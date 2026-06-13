@@ -39,19 +39,20 @@
 
 ## Overview
 
-Anybox is an open-source desktop workspace for working with AI agents on local projects. It brings project folders, agent conversations, terminals, model and provider settings, skills, MCP servers, permissions, patches, and tool traces into one inspectable Electron app.
+Anybox is an open-source AI Agent desktop workspace for local project collaboration.
+It has the core capabilities expected from mainstream desktop agent products. If you are looking for an open-source Claude Code, an open-source Codex, or an open-source Workbuddy-style product, Anybox is built for that direction.
 
-The repository is a `pnpm` workspace. The main desktop product lives in `packages/desktop`; the local agent runtime and HTTP service live in `packages/anyboxagent`.
+The core idea behind Anybox is to make building software enjoyable while following two principles: no black boxes, and user customization. Everything around the LLM layer should be inspectable, replaceable, and controllable by the user.
 
-## Highlights
+## Core Capabilities
 
-- Open local project folders as agent workspaces.
-- Run multi-turn agent sessions with visible reasoning, assistant output, tool calls, permission requests, errors, and patches.
-- Use a managed local agent service by default, or connect the desktop app to a custom agent endpoint.
-- Work with an integrated terminal powered by `node-pty` and `xterm`.
-- Configure model providers, MCP servers, skills, plugins, and project-scoped settings from the app.
-- Review workspace changes and use Git-oriented desktop workflows for commits and pushes.
-- Pair with the companion mobile app package for remote desktop control workflows under active development.
+- Local project development.
+- Cloud server development through SSH.
+- Daily office assistance, including document editing and data organization for Excel, PowerPoint, and Markdown.
+- Mobile remote control.
+- Multi-agent workflows.
+- MCP, Skill, and CLI plugins.
+- Plugin modules that let users build their own domain-specific plugins as developers.
 
 ## Download
 
@@ -68,19 +69,6 @@ Installers are published from GitHub Releases:
 | macOS Apple Silicon | Early access | Primary macOS target |
 | Android | In development | Companion app package lives in `packages/mobile-app` |
 | Linux | Planned | Desktop packaging is not a primary target yet |
-
-## Architecture
-
-```mermaid
-flowchart LR
-  Desktop["Electron Desktop"] --> Agent["Bun/Hono Agent Service"]
-  Desktop --> Terminal["Integrated Terminal"]
-  Agent --> Workspace["Local Project Workspace"]
-  Agent --> Tools["Tools and Permissions"]
-  Agent --> MCP["MCP Servers"]
-  Agent --> Skills["Skills and Plugins"]
-  Agent --> Providers["Model Providers"]
-```
 
 ## Quick Start
 

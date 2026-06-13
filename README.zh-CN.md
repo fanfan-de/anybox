@@ -39,19 +39,20 @@
 
 ## 概览
 
-Anybox 是一个开源的 AI Agent 桌面工作台，面向本地项目协作场景。它把项目文件夹、Agent 会话、终端、模型与供应商配置、Skills、MCP 服务器、权限审批、补丁和工具调用轨迹放到一个可检查、可追踪的 Electron 应用里。
+Anybox 是一个开源的 AI Agent 桌面工作台，面向本地项目协作场景。
+它有市面上主流桌面Agent的全部能力,如果你想寻找一个开源版Claude Code，开源版codex，开源版workbuddy，你都可以选择anybox
 
-这个仓库使用 `pnpm` workspace 管理。核心桌面产品位于 `packages/desktop`，本地 Agent 运行时和 HTTP 服务位于 `packages/anyboxagent`。
+anybox的核心理念是让build成为一种乐趣，遵循无黑盒，用户自定义的原则，让除了LLM意外的壳层都可以为用户所掌握和控制。
 
 ## 核心能力
 
-- 将本地项目文件夹作为 Agent 工作区打开。
-- 运行多轮 Agent 会话，并展示 reasoning、助手回复、工具调用、权限请求、错误和补丁。
-- 默认由桌面端托管本地 Agent 服务，也可以连接到自定义 Agent 服务地址。
-- 内置基于 `node-pty` 和 `xterm` 的终端。
-- 在应用内配置模型供应商、MCP 服务器、Skills、插件和项目级设置。
-- 查看工作区变更，并使用面向 Git 的桌面工作流完成提交和推送。
-- 包含正在开发中的移动端配套包，用于远程桌面控制等工作流。
+- 本地项目开发
+- ssh实现的云端服务器开发
+- 日常办公助理，文档编辑，数据整理（Excel，PPT，md）
+- 手机端远程控制
+- multiagent
+- mcp，skill，cli插件
+- 插件模块，用户可以作为开发者制作自己的领域插件
 
 ## 下载
 
@@ -68,19 +69,6 @@ Anybox 是一个开源的 AI Agent 桌面工作台，面向本地项目协作场
 | macOS Apple Silicon | 早期访问 | 主要 macOS 目标平台 |
 | Android | 开发中 | 配套移动端包位于 `packages/mobile-app` |
 | Linux | 计划中 | 当前不是主要桌面打包目标 |
-
-## 架构概览
-
-```mermaid
-flowchart LR
-  Desktop["Electron 桌面应用"] --> Agent["Bun/Hono Agent 服务"]
-  Desktop --> Terminal["内置终端"]
-  Agent --> Workspace["本地项目工作区"]
-  Agent --> Tools["工具与权限审批"]
-  Agent --> MCP["MCP 服务器"]
-  Agent --> Skills["Skills 与插件"]
-  Agent --> Providers["模型供应商"]
-```
 
 ## 快速开始
 
