@@ -39,8 +39,16 @@
 }
 
 .automations-top-menu {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   border-bottom: 1px solid var(--automations-border);
   background: var(--automations-sidebar-bg);
+}
+
+.automations-top-menu .shell-top-menu-content {
+  grid-column: 2;
+  width: auto;
+  justify-self: center;
+  justify-content: center;
 }
 
 .automations-top-menu-label {
@@ -63,6 +71,7 @@
 }
 
 .automations-top-menu-window-controls {
+  grid-column: 3;
   align-self: stretch;
   justify-self: end;
   align-items: center;

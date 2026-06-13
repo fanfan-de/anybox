@@ -1089,51 +1089,53 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
           ) : calendarData.isLoading ? (
             <p className="calendar-data-status" role="status">Loading calendar data...</p>
           ) : null}
-          {viewMode === "day" ? (
-            <TimeGrid
-              days={[anchorDate]}
-              items={visibleItems}
-              sourceById={sourceById}
-              onAllDayDrop={handleAllDayDrop}
-              onCellDrop={handleCellDrop}
-              onCreateEvent={handleSlotContextMenu}
-              onItemContextMenu={handleItemContextMenu}
-              onItemDragStart={handleItemDragStart}
-              onItemSelect={setSelectedItemId}
-            />
-          ) : viewMode === "week" ? (
-            <TimeGrid
-              days={Array.from({ length: 7 }, (_item, index) => addDays(weekStart, index))}
-              items={visibleItems}
-              sourceById={sourceById}
-              onAllDayDrop={handleAllDayDrop}
-              onCellDrop={handleCellDrop}
-              onCreateEvent={handleSlotContextMenu}
-              onItemContextMenu={handleItemContextMenu}
-              onItemDragStart={handleItemDragStart}
-              onItemSelect={setSelectedItemId}
-            />
-          ) : viewMode === "month" ? (
-            <MonthGrid
-              anchorDate={anchorDate}
-              items={visibleItems}
-              sourceById={sourceById}
-              onDayDrop={handleAllDayDrop}
-              onCreateEvent={handleSlotContextMenu}
-              onItemContextMenu={handleItemContextMenu}
-              onItemDragStart={handleItemDragStart}
-              onItemSelect={setSelectedItemId}
-            />
-          ) : (
-            <ScheduleList
-              anchorDate={anchorDate}
-              items={visibleItems}
-              sourceById={sourceById}
-              onItemContextMenu={handleItemContextMenu}
-              onItemDragStart={handleItemDragStart}
-              onItemSelect={setSelectedItemId}
-            />
-          )}
+          <div className="calendar-main-stage">
+            {viewMode === "day" ? (
+              <TimeGrid
+                days={[anchorDate]}
+                items={visibleItems}
+                sourceById={sourceById}
+                onAllDayDrop={handleAllDayDrop}
+                onCellDrop={handleCellDrop}
+                onCreateEvent={handleSlotContextMenu}
+                onItemContextMenu={handleItemContextMenu}
+                onItemDragStart={handleItemDragStart}
+                onItemSelect={setSelectedItemId}
+              />
+            ) : viewMode === "week" ? (
+              <TimeGrid
+                days={Array.from({ length: 7 }, (_item, index) => addDays(weekStart, index))}
+                items={visibleItems}
+                sourceById={sourceById}
+                onAllDayDrop={handleAllDayDrop}
+                onCellDrop={handleCellDrop}
+                onCreateEvent={handleSlotContextMenu}
+                onItemContextMenu={handleItemContextMenu}
+                onItemDragStart={handleItemDragStart}
+                onItemSelect={setSelectedItemId}
+              />
+            ) : viewMode === "month" ? (
+              <MonthGrid
+                anchorDate={anchorDate}
+                items={visibleItems}
+                sourceById={sourceById}
+                onDayDrop={handleAllDayDrop}
+                onCreateEvent={handleSlotContextMenu}
+                onItemContextMenu={handleItemContextMenu}
+                onItemDragStart={handleItemDragStart}
+                onItemSelect={setSelectedItemId}
+              />
+            ) : (
+              <ScheduleList
+                anchorDate={anchorDate}
+                items={visibleItems}
+                sourceById={sourceById}
+                onItemContextMenu={handleItemContextMenu}
+                onItemDragStart={handleItemDragStart}
+                onItemSelect={setSelectedItemId}
+              />
+            )}
+          </div>
         </main>
 
         <CalendarDetailPanel

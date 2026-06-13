@@ -20,6 +20,8 @@
   --calendar-accent: var(--brand-primary);
   --calendar-radius: var(--radius-control);
   --calendar-panel-radius: var(--radius-panel);
+  --calendar-workbench-max-width: 1320px;
+  --calendar-workbench-gutter: clamp(24px, 3.5vw, 56px);
   height: 100%;
   position: relative;
   display: grid;
@@ -29,6 +31,7 @@
 }
 
 .calendar-top-menu {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   border-bottom: 1px solid var(--calendar-border);
   background: var(--calendar-top-surface);
 }
@@ -38,6 +41,16 @@
   min-width: 0;
   min-height: 40px;
   align-items: center;
+}
+
+.calendar-top-menu-content {
+  grid-column: 2;
+  justify-self: center;
+  justify-content: center;
+}
+
+.calendar-top-menu-window-controls {
+  grid-column: 3;
 }
 
 .calendar-top-menu-title {
@@ -815,7 +828,17 @@
 .calendar-main {
   position: relative;
   overflow: hidden;
+  padding: 20px var(--calendar-workbench-gutter) 24px;
+  box-sizing: border-box;
   background: var(--calendar-bg);
+}
+
+.calendar-main-stage {
+  width: min(100%, var(--calendar-workbench-max-width));
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 auto;
 }
 
 .calendar-data-status {
@@ -1343,6 +1366,10 @@
 }
 
 @media (max-width: 820px) {
+  .calendar-page {
+    --calendar-workbench-gutter: 12px;
+  }
+
   .calendar-shell {
     grid-template-columns: minmax(0, 1fr);
   }
