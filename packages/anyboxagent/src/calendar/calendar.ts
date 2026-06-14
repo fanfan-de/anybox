@@ -150,6 +150,7 @@ function ensureCalendarTables() {
     ON "planner_tasks" ("status", "updatedAt");
   `)
   normalizeLegacyTaskStatuses()
+  removeLegacyEventCalendarData()
 
   seedDefaultSources()
   calendarTablesGeneration = db.getDatabaseGeneration()
@@ -161,6 +162,11 @@ function normalizeLegacyTaskStatuses() {
     SET "status" = 'todo'
     WHERE "status" IN ('doing', 'canceled');
   `)
+}
+
+function removeLegacyEventCalendarData() {
+  db.deleteAll(CALENDAR_EVENTS_TABLE)
+  db.deleteById(CALENDAR_SOURCES_TABLE, "personal")
 }
 
 function seedDefaultSources() {
@@ -284,31 +290,13 @@ export function listItems(input: {
   endAt?: number
   sourceIds?: string[]
 } = {}) {
-  const sources = listSources()
-  const enabledSourceIds = new Set(sources.filter((source) => source.enabled).map((source) => source.id))
-  const sourceById = new Map(sources.map((source) => [source.id, source]))
   const sourceIdFilter = new Set(input.sourceIds?.filter(Boolean))
   const hasSourceFilter = sourceIdFilter.size > 0
-  const effectiveEventSourceIds = hasSourceFilter
-    ? [...sourceIdFilter].filter((sourceId) => enabledSourceIds.has(sourceId))
-    : [...enabledSourceIds]
-  const events = effectiveEventSourceIds.length > 0
-    ? listEvents({
-        startAt: input.startAt,
-        endAt: input.endAt,
-        sourceIds: effectiveEventSourceIds,
-      })
-    : []
-
-  const eventItems = events
-    .filter((event) => enabledSourceIds.has(event.sourceId))
-    .map((event) => toCalendarItem(event, sourceById.get(event.sourceId)))
-
   const taskItems = listTasks()
     .flatMap((task) => toTaskCalendarItems(task, input))
     .filter((item) => !hasSourceFilter || sourceIdFilter.has(item.sourceId))
 
-  return [...eventItems, ...taskItems]
+  return taskItems
 }
 
 export function toCalendarItem(event: CalendarEvent, source?: CalendarSource): CalendarItem {
@@ -390,6 +378,7 @@ function toScheduledTodoCalendarItem(task: PlannerTask, source?: CalendarSource)
 
 function toDeadlineCalendarItem(task: PlannerTask) {
   if (task.dueAt === undefined) return null
+  const dueAt = new Date(task.dueAt)
   return CalendarItem.parse({
     id: `todo:${task.id}:deadline`,
     sourceId: DEADLINE_SOURCE_ID,
@@ -400,7 +389,7 @@ function toDeadlineCalendarItem(task: PlannerTask) {
     description: task.description,
     startAt: task.dueAt,
     endAt: task.dueAt,
-    allDay: true,
+    allDay: dueAt.getHours() === 0 && dueAt.getMinutes() === 0 && dueAt.getSeconds() === 0 && dueAt.getMilliseconds() === 0,
     color: "#c47a2c",
     estimateMinutes: task.estimateMinutes,
     status: task.status,

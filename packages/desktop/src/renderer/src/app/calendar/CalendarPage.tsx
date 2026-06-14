@@ -5,6 +5,7 @@ import {
   ChevronRightIcon,
   CloseIcon,
   DeleteIcon,
+  PlusIcon,
   SearchIcon,
 } from "../icons"
 import { ShellTopMenu, joinClassNames } from "../shared-ui"
@@ -53,11 +54,8 @@ interface CalendarItemContextMenuState extends CalendarContextMenuPosition {
 }
 
 type QuickAddMode = "todo" | "event"
-type CalendarOverlayKey = "deadlines" | "reminders" | "agent"
 
 interface TodoSummary {
-  inbox: number
-  scheduled: number
   unscheduled: number
 }
 
@@ -87,8 +85,15 @@ const HOURS = Array.from({ length: 12 }, (_item, index) => index + 8)
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 const VIEW_MODES: CalendarViewMode[] = ["day", "week", "month", "schedule"]
 const CALENDAR_CONTEXT_MENU_WIDTH = 240
-const CALENDAR_SLOT_CONTEXT_MENU_HEIGHT = 96
+const CALENDAR_SLOT_CONTEXT_MENU_HEIGHT = 54
 const CALENDAR_ITEM_CONTEXT_MENU_HEIGHT = 46
+const TODO_PROJECT_ALL_FILTER_ID = "__all_projects__"
+const TODO_PROJECT_NO_PROJECT_FILTER_ID = "__no_project__"
+const DEFAULT_ENABLED_OVERLAYS: CalendarOverlaysState = {
+  agent: true,
+  deadlines: true,
+  reminders: true,
+}
 
 function startOfDay(date: Date) {
   const nextDate = new Date(date)
@@ -140,8 +145,32 @@ function formatMonthLabel(date: Date) {
   return new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(date)
 }
 
+function formatWeekRangeLabel(weekStart: Date) {
+  const weekEnd = addDays(weekStart, 6)
+  const monthFormatter = new Intl.DateTimeFormat(undefined, { month: "short" })
+  const startMonth = monthFormatter.format(weekStart)
+  const endMonth = monthFormatter.format(weekEnd)
+  if (weekStart.getFullYear() !== weekEnd.getFullYear()) {
+    return `${formatDayLabel(weekStart)} - ${formatDayLabel(weekEnd)}`
+  }
+  if (weekStart.getMonth() === weekEnd.getMonth()) {
+    return `${startMonth} ${weekStart.getDate()} - ${weekEnd.getDate()}, ${weekStart.getFullYear()}`
+  }
+  return `${startMonth} ${weekStart.getDate()} - ${endMonth} ${weekEnd.getDate()}, ${weekStart.getFullYear()}`
+}
+
+function formatScheduleRangeLabel(anchorDate: Date) {
+  return `${formatDayLabel(anchorDate)} + 14 days`
+}
+
 function formatDayLabel(date: Date) {
   return new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", weekday: "short" }).format(date)
+}
+
+function parseDateKey(value: string) {
+  const [year, month, day] = value.split("-").map((part) => Number(part))
+  if (!year || !month || !day) return null
+  return startOfDay(new Date(year, month - 1, day))
 }
 
 function formatTime(date: Date) {
@@ -177,7 +206,7 @@ function getDisplayKindLabel(displayKind: CalendarDisplayKind | undefined) {
     case "scheduled_todo":
       return "Todo"
     case "deadline":
-      return "Deadline"
+      return "Date"
     case "reminder":
       return "Reminder"
     case "agent_suggestion":
@@ -211,6 +240,10 @@ function getScheduledTodoItemId(todoId: string) {
   return `todo:${todoId}:scheduled`
 }
 
+function getDeadlineItemId(todoId: string) {
+  return `todo:${todoId}:deadline`
+}
+
 function getItemAccentColor(item: CalendarItem, source?: CalendarSource) {
   return source?.color ?? item.color ?? (
     item.displayKind === "deadline" ? DEADLINE_COLOR :
@@ -239,11 +272,24 @@ function resolveProjectValue(value: string | undefined, projects: CalendarProjec
 
 function getProjectDisplayName(value: string | undefined, projects: CalendarProjectOption[]) {
   const normalized = value?.trim()
-  if (!normalized) return "Inbox"
+  if (!normalized) return "No project"
   const resolved = resolveProjectValue(normalized, projects)
   return projects.find((project) => project.id === resolved)
     ? getProjectOptionLabel(projects.find((project) => project.id === resolved)!)
     : normalized
+}
+
+function getTodoProjectFilterId(item: CalendarItem, projects: CalendarProjectOption[]) {
+  return resolveProjectValue(item.workspace, projects) || TODO_PROJECT_NO_PROJECT_FILTER_ID
+}
+
+function getSidebarTodoMeta(item: CalendarItem, projects: CalendarProjectOption[]) {
+  const projectName = getProjectDisplayName(item.workspace, projects)
+  const estimate = `${item.estimateMinutes ?? 60}m`
+  if (item.startAt && item.endAt) {
+    return `${projectName} - ${formatTime(item.startAt)}-${formatTime(item.endAt)} - ${estimate}`
+  }
+  return `${projectName} - ${estimate}`
 }
 
 function hasLegacyProjectValue(value: string | undefined, projects: CalendarProjectOption[]) {
@@ -329,6 +375,10 @@ function canDeleteCalendarItem(item: CalendarItem | undefined) {
   return Boolean(item && item.entityType !== "agent_suggestion" && !item.isReadOnly)
 }
 
+function isTodoCalendarItem(item: CalendarItem) {
+  return item.entityType !== "event" && item.displayKind !== "external_event"
+}
+
 function getCalendarContextMenuPosition(
   event: MouseEvent<HTMLElement>,
   estimatedWidth = CALENDAR_CONTEXT_MENU_WIDTH,
@@ -356,13 +406,11 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
   const [anchorDate, setAnchorDate] = useState(() => startOfDay(new Date()))
   const [viewMode, setViewMode] = useState<CalendarViewMode>("week")
   const [localItems, setLocalItems] = useState<CalendarItem[]>([])
-  const [enabledOverlays, setEnabledOverlays] = useState<CalendarOverlaysState>({
-    agent: true,
-    deadlines: true,
-    reminders: true,
-  })
+  const enabledOverlays = DEFAULT_ENABLED_OVERLAYS
   const [selectedItemId, setSelectedItemId] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedTodoProjectID, setSelectedTodoProjectID] = useState(TODO_PROJECT_ALL_FILTER_ID)
+  const [isTodoProjectFilterOpen, setIsTodoProjectFilterOpen] = useState(false)
   const [quickAddMode, setQuickAddMode] = useState<QuickAddMode>("todo")
   const [quickAddText, setQuickAddText] = useState("")
   const [quickAddSourceId, setQuickAddSourceId] = useState("")
@@ -370,6 +418,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
   const [quickAddWorkspace, setQuickAddWorkspace] = useState("")
   const [quickAddNotes, setQuickAddNotes] = useState("")
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false)
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
   const [quickAddContext, setQuickAddContext] = useState<QuickAddContext | null>(null)
   const [calendarContextMenu, setCalendarContextMenu] = useState<CalendarSlotContextMenuState | null>(null)
   const [calendarItemContextMenu, setCalendarItemContextMenu] = useState<CalendarItemContextMenuState | null>(null)
@@ -403,7 +452,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
   const calendarData = useCalendarData(calendarRange)
   const sources = calendarData.sources
   const items = useMemo(
-    () => [...calendarData.items, ...localItems],
+    () => [...calendarData.items, ...localItems].filter(isTodoCalendarItem),
     [calendarData.items, localItems],
   )
   const todoItems = calendarData.todos
@@ -413,7 +462,6 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
   )
   const remoteItemIds = useMemo(() => new Set(calendarData.items.map((item) => item.id)), [calendarData.items])
   const remoteTodoIds = useMemo(() => new Set(calendarData.todos.map((item) => item.id)), [calendarData.todos])
-  const remoteSourceIds = useMemo(() => new Set(calendarData.sources.map((source) => source.id)), [calendarData.sources])
   const sourceById = useMemo(() => new Map(sources.map((source) => [source.id, source])), [sources])
   const defaultEventSource = useMemo(
     () => sources.find((source) => source.enabled) ?? sources[0] ?? null,
@@ -424,32 +472,29 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     [sources],
   )
   const visibleItems = useMemo(
-    () => items.filter((item) => itemMatchesQuery(item, searchQuery) && (
+    () => items.filter((item) => (
       item.displayKind === "deadline" ? enabledOverlays.deadlines :
       item.displayKind === "reminder" ? enabledOverlays.reminders :
       item.displayKind === "agent_suggestion" || item.entityType === "agent_suggestion" ? enabledOverlays.agent :
       item.entityType === "event" ? enabledSourceIds.has(item.sourceId) :
       true
     )),
-    [enabledOverlays.agent, enabledOverlays.deadlines, enabledOverlays.reminders, enabledSourceIds, items, searchQuery],
+    [enabledOverlays.agent, enabledOverlays.deadlines, enabledOverlays.reminders, enabledSourceIds, items],
   )
-  const unscheduledTasks = useMemo(
+  const allUnscheduledTasks = useMemo(
     () => todoItems.filter((item) => (
       item.entityType === "task" &&
-      !item.startAt &&
-      itemMatchesQuery(item, searchQuery)
+      !item.startAt
     )),
-    [todoItems, searchQuery],
+    [todoItems],
   )
   const todoSummary = useMemo<TodoSummary>(() => ({
-    inbox: todoItems.filter((item) => item.status !== "done").length,
-    scheduled: todoItems.filter((item) => Boolean(item.startAt)).length,
     unscheduled: todoItems.filter((item) => !item.startAt).length,
   }), [todoItems])
   const projectSummaries = useMemo<ProjectSummary[]>(() => {
     const counts = new Map<string, ProjectSummary>()
-    for (const todo of todoItems) {
-      const projectId = resolveProjectValue(todo.workspace, projects) || "inbox"
+    for (const todo of allUnscheduledTasks) {
+      const projectId = getTodoProjectFilterId(todo, projects)
       const existing = counts.get(projectId)
       counts.set(projectId, {
         count: (existing?.count ?? 0) + 1,
@@ -458,12 +503,31 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
       })
     }
     return Array.from(counts.values()).sort((left, right) => left.name.localeCompare(right.name))
-  }, [projects, todoItems])
-  const overlayCounts = useMemo<Record<CalendarOverlayKey, number>>(() => ({
-    agent: items.filter((item) => item.displayKind === "agent_suggestion" || item.entityType === "agent_suggestion").length,
-    deadlines: items.filter((item) => item.displayKind === "deadline").length,
-    reminders: items.filter((item) => item.displayKind === "reminder").length,
-  }), [items])
+  }, [allUnscheduledTasks, projects])
+  const todoProjectFilterOptions = useMemo<ProjectSummary[]>(() => [
+    {
+      count: allUnscheduledTasks.length,
+      id: TODO_PROJECT_ALL_FILTER_ID,
+      name: "All projects",
+    },
+    ...projectSummaries,
+  ], [allUnscheduledTasks.length, projectSummaries])
+  const activeTodoProjectID = useMemo(
+    () => todoProjectFilterOptions.some((project) => project.id === selectedTodoProjectID)
+      ? selectedTodoProjectID
+      : TODO_PROJECT_ALL_FILTER_ID,
+    [selectedTodoProjectID, todoProjectFilterOptions],
+  )
+  const unscheduledTasks = useMemo(
+    () => allUnscheduledTasks.filter((item) => (
+      itemMatchesQuery(item, searchQuery) &&
+      (
+        activeTodoProjectID === TODO_PROJECT_ALL_FILTER_ID ||
+        getTodoProjectFilterId(item, projects) === activeTodoProjectID
+      )
+    )),
+    [activeTodoProjectID, allUnscheduledTasks, projects, searchQuery],
+  )
   const selectedItem = useMemo(
     () => selectableItems.find((item) => item.id === selectedItemId) ?? visibleItems[0] ?? todoItems[0] ?? null,
     [selectableItems, selectedItemId, todoItems, visibleItems],
@@ -474,7 +538,12 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
       : undefined,
     [calendarItemContextMenu, selectableItems],
   )
-  const currentViewLabel = viewMode === "day" ? formatDayLabel(anchorDate) : formatMonthLabel(anchorDate)
+  const currentViewLabel = (
+    viewMode === "day" ? formatDayLabel(anchorDate) :
+    viewMode === "week" ? formatWeekRangeLabel(weekStart) :
+    viewMode === "month" ? formatMonthLabel(anchorDate) :
+    formatScheduleRangeLabel(anchorDate)
+  )
 
   function createItemId(prefix: string) {
     itemCounterRef.current += 1
@@ -519,14 +588,31 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
 
     const todoId = existing?.entityType === "task" ? existing.entityId ?? itemId : ""
     if (existing?.entityType === "task" && remoteTodoIds.has(todoId)) {
-      calendarData.patchItem(itemId, update)
-      calendarData.patchItem(todoId, update)
-      const taskUpdate = toCalendarTaskUpdate(update)
+      const isDatePoint = existing.displayKind === "deadline"
+      const nextStart = "startAt" in update ? update.startAt : existing.startAt
+      const nextEnd = isDatePoint && "startAt" in update ? update.startAt : ("endAt" in update ? update.endAt : existing.endAt)
+      const itemUpdate = isDatePoint ? { ...update, endAt: nextEnd } : update
+      calendarData.patchItem(itemId, itemUpdate)
+      const {
+        allDay: _allDay,
+        endAt: _endAt,
+        startAt: _startAt,
+        ...nonDateTodoUpdate
+      } = update
+      const todoUpdate = isDatePoint ? nonDateTodoUpdate : update
+      calendarData.patchItem(todoId, todoUpdate)
+      const taskUpdate = {
+        ...toCalendarTaskUpdate(update),
+        ...(
+          isDatePoint && "startAt" in update
+            ? { dueAt: nextStart ? nextStart.getTime() : null }
+            : {}
+        ),
+      }
       if (Object.keys(taskUpdate).length > 0) {
         void calendarData.updateTask(todoId, taskUpdate).catch(() => undefined)
       }
-      if ("startAt" in update || "endAt" in update) {
-        const nextStart = "startAt" in update ? update.startAt : existing.startAt
+      if (!isDatePoint && ("startAt" in update || "endAt" in update)) {
         const nextEnd = "endAt" in update ? update.endAt : existing.endAt
         const schedule = nextStart && nextEnd
           ? {
@@ -543,20 +629,6 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     }
 
     setLocalItems((current) => current.map((item) => (item.id === itemId ? { ...item, ...update } : item)))
-  }
-
-  function toggleSource(sourceId: string) {
-    const existing = sources.find((source) => source.id === sourceId)
-    if (!existing) return
-    const enabled = !existing.enabled
-    if (remoteSourceIds.has(sourceId)) {
-      calendarData.patchSource(sourceId, { enabled })
-      void calendarData.updateSource(sourceId, { enabled }).catch(() => undefined)
-    }
-  }
-
-  function toggleOverlay(overlay: CalendarOverlayKey) {
-    setEnabledOverlays((current) => ({ ...current, [overlay]: !current[overlay] }))
   }
 
   function deleteItem(itemId: string) {
@@ -582,6 +654,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
   }
 
   function moveAnchor(delta: number) {
+    setIsDatePickerOpen(false)
     if (viewMode === "month") {
       setAnchorDate((current) => {
         const nextDate = new Date(current)
@@ -594,9 +667,25 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     setAnchorDate((current) => addDays(current, viewMode === "day" ? delta : delta * 7))
   }
 
+  function selectAnchorDate(date: Date) {
+    setAnchorDate(startOfDay(date))
+    setIsDatePickerOpen(false)
+  }
+
   function moveItemToContext(itemId: string, context: QuickAddContext) {
     const item = selectableItems.find((candidate) => candidate.id === itemId)
     if (!item || item.entityType === "agent_suggestion") return
+
+    if (item.displayKind === "deadline") {
+      const startAt = context.allDay ? startOfDay(context.startAt) : context.startAt
+      updateItem(itemId, {
+        startAt,
+        endAt: startAt,
+        allDay: context.allDay,
+      })
+      setSelectedItemId(getDeadlineItemId(item.entityId ?? item.id))
+      return
+    }
 
     const duration = item.startAt && item.endAt
       ? Math.max(15, Math.round((item.endAt.getTime() - item.startAt.getTime()) / 60000))
@@ -652,12 +741,12 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     event.dataTransfer.effectAllowed = "move"
   }
 
-  function openQuickAddDialog(mode: QuickAddMode, context: QuickAddContext | null = null) {
+  function openQuickAddDialog(mode: QuickAddMode, context: QuickAddContext | null = null, workspaceOverride?: string) {
     setQuickAddMode(mode)
     setQuickAddText("")
     setQuickAddSourceId(defaultEventSource?.id ?? "")
     setQuickAddStatus("scheduled")
-    setQuickAddWorkspace(activeProjectID ?? "")
+    setQuickAddWorkspace(workspaceOverride ?? activeProjectID ?? "")
     setQuickAddNotes("")
     setQuickAddContext(context)
     setCalendarContextMenu(null)
@@ -750,6 +839,12 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     setIsQuickAddOpen(false)
   }
 
+  function getSidebarQuickAddWorkspace() {
+    if (activeTodoProjectID === TODO_PROJECT_ALL_FILTER_ID) return activeProjectID ?? ""
+    if (activeTodoProjectID === TODO_PROJECT_NO_PROJECT_FILTER_ID) return ""
+    return activeTodoProjectID
+  }
+
   function generateAgentSuggestions() {
     const candidateTasks = unscheduledTasks.slice(0, 2)
     if (candidateTasks.length === 0) return
@@ -827,20 +922,61 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
       />
 
       <div className="calendar-toolbar">
+        <div className="calendar-toolbar-spacer" aria-hidden="true" />
+
         <div className="calendar-date-controls" aria-label="Date navigation">
-          <button type="button" className="calendar-toolbar-button" onClick={() => moveAnchor(-1)}>
-            Prev
+          <button
+            type="button"
+            className="calendar-period-step"
+            aria-label="Previous calendar range"
+            title="Previous"
+            onClick={() => moveAnchor(-1)}
+          >
+            <span aria-hidden="true">‹</span>
           </button>
-          <button type="button" className="calendar-toolbar-button" onClick={() => setAnchorDate(startOfDay(new Date()))}>
-            Today
+          <div className="calendar-period-picker">
+            <button
+              type="button"
+              className="calendar-period-title"
+              aria-haspopup="dialog"
+              aria-expanded={isDatePickerOpen}
+              aria-label={`Change calendar date, current range ${currentViewLabel}`}
+              onClick={() => setIsDatePickerOpen((current) => !current)}
+            >
+              <h1>{currentViewLabel}</h1>
+              <span aria-hidden="true">⌄</span>
+            </button>
+            {isDatePickerOpen ? (
+              <div className="calendar-date-popover" role="dialog" aria-label="Choose calendar date">
+                <label>
+                  Jump to date
+                  <input
+                    type="date"
+                    value={getDateKey(anchorDate)}
+                    onChange={(event) => {
+                      const nextDate = parseDateKey(event.currentTarget.value)
+                      if (nextDate) selectAnchorDate(nextDate)
+                    }}
+                  />
+                </label>
+                <button type="button" className="calendar-date-popover-today" onClick={() => selectAnchorDate(new Date())}>
+                  Today
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="calendar-period-step"
+            aria-label="Next calendar range"
+            title="Next"
+            onClick={() => moveAnchor(1)}
+          >
+            <span aria-hidden="true">›</span>
           </button>
-          <button type="button" className="calendar-toolbar-button" onClick={() => moveAnchor(1)}>
-            Next
-          </button>
-          <h1>{currentViewLabel}</h1>
         </div>
 
-        <div className="calendar-toolbar-center">
+        <div className="calendar-toolbar-actions">
           <div className="calendar-view-switcher" aria-label="Calendar view">
             {VIEW_MODES.map((mode) => (
               <button
@@ -856,18 +992,6 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
           </div>
         </div>
 
-        <div className="calendar-quick-add">
-          <button
-            type="button"
-            className="calendar-quick-add-trigger"
-            aria-haspopup="dialog"
-            aria-expanded={isQuickAddOpen}
-            aria-label="New Todo"
-            onClick={() => openQuickAddDialog("todo")}
-          >
-            <span>New Todo</span>
-          </button>
-        </div>
       </div>
 
       {calendarContextMenu ? (
@@ -886,14 +1010,6 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
               onClick={() => openQuickAddDialog("todo", calendarContextMenu.context)}
             >
               <span>New Todo</span>
-              <small>{formatQuickAddContext(calendarContextMenu.context)}</small>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => openQuickAddDialog("event", calendarContextMenu.context)}
-            >
-              <span>Create event</span>
               <small>{formatQuickAddContext(calendarContextMenu.context)}</small>
             </button>
           </div>
@@ -1065,20 +1181,23 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
 
       <div className="calendar-shell">
         <CalendarSourcesPanel
-          anchorDate={anchorDate}
-          enabledOverlays={enabledOverlays}
-          overlayCounts={overlayCounts}
+          isQuickAddOpen={isQuickAddOpen}
+          isProjectFilterOpen={isTodoProjectFilterOpen}
           projects={projects}
+          projectFilterOptions={todoProjectFilterOptions}
           searchQuery={searchQuery}
-          sources={sources}
+          selectedProjectFilterID={activeTodoProjectID}
           todoSummary={todoSummary}
-          unscheduledTasks={unscheduledTasks}
-          projectSummaries={projectSummaries}
+          todoItems={unscheduledTasks}
+          onCreateTodo={() => openQuickAddDialog("todo", null, getSidebarQuickAddWorkspace())}
           onSearchQueryChange={setSearchQuery}
           onAgentPlan={generateAgentSuggestions}
           onItemSelect={setSelectedItemId}
-          onOverlayToggle={toggleOverlay}
-          onSourceToggle={toggleSource}
+          onProjectFilterSelect={(projectId) => {
+            setSelectedTodoProjectID(projectId)
+            setIsTodoProjectFilterOpen(false)
+          }}
+          onProjectFilterToggle={() => setIsTodoProjectFilterOpen((current) => !current)}
         />
 
         <main className="calendar-main" aria-label={`${viewMode} calendar view`}>
@@ -1163,72 +1282,107 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
 }
 
 interface CalendarSourcesPanelProps {
-  anchorDate: Date
-  enabledOverlays: CalendarOverlaysState
-  overlayCounts: Record<CalendarOverlayKey, number>
+  isQuickAddOpen: boolean
+  isProjectFilterOpen: boolean
   projects: CalendarProjectOption[]
+  projectFilterOptions: ProjectSummary[]
   searchQuery: string
-  sources: CalendarSource[]
+  selectedProjectFilterID: string
   todoSummary: TodoSummary
-  unscheduledTasks: CalendarItem[]
-  projectSummaries: ProjectSummary[]
+  todoItems: CalendarItem[]
   onAgentPlan: () => void
+  onCreateTodo: () => void
   onItemSelect: (itemId: string) => void
-  onOverlayToggle: (overlay: CalendarOverlayKey) => void
+  onProjectFilterSelect: (projectId: string) => void
+  onProjectFilterToggle: () => void
   onSearchQueryChange: (query: string) => void
-  onSourceToggle: (sourceId: string) => void
 }
 
 function CalendarSourcesPanel({
-  anchorDate,
-  enabledOverlays,
-  overlayCounts,
+  isQuickAddOpen,
+  isProjectFilterOpen,
   projects,
+  projectFilterOptions,
   searchQuery,
-  sources,
+  selectedProjectFilterID,
   todoSummary,
-  unscheduledTasks,
-  projectSummaries,
+  todoItems,
   onAgentPlan,
+  onCreateTodo,
   onItemSelect,
-  onOverlayToggle,
+  onProjectFilterSelect,
+  onProjectFilterToggle,
   onSearchQueryChange,
-  onSourceToggle,
 }: CalendarSourcesPanelProps) {
+  const selectedProject = projectFilterOptions.find((project) => project.id === selectedProjectFilterID) ?? projectFilterOptions[0]
+
   return (
     <aside className="calendar-sources-panel" aria-label="Calendar sidebar">
-      <MiniCalendar date={anchorDate} />
+      <div className="calendar-source-search-row">
+        <label className="calendar-source-search">
+          <SearchIcon />
+          <input
+            value={searchQuery}
+            placeholder="Search Todos..."
+            onChange={(event) => onSearchQueryChange(event.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          className="calendar-source-add-button"
+          aria-haspopup="dialog"
+          aria-expanded={isQuickAddOpen}
+          aria-label="New Todo"
+          title="New Todo"
+          onClick={onCreateTodo}
+        >
+          <PlusIcon />
+        </button>
+      </div>
 
-      <label className="calendar-source-search">
-        <SearchIcon />
-        <input
-          value={searchQuery}
-          placeholder="Search calendar..."
-          onChange={(event) => onSearchQueryChange(event.target.value)}
-        />
-      </label>
+      <div className="calendar-project-filter">
+        <button
+          type="button"
+          className="calendar-project-filter-trigger"
+          aria-haspopup="listbox"
+          aria-expanded={isProjectFilterOpen}
+          aria-label={`Project filter: ${selectedProject?.name ?? "All projects"}`}
+          title={selectedProject?.name ?? "All projects"}
+          onClick={onProjectFilterToggle}
+        >
+          <span>Project: {selectedProject?.name ?? "All projects"}</span>
+          <strong>{selectedProject?.count ?? 0}</strong>
+        </button>
+        {isProjectFilterOpen ? (
+          <div className="calendar-project-filter-menu" role="listbox" aria-label="Todo project filter">
+            {projectFilterOptions.map((project) => (
+              <button
+                key={project.id}
+                type="button"
+                role="option"
+                className={joinClassNames(
+                  "calendar-project-filter-option",
+                  project.id === selectedProjectFilterID && "is-selected",
+                )}
+                aria-selected={project.id === selectedProjectFilterID}
+                title={project.name}
+                onClick={() => onProjectFilterSelect(project.id)}
+              >
+                <span>{project.name}</span>
+                <strong>{project.count}</strong>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       <section className="calendar-source-section">
         <div className="calendar-section-heading">
           <h2>Todos</h2>
-          <span>{todoSummary.inbox} open</span>
-        </div>
-        <div className="calendar-todo-summary-list">
-          <div className="calendar-todo-summary-row">
-            <span>Inbox</span>
-            <strong>{todoSummary.inbox}</strong>
-          </div>
-          <div className="calendar-todo-summary-row">
-            <span>Unscheduled</span>
-            <strong>{todoSummary.unscheduled}</strong>
-          </div>
-          <div className="calendar-todo-summary-row">
-            <span>Scheduled</span>
-            <strong>{todoSummary.scheduled}</strong>
-          </div>
+          <span>{todoSummary.unscheduled} unscheduled</span>
         </div>
         <div className="calendar-unscheduled-list">
-          {unscheduledTasks.length > 0 ? unscheduledTasks.map((task) => (
+          {todoItems.length > 0 ? todoItems.map((task) => (
             <button
               key={task.id}
               type="button"
@@ -1241,79 +1395,11 @@ function CalendarSourcesPanel({
               }}
             >
               <span>{task.title}</span>
-              <small>{getProjectDisplayName(task.workspace, projects)} - {task.estimateMinutes ?? 60}m</small>
+              <small>{getSidebarTodoMeta(task, projects)}</small>
             </button>
           )) : (
             <p className="calendar-empty-note">No unscheduled Todos match this view.</p>
           )}
-        </div>
-      </section>
-
-      <section className="calendar-source-section">
-        <div className="calendar-section-heading">
-          <h2>Projects</h2>
-          <span>{projectSummaries.length}</span>
-        </div>
-        <div className="calendar-workspace-list">
-          {projectSummaries.length > 0 ? projectSummaries.map((project) => (
-            <div key={project.id} className="calendar-workspace-row">
-              <span>{project.name}</span>
-              <strong>{project.count}</strong>
-            </div>
-          )) : (
-            <p className="calendar-empty-note">No Todo projects yet.</p>
-          )}
-        </div>
-      </section>
-
-      {sources.length > 1 ? (
-        <section className="calendar-source-section">
-          <div className="calendar-section-heading">
-            <h2>Event calendars</h2>
-            <span>{sources.filter((source) => source.enabled).length} active</span>
-          </div>
-          <div className="calendar-source-list">
-            {sources.map((source) => (
-              <button
-                key={source.id}
-                type="button"
-                className={joinClassNames("calendar-source-row", source.enabled && "is-enabled")}
-                aria-pressed={source.enabled}
-                onClick={() => onSourceToggle(source.id)}
-              >
-                <span className="calendar-source-swatch" style={{ backgroundColor: source.color }} />
-                <span className="calendar-source-copy">
-                  <span>{source.name}</span>
-                  {source.subtitle ? <small>{source.subtitle}</small> : null}
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <section className="calendar-source-section">
-        <div className="calendar-section-heading">
-          <h2>Overlays</h2>
-          <span>{Object.values(enabledOverlays).filter(Boolean).length} active</span>
-        </div>
-        <div className="calendar-overlay-list">
-          {([
-            ["deadlines", "Deadlines"],
-            ["reminders", "Reminders"],
-            ["agent", "Agent suggestions"],
-          ] satisfies Array<[CalendarOverlayKey, string]>).map(([overlay, label]) => (
-            <button
-              key={overlay}
-              type="button"
-              className={joinClassNames("calendar-overlay-row", enabledOverlays[overlay] && "is-enabled")}
-              aria-pressed={enabledOverlays[overlay]}
-              onClick={() => onOverlayToggle(overlay)}
-            >
-              <span>{label}</span>
-              <strong>{overlayCounts[overlay]}</strong>
-            </button>
-          ))}
         </div>
       </section>
 
@@ -1328,35 +1414,6 @@ function CalendarSourcesPanel({
         </button>
       </section>
     </aside>
-  )
-}
-
-function MiniCalendar({ date }: { date: Date }) {
-  const monthStart = new Date(date.getFullYear(), date.getMonth(), 1)
-  const gridStart = startOfWeek(monthStart)
-  const days = Array.from({ length: 35 }, (_item, index) => addDays(gridStart, index))
-
-  return (
-    <section className="calendar-mini" aria-label="Mini calendar">
-      <h2>{formatMonthLabel(date)}</h2>
-      <div className="calendar-mini-weekdays" aria-hidden="true">
-        {WEEKDAY_LABELS.map((label) => <span key={label}>{label.slice(0, 1)}</span>)}
-      </div>
-      <div className="calendar-mini-grid">
-        {days.map((day) => (
-          <span
-            key={getDateKey(day)}
-            className={joinClassNames(
-              "calendar-mini-day",
-              day.getMonth() !== date.getMonth() && "is-muted",
-              isSameDay(day, new Date()) && "is-today",
-            )}
-          >
-            {day.getDate()}
-          </span>
-        ))}
-      </div>
-    </section>
   )
 }
 

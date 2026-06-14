@@ -13,14 +13,14 @@
     "typescript": "^6.0.2"
   },
   "dependencies": {
-    "@ai-sdk/provider": "^3.0.8",
+    "@ai-sdk/provider": "^3.0.10",
     "@anybox/platform": "workspace:*",
     "@anybox/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@opentui/core": "^0.1.90",
     "@opentui/solid": "^0.1.90",
     "@types/ssh2": "^1.15.5",
-    "ai": "^6.0.140",
+    "ai": "^6.0.205",
     "fuzzysort": "^3.1.0",
     "gray-matter": "^4.0.3",
     "hono": "^4.12.9",

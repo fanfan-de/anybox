@@ -43,32 +43,75 @@
   overflow: hidden;
   align-items: stretch;
   justify-content: stretch;
-  padding: 0 var(--pane-content-gutter);
+  padding: 0;
 }
 
 .thread-column {
   --thread-composer-clearance: 52px;
+  --thread-scrollbar-size: 10px;
+  --thread-scrollbar-track: var(--mix-seg-panel-muted-86-transparent-14);
+  --thread-scrollbar-thumb: var(--mix-seg-text-3-54-transparent-46);
+  --thread-scrollbar-thumb-hover: var(--seg-text-3);
   width: 100%;
   min-width: 0;
-  max-width: var(--pane-content-max-width);
+  max-width: none;
   flex: 1 1 auto;
-  margin: 0 auto;
+  margin: 0;
   flex-direction: column;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   overflow-anchor: none;
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--thread-scrollbar-thumb) transparent;
+  scrollbar-width: thin;
   padding: 14px 0 var(--thread-composer-clearance);
   scroll-padding-bottom: var(--thread-composer-clearance);
   gap: 12px;
 }
 
+.thread-column > .turn,
+.thread-column > .thread-row,
+.thread-column > .thread-virtual-spacer,
+.thread-column > .permission-request-inline {
+  width: 100%;
+  max-width: min(
+    var(--pane-content-max-width),
+    calc(100% - var(--pane-content-gutter) - var(--pane-content-gutter))
+  );
+  margin-right: auto;
+  margin-left: auto;
+}
+
 .thread-column::-webkit-scrollbar {
-  width: 0;
-  height: 0;
+  width: var(--thread-scrollbar-size);
+  height: var(--thread-scrollbar-size);
+}
+
+.thread-column::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.thread-column::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--thread-scrollbar-thumb);
+  background-clip: content-box;
+}
+
+.thread-column:hover::-webkit-scrollbar-track,
+.thread-column:focus-within::-webkit-scrollbar-track,
+.thread-column::-webkit-scrollbar-track:hover {
+  background: var(--thread-scrollbar-track);
+}
+
+.thread-column:hover::-webkit-scrollbar-thumb,
+.thread-column:focus-within::-webkit-scrollbar-thumb,
+.thread-column::-webkit-scrollbar-thumb:hover {
+  background: var(--thread-scrollbar-thumb-hover);
+  background-clip: content-box;
 }
 
 .thread-column.is-virtualized {
@@ -2841,6 +2884,16 @@ body.is-resizing-sidebar .user-turn-diff-file-entry {
   margin: 0;
   padding: 0;
   gap: 12px;
+}
+
+.inline-side-chat-thread .thread-column > .turn,
+.inline-side-chat-thread .thread-column > .thread-row,
+.inline-side-chat-thread .thread-column > .thread-virtual-spacer,
+.inline-side-chat-thread .thread-column > .permission-request-inline {
+  width: 100%;
+  max-width: none;
+  margin-right: 0;
+  margin-left: 0;
 }
 
 .inline-side-chat-thread.is-sidebar .thread-column {
