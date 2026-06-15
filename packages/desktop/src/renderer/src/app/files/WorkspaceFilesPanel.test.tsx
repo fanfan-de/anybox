@@ -205,6 +205,8 @@ describe("WorkspaceFilesPanel", () => {
     expect(screen.getByText("src/camera.js")).toBeVisible()
     expect(screen.getByTestId("workspace-file-line-1")).toHaveTextContent("const camera = { x: 0, y: 0 };")
     expect(screen.getByTestId("workspace-file-line-4")).toHaveTextContent("return camera.x;")
+    expect(screen.getByTestId("workspace-file-line-1").querySelector(".code-highlight-token.is-keyword")).toHaveTextContent("const")
+    expect(screen.getByTestId("workspace-file-line-1").querySelector(".code-highlight-token.is-number")).toHaveTextContent("0")
   })
 
   it("renders Markdown files by default and can switch back to source", () => {
@@ -285,6 +287,31 @@ describe("WorkspaceFilesPanel", () => {
     expect(screen.getByRole("button", { name: "100%" })).toHaveClass("is-active")
     fireEvent.click(screen.getByRole("button", { name: "Zoom in image" }))
     expect(screen.getByText("125%")).toBeVisible()
+  })
+
+  it("renders video files with native controls and preview metadata", () => {
+    const { container } = renderWorkspaceFilesPanel(
+      createFileReviewState({
+        selectedFileExtension: "mp4",
+        selectedFileKind: "video",
+        selectedFileMimeType: "video/mp4",
+        selectedFilePath: "assets/demo.mp4",
+        selectedFilePreviewUrl: "anybox-local-video://video?source=C%3A%5Cworkspace%5Cassets%5Cdemo.mp4",
+        selectedFileSize: 4194304,
+        status: "ready",
+      }),
+    )
+
+    expect(screen.getByText("video/mp4")).toBeVisible()
+    expect(screen.getByText("4.00 MB")).toBeVisible()
+
+    const video = container.querySelector("video.workspace-files-video")
+    expect(video).toHaveAttribute(
+      "src",
+      "anybox-local-video://video?source=C%3A%5Cworkspace%5Cassets%5Cdemo.mp4",
+    )
+    expect(video).toHaveAttribute("controls")
+    expect(video).toHaveAttribute("preload", "metadata")
   })
 
   it("highlights and scrolls to linked line ranges without opening a comment draft", () => {

@@ -222,6 +222,7 @@ const ConnectorDiagnosticTool = z
     annotations: z.record(z.string(), z.unknown()).optional(),
     riskHint: z.enum(["read-only", "destructive", "open-world", "unknown"]),
     recommendedPolicy: Config.McpToolPolicyValue,
+    configuredPolicy: Config.McpToolPolicyValue.optional(),
   })
   .strict()
 

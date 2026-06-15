@@ -162,6 +162,7 @@ export function useReviewPanelController({
     if (state.selectedFileKind === "unsupported") return "unsupported"
     if (state.selectedFilePath && state.selectedFileKind === "text" && state.selectedFileContent !== null) return "ready"
     if (state.selectedFilePath && state.selectedFileKind === "image" && state.selectedFilePreviewUrl) return "ready"
+    if (state.selectedFilePath && state.selectedFileKind === "video" && state.selectedFilePreviewUrl) return "ready"
     return "idle"
   }
 
@@ -169,6 +170,7 @@ export function useReviewPanelController({
     if (!state?.selectedFilePath) return false
     if (state.selectedFileKind === "text") return state.selectedFileContent !== null
     if (state.selectedFileKind === "image") return Boolean(state.selectedFilePreviewUrl)
+    if (state.selectedFileKind === "video") return Boolean(state.selectedFilePreviewUrl)
     return false
   }
 
@@ -956,7 +958,7 @@ export function useReviewPanelController({
         linkedLineRange: nextFile.kind === "text" ? linkedLineRange : null,
         pendingComment: null,
         errorMessage: nextErrorMessage,
-        status: nextFile.kind === "text" || nextFile.kind === "image" ? "ready" : "unsupported",
+        status: nextFile.kind === "text" || nextFile.kind === "image" || nextFile.kind === "video" ? "ready" : "unsupported",
       }))
       updateRightSidebarTab(tabID, {
         scopeDirectory,

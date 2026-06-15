@@ -26,6 +26,7 @@ import {
   FilePlus2,
   FileSearch,
   FileText,
+  Film,
   Folder,
   FolderOpen,
   GitCommitHorizontal,
@@ -105,6 +106,7 @@ export const PreviewIcon = createIcon(Globe)
 export const FileSearchIcon = createIcon(FileSearch)
 export const FileImageIcon = createIcon(FileImage)
 export const FileTextIcon = createIcon(FileText)
+export const FileVideoIcon = createIcon(Film)
 export const SortIcon = createIcon(SortAsc)
 export const NewItemIcon = createIcon(FilePlus2)
 export const PlusIcon = createIcon(Plus)

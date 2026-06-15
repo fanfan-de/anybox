@@ -673,7 +673,7 @@ export interface AgentWorkspaceFileDocument {
   path: string
   name: string
   extension: string | null
-  kind: "text" | "image" | "unsupported"
+  kind: "text" | "image" | "video" | "unsupported"
   content?: string
   mimeType?: string
   previewUrl?: string

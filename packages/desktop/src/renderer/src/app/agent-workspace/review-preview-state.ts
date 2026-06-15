@@ -95,6 +95,7 @@ export function resolveWorkspaceFileReviewStatus(
   if (state.selectedFileKind === "unsupported") return "unsupported"
   if (state.selectedFilePath && state.selectedFileKind === "text" && state.selectedFileContent !== null) return "ready"
   if (state.selectedFilePath && state.selectedFileKind === "image" && state.selectedFilePreviewUrl) return "ready"
+  if (state.selectedFilePath && state.selectedFileKind === "video" && state.selectedFilePreviewUrl) return "ready"
   if (state.query.trim() && state.results.length === 0) return "empty"
   return "idle"
 }

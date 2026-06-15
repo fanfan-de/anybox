@@ -3,8 +3,14 @@ import { tmpdir } from "node:os"
 import path, { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { afterEach, describe, expect, it } from "vitest"
-import { toLocalImageProtocolUrl } from "../shared/local-image-protocol"
-import { getLocalImageMimeType, resolveLocalImageProtocolRequest } from "./local-image-protocol"
+import { toLocalImageProtocolUrl, toLocalVideoProtocolUrl } from "../shared/local-image-protocol"
+import {
+  getLocalImageMimeType,
+  getLocalVideoMimeType,
+  resolveLocalImageProtocolRequest,
+  resolveLocalVideoProtocolRequest,
+  handleLocalVideoProtocolRequest,
+} from "./local-image-protocol"
 
 const tempDirectories: string[] = []
 
@@ -16,6 +22,12 @@ async function createFixtureDirectory() {
 
 function requestUrlForSource(source: string) {
   const url = toLocalImageProtocolUrl(source)
+  if (!url) throw new Error(`Invalid fixture source: ${source}`)
+  return url
+}
+
+function videoRequestUrlForSource(source: string) {
+  const url = toLocalVideoProtocolUrl(source)
   if (!url) throw new Error(`Invalid fixture source: ${source}`)
   return url
 }
@@ -123,5 +135,47 @@ describe("local image protocol", () => {
     expect(getLocalImageMimeType("a.png")).toBe("image/png")
     expect(getLocalImageMimeType("a.webp")).toBe("image/webp")
     expect(getLocalImageMimeType("a.svg")).toBeNull()
+  })
+
+  it("resolves valid local video absolute paths", async () => {
+    const directory = await createFixtureDirectory()
+    const videoPath = join(directory, "clip.mp4")
+    await writeFile(videoPath, Buffer.from([0, 1, 2, 3, 4, 5]))
+
+    await expect(resolveLocalVideoProtocolRequest(videoRequestUrlForSource(videoPath))).resolves.toEqual({
+      ok: true,
+      filePath: path.resolve(videoPath),
+      mimeType: "video/mp4",
+      size: 6,
+    })
+  })
+
+  it("streams byte ranges for video previews", async () => {
+    const directory = await createFixtureDirectory()
+    const videoPath = join(directory, "clip.webm")
+    await writeFile(videoPath, Buffer.from([0, 1, 2, 3, 4, 5]))
+
+    const response = await handleLocalVideoProtocolRequest(new Request(videoRequestUrlForSource(videoPath), {
+      headers: {
+        range: "bytes=2-4",
+      },
+    }))
+
+    expect(response.status).toBe(206)
+    expect(response.headers.get("accept-ranges")).toBe("bytes")
+    expect(response.headers.get("content-range")).toBe("bytes 2-4/6")
+    expect(response.headers.get("content-length")).toBe("3")
+    expect(response.headers.get("content-type")).toBe("video/webm")
+    expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual([2, 3, 4])
+  })
+
+  it("maps allowed video extensions to content types", () => {
+    expect(getLocalVideoMimeType("a.m4v")).toBe("video/mp4")
+    expect(getLocalVideoMimeType("a.mov")).toBe("video/quicktime")
+    expect(getLocalVideoMimeType("a.mp4")).toBe("video/mp4")
+    expect(getLocalVideoMimeType("a.ogg")).toBe("video/ogg")
+    expect(getLocalVideoMimeType("a.ogv")).toBe("video/ogg")
+    expect(getLocalVideoMimeType("a.webm")).toBe("video/webm")
+    expect(getLocalVideoMimeType("a.avi")).toBeNull()
   })
 })

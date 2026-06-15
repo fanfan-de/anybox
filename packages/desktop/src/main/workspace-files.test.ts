@@ -205,6 +205,23 @@ describe("workspace files", () => {
     expect(file.previewUrl).toMatch(/^anybox-local-image:\/\/image\?source=/)
   })
 
+  it("returns local video preview metadata without reading videos as text", async () => {
+    const workspaceRoot = await createWorkspaceFixture()
+    await writeFile(join(workspaceRoot, "src", "demo.mp4"), Buffer.from([0, 0, 0, 24]))
+
+    const file = await readWorkspaceFile(workspaceRoot, "src/demo.mp4")
+
+    expect(file).toMatchObject({
+      path: "src/demo.mp4",
+      name: "demo.mp4",
+      extension: "mp4",
+      kind: "video",
+      mimeType: "video/mp4",
+      size: 4,
+    })
+    expect(file.previewUrl).toMatch(/^anybox-local-video:\/\/video\?source=/)
+  })
+
   it("marks unsupported non-previewable file types without reading them as text", async () => {
     const workspaceRoot = await createWorkspaceFixture()
     await writeFile(join(workspaceRoot, "src", "archive.zip"), Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0x01]))

@@ -6,8 +6,13 @@ import type {
   AgentWorkspaceFileDocument,
   AgentWorkspaceFileSearchResult,
 } from "./types"
-import { getLocalImageMimeType, LOCAL_IMAGE_MAX_BYTES } from "./local-image-protocol"
-import { toLocalImageProtocolUrl } from "../shared/local-image-protocol"
+import {
+  getLocalImageMimeType,
+  getLocalVideoMimeType,
+  LOCAL_IMAGE_MAX_BYTES,
+  LOCAL_VIDEO_MAX_BYTES,
+} from "./local-image-protocol"
+import { toLocalImageProtocolUrl, toLocalVideoProtocolUrl } from "../shared/local-image-protocol"
 
 const EXCLUDED_DIRECTORY_NAMES = new Set([".git", "node_modules", "dist", "build", "out"])
 const HIDDEN_DIRECTORY_NAMES = new Set([".git"])
@@ -63,6 +68,7 @@ const SEARCH_RESULT_LIMIT = 200
 const TEXT_DETECTION_SAMPLE_BYTES = 8192
 const UNSUPPORTED_FILE_MESSAGE = "This file type is not supported in the Files panel yet."
 const IMAGE_TOO_LARGE_MESSAGE = "This image is too large to preview in the Files panel."
+const VIDEO_TOO_LARGE_MESSAGE = "This video is too large to preview in the Files panel."
 const UTF8_TEXT_DECODER = new TextDecoder("utf-8", { fatal: true })
 
 function getFileExtension(fileName: string) {
@@ -293,6 +299,30 @@ export async function readWorkspaceFile(
       extension,
       kind: "image",
       mimeType: imageMimeType,
+      previewUrl,
+      size: fileStats.size,
+    }
+  }
+
+  const videoMimeType = getLocalVideoMimeType(resolvedFilePath)
+  if (videoMimeType) {
+    const previewUrl = toLocalVideoProtocolUrl(resolvedFilePath)
+    if (fileStats.size > LOCAL_VIDEO_MAX_BYTES || !previewUrl) {
+      return {
+        path: normalizedPath,
+        name,
+        extension,
+        kind: "unsupported",
+        unsupportedReason: VIDEO_TOO_LARGE_MESSAGE,
+      }
+    }
+
+    return {
+      path: normalizedPath,
+      name,
+      extension,
+      kind: "video",
+      mimeType: videoMimeType,
       previewUrl,
       size: fileStats.size,
     }

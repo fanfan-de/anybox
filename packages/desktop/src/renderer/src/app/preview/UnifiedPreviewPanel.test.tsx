@@ -258,6 +258,43 @@ describe("UnifiedPreviewPanel", () => {
     expect(screen.queryByRole("button", { name: "Comment" })).toBeNull()
   })
 
+  it("syntax highlights code file previews", async () => {
+    window.desktop!.readPreviewText = vi.fn().mockResolvedValue({
+      content: "const camera = 1\n// ready",
+      path: `${workspaceRoot}\\src\\camera.ts`,
+    })
+
+    const { container } = renderUnifiedPreviewPanel({
+      state: createPreviewState({
+        activeTargetInput: "src/camera.ts",
+        draftTarget: "src/camera.ts",
+        resolvedTarget: {
+          entry: `${workspaceRoot}\\src\\camera.ts`,
+          externalOpenTarget: {
+            kind: "path",
+            value: `${workspaceRoot}\\src\\camera.ts`,
+          },
+          input: "src/camera.ts",
+          kind: "file",
+          mime: "text/typescript; charset=utf-8",
+          normalizedInput: "src/camera.ts",
+          path: `${workspaceRoot}\\src\\camera.ts`,
+          renderer: "code-viewer",
+          textReadable: true,
+          title: "camera.ts",
+          workspaceRoot,
+        },
+        status: "ready",
+      }),
+    })
+
+    expect(await screen.findByText("const")).toHaveClass("code-highlight-token", "is-keyword")
+    expect(container.querySelector(".code-highlight-line-number")).toHaveTextContent("1")
+    const commentToken = screen.getAllByText("// ready").find((element) => element.classList.contains("is-comment"))
+    expect(commentToken).toBeDefined()
+    expect(commentToken!).toHaveClass("code-highlight-token", "is-comment")
+  })
+
   it("routes web comment toolbar toggles through the active interaction callback", () => {
     const onActiveInteractionChange = vi.fn()
     renderUnifiedPreviewPanel({

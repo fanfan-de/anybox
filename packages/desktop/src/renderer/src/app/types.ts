@@ -548,7 +548,7 @@ export interface WorkspaceFileReviewState {
   treeLoadingDirectoryPaths: string[]
   selectedFilePath: string | null
   selectedFileContent: string | null
-  selectedFileKind: "text" | "image" | "unsupported" | null
+  selectedFileKind: "text" | "image" | "video" | "unsupported" | null
   selectedFileExtension: string | null
   selectedFileMimeType: string | null
   selectedFilePreviewUrl: string | null

@@ -1389,6 +1389,52 @@ describe("plugin marketplace API", () => {
     expect(Plugin.listInstalledPluginSkillRoots(["manifest-lab"])).toEqual([])
   })
 
+  test("lists installed plugins with cached connector diagnostics that include configured policies", async () => {
+    await useTempDatabase()
+    await writeManifestPluginPackage()
+    const app = createServerApp()
+
+    const installResponse = await app.request("/api/plugins/installed/manifest-lab", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        enabled: true,
+      }),
+    })
+    expect(installResponse.status).toBe(200)
+
+    const cachedConnectorDiagnostics = {
+      docs: {
+        serverID: "plugin.manifest-lab.connector.docs",
+        enabled: true,
+        ok: true,
+        toolCount: 1,
+        toolNames: ["docs_search"],
+        tools: [
+          {
+            name: "docs_search",
+            displayName: "Search docs",
+            riskHint: "read-only",
+            recommendedPolicy: "auto",
+            configuredPolicy: "ask",
+          },
+        ],
+      },
+    }
+    Sqlite.db.prepare(
+      "UPDATE installed_plugins SET lastConnectorDiagnostics = ? WHERE pluginID = ?",
+    ).run(JSON.stringify(cachedConnectorDiagnostics), "manifest-lab")
+
+    const listResponse = await app.request("/api/plugins/installed")
+    const listBody = (await listResponse.json()) as InstalledPluginsEnvelope
+
+    expect(listResponse.status).toBe(200)
+    expect(listBody.success).toBe(true)
+    expect(listBody.data?.some((plugin) => plugin.pluginID === "manifest-lab")).toBe(true)
+  })
+
   test("rejects installs that omit required plugin configuration", async () => {
     await useTempDatabase()
     await writeConfigRequiredPluginPackage()

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { DesktopLocalPreviewService } from "../../../../shared/desktop-ipc-contract"
+import { CodeBlockPreview, inferCodeLanguage } from "../code-highlight"
 import { BackIcon, ForwardIcon, OpenExternalIcon, PreviewIcon, ResetIcon, ScreenshotIcon } from "../icons"
 import { useToast } from "../toast"
 import type { PreviewInteractionCommitInput, PreviewInteractionPluginID, ResolvedPreviewTarget, WorkspacePreviewState } from "../types"
@@ -103,13 +104,13 @@ function JsonPreview({ content }: { content: string }) {
     // Invalid JSON still renders as read-only source.
   }
 
-  return <pre className="unified-preview-code" data-language="json">{formatted}</pre>
+  return <CodeBlockPreview className="unified-preview-code" content={formatted} language="json" />
 }
 
 function TablePreview({ content }: { content: string }) {
   const rows = parseCsvRows(content)
   const [header, ...bodyRows] = rows
-  if (!header) return <pre className="unified-preview-code" data-language="csv">{content}</pre>
+  if (!header) return <CodeBlockPreview className="unified-preview-code" content={content} language="csv" />
 
   return (
     <div className="unified-preview-table-scroll" role="region" aria-label="CSV preview">
@@ -136,11 +137,12 @@ function TablePreview({ content }: { content: string }) {
 
 function TextPreviewContent({
   content,
-  renderer,
+  target,
 }: {
   content: string
-  renderer: ResolvedPreviewTarget["renderer"]
+  target: ResolvedPreviewTarget
 }) {
+  const renderer = target.renderer
   if (renderer === "markdown-preview") {
     return (
       <div className="unified-preview-markdown thread-markdown">
@@ -152,7 +154,17 @@ function TextPreviewContent({
   }
   if (renderer === "json-viewer") return <JsonPreview content={content} />
   if (renderer === "table-preview") return <TablePreview content={content} />
-  return <pre className="unified-preview-code">{content}</pre>
+  return (
+    <CodeBlockPreview
+      className="unified-preview-code"
+      content={content}
+      language={inferCodeLanguage({
+        mime: target.mime,
+        path: getTargetPath(target) ?? target.title,
+        renderer: target.renderer,
+      })}
+    />
+  )
 }
 
 function shouldRenderTargetInWebview(target: ResolvedPreviewTarget | null) {
@@ -565,7 +577,7 @@ export function UnifiedPreviewPanel({
 
     return (
       <div className="unified-preview-text-stage">
-        <TextPreviewContent content={textPreview.content} renderer={target.renderer} />
+        <TextPreviewContent content={textPreview.content} target={target} />
       </div>
     )
   }

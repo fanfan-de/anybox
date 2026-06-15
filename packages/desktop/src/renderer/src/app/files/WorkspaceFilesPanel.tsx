@@ -13,6 +13,7 @@ import {
   ExpandIcon,
   FileImageIcon,
   FileTextIcon,
+  FileVideoIcon,
   FolderIcon,
   FolderOpenIcon,
   MinimizeIcon,
@@ -32,6 +33,7 @@ import {
 } from "../thread-markdown"
 import { formatWorkspaceFileLineRangeLabel, normalizeWorkspaceFileLineRange } from "./utils"
 import { toLocalImageProtocolUrl } from "../../../../shared/local-image-protocol"
+import { HighlightedCodeLine, inferCodeLanguage } from "../code-highlight"
 
 const ROOT_DIRECTORY_PATH = ""
 const MARKDOWN_FILE_EXTENSIONS = new Set(["md", "markdown"])
@@ -280,6 +282,13 @@ function getFileBadgeLabel(extension: string | null) {
     case "gif":
     case "webp":
       return "IMG"
+    case "m4v":
+    case "mov":
+    case "mp4":
+    case "ogg":
+    case "ogv":
+    case "webm":
+      return "VID"
     default:
       return null
   }
@@ -444,9 +453,18 @@ export function WorkspaceFilesPanel({
     Boolean(state.selectedFilePath) &&
     state.selectedFileKind === "image" &&
     Boolean(state.selectedFilePreviewUrl)
-  const imageFileSizeLabel = formatFileSize(state.selectedFileSize)
+  const shouldRenderVideoPreview =
+    Boolean(state.selectedFilePath) &&
+    state.selectedFileKind === "video" &&
+    Boolean(state.selectedFilePreviewUrl)
+  const selectedFileSizeLabel = formatFileSize(state.selectedFileSize)
   const selectedFileDirectoryPath = getWorkspaceFileDirectoryPath(state.selectedFilePath)
   const imageZoomLabel = imageViewMode === "fit" ? "Fit" : `${Math.round(imageScale * 100)}%`
+  const selectedCodeLanguage = inferCodeLanguage({
+    extension: selectedFileExtension,
+    mime: state.selectedFileMimeType,
+    path: state.selectedFilePath,
+  })
 
   for (const comment of state.comments) {
     const currentComments = commentsByEndLine.get(comment.endLineNumber) ?? []
@@ -678,10 +696,10 @@ export function WorkspaceFilesPanel({
         <div className="workspace-files-reader-title">
           <span className="label">Reader</span>
           <strong>{state.selectedFilePath}</strong>
-          {state.selectedFileKind === "image" ? (
+          {state.selectedFileKind === "image" || state.selectedFileKind === "video" ? (
             <span className="workspace-files-reader-meta">
               {state.selectedFileMimeType ? <span>{state.selectedFileMimeType}</span> : null}
-              {imageFileSizeLabel ? <span>{imageFileSizeLabel}</span> : null}
+              {selectedFileSizeLabel ? <span>{selectedFileSizeLabel}</span> : null}
             </span>
           ) : null}
         </div>
@@ -818,8 +836,10 @@ export function WorkspaceFilesPanel({
                     </button>
                   ) : null}
                 </div>
-                <pre className="workspace-files-line-content">
-                  <code>{line.length > 0 ? line : " "}</code>
+                <pre className="workspace-files-line-content code-highlight">
+                  <code>
+                    <HighlightedCodeLine line={line} language={selectedCodeLanguage} />
+                  </code>
                 </pre>
               </div>
 
@@ -914,21 +934,38 @@ export function WorkspaceFilesPanel({
     )
   }
 
+  function renderVideoPreview() {
+    if (!state.selectedFilePreviewUrl) return null
+
+    return (
+      <div className="workspace-files-video-stage">
+        <video
+          className="workspace-files-video"
+          controls
+          preload="metadata"
+          src={state.selectedFilePreviewUrl}
+          title={state.selectedFilePath ?? "Workspace video preview"}
+        />
+      </div>
+    )
+  }
+
   function renderReaderContent() {
-    if (shouldRenderSourceReader || shouldRenderMarkdownPreview || shouldRenderImagePreview) {
+    if (shouldRenderSourceReader || shouldRenderMarkdownPreview || shouldRenderImagePreview || shouldRenderVideoPreview) {
       return (
         <>
           {renderReaderHeader()}
           {shouldRenderMarkdownPreview ? renderMarkdownPreview() : null}
           {shouldRenderSourceReader ? renderSourceReader() : null}
           {shouldRenderImagePreview ? renderImagePreview() : null}
+          {shouldRenderVideoPreview ? renderVideoPreview() : null}
         </>
       )
     }
 
     return (
       <div className="workspace-files-open-empty">
-        {state.selectedFileKind === "image" ? <FileImageIcon /> : <FileTextIcon />}
+        {state.selectedFileKind === "image" ? <FileImageIcon /> : state.selectedFileKind === "video" ? <FileVideoIcon /> : <FileTextIcon />}
         <strong>{getReaderEmptyStateTitle(state)}</strong>
         <p>{getReaderEmptyStateCopy(state, scopeDirectory)}</p>
       </div>
