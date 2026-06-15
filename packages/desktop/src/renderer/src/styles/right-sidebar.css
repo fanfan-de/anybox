@@ -34,6 +34,8 @@
 
 .sidebar.is-right {
   --right-sidebar-inline-padding: 14px;
+  --right-sidebar-scrollbar-thumb: var(--mix-seg-text-3-34-transparent-66);
+  --right-sidebar-scrollbar-thumb-hover: var(--seg-text-3);
   padding: 0;
   gap: 0;
   background: transparent;
@@ -862,7 +864,7 @@
 }
 
 .unified-preview-code .code-highlight-line-number {
-  background: rgba(15, 23, 42, 0.34);
+  background: rgba(128, 128, 128, 0.08);
 }
 
 .code-highlight-line-text {
@@ -2904,7 +2906,8 @@
   border-right: 0;
   border-left: 0;
   border-bottom: 0;
-  background: #ffffff;
+  background: var(--code-highlight-bg, #ffffff);
+  color: var(--code-highlight-fg, #233241);
 }
 
 .workspace-files-code-block + .workspace-files-code-block {
@@ -2915,15 +2918,15 @@
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr);
   min-width: max-content;
-  background: #ffffff;
+  background: var(--code-highlight-bg, #ffffff);
 }
 
 .workspace-files-line:hover {
-  background: #f7fbff;
+  background: color-mix(in srgb, var(--code-highlight-bg, #ffffff) 88%, #d7ecff 12%);
 }
 
 .workspace-files-line.is-selected {
-  background: #eef6ff;
+  background: color-mix(in srgb, var(--code-highlight-bg, #ffffff) 78%, #d7ecff 22%);
 }
 
 .workspace-files-line.is-linked {
@@ -2981,7 +2984,7 @@
 .workspace-files-line-content {
   margin: 0;
   padding: 0 12px;
-  color: #233241;
+  color: var(--code-highlight-fg, #233241);
   font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
   font-size: 12px;
   line-height: 1.7;
@@ -2994,7 +2997,7 @@
 }
 
 .workspace-files-line.is-selected .workspace-files-line-content {
-  background: #f7fbff;
+  background: color-mix(in srgb, var(--code-highlight-bg, #ffffff) 78%, #d7ecff 22%);
 }
 
 .workspace-files-comment-composer,
@@ -3499,8 +3502,40 @@
   border-right: 0;
   border-left: 0;
   border-bottom: 0;
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  background: var(--code-highlight-bg, var(--seg-panel));
+  color: var(--code-highlight-fg, var(--seg-text-1));
+  scrollbar-color: var(--right-sidebar-scrollbar-thumb, var(--mix-seg-text-3-34-transparent-66)) transparent;
+  scrollbar-width: thin;
+}
+
+.workspace-files-code::-webkit-scrollbar,
+.workspace-files-tree-scroll::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.workspace-files-code::-webkit-scrollbar-track,
+.workspace-files-tree-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.workspace-files-code::-webkit-scrollbar-thumb,
+.workspace-files-tree-scroll::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: var(--right-sidebar-scrollbar-thumb, var(--mix-seg-text-3-34-transparent-66));
+  background-clip: content-box;
+}
+
+.workspace-files-code:hover::-webkit-scrollbar-thumb,
+.workspace-files-code:focus-within::-webkit-scrollbar-thumb,
+.workspace-files-code::-webkit-scrollbar-thumb:hover,
+.workspace-files-tree-scroll:hover::-webkit-scrollbar-thumb,
+.workspace-files-tree-scroll:focus-within::-webkit-scrollbar-thumb,
+.workspace-files-tree-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--right-sidebar-scrollbar-thumb-hover, var(--seg-text-3));
+  background-clip: content-box;
 }
 
 .right-sidebar-diff-hunk {
@@ -3518,7 +3553,7 @@
 }
 
 .workspace-files-line {
-  background: var(--seg-panel);
+  background: var(--code-highlight-bg, var(--seg-panel));
 }
 
 .right-sidebar-diff-row + .right-sidebar-diff-row {
@@ -3551,7 +3586,7 @@
 
 .workspace-files-line-content,
 .workspace-files-line-content code {
-  color: var(--seg-text-1);
+  color: var(--code-highlight-fg, var(--seg-text-1));
 }
 
 .code-highlight {
@@ -3587,10 +3622,13 @@
   color: var(--mix-seg-danger-72-text-on-dark-28);
 }
 
-.workspace-files-line:hover,
+.workspace-files-line:hover {
+  background: color-mix(in srgb, var(--code-highlight-bg, var(--seg-panel)) 88%, var(--seg-accent-soft) 12%);
+}
+
 .workspace-files-line.is-selected,
 .workspace-files-line.is-selected .workspace-files-line-content {
-  background: var(--mix-seg-accent-soft-76-seg-panel-24);
+  background: color-mix(in srgb, var(--code-highlight-bg, var(--seg-panel)) 78%, var(--seg-accent-soft) 22%);
 }
 
 .workspace-files-line.is-linked {
@@ -4011,6 +4049,8 @@
   min-height: 0;
   overflow: auto;
   padding: 6px 0 10px;
+  scrollbar-color: var(--right-sidebar-scrollbar-thumb, var(--mix-seg-text-3-34-transparent-66)) transparent;
+  scrollbar-width: thin;
 }
 
 .workspace-files-tree-list {

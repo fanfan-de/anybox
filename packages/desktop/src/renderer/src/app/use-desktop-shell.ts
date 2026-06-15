@@ -10,6 +10,12 @@ import {
 } from "../../../shared/appearance"
 import { applyAppearanceOverrides, normalizeAppearanceColorInputValue, readResolvedAppearanceTokenValues } from "./appearance-theme"
 import {
+  normalizeCodeThemePreference,
+  resolveCodeHighlightTheme,
+  type CodeThemePreference,
+  type ResolvedColorMode,
+} from "./code-theme"
+import {
   DEFAULT_RIGHT_SIDEBAR_WIDTH,
   DEFAULT_SIDEBAR_WIDTH,
   RIGHT_SIDEBAR_MIN_LEFT_EDGE_RATIO,
@@ -28,6 +34,7 @@ import { SIDEBAR_RESIZE_END_EVENT } from "./sidebar-resize-events"
 
 const ACTIVITY_RAIL_VISIBILITY_STORAGE_KEY = "desktop.activityRailVisible"
 const COLOR_MODE_STORAGE_KEY = "desktop.colorMode"
+const CODE_THEME_STORAGE_KEY = "desktop.codeTheme"
 const BRAND_THEME_STORAGE_KEY = "desktop.brandTheme"
 const FONT_FAMILY_STORAGE_KEY = "desktop.fontFamily"
 const DEBUG_UI_REGIONS_STORAGE_KEY = "desktop.debugUiRegions"
@@ -92,6 +99,15 @@ function readColorModePreference(): ColorMode {
   }
 }
 
+function readCodeThemePreference(): CodeThemePreference {
+  if (typeof window === "undefined") return "auto"
+  try {
+    return normalizeCodeThemePreference(window.localStorage.getItem(CODE_THEME_STORAGE_KEY))
+  } catch {
+    return "auto"
+  }
+}
+
 function readBrandThemePreference(): BrandTheme {
   if (typeof window === "undefined") return "terra"
   try {
@@ -100,6 +116,15 @@ function readBrandThemePreference(): BrandTheme {
     return "terra"
   } catch {
     return "terra"
+  }
+}
+
+function readSystemDarkModePreference() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false
+  try {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
+  } catch {
+    return false
   }
 }
 
@@ -176,6 +201,8 @@ export function useDesktopShell() {
   const [rightSidebarWidth, setRightSidebarWidth] = useState(DEFAULT_RIGHT_SIDEBAR_WIDTH)
   const [isActivityRailVisible, setIsActivityRailVisible] = useState(readActivityRailVisibilityPreference)
   const [colorMode, setColorMode] = useState<ColorMode>(readColorModePreference)
+  const [codeThemePreference, setCodeThemePreference] = useState<CodeThemePreference>(readCodeThemePreference)
+  const [isSystemDarkMode, setIsSystemDarkMode] = useState(readSystemDarkModePreference)
   const [brandTheme, setBrandTheme] = useState<BrandTheme>(readBrandThemePreference)
   const [fontFamily, setFontFamily] = useState<AppearanceFontFamily>(readFontFamilyPreference)
   const [appearanceOverrides, setAppearanceOverrides] = useState<AppearanceTokenMap>({})
@@ -199,6 +226,10 @@ export function useDesktopShell() {
   const isSidebarResizing = false
   const isRightSidebarResizing = false
   const isAgentDebugTraceEnabled = assistantTraceVisibility.debugMetadata
+  const resolvedColorMode: ResolvedColorMode = colorMode === "dark" || (colorMode === "system" && isSystemDarkMode)
+    ? "dark"
+    : "light"
+  const resolvedCodeTheme = resolveCodeHighlightTheme(codeThemePreference, resolvedColorMode)
 
   function getLeftRailDisplayWidth() {
     return isActivityRailVisible ? 54 : 0
@@ -445,6 +476,38 @@ export function useDesktopShell() {
       return
     }
   }, [colorMode])
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return
+
+    let mediaQueryList: MediaQueryList
+    try {
+      mediaQueryList = window.matchMedia("(prefers-color-scheme: dark)")
+    } catch {
+      return
+    }
+
+    const handleChange = () => {
+      setIsSystemDarkMode(mediaQueryList.matches)
+    }
+
+    handleChange()
+    if (typeof mediaQueryList.addEventListener === "function") {
+      mediaQueryList.addEventListener("change", handleChange)
+      return () => mediaQueryList.removeEventListener("change", handleChange)
+    }
+
+    mediaQueryList.addListener(handleChange)
+    return () => mediaQueryList.removeListener(handleChange)
+  }, [])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CODE_THEME_STORAGE_KEY, codeThemePreference)
+    } catch {
+      return
+    }
+  }, [codeThemePreference])
 
   useEffect(() => {
     document.documentElement.setAttribute("data-brand-theme", brandTheme)
@@ -912,9 +975,11 @@ export function useDesktopShell() {
     appShellRef,
     appShellStyle,
     brandTheme,
+    codeThemePreference,
     colorMode,
     fontFamily,
     handleBrandThemeChange: setBrandTheme,
+    handleCodeThemeChange: setCodeThemePreference,
     handleColorModeChange: setColorMode,
     handleFontFamilyChange: setFontFamily,
     handleActivityRailVisibilityChange,
@@ -944,6 +1009,8 @@ export function useDesktopShell() {
     platform,
     rightSidebarWidthBounds,
     rightSidebarWidth,
+    resolvedCodeTheme,
+    resolvedColorMode,
     sidebarWidthBounds,
     sidebarWidth,
     windowControlsRef,

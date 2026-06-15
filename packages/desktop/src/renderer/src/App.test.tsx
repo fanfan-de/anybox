@@ -9588,6 +9588,37 @@ describe("App", () => {
     expect(window.localStorage.getItem("desktop.brandTheme")).toBe("terra")
   })
 
+  it("saves the code theme from appearance settings", async () => {
+    render(<App />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Open settings" }))
+    await screen.findByRole("dialog", { name: "Settings" })
+    fireEvent.click(screen.getByRole("button", { name: /^Appearance/ }))
+
+    await chooseSettingsSelectOption("Code Theme", "Dracula")
+
+    expect(window.localStorage.getItem("desktop.codeTheme")).toBe("dracula")
+
+    await chooseSettingsSelectOption("Code Theme", "Auto (GitHub Light/Dark)")
+
+    expect(window.localStorage.getItem("desktop.codeTheme")).toBe("auto")
+  })
+
+  it("normalizes invalid saved code themes to auto", async () => {
+    window.localStorage.setItem("desktop.codeTheme", "unknown-theme")
+
+    render(<App />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Open settings" }))
+    await screen.findByRole("dialog", { name: "Settings" })
+    fireEvent.click(screen.getByRole("button", { name: /^Appearance/ }))
+
+    expect(getSettingsCombobox("Code Theme")).toHaveTextContent("Auto (GitHub Light/Dark)")
+    await waitFor(() => {
+      expect(window.localStorage.getItem("desktop.codeTheme")).toBe("auto")
+    })
+  })
+
   it("saves semantic token overrides from appearance settings", async () => {
     render(<App />)
 

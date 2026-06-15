@@ -2,10 +2,17 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import {
   bundledLanguages,
   createHighlighter,
+  type BundledTheme,
   type BundledLanguage,
   type Highlighter,
   type ThemedToken,
 } from "shiki/bundle/web"
+import {
+  DEFAULT_DARK_CODE_THEME,
+  DEFAULT_LIGHT_CODE_THEME,
+  isCodeHighlightTheme,
+  type CodeHighlightTheme,
+} from "./code-theme"
 
 export interface CodeLanguageInput {
   extension?: string | null
@@ -13,8 +20,6 @@ export interface CodeLanguageInput {
   path?: string | null
   renderer?: string | null
 }
-
-export type CodeHighlightTheme = "light" | "dark"
 
 interface HighlightedCodeLineProps {
   line: string
@@ -35,16 +40,16 @@ interface UseHighlightedCodeInput {
 }
 
 interface HighlightedCodeState {
+  backgroundColor: string | null
+  foregroundColor: string | null
   language: string
+  themeName: string | null
   tokenLines: ThemedToken[][] | null
 }
 
 export const CODE_HIGHLIGHT_MAX_INPUT_LENGTH = 200_000
 
-const SHIKI_THEMES = {
-  dark: "github-dark",
-  light: "github-light",
-} as const
+const INITIAL_SHIKI_THEMES = [DEFAULT_LIGHT_CODE_THEME, DEFAULT_DARK_CODE_THEME] as const satisfies readonly BundledTheme[]
 
 const INITIAL_SHIKI_LANGUAGES = [
   "bash",
@@ -113,6 +118,7 @@ const FILE_NAME_LANGUAGES = new Map([
 const SHIKI_LANGUAGE_IDS = new Set(Object.keys(bundledLanguages))
 let highlighterPromise: Promise<Highlighter> | null = null
 const loadedLanguages = new Set<string>(INITIAL_SHIKI_LANGUAGES)
+const loadedThemes = new Set<string>(INITIAL_SHIKI_THEMES)
 
 function getPathFileName(value: string | null | undefined) {
   const cleanPath = value?.split(/[?#]/)[0]?.trim() ?? ""
@@ -155,7 +161,7 @@ export function inferCodeLanguage(input: CodeLanguageInput) {
 function getHighlighter() {
   highlighterPromise ??= createHighlighter({
     langs: [...INITIAL_SHIKI_LANGUAGES],
-    themes: [SHIKI_THEMES.light, SHIKI_THEMES.dark],
+    themes: [...INITIAL_SHIKI_THEMES],
   }).catch((error) => {
     highlighterPromise = null
     throw error
@@ -169,10 +175,20 @@ function normalizeShikiLanguage(language: string | null | undefined) {
   return SHIKI_LANGUAGE_IDS.has(normalized) ? normalized : "text"
 }
 
+function normalizeShikiTheme(theme: CodeHighlightTheme) {
+  return isCodeHighlightTheme(theme) ? theme : DEFAULT_LIGHT_CODE_THEME
+}
+
 async function ensureLanguageLoaded(highlighter: Highlighter, language: string) {
   if (language === "text" || loadedLanguages.has(language)) return
   await highlighter.loadLanguage(language as BundledLanguage)
   loadedLanguages.add(language)
+}
+
+async function ensureThemeLoaded(highlighter: Highlighter, theme: CodeHighlightTheme) {
+  if (loadedThemes.has(theme)) return
+  await highlighter.loadTheme(theme as BundledTheme)
+  loadedThemes.add(theme)
 }
 
 function shouldUsePlainTextFallback(content: string, language: string) {
@@ -182,11 +198,15 @@ function shouldUsePlainTextFallback(content: string, language: string) {
 export function useHighlightedCode({
   content,
   language,
-  theme = "light",
+  theme = DEFAULT_LIGHT_CODE_THEME,
 }: UseHighlightedCodeInput): HighlightedCodeState {
   const shikiLanguage = normalizeShikiLanguage(language)
+  const shikiTheme = normalizeShikiTheme(theme)
   const [state, setState] = useState<HighlightedCodeState>({
+    backgroundColor: null,
+    foregroundColor: null,
     language: shikiLanguage,
+    themeName: shikiTheme,
     tokenLines: null,
   })
 
@@ -194,38 +214,62 @@ export function useHighlightedCode({
     let cancelled = false
 
     if (shouldUsePlainTextFallback(content, shikiLanguage)) {
-      setState({ language: shikiLanguage, tokenLines: null })
+      setState({
+        backgroundColor: null,
+        foregroundColor: null,
+        language: shikiLanguage,
+        themeName: shikiTheme,
+        tokenLines: null,
+      })
       return () => {
         cancelled = true
       }
     }
 
-    setState({ language: shikiLanguage, tokenLines: null })
+    setState({
+      backgroundColor: null,
+      foregroundColor: null,
+      language: shikiLanguage,
+      themeName: shikiTheme,
+      tokenLines: null,
+    })
 
     void getHighlighter()
       .then(async (highlighter) => {
         await ensureLanguageLoaded(highlighter, shikiLanguage)
+        await ensureThemeLoaded(highlighter, shikiTheme)
         if (cancelled) return
 
         const result = highlighter.codeToTokens(content, {
           lang: shikiLanguage as BundledLanguage,
-          theme: SHIKI_THEMES[theme],
+          theme: shikiTheme as BundledTheme,
         })
         if (!cancelled) {
           setState({
+            backgroundColor: result.bg ?? null,
+            foregroundColor: result.fg ?? null,
             language: shikiLanguage,
+            themeName: result.themeName ?? shikiTheme,
             tokenLines: result.tokens,
           })
         }
       })
       .catch(() => {
-        if (!cancelled) setState({ language: shikiLanguage, tokenLines: null })
+        if (!cancelled) {
+          setState({
+            backgroundColor: null,
+            foregroundColor: null,
+            language: shikiLanguage,
+            themeName: shikiTheme,
+            tokenLines: null,
+          })
+        }
       })
 
     return () => {
       cancelled = true
     }
-  }, [content, shikiLanguage, theme])
+  }, [content, shikiLanguage, shikiTheme])
 
   return state
 }
@@ -279,13 +323,17 @@ export function HighlightedCodeLine({ line, tokens }: HighlightedCodeLineProps) 
   )
 }
 
-export function CodeBlockPreview({ className, content, language, theme = "light" }: CodeBlockPreviewProps) {
+export function CodeBlockPreview({ className, content, language, theme = DEFAULT_LIGHT_CODE_THEME }: CodeBlockPreviewProps) {
   const lines = useMemo(() => content.split(/\r?\n/), [content])
   const highlight = useHighlightedCode({ content, language, theme })
   const classes = ["code-highlight", "code-highlight-block", className].filter(Boolean).join(" ")
+  const style = {
+    backgroundColor: highlight.backgroundColor ?? undefined,
+    color: highlight.foregroundColor ?? undefined,
+  }
 
   return (
-    <pre className={classes} data-language={highlight.language} data-theme={theme}>
+    <pre className={classes} data-language={highlight.language} data-theme={highlight.themeName ?? theme} style={style}>
       <code>
         {lines.map((line, index): ReactNode => {
           const lineNumber = index + 1

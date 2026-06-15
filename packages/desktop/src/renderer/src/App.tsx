@@ -873,6 +873,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     appShellRef,
     appShellStyle,
     brandTheme,
+    codeThemePreference,
     fontFamily,
     handleActivityRailVisibilityChange,
     handleAppearancePaletteReset,
@@ -880,6 +881,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     handleAppearanceTokenReset,
     handleAssistantTraceVisibilityChange,
     handleBrandThemeChange,
+    handleCodeThemeChange,
     handleAgentDebugTraceChange,
     handleDebugLineColorsChange,
     handleDebugUiRegionsChange,
@@ -905,6 +907,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     platform,
     rightSidebarWidthBounds,
     rightSidebarWidth,
+    resolvedCodeTheme,
     sidebarWidthBounds,
     sidebarWidth,
     windowControlsRef,
@@ -2589,6 +2592,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 assistantTraceVisibility={assistantTraceVisibility}
                 canOpenReview={Boolean(activeSession)}
                 canOpenTerminal={Boolean(terminalSessionID)}
+                codeTheme={resolvedCodeTheme}
                 canInsertWorkspaceFileCommentsIntoDraft={canInsertWorkspaceFileCommentsIntoDraft}
                 composerRefreshVersion={composerRefreshVersion}
                 isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
@@ -2736,6 +2740,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               assistantTraceVisibility={assistantTraceVisibility}
               archivableSessionCount={archivableSessionCount}
               brandTheme={brandTheme}
+              codeThemePreference={codeThemePreference}
               colorMode={colorMode}
               fontFamily={fontFamily}
               isActivityRailVisible={isActivityRailVisible}
@@ -2765,6 +2770,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               testingProviderID={testingProviderID}
               selectionDraft={selectionDraft}
               onBrandThemeChange={handleBrandThemeChange}
+              onCodeThemeChange={handleCodeThemeChange}
               onColorModeChange={handleColorModeChange}
               onFontFamilyChange={handleFontFamilyChange}
               onActivityRailVisibilityChange={handleActivityRailVisibilityChange}

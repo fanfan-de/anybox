@@ -17,9 +17,11 @@ function createPreviewState(overrides: Partial<WorkspacePreviewState> = {}): Wor
 }
 
 function renderUnifiedPreviewPanel(overrides: Partial<ComponentProps<typeof UnifiedPreviewPanel>> = {}) {
+  const { codeTheme = "github-light", ...panelOverrides } = overrides
   return render(
     <ToastProvider>
       <UnifiedPreviewPanel
+        codeTheme={codeTheme}
         state={createPreviewState()}
         workspaceRoot={workspaceRoot}
         onActiveInteractionChange={vi.fn()}
@@ -31,7 +33,7 @@ function renderUnifiedPreviewPanel(overrides: Partial<ComponentProps<typeof Unif
         onOpenExternal={vi.fn()}
         onOpenUrl={vi.fn()}
         onReload={vi.fn()}
-        {...overrides}
+        {...panelOverrides}
       />
     </ToastProvider>,
   )
@@ -266,6 +268,7 @@ describe("UnifiedPreviewPanel", () => {
     })
 
     const { container } = renderUnifiedPreviewPanel({
+      codeTheme: "vitesse-dark",
       state: createPreviewState({
         activeTargetInput: "src/camera.ts",
         draftTarget: "src/camera.ts",
@@ -292,7 +295,7 @@ describe("UnifiedPreviewPanel", () => {
     await waitFor(() => {
       expect(container.querySelector(".code-highlight-token")).not.toBeNull()
     })
-    expect(container.querySelector(".unified-preview-code")).toHaveAttribute("data-theme", "dark")
+    expect(container.querySelector(".unified-preview-code")).toHaveAttribute("data-theme", "vitesse-dark")
     expect(container.querySelector(".code-highlight-line-number")).toHaveTextContent("1")
     expect(container.querySelector(".code-highlight-row")).toHaveTextContent("const camera = 1")
     expect(container.querySelector(".code-highlight-raw-line")).toHaveTextContent("const camera = 1")
@@ -334,6 +337,19 @@ describe("UnifiedPreviewPanel", () => {
     })
     expect(container.querySelectorAll(".code-highlight-row")).toHaveLength(4)
     expect(container.querySelectorAll(".code-highlight-row")[2]).toHaveTextContent("now`")
+    expect(container.querySelector(".unified-preview-code")).toHaveAttribute("data-theme", "github-light")
+  })
+
+  it("applies the selected Shiki theme foreground and background to code blocks", async () => {
+    const { container } = render(<CodeBlockPreview content="const value = 1" language="typescript" theme="dracula" />)
+    const codeBlock = container.querySelector<HTMLElement>(".code-highlight")
+
+    await waitFor(() => {
+      expect(container.querySelector(".code-highlight-token")).not.toBeNull()
+      expect(codeBlock).toHaveAttribute("data-theme", "dracula")
+    })
+    expect(codeBlock?.style.backgroundColor).not.toBe("")
+    expect(codeBlock?.style.color).not.toBe("")
   })
 
   it("falls back to plain text for unsupported code languages", () => {

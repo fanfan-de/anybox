@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it, vi } from "vitest"
 import type { WorkspaceFileReviewState } from "../types"
+import type { CodeHighlightTheme } from "../code-theme"
 import { WorkspaceFilesPanel } from "./WorkspaceFilesPanel"
 
 function createFileReviewState(overrides: Partial<WorkspaceFileReviewState> = {}): WorkspaceFileReviewState {
@@ -38,11 +39,13 @@ function renderWorkspaceFilesPanel(
     onQueryChange: (value: string) => void
     onSelectFile: (path: string, options?: { linkedLineRange?: { startLineNumber: number; endLineNumber: number } | null }) => void
     onTreeInvalidate: (paths: string[]) => void
+    codeTheme: CodeHighlightTheme
   }> = {},
 ) {
   return render(
     <WorkspaceFilesPanel
       canInsertCommentsIntoDraft={true}
+      codeTheme={handlers.codeTheme ?? "github-light"}
       scopeDirectory="C:/workspace"
       scopeName="Workspace"
       state={state}
@@ -192,7 +195,7 @@ describe("WorkspaceFilesPanel", () => {
   })
 
   it("renders selected text file lines in the reader with Shiki tokens", async () => {
-    renderWorkspaceFilesPanel(
+    const { container } = renderWorkspaceFilesPanel(
       createFileReviewState({
         selectedFileContent: "const camera = { x: 0, y: 0 };\n\nfunction updateCamera() {\n  return camera.x;\n}",
         selectedFileExtension: ".js",
@@ -200,6 +203,7 @@ describe("WorkspaceFilesPanel", () => {
         selectedFilePath: "src/camera.js",
         status: "ready",
       }),
+      { codeTheme: "dracula" },
     )
 
     expect(screen.getByText("src/camera.js")).toBeVisible()
@@ -213,6 +217,10 @@ describe("WorkspaceFilesPanel", () => {
     expect(tokenTexts).toContain("const")
     expect(tokenTexts).toContain("0")
     expect(firstLine.querySelector(".code-highlight-raw-line")).toHaveTextContent("const camera = { x: 0, y: 0 };")
+    const codeContainer = container.querySelector<HTMLElement>(".workspace-files-code")
+    expect(codeContainer).toHaveAttribute("data-theme", "dracula")
+    expect(codeContainer?.style.getPropertyValue("--code-highlight-bg")).not.toBe("")
+    expect(codeContainer?.style.getPropertyValue("--code-highlight-fg")).not.toBe("")
   })
 
   it("renders Markdown files by default and can switch back to source", () => {
@@ -385,10 +393,22 @@ describe("WorkspaceFilesPanel", () => {
     )
     expect(styles).not.toContain(".workspace-files-results-dropdown")
     expect(styles).toMatch(
-      /\.workspace-files-code\s*\{[^}]*background:\s*var\(--seg-panel\);[^}]*color:\s*var\(--seg-text-1\);/s,
+      /\.workspace-files-code\s*\{[^}]*background:\s*var\(--code-highlight-bg,\s*var\(--seg-panel\)\);[^}]*color:\s*var\(--code-highlight-fg,\s*var\(--seg-text-1\)\);/s,
     )
     expect(styles).toMatch(
-      /\.workspace-files-line-content,\s*\.workspace-files-line-content code\s*\{[^}]*color:\s*var\(--seg-text-1\);/s,
+      /\.workspace-files-code\s*\{[^}]*scrollbar-color:\s*var\(--right-sidebar-scrollbar-thumb,\s*var\(--mix-seg-text-3-34-transparent-66\)\) transparent;[^}]*scrollbar-width:\s*thin;/s,
+    )
+    expect(styles).toMatch(
+      /\.workspace-files-tree-scroll\s*\{[^}]*scrollbar-color:\s*var\(--right-sidebar-scrollbar-thumb,\s*var\(--mix-seg-text-3-34-transparent-66\)\) transparent;[^}]*scrollbar-width:\s*thin;/s,
+    )
+    expect(styles).toMatch(
+      /\.workspace-files-code::-webkit-scrollbar-track,\s*\.workspace-files-tree-scroll::-webkit-scrollbar-track\s*\{[^}]*background:\s*transparent;/s,
+    )
+    expect(styles).toMatch(
+      /\.workspace-files-code::-webkit-scrollbar-thumb,\s*\.workspace-files-tree-scroll::-webkit-scrollbar-thumb\s*\{[^}]*border:\s*3px solid transparent;[^}]*border-radius:\s*999px;[^}]*background:\s*var\(--right-sidebar-scrollbar-thumb,\s*var\(--mix-seg-text-3-34-transparent-66\)\);[^}]*background-clip:\s*content-box;/s,
+    )
+    expect(styles).toMatch(
+      /\.workspace-files-line-content,\s*\.workspace-files-line-content code\s*\{[^}]*color:\s*var\(--code-highlight-fg,\s*var\(--seg-text-1\)\);/s,
     )
     expect(styles).toMatch(/\.workspace-files-line:hover\s*\{[^}]*background:/s)
     expect(styles).toMatch(

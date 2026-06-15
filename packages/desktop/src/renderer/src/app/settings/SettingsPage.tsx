@@ -40,6 +40,11 @@ import {
   SearchIcon,
 } from "../icons"
 import { normalizeAppearanceColorInputValue } from "../appearance-theme"
+import {
+  CODE_HIGHLIGHT_THEMES,
+  CODE_THEME_LABELS,
+  type CodeThemePreference,
+} from "../code-theme"
 import { useI18n } from "../i18n/I18nProvider"
 import type { TranslationKey } from "../i18n/translations"
 import { writeTextToClipboard } from "../shared-ui"
@@ -1093,6 +1098,7 @@ interface SettingsPageProps {
   deletingMcpServerID: string | null
   deletingProviderID: string | null
   brandTheme: BrandTheme
+  codeThemePreference: CodeThemePreference
   colorMode: ColorMode
   fontFamily: AppearanceFontFamily
   isActivityRailVisible: boolean
@@ -1122,6 +1128,7 @@ interface SettingsPageProps {
   testingProviderID: string | null
   selectionDraft: ProjectModelSelection
   onBrandThemeChange: (theme: BrandTheme) => void
+  onCodeThemeChange: (theme: CodeThemePreference) => void
   onColorModeChange: (mode: ColorMode) => void
   onFontFamilyChange: (fontFamily: AppearanceFontFamily) => void
   onActivityRailVisibilityChange: (value: boolean) => void
@@ -1195,6 +1202,7 @@ export function SettingsPage({
   deletingMcpServerID,
   deletingProviderID,
   brandTheme,
+  codeThemePreference,
   colorMode,
   fontFamily,
   isActivityRailVisible,
@@ -1224,6 +1232,7 @@ export function SettingsPage({
   testingProviderID,
   selectionDraft,
   onBrandThemeChange,
+  onCodeThemeChange,
   onColorModeChange,
   onFontFamilyChange,
   onActivityRailVisibilityChange,
@@ -1881,6 +1890,13 @@ export function SettingsPage({
       { value: "dark", label: t("settings.appearance.dark") },
       { value: "system", label: t("settings.appearance.system") },
     ]
+    const codeThemeOptions: Array<{ value: CodeThemePreference; label: string }> = [
+      { value: "auto", label: t("settings.appearance.codeThemeAuto") },
+      ...CODE_HIGHLIGHT_THEMES.map((theme) => ({
+        value: theme,
+        label: CODE_THEME_LABELS[theme],
+      })),
+    ]
     const languageOptions: Array<{ value: AppLocale; label: string; description: string }> = [
       {
         value: "zh-CN",
@@ -2253,6 +2269,20 @@ export function SettingsPage({
                             options={brandThemeOptions}
                             value={brandTheme}
                             onChange={onBrandThemeChange}
+                          />
+                        </span>
+                      </div>
+
+                      <div className="settings-select-row">
+                        <span className="settings-select-copy">
+                          <span className="settings-select-title">{t("settings.appearance.codeTheme")}</span>
+                        </span>
+                        <span className="settings-select-control">
+                          <SettingsSelect<CodeThemePreference>
+                            ariaLabel={t("settings.appearance.codeTheme")}
+                            options={codeThemeOptions}
+                            value={codeThemePreference}
+                            onChange={onCodeThemeChange}
                           />
                         </span>
                       </div>

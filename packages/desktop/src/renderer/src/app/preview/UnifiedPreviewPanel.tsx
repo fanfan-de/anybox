@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { DesktopLocalPreviewService } from "../../../../shared/desktop-ipc-contract"
 import { CodeBlockPreview, inferCodeLanguage } from "../code-highlight"
+import type { CodeHighlightTheme } from "../code-theme"
 import { BackIcon, ForwardIcon, OpenExternalIcon, PreviewIcon, ResetIcon, ScreenshotIcon } from "../icons"
 import { useToast } from "../toast"
 import type { PreviewInteractionCommitInput, PreviewInteractionPluginID, ResolvedPreviewTarget, WorkspacePreviewState } from "../types"
@@ -14,6 +15,7 @@ const PREVIEW_QUICK_TARGETS = ["http://localhost:3000", "http://localhost:5173",
 const TEXT_RENDERERS = new Set(["markdown-preview", "json-viewer", "table-preview", "code-viewer"])
 
 interface UnifiedPreviewPanelProps {
+  codeTheme: CodeHighlightTheme
   state: WorkspacePreviewState
   workspaceRoot?: string | null
   onDraftUrlChange: (value: string) => void
@@ -96,7 +98,7 @@ function renderTextError(error: string) {
   )
 }
 
-function JsonPreview({ content }: { content: string }) {
+function JsonPreview({ codeTheme, content }: { codeTheme: CodeHighlightTheme; content: string }) {
   let formatted = content
   try {
     formatted = JSON.stringify(JSON.parse(content), null, 2)
@@ -104,13 +106,13 @@ function JsonPreview({ content }: { content: string }) {
     // Invalid JSON still renders as read-only source.
   }
 
-  return <CodeBlockPreview className="unified-preview-code" content={formatted} language="json" theme="dark" />
+  return <CodeBlockPreview className="unified-preview-code" content={formatted} language="json" theme={codeTheme} />
 }
 
-function TablePreview({ content }: { content: string }) {
+function TablePreview({ codeTheme, content }: { codeTheme: CodeHighlightTheme; content: string }) {
   const rows = parseCsvRows(content)
   const [header, ...bodyRows] = rows
-  if (!header) return <CodeBlockPreview className="unified-preview-code" content={content} language="csv" theme="dark" />
+  if (!header) return <CodeBlockPreview className="unified-preview-code" content={content} language="csv" theme={codeTheme} />
 
   return (
     <div className="unified-preview-table-scroll" role="region" aria-label="CSV preview">
@@ -136,9 +138,11 @@ function TablePreview({ content }: { content: string }) {
 }
 
 function TextPreviewContent({
+  codeTheme,
   content,
   target,
 }: {
+  codeTheme: CodeHighlightTheme
   content: string
   target: ResolvedPreviewTarget
 }) {
@@ -152,8 +156,8 @@ function TextPreviewContent({
       </div>
     )
   }
-  if (renderer === "json-viewer") return <JsonPreview content={content} />
-  if (renderer === "table-preview") return <TablePreview content={content} />
+  if (renderer === "json-viewer") return <JsonPreview codeTheme={codeTheme} content={content} />
+  if (renderer === "table-preview") return <TablePreview codeTheme={codeTheme} content={content} />
   return (
     <CodeBlockPreview
       className="unified-preview-code"
@@ -163,7 +167,7 @@ function TextPreviewContent({
         path: getTargetPath(target) ?? target.title,
         renderer: target.renderer,
       })}
-      theme="dark"
+      theme={codeTheme}
     />
   )
 }
@@ -220,6 +224,7 @@ function EmptyPreviewState({
 }
 
 export function UnifiedPreviewPanel({
+  codeTheme,
   state,
   workspaceRoot,
   onBack,
@@ -578,7 +583,7 @@ export function UnifiedPreviewPanel({
 
     return (
       <div className="unified-preview-text-stage">
-        <TextPreviewContent content={textPreview.content} target={target} />
+        <TextPreviewContent codeTheme={codeTheme} content={textPreview.content} target={target} />
       </div>
     )
   }

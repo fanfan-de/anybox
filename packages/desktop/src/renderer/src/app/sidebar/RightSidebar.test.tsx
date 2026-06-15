@@ -330,6 +330,7 @@ function renderRightSidebar(input: {
         canInsertWorkspaceFileCommentsIntoDraft={true}
         canOpenReview={input.canOpenReview ?? true}
         canOpenTerminal={input.canOpenTerminal ?? true}
+        codeTheme="github-light"
         composerRefreshVersion={0}
         isAgentDebugTraceEnabled={false}
         isResolvingPermissionRequest={false}

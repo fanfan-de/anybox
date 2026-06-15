@@ -13,6 +13,7 @@ import {
 } from "../icons"
 import { UnifiedPreviewPanel } from "../preview/UnifiedPreviewPanel"
 import { ShellTopMenu } from "../shared-ui"
+import type { CodeHighlightTheme } from "../code-theme"
 import type { SessionMessageTree } from "../session-message-tree"
 import { InlineSideChatThread } from "../thread/ThreadView"
 import type {
@@ -66,6 +67,7 @@ interface RightSidebarProps {
   canInsertWorkspaceFileCommentsIntoDraft: boolean
   canOpenReview: boolean
   canOpenTerminal: boolean
+  codeTheme: CodeHighlightTheme
   composerRefreshVersion: number
   isAgentDebugTraceEnabled: boolean
   isResolvingPermissionRequest: boolean
@@ -237,6 +239,7 @@ export function RightSidebar({
   canInsertWorkspaceFileCommentsIntoDraft,
   canOpenReview,
   canOpenTerminal,
+  codeTheme,
   composerRefreshVersion,
   isAgentDebugTraceEnabled,
   isResolvingPermissionRequest,
@@ -413,6 +416,7 @@ export function RightSidebar({
         return (
           <WorkspaceFilesPanel
             canInsertCommentsIntoDraft={canInsertWorkspaceFileCommentsIntoDraft}
+            codeTheme={codeTheme}
             scopeDirectory={activeTab.scopeDirectory ?? activeWorkspaceFileScopeDirectory}
             scopeName={activeTab.scopeName ?? activeWorkspaceFileScopeName}
             state={activeTab.state}
@@ -430,6 +434,7 @@ export function RightSidebar({
       case "browser":
         return (
           <UnifiedPreviewPanel
+            codeTheme={codeTheme}
             state={activeTab.state}
             onBack={onPreviewBack}
             onDraftUrlChange={onPreviewDraftUrlChange}

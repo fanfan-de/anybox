@@ -3,6 +3,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type CSSProperties,
   type MouseEvent as ReactMouseEvent,
 } from "react"
 import {
@@ -34,6 +35,7 @@ import {
 import { formatWorkspaceFileLineRangeLabel, normalizeWorkspaceFileLineRange } from "./utils"
 import { toLocalImageProtocolUrl } from "../../../../shared/local-image-protocol"
 import { HighlightedCodeLine, inferCodeLanguage, useHighlightedCode } from "../code-highlight"
+import type { CodeHighlightTheme } from "../code-theme"
 
 const ROOT_DIRECTORY_PATH = ""
 const MARKDOWN_FILE_EXTENSIONS = new Set(["md", "markdown"])
@@ -45,6 +47,7 @@ const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/
 
 interface WorkspaceFilesPanelProps {
   canInsertCommentsIntoDraft: boolean
+  codeTheme: CodeHighlightTheme
   scopeDirectory: string | null
   scopeName: string | null
   state: WorkspaceFileReviewState
@@ -403,6 +406,7 @@ function WorkspaceFileTreeNode({
 
 export function WorkspaceFilesPanel({
   canInsertCommentsIntoDraft,
+  codeTheme,
   scopeDirectory,
   scopeName,
   state,
@@ -467,8 +471,12 @@ export function WorkspaceFilesPanel({
   const sourceHighlight = useHighlightedCode({
     content: shouldRenderSourceReader ? state.selectedFileContent ?? "" : "",
     language: selectedCodeLanguage,
-    theme: "light",
+    theme: codeTheme,
   })
+  const sourceHighlightStyle = {
+    "--code-highlight-bg": sourceHighlight.backgroundColor ?? undefined,
+    "--code-highlight-fg": sourceHighlight.foregroundColor ?? undefined,
+  } as CSSProperties
 
   for (const comment of state.comments) {
     const currentComments = commentsByEndLine.get(comment.endLineNumber) ?? []
@@ -785,7 +793,12 @@ export function WorkspaceFilesPanel({
 
   function renderSourceReader() {
     return (
-      <div className={dragSelection ? "workspace-files-code is-selecting-lines" : "workspace-files-code"} role="presentation">
+      <div
+        className={dragSelection ? "workspace-files-code is-selecting-lines" : "workspace-files-code"}
+        data-theme={sourceHighlight.themeName ?? codeTheme}
+        role="presentation"
+        style={sourceHighlightStyle}
+      >
         {fileLines.map((line, index) => {
           const lineNumber = index + 1
           const isCommenting = isLineWithinRange(pendingRange, lineNumber)
