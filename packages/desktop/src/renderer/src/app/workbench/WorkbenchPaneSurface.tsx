@@ -3,6 +3,7 @@ import { CreateSessionCanvas } from "../canvas/CreateSessionCanvas"
 import { SessionCanvasTopMenu } from "../canvas/SessionCanvasTopMenu"
 import { Composer } from "../composer/Composer"
 import { ComposerConcurrentInputDrawer } from "../composer/ComposerConcurrentInputDrawer"
+import { createComposerDraftStateFromPlainText, normalizeComposerDraftState } from "../composer/draft-state"
 import { useDeferredComposerDraftSync } from "../composer/use-deferred-composer-draft-sync"
 import { ComposerUtilityBar } from "../ComposerUtilityBar"
 import { getSessionWorkflowBadge, type SessionWorkflowBadge as SessionWorkflowBadgeInfo } from "../session-workflow"
@@ -77,6 +78,7 @@ export interface WorkbenchPaneSurfaceProps {
   sideChatPlacement?: "inline" | "right-sidebar"
   onCreateSessionSubmit: (createSessionTabID?: string | null, paneID?: string) => Promise<void>
   onCreateSessionWorkspaceChange: (workspaceID: string, createSessionTabID?: string | null) => void
+  onOpenProjectFolder: () => void | Promise<void>
   onInspectFileInSidebar: (file: string | null, sessionID: string | null, paneID: string) => void
   onArtifactLinkOpen?: (input: {
     paneID: string
@@ -212,6 +214,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   sideChatPlacement = "inline",
   onCreateSessionSubmit,
   onCreateSessionWorkspaceChange,
+  onOpenProjectFolder,
   onInspectFileInSidebar,
   onArtifactLinkOpen,
   onLocalFileLinkOpen,
@@ -293,6 +296,19 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
           },
         })
       : null
+
+  function handleCreateSessionPromptExampleSelect(text: string) {
+    const tabKey = pane.tabKey
+    if (!tabKey) return
+
+    const flushedDraft = flushDraftSync()
+    const baseDraftState = flushedDraft?.draftKey === tabKey ? flushedDraft.draftState : pane.draftState
+    const normalizedDraftState = normalizeComposerDraftState(baseDraftState)
+    const currentText = normalizedDraftState.plainText.trim()
+    const nextText = currentText ? `${normalizedDraftState.plainText.trimEnd()}\n\n${text}` : text
+    onSetDraft(tabKey, createComposerDraftStateFromPlainText(nextText))
+  }
+
   const composerProfiler = useMemo(
     () => createRendererProfilerOnRender("Composer commit", () => ({
       paneID: pane.id,
@@ -374,6 +390,8 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   isCreatingSession={pane.isCreatingSession}
                   selectedWorkspaceID={pane.createSessionWorkspaceID}
                   workspaces={workspaces}
+                  onOpenProjectFolder={onOpenProjectFolder}
+                  onPromptExampleSelect={handleCreateSessionPromptExampleSelect}
                   onWorkspaceChange={(workspaceID) => onCreateSessionWorkspaceChange(workspaceID, pane.createSessionTabID)}
                 />
               </RendererProfiler>

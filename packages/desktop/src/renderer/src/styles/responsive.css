@@ -213,6 +213,28 @@
     border-radius: var(--seg-radius-sm);
   }
 
+  .create-session-shell {
+    padding: 14px 10px;
+  }
+
+  .create-session-card {
+    gap: 12px;
+  }
+
+  .create-session-guide {
+    padding: 14px;
+  }
+
+  .create-session-guide-examples {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .create-session-guide-example {
+    width: 100%;
+    text-align: center;
+  }
+
   .composer-utility-bar {
     flex-wrap: wrap;
   }

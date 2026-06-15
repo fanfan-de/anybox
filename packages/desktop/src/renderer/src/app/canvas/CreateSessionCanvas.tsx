@@ -1,4 +1,5 @@
 import { type KeyboardEvent, type PointerEvent, useEffect, useId, useRef, useState } from "react"
+import { FolderIcon } from "../icons"
 import { joinClassNames } from "../shared-ui"
 import { ThreadMarkdown } from "../thread-markdown"
 import type { WorkspaceGroup } from "../types"
@@ -300,8 +301,17 @@ interface CreateSessionCanvasProps {
   isCreatingSession: boolean
   selectedWorkspaceID: string | null
   workspaces: WorkspaceGroup[]
+  onOpenProjectFolder: () => void | Promise<void>
+  onPromptExampleSelect: (text: string) => void
   onWorkspaceChange: (workspaceID: string) => void
 }
+
+export const CREATE_SESSION_PROMPT_EXAMPLES = [
+  "Fix a bug in the selected area and run the relevant tests.",
+  "Implement a focused feature, then verify it works.",
+  "Review the recent changes and list risks before editing.",
+  "Explain how this project is structured and where to start.",
+] as const
 
 function CreateSessionLogo() {
   return <span className="create-session-logo" role="img" aria-label="Anybox logo" />
@@ -309,6 +319,10 @@ function CreateSessionLogo() {
 
 function getWorkspaceLabel(workspace: WorkspaceGroup) {
   return `${workspace.project.name} / ${workspace.name}`
+}
+
+function getSelectedCreateSessionWorkspace(workspaces: WorkspaceGroup[], selectedWorkspaceID: string | null) {
+  return workspaces.find((workspace) => workspace.id === selectedWorkspaceID) ?? null
 }
 
 function CreateSessionWorkspaceSelect({
@@ -525,37 +539,121 @@ function CreateSessionWorkspaceSelect({
   )
 }
 
+function CreateSessionPromptExamples({ onPromptExampleSelect }: { onPromptExampleSelect: (text: string) => void }) {
+  return (
+    <div className="create-session-guide-examples" aria-label="Prompt examples">
+      {CREATE_SESSION_PROMPT_EXAMPLES.map((example) => (
+        <button
+          key={example}
+          type="button"
+          className="create-session-guide-example"
+          onClick={() => onPromptExampleSelect(example)}
+        >
+          {example}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function CreateSessionGuide({
+  selectedWorkspace,
+  workspaces,
+  onOpenProjectFolder,
+  onPromptExampleSelect,
+}: {
+  selectedWorkspace: WorkspaceGroup | null
+  workspaces: WorkspaceGroup[]
+  onOpenProjectFolder: () => void | Promise<void>
+  onPromptExampleSelect: (text: string) => void
+}) {
+  if (workspaces.length === 0) {
+    return (
+      <div className="create-session-guide is-no-project">
+        <div className="create-session-guide-copy">
+          <p className="create-session-guide-kicker">No project selected</p>
+          <h2>Open a project folder to start</h2>
+          <p>
+            Anybox needs a local project folder before this composer can create a real session, read files, or run
+            tools in context.
+          </p>
+        </div>
+        <button
+          className="create-session-guide-primary"
+          type="button"
+          aria-label="Open project folder"
+          onClick={() => void onOpenProjectFolder()}
+        >
+          <FolderIcon />
+          <span>Open folder</span>
+        </button>
+        <p className="create-session-guide-note">After a project is open, send a concrete task from the composer below.</p>
+      </div>
+    )
+  }
+
+  if (!selectedWorkspace) {
+    return (
+      <div className="create-session-guide is-missing-selection">
+        <div className="create-session-guide-copy">
+          <p className="create-session-guide-kicker">Project required</p>
+          <h2>Select a project before sending</h2>
+          <p>Choose a project from the selector above, or open another folder if the target project is not listed.</p>
+        </div>
+        <button
+          className="create-session-guide-secondary"
+          type="button"
+          aria-label="Open project folder"
+          onClick={() => void onOpenProjectFolder()}
+        >
+          <FolderIcon />
+          <span>Open folder</span>
+        </button>
+        <CreateSessionPromptExamples onPromptExampleSelect={onPromptExampleSelect} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="create-session-guide">
+      <div className="create-session-guide-copy">
+        <p className="create-session-guide-kicker">Project context</p>
+        <h2>Start with a concrete task</h2>
+        <p>
+          This session will start in <strong>{getWorkspaceLabel(selectedWorkspace)}</strong>. Include the goal, relevant
+          files or area, constraints, and how you want the result verified.
+        </p>
+      </div>
+      <CreateSessionPromptExamples onPromptExampleSelect={onPromptExampleSelect} />
+    </div>
+  )
+}
+
 export function CreateSessionCanvas({
   isCreatingSession,
   selectedWorkspaceID,
   workspaces,
+  onOpenProjectFolder,
+  onPromptExampleSelect,
   onWorkspaceChange,
 }: CreateSessionCanvasProps) {
-  if (workspaces.length === 0) {
-    return (
-      <section className="thread-shell create-session-shell">
-        <article className="create-session-card">
-          <CreateSessionLogo />
-          <CreateSessionWorkspaceSelect
-            disabled
-            selectedWorkspaceID={selectedWorkspaceID}
-            workspaces={workspaces}
-            onWorkspaceChange={onWorkspaceChange}
-          />
-        </article>
-      </section>
-    )
-  }
+  const selectedWorkspace = getSelectedCreateSessionWorkspace(workspaces, selectedWorkspaceID)
 
   return (
     <section className="thread-shell create-session-shell">
       <article className="create-session-card">
         <CreateSessionLogo />
         <CreateSessionWorkspaceSelect
-          disabled={isCreatingSession}
+          disabled={isCreatingSession || workspaces.length === 0}
           selectedWorkspaceID={selectedWorkspaceID}
           workspaces={workspaces}
           onWorkspaceChange={onWorkspaceChange}
+        />
+        <CreateSessionGuide
+          selectedWorkspace={selectedWorkspace}
+          workspaces={workspaces}
+          onOpenProjectFolder={onOpenProjectFolder}
+          onPromptExampleSelect={onPromptExampleSelect}
         />
       </article>
     </section>

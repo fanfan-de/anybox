@@ -791,6 +791,7 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
           onCommandsReady={handleWorkbenchDockviewCommandsReady}
           onCreateSessionSubmit={handleCreateSessionSubmit}
           onCreateSessionWorkspaceChange={handleCreateSessionWorkspaceChange}
+          onOpenProjectFolder={() => undefined}
           onCreateSideChatTab={handleCreateSideChatTab}
           onDeleteSideChatTab={handleDeleteSideChatTab}
           onBranchSelect={handleSessionBranchSelect}
@@ -2528,6 +2529,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 onCloseSessionTab={handleCanvasSessionTabClose}
                 onCreateSessionSubmit={handleCreateSessionSubmit}
                 onCreateSessionWorkspaceChange={handleCreateSessionWorkspaceChange}
+                onOpenProjectFolder={() => handleSidebarAction("project")}
                 onActiveDockviewChange={handleDockviewActiveChange}
                 onDetachSessionPanel={handleDetachSessionPanel}
                 onFocusPane={handlePaneFocus}

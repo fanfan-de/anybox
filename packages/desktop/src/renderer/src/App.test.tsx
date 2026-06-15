@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { DesktopAppUpdateState, MobileBridgeDesktopEvent } from "../../shared/desktop-ipc-contract"
 import type { PermissionRequestPrompt, PermissionResolveResult } from "../../shared/permission"
 import { App } from "./App"
+import { CREATE_SESSION_PROMPT_EXAMPLES } from "./app/canvas/CreateSessionCanvas"
 import {
   DEFAULT_RIGHT_SIDEBAR_WIDTH,
   DEFAULT_SIDEBAR_WIDTH,
@@ -1405,7 +1406,8 @@ describe("App", () => {
       expect(container.querySelector(".signal-row")).not.toBeInTheDocument()
     })
     expect(screen.getByRole("textbox", { name: "Task draft" }).closest("footer")).toHaveClass("prompt-input-shell")
-    expect(screen.getByRole("button", { name: "Add attachments" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Add attachments" })).not.toBeDisabled()
+    expect(screen.getByRole("button", { name: "Add attachments" })).toHaveAttribute("aria-disabled", "true")
     expect(screen.getByRole("button", { name: /^Select model:/ })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /^Agent mode:/ })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Clear draft" })).not.toBeInTheDocument()
@@ -8200,6 +8202,36 @@ describe("App", () => {
     expect(screen.queryByRole("combobox", { name: "Session project" })).not.toBeInTheDocument()
   })
 
+  it("fills the create session composer from a prompt example", async () => {
+    render(<App />)
+
+    fireEvent.click(getAddSessionTabButton())
+    await screen.findByRole("combobox", { name: "Session project" })
+
+    fireEvent.click(screen.getByRole("button", { name: CREATE_SESSION_PROMPT_EXAMPLES[0] }))
+
+    await waitFor(() => {
+      expectComposerDraftValue(screen.getByRole("textbox", { name: "Task draft" }), CREATE_SESSION_PROMPT_EXAMPLES[0])
+    })
+  })
+
+  it("appends a prompt example to an existing create session draft", async () => {
+    render(<App />)
+
+    fireEvent.click(getAddSessionTabButton())
+    await screen.findByRole("combobox", { name: "Session project" })
+
+    const draftInput = screen.getByRole("textbox", { name: "Task draft" })
+    setComposerDraftValue(draftInput, "Keep this context")
+    fireEvent.click(screen.getByRole("button", { name: CREATE_SESSION_PROMPT_EXAMPLES[1] }))
+
+    await waitFor(() => {
+      const draftText = screen.getByRole("textbox", { name: "Task draft" }).textContent ?? ""
+      expect(draftText).toContain("Keep this context")
+      expect(draftText).toContain(CREATE_SESSION_PROMPT_EXAMPLES[1])
+    })
+  })
+
   it("creates a backend session in the active workspace directory for local sessions", async () => {
     window.desktop!.getAgentHealth = vi.fn().mockResolvedValue({
       ok: true,
@@ -10930,7 +10962,9 @@ describe("App", () => {
 
     render(<App />)
 
-    expect(await screen.findByRole("button", { name: "Add attachments" })).toBeDisabled()
+    const attachmentButton = await screen.findByRole("button", { name: "Add attachments" })
+    expect(attachmentButton).not.toBeDisabled()
+    expect(attachmentButton).toHaveAttribute("aria-disabled", "true")
     fireEvent.click(await screen.findByRole("button", { name: "Select model: DeepSeek Reasoner" }))
     const modelList = screen.getByRole("listbox", { name: "Model selection" })
     expect(within(modelList).queryByRole("option", { name: "Use server default" })).not.toBeInTheDocument()
@@ -13389,8 +13423,8 @@ describe("App", () => {
     expect(styles).toMatch(/\.settings-service-detail-panel\s*\{[^}]*overflow:\s*auto;[^}]*scrollbar-gutter:\s*stable;/s)
     expect(styles).toMatch(/\.settings-page-main\.prompt-presets-page-main\s*\{[^}]*height:\s*100%;[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*align-items:\s*stretch;/s)
     expect(styles).toMatch(/\.settings-page-main\.prompt-presets-page-main\s*>\s*\.settings-prompts-shell\s*\{[^}]*flex:\s*1 1 auto;[^}]*height:\s*auto;/s)
-    expect(styles).toMatch(/\.settings-prompts-shell\s*\{[^}]*grid-template-columns:\s*320px minmax\(0,\s*1fr\) clamp\(230px,\s*17vw,\s*300px\);[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\);[^}]*grid-template-areas:\s*"library detail slots";[^}]*gap:\s*18px 22px;/s)
-    expect(styles).toMatch(/\.settings-prompts-shell\.is-sidebar-hosted\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) clamp\(230px,\s*17vw,\s*300px\);[^}]*grid-template-areas:\s*"detail slots";/s)
+    expect(styles).toMatch(/\.settings-prompts-shell\s*\{[^}]*grid-template-columns:\s*320px\s*minmax\(0,\s*1fr\)\s*minmax\(0,\s*var\(--settings-document-width,\s*1120px\)\)\s*minmax\(0,\s*1fr\)\s*var\(--settings-document-side-panel-width,\s*clamp\(230px,\s*17vw,\s*300px\)\);[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\);[^}]*grid-template-areas:\s*"library \. detail \. slots";[^}]*gap:\s*18px 22px;/s)
+    expect(styles).toMatch(/\.settings-prompts-shell\.is-sidebar-hosted\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(0,\s*var\(--settings-document-width,\s*1120px\)\)\s*minmax\(0,\s*1fr\)\s*var\(--settings-document-side-panel-width,\s*clamp\(230px,\s*17vw,\s*300px\)\);[^}]*grid-template-areas:\s*"\. detail \. slots";/s)
     expect(styles).toMatch(/\.settings-prompt-assignment-select\s+\.settings-select-trigger\s*\{[^}]*min-height:\s*32px;[^}]*background:\s*transparent;/s)
     expect(styles).toMatch(/\.settings-prompt-assignment-select\s+\.settings-select-panel\s*\{[^}]*left:\s*0;[^}]*width:\s*max-content;[^}]*max-width:\s*calc\(100vw - 48px\);/s)
     expect(styles).toMatch(/\.settings-prompt-assignment-select\s+\.settings-select-option span\s*\{[^}]*overflow:\s*visible;[^}]*text-overflow:\s*clip;/s)
@@ -13403,12 +13437,12 @@ describe("App", () => {
     expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-assignment-row\s*\+\s*\.settings-prompt-assignment-row\s*\{[^}]*border-left:\s*0;[^}]*border-top:\s*0;/s)
     expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-assignment-control,\s*\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-assignment-actions,\s*\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-assignment-select\s*\{[^}]*width:\s*100%;/s)
     expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main[\s\S]*?\.settings-prompt-assignment-select[\s\S]*?\.settings-select-trigger\s*\{[^}]*min-height:\s*30px;[^}]*padding:\s*0;[^}]*background:\s*transparent;/s)
-    expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-editor-header\s*\{[^}]*width:\s*min\(100%,\s*1320px\);[^}]*justify-self:\s*center;/s)
+    expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-editor-header\s*\{[^}]*width:\s*min\(100%,\s*var\(--settings-document-width\)\);[^}]*justify-self:\s*center;/s)
     expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-service-detail-panel\s*>\s*\.settings-prompt-editor-panel\s*\{[^}]*padding:\s*0;[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s)
-    expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-editor,\s*\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-preview-surface\s*\{[^}]*width:\s*min\(100%,\s*1320px\);[^}]*justify-self:\s*center;[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s)
+    expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-editor,\s*\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-preview-surface\s*\{[^}]*width:\s*min\(100%,\s*var\(--settings-document-width\)\);[^}]*justify-self:\s*center;[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s)
     expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-editor\s*\{[^}]*resize:\s*none;/s)
     expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-editor:focus-visible\s*\{[^}]*box-shadow:\s*none;[^}]*outline:\s*var\(--focus-outline-width\) solid rgba\(143,\s*99,\s*233,\s*0\.22\);/s)
-    expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-source-path\s*\{[^}]*width:\s*min\(100%,\s*1320px\);[^}]*justify-self:\s*center;/s)
+    expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-source-path\s*\{[^}]*width:\s*min\(100%,\s*var\(--settings-document-width\)\);[^}]*justify-self:\s*center;/s)
     expect(styles).not.toMatch(/\.settings-prompt-assignment-control select/)
   })
 

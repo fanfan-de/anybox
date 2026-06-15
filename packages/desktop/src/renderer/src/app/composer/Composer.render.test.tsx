@@ -124,6 +124,67 @@ describe("Composer", () => {
     expect(screen.getByText("Ask a follow-up about this reply.")).toBeInTheDocument()
   })
 
+  it("explains why attachments are unavailable without opening the picker", () => {
+    const onPickAttachments = vi.fn()
+    const disabledReason = "DeepSeek V4 Pro does not support image or PDF input."
+
+    renderComposer({
+      attachmentButtonTitle: disabledReason,
+      attachmentDisabledReason: disabledReason,
+      onPickAttachments,
+    })
+
+    const attachmentButton = screen.getByRole("button", { name: "Add attachments" })
+    expect(attachmentButton).not.toBeDisabled()
+    expect(attachmentButton).toHaveAttribute("aria-disabled", "true")
+
+    fireEvent.click(attachmentButton)
+
+    expect(onPickAttachments).not.toHaveBeenCalled()
+    expect(screen.getByRole("dialog", { name: "Attachments unavailable" })).toBeInTheDocument()
+    expect(screen.getByText(disabledReason)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Got it" }))
+    expect(screen.queryByRole("dialog", { name: "Attachments unavailable" })).not.toBeInTheDocument()
+  })
+
+  it("closes the unavailable attachment popover from outside click and Escape", () => {
+    const disabledReason = "Loading model capabilities..."
+
+    renderComposer({
+      attachmentButtonTitle: disabledReason,
+      attachmentDisabledReason: disabledReason,
+    })
+
+    const attachmentButton = screen.getByRole("button", { name: "Add attachments" })
+
+    fireEvent.click(attachmentButton)
+    expect(screen.getByRole("dialog", { name: "Attachments unavailable" })).toBeInTheDocument()
+
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole("dialog", { name: "Attachments unavailable" })).not.toBeInTheDocument()
+
+    fireEvent.click(attachmentButton)
+    expect(screen.getByRole("dialog", { name: "Attachments unavailable" })).toBeInTheDocument()
+
+    fireEvent.keyDown(window, { key: "Escape" })
+    expect(screen.queryByRole("dialog", { name: "Attachments unavailable" })).not.toBeInTheDocument()
+  })
+
+  it("opens the attachment picker when attachments are available", () => {
+    const onPickAttachments = vi.fn()
+
+    renderComposer({ onPickAttachments })
+
+    const attachmentButton = screen.getByRole("button", { name: "Add attachments" })
+    expect(attachmentButton).not.toHaveAttribute("aria-disabled")
+
+    fireEvent.click(attachmentButton)
+
+    expect(onPickAttachments).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole("dialog", { name: "Attachments unavailable" })).not.toBeInTheDocument()
+  })
+
   it("supports two-level provider and model selection in the model menu", () => {
     renderComposer({
       modelOptions: [

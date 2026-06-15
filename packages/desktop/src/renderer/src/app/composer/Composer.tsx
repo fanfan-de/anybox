@@ -22,12 +22,14 @@ import {
   useMemo,
   useRef,
   useState,
+  useId,
   type CSSProperties,
   type ClipboardEvent as ReactClipboardEvent,
   type KeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react"
 import { ArrowUpIcon, ChevronDownIcon, CloseIcon, PaperclipIcon, StopIcon } from "../icons"
+import { joinClassNames } from "../shared-ui"
 import type {
   ComposerAttachment,
   ComposerDraftState,
@@ -1012,6 +1014,7 @@ export function Composer({
   const editorRef = useRef<LexicalEditor | null>(null)
   const contentEditableRef = useRef<HTMLDivElement | null>(null)
   const footerRef = useRef<HTMLElement | null>(null)
+  const attachmentUnavailableAnchorRef = useRef<HTMLDivElement | null>(null)
   const activeModelProviderOptionRef = useRef<HTMLButtonElement | null>(null)
   const selectedModelOptionRef = useRef<HTMLButtonElement | null>(null)
   const isComposingRef = useRef(false)
@@ -1029,6 +1032,10 @@ export function Composer({
   const [modelSearchQuery, setModelSearchQuery] = useState("")
   const [activeModelProviderID, setActiveModelProviderID] = useState<string | null>(null)
   const previousOpenMenuRef = useRef<ComposerMenuKey>(null)
+  const [isAttachmentUnavailablePopoverOpen, setIsAttachmentUnavailablePopoverOpen] = useState(false)
+  const attachmentUnavailablePopoverID = useId()
+  const attachmentUnavailableTitleID = useId()
+  const attachmentUnavailableDescriptionID = useId()
   const [commandMenuState, setCommandMenuState] = useState<ComposerCommandMenuState | null>(null)
   const [commandMenuItems, setCommandMenuItems] = useState<ComposerCommandMenuItem[]>([])
   const [activeCommandIndex, setActiveCommandIndex] = useState(0)
@@ -1365,6 +1372,36 @@ export function Composer({
   }, [openMenu])
 
   useEffect(() => {
+    if (attachmentDisabledReason !== null || !isAttachmentUnavailablePopoverOpen) return
+    setIsAttachmentUnavailablePopoverOpen(false)
+  }, [attachmentDisabledReason, isAttachmentUnavailablePopoverOpen])
+
+  useEffect(() => {
+    if (!isAttachmentUnavailablePopoverOpen) return
+
+    const handlePointerDown = (event: globalThis.PointerEvent) => {
+      const target = event.target as Node
+      if (!attachmentUnavailableAnchorRef.current?.contains(target)) {
+        setIsAttachmentUnavailablePopoverOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsAttachmentUnavailablePopoverOpen(false)
+      }
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown)
+    window.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown)
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [isAttachmentUnavailablePopoverOpen])
+
+  useEffect(() => {
     if (openMenu === "model" || modelSearchQuery === "") return
     setModelSearchQuery("")
   }, [modelSearchQuery, openMenu])
@@ -1532,6 +1569,17 @@ export function Composer({
     void onModelChange(value)
   }
 
+  function handleAttachmentButtonClick() {
+    if (attachmentDisabledReason !== null) {
+      setOpenMenu(null)
+      setIsAttachmentUnavailablePopoverOpen((current) => !current)
+      return
+    }
+
+    setIsAttachmentUnavailablePopoverOpen(false)
+    void onPickAttachments()
+  }
+
   function handleReasoningEffortSelect(value: ReasoningEffort) {
     setOpenMenu(null)
     onReasoningEffortChange(value)
@@ -1612,6 +1660,12 @@ export function Composer({
     setCommandMenuStateWithRef(null)
 
     if (command === "attach") {
+      if (attachmentDisabledReason !== null) {
+        setOpenMenu(null)
+        setIsAttachmentUnavailablePopoverOpen(true)
+        return
+      }
+
       void onPickAttachments()
       return
     }
@@ -2007,16 +2061,47 @@ export function Composer({
 
       <div className="composer-toolbar">
         <div className="composer-selectors" aria-label="Composer options">
-          <button
-            aria-label="Add attachments"
-            className="composer-selector-button is-icon-only"
-            disabled={attachmentDisabledReason !== null}
-            onClick={() => void onPickAttachments()}
-            title={attachmentButtonTitle}
-            type="button"
-          >
-            <PaperclipIcon />
-          </button>
+          <div className="composer-menu-anchor" ref={attachmentUnavailableAnchorRef}>
+            <button
+              aria-controls={isAttachmentUnavailablePopoverOpen ? attachmentUnavailablePopoverID : undefined}
+              aria-describedby={isAttachmentUnavailablePopoverOpen ? attachmentUnavailableDescriptionID : undefined}
+              aria-disabled={attachmentDisabledReason !== null ? "true" : undefined}
+              aria-expanded={attachmentDisabledReason !== null ? isAttachmentUnavailablePopoverOpen : undefined}
+              aria-haspopup={attachmentDisabledReason !== null ? "dialog" : undefined}
+              aria-label="Add attachments"
+              className={joinClassNames(
+                "composer-selector-button is-icon-only",
+                attachmentDisabledReason !== null && "is-unavailable",
+                isAttachmentUnavailablePopoverOpen && "is-active",
+              )}
+              onClick={handleAttachmentButtonClick}
+              title={attachmentButtonTitle}
+              type="button"
+            >
+              <PaperclipIcon />
+            </button>
+
+            {isAttachmentUnavailablePopoverOpen && attachmentDisabledReason !== null ? (
+              <div
+                id={attachmentUnavailablePopoverID}
+                aria-labelledby={attachmentUnavailableTitleID}
+                className="composer-attachment-unavailable-popover"
+                role="dialog"
+              >
+                <div className="composer-attachment-unavailable-copy">
+                  <h2 id={attachmentUnavailableTitleID}>Attachments unavailable</h2>
+                  <p id={attachmentUnavailableDescriptionID}>{attachmentDisabledReason}</p>
+                </div>
+                <button
+                  className="secondary-button composer-attachment-unavailable-action"
+                  onClick={() => setIsAttachmentUnavailablePopoverOpen(false)}
+                  type="button"
+                >
+                  Got it
+                </button>
+              </div>
+            ) : null}
+          </div>
 
           {showModelSelector ? (
             <div className="composer-menu-anchor">

@@ -2544,25 +2544,26 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   flex: 1 1 auto;
   align-items: center;
   justify-content: center;
-  padding: 12px 0;
+  padding: 18px var(--pane-content-gutter);
+  overflow: auto;
 }
 
 .create-session-card {
-  width: min(100%, 360px);
+  width: min(100%, 720px);
   padding: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
   display: grid;
   justify-items: center;
-  gap: 18px;
+  gap: 14px;
 }
 
 .create-session-logo {
   --create-session-logo-image: url("/黑色.svg");
 
   display: block;
-  width: min(200px, 48vw);
+  width: min(132px, 36vw);
   aspect-ratio: 1888 / 1884;
   background-image: var(--create-session-logo-image);
   background-position: center;
@@ -2707,6 +2708,144 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 
 .create-session-select-option:focus-visible {
   box-shadow: inset 0 0 0 1px var(--focus-outline-color);
+}
+
+.create-session-guide {
+  width: 100%;
+  max-width: 720px;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  justify-items: stretch;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--seg-radius-md);
+  background: var(--mix-seg-panel-muted-88-seg-panel-12);
+  color: var(--seg-text-1);
+  box-shadow: 0 16px 34px rgba(46, 81, 118, 0.07);
+  box-sizing: border-box;
+}
+
+.create-session-guide-copy {
+  display: grid;
+  gap: 6px;
+  text-align: center;
+}
+
+.create-session-guide-kicker {
+  margin: 0;
+  color: var(--seg-text-3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.create-session-guide h2 {
+  margin: 0;
+  color: var(--seg-text-1);
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.25;
+}
+
+.create-session-guide p {
+  margin: 0;
+  color: var(--seg-text-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.create-session-guide strong {
+  color: var(--seg-text-1);
+  font-weight: 650;
+}
+
+.create-session-guide-primary,
+.create-session-guide-secondary {
+  min-height: 36px;
+  justify-self: center;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--seg-radius-sm);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.create-session-guide-primary {
+  border-color: var(--seg-accent);
+  background: var(--seg-accent);
+  color: #ffffff;
+  box-shadow: 0 8px 18px var(--mix-seg-accent-22-transparent-78);
+}
+
+.create-session-guide-secondary {
+  background: var(--seg-panel);
+  color: var(--seg-text-1);
+  box-shadow: none;
+}
+
+.create-session-guide-primary svg,
+.create-session-guide-secondary svg {
+  width: 16px;
+  height: 16px;
+}
+
+.create-session-guide-primary:hover,
+.create-session-guide-primary:focus-visible,
+.create-session-guide-secondary:hover,
+.create-session-guide-secondary:focus-visible,
+.create-session-guide-example:hover,
+.create-session-guide-example:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1px var(--focus-outline-color),
+    0 8px 18px rgba(46, 81, 118, 0.08);
+}
+
+.create-session-guide-note {
+  text-align: center;
+}
+
+.create-session-guide-examples {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.create-session-guide-example {
+  max-width: 100%;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid rgba(138, 164, 189, 0.36);
+  border-radius: var(--seg-radius-sm);
+  background: var(--seg-panel);
+  color: var(--seg-text-2);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.create-session-guide-example:hover,
+.create-session-guide-example:focus-visible {
+  color: var(--seg-text-1);
+  background: var(--semantic-sidebar-tree-row-surface-hover, rgba(17, 24, 39, 0.06));
 }
 
 .session-row-copy,

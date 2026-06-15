@@ -307,6 +307,7 @@ export interface WorkbenchShellProps {
   onCloseSessionTab: (sessionID: string, paneID?: string) => void
   onCreateSessionSubmit: (createSessionTabID?: string | null, paneID?: string) => Promise<void>
   onCreateSessionWorkspaceChange: (workspaceID: string, createSessionTabID?: string | null) => void
+  onOpenProjectFolder: () => void | Promise<void>
   onActiveDockviewChange: (input: WorkbenchDockviewActiveChange) => void
   onDetachSessionPanel?: (input: {
     bounds: DetachedSessionPanelBounds
@@ -891,6 +892,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
           sideChatPlacement={props.sideChatPlacement}
           onCreateSessionSubmit={props.onCreateSessionSubmit}
           onCreateSessionWorkspaceChange={props.onCreateSessionWorkspaceChange}
+          onOpenProjectFolder={props.onOpenProjectFolder}
           onInspectFileInSidebar={props.onInspectFileInSidebar}
           onArtifactLinkOpen={props.onArtifactLinkOpen}
           onLocalFileLinkOpen={props.onLocalFileLinkOpen}

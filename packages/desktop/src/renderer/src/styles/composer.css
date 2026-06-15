@@ -858,11 +858,62 @@
   cursor: default;
 }
 
+.composer-selector-button.is-unavailable {
+  opacity: 0.58;
+  cursor: pointer;
+}
+
 .composer-attachment-note {
   margin: 12px 0 0;
   color: #9b2c2c;
   font-size: 13px;
   line-height: 1.5;
+}
+
+.composer-attachment-unavailable-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 4;
+  width: min(300px, calc(100vw - 64px));
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md));
+  background: var(--seg-dropdown-menu-surface);
+  color: var(--seg-text-1);
+  box-shadow: var(--shadow-sm);
+}
+
+.composer-attachment-unavailable-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.composer-attachment-unavailable-copy h2,
+.composer-attachment-unavailable-copy p {
+  margin: 0;
+}
+
+.composer-attachment-unavailable-copy h2 {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--seg-text-1);
+}
+
+.composer-attachment-unavailable-copy p {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--seg-text-2);
+}
+
+.composer-attachment-unavailable-action {
+  min-height: 30px;
+  width: max-content;
+  justify-self: end;
+  padding: 0 10px;
 }
 
 .composer-menu-panel {
@@ -1704,6 +1755,19 @@
   background: var(--seg-composer-button-surface);
   color: var(--seg-composer-button-text);
   box-shadow: none;
+}
+
+.composer .composer-selector-button.is-unavailable {
+  color: var(--seg-text-3);
+  opacity: 0.62;
+}
+
+.composer .composer-selector-button.is-unavailable:hover,
+.composer .composer-selector-button.is-unavailable:focus-visible,
+.composer .composer-selector-button.is-unavailable.is-active {
+  background: var(--seg-composer-button-surface);
+  color: var(--seg-text-2);
+  opacity: 0.86;
 }
 
 .composer .composer-menu-option.is-selected {

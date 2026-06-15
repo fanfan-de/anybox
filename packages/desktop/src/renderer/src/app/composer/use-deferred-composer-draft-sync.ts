@@ -33,10 +33,11 @@ export function useDeferredComposerDraftSync({
     clearTimer()
 
     const pendingDraft = pendingDraftRef.current
-    if (!pendingDraft) return
+    if (!pendingDraft) return null
 
     pendingDraftRef.current = null
     latestOnSyncRef.current(pendingDraft.draftKey, pendingDraft.draftState)
+    return pendingDraft
   }, [clearTimer])
 
   const scheduleDraftSync = useCallback((draftState: ComposerDraftState) => {

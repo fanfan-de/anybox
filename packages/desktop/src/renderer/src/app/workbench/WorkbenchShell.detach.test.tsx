@@ -292,6 +292,7 @@ function createProps(overrides: Partial<WorkbenchShellProps> = {}): WorkbenchShe
     onLayoutChange: vi.fn(),
     onLocalFileLinkOpen: vi.fn(),
     onOpenCreateSessionTab: vi.fn(),
+    onOpenProjectFolder: vi.fn(),
     onOpenSideChat: vi.fn(),
     onPasteComposerImageAttachments: vi.fn(),
     onPermissionRequestResponse: vi.fn(),
