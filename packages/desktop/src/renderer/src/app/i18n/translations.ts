@@ -293,6 +293,10 @@ export const zhCN = {
   "composer.send": "发送",
   "composer.stop": "停止",
   "composer.attach": "添加附件",
+  "composer.attachments.add": "添加附件",
+  "composer.attachments.unavailableTitle": "附件不可用",
+  "composer.attachments.loadingModelCapabilities": "正在加载模型能力...",
+  "composer.attachments.noModelSupports": "当前项目没有可用模型支持图片或 PDF 输入。",
   "composer.reasoning": "推理",
   "composer.model": "模型",
   "composer.skills": "Skills",
@@ -973,6 +977,10 @@ export const enUS = {
   "composer.send": "Send",
   "composer.stop": "Stop",
   "composer.attach": "Attach",
+  "composer.attachments.add": "Add attachments",
+  "composer.attachments.unavailableTitle": "Attachments unavailable",
+  "composer.attachments.loadingModelCapabilities": "Loading model capabilities...",
+  "composer.attachments.noModelSupports": "No available model for this project supports image or PDF input.",
   "composer.reasoning": "Reasoning",
   "composer.model": "Model",
   "composer.skills": "Skills",
@@ -1423,6 +1431,13 @@ const literalPatterns: LiteralPattern[] = [
     format: {
       "zh-CN": (match) => `版本 ${match[1]}`,
       "en-US": (match) => `Version ${match[1]}`,
+    },
+  },
+  {
+    match: /^(.+) does not support image or PDF input\.$/i,
+    format: {
+      "zh-CN": (match) => `${match[1]} 不支持图片或 PDF 输入。`,
+      "en-US": (match) => `${match[1]} does not support image or PDF input.`,
     },
   },
   {

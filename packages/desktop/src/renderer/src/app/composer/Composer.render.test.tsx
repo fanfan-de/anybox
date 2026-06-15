@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
+import { I18nProvider } from "../i18n/I18nProvider"
 import { Composer } from "./Composer"
 import {
   appendComposerTagToDraftState,
@@ -9,8 +10,9 @@ import {
   readComposerTagsFromDraftState,
 } from "./draft-state"
 
-function renderComposer(input: Partial<Parameters<typeof Composer>[0]> = {}) {
-  return render(
+function renderComposer(input: Partial<Parameters<typeof Composer>[0]> & { withI18n?: boolean } = {}) {
+  const { withI18n, ...props } = input
+  const ui = (
     <Composer
       attachments={[]}
       attachmentButtonTitle="Add attachments"
@@ -38,9 +40,11 @@ function renderComposer(input: Partial<Parameters<typeof Composer>[0]> = {}) {
       skillOptions={[]}
       unsupportedAttachmentPaths={[]}
       workspaceDirectory={null}
-      {...input}
-    />,
+      {...props}
+    />
   )
+
+  return render(withI18n ? <I18nProvider>{ui}</I18nProvider> : ui)
 }
 
 function createLongPastedText(prefix = "Pasted implementation notes") {
@@ -141,11 +145,38 @@ describe("Composer", () => {
     fireEvent.click(attachmentButton)
 
     expect(onPickAttachments).not.toHaveBeenCalled()
-    expect(screen.getByRole("dialog", { name: "Attachments unavailable" })).toBeInTheDocument()
+    const popover = screen.getByRole("dialog", { name: "Attachments unavailable" })
+    expect(popover).toBeInTheDocument()
     expect(screen.getByText(disabledReason)).toBeInTheDocument()
+    expect(within(popover).queryByRole("button")).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: "Got it" }))
+    fireEvent.click(attachmentButton)
     expect(screen.queryByRole("dialog", { name: "Attachments unavailable" })).not.toBeInTheDocument()
+  })
+
+  it("localizes the unavailable attachment popover in Chinese", () => {
+    window.localStorage.removeItem("desktop.locale")
+
+    const disabledReason = "DeepSeek V4 Pro does not support image or PDF input."
+
+    renderComposer({
+      withI18n: true,
+      attachmentButtonTitle: disabledReason,
+      attachmentDisabledReason: disabledReason,
+    })
+
+    const attachmentButton = screen.getByRole("button", { name: "添加附件" })
+    expect(attachmentButton).toHaveAttribute("title", "DeepSeek V4 Pro 不支持图片或 PDF 输入。")
+
+    fireEvent.click(attachmentButton)
+
+    const popover = screen.getByRole("dialog", { name: "附件不可用" })
+    expect(popover).toBeInTheDocument()
+    expect(screen.getByText("DeepSeek V4 Pro 不支持图片或 PDF 输入。")).toBeInTheDocument()
+    expect(within(popover).queryByRole("button")).not.toBeInTheDocument()
+
+    fireEvent.click(attachmentButton)
+    expect(screen.queryByRole("dialog", { name: "附件不可用" })).not.toBeInTheDocument()
   })
 
   it("closes the unavailable attachment popover from outside click and Escape", () => {

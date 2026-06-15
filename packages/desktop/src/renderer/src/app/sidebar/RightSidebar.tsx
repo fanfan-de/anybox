@@ -393,19 +393,29 @@ export function RightSidebar({
   function renderLauncher() {
     return (
       <div className="right-sidebar-launcher" aria-label="Right sidebar launcher">
-        {launcherCards.map((card) => (
-          <button
-            key={card.key}
-            type="button"
-            className="right-sidebar-launcher-card"
-            disabled={card.disabled}
-            onClick={() => handleOpenLauncherCard(card.key)}
-          >
-            <span className="right-sidebar-launcher-card-icon">{card.icon}</span>
-            <span className="right-sidebar-launcher-card-title">{card.title}</span>
-            <span className="right-sidebar-launcher-card-description">{card.description}</span>
-          </button>
-        ))}
+        <div className="right-sidebar-launcher-shell">
+          <div className="right-sidebar-launcher-heading">
+            <span className="right-sidebar-launcher-brand">anybox</span>
+            <h2 className="right-sidebar-launcher-title">开始</h2>
+          </div>
+          <div className="right-sidebar-launcher-tile-grid">
+            {launcherCards.map((card) => (
+              <button
+                key={card.key}
+                type="button"
+                className={`right-sidebar-launcher-card is-${card.key}`}
+                disabled={card.disabled}
+                onClick={() => handleOpenLauncherCard(card.key)}
+              >
+                <span className="right-sidebar-launcher-card-icon">{card.icon}</span>
+                <span className="right-sidebar-launcher-card-copy">
+                  <span className="right-sidebar-launcher-card-title">{card.title}</span>
+                  <span className="right-sidebar-launcher-card-description">{card.description}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     )
   }

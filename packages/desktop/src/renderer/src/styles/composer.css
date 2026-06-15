@@ -909,13 +909,6 @@
   color: var(--seg-text-2);
 }
 
-.composer-attachment-unavailable-action {
-  min-height: 30px;
-  width: max-content;
-  justify-self: end;
-  padding: 0 10px;
-}
-
 .composer-menu-panel {
   position: absolute;
   bottom: calc(100% + 8px);

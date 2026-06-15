@@ -29,6 +29,8 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react"
 import { ArrowUpIcon, ChevronDownIcon, CloseIcon, PaperclipIcon, StopIcon } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
+import { translateLiteral } from "../i18n/translations"
 import { joinClassNames } from "../shared-ui"
 import type {
   ComposerAttachment,
@@ -1007,6 +1009,7 @@ export function Composer({
   unsupportedAttachmentPaths,
   workspaceDirectory,
 }: ComposerProps) {
+  const { locale, t } = useI18n()
   const normalizedDraftState = useMemo(() => normalizeComposerDraftState(draftState), [draftState.lexicalJSON])
   const draftStateRef = useRef(normalizedDraftState)
   const localEditorLexicalJSONRef = useRef(normalizedDraftState.lexicalJSON)
@@ -1041,6 +1044,10 @@ export function Composer({
   const [activeCommandIndex, setActiveCommandIndex] = useState(0)
   const [longTextEditorState, setLongTextEditorState] = useState<ComposerLongTextEditorState | null>(null)
   const [hasDraftText, setHasDraftText] = useState(() => hasComposerDraftText(normalizedDraftState))
+  const localizedAttachmentButtonTitle = translateLiteral(locale, attachmentButtonTitle)
+  const localizedAttachmentDisabledReason = attachmentDisabledReason
+    ? translateLiteral(locale, attachmentDisabledReason)
+    : null
   const commandMenuStateRef = useRef<ComposerCommandMenuState | null>(commandMenuState)
   const commandMenuItemsRef = useRef<ComposerCommandMenuItem[]>(commandMenuItems)
   const activeCommandIndexRef = useRef(activeCommandIndex)
@@ -2068,14 +2075,14 @@ export function Composer({
               aria-disabled={attachmentDisabledReason !== null ? "true" : undefined}
               aria-expanded={attachmentDisabledReason !== null ? isAttachmentUnavailablePopoverOpen : undefined}
               aria-haspopup={attachmentDisabledReason !== null ? "dialog" : undefined}
-              aria-label="Add attachments"
+              aria-label={t("composer.attachments.add")}
               className={joinClassNames(
                 "composer-selector-button is-icon-only",
                 attachmentDisabledReason !== null && "is-unavailable",
                 isAttachmentUnavailablePopoverOpen && "is-active",
               )}
               onClick={handleAttachmentButtonClick}
-              title={attachmentButtonTitle}
+              title={localizedAttachmentButtonTitle}
               type="button"
             >
               <PaperclipIcon />
@@ -2089,16 +2096,9 @@ export function Composer({
                 role="dialog"
               >
                 <div className="composer-attachment-unavailable-copy">
-                  <h2 id={attachmentUnavailableTitleID}>Attachments unavailable</h2>
-                  <p id={attachmentUnavailableDescriptionID}>{attachmentDisabledReason}</p>
+                  <h2 id={attachmentUnavailableTitleID}>{t("composer.attachments.unavailableTitle")}</h2>
+                  <p id={attachmentUnavailableDescriptionID}>{localizedAttachmentDisabledReason}</p>
                 </div>
-                <button
-                  className="secondary-button composer-attachment-unavailable-action"
-                  onClick={() => setIsAttachmentUnavailablePopoverOpen(false)}
-                  type="button"
-                >
-                  Got it
-                </button>
               </div>
             ) : null}
           </div>
