@@ -107,6 +107,8 @@ function renderSidebar(overrides: Partial<ComponentProps<typeof Sidebar>> = {}) 
       onActiveToolKindChange: vi.fn(),
     },
     visibleCanvasSessionIDs: [],
+    conversationWorkspaceID: null,
+    protectedWorkspaceIDs: [],
     workspaces: [createWorkspace()],
     pinnedWorkspaceIDs: [],
     onHoveredFolderChange: vi.fn(),
@@ -118,6 +120,7 @@ function renderSidebar(overrides: Partial<ComponentProps<typeof Sidebar>> = {}) 
     onProjectOpenInExplorer: vi.fn(),
     onProjectPin: vi.fn(),
     onProjectRemove: vi.fn(),
+    onConversationClick: vi.fn(),
     onSessionDelete: vi.fn(),
     onSessionSelect: vi.fn(),
     onSidebarAction: vi.fn(),
@@ -166,8 +169,48 @@ describe("Sidebar", () => {
   it("renders the workspace tree", () => {
     renderSidebar()
 
+    const conversationRow = screen.getByRole("button", { name: "\u5bf9\u8bdd" })
+    expect(conversationRow).toBeInTheDocument()
+    expect(conversationRow.querySelector(".lucide-folder")).toBeInTheDocument()
+    expect(conversationRow.querySelector(".lucide-message-square")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Workspace" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Unread" })).toBeInTheDocument()
+  })
+
+  it("opens the default conversation entry from the workspace sidebar", () => {
+    const onConversationClick = vi.fn()
+    renderSidebar({ onConversationClick })
+
+    fireEvent.click(screen.getByRole("button", { name: "\u5bf9\u8bdd" }))
+
+    expect(onConversationClick).toHaveBeenCalledTimes(1)
+  })
+
+  it("renders the loaded default conversation workspace as a protected project row", () => {
+    const onProjectClick = vi.fn()
+    const onProjectRemove = vi.fn()
+    renderSidebar({
+      conversationWorkspaceID: "workspace-1",
+      protectedWorkspaceIDs: ["workspace-1"],
+      onProjectClick,
+      onProjectRemove,
+    })
+
+    const conversationRows = screen.getAllByRole("button", { name: "\u5bf9\u8bdd" })
+
+    expect(conversationRows).toHaveLength(1)
+    expect(conversationRows[0].querySelector(".lucide-folder")).toBeInTheDocument()
+    expect(conversationRows[0].querySelector(".lucide-message-square")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Workspace" })).not.toBeInTheDocument()
+    fireEvent.click(conversationRows[0])
+    expect(onProjectClick).toHaveBeenCalledWith(expect.objectContaining({ id: "workspace-1" }))
+
+    fireEvent.contextMenu(conversationRows[0], {
+      clientX: 120,
+      clientY: 140,
+    })
+    expect(screen.queryByRole("menuitem", { name: "绉婚櫎" })).not.toBeInTheDocument()
+    expect(onProjectRemove).not.toHaveBeenCalled()
   })
 
   it("marks linked worktree folders with a worktree icon", () => {

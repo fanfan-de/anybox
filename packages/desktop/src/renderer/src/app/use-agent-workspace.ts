@@ -635,6 +635,7 @@ export function useAgentWorkspace({
   } = useSessionLifecycleController({
     activeCreateSessionTab,
     activeCreateSessionTabID,
+    agentDefaultDirectory,
     activeSessionID,
     activeSideChatSessionIDByParentSessionID,
     activeWorkspace,

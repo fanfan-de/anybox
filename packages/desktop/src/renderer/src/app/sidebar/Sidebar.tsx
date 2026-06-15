@@ -82,6 +82,8 @@ interface SidebarProps {
   showSidebarToggleButton: boolean
   builtinToolsSidebarProps: BuiltinToolsSidebarViewProps
   projectRowRefs: MutableRefObject<Record<string, HTMLButtonElement | null>>
+  conversationWorkspaceID: string | null
+  protectedWorkspaceIDs: string[]
   runningSessionIDs: string[]
   selectedFolderID: string | null
   sessionCanvasUnreadBySession: Record<string, boolean>
@@ -98,6 +100,7 @@ interface SidebarProps {
   onProjectOpenInExplorer: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectPin: (workspace: WorkspaceGroup) => void
   onProjectRemove: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void
+  onConversationClick: () => void | Promise<void>
   onSessionDelete: (workspace: WorkspaceGroup, session: SessionSummary, event: MouseEvent<HTMLButtonElement>) => void
   onSessionSelect: (workspaceID: string, sessionID: string) => void
   onSidebarAction: (action: SidebarActionKey) => void | Promise<void>
@@ -182,6 +185,8 @@ interface FolderWorkspaceViewProps {
   isCreatingSession: boolean
   creatingWorktreeProjectID: string | null
   projectRowRefs: MutableRefObject<Record<string, HTMLButtonElement | null>>
+  conversationWorkspaceID: string | null
+  protectedWorkspaceIDs: string[]
   runningSessionIDs: string[]
   selectedFolderID: string | null
   sessionCanvasUnreadBySession: Record<string, boolean>
@@ -196,6 +201,7 @@ interface FolderWorkspaceViewProps {
   onProjectOpenInExplorer: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectPin: (workspace: WorkspaceGroup) => void
   onProjectRemove: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void
+  onConversationClick: () => void | Promise<void>
   onSessionDelete: (workspace: WorkspaceGroup, session: SessionSummary, event: MouseEvent<HTMLButtonElement>) => void
   onSessionSelect: (workspaceID: string, sessionID: string) => void
 }
@@ -334,6 +340,7 @@ interface ProjectContextMenuProps {
   creatingWorktreeProjectID: string | null
   menu: ProjectContextMenuState
   pinnedWorkspaceIDs: string[]
+  protectedWorkspaceIDs: string[]
   onClose: () => void
   onProjectArchiveSessions: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectCreateWorktree: (workspace: WorkspaceGroup) => void | Promise<void>
@@ -347,6 +354,7 @@ function ProjectContextMenu({
   creatingWorktreeProjectID,
   menu,
   pinnedWorkspaceIDs,
+  protectedWorkspaceIDs,
   onClose,
   onProjectArchiveSessions,
   onProjectCreateWorktree,
@@ -392,7 +400,8 @@ function ProjectContextMenu({
   const isMissingWorkspace = workspace.exists === false
   const hasArchivableSessions = workspace.sessions.some((session) => !isSideChatSession(session)) || workspace.sessions.length > 0
   const isArchiveDisabled = deletingSessionID !== null || !hasArchivableSessions
-  const isPinnedFirst = pinnedWorkspaceIDs[0] === workspace.id
+  const isProtectedWorkspace = protectedWorkspaceIDs.includes(workspace.id)
+  const isPinnedFirst = isProtectedWorkspace || pinnedWorkspaceIDs[0] === workspace.id
   const isGitProject = isGitWorkspaceProject(workspace)
   const isCreatingWorktree = creatingWorktreeProjectID === workspace.project.id
 
@@ -462,20 +471,24 @@ function ProjectContextMenu({
         <span className="ui-context-menu__icon" aria-hidden="true"><ArchiveIcon /></span>
         <span className="ui-context-menu__label">归档所有对话</span>
       </button>
-      <div className="ui-context-menu__divider" role="separator" />
-      <button
-        className="ui-context-menu__item"
-        role="menuitem"
-        type="button"
-        data-variant="danger"
-        onClick={(event) => {
-          onClose()
-          onProjectRemove(workspace, event)
-        }}
-      >
-        <span className="ui-context-menu__icon" aria-hidden="true"><DeleteIcon /></span>
+      {!isProtectedWorkspace ? (
+        <>
+          <div className="ui-context-menu__divider" role="separator" />
+          <button
+            className="ui-context-menu__item"
+            role="menuitem"
+            type="button"
+            data-variant="danger"
+            onClick={(event) => {
+              onClose()
+              onProjectRemove(workspace, event)
+            }}
+          >
+            <span className="ui-context-menu__icon" aria-hidden="true"><DeleteIcon /></span>
         <span className="ui-context-menu__label">移除</span>
-      </button>
+          </button>
+        </>
+      ) : null}
     </div>,
     document.body,
   )
@@ -618,6 +631,8 @@ function FolderWorkspaceView({
   isCreatingSession,
   creatingWorktreeProjectID,
   projectRowRefs,
+  conversationWorkspaceID,
+  protectedWorkspaceIDs,
   runningSessionIDs,
   selectedFolderID,
   sessionCanvasUnreadBySession,
@@ -632,6 +647,7 @@ function FolderWorkspaceView({
   onProjectOpenInExplorer,
   onProjectPin,
   onProjectRemove,
+  onConversationClick,
   onSessionDelete,
   onSessionSelect,
 }: FolderWorkspaceViewProps) {
@@ -730,19 +746,57 @@ function FolderWorkspaceView({
     )
   }
 
+  const conversationWorkspace = conversationWorkspaceID
+    ? workspaces.find((workspace) => workspace.id === conversationWorkspaceID) ?? null
+    : null
+  const orderedWorkspaces = conversationWorkspace
+    ? [conversationWorkspace, ...workspaces.filter((workspace) => workspace.id !== conversationWorkspace.id)]
+    : workspaces
+
   return (
     <section className="sidebar-view sidebar-view-workspace" aria-label="Workspace sidebar view">
       <div className="sidebar-projects">
-        {workspaces.map((workspace) => {
+        {!conversationWorkspace ? (
+          <section className="project-block conversation-entry-block">
+            <div className="project-row-shell conversation-entry-shell">
+              <button
+                className={joinClassNames(
+                  "project-row",
+                  "conversation-entry-row",
+                  conversationWorkspaceID && selectedFolderID === conversationWorkspaceID ? "is-active" : "",
+                )}
+                aria-label={"\u5bf9\u8bdd"}
+                type="button"
+                onClick={() => void onConversationClick()}
+              >
+                <span className="project-row-leading" aria-hidden="true">
+                  <FolderIcon />
+                </span>
+                <span className="project-row-text">
+                  <span className="project-row-label">{"\u5bf9\u8bdd"}</span>
+                  <span className="project-row-meta" title={"\u65e0\u9700\u9009\u62e9\u9879\u76ee\u6587\u4ef6\u5939\u4e5f\u53ef\u4ee5\u4f7f\u7528 Agent \u5bf9\u8bdd"}>
+                    <span className="project-row-meta-label">{"\u9ed8\u8ba4 Agent \u5bf9\u8bdd"}</span>
+                  </span>
+                </span>
+              </button>
+            </div>
+          </section>
+        ) : null}
+        {orderedWorkspaces.map((workspace) => {
+          const isConversationWorkspace = workspace.id === conversationWorkspaceID
           const isActiveWorkspace = workspace.id === selectedFolderID
           const isExpanded = expandedFolderIDs.includes(workspace.id)
           const isMissingWorkspace = workspace.exists === false
           const showStateIcon = workspace.id === hoveredFolderID
           const leadingIcon = showStateIcon ? (isExpanded ? "expanded" : "collapsed") : "folder"
           const linkedWorktreeRoot = getLinkedWorktreeRoot(workspace)
-          const createSessionLabel = `Create session for ${workspace.name}`
+          const workspaceLabel = isConversationWorkspace ? "\u5bf9\u8bdd" : workspace.name
+          const workspaceMeta = isConversationWorkspace
+            ? workspace.directory
+            : workspace.project.repositoryRoot ?? workspace.project.worktree
+          const createSessionLabel = `Create session for ${workspaceLabel}`
           const createSessionTitle = isMissingWorkspace
-            ? `${workspace.name} has been deleted and cannot create new sessions.`
+            ? `${workspaceLabel} has been deleted and cannot create new sessions.`
             : createSessionLabel
 
           function handleProjectBlur(event: FocusEvent<HTMLDivElement>) {
@@ -768,7 +822,10 @@ function FolderWorkspaceView({
           }
 
           return (
-            <section key={workspace.id} className="project-block">
+            <section
+              key={workspace.id}
+              className={joinClassNames("project-block", isConversationWorkspace ? "conversation-entry-block" : "")}
+            >
               <div
                 className="project-row-shell"
                 onMouseEnter={() => onHoveredFolderChange(workspace.id)}
@@ -783,19 +840,29 @@ function FolderWorkspaceView({
                   }}
                   className={joinClassNames(
                     "project-row",
+                    isConversationWorkspace ? "conversation-entry-row" : "",
                     isActiveWorkspace ? "is-active" : "",
                     linkedWorktreeRoot ? "is-linked-worktree" : "",
                   )}
-                  aria-label={workspace.name}
+                  aria-label={workspaceLabel}
                   aria-expanded={isExpanded}
                   data-folder-id={workspace.id}
                   onClick={() => onProjectClick(workspace)}
                 >
-                  <span className="project-row-leading" data-icon={leadingIcon} data-testid={`project-leading-${workspace.id}`} aria-hidden="true">
-                    {showStateIcon ? isExpanded ? <ChevronDownIcon /> : <ChevronRightIcon /> : <FolderIcon />}
+                  <span
+                    className="project-row-leading"
+                    data-icon={leadingIcon}
+                    data-testid={`project-leading-${workspace.id}`}
+                    aria-hidden="true"
+                  >
+                    {showStateIcon ? (
+                      isExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />
+                    ) : (
+                      <FolderIcon />
+                    )}
                   </span>
                   <span className="project-row-text">
-                    <span className="project-row-label">{workspace.name}</span>
+                    <span className="project-row-label">{workspaceLabel}</span>
                     {linkedWorktreeRoot ? (
                       <span
                         className="project-row-worktree-icon"
@@ -806,15 +873,15 @@ function FolderWorkspaceView({
                         <ForkIcon />
                       </span>
                     ) : null}
-                    <span className="project-row-meta" title={workspace.project.repositoryRoot ?? workspace.project.worktree}>
-                      <span className="project-row-meta-label">{workspace.project.repositoryRoot ?? workspace.project.worktree}</span>
+                    <span className="project-row-meta" title={workspaceMeta}>
+                      <span className="project-row-meta-label">{workspaceMeta}</span>
                       {isMissingWorkspace ? (
                         <span className="project-row-status is-missing">{"\u5df2\u5220\u9664"}</span>
                       ) : null}
                     </span>
                   </span>
                 </button>
-                <div className="project-row-actions" aria-label={`${workspace.name} actions`}>
+                <div className="project-row-actions" aria-label={`${workspaceLabel} actions`}>
                   <button
                     className="row-action project-row-action"
                     aria-label={createSessionLabel}
@@ -841,6 +908,7 @@ function FolderWorkspaceView({
         creatingWorktreeProjectID={creatingWorktreeProjectID}
         menu={projectContextMenu}
         pinnedWorkspaceIDs={pinnedWorkspaceIDs}
+        protectedWorkspaceIDs={protectedWorkspaceIDs}
         onClose={closeProjectContextMenu}
         onProjectArchiveSessions={onProjectArchiveSessions}
         onProjectCreateWorktree={openWorktreeCreateDialog}
@@ -1187,6 +1255,8 @@ export function Sidebar({
   showSidebarToggleButton,
   builtinToolsSidebarProps,
   projectRowRefs,
+  conversationWorkspaceID,
+  protectedWorkspaceIDs,
   runningSessionIDs,
   selectedFolderID,
   sessionCanvasUnreadBySession,
@@ -1202,6 +1272,7 @@ export function Sidebar({
   onProjectOpenInExplorer,
   onProjectPin,
   onProjectRemove,
+  onConversationClick,
   onSessionDelete,
   onSessionSelect,
   onSidebarAction,
@@ -1230,6 +1301,8 @@ export function Sidebar({
             isCreatingSession={isCreatingSession}
             creatingWorktreeProjectID={creatingWorktreeProjectID}
             projectRowRefs={projectRowRefs}
+            conversationWorkspaceID={conversationWorkspaceID}
+            protectedWorkspaceIDs={protectedWorkspaceIDs}
             runningSessionIDs={runningSessionIDs}
             selectedFolderID={selectedFolderID}
             sessionCanvasUnreadBySession={sessionCanvasUnreadBySession}
@@ -1244,6 +1317,7 @@ export function Sidebar({
             onProjectOpenInExplorer={onProjectOpenInExplorer}
             onProjectPin={onProjectPin}
             onProjectRemove={onProjectRemove}
+            onConversationClick={onConversationClick}
             onSessionDelete={onSessionDelete}
             onSessionSelect={onSessionSelect}
           />

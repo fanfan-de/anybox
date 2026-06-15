@@ -384,7 +384,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
             />
           </RendererProfiler>
           {pane.createSessionTabID ? (
-            <>
+            <div className="create-session-layout">
               <RendererProfiler id="WorkbenchPaneSurface.CreateSessionCanvas" onRender={createSessionCanvasProfiler}>
                 <CreateSessionCanvas
                   isCreatingSession={pane.isCreatingSession}
@@ -395,7 +395,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   onWorkspaceChange={(workspaceID) => onCreateSessionWorkspaceChange(workspaceID, pane.createSessionTabID)}
                 />
               </RendererProfiler>
-              <div className="composer-stack">
+              <div className="composer-stack create-session-composer-stack">
                 <RendererProfiler id="WorkbenchPaneSurface.CreateSessionComposer" onRender={composerProfiler}>
                   <Composer
                     attachments={pane.composerAttachments}
@@ -480,7 +480,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   usage={null}
                 />
               </div>
-            </>
+            </div>
           ) : (
             <>
               <RendererProfiler id="WorkbenchPaneSurface.ThreadView" onRender={threadViewProfiler}>

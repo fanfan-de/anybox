@@ -41,7 +41,7 @@ import { ToastProvider, useToast } from "./app/toast"
 import { RendererProfiler, createRendererProfilerOnRender } from "./app/perf-profiler"
 import { createEmptyComposerDraftState } from "./app/composer/draft-state"
 import type { BuiltinToolKindKey } from "./app/tools/BuiltinToolsPage"
-import { findSession, isGitWorkspaceProject, isSideChatSession } from "./app/workspace"
+import { findSession, isGitWorkspaceProject, isSideChatSession, sameWorkspaceDirectory } from "./app/workspace"
 import { WorkbenchShell } from "./app/workbench/WorkbenchShell"
 import {
   createInitialDockviewLayout,
@@ -1596,6 +1596,15 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     return session && !isSideChatSession(session) ? session.id : null
   })
   const activeRightSidebarTab = rightSidebar.tabs.find((tab) => tab.id === rightSidebar.activeTabID) ?? null
+  const conversationWorkspaceID = useMemo(() => {
+    const defaultDirectory = agentDefaultDirectory.trim()
+    if (!defaultDirectory) return null
+    return workspaces.find((workspace) => sameWorkspaceDirectory(workspace.directory, defaultDirectory))?.id ?? null
+  }, [agentDefaultDirectory, workspaces])
+  const protectedWorkspaceIDs = useMemo(
+    () => (conversationWorkspaceID ? [conversationWorkspaceID] : []),
+    [conversationWorkspaceID],
+  )
   const rightSidebarSideChatPanelState = useWorkspaceStoreSelector(
     workspaceStore,
     (state): RightSidebarSideChatPanelState | null => {
@@ -2189,6 +2198,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 onActiveToolKindChange: setActiveBuiltinToolKind,
               }}
               projectRowRefs={projectRowRefs}
+              conversationWorkspaceID={conversationWorkspaceID}
+              protectedWorkspaceIDs={protectedWorkspaceIDs}
               runningSessionIDs={runningSessionIDs}
               selectedFolderID={selectedFolderID}
               sessionCanvasUnreadBySession={sessionCanvasUnreadBySession}
@@ -2205,6 +2216,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onProjectOpenInExplorer={handleProjectOpenInExplorer}
               onProjectPin={handleProjectPin}
               onProjectRemove={handleProjectRemove}
+              onConversationClick={() => handleSidebarAction("conversation")}
               onSessionDelete={handleSessionDelete}
               onSessionSelect={handleSessionSelect}
               onSidebarAction={handleSidebarAction}

@@ -5,6 +5,7 @@ import type { DesktopLocalPreviewService } from "../../../../shared/desktop-ipc-
 import { CodeBlockPreview, inferCodeLanguage } from "../code-highlight"
 import type { CodeHighlightTheme } from "../code-theme"
 import { BackIcon, ForwardIcon, OpenExternalIcon, PreviewIcon, ResetIcon, ScreenshotIcon } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
 import { useToast } from "../toast"
 import type { PreviewInteractionCommitInput, PreviewInteractionPluginID, ResolvedPreviewTarget, WorkspacePreviewState } from "../types"
 import { getPreviewFailure } from "./failures"
@@ -187,12 +188,18 @@ function EmptyPreviewState({
   onOpenUrl: (url: string) => void
   onScanLocalServices: () => void
 }) {
+  const { t } = useI18n()
+
   return (
     <div className="preview-canvas-state preview-empty-state unified-preview-empty">
       <PreviewIcon />
-      <h3>Open a preview target</h3>
-      <p>Enter a URL, <code>agent://artifact/id</code>, or a file path in the current workspace.</p>
-      <div className="unified-preview-quick-list" aria-label="Quick preview targets">
+      <h3>{t("preview.empty.openTarget")}</h3>
+      <p>
+        {t("preview.empty.descriptionPrefix")}
+        <code>agent://artifact/id</code>
+        {t("preview.empty.descriptionSuffix")}
+      </p>
+      <div className="unified-preview-quick-list" role="group" aria-label={t("preview.empty.quickTargets")}>
         {PREVIEW_QUICK_TARGETS.map((url) => (
           <button key={url} type="button" className="secondary-button" onClick={() => onOpenUrl(url)}>
             {url}
@@ -201,7 +208,7 @@ function EmptyPreviewState({
       </div>
       <div className="unified-preview-services">
         <button type="button" className="secondary-button" onClick={onScanLocalServices}>
-          {localServiceStatus === "scanning" ? "Scanning..." : "Detect local servers"}
+          {localServiceStatus === "scanning" ? t("preview.empty.scanning") : t("preview.empty.detectLocalServers")}
         </button>
         {localPreviewServices.length > 0 ? (
           <div className="unified-preview-service-list">
@@ -237,6 +244,7 @@ export function UnifiedPreviewPanel({
   onActiveInteractionChange,
   onCommitInteraction,
 }: UnifiedPreviewPanelProps) {
+  const { t } = useI18n()
   const toast = useToast()
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const webviewRef = useRef<WebviewElement | null>(null)
@@ -594,7 +602,7 @@ export function UnifiedPreviewPanel({
         <h3>No inline renderer</h3>
         <p>This file type can be opened with the system default application.</p>
         <button type="button" className="primary-button" onClick={() => void onOpenExternal()}>
-          Open externally
+          {t("preview.openExternally")}
         </button>
       </div>
     )
@@ -675,8 +683,8 @@ export function UnifiedPreviewPanel({
               <button
                 type="button"
                 className="preview-toolbar-icon-button"
-                aria-label="Reload preview"
-                title="Reload preview"
+                aria-label={t("preview.reloadPreview")}
+                title={t("preview.reloadPreview")}
                 onClick={() => onReload()}
               >
                 <ResetIcon />
@@ -687,15 +695,15 @@ export function UnifiedPreviewPanel({
                 className="preview-toolbar-input"
                 value={draftValue}
                 onChange={(event) => onDraftUrlChange(event.currentTarget.value)}
-                placeholder="URL, agent://artifact/id, or workspace file"
+                placeholder={t("preview.targetPlaceholder")}
                 spellCheck={false}
-                aria-label="Preview target"
+                aria-label={t("preview.targetLabel")}
               />
               <button
                 type="button"
                 className="preview-toolbar-icon-button preview-toolbar-open-external"
-                aria-label="Open externally"
-                title="Open externally"
+                aria-label={t("preview.openExternally")}
+                title={t("preview.openExternally")}
                 disabled={!canOpenExternal}
                 onClick={() => void onOpenExternal()}
               >

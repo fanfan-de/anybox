@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { I18nProvider } from "../i18n/I18nProvider"
 import { CalendarPage } from "./CalendarPage"
 import {
   createCalendarEvent,
@@ -55,6 +56,15 @@ const testProjects = [
 
 function renderCalendarPage() {
   return render(<CalendarPage activeProjectID="prj_anybox_desktop" projects={testProjects} />)
+}
+
+function renderLocalizedCalendarPage(locale: string) {
+  window.localStorage.setItem("desktop.locale", locale)
+  return render(
+    <I18nProvider>
+      <CalendarPage activeProjectID="prj_anybox_desktop" projects={testProjects} />
+    </I18nProvider>,
+  )
 }
 
 function createSources(): CalendarSource[] {
@@ -270,12 +280,12 @@ function getTestDateKey(date: Date) {
 }
 
 function formatTestDayLabel(date: Date) {
-  return new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", weekday: "short" }).format(date)
+  return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", weekday: "short" }).format(date)
 }
 
 function formatTestWeekRangeLabel(weekStart: Date) {
   const weekEnd = addTestDays(weekStart, 6)
-  const monthFormatter = new Intl.DateTimeFormat(undefined, { month: "short" })
+  const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "short" })
   const startMonth = monthFormatter.format(weekStart)
   const endMonth = monthFormatter.format(weekEnd)
   if (weekStart.getFullYear() !== weekEnd.getFullYear()) {
@@ -401,6 +411,17 @@ describe("CalendarPage", () => {
     expect(screen.queryByText("Project dates")).not.toBeInTheDocument()
     expect(screen.queryByText("My Tasks")).not.toBeInTheDocument()
     expect(screen.queryByText("Weekly product sync")).not.toBeInTheDocument()
+  })
+
+  it("localizes calendar chrome through the app i18n provider", async () => {
+    renderLocalizedCalendarPage("zh-CN")
+
+    expect(screen.getByRole("region", { name: "日历" })).toBeInTheDocument()
+    const sidebar = screen.getByRole("complementary", { name: "日历侧边栏" })
+    expect(within(sidebar).getByPlaceholderText("搜索 Todos...")).toBeInTheDocument()
+    expect(within(sidebar).getByRole("button", { name: "项目筛选：所有项目" })).toBeInTheDocument()
+    expect(within(sidebar).getByRole("heading", { name: "Todos" })).toBeInTheDocument()
+    expect(screen.getByRole("main", { name: "周 日历视图" })).toBeInTheDocument()
   })
 
   it("keeps fixed dates out of the sidebar while showing them in the calendar", async () => {

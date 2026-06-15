@@ -8178,10 +8178,15 @@ describe("App", () => {
     fireEvent.click(getAddSessionTabButton())
     await screen.findByRole("combobox", { name: "Session project" })
 
-    expect(screen.getByRole("textbox", { name: "Task draft" })).toBeInTheDocument()
+    const createSessionLayout = document.querySelector(".create-session-layout")
+    const createSessionDraft = screen.getByRole("textbox", { name: "Task draft" })
+
+    expect(createSessionDraft).toBeInTheDocument()
+    expect(createSessionLayout).toContainElement(createSessionDraft)
+    expect(createSessionDraft.closest(".composer-stack")).toHaveClass("create-session-composer-stack")
     expect(getComposerSendButton()).toBeEnabled()
 
-    setComposerDraftValue(screen.getByRole("textbox", { name: "Task draft" }), "Ship the first session prompt")
+    setComposerDraftValue(createSessionDraft, "Ship the first session prompt")
     fireEvent.click(getComposerSendButton())
 
     await waitFor(() => {

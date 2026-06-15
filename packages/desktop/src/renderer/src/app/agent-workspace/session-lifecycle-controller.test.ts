@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react"
-import { useRef, useState } from "react"
+import { useRef, useState, type MouseEvent } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { PendingAgentStream, SessionSummary, SideChatLink, WorkspaceGroup } from "../types"
 import { createSessionDataLoadCache } from "./session-data-load-cache"
@@ -42,7 +42,11 @@ function createWorkspace(id: string, sessions: SessionSummary[]): WorkspaceGroup
 function useProjectClickHarness(
   focusSession = vi.fn(),
   input: {
+    agentDefaultDirectory?: string
+    focusExistingCreateSessionTabAcrossPanes?: (preferredWorkspaceID?: string | null) => boolean
+    openCreateSessionTab?: (preferredWorkspaceID?: string | null, paneID?: string | null, workspaceScope?: WorkspaceGroup[]) => void
     refreshWorkspaceFromDirectory?: (directory: string) => Promise<WorkspaceGroup | null>
+    setWorkspaces?: Parameters<typeof useSessionLifecycleController>[0]["setWorkspaces"]
     workspaces?: WorkspaceGroup[]
   } = {},
 ) {
@@ -51,10 +55,14 @@ function useProjectClickHarness(
   const [selectedFolderID, setSelectedFolderID] = useState<string | null>(null)
   const [expandedFolderIDs, setExpandedFolderIDs] = useState<string[]>([])
   const noop = vi.fn()
+  const setWorkspaces = input.setWorkspaces ?? noop
+  const focusExistingCreateSessionTabAcrossPanes = input.focusExistingCreateSessionTabAcrossPanes ?? vi.fn(() => false)
+  const openCreateSessionTab = input.openCreateSessionTab ?? vi.fn()
 
   const controller = useSessionLifecycleController({
     activeCreateSessionTab: null,
     activeCreateSessionTabID: null,
+    agentDefaultDirectory: input.agentDefaultDirectory ?? "C:/work/default-chat",
     activeSessionID: "session-outside-workspace",
     activeSideChatSessionIDByParentSessionID: {},
     activeWorkspace: null,
@@ -66,7 +74,7 @@ function useProjectClickHarness(
     deletingSessionID: null,
     dockviewLayout: null,
     expandedFolderIDs,
-    focusExistingCreateSessionTabAcrossPanes: vi.fn(() => false),
+    focusExistingCreateSessionTabAcrossPanes,
     focusSession,
     focusedPane: null,
     focusedPaneID: null,
@@ -79,7 +87,7 @@ function useProjectClickHarness(
     lastFocusedSessionIDRef: useRef(null),
     ensurePendingPermissionRequestsLoaded: vi.fn(async () => {}),
     ensureSessionHistoryLoaded: vi.fn(async () => {}),
-    openCreateSessionTab: vi.fn(),
+    openCreateSessionTab,
     openOrFocusRightSidebarTab: vi.fn(() => "tab-1"),
     pendingStreamsRef: useRef({}),
     permissionRequestsRequestRef: useRef({}),
@@ -114,7 +122,7 @@ function useProjectClickHarness(
     setSessionRuntimeDebugBySession: noop,
     setSessionRuntimeDebugStateBySession: noop,
     setSessionTasksBySession: noop,
-    setWorkspaces: noop,
+    setWorkspaces,
     refreshWorkspaceFromDirectory: input.refreshWorkspaceFromDirectory ?? vi.fn(async () => workspace),
     updateRightSidebarTab: noop,
     clearRuntimeDebugRefreshTimer: noop,
@@ -129,7 +137,10 @@ function useProjectClickHarness(
   return {
     controller,
     expandedFolderIDs,
+    focusExistingCreateSessionTabAcrossPanes,
+    openCreateSessionTab,
     selectedFolderID,
+    setWorkspaces,
     workspace,
   }
 }
@@ -198,6 +209,85 @@ describe("session lifecycle cleanup helpers", () => {
       title: undefined,
     })
     expect(focusSession).toHaveBeenCalledWith("worktree-1", "session-worktree", undefined)
+  })
+
+  it("opens a create-session tab for an existing default conversation workspace", async () => {
+    const openCreateSessionTab = vi.fn()
+    const { result } = renderHook(() => useProjectClickHarness(vi.fn(), {
+      agentDefaultDirectory: "C:/work/workspace-1",
+      openCreateSessionTab,
+    }))
+
+    await act(async () => {
+      await result.current.controller.handleSidebarAction("conversation")
+    })
+
+    expect(result.current.selectedFolderID).toBe("workspace-1")
+    expect(result.current.expandedFolderIDs).toEqual(["workspace-1"])
+    expect(openCreateSessionTab).toHaveBeenCalledWith(
+      "workspace-1",
+      null,
+      expect.any(Array),
+    )
+  })
+
+  it("loads the default conversation workspace before opening the composer", async () => {
+    const loadedWorkspace = {
+      id: "C:/default-chat",
+      name: "default-chat",
+      directory: "C:/default-chat",
+      created: 1,
+      updated: 1,
+      project: {
+        id: "project-default-chat",
+        name: "default-chat",
+        worktree: "C:/default-chat",
+      },
+      sessions: [],
+    }
+    const openFolderWorkspace = vi.fn(async () => loadedWorkspace)
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      writable: true,
+      value: {
+        openFolderWorkspace,
+      },
+    })
+
+    const openCreateSessionTab = vi.fn()
+    const { result } = renderHook(() => useProjectClickHarness(vi.fn(), {
+      agentDefaultDirectory: "C:/default-chat",
+      openCreateSessionTab,
+      workspaces: [],
+    }))
+
+    await act(async () => {
+      await result.current.controller.handleSidebarAction("conversation")
+    })
+
+    expect(openFolderWorkspace).toHaveBeenCalledWith({ directory: "C:/default-chat" })
+    expect(result.current.selectedFolderID).toBe("C:/default-chat")
+    expect(openCreateSessionTab).toHaveBeenCalledWith(
+      "C:/default-chat",
+      null,
+      expect.arrayContaining([expect.objectContaining({ id: "C:/default-chat" })]),
+    )
+  })
+
+  it("keeps the default conversation workspace from being removed", () => {
+    const setWorkspaces = vi.fn()
+    const { result } = renderHook(() => useProjectClickHarness(vi.fn(), {
+      agentDefaultDirectory: "C:/work/workspace-1",
+      setWorkspaces,
+    }))
+    const event = { stopPropagation: vi.fn() } as unknown as MouseEvent<HTMLButtonElement>
+
+    act(() => {
+      result.current.controller.handleProjectRemove(result.current.workspace, event)
+    })
+
+    expect(event.stopPropagation).toHaveBeenCalledTimes(1)
+    expect(setWorkspaces).not.toHaveBeenCalled()
   })
 
   it("removes side chat mappings when either parent or side chat session is cleaned up", () => {

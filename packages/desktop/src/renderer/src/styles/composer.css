@@ -58,6 +58,11 @@
   padding-top: 12px;
 }
 
+.composer-stack.create-session-composer-stack {
+  width: min(100%, var(--pane-content-max-width));
+  padding: 0;
+}
+
 .composer-task-progress {
   width: 100%;
   max-width: var(--pane-content-max-width);

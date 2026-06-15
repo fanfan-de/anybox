@@ -12,6 +12,16 @@ export function isSideChatSession(session: Pick<SessionSummary, "kind"> | null |
   return session?.kind === "side-chat"
 }
 
+export function normalizeWorkspaceDirectoryKey(value: string) {
+  return value.trim().replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()
+}
+
+export function sameWorkspaceDirectory(left: string, right: string) {
+  const normalizedLeft = normalizeWorkspaceDirectoryKey(left)
+  const normalizedRight = normalizeWorkspaceDirectoryKey(right)
+  return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight)
+}
+
 export function normalizeSessionModelSelection(
   selection?: { model?: string | null; small_model?: string | null; reasoning_effort?: SessionModelSelection["reasoning_effort"] | null } | null,
 ): SessionModelSelection | undefined {

@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import type { DesktopLocalPreviewService } from "../../../../shared/desktop-ipc-contract"
 import type { ComponentProps } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { DEFAULT_WORKSPACE_PREVIEW_STATE } from "../agent-workspace/review-preview-state"
 import { CODE_HIGHLIGHT_MAX_INPUT_LENGTH, CodeBlockPreview } from "../code-highlight"
+import { I18nProvider } from "../i18n/I18nProvider"
 import { ToastProvider } from "../toast"
 import type { PreviewInteractionRecord, WorkspacePreviewState } from "../types"
 import { UnifiedPreviewPanel } from "./UnifiedPreviewPanel"
@@ -16,9 +18,11 @@ function createPreviewState(overrides: Partial<WorkspacePreviewState> = {}): Wor
   }
 }
 
-function renderUnifiedPreviewPanel(overrides: Partial<ComponentProps<typeof UnifiedPreviewPanel>> = {}) {
-  const { codeTheme = "github-light", ...panelOverrides } = overrides
-  return render(
+function renderUnifiedPreviewPanel(
+  overrides: Partial<ComponentProps<typeof UnifiedPreviewPanel>> & { withI18n?: boolean } = {},
+) {
+  const { codeTheme = "github-light", withI18n, ...panelOverrides } = overrides
+  const ui = (
     <ToastProvider>
       <UnifiedPreviewPanel
         codeTheme={codeTheme}
@@ -35,8 +39,10 @@ function renderUnifiedPreviewPanel(overrides: Partial<ComponentProps<typeof Unif
         onReload={vi.fn()}
         {...panelOverrides}
       />
-    </ToastProvider>,
+    </ToastProvider>
   )
+
+  return render(withI18n ? <I18nProvider>{ui}</I18nProvider> : ui)
 }
 
 function createWebCommentRecord(
@@ -88,6 +94,20 @@ describe("UnifiedPreviewPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "http://localhost:5173" }))
 
     expect(onOpenUrl).toHaveBeenCalledWith("http://localhost:5173")
+  })
+
+  it("localizes the empty preview target state in Chinese", async () => {
+    window.localStorage.removeItem("desktop.locale")
+    window.desktop!.detectLocalPreviewServices = vi.fn(() => new Promise<DesktopLocalPreviewService[]>(() => undefined))
+
+    renderUnifiedPreviewPanel({ withI18n: true })
+
+    expect(screen.getByRole("heading", { name: "打开预览目标" })).toBeInTheDocument()
+    expect(screen.getByText(/输入 URL、/)).toBeInTheDocument()
+    expect(screen.getByText("agent://artifact/id")).toBeInTheDocument()
+    expect(screen.getByText(/或当前工作区中的文件路径。/)).toBeInTheDocument()
+    expect(screen.getByRole("group", { name: "快速预览目标" })).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: "扫描中..." })).toBeInTheDocument()
   })
 
   it("reads and renders markdown artifact previews", async () => {

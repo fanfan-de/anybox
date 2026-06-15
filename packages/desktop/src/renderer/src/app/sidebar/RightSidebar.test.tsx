@@ -430,15 +430,10 @@ describe("RightSidebar", () => {
     })
 
     expect(screen.getByText("文件")).toBeInTheDocument()
-    expect(screen.getByText("浏览项目文件")).toBeInTheDocument()
     expect(screen.getByText("浏览器")).toBeInTheDocument()
-    expect(screen.getByText("打开网站")).toBeInTheDocument()
     expect(screen.getByText("消息树")).toBeInTheDocument()
-    expect(screen.getByText("查看消息分支")).toBeInTheDocument()
     expect(screen.getByText("代码审查")).toBeInTheDocument()
-    expect(screen.getByText("检查代码变更")).toBeInTheDocument()
     expect(screen.getByText("终端")).toBeInTheDocument()
-    expect(screen.getByText("启动交互式 Shell")).toBeInTheDocument()
   })
 
   it("disables the tree launcher card without an active session", () => {

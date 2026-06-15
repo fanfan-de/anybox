@@ -29,7 +29,7 @@ export type {
 }
 
 export type SessionStatus = "Live" | "Review" | "Ready"
-export type SidebarActionKey = "project"
+export type SidebarActionKey = "project" | "conversation"
 export type LeftSidebarView = "workspace" | "calendar" | "automations" | "skills" | "prompts" | "connections" | "tools"
 export type ConnectionsTab = "plugins" | "connectors" | "mcp" | "ssh" | "mobile"
 export type AppMode = "Autopilot" | "Review"

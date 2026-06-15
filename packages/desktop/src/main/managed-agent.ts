@@ -8,12 +8,12 @@ import path from "node:path"
 import type { Readable } from "node:stream"
 import { setTimeout as delay } from "node:timers/promises"
 import { readTrimmedDesktopEnv } from "./env-compat"
+import { AGENT_WORKDIR_ENV, resolveDefaultAgentWorkdir } from "./agent-workdir"
 import { writeBrowserNativeMessagingRuntimeConfig } from "./browser-native-messaging"
 import { safeError, safeLog } from "./safe-console"
 import { createSourceRuntimeSnapshot, shouldRestartForSourceRuntimeChange, type SourceRuntimeSnapshot } from "./source-runtime-watch"
 
 const MANAGED_AGENT_BASE_URL_ENV = "ANYBOX_AGENT_BASE_URL"
-const MANAGED_AGENT_WORKDIR_ENV = "ANYBOX_AGENT_WORKDIR"
 const MANAGED_AGENT_DISABLE_ENV = "ANYBOX_DISABLE_MANAGED_AGENT"
 const MANAGED_AGENT_RUNTIME_ENV = "ANYBOX_AGENT_RUNTIME_DIR"
 const MANAGED_AGENT_BUN_BINARY_ENV = "ANYBOX_BUN_BINARY"
@@ -480,6 +480,9 @@ export async function ensureManagedAgentRunning() {
   const proxyEnv = await resolveManagedAgentProxyEnv()
 
   await fsp.mkdir(dataDir, { recursive: true })
+  if (!readTrimmedDesktopEnv(AGENT_WORKDIR_ENV)) {
+    process.env[AGENT_WORKDIR_ENV] = resolveDefaultAgentWorkdir()
+  }
 
   const launchErrors: Error[] = []
 
@@ -512,9 +515,6 @@ export async function ensureManagedAgentRunning() {
     try {
       await waitForAgentHealth(baseURL, child)
       process.env[MANAGED_AGENT_BASE_URL_ENV] = baseURL
-      if (!readTrimmedDesktopEnv(MANAGED_AGENT_WORKDIR_ENV)) {
-        process.env[MANAGED_AGENT_WORKDIR_ENV] = app.getPath("home")
-      }
       applyWorkspaceDependencyEnv(spec)
       if (spec.sourceRuntime) {
         await ensureSourceRuntimeWatcher()

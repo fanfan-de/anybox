@@ -11,6 +11,7 @@ import type {
   CreateSessionTab,
   ComposerAttachment,
   ComposerDraftState,
+  LoadedFolderWorkspace,
   PendingAgentStream,
   PermissionRequest,
   RightSidebarOpenTabInput,
@@ -43,6 +44,7 @@ import {
   mapLoadedSession,
   mapLoadedWorkspace,
   normalizeSessionModelSelection,
+  sameWorkspaceDirectory,
   sortWorkspaceGroups,
   upsertSessionInWorkspace,
   upsertWorkspaceGroup,
@@ -132,6 +134,7 @@ export function sideChatLinkHasRealResponse(link: Pick<SideChatLink, "snapshot">
 interface UseSessionLifecycleControllerOptions {
   activeCreateSessionTab: CreateSessionTab | null
   activeCreateSessionTabID: string | null
+  agentDefaultDirectory: string
   activeSessionID: string | null
   activeWorkspace: WorkspaceGroup | null
   activeSideChatSessionIDByParentSessionID: Record<string, string>
@@ -155,7 +158,7 @@ interface UseSessionLifecycleControllerOptions {
   lastFocusedSessionIDRef: MutableRefObject<string | null>
   ensurePendingPermissionRequestsLoaded: (sessionID: string, backendSessionID?: string, options?: SessionDataLoadOptions) => Promise<void>
   ensureSessionHistoryLoaded: (sessionID: string, backendSessionID?: string, options?: SessionDataLoadOptions) => Promise<void>
-  openCreateSessionTab: (preferredWorkspaceID?: string | null, paneID?: string, workspaceScope?: WorkspaceGroup[]) => void
+  openCreateSessionTab: (preferredWorkspaceID?: string | null, paneID?: string | null, workspaceScope?: WorkspaceGroup[]) => void
   openOrFocusRightSidebarTab: (input: RightSidebarOpenTabInput) => string
   pendingStreamsRef: MutableRefObject<Record<string, PendingAgentStream>>
   permissionRequestsRequestRef: MutableRefObject<Record<string, number>>
@@ -210,6 +213,7 @@ interface UseSessionLifecycleControllerOptions {
 export function useSessionLifecycleController({
   activeCreateSessionTab,
   activeCreateSessionTabID,
+  agentDefaultDirectory,
   activeSessionID,
   activeSideChatSessionIDByParentSessionID,
   activeWorkspace,
@@ -279,6 +283,24 @@ export function useSessionLifecycleController({
   workbenchDockviewCommandsRef,
   workspaces,
 }: UseSessionLifecycleControllerOptions) {
+  function applyLoadedFolderWorkspace(loadedWorkspace: LoadedFolderWorkspace) {
+    const nextWorkspace = mapLoadedWorkspace(loadedWorkspace)
+    const loadedSessionIDs = loadedWorkspace.sessions.map((session) => session.id)
+    setWorkspaces((prev) => upsertWorkspaceGroup(prev, nextWorkspace))
+    setConversations((prev) => ensureConversationSessions(prev, loadedSessionIDs))
+    setAgentSessions((prev) => ensureAgentSessions(prev, loadedSessionIDs))
+    setSessionDirectoryBySession((prev) => ({
+      ...prev,
+      ...collectSessionDirectoryMap([loadedWorkspace]),
+    }))
+    setCanLoadSessionHistory(true)
+    return nextWorkspace
+  }
+
+  function isDefaultConversationWorkspace(workspace: WorkspaceGroup) {
+    return sameWorkspaceDirectory(workspace.directory, agentDefaultDirectory)
+  }
+
   function cleanupSessionState(sessionIDs: Set<string>) {
     setConversations((prev) => {
       const next = { ...prev }
@@ -554,6 +576,42 @@ export function useSessionLifecycleController({
   }
 
   async function handleSidebarAction(action: SidebarActionKey) {
+    if (action === "conversation") {
+      const defaultDirectory = agentDefaultDirectory.trim()
+      if (!defaultDirectory) return
+
+      let targetWorkspace = workspaces.find((workspace) => sameWorkspaceDirectory(workspace.directory, defaultDirectory)) ?? null
+
+      if (!targetWorkspace) {
+        if (isCreatingProject || !window.desktop?.openFolderWorkspace) return
+
+        setIsCreatingProject(true)
+        try {
+          const loadedWorkspace = await window.desktop.openFolderWorkspace({ directory: defaultDirectory })
+          if (!initialFolderWorkspacesLoadedRef.current) {
+            preserveLocalWorkspaceStateOnInitialLoadRef.current = true
+          }
+          targetWorkspace = applyLoadedFolderWorkspace(loadedWorkspace)
+        } catch (error) {
+          console.error("[desktop] open default conversation workspace failed:", error)
+          return
+        } finally {
+          setIsCreatingProject(false)
+        }
+      }
+
+      if (!targetWorkspace) return
+
+      setSelectedFolderID(targetWorkspace.id)
+      setExpandedFolderIDs((current) => ensureExpandedFolderID(current, targetWorkspace.id))
+      if (focusExistingCreateSessionTabAcrossPanes(targetWorkspace.id)) return
+      const workspaceScope = workspaces.some((workspace) => workspace.id === targetWorkspace.id)
+        ? workspaces
+        : [...workspaces, targetWorkspace]
+      openCreateSessionTab(targetWorkspace.id, focusedPaneID ?? focusedPane?.id ?? null, workspaceScope)
+      return
+    }
+
     if (action === "project") {
       if (isCreatingProject || !window.desktop?.pickProjectDirectory || !window.desktop?.openFolderWorkspace) {
         return
@@ -568,16 +626,7 @@ export function useSessionLifecycleController({
         if (!initialFolderWorkspacesLoadedRef.current) {
           preserveLocalWorkspaceStateOnInitialLoadRef.current = true
         }
-        const nextWorkspace = mapLoadedWorkspace(createdWorkspace)
-        const createdSessionIDs = createdWorkspace.sessions.map((session) => session.id)
-        setWorkspaces((prev) => upsertWorkspaceGroup(prev, nextWorkspace))
-        setConversations((prev) => ensureConversationSessions(prev, createdSessionIDs))
-        setAgentSessions((prev) => ensureAgentSessions(prev, createdSessionIDs))
-        setSessionDirectoryBySession((prev) => ({
-          ...prev,
-          ...collectSessionDirectoryMap([createdWorkspace]),
-        }))
-        setCanLoadSessionHistory(true)
+        const nextWorkspace = applyLoadedFolderWorkspace(createdWorkspace)
         setExpandedFolderIDs((current) => ensureExpandedFolderID(current, createdWorkspace.id))
         setSelectedFolderID(createdWorkspace.id)
         const [initialWorkspaceSession] = getPrimaryWorkspaceSessions(nextWorkspace.sessions)
@@ -991,6 +1040,7 @@ export function useSessionLifecycleController({
 
   function handleProjectRemove(workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation()
+    if (isDefaultConversationWorkspace(workspace)) return
 
     const nextWorkspaces = workspaces.filter((item) => item.id !== workspace.id)
     const removedSessionIDs = new Set(workspace.sessions.map((session) => session.id))

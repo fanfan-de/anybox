@@ -165,7 +165,6 @@ interface RightSidebarProps {
 type RightSidebarLauncherTabKind = Exclude<RightSidebarTab["kind"], "side-chat">
 
 interface LauncherCard {
-  description: string
   disabled?: boolean
   icon: ReactNode
   key: RightSidebarLauncherTabKind
@@ -308,33 +307,28 @@ export function RightSidebar({
     {
       key: "files",
       title: t("rightSidebar.launcher.filesTitle"),
-      description: t("rightSidebar.launcher.filesDescription"),
       icon: <FileSearchIcon />,
     },
     {
       key: "browser",
       title: t("rightSidebar.launcher.browserTitle"),
-      description: t("rightSidebar.launcher.browserDescription"),
       icon: <PreviewIcon />,
     },
     {
       key: "message-tree",
       title: t("rightSidebar.launcher.messageTreeTitle"),
-      description: t("rightSidebar.launcher.messageTreeDescription"),
       disabled: !activeSession,
       icon: <SessionTreeIcon />,
     },
     {
       key: "review",
       title: t("rightSidebar.launcher.reviewTitle"),
-      description: t("rightSidebar.launcher.reviewDescription"),
       disabled: !canOpenReview,
       icon: <ChangesIcon />,
     },
     {
       key: "terminal",
       title: t("rightSidebar.launcher.terminalTitle"),
-      description: t("rightSidebar.launcher.terminalDescription"),
       disabled: !canOpenTerminal,
       icon: <TerminalIcon />,
     },
@@ -394,10 +388,6 @@ export function RightSidebar({
     return (
       <div className="right-sidebar-launcher" aria-label="Right sidebar launcher">
         <div className="right-sidebar-launcher-shell">
-          <div className="right-sidebar-launcher-heading">
-            <span className="right-sidebar-launcher-brand">anybox</span>
-            <h2 className="right-sidebar-launcher-title">开始</h2>
-          </div>
           <div className="right-sidebar-launcher-tile-grid">
             {launcherCards.map((card) => (
               <button
@@ -410,7 +400,6 @@ export function RightSidebar({
                 <span className="right-sidebar-launcher-card-icon">{card.icon}</span>
                 <span className="right-sidebar-launcher-card-copy">
                   <span className="right-sidebar-launcher-card-title">{card.title}</span>
-                  <span className="right-sidebar-launcher-card-description">{card.description}</span>
                 </span>
               </button>
             ))}

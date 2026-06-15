@@ -10,6 +10,7 @@ import {
 import { useI18n } from "../i18n/I18nProvider"
 import type { TranslationKey } from "../i18n/translations"
 import { ShellTopMenu, joinClassNames } from "../shared-ui"
+import type { AppLocale } from "../../../../shared/locale"
 import { useCalendarData } from "./use-calendar-data"
 import type {
   CalendarEventStatus,
@@ -73,10 +74,7 @@ interface CalendarOverlaysState {
   reminders: boolean
 }
 
-const CREATE_EVENT_STATUS_OPTIONS = [
-  { value: "scheduled", label: "Scheduled" },
-  { value: "canceled", label: "Canceled" },
-] satisfies Array<{ value: CalendarEventStatus; label: string }>
+const CREATE_EVENT_STATUS_VALUES = ["scheduled", "canceled"] as const satisfies readonly CalendarEventStatus[]
 
 const TODO_COLOR = "#8a5cf6"
 const DEADLINE_COLOR = "#c47a2c"
@@ -84,7 +82,7 @@ const REMINDER_COLOR = "#d94d64"
 const AGENT_COLOR = "#64748b"
 
 const HOURS = Array.from({ length: 12 }, (_item, index) => index + 8)
-const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+const WEEKDAY_LABEL_REFERENCE = new Date(2020, 5, 7)
 const VIEW_MODES: CalendarViewMode[] = ["day", "week", "month", "schedule"]
 const CALENDAR_CONTEXT_MENU_WIDTH = 240
 const CALENDAR_SLOT_CONTEXT_MENU_HEIGHT = 54
@@ -95,6 +93,19 @@ const DEFAULT_ENABLED_OVERLAYS: CalendarOverlaysState = {
   agent: true,
   deadlines: true,
   reminders: true,
+}
+
+function getViewModeLabel(mode: CalendarViewMode, t: CalendarTranslate) {
+  switch (mode) {
+    case "day":
+      return t("calendar.view.day")
+    case "week":
+      return t("calendar.view.week")
+    case "month":
+      return t("calendar.view.month")
+    case "schedule":
+      return t("calendar.view.schedule")
+  }
 }
 
 function startOfDay(date: Date) {
@@ -143,17 +154,25 @@ function getHourKey(date: Date) {
   return date.getHours()
 }
 
-function formatMonthLabel(date: Date) {
-  return new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(date)
+function formatMonthLabel(date: Date, locale: AppLocale) {
+  return new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(date)
 }
 
-function formatWeekRangeLabel(weekStart: Date) {
+function formatDateOnlyLabel(date: Date, locale: AppLocale) {
+  return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric" }).format(date)
+}
+
+function formatWeekRangeLabel(weekStart: Date, locale: AppLocale) {
   const weekEnd = addDays(weekStart, 6)
-  const monthFormatter = new Intl.DateTimeFormat(undefined, { month: "short" })
+  if (locale !== "en-US") {
+    return `${formatDateOnlyLabel(weekStart, locale)} - ${formatDateOnlyLabel(weekEnd, locale)}`
+  }
+
+  const monthFormatter = new Intl.DateTimeFormat(locale, { month: "short" })
   const startMonth = monthFormatter.format(weekStart)
   const endMonth = monthFormatter.format(weekEnd)
   if (weekStart.getFullYear() !== weekEnd.getFullYear()) {
-    return `${formatDayLabel(weekStart)} - ${formatDayLabel(weekEnd)}`
+    return `${formatDayLabel(weekStart, locale)} - ${formatDayLabel(weekEnd, locale)}`
   }
   if (weekStart.getMonth() === weekEnd.getMonth()) {
     return `${startMonth} ${weekStart.getDate()} - ${weekEnd.getDate()}, ${weekStart.getFullYear()}`
@@ -161,12 +180,20 @@ function formatWeekRangeLabel(weekStart: Date) {
   return `${startMonth} ${weekStart.getDate()} - ${endMonth} ${weekEnd.getDate()}, ${weekStart.getFullYear()}`
 }
 
-function formatScheduleRangeLabel(anchorDate: Date, t: CalendarTranslate) {
-  return t("calendar.scheduleRange", { date: formatDayLabel(anchorDate) })
+function formatScheduleRangeLabel(anchorDate: Date, locale: AppLocale, t: CalendarTranslate) {
+  return t("calendar.scheduleRange", { date: formatDayLabel(anchorDate, locale) })
 }
 
-function formatDayLabel(date: Date) {
-  return new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", weekday: "short" }).format(date)
+function formatDayLabel(date: Date, locale: AppLocale) {
+  return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", weekday: "short" }).format(date)
+}
+
+function formatWeekdayLabel(date: Date, locale: AppLocale) {
+  return new Intl.DateTimeFormat(locale, { weekday: "short" }).format(date)
+}
+
+function formatWeekdayLabelForIndex(index: number, locale: AppLocale) {
+  return formatWeekdayLabel(addDays(WEEKDAY_LABEL_REFERENCE, index), locale)
 }
 
 function parseDateKey(value: string) {
@@ -175,51 +202,58 @@ function parseDateKey(value: string) {
   return startOfDay(new Date(year, month - 1, day))
 }
 
-function formatTime(date: Date) {
-  return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(date)
+function formatTime(date: Date, locale: AppLocale) {
+  return new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(date)
 }
 
-function formatDateTimeRange(item: CalendarItem, t: CalendarTranslate) {
+function formatHourLabel(hour: number, locale: AppLocale) {
+  return formatTime(setTime(new Date(2020, 0, 1), hour), locale)
+}
+
+function formatDateTimeRange(item: CalendarItem, locale: AppLocale, t: CalendarTranslate) {
   if (!item.startAt) return t("calendar.notScheduled")
-  if (item.allDay) return t("calendar.dateTimeAllDay", { date: formatDayLabel(item.startAt) })
-  const endLabel = item.endAt ? `-${formatTime(item.endAt)}` : ""
-  return `${formatDayLabel(item.startAt)}, ${formatTime(item.startAt)}${endLabel}`
+  if (item.allDay) return t("calendar.dateTimeAllDay", { date: formatDayLabel(item.startAt, locale) })
+  const startTime = formatTime(item.startAt, locale)
+  const time = item.endAt
+    ? t("calendar.timeRange", { start: startTime, end: formatTime(item.endAt, locale) })
+    : startTime
+  return t("calendar.dateTimeTimed", { date: formatDayLabel(item.startAt, locale), time })
 }
 
-function getEntityLabel(type: CalendarEntityType) {
+function getEntityLabel(type: CalendarEntityType, t: CalendarTranslate) {
   switch (type) {
     case "event":
-      return "Event"
+      return t("calendar.type.event")
     case "task":
-      return "Todo"
+      return t("calendar.type.todo")
     case "project":
-      return "Project"
+      return t("calendar.type.project")
     case "reminder":
-      return "Reminder"
+      return t("calendar.type.reminder")
     case "agent_suggestion":
-      return "Suggestion"
+      return t("calendar.type.suggestion")
   }
 }
 
-function getDisplayKindLabel(displayKind: CalendarDisplayKind | undefined) {
+function getDisplayKindLabel(displayKind: CalendarDisplayKind | undefined, t: CalendarTranslate) {
   switch (displayKind) {
     case "external_event":
-      return "Event"
+      return t("calendar.type.event")
     case "scheduled_todo":
-      return "Todo"
+      return t("calendar.type.todo")
     case "deadline":
-      return "Date"
+      return t("calendar.type.date")
     case "reminder":
-      return "Reminder"
+      return t("calendar.type.reminder")
     case "agent_suggestion":
-      return "Suggestion"
+      return t("calendar.type.suggestion")
     default:
       return null
   }
 }
 
-function getItemTypeLabel(item: CalendarItem) {
-  return getDisplayKindLabel(item.displayKind) ?? getEntityLabel(item.entityType)
+function getItemTypeLabel(item: CalendarItem, t: CalendarTranslate) {
+  return getDisplayKindLabel(item.displayKind, t) ?? getEntityLabel(item.entityType, t)
 }
 
 function getDateFieldLabel(item: CalendarItem) {
@@ -256,8 +290,8 @@ function getItemAccentColor(item: CalendarItem, source?: CalendarSource) {
   )
 }
 
-function getScheduleListSourceLabel(item: CalendarItem, source?: CalendarSource) {
-  return source?.name ?? getItemTypeLabel(item)
+function getScheduleListSourceLabel(item: CalendarItem, source: CalendarSource | undefined, t: CalendarTranslate) {
+  return source?.name ?? getItemTypeLabel(item, t)
 }
 
 function getProjectOptionLabel(project: CalendarProjectOption) {
@@ -272,9 +306,9 @@ function resolveProjectValue(value: string | undefined, projects: CalendarProjec
   return matchingProject?.id ?? normalized
 }
 
-function getProjectDisplayName(value: string | undefined, projects: CalendarProjectOption[]) {
+function getProjectDisplayName(value: string | undefined, projects: CalendarProjectOption[], t: CalendarTranslate) {
   const normalized = value?.trim()
-  if (!normalized) return "No project"
+  if (!normalized) return t("calendar.noProject")
   const resolved = resolveProjectValue(normalized, projects)
   return projects.find((project) => project.id === resolved)
     ? getProjectOptionLabel(projects.find((project) => project.id === resolved)!)
@@ -285,13 +319,17 @@ function getTodoProjectFilterId(item: CalendarItem, projects: CalendarProjectOpt
   return resolveProjectValue(item.workspace, projects) || TODO_PROJECT_NO_PROJECT_FILTER_ID
 }
 
-function getSidebarTodoMeta(item: CalendarItem, projects: CalendarProjectOption[]) {
-  const projectName = getProjectDisplayName(item.workspace, projects)
-  const estimate = `${item.estimateMinutes ?? 60}m`
+function getSidebarTodoMeta(item: CalendarItem, projects: CalendarProjectOption[], locale: AppLocale, t: CalendarTranslate) {
+  const projectName = getProjectDisplayName(item.workspace, projects, t)
+  const estimate = t("calendar.minuteEstimate", { minutes: item.estimateMinutes ?? 60 })
   if (item.startAt && item.endAt) {
-    return `${projectName} - ${formatTime(item.startAt)}-${formatTime(item.endAt)} - ${estimate}`
+    return t("calendar.sidebarTodoMetaWithTime", {
+      estimate,
+      project: projectName,
+      time: t("calendar.timeRange", { start: formatTime(item.startAt, locale), end: formatTime(item.endAt, locale) }),
+    })
   }
-  return `${projectName} - ${estimate}`
+  return t("calendar.sidebarTodoMeta", { estimate, project: projectName })
 }
 
 function hasLegacyProjectValue(value: string | undefined, projects: CalendarProjectOption[]) {
@@ -299,30 +337,56 @@ function hasLegacyProjectValue(value: string | undefined, projects: CalendarProj
   return Boolean(resolved && !projects.some((project) => project.id === resolved))
 }
 
-function getStatusOptions(item: CalendarItem) {
+function getStatusLabel(status: CalendarItem["status"], t: CalendarTranslate) {
+  switch (status) {
+    case "scheduled":
+      return t("calendar.status.scheduled")
+    case "canceled":
+      return t("calendar.status.canceled")
+    case "todo":
+      return t("calendar.status.todo")
+    case "done":
+      return t("calendar.status.done")
+    case "pending":
+      return t("calendar.status.pending")
+    case "blocked":
+      return t("calendar.status.blocked")
+    default:
+      return status ?? t("calendar.unknown")
+  }
+}
+
+function getCreateEventStatusOptions(t: CalendarTranslate) {
+  return CREATE_EVENT_STATUS_VALUES.map((value) => ({
+    label: getStatusLabel(value, t),
+    value,
+  }))
+}
+
+function getStatusOptions(item: CalendarItem, t: CalendarTranslate) {
   if (item.entityType === "event") {
-    return CREATE_EVENT_STATUS_OPTIONS
+    return getCreateEventStatusOptions(t)
   }
 
   if (item.entityType === "task") {
     return [
-      { value: "todo", label: "未完成" },
-      { value: "done", label: "已完成" },
+      { value: "todo", label: getStatusLabel("todo", t) },
+      { value: "done", label: getStatusLabel("done", t) },
     ] satisfies Array<{ value: CalendarItem["status"]; label: string }>
   }
 
   if (item.entityType === "agent_suggestion") {
     return [
-      { value: "pending", label: "Pending" },
-      { value: "blocked", label: "Blocked" },
+      { value: "pending", label: getStatusLabel("pending", t) },
+      { value: "blocked", label: getStatusLabel("blocked", t) },
     ] satisfies Array<{ value: CalendarItem["status"]; label: string }>
   }
 
   return [
-    { value: "scheduled", label: "Scheduled" },
-    { value: "todo", label: "未完成" },
-    { value: "done", label: "已完成" },
-    { value: "canceled", label: "Canceled" },
+    { value: "scheduled", label: getStatusLabel("scheduled", t) },
+    { value: "todo", label: getStatusLabel("todo", t) },
+    { value: "done", label: getStatusLabel("done", t) },
+    { value: "canceled", label: getStatusLabel("canceled", t) },
   ] satisfies Array<{ value: CalendarItem["status"]; label: string }>
 }
 
@@ -360,7 +424,7 @@ function readQuickAddHour(text: string) {
   return { hour, minute: Number.isFinite(minute) ? minute : 0 }
 }
 
-function itemMatchesQuery(item: CalendarItem, query: string) {
+function itemMatchesQuery(item: CalendarItem, query: string, t: CalendarTranslate) {
   const normalized = normalizeSearchText(query)
   if (!normalized) return true
   return [
@@ -369,7 +433,7 @@ function itemMatchesQuery(item: CalendarItem, query: string) {
     item.workspace,
     item.status,
     item.entityType,
-    getItemTypeLabel(item),
+    getItemTypeLabel(item, t),
   ].some((value) => value?.toLowerCase().includes(normalized))
 }
 
@@ -425,13 +489,16 @@ function getCalendarContextMenuPosition(
   }
 }
 
-function formatQuickAddContext(context: QuickAddContext, t: CalendarTranslate) {
-  if (context.allDay) return t("calendar.dateTimeAllDay", { date: formatDayLabel(context.startAt) })
-  return `${formatDayLabel(context.startAt)}, ${formatTime(context.startAt)}-${formatTime(context.endAt)}`
+function formatQuickAddContext(context: QuickAddContext, locale: AppLocale, t: CalendarTranslate) {
+  if (context.allDay) return t("calendar.dateTimeAllDay", { date: formatDayLabel(context.startAt, locale) })
+  return t("calendar.dateTimeTimed", {
+    date: formatDayLabel(context.startAt, locale),
+    time: t("calendar.timeRange", { start: formatTime(context.startAt, locale), end: formatTime(context.endAt, locale) }),
+  })
 }
 
 export function CalendarPage({ activeProjectID = null, projects = [], windowControls }: CalendarPageProps) {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const [anchorDate, setAnchorDate] = useState(() => startOfDay(new Date()))
   const [viewMode, setViewMode] = useState<CalendarViewMode>("week")
   const [localItems, setLocalItems] = useState<CalendarItem[]>([])
@@ -524,19 +591,19 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
       counts.set(projectId, {
         count: (existing?.count ?? 0) + 1,
         id: projectId,
-        name: getProjectDisplayName(todo.workspace, projects),
+        name: getProjectDisplayName(todo.workspace, projects, t),
       })
     }
-    return Array.from(counts.values()).sort((left, right) => left.name.localeCompare(right.name))
-  }, [allUnscheduledTasks, projects])
+    return Array.from(counts.values()).sort((left, right) => left.name.localeCompare(right.name, locale))
+  }, [allUnscheduledTasks, locale, projects, t])
   const todoProjectFilterOptions = useMemo<ProjectSummary[]>(() => [
     {
       count: allUnscheduledTasks.length,
       id: TODO_PROJECT_ALL_FILTER_ID,
-      name: "All projects",
+      name: t("calendar.allProjects"),
     },
     ...projectSummaries,
-  ], [allUnscheduledTasks.length, projectSummaries])
+  ], [allUnscheduledTasks.length, projectSummaries, t])
   const activeTodoProjectID = useMemo(
     () => todoProjectFilterOptions.some((project) => project.id === selectedTodoProjectID)
       ? selectedTodoProjectID
@@ -545,13 +612,13 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
   )
   const unscheduledTasks = useMemo(
     () => allUnscheduledTasks.filter((item) => (
-      itemMatchesQuery(item, searchQuery) &&
+      itemMatchesQuery(item, searchQuery, t) &&
       (
         activeTodoProjectID === TODO_PROJECT_ALL_FILTER_ID ||
         getTodoProjectFilterId(item, projects) === activeTodoProjectID
       )
     )),
-    [activeTodoProjectID, allUnscheduledTasks, projects, searchQuery],
+    [activeTodoProjectID, allUnscheduledTasks, projects, searchQuery, t],
   )
   const selectedItem = useMemo(
     () => selectableItems.find((item) => item.id === selectedItemId) ?? visibleItems[0] ?? allUnscheduledTasks[0] ?? null,
@@ -564,10 +631,10 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     [calendarItemContextMenu, selectableItems],
   )
   const currentViewLabel = (
-    viewMode === "day" ? formatDayLabel(anchorDate) :
-    viewMode === "week" ? formatWeekRangeLabel(weekStart) :
-    viewMode === "month" ? formatMonthLabel(anchorDate) :
-    formatScheduleRangeLabel(anchorDate, t)
+    viewMode === "day" ? formatDayLabel(anchorDate, locale) :
+    viewMode === "week" ? formatWeekRangeLabel(weekStart, locale) :
+    viewMode === "month" ? formatMonthLabel(anchorDate, locale) :
+    formatScheduleRangeLabel(anchorDate, locale, t)
   )
 
   function toCalendarEventUpdate(update: Partial<CalendarItem>): UpdateCalendarEventInput {
@@ -901,16 +968,16 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
   }
 
   return (
-    <section className="calendar-page" aria-label="Calendar">
+    <section className="calendar-page" aria-label={t("calendar.title")}>
       <ShellTopMenu
         as="header"
-        ariaLabel="Calendar top menu"
+        ariaLabel={t("calendar.topMenu")}
         className="calendar-top-menu"
         contentClassName="calendar-top-menu-content"
         content={(
           <div className="calendar-top-menu-title">
             <CalendarIcon />
-            <span>Calendar</span>
+            <span>{t("calendar.title")}</span>
           </div>
         )}
         dragRegion
@@ -921,12 +988,12 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
       <div className="calendar-toolbar">
         <div className="calendar-toolbar-spacer" aria-hidden="true" />
 
-        <div className="calendar-date-controls" aria-label="Date navigation">
+        <div className="calendar-date-controls" aria-label={t("calendar.dateNavigation")}>
           <button
             type="button"
             className="calendar-period-step"
-            aria-label="Previous calendar range"
-            title="Previous"
+            aria-label={t("calendar.previousRange")}
+            title={t("calendar.previous")}
             onClick={() => moveAnchor(-1)}
           >
             <span aria-hidden="true">‹</span>
@@ -937,16 +1004,16 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
               className="calendar-period-title"
               aria-haspopup="dialog"
               aria-expanded={isDatePickerOpen}
-              aria-label={`Change calendar date, current range ${currentViewLabel}`}
+              aria-label={t("calendar.changeDate", { range: currentViewLabel })}
               onClick={() => setIsDatePickerOpen((current) => !current)}
             >
               <h1>{currentViewLabel}</h1>
               <span aria-hidden="true">⌄</span>
             </button>
             {isDatePickerOpen ? (
-              <div className="calendar-date-popover" role="dialog" aria-label="Choose calendar date">
+              <div className="calendar-date-popover" role="dialog" aria-label={t("calendar.chooseDate")}>
                 <label>
-                  Jump to date
+                  {t("calendar.jumpToDate")}
                   <input
                     type="date"
                     value={getDateKey(anchorDate)}
@@ -957,7 +1024,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
                   />
                 </label>
                 <button type="button" className="calendar-date-popover-today" onClick={() => selectAnchorDate(new Date())}>
-                  Today
+                  {t("calendar.today")}
                 </button>
               </div>
             ) : null}
@@ -965,8 +1032,8 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
           <button
             type="button"
             className="calendar-period-step"
-            aria-label="Next calendar range"
-            title="Next"
+            aria-label={t("calendar.nextRange")}
+            title={t("calendar.next")}
             onClick={() => moveAnchor(1)}
           >
             <span aria-hidden="true">›</span>
@@ -974,7 +1041,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
         </div>
 
         <div className="calendar-toolbar-actions">
-          <div className="calendar-view-switcher" aria-label="Calendar view">
+          <div className="calendar-view-switcher" aria-label={t("calendar.view")}>
             {VIEW_MODES.map((mode) => (
               <button
                 key={mode}
@@ -983,7 +1050,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
                 aria-pressed={viewMode === mode}
                 onClick={() => setViewMode(mode)}
               >
-                {mode}
+                {getViewModeLabel(mode, t)}
               </button>
             ))}
           </div>
@@ -996,7 +1063,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
           <div
             className="calendar-context-menu"
             role="menu"
-            aria-label="Calendar slot actions"
+            aria-label={t("calendar.slotActions")}
             style={{ left: calendarContextMenu.x, top: calendarContextMenu.y }}
             onClick={(event) => event.stopPropagation()}
             onContextMenu={(event) => event.preventDefault()}
@@ -1006,8 +1073,8 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
               role="menuitem"
               onClick={() => openQuickAddDialog("todo", calendarContextMenu.context)}
             >
-              <span>New Todo</span>
-              <small>{formatQuickAddContext(calendarContextMenu.context, t)}</small>
+              <span>{t("calendar.newTodo")}</span>
+              <small>{formatQuickAddContext(calendarContextMenu.context, locale, t)}</small>
             </button>
           </div>
         </div>
@@ -1018,7 +1085,9 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
           <div
             className="calendar-context-menu calendar-item-context-menu"
             role="menu"
-            aria-label={`${calendarItemContextMenuItem?.title ?? "Calendar item"} actions`}
+            aria-label={t("calendar.itemActions", {
+              title: calendarItemContextMenuItem?.title ?? t("calendar.itemFallback"),
+            })}
             style={{ left: calendarItemContextMenu.x, top: calendarItemContextMenu.y }}
             onClick={(event) => event.stopPropagation()}
             onContextMenu={(event) => event.preventDefault()}
@@ -1035,7 +1104,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
               }}
             >
               <DeleteIcon />
-              <span>Delete</span>
+              <span>{t("calendar.delete")}</span>
             </button>
           </div>
         </div>
@@ -1058,11 +1127,13 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
             }}
           >
             <header className="calendar-quick-add-dialog-header">
-              <h2 id="calendar-quick-add-title">{quickAddMode === "todo" ? "New Todo" : "Create event"}</h2>
+              <h2 id="calendar-quick-add-title">
+                {quickAddMode === "todo" ? t("calendar.newTodo") : t("calendar.createEvent")}
+              </h2>
               <button
                 type="button"
                 className="calendar-quick-add-close"
-                aria-label="Close add calendar item dialog"
+                aria-label={t("calendar.closeQuickAdd")}
                 onClick={closeQuickAddDialog}
               >
                 <CloseIcon />
@@ -1071,24 +1142,24 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
 
             <form
               className="calendar-quick-add-form"
-              aria-label={quickAddMode === "todo" ? "New Todo details" : "Create event details"}
+              aria-label={quickAddMode === "todo" ? t("calendar.newTodoDetails") : t("calendar.createEventDetails")}
               onSubmit={handleQuickAdd}
             >
               <div className="calendar-quick-add-summary">
-                <span>{quickAddMode === "todo" ? "Todo" : "Event"}</span>
+                <span>{quickAddMode === "todo" ? t("calendar.todo") : t("calendar.event")}</span>
                 <strong>
-                  {quickAddContext ? formatQuickAddContext(quickAddContext, t) : (
-                    quickAddMode === "todo" ? "Unscheduled Todo" : "New calendar event"
+                  {quickAddContext ? formatQuickAddContext(quickAddContext, locale, t) : (
+                    quickAddMode === "todo" ? t("calendar.unscheduledTodo") : t("calendar.newCalendarEvent")
                   )}
                 </strong>
               </div>
               <label className="calendar-quick-add-field">
-                <span>Title</span>
+                <span>{t("calendar.titleLabel")}</span>
                 <input
-                  aria-label={quickAddMode === "todo" ? "Todo title" : "Event title"}
+                  aria-label={quickAddMode === "todo" ? t("calendar.todoTitle") : t("calendar.eventTitle")}
                   autoFocus
                   value={quickAddText}
-                  placeholder={quickAddMode === "todo" ? "Todo title..." : "Event title..."}
+                  placeholder={quickAddMode === "todo" ? t("calendar.todoTitlePlaceholder") : t("calendar.eventTitlePlaceholder")}
                   onChange={(event) => setQuickAddText(event.target.value)}
                 />
               </label>
@@ -1096,9 +1167,9 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
               {quickAddMode === "event" ? (
                 <>
                   <label className="calendar-quick-add-field">
-                    <span>Calendar</span>
+                    <span>{t("calendar.calendarLabel")}</span>
                     <select
-                      aria-label="Calendar"
+                      aria-label={t("calendar.calendarLabel")}
                       value={quickAddSourceId}
                       onChange={(event) => setQuickAddSourceId(event.target.value)}
                     >
@@ -1109,13 +1180,13 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
                   </label>
 
                   <label className="calendar-quick-add-field">
-                    <span>Status</span>
+                    <span>{t("calendar.status")}</span>
                     <select
-                      aria-label="Status"
+                      aria-label={t("calendar.status")}
                       value={quickAddStatus}
                       onChange={(event) => setQuickAddStatus(event.target.value as CalendarEventStatus)}
                     >
-                      {CREATE_EVENT_STATUS_OPTIONS.map((option) => (
+                      {getCreateEventStatusOptions(t).map((option) => (
                         <option key={option.value} value={option.value}>{option.label}</option>
                       ))}
                     </select>
@@ -1124,13 +1195,13 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
               ) : null}
 
               <label className="calendar-quick-add-field">
-                <span>Project</span>
+                <span>{t("calendar.project")}</span>
                 <select
-                  aria-label="Project"
+                  aria-label={t("calendar.project")}
                   value={quickAddWorkspace}
                   onChange={(event) => setQuickAddWorkspace(event.target.value)}
                 >
-                  <option value="">No project</option>
+                  <option value="">{t("calendar.noProject")}</option>
                   {projects.map((project) => (
                     <option key={project.id} value={project.id}>{getProjectOptionLabel(project)}</option>
                   ))}
@@ -1138,37 +1209,41 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
               </label>
 
               <label className="calendar-quick-add-field">
-                <span>Notes</span>
+                <span>{t("calendar.notes")}</span>
                 <textarea
-                  aria-label="Notes"
+                  aria-label={t("calendar.notes")}
                   value={quickAddNotes}
-                  placeholder="Context for this calendar item"
+                  placeholder={t("calendar.notesPlaceholder")}
                   onChange={(event) => setQuickAddNotes(event.target.value)}
                 />
               </label>
 
               <div className="calendar-quick-add-meta">
                 <div>
-                  <span>{quickAddMode === "todo" ? "Project" : "Calendar"}</span>
-                  <strong>{quickAddMode === "todo" ? getProjectDisplayName(quickAddWorkspace, projects) : sourceById.get(quickAddSourceId)?.name ?? "Not selected"}</strong>
+                  <span>{quickAddMode === "todo" ? t("calendar.project") : t("calendar.calendarLabel")}</span>
+                  <strong>
+                    {quickAddMode === "todo"
+                      ? getProjectDisplayName(quickAddWorkspace, projects, t)
+                      : sourceById.get(quickAddSourceId)?.name ?? t("calendar.notSelected")}
+                  </strong>
                 </div>
                 <div>
-                  <span>Date field</span>
+                  <span>{t("calendar.dateField")}</span>
                   <strong>{quickAddMode === "todo" ? "scheduledStartAt" : "startAt"}</strong>
                 </div>
               </div>
 
               <div className="calendar-quick-add-actions">
                 <button type="button" className="calendar-secondary-action" onClick={closeQuickAddDialog}>
-                  Cancel
+                  {t("calendar.cancel")}
                 </button>
                 <button
                   type="submit"
                   className="calendar-primary-action"
-                  aria-label={quickAddMode === "todo" ? "Create todo" : "Create event"}
+                  aria-label={quickAddMode === "todo" ? t("calendar.createTodo") : t("calendar.createEvent")}
                   disabled={quickAddMode === "event" && !quickAddSourceId}
                 >
-                  Create
+                  {t("calendar.create")}
                 </button>
               </div>
             </form>
@@ -1180,12 +1255,14 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
         <CalendarSourcesPanel
           isQuickAddOpen={isQuickAddOpen}
           isProjectFilterOpen={isTodoProjectFilterOpen}
+          locale={locale}
           projects={projects}
           projectFilterOptions={todoProjectFilterOptions}
           searchQuery={searchQuery}
           selectedProjectFilterID={activeTodoProjectID}
           todoSummary={todoSummary}
           todoItems={unscheduledTasks}
+          t={t}
           onCreateTodo={() => openQuickAddDialog("todo", null, getSidebarQuickAddWorkspace())}
           onSearchQueryChange={setSearchQuery}
           onItemSelect={setSelectedItemId}
@@ -1198,19 +1275,20 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
           onProjectFilterToggle={() => setIsTodoProjectFilterOpen((current) => !current)}
         />
 
-        <main className="calendar-main" aria-label={`${viewMode} calendar view`}>
+        <main className="calendar-main" aria-label={t("calendar.viewAria", { view: getViewModeLabel(viewMode, t) })}>
           {calendarData.error ? (
             <p className="calendar-data-status is-error" role="alert">
-              Calendar data unavailable: {calendarData.error}
+              {t("calendar.dataUnavailable", { message: calendarData.error })}
             </p>
           ) : calendarData.isLoading ? (
-            <p className="calendar-data-status" role="status">Loading calendar data...</p>
+            <p className="calendar-data-status" role="status">{t("calendar.loadingData")}</p>
           ) : null}
           <div className="calendar-main-stage">
             {viewMode === "day" ? (
               <TimeGrid
                 days={[anchorDate]}
                 items={visibleItems}
+                locale={locale}
                 sourceById={sourceById}
                 t={t}
                 onAllDayDrop={handleAllDayDrop}
@@ -1224,6 +1302,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
               <TimeGrid
                 days={Array.from({ length: 7 }, (_item, index) => addDays(weekStart, index))}
                 items={visibleItems}
+                locale={locale}
                 sourceById={sourceById}
                 t={t}
                 onAllDayDrop={handleAllDayDrop}
@@ -1237,6 +1316,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
               <MonthGrid
                 anchorDate={anchorDate}
                 items={visibleItems}
+                locale={locale}
                 sourceById={sourceById}
                 onDayDrop={handleAllDayDrop}
                 onCreateEvent={handleSlotContextMenu}
@@ -1248,6 +1328,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
               <ScheduleList
                 anchorDate={anchorDate}
                 items={visibleItems}
+                locale={locale}
                 sourceById={sourceById}
                 t={t}
                 onItemContextMenu={handleItemContextMenu}
@@ -1260,6 +1341,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
 
         <CalendarDetailPanel
           item={selectedItem}
+          locale={locale}
           projects={projects}
           source={selectedItem ? sourceById.get(selectedItem.sourceId) : undefined}
           sources={sources}
@@ -1277,10 +1359,12 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
 interface CalendarSourcesPanelProps {
   isQuickAddOpen: boolean
   isProjectFilterOpen: boolean
+  locale: AppLocale
   projects: CalendarProjectOption[]
   projectFilterOptions: ProjectSummary[]
   searchQuery: string
   selectedProjectFilterID: string
+  t: CalendarTranslate
   todoSummary: TodoSummary
   todoItems: CalendarItem[]
   onCreateTodo: () => void
@@ -1295,10 +1379,12 @@ interface CalendarSourcesPanelProps {
 function CalendarSourcesPanel({
   isQuickAddOpen,
   isProjectFilterOpen,
+  locale,
   projects,
   projectFilterOptions,
   searchQuery,
   selectedProjectFilterID,
+  t,
   todoSummary,
   todoItems,
   onCreateTodo,
@@ -1314,7 +1400,7 @@ function CalendarSourcesPanel({
   return (
     <aside
       className="calendar-sources-panel"
-      aria-label="Calendar sidebar"
+      aria-label={t("calendar.sidebar")}
       onDragOver={onTodoDragOver}
       onDrop={onTodoDrop}
     >
@@ -1323,7 +1409,7 @@ function CalendarSourcesPanel({
           <SearchIcon />
           <input
             value={searchQuery}
-            placeholder="Search Todos..."
+            placeholder={t("calendar.searchTodos")}
             onChange={(event) => onSearchQueryChange(event.target.value)}
           />
         </label>
@@ -1332,8 +1418,8 @@ function CalendarSourcesPanel({
           className="calendar-source-add-button"
           aria-haspopup="dialog"
           aria-expanded={isQuickAddOpen}
-          aria-label="New Todo"
-          title="New Todo"
+          aria-label={t("calendar.newTodo")}
+          title={t("calendar.newTodo")}
           onClick={onCreateTodo}
         >
           <PlusIcon />
@@ -1346,15 +1432,15 @@ function CalendarSourcesPanel({
           className="calendar-project-filter-trigger"
           aria-haspopup="listbox"
           aria-expanded={isProjectFilterOpen}
-          aria-label={`Project filter: ${selectedProject?.name ?? "All projects"}`}
-          title={selectedProject?.name ?? "All projects"}
+          aria-label={t("calendar.projectFilter", { project: selectedProject?.name ?? t("calendar.allProjects") })}
+          title={selectedProject?.name ?? t("calendar.allProjects")}
           onClick={onProjectFilterToggle}
         >
-          <span>Project: {selectedProject?.name ?? "All projects"}</span>
+          <span>{t("calendar.projectPrefix", { project: selectedProject?.name ?? t("calendar.allProjects") })}</span>
           <strong>{selectedProject?.count ?? 0}</strong>
         </button>
         {isProjectFilterOpen ? (
-          <div className="calendar-project-filter-menu" role="listbox" aria-label="Todo project filter">
+          <div className="calendar-project-filter-menu" role="listbox" aria-label={t("calendar.todoProjectFilter")}>
             {projectFilterOptions.map((project) => (
               <button
                 key={project.id}
@@ -1376,10 +1462,10 @@ function CalendarSourcesPanel({
         ) : null}
       </div>
 
-      <section className="calendar-source-section" aria-label="Unscheduled Todos">
+      <section className="calendar-source-section" aria-label={t("calendar.unscheduledTodos")}>
         <div className="calendar-section-heading">
-          <h2>Todos</h2>
-          <span>{todoSummary.unscheduled} unscheduled</span>
+          <h2>{t("calendar.todos")}</h2>
+          <span>{t("calendar.unscheduledCount", { count: todoSummary.unscheduled })}</span>
         </div>
         <div className="calendar-unscheduled-list">
           {todoItems.length > 0 ? todoItems.map((task) => (
@@ -1395,10 +1481,10 @@ function CalendarSourcesPanel({
               }}
             >
               <span>{task.title}</span>
-              <small>{getSidebarTodoMeta(task, projects)}</small>
+              <small>{getSidebarTodoMeta(task, projects, locale, t)}</small>
             </button>
           )) : (
-            <p className="calendar-empty-note">No unscheduled Todos match this view.</p>
+            <p className="calendar-empty-note">{t("calendar.emptyUnscheduledTodos")}</p>
           )}
         </div>
       </section>
@@ -1409,6 +1495,7 @@ function CalendarSourcesPanel({
 interface TimeGridProps {
   days: Date[]
   items: CalendarItem[]
+  locale: AppLocale
   sourceById: Map<string, CalendarSource>
   t: CalendarTranslate
   onAllDayDrop: (event: DragEvent<HTMLElement>, day: Date) => void
@@ -1422,6 +1509,7 @@ interface TimeGridProps {
 function TimeGrid({
   days,
   items,
+  locale,
   sourceById,
   t,
   onAllDayDrop,
@@ -1441,7 +1529,7 @@ function TimeGrid({
         <div className="calendar-grid-corner" />
         {days.map((day) => (
           <div key={getDateKey(day)} className={joinClassNames("calendar-day-header", isSameDay(day, new Date()) && "is-today")}>
-            <span>{WEEKDAY_LABELS[day.getDay()]}</span>
+            <span>{formatWeekdayLabel(day, locale)}</span>
             <strong>{day.getDate()}</strong>
           </div>
         ))}
@@ -1473,6 +1561,7 @@ function TimeGrid({
                 <CalendarEventChip
                   key={item.id}
                   item={item}
+                  locale={locale}
                   source={sourceById.get(item.sourceId)}
                   t={t}
                   onClick={() => onItemSelect(item.id)}
@@ -1485,7 +1574,7 @@ function TimeGrid({
 
         {HOURS.map((hour) => (
           <Fragment key={`hour-row-${hour}`}>
-            <div key={`time-${hour}`} className="calendar-time-label">{String(hour).padStart(2, "0")}:00</div>
+            <div key={`time-${hour}`} className="calendar-time-label">{formatHourLabel(hour, locale)}</div>
             {days.map((day) => {
               const cellItems = timedItems.filter((item) => (
                 item.startAt && isSameDay(item.startAt, day) && getHourKey(item.startAt) === hour
@@ -1496,7 +1585,7 @@ function TimeGrid({
                   key={`${getDateKey(day)}-${hour}`}
                   role="gridcell"
                   className="calendar-time-cell"
-                  aria-label={t("calendar.scheduleAt", { date: formatDayLabel(day), hour })}
+                  aria-label={t("calendar.scheduleAt", { date: formatDayLabel(day, locale), time: formatHourLabel(hour, locale) })}
                   data-calendar-date={getDateKey(day)}
                   data-calendar-hour={hour}
                   onDragOver={(event) => {
@@ -1517,6 +1606,7 @@ function TimeGrid({
                     <CalendarEventChip
                       key={item.id}
                       item={item}
+                      locale={locale}
                       source={sourceById.get(item.sourceId)}
                       t={t}
                       onClick={() => onItemSelect(item.id)}
@@ -1536,6 +1626,7 @@ function TimeGrid({
 
 interface CalendarEventChipProps {
   item: CalendarItem
+  locale: AppLocale
   source?: CalendarSource
   t: CalendarTranslate
   onClick: () => void
@@ -1543,7 +1634,7 @@ interface CalendarEventChipProps {
   onDragStart: (event: DragEvent<HTMLElement>) => void
 }
 
-function CalendarEventChip({ item, source, t, onClick, onContextMenu, onDragStart }: CalendarEventChipProps) {
+function CalendarEventChip({ item, locale, source, t, onClick, onContextMenu, onDragStart }: CalendarEventChipProps) {
   const isMovable = item.entityType !== "agent_suggestion"
   return (
     <span
@@ -1568,7 +1659,7 @@ function CalendarEventChip({ item, source, t, onClick, onContextMenu, onDragStar
       }}
     >
       <span>{item.title}</span>
-      <small>{item.isSuggestion ? t("calendar.suggested") : item.startAt ? formatTime(item.startAt) : getItemTypeLabel(item)}</small>
+      <small>{item.isSuggestion ? t("calendar.suggested") : item.startAt ? formatTime(item.startAt, locale) : getItemTypeLabel(item, t)}</small>
     </span>
   )
 }
@@ -1576,6 +1667,7 @@ function CalendarEventChip({ item, source, t, onClick, onContextMenu, onDragStar
 interface MonthGridProps {
   anchorDate: Date
   items: CalendarItem[]
+  locale: AppLocale
   sourceById: Map<string, CalendarSource>
   onDayDrop: (event: DragEvent<HTMLElement>, day: Date) => void
   onCreateEvent: (event: MouseEvent<HTMLElement>, context: QuickAddContext) => void
@@ -1587,6 +1679,7 @@ interface MonthGridProps {
 function MonthGrid({
   anchorDate,
   items,
+  locale,
   sourceById,
   onDayDrop,
   onCreateEvent,
@@ -1601,7 +1694,9 @@ function MonthGrid({
 
   return (
     <div className="calendar-month-view">
-      {WEEKDAY_LABELS.map((label) => <div key={label} className="calendar-month-weekday">{label}</div>)}
+      {Array.from({ length: 7 }, (_item, index) => (
+        <div key={index} className="calendar-month-weekday">{formatWeekdayLabelForIndex(index, locale)}</div>
+      ))}
       {days.map((day) => {
         const dayItems = datedItems.filter((item) => item.startAt && isSameDay(item.startAt, day))
         return (
@@ -1656,6 +1751,7 @@ function MonthGrid({
 interface ScheduleListProps {
   anchorDate: Date
   items: CalendarItem[]
+  locale: AppLocale
   sourceById: Map<string, CalendarSource>
   t: CalendarTranslate
   onItemContextMenu: (event: MouseEvent<HTMLElement>, item: CalendarItem) => void
@@ -1663,7 +1759,7 @@ interface ScheduleListProps {
   onItemSelect: (itemId: string) => void
 }
 
-function ScheduleList({ anchorDate, items, sourceById, t, onItemContextMenu, onItemDragStart, onItemSelect }: ScheduleListProps) {
+function ScheduleList({ anchorDate, items, locale, sourceById, t, onItemContextMenu, onItemDragStart, onItemSelect }: ScheduleListProps) {
   const rangeStart = startOfDay(anchorDate)
   const rangeEnd = addDays(rangeStart, 14)
   const scheduledItems = items
@@ -1681,7 +1777,7 @@ function ScheduleList({ anchorDate, items, sourceById, t, onItemContextMenu, onI
     <div className="calendar-schedule-view">
       {Object.entries(groups).map(([key, groupItems]) => (
         <section key={key} className="calendar-schedule-group">
-          <h2>{formatDayLabel(groupItems[0].startAt!)}</h2>
+          <h2>{formatDayLabel(groupItems[0].startAt!, locale)}</h2>
           <div className="calendar-schedule-items">
             {groupItems.map((item) => (
               <button
@@ -1693,12 +1789,12 @@ function ScheduleList({ anchorDate, items, sourceById, t, onItemContextMenu, onI
                 onDragStart={(event) => onItemDragStart(event, item)}
                 onContextMenu={(event) => onItemContextMenu(event, item)}
               >
-                <span className="calendar-schedule-time">{item.allDay ? t("calendar.allDay") : item.startAt ? formatTime(item.startAt) : ""}</span>
+                <span className="calendar-schedule-time">{item.allDay ? t("calendar.allDay") : item.startAt ? formatTime(item.startAt, locale) : ""}</span>
                 <span className="calendar-schedule-copy">
                   <strong>{item.title}</strong>
                   <small>
                     <span style={{ backgroundColor: getItemAccentColor(item, sourceById.get(item.sourceId)) }} />
-                    {getScheduleListSourceLabel(item, sourceById.get(item.sourceId))}
+                    {getScheduleListSourceLabel(item, sourceById.get(item.sourceId), t)}
                   </small>
                 </span>
                 <ChevronRightIcon />
@@ -1707,13 +1803,14 @@ function ScheduleList({ anchorDate, items, sourceById, t, onItemContextMenu, onI
           </div>
         </section>
       ))}
-      {scheduledItems.length === 0 ? <p className="calendar-empty-state">No visible items in the next two weeks.</p> : null}
+      {scheduledItems.length === 0 ? <p className="calendar-empty-state">{t("calendar.noVisibleItemsTwoWeeks")}</p> : null}
     </div>
   )
 }
 
 interface CalendarDetailPanelProps {
   item: CalendarItem | null
+  locale: AppLocale
   projects: CalendarProjectOption[]
   source?: CalendarSource
   sources: CalendarSource[]
@@ -1726,6 +1823,7 @@ interface CalendarDetailPanelProps {
 
 function CalendarDetailPanel({
   item,
+  locale,
   projects,
   source,
   sources,
@@ -1737,11 +1835,11 @@ function CalendarDetailPanel({
 }: CalendarDetailPanelProps) {
   if (!item) {
     return (
-      <aside className="calendar-detail-panel" aria-label="Calendar details">
+      <aside className="calendar-detail-panel" aria-label={t("calendar.details")}>
         <div className="calendar-detail-empty">
           <CalendarIcon />
-          <h2>Select a calendar item</h2>
-          <p>Events, Todos, and Agent suggestions open here.</p>
+          <h2>{t("calendar.selectItemTitle")}</h2>
+          <p>{t("calendar.selectItemCopy")}</p>
         </div>
       </aside>
     )
@@ -1750,7 +1848,7 @@ function CalendarDetailPanel({
   const sourceOptionsWithCurrent = source && !sourceOptions.some((candidate) => candidate.id === source.id)
     ? [source, ...sourceOptions]
     : sourceOptions
-  const statusOptions = getStatusOptions(item)
+  const statusOptions = getStatusOptions(item, t)
   const statusValue = item.status ?? (item.entityType === "task" ? "todo" : "scheduled")
   const useSegmentedStatus = statusOptions.length === 2
   const isTaskLikeItem = item.entityType === "task"
@@ -1758,12 +1856,12 @@ function CalendarDetailPanel({
   const hasLegacyProject = hasLegacyProjectValue(item.workspace, projects)
 
   return (
-    <aside className="calendar-detail-panel" aria-label="Calendar details">
+    <aside className="calendar-detail-panel" aria-label={t("calendar.details")}>
       <div className="calendar-detail-heading">
-        <span className="calendar-detail-type">{getItemTypeLabel(item)}</span>
+        <span className="calendar-detail-type">{getItemTypeLabel(item, t)}</span>
         <textarea
           className="calendar-detail-title-input"
-          aria-label="Title"
+          aria-label={t("calendar.titleLabel")}
           value={item.title}
           rows={getDetailTitleRows(item.title)}
           onChange={(event) => onItemUpdate(item.id, { title: event.target.value })}
@@ -1774,13 +1872,13 @@ function CalendarDetailPanel({
             }
           }}
         />
-        <p>{formatDateTimeRange(item, t)}</p>
+        <p>{formatDateTimeRange(item, locale, t)}</p>
       </div>
 
       <div className="calendar-detail-form">
         {item.entityType === "event" ? (
           <label className="calendar-detail-field-row">
-            <span>Calendar</span>
+            <span>{t("calendar.calendarLabel")}</span>
             <select
               value={item.sourceId}
               onChange={(event) => onItemUpdate(item.id, { sourceId: event.target.value })}
@@ -1794,8 +1892,8 @@ function CalendarDetailPanel({
 
         {useSegmentedStatus ? (
           <div className="calendar-detail-field-row">
-            <span>Status</span>
-            <div className="calendar-status-segmented" role="radiogroup" aria-label="Status">
+            <span>{t("calendar.status")}</span>
+            <div className="calendar-status-segmented" role="radiogroup" aria-label={t("calendar.status")}>
               {statusOptions.map((option) => (
                 <button
                   key={option.value}
@@ -1819,7 +1917,7 @@ function CalendarDetailPanel({
           </div>
         ) : (
           <label className="calendar-detail-field-row">
-            <span>Status</span>
+            <span>{t("calendar.status")}</span>
             <select
               value={statusValue}
               onChange={(event) => onItemUpdate(item.id, { status: event.target.value as CalendarItem["status"] })}
@@ -1832,12 +1930,12 @@ function CalendarDetailPanel({
         )}
 
         <label className="calendar-detail-field-row">
-          <span>Project</span>
+          <span>{t("calendar.project")}</span>
           <select
             value={projectValue}
             onChange={(event) => onItemUpdate(item.id, { workspace: event.target.value })}
           >
-            <option value="">No project</option>
+            <option value="">{t("calendar.noProject")}</option>
             {hasLegacyProject ? (
               <option value={projectValue}>{item.workspace}</option>
             ) : null}
@@ -1848,11 +1946,11 @@ function CalendarDetailPanel({
         </label>
 
         <label>
-          Notes
+          {t("calendar.notes")}
           <textarea
             value={item.description ?? ""}
             rows={4}
-            placeholder="Context for this calendar item"
+            placeholder={t("calendar.notesPlaceholder")}
             onChange={(event) => onItemUpdate(item.id, { description: event.target.value })}
           />
         </label>
@@ -1860,11 +1958,11 @@ function CalendarDetailPanel({
 
       <div className="calendar-detail-meta">
         <div>
-          <span>{item.entityType === "event" ? "Calendar" : "Context"}</span>
-          <strong>{item.entityType === "event" ? source?.name ?? "Unknown" : getItemTypeLabel(item)}</strong>
+          <span>{item.entityType === "event" ? t("calendar.calendarLabel") : t("calendar.context")}</span>
+          <strong>{item.entityType === "event" ? source?.name ?? t("calendar.unknown") : getItemTypeLabel(item, t)}</strong>
         </div>
         <div>
-          <span>Date field</span>
+          <span>{t("calendar.dateField")}</span>
           <strong>{getDateFieldLabel(item)}</strong>
         </div>
       </div>
@@ -1873,10 +1971,10 @@ function CalendarDetailPanel({
         {item.entityType === "agent_suggestion" ? (
           <>
             <button type="button" className="calendar-primary-action" onClick={() => onAcceptSuggestion(item)}>
-              Accept suggestion
+              {t("calendar.acceptSuggestion")}
             </button>
             <button type="button" className="calendar-secondary-action" onClick={() => onDismissSuggestion(item.id)}>
-              Dismiss
+              {t("calendar.dismiss")}
             </button>
           </>
         ) : (
@@ -1888,7 +1986,7 @@ function CalendarDetailPanel({
                 disabled={item.isReadOnly}
                 onClick={() => onDelete(item.id)}
               >
-                Delete
+                {t("calendar.delete")}
               </button>
             ) : null}
           </>
