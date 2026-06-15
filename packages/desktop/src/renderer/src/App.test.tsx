@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { DesktopAppUpdateState, MobileBridgeDesktopEvent } from "../../shared/desktop-ipc-contract"
 import type { PermissionRequestPrompt, PermissionResolveResult } from "../../shared/permission"
 import { App } from "./App"
-import { CREATE_SESSION_PROMPT_EXAMPLES } from "./app/canvas/CreateSessionCanvas"
 import {
   DEFAULT_RIGHT_SIDEBAR_WIDTH,
   DEFAULT_SIDEBAR_WIDTH,
@@ -159,6 +158,14 @@ function createSubscriptionStreamEvent(input: {
     id: input.id,
     event: input.event,
     data: input.data,
+    receivedAt: Date.now(),
+  }
+}
+
+function createFocusSessionEvent(backendSessionID: string): DesktopAgentSessionEvent {
+  return {
+    kind: "focus-session",
+    backendSessionID,
     receivedAt: Date.now(),
   }
 }
@@ -7740,6 +7747,23 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "app" }).closest(".project-row")).toHaveClass("is-active")
   })
 
+  it("focuses the target session when a notification focus event arrives", async () => {
+    render(<App />)
+
+    expect(screen.getByRole("button", { name: "Switch to session Chat 1" })).toHaveAttribute("aria-pressed", "true")
+    expect(screen.queryByRole("button", { name: "Switch to session Chat 2" })).not.toBeInTheDocument()
+
+    act(() => {
+      for (const listener of agentSessionEventListeners) {
+        listener(createFocusSessionEvent("session-chat-2"))
+      }
+    })
+
+    expect(await screen.findByRole("button", { name: "Switch to session Chat 2" })).toHaveAttribute("aria-pressed", "true")
+    expect(screen.getByRole("button", { name: "Switch to session Chat 1" })).toHaveAttribute("aria-pressed", "false")
+    expect(screen.getByRole("button", { name: "Chat 2" }).closest(".session-row")).toHaveClass("is-active")
+  })
+
   it("reuses open session tabs while preserving create session tabs in the focused pane", async () => {
     render(<App />)
 
@@ -8207,34 +8231,14 @@ describe("App", () => {
     expect(screen.queryByRole("combobox", { name: "Session project" })).not.toBeInTheDocument()
   })
 
-  it("fills the create session composer from a prompt example", async () => {
+  it("does not show prompt examples on the create session canvas", async () => {
     render(<App />)
 
     fireEvent.click(getAddSessionTabButton())
     await screen.findByRole("combobox", { name: "Session project" })
 
-    fireEvent.click(screen.getByRole("button", { name: CREATE_SESSION_PROMPT_EXAMPLES[0] }))
-
-    await waitFor(() => {
-      expectComposerDraftValue(screen.getByRole("textbox", { name: "Task draft" }), CREATE_SESSION_PROMPT_EXAMPLES[0])
-    })
-  })
-
-  it("appends a prompt example to an existing create session draft", async () => {
-    render(<App />)
-
-    fireEvent.click(getAddSessionTabButton())
-    await screen.findByRole("combobox", { name: "Session project" })
-
-    const draftInput = screen.getByRole("textbox", { name: "Task draft" })
-    setComposerDraftValue(draftInput, "Keep this context")
-    fireEvent.click(screen.getByRole("button", { name: CREATE_SESSION_PROMPT_EXAMPLES[1] }))
-
-    await waitFor(() => {
-      const draftText = screen.getByRole("textbox", { name: "Task draft" }).textContent ?? ""
-      expect(draftText).toContain("Keep this context")
-      expect(draftText).toContain(CREATE_SESSION_PROMPT_EXAMPLES[1])
-    })
+    expect(screen.queryByRole("heading", { name: "Start with a concrete task" })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Prompt examples")).not.toBeInTheDocument()
   })
 
   it("creates a backend session in the active workspace directory for local sessions", async () => {

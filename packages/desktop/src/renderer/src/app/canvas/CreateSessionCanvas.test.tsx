@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import type { WorkspaceGroup } from "../types"
-import { CREATE_SESSION_PROMPT_EXAMPLES, CreateSessionCanvas } from "./CreateSessionCanvas"
+import { CreateSessionCanvas } from "./CreateSessionCanvas"
 
 function createWorkspace(overrides: Partial<WorkspaceGroup> = {}): WorkspaceGroup {
   return {
@@ -26,7 +26,6 @@ function renderCreateSessionCanvas(input: Partial<Parameters<typeof CreateSessio
     selectedWorkspaceID: "workspace-1",
     workspaces: [createWorkspace()],
     onOpenProjectFolder: vi.fn(),
-    onPromptExampleSelect: vi.fn(),
     onWorkspaceChange: vi.fn(),
     ...input,
   } satisfies Parameters<typeof CreateSessionCanvas>[0]
@@ -53,20 +52,12 @@ describe("CreateSessionCanvas", () => {
     expect(props.onOpenProjectFolder).toHaveBeenCalledTimes(1)
   })
 
-  it("shows the selected project context and prompt examples when a project is selected", () => {
+  it("shows only the selected project selector when a project is selected", () => {
     renderCreateSessionCanvas()
 
-    expect(screen.getByRole("heading", { name: "Start with a concrete task" })).toBeInTheDocument()
     expect(screen.getAllByText("Project 1 / app").length).toBeGreaterThan(0)
-    expect(screen.getByRole("button", { name: CREATE_SESSION_PROMPT_EXAMPLES[0] })).toBeInTheDocument()
-  })
-
-  it("emits the fixed prompt example when an example chip is clicked", () => {
-    const { props } = renderCreateSessionCanvas()
-
-    fireEvent.click(screen.getByRole("button", { name: CREATE_SESSION_PROMPT_EXAMPLES[1] }))
-
-    expect(props.onPromptExampleSelect).toHaveBeenCalledWith(CREATE_SESSION_PROMPT_EXAMPLES[1])
+    expect(screen.queryByRole("heading", { name: "Start with a concrete task" })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Prompt examples")).not.toBeInTheDocument()
   })
 
   it("shows a selection-required guide when workspaces exist but none is selected", () => {

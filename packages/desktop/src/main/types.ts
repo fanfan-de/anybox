@@ -561,6 +561,11 @@ export type AgentSessionBridgeIPCEvent =
       lastEventID?: string
       receivedAt: number
     }
+  | {
+      kind: "focus-session"
+      backendSessionID: string
+      receivedAt: number
+    }
 
 export interface AgentSessionHistoryInfo {
   id: string

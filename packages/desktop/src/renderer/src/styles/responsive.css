@@ -231,16 +231,6 @@
     padding: 14px;
   }
 
-  .create-session-guide-examples {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .create-session-guide-example {
-    width: 100%;
-    text-align: center;
-  }
-
   .composer-utility-bar {
     flex-wrap: wrap;
   }

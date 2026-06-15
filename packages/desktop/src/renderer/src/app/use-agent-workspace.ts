@@ -137,6 +137,7 @@ export function useAgentWorkspace({
 }: UseAgentWorkspaceOptions) {
   const workbenchDockviewCommandsRef = useRef<WorkbenchDockviewCommands | null>(null)
   const dockviewPersistenceTimerRef = useRef<number | null>(null)
+  const focusSessionFromAgentEventRef = useRef<(sessionID: string) => void>(() => undefined)
   const threadScrollSnapshotsRef = useRef<Record<string, ThreadScrollSnapshot>>({})
   const workspaceStoreRef = useRef<WorkspaceStoreApi | null>(null)
   const renderStartRef = useRef<number | null>(null)
@@ -487,6 +488,9 @@ export function useAgentWorkspace({
     isRuntimeDebugEnabled,
     openCanvasSessionIDs,
     visibleCanvasSessionIDs,
+    onFocusSession: (sessionID) => {
+      focusSessionFromAgentEventRef.current(sessionID)
+    },
     onSessionCanvasActivity: markSessionCanvasUnread,
     pendingStreamsRef,
     pendingConversationInputsBySession,
@@ -614,6 +618,18 @@ export function useAgentWorkspace({
     workbenchState,
     workspaces,
   })
+
+  focusSessionFromAgentEventRef.current = (sessionID: string) => {
+    const selection = findSession(workspaces, sessionID)
+    if (!selection.workspace || !selection.session) {
+      console.warn("[desktop] Cannot focus notification session; session is not loaded.", {
+        sessionID,
+      })
+      return
+    }
+
+    focusSession(selection.workspace.id, selection.session.id)
+  }
 
   const {
     createSessionForWorkspace,

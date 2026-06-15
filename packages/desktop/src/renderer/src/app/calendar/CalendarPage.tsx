@@ -95,6 +95,10 @@ const DEFAULT_ENABLED_OVERLAYS: CalendarOverlaysState = {
   reminders: true,
 }
 
+function formatActionError(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
 function getViewModeLabel(mode: CalendarViewMode, t: CalendarTranslate) {
   switch (mode) {
     case "day":
@@ -513,6 +517,8 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
   const [quickAddStatus, setQuickAddStatus] = useState<CalendarEventStatus>("scheduled")
   const [quickAddWorkspace, setQuickAddWorkspace] = useState("")
   const [quickAddNotes, setQuickAddNotes] = useState("")
+  const [quickAddError, setQuickAddError] = useState<string | null>(null)
+  const [isCreatingQuickAdd, setIsCreatingQuickAdd] = useState(false)
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false)
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
   const [quickAddContext, setQuickAddContext] = useState<QuickAddContext | null>(null)
@@ -835,6 +841,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     setQuickAddStatus("scheduled")
     setQuickAddWorkspace(workspaceOverride ?? activeProjectID ?? "")
     setQuickAddNotes("")
+    setQuickAddError(null)
     setQuickAddContext(context)
     setCalendarContextMenu(null)
     setCalendarItemContextMenu(null)
@@ -864,8 +871,13 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
 
   async function handleQuickAdd(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (isCreatingQuickAdd) return
+
     const title = quickAddText.trim()
-    if (!title) return
+    if (!title) {
+      setQuickAddError(t("calendar.titleRequired"))
+      return
+    }
 
     const context = quickAddContext
     const targetDate = context?.startAt ?? (/tomorrow|明天/.test(title.toLowerCase()) ? addDays(anchorDate, 1) : anchorDate)
@@ -881,38 +893,55 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     const workspace = quickAddWorkspace.trim()
     const notes = quickAddNotes.trim()
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
-    const created = quickAddMode === "event" ? (
-      sourceId && startAt && endAt ? await calendarData.createEvent({
-        title,
-        sourceId,
-        startAt: startAt.getTime(),
-        endAt: endAt.getTime(),
-        allDay: context?.allDay ?? false,
-        timezone,
-        description: notes || undefined,
-        status: quickAddStatus,
-        linkedWorkspaceId: workspace || undefined,
-      }).catch(() => null) : null
-    ) : await calendarData.createTask({
-      title,
-      description: notes || undefined,
-      estimateMinutes: startAt && endAt ? Math.max(15, Math.round((endAt.getTime() - startAt.getTime()) / 60000)) : 60,
-      priority: "medium",
-      scheduledStartAt: startAt?.getTime(),
-      scheduledEndAt: endAt?.getTime(),
-      status: "todo",
-      timezone,
-      workspaceId: workspace || undefined,
-    }).catch(() => null)
-    if (!created) return
-    setSelectedItemId(quickAddMode === "todo" && startAt ? getScheduledTodoItemId(created.id) : created.id)
-    setQuickAddText("")
-    setQuickAddSourceId(defaultEventSource?.id ?? "")
-    setQuickAddStatus("scheduled")
-    setQuickAddWorkspace(activeProjectID ?? "")
-    setQuickAddNotes("")
-    setQuickAddContext(null)
-    setIsQuickAddOpen(false)
+    setIsCreatingQuickAdd(true)
+    setQuickAddError(null)
+
+    try {
+      let created: { id: string } | null = null
+      if (quickAddMode === "event") {
+        if (!sourceId || !startAt || !endAt) {
+          setQuickAddError(t("calendar.createMissingFields"))
+          return
+        }
+        created = await calendarData.createEvent({
+          title,
+          sourceId,
+          startAt: startAt.getTime(),
+          endAt: endAt.getTime(),
+          allDay: context?.allDay ?? false,
+          timezone,
+          description: notes || undefined,
+          status: quickAddStatus,
+          linkedWorkspaceId: workspace || undefined,
+        })
+      } else {
+        created = await calendarData.createTask({
+          title,
+          description: notes || undefined,
+          estimateMinutes: startAt && endAt ? Math.max(15, Math.round((endAt.getTime() - startAt.getTime()) / 60000)) : 60,
+          priority: "medium",
+          scheduledStartAt: startAt?.getTime(),
+          scheduledEndAt: endAt?.getTime(),
+          status: "todo",
+          timezone,
+          workspaceId: workspace || undefined,
+        })
+      }
+
+      setSelectedItemId(quickAddMode === "todo" && startAt ? getScheduledTodoItemId(created.id) : created.id)
+      setQuickAddText("")
+      setQuickAddSourceId(defaultEventSource?.id ?? "")
+      setQuickAddStatus("scheduled")
+      setQuickAddWorkspace(activeProjectID ?? "")
+      setQuickAddNotes("")
+      setQuickAddError(null)
+      setQuickAddContext(null)
+      setIsQuickAddOpen(false)
+    } catch (error) {
+      setQuickAddError(t("calendar.createFailedWithMessage", { message: formatActionError(error) }))
+    } finally {
+      setIsCreatingQuickAdd(false)
+    }
   }
 
   function closeQuickAddDialog() {
@@ -922,6 +951,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     setQuickAddStatus("scheduled")
     setQuickAddWorkspace(activeProjectID ?? "")
     setQuickAddNotes("")
+    setQuickAddError(null)
     setQuickAddContext(null)
     setIsQuickAddOpen(false)
   }
@@ -1143,6 +1173,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
             <form
               className="calendar-quick-add-form"
               aria-label={quickAddMode === "todo" ? t("calendar.newTodoDetails") : t("calendar.createEventDetails")}
+              aria-busy={isCreatingQuickAdd}
               onSubmit={handleQuickAdd}
             >
               <div className="calendar-quick-add-summary">
@@ -1160,7 +1191,10 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
                   autoFocus
                   value={quickAddText}
                   placeholder={quickAddMode === "todo" ? t("calendar.todoTitlePlaceholder") : t("calendar.eventTitlePlaceholder")}
-                  onChange={(event) => setQuickAddText(event.target.value)}
+                  onChange={(event) => {
+                    setQuickAddText(event.target.value)
+                    setQuickAddError(null)
+                  }}
                 />
               </label>
 
@@ -1171,7 +1205,10 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
                     <select
                       aria-label={t("calendar.calendarLabel")}
                       value={quickAddSourceId}
-                      onChange={(event) => setQuickAddSourceId(event.target.value)}
+                      onChange={(event) => {
+                        setQuickAddSourceId(event.target.value)
+                        setQuickAddError(null)
+                      }}
                     >
                       {sources.map((source) => (
                         <option key={source.id} value={source.id}>{source.name}</option>
@@ -1184,7 +1221,10 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
                     <select
                       aria-label={t("calendar.status")}
                       value={quickAddStatus}
-                      onChange={(event) => setQuickAddStatus(event.target.value as CalendarEventStatus)}
+                      onChange={(event) => {
+                        setQuickAddStatus(event.target.value as CalendarEventStatus)
+                        setQuickAddError(null)
+                      }}
                     >
                       {getCreateEventStatusOptions(t).map((option) => (
                         <option key={option.value} value={option.value}>{option.label}</option>
@@ -1199,7 +1239,10 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
                 <select
                   aria-label={t("calendar.project")}
                   value={quickAddWorkspace}
-                  onChange={(event) => setQuickAddWorkspace(event.target.value)}
+                  onChange={(event) => {
+                    setQuickAddWorkspace(event.target.value)
+                    setQuickAddError(null)
+                  }}
                 >
                   <option value="">{t("calendar.noProject")}</option>
                   {projects.map((project) => (
@@ -1214,7 +1257,10 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
                   aria-label={t("calendar.notes")}
                   value={quickAddNotes}
                   placeholder={t("calendar.notesPlaceholder")}
-                  onChange={(event) => setQuickAddNotes(event.target.value)}
+                  onChange={(event) => {
+                    setQuickAddNotes(event.target.value)
+                    setQuickAddError(null)
+                  }}
                 />
               </label>
 
@@ -1233,6 +1279,10 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
                 </div>
               </div>
 
+              {quickAddError ? (
+                <p className="calendar-quick-add-error" role="alert">{quickAddError}</p>
+              ) : null}
+
               <div className="calendar-quick-add-actions">
                 <button type="button" className="calendar-secondary-action" onClick={closeQuickAddDialog}>
                   {t("calendar.cancel")}
@@ -1241,9 +1291,9 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
                   type="submit"
                   className="calendar-primary-action"
                   aria-label={quickAddMode === "todo" ? t("calendar.createTodo") : t("calendar.createEvent")}
-                  disabled={quickAddMode === "event" && !quickAddSourceId}
+                  disabled={isCreatingQuickAdd || !quickAddText.trim() || (quickAddMode === "event" && !quickAddSourceId)}
                 >
-                  {t("calendar.create")}
+                  {isCreatingQuickAdd ? t("calendar.creating") : t("calendar.create")}
                 </button>
               </div>
             </form>

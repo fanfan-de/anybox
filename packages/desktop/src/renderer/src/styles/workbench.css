@@ -2825,9 +2825,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .create-session-guide-primary:hover,
 .create-session-guide-primary:focus-visible,
 .create-session-guide-secondary:hover,
-.create-session-guide-secondary:focus-visible,
-.create-session-guide-example:hover,
-.create-session-guide-example:focus-visible {
+.create-session-guide-secondary:focus-visible {
   outline: none;
   box-shadow:
     0 0 0 1px var(--focus-outline-color),
@@ -2836,37 +2834,6 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 
 .create-session-guide-note {
   text-align: center;
-}
-
-.create-session-guide-examples {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.create-session-guide-example {
-  width: 100%;
-  max-width: 100%;
-  min-height: 34px;
-  padding: 0 11px;
-  border: 1px solid rgba(138, 164, 189, 0.36);
-  border-radius: var(--seg-radius-sm);
-  background: var(--seg-panel);
-  color: var(--seg-text-2);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 550;
-  letter-spacing: 0;
-  line-height: 1.35;
-  text-align: left;
-  cursor: pointer;
-  -webkit-app-region: no-drag;
-}
-
-.create-session-guide-example:hover,
-.create-session-guide-example:focus-visible {
-  color: var(--seg-text-1);
-  background: var(--semantic-sidebar-tree-row-surface-hover, rgba(17, 24, 39, 0.06));
 }
 
 .session-row-copy,

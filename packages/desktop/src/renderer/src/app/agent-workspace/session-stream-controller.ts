@@ -1316,6 +1316,7 @@ interface UseSessionStreamControllerOptions {
   isRuntimeDebugEnabled: boolean
   openCanvasSessionIDs: string[]
   visibleCanvasSessionIDs: string[]
+  onFocusSession: (sessionID: string) => void
   onSessionCanvasActivity: (sessionID: string) => void
   pendingConversationInputsBySession: Record<string, PendingConversationInput[]>
   pendingStreamsRef: MutableRefObject<Record<string, PendingAgentStream>>
@@ -1363,6 +1364,7 @@ export function useSessionStreamController({
   isRuntimeDebugEnabled,
   openCanvasSessionIDs,
   visibleCanvasSessionIDs,
+  onFocusSession,
   onSessionCanvasActivity,
   pendingConversationInputsBySession,
   pendingStreamsRef,
@@ -2606,6 +2608,11 @@ export function useSessionStreamController({
         type: "subscription.state",
         event: sessionEvent,
       })
+      return
+    }
+
+    if (sessionEvent.kind === "focus-session") {
+      onFocusSession(sessionEvent.backendSessionID)
       return
     }
 

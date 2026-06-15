@@ -563,6 +563,17 @@
   outline: none;
 }
 
+.calendar-quick-add-error {
+  margin: -2px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--status-danger-border, var(--calendar-border));
+  border-radius: var(--calendar-radius);
+  color: var(--status-danger-text, var(--calendar-text));
+  background: var(--status-danger-bg, var(--calendar-panel-inset));
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .calendar-quick-add-actions {
   min-width: 0;
   display: flex;

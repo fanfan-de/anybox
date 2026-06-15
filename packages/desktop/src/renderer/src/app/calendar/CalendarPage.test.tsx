@@ -626,6 +626,24 @@ describe("CalendarPage", () => {
     expect(createCalendarEventMock).not.toHaveBeenCalled()
   })
 
+  it("keeps the quick add dialog open and reports Todo creation errors", async () => {
+    renderCalendarPage()
+
+    await screen.findByText("Connect Todo to optional time")
+    const sidebar = screen.getByRole("complementary", { name: "Calendar sidebar" })
+    fireEvent.click(within(sidebar).getByRole("button", { name: "New Todo" }))
+
+    const dialog = screen.getByRole("dialog", { name: "New Todo" })
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Todo title" }), {
+      target: { value: "Prototype check" },
+    })
+    createCalendarTaskMock.mockRejectedValueOnce(new Error("Agent timeout"))
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create todo" }))
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Create failed: Agent timeout")
+    expect(screen.getByRole("dialog", { name: "New Todo" })).toBeInTheDocument()
+  })
+
   it("creates a scheduled Todo from a right-clicked time slot", async () => {
     const { container } = renderCalendarPage()
 

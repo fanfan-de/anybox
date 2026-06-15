@@ -304,12 +304,16 @@ describe("AgentCompletionNotificationManager", () => {
 
   it("focuses the source window when the notification is clicked", async () => {
     electronMock.targetWindow.isMinimized.mockReturnValue(true)
-    const manager = new AgentCompletionNotificationManager()
+    const onNotificationClick = vi.fn()
+    const manager = new AgentCompletionNotificationManager({
+      onNotificationClick,
+    })
+    const target = createTarget()
 
     await manager.handleSessionStreamEvent({
       data: createRuntimeEvent("turn.completed", { status: "completed" }),
       event: "runtime",
-      target: createTarget(),
+      target,
     })
 
     electronMock.instances[0].handlers.get("click")?.()
@@ -317,6 +321,10 @@ describe("AgentCompletionNotificationManager", () => {
     expect(electronMock.targetWindow.restore).toHaveBeenCalledTimes(1)
     expect(electronMock.targetWindow.show).toHaveBeenCalledTimes(1)
     expect(electronMock.targetWindow.focus).toHaveBeenCalledTimes(1)
+    expect(onNotificationClick).toHaveBeenCalledWith({
+      sessionID: "session_1",
+      target,
+    })
   })
 
   it("does not focus a destroyed source target when the notification is clicked", async () => {

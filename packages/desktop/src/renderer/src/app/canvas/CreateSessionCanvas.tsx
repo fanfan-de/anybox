@@ -302,16 +302,8 @@ interface CreateSessionCanvasProps {
   selectedWorkspaceID: string | null
   workspaces: WorkspaceGroup[]
   onOpenProjectFolder: () => void | Promise<void>
-  onPromptExampleSelect: (text: string) => void
   onWorkspaceChange: (workspaceID: string) => void
 }
-
-export const CREATE_SESSION_PROMPT_EXAMPLES = [
-  "Fix a bug in the selected area and run the relevant tests.",
-  "Implement a focused feature, then verify it works.",
-  "Review the recent changes and list risks before editing.",
-  "Explain how this project is structured and where to start.",
-] as const
 
 function CreateSessionLogo() {
   return <span className="create-session-logo" role="img" aria-label="Anybox logo" />
@@ -539,33 +531,14 @@ function CreateSessionWorkspaceSelect({
   )
 }
 
-function CreateSessionPromptExamples({ onPromptExampleSelect }: { onPromptExampleSelect: (text: string) => void }) {
-  return (
-    <div className="create-session-guide-examples" aria-label="Prompt examples">
-      {CREATE_SESSION_PROMPT_EXAMPLES.map((example) => (
-        <button
-          key={example}
-          type="button"
-          className="create-session-guide-example"
-          onClick={() => onPromptExampleSelect(example)}
-        >
-          {example}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 function CreateSessionGuide({
   selectedWorkspace,
   workspaces,
   onOpenProjectFolder,
-  onPromptExampleSelect,
 }: {
   selectedWorkspace: WorkspaceGroup | null
   workspaces: WorkspaceGroup[]
   onOpenProjectFolder: () => void | Promise<void>
-  onPromptExampleSelect: (text: string) => void
 }) {
   if (workspaces.length === 0) {
     return (
@@ -609,24 +582,11 @@ function CreateSessionGuide({
           <FolderIcon />
           <span>Open folder</span>
         </button>
-        <CreateSessionPromptExamples onPromptExampleSelect={onPromptExampleSelect} />
       </div>
     )
   }
 
-  return (
-    <div className="create-session-guide">
-      <div className="create-session-guide-copy">
-        <p className="create-session-guide-kicker">Project context</p>
-        <h2>Start with a concrete task</h2>
-        <p>
-          This session will start in <strong>{getWorkspaceLabel(selectedWorkspace)}</strong>. Include the goal, relevant
-          files or area, constraints, and how you want the result verified.
-        </p>
-      </div>
-      <CreateSessionPromptExamples onPromptExampleSelect={onPromptExampleSelect} />
-    </div>
-  )
+  return null
 }
 
 export function CreateSessionCanvas({
@@ -634,7 +594,6 @@ export function CreateSessionCanvas({
   selectedWorkspaceID,
   workspaces,
   onOpenProjectFolder,
-  onPromptExampleSelect,
   onWorkspaceChange,
 }: CreateSessionCanvasProps) {
   const selectedWorkspace = getSelectedCreateSessionWorkspace(workspaces, selectedWorkspaceID)
@@ -653,7 +612,6 @@ export function CreateSessionCanvas({
           selectedWorkspace={selectedWorkspace}
           workspaces={workspaces}
           onOpenProjectFolder={onOpenProjectFolder}
-          onPromptExampleSelect={onPromptExampleSelect}
         />
       </article>
     </section>

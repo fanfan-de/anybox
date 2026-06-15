@@ -27,6 +27,7 @@ export interface AgentCompletionNotificationManagerOptions {
   dedupLimit?: number
   isAppWindowFocused?: () => boolean
   notifyWhenFocused?: boolean
+  onNotificationClick?: (input: { sessionID?: string; target: WebContents }) => void
   resolveSessionTitle?: (sessionID: string) => Promise<string | undefined> | string | undefined
   responsePreviewLength?: number
   title?: string
@@ -146,6 +147,7 @@ export class AgentCompletionNotificationManager {
   private readonly dedupLimit: number
   private readonly isAppWindowFocused: () => boolean
   private readonly notifyWhenFocused: boolean
+  private readonly onNotificationClick?: (input: { sessionID?: string; target: WebContents }) => void
   private readonly notifiedKeys = new Set<string>()
   private readonly notifiedKeyOrder: string[] = []
   private readonly resolveSessionTitle?: (sessionID: string) => Promise<string | undefined> | string | undefined
@@ -158,6 +160,7 @@ export class AgentCompletionNotificationManager {
     this.dedupLimit = options.dedupLimit ?? DEFAULT_DEDUP_LIMIT
     this.isAppWindowFocused = options.isAppWindowFocused ?? (() => Boolean(BrowserWindow.getFocusedWindow()))
     this.notifyWhenFocused = options.notifyWhenFocused ?? true
+    this.onNotificationClick = options.onNotificationClick
     this.resolveSessionTitle = options.resolveSessionTitle
     this.responsePreviewLength = options.responsePreviewLength ?? DEFAULT_RESPONSE_PREVIEW_LENGTH
     this.title = options.title ?? DEFAULT_NOTIFICATION_TITLE
@@ -173,7 +176,7 @@ export class AgentCompletionNotificationManager {
     const sessionID = readNotificationSessionID(input)
     const title = await this.resolveNotificationTitle(sessionID)
     const body = readNotificationResponsePreview(input, this.responsePreviewLength) ?? this.body
-    return this.showNativeNotification(input.target, { body, title })
+    return this.showNativeNotification(input.target, { body, sessionID, title })
   }
 
   private rememberNotificationKey(key: string) {
@@ -210,7 +213,7 @@ export class AgentCompletionNotificationManager {
     return this.title
   }
 
-  private showNativeNotification(target: WebContents, content: { body: string; title: string }) {
+  private showNativeNotification(target: WebContents, content: { body: string; sessionID?: string; title: string }) {
     if (!Notification.isSupported()) return false
 
     try {
@@ -225,6 +228,14 @@ export class AgentCompletionNotificationManager {
       notification.on("click", () => {
         releaseNotification()
         focusNotificationTarget(target)
+        try {
+          this.onNotificationClick?.({
+            sessionID: content.sessionID,
+            target,
+          })
+        } catch (error) {
+          safeError("[desktop] failed to handle agent completion notification click", error)
+        }
       })
       notification.on("close", releaseNotification)
       notification.on("failed", (_event, error) => {

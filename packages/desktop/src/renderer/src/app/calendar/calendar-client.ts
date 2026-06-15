@@ -23,17 +23,38 @@ type AgentEnvelope<T> =
     }
 
 const FALLBACK_AGENT_BASE_URL = "http://127.0.0.1:4096"
+const AGENT_REQUEST_TIMEOUT_MS = 15_000
 
-function resolveFallbackAgentURL(pathname: string) {
-  return new URL(pathname, FALLBACK_AGENT_BASE_URL).toString()
+async function resolveAgentBaseURL() {
+  if (typeof window !== "undefined") {
+    const config = await window.desktop?.getAgentConfig?.().catch(() => undefined)
+    if (config?.baseURL) return config.baseURL
+  }
+
+  return FALLBACK_AGENT_BASE_URL
+}
+
+function resolveAgentURL(pathname: string, baseURL: string) {
+  const normalizedBaseURL = baseURL.endsWith("/") ? baseURL : `${baseURL}/`
+  return new URL(pathname, normalizedBaseURL).toString()
 }
 
 async function requestAgentJSON<T>(pathname: string, init?: RequestInit): Promise<T> {
+  const controller = new AbortController()
+  const timeout = globalThis.setTimeout(() => controller.abort(), AGENT_REQUEST_TIMEOUT_MS)
   let response: Response
   try {
-    response = await fetch(resolveFallbackAgentURL(pathname), init)
+    response = await fetch(resolveAgentURL(pathname, await resolveAgentBaseURL()), {
+      ...init,
+      signal: controller.signal,
+    })
   } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`Local agent API timed out after ${AGENT_REQUEST_TIMEOUT_MS / 1000}s.`)
+    }
     throw new Error(`Local agent API could not be reached. ${formatError(error)}`)
+  } finally {
+    globalThis.clearTimeout(timeout)
   }
 
   const envelope = (await response.json().catch(() => null)) as AgentEnvelope<T> | null
