@@ -56,6 +56,7 @@ export interface CalendarItem {
   color?: string
   description?: string
   displayKind?: CalendarDisplayKind
+  dueAt?: Date
   endAt?: Date
   entityId?: string
   entityType: CalendarEntityType
@@ -64,6 +65,7 @@ export interface CalendarItem {
   isReadOnly?: boolean
   isSuggestion?: boolean
   properties?: Record<string, unknown>
+  reminderAt?: Date
   sourceId: string
   startAt?: Date
   status?: CalendarItemStatus

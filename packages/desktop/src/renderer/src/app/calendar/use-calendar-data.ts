@@ -61,6 +61,7 @@ function toTodoItem(todo: PlannerTaskRecord): CalendarItem {
     entityId: todo.id,
     title: todo.title,
     description: todo.description,
+    dueAt: todo.dueAt === undefined ? undefined : new Date(todo.dueAt),
     startAt: todo.scheduledStartAt === undefined ? undefined : new Date(todo.scheduledStartAt),
     endAt: todo.scheduledEndAt === undefined ? undefined : new Date(todo.scheduledEndAt),
     allDay: false,
@@ -71,6 +72,7 @@ function toTodoItem(todo: PlannerTaskRecord): CalendarItem {
     isSuggestion: false,
     workspace: todo.workspaceId,
     properties: todo.properties,
+    reminderAt: todo.reminderAt === undefined ? undefined : new Date(todo.reminderAt),
     timezone: todo.timezone,
   }
 }

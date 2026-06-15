@@ -390,7 +390,8 @@ describe("CalendarPage", () => {
     expect(within(sidebar).queryByText("Inbox")).not.toBeInTheDocument()
     expect(screen.queryByText("Workspaces")).not.toBeInTheDocument()
     await screen.findByText("Connect Todo to optional time")
-    expect(within(sidebar).getByText("Triage mobile feedback")).toBeInTheDocument()
+    expect(within(sidebar).getByText("Connect Todo to optional time")).toBeInTheDocument()
+    expect(within(sidebar).queryByText("Triage mobile feedback")).not.toBeInTheDocument()
     expect(within(sidebar).queryByText("Write mobile release notes")).not.toBeInTheDocument()
     expect(screen.queryByText("Event calendars")).not.toBeInTheDocument()
     expect(screen.queryByText("Calendars")).not.toBeInTheDocument()
@@ -427,25 +428,28 @@ describe("CalendarPage", () => {
 
     const sidebar = screen.getByRole("complementary", { name: "Calendar sidebar" })
     await screen.findByText("Connect Todo to optional time")
-    expect(within(sidebar).getByText("Triage mobile feedback")).toBeInTheDocument()
+    expect(within(sidebar).getByText("Connect Todo to optional time")).toBeInTheDocument()
+    expect(within(sidebar).queryByText("Triage mobile feedback")).not.toBeInTheDocument()
+    expect(within(sidebar).queryByText("Write mobile release notes")).not.toBeInTheDocument()
 
     fireEvent.click(within(sidebar).getByRole("button", { name: "Project filter: All projects" }))
 
     const listbox = within(sidebar).getByRole("listbox", { name: "Todo project filter" })
     expect(within(listbox).getByRole("option", { name: /All projects/ })).toBeInTheDocument()
     expect(within(listbox).getByRole("option", { name: /Anybox Desktop/ })).toBeInTheDocument()
-    fireEvent.click(within(listbox).getByRole("option", { name: /Anybox Mobile/ }))
+    expect(within(listbox).queryByRole("option", { name: /Anybox Mobile/ })).not.toBeInTheDocument()
+    fireEvent.click(within(listbox).getByRole("option", { name: /Anybox Desktop/ }))
 
-    expect(within(sidebar).getByRole("button", { name: "Project filter: Anybox Mobile" })).toBeInTheDocument()
-    expect(within(sidebar).getByText("Triage mobile feedback")).toBeInTheDocument()
-    expect(within(sidebar).queryByText("Connect Todo to optional time")).not.toBeInTheDocument()
+    expect(within(sidebar).getByRole("button", { name: "Project filter: Anybox Desktop" })).toBeInTheDocument()
+    expect(within(sidebar).getByText("Connect Todo to optional time")).toBeInTheDocument()
+    expect(within(sidebar).queryByText("Triage mobile feedback")).not.toBeInTheDocument()
     expect(within(sidebar).queryByText("Write mobile release notes")).not.toBeInTheDocument()
 
-    fireEvent.click(within(sidebar).getByRole("button", { name: "Project filter: Anybox Mobile" }))
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Project filter: Anybox Desktop" }))
     fireEvent.click(within(sidebar).getByRole("option", { name: /All projects/ }))
 
     expect(within(sidebar).getByText("Connect Todo to optional time")).toBeInTheDocument()
-    expect(within(sidebar).getByText("Triage mobile feedback")).toBeInTheDocument()
+    expect(within(sidebar).queryByText("Triage mobile feedback")).not.toBeInTheDocument()
   })
 
   it("uses the centered period title for view-aware date navigation", async () => {
@@ -482,6 +486,30 @@ describe("CalendarPage", () => {
     expect(screen.getByLabelText("Jump to date")).toHaveValue(getTestDateKey(addTestDays(nextWeekAnchor, 1)))
   })
 
+  it("renders all items in a month day instead of limiting the cell to four", async () => {
+    const testDate = startOfTestDay(new Date())
+    testDate.setHours(9, 0, 0, 0)
+    apiTodos = Array.from({ length: 5 }, (_item, index): PlannerTaskRecord => ({
+      id: `tsk_stacked_${index + 1}`,
+      title: `Stacked month Todo ${index + 1}`,
+      description: "Same day month item.",
+      status: "todo",
+      priority: "medium",
+      estimateMinutes: 30,
+      scheduledStartAt: testDate.getTime() + index * 60 * 1000,
+      scheduledEndAt: testDate.getTime() + (index + 1) * 60 * 1000,
+      workspaceId: "prj_anybox_desktop",
+      createdAt: 1,
+      updatedAt: 2,
+    }))
+
+    renderCalendarPage()
+    fireEvent.click(screen.getByRole("button", { name: "month" }))
+
+    const monthView = screen.getByRole("main", { name: "month calendar view" })
+    expect(await within(monthView).findByText("Stacked month Todo 5")).toBeInTheDocument()
+  })
+
   it("keeps event calendar source controls hidden when only the default source exists", async () => {
     apiSources = [createSources()[0]!]
 
@@ -501,9 +529,11 @@ describe("CalendarPage", () => {
     fireEvent.click(await screen.findByText("Connect Todo to optional time"))
 
     const detailPanel = screen.getByRole("complementary", { name: "Calendar details" })
-    const titleInput = await within(detailPanel).findByDisplayValue("Connect Todo to optional time")
+    expect(within(detailPanel).queryByText("Title")).not.toBeInTheDocument()
+    const titleInput = await within(detailPanel).findByRole("textbox", { name: "Title" })
+    expect(titleInput).toHaveValue("Connect Todo to optional time")
     expect(within(detailPanel).getAllByText("Todo").length).toBeGreaterThan(0)
-    expect(within(detailPanel).getByRole("button", { name: "Already unscheduled" })).toBeDisabled()
+    expect(within(detailPanel).queryByRole("button", { name: "Unschedule" })).not.toBeInTheDocument()
     fireEvent.change(titleInput, { target: { value: "Connect real Todos to calendar" } })
 
     await waitFor(() => expect(updateCalendarTaskMock).toHaveBeenCalledWith({
@@ -511,7 +541,11 @@ describe("CalendarPage", () => {
       update: { title: "Connect real Todos to calendar" },
     }))
 
-    fireEvent.change(within(detailPanel).getByDisplayValue("未完成"), { target: { value: "done" } })
+    const statusGroup = within(detailPanel).getByRole("radiogroup", { name: "Status" })
+    const statusSegments = within(statusGroup).getAllByRole("radio")
+    expect(statusSegments).toHaveLength(2)
+    expect(statusSegments[0]).toHaveAttribute("aria-checked", "true")
+    fireEvent.click(statusSegments[1]!)
 
     await waitFor(() => expect(updateCalendarTaskMock).toHaveBeenCalledWith({
       taskId: "tsk_calendar_spec",
@@ -525,28 +559,25 @@ describe("CalendarPage", () => {
     fireEvent.click(await screen.findByText("Connect Todo to optional time"))
 
     const detailPanel = screen.getByRole("complementary", { name: "Calendar details" })
-    fireEvent.click(await within(detailPanel).findByRole("button", { name: "Delete Todo" }))
+    fireEvent.click(await within(detailPanel).findByRole("button", { name: "Delete" }))
 
     await waitFor(() => expect(deleteCalendarTaskMock).toHaveBeenCalledWith({ taskId: "tsk_calendar_spec" }))
     await waitFor(() => expect(screen.queryByText("Connect Todo to optional time")).not.toBeInTheDocument())
   })
 
-  it("unschedules a scheduled Todo through the composite calendar item", async () => {
+  it("shows only the delete action for a scheduled Todo detail", async () => {
     renderCalendarPage()
 
     fireEvent.click((await screen.findAllByText("Write mobile release notes"))[0]!)
 
     const detailPanel = screen.getByRole("complementary", { name: "Calendar details" })
-    const unscheduleButton = await within(detailPanel).findByRole("button", { name: "Unschedule" })
-    fireEvent.click(unscheduleButton)
-
-    await waitFor(() => expect(scheduleCalendarTaskMock).toHaveBeenCalledWith({
-      taskId: "tsk_release_notes",
-      schedule: {
-        scheduledStartAt: null,
-        scheduledEndAt: null,
-      },
-    }))
+    const actionPanel = detailPanel.querySelector(".calendar-detail-actions")
+    expect(actionPanel).not.toBeNull()
+    expect(within(actionPanel as HTMLElement).getByRole("button", { name: "Delete" })).toBeInTheDocument()
+    expect(within(actionPanel as HTMLElement).queryByRole("button", { name: "Move 30m later" })).not.toBeInTheDocument()
+    expect(within(actionPanel as HTMLElement).queryByRole("button", { name: "Unschedule" })).not.toBeInTheDocument()
+    expect(within(actionPanel as HTMLElement).queryByRole("button", { name: "标记完成" })).not.toBeInTheDocument()
+    expect(within(actionPanel as HTMLElement).queryByRole("button", { name: "标记未完成" })).not.toBeInTheDocument()
   })
 
   it("quick add defaults to creating an unscheduled Todo", async () => {
@@ -619,6 +650,28 @@ describe("CalendarPage", () => {
     expect(createCalendarEventMock).not.toHaveBeenCalled()
   })
 
+  it("unschedules a scheduled Todo when dragged back to the sidebar", async () => {
+    renderCalendarPage()
+
+    await screen.findByText("Connect Todo to optional time")
+    const main = screen.getByRole("main", { name: "week calendar view" })
+    const scheduledTodo = await within(main).findByRole("button", { name: /Write mobile release notes/ })
+    const sidebar = screen.getByRole("complementary", { name: "Calendar sidebar" })
+    const transfer = createDragDataTransfer()
+
+    fireEvent.dragStart(scheduledTodo, { dataTransfer: transfer })
+    fireEvent.drop(sidebar, { dataTransfer: transfer })
+
+    await waitFor(() => expect(scheduleCalendarTaskMock).toHaveBeenCalledWith({
+      taskId: "tsk_release_notes",
+      schedule: {
+        scheduledStartAt: null,
+        scheduledEndAt: null,
+      },
+    }))
+    expect(await within(sidebar).findByText("Write mobile release notes")).toBeInTheDocument()
+  })
+
   it("schedules an unscheduled Todo when dragged into the grid", async () => {
     const { container } = renderCalendarPage()
 
@@ -665,28 +718,32 @@ describe("CalendarPage", () => {
     expect(new Date(update!.dueAt!).getHours()).toBe(13)
   })
 
-  it("dismisses Agent suggestions locally and accepts them by scheduling the target Todo", async () => {
+  it("keeps fixed Dates out of the unscheduled Todo sidebar and ignores sidebar drops", async () => {
     renderCalendarPage()
 
     await screen.findByText("Connect Todo to optional time")
-    fireEvent.click(screen.getByRole("button", { name: "Ask Agent" }))
-
+    const main = screen.getByRole("main", { name: "week calendar view" })
+    const dateItem = await within(main).findByRole("button", { name: /Triage mobile feedback/ })
+    const sidebar = screen.getByRole("complementary", { name: "Calendar sidebar" })
     const detailPanel = screen.getByRole("complementary", { name: "Calendar details" })
-    expect((await within(detailPanel).findAllByText("Suggestion")).length).toBeGreaterThan(0)
-    fireEvent.click(within(detailPanel).getByRole("button", { name: "Dismiss" }))
+
+    expect(within(sidebar).queryByText("Triage mobile feedback")).not.toBeInTheDocument()
+    fireEvent.click(dateItem)
+    expect(await within(detailPanel).findByDisplayValue("Triage mobile feedback")).toBeInTheDocument()
+    const actionPanel = detailPanel.querySelector(".calendar-detail-actions")
+    expect(actionPanel).not.toBeNull()
+    expect(within(actionPanel as HTMLElement).getByRole("button", { name: "Delete" })).toBeInTheDocument()
+    expect(within(actionPanel as HTMLElement).queryByRole("button", { name: "Move 30m later" })).not.toBeInTheDocument()
+    expect(within(actionPanel as HTMLElement).queryByRole("button", { name: "Unschedule" })).not.toBeInTheDocument()
+    expect(within(actionPanel as HTMLElement).queryByRole("button", { name: "标记完成" })).not.toBeInTheDocument()
+    expect(within(actionPanel as HTMLElement).queryByRole("button", { name: "标记未完成" })).not.toBeInTheDocument()
+
+    const transfer = createDragDataTransfer()
+    fireEvent.dragStart(dateItem, { dataTransfer: transfer })
+    fireEvent.drop(sidebar, { dataTransfer: transfer })
+
     expect(scheduleCalendarTaskMock).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getByRole("button", { name: "Ask Agent" }))
-    expect((await within(detailPanel).findAllByText("Suggestion")).length).toBeGreaterThan(0)
-    fireEvent.click(within(detailPanel).getByRole("button", { name: "Accept suggestion" }))
-
-    await waitFor(() => expect(scheduleCalendarTaskMock).toHaveBeenCalledWith({
-      taskId: "tsk_calendar_spec",
-      schedule: expect.objectContaining({
-        scheduledStartAt: expect.any(Number),
-        scheduledEndAt: expect.any(Number),
-      }),
-    }))
+    expect(updateCalendarTaskMock).not.toHaveBeenCalled()
   })
 
   it("shows an error state when the local agent API is unavailable", async () => {

@@ -1,6 +1,5 @@
-import { Fragment, useMemo, useRef, useState, type DragEvent, type FormEvent, type MouseEvent, type ReactNode } from "react"
+import { Fragment, useMemo, useState, type DragEvent, type FormEvent, type MouseEvent, type ReactNode } from "react"
 import {
-  AutomationIcon,
   CalendarIcon,
   ChevronRightIcon,
   CloseIcon,
@@ -375,8 +374,34 @@ function canDeleteCalendarItem(item: CalendarItem | undefined) {
   return Boolean(item && item.entityType !== "agent_suggestion" && !item.isReadOnly)
 }
 
+function getDetailTitleRows(title: string) {
+  return Math.min(4, Math.max(1, title.split(/\r?\n/).reduce((rows, line) => {
+    return rows + Math.max(1, Math.ceil(line.length / 24))
+  }, 0)))
+}
+
 function isTodoCalendarItem(item: CalendarItem) {
   return item.entityType !== "event" && item.displayKind !== "external_event"
+}
+
+function isUnscheduledTodoItem(item: CalendarItem) {
+  return (
+    item.entityType === "task" &&
+    item.displayKind === "scheduled_todo" &&
+    !item.startAt &&
+    !item.dueAt &&
+    !item.reminderAt
+  )
+}
+
+function canUnscheduleCalendarItem(item: CalendarItem | undefined) {
+  return Boolean(
+    item &&
+    item.entityType === "task" &&
+    item.displayKind === "scheduled_todo" &&
+    item.startAt &&
+    !item.isReadOnly,
+  )
 }
 
 function getCalendarContextMenuPosition(
@@ -422,7 +447,6 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
   const [quickAddContext, setQuickAddContext] = useState<QuickAddContext | null>(null)
   const [calendarContextMenu, setCalendarContextMenu] = useState<CalendarSlotContextMenuState | null>(null)
   const [calendarItemContextMenu, setCalendarItemContextMenu] = useState<CalendarItemContextMenuState | null>(null)
-  const itemCounterRef = useRef(0)
 
   const weekStart = useMemo(() => startOfWeek(anchorDate), [anchorDate])
   const calendarRange = useMemo(() => {
@@ -456,9 +480,13 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     [calendarData.items, localItems],
   )
   const todoItems = calendarData.todos
+  const allUnscheduledTasks = useMemo(
+    () => todoItems.filter(isUnscheduledTodoItem),
+    [todoItems],
+  )
   const selectableItems = useMemo(
-    () => [...items, ...todoItems],
-    [items, todoItems],
+    () => [...items, ...allUnscheduledTasks],
+    [allUnscheduledTasks, items],
   )
   const remoteItemIds = useMemo(() => new Set(calendarData.items.map((item) => item.id)), [calendarData.items])
   const remoteTodoIds = useMemo(() => new Set(calendarData.todos.map((item) => item.id)), [calendarData.todos])
@@ -481,16 +509,9 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     )),
     [enabledOverlays.agent, enabledOverlays.deadlines, enabledOverlays.reminders, enabledSourceIds, items],
   )
-  const allUnscheduledTasks = useMemo(
-    () => todoItems.filter((item) => (
-      item.entityType === "task" &&
-      !item.startAt
-    )),
-    [todoItems],
-  )
   const todoSummary = useMemo<TodoSummary>(() => ({
-    unscheduled: todoItems.filter((item) => !item.startAt).length,
-  }), [todoItems])
+    unscheduled: allUnscheduledTasks.length,
+  }), [allUnscheduledTasks.length])
   const projectSummaries = useMemo<ProjectSummary[]>(() => {
     const counts = new Map<string, ProjectSummary>()
     for (const todo of allUnscheduledTasks) {
@@ -529,8 +550,8 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     [activeTodoProjectID, allUnscheduledTasks, projects, searchQuery],
   )
   const selectedItem = useMemo(
-    () => selectableItems.find((item) => item.id === selectedItemId) ?? visibleItems[0] ?? todoItems[0] ?? null,
-    [selectableItems, selectedItemId, todoItems, visibleItems],
+    () => selectableItems.find((item) => item.id === selectedItemId) ?? visibleItems[0] ?? allUnscheduledTasks[0] ?? null,
+    [allUnscheduledTasks, selectableItems, selectedItemId, visibleItems],
   )
   const calendarItemContextMenuItem = useMemo(
     () => calendarItemContextMenu
@@ -544,11 +565,6 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     viewMode === "month" ? formatMonthLabel(anchorDate) :
     formatScheduleRangeLabel(anchorDate)
   )
-
-  function createItemId(prefix: string) {
-    itemCounterRef.current += 1
-    return `${prefix}-${Date.now()}-${itemCounterRef.current}`
-  }
 
   function toCalendarEventUpdate(update: Partial<CalendarItem>): UpdateCalendarEventInput {
     const eventUpdate: UpdateCalendarEventInput = {}
@@ -845,41 +861,6 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     return activeTodoProjectID
   }
 
-  function generateAgentSuggestions() {
-    const candidateTasks = unscheduledTasks.slice(0, 2)
-    if (candidateTasks.length === 0) return
-
-    const existingSuggestionTargetIds = new Set(
-      items.filter((item) => item.entityType === "agent_suggestion").map((item) => item.targetItemId),
-    )
-    const suggestionDays = [addDays(weekStart, 2), addDays(weekStart, 4)]
-    const suggestions = candidateTasks
-      .filter((task) => !existingSuggestionTargetIds.has(task.id))
-      .map((task, index): CalendarItem => {
-        const startAt = setTime(suggestionDays[index] ?? addDays(anchorDate, index + 1), index === 0 ? 11 : 14)
-        return {
-          id: createItemId("suggestion"),
-          title: task.title,
-          displayKind: "agent_suggestion",
-          entityType: "agent_suggestion",
-          sourceId: "agent",
-          targetItemId: task.id,
-          startAt,
-          endAt: addMinutes(startAt, task.estimateMinutes ?? 60),
-          allDay: false,
-          color: AGENT_COLOR,
-          status: "pending",
-          isSuggestion: true,
-          workspace: task.workspace,
-          description: `Suggested from ${getProjectDisplayName(task.workspace, projects)} Todo.`,
-        }
-      })
-
-    if (suggestions.length === 0) return
-    setLocalItems((current) => [...suggestions, ...current])
-    setSelectedItemId(suggestions[0].id)
-  }
-
   function acceptSuggestion(suggestion: CalendarItem) {
     if (!suggestion.targetItemId || !suggestion.startAt) return
     updateItem(suggestion.targetItemId, {
@@ -896,11 +877,23 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
   }
 
   function unscheduleItem(itemId: string) {
-    updateItem(itemId, { startAt: undefined, endAt: undefined, allDay: false, status: "todo" })
     const existing = selectableItems.find((item) => item.id === itemId)
-    if (existing?.entityType === "task") {
-      setSelectedItemId(existing.entityId ?? itemId)
-    }
+    if (!existing || !canUnscheduleCalendarItem(existing)) return
+    updateItem(itemId, { startAt: undefined, endAt: undefined, allDay: false, status: "todo" })
+    setSelectedItemId(existing.entityId ?? itemId)
+  }
+
+  function handleUnscheduledTodoDragOver(event: DragEvent<HTMLElement>) {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "move"
+  }
+
+  function handleUnscheduledTodoDrop(event: DragEvent<HTMLElement>) {
+    const itemId = event.dataTransfer.getData("text/calendar-item-id")
+    const existing = selectableItems.find((item) => item.id === itemId)
+    if (!canUnscheduleCalendarItem(existing)) return
+    event.preventDefault()
+    unscheduleItem(itemId)
   }
 
   return (
@@ -1191,8 +1184,9 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
           todoItems={unscheduledTasks}
           onCreateTodo={() => openQuickAddDialog("todo", null, getSidebarQuickAddWorkspace())}
           onSearchQueryChange={setSearchQuery}
-          onAgentPlan={generateAgentSuggestions}
           onItemSelect={setSelectedItemId}
+          onTodoDragOver={handleUnscheduledTodoDragOver}
+          onTodoDrop={handleUnscheduledTodoDrop}
           onProjectFilterSelect={(projectId) => {
             setSelectedTodoProjectID(projectId)
             setIsTodoProjectFilterOpen(false)
@@ -1266,15 +1260,6 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
           onDismissSuggestion={dismissSuggestion}
           onDelete={deleteItem}
           onItemUpdate={updateItem}
-          onMoveLater={(item) => {
-            if (!item.startAt) return
-            const nextStart = addMinutes(item.startAt, 30)
-            updateItem(item.id, {
-              startAt: nextStart,
-              endAt: item.endAt ? addMinutes(item.endAt, 30) : addMinutes(nextStart, item.estimateMinutes ?? 60),
-            })
-          }}
-          onUnschedule={unscheduleItem}
         />
       </div>
     </section>
@@ -1290,12 +1275,13 @@ interface CalendarSourcesPanelProps {
   selectedProjectFilterID: string
   todoSummary: TodoSummary
   todoItems: CalendarItem[]
-  onAgentPlan: () => void
   onCreateTodo: () => void
   onItemSelect: (itemId: string) => void
   onProjectFilterSelect: (projectId: string) => void
   onProjectFilterToggle: () => void
   onSearchQueryChange: (query: string) => void
+  onTodoDragOver: (event: DragEvent<HTMLElement>) => void
+  onTodoDrop: (event: DragEvent<HTMLElement>) => void
 }
 
 function CalendarSourcesPanel({
@@ -1307,17 +1293,23 @@ function CalendarSourcesPanel({
   selectedProjectFilterID,
   todoSummary,
   todoItems,
-  onAgentPlan,
   onCreateTodo,
   onItemSelect,
   onProjectFilterSelect,
   onProjectFilterToggle,
   onSearchQueryChange,
+  onTodoDragOver,
+  onTodoDrop,
 }: CalendarSourcesPanelProps) {
   const selectedProject = projectFilterOptions.find((project) => project.id === selectedProjectFilterID) ?? projectFilterOptions[0]
 
   return (
-    <aside className="calendar-sources-panel" aria-label="Calendar sidebar">
+    <aside
+      className="calendar-sources-panel"
+      aria-label="Calendar sidebar"
+      onDragOver={onTodoDragOver}
+      onDrop={onTodoDrop}
+    >
       <div className="calendar-source-search-row">
         <label className="calendar-source-search">
           <SearchIcon />
@@ -1376,7 +1368,7 @@ function CalendarSourcesPanel({
         ) : null}
       </div>
 
-      <section className="calendar-source-section">
+      <section className="calendar-source-section" aria-label="Unscheduled Todos">
         <div className="calendar-section-heading">
           <h2>Todos</h2>
           <span>{todoSummary.unscheduled} unscheduled</span>
@@ -1401,17 +1393,6 @@ function CalendarSourcesPanel({
             <p className="calendar-empty-note">No unscheduled Todos match this view.</p>
           )}
         </div>
-      </section>
-
-      <section className="calendar-agent-panel">
-        <div>
-          <AutomationIcon />
-          <h2>Agent plan</h2>
-          <p>Suggest time blocks for unscheduled Todos in this week.</p>
-        </div>
-        <button type="button" className="calendar-agent-button" onClick={onAgentPlan}>
-          Ask Agent
-        </button>
       </section>
     </aside>
   )
@@ -1609,7 +1590,7 @@ function MonthGrid({
     <div className="calendar-month-view">
       {WEEKDAY_LABELS.map((label) => <div key={label} className="calendar-month-weekday">{label}</div>)}
       {days.map((day) => {
-        const dayItems = datedItems.filter((item) => item.startAt && isSameDay(item.startAt, day)).slice(0, 4)
+        const dayItems = datedItems.filter((item) => item.startAt && isSameDay(item.startAt, day))
         return (
           <section
             key={getDateKey(day)}
@@ -1726,8 +1707,6 @@ interface CalendarDetailPanelProps {
   onDelete: (itemId: string) => void
   onDismissSuggestion: (itemId: string) => void
   onItemUpdate: (itemId: string, update: Partial<CalendarItem>) => void
-  onMoveLater: (item: CalendarItem) => void
-  onUnschedule: (itemId: string) => void
 }
 
 function CalendarDetailPanel({
@@ -1739,8 +1718,6 @@ function CalendarDetailPanel({
   onDelete,
   onDismissSuggestion,
   onItemUpdate,
-  onMoveLater,
-  onUnschedule,
 }: CalendarDetailPanelProps) {
   if (!item) {
     return (
@@ -1759,6 +1736,7 @@ function CalendarDetailPanel({
     : sourceOptions
   const statusOptions = getStatusOptions(item)
   const statusValue = item.status ?? (item.entityType === "task" ? "todo" : "scheduled")
+  const useSegmentedStatus = statusOptions.length === 2
   const isTaskLikeItem = item.entityType === "task"
   const projectValue = resolveProjectValue(item.workspace, projects)
   const hasLegacyProject = hasLegacyProjectValue(item.workspace, projects)
@@ -1767,22 +1745,26 @@ function CalendarDetailPanel({
     <aside className="calendar-detail-panel" aria-label="Calendar details">
       <div className="calendar-detail-heading">
         <span className="calendar-detail-type">{getItemTypeLabel(item)}</span>
-        <h2>{item.title}</h2>
+        <textarea
+          className="calendar-detail-title-input"
+          aria-label="Title"
+          value={item.title}
+          rows={getDetailTitleRows(item.title)}
+          onChange={(event) => onItemUpdate(item.id, { title: event.target.value })}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault()
+              event.currentTarget.blur()
+            }
+          }}
+        />
         <p>{formatDateTimeRange(item)}</p>
       </div>
 
       <div className="calendar-detail-form">
-        <label>
-          Title
-          <input
-            value={item.title}
-            onChange={(event) => onItemUpdate(item.id, { title: event.target.value })}
-          />
-        </label>
-
         {item.entityType === "event" ? (
-          <label>
-            Calendar
+          <label className="calendar-detail-field-row">
+            <span>Calendar</span>
             <select
               value={item.sourceId}
               onChange={(event) => onItemUpdate(item.id, { sourceId: event.target.value })}
@@ -1794,20 +1776,47 @@ function CalendarDetailPanel({
           </label>
         ) : null}
 
-        <label>
-          Status
-          <select
-            value={statusValue}
-            onChange={(event) => onItemUpdate(item.id, { status: event.target.value as CalendarItem["status"] })}
-          >
-            {statusOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </label>
+        {useSegmentedStatus ? (
+          <div className="calendar-detail-field-row">
+            <span>Status</span>
+            <div className="calendar-status-segmented" role="radiogroup" aria-label="Status">
+              {statusOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={statusValue === option.value}
+                  className={joinClassNames(
+                    "calendar-status-segment",
+                    statusValue === option.value && "is-selected",
+                  )}
+                  onClick={() => {
+                    if (statusValue !== option.value) {
+                      onItemUpdate(item.id, { status: option.value })
+                    }
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <label className="calendar-detail-field-row">
+            <span>Status</span>
+            <select
+              value={statusValue}
+              onChange={(event) => onItemUpdate(item.id, { status: event.target.value as CalendarItem["status"] })}
+            >
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
 
-        <label>
-          Project
+        <label className="calendar-detail-field-row">
+          <span>Project</span>
           <select
             value={projectValue}
             onChange={(event) => onItemUpdate(item.id, { workspace: event.target.value })}
@@ -1856,28 +1865,6 @@ function CalendarDetailPanel({
           </>
         ) : (
           <>
-            <button type="button" className="calendar-primary-action" onClick={() => onMoveLater(item)} disabled={!item.startAt}>
-              Move 30m later
-            </button>
-            {isTaskLikeItem ? (
-              <button
-                type="button"
-                className="calendar-secondary-action"
-                onClick={() => onItemUpdate(item.id, { status: item.status === "done" ? "todo" : "done" })}
-              >
-                {item.status === "done" ? "标记未完成" : "标记完成"}
-              </button>
-            ) : null}
-            {isTaskLikeItem ? (
-              <button
-                type="button"
-                className="calendar-secondary-action"
-                disabled={!item.startAt}
-                onClick={() => onUnschedule(item.id)}
-              >
-                {item.startAt ? "Unschedule" : "Already unscheduled"}
-              </button>
-            ) : null}
             {item.entityType === "event" || isTaskLikeItem ? (
               <button
                 type="button"
@@ -1885,7 +1872,7 @@ function CalendarDetailPanel({
                 disabled={item.isReadOnly}
                 onClick={() => onDelete(item.id)}
               >
-                {isTaskLikeItem ? "Delete Todo" : "Delete event"}
+                Delete
               </button>
             ) : null}
           </>

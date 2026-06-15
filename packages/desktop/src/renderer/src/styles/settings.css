@@ -1079,17 +1079,26 @@ body.is-dragging-settings-page {
   height: 100%;
   overflow: hidden;
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr) clamp(230px, 17vw, 300px);
+  grid-template-columns:
+    320px
+    minmax(0, 1fr)
+    minmax(0, var(--settings-document-width, 1120px))
+    minmax(0, 1fr)
+    var(--settings-document-side-panel-width, clamp(230px, 17vw, 300px));
   grid-template-rows: minmax(0, 1fr);
   grid-template-areas:
-    "library detail slots";
+    "library . detail . slots";
   gap: 18px 22px;
 }
 
 .settings-prompts-shell.is-sidebar-hosted {
-  grid-template-columns: minmax(0, 1fr) clamp(230px, 17vw, 300px);
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, var(--settings-document-width, 1120px))
+    minmax(0, 1fr)
+    var(--settings-document-side-panel-width, clamp(230px, 17vw, 300px));
   grid-template-areas:
-    "detail slots";
+    ". detail . slots";
 }
 
 .settings-page-main.prompt-presets-page-main {
@@ -7824,11 +7833,13 @@ body.is-dragging-settings-page {
 }
 
 .plugins-marketplace-content {
+  --plugins-marketplace-optical-offset: clamp(0px, calc((100% - 1040px) * 0.45), 260px);
   min-width: 0;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 28px 0 72px;
+  box-sizing: border-box;
+  padding: 28px var(--plugins-marketplace-optical-offset) 72px 0;
   scrollbar-gutter: stable;
   display: grid;
   align-content: start;
@@ -9270,6 +9281,8 @@ body.is-dragging-settings-page {
 }
 
 .settings-page-main.is-services {
+  --settings-document-width: 1120px;
+  --settings-document-side-panel-width: clamp(230px, 17vw, 300px);
   padding: 30px 34px 34px;
   background: var(--seg-panel);
 }
@@ -9279,9 +9292,38 @@ body.is-dragging-settings-page {
   gap: 22px;
 }
 
+.settings-page-main.is-services .settings-services-layout.global-skills-page-layout {
+  grid-template-columns:
+    300px
+    minmax(0, 1fr)
+    minmax(0, var(--settings-document-width))
+    minmax(0, 1fr)
+    var(--settings-document-side-panel-width);
+}
+
+.settings-page-main.is-services .settings-services-layout.global-skills-page-layout > .global-skills-library-panel {
+  grid-column: 1;
+}
+
+.settings-page-main.is-services .settings-services-layout.global-skills-page-layout > .global-skills-detail-panel {
+  grid-column: 3;
+}
+
 .settings-page-main.is-services .settings-services-layout.global-skills-page-layout.is-sidebar-hosted,
 .settings-page-main.is-services .settings-services-layout.mcp-servers-page-layout.is-sidebar-hosted {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-page-main.is-services .settings-services-layout.global-skills-page-layout.is-sidebar-hosted {
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, var(--settings-document-width))
+    minmax(0, 1fr)
+    var(--settings-document-side-panel-width);
+}
+
+.settings-page-main.is-services .settings-services-layout.global-skills-page-layout.is-sidebar-hosted > .global-skills-detail-panel {
+  grid-column: 2;
 }
 
 .settings-page-main.is-services .settings-service-list-panel,
@@ -9756,7 +9798,7 @@ body.is-dragging-settings-page {
 }
 
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-editor-header {
-  width: min(100%, 1320px);
+  width: min(100%, var(--settings-document-width));
   justify-self: center;
 }
 
@@ -9773,7 +9815,7 @@ body.is-dragging-settings-page {
 
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-editor,
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-preview-surface {
-  width: min(100%, 1320px);
+  width: min(100%, var(--settings-document-width));
   justify-self: center;
   border: 0;
   border-radius: 0;
@@ -9792,7 +9834,7 @@ body.is-dragging-settings-page {
 }
 
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-source-path {
-  width: min(100%, 1320px);
+  width: min(100%, var(--settings-document-width));
   justify-self: center;
 }
 
@@ -9872,8 +9914,33 @@ body.is-dragging-settings-page {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .settings-page-main.is-services .settings-services-layout.global-skills-page-layout,
+  .settings-page-main.is-services .settings-services-layout.global-skills-page-layout.is-sidebar-hosted {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-page-main.is-services .settings-services-layout.global-skills-page-layout > .global-skills-library-panel,
+  .settings-page-main.is-services .settings-services-layout.global-skills-page-layout > .global-skills-detail-panel,
+  .settings-page-main.is-services .settings-services-layout.global-skills-page-layout.is-sidebar-hosted > .global-skills-detail-panel {
+    grid-column: 1;
+  }
+
   .settings-page-main.is-services .settings-service-list-panel {
     max-height: 320px;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1280px) {
+  .settings-page-main.is-services .settings-services-layout.global-skills-page-layout.is-sidebar-hosted {
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(0, var(--settings-document-width))
+      minmax(0, 1fr)
+      var(--settings-document-side-panel-width);
+  }
+
+  .settings-page-main.is-services .settings-services-layout.global-skills-page-layout.is-sidebar-hosted > .global-skills-detail-panel {
+    grid-column: 2;
   }
 }
 
