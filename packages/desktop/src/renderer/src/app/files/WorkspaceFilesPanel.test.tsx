@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it, vi } from "vitest"
@@ -191,7 +191,7 @@ describe("WorkspaceFilesPanel", () => {
     expect(onQueryChange).toHaveBeenCalledWith("src")
   })
 
-  it("renders selected text file lines in the reader", () => {
+  it("renders selected text file lines in the reader with Shiki tokens", async () => {
     renderWorkspaceFilesPanel(
       createFileReviewState({
         selectedFileContent: "const camera = { x: 0, y: 0 };\n\nfunction updateCamera() {\n  return camera.x;\n}",
@@ -203,10 +203,16 @@ describe("WorkspaceFilesPanel", () => {
     )
 
     expect(screen.getByText("src/camera.js")).toBeVisible()
-    expect(screen.getByTestId("workspace-file-line-1")).toHaveTextContent("const camera = { x: 0, y: 0 };")
+    const firstLine = screen.getByTestId("workspace-file-line-1")
+    expect(firstLine).toHaveTextContent("const camera = { x: 0, y: 0 };")
     expect(screen.getByTestId("workspace-file-line-4")).toHaveTextContent("return camera.x;")
-    expect(screen.getByTestId("workspace-file-line-1").querySelector(".code-highlight-token.is-keyword")).toHaveTextContent("const")
-    expect(screen.getByTestId("workspace-file-line-1").querySelector(".code-highlight-token.is-number")).toHaveTextContent("0")
+    await waitFor(() => {
+      expect(firstLine.querySelector(".code-highlight-token")).not.toBeNull()
+    })
+    const tokenTexts = Array.from(firstLine.querySelectorAll(".code-highlight-token")).map((token) => token.textContent)
+    expect(tokenTexts).toContain("const")
+    expect(tokenTexts).toContain("0")
+    expect(firstLine.querySelector(".code-highlight-raw-line")).toHaveTextContent("const camera = { x: 0, y: 0 };")
   })
 
   it("renders Markdown files by default and can switch back to source", () => {
@@ -384,6 +390,14 @@ describe("WorkspaceFilesPanel", () => {
     expect(styles).toMatch(
       /\.workspace-files-line-content,\s*\.workspace-files-line-content code\s*\{[^}]*color:\s*var\(--seg-text-1\);/s,
     )
+    expect(styles).toMatch(/\.workspace-files-line:hover\s*\{[^}]*background:/s)
+    expect(styles).toMatch(
+      /\.workspace-files-line:hover\s+\.workspace-files-line-comment-button,\s*\.workspace-files-line:focus-within\s+\.workspace-files-line-comment-button,\s*\.workspace-files-line\.is-commenting\s+\.workspace-files-line-comment-button\s*\{[^}]*opacity:\s*1;[^}]*pointer-events:\s*auto;[^}]*visibility:\s*visible;/s,
+    )
+    expect(styles).toMatch(
+      /\.workspace-files-code\.is-selecting-lines\s+\.workspace-files-line-comment-button\s*\{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;[^}]*visibility:\s*hidden;/s,
+    )
+    expect(styles).not.toContain(".workspace-files-line.is-hovered")
     expect(styles).not.toMatch(
       /\.workspace-files-line-content,\s*\.workspace-files-line-content code\s*\{[^}]*color:\s*var\(--text-on-dark\);/s,
     )

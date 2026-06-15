@@ -33,7 +33,7 @@ import {
 } from "../thread-markdown"
 import { formatWorkspaceFileLineRangeLabel, normalizeWorkspaceFileLineRange } from "./utils"
 import { toLocalImageProtocolUrl } from "../../../../shared/local-image-protocol"
-import { HighlightedCodeLine, inferCodeLanguage } from "../code-highlight"
+import { HighlightedCodeLine, inferCodeLanguage, useHighlightedCode } from "../code-highlight"
 
 const ROOT_DIRECTORY_PATH = ""
 const MARKDOWN_FILE_EXTENSIONS = new Set(["md", "markdown"])
@@ -416,7 +416,6 @@ export function WorkspaceFilesPanel({
   onSelectFile,
   onTreeInvalidate,
 }: WorkspaceFilesPanelProps) {
-  const [hoveredLineNumber, setHoveredLineNumber] = useState<number | null>(null)
   const [dragSelection, setDragSelection] = useState<WorkspaceFileLineRange | null>(null)
   const [markdownViewMode, setMarkdownViewMode] = useState<"preview" | "source">("preview")
   const [imageViewMode, setImageViewMode] = useState<"fit" | "actual">("fit")
@@ -465,6 +464,11 @@ export function WorkspaceFilesPanel({
     mime: state.selectedFileMimeType,
     path: state.selectedFilePath,
   })
+  const sourceHighlight = useHighlightedCode({
+    content: shouldRenderSourceReader ? state.selectedFileContent ?? "" : "",
+    language: selectedCodeLanguage,
+    theme: "light",
+  })
 
   for (const comment of state.comments) {
     const currentComments = commentsByEndLine.get(comment.endLineNumber) ?? []
@@ -505,7 +509,6 @@ export function WorkspaceFilesPanel({
   }, [onSelectFile, onTreeInvalidate, scopeDirectory, state.selectedFilePath])
 
   useEffect(() => {
-    setHoveredLineNumber(null)
     dragSelectionRef.current = null
     setDragSelection(null)
   }, [state.selectedFilePath, state.pendingComment?.startLineNumber, state.pendingComment?.endLineNumber])
@@ -782,15 +785,11 @@ export function WorkspaceFilesPanel({
 
   function renderSourceReader() {
     return (
-      <div className="workspace-files-code" role="presentation">
+      <div className={dragSelection ? "workspace-files-code is-selecting-lines" : "workspace-files-code"} role="presentation">
         {fileLines.map((line, index) => {
           const lineNumber = index + 1
           const isCommenting = isLineWithinRange(pendingRange, lineNumber)
           const lineComments = commentsByEndLine.get(lineNumber) ?? []
-          const showCommentAction =
-            dragSelection === null &&
-            (hoveredLineNumber === lineNumber ||
-              (pendingRange?.startLineNumber === lineNumber && pendingRange.endLineNumber === lineNumber))
           const lineLabel = pendingRange && isCommenting
             ? formatWorkspaceFileLineRangeLabel(pendingRange.startLineNumber, pendingRange.endLineNumber)
             : formatWorkspaceFileLineRangeLabel(lineNumber)
@@ -808,13 +807,11 @@ export function WorkspaceFilesPanel({
                 ref={registerLineRef(lineNumber)}
                 className={[
                   "workspace-files-line",
-                  showCommentAction ? "is-hovered" : "",
+                  isCommenting ? "is-commenting" : "",
                   isSelectionHighlighted ? "is-selected" : "",
                   isLinkedLine ? "is-linked" : "",
                 ].filter(Boolean).join(" ")}
                 data-testid={`workspace-file-line-${lineNumber}`}
-                onMouseEnter={() => setHoveredLineNumber(lineNumber)}
-                onMouseLeave={() => setHoveredLineNumber((current) => (current === lineNumber ? null : current))}
               >
                 <div
                   className="workspace-files-line-gutter"
@@ -824,21 +821,19 @@ export function WorkspaceFilesPanel({
                   onMouseUp={() => handleLineSelectionEnd()}
                 >
                   <span className="workspace-files-line-number">{String(lineNumber)}</span>
-                  {showCommentAction ? (
-                    <button
-                      type="button"
-                      className="workspace-files-line-comment-button"
-                      aria-label={`Add comment on line ${String(lineNumber)}`}
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onClick={() => onPendingCommentStart(lineNumber)}
-                    >
-                      <PlusIcon />
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    className="workspace-files-line-comment-button"
+                    aria-label={`Add comment on line ${String(lineNumber)}`}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={() => onPendingCommentStart(lineNumber)}
+                  >
+                    <PlusIcon />
+                  </button>
                 </div>
                 <pre className="workspace-files-line-content code-highlight">
                   <code>
-                    <HighlightedCodeLine line={line} language={selectedCodeLanguage} />
+                    <HighlightedCodeLine line={line} tokens={sourceHighlight.tokenLines?.[index] ?? null} />
                   </code>
                 </pre>
               </div>

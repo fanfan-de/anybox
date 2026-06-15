@@ -104,13 +104,13 @@ function JsonPreview({ content }: { content: string }) {
     // Invalid JSON still renders as read-only source.
   }
 
-  return <CodeBlockPreview className="unified-preview-code" content={formatted} language="json" />
+  return <CodeBlockPreview className="unified-preview-code" content={formatted} language="json" theme="dark" />
 }
 
 function TablePreview({ content }: { content: string }) {
   const rows = parseCsvRows(content)
   const [header, ...bodyRows] = rows
-  if (!header) return <CodeBlockPreview className="unified-preview-code" content={content} language="csv" />
+  if (!header) return <CodeBlockPreview className="unified-preview-code" content={content} language="csv" theme="dark" />
 
   return (
     <div className="unified-preview-table-scroll" role="region" aria-label="CSV preview">
@@ -163,6 +163,7 @@ function TextPreviewContent({
         path: getTargetPath(target) ?? target.title,
         renderer: target.renderer,
       })}
+      theme="dark"
     />
   )
 }

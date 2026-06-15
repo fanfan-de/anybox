@@ -2582,10 +2582,7 @@ describe("App", () => {
     expect(await screen.findByText("const nextValue = focusValue + 1")).toBeInTheDocument()
 
     const secondLine = screen.getByTestId("workspace-file-line-2")
-    expect(screen.queryByRole("button", { name: "Add comment on line 2" })).not.toBeInTheDocument()
-
-    fireEvent.mouseEnter(secondLine)
-    fireEvent.click(screen.getByRole("button", { name: "Add comment on line 2" }))
+    fireEvent.click(within(secondLine).getByRole("button", { name: "Add comment on line 2" }))
     fireEvent.change(screen.getByRole("textbox", { name: "File comment on line 2" }), {
       target: { value: "Check the increment logic." },
     })
@@ -2595,8 +2592,7 @@ describe("App", () => {
     expect(screen.getByText("Check the increment logic.")).toBeInTheDocument()
 
     const thirdLine = screen.getByTestId("workspace-file-line-3")
-    fireEvent.mouseEnter(thirdLine)
-    fireEvent.click(screen.getByRole("button", { name: "Add comment on line 3" }))
+    fireEvent.click(within(thirdLine).getByRole("button", { name: "Add comment on line 3" }))
     fireEvent.change(screen.getByRole("textbox", { name: "File comment on line 3" }), {
       target: { value: "Drop this note." },
     })

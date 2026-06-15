@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import type { ComponentProps } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { DEFAULT_WORKSPACE_PREVIEW_STATE } from "../agent-workspace/review-preview-state"
+import { CODE_HIGHLIGHT_MAX_INPUT_LENGTH, CodeBlockPreview } from "../code-highlight"
 import { ToastProvider } from "../toast"
 import type { PreviewInteractionRecord, WorkspacePreviewState } from "../types"
 import { UnifiedPreviewPanel } from "./UnifiedPreviewPanel"
@@ -258,9 +259,9 @@ describe("UnifiedPreviewPanel", () => {
     expect(screen.queryByRole("button", { name: "Comment" })).toBeNull()
   })
 
-  it("syntax highlights code file previews", async () => {
+  it("syntax highlights code file previews with Shiki tokens", async () => {
     window.desktop!.readPreviewText = vi.fn().mockResolvedValue({
-      content: "const camera = 1\n// ready",
+      content: "const camera = 1\nconst message = `ready\nnow`",
       path: `${workspaceRoot}\\src\\camera.ts`,
     })
 
@@ -288,11 +289,67 @@ describe("UnifiedPreviewPanel", () => {
       }),
     })
 
-    expect(await screen.findByText("const")).toHaveClass("code-highlight-token", "is-keyword")
+    await waitFor(() => {
+      expect(container.querySelector(".code-highlight-token")).not.toBeNull()
+    })
+    expect(container.querySelector(".unified-preview-code")).toHaveAttribute("data-theme", "dark")
     expect(container.querySelector(".code-highlight-line-number")).toHaveTextContent("1")
-    const commentToken = screen.getAllByText("// ready").find((element) => element.classList.contains("is-comment"))
-    expect(commentToken).toBeDefined()
-    expect(commentToken!).toHaveClass("code-highlight-token", "is-comment")
+    expect(container.querySelector(".code-highlight-row")).toHaveTextContent("const camera = 1")
+    expect(container.querySelector(".code-highlight-raw-line")).toHaveTextContent("const camera = 1")
+    expect(container.querySelector(".code-highlight-token")).not.toHaveClass("is-keyword")
+  })
+
+  it("uses Shiki token lines for multiline HTML code", async () => {
+    window.desktop!.readPreviewText = vi.fn().mockResolvedValue({
+      content: "<script>\nconst value = `ready\nnow`\n</script>",
+      path: `${workspaceRoot}\\src\\index.html`,
+    })
+
+    const { container } = renderUnifiedPreviewPanel({
+      state: createPreviewState({
+        activeTargetInput: "src/index.html",
+        draftTarget: "src/index.html",
+        resolvedTarget: {
+          entry: `${workspaceRoot}\\src\\index.html`,
+          externalOpenTarget: {
+            kind: "path",
+            value: `${workspaceRoot}\\src\\index.html`,
+          },
+          input: "src/index.html",
+          kind: "file",
+          mime: "text/html; charset=utf-8",
+          normalizedInput: "src/index.html",
+          path: `${workspaceRoot}\\src\\index.html`,
+          renderer: "code-viewer",
+          textReadable: true,
+          title: "index.html",
+          workspaceRoot,
+        },
+        status: "ready",
+      }),
+    })
+
+    await waitFor(() => {
+      expect(container.querySelectorAll(".code-highlight-token").length).toBeGreaterThan(0)
+    })
+    expect(container.querySelectorAll(".code-highlight-row")).toHaveLength(4)
+    expect(container.querySelectorAll(".code-highlight-row")[2]).toHaveTextContent("now`")
+  })
+
+  it("falls back to plain text for unsupported code languages", () => {
+    const { container } = render(<CodeBlockPreview content="custom value" language="not-a-language" />)
+
+    expect(container.querySelector(".code-highlight-token")).toBeNull()
+    expect(container.querySelector(".code-highlight-row")).toHaveTextContent("custom value")
+    expect(container.querySelector(".code-highlight-raw-line")).toHaveTextContent("custom value")
+  })
+
+  it("falls back to plain text for large code blocks", () => {
+    const content = `const value = 1;\n${"x".repeat(CODE_HIGHLIGHT_MAX_INPUT_LENGTH)}`
+    const { container } = render(<CodeBlockPreview content={content} language="typescript" />)
+
+    expect(container.querySelector(".code-highlight-token")).toBeNull()
+    expect(container.querySelector(".code-highlight-row")).toHaveTextContent("const value = 1;")
   })
 
   it("routes web comment toolbar toggles through the active interaction callback", () => {
