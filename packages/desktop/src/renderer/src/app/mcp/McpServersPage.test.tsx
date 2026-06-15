@@ -465,7 +465,7 @@ describe("McpServersPage tool policies", () => {
 
     render(<McpServersPage {...createProps({ onImportMcpConfigJson })} />)
 
-    fireEvent.click(screen.getByRole("button", { name: "Import Json" }))
+    fireEvent.click(screen.getByRole("button", { name: "Import JSON" }))
     fireEvent.change(screen.getByLabelText("MCP configuration JSON"), {
       target: {
         value: JSON.stringify({
@@ -481,7 +481,11 @@ describe("McpServersPage tool policies", () => {
 
     expect(screen.getByText(/Detected 1 MCP server/)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: "Import" }))
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Install from MCP JSON" })).getByRole("button", {
+        name: "Import JSON",
+      }),
+    )
 
     expect(onImportMcpConfigJson).toHaveBeenCalledWith(expect.stringContaining("filesystem"))
   })

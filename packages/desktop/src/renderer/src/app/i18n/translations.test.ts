@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { enUS, getTranslationDictionary, translateLiteral, zhCN } from "./translations"
+import { enUS, getTranslationDictionary, t, translateLiteral, zhCN } from "./translations"
 
 describe("i18n translations", () => {
   it("keeps English and Chinese dictionaries aligned", () => {
@@ -22,6 +22,19 @@ describe("i18n translations", () => {
     expect(translateLiteral("zh-CN", "Current branch: master")).toBe("当前分支：master")
     expect(translateLiteral("zh-CN", "Create and checkout new branch...")).toBe("创建并检出新分支...")
     expect(translateLiteral("zh-CN", "Switched to master.")).toBe("已切换到 master。")
+  })
+
+  it("keeps glossary terms while translating surrounding UI", () => {
+    expect(translateLiteral("zh-CN", "API key")).toBe("API key")
+    expect(translateLiteral("zh-CN", "Git branches")).toBe("Git 分支")
+    expect(getTranslationDictionary("zh-CN")["mcp.title"]).toBe("MCP 服务器")
+    expect(getTranslationDictionary("zh-CN")["connections.mobile.copyToken"]).toBe("复制 token")
+  })
+
+  it("formats localized dynamic UI messages", () => {
+    expect(t("zh-CN", "connections.mobile.lastSeen", { time: "10:30" })).toBe("上次在线 10:30")
+    expect(t("zh-CN", "calendar.scheduleRange", { date: "6月16日 周二" })).toBe("6月16日 周二 + 14 天")
+    expect(t("en-US", "files.addCommentOnLine", { line: 42 })).toBe("Add comment on line 42")
   })
 
   it("exposes dictionaries by locale", () => {

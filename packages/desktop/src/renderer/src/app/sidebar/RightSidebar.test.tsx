@@ -7,6 +7,7 @@ import {
   type WorkspaceGroup,
 } from "../types"
 import { DEFAULT_WORKSPACE_FILE_REVIEW_STATE, DEFAULT_WORKSPACE_PREVIEW_STATE } from "../agent-workspace/review-preview-state"
+import { I18nProvider } from "../i18n/I18nProvider"
 import type { SessionMessageTree } from "../session-message-tree"
 import { ToastProvider } from "../toast"
 import { RightSidebar } from "./RightSidebar"
@@ -318,8 +319,9 @@ function renderRightSidebar(input: {
   onOpenReviewTab?: () => void
   onOpenTerminalTab?: () => void
   onMessageTreeNodeSelect?: (sessionID: string, messageID: string) => void
+  withI18n?: boolean
 }) {
-  return render(
+  const ui = (
     <ToastProvider>
       <RightSidebar
         activeSession={input.activeSession === undefined ? workspace.sessions[0] ?? null : input.activeSession}
@@ -385,8 +387,10 @@ function renderRightSidebar(input: {
         onWorkspaceFileSelect={vi.fn()}
         renderTerminalTab={() => <div role="region" aria-label="Terminal tab" />}
       />
-    </ToastProvider>,
+    </ToastProvider>
   )
+
+  return render(input.withI18n ? <I18nProvider>{ui}</I18nProvider> : ui)
 }
 
 describe("RightSidebar", () => {
@@ -412,6 +416,29 @@ describe("RightSidebar", () => {
     expect(onOpenMessageTreeTab).toHaveBeenCalledTimes(1)
     expect(screen.getByRole("button", { name: /^Terminal/ })).toBeDisabled()
     expect(onOpenTerminalTab).not.toHaveBeenCalled()
+  })
+
+  it("localizes launcher cards in Chinese", () => {
+    window.localStorage.removeItem("desktop.locale")
+
+    renderRightSidebar({
+      withI18n: true,
+      rightSidebar: {
+        activeTabID: null,
+        tabs: [],
+      },
+    })
+
+    expect(screen.getByText("文件")).toBeInTheDocument()
+    expect(screen.getByText("浏览项目文件")).toBeInTheDocument()
+    expect(screen.getByText("浏览器")).toBeInTheDocument()
+    expect(screen.getByText("打开网站")).toBeInTheDocument()
+    expect(screen.getByText("消息树")).toBeInTheDocument()
+    expect(screen.getByText("查看消息分支")).toBeInTheDocument()
+    expect(screen.getByText("代码审查")).toBeInTheDocument()
+    expect(screen.getByText("检查代码变更")).toBeInTheDocument()
+    expect(screen.getByText("终端")).toBeInTheDocument()
+    expect(screen.getByText("启动交互式 Shell")).toBeInTheDocument()
   })
 
   it("disables the tree launcher card without an active session", () => {

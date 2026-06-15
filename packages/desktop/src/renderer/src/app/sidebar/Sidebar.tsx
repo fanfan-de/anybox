@@ -18,6 +18,7 @@ import {
   SessionRunningIcon,
   SettingsIcon
 } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
 import { PromptPresetsSidebarView, type PromptPresetsSidebarViewProps } from "../prompts/PromptPresetsPage"
 import { joinClassNames, ShellTopMenu, SidebarToggleButton } from "../shared-ui"
 import { GlobalSkillsNavigator, type GlobalSkillsNavigatorProps } from "../skills/GlobalSkillsPage"
@@ -1206,6 +1207,8 @@ export function Sidebar({
   onSidebarAction,
   onToggleSidebar,
 }: SidebarProps) {
+  const { t } = useI18n()
+
   return (
     <aside id="app-sidebar" className="sidebar" aria-label="Primary sidebar">
       <LeftSidebarTopMenu
@@ -1259,9 +1262,9 @@ export function Sidebar({
       {showSettingsButton ? (
         <button
           className={isSettingsOpen ? "sidebar-settings is-active" : "sidebar-settings"}
-          aria-label="Open settings"
+          aria-label={t("shell.openSettings")}
           aria-pressed={isSettingsOpen}
-          title="Open settings"
+          title={t("shell.openSettings")}
           onClick={onOpenSettings}
         >
           <SettingsIcon />

@@ -11,6 +11,8 @@ import {
   SideChatIcon,
   ToolsIcon,
 } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
+import type { TranslationKey } from "../i18n/translations"
 import { joinClassNames, SidebarToggleButton, type SidebarSide } from "../shared-ui"
 import type { LeftSidebarView } from "../types"
 
@@ -26,16 +28,16 @@ interface ActivityRailProps {
 }
 
 const primaryLeftRailViews = [
-  { view: "workspace" as const, label: "Open workspace", Icon: LayoutSidebarLeftIcon },
-  { view: "calendar" as const, label: "Open calendar", Icon: CalendarIcon },
-  { view: "automations" as const, label: "Open automations", Icon: AutomationIcon },
+  { view: "workspace" as const, labelKey: "shell.openWorkspace", Icon: LayoutSidebarLeftIcon },
+  { view: "calendar" as const, labelKey: "shell.openCalendar", Icon: CalendarIcon },
+  { view: "automations" as const, labelKey: "shell.openAutomations", Icon: AutomationIcon },
 ]
 
 const configurationLeftRailViews = [
-  { view: "skills" as const, label: "Open skills", Icon: FileTextIcon },
-  { view: "prompts" as const, label: "Open prompts", Icon: SideChatIcon },
-  { view: "connections" as const, label: "Open connections and extensions", Icon: ConnectedStatusIcon },
-  { view: "tools" as const, label: "Open tools", Icon: ToolsIcon },
+  { view: "skills" as const, labelKey: "shell.openSkills", Icon: FileTextIcon },
+  { view: "prompts" as const, labelKey: "shell.openPrompts", Icon: SideChatIcon },
+  { view: "connections" as const, labelKey: "shell.openConnectionsAndExtensions", Icon: ConnectedStatusIcon },
+  { view: "tools" as const, labelKey: "shell.openTools", Icon: ToolsIcon },
 ]
 
 function isConfigurationLeftRailView(view: LeftSidebarView) {
@@ -77,9 +79,13 @@ export function ActivityRail({
 }: ActivityRailProps) {
   const railClassName = side === "right" ? "activity-rail is-right" : "activity-rail"
   const configurationMenuID = useId()
+  const { t } = useI18n()
   const isConfigurationViewActive = isConfigurationLeftRailView(activeView)
   const [isConfigurationMenuOpen, setIsConfigurationMenuOpen] = useState(isConfigurationViewActive)
   const ConfigurationToggleIcon = isConfigurationMenuOpen ? ChevronDownIcon : ChevronRightIcon
+  const configurationToggleLabel = isConfigurationMenuOpen
+    ? t("shell.hideConfigurationShortcuts")
+    : t("shell.showConfigurationShortcuts")
 
   useEffect(() => {
     if (isConfigurationViewActive) {
@@ -93,7 +99,7 @@ export function ActivityRail({
   }
 
   return (
-    <aside className={railClassName} aria-label={side === "left" ? "Primary navigation rail" : "Inspector rail"}>
+    <aside className={railClassName} aria-label={side === "left" ? t("shell.primaryNavigationRail") : t("shell.inspectorRail")}>
       <div className="activity-rail-top-menu">
         <SidebarToggleButton
           isSidebarCollapsed={isSidebarCollapsed}
@@ -104,9 +110,10 @@ export function ActivityRail({
       </div>
       <div className="activity-rail-primary">
         {side === "left" ? (
-          <div className="activity-rail-view-stack" aria-label="Primary views">
-            {primaryLeftRailViews.map(({ view, label, Icon }) => {
+          <div className="activity-rail-view-stack" aria-label={t("shell.primaryViews")}>
+            {primaryLeftRailViews.map(({ view, labelKey, Icon }) => {
               const isActive = activeView === view
+              const label = t(labelKey as TranslationKey)
 
               return (
                 <ActivityRailViewButton
@@ -123,10 +130,11 @@ export function ActivityRail({
       </div>
       {side === "left" ? (
         <div className="activity-rail-footer">
-          <div className="activity-rail-config" aria-label="Configuration views">
+          <div className="activity-rail-config" aria-label={t("shell.configurationViews")}>
             <div id={configurationMenuID} className="activity-rail-config-stack" hidden={!isConfigurationMenuOpen}>
-              {configurationLeftRailViews.map(({ view, label, Icon }) => {
+              {configurationLeftRailViews.map(({ view, labelKey, Icon }) => {
                 const isActive = activeView === view
+                const label = t(labelKey as TranslationKey)
 
                 return (
                   <ActivityRailViewButton
@@ -151,8 +159,8 @@ export function ActivityRail({
                 .join(" ")}
               aria-controls={configurationMenuID}
               aria-expanded={isConfigurationMenuOpen}
-              aria-label={isConfigurationMenuOpen ? "Hide configuration shortcuts" : "Show configuration shortcuts"}
-              title={isConfigurationMenuOpen ? "Hide configuration shortcuts" : "Show configuration shortcuts"}
+              aria-label={configurationToggleLabel}
+              title={configurationToggleLabel}
               type="button"
               onClick={() => setIsConfigurationMenuOpen((nextValue) => !nextValue)}
             >
@@ -163,9 +171,9 @@ export function ActivityRail({
           {onOpenSettings ? (
             <button
               className={joinClassNames("activity-rail-view-button", "activity-rail-settings", isSettingsOpen && "is-active")}
-              aria-label="Open settings"
+              aria-label={t("shell.openSettings")}
               aria-pressed={isSettingsOpen}
-              title="Open settings"
+              title={t("shell.openSettings")}
               type="button"
               onClick={onOpenSettings}
             >

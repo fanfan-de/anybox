@@ -27,6 +27,17 @@ function EditableFixture() {
   )
 }
 
+function NonLocalizableFixture() {
+  return (
+    <div>
+      <code>Open settings</code>
+      <pre>Search files</pre>
+      <span data-i18n-skip>Open settings</span>
+      <span className="xterm">Search files</span>
+    </div>
+  )
+}
+
 function waitForLocalizationFrame() {
   return new Promise((resolve) => {
     window.setTimeout(resolve, 50)
@@ -116,8 +127,23 @@ describe("I18nProvider", () => {
     expect(editable.textContent).toBe("abc ")
   })
 
+  it("does not localize code, preformatted, skipped, or terminal text", async () => {
+    render(
+      <I18nProvider>
+        <NonLocalizableFixture />
+      </I18nProvider>,
+    )
+
+    await waitForLocalizationFrame()
+
+    expect(screen.getByText("Open settings", { selector: "code" })).toBeInTheDocument()
+    expect(screen.getByText("Search files", { selector: "pre" })).toBeInTheDocument()
+    expect(screen.getByText("Open settings", { selector: "[data-i18n-skip]" })).toBeInTheDocument()
+    expect(screen.getByText("Search files", { selector: ".xterm" })).toBeInTheDocument()
+  })
+
   it("localizes MCP import action text", () => {
-    expect(translateLiteral("zh-CN", "Import Json")).toBe("\u5bfc\u5165 JSON")
-    expect(translateLiteral("en-US", "Import Json")).toBe("Import Json")
+    expect(translateLiteral("zh-CN", "Import JSON")).toBe("\u5bfc\u5165 JSON")
+    expect(translateLiteral("en-US", "Import JSON")).toBe("Import JSON")
   })
 })

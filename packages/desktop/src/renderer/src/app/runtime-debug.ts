@@ -1,72 +1,83 @@
 import type { SessionRuntimeDebugSnapshot, SessionRuntimeDebugState, SessionSummary } from "./types"
+import { normalizeAppLocale, type AppLocale } from "../../../shared/locale"
+import { t as translate, type TranslationKey } from "./i18n/translations"
 import { formatTime } from "./utils"
+
+function getRuntimeLocale(): AppLocale {
+  if (typeof document === "undefined") return "zh-CN"
+  return normalizeAppLocale(document.documentElement.lang)
+}
+
+function runtimeT(key: TranslationKey, params?: Record<string, string | number>) {
+  return translate(getRuntimeLocale(), key, params)
+}
 
 export function formatRuntimeLoadStateLabel(status: SessionRuntimeDebugState["status"]) {
   switch (status) {
     case "loading":
-      return "Loading"
+      return runtimeT("runtime.load.loading")
     case "refreshing":
-      return "Refreshing"
+      return runtimeT("runtime.load.refreshing")
     case "ready":
-      return "Synced"
+      return runtimeT("runtime.load.synced")
     case "error":
-      return "Refresh failed"
+      return runtimeT("runtime.load.refreshFailed")
     default:
-      return "Idle"
+      return runtimeT("runtime.load.idle")
   }
 }
 
 export function formatRuntimeBusyStateLabel(status: SessionRuntimeDebugSnapshot["status"]["type"]) {
-  return status === "busy" ? "Busy" : "Idle"
+  return status === "busy" ? runtimeT("runtime.busy.busy") : runtimeT("runtime.busy.idle")
 }
 
 export function formatRuntimePhaseLabel(phase?: SessionRuntimeDebugSnapshot["status"]["phase"]) {
   switch (phase) {
     case "preparing":
-      return "Preparing"
+      return runtimeT("runtime.phase.preparing")
     case "waiting_llm":
-      return "Waiting LLM"
+      return runtimeT("runtime.phase.waitingLlm")
     case "reasoning":
-      return "Reasoning"
+      return runtimeT("runtime.phase.reasoning")
     case "executing_tool":
-      return "Running Tool"
+      return runtimeT("runtime.phase.runningTool")
     case "waiting_approval":
-      return "Waiting Approval"
+      return runtimeT("runtime.phase.waitingApproval")
     case "responding":
-      return "Responding"
+      return runtimeT("runtime.phase.responding")
     case "retrying":
-      return "Retrying"
+      return runtimeT("runtime.phase.retrying")
     case "blocked":
-      return "Blocked"
+      return runtimeT("runtime.phase.blocked")
     case "continued_by_user":
-      return "Continued by User"
+      return runtimeT("runtime.phase.continuedByUser")
     case "completed":
-      return "Completed"
+      return runtimeT("runtime.phase.completed")
     case "cancelled":
-      return "Cancelled"
+      return runtimeT("runtime.phase.cancelled")
     case "failed":
-      return "Failed"
+      return runtimeT("runtime.phase.failed")
     default:
-      return "Unknown"
+      return runtimeT("runtime.phase.unknown")
   }
 }
 
 export function formatRuntimeTurnStatusLabel(status?: SessionRuntimeDebugSnapshot["turns"][number]["status"]) {
   switch (status) {
     case "running":
-      return "Running"
+      return runtimeT("automations.status.running")
     case "completed":
-      return "Completed"
+      return runtimeT("runtime.phase.completed")
     case "blocked":
-      return "Blocked"
+      return runtimeT("runtime.phase.blocked")
     case "continued_by_user":
-      return "Continued by User"
+      return runtimeT("runtime.phase.continuedByUser")
     case "failed":
-      return "Failed"
+      return runtimeT("runtime.phase.failed")
     case "stopped":
-      return "Stopped"
+      return runtimeT("connections.mobile.stopped")
     default:
-      return "Idle"
+      return runtimeT("runtime.load.idle")
   }
 }
 
@@ -85,41 +96,43 @@ export function buildRuntimeStatusDescription(input: {
   runtimeSnapshot: SessionRuntimeDebugSnapshot | null
 }) {
   if (!input.activeSession) {
-    return "Select a session to inspect the current agent runtime."
+    return runtimeT("runtime.description.selectSession")
   }
 
   if (input.runtimeState.status === "loading") {
-    return "Loading the current runtime trace for this session."
+    return runtimeT("runtime.description.loading")
   }
 
   if (input.runtimeState.status === "refreshing") {
     return input.runtimeState.updatedAt
-      ? `Refreshing runtime state. Last synced at ${formatTime(input.runtimeState.updatedAt)}.`
-      : "Refreshing runtime state."
+      ? runtimeT("runtime.description.refreshingWithTime", { time: formatTime(input.runtimeState.updatedAt) })
+      : runtimeT("runtime.description.refreshing")
   }
 
   if (input.runtimeState.status === "error") {
     return input.runtimeState.updatedAt
-      ? `The latest runtime refresh failed. Showing the most recent snapshot from ${formatTime(input.runtimeState.updatedAt)}.`
-      : "The runtime snapshot could not be loaded."
+      ? runtimeT("runtime.description.refreshFailedWithTime", { time: formatTime(input.runtimeState.updatedAt) })
+      : runtimeT("runtime.description.refreshFailed")
   }
 
   const latestTurn = input.runtimeSnapshot?.latestTurn
   if (input.runtimeSnapshot?.status.type === "busy" && latestTurn) {
-    return `${formatRuntimePhaseLabel(input.runtimeSnapshot.status.phase ?? latestTurn.phase)} in progress for the latest turn.`
+    return runtimeT("runtime.description.phaseInProgress", {
+      phase: formatRuntimePhaseLabel(input.runtimeSnapshot.status.phase ?? latestTurn.phase),
+    })
   }
 
   if (latestTurn?.status === "failed") {
-    return latestTurn.errorContext?.error.message ?? latestTurn.error?.message ?? "The latest turn failed."
+    return latestTurn.errorContext?.error.message ?? latestTurn.error?.message ?? runtimeT("runtime.description.latestTurnFailed")
   }
 
   if (input.runtimeSnapshot?.diagnostics.blockedOnApproval) {
-    return "The latest turn is blocked on a tool approval request."
+    return runtimeT("runtime.description.blockedOnApproval")
   }
 
   if (input.runtimeState.updatedAt) {
-    return `Last synced at ${formatTime(input.runtimeState.updatedAt)}.`
+    return runtimeT("runtime.description.lastSyncedAt", { time: formatTime(input.runtimeState.updatedAt) })
   }
 
-  return "Inspect the current runtime state, recent tool calls, and recent execution events."
+  return runtimeT("runtime.description.inspect")
 }

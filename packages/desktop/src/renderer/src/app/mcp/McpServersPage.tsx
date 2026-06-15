@@ -7,6 +7,7 @@ import {
   PlusIcon,
   SearchIcon,
 } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
 import { ShellTopMenu } from "../shared-ui"
 import type {
   InstalledPlugin,
@@ -490,6 +491,7 @@ export function McpServersSidebarView({
   onSearchQueryChange,
   onStartNewMcpServer,
 }: McpServersSidebarViewProps) {
+  const { t } = useI18n()
   const [localMcpServerSearchQuery, setLocalMcpServerSearchQuery] = useState("")
   const hasExternalSearch = searchQuery !== undefined
   const effectiveSearchQuery = searchQuery ?? localMcpServerSearchQuery
@@ -573,9 +575,9 @@ export function McpServersSidebarView({
             )
           })
         ) : mcpServers.length > 0 ? (
-          <p className="skills-tree-empty">No MCP servers match this search.</p>
+          <p className="skills-tree-empty">{t("mcp.noMatchTitle")}.</p>
         ) : (
-          <p className="skills-tree-empty">No global MCP servers configured yet.</p>
+          <p className="skills-tree-empty">{t("mcp.noServersTitle")}.</p>
         )}
 
         <div className="global-skills-new-menu-shell mcp-servers-new-menu-shell">
@@ -620,6 +622,7 @@ export function McpServersPage({
   onSearchQueryChange,
   onStartNewMcpServer,
 }: McpServersPageProps) {
+  const { t } = useI18n()
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [importConfigJson, setImportConfigJson] = useState("")
   const activeMcpServer = activeMcpServerID ? mcpServers.find((server) => server.id === activeMcpServerID) ?? null : null
@@ -979,7 +982,7 @@ export function McpServersPage({
                         type="button"
                       >
                         <DownloadIcon />
-                        Import Json
+                        {t("mcp.importJson")}
                       </button>
                       {activeMcpServer ? (
                         <button
@@ -988,7 +991,7 @@ export function McpServersPage({
                           onClick={() => void onDeleteMcpServer(activeMcpServer.id)}
                           type="button"
                         >
-                          {deletingMcpServerID === activeMcpServer.id ? "Removing..." : "Remove"}
+                          {deletingMcpServerID === activeMcpServer.id ? t("app.removing") : t("plugins.remove")}
                         </button>
                       ) : null}
                       <button
@@ -997,7 +1000,7 @@ export function McpServersPage({
                         onClick={() => void onSaveMcpServer()}
                         type="button"
                       >
-                        {savingMcpServerID === (activeMcpServerID ?? mcpServerDraft.id.trim()) ? "Saving..." : "Save"}
+                        {savingMcpServerID === (activeMcpServerID ?? mcpServerDraft.id.trim()) ? t("app.saving") : t("app.save")}
                       </button>
                     </div>
                   </div>
@@ -1018,7 +1021,7 @@ export function McpServersPage({
           >
             <div className="mcp-config-import-header">
               <div>
-                <span className="label">Import</span>
+                <span className="label">{t("mcp.importJson")}</span>
                 <h3 id="mcp-config-import-title">Install from MCP JSON</h3>
                 <p className="settings-page-copy">
                   Paste a Cursor, Claude Desktop, or Claude Code MCP JSON configuration.
@@ -1076,7 +1079,7 @@ export function McpServersPage({
                 disabled={isImportingMcpConfigJson}
                 onClick={() => setIsImportDialogOpen(false)}
               >
-                Cancel
+                {t("app.cancel")}
               </button>
               <button
                 className="primary-button"
@@ -1084,7 +1087,7 @@ export function McpServersPage({
                 disabled={!canImportConfigJson}
                 onClick={() => void handleImportConfigJson()}
               >
-                {isImportingMcpConfigJson ? "Importing..." : "Import"}
+                {isImportingMcpConfigJson ? t("app.importing") : t("mcp.importJson")}
               </button>
             </div>
           </section>

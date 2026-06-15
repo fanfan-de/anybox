@@ -21,6 +21,7 @@ import {
   PlusIcon,
   SearchIcon,
 } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
 import type {
   WorkspaceDirectoryEntry,
   WorkspaceFileLineRange,
@@ -420,6 +421,7 @@ export function WorkspaceFilesPanel({
   onSelectFile,
   onTreeInvalidate,
 }: WorkspaceFilesPanelProps) {
+  const { t } = useI18n()
   const [dragSelection, setDragSelection] = useState<WorkspaceFileLineRange | null>(null)
   const [markdownViewMode, setMarkdownViewMode] = useState<"preview" | "source">("preview")
   const [imageViewMode, setImageViewMode] = useState<"fit" | "actual">("fit")
@@ -837,7 +839,7 @@ export function WorkspaceFilesPanel({
                   <button
                     type="button"
                     className="workspace-files-line-comment-button"
-                    aria-label={`Add comment on line ${String(lineNumber)}`}
+                    aria-label={t("files.addCommentOnLine", { line: lineNumber })}
                     onMouseDown={(event) => event.stopPropagation()}
                     onClick={() => onPendingCommentStart(lineNumber)}
                   >
@@ -859,7 +861,7 @@ export function WorkspaceFilesPanel({
                       <span>{commentTargetLabel}</span>
                     </div>
                     <textarea
-                      aria-label={`File comment on ${lineLabel.toLowerCase()}`}
+                      aria-label={t("files.fileCommentOn", { label: lineLabel.toLowerCase() })}
                       rows={3}
                       placeholder="请求更改"
                       value={state.pendingComment?.text ?? ""}

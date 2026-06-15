@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, protocol, session } from "electron"
+import { app, Menu, protocol, session, type BrowserWindow } from "electron"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { registerIpcHandlers } from "./ipc"
@@ -11,6 +11,7 @@ import { createApplicationMenus, type ApplicationMenuOptions } from "./menu"
 import { ensureMobileBridgeServerRunning, stopMobileBridgeServer } from "./mobile-bridge-server"
 import { stopRendererHttpServer } from "./renderer-http-server"
 import { safeError } from "./safe-console"
+import { DesktopTrayController } from "./tray"
 import { checkForAppUpdates, initializeAutoUpdater } from "./updater"
 import {
   createWindow,
@@ -26,6 +27,10 @@ const PREVIEW_WEBVIEW_PARTITION = "persist:preview"
 
 registerLocalImageProtocolScheme(protocol)
 registerLocalPreviewProtocolScheme(protocol)
+app.setAppUserModelId("com.anybox.app")
+
+let isQuitting = false
+let trayController: DesktopTrayController | null = null
 
 void app.whenReady().then(async () => {
   installDockIcon(mainDir)
@@ -59,12 +64,49 @@ void app.whenReady().then(async () => {
     configureWindow: installNativeMacWindowControls,
     createPopoutWindowOptions: () => resolvePopoutWindowOptions(mainDir),
   })
+  let mainWindow: BrowserWindow | null = null
+  const createMainWindow = async () => {
+    const win = await createWindow(mainDir, {
+      closeToTray: {
+        onCloseToTray: (window) => {
+          trayController?.hideMainWindow(window)
+        },
+        shouldCloseToTray: () => !isQuitting && trayController?.isInstalled() === true,
+      },
+      workbenchWindowManager,
+    })
+    mainWindow = win
+    win.once("closed", () => {
+      if (mainWindow === win) {
+        mainWindow = null
+      }
+      trayController?.updateMenu()
+    })
+    return win
+  }
+  const nextTrayController = new DesktopTrayController({
+    createMainWindow,
+    getMainWindow: () => mainWindow,
+    mainDir,
+    onCheckForUpdates: menuOptions.onCheckForUpdates,
+    onQuit: () => {
+      isQuitting = true
+      app.quit()
+    },
+  })
+  try {
+    nextTrayController.install(localeSnapshot?.document.locale ?? "zh-CN")
+    trayController = nextTrayController
+  } catch (error) {
+    safeError("[desktop] failed to install tray", error)
+  }
   registerIpcHandlers(menus, {
     onLocaleChanged: (locale) => {
       const nextMenus = createApplicationMenus(locale, menuOptions)
       menus.applicationMenu = nextMenus.applicationMenu
       menus.popupMenus = nextMenus.popupMenus
       Menu.setApplicationMenu(menus.applicationMenu)
+      trayController?.setLocale(locale)
     },
     workbenchWindowManager,
   })
@@ -73,7 +115,7 @@ void app.whenReady().then(async () => {
   registerLocalPreviewProtocolHandler(session.fromPartition(PREVIEW_WEBVIEW_PARTITION).protocol)
 
   try {
-    await createWindow(mainDir, { workbenchWindowManager })
+    await createMainWindow()
   } catch (error) {
     safeError("[desktop] failed to create window", error)
   }
@@ -83,20 +125,21 @@ void app.whenReady().then(async () => {
   }, 3000)
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      void createWindow(mainDir, { workbenchWindowManager }).catch((error) => {
-        safeError("[desktop] failed to create window", error)
-      })
-    }
+    void trayController?.showMainWindow().catch((error) => {
+      safeError("[desktop] failed to show main window", error)
+    })
   })
 })
 
 app.on("before-quit", () => {
+  isQuitting = true
+  trayController?.destroy()
   void stopManagedAgent()
   void stopMobileBridgeServer()
   void stopRendererHttpServer()
 })
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit()
+  if (isQuitting) return
+  if (process.platform !== "darwin" && !trayController?.isInstalled()) app.quit()
 })

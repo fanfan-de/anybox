@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { CommentAddIcon } from "../../icons"
+import { useI18n } from "../../i18n/I18nProvider"
 import type {
   PreviewInteractionCommitInput,
   PreviewInteractionPluginID,
@@ -183,6 +184,7 @@ export function PreviewInteractionHost({
   onCommitInteraction,
 }: PreviewInteractionHostProps) {
   const overlayRef = useRef<HTMLDivElement | null>(null)
+  const { t } = useI18n()
   const hoverRequestIDRef = useRef(0)
   const activePlugin = useActivePlugin(plugins, activeInteractionID)
   const [hoverTarget, setHoverTarget] = useState<PreviewInteractionHoverTarget | null>(null)
@@ -393,8 +395,8 @@ export function PreviewInteractionHost({
             </div>
             <label className="preview-comment-label">
               <textarea
-                aria-label={`${activePlugin.label} text`}
-                placeholder="Add comment..."
+                aria-label={t("preview.commentText", { label: activePlugin.label })}
+                placeholder={t("preview.commentPlaceholder")}
                 rows={2}
                 value={pendingText}
                 onChange={(event) => setPendingText(event.target.value)}
@@ -402,10 +404,10 @@ export function PreviewInteractionHost({
             </label>
             <div className="right-sidebar-toolbar preview-floating-comment-actions">
               <button type="button" className="secondary-button" disabled={!pendingText.trim() || isSaving} onClick={() => void handlePendingSave()}>
-                {isSaving ? "Saving" : "Save"}
+                {isSaving ? t("app.saving") : t("app.save")}
               </button>
               <button type="button" className="secondary-button" onClick={handlePendingCancel}>
-                Cancel
+                {t("app.cancel")}
               </button>
             </div>
           </div>
@@ -413,7 +415,7 @@ export function PreviewInteractionHost({
       ) : null}
 
       {frameKind !== "webview" && visibleCommentMarkerRecords.length > 0 ? (
-        <div className="preview-markers-layer" aria-label="Saved preview comments">
+        <div className="preview-markers-layer" aria-label={t("preview.savedComments")}>
           {visibleCommentMarkerRecords.map((record, index) => {
             const payload = record.payload as WebCommentInteractionPayload
             const markerNumber = index + 1
@@ -422,7 +424,7 @@ export function PreviewInteractionHost({
                 key={record.id}
                 className="preview-comment-marker"
                 style={getCommentMarkerStyle(payload)}
-                aria-label={`Comment ${markerNumber}: ${payload.text}`}
+                aria-label={t("preview.commentMarker", { number: markerNumber, text: payload.text })}
                 title={payload.text}
               >
                 {markerNumber}

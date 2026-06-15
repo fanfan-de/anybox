@@ -25,6 +25,7 @@ import {
   DESKTOP_AUTOMATION_EVENT_CHANNEL,
 } from "../shared/desktop-ipc-contract"
 import { getAgentConfig, readAgentSSEStream, requestAgentJSON, resolveAgentURL } from "./agent-client"
+import { AgentCompletionNotificationManager } from "./agent-completion-notification"
 import { readAppearanceConfigSnapshot, writeAppearanceConfigSnapshot } from "./appearance-config"
 import { ComputerUseOverlayManager } from "./computer-use-overlay"
 import { filterAvailableExternalEditorsForTarget, listAvailableExternalEditors, openInExternalEditor } from "./external-editors"
@@ -2440,6 +2441,12 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     appName: "Anybox",
     onCancel: cancelAgentSessionFromComputerUseOverlay,
   })
+  const agentCompletionNotifications = new AgentCompletionNotificationManager({
+    resolveSessionTitle: async (sessionID) => {
+      const result = await requestAgentJSON<AgentSessionInfo>(`/api/sessions/${encodeURIComponent(sessionID)}`)
+      return result.data.title
+    },
+  })
 
   function createSessionStreamSubscription(
     target: Electron.WebContents,
@@ -2526,6 +2533,12 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
           computerUseOverlay.handleSessionStreamEvent({
             backendSessionID: sessionID,
             data: item.data,
+            event: item.event,
+            target,
+          })
+          void agentCompletionNotifications.handleSessionStreamEvent({
+            data: item.data,
+            id: item.id,
             event: item.event,
             target,
           })
@@ -5252,6 +5265,13 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
           backendSessionID,
           clientTurnID,
           data: item.data,
+          event: item.event,
+          target,
+        })
+        void agentCompletionNotifications.handleSessionStreamEvent({
+          data: item.data,
+          dedupKey: clientTurnID,
+          id: item.id,
           event: item.event,
           target,
         })

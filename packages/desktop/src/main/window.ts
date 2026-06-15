@@ -6,6 +6,11 @@ import { safeError, safeWarn } from "./safe-console"
 import { clearManualMaximize, sendWindowState } from "./window-state"
 import type { WorkbenchWindowManager } from "./workbench-window-manager"
 
+export interface CloseToTrayOptions {
+  onCloseToTray: (win: BrowserWindow) => void
+  shouldCloseToTray: () => boolean
+}
+
 export function resolvePreloadPath(mainDir: string) {
   const rootDir = app.getAppPath()
   const candidatePaths = [
@@ -167,7 +172,18 @@ function installWindowDiagnostics(win: BrowserWindow, input: { label: string; ur
   })
 }
 
-export async function createWindow(mainDir: string, options: { workbenchWindowManager?: WorkbenchWindowManager } = {}) {
+function installCloseToTray(win: BrowserWindow, options?: CloseToTrayOptions) {
+  if (!options) return
+
+  win.on("close", (event) => {
+    if (!options.shouldCloseToTray()) return
+
+    event.preventDefault()
+    options.onCloseToTray(win)
+  })
+}
+
+export async function createWindow(mainDir: string, options: { closeToTray?: CloseToTrayOptions; workbenchWindowManager?: WorkbenchWindowManager } = {}) {
   const rendererEntryUrl = await resolveRendererEntryUrl(mainDir)
   const win = new BrowserWindow({
     width: 1440,
@@ -189,6 +205,7 @@ export async function createWindow(mainDir: string, options: { workbenchWindowMa
   })
   installNativeMacWindowControls(win)
   installWindowDiagnostics(win, { label: "main", url: rendererEntryUrl })
+  installCloseToTray(win, options.closeToTray)
   options.workbenchWindowManager?.registerMainWindow(win)
 
   win.once("ready-to-show", () => {

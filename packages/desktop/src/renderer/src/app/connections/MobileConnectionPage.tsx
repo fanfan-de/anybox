@@ -1,24 +1,30 @@
 import { useEffect, useMemo, useState } from "react"
 import QRCode from "qrcode"
 import type { DesktopMobileBridgeStatus, DesktopMobileDeviceSummary } from "../../../../shared/desktop-ipc-contract"
+import { useI18n } from "../i18n/I18nProvider"
+import type { TranslationKey } from "../i18n/translations"
 import { CopyIcon, ResetIcon, SmartphoneIcon } from "../icons"
 import { writeTextToClipboard } from "../shared-ui"
 
-function formatStartedAt(value: number | null) {
-  if (!value) return "Not running"
-  return new Date(value).toLocaleString()
+type MobileTranslate = (key: TranslationKey, params?: Record<string, string | number>) => string
+
+function formatStartedAt(value: number | null, locale: string, t: MobileTranslate) {
+  if (!value) return t("connections.mobile.notRunning")
+  return new Date(value).toLocaleString(locale)
 }
 
-function formatDeviceTime(value: number) {
-  return new Date(value).toLocaleString()
+function formatDeviceTime(value: number, locale: string) {
+  return new Date(value).toLocaleString(locale)
 }
 
-function formatPairingExpiry(expiresAt: number | null, now: number) {
-  if (!expiresAt) return "Unavailable"
+function formatPairingExpiry(expiresAt: number | null, now: number, t: MobileTranslate) {
+  if (!expiresAt) return t("connections.mobile.unavailable")
   const remaining = Math.max(0, expiresAt - now)
   const minutes = Math.floor(remaining / 60_000)
   const seconds = Math.floor((remaining % 60_000) / 1000)
-  return remaining > 0 ? `Expires in ${minutes}:${String(seconds).padStart(2, "0")}` : "Expired"
+  return remaining > 0
+    ? t("connections.mobile.expiresIn", { time: `${minutes}:${String(seconds).padStart(2, "0")}` })
+    : t("connections.mobile.expired")
 }
 
 function isLoopbackBridgeHost(host: string) {
@@ -86,29 +92,30 @@ function getActiveDeviceCount(devices: DesktopMobileDeviceSummary[] | undefined)
   return (devices ?? []).filter((device) => !device.revokedAt).length
 }
 
-function formatCapabilities(capabilities: string[]) {
-  return capabilities.length ? capabilities.join(", ") : "No capabilities recorded"
+function formatCapabilities(capabilities: string[], t: MobileTranslate) {
+  return capabilities.length ? capabilities.join(", ") : t("connections.mobile.noCapabilities")
 }
 
-function formatCloudRelayDetail(status: DesktopMobileBridgeStatus | null) {
+function formatCloudRelayDetail(status: DesktopMobileBridgeStatus | null, t: MobileTranslate) {
   const cloudRelay = status?.cloudRelay
-  if (!cloudRelay?.enabled) return cloudRelay?.lastError ?? "Not configured"
-  const baseUrl = cloudRelay.baseUrl ?? "Relay URL unavailable"
+  if (!cloudRelay?.enabled) return cloudRelay?.lastError ?? t("connections.mobile.notConfigured")
+  const baseUrl = cloudRelay.baseUrl ?? t("connections.mobile.relayUrlUnavailable")
   const account = cloudRelay.account ?? { state: "unknown" as const }
   const accountLabel =
     account.state === "connected"
       ? account.email
-        ? `Account discovery: ${account.email}`
-        : "Account discovery enabled"
+        ? t("connections.mobile.accountDiscovery", { email: account.email })
+        : t("connections.mobile.accountDiscoveryEnabled")
       : account.state === "not_connected"
-        ? "Sign in to Anybox Provider for no-scan discovery"
+        ? t("connections.mobile.signInForDiscovery")
         : account.state === "error"
-          ? account.lastError ?? "Account discovery unavailable"
-          : "Account discovery unknown"
+          ? account.lastError ?? t("connections.mobile.accountDiscoveryUnavailable")
+          : t("connections.mobile.accountDiscoveryUnknown")
   return `${baseUrl} - ${accountLabel}`
 }
 
 export function MobileConnectionPage() {
+  const { locale, t } = useI18n()
   const [status, setStatus] = useState<DesktopMobileBridgeStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
@@ -122,7 +129,7 @@ export function MobileConnectionPage() {
   async function refreshStatus() {
     try {
       if (!window.desktop?.getMobileBridgeStatus) {
-        throw new Error("Desktop mobile bridge is unavailable.")
+        throw new Error(t("connections.mobile.bridgeUnavailable"))
       }
       setError(null)
       setStatus(await window.desktop.getMobileBridgeStatus())
@@ -156,7 +163,11 @@ export function MobileConnectionPage() {
   const legacyUrls = useMemo(() => getLegacyUrls(status), [status])
   const pairingDeepLink = useMemo(() => getPrimaryPairingDeepLink(status, primaryPairingUrl, now), [now, primaryPairingUrl, status])
   const androidSmokeCommand = useMemo(() => createAndroidSmokeCommand(pairingDeepLink), [pairingDeepLink])
-  const pairingExpiryLabel = formatPairingExpiry(getCloudRelayPairingDeepLink(status, now) ? status?.cloudRelay?.pairingExpiresAt ?? null : status?.pairingExpiresAt ?? null, now)
+  const pairingExpiryLabel = formatPairingExpiry(
+    getCloudRelayPairingDeepLink(status, now) ? status?.cloudRelay?.pairingExpiresAt ?? null : status?.pairingExpiresAt ?? null,
+    now,
+    t,
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -194,7 +205,7 @@ export function MobileConnectionPage() {
     setIsRotating(true)
     try {
       if (!window.desktop?.rotateMobileBridgeToken) {
-        throw new Error("Desktop mobile bridge is unavailable.")
+        throw new Error(t("connections.mobile.bridgeUnavailable"))
       }
       setStatus(await window.desktop.rotateMobileBridgeToken())
     } catch (nextError) {
@@ -208,7 +219,7 @@ export function MobileConnectionPage() {
     setIsRefreshingPairing(true)
     try {
       if (!window.desktop?.refreshMobilePairingCode) {
-        throw new Error("Desktop mobile bridge is unavailable.")
+        throw new Error(t("connections.mobile.bridgeUnavailable"))
       }
       setError(null)
       setStatus(await window.desktop.refreshMobilePairingCode())
@@ -223,7 +234,7 @@ export function MobileConnectionPage() {
     setRevokingDeviceID(deviceID)
     try {
       if (!window.desktop?.revokeMobileDevice) {
-        throw new Error("Device management is unavailable.")
+        throw new Error(t("connections.mobile.deviceManagementUnavailable"))
       }
       setError(null)
       setStatus(await window.desktop.revokeMobileDevice({ deviceID }))
@@ -238,15 +249,15 @@ export function MobileConnectionPage() {
   const activeDeviceCount = getActiveDeviceCount(devices)
 
   return (
-    <section className="mobile-connection-page" aria-label="Mobile connection">
+    <section className="mobile-connection-page" aria-label={t("connections.mobile.title")}>
       <div className="mobile-connection-shell">
         <header className="mobile-connection-hero">
           <span className="mobile-connection-icon" aria-hidden="true">
             <SmartphoneIcon />
           </span>
           <div>
-            <h1>Mobile connection</h1>
-            <p>Pair Anybox Mobile with this desktop through the cloud relay, with local bridge fallback available.</p>
+            <h1>{t("connections.mobile.title")}</h1>
+            <p>{t("connections.mobile.description")}</p>
           </div>
         </header>
 
@@ -254,31 +265,31 @@ export function MobileConnectionPage() {
 
         <section className="mobile-connection-grid">
           <article className="mobile-connection-card">
-            <span className="settings-field-label">Bridge status</span>
-            <strong>{status?.running ? "Running" : "Stopped"}</strong>
-            <small>{formatStartedAt(status?.startedAt ?? null)}</small>
+            <span className="settings-field-label">{t("connections.mobile.bridgeStatus")}</span>
+            <strong>{status?.running ? t("connections.mobile.running") : t("connections.mobile.stopped")}</strong>
+            <small>{formatStartedAt(status?.startedAt ?? null, locale, t)}</small>
           </article>
           <article className="mobile-connection-card">
-            <span className="settings-field-label">Listening address</span>
+            <span className="settings-field-label">{t("connections.mobile.listeningAddress")}</span>
             <strong>{status?.host ?? "0.0.0.0"}</strong>
-            <small>{status?.port ? `Port ${status.port}` : "Port unavailable"}</small>
+            <small>{status?.port ? t("connections.mobile.port", { port: status.port }) : t("connections.mobile.portUnavailable")}</small>
           </article>
           <article className="mobile-connection-card">
-            <span className="settings-field-label">Paired devices</span>
+            <span className="settings-field-label">{t("connections.mobile.pairedDevices")}</span>
             <strong>{activeDeviceCount}</strong>
-            <small>{devices.length ? `${devices.length} records` : "No devices"}</small>
+            <small>{devices.length ? t("connections.mobile.records", { count: devices.length }) : t("connections.mobile.noDevices")}</small>
           </article>
           <article className="mobile-connection-card">
-            <span className="settings-field-label">Cloud relay</span>
+            <span className="settings-field-label">{t("connections.mobile.cloudRelay")}</span>
             <strong>{status?.cloudRelay?.state ?? "disabled"}</strong>
-            <small>{formatCloudRelayDetail(status)}</small>
+            <small>{formatCloudRelayDetail(status, t)}</small>
           </article>
         </section>
 
         <section className="mobile-connection-panel">
           <div className="settings-section-header">
             <div>
-              <h3>Scan to connect Anybox Mobile</h3>
+              <h3>{t("connections.mobile.scanTitle")}</h3>
               <p>{pairingExpiryLabel}</p>
             </div>
             <div className="settings-inline-actions">
@@ -289,7 +300,7 @@ export function MobileConnectionPage() {
                 onClick={() => void refreshPairingCode()}
               >
                 <ResetIcon />
-                {isRefreshingPairing ? "Refreshing" : "Refresh QR"}
+                {isRefreshingPairing ? t("connections.mobile.refreshing") : t("connections.mobile.refreshQr")}
               </button>
               <button
                 type="button"
@@ -298,7 +309,7 @@ export function MobileConnectionPage() {
                 onClick={() => void copyValue("deeplink", pairingDeepLink)}
               >
                 <CopyIcon />
-                {copied === "deeplink" ? "Copied" : "Copy deep link"}
+                {copied === "deeplink" ? t("connections.mobile.copied") : t("connections.mobile.copyDeepLink")}
               </button>
               <button
                 type="button"
@@ -307,16 +318,16 @@ export function MobileConnectionPage() {
                 onClick={() => void copyValue("smoke-command", androidSmokeCommand)}
               >
                 <CopyIcon />
-                {copied === "smoke-command" ? "Copied" : "Copy test command"}
+                {copied === "smoke-command" ? t("connections.mobile.copied") : t("connections.mobile.copyTestCommand")}
               </button>
             </div>
           </div>
 
-          <div className="mobile-connection-qr" aria-label="Mobile connection QR code">
+          <div className="mobile-connection-qr" aria-label={t("connections.mobile.qrCode")}>
             {qrDataUrl ? (
-              <img src={qrDataUrl} alt="Mobile connection QR code" />
+              <img src={qrDataUrl} alt={t("connections.mobile.qrCode")} />
             ) : (
-              <span>{pairingDeepLink || primaryPairingUrl ? "Generating" : "Unavailable"}</span>
+              <span>{pairingDeepLink || primaryPairingUrl ? t("connections.mobile.generating") : t("connections.mobile.unavailable")}</span>
             )}
           </div>
 
@@ -353,7 +364,7 @@ export function MobileConnectionPage() {
               </button>
             ) : null}
             {status && pairingUrls.length === 0 ? (
-              <div className="mobile-connection-empty">No local pairing address is available.</div>
+              <div className="mobile-connection-empty">{t("connections.mobile.noPairingAddress")}</div>
             ) : null}
           </div>
         </section>
@@ -361,7 +372,7 @@ export function MobileConnectionPage() {
         <section className="mobile-connection-panel">
           <div className="settings-section-header">
             <div>
-              <h3>Advanced token access</h3>
+              <h3>{t("connections.mobile.advancedTokenAccess")}</h3>
             </div>
             <button
               type="button"
@@ -369,7 +380,7 @@ export function MobileConnectionPage() {
               aria-expanded={isLegacyOpen}
               onClick={() => setIsLegacyOpen((current) => !current)}
             >
-              {isLegacyOpen ? "Hide advanced" : "Show advanced"}
+              {isLegacyOpen ? t("connections.mobile.hideAdvanced") : t("connections.mobile.showAdvanced")}
             </button>
           </div>
 
@@ -383,7 +394,7 @@ export function MobileConnectionPage() {
                   onClick={() => void copyValue("legacy-url", primaryUrl)}
                 >
                   <CopyIcon />
-                  {copied === "legacy-url" ? "Copied" : "Copy legacy URL"}
+                  {copied === "legacy-url" ? t("connections.mobile.copied") : t("connections.mobile.copyLegacyUrl")}
                 </button>
                 <button
                   type="button"
@@ -392,7 +403,7 @@ export function MobileConnectionPage() {
                   onClick={() => void copyValue("token", status?.token ?? "")}
                 >
                   <CopyIcon />
-                  {copied === "token" ? "Copied" : "Copy token"}
+                  {copied === "token" ? t("connections.mobile.copied") : t("connections.mobile.copyToken")}
                 </button>
                 <button
                   type="button"
@@ -401,7 +412,7 @@ export function MobileConnectionPage() {
                   onClick={() => void rotateToken()}
                 >
                   <ResetIcon />
-                  {isRotating ? "Refreshing" : "Rotate token"}
+                  {isRotating ? t("connections.mobile.refreshing") : t("connections.mobile.rotateToken")}
                 </button>
               </div>
               <div className="mobile-connection-url-list">
@@ -425,10 +436,10 @@ export function MobileConnectionPage() {
         <section className="mobile-connection-panel">
           <div className="settings-section-header">
             <div>
-              <h3>Paired devices</h3>
+              <h3>{t("connections.mobile.pairedDevices")}</h3>
             </div>
             <button type="button" className="secondary-button" onClick={() => void refreshStatus()}>
-              Refresh
+              {t("app.refresh")}
             </button>
           </div>
 
@@ -440,22 +451,26 @@ export function MobileConnectionPage() {
                   <div key={device.id} className={revoked ? "mobile-connection-device-row is-revoked" : "mobile-connection-device-row"}>
                     <div className="mobile-connection-device-main">
                       <strong>{device.name}</strong>
-                      <span>{formatCapabilities(device.capabilities)}</span>
+                      <span>{formatCapabilities(device.capabilities, t)}</span>
                     </div>
-                    <span>{revoked ? "Revoked" : `Last seen ${formatDeviceTime(device.lastSeenAt)}`}</span>
+                    <span>
+                      {revoked
+                        ? t("connections.mobile.revoked")
+                        : t("connections.mobile.lastSeen", { time: formatDeviceTime(device.lastSeenAt, locale) })}
+                    </span>
                     <button
                       type="button"
                       className="secondary-button"
                       disabled={revoked || revokingDeviceID === device.id}
                       onClick={() => void revokeDevice(device.id)}
                     >
-                      {revokingDeviceID === device.id ? "Revoking" : "Revoke"}
+                      {revokingDeviceID === device.id ? t("connections.mobile.revoking") : t("connections.mobile.revoke")}
                     </button>
                   </div>
                 )
               })
             ) : (
-              <div className="mobile-connection-empty">Paired Android devices will appear here.</div>
+              <div className="mobile-connection-empty">{t("connections.mobile.emptyDevices")}</div>
             )}
           </div>
         </section>

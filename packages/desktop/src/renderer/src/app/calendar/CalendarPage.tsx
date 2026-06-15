@@ -7,6 +7,8 @@ import {
   PlusIcon,
   SearchIcon,
 } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
+import type { TranslationKey } from "../i18n/translations"
 import { ShellTopMenu, joinClassNames } from "../shared-ui"
 import { useCalendarData } from "./use-calendar-data"
 import type {
@@ -53,6 +55,7 @@ interface CalendarItemContextMenuState extends CalendarContextMenuPosition {
 }
 
 type QuickAddMode = "todo" | "event"
+type CalendarTranslate = (key: TranslationKey, params?: Record<string, string | number>) => string
 
 interface TodoSummary {
   unscheduled: number
@@ -158,8 +161,8 @@ function formatWeekRangeLabel(weekStart: Date) {
   return `${startMonth} ${weekStart.getDate()} - ${endMonth} ${weekEnd.getDate()}, ${weekStart.getFullYear()}`
 }
 
-function formatScheduleRangeLabel(anchorDate: Date) {
-  return `${formatDayLabel(anchorDate)} + 14 days`
+function formatScheduleRangeLabel(anchorDate: Date, t: CalendarTranslate) {
+  return t("calendar.scheduleRange", { date: formatDayLabel(anchorDate) })
 }
 
 function formatDayLabel(date: Date) {
@@ -176,9 +179,9 @@ function formatTime(date: Date) {
   return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(date)
 }
 
-function formatDateTimeRange(item: CalendarItem) {
-  if (!item.startAt) return "Not scheduled"
-  if (item.allDay) return `${formatDayLabel(item.startAt)} - All day`
+function formatDateTimeRange(item: CalendarItem, t: CalendarTranslate) {
+  if (!item.startAt) return t("calendar.notScheduled")
+  if (item.allDay) return t("calendar.dateTimeAllDay", { date: formatDayLabel(item.startAt) })
   const endLabel = item.endAt ? `-${formatTime(item.endAt)}` : ""
   return `${formatDayLabel(item.startAt)}, ${formatTime(item.startAt)}${endLabel}`
 }
@@ -422,12 +425,13 @@ function getCalendarContextMenuPosition(
   }
 }
 
-function formatQuickAddContext(context: QuickAddContext) {
-  if (context.allDay) return `${formatDayLabel(context.startAt)} - All day`
+function formatQuickAddContext(context: QuickAddContext, t: CalendarTranslate) {
+  if (context.allDay) return t("calendar.dateTimeAllDay", { date: formatDayLabel(context.startAt) })
   return `${formatDayLabel(context.startAt)}, ${formatTime(context.startAt)}-${formatTime(context.endAt)}`
 }
 
 export function CalendarPage({ activeProjectID = null, projects = [], windowControls }: CalendarPageProps) {
+  const { t } = useI18n()
   const [anchorDate, setAnchorDate] = useState(() => startOfDay(new Date()))
   const [viewMode, setViewMode] = useState<CalendarViewMode>("week")
   const [localItems, setLocalItems] = useState<CalendarItem[]>([])
@@ -563,7 +567,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     viewMode === "day" ? formatDayLabel(anchorDate) :
     viewMode === "week" ? formatWeekRangeLabel(weekStart) :
     viewMode === "month" ? formatMonthLabel(anchorDate) :
-    formatScheduleRangeLabel(anchorDate)
+    formatScheduleRangeLabel(anchorDate, t)
   )
 
   function toCalendarEventUpdate(update: Partial<CalendarItem>): UpdateCalendarEventInput {
@@ -1003,7 +1007,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
               onClick={() => openQuickAddDialog("todo", calendarContextMenu.context)}
             >
               <span>New Todo</span>
-              <small>{formatQuickAddContext(calendarContextMenu.context)}</small>
+              <small>{formatQuickAddContext(calendarContextMenu.context, t)}</small>
             </button>
           </div>
         </div>
@@ -1073,7 +1077,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
               <div className="calendar-quick-add-summary">
                 <span>{quickAddMode === "todo" ? "Todo" : "Event"}</span>
                 <strong>
-                  {quickAddContext ? formatQuickAddContext(quickAddContext) : (
+                  {quickAddContext ? formatQuickAddContext(quickAddContext, t) : (
                     quickAddMode === "todo" ? "Unscheduled Todo" : "New calendar event"
                   )}
                 </strong>
@@ -1208,6 +1212,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
                 days={[anchorDate]}
                 items={visibleItems}
                 sourceById={sourceById}
+                t={t}
                 onAllDayDrop={handleAllDayDrop}
                 onCellDrop={handleCellDrop}
                 onCreateEvent={handleSlotContextMenu}
@@ -1220,6 +1225,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
                 days={Array.from({ length: 7 }, (_item, index) => addDays(weekStart, index))}
                 items={visibleItems}
                 sourceById={sourceById}
+                t={t}
                 onAllDayDrop={handleAllDayDrop}
                 onCellDrop={handleCellDrop}
                 onCreateEvent={handleSlotContextMenu}
@@ -1243,6 +1249,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
                 anchorDate={anchorDate}
                 items={visibleItems}
                 sourceById={sourceById}
+                t={t}
                 onItemContextMenu={handleItemContextMenu}
                 onItemDragStart={handleItemDragStart}
                 onItemSelect={setSelectedItemId}
@@ -1256,6 +1263,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
           projects={projects}
           source={selectedItem ? sourceById.get(selectedItem.sourceId) : undefined}
           sources={sources}
+          t={t}
           onAcceptSuggestion={acceptSuggestion}
           onDismissSuggestion={dismissSuggestion}
           onDelete={deleteItem}
@@ -1402,6 +1410,7 @@ interface TimeGridProps {
   days: Date[]
   items: CalendarItem[]
   sourceById: Map<string, CalendarSource>
+  t: CalendarTranslate
   onAllDayDrop: (event: DragEvent<HTMLElement>, day: Date) => void
   onCellDrop: (event: DragEvent<HTMLDivElement>, day: Date, hour: number) => void
   onCreateEvent: (event: MouseEvent<HTMLElement>, context: QuickAddContext) => void
@@ -1414,6 +1423,7 @@ function TimeGrid({
   days,
   items,
   sourceById,
+  t,
   onAllDayDrop,
   onCellDrop,
   onCreateEvent,
@@ -1436,7 +1446,7 @@ function TimeGrid({
           </div>
         ))}
 
-        <div className="calendar-time-label is-all-day">All day</div>
+        <div className="calendar-time-label is-all-day">{t("calendar.allDay")}</div>
         {days.map((day) => (
           <div
             key={`all-day-${getDateKey(day)}`}
@@ -1464,6 +1474,7 @@ function TimeGrid({
                   key={item.id}
                   item={item}
                   source={sourceById.get(item.sourceId)}
+                  t={t}
                   onClick={() => onItemSelect(item.id)}
                   onContextMenu={(event) => onItemContextMenu(event, item)}
                   onDragStart={(event) => onItemDragStart(event, item)}
@@ -1485,7 +1496,7 @@ function TimeGrid({
                   key={`${getDateKey(day)}-${hour}`}
                   role="gridcell"
                   className="calendar-time-cell"
-                  aria-label={`Schedule at ${formatDayLabel(day)} ${hour}:00`}
+                  aria-label={t("calendar.scheduleAt", { date: formatDayLabel(day), hour })}
                   data-calendar-date={getDateKey(day)}
                   data-calendar-hour={hour}
                   onDragOver={(event) => {
@@ -1507,6 +1518,7 @@ function TimeGrid({
                       key={item.id}
                       item={item}
                       source={sourceById.get(item.sourceId)}
+                      t={t}
                       onClick={() => onItemSelect(item.id)}
                       onContextMenu={(event) => onItemContextMenu(event, item)}
                       onDragStart={(event) => onItemDragStart(event, item)}
@@ -1525,12 +1537,13 @@ function TimeGrid({
 interface CalendarEventChipProps {
   item: CalendarItem
   source?: CalendarSource
+  t: CalendarTranslate
   onClick: () => void
   onContextMenu: (event: MouseEvent<HTMLElement>) => void
   onDragStart: (event: DragEvent<HTMLElement>) => void
 }
 
-function CalendarEventChip({ item, source, onClick, onContextMenu, onDragStart }: CalendarEventChipProps) {
+function CalendarEventChip({ item, source, t, onClick, onContextMenu, onDragStart }: CalendarEventChipProps) {
   const isMovable = item.entityType !== "agent_suggestion"
   return (
     <span
@@ -1555,7 +1568,7 @@ function CalendarEventChip({ item, source, onClick, onContextMenu, onDragStart }
       }}
     >
       <span>{item.title}</span>
-      <small>{item.isSuggestion ? "Suggested" : item.startAt ? formatTime(item.startAt) : getItemTypeLabel(item)}</small>
+      <small>{item.isSuggestion ? t("calendar.suggested") : item.startAt ? formatTime(item.startAt) : getItemTypeLabel(item)}</small>
     </span>
   )
 }
@@ -1644,12 +1657,13 @@ interface ScheduleListProps {
   anchorDate: Date
   items: CalendarItem[]
   sourceById: Map<string, CalendarSource>
+  t: CalendarTranslate
   onItemContextMenu: (event: MouseEvent<HTMLElement>, item: CalendarItem) => void
   onItemDragStart: (event: DragEvent<HTMLElement>, item: CalendarItem) => void
   onItemSelect: (itemId: string) => void
 }
 
-function ScheduleList({ anchorDate, items, sourceById, onItemContextMenu, onItemDragStart, onItemSelect }: ScheduleListProps) {
+function ScheduleList({ anchorDate, items, sourceById, t, onItemContextMenu, onItemDragStart, onItemSelect }: ScheduleListProps) {
   const rangeStart = startOfDay(anchorDate)
   const rangeEnd = addDays(rangeStart, 14)
   const scheduledItems = items
@@ -1679,7 +1693,7 @@ function ScheduleList({ anchorDate, items, sourceById, onItemContextMenu, onItem
                 onDragStart={(event) => onItemDragStart(event, item)}
                 onContextMenu={(event) => onItemContextMenu(event, item)}
               >
-                <span className="calendar-schedule-time">{item.allDay ? "All day" : item.startAt ? formatTime(item.startAt) : ""}</span>
+                <span className="calendar-schedule-time">{item.allDay ? t("calendar.allDay") : item.startAt ? formatTime(item.startAt) : ""}</span>
                 <span className="calendar-schedule-copy">
                   <strong>{item.title}</strong>
                   <small>
@@ -1703,6 +1717,7 @@ interface CalendarDetailPanelProps {
   projects: CalendarProjectOption[]
   source?: CalendarSource
   sources: CalendarSource[]
+  t: CalendarTranslate
   onAcceptSuggestion: (item: CalendarItem) => void
   onDelete: (itemId: string) => void
   onDismissSuggestion: (itemId: string) => void
@@ -1714,6 +1729,7 @@ function CalendarDetailPanel({
   projects,
   source,
   sources,
+  t,
   onAcceptSuggestion,
   onDelete,
   onDismissSuggestion,
@@ -1758,7 +1774,7 @@ function CalendarDetailPanel({
             }
           }}
         />
-        <p>{formatDateTimeRange(item)}</p>
+        <p>{formatDateTimeRange(item, t)}</p>
       </div>
 
       <div className="calendar-detail-form">

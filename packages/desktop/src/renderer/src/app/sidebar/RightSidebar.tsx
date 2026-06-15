@@ -11,6 +11,7 @@ import {
   SideChatIcon,
   TerminalIcon,
 } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
 import { UnifiedPreviewPanel } from "../preview/UnifiedPreviewPanel"
 import { ShellTopMenu } from "../shared-ui"
 import type { CodeHighlightTheme } from "../code-theme"
@@ -298,6 +299,7 @@ export function RightSidebar({
   renderTerminalTab,
   windowControls,
 }: RightSidebarProps) {
+  const { t } = useI18n()
   const [isLauncherVisible, setIsLauncherVisible] = useState(() => !rightSidebar.activeTabID)
   const lastActiveTabIDRef = useRef<string | null>(null)
   const activeTab = rightSidebar.tabs.find((tab) => tab.id === rightSidebar.activeTabID) ?? null
@@ -305,38 +307,38 @@ export function RightSidebar({
   const launcherCards = useMemo<LauncherCard[]>(() => [
     {
       key: "files",
-      title: "Files",
-      description: "Browse project files",
+      title: t("rightSidebar.launcher.filesTitle"),
+      description: t("rightSidebar.launcher.filesDescription"),
       icon: <FileSearchIcon />,
     },
     {
       key: "browser",
-      title: "Browser",
-      description: "Open a website",
+      title: t("rightSidebar.launcher.browserTitle"),
+      description: t("rightSidebar.launcher.browserDescription"),
       icon: <PreviewIcon />,
     },
     {
       key: "message-tree",
-      title: "Tree",
-      description: "Navigate message branches",
+      title: t("rightSidebar.launcher.messageTreeTitle"),
+      description: t("rightSidebar.launcher.messageTreeDescription"),
       disabled: !activeSession,
       icon: <SessionTreeIcon />,
     },
     {
       key: "review",
-      title: "Review",
-      description: "Inspect code changes",
+      title: t("rightSidebar.launcher.reviewTitle"),
+      description: t("rightSidebar.launcher.reviewDescription"),
       disabled: !canOpenReview,
       icon: <ChangesIcon />,
     },
     {
       key: "terminal",
-      title: "Terminal",
-      description: "Start an interactive shell",
+      title: t("rightSidebar.launcher.terminalTitle"),
+      description: t("rightSidebar.launcher.terminalDescription"),
       disabled: !canOpenTerminal,
       icon: <TerminalIcon />,
     },
-  ], [activeSession, canOpenReview, canOpenTerminal])
+  ], [activeSession, canOpenReview, canOpenTerminal, t])
 
   useEffect(() => {
     if (rightSidebar.tabs.length === 0) {
