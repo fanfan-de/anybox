@@ -2958,12 +2958,13 @@
 }
 
 .workspace-files-line-comment-button {
-  width: 22px;
-  height: 22px;
-  border: 1px solid rgba(95, 146, 194, 0.34);
-  border-radius: 999px;
-  background: #ffffff;
-  color: #226ba1;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #8ca0b2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2972,7 +2973,8 @@
 
 .workspace-files-line-comment-button:hover,
 .workspace-files-line-comment-button:focus-visible {
-  background: #edf6ff;
+  background: transparent;
+  color: #226ba1;
   outline: none;
 }
 
@@ -3358,8 +3360,7 @@
 
 .right-sidebar-filter-chip,
 .preview-mode-button,
-.right-sidebar-diff-height-toggle,
-.workspace-files-line-comment-button {
+.right-sidebar-diff-height-toggle {
   border: 1px solid var(--seg-border);
   background: var(--seg-panel-muted);
   color: var(--seg-text-2);
@@ -3373,11 +3374,23 @@
 .preview-mode-button:hover,
 .preview-mode-button:focus-visible,
 .right-sidebar-diff-height-toggle:hover,
-.right-sidebar-diff-height-toggle:focus-visible,
-.workspace-files-line-comment-button:hover,
-.workspace-files-line-comment-button:focus-visible {
+.right-sidebar-diff-height-toggle:focus-visible {
   border-color: var(--mix-seg-accent-36-seg-border-64);
   background: var(--mix-seg-accent-soft-76-seg-panel-24);
+  color: var(--seg-accent-strong);
+  box-shadow: none;
+}
+
+.workspace-files-line-comment-button {
+  border: 0;
+  background: transparent;
+  color: var(--seg-text-3);
+  box-shadow: none;
+}
+
+.workspace-files-line-comment-button:hover,
+.workspace-files-line-comment-button:focus-visible {
+  background: transparent;
   color: var(--seg-accent-strong);
   box-shadow: none;
 }

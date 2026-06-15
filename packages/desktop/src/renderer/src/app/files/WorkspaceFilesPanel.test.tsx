@@ -415,6 +415,12 @@ describe("WorkspaceFilesPanel", () => {
       /\.workspace-files-line:hover\s+\.workspace-files-line-comment-button,\s*\.workspace-files-line:focus-within\s+\.workspace-files-line-comment-button,\s*\.workspace-files-line\.is-commenting\s+\.workspace-files-line-comment-button\s*\{[^}]*opacity:\s*1;[^}]*pointer-events:\s*auto;[^}]*visibility:\s*visible;/s,
     )
     expect(styles).toMatch(
+      /\.workspace-files-line-comment-button\s*\{[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*background:\s*transparent;/s,
+    )
+    expect(styles).toMatch(
+      /\.workspace-files-line-comment-button:hover,\s*\.workspace-files-line-comment-button:focus-visible\s*\{[^}]*background:\s*transparent;[^}]*color:\s*var\(--seg-accent-strong\);/s,
+    )
+    expect(styles).toMatch(
       /\.workspace-files-code\.is-selecting-lines\s+\.workspace-files-line-comment-button\s*\{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;[^}]*visibility:\s*hidden;/s,
     )
     expect(styles).not.toContain(".workspace-files-line.is-hovered")
