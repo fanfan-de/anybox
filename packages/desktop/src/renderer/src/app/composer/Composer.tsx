@@ -993,7 +993,7 @@ export function Composer({
   onRemoveAttachment,
   onCancelSend,
   onSend,
-  placeholder = "Describe the UI, implementation task, or review target for the agent.",
+  placeholder,
   pluginOptions = EMPTY_PLUGIN_OPTIONS,
   reasoningEffortOptions,
   selectedMcpServerIDs,
@@ -1010,6 +1010,7 @@ export function Composer({
   workspaceDirectory,
 }: ComposerProps) {
   const { locale, t } = useI18n()
+  const localizedPlaceholder = placeholder ? translateLiteral(locale, placeholder) : t("composer.placeholder")
   const normalizedDraftState = useMemo(() => normalizeComposerDraftState(draftState), [draftState.lexicalJSON])
   const draftStateRef = useRef(normalizedDraftState)
   const localEditorLexicalJSONRef = useRef(normalizedDraftState.lexicalJSON)
@@ -1913,7 +1914,7 @@ export function Composer({
               />
             }
             ErrorBoundary={LexicalErrorBoundary}
-            placeholder={<div className="composer-editor-placeholder">{placeholder}</div>}
+            placeholder={<div className="composer-editor-placeholder">{localizedPlaceholder}</div>}
           />
         </div>
       </LexicalComposer>

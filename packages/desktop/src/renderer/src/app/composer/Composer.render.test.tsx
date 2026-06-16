@@ -89,7 +89,15 @@ describe("Composer", () => {
     expect(editorShell).not.toBeNull()
     expect(editorShell?.querySelector(".composer-editor-input")).not.toBeNull()
     expect(editorShell?.querySelector(".composer-editor-placeholder")).not.toBeNull()
-    expect(screen.getByText("Describe the UI, implementation task, or review target for the agent.")).toBeInTheDocument()
+    expect(screen.getByText("Ask anything")).toBeInTheDocument()
+  })
+
+  it("localizes the default placeholder through i18n", () => {
+    window.localStorage.removeItem("desktop.locale")
+
+    renderComposer({ withI18n: true })
+
+    expect(screen.getByText("随心输入")).toBeInTheDocument()
   })
 
   it("renders a custom placeholder when provided", () => {

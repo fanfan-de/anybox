@@ -59,6 +59,8 @@
 }
 
 .composer-stack.create-session-composer-stack {
+  position: relative;
+  z-index: 6;
   width: min(100%, var(--pane-content-max-width));
   padding: 0;
 }
