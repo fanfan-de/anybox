@@ -125,6 +125,15 @@ const DEFAULT_SOURCES = [
   },
 ] satisfies Array<Omit<CalendarSource, "createdAt" | "updatedAt">>
 
+function isLocalMidnight(timestamp: number) {
+  const date = new Date(timestamp)
+  return date.getHours() === 0 && date.getMinutes() === 0 && date.getSeconds() === 0 && date.getMilliseconds() === 0
+}
+
+function isAllDayScheduledRange(startAt: number | undefined, endAt: number | undefined) {
+  return startAt !== undefined && endAt !== undefined && endAt > startAt && isLocalMidnight(startAt) && isLocalMidnight(endAt)
+}
+
 function ensureCalendarTables() {
   const generation = db.getDatabaseGeneration()
   if (calendarTablesGeneration === generation && generation > 0) return
@@ -332,7 +341,7 @@ export function toTaskCalendarItem(task: PlannerTask, source?: CalendarSource): 
     description: task.description,
     startAt: task.scheduledStartAt,
     endAt: task.scheduledEndAt,
-    allDay: false,
+    allDay: isAllDayScheduledRange(task.scheduledStartAt, task.scheduledEndAt),
     color: source?.color ?? "#8a5cf6",
     estimateMinutes: task.estimateMinutes,
     status: task.status,
@@ -364,7 +373,7 @@ function toScheduledTodoCalendarItem(task: PlannerTask, source?: CalendarSource)
     description: task.description,
     startAt: task.scheduledStartAt,
     endAt: task.scheduledEndAt,
-    allDay: false,
+    allDay: isAllDayScheduledRange(task.scheduledStartAt, task.scheduledEndAt),
     color: source?.color ?? "#8a5cf6",
     estimateMinutes: task.estimateMinutes,
     status: task.status,

@@ -218,6 +218,10 @@ describe("calendar api", () => {
     const rangeStart = Date.UTC(2026, 5, 11, 0, 0, 0)
     const taskStart = Date.UTC(2026, 5, 11, 13, 0, 0)
     const taskEnd = Date.UTC(2026, 5, 11, 14, 15, 0)
+    const allDayTaskStart = new Date(2026, 5, 11, 0, 0, 0, 0).getTime()
+    const allDayTaskEndDate = new Date(allDayTaskStart)
+    allDayTaskEndDate.setDate(allDayTaskEndDate.getDate() + 1)
+    const allDayTaskEnd = allDayTaskEndDate.getTime()
     const dueAt = Date.UTC(2026, 5, 12, 0, 0, 0)
     const reminderAt = Date.UTC(2026, 5, 11, 8, 45, 0)
     const rangeEnd = Date.UTC(2026, 5, 12, 23, 59, 59)
@@ -274,7 +278,25 @@ describe("calendar api", () => {
     expect(scheduledItem?.sourceId).toBe("todos")
     expect(scheduledItem?.startAt).toBe(taskStart)
     expect(scheduledItem?.endAt).toBe(taskEnd)
+    expect(scheduledItem?.allDay).toBe(false)
     expect(scheduledItem?.title).toBe("Write Todo model tests")
+
+    const allDayScheduleResponse = await app.request(`/api/calendar/todos/${created.data!.id}/schedule`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        scheduledStartAt: allDayTaskStart,
+        scheduledEndAt: allDayTaskEnd,
+      }),
+    })
+    expect(allDayScheduleResponse.status).toBe(200)
+
+    const allDayItemsResponse = await app.request(`/api/calendar/items?startAt=${rangeStart}&endAt=${rangeEnd}`)
+    const allDayItems = await readJson<CalendarItem[]>(allDayItemsResponse)
+    const allDayScheduledItem = allDayItems.data?.find((item) => item.id === `todo:${created.data!.id}:scheduled`)
+    expect(allDayScheduledItem?.startAt).toBe(allDayTaskStart)
+    expect(allDayScheduledItem?.endAt).toBe(allDayTaskEnd)
+    expect(allDayScheduledItem?.allDay).toBe(true)
 
     const overlayPatchResponse = await app.request(`/api/calendar/todos/${created.data!.id}`, {
       method: "PATCH",

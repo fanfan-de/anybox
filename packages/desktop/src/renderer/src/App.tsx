@@ -2075,6 +2075,20 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     ),
     [handleWindowAction, isMacOS, isWindowMaximized, windowControlsRef],
   )
+  const openCalendarProjects = useMemo(() => {
+    const projectsByID = new Map<string, CalendarProjectOption>()
+    for (const workspace of workspaces) {
+      const project = mapWorkspaceGroupToCalendarProject(workspace)
+      const id = project.id.trim()
+      if (!id || projectsByID.has(id)) continue
+      projectsByID.set(id, {
+        ...project,
+        id,
+        name: project.name.trim() || getCalendarProjectFallbackName(project.directory, id),
+      })
+    }
+    return Array.from(projectsByID.values()).sort((left, right) => left.name.localeCompare(right.name))
+  }, [workspaces])
   const calendarProjects = useMemo(() => {
     const projectsByID = new Map<string, CalendarProjectOption>()
     for (const project of loadedCalendarProjects) {
@@ -2086,17 +2100,13 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
         name: project.name.trim() || getCalendarProjectFallbackName(project.directory, id),
       })
     }
-    for (const workspace of workspaces) {
-      const project = mapWorkspaceGroupToCalendarProject(workspace)
+    for (const project of openCalendarProjects) {
       const id = project.id.trim()
       if (!id || projectsByID.has(id)) continue
       projectsByID.set(id, { ...project, id })
     }
     return Array.from(projectsByID.values()).sort((left, right) => left.name.localeCompare(right.name))
-  }, [loadedCalendarProjects, workspaces])
-  const activeCalendarProjectID = selectedWorkspace?.project.id ?? (
-    activeSession ? findSession(workspaces, activeSession.id).workspace?.project.id ?? null : null
-  )
+  }, [loadedCalendarProjects, openCalendarProjects])
   const workbenchWindowControls = useMemo(
     () => (
       isMacOS
@@ -2365,8 +2375,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
           ) : isCalendarView ? (
             <Suspense fallback={null}>
               <CalendarPage
-                activeProjectID={activeCalendarProjectID}
                 projects={calendarProjects}
+                quickAddProjects={openCalendarProjects}
                 windowControls={windowControls}
               />
             </Suspense>

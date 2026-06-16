@@ -55,14 +55,14 @@ const testProjects = [
 ]
 
 function renderCalendarPage() {
-  return render(<CalendarPage activeProjectID="prj_anybox_desktop" projects={testProjects} />)
+  return render(<CalendarPage projects={testProjects} quickAddProjects={[testProjects[0]!]} />)
 }
 
 function renderLocalizedCalendarPage(locale: string) {
   window.localStorage.setItem("desktop.locale", locale)
   return render(
     <I18nProvider>
-      <CalendarPage activeProjectID="prj_anybox_desktop" projects={testProjects} />
+      <CalendarPage projects={testProjects} quickAddProjects={[testProjects[0]!]} />
     </I18nProvider>,
   )
 }
@@ -626,6 +626,31 @@ describe("CalendarPage", () => {
     expect(createCalendarEventMock).not.toHaveBeenCalled()
   })
 
+  it("limits quick add project choices to open projects with no project selected by default", async () => {
+    render(<CalendarPage projects={testProjects} quickAddProjects={[testProjects[0]!]} />)
+
+    await screen.findByText("Connect Todo to optional time")
+    const sidebar = screen.getByRole("complementary", { name: "Calendar sidebar" })
+    fireEvent.click(within(sidebar).getByRole("button", { name: "New Todo" }))
+
+    const dialog = screen.getByRole("dialog", { name: "New Todo" })
+    const projectSelect = within(dialog).getByRole("combobox", { name: "Project" })
+    expect(projectSelect).toHaveValue("")
+    expect(within(projectSelect).getByRole("option", { name: "No project" })).toBeInTheDocument()
+    expect(within(projectSelect).getByRole("option", { name: "Anybox Desktop" })).toBeInTheDocument()
+    expect(within(projectSelect).queryByRole("option", { name: "Anybox Mobile" })).not.toBeInTheDocument()
+
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Todo title" }), {
+      target: { value: "No project Todo" },
+    })
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create todo" }))
+
+    await waitFor(() => expect(createCalendarTaskMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: "No project Todo",
+      workspaceId: undefined,
+    })))
+  })
+
   it("keeps the quick add dialog open and reports Todo creation errors", async () => {
     renderCalendarPage()
 
@@ -731,6 +756,30 @@ describe("CalendarPage", () => {
     }))
     const schedule = scheduleCalendarTaskMock.mock.calls.at(-1)?.[0].schedule
     expect(new Date(schedule!.scheduledStartAt!).getHours()).toBe(13)
+  })
+
+  it("shows an unscheduled Todo in the all-day row after it is dragged there", async () => {
+    const { container } = renderCalendarPage()
+
+    const todo = await screen.findByRole("button", { name: /Connect Todo to optional time/ })
+    const allDayCell = container.querySelector('[data-calendar-slot="all-day"]') as HTMLElement | null
+    expect(allDayCell).not.toBeNull()
+    const transfer = createDragDataTransfer()
+
+    fireEvent.dragStart(todo, { dataTransfer: transfer })
+    fireEvent.drop(allDayCell!, { dataTransfer: transfer })
+
+    await waitFor(() => expect(scheduleCalendarTaskMock).toHaveBeenCalledWith({
+      taskId: "tsk_calendar_spec",
+      schedule: {
+        scheduledStartAt: expect.any(Number),
+        scheduledEndAt: expect.any(Number),
+      },
+    }))
+    const schedule = scheduleCalendarTaskMock.mock.calls.at(-1)?.[0].schedule
+    expect(new Date(schedule!.scheduledStartAt!).getHours()).toBe(0)
+    expect(new Date(schedule!.scheduledEndAt!).getHours()).toBe(0)
+    expect(await within(allDayCell!).findByRole("button", { name: /Connect Todo to optional time/ })).toBeInTheDocument()
   })
 
   it("moves a fixed Date by updating dueAt instead of scheduling the Todo", async () => {

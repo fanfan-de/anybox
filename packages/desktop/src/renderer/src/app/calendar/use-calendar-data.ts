@@ -34,6 +34,15 @@ const KNOWN_STATUSES = new Set<CalendarItemStatus>([
   "blocked",
 ])
 
+function isLocalMidnight(timestamp: number) {
+  const date = new Date(timestamp)
+  return date.getHours() === 0 && date.getMinutes() === 0 && date.getSeconds() === 0 && date.getMilliseconds() === 0
+}
+
+function isAllDayScheduledRange(startAt: number | undefined, endAt: number | undefined) {
+  return startAt !== undefined && endAt !== undefined && endAt > startAt && isLocalMidnight(startAt) && isLocalMidnight(endAt)
+}
+
 function normalizeItemStatus(apiItem: CalendarApiItem): CalendarItemStatus | undefined {
   if (apiItem.entityType === "task" && (apiItem.status === "doing" || apiItem.status === "canceled")) {
     return "todo"
@@ -48,6 +57,9 @@ function toCalendarItem(apiItem: CalendarApiItem): CalendarItem {
     ...apiItem,
     startAt: apiItem.startAt === undefined ? undefined : new Date(apiItem.startAt),
     endAt: apiItem.endAt === undefined ? undefined : new Date(apiItem.endAt),
+    allDay: apiItem.allDay || (
+      apiItem.displayKind === "scheduled_todo" && isAllDayScheduledRange(apiItem.startAt, apiItem.endAt)
+    ),
     status: normalizeItemStatus(apiItem),
   }
 }
@@ -64,7 +76,7 @@ function toTodoItem(todo: PlannerTaskRecord): CalendarItem {
     dueAt: todo.dueAt === undefined ? undefined : new Date(todo.dueAt),
     startAt: todo.scheduledStartAt === undefined ? undefined : new Date(todo.scheduledStartAt),
     endAt: todo.scheduledEndAt === undefined ? undefined : new Date(todo.scheduledEndAt),
-    allDay: false,
+    allDay: isAllDayScheduledRange(todo.scheduledStartAt, todo.scheduledEndAt),
     color: "#8a5cf6",
     estimateMinutes: todo.estimateMinutes,
     status: todo.status === "done" ? "done" : "todo",

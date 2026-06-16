@@ -25,8 +25,8 @@ import type {
 } from "./calendar-types"
 
 interface CalendarPageProps {
-  activeProjectID?: string | null
   projects?: CalendarProjectOption[]
+  quickAddProjects?: CalendarProjectOption[]
   windowControls?: ReactNode
 }
 
@@ -501,7 +501,7 @@ function formatQuickAddContext(context: QuickAddContext, locale: AppLocale, t: C
   })
 }
 
-export function CalendarPage({ activeProjectID = null, projects = [], windowControls }: CalendarPageProps) {
+export function CalendarPage({ projects = [], quickAddProjects = [], windowControls }: CalendarPageProps) {
   const { locale, t } = useI18n()
   const [anchorDate, setAnchorDate] = useState(() => startOfDay(new Date()))
   const [viewMode, setViewMode] = useState<CalendarViewMode>("week")
@@ -524,6 +524,23 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
   const [quickAddContext, setQuickAddContext] = useState<QuickAddContext | null>(null)
   const [calendarContextMenu, setCalendarContextMenu] = useState<CalendarSlotContextMenuState | null>(null)
   const [calendarItemContextMenu, setCalendarItemContextMenu] = useState<CalendarItemContextMenuState | null>(null)
+  const quickAddProjectOptions = useMemo(() => {
+    const projectsByID = new Map<string, CalendarProjectOption>()
+    for (const project of quickAddProjects) {
+      const id = project.id.trim()
+      if (!id || projectsByID.has(id)) continue
+      projectsByID.set(id, {
+        ...project,
+        id,
+        name: getProjectOptionLabel(project),
+      })
+    }
+    return Array.from(projectsByID.values()).sort((left, right) => left.name.localeCompare(right.name, locale))
+  }, [locale, quickAddProjects])
+  const quickAddProjectIDs = useMemo(
+    () => new Set(quickAddProjectOptions.map((project) => project.id)),
+    [quickAddProjectOptions],
+  )
 
   const weekStart = useMemo(() => startOfWeek(anchorDate), [anchorDate])
   const calendarRange = useMemo(() => {
@@ -839,7 +856,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     setQuickAddText("")
     setQuickAddSourceId(defaultEventSource?.id ?? "")
     setQuickAddStatus("scheduled")
-    setQuickAddWorkspace(workspaceOverride ?? activeProjectID ?? "")
+    setQuickAddWorkspace(getQuickAddWorkspaceValue(workspaceOverride))
     setQuickAddNotes("")
     setQuickAddError(null)
     setQuickAddContext(context)
@@ -932,7 +949,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
       setQuickAddText("")
       setQuickAddSourceId(defaultEventSource?.id ?? "")
       setQuickAddStatus("scheduled")
-      setQuickAddWorkspace(activeProjectID ?? "")
+      setQuickAddWorkspace("")
       setQuickAddNotes("")
       setQuickAddError(null)
       setQuickAddContext(null)
@@ -949,17 +966,22 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
     setQuickAddText("")
     setQuickAddSourceId(defaultEventSource?.id ?? "")
     setQuickAddStatus("scheduled")
-    setQuickAddWorkspace(activeProjectID ?? "")
+    setQuickAddWorkspace("")
     setQuickAddNotes("")
     setQuickAddError(null)
     setQuickAddContext(null)
     setIsQuickAddOpen(false)
   }
 
+  function getQuickAddWorkspaceValue(value: string | undefined) {
+    const normalized = value?.trim()
+    return normalized && quickAddProjectIDs.has(normalized) ? normalized : ""
+  }
+
   function getSidebarQuickAddWorkspace() {
-    if (activeTodoProjectID === TODO_PROJECT_ALL_FILTER_ID) return activeProjectID ?? ""
+    if (activeTodoProjectID === TODO_PROJECT_ALL_FILTER_ID) return ""
     if (activeTodoProjectID === TODO_PROJECT_NO_PROJECT_FILTER_ID) return ""
-    return activeTodoProjectID
+    return getQuickAddWorkspaceValue(activeTodoProjectID)
   }
 
   function acceptSuggestion(suggestion: CalendarItem) {
@@ -1245,7 +1267,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
                   }}
                 >
                   <option value="">{t("calendar.noProject")}</option>
-                  {projects.map((project) => (
+                  {quickAddProjectOptions.map((project) => (
                     <option key={project.id} value={project.id}>{getProjectOptionLabel(project)}</option>
                   ))}
                 </select>
@@ -1269,7 +1291,7 @@ export function CalendarPage({ activeProjectID = null, projects = [], windowCont
                   <span>{quickAddMode === "todo" ? t("calendar.project") : t("calendar.calendarLabel")}</span>
                   <strong>
                     {quickAddMode === "todo"
-                      ? getProjectDisplayName(quickAddWorkspace, projects, t)
+                      ? getProjectDisplayName(quickAddWorkspace, quickAddProjectOptions, t)
                       : sourceById.get(quickAddSourceId)?.name ?? t("calendar.notSelected")}
                   </strong>
                 </div>
