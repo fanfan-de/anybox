@@ -16,9 +16,18 @@
     "ci"
   ],
   "interface": {
-    "displayName": "CircleCI",
-    "shortDescription": "Build, test, and deploy any application",
-    "longDescription": "Bring testing, deployment, and CI best practices into Codex",
+    "displayName": {
+      "en-US": "CircleCI",
+      "zh-CN": "CircleCI"
+    },
+    "shortDescription": {
+      "en-US": "Build, test, and deploy any application",
+      "zh-CN": "构建、测试和部署任何应用"
+    },
+    "longDescription": {
+      "en-US": "Bring testing, deployment, and CI best practices into Codex",
+      "zh-CN": "将测试、部署和 CI 最佳实践带入 Codex"
+    },
     "developerName": "CircleCI",
     "category": "Code",
     "capabilities": [

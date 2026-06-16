@@ -16,9 +16,18 @@
     "mcp"
   ],
   "interface": {
-    "displayName": "Feishu",
-    "shortDescription": "Use Feishu messages and contacts",
-    "longDescription": "Connect a Feishu custom app to look up users, inspect chats and recent chat messages, and send bot messages through Feishu Open Platform APIs.",
+    "displayName": {
+      "en-US": "Feishu",
+      "zh-CN": "飞书"
+    },
+    "shortDescription": {
+      "en-US": "Use Feishu messages and contacts",
+      "zh-CN": "使用飞书消息和联系人"
+    },
+    "longDescription": {
+      "en-US": "Connect a Feishu custom app to look up users, inspect chats and recent chat messages, and send bot messages through Feishu Open Platform APIs.",
+      "zh-CN": "连接飞书自建应用，用于查找用户、检查聊天和最近聊天消息，并通过飞书开放平台 API 发送机器人消息。"
+    },
     "developerName": "Anybox",
     "category": "Docs",
     "capabilities": [

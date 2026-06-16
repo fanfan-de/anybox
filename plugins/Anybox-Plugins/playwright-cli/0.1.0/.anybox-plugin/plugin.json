@@ -20,9 +20,18 @@
     "skill"
   ],
   "interface": {
-    "displayName": "Playwright CLI",
-    "shortDescription": "Automate browsers through Playwright Agent CLI.",
-    "longDescription": "A skill-only plugin that teaches the agent to use Playwright Agent CLI for browser automation, page snapshots, screenshots, sessions, storage state, tracing, and test debugging. It does not bundle an MCP server and relies on Node.js 20+ plus the @playwright/cli npm package.",
+    "displayName": {
+      "en-US": "Playwright CLI",
+      "zh-CN": "Playwright CLI"
+    },
+    "shortDescription": {
+      "en-US": "Automate browsers through Playwright Agent CLI.",
+      "zh-CN": "通过 Playwright Agent CLI 自动化浏览器。"
+    },
+    "longDescription": {
+      "en-US": "A skill-only plugin that teaches the agent to use Playwright Agent CLI for browser automation, page snapshots, screenshots, sessions, storage state, tracing, and test debugging. It does not bundle an MCP server and relies on Node.js 20+ plus the @playwright/cli npm package.",
+      "zh-CN": "仅包含技能的插件，指导 Agent 使用 Playwright Agent CLI 进行浏览器自动化、页面快照、截图、会话、storage state、trace 和测试调试。它不打包 MCP server，依赖 Node.js 20+ 和 @playwright/cli npm 包。"
+    },
     "developerName": "Microsoft Playwright",
     "category": "Browser",
     "capabilities": [

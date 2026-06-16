@@ -20,9 +20,18 @@
     "productivity"
   ],
   "interface": {
-    "displayName": "Google Calendar",
-    "shortDescription": "Manage Google Calendar events and schedules",
-    "longDescription": "Use Google Calendar to summarize a day, check availability, list calendars, and create, update, or delete events directly from task prompts.",
+    "displayName": {
+      "en-US": "Google Calendar",
+      "zh-CN": "Google 日历"
+    },
+    "shortDescription": {
+      "en-US": "Manage Google Calendar events and schedules",
+      "zh-CN": "管理 Google Calendar 事件和日程"
+    },
+    "longDescription": {
+      "en-US": "Use Google Calendar to summarize a day, check availability, list calendars, and create, update, or delete events directly from task prompts.",
+      "zh-CN": "使用 Google Calendar 总结一天日程、检查空闲时间、列出日历，并直接通过任务提示创建、更新或删除事件。"
+    },
     "developerName": "OpenAI",
     "category": "Docs",
     "capabilities": [

@@ -18,9 +18,18 @@
     "machine-learning"
   ],
   "interface": {
-    "displayName": "Hugging Face",
-    "shortDescription": "Inspect models, datasets, Spaces, and research",
-    "longDescription": "Connect to the Hugging Face Hub to explore Models and Datasets, access SDK Documentation and more. Manage Machine Learning Jobs and connect to thousands of AI applications via Spaces.",
+    "displayName": {
+      "en-US": "Hugging Face",
+      "zh-CN": "Hugging Face"
+    },
+    "shortDescription": {
+      "en-US": "Inspect models, datasets, Spaces, and research",
+      "zh-CN": "查看模型、数据集、Spaces 和研究内容"
+    },
+    "longDescription": {
+      "en-US": "Connect to the Hugging Face Hub to explore Models and Datasets, access SDK Documentation and more. Manage Machine Learning Jobs and connect to thousands of AI applications via Spaces.",
+      "zh-CN": "连接 Hugging Face Hub，以探索模型和数据集、访问 SDK 文档等内容；管理机器学习任务，并通过 Spaces 连接到数千个 AI 应用。"
+    },
     "developerName": "Hugging Face",
     "category": "Code",
     "capabilities": [

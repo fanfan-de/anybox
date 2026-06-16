@@ -17,9 +17,18 @@
     "microsoft"
   ],
   "interface": {
-    "displayName": "Outlook Email",
-    "shortDescription": "Triage Outlook inboxes and draft replies",
-    "longDescription": "Use Outlook Email to triage inboxes, summarize threads, extract actions, and draft replies or forwards through the connected Microsoft Outlook app.",
+    "displayName": {
+      "en-US": "Outlook Email",
+      "zh-CN": "Outlook 邮箱"
+    },
+    "shortDescription": {
+      "en-US": "Triage Outlook inboxes and draft replies",
+      "zh-CN": "整理 Outlook 收件箱并起草回复"
+    },
+    "longDescription": {
+      "en-US": "Use Outlook Email to triage inboxes, summarize threads, extract actions, and draft replies or forwards through the connected Microsoft Outlook app.",
+      "zh-CN": "使用 Outlook Email 整理收件箱、总结邮件会话、提取行动项，并通过已连接的 Microsoft Outlook 应用起草回复或转发。"
+    },
     "developerName": "OpenAI",
     "category": "Docs",
     "capabilities": [

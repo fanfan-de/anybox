@@ -51,6 +51,20 @@ type PluginCatalogEnvelope = JsonEnvelope<
     name: string
     description: string
     iconUrl?: string
+    localized?: {
+      name?: {
+        "en-US"?: string
+        "zh-CN"?: string
+      }
+      description?: {
+        "en-US"?: string
+        "zh-CN"?: string
+      }
+      longDescription?: {
+        "en-US"?: string
+        "zh-CN"?: string
+      }
+    }
     thumbnailUrl?: string
     heroImageUrl?: string
     screenshots: string[]
@@ -371,8 +385,18 @@ async function writeManifestPluginPackage(packageSourceRoot = pluginInstallRoot(
       name: "Anybox Tests",
     },
     interface: {
-      displayName: "Manifest Lab",
-      shortDescription: "Fixture plugin package.",
+      displayName: {
+        "en-US": "Manifest Lab",
+        "zh-CN": "清单实验",
+      },
+      shortDescription: {
+        "en-US": "Fixture plugin package.",
+        "zh-CN": "用于测试的插件包。",
+      },
+      longDescription: {
+        "en-US": "Fixture plugin package with MCP, skills, and API-key backed app connector.",
+        "zh-CN": "包含 MCP、技能和 API key 连接器的测试插件包。",
+      },
       developerName: "Anybox Tests",
       category: "Docs",
       logo: "docs",
@@ -1085,6 +1109,70 @@ describe("plugin marketplace API", () => {
     expect(manifestPlugin?.source).toBe("package")
     expect(manifestPlugin?.installable).toBe(true)
     expect(manifestPlugin?.skills.map((skill) => skill.directory)).toEqual(["review"])
+  })
+
+  test("preserves registry localization when package metadata wins catalog merge", async () => {
+    await useTempDatabase()
+    const packageSourceRoot = await writeManifestPluginPackage()
+    await writeFile(join(packageSourceRoot, "manifest-lab", "0.1.0", ".anybox-plugin", "plugin.json"), JSON.stringify({
+      name: "manifest-lab",
+      version: "0.1.0",
+      description: "Legacy package description.",
+      author: "Anybox Tests",
+      interface: {
+        displayName: "Legacy Manifest Lab",
+        shortDescription: "Legacy package short description.",
+        longDescription: "Legacy package long description.",
+        developerName: "Anybox Tests",
+        category: "Docs",
+        logo: "docs",
+      },
+      skills: "skills",
+    }, null, 2))
+
+    const registryPath = join(activeRoot!, "plugin-registry.json")
+    await writeFile(registryPath, JSON.stringify({
+      schemaVersion: 1,
+      plugins: [
+        {
+          id: "manifest-lab",
+          name: "manifest-lab",
+          version: "0.1.0",
+          description: "Registry package description.",
+          author: "Registry Tests",
+          interface: {
+            displayName: {
+              "en-US": "Registry Manifest Lab",
+              "zh-CN": "注册表清单实验",
+            },
+            shortDescription: {
+              "en-US": "Registry short description.",
+              "zh-CN": "注册表短描述。",
+            },
+            longDescription: {
+              "en-US": "Registry long description.",
+              "zh-CN": "注册表长描述。",
+            },
+            developerName: "Registry Tests",
+            category: "Docs",
+          },
+        },
+      ],
+    }, null, 2))
+    process.env.ANYBOX_PLUGIN_REGISTRY_FILES = registryPath
+
+    const app = createServerApp()
+    const response = await app.request("/api/plugins/catalog")
+    const body = (await response.json()) as PluginCatalogEnvelope
+    const manifestPlugin = body.data?.find((plugin) => plugin.id === "manifest-lab")
+
+    expect(response.status).toBe(200)
+    expect(manifestPlugin?.source).toBe("package")
+    expect(manifestPlugin?.name).toBe("Legacy Manifest Lab")
+    expect(manifestPlugin?.description).toBe("Legacy package short description.")
+    expect(manifestPlugin?.localized?.name?.["zh-CN"]).toBe("注册表清单实验")
+    expect(manifestPlugin?.localized?.description?.["zh-CN"]).toBe("注册表短描述。")
+    expect(manifestPlugin?.localized?.longDescription?.["zh-CN"]).toBe("注册表长描述。")
   })
 
   test("installs packages from the fixed local plugin repository without deleting the source on uninstall", async () => {
@@ -1910,6 +1998,11 @@ describe("plugin marketplace API", () => {
 
     expect(catalogResponse.status).toBe(200)
     expect(manifestPlugin?.name).toBe("Manifest Lab")
+    expect(manifestPlugin?.description).toBe("Fixture plugin package.")
+    expect(manifestPlugin?.longDescription).toBe("Fixture plugin package with MCP, skills, and API-key backed app connector.")
+    expect(manifestPlugin?.localized?.name?.["zh-CN"]).toBe("清单实验")
+    expect(manifestPlugin?.localized?.description?.["zh-CN"]).toBe("用于测试的插件包。")
+    expect(manifestPlugin?.localized?.longDescription?.["zh-CN"]).toBe("包含 MCP、技能和 API key 连接器的测试插件包。")
     expect(manifestPlugin?.mcpServers.map((server) => server.id)).toEqual(["notes"])
     expect(manifestPlugin?.skills.map((skill) => skill.id)).toEqual(["plugin:manifest-lab:review"])
     expect(manifestPlugin?.apps.map((connector) => connector.appID)).toEqual(["docs"])

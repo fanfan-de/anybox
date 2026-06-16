@@ -1961,6 +1961,17 @@ export interface PluginPackageDownload {
   size?: number
 }
 
+export interface PluginLocalizedText {
+  "en-US"?: string
+  "zh-CN"?: string
+}
+
+export interface PluginCatalogLocalization {
+  name?: PluginLocalizedText
+  description?: PluginLocalizedText
+  longDescription?: PluginLocalizedText
+}
+
 export interface PluginStdioRuntime {
   transport: "stdio"
   command: string
@@ -2026,6 +2037,7 @@ export interface PluginCatalogItem {
   name: string
   description: string
   longDescription?: string
+  localized?: PluginCatalogLocalization
   version: string
   publisher: string
   category: PluginCategory

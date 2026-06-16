@@ -13,6 +13,8 @@ import {
 } from "../icons"
 import { ShellTopMenu } from "../shared-ui"
 import { installedPluginDisplayName } from "../plugin-catalog"
+import { useI18n } from "../i18n/I18nProvider"
+import type { AppLocale } from "../../../../shared/locale"
 import type {
   ConnectorStatus,
   InstalledPlugin,
@@ -212,13 +214,65 @@ function pluginStoreSourceLabel(plugin: PluginCatalogItem) {
   return "Catalog"
 }
 
-function pluginDetailDescription(plugin: PluginCatalogItem) {
-  if (plugin.longDescription?.trim()) return plugin.longDescription.trim()
+function localizedPluginText(
+  localized: Partial<Record<AppLocale, string>> | undefined,
+  locale: AppLocale,
+  fallback: string | undefined,
+) {
+  return localized?.[locale]?.trim() || fallback?.trim() || ""
+}
+
+function pluginDisplayName(plugin: PluginCatalogItem, locale: AppLocale) {
+  return localizedPluginText(plugin.localized?.name, locale, plugin.name) || plugin.name
+}
+
+function pluginDisplayDescription(plugin: PluginCatalogItem, locale: AppLocale) {
+  return localizedPluginText(plugin.localized?.description, locale, plugin.description) || plugin.description
+}
+
+function pluginDisplayLongDescription(plugin: PluginCatalogItem, locale: AppLocale) {
+  return localizedPluginText(plugin.localized?.longDescription, locale, plugin.longDescription) ||
+    localizedPluginText(plugin.localized?.description, locale, plugin.description)
+}
+
+function pluginSearchText(plugin: PluginCatalogItem, locale: AppLocale) {
+  return [
+    pluginDisplayName(plugin, locale),
+    plugin.name,
+    plugin.publisher,
+    pluginDisplayDescription(plugin, locale),
+    plugin.description,
+    pluginDisplayLongDescription(plugin, locale),
+    plugin.longDescription ?? "",
+    plugin.localized?.name?.["en-US"] ?? "",
+    plugin.localized?.name?.["zh-CN"] ?? "",
+    plugin.localized?.description?.["en-US"] ?? "",
+    plugin.localized?.description?.["zh-CN"] ?? "",
+    plugin.localized?.longDescription?.["en-US"] ?? "",
+    plugin.localized?.longDescription?.["zh-CN"] ?? "",
+    plugin.category,
+    (plugin.tags ?? []).join(" "),
+    plugin.tools.map((tool) => tool.name).join(" "),
+    plugin.skills.map((skill) => skill.name).join(" "),
+    plugin.connectorRequirements.map((requirement) => requirement.connector).join(" "),
+    plugin.apps.map((app) => app.name).join(" "),
+  ].join(" ")
+}
+
+function pluginDetailDescription(plugin: PluginCatalogItem, locale: AppLocale) {
+  const longDescription = pluginDisplayLongDescription(plugin, locale)
+  if (longDescription.trim()) return longDescription.trim()
+
+  const description = pluginDisplayDescription(plugin, locale)
 
   const capabilityCount = plugin.mcpServers.length + plugin.skills.length + plugin.connectorRequirements.length + plugin.apps.length
   const capabilityLabel = capabilityCount === 1 ? "capability" : "capabilities"
 
-  return `${plugin.description} This plugin includes ${capabilityCount} ${capabilityLabel} for ${plugin.category.toLowerCase()} workflows and can be enabled per project after installation.`
+  if (locale === "zh-CN") {
+    return `${description} 此插件包含 ${capabilityCount} 项 ${plugin.category.toLowerCase()} 工作流能力，安装后可按项目启用。`
+  }
+
+  return `${description} This plugin includes ${capabilityCount} ${capabilityLabel} for ${plugin.category.toLowerCase()} workflows and can be enabled per project after installation.`
 }
 
 function pluginFunctionLabel(plugin: PluginCatalogItem) {
@@ -290,6 +344,7 @@ interface PluginMarketItemProps {
   installed: InstalledPlugin | null
   isActive: boolean
   isBusy: boolean
+  locale: AppLocale
   plugin: PluginCatalogItem
   onInstallPlugin: (pluginID: string) => boolean | Promise<boolean>
   onPluginSelect: (pluginID: string) => void
@@ -300,10 +355,13 @@ function PluginMarketItem({
   installed,
   isActive,
   isBusy,
+  locale,
   plugin,
   onInstallPlugin,
   onPluginSelect,
 }: PluginMarketItemProps) {
+  const name = pluginDisplayName(plugin, locale)
+  const description = pluginDisplayDescription(plugin, locale)
   const packageMissing = Boolean(installed?.missingPackage)
   const installState = packageMissing
     ? "package missing"
@@ -320,7 +378,7 @@ function PluginMarketItem({
       <button
         className="plugins-market-item-main"
         type="button"
-        aria-label={`${plugin.name} ${installState}`}
+        aria-label={`${name} ${installState}`}
         aria-pressed={isActive}
         onClick={() => onPluginSelect(plugin.id)}
       >
@@ -329,10 +387,10 @@ function PluginMarketItem({
         </span>
         <span className="plugins-market-item-copy">
           <span className="plugins-market-item-title-row">
-            <strong>{plugin.name}</strong>
+            <strong>{name}</strong>
             {visibleStatus ? <span className="plugins-market-item-state">{visibleStatus}</span> : null}
           </span>
-          <span className="plugins-market-item-description">{plugin.description}</span>
+          <span className="plugins-market-item-description">{description}</span>
           <span className="plugins-market-item-meta" aria-hidden="true">
             <span>由 {plugin.publisher} 开发</span>
             <span>{CATEGORY_LABELS[plugin.category]}</span>
@@ -353,7 +411,7 @@ function PluginMarketItem({
           <button
             className="plugins-market-install-button"
             type="button"
-            aria-label={`Install ${plugin.name}`}
+            aria-label={`Install ${name}`}
             disabled={!canInstall || isBusy}
             onClick={() => onInstallPlugin(plugin.id)}
           >
@@ -367,6 +425,7 @@ function PluginMarketItem({
 
 interface InstalledPluginsSidebarProps {
   installedPlugins: InstalledPlugin[]
+  locale: AppLocale
   pluginCatalog: PluginCatalogItem[]
   selectedPluginID: string | null
   onPluginSelect: (pluginID: string) => void
@@ -555,6 +614,7 @@ function InstalledPluginContextMenu({
 
 function InstalledPluginsSidebar({
   installedPlugins,
+  locale,
   pluginCatalog,
   selectedPluginID,
   onPluginSelect,
@@ -571,12 +631,12 @@ function InstalledPluginsSidebar({
         plugin: catalogByPluginID.get(installed.pluginID) ?? null,
       }))
       .sort((left, right) => {
-        const leftName = left.plugin?.name ?? installedPluginDisplayName(left.installed.pluginID)
-        const rightName = right.plugin?.name ?? installedPluginDisplayName(right.installed.pluginID)
+        const leftName = left.plugin ? pluginDisplayName(left.plugin, locale) : installedPluginDisplayName(left.installed.pluginID)
+        const rightName = right.plugin ? pluginDisplayName(right.plugin, locale) : installedPluginDisplayName(right.installed.pluginID)
 
-        return leftName.localeCompare(rightName)
+        return leftName.localeCompare(rightName, locale)
       }),
-    [catalogByPluginID, installedPlugins],
+    [catalogByPluginID, installedPlugins, locale],
   )
 
   function closeContextMenu() {
@@ -594,7 +654,7 @@ function InstalledPluginsSidebar({
         {installedRows.length > 0 ? (
           <div className="plugins-installed-list" role="list" aria-label="Installed plugins list">
             {installedRows.map(({ installed, plugin }) => {
-              const name = plugin?.name ?? installedPluginDisplayName(installed.pluginID)
+              const name = plugin ? pluginDisplayName(plugin, locale) : installedPluginDisplayName(installed.pluginID)
               const isActive = selectedPluginID === installed.pluginID
               const visibleStatus = installed.missingPackage || !installed.enabled ? installedPluginStatusText(installed) : null
 
@@ -652,6 +712,7 @@ function InstalledPluginsSidebar({
 interface PluginSectionProps {
   canInstallPlugin: (plugin: PluginCatalogItem) => boolean
   installedByPluginID: Map<string, InstalledPlugin>
+  locale: AppLocale
   pluginBusyIDs: Set<string>
   plugins: PluginCatalogItem[]
   selectedPluginID: string | null
@@ -663,6 +724,7 @@ interface PluginSectionProps {
 function PluginSection({
   canInstallPlugin,
   installedByPluginID,
+  locale,
   pluginBusyIDs,
   plugins,
   selectedPluginID,
@@ -688,6 +750,7 @@ function PluginSection({
                 installed={installed}
                 isActive={plugin.id === selectedPluginID}
                 isBusy={pluginBusyIDs.has(plugin.id)}
+                locale={locale}
                 plugin={plugin}
                 onInstallPlugin={onInstallPlugin}
                 onPluginSelect={onPluginSelect}
@@ -732,6 +795,7 @@ export function PluginsPage({
   onSaveInstalledPluginConfig,
   onStartInstalledPluginConnectorAuthFlow,
 }: PluginsPageProps) {
+  const { locale } = useI18n()
   const [categoryFilter, setCategoryFilter] = useState<PluginCategory | "All">("All")
   const [expandedIncludedItemID, setExpandedIncludedItemID] = useState<string | null>(null)
   const effectiveSearchQuery = searchQuery ?? ""
@@ -759,25 +823,15 @@ export function PluginsPage({
       if (categoryFilter !== "All" && plugin.category !== categoryFilter) return false
       if (!normalizedQuery) return true
 
-      return [
-        plugin.name,
-        plugin.publisher,
-        plugin.description,
-        plugin.longDescription ?? "",
-        plugin.category,
-        (plugin.tags ?? []).join(" "),
-        plugin.tools.map((tool) => tool.name).join(" "),
-        plugin.skills.map((skill) => skill.name).join(" "),
-        plugin.connectorRequirements.map((requirement) => requirement.connector).join(" "),
-        plugin.apps.map((app) => app.name).join(" "),
-      ]
-        .join(" ")
+      return pluginSearchText(plugin, locale)
         .toLowerCase()
         .includes(normalizedQuery)
     })
-  }, [categoryFilter, pluginCatalog, effectiveSearchQuery])
+  }, [categoryFilter, pluginCatalog, effectiveSearchQuery, locale])
 
   const activePlugin = activePluginID ? pluginCatalog.find((plugin) => plugin.id === activePluginID) ?? null : null
+  const activePluginName = activePlugin ? pluginDisplayName(activePlugin, locale) : ""
+  const activePluginDescription = activePlugin ? pluginDisplayDescription(activePlugin, locale) : ""
   const activeInstalledPlugin = activePlugin ? installedByPluginID.get(activePlugin.id) ?? null : null
   const activeConnectorStatuses = activePlugin ? pluginConnectorStatuses[activePlugin.id] ?? [] : []
   const activeConnectorStatusByAppID = useMemo(
@@ -853,7 +907,7 @@ export function PluginsPage({
         <>
           <button type="button" onClick={onPluginDeselect}>插件</button>
           <ChevronRightIcon />
-          <span>{activePlugin.name}</span>
+          <span>{activePluginName}</span>
         </>
       ) : (
         <span>插件</span>
@@ -908,6 +962,7 @@ export function PluginsPage({
             <div className="settings-service-list-panel plugins-list-panel plugins-marketplace-sidebar-column">
               <InstalledPluginsSidebar
                 installedPlugins={installedPlugins}
+                locale={locale}
                 pluginCatalog={pluginCatalog}
                 selectedPluginID={selectedPluginID}
                 onPluginSelect={onPluginSelect}
@@ -931,6 +986,7 @@ export function PluginsPage({
                         <PluginSection
                           canInstallPlugin={canInstallPlugin}
                           installedByPluginID={installedByPluginID}
+                          locale={locale}
                           pluginBusyIDs={pluginBusyIDs}
                           plugins={featuredPlugins}
                           selectedPluginID={selectedPluginID}
@@ -945,6 +1001,7 @@ export function PluginsPage({
                           key={category}
                           canInstallPlugin={canInstallPlugin}
                           installedByPluginID={installedByPluginID}
+                          locale={locale}
                           pluginBusyIDs={pluginBusyIDs}
                           plugins={items}
                           selectedPluginID={selectedPluginID}
@@ -970,10 +1027,10 @@ export function PluginsPage({
                 <>
                   <header className="plugins-detail-header">
                     <PluginMark plugin={activePlugin} />
-                    <h1>{activePlugin.name}</h1>
-                    <p>{activePlugin.description}</p>
+                    <h1>{activePluginName}</h1>
+                    <p>{activePluginDescription}</p>
                     {(activePlugin.tags ?? []).length > 0 ? (
-                      <div className="plugins-tag-row" aria-label={`${activePlugin.name} tags`}>
+                      <div className="plugins-tag-row" aria-label={`${activePluginName} tags`}>
                         {(activePlugin.tags ?? []).slice(0, 8).map((tag) => (
                           <span key={tag} className="settings-badge">{tag}</span>
                         ))}
@@ -981,7 +1038,7 @@ export function PluginsPage({
                     ) : null}
                   </header>
 
-                  <p className="plugins-detail-description">{pluginDetailDescription(activePlugin)}</p>
+                  <p className="plugins-detail-description">{pluginDetailDescription(activePlugin, locale)}</p>
 
                   {activePlugin.configFields.length > 0 ? (
                     <section className="plugins-detail-section">
@@ -1040,7 +1097,7 @@ export function PluginsPage({
                           <img
                             key={screenshot}
                             src={screenshot}
-                            alt={`${activePlugin.name} screenshot ${index + 1}`}
+                            alt={`${activePluginName} screenshot ${index + 1}`}
                           />
                         ))}
                       </div>
@@ -1440,7 +1497,7 @@ export function PluginsPage({
                             href={activePlugin.homepage}
                             target="_blank"
                             rel="noreferrer"
-                            title={`Open ${activePlugin.name} website`}
+                            title={`Open ${activePluginName} website`}
                             onClick={(event) => handlePluginInfoLinkClick(event, activePlugin.homepage!)}
                           >
                             <span className="plugins-info-link-text">{activePlugin.homepage}</span>
@@ -1458,7 +1515,7 @@ export function PluginsPage({
                             href={activePlugin.documentationUrl}
                             target="_blank"
                             rel="noreferrer"
-                            title={`Open ${activePlugin.name} documentation`}
+                            title={`Open ${activePluginName} documentation`}
                             onClick={(event) => handlePluginInfoLinkClick(event, activePlugin.documentationUrl!)}
                           >
                             <span className="plugins-info-link-text">{activePlugin.documentationUrl}</span>
@@ -1482,17 +1539,17 @@ export function PluginsPage({
                         </div>
                       ) : null}
                     </div>
-                    <div className="plugins-detail-actions" aria-label={`${activePlugin.name} plugin actions`}>
+                    <div className="plugins-detail-actions" aria-label={`${activePluginName} plugin actions`}>
                       {activeInstalledPlugin && !activeInstalledPlugin.missingPackage ? (
                         <>
-                          <span className="plugins-detail-action-status" aria-label={`${activePlugin.name} installed`}>
+                          <span className="plugins-detail-action-status" aria-label={`${activePluginName} installed`}>
                             <ConnectedStatusIcon />
                             <span>{activeInstalledPlugin.enabled ? "Installed" : "Disabled"}</span>
                           </span>
                           <button
                             className="plugins-detail-uninstall-button"
                             type="button"
-                            aria-label={`Uninstall ${activePlugin.name}`}
+                            aria-label={`Uninstall ${activePluginName}`}
                             disabled={!canDeleteActivePlugin}
                             onClick={() => void onDeleteInstalledPlugin(activePlugin.id)}
                           >
@@ -1504,7 +1561,7 @@ export function PluginsPage({
                         <button
                           className="plugins-detail-install-button"
                           type="button"
-                          aria-label={`Install ${activePlugin.name}`}
+                          aria-label={`Install ${activePluginName}`}
                           disabled={!canInstallActivePlugin}
                           onClick={() => onInstallPlugin(activePlugin.id)}
                         >

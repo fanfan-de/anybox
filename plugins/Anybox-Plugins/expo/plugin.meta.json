@@ -25,9 +25,18 @@
     "native-modules"
   ],
   "interface": {
-    "displayName": "Expo",
-    "shortDescription": "Build, deploy, upgrade, and debug Expo and React Native apps",
-    "longDescription": "Official Expo-authored skills for building Expo Router UI, authoring API routes, configuring data fetching and styling, writing Expo native modules, creating dev clients, upgrading Expo SDKs, wiring Codex app Run actions, and deploying Expo apps with EAS workflows, builds, hosting, TestFlight, App Store, and Play Store guidance.",
+    "displayName": {
+      "en-US": "Expo",
+      "zh-CN": "Expo"
+    },
+    "shortDescription": {
+      "en-US": "Build, deploy, upgrade, and debug Expo and React Native apps",
+      "zh-CN": "构建、部署、升级和调试 Expo 与 React Native 应用"
+    },
+    "longDescription": {
+      "en-US": "Official Expo-authored skills for building Expo Router UI, authoring API routes, configuring data fetching and styling, writing Expo native modules, creating dev clients, upgrading Expo SDKs, wiring Codex app Run actions, and deploying Expo apps with EAS workflows, builds, hosting, TestFlight, App Store, and Play Store guidance.",
+      "zh-CN": "Expo 官方技能，用于构建 Expo Router UI、编写 API routes、配置数据获取和样式、编写 Expo native modules、创建 dev clients、升级 Expo SDK、接入 Codex app Run actions，并通过 EAS workflows、builds、hosting、TestFlight、App Store 和 Play Store 部署 Expo 应用。"
+    },
     "developerName": "Expo",
     "category": "Code",
     "capabilities": [

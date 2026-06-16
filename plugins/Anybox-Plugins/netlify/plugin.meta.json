@@ -18,9 +18,18 @@
     "static-sites"
   ],
   "interface": {
-    "displayName": "Netlify",
-    "shortDescription": "Deploy projects and manage releases",
-    "longDescription": "Use Netlify to inspect deployment state, manage sites, and pair the Netlify app with the curated deployment skill for preview and production workflows.",
+    "displayName": {
+      "en-US": "Netlify",
+      "zh-CN": "Netlify"
+    },
+    "shortDescription": {
+      "en-US": "Deploy projects and manage releases",
+      "zh-CN": "部署项目并管理发布"
+    },
+    "longDescription": {
+      "en-US": "Use Netlify to inspect deployment state, manage sites, and pair the Netlify app with the curated deployment skill for preview and production workflows.",
+      "zh-CN": "使用 Netlify 查看部署状态、管理站点，并将 Netlify 应用与精选部署技能配合，用于预览和生产工作流。"
+    },
     "developerName": "Netlify",
     "category": "Code",
     "capabilities": [

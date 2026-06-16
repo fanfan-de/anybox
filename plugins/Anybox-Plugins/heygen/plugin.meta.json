@@ -24,9 +24,18 @@
     "avatar-video"
   ],
   "interface": {
-    "displayName": "HeyGen",
-    "shortDescription": "Avatar videos and personalized video messages",
-    "longDescription": "HeyGen Skills give your agent a face, a voice, and the ability to send video like a message. Use heygen-avatar to build a persistent digital identity from a photo and pick a voice, then heygen-video to generate identity-first presenter videos via the HeyGen v3 Video Agent pipeline (avatar resolution, aspect ratio correction, prompt engineering, and voice selection are handled automatically).",
+    "displayName": {
+      "en-US": "HeyGen",
+      "zh-CN": "HeyGen"
+    },
+    "shortDescription": {
+      "en-US": "Avatar videos and personalized video messages",
+      "zh-CN": "头像视频和个性化视频消息"
+    },
+    "longDescription": {
+      "en-US": "HeyGen Skills give your agent a face, a voice, and the ability to send video like a message. Use heygen-avatar to build a persistent digital identity from a photo and pick a voice, then heygen-video to generate identity-first presenter videos via the HeyGen v3 Video Agent pipeline (avatar resolution, aspect ratio correction, prompt engineering, and voice selection are handled automatically).",
+      "zh-CN": "HeyGen Skills 让 Agent 具备头像、语音和像发送消息一样发送视频的能力。使用 heygen-avatar 从照片构建持久数字身份并选择声音，再用 heygen-video 通过 HeyGen v3 Video Agent 流水线生成以身份为中心的讲解视频，头像解析、纵横比修正、提示词工程和声音选择会自动处理。"
+    },
     "developerName": "HeyGen",
     "category": "Design",
     "capabilities": [

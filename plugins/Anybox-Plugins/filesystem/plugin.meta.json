@@ -9,8 +9,14 @@
   },
   "homepage": "https://github.com/modelcontextprotocol/servers",
   "interface": {
-    "displayName": "Filesystem",
-    "shortDescription": "Expose a local directory to MCP.",
+    "displayName": {
+      "en-US": "Filesystem",
+      "zh-CN": "文件系统"
+    },
+    "shortDescription": {
+      "en-US": "Expose a local directory to MCP.",
+      "zh-CN": "将本地目录暴露给 MCP。"
+    },
     "developerName": "Model Context Protocol",
     "category": "Code",
     "capabilities": [
@@ -19,7 +25,10 @@
     ],
     "logo": "folder",
     "screenshots": [],
-    "longDescription": "Expose a specific local directory to an MCP filesystem server."
+    "longDescription": {
+      "en-US": "Expose a specific local directory to an MCP filesystem server.",
+      "zh-CN": "将指定的本地目录暴露给 MCP filesystem server。"
+    }
   },
   "mcpServers": [
     {

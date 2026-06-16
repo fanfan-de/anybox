@@ -19,9 +19,18 @@
     "productivity"
   ],
   "interface": {
-    "displayName": "Google Drive",
-    "shortDescription": "Work across Drive, Docs, Sheets, and Slides",
-    "longDescription": "Use Google Drive as one unified Google file plugin for search, file organization, sharing, and Google Docs, Google Sheets, and Google Slides workflows.",
+    "displayName": {
+      "en-US": "Google Drive",
+      "zh-CN": "Google Drive"
+    },
+    "shortDescription": {
+      "en-US": "Work across Drive, Docs, Sheets, and Slides",
+      "zh-CN": "跨 Drive、Docs、Sheets 和 Slides 工作"
+    },
+    "longDescription": {
+      "en-US": "Use Google Drive as one unified Google file plugin for search, file organization, sharing, and Google Docs, Google Sheets, and Google Slides workflows.",
+      "zh-CN": "将 Google Drive 作为统一的 Google 文件插件，用于搜索、文件整理、共享，以及 Google Docs、Google Sheets 和 Google Slides 工作流。"
+    },
     "developerName": "OpenAI",
     "category": "Docs",
     "capabilities": [

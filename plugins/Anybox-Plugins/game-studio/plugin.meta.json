@@ -24,9 +24,18 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "Game Studio",
-    "shortDescription": "Design, prototype, and ship browser games",
-    "longDescription": "Plan, prototype, and build browser games with guided workflows for gameplay systems, UI, asset pipelines, and playtesting across 2D and 3D projects.",
+    "displayName": {
+      "en-US": "Game Studio",
+      "zh-CN": "游戏工作室"
+    },
+    "shortDescription": {
+      "en-US": "Design, prototype, and ship browser games",
+      "zh-CN": "设计、原型制作并发布浏览器游戏"
+    },
+    "longDescription": {
+      "en-US": "Plan, prototype, and build browser games with guided workflows for gameplay systems, UI, asset pipelines, and playtesting across 2D and 3D projects.",
+      "zh-CN": "通过面向 2D 和 3D 项目的玩法系统、UI、资产流水线和试玩工作流，规划、原型制作并构建浏览器游戏。"
+    },
     "developerName": "OpenAI",
     "category": "Coding",
     "capabilities": [

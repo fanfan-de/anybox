@@ -17,9 +17,18 @@
     "microsoft"
   ],
   "interface": {
-    "displayName": "SharePoint",
-    "shortDescription": "Summarize SharePoint sites and files",
-    "longDescription": "Use SharePoint to summarize sites, pages, and files, extract owners and status, and plan safe content updates through the connected Microsoft SharePoint app.",
+    "displayName": {
+      "en-US": "SharePoint",
+      "zh-CN": "SharePoint"
+    },
+    "shortDescription": {
+      "en-US": "Summarize SharePoint sites and files",
+      "zh-CN": "总结 SharePoint 站点和文件"
+    },
+    "longDescription": {
+      "en-US": "Use SharePoint to summarize sites, pages, and files, extract owners and status, and plan safe content updates through the connected Microsoft SharePoint app.",
+      "zh-CN": "使用 SharePoint 总结站点、页面和文件，提取负责人和状态，并通过已连接的 Microsoft SharePoint 应用规划安全的内容更新。"
+    },
     "developerName": "OpenAI",
     "category": "Docs",
     "capabilities": [

@@ -18,9 +18,18 @@
     "customer-support"
   ],
   "interface": {
-    "displayName": "HubSpot",
-    "shortDescription": "Work with your HubSpot data to analyze patterns, create and update records, and manage your CRM operations.",
-    "longDescription": "Work with your HubSpot data to analyze patterns, create and update records, and manage your CRM operations. Read from and write to deals, contacts, companies, tickets, engagements, and other objects you have permission to access. Prepare reports, update deal stages, log calls and emails, create tasks, or review pipeline details before meetings. Use it for quick updates in chat or comprehensive CRM management, all grounded in your actual HubSpot data.",
+    "displayName": {
+      "en-US": "HubSpot",
+      "zh-CN": "HubSpot"
+    },
+    "shortDescription": {
+      "en-US": "Work with your HubSpot data to analyze patterns, create and update records, and manage your CRM operations.",
+      "zh-CN": "使用 HubSpot 数据分析模式、创建和更新记录，并管理 CRM 运营。"
+    },
+    "longDescription": {
+      "en-US": "Work with your HubSpot data to analyze patterns, create and update records, and manage your CRM operations. Read from and write to deals, contacts, companies, tickets, engagements, and other objects you have permission to access. Prepare reports, update deal stages, log calls and emails, create tasks, or review pipeline details before meetings. Use it for quick updates in chat or comprehensive CRM management, all grounded in your actual HubSpot data.",
+      "zh-CN": "使用 HubSpot 数据分析模式、创建和更新记录，并管理 CRM 运营。可读取和写入你有权访问的交易、联系人、公司、工单、互动记录和其他对象；可准备报表、更新交易阶段、记录电话和邮件、创建任务，或在会议前查看管道详情。适用于聊天中的快速更新，也适用于基于真实 HubSpot 数据的完整 CRM 管理。"
+    },
     "developerName": "HubSpot",
     "category": "Docs",
     "capabilities": [

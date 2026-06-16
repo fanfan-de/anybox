@@ -13,9 +13,18 @@
     "mcp"
   ],
   "interface": {
-    "displayName": "Browser",
-    "shortDescription": "Use Chrome tabs through the Anybox browser extension.",
-    "longDescription": "A plugin that enables browser MCP tools through the shared Anybox browser connector and Chrome extension bridge.",
+    "displayName": {
+      "en-US": "Browser",
+      "zh-CN": "浏览器"
+    },
+    "shortDescription": {
+      "en-US": "Use Chrome tabs through the Anybox browser extension.",
+      "zh-CN": "通过 Anybox 浏览器扩展使用 Chrome 标签页。"
+    },
+    "longDescription": {
+      "en-US": "A plugin that enables browser MCP tools through the shared Anybox browser connector and Chrome extension bridge.",
+      "zh-CN": "通过共享的 Anybox 浏览器连接器和 Chrome 扩展桥接器启用浏览器 MCP 工具。"
+    },
     "developerName": "Anybox",
     "category": "Browser",
     "capabilities": [

@@ -22,9 +22,18 @@
     "distributed-systems"
   ],
   "interface": {
-    "displayName": "Temporal",
-    "shortDescription": "Develop, run, and manage Temporal applications across the entire platform lifecycle",
-    "longDescription": "Comprehensive guidance for working with Temporal — developing workflows, activities, and workers across Python, TypeScript, Go, and Java SDKs; using the Temporal CLI for local development and operations; running and managing self-hosted Temporal Server; and working with Temporal Cloud for production deployments.",
+    "displayName": {
+      "en-US": "Temporal",
+      "zh-CN": "Temporal"
+    },
+    "shortDescription": {
+      "en-US": "Develop, run, and manage Temporal applications across the entire platform lifecycle",
+      "zh-CN": "开发、运行和管理 Temporal 应用的完整平台生命周期"
+    },
+    "longDescription": {
+      "en-US": "Comprehensive guidance for working with Temporal — developing workflows, activities, and workers across Python, TypeScript, Go, and Java SDKs; using the Temporal CLI for local development and operations; running and managing self-hosted Temporal Server; and working with Temporal Cloud for production deployments.",
+      "zh-CN": "用于 Temporal 全面工作的指南，包括使用 Python、TypeScript、Go 和 Java SDK 开发 workflows、activities 和 workers，使用 Temporal CLI 进行本地开发和运维，运行和管理自托管 Temporal Server，以及在生产部署中使用 Temporal Cloud。"
+    },
     "developerName": "Temporal",
     "category": "Code",
     "capabilities": [

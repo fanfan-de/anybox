@@ -31,9 +31,18 @@
     "api"
   ],
   "interface": {
-    "displayName": "Twilio Developer Kit",
-    "shortDescription": "Twilio Skills for building, debugging, and shipping on Twilio",
-    "longDescription": "Procedural knowledge that guides AI coding agents to the right Twilio APIs for any use case. Covers channel selection, production best practices, compliance requirements, and common pitfalls across Messaging, Voice, Verify, SendGrid, and 30+ products. Skills follow a progressive disclosure architecture — your agent sees lightweight metadata at startup and loads full guidance only when a task matches.",
+    "displayName": {
+      "en-US": "Twilio Developer Kit",
+      "zh-CN": "Twilio Developer Kit"
+    },
+    "shortDescription": {
+      "en-US": "Twilio Skills for building, debugging, and shipping on Twilio",
+      "zh-CN": "用于在 Twilio 上构建、调试和发布的 Twilio 技能"
+    },
+    "longDescription": {
+      "en-US": "Procedural knowledge that guides AI coding agents to the right Twilio APIs for any use case. Covers channel selection, production best practices, compliance requirements, and common pitfalls across Messaging, Voice, Verify, SendGrid, and 30+ products. Skills follow a progressive disclosure architecture — your agent sees lightweight metadata at startup and loads full guidance only when a task matches.",
+      "zh-CN": "为 AI 编码 Agent 提供程序化知识，帮助针对任何用例选择正确的 Twilio API。涵盖 Messaging、Voice、Verify、SendGrid 和 30 多个产品的渠道选择、生产最佳实践、合规要求和常见陷阱。技能采用渐进式披露架构，Agent 启动时只看到轻量元数据，并在任务匹配时加载完整指导。"
+    },
     "developerName": "Twilio",
     "category": "Code",
     "capabilities": [

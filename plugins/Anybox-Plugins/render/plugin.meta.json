@@ -20,9 +20,18 @@
     "debugging"
   ],
   "interface": {
-    "displayName": "Render",
-    "shortDescription": "Deploy, debug, monitor, and migrate apps on Render.",
-    "longDescription": "Provides skills for deploying apps with Blueprints, debugging failed deploys, monitoring service health and metrics, building Render Workflows, and migrating from Heroku.",
+    "displayName": {
+      "en-US": "Render",
+      "zh-CN": "Render"
+    },
+    "shortDescription": {
+      "en-US": "Deploy, debug, monitor, and migrate apps on Render.",
+      "zh-CN": "在 Render 上部署、调试、监控和迁移应用。"
+    },
+    "longDescription": {
+      "en-US": "Provides skills for deploying apps with Blueprints, debugging failed deploys, monitoring service health and metrics, building Render Workflows, and migrating from Heroku.",
+      "zh-CN": "提供用于 Blueprints 部署、失败部署调试、服务健康和指标监控、Render Workflows 构建，以及从 Heroku 迁移的技能。"
+    },
     "developerName": "Render",
     "category": "Code",
     "capabilities": [

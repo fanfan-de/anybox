@@ -20,9 +20,18 @@
     "budget"
   ],
   "interface": {
-    "displayName": "Plugin Eval",
-    "shortDescription": "Start from chat, then evaluate or benchmark locally",
-    "longDescription": "Ask Codex to evaluate a plugin or skill, give you a full analysis of a named plugin such as game-studio, explain why it scored that way, show what to fix first, explain its token budget, measure real token usage, benchmark a plugin, or tell you what to run next. Plugin Eval keeps the path engineer-friendly: start with a natural chat request, then use the local `plugin-eval start` entrypoint or the routed workflow command it recommends.",
+    "displayName": {
+      "en-US": "Plugin Eval",
+      "zh-CN": "插件评估"
+    },
+    "shortDescription": {
+      "en-US": "Start from chat, then evaluate or benchmark locally",
+      "zh-CN": "从聊天开始，再在本地评估或基准测试"
+    },
+    "longDescription": {
+      "en-US": "Ask Codex to evaluate a plugin or skill, give you a full analysis of a named plugin such as game-studio, explain why it scored that way, show what to fix first, explain its token budget, measure real token usage, benchmark a plugin, or tell you what to run next. Plugin Eval keeps the path engineer-friendly: start with a natural chat request, then use the local `plugin-eval start` entrypoint or the routed workflow command it recommends.",
+      "zh-CN": "让 Codex 评估插件或技能、分析指定插件、解释评分、指出优先修复项、说明 token 预算、测量实际 token 使用、进行基准测试，或告诉你下一步该运行什么。Plugin Eval 以工程师友好的路径工作：先用自然语言请求开始，再使用本地 `plugin-eval start` 入口或它推荐的路由工作流命令。"
+    },
     "developerName": "OpenAI",
     "category": "Code",
     "capabilities": [

@@ -24,9 +24,18 @@
     "debugging"
   ],
   "interface": {
-    "displayName": "Build iOS Apps",
-    "shortDescription": "Build, refine, and debug iOS apps with App Intents, SwiftUI, and Xcode workflows",
-    "longDescription": "Use Build iOS Apps to design App Intents and App Shortcuts, build or refactor SwiftUI UI, adopt modern iOS patterns such as Liquid Glass, audit runtime performance, capture ETTrace profiles, investigate memory leaks, and debug apps on simulators with XcodeBuildMCP-backed workflows.",
+    "displayName": {
+      "en-US": "Build iOS Apps",
+      "zh-CN": "构建 iOS 应用"
+    },
+    "shortDescription": {
+      "en-US": "Build, refine, and debug iOS apps with App Intents, SwiftUI, and Xcode workflows",
+      "zh-CN": "使用 App Intents、SwiftUI 和 Xcode 工作流构建、完善和调试 iOS 应用"
+    },
+    "longDescription": {
+      "en-US": "Use Build iOS Apps to design App Intents and App Shortcuts, build or refactor SwiftUI UI, adopt modern iOS patterns such as Liquid Glass, audit runtime performance, capture ETTrace profiles, investigate memory leaks, and debug apps on simulators with XcodeBuildMCP-backed workflows.",
+      "zh-CN": "使用 Build iOS Apps 设计 App Intents 和 App Shortcuts，构建或重构 SwiftUI 界面，采用 Liquid Glass 等现代 iOS 模式，审计运行时性能，捕获 ETTrace 分析，排查内存泄漏，并通过 XcodeBuildMCP 工作流在模拟器上调试应用。"
+    },
     "developerName": "OpenAI",
     "category": "Code",
     "capabilities": [

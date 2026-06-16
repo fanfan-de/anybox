@@ -12,9 +12,18 @@
   "license": "MIT",
   "keywords": [],
   "interface": {
-    "displayName": "Linear",
-    "shortDescription": "Find and reference issues and projects.",
-    "longDescription": "Manage issues, projects, and team workflows in Linear from Codex.",
+    "displayName": {
+      "en-US": "Linear",
+      "zh-CN": "Linear"
+    },
+    "shortDescription": {
+      "en-US": "Find and reference issues and projects.",
+      "zh-CN": "查找和引用 Issue 与项目。"
+    },
+    "longDescription": {
+      "en-US": "Manage issues, projects, and team workflows in Linear from Codex.",
+      "zh-CN": "在 Codex 中管理 Linear 的 Issue、项目和团队工作流。"
+    },
     "developerName": "OpenAI",
     "category": "Docs",
     "capabilities": [],

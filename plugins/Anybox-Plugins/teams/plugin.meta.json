@@ -17,9 +17,18 @@
     "microsoft"
   ],
   "interface": {
-    "displayName": "Teams",
-    "shortDescription": "Summarize Teams and draft follow-ups",
-    "longDescription": "Use Teams to summarize chats, extract actions, and draft channel or meeting follow-ups through the connected Microsoft Teams app.",
+    "displayName": {
+      "en-US": "Teams",
+      "zh-CN": "Teams"
+    },
+    "shortDescription": {
+      "en-US": "Summarize Teams and draft follow-ups",
+      "zh-CN": "总结 Teams 并起草后续跟进"
+    },
+    "longDescription": {
+      "en-US": "Use Teams to summarize chats, extract actions, and draft channel or meeting follow-ups through the connected Microsoft Teams app.",
+      "zh-CN": "使用 Teams 总结聊天、提取行动项，并通过已连接的 Microsoft Teams 应用起草频道或会议后续跟进。"
+    },
     "developerName": "OpenAI",
     "category": "Docs",
     "capabilities": [

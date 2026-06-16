@@ -23,9 +23,18 @@
     "audio"
   ],
   "interface": {
-    "displayName": "Remotion",
-    "shortDescription": "Create motion graphics from prompts",
-    "longDescription": "Build videos programmatically with Remotion and React. Covers animations, timing, audio, captions, 3D, transitions, charts, text effects, and more.",
+    "displayName": {
+      "en-US": "Remotion",
+      "zh-CN": "Remotion"
+    },
+    "shortDescription": {
+      "en-US": "Create motion graphics from prompts",
+      "zh-CN": "根据提示创建动态图形"
+    },
+    "longDescription": {
+      "en-US": "Build videos programmatically with Remotion and React. Covers animations, timing, audio, captions, 3D, transitions, charts, text effects, and more.",
+      "zh-CN": "使用 Remotion 和 React 以程序化方式构建视频，涵盖动画、时序、音频、字幕、3D、转场、图表、文字效果等。"
+    },
     "developerName": "Remotion",
     "category": "Design",
     "capabilities": [

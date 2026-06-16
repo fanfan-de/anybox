@@ -14,9 +14,18 @@
     "mcp"
   ],
   "interface": {
-    "displayName": "Computer Use Windows",
-    "shortDescription": "Observe and control selected Windows app windows with approval gates.",
-    "longDescription": "A local high-risk Computer Use plugin for Windows. It exposes read-only window discovery and snapshot tools plus approval-gated input actions through a local stdio MCP server.",
+    "displayName": {
+      "en-US": "Computer Use Windows",
+      "zh-CN": "Windows 电脑控制"
+    },
+    "shortDescription": {
+      "en-US": "Observe and control selected Windows app windows with approval gates.",
+      "zh-CN": "在审批保护下观察并控制选定的 Windows 应用窗口。"
+    },
+    "longDescription": {
+      "en-US": "A local high-risk Computer Use plugin for Windows. It exposes read-only window discovery and snapshot tools plus approval-gated input actions through a local stdio MCP server.",
+      "zh-CN": "适用于 Windows 的本地高风险 Computer Use 插件。它通过本地 stdio MCP server 提供只读窗口发现和截图工具，并提供需要审批的输入操作。"
+    },
     "developerName": "Anybox",
     "category": "Automation",
     "capabilities": [

@@ -18,9 +18,18 @@
     "codex"
   ],
   "interface": {
-    "displayName": "CodeRabbit",
-    "shortDescription": "Run AI-powered code review for your current changes",
-    "longDescription": "Run CodeRabbit review workflows in Codex to inspect diffs, surface actionable findings, and turn review output into follow-up fixes.",
+    "displayName": {
+      "en-US": "CodeRabbit",
+      "zh-CN": "CodeRabbit"
+    },
+    "shortDescription": {
+      "en-US": "Run AI-powered code review for your current changes",
+      "zh-CN": "为当前改动运行 AI 代码审查"
+    },
+    "longDescription": {
+      "en-US": "Run CodeRabbit review workflows in Codex to inspect diffs, surface actionable findings, and turn review output into follow-up fixes.",
+      "zh-CN": "在 Codex 中运行 CodeRabbit 审查工作流，检查 diff、提出可执行问题，并将审查结果转化为后续修复。"
+    },
     "developerName": "CodeRabbit",
     "category": "Code",
     "capabilities": [

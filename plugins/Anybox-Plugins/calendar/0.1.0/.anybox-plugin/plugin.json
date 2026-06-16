@@ -5,14 +5,34 @@
   "author": {
     "name": "Anybox"
   },
-  "keywords": ["calendar", "todo", "event", "mcp", "planning"],
+  "keywords": [
+    "calendar",
+    "todo",
+    "event",
+    "mcp",
+    "planning"
+  ],
   "interface": {
-    "displayName": "Calendar",
-    "shortDescription": "Manage Anybox Calendar items.",
-    "longDescription": "A local Anybox Calendar plugin that lets the agent create, inspect, update, schedule, complete, cancel, delete, and search local Calendar todos and events.",
+    "displayName": {
+      "en-US": "Calendar",
+      "zh-CN": "日历"
+    },
+    "shortDescription": {
+      "en-US": "Manage Anybox Calendar items.",
+      "zh-CN": "管理 Anybox 日历事项。"
+    },
+    "longDescription": {
+      "en-US": "A local Anybox Calendar plugin that lets the agent create, inspect, update, schedule, complete, cancel, delete, and search local Calendar todos and events.",
+      "zh-CN": "本地 Anybox 日历插件，可让 Agent 创建、查看、更新、安排、完成、取消、删除和搜索本地日历待办和事件。"
+    },
     "developerName": "Anybox",
     "category": "Automation",
-    "capabilities": ["calendar", "todos", "events", "planning"],
+    "capabilities": [
+      "calendar",
+      "todos",
+      "events",
+      "planning"
+    ],
     "logo": "CA",
     "brandColor": "#0F766E"
   },
@@ -137,28 +157,60 @@
       "runtime": {
         "transport": "stdio",
         "command": "node",
-        "args": ["${PLUGIN_ROOT}/scripts/server.js"],
+        "args": [
+          "${PLUGIN_ROOT}/scripts/server.js"
+        ],
         "cwd": "${PLUGIN_ROOT}",
         "env": {
           "ANYBOX_CALENDAR_AGENT_BASE_URL": "http://127.0.0.1:4096"
         },
         "timeoutMs": 30000,
         "toolPolicies": {
-          "calendar_list_sources": { "policy": "auto" },
-          "calendar_update_source": { "policy": "ask" },
-          "calendar_create_todo": { "policy": "ask" },
-          "calendar_create_event": { "policy": "ask" },
-          "calendar_list_items": { "policy": "auto" },
-          "calendar_get_item": { "policy": "auto" },
-          "calendar_list_todos": { "policy": "auto" },
-          "calendar_update_todo": { "policy": "ask" },
-          "calendar_schedule_todo": { "policy": "ask" },
-          "calendar_complete_todo": { "policy": "ask" },
-          "calendar_delete_todo": { "policy": "ask" },
-          "calendar_update_event": { "policy": "ask" },
-          "calendar_cancel_event": { "policy": "ask" },
-          "calendar_delete_event": { "policy": "ask" },
-          "calendar_find_free_time": { "policy": "auto" }
+          "calendar_list_sources": {
+            "policy": "auto"
+          },
+          "calendar_update_source": {
+            "policy": "ask"
+          },
+          "calendar_create_todo": {
+            "policy": "ask"
+          },
+          "calendar_create_event": {
+            "policy": "ask"
+          },
+          "calendar_list_items": {
+            "policy": "auto"
+          },
+          "calendar_get_item": {
+            "policy": "auto"
+          },
+          "calendar_list_todos": {
+            "policy": "auto"
+          },
+          "calendar_update_todo": {
+            "policy": "ask"
+          },
+          "calendar_schedule_todo": {
+            "policy": "ask"
+          },
+          "calendar_complete_todo": {
+            "policy": "ask"
+          },
+          "calendar_delete_todo": {
+            "policy": "ask"
+          },
+          "calendar_update_event": {
+            "policy": "ask"
+          },
+          "calendar_cancel_event": {
+            "policy": "ask"
+          },
+          "calendar_delete_event": {
+            "policy": "ask"
+          },
+          "calendar_find_free_time": {
+            "policy": "auto"
+          }
         }
       },
       "installReview": [

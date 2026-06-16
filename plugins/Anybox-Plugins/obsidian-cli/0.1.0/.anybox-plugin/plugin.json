@@ -19,9 +19,18 @@
     "skill"
   ],
   "interface": {
-    "displayName": "Obsidian CLI",
-    "shortDescription": "Use Obsidian vaults through the official CLI",
-    "longDescription": "A skill-only plugin that teaches the agent to use the official Obsidian CLI for vault inspection, note reading and writing, search, tasks, properties, and plugin development diagnostics. It does not bundle an MCP server and does not store Obsidian credentials.",
+    "displayName": {
+      "en-US": "Obsidian CLI",
+      "zh-CN": "Obsidian CLI"
+    },
+    "shortDescription": {
+      "en-US": "Use Obsidian vaults through the official CLI",
+      "zh-CN": "通过官方 CLI 使用 Obsidian 仓库"
+    },
+    "longDescription": {
+      "en-US": "A skill-only plugin that teaches the agent to use the official Obsidian CLI for vault inspection, note reading and writing, search, tasks, properties, and plugin development diagnostics. It does not bundle an MCP server and does not store Obsidian credentials.",
+      "zh-CN": "仅包含技能的插件，指导 Agent 使用官方 Obsidian CLI 检查仓库、读取和写入笔记、搜索、处理任务和属性，并诊断插件开发问题。它不打包 MCP server，也不存储 Obsidian 凭据。"
+    },
     "developerName": "Anybox",
     "category": "Docs",
     "capabilities": [

@@ -15,9 +15,18 @@
     "自动化"
   ],
   "interface": {
-    "displayName": "SMTP 邮箱",
-    "shortDescription": "通过 SMTP 发送邮件",
-    "longDescription": "连接支持 SMTP 的邮箱或授权码，让 Agent 通过配置的账号发送纯文本或 HTML 邮件。",
+    "displayName": {
+      "en-US": "SMTP Email",
+      "zh-CN": "SMTP 邮箱"
+    },
+    "shortDescription": {
+      "en-US": "Send email through SMTP",
+      "zh-CN": "通过 SMTP 发送邮件"
+    },
+    "longDescription": {
+      "en-US": "Connect an SMTP mailbox or app password so the Agent can send plain-text or HTML email from the configured account.",
+      "zh-CN": "连接支持 SMTP 的邮箱或授权码，让 Agent 通过配置的账号发送纯文本或 HTML 邮件。"
+    },
     "developerName": "Anybox",
     "category": "Automation",
     "capabilities": [

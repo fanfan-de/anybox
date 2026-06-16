@@ -22,9 +22,18 @@
     "ai-gateway"
   ],
   "interface": {
-    "displayName": "Cloudflare",
-    "shortDescription": "Cloudflare platform guidance with official MCP",
-    "longDescription": "Bring Cloudflare platform guidance into Codex with curated skills for the broader platform, Wrangler CLI, and the Agents SDK, plus the official Cloudflare API MCP server for authenticated access to live account data and workflows across Workers, Pages, storage, AI, networking, security, and analytics services.",
+    "displayName": {
+      "en-US": "Cloudflare",
+      "zh-CN": "Cloudflare"
+    },
+    "shortDescription": {
+      "en-US": "Cloudflare platform guidance with official MCP",
+      "zh-CN": "使用官方 MCP 获取 Cloudflare 平台指导"
+    },
+    "longDescription": {
+      "en-US": "Bring Cloudflare platform guidance into Codex with curated skills for the broader platform, Wrangler CLI, and the Agents SDK, plus the official Cloudflare API MCP server for authenticated access to live account data and workflows across Workers, Pages, storage, AI, networking, security, and analytics services.",
+      "zh-CN": "将 Cloudflare 平台指导带入 Codex，包含平台通用技能、Wrangler CLI、Agents SDK，以及官方 Cloudflare API MCP server，用于通过认证访问实时账号数据，并处理 Workers、Pages、存储、AI、网络、安全和分析服务工作流。"
+    },
     "developerName": "Cloudflare",
     "category": "Code",
     "capabilities": [

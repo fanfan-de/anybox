@@ -12,10 +12,19 @@
   "license": "MIT",
   "keywords": [],
   "interface": {
-    "displayName": "Stripe",
+    "displayName": {
+      "en-US": "Stripe",
+      "zh-CN": "Stripe"
+    },
     "developerName": "Stripe",
-    "shortDescription": "Payments and business tools",
-    "longDescription": "Payments and business tools",
+    "shortDescription": {
+      "en-US": "Payments and business tools",
+      "zh-CN": "支付和商业工具"
+    },
+    "longDescription": {
+      "en-US": "Payments and business tools",
+      "zh-CN": "支付和商业工具"
+    },
     "category": "Docs",
     "capabilities": [],
     "websiteURL": "https://stripe.com",

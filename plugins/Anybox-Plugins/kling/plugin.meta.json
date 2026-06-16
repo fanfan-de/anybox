@@ -7,14 +7,35 @@
     "name": "Anybox"
   },
   "homepage": "https://klingai.com/document-api",
-  "keywords": ["kling", "video", "generation", "ai-video", "text-to-video", "image-to-video"],
+  "keywords": [
+    "kling",
+    "video",
+    "generation",
+    "ai-video",
+    "text-to-video",
+    "image-to-video"
+  ],
   "interface": {
-    "displayName": "Kling Video",
-    "shortDescription": "Generate videos with Kling text-to-video and image-to-video APIs.",
-    "longDescription": "A Kling API connector for creating asynchronous video generation tasks, checking task status, and waiting for generated video URLs.",
+    "displayName": {
+      "en-US": "Kling Video",
+      "zh-CN": "Kling 视频"
+    },
+    "shortDescription": {
+      "en-US": "Generate videos with Kling text-to-video and image-to-video APIs.",
+      "zh-CN": "使用 Kling 文生视频和图生视频 API 生成视频。"
+    },
+    "longDescription": {
+      "en-US": "A Kling API connector for creating asynchronous video generation tasks, checking task status, and waiting for generated video URLs.",
+      "zh-CN": "Kling API 连接器，可创建异步视频生成任务、检查任务状态，并等待生成视频 URL。"
+    },
     "developerName": "Anybox",
     "category": "Design",
-    "capabilities": ["video", "generation", "text-to-video", "image-to-video"],
+    "capabilities": [
+      "video",
+      "generation",
+      "text-to-video",
+      "image-to-video"
+    ],
     "logo": "KV",
     "brandColor": "#111827",
     "defaultPrompt": [
@@ -72,7 +93,9 @@
       "runtime": {
         "transport": "stdio",
         "command": "node",
-        "args": ["${PLUGIN_ROOT}/connectors/kling/server.js"],
+        "args": [
+          "${PLUGIN_ROOT}/connectors/kling/server.js"
+        ],
         "cwd": "${PLUGIN_ROOT}",
         "env": {
           "KLING_ACCESS_KEY": "${KLING_ACCESS_KEY}",
@@ -81,12 +104,24 @@
         },
         "timeoutMs": 900000,
         "toolPolicies": {
-          "kling_health_check": { "policy": "auto" },
-          "kling_get_video_task": { "policy": "auto" },
-          "kling_list_video_tasks": { "policy": "auto" },
-          "kling_wait_for_video": { "policy": "auto" },
-          "kling_create_text_to_video": { "policy": "ask" },
-          "kling_create_image_to_video": { "policy": "ask" }
+          "kling_health_check": {
+            "policy": "auto"
+          },
+          "kling_get_video_task": {
+            "policy": "auto"
+          },
+          "kling_list_video_tasks": {
+            "policy": "auto"
+          },
+          "kling_wait_for_video": {
+            "policy": "auto"
+          },
+          "kling_create_text_to_video": {
+            "policy": "ask"
+          },
+          "kling_create_image_to_video": {
+            "policy": "ask"
+          }
         }
       },
       "tools": [

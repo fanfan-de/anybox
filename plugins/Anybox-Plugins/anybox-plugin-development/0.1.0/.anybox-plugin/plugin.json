@@ -16,9 +16,18 @@
   ],
   "skills": "skills",
   "interface": {
-    "displayName": "Anybox 插件开发",
-    "shortDescription": "创建和验证 Anybox 插件包。",
-    "longDescription": "将 Anybox 第三方插件开发指南打包为可安装插件，提供插件包结构、plugin.json、bundled skill、MCP server、connector、registry metadata 和验证流程的操作说明。",
+    "displayName": {
+      "en-US": "Anybox Plugin Development",
+      "zh-CN": "Anybox 插件开发"
+    },
+    "shortDescription": {
+      "en-US": "Create and validate Anybox plugin packages.",
+      "zh-CN": "创建和验证 Anybox 插件包。"
+    },
+    "longDescription": {
+      "en-US": "Package the Anybox third-party plugin development guide as an installable plugin, covering plugin package structure, plugin.json, bundled skills, MCP servers, connectors, registry metadata, and validation workflows.",
+      "zh-CN": "将 Anybox 第三方插件开发指南打包为可安装插件，提供插件包结构、plugin.json、bundled skill、MCP server、connector、registry metadata 和验证流程的操作说明。"
+    },
     "developerName": "Anybox",
     "category": "Code",
     "capabilities": [

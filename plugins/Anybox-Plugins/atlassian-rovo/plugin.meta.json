@@ -14,9 +14,18 @@
     "atlassian"
   ],
   "interface": {
-    "displayName": "Atlassian Rovo",
-    "shortDescription": "Manage Jira and Confluence fast",
-    "longDescription": "Manage Jira and Confluence fast",
+    "displayName": {
+      "en-US": "Atlassian Rovo",
+      "zh-CN": "Atlassian Rovo"
+    },
+    "shortDescription": {
+      "en-US": "Manage Jira and Confluence fast",
+      "zh-CN": "快速管理 Jira 和 Confluence"
+    },
+    "longDescription": {
+      "en-US": "Manage Jira and Confluence fast",
+      "zh-CN": "快速管理 Jira 和 Confluence"
+    },
     "developerName": "Atlassian",
     "category": "Docs",
     "capabilities": [

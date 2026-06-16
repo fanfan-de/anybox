@@ -17,9 +17,18 @@
     "collaboration"
   ],
   "interface": {
-    "displayName": "Slack",
-    "shortDescription": "Read and manage Slack",
-    "longDescription": "Use Slack to summarize channels, draft messages, and organize team conversations through the connected Slack integration.",
+    "displayName": {
+      "en-US": "Slack",
+      "zh-CN": "Slack"
+    },
+    "shortDescription": {
+      "en-US": "Read and manage Slack",
+      "zh-CN": "阅读和管理 Slack"
+    },
+    "longDescription": {
+      "en-US": "Use Slack to summarize channels, draft messages, and organize team conversations through the connected Slack integration.",
+      "zh-CN": "通过已连接的 Slack 集成总结频道、起草消息，并整理团队对话。"
+    },
     "developerName": "OpenAI",
     "category": "Docs",
     "capabilities": [

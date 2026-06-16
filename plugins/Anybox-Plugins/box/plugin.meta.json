@@ -12,9 +12,18 @@
   "license": "MIT",
   "keywords": [],
   "interface": {
-    "displayName": "Box",
-    "shortDescription": "Search and reference your documents",
-    "longDescription": "Search and reference your documents in Box and work safely with Box content flows from Codex.",
+    "displayName": {
+      "en-US": "Box",
+      "zh-CN": "Box"
+    },
+    "shortDescription": {
+      "en-US": "Search and reference your documents",
+      "zh-CN": "搜索和引用你的文档"
+    },
+    "longDescription": {
+      "en-US": "Search and reference your documents in Box and work safely with Box content flows from Codex.",
+      "zh-CN": "在 Box 中搜索和引用文档，并从 Codex 安全处理 Box 内容流程。"
+    },
     "developerName": "OpenAI",
     "category": "Docs",
     "capabilities": [],

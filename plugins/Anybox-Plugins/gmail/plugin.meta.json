@@ -17,9 +17,18 @@
     "google"
   ],
   "interface": {
-    "displayName": "Gmail",
-    "shortDescription": "Read and manage Gmail",
-    "longDescription": "Use Gmail to summarize inbox activity, draft replies, and organize email threads through the connected Gmail app.",
+    "displayName": {
+      "en-US": "Gmail",
+      "zh-CN": "Gmail"
+    },
+    "shortDescription": {
+      "en-US": "Read and manage Gmail",
+      "zh-CN": "阅读和管理 Gmail"
+    },
+    "longDescription": {
+      "en-US": "Use Gmail to summarize inbox activity, draft replies, and organize email threads through the connected Gmail app.",
+      "zh-CN": "通过已连接的 Gmail 应用总结收件箱动态、起草回复，并整理邮件会话。"
+    },
     "developerName": "OpenAI",
     "category": "Docs",
     "capabilities": [

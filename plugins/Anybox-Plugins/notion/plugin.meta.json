@@ -20,9 +20,18 @@
     "planning"
   ],
   "interface": {
-    "displayName": "Notion",
-    "shortDescription": "Notion workflows for specs, research, meetings, and knowledge capture",
-    "longDescription": "Notion workflows for turning specs into implementation plans, synthesizing research into structured documentation, preparing meeting materials with workspace context, and capturing decisions or conversations into durable knowledge pages.",
+    "displayName": {
+      "en-US": "Notion",
+      "zh-CN": "Notion"
+    },
+    "shortDescription": {
+      "en-US": "Notion workflows for specs, research, meetings, and knowledge capture",
+      "zh-CN": "用于规格、研究、会议和知识沉淀的 Notion 工作流"
+    },
+    "longDescription": {
+      "en-US": "Notion workflows for turning specs into implementation plans, synthesizing research into structured documentation, preparing meeting materials with workspace context, and capturing decisions or conversations into durable knowledge pages.",
+      "zh-CN": "Notion 工作流可将规格转化为实现计划，把研究整理成结构化文档，结合工作区上下文准备会议材料，并把决策或对话沉淀为持久知识页面。"
+    },
     "developerName": "OpenAI",
     "category": "Docs",
     "capabilities": [

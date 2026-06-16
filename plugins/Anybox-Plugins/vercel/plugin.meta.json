@@ -27,9 +27,18 @@
     "discord-bot"
   ],
   "interface": {
-    "displayName": "Vercel",
-    "shortDescription": "Build and deploy web apps and agents",
-    "longDescription": "Bring Vercel ecosystem guidance into Codex with curated skills and the connected Vercel app. Packages the upstream vercel/vercel-plugin skills, agents, and commands under the local `vercel` plugin identity for the Codex plugin marketplace.",
+    "displayName": {
+      "en-US": "Vercel",
+      "zh-CN": "Vercel"
+    },
+    "shortDescription": {
+      "en-US": "Build and deploy web apps and agents",
+      "zh-CN": "构建和部署 Web 应用与 Agent"
+    },
+    "longDescription": {
+      "en-US": "Bring Vercel ecosystem guidance into Codex with curated skills and the connected Vercel app. Packages the upstream vercel/vercel-plugin skills, agents, and commands under the local `vercel` plugin identity for the Codex plugin marketplace.",
+      "zh-CN": "将 Vercel 生态指导带入 Codex，包含精选技能和已连接的 Vercel 应用。它把上游 vercel/vercel-plugin 的 skills、agents 和 commands 打包到本地 `vercel` 插件身份下，供 Codex 插件市场使用。"
+    },
     "developerName": "Vercel Labs",
     "category": "Code",
     "capabilities": [

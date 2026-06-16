@@ -22,9 +22,18 @@
     "workflow"
   ],
   "interface": {
-    "displayName": "Superpowers",
-    "shortDescription": "Planning, TDD, debugging, and delivery workflows for coding agents",
-    "longDescription": "Use Superpowers to guide agent work through brainstorming, implementation planning, test-driven development, systematic debugging, parallel execution, code review, and finish-the-branch workflows.",
+    "displayName": {
+      "en-US": "Superpowers",
+      "zh-CN": "Superpowers"
+    },
+    "shortDescription": {
+      "en-US": "Planning, TDD, debugging, and delivery workflows for coding agents",
+      "zh-CN": "面向编码 Agent 的规划、TDD、调试和交付工作流"
+    },
+    "longDescription": {
+      "en-US": "Use Superpowers to guide agent work through brainstorming, implementation planning, test-driven development, systematic debugging, parallel execution, code review, and finish-the-branch workflows.",
+      "zh-CN": "使用 Superpowers 通过头脑风暴、实现规划、测试驱动开发、系统化调试、并行执行、代码审查和完成分支工作流来指导 Agent 工作。"
+    },
     "developerName": "Jesse Vincent",
     "category": "Code",
     "capabilities": [

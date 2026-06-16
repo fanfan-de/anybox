@@ -21,9 +21,18 @@
     "workbook"
   ],
   "interface": {
-    "displayName": "Spreadsheets",
-    "shortDescription": "Create and edit spreadsheet files",
-    "longDescription": "Create, edit, inspect, render, verify, and export XLSX, CSV, and TSV spreadsheets locally. Use Spreadsheets when the durable output or target is a spreadsheet, workbook, sheet, or CSV file.",
+    "displayName": {
+      "en-US": "Spreadsheets",
+      "zh-CN": "电子表格"
+    },
+    "shortDescription": {
+      "en-US": "Create and edit spreadsheet files",
+      "zh-CN": "创建和编辑电子表格文件"
+    },
+    "longDescription": {
+      "en-US": "Create, edit, inspect, render, verify, and export XLSX, CSV, and TSV spreadsheets locally. Use Spreadsheets when the durable output or target is a spreadsheet, workbook, sheet, or CSV file.",
+      "zh-CN": "在本地创建、编辑、检查、渲染、验证并导出 XLSX、CSV 和 TSV 电子表格。当目标产物是电子表格、工作簿、表格或 CSV 文件时使用 Spreadsheets。"
+    },
     "developerName": "Anybox",
     "category": "Docs",
     "capabilities": [

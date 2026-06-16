@@ -363,11 +363,34 @@ const PluginAuthor = z.union([
     .passthrough(),
 ])
 
+const PluginLocalizedText = z
+  .object({
+    "en-US": z.string().min(1).optional(),
+    "zh-CN": z.string().min(1).optional(),
+  })
+  .strict()
+  .refine((value) => Boolean(value["en-US"] || value["zh-CN"]), {
+    message: "Localized text requires at least one supported locale.",
+  })
+export type PluginLocalizedText = z.infer<typeof PluginLocalizedText>
+
+const PluginLocalizableText = z.union([z.string().min(1), PluginLocalizedText])
+type PluginLocalizableText = z.infer<typeof PluginLocalizableText>
+
+const PluginCatalogLocalization = z
+  .object({
+    name: PluginLocalizedText.optional(),
+    description: PluginLocalizedText.optional(),
+    longDescription: PluginLocalizedText.optional(),
+  })
+  .strict()
+export type PluginCatalogLocalization = z.infer<typeof PluginCatalogLocalization>
+
 const PluginInterface = z
   .object({
-    displayName: z.string().optional(),
-    shortDescription: z.string().optional(),
-    longDescription: z.string().optional(),
+    displayName: PluginLocalizableText.optional(),
+    shortDescription: PluginLocalizableText.optional(),
+    longDescription: PluginLocalizableText.optional(),
     developerName: z.string().optional(),
     category: z.string().optional(),
     capabilities: z.array(z.string()).optional(),
@@ -473,6 +496,7 @@ export const PluginCatalogItem = z
     name: z.string().min(1),
     description: z.string().min(1),
     longDescription: z.string().optional(),
+    localized: PluginCatalogLocalization.optional(),
     version: z.string().min(1),
     publisher: z.string().min(1),
     category: PluginCategory,
@@ -1064,11 +1088,53 @@ function listPackageManifestSources() {
   return [...byID.values()]
 }
 
+function mergeLocalizableText(
+  value: PluginLocalizableText | undefined,
+  fallback: PluginLocalizableText | undefined,
+): PluginLocalizableText | undefined {
+  if (!fallback || typeof fallback === "string") return value
+  if (!value) return fallback
+  if (typeof value === "string") {
+    return fallback["zh-CN"] ? {
+      "en-US": value,
+      "zh-CN": fallback["zh-CN"],
+    } : value
+  }
+
+  return {
+    "en-US": value["en-US"] ?? fallback["en-US"],
+    "zh-CN": value["zh-CN"] ?? fallback["zh-CN"],
+  }
+}
+
+function mergeManifestSourceLocalization(source: PluginManifestSource, fallback: PluginManifestSource | undefined) {
+  if (!fallback?.manifest.interface) return source
+
+  const interfaceMetadata = source.manifest.interface
+  const fallbackInterface = fallback.manifest.interface
+  const mergedInterface = {
+    ...fallbackInterface,
+    ...interfaceMetadata,
+    displayName: mergeLocalizableText(interfaceMetadata?.displayName, fallbackInterface.displayName),
+    shortDescription: mergeLocalizableText(interfaceMetadata?.shortDescription, fallbackInterface.shortDescription),
+    longDescription: mergeLocalizableText(interfaceMetadata?.longDescription, fallbackInterface.longDescription),
+  }
+
+  return {
+    ...source,
+    manifest: PluginManifest.parse({
+      ...source.manifest,
+      interface: mergedInterface,
+    }),
+  }
+}
+
 function mergeManifestSources(...groups: PluginManifestSource[][]) {
   const byID = new Map<string, PluginManifestSource>()
   for (const group of groups) {
     for (const source of group) {
-      byID.set(normalizeManifestID(source.manifest.name), source)
+      const pluginID = normalizeManifestID(source.manifest.name)
+      byID.set(pluginID, mergeManifestSourceLocalization(source, byID.get(pluginID)))
     }
   }
   return [...byID.values()]
@@ -1192,7 +1258,7 @@ function normalizeMcpServers(manifest: PluginManifest): PluginMcpServerCatalogEn
     const serverID = normalizeServerTemplateID(server.id)
     return PluginMcpServerCatalogEntry.parse({
       id: serverID,
-      name: server.name ?? manifest.interface?.displayName ?? manifest.name,
+      name: server.name ?? defaultLocalizableText(manifest.interface?.displayName, manifest.name),
       description: server.description ?? manifest.description,
       risk: server.risk ?? "medium",
       permissions: server.permissions ?? [],
@@ -1202,6 +1268,35 @@ function normalizeMcpServers(manifest: PluginManifest): PluginMcpServerCatalogEn
       installReview: server.installReview ?? [],
     })
   })
+}
+
+function defaultLocalizableText(value: PluginLocalizableText | undefined, fallback: string) {
+  if (!value) return fallback
+  if (typeof value === "string") return value
+  return value["en-US"] ?? fallback ?? value["zh-CN"]
+}
+
+function localizableTextMap(value: PluginLocalizableText | undefined) {
+  if (!value || typeof value === "string") return undefined
+
+  const localized: Partial<Record<keyof PluginLocalizedText, string>> = {}
+  if (value["en-US"]) localized["en-US"] = value["en-US"]
+  if (value["zh-CN"]) localized["zh-CN"] = value["zh-CN"]
+
+  return Object.keys(localized).length > 0 ? localized : undefined
+}
+
+function catalogLocalization(manifest: PluginManifest) {
+  const localized: PluginCatalogLocalization = {}
+  const name = localizableTextMap(manifest.interface?.displayName)
+  const description = localizableTextMap(manifest.interface?.shortDescription)
+  const longDescription = localizableTextMap(manifest.interface?.longDescription)
+
+  if (name) localized.name = name
+  if (description) localized.description = description
+  if (longDescription) localized.longDescription = longDescription
+
+  return Object.keys(localized).length > 0 ? localized : undefined
 }
 
 function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
@@ -1230,9 +1325,10 @@ function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
 
   return PluginCatalogItem.parse({
     id: pluginID,
-    name: manifest.interface?.displayName ?? manifest.name,
-    description: manifest.interface?.shortDescription ?? manifest.description,
-    longDescription: manifest.interface?.longDescription ?? manifest.description,
+    name: defaultLocalizableText(manifest.interface?.displayName, manifest.name),
+    description: defaultLocalizableText(manifest.interface?.shortDescription, manifest.description),
+    longDescription: defaultLocalizableText(manifest.interface?.longDescription, manifest.description),
+    localized: catalogLocalization(manifest),
     version: manifest.version,
     publisher: manifest.interface?.developerName ?? authorName(manifest.author),
     category: normalizeCategory(manifest.interface?.category),
@@ -2504,7 +2600,7 @@ export function listInstalledPluginSkillRoots(
     const manifest = safeReadPluginManifest(installed.packageRoot)
     if (!manifest) return []
     const pluginID = normalizeManifestID(manifest.name)
-    const pluginName = manifest.interface?.displayName ?? manifest.name
+    const pluginName = defaultLocalizableText(manifest.interface?.displayName, manifest.name)
 
     return skillDirectoryDeclarations(manifest)
       .map((directory) => resolvePackageRelativePath(installed.packageRoot!, directory))

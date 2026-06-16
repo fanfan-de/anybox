@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import type { ComponentProps } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { PluginsPage } from "./PluginsPage"
+import { I18nProvider } from "../i18n/I18nProvider"
 
 type PluginsPageProps = ComponentProps<typeof PluginsPage>
 type CatalogPlugin = PluginsPageProps["pluginCatalog"][number]
@@ -243,6 +244,7 @@ function createProps(overrides: Partial<PluginsPageProps> = {}): PluginsPageProp
 describe("PluginsPage", () => {
   beforeEach(() => {
     window.desktop = undefined
+    window.localStorage.removeItem("desktop.locale")
   })
 
   it("renders the plugin marketplace without the development blocker", () => {
@@ -298,6 +300,52 @@ describe("PluginsPage", () => {
     expect(within(categoryNav).getByRole("button", { name: "全部，3 个插件" })).toHaveAttribute("aria-pressed", "true")
     expect(screen.getByRole("button", { name: "Filesystem not installed" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Docs not installed" })).toBeInTheDocument()
+  })
+
+  it("uses localized plugin descriptions for the active app locale", () => {
+    window.localStorage.setItem("desktop.locale", "zh-CN")
+    const calendarPlugin = createPlugin({
+      id: "calendar",
+      name: "Calendar",
+      description: "Manage Anybox Calendar items.",
+      longDescription: "Manage Anybox Calendar items from the plugin marketplace.",
+      category: "Automation",
+      localized: {
+        name: {
+          "en-US": "Calendar",
+          "zh-CN": "日历",
+        },
+        description: {
+          "en-US": "Manage Anybox Calendar items.",
+          "zh-CN": "管理 Anybox 日历事项。",
+        },
+        longDescription: {
+          "en-US": "Manage Anybox Calendar items from the plugin marketplace.",
+          "zh-CN": "在插件市场中管理 Anybox 日历事项。",
+        },
+      },
+    })
+    const props = createProps({
+      pluginCatalog: [calendarPlugin],
+    })
+    const { rerender } = render(
+      <I18nProvider>
+        <PluginsPage {...props} />
+      </I18nProvider>,
+    )
+
+    expect(screen.getByRole("button", { name: "日历 not installed" })).toBeInTheDocument()
+    expect(screen.getByText("管理 Anybox 日历事项。")).toBeInTheDocument()
+
+    rerender(
+      <I18nProvider>
+        <PluginsPage {...props} activePluginID="calendar" />
+      </I18nProvider>,
+    )
+
+    expect(screen.getByRole("heading", { name: "日历", level: 1 })).toBeInTheDocument()
+    expect(screen.getByText("在插件市场中管理 Anybox 日历事项。")).toBeInTheDocument()
+    expect(screen.queryByText("Manage Anybox Calendar items.")).not.toBeInTheDocument()
   })
 
   it("lists installed plugins in the installed sidebar", () => {

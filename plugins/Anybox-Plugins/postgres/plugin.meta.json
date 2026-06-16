@@ -9,8 +9,14 @@
   },
   "homepage": "https://github.com/modelcontextprotocol/servers",
   "interface": {
-    "displayName": "Postgres",
-    "shortDescription": "Inspect and query a configured Postgres database.",
+    "displayName": {
+      "en-US": "Postgres",
+      "zh-CN": "Postgres"
+    },
+    "shortDescription": {
+      "en-US": "Inspect and query a configured Postgres database.",
+      "zh-CN": "查看并查询已配置的 Postgres 数据库。"
+    },
     "developerName": "Model Context Protocol",
     "category": "Database",
     "capabilities": [
@@ -19,7 +25,10 @@
     ],
     "logo": "database",
     "screenshots": [],
-    "longDescription": "Inspect and query a configured Postgres database through MCP."
+    "longDescription": {
+      "en-US": "Inspect and query a configured Postgres database through MCP.",
+      "zh-CN": "通过 MCP 查看并查询已配置的 Postgres 数据库。"
+    }
   },
   "mcpServers": [
     {

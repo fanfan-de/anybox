@@ -9,8 +9,14 @@
   },
   "homepage": "https://context7.com",
   "interface": {
-    "displayName": "Context7 Docs",
-    "shortDescription": "Fetch library and framework docs.",
+    "displayName": {
+      "en-US": "Context7 Docs",
+      "zh-CN": "Context7 文档"
+    },
+    "shortDescription": {
+      "en-US": "Fetch library and framework docs.",
+      "zh-CN": "获取库和框架文档。"
+    },
     "developerName": "Context7",
     "category": "Docs",
     "capabilities": [
@@ -18,7 +24,10 @@
     ],
     "logo": "docs",
     "screenshots": [],
-    "longDescription": "Fetch library and framework documentation through the remote Context7 MCP endpoint."
+    "longDescription": {
+      "en-US": "Fetch library and framework documentation through the remote Context7 MCP endpoint.",
+      "zh-CN": "通过远程 Context7 MCP 端点获取库和框架文档。"
+    }
   },
   "mcpServers": [
     {

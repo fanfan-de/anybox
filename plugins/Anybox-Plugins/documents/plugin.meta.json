@@ -22,9 +22,18 @@
     "artifacts"
   ],
   "interface": {
-    "displayName": "Documents",
-    "shortDescription": "Create and edit document files",
-    "longDescription": "Create, edit, inspect, render, verify, redline, comment on, and export DOCX document files locally. Use Documents when the durable output or target is a document, doc, docs, Word file, memo, report, or writing artifact.",
+    "displayName": {
+      "en-US": "Documents",
+      "zh-CN": "文档"
+    },
+    "shortDescription": {
+      "en-US": "Create and edit document files",
+      "zh-CN": "创建和编辑文档文件"
+    },
+    "longDescription": {
+      "en-US": "Create, edit, inspect, render, verify, redline, comment on, and export DOCX document files locally. Use Documents when the durable output or target is a document, doc, docs, Word file, memo, report, or writing artifact.",
+      "zh-CN": "在本地创建、编辑、检查、渲染、验证、修订、评论和导出 DOCX 文档文件。当目标产物是 document、doc、docs、Word 文件、备忘录、报告或写作材料时使用 Documents。"
+    },
     "developerName": "Anybox",
     "category": "Docs",
     "capabilities": [

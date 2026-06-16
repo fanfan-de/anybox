@@ -25,9 +25,18 @@
     "oslog"
   ],
   "interface": {
-    "displayName": "Build macOS Apps",
-    "shortDescription": "Build, debug, instrument, and implement macOS apps with SwiftUI and AppKit guidance",
-    "longDescription": "macOS development workflows for discovering local projects, building and running desktop apps, implementing native SwiftUI scenes, bridging into AppKit when necessary, adding lightweight Logger telemetry, triaging test failures, inspecting signing and entitlements, and debugging desktop-specific build or runtime errors.",
+    "displayName": {
+      "en-US": "Build macOS Apps",
+      "zh-CN": "构建 macOS 应用"
+    },
+    "shortDescription": {
+      "en-US": "Build, debug, instrument, and implement macOS apps with SwiftUI and AppKit guidance",
+      "zh-CN": "使用 SwiftUI 和 AppKit 指导构建、调试、检测并实现 macOS 应用"
+    },
+    "longDescription": {
+      "en-US": "Use Build macOS Apps for SwiftUI and AppKit architecture, Xcode build and simulator workflows, Instruments and runtime diagnostics, app automation, menus, settings, windowing, and native macOS polish.",
+      "zh-CN": "使用 Build macOS Apps 处理 SwiftUI 和 AppKit 架构、Xcode 构建与模拟器工作流、Instruments 和运行时诊断、应用自动化、菜单、设置、窗口以及原生 macOS 细节打磨。"
+    },
     "developerName": "OpenAI",
     "category": "Code",
     "capabilities": [

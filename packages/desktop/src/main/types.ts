@@ -1600,6 +1600,17 @@ export interface AgentPluginPackageDownload {
   size?: number
 }
 
+export interface AgentPluginLocalizedText {
+  "en-US"?: string
+  "zh-CN"?: string
+}
+
+export interface AgentPluginCatalogLocalization {
+  name?: AgentPluginLocalizedText
+  description?: AgentPluginLocalizedText
+  longDescription?: AgentPluginLocalizedText
+}
+
 export interface AgentPluginStdioRuntime {
   transport: "stdio"
   command: string
@@ -1665,6 +1676,7 @@ export interface AgentPluginCatalogItem {
   name: string
   description: string
   longDescription?: string
+  localized?: AgentPluginCatalogLocalization
   version: string
   publisher: string
   category: AgentPluginCategory

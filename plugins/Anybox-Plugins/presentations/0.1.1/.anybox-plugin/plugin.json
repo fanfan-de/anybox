@@ -18,9 +18,18 @@
     "deck"
   ],
   "interface": {
-    "displayName": "Presentations",
-    "shortDescription": "Create editable PowerPoint decks",
-    "longDescription": "Create, render, inspect, verify, and export editable PowerPoint PPTX decks locally with code-first slide modules, PNG previews, layout JSON, and QA checks.",
+    "displayName": {
+      "en-US": "Presentations",
+      "zh-CN": "演示文稿"
+    },
+    "shortDescription": {
+      "en-US": "Create editable PowerPoint decks",
+      "zh-CN": "创建可编辑的 PowerPoint 演示文稿"
+    },
+    "longDescription": {
+      "en-US": "Create, render, inspect, verify, and export editable PowerPoint PPTX decks locally with code-first slide modules, PNG previews, layout JSON, and QA checks.",
+      "zh-CN": "在本地创建、渲染、检查、验证并导出可编辑的 PowerPoint PPTX 演示文稿，包含代码优先的幻灯片模块、PNG 预览、布局 JSON 和 QA 检查。"
+    },
     "developerName": "Anybox",
     "category": "Docs",
     "capabilities": [

@@ -17,9 +17,18 @@
     "automation"
   ],
   "interface": {
-    "displayName": "Feishu CLI",
-    "shortDescription": "Use official lark-cli skills from agent shell commands",
-    "longDescription": "A skill-only plugin that bundles Feishu/Lark CLI skills for installing, authenticating, inspecting, and safely operating Feishu or Lark through the official lark-cli command-line tool. It does not bundle an MCP server or store Feishu credentials.",
+    "displayName": {
+      "en-US": "Feishu CLI",
+      "zh-CN": "飞书 CLI"
+    },
+    "shortDescription": {
+      "en-US": "Use official lark-cli skills from agent shell commands",
+      "zh-CN": "通过 Agent shell 命令使用官方 lark-cli 技能"
+    },
+    "longDescription": {
+      "en-US": "A skill-only plugin that bundles Feishu/Lark CLI skills for installing, authenticating, inspecting, and safely operating Feishu or Lark through the official lark-cli command-line tool. It does not bundle an MCP server or store Feishu credentials.",
+      "zh-CN": "仅包含技能的插件，打包 Feishu/Lark CLI 技能，用于安装、认证、检查，并通过官方 lark-cli 命令行工具安全操作飞书或 Lark。它不打包 MCP server，也不存储飞书凭据。"
+    },
     "developerName": "Anybox",
     "category": "Automation",
     "capabilities": [

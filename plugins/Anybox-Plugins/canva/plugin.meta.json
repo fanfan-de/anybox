@@ -12,10 +12,19 @@
   "license": "MIT",
   "keywords": [],
   "interface": {
-    "displayName": "Canva",
+    "displayName": {
+      "en-US": "Canva",
+      "zh-CN": "Canva"
+    },
     "developerName": "Canva",
-    "shortDescription": "Search, create, edit designs",
-    "longDescription": "Search, create, edit designs",
+    "shortDescription": {
+      "en-US": "Search, create, edit designs",
+      "zh-CN": "搜索、创建和编辑设计"
+    },
+    "longDescription": {
+      "en-US": "Search, create, edit designs",
+      "zh-CN": "搜索、创建和编辑设计"
+    },
     "category": "Docs",
     "capabilities": [],
     "websiteURL": "https://www.canva.com",

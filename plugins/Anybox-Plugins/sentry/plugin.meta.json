@@ -17,9 +17,18 @@
     "triage"
   ],
   "interface": {
-    "displayName": "Sentry",
-    "shortDescription": "Inspect recent Sentry issues and events",
-    "longDescription": "Use Sentry skills to inspect recent issues, review events, and summarize production errors with a read-only workflow.",
+    "displayName": {
+      "en-US": "Sentry",
+      "zh-CN": "Sentry"
+    },
+    "shortDescription": {
+      "en-US": "Inspect recent Sentry issues and events",
+      "zh-CN": "查看近期 Sentry Issue 和事件"
+    },
+    "longDescription": {
+      "en-US": "Use Sentry skills to inspect recent issues, review events, and summarize production errors with a read-only workflow.",
+      "zh-CN": "使用 Sentry 技能以只读工作流查看近期 Issue、检查事件，并总结生产错误。"
+    },
     "developerName": "OpenAI",
     "category": "Docs",
     "capabilities": [

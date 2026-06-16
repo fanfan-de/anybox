@@ -21,9 +21,18 @@
     "meeting-prep"
   ],
   "interface": {
-    "displayName": "Outlook Calendar",
-    "shortDescription": "Manage Outlook schedules and meeting changes",
-    "longDescription": "Use Outlook Calendar to summarize a day, compare availability, prepare for meetings, explain Outlook status semantics, and schedule, reschedule, or cancel events through the connected Microsoft Outlook app.",
+    "displayName": {
+      "en-US": "Outlook Calendar",
+      "zh-CN": "Outlook 日历"
+    },
+    "shortDescription": {
+      "en-US": "Manage Outlook schedules and meeting changes",
+      "zh-CN": "管理 Outlook 日程和会议变更"
+    },
+    "longDescription": {
+      "en-US": "Use Outlook Calendar to summarize a day, compare availability, prepare for meetings, explain Outlook status semantics, and schedule, reschedule, or cancel events through the connected Microsoft Outlook app.",
+      "zh-CN": "使用 Outlook Calendar 总结一天日程、比较空闲时间、准备会议、解释 Outlook 状态语义，并通过已连接的 Microsoft Outlook 应用安排、改期或取消事件。"
+    },
     "developerName": "OpenAI",
     "category": "Docs",
     "capabilities": [

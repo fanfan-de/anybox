@@ -26,9 +26,18 @@
     "heap"
   ],
   "interface": {
-    "displayName": "Test Android Apps",
-    "shortDescription": "Reproduce issues, inspect UI, and capture performance evidence from Android emulators",
-    "longDescription": "Use Test Android Apps to build and install app variants, drive a booted Android emulator with adb input events, inspect UI trees, capture screenshots, collect logcat output, and gather Simpleperf, Perfetto, gfxinfo, or memory/leak evidence while reproducing issues.",
+    "displayName": {
+      "en-US": "Test Android Apps",
+      "zh-CN": "Android 应用测试"
+    },
+    "shortDescription": {
+      "en-US": "Reproduce issues, inspect UI, and capture performance evidence from Android emulators",
+      "zh-CN": "在 Android 模拟器中复现问题、检查 UI 并采集性能证据"
+    },
+    "longDescription": {
+      "en-US": "Use Test Android Apps to build and install app variants, drive a booted Android emulator with adb input events, inspect UI trees, capture screenshots, collect logcat output, and gather Simpleperf, Perfetto, gfxinfo, or memory/leak evidence while reproducing issues.",
+      "zh-CN": "使用 Test Android Apps 构建并安装应用变体，通过 adb 输入事件驱动已启动的 Android 模拟器，检查 UI 树，截取截图，收集 logcat 输出，并在复现问题时采集 Simpleperf、Perfetto、gfxinfo 或内存/泄漏证据。"
+    },
     "developerName": "OpenAI",
     "category": "Code",
     "capabilities": [
