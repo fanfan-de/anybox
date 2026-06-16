@@ -10696,9 +10696,9 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open settings" }))
     await screen.findByRole("dialog", { name: "Settings" })
     fireEvent.click(screen.getByRole("button", { name: /^Models/ }))
-    expect(screen.getByText("GPT-4o mini")).toBeInTheDocument()
+    expect(await screen.findByText("GPT-4o mini")).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: "Primary model: DeepSeek / DeepSeek Reasoner" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Primary model: DeepSeek / DeepSeek Reasoner" }))
     let modelPicker = screen.getByRole("dialog", { name: "Primary model model picker" })
     fireEvent.change(within(modelPicker).getByRole("searchbox", { name: "Search providers or models" }), {
       target: {

@@ -1,5 +1,15 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+
+vi.mock("electron", () => ({
+  app: {
+    getPath: vi.fn((name: string) => (name === "userData" ? `${process.env.TEMP ?? "C:\\Temp"}\\Anybox-test` : "")),
+  },
+}))
+
+import { AGENT_WORKDIR_ENV } from "./agent-workdir"
 import { commitGitChanges, createGitBranch, getGitCapabilities } from "./git"
+
+let previousAgentWorkdir: string | undefined
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -11,7 +21,17 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe("git api client", () => {
+  beforeEach(() => {
+    previousAgentWorkdir = process.env[AGENT_WORKDIR_ENV]
+    process.env[AGENT_WORKDIR_ENV] = "C:\\Projects\\Atlas\\client"
+  })
+
   afterEach(() => {
+    if (previousAgentWorkdir === undefined) {
+      delete process.env[AGENT_WORKDIR_ENV]
+    } else {
+      process.env[AGENT_WORKDIR_ENV] = previousAgentWorkdir
+    }
     vi.restoreAllMocks()
   })
 
