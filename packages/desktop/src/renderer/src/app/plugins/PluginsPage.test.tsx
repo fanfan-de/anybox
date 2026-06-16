@@ -255,8 +255,8 @@ describe("PluginsPage", () => {
     expect(screen.queryByLabelText("Featured plugin spotlight")).not.toBeInTheDocument()
     expect(screen.queryByText("Plugin module is under development")).not.toBeInTheDocument()
     const breadcrumb = screen.getByRole("navigation", { name: "Plugin detail breadcrumb" })
-    expect(breadcrumb).toHaveTextContent("插件")
-    expect(within(breadcrumb).queryByRole("button", { name: "插件" })).not.toBeInTheDocument()
+    expect(breadcrumb).toHaveTextContent("Plugins")
+    expect(within(breadcrumb).queryByRole("button", { name: "Plugins" })).not.toBeInTheDocument()
     expect(breadcrumb.closest(".plugins-marketplace-content")).not.toBeNull()
 
     fireEvent.click(screen.getByRole("button", { name: "Install Filesystem" }))
@@ -284,22 +284,70 @@ describe("PluginsPage", () => {
     )
 
     const categoryNav = screen.getByRole("navigation", { name: "Plugin categories" })
-    expect(within(categoryNav).getByRole("button", { name: "全部，3 个插件" })).toHaveAttribute("aria-pressed", "true")
+    expect(within(categoryNav).getByRole("button", { name: "All, 3 plugins" })).toHaveAttribute("aria-pressed", "true")
     expect(screen.queryByRole("region", { name: "Plugin promotion" })).not.toBeInTheDocument()
     expect(screen.getByRole("region", { name: "Featured plugins" })).toBeInTheDocument()
     expect(screen.getByRole("list", { name: "Featured" })).toBeInTheDocument()
 
-    fireEvent.click(within(categoryNav).getByRole("button", { name: "文档，1 个插件" }))
+    fireEvent.click(within(categoryNav).getByRole("button", { name: "Docs, 1 plugin" }))
 
-    expect(within(categoryNav).getByRole("button", { name: "文档，1 个插件" })).toHaveAttribute("aria-pressed", "true")
+    expect(within(categoryNav).getByRole("button", { name: "Docs, 1 plugin" })).toHaveAttribute("aria-pressed", "true")
     expect(screen.getByRole("button", { name: "Docs not installed" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Filesystem not installed" })).not.toBeInTheDocument()
 
-    fireEvent.click(within(categoryNav).getByRole("button", { name: "全部，3 个插件" }))
+    fireEvent.click(within(categoryNav).getByRole("button", { name: "All, 3 plugins" }))
 
-    expect(within(categoryNav).getByRole("button", { name: "全部，3 个插件" })).toHaveAttribute("aria-pressed", "true")
+    expect(within(categoryNav).getByRole("button", { name: "All, 3 plugins" })).toHaveAttribute("aria-pressed", "true")
     expect(screen.getByRole("button", { name: "Filesystem not installed" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Docs not installed" })).toBeInTheDocument()
+  })
+
+  it("localizes marketplace category chips and card metadata in English", () => {
+    render(
+      <PluginsPage
+        {...createProps({
+          installedPlugins: [createInstalledPlugin()],
+          pluginCatalog: [
+            createPlugin({
+              source: "package",
+            }),
+          ],
+        })}
+      />,
+    )
+
+    expect(screen.getByText("By Anybox")).toBeInTheDocument()
+    expect(screen.getAllByText("Code").length).toBeGreaterThan(0)
+    expect(screen.getByText("1 capability")).toBeInTheDocument()
+    expect(screen.getByText("Local package")).toBeInTheDocument()
+    expect(screen.getAllByText("Installed").length).toBeGreaterThan(0)
+    expect(screen.queryByText("由 Anybox 开发")).not.toBeInTheDocument()
+    expect(screen.queryByText("开发")).not.toBeInTheDocument()
+    expect(screen.queryByText("1 项能力")).not.toBeInTheDocument()
+    expect(screen.queryByText("本地包")).not.toBeInTheDocument()
+    expect(screen.queryByText("已安装")).not.toBeInTheDocument()
+  })
+
+  it("localizes the browser category in Chinese", () => {
+    window.localStorage.setItem("desktop.locale", "zh-CN")
+
+    render(
+      <I18nProvider>
+        <PluginsPage
+          {...createProps({
+            pluginCatalog: [
+              createPlugin({
+                category: "Browser",
+              }),
+            ],
+          })}
+        />
+      </I18nProvider>,
+    )
+
+    const categoryNav = screen.getByRole("navigation", { name: "插件分类" })
+    expect(within(categoryNav).getByRole("button", { name: "浏览器，1 个插件" })).toBeInTheDocument()
+    expect(within(categoryNav).queryByRole("button", { name: "Browser，1 个插件" })).not.toBeInTheDocument()
   })
 
   it("uses localized plugin descriptions for the active app locale", () => {
@@ -334,7 +382,7 @@ describe("PluginsPage", () => {
       </I18nProvider>,
     )
 
-    expect(screen.getByRole("button", { name: "日历 not installed" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "日历 未安装" })).toBeInTheDocument()
     expect(screen.getByText("管理 Anybox 日历事项。")).toBeInTheDocument()
 
     rerender(
@@ -472,7 +520,7 @@ describe("PluginsPage", () => {
     )
 
     const installedSidebar = screen.getByRole("complementary", { name: "Installed plugins" })
-    fireEvent.contextMenu(within(installedSidebar).getByRole("button", { name: "Filesystem package missing" }), {
+    fireEvent.contextMenu(within(installedSidebar).getByRole("button", { name: "Filesystem Download required" }), {
       clientX: 48,
       clientY: 64,
     })
@@ -533,7 +581,7 @@ describe("PluginsPage", () => {
     expect(screen.queryByRole("region", { name: "Plugin marketplace layout" })).not.toBeInTheDocument()
     expect(screen.getByRole("region", { name: "Selected plugin details" })).toBeInTheDocument()
     const breadcrumb = screen.getByRole("navigation", { name: "Plugin detail breadcrumb" })
-    expect(breadcrumb).toHaveTextContent("插件")
+    expect(breadcrumb).toHaveTextContent("Plugins")
     expect(screen.getByLabelText("Plugins top menu")).not.toContainElement(breadcrumb)
     expect(breadcrumb.closest(".plugins-page-main")).not.toBeNull()
     const detailColumn = breadcrumb.closest(".plugins-marketplace-content")
@@ -546,7 +594,7 @@ describe("PluginsPage", () => {
     fireEvent.click(installButton)
     expect(onInstallPlugin).toHaveBeenCalledWith("filesystem")
 
-    fireEvent.click(within(breadcrumb).getByRole("button", { name: "插件" }))
+    fireEvent.click(within(breadcrumb).getByRole("button", { name: "Plugins" }))
     expect(onPluginDeselect).toHaveBeenCalledTimes(1)
   })
 
@@ -569,7 +617,7 @@ describe("PluginsPage", () => {
     expect(screen.queryByRole("button", { name: "Filesystem not installed" })).not.toBeInTheDocument()
 
     const categoryNav = screen.getByRole("navigation", { name: "Plugin categories" })
-    fireEvent.click(within(categoryNav).getByRole("button", { name: "文档，1 个插件" }))
+    fireEvent.click(within(categoryNav).getByRole("button", { name: "Docs, 1 plugin" }))
     expect(screen.getByRole("button", { name: "Docs not installed" })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "Docs not installed" }))

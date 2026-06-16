@@ -1,5 +1,7 @@
 import { type ReactNode } from "react"
 import { CloseIcon, SearchIcon } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
+import type { TranslationKey } from "../i18n/translations"
 import { ShellTopMenu } from "../shared-ui"
 import type { ConnectionsTab } from "../types"
 
@@ -19,21 +21,21 @@ interface ConnectionsPageProps {
 
 const CONNECTION_TABS: Array<{
   key: ConnectionsTab
-  label: string
+  labelKey: TranslationKey
 }> = [
-  { key: "plugins", label: "插件" },
-  { key: "connectors", label: "连接器" },
-  { key: "mcp", label: "MCP" },
-  { key: "ssh", label: "SSH" },
-  { key: "mobile", label: "手机" },
+  { key: "plugins", labelKey: "connections.tabs.plugins" },
+  { key: "connectors", labelKey: "connections.tabs.connectors" },
+  { key: "mcp", labelKey: "connections.tabs.mcp" },
+  { key: "ssh", labelKey: "connections.tabs.ssh" },
+  { key: "mobile", labelKey: "connections.tabs.mobile" },
 ]
 
-function getSearchPlaceholder(tab: ConnectionsTab) {
-  if (tab === "connectors") return "搜索连接器"
-  if (tab === "mcp") return "搜索 MCP"
-  if (tab === "ssh") return "搜索 SSH"
-  if (tab === "mobile") return "搜索手机"
-  return "搜索插件"
+function getSearchPlaceholderKey(tab: ConnectionsTab): TranslationKey {
+  if (tab === "connectors") return "connections.search.connectors"
+  if (tab === "mcp") return "connections.search.mcp"
+  if (tab === "ssh") return "connections.search.ssh"
+  if (tab === "mobile") return "connections.search.mobile"
+  return "connections.search.plugins"
 }
 
 export function ConnectionsPage({
@@ -49,6 +51,8 @@ export function ConnectionsPage({
   onSearchQueryChange,
   onTabChange,
 }: ConnectionsPageProps) {
+  const { t } = useI18n()
+  const searchPlaceholder = t(getSearchPlaceholderKey(activeTab))
   const tabCounts: Record<ConnectionsTab, number> = {
     plugins: pluginCount,
     connectors: connectorCount,
@@ -58,17 +62,18 @@ export function ConnectionsPage({
   }
 
   return (
-    <section className="connections-page" aria-label="连接与扩展">
+    <section className="connections-page" aria-label={t("connections.title")}>
       <ShellTopMenu
         as="header"
-        ariaLabel="连接与扩展顶部菜单"
+        ariaLabel={t("connections.topMenu")}
         className="canvas-region-top-menu connections-top-menu"
         contentClassName="connections-top-menu-content"
         content={(
           <div className="connections-top-menu-inner">
-            <nav className="connections-tab-list" role="tablist" aria-label="连接与扩展分类">
+            <nav className="connections-tab-list" role="tablist" aria-label={t("connections.categories")}>
               {CONNECTION_TABS.map((tab) => {
                 const isActive = activeTab === tab.key
+                const label = t(tab.labelKey)
 
                 return (
                   <button
@@ -76,12 +81,12 @@ export function ConnectionsPage({
                     className={isActive ? "connections-tab is-active" : "connections-tab"}
                     type="button"
                     role="tab"
-                    aria-label={`${tab.label} ${tabCounts[tab.key]}`}
+                    aria-label={`${label} ${tabCounts[tab.key]}`}
                     aria-selected={isActive}
                     aria-controls="connections-tab-panel"
                     onClick={() => onTabChange(tab.key)}
                   >
-                    <span>{tab.label}</span>
+                    <span>{label}</span>
                     <small>{tabCounts[tab.key]}</small>
                   </button>
                 )
@@ -100,17 +105,17 @@ export function ConnectionsPage({
           <label className="connections-search-control">
             <SearchIcon />
             <input
-              aria-label={getSearchPlaceholder(activeTab)}
+              aria-label={searchPlaceholder}
               type="search"
               value={searchQuery}
-              placeholder={getSearchPlaceholder(activeTab)}
+              placeholder={searchPlaceholder}
               onChange={(event) => onSearchQueryChange(event.target.value)}
             />
             {searchQuery ? (
               <button
                 type="button"
-                aria-label="清除搜索"
-                title="清除搜索"
+                aria-label={t("connections.search.clear")}
+                title={t("connections.search.clear")}
                 onClick={() => onSearchQueryChange("")}
               >
                 <CloseIcon />

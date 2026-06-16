@@ -1,4 +1,4 @@
-import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useRef, useState } from "react"
+import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react"
 import {
   ChevronDownIcon,
   CloseIcon,
@@ -190,6 +190,12 @@ function getPromptMarkdownPreviewText(value: string) {
 
 function normalizePromptSearchTerm(value: string) {
   return value.trim().toLowerCase()
+}
+
+function resizePromptNameTextarea(textarea: HTMLTextAreaElement | null) {
+  if (!textarea) return
+  textarea.style.height = "0px"
+  textarea.style.height = `${textarea.scrollHeight}px`
 }
 
 function doesPromptPresetMatchSearch(
@@ -821,6 +827,7 @@ export function PromptPresetsPage({
   const [promptTranslationLanguageID, setPromptTranslationLanguageID] =
     useState<PromptTranslationLanguageID>("zh-Hans")
   const [promptTranslationModel, setPromptTranslationModel] = useState("")
+  const promptNameTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const promptPresetOptions = [...promptPresets].sort((left, right) => {
     if (left.source !== right.source) {
       return left.source === "bundled" ? -1 : 1
@@ -854,6 +861,22 @@ export function PromptPresetsPage({
     isTranslatingPromptPreset ||
     !promptDraftContent.trim()
 
+  useLayoutEffect(() => {
+    resizePromptNameTextarea(promptNameTextareaRef.current)
+  }, [promptDraftLabel, selectedPromptPreset?.id])
+
+  useLayoutEffect(() => {
+    const textarea = promptNameTextareaRef.current
+    const resizeTarget = textarea?.parentElement
+    if (!textarea || !resizeTarget || typeof ResizeObserver === "undefined") return
+
+    const resizeObserver = new ResizeObserver(() => {
+      resizePromptNameTextarea(textarea)
+    })
+    resizeObserver.observe(resizeTarget)
+    return () => resizeObserver.disconnect()
+  }, [selectedPromptPreset?.id])
+
   function openPromptTranslateDialog() {
     if (isPromptTranslateDisabled) return
     setPromptTranslationLanguageID("zh-Hans")
@@ -875,6 +898,11 @@ export function PromptPresetsPage({
       setIsPromptTranslateDialogOpen(false)
     }
     return translated
+  }
+
+  function handlePromptDraftLabelChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    onPromptDraftLabelChange(event.target.value.replace(/[\r\n]+/g, " "))
+    resizePromptNameTextarea(event.target)
   }
 
   return (
@@ -1010,12 +1038,14 @@ export function PromptPresetsPage({
                     <div className="settings-prompt-editor-header">
                       <div className="settings-prompt-editor-meta">
                         {selectedPromptPreset.source === "custom" ? (
-                          <input
+                          <textarea
+                            ref={promptNameTextareaRef}
                             className="settings-prompt-name-input"
                             aria-label={t("prompts.presetNameAria")}
                             value={promptDraftLabel}
+                            rows={1}
                             readOnly={isLoadingPromptPreset}
-                            onChange={(event) => onPromptDraftLabelChange(event.target.value)}
+                            onChange={handlePromptDraftLabelChange}
                           />
                         ) : (
                           <h3>{selectedPromptPresetDisplayLabel}</h3>
