@@ -13413,6 +13413,45 @@ describe("App", () => {
     )
   })
 
+  it("keeps skills tree scrollbars themed in light mode", () => {
+    expect(styles).toMatch(
+      /\.skills-tree-root\s*\{[^}]*--skills-tree-scrollbar-size:\s*10px;[^}]*--skills-tree-scrollbar-thumb:\s*var\(--mix-seg-text-3-34-transparent-66\);[^}]*--skills-tree-scrollbar-thumb-hover:\s*var\(--mix-seg-text-3-54-transparent-46\);[^}]*--skills-tree-scrollbar-thumb-active:\s*var\(--seg-text-3\);[^}]*--skills-tree-scrollbar-track:\s*transparent;/s,
+    )
+    expect(styles).toMatch(
+      /\.skills-tree-root\s*\{[^}]*overflow:\s*auto;[^}]*scrollbar-gutter:\s*stable;[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*var\(--skills-tree-scrollbar-thumb\) var\(--skills-tree-scrollbar-track\);/s,
+    )
+    expect(styles).toMatch(
+      /\.skills-tree-root::-webkit-scrollbar\s*\{[^}]*width:\s*var\(--skills-tree-scrollbar-size\);[^}]*height:\s*var\(--skills-tree-scrollbar-size\);/s,
+    )
+    expect(styles).toMatch(
+      /\.skills-tree-root::-webkit-scrollbar-thumb\s*\{[^}]*min-height:\s*32px;[^}]*border:\s*3px solid transparent;[^}]*border-radius:\s*999px;[^}]*background-color:\s*var\(--skills-tree-scrollbar-thumb\);[^}]*background-clip:\s*content-box;/s,
+    )
+    expect(styles).toMatch(
+      /\.skills-tree-root::-webkit-scrollbar-thumb:active\s*\{[^}]*background-color:\s*var\(--skills-tree-scrollbar-thumb-active\);/s,
+    )
+    expect(styles).toMatch(
+      /\.skills-tree-root::-webkit-scrollbar-corner\s*\{[^}]*background:\s*transparent;/s,
+    )
+  })
+
+  it("keeps plugins marketplace scrollbars themed", () => {
+    expect(styles).toMatch(
+      /\.plugins-marketplace-content,\s*\.plugins-installed-list\s*\{[^}]*--plugins-scrollbar-size:\s*10px;[^}]*--plugins-scrollbar-thumb:\s*var\(--mix-seg-text-3-34-transparent-66\);[^}]*--plugins-scrollbar-thumb-hover:\s*var\(--mix-seg-text-3-54-transparent-46\);[^}]*--plugins-scrollbar-thumb-active:\s*var\(--seg-text-3\);[^}]*--plugins-scrollbar-track:\s*transparent;[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*var\(--plugins-scrollbar-thumb\) var\(--plugins-scrollbar-track\);/s,
+    )
+    expect(styles).toMatch(
+      /\.plugins-marketplace-content::-webkit-scrollbar,\s*\.plugins-installed-list::-webkit-scrollbar\s*\{[^}]*width:\s*var\(--plugins-scrollbar-size\);[^}]*height:\s*var\(--plugins-scrollbar-size\);/s,
+    )
+    expect(styles).toMatch(
+      /\.plugins-marketplace-content::-webkit-scrollbar-thumb,\s*\.plugins-installed-list::-webkit-scrollbar-thumb\s*\{[^}]*min-height:\s*32px;[^}]*border:\s*3px solid transparent;[^}]*border-radius:\s*999px;[^}]*background-color:\s*var\(--plugins-scrollbar-thumb\);[^}]*background-clip:\s*content-box;/s,
+    )
+    expect(styles).toMatch(
+      /\.plugins-marketplace-content::-webkit-scrollbar-thumb:active,\s*\.plugins-installed-list::-webkit-scrollbar-thumb:active\s*\{[^}]*background-color:\s*var\(--plugins-scrollbar-thumb-active\);/s,
+    )
+    expect(styles).toMatch(
+      /\.plugins-marketplace-content::-webkit-scrollbar-corner,\s*\.plugins-installed-list::-webkit-scrollbar-corner\s*\{[^}]*background:\s*transparent;/s,
+    )
+  })
+
   it("lets sidebar-hosted skills and MCP pages use the full canvas width", () => {
     expect(styles).toMatch(
       /\.settings-page-main\.is-services\s+\.settings-services-layout\.global-skills-page-layout\.is-sidebar-hosted,\s*\.settings-page-main\.is-services\s+\.settings-services-layout\.mcp-servers-page-layout\.is-sidebar-hosted\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s,

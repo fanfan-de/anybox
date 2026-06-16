@@ -13,6 +13,8 @@ import {
 import { SettingsSelect } from "../settings/SettingsSelect"
 import { ShellTopMenu } from "../shared-ui"
 import { ThreadMarkdown } from "../thread-markdown"
+import { useI18n } from "../i18n/I18nProvider"
+import type { TranslationKey } from "../i18n/translations"
 import type {
   PromptPresetDocument,
   PromptPresetSelection,
@@ -24,24 +26,39 @@ import type {
 
 type PromptEditorMode = "edit" | "preview"
 type PromptPresetFolderID = PromptPresetSummary["source"]
+type PromptTranslate = (key: TranslationKey, params?: Record<string, string | number>) => string
 
 const PROMPT_TRANSLATION_LANGUAGES: Array<{
   value: PromptTranslationLanguageID
-  label: string
+  labelKey: TranslationKey
 }> = [
-  { value: "en", label: "English" },
-  { value: "zh-Hans", label: "简体中文" },
-  { value: "zh-Hant", label: "繁體中文" },
-  { value: "es", label: "Spanish" },
-  { value: "fr", label: "French" },
-  { value: "de", label: "German" },
-  { value: "pt", label: "Portuguese" },
-  { value: "it", label: "Italian" },
-  { value: "ja", label: "Japanese" },
-  { value: "ko", label: "Korean" },
-  { value: "nl", label: "Dutch" },
-  { value: "ru", label: "Russian" },
+  { value: "en", labelKey: "prompts.language.english" },
+  { value: "zh-Hans", labelKey: "prompts.language.simplifiedChinese" },
+  { value: "zh-Hant", labelKey: "prompts.language.traditionalChinese" },
+  { value: "es", labelKey: "prompts.language.spanish" },
+  { value: "fr", labelKey: "prompts.language.french" },
+  { value: "de", labelKey: "prompts.language.german" },
+  { value: "pt", labelKey: "prompts.language.portuguese" },
+  { value: "it", labelKey: "prompts.language.italian" },
+  { value: "ja", labelKey: "prompts.language.japanese" },
+  { value: "ko", labelKey: "prompts.language.korean" },
+  { value: "nl", labelKey: "prompts.language.dutch" },
+  { value: "ru", labelKey: "prompts.language.russian" },
 ]
+
+const BUILTIN_PROMPT_LABEL_KEYS = {
+  "System prompt": "prompts.builtin.systemPrompt",
+  "Plan mode prompt": "prompts.builtin.planModePrompt",
+  "Side chat prompt": "prompts.builtin.sideChatPrompt",
+  "Anthropic Provider Prompt": "prompts.builtin.anthropicProviderPrompt",
+  "Beast Provider Prompt": "prompts.builtin.beastProviderPrompt",
+  "Gemini Provider Prompt": "prompts.builtin.geminiProviderPrompt",
+  "GPT Provider Prompt": "prompts.builtin.gptProviderPrompt",
+  "Kimi Provider Prompt": "prompts.builtin.kimiProviderPrompt",
+  "Codex Provider Prompt": "prompts.builtin.codexProviderPrompt",
+  "Trinity Provider Prompt": "prompts.builtin.trinityProviderPrompt",
+  "Anthropic Plan Reminder": "prompts.builtin.anthropicPlanReminder",
+} as const satisfies Record<string, TranslationKey>
 
 function getPromptTranslationModelValue(model: ProviderModel) {
   return `${model.providerID}/${model.id}`
@@ -122,33 +139,46 @@ export interface PromptPresetsSidebarViewProps {
   onPromptUrlInstallDialogOpen: () => void
 }
 
-function getPromptPresetSourceLabel(source: PromptPresetSummary["source"]) {
-  return source === "custom" ? "Custom" : "Bundled"
+function getPromptPresetDisplayLabel(
+  preset: Pick<PromptPresetSummary, "label" | "source">,
+  t: PromptTranslate,
+) {
+  if (preset.source !== "bundled") return preset.label
+
+  const labelKey = BUILTIN_PROMPT_LABEL_KEYS[preset.label as keyof typeof BUILTIN_PROMPT_LABEL_KEYS]
+  return labelKey ? t(labelKey) : preset.label
 }
 
-function getPromptPresetFolderLabel(source: PromptPresetSummary["source"]) {
-  return source === "custom" ? "Custom" : "Bundled"
+function getPromptPresetSourceLabel(source: PromptPresetSummary["source"], t: PromptTranslate) {
+  return source === "custom" ? t("prompts.source.custom") : t("prompts.source.bundled")
 }
 
-function getPromptPresetPathLabel(preset: PromptPresetSummary) {
-  return preset.filePath ?? preset.sourcePath ?? (preset.source === "custom" ? "Custom preset" : "Bundled preset")
+function getPromptPresetFolderLabel(source: PromptPresetSummary["source"], t: PromptTranslate) {
+  return source === "custom" ? t("prompts.folder.custom") : t("prompts.folder.bundled")
+}
+
+function getPromptPresetPathLabel(preset: PromptPresetSummary, t: PromptTranslate) {
+  return preset.filePath ?? preset.sourcePath ?? (
+    preset.source === "custom" ? t("prompts.path.customPreset") : t("prompts.path.bundledPreset")
+  )
 }
 
 function getPromptPresetUsageLabels(
   presetID: string,
   selection: PromptPresetSelection | null,
+  t: PromptTranslate,
 ) {
   if (!selection) return []
 
   const labels: string[] = []
   if (selection.systemPromptPresetID === presetID) {
-    labels.push("System")
+    labels.push(t("prompts.usage.system"))
   }
   if (selection.planModePromptPresetID === presetID) {
-    labels.push("Plan")
+    labels.push(t("prompts.usage.plan"))
   }
   if (selection.sideChatPromptPresetID === presetID) {
-    labels.push("Side chat")
+    labels.push(t("prompts.usage.sideChat"))
   }
 
   return labels
@@ -165,17 +195,19 @@ function normalizePromptSearchTerm(value: string) {
 function doesPromptPresetMatchSearch(
   preset: PromptPresetSummary,
   normalizedSearchTerm: string,
+  t: PromptTranslate,
 ) {
   if (!normalizedSearchTerm) return true
 
   return [
+    getPromptPresetDisplayLabel(preset, t),
     preset.label,
     preset.description,
     preset.id,
     preset.filePath ?? "",
     preset.sourcePath ?? "",
     preset.root ?? "",
-    getPromptPresetSourceLabel(preset.source),
+    getPromptPresetSourceLabel(preset.source, t),
   ].some((value) => value.toLowerCase().includes(normalizedSearchTerm))
 }
 
@@ -206,6 +238,7 @@ function PromptUrlInstallDialog({
   onSourceChange,
   onTogglePrompt,
 }: PromptUrlInstallDialogProps) {
+  const { t } = useI18n()
   const isBusy = isPreviewing || isInstalling
   const selectedCount = selectedPromptIDs.length
 
@@ -216,17 +249,17 @@ function PromptUrlInstallDialog({
 
   return (
     <div className="global-skills-git-install-overlay">
-      <section className="global-skills-git-install-modal" role="dialog" aria-modal="true" aria-label="Install prompts from URL">
+      <section className="global-skills-git-install-modal" role="dialog" aria-modal="true" aria-label={t("prompts.install.dialogAria")}>
         <header className="global-skills-git-install-header">
           <div>
-            <h3>Install Prompts from URL</h3>
-            <p>Preview the URL, then select the prompts to install.</p>
+            <h3>{t("prompts.install.dialogTitle")}</h3>
+            <p>{t("prompts.install.dialogCopy")}</p>
           </div>
           <button
             className="row-action global-skills-git-install-close"
-            aria-label="Close prompt URL install"
+            aria-label={t("prompts.install.closeAria")}
             disabled={isBusy}
-            title="Close"
+            title={t("app.close")}
             type="button"
             onClick={onClose}
           >
@@ -241,16 +274,16 @@ function PromptUrlInstallDialog({
           <input
             id="prompt-url-install-source"
             className="global-skills-git-install-input"
-            aria-label="Prompt resource URL"
+            aria-label={t("prompts.install.sourceAria")}
             autoComplete="off"
             disabled={isBusy}
-            placeholder="github.com/user/repo, GitHub tree URL, or direct .md/.txt URL"
+            placeholder={t("prompts.install.sourcePlaceholder")}
             type="text"
             value={installSource}
             onChange={(event) => onSourceChange(event.target.value)}
           />
           <div className="global-skills-git-install-help">
-            <span>Supported formats:</span>
+            <span>{t("prompts.install.supportedFormats")}</span>
             <code>github.com/user/repo</code>
             <code>https://github.com/user/repo/tree/main/prompts</code>
             <code>https://github.com/user/repo/blob/main/prompts/system.md</code>
@@ -258,7 +291,7 @@ function PromptUrlInstallDialog({
           </div>
           <div className="global-skills-git-install-actions">
             <button className="secondary-button" disabled={isBusy || !installSource.trim()} type="submit">
-              {isPreviewing ? "Previewing..." : "Preview"}
+              {isPreviewing ? t("prompts.install.previewing") : t("prompts.install.preview")}
             </button>
           </div>
         </form>
@@ -270,7 +303,7 @@ function PromptUrlInstallDialog({
         ) : null}
 
         {installPreview ? (
-          <section className="global-skills-git-install-preview" aria-label="Prompt URL install preview">
+          <section className="global-skills-git-install-preview" aria-label={t("prompts.install.previewAria")}>
             <div className="global-skills-git-install-preview-meta">
               <span>{installPreview.source}</span>
             </div>
@@ -303,7 +336,7 @@ function PromptUrlInstallDialog({
 
         <footer className="global-skills-git-install-footer">
           <button className="secondary-button" disabled={isBusy} type="button" onClick={onClose}>
-            Cancel
+            {t("app.cancel")}
           </button>
           <button
             className="primary-button"
@@ -311,7 +344,11 @@ function PromptUrlInstallDialog({
             type="button"
             onClick={() => void onInstall()}
           >
-            {isInstalling ? "Installing..." : `Install${selectedCount > 0 ? ` (${selectedCount})` : ""}`}
+            {isInstalling
+              ? t("prompts.install.installing")
+              : selectedCount > 0
+                ? t("prompts.install.count", { count: selectedCount })
+                : t("prompts.install.button")}
           </button>
         </footer>
       </section>
@@ -340,6 +377,11 @@ function PromptTranslateDialog({
   onModelChange,
   onSubmit,
 }: PromptTranslateDialogProps) {
+  const { t } = useI18n()
+  const languageOptions = PROMPT_TRANSLATION_LANGUAGES.map((item) => ({
+    value: item.value,
+    label: t(item.labelKey),
+  }))
   const availableModelOptions = models
     .filter((item) => item.available && item.capabilities.input.text && item.capabilities.output.text)
     .map((item) => ({
@@ -348,10 +390,10 @@ function PromptTranslateDialog({
     }))
   const modelOptions = availableModelOptions.length > 0
     ? [
-        { value: "", label: "Select model", disabled: true },
+        { value: "", label: t("prompts.translate.selectModel"), disabled: true },
         ...availableModelOptions,
       ]
-    : [{ value: "", label: "No text models available", disabled: true }]
+    : [{ value: "", label: t("prompts.translate.noTextModels"), disabled: true }]
   const canSubmit = Boolean(model.trim()) && !isTranslating
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -362,16 +404,16 @@ function PromptTranslateDialog({
 
   return (
     <div className="global-skills-git-install-overlay">
-      <section className="global-skills-git-install-modal prompt-translate-modal" role="dialog" aria-modal="true" aria-label="Translate prompt">
+      <section className="global-skills-git-install-modal prompt-translate-modal" role="dialog" aria-modal="true" aria-label={t("prompts.translate.dialogAria")}>
         <header className="global-skills-git-install-header">
           <div>
-            <h3>Translate Prompt</h3>
+            <h3>{t("prompts.translate.dialogTitle")}</h3>
           </div>
           <button
             className="row-action global-skills-git-install-close"
-            aria-label="Close prompt translation"
+            aria-label={t("prompts.translate.closeAria")}
             disabled={isTranslating}
-            title="Close"
+            title={t("app.close")}
             type="button"
             onClick={onClose}
           >
@@ -381,22 +423,22 @@ function PromptTranslateDialog({
 
         <form className="global-skills-git-install-form prompt-translate-form" onSubmit={handleSubmit}>
           <label className="global-skills-git-install-label">
-            Language
+            {t("prompts.translate.language")}
           </label>
           <SettingsSelect<PromptTranslationLanguageID>
-            ariaLabel="Prompt translation language"
+            ariaLabel={t("prompts.translate.languageAria")}
             className="prompt-translate-select"
             disabled={isTranslating}
-            options={PROMPT_TRANSLATION_LANGUAGES}
+            options={languageOptions}
             value={languageID}
             onChange={onLanguageChange}
           />
 
           <label className="global-skills-git-install-label">
-            Model
+            {t("prompts.translate.model")}
           </label>
           <SettingsSelect
-            ariaLabel="Prompt translation model"
+            ariaLabel={t("prompts.translate.modelAria")}
             className="prompt-translate-select"
             disabled={isTranslating || availableModelOptions.length === 0}
             options={modelOptions}
@@ -408,10 +450,10 @@ function PromptTranslateDialog({
 
         <footer className="global-skills-git-install-footer">
           <button className="secondary-button" disabled={isTranslating} type="button" onClick={onClose}>
-            Cancel
+            {t("app.cancel")}
           </button>
           <button className="primary-button" disabled={!canSubmit} type="button" onClick={() => void onSubmit()}>
-            {isTranslating ? "Translating..." : "Translate"}
+            {isTranslating ? t("prompts.translate.translating") : t("prompts.translate.button")}
           </button>
         </footer>
       </section>
@@ -435,6 +477,7 @@ export function PromptPresetsSidebarView({
   onPromptPresetSelect,
   onPromptUrlInstallDialogOpen,
 }: PromptPresetsSidebarViewProps) {
+  const { t } = useI18n()
   const [promptSearchTerm, setPromptSearchTerm] = useState("")
   const [isInstallMenuOpen, setIsInstallMenuOpen] = useState(false)
   const installMenuRef = useRef<HTMLDivElement | null>(null)
@@ -457,19 +500,19 @@ export function PromptPresetsSidebarView({
   }> = [
     {
       id: "bundled",
-      label: getPromptPresetFolderLabel("bundled"),
+      label: getPromptPresetFolderLabel("bundled", t),
       presets: promptPresetOptions.filter((preset) => preset.source === "bundled"),
     },
     {
       id: "custom",
-      label: getPromptPresetFolderLabel("custom"),
+      label: getPromptPresetFolderLabel("custom", t),
       presets: promptPresetOptions.filter((preset) => preset.source === "custom"),
     },
   ]
   const promptPresetFolders = promptPresetFolderDefinitions.map((folder) => ({
     ...folder,
     presets: folder.presets.filter((preset) =>
-      doesPromptPresetMatchSearch(preset, normalizedPromptSearchTerm),
+      doesPromptPresetMatchSearch(preset, normalizedPromptSearchTerm, t),
     ),
   }))
   const visiblePromptPresetFolders = promptPresetFolders.filter((folder) =>
@@ -504,7 +547,7 @@ export function PromptPresetsSidebarView({
     if (
       isPromptDirty &&
       typeof window.confirm === "function" &&
-      !window.confirm("Discard unsaved prompt changes and switch presets?")
+      !window.confirm(t("prompts.confirm.discardSwitch"))
     ) {
       return
     }
@@ -516,7 +559,7 @@ export function PromptPresetsSidebarView({
     if (
       isPromptDirty &&
       typeof window.confirm === "function" &&
-      !window.confirm("Discard unsaved prompt changes and create a new preset?")
+      !window.confirm(t("prompts.confirm.discardCreate"))
     ) {
       return
     }
@@ -544,19 +587,19 @@ export function PromptPresetsSidebarView({
   }
 
   return (
-    <section className="sidebar-view sidebar-view-prompts" aria-label="Prompt presets sidebar view">
+    <section className="sidebar-view sidebar-view-prompts" aria-label={t("prompts.sidebarAria")}>
       <div className="settings-prompt-section-bar prompt-presets-navigator-bar global-skills-section-bar">
         <div className="prompt-presets-navigator-actions global-skills-section-actions">
           <button
             className="secondary-button global-skills-open-folder-button prompt-presets-open-button"
             type="button"
-            aria-label="Open prompts folder"
-            title={promptRoot || "Prompts folder"}
+            aria-label={t("prompts.openFolderAria")}
+            title={promptRoot || t("prompts.folderTitle")}
             disabled={!promptRoot.trim()}
             onClick={() => void onOpenPromptFolder()}
           >
             <FolderIcon />
-            <span>打开文件位置</span>
+            <span>{t("prompts.openFolder")}</span>
           </button>
           <div className="global-skills-install-menu-shell" ref={installMenuRef}>
             <button
@@ -567,21 +610,21 @@ export function PromptPresetsSidebarView({
               }
               aria-expanded={isInstallMenuOpen}
               aria-haspopup="menu"
-              aria-label="Install prompt"
+              aria-label={t("prompts.install.menuAria")}
               disabled={isInstallButtonDisabled}
-              title="Install prompt"
+              title={t("prompts.install.menuAria")}
               type="button"
               onClick={handleInstallMenuToggle}
             >
               <DownloadIcon />
-              <span>{isInstallingPromptUrlPrompts ? "Installing..." : "Install"}</span>
+              <span>{isInstallingPromptUrlPrompts ? t("prompts.install.installing") : t("prompts.install.button")}</span>
               <ChevronDownIcon />
             </button>
             {isInstallMenuOpen ? (
               <div
                 className="global-skills-install-menu prompt-presets-install-menu"
                 role="menu"
-                aria-label="Install prompt options"
+                aria-label={t("prompts.install.optionsAria")}
               >
                 <button
                   className="global-skills-install-menu-item"
@@ -589,7 +632,7 @@ export function PromptPresetsSidebarView({
                   type="button"
                   onClick={handleInstallFromUrl}
                 >
-                  From URL
+                  {t("prompts.install.fromUrl")}
                 </button>
               </div>
             ) : null}
@@ -597,20 +640,20 @@ export function PromptPresetsSidebarView({
         </div>
       </div>
 
-      <div className="skills-tree-root prompt-presets-tree" role="list" aria-label="Prompt presets">
-        <div className="skills-tree-search-row" aria-label="Prompt presets search" role="search">
+      <div className="skills-tree-root prompt-presets-tree" role="list" aria-label={t("prompts.listAria")}>
+        <div className="skills-tree-search-row" aria-label={t("prompts.searchAria")} role="search">
           <SearchIcon />
           <input
-            aria-label="Search prompts"
-            placeholder="搜索 prompts"
+            aria-label={t("prompts.searchInputAria")}
+            placeholder={t("prompts.searchPlaceholder")}
             type="search"
             value={promptSearchTerm}
             onChange={(event) => setPromptSearchTerm(event.target.value)}
           />
           {promptSearchTerm.trim() ? (
             <button
-              aria-label="Clear prompt search"
-              title="Clear"
+              aria-label={t("prompts.clearSearchAria")}
+              title={t("prompts.clearSearchTitle")}
               type="button"
               onClick={() => setPromptSearchTerm("")}
             >
@@ -629,7 +672,7 @@ export function PromptPresetsSidebarView({
                   <button
                     className="skill-tree-row"
                     aria-expanded={isExpanded}
-                    aria-label={`${folder.label} prompt folder`}
+                    aria-label={t("prompts.folderAria", { folder: folder.label })}
                     type="button"
                     onClick={() => handlePromptFolderToggle(folder.id)}
                   >
@@ -646,7 +689,8 @@ export function PromptPresetsSidebarView({
                     {folder.presets.length > 0 ? (
                       folder.presets.map((preset) => {
                         const isActive = preset.id === selectedPromptPreset?.id
-                        const usageLabels = getPromptPresetUsageLabels(preset.id, promptPresetSelection)
+                        const displayLabel = getPromptPresetDisplayLabel(preset, t)
+                        const usageLabels = getPromptPresetUsageLabels(preset.id, promptPresetSelection, t)
                         const isDeleting = deletingPromptPresetID === preset.id
 
                         return (
@@ -654,31 +698,33 @@ export function PromptPresetsSidebarView({
                             <div className="skill-tree-row-shell">
                               <button
                                 className={isActive ? "skill-tree-row is-active" : "skill-tree-row"}
-                                aria-label={preset.label}
+                                aria-label={displayLabel}
                                 aria-pressed={isActive}
-                                title={getPromptPresetPathLabel(preset)}
+                                title={getPromptPresetPathLabel(preset, t)}
                                 type="button"
                                 onClick={() => handlePromptPresetSelection(preset.id)}
                               >
                                 <span className="skill-tree-role-icon is-skill" aria-hidden="true">
                                   <FileTextIcon />
                                 </span>
-                                <span className="skill-tree-label">{preset.label}</span>
+                                <span className="skill-tree-label">{displayLabel}</span>
                                 <span className="prompt-tree-row-badges" aria-hidden="true">
                                   {usageLabels.map((label) => (
                                     <span key={`${preset.id}-${label}`} className="settings-badge is-highlight">
                                       {label}
                                     </span>
                                   ))}
-                                  {preset.hasOverride ? <span className="settings-badge is-warning">Edited</span> : null}
+                                  {preset.hasOverride ? <span className="settings-badge is-warning">{t("prompts.status.edited")}</span> : null}
                                 </span>
                               </button>
                               {preset.source === "custom" ? (
                                 <button
                                   className="row-action skill-tree-row-action prompt-tree-delete-button"
-                                  aria-label={`Delete prompt ${preset.label}`}
+                                  aria-label={t("prompts.deletePromptAria", { label: displayLabel })}
                                   disabled={deletingPromptPresetID !== null}
-                                  title={isDeleting ? `Deleting ${preset.label}` : `Delete ${preset.label}`}
+                                  title={isDeleting
+                                    ? t("prompts.deletingPromptTitle", { label: displayLabel })
+                                    : t("prompts.deletePromptTitle", { label: displayLabel })}
                                   type="button"
                                   onClick={(event) => {
                                     event.stopPropagation()
@@ -694,7 +740,7 @@ export function PromptPresetsSidebarView({
                       })
                     ) : (
                       <p className="skills-tree-empty prompt-tree-empty">
-                        {folder.id === "custom" ? "No custom prompts yet." : "No bundled prompts."}
+                        {folder.id === "custom" ? t("prompts.emptyCustom") : t("prompts.emptyBundled")}
                       </p>
                     )}
                   </div>
@@ -703,18 +749,18 @@ export function PromptPresetsSidebarView({
             )
           })
         ) : promptPresetOptions.length > 0 ? (
-          <p className="skills-tree-empty">No prompts match your search.</p>
+          <p className="skills-tree-empty">{t("prompts.noSearchResults")}</p>
         ) : (
-          <p className="skills-tree-empty">No prompt files found.</p>
+          <p className="skills-tree-empty">{t("prompts.noFiles")}</p>
         )}
 
         <div className="global-skills-new-menu-shell prompt-presets-new-menu-shell">
           <button
             className="global-skills-new-button prompt-presets-new-button"
             type="button"
-            aria-label="New"
+            aria-label={t("app.new")}
             disabled={isCreatingPromptPreset}
-            title={isCreatingPromptPreset ? "Creating..." : "New prompt"}
+            title={isCreatingPromptPreset ? t("prompts.creating") : t("prompts.newPrompt")}
             onClick={handlePromptPresetCreate}
           >
             <PlusIcon />
@@ -769,6 +815,7 @@ export function PromptPresetsPage({
   onSavePromptPreset,
   onTranslatePromptPreset,
 }: PromptPresetsPageProps) {
+  const { t } = useI18n()
   const [promptEditorMode, setPromptEditorMode] = useState<PromptEditorMode>("edit")
   const [isPromptTranslateDialogOpen, setIsPromptTranslateDialogOpen] = useState(false)
   const [promptTranslationLanguageID, setPromptTranslationLanguageID] =
@@ -789,14 +836,17 @@ export function PromptPresetsPage({
       deletingPromptPresetID === selectedPromptPreset.id
     )
   const selectedPromptPresetUsageLabels = selectedPromptPreset
-    ? getPromptPresetUsageLabels(selectedPromptPreset.id, promptPresetSelection)
+    ? getPromptPresetUsageLabels(selectedPromptPreset.id, promptPresetSelection, t)
     : []
+  const selectedPromptPresetDisplayLabel = selectedPromptPreset
+    ? getPromptPresetDisplayLabel(selectedPromptPreset, t)
+    : ""
   const isSystemPromptSlotOpen = selectedPromptPreset?.id === promptPresetSelection?.systemPromptPresetID
   const isPlanModePromptSlotOpen = selectedPromptPreset?.id === promptPresetSelection?.planModePromptPresetID
   const isSideChatPromptSlotOpen = selectedPromptPreset?.id === promptPresetSelection?.sideChatPromptPresetID
   const promptPresetSelectOptions = promptPresetOptions.map((preset) => ({
     value: preset.id,
-    label: preset.label,
+    label: getPromptPresetDisplayLabel(preset, t),
   }))
   const isPromptTranslateDisabled =
     !selectedPromptPreset ||
@@ -828,16 +878,16 @@ export function PromptPresetsPage({
   }
 
   return (
-    <section className="prompt-presets-page" aria-label="Prompt presets">
+    <section className="prompt-presets-page" aria-label={t("prompts.pageAria")}>
       <ShellTopMenu
         as="header"
-        ariaLabel="Prompts top menu"
+        ariaLabel={t("prompts.topMenuAria")}
         className="canvas-region-top-menu prompt-presets-top-menu"
         contentClassName="canvas-region-top-menu-tabs-shell"
         content={(
           <div className="prompt-presets-top-menu-label">
             <FileTextIcon />
-            <span>Prompts</span>
+            <span>{t("prompts.title")}</span>
           </div>
         )}
         dragRegion
@@ -853,27 +903,27 @@ export function PromptPresetsPage({
 
         {isLoadingPrompts ? (
           <article className="settings-empty-state">
-            <span className="label">Loading</span>
-            <h3>Fetching prompt presets</h3>
-            <p>Reading the prompt catalog, override state, and current editable content.</p>
+            <span className="label">{t("app.loading")}</span>
+            <h3>{t("prompts.loadingTitle")}</h3>
+            <p>{t("prompts.loadingCopy")}</p>
           </article>
         ) : (
-          <section className={hideNavigator ? "settings-prompts-shell is-sidebar-hosted" : "settings-prompts-shell"} aria-label="Prompt preset layout">
+          <section className={hideNavigator ? "settings-prompts-shell is-sidebar-hosted" : "settings-prompts-shell"} aria-label={t("prompts.layoutAria")}>
             <section className="settings-panel settings-prompt-slots-panel">
               <header className="settings-prompt-slots-header">
-                <h3>Prompt slots</h3>
+                <h3>{t("prompts.slotsTitle")}</h3>
               </header>
               <div className="settings-prompt-assignment-list">
                 <div className={isSystemPromptSlotOpen ? "settings-prompt-assignment-row is-open" : "settings-prompt-assignment-row"}>
                   <div className="settings-prompt-assignment-copy">
-                    <span className="settings-prompt-assignment-title">System prompt</span>
-                    {isSystemPromptSlotOpen ? <span className="settings-badge is-highlight">Open</span> : null}
+                    <span className="settings-prompt-assignment-title">{t("prompts.slot.system")}</span>
+                    {isSystemPromptSlotOpen ? <span className="settings-badge is-highlight">{t("prompts.status.open")}</span> : null}
                   </div>
 
                   <div className="settings-prompt-assignment-control">
                     <div className="settings-prompt-assignment-actions">
                       <SettingsSelect
-                        ariaLabel="System prompt preset"
+                        ariaLabel={t("prompts.slot.systemSelectAria")}
                         className="settings-prompt-assignment-select"
                         options={promptPresetSelectOptions}
                         value={promptPresetSelection?.systemPromptPresetID ?? ""}
@@ -888,14 +938,14 @@ export function PromptPresetsPage({
 
                 <div className={isPlanModePromptSlotOpen ? "settings-prompt-assignment-row is-open" : "settings-prompt-assignment-row"}>
                   <div className="settings-prompt-assignment-copy">
-                    <span className="settings-prompt-assignment-title">Plan mode prompt</span>
-                    {isPlanModePromptSlotOpen ? <span className="settings-badge is-highlight">Open</span> : null}
+                    <span className="settings-prompt-assignment-title">{t("prompts.slot.planMode")}</span>
+                    {isPlanModePromptSlotOpen ? <span className="settings-badge is-highlight">{t("prompts.status.open")}</span> : null}
                   </div>
 
                   <div className="settings-prompt-assignment-control">
                     <div className="settings-prompt-assignment-actions">
                       <SettingsSelect
-                        ariaLabel="Plan mode prompt preset"
+                        ariaLabel={t("prompts.slot.planModeSelectAria")}
                         className="settings-prompt-assignment-select"
                         options={promptPresetSelectOptions}
                         value={promptPresetSelection?.planModePromptPresetID ?? ""}
@@ -910,14 +960,14 @@ export function PromptPresetsPage({
 
                 <div className={isSideChatPromptSlotOpen ? "settings-prompt-assignment-row is-open" : "settings-prompt-assignment-row"}>
                   <div className="settings-prompt-assignment-copy">
-                    <span className="settings-prompt-assignment-title">Side chat prompt</span>
-                    {isSideChatPromptSlotOpen ? <span className="settings-badge is-highlight">Open</span> : null}
+                    <span className="settings-prompt-assignment-title">{t("prompts.slot.sideChat")}</span>
+                    {isSideChatPromptSlotOpen ? <span className="settings-badge is-highlight">{t("prompts.status.open")}</span> : null}
                   </div>
 
                   <div className="settings-prompt-assignment-control">
                     <div className="settings-prompt-assignment-actions">
                       <SettingsSelect
-                        ariaLabel="Side chat prompt preset"
+                        ariaLabel={t("prompts.slot.sideChatSelectAria")}
                         className="settings-prompt-assignment-select"
                         options={promptPresetSelectOptions}
                         value={promptPresetSelection?.sideChatPromptPresetID ?? ""}
@@ -962,31 +1012,31 @@ export function PromptPresetsPage({
                         {selectedPromptPreset.source === "custom" ? (
                           <input
                             className="settings-prompt-name-input"
-                            aria-label="Preset name"
+                            aria-label={t("prompts.presetNameAria")}
                             value={promptDraftLabel}
                             readOnly={isLoadingPromptPreset}
                             onChange={(event) => onPromptDraftLabelChange(event.target.value)}
                           />
                         ) : (
-                          <h3>{selectedPromptPreset.label}</h3>
+                          <h3>{selectedPromptPresetDisplayLabel}</h3>
                         )}
 
                         <div className="settings-prompt-item-statuses">
-                          <span className="settings-badge">{getPromptPresetSourceLabel(selectedPromptPreset.source)}</span>
+                          <span className="settings-badge">{getPromptPresetSourceLabel(selectedPromptPreset.source, t)}</span>
                           {selectedPromptPresetUsageLabels.map((label) => (
                             <span key={`${selectedPromptPreset.id}-${label}`} className="settings-badge is-highlight">
                               {label}
                             </span>
                           ))}
                           {selectedPromptPreset.hasOverride ? (
-                            <span className="settings-badge is-warning">Edited</span>
+                            <span className="settings-badge is-warning">{t("prompts.status.edited")}</span>
                           ) : null}
-                          {isLoadingPromptPreset ? <span className="settings-badge">Loading</span> : null}
+                          {isLoadingPromptPreset ? <span className="settings-badge">{t("app.loading")}</span> : null}
                         </div>
                       </div>
 
                       <div className="settings-prompt-editor-toolbar">
-                        <div className="settings-prompt-editor-mode-switch" aria-label="Prompt editor mode">
+                        <div className="settings-prompt-editor-mode-switch" aria-label={t("prompts.editorModeAria")}>
                           <button
                             className={
                               promptEditorMode === "edit"
@@ -997,7 +1047,7 @@ export function PromptPresetsPage({
                             aria-pressed={promptEditorMode === "edit"}
                             onClick={() => setPromptEditorMode("edit")}
                           >
-                            Edit
+                            {t("prompts.edit")}
                           </button>
                           <button
                             className={
@@ -1009,7 +1059,7 @@ export function PromptPresetsPage({
                             aria-pressed={promptEditorMode === "preview"}
                             onClick={() => setPromptEditorMode("preview")}
                           >
-                            Preview
+                            {t("prompts.preview")}
                           </button>
                         </div>
 
@@ -1020,7 +1070,7 @@ export function PromptPresetsPage({
                             disabled={isPromptTranslateDisabled || selectedPromptPresetBusy}
                             onClick={openPromptTranslateDialog}
                           >
-                            {isTranslatingPromptPreset ? "Translating..." : "Translate"}
+                            {isTranslatingPromptPreset ? t("prompts.translate.translating") : t("prompts.translate.button")}
                           </button>
                           {selectedPromptPreset.source === "custom" ? (
                             <button
@@ -1029,7 +1079,7 @@ export function PromptPresetsPage({
                               disabled={selectedPromptPresetBusy || isLoadingPromptPreset}
                               onClick={() => void onDeletePromptPreset()}
                             >
-                              {deletingPromptPresetID === selectedPromptPreset.id ? "Deleting..." : "Delete"}
+                              {deletingPromptPresetID === selectedPromptPreset.id ? t("prompts.deleting") : t("app.delete")}
                             </button>
                           ) : (
                             <button
@@ -1038,7 +1088,7 @@ export function PromptPresetsPage({
                               disabled={!selectedPromptPreset.hasOverride || selectedPromptPresetBusy || isLoadingPromptPreset}
                               onClick={() => void onResetPromptPreset()}
                             >
-                              {resettingPromptPresetID === selectedPromptPreset.id ? "Resetting..." : "Reset"}
+                              {resettingPromptPresetID === selectedPromptPreset.id ? t("app.resetting") : t("app.reset")}
                             </button>
                           )}
                           <button
@@ -1047,7 +1097,7 @@ export function PromptPresetsPage({
                             disabled={!isPromptDirty || selectedPromptPresetBusy || isLoadingPromptPreset}
                             onClick={() => void onSavePromptPreset()}
                           >
-                            {savingPromptPresetID === selectedPromptPreset.id ? "Saving..." : "Save"}
+                            {savingPromptPresetID === selectedPromptPreset.id ? t("app.saving") : t("app.save")}
                           </button>
                         </div>
                       </div>
@@ -1057,7 +1107,7 @@ export function PromptPresetsPage({
                       {promptEditorMode === "edit" ? (
                         <textarea
                           className="settings-prompt-editor"
-                          aria-label={`${selectedPromptPreset.label} content`}
+                          aria-label={t("prompts.contentAria", { label: selectedPromptPresetDisplayLabel })}
                           value={promptDraftContent}
                           readOnly={!selectedPromptPreset.editable || isLoadingPromptPreset}
                           onChange={(event: ChangeEvent<HTMLTextAreaElement>) => onPromptDraftChange(event.target.value)}
@@ -1066,7 +1116,7 @@ export function PromptPresetsPage({
                         <div
                           className="settings-prompt-preview-surface"
                           role="region"
-                          aria-label={`${selectedPromptPreset.label} markdown preview`}
+                          aria-label={t("prompts.previewAria", { label: selectedPromptPresetDisplayLabel })}
                         >
                           {promptDraftContent.trim() ? (
                             <ThreadMarkdown
@@ -1074,7 +1124,7 @@ export function PromptPresetsPage({
                               text={getPromptMarkdownPreviewText(promptDraftContent)}
                             />
                           ) : (
-                            <p className="settings-prompt-preview-empty">No prompt content.</p>
+                            <p className="settings-prompt-preview-empty">{t("prompts.noContent")}</p>
                           )}
                         </div>
                       )}
@@ -1088,7 +1138,7 @@ export function PromptPresetsPage({
                   </section>
                 ) : (
                   <article className="settings-empty-state settings-detail-empty-state">
-                    <h3>Select a preset</h3>
+                    <h3>{t("prompts.selectPreset")}</h3>
                   </article>
                 )}
               </div>

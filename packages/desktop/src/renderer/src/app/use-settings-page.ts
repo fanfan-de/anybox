@@ -33,6 +33,7 @@ import { mergeMcpToolPolicyDefaults } from "./mcp/mcp-tool-policies"
 import { parseMcpConfigJson } from "./mcp/mcp-config-import"
 import { arePluginCatalogsEqual, mergePluginCatalogWithInstalled } from "./plugin-catalog"
 import { useToast } from "./toast"
+import { useI18n } from "./i18n/I18nProvider"
 import type { DesktopProviderAuthPrompt } from "../../../shared/desktop-ipc-contract"
 
 interface SettingsMessage {
@@ -531,6 +532,7 @@ function getMcpServerValidationError(draft: McpServerDraftState) {
 
 export function useSettingsPage(options: UseSettingsPageOptions) {
   const toast = useToast()
+  const { t } = useI18n()
   const isBuiltinToolsPageOpen = options.isBuiltinToolsPageOpen ?? false
   const isConnectorsPageOpen = options.isConnectorsPageOpen ?? false
   const isMcpServersPageOpen = options.isMcpServersPageOpen ?? false
@@ -752,7 +754,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       setSavedPromptLabel("")
       setPromptDraftContent("")
       setSavedPromptContent("")
-      setPromptLoadError("Desktop prompt preset APIs are unavailable.")
+      setPromptLoadError(t("prompts.message.apiUnavailable"))
       return null
     }
 
@@ -799,7 +801,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       setPromptDraftContent("")
       setSavedPromptContent("")
       setPromptRoot("")
-      setPromptLoadError("Desktop prompt preset APIs are unavailable.")
+      setPromptLoadError(t("prompts.message.apiUnavailable"))
       return
     }
 
@@ -1891,12 +1893,12 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
         tone: "success",
         text:
           field === "systemPromptPresetID"
-            ? "System prompt updated."
+            ? t("prompts.message.systemUpdated")
             : field === "planModePromptPresetID"
-              ? "Plan prompt updated."
+              ? t("prompts.message.planUpdated")
               : field === "sideChatPromptPresetID"
-                ? "Side chat prompt updated."
-              : "Prompt assignments updated.",
+                ? t("prompts.message.sideChatUpdated")
+              : t("prompts.message.assignmentsUpdated"),
       })
       return true
     } catch (error) {
@@ -1978,7 +1980,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       setSavedPromptContent(document.content)
       showMessage({
         tone: "success",
-        text: "Prompt preset created.",
+        text: t("prompts.message.created"),
       })
       return true
     } catch (error) {
@@ -2000,7 +2002,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     if (!openPath) {
       showMessage({
         tone: "error",
-        text: "Opening the prompts folder is unavailable in this desktop shell.",
+        text: t("prompts.message.openFolderUnavailable"),
       })
       return false
     }
@@ -2058,7 +2060,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     if (!previewPromptUrlInstallApi) {
       setPromptUrlInstallMessage({
         tone: "error",
-        text: "Installing prompts from URL is unavailable in this desktop shell.",
+        text: t("prompts.install.unavailable"),
       })
       return false
     }
@@ -2067,7 +2069,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     if (!source) {
       setPromptUrlInstallMessage({
         tone: "error",
-        text: "Enter a prompt resource URL.",
+        text: t("prompts.install.enterUrl"),
       })
       return false
     }
@@ -2088,7 +2090,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       setPromptUrlInstallMessage(preview.prompts.length === 0
         ? {
             tone: "error",
-            text: "No prompts were found at that URL.",
+            text: t("prompts.install.noPrompts"),
           }
         : null)
       return true
@@ -2110,7 +2112,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     if (!installPromptsFromUrlApi) {
       setPromptUrlInstallMessage({
         tone: "error",
-        text: "Installing prompts from URL is unavailable in this desktop shell.",
+        text: t("prompts.install.unavailable"),
       })
       return false
     }
@@ -2118,7 +2120,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     if (selectedPromptUrlInstallIDs.length === 0) {
       setPromptUrlInstallMessage({
         tone: "error",
-        text: "Select at least one prompt to install.",
+        text: t("prompts.install.selectAtLeastOne"),
       })
       return false
     }
@@ -2126,7 +2128,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     if (
       isPromptDirty &&
       typeof window.confirm === "function" &&
-      !window.confirm("Discard unsaved prompt changes and install prompts from URL?")
+      !window.confirm(t("prompts.install.discardConfirm"))
     ) {
       return false
     }
@@ -2159,7 +2161,10 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       resetPromptUrlInstallDialog()
       showMessage({
         tone: "success",
-        text: `Installed ${result.installed.length} prompt${result.installed.length === 1 ? "" : "s"}.`,
+        text: t("prompts.message.installedCount", {
+          count: result.installed.length,
+          plural: result.installed.length === 1 ? "" : "s",
+        }),
       })
       return true
     } catch (error) {
@@ -2181,7 +2186,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     if (!selectedPromptPreset || !translatePromptPresetApi) {
       showMessage({
         tone: "error",
-        text: "Prompt translation is unavailable in this desktop shell.",
+        text: t("prompts.message.translationUnavailable"),
       })
       return false
     }
@@ -2189,7 +2194,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     if (!promptDraftContent.trim()) {
       showMessage({
         tone: "error",
-        text: "Prompt content is empty.",
+        text: t("prompts.message.contentEmpty"),
       })
       return false
     }
@@ -2197,7 +2202,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     if (!input.model.trim()) {
       showMessage({
         tone: "error",
-        text: "Select a model for prompt translation.",
+        text: t("prompts.message.selectTranslationModel"),
       })
       return false
     }
@@ -2216,7 +2221,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       setPromptRoot(document.root ?? promptRoot)
       showMessage({
         tone: "success",
-        text: `Translated prompt saved as "${document.label}".`,
+        text: t("prompts.message.translatedSaved", { label: document.label }),
       })
       return true
     } catch (error) {
@@ -2249,7 +2254,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       syncPromptPresetSummary(document)
       showMessage({
         tone: "success",
-        text: "Prompt preset saved.",
+        text: t("prompts.message.saved"),
       })
       return true
     } catch (error) {
@@ -2286,7 +2291,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       syncPromptPresetSummary(document)
       showMessage({
         tone: "success",
-        text: "Prompt preset reset to default.",
+        text: t("prompts.message.reset"),
       })
       return true
     } catch (error) {
@@ -2326,7 +2331,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       if (selectedPromptPresetID !== presetID) {
         showMessage({
           tone: "success",
-          text: "Prompt preset deleted.",
+          text: t("prompts.message.deleted"),
         })
         return true
       }
@@ -2350,7 +2355,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
 
       showMessage({
         tone: "success",
-        text: "Prompt preset deleted.",
+        text: t("prompts.message.deleted"),
       })
       return true
     } catch (error) {

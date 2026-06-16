@@ -962,6 +962,11 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 }
 
 .skills-tree-root {
+  --skills-tree-scrollbar-size: 10px;
+  --skills-tree-scrollbar-thumb: var(--mix-seg-text-3-34-transparent-66);
+  --skills-tree-scrollbar-thumb-hover: var(--mix-seg-text-3-54-transparent-46);
+  --skills-tree-scrollbar-thumb-active: var(--seg-text-3);
+  --skills-tree-scrollbar-track: transparent;
   min-height: 0;
   display: grid;
   grid-auto-rows: max-content;
@@ -970,7 +975,41 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   gap: 4px;
   overflow: auto;
   scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--skills-tree-scrollbar-thumb) var(--skills-tree-scrollbar-track);
   padding-right: 4px;
+}
+
+.skills-tree-root::-webkit-scrollbar {
+  width: var(--skills-tree-scrollbar-size);
+  height: var(--skills-tree-scrollbar-size);
+}
+
+.skills-tree-root::-webkit-scrollbar-track {
+  background: var(--skills-tree-scrollbar-track);
+}
+
+.skills-tree-root::-webkit-scrollbar-thumb {
+  min-height: 32px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-color: var(--skills-tree-scrollbar-thumb);
+  background-clip: content-box;
+}
+
+.skills-tree-root:hover::-webkit-scrollbar-thumb,
+.skills-tree-root:focus-within::-webkit-scrollbar-thumb,
+.skills-tree-root::-webkit-scrollbar-thumb:hover {
+  background-color: var(--skills-tree-scrollbar-thumb-hover);
+  background-clip: content-box;
+}
+
+.skills-tree-root::-webkit-scrollbar-thumb:active {
+  background-color: var(--skills-tree-scrollbar-thumb-active);
+}
+
+.skills-tree-root::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .skills-tree-search-row {

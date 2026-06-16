@@ -83,9 +83,7 @@ const CATEGORY_LABELS: Record<PluginCategory | "All", string> = {
   Design: "设计",
 }
 
-const PUBLISHER_FILTER_ALL = "All"
 const FEATURED_PLUGIN_LIMIT = 3
-const PROMOTION_PLUGIN_LIMIT = 3
 
 type PluginVisualStyle = CSSProperties & {
   "--plugins-brand-color"?: string
@@ -252,23 +250,6 @@ function PluginMark({ plugin }: { plugin: PluginCatalogItem }) {
   )
 }
 
-function PluginMarketVisual({ plugin }: { plugin: PluginCatalogItem }) {
-  const thumbnail = pluginImageURL(plugin, "thumbnail")
-
-  return (
-    <span
-      className={thumbnail ? "plugins-market-item-visual has-image" : "plugins-market-item-visual is-fallback"}
-      aria-hidden="true"
-      style={pluginBrandStyle(plugin)}
-    >
-      {thumbnail ? <img src={thumbnail} alt="" /> : <span className="plugins-market-item-visual-surface" />}
-      <span className="plugins-market-item-visual-mark">
-        <PluginMark plugin={plugin} />
-      </span>
-    </span>
-  )
-}
-
 interface PluginCategoryNavigationProps {
   activeCategory: PluginCategory | "All"
   categoryCounts: Map<PluginCategory | "All", number>
@@ -301,76 +282,6 @@ function PluginCategoryNavigation({
         )
       })}
     </nav>
-  )
-}
-
-interface PluginPromotionHeroProps {
-  installedCount: number
-  pluginCount: number
-  promotionPlugins: PluginCatalogItem[]
-  publisherCount: number
-  onBrowseAll: () => void
-}
-
-function PluginPromotionHero({
-  installedCount,
-  pluginCount,
-  promotionPlugins,
-  publisherCount,
-  onBrowseAll,
-}: PluginPromotionHeroProps) {
-  const primaryPlugin = promotionPlugins[0] ?? null
-  const title = primaryPlugin ? `用 ${primaryPlugin.name} 扩展 Anybox` : "为 Anybox 添加工作流能力"
-  const description = primaryPlugin
-    ? `精选 ${CATEGORY_LABELS[primaryPlugin.category]} 场景插件，按项目安装并组合 MCP、技能和连接器。`
-    : "从开发、文档、自动化到设计，把常用能力装进当前工作区。"
-
-  return (
-    <section className="plugins-promotion-hero" aria-label="Plugin promotion">
-      <div className="plugins-promotion-copy">
-        <span className="plugins-promotion-eyebrow">本周精选</span>
-        <h2>{title}</h2>
-        <p>{description}</p>
-        <div className="plugins-promotion-metrics" aria-label="Plugin promotion summary">
-          <span>
-            <strong>{pluginCount}</strong>
-            <span>插件</span>
-          </span>
-          <span>
-            <strong>{publisherCount}</strong>
-            <span>开发者</span>
-          </span>
-          <span>
-            <strong>{installedCount}</strong>
-            <span>已安装</span>
-          </span>
-        </div>
-        <button className="plugins-promotion-button" type="button" onClick={onBrowseAll}>
-          查看全部插件
-        </button>
-      </div>
-      <div className="plugins-promotion-visual" aria-hidden="true">
-        {promotionPlugins.length > 0 ? (
-          promotionPlugins.map((plugin) => {
-            const image = pluginImageURL(plugin, "hero")
-
-            return (
-              <span key={plugin.id} className="plugins-promotion-card" style={pluginBrandStyle(plugin)}>
-                <span className={image ? "plugins-promotion-card-image has-image" : "plugins-promotion-card-image"}>
-                  {image ? <img src={image} alt="" /> : <span />}
-                </span>
-                <span className="plugins-promotion-card-footer">
-                  <PluginMark plugin={plugin} />
-                  <span>{plugin.name}</span>
-                </span>
-              </span>
-            )
-          })
-        ) : (
-          <span className="plugins-promotion-empty-visual" />
-        )}
-      </div>
-    </section>
   )
 }
 
@@ -413,7 +324,9 @@ function PluginMarketItem({
         aria-pressed={isActive}
         onClick={() => onPluginSelect(plugin.id)}
       >
-        <PluginMarketVisual plugin={plugin} />
+        <span className="plugins-market-item-mark">
+          <PluginMark plugin={plugin} />
+        </span>
         <span className="plugins-market-item-copy">
           <span className="plugins-market-item-title-row">
             <strong>{plugin.name}</strong>
@@ -817,23 +730,15 @@ export function PluginsPage({
   onPluginSelect,
   onSaveInstalledPluginConnectorApiKey,
   onSaveInstalledPluginConfig,
-  onSearchQueryChange,
   onStartInstalledPluginConnectorAuthFlow,
 }: PluginsPageProps) {
-  const [localSearchQuery, setLocalSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState<PluginCategory | "All">("All")
-  const [publisherFilter, setPublisherFilter] = useState(PUBLISHER_FILTER_ALL)
   const [expandedIncludedItemID, setExpandedIncludedItemID] = useState<string | null>(null)
-  const hasExternalSearch = searchQuery !== undefined
-  const effectiveSearchQuery = searchQuery ?? localSearchQuery
+  const effectiveSearchQuery = searchQuery ?? ""
 
   const installedByPluginID = useMemo(
     () => new Map(installedPlugins.map((plugin) => [plugin.pluginID, plugin])),
     [installedPlugins],
-  )
-  const publisherFilters = useMemo(
-    () => Array.from(new Set(pluginCatalog.map((plugin) => plugin.publisher).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
-    [pluginCatalog],
   )
   const categoryCounts = useMemo(() => {
     const counts = new Map<PluginCategory | "All", number>([["All", pluginCatalog.length]])
@@ -852,7 +757,6 @@ export function PluginsPage({
     const normalizedQuery = effectiveSearchQuery.trim().toLowerCase()
     return pluginCatalog.filter((plugin) => {
       if (categoryFilter !== "All" && plugin.category !== categoryFilter) return false
-      if (publisherFilter !== PUBLISHER_FILTER_ALL && plugin.publisher !== publisherFilter) return false
       if (!normalizedQuery) return true
 
       return [
@@ -871,7 +775,7 @@ export function PluginsPage({
         .toLowerCase()
         .includes(normalizedQuery)
     })
-  }, [categoryFilter, pluginCatalog, publisherFilter, effectiveSearchQuery])
+  }, [categoryFilter, pluginCatalog, effectiveSearchQuery])
 
   const activePlugin = activePluginID ? pluginCatalog.find((plugin) => plugin.id === activePluginID) ?? null : null
   const activeInstalledPlugin = activePlugin ? installedByPluginID.get(activePlugin.id) ?? null : null
@@ -910,18 +814,12 @@ export function PluginsPage({
     : "Uninstall"
   const hasDirectoryFilters =
     effectiveSearchQuery.trim().length > 0 ||
-    categoryFilter !== "All" ||
-    publisherFilter !== PUBLISHER_FILTER_ALL
+    categoryFilter !== "All"
   const featuredPlugins = useMemo(() => {
     const installedMatches = filteredPlugins.filter((plugin) => installedByPluginID.has(plugin.id))
     const priorityPlugins = installedMatches.length > 0 ? installedMatches : filteredPlugins
     return priorityPlugins.slice(0, FEATURED_PLUGIN_LIMIT)
   }, [filteredPlugins, installedByPluginID])
-  const promotionPlugins = useMemo(() => {
-    const installedMatches = pluginCatalog.filter((plugin) => installedByPluginID.has(plugin.id))
-    const priorityPlugins = installedMatches.length > 0 ? installedMatches : pluginCatalog
-    return priorityPlugins.slice(0, PROMOTION_PLUGIN_LIMIT)
-  }, [installedByPluginID, pluginCatalog])
   const shouldShowFeatured = !hasDirectoryFilters && featuredPlugins.length > 0
   const featuredPluginIDs = useMemo(() => new Set(featuredPlugins.map((plugin) => plugin.id)), [featuredPlugins])
   const directorySections = useMemo(() => {
@@ -949,28 +847,21 @@ export function PluginsPage({
   const defaultIncludedItemID = activePlugin && defaultOAuthApp
     ? `${activePlugin.id}:app:${defaultOAuthApp.appID}`
     : null
-  const pluginDetailBreadcrumb = activePlugin ? (
+  const pluginBreadcrumb = (
     <nav className="plugins-detail-breadcrumb" aria-label="Plugin detail breadcrumb">
-      <button type="button" onClick={onPluginDeselect}>插件</button>
-      <ChevronRightIcon />
-      <span>{activePlugin.name}</span>
+      {activePlugin ? (
+        <>
+          <button type="button" onClick={onPluginDeselect}>插件</button>
+          <ChevronRightIcon />
+          <span>{activePlugin.name}</span>
+        </>
+      ) : (
+        <span>插件</span>
+      )}
     </nav>
-  ) : null
+  )
   const toggleIncludedItem = (itemID: string) => {
     setExpandedIncludedItemID((currentItemID) => currentItemID === itemID ? null : itemID)
-  }
-
-  function handleSearchQueryChange(value: string) {
-    if (!hasExternalSearch) {
-      setLocalSearchQuery(value)
-    }
-    onSearchQueryChange?.(value)
-  }
-
-  function handleBrowseAllPlugins() {
-    setCategoryFilter("All")
-    setPublisherFilter(PUBLISHER_FILTER_ALL)
-    handleSearchQueryChange("")
   }
 
   useEffect(() => {
@@ -1024,21 +915,13 @@ export function PluginsPage({
             </div>
 
             <div className={isPluginDetailView ? "settings-service-detail-panel plugins-marketplace-content is-detail-view" : "settings-service-detail-panel plugins-marketplace-content"}>
-              {pluginDetailBreadcrumb}
+              {pluginBreadcrumb}
               {!activePlugin ? (
               <>
                 <PluginCategoryNavigation
                   activeCategory={categoryFilter}
                   categoryCounts={categoryCounts}
                   onCategoryChange={setCategoryFilter}
-                />
-
-                <PluginPromotionHero
-                  installedCount={installedPlugins.length}
-                  pluginCount={pluginCatalog.length}
-                  promotionPlugins={promotionPlugins}
-                  publisherCount={publisherFilters.length}
-                  onBrowseAll={handleBrowseAllPlugins}
                 />
 
                 <div className="plugins-directory" role="region" aria-label="Plugin marketplace layout">
