@@ -482,11 +482,6 @@
   overflow-wrap: anywhere;
 }
 
-.right-sidebar-launcher-card.is-files .right-sidebar-launcher-card-title {
-  font-size: 28px;
-  font-weight: 300;
-}
-
 @media (max-width: 560px) {
   .right-sidebar-launcher {
     padding: 10px;
@@ -525,9 +520,6 @@
     min-width: 46px;
   }
 
-  .right-sidebar-launcher-card.is-files .right-sidebar-launcher-card-title {
-    font-size: 24px;
-  }
 }
 
 .right-sidebar-top-menu-window-controls {

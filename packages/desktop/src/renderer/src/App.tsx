@@ -2546,6 +2546,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 permissionRequestActionRequestID={permissionRequestActionRequestID}
                 toolPermissionMode={toolPermissionMode}
                 toolPermissionModeError={toolPermissionModeError}
+                conversationWorkspaceID={conversationWorkspaceID}
                 surfaceID={surfaceID}
                 onCloseCreateSessionTab={handleCloseCreateSessionTab}
                 onCloseSessionTab={handleCanvasSessionTabClose}

@@ -301,6 +301,7 @@ export interface WorkbenchShellProps {
   permissionRequestActionRequestID: string | null
   toolPermissionMode: ToolPermissionMode
   toolPermissionModeError: string | null
+  conversationWorkspaceID?: string | null
   readThreadScrollSnapshot: (key: string) => ThreadScrollSnapshot | null
   saveThreadScrollSnapshot: (key: string, snapshot: ThreadScrollSnapshot) => void
   onCloseCreateSessionTab: (createSessionTabID: string, paneID?: string, options?: { force?: boolean }) => void
@@ -886,6 +887,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
           permissionRequestActionRequestID={props.permissionRequestActionRequestID}
           toolPermissionMode={props.toolPermissionMode}
           toolPermissionModeError={props.toolPermissionModeError}
+          conversationWorkspaceID={props.conversationWorkspaceID ?? null}
           workspaces={workspaces}
           readThreadScrollSnapshot={props.readThreadScrollSnapshot}
           saveThreadScrollSnapshot={props.saveThreadScrollSnapshot}

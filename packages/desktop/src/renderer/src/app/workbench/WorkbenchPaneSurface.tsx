@@ -1,5 +1,5 @@
 import { memo, useLayoutEffect, useMemo, useRef } from "react"
-import { CreateSessionCanvas } from "../canvas/CreateSessionCanvas"
+import { CreateSessionCanvas, getCreateSessionProjectWorkspaces } from "../canvas/CreateSessionCanvas"
 import { SessionCanvasTopMenu } from "../canvas/SessionCanvasTopMenu"
 import { Composer } from "../composer/Composer"
 import { ComposerConcurrentInputDrawer } from "../composer/ComposerConcurrentInputDrawer"
@@ -71,6 +71,7 @@ export interface WorkbenchPaneSurfaceProps {
   permissionRequestActionRequestID: string | null
   toolPermissionMode: ToolPermissionMode
   toolPermissionModeError: string | null
+  conversationWorkspaceID?: string | null
   workspaces: WorkspaceGroup[]
   readThreadScrollSnapshot: (key: string) => ThreadScrollSnapshot | null
   saveThreadScrollSnapshot: (key: string, snapshot: ThreadScrollSnapshot) => void
@@ -207,6 +208,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   permissionRequestActionRequestID,
   toolPermissionMode,
   toolPermissionModeError,
+  conversationWorkspaceID = null,
   workspaces,
   readThreadScrollSnapshot,
   saveThreadScrollSnapshot,
@@ -322,6 +324,14 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
     })),
     [pane.createSessionTabID, pane.createSessionWorkspaceID, pane.id],
   )
+  const createSessionProjectWorkspaces = useMemo(
+    () => getCreateSessionProjectWorkspaces(workspaces, conversationWorkspaceID),
+    [conversationWorkspaceID, workspaces],
+  )
+  const canCreateProjectSession = Boolean(
+    pane.createSessionWorkspaceID &&
+      createSessionProjectWorkspaces.some((workspace) => workspace.id === pane.createSessionWorkspaceID),
+  )
   const threadViewProfiler = useMemo(
     () => createRendererProfilerOnRender("ThreadView commit", () => ({
       paneID: pane.id,
@@ -374,6 +384,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
             <div className="create-session-layout">
               <RendererProfiler id="WorkbenchPaneSurface.CreateSessionCanvas" onRender={createSessionCanvasProfiler}>
                 <CreateSessionCanvas
+                  conversationWorkspaceID={conversationWorkspaceID}
                   isCreatingSession={pane.isCreatingSession}
                   selectedWorkspaceID={pane.createSessionWorkspaceID}
                   workspaces={workspaces}
@@ -388,7 +399,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                     attachmentButtonTitle={composer.attachmentButtonTitle}
                     attachmentDisabledReason={composer.attachmentDisabledReason}
                     attachmentError={composer.attachmentError}
-                    canSend={Boolean(pane.createSessionWorkspaceID)}
+                    canSend={canCreateProjectSession}
                     canPasteImageAttachments={composer.attachmentCapabilities.image && composer.attachmentDisabledReason === null}
                     draftState={pane.draftState}
                     hasPendingPermissionRequests={false}

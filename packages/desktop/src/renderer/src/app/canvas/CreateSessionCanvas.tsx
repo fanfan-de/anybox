@@ -298,6 +298,7 @@ export function GlobalSkillsCanvas({
 }
 
 interface CreateSessionCanvasProps {
+  conversationWorkspaceID?: string | null
   isCreatingSession: boolean
   selectedWorkspaceID: string | null
   workspaces: WorkspaceGroup[]
@@ -315,6 +316,15 @@ function getWorkspaceLabel(workspace: WorkspaceGroup) {
 
 function getSelectedCreateSessionWorkspace(workspaces: WorkspaceGroup[], selectedWorkspaceID: string | null) {
   return workspaces.find((workspace) => workspace.id === selectedWorkspaceID) ?? null
+}
+
+export function getCreateSessionProjectWorkspaces(
+  workspaces: WorkspaceGroup[],
+  conversationWorkspaceID?: string | null,
+) {
+  return conversationWorkspaceID && workspaces.length === 1 && workspaces[0]?.id === conversationWorkspaceID
+    ? []
+    : workspaces
 }
 
 function CreateSessionWorkspaceSelect({
@@ -542,26 +552,15 @@ function CreateSessionGuide({
 }) {
   if (workspaces.length === 0) {
     return (
-      <div className="create-session-guide is-no-project">
-        <div className="create-session-guide-copy">
-          <p className="create-session-guide-kicker">No project selected</p>
-          <h2>Open a project folder to start</h2>
-          <p>
-            Anybox needs a local project folder before this composer can create a real session, read files, or run
-            tools in context.
-          </p>
-        </div>
-        <button
-          className="create-session-guide-primary"
-          type="button"
-          aria-label="Open project folder"
-          onClick={() => void onOpenProjectFolder()}
-        >
-          <FolderIcon />
-          <span>Open folder</span>
-        </button>
-        <p className="create-session-guide-note">After a project is open, send a concrete task from the composer below.</p>
-      </div>
+      <button
+        className="create-session-guide-primary"
+        type="button"
+        aria-label="Open project folder"
+        onClick={() => void onOpenProjectFolder()}
+      >
+        <FolderIcon />
+        <span>Open folder</span>
+      </button>
     )
   }
 
@@ -590,27 +589,29 @@ function CreateSessionGuide({
 }
 
 export function CreateSessionCanvas({
+  conversationWorkspaceID = null,
   isCreatingSession,
   selectedWorkspaceID,
   workspaces,
   onOpenProjectFolder,
   onWorkspaceChange,
 }: CreateSessionCanvasProps) {
-  const selectedWorkspace = getSelectedCreateSessionWorkspace(workspaces, selectedWorkspaceID)
+  const projectWorkspaces = getCreateSessionProjectWorkspaces(workspaces, conversationWorkspaceID)
+  const selectedWorkspace = getSelectedCreateSessionWorkspace(projectWorkspaces, selectedWorkspaceID)
 
   return (
     <section className="thread-shell create-session-shell">
       <article className="create-session-card">
         <CreateSessionLogo />
         <CreateSessionWorkspaceSelect
-          disabled={isCreatingSession || workspaces.length === 0}
+          disabled={isCreatingSession || projectWorkspaces.length === 0}
           selectedWorkspaceID={selectedWorkspaceID}
-          workspaces={workspaces}
+          workspaces={projectWorkspaces}
           onWorkspaceChange={onWorkspaceChange}
         />
         <CreateSessionGuide
           selectedWorkspace={selectedWorkspace}
-          workspaces={workspaces}
+          workspaces={projectWorkspaces}
           onOpenProjectFolder={onOpenProjectFolder}
         />
       </article>

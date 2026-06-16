@@ -37,19 +37,32 @@ function renderCreateSessionCanvas(input: Partial<Parameters<typeof CreateSessio
 }
 
 describe("CreateSessionCanvas", () => {
-  it("shows a strong open-folder guide when no project is available", () => {
+  it("shows only an open-folder button when no project is available", () => {
     const { props } = renderCreateSessionCanvas({
       selectedWorkspaceID: null,
       workspaces: [],
     })
 
-    expect(screen.getByRole("heading", { name: "Open a project folder to start" })).toBeInTheDocument()
-    expect(screen.getByText(/Anybox needs a local project folder/)).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Open a project folder to start" })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Anybox needs a local project folder/)).not.toBeInTheDocument()
     expect(screen.getByRole("combobox", { name: "Session project" })).toBeDisabled()
 
     fireEvent.click(screen.getByRole("button", { name: "Open project folder" }))
 
     expect(props.onOpenProjectFolder).toHaveBeenCalledTimes(1)
+  })
+
+  it("shows only an open-folder button when only the default conversation workspace is available", () => {
+    renderCreateSessionCanvas({
+      conversationWorkspaceID: "workspace-1",
+      selectedWorkspaceID: "workspace-1",
+      workspaces: [createWorkspace({ name: "conversation" })],
+    })
+
+    expect(screen.queryByRole("heading", { name: "Open a project folder to start" })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Anybox needs a local project folder/)).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Open project folder" })).toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: "Session project" })).toBeDisabled()
   })
 
   it("shows only the selected project selector when a project is selected", () => {
