@@ -7,6 +7,8 @@ import { repositoryUrl } from "./releaseDownloads"
 
 const brandLogoBlack = "/brand-logo-black.svg"
 const wechatCommunityQrImage = "/wechat-community-qr-20260602.png"
+const icpRecordNumber = "苏ICP备2026030016号-1"
+const icpRecordUrl = "https://beian.miit.gov.cn/"
 
 function getGitHubRepoApiUrl(href: string) {
   const match = href.match(/^https:\/\/github\.com\/([^/]+)\/([^/#?]+)/)
@@ -185,6 +187,17 @@ function CommunityBottomSection() {
   )
 }
 
+function SiteFooter() {
+  return (
+    <footer className="site-footer">
+      <span>© 2026 Anybox</span>
+      <a href={icpRecordUrl} rel="noreferrer" target="_blank">
+        {icpRecordNumber}
+      </a>
+    </footer>
+  )
+}
+
 export function App() {
   return (
     <main className="page-shell" id="top">
@@ -242,6 +255,7 @@ export function App() {
 
       <ScenarioSection />
       <CommunityBottomSection />
+      <SiteFooter />
     </main>
   )
 }

@@ -65,6 +65,7 @@ interface GlobalSkillsPageProps {
   selectedFileReadOnly: boolean
   selectedGitInstallSkillIDs: string[]
   selectedSkillDirectoryName: string | null
+  hideTopMenu?: boolean
   hideNavigator?: boolean
   windowControls?: ReactNode
   onChange: (value: string) => void
@@ -1233,6 +1234,7 @@ export function GlobalSkillsPage({
   selectedFileReadOnly,
   selectedGitInstallSkillIDs,
   selectedSkillDirectoryName,
+  hideTopMenu = false,
   hideNavigator = false,
   windowControls,
   onChange,
@@ -1267,23 +1269,25 @@ export function GlobalSkillsPage({
   onSave,
 }: GlobalSkillsPageProps) {
   return (
-    <section className="global-skills-page" aria-label="Global skills">
-      <ShellTopMenu
-        as="header"
-        ariaLabel="Skills top menu"
-        className="canvas-region-top-menu global-skills-top-menu"
-        contentClassName="canvas-region-top-menu-tabs-shell"
-        content={(
-          <div className="prompt-presets-top-menu-label">
-            <FileTextIcon />
-            <span>Skills</span>
-          </div>
-        )}
-        dragRegion
-        layout="three-column"
-        trailing={windowControls}
-        trailingClassName="prompt-presets-top-menu-window-controls"
-      />
+    <section className={hideTopMenu ? "global-skills-page is-embedded" : "global-skills-page"} aria-label="Global skills">
+      {hideTopMenu ? null : (
+        <ShellTopMenu
+          as="header"
+          ariaLabel="Skills top menu"
+          className="canvas-region-top-menu global-skills-top-menu"
+          contentClassName="canvas-region-top-menu-tabs-shell"
+          content={(
+            <div className="prompt-presets-top-menu-label">
+              <FileTextIcon />
+              <span>Skills</span>
+            </div>
+          )}
+          dragRegion
+          layout="three-column"
+          trailing={windowControls}
+          trailingClassName="prompt-presets-top-menu-window-controls"
+        />
+      )}
 
       <div className={hideNavigator ? "settings-page-main is-services global-skills-page-main is-sidebar-hosted" : "settings-page-main is-services global-skills-page-main"}>
         <section

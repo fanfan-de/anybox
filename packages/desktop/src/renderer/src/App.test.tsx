@@ -80,6 +80,13 @@ function openActivityRailConfigurationView(label: string | RegExp) {
   if (expandConfigurationButton) {
     fireEvent.click(expandConfigurationButton)
   }
+  if (label === "Open skills" || label === "Open prompts") {
+    fireEvent.click(screen.getByRole("button", { name: "Open prompts and skills" }))
+    if (label === "Open skills") {
+      fireEvent.click(screen.getByRole("button", { name: "Skills", hidden: true }))
+    }
+    return
+  }
   fireEvent.click(screen.getByRole("button", { name: label }))
 }
 
@@ -2987,7 +2994,8 @@ describe("App", () => {
 
     openActivityRailConfigurationView("Open skills")
 
-    expect(await screen.findByLabelText("Skills top menu")).toBeInTheDocument()
+    expect(await screen.findByLabelText("Prompts and skills top menu")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Skills", hidden: true })).toHaveAttribute("aria-pressed", "true")
     expect(screen.getByLabelText("Left sidebar top menu")).toBeInTheDocument()
     expect(document.querySelector("#app-sidebar")).toBeInTheDocument()
     expect(screen.queryByRole("complementary", { name: "Inspector sidebar" })).not.toBeInTheDocument()
@@ -3011,6 +3019,89 @@ describe("App", () => {
     await screen.findByRole("button", { name: "SKILL.md" })
     expect(screen.queryByRole("textbox", { name: "New global skill name" })).not.toBeInTheDocument()
     expect(screen.getByRole("textbox", { name: "Global skill editor" })).toHaveValue(content)
+  })
+
+  it("confirms before switching from dirty prompts to skills", async () => {
+    render(<App />)
+
+    openActivityRailConfigurationView("Open prompts")
+    const promptEditor = await screen.findByRole("textbox", { name: "System prompt content" })
+    fireEvent.change(promptEditor, {
+      target: {
+        value: "Edited system prompt",
+      },
+    })
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const modeGroup = screen.getByLabelText("Prompts and skills section")
+    const promptsModeButton = within(modeGroup).getByRole("button", { name: "Prompts", hidden: true })
+    const skillsModeButton = within(modeGroup).getByRole("button", { name: "Skills", hidden: true })
+
+    fireEvent.click(skillsModeButton)
+    expect(confirmSpy).toHaveBeenCalledWith("The current prompt has unsaved changes. Switch to Skills anyway?")
+    expect(promptsModeButton).toHaveAttribute("aria-pressed", "true")
+    expect(skillsModeButton).toHaveAttribute("aria-pressed", "false")
+    expect(screen.getByRole("textbox", { name: "System prompt content" })).toHaveValue("Edited system prompt")
+
+    fireEvent.click(skillsModeButton)
+    await screen.findByText("No skills exist yet. Use + to create the first one.")
+    expect(within(screen.getByLabelText("Prompts and skills section")).getByRole("button", { name: "Skills", hidden: true })).toHaveAttribute("aria-pressed", "true")
+    confirmSpy.mockRestore()
+  })
+
+  it("confirms before switching from dirty skills to prompts", async () => {
+    const root = "C:\\Users\\19128\\.anybox\\skills"
+    const directoryPath = `${root}\\layout-review`
+    const filePath = `${directoryPath}\\SKILL.md`
+    const content = ["---", "name: layout-review", "description: Describe when this skill should be used.", "---", "", "# layout-review"].join("\n")
+
+    window.desktop!.getGlobalSkillsTree = vi.fn().mockResolvedValue({
+      root,
+      items: [
+        {
+          name: "layout-review",
+          path: directoryPath,
+          kind: "directory",
+          children: [
+            {
+              name: "SKILL.md",
+              path: filePath,
+              kind: "file",
+            },
+          ],
+        },
+      ],
+    })
+    window.desktop!.readGlobalSkillFile = vi.fn().mockResolvedValue({
+      path: filePath,
+      content,
+    })
+
+    render(<App />)
+
+    openActivityRailConfigurationView("Open skills")
+    const skillEditor = await screen.findByRole("textbox", { name: "Global skill editor" })
+    fireEvent.change(skillEditor, {
+      target: {
+        value: `${content}\n\nExtra guidance.`,
+      },
+    })
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const modeGroup = screen.getByLabelText("Prompts and skills section")
+    const promptsModeButton = within(modeGroup).getByRole("button", { name: "Prompts", hidden: true })
+    const skillsModeButton = within(modeGroup).getByRole("button", { name: "Skills", hidden: true })
+
+    fireEvent.click(promptsModeButton)
+    expect(confirmSpy).toHaveBeenCalledWith("The current skill has unsaved changes. Switch to Prompts anyway?")
+    expect(skillsModeButton).toHaveAttribute("aria-pressed", "true")
+    expect(promptsModeButton).toHaveAttribute("aria-pressed", "false")
+    expect(screen.getByRole("textbox", { name: "Global skill editor" })).toHaveValue(`${content}\n\nExtra guidance.`)
+
+    fireEvent.click(promptsModeButton)
+    await screen.findByRole("list", { name: "Prompt presets" })
+    expect(within(screen.getByLabelText("Prompts and skills section")).getByRole("button", { name: "Prompts", hidden: true })).toHaveAttribute("aria-pressed", "true")
+    confirmSpy.mockRestore()
   })
 
   it("creates a global skill folder and a nested skill from the tree menu", async () => {
@@ -9450,6 +9541,7 @@ describe("App", () => {
     expect(leftActivityRail).not.toBeNull()
     expect(within(leftActivityRail!).getByRole("button", { name: "Open workspace" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Open skills" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Open prompts" })).not.toBeInTheDocument()
 
     const configurationToggle = within(leftActivityRail!).getByRole("button", {
       name: "Show configuration shortcuts",
@@ -9462,8 +9554,9 @@ describe("App", () => {
     fireEvent.click(configurationToggle)
 
     const configurationGroup = within(leftActivityRail!).getByLabelText("Configuration views")
-    expect(within(configurationGroup).getByRole("button", { name: "Open skills" })).toBeInTheDocument()
-    expect(within(configurationGroup).getByRole("button", { name: "Open prompts" })).toBeInTheDocument()
+    expect(within(configurationGroup).getByRole("button", { name: "Open prompts and skills" })).toBeInTheDocument()
+    expect(within(configurationGroup).queryByRole("button", { name: "Open skills" })).not.toBeInTheDocument()
+    expect(within(configurationGroup).queryByRole("button", { name: "Open prompts" })).not.toBeInTheDocument()
     expect(within(configurationGroup).getByRole("button", { name: "Open connections and extensions" })).toBeInTheDocument()
     expect(within(configurationGroup).queryByRole("button", { name: "Open MCP" })).not.toBeInTheDocument()
     expect(within(configurationGroup).queryByRole("button", { name: "Open plugins" })).not.toBeInTheDocument()
@@ -9473,9 +9566,9 @@ describe("App", () => {
       within(leftActivityRail!).getByRole("button", { name: "Hide configuration shortcuts" }),
     ).toHaveAttribute("aria-expanded", "true")
 
-    fireEvent.click(within(configurationGroup).getByRole("button", { name: "Open prompts" }))
+    fireEvent.click(within(configurationGroup).getByRole("button", { name: "Open prompts and skills" }))
 
-    expect(within(configurationGroup).getByRole("button", { name: "Open prompts" })).toHaveAttribute(
+    expect(within(configurationGroup).getByRole("button", { name: "Open prompts and skills" })).toHaveAttribute(
       "aria-pressed",
       "true",
     )
@@ -13313,6 +13406,9 @@ describe("App", () => {
     )
     expect(styles).toMatch(
       /\.composer-menu-panel\s*\{[^}]*bottom:\s*calc\(100%\s*\+\s*8px\);[^}]*max-height:\s*min\(320px,\s*calc\(100dvh - 180px\)\);[^}]*overflow:\s*auto;[^}]*background:\s*var\(--seg-dropdown-menu-surface\);/s,
+    )
+    expect(styles).toMatch(
+      /\.create-session-layout\s+\.create-session-shell:has\(\.create-session-select-panel\)\s*\{[^}]*z-index:\s*7;/s,
     )
     expect(styles).toMatch(
       /\.canvas-top-menu-selector-panel\s*\{[^}]*top:\s*calc\(100%\s*\+\s*8px\);[^}]*background:\s*var\(--seg-dropdown-menu-surface\);/s,

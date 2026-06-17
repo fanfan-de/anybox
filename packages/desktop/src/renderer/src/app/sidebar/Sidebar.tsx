@@ -20,6 +20,7 @@ import {
 } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
 import { PromptPresetsSidebarView, type PromptPresetsSidebarViewProps } from "../prompts/PromptPresetsPage"
+import type { PromptSkillMode } from "../prompts/PromptSkillsPage"
 import { joinClassNames, ShellTopMenu, SidebarToggleButton } from "../shared-ui"
 import { GlobalSkillsNavigator, type GlobalSkillsNavigatorProps } from "../skills/GlobalSkillsPage"
 import { BuiltinToolsSidebarView, type BuiltinToolsSidebarViewProps } from "../tools/BuiltinToolsPage"
@@ -77,6 +78,7 @@ interface SidebarProps {
   isCreatingSession: boolean
   creatingWorktreeProjectID: string | null
   isSettingsOpen: boolean
+  promptSkillMode: PromptSkillMode
   promptPresetsSidebarProps: PromptPresetsSidebarViewProps
   showSettingsButton?: boolean
   showSidebarToggleButton: boolean
@@ -1250,6 +1252,7 @@ export function Sidebar({
   creatingWorktreeProjectID,
   isSettingsOpen,
   onOpenRemoteFolderConfig,
+  promptSkillMode,
   promptPresetsSidebarProps,
   showSettingsButton = true,
   showSidebarToggleButton,
@@ -1322,11 +1325,10 @@ export function Sidebar({
             onSessionSelect={onSessionSelect}
           />
         ) : null}
-        {activeView === "skills" ? (
-          <GlobalSkillsNavigator {...globalSkillsNavigatorProps} />
-        ) : null}
-        {activeView === "prompts" ? (
-          <PromptPresetsSidebarView {...promptPresetsSidebarProps} />
+        {activeView === "resources" ? (
+          promptSkillMode === "skills"
+            ? <GlobalSkillsNavigator {...globalSkillsNavigatorProps} />
+            : <PromptPresetsSidebarView {...promptPresetsSidebarProps} />
         ) : null}
         {activeView === "tools" ? (
           <BuiltinToolsSidebarView {...builtinToolsSidebarProps} />

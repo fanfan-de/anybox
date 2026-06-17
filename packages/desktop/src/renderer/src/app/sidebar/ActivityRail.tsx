@@ -8,7 +8,6 @@ import {
   FileTextIcon,
   LayoutSidebarLeftIcon,
   SettingsIcon,
-  SideChatIcon,
   ToolsIcon,
 } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
@@ -34,8 +33,7 @@ const primaryLeftRailViews = [
 ]
 
 const configurationLeftRailViews = [
-  { view: "skills" as const, labelKey: "shell.openSkills", Icon: FileTextIcon },
-  { view: "prompts" as const, labelKey: "shell.openPrompts", Icon: SideChatIcon },
+  { view: "resources" as const, labelKey: "shell.openPromptsAndSkills", Icon: FileTextIcon },
   { view: "connections" as const, labelKey: "shell.openConnectionsAndExtensions", Icon: ConnectedStatusIcon },
   { view: "tools" as const, labelKey: "shell.openTools", Icon: ToolsIcon },
 ]

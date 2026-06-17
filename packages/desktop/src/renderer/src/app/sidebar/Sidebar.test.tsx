@@ -80,6 +80,7 @@ function renderSidebar(overrides: Partial<ComponentProps<typeof Sidebar>> = {}) 
     isCreatingSession: false,
     creatingWorktreeProjectID: null,
     isSettingsOpen: false,
+    promptSkillMode: "prompts",
     promptPresetsSidebarProps: {
       deletingPromptPresetID: null,
       isCreatingPromptPreset: false,

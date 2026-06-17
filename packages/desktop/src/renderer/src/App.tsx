@@ -71,6 +71,7 @@ import {
 import { UpdateDialog, type AppUpdateStatus } from "./app/update/UpdateDialog"
 import { useI18n } from "./app/i18n/I18nProvider"
 import type { TranslationKey } from "./app/i18n/translations"
+import { PromptSkillsPage, type PromptSkillMode } from "./app/prompts/PromptSkillsPage"
 
 const GlobalSkillsPage = lazy(() => import("./app/skills/GlobalSkillsPage").then((module) => ({ default: module.GlobalSkillsPage })))
 const ConnectorsPage = lazy(() => import("./app/connectors/ConnectorsPage").then((module) => ({ default: module.ConnectorsPage })))
@@ -858,6 +859,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   const [isInstallingAppUpdate, setIsInstallingAppUpdate] = useState(false)
   const [isSavingAutomaticUpdates, setIsSavingAutomaticUpdates] = useState(false)
   const [isPreparingSettingsPage, setIsPreparingSettingsPage] = useState(false)
+  const [promptSkillMode, setPromptSkillMode] = useState<PromptSkillMode>("prompts")
   const autoPromptedDownloadingUpdateRef = useRef<string | null>(null)
   const autoPromptedDownloadedUpdateRef = useRef<string | null>(null)
   const [creatingWorktreeProjectID, setCreatingWorktreeProjectID] = useState<string | null>(null)
@@ -1122,6 +1124,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     }
   }, [agentConnected])
   const isConnectionsPageOpen = leftSidebarView === "connections"
+  const isResourcesPageOpen = leftSidebarView === "resources"
   const workbenchPublishSnapshot = useWorkspaceStoreSelector(
     workspaceStore,
     (state) => buildWorkbenchPublishSnapshot({
@@ -1357,7 +1360,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     isConnectorsPageOpen: isConnectionsPageOpen,
     isMcpServersPageOpen: isConnectionsPageOpen,
     isPluginsPageOpen: isConnectionsPageOpen,
-    isPromptPresetEditorOpen: leftSidebarView === "prompts",
+    isPromptPresetEditorOpen: isResourcesPageOpen && promptSkillMode === "prompts",
     onArchivedSessionRestored: async (session) => {
       await refreshWorkspaceFromDirectory(session.directory)
     },
@@ -2038,6 +2041,30 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     handleLeftSidebarViewChange("connections")
   }
 
+  function handlePromptSkillModeChange(nextMode: PromptSkillMode) {
+    if (nextMode === promptSkillMode) return
+
+    if (
+      promptSkillMode === "prompts" &&
+      isPromptDirty &&
+      typeof window.confirm === "function" &&
+      !window.confirm(t("resources.confirm.switchFromPrompt"))
+    ) {
+      return
+    }
+
+    if (
+      promptSkillMode === "skills" &&
+      isDirtyGlobalSkillFile &&
+      typeof window.confirm === "function" &&
+      !window.confirm(t("resources.confirm.switchFromSkill"))
+    ) {
+      return
+    }
+
+    setPromptSkillMode(nextMode)
+  }
+
   const isMacOS = platform === "darwin"
   const windowShellClassName = [
     "window-shell",
@@ -2048,13 +2075,12 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   ]
     .filter(Boolean)
     .join(" ")
-  const isPromptEditorView = leftSidebarView === "prompts"
-  const isGlobalSkillsView = leftSidebarView === "skills"
+  const isResourcesView = leftSidebarView === "resources"
   const isAutomationsView = leftSidebarView === "automations"
   const isCalendarView = leftSidebarView === "calendar"
   const isConnectionsView = leftSidebarView === "connections"
   const isBuiltinToolsView = leftSidebarView === "tools"
-  const isShellSidebarManagedView = isPromptEditorView || isGlobalSkillsView || isBuiltinToolsView
+  const isShellSidebarManagedView = isResourcesView || isBuiltinToolsView
   const isFullSurfaceView = isConnectionsView || isAutomationsView || isCalendarView
   const windowControls = useMemo(
     () => (
@@ -2173,6 +2199,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               isCreatingSession={isCreatingSession}
               creatingWorktreeProjectID={creatingWorktreeProjectID}
               isSettingsOpen={isOpen}
+              promptSkillMode={promptSkillMode}
               promptPresetsSidebarProps={{
                 deletingPromptPresetID,
                 isCreatingPromptPreset,
@@ -2241,126 +2268,132 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               : "canvas is-workbench"
           }
         >
-          {isPromptEditorView ? (
-            <Suspense fallback={null}>
-              <PromptPresetsPage
-                deletingPromptPresetID={deletingPromptPresetID}
-                hideNavigator
-                isCreatingPromptPreset={isCreatingPromptPreset}
-                isLoadingPromptPreset={isLoadingPromptPreset}
-                isLoadingPrompts={isLoadingPrompts}
-                isInstallingPromptUrlPrompts={isInstallingPromptUrlPrompts}
-                isPreviewingPromptUrlInstall={isPreviewingPromptUrlInstall}
-                isPromptDirty={isPromptDirty}
-                isPromptUrlInstallDialogOpen={isPromptUrlInstallDialogOpen}
-                isSavingPromptPresetSelection={isSavingPromptPresetSelection}
-                isTranslatingPromptPreset={isTranslatingPromptPreset}
-                models={models}
-                promptDraftContent={promptDraftContent}
-                promptDraftLabel={promptDraftLabel}
-                promptLoadError={promptLoadError}
-                promptRoot={promptRoot}
-                promptPresets={promptPresets}
-                promptPresetSelection={promptPresetSelection}
-                promptUrlInstallMessage={promptUrlInstallMessage}
-                promptUrlInstallPreview={promptUrlInstallPreview}
-                promptUrlInstallSource={promptUrlInstallSource}
-                resettingPromptPresetID={resettingPromptPresetID}
-                savingPromptPresetID={savingPromptPresetID}
-                selectedPromptPreset={selectedPromptPreset}
-                selectedPromptUrlInstallIDs={selectedPromptUrlInstallIDs}
-                windowControls={windowControls}
-                onCreatePromptPreset={createPromptPreset}
-                onDeletePromptPreset={deletePromptPreset}
-                onInstallPromptsFromUrl={installPromptsFromUrl}
-                onPromptUrlInstallDialogClose={closePromptUrlInstallDialog}
-                onPromptUrlInstallDialogOpen={openPromptUrlInstallDialog}
-                onPromptUrlInstallPromptToggle={togglePromptUrlInstallPrompt}
-                onPromptUrlInstallSourceChange={setPromptUrlInstallSourceValue}
-                onPromptDraftChange={setPromptDraftValue}
-                onPromptDraftLabelChange={setPromptDraftLabelValue}
-                onPromptPresetSelect={selectPromptPreset}
-                onPromptPresetSelectionChange={setPromptPresetSelectionValue}
-                onPreviewPromptUrlInstall={previewPromptUrlInstall}
-                onOpenPromptFolder={openPromptFolder}
-                onResetPromptPreset={resetPromptPreset}
-                onSavePromptPreset={savePromptPreset}
-                onTranslatePromptPreset={translatePromptPreset}
-              />
-            </Suspense>
-          ) : isGlobalSkillsView ? (
-            <Suspense fallback={null}>
-              <GlobalSkillsPage
-              creatingGlobalSkillName={creatingGlobalSkillName}
-              creatingGlobalSkillDraftKind={creatingGlobalSkillDraftKind}
-              creatingGlobalSkillParentDirectory={creatingGlobalSkillParentDirectory}
-              deletingGlobalSkillDirectory={deletingGlobalSkillDirectory}
-              expandedSkillPaths={expandedSkillPaths}
-              globalSkillFolderOptions={globalSkillFolderOptions}
-              globalSkillsRoot={globalSkillsRoot}
-              globalSkillsTree={globalSkillsTree}
-              hideNavigator
-              gitInstallTargetDirectory={gitInstallTargetDirectory}
-              gitInstallPreview={gitInstallPreview}
-              gitInstallSource={gitInstallSource}
-              isCreateGlobalSkillDraftVisible={isCreateGlobalSkillDraftVisible}
-              isCreatingGlobalSkill={isCreatingGlobalSkill}
-              isDirty={isDirtyGlobalSkillFile}
-              isGitInstallDialogOpen={isGitInstallDialogOpen}
-              isInstallingGitSkills={isInstallingGitSkills}
-              isInstallingLocalSkill={isInstallingLocalSkill}
-              isLocalInstallDialogOpen={isLocalInstallDialogOpen}
-              isLoadingFile={isLoadingGlobalSkillFile}
-              isLoadingSkillsTree={isLoadingGlobalSkillsTree}
-              isMoveGlobalSkillDialogOpen={isMoveGlobalSkillDialogOpen}
-              isMovingGlobalSkillDirectory={isMovingGlobalSkillDirectory}
-              isPreviewingGitInstall={isPreviewingGitInstall}
-              isSavingFile={isSavingGlobalSkillFile}
-              localInstallTargetDirectory={localInstallTargetDirectory}
-              moveGlobalSkillTargetOptions={moveGlobalSkillTargetOptions}
-              movingGlobalSkillDirectory={movingGlobalSkillDirectory}
-              movingGlobalSkillTargetDirectory={movingGlobalSkillTargetDirectory}
-              renamingGlobalSkillDirectory={renamingGlobalSkillDirectory}
-              renamingGlobalSkillDraftDirectory={renamingGlobalSkillDraftDirectory}
-              renamingGlobalSkillName={renamingGlobalSkillName}
-              selectedFileContent={selectedGlobalSkillFileContent}
-              selectedFilePath={selectedGlobalSkillFilePath}
-              selectedFileReadOnly={selectedGlobalSkillFileReadOnly}
-              selectedGitInstallSkillIDs={selectedGitInstallSkillIDs}
-              selectedSkillDirectoryName={selectedGlobalSkillDirectory?.name ?? null}
+          {isResourcesView ? (
+            <PromptSkillsPage
+              mode={promptSkillMode}
               windowControls={windowControls}
-              onChange={handleGlobalSkillDraftChange}
-              onCreateGlobalSkill={handleCreateGlobalSkill}
-              onCreateGlobalSkillDraftCancel={handleCreateGlobalSkillDraftCancel}
-              onCreateGlobalSkillDraftChange={handleCreateGlobalSkillDraftChange}
-              onCreateGlobalSkillDraftStart={handleCreateGlobalSkillDraftStart}
-              onDelete={handleDeleteGlobalSkill}
-              onDeleteGlobalSkill={handleDeleteGlobalSkill}
-              onGitInstallDialogClose={handleGitInstallDialogClose}
-              onGitInstallDialogOpen={handleGitInstallDialogOpen}
-              onGitInstallSkillToggle={handleGitInstallSkillToggle}
-              onGitInstallSourceChange={handleGitInstallSourceChange}
-              onGitInstallTargetDirectoryChange={handleGitInstallTargetDirectoryChange}
-              onGlobalSkillDirectoryToggle={handleGlobalSkillDirectoryToggle}
-              onGlobalSkillFileSelect={handleGlobalSkillFileSelect}
-              onInstallGitSkills={handleInstallGitSkills}
-              onInstallLocalSkillFile={handleInstallLocalSkillFile}
-              onLocalInstallDialogClose={handleLocalInstallDialogClose}
-              onLocalInstallDialogOpen={handleLocalInstallDialogOpen}
-              onLocalInstallTargetDirectoryChange={handleLocalInstallTargetDirectoryChange}
-              onMoveGlobalSkillDirectory={handleMoveGlobalSkillDirectory}
-              onMoveGlobalSkillDirectoryCancel={handleMoveGlobalSkillDirectoryCancel}
-              onMoveGlobalSkillDirectoryStart={handleMoveGlobalSkillDirectoryStart}
-              onMoveGlobalSkillTargetDirectoryChange={handleMoveGlobalSkillTargetDirectoryChange}
-              onOpenGlobalSkillsFolder={handleOpenGlobalSkillsFolder}
-              onPreviewGitSkillInstall={handlePreviewGitSkillInstall}
-              onRenameGlobalSkill={handleRenameGlobalSkill}
-              onRenameGlobalSkillDraftCancel={handleRenameGlobalSkillDraftCancel}
-              onRenameGlobalSkillDraftChange={handleRenameGlobalSkillDraftChange}
-              onRenameGlobalSkillDraftStart={handleRenameGlobalSkillDraftStart}
-                onSave={handleSaveGlobalSkillFile}
-              />
-            </Suspense>
+              onModeChange={handlePromptSkillModeChange}
+            >
+              <Suspense fallback={null}>
+                {promptSkillMode === "prompts" ? (
+                  <PromptPresetsPage
+                    deletingPromptPresetID={deletingPromptPresetID}
+                    hideNavigator
+                    hideTopMenu
+                    isCreatingPromptPreset={isCreatingPromptPreset}
+                    isLoadingPromptPreset={isLoadingPromptPreset}
+                    isLoadingPrompts={isLoadingPrompts}
+                    isInstallingPromptUrlPrompts={isInstallingPromptUrlPrompts}
+                    isPreviewingPromptUrlInstall={isPreviewingPromptUrlInstall}
+                    isPromptDirty={isPromptDirty}
+                    isPromptUrlInstallDialogOpen={isPromptUrlInstallDialogOpen}
+                    isSavingPromptPresetSelection={isSavingPromptPresetSelection}
+                    isTranslatingPromptPreset={isTranslatingPromptPreset}
+                    models={models}
+                    promptDraftContent={promptDraftContent}
+                    promptDraftLabel={promptDraftLabel}
+                    promptLoadError={promptLoadError}
+                    promptRoot={promptRoot}
+                    promptPresets={promptPresets}
+                    promptPresetSelection={promptPresetSelection}
+                    promptUrlInstallMessage={promptUrlInstallMessage}
+                    promptUrlInstallPreview={promptUrlInstallPreview}
+                    promptUrlInstallSource={promptUrlInstallSource}
+                    resettingPromptPresetID={resettingPromptPresetID}
+                    savingPromptPresetID={savingPromptPresetID}
+                    selectedPromptPreset={selectedPromptPreset}
+                    selectedPromptUrlInstallIDs={selectedPromptUrlInstallIDs}
+                    onCreatePromptPreset={createPromptPreset}
+                    onDeletePromptPreset={deletePromptPreset}
+                    onInstallPromptsFromUrl={installPromptsFromUrl}
+                    onPromptUrlInstallDialogClose={closePromptUrlInstallDialog}
+                    onPromptUrlInstallDialogOpen={openPromptUrlInstallDialog}
+                    onPromptUrlInstallPromptToggle={togglePromptUrlInstallPrompt}
+                    onPromptUrlInstallSourceChange={setPromptUrlInstallSourceValue}
+                    onPromptDraftChange={setPromptDraftValue}
+                    onPromptDraftLabelChange={setPromptDraftLabelValue}
+                    onPromptPresetSelect={selectPromptPreset}
+                    onPromptPresetSelectionChange={setPromptPresetSelectionValue}
+                    onPreviewPromptUrlInstall={previewPromptUrlInstall}
+                    onOpenPromptFolder={openPromptFolder}
+                    onResetPromptPreset={resetPromptPreset}
+                    onSavePromptPreset={savePromptPreset}
+                    onTranslatePromptPreset={translatePromptPreset}
+                  />
+                ) : (
+                  <GlobalSkillsPage
+                    creatingGlobalSkillName={creatingGlobalSkillName}
+                    creatingGlobalSkillDraftKind={creatingGlobalSkillDraftKind}
+                    creatingGlobalSkillParentDirectory={creatingGlobalSkillParentDirectory}
+                    deletingGlobalSkillDirectory={deletingGlobalSkillDirectory}
+                    expandedSkillPaths={expandedSkillPaths}
+                    globalSkillFolderOptions={globalSkillFolderOptions}
+                    globalSkillsRoot={globalSkillsRoot}
+                    globalSkillsTree={globalSkillsTree}
+                    hideNavigator
+                    hideTopMenu
+                    gitInstallTargetDirectory={gitInstallTargetDirectory}
+                    gitInstallPreview={gitInstallPreview}
+                    gitInstallSource={gitInstallSource}
+                    isCreateGlobalSkillDraftVisible={isCreateGlobalSkillDraftVisible}
+                    isCreatingGlobalSkill={isCreatingGlobalSkill}
+                    isDirty={isDirtyGlobalSkillFile}
+                    isGitInstallDialogOpen={isGitInstallDialogOpen}
+                    isInstallingGitSkills={isInstallingGitSkills}
+                    isInstallingLocalSkill={isInstallingLocalSkill}
+                    isLocalInstallDialogOpen={isLocalInstallDialogOpen}
+                    isLoadingFile={isLoadingGlobalSkillFile}
+                    isLoadingSkillsTree={isLoadingGlobalSkillsTree}
+                    isMoveGlobalSkillDialogOpen={isMoveGlobalSkillDialogOpen}
+                    isMovingGlobalSkillDirectory={isMovingGlobalSkillDirectory}
+                    isPreviewingGitInstall={isPreviewingGitInstall}
+                    isSavingFile={isSavingGlobalSkillFile}
+                    localInstallTargetDirectory={localInstallTargetDirectory}
+                    moveGlobalSkillTargetOptions={moveGlobalSkillTargetOptions}
+                    movingGlobalSkillDirectory={movingGlobalSkillDirectory}
+                    movingGlobalSkillTargetDirectory={movingGlobalSkillTargetDirectory}
+                    renamingGlobalSkillDirectory={renamingGlobalSkillDirectory}
+                    renamingGlobalSkillDraftDirectory={renamingGlobalSkillDraftDirectory}
+                    renamingGlobalSkillName={renamingGlobalSkillName}
+                    selectedFileContent={selectedGlobalSkillFileContent}
+                    selectedFilePath={selectedGlobalSkillFilePath}
+                    selectedFileReadOnly={selectedGlobalSkillFileReadOnly}
+                    selectedGitInstallSkillIDs={selectedGitInstallSkillIDs}
+                    selectedSkillDirectoryName={selectedGlobalSkillDirectory?.name ?? null}
+                    onChange={handleGlobalSkillDraftChange}
+                    onCreateGlobalSkill={handleCreateGlobalSkill}
+                    onCreateGlobalSkillDraftCancel={handleCreateGlobalSkillDraftCancel}
+                    onCreateGlobalSkillDraftChange={handleCreateGlobalSkillDraftChange}
+                    onCreateGlobalSkillDraftStart={handleCreateGlobalSkillDraftStart}
+                    onDelete={handleDeleteGlobalSkill}
+                    onDeleteGlobalSkill={handleDeleteGlobalSkill}
+                    onGitInstallDialogClose={handleGitInstallDialogClose}
+                    onGitInstallDialogOpen={handleGitInstallDialogOpen}
+                    onGitInstallSkillToggle={handleGitInstallSkillToggle}
+                    onGitInstallSourceChange={handleGitInstallSourceChange}
+                    onGitInstallTargetDirectoryChange={handleGitInstallTargetDirectoryChange}
+                    onGlobalSkillDirectoryToggle={handleGlobalSkillDirectoryToggle}
+                    onGlobalSkillFileSelect={handleGlobalSkillFileSelect}
+                    onInstallGitSkills={handleInstallGitSkills}
+                    onInstallLocalSkillFile={handleInstallLocalSkillFile}
+                    onLocalInstallDialogClose={handleLocalInstallDialogClose}
+                    onLocalInstallDialogOpen={handleLocalInstallDialogOpen}
+                    onLocalInstallTargetDirectoryChange={handleLocalInstallTargetDirectoryChange}
+                    onMoveGlobalSkillDirectory={handleMoveGlobalSkillDirectory}
+                    onMoveGlobalSkillDirectoryCancel={handleMoveGlobalSkillDirectoryCancel}
+                    onMoveGlobalSkillDirectoryStart={handleMoveGlobalSkillDirectoryStart}
+                    onMoveGlobalSkillTargetDirectoryChange={handleMoveGlobalSkillTargetDirectoryChange}
+                    onOpenGlobalSkillsFolder={handleOpenGlobalSkillsFolder}
+                    onPreviewGitSkillInstall={handlePreviewGitSkillInstall}
+                    onRenameGlobalSkill={handleRenameGlobalSkill}
+                    onRenameGlobalSkillDraftCancel={handleRenameGlobalSkillDraftCancel}
+                    onRenameGlobalSkillDraftChange={handleRenameGlobalSkillDraftChange}
+                    onRenameGlobalSkillDraftStart={handleRenameGlobalSkillDraftStart}
+                    onSave={handleSaveGlobalSkillFile}
+                  />
+                )}
+              </Suspense>
+            </PromptSkillsPage>
           ) : isCalendarView ? (
             <Suspense fallback={null}>
               <CalendarPage

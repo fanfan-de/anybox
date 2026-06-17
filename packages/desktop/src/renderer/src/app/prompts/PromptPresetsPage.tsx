@@ -99,6 +99,7 @@ interface PromptPresetsPageProps {
   savingPromptPresetID: string | null
   selectedPromptPreset: PromptPresetDocument | null
   selectedPromptUrlInstallIDs: string[]
+  hideTopMenu?: boolean
   hideNavigator?: boolean
   windowControls?: ReactNode
   onCreatePromptPreset: () => boolean | Promise<boolean>
@@ -802,6 +803,7 @@ export function PromptPresetsPage({
   savingPromptPresetID,
   selectedPromptPreset,
   selectedPromptUrlInstallIDs,
+  hideTopMenu = false,
   hideNavigator = false,
   windowControls,
   onCreatePromptPreset,
@@ -906,23 +908,25 @@ export function PromptPresetsPage({
   }
 
   return (
-    <section className="prompt-presets-page" aria-label={t("prompts.pageAria")}>
-      <ShellTopMenu
-        as="header"
-        ariaLabel={t("prompts.topMenuAria")}
-        className="canvas-region-top-menu prompt-presets-top-menu"
-        contentClassName="canvas-region-top-menu-tabs-shell"
-        content={(
-          <div className="prompt-presets-top-menu-label">
-            <FileTextIcon />
-            <span>{t("prompts.title")}</span>
-          </div>
-        )}
-        dragRegion
-        layout="three-column"
-        trailing={windowControls}
-        trailingClassName="prompt-presets-top-menu-window-controls"
-      />
+    <section className={hideTopMenu ? "prompt-presets-page is-embedded" : "prompt-presets-page"} aria-label={t("prompts.pageAria")}>
+      {hideTopMenu ? null : (
+        <ShellTopMenu
+          as="header"
+          ariaLabel={t("prompts.topMenuAria")}
+          className="canvas-region-top-menu prompt-presets-top-menu"
+          contentClassName="canvas-region-top-menu-tabs-shell"
+          content={(
+            <div className="prompt-presets-top-menu-label">
+              <FileTextIcon />
+              <span>{t("prompts.title")}</span>
+            </div>
+          )}
+          dragRegion
+          layout="three-column"
+          trailing={windowControls}
+          trailingClassName="prompt-presets-top-menu-window-controls"
+        />
+      )}
 
       <div className="settings-page-main is-services prompt-presets-page-main">
         {promptLoadError ? (
