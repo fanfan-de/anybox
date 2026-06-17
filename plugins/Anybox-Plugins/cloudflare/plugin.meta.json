@@ -103,8 +103,8 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/cloudflare/cloudflare-0.1.0.zip",
-    "sha256": "587dec7092ed2ff84aca4d63dbd7cd7559aea83b2ed87ff4674fe35cb31e2171",
-    "size": 734704
+    "sha256": "f0d2c471201342821906e7dcc797bcb687b40cf21e41abe7911fab761c2ebafc",
+    "size": 728172
   },
   "connectors": [
     {

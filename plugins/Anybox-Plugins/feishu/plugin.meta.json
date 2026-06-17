@@ -165,7 +165,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/feishu/feishu-0.1.0.zip",
-    "sha256": "1aae14ec93379a2a1211ddd987bc26141ca57e8766d9114ce37d23a4bdd57bf6",
-    "size": 6091
+    "sha256": "197b450240eb71cfdff7207a5c999d089699f52bb0f0f5ced3c85b9b06603259",
+    "size": 7585
   }
 }

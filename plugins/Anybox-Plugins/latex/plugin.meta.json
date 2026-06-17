@@ -71,7 +71,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/latex/latex-0.2.0.zip",
-    "sha256": "a86086ed8850bfd359a016e7db03a421594451bcaf063ae92fef1b2c0dea6a21",
-    "size": 19203908
+    "sha256": "230352ea440683684af31774f01ec15bd0ba46b56281eedee9467c397bb6d65f",
+    "size": 19204619
   }
 }

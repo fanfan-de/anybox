@@ -65,7 +65,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/playwright-cli/playwright-cli-0.1.0.zip",
-    "sha256": "192e31d6bd5af73c132d6aa77c3b86feeb0dd14d769b6cba387e2d8d0da29187",
-    "size": 2135
+    "sha256": "69c0b3571b1113060f46b01b84499f1f5b71dde65d81c4cd60802648988f1af9",
+    "size": 3548
   }
 }

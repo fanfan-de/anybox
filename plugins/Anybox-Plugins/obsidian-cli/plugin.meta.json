@@ -83,7 +83,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/obsidian-cli/obsidian-cli-0.1.0.zip",
-    "sha256": "374b525afbaea9f01a424e64c77a962de8dfee573c7547fa61b16ee7ba21e5b7",
-    "size": 153238
+    "sha256": "1cecb95cecdb82f0255c632b92d1303542fd34563ecbe7232b25959cecc4de0d",
+    "size": 153792
   }
 }

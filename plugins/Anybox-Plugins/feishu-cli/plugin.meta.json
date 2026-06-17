@@ -185,7 +185,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/feishu-cli/feishu-cli-0.1.0.zip",
-    "sha256": "28101594d9170ae39761e14b3dd4f44c490ceb5030b195f2bec34ce2c05613c5",
-    "size": 1095307
+    "sha256": "9699858b762fd42d07c47de4d126dab4e6e4069290d9a87ec0f0bd7a816f95a3",
+    "size": 1088755
   }
 }

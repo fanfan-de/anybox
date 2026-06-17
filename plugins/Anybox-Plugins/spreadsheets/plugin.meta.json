@@ -61,7 +61,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/spreadsheets/spreadsheets-0.1.0.zip",
-    "sha256": "56f0b330877066e6d1fa266342e72006455157f43bc93a797cbee882920c7cd7",
-    "size": 283368
+    "sha256": "c484f3e5d32ab6ad24ac8f46e967ccc9560fc625479593eb464a8bb68de12143",
+    "size": 283764
   }
 }
