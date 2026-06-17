@@ -241,6 +241,72 @@ function readToolRaw(state: Message.ToolPart["state"] | undefined) {
         : ""
 }
 
+function serializeToolInput(value: unknown) {
+    if (typeof value === "string") return value
+
+    try {
+        const serialized = JSON.stringify(value)
+        if (serialized) return serialized
+    } catch {
+        // ignore and fall through to String(value)
+    }
+
+    return value === undefined ? "" : String(value)
+}
+
+function normalizeToolInput(
+    value: unknown,
+    fallbackRaw = "",
+): { input: Record<string, unknown>; raw: string } {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+        return {
+            input: value as Record<string, unknown>,
+            raw: fallbackRaw,
+        }
+    }
+
+    const raw = serializeToolInput(value) || fallbackRaw
+    if (typeof value === "string") {
+        try {
+            const parsed = JSON.parse(value)
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                return {
+                    input: parsed as Record<string, unknown>,
+                    raw,
+                }
+            }
+        } catch {
+            // Keep the raw value for diagnostics, but store a schema-safe input.
+        }
+    }
+
+    return {
+        input: {},
+        raw,
+    }
+}
+
+function normalizeToolArgumentFailureMessage(message: string) {
+    return `Tool argument validation failed: ${message}`
+}
+
+function isToolArgumentShapeError(message: string) {
+    const normalized = message.toLowerCase()
+    return (
+        normalized.includes("expected record") ||
+        normalized.includes("received string") ||
+        normalized.includes("expected object") ||
+        normalized.includes("invalid input") ||
+        normalized.includes("invalid arguments") ||
+        normalized.includes("tool argument") ||
+        normalized.includes("tool input") ||
+        (
+            normalized.includes("schema") &&
+            (normalized.includes("tool") || normalized.includes("argument") || normalized.includes("input"))
+        )
+    )
+}
+
 function buildStepTokens(usage: LanguageModelUsage | undefined) {
     return {
         input: usage?.inputTokens ?? 0,
@@ -629,7 +695,7 @@ function isWorkflowControlToolResult(
 type FinalToolResultCandidate = {
     toolCallId: string
     toolName?: string
-    input?: Record<string, unknown>
+    input?: unknown
     output?: unknown
     result?: unknown
     title?: string
@@ -656,13 +722,12 @@ function toToolResultCandidate(
             ? unwrapFinalToolOutput(value.output)
             : value.output
 
-    const input = isRecord(value.input) ? value.input : undefined
     const providerMetadata = isRecord(value.providerMetadata) ? value.providerMetadata : undefined
 
     return {
         toolCallId: value.toolCallId,
         toolName: typeof value.toolName === "string" ? value.toolName : undefined,
-        input,
+        input: "input" in value ? value.input : undefined,
         output,
         result: value.result,
         title: typeof value.title === "string" ? value.title : undefined,
@@ -923,14 +988,16 @@ export function create(input: {
                 delete pendingToolInputChunks[toolCallID]
                 delete pendingToolInputLengths[toolCallID]
 
+                const normalizedInput = normalizeToolInput(raw, raw)
                 const pendingPart: Message.ToolPart =
-                    raw === pendingState.data.raw
+                    raw === pendingState.data.raw && pendingState.data.input === normalizedInput.input
                         ? current
                         : {
                             ...current,
                             state: {
                                 ...pendingState.data,
-                                raw,
+                                input: normalizedInput.input,
+                                raw: normalizedInput.raw,
                             },
                         }
 
@@ -992,14 +1059,15 @@ export function create(input: {
                         current.state.status === "running"
                             ? current.state.time.start
                             : end
+                    const normalizedInput = normalizeToolInput(current.state.input, readToolRaw(current.state))
 
                     const settled: Message.ToolPart = {
                         ...current,
                         state: status === "cancelled"
                             ? {
                                 status: "cancelled",
-                                input: current.state.input,
-                                raw: readToolRaw(current.state),
+                                input: normalizedInput.input,
+                                raw: normalizedInput.raw,
                                 reason,
                                 metadata:
                                     current.state.status === "running"
@@ -1012,8 +1080,8 @@ export function create(input: {
                             }
                             : {
                                 status: "error",
-                                input: current.state.input,
-                                raw: readToolRaw(current.state),
+                                input: normalizedInput.input,
+                                raw: normalizedInput.raw,
                                 error: reason,
                                 metadata:
                                     current.state.status === "running"
@@ -1047,6 +1115,29 @@ export function create(input: {
                             return part.state.status === "pending" || part.state.status === "running"
                         },
                     )
+
+            const recoverToolArgumentFailure = async (message: string) => {
+                const activeToolCalls = listActiveToolCalls()
+                if (activeToolCalls.length === 0 || !isToolArgumentShapeError(message)) {
+                    return false
+                }
+
+                const reason = normalizeToolArgumentFailureMessage(message)
+                input.Assistant.error = undefined
+                input.Assistant.finishReason = "tool-calls"
+                input.Assistant.completed = input.Assistant.completed ?? Date.now()
+                await failOpenToolCalls(reason)
+                await persistAssistantMessage()
+                log.warn("converted tool argument validation failure into tool errors", {
+                    error: message,
+                    activeToolCalls: activeToolCalls.map((part) => ({
+                        callID: part.callID,
+                        tool: part.tool,
+                        status: part.state.status,
+                    })),
+                })
+                return true
+            }
 
             const describeOpenToolCallFailure = (
                 activeToolCalls: Message.ToolPart[],
@@ -1144,6 +1235,10 @@ export function create(input: {
                             fallbackMetadata,
                             current,
                         )
+                        const normalizedInput = normalizeToolInput(
+                            candidate.input === undefined ? current.state.input : candidate.input,
+                            readToolRaw(current.state),
+                        )
                         const match: Message.ToolPart = {
                             ...current,
                             tool: candidate.toolName ?? current.tool,
@@ -1153,7 +1248,8 @@ export function create(input: {
                                     : current.providerExecuted,
                             state: {
                                 status: "completed",
-                                input: candidate.input ?? current.state.input,
+                                input: normalizedInput.input,
+                                raw: normalizedInput.raw,
                                 output: normalized.output,
                                 modelOutput: normalized.modelOutput,
                                 metadata: normalized.metadata,
@@ -1317,6 +1413,13 @@ export function create(input: {
                         },
                         onError: (event) => {
                             const reason = normalizeToolError(event.error)
+                            if (isToolArgumentShapeError(reason) && listActiveToolCalls().length > 0) {
+                                log.warn("deferring recoverable tool argument stream error to fullStream handling", {
+                                    error: reason,
+                                })
+                                return
+                            }
+
                             input.Assistant.error = TurnError.toAssistantError(event.error)
                             lifecyclePersistence = persistPartialDraftOnce!(reason)
                             return lifecyclePersistence
@@ -1562,8 +1665,10 @@ export function create(input: {
                                 // value.toolName 工具名称
                                 // value.args 工具参数
                                 const match = flushPendingToolInput(value.toolCallId)
+                                const rawToolInput = readToolRaw(match?.state)
+                                const normalizedInput = normalizeToolInput(value.input, rawToolInput)
                                 const askUserQuestionMetadata = isAskUserQuestionToolName(value.toolName)
-                                    ? createAskUserQuestionMetadataFromInput(value.input, {
+                                    ? createAskUserQuestionMetadataFromInput(normalizedInput.input, {
                                         toolCallID: value.toolCallId,
                                     })
                                     : undefined
@@ -1580,8 +1685,8 @@ export function create(input: {
                                     providerExecuted: value.providerExecuted === true ? true : match?.providerExecuted,
                                     state: {
                                         status: "running",
-                                        input: value.input,
-                                        raw: readToolRaw(match?.state),
+                                        input: normalizedInput.input,
+                                        raw: normalizedInput.raw,
                                         title: value.title,
                                         metadata: runningStateMetadata,
                                         time: {
@@ -1601,35 +1706,37 @@ export function create(input: {
                                 break;
                             case 'tool-result':
                                 if (toolcalls[value.toolCallId] && toolcalls[value.toolCallId]?.state.status === "running") {
+                                    const current = toolcalls[value.toolCallId]!
                                     const resultValue = value as { output?: unknown; result?: unknown }
                                     const rawToolOutput = resultValue.output ?? resultValue.result
                                     const normalized = await extractToolResultState(
                                         rawToolOutput,
                                         value.title,
                                         value.providerMetadata ?? {},
-                                        toolcalls[value.toolCallId],
+                                        current,
                                     )
+                                    const normalizedInput = normalizeToolInput(value.input, readToolRaw(current.state))
                                     const match: Message.ToolPart = {
-                                        ...toolcalls[value.toolCallId]!,
+                                        ...current,
                                         providerExecuted:
                                             value.providerExecuted === true
                                                 ? true
-                                                : toolcalls[value.toolCallId]!.providerExecuted,
+                                                : current.providerExecuted,
                                         state: {
                                             status: "completed",
-                                            input: value.input,
-                                            raw: readToolRaw(toolcalls[value.toolCallId]!.state),
+                                            input: normalizedInput.input,
+                                            raw: normalizedInput.raw,
                                             output: normalized.output,
                                             modelOutput: normalized.modelOutput,
                                             metadata: normalized.metadata,
                                             title: normalized.title,
                                             time: {
-                                                start: (toolcalls[value.toolCallId]!.state as Message.ToolStateRunning).time.start,
+                                                start: (current.state as Message.ToolStateRunning).time.start,
                                                 end: Date.now(),
                                             },
                                             attachments: normalized.attachments,
                                         },
-                                        metadata: toolcalls[value.toolCallId]!.metadata,
+                                        metadata: current.metadata,
                                     }
 
                                     toolcalls[value.toolCallId] = match
@@ -1649,20 +1756,22 @@ export function create(input: {
 
                             case "tool-error":
                                 if (toolcalls[value.toolCallId] && toolcalls[value.toolCallId]?.state.status === "running") {
+                                    const current = toolcalls[value.toolCallId]!
+                                    const normalizedInput = normalizeToolInput(value.input, readToolRaw(current.state))
                                     const match: Message.ToolPart = {
-                                        ...toolcalls[value.toolCallId]!,
+                                        ...current,
                                         providerExecuted:
                                             value.providerExecuted === true
                                                 ? true
-                                                : toolcalls[value.toolCallId]!.providerExecuted,
+                                                : current.providerExecuted,
                                         state: {
                                             status: "error",
-                                            input: value.input,
-                                            raw: readToolRaw(toolcalls[value.toolCallId]!.state),
+                                            input: normalizedInput.input,
+                                            raw: normalizedInput.raw,
                                             error: normalizeToolError(value.error),
                                             metadata: value.providerMetadata ?? {},
                                             time: {
-                                                start: (toolcalls[value.toolCallId]!.state as Message.ToolStateRunning).time.start,
+                                                start: (current.state as Message.ToolStateRunning).time.start,
                                                 end: Date.now(),
                                             },
                                         },
@@ -1688,6 +1797,7 @@ export function create(input: {
                                         current.state.status === "waiting-approval"
                                             ? current.state.time.start
                                             : (current.state as Message.ToolStateRunning).time.start
+                                    const normalizedInput = normalizeToolInput(current.state.input, readToolRaw(current.state))
 
                                     const match: Message.ToolPart = {
                                         ...current,
@@ -1697,8 +1807,8 @@ export function create(input: {
                                                 current.state.status === "waiting-approval"
                                                     ? current.state.approvalID
                                                     : undefined,
-                                            input: current.state.input,
-                                            raw: readToolRaw(current.state),
+                                            input: normalizedInput.input,
+                                            raw: normalizedInput.raw,
                                             reason: "Tool execution was denied.",
                                             metadata:
                                                 current.state.status === "waiting-approval"
@@ -1770,6 +1880,11 @@ export function create(input: {
                                 break;
                             case 'error':
                                 const streamErrorMessage = normalizeToolError(value.error)
+                                if (await recoverToolArgumentFailure(streamErrorMessage)) {
+                                    llmCallSettled = true
+                                    break
+                                }
+
                                 input.Assistant.error = TurnError.toAssistantError(value.error)
                                 emitRuntimeEvent?.("llm.call.failed", {
                                     messageID: input.Assistant.id,
@@ -1835,13 +1950,14 @@ export function create(input: {
                                     )
                                 ) {
                                     const current = toolcalls[approvalToolCallID]!
+                                    const normalizedInput = normalizeToolInput(current.state.input, readToolRaw(current.state))
                                     const waiting: Message.ToolPart = {
                                         ...current,
                                         state: {
                                             status: "waiting-approval",
                                             approvalID: value.approvalId,
-                                            input: current.state.input,
-                                            raw: readToolRaw(current.state),
+                                            input: normalizedInput.input,
+                                            raw: normalizedInput.raw,
                                             title:
                                                 current.state.status === "running"
                                                     ? current.state.title
@@ -1974,6 +2090,14 @@ export function create(input: {
                 catch (e: any) {
                     const aborted = isAbortSignalAborted(streamInput.abort ?? input.abort)
                     const errorMessage = aborted ? "Prompt cancellation requested." : normalizeToolError(e)
+                    if (!aborted && await recoverToolArgumentFailure(errorMessage)) {
+                        llmCallSettled = true
+                        log.warn("processor recovered from tool argument validation failure", {
+                            error: errorMessage,
+                        })
+                        return "continue"
+                    }
+
                     if (!llmCallSettled) {
                         emitRuntimeEvent?.("llm.call.failed", {
                             messageID: input.Assistant.id,

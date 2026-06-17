@@ -2058,6 +2058,14 @@ function formatErrorTraceTitle(baseTitle: string, error: HistoryErrorPresentatio
   return error?.name ? `${baseTitle}: ${error.name}` : baseTitle
 }
 
+function isToolArgumentValidationFailure(error: HistoryErrorPresentation | null) {
+  return readString(error?.message).toLowerCase().includes("tool argument validation failed")
+}
+
+function assistantFailureBaseTitle(error: HistoryErrorPresentation | null) {
+  return isToolArgumentValidationFailure(error) ? "Tool argument validation failed" : "Backend request failed"
+}
+
 function isAssistantHistoryFailed(message: LoadedSessionHistoryMessage) {
   return Boolean(readAssistantHistoryFailure(message))
 }
@@ -2138,7 +2146,8 @@ function assistantHistoryStateForSettledPhase(phase: AssistantTurnPhase | null) 
 
 function resolveAssistantHistoryState(items: AssistantTraceItem[], message: LoadedSessionHistoryMessage) {
   if (isAssistantHistoryCancelled(message) || items.some((item) => item.status === "cancelled")) return "Backend stream cancelled"
-  if (isAssistantHistoryFailed(message)) return "Backend request failed"
+  const failure = readAssistantHistoryFailure(message)
+  if (failure) return assistantFailureBaseTitle(failure)
   if (items.some((item) => item.kind === "question")) return "Waiting for your answer"
   if (items.some((item) => item.status === "waiting-approval")) return "Waiting for permission approval"
   if (items.some((item) => item.status === "denied")) return "Tool execution denied"
@@ -2237,7 +2246,7 @@ function buildAssistantTurnFromHistory(message: LoadedSessionHistoryMessage) {
       createTraceItem({
         kind: "error",
         label: "Error",
-        title: formatErrorTraceTitle("Backend request failed", failure),
+        title: formatErrorTraceTitle(assistantFailureBaseTitle(failure), failure),
         detail: errorMessage,
         status: "error",
         messageID: ownership.messageID,

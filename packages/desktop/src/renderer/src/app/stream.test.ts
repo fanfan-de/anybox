@@ -3019,6 +3019,35 @@ describe("stream trace reducer", () => {
     expect(turns[0]?.kind === "assistant" ? turns[0].items.map((item) => item.kind) : []).toEqual(["error"])
   })
 
+  it("labels assistant-level tool argument validation failures distinctly", () => {
+    const turns = buildTurnsFromHistory([
+      {
+        info: {
+          id: "msg-assistant-tool-args-error",
+          sessionID: "session-1",
+          role: "assistant",
+          created: 20,
+          error: {
+            message: "Tool argument validation failed: Invalid input: expected record, received string",
+          },
+        },
+        parts: [],
+      },
+    ])
+
+    expect(turns).toHaveLength(1)
+    expect(turns[0]).toMatchObject({
+      id: "msg-assistant-tool-args-error",
+      kind: "assistant",
+      state: "Tool argument validation failed",
+    })
+    expect(turns[0]?.kind === "assistant" ? turns[0].items[0] : null).toMatchObject({
+      kind: "error",
+      title: "Tool argument validation failed",
+      detail: "Tool argument validation failed: Invalid input: expected record, received string",
+    })
+  })
+
   it("restores failed assistant turns from turn outcome error info", () => {
     const turns = buildTurnsFromHistory([
       {
