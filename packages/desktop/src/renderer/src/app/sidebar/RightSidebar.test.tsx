@@ -681,7 +681,7 @@ describe("RightSidebar", () => {
     expect(screen.getByText("Active answer").closest(".session-message-tree-graph-node")).not.toHaveClass("is-active-path")
     const graph = document.querySelector(".session-message-tree-graph") as HTMLDivElement | null
     expect(graph).not.toBeNull()
-    expect(graph?.style.transform).toBe("matrix(1, 0, 0, 1, 272, 171)")
+    expect(graph?.style.transform).toBe("matrix(1, 0, 0, 1, 264, 171)")
     expect(document.querySelector(".session-message-tree-edge")).not.toBeNull()
 
     rerender(
@@ -888,15 +888,15 @@ describe("RightSidebar", () => {
     }
   })
 
-  it("sizes expanded response cards to fit long content without an inner scroll area", () => {
+  it("caps expanded response card height and lays out descendants below the capped card", () => {
     const messageTree = createMessageTree()
     messageTree.nodesByID["assistant-1"]!.content = [
       "Long answer",
       ...Array.from(
-        { length: 22 },
+        { length: 80 },
         (_, index) => `Expanded response line ${index + 1} with enough detail to wrap inside the response tree card.`,
       ),
-      "Final line stays visible when the response is fully expanded.",
+      "Final line stays reachable inside the response card scroll area.",
     ].join("\n")
     messageTree.nodesByID["assistant-1"]!.preview = "Long answer"
 
@@ -919,16 +919,21 @@ describe("RightSidebar", () => {
     const expandedNodeHeight = Number.parseFloat(
       activeNode.style.getPropertyValue("--session-message-tree-expanded-node-height"),
     )
+    const responseCardHeight = Number.parseFloat(
+      activeNode.style.getPropertyValue("--session-message-tree-response-card-height"),
+    )
     const responseCardMinHeight = Number.parseFloat(
       activeNode.style.getPropertyValue("--session-message-tree-response-card-min-height"),
     )
     const activeNodeTop = Number.parseFloat(activeNode.style.top)
     const childNodeTop = Number.parseFloat(childNode.style.top)
 
-    expect(expandedNodeHeight).toBeGreaterThan(270)
-    expect(responseCardMinHeight).toBeGreaterThan(232)
+    expect(expandedNodeHeight).toBe(458)
+    expect(responseCardHeight).toBe(420)
+    expect(responseCardMinHeight).toBe(420)
     expect(childNodeTop - activeNodeTop).toBeCloseTo(expandedNodeHeight + 36, 5)
-    expect(screen.getByText(/Final line stays visible/)).toBeInTheDocument()
+    expect(activeNode.querySelector(".session-message-tree-response-card-body-wrap")).not.toBeNull()
+    expect(screen.getByText(/Final line stays reachable/)).toBeInTheDocument()
   })
 
   it("shrinks expanded response cards when the content does not need the maximum width", () => {

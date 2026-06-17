@@ -1,62 +1,78 @@
 import type { MouseEvent } from "react"
 import type { DesktopAppUpdateState } from "../../../../shared/desktop-ipc-contract"
+import { useI18n } from "../i18n/I18nProvider"
+import { t as translateKey, type TranslationKey } from "../i18n/translations"
+
+type UpdateTranslate = (key: TranslationKey, params?: Record<string, string | number>) => string
+
+const defaultUpdateTranslate: UpdateTranslate = (key, params) => translateKey("en-US", key, params)
 
 export type AppUpdateStatus = {
   tone: "success" | "error" | "muted"
   text: string
 }
 
-export function getAppUpdatePhaseLabel(state: DesktopAppUpdateState | null) {
+export function getAppUpdatePhaseLabel(
+  state: DesktopAppUpdateState | null,
+  translate: UpdateTranslate = defaultUpdateTranslate,
+) {
   switch (state?.phase) {
     case "checking":
-      return "Checking"
+      return translate("updates.phase.checking")
     case "available":
-      return "Update available"
+      return translate("updates.phase.available")
     case "downloading":
-      return "Downloading"
+      return translate("updates.phase.downloading")
     case "downloaded":
-      return "Ready to install"
+      return translate("updates.phase.downloaded")
     case "up-to-date":
-      return "Up to date"
+      return translate("updates.phase.upToDate")
     case "error":
-      return "Needs attention"
+      return translate("updates.phase.error")
     case "unsupported":
-      return "Unavailable"
+      return translate("updates.phase.unsupported")
     default:
-      return "Ready"
+      return translate("updates.phase.ready")
   }
 }
 
-function getUpdateVersionLabel(state: DesktopAppUpdateState | null) {
-  return state?.latestVersion ? `Anybox ${state.latestVersion}` : "The update"
+function getUpdateVersionLabel(state: DesktopAppUpdateState | null, translate: UpdateTranslate) {
+  return state?.latestVersion
+    ? translate("updates.version.label", { version: state.latestVersion })
+    : translate("updates.version.fallback")
 }
 
-export function getAppUpdateSummary(state: DesktopAppUpdateState | null) {
-  if (!state) return "Loading update status..."
+export function getAppUpdateSummary(
+  state: DesktopAppUpdateState | null,
+  translate: UpdateTranslate = defaultUpdateTranslate,
+) {
+  if (!state) return translate("updates.summary.loading")
 
   switch (state.phase) {
     case "checking":
-      return "Checking for the latest Anybox desktop release."
+      return translate("updates.summary.checking")
     case "available":
       return state.latestVersion
-        ? `Anybox ${state.latestVersion} is available and will download automatically.`
-        : "A new Anybox desktop update is available and will download automatically."
+        ? translate("updates.summary.availableVersion", { version: state.latestVersion })
+        : translate("updates.summary.available")
     case "downloading":
       return state.latestVersion
-        ? `Downloading Anybox ${state.latestVersion}.`
-        : "Downloading the latest Anybox update."
+        ? translate("updates.summary.downloadingVersion", { version: state.latestVersion })
+        : translate("updates.summary.downloading")
     case "downloaded":
       return state.latestVersion
-        ? `Anybox ${state.latestVersion} has downloaded. Restart the app to finish updating.`
-        : "An update has downloaded. Restart the app to finish updating."
+        ? translate("updates.summary.downloadedVersion", { version: state.latestVersion })
+        : translate("updates.summary.downloaded")
     case "up-to-date":
-      return "Anybox is running the latest available version."
+      return translate("updates.summary.upToDate")
     case "error":
-      return state.error ? `Update check failed. ${state.error}` : "Update check failed."
+      return state.error
+        ? translate("updates.summary.errorWithMessage", { message: state.error })
+        : translate("updates.summary.error")
     case "unsupported":
-      return "Update checks run in packaged builds."
+      return translate("updates.summary.unsupported")
     default:
-      return "Open Update Center to check for a new version."
+      return translate("updates.summary.ready")
   }
 }
 
@@ -64,24 +80,24 @@ export function shouldOpenUpdateCenterOnly(state: DesktopAppUpdateState | null) 
   return state?.phase === "checking" || state?.phase === "available" || state?.phase === "downloading" || state?.phase === "downloaded"
 }
 
-function getUpdateDialogTitle(state: DesktopAppUpdateState | null) {
+function getUpdateDialogTitle(state: DesktopAppUpdateState | null, translate: UpdateTranslate) {
   switch (state?.phase) {
     case "checking":
-      return "Checking for updates"
+      return translate("updates.dialog.title.checking")
     case "available":
-      return "Preparing update download"
+      return translate("updates.dialog.title.available")
     case "downloading":
-      return "Downloading update"
+      return translate("updates.dialog.title.downloading")
     case "downloaded":
-      return "Update ready to install"
+      return translate("updates.dialog.title.downloaded")
     case "up-to-date":
-      return "Anybox is up to date"
+      return translate("updates.dialog.title.upToDate")
     case "error":
-      return "Unable to check for updates"
+      return translate("updates.dialog.title.error")
     case "unsupported":
-      return "Updates unavailable"
+      return translate("updates.dialog.title.unsupported")
     default:
-      return "Update Center"
+      return translate("updates.dialog.title.default")
   }
 }
 
@@ -138,6 +154,7 @@ export function UpdateDialog({
   onClose,
   onInstall,
 }: UpdateDialogProps) {
+  const { t } = useI18n()
   const phase = state?.phase ?? "idle"
   const progressPercent = getUpdateProgressPercent(state)
   const progressSpeed = getProgressSpeedLabel(state)
@@ -146,8 +163,8 @@ export function UpdateDialog({
   const canCheck = phase !== "checking" && !isChecking
   const canInstall = phase === "downloaded"
   const secondaryActionLabel = phase === "available" || phase === "downloading" || phase === "checking"
-    ? "Download in background"
-    : "Later"
+    ? t("updates.action.downloadInBackground")
+    : t("updates.action.later")
 
   function handleOverlayClick(event: MouseEvent<HTMLElement>) {
     if (event.target === event.currentTarget) {
@@ -164,13 +181,16 @@ export function UpdateDialog({
         aria-labelledby="update-center-title"
       >
         <header className="update-center-titlebar">
-          <h2 id="update-center-title">{getUpdateDialogTitle(state)}</h2>
-          <p>{getAppUpdateSummary(state)}</p>
+          <h2 id="update-center-title">{getUpdateDialogTitle(state, t)}</h2>
+          <p>{getAppUpdateSummary(state, t)}</p>
         </header>
 
         {showProgress ? (
           <div className="update-center-progress-panel">
-            <div className="update-center-progress" aria-label={`Download progress ${Math.round(progressPercent)}%`}>
+            <div
+              className="update-center-progress"
+              aria-label={t("updates.progress.aria", { percent: Math.round(progressPercent) })}
+            >
               <span className="update-center-progress-track">
                 <span className="update-center-progress-fill" style={{ width: `${progressPercent}%` }} />
               </span>
@@ -183,15 +203,15 @@ export function UpdateDialog({
         ) : null}
 
         {phase === "downloaded" && state?.releaseNotes ? (
-          <section className="update-center-release-notes" aria-label="Release notes">
-            <h3>{getUpdateVersionLabel(state)}</h3>
+          <section className="update-center-release-notes" aria-label={t("updates.release.notesAria")}>
+            <h3>{getUpdateVersionLabel(state, t)}</h3>
             <p>{state.releaseNotes}</p>
           </section>
         ) : null}
 
         {phase === "unsupported" ? (
           <p className="update-center-helper">
-            Build and install the app, or use the configured development update feed, to test updates locally.
+            {t("updates.helper.unsupported")}
           </p>
         ) : null}
 
@@ -203,11 +223,11 @@ export function UpdateDialog({
           </button>
           {canInstall ? (
             <button className="primary-button" type="button" disabled={isInstalling} onClick={onInstall}>
-              {isInstalling ? "Restarting..." : "Restart to install"}
+              {isInstalling ? t("updates.action.restarting") : t("updates.action.restartToInstall")}
             </button>
           ) : showCheckAction ? (
             <button className="primary-button" type="button" disabled={!canCheck} onClick={onCheck}>
-              {isChecking || phase === "checking" ? "Checking..." : "Check for updates"}
+              {isChecking || phase === "checking" ? t("updates.action.checking") : t("updates.action.checkForUpdates")}
             </button>
           ) : null}
         </footer>

@@ -40,6 +40,14 @@ describe("i18n translations", () => {
     )
   })
 
+  it("exposes update center translations", () => {
+    expect(t("zh-CN", "updates.dialog.title.downloading")).toBe("正在下载更新")
+    expect(t("zh-CN", "updates.summary.downloadingVersion", { version: "0.1.18" })).toBe(
+      "正在下载 Anybox 0.1.18。",
+    )
+    expect(t("en-US", "updates.action.downloadInBackground")).toBe("Download in background")
+  })
+
   it("exposes dictionaries by locale", () => {
     expect(getTranslationDictionary("zh-CN")["settings.appearance.languageTitle"]).toBe("显示语言")
     expect(getTranslationDictionary("en-US")["settings.appearance.languageTitle"]).toBe("Display Language")

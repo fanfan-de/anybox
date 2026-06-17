@@ -28,6 +28,7 @@ function countBranchPoints(messageTree: SessionMessageTree) {
 }
 
 interface MessageTreeGraphNode {
+  cardHeight?: number
   cardWidth?: number
   column: number
   depth: number
@@ -63,6 +64,7 @@ interface MessageTreeGraphPan {
 }
 
 interface MessageTreeGraphNodeDimensions {
+  cardHeight?: number
   cardWidth?: number
   height: number
   width: number
@@ -80,6 +82,7 @@ const EXPANDED_RESPONSE_NODE_MIN_HEIGHT = 270
 const EXPANDED_RESPONSE_CARD_MIN_WIDTH = 360
 const EXPANDED_RESPONSE_CARD_MAX_WIDTH = 560
 const EXPANDED_RESPONSE_CARD_MIN_HEIGHT = 232
+const EXPANDED_RESPONSE_CARD_MAX_HEIGHT = 420
 const EXPANDED_RESPONSE_NODE_HORIZONTAL_CHROME = 16
 const EXPANDED_RESPONSE_NODE_CHROME_HEIGHT = EXPANDED_RESPONSE_NODE_MIN_HEIGHT - EXPANDED_RESPONSE_CARD_MIN_HEIGHT
 const RESPONSE_CARD_HEADER_MIN_HEIGHT = 32
@@ -89,6 +92,8 @@ const RESPONSE_CARD_BODY_FONT_SIZE = 12
 const RESPONSE_CARD_BODY_LINE_HEIGHT = RESPONSE_CARD_BODY_FONT_SIZE * 1.42
 const RESPONSE_CARD_ESTIMATED_LATIN_CHARACTER_WIDTH = 7.2
 const RESPONSE_CARD_ESTIMATED_CJK_CHARACTER_WIDTH = RESPONSE_CARD_BODY_FONT_SIZE
+const EXPANDED_RESPONSE_COLUMN_GAP = 44
+const GRAPH_LAYOUT_PADDING = 40
 const NODE_VERTICAL_GAP = 36
 const MIN_GRAPH_ZOOM = 0.5
 const MAX_GRAPH_ZOOM = 1.8
@@ -124,6 +129,7 @@ interface SiblingWheelSwitchState {
 type MessageTreeGraphNodeStyle = CSSProperties & {
   "--session-message-tree-expanded-node-width"?: string
   "--session-message-tree-expanded-node-height"?: string
+  "--session-message-tree-response-card-height"?: string
   "--session-message-tree-response-card-width"?: string
   "--session-message-tree-response-card-min-height"?: string
 }
@@ -211,13 +217,15 @@ function estimateExpandedResponseNodeDimensions(content: string) {
       RESPONSE_CARD_BODY_VERTICAL_PADDING +
       lineCount * RESPONSE_CARD_BODY_LINE_HEIGHT,
   )
+  const cardHeight = Math.min(
+    EXPANDED_RESPONSE_CARD_MAX_HEIGHT,
+    Math.max(EXPANDED_RESPONSE_CARD_MIN_HEIGHT, responseCardHeight),
+  )
 
   return {
+    cardHeight,
     cardWidth,
-    height: Math.max(
-      EXPANDED_RESPONSE_NODE_MIN_HEIGHT,
-      responseCardHeight + EXPANDED_RESPONSE_NODE_CHROME_HEIGHT,
-    ),
+    height: Math.max(EXPANDED_RESPONSE_NODE_MIN_HEIGHT, cardHeight + EXPANDED_RESPONSE_NODE_CHROME_HEIGHT),
     width: cardWidth + EXPANDED_RESPONSE_NODE_HORIZONTAL_CHROME,
   }
 }
@@ -342,6 +350,38 @@ function centerChildResponseBranchesAroundFocusedResponse(input: {
   }
 }
 
+function normalizeGraphLayoutBounds(nodesByID: Map<string, MessageTreeGraphNode>) {
+  let minLeft = Number.POSITIVE_INFINITY
+  let maxRight = Number.NEGATIVE_INFINITY
+  let maxBottom = Number.NEGATIVE_INFINITY
+
+  for (const node of nodesByID.values()) {
+    minLeft = Math.min(minLeft, node.x - node.width / 2)
+    maxRight = Math.max(maxRight, node.x + node.width / 2)
+    maxBottom = Math.max(maxBottom, node.y + node.height)
+  }
+
+  if (!Number.isFinite(minLeft) || !Number.isFinite(maxRight) || !Number.isFinite(maxBottom)) {
+    return {
+      height: 160,
+      width: 260,
+    }
+  }
+
+  const shiftX = Math.max(0, GRAPH_LAYOUT_PADDING - minLeft)
+  if (shiftX > 0) {
+    for (const node of nodesByID.values()) {
+      node.x += shiftX
+    }
+    maxRight += shiftX
+  }
+
+  return {
+    height: Math.max(160, maxBottom + GRAPH_LAYOUT_PADDING),
+    width: Math.max(260, maxRight + GRAPH_LAYOUT_PADDING),
+  }
+}
+
 function getChildResponseMessageIDs(messageTree: SessionMessageTree, messageID: string | null) {
   if (!messageID) return []
 
@@ -404,9 +444,7 @@ function buildGraphLayout(
   const focusedChildResponseMessageIDs = getChildResponseMessageIDs(messageTree, focusedExpandedResponseMessageID)
   const expandedResponseLayoutWidth = getExpandedResponseLayoutWidth(messageTree, expandedResponseMessageIDs)
   const columnGap = hasExpandedResponse
-    ? expandedResponseMessageIDs.size > 1
-      ? expandedResponseLayoutWidth + 44
-      : Math.round(expandedResponseLayoutWidth * 0.78)
+    ? expandedResponseLayoutWidth + EXPANDED_RESPONSE_COLUMN_GAP
     : 156
   const originX = hasExpandedResponse
     ? Math.round(expandedResponseLayoutWidth / 2) + 4 + Math.max(0, focusedChildResponseMessageIDs.length - 1) * columnGap
@@ -414,7 +452,6 @@ function buildGraphLayout(
   const originY = 28
   let nextColumn = 0
   let maxDepth = 0
-  let maxY = originY + COLLAPSED_NODE_HEIGHT
 
   function visit(messageID: string, depth: number, y: number, parentID: string | null, visited: Set<string>): number | null {
     if (visited.has(messageID)) return null
@@ -430,7 +467,6 @@ function buildGraphLayout(
     nextVisited.add(messageID)
     const childColumns: number[] = []
     const nodeDimensions = getGraphNodeDimensions(messageTree, messageID, expandedResponseMessageIDs)
-    maxY = Math.max(maxY, y + nodeDimensions.height)
 
     for (const childID of messageTree.childIDsByParentID[messageID] ?? []) {
       const childColumn = visit(childID, depth + 1, y + nodeDimensions.height + NODE_VERTICAL_GAP, messageID, nextVisited)
@@ -444,6 +480,7 @@ function buildGraphLayout(
       : nextColumn++
 
     nodesByID.set(messageID, {
+      cardHeight: nodeDimensions.cardHeight,
       cardWidth: nodeDimensions.cardWidth,
       column,
       depth,
@@ -469,6 +506,8 @@ function buildGraphLayout(
     messageTree,
     nodesByID,
   })
+
+  const graphBounds = normalizeGraphLayoutBounds(nodesByID)
 
   const edges: MessageTreeGraphEdge[] = rawEdges.flatMap((edge) => {
     const from = nodesByID.get(edge.fromID)
@@ -496,15 +535,10 @@ function buildGraphLayout(
   return {
     edges,
     height: hasExpandedResponse
-      ? Math.max(160, maxY + 48)
-      : Math.max(160, originY + (maxDepth + 1) * (COLLAPSED_NODE_HEIGHT + NODE_VERTICAL_GAP) + 34),
+      ? graphBounds.height
+      : Math.max(graphBounds.height, originY + (maxDepth + 1) * (COLLAPSED_NODE_HEIGHT + NODE_VERTICAL_GAP) + 34),
     nodes,
-    width: Math.max(
-      260,
-      ...nodes.map((node) => (
-        node.x + node.width / 2 + 40
-      )),
-    ),
+    width: graphBounds.width,
   }
 }
 
@@ -1262,6 +1296,9 @@ export function SessionMessageTreePanel({
             if (isExpandedResponse) {
               nodeStyle["--session-message-tree-expanded-node-width"] = `${layoutNode.width}px`
               nodeStyle["--session-message-tree-expanded-node-height"] = `${layoutNode.height}px`
+              nodeStyle["--session-message-tree-response-card-height"] = `${
+                layoutNode.cardHeight ?? Math.max(EXPANDED_RESPONSE_CARD_MIN_HEIGHT, layoutNode.height - EXPANDED_RESPONSE_NODE_CHROME_HEIGHT)
+              }px`
               nodeStyle["--session-message-tree-response-card-width"] = `${layoutNode.cardWidth ?? EXPANDED_RESPONSE_CARD_MIN_WIDTH}px`
               nodeStyle["--session-message-tree-response-card-min-height"] = `${
                 Math.max(EXPANDED_RESPONSE_CARD_MIN_HEIGHT, layoutNode.height - EXPANDED_RESPONSE_NODE_CHROME_HEIGHT)
@@ -1344,7 +1381,12 @@ export function SessionMessageTreePanel({
                       </div>
                     </div>
                     <div className="session-message-tree-response-card-main">
-                      <div className="session-message-tree-response-card-body-wrap">
+                      <div
+                        className="session-message-tree-response-card-body-wrap"
+                        onWheel={(event) => {
+                          event.stopPropagation()
+                        }}
+                      >
                         <ThreadMarkdown
                           className="session-message-tree-response-card-body thread-markdown"
                           text={node.content}

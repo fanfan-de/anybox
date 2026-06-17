@@ -69,6 +69,8 @@ import {
   setAutomaticUpdatesEnabled,
 } from "./app/settings/client"
 import { UpdateDialog, type AppUpdateStatus } from "./app/update/UpdateDialog"
+import { useI18n } from "./app/i18n/I18nProvider"
+import type { TranslationKey } from "./app/i18n/translations"
 
 const GlobalSkillsPage = lazy(() => import("./app/skills/GlobalSkillsPage").then((module) => ({ default: module.GlobalSkillsPage })))
 const ConnectorsPage = lazy(() => import("./app/connectors/ConnectorsPage").then((module) => ({ default: module.ConnectorsPage })))
@@ -213,12 +215,19 @@ function readAutomationSessionRefreshTarget(event: AgentAutomationIPCEvent) {
   return sessionID && directory ? { sessionID, directory } : null
 }
 
-function getManualUpdateCheckStatusText(result: Awaited<ReturnType<typeof checkForAppUpdates>> | null) {
-  if (!result) return "Update check requested."
-  if (!result.ok) return result.error ? `Update check failed. ${result.error}` : "Update check failed."
-  if (result.reason === "not-packaged") return "Update checks run in packaged builds."
-  if (result.reason === "already-checking") return "An update check is already in progress."
-  return "Update check started."
+function getManualUpdateCheckStatusText(
+  result: Awaited<ReturnType<typeof checkForAppUpdates>> | null,
+  translate: (key: TranslationKey, params?: Record<string, string | number>) => string,
+) {
+  if (!result) return translate("updates.status.manualRequested")
+  if (!result.ok) {
+    return result.error
+      ? translate("updates.status.checkFailedWithMessage", { message: result.error })
+      : translate("updates.status.checkFailed")
+  }
+  if (result.reason === "not-packaged") return translate("updates.status.notPackaged")
+  if (result.reason === "already-checking") return translate("updates.status.alreadyChecking")
+  return translate("updates.status.checkStarted")
 }
 
 function createFallbackAppUpdateState(enabled: boolean, version = "Unknown"): DesktopAppUpdateState {
@@ -840,6 +849,7 @@ export function App() {
 }
 
 function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContext }) {
+  const { t } = useI18n()
   const surfaceID = getWorkbenchSurfaceID(workbenchContext)
   const [appUpdateState, setAppUpdateState] = useState<DesktopAppUpdateState | null>(null)
   const [appUpdateStatus, setAppUpdateStatus] = useState<AppUpdateStatus | null>(null)
@@ -927,7 +937,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
         const message = getErrorMessage(error)
         setAppUpdateStatus({
           tone: "error",
-          text: `Unable to load update settings. ${message}`,
+          text: t("updates.status.loadSettingsFailed", { message }),
         })
       })
 
@@ -941,7 +951,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
       disposed = true
       unsubscribe?.()
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     if (!isUpdateDialogOpen) return
@@ -1464,7 +1474,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
       if (!result || result.ok === false || result.reason === "already-checking") {
         setAppUpdateStatus({
           tone: result?.ok === false ? "error" : "muted",
-          text: getManualUpdateCheckStatusText(result),
+          text: getManualUpdateCheckStatusText(result, t),
         })
       }
       await refreshAppUpdateState()
@@ -1472,7 +1482,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
       const message = getErrorMessage(error)
       setAppUpdateStatus({
         tone: "error",
-        text: `Update check failed. ${message}`,
+        text: t("updates.status.checkFailedWithMessage", { message }),
       })
     } finally {
       setIsCheckingAppUpdate(false)
@@ -1491,15 +1501,15 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
         setAppUpdateStatus({
           tone: "error",
           text: result?.reason === "update-not-downloaded"
-            ? "The update has not finished downloading yet."
-            : "Unable to install the update.",
+            ? t("updates.status.notDownloaded")
+            : t("updates.status.installFailed"),
         })
       }
     } catch (error) {
       const message = getErrorMessage(error)
       setAppUpdateStatus({
         tone: "error",
-        text: `Unable to install the update. ${message}`,
+        text: t("updates.status.installFailedWithMessage", { message }),
       })
     } finally {
       setIsInstallingAppUpdate(false)
@@ -1529,13 +1539,13 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
       })
       setAppUpdateStatus({
         tone: "success",
-        text: enabled ? "Automatic updates enabled." : "Automatic updates disabled.",
+        text: enabled ? t("updates.status.automaticEnabled") : t("updates.status.automaticDisabled"),
       })
     } catch (error) {
       const message = getErrorMessage(error)
       setAppUpdateStatus({
         tone: "error",
-        text: `Unable to save automatic update setting. ${message}`,
+        text: t("updates.status.saveAutomaticFailedWithMessage", { message }),
       })
     } finally {
       setIsSavingAutomaticUpdates(false)
