@@ -1090,7 +1090,6 @@ interface SettingsPageProps {
   appearanceOverrides: AppearanceTokenMap
   appearanceTokenValues: Record<AppearanceTokenName, string>
   assistantTraceVisibility: AssistantTraceVisibility
-  archivableSessionCount: number
   archivedSessions: ArchivedSessionSummary[]
   archivedSessionsError: string | null
   catalog: ProviderCatalogItem[]
@@ -1103,9 +1102,9 @@ interface SettingsPageProps {
   fontFamily: AppearanceFontFamily
   isActivityRailVisible: boolean
   isAgentDebugTraceEnabled: boolean
-  isArchivingAllSessions: boolean
   isDebugLineColorsEnabled: boolean
   isDebugUiRegionsEnabled: boolean
+  isDeletingAllArchivedSessions: boolean
   isLoading: boolean
   isLoadingArchivedSessions: boolean
   isOpen: boolean
@@ -1142,7 +1141,7 @@ interface SettingsPageProps {
   onAutomaticUpdatesToggle: () => void
   onCheckForUpdates: () => void
   onClose: () => void
-  onArchiveAllSessions: () => boolean | Promise<boolean>
+  onDeleteAllArchivedSessions: (sessionIDs: string[]) => boolean | Promise<boolean>
   onDeleteArchivedSession: (sessionID: string) => boolean | Promise<boolean>
   onDeleteMcpServer: (serverID: string) => void | Promise<void>
   onDeleteProvider: (providerID: string) => void | Promise<void>
@@ -1194,7 +1193,6 @@ export function SettingsPage({
   appearanceOverrides,
   appearanceTokenValues,
   assistantTraceVisibility,
-  archivableSessionCount,
   archivedSessions,
   archivedSessionsError,
   catalog,
@@ -1207,9 +1205,9 @@ export function SettingsPage({
   fontFamily,
   isActivityRailVisible,
   isAgentDebugTraceEnabled,
-  isArchivingAllSessions,
   isDebugLineColorsEnabled,
   isDebugUiRegionsEnabled,
+  isDeletingAllArchivedSessions,
   isLoading,
   isLoadingArchivedSessions,
   isOpen,
@@ -1246,7 +1244,7 @@ export function SettingsPage({
   onAutomaticUpdatesToggle,
   onCheckForUpdates,
   onClose,
-  onArchiveAllSessions,
+  onDeleteAllArchivedSessions,
   onDeleteArchivedSession,
   onDeleteMcpServer,
   onDeleteProvider,
@@ -1445,16 +1443,24 @@ export function SettingsPage({
       onCheckForUpdates()
     }
 
-    function handleArchiveAllSessionsClick() {
-      if (isArchivingAllSessions || archivableSessionCount === 0) return
+    function handleDeleteAllArchivedSessionsClick() {
+      const targetSessionIDs = archivedSessions.map((session) => session.id)
+      if (
+        isDeletingAllArchivedSessions ||
+        restoringArchivedSessionID !== null ||
+        deletingArchivedSessionID !== null ||
+        targetSessionIDs.length === 0
+      ) {
+        return
+      }
       if (
         typeof window.confirm === "function" &&
-        !window.confirm(t("settings.archive.confirmArchiveAll", { count: archivableSessionCount }))
+        !window.confirm(t("settings.archive.confirmDeleteAll", { count: targetSessionIDs.length }))
       ) {
         return
       }
 
-      void onArchiveAllSessions()
+      void onDeleteAllArchivedSessions(targetSessionIDs)
     }
 
     useEffect(() => {
@@ -2724,12 +2730,17 @@ export function SettingsPage({
                         />
                       </div>
                       <button
-                        className="secondary-button"
-                        disabled={isArchivingAllSessions || archivableSessionCount === 0}
+                        className="secondary-button is-danger"
+                        disabled={
+                          isDeletingAllArchivedSessions ||
+                          restoringArchivedSessionID !== null ||
+                          deletingArchivedSessionID !== null ||
+                          archivedSessions.length === 0
+                        }
                         type="button"
-                        onClick={handleArchiveAllSessionsClick}
+                        onClick={handleDeleteAllArchivedSessionsClick}
                       >
-                        {isArchivingAllSessions ? t("settings.archive.archivingAll") : t("settings.archive.archiveAll")}
+                        {isDeletingAllArchivedSessions ? t("settings.archive.deletingAll") : t("settings.archive.deleteAll")}
                       </button>
                     </div>
 
@@ -2774,7 +2785,7 @@ export function SettingsPage({
                               <div className="settings-inline-actions settings-archive-actions">
                                 <button
                                   className="secondary-button"
-                                  disabled={isRestoring || isDeleting}
+                                  disabled={isDeletingAllArchivedSessions || isRestoring || isDeleting}
                                   type="button"
                                   onClick={() => void onRestoreArchivedSession(session.id)}
                                 >
@@ -2782,7 +2793,7 @@ export function SettingsPage({
                                 </button>
                                 <button
                                   className="secondary-button is-danger"
-                                  disabled={isRestoring || isDeleting}
+                                  disabled={isDeletingAllArchivedSessions || isRestoring || isDeleting}
                                   type="button"
                                   onClick={() => void onDeleteArchivedSession(session.id)}
                                 >

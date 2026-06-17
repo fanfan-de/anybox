@@ -69,7 +69,6 @@ function createSettingsPageProps(
     appearanceConfigPreview: "{}",
     appearanceOverrides: {},
     appearanceTokenValues: {} as ComponentProps<typeof SettingsPage>["appearanceTokenValues"],
-    archivableSessionCount: 0,
     archivedSessions: [],
     archivedSessionsError: null,
     assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
@@ -83,9 +82,9 @@ function createSettingsPageProps(
     deletingProviderID: null,
     isActivityRailVisible: true,
     isAgentDebugTraceEnabled: false,
-    isArchivingAllSessions: false,
     isDebugLineColorsEnabled: false,
     isDebugUiRegionsEnabled: false,
+    isDeletingAllArchivedSessions: false,
     isLoading: false,
     isLoadingArchivedSessions: false,
     isOpen: true,
@@ -110,7 +109,6 @@ function createSettingsPageProps(
     onAppearanceTokenChange: vi.fn(),
     onAppearanceTokenReset: vi.fn(),
     onAutomaticUpdatesToggle: vi.fn(),
-    onArchiveAllSessions: vi.fn(),
     onAssistantTraceVisibilityChange: vi.fn(),
     onBrandThemeChange: vi.fn(),
     onCancelProviderAuthFlow: vi.fn(),
@@ -123,6 +121,7 @@ function createSettingsPageProps(
     onFontFamilyChange: vi.fn(),
     onDebugLineColorsChange: vi.fn(),
     onDebugUiRegionsChange: vi.fn(),
+    onDeleteAllArchivedSessions: vi.fn(),
     onDeleteArchivedSession: vi.fn(),
     onDeleteMcpServer: vi.fn(),
     onDeleteProvider: vi.fn(),
@@ -694,7 +693,6 @@ describe("SettingsPage built-in tools", () => {
     render(
       <SettingsPage
         {...createSettingsPageProps({
-          archivableSessionCount: 2,
           archivedSessions: [
             createArchivedSession({
               id: "session-analysis",
@@ -730,54 +728,55 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.queryByRole("list", { name: "Archived sessions" })).not.toBeInTheDocument()
   })
 
-  it("exposes archive all from the archived sessions page", () => {
-    const confirmArchiveAll = vi.spyOn(window, "confirm").mockReturnValue(true)
-    const onArchiveAllSessions = vi.fn()
+  it("deletes all archived sessions from the archived sessions page", () => {
+    const confirmDeleteAll = vi.spyOn(window, "confirm").mockReturnValue(true)
+    const onDeleteAllArchivedSessions = vi.fn()
 
     render(
       <SettingsPage
         {...createSettingsPageProps({
-          archivableSessionCount: 3,
-          archivedSessions: [createArchivedSession()],
-          onArchiveAllSessions,
+          archivedSessions: [
+            createArchivedSession({ id: "session-archived-1" }),
+            createArchivedSession({ id: "session-archived-2" }),
+          ],
+          onDeleteAllArchivedSessions,
         })}
       />,
     )
 
     fireEvent.click(screen.getByRole("button", { name: "Archived Sessions" }))
-    fireEvent.click(screen.getByRole("button", { name: "Archive all" }))
+    fireEvent.click(screen.getByRole("button", { name: "Delete all" }))
 
-    expect(confirmArchiveAll).toHaveBeenCalledWith("Archive 3 currently loaded sessions?")
-    expect(onArchiveAllSessions).toHaveBeenCalledTimes(1)
+    expect(confirmDeleteAll).toHaveBeenCalledWith("Permanently delete archived sessions (2)?")
+    expect(onDeleteAllArchivedSessions).toHaveBeenCalledWith(["session-archived-1", "session-archived-2"])
   })
 
-  it("does not archive all when confirmation is cancelled", () => {
-    const confirmArchiveAll = vi.spyOn(window, "confirm").mockReturnValue(false)
-    const onArchiveAllSessions = vi.fn()
+  it("does not delete all archived sessions when confirmation is cancelled", () => {
+    const confirmDeleteAll = vi.spyOn(window, "confirm").mockReturnValue(false)
+    const onDeleteAllArchivedSessions = vi.fn()
 
     render(
       <SettingsPage
         {...createSettingsPageProps({
-          archivableSessionCount: 3,
           archivedSessions: [createArchivedSession()],
-          onArchiveAllSessions,
+          onDeleteAllArchivedSessions,
         })}
       />,
     )
 
     fireEvent.click(screen.getByRole("button", { name: "Archived Sessions" }))
-    fireEvent.click(screen.getByRole("button", { name: "Archive all" }))
+    fireEvent.click(screen.getByRole("button", { name: "Delete all" }))
 
-    expect(confirmArchiveAll).toHaveBeenCalledWith("Archive 3 currently loaded sessions?")
-    expect(onArchiveAllSessions).not.toHaveBeenCalled()
+    expect(confirmDeleteAll).toHaveBeenCalledWith("Permanently delete archived sessions (1)?")
+    expect(onDeleteAllArchivedSessions).not.toHaveBeenCalled()
   })
 
-  it("disables archive all when there are no active sessions to archive", () => {
+  it("disables delete all when there are no archived sessions", () => {
     render(<SettingsPage {...createSettingsPageProps()} />)
 
     fireEvent.click(screen.getByRole("button", { name: "Archived Sessions" }))
 
-    expect(screen.getByRole("button", { name: "Archive all" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Delete all" })).toBeDisabled()
   })
 
   it("opens the monitor app from developer mode settings", async () => {

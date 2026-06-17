@@ -4,6 +4,7 @@ out/
 build/
 .env
 .env.local
+.env.downloads
 .DS_Store
 Thumbs.db
 .idea/

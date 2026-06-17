@@ -625,6 +625,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   const [isTranslatingPromptPreset, setIsTranslatingPromptPreset] = useState(false)
   const [restoringArchivedSessionID, setRestoringArchivedSessionID] = useState<string | null>(null)
   const [deletingArchivedSessionID, setDeletingArchivedSessionID] = useState<string | null>(null)
+  const [isDeletingAllArchivedSessions, setIsDeletingAllArchivedSessions] = useState(false)
   const requestIDRef = useRef(0)
   const savedSelectionRef = useRef<ProjectModelSelection>(EMPTY_PROJECT_MODEL_SELECTION)
   const selectionDraftRef = useRef<ProjectModelSelection>(EMPTY_PROJECT_MODEL_SELECTION)
@@ -3382,6 +3383,36 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     }
   }
 
+  async function deleteAllArchivedSessions(sessionIDs: string[]) {
+    const deleteArchivedSessionApi = window.desktop?.deleteArchivedSession
+    const targetSessionIDs = Array.from(new Set(sessionIDs.map((sessionID) => sessionID.trim()).filter(Boolean)))
+    if (!deleteArchivedSessionApi || targetSessionIDs.length === 0 || isDeletingAllArchivedSessions) return false
+
+    setIsDeletingAllArchivedSessions(true)
+    try {
+      for (const sessionID of targetSessionIDs) {
+        await deleteArchivedSessionApi({ sessionID })
+      }
+      await loadArchivedSessions({ silent: true })
+      showMessage({
+        tone: "success",
+        text: targetSessionIDs.length === 1
+          ? "Archived session deleted."
+          : `${targetSessionIDs.length} archived sessions deleted.`,
+      })
+      return true
+    } catch (error) {
+      await loadArchivedSessions({ silent: true })
+      showMessage({
+        tone: "error",
+        text: getErrorMessage(error),
+      })
+      return false
+    } finally {
+      setIsDeletingAllArchivedSessions(false)
+    }
+  }
+
   const isPromptDirty =
     selectedPromptPresetID !== null &&
     (promptDraftLabel !== savedPromptLabel || promptDraftContent !== savedPromptContent)
@@ -3422,6 +3453,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     deleteConnectorApiKey,
     deleteConnectorConfig,
     deleteConnectorAuthSession,
+    deleteAllArchivedSessions,
     deleteArchivedSession,
     deleteInstalledPlugin,
     deleteProviderAuthSession,
@@ -3455,6 +3487,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     isLoadingPromptPreset,
     isLoadingPrompts,
     isLoadingArchivedSessions,
+    isDeletingAllArchivedSessions,
     isOpen,
     isPromptDirty,
     isPromptUrlInstallDialogOpen,

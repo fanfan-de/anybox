@@ -1111,11 +1111,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
       cancelled = true
     }
   }, [agentConnected])
-  const [isArchivingAllSessions, setIsArchivingAllSessions] = useState(false)
-  const archivableSessionCount = useMemo(
-    () => workspaces.reduce((count, workspace) => count + workspace.sessions.length, 0),
-    [workspaces],
-  )
   const isConnectionsPageOpen = leftSidebarView === "connections"
   const workbenchPublishSnapshot = useWorkspaceStoreSelector(
     workspaceStore,
@@ -1216,6 +1211,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     connectorConfigDrafts,
     connectorsError,
     connectorStatuses,
+    deleteAllArchivedSessions,
     deleteArchivedSession,
     deleteConnectorApiKey,
     deleteConnectorConfig,
@@ -1256,6 +1252,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     isPromptUrlInstallDialogOpen,
     isBuiltinToolSelectionDirty,
     isRefreshingProviderCatalog,
+    isDeletingAllArchivedSessions,
     isInstallingPromptUrlPrompts,
     isPreviewingPromptUrlInstall,
     isTranslatingPromptPreset,
@@ -1358,24 +1355,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     onSkillsUpdated: refreshComposerSkills,
     onProviderModelsUpdated: refreshComposerModels,
   })
-
-  async function handleArchiveAllSessions() {
-    if (isArchivingAllSessions || deletingSessionID !== null) return false
-
-    const targetWorkspaces = workspaces.filter((workspace) => workspace.sessions.length > 0)
-    if (targetWorkspaces.length === 0) return false
-
-    setIsArchivingAllSessions(true)
-    try {
-      for (const workspace of targetWorkspaces) {
-        await handleProjectArchiveSessions(workspace)
-      }
-      await loadArchivedSessions({ silent: true })
-      return true
-    } finally {
-      setIsArchivingAllSessions(false)
-    }
-  }
 
   const automationRefreshKnownSessionIDsRef = useRef<Set<string>>(new Set())
   const refreshWorkspaceFromDirectoryRef = useRef(refreshWorkspaceFromDirectory)
@@ -2763,16 +2742,15 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               appearanceOverrides={appearanceOverrides}
               appearanceTokenValues={appearanceTokenValues}
               assistantTraceVisibility={assistantTraceVisibility}
-              archivableSessionCount={archivableSessionCount}
               brandTheme={brandTheme}
               codeThemePreference={codeThemePreference}
               colorMode={colorMode}
               fontFamily={fontFamily}
               isActivityRailVisible={isActivityRailVisible}
               isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
-              isArchivingAllSessions={isArchivingAllSessions}
               isDebugLineColorsEnabled={isDebugLineColorsEnabled}
               isDebugUiRegionsEnabled={isDebugUiRegionsEnabled}
+              isDeletingAllArchivedSessions={isDeletingAllArchivedSessions}
               isLoading={isLoading}
               isLoadingArchivedSessions={isLoadingArchivedSessions}
               isOpen={isOpen}
@@ -2807,9 +2785,9 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onDebugLineColorsChange={handleDebugLineColorsChange}
               onDebugUiRegionsChange={handleDebugUiRegionsChange}
               onAutomaticUpdatesToggle={() => void handleAutomaticUpdatesToggle()}
-              onArchiveAllSessions={handleArchiveAllSessions}
               onCheckForUpdates={() => void handleCheckForUpdates()}
               onClose={closeSettings}
+              onDeleteAllArchivedSessions={deleteAllArchivedSessions}
               onDeleteArchivedSession={deleteArchivedSession}
               onDeleteMcpServer={deleteMcpServer}
               onDeleteProvider={deleteProvider}

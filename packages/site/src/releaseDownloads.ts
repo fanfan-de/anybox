@@ -6,6 +6,8 @@ export const repositoryUrl = "https://github.com/fanfan-de/anybox"
 
 const releasesApiUrl =
   "https://api.github.com/repos/fanfan-de/anybox/releases?per_page=100"
+const downloadManifestUrl =
+  import.meta.env.VITE_DOWNLOAD_MANIFEST_URL?.trim() || ""
 
 export const installerFallbackUrls: Record<InstallerPlatform, string> = {
   windows: `${repositoryUrl}/releases`,
@@ -23,7 +25,31 @@ type GitHubRelease = {
   tag_name?: unknown
 }
 
+type DownloadManifestPlatform = {
+  fallbackUrl?: unknown
+  url?: unknown
+  version?: unknown
+}
+
+type DownloadManifest = {
+  platforms?: unknown
+  version?: unknown
+}
+
+type DownloadManifestPlatformMap = Partial<
+  Record<InstallerPlatform, DownloadManifestPlatform>
+>
+
+let downloadManifestPromise: Promise<DownloadManifest | undefined> | undefined
 let releasesPromise: Promise<GitHubRelease[]> | undefined
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0
+}
 
 function normalizeVersionLabel(version: string) {
   const normalizedVersion = version.trim()
@@ -85,6 +111,84 @@ function getInstallerUrl(release: GitHubRelease, platform: InstallerPlatform) {
     : undefined
 }
 
+function getManifestPlatform(
+  manifest: DownloadManifest | undefined,
+  platform: InstallerPlatform,
+) {
+  if (!manifest || !isRecord(manifest)) return undefined
+
+  const platforms = isRecord(manifest.platforms)
+    ? (manifest.platforms as DownloadManifestPlatformMap)
+    : undefined
+  const manifestRecord = manifest as Record<string, unknown>
+  const platformEntry = platforms?.[platform] ?? manifestRecord[platform]
+
+  return isRecord(platformEntry)
+    ? (platformEntry as DownloadManifestPlatform)
+    : undefined
+}
+
+function getManifestVersion(
+  manifest: DownloadManifest | undefined,
+  platform: InstallerPlatform,
+) {
+  const platformVersion = getManifestPlatform(manifest, platform)?.version
+
+  if (isNonEmptyString(platformVersion)) {
+    return normalizeVersionLabel(platformVersion)
+  }
+
+  if (isNonEmptyString(manifest?.version)) {
+    return normalizeVersionLabel(manifest.version)
+  }
+
+  return undefined
+}
+
+function getManifestInstallerUrl(
+  manifest: DownloadManifest | undefined,
+  platform: InstallerPlatform,
+) {
+  const url = getManifestPlatform(manifest, platform)?.url
+
+  return isNonEmptyString(url) ? url.trim() : undefined
+}
+
+function getManifestFallbackUrl(
+  manifest: DownloadManifest | undefined,
+  platform: InstallerPlatform,
+) {
+  const url = getManifestPlatform(manifest, platform)?.fallbackUrl
+
+  return isNonEmptyString(url) ? url.trim() : undefined
+}
+
+function fetchDownloadManifest() {
+  if (!downloadManifestUrl) return Promise.resolve(undefined)
+
+  if (!downloadManifestPromise) {
+    downloadManifestPromise = fetch(downloadManifestUrl, {
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+      },
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Download manifest request failed: ${response.status}`)
+        }
+
+        return response.json() as Promise<DownloadManifest>
+      })
+      .catch((error: unknown) => {
+        downloadManifestPromise = undefined
+        throw error
+      })
+  }
+
+  return downloadManifestPromise
+}
+
 function fetchReleases() {
   if (!releasesPromise) {
     releasesPromise = fetch(releasesApiUrl, {
@@ -115,6 +219,15 @@ async function resolveLatestReleaseForPlatform(platform: InstallerPlatform) {
 }
 
 export async function resolveLatestReleaseVersion(platform: InstallerPlatform) {
+  try {
+    const manifestVersion = getManifestVersion(
+      await fetchDownloadManifest(),
+      platform,
+    )
+
+    if (manifestVersion) return manifestVersion
+  } catch {}
+
   const release = await resolveLatestReleaseForPlatform(platform)
   const tagName =
     typeof release?.tag_name === "string"
@@ -125,6 +238,15 @@ export async function resolveLatestReleaseVersion(platform: InstallerPlatform) {
 }
 
 async function resolveLatestInstallerUrl(platform: InstallerPlatform) {
+  try {
+    const manifestInstallerUrl = getManifestInstallerUrl(
+      await fetchDownloadManifest(),
+      platform,
+    )
+
+    if (manifestInstallerUrl) return manifestInstallerUrl
+  } catch {}
+
   const release = await resolveLatestReleaseForPlatform(platform)
 
   if (!release) {
@@ -143,10 +265,21 @@ async function resolveLatestInstallerUrl(platform: InstallerPlatform) {
   return downloadUrl
 }
 
+async function resolveFallbackUrl(platform: InstallerPlatform) {
+  try {
+    return (
+      getManifestFallbackUrl(await fetchDownloadManifest(), platform) ??
+      installerFallbackUrls[platform]
+    )
+  } catch {
+    return installerFallbackUrls[platform]
+  }
+}
+
 export async function navigateToLatestInstaller(platform: InstallerPlatform) {
   try {
     window.location.assign(await resolveLatestInstallerUrl(platform))
   } catch {
-    window.location.assign(installerFallbackUrls[platform])
+    window.location.assign(await resolveFallbackUrl(platform))
   }
 }

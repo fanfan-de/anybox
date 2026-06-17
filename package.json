@@ -13,6 +13,8 @@
     "build": "corepack pnpm --filter anybox-desktop-agent build",
     "dist": "corepack pnpm --filter anybox-desktop-agent dist",
     "dist:publish": "corepack pnpm --filter anybox-desktop-agent dist:publish",
+    "downloads:prepare": "node ./scripts/sync-downloads-to-cos.mjs",
+    "downloads:publish": "node ./scripts/sync-downloads-to-cos.mjs --upload",
     "site:build": "corepack pnpm --filter anybox-site build",
     "site:dev": "corepack pnpm --filter anybox-site dev",
     "site:preview": "corepack pnpm --filter anybox-site preview",
