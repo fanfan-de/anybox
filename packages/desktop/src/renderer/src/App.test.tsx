@@ -9283,8 +9283,8 @@ describe("App", () => {
 
     openActivityRailConfigurationView("Open connections and extensions")
 
-    expect(await screen.findByLabelText("连接与扩展顶部菜单")).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("tab", { name: "连接器 1" }))
+    expect(await screen.findByLabelText("Connections and extensions top menu")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("tab", { name: "Connectors 1" }))
     expect(document.querySelector("#app-sidebar")).not.toBeInTheDocument()
     expect(screen.queryByRole("complementary", { name: "Inspector sidebar" })).not.toBeInTheDocument()
     expect(await screen.findByRole("button", { name: "Gmail Connected" })).toBeInTheDocument()
@@ -9336,7 +9336,7 @@ describe("App", () => {
 
     openActivityRailConfigurationView("Open connections and extensions")
 
-    expect(await screen.findByLabelText("连接与扩展顶部菜单")).toBeInTheDocument()
+    expect(await screen.findByLabelText("Connections and extensions top menu")).toBeInTheDocument()
     fireEvent.click(screen.getByRole("tab", { name: "MCP 1" }))
     expect(document.querySelector("#app-sidebar")).not.toBeInTheDocument()
     expect(screen.queryByRole("complementary", { name: "Inspector sidebar" })).not.toBeInTheDocument()
