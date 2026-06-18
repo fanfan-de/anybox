@@ -178,7 +178,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/kling/kling-0.1.0.zip",
-    "sha256": "ac0e10ab06ddaa76e6a3fe34197a1b6f5a8e75bba35d269d32f1f46d8fe86594",
-    "size": 7775
+    "sha256": "b2752cd43f8172cc0ff7815841a2dc66dc2cff10a3195b0c18d789e4f59cbb4e",
+    "size": 7757
   }
 }

@@ -129,7 +129,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/superpowers/superpowers-5.1.0.zip",
-    "sha256": "5c733fcea5a5dcf47ea0ed84a44948dfeeec55cbd1f6991986552dd62368a8a8",
-    "size": 170722
+    "sha256": "6fa039847c32ba10bfe8bd1d60d2c3b2830c1b10763a5647814534596ad1d568",
+    "size": 170636
   }
 }

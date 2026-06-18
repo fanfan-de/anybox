@@ -74,7 +74,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/notion/notion-0.1.0.zip",
-    "sha256": "813f8db927eac6d9aff747338ad2ec60f29fd0c356204f6ec8c48b38899ea0ca",
-    "size": 229281
+    "sha256": "47f692de56a3da1e96df977c23c27dffbadadb648b849dc655854b536d91f944",
+    "size": 229456
   }
 }

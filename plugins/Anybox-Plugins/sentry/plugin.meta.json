@@ -57,7 +57,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/sentry/sentry-0.1.0.zip",
-    "sha256": "8ffdec9c62223ec2119b2f1ac8a55871ab0492c063680d1de874eda693078ca8",
-    "size": 14997
+    "sha256": "3525c63ebc9dd85268a21e6f7036cd9a7267e381ff3003f18351378fe624aa26",
+    "size": 14942
   }
 }

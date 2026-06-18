@@ -73,7 +73,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/circleci/circleci-1.0.0.zip",
-    "sha256": "e069fe0062f76325d3d98e61b84e0ab7464bd55185e19797aba2871c10b26866",
-    "size": 21656
+    "sha256": "29760402ddcd184feb30ae4cbcf3cce6aeb7316b02d029e5e86fd8e4deddb8f9",
+    "size": 21416
   }
 }

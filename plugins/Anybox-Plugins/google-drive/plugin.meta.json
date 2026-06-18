@@ -79,7 +79,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/google-drive/google-drive-0.1.0.zip",
-    "sha256": "587635f1db7e02077635fc6dca799c5d4c92f7f7ff188149fc6564306a4db83a",
-    "size": 268911
+    "sha256": "1f426c958f7c03bbe5f275891a9ee64e22e7759b88db29dcc750471e47fdec44",
+    "size": 270367
   }
 }

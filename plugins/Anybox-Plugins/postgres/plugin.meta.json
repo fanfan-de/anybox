@@ -84,7 +84,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/postgres/postgres-1.0.0.zip",
-    "sha256": "05426dc6a41249bb1c01d1c11449f1cb149a403ffea8ebbf10ebb8b2d2384aa4",
-    "size": 982
+    "sha256": "fd7812a92de4e87767cf6212969e19e415ae03aa4ff1f4b62316bc7db4f5fcb2",
+    "size": 983
   }
 }

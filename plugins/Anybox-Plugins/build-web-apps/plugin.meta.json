@@ -95,7 +95,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/build-web-apps/build-web-apps-0.1.0.zip",
-    "sha256": "761dacc145d3477e362921511c144a8b3a4b949d095c6f44ed7c51d15f6c0011",
-    "size": 195656
+    "sha256": "d66f03694b591c970a0b5b78ae845a3fe65210d9e8c78f6d7d0811e8c0f3c675",
+    "size": 195068
   }
 }

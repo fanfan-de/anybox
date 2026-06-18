@@ -65,7 +65,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/neon-postgres/neon-postgres-1.0.0.zip",
-    "sha256": "4ec9f8f976efb37704d0ff52200d96f20639dc5e15f7bd23e0094630e36a6ecd",
-    "size": 17841
+    "sha256": "5c3ef2d178214638ff4ef93f9e193973ea6e571187940830cef5eac29755517e",
+    "size": 17821
   }
 }

@@ -49,7 +49,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/box/box-0.0.0.zip",
-    "sha256": "0c2c964ea03ea769b7a057ffcfc0d97dfef9858f1e264c60adaf13ee4f6a330b",
-    "size": 43351
+    "sha256": "5efbe5076ffebc79d4b3cd96608dfa612db474cc71766d53341367acd4a32892",
+    "size": 43166
   }
 }

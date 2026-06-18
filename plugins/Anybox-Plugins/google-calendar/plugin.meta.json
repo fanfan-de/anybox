@@ -80,7 +80,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/google-calendar/google-calendar-1.2.0.zip",
-    "sha256": "ee42f8c0d0dfe2accf288980005c344d03b82a785895cbd6b183edef9c2135ec",
-    "size": 154296
+    "sha256": "ca2fc021313a0e467eb804b6473fc1decbe5cbd48fb1f767432078583bdfc467",
+    "size": 155430
   }
 }

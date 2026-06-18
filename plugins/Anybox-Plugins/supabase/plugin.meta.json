@@ -64,7 +64,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/supabase/supabase-0.1.4.zip",
-    "sha256": "a004d5f30205d0624941a9945d16beee2a3b46261b50c763ef526b61c8927b87",
-    "size": 43959
+    "sha256": "d7cea8bab3a288eb80cc1787760409d67d9b49407ae2d8668c9fd00d2b176346",
+    "size": 43849
   }
 }

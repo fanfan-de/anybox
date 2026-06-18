@@ -84,7 +84,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/outlook-calendar/outlook-calendar-0.1.0.zip",
-    "sha256": "470db4a9ff8e28d99d105f84f695a95e8863b136fccdd98498fbe87d08c9a6d2",
-    "size": 421492
+    "sha256": "92dee93ec0253bf8053d745137784a82f198416d36d30172ad8fda42f933e5c1",
+    "size": 421220
   }
 }

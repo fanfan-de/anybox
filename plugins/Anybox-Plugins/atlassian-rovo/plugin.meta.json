@@ -74,7 +74,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/atlassian-rovo/atlassian-rovo-1.0.0.zip",
-    "sha256": "aa8d7d5faf261ef3f61071dfa9919ab015bba0c93f81c8998a3260322cdd5a58",
-    "size": 88294
+    "sha256": "e8d7d971ea3eb8a1a07cbd8044a3a34b9d75315cc84bfb3ef01442ced198060d",
+    "size": 88163
   }
 }

@@ -91,7 +91,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/filesystem/filesystem-1.0.0.zip",
-    "sha256": "2bcb04dd786dd22288c43bac146f5d035a00aa2a72259c3316714c107b0ea2fe",
+    "sha256": "d09775b1ccaaa1702982aedc20c22d7e71615232d4a3d643a868b193ecf1369e",
     "size": 944
   }
 }

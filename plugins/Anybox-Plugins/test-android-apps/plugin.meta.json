@@ -71,7 +71,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/test-android-apps/test-android-apps-0.1.0.zip",
-    "sha256": "77ba91aaf119e0b87cf6ca52598f92474ae33be1ab934e161dd56a0fdd91cc5a",
-    "size": 99731
+    "sha256": "6685d3bc32f2c0026ec50f44136a6b3304c4f8e5b96a0b691d964ed9810bb2cd",
+    "size": 99646
   }
 }

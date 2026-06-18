@@ -109,7 +109,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/hugging-face/hugging-face-1.0.0.zip",
-    "sha256": "e3640c4bba92aa5cfec5433d4bb3eb28cc6bc07ad0b424c0807ec91603a7390e",
-    "size": 349823
+    "sha256": "7c4d559efd295160814d861dad5936e993835bfffd27e25760f88239d9ff55c1",
+    "size": 349593
   }
 }

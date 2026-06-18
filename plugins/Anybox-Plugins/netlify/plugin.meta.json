@@ -113,7 +113,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/netlify/netlify-1.1.0.zip",
-    "sha256": "e07adc07441edeeeed8aaa557078fe41e6e5627785f4cb16932fb9ad523fbdd3",
-    "size": 150194
+    "sha256": "f0e8474ad83de3ee58292f73ef73caee98884aae8731a328d3f95ee885b297c6",
+    "size": 149743
   }
 }

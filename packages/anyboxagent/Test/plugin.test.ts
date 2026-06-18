@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import "./sqlite.cleanup.ts"
+import { createHash } from "node:crypto"
 import { existsSync } from "node:fs"
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -353,6 +354,88 @@ function pluginInstallRoot() {
 function pluginLocalRoot() {
   if (!activeRoot) throw new Error("Temp root has not been initialized.")
   return process.env.ANYBOX_PLUGIN_LOCAL_DIR ?? join(activeRoot, "local-plugins")
+}
+
+function createZipArchive(entries: Array<{ name: string; data: string | Buffer }>) {
+  const chunks: Buffer[] = []
+  const centralDirectoryChunks: Buffer[] = []
+  let offset = 0
+
+  for (const entry of entries) {
+    const name = Buffer.from(entry.name, "utf8")
+    const data = typeof entry.data === "string" ? Buffer.from(entry.data, "utf8") : entry.data
+    const localHeader = Buffer.alloc(30)
+    localHeader.writeUInt32LE(0x04034b50, 0)
+    localHeader.writeUInt16LE(20, 4)
+    localHeader.writeUInt16LE(0x0800, 6)
+    localHeader.writeUInt16LE(0, 8)
+    localHeader.writeUInt16LE(0, 10)
+    localHeader.writeUInt16LE(0x21, 12)
+    localHeader.writeUInt32LE(crc32(data), 14)
+    localHeader.writeUInt32LE(data.length, 18)
+    localHeader.writeUInt32LE(data.length, 22)
+    localHeader.writeUInt16LE(name.length, 26)
+    localHeader.writeUInt16LE(0, 28)
+    chunks.push(localHeader, name, data)
+
+    const centralDirectoryHeader = Buffer.alloc(46)
+    centralDirectoryHeader.writeUInt32LE(0x02014b50, 0)
+    centralDirectoryHeader.writeUInt16LE(20, 4)
+    centralDirectoryHeader.writeUInt16LE(20, 6)
+    centralDirectoryHeader.writeUInt16LE(0x0800, 8)
+    centralDirectoryHeader.writeUInt16LE(0, 10)
+    centralDirectoryHeader.writeUInt16LE(0, 12)
+    centralDirectoryHeader.writeUInt16LE(0x21, 14)
+    centralDirectoryHeader.writeUInt32LE(crc32(data), 16)
+    centralDirectoryHeader.writeUInt32LE(data.length, 20)
+    centralDirectoryHeader.writeUInt32LE(data.length, 24)
+    centralDirectoryHeader.writeUInt16LE(name.length, 28)
+    centralDirectoryHeader.writeUInt16LE(0, 30)
+    centralDirectoryHeader.writeUInt16LE(0, 32)
+    centralDirectoryHeader.writeUInt16LE(0, 34)
+    centralDirectoryHeader.writeUInt16LE(0, 36)
+    centralDirectoryHeader.writeUInt32LE((0o100644 << 16) >>> 0, 38)
+    centralDirectoryHeader.writeUInt32LE(offset, 42)
+    centralDirectoryChunks.push(centralDirectoryHeader, name)
+
+    offset += localHeader.length + name.length + data.length
+  }
+
+  const centralDirectoryOffset = offset
+  const centralDirectory = Buffer.concat(centralDirectoryChunks)
+  const endOfCentralDirectory = Buffer.alloc(22)
+  endOfCentralDirectory.writeUInt32LE(0x06054b50, 0)
+  endOfCentralDirectory.writeUInt16LE(0, 4)
+  endOfCentralDirectory.writeUInt16LE(0, 6)
+  endOfCentralDirectory.writeUInt16LE(entries.length, 8)
+  endOfCentralDirectory.writeUInt16LE(entries.length, 10)
+  endOfCentralDirectory.writeUInt32LE(centralDirectory.length, 12)
+  endOfCentralDirectory.writeUInt32LE(centralDirectoryOffset, 16)
+  endOfCentralDirectory.writeUInt16LE(0, 20)
+
+  return Buffer.concat([...chunks, centralDirectory, endOfCentralDirectory])
+}
+
+const CRC32_TABLE = buildCRC32Table()
+
+function buildCRC32Table() {
+  const table = new Uint32Array(256)
+  for (let index = 0; index < 256; index += 1) {
+    let value = index
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1)
+    }
+    table[index] = value >>> 0
+  }
+  return table
+}
+
+function crc32(data: Buffer) {
+  let value = 0xffffffff
+  for (const byte of data) {
+    value = CRC32_TABLE[(value ^ byte) & 0xff]! ^ (value >>> 8)
+  }
+  return (value ^ 0xffffffff) >>> 0
 }
 
 async function writeManifestPluginPackage(packageSourceRoot = pluginInstallRoot()) {
@@ -1365,6 +1448,163 @@ describe("plugin marketplace API", () => {
     expect(response.status).toBe(200)
     expect(plugin?.name).toBe("Meta Only")
     expect(plugin?.installable).toBe(false)
+  })
+
+  test("installs registry zip packages that use Windows path separators", async () => {
+    await useTempDatabase()
+    const app = createServerApp()
+    process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "https://registry.example.test/index.json"
+
+    const packageManifest = {
+      name: "remote-lab",
+      version: "1.2.3",
+      description: "Remote fixture plugin.",
+      skills: "./skills/",
+    }
+    const zipBytes = createZipArchive([
+      {
+        name: "remote-lab-1.2.3\\.anybox-plugin\\plugin.json",
+        data: `${JSON.stringify(packageManifest, null, 2)}\n`,
+      },
+      {
+        name: "remote-lab-1.2.3\\skills\\review\\SKILL.md",
+        data: [
+          "---",
+          "name: review",
+          "description: Review remote fixture plugin packages.",
+          "---",
+          "",
+          "Use when testing remote plugin installation.",
+          "",
+        ].join("\n"),
+      },
+    ])
+    const remotePluginMeta = {
+      ...packageManifest,
+      interface: {
+        displayName: "Remote Lab",
+        shortDescription: "Remote fixture.",
+        category: "Docs",
+      },
+      package: {
+        type: "zip",
+        url: "https://cdn.example.test/remote-lab.zip",
+        sha256: createHash("sha256").update(zipBytes).digest("hex"),
+        size: zipBytes.byteLength,
+      },
+      skillPreviews: [
+        {
+          name: "review",
+          description: "Review remote fixture plugin packages.",
+          directory: "review",
+        },
+      ],
+    }
+
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL ? input.toString() : input.url
+      if (url === "https://registry.example.test/index.json") {
+        return new Response(JSON.stringify(["https://plugins.example.test/remote-lab"]), { status: 200 })
+      }
+      if (url === "https://plugins.example.test/remote-lab/plugin.meta.json") {
+        return new Response(JSON.stringify(remotePluginMeta), { status: 200 })
+      }
+      if (url === "https://cdn.example.test/remote-lab.zip") {
+        return new Response(zipBytes, {
+          status: 200,
+          headers: {
+            "content-length": String(zipBytes.byteLength),
+          },
+        })
+      }
+      return new Response("not found", { status: 404 })
+    }) as typeof fetch
+
+    const installResponse = await app.request("/api/plugins/installed/remote-lab", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        enabled: true,
+      }),
+    })
+    const installBody = (await installResponse.json()) as InstalledPluginEnvelope
+
+    expect(installResponse.status).toBe(200)
+    expect(installBody.data?.skillIDs).toEqual(["plugin:remote-lab:review"])
+    expect(existsSync(join(pluginInstallRoot(), "remote-lab", "1.2.3", ".anybox-plugin", "plugin.json"))).toBe(true)
+    expect(existsSync(join(pluginInstallRoot(), "remote-lab", "1.2.3", "skills", "review", "SKILL.md"))).toBe(true)
+  })
+
+  test("rejects registry zip packages with unsafe Windows-style paths", async () => {
+    await useTempDatabase()
+    const app = createServerApp()
+    process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "https://registry.example.test/index.json"
+
+    const packageManifest = {
+      name: "remote-lab",
+      version: "1.2.3",
+      description: "Remote fixture plugin.",
+      skills: "./skills/",
+    }
+    const zipBytes = createZipArchive([
+      {
+        name: "remote-lab-1.2.3\\..\\escape.txt",
+        data: "outside",
+      },
+      {
+        name: "remote-lab-1.2.3\\.anybox-plugin\\plugin.json",
+        data: `${JSON.stringify(packageManifest, null, 2)}\n`,
+      },
+    ])
+    const remotePluginMeta = {
+      ...packageManifest,
+      package: {
+        type: "zip",
+        url: "https://cdn.example.test/remote-lab.zip",
+        sha256: createHash("sha256").update(zipBytes).digest("hex"),
+        size: zipBytes.byteLength,
+      },
+    }
+
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL ? input.toString() : input.url
+      if (url === "https://registry.example.test/index.json") {
+        return new Response(JSON.stringify(["https://plugins.example.test/remote-lab"]), { status: 200 })
+      }
+      if (url === "https://plugins.example.test/remote-lab/plugin.meta.json") {
+        return new Response(JSON.stringify(remotePluginMeta), { status: 200 })
+      }
+      if (url === "https://cdn.example.test/remote-lab.zip") {
+        return new Response(zipBytes, {
+          status: 200,
+          headers: {
+            "content-length": String(zipBytes.byteLength),
+          },
+        })
+      }
+      return new Response("not found", { status: 404 })
+    }) as typeof fetch
+
+    const installResponse = await app.request("/api/plugins/installed/remote-lab", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        enabled: true,
+      }),
+    })
+    const installBody = (await installResponse.json()) as InstalledPluginEnvelope
+
+    expect(installResponse.status).toBe(400)
+    expect(installBody.error?.code).toBe("PLUGIN_PACKAGE_INVALID")
+    expect(existsSync(join(activeRoot!, "escape.txt"))).toBe(false)
   })
 
   test("installs, disables, diagnoses, and removes a plugin-backed MCP server", async () => {

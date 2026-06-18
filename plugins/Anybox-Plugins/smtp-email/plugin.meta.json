@@ -168,7 +168,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/smtp-email/smtp-email-0.1.0.zip",
-    "sha256": "4ca869c5bc051a32e83caea9de48105bd46dfb8ed7807b3835f1971537832000",
-    "size": 9965
+    "sha256": "8ab55698bcc86b8e79b77b3dfbeea24623b3fcc6c4c95f98759368e75a065ef9",
+    "size": 10064
   }
 }

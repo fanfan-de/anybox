@@ -340,7 +340,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/twilio-developer-kit/twilio-developer-kit-0.2.0.zip",
-    "sha256": "b3f14ed3b082172f15d11fed21054997f9b10a969c6b9c5cfe1478753120dffc",
-    "size": 271798
+    "sha256": "ca2fa14dd5b7e8720f1418d1727f7ff26a454a08c98cdd9377577e55adc3cbca",
+    "size": 270990
   }
 }

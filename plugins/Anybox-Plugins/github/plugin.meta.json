@@ -113,8 +113,8 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/github/github-1.0.0.zip",
-    "sha256": "cb27b004f86994cf550046e7eb8615bbbc523e9a063741c6647866cc75bbdfb6",
-    "size": 70478
+    "sha256": "6709f95c36e55c0951a3e249b82f7696ffebce5a9d566202ec227375854aa8d6",
+    "size": 70801
   },
   "skills": "./skills/"
 }

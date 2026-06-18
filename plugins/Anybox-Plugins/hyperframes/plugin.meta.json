@@ -83,7 +83,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/hyperframes/hyperframes-0.1.0.zip",
-    "sha256": "c25077b267d8962c4f1e6c628c1067151344f2e8be871fa4d90ea1c87ed9f5f9",
-    "size": 210173
+    "sha256": "8fc2fbd2941df4423f0b22d660a414e5f9d28ad7cf8323acb8bf6b70d4aefa95",
+    "size": 209983
   }
 }

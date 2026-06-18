@@ -83,7 +83,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/plugin-eval/plugin-eval-0.1.0.zip",
-    "sha256": "4500f1cb3722062c1a60ea235a6bd810656de03e3f2b168f623660d743bc479e",
-    "size": 96850
+    "sha256": "ea02810f006ceb6d772ea42df4970a092f9ac0c7ee538d3faa1ac8a83dd5d5d5",
+    "size": 96459
   }
 }

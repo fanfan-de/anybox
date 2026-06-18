@@ -58,7 +58,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/presentations/presentations-0.1.1.zip",
-    "sha256": "d9f7c0b61bfd052213998809b70178f85d20be6487d5e75629c6142f6424a43d",
-    "size": 41872
+    "sha256": "555edd4f6139813d49405c85b61719ebcf5097db6b88a9061deaced2a24906fe",
+    "size": 41816
   }
 }

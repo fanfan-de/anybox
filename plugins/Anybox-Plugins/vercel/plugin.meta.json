@@ -299,7 +299,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/vercel/vercel-0.21.0.zip",
-    "sha256": "c9acf2fb964ab4d6a9adc8e76ecc273105d4e4d695cba7b06e01bb997847a6e9",
-    "size": 338039
+    "sha256": "05ec470c179e92595224ab815487d3e3491c5661990cdf8d796f831c5372eeeb",
+    "size": 337224
   }
 }

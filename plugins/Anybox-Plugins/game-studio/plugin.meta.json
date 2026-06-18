@@ -106,7 +106,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/game-studio/game-studio-0.1.0.zip",
-    "sha256": "c71ef5b2a5d2fc25bca240006a4c7458c200c4ff76c6d77810d87b2b345f1758",
-    "size": 53175
+    "sha256": "3543e4b84a935f421b2c2909f2f65e1adbd1362071a730604ab7cb8ba0071b28",
+    "size": 52860
   }
 }

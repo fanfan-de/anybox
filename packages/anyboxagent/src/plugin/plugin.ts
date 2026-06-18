@@ -1,9 +1,9 @@
-import { spawnSync } from "node:child_process"
 import { createHash, randomUUID } from "node:crypto"
-import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs"
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs"
 import { cp, mkdir, rm, writeFile } from "node:fs/promises"
 import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+import { inflateRawSync } from "node:zlib"
 import matter from "gray-matter"
 import z from "zod"
 import * as Auth from "#auth/auth.ts"
@@ -1882,29 +1882,215 @@ function validateExtractedTree(root: string) {
   visit(root)
 }
 
-function extractZipArchive(zipPath: string, destination: string) {
-  const result = process.platform === "win32"
-    ? spawnSync(
-      "powershell.exe",
-      [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-Command",
-        "& { param($zipPath, $destination) Expand-Archive -LiteralPath $zipPath -DestinationPath $destination -Force }",
-        zipPath,
-        destination,
-      ],
-      { encoding: "utf8", windowsHide: true },
-    )
-    : spawnSync("unzip", ["-q", zipPath, "-d", destination], { encoding: "utf8", windowsHide: true })
+const ZIP_LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50
+const ZIP_CENTRAL_DIRECTORY_SIGNATURE = 0x02014b50
+const ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50
+const ZIP64_SENTINEL = 0xffffffff
 
-  if (result.status !== 0) {
-    const detail = (result.stderr || result.stdout || "").trim()
-    throw new PluginError(
-      "PLUGIN_PACKAGE_INVALID",
-      detail ? `Could not extract plugin package: ${detail}` : "Could not extract plugin package.",
-    )
+type ZipEntry = {
+  rawName: string
+  normalizedName: string | null
+  flags: number
+  method: number
+  compressedSize: number
+  uncompressedSize: number
+  localHeaderOffset: number
+  externalAttributes: number
+}
+
+function zipPackageError(message: string) {
+  return new PluginError("PLUGIN_PACKAGE_INVALID", message)
+}
+
+function findEndOfCentralDirectory(archive: Buffer) {
+  const minimumEOCDLength = 22
+  const maximumCommentLength = 0xffff
+  if (archive.length < minimumEOCDLength) {
+    throw zipPackageError("Plugin archive is missing its central directory.")
+  }
+
+  const start = Math.max(0, archive.length - minimumEOCDLength - maximumCommentLength)
+
+  for (let offset = archive.length - minimumEOCDLength; offset >= start; offset -= 1) {
+    if (archive.readUInt32LE(offset) === ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE) return offset
+  }
+
+  throw zipPackageError("Plugin archive is missing its central directory.")
+}
+
+function decodeZipEntryName(bytes: Buffer, flags: number) {
+  if ((flags & 0x800) !== 0) return bytes.toString("utf8")
+
+  try {
+    return new TextDecoder("ibm437").decode(bytes)
+  } catch {
+    return bytes.toString("utf8")
+  }
+}
+
+function normalizeZipEntryPath(rawName: string) {
+  const slashName = rawName.replace(/\\/g, "/")
+  if (slashName.includes("\0")) {
+    throw zipPackageError("Plugin archive contains an invalid path.")
+  }
+
+  const trimmedName = slashName.replace(/\/+$/g, "")
+  if (!trimmedName) return null
+  if (trimmedName.startsWith("/") || /^[A-Za-z]:($|\/)/.test(trimmedName)) {
+    throw zipPackageError("Plugin archive contains an absolute path.")
+  }
+
+  const segments = trimmedName.split("/")
+  if (segments.some((segment) => !segment || segment === "." || segment === "..")) {
+    throw zipPackageError("Plugin archive contains an unsafe path.")
+  }
+
+  return segments.join("/")
+}
+
+function readZipEntries(archive: Buffer): ZipEntry[] {
+  const eocdOffset = findEndOfCentralDirectory(archive)
+  const diskNumber = archive.readUInt16LE(eocdOffset + 4)
+  const centralDirectoryDisk = archive.readUInt16LE(eocdOffset + 6)
+  const totalEntries = archive.readUInt16LE(eocdOffset + 10)
+  const centralDirectorySize = archive.readUInt32LE(eocdOffset + 12)
+  const centralDirectoryOffset = archive.readUInt32LE(eocdOffset + 16)
+
+  if (diskNumber !== 0 || centralDirectoryDisk !== 0) {
+    throw zipPackageError("Split plugin archives are not supported.")
+  }
+  if (
+    totalEntries === 0xffff ||
+    centralDirectorySize === ZIP64_SENTINEL ||
+    centralDirectoryOffset === ZIP64_SENTINEL
+  ) {
+    throw zipPackageError("ZIP64 plugin archives are not supported.")
+  }
+  if (centralDirectoryOffset + centralDirectorySize > archive.length) {
+    throw zipPackageError("Plugin archive central directory is invalid.")
+  }
+
+  const entries: ZipEntry[] = []
+  let offset = centralDirectoryOffset
+  for (let index = 0; index < totalEntries; index += 1) {
+    if (offset + 46 > archive.length || archive.readUInt32LE(offset) !== ZIP_CENTRAL_DIRECTORY_SIGNATURE) {
+      throw zipPackageError("Plugin archive central directory is invalid.")
+    }
+
+    const flags = archive.readUInt16LE(offset + 8)
+    const method = archive.readUInt16LE(offset + 10)
+    const compressedSize = archive.readUInt32LE(offset + 20)
+    const uncompressedSize = archive.readUInt32LE(offset + 24)
+    const nameLength = archive.readUInt16LE(offset + 28)
+    const extraLength = archive.readUInt16LE(offset + 30)
+    const commentLength = archive.readUInt16LE(offset + 32)
+    const externalAttributes = archive.readUInt32LE(offset + 38)
+    const localHeaderOffset = archive.readUInt32LE(offset + 42)
+    const nameStart = offset + 46
+    const nextOffset = nameStart + nameLength + extraLength + commentLength
+
+    if (
+      compressedSize === ZIP64_SENTINEL ||
+      uncompressedSize === ZIP64_SENTINEL ||
+      localHeaderOffset === ZIP64_SENTINEL
+    ) {
+      throw zipPackageError("ZIP64 plugin archives are not supported.")
+    }
+    if (nextOffset > archive.length) {
+      throw zipPackageError("Plugin archive central directory is invalid.")
+    }
+
+    const rawName = decodeZipEntryName(archive.subarray(nameStart, nameStart + nameLength), flags)
+    entries.push({
+      rawName,
+      normalizedName: normalizeZipEntryPath(rawName),
+      flags,
+      method,
+      compressedSize,
+      uncompressedSize,
+      localHeaderOffset,
+      externalAttributes,
+    })
+    offset = nextOffset
+  }
+
+  return entries
+}
+
+function zipEntryMode(entry: ZipEntry) {
+  return (entry.externalAttributes >>> 16) & 0xffff
+}
+
+function isZipEntryDirectory(entry: ZipEntry) {
+  const mode = zipEntryMode(entry)
+  return entry.rawName.endsWith("/") || entry.rawName.endsWith("\\") || (mode & 0o170000) === 0o040000
+}
+
+function isZipEntrySymlink(entry: ZipEntry) {
+  return (zipEntryMode(entry) & 0o170000) === 0o120000
+}
+
+function readZipEntryData(archive: Buffer, entry: ZipEntry) {
+  if ((entry.flags & 0x1) !== 0) {
+    throw zipPackageError("Encrypted plugin archives are not supported.")
+  }
+  if (entry.localHeaderOffset + 30 > archive.length) {
+    throw zipPackageError("Plugin archive local file header is invalid.")
+  }
+  if (archive.readUInt32LE(entry.localHeaderOffset) !== ZIP_LOCAL_FILE_HEADER_SIGNATURE) {
+    throw zipPackageError("Plugin archive local file header is invalid.")
+  }
+
+  const nameLength = archive.readUInt16LE(entry.localHeaderOffset + 26)
+  const extraLength = archive.readUInt16LE(entry.localHeaderOffset + 28)
+  const dataStart = entry.localHeaderOffset + 30 + nameLength + extraLength
+  const dataEnd = dataStart + entry.compressedSize
+  if (dataEnd > archive.length) {
+    throw zipPackageError("Plugin archive file data is invalid.")
+  }
+
+  const compressed = archive.subarray(dataStart, dataEnd)
+  let data: Buffer | null = null
+  if (entry.method === 0) {
+    data = Buffer.from(compressed)
+  } else if (entry.method === 8) {
+    try {
+      data = inflateRawSync(compressed)
+    } catch {
+      throw zipPackageError("Plugin archive file data is invalid.")
+    }
+  }
+
+  if (!data) {
+    throw zipPackageError(`Plugin archive uses unsupported compression method ${entry.method}.`)
+  }
+  if (data.byteLength !== entry.uncompressedSize) {
+    throw zipPackageError("Plugin archive file data size does not match its metadata.")
+  }
+
+  return data
+}
+
+function extractZipArchive(zipPath: string, destination: string) {
+  const archive = readFileSync(zipPath)
+  const destinationRoot = resolve(destination)
+
+  for (const entry of readZipEntries(archive)) {
+    if (!entry.normalizedName) continue
+    if (isZipEntrySymlink(entry)) {
+      throw zipPackageError("Plugin archives must not contain symbolic links.")
+    }
+
+    const targetPath = resolve(destinationRoot, entry.normalizedName)
+    assertPathInside(destinationRoot, targetPath)
+
+    if (isZipEntryDirectory(entry)) {
+      mkdirSync(targetPath, { recursive: true })
+      continue
+    }
+
+    mkdirSync(dirname(targetPath), { recursive: true })
+    writeFileSync(targetPath, readZipEntryData(archive, entry))
   }
 
   validateExtractedTree(destination)

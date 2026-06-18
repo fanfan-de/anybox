@@ -114,7 +114,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/build-macos-apps/build-macos-apps-0.1.2.zip",
-    "sha256": "d4d993128e7a5291020ac9424ec85b155f78e0cfacfeacceabd935ad28a63725",
-    "size": 53870
+    "sha256": "e782f3d937a90512a3059a853a5a0d4e80199efef88efb553defc3c75fce77db",
+    "size": 53608
   }
 }

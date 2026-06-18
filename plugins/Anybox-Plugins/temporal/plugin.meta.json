@@ -62,7 +62,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/temporal/temporal-0.2.0.zip",
-    "sha256": "b0773d7e4ef79d91c6be1b10114078cab7ef1395125960a22d56f7f739f8f775",
-    "size": 142768
+    "sha256": "5eec380b4b642c20a63c5390367d3962aa976a9bb0628d87512c99aeda6ad706",
+    "size": 141684
   }
 }

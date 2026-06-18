@@ -87,7 +87,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/sharepoint/sharepoint-0.1.0.zip",
-    "sha256": "bead7706c37a95e2fd94842a512df7e94948f8fdfcbc1e7fd665fb4dfb0ecabd",
-    "size": 381424
+    "sha256": "4b4a1fd0d2e331803e6b7d9adce050e4d36085ccb04aa3fa64c6a5bf9d4bfe31",
+    "size": 381286
   }
 }

@@ -54,7 +54,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/anybox-plugin-development/anybox-plugin-development-0.1.0.zip",
-    "sha256": "f04e27beefef65f1edfeac8fd7c2a2089a8cd3895f2a0c125988292825f6b858",
-    "size": 13139
+    "sha256": "c6dcc00f6d5dcbeada3a5a1b1c1e198adfdf20fa2424823c51989b3e976e35e6",
+    "size": 13404
   }
 }

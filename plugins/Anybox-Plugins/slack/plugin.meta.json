@@ -82,7 +82,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/slack/slack-0.1.0.zip",
-    "sha256": "4b990f9340ff7c73abedb4b4e39f957e97aaaef4e82c750abb2ff3857461c65c",
-    "size": 85013
+    "sha256": "b511411885d6cac0c8ddbd6e09ffd8c52bbc0a6ef252b3d73c0ba3953dce9935",
+    "size": 85277
   }
 }

@@ -2,9 +2,27 @@ const fs = require("node:fs")
 const path = require("node:path")
 const { spawnSync } = require("node:child_process")
 
-function copyAgentNodeModules(projectDir, appOutDir) {
+function resolveAppResourcesDir(context) {
+  const macResourcesDir = path.join(
+    context.appOutDir,
+    `${context.packager.appInfo.productFilename}.app`,
+    "Contents",
+    "Resources",
+  )
+  if (fs.existsSync(macResourcesDir)) {
+    return macResourcesDir
+  }
+  if (context.electronPlatformName === "darwin") {
+    throw new Error(`[desktop][build] macOS app resources not found: ${macResourcesDir}`)
+  }
+
+  return path.join(context.appOutDir, "resources")
+}
+
+function copyAgentNodeModules(context) {
+  const projectDir = context.packager.projectDir
   const sourceDir = path.join(projectDir, "build", "agent-runtime", "node_modules")
-  const targetDir = path.join(appOutDir, "resources", "agent", "node_modules")
+  const targetDir = path.join(resolveAppResourcesDir(context), "agent", "node_modules")
   const nodePtyPackage = path.join(sourceDir, "node-pty", "package.json")
 
   if (!fs.existsSync(nodePtyPackage)) {
@@ -62,7 +80,7 @@ function findRcedit(projectDir) {
 
 module.exports = async function afterPack(context) {
   const projectDir = context.packager.projectDir
-  copyAgentNodeModules(projectDir, context.appOutDir)
+  copyAgentNodeModules(context)
 
   if (process.platform !== "win32") return
 

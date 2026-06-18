@@ -82,7 +82,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/render/render-0.1.0.zip",
-    "sha256": "66c93b7583ff9e41d9f97bd2b1bd795775ff79fe62d9ca9af0af2eceb6740ea3",
-    "size": 122718
+    "sha256": "dbf15a2d9e6267ae3465f14f858054490bf13a25cd27264a86b7526af6529878",
+    "size": 122437
   }
 }

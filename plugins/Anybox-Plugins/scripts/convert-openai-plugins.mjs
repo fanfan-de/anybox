@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto"
-import { spawnSync } from "node:child_process"
 import { existsSync } from "node:fs"
-import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
-import { dirname, extname, join, resolve } from "node:path"
+import { cp, lstat, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
+import { basename, dirname, extname, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+import { deflateRawSync } from "node:zlib"
 
 const OPEN_SOURCE_LICENSES = new Set(["MIT", "Apache-2.0"])
 const VALID_CATEGORIES = new Set(["Code", "Browser", "Git", "Database", "Docs", "Automation", "Design"])
@@ -92,7 +92,7 @@ try {
     const zipName = `${pluginID}-${version}.zip`
     const zipPath = join(outputDir, zipName)
     await removeFileIfExists(zipPath)
-    createZip(packageRoot, zipPath)
+    await createZip(packageRoot, zipPath)
 
     const zipBytes = await readFile(zipPath)
     const meta = {
@@ -321,26 +321,130 @@ async function removeFileIfExists(filePath) {
   await rm(filePath, { force: true })
 }
 
-function createZip(packageRoot, zipPath) {
-  const source = powershellSingleQuoted(packageRoot)
-  const destination = powershellSingleQuoted(zipPath)
-  const command = [
-    "Add-Type -AssemblyName System.IO.Compression.FileSystem",
-    `if (Test-Path -LiteralPath ${destination}) { Remove-Item -LiteralPath ${destination} -Force }`,
-    `[IO.Compression.ZipFile]::CreateFromDirectory(${source}, ${destination}, [IO.Compression.CompressionLevel]::Optimal, $true)`,
-  ].join("; ")
-  const result = spawnSync(
-    "powershell",
-    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
-    { encoding: "utf8", windowsHide: true },
-  )
-  if (result.status !== 0) {
-    throw new Error(`Could not create ${zipPath}: ${(result.stderr || result.stdout).trim()}`)
+async function createZip(packageRoot, zipPath) {
+  const entries = await collectZipEntries(packageRoot)
+  const chunks = []
+  const centralDirectoryChunks = []
+  let offset = 0
+
+  for (const entry of entries) {
+    const name = Buffer.from(entry.name, "utf8")
+    const localHeader = Buffer.alloc(30)
+    localHeader.writeUInt32LE(0x04034b50, 0)
+    localHeader.writeUInt16LE(20, 4)
+    localHeader.writeUInt16LE(0x0800, 6)
+    localHeader.writeUInt16LE(entry.method, 8)
+    localHeader.writeUInt16LE(0, 10)
+    localHeader.writeUInt16LE(0x21, 12)
+    localHeader.writeUInt32LE(entry.crc, 14)
+    localHeader.writeUInt32LE(entry.compressed.length, 18)
+    localHeader.writeUInt32LE(entry.uncompressedSize, 22)
+    localHeader.writeUInt16LE(name.length, 26)
+    localHeader.writeUInt16LE(0, 28)
+
+    chunks.push(localHeader, name, entry.compressed)
+
+    const centralDirectoryHeader = Buffer.alloc(46)
+    centralDirectoryHeader.writeUInt32LE(0x02014b50, 0)
+    centralDirectoryHeader.writeUInt16LE(20, 4)
+    centralDirectoryHeader.writeUInt16LE(20, 6)
+    centralDirectoryHeader.writeUInt16LE(0x0800, 8)
+    centralDirectoryHeader.writeUInt16LE(entry.method, 10)
+    centralDirectoryHeader.writeUInt16LE(0, 12)
+    centralDirectoryHeader.writeUInt16LE(0x21, 14)
+    centralDirectoryHeader.writeUInt32LE(entry.crc, 16)
+    centralDirectoryHeader.writeUInt32LE(entry.compressed.length, 20)
+    centralDirectoryHeader.writeUInt32LE(entry.uncompressedSize, 24)
+    centralDirectoryHeader.writeUInt16LE(name.length, 28)
+    centralDirectoryHeader.writeUInt16LE(0, 30)
+    centralDirectoryHeader.writeUInt16LE(0, 32)
+    centralDirectoryHeader.writeUInt16LE(0, 34)
+    centralDirectoryHeader.writeUInt16LE(0, 36)
+    centralDirectoryHeader.writeUInt32LE(entry.externalAttributes, 38)
+    centralDirectoryHeader.writeUInt32LE(offset, 42)
+    centralDirectoryChunks.push(centralDirectoryHeader, name)
+
+    offset += localHeader.length + name.length + entry.compressed.length
+  }
+
+  const centralDirectoryOffset = offset
+  const centralDirectory = Buffer.concat(centralDirectoryChunks)
+  const endOfCentralDirectory = Buffer.alloc(22)
+  endOfCentralDirectory.writeUInt32LE(0x06054b50, 0)
+  endOfCentralDirectory.writeUInt16LE(0, 4)
+  endOfCentralDirectory.writeUInt16LE(0, 6)
+  endOfCentralDirectory.writeUInt16LE(entries.length, 8)
+  endOfCentralDirectory.writeUInt16LE(entries.length, 10)
+  endOfCentralDirectory.writeUInt32LE(centralDirectory.length, 12)
+  endOfCentralDirectory.writeUInt32LE(centralDirectoryOffset, 16)
+  endOfCentralDirectory.writeUInt16LE(0, 20)
+
+  await writeFile(zipPath, Buffer.concat([...chunks, centralDirectory, endOfCentralDirectory]))
+}
+
+async function collectZipEntries(packageRoot) {
+  const root = resolve(packageRoot)
+  const rootName = basename(root)
+  const entries = []
+
+  async function visit(current) {
+    const children = (await readdir(current, { withFileTypes: true }))
+      .filter((entry) => !entry.name.startsWith(".DS_Store"))
+      .sort((left, right) => left.name.localeCompare(right.name))
+
+    for (const child of children) {
+      const absolute = join(current, child.name)
+      const stats = await lstat(absolute)
+      const relativePath = relative(root, absolute).split(/[\\/]+/).filter(Boolean).join("/")
+      const name = `${rootName}/${relativePath}`
+      if (stats.isSymbolicLink()) {
+        throw new Error(`Plugin packages must not contain symbolic links: ${absolute}`)
+      }
+      if (stats.isDirectory()) {
+        entries.push(buildZipEntry(`${name}/`, Buffer.alloc(0), 0, 0o040755))
+        await visit(absolute)
+      } else if (stats.isFile()) {
+        entries.push(buildZipEntry(name, await readFile(absolute), 8, 0o100644))
+      }
+    }
+  }
+
+  await visit(root)
+  return entries
+}
+
+function buildZipEntry(name, data, method, mode) {
+  const compressed = method === 8 ? deflateRawSync(data) : data
+  return {
+    name,
+    method,
+    crc: crc32(data),
+    compressed,
+    uncompressedSize: data.length,
+    externalAttributes: (mode << 16) >>> 0,
   }
 }
 
-function powershellSingleQuoted(value) {
-  return `'${String(value).replace(/'/g, "''")}'`
+const CRC32_TABLE = buildCRC32Table()
+
+function buildCRC32Table() {
+  const table = new Uint32Array(256)
+  for (let index = 0; index < 256; index += 1) {
+    let value = index
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1)
+    }
+    table[index] = value >>> 0
+  }
+  return table
+}
+
+function crc32(data) {
+  let value = 0xffffffff
+  for (const byte of data) {
+    value = CRC32_TABLE[(value ^ byte) & 0xff] ^ (value >>> 8)
+  }
+  return (value ^ 0xffffffff) >>> 0
 }
 
 async function updateIndex() {

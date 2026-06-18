@@ -123,7 +123,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/build-ios-apps/build-ios-apps-0.1.0.zip",
-    "sha256": "8a4e6ca9d77eb8aaf30f1b0c6c1bb7c5022d022b3fffa7da6a8e6a6223bfb5c2",
-    "size": 100439
+    "sha256": "f55805655a37841b9403eac1f3dd364200aa3f81e367256ae3e046ac6171d847",
+    "size": 99819
   }
 }

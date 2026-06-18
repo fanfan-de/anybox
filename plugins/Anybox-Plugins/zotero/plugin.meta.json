@@ -65,7 +65,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/zotero/zotero-0.1.0.zip",
-    "sha256": "76da307fd50af110d5bbadf774a2caaa38f1fd930e87683d66564a1ba769197e",
-    "size": 31589
+    "sha256": "ee54f04011a26bb3967ed34d7609120b57cc04fdab333961c345b18b731193d9",
+    "size": 31662
   }
 }

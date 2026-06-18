@@ -54,7 +54,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/stripe/stripe-1.0.0.zip",
-    "sha256": "23e0bd27c98c2fd5b5690bbcd8c3cf97e0bb85a0b61ba637587aeeabae9a1637",
-    "size": 22531
+    "sha256": "d2883f8b00fd31a81234f551617a6e7c23d035e8d5f90d93ff2155adfa19a1e2",
+    "size": 22582
   }
 }

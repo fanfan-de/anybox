@@ -75,7 +75,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/hubspot/hubspot-2.0.0.zip",
-    "sha256": "883bcb194cb00568f80e63d6564ccedcc86102c80a56fd8ceed3b791fae6134d",
-    "size": 19695
+    "sha256": "60d46b7243d37debe43f995f6e477962bcae8f6baf13ce88197b38492ce0d15a",
+    "size": 19729
   }
 }

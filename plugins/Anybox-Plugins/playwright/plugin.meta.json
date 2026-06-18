@@ -81,7 +81,7 @@
   "package": {
     "type": "zip",
     "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/playwright/playwright-1.0.0.zip",
-    "sha256": "9e35eed326b6bfbe0e3ab75a1eb69afa4dd7c64e52abe17de530cdd115288462",
-    "size": 1411
+    "sha256": "b2175bfc79fa780604160baabcbbacd8c946fa147e9367da9466941ce478a685",
+    "size": 1421
   }
 }
