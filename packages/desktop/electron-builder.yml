@@ -15,6 +15,10 @@ files:
   - out/**/*
   - package.json
 extraResources:
+  - from: build/icon.ico
+    to: build/icon.ico
+  - from: build/icon.png
+    to: build/icon.png
   - from: build/agent-runtime
     to: agent
     filter:

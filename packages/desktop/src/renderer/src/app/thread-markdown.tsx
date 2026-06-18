@@ -44,6 +44,8 @@ const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/
 const WINDOWS_UNC_PATH_PATTERN = /^(?:\\\\|\/\/)[^\\/]+[\\/][^\\/]+/
 const HASH_LINE_RANGE_PATTERN = /#L(\d+)(?:-L?(\d+))?$/i
 const COLON_LINE_RANGE_PATTERN = /:(\d+)(?:-(\d+))?$/
+const URI_SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:/i
+const FILE_LIKE_EXTENSION_PATTERN = /\.[A-Za-z0-9]{1,16}$/
 
 interface LooseLocalFileMarkdownLink {
   destination: string
@@ -122,6 +124,21 @@ function isLocalAbsolutePath(value: string) {
   )
 }
 
+function isRelativeLocalFilePath(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("?")) return false
+  if (URI_SCHEME_PATTERN.test(trimmed) && !WINDOWS_DRIVE_PATH_PATTERN.test(trimmed)) return false
+  if (/[\r\n<>]/.test(trimmed)) return false
+
+  const pathWithoutDecoration = trimmed.split(/[?#]/, 1)[0] ?? trimmed
+  const lastSegment = pathWithoutDecoration.split(/[\\/]/).filter(Boolean).pop() ?? pathWithoutDecoration
+  return trimmed.startsWith(".") || /[\\/]/.test(trimmed) || FILE_LIKE_EXTENSION_PATTERN.test(lastSegment)
+}
+
+function isLocalFilePath(value: string) {
+  return isLocalAbsolutePath(value) || isRelativeLocalFilePath(value)
+}
+
 function startsWithLooseLocalFileDestination(value: string) {
   return (
     /^[A-Za-z]:[\\/]/.test(value) ||
@@ -150,7 +167,7 @@ function normalizeLocalFileLinkTarget(value: string): MarkdownLocalFileLinkTarge
   const fileUrlPath = normalizeFileUrlPath(path)
   const localPath = fileUrlPath ?? path
 
-  if (!isLocalAbsolutePath(localPath)) return null
+  if (!isLocalFilePath(localPath)) return null
 
   return {
     lineRange,

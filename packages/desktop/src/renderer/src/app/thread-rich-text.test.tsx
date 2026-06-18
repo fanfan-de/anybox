@@ -74,6 +74,44 @@ describe("parseThreadRichText", () => {
     ])
   })
 
+  it("supports relative local markdown links", () => {
+    expect(parseThreadRichText("Open [Game](snake.html) and [Source](src/app.tsx:12).")).toEqual([
+      {
+        type: "text",
+        text: "Open ",
+      },
+      {
+        type: "link",
+        text: "Game",
+        href: "snake.html",
+        localFileTarget: {
+          lineRange: null,
+          path: "snake.html",
+        },
+      },
+      {
+        type: "text",
+        text: " and ",
+      },
+      {
+        type: "link",
+        text: "Source",
+        href: "src/app.tsx:12",
+        localFileTarget: {
+          lineRange: {
+            startLineNumber: 12,
+            endLineNumber: 12,
+          },
+          path: "src/app.tsx",
+        },
+      },
+      {
+        type: "text",
+        text: ".",
+      },
+    ])
+  })
+
   it("supports artifact markdown links", () => {
     expect(parseThreadRichText("Open [Artifact](agent://artifact/report-1).")).toEqual([
       {

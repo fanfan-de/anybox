@@ -96,7 +96,7 @@ describe("ThreadHtml", () => {
         text={[
           '<a href="javascript:alert(1)">Bad</a>',
           '<a href="data:text/html;base64,PGgxPkJhZDwvaDE+">Data</a>',
-          '<a href="src/app.tsx">Relative</a>',
+          '<a href="#section">Anchor</a>',
         ].join(" ")}
       />,
     )
@@ -105,10 +105,10 @@ describe("ThreadHtml", () => {
 
     expect(srcDoc).not.toContain("javascript:")
     expect(srcDoc).not.toContain("data:text")
-    expect(srcDoc).not.toContain('href="src/app.tsx"')
+    expect(srcDoc).not.toContain('href="#section"')
     expect(srcDoc).toContain(">Bad</a>")
     expect(srcDoc).toContain(">Data</a>")
-    expect(srcDoc).toContain(">Relative</a>")
+    expect(srcDoc).toContain(">Anchor</a>")
   })
 
   it("opens safe external links through the desktop bridge", () => {
@@ -159,6 +159,34 @@ describe("ThreadHtml", () => {
         endLineNumber: 42,
       },
       path: "C:/Projects/anybox/packages/desktop/src/renderer/src/app/thread/ThreadView.tsx",
+    })
+    expect(window.desktop?.openExternalUrl).not.toHaveBeenCalled()
+  })
+
+  it("opens relative local file links through the local file callback", () => {
+    const onLocalFileLinkOpen = vi.fn()
+    const { container } = render(
+      <ThreadHtml
+        text='<a href="snake.html">Game</a> <a href="src/app.tsx:12">Source</a>'
+        onLocalFileLinkOpen={onLocalFileLinkOpen}
+      />,
+    )
+    const document = loadFrameDocument(getFrame(container))
+    const links = document.querySelectorAll("a")
+
+    fireEvent.click(links[0]!)
+    fireEvent.click(links[1]!)
+
+    expect(onLocalFileLinkOpen).toHaveBeenNthCalledWith(1, {
+      lineRange: null,
+      path: "snake.html",
+    })
+    expect(onLocalFileLinkOpen).toHaveBeenNthCalledWith(2, {
+      lineRange: {
+        startLineNumber: 12,
+        endLineNumber: 12,
+      },
+      path: "src/app.tsx",
     })
     expect(window.desktop?.openExternalUrl).not.toHaveBeenCalled()
   })

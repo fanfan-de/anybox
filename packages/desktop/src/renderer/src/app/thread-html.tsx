@@ -67,7 +67,7 @@ const sanitizeConfig = {
     "ul",
   ],
   ALLOWED_URI_REGEXP:
-    /^(?:(?:https?):|agent:\/\/artifact\/|file:\/\/|[A-Za-z]:[\\/]|\/|\\\\|\/\/)/i,
+    /^(?:(?:https?):|agent:\/\/artifact\/|file:\/\/|[A-Za-z]:[\\/]|\/|\\\\|\/\/|\.{1,2}[\\/]|[^:/?#\s<>]+[\\/]|[^:/?#\s<>]+\.[A-Za-z0-9]{1,16}(?:[?#]|$))/i,
   FORBID_ATTR: ["style"],
   FORBID_TAGS: ["iframe", "script"],
   WHOLE_DOCUMENT: true,

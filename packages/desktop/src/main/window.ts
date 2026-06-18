@@ -1,6 +1,7 @@
 import { BrowserWindow, app, type BrowserWindowConstructorOptions } from "electron"
 import fs from "node:fs"
 import path from "node:path"
+import { resolveAppIconPath } from "./app-icon"
 import { ensureRendererHttpServer } from "./renderer-http-server"
 import { safeError, safeWarn } from "./safe-console"
 import { clearManualMaximize, sendWindowState } from "./window-state"
@@ -35,16 +36,7 @@ export function resolvePreloadPath(mainDir: string) {
 }
 
 export function resolveWindowIconPath(mainDir: string) {
-  const rootDir = app.getAppPath()
-  const iconFileName = process.platform === "win32" ? "icon.ico" : "icon.png"
-  const candidatePaths = [
-    path.join(process.cwd(), "build", iconFileName),
-    path.join(rootDir, "build", iconFileName),
-    path.join(mainDir, "../../build", iconFileName),
-    path.join(mainDir, "../build", iconFileName),
-  ]
-
-  return candidatePaths.find((candidate) => fs.existsSync(candidate))
+  return resolveAppIconPath(mainDir)
 }
 
 export function installDockIcon(mainDir: string) {

@@ -104,6 +104,22 @@ describe("preview target resolver", () => {
     })
   })
 
+  it.skipIf(process.platform !== "win32")("normalizes slash-prefixed Windows absolute paths before resolving workspace files", async () => {
+    const workspaceRoot = await createTempWorkspace()
+    const entry = path.join(workspaceRoot, "snake-game.html")
+    await writeFile(entry, "<!doctype html><title>Snake</title>", "utf8")
+
+    const slashPrefixedPath = `/${entry.replace(/\\/g, "/")}`
+    const resolved = await resolvePreviewTarget({
+      value: slashPrefixedPath,
+      workspaceRoot,
+    })
+
+    await expect(realpath(entry)).resolves.toBe(resolved.path)
+    expect(resolved.normalizedInput).toBe("snake-game.html")
+    expect(resolved.renderer).toBe("html-preview")
+  })
+
   it("infers renderers from common preview file types", () => {
     expect(inferPreviewRenderer("README.md")).toBe("markdown-preview")
     expect(inferPreviewRenderer("index.html")).toBe("html-preview")

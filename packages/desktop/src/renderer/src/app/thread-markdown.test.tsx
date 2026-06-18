@@ -50,7 +50,7 @@ describe("ThreadMarkdown", () => {
   it("skips raw HTML and blocks unsafe links", () => {
     render(
       <ThreadMarkdown
-        text={'Before <span data-testid="raw-html">raw</span> [bad](javascript:alert(1)) [ftp](ftp://example.com) [relative](src/app.tsx).'}
+        text={'Before <span data-testid="raw-html">raw</span> [bad](javascript:alert(1)) [ftp](ftp://example.com) [anchor](#section).'}
         onLocalFileLinkOpen={vi.fn()}
       />,
     )
@@ -58,10 +58,10 @@ describe("ThreadMarkdown", () => {
     expect(screen.queryByTestId("raw-html")).not.toBeInTheDocument()
     expect(screen.queryByRole("link", { name: "bad" })).not.toBeInTheDocument()
     expect(screen.queryByRole("link", { name: "ftp" })).not.toBeInTheDocument()
-    expect(screen.queryByRole("link", { name: "relative" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "anchor" })).not.toBeInTheDocument()
     expect(screen.getByText(/bad/)).toBeInTheDocument()
     expect(screen.getByText(/ftp/)).toBeInTheDocument()
-    expect(screen.getByText(/relative/)).toBeInTheDocument()
+    expect(screen.getByText(/anchor/)).toBeInTheDocument()
   })
 
   it("opens safe links through the desktop bridge", () => {
@@ -116,6 +116,32 @@ describe("ThreadMarkdown", () => {
     expect(onLocalFileLinkOpen).toHaveBeenCalledWith({
       lineRange: null,
       path: "C:/Projects/anybox/packages/desktop/src/renderer/src/app/thread/ThreadView.tsx",
+    })
+    expect(window.desktop?.openExternalUrl).not.toHaveBeenCalled()
+  })
+
+  it("opens relative file links through the local file callback", () => {
+    const onLocalFileLinkOpen = vi.fn()
+    render(
+      <ThreadMarkdown
+        text="[Source](src/app.tsx:12) [Game](snake.html)"
+        onLocalFileLinkOpen={onLocalFileLinkOpen}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("link", { name: "Source" }))
+    fireEvent.click(screen.getByRole("link", { name: "Game" }))
+
+    expect(onLocalFileLinkOpen).toHaveBeenNthCalledWith(1, {
+      lineRange: {
+        startLineNumber: 12,
+        endLineNumber: 12,
+      },
+      path: "src/app.tsx",
+    })
+    expect(onLocalFileLinkOpen).toHaveBeenNthCalledWith(2, {
+      lineRange: null,
+      path: "snake.html",
     })
     expect(window.desktop?.openExternalUrl).not.toHaveBeenCalled()
   })

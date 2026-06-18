@@ -106,6 +106,10 @@ const EMPTY_SIDE_CHAT_ATTACHMENTS: ComposerAttachment[] = []
 const EMPTY_SIDE_CHAT_PENDING_INPUTS: PendingConversationInput[] = []
 const EMPTY_SIDE_CHAT_PERMISSION_REQUESTS: PermissionRequest[] = []
 const EMPTY_SIDE_CHAT_TURNS: Turn[] = []
+const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/
+const WINDOWS_UNC_PATH_PATTERN = /^(?:\\\\|\/\/)[^\\/]+[\\/][^\\/]+/
+const URI_SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:/i
+const URI_WITH_AUTHORITY_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i
 
 function getCalendarProjectFallbackName(directory: string | undefined, fallback: string) {
   const trimmed = directory?.trim()
@@ -293,30 +297,128 @@ function toFileUrl(targetPath: string) {
   return null
 }
 
-async function openSystemLocalPath(targetPath: string) {
+function uniqueNonEmptyPaths(paths: string[]) {
+  const seen = new Set<string>()
+  const uniquePaths: string[] = []
+
+  for (const path of paths) {
+    const trimmedPath = path.trim()
+    if (!trimmedPath || seen.has(trimmedPath)) continue
+    seen.add(trimmedPath)
+    uniquePaths.push(trimmedPath)
+  }
+
+  return uniquePaths
+}
+
+async function openSystemLocalPath(targetPath: string, fallbackTargetPaths: string[] = []) {
+  const targetPaths = uniqueNonEmptyPaths([targetPath, ...fallbackTargetPaths])
   const openPath = window.desktop?.openPath
   if (openPath) {
-    try {
-      await openPath({ targetPath })
-      return
-    } catch (error) {
-      console.error("[desktop] Failed to open local file path:", error)
+    for (const candidatePath of targetPaths) {
+      try {
+        await openPath({ targetPath: candidatePath })
+        return
+      } catch (error) {
+        console.error("[desktop] Failed to open local file path:", error)
+      }
     }
   }
 
-  const fileUrl = toFileUrl(targetPath)
   const openExternalUrl = window.desktop?.openExternalUrl
-  if (!fileUrl || !openExternalUrl) return
+  if (!openExternalUrl) return
 
-  try {
-    await openExternalUrl({ url: fileUrl })
-  } catch (error) {
-    console.error("[desktop] Failed to open local file URL:", error)
+  for (const candidatePath of targetPaths) {
+    const fileUrl = toFileUrl(candidatePath)
+    if (!fileUrl) continue
+
+    try {
+      await openExternalUrl({ url: fileUrl })
+      return
+    } catch (error) {
+      console.error("[desktop] Failed to open local file URL:", error)
+    }
   }
 }
 
 function isMarkdownDocumentPath(path: string) {
   return /\.(?:md|markdown)$/i.test(path.trim())
+}
+
+function isRemoteWorkspaceDirectory(directory: string | null | undefined) {
+  const trimmedDirectory = directory?.trim() ?? ""
+  return URI_WITH_AUTHORITY_PATTERN.test(trimmedDirectory) && !WINDOWS_DRIVE_PATH_PATTERN.test(trimmedDirectory)
+}
+
+function isLocalAbsolutePathForPlatform(targetPath: string, platform: string) {
+  const trimmedPath = targetPath.trim()
+  if (!trimmedPath) return false
+  if (WINDOWS_DRIVE_PATH_PATTERN.test(trimmedPath) || WINDOWS_UNC_PATH_PATTERN.test(trimmedPath)) return true
+  if (platform === "win32" && /^[\\/]+[A-Za-z]:[\\/]/.test(trimmedPath)) return true
+  return platform !== "win32" && trimmedPath.startsWith("/")
+}
+
+function normalizeLocalFileLinkPathForPlatform(targetPath: string, platform: string) {
+  const trimmedPath = targetPath.trim()
+  if (platform === "win32") {
+    return trimmedPath.replace(/^[\\/]+([A-Za-z]:[\\/])/, "$1")
+  }
+  return trimmedPath
+}
+
+function normalizeWorkspaceRelativeLinkPath(targetPath: string, platform: string) {
+  const trimmedPath = normalizeLocalFileLinkPathForPlatform(targetPath, platform)
+  if (!trimmedPath) return null
+  if (isLocalAbsolutePathForPlatform(trimmedPath, platform)) return null
+  if (URI_SCHEME_PATTERN.test(trimmedPath) && !WINDOWS_DRIVE_PATH_PATTERN.test(trimmedPath)) return null
+
+  const normalizedTarget = trimmedPath.replace(/^[\\/]+/, "").replace(/\\/g, "/")
+  const resolvedSegments: string[] = []
+
+  for (const segment of normalizedTarget.split("/")) {
+    if (!segment || segment === ".") continue
+    if (segment === "..") {
+      if (resolvedSegments.length === 0) return null
+      resolvedSegments.pop()
+      continue
+    }
+    resolvedSegments.push(segment)
+  }
+
+  return resolvedSegments.join("/")
+}
+
+function joinLocalWorkspacePath(workspaceDirectory: string, workspaceRelativePath: string) {
+  const trimmedWorkspaceDirectory = workspaceDirectory.trim().replace(/[\\/]+$/, "")
+  const separator = trimmedWorkspaceDirectory.includes("\\") ? "\\" : "/"
+  const relativeSegments = workspaceRelativePath.split("/").filter(Boolean)
+  if (relativeSegments.length === 0) return trimmedWorkspaceDirectory
+  return `${trimmedWorkspaceDirectory}${separator}${relativeSegments.join(separator)}`
+}
+
+function resolveLocalFileLinkWorkspacePath(
+  workspaceDirectory: string | null,
+  targetPath: string,
+  platform: string,
+) {
+  if (!workspaceDirectory || isRemoteWorkspaceDirectory(workspaceDirectory)) return null
+
+  const normalizedTargetPath = normalizeLocalFileLinkPathForPlatform(targetPath, platform)
+  const workspaceRelativePath = resolveWorkspaceRelativePath(workspaceDirectory, normalizedTargetPath, platform)
+  if (workspaceRelativePath !== null) {
+    return {
+      absolutePath: normalizedTargetPath,
+      relativePath: workspaceRelativePath,
+    }
+  }
+
+  const relativePath = normalizeWorkspaceRelativeLinkPath(normalizedTargetPath, platform)
+  if (relativePath === null) return null
+
+  return {
+    absolutePath: joinLocalWorkspacePath(workspaceDirectory, relativePath),
+    relativePath,
+  }
 }
 
 const FALLBACK_WORKBENCH_STATE: WorkbenchSharedState = {
@@ -1888,20 +1990,18 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     }
     handlePaneFocus(paneID)
 
-    const workspaceRelativePath = workspaceDirectory
-      ? resolveWorkspaceRelativePath(workspaceDirectory, target.path, platform)
-      : null
+    const workspaceLinkPath = resolveLocalFileLinkWorkspacePath(workspaceDirectory, target.path, platform)
 
-    if (workspaceDirectory && workspaceRelativePath !== null) {
-      if (target.lineRange || isMarkdownDocumentPath(workspaceRelativePath)) {
-        void handleWorkspaceFileSelect(workspaceRelativePath, {
+    if (workspaceDirectory && workspaceLinkPath) {
+      if (target.lineRange || isMarkdownDocumentPath(workspaceLinkPath.relativePath)) {
+        void handleWorkspaceFileSelect(workspaceLinkPath.relativePath, {
           linkedLineRange: target.lineRange ?? null,
           scopeDirectory: workspaceDirectory,
         })
         return
       }
 
-      void handlePreviewOpenTarget(target.path, workspaceID, workspaceDirectory)
+      void handlePreviewOpenTarget(workspaceLinkPath.absolutePath, workspaceID, workspaceDirectory)
       return
     }
 

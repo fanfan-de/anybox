@@ -70,6 +70,10 @@ const validRenderers = new Set<DesktopPreviewRenderer>([
   "system-open",
 ])
 
+const WINDOWS_DRIVE_PATH_WITH_LEADING_SLASH_PATTERN = /^[\\/]+([A-Za-z]:[\\/].*)$/
+const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/
+const WINDOWS_UNC_PATH_PATTERN = /^(?:\\\\|\/\/)[^\\/]+[\\/][^\\/]+/
+
 type PreviewRegistration = {
   root: string
   workspaceRoot: string
@@ -92,6 +96,15 @@ interface LocalPreviewProtocolRegistrar {
 function isPathInside(parent: string, candidate: string) {
   const relativePath = path.relative(parent, candidate)
   return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+}
+
+function normalizePreviewInputPath(value: string) {
+  if (process.platform !== "win32") return value
+  return value.replace(WINDOWS_DRIVE_PATH_WITH_LEADING_SLASH_PATTERN, "$1")
+}
+
+function isAbsolutePreviewInputPath(value: string) {
+  return path.isAbsolute(value) || WINDOWS_DRIVE_PATH_PATTERN.test(value) || WINDOWS_UNC_PATH_PATTERN.test(value)
 }
 
 async function maybeRealpath(candidate: string) {
@@ -425,8 +438,8 @@ async function resolveArtifactPreviewTarget(input: string, workspaceRoot: string
 }
 
 async function resolveWorkspaceFilePreviewTarget(input: string, workspaceRoot: string): Promise<DesktopResolvedPreviewTarget> {
-  const trimmedInput = input.trim()
-  const candidatePath = path.resolve(path.isAbsolute(trimmedInput) ? trimmedInput : path.join(workspaceRoot, trimmedInput))
+  const trimmedInput = normalizePreviewInputPath(input.trim())
+  const candidatePath = path.resolve(isAbsolutePreviewInputPath(trimmedInput) ? trimmedInput : path.join(workspaceRoot, trimmedInput))
   const resolvedPath = await realpath(candidatePath)
 
   if (!isPathInside(workspaceRoot, resolvedPath)) {

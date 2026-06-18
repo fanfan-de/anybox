@@ -1,7 +1,6 @@
-import { Menu, Tray, app, nativeImage, type BrowserWindow, type MenuItemConstructorOptions, type NativeImage } from "electron"
-import fs from "node:fs"
-import path from "node:path"
+import { Menu, Tray, nativeImage, type BrowserWindow, type MenuItemConstructorOptions, type NativeImage } from "electron"
 import type { AppLocale } from "../shared/locale"
+import { resolveAppIconPath } from "./app-icon"
 
 const trayLabels = {
   "zh-CN": {
@@ -161,22 +160,9 @@ export class DesktopTrayController {
 }
 
 function resolveTrayImage(mainDir: string): NativeImage {
-  const iconPath = resolveTrayIconPath(mainDir)
+  const iconPath = resolveAppIconPath(mainDir)
   if (!iconPath) return nativeImage.createEmpty()
 
   const image = nativeImage.createFromPath(iconPath)
   return image.isEmpty() ? nativeImage.createEmpty() : image
-}
-
-function resolveTrayIconPath(mainDir: string) {
-  const rootDir = app.getAppPath()
-  const iconFileName = process.platform === "win32" ? "icon.ico" : "icon.png"
-  const candidatePaths = [
-    path.join(process.cwd(), "build", iconFileName),
-    path.join(rootDir, "build", iconFileName),
-    path.join(mainDir, "../../build", iconFileName),
-    path.join(mainDir, "../build", iconFileName),
-  ]
-
-  return candidatePaths.find((candidate) => fs.existsSync(candidate))
 }

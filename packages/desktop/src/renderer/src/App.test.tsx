@@ -2308,6 +2308,62 @@ describe("App", () => {
     expect(screen.queryByRole("textbox", { name: "File comment on lines 2-3" })).not.toBeInTheDocument()
   })
 
+  it("opens relative response local file links inside the files inspector", async () => {
+    window.desktop!.listFolderWorkspaces = vi.fn().mockResolvedValue(createWorkspaceFileReviewWorkspaces())
+    window.desktop!.agentSession!.loadHistory = vi.fn().mockResolvedValue([
+      {
+        info: {
+          id: "msg-user-relative-link-1",
+          sessionID: "session-frontend-review",
+          role: "user",
+          created: 100,
+        },
+        parts: [{ id: "part-user-relative-link-1", type: "text", text: "Open the relative file link" }],
+      },
+      {
+        info: {
+          id: "msg-assistant-relative-link-1",
+          sessionID: "session-frontend-review",
+          role: "assistant",
+          created: 101,
+          completed: 102,
+        },
+        parts: [
+          {
+            id: "part-assistant-relative-link-1",
+            type: "text",
+            text: "[focus-files.tsx](src/focus-files.tsx:2)",
+          },
+        ],
+      },
+    ])
+    window.desktop!.readWorkspaceFile = vi.fn().mockResolvedValue({
+      path: WORKSPACE_FILE_PATH,
+      name: "focus-files.tsx",
+      extension: "tsx",
+      kind: "text",
+      content: WORKSPACE_FILE_CONTENT,
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(window.desktop!.agentSession!.loadHistory).toHaveBeenCalledWith({
+        backendSessionID: "session-frontend-review",
+      })
+    })
+    fireEvent.click(await screen.findByRole("link", { name: "focus-files.tsx" }))
+
+    await waitFor(() => {
+      expect(window.desktop!.readWorkspaceFile).toHaveBeenCalledWith({
+        directory: FRONTEND_WORKSPACE_DIRECTORY,
+        path: WORKSPACE_FILE_PATH,
+      })
+    })
+    expect(screen.getByTestId("workspace-file-line-2")).toHaveClass("is-linked")
+    expect(window.desktop!.openPath).not.toHaveBeenCalled()
+  })
+
   it("opens previewable response local file links without line numbers in the preview sidebar", async () => {
     const absolutePath = "C:/Projects/Atlas/frontend/src/focus-files.tsx"
     window.desktop!.listFolderWorkspaces = vi.fn().mockResolvedValue(createWorkspaceFileReviewWorkspaces())
@@ -2377,6 +2433,145 @@ describe("App", () => {
     const inspector = screen.getByRole("complementary", { name: "Inspector sidebar" })
     expect(await within(inspector).findByText(/export const focusValue = 1/)).toBeInTheDocument()
     expect(within(inspector).queryByRole("textbox", { name: "Filter workspace files" })).not.toBeInTheDocument()
+  })
+
+  it("opens root-relative response local file links from the pane workspace", async () => {
+    const resolvedPath = `${FRONTEND_WORKSPACE_DIRECTORY}\\snake.html`
+    window.desktop!.listFolderWorkspaces = vi.fn().mockResolvedValue(createWorkspaceFileReviewWorkspaces())
+    window.desktop!.agentSession!.loadHistory = vi.fn().mockResolvedValue([
+      {
+        info: {
+          id: "msg-user-root-relative-link-1",
+          sessionID: "session-frontend-review",
+          role: "user",
+          created: 100,
+        },
+        parts: [{ id: "part-user-root-relative-link-1", type: "text", text: "Open the root-relative file link" }],
+      },
+      {
+        info: {
+          id: "msg-assistant-root-relative-link-1",
+          sessionID: "session-frontend-review",
+          role: "assistant",
+          created: 101,
+          completed: 102,
+        },
+        parts: [
+          {
+            id: "part-assistant-root-relative-link-1",
+            type: "text",
+            text: "[snake.html](/snake.html)",
+          },
+        ],
+      },
+    ])
+    window.desktop!.resolvePreviewTarget = vi.fn().mockResolvedValue({
+      entry: resolvedPath,
+      externalOpenTarget: {
+        kind: "path",
+        value: resolvedPath,
+      },
+      input: resolvedPath,
+      kind: "file",
+      mime: "text/html; charset=utf-8",
+      normalizedInput: "snake.html",
+      path: resolvedPath,
+      renderer: "html-preview",
+      textReadable: true,
+      title: "snake.html",
+      workspaceRoot: FRONTEND_WORKSPACE_DIRECTORY,
+    })
+    window.desktop!.readPreviewText = vi.fn().mockResolvedValue({
+      content: "<!doctype html><title>Snake</title>",
+      path: resolvedPath,
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(window.desktop!.agentSession!.loadHistory).toHaveBeenCalledWith({
+        backendSessionID: "session-frontend-review",
+      })
+    })
+    fireEvent.click(await screen.findByRole("link", { name: "snake.html" }))
+
+    await waitFor(() => {
+      expect(window.desktop!.resolvePreviewTarget).toHaveBeenCalledWith({
+        value: resolvedPath,
+        workspaceRoot: FRONTEND_WORKSPACE_DIRECTORY,
+      })
+    })
+    expect(window.desktop!.openPath).not.toHaveBeenCalled()
+  })
+
+  it("does not duplicate the workspace for slash-prefixed Windows absolute response links", async () => {
+    const resolvedPath = `${FRONTEND_WORKSPACE_DIRECTORY}\\snake-game.html`
+    const slashPrefixedAbsolutePath = `/${FRONTEND_WORKSPACE_DIRECTORY.replace(/\\/g, "/")}/snake-game.html`
+    window.desktop!.listFolderWorkspaces = vi.fn().mockResolvedValue(createWorkspaceFileReviewWorkspaces())
+    window.desktop!.agentSession!.loadHistory = vi.fn().mockResolvedValue([
+      {
+        info: {
+          id: "msg-user-slash-drive-link-1",
+          sessionID: "session-frontend-review",
+          role: "user",
+          created: 100,
+        },
+        parts: [{ id: "part-user-slash-drive-link-1", type: "text", text: "Open the slash-prefixed drive link" }],
+      },
+      {
+        info: {
+          id: "msg-assistant-slash-drive-link-1",
+          sessionID: "session-frontend-review",
+          role: "assistant",
+          created: 101,
+          completed: 102,
+        },
+        parts: [
+          {
+            id: "part-assistant-slash-drive-link-1",
+            type: "text",
+            text: `[snake-game.html](${slashPrefixedAbsolutePath})`,
+          },
+        ],
+      },
+    ])
+    window.desktop!.resolvePreviewTarget = vi.fn().mockResolvedValue({
+      entry: resolvedPath,
+      externalOpenTarget: {
+        kind: "path",
+        value: resolvedPath,
+      },
+      input: resolvedPath,
+      kind: "file",
+      mime: "text/html; charset=utf-8",
+      normalizedInput: "snake-game.html",
+      path: resolvedPath,
+      renderer: "html-preview",
+      textReadable: true,
+      title: "snake-game.html",
+      workspaceRoot: FRONTEND_WORKSPACE_DIRECTORY,
+    })
+    window.desktop!.readPreviewText = vi.fn().mockResolvedValue({
+      content: "<!doctype html><title>Snake</title>",
+      path: resolvedPath,
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(window.desktop!.agentSession!.loadHistory).toHaveBeenCalledWith({
+        backendSessionID: "session-frontend-review",
+      })
+    })
+    fireEvent.click(await screen.findByRole("link", { name: "snake-game.html" }))
+
+    await waitFor(() => {
+      expect(window.desktop!.resolvePreviewTarget).toHaveBeenCalledWith({
+        value: `${FRONTEND_WORKSPACE_DIRECTORY.replace(/\\/g, "/")}/snake-game.html`,
+        workspaceRoot: FRONTEND_WORKSPACE_DIRECTORY,
+      })
+    })
+    expect(window.desktop!.openPath).not.toHaveBeenCalled()
   })
 
   it("opens response markdown document links without line numbers in the files inspector", async () => {
