@@ -7,6 +7,7 @@ import { ComposerConcurrentInputDrawer } from "../composer/ComposerConcurrentInp
 import { useDeferredComposerDraftSync } from "../composer/use-deferred-composer-draft-sync"
 import { ComposerUtilityBar } from "../ComposerUtilityBar"
 import { getSessionWorkflowBadge, type SessionWorkflowBadge as SessionWorkflowBadgeInfo } from "../session-workflow"
+import { useI18n } from "../i18n/I18nProvider"
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "../thread-markdown"
 import type {
   AssistantTraceVisibility,
@@ -99,44 +100,48 @@ function formatSessionBagSize(sizeBytes: number) {
   return unitIndex === 0 ? `${Math.round(value)} ${units[unitIndex]}` : `${value.toFixed(1)} ${units[unitIndex]}`
 }
 
-function readSessionBagErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error || "Report submission failed.")
+function readSessionBagErrorMessage(error: unknown, fallbackMessage: string) {
+  return error instanceof Error ? error.message : String(error || fallbackMessage)
 }
 
-function renderSessionBagSummary(prepare: SessionBagPrepareResult) {
+function SessionBagSummary({ prepare }: { prepare: SessionBagPrepareResult }) {
+  const { t } = useI18n()
   const targetAccount = [
     prepare.account?.email,
     prepare.account?.workspaceName,
     prepare.account?.planLabel,
   ].filter(Boolean).join(" / ")
   const redactionSummary = prepare.redaction.enabled
-    ? `${prepare.redaction.redactedKeyPattern || "configured"} keys, max ${prepare.redaction.maxStringLength} chars`
-    : "Disabled"
+    ? t("workbench.sessionBag.redaction.enabled", {
+        pattern: prepare.redaction.redactedKeyPattern || t("workbench.sessionBag.redaction.configured"),
+        max: prepare.redaction.maxStringLength,
+      })
+    : t("workbench.sessionBag.redaction.disabled")
 
   return (
     <dl className="session-bag-summary">
       <div>
-        <dt>File</dt>
+        <dt>{t("workbench.sessionBag.field.file")}</dt>
         <dd>{prepare.filename}</dd>
       </div>
       <div>
-        <dt>Records</dt>
+        <dt>{t("workbench.sessionBag.field.records")}</dt>
         <dd>{prepare.recordCount}</dd>
       </div>
       <div>
-        <dt>Files</dt>
+        <dt>{t("workbench.sessionBag.field.files")}</dt>
         <dd>{prepare.fileCount}</dd>
       </div>
       <div>
-        <dt>Size</dt>
+        <dt>{t("workbench.sessionBag.field.size")}</dt>
         <dd>{formatSessionBagSize(prepare.sizeBytes)}</dd>
       </div>
       <div>
-        <dt>Target</dt>
+        <dt>{t("workbench.sessionBag.field.target")}</dt>
         <dd>{targetAccount || prepare.baseURL || "Anybox"}</dd>
       </div>
       <div>
-        <dt>Redaction</dt>
+        <dt>{t("workbench.sessionBag.field.redaction")}</dt>
         <dd>{redactionSummary}</dd>
       </div>
     </dl>
@@ -171,16 +176,17 @@ function SessionBagSubmissionDialog({
     void window.desktop?.openExternalUrl?.({ url: state.result.url })
   }
 
+  const { t } = useI18n()
   const title =
     state.stage === "preparing"
-      ? "Preparing diagnostic report"
+      ? t("workbench.sessionBag.title.preparing")
       : state.stage === "uploading"
-        ? "Uploading diagnostic report"
+        ? t("workbench.sessionBag.title.uploading")
         : state.stage === "success"
-          ? "Report submitted"
+          ? t("workbench.sessionBag.title.success")
           : state.stage === "error"
-            ? "Report submission failed"
-            : "Submit diagnostic report"
+            ? t("workbench.sessionBag.title.error")
+            : t("workbench.sessionBag.title.confirm")
   const preparedSummary = state.stage === "confirm" || state.stage === "uploading" || state.stage === "success"
     ? state.prepare
     : state.stage === "error"
@@ -194,26 +200,26 @@ function SessionBagSubmissionDialog({
           <h2 id="session-bag-dialog-title">{title}</h2>
           <p>
             {state.stage === "preparing"
-              ? "Collecting the safe session trace and building the report package."
+              ? t("workbench.sessionBag.description.preparing")
               : state.stage === "uploading"
-                ? "Sending the package to your Anybox workspace."
+                ? t("workbench.sessionBag.description.uploading")
                 : state.stage === "success"
-                  ? "The diagnostic report is now available on the server."
+                  ? t("workbench.sessionBag.description.success")
                   : state.stage === "error"
                     ? state.message
-                    : "Review the safe diagnostic report before sending it to Anybox."}
+                    : t("workbench.sessionBag.description.confirm")}
           </p>
         </header>
 
-        {preparedSummary ? renderSessionBagSummary(preparedSummary) : null}
+        {preparedSummary ? <SessionBagSummary prepare={preparedSummary} /> : null}
 
         {state.stage === "success" ? (
           <div className="session-bag-success">
-            <span>Report ID</span>
+            <span>{t("workbench.sessionBag.success.reportId")}</span>
             <code>{state.result.bagID}</code>
             {state.result.url ? (
               <a href={state.result.url} onClick={handleSuccessLinkClick}>
-                Open in Anybox
+                {t("workbench.sessionBag.success.open")}
               </a>
             ) : null}
           </div>
@@ -228,35 +234,35 @@ function SessionBagSubmissionDialog({
         <footer className="session-bag-actions">
           {state.stage === "success" ? (
             <button className="primary-button" type="button" onClick={onClose}>
-              Close
+              {t("app.close")}
             </button>
           ) : state.stage === "confirm" ? (
             <>
               <button className="secondary-button" type="button" onClick={onCancel}>
-                Cancel
+                {t("app.cancel")}
               </button>
               <button className="primary-button" type="button" onClick={onSubmit}>
-                Submit report
+                {t("workbench.sessionBag.action.submit")}
               </button>
             </>
           ) : state.stage === "error" ? (
             <>
               <button className="secondary-button" type="button" onClick={onCancel}>
-                Close
+                {t("app.close")}
               </button>
               {state.prepare ? (
                 <button className="primary-button" type="button" onClick={onSubmit}>
-                  Retry
+                  {t("workbench.sessionBag.action.retry")}
                 </button>
               ) : null}
             </>
           ) : state.stage === "preparing" ? (
             <button className="secondary-button" type="button" onClick={onCancel}>
-              Cancel
+              {t("app.cancel")}
             </button>
           ) : (
             <button className="secondary-button" type="button" disabled>
-              Uploading
+              {t("workbench.sessionBag.action.uploading")}
             </button>
           )}
         </footer>
@@ -450,6 +456,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   onTurnDiffReview,
   onTurnDiffSummaryHydrate,
 }: WorkbenchPaneSurfaceProps) {
+  const { t } = useI18n()
   const threadColumnRef = useRef<HTMLDivElement | null>(null)
   const bagOperationVersionRef = useRef(0)
   const [bagDialogState, setBagDialogState] = useState<SessionBagDialogState | null>(null)
@@ -570,7 +577,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
     if (!prepareSessionBag) {
       setBagDialogState({
         stage: "error",
-        message: "Desktop report submission bridge is unavailable.",
+        message: t("workbench.sessionBag.error.prepareBridgeUnavailable"),
       })
       return
     }
@@ -592,7 +599,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
 
       setBagDialogState({
         stage: "error",
-        message: readSessionBagErrorMessage(error),
+        message: readSessionBagErrorMessage(error, t("workbench.sessionBag.error.fallback")),
       })
     }
   }
@@ -612,7 +619,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
       setBagDialogState({
         stage: "error",
         prepare,
-        message: "Desktop report upload bridge is unavailable.",
+        message: t("workbench.sessionBag.error.uploadBridgeUnavailable"),
       })
       return
     }
@@ -632,7 +639,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
       setBagDialogState({
         stage: "error",
         prepare,
-        message: readSessionBagErrorMessage(error),
+        message: readSessionBagErrorMessage(error, t("workbench.sessionBag.error.fallback")),
       })
     }
   }

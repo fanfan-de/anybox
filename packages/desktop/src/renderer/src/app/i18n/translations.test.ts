@@ -35,6 +35,12 @@ describe("i18n translations", () => {
     expect(t("zh-CN", "connections.mobile.lastSeen", { time: "10:30" })).toBe("上次在线 10:30")
     expect(t("zh-CN", "calendar.scheduleRange", { date: "6月16日 周二" })).toBe("6月16日 周二 + 14 天")
     expect(t("en-US", "files.addCommentOnLine", { line: 42 })).toBe("Add comment on line 42")
+    expect(t("zh-CN", "workbench.sessionBag.redaction.enabled", { pattern: "apiKey", max: 20000 })).toBe(
+      "\u5339\u914d apiKey \u7684\u952e\uff0c\u6700\u957f 20000 \u4e2a\u5b57\u7b26",
+    )
+    expect(t("en-US", "workbench.sessionBag.redaction.enabled", { pattern: "apiKey", max: 20000 })).toBe(
+      "apiKey keys, max 20000 chars",
+    )
     expect(translateLiteral("zh-CN", "DeepSeek V4 Pro does not support image or PDF input.")).toBe(
       "DeepSeek V4 Pro 不支持图片或 PDF 输入。",
     )

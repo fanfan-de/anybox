@@ -30,7 +30,7 @@ import {
 } from "react"
 import { ArrowUpIcon, ChevronDownIcon, CloseIcon, PaperclipIcon, StopIcon } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
-import { translateLiteral } from "../i18n/translations"
+import { translateLiteral, type TranslationKey } from "../i18n/translations"
 import { joinClassNames } from "../shared-ui"
 import type {
   ComposerAttachment,
@@ -201,7 +201,8 @@ const EMPTY_SELECTED_PLUGIN_IDS: string[] = []
 const COMPOSER_COMMAND_TRIGGER_PREFIX = "~"
 
 const COMPOSER_COMMANDS: Array<{
-  description: string
+  description?: string
+  descriptionKey?: TranslationKey
   label: string
   value: ComposerCommandKey
 }> = [
@@ -233,7 +234,7 @@ const COMPOSER_COMMANDS: Array<{
   {
     value: "bag",
     label: `${COMPOSER_COMMAND_TRIGGER_PREFIX}report`,
-    description: "Submit a safe diagnostic report to Anybox.",
+    descriptionKey: "composer.commands.reportDescription",
   },
   {
     value: "plan",
@@ -1158,7 +1159,7 @@ export function Composer({
         key: `command:${command.value}`,
         group: "Commands",
         label: command.label,
-        description: command.description,
+        description: command.descriptionKey ? t(command.descriptionKey) : command.description ?? "",
         value: command.value,
       } satisfies ComposerCommandMenuItem))
   }
