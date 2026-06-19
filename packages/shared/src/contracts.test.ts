@@ -3,6 +3,7 @@ import {
   AgentRouteSchemas,
   ApiEnvelopeSchema,
   DesktopIpcSchemas,
+  getDefaultReasoningEffort,
   getSupportedReasoningEfforts,
   normalizeReasoningEffort,
   SessionEventSchema,
@@ -65,5 +66,21 @@ describe("shared contracts", () => {
       modelID: "gpt-5.4",
       reasoning: true,
     })).toEqual(["none", "low", "medium", "high", "xhigh"])
+    expect(getSupportedReasoningEfforts({
+      providerID: "google",
+      modelID: "gemini-3.1-pro-preview",
+      reasoning: true,
+    })).toEqual(["low", "medium", "high"])
+    expect(getDefaultReasoningEffort({
+      providerID: "google",
+      modelID: "gemini-3.1-pro-preview",
+      reasoning: true,
+    })).toBe("high")
+    expect(normalizeReasoningEffort({
+      providerID: "google",
+      modelID: "gemini-3.1-pro-preview",
+      reasoning: true,
+      reasoningEffort: "xhigh",
+    })).toBe("high")
   })
 })

@@ -390,6 +390,12 @@ try {
       invokeDesktop("desktop:save-session-trace-export-directory", input) as Promise<DesktopSaveSessionTraceExportDirectoryResult>,
     saveSessionTraceExportToProject: (input: { sessionID: string; directory: string; projectID?: string | null }) =>
       invokeDesktop("desktop:save-session-trace-export-to-project", input) as Promise<DesktopSaveSessionTraceExportDirectoryResult>,
+    prepareSessionBagSubmission: (input: DesktopIpcInput<"desktop:prepare-session-bag-submission">) =>
+      invokeDesktop("desktop:prepare-session-bag-submission", input) as Promise<DesktopIpcOutput<"desktop:prepare-session-bag-submission">>,
+    uploadSessionBagSubmission: (input: DesktopIpcInput<"desktop:upload-session-bag-submission">) =>
+      invokeDesktop("desktop:upload-session-bag-submission", input) as Promise<DesktopIpcOutput<"desktop:upload-session-bag-submission">>,
+    discardSessionBagSubmission: (input: DesktopIpcInput<"desktop:discard-session-bag-submission">) =>
+      invokeDesktop("desktop:discard-session-bag-submission", input) as Promise<DesktopIpcOutput<"desktop:discard-session-bag-submission">>,
     updateSessionWorkflow: (input: DesktopIpcInput<"desktop:update-session-workflow">) =>
       invokeDesktop("desktop:update-session-workflow", input) as Promise<DesktopIpcOutput<"desktop:update-session-workflow">>,
     updateSessionActiveMessage: (input: DesktopIpcInput<"desktop:update-session-active-message">) =>

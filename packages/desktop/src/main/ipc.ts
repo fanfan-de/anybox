@@ -1,8 +1,8 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type NativeImage, type OpenDialogOptions, type OpenDialogReturnValue, type SaveDialogOptions, type SaveDialogReturnValue, type WebContents } from "electron"
 import { createPlatformAdapter } from "@anybox/platform"
 import { DesktopIpcSchemas, createSshWorkspaceUri, isSshWorkspaceUri } from "@anybox/shared"
-import { createHash } from "node:crypto"
-import { appendFile, mkdir, writeFile } from "node:fs/promises"
+import { createHash, randomUUID } from "node:crypto"
+import { appendFile, mkdir, open, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 import type { AppearanceConfigDocument } from "../shared/appearance"
 import type { AppLocale, LocaleConfigDocument } from "../shared/locale"
@@ -607,6 +607,9 @@ type SessionTraceExportInput = DesktopIpcInput<"desktop:get-session-trace-export
 type SaveSessionTraceExportInput = DesktopIpcInput<"desktop:save-session-trace-export">
 type SaveSessionTraceExportDirectoryInput = DesktopIpcInput<"desktop:save-session-trace-export-directory">
 type SaveSessionTraceExportToProjectInput = DesktopIpcInput<"desktop:save-session-trace-export-to-project">
+type PrepareSessionBagSubmissionInput = DesktopIpcInput<"desktop:prepare-session-bag-submission">
+type UploadSessionBagSubmissionInput = DesktopIpcInput<"desktop:upload-session-bag-submission">
+type DiscardSessionBagSubmissionInput = DesktopIpcInput<"desktop:discard-session-bag-submission">
 
 interface SaveSessionTraceExportOptions {
   downloadsPath?: string
@@ -622,6 +625,59 @@ interface SaveSessionTraceExportDirectoryOptions {
   showOpenDialog?: (options: OpenDialogOptions) => Promise<OpenDialogReturnValue>
   userDataPath?: string
   writeTraceFile?: (filePath: string, data: string, encoding: BufferEncoding) => Promise<unknown>
+}
+
+interface AnyboxProviderRelaySession {
+  connected: boolean
+  status: string
+  accessToken?: string
+  baseURL?: string
+  expiresAt?: number
+  account?: {
+    email?: string
+    workspaceName?: string
+    planLabel?: string
+  }
+  error?: string
+}
+
+interface SessionBagSubmissionRecord {
+  accessToken: string
+  account?: AnyboxProviderRelaySession["account"]
+  baseURL: string
+  filename: string
+  fileCount: number
+  generatedAt: string
+  projectID?: string | null
+  recordCount: number
+  redaction: AgentSessionTraceExport["redaction"]
+  rootDirectory: string
+  sessionID: string
+  sha256: string
+  sizeBytes: number
+  submissionID: string
+  zipPath: string
+}
+
+interface PrepareSessionBagSubmissionOptions extends Pick<SaveSessionTraceExportDirectoryOptions, "makeDirectory" | "now" | "userDataPath" | "writeTraceFile"> {
+  fetchRelaySession?: () => Promise<AnyboxProviderRelaySession>
+  writeZipFile?: (input: { rootDirectory: string; zipPath: string; entries: string[] }) => Promise<void>
+}
+
+interface UploadSessionBagSubmissionOptions {
+  fetch?: typeof fetch
+  removeDirectory?: (directory: string, options: { force: true; recursive: true }) => Promise<unknown>
+}
+
+interface DiscardSessionBagSubmissionOptions {
+  removeDirectory?: (directory: string, options: { force: true; recursive: true }) => Promise<unknown>
+}
+
+const SESSION_BAG_CONTENT_TYPE = "application/zip"
+const pendingSessionBagSubmissions = new Map<string, SessionBagSubmissionRecord>()
+
+function getDesktopAppVersion() {
+  return app?.getVersion?.() ?? "0.0.0"
 }
 
 function sanitizeSessionTraceFileSegment(value: string) {
@@ -677,6 +733,393 @@ function getProjectSessionTraceExportRoot(
   const name = sanitizeSessionTraceFileSegment(path.basename(directory))
   const digest = createHash("sha256").update(directory.toLowerCase()).digest("hex").slice(0, 12)
   return path.join(options.userDataPath ?? app.getPath("userData"), "session-traces", `${name}-${digest}`)
+}
+
+function getSessionBagStagingRoot(options: Pick<PrepareSessionBagSubmissionOptions, "userDataPath"> = {}) {
+  return path.join(options.userDataPath ?? app.getPath("userData"), "session-bags", "staging")
+}
+
+function normalizeAnyboxRootURL(value: string | undefined) {
+  const baseURL = value?.trim() || process.env.ANYBOX_BASE_URL?.trim() || "https://anybox.com.cn"
+  const trimmed = baseURL.replace(/\/+$/g, "")
+  return trimmed.endsWith("/v1") ? trimmed.slice(0, -"/v1".length) : trimmed
+}
+
+function anyboxBagURL(baseURL: string, pathname: string) {
+  return new URL(pathname.replace(/^\/+/, ""), `${normalizeAnyboxRootURL(baseURL)}/`).toString()
+}
+
+async function getAnyboxProviderRelaySessionForBag() {
+  const result = await requestAgentJSON<AnyboxProviderRelaySession>("/api/providers/anybox/auth/relay-session")
+  return result.data
+}
+
+function assertConnectedAnyboxSession(session: AnyboxProviderRelaySession) {
+  if (!session.connected || !session.accessToken) {
+    throw new Error(session.error || "Connect your Anybox account before submitting a report.")
+  }
+
+  return {
+    accessToken: session.accessToken,
+    account: session.account,
+    baseURL: normalizeAnyboxRootURL(session.baseURL),
+  }
+}
+
+function buildCrc32Table() {
+  return Array.from({ length: 256 }, (_, index) => {
+    let value = index
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1)
+    }
+    return value >>> 0
+  })
+}
+
+const CRC32_TABLE = buildCrc32Table()
+
+function crc32(buffer: Buffer) {
+  let value = 0xffffffff
+  for (const byte of buffer) {
+    value = CRC32_TABLE[(value ^ byte) & 0xff]! ^ (value >>> 8)
+  }
+  return (value ^ 0xffffffff) >>> 0
+}
+
+function toDosDateTime(date: Date) {
+  const year = Math.max(1980, date.getFullYear())
+  return {
+    date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
+    time: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
+  }
+}
+
+async function listZipEntryFiles(rootDirectory: string, entry: string): Promise<string[]> {
+  const absolutePath = path.join(rootDirectory, entry)
+  const entryStat = await stat(absolutePath)
+  if (entryStat.isFile()) return [entry]
+  if (!entryStat.isDirectory()) return []
+
+  const children = await readdir(absolutePath, { withFileTypes: true })
+  const files = await Promise.all(children.map((child) => listZipEntryFiles(rootDirectory, path.join(entry, child.name))))
+  return files.flat()
+}
+
+function toZipPath(value: string) {
+  return value.split(path.sep).join("/")
+}
+
+async function writeStoredZipFile(input: { rootDirectory: string; zipPath: string; entries: string[] }) {
+  const files = (await Promise.all(input.entries.map((entry) => listZipEntryFiles(input.rootDirectory, entry))))
+    .flat()
+    .map((entry) => ({
+      absolutePath: path.join(input.rootDirectory, entry),
+      zipPath: toZipPath(entry),
+    }))
+    .sort((left, right) => left.zipPath.localeCompare(right.zipPath))
+
+  const output = await open(input.zipPath, "w")
+  const centralDirectory: Buffer[] = []
+  let offset = 0
+
+  async function writeBuffer(buffer: Buffer) {
+    await output.write(buffer, 0, buffer.length, offset)
+    offset += buffer.length
+  }
+
+  try {
+    for (const file of files) {
+      const content = await readFile(file.absolutePath)
+      const fileStat = await stat(file.absolutePath)
+      const name = Buffer.from(file.zipPath, "utf8")
+      const checksum = crc32(content)
+      const size = content.byteLength
+      const localOffset = offset
+      const dos = toDosDateTime(fileStat.mtime)
+      const flags = 0x0800
+
+      if (size > 0xffffffff || localOffset > 0xffffffff) {
+        throw new Error("Report zip is too large for the built-in ZIP writer.")
+      }
+
+      const localHeader = Buffer.alloc(30)
+      localHeader.writeUInt32LE(0x04034b50, 0)
+      localHeader.writeUInt16LE(20, 4)
+      localHeader.writeUInt16LE(flags, 6)
+      localHeader.writeUInt16LE(0, 8)
+      localHeader.writeUInt16LE(dos.time, 10)
+      localHeader.writeUInt16LE(dos.date, 12)
+      localHeader.writeUInt32LE(checksum, 14)
+      localHeader.writeUInt32LE(size, 18)
+      localHeader.writeUInt32LE(size, 22)
+      localHeader.writeUInt16LE(name.byteLength, 26)
+      localHeader.writeUInt16LE(0, 28)
+
+      await writeBuffer(localHeader)
+      await writeBuffer(name)
+      await writeBuffer(content)
+
+      const centralHeader = Buffer.alloc(46)
+      centralHeader.writeUInt32LE(0x02014b50, 0)
+      centralHeader.writeUInt16LE(20, 4)
+      centralHeader.writeUInt16LE(20, 6)
+      centralHeader.writeUInt16LE(flags, 8)
+      centralHeader.writeUInt16LE(0, 10)
+      centralHeader.writeUInt16LE(dos.time, 12)
+      centralHeader.writeUInt16LE(dos.date, 14)
+      centralHeader.writeUInt32LE(checksum, 16)
+      centralHeader.writeUInt32LE(size, 20)
+      centralHeader.writeUInt32LE(size, 24)
+      centralHeader.writeUInt16LE(name.byteLength, 28)
+      centralHeader.writeUInt16LE(0, 30)
+      centralHeader.writeUInt16LE(0, 32)
+      centralHeader.writeUInt16LE(0, 34)
+      centralHeader.writeUInt16LE(0, 36)
+      centralHeader.writeUInt32LE(0, 38)
+      centralHeader.writeUInt32LE(localOffset, 42)
+      centralDirectory.push(Buffer.concat([centralHeader, name]))
+    }
+
+    const centralDirectoryOffset = offset
+    for (const header of centralDirectory) {
+      await writeBuffer(header)
+    }
+    const centralDirectorySize = offset - centralDirectoryOffset
+
+    if (files.length > 0xffff || centralDirectorySize > 0xffffffff || centralDirectoryOffset > 0xffffffff) {
+      throw new Error("Report zip is too large for the built-in ZIP writer.")
+    }
+
+    const end = Buffer.alloc(22)
+    end.writeUInt32LE(0x06054b50, 0)
+    end.writeUInt16LE(0, 4)
+    end.writeUInt16LE(0, 6)
+    end.writeUInt16LE(files.length, 8)
+    end.writeUInt16LE(files.length, 10)
+    end.writeUInt32LE(centralDirectorySize, 12)
+    end.writeUInt32LE(centralDirectoryOffset, 16)
+    end.writeUInt16LE(0, 20)
+    await writeBuffer(end)
+  } finally {
+    await output.close()
+  }
+}
+
+async function removeSessionBagStaging(record: Pick<SessionBagSubmissionRecord, "rootDirectory">, options: DiscardSessionBagSubmissionOptions = {}) {
+  await (options.removeDirectory ?? rm)(record.rootDirectory, { force: true, recursive: true })
+}
+
+async function readAnyboxBagError(response: Response) {
+  const body = await response.json().catch(() => null)
+  const record = readTraceExportRecord(body)
+  const error = readTraceExportRecord(record?.error)
+  return readTraceExportString(error?.message) ?? readTraceExportString(record?.message) ?? `Anybox report request failed (${response.status})`
+}
+
+function readAnyboxBagResponseData<T>(value: unknown): T {
+  const envelope = readTraceExportRecord(value)
+  if (envelope && "data" in envelope) {
+    return envelope.data as T
+  }
+
+  return value as T
+}
+
+async function requestAnyboxBagJSON<T>(
+  record: Pick<SessionBagSubmissionRecord, "accessToken" | "baseURL">,
+  pathname: string,
+  body: unknown,
+  fetchImpl: typeof fetch,
+) {
+  const response = await fetchImpl(anyboxBagURL(record.baseURL, pathname), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${record.accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readAnyboxBagError(response))
+  }
+
+  return readAnyboxBagResponseData<T>(await response.json())
+}
+
+async function prepareSessionBagSubmission(
+  input: PrepareSessionBagSubmissionInput,
+  options: PrepareSessionBagSubmissionOptions = {},
+) {
+  const sessionID = input.sessionID.trim()
+  if (!sessionID) {
+    throw new Error("Session ID is required.")
+  }
+
+  const relaySession = await (options.fetchRelaySession ?? getAnyboxProviderRelaySessionForBag)()
+  const connectedSession = assertConnectedAnyboxSession(relaySession)
+  const now = options.now ?? new Date()
+  const generatedAt = now.toISOString()
+  const submissionID = `bag-${randomUUID()}`
+  const filename = `anybox-bag-${sanitizeSessionTraceFileSegment(sessionID)}-${formatSessionTraceTimestamp(now)}.zip`
+  const rootDirectory = path.join(getSessionBagStagingRoot(options), submissionID)
+  const traceDirectory = path.join(rootDirectory, "trace")
+  const zipPath = path.join(rootDirectory, filename)
+  const projectID = input.projectID?.trim() || null
+  const workspaceDirectory = input.workspaceDirectory?.trim() || null
+
+  try {
+    await (options.makeDirectory ?? mkdir)(rootDirectory, { recursive: true })
+    const trace = await getSessionTraceExport({ sessionID })
+    const traceResult = await writeSplitSessionTraceExportDirectory(trace, traceDirectory, options)
+    const manifest = {
+      schemaVersion: 1,
+      kind: "session-trace",
+      generatedAt,
+      appVersion: getDesktopAppVersion(),
+      sessionID,
+      projectID,
+      workspaceDirectory,
+      contentType: SESSION_BAG_CONTENT_TYPE,
+      filename,
+      trace: {
+        fileCount: traceResult.fileCount,
+        recordCount: traceResult.recordCount,
+        redaction: trace.redaction,
+      },
+    }
+    await writeFile(path.join(rootDirectory, "bag-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8")
+    await (options.writeZipFile ?? writeStoredZipFile)({
+      rootDirectory,
+      zipPath,
+      entries: ["bag-manifest.json", "trace"],
+    })
+
+    const zipContent = await readFile(zipPath)
+    const sizeBytes = (await stat(zipPath)).size
+    const sha256 = createHash("sha256").update(zipContent).digest("hex")
+    const record: SessionBagSubmissionRecord = {
+      accessToken: connectedSession.accessToken,
+      account: connectedSession.account,
+      baseURL: connectedSession.baseURL,
+      filename,
+      fileCount: traceResult.fileCount,
+      generatedAt,
+      projectID,
+      recordCount: traceResult.recordCount,
+      redaction: trace.redaction,
+      rootDirectory,
+      sessionID,
+      sha256,
+      sizeBytes,
+      submissionID,
+      zipPath,
+    }
+    pendingSessionBagSubmissions.set(submissionID, record)
+
+    return {
+      account: record.account,
+      baseURL: record.baseURL,
+      filename: record.filename,
+      fileCount: record.fileCount,
+      generatedAt: record.generatedAt,
+      projectID: record.projectID,
+      recordCount: record.recordCount,
+      redaction: record.redaction,
+      sessionID: record.sessionID,
+      sha256: record.sha256,
+      sizeBytes: record.sizeBytes,
+      submissionID: record.submissionID,
+    } satisfies DesktopIpcOutput<"desktop:prepare-session-bag-submission">
+  } catch (error) {
+    pendingSessionBagSubmissions.delete(submissionID)
+    await rm(rootDirectory, { force: true, recursive: true }).catch((cleanupError) => {
+      safeWarn("[desktop] failed to clean up session bag staging after prepare failure:", cleanupError)
+    })
+    throw error
+  }
+}
+
+async function uploadSessionBagSubmission(
+  input: UploadSessionBagSubmissionInput,
+  options: UploadSessionBagSubmissionOptions = {},
+) {
+  const submissionID = input.submissionID.trim()
+  const record = pendingSessionBagSubmissions.get(submissionID)
+  if (!record) {
+    throw new Error("Session report submission is no longer available.")
+  }
+
+  const fetchImpl = options.fetch ?? fetch
+  const initResult = await requestAnyboxBagJSON<{
+    bagID: string
+    uploadUrl: string
+    uploadHeaders?: Record<string, string>
+    uploadMethod?: string
+  }>(record, "/api/agent/bags/init", {
+    kind: "session-trace",
+    filename: record.filename,
+    contentType: SESSION_BAG_CONTENT_TYPE,
+    sizeBytes: record.sizeBytes,
+    sha256: record.sha256,
+    sessionID: record.sessionID,
+    projectID: record.projectID,
+    appVersion: getDesktopAppVersion(),
+    trace: {
+      fileCount: record.fileCount,
+      recordCount: record.recordCount,
+    },
+  }, fetchImpl)
+
+  if (!initResult.bagID || !initResult.uploadUrl) {
+    throw new Error("Anybox did not return a report upload target.")
+  }
+
+  const uploadResponse = await fetchImpl(initResult.uploadUrl, {
+    method: initResult.uploadMethod || "PUT",
+    headers: {
+      "content-type": SESSION_BAG_CONTENT_TYPE,
+      ...(initResult.uploadHeaders ?? {}),
+    },
+    body: await readFile(record.zipPath),
+  })
+  if (!uploadResponse.ok) {
+    throw new Error(await readAnyboxBagError(uploadResponse))
+  }
+
+  const completeResult = await requestAnyboxBagJSON<{
+    bagID?: string
+    url?: string
+  }>(record, "/api/agent/bags/complete", {
+    bagID: initResult.bagID,
+    sizeBytes: record.sizeBytes,
+    sha256: record.sha256,
+  }, fetchImpl)
+
+  pendingSessionBagSubmissions.delete(submissionID)
+  await removeSessionBagStaging(record, options).catch((cleanupError) => {
+    safeWarn("[desktop] failed to clean up session bag staging after upload:", cleanupError)
+  })
+
+  return {
+    bagID: completeResult.bagID || initResult.bagID,
+    url: completeResult.url,
+  } satisfies DesktopIpcOutput<"desktop:upload-session-bag-submission">
+}
+
+async function discardSessionBagSubmission(
+  input: DiscardSessionBagSubmissionInput,
+  options: DiscardSessionBagSubmissionOptions = {},
+) {
+  const submissionID = input.submissionID.trim()
+  const record = pendingSessionBagSubmissions.get(submissionID)
+  if (!record) {
+    return { discarded: false }
+  }
+
+  pendingSessionBagSubmissions.delete(submissionID)
+  await removeSessionBagStaging(record, options)
+  return { discarded: true }
 }
 
 function sanitizeSessionTraceFileNamePart(value: string | undefined) {
@@ -3567,6 +4010,21 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   )
 
   handleDesktopIpc(
+    "desktop:prepare-session-bag-submission",
+    async (_event, input: PrepareSessionBagSubmissionInput) => prepareSessionBagSubmission(input),
+  )
+
+  handleDesktopIpc(
+    "desktop:upload-session-bag-submission",
+    async (_event, input: UploadSessionBagSubmissionInput) => uploadSessionBagSubmission(input),
+  )
+
+  handleDesktopIpc(
+    "desktop:discard-session-bag-submission",
+    async (_event, input: DiscardSessionBagSubmissionInput) => discardSessionBagSubmission(input),
+  )
+
+  handleDesktopIpc(
     "desktop:update-session-workflow",
     async (_event, input: { sessionID: string } & AgentSessionWorkflowUpdateInput) => {
       const sessionID = input.sessionID.trim()
@@ -5514,11 +5972,13 @@ export const internal = {
   abortActiveAgentSessionRequestsInMap,
   cleanupSideChatLinksWithoutResponses,
   capturePreviewScreenshotFromWindow,
+  discardSessionBagSubmission,
   disposeSessionStreamSubscriptionsForWebContents,
   getSessionTraceExport,
   getToolPermissionMode,
   interruptAgentSessionBackendFirst,
   isSessionStreamSubscriptionKeyForWebContents,
+  prepareSessionBagSubmission,
   readPreviewText,
   resolvePreviewTarget,
   saveComposerPastedImages,
@@ -5527,4 +5987,5 @@ export const internal = {
   saveSessionTraceExportToProject,
   translatePromptPreset,
   updateToolPermissionMode,
+  uploadSessionBagSubmission,
 }

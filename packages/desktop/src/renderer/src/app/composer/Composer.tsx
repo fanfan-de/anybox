@@ -74,6 +74,7 @@ interface ComposerProps {
   canSend: boolean
   canPasteImageAttachments?: boolean
   draftState: ComposerDraftState
+  hasBagSubmit?: boolean
   hasPendingPermissionRequests: boolean
   isCancelling?: boolean
   isInterruptible?: boolean
@@ -89,6 +90,7 @@ interface ComposerProps {
   onPluginToggle?: (value: string) => void | Promise<void>
   onReasoningEffortChange: (value: ReasoningEffort | null) => void
   onRemoveAttachment: (path: string) => void
+  onSubmitBag?: () => void | Promise<void>
   onCancelSend?: () => void | Promise<void>
   onSend: (draftStateOverride?: ComposerDraftState) => void | Promise<void>
   placeholder?: string
@@ -109,7 +111,7 @@ interface ComposerProps {
 }
 
 type ComposerMenuKey = "model" | "reasoning" | null
-type ComposerCommandKey = "attach" | "file" | "mcp" | "model" | "plan" | "plugin" | "reasoning" | "skill"
+type ComposerCommandKey = "attach" | "bag" | "file" | "mcp" | "model" | "plan" | "plugin" | "reasoning" | "skill"
 
 interface ComposerModelProviderGroup {
   matchingOptions: ComposerModelOption[]
@@ -229,6 +231,11 @@ const COMPOSER_COMMANDS: Array<{
     description: "Open the attachment picker for images or PDFs.",
   },
   {
+    value: "bag",
+    label: `${COMPOSER_COMMAND_TRIGGER_PREFIX}report`,
+    description: "Submit a safe diagnostic report to Anybox.",
+  },
+  {
     value: "plan",
     label: `${COMPOSER_COMMAND_TRIGGER_PREFIX}plan`,
     description: "Toggle Plan Mode for this session.",
@@ -246,12 +253,14 @@ const COMPOSER_COMMANDS: Array<{
 ]
 
 export function getVisibleComposerCommandLabels({
+  hasBagSubmit = false,
   hasPlanModeToggle = false,
   query = "",
   reasoningEffortOptionCount = 0,
   showModelSelector = false,
   showProjectTagCommands = false,
 }: {
+  hasBagSubmit?: boolean
   hasPlanModeToggle?: boolean
   query?: string
   reasoningEffortOptionCount?: number
@@ -276,6 +285,10 @@ export function getVisibleComposerCommandLabels({
       }
 
       if (command.value === "plan" && !hasPlanModeToggle) {
+        return false
+      }
+
+      if (command.value === "bag" && !hasBagSubmit) {
         return false
       }
 
@@ -976,6 +989,7 @@ export function Composer({
   canSend,
   canPasteImageAttachments = false,
   draftState,
+  hasBagSubmit = false,
   hasPendingPermissionRequests,
   isCancelling = false,
   isInterruptible = false,
@@ -991,6 +1005,7 @@ export function Composer({
   onPluginToggle,
   onReasoningEffortChange,
   onRemoveAttachment,
+  onSubmitBag,
   onCancelSend,
   onSend,
   placeholder,
@@ -1128,6 +1143,7 @@ export function Composer({
 
   function buildComposerCommandItems(query: string) {
     const visibleLabels = new Set(getVisibleComposerCommandLabels({
+      hasBagSubmit,
       hasPlanModeToggle: Boolean(onPlanModeToggle),
       query,
       reasoningEffortOptionCount: reasoningEffortOptions.length,
@@ -1554,6 +1570,7 @@ export function Composer({
   }, [
     commandMenuState,
     mcpOptions,
+    hasBagSubmit,
     onPlanModeToggle,
     pluginOptions,
     reasoningEffortOptions.length,
@@ -1690,8 +1707,12 @@ export function Composer({
 
     if (command === "plan") {
       void onPlanModeToggle?.()
+      return
     }
 
+    if (command === "bag") {
+      void onSubmitBag?.()
+    }
   }
 
   function handleCommandMenuItemSelect(item: ComposerCommandMenuItem) {

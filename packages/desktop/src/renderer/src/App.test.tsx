@@ -13743,6 +13743,24 @@ describe("App", () => {
     )
   })
 
+  it("keeps calendar scrollbars aligned with the shared UI kit", () => {
+    expect(styles).toMatch(
+      /\.calendar-page\s*\{[^}]*--calendar-scrollbar-size:\s*10px;[^}]*--calendar-scrollbar-thumb:\s*var\(--mix-seg-text-3-34-transparent-66\);[^}]*--calendar-scrollbar-thumb-hover:\s*var\(--mix-seg-text-3-54-transparent-46\);[^}]*--calendar-scrollbar-thumb-active:\s*var\(--seg-text-3\);[^}]*--calendar-scrollbar-track:\s*transparent;/s,
+    )
+    expect(styles).toMatch(
+      /\.calendar-sources-panel,\s*\.calendar-detail-panel,\s*\.calendar-quick-add-overlay,\s*\.calendar-quick-add-dialog,\s*\.calendar-time-grid-wrap,\s*\.calendar-month-view,\s*\.calendar-month-day-items,\s*\.calendar-schedule-view\s*\{[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*var\(--calendar-scrollbar-thumb\) var\(--calendar-scrollbar-track\);/s,
+    )
+    expect(styles).toMatch(
+      /\.calendar-sources-panel::-webkit-scrollbar-thumb,\s*\.calendar-detail-panel::-webkit-scrollbar-thumb,\s*\.calendar-quick-add-overlay::-webkit-scrollbar-thumb,\s*\.calendar-quick-add-dialog::-webkit-scrollbar-thumb,\s*\.calendar-time-grid-wrap::-webkit-scrollbar-thumb,\s*\.calendar-month-view::-webkit-scrollbar-thumb,\s*\.calendar-month-day-items::-webkit-scrollbar-thumb,\s*\.calendar-schedule-view::-webkit-scrollbar-thumb\s*\{[^}]*min-height:\s*32px;[^}]*border:\s*3px solid transparent;[^}]*border-radius:\s*999px;[^}]*background-color:\s*var\(--calendar-scrollbar-thumb\);[^}]*background-clip:\s*content-box;/s,
+    )
+    expect(styles).toMatch(
+      /\.calendar-project-filter-menu\s*\{[^}]*overflow:\s*auto;[^}]*scrollbar-width:\s*none;/s,
+    )
+    expect(styles).toMatch(
+      /\.calendar-project-filter-menu::-webkit-scrollbar\s*\{[^}]*width:\s*0;[^}]*height:\s*0;/s,
+    )
+  })
+
   it("lets sidebar-hosted skills and MCP pages use the full canvas width", () => {
     expect(styles).toMatch(
       /\.settings-page-main\.is-services\s+\.settings-services-layout\.global-skills-page-layout\.is-sidebar-hosted,\s*\.settings-page-main\.is-services\s+\.settings-services-layout\.mcp-servers-page-layout\.is-sidebar-hosted\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s,

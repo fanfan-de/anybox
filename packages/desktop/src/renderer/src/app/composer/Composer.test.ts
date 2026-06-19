@@ -223,6 +223,15 @@ describe("getVisibleComposerCommandLabels", () => {
     expect(getVisibleComposerCommandLabels({ hasPlanModeToggle: false })).not.toContain("~plan")
   })
 
+  it("shows ~report when report submission is available", () => {
+    expect(getVisibleComposerCommandLabels({ hasBagSubmit: true })).toContain("~report")
+    expect(getVisibleComposerCommandLabels({ hasBagSubmit: true })).not.toContain("~bag")
+  })
+
+  it("hides ~report when report submission is unavailable", () => {
+    expect(getVisibleComposerCommandLabels({ hasBagSubmit: false })).not.toContain("~report")
+  })
+
   it("shows project plugin commands only when project tag commands are enabled", () => {
     expect(getVisibleComposerCommandLabels({ showProjectTagCommands: true })).toContain("~plugin")
     expect(getVisibleComposerCommandLabels({ showProjectTagCommands: false })).not.toContain("~plugin")

@@ -1,4 +1,5 @@
-import { memo, useLayoutEffect, useMemo, useRef } from "react"
+import { memo, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react"
+import type { DesktopIpcOutput } from "../../../../shared/desktop-ipc-contract"
 import { CreateSessionCanvas, getCreateSessionProjectWorkspaces } from "../canvas/CreateSessionCanvas"
 import { SessionCanvasTopMenu } from "../canvas/SessionCanvasTopMenu"
 import { Composer } from "../composer/Composer"
@@ -55,6 +56,212 @@ function ComposerBranchParentNotice({
         Clear
       </button>
     </div>
+  )
+}
+
+type SessionBagPrepareResult = DesktopIpcOutput<"desktop:prepare-session-bag-submission">
+type SessionBagUploadResult = DesktopIpcOutput<"desktop:upload-session-bag-submission">
+
+type SessionBagDialogState =
+  | {
+      stage: "preparing"
+    }
+  | {
+      prepare: SessionBagPrepareResult
+      stage: "confirm"
+    }
+  | {
+      prepare: SessionBagPrepareResult
+      stage: "uploading"
+    }
+  | {
+      prepare: SessionBagPrepareResult
+      result: SessionBagUploadResult
+      stage: "success"
+    }
+  | {
+      message: string
+      prepare?: SessionBagPrepareResult
+      stage: "error"
+    }
+
+function formatSessionBagSize(sizeBytes: number) {
+  if (!Number.isFinite(sizeBytes) || sizeBytes < 0) return "-"
+
+  const units = ["B", "KB", "MB", "GB"] as const
+  let value = sizeBytes
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+
+  return unitIndex === 0 ? `${Math.round(value)} ${units[unitIndex]}` : `${value.toFixed(1)} ${units[unitIndex]}`
+}
+
+function readSessionBagErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error || "Report submission failed.")
+}
+
+function renderSessionBagSummary(prepare: SessionBagPrepareResult) {
+  const targetAccount = [
+    prepare.account?.email,
+    prepare.account?.workspaceName,
+    prepare.account?.planLabel,
+  ].filter(Boolean).join(" / ")
+  const redactionSummary = prepare.redaction.enabled
+    ? `${prepare.redaction.redactedKeyPattern || "configured"} keys, max ${prepare.redaction.maxStringLength} chars`
+    : "Disabled"
+
+  return (
+    <dl className="session-bag-summary">
+      <div>
+        <dt>File</dt>
+        <dd>{prepare.filename}</dd>
+      </div>
+      <div>
+        <dt>Records</dt>
+        <dd>{prepare.recordCount}</dd>
+      </div>
+      <div>
+        <dt>Files</dt>
+        <dd>{prepare.fileCount}</dd>
+      </div>
+      <div>
+        <dt>Size</dt>
+        <dd>{formatSessionBagSize(prepare.sizeBytes)}</dd>
+      </div>
+      <div>
+        <dt>Target</dt>
+        <dd>{targetAccount || prepare.baseURL || "Anybox"}</dd>
+      </div>
+      <div>
+        <dt>Redaction</dt>
+        <dd>{redactionSummary}</dd>
+      </div>
+    </dl>
+  )
+}
+
+function SessionBagSubmissionDialog({
+  state,
+  onCancel,
+  onClose,
+  onSubmit,
+}: {
+  state: SessionBagDialogState
+  onCancel: () => void
+  onClose: () => void
+  onSubmit: () => void
+}) {
+  function handleOverlayClick(event: MouseEvent<HTMLElement>) {
+    if (event.target !== event.currentTarget) return
+    if (state.stage === "success") {
+      onClose()
+      return
+    }
+    if (state.stage === "preparing" || state.stage === "confirm" || state.stage === "error") {
+      onCancel()
+    }
+  }
+
+  function handleSuccessLinkClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (state.stage !== "success" || !state.result.url) return
+    event.preventDefault()
+    void window.desktop?.openExternalUrl?.({ url: state.result.url })
+  }
+
+  const title =
+    state.stage === "preparing"
+      ? "Preparing diagnostic report"
+      : state.stage === "uploading"
+        ? "Uploading diagnostic report"
+        : state.stage === "success"
+          ? "Report submitted"
+          : state.stage === "error"
+            ? "Report submission failed"
+            : "Submit diagnostic report"
+  const preparedSummary = state.stage === "confirm" || state.stage === "uploading" || state.stage === "success"
+    ? state.prepare
+    : state.stage === "error"
+      ? state.prepare
+      : undefined
+
+  return (
+    <section className="session-bag-overlay" role="presentation" onClick={handleOverlayClick}>
+      <article className={`session-bag-dialog is-${state.stage}`} role="dialog" aria-modal="true" aria-labelledby="session-bag-dialog-title">
+        <header className="session-bag-header">
+          <h2 id="session-bag-dialog-title">{title}</h2>
+          <p>
+            {state.stage === "preparing"
+              ? "Collecting the safe session trace and building the report package."
+              : state.stage === "uploading"
+                ? "Sending the package to your Anybox workspace."
+                : state.stage === "success"
+                  ? "The diagnostic report is now available on the server."
+                  : state.stage === "error"
+                    ? state.message
+                    : "Review the safe diagnostic report before sending it to Anybox."}
+          </p>
+        </header>
+
+        {preparedSummary ? renderSessionBagSummary(preparedSummary) : null}
+
+        {state.stage === "success" ? (
+          <div className="session-bag-success">
+            <span>Report ID</span>
+            <code>{state.result.bagID}</code>
+            {state.result.url ? (
+              <a href={state.result.url} onClick={handleSuccessLinkClick}>
+                Open in Anybox
+              </a>
+            ) : null}
+          </div>
+        ) : null}
+
+        {state.stage === "error" ? (
+          <p className="session-bag-error" role="alert">
+            {state.message}
+          </p>
+        ) : null}
+
+        <footer className="session-bag-actions">
+          {state.stage === "success" ? (
+            <button className="primary-button" type="button" onClick={onClose}>
+              Close
+            </button>
+          ) : state.stage === "confirm" ? (
+            <>
+              <button className="secondary-button" type="button" onClick={onCancel}>
+                Cancel
+              </button>
+              <button className="primary-button" type="button" onClick={onSubmit}>
+                Submit report
+              </button>
+            </>
+          ) : state.stage === "error" ? (
+            <>
+              <button className="secondary-button" type="button" onClick={onCancel}>
+                Close
+              </button>
+              {state.prepare ? (
+                <button className="primary-button" type="button" onClick={onSubmit}>
+                  Retry
+                </button>
+              ) : null}
+            </>
+          ) : state.stage === "preparing" ? (
+            <button className="secondary-button" type="button" onClick={onCancel}>
+              Cancel
+            </button>
+          ) : (
+            <button className="secondary-button" type="button" disabled>
+              Uploading
+            </button>
+          )}
+        </footer>
+      </article>
+    </section>
   )
 }
 
@@ -244,6 +451,8 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   onTurnDiffSummaryHydrate,
 }: WorkbenchPaneSurfaceProps) {
   const threadColumnRef = useRef<HTMLDivElement | null>(null)
+  const bagOperationVersionRef = useRef(0)
+  const [bagDialogState, setBagDialogState] = useState<SessionBagDialogState | null>(null)
   const activeTurns = useConversationTurns(conversationStore, pane.sessionID)
   const activeSideChatTurns = useConversationTurns(conversationStore, pane.activeSideChatSession?.id ?? null)
   const composerParentMessagePreview = pane.composerParentMessageID
@@ -275,6 +484,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   })
   const readOnlySideChat = isSideChatSession(pane.activeSession)
   const showGitControls = pane.isActivePanel && !readOnlySideChat
+  const mainSessionBagSessionID = !readOnlySideChat && pane.activeSession && pane.sessionID ? pane.sessionID : null
   const pendingSubmissionInputs = useMemo(
     () => [...pane.pendingConversationInputs].sort((left, right) => left.createdAt - right.createdAt),
     [pane.pendingConversationInputs],
@@ -343,6 +553,108 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
     })),
     [activeSideChatTurns.length, activeTurns.length, pane.id, pane.isActivePanel, pane.sessionID, pane.tabKey],
   )
+
+  async function discardPreparedSessionBag(prepare: SessionBagPrepareResult | undefined) {
+    if (!prepare) return
+    await window.desktop?.discardSessionBagSubmission?.({ submissionID: prepare.submissionID }).catch(() => undefined)
+  }
+
+  async function handlePrepareSessionBag(input: {
+    projectID?: string | null
+    sessionID: string
+    workspaceDirectory?: string | null
+  }) {
+    const operationVersion = bagOperationVersionRef.current + 1
+    bagOperationVersionRef.current = operationVersion
+    const prepareSessionBag = window.desktop?.prepareSessionBagSubmission
+    if (!prepareSessionBag) {
+      setBagDialogState({
+        stage: "error",
+        message: "Desktop report submission bridge is unavailable.",
+      })
+      return
+    }
+
+    setBagDialogState({ stage: "preparing" })
+    try {
+      const prepare = await prepareSessionBag(input)
+      if (bagOperationVersionRef.current !== operationVersion) {
+        void discardPreparedSessionBag(prepare)
+        return
+      }
+
+      setBagDialogState({
+        stage: "confirm",
+        prepare,
+      })
+    } catch (error) {
+      if (bagOperationVersionRef.current !== operationVersion) return
+
+      setBagDialogState({
+        stage: "error",
+        message: readSessionBagErrorMessage(error),
+      })
+    }
+  }
+
+  async function handleConfirmSessionBagUpload() {
+    bagOperationVersionRef.current += 1
+    const currentState = bagDialogState
+    const prepare = currentState?.stage === "confirm" || currentState?.stage === "uploading" || currentState?.stage === "success"
+      ? currentState.prepare
+      : currentState?.stage === "error"
+        ? currentState.prepare
+        : undefined
+    if (!prepare) return
+
+    const uploadSessionBag = window.desktop?.uploadSessionBagSubmission
+    if (!uploadSessionBag) {
+      setBagDialogState({
+        stage: "error",
+        prepare,
+        message: "Desktop report upload bridge is unavailable.",
+      })
+      return
+    }
+
+    setBagDialogState({
+      stage: "uploading",
+      prepare,
+    })
+    try {
+      const result = await uploadSessionBag({ submissionID: prepare.submissionID })
+      setBagDialogState({
+        stage: "success",
+        prepare,
+        result,
+      })
+    } catch (error) {
+      setBagDialogState({
+        stage: "error",
+        prepare,
+        message: readSessionBagErrorMessage(error),
+      })
+    }
+  }
+
+  function handleCancelSessionBagDialog() {
+    bagOperationVersionRef.current += 1
+    const currentState = bagDialogState
+    const prepare = currentState?.stage === "confirm" || currentState?.stage === "uploading" || currentState?.stage === "success"
+      ? currentState.prepare
+      : currentState?.stage === "error"
+        ? currentState.prepare
+        : undefined
+    setBagDialogState(null)
+    if (currentState?.stage !== "success") {
+      void discardPreparedSessionBag(prepare)
+    }
+  }
+
+  function handleCloseSessionBagDialog() {
+    bagOperationVersionRef.current += 1
+    setBagDialogState(null)
+  }
 
   return (
     <section
@@ -651,6 +963,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                     canSend={Boolean(pane.activeSession)}
                     canPasteImageAttachments={composer.attachmentCapabilities.image && composer.attachmentDisabledReason === null}
                     draftState={pane.draftState}
+                    hasBagSubmit={mainSessionBagSessionID !== null}
                     hasPendingPermissionRequests={pane.pendingPermissionRequests.length > 0 || isResolvingPermissionRequest}
                     isCancelling={pane.isCancelling}
                     isInterruptible={pane.isInterruptible}
@@ -697,6 +1010,15 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                         ? undefined
                         : () => void onPlanModeToggle({ sessionID: pane.sessionID })
                     }
+                    onSubmitBag={
+                      mainSessionBagSessionID === null
+                        ? undefined
+                        : () => void handlePrepareSessionBag({
+                            sessionID: mainSessionBagSessionID,
+                            projectID: pane.projectID,
+                            workspaceDirectory: pane.workspace?.directory ?? null,
+                          })
+                    }
                     onRemoveAttachment={(path) => onRemoveComposerAttachment(path, pane.tabKey)}
                     onCancelSend={() => void onCancelSend({
                       sessionID: pane.sessionID,
@@ -738,6 +1060,14 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
           )}
         </div>
       </div>
+      {bagDialogState ? (
+        <SessionBagSubmissionDialog
+          state={bagDialogState}
+          onCancel={handleCancelSessionBagDialog}
+          onClose={handleCloseSessionBagDialog}
+          onSubmit={() => void handleConfirmSessionBagUpload()}
+        />
+      ) : null}
     </section>
   )
 })

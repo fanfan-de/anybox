@@ -7,12 +7,12 @@ import {
 const capturedRequests: Array<Record<string, unknown>> = []
 let restoreRuntimeDependencies: (() => void) | undefined
 
-function createModel(input: { providerID: string; url: string; id?: string; reasoning?: boolean }) {
+function createModel(input: { providerID: string; url: string; id?: string; apiID?: string; reasoning?: boolean }) {
   return {
     id: input.id ?? "test-model",
     providerID: input.providerID,
     api: {
-      id: input.id ?? "test-model",
+      id: input.apiID ?? input.id ?? "test-model",
       url: input.url,
       npm: "@ai-sdk/openai",
     },
@@ -155,6 +155,113 @@ describe("llm codex request shaping", () => {
       },
     })
     expect(capturedRequests[0]?.system).toBe("alpha\nbeta")
+  })
+
+  it("requests Gemini 3 thought summaries through Google provider options", async () => {
+    await stream(
+      createInput(
+        createModel({
+          providerID: "google",
+          url: "https://generativelanguage.googleapis.com/v1beta",
+          id: "gemini-3.1-pro-preview",
+        }),
+      ),
+    )
+
+    expect(capturedRequests).toHaveLength(1)
+    expect(capturedRequests[0]?.providerOptions).toEqual({
+      google: {
+        thinkingConfig: {
+          thinkingLevel: "high",
+          includeThoughts: true,
+        },
+      },
+    })
+    expect(capturedRequests[0]?.system).toBe("alpha\nbeta")
+  })
+
+  it("maps Gemini 3 reasoning effort to thinking level", async () => {
+    await stream({
+      ...createInput(
+        createModel({
+          providerID: "google",
+          url: "https://generativelanguage.googleapis.com/v1beta",
+          id: "gemini-3.1-pro-preview",
+        }),
+      ),
+      reasoningEffort: "medium",
+    })
+
+    expect(capturedRequests).toHaveLength(1)
+    expect(capturedRequests[0]?.providerOptions).toEqual({
+      google: {
+        thinkingConfig: {
+          thinkingLevel: "medium",
+          includeThoughts: true,
+        },
+      },
+    })
+  })
+
+  it("detects Gemini thinking support from the provider API model id", async () => {
+    await stream(
+      createInput(
+        createModel({
+          providerID: "google",
+          url: "https://generativelanguage.googleapis.com/v1beta",
+          id: "custom-gemini-alias",
+          apiID: "gemini-3.1-pro-preview",
+        }),
+      ),
+    )
+
+    expect(capturedRequests).toHaveLength(1)
+    expect(capturedRequests[0]?.providerOptions).toEqual({
+      google: {
+        thinkingConfig: {
+          thinkingLevel: "high",
+          includeThoughts: true,
+        },
+      },
+    })
+  })
+
+  it("requests Gemini 2.5 thought summaries with a thinking budget", async () => {
+    await stream({
+      ...createInput(
+        createModel({
+          providerID: "google",
+          url: "https://generativelanguage.googleapis.com/v1beta",
+          id: "gemini-2.5-flash",
+        }),
+      ),
+      reasoningEffort: "none",
+    })
+
+    expect(capturedRequests).toHaveLength(1)
+    expect(capturedRequests[0]?.providerOptions).toEqual({
+      google: {
+        thinkingConfig: {
+          thinkingBudget: 0,
+          includeThoughts: true,
+        },
+      },
+    })
+  })
+
+  it("does not send Google thinking config for Gemini models without thinking support", async () => {
+    await stream(
+      createInput(
+        createModel({
+          providerID: "google",
+          url: "https://generativelanguage.googleapis.com/v1beta",
+          id: "gemini-2.0-flash",
+        }),
+      ),
+    )
+
+    expect(capturedRequests).toHaveLength(1)
+    expect(capturedRequests[0]?.providerOptions).toBeUndefined()
   })
 
   it("does not request OpenAI reasoning summaries unless reasoning effort is explicit", async () => {

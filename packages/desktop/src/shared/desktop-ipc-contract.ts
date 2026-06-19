@@ -888,6 +888,32 @@ export interface DesktopSaveSessionTraceExportDirectoryResult {
   recordCount?: number
 }
 
+export interface DesktopSessionBagAccountSummary {
+  email?: string
+  workspaceName?: string
+  planLabel?: string
+}
+
+export interface DesktopPrepareSessionBagSubmissionResult {
+  account?: DesktopSessionBagAccountSummary
+  baseURL?: string
+  filename: string
+  fileCount: number
+  generatedAt: string
+  projectID?: string | null
+  recordCount: number
+  redaction: AgentSessionTraceExport["redaction"]
+  sessionID: string
+  sha256: string
+  sizeBytes: number
+  submissionID: string
+}
+
+export interface DesktopUploadSessionBagSubmissionResult {
+  bagID: string
+  url?: string
+}
+
 export interface DesktopIpcContract {
   "desktop:get-info": {
     input: void
@@ -1295,6 +1321,18 @@ export interface DesktopIpcContract {
   "desktop:save-session-trace-export-to-project": {
     input: { sessionID: string; directory: string; projectID?: string | null }
     output: DesktopSaveSessionTraceExportDirectoryResult
+  }
+  "desktop:prepare-session-bag-submission": {
+    input: { sessionID: string; projectID?: string | null; workspaceDirectory?: string | null }
+    output: DesktopPrepareSessionBagSubmissionResult
+  }
+  "desktop:upload-session-bag-submission": {
+    input: { submissionID: string }
+    output: DesktopUploadSessionBagSubmissionResult
+  }
+  "desktop:discard-session-bag-submission": {
+    input: { submissionID: string }
+    output: { discarded: boolean }
   }
   "desktop:update-session-workflow": {
     input: { sessionID: string } & AgentSessionWorkflowUpdateInput
@@ -1925,6 +1963,9 @@ export interface DesktopApiMethods {
   saveSessionTraceExport(input: DesktopIpcInput<"desktop:save-session-trace-export">): Promise<DesktopIpcOutput<"desktop:save-session-trace-export">>
   saveSessionTraceExportDirectory(input: DesktopIpcInput<"desktop:save-session-trace-export-directory">): Promise<DesktopIpcOutput<"desktop:save-session-trace-export-directory">>
   saveSessionTraceExportToProject(input: DesktopIpcInput<"desktop:save-session-trace-export-to-project">): Promise<DesktopIpcOutput<"desktop:save-session-trace-export-to-project">>
+  prepareSessionBagSubmission(input: DesktopIpcInput<"desktop:prepare-session-bag-submission">): Promise<DesktopIpcOutput<"desktop:prepare-session-bag-submission">>
+  uploadSessionBagSubmission(input: DesktopIpcInput<"desktop:upload-session-bag-submission">): Promise<DesktopIpcOutput<"desktop:upload-session-bag-submission">>
+  discardSessionBagSubmission(input: DesktopIpcInput<"desktop:discard-session-bag-submission">): Promise<DesktopIpcOutput<"desktop:discard-session-bag-submission">>
   agentSession: DesktopAgentSessionApi
   getGlobalProviderCatalog(): Promise<DesktopIpcOutput<"desktop:get-global-provider-catalog">>
   refreshGlobalProviderCatalog(): Promise<DesktopIpcOutput<"desktop:refresh-global-provider-catalog">>

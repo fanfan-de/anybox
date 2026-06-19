@@ -11,6 +11,7 @@ const log = Log.create({ service: "provider.transform" })
 
 const OPENAI_PROVIDER_ID = "openai"
 const DEEPSEEK_PROVIDER_ID = "deepseek"
+const GOOGLE_PROVIDER_ID = "google"
 const OPENAI_CODEX_API_SEGMENT = "/backend-api/codex"
 
 export function isOpenAICodexModel(model: Model) {
@@ -23,6 +24,15 @@ export function isOpenAIReasoningModel(model: Model) {
 
 export function isDeepSeekReasoningModel(model: Model) {
   return model.providerID === DEEPSEEK_PROVIDER_ID && model.capabilities.reasoning
+}
+
+export function isGoogleGeminiThinkingModel(model: Model) {
+  if (model.providerID !== GOOGLE_PROVIDER_ID) return false
+
+  return readGoogleModelIDs(model).some((modelID) => {
+    const normalized = modelID.trim().toLowerCase()
+    return normalized.startsWith("gemini-3") || normalized.startsWith("gemini-2.5")
+  })
 }
 
 export function isProviderReasoningModel(model: Model) {
@@ -106,6 +116,88 @@ function buildDeepSeekProviderOptions(input: {
   }
 }
 
+function supportsGoogleMinimalThinkingLevel(modelID: string) {
+  const normalized = modelID.trim().toLowerCase()
+  return (
+    normalized.startsWith("gemini-3.1-flash") ||
+    normalized.startsWith("gemini-3-flash") ||
+    normalized.startsWith("gemini-3.5-flash")
+  )
+}
+
+function readGoogleModelIDs(model: Model) {
+  return [model.api.id, model.id].filter((value, index, values) => value && values.indexOf(value) === index)
+}
+
+function resolveGoogleThinkingModelID(model: Model) {
+  return readGoogleModelIDs(model).find((modelID) => {
+    const normalized = modelID.trim().toLowerCase()
+    return normalized.startsWith("gemini-3") || normalized.startsWith("gemini-2.5")
+  }) ?? model.id
+}
+
+function supportsGoogleMediumThinkingLevel(modelID: string) {
+  const normalized = modelID.trim().toLowerCase()
+  return !normalized.startsWith("gemini-3-pro")
+}
+
+function normalizeGoogleThinkingLevel(modelID: string, reasoningEffort?: ReasoningEffort) {
+  if (reasoningEffort === "none" || reasoningEffort === "minimal") {
+    return supportsGoogleMinimalThinkingLevel(modelID) ? "minimal" : "low"
+  }
+
+  if (reasoningEffort === "low") return "low"
+  if (reasoningEffort === "medium") {
+    return supportsGoogleMediumThinkingLevel(modelID) ? "medium" : "high"
+  }
+
+  return "high"
+}
+
+function normalizeGoogleThinkingBudget(modelID: string, reasoningEffort?: ReasoningEffort) {
+  const normalized = modelID.trim().toLowerCase()
+  const canDisableThinking = !normalized.startsWith("gemini-2.5-pro")
+
+  if ((reasoningEffort === "none" || reasoningEffort === "minimal") && canDisableThinking) {
+    return 0
+  }
+
+  if (reasoningEffort === "low") return 1024
+  if (reasoningEffort === "medium") return 8192
+  if (reasoningEffort === "high" || reasoningEffort === "max" || reasoningEffort === "xhigh") return 24576
+
+  return -1
+}
+
+function buildGoogleProviderOptions(input: {
+  model: Model
+  reasoningEffort?: ReasoningEffort
+}) {
+  if (!isGoogleGeminiThinkingModel(input.model)) return undefined
+
+  const thinkingModelID = resolveGoogleThinkingModelID(input.model)
+  const normalized = thinkingModelID.trim().toLowerCase()
+  if (normalized.startsWith("gemini-3")) {
+    return {
+      thinkingConfig: {
+        thinkingLevel: normalizeGoogleThinkingLevel(thinkingModelID, input.reasoningEffort),
+        includeThoughts: true,
+      },
+    }
+  }
+
+  if (normalized.startsWith("gemini-2.5")) {
+    return {
+      thinkingConfig: {
+        thinkingBudget: normalizeGoogleThinkingBudget(thinkingModelID, input.reasoningEffort),
+        includeThoughts: true,
+      },
+    }
+  }
+
+  return undefined
+}
+
 export function buildProviderOptions(input: {
   model: Model
   systemPrompt: string
@@ -113,9 +205,11 @@ export function buildProviderOptions(input: {
 }) {
   const openai = buildOpenAIProviderOptions(input)
   const deepseek = buildDeepSeekProviderOptions(input)
+  const google = buildGoogleProviderOptions(input)
   const options = {
     ...(openai ? { openai } : {}),
     ...(deepseek ? { deepseek } : {}),
+    ...(google ? { google } : {}),
   }
 
   return Object.keys(options).length > 0 ? options : undefined

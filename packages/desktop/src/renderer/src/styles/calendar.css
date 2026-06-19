@@ -24,6 +24,11 @@
   --calendar-right-sidebar-width: 356px;
   --calendar-workbench-max-width: 1320px;
   --calendar-workbench-gutter: clamp(24px, 3.5vw, 56px);
+  --calendar-scrollbar-size: 10px;
+  --calendar-scrollbar-thumb: var(--mix-seg-text-3-34-transparent-66);
+  --calendar-scrollbar-thumb-hover: var(--mix-seg-text-3-54-transparent-46);
+  --calendar-scrollbar-thumb-active: var(--seg-text-3);
+  --calendar-scrollbar-track: transparent;
   height: 100%;
   position: relative;
   display: grid;
@@ -608,6 +613,105 @@
   border-left: 1px solid var(--calendar-border);
 }
 
+.calendar-sources-panel,
+.calendar-detail-panel,
+.calendar-quick-add-overlay,
+.calendar-quick-add-dialog,
+.calendar-time-grid-wrap,
+.calendar-month-view,
+.calendar-month-day-items,
+.calendar-schedule-view {
+  scrollbar-width: thin;
+  scrollbar-color: var(--calendar-scrollbar-thumb) var(--calendar-scrollbar-track);
+}
+
+.calendar-sources-panel::-webkit-scrollbar,
+.calendar-detail-panel::-webkit-scrollbar,
+.calendar-quick-add-overlay::-webkit-scrollbar,
+.calendar-quick-add-dialog::-webkit-scrollbar,
+.calendar-time-grid-wrap::-webkit-scrollbar,
+.calendar-month-view::-webkit-scrollbar,
+.calendar-month-day-items::-webkit-scrollbar,
+.calendar-schedule-view::-webkit-scrollbar {
+  width: var(--calendar-scrollbar-size);
+  height: var(--calendar-scrollbar-size);
+}
+
+.calendar-sources-panel::-webkit-scrollbar-track,
+.calendar-detail-panel::-webkit-scrollbar-track,
+.calendar-quick-add-overlay::-webkit-scrollbar-track,
+.calendar-quick-add-dialog::-webkit-scrollbar-track,
+.calendar-time-grid-wrap::-webkit-scrollbar-track,
+.calendar-month-view::-webkit-scrollbar-track,
+.calendar-month-day-items::-webkit-scrollbar-track,
+.calendar-schedule-view::-webkit-scrollbar-track {
+  background: var(--calendar-scrollbar-track);
+}
+
+.calendar-sources-panel::-webkit-scrollbar-thumb,
+.calendar-detail-panel::-webkit-scrollbar-thumb,
+.calendar-quick-add-overlay::-webkit-scrollbar-thumb,
+.calendar-quick-add-dialog::-webkit-scrollbar-thumb,
+.calendar-time-grid-wrap::-webkit-scrollbar-thumb,
+.calendar-month-view::-webkit-scrollbar-thumb,
+.calendar-month-day-items::-webkit-scrollbar-thumb,
+.calendar-schedule-view::-webkit-scrollbar-thumb {
+  min-height: 32px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-color: var(--calendar-scrollbar-thumb);
+  background-clip: content-box;
+}
+
+.calendar-sources-panel:hover::-webkit-scrollbar-thumb,
+.calendar-sources-panel:focus-within::-webkit-scrollbar-thumb,
+.calendar-sources-panel::-webkit-scrollbar-thumb:hover,
+.calendar-detail-panel:hover::-webkit-scrollbar-thumb,
+.calendar-detail-panel:focus-within::-webkit-scrollbar-thumb,
+.calendar-detail-panel::-webkit-scrollbar-thumb:hover,
+.calendar-quick-add-overlay:hover::-webkit-scrollbar-thumb,
+.calendar-quick-add-overlay:focus-within::-webkit-scrollbar-thumb,
+.calendar-quick-add-overlay::-webkit-scrollbar-thumb:hover,
+.calendar-quick-add-dialog:hover::-webkit-scrollbar-thumb,
+.calendar-quick-add-dialog:focus-within::-webkit-scrollbar-thumb,
+.calendar-quick-add-dialog::-webkit-scrollbar-thumb:hover,
+.calendar-time-grid-wrap:hover::-webkit-scrollbar-thumb,
+.calendar-time-grid-wrap:focus-within::-webkit-scrollbar-thumb,
+.calendar-time-grid-wrap::-webkit-scrollbar-thumb:hover,
+.calendar-month-view:hover::-webkit-scrollbar-thumb,
+.calendar-month-view:focus-within::-webkit-scrollbar-thumb,
+.calendar-month-view::-webkit-scrollbar-thumb:hover,
+.calendar-month-day-items:hover::-webkit-scrollbar-thumb,
+.calendar-month-day-items:focus-within::-webkit-scrollbar-thumb,
+.calendar-month-day-items::-webkit-scrollbar-thumb:hover,
+.calendar-schedule-view:hover::-webkit-scrollbar-thumb,
+.calendar-schedule-view:focus-within::-webkit-scrollbar-thumb,
+.calendar-schedule-view::-webkit-scrollbar-thumb:hover {
+  background-color: var(--calendar-scrollbar-thumb-hover);
+}
+
+.calendar-sources-panel::-webkit-scrollbar-thumb:active,
+.calendar-detail-panel::-webkit-scrollbar-thumb:active,
+.calendar-quick-add-overlay::-webkit-scrollbar-thumb:active,
+.calendar-quick-add-dialog::-webkit-scrollbar-thumb:active,
+.calendar-time-grid-wrap::-webkit-scrollbar-thumb:active,
+.calendar-month-view::-webkit-scrollbar-thumb:active,
+.calendar-month-day-items::-webkit-scrollbar-thumb:active,
+.calendar-schedule-view::-webkit-scrollbar-thumb:active {
+  background-color: var(--calendar-scrollbar-thumb-active);
+}
+
+.calendar-sources-panel::-webkit-scrollbar-corner,
+.calendar-detail-panel::-webkit-scrollbar-corner,
+.calendar-quick-add-overlay::-webkit-scrollbar-corner,
+.calendar-quick-add-dialog::-webkit-scrollbar-corner,
+.calendar-time-grid-wrap::-webkit-scrollbar-corner,
+.calendar-month-view::-webkit-scrollbar-corner,
+.calendar-month-day-items::-webkit-scrollbar-corner,
+.calendar-schedule-view::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .calendar-mini {
   padding: 12px;
   border: 1px solid var(--calendar-border);
@@ -806,6 +910,12 @@
   overflow: auto;
   background: var(--calendar-panel);
   box-shadow: var(--shadow-lg, 0 18px 40px rgba(15, 23, 42, 0.16));
+  scrollbar-width: none;
+}
+
+.calendar-project-filter-menu::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .calendar-project-filter-option {

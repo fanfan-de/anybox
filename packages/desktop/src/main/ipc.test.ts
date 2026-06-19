@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createHash } from "node:crypto"
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 
 const requestAgentJSONMock = vi.hoisted(() => vi.fn())
 
@@ -764,6 +767,233 @@ describe("ipc session trace export helpers", () => {
       { recursive: true },
     )
     expect(writeTraceFile.mock.calls.some((call) => toWindowsSeparators(call[0]).endsWith("\\manifest.json"))).toBe(true)
+  })
+
+  it("prepares a session bag submission in a local staging directory", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "anybox-bag-prepare-"))
+    try {
+      requestAgentJSONMock.mockResolvedValueOnce({
+        data: traceExport,
+      })
+
+      const result = await internal.prepareSessionBagSubmission(
+        {
+          sessionID: " session-1 ",
+          projectID: " project-1 ",
+          workspaceDirectory: "C:\\Projects\\Demo",
+        },
+        {
+          fetchRelaySession: async () => ({
+            connected: true,
+            status: "connected",
+            accessToken: "relay-token",
+            baseURL: "https://api.anybox.test/",
+            account: {
+              email: "dev@example.com",
+              workspaceName: "Demo workspace",
+            },
+          }),
+          now: new Date(2026, 4, 22, 9, 8, 7),
+          userDataPath: tempRoot,
+        },
+      )
+
+      expect(result).toEqual(expect.objectContaining({
+        baseURL: "https://api.anybox.test",
+        filename: "anybox-bag-session-1-20260522-090807.zip",
+        fileCount: 11,
+        projectID: "project-1",
+        recordCount: 0,
+        sessionID: "session-1",
+        submissionID: expect.stringMatching(/^bag-/),
+      }))
+      expect(result.account).toEqual(expect.objectContaining({
+        email: "dev@example.com",
+        workspaceName: "Demo workspace",
+      }))
+
+      const zipPath = path.join(tempRoot, "session-bags", "staging", result.submissionID, result.filename)
+      const zipContent = await readFile(zipPath)
+      expect((await stat(zipPath)).size).toBe(result.sizeBytes)
+      expect(createHash("sha256").update(zipContent).digest("hex")).toBe(result.sha256)
+      expect(zipContent.toString("utf8")).toContain("bag-manifest.json")
+      expect(zipContent.toString("utf8")).toContain("session-1")
+      expect(requestAgentJSONMock).toHaveBeenCalledWith("/api/debug/sessions/session-1/trace-export")
+    } finally {
+      await rm(tempRoot, { force: true, recursive: true })
+    }
+  })
+
+  it("uploads a prepared session bag and removes the staging directory", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "anybox-bag-upload-"))
+    try {
+      requestAgentJSONMock.mockResolvedValueOnce({
+        data: traceExport,
+      })
+
+      const prepared = await internal.prepareSessionBagSubmission(
+        { sessionID: "session-1", projectID: "project-1", workspaceDirectory: "C:\\Projects\\Demo" },
+        {
+          fetchRelaySession: async () => ({
+            connected: true,
+            status: "connected",
+            accessToken: "relay-token",
+            baseURL: "https://api.anybox.test",
+          }),
+          now: new Date(2026, 4, 22, 9, 8, 7),
+          userDataPath: tempRoot,
+        },
+      )
+      const zipPath = path.join(tempRoot, "session-bags", "staging", prepared.submissionID, prepared.filename)
+      const uploadBody = await readFile(zipPath)
+      const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const requestURL = String(url)
+        if (requestURL === "https://api.anybox.test/api/agent/bags/init") {
+          expect(init?.method).toBe("POST")
+          expect(init?.headers).toMatchObject({
+            authorization: "Bearer relay-token",
+            "content-type": "application/json",
+          })
+          expect(JSON.parse(String(init?.body))).toMatchObject({
+            kind: "session-trace",
+            filename: prepared.filename,
+            contentType: "application/zip",
+            sizeBytes: prepared.sizeBytes,
+            sha256: prepared.sha256,
+            sessionID: "session-1",
+            projectID: "project-1",
+          })
+          return new Response(JSON.stringify({
+            data: {
+              bagID: "bag-1",
+              uploadUrl: "https://upload.anybox.test/bag-1",
+              uploadHeaders: {
+                "x-upload-token": "token-1",
+              },
+            },
+          }), { status: 200 })
+        }
+
+        if (requestURL === "https://upload.anybox.test/bag-1") {
+          expect(init?.method).toBe("PUT")
+          expect(init?.headers).toMatchObject({
+            "content-type": "application/zip",
+            "x-upload-token": "token-1",
+          })
+          expect(Buffer.compare(Buffer.from(init?.body as Buffer), uploadBody)).toBe(0)
+          return new Response(null, { status: 200 })
+        }
+
+        if (requestURL === "https://api.anybox.test/api/agent/bags/complete") {
+          expect(init?.method).toBe("POST")
+          expect(init?.headers).toMatchObject({
+            authorization: "Bearer relay-token",
+            "content-type": "application/json",
+          })
+          expect(JSON.parse(String(init?.body))).toEqual({
+            bagID: "bag-1",
+            sizeBytes: prepared.sizeBytes,
+            sha256: prepared.sha256,
+          })
+          return new Response(JSON.stringify({
+            data: {
+              bagID: "bag-1",
+              url: "https://api.anybox.test/bags/bag-1",
+            },
+          }), { status: 200 })
+        }
+
+        throw new Error(`unexpected request: ${requestURL}`)
+      })
+
+      await expect(internal.uploadSessionBagSubmission(
+        { submissionID: prepared.submissionID },
+        { fetch: fetchMock as unknown as typeof fetch },
+      )).resolves.toEqual({
+        bagID: "bag-1",
+        url: "https://api.anybox.test/bags/bag-1",
+      })
+
+      expect(fetchMock).toHaveBeenCalledTimes(3)
+      await expect(stat(zipPath)).rejects.toThrow()
+    } finally {
+      await rm(tempRoot, { force: true, recursive: true })
+    }
+  })
+
+  it("uploads session bags against the Anybox root when relay baseURL includes /v1", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "anybox-bag-upload-v1-"))
+    try {
+      requestAgentJSONMock.mockResolvedValueOnce({
+        data: traceExport,
+      })
+
+      const prepared = await internal.prepareSessionBagSubmission(
+        { sessionID: "session-1", projectID: "project-1", workspaceDirectory: "C:\\Projects\\Demo" },
+        {
+          fetchRelaySession: async () => ({
+            connected: true,
+            status: "connected",
+            accessToken: "relay-token",
+            baseURL: "https://api.anybox.test/v1",
+          }),
+          now: new Date(2026, 4, 22, 9, 8, 7),
+          userDataPath: tempRoot,
+        },
+      )
+      const fetchMock = vi.fn(async (url: string | URL | Request) => {
+        const requestURL = String(url)
+        if (requestURL === "https://api.anybox.test/api/agent/bags/init") {
+          return new Response(JSON.stringify({
+            data: {
+              bagID: "bag-1",
+              uploadUrl: "https://upload.anybox.test/bag-1",
+            },
+          }), { status: 200 })
+        }
+
+        if (requestURL === "https://upload.anybox.test/bag-1") {
+          return new Response(null, { status: 200 })
+        }
+
+        if (requestURL === "https://api.anybox.test/api/agent/bags/complete") {
+          return new Response(JSON.stringify({
+            data: {
+              bagID: "bag-1",
+              url: "https://api.anybox.test/bags/bag-1",
+            },
+          }), { status: 200 })
+        }
+
+        throw new Error(`unexpected request: ${requestURL}`)
+      })
+
+      await expect(internal.uploadSessionBagSubmission(
+        { submissionID: prepared.submissionID },
+        { fetch: fetchMock as unknown as typeof fetch },
+      )).resolves.toEqual({
+        bagID: "bag-1",
+        url: "https://api.anybox.test/bags/bag-1",
+      })
+    } finally {
+      await rm(tempRoot, { force: true, recursive: true })
+    }
+  })
+
+  it("rejects bag preparation before reading trace data when Anybox is disconnected", async () => {
+    await expect(internal.prepareSessionBagSubmission(
+      { sessionID: "session-1", projectID: null, workspaceDirectory: null },
+      {
+        fetchRelaySession: async () => ({
+          connected: false,
+          status: "signed-out",
+          error: "Connect Anybox first.",
+        }),
+        userDataPath: "C:\\Temp\\Anybox",
+      },
+    )).rejects.toThrow("Connect Anybox first.")
+
+    expect(requestAgentJSONMock).not.toHaveBeenCalled()
   })
 
   it("saves a split session trace directory when runtime arrays are missing", async () => {
