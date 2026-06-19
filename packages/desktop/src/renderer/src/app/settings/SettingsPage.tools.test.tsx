@@ -293,8 +293,8 @@ describe("SettingsPage built-in tools", () => {
     render(<SettingsPage {...createSettingsPageProps({ onAutomaticUpdatesToggle, onCheckForUpdates })} />)
 
     expect(screen.getByText("Version 1.2.3")).toBeInTheDocument()
-    expect(screen.getByText("Installer version: 1.2.3")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Read release notes" })).toBeInTheDocument()
+    expect(screen.queryByText("Installer version: 1.2.3")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Read release notes" })).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Check for updates" })).toBeInTheDocument()
 
     const automaticUpdatesSwitch = screen.getByRole("switch", { name: /Automatic updates/i })
@@ -336,9 +336,6 @@ describe("SettingsPage built-in tools", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Open update center/i }))
     expect(onOpenUpdateCenter).toHaveBeenCalledTimes(1)
-
-    fireEvent.click(screen.getByRole("button", { name: /Read release notes/i }))
-    expect(onOpenUpdateCenter).toHaveBeenCalledTimes(2)
   })
 
   it("scrolls the active settings section back to the top when its nav item is clicked again", () => {
@@ -444,6 +441,9 @@ describe("SettingsPage built-in tools", () => {
 
   it("shows connected Anybox account details and signs out from the account page", () => {
     const onDeleteProviderAuthSession = vi.fn()
+    const openExternalUrl = vi.fn().mockResolvedValue({ ok: true, url: "https://provider.example/billing" })
+    setDesktopMock({ openExternalUrl })
+
     render(
       <SettingsPage
         {...createSettingsPageProps({
@@ -494,13 +494,48 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.getByText("agent@example.com")).toBeInTheDocument()
     expect(screen.getByText("Studio")).toBeInTheDocument()
     expect(screen.getByText("Pro")).toBeInTheDocument()
-    expect(screen.getByText("Active")).toBeInTheDocument()
-    expect(screen.getAllByText("Enabled")).toHaveLength(2)
-    expect(screen.getByText("3 / 5")).toBeInTheDocument()
     expect(screen.getByText(/2\.50/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "anybox.com.cn" }))
+    expect(openExternalUrl).toHaveBeenCalledWith({ url: "https://anybox.com.cn" })
+
+    fireEvent.click(screen.getByRole("button", { name: "Recharge" }))
+    expect(openExternalUrl).toHaveBeenCalledWith({ url: "https://provider.example/billing" })
 
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }))
     expect(onDeleteProviderAuthSession).toHaveBeenCalledWith("anybox")
+  })
+
+  it("opens the Provider dashboard when an Anybox account has no recharge URL", () => {
+    const openExternalUrl = vi.fn().mockResolvedValue({
+      ok: true,
+      url: "https://provider.anybox.com.cn/app/dashboard",
+    })
+    setDesktopMock({ openExternalUrl })
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          catalog: [
+            createAnyboxProvider({
+              baseURL: "https://anybox.com.cn/v1",
+              authState: {
+                status: "connected",
+                account: {
+                  email: "agent@example.com",
+                  workspaceName: "Studio",
+                },
+              },
+            }),
+          ],
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Account" }))
+    fireEvent.click(screen.getByRole("button", { name: "Recharge" }))
+
+    expect(openExternalUrl).toHaveBeenCalledWith({ url: "https://provider.anybox.com.cn/app/dashboard" })
   })
 
   it("moves Anybox provider browser login controls to the Account page", () => {

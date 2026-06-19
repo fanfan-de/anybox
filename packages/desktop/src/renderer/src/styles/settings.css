@@ -5795,6 +5795,20 @@ body.is-dragging-settings-page {
   gap: 0;
 }
 
+.settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-status-row {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, max-content);
+}
+
+.settings-account-status-side {
+  min-width: 0;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
 .settings-account-status {
   min-width: 0;
   max-width: 220px;
@@ -5840,6 +5854,34 @@ body.is-dragging-settings-page {
   line-height: 1.35;
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+.settings-account-link-button {
+  min-width: 0;
+  justify-self: end;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #8f63e9;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: right;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.settings-account-link-button:hover,
+.settings-account-link-button:focus-visible {
+  color: #704bd6;
+  text-decoration: underline;
+}
+
+.settings-account-link-button:focus-visible {
+  outline: 2px solid rgba(143, 99, 233, 0.28);
+  outline-offset: 3px;
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions {
@@ -5909,6 +5951,8 @@ body.is-dragging-settings-page {
 
   .settings-account-status,
   .settings-account-value,
+  .settings-account-link-button,
+  .settings-account-status-side,
   .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions {
     max-width: none;
     justify-self: stretch;

@@ -451,20 +451,6 @@ function formatProviderPlanLabel(account: ProviderCatalogItem["authState"]["acco
   return account?.planLabel ?? formatPlanCode(account?.planType ?? account?.subscription?.planCode) ?? null
 }
 
-function formatProviderSubscriptionStatus(account: ProviderCatalogItem["authState"]["account"]) {
-  return formatPlanCode(account?.subscription?.status) ?? null
-}
-
-function formatProviderEntitlementFlag(value: boolean | undefined, t: SettingsTranslate) {
-  if (value === true) return t("settings.account.entitlementEnabled")
-  if (value === false) return t("settings.account.entitlementDisabled")
-  return t("settings.account.entitlementUnknown")
-}
-
-function formatProviderDeviceLimit(value: number | undefined, t: SettingsTranslate) {
-  return typeof value === "number" && Number.isFinite(value) ? `${value}` : t("settings.account.entitlementUnknown")
-}
-
 function formatPlanCode(value: string | undefined) {
   const normalized = value?.trim()
   if (!normalized) return null
@@ -475,22 +461,22 @@ function formatPlanCode(value: string | undefined) {
     .join(" ")
 }
 
+const ANYBOX_ACCOUNT_DASHBOARD_URL = "https://provider.anybox.com.cn/app/dashboard"
+const ANYBOX_PRODUCT_HOME_URL = "https://anybox.com.cn"
+
 function getAnyboxRechargeUrl(provider: ProviderCatalogItem) {
   const account = provider.authState.account
   const credential = getProviderActiveCredential(provider)
   const direct = account?.rechargeUrl ?? credential?.rechargeUrl
   if (direct) return direct
 
-  const baseURL = provider.baseURL?.trim()
-  if (!baseURL) return null
-  return `${baseURL.replace(/\/+$/, "").replace(/\/v1$/, "")}/billing`
+  return ANYBOX_ACCOUNT_DASHBOARD_URL
 }
 
 type AnyboxAccountStatus = "unavailable" | "not_connected" | "pending" | "connected" | "expired" | "error"
 
 interface AnyboxAccountViewModel {
   account: ProviderCatalogItem["authState"]["account"] | null
-  description: string
   flow: ProviderCatalogItem["authState"]["flow"] | null
   provider: ProviderCatalogItem | null
   status: AnyboxAccountStatus
@@ -505,7 +491,6 @@ function getAnyboxAccountViewModel(
   if (!provider) {
     return {
       account: null,
-      description: t("settings.account.unavailableCopy"),
       flow: null,
       provider: null,
       status: "unavailable",
@@ -518,7 +503,6 @@ function getAnyboxAccountViewModel(
   if (flow && !isProviderFlowTerminal(flow.status)) {
     return {
       account,
-      description: flow.errorMessage ?? t("settings.account.pendingCopy"),
       flow,
       provider,
       status: "pending",
@@ -529,7 +513,6 @@ function getAnyboxAccountViewModel(
   if (provider.authState.status === "connected") {
     return {
       account,
-      description: t("settings.account.connectedCopy"),
       flow,
       provider,
       status: "connected",
@@ -540,7 +523,6 @@ function getAnyboxAccountViewModel(
   if (provider.authState.status === "expired") {
     return {
       account,
-      description: provider.authState.lastError ?? provider.lastAuthError ?? t("settings.account.notConnectedCopy"),
       flow,
       provider,
       status: "expired",
@@ -551,7 +533,6 @@ function getAnyboxAccountViewModel(
   if (provider.authState.status === "error") {
     return {
       account,
-      description: provider.authState.lastError ?? provider.lastAuthError ?? flow?.errorMessage ?? t("settings.account.errorFallback"),
       flow,
       provider,
       status: "error",
@@ -561,7 +542,6 @@ function getAnyboxAccountViewModel(
 
   return {
     account,
-    description: t("settings.account.notConnectedCopy"),
     flow,
     provider,
     status: "not_connected",
@@ -1212,7 +1192,6 @@ export function SettingsPage({
   isLoadingArchivedSessions,
   isOpen,
   appUpdateState,
-  appUpdateStatus,
   isCheckingAppUpdate,
   isSavingAutomaticUpdates,
   isRefreshingProviderCatalog,
@@ -1350,12 +1329,6 @@ export function SettingsPage({
       : false
     const anyboxAccountBalance = anyboxAccountProvider ? formatProviderBalance(anyboxAccountView.account ?? undefined) : null
     const anyboxAccountPlanLabel = formatProviderPlanLabel(anyboxAccountView.account ?? undefined)
-    const anyboxAccountSubscriptionStatus = formatProviderSubscriptionStatus(anyboxAccountView.account ?? undefined)
-    const anyboxAccountRelayStatus = formatProviderEntitlementFlag(anyboxAccountView.account?.entitlements?.relayEnabled, t)
-    const anyboxAccountModelGatewayStatus = formatProviderEntitlementFlag(anyboxAccountView.account?.entitlements?.modelGatewayEnabled, t)
-    const anyboxAccountDeviceLimits = anyboxAccountView.account?.entitlements
-      ? `${formatProviderDeviceLimit(anyboxAccountView.account.entitlements.maxDesktopDevices, t)} / ${formatProviderDeviceLimit(anyboxAccountView.account.entitlements.maxMobileDevices, t)}`
-      : t("settings.account.entitlementUnknown")
     const anyboxAccountRechargeUrl = anyboxAccountProvider ? getAnyboxRechargeUrl(anyboxAccountProvider) : null
     const activeProviderModels = activeProvider ? modelGroups[activeProvider.id] ?? [] : []
     const activeProviderBusy = activeProvider ? savingProviderID === activeProvider.id || deletingProviderID === activeProvider.id : false
@@ -1426,7 +1399,6 @@ export function SettingsPage({
     const showProviderSections = activeSection === "services" || activeSection === "defaults" || activeSection === "mcp"
     const appVersionNumber = appUpdateState?.version ?? "..."
     const appVersionLabel = `${t("settings.about.version")} ${appVersionNumber}`
-    const installerVersionLabel = `${t("settings.about.installerVersion")}: ${appVersionNumber}`
     const automaticUpdatesEnabled = appUpdateState?.automaticUpdates ?? true
     const aboutUpdateActionLabel = shouldOpenUpdateCenterOnly(appUpdateState)
       ? t("settings.about.openUpdateCenter")
@@ -1937,10 +1909,6 @@ export function SettingsPage({
         <div className="settings-about-row settings-about-version-row">
           <div className="settings-about-copy settings-about-version-copy">
             <h3>{appVersionLabel}</h3>
-            <p>{installerVersionLabel}</p>
-            <button className="settings-about-release-link" type="button" onClick={onOpenUpdateCenter}>
-              {t("settings.about.releaseNotes")}
-            </button>
           </div>
           <button
             className="primary-button settings-about-check-button"
@@ -1968,18 +1936,12 @@ export function SettingsPage({
         >
           <span className="settings-about-copy">
             <span className="settings-about-title">{t("settings.about.automaticUpdates")}</span>
-            <span className="settings-about-description">
-              {t("settings.about.automaticUpdatesDescription")}
-            </span>
           </span>
           <span className="settings-toggle-control" aria-hidden="true">
             <span className="settings-toggle-thumb" />
           </span>
         </button>
 
-        {appUpdateStatus ? (
-          <p className={`settings-about-status is-${appUpdateStatus.tone}`}>{appUpdateStatus.text}</p>
-        ) : null}
       </section>
     )
 
@@ -1989,7 +1951,6 @@ export function SettingsPage({
           <div className="settings-select-row">
             <span className="settings-select-copy">
               <span className="settings-select-title">{t("settings.general.languageTitle")}</span>
-              <span className="settings-select-description">{t("settings.general.languageCopy")}</span>
             </span>
             <span className="settings-select-control">
               <SettingsSelect<AppLocale>
@@ -2013,15 +1974,77 @@ export function SettingsPage({
       <div className="settings-account-layout">
         <section className="settings-panel settings-account-panel" aria-label={t("settings.account.title")}>
           <div className="settings-account-list">
-            <div className="settings-account-row">
+            <div className="settings-account-row settings-account-status-row">
               <span className="settings-account-copy">
                 <span className="settings-account-title">{t("settings.account.status")}</span>
-                <span className="settings-account-description">{anyboxAccountView.description}</span>
               </span>
-              <span className={`settings-account-status is-${anyboxAccountView.status}`}>
-                <span className="settings-account-status-dot" aria-hidden="true" />
-                <span>{anyboxAccountView.title}</span>
-              </span>
+              <div className="settings-account-status-side">
+                <span className={`settings-account-status is-${anyboxAccountView.status}`}>
+                  <span className="settings-account-status-dot" aria-hidden="true" />
+                  <span>{anyboxAccountView.title}</span>
+                </span>
+                <span className="settings-inline-actions settings-account-actions">
+                  {anyboxAccountView.status === "connected" && anyboxAccountRechargeUrl ? (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={anyboxAccountBusy}
+                      onClick={() => void openExternalUrl(anyboxAccountRechargeUrl)}
+                    >
+                      {t("settings.account.recharge")}
+                    </button>
+                  ) : null}
+                  {anyboxAccountView.status === "connected" ? (
+                    <>
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        disabled={anyboxAccountBusy}
+                        onClick={handleAnyboxAccountSignIn}
+                      >
+                        {t("settings.account.signInAgain")}
+                      </button>
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        disabled={anyboxAccountBusy}
+                        onClick={handleAnyboxAccountSignOut}
+                      >
+                        {t("settings.account.signOut")}
+                      </button>
+                    </>
+                  ) : anyboxAccountView.status === "pending" ? (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={anyboxAccountBusy}
+                      onClick={handleAnyboxAccountCancel}
+                    >
+                      {t("settings.account.cancelSignIn")}
+                    </button>
+                  ) : (
+                    <button
+                      className="primary-button"
+                      type="button"
+                      disabled={!anyboxAccountProvider || anyboxAccountBusy}
+                      onClick={handleAnyboxAccountSignIn}
+                    >
+                      {t("settings.account.signIn")}
+                    </button>
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div className="settings-account-row">
+              <span className="settings-account-title">{t("settings.account.productPage")}</span>
+              <button
+                className="settings-account-link-button"
+                type="button"
+                onClick={() => void openExternalUrl(ANYBOX_PRODUCT_HOME_URL)}
+              >
+                anybox.com.cn
+              </button>
             </div>
 
             {anyboxAccountView.status === "connected" ? (
@@ -2047,28 +2070,6 @@ export function SettingsPage({
                   </strong>
                 </div>
 
-                <div className="settings-account-row">
-                  <span className="settings-account-title">{t("settings.account.subscriptionStatus")}</span>
-                  <strong className="settings-account-value">
-                    {anyboxAccountSubscriptionStatus ?? t("settings.account.noValue")}
-                  </strong>
-                </div>
-
-                <div className="settings-account-row">
-                  <span className="settings-account-title">{t("settings.account.relay")}</span>
-                  <strong className="settings-account-value">{anyboxAccountRelayStatus}</strong>
-                </div>
-
-                <div className="settings-account-row">
-                  <span className="settings-account-title">{t("settings.account.modelGateway")}</span>
-                  <strong className="settings-account-value">{anyboxAccountModelGatewayStatus}</strong>
-                </div>
-
-                <div className="settings-account-row">
-                  <span className="settings-account-title">{t("settings.account.deviceLimits")}</span>
-                  <strong className="settings-account-value">{anyboxAccountDeviceLimits}</strong>
-                </div>
-
                 {anyboxAccountBalance ? (
                   <div className="settings-account-row">
                     <span className="settings-account-title">{t("settings.account.balance")}</span>
@@ -2078,70 +2079,6 @@ export function SettingsPage({
               </>
             ) : null}
 
-            <div className="settings-account-row settings-account-action-row">
-              <span className="settings-account-copy">
-                <span className="settings-account-title">Anybox</span>
-                <span className="settings-account-description">
-                  {anyboxAccountView.status === "connected"
-                    ? t("settings.account.connectedCopy")
-                    : anyboxAccountView.status === "pending"
-                      ? t("settings.account.pendingCopy")
-                      : anyboxAccountView.status === "unavailable"
-                        ? t("settings.account.unavailableCopy")
-                        : t("settings.account.notConnectedCopy")}
-                </span>
-              </span>
-              <span className="settings-inline-actions settings-account-actions">
-                {anyboxAccountView.status === "connected" && anyboxAccountRechargeUrl ? (
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    disabled={anyboxAccountBusy}
-                    onClick={() => void openExternalUrl(anyboxAccountRechargeUrl)}
-                  >
-                    {t("settings.account.recharge")}
-                  </button>
-                ) : null}
-                {anyboxAccountView.status === "connected" ? (
-                  <>
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      disabled={anyboxAccountBusy}
-                      onClick={handleAnyboxAccountSignIn}
-                    >
-                      {t("settings.account.signInAgain")}
-                    </button>
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      disabled={anyboxAccountBusy}
-                      onClick={handleAnyboxAccountSignOut}
-                    >
-                      {t("settings.account.signOut")}
-                    </button>
-                  </>
-                ) : anyboxAccountView.status === "pending" ? (
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    disabled={anyboxAccountBusy}
-                    onClick={handleAnyboxAccountCancel}
-                  >
-                    {t("settings.account.cancelSignIn")}
-                  </button>
-                ) : (
-                  <button
-                    className="primary-button"
-                    type="button"
-                    disabled={!anyboxAccountProvider || anyboxAccountBusy}
-                    onClick={handleAnyboxAccountSignIn}
-                  >
-                    {t("settings.account.signIn")}
-                  </button>
-                )}
-              </span>
-            </div>
           </div>
         </section>
       </div>
