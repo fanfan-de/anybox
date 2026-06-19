@@ -24,8 +24,8 @@ export const proofPoints = [
 export const scenarioCards = [
   {
     title: "代码",
-    image: "/product-preview.png",
-    imageAlt: "Anybox 桌面工作台处理代码任务的界面",
+    image: "/scenario-code-workflow.webp",
+    imageAlt: "代码场景的 AI Agent 辅助开发工作流宣传图",
     audience: "开发者、开源维护者、技术团队负责人",
     capability:
       "连接本地项目上下文，阅读代码、执行命令、跟踪变更，把 Agent 真正放进开发工作流。",
@@ -36,8 +36,8 @@ export const scenarioCards = [
   },
   {
     title: "办公",
-    image: "/product-preview.png",
-    imageAlt: "Anybox 桌面工作台协助资料整理与办公任务的界面",
+    image: "/scenario-office-workflow.webp",
+    imageAlt: "办公场景的资料整理、图表分析和后续行动宣传图",
     audience: "运营、产品、管理者、跨职能协作者",
     capability:
       "把文档、资料和业务问题交给 Agent 协同处理，从信息整理到方案输出都能保留过程。",
@@ -48,8 +48,8 @@ export const scenarioCards = [
   },
   {
     title: "创造",
-    image: "/anybox-mobile-product-shot.png",
-    imageAlt: "Anybox 移动端深色界面的创作任务预览",
+    image: "/scenario-creative-workflow.webp",
+    imageAlt: "创作场景的画布、素材板和概念迭代宣传图",
     audience: "设计师、内容创作者、独立开发者",
     capability:
       "从一个想法开始，让 Agent 帮你拆解方向、生成素材、迭代表达，直到作品可以交付。",
