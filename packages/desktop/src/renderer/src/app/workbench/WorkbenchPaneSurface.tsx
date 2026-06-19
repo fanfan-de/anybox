@@ -1,4 +1,4 @@
-import { memo, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react"
+import { memo, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent } from "react"
 import type { DesktopIpcOutput } from "../../../../shared/desktop-ipc-contract"
 import { CreateSessionCanvas, getCreateSessionProjectWorkspaces } from "../canvas/CreateSessionCanvas"
 import { SessionCanvasTopMenu } from "../canvas/SessionCanvasTopMenu"
@@ -31,6 +31,7 @@ import type { WorkbenchPaneState } from "../agent-workspace/workspace-derived-st
 import { useConversationTurns, type ConversationStoreApi } from "../agent-workspace/conversation-store"
 
 const THREAD_TOP_RESET_THRESHOLD_PX = 2
+const SESSION_BAG_DESCRIPTION_MAX_LENGTH = 2000
 
 function ComposerPlanModeNotice({ workflow }: { workflow: SessionWorkflowBadgeInfo }) {
   return (
@@ -148,12 +149,16 @@ function SessionBagSummary({ prepare }: { prepare: SessionBagPrepareResult }) {
   )
 }
 
-function SessionBagSubmissionDialog({
+export function SessionBagSubmissionDialog({
+  description,
+  onDescriptionChange,
   state,
   onCancel,
   onClose,
   onSubmit,
 }: {
+  description: string
+  onDescriptionChange: (description: string) => void
   state: SessionBagDialogState
   onCancel: () => void
   onClose: () => void
@@ -176,6 +181,10 @@ function SessionBagSubmissionDialog({
     void window.desktop?.openExternalUrl?.({ url: state.result.url })
   }
 
+  function handleDescriptionChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    onDescriptionChange(event.currentTarget.value.slice(0, SESSION_BAG_DESCRIPTION_MAX_LENGTH))
+  }
+
   const { t } = useI18n()
   const title =
     state.stage === "preparing"
@@ -192,6 +201,11 @@ function SessionBagSubmissionDialog({
     : state.stage === "error"
       ? state.prepare
       : undefined
+  const showDescriptionField =
+    state.stage === "confirm" ||
+    state.stage === "uploading" ||
+    (state.stage === "error" && Boolean(state.prepare))
+  const canEditDescription = state.stage === "confirm" || (state.stage === "error" && Boolean(state.prepare))
 
   return (
     <section className="session-bag-overlay" role="presentation" onClick={handleOverlayClick}>
@@ -212,6 +226,33 @@ function SessionBagSubmissionDialog({
         </header>
 
         {preparedSummary ? <SessionBagSummary prepare={preparedSummary} /> : null}
+
+        {showDescriptionField ? (
+          <div className="session-bag-problem-field">
+            <label className="session-bag-problem-label" htmlFor="session-bag-problem-description">
+              {t("workbench.sessionBag.problem.label")}
+            </label>
+            <textarea
+              id="session-bag-problem-description"
+              value={description}
+              placeholder={t("workbench.sessionBag.problem.placeholder")}
+              maxLength={SESSION_BAG_DESCRIPTION_MAX_LENGTH}
+              rows={5}
+              disabled={!canEditDescription}
+              aria-describedby="session-bag-problem-help session-bag-problem-count"
+              onChange={handleDescriptionChange}
+            />
+            <span className="session-bag-problem-footer">
+              <span id="session-bag-problem-help">{t("workbench.sessionBag.problem.hint")}</span>
+              <span id="session-bag-problem-count">
+                {t("workbench.sessionBag.problem.count", {
+                  count: description.length,
+                  max: SESSION_BAG_DESCRIPTION_MAX_LENGTH,
+                })}
+              </span>
+            </span>
+          </div>
+        ) : null}
 
         {state.stage === "success" ? (
           <div className="session-bag-success">
@@ -460,6 +501,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   const threadColumnRef = useRef<HTMLDivElement | null>(null)
   const bagOperationVersionRef = useRef(0)
   const [bagDialogState, setBagDialogState] = useState<SessionBagDialogState | null>(null)
+  const [bagDescription, setBagDescription] = useState("")
   const activeTurns = useConversationTurns(conversationStore, pane.sessionID)
   const activeSideChatTurns = useConversationTurns(conversationStore, pane.activeSideChatSession?.id ?? null)
   const composerParentMessagePreview = pane.composerParentMessageID
@@ -573,6 +615,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   }) {
     const operationVersion = bagOperationVersionRef.current + 1
     bagOperationVersionRef.current = operationVersion
+    setBagDescription("")
     const prepareSessionBag = window.desktop?.prepareSessionBagSubmission
     if (!prepareSessionBag) {
       setBagDialogState({
@@ -629,7 +672,10 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
       prepare,
     })
     try {
-      const result = await uploadSessionBag({ submissionID: prepare.submissionID })
+      const result = await uploadSessionBag({
+        submissionID: prepare.submissionID,
+        description: bagDescription,
+      })
       setBagDialogState({
         stage: "success",
         prepare,
@@ -653,6 +699,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
         ? currentState.prepare
         : undefined
     setBagDialogState(null)
+    setBagDescription("")
     if (currentState?.stage !== "success") {
       void discardPreparedSessionBag(prepare)
     }
@@ -661,6 +708,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   function handleCloseSessionBagDialog() {
     bagOperationVersionRef.current += 1
     setBagDialogState(null)
+    setBagDescription("")
   }
 
   return (
@@ -1069,7 +1117,9 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
       </div>
       {bagDialogState ? (
         <SessionBagSubmissionDialog
+          description={bagDescription}
           state={bagDialogState}
+          onDescriptionChange={setBagDescription}
           onCancel={handleCancelSessionBagDialog}
           onClose={handleCloseSessionBagDialog}
           onSubmit={() => void handleConfirmSessionBagUpload()}

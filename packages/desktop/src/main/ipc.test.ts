@@ -846,6 +846,8 @@ describe("ipc session trace export helpers", () => {
       )
       const zipPath = path.join(tempRoot, "session-bags", "staging", prepared.submissionID, prepared.filename)
       const uploadBody = await readFile(zipPath)
+      const rawDescription = ` ${"Report context ".repeat(180)} `
+      const expectedDescription = rawDescription.trim().slice(0, 2000)
       const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
         const requestURL = String(url)
         if (requestURL === "https://api.anybox.test/api/agent/bags/init") {
@@ -854,7 +856,8 @@ describe("ipc session trace export helpers", () => {
             authorization: "Bearer relay-token",
             "content-type": "application/json",
           })
-          expect(JSON.parse(String(init?.body))).toMatchObject({
+          const initBody = JSON.parse(String(init?.body))
+          expect(initBody).toMatchObject({
             kind: "session-trace",
             filename: prepared.filename,
             contentType: "application/zip",
@@ -862,7 +865,9 @@ describe("ipc session trace export helpers", () => {
             sha256: prepared.sha256,
             sessionID: "session-1",
             projectID: "project-1",
+            description: expectedDescription,
           })
+          expect(initBody.description).toHaveLength(2000)
           return new Response(JSON.stringify({
             data: {
               bagID: "bag-1",
@@ -890,7 +895,9 @@ describe("ipc session trace export helpers", () => {
             authorization: "Bearer relay-token",
             "content-type": "application/json",
           })
-          expect(JSON.parse(String(init?.body))).toEqual({
+          const completeBody = JSON.parse(String(init?.body))
+          expect(completeBody).not.toHaveProperty("description")
+          expect(completeBody).toEqual({
             bagID: "bag-1",
             sizeBytes: prepared.sizeBytes,
             sha256: prepared.sha256,
@@ -907,7 +914,7 @@ describe("ipc session trace export helpers", () => {
       })
 
       await expect(internal.uploadSessionBagSubmission(
-        { submissionID: prepared.submissionID },
+        { submissionID: prepared.submissionID, description: rawDescription },
         { fetch: fetchMock as unknown as typeof fetch },
       )).resolves.toEqual({
         bagID: "bag-1",
@@ -941,9 +948,10 @@ describe("ipc session trace export helpers", () => {
           userDataPath: tempRoot,
         },
       )
-      const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
         const requestURL = String(url)
         if (requestURL === "https://api.anybox.test/api/agent/bags/init") {
+          expect(JSON.parse(String(init?.body))).not.toHaveProperty("description")
           return new Response(JSON.stringify({
             data: {
               bagID: "bag-1",
@@ -969,7 +977,7 @@ describe("ipc session trace export helpers", () => {
       })
 
       await expect(internal.uploadSessionBagSubmission(
-        { submissionID: prepared.submissionID },
+        { submissionID: prepared.submissionID, description: "   " },
         { fetch: fetchMock as unknown as typeof fetch },
       )).resolves.toEqual({
         bagID: "bag-1",

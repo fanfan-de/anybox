@@ -1327,7 +1327,7 @@ export interface DesktopIpcContract {
     output: DesktopPrepareSessionBagSubmissionResult
   }
   "desktop:upload-session-bag-submission": {
-    input: { submissionID: string }
+    input: { submissionID: string; description?: string | null }
     output: DesktopUploadSessionBagSubmissionResult
   }
   "desktop:discard-session-bag-submission": {

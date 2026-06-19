@@ -674,6 +674,7 @@ interface DiscardSessionBagSubmissionOptions {
 }
 
 const SESSION_BAG_CONTENT_TYPE = "application/zip"
+const SESSION_BAG_DESCRIPTION_MAX_LENGTH = 2000
 const pendingSessionBagSubmissions = new Map<string, SessionBagSubmissionRecord>()
 
 function getDesktopAppVersion() {
@@ -747,6 +748,13 @@ function normalizeAnyboxRootURL(value: string | undefined) {
 
 function anyboxBagURL(baseURL: string, pathname: string) {
   return new URL(pathname.replace(/^\/+/, ""), `${normalizeAnyboxRootURL(baseURL)}/`).toString()
+}
+
+function normalizeSessionBagDescription(value: string | null | undefined) {
+  if (typeof value !== "string") return undefined
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  return trimmed.slice(0, SESSION_BAG_DESCRIPTION_MAX_LENGTH)
 }
 
 async function getAnyboxProviderRelaySessionForBag() {
@@ -1051,6 +1059,7 @@ async function uploadSessionBagSubmission(
   }
 
   const fetchImpl = options.fetch ?? fetch
+  const description = normalizeSessionBagDescription(input.description)
   const initResult = await requestAnyboxBagJSON<{
     bagID: string
     uploadUrl: string
@@ -1065,6 +1074,7 @@ async function uploadSessionBagSubmission(
     sessionID: record.sessionID,
     projectID: record.projectID,
     appVersion: getDesktopAppVersion(),
+    ...(description ? { description } : {}),
     trace: {
       fileCount: record.fileCount,
       recordCount: record.recordCount,

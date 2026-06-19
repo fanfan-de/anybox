@@ -41,6 +41,12 @@ describe("i18n translations", () => {
     expect(t("en-US", "workbench.sessionBag.redaction.enabled", { pattern: "apiKey", max: 20000 })).toBe(
       "apiKey keys, max 20000 chars",
     )
+    expect(t("zh-CN", "workbench.sessionBag.problem.count", { count: 12, max: 2000 })).toBe(
+      "12 / 2000 \u5b57\u7b26",
+    )
+    expect(t("en-US", "workbench.sessionBag.problem.count", { count: 12, max: 2000 })).toBe(
+      "12 / 2000 chars",
+    )
     expect(translateLiteral("zh-CN", "DeepSeek V4 Pro does not support image or PDF input.")).toBe(
       "DeepSeek V4 Pro 不支持图片或 PDF 输入。",
     )
