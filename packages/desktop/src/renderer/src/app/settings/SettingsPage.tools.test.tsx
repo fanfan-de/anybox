@@ -985,6 +985,37 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.getByText("No matching tokens")).toBeInTheDocument()
   })
 
+  it("filters appearance theme tokens by group", () => {
+    render(<SettingsPage {...createSettingsPageProps()} />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
+
+    selectSettingsOption("Filter token group", "Foundation / Content")
+
+    expect(screen.getAllByText("Foundation / Content").length).toBeGreaterThan(0)
+    expect(screen.getByText("Primary Text")).toBeInTheDocument()
+    expect(screen.queryByText("App Background")).not.toBeInTheDocument()
+  })
+
+  it("filters appearance theme tokens to customized rows", () => {
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          appearanceOverrides: {
+            "surface-app-light": "#ffffff",
+          },
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
+
+    selectSettingsOption("Filter token status", "Customized only")
+
+    expect(screen.getByText("App Background")).toBeInTheDocument()
+    expect(screen.queryByText("Shell Background")).not.toBeInTheDocument()
+  })
+
   it("uses localized appearance labels without helper descriptions in Chinese", () => {
     window.localStorage.setItem("desktop.locale", "zh-CN")
 

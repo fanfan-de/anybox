@@ -1,9 +1,12 @@
 import { Fragment, useMemo, useState, type DragEvent, type FormEvent, type MouseEvent, type ReactNode } from "react"
 import {
+  BackIcon,
   CalendarIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
   CloseIcon,
   DeleteIcon,
+  ForwardIcon,
   PlusIcon,
   SearchIcon,
 } from "../icons"
@@ -76,10 +79,10 @@ interface CalendarOverlaysState {
 
 const CREATE_EVENT_STATUS_VALUES = ["scheduled", "canceled"] as const satisfies readonly CalendarEventStatus[]
 
-const TODO_COLOR = "#8a5cf6"
-const DEADLINE_COLOR = "#c47a2c"
-const REMINDER_COLOR = "#d94d64"
-const AGENT_COLOR = "#64748b"
+const TODO_COLOR = "var(--calendar-todo-accent)"
+const DEADLINE_COLOR = "var(--calendar-deadline-accent)"
+const REMINDER_COLOR = "var(--calendar-reminder-accent)"
+const AGENT_COLOR = "var(--calendar-agent-accent)"
 
 const HOURS = Array.from({ length: 12 }, (_item, index) => index + 8)
 const WEEKDAY_LABEL_REFERENCE = new Date(2020, 5, 7)
@@ -1048,7 +1051,7 @@ export function CalendarPage({ projects = [], quickAddProjects = [], windowContr
             title={t("calendar.previous")}
             onClick={() => moveAnchor(-1)}
           >
-            <span aria-hidden="true">‹</span>
+            <BackIcon />
           </button>
           <div className="calendar-period-picker">
             <button
@@ -1060,7 +1063,7 @@ export function CalendarPage({ projects = [], quickAddProjects = [], windowContr
               onClick={() => setIsDatePickerOpen((current) => !current)}
             >
               <h1>{currentViewLabel}</h1>
-              <span aria-hidden="true">⌄</span>
+              <ChevronDownIcon />
             </button>
             {isDatePickerOpen ? (
               <div className="calendar-date-popover" role="dialog" aria-label={t("calendar.chooseDate")}>
@@ -1088,7 +1091,7 @@ export function CalendarPage({ projects = [], quickAddProjects = [], windowContr
             title={t("calendar.next")}
             onClick={() => moveAnchor(1)}
           >
-            <span aria-hidden="true">›</span>
+            <ForwardIcon />
           </button>
         </div>
 
@@ -1331,6 +1334,7 @@ export function CalendarPage({ projects = [], quickAddProjects = [], windowContr
           projects={projects}
           projectFilterOptions={todoProjectFilterOptions}
           searchQuery={searchQuery}
+          selectedItemId={selectedItem?.id ?? ""}
           selectedProjectFilterID={activeTodoProjectID}
           todoSummary={todoSummary}
           todoItems={unscheduledTasks}
@@ -1361,6 +1365,7 @@ export function CalendarPage({ projects = [], quickAddProjects = [], windowContr
                 days={[anchorDate]}
                 items={visibleItems}
                 locale={locale}
+                selectedItemId={selectedItem?.id ?? ""}
                 sourceById={sourceById}
                 t={t}
                 onAllDayDrop={handleAllDayDrop}
@@ -1375,6 +1380,7 @@ export function CalendarPage({ projects = [], quickAddProjects = [], windowContr
                 days={Array.from({ length: 7 }, (_item, index) => addDays(weekStart, index))}
                 items={visibleItems}
                 locale={locale}
+                selectedItemId={selectedItem?.id ?? ""}
                 sourceById={sourceById}
                 t={t}
                 onAllDayDrop={handleAllDayDrop}
@@ -1389,6 +1395,7 @@ export function CalendarPage({ projects = [], quickAddProjects = [], windowContr
                 anchorDate={anchorDate}
                 items={visibleItems}
                 locale={locale}
+                selectedItemId={selectedItem?.id ?? ""}
                 sourceById={sourceById}
                 onDayDrop={handleAllDayDrop}
                 onCreateEvent={handleSlotContextMenu}
@@ -1401,6 +1408,7 @@ export function CalendarPage({ projects = [], quickAddProjects = [], windowContr
                 anchorDate={anchorDate}
                 items={visibleItems}
                 locale={locale}
+                selectedItemId={selectedItem?.id ?? ""}
                 sourceById={sourceById}
                 t={t}
                 onItemContextMenu={handleItemContextMenu}
@@ -1435,6 +1443,7 @@ interface CalendarSourcesPanelProps {
   projects: CalendarProjectOption[]
   projectFilterOptions: ProjectSummary[]
   searchQuery: string
+  selectedItemId: string
   selectedProjectFilterID: string
   t: CalendarTranslate
   todoSummary: TodoSummary
@@ -1455,6 +1464,7 @@ function CalendarSourcesPanel({
   projects,
   projectFilterOptions,
   searchQuery,
+  selectedItemId,
   selectedProjectFilterID,
   t,
   todoSummary,
@@ -1482,8 +1492,20 @@ function CalendarSourcesPanel({
           <input
             value={searchQuery}
             placeholder={t("calendar.searchTodos")}
+            aria-label={t("calendar.searchTodos")}
             onChange={(event) => onSearchQueryChange(event.target.value)}
           />
+          {searchQuery ? (
+            <button
+              type="button"
+              className="calendar-source-search-clear"
+              aria-label={t("connections.search.clear")}
+              title={t("prompts.clearSearchTitle")}
+              onClick={() => onSearchQueryChange("")}
+            >
+              <CloseIcon />
+            </button>
+          ) : null}
         </label>
         <button
           type="button"
@@ -1544,7 +1566,10 @@ function CalendarSourcesPanel({
             <button
               key={task.id}
               type="button"
-              className="calendar-unscheduled-task"
+              className={joinClassNames(
+                "calendar-unscheduled-task",
+                task.id === selectedItemId && "is-selected",
+              )}
               draggable
               onClick={() => onItemSelect(task.id)}
               onDragStart={(event) => {
@@ -1568,6 +1593,7 @@ interface TimeGridProps {
   days: Date[]
   items: CalendarItem[]
   locale: AppLocale
+  selectedItemId: string
   sourceById: Map<string, CalendarSource>
   t: CalendarTranslate
   onAllDayDrop: (event: DragEvent<HTMLElement>, day: Date) => void
@@ -1582,6 +1608,7 @@ function TimeGrid({
   days,
   items,
   locale,
+  selectedItemId,
   sourceById,
   t,
   onAllDayDrop,
@@ -1633,6 +1660,7 @@ function TimeGrid({
                 <CalendarEventChip
                   key={item.id}
                   item={item}
+                  isSelected={item.id === selectedItemId}
                   locale={locale}
                   source={sourceById.get(item.sourceId)}
                   t={t}
@@ -1678,6 +1706,7 @@ function TimeGrid({
                     <CalendarEventChip
                       key={item.id}
                       item={item}
+                      isSelected={item.id === selectedItemId}
                       locale={locale}
                       source={sourceById.get(item.sourceId)}
                       t={t}
@@ -1697,6 +1726,7 @@ function TimeGrid({
 }
 
 interface CalendarEventChipProps {
+  isSelected: boolean
   item: CalendarItem
   locale: AppLocale
   source?: CalendarSource
@@ -1706,13 +1736,18 @@ interface CalendarEventChipProps {
   onDragStart: (event: DragEvent<HTMLElement>) => void
 }
 
-function CalendarEventChip({ item, locale, source, t, onClick, onContextMenu, onDragStart }: CalendarEventChipProps) {
+function CalendarEventChip({ isSelected, item, locale, source, t, onClick, onContextMenu, onDragStart }: CalendarEventChipProps) {
   const isMovable = item.entityType !== "agent_suggestion"
   return (
     <span
       role="button"
       tabIndex={0}
-      className={joinClassNames("calendar-event-chip", item.isSuggestion && "is-suggestion")}
+      aria-pressed={isSelected}
+      className={joinClassNames(
+        "calendar-event-chip",
+        item.isSuggestion && "is-suggestion",
+        isSelected && "is-selected",
+      )}
       draggable={isMovable}
       style={{ borderLeftColor: getItemAccentColor(item, source) }}
       onClick={(event) => {
@@ -1740,6 +1775,7 @@ interface MonthGridProps {
   anchorDate: Date
   items: CalendarItem[]
   locale: AppLocale
+  selectedItemId: string
   sourceById: Map<string, CalendarSource>
   onDayDrop: (event: DragEvent<HTMLElement>, day: Date) => void
   onCreateEvent: (event: MouseEvent<HTMLElement>, context: QuickAddContext) => void
@@ -1752,6 +1788,7 @@ function MonthGrid({
   anchorDate,
   items,
   locale,
+  selectedItemId,
   sourceById,
   onDayDrop,
   onCreateEvent,
@@ -1800,7 +1837,11 @@ function MonthGrid({
                 <button
                   key={item.id}
                   type="button"
-                  className={joinClassNames("calendar-month-item", item.isSuggestion && "is-suggestion")}
+                  className={joinClassNames(
+                    "calendar-month-item",
+                    item.isSuggestion && "is-suggestion",
+                    item.id === selectedItemId && "is-selected",
+                  )}
                   draggable={item.entityType !== "agent_suggestion"}
                   style={{ borderLeftColor: getItemAccentColor(item, sourceById.get(item.sourceId)) }}
                   onClick={() => onItemSelect(item.id)}
@@ -1824,6 +1865,7 @@ interface ScheduleListProps {
   anchorDate: Date
   items: CalendarItem[]
   locale: AppLocale
+  selectedItemId: string
   sourceById: Map<string, CalendarSource>
   t: CalendarTranslate
   onItemContextMenu: (event: MouseEvent<HTMLElement>, item: CalendarItem) => void
@@ -1831,7 +1873,7 @@ interface ScheduleListProps {
   onItemSelect: (itemId: string) => void
 }
 
-function ScheduleList({ anchorDate, items, locale, sourceById, t, onItemContextMenu, onItemDragStart, onItemSelect }: ScheduleListProps) {
+function ScheduleList({ anchorDate, items, locale, selectedItemId, sourceById, t, onItemContextMenu, onItemDragStart, onItemSelect }: ScheduleListProps) {
   const rangeStart = startOfDay(anchorDate)
   const rangeEnd = addDays(rangeStart, 14)
   const scheduledItems = items
@@ -1855,7 +1897,11 @@ function ScheduleList({ anchorDate, items, locale, sourceById, t, onItemContextM
               <button
                 key={item.id}
                 type="button"
-                className={joinClassNames("calendar-schedule-item", item.isSuggestion && "is-suggestion")}
+                className={joinClassNames(
+                  "calendar-schedule-item",
+                  item.isSuggestion && "is-suggestion",
+                  item.id === selectedItemId && "is-selected",
+                )}
                 draggable={item.entityType !== "agent_suggestion"}
                 onClick={() => onItemSelect(item.id)}
                 onDragStart={(event) => onItemDragStart(event, item)}

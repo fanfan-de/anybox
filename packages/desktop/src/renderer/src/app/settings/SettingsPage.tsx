@@ -585,6 +585,16 @@ function countAppearanceTokenRows(groups: readonly AppearanceTokenGroup[]) {
   return groups.reduce((count, group) => count + group.rows.length, 0)
 }
 
+type AppearanceTokenGroupFilter = "all" | (typeof APPEARANCE_TOKEN_GROUPS)[number]["id"]
+type AppearanceTokenCustomizationFilter = "all" | "customized"
+
+function isAppearanceTokenRowCustomized(
+  row: AppearanceTokenGroup["rows"][number],
+  appearanceOverrides: AppearanceTokenMap,
+) {
+  return Boolean(appearanceOverrides[row.lightToken] || appearanceOverrides[row.darkToken])
+}
+
 function matchesAppearanceTokenRowSearch(
   group: AppearanceTokenGroup,
   row: AppearanceTokenGroup["rows"][number],
@@ -613,15 +623,25 @@ function filterAppearanceTokenGroups(
   groups: readonly AppearanceTokenGroup[],
   rawQuery: string,
   appearanceTokenValues: Record<AppearanceTokenName, string>,
+  groupFilter: AppearanceTokenGroupFilter,
+  customizationFilter: AppearanceTokenCustomizationFilter,
+  appearanceOverrides: AppearanceTokenMap,
 ): AppearanceTokenGroup[] {
   const normalizedQuery = rawQuery.trim().toLowerCase()
-  if (!normalizedQuery) return [...groups]
 
   return groups.flatMap((group) => {
+    if (groupFilter !== "all" && group.id !== groupFilter) return []
+
     const groupHaystack = `${group.id} ${group.label} ${group.description}`.toLowerCase()
-    const rows = groupHaystack.includes(normalizedQuery)
-      ? group.rows
-      : group.rows.filter((row) => matchesAppearanceTokenRowSearch(group, row, appearanceTokenValues, normalizedQuery))
+    const rows = group.rows.filter((row) => {
+      if (customizationFilter === "customized" && !isAppearanceTokenRowCustomized(row, appearanceOverrides)) {
+        return false
+      }
+
+      if (!normalizedQuery || groupHaystack.includes(normalizedQuery)) return true
+
+      return matchesAppearanceTokenRowSearch(group, row, appearanceTokenValues, normalizedQuery)
+    })
 
     if (rows.length === 0) return []
 
@@ -1308,6 +1328,9 @@ export function SettingsPage({
     const [archivedSessionSearchQuery, setArchivedSessionSearchQuery] = useState("")
     const [providerSearch, setProviderSearch] = useState("")
     const [themeTokenSearchQuery, setThemeTokenSearchQuery] = useState("")
+    const [themeTokenGroupFilter, setThemeTokenGroupFilter] = useState<AppearanceTokenGroupFilter>("all")
+    const [themeTokenCustomizationFilter, setThemeTokenCustomizationFilter] =
+      useState<AppearanceTokenCustomizationFilter>("all")
     const [isCustomProviderDialogOpen, setIsCustomProviderDialogOpen] = useState(false)
     const [editingCustomProviderID, setEditingCustomProviderID] = useState<string | null>(null)
     const [mcpServerSearchQuery, setMcpServerSearchQuery] = useState("")
@@ -1347,9 +1370,39 @@ export function SettingsPage({
     const filteredArchivedSessions = archivedSessions.filter((session) =>
       doesArchivedSessionMatchSearch(session, normalizedArchivedSessionSearchQuery),
     )
+    const appearanceTokenGroupFilterOptions = useMemo<Array<{ value: AppearanceTokenGroupFilter; label: string }>>(
+      () => [
+        { value: "all", label: t("settings.appearance.allTokenGroups") },
+        ...APPEARANCE_TOKEN_GROUPS.map((group) => ({ value: group.id, label: group.label })),
+      ],
+      [t],
+    )
+    const appearanceTokenCustomizationFilterOptions = useMemo<
+      Array<{ value: AppearanceTokenCustomizationFilter; label: string }>
+    >(
+      () => [
+        { value: "all", label: t("settings.appearance.allTokens") },
+        { value: "customized", label: t("settings.appearance.customizedTokens") },
+      ],
+      [t],
+    )
     const filteredAppearanceTokenGroups = useMemo(
-      () => filterAppearanceTokenGroups(APPEARANCE_TOKEN_GROUPS, themeTokenSearchQuery, appearanceTokenValues),
-      [appearanceTokenValues, themeTokenSearchQuery],
+      () =>
+        filterAppearanceTokenGroups(
+          APPEARANCE_TOKEN_GROUPS,
+          themeTokenSearchQuery,
+          appearanceTokenValues,
+          themeTokenGroupFilter,
+          themeTokenCustomizationFilter,
+          appearanceOverrides,
+        ),
+      [
+        appearanceOverrides,
+        appearanceTokenValues,
+        themeTokenCustomizationFilter,
+        themeTokenGroupFilter,
+        themeTokenSearchQuery,
+      ],
     )
     const appearanceTokenTotalCount = countAppearanceTokenRows(APPEARANCE_TOKEN_GROUPS)
     const appearanceTokenVisibleCount = countAppearanceTokenRows(filteredAppearanceTokenGroups)
@@ -2354,12 +2407,28 @@ export function SettingsPage({
                         onChange={(event: ChangeEvent<HTMLInputElement>) => setThemeTokenSearchQuery(event.target.value)}
                       />
                     </div>
-                    <span className="settings-theme-token-search-count" aria-live="polite">
-                      {t("settings.appearance.searchTokensCount", {
-                        total: appearanceTokenTotalCount,
-                        visible: appearanceTokenVisibleCount,
-                      })}
-                    </span>
+                    <div className="settings-theme-token-filter-controls">
+                      <SettingsSelect<AppearanceTokenGroupFilter>
+                        ariaLabel={t("settings.appearance.tokenGroupFilterLabel")}
+                        className="settings-theme-token-filter-select"
+                        options={appearanceTokenGroupFilterOptions}
+                        value={themeTokenGroupFilter}
+                        onChange={setThemeTokenGroupFilter}
+                      />
+                      <SettingsSelect<AppearanceTokenCustomizationFilter>
+                        ariaLabel={t("settings.appearance.tokenStatusFilterLabel")}
+                        className="settings-theme-token-status-select"
+                        options={appearanceTokenCustomizationFilterOptions}
+                        value={themeTokenCustomizationFilter}
+                        onChange={setThemeTokenCustomizationFilter}
+                      />
+                      <span className="settings-theme-token-search-count" aria-live="polite">
+                        {t("settings.appearance.searchTokensCount", {
+                          total: appearanceTokenTotalCount,
+                          visible: appearanceTokenVisibleCount,
+                        })}
+                      </span>
+                    </div>
                   </div>
 
                   {filteredAppearanceTokenGroups.length === 0 ? (

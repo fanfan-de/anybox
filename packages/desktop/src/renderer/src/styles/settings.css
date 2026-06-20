@@ -4444,14 +4444,31 @@ body.is-dragging-settings-page {
 
 .settings-theme-token-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(220px, 1fr) auto;
   align-items: center;
   gap: 10px;
 }
 
 .settings-theme-token-search {
-  width: min(520px, 100%);
+  width: 100%;
+  max-width: 520px;
   background: var(--mix-seg-panel-muted-72-seg-panel-28);
+}
+
+.settings-theme-token-filter-controls {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.settings-theme-token-filter-select {
+  width: min(260px, 30vw);
+}
+
+.settings-theme-token-status-select {
+  width: 156px;
 }
 
 .settings-theme-token-search-count {
@@ -4608,6 +4625,17 @@ body.is-dragging-settings-page {
   }
 
   .settings-theme-token-search {
+    width: 100%;
+  }
+
+  .settings-theme-token-filter-controls {
+    justify-content: stretch;
+    flex-wrap: wrap;
+  }
+
+  .settings-theme-token-filter-select,
+  .settings-theme-token-status-select {
+    flex: 1 1 180px;
     width: 100%;
   }
 
