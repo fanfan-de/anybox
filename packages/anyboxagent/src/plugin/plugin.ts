@@ -719,22 +719,10 @@ function normalizePluginRegistryEntryURL(rawUrl: string) {
   if (url.search || url.hash) {
     throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin registry entry URL must not contain query parameters or fragments.")
   }
-  return url.toString().replace(/\/+$/, "")
-}
-
-function isPluginRegistryManifestURL(url: string) {
-  const pathname = assertHTTPSURL(url, "Plugin registry entry URL").pathname.toLowerCase()
-  return pathname.endsWith("/plugin.json") || pathname.endsWith("/plugin.meta.json")
-}
-
-function pluginRegistryManifestURLs(entryURL: string) {
-  const normalized = normalizePluginRegistryEntryURL(entryURL)
-  if (isPluginRegistryManifestURL(normalized)) return [normalized]
-
-  return [
-    `${normalized}/plugin.meta.json`,
-    `${normalized}/plugin.json`,
-  ]
+  if (!url.pathname.toLowerCase().endsWith("/plugin.json")) {
+    throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin registry entry URL must point to plugin.json.")
+  }
+  return url.toString()
 }
 
 function riskWeight(risk: PluginRisk) {
@@ -1152,23 +1140,14 @@ async function fetchRegistryIndex() {
   return uniqueStrings(entries.map(normalizePluginRegistryEntryURL))
 }
 
-async function fetchPluginMeta(baseURL: string) {
-  let lastError: unknown
-  for (const url of pluginRegistryManifestURLs(baseURL)) {
-    try {
-      const item = await fetchJSONWithSchema(
-        url,
-        PluginRegistryItem,
-        MAX_PLUGIN_META_BYTES,
-        "Plugin metadata",
-      )
-      return registryItemToManifestSource(item, url)
-    } catch (error) {
-      lastError = error
-    }
-  }
-
-  throw lastError
+async function fetchPluginMeta(manifestURL: string) {
+  const item = await fetchJSONWithSchema(
+    manifestURL,
+    PluginRegistryItem,
+    MAX_PLUGIN_META_BYTES,
+    "Plugin metadata",
+  )
+  return registryItemToManifestSource(item, manifestURL)
 }
 
 function listCachedRemoteRegistryManifestSources() {

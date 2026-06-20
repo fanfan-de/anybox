@@ -77,11 +77,5 @@
       "description": "Sets up, develops, tests, and deploys Render Workflows. Covers first-time scaffolding (via CLI or manual), SDK installation (Python or TypeScript), task patterns (retries, subtasks, fan-out), local development, Dashboard deployment, and troubleshooting. Use when a user wants to set up Render Workflows for the first time, scaffold a workflow service, add or modify workflow tasks, test workflows locally, or deploy workflows to Render.",
       "directory": "render-workflows"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/render/render-0.1.0.zip",
-    "sha256": "d202419e78009c15c73b38280ad76540a6254a49e3e789b8567cc2b5db18e17d",
-    "size": 132433
-  }
+  ]
 }

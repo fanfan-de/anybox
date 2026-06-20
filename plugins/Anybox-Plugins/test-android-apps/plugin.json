@@ -66,11 +66,5 @@
       "description": "Gather and interpret Android performance evidence on an adb target using Simpleperf CPU profiles, Perfetto or Compose traces, gfxinfo frame data, dumpsys meminfo snapshots, Java heap dumps, and native allocation traces. Use when asked to profile an Android app flow, find CPU-heavy functions, diagnose jank, capture startup or frame timing evidence, compare before/after performance, explain what code is taking time, or gather memory/leak profiling artifacts.",
       "directory": "android-performance"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/test-android-apps/test-android-apps-0.1.0.zip",
-    "sha256": "92321d93bc84a330e65bb4c48e179bc48d50125326ba0121d04b7879941302c2",
-    "size": 103106
-  }
+  ]
 }

@@ -160,11 +160,5 @@
       "description": "Use Feishu Open Platform tools to look up users, inspect chats and messages, and send bot messages through a connected Feishu custom app.",
       "directory": "feishu"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/feishu/feishu-0.1.0.zip",
-    "sha256": "a8f1deaa493e1146292eb566d398e160f25ab65397266e13794f8d158c0af1ce",
-    "size": 8776
-  }
+  ]
 }

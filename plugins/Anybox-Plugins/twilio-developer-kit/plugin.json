@@ -335,11 +335,5 @@
       "description": ">",
       "directory": "twilio-whatsapp-send-message"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/twilio-developer-kit/twilio-developer-kit-0.2.0.zip",
-    "sha256": "d1062a16df25ce41db22fac2259d3f17b46d7e7b2a075251d32275b8631e0cc5",
-    "size": 310270
-  }
+  ]
 }

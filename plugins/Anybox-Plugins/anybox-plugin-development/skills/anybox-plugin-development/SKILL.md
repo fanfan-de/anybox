@@ -72,7 +72,8 @@ description: 创建、审查或验证 Anybox 第三方插件包。Use when the u
 - `connectors`
 - `apps`，仅用于旧兼容
 - `commands`、`agents`，当前是保留字段
-- `skillPreviews` and `package` are allowed in repository/registry `plugin.json` files for marketplace preview and remote install metadata. Runtime package validation ignores these fields after download.
+- `skillPreviews` is allowed in repository/registry `plugin.json` files for marketplace preview. `package` is optional and should only be present when a real downloadable artifact exists.
+- Built-in registry `index.json` entries must point directly to HTTPS `plugin.json` manifest URLs. Directory URLs are not supported.
 
 未知顶层字段会被拒绝。
 

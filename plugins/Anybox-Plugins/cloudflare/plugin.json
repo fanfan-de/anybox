@@ -166,11 +166,5 @@
       "description": "Cloudflare Workers CLI for deploying, developing, and managing Workers, KV, R2, D1, Vectorize, Hyperdrive, Workers AI, Containers, Queues, Workflows, Pipelines, and Secrets Store. Load before running wrangler commands to ensure correct syntax and best practices. Biases towards retrieval from Cloudflare docs over pre-trained knowledge.",
       "directory": "wrangler"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/cloudflare/cloudflare-0.1.0.zip",
-    "sha256": "5e3264a53095fd33156280cc6a87ef1d14781e348a16ca076044660e3a946cdc",
-    "size": 784554
-  }
+  ]
 }

@@ -78,11 +78,5 @@
       "description": "Develop, reload, debug, inspect, screenshot, and diagnose Obsidian plugins and themes through CLI developer commands.",
       "directory": "obsidian-dev"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/obsidian-cli/obsidian-cli-0.1.0.zip",
-    "sha256": "0889aa39ca1778379720e8544389edb2ec12ad952e0e62345aa5d9c88d203fbd",
-    "size": 156628
-  }
+  ]
 }

@@ -52,11 +52,5 @@
       "description": "Use when the user asks to inspect Sentry issues or events, summarize recent production errors, or pull basic Sentry health data via the Sentry API; perform read-only queries with the bundled script and require `SENTRY_AUTH_TOKEN`.",
       "directory": "sentry"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/sentry/sentry-0.1.0.zip",
-    "sha256": "1b30fcfb9dc8bbeccfaa69f991eed6331dd176ab075062dc648a301f857fba86",
-    "size": 16960
-  }
+  ]
 }

@@ -41,11 +41,5 @@
       "description": "一个简单的打招呼 skill，用于测试插件是否正常工作。当用户说\"打个招呼\"、\"测试插件\"或\"hello\"时触发。",
       "directory": "hello-world"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/test-plugin/test-plugin-1.0.0.zip",
-    "sha256": "ce4cb952f46bdacb0e8a047f0369b7f0ddea71f23b237b8b31c3da86d27f3ab6",
-    "size": 1958
-  }
+  ]
 }

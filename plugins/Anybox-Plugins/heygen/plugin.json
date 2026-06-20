@@ -63,11 +63,5 @@
       "description": "|",
       "directory": "heygen-video"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/heygen/heygen-2.2.0.zip",
-    "sha256": "f69f0ae2a034f4094adc92e7f00d6ab9837eeb7638e6dff3774a9ce444273158",
-    "size": 229790
-  }
+  ]
 }

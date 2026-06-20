@@ -174,11 +174,5 @@
       "description": "Control Windows desktop apps through the guarded Computer Use Windows plugin.",
       "directory": "computer-use"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/computer-use-windows/computer-use-windows-0.1.1.zip",
-    "sha256": "f1d409d631379cdfd6548ae99b002530e47f113b8703ebc787d9de1cb6722919",
-    "size": 44871857
-  }
+  ]
 }

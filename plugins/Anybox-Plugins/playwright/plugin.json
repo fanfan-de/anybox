@@ -75,11 +75,5 @@
         "Tool calls can interact with pages after the existing permission layer approves them."
       ]
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/playwright/playwright-1.0.0.zip",
-    "sha256": "00fa9975080f224edd4ef71a2dbf542728e7c2369cc4db0272b1a7f2d3345552",
-    "size": 1794
-  }
+  ]
 }

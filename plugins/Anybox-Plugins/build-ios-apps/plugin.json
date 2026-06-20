@@ -118,11 +118,5 @@
       "description": "Refactor and review SwiftUI view files with strong defaults for small dedicated subviews, MV-over-MVVM data flow, stable view trees, explicit dependency injection, and correct Observation usage. Use when cleaning up a SwiftUI view, splitting long bodies, removing inline actions or side effects, reducing computed `some View` helpers, or standardizing `@Observable` and view model initialization patterns.",
       "directory": "swiftui-view-refactor"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/build-ios-apps/build-ios-apps-0.1.0.zip",
-    "sha256": "19ea29dfb9bee37ef2db72d6d430d822739ab7e2bb94a0fd7afbacc4a1beaf62",
-    "size": 111824
-  }
+  ]
 }

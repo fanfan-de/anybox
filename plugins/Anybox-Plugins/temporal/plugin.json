@@ -57,11 +57,5 @@
       "description": "Develop, debug, and manage Temporal applications across Python, TypeScript, Go, and Java. Use when the user is building workflows, activities, or workers with a Temporal SDK, debugging issues like non-determinism errors, stuck workflows, or activity retries, using Temporal CLI, Temporal Server, or Temporal Cloud, or working with durable execution concepts like signals, queries, heartbeats, versioning, continue-as-new, child workflows, or saga patterns.",
       "directory": "temporal-developer"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/temporal/temporal-0.2.0.zip",
-    "sha256": "2c50201ba19f1da66f82bb024057cca92013957d9b5405fd85fcc9e4f43e25f7",
-    "size": 149546
-  }
+  ]
 }

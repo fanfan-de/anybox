@@ -60,11 +60,5 @@
       "description": ">-",
       "directory": "neon-postgres-egress-optimizer"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/neon-postgres/neon-postgres-1.0.0.zip",
-    "sha256": "1361f040c62260a59e0cd3f694285ffd385dc3c0946e280f8130888f9d814cbc",
-    "size": 20759
-  }
+  ]
 }

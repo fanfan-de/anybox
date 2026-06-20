@@ -85,11 +85,5 @@
         "Prefer a narrow project folder instead of your full home directory."
       ]
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/filesystem/filesystem-1.0.0.zip",
-    "sha256": "5e7dca6f6633b774e1249216beca40119c7fedc4811c7651eb15438af56cbc35",
-    "size": 1285
-  }
+  ]
 }

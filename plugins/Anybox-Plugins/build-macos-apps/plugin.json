@@ -109,11 +109,5 @@
       "description": "Customize macOS 15+ SwiftUI windows and scene behavior using Window, WindowGroup, and macOS window modifiers. Use when styling or hiding window toolbars and titles, extending drag regions with WindowDragGesture, replacing window backgrounds with materials, disabling minimize or restoration for utility windows, setting default or ideal window placement from content/display size, creating borderless windows, or tuning default launch behavior.",
       "directory": "window-management"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/build-macos-apps/build-macos-apps-0.1.2.zip",
-    "sha256": "76362133f638999726cc616f78d3386fcd1d222fdeab740fde669f9a6325dd9a",
-    "size": 63626
-  }
+  ]
 }

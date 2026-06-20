@@ -44,11 +44,5 @@
       "description": "Manage issues, projects & team workflows in Linear. Use when the user wants to read, create or updates tickets in Linear.",
       "directory": "linear"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/linear/linear-0.0.0.zip",
-    "sha256": "f99a3f870ab5a6a8c0d93d73dd36a264196529b53da82bbbfe96d45d4bd4bd72",
-    "size": 308039
-  }
+  ]
 }

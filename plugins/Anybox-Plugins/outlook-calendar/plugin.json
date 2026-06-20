@@ -79,11 +79,5 @@
       "description": "Safely write to delegated or shared Outlook calendars. Use when the user explicitly wants to create, update, respond to, cancel, delete, or add a small attachment to an event on a shared or delegated Outlook Calendar.",
       "directory": "outlook-calendar-shared-calendars"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/outlook-calendar/outlook-calendar-0.1.0.zip",
-    "sha256": "fc3b40409fae67ead640b1db23ba970862502987705d5ce2aa849ca9844c79be",
-    "size": 427225
-  }
+  ]
 }

@@ -163,11 +163,5 @@
       "description": "当用户明确要求发送邮件时，通过用户配置的 SMTP 邮箱发送邮件。",
       "directory": "smtp-email"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/smtp-email/smtp-email-0.1.0.zip",
-    "sha256": "8463dad102375aa15174ae3e9a6974fbbb7fe9717063f0e08b2907e277020dae",
-    "size": 11236
-  }
+  ]
 }

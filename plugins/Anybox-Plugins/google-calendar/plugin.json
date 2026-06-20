@@ -75,11 +75,5 @@
       "description": "Build a practical meeting prep brief from a connected Google Calendar event and its nearby context. Use when the user wants to prepare for an upcoming meeting, understand what to read beforehand, pull in linked notes or docs, or get a concise brief on what the meeting appears to require.",
       "directory": "google-calendar-meeting-prep"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/google-calendar/google-calendar-1.2.0.zip",
-    "sha256": "50bf2963fdca8d2645f725190f2e3b1fe0e7137452a3221f81f3537bcc6ea97e",
-    "size": 160757
-  }
+  ]
 }

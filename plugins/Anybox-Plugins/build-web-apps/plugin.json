@@ -90,11 +90,5 @@
       "description": "Postgres performance optimization and best practices from Supabase. Use this skill when writing, reviewing, or optimizing Postgres queries, schema designs, or database configurations.",
       "directory": "supabase-best-practices"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/build-web-apps/build-web-apps-0.1.0.zip",
-    "sha256": "953dce9433f1148bb129c8ab5ecf526fa0e1bc28743d0c85d0a62441c8275299",
-    "size": 214778
-  }
+  ]
 }

@@ -77,11 +77,5 @@
       "description": "Draft Slack replies from available context. Use when the user wants help finding messages that likely need a response and preparing reply drafts.",
       "directory": "slack-reply-drafting"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/slack/slack-0.1.0.zip",
-    "sha256": "76efe65055e291ba6c403ef84b0fdf16d3c17281a5fa88f921e5eee1c7c224f8",
-    "size": 91861
-  }
+  ]
 }

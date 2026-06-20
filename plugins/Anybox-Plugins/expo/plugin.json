@@ -119,11 +119,5 @@
       "description": "Use Expo DOM components to run web code in a webview on native and as-is on web. Migrate web code to native incrementally.",
       "directory": "use-dom"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/expo/expo-1.0.0.zip",
-    "sha256": "dfd0ac6c1d0b43a0d98eb8cdba18d10d9925e3e07d7d9c21615a9e313386e0b4",
-    "size": 133804
-  }
+  ]
 }

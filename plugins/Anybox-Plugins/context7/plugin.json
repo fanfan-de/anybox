@@ -64,11 +64,5 @@
         "No local command is started for this plugin."
       ]
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/context7/context7-1.0.0.zip",
-    "sha256": "ce629d4ce3969fd2d6a57cb9b820ac18d1fa20321bc7637a145541c130c24414",
-    "size": 1115
-  }
+  ]
 }

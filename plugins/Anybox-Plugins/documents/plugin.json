@@ -57,11 +57,5 @@
       "description": "Create, edit, redline, and comment on `.docx` files inside the local Anybox workspace, with a strict render-and-verify workflow. Use `render_docx.py` to generate page PNGs (and optional PDF) for visual QA, then iterate until layout is flawless before delivering the final DOCX.",
       "directory": "documents"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/documents/documents-0.1.0.zip",
-    "sha256": "449b9d9d2dc3a9686d0fee2a589b69473eefb17bb6b07e9b9d33624740d6f4c5",
-    "size": 415044
-  }
+  ]
 }

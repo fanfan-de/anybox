@@ -294,11 +294,5 @@
       "description": "Vercel Workflow DevKit (WDK) expert guidance. Use when building durable workflows, long-running tasks, API routes or agents that need pause/resume, retries, step-based execution, or crash-safe orchestration with Vercel Workflow.",
       "directory": "workflow"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/vercel/vercel-0.21.0.zip",
-    "sha256": "8af6616ae43929299b88183863b8f46f9574bfb590457dca8ebf97dd97d1b935",
-    "size": 369011
-  }
+  ]
 }

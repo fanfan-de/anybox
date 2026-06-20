@@ -101,11 +101,5 @@
       "description": "Set browser-game architecture before implementation. Use when the user needs engine choice, simulation and render boundaries, input model, asset organization, or save/debug/performance strategy.",
       "directory": "web-game-foundations"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/game-studio/game-studio-0.1.0.zip",
-    "sha256": "e7161870246ba73b0faf9894ede37ae981d13fe6dfc0b601e19797fe31ae1a5d",
-    "size": 70243
-  }
+  ]
 }

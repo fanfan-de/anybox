@@ -82,11 +82,5 @@
       "description": "Edit SharePoint-hosted Word `.docx` files while preserving document structure and styling. Use when the user wants to update a real Word document in SharePoint rather than summarize it as plain text.",
       "directory": "sharepoint-word-docs"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/sharepoint/sharepoint-0.1.0.zip",
-    "sha256": "4ef0c87e88445509383087e43aa21681a2d3601f8846c92931296f904e50be8a",
-    "size": 387274
-  }
+  ]
 }

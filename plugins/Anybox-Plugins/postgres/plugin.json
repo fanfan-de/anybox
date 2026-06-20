@@ -78,11 +78,5 @@
         "Use read-only database credentials when you only need inspection."
       ]
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/postgres/postgres-1.0.0.zip",
-    "sha256": "6984744c4fad2b2e23c75477c3e31bddffaca7ac70542e75f527e2d216c143ae",
-    "size": 1321
-  }
+  ]
 }

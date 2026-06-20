@@ -58,12 +58,6 @@
       "directory": "gmail-inbox-triage"
     }
   ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/gmail/gmail-0.1.0.zip",
-    "sha256": "7978a5b0e09bfc84e2c2938b898384b4272ad527fc27de3ad15cd0f5f351d202",
-    "size": 69760
-  },
   "connectorRequirements": [
     {
       "connector": "gmail",

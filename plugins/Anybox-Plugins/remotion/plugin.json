@@ -60,11 +60,5 @@
       "description": "Best practices for Remotion - Video creation in React",
       "directory": "remotion"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/remotion/remotion-1.0.0.zip",
-    "sha256": "1f96d21bbf84e542645208d57dd471704ecea267938664e094a6f591d8777aaf",
-    "size": 120474
-  }
+  ]
 }

@@ -49,11 +49,5 @@
       "description": "创建、审查或验证 Anybox 第三方插件包。Use when the user asks to make a plugin, convert an API/SaaS/local tool into an installable plugin, write plugin.json, add plugin MCP servers, add bundled plugin skills, define plugin-owned connectors with API key or OAuth credentials, package plugin metadata, or debug plugin catalog/install/diagnostic failures.",
       "directory": "anybox-plugin-development"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/anybox-plugin-development/anybox-plugin-development-0.1.0.zip",
-    "sha256": "2fd4720b93f61b7d4332a763c02f1614a3d61dba7c43bb96872bc2740f3a8e64",
-    "size": 14512
-  }
+  ]
 }

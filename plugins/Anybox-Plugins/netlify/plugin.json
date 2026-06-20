@@ -108,11 +108,5 @@
       "description": "Guide for using Netlify Image CDN for image optimization and transformation. Use when serving optimized images, creating responsive image markup, setting up user-uploaded image pipelines, or configuring image transformations. Covers the /.netlify/images endpoint, query parameters, remote image allowlisting, clean URL rewrites, and composing uploads with Functions + Blobs.",
       "directory": "netlify-image-cdn"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/netlify/netlify-1.1.0.zip",
-    "sha256": "8bdf1b2b678219051b16c7820be528e50edb4bb67deb74c084724375724b1eaf",
-    "size": 164876
-  }
+  ]
 }

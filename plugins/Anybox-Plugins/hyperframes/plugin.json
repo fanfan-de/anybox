@@ -69,11 +69,5 @@
       "description": "|",
       "directory": "website-to-hyperframes"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/hyperframes/hyperframes-0.1.0.zip",
-    "sha256": "b48adc8929b6c0cb285413422427e427621bb647ea26f47eca457d19c89aaf16",
-    "size": 219794
-  }
+  ]
 }

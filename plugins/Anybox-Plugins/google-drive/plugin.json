@@ -74,11 +74,5 @@
       "description": "Google Slides work for finding, reading, summarizing, creating, importing, visual cleanup, template migration, structural repair, and content edits in native Slides decks.",
       "directory": "google-slides"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/google-drive/google-drive-0.1.0.zip",
-    "sha256": "6a56228b60dea9208e74be629624c0dff051be85a51f6e0a5000eb1b2653d4ab",
-    "size": 277693
-  }
+  ]
 }

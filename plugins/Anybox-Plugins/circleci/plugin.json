@@ -68,11 +68,5 @@
       "description": "Optimize CircleCI configuration for speed, reliability, and maintainability. Use when users ask to improve `.circleci/config.yml`, reduce CI runtime, tune caching/workspaces/parallelism, remove pipeline waste, or fix flaky pipeline behavior caused by configuration choices.",
       "directory": "config"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/circleci/circleci-1.0.0.zip",
-    "sha256": "a113fdb15cace277bdd4a110ec27501af72ada008b8d3a8705fe179131addf0f",
-    "size": 25574
-  }
+  ]
 }

@@ -70,11 +70,5 @@
       "description": "Use when reviewing HubSpot pipeline health, forecasts, stale deals, slipping close dates, or open deal risks.",
       "directory": "hubspot-pipeline-health"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/hubspot/hubspot-2.0.0.zip",
-    "sha256": "35b165c5cbefc07ed47207220c243f369a6771fdba78cce87317e6c2a023d542",
-    "size": 23012
-  }
+  ]
 }

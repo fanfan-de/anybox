@@ -60,11 +60,5 @@
       "description": "Use Zotero Desktop from Codex to enable/probe the local API, search a local Zotero library, list items/collections/tags, export BibTeX, insert citation keys into LaTeX or Markdown drafts, read indexed full text when requested, and import BibTeX/RIS records into Zotero through the connector server. Use when the user mentions Zotero, citations, references.bib, BibTeX export, local Zotero API, localhost:23119, or adding citations from a Zotero library.",
       "directory": "zotero"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/zotero/zotero-0.1.0.zip",
-    "sha256": "51b486a5c8de3f4d5a41bc2df7e3043f088e782d6fda52aa6ebaac5d9dd09f77",
-    "size": 33742
-  }
+  ]
 }

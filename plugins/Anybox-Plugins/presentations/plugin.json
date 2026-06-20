@@ -53,11 +53,5 @@
       "description": "Create editable PowerPoint `.pptx` decks locally with code-first slide modules, PNG previews, layout JSON, and strict layout QA. Use when the user wants a durable presentation, slide deck, PPT, PPTX, or PowerPoint artifact.",
       "directory": "presentations"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/presentations/presentations-0.1.1.zip",
-    "sha256": "26ca069670a0e204c78eacf89469eb0779ec537339ec98d733642ec37dca045d",
-    "size": 46125
-  }
+  ]
 }

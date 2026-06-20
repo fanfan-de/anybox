@@ -60,11 +60,5 @@
       "description": "Inspect, test, debug, screenshot, trace, and automate websites through Playwright Agent CLI shell commands.",
       "directory": "playwright-cli"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/playwright-cli/playwright-cli-0.1.0.zip",
-    "sha256": "e5d720bdbacae42ad3a06b91d4efeb10e4d35577ce0658002a96e285fb248d23",
-    "size": 4296
-  }
+  ]
 }

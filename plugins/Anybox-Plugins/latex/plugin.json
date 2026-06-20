@@ -66,11 +66,5 @@
       "description": "Detect existing TeX Live or MacTeX first, then optionally install a Codex-managed full TeX Live runtime only when no existing TeX Live installation is detected.",
       "directory": "texlive-runtime-installer"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/latex/latex-0.2.0.zip",
-    "sha256": "cc8cc5ce946df268d7129bce01ff70cdb1c240005ffb071432b28ff66fff2295",
-    "size": 19211260
-  }
+  ]
 }

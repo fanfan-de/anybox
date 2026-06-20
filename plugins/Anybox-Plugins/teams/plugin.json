@@ -82,11 +82,5 @@
       "description": "Draft Microsoft Teams replies from available context. Use when the user wants help finding messages that likely need a response and preparing reply drafts.",
       "directory": "teams-reply-drafting"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/teams/teams-0.1.0.zip",
-    "sha256": "8aed57e2e998c84ad99fc9fa4cab4f667ac42057fab8ba7fbd19a8fd002a0251",
-    "size": 337801
-  }
+  ]
 }

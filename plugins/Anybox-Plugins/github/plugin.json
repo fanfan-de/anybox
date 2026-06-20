@@ -109,11 +109,5 @@
       "description": "Publish local changes to GitHub by confirming scope, committing intentionally, pushing the branch, and opening a draft PR through the GitHub app from this plugin, with `gh` used only as a fallback where connector coverage is insufficient.",
       "directory": "yeet"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/github/github-1.0.0.zip",
-    "sha256": "481b673191d9cbfd6e6fd79841043be0835c2a192417aa68b1db7c637f2fbe83",
-    "size": 75554
-  }
+  ]
 }

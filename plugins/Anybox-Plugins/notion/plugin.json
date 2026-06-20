@@ -69,11 +69,5 @@
       "description": "Turn Notion specs into implementation plans, tasks, and progress tracking; use when implementing PRDs/feature specs and creating Notion plans + tasks from them.",
       "directory": "notion-spec-to-implementation"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/notion/notion-0.1.0.zip",
-    "sha256": "ca684c0f5ed659b62a134993ca82c45a3331e93bdbee0f45ca3f3cf36738cc19",
-    "size": 242132
-  }
+  ]
 }

@@ -907,14 +907,6 @@ async function writeLocalSourcePluginPackage() {
     skills: "skills",
   }, null, 2))
 
-  await writeFile(join(packageRoot, "plugin.meta.json"), JSON.stringify({
-    id: "local-source-lab",
-    name: "local-source-lab",
-    version: "0.1.0",
-    description: "Registry metadata next to expanded local plugin source.",
-  }, null, 2))
-  await writeFile(join(packageRoot, "local-source-lab-0.1.0.zip"), "fixture release artifact")
-
   return packageRoot
 }
 
@@ -1430,14 +1422,14 @@ describe("plugin marketplace API", () => {
         ? input
         : input instanceof URL ? input.toString() : input.url
       if (url === "https://registry.example.test/index.json") {
-        return new Response(JSON.stringify(["https://plugins.example.test/remote-lab"]), {
+        return new Response(JSON.stringify(["https://plugins.example.test/remote-lab/plugin.json"]), {
           status: 200,
           headers: {
             "content-type": "application/json",
           },
         })
       }
-      if (url === "https://plugins.example.test/remote-lab/plugin.meta.json") {
+      if (url === "https://plugins.example.test/remote-lab/plugin.json") {
         return new Response(JSON.stringify(remotePluginMeta), {
           status: 200,
           headers: {
@@ -1493,9 +1485,9 @@ describe("plugin marketplace API", () => {
         ? input
         : input instanceof URL ? input.toString() : input.url
       if (url === "https://registry.example.test/index.json") {
-        return new Response(JSON.stringify(["https://plugins.example.test/meta-only"]), { status: 200 })
+        return new Response(JSON.stringify(["https://plugins.example.test/meta-only/plugin.json"]), { status: 200 })
       }
-      if (url === "https://plugins.example.test/meta-only/plugin.meta.json") {
+      if (url === "https://plugins.example.test/meta-only/plugin.json") {
         return new Response(JSON.stringify({
           name: "meta-only",
           version: "1.0.0",
@@ -1521,10 +1513,11 @@ describe("plugin marketplace API", () => {
     expect(plugin?.installable).toBe(false)
   })
 
-  test("loads remote metadata from root plugin.json when plugin.meta.json is absent", async () => {
+  test("does not resolve legacy remote registry directory URLs", async () => {
     await useTempDatabase()
     const app = createServerApp()
     process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "https://registry.example.test/index.json"
+    let manifestRequestCount = 0
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = typeof input === "string"
         ? input
@@ -1532,22 +1525,8 @@ describe("plugin marketplace API", () => {
       if (url === "https://registry.example.test/index.json") {
         return new Response(JSON.stringify(["https://plugins.example.test/root-manifest"]), { status: 200 })
       }
-      if (url === "https://plugins.example.test/root-manifest/plugin.meta.json") {
-        return new Response("not found", { status: 404 })
-      }
-      if (url === "https://plugins.example.test/root-manifest/plugin.json") {
-        return new Response(JSON.stringify({
-          name: "root-manifest",
-          version: "1.0.0",
-          description: "Remote plugin described by root plugin.json.",
-          interface: {
-            displayName: "Root Manifest",
-            shortDescription: "Root manifest catalog entry.",
-            category: "Docs",
-          },
-          mcpServers: [],
-          skills: [],
-        }), { status: 200 })
+      if (url.startsWith("https://plugins.example.test/root-manifest/")) {
+        manifestRequestCount += 1
       }
       return new Response("not found", { status: 404 })
     }) as typeof fetch
@@ -1557,8 +1536,8 @@ describe("plugin marketplace API", () => {
     const plugin = body.data?.find((item) => item.id === "root-manifest")
 
     expect(response.status).toBe(200)
-    expect(plugin?.name).toBe("Root Manifest")
-    expect(plugin?.installable).toBe(false)
+    expect(plugin).toBeUndefined()
+    expect(manifestRequestCount).toBe(0)
   })
 
   test("loads remote metadata from direct plugin.json URLs in the registry index", async () => {
@@ -1680,9 +1659,9 @@ describe("plugin marketplace API", () => {
         ? input
         : input instanceof URL ? input.toString() : input.url
       if (url === "https://registry.example.test/index.json") {
-        return new Response(JSON.stringify(["https://plugins.example.test/remote-lab"]), { status: 200 })
+        return new Response(JSON.stringify(["https://plugins.example.test/remote-lab/plugin.json"]), { status: 200 })
       }
-      if (url === "https://plugins.example.test/remote-lab/plugin.meta.json") {
+      if (url === "https://plugins.example.test/remote-lab/plugin.json") {
         return new Response(JSON.stringify(remotePluginMeta), { status: 200 })
       }
       if (url === "https://cdn.example.test/remote-lab.zip") {
@@ -1749,9 +1728,9 @@ describe("plugin marketplace API", () => {
         ? input
         : input instanceof URL ? input.toString() : input.url
       if (url === "https://registry.example.test/index.json") {
-        return new Response(JSON.stringify(["https://plugins.example.test/remote-lab"]), { status: 200 })
+        return new Response(JSON.stringify(["https://plugins.example.test/remote-lab/plugin.json"]), { status: 200 })
       }
-      if (url === "https://plugins.example.test/remote-lab/plugin.meta.json") {
+      if (url === "https://plugins.example.test/remote-lab/plugin.json") {
         return new Response(JSON.stringify(remotePluginMeta), { status: 200 })
       }
       if (url === "https://cdn.example.test/remote-lab.zip") {

@@ -180,11 +180,5 @@
       "description": "\"日程待办摘要：编排 calendar +agenda 和 task +get-my-tasks，生成指定日期的日程与未完成任务摘要。适用于了解今天/明天/本周的安排。\"",
       "directory": "lark-workflow-standup-report"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/feishu-cli/feishu-cli-0.1.0.zip",
-    "sha256": "f1783abb0ceaf86c09c21f833f75d3842233f8767b3a65227f5a409cc64be49e",
-    "size": 1132975
-  }
+  ]
 }

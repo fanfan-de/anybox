@@ -54,11 +54,5 @@
       "description": "Translate the text in a Canva design into another language while preserving the original layout as much as possible. Use when the user wants a localized or translated version of an existing Canva design and expects the original file to remain unchanged.",
       "directory": "canva-translate-design"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/canva/canva-1.0.0.zip",
-    "sha256": "b68c5df7721e8b5537b3a80ce7cad72c07238443c0c3ea3de832d91d770c61c2",
-    "size": 1104826
-  }
+  ]
 }

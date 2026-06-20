@@ -173,11 +173,5 @@
       "description": "Use when the user wants to generate, inspect, or wait for AI video generation tasks through the Kling API.",
       "directory": "kling-video"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/kling/kling-0.1.0.zip",
-    "sha256": "8aebb0e222a794c2b1bfba6919d66a7eadbbbcaa02dafe15d5ba2b73de18a729",
-    "size": 8886
-  }
+  ]
 }

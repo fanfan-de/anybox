@@ -53,11 +53,5 @@
       "description": "Reviews code changes using CodeRabbit AI. Use when user asks for code review, PR feedback, code quality checks, security issues, or requests fix-review cycles.",
       "directory": "coderabbit-review"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/coderabbit/coderabbit-1.1.1.zip",
-    "sha256": "95603ec068caacbe4e207549afbd52ec67a12ad0e534a42eb023aaa3fe855041",
-    "size": 10366
-  }
+  ]
 }

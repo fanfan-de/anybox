@@ -124,11 +124,5 @@
       "description": "Use when creating new skills, editing existing skills, or verifying skills work before deployment",
       "directory": "writing-skills"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/superpowers/superpowers-5.1.0.zip",
-    "sha256": "d1226869d2c07f46531c6a11e6a292ce6647c94380d37ecf56ae04c3f61cddc1",
-    "size": 183320
-  }
+  ]
 }

@@ -56,11 +56,5 @@
       "description": "Use this skill when a user requests to create, modify, analyze, visualize, or work with spreadsheet files (`.xlsx`, `.xls`, `.csv`, `.tsv`) with formulas, formatting, charts, tables, and recalculation.",
       "directory": "spreadsheets"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/spreadsheets/spreadsheets-0.1.0.zip",
-    "sha256": "eb12a0ac404e868e396660a8be88a3d0a777107daaac73af4e30a8a9a2f9c731",
-    "size": 286435
-  }
+  ]
 }

@@ -49,11 +49,5 @@
       "description": "Guide for upgrading Stripe API versions and SDKs",
       "directory": "upgrade-stripe"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/stripe/stripe-1.0.0.zip",
-    "sha256": "8f86c99c43d9d21a21f81dcf1ce1d146bcceec06c2e4a0e283521659b55dbac4",
-    "size": 24856
-  }
+  ]
 }

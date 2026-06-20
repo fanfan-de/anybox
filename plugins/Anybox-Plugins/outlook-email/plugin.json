@@ -77,11 +77,5 @@
       "description": "Extract action items, deadlines, commitments, and owners from Outlook email threads and mailbox searches. Use when the user wants a task list from one thread, several related messages, or a mailbox slice, including who owes what and when.",
       "directory": "outlook-email-task-extraction"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/outlook-email/outlook-email-0.1.0.zip",
-    "sha256": "a5b058b6ad952addbac72821a21b21a939697f02cf9ff44122a0817d82c0cc63",
-    "size": 417156
-  }
+  ]
 }

@@ -22,14 +22,14 @@ const args = parseArgs(process.argv.slice(2))
 const sourceArg = args.source ?? process.env.OPENAI_PLUGINS_SRC
 
 if (!sourceArg) {
-  fail("Usage: node scripts/convert-openai-plugins.mjs --source <openai/plugins repo or plugins dir> [--overwrite-existing] [--zip] [--no-zip] [--registry-meta]")
+  fail("Usage: node scripts/convert-openai-plugins.mjs --source <openai/plugins repo or plugins dir> [--overwrite-existing] [--registry-meta] [--zip] [--no-zip]")
 }
 
 const sourceRoot = resolve(sourceArg)
 const pluginsRoot = existsSync(join(sourceRoot, "plugins")) ? join(sourceRoot, "plugins") : sourceRoot
 const overwriteExisting = Boolean(args["overwrite-existing"])
 const emitRegistryMeta = Boolean(args["registry-meta"])
-const emitZip = (Boolean(args.zip) || emitRegistryMeta) && !Boolean(args["no-zip"])
+const emitZip = Boolean(args.zip) && !Boolean(args["no-zip"])
 const stagingRoot = resolve(process.env.TEMP ?? process.env.TMP ?? repoRoot, "anybox-openai-plugin-conversion")
 
 const converted = []

@@ -78,11 +78,5 @@
       "description": "Help engineers evaluate a local skill or plugin, explain why it scored that way, show what to fix first, measure real token usage, benchmark starter scenarios, or decide what to run next. Use when the user says things like \"evaluate this skill\", \"give me an analysis of the game dev skill\", \"why did this score that way\", \"what should I fix first\", \"measure the real token usage of this skill\", or \"what should I run next?\".",
       "directory": "plugin-eval"
     }
-  ],
-  "package": {
-    "type": "zip",
-    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/plugin-eval/plugin-eval-0.1.0.zip",
-    "sha256": "586ea66c14502f981600ba1281dc40805ebc5ffac79e7868796eb02c93f3b997",
-    "size": 109495
-  }
+  ]
 }

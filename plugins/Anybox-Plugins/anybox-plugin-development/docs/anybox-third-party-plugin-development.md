@@ -61,7 +61,7 @@ my-anybox-plugins/
 ### Manifest
 
 `plugin.json` 是插件清单。它是严格 JSON，未知顶层字段会被拒绝。
-Repository and registry `plugin.json` files may also include `skillPreviews` and `package` so `index.json` can point directly at each plugin manifest. Downloaded zip packages may omit those registry-only fields.
+Repository and registry `plugin.json` files may also include `skillPreviews` so `index.json` can point directly at each plugin manifest. Include `package` only when a real downloadable artifact exists.
 
 最小清单：
 
@@ -709,8 +709,8 @@ anybox-plugin-examples/
 $env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\Projects\anybox-plugin-examples"
 ```
 
-如果要做正式分发，可以额外提供 registry metadata 和 zip 包。zip 是远程安装发布产物，不应该替代仓库里的展开源码目录；第三方生态还需要进一步规范签名、信任确认和安装审计。
-For the built-in registry, `index.json` is a JSON array of HTTPS manifest URLs such as `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/<plugin-id>/plugin.json`.
+For the built-in registry, `index.json` is a JSON array of HTTPS manifest URLs such as `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/<plugin-id>/plugin.json`. Directory URLs are not supported.
+Zip artifacts are optional remote install artifacts. Do not commit them to the built-in expanded plugin registry unless the matching `package` metadata points to a real downloadable file.
 
 ## 常见问题
 
