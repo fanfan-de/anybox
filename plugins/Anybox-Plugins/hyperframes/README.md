@@ -1,26 +1,40 @@
 # hyperframes
 
-OpenAI Codex plugin for [HyperFrames](https://hyperframes.heygen.com) — an open-source video rendering framework where HTML is the source of truth for video.
+OpenAI Codex plugin for [HyperFrames](https://hyperframes.heygen.com), an open-source video rendering framework where HTML is the source of truth for video.
 
 ## What's included
 
-Five skills for authoring and rendering video:
+This package mirrors the official HyperFrames Codex plugin metadata and skills from [`heygen-com/hyperframes`](https://github.com/heygen-com/hyperframes).
 
-- **hyperframes** — composition authoring (HTML + CSS + GSAP), visual styles, palettes, house style, motion principles, transitions, captions, audio-reactive visuals
-- **hyperframes-cli** — `hyperframes init / lint / preview / render / transcribe / tts / doctor / browser`
-- **hyperframes-registry** — `hyperframes add` to install reusable blocks and components (social overlays, shader transitions, data viz, effects)
-- **gsap** — tweens, timelines, easing, stagger, performance
-- **website-to-hyperframes** — 7-step pipeline that captures a URL and produces a finished video
+Included skills:
+
+- embedded-captions
+- faceless-explainer
+- general-video
+- graphic-overlays
+- hyperframes
+- hyperframes-animation
+- hyperframes-cli
+- hyperframes-core
+- hyperframes-creative
+- hyperframes-media
+- hyperframes-registry
+- motion-graphics
+- pr-to-video
+- product-launch-video
+- remotion-to-hyperframes
+- slideshow
+- website-to-video
 
 ## Requirements
 
 The skills invoke the `hyperframes` CLI via `npx hyperframes`, which needs:
 
-- Node.js ≥ 22
+- Node.js >= 22
 - FFmpeg on `PATH`
 
 See [hyperframes.heygen.com/quickstart](https://hyperframes.heygen.com/quickstart) for full setup.
 
 ## Source of truth
 
-The skills are authored in [`heygen-com/hyperframes`](https://github.com/heygen-com/hyperframes) (under `skills/` at the repo root) and mirrored here. File issues about skill content on that repo.
+The skills are authored in [`heygen-com/hyperframes`](https://github.com/heygen-com/hyperframes) under the repository root `skills/` directory. The plugin manifest is mirrored from `.codex-plugin/plugin.json`.

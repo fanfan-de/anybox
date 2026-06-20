@@ -1,7 +1,7 @@
 {
   "name": "hyperframes",
-  "version": "0.1.0",
-  "description": "Write HTML, render video. Compositions, GSAP animations, captions, voiceovers, audio-reactive visuals, and website-to-video capture for HyperFrames.",
+  "version": "0.6.117",
+  "description": "Write HTML, render video. Compositions, Tailwind v4 styles, GSAP and runtime adapter animations, captions, voiceovers, audio-reactive visuals, and website-to-video capture for HyperFrames.",
   "author": {
     "name": "HeyGen",
     "email": "hyperframes@heygen.com",
@@ -14,7 +14,12 @@
     "hyperframes",
     "video",
     "html",
+    "tailwind",
     "gsap",
+    "lottie",
+    "three",
+    "waapi",
+    "animejs",
     "animation",
     "composition",
     "rendering",
@@ -22,16 +27,14 @@
     "tts",
     "audio-reactive"
   ],
+  "skills": "./skills/",
   "interface": {
     "displayName": "HyperFrames by HeyGen",
     "shortDescription": "Write HTML, render video",
-    "longDescription": "Build videos from HTML with HyperFrames. Author compositions with HTML + CSS + GSAP, use the CLI for init/preview/render/transcribe/tts, install reusable registry blocks and components, follow the GSAP animation reference, and turn any website into a video with the 7-step capture-to-video pipeline.",
+    "longDescription": "Build videos from HTML with HyperFrames. Author compositions with HTML, CSS, Tailwind v4 browser-runtime styles, GSAP, Anime.js, Lottie, Three.js, and WAAPI adapter patterns, use the CLI for the dev loop (init/preview/render), preprocess assets (tts/transcribe/remove-background) for compositions, install reusable registry blocks and components, and turn any website into a video with the 7-step capture-to-video pipeline.",
     "developerName": "HeyGen",
     "category": "Design",
-    "capabilities": [
-      "Read",
-      "Write"
-    ],
+    "capabilities": ["Read", "Write"],
     "websiteURL": "https://hyperframes.heygen.com",
     "defaultPrompt": [
       "Turn this website into a 20-second product promo",
@@ -41,33 +44,5 @@
     "brandColor": "#0a0a0a",
     "composerIcon": "./assets/icon.png",
     "logo": "./assets/logo.png"
-  },
-  "skills": "./skills/",
-  "skillPreviews": [
-    {
-      "name": "gsap",
-      "description": "GSAP animation reference for HyperFrames. Covers gsap.to(), from(), fromTo(), easing, stagger, defaults, timelines (gsap.timeline(), position parameter, labels, nesting, playback), and performance (transforms, will-change, quickTo). Use when writing GSAP animations in HyperFrames compositions.",
-      "directory": "gsap"
-    },
-    {
-      "name": "hyperframes",
-      "description": "Create video compositions, animations, title cards, overlays, captions, voiceovers, audio-reactive visuals, and scene transitions in HyperFrames HTML. Use when asked to build any HTML-based video content, add captions or subtitles synced to audio, generate text-to-speech narration, create audio-reactive animation (beat sync, glow, pulse driven by music), add animated text highlighting (marker sweeps, hand-drawn circles, burst lines, scribble, sketchout), or add transitions between scenes (crossfades, wipes, reveals, shader transitions). Covers composition authoring, timing, media, and the full video production workflow. For CLI commands (init, lint, preview, render, transcribe, tts) see the hyperframes-cli skill.",
-      "directory": "hyperframes"
-    },
-    {
-      "name": "hyperframes-cli",
-      "description": "HyperFrames CLI tool — hyperframes init, lint, inspect, preview, render, transcribe, tts, doctor, browser, info, upgrade, compositions, docs, benchmark. Use when scaffolding a project, linting, validating, inspecting visual layout in compositions, previewing in the studio, rendering to video, transcribing audio, generating TTS, or troubleshooting the HyperFrames environment.",
-      "directory": "hyperframes-cli"
-    },
-    {
-      "name": "hyperframes-registry",
-      "description": "Install and wire registry blocks and components into HyperFrames compositions. Use when running hyperframes add, installing a block or component, wiring an installed item into index.html, or working with hyperframes.json. Covers the add command, install locations, block sub-composition wiring, component snippet merging, and registry discovery.",
-      "directory": "hyperframes-registry"
-    },
-    {
-      "name": "website-to-hyperframes",
-      "description": "|",
-      "directory": "website-to-hyperframes"
-    }
-  ]
+  }
 }

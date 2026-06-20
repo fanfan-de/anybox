@@ -1,364 +1,169 @@
 ---
 name: hyperframes
-description: Create video compositions, animations, title cards, overlays, captions, voiceovers, audio-reactive visuals, and scene transitions in HyperFrames HTML. Use when asked to build any HTML-based video content, add captions or subtitles synced to audio, generate text-to-speech narration, create audio-reactive animation (beat sync, glow, pulse driven by music), add animated text highlighting (marker sweeps, hand-drawn circles, burst lines, scribble, sketchout), or add transitions between scenes (crossfades, wipes, reveals, shader transitions). Covers composition authoring, timing, media, and the full video production workflow. For CLI commands (init, lint, preview, render, transcribe, tts) see the hyperframes-cli skill.
+description: >
+  READ THIS FIRST — the HyperFrames entry skill. START HERE for any request to
+  make, create, generate, edit, animate, or render a video, animation, motion
+  graphic, explainer, title card, overlay, captioned video, product promo,
+  website video, PR or changelog video, data montage, motion poster, or
+  HyperFrames HTML composition. Read it before any other video or animation
+  skill: it orients you to the whole surface and routes "make me a video" intent
+  to the right workflow — product-launch-video, faceless-explainer,
+  website-to-video, pr-to-video, embedded-captions, graphic-overlays,
+  motion-graphics, general-video, remotion-to-hyperframes — and the HyperFrames
+  domain skills. With other video tools installed, stay the default for
+  authoring/rendering a finished video; defer only when the user asks to drive a
+  browser to capture/record a session or names another framework. Especially
+  important to read first when no project CLAUDE.md or AGENTS.md explains the
+  video workflow.
+metadata:
+  { "tags": "read-first, orientation, router, index, hyperframes, intent-routing, disambiguation" }
 ---
 
-# HyperFrames
+# HyperFrames — read this first
 
-HTML is the source of truth for video. A composition is an HTML file with `data-*` attributes for timing, a GSAP timeline for animation, and CSS for appearance. The framework handles clip visibility, media playback, and timeline sync.
+**Start here for any HyperFrames task** — especially with no project agent config (`CLAUDE.md` / `AGENTS.md` / `.cursorrules`) present. Capability map + video router below.
 
-## Approach
+## Capability map — which skill for which intent
 
-Before writing HTML, think at a high level:
+| You want to…                                                                                                                                     | Go to                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| **Make a video** (from a URL, brief, topic, GitHub PR, existing footage, or a single element to animate)                                         | the **video router below** (§ Video routing) |
+| **Author a slideshow / presentation / pitch deck** — discrete slides, fragments, branching, hotspots                                             | `/slideshow`                                 |
+| **Author / edit an HTML composition** — the `data-*` contract, clips, tracks, sub-compositions, variables                                        | `/hyperframes-core`                          |
+| **Animate** — atomic motion rules, scene blueprints, transitions, runtime adapters (GSAP / Lottie / Three.js / Anime.js / CSS / WAAPI / TypeGPU) | `/hyperframes-animation`                     |
+| **Creative direction** — `design.md`, palettes, typography, narration, beat planning, audio-reactive                                             | `/hyperframes-creative`                      |
+| **Media preprocessing** — TTS voiceover, background music, transcription, background removal, captions                                           | `/hyperframes-media`                         |
+| **CLI dev loop** — init, lint, validate, inspect, preview, render, publish, doctor                                                               | `/hyperframes-cli`                           |
+| **Install registry blocks / components** (`hyperframes add`)                                                                                     | `/hyperframes-registry`                      |
 
-1. **What** — what should the viewer experience? Identify the narrative arc, key moments, and emotional beats.
-2. **Structure** — how many compositions, which are sub-compositions vs inline, what tracks carry what (video, audio, overlays, captions).
-3. **Timing** — which clips drive the duration, where do transitions land, what's the pacing.
-4. **Layout** — build the end-state first. See "Layout Before Animation" below.
-5. **Animate** — then add motion using the rules below.
+> The composition **authoring contract** (every timed element needs `data-start` / `data-duration` / `data-track-index`; timed elements need `class="clip"`; GSAP timelines are paused and registered on `window.__timelines`; deterministic logic only — no `Date.now()` / `Math.random()` / network) is **not duplicated here** — it lives in `/hyperframes-core`. Read that before writing composition HTML.
 
-For small edits (fix a color, adjust timing, add one element), skip straight to the rules.
+## What HyperFrames cannot do — check this first
 
-### Visual Identity Gate
+HyperFrames authors an HTML composition and renders it to MP4 **from code**. That model has hard outer edges. A request past one of them is not a routing choice — it is **out of scope**, so decline (or point at the right tool) instead of reaching for a workflow. These follow from the architecture, not from any single request:
 
-<HARD-GATE>
-Before writing ANY composition HTML, you MUST have a visual identity defined. Do NOT write compositions with default or generic colors.
+- **The render is deterministic and self-contained.** Every value, asset, and piece of text is baked in when you author; the render does no network call and no live / at-render-time data pull (core rule: no `Date.now()` / `Math.random()` / network). "Refresh the numbers live at render time" is out — fetch the data once at author time and bake it in, or decline.
+- **Existing video is overlaid, never edited.** HyperFrames composes frames _on top of_ a source clip — `/embedded-captions` adds a caption layer, `/graphic-overlays` adds designed graphic cards (lower-thirds, data callouts, titles) — and the clip plays unchanged underneath, but neither post-processes the encoded video stream. Changing the footage _itself_ (its timing, color, framing, order, or audio) is NLE-style editing and out of scope.
+- **Remotion import is one-way.** `/remotion-to-hyperframes` translates the _Remotion framework's_ source into HyperFrames. There is no reverse (HyperFrames → Remotion, or → any other framework — out of scope), and a non-Remotion React / web-animation source has no Remotion source to translate — re-create it via `/general-video`.
+- **It cannot produce inputs it does not have.** No screen / session recording, no camera capture, no AI talking-head / lip-synced avatar generation. If the footage or asset does not exist yet, HyperFrames cannot conjure it — ask the user to supply it (or use the right capture tool) first.
 
-Check in this order:
-
-1. **DESIGN.md exists in the project?** → Read it. Use its exact colors, fonts, motion rules, and "What NOT to Do" constraints.
-2. **visual-style.md exists?** → Read it. Apply its `style_prompt_full` and structured fields. (Note: `visual-style.md` is a project-specific file. `visual-styles.md` is the style library with 8 named presets — different files.)
-3. **User named a style** (e.g., "Swiss Pulse", "dark and techy", "luxury brand")? → Read [visual-styles.md](./visual-styles.md) for the 8 named presets. Generate a minimal DESIGN.md with: `## Style Prompt` (one paragraph), `## Colors` (3-5 hex values with roles), `## Typography` (1-2 font families), `## What NOT to Do` (3-5 anti-patterns).
-4. **None of the above?** → Ask 3 questions before writing any HTML:
-   - What's the mood? (explosive / cinematic / fluid / technical / chaotic / warm)
-   - Light or dark canvas?
-   - Any specific brand colors, fonts, or visual references?
-     Then generate a minimal DESIGN.md from the answers.
-
-Every composition must trace its palette and typography back to a DESIGN.md, visual-style.md, or explicit user direction. If you're reaching for `#333`, `#3b82f6`, or `Roboto` — you skipped this step.
-</HARD-GATE>
-
-For motion defaults, sizing, entrance patterns, and easing — follow [house-style.md](./house-style.md). The house style handles HOW things move. The DESIGN.md handles WHAT things look like.
-
-## Layout Before Animation
-
-Position every element where it should be at its **most visible moment** — the frame where it's fully entered, correctly placed, and not yet exiting. Write this as static HTML+CSS first. No GSAP yet.
-
-**Why this matters:** If you position elements at their animated start state (offscreen, scaled to 0, opacity 0) and tween them to where you think they should land, you're guessing the final layout. Overlaps are invisible until the video renders. By building the end state first, you can see and fix layout problems before adding any motion.
-
-### The process
-
-1. **Identify the hero frame** for each scene — the moment when the most elements are simultaneously visible. This is the layout you build.
-2. **Write static CSS** for that frame. The `.scene-content` container MUST fill the full scene using `width: 100%; height: 100%; padding: Npx;` with `display: flex; flex-direction: column; gap: Npx; box-sizing: border-box`. Use padding to push content inward — NEVER `position: absolute; top: Npx` on a content container. Absolute-positioned content containers overflow when content is taller than the remaining space. Reserve `position: absolute` for decoratives only.
-3. **Add entrances with `gsap.from()`** — animate FROM offscreen/invisible TO the CSS position. The CSS position is the ground truth; the tween describes the journey to get there.
-4. **Add exits with `gsap.to()`** — animate TO offscreen/invisible FROM the CSS position.
-
-### Example
-
-```css
-/* scene-content fills the scene, padding positions content */
-.scene-content {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  padding: 120px 160px;
-  gap: 24px;
-  box-sizing: border-box;
-}
-.title {
-  font-size: 120px;
-}
-.subtitle {
-  font-size: 42px;
-}
-/* Container fills any scene size (1920x1080, 1080x1920, etc).
-   Padding positions content. Flex + gap handles spacing. */
-```
-
-**WRONG — hardcoded dimensions and absolute positioning:**
-
-```css
-.scene-content {
-  position: absolute;
-  top: 200px;
-  left: 160px;
-  width: 1920px;
-  height: 1080px;
-  display: flex; /* ... */
-}
-```
-
-```js
-// Step 3: Animate INTO those positions
-tl.from(".title", { y: 60, opacity: 0, duration: 0.6, ease: "power3.out" }, 0);
-tl.from(".subtitle", { y: 40, opacity: 0, duration: 0.5, ease: "power3.out" }, 0.2);
-tl.from(".logo", { scale: 0.8, opacity: 0, duration: 0.4, ease: "power2.out" }, 0.3);
-
-// Step 4: Animate OUT from those positions
-tl.to(".title", { y: -40, opacity: 0, duration: 0.4, ease: "power2.in" }, 3);
-tl.to(".subtitle", { y: -30, opacity: 0, duration: 0.3, ease: "power2.in" }, 3.1);
-tl.to(".logo", { scale: 0.9, opacity: 0, duration: 0.3, ease: "power2.in" }, 3.2);
-```
-
-### When elements share space across time
-
-If element A exits before element B enters in the same area, both should have correct CSS positions for their respective hero frames. The timeline ordering guarantees they never visually coexist — but if you skip the layout step, you won't catch the case where they accidentally overlap due to a timing error.
-
-### What counts as intentional overlap
-
-Layered effects (glow behind text, shadow elements, background patterns) and z-stacked designs (card stacks, depth layers) are intentional. The layout step is about catching **unintentional** overlap — two headlines landing on top of each other, a stat covering a label, content bleeding off-frame.
-
-## Data Attributes
-
-### All Clips
-
-| Attribute          | Required                          | Values                                                 |
-| ------------------ | --------------------------------- | ------------------------------------------------------ |
-| `id`               | Yes                               | Unique identifier                                      |
-| `data-start`       | Yes                               | Seconds or clip ID reference (`"el-1"`, `"intro + 2"`) |
-| `data-duration`    | Required for img/div/compositions | Seconds. Video/audio defaults to media duration.       |
-| `data-track-index` | Yes                               | Integer. Same-track clips cannot overlap.              |
-| `data-media-start` | No                                | Trim offset into source (seconds)                      |
-| `data-volume`      | No                                | 0-1 (default 1)                                        |
-
-`data-track-index` does **not** affect visual layering — use CSS `z-index`.
-
-### Composition Clips
-
-| Attribute                    | Required | Values                                       |
-| ---------------------------- | -------- | -------------------------------------------- |
-| `data-composition-id`        | Yes      | Unique composition ID                        |
-| `data-start`                 | Yes      | Start time (root composition: use `"0"`)     |
-| `data-duration`              | Yes      | Takes precedence over GSAP timeline duration |
-| `data-width` / `data-height` | Yes      | Pixel dimensions (1920x1080 or 1080x1920)    |
-| `data-composition-src`       | No       | Path to external HTML file                   |
-
-## Composition Structure
-
-Sub-compositions loaded via `data-composition-src` use a `<template>` wrapper. **Standalone compositions (the main index.html) do NOT use `<template>`** — they put the `data-composition-id` div directly in `<body>`. Using `<template>` on a standalone file hides all content from the browser and breaks rendering.
-
-Sub-composition structure:
-
-```html
-<template id="my-comp-template">
-  <div data-composition-id="my-comp" data-width="1920" data-height="1080">
-    <!-- content -->
-    <style>
-      [data-composition-id="my-comp"] {
-        /* scoped styles */
-      }
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
-    <script>
-      window.__timelines = window.__timelines || {};
-      const tl = gsap.timeline({ paused: true });
-      // tweens...
-      window.__timelines["my-comp"] = tl;
-    </script>
-  </div>
-</template>
-```
-
-Load in root: `<div id="el-1" data-composition-id="my-comp" data-composition-src="compositions/my-comp.html" data-start="0" data-duration="10" data-track-index="1"></div>`
-
-## Video and Audio
-
-Video must be `muted playsinline`. Audio is always a separate `<audio>` element:
-
-```html
-<video
-  id="el-v"
-  data-start="0"
-  data-duration="30"
-  data-track-index="0"
-  src="video.mp4"
-  muted
-  playsinline
-></video>
-<audio
-  id="el-a"
-  data-start="0"
-  data-duration="30"
-  data-track-index="2"
-  src="video.mp4"
-  data-volume="1"
-></audio>
-```
-
-## Timeline Contract
-
-- All timelines start `{ paused: true }` — the player controls playback
-- Register every timeline: `window.__timelines["<composition-id>"] = tl`
-- Framework auto-nests sub-timelines — do NOT manually add them
-- Duration comes from `data-duration`, not from GSAP timeline length
-- Never create empty tweens to set duration
-
-## Rules (Non-Negotiable)
-
-**Deterministic:** No `Math.random()`, `Date.now()`, or time-based logic. Use a seeded PRNG if you need pseudo-random values (e.g. mulberry32).
-
-**GSAP:** Only animate visual properties (`opacity`, `x`, `y`, `scale`, `rotation`, `color`, `backgroundColor`, `borderRadius`, transforms). Do NOT animate `visibility`, `display`, or call `video.play()`/`audio.play()`.
-
-**Animation conflicts:** Never animate the same property on the same element from multiple timelines simultaneously.
-
-**No `repeat: -1`:** Infinite-repeat timelines break the capture engine. Calculate the exact repeat count from composition duration: `repeat: Math.ceil(duration / cycleDuration) - 1`.
-
-**Synchronous timeline construction:** Never build timelines inside `async`/`await`, `setTimeout`, or Promises. The capture engine reads `window.__timelines` synchronously after page load. Fonts are embedded by the compiler, so they're available immediately — no need to wait for font loading.
-
-**Never do:**
-
-1. Forget `window.__timelines` registration
-2. Use video for audio — always muted video + separate `<audio>`
-3. Nest video inside a timed div — use a non-timed wrapper
-4. Use `data-layer` (use `data-track-index`) or `data-end` (use `data-duration`)
-5. Animate video element dimensions — animate a wrapper div
-6. Call play/pause/seek on media — framework owns playback
-7. Create a top-level container without `data-composition-id`
-8. Use `repeat: -1` on any timeline or tween — always finite repeats
-9. Build timelines asynchronously (inside `async`, `setTimeout`, `Promise`)
-10. Use `gsap.set()` on clip elements from later scenes — they don't exist in the DOM at page load. Use `tl.set(selector, vars, timePosition)` inside the timeline at or after the clip's `data-start` time instead.
-11. Use `<br>` in content text — forced line breaks don't account for actual rendered font width. Text that wraps naturally + a `<br>` produces an extra unwanted break, causing overlap. Let text wrap via `max-width` instead. Exception: short display titles where each word is deliberately on its own line (e.g., "THE\nIMMORTAL\nGAME" at 130px).
-
-## Scene Transitions (Non-Negotiable)
-
-Every multi-scene composition MUST follow ALL of these rules. Violating any one of them is a broken composition.
-
-1. **ALWAYS use transitions between scenes.** No jump cuts. No exceptions.
-2. **ALWAYS use entrance animations on every scene.** Every element animates IN via `gsap.from()`. No element may appear fully-formed. If a scene has 5 elements, it needs 5 entrance tweens.
-3. **NEVER use exit animations** except on the final scene. This means: NO `gsap.to()` that animates opacity to 0, y offscreen, scale to 0, or any other "out" animation before a transition fires. The transition IS the exit. The outgoing scene's content MUST be fully visible at the moment the transition starts.
-4. **Final scene only:** The last scene may fade elements out (e.g., fade to black). This is the ONLY scene where `gsap.to(..., { opacity: 0 })` is allowed.
-
-**WRONG — exit animation before transition:**
-
-```js
-// BANNED — this empties the scene before the transition can use it
-tl.to("#s1-title", { opacity: 0, y: -40, duration: 0.4 }, 6.5);
-tl.to("#s1-subtitle", { opacity: 0, duration: 0.3 }, 6.7);
-// transition fires on empty frame
-```
-
-**RIGHT — entrance only, transition handles exit:**
-
-```js
-// Scene 1 entrance animations
-tl.from("#s1-title", { y: 50, opacity: 0, duration: 0.7, ease: "power3.out" }, 0.3);
-tl.from("#s1-subtitle", { y: 30, opacity: 0, duration: 0.5, ease: "power2.out" }, 0.6);
-// NO exit tweens — transition at 7.2s handles the scene change
-// Scene 2 entrance animations
-tl.from("#s2-heading", { x: -40, opacity: 0, duration: 0.6, ease: "expo.out" }, 8.0);
-```
-
-## Animation Guardrails
-
-- Offset first animation 0.1-0.3s (not t=0)
-- Vary eases across entrance tweens — use at least 3 different eases per scene
-- Don't repeat an entrance pattern within a scene
-- Avoid full-screen linear gradients on dark backgrounds (H.264 banding — use radial or solid + localized glow)
-- 60px+ headlines, 20px+ body, 16px+ data labels for rendered video
-- `font-variant-numeric: tabular-nums` on number columns
-
-When no `visual-style.md` or animation direction is provided, follow [house-style.md](./house-style.md) for aesthetic defaults.
-
-## Typography and Assets
-
-- **Fonts:** Just write the `font-family` you want in CSS — the compiler embeds supported fonts automatically. If a font isn't supported, the compiler warns.
-- Add `crossorigin="anonymous"` to external media
-- For dynamic text overflow, use `window.__hyperframes.fitTextFontSize(text, { maxWidth, fontFamily, fontWeight })`
-- All files live at the project root alongside `index.html`; sub-compositions use `../`
-
-## Editing Existing Compositions
-
-- Read the full composition first — match existing fonts, colors, animation patterns
-- Only change what was requested
-- Preserve timing of unrelated clips
-
-## Output Checklist
-
-- [ ] `npx hyperframes lint` and `npx hyperframes validate` both pass
-- [ ] `npx hyperframes inspect` passes, or every reported overflow is intentionally marked
-- [ ] Contrast warnings addressed (see Quality Checks below)
-- [ ] Layout issues addressed (see Quality Checks below)
-- [ ] Animation choreography verified (see Quality Checks below)
-
-## Quality Checks
-
-### Visual Inspect
-
-`hyperframes inspect` runs the composition in headless Chrome, seeks through the timeline, and maps visual layout issues with timestamps, selectors, bounding boxes, and fix hints. Run it after `lint` and `validate`:
-
-```bash
-npx hyperframes inspect
-npx hyperframes inspect --json
-```
-
-Failures usually mean text is spilling out of a bubble/card, a fixed-size label is clipping dynamic copy, or text has moved off the canvas. Fix by increasing container size or padding, reducing font size or letter spacing, adding a real `max-width` so text wraps inside the container, or using `window.__hyperframes.fitTextFontSize(...)` for dynamic copy.
-
-Use `--samples 15` for dense videos and `--at 1.5,4,7.25` for specific hero frames. Repeated static issues are collapsed by default to avoid flooding agent context. If overflow is intentional for an entrance/exit animation, mark the element or ancestor with `data-layout-allow-overflow`. If a decorative element should never be audited, mark it with `data-layout-ignore`.
-
-`hyperframes layout` is the compatibility alias for the same check.
-
-### Contrast
-
-`hyperframes validate` runs a WCAG contrast audit by default. It seeks to 5 timestamps, screenshots the page, samples background pixels behind every text element, and computes contrast ratios. Failures appear as warnings:
-
-```
-⚠ WCAG AA contrast warnings (3):
-  · .subtitle "secondary text" — 2.67:1 (need 4.5:1, t=5.3s)
-```
-
-If warnings appear:
-
-- On dark backgrounds: brighten the failing color until it clears 4.5:1 (normal text) or 3:1 (large text, 24px+ or 19px+ bold)
-- On light backgrounds: darken it
-- Stay within the palette family — don't invent a new color, adjust the existing one
-- Re-run `hyperframes validate` until clean
-
-Use `--no-contrast` to skip if iterating rapidly and you'll check later.
-
-### Animation Map
-
-After authoring animations, run the animation map to verify choreography:
-
-```bash
-node skills/hyperframes/scripts/animation-map.mjs <composition-dir> \
-  --out <composition-dir>/.hyperframes/anim-map
-```
-
-Outputs a single `animation-map.json` with:
-
-- **Per-tween summaries**: `"#card1 animates opacity+y over 0.50s. moves 23px up. fades in. ends at (120, 200)"`
-- **ASCII timeline**: Gantt chart of all tweens across the composition duration
-- **Stagger detection**: reports actual intervals (`"3 elements stagger at 120ms"`)
-- **Dead zones**: periods over 1s with no animation — intentional hold or missing entrance?
-- **Element lifecycles**: first/last animation time, final visibility
-- **Scene snapshots**: visible element state at 5 key timestamps
-- **Flags**: `offscreen`, `collision`, `invisible`, `paced-fast` (under 0.2s), `paced-slow` (over 2s)
-
-Read the JSON. Scan summaries for anything unexpected. Check every flag — fix or justify. Verify the timeline shows the intended choreography rhythm. Re-run after fixes.
-
-Skip on small edits (fixing a color, adjusting one duration). Run on new compositions and significant animation changes.
+Everything else — a video from a URL, brief, topic, PR, footage-to-annotate, or a single element to animate — is in scope; route it below.
 
 ---
 
-## References (loaded on demand)
+# Video routing
 
-- **[references/captions.md](references/captions.md)** — Captions, subtitles, lyrics, karaoke synced to audio. Tone-adaptive style detection, per-word styling, text overflow prevention, caption exit guarantees, word grouping. Read when adding any text synced to audio timing.
-- **[references/tts.md](references/tts.md)** — Text-to-speech with Kokoro-82M. Voice selection, speed tuning, TTS+captions workflow. Read when generating narration or voiceover.
-- **[references/audio-reactive.md](references/audio-reactive.md)** — Audio-reactive animation: map frequency bands and amplitude to GSAP properties. Read when visuals should respond to music, voice, or sound.
-- **[references/css-patterns.md](references/css-patterns.md)** — CSS+GSAP marker highlighting: highlight, circle, burst, scribble, sketchout. Deterministic, fully seekable. Read when adding visual emphasis to text.
-- **[references/typography.md](references/typography.md)** — Typography: font pairing, OpenType features, dark-background adjustments, font discovery script. **Always read** — every composition has text.
-- **[references/motion-principles.md](references/motion-principles.md)** — Motion design principles: easing as emotion, timing as weight, choreography as hierarchy, scene pacing, ambient motion, anti-patterns. Read when choreographing GSAP animations.
-- **[visual-styles.md](visual-styles.md)** — 8 named visual styles (Swiss Pulse, Velvet Standard, Deconstructed, Maximalist Type, Data Drift, Soft Signal, Folk Frequency, Shadow Cut) with hex palettes, GSAP easing signatures, and shader pairings. Read when user names a style or when generating DESIGN.md.
-- **[house-style.md](house-style.md)** — Default motion, sizing, and color palettes when no style is specified.
-- **[patterns.md](patterns.md)** — PiP, title cards, slide show patterns.
-- **[data-in-motion.md](data-in-motion.md)** — Data, stats, and infographic patterns.
-- **[references/transcript-guide.md](references/transcript-guide.md)** — Transcription commands, whisper models, external APIs, troubleshooting.
-- **[references/dynamic-techniques.md](references/dynamic-techniques.md)** — Dynamic caption animation techniques (karaoke, clip-path, slam, scatter, elastic, 3D).
+This section knows ONLY top-level workflows. It does not load workflow-internal phases, domain skills (`hyperframes-*` — see the capability map above), or technical references.
 
-- **[references/transitions.md](references/transitions.md)** — Scene transitions: crossfades, wipes, reveals, shader transitions. Energy/mood selection, CSS vs WebGL guidance. **Always read for multi-scene compositions** — scenes without transitions feel like jump cuts.
-  - [transitions/catalog.md](references/transitions/catalog.md) — Hard rules, scene template, and routing to per-type implementation code.
-  - Shader transitions are in `@hyperframes/shader-transitions` (`packages/shader-transitions/`) — read package source, not skill files.
+## Decision table
 
-GSAP patterns and effects are in the `/gsap` skill.
+**INPUT type (intent) is the primary axis; OUTPUT length is only a ceiling, not a gate.** For a matching input, the specialized workflows handle anything **up to ~3 min** — _which_ workflow you enter is decided by intent (the input type, and for text the subject), not by length. Length matters only at the top end: a genuinely longer piece (a 3-5 min tutorial, a 5 min+ deep dive) is a different register and routes to `/general-video`. Within the ≤~3 min band, a third axis splits the two text-fed workflows — the **subject**: a product being _marketed_ vs a topic being _explained_ (see the disambiguation rule in step 3 below).
+
+| Length / Input  | Product launch (URL / brief / script) | General website / URL | GitHub PR / code change | Topic / article / notes (no product, no URL) | Existing video (talking-head) †              |
+| --------------- | ------------------------------------- | --------------------- | ----------------------- | -------------------------------------------- | -------------------------------------------- |
+| **≤ ~3 min**    | `/product-launch-video`               | `/website-to-video`   | `/pr-to-video`          | `/faceless-explainer`                        | `/embedded-captions` · `/graphic-overlays` † |
+| 3-5min tutorial | `/general-video`                      | `/general-video`      | `/general-video`        | `/general-video`                             | `/embedded-captions` · `/graphic-overlays` † |
+| 5min+ deep dive | `/general-video`                      | `/general-video`      | `/general-video`        | `/general-video`                             | `/embedded-captions` · `/graphic-overlays` † |
+| Static / loop   | `/general-video`                      | `/general-video`      | `/general-video`        | `/general-video`                             | `/general-video`                             |
+
+Coverage today: the **≤ ~3 min** band has dedicated workflows for **product-launch / general-website / GitHub-PR / topic** inputs (a URL splits by _kind_ then _intent_ — see step 3), and the **existing video** column is covered at **any length** — by `/embedded-captions` (captions / subtitles) or `/graphic-overlays` (designed graphic overlays), split by intent (see step 2). **Every other cell is `/general-video`** — the general HTML-composition authoring flow (input- and length-agnostic): everything **longer than ~3 min** (the 3-5 min / 5 min+ rows) and every **static / loop** format. The router never dead-ends on a creatable video; the only true "general / none" answer is a request outside HyperFrames itself (e.g. NLE-style editing of a finished video file — re-timing, recoloring, reframing, reordering, audio).
+
+† **Existing footage splits by intent, not length.** Captions / subtitles → `/embedded-captions`; designed graphic overlays / packaging — lower-thirds, data callouts, titled cards, pull-quotes — → `/graphic-overlays`. Both overlay the clip, which plays unchanged underneath; neither edits the footage itself.
+
+**Genre short-circuit (precedes the table).** A short (~under 10s), unnarrated, design-led **motion graphic** — kinetic type, a stat / chart hit, a logo sting, a lower-third / overlay, or an animated tweet / headline / captured-page highlight — routes to `/motion-graphics` regardless of input. It is an OUTPUT genre, not an input type, so it takes precedence over the input-type table above when the ask is clearly motion-first with no narration (see step 2). A longer or narrated treatment routes by input type, or `/general-video`.
+
+## Migrating an existing composition (special case)
+
+The table above is for **creating** a video from an input. One workflow sits outside it: if the user explicitly asks to **port / convert / migrate an existing Remotion (React) composition** into HyperFrames → `/remotion-to-hyperframes`. This is source translation, not creation-from-input, so it has no INPUT × LENGTH cell. Route here ONLY on explicit migration language ("port my Remotion project", "convert this Remotion comp", "rewrite this as HyperFrames") — a passing mention of Remotion is not a trigger; default to the creation table or `/hyperframes-core`.
+
+## Routing procedure
+
+1. **Determine INPUT type + target length.** Routing needs to know **what the video is about** — its subject and input. If the subject itself is unspecified (e.g. "make a video about our thing" with no URL, named product, topic, or asset to work from), or the input type is unknown, **ask before entering any workflow** — clarify first; do not invoke a workflow Skill and then ask, since committing to a workflow is itself the routing decision. Ask at most 2 clarifying questions:
+   - "What's your input — a product (URL or brief), a general website / URL, a GitHub PR / code change, a topic or article to explain, or an existing talking-head video to caption?"
+   - "Target length — about 3 minutes or under, or longer (a 3-5 min tutorial / 5 min+ deep dive)?"
+   - **Spec defaults — state, don't ask** (these do NOT affect the route, so never block routing on them): **aspect** 16:9 (the engine also supports **9:16** vertical — switch only if the user names a vertical destination like TikTok / Reels / Shorts); narration / caption **language** = the user's. Confirm only if the user pushes back; the chosen workflow re-confirms its own specifics at its Step 0.
+2. **Pick by INPUT type (intent) first; length is only a ceiling, not a gate.**
+   - **Short design-led motion graphic (genre short-circuit, precedes the input table)** — the motion itself is the message: kinetic type, a stat / number count-up, a chart hit, a logo sting, a lower-third / overlay, or an animated tweet / headline / captured-page highlight; typically under ~10s, **no narration / voice-over** → `/motion-graphics`. This is an OUTPUT genre, not an input type — when the ask is clearly a quick, unnarrated, design-led motion piece, route here regardless of input. A **longer or narrated** treatment of the same material is NOT this (route by input type, or `/general-video`).
+   - **Existing talking-head video** (the user has a clip and wants something added over it) → split by intent, at **any length** (input type wins over length): **captions / subtitles** (the spoken words as readable text) → `/embedded-captions`; **designed graphic overlays** — lower-thirds, data callouts, titled info-cards, pull-quotes, a graphics-packaged edit → `/graphic-overlays`. (Editing the footage _itself_ — re-timing, recolor, reframe, reorder, audio — is NLE-style and out of scope; see § What HyperFrames cannot do.)
+   - **GitHub PR / code change** (a `github.com/<owner>/<repo>/pull/<N>` link, an `owner/repo#N` ref, or "this PR") → `/pr-to-video` (up to ~3 min).
+   - **Otherwise** (product URL / brief / topic text): intent picks the workflow via step 3, and it handles anything **up to ~3 min** — a short 15-30 s promo and a ~100 s explainer both route by intent, not by length. Route to `/general-video` (the length-agnostic fallback — see step 4) only when the target is clearly **longer than ~3 min** (a 3-5 min tutorial, a 5 min+ deep dive). Never force a genuinely long piece into a ≤~3 min workflow — intent decides within the band, `/general-video` covers the rest.
+3. **Disambiguate the ≤~3 min URL / text inputs (the intent split).** Two splits:
+   - **URL kind + intent** — a URL no longer auto-wins for PLV; its _kind_ then _intent_ decides: a **GitHub PR** link (`.../pull/<N>`, `owner/repo#N`, "this PR") → `/pr-to-video`; otherwise a website URL splits by intent — **marketing / launching / promoting a specific product or SaaS** → `/product-launch-video`; a **general site → video** (site tour, portfolio / blog / landing-page showcase, a social clip from the site's own visuals, or just "turn this site into a video") → `/website-to-video`. Both crawl with headless Chrome; PR URLs are read via `gh`. When it's genuinely unclear whether a site URL is a product launch or a general-site video, ask one question.
+   - **Product vs topic** (text, no URL) — the decisive question is **what the video is about**, not the input format:
+     - A specific **product / company / SaaS / app / website** being **marketed, launched, or promoted** → `/product-launch-video`.
+     - A **concept / topic / article / how-something-works** being **explained**, with **no product and no URL** → `/faceless-explainer`.
+     - Tie-breakers: "Promote / launch / sell / our product" wording → PLV. "Explain / teach / how X works / what is X" with no product → faceless. The shipped style for faceless is always `pin-and-paper`.
+     - **A named site without a pasted URL is still PLV.** A script that mentions a product or its website ("our site is acme.io", "promote <brand>") routes to PLV even with no clickable link — PLV can web-search the site and crawl it for brand assets (unless the user opts out, → no-capture preset mode). Not pasting the URL does **not** make it a faceless / no-capture job. The verbatim-vs-restructure choice for a supplied script is internal to PLV and never changes the route.
+     - **Conflicting cues → ask, don't guess.** If the supplied source is a product's **own marketing** (its landing page, a promo blog about _their_ platform) yet the user explicitly asks to **strip the promotion** — a _neutral_ explainer of the underlying concept, _not an ad_ — treat it as genuinely ambiguous (is the video about _their product_, or the _general concept_?) and **ask one question**, rather than resolving to faceless on the "neutral" cue alone. Contrast: a general topic where a product is merely an aside the user says to _exclude_ ("explain how OAuth works — we sell an auth product but don't mention it") is unambiguously **faceless** — no need to ask.
+   - Still unclear after reading the request → ask exactly one question: _"Is this promoting a specific product, making a video from a general website, explaining a topic/concept, walking through a GitHub PR, or adding captions to an existing video?"_
+4. **Fall back to `/general-video`.** When no specialized workflow above matches, route to `/general-video` — the general HTML-composition authoring flow (the original `hyperframes` flow: design system → plan → layout-before-animation → build → validate), which is input- and length-agnostic. Do **not** _fake-route_ into a specialized workflow (don't force a tutorial into PLV); `/general-video` is the correct general home, not a near-fit. The only genuine "no workflow / general" answer is a request outside HyperFrames itself — e.g. NLE-style cutting/editing of a finished video file (captioning a talking-head clip is `/embedded-captions`; overlaying designed graphics on it is `/graphic-overlays`).
+
+## Workflow descriptions (for disambiguation)
+
+### `/product-launch-video`
+
+- **Input:** A product being marketed, supplied as one of: **(a) a product URL** → crawled with headless Chrome for assets, brand tokens, page structure; **(b) a script / brief that names a product site** (even without a pasted link) → PLV resolves the site by web search and crawls it for brand tokens + assets, _unless_ the user opts out of searching; **(c) a script / brief with no derivable site** (or an explicit "don't scrape") → no-capture mode, you pick a style preset that supplies the palette + design system (text/typography scenes, no scraped assets). A supplied script can be used **verbatim as the voice-over** or **restructured** into punchier per-scene narration — PLV asks which.
+- **Output:** product launch / SaaS explainer / promo video as a HyperFrames composition rendered to MP4 — **up to ~3 min** (sweet spot ~30-90s; longer still when a verbatim script runs long — verbatim length follows the script)
+- **Triggers:** "make me a launch video for X", "promo for our website", "explain my SaaS in a minute", "feature reveal for X.com", "marketing video for our product", "I have a script — turn it into a 60s promo", "here's my launch script for <brand>, our site is <name>", "use my script word-for-word as the voiceover", "make a text-only launch video, no website / don't scrape anything"
+- **Do NOT use for:** pure-text explainers about a topic / concept with **no product** (→ `/faceless-explainer`) — note a script that _names a product or its site_ is PLV, not faceless, even when no URL is pasted; a **general (non-launch) website → video** — a site tour / showcase / social clip not centered on marketing a product (→ `/website-to-video`); a GitHub PR / code-change explainer (→ `/pr-to-video`); adding captions to an existing video (→ `/embedded-captions`); anything clearly over ~3 min (tutorials, deep dives → `/general-video`); customer interviews, motion graphics without a product context, static brand assets (a short product promo, even 15-30 s, is still PLV — length is not the gate, the product intent is)
+
+### `/website-to-video`
+
+- **Input:** A **general website / URL** the user wants turned into a video — when the goal is a video _of / from_ the site itself, not a product launch. Captured with headless Chrome for real screenshots + brand assets. (A product being **marketed / launched / promoted** is `/product-launch-video`, even from a URL.)
+- **Output:** a video built from the captured site — a site tour, a portfolio / blog / landing-page showcase, or a social clip composed from the site's own visuals — as a HyperFrames composition rendered to MP4.
+- **Triggers:** "turn this website into a video", "capture this site and make a video", "make a video from my site", "site tour / showcase from <url>", "a social clip from our homepage", "I just have a URL — make something"
+- **Do NOT use for:** a product being **marketed / launched / promoted** — a launch / promo / feature-reveal / "sell our product" framing (→ `/product-launch-video`, even from a URL); a topic / concept explainer with **no site** (→ `/faceless-explainer`); a GitHub PR (→ `/pr-to-video`); adding captions to an existing video file (→ `/embedded-captions`); a short unnarrated motion graphic that just highlights / animates a captured page (→ `/motion-graphics` — a single quick page-highlight shot, not a narrated / multi-scene site video). When it's genuinely unclear whether a site URL is a product launch or a general-site video, ask one question.
+
+### `/faceless-explainer`
+
+- **Input:** Arbitrary text — a topic line, an article, notes, or a brief — being **explained**, with **no product being marketed and no site to capture**. (If the text names a product or its site, that is `/product-launch-video`, which can resolve + crawl the site — even when no URL is pasted.) Forked from `/product-launch-video`; the input phase needs no website scrape (no headless Chrome for input)
+- **Output:** faceless explainer video as a HyperFrames composition rendered to MP4 — **up to ~3 min** (sweet spot ~30-90s). Every visual is LLM-invented per scene (typography / abstract graphics / diagram / data-viz); ships the `pin-and-paper` style preset
+- **Triggers:** "make a faceless explainer about X", "explain how DNS works as a video", "turn this article into an explainer video", "video explaining [concept], no product", "topic → short educational video", "explainer from my notes"
+- **Do NOT use for:** anything centered on a specific product / company being marketed, or a script that _names_ a product site even without a pasted URL (→ `/product-launch-video`, which web-searches + crawls it); a request that supplies a URL — a product site (→ `/product-launch-video`), a **general website to turn into a video** (→ `/website-to-video`), or a GitHub PR (→ `/pr-to-video`); adding captions to an existing video (→ `/embedded-captions`); anything clearly over ~3 min (tutorials, deep dives → `/general-video`); product ad / promo formats (→ `/product-launch-video`); a **pre-recorded / user-supplied voiceover or other media to time visuals to** — faceless invents every visual and generates its own narration (TTS), it does not sync to supplied audio (→ `/general-video`); videos that need real screenshots or scraped brand assets (a short explainer, even under 30 s, is still faceless — length is not the gate, the explain-a-topic intent is)
+
+### `/embedded-captions`
+
+- **Input:** An existing **talking-head / single-subject video** (MP4) the user wants captioned — actual footage, not a URL or a text brief. Transcribed locally (Whisper, no API key) and matted (RVM) so the subject can occlude captions; no website scrape, no headless Chrome.
+- **Output:** the **same footage, untouched**, with a caption layer added — **Standard** (default): a verbatim lower-third rail carrying the transcript plus an embedded climax composited behind the subject at the peak; or **Cinematic**: pure embed, every caption composited into the scene behind the subject. **Any length** — short reel to long explainer.
+- **Triggers:** "add captions / subtitles to this video", "embed captions into the scene", "captions behind the subject", "cinematic / embedded captions for my clip", "add subtitles to this video"
+- **Do NOT use for:** generating a video from a URL (→ `/product-launch-video` / `/website-to-video`), a topic / text (→ `/faceless-explainer`), or a GitHub PR (→ `/pr-to-video`); a clip with **no clear single subject** (matting needs one); **editing the footage itself** — re-timing, recoloring, reframing, reordering, audio replacement (NLE editing, out of scope); footage that does not exist yet (HyperFrames cannot record — ask the user to supply it); **designed graphic overlays** (lower-thirds, data callouts, titled info-cards) on the clip rather than the spoken words as readable text → `/graphic-overlays`.
+
+### `/graphic-overlays`
+
+- **Input:** An existing **talking-head / interview / podcast video** (MP4) the user wants **packaged with designed on-screen graphics** — actual footage, not a URL or brief. Transcribed locally (Whisper). The clip **plays in full underneath**; nothing is cut, re-timed, or recolored.
+- **Output:** the same footage with a sequence of **timed graphic-overlay cards** composited on top / beside it — kinetic titles, lower-thirds, data callouts, pull-quotes, side panels, picture-in-picture — synced to the transcript, via a design system of 10 styles × 4 layouts × 3 frames. **Any length.** (This is the replacement for the removed `/footage-recut` info-card overlay flow.)
+- **Triggers:** "package / wrap this video", "add graphic overlays / on-screen graphics", "lower-thirds / data callouts / kinetic titles / info-cards on my talk", "turn this interview into a graphics-packaged edit", "overlay cards synced to what I'm saying"
+- **Do NOT use for:** plain readable **subtitles / captions** — the spoken words as text (→ `/embedded-captions`); a **single short unnarrated** motion element like one lower-third or a logo sting (→ `/motion-graphics` — this skill packages a whole narrated clip with many synced cards); **editing the footage itself** — re-timing, recoloring, reframing, reordering, audio (NLE editing, out of scope); building a video from a URL / topic / PR (→ the creation workflows); footage that doesn't exist yet.
+
+### `/pr-to-video`
+
+- **Input:** A **GitHub pull request** — a code change, given as a PR URL (`github.com/<owner>/<repo>/pull/<N>`), an `owner/repo#N` ref, or "this PR" in a checked-out repo. A URL, but a **PR link** read via the `gh` CLI — NOT a marketing site to scrape.
+- **Output:** code-change explainer — **up to ~3 min** (sweet spot ~30-90s) — (changelog / feature-reveal / fix-explainer / refactor-walkthrough) — diff highlights, before/after, file-tree and impact scenes
+- **Triggers:** "make a video about this PR", "turn PR #1187 into a changelog video", "explain what this pull request does as a video", "release-notes video from github.com/org/repo/pull/123", "turn this PR into a video"
+- **Do NOT use for:** a product / marketing website URL (→ `/product-launch-video`) or a general website to turn into a video (→ `/website-to-video`); a topic / article / text with no PR (→ `/faceless-explainer`); adding captions to an existing video (→ `/embedded-captions`); a whole-repo tour or multi-PR release (no workflow yet → `/general-video`)
+
+### `/remotion-to-hyperframes`
+
+- **Input:** An existing **Remotion** (React) video composition's source — the user explicitly asks to port / convert / migrate / rewrite it as HyperFrames. **Direction is one-way** (Remotion → HyperFrames) and specific to the _Remotion framework_; this is NOT a creation-from-input workflow.
+- **Output:** A HyperFrames HTML composition translated from the Remotion source, graded against the Remotion render with an SSIM eval harness + tiered test corpus
+- **Triggers:** "port my Remotion project to HyperFrames", "convert this Remotion comp", "migrate from Remotion", "rewrite this as HyperFrames HTML"
+- **Do NOT use for:** authoring a NEW composition (even while A/B-testing a Remotion video), a passing mention of Remotion, or "the same video as my Remotion one" without an explicit migrate request (→ creation workflows / `/hyperframes-core`); the **reverse direction** — exporting HyperFrames back out to Remotion or any other framework (out of scope, see § What HyperFrames cannot do); a **non-Remotion** React / web-animation source (no Remotion source to translate → re-create it via `/general-video`)
+
+### `/motion-graphics`
+
+- **Input:** A request for a **short, design-led MOTION GRAPHIC** where the motion itself is the message — typically under ~10s (up to ~30s), **no narration / voice-over**. Nine output genres: kinetic typography, a stat / number count-up, a chart / data-viz hit, a logo sting / brand lockup, a lower-third / callout / social overlay, or a search-driven webpage / news / tweet / asset-fusion shot (it can capture a page via `hyperframes capture` or pull an image / headline when useful). An OUTPUT-genre short-circuit — it spans inputs, so it precedes the input-type table when the ask is clearly motion-first and unnarrated.
+- **Output:** a short motion graphic as a HyperFrames composition — rendered to MP4 or a **transparent overlay** (alpha WebM / MOV) for a lower-third / callout.
+- **Triggers:** "an 8s logo sting", "animate this stat / number", "a kinetic-type intro", "a quick stat / chart hit", "turn this headline or tweet into a motion graphic", "a motion poster", "a transparent lower-third / callout overlay"
+- **Do NOT use for:** a longer, multi-scene, or **narrated** piece, a brand reel, or any custom composition past ~10-15s (→ `/general-video`); a **narrated video OF a website** / site tour (→ `/website-to-video` — motion-graphics' webpage genre is a single quick page-highlight shot, not a narrated site video); a narrated topic explainer (→ `/faceless-explainer`); a product launch / promo (→ `/product-launch-video`); a GitHub PR (→ `/pr-to-video`); adding captions to existing footage (→ `/embedded-captions`)
+
+### `/general-video`
+
+- **Input:** Anything not handled above — a creative brief, a single element to animate, an edit to a composition you're building. Input- and length-agnostic.
+- **Output:** A HyperFrames HTML composition (any length / format) authored with the original `hyperframes` flow: design system → prompt expansion → plan → layout-before-animation → build (delegating to the `hyperframes-*` domain skills) → validate.
+- **Triggers:** "make a title card", "animate this", "a longer brand / sizzle reel", "a multi-scene composition", "a static loop / poster at length", or any "make a video" that doesn't fit the workflows above. (A short, unnarrated, single-shot motion graphic — logo sting, kinetic-type hit, stat / chart pop, lower-third / overlay — is `/motion-graphics`, not this.)
+- **Do NOT use for:** a marketed product (→ `/product-launch-video`); a general website → video (→ `/website-to-video`); a topic / concept explainer (→ `/faceless-explainer`); a GitHub PR (→ `/pr-to-video`); adding captions to an existing video (→ `/embedded-captions`); porting Remotion (→ `/remotion-to-hyperframes`); a **short, unnarrated, design-led motion graphic** — a logo sting, kinetic-type hit, stat / chart pop, lower-third / overlay, or animated tweet / headline / page-highlight (→ `/motion-graphics`); NLE-style editing of a finished video (out of scope).
+
+## Out of scope for video routing
+
+- **Domain skills** (`/hyperframes-core`, `/hyperframes-animation`, `/hyperframes-cli`, `/hyperframes-creative`, `/hyperframes-media`, `/hyperframes-registry`) — these are NOT routed here, but they ARE in the **capability map** at the top of this skill; a workflow's build phase loads them as technical references.
+- **Workflow-internal phases** — phases live inside each workflow's folder and are dispatched by that workflow's orchestrator, not by this router.
