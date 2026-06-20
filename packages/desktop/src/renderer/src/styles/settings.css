@@ -727,15 +727,16 @@ body.is-dragging-settings-page {
   cursor: pointer;
   transition:
     border-color 160ms ease,
-    box-shadow 160ms ease,
+    background 160ms ease,
     color 160ms ease;
 }
 
 .provider-model-picker-button:hover,
 .provider-model-picker-button:focus-visible,
 .provider-model-picker-button.is-open {
-  border-color: rgba(95, 146, 194, 0.62);
-  box-shadow: 0 0 0 1px rgba(95, 146, 194, 0.12);
+  border-color: var(--mix-seg-accent-34-seg-border-66);
+  background: var(--mix-seg-panel-72-seg-panel-muted-28);
+  outline: none;
 }
 
 .provider-model-picker-button svg {
@@ -772,10 +773,10 @@ body.is-dragging-settings-page {
   grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
   overflow: hidden;
-  border: 1px solid rgba(166, 186, 208, 0.48);
+  border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
   background: var(--seg-dropdown-menu-surface);
-  box-shadow: 0 22px 48px rgba(31, 48, 66, 0.16);
+  box-shadow: var(--shadow-md);
 }
 
 .settings-field:nth-child(even) .provider-model-picker-panel {
@@ -794,7 +795,7 @@ body.is-dragging-settings-page {
   padding: 0 12px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-xs);
-  background: #ffffff;
+  background: var(--seg-panel);
   color: var(--seg-text-1);
   font: inherit;
   outline: none;
@@ -806,7 +807,7 @@ body.is-dragging-settings-page {
 
 .provider-model-picker-search:focus {
   border-color: var(--mix-seg-accent-34-seg-border-66);
-  box-shadow: inset 0 0 0 1px var(--mix-seg-accent-16-transparent-84);
+  background: var(--mix-seg-panel-72-seg-panel-muted-28);
 }
 
 .provider-model-picker-body {
@@ -833,7 +834,7 @@ body.is-dragging-settings-page {
   border: 1px solid transparent;
   border-radius: var(--seg-radius-xs);
   background: transparent;
-  color: #314353;
+  color: var(--seg-text-2);
   display: flex;
   align-items: center;
   text-align: left;
@@ -841,11 +842,17 @@ body.is-dragging-settings-page {
 }
 
 .provider-model-picker-provider:hover,
-.provider-model-picker-provider:focus-visible,
+.provider-model-picker-provider:focus-visible {
+  border-color: var(--seg-border);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
+  color: var(--seg-text-1);
+  outline: none;
+}
+
 .provider-model-picker-provider.is-active {
-  border-color: rgba(125, 154, 184, 0.28);
-  background: #eef4fa;
-  color: #123a5a;
+  border-color: var(--mix-seg-accent-24-seg-border-76);
+  background: var(--semantic-settings-list-detail-row-surface-current);
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .provider-model-picker-model {
@@ -855,7 +862,7 @@ body.is-dragging-settings-page {
   border: 1px solid transparent;
   border-radius: var(--seg-radius-xs);
   background: transparent;
-  color: #314353;
+  color: var(--seg-text-2);
   display: flex;
   align-items: center;
   text-align: left;
@@ -868,9 +875,16 @@ body.is-dragging-settings-page {
 
 .provider-model-picker-model:hover,
 .provider-model-picker-model:focus-visible {
-  border-color: rgba(95, 146, 194, 0.48);
-  background: #eef4fa;
-  color: #123a5a;
+  border-color: var(--seg-border);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
+  color: var(--seg-text-1);
+  outline: none;
+}
+
+.provider-model-picker-model[aria-selected="true"] {
+  border-color: var(--mix-seg-accent-24-seg-border-76);
+  background: var(--semantic-settings-list-detail-row-surface-current);
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .provider-model-picker-provider-name,
@@ -887,8 +901,8 @@ body.is-dragging-settings-page {
   margin: 0;
   padding: 14px;
   border-radius: var(--seg-radius-xs);
-  background: rgba(238, 244, 250, 0.72);
-  color: #607488;
+  background: var(--seg-panel-muted);
+  color: var(--seg-text-2);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -907,7 +921,7 @@ body.is-dragging-settings-page {
   padding: 12px 14px;
   border: 1px solid var(--seg-border);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.76);
+  background: var(--mix-seg-panel-92-transparent-8);
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
   gap: 14px;
@@ -945,11 +959,11 @@ body.is-dragging-settings-page {
 
 .mcp-tool-policy-toggle:hover .mcp-tool-policy-title,
 .mcp-tool-policy-toggle:focus-visible .mcp-tool-policy-title {
-  color: #153a5f;
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .mcp-tool-policy-toggle:focus-visible {
-  outline: 2px solid rgba(58, 116, 176, 0.35);
+  outline: 2px solid var(--mix-seg-accent-32-seg-border-68);
   outline-offset: 3px;
   border-radius: 4px;
 }
@@ -958,7 +972,7 @@ body.is-dragging-settings-page {
   width: 14px;
   height: 14px;
   margin-top: 2px;
-  color: #41586f;
+  color: var(--seg-text-3);
   display: inline-flex;
   flex: 0 0 auto;
 }
@@ -984,7 +998,7 @@ body.is-dragging-settings-page {
 }
 
 .mcp-tool-policy-heading code {
-  color: #5f7285;
+  color: var(--seg-text-3);
   font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
   font-size: 12px;
   word-break: break-word;
@@ -1007,7 +1021,7 @@ body.is-dragging-settings-page {
   display: grid;
   gap: 10px;
   padding-top: 12px;
-  border-top: 1px solid rgba(163, 184, 205, 0.32);
+  border-top: 1px solid var(--seg-border);
 }
 
 .mcp-tool-policy-schema {
@@ -1016,7 +1030,7 @@ body.is-dragging-settings-page {
 }
 
 .mcp-tool-policy-details-label {
-  color: #41586f;
+  color: var(--seg-text-3);
   font-size: 12px;
   font-weight: 600;
 }
@@ -1026,9 +1040,9 @@ body.is-dragging-settings-page {
   margin: 0;
   padding: 12px;
   overflow: auto;
-  border: 1px solid rgba(163, 184, 205, 0.42);
-  background: rgba(246, 249, 252, 0.9);
-  color: #26394b;
+  border: 1px solid var(--seg-border);
+  background: var(--surface-trace);
+  color: var(--seg-text-1);
   font-size: 12px;
   line-height: 1.45;
   white-space: pre-wrap;
@@ -1735,7 +1749,7 @@ body.is-dragging-settings-page {
   padding: 0 10px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-xs);
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--mix-seg-panel-92-transparent-8);
 }
 
 .mcp-servers-search-row svg {
@@ -1784,7 +1798,7 @@ body.is-dragging-settings-page {
 
 .mcp-servers-search-row button:hover,
 .mcp-servers-search-row button:focus-visible {
-  background: rgba(33, 51, 72, 0.08);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
   color: var(--seg-text-1);
   outline: none;
 }
@@ -1887,9 +1901,9 @@ body.is-dragging-settings-page {
 .mcp-server-source-chip {
   width: max-content;
   max-width: 100%;
-  border: 1px solid rgba(15, 118, 110, 0.22);
-  background: #ecfdf5;
-  color: #0f766e;
+  border: 1px solid var(--semantic-success-border);
+  background: var(--semantic-success-surface);
+  color: var(--semantic-success-text);
   display: inline-flex;
   align-items: center;
   white-space: nowrap;
@@ -2085,7 +2099,7 @@ body.is-dragging-settings-page {
 .mcp-transport-segment.is-active {
   background: var(--seg-panel);
   color: var(--seg-text-1);
-  box-shadow: 0 1px 2px rgba(19, 33, 48, 0.12);
+  box-shadow: 0 1px 2px var(--mix-seg-accent-12-transparent-88);
 }
 
 .mcp-line-editor,
@@ -2314,7 +2328,8 @@ body.is-dragging-settings-page {
 
 .settings-page-main.mcp-servers-page-main {
   padding: 0 20px 72px;
-  background: #ffffff;
+  background: var(--seg-shell);
+  color: var(--seg-text-1);
 }
 
 .settings-services-layout.mcp-servers-page-layout {
@@ -2337,17 +2352,17 @@ body.is-dragging-settings-page {
 .mcp-server-sidebar-row:focus-visible,
 .mcp-server-sidebar-row.is-active {
   border-color: transparent;
-  background: #f7f6f4;
+  background: var(--semantic-settings-list-detail-row-surface-current);
 }
 
 .mcp-server-sidebar-row:hover .mcp-server-sidebar-name,
 .mcp-server-sidebar-row:focus-visible .mcp-server-sidebar-name,
 .mcp-server-sidebar-row.is-active .mcp-server-sidebar-name {
-  color: #0f766e;
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .mcp-server-sidebar-name {
-  color: #202020;
+  color: var(--semantic-settings-list-detail-row-primary-text);
   font-size: 15px;
   font-weight: 690;
 }
@@ -2355,7 +2370,7 @@ body.is-dragging-settings-page {
 .mcp-server-sidebar-status {
   width: 7px;
   height: 7px;
-  background: #c7c2bc;
+  background: var(--semantic-settings-list-detail-row-secondary-text);
 }
 
 .mcp-servers-new-button {
@@ -2366,7 +2381,7 @@ body.is-dragging-settings-page {
   border-color: transparent;
   border-radius: 8px;
   background: transparent;
-  color: #202020;
+  color: var(--semantic-settings-list-detail-row-primary-text);
   box-shadow: none;
 }
 
@@ -2391,15 +2406,16 @@ body.is-dragging-settings-page {
 .global-skills-new-button.mcp-servers-new-button.is-open,
 .global-skills-new-button.mcp-servers-new-button.is-active {
   border-color: transparent;
-  background: #f7f6f4;
-  color: #0f766e;
+  background: var(--semantic-settings-list-detail-row-surface-current);
+  color: var(--semantic-settings-list-detail-row-current-text);
   box-shadow: none;
   outline: none;
   transform: none;
 }
 
 .mcp-server-detail-panel {
-  background: #ffffff;
+  background: var(--seg-shell);
+  color: var(--seg-text-1);
 }
 
 .mcp-server-detail-shell {
@@ -2456,7 +2472,7 @@ body.is-dragging-settings-page {
 }
 
 .mcp-overview-copy h3 {
-  color: #202020;
+  color: var(--seg-text-1);
   font-size: 27px;
   font-weight: 690;
   line-height: 1.14;
@@ -2464,7 +2480,7 @@ body.is-dragging-settings-page {
 
 .mcp-overview-copy p {
   max-width: 620px;
-  color: #77736d;
+  color: var(--seg-text-2);
   font-size: 17px;
   line-height: 1.42;
 }
@@ -2482,7 +2498,7 @@ body.is-dragging-settings-page {
 }
 
 .mcp-config-card-header h3 {
-  color: #202020;
+  color: var(--seg-text-1);
   font-size: 17px;
   font-weight: 680;
 }
@@ -2490,16 +2506,16 @@ body.is-dragging-settings-page {
 .mcp-config-grid,
 .mcp-editor-stack {
   overflow: hidden;
-  border: 1px solid #eceae7;
+  border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--seg-panel);
 }
 
 .mcp-config-grid .settings-field,
 .mcp-editor-section {
   min-height: 52px;
   padding: 8px 14px;
-  border-bottom: 1px solid #eceae7;
+  border-bottom: 1px solid var(--seg-border);
   grid-template-columns: minmax(120px, 0.32fr) minmax(0, 1fr);
   column-gap: 18px;
 }
@@ -2516,7 +2532,7 @@ body.is-dragging-settings-page {
 
 .mcp-config-grid .settings-field-label,
 .mcp-editor-section h3 {
-  color: #77736d;
+  color: var(--seg-text-2);
   font-size: 15px;
   font-weight: 520;
   line-height: 1.25;
@@ -2529,16 +2545,16 @@ body.is-dragging-settings-page {
 .mcp-editor-section select {
   min-height: 34px;
   padding: 0 10px;
-  border: 1px solid #e9e7e4;
+  border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: #ffffff;
-  color: #242321;
+  background: var(--seg-panel);
+  color: var(--seg-text-1);
   font-size: 14px;
 }
 
 .mcp-config-grid .settings-field input::placeholder,
 .mcp-editor-section input::placeholder {
-  color: #918d88;
+  color: var(--seg-text-3);
 }
 
 .mcp-config-grid .settings-checkbox-field input {
@@ -2600,20 +2616,20 @@ body.is-dragging-settings-page {
   min-width: 30px;
   height: 30px;
   border-radius: 7px;
-  color: #9a958f;
+  color: var(--seg-text-3);
 }
 
 .mcp-editor-remove-button:hover,
 .mcp-editor-remove-button:focus-visible {
-  background: rgba(41, 37, 36, 0.045);
-  color: #ef4444;
+  background: var(--mix-seg-danger-8-seg-panel-92);
+  color: var(--seg-danger-text);
 }
 
 .mcp-editor-add-button {
   min-height: 28px;
   border-radius: 7px;
-  background: #f7f6f4;
-  color: #77736d;
+  background: var(--seg-panel-muted);
+  color: var(--seg-text-2);
   font-size: 14px;
   font-weight: 520;
 }
@@ -2621,8 +2637,8 @@ body.is-dragging-settings-page {
 .mcp-editor-add-button:hover,
 .mcp-editor-add-button:focus-visible {
   border-color: transparent;
-  background: #efeeeb;
-  color: #242321;
+  background: var(--semantic-settings-list-detail-row-surface-hover);
+  color: var(--seg-text-1);
 }
 
 .mcp-tool-policy-card-shell {
@@ -2639,7 +2655,7 @@ body.is-dragging-settings-page {
 }
 
 .mcp-tool-policy-card-shell .settings-section-header h3 {
-  color: #202020;
+  color: var(--seg-text-1);
   font-size: 17px;
   font-weight: 680;
 }
@@ -2647,9 +2663,9 @@ body.is-dragging-settings-page {
 .mcp-tools-policy-list {
   overflow: hidden;
   gap: 0;
-  border: 1px solid #eceae7;
+  border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--seg-panel);
 }
 
 .mcp-tool-policy-card {
@@ -2660,49 +2676,49 @@ body.is-dragging-settings-page {
 }
 
 .mcp-tool-policy-card + .mcp-tool-policy-card {
-  border-top: 1px solid #eceae7;
+  border-top: 1px solid var(--seg-border);
 }
 
 .mcp-tool-policy-card:hover,
 .mcp-tool-policy-card:focus-within,
 .mcp-tool-policy-card.is-expanded {
-  background: rgba(41, 37, 36, 0.035);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
 }
 
 .mcp-tool-policy-title {
-  color: #242321;
+  color: var(--seg-text-1);
   font-size: 15px;
   font-weight: 680;
 }
 
 .mcp-tool-policy-toggle:hover .mcp-tool-policy-title,
 .mcp-tool-policy-toggle:focus-visible .mcp-tool-policy-title {
-  color: #0f766e;
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .mcp-tool-policy-heading code,
 .mcp-tool-policy-details p {
-  color: #7a7671;
+  color: var(--seg-text-2);
 }
 
 .mcp-tool-policy-select select {
   min-height: 34px;
-  border: 1px solid #e9e7e4;
+  border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: #ffffff;
-  color: #242321;
+  background: var(--seg-panel);
+  color: var(--seg-text-1);
   font-size: 14px;
 }
 
 .mcp-tool-policy-details {
-  border-top-color: #f1efec;
+  border-top-color: var(--seg-border);
 }
 
 .mcp-tool-policy-details pre {
-  border-color: #eceae7;
+  border-color: var(--seg-border);
   border-radius: 8px;
-  background: #faf9f7;
-  color: #34312d;
+  background: var(--surface-trace);
+  color: var(--seg-text-1);
 }
 
 @media (max-width: 860px) {
@@ -4330,6 +4346,30 @@ body.is-dragging-settings-page {
   line-height: 1.55;
 }
 
+.settings-theme-token-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-theme-token-search {
+  width: min(520px, 100%);
+  background: var(--mix-seg-panel-muted-72-seg-panel-28);
+}
+
+.settings-theme-token-search-count {
+  color: var(--seg-text-3);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.settings-theme-token-empty-result {
+  margin: 0;
+}
+
 .settings-theme-token-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -4466,6 +4506,19 @@ body.is-dragging-settings-page {
 }
 
 @media (max-width: 720px) {
+  .settings-theme-token-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .settings-theme-token-search {
+    width: 100%;
+  }
+
+  .settings-theme-token-search-count {
+    justify-self: start;
+  }
+
   .settings-theme-token-card {
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
@@ -6173,7 +6226,8 @@ body.is-dragging-settings-page {
   min-height: 0;
   height: 100%;
   overflow: auto;
-  background: #ffffff;
+  background: var(--seg-shell);
+  color: var(--seg-text-1);
   padding: 26px;
 }
 
@@ -6189,7 +6243,7 @@ body.is-dragging-settings-page {
   min-width: 0;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
-  background: var(--seg-surface);
+  background: var(--seg-panel);
 }
 
 .mobile-connection-hero {
@@ -6268,7 +6322,7 @@ body.is-dragging-settings-page {
   padding: 10px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-xs);
-  background: #ffffff;
+  background: var(--seg-panel);
   display: grid;
   place-items: center;
 }
@@ -6300,7 +6354,7 @@ body.is-dragging-settings-page {
   padding: 0 12px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-xs);
-  background: #ffffff;
+  background: var(--seg-panel);
   color: var(--seg-text-1);
   text-align: left;
   cursor: pointer;
@@ -6308,7 +6362,8 @@ body.is-dragging-settings-page {
 
 .mobile-connection-url-row:hover,
 .mobile-connection-url-row:focus-visible {
-  border-color: var(--brand-accent-active);
+  border-color: var(--mix-seg-accent-34-seg-border-66);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
   outline: none;
 }
 
@@ -6332,7 +6387,7 @@ body.is-dragging-settings-page {
   padding: 10px 12px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-xs);
-  background: #f7f8fa;
+  background: var(--seg-panel-muted);
   color: var(--seg-text-1);
 }
 
@@ -6414,7 +6469,8 @@ body.is-dragging-settings-page {
   gap: 22px;
   padding: 22px 26px 28px;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--seg-shell);
+  color: var(--seg-text-1);
 }
 
 .ssh-profile-sidebar,
@@ -6449,7 +6505,7 @@ body.is-dragging-settings-page {
 .ssh-detail-hero h2,
 .ssh-card-header h3 {
   margin: 0;
-  color: #1f1f1f;
+  color: var(--seg-text-1);
   letter-spacing: 0;
 }
 
@@ -6474,7 +6530,7 @@ body.is-dragging-settings-page {
 .ssh-card-header p,
 .ssh-empty-state span {
   margin: 5px 0 0;
-  color: #666666;
+  color: var(--seg-text-2);
   font-size: 13px;
   line-height: 1.45;
 }
@@ -6496,10 +6552,10 @@ body.is-dragging-settings-page {
 .ssh-directory-row {
   width: 100%;
   min-width: 0;
-  border: 1px solid #e7e7e7;
+  border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: #ffffff;
-  color: #1f1f1f;
+  background: var(--seg-panel);
+  color: var(--seg-text-1);
   display: grid;
   text-align: left;
   cursor: pointer;
@@ -6518,15 +6574,15 @@ body.is-dragging-settings-page {
 .ssh-profile-card:focus-visible,
 .ssh-directory-row:hover,
 .ssh-directory-row:focus-visible {
-  border-color: #d6d6d6;
-  background: #fafafa;
+  border-color: var(--mix-seg-accent-24-seg-border-76);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
   outline: none;
 }
 
 .ssh-profile-card.is-active {
-  border-color: rgba(143, 99, 233, 0.42);
-  background: rgba(143, 99, 233, 0.08);
-  box-shadow: inset 3px 0 0 #8f63e9;
+  border-color: var(--mix-seg-accent-34-seg-border-66);
+  background: var(--semantic-settings-list-detail-row-surface-current);
+  box-shadow: inset 3px 0 0 var(--seg-accent);
 }
 
 .ssh-profile-card-main {
@@ -6539,7 +6595,7 @@ body.is-dragging-settings-page {
 .ssh-directory-row strong {
   min-width: 0;
   overflow: hidden;
-  color: #1f1f1f;
+  color: var(--semantic-settings-list-detail-row-primary-text);
   font-size: 14px;
   font-weight: 650;
   line-height: 1.25;
@@ -6552,7 +6608,7 @@ body.is-dragging-settings-page {
 .ssh-directory-row small {
   min-width: 0;
   overflow: hidden;
-  color: #6c6c6c;
+  color: var(--semantic-settings-list-detail-row-secondary-text);
   font-size: 12px;
   line-height: 1.35;
   text-overflow: ellipsis;
@@ -6584,10 +6640,10 @@ body.is-dragging-settings-page {
   max-width: 260px;
   min-height: 28px;
   padding: 5px 10px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--seg-border);
   border-radius: 999px;
-  background: #fafafa;
-  color: #555555;
+  background: var(--seg-panel);
+  color: var(--seg-text-2);
   overflow: hidden;
   font-size: 12px;
   font-weight: 620;
@@ -6599,32 +6655,32 @@ body.is-dragging-settings-page {
 .ssh-message {
   grid-column: 1 / -1;
   padding: 10px 12px;
-  border: 1px solid #dedede;
+  border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: #fafafa;
-  color: #444444;
+  background: var(--seg-panel-muted);
+  color: var(--seg-text-2);
   font-size: 13px;
   line-height: 1.4;
 }
 
 .ssh-message.is-success {
-  border-color: rgba(62, 142, 91, 0.24);
-  background: rgba(62, 142, 91, 0.1);
-  color: #27633c;
+  border-color: var(--semantic-success-border);
+  background: var(--semantic-success-surface);
+  color: var(--semantic-success-text);
 }
 
 .ssh-message.is-error {
-  border-color: rgba(197, 78, 78, 0.26);
-  background: rgba(197, 78, 78, 0.1);
-  color: #8f3127;
+  border-color: var(--semantic-error-border);
+  background: var(--semantic-error-surface);
+  color: var(--semantic-error-text);
 }
 
 .ssh-card {
   min-width: 0;
   padding: 18px;
-  border: 1px solid #e2e2e2;
+  border: 1px solid var(--seg-border);
   border-radius: 10px;
-  background: #fafafa;
+  background: var(--seg-panel);
   display: grid;
   gap: 18px;
 }
@@ -6651,7 +6707,7 @@ body.is-dragging-settings-page {
 }
 
 .ssh-field span {
-  color: #4f4f4f;
+  color: var(--seg-text-2);
   font-size: 12px;
   font-weight: 650;
   line-height: 1.2;
@@ -6663,22 +6719,22 @@ body.is-dragging-settings-page {
   height: 36px;
   box-sizing: border-box;
   padding: 0 11px;
-  border: 1px solid #dcdcdc;
+  border: 1px solid var(--seg-border);
   border-radius: 7px;
-  background: #ffffff;
-  color: #1f1f1f;
+  background: var(--seg-panel);
+  color: var(--seg-text-1);
   font: inherit;
   font-size: 13px;
   outline: none;
 }
 
 .ssh-field input:focus {
-  border-color: rgba(143, 99, 233, 0.46);
-  box-shadow: 0 0 0 3px rgba(143, 99, 233, 0.12);
+  border-color: var(--mix-seg-accent-34-seg-border-66);
+  background: var(--mix-seg-panel-72-seg-panel-muted-28);
 }
 
 .ssh-field input::placeholder {
-  color: #9a9a9a;
+  color: var(--seg-text-3);
 }
 
 .ssh-action-row {
@@ -6714,7 +6770,7 @@ body.is-dragging-settings-page {
   max-width: 240px;
   min-width: 0;
   overflow: hidden;
-  color: #777777;
+  color: var(--seg-text-3);
   font-size: 11px;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -6724,9 +6780,9 @@ body.is-dragging-settings-page {
 .ssh-path-toolbar {
   min-height: 42px;
   padding: 6px 8px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--seg-border);
   border-radius: 7px;
-  background: #ffffff;
+  background: var(--seg-panel);
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
@@ -6742,7 +6798,7 @@ body.is-dragging-settings-page {
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: #5f5f5f;
+  color: var(--seg-text-3);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -6756,9 +6812,9 @@ body.is-dragging-settings-page {
 
 .ssh-icon-button:hover,
 .ssh-icon-button:focus-visible {
-  border-color: #dcdcdc;
-  background: #f7f7f7;
-  color: #1f1f1f;
+  border-color: var(--seg-border);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
+  color: var(--seg-text-1);
   outline: none;
 }
 
@@ -6786,7 +6842,7 @@ body.is-dragging-settings-page {
 }
 
 .ssh-path-placeholder {
-  color: #777777;
+  color: var(--seg-text-3);
   font-size: 12px;
 }
 
@@ -6808,7 +6864,7 @@ body.is-dragging-settings-page {
   width: 12px;
   height: 12px;
   flex: 0 0 auto;
-  color: #9a9a9a;
+  color: var(--seg-text-3);
   stroke-width: 1.7;
 }
 
@@ -6820,7 +6876,7 @@ body.is-dragging-settings-page {
   border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
-  color: #333333;
+  color: var(--seg-text-1);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   line-height: 1;
@@ -6832,8 +6888,8 @@ body.is-dragging-settings-page {
 
 .ssh-path-crumb-wrap button:hover,
 .ssh-path-crumb-wrap button:focus-visible {
-  border-color: #dddddd;
-  background: #f7f7f7;
+  border-color: var(--seg-border);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
   outline: none;
 }
 
@@ -6849,10 +6905,10 @@ body.is-dragging-settings-page {
   min-width: 0;
   height: 30px;
   padding: 0 9px;
-  border: 1px solid #dcdcdc;
+  border: 1px solid var(--seg-border);
   border-radius: 6px;
-  background: #ffffff;
-  color: #1f1f1f;
+  background: var(--seg-panel);
+  color: var(--seg-text-1);
   font: inherit;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 12px;
@@ -6860,8 +6916,8 @@ body.is-dragging-settings-page {
 }
 
 .ssh-path-edit-form input:focus {
-  border-color: rgba(143, 99, 233, 0.46);
-  box-shadow: 0 0 0 3px rgba(143, 99, 233, 0.12);
+  border-color: var(--mix-seg-accent-34-seg-border-66);
+  background: var(--mix-seg-panel-72-seg-panel-muted-28);
 }
 
 .ssh-path-actions {
@@ -6875,9 +6931,9 @@ body.is-dragging-settings-page {
   min-width: 0;
   min-height: 36px;
   padding: 0 10px;
-  border: 1px solid #e2e2e2;
+  border: 1px solid var(--seg-border);
   border-radius: 7px;
-  background: #ffffff;
+  background: var(--seg-panel);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -6887,7 +6943,7 @@ body.is-dragging-settings-page {
 .ssh-directory-filter svg {
   width: 15px;
   height: 15px;
-  color: #8a8a8a;
+  color: var(--seg-text-3);
   stroke-width: 1.8;
 }
 
@@ -6898,19 +6954,19 @@ body.is-dragging-settings-page {
   padding: 0;
   border: 0;
   background: transparent;
-  color: #1f1f1f;
+  color: var(--seg-text-1);
   font: inherit;
   font-size: 13px;
   outline: none;
 }
 
 .ssh-directory-filter input::placeholder {
-  color: #9a9a9a;
+  color: var(--seg-text-3);
 }
 
 .ssh-directory-filter:focus-within {
-  border-color: rgba(143, 99, 233, 0.42);
-  box-shadow: 0 0 0 3px rgba(143, 99, 233, 0.1);
+  border-color: var(--mix-seg-accent-34-seg-border-66);
+  background: var(--mix-seg-panel-72-seg-panel-muted-28);
 }
 
 .ssh-directory-browser {
@@ -6926,10 +6982,10 @@ body.is-dragging-settings-page {
   right: 12px;
   z-index: 1;
   padding: 4px 8px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--seg-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.94);
-  color: #666666;
+  background: var(--mix-seg-panel-92-transparent-8);
+  color: var(--seg-text-2);
   font-size: 11px;
   font-weight: 650;
   line-height: 1.2;
@@ -6956,15 +7012,15 @@ body.is-dragging-settings-page {
 .ssh-directory-row:hover,
 .ssh-directory-row:focus-visible {
   border-color: transparent;
-  background: #f2f2f2;
+  background: var(--semantic-settings-list-detail-row-surface-hover);
 }
 
 .ssh-directory-row.is-selected,
 .ssh-directory-row.is-selected:hover,
 .ssh-directory-row.is-selected:focus-visible {
   border-color: transparent;
-  background: #e9e9e9;
-  color: #1f1f1f;
+  background: var(--semantic-settings-list-detail-row-surface-current);
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .ssh-directory-row.is-unavailable {
@@ -6977,7 +7033,7 @@ body.is-dragging-settings-page {
   height: 24px;
   border-radius: 6px;
   background: transparent;
-  color: #6a6a6a;
+  color: var(--semantic-settings-list-detail-row-secondary-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -6993,7 +7049,7 @@ body.is-dragging-settings-page {
 
 .ssh-directory-row.is-directory .ssh-directory-icon,
 .ssh-directory-row.is-selected .ssh-directory-icon {
-  color: #5f3dc4;
+  color: var(--semantic-settings-list-detail-icon-text);
 }
 
 .ssh-directory-copy {
@@ -7005,7 +7061,7 @@ body.is-dragging-settings-page {
 .ssh-directory-meta {
   min-width: 0;
   overflow: hidden;
-  color: #777777;
+  color: var(--semantic-settings-list-detail-row-secondary-text);
   font-size: 11px;
   line-height: 1.2;
   text-align: right;
@@ -7016,9 +7072,9 @@ body.is-dragging-settings-page {
 .ssh-empty-state {
   min-width: 0;
   padding: 16px;
-  border: 1px dashed #d7d7d7;
+  border: 1px dashed var(--seg-border);
   border-radius: 8px;
-  background: #fafafa;
+  background: var(--seg-panel-muted);
   display: grid;
   align-content: center;
   justify-items: start;
@@ -7026,7 +7082,7 @@ body.is-dragging-settings-page {
 }
 
 .ssh-empty-state strong {
-  color: #303030;
+  color: var(--seg-text-1);
   font-size: 14px;
   font-weight: 650;
   line-height: 1.3;
@@ -7150,7 +7206,7 @@ body.is-dragging-settings-page {
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--semantic-sidebar-tree-row-text);
+  color: var(--semantic-settings-list-detail-row-primary-text);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -7162,24 +7218,24 @@ body.is-dragging-settings-page {
 .connectors-list-row:hover,
 .connectors-list-row:focus-visible {
   border-color: transparent;
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
+  color: var(--semantic-settings-list-detail-row-primary-text);
   outline: none;
 }
 
 .connectors-list-row.is-active {
   border-color: transparent;
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--semantic-settings-list-detail-row-surface-current);
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .connectors-list-row:hover .connectors-list-copy strong,
 .connectors-list-row:focus-visible .connectors-list-copy strong {
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  color: var(--semantic-settings-list-detail-row-primary-text);
 }
 
 .connectors-list-row.is-active .connectors-list-copy strong {
-  color: var(--semantic-sidebar-tree-row-text-active);
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .connectors-list-copy {
@@ -7196,13 +7252,13 @@ body.is-dragging-settings-page {
 }
 
 .connectors-list-copy strong {
-  color: var(--seg-text-1);
+  color: var(--semantic-settings-list-detail-row-primary-text);
   font-size: 15px;
   font-weight: 690;
 }
 
 .connectors-list-copy span {
-  color: var(--seg-text-3);
+  color: var(--semantic-settings-list-detail-row-secondary-text);
   font-size: 12px;
   font-weight: 560;
 }
@@ -7210,10 +7266,10 @@ body.is-dragging-settings-page {
 .connectors-icon-mark {
   width: 34px;
   height: 34px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-settings-list-detail-icon-border);
   border-radius: 8px;
-  background: var(--seg-panel);
-  color: var(--seg-accent-strong);
+  background: var(--semantic-settings-list-detail-icon-surface);
+  color: var(--semantic-settings-list-detail-icon-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -7233,7 +7289,7 @@ body.is-dragging-settings-page {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--text-tertiary);
+  background: var(--semantic-settings-list-detail-row-secondary-text);
 }
 
 .connectors-status-dot.is-connected,
@@ -8073,7 +8129,7 @@ body.is-dragging-settings-page {
 
 .plugins-installed-sidebar-header h2 {
   margin: 0;
-  color: var(--plugins-market-text);
+  color: var(--semantic-settings-list-detail-row-primary-text);
   font-size: 15px;
   font-weight: 680;
   line-height: 1.2;
@@ -8084,8 +8140,8 @@ body.is-dragging-settings-page {
   min-width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: var(--plugins-market-chip-surface);
-  color: var(--plugins-market-chip-text);
+  background: var(--semantic-settings-list-detail-count-surface);
+  color: var(--semantic-settings-list-detail-count-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -8114,7 +8170,7 @@ body.is-dragging-settings-page {
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: inherit;
+  color: var(--semantic-settings-list-detail-row-primary-text);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -8125,23 +8181,33 @@ body.is-dragging-settings-page {
 }
 
 .plugins-installed-item:hover,
-.plugins-installed-item:focus-visible,
-.plugins-installed-item.is-active {
+.plugins-installed-item:focus-visible {
   border-color: transparent;
-  background: var(--plugins-market-surface-hover);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
   outline: none;
 }
 
-.plugins-installed-item:hover .plugins-installed-copy strong,
-.plugins-installed-item:focus-visible .plugins-installed-copy strong,
-.plugins-installed-item.is-active .plugins-installed-copy strong {
-  color: #0f766e;
+.plugins-installed-item.is-active {
+  border-color: transparent;
+  background: var(--semantic-settings-list-detail-row-surface-current);
 }
 
-.plugins-installed-item .plugins-icon-mark {
+.plugins-installed-item:hover .plugins-installed-copy strong,
+.plugins-installed-item:focus-visible .plugins-installed-copy strong {
+  color: var(--semantic-settings-list-detail-row-primary-text);
+}
+
+.plugins-installed-item.is-active .plugins-installed-copy strong {
+  color: var(--semantic-settings-list-detail-row-current-text);
+}
+
+.plugins-installed-list .plugins-installed-item .plugins-icon-mark {
   width: 34px;
   height: 34px;
+  border-color: var(--semantic-settings-list-detail-icon-border);
   border-radius: 8px;
+  background: var(--semantic-settings-list-detail-icon-surface);
+  color: var(--semantic-settings-list-detail-icon-text);
   font-size: 12px;
 }
 
@@ -8171,7 +8237,7 @@ body.is-dragging-settings-page {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  color: var(--plugins-market-text);
+  color: var(--semantic-settings-list-detail-row-primary-text);
   font-size: 15px;
   font-weight: 690;
   line-height: 1.15;
@@ -8181,7 +8247,7 @@ body.is-dragging-settings-page {
 
 .plugins-installed-version {
   flex: 0 0 auto;
-  color: var(--plugins-market-subtle);
+  color: var(--semantic-settings-list-detail-row-secondary-text);
   font-size: 12px;
   font-weight: 520;
   line-height: 1.15;
@@ -8189,7 +8255,7 @@ body.is-dragging-settings-page {
 
 .plugins-installed-state,
 .plugins-installed-empty {
-  color: var(--plugins-market-muted);
+  color: var(--semantic-settings-list-detail-row-secondary-text);
   font-size: 12px;
   line-height: 1.35;
 }
@@ -8210,15 +8276,15 @@ body.is-dragging-settings-page {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--plugins-market-border);
+  background: var(--semantic-settings-list-detail-row-secondary-text);
 }
 
 .plugins-installed-status-dot.is-enabled {
-  background: #0f766e;
+  background: var(--semantic-success);
 }
 
 .plugins-installed-status-dot.is-missing {
-  background: #d97706;
+  background: var(--semantic-warning);
 }
 
 .plugins-marketplace-category-nav {

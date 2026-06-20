@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import type { ComponentProps } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { APPEARANCE_TOKEN_NAMES } from "../../../../shared/appearance"
 import type { DesktopAppUpdateState } from "../../../../shared/desktop-ipc-contract"
 import { I18nProvider } from "../i18n/I18nProvider"
 import { DEFAULT_ASSISTANT_TRACE_VISIBILITY, type McpServerDraftState } from "../types"
@@ -53,6 +54,14 @@ function createAppUpdateState(overrides: Partial<DesktopAppUpdateState> = {}): D
   return { ...baseState, ...overrides }
 }
 
+function createAppearanceTokenValues(
+  value = "#000000",
+): ComponentProps<typeof SettingsPage>["appearanceTokenValues"] {
+  return Object.fromEntries(APPEARANCE_TOKEN_NAMES.map((tokenName) => [tokenName, value])) as ComponentProps<
+    typeof SettingsPage
+  >["appearanceTokenValues"]
+}
+
 function selectSettingsOption(label: string, option: string) {
   fireEvent.click(screen.getByRole("combobox", { name: label }))
   fireEvent.click(within(screen.getByRole("listbox", { name: label })).getByRole("option", { name: option }))
@@ -68,7 +77,7 @@ function createSettingsPageProps(
     appearanceConfigPath: null,
     appearanceConfigPreview: "{}",
     appearanceOverrides: {},
-    appearanceTokenValues: {} as ComponentProps<typeof SettingsPage>["appearanceTokenValues"],
+    appearanceTokenValues: createAppearanceTokenValues(),
     archivedSessions: [],
     archivedSessionsError: null,
     assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
@@ -934,6 +943,29 @@ describe("SettingsPage built-in tools", () => {
     selectSettingsOption("Interface Font", "微软雅黑")
 
     expect(onFontFamilyChange).toHaveBeenCalledWith("microsoft-yahei")
+  })
+
+  it("filters appearance theme tokens by semantic token name", () => {
+    render(<SettingsPage {...createSettingsPageProps()} />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
+
+    expect(screen.getByText("App Background")).toBeInTheDocument()
+
+    const searchBox = screen.getByRole("searchbox", { name: "Search semantic tokens" })
+    fireEvent.change(searchBox, {
+      target: { value: "semantic-sidebar-tree-row-surface-active" },
+    })
+
+    expect(screen.getByText("Row Surface Active")).toBeInTheDocument()
+    expect(screen.getByText("semantic-sidebar-tree-row-surface-active")).toBeInTheDocument()
+    expect(screen.queryByText("App Background")).not.toBeInTheDocument()
+
+    fireEvent.change(searchBox, {
+      target: { value: "no-such-token" },
+    })
+
+    expect(screen.getByText("No matching tokens")).toBeInTheDocument()
   })
 
   it("uses localized appearance labels without helper descriptions in Chinese", () => {
