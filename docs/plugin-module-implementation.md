@@ -28,43 +28,46 @@ plugins/Anybox-Plugins/                                仓库内插件包集合
 
 ## 2. 插件包布局
 
-当前插件 manifest 固定读取：
+仓库内插件源码推荐采用 Codex-like 展开目录，manifest 入口为：
 
 ```text
-<plugin-id>/<version>/.anybox-plugin/plugin.json
+<plugin-id>/plugin.json
 ```
 
-也兼容旧的非版本化入口：
+也兼容旧入口和版本化入口：
 
 ```text
 <plugin-id>/.anybox-plugin/plugin.json
+<plugin-id>/<version>/plugin.json
+<plugin-id>/<version>/.anybox-plugin/plugin.json
 ```
 
 推荐插件包结构：
 
 ```text
 <plugin-id>/
-  <version>/
-    .anybox-plugin/
-      plugin.json
-    skills/
-      <skill-name>/
-        SKILL.md
-    connectors/
-      <connector-id>/
-        server.js
-    scripts/
+  plugin.json
+  skills/
+    <skill-name>/
+      SKILL.md
+  connectors/
+    <connector-id>/
       server.js
-    docs/
-    assets/
+  scripts/
+    server.js
+  docs/
+  assets/
+  plugin.meta.json          # 可选：远程 registry 展示元数据
+  <plugin-id>-<version>.zip # 可选：远程 registry 安装包
 ```
 
 注意：
 
-- `.anybox-plugin` 只放平台元数据；`skills`、`connectors`、`scripts` 等放在版本目录下，与 `.anybox-plugin` 同级。
+- `plugin.json` 推荐放在插件包根目录；运行时仍兼容旧的 `.anybox-plugin/plugin.json`。
+- `skills`、`connectors`、`scripts` 等放在插件包根目录下。
 - 当前实现从 `plugin.json` 读取 connector 声明，尚未扫描独立的 `connectors/<id>/connector.json`。
 - 插件 ID 来自 manifest `name` 的 trim + lowercase 结果，目录名、manifest `name` 和 registry ID 应保持一致。
-- 一个插件源里存在多个版本目录时，catalog 会按 manifest `version` 选最高版本。
+- 一个插件源里如果根目录没有 manifest、但存在多个版本目录，catalog 会按 manifest `version` 选最高版本。
 
 ## 3. Manifest Schema
 
@@ -112,7 +115,7 @@ plugins/Anybox-Plugins/                                仓库内插件包集合
 `packageSearchRoots()` 按顺序扫描：
 
 1. Agent 内置插件包：`packages/anyboxagent/plugins/builtin/<plugin-id>/<version>`。
-2. 仓库插件包：`plugins/Anybox-Plugins/<plugin-id>/<version>`。
+2. 仓库插件包：`plugins/Anybox-Plugins/<plugin-id>`，也兼容 `<plugin-id>/<version>`。
 3. 本地开发插件仓库：`ANYBOX_PLUGIN_LOCAL_DIR`，未设置时为 Agent data 下的 `plugins/local`。
 4. 受管理安装目录：`ANYBOX_PLUGIN_INSTALL_DIR`，未设置时为 Agent data 下的 `plugins/installed`。
 
@@ -124,10 +127,10 @@ plugins/Anybox-Plugins/                                仓库内插件包集合
 
 - 本地 registry 文件：仓库内 `plugins/registry/plugin-registry.json` 及 `ANYBOX_PLUGIN_REGISTRY_FILES` 指定的文件。
 - 远程 registry index：`ANYBOX_PLUGIN_REGISTRY_INDEX_URL`，默认指向 GitHub 上的 Anybox plugin index。
-- 远程 index 返回插件 base URL 列表，运行时读取 `<base-url>/plugin.meta.json`。
+- 远程 index 返回插件 base URL 列表，运行时优先读取 `<base-url>/plugin.meta.json`，不存在时回退读取 `<base-url>/plugin.json`。
 - 远程 metadata 可缓存到 `ANYBOX_PLUGIN_REGISTRY_CACHE_DIR`。
 
-Registry item 可以只有展示 metadata，也可以携带 zip 包下载信息：
+Registry item 可以只有展示 metadata，也可以携带 zip 包下载信息。zip 是远程安装发布产物；仓库源码仍应以展开目录提交，便于审查和本地开发：
 
 ```json
 {
@@ -625,7 +628,7 @@ bun -e "import * as Config from './src/config/config.ts'; console.log(await Conf
 常见排查顺序：
 
 1. `plugin.json` 是否是合法 JSON，且顶层字段被 schema 支持。
-2. 插件目录是否位于扫描根目录下，且采用 `<plugin-id>/<version>/.anybox-plugin/plugin.json`。
+2. 插件目录是否位于扫描根目录下，且采用 `<plugin-id>/plugin.json`，或兼容的 `<plugin-id>/.anybox-plugin/plugin.json`、`<plugin-id>/<version>/plugin.json`、`<plugin-id>/<version>/.anybox-plugin/plugin.json`。
 3. catalog 是否能看到插件，`installable` 是否为 `true`。
 4. required `configFields` 是否已提供或有 defaultValue。
 5. 安装记录里 `mcpServerIDs`、`connectorIDs`、`skillIDs` 是否符合预期。

@@ -2,7 +2,7 @@
 
 本文面向第一次接触 Anybox 插件系统的第三方开发者。你不需要了解 Anybox 内部实现，也不需要修改 Anybox 源码；你只需要准备一个符合约定的插件包，Anybox Agent 就可以发现、安装、连接并调用你的插件能力。
 
-当前代码库统一使用 `Anybox` 命名，环境变量以 `ANYBOX_` 开头，例如 `ANYBOX_PLUGIN_INSTALL_DIR`。本文中的 Anybox 插件系统指的就是当前桌面端 Agent 使用的这套插件运行时。
+当前代码库统一使用 `Anybox` 命名，环境变量以 `ANYBOX_` 开头，例如 `ANYBOX_PLUGIN_LOCAL_DIR` 和 `ANYBOX_PLUGIN_INSTALL_DIR`。本文中的 Anybox 插件系统指的就是当前桌面端 Agent 使用的这套插件运行时。
 
 ## 插件是什么
 
@@ -40,29 +40,27 @@ Anybox 插件是一个能力包，不是新的执行引擎。
 插件包是一个目录，里面必须有：
 
 ```text
-<plugin-id>/<version>/.anybox-plugin/plugin.json
+<plugin-id>/plugin.json
 ```
 
-推荐版本化结构：
+推荐 Codex-like 展开结构：
 
 ```text
 my-anybox-plugins/
   my-plugin/
-    0.1.0/
-      .anybox-plugin/
-        plugin.json
-      skills/
-      connectors/
-      scripts/
-      docs/
-      assets/
+    plugin.json
+    skills/
+    connectors/
+    scripts/
+    docs/
+    assets/
 ```
 
-`my-anybox-plugins` 是插件安装根目录。Anybox 会扫描它下面的每个 `<plugin-id>/<version>`。
+`my-anybox-plugins` 是插件来源根目录。Anybox 会扫描它下面的每个 `<plugin-id>`。如果需要在同一个插件目录里保留多个版本，也可以使用 `<plugin-id>/<version>/plugin.json`，Anybox 会选择最高版本；旧的 `.anybox-plugin/plugin.json` 入口仍然兼容。
 
 ### Manifest
 
-`.anybox-plugin/plugin.json` 是插件清单。它是严格 JSON，未知顶层字段会被拒绝。
+`plugin.json` 是插件清单。它是严格 JSON，未知顶层字段会被拒绝。
 
 最小清单：
 
@@ -127,39 +125,45 @@ anybox-plugin-examples/
   README.md
   .gitignore
   hello-anybox/
-    0.1.0/
-      .anybox-plugin/
-        plugin.json
-      scripts/
-        server.js
-      skills/
-        hello/
-          SKILL.md
+    plugin.json
+    scripts/
+      server.js
+    skills/
+      hello/
+        SKILL.md
 ```
 
-即使仓库里只有一个插件，也建议保留 `<plugin-id>/<version>` 这两层。这样最符合当前扫描器，也方便以后一个仓库放多个插件。
+默认不需要版本目录。只有在同一个插件需要并存多个版本时，才使用 `<plugin-id>/<version>/plugin.json`。
 
-### 关于安装根目录
+### 关于本地插件来源和安装根目录
 
-开发时可以把仓库根目录直接作为插件安装根：
+开发时推荐把仓库根目录作为固定本地插件来源：
 
 ```powershell
-$env:ANYBOX_PLUGIN_INSTALL_DIR = "C:\Projects\anybox-plugin-examples"
+$env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\Projects\anybox-plugin-examples"
 ```
 
-但要注意：当前实现把 `ANYBOX_PLUGIN_INSTALL_DIR` 视为受管理安装目录。用户在 UI 里卸载插件时，可能会删除该目录下对应插件包。
+`ANYBOX_PLUGIN_LOCAL_DIR` 未设置时，默认指向 Agent data 目录下的 `plugins/local`。如果同时设置了 `ANYBOX_AGENT_DATA_DIR`，默认本地来源就是：
 
-更安全的开发方式是：
+```text
+<ANYBOX_AGENT_DATA_DIR>\data\plugins\local
+```
+
+这个来源的定位是本地插件仓库，逻辑上等价于 GitHub 上的插件仓库。用户在 UI 里安装插件时，Anybox 会把插件包复制到受管理安装根目录；卸载插件时只删除安装目录里的副本，不会删除这里的仓库源包。因此它适合放 Anybox 内部创建的新插件、手写开发插件，或从生成流程直接产出的可用插件。
+
+`ANYBOX_PLUGIN_INSTALL_DIR` 是受管理安装根目录，未设置时默认是 Agent data 目录下的 `plugins/installed`。这个目录里的插件逻辑上属于已经安装到本机的插件；运行时使用这里的副本，用户卸载插件时，可能会删除该目录下对应插件包。
+
+如果必须使用 `ANYBOX_PLUGIN_INSTALL_DIR` 做开发验证，更安全的方式是把源码和受管理安装目录分开：
 
 ```text
 anybox-plugin-examples/       # Git 仓库，提交源码
   hello-anybox/
-    0.1.0/
-      ...
+    plugin.json
+    ...
   dev-install/                # 构建或复制出来的安装目录，加入 .gitignore
 ```
 
-然后把环境变量指向 `dev-install`，而不是源码目录。这样 UI 卸载不会误删 Git 源码。
+然后把 `ANYBOX_PLUGIN_INSTALL_DIR` 指向 `dev-install`，而不是源码目录。日常开发仍优先使用 `ANYBOX_PLUGIN_LOCAL_DIR`。
 
 ## 从零开发第一个插件
 
@@ -170,14 +174,12 @@ anybox-plugin-examples/       # Git 仓库，提交源码
 ```text
 anybox-plugin-examples/
   hello-anybox/
-    0.1.0/
-      .anybox-plugin/
-        plugin.json
-      scripts/
-        server.js
-      skills/
-        hello/
-          SKILL.md
+    plugin.json
+    scripts/
+      server.js
+    skills/
+      hello/
+        SKILL.md
 ```
 
 ### 2. 编写 plugin.json
@@ -185,7 +187,7 @@ anybox-plugin-examples/
 路径：
 
 ```text
-hello-anybox/0.1.0/.anybox-plugin/plugin.json
+hello-anybox/plugin.json
 ```
 
 内容：
@@ -245,7 +247,7 @@ hello-anybox/0.1.0/.anybox-plugin/plugin.json
 路径：
 
 ```text
-hello-anybox/0.1.0/scripts/server.js
+hello-anybox/scripts/server.js
 ```
 
 内容：
@@ -367,7 +369,7 @@ rl.on("line", (line) => {
 路径：
 
 ```text
-hello-anybox/0.1.0/skills/hello/SKILL.md
+hello-anybox/skills/hello/SKILL.md
 ```
 
 内容：
@@ -394,7 +396,7 @@ C:\Projects\anybox-plugin-examples
 在开发环境中设置：
 
 ```powershell
-$env:ANYBOX_PLUGIN_INSTALL_DIR = "C:\Projects\anybox-plugin-examples"
+$env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\Projects\anybox-plugin-examples"
 $env:ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "off"
 ```
 
@@ -425,12 +427,10 @@ plugin:hello-anybox:hello
 
 ```text
 weather-demo/
-  0.1.0/
-    .anybox-plugin/
-      plugin.json
-    connectors/
-      weather/
-        server.js
+  plugin.json
+  connectors/
+    weather/
+      server.js
 ```
 
 `plugin.json` 中的 connector：
@@ -579,6 +579,30 @@ http://localhost:1455/auth/callback
 
 OAuth token 返回 `scope` 时，Anybox 会校验插件声明的非身份类 scope 是否都被授予。缺少必需 scope 时，连接会失败并显示明确错误。
 
+如果你的 OAuth provider 支持 RFC 7591 dynamic client registration，可以省略 `clientID`，改用 `registration`：
+
+```json
+{
+  "credential": {
+    "kind": "oauth",
+    "label": "Docs OAuth",
+    "authorizationURL": "https://auth.example.com/oauth/authorize",
+    "tokenURL": "https://auth.example.com/oauth/token",
+    "scopes": ["docs.readonly"],
+    "registration": {
+      "registrationURL": "https://auth.example.com/oauth/register",
+      "metadata": {
+        "client_name": "Anybox Docs",
+        "application_type": "native",
+        "token_endpoint_auth_method": "none"
+      }
+    }
+  }
+}
+```
+
+Anybox 会在用户连接时自动注册 client，并把返回的 `client_id`、可选 `client_secret` 和 `token_endpoint_auth_method` 保存到本地 credential store。生成的 MCP config 仍只保存 `connectorId`。
+
 ## 远程 MCP Connector
 
 如果你的服务已经提供远程 MCP endpoint，可以让 connector runtime 指向远程地址：
@@ -605,7 +629,7 @@ OAuth token 返回 `scope` 时，Anybox 会校验插件声明的非身份类 sco
 
 典型流程：
 
-1. 开发者把插件包放到插件安装根目录。
+1. 开发者把插件包放到固定本地插件来源，或通过插件市场安装到受管理安装根目录。
 2. 用户打开插件页，安装插件。
 3. 如果插件有 connector，用户连接 API key 或 OAuth。
 4. 用户在项目里选择该插件。
@@ -673,20 +697,18 @@ secrets*
 anybox-plugin-examples/
   README.md
   hello-anybox/
-    0.1.0/
-      .anybox-plugin/
-        plugin.json
-      scripts/
-      skills/
+    plugin.json
+    scripts/
+    skills/
 ```
 
 用户可以 clone 你的仓库，然后把仓库根目录设置为：
 
 ```powershell
-$env:ANYBOX_PLUGIN_INSTALL_DIR = "C:\Projects\anybox-plugin-examples"
+$env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\Projects\anybox-plugin-examples"
 ```
 
-如果要做正式分发，后续可以提供 registry metadata 和 zip 包。当前插件系统已有 registry/zip 的基础路径，但第三方生态还需要进一步规范签名、信任确认和安装审计。
+如果要做正式分发，可以额外提供 registry metadata 和 zip 包。zip 是远程安装发布产物，不应该替代仓库里的展开源码目录；第三方生态还需要进一步规范签名、信任确认和安装审计。
 
 ## 常见问题
 
@@ -694,8 +716,8 @@ $env:ANYBOX_PLUGIN_INSTALL_DIR = "C:\Projects\anybox-plugin-examples"
 
 检查：
 
-- `ANYBOX_PLUGIN_INSTALL_DIR` 是否指向插件集合根目录。
-- 目录是否是 `<plugin-id>/<version>/.anybox-plugin/plugin.json`。
+- `ANYBOX_PLUGIN_LOCAL_DIR` 是否指向插件集合根目录。只有在验证受管理安装目录时，才检查 `ANYBOX_PLUGIN_INSTALL_DIR`。
+- 目录是否是 `<plugin-id>/plugin.json`，或兼容的 `<plugin-id>/.anybox-plugin/plugin.json`、`<plugin-id>/<version>/plugin.json`、`<plugin-id>/<version>/.anybox-plugin/plugin.json`。
 - `plugin.json` 是否是合法 JSON。
 - 是否写了未知顶层字段。
 - `name`、`version`、`description` 是否存在。
@@ -726,7 +748,7 @@ API key connector 需要用户保存 API key。OAuth connector 需要用户完�
 
 ### 卸载插件时源码被删
 
-如果你把 Git 仓库根目录直接设置为 `ANYBOX_PLUGIN_INSTALL_DIR`，UI 卸载可能删除其中的插件包。长期开发建议使用 `dev-install` 作为运行目录，把源码目录和安装目录分开。
+如果你把 Git 仓库根目录直接设置为 `ANYBOX_PLUGIN_INSTALL_DIR`，UI 卸载可能删除其中的插件包。长期开发建议使用 `ANYBOX_PLUGIN_LOCAL_DIR` 作为固定本地插件来源；如果必须验证受管理安装目录，则使用 `dev-install`，把源码目录和安装目录分开。
 
 ## 当前限制
 

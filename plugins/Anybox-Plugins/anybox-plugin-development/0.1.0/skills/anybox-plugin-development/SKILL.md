@@ -16,9 +16,9 @@ description: 创建、审查或验证 Anybox 第三方插件包。Use when the u
 ## 工作流
 
 1. 明确插件能力：MCP 工具、随包 skill、插件自带 connector，或平台 connector requirement。
-2. 选择插件包结构。默认使用版本化目录。
-3. 编写 `.anybox-plugin/plugin.json`，必须是严格 JSON，只使用运行时支持的顶层字段。
-4. 在 `.anybox-plugin` 同级添加运行文件，例如 `skills/`、`connectors/`、`scripts/`、`docs/` 和 `assets/`。
+2. 选择插件包结构。默认使用 Codex-like 展开目录。
+3. 编写根目录 `plugin.json`，必须是严格 JSON，只使用运行时支持的顶层字段。
+4. 在插件根目录添加运行文件，例如 `skills/`、`connectors/`、`scripts/`、`docs/` 和 `assets/`。
 5. 使用 `Plugin.listCatalog()` 验证 catalog 能发现插件。
 6. 如果修改了插件系统运行时代码，运行 `bun test Test/plugin.test.ts`。
 
@@ -29,16 +29,14 @@ description: 创建、审查或验证 Anybox 第三方插件包。Use when the u
 ```text
 <install-root>/
   <plugin-id>/
-    <version>/
-      .anybox-plugin/
-        plugin.json
-      skills/
-        <skill-name>/
-          SKILL.md
-      connectors/
-      scripts/
-      docs/
-      assets/
+    plugin.json
+    skills/
+      <skill-name>/
+        SKILL.md
+    connectors/
+    scripts/
+    docs/
+    assets/
 ```
 
 注意：
@@ -46,9 +44,10 @@ description: 创建、审查或验证 Anybox 第三方插件包。Use when the u
 - `<install-root>` 是包含一个或多个插件包目录的父目录；开发新插件时优先把它作为 `ANYBOX_PLUGIN_LOCAL_DIR`。
 - 当前运行时用 `ANYBOX_PLUGIN_LOCAL_DIR` 发现固定本地插件仓库，未设置时默认是 Agent data 目录下的 `plugins/local`。这个目录逻辑上等价于 GitHub 插件仓库，只提供可安装候选项，不受卸载流程删除。
 - `ANYBOX_PLUGIN_INSTALL_DIR` 是受管理安装根目录，用于网络下载或从本地仓库安装时复制出来的插件包。这里的插件逻辑上属于已安装插件，运行时使用这里的副本，卸载时可能删除对应插件包。
-- 运行时只读取 `.anybox-plugin/plugin.json`；新插件必须写 `.anybox-plugin/plugin.json`。
-- `skills`、`connectors`、`scripts`、`docs` 和 `assets` 应放在 `.anybox-plugin` 同级，不要放进 `.anybox-plugin` 里。
+- 运行时优先读取根目录 `plugin.json`；旧的 `.anybox-plugin/plugin.json` 仍然兼容。
+- `skills`、`connectors`、`scripts`、`docs` 和 `assets` 应放在插件根目录。
 - 插件 ID 使用稳定的小写名称。目录名和 manifest `name` 尽量保持一致。
+- 如果确实需要多个版本并存，也可以使用 `<plugin-id>/<version>/plugin.json`，运行时会选择最高版本。
 
 ## Manifest 规则
 

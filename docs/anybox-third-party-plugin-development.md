@@ -40,29 +40,27 @@ Anybox 插件是一个能力包，不是新的执行引擎。
 插件包是一个目录，里面必须有：
 
 ```text
-<plugin-id>/<version>/.anybox-plugin/plugin.json
+<plugin-id>/plugin.json
 ```
 
-推荐版本化结构：
+推荐 Codex-like 展开结构：
 
 ```text
 my-anybox-plugins/
   my-plugin/
-    0.1.0/
-      .anybox-plugin/
-        plugin.json
-      skills/
-      connectors/
-      scripts/
-      docs/
-      assets/
+    plugin.json
+    skills/
+    connectors/
+    scripts/
+    docs/
+    assets/
 ```
 
-`my-anybox-plugins` 是插件来源根目录。Anybox 会扫描它下面的每个 `<plugin-id>/<version>`。
+`my-anybox-plugins` 是插件来源根目录。Anybox 会扫描它下面的每个 `<plugin-id>`。如果需要在同一个插件目录里保留多个版本，也可以使用 `<plugin-id>/<version>/plugin.json`，Anybox 会选择最高版本；旧的 `.anybox-plugin/plugin.json` 入口仍然兼容。
 
 ### Manifest
 
-`.anybox-plugin/plugin.json` 是插件清单。它是严格 JSON，未知顶层字段会被拒绝。
+`plugin.json` 是插件清单。它是严格 JSON，未知顶层字段会被拒绝。
 
 最小清单：
 
@@ -127,17 +125,15 @@ anybox-plugin-examples/
   README.md
   .gitignore
   hello-anybox/
-    0.1.0/
-      .anybox-plugin/
-        plugin.json
-      scripts/
-        server.js
-      skills/
-        hello/
-          SKILL.md
+    plugin.json
+    scripts/
+      server.js
+    skills/
+      hello/
+        SKILL.md
 ```
 
-即使仓库里只有一个插件，也建议保留 `<plugin-id>/<version>` 这两层。这样最符合当前扫描器，也方便以后一个仓库放多个插件。
+默认不需要版本目录。只有在同一个插件需要并存多个版本时，才使用 `<plugin-id>/<version>/plugin.json`。
 
 ### 关于本地插件来源和安装根目录
 
@@ -162,8 +158,8 @@ $env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\Projects\anybox-plugin-examples"
 ```text
 anybox-plugin-examples/       # Git 仓库，提交源码
   hello-anybox/
-    0.1.0/
-      ...
+    plugin.json
+    ...
   dev-install/                # 构建或复制出来的安装目录，加入 .gitignore
 ```
 
@@ -178,14 +174,12 @@ anybox-plugin-examples/       # Git 仓库，提交源码
 ```text
 anybox-plugin-examples/
   hello-anybox/
-    0.1.0/
-      .anybox-plugin/
-        plugin.json
-      scripts/
-        server.js
-      skills/
-        hello/
-          SKILL.md
+    plugin.json
+    scripts/
+      server.js
+    skills/
+      hello/
+        SKILL.md
 ```
 
 ### 2. 编写 plugin.json
@@ -193,7 +187,7 @@ anybox-plugin-examples/
 路径：
 
 ```text
-hello-anybox/0.1.0/.anybox-plugin/plugin.json
+hello-anybox/plugin.json
 ```
 
 内容：
@@ -253,7 +247,7 @@ hello-anybox/0.1.0/.anybox-plugin/plugin.json
 路径：
 
 ```text
-hello-anybox/0.1.0/scripts/server.js
+hello-anybox/scripts/server.js
 ```
 
 内容：
@@ -375,7 +369,7 @@ rl.on("line", (line) => {
 路径：
 
 ```text
-hello-anybox/0.1.0/skills/hello/SKILL.md
+hello-anybox/skills/hello/SKILL.md
 ```
 
 内容：
@@ -433,12 +427,10 @@ plugin:hello-anybox:hello
 
 ```text
 weather-demo/
-  0.1.0/
-    .anybox-plugin/
-      plugin.json
-    connectors/
-      weather/
-        server.js
+  plugin.json
+  connectors/
+    weather/
+      server.js
 ```
 
 `plugin.json` 中的 connector：
@@ -705,11 +697,9 @@ secrets*
 anybox-plugin-examples/
   README.md
   hello-anybox/
-    0.1.0/
-      .anybox-plugin/
-        plugin.json
-      scripts/
-      skills/
+    plugin.json
+    scripts/
+    skills/
 ```
 
 用户可以 clone 你的仓库，然后把仓库根目录设置为：
@@ -718,7 +708,7 @@ anybox-plugin-examples/
 $env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\Projects\anybox-plugin-examples"
 ```
 
-如果要做正式分发，后续可以提供 registry metadata 和 zip 包。当前插件系统已有 registry/zip 的基础路径，但第三方生态还需要进一步规范签名、信任确认和安装审计。
+如果要做正式分发，可以额外提供 registry metadata 和 zip 包。zip 是远程安装发布产物，不应该替代仓库里的展开源码目录；第三方生态还需要进一步规范签名、信任确认和安装审计。
 
 ## 常见问题
 
@@ -727,7 +717,7 @@ $env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\Projects\anybox-plugin-examples"
 检查：
 
 - `ANYBOX_PLUGIN_LOCAL_DIR` 是否指向插件集合根目录。只有在验证受管理安装目录时，才检查 `ANYBOX_PLUGIN_INSTALL_DIR`。
-- 目录是否是 `<plugin-id>/<version>/.anybox-plugin/plugin.json`。
+- 目录是否是 `<plugin-id>/plugin.json`，或兼容的 `<plugin-id>/.anybox-plugin/plugin.json`、`<plugin-id>/<version>/plugin.json`、`<plugin-id>/<version>/.anybox-plugin/plugin.json`。
 - `plugin.json` 是否是合法 JSON。
 - 是否写了未知顶层字段。
 - `name`、`version`、`description` 是否存在。

@@ -875,10 +875,9 @@ async function writeLocalSourcePluginPackage() {
   if (!activeRoot) throw new Error("Temp root has not been initialized.")
 
   const packageSourceRoot = pluginLocalRoot()
-  const versionRoot = join(packageSourceRoot, "local-source-lab", "0.1.0")
-  const manifestRoot = join(versionRoot, ".anybox-plugin")
-  const skillRoot = join(versionRoot, "skills", "local-review")
-  await mkdir(manifestRoot, { recursive: true })
+  const packageRoot = join(packageSourceRoot, "local-source-lab")
+  const skillRoot = join(packageRoot, "skills", "local-review")
+  await mkdir(packageRoot, { recursive: true })
   await mkdir(skillRoot, { recursive: true })
 
   await writeFile(join(skillRoot, "SKILL.md"), [
@@ -893,7 +892,7 @@ async function writeLocalSourcePluginPackage() {
     "",
   ].join("\n"))
 
-  await writeFile(join(manifestRoot, "plugin.json"), JSON.stringify({
+  await writeFile(join(packageRoot, "plugin.json"), JSON.stringify({
     name: "local-source-lab",
     version: "0.1.0",
     description: "Fixture plugin package from the local plugin source root.",
@@ -908,7 +907,15 @@ async function writeLocalSourcePluginPackage() {
     skills: "skills",
   }, null, 2))
 
-  return versionRoot
+  await writeFile(join(packageRoot, "plugin.meta.json"), JSON.stringify({
+    id: "local-source-lab",
+    name: "local-source-lab",
+    version: "0.1.0",
+    description: "Registry metadata next to expanded local plugin source.",
+  }, null, 2))
+  await writeFile(join(packageRoot, "local-source-lab-0.1.0.zip"), "fixture release artifact")
+
+  return packageRoot
 }
 
 async function writeRelativeAssetPluginPackage() {
@@ -1346,6 +1353,8 @@ describe("plugin marketplace API", () => {
     expect(installResponse.status).toBe(200)
     expect(installBody.data?.skillIDs).toEqual(["plugin:local-source-lab:local-review"])
     expect(existsSync(installedPackageRoot)).toBe(true)
+    expect(existsSync(join(installedPackageRoot, "plugin.json"))).toBe(true)
+    expect(existsSync(join(installedPackageRoot, ".anybox-plugin", "plugin.json"))).toBe(false)
 
     const deleteResponse = await app.request("/api/plugins/installed/local-source-lab", {
       method: "DELETE",
@@ -1506,6 +1515,46 @@ describe("plugin marketplace API", () => {
 
     expect(response.status).toBe(200)
     expect(plugin?.name).toBe("Meta Only")
+    expect(plugin?.installable).toBe(false)
+  })
+
+  test("loads remote metadata from root plugin.json when plugin.meta.json is absent", async () => {
+    await useTempDatabase()
+    const app = createServerApp()
+    process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "https://registry.example.test/index.json"
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL ? input.toString() : input.url
+      if (url === "https://registry.example.test/index.json") {
+        return new Response(JSON.stringify(["https://plugins.example.test/root-manifest"]), { status: 200 })
+      }
+      if (url === "https://plugins.example.test/root-manifest/plugin.meta.json") {
+        return new Response("not found", { status: 404 })
+      }
+      if (url === "https://plugins.example.test/root-manifest/plugin.json") {
+        return new Response(JSON.stringify({
+          name: "root-manifest",
+          version: "1.0.0",
+          description: "Remote plugin described by root plugin.json.",
+          interface: {
+            displayName: "Root Manifest",
+            shortDescription: "Root manifest catalog entry.",
+            category: "Docs",
+          },
+          mcpServers: [],
+          skills: [],
+        }), { status: 200 })
+      }
+      return new Response("not found", { status: 404 })
+    }) as typeof fetch
+
+    const response = await app.request("/api/plugins/catalog")
+    const body = (await response.json()) as PluginCatalogEnvelope
+    const plugin = body.data?.find((item) => item.id === "root-manifest")
+
+    expect(response.status).toBe(200)
+    expect(plugin?.name).toBe("Root Manifest")
     expect(plugin?.installable).toBe(false)
   })
 

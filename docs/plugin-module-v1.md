@@ -6,48 +6,50 @@
 
 ## 插件包结构
 
-插件包采用版本化目录。推荐入口为：
+插件源码推荐采用 Codex-like 的展开目录。推荐入口为：
 
 ```text
-<plugin-id>/<version>/.anybox-plugin/plugin.json
+<plugin-id>/plugin.json
 ```
 
-非版本化入口：
+旧入口和版本化入口仍然兼容，主要用于内置包、受管理安装目录或需要并存多个版本的场景：
 
 ```text
 <plugin-id>/.anybox-plugin/plugin.json
+<plugin-id>/<version>/plugin.json
+<plugin-id>/<version>/.anybox-plugin/plugin.json
 ```
 
 一个完整插件包可以包含这些目录：
 
 ```text
 <plugin-id>/
-  <version>/
-    .anybox-plugin/
-      plugin.json
-    assets/
-    docs/
-    scripts/
-    skills/
-      <skill-name>/
-        SKILL.md
-    connectors/
-      <connector-id>/
-        server.js
+  plugin.json
+  assets/
+  docs/
+  scripts/
+  skills/
+    <skill-name>/
+      SKILL.md
+  connectors/
+    <connector-id>/
+      server.js
+  plugin.meta.json        # 可选：registry 展示与下载元数据
+  <plugin-id>-<version>.zip # 可选：远程 registry 安装包
 ```
 
-`.anybox-plugin` 是 Anybox 平台元数据目录。v1 固定读取其中的 `plugin.json`，未来可继续放签名、锁文件、权限声明等平台文件。`assets`、`docs`、`scripts`、`skills` 和 `connectors` 放在版本目录下，与 `.anybox-plugin` 同级。
+`plugin.json` 是 Anybox 插件清单，推荐直接放在插件包根目录。v1 会优先读取根目录 `plugin.json`，并继续兼容旧的 `.anybox-plugin/plugin.json`。`assets`、`docs`、`scripts`、`skills` 和 `connectors` 也放在插件包根目录下。
 
 当前实现从 `plugin.json` 读取 connector 声明。`connectors/<connector-id>/` 可用于放置本地 connector runtime 代码，但独立的 `connectors/<connector-id>/connector.json` 扫描仍是后续阶段。
 
 当前实现会按顺序扫描这些插件包来源：
 
 - 内置 curated catalog：仓库内置插件包放在 `packages/anyboxagent/plugins/builtin/<plugin-id>/<version>`，打包后复制到 Agent runtime 的 `plugins/builtin`。
-- 仓库插件目录：开发仓库内的 `plugins/Anybox-Plugins/<plugin-id>/<version>`。
+- 仓库插件目录：开发仓库内的 `plugins/Anybox-Plugins/<plugin-id>`，也兼容 `plugins/Anybox-Plugins/<plugin-id>/<version>`。
 - 固定本地插件仓库：`ANYBOX_PLUGIN_LOCAL_DIR` 指向的本地插件根目录；未设置时默认为 Agent data 目录下的 `plugins/local`。这个来源的定位等价于 GitHub 上的插件仓库，只提供 catalog 候选项；安装时会复制一份到受管理安装根目录，卸载插件时不会删除这里的仓库源包。
 - 受管理安装根目录：`ANYBOX_PLUGIN_INSTALL_DIR` 指向的目录；未设置时默认为 Agent data 目录下的 `plugins/installed`。这个来源代表已经安装到本机的插件包，运行时使用这里的副本，卸载插件时可以删除对应插件包。
 
-同一个插件来源下如果存在多个版本目录，catalog 选择 manifest `version` 最高的版本；后面的插件来源仍会覆盖前面的同名插件来源。
+同一个插件来源下如果既有根目录 manifest 又有多个版本目录，根目录 manifest 会作为该插件源的直接包；如果只有多个版本目录，catalog 选择 manifest `version` 最高的版本。后面的插件来源仍会覆盖前面的同名插件来源。
 
 插件包本身不放在 `src` 代码目录；`src/plugin` 只负责扫描、校验、安装和生成运行时绑定。
 

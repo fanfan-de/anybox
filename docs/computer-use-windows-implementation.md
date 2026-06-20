@@ -71,7 +71,7 @@ plugins/Anybox-Plugins/computer-use-windows/
 
 安装时，插件系统主要做这些事：
 
-- 读取并校验 manifest。当前只支持 `.anybox-plugin/plugin.json`。
+- 读取并校验 manifest。当前优先支持插件根目录 `plugin.json`，并兼容旧的 `.anybox-plugin/plugin.json`。
 - 归一化插件 ID。这里的插件 ID 是 `computer-use-windows`。
 - 生成 MCP server ID。manifest 中 server id 是 `windows`，因此最终全局 MCP server ID 是：
 

@@ -22,12 +22,14 @@ const args = parseArgs(process.argv.slice(2))
 const sourceArg = args.source ?? process.env.OPENAI_PLUGINS_SRC
 
 if (!sourceArg) {
-  fail("Usage: node scripts/convert-openai-plugins.mjs --source <openai/plugins repo or plugins dir> [--overwrite-existing]")
+  fail("Usage: node scripts/convert-openai-plugins.mjs --source <openai/plugins repo or plugins dir> [--overwrite-existing] [--zip] [--no-zip] [--registry-meta]")
 }
 
 const sourceRoot = resolve(sourceArg)
 const pluginsRoot = existsSync(join(sourceRoot, "plugins")) ? join(sourceRoot, "plugins") : sourceRoot
 const overwriteExisting = Boolean(args["overwrite-existing"])
+const emitRegistryMeta = Boolean(args["registry-meta"])
+const emitZip = (Boolean(args.zip) || emitRegistryMeta) && !Boolean(args["no-zip"])
 const stagingRoot = resolve(process.env.TEMP ?? process.env.TMP ?? repoRoot, "anybox-openai-plugin-conversion")
 
 const converted = []
@@ -64,14 +66,13 @@ try {
 
     const pluginID = normalizePluginID(sourceManifest.name)
     const outputDir = join(repoRoot, pluginID)
-    const outputMetaPath = join(outputDir, "plugin.meta.json")
-    if (!overwriteExisting && existsSync(outputMetaPath)) {
+    if (!overwriteExisting && existsSync(outputDir)) {
       skipped.push({ name: pluginName, reason: "target plugin already exists; kept existing package" })
       continue
     }
 
     const version = String(sourceManifest.version ?? "0.1.0")
-    const packageRootName = `${pluginID}-${version}`
+    const packageRootName = pluginID
     const packageRoot = join(stagingRoot, packageRootName)
     await cp(pluginRoot, packageRoot, {
       recursive: true,
@@ -81,32 +82,43 @@ try {
     const anyboxManifest = await buildAnyboxManifest(sourceManifest, pluginRoot, skillRoots, mcpServers, {
       embedAssets: false,
     })
-    const registryManifest = await buildAnyboxManifest(sourceManifest, pluginRoot, skillRoots, mcpServers, {
-      embedAssets: true,
-      maxAssetBytes: 64 * 1024,
-    })
-    await mkdir(join(packageRoot, ".anybox-plugin"), { recursive: true })
-    await writeJson(join(packageRoot, ".anybox-plugin", "plugin.json"), anyboxManifest)
+    await writeJson(join(packageRoot, "plugin.json"), anyboxManifest)
 
+    if (overwriteExisting) {
+      await rm(outputDir, { recursive: true, force: true })
+    }
     await mkdir(outputDir, { recursive: true })
-    const zipName = `${pluginID}-${version}.zip`
-    const zipPath = join(outputDir, zipName)
-    await removeFileIfExists(zipPath)
-    await createZip(packageRoot, zipPath)
+    await cp(packageRoot, outputDir, { recursive: true })
 
-    const zipBytes = await readFile(zipPath)
-    const meta = {
-      id: pluginID,
-      ...registryManifest,
-      skillPreviews: skillPreviews.map(({ id: _id, ...preview }) => preview),
-      package: {
+    let packageDownload
+    if (emitZip) {
+      const zipName = `${pluginID}-${version}.zip`
+      const zipPath = join(outputDir, zipName)
+      await removeFileIfExists(zipPath)
+      await createZip(packageRoot, zipPath)
+
+      const zipBytes = await readFile(zipPath)
+      packageDownload = {
         type: "zip",
         url: `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/${pluginID}/${zipName}`,
         sha256: createHash("sha256").update(zipBytes).digest("hex"),
         size: zipBytes.byteLength,
-      },
+      }
     }
-    await writeJson(outputMetaPath, meta)
+
+    if (emitRegistryMeta) {
+      const registryManifest = await buildAnyboxManifest(sourceManifest, pluginRoot, skillRoots, mcpServers, {
+        embedAssets: true,
+        maxAssetBytes: 64 * 1024,
+      })
+      const meta = {
+        id: pluginID,
+        ...registryManifest,
+        skillPreviews: skillPreviews.map(({ id: _id, ...preview }) => preview),
+        package: packageDownload,
+      }
+      await writeJson(join(outputDir, "plugin.meta.json"), meta)
+    }
     converted.push({ name: pluginID, version, skills: skillPreviews.length, mcpServers: mcpServers.length })
   }
 
@@ -451,7 +463,7 @@ async function updateIndex() {
   const dirs = (await readdir(repoRoot, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
-    .filter((name) => existsSync(join(repoRoot, name, "plugin.meta.json")))
+    .filter((name) => existsSync(join(repoRoot, name, "plugin.json")) || existsSync(join(repoRoot, name, "plugin.meta.json")))
     .sort((left, right) => left.localeCompare(right))
   const urls = dirs.map((name) => `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/${name}`)
   await writeJson(join(repoRoot, "index.json"), urls)

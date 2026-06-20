@@ -17,7 +17,10 @@ import * as Mcp from "#mcp/manager.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
 
 const INSTALLED_PLUGINS_TABLE = "installed_plugins"
-const PLUGIN_MANIFEST_PATH = join(".anybox-plugin", "plugin.json")
+const PLUGIN_MANIFEST_PATHS = [
+  "plugin.json",
+  join(".anybox-plugin", "plugin.json"),
+]
 const PLUGIN_APP_COMPAT_PATH = ".app.json"
 const BUILTIN_PLUGIN_PACKAGE_PATH = join("plugins", "builtin")
 const WORKSPACE_PLUGIN_PACKAGE_PATH = join("plugins", "Anybox-Plugins")
@@ -695,8 +698,12 @@ function normalizePluginBaseURL(rawUrl: string) {
   return url.toString().replace(/\/+$/, "")
 }
 
-function pluginMetaURL(baseURL: string) {
-  return `${normalizePluginBaseURL(baseURL)}/plugin.meta.json`
+function pluginRegistryManifestURLs(baseURL: string) {
+  const normalized = normalizePluginBaseURL(baseURL)
+  return [
+    `${normalized}/plugin.meta.json`,
+    `${normalized}/plugin.json`,
+  ]
 }
 
 function riskWeight(risk: PluginRisk) {
@@ -813,8 +820,8 @@ function normalizePluginConnectors(manifest: PluginManifest): PluginAppConnector
 }
 
 function safeReadPluginManifest(packageRoot: string) {
-  const manifestPath = join(packageRoot, PLUGIN_MANIFEST_PATH)
-  if (!existsSync(manifestPath)) return undefined
+  const manifestPath = PLUGIN_MANIFEST_PATHS.map((item) => join(packageRoot, item)).find((item) => existsSync(item))
+  if (!manifestPath) return undefined
 
   try {
     const raw = readFileSync(manifestPath, "utf8")
@@ -1036,13 +1043,22 @@ async function fetchRegistryIndex() {
 }
 
 async function fetchPluginMeta(baseURL: string) {
-  const item = await fetchJSONWithSchema(
-    pluginMetaURL(baseURL),
-    PluginRegistryItem,
-    MAX_PLUGIN_META_BYTES,
-    "Plugin metadata",
-  )
-  return registryItemToManifestSource(item)
+  let lastError: unknown
+  for (const url of pluginRegistryManifestURLs(baseURL)) {
+    try {
+      const item = await fetchJSONWithSchema(
+        url,
+        PluginRegistryItem,
+        MAX_PLUGIN_META_BYTES,
+        "Plugin metadata",
+      )
+      return registryItemToManifestSource(item)
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  throw lastError
 }
 
 function listCachedRemoteRegistryManifestSources() {
