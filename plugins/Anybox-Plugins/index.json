@@ -56,5 +56,6 @@
   "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/test-plugin",
   "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/twilio-developer-kit",
   "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/vercel",
-  "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/zotero"
+  "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/zotero",
+  "https://raw.githubusercontent.com/heygen-com/hyperframes/main/.codex-plugin/plugin.json"
 ]

@@ -299,6 +299,7 @@ let previousGmailOAuthClientSecret: string | undefined
 let previousLegacyGmailOAuthClientID: string | undefined
 let previousLegacyGmailOAuthClientSecret: string | undefined
 let previousFetch: typeof fetch | undefined
+const tinyPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
 
 async function removeTreeWithRetry(path: string) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -910,6 +911,45 @@ async function writeLocalSourcePluginPackage() {
   return versionRoot
 }
 
+async function writeRelativeAssetPluginPackage() {
+  if (!activeRoot) throw new Error("Temp root has not been initialized.")
+
+  const packageSourceRoot = pluginInstallRoot()
+  const packageRoot = join(packageSourceRoot, "asset-lab", "0.1.0")
+  const manifestRoot = join(packageRoot, ".anybox-plugin")
+  const assetsRoot = join(packageRoot, "assets")
+  await mkdir(manifestRoot, { recursive: true })
+  await mkdir(assetsRoot, { recursive: true })
+
+  const tinyPng = Buffer.from(tinyPngBase64, "base64")
+  await writeFile(join(assetsRoot, "icon.png"), tinyPng)
+  await writeFile(join(assetsRoot, "logo.png"), tinyPng)
+
+  await writeFile(join(manifestRoot, "plugin.json"), JSON.stringify({
+    name: "asset-lab",
+    version: "0.1.0",
+    description: "Fixture plugin package with package-relative visual assets.",
+    author: "Anybox Tests",
+    interface: {
+      displayName: "Asset Lab",
+      shortDescription: "Local visual asset fixture.",
+      developerName: "Anybox Tests",
+      category: "Design",
+      composerIcon: "./assets/icon.png",
+      logo: "./assets/logo.png",
+      thumbnailUrl: "./assets/logo.png",
+      heroImageUrl: "./assets/logo.png",
+      screenshots: [
+        "./assets/icon.png",
+        "../outside.png",
+        "./assets/missing.png",
+      ],
+    },
+  }, null, 2))
+
+  return packageRoot
+}
+
 async function writeBrowserConnectorRequirementPluginPackage() {
   if (!activeRoot) throw new Error("Temp root has not been initialized.")
 
@@ -1257,6 +1297,24 @@ describe("plugin marketplace API", () => {
     expect(manifestPlugin?.localized?.name?.["zh-CN"]).toBe("注册表清单实验")
     expect(manifestPlugin?.localized?.description?.["zh-CN"]).toBe("注册表短描述。")
     expect(manifestPlugin?.localized?.longDescription?.["zh-CN"]).toBe("注册表长描述。")
+  })
+
+  test("resolves package-relative visual assets to displayable data URLs", async () => {
+    await useTempDatabase()
+    await writeRelativeAssetPluginPackage()
+    const app = createServerApp()
+
+    const response = await app.request("/api/plugins/catalog")
+    const body = (await response.json()) as PluginCatalogEnvelope
+    const assetPlugin = body.data?.find((plugin) => plugin.id === "asset-lab")
+    const expectedDataUrl = `data:image/png;base64,${tinyPngBase64}`
+
+    expect(response.status).toBe(200)
+    expect(assetPlugin?.source).toBe("package")
+    expect(assetPlugin?.iconUrl).toBe(expectedDataUrl)
+    expect(assetPlugin?.thumbnailUrl).toBe(expectedDataUrl)
+    expect(assetPlugin?.heroImageUrl).toBe(expectedDataUrl)
+    expect(assetPlugin?.screenshots).toEqual([expectedDataUrl])
   })
 
   test("installs packages from the fixed local plugin repository without deleting the source on uninstall", async () => {

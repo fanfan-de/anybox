@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto"
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs"
 import { cp, mkdir, rm, writeFile } from "node:fs/promises"
-import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path"
+import { delimiter, dirname, extname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { inflateRawSync } from "node:zlib"
 import matter from "gray-matter"
@@ -34,10 +34,22 @@ const PLUGIN_REGISTRY_INDEX_URL_ENV = "ANYBOX_PLUGIN_REGISTRY_INDEX_URL"
 const PLUGIN_REGISTRY_CACHE_DIR_ENV = "ANYBOX_PLUGIN_REGISTRY_CACHE_DIR"
 const DEFAULT_PLUGIN_REGISTRY_INDEX_URL = "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/index.json"
 const MAX_PLUGIN_PACKAGE_BYTES = 100 * 1024 * 1024
+const MAX_PLUGIN_DISPLAY_ASSET_BYTES = 2 * 1024 * 1024
 const MAX_PLUGIN_REGISTRY_INDEX_BYTES = 256 * 1024
 const MAX_PLUGIN_META_BYTES = 1024 * 1024
 const MAX_REMOTE_PLUGIN_META_COUNT = 200
 const PLUGIN_REGISTRY_FETCH_TIMEOUT_MS = 8000
+const PLUGIN_DISPLAY_ASSET_MIME_TYPES = new Map([
+  [".avif", "image/avif"],
+  [".bmp", "image/bmp"],
+  [".gif", "image/gif"],
+  [".ico", "image/x-icon"],
+  [".jpeg", "image/jpeg"],
+  [".jpg", "image/jpeg"],
+  [".png", "image/png"],
+  [".svg", "image/svg+xml"],
+  [".webp", "image/webp"],
+])
 
 type PluginManifestSource = {
   manifest: PluginManifest
@@ -619,10 +631,31 @@ function uniqueStrings(items: Array<string | undefined>) {
   return [...new Set(items.map((item) => item?.trim()).filter((item): item is string => Boolean(item)))]
 }
 
-function displayAssetURL(value: string | undefined) {
+function displayAssetDataURL(packageRoot: string | undefined, value: string) {
+  if (!packageRoot) return undefined
+  if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(value) || isAbsolute(value)) return undefined
+
+  const filePath = resolvePackageRelativePath(packageRoot, value)
+  if (!filePath) return undefined
+
+  const mimeType = PLUGIN_DISPLAY_ASSET_MIME_TYPES.get(extname(filePath).toLowerCase())
+  if (!mimeType) return undefined
+
+  try {
+    const fileStat = lstatSync(filePath)
+    if (!fileStat.isFile() || fileStat.size <= 0 || fileStat.size > MAX_PLUGIN_DISPLAY_ASSET_BYTES) return undefined
+
+    return `data:${mimeType};base64,${readFileSync(filePath).toString("base64")}`
+  } catch {
+    return undefined
+  }
+}
+
+function displayAssetURL(value: string | undefined, packageRoot?: string) {
   const trimmed = value?.trim()
   if (!trimmed) return undefined
-  return /^(https?:\/\/|data:image\/)/i.test(trimmed) ? trimmed : undefined
+  if (/^(https?:\/\/|data:image\/)/i.test(trimmed)) return trimmed
+  return displayAssetDataURL(packageRoot, trimmed)
 }
 
 function pluginRegistryCachePath() {
@@ -1309,13 +1342,15 @@ function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
     ? discoverSkillPreviews(pluginID, manifest, packageRoot)
     : source.skillPreviews ?? []
   const icon = manifest.interface?.logo ?? manifest.interface?.composerIcon
-  const iconUrl = displayAssetURL(manifest.interface?.iconUrl) ??
-    displayAssetURL(manifest.interface?.logo) ??
-    displayAssetURL(manifest.interface?.composerIcon)
-  const thumbnailUrl = displayAssetURL(manifest.interface?.thumbnailUrl) ??
-    displayAssetURL(manifest.interface?.heroImageUrl)
-  const heroImageUrl = displayAssetURL(manifest.interface?.heroImageUrl) ?? thumbnailUrl
-  const screenshots = uniqueStrings((manifest.interface?.screenshots ?? []).map(displayAssetURL))
+  const iconUrl = displayAssetURL(manifest.interface?.iconUrl, packageRoot) ??
+    displayAssetURL(manifest.interface?.logo, packageRoot) ??
+    displayAssetURL(manifest.interface?.composerIcon, packageRoot)
+  const thumbnailUrl = displayAssetURL(manifest.interface?.thumbnailUrl, packageRoot) ??
+    displayAssetURL(manifest.interface?.heroImageUrl, packageRoot)
+  const heroImageUrl = displayAssetURL(manifest.interface?.heroImageUrl, packageRoot) ?? thumbnailUrl
+  const screenshots = uniqueStrings((manifest.interface?.screenshots ?? []).map((screenshot) =>
+    displayAssetURL(screenshot, packageRoot)
+  ))
   const risk = highestRisk([
     ...mcpServers.map((server) => server.risk),
     ...connectors.map((app) => app.risk ?? "medium"),
