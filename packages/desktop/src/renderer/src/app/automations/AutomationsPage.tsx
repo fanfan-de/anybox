@@ -1842,10 +1842,18 @@ export function AutomationsPage({ projects, windowControls, onOpenSession }: Aut
               </div>
 
               <div className="automations-index-actions">
-                <button className="secondary-button" type="button" onClick={() => void refreshAutomations()}>
+                <button
+                  className="secondary-button automations-index-action-button"
+                  type="button"
+                  onClick={() => void refreshAutomations()}
+                >
                   {t("app.refresh")}
                 </button>
-                <button className="primary-button" type="button" onClick={() => setIsCreatePanelOpen(true)}>
+                <button
+                  className="primary-button automations-index-action-button automations-index-primary-action"
+                  type="button"
+                  onClick={() => setIsCreatePanelOpen(true)}
+                >
                   {t("automations.actions.newAutomation")}
                 </button>
               </div>

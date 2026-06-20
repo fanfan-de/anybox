@@ -939,9 +939,6 @@ export function PromptPresetsPage({
         ) : (
           <section className={hideNavigator ? "settings-prompts-shell is-sidebar-hosted" : "settings-prompts-shell"} aria-label={t("prompts.layoutAria")}>
             <section className="settings-panel settings-prompt-slots-panel">
-              <header className="settings-prompt-slots-header">
-                <h3>{t("prompts.slotsTitle")}</h3>
-              </header>
               <div className="settings-prompt-assignment-list" role="list" aria-label={t("prompts.slotsTitle")}>
                 <div className="settings-prompt-assignment-row" role="listitem">
                   <div className="settings-prompt-assignment-copy">

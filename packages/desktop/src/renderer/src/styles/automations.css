@@ -188,6 +188,11 @@
   font-weight: 500;
   letter-spacing: 0;
   transform: none;
+  box-shadow: none;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
 }
 
 .automations-page .primary-button {
@@ -228,8 +233,42 @@
   color: var(--automations-danger);
 }
 
-.automations-index-actions .primary-button {
-  gap: 7px;
+.automations-index-actions .automations-index-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--automations-text-muted);
+  white-space: nowrap;
+}
+
+.automations-index-actions .automations-index-action-button:hover,
+.automations-index-actions .automations-index-action-button:focus-visible {
+  background: var(--automations-surface-hover);
+  color: var(--automations-text);
+}
+
+.automations-index-actions .automations-index-action-button:focus-visible {
+  outline: none;
+}
+
+.automations-index-actions .automations-index-action-button:disabled {
+  opacity: 0.56;
+  cursor: default;
+}
+
+.automations-index-actions .automations-index-primary-action {
+  background: var(--surface-code);
+  color: var(--text-on-dark);
+  font-weight: 600;
+}
+
+.automations-index-actions .automations-index-primary-action:hover,
+.automations-index-actions .automations-index-primary-action:focus-visible {
+  background: var(--surface-code-strong);
+  color: var(--text-on-dark);
 }
 
 .automations-index-actions svg,

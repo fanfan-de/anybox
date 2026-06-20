@@ -9681,21 +9681,6 @@ body.is-dragging-settings-page {
   gap: 12px;
 }
 
-.settings-page-main.is-services.prompt-presets-page-main .settings-prompt-slots-header {
-  min-width: 0;
-  padding: 0 2px;
-}
-
-.settings-page-main.is-services.prompt-presets-page-main .settings-prompt-slots-header h3 {
-  margin: 0;
-  color: var(--seg-text-3);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-assignment-list {
   display: grid;
   gap: 10px;
