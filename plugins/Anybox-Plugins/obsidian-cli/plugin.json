@@ -1,0 +1,88 @@
+{
+  "name": "obsidian-cli",
+  "version": "0.1.0",
+  "description": "Bundle Obsidian CLI skills that teach the agent to operate Obsidian vaults through the official obsidian command-line tool.",
+  "author": {
+    "name": "Anybox"
+  },
+  "homepage": "https://obsidian.md/help/cli",
+  "repository": "https://github.com/fanfan-de/Anybox-Plugins",
+  "license": "MIT",
+  "keywords": [
+    "obsidian",
+    "cli",
+    "notes",
+    "markdown",
+    "vault",
+    "tasks",
+    "automation",
+    "skill"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Obsidian CLI",
+      "zh-CN": "Obsidian CLI"
+    },
+    "shortDescription": {
+      "en-US": "Use Obsidian vaults through the official CLI",
+      "zh-CN": "通过官方 CLI 使用 Obsidian 仓库"
+    },
+    "longDescription": {
+      "en-US": "A skill-only plugin that teaches the agent to use the official Obsidian CLI for vault inspection, note reading and writing, search, tasks, properties, and plugin development diagnostics. It does not bundle an MCP server and does not store Obsidian credentials.",
+      "zh-CN": "仅包含技能的插件，指导 Agent 使用官方 Obsidian CLI 检查仓库、读取和写入笔记、搜索、处理任务和属性，并诊断插件开发问题。它不打包 MCP server，也不存储 Obsidian 凭据。"
+    },
+    "developerName": "Anybox",
+    "category": "Docs",
+    "capabilities": [
+      "CLI",
+      "Obsidian",
+      "Notes",
+      "Tasks",
+      "Skill"
+    ],
+    "websiteURL": "https://obsidian.md/help/cli",
+    "defaultPrompt": [
+      "Search my Obsidian vault for notes about a project",
+      "Append a task to today's Obsidian daily note",
+      "Use Obsidian CLI to reload the plugin I am developing"
+    ],
+    "brandColor": "#7C3AED",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "obsidian-shared",
+      "description": "Set up, verify, troubleshoot, and target vaults for the official Obsidian CLI.",
+      "directory": "obsidian-shared"
+    },
+    {
+      "name": "obsidian-notes",
+      "description": "Read, create, open, append, prepend, move, rename, template, and manage Obsidian Markdown notes.",
+      "directory": "obsidian-notes"
+    },
+    {
+      "name": "obsidian-search",
+      "description": "Search and analyze Obsidian vault content, tags, links, backlinks, outlines, folders, and file lists.",
+      "directory": "obsidian-search"
+    },
+    {
+      "name": "obsidian-tasks",
+      "description": "List, create, append, update, toggle, complete, and summarize Obsidian tasks and daily-note tasks.",
+      "directory": "obsidian-tasks"
+    },
+    {
+      "name": "obsidian-dev",
+      "description": "Develop, reload, debug, inspect, screenshot, and diagnose Obsidian plugins and themes through CLI developer commands.",
+      "directory": "obsidian-dev"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/obsidian-cli/obsidian-cli-0.1.0.zip",
+    "sha256": "0889aa39ca1778379720e8544389edb2ec12ad952e0e62345aa5d9c88d203fbd",
+    "size": 156628
+  }
+}

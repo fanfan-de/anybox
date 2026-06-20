@@ -312,6 +312,12 @@ export const PluginSkillPreview = z
   .strict()
 export type PluginSkillPreview = z.infer<typeof PluginSkillPreview>
 
+const PluginRegistrySkillPreview = PluginSkillPreview.omit({ id: true })
+  .extend({
+    id: z.string().min(1).optional(),
+  })
+  .strict()
+
 export const PluginAppConnector = z
   .object({
     appID: z.string().min(1).optional(),
@@ -461,6 +467,12 @@ export const PluginManifest = z
   .strict()
 export type PluginManifest = z.infer<typeof PluginManifest>
 
+const PluginManifestDocument = PluginManifest.extend({
+  id: z.string().min(1).optional(),
+  package: PluginPackageDownload.optional(),
+  skillPreviews: z.array(PluginRegistrySkillPreview).optional(),
+}).strict()
+
 const PluginAppCompatEntry = z
   .object({
     appID: z.string().min(1).optional(),
@@ -483,12 +495,6 @@ const PluginAppCompatFile = z
     apps: z.record(z.string(), PluginAppCompatEntry),
   })
   .passthrough()
-
-const PluginRegistrySkillPreview = PluginSkillPreview.omit({ id: true })
-  .extend({
-    id: z.string().min(1).optional(),
-  })
-  .strict()
 
 const PluginRegistryItem = PluginManifest.extend({
   id: z.string().min(1).optional(),
@@ -690,16 +696,41 @@ function assertHTTPSURL(rawUrl: string, label: string) {
   return url
 }
 
-function normalizePluginBaseURL(rawUrl: string) {
-  const url = assertHTTPSURL(rawUrl.trim(), "Plugin base URL")
+function normalizeGitHubBlobURL(rawUrl: string) {
+  let url: URL
+  try {
+    url = new URL(rawUrl)
+  } catch {
+    return rawUrl
+  }
+
+  if (url.hostname !== "github.com") return rawUrl
+  const segments = url.pathname.split("/").filter(Boolean)
+  if (segments.length < 5 || segments[2] !== "blob") return rawUrl
+
+  const [owner, repo, _blob, branch, ...pathSegments] = segments
+  if (!owner || !repo || !branch || pathSegments.length === 0) return rawUrl
+
+  return new URL(`${owner}/${repo}/${branch}/${pathSegments.join("/")}`, "https://raw.githubusercontent.com/").toString()
+}
+
+function normalizePluginRegistryEntryURL(rawUrl: string) {
+  const url = assertHTTPSURL(normalizeGitHubBlobURL(rawUrl.trim()), "Plugin registry entry URL")
   if (url.search || url.hash) {
-    throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin base URL must not contain query parameters or fragments.")
+    throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin registry entry URL must not contain query parameters or fragments.")
   }
   return url.toString().replace(/\/+$/, "")
 }
 
-function pluginRegistryManifestURLs(baseURL: string) {
-  const normalized = normalizePluginBaseURL(baseURL)
+function isPluginRegistryManifestURL(url: string) {
+  const pathname = assertHTTPSURL(url, "Plugin registry entry URL").pathname.toLowerCase()
+  return pathname.endsWith("/plugin.json") || pathname.endsWith("/plugin.meta.json")
+}
+
+function pluginRegistryManifestURLs(entryURL: string) {
+  const normalized = normalizePluginRegistryEntryURL(entryURL)
+  if (isPluginRegistryManifestURL(normalized)) return [normalized]
+
   return [
     `${normalized}/plugin.meta.json`,
     `${normalized}/plugin.json`,
@@ -819,13 +850,93 @@ function normalizePluginConnectors(manifest: PluginManifest): PluginAppConnector
   ]
 }
 
+function parsePluginManifestDocument(input: unknown) {
+  const parsed = PluginManifestDocument.parse(input)
+  const pluginID = normalizeManifestID(parsed.id ?? parsed.name)
+  const { id: _id, package: download, skillPreviews, ...manifestInput } = parsed
+  const manifest = PluginManifest.parse({
+    ...manifestInput,
+    name: pluginID,
+  })
+
+  return {
+    manifest,
+    download,
+    skillPreviews: normalizeRegistrySkillPreviews(pluginID, skillPreviews),
+  }
+}
+
+const REMOTE_DISPLAY_ASSET_FIELDS = [
+  "composerIcon",
+  "logo",
+  "iconUrl",
+  "thumbnailUrl",
+  "heroImageUrl",
+] as const
+
+function isResolvableRemoteAssetReference(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  if (/^(https?:\/\/|data:image\/)/i.test(trimmed)) return false
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return false
+  if (trimmed.startsWith("./") || trimmed.startsWith("../") || trimmed.startsWith("/")) return true
+  if (trimmed.includes("/") || trimmed.includes("\\")) return true
+
+  return PLUGIN_DISPLAY_ASSET_MIME_TYPES.has(extname(trimmed).toLowerCase())
+}
+
+function resolveRemoteAssetReference(value: string | undefined, manifestURL: string) {
+  const trimmed = value?.trim()
+  if (!trimmed || !isResolvableRemoteAssetReference(trimmed)) return value
+
+  try {
+    return new URL(trimmed, manifestURL).toString()
+  } catch {
+    return value
+  }
+}
+
+function resolveRemoteManifestAssets(manifest: PluginManifest, manifestURL: string) {
+  const interfaceMetadata = manifest.interface
+  if (!interfaceMetadata) return manifest
+
+  const resolvedInterface: PluginInterface = { ...interfaceMetadata }
+  let changed = false
+  for (const field of REMOTE_DISPLAY_ASSET_FIELDS) {
+    const current = resolvedInterface[field]
+    if (typeof current !== "string") continue
+    const resolved = resolveRemoteAssetReference(current, manifestURL)
+    if (resolved && resolved !== current) {
+      resolvedInterface[field] = resolved
+      changed = true
+    }
+  }
+
+  if (Array.isArray(resolvedInterface.screenshots)) {
+    const screenshots = resolvedInterface.screenshots.map((screenshot) =>
+      resolveRemoteAssetReference(screenshot, manifestURL) ?? screenshot
+    )
+    if (screenshots.some((screenshot, index) => screenshot !== resolvedInterface.screenshots?.[index])) {
+      resolvedInterface.screenshots = screenshots
+      changed = true
+    }
+  }
+
+  return changed
+    ? PluginManifest.parse({
+      ...manifest,
+      interface: resolvedInterface,
+    })
+    : manifest
+}
+
 function safeReadPluginManifest(packageRoot: string) {
   const manifestPath = PLUGIN_MANIFEST_PATHS.map((item) => join(packageRoot, item)).find((item) => existsSync(item))
   if (!manifestPath) return undefined
 
   try {
     const raw = readFileSync(manifestPath, "utf8")
-    const manifest = PluginManifest.parse(JSON.parse(raw))
+    const { manifest } = parsePluginManifestDocument(JSON.parse(raw))
     const manifestConnectors = normalizePluginConnectors(manifest)
     const compatApps = safeReadPluginAppCompat(packageRoot)
     if (compatApps.length === 0) {
@@ -1005,17 +1116,16 @@ function normalizeRegistrySkillPreviews(pluginID: string, previews: z.infer<type
   )
 }
 
-function registryItemToManifestSource(item: z.infer<typeof PluginRegistryItem>): PluginManifestSource {
-  const pluginID = normalizeManifestID(item.id ?? item.name)
-  const { id: _id, package: download, skillPreviews, ...manifestInput } = item
-  const manifest = PluginManifest.parse({
-    ...manifestInput,
-    name: pluginID,
-  })
+function registryItemToManifestSource(item: z.infer<typeof PluginRegistryItem>, manifestURL?: string): PluginManifestSource {
+  const parsed = parsePluginManifestDocument(item)
+  const manifest = manifestURL
+    ? resolveRemoteManifestAssets(parsed.manifest, manifestURL)
+    : parsed.manifest
+
   return {
     manifest,
-    download,
-    skillPreviews: normalizeRegistrySkillPreviews(pluginID, skillPreviews),
+    download: parsed.download,
+    skillPreviews: parsed.skillPreviews,
     source: "registry",
   }
 }
@@ -1039,7 +1149,7 @@ async function fetchRegistryIndex() {
     throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin registry index contains too many plugin URLs.")
   }
 
-  return uniqueStrings(entries.map(normalizePluginBaseURL))
+  return uniqueStrings(entries.map(normalizePluginRegistryEntryURL))
 }
 
 async function fetchPluginMeta(baseURL: string) {
@@ -1052,7 +1162,7 @@ async function fetchPluginMeta(baseURL: string) {
         MAX_PLUGIN_META_BYTES,
         "Plugin metadata",
       )
-      return registryItemToManifestSource(item)
+      return registryItemToManifestSource(item, url)
     } catch (error) {
       lastError = error
     }

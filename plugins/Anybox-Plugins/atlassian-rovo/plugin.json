@@ -1,0 +1,79 @@
+{
+  "name": "atlassian-rovo",
+  "version": "1.0.0",
+  "description": "Manage Jira and Confluence fast",
+  "author": {
+    "name": "Atlassian",
+    "url": "https://www.atlassian.com"
+  },
+  "homepage": "https://www.atlassian.com",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [
+    "atlassian"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Atlassian Rovo",
+      "zh-CN": "Atlassian Rovo"
+    },
+    "shortDescription": {
+      "en-US": "Manage Jira and Confluence fast",
+      "zh-CN": "快速管理 Jira 和 Confluence"
+    },
+    "longDescription": {
+      "en-US": "Manage Jira and Confluence fast",
+      "zh-CN": "快速管理 Jira 和 Confluence"
+    },
+    "developerName": "Atlassian",
+    "category": "Docs",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://www.atlassian.com",
+    "privacyPolicyURL": "https://www.atlassian.com/legal/privacy-policy",
+    "termsOfServiceURL": "https://www.atlassian.com/legal/cloud-terms-of-service",
+    "defaultPrompt": [
+      "Create Jira tasks in project Vita MVP"
+    ],
+    "screenshots": [],
+    "brandColor": "#0052CC",
+    "composerIcon": "./assets/app-icon.png",
+    "logo": "./assets/app-icon.png"
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "capture-tasks-from-meeting-notes",
+      "description": "Analyze meeting notes to find action items and create Jira tasks for assigned work. When an agent needs to: (1) Create Jira tasks or tickets from meeting notes, (2) Extract or find action items from notes or Confluence pages, (3) Parse meeting notes for assigned tasks, or (4) Analyze notes and generate tasks for team members. Identifies assignees, looks up account IDs, and creates tasks with proper context.",
+      "directory": "capture-tasks-from-meeting-notes"
+    },
+    {
+      "name": "generate-status-report",
+      "description": "Generate project status reports from Jira issues and publish to Confluence. When an agent needs to: (1) Create a status report for a project, (2) Summarize project progress or updates, (3) Generate weekly/daily reports from Jira, (4) Publish status summaries to Confluence, or (5) Analyze project blockers and completion. Queries Jira issues, categorizes by status/priority, and creates formatted reports for delivery managers and executives.",
+      "directory": "generate-status-report"
+    },
+    {
+      "name": "search-company-knowledge",
+      "description": "Search across company knowledge bases (Confluence, Jira, internal docs) to find and explain internal concepts, processes, and technical details. When an agent needs to: (1) Find or search for information about systems, terminology, processes, deployment, authentication, infrastructure, architecture, or technical concepts, (2) Search internal documentation, knowledge base, company docs, or our docs, (3) Explain what something is, how it works, or look up information, or (4) Synthesize information from multiple sources. Searches in parallel and provides cited answers.",
+      "directory": "search-company-knowledge"
+    },
+    {
+      "name": "spec-to-backlog",
+      "description": "Automatically convert Confluence specification documents into structured Jira backlogs with Epics and implementation tickets. When an agent needs to: (1) Create Jira tickets from a Confluence page, (2) Generate a backlog from a specification, (3) Break down a spec into implementation tasks, or (4) Convert requirements into Jira issues. Handles reading Confluence pages, analyzing specifications, creating Epics with proper structure, and generating detailed implementation tickets linked to the Epic.",
+      "directory": "spec-to-backlog"
+    },
+    {
+      "name": "triage-issue",
+      "description": "Intelligently triage bug reports and error messages by searching for duplicates in Jira and offering to create new issues or add comments to existing ones. When an agent needs to: (1) Triage a bug report or error message, (2) Check if an issue is a duplicate, (3) Find similar past issues, (4) Create a new bug ticket with proper context, or (5) Add information to an existing ticket. Searches Jira for similar issues, identifies duplicates, checks fix history, and helps create well-structured bug reports.",
+      "directory": "triage-issue"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/atlassian-rovo/atlassian-rovo-1.0.0.zip",
+    "sha256": "e4efb28de416605f748c86ca443e76c88356440b32c0d307fe438574b167b7f7",
+    "size": 94240
+  }
+}

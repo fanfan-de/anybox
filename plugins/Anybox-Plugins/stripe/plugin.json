@@ -1,0 +1,59 @@
+{
+  "name": "stripe",
+  "version": "1.0.0",
+  "description": "Payments and business tools",
+  "author": {
+    "name": "Stripe",
+    "url": "https://stripe.com"
+  },
+  "homepage": "https://stripe.com",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [],
+  "interface": {
+    "displayName": {
+      "en-US": "Stripe",
+      "zh-CN": "Stripe"
+    },
+    "developerName": "Stripe",
+    "shortDescription": {
+      "en-US": "Payments and business tools",
+      "zh-CN": "支付和商业工具"
+    },
+    "longDescription": {
+      "en-US": "Payments and business tools",
+      "zh-CN": "支付和商业工具"
+    },
+    "category": "Docs",
+    "capabilities": [],
+    "websiteURL": "https://stripe.com",
+    "privacyPolicyURL": "https://stripe.com/privacy",
+    "termsOfServiceURL": "https://stripe.com/legal/ssa",
+    "brandColor": "#635BFF",
+    "defaultPrompt": [
+      "Use Stripe to help with this task"
+    ],
+    "screenshots": [],
+    "composerIcon": "./assets/app-icon.png",
+    "logo": "./assets/app-icon.png"
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "stripe-best-practices",
+      "description": "Guides Stripe integration decisions — API selection (Checkout Sessions vs PaymentIntents), Connect platform setup (Accounts v2, controller properties), billing/subscriptions, Treasury financial accounts, integration surfaces (Checkout, Payment Element), and migrating from deprecated Stripe APIs. Use when building, modifying, or reviewing any Stripe integration — including accepting payments, building marketplaces, integrating Stripe, processing payments, setting up subscriptions, or creating connected accounts.",
+      "directory": "stripe-best-practices"
+    },
+    {
+      "name": "upgrade-stripe",
+      "description": "Guide for upgrading Stripe API versions and SDKs",
+      "directory": "upgrade-stripe"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/stripe/stripe-1.0.0.zip",
+    "sha256": "8f86c99c43d9d21a21f81dcf1ce1d146bcceec06c2e4a0e283521659b55dbac4",
+    "size": 24856
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "name": "sentry",
+  "version": "0.1.0",
+  "description": "Inspect recent issues and events in Sentry from Codex.",
+  "author": {
+    "name": "OpenAI",
+    "email": "support@openai.com",
+    "url": "https://openai.com/"
+  },
+  "homepage": "https://sentry.io/",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [
+    "sentry",
+    "observability",
+    "triage"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Sentry",
+      "zh-CN": "Sentry"
+    },
+    "shortDescription": {
+      "en-US": "Inspect recent Sentry issues and events",
+      "zh-CN": "查看近期 Sentry Issue 和事件"
+    },
+    "longDescription": {
+      "en-US": "Use Sentry skills to inspect recent issues, review events, and summarize production errors with a read-only workflow.",
+      "zh-CN": "使用 Sentry 技能以只读工作流查看近期 Issue、检查事件，并总结生产错误。"
+    },
+    "developerName": "OpenAI",
+    "category": "Docs",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://sentry.io/",
+    "privacyPolicyURL": "https://sentry.io/privacy/",
+    "termsOfServiceURL": "https://sentry.io/terms/",
+    "defaultPrompt": [
+      "Inspect recent Sentry issues and summarize the top production errors"
+    ],
+    "composerIcon": "./assets/sentry-small.svg",
+    "logo": "./assets/sentry.png",
+    "screenshots": [],
+    "brandColor": "#362D59"
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "sentry",
+      "description": "Use when the user asks to inspect Sentry issues or events, summarize recent production errors, or pull basic Sentry health data via the Sentry API; perform read-only queries with the bundled script and require `SENTRY_AUTH_TOKEN`.",
+      "directory": "sentry"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/sentry/sentry-0.1.0.zip",
+    "sha256": "1b30fcfb9dc8bbeccfaa69f991eed6331dd176ab075062dc648a301f857fba86",
+    "size": 16960
+  }
+}

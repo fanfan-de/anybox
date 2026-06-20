@@ -1,0 +1,70 @@
+{
+  "name": "playwright-cli",
+  "version": "0.1.0",
+  "description": "Bundle Playwright Agent CLI skills for token-efficient browser automation from shell commands.",
+  "author": {
+    "name": "Microsoft Playwright",
+    "url": "https://github.com/microsoft/playwright"
+  },
+  "homepage": "https://playwright.dev/agent-cli/introduction",
+  "repository": "https://github.com/fanfan-de/Anybox-Plugins",
+  "license": "MIT",
+  "keywords": [
+    "playwright",
+    "cli",
+    "browser",
+    "automation",
+    "testing",
+    "screenshots",
+    "tracing",
+    "skill"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Playwright CLI",
+      "zh-CN": "Playwright CLI"
+    },
+    "shortDescription": {
+      "en-US": "Automate browsers through Playwright Agent CLI.",
+      "zh-CN": "通过 Playwright Agent CLI 自动化浏览器。"
+    },
+    "longDescription": {
+      "en-US": "A skill-only plugin that teaches the agent to use Playwright Agent CLI for browser automation, page snapshots, screenshots, sessions, storage state, tracing, and test debugging. It does not bundle an MCP server and relies on Node.js 20+ plus the @playwright/cli npm package.",
+      "zh-CN": "仅包含技能的插件，指导 Agent 使用 Playwright Agent CLI 进行浏览器自动化、页面快照、截图、会话、storage state、trace 和测试调试。它不打包 MCP server，依赖 Node.js 20+ 和 @playwright/cli npm 包。"
+    },
+    "developerName": "Microsoft Playwright",
+    "category": "Browser",
+    "capabilities": [
+      "CLI",
+      "Browser",
+      "Automation",
+      "Testing",
+      "Screenshots",
+      "Skill"
+    ],
+    "websiteURL": "https://playwright.dev/agent-cli/introduction",
+    "defaultPrompt": [
+      "Use playwright-cli to inspect this local web app",
+      "Open localhost with playwright-cli and take a screenshot",
+      "Debug this browser flow using playwright-cli"
+    ],
+    "brandColor": "#2EAD33",
+    "logo": "PW",
+    "screenshots": [],
+    "iconUrl": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4Ij4KICA8cmVjdCB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgcng9IjI4IiBmaWxsPSIjMTExODI3Ii8+CiAgPHBhdGggZD0iTTMwIDM0YzAtOSA3LTE2IDE2LTE2aDd2NDZjMCAxMC04IDE4LTE4IDE4aC01VjM0WiIgZmlsbD0iIzJFQUQzMyIvPgogIDxwYXRoIGQ9Ik03NSAxOGg3YzkgMCAxNiA3IDE2IDE2djQ4aC01Yy0xMCAwLTE4LTgtMTgtMThWMThaIiBmaWxsPSIjOEI1Q0Y2Ii8+CiAgPHBhdGggZD0iTTQwIDQ3YzQtNCA5LTQgMTMgME03NyA0N2M0LTQgOS00IDEzIDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSI1IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8cGF0aCBkPSJNNDcgNjdjOSA1IDI1IDUgMzQgMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRkZGRkZGIiBzdHJva2Utd2lkdGg9IjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxyZWN0IHg9IjI3IiB5PSI4MiIgd2lkdGg9Ijc0IiBoZWlnaHQ9IjI0IiByeD0iOCIgZmlsbD0iI0Y5RkFGQiIvPgogIDxwYXRoIGQ9Im00MCA4OSA4IDUtOCA1IiBmaWxsPSJub25lIiBzdHJva2U9IiMxMTE4MjciIHN0cm9rZS13aWR0aD0iNCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CiAgPHBhdGggZD0iTTU2IDk5aDI2IiBzdHJva2U9IiMyRUFEMzMiIHN0cm9rZS13aWR0aD0iNCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPg=="
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "playwright-cli",
+      "description": "Inspect, test, debug, screenshot, trace, and automate websites through Playwright Agent CLI shell commands.",
+      "directory": "playwright-cli"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/playwright-cli/playwright-cli-0.1.0.zip",
+    "sha256": "e5d720bdbacae42ad3a06b91d4efeb10e4d35577ce0658002a96e285fb248d23",
+    "size": 4296
+  }
+}

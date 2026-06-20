@@ -1,0 +1,76 @@
+{
+  "name": "latex",
+  "version": "0.2.0",
+  "description": "Compile LaTeX with bundled Tectonic for simple projects and TeX Live or MacTeX for full projects.",
+  "author": {
+    "name": "OpenAI"
+  },
+  "homepage": "https://github.com/openai/openai/tree/master/plugins/latex",
+  "repository": "https://github.com/openai/openai/tree/master/plugins/latex",
+  "license": "Proprietary",
+  "keywords": [
+    "latex",
+    "tectonic",
+    "texlive",
+    "mactex",
+    "latexmk",
+    "pdf",
+    "typesetting"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "LaTeX",
+      "zh-CN": "LaTeX"
+    },
+    "shortDescription": {
+      "en-US": "Compile LaTeX with Tectonic or TeX Live",
+      "zh-CN": "使用 Tectonic 或 TeX Live 编译 LaTeX"
+    },
+    "longDescription": {
+      "en-US": "LaTeX workflows for Codex that use bundled Tectonic first for simple projects, fall back to detected TeX Live or MacTeX for fuller projects, validate local LaTeX readiness, and optionally install a Codex-managed full TeX Live runtime only when no usable system installation is present.",
+      "zh-CN": "Codex 的 LaTeX 工作流：简单项目优先使用内置 Tectonic，复杂项目回退到检测到的 TeX Live 或 MacTeX，验证本地 LaTeX 就绪状态，并且仅在没有可用系统安装时选择性安装由 Codex 管理的完整 TeX Live 运行时。"
+    },
+    "developerName": "OpenAI",
+    "category": "Docs",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://openai.com/",
+    "privacyPolicyURL": "https://openai.com/policies/row-privacy-policy/",
+    "termsOfServiceURL": "https://openai.com/policies/row-terms-of-use/",
+    "defaultPrompt": [
+      "Use latex-doctor to check whether this machine can compile LaTeX.",
+      "Use latex-compile to build the main TeX file in this project, trying Tectonic first when the project is simple.",
+      "Use texlive-runtime-installer to install managed full TeX Live only if no existing TeX Live is detected."
+    ],
+    "brandColor": "#2563EB",
+    "logo": "./assets/latex-logo.svg",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "latex-compile",
+      "description": "Compile a TeX project from Codex, trying bundled Tectonic for simple projects and falling back to detected TeX Live or MacTeX when needed.",
+      "directory": "latex-compile"
+    },
+    {
+      "name": "latex-doctor",
+      "description": "Detect bundled Tectonic plus TeX Live or MacTeX availability, report missing LaTeX tools, and run small compile smoke tests when possible.",
+      "directory": "latex-doctor"
+    },
+    {
+      "name": "texlive-runtime-installer",
+      "description": "Detect existing TeX Live or MacTeX first, then optionally install a Codex-managed full TeX Live runtime only when no existing TeX Live installation is detected.",
+      "directory": "texlive-runtime-installer"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/latex/latex-0.2.0.zip",
+    "sha256": "cc8cc5ce946df268d7129bce01ff70cdb1c240005ffb071432b28ff66fff2295",
+    "size": 19211260
+  }
+}

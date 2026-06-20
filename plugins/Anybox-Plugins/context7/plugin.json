@@ -1,0 +1,74 @@
+{
+  "name": "context7",
+  "version": "1.0.0",
+  "description": "Fetch library and framework documentation through the remote Context7 MCP endpoint.",
+  "author": {
+    "name": "Context7",
+    "url": "https://context7.com"
+  },
+  "homepage": "https://context7.com",
+  "interface": {
+    "displayName": {
+      "en-US": "Context7 Docs",
+      "zh-CN": "Context7 文档"
+    },
+    "shortDescription": {
+      "en-US": "Fetch library and framework docs.",
+      "zh-CN": "获取库和框架文档。"
+    },
+    "developerName": "Context7",
+    "category": "Docs",
+    "capabilities": [
+      "Read"
+    ],
+    "logo": "docs",
+    "screenshots": [],
+    "longDescription": {
+      "en-US": "Fetch library and framework documentation through the remote Context7 MCP endpoint.",
+      "zh-CN": "通过远程 Context7 MCP 端点获取库和框架文档。"
+    }
+  },
+  "mcpServers": [
+    {
+      "name": "Context7 Docs",
+      "risk": "low",
+      "permissions": [
+        "Network access to https://mcp.context7.com",
+        "Read-only documentation lookup tools"
+      ],
+      "tools": [
+        {
+          "name": "resolve-library-id",
+          "title": "Resolve Library",
+          "description": "Resolve a package or library name to a documentation identifier.",
+          "readOnly": true
+        },
+        {
+          "name": "get-library-docs",
+          "title": "Get Docs",
+          "description": "Read documentation snippets for a resolved library.",
+          "readOnly": true
+        }
+      ],
+      "runtime": {
+        "transport": "remote",
+        "serverUrl": "https://mcp.context7.com/mcp",
+        "allowedTools": {
+          "readOnly": true
+        },
+        "requireApproval": "never",
+        "timeoutMs": 30000
+      },
+      "installReview": [
+        "The remote endpoint is limited to tools annotated as read-only.",
+        "No local command is started for this plugin."
+      ]
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/context7/context7-1.0.0.zip",
+    "sha256": "ce629d4ce3969fd2d6a57cb9b820ac18d1fa20321bc7637a145541c130c24414",
+    "size": 1115
+  }
+}

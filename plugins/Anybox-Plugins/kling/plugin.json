@@ -1,0 +1,183 @@
+{
+  "name": "kling",
+  "version": "0.1.0",
+  "description": "Generate AI videos with the Kling API through a local MCP connector.",
+  "author": {
+    "name": "Anybox"
+  },
+  "homepage": "https://klingai.com/document-api",
+  "keywords": [
+    "kling",
+    "video",
+    "generation",
+    "ai-video",
+    "text-to-video",
+    "image-to-video"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Kling Video",
+      "zh-CN": "Kling 视频"
+    },
+    "shortDescription": {
+      "en-US": "Generate videos with Kling text-to-video and image-to-video APIs.",
+      "zh-CN": "使用 Kling 文生视频和图生视频 API 生成视频。"
+    },
+    "longDescription": {
+      "en-US": "A Kling API connector for creating asynchronous video generation tasks, checking task status, and waiting for generated video URLs.",
+      "zh-CN": "Kling API 连接器，可创建异步视频生成任务、检查任务状态，并等待生成视频 URL。"
+    },
+    "developerName": "Anybox",
+    "category": "Design",
+    "capabilities": [
+      "video",
+      "generation",
+      "text-to-video",
+      "image-to-video"
+    ],
+    "logo": "KV",
+    "brandColor": "#111827",
+    "defaultPrompt": [
+      "Generate a 5 second cinematic video with Kling",
+      "Turn this image into a short Kling video",
+      "Check the status of my Kling video task"
+    ]
+  },
+  "skills": "skills",
+  "connectors": [
+    {
+      "id": "api",
+      "name": "Kling API",
+      "description": "Local MCP wrapper for Kling video generation APIs.",
+      "risk": "medium",
+      "permissions": [
+        "Starts a local Node.js MCP wrapper bundled with this plugin.",
+        "Sends prompts, public image URLs, or base64 image content to api-singapore.klingai.com.",
+        "Creates Kling generation tasks that may consume account credits or concurrency."
+      ],
+      "configFields": [
+        {
+          "key": "KLING_ACCESS_KEY",
+          "label": "Kling AccessKey",
+          "type": "password",
+          "required": true,
+          "secret": true,
+          "description": "Your Kling API AccessKey."
+        },
+        {
+          "key": "KLING_API_BASE_URL",
+          "label": "Kling API base URL",
+          "type": "url",
+          "required": false,
+          "defaultValue": "https://api-singapore.klingai.com",
+          "description": "Override only if Kling documents a different API host for your account."
+        }
+      ],
+      "credential": {
+        "kind": "api_key",
+        "key": "KLING_SECRET_KEY",
+        "label": "Kling SecretKey",
+        "type": "password",
+        "required": true,
+        "secret": true,
+        "description": "Your Kling API SecretKey used to sign JWT requests."
+      },
+      "runtime": {
+        "transport": "stdio",
+        "command": "node",
+        "args": [
+          "${PLUGIN_ROOT}/connectors/kling/server.js"
+        ],
+        "cwd": "${PLUGIN_ROOT}",
+        "env": {
+          "KLING_ACCESS_KEY": "${KLING_ACCESS_KEY}",
+          "KLING_SECRET_KEY": "${KLING_SECRET_KEY}",
+          "KLING_API_BASE_URL": "${KLING_API_BASE_URL}"
+        },
+        "timeoutMs": 900000,
+        "toolPolicies": {
+          "kling_health_check": {
+            "policy": "auto"
+          },
+          "kling_get_video_task": {
+            "policy": "auto"
+          },
+          "kling_list_video_tasks": {
+            "policy": "auto"
+          },
+          "kling_wait_for_video": {
+            "policy": "auto"
+          },
+          "kling_create_text_to_video": {
+            "policy": "ask"
+          },
+          "kling_create_image_to_video": {
+            "policy": "ask"
+          }
+        }
+      },
+      "tools": [
+        {
+          "name": "kling_health_check",
+          "title": "Kling Health Check",
+          "description": "Check whether Kling connector configuration is present.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "kling_create_text_to_video",
+          "title": "Create Text-to-Video",
+          "description": "Create a Kling text-to-video generation task.",
+          "readOnly": false,
+          "destructive": false
+        },
+        {
+          "name": "kling_create_image_to_video",
+          "title": "Create Image-to-Video",
+          "description": "Create a Kling image-to-video generation task.",
+          "readOnly": false,
+          "destructive": false
+        },
+        {
+          "name": "kling_get_video_task",
+          "title": "Get Video Task",
+          "description": "Fetch the current status and result URLs for a Kling video task.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "kling_wait_for_video",
+          "title": "Wait For Video",
+          "description": "Poll a Kling video task until it succeeds, fails, or times out.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "kling_list_video_tasks",
+          "title": "List Video Tasks",
+          "description": "List recent Kling video tasks for a supported video endpoint.",
+          "readOnly": true,
+          "destructive": false
+        }
+      ],
+      "installReview": [
+        "Requires a Kling AccessKey and SecretKey.",
+        "Generation tools can consume Kling account credits and concurrency.",
+        "Generated media URLs are returned by Kling and should be downloaded or transferred before they expire."
+      ]
+    }
+  ],
+  "skillPreviews": [
+    {
+      "name": "Kling Video Generation",
+      "description": "Use when the user wants to generate, inspect, or wait for AI video generation tasks through the Kling API.",
+      "directory": "kling-video"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/kling/kling-0.1.0.zip",
+    "sha256": "8aebb0e222a794c2b1bfba6919d66a7eadbbbcaa02dafe15d5ba2b73de18a729",
+    "size": 8886
+  }
+}

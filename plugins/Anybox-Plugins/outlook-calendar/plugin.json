@@ -1,0 +1,89 @@
+{
+  "name": "outlook-calendar",
+  "version": "0.1.0",
+  "description": "Connect Outlook Calendar for scheduling, daily briefs, event prep, and safe meeting changes.",
+  "author": {
+    "name": "OpenAI",
+    "email": "support@openai.com",
+    "url": "https://openai.com/"
+  },
+  "homepage": "https://www.microsoft.com/en-us/microsoft-365/outlook/calendar-app",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [
+    "outlook-calendar",
+    "calendar",
+    "microsoft",
+    "scheduling",
+    "teams",
+    "daily-brief",
+    "meeting-prep"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Outlook Calendar",
+      "zh-CN": "Outlook 日历"
+    },
+    "shortDescription": {
+      "en-US": "Manage Outlook schedules and meeting changes",
+      "zh-CN": "管理 Outlook 日程和会议变更"
+    },
+    "longDescription": {
+      "en-US": "Use Outlook Calendar to summarize a day, compare availability, prepare for meetings, explain Outlook status semantics, and schedule, reschedule, or cancel events through the connected Microsoft Outlook app.",
+      "zh-CN": "使用 Outlook Calendar 总结一天日程、比较空闲时间、准备会议、解释 Outlook 状态语义，并通过已连接的 Microsoft Outlook 应用安排、改期或取消事件。"
+    },
+    "developerName": "OpenAI",
+    "category": "Docs",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://www.microsoft.com/en-us/microsoft-365/outlook/calendar-app",
+    "privacyPolicyURL": "https://www.microsoft.com/en-us/privacy/privacystatement",
+    "termsOfServiceURL": "https://www.microsoft.com/en-us/servicesagreement/",
+    "defaultPrompt": "Summarize my day, compare availability, explain Outlook status, and draft the right event update",
+    "brandColor": "#0078D4",
+    "composerIcon": "./assets/app-icon.png",
+    "logo": "./assets/app-icon.png",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "outlook-calendar",
+      "description": "Handle Outlook Calendar workflows, including delegated/shared calendar writes. Use when the user asks for schedule understanding, availability checks, meeting scheduling, intelligent rescheduling, meeting prep, reminder updates, RSVP responses, recurring maintenance, travel coordination, deadline planning, or safe create, update, reschedule, respond, attach, delete, or cancel changes with timezone-aware event times and attendee validation.",
+      "directory": "outlook-calendar"
+    },
+    {
+      "name": "outlook-calendar-daily-brief",
+      "description": "Build polished one-day Outlook Calendar briefs. Use when the user asks for today, tomorrow, or a specific date summary with an agenda, conflict flags, free windows, remaining-meeting readouts, or a calendar brief, and Outlook Calendar is available.",
+      "directory": "outlook-calendar-daily-brief"
+    },
+    {
+      "name": "outlook-calendar-free-up-time",
+      "description": "Find ways to open up meaningful free time in Outlook Calendar. Use when the user wants to clear part of their schedule, make room for focus time, create a longer uninterrupted block, or see the smallest set of calendar changes that would give time back.",
+      "directory": "outlook-calendar-free-up-time"
+    },
+    {
+      "name": "outlook-calendar-group-scheduler",
+      "description": "Find and rank good meeting times for several people using Outlook Calendar data. Use when the user wants to schedule a meeting, compare candidate slots across attendees, find the best compromise time, or add a room/resource check after narrowing the attendee-compatible options.",
+      "directory": "outlook-calendar-group-scheduler"
+    },
+    {
+      "name": "outlook-calendar-meeting-prep",
+      "description": "Build a practical meeting prep brief from an Outlook Calendar event and its nearby Microsoft context. Use when the user wants to prepare for an upcoming meeting, understand what to read beforehand, pull in linked notes or docs, or get a concise brief on what the meeting appears to require.",
+      "directory": "outlook-calendar-meeting-prep"
+    },
+    {
+      "name": "outlook-calendar-shared-calendars",
+      "description": "Safely write to delegated or shared Outlook calendars. Use when the user explicitly wants to create, update, respond to, cancel, delete, or add a small attachment to an event on a shared or delegated Outlook Calendar.",
+      "directory": "outlook-calendar-shared-calendars"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/outlook-calendar/outlook-calendar-0.1.0.zip",
+    "sha256": "fc3b40409fae67ead640b1db23ba970862502987705d5ce2aa849ca9844c79be",
+    "size": 427225
+  }
+}

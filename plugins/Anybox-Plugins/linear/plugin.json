@@ -1,0 +1,54 @@
+{
+  "name": "linear",
+  "version": "0.0.0",
+  "description": "Find and reference issues and projects.",
+  "author": {
+    "name": "OpenAI",
+    "url": "https://linear.app/"
+  },
+  "homepage": "https://linear.app/",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [],
+  "interface": {
+    "displayName": {
+      "en-US": "Linear",
+      "zh-CN": "Linear"
+    },
+    "shortDescription": {
+      "en-US": "Find and reference issues and projects.",
+      "zh-CN": "查找和引用 Issue 与项目。"
+    },
+    "longDescription": {
+      "en-US": "Manage issues, projects, and team workflows in Linear from Codex.",
+      "zh-CN": "在 Codex 中管理 Linear 的 Issue、项目和团队工作流。"
+    },
+    "developerName": "OpenAI",
+    "category": "Docs",
+    "capabilities": [],
+    "websiteURL": "https://linear.app/",
+    "privacyPolicyURL": "https://linear.app/privacy",
+    "termsOfServiceURL": "https://linear.app/terms",
+    "brandColor": "#5E6AD2",
+    "defaultPrompt": [
+      "Triage or update relevant issues for this task with clear next actions"
+    ],
+    "composerIcon": "./assets/linear-icon.svg",
+    "logo": "./assets/app-icon.png",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "linear",
+      "description": "Manage issues, projects & team workflows in Linear. Use when the user wants to read, create or updates tickets in Linear.",
+      "directory": "linear"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/linear/linear-0.0.0.zip",
+    "sha256": "f99a3f870ab5a6a8c0d93d73dd36a264196529b53da82bbbfe96d45d4bd4bd72",
+    "size": 308039
+  }
+}

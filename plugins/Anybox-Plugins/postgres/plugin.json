@@ -1,0 +1,88 @@
+{
+  "name": "postgres",
+  "version": "1.0.0",
+  "description": "Inspect and query a configured Postgres database through MCP.",
+  "author": {
+    "name": "Model Context Protocol",
+    "url": "https://github.com/modelcontextprotocol/servers"
+  },
+  "homepage": "https://github.com/modelcontextprotocol/servers",
+  "interface": {
+    "displayName": {
+      "en-US": "Postgres",
+      "zh-CN": "Postgres"
+    },
+    "shortDescription": {
+      "en-US": "Inspect and query a configured Postgres database.",
+      "zh-CN": "查看并查询已配置的 Postgres 数据库。"
+    },
+    "developerName": "Model Context Protocol",
+    "category": "Database",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "logo": "database",
+    "screenshots": [],
+    "longDescription": {
+      "en-US": "Inspect and query a configured Postgres database through MCP.",
+      "zh-CN": "通过 MCP 查看并查询已配置的 Postgres 数据库。"
+    }
+  },
+  "mcpServers": [
+    {
+      "name": "Postgres",
+      "risk": "high",
+      "permissions": [
+        "Network access to the configured database host",
+        "Uses a database connection string as a command argument",
+        "Can expose query tools that may read or mutate database data depending on server behavior"
+      ],
+      "tools": [
+        {
+          "name": "query",
+          "title": "Query",
+          "description": "Run SQL against the configured database.",
+          "readOnly": false
+        },
+        {
+          "name": "list_tables",
+          "title": "List Tables",
+          "description": "Inspect database tables.",
+          "readOnly": true
+        }
+      ],
+      "configFields": [
+        {
+          "key": "POSTGRES_CONNECTION_STRING",
+          "label": "Connection string",
+          "type": "password",
+          "required": true,
+          "secret": true,
+          "placeholder": "postgres://user:password@localhost:5432/db",
+          "description": "Use a least-privilege database user when possible."
+        }
+      ],
+      "runtime": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-postgres",
+          "${POSTGRES_CONNECTION_STRING}"
+        ],
+        "timeoutMs": 30000
+      },
+      "installReview": [
+        "The connection string is passed to the external process as an argument.",
+        "Use read-only database credentials when you only need inspection."
+      ]
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/postgres/postgres-1.0.0.zip",
+    "sha256": "6984744c4fad2b2e23c75477c3e31bddffaca7ac70542e75f527e2d216c143ae",
+    "size": 1321
+  }
+}

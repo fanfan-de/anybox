@@ -1,0 +1,92 @@
+{
+  "name": "teams",
+  "version": "0.1.0",
+  "description": "Work with Teams using the configured Microsoft Teams app connector.",
+  "author": {
+    "name": "OpenAI",
+    "email": "support@openai.com",
+    "url": "https://openai.com/"
+  },
+  "homepage": "https://www.microsoft.com/en-us/microsoft-teams/group-chat-software",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [
+    "teams",
+    "chat",
+    "microsoft"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Teams",
+      "zh-CN": "Teams"
+    },
+    "shortDescription": {
+      "en-US": "Summarize Teams and draft follow-ups",
+      "zh-CN": "总结 Teams 并起草后续跟进"
+    },
+    "longDescription": {
+      "en-US": "Use Teams to summarize chats, extract actions, and draft channel or meeting follow-ups through the connected Microsoft Teams app.",
+      "zh-CN": "使用 Teams 总结聊天、提取行动项，并通过已连接的 Microsoft Teams 应用起草频道或会议后续跟进。"
+    },
+    "developerName": "OpenAI",
+    "category": "Docs",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://www.microsoft.com/en-us/microsoft-teams/group-chat-software",
+    "privacyPolicyURL": "https://www.microsoft.com/en-us/privacy/privacystatement",
+    "termsOfServiceURL": "https://www.microsoft.com/en-us/servicesagreement/",
+    "defaultPrompt": [
+      "Summarize chat, pull out action items, or draft follow-up"
+    ],
+    "brandColor": "#5B5FC7",
+    "composerIcon": "./assets/app-icon.png",
+    "logo": "./assets/app-icon.png",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "teams",
+      "description": "Summarize Microsoft Teams conversations, triage unread or recent activity, draft follow-ups, and manage Planner tasks through connected Teams data. Use when the user wants to review chats or channels, identify owners and next steps, prepare a safe reply or post, or turn Teams follow-ups into Microsoft Planner tasks.",
+      "directory": "teams"
+    },
+    {
+      "name": "teams-channel-summarization",
+      "description": "Summarize activity from one Microsoft Teams channel or one scoped Teams conversation and return a concise recap or post-ready follow-up.",
+      "directory": "teams-channel-summarization"
+    },
+    {
+      "name": "teams-daily-digest",
+      "description": "Create a daily Microsoft Teams digest from selected chats, channels, or workstreams. Use when the user asks for a daily Teams recap or summary of today's Teams activity.",
+      "directory": "teams-daily-digest"
+    },
+    {
+      "name": "teams-messages",
+      "description": "Compose, route, draft, or send Microsoft Teams messages with exact destination resolution, real user mentions, and Teams-native DM or channel routing.",
+      "directory": "teams-messages"
+    },
+    {
+      "name": "teams-notification-triage",
+      "description": "Triage recent Microsoft Teams activity into a priority queue or task list for the user.",
+      "directory": "teams-notification-triage"
+    },
+    {
+      "name": "teams-planner-task-management",
+      "description": "Review and manage Microsoft Planner tasks from Teams workflows. Use when the user wants to inspect plans or buckets, create tasks from follow-ups, update task fields, or safely delete a Planner task.",
+      "directory": "teams-planner-task-management"
+    },
+    {
+      "name": "teams-reply-drafting",
+      "description": "Draft Microsoft Teams replies from available context. Use when the user wants help finding messages that likely need a response and preparing reply drafts.",
+      "directory": "teams-reply-drafting"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/teams/teams-0.1.0.zip",
+    "sha256": "8aed57e2e998c84ad99fc9fa4cab4f667ac42057fab8ba7fbd19a8fd002a0251",
+    "size": 337801
+  }
+}

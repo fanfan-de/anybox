@@ -1,0 +1,129 @@
+{
+  "name": "expo",
+  "version": "1.0.0",
+  "description": "Official Expo skills for building, deploying, upgrading, and debugging Expo and React Native apps.",
+  "author": {
+    "name": "Expo Team",
+    "email": "support@expo.dev",
+    "url": "https://expo.dev"
+  },
+  "homepage": "https://docs.expo.dev/skills/",
+  "repository": "https://github.com/expo/skills/tree/main/plugins/expo",
+  "license": "MIT",
+  "keywords": [
+    "expo",
+    "react-native",
+    "expo-router",
+    "codex-run-actions",
+    "eas",
+    "mobile",
+    "ios",
+    "android",
+    "deployment",
+    "upgrades",
+    "native-modules"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Expo",
+      "zh-CN": "Expo"
+    },
+    "shortDescription": {
+      "en-US": "Build, deploy, upgrade, and debug Expo and React Native apps",
+      "zh-CN": "构建、部署、升级和调试 Expo 与 React Native 应用"
+    },
+    "longDescription": {
+      "en-US": "Official Expo-authored skills for building Expo Router UI, authoring API routes, configuring data fetching and styling, writing Expo native modules, creating dev clients, upgrading Expo SDKs, wiring Codex app Run actions, and deploying Expo apps with EAS workflows, builds, hosting, TestFlight, App Store, and Play Store guidance.",
+      "zh-CN": "Expo 官方技能，用于构建 Expo Router UI、编写 API routes、配置数据获取和样式、编写 Expo native modules、创建 dev clients、升级 Expo SDK、接入 Codex app Run actions，并通过 EAS workflows、builds、hosting、TestFlight、App Store 和 Play Store 部署 Expo 应用。"
+    },
+    "developerName": "Expo",
+    "category": "Code",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://expo.dev/",
+    "privacyPolicyURL": "https://expo.dev/privacy",
+    "termsOfServiceURL": "https://expo.dev/terms",
+    "defaultPrompt": "Use Expo when building, deploying, upgrading, debugging, or wiring Codex app Run actions for Expo and React Native apps.",
+    "composerIcon": "./assets/expo.png",
+    "logo": "./assets/expo.png",
+    "screenshots": [],
+    "brandColor": "#000020"
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "building-native-ui",
+      "description": "Complete guide for building beautiful apps with Expo Router. Covers fundamentals, styling, components, navigation, animations, patterns, and native tabs.",
+      "directory": "building-native-ui"
+    },
+    {
+      "name": "codex-expo-run-actions",
+      "description": "Wire Expo projects into the Codex app with project-local run scripts and .codex/environments/environment.toml actions. Use when the user wants the Codex app Run button, build/run actions, action buttons, or a stable Expo start/run workflow from Codex.",
+      "directory": "codex-expo-run-actions"
+    },
+    {
+      "name": "expo-api-routes",
+      "description": "Guidelines for creating API routes in Expo Router with EAS Hosting",
+      "directory": "expo-api-routes"
+    },
+    {
+      "name": "expo-cicd-workflows",
+      "description": "Helps understand and write EAS workflow YAML files for Expo projects. Use this skill when the user asks about CI/CD or workflows in an Expo or EAS context, mentions .eas/workflows/, or wants help with EAS build pipelines or deployment automation.",
+      "directory": "expo-cicd-workflows"
+    },
+    {
+      "name": "expo-deployment",
+      "description": "Deploying Expo apps to iOS App Store, Android Play Store, web hosting, and API routes",
+      "directory": "expo-deployment"
+    },
+    {
+      "name": "expo-dev-client",
+      "description": "Build and distribute Expo development clients locally or via TestFlight",
+      "directory": "expo-dev-client"
+    },
+    {
+      "name": "expo-module",
+      "description": "Guide for writing Expo native modules and views using the Expo Modules API (Swift, Kotlin, TypeScript). Covers module definition DSL, native views, shared objects, config plugins, lifecycle hooks, autolinking, and type system. Use when building or modifying native modules for Expo.",
+      "directory": "expo-module"
+    },
+    {
+      "name": "expo-tailwind-setup",
+      "description": "Set up Tailwind CSS v4 in Expo with react-native-css and NativeWind v5 for universal styling",
+      "directory": "expo-tailwind-setup"
+    },
+    {
+      "name": "expo-ui-jetpack-compose",
+      "description": "`@expo/ui/jetpack-compose` package lets you use Jetpack Compose Views and modifiers in your app.",
+      "directory": "expo-ui-jetpack-compose"
+    },
+    {
+      "name": "expo-ui-swift-ui",
+      "description": "`@expo/ui/swift-ui` package lets you use SwiftUI Views and modifiers in your app.",
+      "directory": "expo-ui-swift-ui"
+    },
+    {
+      "name": "native-data-fetching",
+      "description": "Use when implementing or debugging ANY network request, API call, or data fetching. Covers fetch API, React Query, SWR, error handling, caching, offline support, and Expo Router data loaders (`useLoaderData`).",
+      "directory": "native-data-fetching"
+    },
+    {
+      "name": "upgrading-expo",
+      "description": "Guidelines for upgrading Expo SDK versions and fixing dependency issues",
+      "directory": "upgrading-expo"
+    },
+    {
+      "name": "use-dom",
+      "description": "Use Expo DOM components to run web code in a webview on native and as-is on web. Migrate web code to native incrementally.",
+      "directory": "use-dom"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/expo/expo-1.0.0.zip",
+    "sha256": "dfd0ac6c1d0b43a0d98eb8cdba18d10d9925e3e07d7d9c21615a9e313386e0b4",
+    "size": 133804
+  }
+}

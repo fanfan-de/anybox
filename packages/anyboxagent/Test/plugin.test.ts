@@ -1459,9 +1459,12 @@ describe("plugin marketplace API", () => {
     expect(firstRemotePlugin?.installable).toBe(true)
     expect(firstRemotePlugin?.download?.url).toBe("https://cdn.example.test/remote-lab.zip")
     expect(firstRemotePlugin?.iconUrl).toBe("https://cdn.example.test/remote-icon.png")
-    expect(firstRemotePlugin?.thumbnailUrl).toBeUndefined()
-    expect(firstRemotePlugin?.heroImageUrl).toBeUndefined()
-    expect(firstRemotePlugin?.screenshots).toEqual(["https://cdn.example.test/remote-lab.png"])
+    expect(firstRemotePlugin?.thumbnailUrl).toBe("https://plugins.example.test/remote-lab/relative-thumbnail.png")
+    expect(firstRemotePlugin?.heroImageUrl).toBe("https://plugins.example.test/remote-lab/relative-thumbnail.png")
+    expect(firstRemotePlugin?.screenshots).toEqual([
+      "https://plugins.example.test/remote-lab/relative-screenshot.png",
+      "https://cdn.example.test/remote-lab.png",
+    ])
 
     const fetchCountBeforeCachedMode = fetchCount
     const cachedModeResponse = await app.request("/api/plugins/catalog?freshness=cached")
@@ -1556,6 +1559,69 @@ describe("plugin marketplace API", () => {
     expect(response.status).toBe(200)
     expect(plugin?.name).toBe("Root Manifest")
     expect(plugin?.installable).toBe(false)
+  })
+
+  test("loads remote metadata from direct plugin.json URLs in the registry index", async () => {
+    await useTempDatabase()
+    const app = createServerApp()
+    process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "https://registry.example.test/index.json"
+    let requestedRawGitHubURL = false
+
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL ? input.toString() : input.url
+      if (url === "https://registry.example.test/index.json") {
+        return new Response(JSON.stringify([
+          "https://plugins.example.test/direct-lab/plugin.json",
+          "https://github.com/fanfan-de/anybox/blob/master/plugins/Anybox-Plugins/blob-lab/plugin.json",
+        ]), { status: 200 })
+      }
+      if (url === "https://plugins.example.test/direct-lab/plugin.json") {
+        return new Response(JSON.stringify({
+          name: "direct-lab",
+          version: "1.0.0",
+          description: "Remote plugin described by a direct plugin.json URL.",
+          interface: {
+            displayName: "Direct Lab",
+            shortDescription: "Direct manifest catalog entry.",
+            category: "Docs",
+            logo: "./assets/icon.png",
+            screenshots: ["./assets/screenshot.png"],
+          },
+          mcpServers: [],
+          skills: [],
+        }), { status: 200 })
+      }
+      if (url === "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/blob-lab/plugin.json") {
+        requestedRawGitHubURL = true
+        return new Response(JSON.stringify({
+          name: "blob-lab",
+          version: "1.0.0",
+          description: "Remote plugin described by a GitHub blob URL.",
+          interface: {
+            displayName: "Blob Lab",
+            shortDescription: "GitHub blob URL catalog entry.",
+            category: "Docs",
+          },
+          mcpServers: [],
+          skills: [],
+        }), { status: 200 })
+      }
+      return new Response("not found", { status: 404 })
+    }) as typeof fetch
+
+    const response = await app.request("/api/plugins/catalog")
+    const body = (await response.json()) as PluginCatalogEnvelope
+    const directPlugin = body.data?.find((item) => item.id === "direct-lab")
+    const blobPlugin = body.data?.find((item) => item.id === "blob-lab")
+
+    expect(response.status).toBe(200)
+    expect(directPlugin?.name).toBe("Direct Lab")
+    expect(directPlugin?.iconUrl).toBe("https://plugins.example.test/direct-lab/assets/icon.png")
+    expect(directPlugin?.screenshots).toEqual(["https://plugins.example.test/direct-lab/assets/screenshot.png"])
+    expect(blobPlugin?.name).toBe("Blob Lab")
+    expect(requestedRawGitHubURL).toBe(true)
   })
 
   test("installs registry zip packages that use Windows path separators", async () => {

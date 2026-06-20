@@ -42,5 +42,38 @@
     "composerIcon": "./assets/icon.png",
     "logo": "./assets/logo.png"
   },
-  "skills": "./skills/"
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "gsap",
+      "description": "GSAP animation reference for HyperFrames. Covers gsap.to(), from(), fromTo(), easing, stagger, defaults, timelines (gsap.timeline(), position parameter, labels, nesting, playback), and performance (transforms, will-change, quickTo). Use when writing GSAP animations in HyperFrames compositions.",
+      "directory": "gsap"
+    },
+    {
+      "name": "hyperframes",
+      "description": "Create video compositions, animations, title cards, overlays, captions, voiceovers, audio-reactive visuals, and scene transitions in HyperFrames HTML. Use when asked to build any HTML-based video content, add captions or subtitles synced to audio, generate text-to-speech narration, create audio-reactive animation (beat sync, glow, pulse driven by music), add animated text highlighting (marker sweeps, hand-drawn circles, burst lines, scribble, sketchout), or add transitions between scenes (crossfades, wipes, reveals, shader transitions). Covers composition authoring, timing, media, and the full video production workflow. For CLI commands (init, lint, preview, render, transcribe, tts) see the hyperframes-cli skill.",
+      "directory": "hyperframes"
+    },
+    {
+      "name": "hyperframes-cli",
+      "description": "HyperFrames CLI tool — hyperframes init, lint, inspect, preview, render, transcribe, tts, doctor, browser, info, upgrade, compositions, docs, benchmark. Use when scaffolding a project, linting, validating, inspecting visual layout in compositions, previewing in the studio, rendering to video, transcribing audio, generating TTS, or troubleshooting the HyperFrames environment.",
+      "directory": "hyperframes-cli"
+    },
+    {
+      "name": "hyperframes-registry",
+      "description": "Install and wire registry blocks and components into HyperFrames compositions. Use when running hyperframes add, installing a block or component, wiring an installed item into index.html, or working with hyperframes.json. Covers the add command, install locations, block sub-composition wiring, component snippet merging, and registry discovery.",
+      "directory": "hyperframes-registry"
+    },
+    {
+      "name": "website-to-hyperframes",
+      "description": "|",
+      "directory": "website-to-hyperframes"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/hyperframes/hyperframes-0.1.0.zip",
+    "sha256": "b48adc8929b6c0cb285413422427e427621bb647ea26f47eca457d19c89aaf16",
+    "size": 219794
+  }
 }

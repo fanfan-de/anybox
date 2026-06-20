@@ -1,0 +1,79 @@
+{
+  "name": "notion",
+  "version": "0.1.0",
+  "description": "Notion workflows for implementation planning, research synthesis, meeting preparation, and knowledge capture.",
+  "author": {
+    "name": "OpenAI",
+    "email": "support@openai.com",
+    "url": "https://openai.com/"
+  },
+  "homepage": "https://www.notion.so/",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [
+    "notion",
+    "documentation",
+    "research",
+    "meeting-prep",
+    "knowledge-management",
+    "planning"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Notion",
+      "zh-CN": "Notion"
+    },
+    "shortDescription": {
+      "en-US": "Notion workflows for specs, research, meetings, and knowledge capture",
+      "zh-CN": "用于规格、研究、会议和知识沉淀的 Notion 工作流"
+    },
+    "longDescription": {
+      "en-US": "Notion workflows for turning specs into implementation plans, synthesizing research into structured documentation, preparing meeting materials with workspace context, and capturing decisions or conversations into durable knowledge pages.",
+      "zh-CN": "Notion 工作流可将规格转化为实现计划，把研究整理成结构化文档，结合工作区上下文准备会议材料，并把决策或对话沉淀为持久知识页面。"
+    },
+    "developerName": "OpenAI",
+    "category": "Docs",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://www.notion.so/",
+    "privacyPolicyURL": "https://www.notion.com/help/privacy",
+    "termsOfServiceURL": "https://www.notion.so/legal/terms-of-use",
+    "defaultPrompt": "Search Notion workspace content, update pages, or turn specs, notes, and meeting context into structured outputs",
+    "brandColor": "#111111",
+    "composerIcon": "./assets/notion-small.svg",
+    "logo": "./assets/notion.png",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "notion-knowledge-capture",
+      "description": "Capture conversations and decisions into structured Notion pages; use when turning chats/notes into wiki entries, how-tos, decisions, or FAQs with proper linking.",
+      "directory": "notion-knowledge-capture"
+    },
+    {
+      "name": "notion-meeting-intelligence",
+      "description": "Prepare meeting materials with Notion context and Codex research; use when gathering context, drafting agendas/pre-reads, and tailoring materials to attendees.",
+      "directory": "notion-meeting-intelligence"
+    },
+    {
+      "name": "notion-research-documentation",
+      "description": "Research across Notion and synthesize into structured documentation; use when gathering info from multiple Notion sources to produce briefs, comparisons, or reports with citations.",
+      "directory": "notion-research-documentation"
+    },
+    {
+      "name": "notion-spec-to-implementation",
+      "description": "Turn Notion specs into implementation plans, tasks, and progress tracking; use when implementing PRDs/feature specs and creating Notion plans + tasks from them.",
+      "directory": "notion-spec-to-implementation"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/notion/notion-0.1.0.zip",
+    "sha256": "ca684c0f5ed659b62a134993ca82c45a3331e93bdbee0f45ca3f3cf36738cc19",
+    "size": 242132
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "name": "build-macos-apps",
+  "version": "0.1.2",
+  "description": "Build, run, test, debug, instrument, and implement local macOS apps using Xcode, SwiftUI, AppKit interop, unified logging, and shell-first desktop workflows.",
+  "author": {
+    "name": "OpenAI",
+    "email": "support@openai.com",
+    "url": "https://openai.com/"
+  },
+  "homepage": "https://openai.com/",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [
+    "macos",
+    "swift",
+    "swiftui",
+    "appkit",
+    "xcode",
+    "swiftpm",
+    "debugging",
+    "codesign",
+    "logging",
+    "telemetry",
+    "oslog"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Build macOS Apps",
+      "zh-CN": "构建 macOS 应用"
+    },
+    "shortDescription": {
+      "en-US": "Build, debug, instrument, and implement macOS apps with SwiftUI and AppKit guidance",
+      "zh-CN": "使用 SwiftUI 和 AppKit 指导构建、调试、检测并实现 macOS 应用"
+    },
+    "longDescription": {
+      "en-US": "Use Build macOS Apps for SwiftUI and AppKit architecture, Xcode build and simulator workflows, Instruments and runtime diagnostics, app automation, menus, settings, windowing, and native macOS polish.",
+      "zh-CN": "使用 Build macOS Apps 处理 SwiftUI 和 AppKit 架构、Xcode 构建与模拟器工作流、Instruments 和运行时诊断、应用自动化、菜单、设置、窗口以及原生 macOS 细节打磨。"
+    },
+    "developerName": "OpenAI",
+    "category": "Code",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://openai.com/",
+    "privacyPolicyURL": "https://openai.com/policies/privacy-policy/",
+    "termsOfServiceURL": "https://openai.com/policies/terms-of-use/",
+    "defaultPrompt": "Build/refactor native macOS UI, inspect AppKit interop, add telemetry, or debug a macOS app",
+    "screenshots": [],
+    "brandColor": "#1F6FEB",
+    "composerIcon": "./assets/build-macos-apps-small.svg",
+    "logo": "./assets/app-icon.png"
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "appkit-interop",
+      "description": "Decide when and how to bridge a macOS app from SwiftUI into AppKit. Use when implementing NSViewRepresentable or NSViewControllerRepresentable, accessing NSWindow or the responder chain, presenting panels, customizing menus, or handling desktop behaviors that SwiftUI does not model cleanly.",
+      "directory": "appkit-interop"
+    },
+    {
+      "name": "build-run-debug",
+      "description": "Build, run, and debug local macOS apps and desktop executables using shell-first Xcode and Swift workflows. Use when asked to build a Mac app, launch it, diagnose compiler or linker failures, inspect startup problems, or debug desktop-only runtime issues.",
+      "directory": "build-run-debug"
+    },
+    {
+      "name": "liquid-glass",
+      "description": "Implement, refactor, or review modern macOS SwiftUI UI for the new design system and Liquid Glass. Use when adopting Liquid Glass, updating NavigationSplitView, toolbars, search, sheets, and controls, removing custom backgrounds that fight system materials, or building custom glass surfaces with glassEffect, GlassEffectContainer, and glassEffectID.",
+      "directory": "liquid-glass"
+    },
+    {
+      "name": "packaging-notarization",
+      "description": "Prepare and troubleshoot packaging, signing, and notarization workflows for macOS distribution. Use when asked to archive a Mac app, validate bundle structure, reason about notarization readiness, or explain distribution-only failures.",
+      "directory": "packaging-notarization"
+    },
+    {
+      "name": "signing-entitlements",
+      "description": "Inspect signing, entitlements, hardened runtime, and Gatekeeper issues for macOS apps. Use when asked to diagnose code signing failures, missing entitlements, sandbox problems, notarization prerequisites, or trust-policy launch errors.",
+      "directory": "signing-entitlements"
+    },
+    {
+      "name": "swiftpm-macos",
+      "description": "Build, run, and test pure SwiftPM-based macOS packages and executables. Use when the repo is package-first, when there is no Xcode project, or when Swift package workflows are the fastest path to diagnosis.",
+      "directory": "swiftpm-macos"
+    },
+    {
+      "name": "swiftui-patterns",
+      "description": "Best practices and example-driven guidance for building native macOS SwiftUI scenes and components, including windows, commands, toolbars, settings, split views, inspectors, menu bar extras, and keyboard-driven workflows. Use when creating or refactoring macOS SwiftUI UI, choosing scene types, wiring menus or settings, or needing desktop-specific component patterns and examples.",
+      "directory": "swiftui-patterns"
+    },
+    {
+      "name": "telemetry",
+      "description": "Add lightweight runtime telemetry and debug instrumentation to macOS apps, then verify those events after building and running. Use when wiring `Logger` / `os.Logger`, adding log points for window/sidebar/menu-bar actions, reading runtime logs from Console or `log stream`, or confirming that expected events fire after a local run.",
+      "directory": "telemetry"
+    },
+    {
+      "name": "test-triage",
+      "description": "Triage failing macOS tests across Xcode and SwiftPM workflows. Use when asked to run macOS tests, narrow failing scopes, explain assertion or crash failures, or separate real test regressions from setup and environment problems.",
+      "directory": "test-triage"
+    },
+    {
+      "name": "view-refactor",
+      "description": "Refactor macOS SwiftUI views and scenes with strong defaults for small dedicated subviews, stable sidebar and selection structure, explicit command and toolbar ownership, scene-aware state, and narrow AppKit escape hatches. Use when cleaning up a macOS view file, splitting oversized scene roots, removing iOS-centric patterns, or tightening mixed SwiftUI/AppKit architecture.",
+      "directory": "view-refactor"
+    },
+    {
+      "name": "window-management",
+      "description": "Customize macOS 15+ SwiftUI windows and scene behavior using Window, WindowGroup, and macOS window modifiers. Use when styling or hiding window toolbars and titles, extending drag regions with WindowDragGesture, replacing window backgrounds with materials, disabling minimize or restoration for utility windows, setting default or ideal window placement from content/display size, creating borderless windows, or tuning default launch behavior.",
+      "directory": "window-management"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/build-macos-apps/build-macos-apps-0.1.2.zip",
+    "sha256": "76362133f638999726cc616f78d3386fcd1d222fdeab740fde669f9a6325dd9a",
+    "size": 63626
+  }
+}

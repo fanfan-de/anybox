@@ -1,0 +1,176 @@
+{
+  "name": "cloudflare",
+  "version": "0.1.0",
+  "description": "Cloudflare platform plugin with curated skills for Workers, Wrangler, and Agents SDK plus the official Cloudflare API MCP server.",
+  "author": {
+    "name": "Cloudflare",
+    "url": "https://workers.cloudflare.com/"
+  },
+  "homepage": "https://workers.cloudflare.com/",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [
+    "cloudflare",
+    "workflow",
+    "deployment",
+    "edge-functions",
+    "edge",
+    "analytics",
+    "wrangler",
+    "agents-sdk",
+    "serverless",
+    "ai-gateway"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Cloudflare",
+      "zh-CN": "Cloudflare"
+    },
+    "shortDescription": {
+      "en-US": "Cloudflare platform guidance with official MCP",
+      "zh-CN": "使用官方 MCP 获取 Cloudflare 平台指导"
+    },
+    "longDescription": {
+      "en-US": "Bring Cloudflare platform guidance into Codex with curated skills for the broader platform, Wrangler CLI, and the Agents SDK, plus the official Cloudflare API MCP server for authenticated access to live account data and workflows across Workers, Pages, storage, AI, networking, security, and analytics services.",
+      "zh-CN": "将 Cloudflare 平台指导带入 Codex，包含平台通用技能、Wrangler CLI、Agents SDK，以及官方 Cloudflare API MCP server，用于通过认证访问实时账号数据，并处理 Workers、Pages、存储、AI、网络、安全和分析服务工作流。"
+    },
+    "developerName": "Cloudflare",
+    "category": "Code",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://workers.cloudflare.com/",
+    "privacyPolicyURL": "https://www.cloudflare.com/privacypolicy/",
+    "termsOfServiceURL": "https://www.cloudflare.com/website-terms/",
+    "defaultPrompt": [
+      "Help me choose the right Cloudflare product, configure Wrangler, and use Cloudflare MCP to inspect or deploy this project"
+    ],
+    "composerIcon": "./assets/cloudflare-small.svg",
+    "logo": "./assets/cloudflare.png",
+    "screenshots": [],
+    "brandColor": "#F48120"
+  },
+  "skills": "./skills/",
+  "connectors": [
+    {
+      "id": "cloudflare-api",
+      "name": "Cloudflare API",
+      "description": "Official Cloudflare API MCP server. Uses OAuth dynamic client registration and provides token-efficient access to the Cloudflare API via search() and execute().",
+      "risk": "high",
+      "permissions": [
+        "Connects to the remote MCP server at https://mcp.cloudflare.com/mcp.",
+        "Starts a browser OAuth flow with Cloudflare and asks the user to select granted permissions.",
+        "Can read or change Cloudflare account resources depending on the permissions approved by the user and approved tool calls."
+      ],
+      "credential": {
+        "kind": "oauth",
+        "label": "Cloudflare API MCP",
+        "authorizationURL": "https://mcp.cloudflare.com/authorize",
+        "tokenURL": "https://mcp.cloudflare.com/token",
+        "revocationURL": "https://mcp.cloudflare.com/token",
+        "scopes": [
+          "offline_access"
+        ],
+        "authorizationParams": {
+          "resource": "https://mcp.cloudflare.com/mcp"
+        },
+        "tokenParams": {
+          "resource": "https://mcp.cloudflare.com/mcp"
+        },
+        "tokenEndpointAuthMethod": "none",
+        "tokenPlacement": {
+          "type": "authorization_bearer"
+        },
+        "registration": {
+          "registrationURL": "https://mcp.cloudflare.com/register",
+          "metadata": {
+            "client_name": "Anybox Cloudflare MCP",
+            "application_type": "native",
+            "token_endpoint_auth_method": "none"
+          }
+        },
+        "description": "Connects Anybox to the official Cloudflare API MCP server using OAuth dynamic client registration."
+      },
+      "runtime": {
+        "transport": "remote",
+        "serverUrl": "https://mcp.cloudflare.com/mcp",
+        "requireApproval": "always",
+        "timeoutMs": 30000
+      },
+      "tools": [
+        {
+          "name": "search",
+          "title": "Search Cloudflare API",
+          "description": "Search Cloudflare API endpoints and schemas.",
+          "readOnly": true
+        },
+        {
+          "name": "execute",
+          "title": "Execute Cloudflare API Request",
+          "description": "Execute code against the Cloudflare API with the connected OAuth session.",
+          "destructive": true
+        }
+      ],
+      "installReview": [
+        "Uses OAuth dynamic client registration; no static Cloudflare OAuth client ID is required.",
+        "Uses the official Cloudflare API MCP server at https://mcp.cloudflare.com/mcp.",
+        "Requests are limited by the Cloudflare permissions approved during OAuth connection.",
+        "Potentially destructive API calls require approval before execution."
+      ]
+    }
+  ],
+  "skillPreviews": [
+    {
+      "name": "agents-sdk",
+      "description": "Build AI agents on Cloudflare Workers using the Agents SDK. Load when creating stateful agents, durable workflows, real-time WebSocket apps, scheduled tasks, MCP servers, or chat applications. Covers Agent class, state management, callable RPC, Workflows integration, and React hooks. Biases towards retrieval from Cloudflare docs over pre-trained knowledge.",
+      "directory": "agents-sdk"
+    },
+    {
+      "name": "building-ai-agent-on-cloudflare",
+      "description": "|",
+      "directory": "building-ai-agent-on-cloudflare"
+    },
+    {
+      "name": "building-mcp-server-on-cloudflare",
+      "description": "|",
+      "directory": "building-mcp-server-on-cloudflare"
+    },
+    {
+      "name": "cloudflare",
+      "description": "Comprehensive Cloudflare platform skill covering Workers, Pages, storage (KV, D1, R2), AI (Workers AI, Vectorize, Agents SDK), networking (Tunnel, Spectrum), security (WAF, DDoS), and infrastructure-as-code (Terraform, Pulumi). Use for any Cloudflare development task. Biases towards retrieval from Cloudflare docs over pre-trained knowledge.",
+      "directory": "cloudflare"
+    },
+    {
+      "name": "durable-objects",
+      "description": "Create and review Cloudflare Durable Objects. Use when building stateful coordination (chat rooms, multiplayer games, booking systems), implementing RPC methods, SQLite storage, alarms, WebSockets, or reviewing DO code for best practices. Covers Workers integration, wrangler config, and testing with Vitest. Biases towards retrieval from Cloudflare docs over pre-trained knowledge.",
+      "directory": "durable-objects"
+    },
+    {
+      "name": "sandbox-sdk",
+      "description": "Build sandboxed applications for secure code execution. Load when building AI code execution, code interpreters, CI/CD systems, interactive dev environments, or executing untrusted code. Covers Sandbox SDK lifecycle, commands, files, code interpreter, and preview URLs. Biases towards retrieval from Cloudflare docs over pre-trained knowledge.",
+      "directory": "sandbox-sdk"
+    },
+    {
+      "name": "web-perf",
+      "description": "Analyzes web performance using Chrome DevTools MCP. Measures Core Web Vitals (FCP, LCP, TBT, CLS, Speed Index), identifies render-blocking resources, network dependency chains, layout shifts, caching issues, and accessibility gaps. Use when asked to audit, profile, debug, or optimize page load performance, Lighthouse scores, or site speed. Biases towards retrieval from current documentation over pre-trained knowledge.",
+      "directory": "web-perf"
+    },
+    {
+      "name": "workers-best-practices",
+      "description": "Reviews and authors Cloudflare Workers code against production best practices. Load when writing new Workers, reviewing Worker code, configuring wrangler.jsonc, or checking for common Workers anti-patterns (streaming, floating promises, global state, secrets, bindings, observability). Biases towards retrieval from Cloudflare docs over pre-trained knowledge.",
+      "directory": "workers-best-practices"
+    },
+    {
+      "name": "wrangler",
+      "description": "Cloudflare Workers CLI for deploying, developing, and managing Workers, KV, R2, D1, Vectorize, Hyperdrive, Workers AI, Containers, Queues, Workflows, Pipelines, and Secrets Store. Load before running wrangler commands to ensure correct syntax and best practices. Biases towards retrieval from Cloudflare docs over pre-trained knowledge.",
+      "directory": "wrangler"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/cloudflare/cloudflare-0.1.0.zip",
+    "sha256": "5e3264a53095fd33156280cc6a87ef1d14781e348a16ca076044660e3a946cdc",
+    "size": 784554
+  }
+}

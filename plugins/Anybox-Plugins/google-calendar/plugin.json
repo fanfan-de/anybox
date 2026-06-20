@@ -1,0 +1,85 @@
+{
+  "name": "google-calendar",
+  "version": "1.2.0",
+  "description": "Connect Google Calendar for scheduling, availability, daily briefs, and event management.",
+  "author": {
+    "name": "OpenAI",
+    "email": "support@openai.com",
+    "url": "https://openai.com/"
+  },
+  "homepage": "https://workspace.google.com/products/calendar/",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [
+    "google-calendar",
+    "calendar",
+    "agenda",
+    "daily-brief",
+    "scheduling",
+    "productivity"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Google Calendar",
+      "zh-CN": "Google 日历"
+    },
+    "shortDescription": {
+      "en-US": "Manage Google Calendar events and schedules",
+      "zh-CN": "管理 Google Calendar 事件和日程"
+    },
+    "longDescription": {
+      "en-US": "Use Google Calendar to summarize a day, check availability, list calendars, and create, update, or delete events directly from task prompts.",
+      "zh-CN": "使用 Google Calendar 总结一天日程、检查空闲时间、列出日历，并直接通过任务提示创建、更新或删除事件。"
+    },
+    "developerName": "OpenAI",
+    "category": "Docs",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://workspace.google.com/products/calendar/",
+    "privacyPolicyURL": "https://policies.google.com/privacy",
+    "termsOfServiceURL": "https://policies.google.com/terms",
+    "defaultPrompt": [
+      "Summarize my calendar, compare availability, prep meetings, or draft event details"
+    ],
+    "brandColor": "#4285F4",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "google-calendar",
+      "description": "Manage scheduling and conflicts in connected Google Calendar data. Use when the user wants to inspect calendars, compare availability, review conflicts, find a meeting room, review event notes or attachments, add or adjust reminders, place temporary holds, or draft exact create, update, reschedule, or cancel changes with timezone-aware details.",
+      "directory": "google-calendar"
+    },
+    {
+      "name": "google-calendar-daily-brief",
+      "description": "Build polished one-day Google Calendar briefs. Use when the user asks for today, tomorrow, or a specific date summary with an agenda, conflict flags, free windows, remaining-meeting readouts, or a calendar brief, and the Google Calendar connector is available.",
+      "directory": "google-calendar-daily-brief"
+    },
+    {
+      "name": "google-calendar-free-up-time",
+      "description": "Find ways to open up meaningful free time in a connected Google Calendar. Use when the user wants to clear up their day, make room for focus time, create a longer uninterrupted block, or see the smallest set of calendar changes that would give time back.",
+      "directory": "google-calendar-free-up-time"
+    },
+    {
+      "name": "google-calendar-group-scheduler",
+      "description": "Find and rank good meeting times for multiple people using connected Google Calendar data. Use when the user wants to schedule a group meeting, compare candidate slots across several attendees, find the best compromise time, or add a room check after narrowing the attendee-compatible options.",
+      "directory": "google-calendar-group-scheduler"
+    },
+    {
+      "name": "google-calendar-meeting-prep",
+      "description": "Build a practical meeting prep brief from a connected Google Calendar event and its nearby context. Use when the user wants to prepare for an upcoming meeting, understand what to read beforehand, pull in linked notes or docs, or get a concise brief on what the meeting appears to require.",
+      "directory": "google-calendar-meeting-prep"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/google-calendar/google-calendar-1.2.0.zip",
+    "sha256": "50bf2963fdca8d2645f725190f2e3b1fe0e7137452a3221f81f3537bcc6ea97e",
+    "size": 160757
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "name": "gmail",
+  "version": "0.1.0",
+  "description": "Work with Gmail using the configured Gmail app connector.",
+  "author": {
+    "name": "OpenAI",
+    "email": "support@openai.com",
+    "url": "https://openai.com/"
+  },
+  "homepage": "https://workspace.google.com/products/gmail/",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [
+    "gmail",
+    "email",
+    "google"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Gmail",
+      "zh-CN": "Gmail"
+    },
+    "shortDescription": {
+      "en-US": "Read and manage Gmail",
+      "zh-CN": "阅读和管理 Gmail"
+    },
+    "longDescription": {
+      "en-US": "Use Gmail to summarize inbox activity, draft replies, and organize email threads through the connected Gmail app.",
+      "zh-CN": "通过已连接的 Gmail 应用总结收件箱动态、起草回复，并整理邮件会话。"
+    },
+    "developerName": "OpenAI",
+    "category": "Docs",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://workspace.google.com/products/gmail/",
+    "privacyPolicyURL": "https://policies.google.com/privacy",
+    "termsOfServiceURL": "https://policies.google.com/terms",
+    "defaultPrompt": [
+      "Summarize inbox, draft replies, or process email threads"
+    ],
+    "brandColor": "#EA4335",
+    "composerIcon": "./assets/gmail-small.svg",
+    "logo": "./assets/gmail.png",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "gmail",
+      "description": "Manage Gmail inbox triage, mailbox search, thread summaries, action extraction, reply drafting, and email forwarding through connected Gmail data. Use when the user wants to inspect a mailbox or thread, search email with Gmail query syntax, summarize messages, extract decisions and follow-ups, prepare replies or forwarded messages, or organize messages with explicit confirmation before send, archive, delete, or label actions.",
+      "directory": "gmail"
+    },
+    {
+      "name": "gmail-inbox-triage",
+      "description": "Triage a Gmail inbox into actionable buckets such as urgent, needs reply soon, waiting, and FYI using connected Gmail data. Use when the user asks to triage the inbox, rank what needs attention, find what still needs a reply, or separate important mail from noise.",
+      "directory": "gmail-inbox-triage"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/gmail/gmail-0.1.0.zip",
+    "sha256": "7978a5b0e09bfc84e2c2938b898384b4272ad527fc27de3ad15cd0f5f351d202",
+    "size": 69760
+  },
+  "connectorRequirements": [
+    {
+      "connector": "gmail",
+      "tools": [
+        "gmail_profile",
+        "gmail_search_messages",
+        "gmail_read_message"
+      ],
+      "permissions": [
+        "Read the connected Gmail profile summary.",
+        "Search Gmail messages with Gmail search syntax.",
+        "Read Gmail message headers and snippets."
+      ],
+      "required": true,
+      "reason": "Read-only Gmail access through the Anybox Gmail connector."
+    }
+  ]
+}

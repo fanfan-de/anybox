@@ -1,0 +1,118 @@
+{
+  "name": "netlify",
+  "version": "1.1.0",
+  "description": "Deploy projects and manage preview or production releases on Netlify.",
+  "author": {
+    "name": "Netlify",
+    "url": "https://www.netlify.com"
+  },
+  "homepage": "https://www.netlify.com",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [
+    "netlify",
+    "deployment",
+    "hosting",
+    "preview",
+    "static-sites"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Netlify",
+      "zh-CN": "Netlify"
+    },
+    "shortDescription": {
+      "en-US": "Deploy projects and manage releases",
+      "zh-CN": "部署项目并管理发布"
+    },
+    "longDescription": {
+      "en-US": "Use Netlify to inspect deployment state, manage sites, and pair the Netlify app with the curated deployment skill for preview and production workflows.",
+      "zh-CN": "使用 Netlify 查看部署状态、管理站点，并将 Netlify 应用与精选部署技能配合，用于预览和生产工作流。"
+    },
+    "developerName": "Netlify",
+    "category": "Code",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://www.netlify.com",
+    "privacyPolicyURL": "https://www.netlify.com/privacy/",
+    "termsOfServiceURL": "https://www.netlify.com/legal/terms-of-use/",
+    "brandColor": "#00AD9F",
+    "defaultPrompt": [
+      "Deploy this project to Netlify and return the preview URL plus any required fixes"
+    ],
+    "screenshots": [],
+    "composerIcon": "./assets/app-icon.png",
+    "logo": "./assets/app-icon.png"
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "netlify-ai-gateway",
+      "description": "Guide for using Netlify AI Gateway to access AI models. Use when adding AI capabilities or selecting/changing AI models. Must be read before choosing a model. Covers supported providers (OpenAI, Anthropic, Google), SDK setup, environment variables, and the list of available models.",
+      "directory": "netlify-ai-gateway"
+    },
+    {
+      "name": "netlify-blobs",
+      "description": "Guide for using Netlify Blobs object storage. Use when storing files, images, documents, or simple key-value data without a full database. Covers getStore(), CRUD operations, metadata, listing, deploy-scoped vs site-scoped stores, and local development.",
+      "directory": "netlify-blobs"
+    },
+    {
+      "name": "netlify-caching",
+      "description": "Guide for controlling caching on Netlify's CDN. Use when configuring cache headers, setting up stale-while-revalidate, implementing on-demand cache purge, or understanding Netlify's CDN caching behavior. Covers Cache-Control, Netlify-CDN-Cache-Control, cache tags, durable cache, and framework-specific caching patterns.",
+      "directory": "netlify-caching"
+    },
+    {
+      "name": "netlify-cli-and-deploy",
+      "description": "Guide for using the Netlify CLI and deploying sites. Use when installing the CLI, linking sites, deploying (Git-based or manual), managing environment variables, or running local development. Covers netlify dev, netlify deploy, Git vs non-Git workflows, and environment variable management.",
+      "directory": "netlify-cli-and-deploy"
+    },
+    {
+      "name": "netlify-config",
+      "description": "Reference for netlify.toml configuration. Use when configuring build settings, redirects, rewrites, headers, deploy contexts, environment variables, or any site-level configuration. Covers the complete netlify.toml syntax including redirects with splats/conditions, headers, deploy contexts, functions config, and edge functions config.",
+      "directory": "netlify-config"
+    },
+    {
+      "name": "netlify-deploy",
+      "description": "Deploy projects to Netlify with the Netlify CLI. Use when the user wants to link a repo, validate deploy settings, run a deploy, or choose between preview and production flows.",
+      "directory": "netlify-deploy"
+    },
+    {
+      "name": "netlify-edge-functions",
+      "description": "Guide for writing Netlify Edge Functions. Use when building middleware, geolocation-based logic, request/response manipulation, authentication checks, A/B testing, or any low-latency edge compute. Covers Deno runtime, context.next() middleware pattern, geolocation, and when to choose edge vs serverless.",
+      "directory": "netlify-edge-functions"
+    },
+    {
+      "name": "netlify-forms",
+      "description": "Guide for using Netlify Forms for HTML form handling. Use when adding contact forms, feedback forms, file upload forms, or any form that should be collected by Netlify. Covers the data-netlify attribute, spam filtering, AJAX submissions, file uploads, notifications, and the submissions API.",
+      "directory": "netlify-forms"
+    },
+    {
+      "name": "netlify-frameworks",
+      "description": "Guide for deploying web frameworks on Netlify. Use when setting up a framework project (Vite/React, Astro, TanStack Start, Next.js, Nuxt, SvelteKit, Remix) for Netlify deployment, configuring adapters or plugins, or troubleshooting framework-specific Netlify integration. Covers what Netlify needs from each framework and how adapters handle server-side rendering.",
+      "directory": "netlify-frameworks"
+    },
+    {
+      "name": "netlify-functions",
+      "description": "Guide for writing Netlify serverless functions. Use when creating API endpoints, background processing, scheduled tasks, or any server-side logic using Netlify Functions. Covers modern syntax (default export + Config), TypeScript, path routing, background functions, scheduled functions, streaming, and method routing.",
+      "directory": "netlify-functions"
+    },
+    {
+      "name": "netlify-identity",
+      "description": "Use when the task involves authentication, user signups, logins, password recovery, OAuth providers, role-based access control, or protecting routes and functions. Always use `@netlify/identity`. Never use `netlify-identity-widget` or `gotrue-js` — they are deprecated.",
+      "directory": "netlify-identity"
+    },
+    {
+      "name": "netlify-image-cdn",
+      "description": "Guide for using Netlify Image CDN for image optimization and transformation. Use when serving optimized images, creating responsive image markup, setting up user-uploaded image pipelines, or configuring image transformations. Covers the /.netlify/images endpoint, query parameters, remote image allowlisting, clean URL rewrites, and composing uploads with Functions + Blobs.",
+      "directory": "netlify-image-cdn"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/netlify/netlify-1.1.0.zip",
+    "sha256": "8bdf1b2b678219051b16c7820be528e50edb4bb67deb74c084724375724b1eaf",
+    "size": 164876
+  }
+}

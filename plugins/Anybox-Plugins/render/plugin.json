@@ -1,0 +1,87 @@
+{
+  "name": "render",
+  "version": "0.1.0",
+  "description": "Skills for deploying, debugging, monitoring, and migrating apps on Render.",
+  "author": {
+    "name": "Render",
+    "email": "support@render.com",
+    "url": "https://render.com"
+  },
+  "homepage": "https://github.com/renderinc/render-codex-plugin",
+  "repository": "https://github.com/renderinc/render-codex-plugin",
+  "license": "MIT",
+  "keywords": [
+    "render",
+    "deploy",
+    "cloud",
+    "blueprint",
+    "monitoring",
+    "debugging"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Render",
+      "zh-CN": "Render"
+    },
+    "shortDescription": {
+      "en-US": "Deploy, debug, monitor, and migrate apps on Render.",
+      "zh-CN": "在 Render 上部署、调试、监控和迁移应用。"
+    },
+    "longDescription": {
+      "en-US": "Provides skills for deploying apps with Blueprints, debugging failed deploys, monitoring service health and metrics, building Render Workflows, and migrating from Heroku.",
+      "zh-CN": "提供用于 Blueprints 部署、失败部署调试、服务健康和指标监控、Render Workflows 构建，以及从 Heroku 迁移的技能。"
+    },
+    "developerName": "Render",
+    "category": "Code",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://render.com/",
+    "privacyPolicyURL": "https://render.com/privacy",
+    "termsOfServiceURL": "https://render.com/terms",
+    "brandColor": "#8A05FF",
+    "defaultPrompt": [
+      "How are my Render services doing?",
+      "Help me validate my render.yaml for Render.",
+      "Debug a failed Render deployment."
+    ],
+    "composerIcon": "./assets/logo.svg",
+    "screenshots": [],
+    "logo": "./assets/logo.svg"
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "render-debug",
+      "description": "Debug failed Render deployments by analyzing logs, metrics, and database state. Identifies errors (missing env vars, port binding, OOM, etc.) and suggests fixes. Use when deployments fail, services won't start, or users mention errors, logs, or debugging.",
+      "directory": "render-debug"
+    },
+    {
+      "name": "render-deploy",
+      "description": "Deploy applications to Render by analyzing codebases, generating render.yaml Blueprints, and providing Dashboard deeplinks. Use when the user wants to deploy, host, publish, or set up their application on Render's cloud platform.",
+      "directory": "render-deploy"
+    },
+    {
+      "name": "render-migrate-from-heroku",
+      "description": "Migrate from Heroku to Render by reading local project files and generating equivalent Render services. Triggers: any mention of migrating from Heroku, moving off Heroku, Heroku to Render migration, or switching from Heroku. Reads Procfile, dependency files, and app config from the local repo. Optionally uses Heroku MCP to enrich with live config vars, add-on details, and dyno sizes. Uses Render MCP or Blueprint YAML to create services.",
+      "directory": "render-migrate-from-heroku"
+    },
+    {
+      "name": "render-monitor",
+      "description": "Monitor Render services in real-time. Check health, performance metrics, logs, and resource usage. Use when users want to check service status, view metrics, monitor performance, or verify deployments are healthy.",
+      "directory": "render-monitor"
+    },
+    {
+      "name": "render-workflows",
+      "description": "Sets up, develops, tests, and deploys Render Workflows. Covers first-time scaffolding (via CLI or manual), SDK installation (Python or TypeScript), task patterns (retries, subtasks, fan-out), local development, Dashboard deployment, and troubleshooting. Use when a user wants to set up Render Workflows for the first time, scaffold a workflow service, add or modify workflow tasks, test workflows locally, or deploy workflows to Render.",
+      "directory": "render-workflows"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/render/render-0.1.0.zip",
+    "sha256": "d202419e78009c15c73b38280ad76540a6254a49e3e789b8567cc2b5db18e17d",
+    "size": 132433
+  }
+}

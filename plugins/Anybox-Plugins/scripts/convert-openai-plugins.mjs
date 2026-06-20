@@ -108,16 +108,15 @@ try {
 
     if (emitRegistryMeta) {
       const registryManifest = await buildAnyboxManifest(sourceManifest, pluginRoot, skillRoots, mcpServers, {
-        embedAssets: true,
+        embedAssets: false,
         maxAssetBytes: 64 * 1024,
       })
-      const meta = {
-        id: pluginID,
+      const publicManifest = {
         ...registryManifest,
         skillPreviews: skillPreviews.map(({ id: _id, ...preview }) => preview),
         package: packageDownload,
       }
-      await writeJson(join(outputDir, "plugin.meta.json"), meta)
+      await writeJson(join(outputDir, "plugin.json"), publicManifest)
     }
     converted.push({ name: pluginID, version, skills: skillPreviews.length, mcpServers: mcpServers.length })
   }
@@ -463,8 +462,8 @@ async function updateIndex() {
   const dirs = (await readdir(repoRoot, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
-    .filter((name) => existsSync(join(repoRoot, name, "plugin.json")) || existsSync(join(repoRoot, name, "plugin.meta.json")))
+    .filter((name) => existsSync(join(repoRoot, name, "plugin.json")))
     .sort((left, right) => left.localeCompare(right))
-  const urls = dirs.map((name) => `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/${name}`)
+  const urls = dirs.map((name) => `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/${name}/plugin.json`)
   await writeJson(join(repoRoot, "index.json"), urls)
 }

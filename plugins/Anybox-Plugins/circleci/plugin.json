@@ -1,0 +1,78 @@
+{
+  "name": "circleci",
+  "version": "1.0.0",
+  "description": "Build, test, and deploy any application",
+  "author": {
+    "name": "CircleCI",
+    "url": "https://circleci.com"
+  },
+  "homepage": "https://circleci.com",
+  "repository": "https://github.com/circleci-public/skills",
+  "license": "MIT",
+  "keywords": [
+    "circleci",
+    "ci/cd",
+    "ci"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "CircleCI",
+      "zh-CN": "CircleCI"
+    },
+    "shortDescription": {
+      "en-US": "Build, test, and deploy any application",
+      "zh-CN": "构建、测试和部署任何应用"
+    },
+    "longDescription": {
+      "en-US": "Bring testing, deployment, and CI best practices into Codex",
+      "zh-CN": "将测试、部署和 CI 最佳实践带入 Codex"
+    },
+    "developerName": "CircleCI",
+    "category": "Code",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://circleci.com",
+    "privacyPolicyURL": "https://circleci.com/legal/privacy-policy",
+    "termsOfServiceURL": "https://circleci.com/legal/terms-of-service",
+    "defaultPrompt": [
+      "Review the CircleCI configuration for this project and suggest improvements",
+      "Diagnose and fix build failures for the current branch",
+      "Setup the Chunk cli for this project"
+    ],
+    "brandColor": "#049B4A",
+    "composerIcon": "./assets/logo.svg",
+    "logo": "./assets/logo.svg",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "circleci-builds",
+      "description": "Diagnose and fix failing CircleCI builds quickly and safely. Use when users ask to investigate failed CircleCI jobs, triage flaky pipelines, identify root causes from logs, and implement minimal fixes in configuration, test setup, or build-related code paths.",
+      "directory": "builds"
+    },
+    {
+      "name": "chunk",
+      "description": "Use CircleCI Chunk for AI-assisted CI/CD work through either the Chunk web UI or the chunk-cli. Trigger this skill when users ask to set up Chunk, troubleshoot or fix failing builds with Chunk, configure Chunk environments, schedule/proactively run Chunk tasks, or use chunk-cli commands such as init, validate, build-prompt, auth, sandbox, task, and skill install.",
+      "directory": "chunk"
+    },
+    {
+      "name": "circleci-cli",
+      "description": "Operate and troubleshoot CircleCI using the CircleCI CLI. Use when users ask to authenticate CLI access, inspect pipeline/workflow/job status, validate configuration locally, rerun pipelines/jobs, trigger pipelines, or gather actionable diagnostics from CLI outputs.",
+      "directory": "cli"
+    },
+    {
+      "name": "circleci-config",
+      "description": "Optimize CircleCI configuration for speed, reliability, and maintainability. Use when users ask to improve `.circleci/config.yml`, reduce CI runtime, tune caching/workspaces/parallelism, remove pipeline waste, or fix flaky pipeline behavior caused by configuration choices.",
+      "directory": "config"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/circleci/circleci-1.0.0.zip",
+    "sha256": "a113fdb15cace277bdd4a110ec27501af72ada008b8d3a8705fe179131addf0f",
+    "size": 25574
+  }
+}

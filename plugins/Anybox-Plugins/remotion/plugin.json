@@ -1,0 +1,70 @@
+{
+  "name": "remotion",
+  "version": "1.0.0",
+  "description": "Remotion video creation skills — best practices, animations, audio, captions, 3D, and more for building programmatic videos with React.",
+  "author": {
+    "name": "Remotion",
+    "email": "hi@remotion.dev",
+    "url": "https://remotion.dev"
+  },
+  "homepage": "https://remotion.dev",
+  "repository": "https://github.com/remotion-dev/remotion",
+  "license": "MIT",
+  "keywords": [
+    "remotion",
+    "video",
+    "react",
+    "animation",
+    "composition",
+    "rendering",
+    "ffmpeg",
+    "captions",
+    "audio"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Remotion",
+      "zh-CN": "Remotion"
+    },
+    "shortDescription": {
+      "en-US": "Create motion graphics from prompts",
+      "zh-CN": "根据提示创建动态图形"
+    },
+    "longDescription": {
+      "en-US": "Build videos programmatically with Remotion and React. Covers animations, timing, audio, captions, 3D, transitions, charts, text effects, and more.",
+      "zh-CN": "使用 Remotion 和 React 以程序化方式构建视频，涵盖动画、时序、音频、字幕、3D、转场、图表、文字效果等。"
+    },
+    "developerName": "Remotion",
+    "category": "Design",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://remotion.dev",
+    "privacyPolicyURL": "https://remotion.pro/privacy",
+    "termsOfServiceURL": "https://remotion.pro/terms",
+    "defaultPrompt": [
+      "Create an animated chart with 5 bars",
+      "Make an animated call-to-action subscribe button for our YouTube channel",
+      "Use Remotion to add captions and audio to a video composition."
+    ],
+    "screenshots": [],
+    "brandColor": "#0B84F3",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png"
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "remotion-best-practices",
+      "description": "Best practices for Remotion - Video creation in React",
+      "directory": "remotion"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/remotion/remotion-1.0.0.zip",
+    "sha256": "1f96d21bbf84e542645208d57dd471704ecea267938664e094a6f591d8777aaf",
+    "size": 120474
+  }
+}

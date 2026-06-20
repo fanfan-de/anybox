@@ -1,0 +1,87 @@
+{
+  "name": "slack",
+  "version": "0.1.0",
+  "description": "Work with Slack using the configured Slack integration.",
+  "author": {
+    "name": "OpenAI",
+    "email": "support@openai.com",
+    "url": "https://openai.com/"
+  },
+  "homepage": "https://slack.com/",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [
+    "slack",
+    "chat",
+    "collaboration"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Slack",
+      "zh-CN": "Slack"
+    },
+    "shortDescription": {
+      "en-US": "Read and manage Slack",
+      "zh-CN": "阅读和管理 Slack"
+    },
+    "longDescription": {
+      "en-US": "Use Slack to summarize channels, draft messages, and organize team conversations through the connected Slack integration.",
+      "zh-CN": "通过已连接的 Slack 集成总结频道、起草消息，并整理团队对话。"
+    },
+    "developerName": "OpenAI",
+    "category": "Docs",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://slack.com/",
+    "privacyPolicyURL": "https://slack.com/privacy-policy",
+    "termsOfServiceURL": "https://slack.com/terms-of-service/user",
+    "defaultPrompt": [
+      "Summarize unread activity, draft replies, or prepare updates"
+    ],
+    "brandColor": "#611F69",
+    "composerIcon": "./assets/app-icon.png",
+    "logo": "./assets/app-icon.png",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "slack",
+      "description": "Read Slack context, route to the right Slack workflow, and prepare or perform Slack writes that match the user's intent.",
+      "directory": "slack"
+    },
+    {
+      "name": "slack-channel-summarization",
+      "description": "Summarize activity from one Slack channel and return a concise recap, post-ready update, or summary doc.",
+      "directory": "slack-channel-summarization"
+    },
+    {
+      "name": "slack-daily-digest",
+      "description": "Create a daily Slack digest from selected channels or topics. Use when the user asks for a daily Slack recap or summary of today's Slack activity.",
+      "directory": "slack-daily-digest"
+    },
+    {
+      "name": "slack-notification-triage",
+      "description": "Triage recent Slack activity into a priority queue or task list for the user.",
+      "directory": "slack-notification-triage"
+    },
+    {
+      "name": "slack-outgoing-message",
+      "description": "Primary skill for composing, drafting, or refining any outbound Slack content. Use this whenever the task will require using `slack_send_message`, `slack_send_message_draft`, or `slack_create_canvas`. Use `slack` to read or analyze Slack context; use this skill to produce the final outgoing message.",
+      "directory": "slack-outgoing-message"
+    },
+    {
+      "name": "slack-reply-drafting",
+      "description": "Draft Slack replies from available context. Use when the user wants help finding messages that likely need a response and preparing reply drafts.",
+      "directory": "slack-reply-drafting"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/slack/slack-0.1.0.zip",
+    "sha256": "76efe65055e291ba6c403ef84b0fdf16d3c17281a5fa88f921e5eee1c7c224f8",
+    "size": 91861
+  }
+}

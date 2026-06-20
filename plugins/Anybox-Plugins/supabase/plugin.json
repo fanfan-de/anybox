@@ -1,0 +1,69 @@
+{
+  "name": "supabase",
+  "version": "0.1.4",
+  "description": "Access your Supabase projects and perform tasks like managing tables, fetching config, and querying data.",
+  "author": {
+    "name": "Supabase",
+    "email": "support@supabase.io",
+    "url": "https://supabase.com"
+  },
+  "homepage": "https://supabase.com",
+  "repository": "https://github.com/supabase-community/codex-plugin",
+  "license": "MIT",
+  "keywords": [
+    "supabase",
+    "postgres",
+    "database",
+    "backend",
+    "mcp"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Supabase",
+      "zh-CN": "Supabase"
+    },
+    "shortDescription": {
+      "en-US": "Supabase skills and MCP tools for Codex",
+      "zh-CN": "适用于 Codex 的 Supabase 技能和 MCP 工具"
+    },
+    "longDescription": {
+      "en-US": "Official Supabase plugin for Codex. Includes agent skills for Supabase development and Postgres best practices, plus MCP server integration for managing your Supabase projects directly from Codex.",
+      "zh-CN": "Codex 的官方 Supabase 插件。包含用于 Supabase 开发和 Postgres 最佳实践的 Agent 技能，并集成 MCP server，让你可以直接从 Codex 管理 Supabase 项目。"
+    },
+    "developerName": "Supabase",
+    "category": "Code",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://supabase.com",
+    "privacyPolicyURL": "https://supabase.com/privacy",
+    "termsOfServiceURL": "https://supabase.com/terms",
+    "defaultPrompt": [
+      "Use Supabase to set up Auth and protected routes for my app.",
+      "Review my Supabase schema and RLS policies for security issues.",
+      "Optimize my Postgres queries and indexes using Supabase best practices."
+    ],
+    "brandColor": "#3ECF8E",
+    "logo": "./assets/logo.svg"
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "supabase",
+      "description": "Use when doing ANY task involving Supabase. Triggers: Supabase products (Database, Auth, Edge Functions, Realtime, Storage, Vectors, Cron, Queues); client libraries and SSR integrations (supabase-js, @supabase/ssr) in Next.js, React, SvelteKit, Astro, Remix; auth issues (login, logout, sessions, JWT, cookies, getSession, getUser, getClaims, RLS); Supabase CLI or MCP server; schema changes, migrations, security audits, Postgres extensions (pg_graphql, pg_cron, pg_vector).",
+      "directory": "supabase"
+    },
+    {
+      "name": "supabase-postgres-best-practices",
+      "description": "Postgres performance optimization and best practices from Supabase. Use this skill when writing, reviewing, or optimizing Postgres queries, schema designs, or database configurations.",
+      "directory": "supabase-postgres-best-practices"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/supabase/supabase-0.1.4.zip",
+    "sha256": "c9e91938d7007335b17aa197dfab1f8ebf2d5f74e7172e030eb17f78bfd83f88",
+    "size": 48835
+  }
+}

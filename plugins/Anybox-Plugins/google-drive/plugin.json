@@ -1,0 +1,84 @@
+{
+  "name": "google-drive",
+  "version": "0.1.0",
+  "description": "Use Google Drive as the single entrypoint for Drive, Docs, Sheets, and Slides work.",
+  "author": {
+    "name": "OpenAI",
+    "email": "support@openai.com",
+    "url": "https://openai.com/"
+  },
+  "homepage": "https://workspace.google.com/products/drive/",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [
+    "google-drive",
+    "google-docs",
+    "google-sheets",
+    "google-slides",
+    "productivity"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Google Drive",
+      "zh-CN": "Google Drive"
+    },
+    "shortDescription": {
+      "en-US": "Work across Drive, Docs, Sheets, and Slides",
+      "zh-CN": "跨 Drive、Docs、Sheets 和 Slides 工作"
+    },
+    "longDescription": {
+      "en-US": "Use Google Drive as one unified Google file plugin for search, file organization, sharing, and Google Docs, Google Sheets, and Google Slides workflows.",
+      "zh-CN": "将 Google Drive 作为统一的 Google 文件插件，用于搜索、文件整理、共享，以及 Google Docs、Google Sheets 和 Google Slides 工作流。"
+    },
+    "developerName": "OpenAI",
+    "category": "Docs",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "composerIcon": "./assets/app-icon.png",
+    "logo": "./assets/app-icon.png",
+    "websiteURL": "https://workspace.google.com/products/drive/",
+    "privacyPolicyURL": "https://policies.google.com/privacy",
+    "termsOfServiceURL": "https://policies.google.com/terms",
+    "defaultPrompt": [
+      "Find the right Drive file, then summarize a Doc, update a Sheet, or edit a Slides deck"
+    ],
+    "brandColor": "#0F9D58",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "google-docs",
+      "description": "Documents-first net-new Google Docs creation plus connector-first Google Docs editing in local Codex plugin sessions, with target-document checks, connector-readback verification, and reference routing for formatting, citations, tables, and write-safety.",
+      "directory": "google-docs"
+    },
+    {
+      "name": "google-drive",
+      "description": "Use connected Google Drive as the single entrypoint for Drive, Docs, Sheets, and Slides work. Use when the user wants to find, fetch, organize, share, export, copy, or delete Drive files, or summarize and edit Google Docs, Google Sheets, and Google Slides through one unified Google Drive plugin.",
+      "directory": "google-drive"
+    },
+    {
+      "name": "google-drive-comments",
+      "description": "Write, reply to, and resolve Google Drive comments on Docs, Sheets, Slides, and Drive files with evidence-backed location context. Use when the user asks to leave comments, review a file with comments, respond to comment threads, or resolve Drive comments.",
+      "directory": "google-drive-comments"
+    },
+    {
+      "name": "google-sheets",
+      "description": "Analyze and edit connected Google Sheets with range precision. Use when the user wants to create Google Sheets, find a spreadsheet, inspect tabs or ranges, search rows, plan formulas, create or repair charts, clean or restructure tables, write concise summaries, or make explicit cell-range updates.",
+      "directory": "google-sheets"
+    },
+    {
+      "name": "google-slides",
+      "description": "Google Slides work for finding, reading, summarizing, creating, importing, visual cleanup, template migration, structural repair, and content edits in native Slides decks.",
+      "directory": "google-slides"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/google-drive/google-drive-0.1.0.zip",
+    "sha256": "6a56228b60dea9208e74be629624c0dff051be85a51f6e0a5000eb1b2653d4ab",
+    "size": 277693
+  }
+}

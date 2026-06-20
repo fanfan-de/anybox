@@ -1,0 +1,67 @@
+{
+  "name": "temporal",
+  "version": "0.2.0",
+  "description": "Comprehensive skill for the entire Temporal lifecycle — developing applications, using the Temporal CLI, running and managing Temporal Server, and working with Temporal Cloud.",
+  "author": {
+    "name": "Temporal",
+    "url": "https://temporal.io/"
+  },
+  "homepage": "https://temporal.io/",
+  "repository": "https://github.com/temporalio/codex-temporal-plugin",
+  "license": "MIT",
+  "keywords": [
+    "temporal",
+    "workflow",
+    "durable-execution",
+    "python",
+    "typescript",
+    "go",
+    "java",
+    "microservices",
+    "distributed-systems"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Temporal",
+      "zh-CN": "Temporal"
+    },
+    "shortDescription": {
+      "en-US": "Develop, run, and manage Temporal applications across the entire platform lifecycle",
+      "zh-CN": "开发、运行和管理 Temporal 应用的完整平台生命周期"
+    },
+    "longDescription": {
+      "en-US": "Comprehensive guidance for working with Temporal — developing workflows, activities, and workers across Python, TypeScript, Go, and Java SDKs; using the Temporal CLI for local development and operations; running and managing self-hosted Temporal Server; and working with Temporal Cloud for production deployments.",
+      "zh-CN": "用于 Temporal 全面工作的指南，包括使用 Python、TypeScript、Go 和 Java SDK 开发 workflows、activities 和 workers，使用 Temporal CLI 进行本地开发和运维，运行和管理自托管 Temporal Server，以及在生产部署中使用 Temporal Cloud。"
+    },
+    "developerName": "Temporal",
+    "category": "Code",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://temporal.io/",
+    "privacyPolicyURL": "https://temporal.io/global-privacy-policy",
+    "termsOfServiceURL": "https://temporal.io/terms-of-service",
+    "brandColor": "#141414",
+    "defaultPrompt": [
+      "Create a workflow using Temporal."
+    ],
+    "composerIcon": "./assets/temporal-logo.svg",
+    "logo": "./assets/temporal-logo.svg",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "temporal-developer",
+      "description": "Develop, debug, and manage Temporal applications across Python, TypeScript, Go, and Java. Use when the user is building workflows, activities, or workers with a Temporal SDK, debugging issues like non-determinism errors, stuck workflows, or activity retries, using Temporal CLI, Temporal Server, or Temporal Cloud, or working with durable execution concepts like signals, queries, heartbeats, versioning, continue-as-new, child workflows, or saga patterns.",
+      "directory": "temporal-developer"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/temporal/temporal-0.2.0.zip",
+    "sha256": "2c50201ba19f1da66f82bb024057cca92013957d9b5405fd85fcc9e4f43e25f7",
+    "size": 149546
+  }
+}

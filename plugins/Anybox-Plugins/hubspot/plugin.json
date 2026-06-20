@@ -1,0 +1,80 @@
+{
+  "name": "hubspot",
+  "version": "2.0.0",
+  "description": "Work with your HubSpot data to analyze patterns, create and update records, and manage your CRM operations.",
+  "author": {
+    "name": "HubSpot",
+    "url": "https://www.hubspot.com/"
+  },
+  "homepage": "https://www.hubspot.com/",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [
+    "hubspot",
+    "crm",
+    "sales",
+    "pipeline",
+    "customer-support"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "HubSpot",
+      "zh-CN": "HubSpot"
+    },
+    "shortDescription": {
+      "en-US": "Work with your HubSpot data to analyze patterns, create and update records, and manage your CRM operations.",
+      "zh-CN": "使用 HubSpot 数据分析模式、创建和更新记录，并管理 CRM 运营。"
+    },
+    "longDescription": {
+      "en-US": "Work with your HubSpot data to analyze patterns, create and update records, and manage your CRM operations. Read from and write to deals, contacts, companies, tickets, engagements, and other objects you have permission to access. Prepare reports, update deal stages, log calls and emails, create tasks, or review pipeline details before meetings. Use it for quick updates in chat or comprehensive CRM management, all grounded in your actual HubSpot data.",
+      "zh-CN": "使用 HubSpot 数据分析模式、创建和更新记录，并管理 CRM 运营。可读取和写入你有权访问的交易、联系人、公司、工单、互动记录和其他对象；可准备报表、更新交易阶段、记录电话和邮件、创建任务，或在会议前查看管道详情。适用于聊天中的快速更新，也适用于基于真实 HubSpot 数据的完整 CRM 管理。"
+    },
+    "developerName": "HubSpot",
+    "category": "Docs",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://www.hubspot.com/",
+    "privacyPolicyURL": "https://legal.hubspot.com/privacy-policy",
+    "termsOfServiceURL": "https://legal.hubspot.com/terms-of-service",
+    "defaultPrompt": [
+      "Review pipeline health and flag risky open deals",
+      "Prepare an account brief for a customer meeting",
+      "Find CRM records with stale or missing data"
+    ],
+    "screenshots": [],
+    "composerIcon": "./assets/app-icon.png",
+    "logo": "./assets/app-icon.png"
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "hubspot",
+      "description": "Use when working with HubSpot CRM records to search, summarize, create, update, associate, or analyze objects and properties.",
+      "directory": "hubspot"
+    },
+    {
+      "name": "hubspot-crm-data-hygiene",
+      "description": "Use when auditing HubSpot data quality for missing fields, stale records, duplicates, associations, owners, or cleanup tasks.",
+      "directory": "hubspot-crm-data-hygiene"
+    },
+    {
+      "name": "hubspot-customer-prep",
+      "description": "Use when preparing HubSpot customer briefs for meetings, renewals, QBRs, sales calls, escalations, handoffs, or follow-ups.",
+      "directory": "hubspot-customer-prep"
+    },
+    {
+      "name": "hubspot-pipeline-health",
+      "description": "Use when reviewing HubSpot pipeline health, forecasts, stale deals, slipping close dates, or open deal risks.",
+      "directory": "hubspot-pipeline-health"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/hubspot/hubspot-2.0.0.zip",
+    "sha256": "35b165c5cbefc07ed47207220c243f369a6771fdba78cce87317e6c2a023d542",
+    "size": 23012
+  }
+}

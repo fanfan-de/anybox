@@ -1,0 +1,92 @@
+{
+  "name": "sharepoint",
+  "version": "0.1.0",
+  "description": "Work with SharePoint using the configured Microsoft SharePoint app connector.",
+  "author": {
+    "name": "OpenAI",
+    "email": "support@openai.com",
+    "url": "https://openai.com/"
+  },
+  "homepage": "https://www.microsoft.com/en-us/microsoft-365/sharepoint/collaboration",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [
+    "sharepoint",
+    "documents",
+    "microsoft"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "SharePoint",
+      "zh-CN": "SharePoint"
+    },
+    "shortDescription": {
+      "en-US": "Summarize SharePoint sites and files",
+      "zh-CN": "总结 SharePoint 站点和文件"
+    },
+    "longDescription": {
+      "en-US": "Use SharePoint to summarize sites, pages, and files, extract owners and status, and plan safe content updates through the connected Microsoft SharePoint app.",
+      "zh-CN": "使用 SharePoint 总结站点、页面和文件，提取负责人和状态，并通过已连接的 Microsoft SharePoint 应用规划安全的内容更新。"
+    },
+    "developerName": "OpenAI",
+    "category": "Docs",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://www.microsoft.com/en-us/microsoft-365/sharepoint/collaboration",
+    "privacyPolicyURL": "https://www.microsoft.com/en-us/privacy/privacystatement",
+    "termsOfServiceURL": "https://www.microsoft.com/en-us/servicesagreement/",
+    "defaultPrompt": [
+      "Summarize a SharePoint site or file, identify owners and status, or plan a safe update across documents, spreadsheets, or decks"
+    ],
+    "brandColor": "#038387",
+    "composerIcon": "./assets/app-icon.png",
+    "logo": "./assets/app-icon.png",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "sharepoint",
+      "description": "Inspect Microsoft SharePoint context, discover the right site or library, and prepare safe changes. Use when the user wants site, page, or file review, ownership and status extraction, or change planning before editing content, navigation, or information architecture.",
+      "directory": "sharepoint"
+    },
+    {
+      "name": "sharepoint-powerpoint",
+      "description": "Create, edit, restyle, and review PowerPoint `.pptx` files fetched from SharePoint, with emphasis on style preservation, slide cloning, theme-aware updates, and rendered visual QA. Use when the user wants reliable slide edits that should match an existing deck's design language.",
+      "directory": "sharepoint-powerpoint"
+    },
+    {
+      "name": "sharepoint-shared-doc-maintenance",
+      "description": "Maintain shared SharePoint strategy, roadmap, planning, or status documents from changing source documents. Use when the user wants cross-document synthesis, source-of-truth propagation, or targeted updates to a maintained shared document.",
+      "directory": "sharepoint-shared-doc-maintenance"
+    },
+    {
+      "name": "sharepoint-site-discovery",
+      "description": "Resolve the right SharePoint site, library, and folder before file work. Use when the user needs to find the right site context, browse a known site, inspect document libraries, or narrow the correct folder before fetching or editing a file.",
+      "directory": "sharepoint-site-discovery"
+    },
+    {
+      "name": "sharepoint-spreadsheet-formula-builder",
+      "description": "Design, repair, and roll out formulas in SharePoint-hosted workbooks with connector-aware retrieval, validation, and upload discipline. Use when the user wants to add a formula column, fix a broken formula, choose between a fill-down formula and a spill formula, build a lookup or filter formula, or reuse workbook logic safely.",
+      "directory": "sharepoint-spreadsheet-formula-builder"
+    },
+    {
+      "name": "sharepoint-spreadsheets",
+      "description": "Edit SharePoint-hosted spreadsheet files while preserving workbook structure, formulas, and formatting. Use when the user wants to update a real spreadsheet in SharePoint rather than summarize extracted sheet text.",
+      "directory": "sharepoint-spreadsheets"
+    },
+    {
+      "name": "sharepoint-word-docs",
+      "description": "Edit SharePoint-hosted Word `.docx` files while preserving document structure and styling. Use when the user wants to update a real Word document in SharePoint rather than summarize it as plain text.",
+      "directory": "sharepoint-word-docs"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/sharepoint/sharepoint-0.1.0.zip",
+    "sha256": "4ef0c87e88445509383087e43aa21681a2d3601f8846c92931296f904e50be8a",
+    "size": 387274
+  }
+}

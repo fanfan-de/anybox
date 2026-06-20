@@ -1,0 +1,88 @@
+{
+  "name": "plugin-eval",
+  "version": "0.1.0",
+  "description": "Evaluate Codex skills and plugins from chat with a beginner-friendly start command, local-first reports, token budget explanations, and guided benchmarking.",
+  "author": {
+    "name": "OpenAI Codex",
+    "email": "support@openai.com",
+    "url": "https://openai.com/"
+  },
+  "homepage": "https://openai.com/",
+  "repository": "https://github.com/openai/plugins",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "plugin",
+    "skill",
+    "evaluation",
+    "quality",
+    "budget"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Plugin Eval",
+      "zh-CN": "插件评估"
+    },
+    "shortDescription": {
+      "en-US": "Start from chat, then evaluate or benchmark locally",
+      "zh-CN": "从聊天开始，再在本地评估或基准测试"
+    },
+    "longDescription": {
+      "en-US": "Ask Codex to evaluate a plugin or skill, give you a full analysis of a named plugin such as game-studio, explain why it scored that way, show what to fix first, explain its token budget, measure real token usage, benchmark a plugin, or tell you what to run next. Plugin Eval keeps the path engineer-friendly: start with a natural chat request, then use the local `plugin-eval start` entrypoint or the routed workflow command it recommends.",
+      "zh-CN": "让 Codex 评估插件或技能、分析指定插件、解释评分、指出优先修复项、说明 token 预算、测量实际 token 使用、进行基准测试，或告诉你下一步该运行什么。Plugin Eval 以工程师友好的路径工作：先用自然语言请求开始，再使用本地 `plugin-eval start` 入口或它推荐的路由工作流命令。"
+    },
+    "developerName": "OpenAI",
+    "category": "Code",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://openai.com/",
+    "privacyPolicyURL": "https://openai.com/policies/privacy-policy/",
+    "termsOfServiceURL": "https://openai.com/policies/terms-of-use/",
+    "defaultPrompt": [
+      "Give me an analysis of the game studio plugin.",
+      "Evaluate this plugin.",
+      "Why did this score that way?",
+      "What should I fix first?"
+    ],
+    "brandColor": "#0F766E",
+    "composerIcon": "./assets/plugin-eval.svg",
+    "logo": "./assets/plugin-eval.svg",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "evaluate-plugin",
+      "description": "Evaluate a local Codex plugin in engineer-friendly language. Use when the user says \"evaluate this plugin\", \"audit this plugin\", \"why did this score that way\", \"what should I fix first\", \"help me benchmark this plugin\", or asks for a plugin-wide report before comparing versions.",
+      "directory": "evaluate-plugin"
+    },
+    {
+      "name": "evaluate-skill",
+      "description": "Evaluate a local Codex skill in engineer-friendly terms. Use when the user says \"evaluate this skill\", \"give me an analysis of the game dev skill\", \"audit this skill\", \"why did this score that way\", \"what should I fix first\", or asks for a skill-specific report before benchmarking it.",
+      "directory": "evaluate-skill"
+    },
+    {
+      "name": "improve-skill",
+      "description": "Turn plugin-eval findings into a concrete rewrite brief for a Codex skill. Use when the user already evaluated a skill and now wants Codex to improve it, especially after asking what to fix first.",
+      "directory": "improve-skill"
+    },
+    {
+      "name": "metric-pack-designer",
+      "description": "Design custom metric packs for plugin-eval so teams can add local evaluation rubrics that emit schema-compatible checks and metrics. Use when the user wants their own evaluation criteria or visualizations.",
+      "directory": "metric-pack-designer"
+    },
+    {
+      "name": "plugin-eval",
+      "description": "Help engineers evaluate a local skill or plugin, explain why it scored that way, show what to fix first, measure real token usage, benchmark starter scenarios, or decide what to run next. Use when the user says things like \"evaluate this skill\", \"give me an analysis of the game dev skill\", \"why did this score that way\", \"what should I fix first\", \"measure the real token usage of this skill\", or \"what should I run next?\".",
+      "directory": "plugin-eval"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/plugin-eval/plugin-eval-0.1.0.zip",
+    "sha256": "586ea66c14502f981600ba1281dc40805ebc5ffac79e7868796eb02c93f3b997",
+    "size": 109495
+  }
+}

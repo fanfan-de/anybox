@@ -1,0 +1,70 @@
+{
+  "name": "neon-postgres",
+  "version": "1.0.0",
+  "description": "Manage Neon Serverless Postgres projects and databases with the neon-postgres agent skill and the Neon MCP Server",
+  "author": {
+    "name": "Neon",
+    "email": "andre@neon.tech",
+    "url": "https://neon.com"
+  },
+  "homepage": "https://neon.com/docs/ai/neon-mcp-server",
+  "repository": "https://github.com/openai/plugins",
+  "license": "Apache-2.0",
+  "keywords": [
+    "neon",
+    "postgres",
+    "serverless",
+    "database",
+    "mcp",
+    "sql"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Neon Postgres",
+      "zh-CN": "Neon Postgres"
+    },
+    "shortDescription": {
+      "en-US": "Manage Neon Serverless Postgres projects and databases",
+      "zh-CN": "管理 Neon Serverless Postgres 项目和数据库"
+    },
+    "longDescription": {
+      "en-US": "Use the Neon Postgres plugin to create and manage Neon Serverless Postgres projects and databases. Includes the Neon MCP Server for project and database management, and the neon-postgres skill with guides on connection methods, branching, autoscaling, Neon Auth, and more.",
+      "zh-CN": "使用 Neon Postgres 插件创建和管理 Neon Serverless Postgres 项目和数据库。包含用于项目和数据库管理的 Neon MCP Server，以及涵盖连接方式、分支、自动扩缩容、Neon Auth 等内容的 neon-postgres skill。"
+    },
+    "developerName": "Neon",
+    "category": "Code",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://neon.com",
+    "privacyPolicyURL": "https://neon.com/privacy-policy",
+    "termsOfServiceURL": "https://neon.com/terms-of-service",
+    "defaultPrompt": [
+      "Use Neon to create a new Serverless Postgres database for my project and help me connect to it."
+    ],
+    "brandColor": "#37C38F",
+    "composerIcon": "./assets/neon-small.svg",
+    "logo": "./assets/neon.jpg",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "neon-postgres",
+      "description": "Guides and best practices for working with Neon Serverless Postgres. Covers getting started, local development with Neon, choosing a connection method, Neon features, authentication (@neondatabase/auth), PostgREST-style data API (@neondatabase/neon-js), Neon CLI, and Neon's Platform API/SDKs. Use for any Neon-related questions.",
+      "directory": "neon-postgres"
+    },
+    {
+      "name": "neon-postgres-egress-optimizer",
+      "description": ">-",
+      "directory": "neon-postgres-egress-optimizer"
+    }
+  ],
+  "package": {
+    "type": "zip",
+    "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/neon-postgres/neon-postgres-1.0.0.zip",
+    "sha256": "1361f040c62260a59e0cd3f694285ffd385dc3c0946e280f8130888f9d814cbc",
+    "size": 20759
+  }
+}
