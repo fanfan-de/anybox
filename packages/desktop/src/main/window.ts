@@ -49,8 +49,19 @@ export function installDockIcon(mainDir: string) {
 const MAC_NATIVE_WINDOW_CONTROLS_SLOT_WIDTH = 88
 const MAC_NATIVE_TRAFFIC_LIGHT_LEFT_OFFSET = 12
 const MAC_NATIVE_TRAFFIC_LIGHT_Y = 14
+const WINDOW_ZOOM_FACTORS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3] as const
+const WINDOW_ZOOM_FACTOR_EPSILON = 0.001
 
 type WindowChromeOptions = Pick<BrowserWindowConstructorOptions, "frame" | "roundedCorners" | "titleBarStyle">
+type WindowZoomShortcutAction = "in" | "out" | "reset"
+type WindowZoomShortcutInput = {
+  alt?: boolean
+  code?: string
+  control?: boolean
+  key?: string
+  meta?: boolean
+  type?: string
+}
 
 export function resolveWindowChromeOptions(platform: NodeJS.Platform = process.platform): WindowChromeOptions {
   if (platform === "darwin") {
@@ -94,6 +105,48 @@ export function installNativeMacWindowControls(win: BrowserWindow, platform: Nod
   win.on("unmaximize", syncWindowButtonPositionSoon)
   win.on("enter-full-screen", syncWindowButtonPositionSoon)
   win.on("leave-full-screen", syncWindowButtonPositionSoon)
+}
+
+export function resolveWindowZoomShortcutAction(input: WindowZoomShortcutInput): WindowZoomShortcutAction | null {
+  if (input.type !== "keyDown") return null
+  if (input.alt) return null
+  if (!input.control && !input.meta) return null
+
+  const key = input.key?.toLowerCase()
+  const code = input.code
+  if (key === "+" || key === "=" || code === "Equal" || code === "NumpadAdd") return "in"
+  if (key === "-" || key === "_" || code === "Minus" || code === "NumpadSubtract") return "out"
+  if (key === "0" || key === ")" || code === "Digit0" || code === "Numpad0") return "reset"
+  return null
+}
+
+export function resolveNextWindowZoomFactor(currentZoomFactor: number, action: WindowZoomShortcutAction) {
+  if (action === "reset") return 1
+  if (!Number.isFinite(currentZoomFactor)) return 1
+
+  if (action === "in") {
+    return WINDOW_ZOOM_FACTORS.find((factor) => factor > currentZoomFactor + WINDOW_ZOOM_FACTOR_EPSILON)
+      ?? WINDOW_ZOOM_FACTORS[WINDOW_ZOOM_FACTORS.length - 1]
+  }
+
+  for (let index = WINDOW_ZOOM_FACTORS.length - 1; index >= 0; index -= 1) {
+    const factor = WINDOW_ZOOM_FACTORS[index]
+    if (factor < currentZoomFactor - WINDOW_ZOOM_FACTOR_EPSILON) return factor
+  }
+  return WINDOW_ZOOM_FACTORS[0]
+}
+
+export function installWindowZoomShortcuts(win: BrowserWindow) {
+  const webContents = win.webContents
+
+  webContents.on("before-input-event", (event, input) => {
+    const action = resolveWindowZoomShortcutAction(input)
+    if (!action) return
+
+    event.preventDefault()
+    const nextZoomFactor = resolveNextWindowZoomFactor(webContents.getZoomFactor(), action)
+    webContents.setZoomFactor(nextZoomFactor)
+  })
 }
 
 export function resolvePopoutWindowOptions(mainDir: string, options: { platform?: NodeJS.Platform } = {}) {
@@ -196,6 +249,7 @@ export async function createWindow(mainDir: string, options: { closeToTray?: Clo
     },
   })
   installNativeMacWindowControls(win)
+  installWindowZoomShortcuts(win)
   installWindowDiagnostics(win, { label: "main", url: rendererEntryUrl })
   installCloseToTray(win, options.closeToTray)
   options.workbenchWindowManager?.registerMainWindow(win)

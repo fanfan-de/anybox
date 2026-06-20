@@ -35,6 +35,7 @@ function usage() {
     "  --require <list>       Comma-separated required platforms, e.g. windows,mac,mobile.",
     "  --env-file <path>      Load simple KEY=VALUE environment file before running.",
     "  --upload              Upload release files and manifest to Tencent COS.",
+    "  --skip-cdn-purge      Skip CDN refresh after uploading downloads.json.",
     "  --help                Show this help.",
     "",
     "Upload environment variables:",
@@ -43,6 +44,7 @@ function usage() {
     "  TENCENT_COS_BUCKET    Example: anybox-downloads-1250000000",
     "  TENCENT_COS_REGION    Example: ap-guangzhou",
     "",
+    "CDN refresh uses the same Tencent credentials and requires cdn:PurgeUrlsCache and cdn:DescribePurgeTasks.",
     "Uploaded objects are set to public-read so the CDN download domain can read them.",
   ].join("\n")
 }
@@ -58,6 +60,7 @@ function parseArgs(argv) {
     mobileVersion: "",
     outDir: siteArtifactsDir,
     releasePrefix: defaultReleasePrefix,
+    skipCdnPurge: false,
     require: [],
     upload: false,
     version: "",
@@ -71,6 +74,8 @@ function parseArgs(argv) {
       args.help = true
     } else if (value === "--upload") {
       args.upload = true
+    } else if (value === "--skip-cdn-purge") {
+      args.skipCdnPurge = true
     } else if (value === "--windows") {
       args.windows = path.resolve(argv[index + 1] ?? "")
       index += 1
@@ -302,6 +307,14 @@ function hmacSha1Hex(key, value) {
   return createHmac("sha1", key).update(value).digest("hex")
 }
 
+function hmacSha256(key, value, encoding) {
+  return createHmac("sha256", key).update(value).digest(encoding)
+}
+
+function sha256Hex(value) {
+  return createHash("sha256").update(value).digest("hex")
+}
+
 function encodeCosKey(key) {
   return `/${trimSlashes(key)
     .split("/")
@@ -409,6 +422,115 @@ function readCosConfig() {
   return { bucket, region, secretId, secretKey }
 }
 
+function tencentCloudApiRequest({ action, payload, secretId, secretKey }) {
+  const service = "cdn"
+  const host = "cdn.tencentcloudapi.com"
+  const version = "2018-06-06"
+  const timestamp = Math.floor(Date.now() / 1000)
+  const date = new Date(timestamp * 1000).toISOString().slice(0, 10)
+  const body = JSON.stringify(payload)
+  const canonicalRequest = [
+    "POST",
+    "/",
+    "",
+    `content-type:application/json; charset=utf-8\nhost:${host}\nx-tc-action:${action.toLowerCase()}\n`,
+    "content-type;host;x-tc-action",
+    sha256Hex(body),
+  ].join("\n")
+  const credentialScope = `${date}/${service}/tc3_request`
+  const stringToSign = [
+    "TC3-HMAC-SHA256",
+    String(timestamp),
+    credentialScope,
+    sha256Hex(canonicalRequest),
+  ].join("\n")
+  const secretDate = hmacSha256(`TC3${secretKey}`, date)
+  const secretService = hmacSha256(secretDate, service)
+  const secretSigning = hmacSha256(secretService, "tc3_request")
+  const signature = hmacSha256(secretSigning, stringToSign, "hex")
+  const authorization = `TC3-HMAC-SHA256 Credential=${secretId}/${credentialScope}, SignedHeaders=content-type;host;x-tc-action, Signature=${signature}`
+
+  return new Promise((resolve, reject) => {
+    const request = https.request(
+      {
+        headers: {
+          Authorization: authorization,
+          "Content-Type": "application/json; charset=utf-8",
+          Host: host,
+          "X-TC-Action": action,
+          "X-TC-Timestamp": String(timestamp),
+          "X-TC-Version": version,
+        },
+        hostname: host,
+        method: "POST",
+        path: "/",
+      },
+      (response) => {
+        const chunks = []
+        response.on("data", (chunk) => chunks.push(chunk))
+        response.on("end", () => {
+          const responseText = Buffer.concat(chunks).toString("utf8")
+          let parsed
+
+          try {
+            parsed = JSON.parse(responseText)
+          } catch {
+            reject(new Error(`Tencent Cloud API ${action} returned invalid JSON: ${responseText}`))
+            return
+          }
+
+          const apiResponse = parsed.Response ?? parsed
+          if (apiResponse.Error) {
+            reject(new Error(`${action} failed: ${apiResponse.Error.Code} ${apiResponse.Error.Message}`))
+            return
+          }
+          if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300) {
+            reject(new Error(`${action} failed: ${response.statusCode} ${response.statusMessage}\n${responseText}`))
+            return
+          }
+
+          resolve(apiResponse)
+        })
+      },
+    )
+
+    request.on("error", reject)
+    request.end(body)
+  })
+}
+
+async function purgeCdnManifest({ baseUrl, manifestKey, secretId, secretKey }) {
+  const url = joinUrl(baseUrl, manifestKey)
+  console.log(`Purging CDN: ${url}`)
+
+  const purgeResponse = await tencentCloudApiRequest({
+    action: "PurgeUrlsCache",
+    payload: { Urls: [url] },
+    secretId,
+    secretKey,
+  })
+  const taskId = purgeResponse.TaskId
+
+  if (!taskId) {
+    console.log(`CDN purge submitted: ${purgeResponse.RequestId}`)
+    return
+  }
+
+  console.log(`CDN purge task: ${taskId}`)
+
+  const taskResponse = await tencentCloudApiRequest({
+    action: "DescribePurgeTasks",
+    payload: { TaskId: taskId },
+    secretId,
+    secretKey,
+  })
+  const task = Array.isArray(taskResponse.PurgeLogs) ? taskResponse.PurgeLogs[0] : undefined
+
+  if (task?.Status) {
+    console.log(`CDN purge status: ${task.Status}`)
+  }
+}
+
 async function uploadAll(args, uploads, manifestPath) {
   const cosConfig = readCosConfig()
 
@@ -431,6 +553,15 @@ async function uploadAll(args, uploads, manifestPath) {
     contentType: "application/json; charset=utf-8",
     key: args.manifestKey,
   })
+
+  if (!args.skipCdnPurge) {
+    await purgeCdnManifest({
+      baseUrl: args.baseUrl,
+      manifestKey: args.manifestKey,
+      secretId: cosConfig.secretId,
+      secretKey: cosConfig.secretKey,
+    })
+  }
 }
 
 async function main() {

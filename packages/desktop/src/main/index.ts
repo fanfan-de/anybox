@@ -17,6 +17,7 @@ import {
   createWindow,
   installDockIcon,
   installNativeMacWindowControls,
+  installWindowZoomShortcuts,
   resolvePopoutWindowOptions,
   resolveRendererEntryUrl,
 } from "./window"
@@ -61,7 +62,10 @@ void app.whenReady().then(async () => {
   const rendererEntryUrl = await resolveRendererEntryUrl(mainDir)
   const workbenchWindowManager = new WorkbenchWindowManager({
     rendererEntryUrl,
-    configureWindow: installNativeMacWindowControls,
+    configureWindow: (window) => {
+      installNativeMacWindowControls(window)
+      installWindowZoomShortcuts(window)
+    },
     createPopoutWindowOptions: () => resolvePopoutWindowOptions(mainDir),
   })
   let mainWindow: BrowserWindow | null = null

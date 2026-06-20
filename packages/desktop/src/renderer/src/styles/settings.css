@@ -2341,24 +2341,25 @@ body.is-dragging-settings-page {
 }
 
 .mcp-server-sidebar-row {
-  min-height: 44px;
+  min-height: 52px;
   padding: 7px 10px;
   border-color: transparent;
   border-radius: 8px;
   background: transparent;
+  gap: 10px;
 }
 
 .mcp-server-sidebar-row:hover,
 .mcp-server-sidebar-row:focus-visible,
 .mcp-server-sidebar-row.is-active {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-current);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
 }
 
 .mcp-server-sidebar-row:hover .mcp-server-sidebar-name,
 .mcp-server-sidebar-row:focus-visible .mcp-server-sidebar-name,
 .mcp-server-sidebar-row.is-active .mcp-server-sidebar-name {
-  color: var(--semantic-settings-list-detail-row-current-text);
+  color: var(--semantic-settings-list-detail-row-primary-text);
 }
 
 .mcp-server-sidebar-name {
@@ -2368,8 +2369,8 @@ body.is-dragging-settings-page {
 }
 
 .mcp-server-sidebar-status {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   background: var(--semantic-settings-list-detail-row-secondary-text);
 }
 
@@ -6058,63 +6059,6 @@ body.is-dragging-settings-page {
   align-items: center;
 }
 
-.connections-tab-list {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -webkit-app-region: no-drag;
-}
-
-.connections-tab-list::-webkit-scrollbar {
-  display: none;
-}
-
-.connections-tab {
-  min-width: 0;
-  min-height: 30px;
-  padding: 0 9px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--seg-text-2);
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 650;
-  letter-spacing: 0;
-  white-space: nowrap;
-  cursor: pointer;
-  -webkit-app-region: no-drag;
-}
-
-.connections-tab small {
-  color: var(--seg-text-3);
-  font-size: 12px;
-  font-weight: 620;
-  font-variant-numeric: tabular-nums;
-}
-
-.connections-tab:hover,
-.connections-tab:focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--seg-text-1);
-  outline: none;
-}
-
-.connections-tab.is-active {
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--seg-text-1);
-}
-
-.connections-tab.is-active small {
-  color: var(--seg-text-2);
-}
-
 .connections-search-control {
   min-width: 180px;
   width: min(360px, 100%);
@@ -7225,8 +7169,8 @@ body.is-dragging-settings-page {
 
 .connectors-list-row.is-active {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-current);
-  color: var(--semantic-settings-list-detail-row-current-text);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
+  color: var(--semantic-settings-list-detail-row-primary-text);
 }
 
 .connectors-list-row:hover .connectors-list-copy strong,
@@ -7235,7 +7179,7 @@ body.is-dragging-settings-page {
 }
 
 .connectors-list-row.is-active .connectors-list-copy strong {
-  color: var(--semantic-settings-list-detail-row-current-text);
+  color: var(--semantic-settings-list-detail-row-primary-text);
 }
 
 .connectors-list-copy {
@@ -8189,7 +8133,7 @@ body.is-dragging-settings-page {
 
 .plugins-installed-item.is-active {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-current);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
 }
 
 .plugins-installed-item:hover .plugins-installed-copy strong,
@@ -8198,7 +8142,7 @@ body.is-dragging-settings-page {
 }
 
 .plugins-installed-item.is-active .plugins-installed-copy strong {
-  color: var(--semantic-settings-list-detail-row-current-text);
+  color: var(--semantic-settings-list-detail-row-primary-text);
 }
 
 .plugins-installed-list .plugins-installed-item .plugins-icon-mark {

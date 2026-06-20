@@ -7,7 +7,12 @@ vi.mock("electron", () => ({
   BrowserWindow: vi.fn(),
 }))
 
-import { resolveNativeMacWindowButtonPosition, resolvePopoutWindowOptions } from "./window"
+import {
+  resolveNativeMacWindowButtonPosition,
+  resolveNextWindowZoomFactor,
+  resolvePopoutWindowOptions,
+  resolveWindowZoomShortcutAction,
+} from "./window"
 
 describe("session popout window options", () => {
   it("creates a frameless first-class Windows Electron window with the desktop preload", () => {
@@ -37,5 +42,26 @@ describe("session popout window options", () => {
   it("positions native macOS traffic lights inside the right window controls slot", () => {
     expect(resolveNativeMacWindowButtonPosition(1440)).toEqual({ x: 1364, y: 14 })
     expect(resolveNativeMacWindowButtonPosition(72)).toEqual({ x: 12, y: 14 })
+  })
+
+  it("recognizes desktop window zoom keyboard shortcuts", () => {
+    expect(resolveWindowZoomShortcutAction({ type: "keyDown", control: true, key: "=", code: "Equal" })).toBe("in")
+    expect(resolveWindowZoomShortcutAction({ type: "keyDown", control: true, key: "+", code: "Equal" })).toBe("in")
+    expect(resolveWindowZoomShortcutAction({ type: "keyDown", meta: true, key: "-", code: "Minus" })).toBe("out")
+    expect(resolveWindowZoomShortcutAction({ type: "keyDown", control: true, key: "0", code: "Digit0" })).toBe("reset")
+    expect(resolveWindowZoomShortcutAction({ type: "keyUp", control: true, key: "=", code: "Equal" })).toBeNull()
+    expect(resolveWindowZoomShortcutAction({ type: "keyDown", alt: true, control: true, key: "=", code: "Equal" })).toBeNull()
+    expect(resolveWindowZoomShortcutAction({ type: "keyDown", key: "=", code: "Equal" })).toBeNull()
+  })
+
+  it("steps desktop window zoom through bounded factors", () => {
+    expect(resolveNextWindowZoomFactor(1, "in")).toBe(1.1)
+    expect(resolveNextWindowZoomFactor(1.1, "in")).toBe(1.25)
+    expect(resolveNextWindowZoomFactor(1, "out")).toBe(0.9)
+    expect(resolveNextWindowZoomFactor(0.9, "out")).toBe(0.8)
+    expect(resolveNextWindowZoomFactor(3, "in")).toBe(3)
+    expect(resolveNextWindowZoomFactor(0.5, "out")).toBe(0.5)
+    expect(resolveNextWindowZoomFactor(1.25, "reset")).toBe(1)
+    expect(resolveNextWindowZoomFactor(Number.NaN, "in")).toBe(1)
   })
 })

@@ -2,7 +2,7 @@ import { type ReactNode } from "react"
 import { CloseIcon, SearchIcon } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
 import type { TranslationKey } from "../i18n/translations"
-import { ShellTopMenu } from "../shared-ui"
+import { joinClassNames, ShellTopMenu } from "../shared-ui"
 import type { ConnectionsTab } from "../types"
 
 interface ConnectionsPageProps {
@@ -70,7 +70,7 @@ export function ConnectionsPage({
         contentClassName="connections-top-menu-content"
         content={(
           <div className="connections-top-menu-inner">
-            <nav className="connections-tab-list" role="tablist" aria-label={t("connections.categories")}>
+            <nav className="top-menu-segment-list connections-tab-list" role="tablist" aria-label={t("connections.categories")}>
               {CONNECTION_TABS.map((tab) => {
                 const isActive = activeTab === tab.key
                 const label = t(tab.labelKey)
@@ -78,7 +78,7 @@ export function ConnectionsPage({
                 return (
                   <button
                     key={tab.key}
-                    className={isActive ? "connections-tab is-active" : "connections-tab"}
+                    className={joinClassNames("top-menu-segment connections-tab", isActive ? "is-active" : null)}
                     type="button"
                     role="tab"
                     aria-label={`${label} ${tabCounts[tab.key]}`}

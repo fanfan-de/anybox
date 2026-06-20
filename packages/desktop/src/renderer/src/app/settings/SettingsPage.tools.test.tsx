@@ -962,6 +962,14 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.queryByText("App Background")).not.toBeInTheDocument()
 
     fireEvent.change(searchBox, {
+      target: { value: "semantic-settings-list-detail-row-surface-hover" },
+    })
+
+    expect(screen.getByText("Settings List Detail Rows")).toBeInTheDocument()
+    expect(screen.getByText("semantic-settings-list-detail-row-surface-hover")).toBeInTheDocument()
+    expect(screen.queryByText("App Background")).not.toBeInTheDocument()
+
+    fireEvent.change(searchBox, {
       target: { value: "no-such-token" },
     })
 

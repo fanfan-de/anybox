@@ -934,7 +934,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 
 .session-row:hover .session-row-label,
 .session-row:focus-visible .session-row-label {
-  color: #243647;
+  color: inherit;
 }
 
 .session-row.is-active {

@@ -167,6 +167,8 @@ export const APPEARANCE_TOKEN_NAMES = [
   "semantic-sidebar-tree-row-surface-active-dark",
   "semantic-sidebar-tree-row-leading-active-light",
   "semantic-sidebar-tree-row-leading-active-dark",
+  "semantic-settings-list-detail-row-surface-hover-light",
+  "semantic-settings-list-detail-row-surface-hover-dark",
   "semantic-composer-surface-light",
   "semantic-composer-surface-dark",
   "semantic-dropdown-menu-surface-light",
@@ -884,6 +886,20 @@ export const APPEARANCE_TOKEN_GROUPS = [
     ],
   },
   {
+    id: "component-settings-list-detail-rows",
+    label: "Settings List Detail Rows",
+    description: "Dedicated row tokens for settings, plugins, connectors, MCP, and similar list-detail screens.",
+    rows: [
+      {
+        id: "semantic-settings-list-detail-row-surface-hover",
+        label: "Row Surface Hover",
+        description: "Hover and focus background for settings list-detail rows.",
+        lightToken: "semantic-settings-list-detail-row-surface-hover-light",
+        darkToken: "semantic-settings-list-detail-row-surface-hover-dark",
+      },
+    ],
+  },
+  {
     id: "component-composer",
     label: "Composer",
     description: "Dedicated semantic colors for the task composer surface and controls.",
@@ -1326,6 +1342,8 @@ const DEFAULT_APPEARANCE_RESOLVED_TOKENS = {
   "semantic-sidebar-tree-row-surface-active-dark": "#e17068",
   "semantic-sidebar-tree-row-leading-active-light": "#000000",
   "semantic-sidebar-tree-row-leading-active-dark": "#f3eded",
+  "semantic-settings-list-detail-row-surface-hover-light": "#f7f1ee",
+  "semantic-settings-list-detail-row-surface-hover-dark": "#342d2a",
   "semantic-composer-surface-light": "#ffffff",
   "semantic-composer-surface-dark": "#292524",
   "semantic-dropdown-menu-surface-light": "#fafafa",
