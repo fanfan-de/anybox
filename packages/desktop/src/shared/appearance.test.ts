@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   APPEARANCE_FONT_FAMILIES,
   APPEARANCE_TOKEN_GROUPS,
+  APPEARANCE_TOKEN_NAMES,
   createDefaultAppearanceConfigDocument,
   normalizeAppearanceConfigDocument,
 } from "./appearance"
@@ -20,6 +21,75 @@ describe("appearance font family", () => {
       "microsoft-yahei",
     )
     expect(normalizeAppearanceConfigDocument({ fontFamily: "invalid-font" }).fontFamily).toBe("default")
+  })
+})
+
+describe("appearance token catalog", () => {
+  it("keeps token names in sync with token groups", () => {
+    const groupedTokenNames = APPEARANCE_TOKEN_GROUPS.flatMap((group) =>
+      group.rows.flatMap((row) => [row.lightToken, row.darkToken]),
+    )
+
+    expect(groupedTokenNames).toHaveLength(APPEARANCE_TOKEN_NAMES.length)
+    expect(new Set(groupedTokenNames)).toEqual(new Set(APPEARANCE_TOKEN_NAMES))
+  })
+
+  it("registers and normalizes button semantic tokens", () => {
+    const buttonGroup = APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-buttons")
+
+    expect(buttonGroup?.rows.map((row) => row.id)).toEqual([
+      "semantic-button-primary-surface",
+      "semantic-button-primary-surface-hover",
+      "semantic-button-primary-border",
+      "semantic-button-primary-border-hover",
+      "semantic-button-primary-text",
+      "semantic-button-primary-text-hover",
+      "semantic-button-primary-disabled-surface",
+      "semantic-button-primary-disabled-border",
+      "semantic-button-primary-disabled-text",
+      "semantic-button-secondary-surface",
+      "semantic-button-secondary-surface-hover",
+      "semantic-button-secondary-border",
+      "semantic-button-secondary-border-hover",
+      "semantic-button-secondary-text",
+      "semantic-button-secondary-text-hover",
+      "semantic-button-secondary-disabled-surface",
+      "semantic-button-secondary-disabled-border",
+      "semantic-button-secondary-disabled-text",
+      "semantic-button-danger-surface",
+      "semantic-button-danger-surface-hover",
+      "semantic-button-danger-border",
+      "semantic-button-danger-border-hover",
+      "semantic-button-danger-text",
+      "semantic-button-danger-text-hover",
+      "semantic-button-danger-disabled-surface",
+      "semantic-button-danger-disabled-border",
+      "semantic-button-danger-disabled-text",
+    ])
+
+    const document = normalizeAppearanceConfigDocument({
+      overrides: {
+        "semantic-button-primary-surface": "#111111",
+        "semantic-button-primary-surface-dark": "#123456",
+        "semantic-button-secondary-text": "#abcdef",
+        "semantic-button-danger-disabled-border-light": " #654321 ",
+        "not-a-token": "#000000",
+      },
+      resolvedTokens: {
+        "semantic-button-danger-text-hover-dark": " #222222 ",
+      },
+    })
+
+    expect(document.overrides).toEqual({
+      "semantic-button-primary-surface-light": "#111111",
+      "semantic-button-primary-surface-dark": "#123456",
+      "semantic-button-secondary-text-light": "#abcdef",
+      "semantic-button-secondary-text-dark": "#abcdef",
+      "semantic-button-danger-disabled-border-light": "#654321",
+    })
+    expect(document.resolvedTokens).toEqual({
+      "semantic-button-danger-text-hover-dark": "#222222",
+    })
   })
 })
 

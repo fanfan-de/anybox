@@ -970,6 +970,15 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.queryByText("App Background")).not.toBeInTheDocument()
 
     fireEvent.change(searchBox, {
+      target: { value: "semantic-button-primary-surface" },
+    })
+
+    expect(screen.getByText("Buttons")).toBeInTheDocument()
+    expect(screen.getByText("Primary Surface")).toBeInTheDocument()
+    expect(screen.getByText("semantic-button-primary-surface")).toBeInTheDocument()
+    expect(screen.queryByText("App Background")).not.toBeInTheDocument()
+
+    fireEvent.change(searchBox, {
       target: { value: "no-such-token" },
     })
 

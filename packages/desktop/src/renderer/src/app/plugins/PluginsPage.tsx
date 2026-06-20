@@ -11,7 +11,7 @@ import {
   PlusIcon,
   SettingsIcon,
 } from "../icons"
-import { ShellTopMenu } from "../shared-ui"
+import { ShellTopMenu, joinClassNames } from "../shared-ui"
 import { installedPluginDisplayName } from "../plugin-catalog"
 import { useI18n } from "../i18n/I18nProvider"
 import type { TranslationKey } from "../i18n/translations"
@@ -149,6 +149,14 @@ function connectorStatusLabel(status: ConnectorStatus | PluginConnectorStatus | 
   if (status.authStatus === "expired") return "Expired"
   if (status.authStatus === "error") return "Error"
   return status.connected ? "Connected" : "Not connected"
+}
+
+function connectorStatusDotClassName(status: ConnectorStatus | PluginConnectorStatus | undefined) {
+  if (status?.connected) return "is-connected"
+  if (status?.authStatus === "pending") return "is-pending"
+  if (status?.authStatus === "error" || status?.authStatus === "expired") return "is-error"
+  if (status?.authStatus === "unavailable") return "is-unavailable"
+  return "is-disconnected"
 }
 
 function openPluginExternalUrl(url: string) {
@@ -1166,6 +1174,12 @@ export function PluginsPage({
                       {activePlugin.mcpServers.map((server) => {
                         const itemID = `${activePlugin.id}:mcp:${server.id}`
                         const isExpanded = expandedIncludedItemID === itemID
+                        const statusLabel = activeInstalledPlugin
+                          ? installedPluginStatusText(activeInstalledPlugin, t)
+                          : t("plugins.status.notInstalled")
+                        const statusClassName = activeInstalledPlugin
+                          ? installedPluginStatusClassName(activeInstalledPlugin)
+                          : "is-not-installed"
 
                         return (
                           <div key={`mcp:${server.id}`} className="plugins-included-item">
@@ -1182,9 +1196,12 @@ export function PluginsPage({
                                 <strong>{server.name}</strong>
                                 <span>{runtimeTitle(server.runtime)}</span>
                               </span>
-                              <span className={activeInstalledPlugin?.enabled ? "plugins-toggle is-on" : "plugins-toggle"} aria-hidden="true">
-                                <span />
-                              </span>
+                              <span
+                                className={joinClassNames("plugins-included-status-dot", statusClassName)}
+                                role="img"
+                                aria-label={`Status: ${statusLabel}`}
+                                title={statusLabel}
+                              />
                               <span className="plugins-included-chevron" aria-hidden="true"><ChevronDownIcon /></span>
                             </button>
                             {isExpanded ? (
@@ -1229,6 +1246,12 @@ export function PluginsPage({
                       {activePlugin.skills.map((skill) => {
                         const itemID = `${activePlugin.id}:skill:${skill.id}`
                         const isExpanded = expandedIncludedItemID === itemID
+                        const statusLabel = activeInstalledPlugin
+                          ? installedPluginStatusText(activeInstalledPlugin, t)
+                          : t("plugins.status.notInstalled")
+                        const statusClassName = activeInstalledPlugin
+                          ? installedPluginStatusClassName(activeInstalledPlugin)
+                          : "is-not-installed"
 
                         return (
                           <div key={`skill:${skill.id}`} className="plugins-included-item">
@@ -1245,9 +1268,12 @@ export function PluginsPage({
                                 <strong>{skill.name}</strong>
                                 <span>{skill.description}</span>
                               </span>
-                              <span className={activeInstalledPlugin?.enabled ? "plugins-toggle is-on" : "plugins-toggle"} aria-hidden="true">
-                                <span />
-                              </span>
+                              <span
+                                className={joinClassNames("plugins-included-status-dot", statusClassName)}
+                                role="img"
+                                aria-label={`Status: ${statusLabel}`}
+                                title={statusLabel}
+                              />
                               <span className="plugins-included-chevron" aria-hidden="true"><ChevronDownIcon /></span>
                             </button>
                             {isExpanded ? (
@@ -1279,6 +1305,7 @@ export function PluginsPage({
                         const itemID = `${activePlugin.id}:connector-requirement:${requirement.connector}`
                         const isExpanded = expandedIncludedItemID === itemID
                         const status = platformConnectorStatusByDefinitionID.get(requirement.connector)
+                        const statusLabel = connectorStatusLabel(status)
                         const connectorID = status?.connectorID ?? `connector:${requirement.connector}:default`
                         const requestedTools = requirement.tools?.join(", ") || "Declared by connector"
                         const requestedPermissions = requirement.permissions?.join(", ") || "Declared by connector"
@@ -1298,9 +1325,12 @@ export function PluginsPage({
                                 <strong>{requirement.connector}</strong>
                                 <span>{requirement.reason ?? "Platform connector requirement"}</span>
                               </span>
-                              <span className={status?.connected ? "plugins-toggle is-on" : "plugins-toggle"} aria-hidden="true">
-                                <span />
-                              </span>
+                              <span
+                                className={joinClassNames("plugins-included-status-dot", connectorStatusDotClassName(status))}
+                                role="img"
+                                aria-label={`Status: ${statusLabel}`}
+                                title={statusLabel}
+                              />
                               <span className="plugins-included-chevron" aria-hidden="true"><ChevronDownIcon /></span>
                             </button>
                             {isExpanded ? (
@@ -1362,6 +1392,7 @@ export function PluginsPage({
                         const itemID = `${activePlugin.id}:app:${app.appID}`
                         const isExpanded = expandedIncludedItemID === itemID
                         const status = activeConnectorStatusByAppID.get(app.appID)
+                        const statusLabel = connectorStatusLabel(status)
                         const connectorKey = `${activePlugin.id}:${app.appID}`
                         const credentialKind = app.credential.kind === "oauth" ? "oauth" : "api_key"
                         const apiKeyCredential = app.credential.kind === "oauth" ? null : app.credential
@@ -1370,7 +1401,7 @@ export function PluginsPage({
                         const activeFlow = status?.activeFlow
                         const hasPendingFlow = activeFlow && ["pending", "waiting_user", "authorizing"].includes(activeFlow.status)
                         const appSummary = activeInstalledPlugin
-                          ? `${connectorStatusLabel(status)} - ${app.description ?? "Connector-backed MCP"}`
+                          ? `${statusLabel} - ${app.description ?? "Connector-backed MCP"}`
                           : `Install to enable ${credentialKindLabel(credentialKind)}`
 
                         return (
@@ -1388,9 +1419,12 @@ export function PluginsPage({
                                 <strong>{app.name}</strong>
                                 <span>{appSummary}</span>
                               </span>
-                              <span className={status?.connected ? "plugins-toggle is-on" : "plugins-toggle"} aria-hidden="true">
-                                <span />
-                              </span>
+                              <span
+                                className={joinClassNames("plugins-included-status-dot", connectorStatusDotClassName(status))}
+                                role="img"
+                                aria-label={`Status: ${statusLabel}`}
+                                title={statusLabel}
+                              />
                               <span className="plugins-included-chevron" aria-hidden="true"><ChevronDownIcon /></span>
                             </button>
                             {isExpanded ? (

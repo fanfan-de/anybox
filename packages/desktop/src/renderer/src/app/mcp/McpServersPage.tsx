@@ -976,7 +976,7 @@ export function McpServersPage({
                     {mcpServerValidationError ? <span className="settings-helper-text">{mcpServerValidationError}</span> : null}
                     <div className="settings-inline-actions mcp-server-form-actions">
                       <button
-                        className="secondary-button"
+                        className="mcp-action-button is-secondary"
                         disabled={mcpServerBusy || isImportingMcpConfigJson}
                         onClick={() => setIsImportDialogOpen(true)}
                         type="button"
@@ -986,7 +986,7 @@ export function McpServersPage({
                       </button>
                       {activeMcpServer ? (
                         <button
-                          className="secondary-button"
+                          className="mcp-action-button is-danger"
                           disabled={mcpServerBusy}
                           onClick={() => void onDeleteMcpServer(activeMcpServer.id)}
                           type="button"
@@ -995,7 +995,7 @@ export function McpServersPage({
                         </button>
                       ) : null}
                       <button
-                        className="primary-button"
+                        className="mcp-action-button is-primary"
                         disabled={mcpServerBusy || !mcpServerCanSave}
                         onClick={() => void onSaveMcpServer()}
                         type="button"
@@ -1074,7 +1074,7 @@ export function McpServersPage({
 
             <div className="settings-inline-actions mcp-config-import-actions">
               <button
-                className="secondary-button"
+                className="mcp-action-button is-secondary"
                 type="button"
                 disabled={isImportingMcpConfigJson}
                 onClick={() => setIsImportDialogOpen(false)}
@@ -1082,7 +1082,7 @@ export function McpServersPage({
                 {t("app.cancel")}
               </button>
               <button
-                className="primary-button"
+                className="mcp-action-button is-primary"
                 type="button"
                 disabled={!canImportConfigJson}
                 onClick={() => void handleImportConfigJson()}

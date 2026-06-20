@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Anybox Button Guidelines Preview Frame</title>
+    <script>
+      (() => {
+        const params = new URLSearchParams(window.location.search);
+        const theme = params.get("theme") === "dark" ? "dark" : "light";
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+    <link rel="stylesheet" href="../packages/desktop/src/renderer/src/styles/tokens.css" />
+    <style>
+      :root {
+        --semantic-button-height-compact: 32px;
+        --semantic-button-height-default: 38px;
+        --semantic-button-height-large: 40px;
+        --semantic-button-icon-size: 30px;
+        --semantic-button-radius: var(--radius-control);
+        --semantic-button-font-size: 13px;
+        --semantic-button-font-weight: 650;
+        --semantic-button-gap: 7px;
+        --semantic-button-icon-glyph: 16px;
+
+        --semantic-button-primary-surface: var(--brand-primary-active);
+        --semantic-button-primary-surface-hover: var(--brand-primary-strong);
+        --semantic-button-primary-surface-active: var(--brand-primary-strong);
+        --semantic-button-primary-border: var(--mix-seg-accent-42-seg-border-58);
+        --semantic-button-primary-border-hover: var(--mix-seg-accent-48-seg-border-52);
+        --semantic-button-primary-text: var(--text-on-dark);
+
+        --semantic-button-secondary-surface: var(--surface-panel);
+        --semantic-button-secondary-surface-hover: var(--surface-elevated);
+        --semantic-button-secondary-surface-active: var(--surface-panel-muted);
+        --semantic-button-secondary-border: var(--border-default);
+        --semantic-button-secondary-border-hover: var(--border-subtle);
+        --semantic-button-secondary-text: var(--text-secondary);
+        --semantic-button-secondary-text-hover: var(--text-primary);
+
+        --semantic-button-danger-surface: var(--semantic-error-surface);
+        --semantic-button-danger-surface-hover: var(--semantic-error-surface-strong);
+        --semantic-button-danger-border: var(--semantic-error-border);
+        --semantic-button-danger-text: var(--semantic-error-text);
+
+        --semantic-button-ghost-surface: var(--mix-seg-text-1-5-transparent-95);
+        --semantic-button-ghost-surface-hover: var(--surface-panel-muted);
+        --semantic-button-ghost-border: var(--mix-seg-border-96-transparent-4);
+        --semantic-button-ghost-text: var(--text-secondary);
+        --semantic-button-ghost-text-hover: var(--text-primary);
+
+        --semantic-button-icon-surface: var(--mix-seg-text-1-5-transparent-95);
+        --semantic-button-icon-surface-hover: var(--semantic-icon-button-surface-hover);
+        --semantic-button-icon-surface-active: var(--semantic-icon-button-surface-active);
+        --semantic-button-icon-text: var(--semantic-icon-button-text);
+        --semantic-button-icon-text-hover: var(--semantic-icon-button-text-hover);
+        --semantic-button-icon-text-active: var(--semantic-icon-button-text-active);
+
+        --semantic-button-row-action-surface: var(--surface-panel);
+        --semantic-button-row-action-surface-hover: var(--surface-elevated);
+        --semantic-button-row-action-border: var(--border-default);
+        --semantic-button-row-action-border-hover: var(--border-subtle);
+        --semantic-button-disabled-opacity: 0.48;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        background: var(--surface-shell);
+        color: var(--text-primary);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .frame-page {
+        min-width: 0;
+        padding: var(--space-4);
+        display: grid;
+        gap: var(--space-4);
+      }
+
+      .frame-header {
+        display: grid;
+        gap: var(--space-1);
+      }
+
+      .frame-header h1 {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.25;
+        letter-spacing: 0;
+      }
+
+      .frame-header p {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 12px;
+      }
+
+      .section {
+        min-width: 0;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-panel);
+        background: var(--surface-panel);
+        padding: var(--space-4);
+        display: grid;
+        gap: var(--space-3);
+      }
+
+      .section h2 {
+        margin: 0;
+        color: var(--text-primary);
+        font-size: 13px;
+        line-height: 1.25;
+        letter-spacing: 0;
+      }
+
+      .section-note {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 12px;
+      }
+
+      .button-row {
+        min-width: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-2);
+      }
+
+      .ab-button {
+        min-width: 0;
+        min-height: var(--semantic-button-height-default);
+        padding: 0 14px;
+        border: 1px solid var(--semantic-button-secondary-border);
+        border-radius: var(--semantic-button-radius);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--semantic-button-gap);
+        color: var(--semantic-button-secondary-text);
+        background: var(--semantic-button-secondary-surface);
+        font-size: var(--semantic-button-font-size);
+        font-weight: var(--semantic-button-font-weight);
+        letter-spacing: 0;
+        line-height: 1;
+        white-space: nowrap;
+        cursor: pointer;
+        transition:
+          background var(--motion-fast) ease,
+          border-color var(--motion-fast) ease,
+          color var(--motion-fast) ease,
+          opacity var(--motion-fast) ease;
+      }
+
+      .ab-button:hover,
+      .ab-button:focus-visible {
+        background: var(--semantic-button-secondary-surface-hover);
+        border-color: var(--semantic-button-secondary-border-hover);
+        color: var(--semantic-button-secondary-text-hover);
+      }
+
+      .ab-button:focus-visible {
+        outline: none;
+      }
+
+      .ab-button:active,
+      .ab-button.is-active {
+        background: var(--semantic-button-secondary-surface-active);
+        color: var(--semantic-button-secondary-text-hover);
+      }
+
+      .ab-button:disabled {
+        opacity: var(--semantic-button-disabled-opacity);
+        cursor: default;
+      }
+
+      .ab-button:disabled:hover,
+      .ab-button:disabled:focus-visible {
+        background: var(--semantic-button-secondary-surface);
+        border-color: var(--semantic-button-secondary-border);
+        color: var(--semantic-button-secondary-text);
+      }
+
+      .ab-button.is-primary {
+        background: var(--semantic-button-primary-surface);
+        border-color: var(--semantic-button-primary-border);
+        color: var(--semantic-button-primary-text);
+      }
+
+      .ab-button.is-primary:hover,
+      .ab-button.is-primary:focus-visible {
+        background: var(--semantic-button-primary-surface-hover);
+        border-color: var(--semantic-button-primary-border-hover);
+        color: var(--semantic-button-primary-text);
+      }
+
+      .ab-button.is-primary:active,
+      .ab-button.is-primary.is-active {
+        background: var(--semantic-button-primary-surface-active);
+        border-color: var(--semantic-button-primary-border-hover);
+      }
+
+      .ab-button.is-primary:disabled:hover,
+      .ab-button.is-primary:disabled:focus-visible {
+        background: var(--semantic-button-primary-surface);
+        border-color: var(--semantic-button-primary-border);
+        color: var(--semantic-button-primary-text);
+      }
+
+      .ab-button.is-danger {
+        background: var(--semantic-button-danger-surface);
+        border-color: var(--semantic-button-danger-border);
+        color: var(--semantic-button-danger-text);
+      }
+
+      .ab-button.is-danger:hover,
+      .ab-button.is-danger:focus-visible {
+        background: var(--semantic-button-danger-surface-hover);
+        border-color: var(--semantic-button-danger-border);
+        color: var(--semantic-button-danger-text);
+      }
+
+      .ab-button.is-ghost {
+        background: var(--semantic-button-ghost-surface);
+        border-color: var(--semantic-button-ghost-border);
+        color: var(--semantic-button-ghost-text);
+      }
+
+      .ab-button.is-ghost:hover,
+      .ab-button.is-ghost:focus-visible,
+      .ab-button.is-ghost.is-active {
+        background: var(--semantic-button-ghost-surface-hover);
+        color: var(--semantic-button-ghost-text-hover);
+      }
+
+      .ab-button.is-compact {
+        min-height: var(--semantic-button-height-compact);
+        padding: 0 11px;
+        font-size: 13px;
+      }
+
+      .ab-button.is-large {
+        min-height: var(--semantic-button-height-large);
+        padding: 0 16px;
+        font-size: 14px;
+      }
+
+      .ab-button.is-icon-only {
+        width: var(--semantic-button-icon-size);
+        min-width: var(--semantic-button-icon-size);
+        height: var(--semantic-button-icon-size);
+        min-height: var(--semantic-button-icon-size);
+        padding: 0;
+        background: var(--semantic-button-icon-surface);
+        border-color: var(--semantic-button-ghost-border);
+        color: var(--semantic-button-icon-text);
+      }
+
+      .ab-button.is-icon-only:hover,
+      .ab-button.is-icon-only:focus-visible {
+        background: var(--semantic-button-icon-surface-hover);
+        color: var(--semantic-button-icon-text-hover);
+      }
+
+      .ab-button.is-icon-only.is-active,
+      .ab-button.is-icon-only[aria-pressed="true"] {
+        background: var(--semantic-button-icon-surface-active);
+        color: var(--semantic-button-icon-text-active);
+      }
+
+      .ab-button.is-row-action {
+        min-height: 30px;
+        padding: 0 10px;
+        background: var(--semantic-button-row-action-surface);
+        border-color: var(--semantic-button-row-action-border);
+        font-size: 12px;
+      }
+
+      .ab-button.is-row-action:hover,
+      .ab-button.is-row-action:focus-visible {
+        background: var(--semantic-button-row-action-surface-hover);
+        border-color: var(--semantic-button-row-action-border-hover);
+      }
+
+      .ab-button.is-row-action.is-danger {
+        background: var(--semantic-button-danger-surface);
+        border-color: var(--semantic-button-danger-border);
+        color: var(--semantic-button-danger-text);
+      }
+
+      .ab-button.is-command {
+        min-height: var(--semantic-button-height-compact);
+        padding: 0 12px;
+      }
+
+      .ab-button .icon {
+        width: var(--semantic-button-icon-glyph);
+        height: var(--semantic-button-icon-glyph);
+        flex: 0 0 auto;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .ab-button .label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .icon.is-spin {
+        animation: spin 800ms linear infinite;
+      }
+
+      .toolbar {
+        min-height: 42px;
+        padding: 0 var(--space-2);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-panel);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        background: var(--surface-shell);
+      }
+
+      .toolbar-group {
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+      }
+
+      .segmented {
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        overflow: hidden;
+      }
+
+      .segment {
+        min-height: 30px;
+        padding: 0 9px;
+        border: 0;
+        border-radius: var(--semantic-button-radius);
+        background: var(--semantic-button-ghost-surface);
+        color: var(--seg-text-2);
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font: inherit;
+        font-size: 14px;
+        font-weight: 650;
+        letter-spacing: 0;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+
+      .segment:hover,
+      .segment:focus-visible {
+        outline: none;
+        background: var(--semantic-sidebar-tree-row-surface-hover);
+        color: var(--seg-text-1);
+      }
+
+      .segment[aria-selected="true"] {
+        background: var(--semantic-sidebar-tree-row-surface-active);
+        color: var(--seg-text-1);
+      }
+
+      .split-button {
+        display: inline-flex;
+        align-items: stretch;
+      }
+
+      .split-button .ab-button {
+        border-radius: 0;
+      }
+
+      .split-button .ab-button:first-child {
+        border-top-left-radius: var(--semantic-button-radius);
+        border-bottom-left-radius: var(--semantic-button-radius);
+      }
+
+      .split-button .ab-button:last-child {
+        width: 34px;
+        min-width: 34px;
+        padding: 0;
+        border-left-width: 0;
+        border-top-right-radius: var(--semantic-button-radius);
+        border-bottom-right-radius: var(--semantic-button-radius);
+      }
+
+      .example-list {
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-panel);
+        overflow: hidden;
+      }
+
+      .example-row {
+        min-height: 44px;
+        padding: 0 var(--space-3);
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: var(--space-3);
+        border-bottom: 1px solid var(--border-default);
+      }
+
+      .example-row:last-child {
+        border-bottom: 0;
+      }
+
+      .row-title {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--text-primary);
+        font-size: 13px;
+        font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .row-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        opacity: 0.72;
+      }
+
+      .example-row:hover .row-actions,
+      .example-row:focus-within .row-actions {
+        opacity: 1;
+      }
+
+      .state-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-2);
+      }
+
+      .state-cell {
+        min-width: 0;
+        padding: var(--space-3);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-panel);
+        display: grid;
+        gap: var(--space-2);
+        background: var(--surface-shell);
+      }
+
+      .state-cell span {
+        color: var(--text-tertiary);
+        font-size: 12px;
+      }
+
+      code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .ab-button,
+        .segment {
+          transition: none;
+        }
+
+        .icon.is-spin {
+          animation: none;
+        }
+      }
+
+      @media (max-width: 520px) {
+        .state-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .toolbar {
+          align-items: flex-start;
+          flex-direction: column;
+          justify-content: center;
+          padding: var(--space-3);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
+      <symbol id="icon-copy" viewBox="0 0 24 24">
+        <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+      </symbol>
+      <symbol id="icon-refresh" viewBox="0 0 24 24">
+        <path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"></path>
+        <path d="M21 3v5h-5"></path>
+        <path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"></path>
+        <path d="M3 21v-5h5"></path>
+      </symbol>
+      <symbol id="icon-upload" viewBox="0 0 24 24">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <path d="M17 8l-5-5-5 5"></path>
+        <path d="M12 3v12"></path>
+      </symbol>
+      <symbol id="icon-trash" viewBox="0 0 24 24">
+        <path d="M3 6h18"></path>
+        <path d="M8 6V4h8v2"></path>
+        <path d="M19 6l-1 14H6L5 6"></path>
+      </symbol>
+      <symbol id="icon-chevron-down" viewBox="0 0 24 24">
+        <path d="m6 9 6 6 6-6"></path>
+      </symbol>
+      <symbol id="icon-external-link" viewBox="0 0 24 24">
+        <path d="M15 3h6v6"></path>
+        <path d="M10 14 21 3"></path>
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+      </symbol>
+      <symbol id="icon-plus" viewBox="0 0 24 24">
+        <path d="M5 12h14"></path>
+        <path d="M12 5v14"></path>
+      </symbol>
+      <symbol id="icon-loader" viewBox="0 0 24 24">
+        <path d="M21 12a9 9 0 1 1-6.2-8.6"></path>
+      </symbol>
+    </svg>
+
+    <main class="frame-page">
+      <header class="frame-header">
+        <h1>Button semantic aliases</h1>
+        <p><code>--semantic-button-*</code> maps to real Anybox runtime tokens from <code>tokens.css</code>.</p>
+      </header>
+
+      <section class="section">
+        <h2>Action row</h2>
+        <div class="button-row">
+          <button class="ab-button is-primary" type="button">保存设置</button>
+          <button class="ab-button" type="button">测试连接</button>
+          <button class="ab-button is-danger" type="button">删除</button>
+          <button class="ab-button is-ghost" type="button">取消</button>
+        </div>
+        <p class="section-note">一个 row 只有一个 primary；普通命令用 secondary；危险动作始终 danger。</p>
+      </section>
+
+      <section class="section">
+        <h2>Command buttons</h2>
+        <div class="button-row">
+          <button class="ab-button is-command" type="button">
+            <svg class="icon"><use href="#icon-upload"></use></svg>
+            <span class="label">导入 JSON</span>
+          </button>
+          <button class="ab-button is-command" type="button">
+            <svg class="icon"><use href="#icon-refresh"></use></svg>
+            <span class="label">刷新二维码</span>
+          </button>
+          <button class="ab-button is-command" type="button">
+            <svg class="icon"><use href="#icon-copy"></use></svg>
+            <span class="label">复制 deep link</span>
+          </button>
+        </div>
+        <p class="section-note">复制、刷新、导入这类命令组允许 icon+text，但仍使用 secondary 视觉。</p>
+      </section>
+
+      <section class="section">
+        <h2>Toolbar and segmented</h2>
+        <div class="toolbar">
+          <div class="segmented" role="tablist" aria-label="Preview mode">
+            <button class="segment" role="tab" aria-selected="true" type="button">Edit</button>
+            <button class="segment" role="tab" aria-selected="false" type="button">Preview</button>
+          </div>
+          <div class="toolbar-group" aria-label="Toolbar actions">
+            <button class="ab-button is-icon-only" type="button" aria-label="Refresh" title="Refresh">
+              <svg class="icon"><use href="#icon-refresh"></use></svg>
+            </button>
+            <button class="ab-button is-icon-only" type="button" aria-label="Copy" title="Copy">
+              <svg class="icon"><use href="#icon-copy"></use></svg>
+            </button>
+            <button class="ab-button is-icon-only is-active" type="button" aria-label="Add" title="Add" aria-pressed="true">
+              <svg class="icon"><use href="#icon-plus"></use></svg>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>States</h2>
+        <div class="state-grid">
+          <div class="state-cell">
+            <span>Default</span>
+            <button class="ab-button" type="button">Diagnose</button>
+          </div>
+          <div class="state-cell">
+            <span>Disabled</span>
+            <button class="ab-button is-primary" type="button" disabled>Save credentials</button>
+          </div>
+          <div class="state-cell">
+            <span>Loading</span>
+            <button class="ab-button is-primary" type="button" disabled>
+              <svg class="icon is-spin"><use href="#icon-loader"></use></svg>
+              <span class="label">保存中</span>
+            </button>
+          </div>
+          <div class="state-cell">
+            <span>Menu open</span>
+            <span class="split-button">
+              <button class="ab-button" type="button">安装</button>
+              <button class="ab-button is-active" type="button" aria-label="安装选项" aria-expanded="true">
+                <svg class="icon"><use href="#icon-chevron-down"></use></svg>
+              </button>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Row actions</h2>
+        <div class="example-list">
+          <div class="example-row">
+            <div class="row-title">Production SSH profile</div>
+            <div class="row-actions">
+              <button class="ab-button is-row-action" type="button">编辑</button>
+              <button class="ab-button is-row-action" type="button">复制</button>
+              <button class="ab-button is-row-action is-danger" type="button">删除</button>
+            </div>
+          </div>
+          <div class="example-row">
+            <div class="row-title">local-mobile-debug-command-with-a-long-name</div>
+            <div class="row-actions">
+              <button class="ab-button is-icon-only" type="button" aria-label="Copy command" title="Copy command">
+                <svg class="icon"><use href="#icon-copy"></use></svg>
+              </button>
+              <button class="ab-button is-icon-only" type="button" aria-label="Open external" title="Open external">
+                <svg class="icon"><use href="#icon-external-link"></use></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

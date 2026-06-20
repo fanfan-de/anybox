@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Anybox Button Guidelines Preview</title>
+    <link rel="stylesheet" href="../packages/desktop/src/renderer/src/styles/tokens.css" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        background: var(--surface-app);
+        color: var(--text-primary);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .page {
+        width: min(1280px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 28px 0 40px;
+        display: grid;
+        gap: var(--space-5);
+      }
+
+      .page-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: end;
+        gap: var(--space-4);
+      }
+
+      .page-header h1 {
+        margin: 0;
+        font-size: 24px;
+        line-height: 1.2;
+        letter-spacing: 0;
+      }
+
+      .page-header p {
+        max-width: 760px;
+        margin: var(--space-2) 0 0;
+        color: var(--text-secondary);
+      }
+
+      .source-pill {
+        min-height: 30px;
+        padding: 0 var(--space-3);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        color: var(--text-secondary);
+        background: var(--surface-panel);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .preview-grid {
+        min-width: 0;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-4);
+      }
+
+      .preview-frame-shell {
+        min-width: 0;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-panel);
+        background: var(--surface-panel);
+        overflow: hidden;
+      }
+
+      .preview-frame-title {
+        min-height: 42px;
+        padding: 0 var(--space-4);
+        border-bottom: 1px solid var(--border-default);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+      }
+
+      .preview-frame-title strong {
+        font-size: 13px;
+        line-height: 1.2;
+      }
+
+      .preview-frame-title span {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--text-tertiary);
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      iframe {
+        width: 100%;
+        height: 1180px;
+        border: 0;
+        display: block;
+        background: var(--surface-shell);
+      }
+
+      .notes {
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-panel);
+        padding: var(--space-4);
+        background: var(--surface-panel);
+        color: var(--text-secondary);
+        display: grid;
+        gap: var(--space-2);
+      }
+
+      .notes strong {
+        color: var(--text-primary);
+      }
+
+      .notes p {
+        margin: 0;
+      }
+
+      code {
+        color: var(--text-primary);
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+
+      @media (max-width: 980px) {
+        .preview-grid,
+        .page-header {
+          grid-template-columns: 1fr;
+        }
+
+        iframe {
+          height: 1080px;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .page {
+          width: min(100% - 24px, 1280px);
+          padding-top: 18px;
+        }
+
+        .preview-frame-title {
+          align-items: flex-start;
+          flex-direction: column;
+          justify-content: center;
+          padding: var(--space-3);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="page-header">
+        <div>
+          <h1>Anybox Button Guidelines Preview</h1>
+          <p>入口页只负责并排展示两个独立 iframe；每个 iframe 都直接加载 Anybox 的真实 token 文件，并在自身根节点切换主题。</p>
+        </div>
+        <span class="source-pill">source: packages/desktop/src/renderer/src/styles/tokens.css</span>
+      </header>
+
+      <section class="preview-grid" aria-label="Button previews">
+        <article class="preview-frame-shell">
+          <div class="preview-frame-title">
+            <strong>Light</strong>
+            <span>iframe root: data-theme="light"</span>
+          </div>
+          <iframe src="./button-guidelines-preview-frame.html?theme=light" title="Light theme button preview"></iframe>
+        </article>
+
+        <article class="preview-frame-shell">
+          <div class="preview-frame-title">
+            <strong>Dark</strong>
+            <span>iframe root: data-theme="dark"</span>
+          </div>
+          <iframe src="./button-guidelines-preview-frame.html?theme=dark" title="Dark theme button preview"></iframe>
+        </article>
+      </section>
+
+      <section class="notes" aria-label="Implementation notes">
+        <p><strong>Token wiring:</strong> 子页组件样式只消费 <code>--semantic-button-*</code>。这些 alias 在子页本地定义，但全部映射到真实 <code>tokens.css</code> 已存在的 runtime token。</p>
+        <p><strong>Theme isolation:</strong> 两个 iframe 各自拥有独立 <code>:root</code>，因此可以同时显示 light/dark，而不需要在同一 document 里复制整套主题映射。</p>
+      </section>
+    </main>
+  </body>
+</html>

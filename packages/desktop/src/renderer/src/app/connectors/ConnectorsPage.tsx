@@ -322,7 +322,7 @@ export function ConnectorsPage({
                             <span>OAuth redirect URL</span>
                             <code>{activeDefinition.oauthCallbackURL}</code>
                             <button
-                              className="plugins-detail-uninstall-button"
+                              className="connectors-action-button connectors-callback-copy-button is-secondary"
                               type="button"
                               aria-label="Copy OAuth redirect URL"
                               title={copiedCallbackURL ? "Copied" : "Copy OAuth redirect URL"}
@@ -350,7 +350,7 @@ export function ConnectorsPage({
                         </div>
                         <div className="connectors-actions">
                           <button
-                            className="plugins-detail-install-button"
+                            className="connectors-action-button is-primary"
                             type="button"
                             disabled={isBusy}
                             onClick={() => void onSaveConnectorConfig(activeConnectorID)}
@@ -359,7 +359,7 @@ export function ConnectorsPage({
                           </button>
                           {activeStatus?.configured ? (
                             <button
-                              className="plugins-detail-uninstall-button"
+                              className="connectors-action-button is-danger"
                               type="button"
                               disabled={isBusy}
                               onClick={() => void onDeleteConnectorConfig(activeConnectorID)}
@@ -429,7 +429,7 @@ export function ConnectorsPage({
                         <>
                           {hasPendingFlow ? (
                             <button
-                              className="plugins-detail-uninstall-button"
+                              className="connectors-action-button is-secondary"
                               type="button"
                               disabled={isBusy}
                               onClick={() => void onCancelConnectorAuthFlow(activeConnectorID)}
@@ -438,7 +438,7 @@ export function ConnectorsPage({
                             </button>
                           ) : (
                             <button
-                              className="plugins-detail-install-button"
+                              className="connectors-action-button is-primary"
                               type="button"
                               disabled={isBusy || !isConfigReady}
                               onClick={() => void onStartConnectorAuthFlow(activeConnectorID)}
@@ -449,7 +449,7 @@ export function ConnectorsPage({
                           )}
                           {activeStatus?.connected ? (
                             <button
-                              className="plugins-detail-uninstall-button"
+                              className="connectors-action-button is-danger"
                               type="button"
                               disabled={isBusy}
                               onClick={() => void onDeleteConnectorAuthSession(activeConnectorID)}
@@ -472,7 +472,7 @@ export function ConnectorsPage({
                             />
                           </label>
                           <button
-                            className="plugins-detail-install-button"
+                            className="connectors-action-button is-primary"
                             type="button"
                             disabled={isBusy}
                             onClick={() => void onSaveConnectorApiKey(activeConnectorID)}
@@ -481,7 +481,7 @@ export function ConnectorsPage({
                           </button>
                           {activeStatus?.connected ? (
                             <button
-                              className="plugins-detail-uninstall-button"
+                              className="connectors-action-button is-danger"
                               type="button"
                               disabled={isBusy}
                               onClick={() => void onDeleteConnectorApiKey(activeConnectorID)}
@@ -496,7 +496,7 @@ export function ConnectorsPage({
                       )}
 
                       <button
-                        className="plugins-detail-uninstall-button"
+                        className="connectors-action-button is-secondary"
                         type="button"
                         disabled={isDiagnosing || !isConfigReady}
                         onClick={() => void onDiagnoseConnector(activeConnectorID)}
