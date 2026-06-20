@@ -6,8 +6,15 @@ Before parsing, locate the spec page:
 
 ```
 1. Search for spec:
-   Notion:notion-search
-   query: "[Feature Name] spec" or "[Feature Name] specification"
+   Notion:search
+   query: "[Feature Name] spec"
+   query_type: "internal"
+   filters: {}
+
+   If that misses, run a second search with:
+   query: "[Feature Name] specification"
+   query_type: "internal"
+   filters: {}
 
 2. Handle results:
    - If found → use page URL/ID
@@ -15,14 +22,15 @@ Before parsing, locate the spec page:
    - If not found → ask user for URL/ID
 
 Example:
-Notion:notion-search
+Notion:search
 query: "User Profile API spec"
 query_type: "internal"
+filters: {}
 ```
 
 ## Reading Specifications
 
-After finding the spec, fetch it with `Notion:notion-fetch`:
+After finding the spec, fetch it with `Notion:fetch`:
 
 1. Read the full content
 2. Identify key sections
@@ -30,7 +38,7 @@ After finding the spec, fetch it with `Notion:notion-fetch`:
 4. Note ambiguities or gaps
 
 ```
-Notion:notion-fetch
+Notion:fetch
 id: "spec-page-id-from-search"
 ```
 

@@ -6,11 +6,17 @@ Before creating tasks, locate the task database:
 
 ```
 1. Search for task database:
-   Notion:notion-search
-   query: "Tasks" or "Task Management" or "[Project] Tasks"
+   Notion:search
+   query: "[Project] Tasks"
+   query_type: "internal"
+   filters: {}
+
+   If needed, run separate searches for:
+   - "Tasks"
+   - "Task Management"
 
 2. Fetch database schema:
-   Notion:notion-fetch
+   Notion:fetch
    id: "database-id-from-search"
 
 3. Identify data source:
@@ -23,11 +29,12 @@ Before creating tasks, locate the task database:
    - Relation properties for linking
 
 Example:
-Notion:notion-search
+Notion:search
 query: "Engineering Tasks"
 query_type: "internal"
+filters: {}
 
-Notion:notion-fetch
+Notion:fetch
 id: "tasks-database-id"
 ```
 
@@ -84,24 +91,23 @@ For each requirement or work item:
 ### Creating Task
 
 ```
-Use Notion:notion-create-pages:
-
+Notion:notion-create-pages
 parent: {
   type: "data_source_id",
   data_source_id: "collection://tasks-db-uuid"
 }
-
-properties: {
-  "[Title Property]": "Task: [Clear task name]",
-  "Status": "To Do",
-  "Priority": "[High/Medium/Low]",
-  "[Project/Related]": ["spec-page-id", "plan-page-id"],
-  "Assignee": "[Person]" (if known),
-  "date:Due Date:start": "[Date]" (if applicable),
-  "date:Due Date:is_datetime": 0
-}
-
-content: "[Task description using template]"
+pages: [{
+  properties: {
+    "[Title Property]": "Task: [Clear task name]",
+    "Status": "To Do",
+    "Priority": "[High/Medium/Low]",
+    "[Project/Related]": ["spec-page-id", "plan-page-id"],
+    "Assignee": "[Person]",
+    "date:Due Date:start": "[Date]",
+    "date:Due Date:is_datetime": 0
+  },
+  content: "[Task description using template]"
+}]
 ```
 
 ## Task Description Template

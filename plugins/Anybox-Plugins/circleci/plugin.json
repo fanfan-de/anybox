@@ -39,7 +39,8 @@
     "defaultPrompt": [
       "Review the CircleCI configuration for this project and suggest improvements",
       "Diagnose and fix build failures for the current branch",
-      "Setup the Chunk cli for this project"
+      "Setup the Chunk cli for this project",
+      "Setup CircleCI Smarter Testing for running tests in this project"
     ],
     "brandColor": "#049B4A",
     "composerIcon": "./assets/logo.svg",
@@ -67,6 +68,16 @@
       "name": "circleci-config",
       "description": "Optimize CircleCI configuration for speed, reliability, and maintainability. Use when users ask to improve `.circleci/config.yml`, reduce CI runtime, tune caching/workspaces/parallelism, remove pipeline waste, or fix flaky pipeline behavior caused by configuration choices.",
       "directory": "config"
+    },
+    {
+      "name": "onboarding",
+      "description": "Agent-driven onboarding guide for CircleCI. Walks a user through the full setup journey: account creation, org setup, GitHub App connection, project creation, pipeline definition + trigger, and iterating a config file until it passes. Use this skill whenever a user says \\\"onboard to CircleCI\\\", \\\"set up CircleCI\\\", \\\"get started with CircleCI\\\", \\\"connect my repo to CircleCI\\\", \\\"create a CircleCI project\\\", or asks for help with any early CircleCI setup step. Also trigger if the user has a new repo and wants CI running on it.",
+      "directory": "onboard"
+    },
+    {
+      "name": "circleci-smarter-testing",
+      "description": "Onboard onto CircleCI Smarter Testing (testsuite) with `.circleci/test-suites.yml`, config wiring, `circleci run testsuite`, and `--doctor` until checks pass. Use for Smarter Testing, testsuite, test-suites YAML, test impact analysis, dynamic test splitting, auto rerun failed tests, or migrating raw test commands.",
+      "directory": "smarter-testing"
     }
   ]
 }

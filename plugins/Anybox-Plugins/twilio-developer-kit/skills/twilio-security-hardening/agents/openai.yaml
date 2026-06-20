@@ -1,6 +1,10 @@
 interface:
-  display_name: "twilio-security-hardening"
-  short_description: "Twilio skill guidance for twilio-security-hardening"
-  icon_small: "../../assets/logo.svg"
-  icon_large: "../../assets/logo.svg"
-  brand_color: "#F22F46"
+  display_name: "Security Hardening"
+  short_description: "Secure Twilio applications against common attacks. Covers credential management, webhook signature verification, PCI DSS, SMS pumping prevention, and geo-permissions."
+  icon_small: "./assets/icon-small.png"
+  icon_large: "./assets/icon-large.png"
+  brand_color: "#EF223A"
+  default_prompt: "How do I secure my Twilio application against attacks and abuse?"
+
+policy:
+  allow_implicit_invocation: true

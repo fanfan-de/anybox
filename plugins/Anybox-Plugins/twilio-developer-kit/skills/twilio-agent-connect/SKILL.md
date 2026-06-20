@@ -1,10 +1,12 @@
 ---
 name: twilio-agent-connect
 description: >
-  Use when building or integrating Twilio Agent Connect (TAC) to connect
-  third-party LLM agent runtimes with Twilio Voice, Messaging,
-  ConversationRelay, Conversation Memory, Conversation Orchestrator, or
-  Enterprise Knowledge.
+  Connect third-party AI agents (OpenAI, Bedrock, LangChain, Microsoft Foundry)
+  to Twilio's communication channels using the Twilio Agent Connect SDK. Covers
+  identity resolution, memory and context management via Conversation Memory,
+  conversation orchestration via Conversation Orchestrator, multi-channel
+  handling (Voice, SMS, RCS, WhatsApp, Chat), and AI-to-human escalation.
+  Use this skill when integrating an existing LLM agent with Twilio services.
 ---
 
 # Twilio Agent Connect
@@ -185,7 +187,7 @@ tac.onMessageReady(async ({ conversationId, message, memory, session }) => {
   conversationHistory[convId].push({ role: 'user', content: message });
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.4-mini',
     messages: [
       { role: 'system', content: systemPrompt },
       ...conversationHistory[convId],

@@ -1,7 +1,7 @@
 {
   "name": "heygen",
-  "version": "2.2.0",
-  "description": "Create HeyGen avatar videos and personalized video messages. Build a persistent digital identity from a photo, then generate presenter-led videos with your digital twin.",
+  "version": "1.3.2",
+  "description": "Create HeyGen avatar videos, personalized video messages, and translated / dubbed videos. Build a persistent digital identity from a photo, generate presenter-led videos with your digital twin, and localize existing videos into 175+ languages with voice cloning and lip-sync.",
   "author": {
     "name": "HeyGen",
     "email": "developers@heygen.com",
@@ -20,7 +20,12 @@
     "presenter",
     "talking-head",
     "ai-avatar",
-    "avatar-video"
+    "avatar-video",
+    "translate",
+    "dub",
+    "localization",
+    "voice-cloning",
+    "lip-sync"
   ],
   "interface": {
     "displayName": {
@@ -28,11 +33,11 @@
       "zh-CN": "HeyGen"
     },
     "shortDescription": {
-      "en-US": "Avatar videos and personalized video messages",
+      "en-US": "Avatar videos, personalized messages, and video translation",
       "zh-CN": "头像视频和个性化视频消息"
     },
     "longDescription": {
-      "en-US": "HeyGen Skills give your agent a face, a voice, and the ability to send video like a message. Use heygen-avatar to build a persistent digital identity from a photo and pick a voice, then heygen-video to generate identity-first presenter videos via the HeyGen v3 Video Agent pipeline (avatar resolution, aspect ratio correction, prompt engineering, and voice selection are handled automatically).",
+      "en-US": "HeyGen Skills give your agent a face, a voice, and the ability to send video like a message — in any language. Use heygen-avatar to build a persistent digital identity from a photo and pick a voice, heygen-video to generate identity-first presenter videos via the HeyGen v3 Video Agent pipeline (avatar resolution, aspect ratio correction, prompt engineering, and voice selection handled automatically), and heygen-translate to localize existing videos into 175+ languages with voice cloning and lip-sync.",
       "zh-CN": "HeyGen Skills 让 Agent 具备头像、语音和像发送消息一样发送视频的能力。使用 heygen-avatar 从照片构建持久数字身份并选择声音，再用 heygen-video 通过 HeyGen v3 Video Agent 流水线生成以身份为中心的讲解视频，头像解析、纵横比修正、提示词工程和声音选择会自动处理。"
     },
     "developerName": "HeyGen",
@@ -45,7 +50,8 @@
     "defaultPrompt": [
       "Create my HeyGen avatar from this photo",
       "Make a 30-second intro video of myself",
-      "Send a video update to my team about this week's progress"
+      "Send a video update to my team about this week's progress",
+      "Translate this video into Spanish, Japanese, and German"
     ],
     "brandColor": "#0a0a0a",
     "composerIcon": "./assets/icon.png",
@@ -55,12 +61,17 @@
   "skillPreviews": [
     {
       "name": "heygen-avatar",
-      "description": "|",
+      "description": "Create a persistent HeyGen avatar — a reusable face + voice identity for the agent, the user, or any named character — powered by HeyGen Avatar V technology. Prompt-based creation by default (description → HeyGen builds it); photo upload is optional for real-person digital twins. Use when: (1) giving the agent a face + voice so it can present videos (\"bring yourself to life\", \"create your avatar\", \"give yourself an avatar\", \"design a presenter\", \"set up an avatar\", \"let's make an avatar\"), (2) the user wants to appear in videos as themselves (\"create my avatar\", \"I want my face in a video\", \"digital twin of me\", \"build me an avatar\"), (3) building a named character presenter (\"create an avatar called Cleo\", \"design a character named X\"), (4) establishing HeyGen identity before making videos — the correct FIRST step when no avatar exists yet. Chain signal: when the user says both an identity/avatar action AND a video action in the same request (\"create an avatar AND make a video\", \"set up identity THEN create a video\", \"design a presenter AND immediately record\"), run heygen-avatar first, then heygen-video. Returns avatar_id + voice_id — pass directly to heygen-video to create HeyGen videos. NOT for: generating videos (use heygen-video), translating videos, or TTS-only tasks.",
       "directory": "heygen-avatar"
     },
     {
+      "name": "heygen-translate",
+      "description": "Translate and dub a video into another language with voice cloning and lip-sync, powered by HeyGen Video Translation. The presenter keeps their face, their voice is cloned into the target language, and lips re-sync to the new audio — viewers see the same person speaking natively. Use when: (1) localizing an existing video into one or more languages (\"translate this video to Spanish\", \"make this in French and German\", \"dub this into Japanese\", \"I need this in 10 languages for a launch\"), (2) the user has a finished video and wants the SAME presenter speaking another language (not a new presenter — that's heygen-video), (3) podcast / audio-only translation (\"translate this podcast\", \"dub the audio but keep my video\"), (4) high-stakes translations where the user wants to review/edit subtitles before final render (the proofreads workflow), (5) \"translate my video\", \"dub this\", \"localize this clip\", \"make a multilingual version\", \"subtitle and dub\". Returns the translated video URL (or audio file for audio-only mode), one per target language. Chain signal: if the user wants to CREATE a new video in another language (no source video exists yet), route to heygen-video and write the script in the target language — do not use heygen-translate. Use heygen-translate only when there is an existing source video to localize. NOT for: creating new videos from scratch (use heygen-video), avatar creation (use heygen-avatar), TTS-only synthesis (use heygen-video with audio-only output), or text-only translation.",
+      "directory": "heygen-translate"
+    },
+    {
       "name": "heygen-video",
-      "description": "|",
+      "description": "Generate HeyGen presenter videos via the v3 Video Agent pipeline — handles Frame Check (aspect ratio correction), prompt engineering, avatar resolution, and voice selection. Required for any HeyGen video generation. Replaces deprecated endpoints with v3. Use when: (1) generating any HeyGen video (via API or otherwise), (2) sending a personalized video message (outreach, update, announcement, pitch, knowledge), (3) creating a HeyGen presenter-led explainer, tutorial, or product demo with a human face, (4) \"make a video of me saying...\", \"send a video to my leads\", \"record an update for my team\", \"create a video pitch\", \"make a loom-style message\", \"I want to appear in this video\", \"generate a HeyGen video\", \"make a talking head video\". Accepts avatar_id from heygen-avatar for identity-first HeyGen videos, or uses a stock presenter. Returns video share URL + HeyGen session URL for iteration. Chain signal: when the user wants to create/design an avatar AND make a video in the same request, run heygen-avatar first, then return here. Conjunctions to watch: \"and then\", \"and immediately\", \"first...then\", \"X and make a video\", \"design [presenter] and record\" = always CHAIN. If the user provides a photo AND wants a video, route to heygen-avatar first. NOT for: avatar creation or identity setup (use heygen-avatar first), cinematic footage or b-roll without a presenter, translating videos, TTS-only, or streaming avatars.",
       "directory": "heygen-video"
     }
   ]

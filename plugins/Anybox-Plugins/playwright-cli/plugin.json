@@ -57,7 +57,7 @@
   "skillPreviews": [
     {
       "name": "playwright-cli",
-      "description": "Inspect, test, debug, screenshot, trace, and automate websites through Playwright Agent CLI shell commands.",
+      "description": "Use when the user asks to inspect, test, debug, screenshot, trace, or automate a website or Playwright test flow through Playwright Agent CLI shell commands, including local web apps, browser sessions, snapshots, element refs, storage state, network mocking, console inspection, and visual verification.",
       "directory": "playwright-cli"
     }
   ]

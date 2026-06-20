@@ -1,6 +1,10 @@
 interface:
-  display_name: "twilio-identity-verification-advisor"
-  short_description: "Twilio skill guidance for twilio-identity-verification-advisor"
-  icon_small: "../../assets/logo.svg"
-  icon_large: "../../assets/logo.svg"
-  brand_color: "#F22F46"
+  display_name: "Identity Verification Advisor"
+  short_description: "Planning skill for identity verification and fraud prevention. Recommends the right Twilio Verify + Lookup architecture for login, signup, and risk-adaptive verification."
+  icon_small: "./assets/icon-small.png"
+  icon_large: "./assets/icon-large.png"
+  brand_color: "#EF223A"
+  default_prompt: "What's the best way to verify user identities and prevent fraud with Twilio?"
+
+policy:
+  allow_implicit_invocation: true

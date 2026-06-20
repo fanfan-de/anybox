@@ -1,9 +1,9 @@
 {
   "name": "vercel",
-  "version": "0.21.0",
-  "description": "Build and deploy web apps and agents",
+  "version": "0.44.0",
+  "description": "Comprehensive Vercel ecosystem plugin — relational knowledge graph, skills for every major product, specialized agents, and Vercel conventions. Turns any AI agent into a Vercel expert.",
   "author": {
-    "name": "Vercel Labs",
+    "name": "Vercel",
     "url": "https://github.com/vercel"
   },
   "homepage": "https://vercel.com/",
@@ -52,37 +52,17 @@
       "Which Vercel tools fit this app best",
       "Help wire the Vercel app into this workflow"
     ],
-    "composerIcon": "./assets/app-icon.png",
-    "logo": "./assets/app-icon.png",
+    "composerIcon": "./assets/vercel.svg",
+    "logo": "./assets/vercel.svg",
     "screenshots": [],
     "brandColor": "#000000"
   },
   "skills": "./skills/",
   "skillPreviews": [
     {
-      "name": "agent-browser",
-      "description": "Browser automation CLI for AI agents. Use when the user needs to interact with websites, verify dev server output, test web apps, navigate pages, fill forms, click buttons, take screenshots, extract data, or automate any browser task. Also triggers when a dev server starts so you can verify it visually.",
-      "directory": "agent-browser"
-    },
-    {
-      "name": "agent-browser-verify",
-      "description": "Automated browser verification for dev servers. Triggers when a dev server starts to run a visual gut-check with agent-browser — verifies the page loads, checks for console errors, validates key UI elements, and reports pass/fail before continuing.",
-      "directory": "agent-browser-verify"
-    },
-    {
-      "name": "ai-elements",
-      "description": "AI Elements component library guidance — pre-built React components for AI interfaces built on shadcn/ui. Use when building chat UIs, message displays, tool call rendering, streaming responses, reasoning panels, or any AI-native interface with the AI SDK.",
-      "directory": "ai-elements"
-    },
-    {
       "name": "ai-gateway",
       "description": "Vercel AI Gateway expert guidance. Use when configuring model routing, provider failover, cost tracking, or managing multiple AI providers through a unified API.",
       "directory": "ai-gateway"
-    },
-    {
-      "name": "ai-generation-persistence",
-      "description": "AI generation persistence patterns — unique IDs, addressable URLs, database storage, and cost tracking for every LLM generation",
-      "directory": "ai-generation-persistence"
     },
     {
       "name": "ai-sdk",
@@ -105,24 +85,9 @@
       "directory": "chat-sdk"
     },
     {
-      "name": "cms",
-      "description": "Headless CMS integration guidance — Sanity (native Vercel Marketplace), Contentful, DatoCMS, Storyblok, and Builder.io. Covers studio setup, content modeling, preview mode, revalidation webhooks, and Visual Editing. Use when building content-driven sites with a headless CMS on Vercel.",
-      "directory": "cms"
-    },
-    {
-      "name": "cron-jobs",
-      "description": "Vercel Cron Jobs configuration and best practices. Use when adding, editing, or debugging scheduled tasks in vercel.json.",
-      "directory": "cron-jobs"
-    },
-    {
       "name": "deployments-cicd",
       "description": "Vercel deployment and CI/CD expert guidance. Use when deploying, promoting, rolling back, inspecting deployments, building with --prebuilt, or configuring CI workflow files for Vercel.",
       "directory": "deployments-cicd"
-    },
-    {
-      "name": "email",
-      "description": "Email sending integration guidance — Resend (native Vercel Marketplace) with React Email templates. Covers API setup, transactional emails, domain verification, and template patterns. Use when sending emails from a Vercel-deployed application.",
-      "directory": "email"
     },
     {
       "name": "env-vars",
@@ -130,39 +95,24 @@
       "directory": "env-vars"
     },
     {
-      "name": "geist",
-      "description": "Expert guidance for Geist, Vercel's default typography system and font family for precise Next.js interfaces. Use when configuring Geist Sans, Geist Mono, or Geist Pixel, setting up font imports, or applying Vercel typography and aesthetic guidance.",
-      "directory": "geist"
-    },
-    {
-      "name": "geistdocs",
-      "description": "Expert guidance for Geistdocs, Vercel's documentation template built with Next.js and Fumadocs — MDX authoring, configuration, AI chat, i18n, feedback, deployment. Use when creating documentation sites, configuring geistdocs, writing MDX content, or setting up docs infrastructure.",
-      "directory": "geistdocs"
-    },
-    {
-      "name": "investigation-mode",
-      "description": "Orchestrated debugging coordinator. Triggers on frustration signals (stuck, hung, broken, waiting) and systematically triages: runtime logs → workflow status → browser verify → deploy/env. Reports findings at every step.",
-      "directory": "investigation-mode"
-    },
-    {
-      "name": "json-render",
-      "description": "AI chat response rendering guidance — handling UIMessage parts, tool call displays, streaming states, and structured data presentation. Use when building custom chat UIs, rendering tool results, or troubleshooting AI response display issues.",
-      "directory": "json-render"
+      "name": "knowledge-update",
+      "description": "Corrects outdated LLM knowledge about the Vercel platform and introduces new products. Injected at session start.",
+      "directory": "knowledge-update"
     },
     {
       "name": "marketplace",
-      "description": "Vercel Marketplace expert guidance — discovering, installing, and building integrations, auto-provisioned environment variables, unified billing, and the vercel integration CLI. Use when consuming third-party services, building custom integrations, or managing marketplace resources on Vercel.",
+      "description": "Vercel Marketplace expert guidance — discovering, installing, and managing integrations via the `vercel integration` CLI, with auto-provisioned environment variables and unified billing. Use when consuming third-party services on Vercel.",
       "directory": "marketplace"
     },
     {
-      "name": "micro",
-      "description": "Expert guidance for micro — asynchronous HTTP microservices framework by Vercel. Use when building lightweight HTTP servers, API endpoints, or microservices using the micro library.",
-      "directory": "micro"
+      "name": "microfrontends",
+      "description": "Guide for building, configuring, and deploying microfrontends on Vercel. Use this skill when the user mentions microfrontends, multi-zones, splitting an app across teams, independent deployments, cross-app routing, incremental migration, composing multiple frontends under one domain, microfrontends.json, @vercel/microfrontends, the microfrontends local proxy, or path-based routing between Vercel projects. Also use when the user asks about shared layouts across projects, navigation between microfrontends, fallback environments, asset prefixes, or feature flag controlled routing.",
+      "directory": "microfrontends"
     },
     {
-      "name": "ncc",
-      "description": "Expert guidance for @vercel/ncc — a simple CLI for compiling Node.js modules into a single file with all dependencies included. Use when bundling serverless functions, CLI tools, or any Node.js project into a self-contained file.",
-      "directory": "ncc"
+      "name": "next-cache-components",
+      "description": "Next.js 16 Cache Components guidance — PPR, use cache directive, cacheLife, cacheTag, updateTag, and migration from unstable_cache. Use when implementing partial prerendering, caching strategies, or migrating from older Next.js cache patterns.",
+      "directory": "next-cache-components"
     },
     {
       "name": "next-forge",
@@ -170,19 +120,14 @@
       "directory": "next-forge"
     },
     {
+      "name": "next-upgrade",
+      "description": "Upgrade Next.js to the latest version following official migration guides and codemods. Use when upgrading Next.js versions, running codemods, or migrating between major releases.",
+      "directory": "next-upgrade"
+    },
+    {
       "name": "nextjs",
       "description": "Next.js App Router expert guidance. Use when building, debugging, or architecting Next.js applications — routing, Server Components, Server Actions, Cache Components, layouts, middleware/proxy, data fetching, rendering strategies, and deployment on Vercel.",
       "directory": "nextjs"
-    },
-    {
-      "name": "observability",
-      "description": "Vercel Observability expert guidance — Drains (logs, traces, speed insights, web analytics), Web Analytics, Speed Insights, runtime logs, custom events, OpenTelemetry integration, and monitoring dashboards. Use when instrumenting, debugging, or optimizing application performance and user experience on Vercel.",
-      "directory": "observability"
-    },
-    {
-      "name": "payments",
-      "description": "Stripe payments integration guidance — native Vercel Marketplace setup, checkout sessions, webhook handling, subscription billing, and the Stripe SDK. Use when implementing payments, subscriptions, or processing transactions.",
-      "directory": "payments"
     },
     {
       "name": "react-best-practices",
@@ -200,24 +145,9 @@
       "directory": "runtime-cache"
     },
     {
-      "name": "satori",
-      "description": "Expert guidance for Satori — Vercel's library that converts HTML and CSS to SVG, commonly used to generate dynamic OG images for Next.js and other frameworks.",
-      "directory": "satori"
-    },
-    {
       "name": "shadcn",
       "description": "shadcn/ui expert guidance — CLI, component installation, composition patterns, custom registries, theming, Tailwind CSS integration, and high-quality interface design. Use when initializing shadcn, adding components, composing product UI, building custom registries, configuring themes, or troubleshooting component issues.",
       "directory": "shadcn"
-    },
-    {
-      "name": "sign-in-with-vercel",
-      "description": "Sign in with Vercel guidance — OAuth 2.0/OIDC identity provider for user authentication via Vercel accounts. Use when implementing user login with Vercel as the identity provider.",
-      "directory": "sign-in-with-vercel"
-    },
-    {
-      "name": "swr",
-      "description": "SWR data-fetching expert guidance. Use when building React apps with client-side data fetching, caching, revalidation, mutations, optimistic UI, pagination, or infinite loading using the SWR library.",
-      "directory": "swr"
     },
     {
       "name": "turbopack",
@@ -225,39 +155,24 @@
       "directory": "turbopack"
     },
     {
-      "name": "turborepo",
-      "description": "Turborepo expert guidance. Use when setting up or optimizing monorepo builds, configuring task caching, remote caching, parallel execution, or the --affected flag for incremental CI.",
-      "directory": "turborepo"
-    },
-    {
-      "name": "v0-dev",
-      "description": "v0 by Vercel expert guidance. Use when discussing AI code generation, generating UI components from prompts, v0 CLI usage, v0 SDK/API integration, or integrating v0 into development workflows with GitHub and Vercel deployment.",
-      "directory": "v0-dev"
-    },
-    {
       "name": "vercel-agent",
       "description": "Vercel Agent guidance — AI-powered code review, incident investigation, and SDK installation. Automates PR analysis and anomaly debugging. Use when configuring or understanding Vercel's AI development tools.",
       "directory": "vercel-agent"
     },
     {
-      "name": "vercel-api",
-      "description": "Vercel app and REST API expert guidance. Use when the agent needs live access to Vercel projects, deployments, environment variables, domains, logs, or documentation through the connected Vercel app or REST API.",
-      "directory": "vercel-api"
-    },
-    {
       "name": "vercel-cli",
-      "description": "Vercel CLI expert guidance. Use when deploying, managing environment variables, linking projects, viewing logs, managing domains, or interacting with the Vercel platform from the command line.",
+      "description": "Vercel CLI expert guidance. Use when deploying, managing environment variables, linking projects, viewing logs, querying metrics, managing domains, or interacting with the Vercel platform from the command line.",
       "directory": "vercel-cli"
     },
     {
-      "name": "vercel-firewall",
-      "description": "Vercel Firewall and security expert guidance. Use when configuring DDoS protection, WAF rules, rate limiting, bot filtering, IP allow/block lists, OWASP rulesets, Attack Challenge Mode, or any security configuration on the Vercel platform.",
-      "directory": "vercel-firewall"
+      "name": "vercel-connect",
+      "description": "Vercel Connect expert guidance — securely obtain scoped OAuth tokens for third-party services (Slack, GitHub, MCP servers, OAuth, Snowflake) on behalf of apps or users via Vercel OIDC. Use when wiring up third-party API access, connecting to MCP servers, sending Slack messages, accessing GitHub APIs, receiving webhook events from Slack/Linear/GitHub and forwarding them to your agents and apps, or building Eve agent connections.",
+      "directory": "vercel-connect"
     },
     {
-      "name": "vercel-flags",
-      "description": "Vercel Flags guidance — feature flags platform with unified dashboard, Flags Explorer, gradual rollouts, A/B testing, and provider adapters. Use when implementing feature flags, experimentation, or staged rollouts.",
-      "directory": "vercel-flags"
+      "name": "vercel-firewall",
+      "description": "Vercel Firewall expert guidance — automatic DDoS mitigation, the Vercel WAF (custom rules, IP blocking, managed rulesets, rate limiting), Attack Mode, system bypass, bot management, and the `vercel firewall` CLI. Use when configuring platform-level security, responding to attacks, or staging firewall rules.",
+      "directory": "vercel-firewall"
     },
     {
       "name": "vercel-functions",
@@ -265,19 +180,9 @@
       "directory": "vercel-functions"
     },
     {
-      "name": "vercel-queues",
-      "description": "Vercel Queues guidance (public beta) — durable event streaming with topics, consumer groups, retries, and delayed delivery. $0.60/1M ops. Powers Workflow DevKit. Use when building async processing, fan-out patterns, or event-driven architectures.",
-      "directory": "vercel-queues"
-    },
-    {
       "name": "vercel-sandbox",
       "description": "Vercel Sandbox guidance — ephemeral Firecracker microVMs for running untrusted code safely. Supports AI agents, code generation, and experimentation. Use when executing user-generated or AI-generated code in isolation.",
       "directory": "vercel-sandbox"
-    },
-    {
-      "name": "vercel-services",
-      "description": "Vercel Services — deploy multiple services within a single Vercel project. Use for monorepo layouts or when combining a backend (Python, Go) with a frontend (Next.js, Vite) in one deployment.",
-      "directory": "vercel-services"
     },
     {
       "name": "vercel-storage",

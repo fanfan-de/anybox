@@ -1,6 +1,6 @@
 {
   "name": "google-drive",
-  "version": "0.1.0",
+  "version": "0.1.7",
   "description": "Use Google Drive as the single entrypoint for Drive, Docs, Sheets, and Slides work.",
   "author": {
     "name": "OpenAI",
@@ -36,8 +36,8 @@
       "Interactive",
       "Write"
     ],
-    "composerIcon": "./assets/app-icon.png",
-    "logo": "./assets/app-icon.png",
+    "composerIcon": "./assets/logo.png",
+    "logo": "./assets/logo.png",
     "websiteURL": "https://workspace.google.com/products/drive/",
     "privacyPolicyURL": "https://policies.google.com/privacy",
     "termsOfServiceURL": "https://policies.google.com/terms",
@@ -51,7 +51,7 @@
   "skillPreviews": [
     {
       "name": "google-docs",
-      "description": "Documents-first net-new Google Docs creation plus connector-first Google Docs editing in local Codex plugin sessions, with target-document checks, connector-readback verification, and reference routing for formatting, citations, tables, and write-safety.",
+      "description": "Connector-first Google Docs creation and editing in local Codex plugin sessions, with direct native create and batchUpdate workflows for simple docs, DOCX-first import for polished deliverables, target-document checks, smart chip and building-block reconstruction, connector-readback verification, and reference routing for formatting, citations, tables, and write-safety.",
       "directory": "google-docs"
     },
     {
@@ -71,7 +71,7 @@
     },
     {
       "name": "google-slides",
-      "description": "Google Slides work for finding, reading, summarizing, creating, importing, visual cleanup, template migration, structural repair, and content edits in native Slides decks.",
+      "description": "Google Slides work for finding, reading, summarizing, creating, importing, template following, visual cleanup, source-deck adaptation, structural repair, and content edits in native Slides decks.",
       "directory": "google-slides"
     }
   ]

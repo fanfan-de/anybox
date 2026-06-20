@@ -1,13 +1,29 @@
 # Request Shapes And Write Safety
 
-When to read: any task that writes through connector APIs.
+When to read: non-meeting structural connector writes, table/form-like template edits, or any connector write that is not fully covered by a task-specific fast-path reference.
 
-## `google_docs_batch_update` Request Shape
+## Contents
+
+- `mcp__codex_apps__google_drive._batch_update_document` Request Shape
+- Tab-Aware Calls
+- Request Key Reference
+- API Capability Boundaries
+- Range Safety
+- Local Style Baseline
+- Existing Table Writes
+
+## `mcp__codex_apps__google_drive._batch_update_document` Request Shape
 
 Always pass `requests` as structured objects, not stringified JSON.
 Pass `write_control` as an object when using it, not as stringified JSON.
 For concurrency-sensitive writes, prefer the latest connector-visible revision id in `write_control`; set either `requiredRevisionId` or `targetRevisionId`, not both.
 Requests execute in order, so sequence dependent edits deliberately.
+Preflight every hand-authored batch before calling the connector:
+
+- Each `requests` array item must be an object with exactly one Google Docs request key.
+- No request item may be an empty object, a JSON string, or a union of multiple request types.
+- Field names must belong to the selected Docs request shape. Do not reuse Sheets, Slides, or Drive field names inside Docs requests.
+- For destructive or index-sensitive edits, resolve the target range from current connector readback immediately before composing the request. Do not reuse stale start or end indexes after insertions, deletions, table edits, image insertion, or tab changes.
 
 Bad:
 
@@ -37,9 +53,8 @@ Good:
 If document tabs exist, include the resolved `tabId` on all relevant reads and writes:
 
 - `get_document`
-- `get_document_text`
-- range/find calls
-- `batch_update`
+- targeted follow-up range/find calls after the cache is stale or insufficient
+- `mcp__codex_apps__google_drive._batch_update_document`
 
 Missing `tabId` is a common reason edits land in the wrong location.
 
@@ -55,19 +70,42 @@ When the connector supports the corresponding Google Docs request shape, use the
 - Document layout and structure: `updateDocumentStyle`, `updateSectionStyle`, `insertPageBreak`, `insertSectionBreak`
 - Headers, footers, and notes: `createHeader`, `deleteHeader`, `createFooter`, `deleteFooter`, `createFootnote`
 - Tabs: `addDocumentTab`, `deleteTab`, `updateDocumentTabProperties`
-- People: `insertPerson`
+- Supported smart chips: `insertDate`, `insertPerson`, `insertRichLink`
+
+For calendar-backed Meeting notes, read `reference-meeting-notes-direct.md`. For simple supported-chip writes, `reference-direct-request-composition.md` is sufficient. For other smart chips and building-block-like content, read `reference-smart-chips-and-building-blocks.md` before writing. Exact text range helpers may not find chip display text even when `get_document` exposes that display text in `dateElement`, `person`, or `richLink` properties.
+Google Docs accepts at most 10 `insertPerson` requests in one `batchUpdate` call. For person-heavy chip writes, split the request array into sequential connector batches and re-read between batches when using revision guards.
+
+## API Capability Boundaries
+
+Use `documents.get` as the source of truth for structure. It exposes connector-visible tabs, body content, paragraph elements, tables, inline objects, lists, text styles, paragraph styles, supported smart chips, headers, footers, footnotes, and revision ids.
+
+Use `mcp__codex_apps__google_drive._create_file` to create blank or basic native Google Docs when `reference-native-create-direct.md` selects the connector-native route.
+
+Use `documents.batchUpdate` as the write primitive for native Google Docs content writes. It validates the request batch before applying it, applies valid batches atomically, and supports `writeControl` for concurrency-sensitive writes.
+
+Use Drive APIs around Docs operations when they fit the task:
+
+- `files.copy` for whole-document template duplication when exact global template parity matters
+- `files.export` to `text/html`, `.docx`, or `application/pdf` for verification and handoff when the task is layout-sensitive, table-heavy, figure-heavy, style-ambiguous, or explicitly requests an export.
+- Drive comments and replies for comment workflows, because comments are not part of Docs `batchUpdate`
+
+For calendar-backed Meeting notes, follow `reference-meeting-notes-direct.md`; it owns Calendar event lookup and event-payload handling.
+
+Do not claim support for true suggestion-mode edits through `batchUpdate`; it creates direct document edits. Do not claim support for arbitrary Google Docs UI building blocks as a single API object unless a connector read and write path for that object has been verified in the current workflow.
+For UI-only building blocks, exact parity requires copying a UI-inserted exemplar or template and editing supported child content in place. Recreating the visible text and table cells through `batchUpdate` is an approximation unless readback confirms every required native child component came from the copied exemplar.
 
 ## Range Safety
 
 Before destructive writes:
 
-1. Resolve target ranges from a fresh read.
+1. Resolve target ranges from current connector readback, or from a fresh read if the prior read is stale.
 2. Confirm first and last paragraphs are the intended body region.
-3. Write one chunk.
-4. Verify before the next chunk.
-5. Treat post-insertion style work as a new range-resolution step, not as a continuation of the insertion step. Re-read after content insertion before applying links, bolding, or heading fixes.
-6. Treat figure insertion as another new range-resolution step. Re-read the intended insertion block before placing any connector-supported image after a text edit.
-7. For write-capability questions, prefer a minimal pilot write and readback over a verbal inference about connector limits.
+3. Confirm every request item has exactly one Docs request key and still targets the live range.
+4. Write one chunk.
+5. Verify before the next chunk.
+6. Treat post-insertion style work as a new range-resolution step, not as a continuation of the insertion step. Re-read after content insertion before applying links, bolding, or heading fixes.
+7. Treat figure insertion as another new range-resolution step. Re-read the intended insertion block before placing any connector-supported image after a text edit.
+8. For write-capability questions, prefer a minimal pilot write and readback over a verbal inference about connector limits.
 
 ## Local Style Baseline
 

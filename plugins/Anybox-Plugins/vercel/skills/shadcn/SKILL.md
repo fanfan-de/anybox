@@ -21,6 +21,29 @@ metadata:
     - '\bbunx\s+create-next-app\b'
     - '\bpnpm\s+create\s+next-app\b'
     - '\bnpm\s+create\s+next-app\b'
+validate:
+  -
+    pattern: '"base"\s*:\s*"base-ui"'
+    message: 'AI Elements components use Radix-specific APIs (asChild, openDelay) and have type errors with Base UI. If this project uses AI Elements, reinitialize with: npx shadcn@latest init -d --base radix -f'
+    severity: warn
+retrieval:
+  aliases:
+    - shadcn ui
+    - component library
+    - ui components
+    - tailwind components
+  intents:
+    - add shadcn component
+    - set up shadcn
+    - customize theme
+    - build ui
+  entities:
+    - shadcn/ui
+    - Tailwind CSS
+    - registry
+    - theme
+    - components.json
+
 ---
 
 # shadcn/ui

@@ -54,29 +54,29 @@
   "skills": "./skills/",
   "skillPreviews": [
     {
-      "name": "obsidian-shared",
-      "description": "Set up, verify, troubleshoot, and target vaults for the official Obsidian CLI.",
-      "directory": "obsidian-shared"
+      "name": "obsidian-dev",
+      "description": "Use when developing, testing, reloading, debugging, inspecting, screenshotting, or diagnosing Obsidian community plugins, themes, commands, hotkeys, DOM, CSS, console output, or captured JavaScript errors through Obsidian CLI developer commands.",
+      "directory": "obsidian-dev"
     },
     {
       "name": "obsidian-notes",
-      "description": "Read, create, open, append, prepend, move, rename, template, and manage Obsidian Markdown notes.",
+      "description": "Use when reading, creating, opening, appending, prepending, moving, renaming, deleting, templating, or editing Markdown notes in an Obsidian vault through the official Obsidian CLI.",
       "directory": "obsidian-notes"
     },
     {
       "name": "obsidian-search",
-      "description": "Search and analyze Obsidian vault content, tags, links, backlinks, outlines, folders, and file lists.",
+      "description": "Use when searching or analyzing an Obsidian vault, including text search, search context, tags, links, backlinks, unresolved links, orphan notes, dead ends, outlines, recent files, folders, and file lists.",
       "directory": "obsidian-search"
     },
     {
-      "name": "obsidian-tasks",
-      "description": "List, create, append, update, toggle, complete, and summarize Obsidian tasks and daily-note tasks.",
-      "directory": "obsidian-tasks"
+      "name": "obsidian-shared",
+      "description": "Use when setting up, verifying, or troubleshooting the official Obsidian CLI, selecting a vault, checking CLI availability, or handling Obsidian CLI command failures.",
+      "directory": "obsidian-shared"
     },
     {
-      "name": "obsidian-dev",
-      "description": "Develop, reload, debug, inspect, screenshot, and diagnose Obsidian plugins and themes through CLI developer commands.",
-      "directory": "obsidian-dev"
+      "name": "obsidian-tasks",
+      "description": "Use when listing, creating, appending, updating, toggling, completing, or summarizing tasks and daily-note tasks in an Obsidian vault through the official Obsidian CLI.",
+      "directory": "obsidian-tasks"
     }
   ]
 }

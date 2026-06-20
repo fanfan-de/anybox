@@ -73,9 +73,9 @@ Video Agent rejects `text/html` content type in the `files[]` array. Web pages (
 
 **Symptom:** Video generation fails or produces errors immediately after creating a new avatar. The avatar exists in the HeyGen dashboard but videos referencing it fail.
 
-**Root Cause:** Avatar creation is asynchronous. `heygen avatar create` (and the equivalent creation flow in the HeyGen app) return success immediately, but the avatar image is still being processed. If you submit a video request before processing completes, it fails.
+**Root Cause:** Avatar creation is asynchronous. `heygen avatar create` (and `create_photo_avatar` / `create_prompt_avatar` MCP tools) return success immediately, but the avatar image is still being processed. If you submit a video request before processing completes, it fails.
 
-**Detection:** Poll with `heygen avatar looks list --group-id <group_id>` (or check the avatar-looks view in the HeyGen app). The avatar is NOT ready until:
+**Detection:** Poll with `heygen avatar looks list --group-id <group_id>` (or MCP `list_avatar_looks`). The avatar is NOT ready until:
 - `preview_image_url` is non-null
 - `image_width` and `image_height` are non-zero
 
@@ -142,7 +142,7 @@ Two ways to generate a video. Different pricing, different trade-offs.
 
 | | **Direct Video** | **Video Agent** |
 |---|-------------------|-----------------|
-| Command / Tool | `heygen video create` / no app equivalent documented here | `heygen video-agent create` / app-based Video Agent flow |
+| Command / Tool | `heygen video create` / no MCP tool yet | `heygen video-agent create` / `create_video_agent` |
 | Input | Full script + avatar + voice + scene JSON | Prompt + optional avatar/voice/style |
 | Control | You author every scene | Video Agent plans scenes, pacing, motion |
 | Pricing | ~$0.0333/sec | ~$0.10/sec |

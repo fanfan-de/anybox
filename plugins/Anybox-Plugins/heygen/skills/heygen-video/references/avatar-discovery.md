@@ -3,7 +3,7 @@
 This guide covers *avatar discovery for video generation* — how heygen-video
 finds an appropriate presenter (or skips presenter entirely) before calling
 the Video Agent. For *avatar creation*, see `heygen-avatar` and
-[`../../heygen-avatar/references/avatar-creation.md`](../../heygen-avatar/references/avatar-creation.md).
+[`heygen-avatar/references/avatar-creation.md`](https://github.com/heygen-com/skills/blob/master/heygen-avatar/references/avatar-creation.md).
 
 ## Path 0: Resolve workspace AVATAR files first
 
@@ -40,7 +40,7 @@ browsing requested) — fall through to Path A below.
 
 **If user specifies an avatar by name** (e.g. "use Eve's Podcast look"), take the fast path:
 
-**App:** use the HeyGen app to browse private avatar looks and filter client-side by name match.
+**MCP:** `list_avatar_looks(ownership=private)` — filter client-side by name match.
 **CLI:**
 ```bash
 heygen avatar looks list --ownership private --limit 50
@@ -49,9 +49,9 @@ Avoids the 2-call group→looks pattern.
 
 **If user wants to browse**, use the group-first flow:
 
-**App:**
-1. Browse private avatar groups (each group = one person)
-2. Open a group to view its available looks
+**MCP:**
+1. `list_avatar_groups(ownership=private)` — list groups (each group = one person)
+2. `list_avatar_looks(group_id=<group_id>)` — show looks for chosen group
 
 **CLI:**
 ```bash
@@ -69,7 +69,7 @@ Avatar types: `studio_avatar`, `video_avatar`, `photo_avatar`. Photo avatars sup
 
 Check `heygen-video-log.jsonl` for last used avatar_id. If found:
 
-**App:** inspect the selected look in the HeyGen app.
+**MCP:** `get_avatar_look(look_id=<look_id>)`
 **CLI:** `heygen avatar looks get --look-id <look_id>`
 
 Show preview image: "Last time you used [Avatar Name]. Use her again?"
@@ -82,7 +82,7 @@ If voice-over only → no `avatar_id`. State in prompt: "Voice-over narration on
 
 If presenter wanted, present private avatars first. For public/stock avatars, browse by group:
 
-**App:** use the HeyGen app to browse public avatar groups.
+**MCP:** `list_avatar_groups(ownership=public)`
 **CLI:**
 ```bash
 heygen avatar list --ownership public --limit 20
@@ -90,7 +90,7 @@ heygen avatar list --ownership public --limit 20
 
 Show group names + one representative image. Let the user pick a person.
 
-**App:** use the HeyGen app to inspect looks for the selected avatar group.
+**MCP:** `list_avatar_looks(group_id=<group_id>)`
 **CLI:**
 ```bash
 heygen avatar looks list --group-id <group_id> --limit 10
@@ -104,7 +104,7 @@ After avatar is settled, confirm voice preferences (accent, delivery style, lang
 
 **ALWAYS show a playable voice preview.** Each voice response includes `preview_audio_url` — share it.
 
-**Handling missing/broken previews:** Some voices may not expose a usable preview URL and can return `null`. When this happens: note "(no preview available)" and offer to generate a short TTS sample via the app's preview flow or `heygen voice speech create --text "<sample>" --voice-id <id> --input-type plain_text --language en --locale en-US` (CLI).
+**Handling missing/broken previews:** Some voices return bare `s3://` paths or `null`. When this happens: note "(no preview available)" and offer to generate a short TTS sample via `create_speech` (MCP) or `heygen voice speech create --text "<sample>" --voice-id <id> --input-type plain_text --language en --locale en-US` (CLI).
 
 ---
 
@@ -112,7 +112,7 @@ After avatar is settled, confirm voice preferences (accent, delivery style, lang
 
 If no existing avatar fits and the user wants one created, route to the
 `heygen-avatar` skill. See
-[`../../heygen-avatar/references/avatar-creation.md`](../../heygen-avatar/references/avatar-creation.md)
+[`heygen-avatar/references/avatar-creation.md`](https://github.com/heygen-com/skills/blob/master/heygen-avatar/references/avatar-creation.md)
 for the full creation API surface (photo / prompt / digital twin), file
 input formats, and identity field mappings.
 
@@ -125,7 +125,7 @@ heygen-video resumes here at Path 0 to pick it up.
 
 Skip avatar creation. Pass `image_url` directly:
 
-**App:** use the HeyGen app's image-to-video flow when available.
+**MCP:** `create_video_from_image(image_url=<url>, script=<script>, voice_id=<voice_id>, aspect_ratio="16:9")`
 **CLI:**
 ```bash
 heygen video create -d '{
@@ -143,7 +143,7 @@ Also accepts `image_asset_id`. Fastest path for one-off talking-head video.
 
 Voice catalog browsing for video generation:
 
-**App:** browse available voices in the HeyGen app, filtered to the target language and voice characteristics when possible.
+**MCP:** `list_voices(type=private)` then `list_voices(type=public, language=<lang>, gender=<gender>)`
 **CLI:**
 ```bash
 heygen voice list --type private --limit 20
@@ -154,13 +154,13 @@ heygen voice list --type public --engine starfish --language en --gender female 
 
 For voice *design* (semantic search by description) and the full voice
 selection workflow during avatar setup, see
-[`../../heygen-avatar/references/avatar-creation.md`](../../heygen-avatar/references/avatar-creation.md).
+[`heygen-avatar/references/avatar-creation.md`](https://github.com/heygen-com/skills/blob/master/heygen-avatar/references/avatar-creation.md).
 
 ---
 
 ## How Avatar/Voice Are Passed
 
-**App:** use the HeyGen app's video-generation flow with the chosen avatar, voice, style, and orientation.
+**MCP:** `create_video_agent(prompt=<prompt>, avatar_id=<look_id>, voice_id=<voice_id>, style_id=<optional>, orientation=<orientation>)`
 
 **CLI:** `heygen video-agent create` with flags:
 ```bash

@@ -1,6 +1,10 @@
 interface:
-  display_name: "twilio-messaging-overview"
-  short_description: "Twilio skill guidance for twilio-messaging-overview"
-  icon_small: "../../assets/logo.svg"
-  icon_large: "../../assets/logo.svg"
-  brand_color: "#F22F46"
+  display_name: "Messaging Overview"
+  short_description: "Twilio Messaging channel overview and onboarding guide. Covers all channels, the unified Messages API, channel selection, and recommended setup sequence."
+  icon_small: "./assets/icon-small.png"
+  icon_large: "./assets/icon-large.png"
+  brand_color: "#EF223A"
+  default_prompt: "What messaging channels does Twilio support and how do I get started?"
+
+policy:
+  allow_implicit_invocation: true

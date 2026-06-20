@@ -1,24 +1,241 @@
-# heygen
+# HeyGen Skills
 
-OpenAI Codex plugin for [HeyGen](https://heygen.com) — create AI avatar videos and personalized video messages.
+AI agent skills for creating avatar videos. Your agent gets a face, a voice, and the ability to send video like a message.
 
-## What's included
+Works with Claude Code, OpenClaw, Codex, Cursor, and other AI coding agents.
 
-Two skills that chain together:
+```
+"Bring yourself to life — create your own avatar and make a 30-second intro video of yourself. Use heygen-avatar and heygen-video, ask me anything before you start."
+→ reads your agent's identity files → asks only what's missing → builds the agent's avatar → picks the best style → generates the video → delivers the share link
+```
 
-- **heygen-avatar** — turn a photo into a persistent digital twin. Handles avatar lookup, instant-avatar creation, voice selection (or voice cloning), and writes an `AVATAR` file the video skill reads back.
-- **heygen-video** — generate identity-first presenter videos via the HeyGen v3 Video Agent pipeline. Encodes the prompting, asset routing, aspect-ratio correction, and avatar/voice resolution that good HeyGen videos need.
-- **HeyGen app reference** — `.app.json` points at the curated [HeyGen ChatGPT app](https://chatgpt.com/apps/heygen/asdk_app_69418aad55e08191aa5e437b649ca2e4).
+## Install
+
+**Paste this into your agent.** It does the rest — clones the repo to the right path, asks for your HeyGen API key, picks the best transport, runs a verify test, and ends with a working video.
+
+```
+Read https://raw.githubusercontent.com/heygen-com/skills/master/INSTALL_FOR_AGENTS.md and follow it.
+Ask me for any API keys you need.
+```
+
+That's it. The agent fetches [INSTALL_FOR_AGENTS.md](./INSTALL_FOR_AGENTS.md) and walks the rest of the install. Same prompt forever — the install spec lives in the repo, not in your clipboard.
+
+Want to install manually instead? Follow the steps below.
+
+### Step 1 — Install the skills
+
+The repo ships three skills: `heygen-avatar`, `heygen-video`, and `heygen-translate`. Pick the install path that matches your tooling.
+
+**Option A: `gh skill install`** (works across Claude Code, Cursor, Codex, Gemini CLI, Copilot, Junie, Goose, OpenHands, Amp, Cline, OpenCode, Warp, and more — [agentskills.io](https://agentskills.io)):
+
+```bash
+gh skill install heygen-com/skills heygen-avatar
+gh skill install heygen-com/skills heygen-video
+gh skill install heygen-com/skills heygen-translate
+```
+
+Requires GitHub CLI v2.90+. The CLI writes to the right directory for your agent automatically.
+
+**Option B: ClawHub:**
+
+```bash
+clawhub install heygen-skills
+```
+
+**Option C: OpenClaw plugin** (bundles MCP support):
+
+```bash
+openclaw plugins install clawhub:@heygen/openclaw-plugin-heygen
+```
+
+**Option D: Git clone** (legacy path):
+
+| Agent | Install path |
+|-------|-------------|
+| **Claude Code** | `~/.claude/skills/heygen-skills` |
+| **OpenClaw** | `~/.openclaw/workspace/skills/heygen-skills` |
+| **Other** | Clone anywhere your agent loads skills from |
+
+```bash
+git clone --single-branch --depth 1 https://github.com/heygen-com/skills.git <install-path>/heygen-skills
+```
+
+After cloning, the three skills are auto-discovered at `heygen-avatar/SKILL.md`, `heygen-video/SKILL.md`, and `heygen-translate/SKILL.md`.
+
+### Step 2 — Get your HeyGen API key
+
+1. Go to **[app.heygen.com/api](https://app.heygen.com/api)** (Settings → API)
+2. Generate a new API key
+3. Save it somewhere safe — you can't view it again after the modal closes
+
+### Step 3 — Install the HeyGen CLI
+
+One-line install (macOS / Linux):
+
+```bash
+curl -fsSL https://static.heygen.ai/cli/install.sh | bash
+```
+
+Then set your API key:
+
+```bash
+export HEYGEN_API_KEY=<your-key>
+```
+
+That's ephemeral (current shell only). To persist across sessions, add `export HEYGEN_API_KEY=<your-key>` to your shell profile (`~/.zshrc`, `~/.bashrc`, or equivalent).
+
+Verify:
+
+```bash
+heygen --version
+heygen auth status
+```
+
+The [HeyGen CLI](https://github.com/heygen-com/heygen-cli) is a single static binary. No runtime deps.
+
+### Alternative: MCP (OAuth, no API key)
+
+If you prefer OAuth and already have a HeyGen plan with credits, connect the remote MCP server instead of setting an API key. The skills will auto-detect MCP when no `HEYGEN_API_KEY` is set.
+
+Claude Code:
+```bash
+claude mcp add --transport http heygen https://mcp.heygen.com/mcp/v1/
+```
+
+OpenClaw: add to `~/.openclaw/openclaw.json`:
+```json
+{
+  "mcp": {
+    "servers": {
+      "heygen": { "url": "https://mcp.heygen.com/mcp/v1/" }
+    }
+  }
+}
+```
+
+The first call triggers an OAuth consent flow in your browser.
+
+> **Priority:** If `HEYGEN_API_KEY` is set, the skills use the CLI. Otherwise they look for MCP tools. Set the key only if you want direct API access; otherwise use MCP.
+
+### Step 4 — Create your avatar
+
+Ask the user for a photo (URL or file), then use the **heygen-avatar** skill:
+
+> Create my HeyGen avatar from this photo: [user's photo]
+
+The skill uploads the photo, creates a persistent digital twin with a voice, and saves an `AVATAR-<NAME>.md` file for future use.
+
+### Step 5 — Make your first video
+
+Use the **heygen-video** skill to generate an intro video with the avatar you just created:
+
+> Make a 30-60 second video of me introducing myself, casual tone.
+
+The skill picks up the avatar automatically, writes a script, generates the video, and returns a share link.
+
+**That's it. You're set up.** The avatar persists — every future video reuses it automatically.
+
+---
+
+## What's Included
+
+Three skills that work standalone or chain together:
+
+| Skill | What it does | Invoke |
+|-------|-------------|--------|
+| **heygen-avatar** | Photo → persistent digital twin (face + voice). Reusable across every video. | `/heygen-avatar` |
+| **heygen-video** | Idea → script → prompt-engineered video with your avatar delivering the message. | `/heygen-video` |
+| **heygen-translate** | Existing video → translated and dubbed version with voice cloning and lip-sync. 175+ languages. | `/heygen-translate` |
+
+**heygen-avatar** creates the identity. **heygen-video** uses it. **heygen-translate** localizes finished videos.
+
+## How It Works
+
+```
+Photo / Description          Avatar File              Finished Video
+       ↓                        ↓                        ↓
+  heygen-avatar    →    AVATAR-NAME.md       →    heygen-video
+  (identity + voice)    (reusable state)          (script + video)
+```
+
+Skills communicate through `AVATAR-<NAME>.md` files. heygen-avatar writes them, heygen-video reads them. Human-readable and machine-readable.
+
+## Authentication
+
+The skills support two auth modes with explicit priority:
+
+| Priority | Mode | Trigger | Billing | Best for |
+|----------|------|---------|---------|----------|
+| 1 | **CLI (API key)** | `HEYGEN_API_KEY` is set | Direct API usage ($, separately billed) | Agents, CI, scripts |
+| 2 | **MCP (OAuth)** | MCP tools visible AND no API key | HeyGen plan credits (no extra billing) | Users on a HeyGen plan |
+| 3 | **CLI (fallback)** | `heygen auth login` session | Direct API usage ($) | Interactive CLI users |
+
+**Billing tradeoff:** CLI mode bills against your HeyGen API usage (separately metered). MCP mode consumes your existing HeyGen plan credits — no extra API billing. Pick the mode that matches how you want to be charged.
+
+### CLI with API key (recommended for agents)
+
+Get a key at **[app.heygen.com/api](https://app.heygen.com/api)**, then:
+
+```bash
+export HEYGEN_API_KEY=your-key-here
+```
+
+If `HEYGEN_API_KEY` is set, the skills use the CLI directly. No MCP probing. This is the most predictable setup for agent workflows.
+
+The [HeyGen CLI](https://github.com/heygen-com/heygen-cli) pattern is `heygen <noun> <verb>`. Output is JSON on stdout with stable exit codes.
+
+- **Verify**: `heygen auth status`
+- **Alternative login**: `heygen auth login` — interactive browser flow, persists to `~/.heygen/credentials`
+
+### MCP (OAuth, no API key)
+
+If you don't set an API key and HeyGen's remote MCP server is connected to your agent, the skills use MCP via OAuth. Calls run against your existing HeyGen plan credits.
+
+- Endpoint: `https://mcp.heygen.com/mcp/v1/`
+- Tool namespace: `mcp__heygen__*`
+- [MCP docs](https://developers.heygen.com/docs/mcp-remote)
+
+You can have both configured — if `HEYGEN_API_KEY` is set, CLI wins.
+
+## Things to Try
+
+After setup, try these prompts with your agent:
+
+| Prompt | What happens |
+|--------|-------------|
+| "Use heygen-avatar and heygen-video to make a 30-second cinematic intro of me as a founder. Ask me what you need." | Full pipeline: avatar → style recommendation → video. The wow moment. |
+| "I want to make a product launch video. Use heygen-video and suggest the best style for it." | Skill recommends from 20 curated styles (A24, editorial, clean tech, etc.) |
+| "Use heygen-avatar — I have a headshot. What kind of look would work best for a founder intro?" | Skill asks questions, recommends setting and tone before creating |
+| "Use heygen-video to summarize this article as a 60-second explainer from my avatar: [URL]" | Fetches content, extracts key points, scripts and generates the video |
+| "Use heygen-video to turn the key points from this PDF into a video update for my team: [file]" | PDF → script → avatar video. Any content becomes a video message. |
+| "Use heygen-video for my team's weekly update. Ask me what shipped before writing the script." | Skill interviews you first, then writes and generates |
+| "Use heygen-video to make a 20-second outreach video to a potential investor. What should I include?" | Skill guides the message, you approve the script, avatar delivers it |
+| "Use heygen-avatar to give me a new look — ask me what vibe I'm going for." | Discovery flow: skill suggests options (outdoor, studio, casual, cinematic) before committing |
 
 ## Requirements
 
-Installing the plugin connects the HeyGen ChatGPT app automatically (OAuth on first use). That is enough for the skills to work end-to-end on the user's existing HeyGen plan credits.
+- A HeyGen account — sign in via MCP (OAuth) or with an [API key](https://app.heygen.com/api) if you use the CLI fallback
+- An AI agent that supports skills (Claude Code, OpenClaw, Codex, Cursor, or similar)
+- No runtime dependencies. No packages. No build step.
 
-If you'd rather not use the app, the skills also support the HeyGen CLI: install it from <https://static.heygen.ai/cli/install.sh> and export `HEYGEN_API_KEY` (get one at <https://app.heygen.com/api>).
+## Security
 
-## Source of truth
+One optional shell script:
 
-The skills are authored in [`heygen-com/skills`](https://github.com/heygen-com/skills) (under `heygen-avatar/` and `heygen-video/` at the repo root) and mirrored here. The main structural delta in this mirror is the wrapping `skills/` parent directory required by the Codex plugin convention. File issues about skill content on that repo.
+- **`scripts/update-check.sh`** — compares your local `VERSION` against the latest on GitHub. Read-only, opt-in, no data transmitted.
+
+Data only leaves your machine through MCP / the `heygen` CLI (video generation) and optionally `raw.githubusercontent.com` (version check).
+
+## Looking for the v1 skills?
+
+The previous version of this repo had individual skills for TTS, video translation, faceswap, video editing, and more. Those skills are preserved at [heygen-com/skills-legacy](https://github.com/heygen-com/skills-legacy).
+
+## Links
+
+- [HeyGen API Docs](https://developers.heygen.com/docs/quick-start)
+- [Repository](https://github.com/heygen-com/skills)
+- [Contributing](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
 
 ## License
 

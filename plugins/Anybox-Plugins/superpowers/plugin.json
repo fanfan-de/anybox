@@ -1,6 +1,6 @@
 {
   "name": "superpowers",
-  "version": "5.1.0",
+  "version": "6.0.3",
   "description": "An agentic skills framework & software development methodology that works: planning, TDD, debugging, and collaboration workflows.",
   "author": {
     "name": "Jesse Vincent",
@@ -106,7 +106,7 @@
     },
     {
       "name": "using-superpowers",
-      "description": "Use when starting any conversation - establishes how to find and use skills, requiring Skill tool invocation before ANY response including clarifying questions",
+      "description": "Use when starting any conversation - establishes how to find and use skills, requiring skill invocation before ANY response including clarifying questions",
       "directory": "using-superpowers"
     },
     {

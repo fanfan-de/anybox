@@ -1,6 +1,6 @@
 {
   "name": "cloudflare",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Cloudflare platform plugin with curated skills for Workers, Wrangler, and Agents SDK plus the official Cloudflare API MCP server.",
   "author": {
     "name": "Cloudflare",
@@ -128,12 +128,12 @@
     },
     {
       "name": "building-ai-agent-on-cloudflare",
-      "description": "|",
+      "description": "Builds AI agents on Cloudflare using the Agents SDK with state management, real-time WebSockets, scheduled tasks, tool integration, and chat capabilities. Generates production-ready agent code deployed to Workers. Use when: user wants to \"build an agent\", \"AI agent\", \"chat agent\", \"stateful agent\", mentions \"Agents SDK\", needs \"real-time AI\", \"WebSocket AI\", or asks about agent \"state management\", \"scheduled tasks\", or \"tool calling\". Biases towards retrieval from Cloudflare docs over pre-trained knowledge.",
       "directory": "building-ai-agent-on-cloudflare"
     },
     {
       "name": "building-mcp-server-on-cloudflare",
-      "description": "|",
+      "description": "Builds remote MCP (Model Context Protocol) servers on Cloudflare Workers with tools, OAuth authentication, and production deployment. Generates server code, configures auth providers, and deploys to Workers. Use when: user wants to \"build MCP server\", \"create MCP tools\", \"remote MCP\", \"deploy MCP\", add \"OAuth to MCP\", or mentions Model Context Protocol on Cloudflare. Also triggers on \"MCP authentication\" or \"MCP deployment\". Biases towards retrieval from Cloudflare docs over pre-trained knowledge.",
       "directory": "building-mcp-server-on-cloudflare"
     },
     {

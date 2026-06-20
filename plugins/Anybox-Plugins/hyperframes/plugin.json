@@ -1,6 +1,6 @@
 {
   "name": "hyperframes",
-  "version": "0.6.117",
+  "version": "0.6.118",
   "description": "Write HTML, render video. Compositions, Tailwind v4 styles, GSAP and runtime adapter animations, captions, voiceovers, audio-reactive visuals, and website-to-video capture for HyperFrames.",
   "author": {
     "name": "HeyGen",
@@ -27,7 +27,6 @@
     "tts",
     "audio-reactive"
   ],
-  "skills": "./skills/",
   "interface": {
     "displayName": {
       "en-US": "HyperFrames by HeyGen",
@@ -35,15 +34,18 @@
     },
     "shortDescription": {
       "en-US": "Write HTML, render video",
-      "zh-CN": "编写 HTML，渲染视频"
+      "zh-CN": "Write HTML, render video"
     },
     "longDescription": {
       "en-US": "Build videos from HTML with HyperFrames. Author compositions with HTML, CSS, Tailwind v4 browser-runtime styles, GSAP, Anime.js, Lottie, Three.js, and WAAPI adapter patterns, use the CLI for the dev loop (init/preview/render), preprocess assets (tts/transcribe/remove-background) for compositions, install reusable registry blocks and components, and turn any website into a video with the 7-step capture-to-video pipeline.",
-      "zh-CN": "使用 HyperFrames 从 HTML 构建视频。通过 HTML、CSS、Tailwind v4 浏览器运行时样式、GSAP、Anime.js、Lottie、Three.js 和 WAAPI adapter 模式创作合成；使用 CLI 完成开发循环（init/preview/render）；为合成预处理素材（tts/transcribe/remove-background）；安装可复用的 registry blocks 和组件，并通过 7 步 capture-to-video 流水线把任意网站转换成视频。"
+      "zh-CN": "Build videos from HTML with HyperFrames. Author compositions with HTML, CSS, Tailwind v4 browser-runtime styles, GSAP, Anime.js, Lottie, Three.js, and WAAPI adapter patterns, use the CLI for the dev loop (init/preview/render), preprocess assets (tts/transcribe/remove-background) for compositions, install reusable registry blocks and components, and turn any website into a video with the 7-step capture-to-video pipeline."
     },
     "developerName": "HeyGen",
     "category": "Design",
-    "capabilities": ["Read", "Write"],
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
     "websiteURL": "https://hyperframes.heygen.com",
     "defaultPrompt": [
       "Turn this website into a 20-second product promo",
@@ -53,5 +55,93 @@
     "brandColor": "#0a0a0a",
     "composerIcon": "./assets/icon.png",
     "logo": "./assets/logo.png"
-  }
+  },
+  "skills": "./skills/",
+  "skillPreviews": [
+    {
+      "name": "embedded-captions",
+      "description": "Add captions to a talking-head video. ONE catalog (CATALOG.md) of 32 visual identities behind two engines: column-flow (captions composited INTO the scene — matte occlusion + mix-blend; cream/ink/editorial/keynote/documentary/loud/neon/glitch/chrome/velocity) and themed constitutions (anchor/ordnance/terminal/neonsign/stardust/stomp/scoreboard/transit/vhs/arcade/dossier/laser/thunder/hologram/biolume/aurora/spectrum/papercut/popup/chalkboard/graffiti/brush/inkwater/ransom/lastpage/nightcity — e.g. a glyph-decode climax, a neon sign WRITTEN stroke by stroke, or the quiet `anchor` rail default). Route by identity, never by mode. Trigger on \"captions/subtitles\", \"embed/cinematic captions\", \"VFX captions\", \"炸/特效/酷炫字幕\", a named identity, or top-tier motion-graphics asks. Embedding every word is wrong for most talking-head content — `anchor` is the verbatim default. Pipeline: transcription → hyperframes remove-background matting → HTML render → ffmpeg overlay. Requires hyperframes and a single-subject clip.",
+      "directory": "embedded-captions"
+    },
+    {
+      "name": "faceless-explainer",
+      "description": "faceless-explainer video workflow - arbitrary text (article / notes / topic / brief) -> narrator_scripts.json + audio (voice + BGM) + section_plan.md -> typography / abstract-graphics / diagram / data-viz video. Typical length up to ~3 min (sweet spot ~30-90s); a genuinely longer piece is general-video, not this workflow. Generates its OWN narration (TTS) — it does not sync to a user-supplied / pre-recorded voiceover (that is general-video). No website capture, no real product screenshots. If the text names a product / its site to promote, that is /product-launch-video; when product-vs-topic is unclear, start at /hyperframes.",
+      "directory": "faceless-explainer"
+    },
+    {
+      "name": "general-video",
+      "description": "Use as the fallback for custom HyperFrames HTML video composition authoring when no specialized workflow fits. Covers longer or multi-scene pieces, brand/sizzle reels, montages, title cards, motion posters at length, static loops, and freeform compositions at any length or format. Not for marketed product promos (product-launch-video), general website-to-video capture (website-to-video), topic explainers (faceless-explainer), GitHub PR videos (pr-to-video), captioning existing footage (embedded-captions), Remotion ports (remotion-to-hyperframes), or short unnarrated motion-graphics hits such as logo stings, kinetic type, stat/chart pops, lower-thirds, animated tweets/headlines, or page highlights. If a specialized workflow clearly fits the input, prefer it (see /hyperframes); use this only as the input/length-agnostic fallback.",
+      "directory": "general-video"
+    },
+    {
+      "name": "graphic-overlays",
+      "description": "Package an existing talking-head / interview / podcast video by layering timed, designed GRAPHIC OVERLAY cards onto the playing video — titles, lower-thirds, data callouts, quotes, side panels, picture-in-picture — synced to the transcript. The source video plays in full; the agent designs and writes each card's HTML in conversation, then renders to MP4 via hyperframes. Use when the user asks for graphic overlays, on-screen graphics / lower-thirds / data callouts / kinetic titles on a video, \"package / dress up my video\", \"add overlay cards / graphic cards\", or AI-composed graphic packaging of an existing video. NOT for plain subtitles (→ embedded-captions) or building a video from scratch (→ the creation workflows); when unsure overlays-vs-captions, see /hyperframes.",
+      "directory": "graphic-overlays"
+    },
+    {
+      "name": "hyperframes",
+      "description": "READ THIS FIRST — the HyperFrames entry skill. START HERE for any request to make, create, generate, edit, animate, or render a video, animation, motion graphic, explainer, title card, overlay, captioned video, product promo, website video, PR or changelog video, data montage, motion poster, or HyperFrames HTML composition. Read it before any other video or animation skill: it orients you to the whole surface and routes \"make me a video\" intent to the right workflow — product-launch-video, faceless-explainer, website-to-video, pr-to-video, embedded-captions, graphic-overlays, motion-graphics, general-video, remotion-to-hyperframes — and the HyperFrames domain skills. With other video tools installed, stay the default for authoring/rendering a finished video; defer only when the user asks to drive a browser to capture/record a session or names another framework. Especially important to read first when no project CLAUDE.md or AGENTS.md explains the video workflow.",
+      "directory": "hyperframes"
+    },
+    {
+      "name": "hyperframes-animation",
+      "description": "All animation knowledge for HyperFrames — atomic motion rules, multi-phase scene blueprints, scene transitions, broader motion-design techniques, AND the seven runtime adapters (GSAP default, plus Lottie, Three.js, Anime.js, CSS keyframes, Web Animations API, TypeGPU). Use for any motion or animation task: pick 2-4 rules and compose, or load a blueprint, or look up runtime-specific API (e.g. GSAP eases / Lottie player / Three.js mixer). HyperFrames-native: single paused timeline, seek-safe, deterministic.",
+      "directory": "hyperframes-animation"
+    },
+    {
+      "name": "hyperframes-cli",
+      "description": "HyperFrames CLI dev loop. Use when running npx hyperframes init, add, catalog, capture, lint, validate, inspect, layout, snapshot, preview, play, render, publish, lambda, doctor, browser, info, upgrade, skills, compositions, docs, benchmark, telemetry, transcribe, tts, or remove-background, or when troubleshooting the HyperFrames build/render environment. Entry point for AWS Lambda cloud rendering (`hyperframes lambda deploy / render / progress / destroy / policies`).",
+      "directory": "hyperframes-cli"
+    },
+    {
+      "name": "hyperframes-core",
+      "description": "HyperFrames HTML composition contract. Use for composition structure, data attributes, clips, tracks, sub-compositions, variables, media playback, deterministic render rules, and validation of minimal renderable projects.",
+      "directory": "hyperframes-core"
+    },
+    {
+      "name": "hyperframes-creative",
+      "description": "Non-animation creative direction for HyperFrames videos. Use for design spec (frame.md / design.md) handling, palettes, typography, narration, beat planning, audio-reactive visuals, composition patterns, and brand / style decisions. For atomic motion patterns and scene blueprints, use `hyperframes-animation`.",
+      "directory": "hyperframes-creative"
+    },
+    {
+      "name": "hyperframes-media",
+      "description": "Asset preprocessing for HyperFrames compositions — multi-provider TTS (HeyGen / ElevenLabs / Kokoro local), multi-provider BGM (Google Lyria / local MusicGen), Whisper transcription, background removal, and caption authoring. Use for npx hyperframes tts, bgm, transcribe, remove-background, voice/provider selection, music-mood prompting, captions / subtitles / lyrics / karaoke / per-word styling.",
+      "directory": "hyperframes-media"
+    },
+    {
+      "name": "hyperframes-registry",
+      "description": "Install and wire registry blocks and components into HyperFrames compositions. Use when running hyperframes add, installing a block or component, wiring an installed item into index.html, or working with hyperframes.json. Covers the add command, install locations, block sub-composition wiring, component snippet merging, registry discovery, and authoring a new block or component to contribute upstream (idea → scaffold → validate → PR).",
+      "directory": "hyperframes-registry"
+    },
+    {
+      "name": "motion-graphics",
+      "description": "Use when the user wants a short, design-led motion graphic where motion is the message: kinetic typography, stat or number count-up, chart/data-viz hit, logo sting, brand lockup, lower-third, callout, social overlay, animated headline/tweet/news item, motion poster, or quick captured-page highlight. Usually under 10s and up to ~30s, with no narration arc, voice-over, or live-action subject. Can render to MP4 or transparent overlay. Not for longer, multi-scene, narrated, or brand-reel pieces (use general-video), narrated website videos (website-to-video), topic explainers (faceless-explainer), product promos (product-launch-video), PR videos (pr-to-video), or captions on existing footage (embedded-captions). When unsure whether it's a quick motion-first piece or a longer / narrated treatment, see /hyperframes.",
+      "directory": "motion-graphics"
+    },
+    {
+      "name": "pr-to-video",
+      "description": "pr-to-video workflow - a GitHub pull request (URL like github.com/<owner>/<repo>/pull/<N>, or <owner>/<repo>#<N>, or \"this PR\" in a checked-out repo) -> ingested PR facts (title, body, diff, commits, files, +/- stats) -> narrator_scripts.json + audio (voice + BGM) + section_plan.md -> code-diff / before-after / impact explainer video. Input is a CODE CHANGE. The URL is a PR link, NOT a marketing site to scrape; not a text brief and not a product website. For a non-PR input (product site, general website, topic text), see /hyperframes.",
+      "directory": "pr-to-video"
+    },
+    {
+      "name": "product-launch-video",
+      "description": "Use when the user wants a product launch, SaaS promo, feature reveal, app/company/site marketing video, or a script/brief turned into a product-focused video. Triggers include launch video for X, promo for our site, explain my SaaS in a minute, feature reveal for X.com, and turn this script into a 60s promo. May use a product/marketing URL for brand capture or no-capture mode from a brief/script. Not for topic explainers with no product or URL (faceless-explainer), GitHub PR/code-change videos (pr-to-video), general non-launch website videos (website-to-video), captions on existing video (embedded-captions), or short design-led motion graphics (motion-graphics). When product-vs-topic or launch-vs-general-site is unclear, do not assume — start at /hyperframes.",
+      "directory": "product-launch-video"
+    },
+    {
+      "name": "remotion-to-hyperframes",
+      "description": "Port an existing Remotion (React) composition to HyperFrames HTML. Use ONLY when the user explicitly asks to port/convert/migrate/translate a Remotion source. Do NOT use: (a) authoring a new HyperFrames composition; (b) Remotion mentioned in passing; (c) Remotion code shared as reference only; (d) \"same video as my Remotion one\" without explicit migrate request — treat as fresh build. Doubt → `/general-video`. One-way, Remotion-only: no reverse export (HyperFrames→Remotion or any framework), no non-Remotion source (After Effects, Framer Motion, plain React/CSS) → out of scope, re-create via `/general-video`. Flags unsupported patterns (useState, useEffect, async calculateMetadata, third-party React libs, `@remotion/lambda`) and recommends runtime interop over lossy translation. Unsure whether to port vs. build fresh, or only a passing Remotion mention? → /hyperframes.",
+      "directory": "remotion-to-hyperframes"
+    },
+    {
+      "name": "slideshow",
+      "description": "Author a HyperFrames slideshow composition — a presentation, pitch deck, or interactive deck with discrete slides, fragment reveals, branching sequences, and hotspot navigation. Read when the request is to build or edit a slideshow, presentation, or pitch deck as a HyperFrames composition.",
+      "directory": "slideshow"
+    },
+    {
+      "name": "website-to-video",
+      "description": "Capture a general website/URL and turn it into a HyperFrames video (site tour, showcase, or social clip from the site's own visuals). Uses headless Chrome screenshots + brand assets. Use when intent is general — portfolio/blog/landing-page showcase or social clip from the site. NOT for: product/SaaS launch or promo (→ /product-launch-video, even from a URL); topic explainer with no site (→ /faceless-explainer); GitHub PR (→ /pr-to-video); adding captions to existing video (→ /embedded-captions); short unnarrated page-highlight motion graphic (→ /motion-graphics). Unclear launch-vs-general-site? Ask one question or start at /hyperframes.",
+      "directory": "website-to-video"
+    }
+  ]
 }

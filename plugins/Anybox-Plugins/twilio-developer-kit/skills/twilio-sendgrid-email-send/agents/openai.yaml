@@ -1,6 +1,10 @@
 interface:
-  display_name: "twilio-sendgrid-email-send"
-  short_description: "Twilio skill guidance for twilio-sendgrid-email-send"
-  icon_small: "../../assets/logo.svg"
-  icon_large: "../../assets/logo.svg"
-  brand_color: "#F22F46"
+  display_name: "SendGrid Email Send"
+  short_description: "Send transactional and bulk email via the SendGrid v3 Mail Send API. Covers single sends, personalized batch sends, dynamic templates, scheduled sends, and sandbox mode."
+  icon_small: "./assets/icon-small.png"
+  icon_large: "./assets/icon-large.png"
+  brand_color: "#EF223A"
+  default_prompt: "How do I send transactional email with SendGrid?"
+
+policy:
+  allow_implicit_invocation: true

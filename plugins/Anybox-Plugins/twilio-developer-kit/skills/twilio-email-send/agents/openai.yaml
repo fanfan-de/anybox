@@ -1,6 +1,10 @@
 interface:
-  display_name: "twilio-email-send"
-  short_description: "Twilio skill guidance for twilio-email-send"
-  icon_small: "../../assets/logo.svg"
-  icon_large: "../../assets/logo.svg"
-  brand_color: "#F22F46"
+  display_name: "Twilio Email Send"
+  short_description: "Send email using Twilio credentials via comms.twilio.com. Covers single and batch sends up to 10,000 recipients, Liquid personalization, and operation tracking."
+  icon_small: "./assets/icon-small.png"
+  icon_large: "./assets/icon-large.png"
+  brand_color: "#EF223A"
+  default_prompt: "How do I send email using my Twilio account?"
+
+policy:
+  allow_implicit_invocation: true

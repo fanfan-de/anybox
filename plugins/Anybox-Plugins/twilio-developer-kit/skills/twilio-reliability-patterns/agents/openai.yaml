@@ -1,6 +1,10 @@
 interface:
-  display_name: "twilio-reliability-patterns"
-  short_description: "Twilio skill guidance for twilio-reliability-patterns"
-  icon_small: "../../assets/logo.svg"
-  icon_large: "../../assets/logo.svg"
-  brand_color: "#F22F46"
+  display_name: "Reliability Patterns"
+  short_description: "Handle rate limits, retries, and failures on Twilio at scale. Covers 429 backoff, per-number throughput limits, StatusCallback resilience, and fallback chains."
+  icon_small: "./assets/icon-small.png"
+  icon_large: "./assets/icon-large.png"
+  brand_color: "#EF223A"
+  default_prompt: "How do I build reliable Twilio integrations at scale?"
+
+policy:
+  allow_implicit_invocation: true

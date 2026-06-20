@@ -276,7 +276,7 @@ Always recommend `twilio-debugging-observability` guardrail skill alongside any 
 After qualifying the developer, recommend:
 
 ```
-Recommended Architecture: [Level 1-4 description]
+Recommended Architecture: [Brief plain-language description of the recommended approach — e.g., "AI voice agent using Agent Connect with long-term memory via Customer Memory API and Conversation Orchestrator for multi-step task handling."]
 
 Implementation Path:
 - **Fast path (recommended):** Use Twilio Agent Connect SDK → Install `twilio-agent-connect` skill
@@ -297,10 +297,10 @@ Product Skills (for custom/advanced implementations):
 - twilio-sendgrid-email-send (post-interaction email summaries)
 
 Setup Skills:
-- twilio-account-setup
-- twilio-iam-auth-setup
-- twilio-numbers-senders
-- twilio-webhook-architecture (especially for enterprise — tunnel alternatives)
+- twilio-account-setup — if developer needs help with credentials or account structure
+- twilio-iam-auth-setup — if developer asks about API key scoping or security
+- twilio-numbers-senders — number type selection affects throughput and compliance timelines; use when choosing between local, toll-free, or short code
+- twilio-webhook-architecture — if developer needs help designing or securing webhook endpoints (especially for enterprise — tunnel alternatives)
 
 Guardrail Skills:
 - twilio-security-hardening (always)

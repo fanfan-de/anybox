@@ -1,3 +1,0 @@
-interface:
-  display_name: "CircleCI Builds"
-  short_description: "Diagnose and fix failing CircleCI jobs"

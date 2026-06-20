@@ -1,6 +1,7 @@
 ---
 name: verification
 description: "Full-story verification — infers what the user is building, then verifies the complete flow end-to-end: browser → API → data → response. Triggers on dev server start and 'why isn't this working' signals."
+summary: "Verify full user story: browser + server + data flow + env"
 metadata:
   priority: 7
   docs:
@@ -58,13 +59,46 @@ metadata:
       - "playwright test"
       - "cypress test"
     minScore: 6
+retrieval:
+  aliases:
+    - end to end test
+    - full stack verify
+    - flow test
+    - integration check
+  intents:
+    - verify full flow
+    - test end to end
+    - check if app works
+    - validate implementation
+  entities:
+    - browser
+    - API
+    - data flow
+    - end-to-end
+    - verification
+chainTo:
+  -
+    pattern: 'process\.env\.\w+|NEXT_PUBLIC_\w+'
+    targetSkill: env-vars
+    message: 'Environment variable references detected during verification — loading Env Vars guidance for proper configuration, vercel env pull, and branch scoping.'
+    skipIfFileContains: 'vercel\s+env\s+pull|\.env\.local'
+  -
+    pattern: 'middleware\.(ts|js)|proxy\.(ts|js)|clerkMiddleware|NextResponse\.redirect'
+    targetSkill: routing-middleware
+    message: 'Middleware/proxy detected during verification — loading Routing Middleware guidance for request interception, auth checks, and proxy.ts migration.'
+  -
+    pattern: 'streamText\s*\(|generateText\s*\(|useChat\s*\('
+    targetSkill: ai-sdk
+    message: 'AI SDK calls detected during verification — loading AI SDK v6 guidance for streaming, transport, and error handling patterns.'
+    skipIfFileContains: 'toUIMessageStreamResponse|DefaultChatTransport'
+
 ---
 
 # Full-Story Verification
 
 You are a verification orchestrator. Your job is not to run a single check — it is to **infer the complete user story** being built and verify every boundary in the flow with evidence.
 
-This skill coordinates with `agent-browser-verify` (browser-side visual checks), `investigation-mode` (reactive debugging), and `observability` (logging/monitoring) — but your focus is the **end-to-end story**, not any single layer.
+Your focus is the **end-to-end story**, not any single layer.
 
 ## When This Triggers
 
@@ -89,12 +123,12 @@ Gather the current state across all layers:
 
 | Layer | How to check | What to capture |
 |-------|-------------|-----------------|
-| **Browser** | Use `agent-browser` — open the relevant page, screenshot, check console | Visual state, console errors, network failures |
+| **Browser** | Open the relevant page, check console, take screenshots | Visual state, console errors, network failures |
 | **Server terminal** | Read the terminal output from the dev server process | Startup errors, request logs, compilation warnings |
 | **Runtime logs** | Run `vercel logs` (if deployed) or check server stdout | API response codes, error traces, timing |
 | **Environment** | Check `.env.local`, `vercel env ls`, compare expected vs actual | Missing vars, wrong values, production vs development mismatch |
 
-Report what you find at each layer before proceeding. Use the investigation-mode reporting contract:
+Report what you find at each layer before proceeding. Use this reporting contract:
 
 > **Checking**: [what you're looking at]
 > **Evidence**: [what you found — quote actual output]
@@ -159,9 +193,3 @@ Summarize findings in a structured report:
 ## Suggest Verification After Implementation
 
 When you finish building or implementing a feature (wrote code, created routes, set up a project), briefly let the user know they can ask you to verify everything works — e.g. browser verification or end-to-end flow check. One sentence is enough. Don't force it if only a small fix or question was involved.
-
-## Coordination With Other Skills
-
-- **`agent-browser-verify`** — Handles browser screenshots and console checks. Defer to it for visual verification. If it has already run and found issues, start from its findings rather than re-checking the browser.
-- **`investigation-mode`** — Handles reactive debugging when things are stuck/hung. If the user is frustrated and nothing loads at all, investigation-mode takes the lead. Verification takes over when things _partially_ work.
-- **`observability`** — Handles logging/monitoring setup. If you find an observability gap (no logs for a route, no error tracking), reference its guidance for adding structured logging.

@@ -1,6 +1,10 @@
 interface:
-  display_name: "twilio-verify-send-otp"
-  short_description: "Twilio skill guidance for twilio-verify-send-otp"
-  icon_small: "../../assets/logo.svg"
-  icon_large: "../../assets/logo.svg"
-  brand_color: "#F22F46"
+  display_name: "Verify OTP"
+  short_description: "Send and verify one-time passcodes via Twilio Verify over SMS, RCS, voice, email, or WhatsApp. Covers Verify Service setup, tokens, and TOTP."
+  icon_small: "./assets/icon-small.png"
+  icon_large: "./assets/icon-large.png"
+  brand_color: "#EF223A"
+  default_prompt: "How do I send and verify one-time passcodes with Twilio?"
+
+policy:
+  allow_implicit_invocation: true

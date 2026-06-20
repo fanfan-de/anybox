@@ -1,6 +1,10 @@
 interface:
-  display_name: "twilio-regulatory-compliance-bundles"
-  short_description: "Twilio skill guidance for twilio-regulatory-compliance-bundles"
-  icon_small: "../../assets/logo.svg"
-  icon_large: "../../assets/logo.svg"
-  brand_color: "#F22F46"
+  display_name: "Regulatory Compliance Bundles"
+  short_description: "Manage regulatory compliance for international phone numbers. Covers bundle creation, End-Users, Supporting Documents, evaluation, and ISV multi-account patterns."
+  icon_small: "./assets/icon-small.png"
+  icon_large: "./assets/icon-large.png"
+  brand_color: "#EF223A"
+  default_prompt: "How do I provision international phone numbers with regulatory compliance on Twilio?"
+
+policy:
+  allow_implicit_invocation: true

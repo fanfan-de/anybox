@@ -22,6 +22,30 @@ metadata:
     - '\bvercel\s+inspect\b'
     - '\bvercel\s+build\b'
     - '\bvercel\s+deploy\s+--prebuilt\b'
+validate:
+  -
+    pattern: 'cron:\s*[''"]|from\s+[''"](node-cron)[''"]|cron\.schedule\('
+    message: 'Manual cron scheduling detected. Use Vercel Cron Jobs (vercel.json crons) for platform-native scheduled tasks.'
+    severity: recommended
+    skipIfFileContains: 'vercel\.json.*crons|@vercel/cron'
+retrieval:
+  aliases:
+    - deploy
+    - ci cd
+    - continuous deployment
+    - release pipeline
+  intents:
+    - deploy to vercel
+    - set up ci cd
+    - promote deployment
+    - rollback deploy
+  entities:
+    - vercel deploy
+    - preview
+    - production
+    - rollback
+    - promote
+    - CI workflow
 ---
 
 # Vercel Deployments & CI/CD

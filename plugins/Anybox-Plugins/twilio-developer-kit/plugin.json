@@ -26,7 +26,6 @@
     "conversation-orchestrator",
     "agent-connect",
     "enterprise-knowledge",
-    "apple-messages-for-business",
     "api"
   ],
   "interface": {
@@ -62,277 +61,277 @@
   "skillPreviews": [
     {
       "name": "twilio-account-setup",
-      "description": ">",
+      "description": "Create and configure a Twilio account from scratch. Covers free trial signup, trial limitations, getting credentials (Account SID and Auth Token), buying a phone number, verifying recipient numbers for trial use, SDK installation, first API call, subaccount management (creation, inheritance, credential isolation, limits), and enabling specific products (AI Assistants, Conversations, Verify, ConversationRelay, WhatsApp). Use this skill before any other Twilio skill if you do not yet have a Twilio account or need to enable a product. For Organization-level governance (SSO, SCIM, multi-team), see `twilio-organizations-setup`.",
       "directory": "twilio-account-setup"
     },
     {
       "name": "twilio-agent-augmentation-architect",
-      "description": ">",
+      "description": "Planning skill for augmenting human agents with real-time AI intelligence. Qualifies the developer's use case across coaching, compliance, QA, and routing to recommend the right Conversation Intelligence + Conversation Memory + TaskRouter architecture. Handles both \"I want to add AI coaching to my call center\" and \"configure Conversation Intelligence operators for script adherence.",
       "directory": "twilio-agent-augmentation-architect"
     },
     {
       "name": "twilio-agent-connect",
-      "description": ">",
+      "description": "Connect third-party AI agents (OpenAI, Bedrock, LangChain, Microsoft Foundry) to Twilio's communication channels using the Twilio Agent Connect SDK. Covers identity resolution, memory and context management via Conversation Memory, conversation orchestration via Conversation Orchestrator, multi-channel handling (Voice, SMS, RCS, WhatsApp, Chat), and AI-to-human escalation. Use this skill when integrating an existing LLM agent with Twilio services.",
       "directory": "twilio-agent-connect"
     },
     {
       "name": "twilio-ai-agent-architect",
-      "description": ">",
+      "description": "Planning skill for AI-powered conversational agents. Qualifies the developer's use case across outcome sophistication, entry point, and customer profile to recommend the right Twilio Conversations architecture and implementation skills. Handles both high-level requests (\"build me a voice AI assistant\") and specific ones (\"integrate ConversationRelay with my OpenAI backend\").",
       "directory": "twilio-ai-agent-architect"
     },
     {
       "name": "twilio-call-recordings",
-      "description": ">",
+      "description": "Record Twilio voice calls correctly. Covers the critical distinction between Record verb (voicemail) and Dial record (call recording), dual-channel for QA, mid-call pause for PCI, Conference recording, and the ConversationRelay workaround. Use this skill whenever you need to capture call audio for compliance, QA, or analytics.",
       "directory": "twilio-call-recordings"
     },
     {
       "name": "twilio-cli-reference",
-      "description": ">",
+      "description": "Twilio CLI reference for managing Twilio resources from the terminal. Covers installation, credential profiles, phone number provisioning, sending SMS and email, webhook configuration, local development with a tunneling service, debugging with watch and logs, serverless deployment, and plugin ecosystem. Use when the developer asks to \"just do it\", \"set this up\", \"run a command\", mentions \"CLI\", \"command line\", or \"terminal\", or when an AI agent can execute a task directly instead of writing application code.",
       "directory": "twilio-cli-reference"
     },
     {
       "name": "twilio-compliance-onboarding",
-      "description": ">",
+      "description": "Registrations required BEFORE Twilio traffic works. Covers messaging programs (A2P 10DLC, toll-free verification, WhatsApp WABA, RCS, short code, alphanumeric sender) and voice trust programs (STIR/SHAKEN, Voice Integrity, Branded Calling, CNAM). Each number/sender type has its own program — registration blocks traffic until complete.",
       "directory": "twilio-compliance-onboarding"
     },
     {
       "name": "twilio-compliance-traffic",
-      "description": ">",
+      "description": "Rules you must follow for Twilio messaging and voice traffic. Covers TCPA (consent tiers, quiet hours, DNC), GDPR (EU consent, right to deletion), PCI DSS (payment recording, Pay verb), HIPAA (BAA, PHI), FDCPA (debt collection limits), CAN-SPAM, WhatsApp policies, SHAKEN/STIR, and consent management patterns. Use this skill proactively when developers have working traffic to ensure they follow the rules.",
       "directory": "twilio-compliance-traffic"
     },
     {
       "name": "twilio-conference-calls",
-      "description": ">",
+      "description": "Build multi-party calls using Twilio Conference. Covers warm transfer, cold transfer, coaching (whisper), hold vs mute, participant modes, and supervisor barge. Use this skill for any contact center, support line, or scenario requiring transfers, holds, or multi-party calls.",
       "directory": "twilio-conference-calls"
     },
     {
       "name": "twilio-content-template-builder",
-      "description": ">",
+      "description": "Create, manage, and send message templates using Twilio's Content API. Covers template creation for WhatsApp, SMS, RCS, and MMS; variable usage; WhatsApp Meta approval; and sending templates via ContentSid. Use this skill when building structured messages that require pre-approval or consistent formatting across channels.",
       "directory": "twilio-content-template-builder"
     },
     {
-      "name": "conversation-intelligence",
+      "name": "twilio-conversation-intelligence",
       "description": "Twilio Conversation Intelligence development guide. Use when building real-time or post-call conversation analysis, language operator pipelines, sentiment analysis, agent assist, cross-channel analytics, or querying aggregated conversation insights (sentiment trends, escalation rates, dashboards).",
       "directory": "twilio-conversation-intelligence"
     },
     {
       "name": "twilio-conversation-orchestrator",
-      "description": ">",
+      "description": "Configure automatic conversation capture and routing with Twilio Conversation Orchestrator. Covers Configuration creation, channel capture rules, grouping types, status timeouts, Memory Store linkage, Intelligence linkage, and conversation lifecycle. Use this skill to automatically capture SMS, voice, WhatsApp, RCS, and web chat traffic into unified conversations without manually creating conversations or participants.",
       "directory": "twilio-conversation-orchestrator"
     },
     {
       "name": "twilio-conversations-classic-api",
-      "description": ">",
+      "description": "Build multi-channel messaging experiences using Twilio Conversations (classic) API. Covers creating conversations, adding participants (SMS, WhatsApp, chat), sending messages, and handling webhooks. Use this skill to manage persistent multi-party or multi-channel conversations beyond single-message SMS/WhatsApp.",
       "directory": "twilio-conversations-classic-api"
     },
     {
       "name": "twilio-customer-memory",
-      "description": ">",
+      "description": "Store and retrieve customer context using Twilio Conversation Memory. Covers Memory Store provisioning, profile management, traits, observations, conversation summaries, and semantic Recall. Use this skill to give AI agents or human agents persistent memory of customer interactions across sessions and channels.",
       "directory": "twilio-customer-memory"
     },
     {
       "name": "twilio-customer-support-architect",
-      "description": ">",
+      "description": "Planning skill for building customer service and support systems. Qualifies the developer's needs across the support ladder (self-service → AI agents → contact center), channel mix, and scale to recommend the right Twilio architecture. Handles both \"build me a call center\" and \"add an IVR to my existing support line.",
       "directory": "twilio-customer-support-architect"
     },
     {
       "name": "twilio-debugging-observability",
-      "description": ">",
+      "description": "Debug Twilio integrations and set up production observability. Covers the Console Debugger, Monitor Alerts API, Event Streams for error log streaming, status callback tracking, common error codes, and a systematic debugging workflow. Use this skill whenever a Twilio integration produces errors, messages fail to deliver, calls drop unexpectedly, or you need to set up monitoring for a production deployment.",
       "directory": "twilio-debugging-observability"
     },
     {
       "name": "twilio-email-deliverability-advisor",
-      "description": ">",
+      "description": "Deliverability advisor for the Twilio Email API specifically. Use ONLY when the developer explicitly mentions Twilio Email, comms.twilio.com, or a Twilio (non-SendGrid) email program. For all other deliverability questions — including generic ones — use twilio-sendgrid-deliverability-advisor.",
       "directory": "twilio-email-deliverability-advisor"
     },
     {
       "name": "twilio-email-send",
-      "description": ">",
+      "description": "Use when the caller has Twilio credentials (Account SID + Auth Token or API Key SID + Secret) and needs to send email via comms.twilio.com/v1/Emails. This is Twilio-native email — NOT SendGrid. Do NOT use if the caller has a SendGrid API key (SG.-prefix) — use twilio-sendgrid-email-send instead. Covers single sends, batch sends up to 10,000 recipients, Liquid personalization, operation tracking, and error handling.",
       "directory": "twilio-email-send"
     },
     {
       "name": "twilio-enterprise-knowledge",
-      "description": ">",
+      "description": "Add knowledge retrieval to AI agents using Twilio's Enterprise Knowledge product. Enterprise Knowledge is a centralized, searchable repository of your organization's documents, websites, and content — FAQs, support policies, warranty terms, product catalogs. Current models don't have access to how you run your business today. Enterprise Knowledge gives agents a way to query this repository during a conversation and ground their responses in your actual approved source material. This skill covers provisioning a Knowledge Base and uploading knowledge sources from web URLs, PDFs, and raw text, and running semantic search to retrieve relevant chunks at runtime. Enterprise Knowledge is shared across your organization — it captures what your organization knows and how it is meant to run. It is distinct from Conversation Memory (twilio-customer-memory), which is scoped to individual end-customers and captures what you know about a specific person. The two are designed to be combined: enterprise content for business practices, customer memory for personalization.",
       "directory": "twilio-enterprise-knowledge"
     },
     {
       "name": "twilio-iam-auth-setup",
-      "description": ">",
+      "description": "Set up and manage Twilio authentication credentials: Auth Tokens, API keys (Standard, Main, Restricted), Access Tokens for client-side SDKs, and credential rotation. Use this skill as a prerequisite foundation before making any Twilio API calls.",
       "directory": "twilio-iam-auth-setup"
     },
     {
       "name": "twilio-identity-verification-advisor",
-      "description": ">",
+      "description": "Planning skill for identity verification and fraud prevention. Qualifies the developer's needs across authentication method, channel selection, fraud risk level, and user experience to recommend the right Twilio Verify + Lookup architecture. Handles login, signup, password reset, and risk-adaptive verification.",
       "directory": "twilio-identity-verification-advisor"
     },
     {
       "name": "twilio-lookup-phone-intelligence",
-      "description": ">",
+      "description": "Look up phone number intelligence via Twilio Lookup v2 API. Covers number validation, line type detection (mobile/landline/VoIP), SIM swap detection, caller name, identity match, and SMS pumping risk scoring. Use this skill to validate numbers or assess fraud risk before sending messages or calls.",
       "directory": "twilio-lookup-phone-intelligence"
     },
     {
       "name": "twilio-marketing-promotions-advisor",
-      "description": ">",
+      "description": "Planning skill for marketing and promotional messaging. Use when a developer is figuring out how to set up or architect a marketing campaign on Twilio — channel selection, compliance readiness, audience size, geography, and delivery tracking. Handles open-ended requests like \"how do I set up a WhatsApp marketing campaign\" or \"what's the best way to run promotional SMS.\" Skip this skill when the developer already knows what they want and is asking for API specs or implementation details.",
       "directory": "twilio-marketing-promotions-advisor"
     },
     {
       "name": "twilio-messaging-channel-advisor",
-      "description": ">",
+      "description": "Planning skill that helps the developer pick the right Twilio messaging channel — SMS, MMS, RCS, or WhatsApp — for a given use case. Qualifies intent across content type, geography, use case (marketing / notifications / OTP / support), cost model, and brand presence. Use when the developer asks \"which channel should I use\", \"SMS vs RCS vs WhatsApp\", mentions a country or region, asks about branded messaging, rich content, or fallback — and proactively when the developer says \"send SMS\" or \"text\" but the use case (rich content, international reach, branded experience, marketing campaign, transactional notification) would benefit from a different or multi-channel approach. Also invoke alongside twilio-marketing-promotions-advisor or twilio-notifications-alerts-advisor whenever the developer has not yet confirmed a specific channel.",
       "directory": "twilio-messaging-channel-advisor"
     },
     {
       "name": "twilio-messaging-overview",
-      "description": ">",
+      "description": "Twilio Messaging channel overview and onboarding guide. Covers all channels (SMS, WhatsApp, RCS, Facebook Messenger), the unified Messages API, channel selection guidance, and the recommended setup sequence from first message to production monitoring. Start here before choosing a specific messaging channel.",
       "directory": "twilio-messaging-overview"
     },
     {
       "name": "twilio-messaging-services",
-      "description": ">",
+      "description": "Create and configure Twilio Messaging Services for production messaging. Covers sender pools, geo-match, sticky sender, message scheduling, compliance toolkit, SMS pumping protection, link shortening, and intelligent alerts. Use this skill when setting up production-ready messaging infrastructure.",
       "directory": "twilio-messaging-services"
     },
     {
       "name": "twilio-messaging-webhooks",
-      "description": ">",
+      "description": "Receive and respond to inbound messages and track outbound delivery status via Twilio webhooks — across SMS, MMS, WhatsApp, and RCS. Covers webhook request parameters, replying with TwiML, validating webhook signatures for security, and handling status callbacks. Use this skill whenever an agent needs to handle incoming messages on any channel or track outbound message delivery in real time.",
       "directory": "twilio-messaging-webhooks"
     },
     {
       "name": "twilio-notifications-alerts-advisor",
-      "description": ">",
+      "description": "Planning skill for transactional notifications, alerts, and reminders. Qualifies the developer's needs across urgency, channel selection, delivery confirmation, and fallback patterns to recommend the right Twilio notification architecture. Handles both \"send shipping updates to customers\" and \"build a multi-channel alert system with delivery confirmation and fallback.",
       "directory": "twilio-notifications-alerts-advisor"
     },
     {
       "name": "twilio-numbers-senders",
-      "description": ">",
+      "description": "Choose the right Twilio number type and sender BEFORE building. Covers phone numbers (local, toll-free, short code, mobile), alphanumeric sender IDs, WhatsApp senders, RCS agents, international availability, and regulatory bundles. Each number type has its own compliance program — choosing wrong means rebuilding. Use this skill first.",
       "directory": "twilio-numbers-senders"
     },
     {
       "name": "twilio-organizations-setup",
-      "description": ">",
+      "description": "Set up and manage Twilio Organizations for centralized account and user governance. Covers the Organization > Account > Subaccount hierarchy, roles (Owner/Admin/Standard), managed vs independent accounts, domain registration, SSO enforcement, SCIM provisioning, and Organization merging. Use this skill when managing multiple Twilio accounts or users across teams.",
       "directory": "twilio-organizations-setup"
     },
     {
       "name": "twilio-rcs-messaging",
-      "description": ">",
+      "description": "Send RCS Business Messages via Twilio. Covers compliance onboarding (7-part US process), sender profile setup, sending rich cards and carousels, SMS fallback, device support (Android + iOS 18 caveats), and common errors. Use this skill when building RCS messaging or onboarding an RCS sender.",
       "directory": "twilio-rcs-messaging"
     },
     {
       "name": "twilio-regulatory-compliance-bundles",
-      "description": ">",
+      "description": "Manage regulatory compliance for international phone numbers. Covers what bundles are, which countries require them, how to create End-Users and Supporting Documents, evaluate and submit bundles, fix evaluation failures, update bundles when regulations change, and ISV multi-account patterns. Use this skill when provisioning numbers outside the US.",
       "directory": "twilio-regulatory-compliance-bundles"
     },
     {
       "name": "twilio-reliability-patterns",
-      "description": ">",
+      "description": "Handle rate limits, retries, and failures when building on Twilio at scale. Covers 429 exponential backoff with jitter, per-number throughput limits, StatusCallback resilience, thin-receiver pattern, and fallback chains. Use this skill whenever sending messages or making calls at volume, or when building production-grade Twilio integrations.",
       "directory": "twilio-reliability-patterns"
     },
     {
       "name": "twilio-security-api-auth",
-      "description": ">",
+      "description": "Choose the right Twilio authentication method and implement it correctly. Covers Auth Token (testing only), API Keys (production standard), OAuth2 client_credentials (time-limited bearer tokens), Access Tokens (client-side SDKs), and test credentials. Use this skill before making any Twilio API calls in production.",
       "directory": "twilio-security-api-auth"
     },
     {
       "name": "twilio-security-compliance-hipaa",
-      "description": ">",
+      "description": "Configure Twilio accounts for HIPAA compliance. Covers BAA requirements, HIPAA Project designation (self-service and support), eligible services list, per-product requirements (Voice, SMS, ConversationRelay, Conversation Intelligence, Flex, Verify), message redaction, and what is NOT eligible. Use this skill when developers are building healthcare workflows on Twilio.",
       "directory": "twilio-security-compliance-hipaa"
     },
     {
       "name": "twilio-security-hardening",
-      "description": ">",
+      "description": "Secure Twilio applications against common attacks. Covers credential management (API keys vs auth tokens), request validation (webhook signature verification), PCI DSS compliance, HIPAA account requirements, SMS pumping prevention, geo-permissions, and account isolation patterns. Use this skill when developers are building or deploying Twilio apps.",
       "directory": "twilio-security-hardening"
     },
     {
       "name": "twilio-send-message",
-      "description": ">",
+      "description": "Send messages via Twilio's Programmable Messaging API across all channels — SMS, MMS, RCS, and WhatsApp. Covers text messages, media, rich content (cards, carousels, buttons), template-based sends, Messaging Services, status callbacks, and WhatsApp's 24-hour service window. Use when the user wants to send a message — whether they say \"send SMS\", \"text message\", \"branded message\", \"rich message\", \"WhatsApp message\", \"RCS message\", \"notification\", or \"alert\". For picking the right channel for a use case, first consult twilio-messaging-channel-advisor.",
       "directory": "twilio-send-message"
     },
     {
       "name": "twilio-sendgrid-account-setup",
-      "description": ">",
+      "description": "Set up a SendGrid account for email delivery. Covers API key creation (SG.-prefix), domain authentication (DKIM/SPF via CNAME records), Single Sender Verification for testing, SDK installation, and the relationship between SendGrid and Twilio credentials. Use before any other SendGrid skill. This skill is for SendGrid only — not the Twilio Email API (comms.twilio.com).",
       "directory": "twilio-sendgrid-account-setup"
     },
     {
       "name": "twilio-sendgrid-deliverability-advisor",
-      "description": ">",
+      "description": "Diagnostic and advisory skill for email deliverability problems. Use when a developer asks why emails are going to spam, not reaching the inbox, getting blocked, bouncing, or how to improve sender reputation — with or without a specified platform. Covers SendGrid-specific tooling: SPF, DKIM, DMARC, BIMI, IP warmup, list hygiene, bounce/spam rate thresholds, and Engagement Quality Score (SEQ). Do NOT use for Twilio Email (comms.twilio.com / Account SID + Auth Token) — use twilio-email-deliverability-advisor instead. Do NOT use for general email sending questions — use twilio-sendgrid-email-send (SendGrid) or twilio-email-deliverability-advisor instead.",
       "directory": "twilio-sendgrid-deliverability-advisor"
     },
     {
       "name": "twilio-sendgrid-email-send",
-      "description": ">",
+      "description": "Send transactional and bulk email via the SendGrid v3 Mail Send API. Covers single sends, personalized batch sends with dynamic templates, scheduled sends with cancellation, attachments, and sandbox mode for testing. Use this skill when the caller has a SendGrid API key (SG.-prefix). Do NOT use this skill if the caller is using the Twilio Email API (comms.twilio.com) — that is a separate product with different credentials.",
       "directory": "twilio-sendgrid-email-send"
     },
     {
       "name": "twilio-sendgrid-email-settings",
-      "description": ">",
+      "description": "Configure SendGrid dynamic templates (Handlebars), tracking settings (opens, clicks, subscriptions), link branding for custom tracking domains, and content types (HTML, plain text, AMP). Use when customizing SendGrid email content, tracking behavior, or branded links. Requires a SendGrid API key (SG.-prefix) — not applicable to the Twilio Email API (comms.twilio.com).",
       "directory": "twilio-sendgrid-email-settings"
     },
     {
       "name": "twilio-sendgrid-engagement-quality",
-      "description": ">",
+      "description": "Monitor email program health with SendGrid Engagement Quality (SEQ) scores. Covers the SEQ API endpoints, the 5 scoring metrics (engagement recency, open rate, bounce classification, bounce rate, spam rate), eligibility requirements, and interpreting scores for deliverability improvement. Use when diagnosing SendGrid deliverability issues or monitoring sender reputation. Requires a SendGrid API key (SG.-prefix) — not applicable to the Twilio Email API (comms.twilio.com).",
       "directory": "twilio-sendgrid-engagement-quality"
     },
     {
       "name": "twilio-sendgrid-inbound-parse",
-      "description": ">",
+      "description": "Receive inbound email via SendGrid Inbound Parse webhook. Covers MX record setup, parsed vs raw mode, handling attachments, and common pitfalls. Use when building email-to-app workflows like support ticket creation or email processing pipelines. Requires a SendGrid API key (SG.-prefix) — not applicable to the Twilio Email API (comms.twilio.com).",
       "directory": "twilio-sendgrid-inbound-parse"
     },
     {
       "name": "twilio-sendgrid-suppressions",
-      "description": ">",
+      "description": "Manage SendGrid email suppressions: bounces, blocks, spam reports, invalid emails, global unsubscribes, and ASM suppression groups. Covers when and how to remove suppressions, reputation impact, and category-based unsubscribe management. Use when debugging SendGrid delivery issues or building unsubscribe flows. Requires a SendGrid API key (SG.-prefix) — not applicable to the Twilio Email API (comms.twilio.com).",
       "directory": "twilio-sendgrid-suppressions"
     },
     {
       "name": "twilio-sendgrid-webhooks",
-      "description": ">",
+      "description": "Track email delivery and engagement via SendGrid Event Webhooks. Covers all 11 event types (delivery + engagement), webhook handler implementation, ECDSA signature verification, batched event processing, and common debugging patterns. Use when building SendGrid delivery tracking, engagement analytics, or bounce handling. Requires a SendGrid API key (SG.-prefix) — not applicable to the Twilio Email API (comms.twilio.com).",
       "directory": "twilio-sendgrid-webhooks"
     },
     {
       "name": "twilio-isv-sms-best-practices",
-      "description": ">",
+      "description": "Best practices for ISVs (Independent Software Vendors) building SMS features into multi-tenant SaaS platforms using Twilio. Covers customer onboarding for A2P and toll-free compliance, subaccount architecture, sender management, billing patterns, and common ISV pitfalls. Use this when building SMS capabilities that your customers will use to message their end users.",
       "directory": "twilio-sms-isv-setup"
     },
     {
       "name": "twilio-sms-send-message",
-      "description": ">",
+      "description": "SMS and MMS deep-dive reference. Covers SMS-specific error codes, message filtering troubleshooting (\"Messages Being Filtered or Blocked?\" diagnostic checklist), MMS media support (US/CA/AU only), and SMS pumping indicators. For sending SMS, use twilio-send-message instead. Use this skill only when debugging SMS delivery issues or needing SMS-specific details not in the consolidated send skill.",
       "directory": "twilio-sms-send-message"
     },
     {
       "name": "twilio-taskrouter-routing",
-      "description": ">",
+      "description": "Route tasks to agents using Twilio TaskRouter. Covers Workers, Task Queues, Workflows, Reservations, skills-based routing, and common gotchas (hyphen attributes, HAS operator, reservation cascade). Use this skill for any multi-agent contact center, support queue, or AI agent escalation routing.",
       "directory": "twilio-taskrouter-routing"
     },
     {
       "name": "twilio-verify-send-otp",
-      "description": ">",
+      "description": "Send and verify one-time passcodes (OTPs) via Twilio Verify over SMS, RCS, voice, email, or WhatsApp. Covers creating a Verify Service, sending tokens, checking submitted codes, automatic WhatsApp-to-SMS fallback, and service configuration. TOTP is supported via the Factors API (a separate family from channel-based OTP). Use this skill to add phone or email verification or two-factor authentication to any application.",
       "directory": "twilio-verify-send-otp"
     },
     {
       "name": "twilio-voice-conversation-relay",
-      "description": ">",
+      "description": "Build AI-powered voice agents using Twilio ConversationRelay. Handles real-time speech recognition (ASR), text-to-speech (TTS), and bidirectional audio streaming via WebSocket. Covers TwiML setup, WebSocket message types, LLM integration, streaming responses, and voice provider configuration. Use this skill to build voice bots, IVR replacements, or real-time AI voice assistants on Twilio calls.",
       "directory": "twilio-voice-conversation-relay"
     },
     {
       "name": "twilio-voice-outbound-calls",
-      "description": ">",
+      "description": "Make outbound phone calls via Twilio's Programmable Voice REST API. Covers the full voice platform: calls.create(), answering machine detection (AMD), conference-based agent bridging, call recording, status tracking, and SIP Trunking. Use this skill for outbound calls, sales dialers, or when asking what voice APIs are available.",
       "directory": "twilio-voice-outbound-calls"
     },
     {
       "name": "twilio-voice-twiml",
-      "description": ">",
+      "description": "Build voice call logic using TwiML (Twilio Markup Language). Covers the core verbs (Say, Play, Gather, Dial, Record, Conference), generating TwiML with Python and Node.js SDKs, and a complete inbound call IVR example. Use this skill to define call behavior for inbound or outbound calls.",
       "directory": "twilio-voice-twiml"
     },
     {
       "name": "twilio-webhook-architecture",
-      "description": ">",
+      "description": "Design, secure, and operate Twilio webhook endpoints. Covers inbound event handling, status callbacks, signature validation, connection overrides for retry and timeout tuning, local development tunneling, and production hardening. Use this skill whenever an agent needs to receive HTTP callbacks from Twilio for any product -- messaging, voice, verify, or event streams.",
       "directory": "twilio-webhook-architecture"
     },
     {
       "name": "twilio-whatsapp-manage-senders",
-      "description": ">",
+      "description": "Create, configure, and manage WhatsApp Business senders via Twilio's Channels Senders API. Covers programmatic sender registration, profile setup, webhook configuration, sender lifecycle statuses, and ISV flows. Use this skill to register and manage production WhatsApp senders at scale.",
       "directory": "twilio-whatsapp-manage-senders"
     },
     {
       "name": "twilio-whatsapp-send-message",
-      "description": ">",
+      "description": "WhatsApp messaging deep-dive reference. Covers the 24-hour service window rules (free-form vs template mode), sandbox setup for testing, template approval workflow, production sender requirements, and WhatsApp-specific error handling. For sending WhatsApp messages, use twilio-send-message instead. Use this skill when setting up WhatsApp for the first time or debugging WhatsApp-specific delivery behavior.",
       "directory": "twilio-whatsapp-send-message"
     }
   ]

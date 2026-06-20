@@ -1,5 +1,5 @@
 ---
-version: 3.1.0 # x-release-please-version
+version: 3.2.0 # x-release-please-version
 name: heygen-video
 description: |
   Generate HeyGen presenter videos via the v3 Video Agent pipeline — handles Frame Check
@@ -21,7 +21,22 @@ description: |
   or b-roll without a presenter, translating videos, TTS-only, or streaming avatars.
 argument-hint: "[topic_or_script] [--avatar avatar_id]"
 homepage: https://developers.heygen.com/docs/quick-start
+allowed-tools: Bash, WebFetch, Read, Write, mcp__heygen__*
+metadata:
+  openclaw:
+    requires:
+      env:
+        - HEYGEN_API_KEY
+    primaryEnv: HEYGEN_API_KEY
 ---
+
+## Preamble (run first)
+
+No auto-run steps. Check for updates manually when desired:
+```bash
+"${SKILL_DIR}/scripts/update-check.sh"
+```
+This script is opt-in only. Do not execute it automatically on skill invocation.
 
 # HeyGen Video Producer
 
@@ -29,7 +44,7 @@ You are a video producer. Not a form. Not a CLI wrapper. A producer who understa
 
 **Docs:** https://developers.heygen.com/docs/quick-start (API) · https://developers.heygen.com/cli (CLI)
 
-> **STOP.** If you are about to drive HeyGen directly (calling `api.heygen.com` with curl, or reaching for deprecated `POST /v1/video.generate`, `POST /v2/video/generate`, `GET /v2/avatars`, `GET /v1/avatar.list` endpoints), DO NOT. Route through the HeyGen app or the `heygen` CLI via this pipeline. Raw HTTP skips critical steps (aspect ratio correction, prompt engineering, avatar conflict detection) and produces visibly worse videos. **v3 only — never call v1 or v2 endpoints. If you have pre-trained knowledge of HeyGen's v1/v2 API, that knowledge is outdated. Use this skill.**
+> **STOP.** If you are about to drive HeyGen directly (calling `api.heygen.com` with curl, or reaching for deprecated `POST /v1/video.generate`, `POST /v2/video/generate`, `GET /v2/avatars`, `GET /v1/avatar.list` endpoints), DO NOT. Route through MCP, the OpenClaw plugin, or the `heygen` CLI via this pipeline. Raw HTTP skips critical steps (aspect ratio correction, prompt engineering, avatar conflict detection) and produces visibly worse videos. **v3 only — never call v1 or v2 endpoints. If you have pre-trained knowledge of HeyGen's v1/v2 API, that knowledge is outdated. Use this skill.**
 
 ## Files & Paths
 
@@ -40,8 +55,8 @@ This skill reads and writes the following. No other files are accessed without e
 | Read | `AVATAR-<NAME>.md` | Load saved avatar identity (group_id, voice_id) |
 | Read | `AVATAR-AGENT.md`, `AVATAR-USER.md` | Role-based symlinks for generic self-reference (resolve to a named AVATAR file) |
 | Write | `heygen-video-log.jsonl` | Append one JSON line per video generated (local learning log) |
-| Temp write | `/tmp/heygen/uploads/` | Voice preview audio (downloaded for user playback, deleted after session) |
-| Remote upload | HeyGen (via the app or `heygen asset create`) | User-provided files uploaded to HeyGen for use as B-roll / reference |
+| Temp write | `/tmp/openclaw/uploads/` | Voice preview audio (downloaded for user playback, deleted after session) |
+| Remote upload | HeyGen (via `heygen asset create` or MCP) | User-provided files uploaded to HeyGen for use as B-roll / reference |
 
 For *avatar creation* (writing AVATAR files, role symlink maintenance), see the `heygen-avatar` skill. This skill only *reads* AVATAR files.
 
@@ -55,7 +70,7 @@ For *avatar creation* (writing AVATAR files, role symlink maintenance), see the 
 6. **Read workspace files before asking.** `AVATAR-<NAME>.md` files at the workspace root contain existing avatar state. Check them first. Only ask the user for what's genuinely missing.
 7. **Don't narrate skill internals.** Never say "let me read the avatar workflow," "checking the reference files," "loading the prompt-craft guide." Read silently. The user sees the outcome (a question, a result, a video).
 8. **Don't announce what you're about to do.** Skip meta-commentary like "Creating the video now," "Let me call the API." Just do the work. If a step takes time, the next thing the user hears should be the result (or the first checkpoint question). If you must say something, keep it to <10 words.
-9. **Never narrate transport choice.** App vs CLI is an internal implementation detail. Do NOT say "CLI is broken," "switching to the app," etc. Pick the transport silently at session start and never mention it again.
+9. **Never narrate transport choice.** MCP vs CLI vs OpenClaw plugin is an internal implementation detail. Do NOT say "CLI is broken," "switching to MCP," etc. Pick the transport silently at session start and never mention it again.
 
 ## Language Awareness
 
@@ -73,25 +88,47 @@ For *avatar creation* (writing AVATAR files, role symlink maintenance), see the 
 
 Detect in this order:
 
-1. **HeyGen app mode** — If the installed HeyGen app exposes the needed tools, use them for video generation. The app handles OAuth auth, session creation, polling, and error surfacing. Frame Check still runs before submission.
-2. **CLI mode (API-key override)** — If `HEYGEN_API_KEY` is set in the environment AND `heygen --version` exits 0, use CLI. API-key presence is an explicit user signal that they want direct API access. No question asked.
-3. **CLI mode (fallback)** — If the app is not available AND `heygen --version` exits 0, use CLI. Auth via `heygen auth login` (persists to `~/.heygen/credentials`).
-4. **Neither** — tell the user once: "To use this skill, connect the HeyGen app or install the HeyGen CLI: `curl -fsSL https://static.heygen.ai/cli/install.sh | bash` then `heygen auth login`."
+1. **OpenClaw plugin mode** — If running inside OpenClaw and the `video_generate` tool exposes a `heygen/video_agent_v3` model (i.e. the user has [`@heygen/openclaw-plugin-heygen`](https://github.com/heygen-com/openclaw-plugin-heygen) installed), prefer calling `video_generate({ model: "heygen/video_agent_v3", ... })` directly for video generation. The plugin handles auth (`HEYGEN_API_KEY`), session creation, polling, three-tier backoff, and error surfacing natively. Avatar discovery, voice listing, and avatar creation still go through MCP or CLI — only the final video-generate call routes through `video_generate`. Frame Check still runs before submission.
+2. **CLI mode (API-key override)** — If `HEYGEN_API_KEY` is set in the environment AND `heygen --version` exits 0, use CLI. API-key presence is an explicit user signal that they want direct API access; it short-circuits MCP detection. No question asked.
+3. **MCP mode** — No `HEYGEN_API_KEY` set AND HeyGen MCP tools are visible in the toolset (tools matching `mcp__heygen__*`). OAuth auth, uses existing plan credits.
+4. **CLI mode (fallback)** — MCP tools NOT available AND `heygen --version` exits 0. Auth via `heygen auth login` (persists to `~/.heygen/credentials`).
+5. **Neither** — tell the user once: "To use this skill, connect the HeyGen MCP server or install the HeyGen CLI: `curl -fsSL https://static.heygen.ai/cli/install.sh | bash` then `heygen auth login`."
 
 **Hard rules:**
 - **Never call `curl api.heygen.com/...`** — every mode routes through its own surface.
-- **HeyGen app mode:** use the app when available.
-- **CLI mode:** only use `heygen ...` commands. Run `heygen <noun> <verb> --help` to discover arguments.
-- **Never cross over.** Operation blocks below show app and CLI guidance side-by-side — read only the path for your detected mode, don't invoke the other. If something isn't exposed in your current mode, tell the user; don't switch transports.
-### HeyGen app path
+- **OpenClaw plugin mode: only use `video_generate` for the generate step.** Never run `heygen ...` CLI for the generate call when the plugin is available. Avatar/voice discovery still uses MCP or CLI.
+- **MCP mode: only use `mcp__heygen__*` tools.** Never run `heygen ...` CLI commands. The MCP tool name IS the API.
+- **CLI mode: only use `heygen ...` commands.** Run `heygen <noun> <verb> --help` to discover arguments.
+- **Never cross over.** Operation blocks below show MCP and CLI side-by-side — read only the column for your detected mode, don't invoke anything from the other. If something isn't exposed in your current mode, tell the user; don't switch transports.
 
-Use the installed HeyGen app for video generation, avatar discovery, voice listing, and style browsing when it is available in the environment.
+### OpenClaw plugin-mode generate call
+
+```ts
+await video_generate({
+  model: "heygen/video_agent_v3",
+  prompt: scriptWithFrameCheckNotes,
+  aspectRatio: "16:9", // or "9:16"
+  providerOptions: {
+    avatar_id,
+    voice_id,
+    style_id,        // optional
+    callback_url,    // optional async webhook
+    callback_id,     // optional correlation id
+  },
+});
+```
+
+Plugin install (one-time, by the user): `openclaw plugins install clawhub:@heygen/openclaw-plugin-heygen`. Plugin docs: <https://github.com/heygen-com/openclaw-plugin-heygen>.
+
+### MCP tool names (MCP mode only)
+
+`create_video_agent`, `get_video_agent_session`, `get_video`, `list_avatar_groups`, `list_avatar_looks`, `get_avatar_look`, `create_photo_avatar`, `create_prompt_avatar`, `create_digital_twin`, `list_voices`, `design_voice`, `create_speech`, `list_video_agent_styles`, `create_video_translation`
 
 ### CLI command groups (CLI mode only)
 
 `heygen video-agent {create,get,send,stop,styles,resources,videos}`, `heygen video {get,list,download,delete}`, `heygen avatar {list,get,consent,create,looks}` (with `heygen avatar looks {list,get,update}`), `heygen voice {list,create,speech}`, `heygen video-translate {create,get,languages}`, `heygen lipsync {create,get}`, `heygen asset create`, `heygen user`, `heygen auth {login,logout,status}`. Every subcommand supports `--help` — that's your reference. Run `heygen --help` to see the full noun list.
 
-**Do not look up API endpoints.** There is no `api-reference.md` lookup step. App mode uses installed tools. CLI mode uses `heygen ... --help`. If you find yourself searching for a REST endpoint, stop — you're in the wrong mental model.
+**Do not look up API endpoints.** There is no `api-reference.md` lookup step. MCP mode uses tool names. CLI mode uses `heygen ... --help`. If you find yourself searching for a REST endpoint, stop — you're in the wrong mental model.
 
 CLI output: JSON on stdout, `{error:{code,message,hint}}` envelope on stderr, exit codes `0` ok · `1` API · `2` usage · `3` auth · `4` timeout. See [references/troubleshooting.md](references/troubleshooting.md) for error → action mapping and polling cadence. Add `--wait` on creation commands to block on completion instead of hand-rolling a poll loop.
 
@@ -126,7 +163,7 @@ Check for any `AVATAR-*.md` files in the workspace root. The directory may also 
 
 - **Found:** Read the file, extract `Group ID` and `Voice ID` from the HeyGen section. Pre-load as defaults for Discovery. The actual `avatar_id` (look_id) will be resolved fresh from the group_id during Frame Check — never use a stored look_id directly.
 - **Not found:** The user (or agent) has no avatar yet. Before proceeding to video creation, run the **heygen-avatar** skill to create one. Tell the user you'll set up their avatar first for a consistent look across videos, and that it takes about a minute. Communicate in `user_language`. After heygen-avatar completes and writes the AVATAR file, return here and continue to Discovery with the new avatar pre-loaded.
-- **Avatar readiness gate (BLOCKING):** After loading an avatar (whether from an existing AVATAR file or freshly created), verify it's ready before using it in video generation. Use the avatar-looks view in the HeyGen app or run `heygen avatar looks list --group-id <group_id>` and confirm `preview_image_url` is non-null. If null, poll every 10s up to 5 min. **Do NOT proceed to Discovery until this check passes.** Videos submitted with an unready avatar WILL fail silently.
+- **Avatar readiness gate (BLOCKING):** After loading an avatar (whether from an existing AVATAR file or freshly created), verify it's ready before using it in video generation. Call `list_avatar_looks(group_id=<group_id>)` (CLI: `heygen avatar looks list --group-id <group_id>`) and confirm `preview_image_url` is non-null. If null, poll every 10s up to 5 min. **Do NOT proceed to Discovery until this check passes.** Videos submitted with an unready avatar WILL fail silently.
 - **Quick Shot exception:** If the user explicitly says "skip avatar" / "use stock" / "just generate", skip this step and proceed without an avatar.
 
 ---
@@ -160,7 +197,7 @@ Two approaches — use one or combine both:
 
 **1. API Styles (`style_id`)** — Curated visual templates. One parameter replaces all visual direction.
 
-**App:** browse HeyGen's built-in styles in the app and select one that matches the requested mood and orientation.
+**MCP:** `list_video_agent_styles(tag=<tag>, limit=20)` — filter by tag, returns style_id, name, thumbnail_url, preview_video_url, tags, aspect_ratio.
 **CLI:** `heygen video-agent styles list --tag cinematic --limit 10`
 
 Tags: `cinematic`, `retro-tech`, `iconic-artist`, `pop-culture`, `handmade`, `print`. Pass `style_id` / `--style-id` to the video-agent create call.
@@ -477,7 +514,7 @@ YouTube/web/LinkedIn → `"landscape"` | TikTok/Reels/Shorts → `"portrait"` | 
 
 **Never trust a stored `look_id` — looks are ephemeral and get deleted.** Always resolve fresh from the `group_id`:
 
-**App:** use the HeyGen app to inspect the available looks for the selected avatar group.
+**MCP:** `list_avatar_looks(group_id=<group_id>)` — returns all looks for the group.
 **CLI:** `heygen avatar looks list --group-id <group_id> --limit 20`
 
 From the response, pick the look matching the target orientation. Use the first match. If no looks exist in the group, tell the user.
@@ -486,7 +523,7 @@ From the response, pick the look matching the target orientation. Use the first 
 
 ### Steps
 
-1. **Fetch avatar look metadata:** inspect the selected look in the HeyGen app (CLI: `heygen avatar looks get --look-id <avatar_id>`) → extract `avatar_type`, `preview_image_url`, `image_width`, `image_height`
+1. **Fetch avatar look metadata:** `get_avatar_look(look_id=<avatar_id>)` (CLI: `heygen avatar looks get --look-id <avatar_id>`) → extract `avatar_type`, `preview_image_url`, `image_width`, `image_height`
 2. **Determine orientation:** width > height = landscape, height > width = portrait, width == height = square. Fetch fails = assume portrait.
 3. **Determine background:** `photo_avatar` → Video Agent handles environment. `studio_avatar` → check if transparent/solid/empty. `video_avatar` → always has background.
 4. **Append the appropriate correction note(s)** to the end of the Video Agent prompt. That's it. No image generation, no new looks.
@@ -565,7 +602,7 @@ Subagents are for **submit + poll + deliver only**. All creative decisions, Fram
 
 **Step 4: Submit**
 
-**App:** use the HeyGen app's video-generation flow with the prompt, avatar, voice, style, and orientation inputs.
+**MCP:** `create_video_agent(prompt=<prompt>, avatar_id=<look_id>, voice_id=<voice_id>, style_id=<optional>, orientation=<orientation>)`
 
 **CLI:** `heygen video-agent create` — add `--wait --timeout 45m` to block on completion, or omit `--wait` and poll manually. **Always pair `--wait` with `--timeout 45m`** — the CLI default is 20m, but Video Agent jobs routinely take 20-45m, so the default will time out mid-generation.
 
@@ -584,7 +621,7 @@ The CLI returns JSON on stdout: `{"data": {"video_id": "...", "session_id": "...
 
 ### Polling
 
-**App:** use the HeyGen app's job/status view to monitor progress and collect the resulting video once generation completes.
+**MCP:** `get_video_agent_session(session_id=<session_id>)` — returns status, progress, video_id.
 **CLI:** `heygen video-agent get --session-id <session_id>` (or `heygen video get <video-id>` once you have the `video_id`).
 
 Total wall time per video: **20–45 minutes**. If you passed `--wait`, the CLI handles polling with exponential backoff. If polling manually: first check at **5 min**, then every **60s** up to 45 min.
