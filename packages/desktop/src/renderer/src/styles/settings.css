@@ -8545,8 +8545,16 @@ body.is-dragging-settings-page {
 .plugins-directory-grid {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 4px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 10px 12px;
+}
+
+.plugins-directory-grid > [role="listitem"] {
+  min-width: 0;
+}
+
+.plugins-directory-grid .plugins-market-item {
+  height: 100%;
 }
 
 .plugins-market-item {

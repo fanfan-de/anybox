@@ -56,5 +56,6 @@
   "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/test-plugin/plugin.json",
   "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/twilio-developer-kit/plugin.json",
   "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/vercel/plugin.json",
-  "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/zotero/plugin.json"
+  "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/zotero/plugin.json",
+  "https://raw.githubusercontent.com/openai/plugins/blob/main/plugins/alpaca/.codex-plugin/plugin.json"
 ]
