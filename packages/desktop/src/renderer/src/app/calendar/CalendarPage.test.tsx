@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { I18nProvider } from "../i18n/I18nProvider"
 import { CalendarPage } from "./CalendarPage"
 import {
@@ -40,6 +40,8 @@ const scheduleCalendarTaskMock = vi.mocked(scheduleCalendarTask)
 let apiSources: CalendarSource[]
 let apiEvents: CalendarApiItem[]
 let apiTodos: PlannerTaskRecord[]
+
+const testNow = new Date("2026-06-17T10:00:00.000Z")
 
 const testProjects = [
   {
@@ -298,6 +300,9 @@ function formatTestWeekRangeLabel(weekStart: Date) {
 }
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] })
+  vi.setSystemTime(testNow)
+
   apiSources = createSources()
   apiEvents = createApiEvents()
   apiTodos = createApiTodos()
@@ -376,6 +381,10 @@ beforeEach(() => {
     apiTodos = [created, ...apiTodos]
     return created
   })
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe("CalendarPage", () => {

@@ -1485,7 +1485,13 @@ function extractValidationErrorMessage(payload: unknown): string | undefined {
   return undefined
 }
 
-async function readEntitlementFailureMessage(response: Response) {
+type EntitlementFailureResponse = {
+  status: number
+  headers: Pick<Headers, "get">
+  json: () => Promise<unknown>
+}
+
+async function readEntitlementFailureMessage(response: EntitlementFailureResponse) {
   if (response.status !== 403) return undefined
   const contentType = response.headers.get("content-type") ?? ""
   if (!contentType.includes("application/json")) return undefined

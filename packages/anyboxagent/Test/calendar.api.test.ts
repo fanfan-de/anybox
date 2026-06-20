@@ -56,6 +56,7 @@ interface CalendarItem {
   title: string
   startAt?: number
   endAt?: number
+  allDay: boolean
   color: string
   status?: string
   workspace?: string

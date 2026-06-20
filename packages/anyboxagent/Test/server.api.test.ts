@@ -3464,9 +3464,10 @@ describe("server api", () => {
           temperature: 0,
           model: testModel,
         })
-        expect(String(capturedGenerateInput?.system)).toContain("Return only the translated prompt.")
-        expect(String(capturedGenerateInput?.prompt)).toContain("Target language: Simplified Chinese")
-        expect(String(capturedGenerateInput?.prompt)).toContain("You are a precise coding assistant.")
+        const generateInput = capturedGenerateInput as unknown as Record<string, unknown>
+        expect(String(generateInput.system)).toContain("Return only the translated prompt.")
+        expect(String(generateInput.prompt)).toContain("Target language: Simplified Chinese")
+        expect(String(generateInput.prompt)).toContain("You are a precise coding assistant.")
 
         const selectionResponse = await app.request("http://localhost/api/prompts/selection")
         const selectionBody = (await selectionResponse.json()) as PromptPresetSelectionEnvelope
@@ -3581,7 +3582,8 @@ describe("server api", () => {
             name: "deepseek",
           },
         ])
-        expect(capturedGenerateInput?.model).toMatchObject({
+        const generateInput = capturedGenerateInput as unknown as Record<string, unknown>
+        expect(generateInput.model).toMatchObject({
           id: "deepseek-language-model",
           modelID: "deepseek-v4-pro",
         })

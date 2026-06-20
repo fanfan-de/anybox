@@ -1922,7 +1922,7 @@ function decodeZipEntryName(bytes: Buffer, flags: number) {
   if ((flags & 0x800) !== 0) return bytes.toString("utf8")
 
   try {
-    return new TextDecoder("ibm437").decode(bytes)
+    return new TextDecoder("ibm437" as ConstructorParameters<typeof TextDecoder>[0]).decode(bytes)
   } catch {
     return bytes.toString("utf8")
   }

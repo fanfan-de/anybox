@@ -51,6 +51,7 @@ type PluginCatalogEnvelope = JsonEnvelope<
     id: string
     name: string
     description: string
+    longDescription?: string
     iconUrl?: string
     localized?: {
       name?: {
