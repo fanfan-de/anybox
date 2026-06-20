@@ -2551,9 +2551,9 @@ body.is-dragging-settings-page {
 .mcp-transport-segmented-control {
   min-height: 34px;
   padding: 2px;
-  border-color: #e9e7e4;
+  border-color: var(--seg-border);
   border-radius: 8px;
-  background: #f7f6f4;
+  background: var(--seg-panel-muted);
 }
 
 .mcp-transport-segmented-control.is-connector {
@@ -2563,20 +2563,21 @@ body.is-dragging-settings-page {
 .mcp-transport-segment {
   min-height: 28px;
   border-radius: 6px;
-  color: #77736d;
+  color: var(--seg-text-2);
   font-size: 14px;
   font-weight: 650;
 }
 
 .mcp-transport-segment:hover,
 .mcp-transport-segment:focus-visible {
-  color: #242321;
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+  color: var(--seg-text-1);
 }
 
 .mcp-transport-segment.is-active {
-  background: #ffffff;
-  color: #202020;
-  box-shadow: 0 1px 3px rgba(41, 37, 36, 0.14);
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  color: var(--seg-text-1);
+  box-shadow: none;
 }
 
 .mcp-transport-segment:disabled {
@@ -3420,16 +3421,17 @@ body.is-dragging-settings-page {
 .settings-prompt-assignment-actions .secondary-button {
   min-width: 78px;
   min-height: 36px;
-  border-color: rgba(195, 204, 214, 0.82);
-  background: #ffffff;
-  color: #33485d;
-  box-shadow: 0 1px 2px rgba(24, 37, 50, 0.08);
+  border-color: var(--semantic-settings-slot-card-list-action-border-default);
+  background: var(--semantic-settings-slot-card-list-action-surface-default);
+  color: var(--semantic-settings-slot-card-list-action-text-default);
+  box-shadow: none;
 }
 
 .settings-prompt-assignment-actions .secondary-button:hover,
 .settings-prompt-assignment-actions .secondary-button:focus-visible {
-  background: #ffffff;
-  color: #162536;
+  border-color: var(--semantic-settings-slot-card-list-action-border-focus);
+  background: var(--semantic-settings-slot-card-list-action-surface-focus);
+  color: var(--semantic-settings-slot-card-list-action-text-focus);
 }
 
 .settings-prompt-assignment-actions .secondary-button:disabled,
@@ -3512,19 +3514,18 @@ body.is-dragging-settings-page {
 
 .settings-prompt-editor-mode-button:hover,
 .settings-prompt-editor-mode-button:focus-visible {
-  background: #ffffff;
+  background: var(--semantic-sidebar-tree-row-surface-hover);
   color: var(--seg-text-1);
 }
 
 .settings-prompt-editor-mode-button:focus-visible {
-  outline: var(--focus-outline-width) solid var(--focus-outline-color);
-  outline-offset: var(--focus-outline-offset);
+  outline: none;
 }
 
 .settings-prompt-editor-mode-button.is-active {
-  background: #ffffff;
+  background: var(--semantic-sidebar-tree-row-surface-active);
   color: var(--seg-text-1);
-  box-shadow: 0 1px 2px rgba(24, 37, 50, 0.08);
+  box-shadow: none;
 }
 
 .settings-prompt-name-input {
@@ -3535,7 +3536,7 @@ body.is-dragging-settings-page {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #182532;
+  color: var(--seg-text-1);
   font-size: 20px;
   font-weight: 600;
   line-height: 1.25;
@@ -3546,8 +3547,10 @@ body.is-dragging-settings-page {
 }
 
 .settings-prompt-name-input:focus-visible {
-  outline: var(--focus-outline-width) solid var(--focus-outline-color);
-  outline-offset: var(--focus-outline-offset);
+  outline: none;
+  text-decoration: underline;
+  text-decoration-color: var(--semantic-settings-slot-card-list-item-border-focus);
+  text-underline-offset: 4px;
 }
 
 .settings-prompt-editor {
@@ -4819,7 +4822,8 @@ body.is-dragging-settings-page {
 .git-branch-create-field input {
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-xs);
-  background: #ffffff;
+  background: var(--seg-panel-muted);
+  color: var(--seg-text-1);
   box-shadow: none;
 }
 
@@ -5521,7 +5525,7 @@ body.is-dragging-settings-page {
 .settings-field .settings-select-trigger {
   min-height: 44px;
   padding: 0 12px;
-  background: #ffffff;
+  background: var(--seg-panel-muted);
 }
 
 @media (max-width: 720px) {
@@ -5547,7 +5551,7 @@ body.is-dragging-settings-page {
   overflow: hidden;
   border: 0;
   border-radius: 10px;
-  background: #fafafa;
+  background: var(--seg-panel);
   box-shadow: none;
 }
 
@@ -5564,30 +5568,30 @@ body.is-dragging-settings-page {
   padding: 16px 24px;
   border: 0;
   border-radius: 10px;
-  background: #fafafa;
+  background: var(--seg-panel);
   box-shadow: none;
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-disclosure-summary:hover,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-disclosure-summary:focus-visible {
-  background: #f4f4f3;
+  background: var(--seg-panel-muted);
   box-shadow: none;
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-disclosure-summary:focus-visible {
-  outline: 2px solid rgba(143, 99, 233, 0.26);
+  outline: var(--focus-outline-width) solid var(--focus-outline-color);
   outline-offset: -2px;
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-disclosure-label {
-  color: #8d8984;
+  color: var(--seg-text-3);
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 0.04em;
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-disclosure-title {
-  color: #1f1f1f;
+  color: var(--seg-text-1);
   font-size: 15px;
   font-weight: 500;
   line-height: 1.25;
@@ -5595,14 +5599,14 @@ body.is-dragging-settings-page {
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-disclosure-description {
-  color: #6d6a66;
+  color: var(--seg-text-2);
   font-size: 13px;
   line-height: 1.45;
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-disclosure-chevron {
-  background: #eeeeee;
-  color: #77736d;
+  background: var(--seg-panel-muted);
+  color: var(--seg-text-2);
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-disclosure-body {
@@ -5628,7 +5632,7 @@ body.is-dragging-settings-page {
   min-height: 76px;
   padding: 16px 0;
   border: 0;
-  border-bottom: 1px solid #dedede;
+  border-bottom: 1px solid var(--seg-border);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -5636,7 +5640,7 @@ body.is-dragging-settings-page {
   grid-template-columns: minmax(0, 1fr) minmax(156px, 220px);
   align-items: center;
   gap: 18px 32px;
-  color: #1f1f1f;
+  color: var(--seg-text-1);
   transform: none;
 }
 
@@ -5657,13 +5661,13 @@ body.is-dragging-settings-page {
   padding: 16px 24px;
   border: 0;
   border-radius: 10px;
-  background: #fafafa;
+  background: var(--seg-panel);
   box-shadow: none;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(156px, 220px);
   align-items: center;
   gap: 18px 32px;
-  color: #1f1f1f;
+  color: var(--seg-text-1);
   transform: none;
 }
 
@@ -5671,14 +5675,14 @@ body.is-dragging-settings-page {
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-card:focus-visible,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-card.is-active {
   border-color: transparent;
-  background: #fafafa;
+  background: var(--seg-panel);
   box-shadow: none;
   transform: none;
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-card:focus-visible,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-about-toggle-row:focus-visible {
-  outline: 2px solid rgba(143, 99, 233, 0.26);
+  outline: var(--focus-outline-width) solid var(--focus-outline-color);
   outline-offset: -2px;
 }
 
@@ -5700,7 +5704,7 @@ body.is-dragging-settings-page {
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-copy strong,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-summary-card strong {
   margin: 0;
-  color: #1f1f1f;
+  color: var(--seg-text-1);
   font-size: 15px;
   font-weight: 500;
   line-height: 1.25;
@@ -5715,7 +5719,7 @@ body.is-dragging-settings-page {
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-copy small,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-summary-card p {
   margin: 0;
-  color: #6d6a66;
+  color: var(--seg-text-2);
   font-size: 13px;
   line-height: 1.45;
   letter-spacing: 0;
@@ -5741,15 +5745,15 @@ body.is-dragging-settings-page {
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-select-control .settings-select-trigger {
   min-height: 34px;
   border-radius: 6px;
-  background: #eeeeee;
-  color: #1f1f1f;
+  background: var(--seg-panel-muted);
+  color: var(--seg-text-1);
   font-size: 14px;
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-select-control .settings-select-trigger:hover,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-select-control .settings-select-trigger:focus-visible,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-select-control .settings-select.is-open .settings-select-trigger {
-  background: #e8e7e5;
+  background: var(--mix-seg-panel-72-seg-panel-muted-28);
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-about-check-button,
@@ -5817,7 +5821,7 @@ body.is-dragging-settings-page {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  color: #555555;
+  color: var(--seg-text-2);
   font-size: 14px;
   font-weight: 500;
   line-height: 1.25;
@@ -5848,7 +5852,7 @@ body.is-dragging-settings-page {
 .settings-account-value {
   min-width: 0;
   justify-self: end;
-  color: #1f1f1f;
+  color: var(--seg-text-1);
   font-size: 14px;
   font-weight: 600;
   line-height: 1.35;
@@ -5863,7 +5867,7 @@ body.is-dragging-settings-page {
   border: 0;
   border-radius: 3px;
   background: transparent;
-  color: #8f63e9;
+  color: var(--seg-accent-strong);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -5875,12 +5879,12 @@ body.is-dragging-settings-page {
 
 .settings-account-link-button:hover,
 .settings-account-link-button:focus-visible {
-  color: #704bd6;
+  color: var(--brand-accent-active);
   text-decoration: underline;
 }
 
 .settings-account-link-button:focus-visible {
-  outline: 2px solid rgba(143, 99, 233, 0.28);
+  outline: var(--focus-outline-width) solid var(--focus-outline-color);
   outline-offset: 3px;
 }
 
@@ -5907,22 +5911,22 @@ body.is-dragging-settings-page {
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions .secondary-button {
-  border-color: #dedede;
-  background: #ffffff;
-  color: #555555;
+  border-color: var(--seg-border);
+  background: var(--seg-panel-muted);
+  color: var(--seg-text-2);
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions .secondary-button:hover,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions .secondary-button:focus-visible {
-  border-color: #d0d0d0;
-  background: #f8f8f8;
-  color: #1f1f1f;
+  border-color: var(--mix-seg-accent-24-seg-border-76);
+  background: var(--mix-seg-panel-72-seg-panel-muted-28);
+  color: var(--seg-text-1);
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-about-status {
   margin: 0;
   padding: 12px 0 16px;
-  border-top: 1px solid #dedede;
+  border-top: 1px solid var(--seg-border);
 }
 
 @media (max-width: 720px) {
@@ -7107,7 +7111,7 @@ body.is-dragging-settings-page {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--seg-panel);
 }
 
 .connectors-page-main {
@@ -7146,7 +7150,7 @@ body.is-dragging-settings-page {
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: #202020;
+  color: var(--semantic-sidebar-tree-row-text);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -7156,17 +7160,26 @@ body.is-dragging-settings-page {
 }
 
 .connectors-list-row:hover,
-.connectors-list-row:focus-visible,
-.connectors-list-row.is-active {
+.connectors-list-row:focus-visible {
   border-color: transparent;
-  background: #f7f6f4;
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+  color: var(--semantic-sidebar-tree-row-text-hover);
   outline: none;
 }
 
+.connectors-list-row.is-active {
+  border-color: transparent;
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  color: var(--semantic-sidebar-tree-row-text-active);
+}
+
 .connectors-list-row:hover .connectors-list-copy strong,
-.connectors-list-row:focus-visible .connectors-list-copy strong,
+.connectors-list-row:focus-visible .connectors-list-copy strong {
+  color: var(--semantic-sidebar-tree-row-text-hover);
+}
+
 .connectors-list-row.is-active .connectors-list-copy strong {
-  color: #0f766e;
+  color: var(--semantic-sidebar-tree-row-text-active);
 }
 
 .connectors-list-copy {
@@ -7183,13 +7196,13 @@ body.is-dragging-settings-page {
 }
 
 .connectors-list-copy strong {
-  color: #202020;
+  color: var(--seg-text-1);
   font-size: 15px;
   font-weight: 690;
 }
 
 .connectors-list-copy span {
-  color: #77736d;
+  color: var(--seg-text-3);
   font-size: 12px;
   font-weight: 560;
 }
@@ -7197,10 +7210,10 @@ body.is-dragging-settings-page {
 .connectors-icon-mark {
   width: 34px;
   height: 34px;
-  border: 1px solid #eceae7;
+  border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: #ffffff;
-  color: #0f766e;
+  background: var(--seg-panel);
+  color: var(--seg-accent-strong);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -7220,33 +7233,34 @@ body.is-dragging-settings-page {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #c7c2bc;
+  background: var(--text-tertiary);
 }
 
 .connectors-status-dot.is-connected,
-.connectors-status-badge.is-connected svg {
-  color: #0f766e;
+.connectors-status-badge.is-connected {
+  color: var(--semantic-success-text);
 }
 
 .connectors-status-dot.is-connected {
-  background: #0f766e;
+  background: var(--semantic-success);
 }
 
 .connectors-status-dot.is-pending {
-  background: #d97706;
+  background: var(--semantic-warning);
 }
 
 .connectors-status-dot.is-error {
-  background: #dc2626;
+  background: var(--semantic-error);
 }
 
 .connectors-status-dot.is-unavailable {
-  background: #78716c;
+  background: var(--text-tertiary);
 }
 
 .connectors-detail-panel {
   min-height: 0;
-  background: #ffffff;
+  background: var(--seg-panel);
+  color: var(--seg-text-1);
   overflow: hidden;
 }
 
@@ -7259,6 +7273,7 @@ body.is-dragging-settings-page {
   overflow: auto;
   scrollbar-gutter: auto;
   scrollbar-width: none;
+  scrollbar-color: var(--seg-border) transparent;
   display: grid;
   align-content: start;
   gap: 28px;
@@ -7284,7 +7299,7 @@ body.is-dragging-settings-page {
 
 .connectors-detail-header h1 {
   margin: 8px 0 8px;
-  color: #202020;
+  color: var(--seg-text-1);
   font-size: 27px;
   line-height: 1.14;
   font-weight: 690;
@@ -7294,7 +7309,7 @@ body.is-dragging-settings-page {
 .connectors-detail-header p {
   max-width: 650px;
   margin: 0;
-  color: #77736d;
+  color: var(--seg-text-2);
   font-size: 16px;
   line-height: 1.45;
 }
@@ -7303,10 +7318,10 @@ body.is-dragging-settings-page {
   width: fit-content;
   min-height: 28px;
   padding: 4px 9px;
-  border: 1px solid #eceae7;
+  border: 1px solid var(--seg-border);
   border-radius: 999px;
-  background: #ffffff;
-  color: #77736d;
+  background: var(--seg-panel-muted);
+  color: var(--seg-text-2);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -7320,11 +7335,15 @@ body.is-dragging-settings-page {
 }
 
 .connectors-status-badge.is-pending {
-  color: #b45309;
+  color: var(--semantic-warning-text);
 }
 
 .connectors-status-badge.is-error {
-  color: #dc2626;
+  color: var(--semantic-error-text);
+}
+
+.connectors-status-badge.is-unavailable {
+  color: var(--text-tertiary);
 }
 
 .connectors-detail-section {
@@ -7334,7 +7353,7 @@ body.is-dragging-settings-page {
 
 .connectors-detail-section h2 {
   margin: 0;
-  color: #202020;
+  color: var(--seg-text-1);
   font-size: 17px;
   line-height: 1.25;
   font-weight: 680;
@@ -7342,16 +7361,16 @@ body.is-dragging-settings-page {
 
 .connectors-detail-table {
   overflow: hidden;
-  border: 1px solid #eceae7;
+  border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--seg-panel);
   display: grid;
 }
 
 .connectors-detail-table div {
   min-height: 52px;
   padding: 10px 14px;
-  border-bottom: 1px solid #eceae7;
+  border-bottom: 1px solid var(--seg-border);
   display: grid;
   grid-template-columns: minmax(120px, 0.32fr) minmax(0, 1fr);
   align-items: center;
@@ -7363,14 +7382,14 @@ body.is-dragging-settings-page {
 }
 
 .connectors-detail-table span {
-  color: #77736d;
+  color: var(--seg-text-2);
   font-size: 15px;
   font-weight: 520;
 }
 
 .connectors-detail-table strong {
   min-width: 0;
-  color: #242321;
+  color: var(--seg-text-1);
   font-size: 14px;
   line-height: 1.35;
   font-weight: 560;
@@ -7388,15 +7407,15 @@ body.is-dragging-settings-page {
   display: grid;
   gap: 14px;
   padding: 14px;
-  border: 1px solid #eceae7;
+  border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--seg-panel);
 }
 
 .connectors-setup-steps {
   margin: 0;
   padding-left: 20px;
-  color: #504c47;
+  color: var(--seg-text-2);
   font-size: 14px;
   line-height: 1.65;
 }
@@ -7407,13 +7426,13 @@ body.is-dragging-settings-page {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid #e2ded8;
+  border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: #faf9f7;
+  background: var(--seg-panel-muted);
 }
 
 .connectors-callback-url-card span {
-  color: #77736d;
+  color: var(--seg-text-2);
   font-size: 13px;
   font-weight: 650;
 }
@@ -7421,10 +7440,10 @@ body.is-dragging-settings-page {
 .connectors-callback-url-card code {
   min-width: 0;
   padding: 6px 8px;
-  border: 1px solid #eceae7;
+  border: 1px solid var(--seg-border);
   border-radius: 6px;
-  background: #ffffff;
-  color: #242321;
+  background: var(--seg-panel);
+  color: var(--seg-text-1);
   font-size: 13px;
   line-height: 1.3;
   white-space: nowrap;
@@ -7443,13 +7462,13 @@ body.is-dragging-settings-page {
 }
 
 .connectors-key-field small {
-  color: #77736d;
+  color: var(--seg-text-2);
   font-size: 12px;
   line-height: 1.35;
 }
 
 .connectors-action-note {
-  color: #77736d;
+  color: var(--seg-text-2);
   font-size: 13px;
   line-height: 1.4;
 }
@@ -7464,10 +7483,10 @@ body.is-dragging-settings-page {
 
 .connectors-review-list li {
   padding: 10px 12px;
-  border: 1px solid #eceae7;
+  border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: #faf9f7;
-  color: #504c47;
+  background: var(--seg-panel-muted);
+  color: var(--seg-text-2);
   font-size: 14px;
   line-height: 1.4;
 }
@@ -8924,7 +8943,7 @@ body.is-dragging-settings-page {
 
 .plugins-connector-empty {
   margin: 14px 0 0;
-  color: #77736d;
+  color: var(--seg-text-2);
   font-size: 13px;
   line-height: 1.45;
 }
@@ -8933,7 +8952,7 @@ body.is-dragging-settings-page {
   min-width: min(280px, 100%);
   display: grid;
   gap: 6px;
-  color: #6f6a64;
+  color: var(--seg-text-2);
   font-size: 12px;
   font-weight: 650;
 }
@@ -8941,17 +8960,18 @@ body.is-dragging-settings-page {
 .plugins-connector-key-field input {
   min-height: 34px;
   width: 100%;
-  border: 1px solid #dad4cd;
+  border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: #ffffff;
-  color: #2b2926;
+  background: var(--seg-panel);
+  color: var(--seg-text-1);
   padding: 0 10px;
   font: inherit;
   font-size: 13px;
 }
 
 .plugins-connector-key-field input:focus {
-  border-color: #202020;
+  border-color: var(--mix-seg-accent-34-seg-border-66);
+  background: var(--seg-panel-muted);
   outline: none;
 }
 
@@ -9033,9 +9053,9 @@ body.is-dragging-settings-page {
   min-width: 0;
   min-height: 54px;
   padding: 10px 12px;
-  border: 1px solid #eceae7;
+  border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--seg-panel);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -9059,9 +9079,9 @@ body.is-dragging-settings-page {
 
 .plugins-detail-install-button {
   padding: 0 14px;
-  border: 1px solid #202020;
-  background: #202020;
-  color: #ffffff;
+  border: 1px solid var(--seg-accent);
+  background: var(--seg-accent);
+  color: var(--text-on-dark);
   cursor: pointer;
   transition:
     background 160ms ease,
@@ -9071,8 +9091,8 @@ body.is-dragging-settings-page {
 
 .plugins-detail-install-button:hover,
 .plugins-detail-install-button:focus-visible {
-  border-color: #101010;
-  background: #101010;
+  border-color: var(--seg-accent-strong);
+  background: var(--seg-accent-strong);
   outline: none;
 }
 
@@ -9083,9 +9103,9 @@ body.is-dragging-settings-page {
 
 .plugins-detail-uninstall-button {
   padding: 0 12px;
-  border: 1px solid rgba(197, 78, 78, 0.28);
-  background: rgba(197, 78, 78, 0.08);
-  color: #8f3127;
+  border: 1px solid var(--semantic-error-border);
+  background: var(--semantic-error-surface);
+  color: var(--semantic-error-text);
   cursor: pointer;
   transition:
     background 160ms ease,
@@ -9096,9 +9116,9 @@ body.is-dragging-settings-page {
 
 .plugins-detail-uninstall-button:hover,
 .plugins-detail-uninstall-button:focus-visible {
-  border-color: rgba(197, 78, 78, 0.42);
-  background: rgba(197, 78, 78, 0.14);
-  color: #76251e;
+  border-color: var(--semantic-error-border);
+  background: var(--semantic-error-surface-strong);
+  color: var(--semantic-error-strong);
   outline: none;
 }
 
@@ -9109,9 +9129,9 @@ body.is-dragging-settings-page {
 
 .plugins-detail-action-status {
   padding: 0 12px;
-  border: 1px solid rgba(59, 156, 255, 0.2);
-  background: rgba(59, 156, 255, 0.08);
-  color: #1f6fb8;
+  border: 1px solid var(--semantic-info-border);
+  background: var(--semantic-info-surface);
+  color: var(--semantic-info-text);
 }
 
 .plugins-detail-install-button svg,
@@ -9198,7 +9218,7 @@ body.is-dragging-settings-page {
 
 .settings-primary-nav-group-label {
   padding: 0 8px;
-  color: #8a8a8a;
+  color: var(--seg-text-3);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0;
@@ -9209,22 +9229,30 @@ body.is-dragging-settings-page {
   padding: 8px 10px;
   border: 0;
   border-radius: 6px;
-  color: #3f3f3f;
+  color: var(--semantic-sidebar-tree-row-text);
   gap: 10px;
 }
 
 .settings-primary-nav-item:hover,
-.settings-primary-nav-item:focus-visible,
+.settings-primary-nav-item:focus-visible {
+  border-color: transparent;
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+  color: var(--semantic-sidebar-tree-row-text-hover);
+}
+
 .settings-primary-nav-item.is-active {
   border-color: transparent;
-  background: #e9e9e9;
-  color: #1f1f1f;
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  color: var(--semantic-sidebar-tree-row-text-active);
 }
 
 .settings-primary-nav-item:hover .settings-primary-nav-icon,
-.settings-primary-nav-item:focus-visible .settings-primary-nav-icon,
+.settings-primary-nav-item:focus-visible .settings-primary-nav-icon {
+  color: currentColor;
+}
+
 .settings-primary-nav-item.is-active .settings-primary-nav-icon {
-  color: #1f1f1f;
+  color: var(--semantic-sidebar-tree-row-leading-active);
 }
 
 .settings-primary-nav-label {
@@ -9297,9 +9325,9 @@ body.is-dragging-settings-page {
   min-width: 0;
   min-height: 38px;
   padding: 0 10px;
-  border: 1px solid #dedede;
+  border: 1px solid var(--seg-border);
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--seg-panel-muted);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -9309,7 +9337,7 @@ body.is-dragging-settings-page {
 .settings-provider-search-control svg {
   width: 15px;
   height: 15px;
-  color: #8a8a8a;
+  color: var(--seg-text-3);
   stroke-width: 1.8;
 }
 
@@ -9320,19 +9348,19 @@ body.is-dragging-settings-page {
   padding: 0;
   border: 0;
   background: transparent;
-  color: #1f1f1f;
+  color: var(--seg-text-1);
   font: inherit;
   font-size: 13px;
   outline: none;
 }
 
 .settings-provider-search-control input::placeholder {
-  color: #8a8a8a;
+  color: var(--seg-text-3);
 }
 
 .settings-provider-search-control:focus-within {
-  border-color: rgba(143, 99, 233, 0.42);
-  box-shadow: 0 0 0 3px rgba(143, 99, 233, 0.12);
+  border-color: var(--mix-seg-accent-34-seg-border-66);
+  box-shadow: 0 0 0 3px var(--mix-seg-accent-16-transparent-84);
 }
 
 .settings-provider-search-row .secondary-button,
@@ -9356,16 +9384,16 @@ body.is-dragging-settings-page {
 }
 
 .settings-page-main.is-services .secondary-button {
-  border-color: #dedede;
-  background: #ffffff;
-  color: #555555;
+  border-color: var(--seg-border);
+  background: var(--seg-panel-muted);
+  color: var(--seg-text-2);
 }
 
 .settings-page-main.is-services .secondary-button:hover,
 .settings-page-main.is-services .secondary-button:focus-visible {
-  border-color: #d0d0d0;
-  background: #f8f8f8;
-  color: #1f1f1f;
+  border-color: var(--mix-seg-accent-24-seg-border-76);
+  background: var(--mix-seg-panel-72-seg-panel-muted-28);
+  color: var(--seg-text-1);
 }
 
 .settings-service-list-body,
@@ -9418,7 +9446,7 @@ body.is-dragging-settings-page {
   border-color: transparent;
   border-radius: 6px;
   background: transparent;
-  color: #555555;
+  color: var(--semantic-sidebar-tree-row-text);
   gap: 4px;
   transform: none;
 }
@@ -9426,15 +9454,15 @@ body.is-dragging-settings-page {
 .settings-page-main.is-services .settings-service-item:hover,
 .settings-page-main.is-services .settings-service-item:focus-visible {
   border-color: transparent;
-  background: #f2f2f2;
-  color: #1f1f1f;
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+  color: var(--semantic-sidebar-tree-row-text-hover);
   transform: none;
 }
 
 .settings-page-main.is-services .settings-service-item.is-active {
   border-color: transparent;
-  background: #e9e9e9;
-  color: #1f1f1f;
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  color: var(--semantic-sidebar-tree-row-text-active);
 }
 
 .settings-page-main.is-services .settings-service-item-title {
@@ -9449,7 +9477,7 @@ body.is-dragging-settings-page {
 
 .settings-page-main.is-services .settings-service-item-copy {
   padding-left: 35px;
-  color: #727272;
+  color: var(--seg-text-3);
   font-size: 13px;
   line-height: 1.35;
 }
@@ -9457,7 +9485,7 @@ body.is-dragging-settings-page {
 .settings-page-main.is-services .provider-logo {
   width: 24px;
   height: 24px;
-  color: #555555;
+  color: currentColor;
 }
 
 .settings-page-main.is-services .provider-logo.is-large {
@@ -9485,9 +9513,9 @@ body.is-dragging-settings-page {
 }
 
 .settings-page-main.is-services .settings-panel {
-  border-color: #dedede;
+  border-color: var(--seg-border);
   border-radius: 12px;
-  background: #fafafa;
+  background: var(--seg-panel);
   box-shadow: none;
 }
 
@@ -9501,7 +9529,7 @@ body.is-dragging-settings-page {
 }
 
 .provider-detail-header h3 {
-  color: #1f1f1f;
+  color: var(--seg-text-1);
   font-size: 21px;
   font-weight: 650;
   line-height: 1.2;
@@ -9509,7 +9537,7 @@ body.is-dragging-settings-page {
 
 .provider-detail-header p {
   margin-top: 5px;
-  color: #666666;
+  color: var(--seg-text-2);
   font-size: 13px;
 }
 
@@ -9527,7 +9555,7 @@ body.is-dragging-settings-page {
 
 .provider-detail-divider {
   margin: 18px 0 0;
-  background: #dedede;
+  background: var(--seg-border);
 }
 
 .provider-detail-body {
@@ -9537,7 +9565,7 @@ body.is-dragging-settings-page {
 .provider-detail-row {
   min-height: 76px;
   padding: 16px 0;
-  border-bottom: 1px solid #dedede;
+  border-bottom: 1px solid var(--seg-border);
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
   align-items: center;
@@ -9557,7 +9585,7 @@ body.is-dragging-settings-page {
 
 .provider-detail-helper {
   margin: 0;
-  color: #6d6a66;
+  color: var(--seg-text-2);
   font-size: 13px;
   line-height: 1.45;
 }
@@ -9568,19 +9596,20 @@ body.is-dragging-settings-page {
 
 .provider-radio-option {
   width: auto;
-  color: #1f1f1f;
+  color: var(--seg-text-1);
   font-size: 14px;
 }
 
 .provider-radio-option input {
   width: 17px;
   height: 17px;
-  border-color: #8a8a8a;
+  border-color: var(--seg-text-3);
+  background: var(--seg-panel);
 }
 
 .provider-radio-option input:checked {
-  border-color: #1f1f1f;
-  background: #1f1f1f;
+  border-color: var(--seg-accent);
+  background: var(--seg-accent);
 }
 
 .provider-key-field {
@@ -9589,10 +9618,10 @@ body.is-dragging-settings-page {
 
 .provider-key-input-wrap input {
   min-height: 36px;
-  border-color: #d9d9d9;
+  border-color: var(--seg-border);
   border-radius: 6px;
-  background: #ffffff;
-  color: #1f1f1f;
+  background: var(--seg-panel-muted);
+  color: var(--seg-text-1);
 }
 
 .provider-advanced-settings {
@@ -9604,11 +9633,11 @@ body.is-dragging-settings-page {
 .provider-advanced-settings summary {
   min-height: 76px;
   padding: 16px 0;
-  border-bottom: 1px solid #dedede;
+  border-bottom: 1px solid var(--seg-border);
 }
 
 .settings-page-main.is-services .provider-advanced-settings summary > span {
-  color: #1f1f1f;
+  color: var(--seg-text-1);
   font-size: 15px;
   font-weight: 500;
 }
@@ -9666,15 +9695,17 @@ body.is-dragging-settings-page {
   position: relative;
   min-height: auto;
   padding: 10px 10px 11px 13px;
-  border-left: 0;
+  border: 1px solid var(--semantic-settings-slot-card-list-item-border-default);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.32);
+  background: var(--semantic-settings-slot-card-list-item-surface-default);
+  color: var(--semantic-settings-slot-card-list-item-primary-text-default);
   grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   gap: 8px;
   transition:
     background 140ms ease,
-    box-shadow 140ms ease;
+    border-color 140ms ease,
+    color 140ms ease;
 }
 
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-assignment-row::before {
@@ -9685,44 +9716,45 @@ body.is-dragging-settings-page {
   left: 0;
   width: 2px;
   border-radius: 999px;
-  background: rgba(120, 130, 140, 0.28);
+  background: var(--semantic-settings-slot-card-list-item-indicator-default);
+  transition: background 140ms ease;
 }
 
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-assignment-row:hover,
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-assignment-row:focus-within {
-  background: rgba(255, 255, 255, 0.56);
+  background: var(--semantic-settings-slot-card-list-item-surface-hover);
 }
 
-.settings-page-main.is-services.prompt-presets-page-main .settings-prompt-assignment-row.is-open {
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 8px 22px rgba(22, 34, 48, 0.04);
+.settings-page-main.is-services.prompt-presets-page-main .settings-prompt-assignment-row:focus-within {
+  background: var(--semantic-settings-slot-card-list-item-surface-focus);
+  box-shadow: none;
 }
 
-.settings-page-main.is-services.prompt-presets-page-main .settings-prompt-assignment-row.is-open::before {
-  background: rgba(143, 99, 233, 0.66);
+.settings-page-main.is-services.prompt-presets-page-main .settings-prompt-assignment-row:focus-within::before {
+  background: var(--semantic-settings-slot-card-list-item-indicator-focus);
 }
 
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-assignment-row + .settings-prompt-assignment-row {
-  border-left: 0;
-  border-top: 0;
+  border: 1px solid var(--semantic-settings-slot-card-list-item-border-default);
 }
 
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-assignment-copy {
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
-.settings-page-main.is-services.prompt-presets-page-main .settings-prompt-assignment-copy .settings-badge {
-  min-height: 18px;
-  padding: 0 6px;
-  font-size: 10px;
-}
-
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-assignment-title {
+  min-width: 0;
+  color: var(--semantic-settings-slot-card-list-item-primary-text-default);
   font-size: 12px;
   letter-spacing: 0;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-assignment-control,
@@ -9738,14 +9770,24 @@ body.is-dragging-settings-page {
 .settings-page-main.is-services.prompt-presets-page-main
   .settings-prompt-assignment-select
   .settings-select-trigger {
-  min-height: 30px;
+  min-height: 20px;
   padding: 0;
+  border: 0;
+  border-radius: 0;
   background: transparent;
+  color: var(--semantic-settings-slot-card-list-item-secondary-text-default);
+  font-size: 13px;
+  line-height: 1.35;
+  box-shadow: none;
 }
 
 .settings-page-main.is-services.prompt-presets-page-main
   .settings-prompt-assignment-select
-  .settings-select-trigger:hover,
+  .settings-select-trigger:hover {
+  background: transparent;
+  color: var(--semantic-settings-slot-card-list-action-text-hover);
+}
+
 .settings-page-main.is-services.prompt-presets-page-main
   .settings-prompt-assignment-select
   .settings-select-trigger:focus-visible,
@@ -9753,6 +9795,27 @@ body.is-dragging-settings-page {
   .settings-prompt-assignment-select.is-open
   .settings-select-trigger {
   background: transparent;
+  color: var(--semantic-settings-slot-card-list-action-text-focus);
+  box-shadow: none;
+}
+
+.settings-page-main.is-services.prompt-presets-page-main
+  .settings-prompt-assignment-row:has(.settings-select-trigger:disabled) {
+  background: var(--semantic-settings-slot-card-list-item-surface-disabled);
+}
+
+.settings-page-main.is-services.prompt-presets-page-main
+  .settings-prompt-assignment-row:has(.settings-select-trigger:disabled)
+  .settings-prompt-assignment-title {
+  color: var(--semantic-settings-slot-card-list-item-primary-text-disabled);
+}
+
+.settings-page-main.is-services.prompt-presets-page-main
+  .settings-prompt-assignment-select
+  .settings-select-trigger:disabled {
+  background: transparent;
+  color: var(--semantic-settings-slot-card-list-action-text-disabled);
+  opacity: 1;
 }
 
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-editor-header {
@@ -9786,9 +9849,10 @@ body.is-dragging-settings-page {
 }
 
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-editor:focus-visible {
+  background: var(--semantic-settings-slot-card-list-item-surface-focus);
+  color: var(--seg-text-1);
   box-shadow: none;
-  outline: var(--focus-outline-width) solid rgba(143, 99, 233, 0.22);
-  outline-offset: calc(-1 * var(--focus-outline-width));
+  outline: none;
 }
 
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-source-path {
@@ -9801,7 +9865,7 @@ body.is-dragging-settings-page {
 }
 
 .settings-page-main.is-services .settings-section-header h3 {
-  color: #1f1f1f;
+  color: var(--seg-text-1);
   font-size: 20px;
   font-weight: 650;
   letter-spacing: 0;
@@ -9814,7 +9878,7 @@ body.is-dragging-settings-page {
 .settings-page-main.is-services .model-row {
   padding: 16px 0;
   border: 0;
-  border-top: 1px solid #dedede;
+  border-top: 1px solid var(--seg-border);
   border-radius: 0;
   background: transparent;
 }
@@ -9828,14 +9892,14 @@ body.is-dragging-settings-page {
 }
 
 .settings-page-main.is-services .model-row h4 {
-  color: #1f1f1f;
+  color: var(--seg-text-1);
   font-size: 16px;
   font-weight: 650;
   letter-spacing: 0;
 }
 
 .settings-page-main.is-services .model-row-copy {
-  color: #777777;
+  color: var(--seg-text-2);
   font-size: 13px;
   line-height: 1.4;
 }
@@ -9853,10 +9917,10 @@ body.is-dragging-settings-page {
 .settings-page-main.is-services .settings-badge {
   min-height: 24px;
   padding: 0 8px;
-  border-color: #dedede;
+  border-color: var(--seg-border);
   border-radius: 5px;
-  background: #f7f7f7;
-  color: #666666;
+  background: var(--seg-panel-muted);
+  color: var(--seg-text-2);
   font-size: 10px;
   letter-spacing: 0.04em;
 }

@@ -156,11 +156,16 @@
 }
 
 .global-skills-mode-button:hover,
-.global-skills-mode-button:focus-visible,
-.global-skills-mode-button.is-active {
-  background: var(--seg-panel);
+.global-skills-mode-button:focus-visible {
+  background: var(--semantic-sidebar-tree-row-surface-hover);
   color: var(--seg-text-1);
-  box-shadow: 0 1px 2px rgba(24, 37, 50, 0.08);
+  box-shadow: none;
+}
+
+.global-skills-mode-button.is-active {
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  color: var(--seg-text-1);
+  box-shadow: none;
 }
 
 .global-skills-mode-button:focus-visible {
@@ -187,8 +192,9 @@
   height: 100%;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
-  border: 1px solid rgba(166, 186, 208, 0.28);
-  background: #ffffff;
+  border: 1px solid var(--seg-border);
+  background: var(--seg-panel);
+  color: var(--seg-text-1);
   cursor: text;
   overflow: hidden;
   -webkit-app-region: no-drag;
@@ -211,12 +217,13 @@
   border: 0;
   padding: 18px;
   background: transparent;
-  color: #203142;
+  color: var(--seg-text-1);
   font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
   font-size: 13px;
   line-height: 1.6;
   resize: none;
   outline: none;
+  scrollbar-color: var(--seg-border) transparent;
   cursor: text;
   pointer-events: auto;
   -webkit-app-region: no-drag;
@@ -224,7 +231,7 @@
 }
 
 .global-skills-editor[readonly] {
-  background: #f9fbfd;
+  background: var(--seg-panel-muted);
   color: var(--seg-text-2);
   cursor: default;
 }
@@ -235,8 +242,9 @@
   min-height: 0;
   max-width: none;
   overflow: auto;
+  scrollbar-color: var(--seg-border) transparent;
   padding: 24px 28px;
-  background: #ffffff;
+  background: var(--seg-panel);
   color: var(--seg-text-1);
   font-size: 14px;
   line-height: 1.65;
@@ -245,7 +253,7 @@
 .global-skills-metadata-panel {
   margin: 0 0 22px;
   padding: 14px 16px;
-  border: 1px solid rgba(166, 186, 208, 0.42);
+  border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-xs);
   background: var(--seg-panel-muted);
   display: grid;
@@ -286,9 +294,9 @@
 .global-skills-metadata-badge {
   flex: 0 0 auto;
   padding: 3px 8px;
-  border: 1px solid rgba(166, 186, 208, 0.6);
+  border: 1px solid var(--seg-border);
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--seg-panel);
   color: var(--seg-text-2);
   font-size: 11px;
   font-weight: 700;
@@ -319,9 +327,9 @@
 .global-skills-metadata-tools code {
   max-width: 100%;
   padding: 3px 7px;
-  border: 1px solid rgba(166, 186, 208, 0.52);
+  border: 1px solid var(--seg-border);
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--seg-panel);
   color: var(--seg-text-1);
   font-size: 12px;
   overflow-wrap: anywhere;
@@ -365,8 +373,8 @@
 .global-skills-empty-state {
   min-height: 0;
   padding: 24px;
-  border: 1px dashed rgba(166, 186, 208, 0.5);
-  background: rgba(255, 255, 255, 0.76);
+  border: 1px dashed var(--seg-border);
+  background: var(--seg-panel);
   display: grid;
   align-content: center;
   justify-items: start;
@@ -384,11 +392,11 @@
 }
 
 .global-skills-empty-state h3 {
-  color: #1f2f3d;
+  color: var(--seg-text-1);
 }
 
 .global-skills-empty-state p {
-  color: #5f7488;
+  color: var(--seg-text-2);
   line-height: 1.5;
 }
 
@@ -542,8 +550,9 @@
   stroke-width: 2;
 }
 
-.prompt-skills-top-menu-content {
+.canvas-region-top-menu-tabs-shell.prompt-skills-top-menu-content {
   gap: 14px;
+  justify-content: center;
 }
 
 .prompt-skills-mode-toggle {

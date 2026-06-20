@@ -1025,7 +1025,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   padding: 0 10px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-xs);
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--seg-panel-muted);
+  color: var(--seg-text-1);
 }
 
 .skills-tree-search-row svg {

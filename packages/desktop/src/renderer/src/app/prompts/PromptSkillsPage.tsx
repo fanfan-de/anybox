@@ -1,5 +1,4 @@
 import type { ReactNode } from "react"
-import { FileTextIcon } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
 import { ShellTopMenu } from "../shared-ui"
 
@@ -36,27 +35,22 @@ export function PromptSkillsPage({
         className="canvas-region-top-menu prompt-skills-top-menu"
         contentClassName="canvas-region-top-menu-tabs-shell prompt-skills-top-menu-content"
         content={(
-          <>
-            <div className="prompt-presets-top-menu-label prompt-skills-top-menu-label">
-              <FileTextIcon />
-              <span>{t("resources.title")}</span>
-            </div>
-            <div className="global-skills-mode-toggle prompt-skills-mode-toggle window-no-drag-region" role="group" aria-label={t("resources.modeAria")}>
-              {promptSkillModeOptions.map((option) => (
-                <button
-                  key={option.mode}
-                  className={mode === option.mode ? "global-skills-mode-button is-active" : "global-skills-mode-button"}
-                  type="button"
-                  aria-pressed={mode === option.mode}
-                  onClick={() => onModeChange(option.mode)}
-                >
-                  {t(option.labelKey)}
-                </button>
-              ))}
-            </div>
-          </>
+          <div className="global-skills-mode-toggle prompt-skills-mode-toggle window-no-drag-region" role="group" aria-label={t("resources.modeAria")}>
+            {promptSkillModeOptions.map((option) => (
+              <button
+                key={option.mode}
+                className={mode === option.mode ? "global-skills-mode-button is-active" : "global-skills-mode-button"}
+                type="button"
+                aria-pressed={mode === option.mode}
+                onClick={() => onModeChange(option.mode)}
+              >
+                {t(option.labelKey)}
+              </button>
+            ))}
+          </div>
         )}
         dragRegion
+        leading={null}
         layout="three-column"
         trailing={windowControls}
         trailingClassName="prompt-presets-top-menu-window-controls"
