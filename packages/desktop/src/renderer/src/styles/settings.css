@@ -7989,6 +7989,9 @@ body.is-dragging-settings-page {
   background: transparent;
   color: var(--seg-text-3);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font: inherit;
 }
 

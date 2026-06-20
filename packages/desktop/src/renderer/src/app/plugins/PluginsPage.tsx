@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import {
+  BackIcon,
   ChevronDownIcon,
-  ChevronRightIcon,
   ConnectedStatusIcon,
   DeleteIcon,
   FolderOpenIcon,
@@ -961,19 +961,14 @@ export function PluginsPage({
   const defaultIncludedItemID = activePlugin && defaultOAuthApp
     ? `${activePlugin.id}:app:${defaultOAuthApp.appID}`
     : null
-  const pluginBreadcrumb = (
+  const pluginBreadcrumb = activePlugin ? (
     <nav className="plugins-detail-breadcrumb" aria-label={t("plugins.detail.breadcrumb")}>
-      {activePlugin ? (
-        <>
-          <button type="button" onClick={onPluginDeselect}>{pluginsTitle}</button>
-          <ChevronRightIcon />
-          <span>{activePluginName}</span>
-        </>
-      ) : (
+      <button type="button" onClick={onPluginDeselect}>
+        <BackIcon />
         <span>{pluginsTitle}</span>
-      )}
+      </button>
     </nav>
-  )
+  ) : null
   const toggleIncludedItem = (itemID: string) => {
     setExpandedIncludedItemID((currentItemID) => currentItemID === itemID ? null : itemID)
   }

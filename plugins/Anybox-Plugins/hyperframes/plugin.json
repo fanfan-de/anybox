@@ -29,9 +29,18 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "HyperFrames by HeyGen",
-    "shortDescription": "Write HTML, render video",
-    "longDescription": "Build videos from HTML with HyperFrames. Author compositions with HTML, CSS, Tailwind v4 browser-runtime styles, GSAP, Anime.js, Lottie, Three.js, and WAAPI adapter patterns, use the CLI for the dev loop (init/preview/render), preprocess assets (tts/transcribe/remove-background) for compositions, install reusable registry blocks and components, and turn any website into a video with the 7-step capture-to-video pipeline.",
+    "displayName": {
+      "en-US": "HyperFrames by HeyGen",
+      "zh-CN": "HyperFrames by HeyGen"
+    },
+    "shortDescription": {
+      "en-US": "Write HTML, render video",
+      "zh-CN": "编写 HTML，渲染视频"
+    },
+    "longDescription": {
+      "en-US": "Build videos from HTML with HyperFrames. Author compositions with HTML, CSS, Tailwind v4 browser-runtime styles, GSAP, Anime.js, Lottie, Three.js, and WAAPI adapter patterns, use the CLI for the dev loop (init/preview/render), preprocess assets (tts/transcribe/remove-background) for compositions, install reusable registry blocks and components, and turn any website into a video with the 7-step capture-to-video pipeline.",
+      "zh-CN": "使用 HyperFrames 从 HTML 构建视频。通过 HTML、CSS、Tailwind v4 浏览器运行时样式、GSAP、Anime.js、Lottie、Three.js 和 WAAPI adapter 模式创作合成；使用 CLI 完成开发循环（init/preview/render）；为合成预处理素材（tts/transcribe/remove-background）；安装可复用的 registry blocks 和组件，并通过 7 步 capture-to-video 流水线把任意网站转换成视频。"
+    },
     "developerName": "HeyGen",
     "category": "Design",
     "capabilities": ["Read", "Write"],
