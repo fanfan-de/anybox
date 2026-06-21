@@ -159,6 +159,15 @@ export function SettingsRoutes() {
 
   app.get("/plugins/installed", async (c) => ok(c, SettingsUseCase.listInstalledPlugins()))
 
+  app.post("/plugins/import-url", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      SettingsUseCase.ImportPluginURLBody,
+      "Body must contain a plugin manifest URL.",
+    )
+    return ok(c, await SettingsUseCase.importPluginFromURL(payload))
+  })
+
   app.put("/plugins/installed/:pluginID", async (c) => {
     const payload = await parseJsonBody(
       c,

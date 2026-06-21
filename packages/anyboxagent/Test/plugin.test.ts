@@ -158,6 +158,7 @@ type PluginCatalogEnvelope = JsonEnvelope<
     }>
   }>
 >
+type PluginCatalogItemEnvelope = JsonEnvelope<NonNullable<PluginCatalogEnvelope["data"]>[number]>
 
 type InstalledPluginEnvelope = JsonEnvelope<{
   pluginID: string
@@ -292,6 +293,7 @@ let previousPluginLocalDir: string | undefined
 let previousPluginInstallDir: string | undefined
 let previousPluginRegistryIndexURL: string | undefined
 let previousPluginRegistryCacheDir: string | undefined
+let previousPluginImportedRegistryFile: string | undefined
 let previousConnectorRegistryFiles: string | undefined
 let previousConnectorBuildConfig: string | undefined
 let previousGmailOAuthClientID: string | undefined
@@ -321,6 +323,7 @@ async function useTempDatabase() {
   previousPluginInstallDir = process.env.ANYBOX_PLUGIN_INSTALL_DIR
   previousPluginRegistryIndexURL = process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL
   previousPluginRegistryCacheDir = process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR
+  previousPluginImportedRegistryFile = process.env.ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE
   previousConnectorRegistryFiles = process.env.ANYBOX_CONNECTOR_REGISTRY_FILES
   previousConnectorBuildConfig = process.env.ANYBOX_CONNECTOR_BUILD_CONFIG
   previousGmailOAuthClientID = process.env.ANYBOX_GMAIL_OAUTH_CLIENT_ID
@@ -332,6 +335,7 @@ async function useTempDatabase() {
   process.env.ANYBOX_PLUGIN_INSTALL_DIR = join(activeRoot, "installed-plugins")
   process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "off"
   process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR = join(activeRoot, "registry-cache")
+  process.env.ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE = join(activeRoot, "imported-plugin-registry.json")
   delete process.env.ANYBOX_CONNECTOR_REGISTRY_FILES
   delete process.env.ANYBOX_CONNECTOR_BUILD_CONFIG
   delete process.env.ANYBOX_GMAIL_OAUTH_CLIENT_ID
@@ -876,8 +880,9 @@ async function writeLocalSourcePluginPackage() {
 
   const packageSourceRoot = pluginLocalRoot()
   const packageRoot = join(packageSourceRoot, "local-source-lab")
+  const manifestRoot = join(packageRoot, ".anybox-plugin")
   const skillRoot = join(packageRoot, "skills", "local-review")
-  await mkdir(packageRoot, { recursive: true })
+  await mkdir(manifestRoot, { recursive: true })
   await mkdir(skillRoot, { recursive: true })
 
   await writeFile(join(skillRoot, "SKILL.md"), [
@@ -892,7 +897,7 @@ async function writeLocalSourcePluginPackage() {
     "",
   ].join("\n"))
 
-  await writeFile(join(packageRoot, "plugin.json"), JSON.stringify({
+  await writeFile(join(manifestRoot, "plugin.json"), JSON.stringify({
     name: "local-source-lab",
     version: "0.1.0",
     description: "Fixture plugin package from the local plugin source root.",
@@ -1157,6 +1162,11 @@ afterEach(async () => {
   } else {
     process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR = previousPluginRegistryCacheDir
   }
+  if (previousPluginImportedRegistryFile === undefined) {
+    delete process.env.ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE
+  } else {
+    process.env.ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE = previousPluginImportedRegistryFile
+  }
   if (previousConnectorRegistryFiles === undefined) {
     delete process.env.ANYBOX_CONNECTOR_REGISTRY_FILES
   } else {
@@ -1194,6 +1204,7 @@ afterEach(async () => {
   previousPluginInstallDir = undefined
   previousPluginRegistryIndexURL = undefined
   previousPluginRegistryCacheDir = undefined
+  previousPluginImportedRegistryFile = undefined
   previousConnectorRegistryFiles = undefined
   previousConnectorBuildConfig = undefined
   previousGmailOAuthClientID = undefined
@@ -1345,8 +1356,8 @@ describe("plugin marketplace API", () => {
     expect(installResponse.status).toBe(200)
     expect(installBody.data?.skillIDs).toEqual(["plugin:local-source-lab:local-review"])
     expect(existsSync(installedPackageRoot)).toBe(true)
-    expect(existsSync(join(installedPackageRoot, "plugin.json"))).toBe(true)
-    expect(existsSync(join(installedPackageRoot, ".anybox-plugin", "plugin.json"))).toBe(false)
+    expect(existsSync(join(installedPackageRoot, "plugin.json"))).toBe(false)
+    expect(existsSync(join(installedPackageRoot, ".anybox-plugin", "plugin.json"))).toBe(true)
 
     const deleteResponse = await app.request("/api/plugins/installed/local-source-lab", {
       method: "DELETE",
@@ -1422,14 +1433,14 @@ describe("plugin marketplace API", () => {
         ? input
         : input instanceof URL ? input.toString() : input.url
       if (url === "https://registry.example.test/index.json") {
-        return new Response(JSON.stringify(["https://plugins.example.test/remote-lab/plugin.json"]), {
+        return new Response(JSON.stringify(["https://plugins.example.test/remote-lab/.anybox-plugin/plugin.json"]), {
           status: 200,
           headers: {
             "content-type": "application/json",
           },
         })
       }
-      if (url === "https://plugins.example.test/remote-lab/plugin.json") {
+      if (url === "https://plugins.example.test/remote-lab/.anybox-plugin/plugin.json") {
         return new Response(JSON.stringify(remotePluginMeta), {
           status: 200,
           headers: {
@@ -1485,9 +1496,9 @@ describe("plugin marketplace API", () => {
         ? input
         : input instanceof URL ? input.toString() : input.url
       if (url === "https://registry.example.test/index.json") {
-        return new Response(JSON.stringify(["https://plugins.example.test/meta-only/plugin.json"]), { status: 200 })
+        return new Response(JSON.stringify(["https://plugins.example.test/meta-only/.anybox-plugin/plugin.json"]), { status: 200 })
       }
-      if (url === "https://plugins.example.test/meta-only/plugin.json") {
+      if (url === "https://plugins.example.test/meta-only/.anybox-plugin/plugin.json") {
         return new Response(JSON.stringify({
           name: "meta-only",
           version: "1.0.0",
@@ -1540,7 +1551,34 @@ describe("plugin marketplace API", () => {
     expect(manifestRequestCount).toBe(0)
   })
 
-  test("loads remote metadata from direct plugin.json URLs in the registry index", async () => {
+  test("does not resolve legacy remote registry root plugin.json URLs", async () => {
+    await useTempDatabase()
+    const app = createServerApp()
+    process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "https://registry.example.test/index.json"
+    let manifestRequestCount = 0
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL ? input.toString() : input.url
+      if (url === "https://registry.example.test/index.json") {
+        return new Response(JSON.stringify(["https://plugins.example.test/root-lab/plugin.json"]), { status: 200 })
+      }
+      if (url === "https://plugins.example.test/root-lab/plugin.json") {
+        manifestRequestCount += 1
+      }
+      return new Response("not found", { status: 404 })
+    }) as typeof fetch
+
+    const response = await app.request("/api/plugins/catalog")
+    const body = (await response.json()) as PluginCatalogEnvelope
+    const plugin = body.data?.find((item) => item.id === "root-lab")
+
+    expect(response.status).toBe(200)
+    expect(plugin).toBeUndefined()
+    expect(manifestRequestCount).toBe(0)
+  })
+
+  test("loads remote metadata from direct .anybox-plugin/plugin.json URLs in the registry index", async () => {
     await useTempDatabase()
     const app = createServerApp()
     process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "https://registry.example.test/index.json"
@@ -1552,11 +1590,11 @@ describe("plugin marketplace API", () => {
         : input instanceof URL ? input.toString() : input.url
       if (url === "https://registry.example.test/index.json") {
         return new Response(JSON.stringify([
-          "https://plugins.example.test/direct-lab/plugin.json",
-          "https://github.com/fanfan-de/anybox/blob/master/plugins/Anybox-Plugins/blob-lab/plugin.json",
+          "https://plugins.example.test/direct-lab/.anybox-plugin/plugin.json",
+          "https://github.com/fanfan-de/anybox/blob/master/plugins/Anybox-Plugins/blob-lab/.anybox-plugin/plugin.json",
         ]), { status: 200 })
       }
-      if (url === "https://plugins.example.test/direct-lab/plugin.json") {
+      if (url === "https://plugins.example.test/direct-lab/.anybox-plugin/plugin.json") {
         return new Response(JSON.stringify({
           name: "direct-lab",
           version: "1.0.0",
@@ -1572,7 +1610,7 @@ describe("plugin marketplace API", () => {
           skills: [],
         }), { status: 200 })
       }
-      if (url === "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/blob-lab/plugin.json") {
+      if (url === "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/blob-lab/.anybox-plugin/plugin.json") {
         requestedRawGitHubURL = true
         return new Response(JSON.stringify({
           name: "blob-lab",
@@ -1601,6 +1639,129 @@ describe("plugin marketplace API", () => {
     expect(directPlugin?.screenshots).toEqual(["https://plugins.example.test/direct-lab/assets/screenshot.png"])
     expect(blobPlugin?.name).toBe("Blob Lab")
     expect(requestedRawGitHubURL).toBe(true)
+  })
+
+  test("imports plugin metadata from a direct plugin URL into the user registry", async () => {
+    await useTempDatabase()
+    const app = createServerApp()
+
+    const packageManifest = {
+      name: "url-lab",
+      version: "0.2.0",
+      description: "Fixture plugin imported from a URL.",
+      skills: "skills",
+    }
+    const zipBytes = createZipArchive([
+      {
+        name: "url-lab/.anybox-plugin/plugin.json",
+        data: `${JSON.stringify(packageManifest, null, 2)}\n`,
+      },
+      {
+        name: "url-lab/skills/review/SKILL.md",
+        data: [
+          "---",
+          "name: review",
+          "description: Review URL imported fixture packages.",
+          "---",
+          "",
+          "Use when testing plugin URL imports.",
+          "",
+        ].join("\n"),
+      },
+    ])
+    const remotePluginMeta = {
+      ...packageManifest,
+      interface: {
+        displayName: "URL Lab",
+        shortDescription: "Imported by URL.",
+        category: "Docs",
+        logo: "./assets/icon.png",
+      },
+      package: {
+        type: "zip",
+        url: "https://cdn.example.test/url-lab.zip",
+        sha256: createHash("sha256").update(zipBytes).digest("hex"),
+        size: zipBytes.byteLength,
+      },
+      skillPreviews: [
+        {
+          name: "review",
+          description: "Review URL imported fixture packages.",
+          directory: "review",
+        },
+      ],
+    }
+    let requestedRawGitHubURL = false
+    let packageDownloadCount = 0
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL ? input.toString() : input.url
+      if (url === "https://raw.githubusercontent.com/example/anybox-plugins/main/url-lab/.anybox-plugin/plugin.json") {
+        requestedRawGitHubURL = true
+        return new Response(JSON.stringify(remotePluginMeta), { status: 200 })
+      }
+      if (url === "https://cdn.example.test/url-lab.zip") {
+        packageDownloadCount += 1
+        return new Response(zipBytes, {
+          status: 200,
+          headers: {
+            "content-length": String(zipBytes.byteLength),
+          },
+        })
+      }
+      return new Response("not found", { status: 404 })
+    }) as typeof fetch
+
+    const importResponse = await app.request("/api/plugins/import-url", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        url: "https://github.com/example/anybox-plugins/blob/main/url-lab/.anybox-plugin/plugin.json",
+      }),
+    })
+    const importBody = (await importResponse.json()) as PluginCatalogItemEnvelope
+
+    expect(importResponse.status).toBe(200)
+    expect(requestedRawGitHubURL).toBe(true)
+    expect(importBody.data?.id).toBe("url-lab")
+    expect(importBody.data?.installable).toBe(true)
+    expect(importBody.data?.iconUrl).toBe("https://raw.githubusercontent.com/example/anybox-plugins/main/url-lab/assets/icon.png")
+
+    const cachedCatalogResponse = await app.request("/api/plugins/catalog?freshness=cached")
+    const cachedCatalogBody = (await cachedCatalogResponse.json()) as PluginCatalogEnvelope
+    const importedPlugin = cachedCatalogBody.data?.find((plugin) => plugin.id === "url-lab")
+
+    expect(cachedCatalogResponse.status).toBe(200)
+    expect(importedPlugin?.name).toBe("URL Lab")
+    expect(importedPlugin?.source).toBe("registry")
+    expect(importedPlugin?.installable).toBe(true)
+
+    process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "https://registry.example.test/offline-index.json"
+    const freshCatalogResponse = await app.request("/api/plugins/catalog?freshness=fresh")
+    const freshCatalogBody = (await freshCatalogResponse.json()) as PluginCatalogEnvelope
+    const freshImportedPlugin = freshCatalogBody.data?.find((plugin) => plugin.id === "url-lab")
+
+    expect(freshCatalogResponse.status).toBe(200)
+    expect(freshImportedPlugin?.name).toBe("URL Lab")
+
+    const installResponse = await app.request("/api/plugins/installed/url-lab", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        enabled: true,
+      }),
+    })
+    const installBody = (await installResponse.json()) as InstalledPluginEnvelope
+
+    expect(installResponse.status).toBe(200)
+    expect(packageDownloadCount).toBe(1)
+    expect(installBody.data?.skillIDs).toEqual(["plugin:url-lab:review"])
+    expect(existsSync(join(pluginInstallRoot(), "url-lab", "0.2.0", ".anybox-plugin", "plugin.json"))).toBe(true)
   })
 
   test("installs registry zip packages that use Windows path separators", async () => {
@@ -1659,9 +1820,9 @@ describe("plugin marketplace API", () => {
         ? input
         : input instanceof URL ? input.toString() : input.url
       if (url === "https://registry.example.test/index.json") {
-        return new Response(JSON.stringify(["https://plugins.example.test/remote-lab/plugin.json"]), { status: 200 })
+        return new Response(JSON.stringify(["https://plugins.example.test/remote-lab/.anybox-plugin/plugin.json"]), { status: 200 })
       }
-      if (url === "https://plugins.example.test/remote-lab/plugin.json") {
+      if (url === "https://plugins.example.test/remote-lab/.anybox-plugin/plugin.json") {
         return new Response(JSON.stringify(remotePluginMeta), { status: 200 })
       }
       if (url === "https://cdn.example.test/remote-lab.zip") {
@@ -1728,9 +1889,9 @@ describe("plugin marketplace API", () => {
         ? input
         : input instanceof URL ? input.toString() : input.url
       if (url === "https://registry.example.test/index.json") {
-        return new Response(JSON.stringify(["https://plugins.example.test/remote-lab/plugin.json"]), { status: 200 })
+        return new Response(JSON.stringify(["https://plugins.example.test/remote-lab/.anybox-plugin/plugin.json"]), { status: 200 })
       }
-      if (url === "https://plugins.example.test/remote-lab/plugin.json") {
+      if (url === "https://plugins.example.test/remote-lab/.anybox-plugin/plugin.json") {
         return new Response(JSON.stringify(remotePluginMeta), { status: 200 })
       }
       if (url === "https://cdn.example.test/remote-lab.zip") {

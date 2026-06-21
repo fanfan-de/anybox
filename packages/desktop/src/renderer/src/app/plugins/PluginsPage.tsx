@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import {
   BackIcon,
   ChevronDownIcon,
+  CloseIcon,
   ConnectedStatusIcon,
   DeleteIcon,
   FolderOpenIcon,
@@ -52,6 +53,7 @@ interface PluginsPageProps {
   onDeleteInstalledPluginConnectorAuthSession: (pluginID: string, appID: string) => boolean | Promise<boolean>
   onDiagnoseInstalledPlugin: (pluginID: string) => boolean | Promise<boolean>
   onDiagnoseInstalledPluginConnector: (pluginID: string, appID: string) => boolean | Promise<boolean>
+  onImportPluginFromURL: (url: string) => boolean | Promise<boolean>
   onInstallPlugin: (pluginID: string) => boolean | Promise<boolean>
   onPluginDraftAppApiKeyChange: (appID: string, value: string) => void
   onPluginDraftConfigChange: (key: string, value: string) => void
@@ -845,6 +847,7 @@ export function PluginsPage({
   onDeleteInstalledPluginConnectorApiKey,
   onDeleteInstalledPluginConnectorAuthSession,
   onDiagnoseInstalledPluginConnector,
+  onImportPluginFromURL,
   onInstallPlugin,
   onPluginDraftAppApiKeyChange,
   onPluginDraftConfigChange,
@@ -857,6 +860,10 @@ export function PluginsPage({
   const { locale, t } = useI18n()
   const [categoryFilter, setCategoryFilter] = useState<PluginCategory | "All">("All")
   const [expandedIncludedItemID, setExpandedIncludedItemID] = useState<string | null>(null)
+  const [isImportURLDialogOpen, setIsImportURLDialogOpen] = useState(false)
+  const [pluginImportURL, setPluginImportURL] = useState("")
+  const [pluginImportError, setPluginImportError] = useState<string | null>(null)
+  const [isImportingPluginURL, setIsImportingPluginURL] = useState(false)
   const effectiveSearchQuery = searchQuery ?? ""
 
   const installedByPluginID = useMemo(
@@ -972,6 +979,111 @@ export function PluginsPage({
   const toggleIncludedItem = (itemID: string) => {
     setExpandedIncludedItemID((currentItemID) => currentItemID === itemID ? null : itemID)
   }
+  const openImportURLDialog = () => {
+    setPluginImportError(null)
+    setIsImportURLDialogOpen(true)
+  }
+  const closeImportURLDialog = () => {
+    if (isImportingPluginURL) return
+    setIsImportURLDialogOpen(false)
+    setPluginImportError(null)
+  }
+  const handleImportURLSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const trimmedURL = pluginImportURL.trim()
+    if (!trimmedURL) {
+      setPluginImportError(t("plugins.importUrl.required"))
+      return
+    }
+
+    setIsImportingPluginURL(true)
+    setPluginImportError(null)
+    try {
+      const imported = await onImportPluginFromURL(trimmedURL)
+      if (imported) {
+        setIsImportURLDialogOpen(false)
+        setPluginImportURL("")
+      } else {
+        setPluginImportError(t("plugins.importUrl.failed"))
+      }
+    } catch (error) {
+      setPluginImportError(error instanceof Error ? error.message : t("plugins.importUrl.failed"))
+    } finally {
+      setIsImportingPluginURL(false)
+    }
+  }
+  const importURLDialog = isImportURLDialogOpen
+    ? createPortal(
+      <section
+        className="plugins-import-url-overlay"
+        role="presentation"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) closeImportURLDialog()
+        }}
+      >
+        <form
+          className="plugins-import-url-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("plugins.importUrl.title")}
+          onSubmit={handleImportURLSubmit}
+        >
+          <header className="plugins-import-url-header">
+            <div>
+              <span>{t("plugins.importUrl.eyebrow")}</span>
+              <h2>{t("plugins.importUrl.title")}</h2>
+              <p>{t("plugins.importUrl.copy")}</p>
+            </div>
+            <button
+              className="plugins-import-url-close"
+              type="button"
+              aria-label={t("plugins.importUrl.close")}
+              disabled={isImportingPluginURL}
+              onClick={closeImportURLDialog}
+            >
+              <CloseIcon />
+            </button>
+          </header>
+          <label className="plugins-import-url-field">
+            <span>{t("plugins.importUrl.field")}</span>
+            <input
+              type="url"
+              value={pluginImportURL}
+              placeholder="https://example.com/.anybox-plugin/plugin.json"
+              autoFocus
+              aria-invalid={Boolean(pluginImportError)}
+              disabled={isImportingPluginURL}
+              onChange={(event) => {
+                setPluginImportURL(event.target.value)
+                if (pluginImportError) setPluginImportError(null)
+              }}
+            />
+          </label>
+          {pluginImportError ? (
+            <p className="plugins-import-url-error" role="alert">{pluginImportError}</p>
+          ) : null}
+          <footer className="plugins-import-url-actions">
+            <button
+              className="plugins-import-url-secondary-button"
+              type="button"
+              disabled={isImportingPluginURL}
+              onClick={closeImportURLDialog}
+            >
+              {t("app.cancel")}
+            </button>
+            <button
+              className="plugins-import-url-primary-button"
+              type="submit"
+              disabled={isImportingPluginURL || pluginImportURL.trim().length === 0}
+            >
+              {isImportingPluginURL ? t("app.importing") : t("plugins.importUrl.submit")}
+            </button>
+          </footer>
+        </form>
+      </section>,
+      document.body,
+    )
+    : null
 
   useEffect(() => {
     setExpandedIncludedItemID(defaultIncludedItemID)
@@ -1029,12 +1141,18 @@ export function PluginsPage({
               {pluginBreadcrumb}
               {!activePlugin ? (
               <>
-                <PluginCategoryNavigation
-                  activeCategory={categoryFilter}
-                  categoryCounts={categoryCounts}
-                  t={t}
-                  onCategoryChange={setCategoryFilter}
-                />
+                <div className="plugins-directory-toolbar">
+                  <PluginCategoryNavigation
+                    activeCategory={categoryFilter}
+                    categoryCounts={categoryCounts}
+                    t={t}
+                    onCategoryChange={setCategoryFilter}
+                  />
+                  <button className="plugins-import-url-trigger" type="button" onClick={openImportURLDialog}>
+                    <OpenExternalIcon />
+                    <span>{t("plugins.importUrl.action")}</span>
+                  </button>
+                </div>
 
                 <div className="plugins-directory" role="region" aria-label={t("plugins.marketplaceLayout")}>
                   {hasPluginMatches ? (
@@ -1663,6 +1781,7 @@ export function PluginsPage({
           </div>
         )}
       </div>
+      {importURLDialog}
     </section>
   )
 }

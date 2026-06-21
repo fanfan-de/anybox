@@ -9,14 +9,12 @@
 插件源码推荐采用 Codex-like 的展开目录。推荐入口为：
 
 ```text
-<plugin-id>/plugin.json
+<plugin-id>/.anybox-plugin/plugin.json
 ```
 
-旧入口和版本化入口仍然兼容，主要用于内置包、受管理安装目录或需要并存多个版本的场景：
+版本化入口主要用于受管理安装目录或需要并存多个版本的场景：
 
 ```text
-<plugin-id>/.anybox-plugin/plugin.json
-<plugin-id>/<version>/plugin.json
 <plugin-id>/<version>/.anybox-plugin/plugin.json
 ```
 
@@ -24,7 +22,8 @@
 
 ```text
 <plugin-id>/
-  plugin.json
+  .anybox-plugin/
+    plugin.json
   assets/
   docs/
   scripts/
@@ -34,11 +33,10 @@
   connectors/
     <connector-id>/
       server.js
-  plugin.meta.json        # 可选：registry 展示与下载元数据
   <plugin-id>-<version>.zip # 可选：远程 registry 安装包
 ```
 
-`plugin.json` 是 Anybox 插件清单，推荐直接放在插件包根目录。v1 会优先读取根目录 `plugin.json`，并继续兼容旧的 `.anybox-plugin/plugin.json`。`assets`、`docs`、`scripts`、`skills` 和 `connectors` 也放在插件包根目录下。
+`plugin.json` 是 Anybox 插件清单，必须放在插件包根目录下的 `.anybox-plugin/plugin.json`。`assets`、`docs`、`scripts`、`skills` 和 `connectors` 仍放在插件包根目录下。
 
 当前实现从 `plugin.json` 读取 connector 声明。`connectors/<connector-id>/` 可用于放置本地 connector runtime 代码，但独立的 `connectors/<connector-id>/connector.json` 扫描仍是后续阶段。
 
@@ -49,7 +47,7 @@
 - 固定本地插件仓库：`ANYBOX_PLUGIN_LOCAL_DIR` 指向的本地插件根目录；未设置时默认为 Agent data 目录下的 `plugins/local`。这个来源的定位等价于 GitHub 上的插件仓库，只提供 catalog 候选项；安装时会复制一份到受管理安装根目录，卸载插件时不会删除这里的仓库源包。
 - 受管理安装根目录：`ANYBOX_PLUGIN_INSTALL_DIR` 指向的目录；未设置时默认为 Agent data 目录下的 `plugins/installed`。这个来源代表已经安装到本机的插件包，运行时使用这里的副本，卸载插件时可以删除对应插件包。
 
-同一个插件来源下如果既有根目录 manifest 又有多个版本目录，根目录 manifest 会作为该插件源的直接包；如果只有多个版本目录，catalog 选择 manifest `version` 最高的版本。后面的插件来源仍会覆盖前面的同名插件来源。
+同一个插件来源下如果既有 `<plugin-id>/.anybox-plugin/plugin.json` 又有多个版本目录，前者会作为该插件源的直接包；如果只有多个版本目录，catalog 选择 manifest `version` 最高的版本。后面的插件来源仍会覆盖前面的同名插件来源。
 
 插件包本身不放在 `src` 代码目录；`src/plugin` 只负责扫描、校验、安装和生成运行时绑定。
 

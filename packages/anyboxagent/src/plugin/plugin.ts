@@ -17,15 +17,14 @@ import * as Mcp from "#mcp/manager.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
 
 const INSTALLED_PLUGINS_TABLE = "installed_plugins"
-const PLUGIN_MANIFEST_PATHS = [
-  "plugin.json",
-  join(".anybox-plugin", "plugin.json"),
-]
+const PLUGIN_MANIFEST_PATH = join(".anybox-plugin", "plugin.json")
+const PLUGIN_MANIFEST_URL_SUFFIX = "/.anybox-plugin/plugin.json"
 const PLUGIN_APP_COMPAT_PATH = ".app.json"
 const BUILTIN_PLUGIN_PACKAGE_PATH = join("plugins", "builtin")
 const WORKSPACE_PLUGIN_PACKAGE_PATH = join("plugins", "Anybox-Plugins")
 const PLUGIN_REGISTRY_PATH = join("plugins", "registry", "plugin-registry.json")
 const PLUGIN_REGISTRY_CACHE_PATH = join("plugins", "registry-cache", "plugin-registry-cache.json")
+const PLUGIN_IMPORTED_REGISTRY_PATH = join("plugins", "registry", "imported-plugin-registry.json")
 const DEFAULT_SKILLS_DIRECTORY = "skills"
 const API_KEY_METHOD = "api-key"
 const PLUGIN_CONNECTOR_PREFIX = "plugin-connector:"
@@ -35,6 +34,7 @@ const PLUGIN_INSTALL_DIR_ENV = "ANYBOX_PLUGIN_INSTALL_DIR"
 const PLUGIN_REGISTRY_FILES_ENV = "ANYBOX_PLUGIN_REGISTRY_FILES"
 const PLUGIN_REGISTRY_INDEX_URL_ENV = "ANYBOX_PLUGIN_REGISTRY_INDEX_URL"
 const PLUGIN_REGISTRY_CACHE_DIR_ENV = "ANYBOX_PLUGIN_REGISTRY_CACHE_DIR"
+const PLUGIN_IMPORTED_REGISTRY_FILE_ENV = "ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE"
 const DEFAULT_PLUGIN_REGISTRY_INDEX_URL = "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/index.json"
 const MAX_PLUGIN_PACKAGE_BYTES = 100 * 1024 * 1024
 const MAX_PLUGIN_DISPLAY_ASSET_BYTES = 2 * 1024 * 1024
@@ -594,6 +594,13 @@ export const UpdateInstalledPluginInput = z
   .strict()
 export type UpdateInstalledPluginInput = z.infer<typeof UpdateInstalledPluginInput>
 
+export const ImportPluginURLInput = z
+  .object({
+    url: z.string().min(1),
+  })
+  .strict()
+export type ImportPluginURLInput = z.infer<typeof ImportPluginURLInput>
+
 export const SavePluginConnectorApiKeyInput = z
   .object({
     apiKey: z.string().nullable().optional(),
@@ -672,6 +679,11 @@ function pluginRegistryCachePath() {
   return resolve(configured || join(Global.Path.data, dirname(PLUGIN_REGISTRY_CACHE_PATH)), "plugin-registry-cache.json")
 }
 
+function importedPluginRegistryPath() {
+  const configured = getProcessEnvValue(PLUGIN_IMPORTED_REGISTRY_FILE_ENV)?.trim()
+  return resolve(configured || join(Global.Path.data, PLUGIN_IMPORTED_REGISTRY_PATH))
+}
+
 function pluginRegistryIndexURL() {
   const configured = getProcessEnvValue(PLUGIN_REGISTRY_INDEX_URL_ENV)?.trim()
   if (configured && /^(off|none|disabled)$/i.test(configured)) return undefined
@@ -719,8 +731,8 @@ function normalizePluginRegistryEntryURL(rawUrl: string) {
   if (url.search || url.hash) {
     throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin registry entry URL must not contain query parameters or fragments.")
   }
-  if (!url.pathname.toLowerCase().endsWith("/plugin.json")) {
-    throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin registry entry URL must point to plugin.json.")
+  if (!url.pathname.toLowerCase().endsWith(PLUGIN_MANIFEST_URL_SUFFIX)) {
+    throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin registry entry URL must point to .anybox-plugin/plugin.json.")
   }
   return url.toString()
 }
@@ -878,7 +890,8 @@ function resolveRemoteAssetReference(value: string | undefined, manifestURL: str
   if (!trimmed || !isResolvableRemoteAssetReference(trimmed)) return value
 
   try {
-    return new URL(trimmed, manifestURL).toString()
+    const packageRootURL = new URL("../", manifestURL)
+    return new URL(trimmed, packageRootURL).toString()
   } catch {
     return value
   }
@@ -919,8 +932,8 @@ function resolveRemoteManifestAssets(manifest: PluginManifest, manifestURL: stri
 }
 
 function safeReadPluginManifest(packageRoot: string) {
-  const manifestPath = PLUGIN_MANIFEST_PATHS.map((item) => join(packageRoot, item)).find((item) => existsSync(item))
-  if (!manifestPath) return undefined
+  const manifestPath = join(packageRoot, PLUGIN_MANIFEST_PATH)
+  if (!existsSync(manifestPath)) return undefined
 
   try {
     const raw = readFileSync(manifestPath, "utf8")
@@ -1206,6 +1219,21 @@ function listRegistryManifestSources() {
   return [...byID.values()]
 }
 
+function listImportedRegistryManifestSources() {
+  const registry = safeReadPluginRegistry(importedPluginRegistryPath())
+  return registry ? registry.plugins.map(registryItemToManifestSource) : []
+}
+
+async function writeImportedRegistryManifestSources(sources: PluginManifestSource[]) {
+  const filePath = importedPluginRegistryPath()
+  const registry = PluginRegistry.parse({
+    schemaVersion: 1,
+    plugins: sources.map(sourceToRegistryItem),
+  })
+  await mkdir(dirname(filePath), { recursive: true })
+  await writeFile(filePath, `${JSON.stringify(registry, null, 2)}\n`)
+}
+
 function listPackageManifestSources() {
   const byID = new Map<string, PluginManifestSource>()
   for (const entry of packageSearchRoots()) {
@@ -1282,23 +1310,28 @@ function listManifestSources() {
   return mergeManifestSources(
     listRegistryManifestSources(),
     listCachedRemoteRegistryManifestSources(),
+    listImportedRegistryManifestSources(),
     listPackageManifestSources(),
   )
 }
 
 async function listManifestSourcesFresh() {
   const localRegistrySources = listRegistryManifestSources()
+  const importedRegistrySources = listImportedRegistryManifestSources()
   const packageSources = listPackageManifestSources()
   let remoteRegistrySources: PluginManifestSource[] = []
   try {
     remoteRegistrySources = await listRemoteRegistryManifestSources()
   } catch (error) {
-    if (localRegistrySources.length === 0 && packageSources.length === 0) throw error
+    if (localRegistrySources.length === 0 && importedRegistrySources.length === 0 && packageSources.length === 0) {
+      throw error
+    }
   }
 
   return mergeManifestSources(
     localRegistrySources,
     remoteRegistrySources,
+    importedRegistrySources,
     packageSources,
   )
 }
@@ -1313,13 +1346,14 @@ function getPackageManifestSource(pluginID: string, options: { managedInstallOnl
 async function getRegistryManifestSource(pluginID: string) {
   const normalizedPluginID = normalizePluginID(pluginID)
   const localRegistrySources = listRegistryManifestSources()
+  const importedRegistrySources = listImportedRegistryManifestSources()
   let remoteRegistrySources: PluginManifestSource[] = []
   try {
     remoteRegistrySources = await listRemoteRegistryManifestSources()
   } catch (error) {
-    if (localRegistrySources.length === 0) throw error
+    if (localRegistrySources.length === 0 && importedRegistrySources.length === 0) throw error
   }
-  const sources = mergeManifestSources(localRegistrySources, remoteRegistrySources)
+  const sources = mergeManifestSources(localRegistrySources, remoteRegistrySources, importedRegistrySources)
   return sources.find((entry) => normalizeManifestID(entry.manifest.name) === normalizedPluginID)
 }
 
@@ -1917,6 +1951,27 @@ export async function listCatalog() {
 
 export function listCachedCatalog() {
   return sortCatalog(listCatalogInternal(listManifestSources()))
+}
+
+export async function importFromURL(input: ImportPluginURLInput) {
+  const manifestURL = normalizePluginRegistryEntryURL(input.url)
+  const source = await fetchPluginMeta(manifestURL)
+  if (source.download?.url) {
+    assertSupportedPackageURL(source.download.url)
+  }
+
+  const plugin = normalizeCatalogItem(source)
+  if (plugin.risk === "critical") {
+    throw new PluginError("PLUGIN_RISK_NOT_ALLOWED", `Plugin '${plugin.id}' has a risk level that is not allowed.`)
+  }
+
+  const sourcesByID = new Map(
+    listImportedRegistryManifestSources()
+      .map((entry) => [normalizeManifestID(entry.manifest.name), entry] as const),
+  )
+  sourcesByID.set(plugin.id, source)
+  await writeImportedRegistryManifestSources([...sourcesByID.values()])
+  return normalizeCatalogItem(source)
 }
 
 export function getCatalogItem(pluginID: string) {

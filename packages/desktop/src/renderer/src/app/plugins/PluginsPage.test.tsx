@@ -228,6 +228,7 @@ function createProps(overrides: Partial<PluginsPageProps> = {}): PluginsPageProp
     onDeleteInstalledPluginConnectorAuthSession: vi.fn(),
     onDiagnoseInstalledPlugin: vi.fn(),
     onDiagnoseInstalledPluginConnector: vi.fn(),
+    onImportPluginFromURL: vi.fn(),
     onInstallPlugin: vi.fn(),
     onPluginDraftAppApiKeyChange: vi.fn(),
     onPluginDraftConfigChange: vi.fn(),
@@ -258,6 +259,29 @@ describe("PluginsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Install Filesystem" }))
     expect(onInstallPlugin).toHaveBeenCalledWith("filesystem")
+  })
+
+  it("imports a plugin URL from the marketplace toolbar", async () => {
+    const onImportPluginFromURL = vi.fn().mockResolvedValue(true)
+    render(<PluginsPage {...createProps({ onImportPluginFromURL })} />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Import URL" }))
+
+    const dialog = screen.getByRole("dialog", { name: "Import plugin URL" })
+    const urlInput = within(dialog).getByLabelText("Plugin URL")
+    fireEvent.change(urlInput, {
+      target: {
+        value: "https://example.test/.anybox-plugin/plugin.json",
+      },
+    })
+    fireEvent.click(within(dialog).getByRole("button", { name: "Import" }))
+
+    await waitFor(() => {
+      expect(onImportPluginFromURL).toHaveBeenCalledWith("https://example.test/.anybox-plugin/plugin.json")
+    })
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Import plugin URL" })).not.toBeInTheDocument()
+    })
   })
 
   it("renders primary category navigation and featured plugin list", () => {

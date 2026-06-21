@@ -8,12 +8,11 @@
 
 核心实现分布在这些位置：
 
-- `plugins/Anybox-Plugins/computer-use-windows/plugin.meta.json`：远程/市场 catalog 元数据，包含下载包信息、展示文案、工具预览和权限说明。
-- `plugins/Anybox-Plugins/computer-use-windows/0.1.1/.anybox-plugin/plugin.json`：真正安装时读取的插件 manifest。
-- `plugins/Anybox-Plugins/computer-use-windows/0.1.1/skills/computer-use/SKILL.md`：给 Agent 的使用规则。
-- `plugins/Anybox-Plugins/computer-use-windows/0.1.1/scripts/server.js`：本地 stdio MCP server，负责暴露工具、校验参数、管理窗口引用和调用 helper。
-- `plugins/Anybox-Plugins/computer-use-windows/0.1.1/helper/ComputerUse.Helper/Program.cs`：Windows helper 源码，真正调用 Win32 API 截图和输入。
-- `plugins/Anybox-Plugins/computer-use-windows/0.1.1/helper/win32-x64/computer-use-helper.exe`：已打包的 Windows helper 可执行文件。
+- `plugins/Anybox-Plugins/computer-use-windows/.anybox-plugin/plugin.json`：插件 manifest 和市场展示元数据。
+- `plugins/Anybox-Plugins/computer-use-windows/skills/computer-use/SKILL.md`：给 Agent 的使用规则。
+- `plugins/Anybox-Plugins/computer-use-windows/scripts/server.js`：本地 stdio MCP server，负责暴露工具、校验参数、管理窗口引用和调用 helper。
+- `plugins/Anybox-Plugins/computer-use-windows/helper/ComputerUse.Helper/Program.cs`：Windows helper 源码，真正调用 Win32 API 截图和输入。
+- `plugins/Anybox-Plugins/computer-use-windows/helper/win32-x64/computer-use-helper.exe`：已打包的 Windows helper 可执行文件。
 - `packages/anyboxagent/src/plugin/plugin.ts`：插件系统的扫描、校验、安装、MCP 绑定生成和 Skill 根目录发现。
 - `packages/anyboxagent/src/config/config.ts`：项目选择插件后，把插件生成的全局 MCP server 注入到项目可用工具列表。
 - `packages/desktop/src/main/computer-use-overlay.ts`：桌面端蓝色边框遮罩、Esc 取消、会话流事件识别。
@@ -60,18 +59,16 @@ flowchart LR
 
 ```text
 plugins/Anybox-Plugins/computer-use-windows/
-  plugin.meta.json
-  0.1.1/
-    .anybox-plugin/plugin.json
-    skills/computer-use/SKILL.md
-    scripts/server.js
-    helper/win32-x64/computer-use-helper.exe
-    helper/ComputerUse.Helper/Program.cs
+  .anybox-plugin/plugin.json
+  skills/computer-use/SKILL.md
+  scripts/server.js
+  helper/win32-x64/computer-use-helper.exe
+  helper/ComputerUse.Helper/Program.cs
 ```
 
 安装时，插件系统主要做这些事：
 
-- 读取并校验 manifest。当前优先支持插件根目录 `plugin.json`，并兼容旧的 `.anybox-plugin/plugin.json`。
+- 读取并校验 `.anybox-plugin/plugin.json`。根目录 `plugin.json` 不再作为插件 manifest 入口。
 - 归一化插件 ID。这里的插件 ID 是 `computer-use-windows`。
 - 生成 MCP server ID。manifest 中 server id 是 `windows`，因此最终全局 MCP server ID 是：
 

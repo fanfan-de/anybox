@@ -82,7 +82,7 @@ try {
     const anyboxManifest = await buildAnyboxManifest(sourceManifest, pluginRoot, skillRoots, mcpServers, {
       embedAssets: false,
     })
-    await writeJson(join(packageRoot, "plugin.json"), anyboxManifest)
+    await writeJson(join(packageRoot, ".anybox-plugin", "plugin.json"), anyboxManifest)
 
     if (overwriteExisting) {
       await rm(outputDir, { recursive: true, force: true })
@@ -116,7 +116,7 @@ try {
         skillPreviews: skillPreviews.map(({ id: _id, ...preview }) => preview),
         package: packageDownload,
       }
-      await writeJson(join(outputDir, "plugin.json"), publicManifest)
+      await writeJson(join(outputDir, ".anybox-plugin", "plugin.json"), publicManifest)
     }
     converted.push({ name: pluginID, version, skills: skillPreviews.length, mcpServers: mcpServers.length })
   }
@@ -325,6 +325,7 @@ function removeUndefined(value) {
 }
 
 async function writeJson(filePath, value) {
+  await mkdir(dirname(filePath), { recursive: true })
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8")
 }
 
@@ -462,8 +463,8 @@ async function updateIndex() {
   const dirs = (await readdir(repoRoot, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
-    .filter((name) => existsSync(join(repoRoot, name, "plugin.json")))
+    .filter((name) => existsSync(join(repoRoot, name, ".anybox-plugin", "plugin.json")))
     .sort((left, right) => left.localeCompare(right))
-  const urls = dirs.map((name) => `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/${name}/plugin.json`)
+  const urls = dirs.map((name) => `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/${name}/.anybox-plugin/plugin.json`)
   await writeJson(join(repoRoot, "index.json"), urls)
 }

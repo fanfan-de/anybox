@@ -136,6 +136,7 @@ export const PluginCatalogQuery = z.object({
 })
 export const InstallPluginBody = Plugin.InstallPluginInput
 export const UpdateInstalledPluginBody = Plugin.UpdateInstalledPluginInput
+export const ImportPluginURLBody = Plugin.ImportPluginURLInput
 export const SavePluginConnectorApiKeyBody = Plugin.SavePluginConnectorApiKeyInput
 export const SaveConnectorApiKeyBody = Connector.SaveConnectorApiKeyInput
 export const SaveConnectorConfigBody = Connector.SaveConnectorConfigInput
@@ -1206,6 +1207,14 @@ export async function listPluginCatalog(input: z.infer<typeof PluginCatalogQuery
 
 export function listInstalledPlugins() {
   return Plugin.listInstalled()
+}
+
+export async function importPluginFromURL(input: z.infer<typeof ImportPluginURLBody>) {
+  try {
+    return await Plugin.importFromURL(input)
+  } catch (error) {
+    throw toPluginApiError(error)
+  }
 }
 
 export async function installPlugin(pluginID: string, input: z.infer<typeof InstallPluginBody>) {

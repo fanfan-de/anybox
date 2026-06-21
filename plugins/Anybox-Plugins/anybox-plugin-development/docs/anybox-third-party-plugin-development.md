@@ -40,7 +40,7 @@ Anybox 插件是一个能力包，不是新的执行引擎。
 插件包是一个目录，里面必须有：
 
 ```text
-<plugin-id>/plugin.json
+<plugin-id>/.anybox-plugin/plugin.json
 ```
 
 推荐 Codex-like 展开结构：
@@ -48,7 +48,8 @@ Anybox 插件是一个能力包，不是新的执行引擎。
 ```text
 my-anybox-plugins/
   my-plugin/
-    plugin.json
+    .anybox-plugin/
+      plugin.json
     skills/
     connectors/
     scripts/
@@ -56,7 +57,7 @@ my-anybox-plugins/
     assets/
 ```
 
-`my-anybox-plugins` 是插件来源根目录。Anybox 会扫描它下面的每个 `<plugin-id>`。如果需要在同一个插件目录里保留多个版本，也可以使用 `<plugin-id>/<version>/plugin.json`，Anybox 会选择最高版本；旧的 `.anybox-plugin/plugin.json` 入口仍然兼容。
+`my-anybox-plugins` 是插件来源根目录。Anybox 会扫描它下面的每个 `<plugin-id>`。如果需要在同一个插件目录里保留多个版本，也可以使用 `<plugin-id>/<version>/.anybox-plugin/plugin.json`，Anybox 会选择最高版本；根目录 `plugin.json` 不再作为 manifest 入口。
 
 ### Manifest
 
@@ -126,7 +127,8 @@ anybox-plugin-examples/
   README.md
   .gitignore
   hello-anybox/
-    plugin.json
+    .anybox-plugin/
+      plugin.json
     scripts/
       server.js
     skills/
@@ -134,7 +136,7 @@ anybox-plugin-examples/
         SKILL.md
 ```
 
-默认不需要版本目录。只有在同一个插件需要并存多个版本时，才使用 `<plugin-id>/<version>/plugin.json`。
+默认不需要版本目录。只有在同一个插件需要并存多个版本时，才使用 `<plugin-id>/<version>/.anybox-plugin/plugin.json`。
 
 ### 关于本地插件来源和安装根目录
 
@@ -159,7 +161,8 @@ $env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\Projects\anybox-plugin-examples"
 ```text
 anybox-plugin-examples/       # Git 仓库，提交源码
   hello-anybox/
-    plugin.json
+    .anybox-plugin/
+      plugin.json
     ...
   dev-install/                # 构建或复制出来的安装目录，加入 .gitignore
 ```
@@ -175,7 +178,8 @@ anybox-plugin-examples/       # Git 仓库，提交源码
 ```text
 anybox-plugin-examples/
   hello-anybox/
-    plugin.json
+    .anybox-plugin/
+      plugin.json
     scripts/
       server.js
     skills/
@@ -188,7 +192,7 @@ anybox-plugin-examples/
 路径：
 
 ```text
-hello-anybox/plugin.json
+hello-anybox/.anybox-plugin/plugin.json
 ```
 
 内容：
@@ -428,7 +432,8 @@ plugin:hello-anybox:hello
 
 ```text
 weather-demo/
-  plugin.json
+  .anybox-plugin/
+    plugin.json
   connectors/
     weather/
       server.js
@@ -698,7 +703,8 @@ secrets*
 anybox-plugin-examples/
   README.md
   hello-anybox/
-    plugin.json
+    .anybox-plugin/
+      plugin.json
     scripts/
     skills/
 ```
@@ -709,7 +715,7 @@ anybox-plugin-examples/
 $env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\Projects\anybox-plugin-examples"
 ```
 
-For the built-in registry, `index.json` is a JSON array of HTTPS manifest URLs such as `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/<plugin-id>/plugin.json`. Directory URLs are not supported.
+For the built-in registry, `index.json` is a JSON array of HTTPS manifest URLs such as `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/<plugin-id>/.anybox-plugin/plugin.json`. Directory URLs are not supported.
 Zip artifacts are optional remote install artifacts. Do not commit them to the built-in expanded plugin registry unless the matching `package` metadata points to a real downloadable file.
 
 ## 常见问题
@@ -719,7 +725,7 @@ Zip artifacts are optional remote install artifacts. Do not commit them to the b
 检查：
 
 - `ANYBOX_PLUGIN_LOCAL_DIR` 是否指向插件集合根目录。只有在验证受管理安装目录时，才检查 `ANYBOX_PLUGIN_INSTALL_DIR`。
-- 目录是否是 `<plugin-id>/plugin.json`，或兼容的 `<plugin-id>/.anybox-plugin/plugin.json`、`<plugin-id>/<version>/plugin.json`、`<plugin-id>/<version>/.anybox-plugin/plugin.json`。
+- 目录是否包含 `<plugin-id>/.anybox-plugin/plugin.json`，或版本化的 `<plugin-id>/<version>/.anybox-plugin/plugin.json`。
 - `plugin.json` 是否是合法 JSON。
 - 是否写了未知顶层字段。
 - `name`、`version`、`description` 是否存在。

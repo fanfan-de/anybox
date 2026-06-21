@@ -63,6 +63,7 @@ import type {
   PluginCatalogItem,
   PluginConnectorStatus,
   PluginDeleteResult,
+  PluginImportURLInput,
   PluginInstallInput,
   PluginUpdateInput,
   PermissionRequestPrompt,
@@ -591,6 +592,8 @@ try {
       invokeDesktop("desktop:get-plugin-catalog", input) as Promise<PluginCatalogItem[]>,
     getInstalledPlugins: () =>
       invokeDesktop("desktop:get-installed-plugins") as Promise<InstalledPlugin[]>,
+    importPluginFromURL: (input: PluginImportURLInput) =>
+      invokeDesktop("desktop:import-plugin-from-url", input) as Promise<PluginCatalogItem>,
     installPlugin: (input: PluginInstallInput) =>
       invokeDesktop("desktop:install-plugin", input) as Promise<InstalledPlugin>,
     updateInstalledPlugin: (input: PluginUpdateInput) =>

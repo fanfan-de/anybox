@@ -3027,6 +3027,38 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     }
   }
 
+  async function importPluginFromURL(url: string) {
+    const importPluginFromURLAPI = window.desktop?.importPluginFromURL
+    if (!importPluginFromURLAPI) {
+      throw new Error("当前桌面进程尚未加载插件 URL 导入通道，请重启 Anybox。")
+    }
+
+    const trimmedURL = url.trim()
+    if (!trimmedURL) {
+      throw new Error("Plugin URL is required.")
+    }
+
+    try {
+      const plugin = await importPluginFromURLAPI({ url: trimmedURL })
+      setActivePluginSelection(plugin.id)
+      await loadPlugins({ silent: true })
+      showMessage({
+        tone: "success",
+        text: plugin.installable === false
+          ? `${plugin.name} imported. Add package metadata before installing it.`
+          : `${plugin.name} imported. Review it before installing.`,
+      })
+      return true
+    } catch (error) {
+      const message = getErrorMessage(error)
+      showMessage({
+        tone: "error",
+        text: message,
+      })
+      throw new Error(message)
+    }
+  }
+
   async function updateInstalledPlugin(pluginID: string, update?: { config?: Record<string, string>; enabled?: boolean }) {
     if (!window.desktop?.updateInstalledPlugin) return false
 
@@ -3472,6 +3504,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     diagnosingPluginID,
     diagnosingPluginConnectorID,
     diagnosingConnectorID,
+    importPluginFromURL,
     installPlugin,
     installPromptsFromUrl,
     importMcpConfigJson,

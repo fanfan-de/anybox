@@ -4431,6 +4431,20 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     return result.data
   })
 
+  handleDesktopIpc("desktop:import-plugin-from-url", async (_event, input: { url: string }) => {
+    const result = await requestAgentJSON<AgentPluginCatalogItem>("/api/plugins/import-url", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        url: input.url,
+      }),
+    })
+
+    return result.data
+  })
+
   handleDesktopIpc(
     "desktop:install-plugin",
     async (_event, input: { pluginID: string; config?: Record<string, string>; enabled?: boolean }) => {

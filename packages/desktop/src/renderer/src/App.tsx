@@ -1348,6 +1348,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     diagnosingPluginID,
     diagnosingPluginConnectorID,
     diagnosingConnectorID,
+    importPluginFromURL,
     installPlugin,
     installPromptsFromUrl,
     importMcpConfigJson,
@@ -2558,6 +2559,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                     onDeleteInstalledPluginConnectorAuthSession={deleteInstalledPluginConnectorAuthSession}
                     onDiagnoseInstalledPlugin={diagnoseInstalledPlugin}
                     onDiagnoseInstalledPluginConnector={diagnoseInstalledPluginConnector}
+                    onImportPluginFromURL={importPluginFromURL}
                     onInstallPlugin={installPlugin}
                     onPluginDraftAppApiKeyChange={setPluginDraftAppApiKey}
                     onPluginDraftConfigChange={setPluginDraftConfigValue}

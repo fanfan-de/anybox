@@ -8434,6 +8434,58 @@ body.is-dragging-settings-page {
   background: var(--semantic-warning);
 }
 
+.plugins-directory-toolbar {
+  width: min(1040px, 100%);
+  min-width: 0;
+  box-shadow: inset 0 -1px var(--plugins-market-divider);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.plugins-directory-toolbar .plugins-marketplace-category-nav {
+  width: 100%;
+  box-shadow: none;
+}
+
+.plugins-import-url-trigger {
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--semantic-button-secondary-border);
+  border-radius: 7px;
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.plugins-import-url-trigger svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.plugins-import-url-trigger:hover,
+.plugins-import-url-trigger:focus-visible {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  outline: none;
+}
+
 .plugins-marketplace-category-nav {
   width: min(1040px, 100%);
   min-width: 0;
@@ -8507,6 +8559,223 @@ body.is-dragging-settings-page {
 .plugins-marketplace-category-nav button.is-active span:last-child {
   background: var(--seg-accent-soft);
   color: var(--seg-accent-strong);
+}
+
+.plugins-import-url-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  padding: 24px;
+  background: var(--surface-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  -webkit-app-region: no-drag;
+}
+
+.plugins-import-url-dialog {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--radius-overlay);
+  background: var(--seg-panel);
+  color: var(--seg-text-1);
+  display: grid;
+  gap: 18px;
+  box-shadow: var(--shadow-lg);
+  box-sizing: border-box;
+}
+
+.plugins-import-url-header {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  align-items: start;
+  gap: 14px;
+}
+
+.plugins-import-url-header > div {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.plugins-import-url-header span {
+  color: var(--seg-text-3);
+  font-size: 12px;
+  font-weight: 680;
+  line-height: 1;
+}
+
+.plugins-import-url-header h2 {
+  margin: 0;
+  color: var(--seg-text-1);
+  font-size: 18px;
+  font-weight: 720;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.plugins-import-url-header p {
+  margin: 0;
+  color: var(--seg-text-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.plugins-import-url-close {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--seg-text-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.plugins-import-url-close svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.plugins-import-url-close:not(:disabled):hover,
+.plugins-import-url-close:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--seg-text-1);
+  outline: none;
+}
+
+.plugins-import-url-close:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.plugins-import-url-field {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  color: var(--seg-text-1);
+  font-size: 13px;
+  font-weight: 640;
+}
+
+.plugins-import-url-field input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 11px;
+  border: 1px solid var(--seg-border);
+  border-radius: 8px;
+  background: var(--seg-shell);
+  color: var(--seg-text-1);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.plugins-import-url-field input:focus {
+  border-color: var(--semantic-button-secondary-border-hover);
+  outline: none;
+}
+
+.plugins-import-url-field input:disabled {
+  color: var(--semantic-button-secondary-disabled-text);
+  background: var(--semantic-button-secondary-disabled-surface);
+}
+
+.plugins-import-url-field input::placeholder {
+  color: var(--seg-text-3);
+}
+
+.plugins-import-url-error {
+  margin: -4px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--semantic-error-border);
+  border-radius: 8px;
+  background: var(--semantic-error-surface);
+  color: var(--semantic-error-text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.plugins-import-url-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.plugins-import-url-primary-button,
+.plugins-import-url-secondary-button {
+  min-width: 84px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 660;
+  line-height: 1;
+}
+
+.plugins-import-url-primary-button {
+  border-color: var(--semantic-button-primary-border);
+  background: var(--semantic-button-primary-surface);
+  color: var(--semantic-button-primary-text);
+}
+
+.plugins-import-url-secondary-button {
+  border-color: var(--semantic-button-secondary-border);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
+}
+
+.plugins-import-url-primary-button:not(:disabled):hover,
+.plugins-import-url-primary-button:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-primary-border-hover);
+  background: var(--semantic-button-primary-surface-hover);
+  color: var(--semantic-button-primary-text-hover);
+  outline: none;
+}
+
+.plugins-import-url-secondary-button:not(:disabled):hover,
+.plugins-import-url-secondary-button:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  outline: none;
+}
+
+.plugins-import-url-primary-button:disabled {
+  border-color: var(--semantic-button-primary-disabled-border);
+  background: var(--semantic-button-primary-disabled-surface);
+  color: var(--semantic-button-primary-disabled-text);
+  cursor: default;
+}
+
+.plugins-import-url-secondary-button:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+  cursor: default;
 }
 
 .plugins-directory {
@@ -10296,9 +10565,19 @@ body.is-dragging-settings-page {
     gap: 6px 10px;
   }
 
+  .plugins-directory-toolbar {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
   .plugins-marketplace-category-nav {
     width: 100%;
     padding-bottom: 6px;
+  }
+
+  .plugins-import-url-trigger {
+    justify-self: start;
   }
 
   .plugins-directory-grid {

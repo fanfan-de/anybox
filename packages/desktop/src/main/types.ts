@@ -1729,6 +1729,10 @@ export interface AgentPluginInstallInput {
   enabled?: boolean
 }
 
+export interface AgentPluginImportURLInput {
+  url: string
+}
+
 export interface AgentPluginUpdateInput {
   pluginID: string
   config?: Record<string, string>

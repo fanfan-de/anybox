@@ -30,6 +30,7 @@ import type {
   AgentPluginCatalogItem,
   AgentPluginConnectorStatus,
   AgentPluginDeleteResult,
+  AgentPluginImportURLInput,
   AgentPluginInstallInput,
   AgentPluginUpdateInput,
   AgentProjectDeleteResult,
@@ -274,6 +275,7 @@ export type PluginCatalogItem = AgentPluginCatalogItem
 export type InstalledPlugin = AgentInstalledPlugin
 export type PluginConnectorStatus = AgentPluginConnectorStatus
 export type PluginInstallInput = AgentPluginInstallInput
+export type PluginImportURLInput = AgentPluginImportURLInput
 export type PluginUpdateInput = AgentPluginUpdateInput
 export type PluginDeleteResult = AgentPluginDeleteResult
 export type PtyIPCEvent = PtyTransportIPCEvent
@@ -1427,6 +1429,10 @@ export interface DesktopIpcContract {
     input: void
     output: AgentInstalledPlugin[]
   }
+  "desktop:import-plugin-from-url": {
+    input: AgentPluginImportURLInput
+    output: AgentPluginCatalogItem
+  }
   "desktop:install-plugin": {
     input: AgentPluginInstallInput
     output: AgentInstalledPlugin
@@ -1988,6 +1994,7 @@ export interface DesktopApiMethods {
   deleteGlobalMcpServer(input: DesktopIpcInput<"desktop:delete-global-mcp-server">): Promise<DesktopIpcOutput<"desktop:delete-global-mcp-server">>
   getPluginCatalog(input?: DesktopIpcInput<"desktop:get-plugin-catalog">): Promise<DesktopIpcOutput<"desktop:get-plugin-catalog">>
   getInstalledPlugins(): Promise<DesktopIpcOutput<"desktop:get-installed-plugins">>
+  importPluginFromURL(input: DesktopIpcInput<"desktop:import-plugin-from-url">): Promise<DesktopIpcOutput<"desktop:import-plugin-from-url">>
   installPlugin(input: DesktopIpcInput<"desktop:install-plugin">): Promise<DesktopIpcOutput<"desktop:install-plugin">>
   updateInstalledPlugin(input: DesktopIpcInput<"desktop:update-installed-plugin">): Promise<DesktopIpcOutput<"desktop:update-installed-plugin">>
   deleteInstalledPlugin(input: DesktopIpcInput<"desktop:delete-installed-plugin">): Promise<DesktopIpcOutput<"desktop:delete-installed-plugin">>
