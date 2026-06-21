@@ -8,6 +8,8 @@ import { getProcessEnvValue } from "#env/compat.ts"
 import PROMPT_ANTHROPIC from "../prompt/anthropic.md" with { type: "text" }
 import PROMPT_BEAST from "../prompt/beast.md" with { type: "text" }
 import PROMPT_CODEX from "../prompt/codex.md" with { type: "text" }
+import PROMPT_CODEXSYSTEM from "../prompt/codexsystem.md" with { type: "text" }
+import PROMPT_CODEXSYSTEM_ZH_HANS from "../prompt/codexsystem.zh-hans.md" with { type: "text" }
 import PROMPT_DEFAULT from "../prompt/default.md" with { type: "text" }
 import PROMPT_GEMINI from "../prompt/gemini.md" with { type: "text" }
 import PROMPT_GPT from "../prompt/gpt.md" with { type: "text" }
@@ -90,7 +92,7 @@ const CUSTOM_PROMPT_DIRECTORY = "custom"
 const PROMPT_FILE_EXTENSION = ".md"
 
 const DEFAULT_PROMPT_PRESET_SELECTION: PromptPresetSelection = {
-  systemPromptPresetID: "system-default",
+  systemPromptPresetID: "system-codex",
   planModePromptPresetID: "plan-mode",
   sideChatPromptPresetID: "side-chat",
 }
@@ -102,6 +104,20 @@ const PROMPT_PRESET_DEFINITIONS: PromptPresetDefinition[] = [
     description: "Base instructions applied to every session turn.",
     sourcePath: "src/session/prompt/default.md",
     bundledContent: PROMPT_DEFAULT,
+  },
+  {
+    id: "system-codex",
+    label: "codexsystem prompt",
+    description: "Codex-style default system instructions for coding sessions.",
+    sourcePath: "src/session/prompt/codexsystem.md",
+    bundledContent: PROMPT_CODEXSYSTEM,
+  },
+  {
+    id: "system-codex-zh-hans",
+    label: "codexsystem prompt - 简体中文",
+    description: "Simplified Chinese version of the Codex-style default system instructions.",
+    sourcePath: "src/session/prompt/codexsystem.zh-hans.md",
+    bundledContent: PROMPT_CODEXSYSTEM_ZH_HANS,
   },
   {
     id: "plan-mode",

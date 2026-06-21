@@ -3404,6 +3404,64 @@ describe("server api", () => {
     })
   })
 
+  test("prompt preset routes should expose codexsystem prompts as bundled defaults", async () => {
+    await withTempPromptRoot(async (promptRoot) => {
+      const app = createServerApp()
+
+      try {
+        await Config.setSelectedPromptPresetIDs(Config.GLOBAL_CONFIG_ID, {
+          systemPromptPresetID: null,
+          planModePromptPresetID: null,
+          sideChatPromptPresetID: null,
+        })
+
+        const listResponse = await app.request("http://localhost/api/prompts")
+        const listBody = (await listResponse.json()) as PromptPresetSummaryEnvelope
+
+        expect(listResponse.status).toBe(200)
+        expect(listBody.success).toBe(true)
+        expect(listBody.data).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: "system-codex",
+              label: "codexsystem prompt",
+              source: "bundled",
+              hasOverride: false,
+              root: promptRoot,
+              filePath: join(promptRoot, "bundled", "system-codex.md"),
+            }),
+            expect.objectContaining({
+              id: "system-codex-zh-hans",
+              label: "codexsystem prompt - 简体中文",
+              source: "bundled",
+              hasOverride: false,
+              root: promptRoot,
+              filePath: join(promptRoot, "bundled", "system-codex-zh-hans.md"),
+            }),
+          ]),
+        )
+        expect(await readFile(join(promptRoot, "bundled", "system-codex.md"), "utf8")).toContain("# SYSTEM INSTRUCTIONS")
+
+        const selectionResponse = await app.request("http://localhost/api/prompts/selection")
+        const selectionBody = (await selectionResponse.json()) as PromptPresetSelectionEnvelope
+
+        expect(selectionResponse.status).toBe(200)
+        expect(selectionBody.success).toBe(true)
+        expect(selectionBody.data).toEqual({
+          systemPromptPresetID: "system-codex",
+          planModePromptPresetID: "plan-mode",
+          sideChatPromptPresetID: "side-chat",
+        })
+      } finally {
+        await Config.setSelectedPromptPresetIDs(Config.GLOBAL_CONFIG_ID, {
+          systemPromptPresetID: "system-default",
+          planModePromptPresetID: "plan-mode",
+          sideChatPromptPresetID: "side-chat",
+        })
+      }
+    })
+  })
+
   test("prompt preset translation should create a new custom prompt without changing assignments", async () => {
     await withTempPromptRoot(async (promptRoot) => {
       const app = createServerApp()
@@ -3873,7 +3931,7 @@ describe("server api", () => {
       expect(deleteCustomResponse.status).toBe(200)
       expect(deleteCustomBody.success).toBe(true)
       expect(deleteCustomBody.data).toEqual({
-        systemPromptPresetID: "system-default",
+        systemPromptPresetID: "system-codex",
         planModePromptPresetID: "plan-mode",
         sideChatPromptPresetID: "side-chat",
       })
