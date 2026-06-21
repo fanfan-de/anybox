@@ -100,10 +100,10 @@
   --section-toolbar-pill-height: 30px;
   --section-toolbar-baseline: var(--section-toolbar-height);
   --sidebar-display-width: var(--sidebar-width);
-  --sidebar-resizer-width: 1px;
+  --sidebar-resizer-width: 10px;
   --sidebar-width: 236px;
   --right-sidebar-display-width: var(--right-sidebar-width);
-  --right-sidebar-resizer-width: 1px;
+  --right-sidebar-resizer-width: 10px;
   --right-sidebar-width: 480px;
   position: relative;
   min-height: 0;

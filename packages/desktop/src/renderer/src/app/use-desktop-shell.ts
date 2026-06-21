@@ -20,6 +20,7 @@ import {
   DEFAULT_SIDEBAR_WIDTH,
   RIGHT_SIDEBAR_MIN_LEFT_EDGE_RATIO,
   SIDEBAR_KEYBOARD_STEP,
+  SIDEBAR_RESIZER_WIDTH,
 } from "./constants"
 import {
   DEFAULT_ASSISTANT_TRACE_VISIBILITY,
@@ -69,6 +70,7 @@ interface ActiveSidebarResize {
   latestWidth: number
   leftRailDisplayWidth: number
   originalWidth: number
+  pointerOffsetX: number
   side: SidebarResizerSide
 }
 
@@ -240,7 +242,10 @@ export function useDesktopShell() {
       return resolveSidebarWidthBounds(containerWidth)
     }
 
-    const fixedWidth = getLeftRailDisplayWidth() + 10 + (isRightSidebarCollapsed ? 0 : rightSidebarWidth + 10)
+    const fixedWidth =
+      getLeftRailDisplayWidth() +
+      SIDEBAR_RESIZER_WIDTH +
+      (isRightSidebarCollapsed ? 0 : rightSidebarWidth + SIDEBAR_RESIZER_WIDTH)
 
     return resolveSidebarWidthBounds(containerWidth - fixedWidth)
   }
@@ -317,10 +322,17 @@ export function useDesktopShell() {
     })
   }
 
+  function resolveSidebarResizeLineX(resizeState: ActiveSidebarResize) {
+    return resizeState.side === "left"
+      ? resizeState.containerLeft + resizeState.leftRailDisplayWidth + resizeState.originalWidth + SIDEBAR_RESIZER_WIDTH
+      : resizeState.containerRight - resizeState.originalWidth
+  }
+
   function resolveSidebarResizeWidth(resizeState: ActiveSidebarResize, clientX: number) {
+    const lineClientX = clientX - resizeState.pointerOffsetX
     const rawWidth = resizeState.side === "left"
-      ? clientX - resizeState.containerLeft - resizeState.leftRailDisplayWidth
-      : resizeState.containerRight - clientX
+      ? lineClientX - resizeState.containerLeft - resizeState.leftRailDisplayWidth - SIDEBAR_RESIZER_WIDTH
+      : resizeState.containerRight - lineClientX
 
     return clamp(rawWidth, resizeState.bounds.min, resizeState.bounds.max)
   }
@@ -748,8 +760,10 @@ export function useDesktopShell() {
       latestWidth: sidebarWidth,
       leftRailDisplayWidth: getLeftRailDisplayWidth(),
       originalWidth: sidebarWidth,
+      pointerOffsetX: 0,
       side: "left",
     }
+    resizeState.pointerOffsetX = event.clientX - resolveSidebarResizeLineX(resizeState)
     queueSidebarResizePreview(resizeState, resolveSidebarResizeWidth(resizeState, event.clientX))
 
     event.preventDefault()
@@ -775,8 +789,10 @@ export function useDesktopShell() {
       latestWidth: rightSidebarWidth,
       leftRailDisplayWidth: getLeftRailDisplayWidth(),
       originalWidth: rightSidebarWidth,
+      pointerOffsetX: 0,
       side: "right",
     }
+    resizeState.pointerOffsetX = event.clientX - resolveSidebarResizeLineX(resizeState)
     queueSidebarResizePreview(resizeState, resolveSidebarResizeWidth(resizeState, event.clientX))
 
     event.preventDefault()
@@ -939,10 +955,10 @@ export function useDesktopShell() {
     "--window-controls-right-sidebar-clearance": "0px",
     "--activity-rail-display-width": isActivityRailVisible ? "54px" : "0px",
     "--sidebar-display-width": isSidebarCollapsed ? "0px" : `${sidebarWidth}px`,
-    "--sidebar-resizer-width": isSidebarCollapsed ? "0px" : "1px",
+    "--sidebar-resizer-width": isSidebarCollapsed ? "0px" : `${SIDEBAR_RESIZER_WIDTH}px`,
     "--sidebar-width": `${sidebarWidth}px`,
     "--right-sidebar-display-width": isRightSidebarCollapsed ? "0px" : `${rightSidebarWidth}px`,
-    "--right-sidebar-resizer-width": isRightSidebarCollapsed ? "0px" : "1px",
+    "--right-sidebar-resizer-width": isRightSidebarCollapsed ? "0px" : `${SIDEBAR_RESIZER_WIDTH}px`,
     "--right-sidebar-width": `${rightSidebarWidth}px`,
   } as CSSProperties
 

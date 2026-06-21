@@ -102,8 +102,8 @@
   grid-column: 3;
   position: relative;
   z-index: 4;
-  width: 11px;
-  justify-self: center;
+  width: 100%;
+  justify-self: stretch;
   min-height: 0;
   cursor: col-resize;
   touch-action: none;

@@ -146,10 +146,16 @@
   top: 0;
   right: 0;
   left: 0;
+  width: auto;
   z-index: 3;
   height: 4px;
   background: var(--dockview-tab-focus-accent);
+  outline: 0 !important;
   pointer-events: none;
+}
+
+.dockview-theme-anybox .dv-groupview.dv-active-group > .dv-tabs-and-actions-container .dv-tabs-container > .dv-tab.dv-active-tab:first-child::after {
+  left: -1px;
 }
 
 .dockview-theme-anybox .dv-groupview.dv-active-group > .dv-tabs-and-actions-container .dv-tabs-container > .dv-tab.dv-inactive-tab,

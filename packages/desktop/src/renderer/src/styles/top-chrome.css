@@ -48,9 +48,9 @@
 
 .sidebar-resizer {
   --sidebar-resizer-line: var(--top-chrome-border);
-  --sidebar-resizer-line-x: 10px;
+  --sidebar-resizer-line-x: 100%;
   --sidebar-resizer-top-surface: var(--top-chrome-surface);
-  justify-self: end;
+  justify-self: stretch;
   background-image:
     linear-gradient(var(--sidebar-resizer-line), var(--sidebar-resizer-line)),
     linear-gradient(var(--top-chrome-surface), var(--top-chrome-surface));
@@ -64,8 +64,8 @@
 }
 
 .sidebar-resizer.is-right {
-  --sidebar-resizer-line-x: 0;
-  justify-self: start;
+  --sidebar-resizer-line-x: 100%;
+  justify-self: stretch;
 }
 
 .sidebar-resizer::before {

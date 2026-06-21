@@ -13342,12 +13342,12 @@ describe("App", () => {
       /\.dockview-theme-anybox\s+\.dv-tabs-and-actions-container::after\s*\{[^}]*bottom:\s*0;[^}]*height:\s*1px;[^}]*background:\s*var\(--dockview-tab-border\);/s,
     )
     expect(styles).toMatch(/\.sidebar-resizer\s*\{[^}]*--sidebar-resizer-top-surface:\s*var\(--seg-pane-tab-bar-surface\);[^}]*background-color:\s*transparent;[^}]*background-image:\s*linear-gradient\(var\(--sidebar-resizer-top-surface\),\s*var\(--sidebar-resizer-top-surface\)\);[^}]*background-position:\s*top;[^}]*background-size:\s*100%\s*var\(--section-toolbar-height\);[^}]*background-repeat:\s*no-repeat;/s)
-    expect(styles).toMatch(/\.sidebar-resizer\s*\{[^}]*--sidebar-resizer-line-x:\s*10px;[^}]*justify-self:\s*end;[^}]*background-image:/s)
+    expect(styles).toMatch(/\.sidebar-resizer\s*\{[^}]*--sidebar-resizer-line-x:\s*100%;[^}]*justify-self:\s*stretch;[^}]*background-image:/s)
     const sidebarResizerBlocks = Array.from(styles.matchAll(/\.sidebar-resizer\s*\{([^}]*)\}/g), (match) => match[1])
-    const topChromeSidebarResizerBlock = sidebarResizerBlocks.find((block) => block.includes("--sidebar-resizer-line-x: 10px")) ?? ""
+    const topChromeSidebarResizerBlock = sidebarResizerBlocks.find((block) => block.includes("--sidebar-resizer-line-x: 100%")) ?? ""
     expect(topChromeSidebarResizerBlock).toContain("linear-gradient(var(--sidebar-resizer-line), var(--sidebar-resizer-line))")
     expect(topChromeSidebarResizerBlock).not.toContain("var(--seg-shell)")
-    expect(styles).toMatch(/\.sidebar-resizer\.is-right\s*\{[^}]*--sidebar-resizer-line-x:\s*0;[^}]*justify-self:\s*start;/s)
+    expect(styles).toMatch(/\.sidebar-resizer\.is-right\s*\{[^}]*--sidebar-resizer-line-x:\s*100%;[^}]*justify-self:\s*stretch;/s)
     expect(styles).toMatch(/\.sidebar-resizer::after\s*\{[^}]*top:\s*calc\(var\(--section-toolbar-height\)\s*-\s*1px\);[^}]*height:\s*1px;[^}]*background:\s*var\(--seg-border\);/s)
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.dv-tabs-container\s*\{[^}]*-webkit-app-region:\s*no-drag;/s)
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.dv-tabs-and-actions-container\s+\.dv-void-container\.dv-draggable\s*\{[^}]*-webkit-app-region:\s*drag;/s)
@@ -13423,7 +13423,10 @@ describe("App", () => {
     )
     expect(styles).not.toMatch(/\.dockview-theme-anybox\s+\.dv-tab\.dv-active-tab,[\s\S]*?\{[^}]*box-shadow:\s*none;/s)
     expect(styles).toMatch(
-      /\.dockview-theme-anybox\s+\.dv-groupview\.dv-active-group > \.dv-tabs-and-actions-container \.dv-tabs-container > \.dv-tab\.dv-active-tab::after\s*\{[^}]*content:\s*"";[^}]*top:\s*0;[^}]*height:\s*4px;[^}]*background:\s*var\(--dockview-tab-focus-accent\);/s,
+      /\.dockview-theme-anybox\s+\.dv-groupview\.dv-active-group > \.dv-tabs-and-actions-container \.dv-tabs-container > \.dv-tab\.dv-active-tab::after\s*\{[^}]*content:\s*"";[^}]*top:\s*0;[^}]*width:\s*auto;[^}]*height:\s*4px;[^}]*background:\s*var\(--dockview-tab-focus-accent\);[^}]*outline:\s*0 !important;/s,
+    )
+    expect(styles).toMatch(
+      /\.dockview-theme-anybox\s+\.dv-groupview\.dv-active-group > \.dv-tabs-and-actions-container \.dv-tabs-container > \.dv-tab\.dv-active-tab:first-child::after\s*\{[^}]*left:\s*-1px;/s,
     )
     expect(styles).toMatch(
       /\.dockview-theme-anybox\s+\.dv-groupview\.dv-active-group > \.dv-tabs-and-actions-container \.dv-tabs-container > \.dv-tab\.dv-inactive-tab,[\s\S]*?\.dv-tab\.dv-inactive-tab\s*\{[^}]*background:\s*transparent;[^}]*color:\s*var\(--seg-text-2\);/s,

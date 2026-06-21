@@ -7,6 +7,7 @@ export const DEFAULT_RIGHT_SIDEBAR_WIDTH = 480
 export const MIN_RIGHT_SIDEBAR_WIDTH = 280
 export const MAX_RIGHT_SIDEBAR_WIDTH = 4096
 export const MIN_CANVAS_WIDTH = 560
+export const SIDEBAR_RESIZER_WIDTH = 10
 export const RIGHT_SIDEBAR_MIN_LEFT_EDGE_RATIO = 1 / 3
 export const SIDEBAR_KEYBOARD_STEP = 16
 export const STREAM_PENDING_PREFIX = "Queued prompt:"
