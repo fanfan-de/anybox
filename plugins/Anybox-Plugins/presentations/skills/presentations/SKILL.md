@@ -1,11 +1,11 @@
 ---
-name: "Presentations"
-description: "Create editable PowerPoint `.pptx` decks locally with code-first slide modules, PNG previews, layout JSON, and strict layout QA. Use when the user wants a durable presentation, slide deck, PPT, PPTX, or PowerPoint artifact."
+name: "PowerPoint PPTX Builder"
+description: "Create editable Microsoft PowerPoint `.pptx` decks locally with code-first slide modules, PNG previews, layout JSON, and strict layout QA. Use when the user wants an Office presentation, slide deck, PPT, PPTX, or PowerPoint artifact."
 ---
 
-# Presentations Skill
+# PowerPoint PPTX Builder Skill
 
-Use this skill when the durable output should be an editable PowerPoint `.pptx` file.
+Use this skill when the durable output should be an editable Microsoft PowerPoint `.pptx` file.
 
 ## Contract
 
