@@ -43,14 +43,20 @@ If the console does not pick up `edgeone.json`, enter the same values manually i
 
 ## Environment Variables
 
-Set these in EdgeOne project environment variables:
+`packages/site/.env.production` already sets the production download manifest:
 
 ```env
 VITE_DOWNLOAD_MANIFEST_URL=https://download.anybox.com.cn/downloads.json
+```
+
+Set these in EdgeOne project environment variables if you need to override the repo default:
+
+```env
 VITE_GITHUB_USERNAME=fanfan-de
 ```
 
 `VITE_DOWNLOAD_MANIFEST_URL` keeps the China download button using the existing Tencent COS/CDN mirror. Without it, the site falls back to GitHub Releases.
+Also make sure `https://download.anybox.com.cn/downloads.json` returns CORS headers for the active site domain, or the browser will reject the manifest and the button will still fall back.
 
 ## First Deployment
 

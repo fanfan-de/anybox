@@ -8,11 +8,24 @@
 2. 给 bucket 配置 CDN 加速，并绑定 `download.anybox.com.cn`。
 3. 在 DNS 中把 `download.anybox.com.cn` CNAME 到腾讯云 CDN 域名。
 4. 给 CDN 配置 HTTPS 证书。
-5. 如果 manifest 和官网不同源，给 `downloads.json` 配 CORS：
+5. 如果 manifest 和官网不同源，给 `downloads.json` 配 CORS。官网当前可能从
+   `fanfande-studio.pages.dev` 预览域名或 `anybox.com.cn` 正式域名访问下载 manifest，
+   两个来源都要允许：
 
 ```text
+Access-Control-Allow-Origin: https://fanfande-studio.pages.dev
 Access-Control-Allow-Origin: https://anybox.com.cn
-Access-Control-Allow-Methods: GET, HEAD
+Access-Control-Allow-Methods: GET, HEAD, OPTIONS
+Access-Control-Allow-Headers: *
+```
+
+在腾讯云控制台里通常应配置为 CORS 规则的多个 AllowedOrigins，而不是给同一个响应手写多条
+`Access-Control-Allow-Origin` 响应头。配置后用下面的命令确认响应包含
+`Access-Control-Allow-Origin`：
+
+```powershell
+curl.exe -I -H "Origin: https://fanfande-studio.pages.dev" https://download.anybox.com.cn/downloads.json
+curl.exe -I -H "Origin: https://anybox.com.cn" https://download.anybox.com.cn/downloads.json
 ```
 
 ## 本地配置
@@ -34,7 +47,8 @@ TENCENT_COS_BUCKET=anybox-downloads-1250000000
 TENCENT_COS_REGION=ap-guangzhou
 ```
 
-官网构建环境需要配置：
+官网生产构建已在 `packages/site/.env.production` 默认配置 manifest URL；如果部署平台覆盖了
+环境变量，也需要保持这个值：
 
 ```env
 VITE_DOWNLOAD_MANIFEST_URL=https://download.anybox.com.cn/downloads.json

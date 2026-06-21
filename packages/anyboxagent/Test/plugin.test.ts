@@ -1586,6 +1586,7 @@ describe("plugin marketplace API", () => {
     expect(cachedRemotePlugin?.name).toBe("Remote Lab")
   })
 
+<<<<<<< Updated upstream
   test("loads multiple cached and imported registry plugins without treating indexes as manifest URLs", async () => {
     await useTempDatabase()
     if (!activeRoot) throw new Error("Temp root has not been initialized.")
@@ -1632,6 +1633,49 @@ describe("plugin marketplace API", () => {
     expect(namesByID.get("cached-two")).toBe("Cached Two")
     expect(namesByID.get("imported-one")).toBe("Imported One")
     expect(namesByID.get("imported-two")).toBe("Imported Two")
+=======
+  test("loads cached remote registry metadata with multiple entries", async () => {
+    await useTempDatabase()
+    const cachePath = join(process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR!, "plugin-registry-cache.json")
+    await mkdir(process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR!, { recursive: true })
+    await writeFile(cachePath, JSON.stringify({
+      schemaVersion: 1,
+      plugins: [
+        {
+          name: "cached-alpha",
+          version: "1.0.0",
+          description: "First cached plugin.",
+          interface: {
+            displayName: "Cached Alpha",
+            shortDescription: "First cached plugin.",
+            category: "Docs",
+          },
+          mcpServers: [],
+          skills: [],
+        },
+        {
+          name: "cached-beta",
+          version: "1.0.0",
+          description: "Second cached plugin.",
+          interface: {
+            displayName: "Cached Beta",
+            shortDescription: "Second cached plugin.",
+            category: "Automation",
+          },
+          mcpServers: [],
+          skills: [],
+        },
+      ],
+    }, null, 2))
+
+    const app = createServerApp()
+    const response = await app.request("/api/plugins/catalog?freshness=cached")
+    const body = (await response.json()) as PluginCatalogEnvelope
+
+    expect(response.status).toBe(200)
+    expect(body.data?.find((plugin) => plugin.id === "cached-alpha")?.name).toBe("Cached Alpha")
+    expect(body.data?.find((plugin) => plugin.id === "cached-beta")?.name).toBe("Cached Beta")
+>>>>>>> Stashed changes
   })
 
   test("shows remote metadata without a package as catalog-only", async () => {

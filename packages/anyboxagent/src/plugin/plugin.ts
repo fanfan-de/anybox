@@ -1443,14 +1443,11 @@ function normalizeRegistrySkillPreviews(pluginID: string, previews: z.infer<type
   )
 }
 
-function registryItemToManifestSource(item: z.infer<typeof PluginRegistryItem>, manifestURL?: string): PluginManifestSource {
+function registryItemToManifestSource(item: z.infer<typeof PluginRegistryItem>): PluginManifestSource {
   const parsed = parsePluginManifestDocument(item)
-  const manifest = manifestURL
-    ? resolveRemoteManifestAssets(parsed.manifest, manifestURL)
-    : parsed.manifest
 
   return {
-    manifest,
+    manifest: parsed.manifest,
     download: parsed.download,
     skillPreviews: parsed.skillPreviews,
     source: "registry",
