@@ -41,6 +41,7 @@ notepad .env.downloads
 
 ```env
 ANYBOX_DOWNLOAD_BASE_URL=https://download.anybox.com.cn
+ANYBOX_UPDATE_FEED_PREFIX=updates/windows/x64
 TENCENT_COS_SECRET_ID=...
 TENCENT_COS_SECRET_KEY=...
 TENCENT_COS_BUCKET=anybox-downloads-1250000000
@@ -59,6 +60,8 @@ VITE_DOWNLOAD_MANIFEST_URL=https://download.anybox.com.cn/downloads.json
 脚本会自动查找这些产物：
 
 - `packages/desktop/dist/Anybox-*-x64.exe`
+- `packages/desktop/dist/Anybox-*-x64.exe.blockmap`
+- `packages/desktop/dist/latest.yml`
 - `packages/desktop/dist/Anybox-*-arm64.dmg`
 - `packages/mobile-app/build/github-release/anybox-mobile.apk`
 - `packages/mobile-app/build/anybox-mobile.apk`
@@ -96,6 +99,9 @@ corepack pnpm downloads:publish -- --env-file .env.downloads
 
 ```text
 releases/<version>/<installer>
+updates/windows/x64/latest.yml
+updates/windows/x64/<installer>
+updates/windows/x64/<installer>.blockmap
 downloads.json
 ```
 
@@ -111,6 +117,8 @@ Cache-Control: public, max-age=31536000, immutable
 Cache-Control: public, max-age=60
 ```
 
+`updates/windows/x64/latest.yml` also uses short caching and is purged after upload. Installer and `.blockmap` files keep long immutable caching because their names include the version.
+
 ## 发布顺序
 
 推荐流程：
@@ -119,4 +127,4 @@ Cache-Control: public, max-age=60
 2. 发布 GitHub Releases，保留国外和开源入口。
 3. 执行 `corepack pnpm downloads:publish -- --env-file .env.downloads`。
 4. 执行 `corepack pnpm site:build` 并部署官网。
-5. 打开 `https://download.anybox.com.cn/downloads.json` 和官网下载按钮验证。
+5. 打开 `https://download.anybox.com.cn/downloads.json`、`https://download.anybox.com.cn/updates/windows/x64/latest.yml` 和官网下载按钮验证。

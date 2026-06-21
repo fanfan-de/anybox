@@ -31,6 +31,12 @@ mac:
   icon: build/icon.icns
 win:
   icon: build/icon.ico
+  publish:
+    - provider: generic
+      url: https://download.anybox.com.cn/updates/windows/x64
+    - provider: github
+      owner: fanfan-de
+      repo: anybox
   signAndEditExecutable: false
   signExts: []
   target:

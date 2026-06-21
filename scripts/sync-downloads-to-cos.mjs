@@ -9,6 +9,7 @@ const siteArtifactsDir = path.join(scriptRoot, "packages", "site", "artifacts", 
 const defaultBaseUrl = "https://download.anybox.com.cn"
 const defaultManifestKey = "downloads.json"
 const defaultReleasePrefix = "releases"
+const defaultUpdateFeedPrefix = "updates/windows/x64"
 const githubReleasesUrl = "https://github.com/fanfan-de/anybox/releases/latest"
 
 const platforms = ["windows", "mac", "mobile"]
@@ -32,10 +33,13 @@ function usage() {
     "  --out-dir <path>       Local output directory. Defaults to packages/site/artifacts/downloads.",
     "  --manifest-key <key>   COS object key for the manifest. Defaults to downloads.json.",
     "  --release-prefix <key> COS prefix for versioned release files. Defaults to releases.",
+    "  --update-feed-prefix <key>",
+    "                         COS prefix for the desktop auto-update feed. Defaults to updates/windows/x64.",
     "  --require <list>       Comma-separated required platforms, e.g. windows,mac,mobile.",
     "  --env-file <path>      Load simple KEY=VALUE environment file before running.",
     "  --upload              Upload release files and manifest to Tencent COS.",
-    "  --skip-cdn-purge      Skip CDN refresh after uploading downloads.json.",
+    "  --skip-update-feed     Do not generate or upload latest.yml for the desktop auto-updater.",
+    "  --skip-cdn-purge      Skip CDN refresh after uploading short-cache metadata.",
     "  --help                Show this help.",
     "",
     "Upload environment variables:",
@@ -61,7 +65,9 @@ function parseArgs(argv) {
     outDir: siteArtifactsDir,
     releasePrefix: defaultReleasePrefix,
     skipCdnPurge: false,
+    skipUpdateFeed: false,
     require: [],
+    updateFeedPrefix: process.env.ANYBOX_UPDATE_FEED_PREFIX || defaultUpdateFeedPrefix,
     upload: false,
     version: "",
     windows: "",
@@ -76,6 +82,8 @@ function parseArgs(argv) {
       args.upload = true
     } else if (value === "--skip-cdn-purge") {
       args.skipCdnPurge = true
+    } else if (value === "--skip-update-feed") {
+      args.skipUpdateFeed = true
     } else if (value === "--windows") {
       args.windows = path.resolve(argv[index + 1] ?? "")
       index += 1
@@ -102,6 +110,9 @@ function parseArgs(argv) {
       index += 1
     } else if (value === "--release-prefix") {
       args.releasePrefix = argv[index + 1] ?? args.releasePrefix
+      index += 1
+    } else if (value === "--update-feed-prefix") {
+      args.updateFeedPrefix = argv[index + 1] ?? args.updateFeedPrefix
       index += 1
     } else if (value === "--require") {
       args.require = (argv[index + 1] ?? "")
@@ -170,6 +181,7 @@ function contentTypeFor(filePath) {
   if (extension === ".dmg") return "application/x-apple-diskimage"
   if (extension === ".exe") return "application/vnd.microsoft.portable-executable"
   if (extension === ".json") return "application/json; charset=utf-8"
+  if (extension === ".yaml" || extension === ".yml") return "text/yaml; charset=utf-8"
 
   return "application/octet-stream"
 }
@@ -256,6 +268,60 @@ function platformVersion(platform, args, desktopVersion, mobileVersion) {
   return normalizeVersion(args.version || desktopVersion)
 }
 
+function buildWindowsUpdateFeedUploads(args, assets) {
+  if (args.skipUpdateFeed || !assets.windows) return []
+
+  const windowsInstaller = assets.windows
+  const windowsInstallerName = path.basename(windowsInstaller)
+  const windowsDistDir = path.dirname(windowsInstaller)
+  const latestYml = path.join(windowsDistDir, "latest.yml")
+  const blockmap = `${windowsInstaller}.blockmap`
+  const updatePrefix = trimSlashes(args.updateFeedPrefix)
+
+  if (!updatePrefix) {
+    throw new Error("Update feed prefix cannot be empty. Pass --skip-update-feed to publish only downloads.json.")
+  }
+  if (!existsSync(latestYml)) {
+    throw new Error(`Missing desktop updater metadata: ${latestYml}. Rebuild the desktop installer or pass --skip-update-feed.`)
+  }
+
+  const latestYmlText = readFileSync(latestYml, "utf8")
+  if (!latestYmlText.includes(windowsInstallerName)) {
+    throw new Error(
+      `desktop latest.yml does not reference ${windowsInstallerName}. Rebuild the desktop installer or pass --skip-update-feed.`,
+    )
+  }
+
+  const uploads = [
+    {
+      cacheControl: "public, max-age=31536000, immutable",
+      contentType: contentTypeFor(windowsInstaller),
+      filePath: windowsInstaller,
+      key: `${updatePrefix}/${windowsInstallerName}`,
+    },
+    {
+      cacheControl: "public, max-age=60",
+      contentType: contentTypeFor(latestYml),
+      filePath: latestYml,
+      key: `${updatePrefix}/latest.yml`,
+      purge: true,
+    },
+  ]
+
+  if (existsSync(blockmap)) {
+    uploads.push({
+      cacheControl: "public, max-age=31536000, immutable",
+      contentType: contentTypeFor(blockmap),
+      filePath: blockmap,
+      key: `${updatePrefix}/${path.basename(blockmap)}`,
+    })
+  } else {
+    console.warn(`windows blockmap not found; updater will fall back to full downloads: ${blockmap}`)
+  }
+
+  return uploads
+}
+
 function buildManifest(args, assets) {
   const desktopPackage = readJson(path.join(scriptRoot, "packages", "desktop", "package.json"))
   const mobileConfig = readJson(path.join(scriptRoot, "packages", "mobile-app", "app.json")).expo
@@ -289,6 +355,8 @@ function buildManifest(args, assets) {
       key: objectKey,
     })
   }
+
+  uploads.push(...buildWindowsUpdateFeedUploads(args, assets))
 
   const manifest = {
     generatedAt: new Date().toISOString(),
@@ -499,13 +567,15 @@ function tencentCloudApiRequest({ action, payload, secretId, secretKey }) {
   })
 }
 
-async function purgeCdnManifest({ baseUrl, manifestKey, secretId, secretKey }) {
-  const url = joinUrl(baseUrl, manifestKey)
-  console.log(`Purging CDN: ${url}`)
+async function purgeCdnUrls({ secretId, secretKey, urls }) {
+  if (urls.length === 0) return
+  for (const url of urls) {
+    console.log(`Purging CDN: ${url}`)
+  }
 
   const purgeResponse = await tencentCloudApiRequest({
     action: "PurgeUrlsCache",
-    payload: { Urls: [url] },
+    payload: { Urls: urls },
     secretId,
     secretKey,
   })
@@ -555,9 +625,12 @@ async function uploadAll(args, uploads, manifestPath) {
   })
 
   if (!args.skipCdnPurge) {
-    await purgeCdnManifest({
-      baseUrl: args.baseUrl,
-      manifestKey: args.manifestKey,
+    const purgeUrls = [
+      joinUrl(args.baseUrl, args.manifestKey),
+      ...uploads.filter((upload) => upload.purge).map((upload) => joinUrl(args.baseUrl, upload.key)),
+    ]
+    await purgeCdnUrls({
+      urls: purgeUrls,
       secretId: cosConfig.secretId,
       secretKey: cosConfig.secretKey,
     })
@@ -590,6 +663,9 @@ async function main() {
     } else {
       console.warn(`${platform}: no asset found; site will fall back to GitHub`)
     }
+  }
+  if (!args.skipUpdateFeed && assets.windows) {
+    console.log(`desktop updater: ${joinUrl(args.baseUrl, `${trimSlashes(args.updateFeedPrefix)}/latest.yml`)}`)
   }
 
   if (args.upload) {
