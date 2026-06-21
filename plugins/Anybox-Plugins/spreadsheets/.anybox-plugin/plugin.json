@@ -1,7 +1,7 @@
 {
   "name": "spreadsheets",
   "version": "0.1.0",
-  "description": "Create, edit, analyze, visualize, render, and export spreadsheet files in Anybox.",
+  "description": "Create, edit, analyze, visualize, render, verify, and export editable Microsoft Excel XLSX workbook files in Anybox.",
   "author": {
     "name": "Anybox"
   },
@@ -13,6 +13,8 @@
     "sheets",
     "spreadsheet",
     "spreadsheets",
+    "office",
+    "microsoft",
     "excel",
     "csv",
     "xlsx",
@@ -21,16 +23,16 @@
   ],
   "interface": {
     "displayName": {
-      "en-US": "Spreadsheets",
-      "zh-CN": "电子表格"
+      "en-US": "Excel Spreadsheets",
+      "zh-CN": "Excel XLSX 制作"
     },
     "shortDescription": {
-      "en-US": "Create and edit spreadsheet files",
-      "zh-CN": "创建和编辑电子表格文件"
+      "en-US": "Create editable Excel XLSX workbooks",
+      "zh-CN": "制作可编辑的 Office Excel XLSX 电子表格"
     },
     "longDescription": {
-      "en-US": "Create, edit, inspect, render, verify, and export XLSX, CSV, and TSV spreadsheets locally. Use Spreadsheets when the durable output or target is a spreadsheet, workbook, sheet, or CSV file.",
-      "zh-CN": "在本地创建、编辑、检查、渲染、验证并导出 XLSX、CSV 和 TSV 电子表格。当目标产物是电子表格、工作簿、表格或 CSV 文件时使用 Spreadsheets。"
+      "en-US": "Create, edit, inspect, analyze, visualize, render, verify, and export editable Microsoft Excel XLSX workbooks plus CSV and TSV spreadsheets locally. Use Excel Spreadsheets when the durable output or target is an Office Excel workbook, XLSX file, spreadsheet, sheet, or CSV file.",
+      "zh-CN": "在本地制作、编辑、分析、可视化、检查、渲染、验证并导出可在 Microsoft Office Excel 中继续编辑的 XLSX/Excel 工作簿，以及 CSV 和 TSV 电子表格。当目标产物是 Office Excel 工作簿、XLSX 文件、电子表格、表格或 CSV 文件时使用。"
     },
     "developerName": "Anybox",
     "category": "Docs",
@@ -52,8 +54,8 @@
   "skills": "./skills/",
   "skillPreviews": [
     {
-      "name": "Spreadsheets",
-      "description": "Use this skill when a user requests to create, modify, analyze, visualize, or work with spreadsheet files (`.xlsx`, `.xls`, `.csv`, `.tsv`) with formulas, formatting, charts, tables, and recalculation.",
+      "name": "Excel XLSX Builder",
+      "description": "Use this skill when a user requests to create, modify, analyze, visualize, or work with editable Microsoft Excel spreadsheet files (`.xlsx`, `.xls`, `.csv`, `.tsv`) with formulas, formatting, charts, tables, and recalculation.",
       "directory": "spreadsheets"
     }
   ]

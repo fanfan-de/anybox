@@ -1,11 +1,11 @@
 ---
-name: "Documents"
-description: "Create, edit, redline, and comment on `.docx` files inside the local Anybox workspace, with a strict render-and-verify workflow. Use `render_docx.py` to generate page PNGs (and optional PDF) for visual QA, then iterate until layout is flawless before delivering the final DOCX."
+name: "Word DOCX Builder"
+description: "Create, edit, redline, and comment on editable Microsoft Word `.docx` files inside the local Anybox workspace, with a strict render-and-verify workflow. Use when the user wants an Office Word document, DOCX file, memo, report, or writing artifact."
 ---
 
-# Documents Skill (Read • Create • Edit • Redline • Comment)
+# Word DOCX Builder Skill (Read • Create • Edit • Redline • Comment)
 
-Use this skill when you need to create or modify `.docx` files **in this container environment** and verify them visually.
+Use this skill when you need to create or modify editable Microsoft Word `.docx` files **in this container environment** and verify them visually.
 
 ## Tools + Contract
 

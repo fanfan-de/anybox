@@ -1,7 +1,7 @@
 {
   "name": "documents",
   "version": "0.1.0",
-  "description": "Create, edit, redline, comment on, render, verify, and export DOCX document files in Anybox.",
+  "description": "Create, edit, redline, comment on, render, verify, and export editable Microsoft Word DOCX document files in Anybox.",
   "author": {
     "name": "Anybox"
   },
@@ -13,6 +13,8 @@
     "docs",
     "document",
     "documents",
+    "office",
+    "microsoft",
     "word",
     "memo",
     "write",
@@ -22,16 +24,16 @@
   ],
   "interface": {
     "displayName": {
-      "en-US": "Documents",
-      "zh-CN": "文档"
+      "en-US": "Word Documents",
+      "zh-CN": "Word DOCX 制作"
     },
     "shortDescription": {
-      "en-US": "Create and edit document files",
-      "zh-CN": "创建和编辑文档文件"
+      "en-US": "Create editable Word DOCX files",
+      "zh-CN": "制作可编辑的 Office Word DOCX 文档"
     },
     "longDescription": {
-      "en-US": "Create, edit, inspect, render, verify, redline, comment on, and export DOCX document files locally. Use Documents when the durable output or target is a document, doc, docs, Word file, memo, report, or writing artifact.",
-      "zh-CN": "在本地创建、编辑、检查、渲染、验证、修订、评论和导出 DOCX 文档文件。当目标产物是 document、doc、docs、Word 文件、备忘录、报告或写作材料时使用 Documents。"
+      "en-US": "Create, edit, inspect, render, verify, redline, comment on, and export editable Microsoft Word DOCX document files locally. Use Word Documents when the durable output or target is an Office Word document, DOCX file, memo, report, or writing artifact.",
+      "zh-CN": "在本地制作、编辑、检查、渲染、验证、修订、评论并导出可在 Microsoft Office Word 中继续编辑的 DOCX/Word 文档。当目标产物是 Office Word 文档、DOCX 文件、备忘录、报告或写作材料时使用。"
     },
     "developerName": "Anybox",
     "category": "Docs",
@@ -53,8 +55,8 @@
   "skills": "./skills/",
   "skillPreviews": [
     {
-      "name": "Documents",
-      "description": "Create, edit, redline, and comment on `.docx` files inside the local Anybox workspace, with a strict render-and-verify workflow. Use `render_docx.py` to generate page PNGs (and optional PDF) for visual QA, then iterate until layout is flawless before delivering the final DOCX.",
+      "name": "Word DOCX Builder",
+      "description": "Create, edit, redline, and comment on editable Microsoft Word `.docx` files inside the local Anybox workspace, with a strict render-and-verify workflow. Use when the user wants an Office Word document, DOCX file, memo, report, or writing artifact.",
       "directory": "documents"
     }
   ]

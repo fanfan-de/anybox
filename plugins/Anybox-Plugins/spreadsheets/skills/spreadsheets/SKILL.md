@@ -1,11 +1,11 @@
 ---
-name: "Spreadsheets"
-description: "Use this skill when a user requests to create, modify, analyze, visualize, or work with spreadsheet files (`.xlsx`, `.xls`, `.csv`, `.tsv`) with formulas, formatting, charts, tables, and recalculation."
+name: "Excel XLSX Builder"
+description: "Use this skill when a user requests to create, modify, analyze, visualize, or work with editable Microsoft Excel spreadsheet files (`.xlsx`, `.xls`, `.csv`, `.tsv`) with formulas, formatting, charts, tables, and recalculation."
 ---
 
-# Spreadsheets skill
+# Excel XLSX Builder skill
 
-This skill includes requirements and guidance for producing a correct, polished spreadsheet artifact quickly that completes the user's request. When producing spreadsheets or workbooks, you will be judged on layout, readability, style, adherence to industry norms/conventions and correctness. Follow the requirements below for how to use the APIs effectively and how to verify your output before finalizing work for the user.
+This skill includes requirements and guidance for producing a correct, polished Microsoft Excel spreadsheet artifact quickly that completes the user's request. When producing spreadsheets or workbooks, you will be judged on layout, readability, style, adherence to industry norms/conventions and correctness. Follow the requirements below for how to use the APIs effectively and how to verify your output before finalizing work for the user.
 
 For complex, analytical, financial or research involved tasks, you are especially judged on correctness and quality. You need to be professional. For these, always make sure you have a plan for how you're organizing the spreadsheet, and the data or visualizations within each sheet. For business, finance, operations, dashboard, and data-analysis prompts, aim for an output that can compete with a strong analyst-built workbook, not just a functional grid. A good default shape is an executive summary or dashboard first, then source/assumptions, then model/detail sheets. For simpler tasks like a creating template or tracker, or things that do not require research, prioritize doing the spreadsheet build and edits quickly, while ensuring the user's request is fulfilled.
 
