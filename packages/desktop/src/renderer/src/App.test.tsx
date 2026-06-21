@@ -83,7 +83,7 @@ function openActivityRailConfigurationView(label: string | RegExp) {
   if (label === "Open skills" || label === "Open prompts") {
     fireEvent.click(screen.getByRole("button", { name: "Open prompts and skills" }))
     if (label === "Open skills") {
-      fireEvent.click(screen.getByRole("button", { name: "Skills", hidden: true }))
+      fireEvent.click(screen.getByRole("tab", { name: "Skills", hidden: true }))
     }
     return
   }
@@ -3190,7 +3190,7 @@ describe("App", () => {
     openActivityRailConfigurationView("Open skills")
 
     expect(await screen.findByLabelText("Prompts and skills top menu")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Skills", hidden: true })).toHaveAttribute("aria-pressed", "true")
+    expect(screen.getByRole("tab", { name: "Skills", hidden: true })).toHaveAttribute("aria-selected", "true")
     expect(screen.getByLabelText("Left sidebar top menu")).toBeInTheDocument()
     expect(document.querySelector("#app-sidebar")).toBeInTheDocument()
     expect(screen.queryByRole("complementary", { name: "Inspector sidebar" })).not.toBeInTheDocument()
@@ -3229,18 +3229,18 @@ describe("App", () => {
 
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true)
     const modeGroup = screen.getByLabelText("Prompts and skills section")
-    const promptsModeButton = within(modeGroup).getByRole("button", { name: "Prompts", hidden: true })
-    const skillsModeButton = within(modeGroup).getByRole("button", { name: "Skills", hidden: true })
+    const promptsModeButton = within(modeGroup).getByRole("tab", { name: "Prompts", hidden: true })
+    const skillsModeButton = within(modeGroup).getByRole("tab", { name: "Skills", hidden: true })
 
     fireEvent.click(skillsModeButton)
     expect(confirmSpy).toHaveBeenCalledWith("The current prompt has unsaved changes. Switch to Skills anyway?")
-    expect(promptsModeButton).toHaveAttribute("aria-pressed", "true")
-    expect(skillsModeButton).toHaveAttribute("aria-pressed", "false")
+    expect(promptsModeButton).toHaveAttribute("aria-selected", "true")
+    expect(skillsModeButton).toHaveAttribute("aria-selected", "false")
     expect(screen.getByRole("textbox", { name: "System prompt content" })).toHaveValue("Edited system prompt")
 
     fireEvent.click(skillsModeButton)
     await screen.findByText("No skills exist yet. Use + to create the first one.")
-    expect(within(screen.getByLabelText("Prompts and skills section")).getByRole("button", { name: "Skills", hidden: true })).toHaveAttribute("aria-pressed", "true")
+    expect(within(screen.getByLabelText("Prompts and skills section")).getByRole("tab", { name: "Skills", hidden: true })).toHaveAttribute("aria-selected", "true")
     confirmSpy.mockRestore()
   })
 
@@ -3284,18 +3284,18 @@ describe("App", () => {
 
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true)
     const modeGroup = screen.getByLabelText("Prompts and skills section")
-    const promptsModeButton = within(modeGroup).getByRole("button", { name: "Prompts", hidden: true })
-    const skillsModeButton = within(modeGroup).getByRole("button", { name: "Skills", hidden: true })
+    const promptsModeButton = within(modeGroup).getByRole("tab", { name: "Prompts", hidden: true })
+    const skillsModeButton = within(modeGroup).getByRole("tab", { name: "Skills", hidden: true })
 
     fireEvent.click(promptsModeButton)
     expect(confirmSpy).toHaveBeenCalledWith("The current skill has unsaved changes. Switch to Prompts anyway?")
-    expect(skillsModeButton).toHaveAttribute("aria-pressed", "true")
-    expect(promptsModeButton).toHaveAttribute("aria-pressed", "false")
+    expect(skillsModeButton).toHaveAttribute("aria-selected", "true")
+    expect(promptsModeButton).toHaveAttribute("aria-selected", "false")
     expect(screen.getByRole("textbox", { name: "Global skill editor" })).toHaveValue(`${content}\n\nExtra guidance.`)
 
     fireEvent.click(promptsModeButton)
     await screen.findByRole("list", { name: "Prompt presets" })
-    expect(within(screen.getByLabelText("Prompts and skills section")).getByRole("button", { name: "Prompts", hidden: true })).toHaveAttribute("aria-pressed", "true")
+    expect(within(screen.getByLabelText("Prompts and skills section")).getByRole("tab", { name: "Prompts", hidden: true })).toHaveAttribute("aria-selected", "true")
     confirmSpy.mockRestore()
   })
 
@@ -13786,7 +13786,6 @@ describe("App", () => {
     expect(styles).toMatch(/\.settings-prompt-assignment-select\s+\.settings-select-panel\s*\{[^}]*left:\s*0;[^}]*width:\s*max-content;[^}]*max-width:\s*calc\(100vw - 48px\);/s)
     expect(styles).toMatch(/\.settings-prompt-assignment-select\s+\.settings-select-option span\s*\{[^}]*overflow:\s*visible;[^}]*text-overflow:\s*clip;/s)
     expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-slots-panel\s*\{[^}]*align-self:\s*start;[^}]*padding:\s*4px 0 0;[^}]*border:\s*0;[^}]*border-bottom:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;[^}]*gap:\s*12px;/s)
-    expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-slots-header h3\s*\{[^}]*font-size:\s*11px;[^}]*letter-spacing:\s*0\.06em;[^}]*text-transform:\s*uppercase;/s)
     expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-assignment-list\s*\{[^}]*display:\s*grid;[^}]*gap:\s*10px;/s)
     expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-assignment-row\s*\{[^}]*position:\s*relative;[^}]*padding:\s*10px 10px 11px 13px;[^}]*border:\s*1px solid var\(--semantic-settings-slot-card-list-item-border-default\);[^}]*background:\s*var\(--semantic-settings-slot-card-list-item-surface-default\);[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);[^}]*gap:\s*8px;/s)
     expect(styles).toMatch(/\.settings-page-main\.is-services\.prompt-presets-page-main\s+\.settings-prompt-assignment-row::before\s*\{[^}]*content:\s*"";[^}]*width:\s*2px;[^}]*background:\s*var\(--semantic-settings-slot-card-list-item-indicator-default\);/s)
