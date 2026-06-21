@@ -18,7 +18,14 @@ import { getProcessEnvValue } from "#env/compat.ts"
 
 const INSTALLED_PLUGINS_TABLE = "installed_plugins"
 const PLUGIN_MANIFEST_PATH = join(".anybox-plugin", "plugin.json")
-const PLUGIN_MANIFEST_URL_SUFFIX = "/.anybox-plugin/plugin.json"
+const PLUGIN_ROOT_MANIFEST_PATH = "plugin.json"
+const PLUGIN_CODEX_MANIFEST_PATH = join(".codex-plugin", "plugin.json")
+const PLUGIN_MANIFEST_PATHS = [
+  PLUGIN_MANIFEST_PATH,
+  PLUGIN_ROOT_MANIFEST_PATH,
+  PLUGIN_CODEX_MANIFEST_PATH,
+] as const
+const PLUGIN_HIDDEN_MANIFEST_DIRECTORIES = new Set([".anybox-plugin", ".codex-plugin"])
 const PLUGIN_APP_COMPAT_PATH = ".app.json"
 const BUILTIN_PLUGIN_PACKAGE_PATH = join("plugins", "builtin")
 const WORKSPACE_PLUGIN_PACKAGE_PATH = join("plugins", "Anybox-Plugins")
@@ -40,6 +47,7 @@ const MAX_PLUGIN_PACKAGE_BYTES = 100 * 1024 * 1024
 const MAX_PLUGIN_DISPLAY_ASSET_BYTES = 2 * 1024 * 1024
 const MAX_PLUGIN_REGISTRY_INDEX_BYTES = 256 * 1024
 const MAX_PLUGIN_META_BYTES = 1024 * 1024
+const MAX_PLUGIN_COMPONENT_BYTES = 1024 * 1024
 const MAX_REMOTE_PLUGIN_META_COUNT = 200
 const PLUGIN_REGISTRY_FETCH_TIMEOUT_MS = 8000
 const PLUGIN_DISPLAY_ASSET_MIME_TYPES = new Map([
@@ -467,6 +475,29 @@ export const PluginManifest = z
   .strict()
 export type PluginManifest = z.infer<typeof PluginManifest>
 
+const PluginComponentPathReference = z.string().min(1)
+const PluginConnectorComponentDeclaration = z.union([z.array(PluginAppConnector), PluginComponentPathReference])
+const PluginMcpServersComponentDeclaration = z.union([z.array(PluginManifestMcpServer), PluginComponentPathReference])
+const PluginHooksComponentDeclaration = z.union([
+  PluginComponentPathReference,
+  z.array(z.unknown()),
+  z.record(z.string(), z.unknown()),
+])
+
+const PluginManifestDocumentRaw = PluginManifest.omit({
+  apps: true,
+  connectors: true,
+  mcpServers: true,
+}).extend({
+  apps: PluginConnectorComponentDeclaration.optional(),
+  connectors: PluginConnectorComponentDeclaration.optional(),
+  mcpServers: PluginMcpServersComponentDeclaration.optional(),
+  hooks: PluginHooksComponentDeclaration.optional(),
+  id: z.string().min(1).optional(),
+  package: PluginPackageDownload.optional(),
+  skillPreviews: z.array(PluginRegistrySkillPreview).optional(),
+}).strict()
+
 const PluginManifestDocument = PluginManifest.extend({
   id: z.string().min(1).optional(),
   package: PluginPackageDownload.optional(),
@@ -726,13 +757,22 @@ function normalizeGitHubBlobURL(rawUrl: string) {
   return new URL(`${owner}/${repo}/${branch}/${pathSegments.join("/")}`, "https://raw.githubusercontent.com/").toString()
 }
 
+function pluginRootURLForManifest(manifestURL: string) {
+  const manifestDirectoryURL = new URL("./", manifestURL)
+  const trimmedPath = manifestDirectoryURL.pathname.replace(/\/+$/, "")
+  const directoryName = decodeURIComponent(trimmedPath.slice(trimmedPath.lastIndexOf("/") + 1))
+  return PLUGIN_HIDDEN_MANIFEST_DIRECTORIES.has(directoryName)
+    ? new URL("../", manifestDirectoryURL)
+    : manifestDirectoryURL
+}
+
 function normalizePluginRegistryEntryURL(rawUrl: string) {
   const url = assertHTTPSURL(normalizeGitHubBlobURL(rawUrl.trim()), "Plugin registry entry URL")
   if (url.search || url.hash) {
     throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin registry entry URL must not contain query parameters or fragments.")
   }
-  if (!url.pathname.toLowerCase().endsWith(PLUGIN_MANIFEST_URL_SUFFIX)) {
-    throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin registry entry URL must point to .anybox-plugin/plugin.json.")
+  if (!url.pathname.toLowerCase().endsWith("/plugin.json")) {
+    throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin registry entry URL must point directly to plugin.json.")
   }
   return url.toString()
 }
@@ -850,8 +890,254 @@ function normalizePluginConnectors(manifest: PluginManifest): PluginAppConnector
   ]
 }
 
-function parsePluginManifestDocument(input: unknown) {
-  const parsed = PluginManifestDocument.parse(input)
+type ManifestComponentResolveContext =
+  | {
+      kind: "local"
+      packageRoot: string
+    }
+  | {
+      kind: "remote"
+      manifestURL: string
+      pluginRootURL: string
+    }
+
+type RawPluginManifestDocument = z.infer<typeof PluginManifestDocumentRaw>
+
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function pluginComponentError(message: string) {
+  return new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", message)
+}
+
+function assertPluginComponentReference(reference: string, label: string) {
+  const trimmed = reference.trim()
+  if (!trimmed) {
+    throw pluginComponentError(`Plugin manifest field '${label}' must point to a JSON file.`)
+  }
+  if (
+    trimmed.includes("\0")
+    || trimmed.startsWith("/")
+    || trimmed.startsWith("\\")
+    || isAbsolute(trimmed)
+    || /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(trimmed)
+  ) {
+    throw pluginComponentError(`Plugin manifest field '${label}' must use a package-relative JSON path.`)
+  }
+  if (!trimmed.toLowerCase().endsWith(".json")) {
+    throw pluginComponentError(`Plugin manifest field '${label}' must point to a JSON file.`)
+  }
+
+  return trimmed
+}
+
+function assertLocalPluginComponentPath(packageRoot: string, reference: string, label: string) {
+  const relativeReference = assertPluginComponentReference(reference, label)
+  const filePath = resolvePackageRelativePath(packageRoot, relativeReference)
+  if (!filePath) {
+    throw pluginComponentError(`Plugin manifest field '${label}' must stay inside the plugin package.`)
+  }
+
+  return filePath
+}
+
+function assertRemotePluginComponentURL(context: Extract<ManifestComponentResolveContext, { kind: "remote" }>, reference: string, label: string) {
+  const relativeReference = assertPluginComponentReference(reference, label)
+  if (relativeReference.includes("\\")) {
+    throw pluginComponentError(`Plugin manifest field '${label}' must use URL-style package-relative paths.`)
+  }
+
+  const rootURL = new URL(context.pluginRootURL)
+  const url = new URL(relativeReference, rootURL)
+  if (url.search || url.hash) {
+    throw pluginComponentError(`Plugin manifest field '${label}' must not include query parameters or fragments.`)
+  }
+  if (url.protocol !== rootURL.protocol || url.origin !== rootURL.origin || !url.pathname.startsWith(rootURL.pathname)) {
+    throw pluginComponentError(`Plugin manifest field '${label}' must stay inside the plugin root URL.`)
+  }
+
+  return url.toString()
+}
+
+function readPluginComponentJSONSync(context: ManifestComponentResolveContext | undefined, reference: string, label: string) {
+  if (!context) {
+    throw pluginComponentError(`Plugin manifest field '${label}' uses an external file, but no plugin root is available.`)
+  }
+  if (context.kind !== "local") {
+    throw pluginComponentError(`Plugin manifest field '${label}' requires asynchronous remote resolution.`)
+  }
+
+  const filePath = assertLocalPluginComponentPath(context.packageRoot, reference, label)
+  try {
+    const stat = lstatSync(filePath)
+    if (!stat.isFile()) {
+      throw pluginComponentError(`Plugin component '${label}' must be a JSON file.`)
+    }
+    if (stat.size > MAX_PLUGIN_COMPONENT_BYTES) {
+      throw pluginComponentError(`Plugin component '${label}' is larger than the allowed size.`)
+    }
+
+    const rootRealPath = realpathSync(context.packageRoot)
+    const fileRealPath = realpathSync(filePath)
+    const realRelativePath = relative(rootRealPath, fileRealPath)
+    if (realRelativePath.startsWith("..") || isAbsolute(realRelativePath)) {
+      throw pluginComponentError(`Plugin manifest field '${label}' must stay inside the plugin package.`)
+    }
+
+    return JSON.parse(readFileSync(filePath, "utf8"))
+  } catch (error) {
+    if (error instanceof PluginError) throw error
+    throw pluginComponentError(
+      error instanceof Error
+        ? `Plugin component '${label}' could not be loaded: ${error.message}`
+        : `Plugin component '${label}' could not be loaded.`,
+    )
+  }
+}
+
+async function fetchPluginComponentJSON(context: Extract<ManifestComponentResolveContext, { kind: "remote" }>, reference: string, label: string) {
+  const componentURL = assertRemotePluginComponentURL(context, reference, label)
+  return fetchJSONWithSchema(componentURL, z.unknown(), MAX_PLUGIN_COMPONENT_BYTES, `Plugin component '${label}'`)
+}
+
+function parsePluginConnectorRecord(record: Record<string, unknown>, label: string) {
+  return Object.entries(record).flatMap(([entryID, rawEntry]) => {
+    const entry = PluginAppCompatEntry.safeParse(rawEntry)
+    if (!entry.success) {
+      throw pluginComponentError(`Plugin component '${label}' entry '${entryID}' is invalid: ${entry.error.message}`)
+    }
+
+    const credential = entry.data.credential ?? entry.data.oauth
+    const openAIAppID = entry.data.id ?? entry.data.appID
+    if (!credential || !entry.data.runtime) {
+      if (typeof openAIAppID === "string" && openAIAppID.startsWith("asdk_app_")) return []
+      throw pluginComponentError(`Plugin component '${label}' entry '${entryID}' requires credential and runtime.`)
+    }
+
+    const connector = PluginAppConnector.safeParse({
+      appID: entry.data.appID ?? entry.data.id ?? entryID,
+      name: entry.data.name ?? entryID,
+      description: entry.data.description,
+      icon: entry.data.icon,
+      risk: entry.data.risk,
+      permissions: entry.data.permissions,
+      tools: entry.data.tools,
+      credential,
+      runtime: entry.data.runtime,
+      installReview: entry.data.installReview,
+    })
+    if (!connector.success) {
+      throw pluginComponentError(`Plugin component '${label}' entry '${entryID}' is invalid: ${connector.error.message}`)
+    }
+
+    return [connector.data]
+  })
+}
+
+function parsePluginConnectorComponentJSON(input: unknown, label: "apps" | "connectors") {
+  if (Array.isArray(input)) {
+    const connectors = z.array(PluginAppConnector).safeParse(input)
+    if (!connectors.success) {
+      throw pluginComponentError(`Plugin component '${label}' is invalid: ${connectors.error.message}`)
+    }
+    return connectors.data
+  }
+
+  if (!isJsonRecord(input)) {
+    throw pluginComponentError(`Plugin component '${label}' must be a JSON array or object.`)
+  }
+
+  const preferredKeys = label === "apps" ? ["apps", "connectors"] : ["connectors", "apps"]
+  for (const key of preferredKeys) {
+    const declaration = input[key]
+    if (Array.isArray(declaration)) {
+      const connectors = z.array(PluginAppConnector).safeParse(declaration)
+      if (!connectors.success) {
+        throw pluginComponentError(`Plugin component '${label}' field '${key}' is invalid: ${connectors.error.message}`)
+      }
+      return connectors.data
+    }
+    if (isJsonRecord(declaration)) {
+      return parsePluginConnectorRecord(declaration, label)
+    }
+  }
+
+  throw pluginComponentError(`Plugin component '${label}' must contain an '${label}' JSON array or object.`)
+}
+
+function parsePluginMcpServersComponentJSON(input: unknown) {
+  const rawServers = Array.isArray(input)
+    ? input
+    : isJsonRecord(input) && Array.isArray(input.mcpServers)
+      ? input.mcpServers
+      : undefined
+  if (!rawServers) {
+    throw pluginComponentError("Plugin component 'mcpServers' must be a JSON array or contain an 'mcpServers' array.")
+  }
+
+  const servers = z.array(PluginManifestMcpServer).safeParse(rawServers)
+  if (!servers.success) {
+    throw pluginComponentError(`Plugin component 'mcpServers' is invalid: ${servers.error.message}`)
+  }
+
+  return servers.data
+}
+
+function resolveConnectorDeclarationSync(
+  declaration: RawPluginManifestDocument["apps"] | RawPluginManifestDocument["connectors"],
+  label: "apps" | "connectors",
+  context?: ManifestComponentResolveContext,
+) {
+  if (declaration === undefined) return undefined
+  if (typeof declaration !== "string") return declaration
+  return parsePluginConnectorComponentJSON(readPluginComponentJSONSync(context, declaration, label), label)
+}
+
+async function resolveConnectorDeclarationAsync(
+  declaration: RawPluginManifestDocument["apps"] | RawPluginManifestDocument["connectors"],
+  label: "apps" | "connectors",
+  context: Extract<ManifestComponentResolveContext, { kind: "remote" }>,
+) {
+  if (declaration === undefined) return undefined
+  if (typeof declaration !== "string") return declaration
+  return parsePluginConnectorComponentJSON(await fetchPluginComponentJSON(context, declaration, label), label)
+}
+
+function resolveMcpServersDeclarationSync(
+  declaration: RawPluginManifestDocument["mcpServers"],
+  context?: ManifestComponentResolveContext,
+) {
+  if (declaration === undefined) return undefined
+  if (typeof declaration !== "string") return declaration
+  return parsePluginMcpServersComponentJSON(readPluginComponentJSONSync(context, declaration, "mcpServers"))
+}
+
+async function resolveMcpServersDeclarationAsync(
+  declaration: RawPluginManifestDocument["mcpServers"],
+  context: Extract<ManifestComponentResolveContext, { kind: "remote" }>,
+) {
+  if (declaration === undefined) return undefined
+  if (typeof declaration !== "string") return declaration
+  return parsePluginMcpServersComponentJSON(await fetchPluginComponentJSON(context, declaration, "mcpServers"))
+}
+
+function resolveHooksDeclarationSync(declaration: RawPluginManifestDocument["hooks"], context?: ManifestComponentResolveContext) {
+  if (typeof declaration === "string") {
+    readPluginComponentJSONSync(context, declaration, "hooks")
+  }
+}
+
+async function resolveHooksDeclarationAsync(
+  declaration: RawPluginManifestDocument["hooks"],
+  context: Extract<ManifestComponentResolveContext, { kind: "remote" }>,
+) {
+  if (typeof declaration === "string") {
+    await fetchPluginComponentJSON(context, declaration, "hooks")
+  }
+}
+
+function finalizePluginManifestDocument(parsed: z.infer<typeof PluginManifestDocument>) {
   const pluginID = normalizeManifestID(parsed.id ?? parsed.name)
   const { id: _id, package: download, skillPreviews, ...manifestInput } = parsed
   const manifest = PluginManifest.parse({
@@ -864,6 +1150,37 @@ function parsePluginManifestDocument(input: unknown) {
     download,
     skillPreviews: normalizeRegistrySkillPreviews(pluginID, skillPreviews),
   }
+}
+
+function parsePluginManifestDocument(input: unknown, context?: ManifestComponentResolveContext) {
+  const raw = PluginManifestDocumentRaw.parse(input)
+  const { apps, connectors, mcpServers, hooks, ...manifestInput } = raw
+  resolveHooksDeclarationSync(hooks, context)
+
+  return finalizePluginManifestDocument(PluginManifestDocument.parse({
+    ...manifestInput,
+    apps: resolveConnectorDeclarationSync(apps, "apps", context),
+    connectors: resolveConnectorDeclarationSync(connectors, "connectors", context),
+    mcpServers: resolveMcpServersDeclarationSync(mcpServers, context),
+  }))
+}
+
+async function parseRemotePluginManifestDocument(input: unknown, manifestURL: string) {
+  const raw = PluginManifestDocumentRaw.parse(input)
+  const context = {
+    kind: "remote" as const,
+    manifestURL,
+    pluginRootURL: pluginRootURLForManifest(manifestURL).toString(),
+  }
+  const { apps, connectors, mcpServers, hooks, ...manifestInput } = raw
+  await resolveHooksDeclarationAsync(hooks, context)
+
+  return finalizePluginManifestDocument(PluginManifestDocument.parse({
+    ...manifestInput,
+    apps: await resolveConnectorDeclarationAsync(apps, "apps", context),
+    connectors: await resolveConnectorDeclarationAsync(connectors, "connectors", context),
+    mcpServers: await resolveMcpServersDeclarationAsync(mcpServers, context),
+  }))
 }
 
 const REMOTE_DISPLAY_ASSET_FIELDS = [
@@ -885,13 +1202,12 @@ function isResolvableRemoteAssetReference(value: string) {
   return PLUGIN_DISPLAY_ASSET_MIME_TYPES.has(extname(trimmed).toLowerCase())
 }
 
-function resolveRemoteAssetReference(value: string | undefined, manifestURL: string) {
+function resolveRemoteAssetReference(value: string | undefined, pluginRootURL: string) {
   const trimmed = value?.trim()
   if (!trimmed || !isResolvableRemoteAssetReference(trimmed)) return value
 
   try {
-    const packageRootURL = new URL("../", manifestURL)
-    return new URL(trimmed, packageRootURL).toString()
+    return new URL(trimmed, pluginRootURL).toString()
   } catch {
     return value
   }
@@ -901,12 +1217,13 @@ function resolveRemoteManifestAssets(manifest: PluginManifest, manifestURL: stri
   const interfaceMetadata = manifest.interface
   if (!interfaceMetadata) return manifest
 
+  const pluginRootURL = pluginRootURLForManifest(manifestURL).toString()
   const resolvedInterface: PluginInterface = { ...interfaceMetadata }
   let changed = false
   for (const field of REMOTE_DISPLAY_ASSET_FIELDS) {
     const current = resolvedInterface[field]
     if (typeof current !== "string") continue
-    const resolved = resolveRemoteAssetReference(current, manifestURL)
+    const resolved = resolveRemoteAssetReference(current, pluginRootURL)
     if (resolved && resolved !== current) {
       resolvedInterface[field] = resolved
       changed = true
@@ -915,7 +1232,7 @@ function resolveRemoteManifestAssets(manifest: PluginManifest, manifestURL: stri
 
   if (Array.isArray(resolvedInterface.screenshots)) {
     const screenshots = resolvedInterface.screenshots.map((screenshot) =>
-      resolveRemoteAssetReference(screenshot, manifestURL) ?? screenshot
+      resolveRemoteAssetReference(screenshot, pluginRootURL) ?? screenshot
     )
     if (screenshots.some((screenshot, index) => screenshot !== resolvedInterface.screenshots?.[index])) {
       resolvedInterface.screenshots = screenshots
@@ -931,13 +1248,22 @@ function resolveRemoteManifestAssets(manifest: PluginManifest, manifestURL: stri
     : manifest
 }
 
+function findPluginManifestPath(packageRoot: string) {
+  return PLUGIN_MANIFEST_PATHS
+    .map((manifestPath) => join(packageRoot, manifestPath))
+    .find((manifestPath) => existsSync(manifestPath))
+}
+
 function safeReadPluginManifest(packageRoot: string) {
-  const manifestPath = join(packageRoot, PLUGIN_MANIFEST_PATH)
-  if (!existsSync(manifestPath)) return undefined
+  const manifestPath = findPluginManifestPath(packageRoot)
+  if (!manifestPath) return undefined
 
   try {
     const raw = readFileSync(manifestPath, "utf8")
-    const { manifest } = parsePluginManifestDocument(JSON.parse(raw))
+    const { manifest } = parsePluginManifestDocument(JSON.parse(raw), {
+      kind: "local",
+      packageRoot,
+    })
     const manifestConnectors = normalizePluginConnectors(manifest)
     const compatApps = safeReadPluginAppCompat(packageRoot)
     if (compatApps.length === 0) {
@@ -1156,11 +1482,17 @@ async function fetchRegistryIndex() {
 async function fetchPluginMeta(manifestURL: string) {
   const item = await fetchJSONWithSchema(
     manifestURL,
-    PluginRegistryItem,
+    z.unknown(),
     MAX_PLUGIN_META_BYTES,
     "Plugin metadata",
   )
-  return registryItemToManifestSource(item, manifestURL)
+  const parsed = await parseRemotePluginManifestDocument(item, manifestURL)
+  return {
+    manifest: resolveRemoteManifestAssets(parsed.manifest, manifestURL),
+    download: parsed.download,
+    skillPreviews: parsed.skillPreviews,
+    source: "registry" as const,
+  }
 }
 
 function listCachedRemoteRegistryManifestSources() {

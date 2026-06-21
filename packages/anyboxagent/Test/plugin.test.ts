@@ -1245,6 +1245,105 @@ describe("plugin marketplace API", () => {
     expect(manifestPlugin?.skills.map((skill) => skill.directory)).toEqual(["review"])
   })
 
+  test("loads local plugin manifests with external apps, mcpServers, and hooks files", async () => {
+    await useTempDatabase()
+    const packageRoot = join(pluginLocalRoot(), "external-component-lab", "0.1.0")
+    await mkdir(packageRoot, { recursive: true })
+    await writeFile(join(packageRoot, "plugin.json"), JSON.stringify({
+      name: "external-component-lab",
+      version: "0.1.0",
+      description: "Fixture plugin package with external manifest components.",
+      mcpServers: "./.mcp.json",
+      apps: "./.app.json",
+      hooks: "./.hooks.json",
+      skills: [],
+    }, null, 2))
+    await writeFile(join(packageRoot, ".mcp.json"), JSON.stringify({
+      mcpServers: [
+        {
+          id: "notes",
+          name: "External Notes",
+          risk: "low",
+          tools: [
+            {
+              name: "list_notes",
+              description: "List fixture notes.",
+              readOnly: true,
+            },
+          ],
+          runtime: {
+            transport: "stdio",
+            command: "node",
+            args: ["server.js"],
+            timeoutMs: 1000,
+          },
+        },
+      ],
+    }, null, 2))
+    await writeFile(join(packageRoot, ".app.json"), JSON.stringify({
+      apps: {
+        docs: {
+          name: "Docs API",
+          description: "Fixture external app connector.",
+          credential: {
+            key: "DOCS_API_KEY",
+            label: "Docs API key",
+            type: "password",
+            required: true,
+            secret: true,
+          },
+          runtime: {
+            transport: "remote",
+            serverUrl: "https://docs.example.test/mcp",
+            headers: {
+              "x-api-key": "${DOCS_API_KEY}",
+            },
+            allowedTools: {
+              readOnly: true,
+            },
+            requireApproval: "never",
+          },
+        },
+      },
+    }, null, 2))
+    await writeFile(join(packageRoot, ".hooks.json"), JSON.stringify({
+      hooks: [
+        {
+          event: "install",
+          command: "node scripts/hook.js",
+        },
+      ],
+    }, null, 2))
+
+    const app = createServerApp()
+    const catalogResponse = await app.request("/api/plugins/catalog")
+    const catalogBody = (await catalogResponse.json()) as PluginCatalogEnvelope
+    const plugin = catalogBody.data?.find((item) => item.id === "external-component-lab")
+
+    expect(catalogResponse.status).toBe(200)
+    expect(plugin?.mcpServers.map((server) => server.id)).toEqual(["notes"])
+    expect(plugin?.apps.map((entry) => entry.appID)).toEqual(["docs"])
+    expect(plugin?.connectors.map((entry) => entry.appID)).toEqual(["docs"])
+
+    const installResponse = await app.request("/api/plugins/installed/external-component-lab", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        enabled: true,
+      }),
+    })
+    const installBody = (await installResponse.json()) as InstalledPluginEnvelope
+
+    expect(installResponse.status).toBe(200)
+    expect(installBody.data?.mcpServerIDs).toEqual([
+      "plugin.external-component-lab.notes",
+      "plugin.external-component-lab.connector.docs",
+    ])
+    expect(installBody.data?.connectorIDs).toEqual(["plugin-connector:external-component-lab:docs"])
+  })
+
   test("preserves registry localization when package metadata wins catalog merge", async () => {
     await useTempDatabase()
     const packageSourceRoot = await writeManifestPluginPackage()
@@ -1551,11 +1650,10 @@ describe("plugin marketplace API", () => {
     expect(manifestRequestCount).toBe(0)
   })
 
-  test("does not resolve legacy remote registry root plugin.json URLs", async () => {
+  test("loads remote metadata from root plugin.json URLs in the registry index", async () => {
     await useTempDatabase()
     const app = createServerApp()
     process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "https://registry.example.test/index.json"
-    let manifestRequestCount = 0
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = typeof input === "string"
         ? input
@@ -1564,7 +1662,19 @@ describe("plugin marketplace API", () => {
         return new Response(JSON.stringify(["https://plugins.example.test/root-lab/plugin.json"]), { status: 200 })
       }
       if (url === "https://plugins.example.test/root-lab/plugin.json") {
-        manifestRequestCount += 1
+        return new Response(JSON.stringify({
+          name: "root-lab",
+          version: "1.0.0",
+          description: "Remote plugin described by a root plugin.json URL.",
+          interface: {
+            displayName: "Root Lab",
+            shortDescription: "Root manifest catalog entry.",
+            category: "Docs",
+            logo: "./assets/icon.png",
+          },
+          mcpServers: [],
+          skills: [],
+        }), { status: 200 })
       }
       return new Response("not found", { status: 404 })
     }) as typeof fetch
@@ -1574,8 +1684,8 @@ describe("plugin marketplace API", () => {
     const plugin = body.data?.find((item) => item.id === "root-lab")
 
     expect(response.status).toBe(200)
-    expect(plugin).toBeUndefined()
-    expect(manifestRequestCount).toBe(0)
+    expect(plugin?.name).toBe("Root Lab")
+    expect(plugin?.iconUrl).toBe("https://plugins.example.test/root-lab/assets/icon.png")
   })
 
   test("loads remote metadata from direct .anybox-plugin/plugin.json URLs in the registry index", async () => {
@@ -1639,6 +1749,143 @@ describe("plugin marketplace API", () => {
     expect(directPlugin?.screenshots).toEqual(["https://plugins.example.test/direct-lab/assets/screenshot.png"])
     expect(blobPlugin?.name).toBe("Blob Lab")
     expect(requestedRawGitHubURL).toBe(true)
+  })
+
+  test("imports OpenAI Codex plugin metadata with external asdk apps as catalog-only", async () => {
+    await useTempDatabase()
+    const app = createServerApp()
+    let requestedRawGitHubURL = false
+    let appManifestRequestCount = 0
+
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL ? input.toString() : input.url
+      if (url === "https://raw.githubusercontent.com/openai/plugins/main/plugins/actively/.codex-plugin/plugin.json") {
+        requestedRawGitHubURL = true
+        return new Response(JSON.stringify({
+          name: "actively",
+          version: "1.0.3",
+          description: "OpenAI Codex plugin metadata fixture.",
+          interface: {
+            displayName: "Actively",
+            shortDescription: "Catalog-only OpenAI App SDK plugin.",
+            category: "Automation",
+            logo: "./assets/logo.png",
+          },
+          apps: "./.app.json",
+        }), { status: 200 })
+      }
+      if (url === "https://raw.githubusercontent.com/openai/plugins/main/plugins/actively/.app.json") {
+        appManifestRequestCount += 1
+        return new Response(JSON.stringify({
+          apps: {
+            actively: {
+              id: "asdk_app_6a15fca0d57c8191a204ffdd12fbbef2",
+            },
+          },
+        }), { status: 200 })
+      }
+      return new Response("not found", { status: 404 })
+    }) as typeof fetch
+
+    const importResponse = await app.request("/api/plugins/import-url", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        url: "https://github.com/openai/plugins/blob/main/plugins/actively/.codex-plugin/plugin.json",
+      }),
+    })
+    const importBody = (await importResponse.json()) as PluginCatalogItemEnvelope
+
+    expect(importResponse.status).toBe(200)
+    expect(requestedRawGitHubURL).toBe(true)
+    expect(appManifestRequestCount).toBe(1)
+    expect(importBody.data?.id).toBe("actively")
+    expect(importBody.data?.apps).toEqual([])
+    expect(importBody.data?.connectors).toEqual([])
+    expect(importBody.data?.installable).toBe(false)
+    expect(importBody.data?.iconUrl).toBe("https://raw.githubusercontent.com/openai/plugins/main/plugins/actively/assets/logo.png")
+
+    const cachedCatalogResponse = await app.request("/api/plugins/catalog?freshness=cached")
+    const cachedCatalogBody = (await cachedCatalogResponse.json()) as PluginCatalogEnvelope
+    const importedPlugin = cachedCatalogBody.data?.find((plugin) => plugin.id === "actively")
+
+    expect(cachedCatalogResponse.status).toBe(200)
+    expect(importedPlugin?.name).toBe("Actively")
+    expect(appManifestRequestCount).toBe(1)
+  })
+
+  test("rejects remote external manifest components outside the plugin root", async () => {
+    await useTempDatabase()
+    const app = createServerApp()
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL ? input.toString() : input.url
+      if (url === "https://plugins.example.test/root-lab/plugin.json") {
+        return new Response(JSON.stringify({
+          name: "root-lab",
+          version: "1.0.0",
+          description: "Remote plugin with an unsafe component path.",
+          apps: "../shared/.app.json",
+        }), { status: 200 })
+      }
+      return new Response("not found", { status: 404 })
+    }) as typeof fetch
+
+    const importResponse = await app.request("/api/plugins/import-url", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        url: "https://plugins.example.test/root-lab/plugin.json",
+      }),
+    })
+    const importBody = (await importResponse.json()) as JsonEnvelope<unknown>
+
+    expect(importResponse.status).toBe(502)
+    expect(importBody.error?.code).toBe("PLUGIN_REGISTRY_UNAVAILABLE")
+    expect(importBody.error?.message).toContain("apps")
+    expect(importBody.error?.message).toContain("plugin root URL")
+  })
+
+  test("rejects missing remote external manifest component files with a clear error", async () => {
+    await useTempDatabase()
+    const app = createServerApp()
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL ? input.toString() : input.url
+      if (url === "https://plugins.example.test/missing-app/plugin.json") {
+        return new Response(JSON.stringify({
+          name: "missing-app",
+          version: "1.0.0",
+          description: "Remote plugin with a missing component file.",
+          apps: "./.app.json",
+        }), { status: 200 })
+      }
+      return new Response("not found", { status: 404 })
+    }) as typeof fetch
+
+    const importResponse = await app.request("/api/plugins/import-url", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        url: "https://plugins.example.test/missing-app/plugin.json",
+      }),
+    })
+    const importBody = (await importResponse.json()) as JsonEnvelope<unknown>
+
+    expect(importResponse.status).toBe(502)
+    expect(importBody.error?.code).toBe("PLUGIN_REGISTRY_UNAVAILABLE")
+    expect(importBody.error?.message).toContain("Plugin component 'apps'")
+    expect(importBody.error?.message).toContain("HTTP 404")
   })
 
   test("imports plugin metadata from a direct plugin URL into the user registry", async () => {

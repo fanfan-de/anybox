@@ -40,7 +40,11 @@ Anybox 插件是一个能力包，不是新的执行引擎。
 插件包是一个目录，里面必须有：
 
 ```text
+<plugin-id>/plugin.json
+# Legacy Anybox package location:
 <plugin-id>/.anybox-plugin/plugin.json
+# Codex-compatible package location:
+<plugin-id>/.codex-plugin/plugin.json
 ```
 
 推荐 Codex-like 展开结构：
@@ -73,6 +77,68 @@ Repository and registry `plugin.json` files may also include `skillPreviews` so 
   "description": "My first Anybox plugin."
 }
 ```
+
+Manifest entry points can be root `plugin.json`, legacy `.anybox-plugin/plugin.json`, or Codex-compatible `.codex-plugin/plugin.json`. If the manifest is inside `.anybox-plugin` or `.codex-plugin`, package-relative paths still resolve from the plugin package root, not from the hidden manifest directory.
+
+### External component JSON files
+
+`apps`, `connectors`, `mcpServers`, and `hooks` may be written inline, or as package-relative JSON file paths:
+
+```json
+{
+  "name": "external-component-demo",
+  "version": "0.1.0",
+  "description": "Plugin manifest with external component files.",
+  "apps": "./.app.json",
+  "mcpServers": "./.mcp.json",
+  "hooks": "./.hooks.json"
+}
+```
+
+Supported component file shapes:
+
+```json
+{
+  "apps": {
+    "docs": {
+      "name": "Docs",
+      "credential": {
+        "key": "DOCS_API_KEY",
+        "label": "Docs API key"
+      },
+      "runtime": {
+        "transport": "remote",
+        "serverUrl": "https://docs.example.test/mcp",
+        "allowedTools": { "readOnly": true },
+        "requireApproval": "never"
+      }
+    }
+  }
+}
+```
+
+```json
+{
+  "mcpServers": [
+    {
+      "id": "docs",
+      "runtime": {
+        "transport": "stdio",
+        "command": "node",
+        "args": ["${PLUGIN_ROOT}/scripts/server.js"]
+      }
+    }
+  ]
+}
+```
+
+Path rules:
+
+- Component paths must be relative JSON paths inside the plugin package.
+- Absolute paths, protocol URLs, query strings, fragments, and `..` paths that escape the plugin root are rejected.
+- URL imports fetch component files only from the same origin and inside the same plugin root URL.
+- `hooks` files are parsed and validated as JSON in this version, but hooks are not executed or registered.
+- OpenAI App SDK entries whose only identifier is `asdk_app_*` are accepted as metadata but are not converted into Anybox connectors.
 
 实际插件还应该声明 `interface`、`mcpServers`、`skills`、`connectors` 或 `connectorRequirements`。
 
@@ -715,7 +781,7 @@ anybox-plugin-examples/
 $env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\Projects\anybox-plugin-examples"
 ```
 
-For the built-in registry, `index.json` is a JSON array of HTTPS manifest URLs such as `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/<plugin-id>/.anybox-plugin/plugin.json`. Directory URLs are not supported.
+For the built-in registry, `index.json` is a JSON array of HTTPS manifest URLs such as `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/<plugin-id>/plugin.json`. Legacy `.anybox-plugin/plugin.json` and Codex-compatible `.codex-plugin/plugin.json` URLs are also accepted. Directory URLs are not supported.
 Zip artifacts are optional remote install artifacts. Do not commit them to the built-in expanded plugin registry unless the matching `package` metadata points to a real downloadable file.
 
 ## 常见问题
