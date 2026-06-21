@@ -1498,7 +1498,7 @@ async function fetchPluginMeta(manifestURL: string) {
 function listCachedRemoteRegistryManifestSources() {
   const registry = safeReadPluginRegistry(pluginRegistryCachePath())
   if (!registry) return []
-  return registry.plugins.map(registryItemToManifestSource)
+  return registry.plugins.map((item) => registryItemToManifestSource(item))
 }
 
 async function writeRemoteRegistryCache(sources: PluginManifestSource[]) {
@@ -1553,7 +1553,7 @@ function listRegistryManifestSources() {
 
 function listImportedRegistryManifestSources() {
   const registry = safeReadPluginRegistry(importedPluginRegistryPath())
-  return registry ? registry.plugins.map(registryItemToManifestSource) : []
+  return registry ? registry.plugins.map((item) => registryItemToManifestSource(item)) : []
 }
 
 async function writeImportedRegistryManifestSources(sources: PluginManifestSource[]) {

@@ -1586,6 +1586,54 @@ describe("plugin marketplace API", () => {
     expect(cachedRemotePlugin?.name).toBe("Remote Lab")
   })
 
+  test("loads multiple cached and imported registry plugins without treating indexes as manifest URLs", async () => {
+    await useTempDatabase()
+    if (!activeRoot) throw new Error("Temp root has not been initialized.")
+    const app = createServerApp()
+
+    const registryFor = (items: Array<{ id: string; name: string }>) => ({
+      schemaVersion: 1,
+      plugins: items.map((item) => ({
+        id: item.id,
+        name: item.id,
+        version: "1.0.0",
+        description: `${item.name} registry plugin.`,
+        interface: {
+          displayName: item.name,
+          shortDescription: `${item.name} catalog entry.`,
+          category: "Docs",
+          logo: "./assets/icon.png",
+        },
+        mcpServers: [],
+        skills: [],
+      })),
+    })
+
+    const cacheDir = process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR
+    const importedRegistryFile = process.env.ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE
+    if (!cacheDir || !importedRegistryFile) throw new Error("Plugin registry paths were not configured.")
+
+    await mkdir(cacheDir, { recursive: true })
+    await writeFile(join(cacheDir, "plugin-registry-cache.json"), JSON.stringify(registryFor([
+      { id: "cached-one", name: "Cached One" },
+      { id: "cached-two", name: "Cached Two" },
+    ])))
+    await writeFile(importedRegistryFile, JSON.stringify(registryFor([
+      { id: "imported-one", name: "Imported One" },
+      { id: "imported-two", name: "Imported Two" },
+    ])))
+
+    const response = await app.request("/api/plugins/catalog?freshness=cached")
+    const body = (await response.json()) as PluginCatalogEnvelope
+    const namesByID = new Map((body.data ?? []).map((plugin) => [plugin.id, plugin.name]))
+
+    expect(response.status).toBe(200)
+    expect(namesByID.get("cached-one")).toBe("Cached One")
+    expect(namesByID.get("cached-two")).toBe("Cached Two")
+    expect(namesByID.get("imported-one")).toBe("Imported One")
+    expect(namesByID.get("imported-two")).toBe("Imported Two")
+  })
+
   test("shows remote metadata without a package as catalog-only", async () => {
     await useTempDatabase()
     const app = createServerApp()
