@@ -651,6 +651,37 @@ describe("ThreadView question prompts", () => {
     expect(getByLabelText("Custom answer").closest(".ask-user-question-freeform-row")).toHaveClass("is-standalone")
     expect(queryByRole("button", { name: "Copy assistant response" })).not.toBeInTheDocument()
   })
+
+  it("keeps custom answers separate from numbered options", () => {
+    const questionItem: AssistantTraceItem = {
+      id: "question-options-freeform",
+      kind: "question",
+      timestamp: 1,
+      label: "Question",
+      status: "completed",
+      section: "response",
+      visibilityKey: "response",
+      questionPrompt: {
+        questionID: "que_pet",
+        header: "Pet preference",
+        question: "Which pet do you prefer?",
+        options: [{ label: "Cat", value: "cat" }],
+        allowFreeform: true,
+        multiple: false,
+        required: true,
+      },
+    }
+    const { getByLabelText, getByText } = renderThread(
+      [assistantTraceTurn("assistant-1", [questionItem], false)],
+      { onAskUserQuestionAnswer: vi.fn().mockResolvedValue(undefined) },
+    )
+
+    const freeformRow = getByLabelText("Custom answer").closest(".ask-user-question-freeform-row")
+    expect(freeformRow).not.toBeNull()
+    expect(freeformRow).not.toHaveTextContent("2.")
+    expect(getByText("Needs your input")).toBeInTheDocument()
+    expect(getByText("Pet preference")).toBeInTheDocument()
+  })
 })
 
 describe("ThreadView image trace items", () => {

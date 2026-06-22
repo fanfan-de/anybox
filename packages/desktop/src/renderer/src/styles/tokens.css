@@ -365,8 +365,8 @@
   --semantic-composer-surface-dark: #292524;
   --semantic-dropdown-menu-surface-light: #ffffff;
   --semantic-dropdown-menu-surface-dark: #302a28;
-  --semantic-question-card-surface-light: #f8eeeb;
-  --semantic-question-card-surface-dark: #332623;
+  --semantic-question-card-surface-light: var(--surface-panel-light);
+  --semantic-question-card-surface-dark: var(--surface-panel-dark);
   --semantic-proposed-plan-card-surface-light: #ffffff;
   --semantic-proposed-plan-card-surface-dark: #292524;
   --semantic-thread-response-text-light: var(--text-primary-light);
@@ -1131,8 +1131,8 @@
   --semantic-composer-surface-dark: #1e293b;
   --semantic-dropdown-menu-surface-light: #ffffff;
   --semantic-dropdown-menu-surface-dark: #223047;
-  --semantic-question-card-surface-light: #e8f7f4;
-  --semantic-question-card-surface-dark: #153344;
+  --semantic-question-card-surface-light: var(--surface-panel-light);
+  --semantic-question-card-surface-dark: var(--surface-panel-dark);
   --semantic-proposed-plan-card-surface-light: #ffffff;
   --semantic-proposed-plan-card-surface-dark: #1e293b;
   --semantic-markdown-code-surface-light: #1e293b;

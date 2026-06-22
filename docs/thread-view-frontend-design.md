@@ -428,7 +428,15 @@ agent 提问通过 `question` trace item 渲染：
 - freeform 使用输入框。
 - 已回答问题显示 answered note，避免重复提交。
 
-这类卡片当前在 response section 中透明化处理，只保留问题本身和回答控件。
+这类卡片在 response section 中使用轻量中性 surface，保留紧凑标题、问题正文和回答控件；只有权限审批类阻塞点使用 warning 语义色。具体规则：
+
+- 顶部状态行使用固定文案“需要你回答 / Needs your input”，`questionPrompt.header` 只作为次级上下文显示。
+- 问题正文使用正文强调级别，不使用 pane/page 标题级字号。
+- 单选项渲染为真实 button；默认态保持轻量，hover/focus 才增强底色、边框和文字。
+- 多选项使用 checkbox row，选中状态不能只依赖位置表达。
+- freeform 输入是补充回答区，不参与选项编号；当 options 与 freeform 同时存在时，输入框位于选项列表之后的独立 action row。
+- helper note 只说明回答方式或已回答状态，使用 muted token。
+- submit 是当前 question card 的唯一 primary action，default/hover/focus/disabled/loading 必须消费按钮 semantic token。
 
 ### 图片预览
 

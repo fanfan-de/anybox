@@ -17,6 +17,7 @@ import {
   CopyIcon,
   DeleteIcon,
   ForkIcon,
+  InfoIcon,
   MinimizeIcon,
   PaperclipIcon,
   PlusIcon,
@@ -4407,6 +4408,7 @@ function QuestionTraceItemView({
   onAskUserQuestionAnswer,
   ...props
 }: TraceItemRendererProps) {
+  const { t } = useI18n()
   const [isSubmittingQuestionAnswer, setIsSubmittingQuestionAnswer] = useState(false)
   const [freeformAnswer, setFreeformAnswer] = useState("")
   const [selectedQuestionOptions, setSelectedQuestionOptions] = useState<string[]>([])
@@ -4439,20 +4441,21 @@ function QuestionTraceItemView({
   const trimmedFreeformAnswer = freeformAnswer.trim()
   const hasSelectedOptions = selectedQuestionOptions.length > 0
   const canSubmitStructuredAnswer = canSubmitAnswer && !isAnswerDisabled && (hasSelectedOptions || Boolean(trimmedFreeformAnswer))
+  const questionContext = prompt.header?.trim()
   const note = isQuestionAnswered
-    ? prompt.answerText ? `Answered: ${prompt.answerText}` : "Answered."
+    ? prompt.answerText ? t("thread.question.answeredWith", { answer: prompt.answerText }) : t("thread.question.answered")
     : canUseMultipleSelection && prompt.allowFreeform
-      ? "Select one or more options or add a custom answer."
+      ? t("thread.question.noteMultipleFreeform")
       : canUseMultipleSelection
-        ? "Select one or more options and submit."
+        ? t("thread.question.noteMultiple")
     : prompt.multiple
       ? prompt.allowFreeform
-        ? "Reply in the composer below with one or more selections."
-        : "Reply in the composer below to continue."
+        ? t("thread.question.noteComposerMultipleFreeform")
+        : t("thread.question.noteComposer")
       : prompt.allowFreeform
         ? canSubmitAnswer
-          ? "Choose an option or send a custom answer here."
-          : "You can also reply in the composer below."
+          ? t("thread.question.noteFreeform")
+          : t("thread.question.noteComposerOptional")
         : null
 
   function handleQuestionOptionToggle(optionValue: string) {
@@ -4503,8 +4506,15 @@ function QuestionTraceItemView({
   }
 
   return (
-    <article className={`${className} ask-user-question-card`} data-kind={item.kind} role="region" aria-label={item.title || "Agent question"}>
+    <article className={`${className} ask-user-question-card`} data-kind={item.kind} role="region" aria-label={item.title || t("thread.question.region")}>
       <div className="ask-user-question-body">
+        <div className="ask-user-question-header">
+          <span className="ask-user-question-icon" aria-hidden="true">
+            <InfoIcon />
+          </span>
+          <span className="ask-user-question-heading">{t("thread.question.heading")}</span>
+          {questionContext ? <span className="ask-user-question-context">{questionContext}</span> : null}
+        </div>
         <ThreadRichText className="ask-user-question-text" text={prompt.question} />
 
         {prompt.options.length > 0 ? (
@@ -4557,15 +4567,12 @@ function QuestionTraceItemView({
                 "ask-user-question-freeform-row",
                 prompt.options.length === 0 && "is-standalone",
               )}>
-                {prompt.options.length > 0 ? (
-                  <span className="ask-user-question-option-number" aria-hidden="true">{prompt.options.length + 1}.</span>
-                ) : null}
                 <input
-                  aria-label="Custom answer"
+                  aria-label={t("thread.question.customAnswerLabel")}
                   className="ask-user-question-freeform-input"
                   disabled={isAnswerDisabled}
                   onChange={(event) => setFreeformAnswer(event.target.value)}
-                  placeholder={prompt.placeholder || "Type your answer"}
+                  placeholder={prompt.placeholder || t("thread.question.placeholder")}
                   type="text"
                   value={freeformAnswer}
                 />
@@ -4574,11 +4581,11 @@ function QuestionTraceItemView({
 
             <div className="ask-user-question-actions">
               <button
-                className="secondary-button"
+                className="primary-button ask-user-question-submit"
                 disabled={!canSubmitStructuredAnswer}
                 type="submit"
               >
-                Submit
+                {isSubmittingQuestionAnswer ? t("thread.question.sending") : t("thread.question.submit")}
               </button>
             </div>
           </form>
