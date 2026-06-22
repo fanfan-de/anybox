@@ -971,7 +971,7 @@ export function GitQuickMenuButton({
                       <button
                         key={`${branch.kind}:${branch.name}`}
                         type="button"
-                        className={branch.current ? "composer-menu-option git-quick-menu-branch-option canvas-top-menu-segmented-option is-selected" : "composer-menu-option git-quick-menu-branch-option canvas-top-menu-segmented-option"}
+                        className={branch.current ? "composer-menu-option git-quick-menu-branch-option canvas-top-menu-segmented-option is-selected is-current" : "composer-menu-option git-quick-menu-branch-option canvas-top-menu-segmented-option"}
                         disabled={branch.current || isBusy}
                         onClick={() => void handleCheckoutBranch(branch.name)}
                       >

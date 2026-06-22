@@ -362,7 +362,7 @@ export function GitBranchSwitcher({ projectID, directory }: GitBranchSwitcherPro
                       type="button"
                       className={
                         branch.current
-                          ? "composer-menu-option composer-utility-git-branch-option is-selected"
+                          ? "composer-menu-option composer-utility-git-branch-option is-selected is-current"
                           : "composer-menu-option composer-utility-git-branch-option"
                       }
                       disabled={branch.current || isBusy}

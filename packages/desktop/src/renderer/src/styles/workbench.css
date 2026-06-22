@@ -1846,38 +1846,50 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .canvas-top-menu-segmented-option:hover,
-.canvas-top-menu-segmented-option:focus-visible,
-.canvas-top-menu-segmented-option.is-selected {
-  background: var(--context-menu-hover, var(--semantic-sidebar-tree-row-surface-hover, rgba(17, 24, 39, 0.06)));
+.canvas-top-menu-segmented-option:focus-visible {
+  background: var(--semantic-sidebar-tree-row-surface-hover);
   border-color: transparent;
-  color: var(--context-menu-hover-text, var(--semantic-sidebar-tree-row-text-hover, #1f2937));
+  color: var(--semantic-sidebar-tree-row-text-hover);
+  box-shadow: none;
+}
+
+.canvas-top-menu-segmented-option.is-selected {
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  border-color: transparent;
+  color: var(--seg-text-1);
   box-shadow: none;
 }
 
 .canvas-top-menu-quick-panel .composer-menu-option.canvas-top-menu-segmented-option {
   background: transparent;
-  color: #314353;
+  color: var(--seg-text-2);
   box-shadow: none;
 }
 
 .canvas-top-menu-quick-panel .composer-menu-option.canvas-top-menu-segmented-option:not(:disabled):hover,
-.canvas-top-menu-quick-panel .composer-menu-option.canvas-top-menu-segmented-option:not(:disabled):focus-visible,
-.canvas-top-menu-quick-panel .composer-menu-option.canvas-top-menu-segmented-option.is-selected {
-  background: var(--context-menu-hover, var(--semantic-sidebar-tree-row-surface-hover, rgba(17, 24, 39, 0.06)));
-  color: var(--context-menu-hover-text, var(--semantic-sidebar-tree-row-text-hover, #1f2937));
+.canvas-top-menu-quick-panel .composer-menu-option.canvas-top-menu-segmented-option:not(:disabled):focus-visible {
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+  color: var(--semantic-sidebar-tree-row-text-hover);
   box-shadow: none;
 }
 
-.canvas-top-menu-quick-panel .composer-menu-option.canvas-top-menu-segmented-option:disabled {
-  background: #f3f6f8;
-  color: #94a3b2;
+.canvas-top-menu-quick-panel .composer-menu-option.canvas-top-menu-segmented-option.is-selected {
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  color: var(--seg-text-1);
+  box-shadow: none;
+}
+
+.canvas-top-menu-quick-panel .composer-menu-option.canvas-top-menu-segmented-option:disabled:not(.is-current) {
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
   cursor: not-allowed;
+  opacity: 0.76;
 }
 
 .canvas-top-menu-quick-panel
-  .composer-menu-option.canvas-top-menu-segmented-option:disabled
+  .composer-menu-option.canvas-top-menu-segmented-option:disabled:not(.is-current)
   .composer-menu-option-check {
-  color: #94a3b2;
+  color: var(--semantic-button-secondary-disabled-text);
 }
 
 .canvas-top-menu-skill-selector-panel {
@@ -1948,7 +1960,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #5f7387;
+  color: var(--seg-text-2);
 }
 
 .canvas-top-menu-quick-field input {
@@ -1973,7 +1985,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 
 .canvas-top-menu-quick-field input::placeholder,
 .canvas-top-menu-quick-field textarea::placeholder {
-  color: #8da0b4;
+  color: var(--seg-text-3);
 }
 
 .canvas-top-menu-quick-actions {
@@ -1985,6 +1997,48 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .canvas-top-menu-quick-actions .secondary-button {
   flex: 1 1 0;
   min-height: 38px;
+}
+
+.canvas-top-menu-quick-actions .primary-button {
+  border-color: var(--semantic-button-primary-border);
+  background: var(--semantic-button-primary-surface);
+  color: var(--semantic-button-primary-text);
+}
+
+.canvas-top-menu-quick-actions .primary-button:hover,
+.canvas-top-menu-quick-actions .primary-button:focus-visible {
+  border-color: var(--semantic-button-primary-border-hover);
+  background: var(--semantic-button-primary-surface-hover);
+  color: var(--semantic-button-primary-text-hover);
+  outline: none;
+}
+
+.canvas-top-menu-quick-actions .primary-button:disabled {
+  border-color: var(--semantic-button-primary-disabled-border);
+  background: var(--semantic-button-primary-disabled-surface);
+  color: var(--semantic-button-primary-disabled-text);
+  opacity: 0.76;
+}
+
+.canvas-top-menu-quick-actions .secondary-button {
+  border-color: var(--semantic-button-secondary-border);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
+}
+
+.canvas-top-menu-quick-actions .secondary-button:hover,
+.canvas-top-menu-quick-actions .secondary-button:focus-visible {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  outline: none;
+}
+
+.canvas-top-menu-quick-actions .secondary-button:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+  opacity: 0.76;
 }
 
 .canvas-top-menu-quick-status {
@@ -2026,19 +2080,31 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   padding-bottom: 0;
 }
 
-.git-quick-menu-option:disabled,
-.git-quick-menu-action-option:disabled,
-.git-quick-menu-branch-option:disabled,
-.git-quick-menu-branch-create-option:disabled {
-  background: #f3f6f8;
-  color: #94a3b2;
+.git-quick-menu-option:disabled:not(.is-current),
+.git-quick-menu-action-option:disabled:not(.is-current),
+.git-quick-menu-branch-option:disabled:not(.is-current),
+.git-quick-menu-branch-create-option:disabled:not(.is-current) {
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
   cursor: not-allowed;
+  opacity: 0.76;
 }
 
-.git-quick-menu-action-option:disabled .composer-menu-option-check,
-.git-quick-menu-branch-option:disabled .composer-menu-option-check,
-.git-quick-menu-branch-create-option:disabled .composer-menu-option-check {
-  color: #94a3b2;
+.git-quick-menu-action-option:disabled:not(.is-current) .composer-menu-option-check,
+.git-quick-menu-branch-option:disabled:not(.is-current) .composer-menu-option-check,
+.git-quick-menu-branch-create-option:disabled:not(.is-current) .composer-menu-option-check {
+  color: var(--semantic-button-secondary-disabled-text);
+}
+
+.git-quick-menu-branch-option.is-current:disabled {
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  color: var(--seg-text-1);
+  cursor: default;
+  opacity: 1;
+}
+
+.git-quick-menu-branch-option.is-current:disabled .composer-menu-option-check {
+  color: var(--semantic-sidebar-tree-row-text-active);
 }
 
 .git-quick-menu-main-option svg,
@@ -2075,13 +2141,13 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: #607488;
+  color: var(--seg-text-2);
   font-size: 12px;
 }
 
 .git-quick-menu-summary-row:hover,
 .git-quick-menu-summary-row:focus-visible {
-  color: var(--context-menu-hover-text, var(--semantic-sidebar-tree-row-text-hover, #1f2937));
+  color: var(--semantic-sidebar-tree-row-text-hover);
 }
 
 .git-quick-menu-summary-label {
@@ -2106,7 +2172,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .git-quick-menu-diff-loading {
-  color: #8da0b4;
+  color: var(--seg-text-3);
   letter-spacing: 0.08em;
 }
 
@@ -2137,7 +2203,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 
 .git-quick-menu-subpanel-header > strong {
   padding: 0 4px;
-  color: #314353;
+  color: var(--seg-text-1);
   font-size: 13px;
   font-weight: 600;
 }
@@ -2146,7 +2212,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .git-quick-menu-icon-button {
   border: 0;
   background: transparent;
-  color: #314353;
+  color: var(--semantic-icon-button-text);
   cursor: pointer;
 }
 
@@ -2183,7 +2249,9 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .git-quick-menu-branch-pill:focus-visible,
 .git-quick-menu-icon-button:hover,
 .git-quick-menu-icon-button:focus-visible {
-  background: var(--context-menu-hover, var(--semantic-sidebar-tree-row-surface-hover, rgba(17, 24, 39, 0.06)));
+  background: var(--semantic-icon-button-surface-hover);
+  color: var(--semantic-icon-button-text-hover);
+  outline: none;
 }
 
 .git-quick-menu-panel-stats {
@@ -2200,7 +2268,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #314353;
+  color: var(--seg-text-1);
   font-size: 13px;
   font-weight: 600;
 }
@@ -2246,10 +2314,10 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(147, 171, 195, 0.42);
+  border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
   background: var(--seg-panel);
-  color: #607488;
+  color: var(--seg-text-2);
 }
 
 .git-quick-menu-search-field input {
@@ -2258,13 +2326,13 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   border: 0;
   outline: 0;
   background: transparent;
-  color: #314353;
+  color: var(--seg-text-1);
   font-family: var(--font-sans);
   font-size: 13px;
 }
 
 .git-quick-menu-search-field input::placeholder {
-  color: #8da0b4;
+  color: var(--seg-text-3);
 }
 
 .git-quick-menu-branch-create-option {

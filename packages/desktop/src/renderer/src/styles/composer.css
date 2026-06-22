@@ -39,8 +39,8 @@
   gap: 12px;
 }
 
-.git-quick-menu-option:disabled .composer-menu-option-check {
-  color: #94a3b2;
+.git-quick-menu-option:disabled:not(.is-current) .composer-menu-option-check {
+  color: var(--semantic-button-secondary-disabled-text);
 }
 
 .prompt-input-shell {
@@ -372,15 +372,31 @@
   padding-bottom: 8px;
 }
 
-.composer-utility-git-branch-option:disabled {
-  background: #f3f6f8;
-  color: #94a3b2;
+.composer-utility-git-branch-option:disabled:not(.is-current) {
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
   cursor: not-allowed;
+  opacity: 0.76;
 }
 
-.composer-utility-git-branch-option:disabled .composer-menu-option-copy small,
-.composer-utility-git-branch-option:disabled .composer-menu-option-check {
-  color: #94a3b2;
+.composer-utility-git-branch-option:disabled:not(.is-current) .composer-menu-option-copy small,
+.composer-utility-git-branch-option:disabled:not(.is-current) .composer-menu-option-check {
+  color: var(--semantic-button-secondary-disabled-text);
+}
+
+.composer-utility-git-branch-option.is-current:disabled {
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  color: var(--seg-text-1);
+  cursor: default;
+  opacity: 1;
+}
+
+.composer-utility-git-branch-option.is-current:disabled .composer-menu-option-copy small {
+  color: var(--seg-text-2);
+}
+
+.composer-utility-git-branch-option.is-current:disabled .composer-menu-option-check {
+  color: var(--semantic-sidebar-tree-row-text-active);
 }
 
 .composer-utility-git-branch-meta {
@@ -391,12 +407,30 @@
   position: sticky;
   bottom: 0;
   padding-top: 4px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, #ffffff 24px);
+  background: linear-gradient(180deg, transparent 0%, var(--semantic-dropdown-menu-surface) 24px);
 }
 
 .composer-utility-git-branch-create-button {
   width: 100%;
   justify-content: center;
+  border-color: var(--semantic-button-secondary-border);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
+}
+
+.composer-utility-git-branch-create-button:hover,
+.composer-utility-git-branch-create-button:focus-visible {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  outline: none;
+}
+
+.composer-utility-git-branch-create-button:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+  opacity: 0.76;
 }
 
 .composer-utility-git-branch-status,
@@ -404,12 +438,12 @@
   margin: 0;
   font-size: 12px;
   line-height: 1.5;
-  color: #607488;
+  color: var(--seg-text-2);
 }
 
 .composer-utility-git-branch-status.is-error,
 .git-branch-create-error {
-  color: #a33d2f;
+  color: var(--semantic-error-text);
 }
 
 .git-branch-badge {
@@ -417,9 +451,9 @@
   padding: 0 6px;
   display: inline-flex;
   align-items: center;
-  border: 1px solid rgba(166, 186, 208, 0.42);
-  background: #f4f8fc;
-  color: #4b6074;
+  border: 1px solid var(--seg-border);
+  background: var(--surface-panel-muted);
+  color: var(--seg-text-2);
   font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
   font-size: 10px;
   letter-spacing: 0.05em;
@@ -858,7 +892,7 @@
   font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #5f7387;
+  color: var(--seg-text-2);
 }
 
 .git-branch-create-field input {
@@ -870,7 +904,7 @@
 }
 
 .git-branch-create-field input::placeholder {
-  color: #8da0b4;
+  color: var(--seg-text-3);
 }
 
 .git-branch-create-field input:focus-visible {
@@ -886,6 +920,48 @@
 .git-branch-create-actions .primary-button,
 .git-branch-create-actions .secondary-button {
   flex: 1 1 0;
+}
+
+.git-branch-create-actions .primary-button {
+  border-color: var(--semantic-button-primary-border);
+  background: var(--semantic-button-primary-surface);
+  color: var(--semantic-button-primary-text);
+}
+
+.git-branch-create-actions .primary-button:hover,
+.git-branch-create-actions .primary-button:focus-visible {
+  border-color: var(--semantic-button-primary-border-hover);
+  background: var(--semantic-button-primary-surface-hover);
+  color: var(--semantic-button-primary-text-hover);
+  outline: none;
+}
+
+.git-branch-create-actions .primary-button:disabled {
+  border-color: var(--semantic-button-primary-disabled-border);
+  background: var(--semantic-button-primary-disabled-surface);
+  color: var(--semantic-button-primary-disabled-text);
+  opacity: 0.76;
+}
+
+.git-branch-create-actions .secondary-button {
+  border-color: var(--semantic-button-secondary-border);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
+}
+
+.git-branch-create-actions .secondary-button:hover,
+.git-branch-create-actions .secondary-button:focus-visible {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  outline: none;
+}
+
+.git-branch-create-actions .secondary-button:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+  opacity: 0.76;
 }
 
 .composer-editor-input {
