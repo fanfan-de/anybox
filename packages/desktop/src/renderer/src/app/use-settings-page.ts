@@ -1869,6 +1869,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       systemPromptPresetID: field === "systemPromptPresetID" ? value : selectedPromptPresetID ?? value,
       planModePromptPresetID: field === "planModePromptPresetID" ? value : selectedPromptPresetID ?? value,
       sideChatPromptPresetID: field === "sideChatPromptPresetID" ? value : selectedPromptPresetID ?? value,
+      gitCommitPromptPresetID: field === "gitCommitPromptPresetID" ? value : selectedPromptPresetID ?? value,
     }
   }
 
@@ -1899,7 +1900,9 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
               ? t("prompts.message.planUpdated")
               : field === "sideChatPromptPresetID"
                 ? t("prompts.message.sideChatUpdated")
-              : t("prompts.message.assignmentsUpdated"),
+                : field === "gitCommitPromptPresetID"
+                  ? t("prompts.message.gitCommitUpdated")
+                  : t("prompts.message.assignmentsUpdated"),
       })
       return true
     } catch (error) {
@@ -1945,6 +1948,10 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
               field === "sideChatPromptPresetID"
                 ? promptPresetSelection.sideChatPromptPresetID
                 : savedPromptPresetSelection.sideChatPromptPresetID,
+            gitCommitPromptPresetID:
+              field === "gitCommitPromptPresetID"
+                ? promptPresetSelection.gitCommitPromptPresetID
+                : savedPromptPresetSelection.gitCommitPromptPresetID,
           }
         : promptPresetSelection
 
@@ -2339,7 +2346,9 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
 
       const nextPresetID =
         remainingPromptPresets.find((preset) => preset.id === nextSelection.systemPromptPresetID)?.id ??
+        remainingPromptPresets.find((preset) => preset.id === nextSelection.planModePromptPresetID)?.id ??
         remainingPromptPresets.find((preset) => preset.id === nextSelection.sideChatPromptPresetID)?.id ??
+        remainingPromptPresets.find((preset) => preset.id === nextSelection.gitCommitPromptPresetID)?.id ??
         remainingPromptPresets[0]?.id ??
         null
 
@@ -3460,6 +3469,10 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     promptPresetSelection !== null &&
     savedPromptPresetSelection !== null &&
     promptPresetSelection.sideChatPromptPresetID !== savedPromptPresetSelection.sideChatPromptPresetID
+  const isGitCommitPromptPresetDirty =
+    promptPresetSelection !== null &&
+    savedPromptPresetSelection !== null &&
+    promptPresetSelection.gitCommitPromptPresetID !== savedPromptPresetSelection.gitCommitPromptPresetID
   const isBuiltinToolSelectionDirty =
     stableSelectionKey(builtinToolSelection) !== stableSelectionKey(savedBuiltinToolSelection)
 
@@ -3528,6 +3541,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     isSystemPromptPresetDirty,
     isPlanModePromptPresetDirty,
     isSideChatPromptPresetDirty,
+    isGitCommitPromptPresetDirty,
     isRefreshingProviderCatalog,
     isInstallingPromptUrlPrompts,
     isPreviewingPromptUrlInstall,

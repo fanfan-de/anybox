@@ -560,6 +560,15 @@ const PROMPT_PRESET_FIXTURES: PromptPresetFixture[] = [
     sourcePath: "src/session/prompt/side-chat.md",
   },
   {
+    id: "git-commit-message",
+    label: "Git commit message prompt",
+    description: "Instructions used when auto-generating Git commit subjects.",
+    source: "bundled" as const,
+    hasOverride: false,
+    editable: true,
+    sourcePath: "src/session/prompt/git-commit-message.md",
+  },
+  {
     id: "provider-gpt",
     label: "GPT Provider Prompt",
     description: "Reserved provider-specific prompt for GPT-family models.",
@@ -574,6 +583,7 @@ const PROMPT_PRESET_SELECTION_FIXTURE = {
   systemPromptPresetID: "system-default",
   planModePromptPresetID: "plan-mode",
   sideChatPromptPresetID: "side-chat",
+  gitCommitPromptPresetID: "git-commit-message",
 }
 
 function createPromptPresetSummary(
@@ -613,6 +623,8 @@ function createPromptPresetDocument(
         ? "<system-reminder>\n# Plan Mode - System Reminder"
         : presetID === "side-chat"
           ? "This session is a side chat anchored to a single assistant reply from another session."
+          : presetID === "git-commit-message"
+            ? "You generate Git commit messages."
         : preset.source === "custom"
           ? ""
         : "GPT provider prompt placeholder. This preset is currently inactive."
@@ -968,6 +980,9 @@ describe("App", () => {
         stdout: "",
         stderr: "",
         summary: "已提交到 main",
+      }),
+      gitGenerateCommitMessage: vi.fn().mockResolvedValue({
+        message: "chore: update project",
       }),
       gitPush: vi.fn().mockResolvedValue({
         directory: "C:\\Projects\\Project 2",
@@ -4121,6 +4136,7 @@ describe("App", () => {
         stageAll: true,
       })
     })
+    expect(window.desktop!.gitGenerateCommitMessage).not.toHaveBeenCalled()
 
     expect(await screen.findByText("Committed to main.")).toBeInTheDocument()
     expect(within(commitPanel).getByRole("textbox", { name: "Commit message" })).toBeInTheDocument()
@@ -4211,6 +4227,206 @@ describe("App", () => {
         stageAll: true,
       })
     })
+  })
+
+  it("auto-generates a commit message when committing with an empty message", async () => {
+    window.desktop!.listFolderWorkspaces = vi.fn().mockResolvedValue([
+      {
+        id: "C:\\Projects\\Atlas\\client",
+        directory: "C:\\Projects\\Atlas\\client",
+        name: "client",
+        created: 1,
+        updated: 20,
+        project: {
+          id: "project-atlas",
+          name: "Atlas",
+          worktree: "C:\\Projects\\Atlas",
+        },
+        sessions: [
+          {
+            id: "session-atlas-review",
+            projectID: "project-atlas",
+            directory: "C:\\Projects\\Atlas\\client",
+            title: "Atlas review",
+            created: 18,
+            updated: 20,
+          },
+        ],
+      },
+    ])
+    window.desktop!.gitGenerateCommitMessage = vi.fn().mockResolvedValue({
+      message: "feat: generate commit messages",
+    })
+    const commitResult = createDeferred<
+      Awaited<ReturnType<NonNullable<NonNullable<Window["desktop"]>["gitCommit"]>>>
+    >()
+    window.desktop!.gitCommit = vi.fn().mockImplementation(() => commitResult.promise)
+
+    render(<App />)
+
+    await screen.findByRole("button", { name: "Atlas review" })
+
+    fireEvent.click(await screen.findByRole("button", { name: "Git" }))
+    fireEvent.click(screen.getByRole("button", { name: "Commit or push" }))
+
+    const commitPanel = await screen.findByRole("dialog", { name: "Commit or push" })
+    const messageInput = within(commitPanel).getByRole("textbox", { name: "Commit message" })
+    expect(messageInput).toHaveAttribute("placeholder", "Commit message (leave blank to auto-generate)")
+
+    fireEvent.click(within(commitPanel).getByRole("button", { name: "Commit" }))
+
+    await waitFor(() => {
+      expect(window.desktop!.gitGenerateCommitMessage).toHaveBeenCalledWith({
+        projectID: "project-atlas",
+        directory: "C:\\Projects\\Atlas\\client",
+        stageAll: true,
+      })
+    })
+    await waitFor(() => {
+      expect(window.desktop!.gitCommit).toHaveBeenCalledWith({
+        projectID: "project-atlas",
+        directory: "C:\\Projects\\Atlas\\client",
+        message: "feat: generate commit messages",
+        stageAll: true,
+      })
+    })
+    expect(messageInput).toHaveValue("feat: generate commit messages")
+
+    await act(async () => {
+      commitResult.resolve({
+        directory: "C:\\Projects\\Atlas\\client",
+        root: "C:\\Projects\\Atlas",
+        branch: "main",
+        stdout: "",
+        stderr: "",
+        summary: "Committed to main.",
+      })
+      await commitResult.promise
+    })
+
+    expect(await screen.findByText("Committed to main.")).toBeInTheDocument()
+  })
+
+  it("auto-generates a commit message before commit and push", async () => {
+    window.desktop!.listFolderWorkspaces = vi.fn().mockResolvedValue([
+      {
+        id: "C:\\Projects\\Atlas\\client",
+        directory: "C:\\Projects\\Atlas\\client",
+        name: "client",
+        created: 1,
+        updated: 20,
+        project: {
+          id: "project-atlas",
+          name: "Atlas",
+          worktree: "C:\\Projects\\Atlas",
+        },
+        sessions: [
+          {
+            id: "session-atlas-review",
+            projectID: "project-atlas",
+            directory: "C:\\Projects\\Atlas\\client",
+            title: "Atlas review",
+            created: 18,
+            updated: 20,
+          },
+        ],
+      },
+    ])
+    window.desktop!.gitGenerateCommitMessage = vi.fn().mockResolvedValue({
+      message: "fix: handle empty commit messages",
+    })
+    window.desktop!.gitCommit = vi.fn().mockResolvedValue({
+      directory: "C:\\Projects\\Atlas\\client",
+      root: "C:\\Projects\\Atlas",
+      branch: "main",
+      stdout: "",
+      stderr: "",
+      summary: "Committed to main.",
+    })
+    window.desktop!.gitPush = vi.fn().mockResolvedValue({
+      directory: "C:\\Projects\\Atlas\\client",
+      root: "C:\\Projects\\Atlas",
+      branch: "main",
+      stdout: "",
+      stderr: "",
+      summary: "Pushed main.",
+    })
+
+    render(<App />)
+
+    await screen.findByRole("button", { name: "Atlas review" })
+
+    fireEvent.click(await screen.findByRole("button", { name: "Git" }))
+    fireEvent.click(screen.getByRole("button", { name: "Commit or push" }))
+
+    const commitPanel = await screen.findByRole("dialog", { name: "Commit or push" })
+    fireEvent.click(within(commitPanel).getByRole("button", { name: "Commit and push" }))
+
+    await waitFor(() => {
+      expect(window.desktop!.gitGenerateCommitMessage).toHaveBeenCalledWith({
+        projectID: "project-atlas",
+        directory: "C:\\Projects\\Atlas\\client",
+        stageAll: true,
+      })
+    })
+    await waitFor(() => {
+      expect(window.desktop!.gitCommit).toHaveBeenCalledWith({
+        projectID: "project-atlas",
+        directory: "C:\\Projects\\Atlas\\client",
+        message: "fix: handle empty commit messages",
+        stageAll: true,
+      })
+    })
+    await waitFor(() => {
+      expect(window.desktop!.gitPush).toHaveBeenCalledWith({
+        projectID: "project-atlas",
+        directory: "C:\\Projects\\Atlas\\client",
+      })
+    })
+
+    expect(await screen.findByText("Committed to main. Pushed main.")).toBeInTheDocument()
+  })
+
+  it("does not commit when empty-message generation fails", async () => {
+    window.desktop!.listFolderWorkspaces = vi.fn().mockResolvedValue([
+      {
+        id: "C:\\Projects\\Atlas\\client",
+        directory: "C:\\Projects\\Atlas\\client",
+        name: "client",
+        created: 1,
+        updated: 20,
+        project: {
+          id: "project-atlas",
+          name: "Atlas",
+          worktree: "C:\\Projects\\Atlas",
+        },
+        sessions: [
+          {
+            id: "session-atlas-review",
+            projectID: "project-atlas",
+            directory: "C:\\Projects\\Atlas\\client",
+            title: "Atlas review",
+            created: 18,
+            updated: 20,
+          },
+        ],
+      },
+    ])
+    window.desktop!.gitGenerateCommitMessage = vi.fn().mockRejectedValue(new Error("Commit message generation failed"))
+    window.desktop!.gitCommit = vi.fn()
+
+    render(<App />)
+
+    await screen.findByRole("button", { name: "Atlas review" })
+
+    fireEvent.click(await screen.findByRole("button", { name: "Git" }))
+    fireEvent.click(screen.getByRole("button", { name: "Commit or push" }))
+
+    const commitPanel = await screen.findByRole("dialog", { name: "Commit or push" })
+    fireEvent.click(within(commitPanel).getByRole("button", { name: "Commit" }))
+
+    expect(await screen.findByText("Commit message generation failed")).toBeInTheDocument()
+    expect(window.desktop!.gitCommit).not.toHaveBeenCalled()
   })
 
   it("refreshes git commit availability when the quick menu opens after staged changes", async () => {
@@ -8910,6 +9126,7 @@ describe("App", () => {
       createPromptPresetDocument("system-default"),
       createPromptPresetDocument("plan-mode"),
       createPromptPresetDocument("side-chat"),
+      createPromptPresetDocument("git-commit-message"),
       createPromptPresetDocument("provider-gpt"),
     ]
 
@@ -8978,9 +9195,16 @@ describe("App", () => {
     window.desktop!.deletePromptPreset = vi.fn().mockImplementation(({ presetID }: { presetID: string }) => {
       promptPresetDocuments = promptPresetDocuments.filter((preset) => preset.id !== presetID)
       promptPresetSelection = {
-        systemPromptPresetID: "system-default",
+        systemPromptPresetID:
+          promptPresetSelection.systemPromptPresetID === presetID
+            ? "system-default"
+            : promptPresetSelection.systemPromptPresetID,
         planModePromptPresetID: promptPresetSelection.planModePromptPresetID,
         sideChatPromptPresetID: promptPresetSelection.sideChatPromptPresetID,
+        gitCommitPromptPresetID:
+          promptPresetSelection.gitCommitPromptPresetID === presetID
+            ? "git-commit-message"
+            : promptPresetSelection.gitCommitPromptPresetID,
       }
       return Promise.resolve(promptPresetSelection)
     })
@@ -9034,17 +9258,19 @@ describe("App", () => {
     expect(within(promptTree.lastElementChild as HTMLElement).getByRole("button", { name: "New" })).toBeInTheDocument()
     expect(
       Array.from(document.querySelectorAll(".settings-prompt-assignment-title"), (node) => node.textContent),
-    ).toEqual(["System prompt", "Plan mode prompt", "Side chat prompt"])
+    ).toEqual(["System prompt", "Plan mode prompt", "Side chat prompt", "Git commit message prompt"])
     expect(screen.queryByText("Every turn")).not.toBeInTheDocument()
     expect(screen.queryByText("Plan only")).not.toBeInTheDocument()
     expect(screen.queryByText("Side chat only")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "System prompt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Plan mode prompt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Side chat prompt" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Git commit message prompt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "GPT Provider Prompt" })).toBeInTheDocument()
     expect(getPromptPresetCombobox("System prompt preset")).toHaveTextContent("System prompt")
     expect(getPromptPresetCombobox("Plan mode prompt preset")).toHaveTextContent("Plan mode prompt")
     expect(getPromptPresetCombobox("Side chat prompt preset")).toHaveTextContent("Side chat prompt")
+    expect(getPromptPresetCombobox("Git commit message prompt preset")).toHaveTextContent("Git commit message prompt")
     expect(screen.queryByRole("button", { name: /Confirm .* prompt preset/ })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "Plan mode prompt" }))
@@ -9073,6 +9299,7 @@ describe("App", () => {
         systemPromptPresetID: "provider-gpt",
         planModePromptPresetID: "plan-mode",
         sideChatPromptPresetID: "side-chat",
+        gitCommitPromptPresetID: "git-commit-message",
       })
     })
 
@@ -9109,6 +9336,18 @@ describe("App", () => {
         systemPromptPresetID: "custom-untitled-preset",
         planModePromptPresetID: "plan-mode",
         sideChatPromptPresetID: "side-chat",
+        gitCommitPromptPresetID: "git-commit-message",
+      })
+    })
+
+    await choosePromptPreset("Git commit message prompt preset", "Focus preset")
+
+    await waitFor(() => {
+      expect(window.desktop!.updatePromptPresetSelection).toHaveBeenLastCalledWith({
+        systemPromptPresetID: "custom-untitled-preset",
+        planModePromptPresetID: "plan-mode",
+        sideChatPromptPresetID: "side-chat",
+        gitCommitPromptPresetID: "custom-untitled-preset",
       })
     })
 
@@ -9202,6 +9441,7 @@ describe("App", () => {
       createPromptPresetDocument("system-default"),
       createPromptPresetDocument("plan-mode"),
       createPromptPresetDocument("side-chat"),
+      createPromptPresetDocument("git-commit-message"),
       createPromptPresetDocument("provider-gpt"),
     ]
 

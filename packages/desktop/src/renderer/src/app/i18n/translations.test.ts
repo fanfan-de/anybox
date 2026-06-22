@@ -18,6 +18,7 @@ describe("i18n translations", () => {
 
   it("translates Git quick menu literals", () => {
     expect(translateLiteral("zh-CN", "Commit or push")).toBe("提交或推送")
+    expect(translateLiteral("zh-CN", "Commit message (leave blank to auto-generate)")).toBe("提交信息（留空将自动生成）")
     expect(translateLiteral("zh-CN", "Create pull request")).toBe("创建 Pull Request")
     expect(translateLiteral("zh-CN", "Current branch: master")).toBe("当前分支：master")
     expect(translateLiteral("zh-CN", "Create and checkout new branch...")).toBe("创建并检出新分支...")

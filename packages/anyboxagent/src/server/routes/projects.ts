@@ -112,6 +112,15 @@ export function ProjectRoutes(options: { ptyRegistry: PtyRegistry }) {
     return ok(c, await ProjectUseCase.commitProjectGitChanges(c.req.param("id"), payload))
   })
 
+  app.post("/:id/git/commit-message", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      ProjectUseCase.GitCommitMessageBody,
+      "Body must include a non-empty 'directory'",
+    )
+    return ok(c, await ProjectUseCase.generateProjectGitCommitMessage(c.req.param("id"), payload))
+  })
+
   app.post("/:id/providers/catalog/refresh", async (c) =>
     ok(c, await ProjectUseCase.refreshProjectProviderCatalog(c.req.param("id"))),
   )

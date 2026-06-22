@@ -34,6 +34,10 @@ export interface GitActionResult {
   url?: string
 }
 
+export interface GitCommitMessageResult {
+  message: string
+}
+
 export interface GitBranchSummary {
   name: string
   kind: "local" | "remote"
@@ -71,6 +75,25 @@ export async function commitGitChanges(input: {
     body: JSON.stringify({
       directory: input.directory.trim(),
       message: input.message,
+      ...(input.stageAll ? { stageAll: true } : {}),
+    }),
+  })
+
+  return response.data
+}
+
+export async function generateGitCommitMessage(input: {
+  projectID: string
+  directory: string
+  stageAll?: boolean
+}): Promise<GitCommitMessageResult> {
+  const response = await requestAgentJSON<GitCommitMessageResult>(encodeProjectPath(input.projectID.trim(), "commit-message"), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      directory: input.directory.trim(),
       ...(input.stageAll ? { stageAll: true } : {}),
     }),
   })

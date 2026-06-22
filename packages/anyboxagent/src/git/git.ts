@@ -37,6 +37,14 @@ export interface GitActionResult {
   url?: string
 }
 
+export interface GitCommitMessageContext {
+  directory: string
+  root: string
+  stageAll: boolean
+  content: string
+  truncated: boolean
+}
+
 interface CommandResult {
   stdout: string
   stderr: string
@@ -50,6 +58,9 @@ interface RunCommandOptions {
 export interface GitCapabilitiesOptions {
   includePullRequestRemoteCheck?: boolean
 }
+
+const COMMIT_MESSAGE_CONTEXT_MAX_CHARS = 20_000
+const COMMIT_MESSAGE_CONTEXT_TRUNCATION_MARKER = "\n[diff context truncated]"
 
 function resolveCommandBinary(names: string[]) {
   for (const name of names) {
@@ -294,6 +305,87 @@ async function inspectWorktreeStatus(directory: string, gitBinary: string) {
   return runCommand(gitBinary, ["status", "--porcelain"], directory, {
     disableOptionalLocks: true,
   })
+}
+
+function appendCommitMessageContextSection(lines: string[], title: string, value: string) {
+  lines.push(`## ${title}`)
+  lines.push(value.trim() || "(none)")
+  lines.push("")
+}
+
+function limitCommitMessageContext(content: string) {
+  const chars = [...content.trim()]
+  if (chars.length <= COMMIT_MESSAGE_CONTEXT_MAX_CHARS) {
+    return {
+      content: content.trim(),
+      truncated: false,
+    }
+  }
+
+  const maxContentChars = Math.max(0, COMMIT_MESSAGE_CONTEXT_MAX_CHARS - [...COMMIT_MESSAGE_CONTEXT_TRUNCATION_MARKER].length)
+  return {
+    content: chars.slice(0, maxContentChars).join("").trimEnd() + COMMIT_MESSAGE_CONTEXT_TRUNCATION_MARKER,
+    truncated: true,
+  }
+}
+
+export async function buildGitCommitMessageContext(
+  directory: string,
+  options?: {
+    stageAll?: boolean
+  },
+): Promise<GitCommitMessageContext> {
+  const gitBinary = requireGitBinary()
+  const targetDirectory = requireDirectory(directory)
+  const stageAll = options?.stageAll === true
+
+  const root = await resolveGitRoot(targetDirectory, gitBinary)
+  if (!root) {
+    throw new Error("The current workspace is not a Git repository.")
+  }
+
+  const stagedStat = await runCommandOrThrow(gitBinary, ["diff", "--cached", "--stat"], targetDirectory, "Failed to inspect staged changes.")
+  const stagedDiff = await runCommandOrThrow(gitBinary, ["diff", "--cached"], targetDirectory, "Failed to inspect staged changes.")
+  let hasChanges = Boolean(stagedStat.stdout || stagedDiff.stdout)
+
+  let status: CommandResult | null = null
+  let unstagedStat: CommandResult | null = null
+  let unstagedDiff: CommandResult | null = null
+
+  if (stageAll) {
+    status = await runCommandOrThrow(gitBinary, ["status", "--porcelain"], targetDirectory, "Failed to inspect local changes.")
+    unstagedStat = await runCommandOrThrow(gitBinary, ["diff", "--stat"], targetDirectory, "Failed to inspect unstaged changes.")
+    unstagedDiff = await runCommandOrThrow(gitBinary, ["diff"], targetDirectory, "Failed to inspect unstaged changes.")
+    hasChanges ||= Boolean(status.stdout || unstagedStat.stdout || unstagedDiff.stdout)
+  }
+
+  if (!hasChanges) {
+    throw new Error(stageAll ? "There are no local changes to summarize." : "There are no staged changes to summarize.")
+  }
+
+  const lines = [
+    "Generate a Git commit subject for the following changes.",
+    `Repository root: ${root}`,
+    `Scope: ${stageAll ? "staged and unstaged local changes" : "staged changes only"}`,
+    "",
+  ]
+  appendCommitMessageContextSection(lines, "Staged diffstat", stagedStat.stdout)
+  appendCommitMessageContextSection(lines, "Staged patch", stagedDiff.stdout)
+
+  if (stageAll) {
+    appendCommitMessageContextSection(lines, "Unstaged and untracked status", status?.stdout ?? "")
+    appendCommitMessageContextSection(lines, "Unstaged diffstat", unstagedStat?.stdout ?? "")
+    appendCommitMessageContextSection(lines, "Unstaged patch", unstagedDiff?.stdout ?? "")
+  }
+
+  const limited = limitCommitMessageContext(lines.join("\n"))
+  return {
+    directory: targetDirectory,
+    root,
+    stageAll,
+    content: limited.content,
+    truncated: limited.truncated,
+  }
 }
 
 function resolveLocalPullRequestCapability(input: {

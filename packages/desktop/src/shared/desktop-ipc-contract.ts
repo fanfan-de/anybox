@@ -1180,6 +1180,10 @@ export interface DesktopIpcContract {
     input: { projectID: string; directory: string; message: string; stageAll?: boolean }
     output: GitActionResult
   }
+  "desktop:git-generate-commit-message": {
+    input: { projectID: string; directory: string; stageAll?: boolean }
+    output: { message: string }
+  }
   "desktop:git-push": {
     input: { projectID: string; directory: string }
     output: GitActionResult
@@ -1923,6 +1927,7 @@ export interface DesktopApiMethods {
   readPreviewText(input: DesktopIpcInput<"desktop:read-preview-text">): Promise<DesktopIpcOutput<"desktop:read-preview-text">>
   gitGetCapabilities(input: DesktopIpcInput<"desktop:git-get-capabilities">): Promise<DesktopIpcOutput<"desktop:git-get-capabilities">>
   gitCommit(input: DesktopIpcInput<"desktop:git-commit">): Promise<DesktopIpcOutput<"desktop:git-commit">>
+  gitGenerateCommitMessage(input: DesktopIpcInput<"desktop:git-generate-commit-message">): Promise<DesktopIpcOutput<"desktop:git-generate-commit-message">>
   gitPush(input: DesktopIpcInput<"desktop:git-push">): Promise<DesktopIpcOutput<"desktop:git-push">>
   gitCreateBranch(input: DesktopIpcInput<"desktop:git-create-branch">): Promise<DesktopIpcOutput<"desktop:git-create-branch">>
   gitListBranches(input: DesktopIpcInput<"desktop:git-list-branches">): Promise<DesktopIpcOutput<"desktop:git-list-branches">>

@@ -4,6 +4,7 @@ import { containsWorkspaceLocation, isSshWorkspaceUri } from "@anybox/shared"
 import z from "zod"
 import * as db from "#database/Sqlite.ts"
 import * as Config from "#config/config.ts"
+import * as GitCommitMessage from "#git/commit-message.ts"
 import * as Git from "#git/git.ts"
 import * as Mcp from "#mcp/manager.ts"
 import type { PtyRegistry } from "#pty/registry.ts"
@@ -21,6 +22,7 @@ import {
   resolveProjectModelSelectionWithGlobalFallback,
 } from "#server/usecases/model-list-cache.ts"
 import * as Session from "#session/core/session.ts"
+import * as PromptPresets from "#session/support/prompt-presets.ts"
 import * as Subtask from "#session/tasks/subtask.ts"
 import * as Skill from "#skill/skill.ts"
 
@@ -67,6 +69,11 @@ export const GitDirectoryQuery = z.object({
 export const GitCommitBody = z.object({
   directory: z.string().min(1),
   message: z.string().min(1),
+  stageAll: z.boolean().optional(),
+})
+
+export const GitCommitMessageBody = z.object({
+  directory: z.string().min(1),
   stageAll: z.boolean().optional(),
 })
 
@@ -230,6 +237,32 @@ async function runProjectWorktreeOperation<T>(operation: () => Promise<T>) {
     return await operation()
   } catch (error) {
     throw createProjectWorktreeApiError(error)
+  }
+}
+
+function createCommitMessageGenerationApiError(error: unknown) {
+  if (error instanceof ApiError) return error
+
+  const message = error instanceof Error && error.message.trim()
+    ? error.message
+    : "Commit message generation failed."
+
+  if (error instanceof GitCommitMessage.internal.GitCommitMessageError) {
+    return new ApiError(
+      502,
+      error.code === "EMPTY" ? "COMMIT_MESSAGE_EMPTY" : "COMMIT_MESSAGE_GENERATION_FAILED",
+      message,
+    )
+  }
+
+  return createProjectGitApiError(error)
+}
+
+async function runProjectGitCommitMessageOperation<T>(operation: () => Promise<T>) {
+  try {
+    return await operation()
+  } catch (error) {
+    throw createCommitMessageGenerationApiError(error)
   }
 }
 
@@ -478,6 +511,60 @@ export async function commitProjectGitChanges(
     const directory = await resolveProjectGitDirectory(projectID, input.directory, { verifyRepositoryRoot: true })
     return Git.commitGitChanges(directory, input.message, {
       stageAll: input.stageAll,
+    })
+  })
+}
+
+async function resolveProjectCommitMessageModel(projectID: string) {
+  const items = await listProjectModelsWithFallback(projectID)
+  const selection = await resolveProjectModelSelectionWithGlobalFallback(projectID, items)
+  const publicModel = await resolveEffectiveModelWithFallback(projectID, items, selection.small_model ?? selection.model)
+
+  if (!publicModel) {
+    throw new ApiError(
+      400,
+      "MODEL_UNAVAILABLE",
+      "No provider model is available for this project. Configure a provider/model before generating commit messages.",
+    )
+  }
+
+  const model = await Provider.getModel(publicModel.providerID, publicModel.id, projectID)
+  if (!model.capabilities.output.text) {
+    throw new ApiError(
+      400,
+      "MODEL_NOT_TEXT_CAPABLE",
+      `${model.providerID}/${model.id} does not support text output.`,
+    )
+  }
+
+  return model
+}
+
+export async function generateProjectGitCommitMessage(
+  projectID: string,
+  input: z.infer<typeof GitCommitMessageBody>,
+) {
+  return runProjectGitCommitMessageOperation(async () => {
+    const directory = await resolveProjectGitDirectory(projectID, input.directory, { verifyRepositoryRoot: true })
+    return Instance.provide({
+      directory,
+      fn: async () => {
+        const context = await Git.buildGitCommitMessageContext(directory, {
+          stageAll: input.stageAll,
+        })
+        const selection = await PromptPresets.getPromptPresetSelection(Config.GLOBAL_CONFIG_ID)
+        const systemPrompt = await PromptPresets.getResolvedPromptPresetContent(
+          selection.gitCommitPromptPresetID,
+          Config.GLOBAL_CONFIG_ID,
+        )
+        const model = await resolveProjectCommitMessageModel(projectID)
+        return GitCommitMessage.generateGitCommitMessage({
+          projectID,
+          model,
+          context,
+          systemPrompt,
+        })
+      },
     })
   })
 }

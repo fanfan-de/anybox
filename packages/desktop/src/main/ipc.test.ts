@@ -262,6 +262,27 @@ describe("ipc prompt helpers", () => {
       body: JSON.stringify(input),
     })
   })
+
+  it("updates prompt preset selection with all assignment slots", async () => {
+    const selection = {
+      systemPromptPresetID: "system-codex",
+      planModePromptPresetID: "plan-mode",
+      sideChatPromptPresetID: "side-chat",
+      gitCommitPromptPresetID: "git-commit-message",
+    }
+    requestAgentJSONMock.mockResolvedValueOnce({
+      data: selection,
+    })
+
+    await expect(internal.updatePromptPresetSelection(selection)).resolves.toEqual(selection)
+    expect(requestAgentJSONMock).toHaveBeenCalledWith("/api/prompts/selection", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(selection),
+    })
+  })
 })
 
 describe("ipc side chat cleanup helpers", () => {

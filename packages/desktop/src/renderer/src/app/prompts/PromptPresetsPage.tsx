@@ -50,6 +50,7 @@ const BUILTIN_PROMPT_LABEL_KEYS = {
   "System prompt": "prompts.builtin.systemPrompt",
   "Plan mode prompt": "prompts.builtin.planModePrompt",
   "Side chat prompt": "prompts.builtin.sideChatPrompt",
+  "Git commit message prompt": "prompts.builtin.gitCommitMessagePrompt",
   "Anthropic Provider Prompt": "prompts.builtin.anthropicProviderPrompt",
   "Beast Provider Prompt": "prompts.builtin.beastProviderPrompt",
   "Gemini Provider Prompt": "prompts.builtin.geminiProviderPrompt",
@@ -180,6 +181,9 @@ function getPromptPresetUsageLabels(
   }
   if (selection.sideChatPromptPresetID === presetID) {
     labels.push(t("prompts.usage.sideChat"))
+  }
+  if (selection.gitCommitPromptPresetID === presetID) {
+    labels.push(t("prompts.usage.gitCommit"))
   }
 
   return labels
@@ -997,6 +1001,27 @@ export function PromptPresetsPage({
                         disabled={!promptPresetSelection || isSavingPromptPresetSelection}
                         onChange={(value) =>
                           void onPromptPresetSelectionChange("sideChatPromptPresetID", value)
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="settings-prompt-assignment-row" role="listitem">
+                  <div className="settings-prompt-assignment-copy">
+                    <span className="settings-prompt-assignment-title">{t("prompts.slot.gitCommit")}</span>
+                  </div>
+
+                  <div className="settings-prompt-assignment-control">
+                    <div className="settings-prompt-assignment-actions">
+                      <SettingsSelect
+                        ariaLabel={t("prompts.slot.gitCommitSelectAria")}
+                        className="settings-prompt-assignment-select"
+                        options={promptPresetSelectOptions}
+                        value={promptPresetSelection?.gitCommitPromptPresetID ?? ""}
+                        disabled={!promptPresetSelection || isSavingPromptPresetSelection}
+                        onChange={(value) =>
+                          void onPromptPresetSelectionChange("gitCommitPromptPresetID", value)
                         }
                       />
                     </div>

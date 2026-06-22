@@ -181,6 +181,11 @@ const SelectedSideChatPromptPresetField = z
   .optional()
   .describe("Selected preset id for the runtime side-chat prompt")
 
+const SelectedGitCommitPromptPresetField = z
+  .string()
+  .optional()
+  .describe("Selected preset id for the Git commit message prompt")
+
 export const McpServerTransport = z.enum(["stdio", "remote", "connector"]).meta({
   ref: "McpServerTransport",
 })
@@ -476,6 +481,7 @@ export const Info = z
     selected_system_prompt_preset: SelectedSystemPromptPresetField,
     selected_plan_mode_prompt_preset: SelectedPlanModePromptPresetField,
     selected_side_chat_prompt_preset: SelectedSideChatPromptPresetField,
+    selected_git_commit_prompt_preset: SelectedGitCommitPromptPresetField,
     enterprise: z
       .object({
         url: z.string().optional().describe("Enterprise URL"),
@@ -1112,12 +1118,17 @@ export async function getSelectedSideChatPromptPresetID(configID = GLOBAL_CONFIG
   return normalizePromptPresetID(readConfig(normalizeConfigID(configID)).selected_side_chat_prompt_preset)
 }
 
+export async function getSelectedGitCommitPromptPresetID(configID = GLOBAL_CONFIG_ID) {
+  return normalizePromptPresetID(readConfig(normalizeConfigID(configID)).selected_git_commit_prompt_preset)
+}
+
 export async function setSelectedPromptPresetIDs(
   configID: string,
   selection: {
     systemPromptPresetID?: string | null
     planModePromptPresetID?: string | null
     sideChatPromptPresetID?: string | null
+    gitCommitPromptPresetID?: string | null
   },
 ) {
   const normalizedConfigID = normalizeConfigID(configID)
@@ -1125,11 +1136,13 @@ export async function setSelectedPromptPresetIDs(
   const systemPromptPresetID = normalizePromptPresetID(selection.systemPromptPresetID)
   const planModePromptPresetID = normalizePromptPresetID(selection.planModePromptPresetID)
   const sideChatPromptPresetID = normalizePromptPresetID(selection.sideChatPromptPresetID)
+  const gitCommitPromptPresetID = normalizePromptPresetID(selection.gitCommitPromptPresetID)
   const next: Info = {
     ...current,
     selected_system_prompt_preset: systemPromptPresetID,
     selected_plan_mode_prompt_preset: planModePromptPresetID,
     selected_side_chat_prompt_preset: sideChatPromptPresetID,
+    selected_git_commit_prompt_preset: gitCommitPromptPresetID,
   }
 
   return writeConfig(normalizedConfigID, Info.parse(next))

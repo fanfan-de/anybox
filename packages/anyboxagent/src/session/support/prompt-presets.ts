@@ -12,6 +12,7 @@ import PROMPT_CODEXSYSTEM from "../prompt/codexsystem.md" with { type: "text" }
 import PROMPT_CODEXSYSTEM_ZH_HANS from "../prompt/codexsystem.zh-hans.md" with { type: "text" }
 import PROMPT_DEFAULT from "../prompt/default.md" with { type: "text" }
 import PROMPT_GEMINI from "../prompt/gemini.md" with { type: "text" }
+import PROMPT_GIT_COMMIT_MESSAGE from "../prompt/git-commit-message.md" with { type: "text" }
 import PROMPT_GPT from "../prompt/gpt.md" with { type: "text" }
 import PROMPT_KIMI from "../prompt/kimi.md" with { type: "text" }
 import PROMPT_PLAN_REMINDER_ANTHROPIC from "../prompt/plan-reminder-anthropic.md" with { type: "text" }
@@ -20,12 +21,13 @@ import PROMPT_SIDE_CHAT from "../prompt/side-chat.md" with { type: "text" }
 import PROMPT_TRINITY from "../prompt/trinity.md" with { type: "text" }
 
 export type PromptPresetSource = "bundled" | "custom"
-export type PromptPresetTarget = "system" | "plan" | "side-chat"
+export type PromptPresetTarget = "system" | "plan" | "side-chat" | "git-commit"
 
 export interface PromptPresetSelection {
   systemPromptPresetID: string
   planModePromptPresetID: string
   sideChatPromptPresetID: string
+  gitCommitPromptPresetID: string
 }
 
 export interface PromptPresetSummary {
@@ -95,6 +97,7 @@ const DEFAULT_PROMPT_PRESET_SELECTION: PromptPresetSelection = {
   systemPromptPresetID: "system-codex",
   planModePromptPresetID: "plan-mode",
   sideChatPromptPresetID: "side-chat",
+  gitCommitPromptPresetID: "git-commit-message",
 }
 
 const PROMPT_PRESET_DEFINITIONS: PromptPresetDefinition[] = [
@@ -132,6 +135,13 @@ const PROMPT_PRESET_DEFINITIONS: PromptPresetDefinition[] = [
     description: "Additional instructions appended when a side chat session is active.",
     sourcePath: "src/session/prompt/side-chat.md",
     bundledContent: PROMPT_SIDE_CHAT,
+  },
+  {
+    id: "git-commit-message",
+    label: "Git commit message prompt",
+    description: "Instructions used when auto-generating Git commit subjects.",
+    sourcePath: "src/session/prompt/git-commit-message.md",
+    bundledContent: PROMPT_GIT_COMMIT_MESSAGE,
   },
   {
     id: "provider-anthropic",
@@ -602,11 +612,13 @@ export async function getPromptPresetSelection(
     selectedSystemPromptPresetID,
     selectedPlanModePromptPresetID,
     selectedSideChatPromptPresetID,
+    selectedGitCommitPromptPresetID,
   ] = await Promise.all([
     listAvailablePromptPresetIDs(configID),
     Config.getSelectedSystemPromptPresetID(configID),
     Config.getSelectedPlanModePromptPresetID(configID),
     Config.getSelectedSideChatPromptPresetID(configID),
+    Config.getSelectedGitCommitPromptPresetID(configID),
   ])
 
   return {
@@ -625,6 +637,11 @@ export async function getPromptPresetSelection(
       availablePresetIDs,
       DEFAULT_PROMPT_PRESET_SELECTION.sideChatPromptPresetID,
     ),
+    gitCommitPromptPresetID: normalizePromptPresetSelectionValue(
+      selectedGitCommitPromptPresetID,
+      availablePresetIDs,
+      DEFAULT_PROMPT_PRESET_SELECTION.gitCommitPromptPresetID,
+    ),
   }
 }
 
@@ -637,6 +654,7 @@ export async function updatePromptPresetSelection(
     systemPromptPresetID: selection.systemPromptPresetID.trim(),
     planModePromptPresetID: selection.planModePromptPresetID.trim(),
     sideChatPromptPresetID: selection.sideChatPromptPresetID.trim(),
+    gitCommitPromptPresetID: selection.gitCommitPromptPresetID.trim(),
   }
 
   if (!availablePresetIDs.has(normalizedSelection.systemPromptPresetID)) {
@@ -649,6 +667,10 @@ export async function updatePromptPresetSelection(
 
   if (!availablePresetIDs.has(normalizedSelection.sideChatPromptPresetID)) {
     throw new Error(`Unknown prompt preset '${selection.sideChatPromptPresetID}'.`)
+  }
+
+  if (!availablePresetIDs.has(normalizedSelection.gitCommitPromptPresetID)) {
+    throw new Error(`Unknown prompt preset '${selection.gitCommitPromptPresetID}'.`)
   }
 
   return persistPromptPresetSelection(normalizedSelection, configID)
@@ -765,6 +787,10 @@ export async function deletePromptPreset(
       resolvedSelection.sideChatPromptPresetID === presetID
         ? DEFAULT_PROMPT_PRESET_SELECTION.sideChatPromptPresetID
         : resolvedSelection.sideChatPromptPresetID,
+    gitCommitPromptPresetID:
+      resolvedSelection.gitCommitPromptPresetID === presetID
+        ? DEFAULT_PROMPT_PRESET_SELECTION.gitCommitPromptPresetID
+        : resolvedSelection.gitCommitPromptPresetID,
   }
 
   return persistPromptPresetSelection(nextSelection, configID)

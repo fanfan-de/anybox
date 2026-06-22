@@ -49,6 +49,7 @@ function createProps(overrides: Partial<PromptPresetsPageProps> = {}): PromptPre
       systemPromptPresetID: selectedPromptPreset.id,
       planModePromptPresetID: selectedPromptPreset.id,
       sideChatPromptPresetID: selectedPromptPreset.id,
+      gitCommitPromptPresetID: selectedPromptPreset.id,
     },
     promptUrlInstallMessage: null,
     promptUrlInstallPreview: null,
@@ -86,6 +87,7 @@ describe("PromptPresetsPage", () => {
     expect(titleField.tagName).toBe("TEXTAREA")
     expect(titleField).toHaveAttribute("rows", "1")
     expect(titleField).toHaveValue(LONG_PROMPT_LABEL)
+    expect(screen.getByText("Git commit")).toBeInTheDocument()
   })
 
   it("keeps custom prompt titles single-line in state", () => {

@@ -18,7 +18,10 @@ import * as LiveStreamHub from "#session/runtime/live-stream-hub.ts"
 import * as RuntimeEvent from "#session/runtime/runtime-event.ts"
 import * as Env from "#env/env.ts"
 import * as Config from "#config/config.ts"
+import * as GitCommitMessage from "#git/commit-message.ts"
+import { Instance } from "#project/instance.ts"
 import * as Provider from "#provider/provider.ts"
+import * as PromptPresets from "#session/support/prompt-presets.ts"
 import * as SystemPrompt from "#session/core/system.ts"
 import * as SettingsUseCase from "#server/usecases/settings.ts"
 import * as Log from "#util/log.ts"
@@ -146,6 +149,10 @@ type GitActionEnvelope = JsonEnvelope<{
   stderr: string
   summary: string
   url?: string
+}>
+
+type GitCommitMessageEnvelope = JsonEnvelope<{
+  message: string
 }>
 
 async function createTempDirectory(prefix: string) {
@@ -434,6 +441,7 @@ type PromptPresetSelectionEnvelope = JsonEnvelope<{
   systemPromptPresetID: string
   planModePromptPresetID: string
   sideChatPromptPresetID: string
+  gitCommitPromptPresetID: string
 }>
 
 function createPromptTranslationTestModel(input?: {
@@ -3413,6 +3421,7 @@ describe("server api", () => {
           systemPromptPresetID: null,
           planModePromptPresetID: null,
           sideChatPromptPresetID: null,
+          gitCommitPromptPresetID: null,
         })
 
         const listResponse = await app.request("http://localhost/api/prompts")
@@ -3451,12 +3460,14 @@ describe("server api", () => {
           systemPromptPresetID: "system-codex",
           planModePromptPresetID: "plan-mode",
           sideChatPromptPresetID: "side-chat",
+          gitCommitPromptPresetID: "git-commit-message",
         })
       } finally {
         await Config.setSelectedPromptPresetIDs(Config.GLOBAL_CONFIG_ID, {
           systemPromptPresetID: "system-default",
           planModePromptPresetID: "plan-mode",
           sideChatPromptPresetID: "side-chat",
+          gitCommitPromptPresetID: "git-commit-message",
         })
       }
     })
@@ -3486,6 +3497,7 @@ describe("server api", () => {
           systemPromptPresetID: "system-default",
           planModePromptPresetID: "plan-mode",
           sideChatPromptPresetID: "side-chat",
+          gitCommitPromptPresetID: "git-commit-message",
         })
         await app.request("http://localhost/api/prompts", {
           method: "POST",
@@ -3533,6 +3545,7 @@ describe("server api", () => {
           systemPromptPresetID: "system-default",
           planModePromptPresetID: "plan-mode",
           sideChatPromptPresetID: "side-chat",
+          gitCommitPromptPresetID: "git-commit-message",
         })
       } finally {
         restoreSettings()
@@ -3541,6 +3554,7 @@ describe("server api", () => {
           systemPromptPresetID: "system-default",
           planModePromptPresetID: "plan-mode",
           sideChatPromptPresetID: "side-chat",
+          gitCommitPromptPresetID: "git-commit-message",
         })
       }
     })
@@ -3731,6 +3745,7 @@ describe("server api", () => {
         systemPromptPresetID: "system-default",
         planModePromptPresetID: "plan-mode",
         sideChatPromptPresetID: "side-chat",
+        gitCommitPromptPresetID: "git-commit-message",
       })
 
       const listResponse = await app.request("http://localhost/api/prompts")
@@ -3758,6 +3773,11 @@ describe("server api", () => {
             hasOverride: false,
           }),
           expect.objectContaining({
+            id: "git-commit-message",
+            source: "bundled",
+            hasOverride: false,
+          }),
+          expect.objectContaining({
             id: "provider-gpt",
             source: "bundled",
             hasOverride: false,
@@ -3777,6 +3797,7 @@ describe("server api", () => {
         systemPromptPresetID: "system-default",
         planModePromptPresetID: "plan-mode",
         sideChatPromptPresetID: "side-chat",
+        gitCommitPromptPresetID: "git-commit-message",
       })
 
       const createResponse = await app.request("http://localhost/api/prompts", {
@@ -3809,6 +3830,7 @@ describe("server api", () => {
           systemPromptPresetID: customPresetIDValue,
           planModePromptPresetID: "plan-mode",
           sideChatPromptPresetID: "side-chat",
+          gitCommitPromptPresetID: customPresetIDValue,
         }),
       })
       const updateSelectionBody = (await updateSelectionResponse.json()) as PromptPresetSelectionEnvelope
@@ -3819,6 +3841,7 @@ describe("server api", () => {
         systemPromptPresetID: customPresetIDValue,
         planModePromptPresetID: "plan-mode",
         sideChatPromptPresetID: "side-chat",
+        gitCommitPromptPresetID: customPresetIDValue,
       })
 
       const runtimeWithCustomSystemPrompt = await SystemPrompt.defaultPrompt()
@@ -3934,6 +3957,7 @@ describe("server api", () => {
         systemPromptPresetID: "system-codex",
         planModePromptPresetID: "plan-mode",
         sideChatPromptPresetID: "side-chat",
+        gitCommitPromptPresetID: "git-commit-message",
       })
 
       const runtimeAfterDelete = await SystemPrompt.defaultPrompt()
@@ -3955,6 +3979,7 @@ describe("server api", () => {
         systemPromptPresetID: "system-default",
         planModePromptPresetID: "plan-mode",
         sideChatPromptPresetID: "side-chat",
+        gitCommitPromptPresetID: "git-commit-message",
       })
     }
     })
@@ -4749,6 +4774,147 @@ describe("server api", () => {
 
       const committedFiles = await $`git show --name-only --format= HEAD`.cwd(repositoryRoot).text()
       expect(committedFiles).toContain("stage-all.txt")
+    } finally {
+      await rm(repositoryRoot, { recursive: true, force: true })
+    }
+  })
+
+  test("project git commit message route should generate from the selected change scope", async () => {
+    await withTempPromptRoot(async () => {
+      const app = createServerApp()
+      const repositoryRoot = await createTempDirectory("anybox-git-commit-message-project-")
+      const testModel = createPromptTranslationTestModel()
+      const customCommitPrompt = "Only output a surgical commit subject."
+      const capturedGenerateInputs: Record<string, unknown>[] = []
+      let activeProjectID = ""
+      const restoreProvider = Provider.setProviderFunctionOverridesForTesting({
+        listModels: async () => [toPromptTranslationPublicModel(testModel)],
+        getSelection: async () => ({
+          small_model: "test-provider/prompt-translator",
+        }),
+        getModel: async () => testModel,
+        getLanguage: async (model) => {
+          expect(Instance.project.id).toBe(activeProjectID)
+          return model as never
+        },
+      })
+      const restoreCommitMessage = GitCommitMessage.setRuntimeDependenciesForTesting({
+        getGenerateText: async () => async (input: Record<string, unknown>) => {
+          capturedGenerateInputs.push(input)
+          return {
+            text: "\"feat: add generated commit messages\"\n\nBody should be ignored.",
+          } as never
+        },
+      })
+
+      try {
+        const customCommitPromptPreset = await PromptPresets.createPromptPreset({
+          label: "Commit subject prompt",
+          content: customCommitPrompt,
+        }, Config.GLOBAL_CONFIG_ID)
+        await PromptPresets.updatePromptPresetSelection({
+          systemPromptPresetID: "system-codex",
+          planModePromptPresetID: "plan-mode",
+          sideChatPromptPresetID: "side-chat",
+          gitCommitPromptPresetID: customCommitPromptPreset.id,
+        }, Config.GLOBAL_CONFIG_ID)
+
+        await createGitRepo(repositoryRoot, "git-commit-message-project")
+        await writeFile(join(repositoryRoot, "staged.txt"), "staged\n")
+        await writeFile(join(repositoryRoot, "unstaged.txt"), "unstaged\n")
+        await $`git add staged.txt`.cwd(repositoryRoot).quiet()
+
+        const projectResponse = await app.request("http://localhost/api/projects", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ directory: repositoryRoot }),
+        })
+        const projectBody = (await projectResponse.json()) as ProjectResponseEnvelope
+        const projectID = projectBody.data?.id
+
+        expect(projectResponse.status).toBe(201)
+        expect(projectID).toBeString()
+        activeProjectID = projectID
+
+        const stagedResponse = await app.request(`http://localhost/api/projects/${projectID}/git/commit-message`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            directory: repositoryRoot,
+          }),
+        })
+        const stagedBody = (await stagedResponse.json()) as GitCommitMessageEnvelope
+
+        expect(stagedResponse.status).toBe(200)
+        expect(stagedBody.data?.message).toBe("feat: add generated commit messages")
+        expect(capturedGenerateInputs[0]?.system).toBe(customCommitPrompt)
+        expect(String(capturedGenerateInputs[0]?.prompt)).toContain("staged.txt")
+        expect(String(capturedGenerateInputs[0]?.prompt)).not.toContain("unstaged.txt")
+
+        const stageAllResponse = await app.request(`http://localhost/api/projects/${projectID}/git/commit-message`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            directory: repositoryRoot,
+            stageAll: true,
+          }),
+        })
+        const stageAllBody = (await stageAllResponse.json()) as GitCommitMessageEnvelope
+
+        expect(stageAllResponse.status).toBe(200)
+        expect(stageAllBody.data?.message).toBe("feat: add generated commit messages")
+        expect(capturedGenerateInputs[1]?.system).toBe(customCommitPrompt)
+        expect(String(capturedGenerateInputs[1]?.prompt)).toContain("staged.txt")
+        expect(String(capturedGenerateInputs[1]?.prompt)).toContain("unstaged.txt")
+        expect(capturedGenerateInputs[1]).toMatchObject({
+          temperature: 0,
+          model: testModel,
+        })
+      } finally {
+        await Config.setSelectedPromptPresetIDs(Config.GLOBAL_CONFIG_ID, {
+          systemPromptPresetID: "system-codex",
+          planModePromptPresetID: "plan-mode",
+          sideChatPromptPresetID: "side-chat",
+          gitCommitPromptPresetID: "git-commit-message",
+        })
+        restoreCommitMessage()
+        restoreProvider()
+        await rm(repositoryRoot, { recursive: true, force: true })
+      }
+    })
+  })
+
+  test("project git commit message route should reject when the selected scope has no changes", async () => {
+    const app = createServerApp()
+    const repositoryRoot = await createTempDirectory("anybox-git-empty-commit-message-project-")
+
+    try {
+      await createGitRepo(repositoryRoot, "git-empty-commit-message-project")
+
+      const projectResponse = await app.request("http://localhost/api/projects", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ directory: repositoryRoot }),
+      })
+      const projectBody = (await projectResponse.json()) as ProjectResponseEnvelope
+      const projectID = projectBody.data?.id
+
+      expect(projectResponse.status).toBe(201)
+      expect(projectID).toBeString()
+
+      const commitMessageResponse = await app.request(`http://localhost/api/projects/${projectID}/git/commit-message`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          directory: repositoryRoot,
+        }),
+      })
+      const commitMessageBody = (await commitMessageResponse.json()) as JsonEnvelope
+
+      expect(commitMessageResponse.status).toBe(400)
+      expect(commitMessageBody.success).toBe(false)
+      expect(commitMessageBody.error?.code).toBe("GIT_OPERATION_FAILED")
+      expect(commitMessageBody.error?.message).toBe("There are no staged changes to summarize.")
     } finally {
       await rm(repositoryRoot, { recursive: true, force: true })
     }

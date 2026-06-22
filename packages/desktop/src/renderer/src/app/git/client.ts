@@ -1,6 +1,7 @@
 type DesktopBridge = NonNullable<Window["desktop"]>
 type GitGetCapabilities = NonNullable<DesktopBridge["gitGetCapabilities"]>
 type GitCommit = NonNullable<DesktopBridge["gitCommit"]>
+type GitGenerateCommitMessage = NonNullable<DesktopBridge["gitGenerateCommitMessage"]>
 type GitPush = NonNullable<DesktopBridge["gitPush"]>
 type GitCreateBranch = NonNullable<DesktopBridge["gitCreateBranch"]>
 type GitListBranches = NonNullable<DesktopBridge["gitListBranches"]>
@@ -114,6 +115,12 @@ export async function commitGit(input: Parameters<GitCommit>[0]) {
   const result = await gitCommit(input)
   invalidateGitCapabilities(input)
   return result
+}
+
+export async function generateGitCommitMessage(input: Parameters<GitGenerateCommitMessage>[0]) {
+  const gitGenerateCommitMessage = window.desktop?.gitGenerateCommitMessage
+  if (!gitGenerateCommitMessage) throw unavailableError("commit message generation")
+  return gitGenerateCommitMessage(input)
 }
 
 export async function pushGit(input: Parameters<GitPush>[0]) {

@@ -7,7 +7,7 @@ vi.mock("electron", () => ({
 }))
 
 import { AGENT_WORKDIR_ENV } from "./agent-workdir"
-import { commitGitChanges, createGitBranch, getGitCapabilities } from "./git"
+import { commitGitChanges, createGitBranch, generateGitCommitMessage, getGitCapabilities } from "./git"
 
 let previousAgentWorkdir: string | undefined
 
@@ -206,6 +206,42 @@ describe("git api client", () => {
     })
 
     expect(result.summary).toBe("Committed to main.")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("posts git commit message generation requests", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url)
+
+      if (url.pathname === "/api/projects/prj_project-atlas/git/commit-message") {
+        expect(init?.method).toBe("POST")
+        expect(init?.body).toBe(
+          JSON.stringify({
+            directory: "C:\\Projects\\Atlas\\client",
+            stageAll: true,
+          }),
+        )
+
+        return jsonResponse({
+          success: true,
+          data: {
+            message: "feat: generate commit messages",
+          },
+        })
+      }
+
+      throw new Error(`Unexpected request: ${url.pathname}${url.search}`)
+    })
+
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await generateGitCommitMessage({
+      projectID: "prj_project-atlas",
+      directory: "C:\\Projects\\Atlas\\client",
+      stageAll: true,
+    })
+
+    expect(result.message).toBe("feat: generate commit messages")
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

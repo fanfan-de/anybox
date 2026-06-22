@@ -265,6 +265,8 @@ try {
       invokeDesktop("desktop:git-get-capabilities", input) as Promise<GitCapabilities>,
     gitCommit: (input: { projectID: string; directory: string; message: string; stageAll?: boolean }) =>
       invokeDesktop("desktop:git-commit", input) as Promise<GitActionResult>,
+    gitGenerateCommitMessage: (input: DesktopIpcInput<"desktop:git-generate-commit-message">) =>
+      invokeDesktop("desktop:git-generate-commit-message", input) as Promise<DesktopIpcOutput<"desktop:git-generate-commit-message">>,
     gitPush: (input: { projectID: string; directory: string }) =>
       invokeDesktop("desktop:git-push", input) as Promise<GitActionResult>,
     gitCreateBranch: (input: { projectID: string; directory: string; name: string }) =>

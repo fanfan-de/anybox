@@ -13,11 +13,13 @@ import {
   PushIcon,
   SearchIcon,
 } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
 import {
   checkoutGitBranch,
   commitGit,
   createGitBranch,
   createGitPullRequest,
+  generateGitCommitMessage,
   getGitCapabilities,
   hasGitQuickMenuClient,
   listGitBranches,
@@ -148,6 +150,7 @@ export function GitQuickMenuButton({
   })
 
   const hasGitClient = hasGitQuickMenuClient()
+  const { t } = useI18n()
 
   async function refreshCapabilities({
     bypassCache = false,
@@ -446,18 +449,10 @@ export function GitQuickMenuButton({
   }, [activePanel, isCreateBranchFormOpen, isMenuOpen])
 
   async function handleCommit(options?: { pushAfter?: boolean; stageAll?: boolean }) {
-    const message = commitMessage.trim()
+    let message = commitMessage.trim()
     const stageAll = options?.stageAll === true
     const pushAfter = options?.pushAfter === true
     let didCommit = false
-
-    if (!message) {
-      setStatus({
-        tone: "error",
-        text: "Enter a commit message.",
-      })
-      return
-    }
 
     if (!projectID || !directory) {
       setStatus({
@@ -468,12 +463,29 @@ export function GitQuickMenuButton({
     }
 
     setPendingAction(pushAfter ? "commit-push" : stageAll ? "stage-all-commit" : "commit")
-    setStatus({
-      tone: "neutral",
-      text: stageAll ? "Staging all changes and committing..." : "Committing staged changes...",
-    })
 
     try {
+      if (!message) {
+        setStatus({
+          tone: "neutral",
+          text: t("git.generatingCommitMessage"),
+        })
+        const generated = await generateGitCommitMessage({
+          projectID,
+          directory,
+          ...(stageAll ? { stageAll: true } : {}),
+        })
+        message = generated.message.trim()
+        if (!message) {
+          throw new Error("Generated commit message was empty.")
+        }
+        setCommitMessage(message)
+      }
+
+      setStatus({
+        tone: "neutral",
+        text: stageAll ? "Staging all changes and committing..." : "Committing staged changes...",
+      })
       const commitResult = await commitGit({
         projectID,
         directory,
@@ -863,7 +875,7 @@ export function GitQuickMenuButton({
                 <textarea
                   ref={commitInputRef}
                   value={commitMessage}
-                  placeholder="Describe the change"
+                  placeholder={t("git.commitMessageAutoPlaceholder")}
                   rows={3}
                   onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setCommitMessage(event.target.value)}
                 />

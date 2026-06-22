@@ -35,6 +35,7 @@ import {
   commitGitChanges,
   createGitBranch,
   createGitPullRequest,
+  generateGitCommitMessage,
   getGitCapabilities,
   listGitBranches,
   pushGitChanges,
@@ -594,6 +595,18 @@ async function updateToolPermissionMode(input: AgentToolPermissionModePayload) {
 async function translatePromptPreset(input: DesktopIpcInput<"desktop:translate-prompt-preset">) {
   const result = await requestAgentJSON<AgentPromptPresetDocument>("/api/prompts/translate", {
     method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(input),
+  })
+
+  return result.data
+}
+
+async function updatePromptPresetSelection(input: AgentPromptPresetSelection) {
+  const result = await requestAgentJSON<AgentPromptPresetSelection>("/api/prompts/selection", {
+    method: "PUT",
     headers: {
       "content-type": "application/json",
     },
@@ -3636,6 +3649,12 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     commitGitChanges(input),
   )
 
+  handleDesktopIpc(
+    "desktop:git-generate-commit-message",
+    async (_event, input: { projectID: string; directory: string; stageAll?: boolean }) =>
+      generateGitCommitMessage(input),
+  )
+
   handleDesktopIpc("desktop:git-push", async (_event, input: { projectID: string; directory: string }) => pushGitChanges(input))
 
   handleDesktopIpc("desktop:git-create-branch", async (_event, input: { projectID: string; directory: string; name: string }) =>
@@ -4973,15 +4992,7 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   handleDesktopIpc(
     "desktop:update-prompt-preset-selection",
     async (_event, input: AgentPromptPresetSelection) => {
-      const result = await requestAgentJSON<AgentPromptPresetSelection>("/api/prompts/selection", {
-        method: "PUT",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(input),
-      })
-
-      return result.data
+      return updatePromptPresetSelection(input)
     },
   )
 
@@ -6010,6 +6021,7 @@ export const internal = {
   saveSessionTraceExportDirectory,
   saveSessionTraceExportToProject,
   translatePromptPreset,
+  updatePromptPresetSelection,
   updateToolPermissionMode,
   uploadSessionBagSubmission,
 }
