@@ -1,0 +1,511 @@
+{
+  "initialSummary": {
+    "clientHeight": 926,
+    "commitCount": 3,
+    "layoutShiftCount": 0,
+    "longTaskCount": 1,
+    "renderedRowCount": 18,
+    "scrollHeight": 42867,
+    "scrollTop": 41941,
+    "stageWidth": 1080,
+    "turnCount": 240,
+    "virtualRowCount": 18
+  },
+  "scenarios": [
+    {
+      "name": "virtualized-scroll",
+      "scenarioResult": {
+        "clientHeight": 926,
+        "commitCount": 83,
+        "layoutShiftCount": 0,
+        "longTaskCount": 24,
+        "renderedRowCount": 14,
+        "scrollHeight": 47101,
+        "scrollTop": 46175,
+        "stageWidth": 1080,
+        "turnCount": 240,
+        "virtualRowCount": 14,
+        "durationMs": 3374.5,
+        "steps": 64
+      },
+      "summary": {
+        "clientHeight": 926,
+        "commitCount": 83,
+        "layoutShiftCount": 0,
+        "longTaskCount": 24,
+        "renderedRowCount": 14,
+        "scrollHeight": 47101,
+        "scrollTop": 46175,
+        "stageWidth": 1080,
+        "turnCount": 240,
+        "virtualRowCount": 14
+      },
+      "metricsDelta": {
+        "LayoutCount": 59,
+        "RecalcStyleCount": 84,
+        "LayoutDuration": 653.91,
+        "RecalcStyleDuration": 554.604,
+        "ScriptDuration": 1973.691,
+        "TaskDuration": 3310.55,
+        "JSHeapUsedSize": 10755476,
+        "Nodes": 1205,
+        "JSEventListeners": 101
+      },
+      "commitSummary": {
+        "count": 83,
+        "maxActualDurationMs": 28.4,
+        "p50ActualDurationMs": 8.4,
+        "p95ActualDurationMs": 21.5,
+        "totalActualDurationMs": 839.6
+      },
+      "traceSummary": {
+        "byName": {
+          "RunTask": {
+            "count": 21415,
+            "totalMs": 2452.097,
+            "maxMs": 172.428
+          },
+          "EvaluateScript": {
+            "count": 1,
+            "totalMs": 0.669,
+            "maxMs": 0.669
+          },
+          "EventDispatch": {
+            "count": 127,
+            "totalMs": 5.938,
+            "maxMs": 0.213
+          },
+          "FunctionCall": {
+            "count": 546,
+            "totalMs": 2093.651,
+            "maxMs": 167.904
+          },
+          "FireAnimationFrame": {
+            "count": 71,
+            "totalMs": 22.859,
+            "maxMs": 2.621
+          },
+          "PrePaint": {
+            "count": 69,
+            "totalMs": 6.432,
+            "maxMs": 0.561
+          },
+          "Paint": {
+            "count": 88,
+            "totalMs": 14.53,
+            "maxMs": 0.547
+          },
+          "UpdateLayoutTree": {
+            "count": 54,
+            "totalMs": 351.534,
+            "maxMs": 20.576
+          },
+          "Layout": {
+            "count": 39,
+            "totalMs": 424.538,
+            "maxMs": 32.858
+          },
+          "HitTest": {
+            "count": 4,
+            "totalMs": 0.042,
+            "maxMs": 0.018
+          }
+        },
+        "eventCount": 114169,
+        "topLongEvents": [
+          {
+            "name": "RunTask",
+            "durationMs": 172.428,
+            "cat": "disabled-by-default-devtools.timeline"
+          },
+          {
+            "name": "RunTask",
+            "durationMs": 168.844,
+            "cat": "disabled-by-default-devtools.timeline"
+          },
+          {
+            "name": "MessagePort::Accept",
+            "durationMs": 168.42,
+            "cat": "blink"
+          },
+          {
+            "name": "FunctionCall",
+            "durationMs": 167.904,
+            "cat": "devtools.timeline"
+          },
+          {
+            "name": "MessagePort::Accept",
+            "durationMs": 166.45,
+            "cat": "blink"
+          },
+          {
+            "name": "FunctionCall",
+            "durationMs": 166.007,
+            "cat": "devtools.timeline"
+          },
+          {
+            "name": "RunTask",
+            "durationMs": 159.485,
+            "cat": "disabled-by-default-devtools.timeline"
+          },
+          {
+            "name": "RunTask",
+            "durationMs": 158.317,
+            "cat": "disabled-by-default-devtools.timeline"
+          },
+          {
+            "name": "RunTask",
+            "durationMs": 157.821,
+            "cat": "disabled-by-default-devtools.timeline"
+          },
+          {
+            "name": "MessagePort::Accept",
+            "durationMs": 157.104,
+            "cat": "blink"
+          },
+          {
+            "name": "FunctionCall",
+            "durationMs": 156.722,
+            "cat": "devtools.timeline"
+          },
+          {
+            "name": "MessagePort::Accept",
+            "durationMs": 156.021,
+            "cat": "blink"
+          }
+        ]
+      }
+    },
+    {
+      "name": "streaming-append",
+      "scenarioResult": {
+        "clientHeight": 926,
+        "commitCount": 114,
+        "layoutShiftCount": 14,
+        "longTaskCount": 1,
+        "renderedRowCount": 11,
+        "scrollHeight": 45860,
+        "scrollTop": 44933,
+        "stageWidth": 1080,
+        "turnCount": 240,
+        "virtualRowCount": 11,
+        "chunks": 90,
+        "durationMs": 1595.3999999761581,
+        "responseLength": 6057
+      },
+      "summary": {
+        "clientHeight": 926,
+        "commitCount": 114,
+        "layoutShiftCount": 14,
+        "longTaskCount": 1,
+        "renderedRowCount": 11,
+        "scrollHeight": 45860,
+        "scrollTop": 44933,
+        "stageWidth": 1080,
+        "turnCount": 234,
+        "virtualRowCount": 11
+      },
+      "metricsDelta": {
+        "LayoutCount": 96,
+        "RecalcStyleCount": 186,
+        "LayoutDuration": 481.599,
+        "RecalcStyleDuration": 31.76,
+        "ScriptDuration": 966.306,
+        "TaskDuration": 1672.529,
+        "JSHeapUsedSize": -3886132,
+        "Nodes": -1264,
+        "JSEventListeners": -72
+      },
+      "commitSummary": {
+        "count": 114,
+        "maxActualDurationMs": 15.9,
+        "p50ActualDurationMs": 5.5,
+        "p95ActualDurationMs": 10.7,
+        "totalActualDurationMs": 681.1
+      },
+      "traceSummary": {
+        "byName": {
+          "RunTask": {
+            "count": 8119,
+            "totalMs": 1847.094,
+            "maxMs": 88.407
+          },
+          "EvaluateScript": {
+            "count": 2,
+            "totalMs": 1.008,
+            "maxMs": 0.882
+          },
+          "FunctionCall": {
+            "count": 742,
+            "totalMs": 1465.89,
+            "maxMs": 87.372
+          },
+          "UpdateLayoutTree": {
+            "count": 114,
+            "totalMs": 23.862,
+            "maxMs": 8.101
+          },
+          "Layout": {
+            "count": 96,
+            "totalMs": 480.565,
+            "maxMs": 16.172
+          },
+          "EventDispatch": {
+            "count": 48,
+            "totalMs": 4.743,
+            "maxMs": 0.286
+          },
+          "FireAnimationFrame": {
+            "count": 202,
+            "totalMs": 14.034,
+            "maxMs": 0.625
+          },
+          "PrePaint": {
+            "count": 124,
+            "totalMs": 8.824,
+            "maxMs": 0.417
+          },
+          "Paint": {
+            "count": 250,
+            "totalMs": 20.716,
+            "maxMs": 0.536
+          },
+          "HitTest": {
+            "count": 2,
+            "totalMs": 0.029,
+            "maxMs": 0.025
+          }
+        },
+        "eventCount": 93261,
+        "topLongEvents": [
+          {
+            "name": "RunTask",
+            "durationMs": 88.407,
+            "cat": "disabled-by-default-devtools.timeline"
+          },
+          {
+            "name": "MessagePort::Accept",
+            "durationMs": 87.636,
+            "cat": "blink"
+          },
+          {
+            "name": "FunctionCall",
+            "durationMs": 87.372,
+            "cat": "devtools.timeline"
+          },
+          {
+            "name": "RunTask",
+            "durationMs": 38.987,
+            "cat": "disabled-by-default-devtools.timeline"
+          },
+          {
+            "name": "MessagePort::Accept",
+            "durationMs": 38.864,
+            "cat": "blink"
+          },
+          {
+            "name": "FunctionCall",
+            "durationMs": 38.786,
+            "cat": "devtools.timeline"
+          },
+          {
+            "name": "RunTask",
+            "durationMs": 33.986,
+            "cat": "disabled-by-default-devtools.timeline"
+          },
+          {
+            "name": "MessagePort::Accept",
+            "durationMs": 33.869,
+            "cat": "blink"
+          },
+          {
+            "name": "FunctionCall",
+            "durationMs": 33.79,
+            "cat": "devtools.timeline"
+          },
+          {
+            "name": "RunTask",
+            "durationMs": 28.562,
+            "cat": "disabled-by-default-devtools.timeline"
+          },
+          {
+            "name": "MessagePort::Accept",
+            "durationMs": 28.492,
+            "cat": "blink"
+          },
+          {
+            "name": "FunctionCall",
+            "durationMs": 28.413,
+            "cat": "devtools.timeline"
+          }
+        ]
+      }
+    },
+    {
+      "name": "container-resize",
+      "scenarioResult": {
+        "clientHeight": 926,
+        "commitCount": 137,
+        "layoutShiftCount": 36,
+        "longTaskCount": 11,
+        "renderedRowCount": 17,
+        "scrollHeight": 46670,
+        "scrollTop": 45744,
+        "stageWidth": 1080,
+        "turnCount": 240,
+        "virtualRowCount": 17,
+        "durationMs": 1544.8000000715256,
+        "steps": 36
+      },
+      "summary": {
+        "clientHeight": 926,
+        "commitCount": 137,
+        "layoutShiftCount": 36,
+        "longTaskCount": 11,
+        "renderedRowCount": 17,
+        "scrollHeight": 46670,
+        "scrollTop": 45744,
+        "stageWidth": 1180,
+        "turnCount": 240,
+        "virtualRowCount": 17
+      },
+      "metricsDelta": {
+        "LayoutCount": 137,
+        "RecalcStyleCount": 155,
+        "LayoutDuration": 385.492,
+        "RecalcStyleDuration": 122.293,
+        "ScriptDuration": 932.437,
+        "TaskDuration": 1546.575,
+        "JSHeapUsedSize": 4982892,
+        "Nodes": 220,
+        "JSEventListeners": 75
+      },
+      "commitSummary": {
+        "count": 137,
+        "maxActualDurationMs": 13.1,
+        "p50ActualDurationMs": 2.5,
+        "p95ActualDurationMs": 11.9,
+        "totalActualDurationMs": 522.5
+      },
+      "traceSummary": {
+        "byName": {
+          "RunTask": {
+            "count": 10037,
+            "totalMs": 1722.306,
+            "maxMs": 89.283
+          },
+          "EvaluateScript": {
+            "count": 2,
+            "totalMs": 0.397,
+            "maxMs": 0.29
+          },
+          "FunctionCall": {
+            "count": 408,
+            "totalMs": 1440.112,
+            "maxMs": 88.477
+          },
+          "UpdateLayoutTree": {
+            "count": 155,
+            "totalMs": 122.369,
+            "maxMs": 4.371
+          },
+          "Layout": {
+            "count": 137,
+            "totalMs": 384.348,
+            "maxMs": 15.215
+          },
+          "FireAnimationFrame": {
+            "count": 76,
+            "totalMs": 8.524,
+            "maxMs": 0.396
+          },
+          "PrePaint": {
+            "count": 75,
+            "totalMs": 13.593,
+            "maxMs": 0.521
+          },
+          "Paint": {
+            "count": 72,
+            "totalMs": 22.572,
+            "maxMs": 0.45
+          },
+          "EventDispatch": {
+            "count": 34,
+            "totalMs": 1.394,
+            "maxMs": 0.102
+          },
+          "HitTest": {
+            "count": 2,
+            "totalMs": 0.021,
+            "maxMs": 0.018
+          }
+        },
+        "eventCount": 90537,
+        "topLongEvents": [
+          {
+            "name": "RunTask",
+            "durationMs": 89.283,
+            "cat": "disabled-by-default-devtools.timeline"
+          },
+          {
+            "name": "MessagePort::Accept",
+            "durationMs": 88.706,
+            "cat": "blink"
+          },
+          {
+            "name": "RunTask",
+            "durationMs": 88.65,
+            "cat": "disabled-by-default-devtools.timeline"
+          },
+          {
+            "name": "FunctionCall",
+            "durationMs": 88.477,
+            "cat": "devtools.timeline"
+          },
+          {
+            "name": "MessagePort::Accept",
+            "durationMs": 88.156,
+            "cat": "blink"
+          },
+          {
+            "name": "FunctionCall",
+            "durationMs": 87.967,
+            "cat": "devtools.timeline"
+          },
+          {
+            "name": "RunTask",
+            "durationMs": 83.285,
+            "cat": "disabled-by-default-devtools.timeline"
+          },
+          {
+            "name": "MessagePort::Accept",
+            "durationMs": 82.727,
+            "cat": "blink"
+          },
+          {
+            "name": "FunctionCall",
+            "durationMs": 82.514,
+            "cat": "devtools.timeline"
+          },
+          {
+            "name": "RunTask",
+            "durationMs": 71.538,
+            "cat": "disabled-by-default-devtools.timeline"
+          },
+          {
+            "name": "MessagePort::Accept",
+            "durationMs": 70.719,
+            "cat": "blink"
+          },
+          {
+            "name": "FunctionCall",
+            "durationMs": 70.496,
+            "cat": "devtools.timeline"
+          }
+        ]
+      }
+    }
+  ],
+  "targetUrl": "http://127.0.0.1:5273/perf-thread.html",
+  "capturedAt": "2026-06-22T02:16:50.092Z"
+}

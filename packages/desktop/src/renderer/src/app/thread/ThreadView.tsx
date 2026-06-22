@@ -310,6 +310,10 @@ interface ThreadVirtualViewport {
   scrollTop: number
 }
 
+interface ThreadVirtualViewportSyncOptions {
+  forceCommit?: boolean
+}
+
 type ImagePreviewFitMode = "fit-width" | "fit-contain"
 
 interface ImagePreviewPayload {
@@ -554,6 +558,15 @@ function findThreadVirtualRange(layout: ThreadVirtualLayout, viewport: ThreadVir
     items: layout.items.slice(startIndex, endIndex),
     startIndex,
   }
+}
+
+function readResizeEntryBlockSize(entry: ResizeObserverEntry) {
+  const borderBoxSize = Array.isArray(entry.borderBoxSize)
+    ? entry.borderBoxSize[0]
+    : entry.borderBoxSize
+  const height = borderBoxSize?.blockSize ?? entry.contentRect?.height
+
+  return Number.isFinite(height) ? height : null
 }
 
 function estimateAssistantTraceItemHeight(item: AssistantTraceItem) {
@@ -5491,6 +5504,8 @@ function VisibleThreadView({
   const contentResizeObserverRef = useRef<ResizeObserver | null>(null)
   const contentMutationObserverRef = useRef<MutationObserver | null>(null)
   const observedThreadContentRef = useRef<WeakSet<Element>>(new WeakSet())
+  const pendingObservedContentScrollSyncFrameRef = useRef<number | null>(null)
+  const pendingObservedContentScrollSyncKeyRef = useRef<string | null>(null)
   const pendingSidebarResizeScrollSyncRef = useRef(false)
   const smoothFollowScrollRef = useRef<ThreadSmoothFollowScroll | null>(null)
   const lastUserScrollIntentAtRef = useRef(0)
@@ -5503,6 +5518,10 @@ function VisibleThreadView({
   const currentScrollStateKeyRef = useRef<string | null>(null)
   const renderedTurnIDsByScrollKeyRef = useRef<Record<string, Set<string>>>({})
   const threadVirtualHeightCachesRef = useRef<Record<string, Map<string, number>>>({})
+  const pendingThreadVirtualMeasurementsRef = useRef<Record<string, Map<string, number>>>({})
+  const pendingThreadVirtualMeasurementFrameRef = useRef<number | null>(null)
+  const pendingThreadVirtualMeasurementScrollSyncKeyRef = useRef<string | null>(null)
+  const pendingThreadVirtualViewportFrameRef = useRef<number | null>(null)
   const previousProcessTraceCollapseEligibilityByTurnIDRef = useRef<Record<string, boolean>>({})
   const [threadVirtualMeasurementVersion, setThreadVirtualMeasurementVersion] = useState(0)
   const [threadViewUiState, setThreadViewUiState] = useState<ThreadViewUiState>(() => ({
@@ -5664,14 +5683,30 @@ function VisibleThreadView({
     return nextCache
   }
 
-  function syncThreadVirtualViewport(threadColumn: HTMLDivElement) {
-    if (!shouldVirtualizeThreadRows) return
-
-    const nextViewport: ThreadVirtualViewport = {
-      height: threadColumn.clientHeight,
-      paddingTop: readThreadColumnPaddingTop(threadColumn),
-      scrollTop: threadColumn.scrollTop,
+  function cancelThreadAnimationFrame(frameID: number | null) {
+    if (
+      frameID !== null &&
+      typeof window !== "undefined" &&
+      typeof window.cancelAnimationFrame === "function"
+    ) {
+      window.cancelAnimationFrame(frameID)
     }
+  }
+
+  function threadVirtualRangeWouldChange(nextViewport: ThreadVirtualViewport) {
+    if (!shouldVirtualizeThreadRows) return false
+
+    const nextRange = findThreadVirtualRange(threadVirtualLayout, nextViewport)
+    return (
+      nextRange.startIndex !== threadVirtualRange.startIndex ||
+      nextRange.endIndex !== threadVirtualRange.endIndex
+    )
+  }
+
+  function commitThreadVirtualViewport(
+    nextViewport: ThreadVirtualViewport,
+    options: ThreadVirtualViewportSyncOptions = {},
+  ) {
     const previousViewport = threadVirtualViewportRef.current
     if (
       Math.abs(previousViewport.height - nextViewport.height) < THREAD_VIRTUAL_ROW_MEASURE_EPSILON_PX &&
@@ -5682,7 +5717,162 @@ function VisibleThreadView({
     }
 
     threadVirtualViewportRef.current = nextViewport
+    if (!options.forceCommit && !threadVirtualRangeWouldChange(nextViewport)) return
+
     setThreadVirtualViewport(nextViewport)
+  }
+
+  function readThreadVirtualViewport(threadColumn: HTMLDivElement): ThreadVirtualViewport {
+    return {
+      height: threadColumn.clientHeight,
+      paddingTop: readThreadColumnPaddingTop(threadColumn),
+      scrollTop: threadColumn.scrollTop,
+    }
+  }
+
+  function syncThreadVirtualViewport(
+    threadColumn: HTMLDivElement,
+    options: ThreadVirtualViewportSyncOptions = {},
+  ) {
+    if (!shouldVirtualizeThreadRows) return
+
+    commitThreadVirtualViewport(readThreadVirtualViewport(threadColumn), options)
+  }
+
+  function scheduleThreadVirtualViewportSync(threadColumn: HTMLDivElement) {
+    if (!shouldVirtualizeThreadRows) return
+    if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+      syncThreadVirtualViewport(threadColumn)
+      return
+    }
+    if (pendingThreadVirtualViewportFrameRef.current !== null) return
+
+    pendingThreadVirtualViewportFrameRef.current = window.requestAnimationFrame(() => {
+      pendingThreadVirtualViewportFrameRef.current = null
+      const currentThreadColumn = threadColumnRef.current
+      if (!currentThreadColumn) return
+      syncThreadVirtualViewport(currentThreadColumn)
+    })
+  }
+
+  function scheduleObservedContentScrollSync(key = effectiveScrollStateKey) {
+    if (isSidebarResizeInProgress()) {
+      pendingSidebarResizeScrollSyncRef.current = true
+      return
+    }
+
+    pendingObservedContentScrollSyncKeyRef.current = key
+    if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+      pendingObservedContentScrollSyncKeyRef.current = null
+      syncThreadScrollAfterContentChange(key, {
+        smoothFollow: latestAssistantTurnStateRef.current?.isStreaming === true,
+      })
+      return
+    }
+    if (pendingObservedContentScrollSyncFrameRef.current !== null) return
+
+    pendingObservedContentScrollSyncFrameRef.current = window.requestAnimationFrame(() => {
+      pendingObservedContentScrollSyncFrameRef.current = null
+      const pendingKey = pendingObservedContentScrollSyncKeyRef.current
+      pendingObservedContentScrollSyncKeyRef.current = null
+      if (!pendingKey) return
+      if (smoothFollowScrollRef.current?.key === pendingKey) return
+      syncThreadScrollAfterContentChange(pendingKey, {
+        smoothFollow: latestAssistantTurnStateRef.current?.isStreaming === true,
+      })
+    })
+  }
+
+  function commitThreadVirtualRowHeight(rowID: string, height: number, key = effectiveScrollStateKey) {
+    if (!Number.isFinite(height) || height < THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX) return false
+
+    const normalizedHeight = Math.max(THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX, height)
+    const heightCache = getThreadVirtualHeightCache(key)
+    const previousHeight = heightCache.get(rowID)
+    if (
+      previousHeight !== undefined &&
+      Math.abs(previousHeight - normalizedHeight) < THREAD_VIRTUAL_ROW_MEASURE_EPSILON_PX
+    ) {
+      return false
+    }
+
+    heightCache.set(rowID, normalizedHeight)
+    return true
+  }
+
+  function flushQueuedThreadVirtualMeasurements() {
+    let didMeasure = false
+
+    for (const [key, measurements] of Object.entries(pendingThreadVirtualMeasurementsRef.current)) {
+      for (const [rowID, height] of measurements) {
+        didMeasure = commitThreadVirtualRowHeight(rowID, height, key) || didMeasure
+      }
+    }
+
+    pendingThreadVirtualMeasurementsRef.current = {}
+    pendingThreadVirtualMeasurementFrameRef.current = null
+
+    if (didMeasure) {
+      setThreadVirtualMeasurementVersion((version) => version + 1)
+    }
+
+    const scrollSyncKey = pendingThreadVirtualMeasurementScrollSyncKeyRef.current
+    pendingThreadVirtualMeasurementScrollSyncKeyRef.current = null
+    if (didMeasure && scrollSyncKey) {
+      scheduleObservedContentScrollSync(scrollSyncKey)
+    }
+
+    return didMeasure
+  }
+
+  function scheduleQueuedThreadVirtualMeasurementsFlush() {
+    if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+      flushQueuedThreadVirtualMeasurements()
+      return
+    }
+    if (pendingThreadVirtualMeasurementFrameRef.current !== null) return
+
+    pendingThreadVirtualMeasurementFrameRef.current = window.requestAnimationFrame(() => {
+      flushQueuedThreadVirtualMeasurements()
+    })
+  }
+
+  function queueThreadVirtualRowHeight(
+    rowID: string,
+    height: number,
+    key = effectiveScrollStateKey,
+    options: { syncScroll?: boolean } = {},
+  ) {
+    if (!Number.isFinite(height) || height < THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX) return false
+
+    const normalizedHeight = Math.max(THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX, height)
+    const existingMeasurements = pendingThreadVirtualMeasurementsRef.current[key]
+    const pendingHeight = existingMeasurements?.get(rowID)
+    if (
+      pendingHeight !== undefined &&
+      Math.abs(pendingHeight - normalizedHeight) < THREAD_VIRTUAL_ROW_MEASURE_EPSILON_PX
+    ) {
+      return false
+    }
+
+    const cachedHeight = getThreadVirtualHeightCache(key).get(rowID)
+    if (
+      pendingHeight === undefined &&
+      cachedHeight !== undefined &&
+      Math.abs(cachedHeight - normalizedHeight) < THREAD_VIRTUAL_ROW_MEASURE_EPSILON_PX
+    ) {
+      return false
+    }
+
+    const measurements = existingMeasurements ?? new Map<string, number>()
+    if (!existingMeasurements) pendingThreadVirtualMeasurementsRef.current[key] = measurements
+    measurements.set(rowID, normalizedHeight)
+
+    if (options.syncScroll) {
+      pendingThreadVirtualMeasurementScrollSyncKeyRef.current = key
+    }
+    scheduleQueuedThreadVirtualMeasurementsFlush()
+    return true
   }
 
   function getThreadVirtualScrollMaxTop(threadColumn: HTMLDivElement) {
@@ -5693,17 +5883,36 @@ function VisibleThreadView({
     return Math.max(getThreadScrollMaxTop(threadColumn), virtualScrollHeight - threadColumn.clientHeight)
   }
 
-  function getLatestThreadContentScrollTarget(threadColumn: HTMLDivElement): ThreadFollowScrollTarget {
-    const streamingResponseTarget = getStreamingResponseScrollTarget(threadColumn)
-    if (streamingResponseTarget) return streamingResponseTarget
+  function shouldUseStreamingResponseScrollTargetForVirtualRows() {
+    for (let index = displayRows.length - 1; index >= 0; index -= 1) {
+      const row = displayRows[index]
+      if (row?.kind !== "assistant") continue
 
+      const streamingResponseIndex = row.renderedItems.findIndex(
+        (item) => item.kind === "text" && item.isStreaming && traceSectionKeyForItem(item) === "response",
+      )
+      return streamingResponseIndex >= 0 && streamingResponseIndex < row.renderedItems.length - 1
+    }
+
+    return false
+  }
+
+  function getLatestThreadContentScrollTarget(threadColumn: HTMLDivElement): ThreadFollowScrollTarget {
     if (shouldVirtualizeThreadRows) {
+      if (shouldUseStreamingResponseScrollTargetForVirtualRows()) {
+        const streamingResponseTarget = getStreamingResponseScrollTarget(threadColumn)
+        if (streamingResponseTarget) return streamingResponseTarget
+      }
+
       const scrollTop = getThreadVirtualScrollMaxTop(threadColumn)
       return {
         scrollTop,
         visualScrollTop: scrollTop,
       }
     }
+
+    const streamingResponseTarget = getStreamingResponseScrollTarget(threadColumn)
+    if (streamingResponseTarget) return streamingResponseTarget
 
     return {
       scrollTop: threadColumn.scrollHeight,
@@ -5722,50 +5931,37 @@ function VisibleThreadView({
     syncThreadVirtualViewport(threadColumn)
   }
 
-  function measureThreadVirtualRowElement(element: HTMLElement) {
-    const rowID = element.dataset.threadVirtualRowId
-    if (!rowID) return false
-
-    const height = Math.max(element.offsetHeight, element.getBoundingClientRect().height)
-    if (!Number.isFinite(height) || height < THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX) return false
-
-    const heightCache = getThreadVirtualHeightCache()
-    const previousHeight = heightCache.get(rowID)
-    if (previousHeight !== undefined && Math.abs(previousHeight - height) < THREAD_VIRTUAL_ROW_MEASURE_EPSILON_PX) {
-      return false
-    }
-
-    heightCache.set(rowID, height)
-    return true
-  }
-
-  function measureRenderedThreadVirtualRows() {
+  function measureRenderedThreadVirtualRows(options: { syncScroll?: boolean } = {}) {
     const threadColumn = threadColumnRef.current
     if (!threadColumn || !shouldVirtualizeThreadRows) return false
 
     let didMeasure = false
     for (const element of Array.from(threadColumn.querySelectorAll<HTMLElement>("[data-thread-virtual-row-id]"))) {
-      didMeasure = measureThreadVirtualRowElement(element) || didMeasure
-    }
+      const rowID = element.dataset.threadVirtualRowId
+      if (!rowID) continue
 
-    if (didMeasure) {
-      setThreadVirtualMeasurementVersion((version) => version + 1)
+      const height = Math.max(element.offsetHeight, element.getBoundingClientRect().height)
+      didMeasure = queueThreadVirtualRowHeight(rowID, height, effectiveScrollStateKey, options) || didMeasure
     }
 
     return didMeasure
   }
 
-  function measureThreadVirtualRowsFromResizeEntries(entries: ResizeObserverEntry[]) {
+  function measureThreadVirtualRowsFromResizeEntries(
+    entries: ResizeObserverEntry[],
+    options: { syncScroll?: boolean } = {},
+  ) {
     if (!shouldVirtualizeThreadRows) return false
 
     let didMeasure = false
     for (const entry of entries) {
       if (!(entry.target instanceof HTMLElement)) continue
-      didMeasure = measureThreadVirtualRowElement(entry.target) || didMeasure
-    }
+      const rowID = entry.target.dataset.threadVirtualRowId
+      if (!rowID) continue
 
-    if (didMeasure) {
-      setThreadVirtualMeasurementVersion((version) => version + 1)
+      const height = readResizeEntryBlockSize(entry)
+      if (height === null) continue
+      didMeasure = queueThreadVirtualRowHeight(rowID, height, effectiveScrollStateKey, options) || didMeasure
     }
 
     return didMeasure
@@ -6041,19 +6237,22 @@ function VisibleThreadView({
   }
 
   function syncThreadScrollAfterObservedContentChange(key = effectiveScrollStateKey) {
-    if (isSidebarResizeInProgress()) {
-      pendingSidebarResizeScrollSyncRef.current = true
-      return
-    }
-
-    syncThreadScrollAfterContentChange(key, {
-      smoothFollow: latestAssistantTurnStateRef.current?.isStreaming === true,
-    })
+    scheduleObservedContentScrollSync(key)
   }
 
   const flushDeferredSidebarResizeScrollSync = useEffectEvent((key: string) => {
+    cancelThreadAnimationFrame(pendingObservedContentScrollSyncFrameRef.current)
+    pendingObservedContentScrollSyncFrameRef.current = null
+    pendingObservedContentScrollSyncKeyRef.current = null
+    cancelThreadAnimationFrame(pendingThreadVirtualMeasurementFrameRef.current)
+    pendingThreadVirtualMeasurementFrameRef.current = null
+    flushQueuedThreadVirtualMeasurements()
+
     if (!pendingSidebarResizeScrollSyncRef.current) return
     pendingSidebarResizeScrollSyncRef.current = false
+    cancelThreadAnimationFrame(pendingObservedContentScrollSyncFrameRef.current)
+    pendingObservedContentScrollSyncFrameRef.current = null
+    pendingObservedContentScrollSyncKeyRef.current = null
     syncThreadScrollAfterContentChange(key)
   })
 
@@ -6076,6 +6275,12 @@ function VisibleThreadView({
       if (copiedUserTimeoutRef.current !== null) {
         window.clearTimeout(copiedUserTimeoutRef.current)
       }
+      cancelThreadAnimationFrame(pendingObservedContentScrollSyncFrameRef.current)
+      pendingObservedContentScrollSyncFrameRef.current = null
+      cancelThreadAnimationFrame(pendingThreadVirtualMeasurementFrameRef.current)
+      pendingThreadVirtualMeasurementFrameRef.current = null
+      cancelThreadAnimationFrame(pendingThreadVirtualViewportFrameRef.current)
+      pendingThreadVirtualViewportFrameRef.current = null
       contentResizeObserverRef.current?.disconnect()
       contentResizeObserverRef.current = null
       contentMutationObserverRef.current?.disconnect()
@@ -6225,7 +6430,7 @@ function VisibleThreadView({
     contentMutationObserverRef.current?.disconnect()
 
     const resizeObserver = new ResizeObserver((entries) => {
-      measureThreadVirtualRowsFromResizeEntries(entries)
+      measureThreadVirtualRowsFromResizeEntries(entries, { syncScroll: true })
       syncThreadScrollAfterObservedContentChange(effectiveScrollStateKey)
     })
     observedThreadContentRef.current = new WeakSet()
@@ -6275,7 +6480,7 @@ function VisibleThreadView({
     const threadColumn = threadColumnRef.current
     if (!threadColumn || !shouldVirtualizeThreadRows) return
 
-    syncThreadVirtualViewport(threadColumn)
+    syncThreadVirtualViewport(threadColumn, { forceCommit: true })
   }, [
     effectiveScrollStateKey,
     shouldVirtualizeThreadRows,
@@ -6287,7 +6492,7 @@ function VisibleThreadView({
   useLayoutEffect(() => {
     if (!shouldVirtualizeThreadRows) return
 
-    const didMeasure = measureRenderedThreadVirtualRows()
+    const didMeasure = measureRenderedThreadVirtualRows({ syncScroll: true })
     if (didMeasure) {
       syncThreadScrollAfterObservedContentChange(effectiveScrollStateKey)
     }
@@ -6420,7 +6625,7 @@ function VisibleThreadView({
   function handleThreadScroll() {
     const threadColumn = threadColumnRef.current
     if (!threadColumn) return
-    syncThreadVirtualViewport(threadColumn)
+    scheduleThreadVirtualViewportSync(threadColumn)
 
     if (!hasRecentThreadScrollIntent()) {
       if (threadColumn.scrollTop <= THREAD_TOP_RESET_THRESHOLD_PX) {

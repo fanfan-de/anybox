@@ -147,6 +147,37 @@ function createElementRect(input: { top?: number; left?: number; width?: number;
   } as DOMRect
 }
 
+function installManualAnimationFrame() {
+  const originalRequestAnimationFrame = window.requestAnimationFrame
+  const originalCancelAnimationFrame = window.cancelAnimationFrame
+  let nextFrameID = 0
+  const pendingFrames = new Map<number, FrameRequestCallback>()
+
+  window.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+    nextFrameID += 1
+    pendingFrames.set(nextFrameID, callback)
+    return nextFrameID
+  })
+  window.cancelAnimationFrame = vi.fn((frameID: number) => {
+    pendingFrames.delete(frameID)
+  })
+
+  return {
+    flush(timestamp = 10_000) {
+      const callbacks = Array.from(pendingFrames.values())
+      pendingFrames.clear()
+      for (const callback of callbacks) {
+        callback(timestamp)
+      }
+    },
+    restore() {
+      pendingFrames.clear()
+      window.requestAnimationFrame = originalRequestAnimationFrame
+      window.cancelAnimationFrame = originalCancelAnimationFrame
+    },
+  }
+}
+
 const traceItemKinds: AssistantTraceItemKind[] = [
   "system",
   "reasoning",
@@ -4136,6 +4167,97 @@ describe("ThreadView virtual list", () => {
     await waitFor(() => expect(screen.getByText("Prompt 0")).toBeInTheDocument())
     expect(screen.queryByText("Prompt 119")).not.toBeInTheDocument()
   })
+
+  it("updates virtual row measurements from ResizeObserver entries without reading row layout", async () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+    const animationFrame = installManualAnimationFrame()
+    let resizeCallback: ResizeObserverCallback | null = null
+    let resizeObserverInstance: ResizeObserver | null = null
+
+    class ManualResizeObserver implements ResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallback = callback
+        resizeObserverInstance = this
+      }
+
+      observe() {}
+
+      unobserve() {}
+
+      disconnect() {}
+    }
+
+    globalThis.ResizeObserver = ManualResizeObserver
+
+    try {
+      const activeTurns = Array.from({ length: 120 }, (_, index) => userTurn(`user-${index}`, `Prompt ${index}`))
+      const { container, threadColumn } = renderThread(activeTurns, {
+        scrollStateKey: "virtual-list-resize-entry-session",
+      })
+      setScrollMetrics(threadColumn, {
+        clientHeight: 400,
+        scrollHeight: 12000,
+        scrollTop: threadColumn.scrollTop,
+      })
+
+      act(() => animationFrame.flush())
+      await waitFor(() => expect(screen.getByText("Prompt 119")).toBeInTheDocument())
+
+      const virtualRow = container.querySelector<HTMLElement>("[data-thread-virtual-row-id]")
+      expect(virtualRow).not.toBeNull()
+      const rowLayoutSpy = vi.spyOn(virtualRow!, "getBoundingClientRect")
+
+      act(() => {
+        resizeCallback?.([
+          {
+            borderBoxSize: [{ blockSize: 188, inlineSize: 640 }] as ResizeObserverSize[],
+            contentBoxSize: [],
+            contentRect: createElementRect({ height: 144 }),
+            devicePixelContentBoxSize: [],
+            target: virtualRow!,
+          },
+        ], resizeObserverInstance!)
+        animationFrame.flush()
+      })
+
+      expect(rowLayoutSpy).not.toHaveBeenCalled()
+      rowLayoutSpy.mockRestore()
+    } finally {
+      animationFrame.restore()
+      globalThis.ResizeObserver = originalResizeObserver
+    }
+  })
+
+  it("coalesces virtual viewport scroll updates until animation frame", async () => {
+    const activeTurns = Array.from({ length: 120 }, (_, index) => userTurn(`user-${index}`, `Prompt ${index}`))
+    const { threadColumn } = renderThread(activeTurns, {
+      scrollStateKey: "virtual-list-scroll-frame-session",
+    })
+    setScrollMetrics(threadColumn, {
+      clientHeight: 400,
+      scrollHeight: 12000,
+      scrollTop: threadColumn.scrollTop,
+    })
+
+    await waitFor(() => expect(screen.getByText("Prompt 119")).toBeInTheDocument())
+
+    const animationFrame = installManualAnimationFrame()
+    try {
+      threadColumn.scrollTop = 0
+      fireEvent.wheel(threadColumn, { deltaY: -120 })
+      fireEvent.scroll(threadColumn)
+
+      expect(screen.getByText("Prompt 119")).toBeInTheDocument()
+      expect(screen.queryByText("Prompt 0")).not.toBeInTheDocument()
+
+      act(() => animationFrame.flush())
+
+      await waitFor(() => expect(screen.getByText("Prompt 0")).toBeInTheDocument())
+      expect(screen.queryByText("Prompt 119")).not.toBeInTheDocument()
+    } finally {
+      animationFrame.restore()
+    }
+  })
 })
 
 describe("ThreadView scroll restoration", () => {
@@ -4443,6 +4565,78 @@ describe("ThreadView scroll restoration", () => {
       expect(threadColumn.scrollTop).toBe(1024)
     } finally {
       layoutSpy.mockRestore()
+    }
+  })
+
+  it("keeps a virtualized streaming response at the bottom when trailing trace rows render below it", async () => {
+    const animationFrame = installManualAnimationFrame()
+    const layoutSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("thread-column")) return createElementRect({ top: 0, height: 400 })
+      if (this.getAttribute("data-trace-item-id") === "response-virtual") return createElementRect({ top: 64, height: 960 })
+
+      return createElementRect()
+    })
+    const historyTurns = Array.from({ length: 120 }, (_, index) => userTurn(`user-${index}`, `Prompt ${index}`))
+    const buildStreamingTurn = (text: string) => assistantTraceTurn("assistant-virtual", [
+      {
+        id: "response-virtual",
+        kind: "text",
+        timestamp: 1,
+        label: "Assistant",
+        text,
+        status: "running",
+        isStreaming: true,
+      },
+      {
+        id: "backend-fallback-virtual",
+        kind: "system",
+        timestamp: 2,
+        label: "System",
+        title: "No visible output",
+        detail: "The backend stored this assistant turn without replayable trace items.",
+        status: "completed",
+        section: "response",
+        visibilityKey: "response",
+      },
+    ], true)
+
+    try {
+      const { rerender, props, threadColumn } = renderThread([
+        ...historyTurns,
+        buildStreamingTurn("First chunk"),
+      ], {
+        scrollStateKey: "session:virtual-streaming-response-before-trace",
+      })
+      setScrollMetrics(threadColumn, {
+        clientHeight: 400,
+        scrollHeight: 12000,
+        scrollTop: 11600,
+      })
+
+      fireEvent.wheel(threadColumn, { deltaY: 120 })
+      fireEvent.scroll(threadColumn)
+      act(() => animationFrame.flush())
+      await waitFor(() => expect(screen.getByText("First chunk")).toBeInTheDocument())
+
+      setScrollMetrics(threadColumn, {
+        clientHeight: 400,
+        scrollHeight: 13000,
+        scrollTop: 11600,
+      })
+      rerender(
+        <ThreadView
+          {...props}
+          activeTurns={[
+            ...historyTurns,
+            buildStreamingTurn("First chunk\nSecond chunk"),
+          ]}
+        />,
+      )
+
+      expect(threadColumn.scrollTop).toBe(12224)
+    } finally {
+      layoutSpy.mockRestore()
+      animationFrame.restore()
     }
   })
 
