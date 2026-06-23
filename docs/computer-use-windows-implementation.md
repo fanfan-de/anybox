@@ -219,11 +219,13 @@ Node server 有一层硬阻止列表。典型被阻止进程包括：
 - 终端和 shell：`cmd.exe`、`powershell.exe`、`pwsh.exe`、`windowsterminal.exe`、`wt.exe`、`bash.exe`、`wsl.exe`
 - 密码管理器：`1password.exe`、`bitwarden.exe`、`dashlane.exe`、`keepass.exe`、`keepassxc.exe`、`lastpass.exe`
 - 系统安全/凭据相关：`consent.exe`、`credentialui.exe`、`lockapp.exe`、`securityhealthsystray.exe`
+- Anybox 自保护：`anybox.exe`、`anybox-desktop-agent.exe`，以及精确标题 `Anybox` / `Anybox Agent Desktop`
 
 标题阻止规则包括：
 
 - `CAPTCHA`
 - `Credential`
+- `Anybox` / `Anybox Agent Desktop`
 - `User Account Control`
 - `Windows Security`
 - `security warning`

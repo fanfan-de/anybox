@@ -1,10 +1,12 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
+  type UIEvent as ReactUIEvent,
 } from "react"
 import {
   ChevronDownIcon,
@@ -45,6 +47,12 @@ const COLON_LINE_RANGE_PATTERN = /:(\d+)(?:-(\d+))?$/
 const URI_SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:/i
 const URI_WITH_AUTHORITY_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i
 const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/
+const SOURCE_READER_LINE_ESTIMATED_HEIGHT = 24
+const SOURCE_READER_COMMENT_ESTIMATED_HEIGHT = 78
+const SOURCE_READER_COMMENT_COMPOSER_ESTIMATED_HEIGHT = 154
+const SOURCE_READER_OVERSCAN_LINE_COUNT = 16
+const SOURCE_READER_FALLBACK_VIEWPORT_HEIGHT = 720
+const SOURCE_READER_OVERSCAN_PX = SOURCE_READER_LINE_ESTIMATED_HEIGHT * SOURCE_READER_OVERSCAN_LINE_COUNT
 
 interface WorkspaceFilesPanelProps {
   canInsertCommentsIntoDraft: boolean
@@ -238,6 +246,37 @@ function isLineWithinRange(range: WorkspaceFileLineRange | null, lineNumber: num
   return lineNumber >= range.startLineNumber && lineNumber <= range.endLineNumber
 }
 
+function getSourceLineEstimatedHeight(
+  lineNumber: number,
+  commentsByEndLine: Map<number, WorkspaceFileReviewState["comments"]>,
+  pendingRange: WorkspaceFileLineRange | null,
+) {
+  const lineComments = commentsByEndLine.get(lineNumber)?.length ?? 0
+  const composerHeight = pendingRange?.endLineNumber === lineNumber ? SOURCE_READER_COMMENT_COMPOSER_ESTIMATED_HEIGHT : 0
+  return SOURCE_READER_LINE_ESTIMATED_HEIGHT + lineComments * SOURCE_READER_COMMENT_ESTIMATED_HEIGHT + composerHeight
+}
+
+function getSourceLineIndexAtOffset(offsets: readonly number[], heights: readonly number[], offset: number) {
+  if (offsets.length === 0) return 0
+
+  let low = 0
+  let high = offsets.length - 1
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2)
+    const lineTop = offsets[middle] ?? 0
+    const lineBottom = lineTop + (heights[middle] ?? SOURCE_READER_LINE_ESTIMATED_HEIGHT)
+    if (offset < lineTop) {
+      high = middle - 1
+    } else if (offset >= lineBottom) {
+      low = middle + 1
+    } else {
+      return middle
+    }
+  }
+
+  return Math.min(offsets.length - 1, Math.max(0, low))
+}
+
 function entryMatchesFilter(entry: WorkspaceDirectoryEntry, normalizedFilter: string) {
   if (!normalizedFilter) return true
   return `${entry.name} ${entry.path}`.toLowerCase().includes(normalizedFilter)
@@ -428,9 +467,12 @@ export function WorkspaceFilesPanel({
   const [imageScale, setImageScale] = useState(1)
   const [isTreeCollapsed, setIsTreeCollapsed] = useState(false)
   const dragSelectionRef = useRef<WorkspaceFileLineRange | null>(null)
-  const lineRefs = useRef<Map<number, HTMLDivElement>>(new Map())
-  const fileLines = state.selectedFileContent?.split(/\r?\n/) ?? []
-  const commentsByEndLine = new Map<number, typeof state.comments>()
+  const sourceScrollRef = useRef<HTMLDivElement | null>(null)
+  const [sourceViewport, setSourceViewport] = useState({
+    scrollTop: 0,
+    viewportHeight: SOURCE_READER_FALLBACK_VIEWPORT_HEIGHT,
+  })
+  const fileLines = useMemo(() => state.selectedFileContent?.split(/\r?\n/) ?? [], [state.selectedFileContent])
   const pendingRange = state.pendingComment
     ? normalizeWorkspaceFileLineRange(state.pendingComment.startLineNumber, state.pendingComment.endLineNumber)
     : null
@@ -480,10 +522,79 @@ export function WorkspaceFilesPanel({
     "--code-highlight-fg": sourceHighlight.foregroundColor ?? undefined,
   } as CSSProperties
 
-  for (const comment of state.comments) {
-    const currentComments = commentsByEndLine.get(comment.endLineNumber) ?? []
-    commentsByEndLine.set(comment.endLineNumber, [...currentComments, comment])
-  }
+  const commentsByEndLine = useMemo(() => {
+    const nextCommentsByEndLine = new Map<number, typeof state.comments>()
+    for (const comment of state.comments) {
+      const currentComments = nextCommentsByEndLine.get(comment.endLineNumber) ?? []
+      nextCommentsByEndLine.set(comment.endLineNumber, [...currentComments, comment])
+    }
+    return nextCommentsByEndLine
+  }, [state.comments])
+
+  const sourceLineHeights = useMemo(
+    () => fileLines.map((_, index) => (
+      getSourceLineEstimatedHeight(index + 1, commentsByEndLine, pendingRange)
+    )),
+    [
+      commentsByEndLine,
+      fileLines,
+      pendingRange?.endLineNumber,
+      pendingRange?.startLineNumber,
+    ],
+  )
+
+  const sourceLineOffsets = useMemo(() => {
+    let offset = 0
+    return sourceLineHeights.map((height) => {
+      const lineOffset = offset
+      offset += height
+      return lineOffset
+    })
+  }, [sourceLineHeights])
+
+  const sourceTotalHeight = useMemo(
+    () => sourceLineOffsets.length === 0
+      ? 0
+      : (sourceLineOffsets[sourceLineOffsets.length - 1] ?? 0) +
+        (sourceLineHeights[sourceLineHeights.length - 1] ?? SOURCE_READER_LINE_ESTIMATED_HEIGHT),
+    [sourceLineHeights, sourceLineOffsets],
+  )
+
+  const sourceVisibleRange = useMemo(() => {
+    if (fileLines.length === 0) {
+      return {
+        endIndex: -1,
+        endOffset: 0,
+        startIndex: 0,
+        startOffset: 0,
+      }
+    }
+
+    const visibleTop = Math.max(0, sourceViewport.scrollTop - SOURCE_READER_OVERSCAN_PX)
+    const visibleBottom = Math.min(
+      sourceTotalHeight,
+      sourceViewport.scrollTop + sourceViewport.viewportHeight + SOURCE_READER_OVERSCAN_PX,
+    )
+    const startIndex = getSourceLineIndexAtOffset(sourceLineOffsets, sourceLineHeights, visibleTop)
+    const endIndex = Math.min(
+      fileLines.length - 1,
+      getSourceLineIndexAtOffset(sourceLineOffsets, sourceLineHeights, visibleBottom),
+    )
+
+    return {
+      endIndex,
+      endOffset: (sourceLineOffsets[endIndex] ?? 0) + (sourceLineHeights[endIndex] ?? SOURCE_READER_LINE_ESTIMATED_HEIGHT),
+      startIndex,
+      startOffset: sourceLineOffsets[startIndex] ?? 0,
+    }
+  }, [
+    fileLines.length,
+    sourceLineHeights,
+    sourceLineOffsets,
+    sourceTotalHeight,
+    sourceViewport.scrollTop,
+    sourceViewport.viewportHeight,
+  ])
 
   useEffect(() => {
     if (!scopeDirectory) return
@@ -537,15 +648,70 @@ export function WorkspaceFilesPanel({
   }, [state.selectedFilePath, state.selectedFilePreviewUrl])
 
   useEffect(() => {
-    if (!linkedRange || state.selectedFileContent === null) return
-    lineRefs.current.get(linkedRange.startLineNumber)?.scrollIntoView?.({
-      block: "center",
-      inline: "nearest",
-    })
+    const scrollContainer = sourceScrollRef.current
+    if (!shouldRenderSourceReader || !scrollContainer) return
+
+    const updateViewport = () => {
+      const nextViewportHeight = scrollContainer.clientHeight || SOURCE_READER_FALLBACK_VIEWPORT_HEIGHT
+      setSourceViewport((current) => {
+        const nextScrollTop = scrollContainer.scrollTop
+        if (current.scrollTop === nextScrollTop && current.viewportHeight === nextViewportHeight) return current
+        return {
+          scrollTop: nextScrollTop,
+          viewportHeight: nextViewportHeight,
+        }
+      })
+    }
+
+    updateViewport()
+    if (typeof ResizeObserver === "undefined") return
+
+    const resizeObserver = new ResizeObserver(updateViewport)
+    resizeObserver.observe(scrollContainer)
+    return () => {
+      resizeObserver.disconnect()
+    }
+  }, [shouldRenderSourceReader])
+
+  useEffect(() => {
+    const scrollContainer = sourceScrollRef.current
+    if (!shouldRenderSourceReader || !scrollContainer) return
+
+    scrollContainer.scrollTop = 0
+    setSourceViewport((current) => (
+      current.scrollTop === 0 ? current : { ...current, scrollTop: 0 }
+    ))
+  }, [shouldRenderSourceReader, state.selectedFilePath])
+
+  useEffect(() => {
+    if (!linkedRange || !shouldRenderSourceReader || state.selectedFileContent === null) return
+
+    const scrollContainer = sourceScrollRef.current
+    if (!scrollContainer) return
+
+    const lineIndex = Math.min(fileLines.length - 1, Math.max(0, linkedRange.startLineNumber - 1))
+    const lineTop = sourceLineOffsets[lineIndex] ?? 0
+    const lineHeight = sourceLineHeights[lineIndex] ?? SOURCE_READER_LINE_ESTIMATED_HEIGHT
+    const viewportHeight = scrollContainer.clientHeight || sourceViewport.viewportHeight || SOURCE_READER_FALLBACK_VIEWPORT_HEIGHT
+    const nextScrollTop = Math.max(0, lineTop - Math.max(0, Math.floor((viewportHeight - lineHeight) / 2)))
+
+    scrollContainer.scrollTop = nextScrollTop
+    setSourceViewport((current) => (
+      current.scrollTop === nextScrollTop && current.viewportHeight === viewportHeight
+        ? current
+        : {
+            scrollTop: nextScrollTop,
+            viewportHeight,
+          }
+    ))
   }, [
+    fileLines.length,
     linkedRange?.startLineNumber,
     linkedRange?.endLineNumber,
     shouldRenderSourceReader,
+    sourceLineHeights,
+    sourceLineOffsets,
+    sourceViewport.viewportHeight,
     state.selectedFileContent,
     state.selectedFilePath,
   ])
@@ -608,14 +774,17 @@ export function WorkspaceFilesPanel({
     onQueryChange(event.target.value)
   }
 
-  function registerLineRef(lineNumber: number) {
-    return (node: HTMLDivElement | null) => {
-      if (node) {
-        lineRefs.current.set(lineNumber, node)
-      } else {
-        lineRefs.current.delete(lineNumber)
+  function handleSourceScroll(event: ReactUIEvent<HTMLDivElement>) {
+    const scrollContainer = event.currentTarget
+    const nextViewportHeight = scrollContainer.clientHeight || SOURCE_READER_FALLBACK_VIEWPORT_HEIGHT
+    const nextScrollTop = scrollContainer.scrollTop
+    setSourceViewport((current) => {
+      if (current.scrollTop === nextScrollTop && current.viewportHeight === nextViewportHeight) return current
+      return {
+        scrollTop: nextScrollTop,
+        viewportHeight: nextViewportHeight,
       }
-    }
+    })
   }
 
   function resolveWorkspaceMarkdownRelativeTarget(value: string): MarkdownLocalFileLinkTarget | null {
@@ -794,15 +963,30 @@ export function WorkspaceFilesPanel({
   }
 
   function renderSourceReader() {
+    const topSpacerHeight = sourceVisibleRange.startOffset
+    const bottomSpacerHeight = Math.max(0, sourceTotalHeight - sourceVisibleRange.endOffset)
+    const visibleLines = sourceVisibleRange.endIndex >= sourceVisibleRange.startIndex
+      ? fileLines.slice(sourceVisibleRange.startIndex, sourceVisibleRange.endIndex + 1)
+      : []
+
     return (
       <div
+        ref={sourceScrollRef}
         className={dragSelection ? "workspace-files-code is-selecting-lines" : "workspace-files-code"}
         data-theme={sourceHighlight.themeName ?? codeTheme}
+        data-line-count={fileLines.length}
+        data-virtualized="true"
+        onScroll={handleSourceScroll}
         role="presentation"
         style={sourceHighlightStyle}
       >
-        {fileLines.map((line, index) => {
-          const lineNumber = index + 1
+        {topSpacerHeight > 0 ? (
+          <div className="workspace-files-code-spacer" aria-hidden="true" style={{ height: topSpacerHeight }} />
+        ) : null}
+
+        {visibleLines.map((line, visibleIndex) => {
+          const sourceIndex = sourceVisibleRange.startIndex + visibleIndex
+          const lineNumber = sourceIndex + 1
           const isCommenting = isLineWithinRange(pendingRange, lineNumber)
           const lineComments = commentsByEndLine.get(lineNumber) ?? []
           const lineLabel = pendingRange && isCommenting
@@ -819,7 +1003,6 @@ export function WorkspaceFilesPanel({
           return (
             <div key={`${state.selectedFilePath}:${lineNumber}`} className="workspace-files-code-block">
               <div
-                ref={registerLineRef(lineNumber)}
                 className={[
                   "workspace-files-line",
                   isCommenting ? "is-commenting" : "",
@@ -848,7 +1031,7 @@ export function WorkspaceFilesPanel({
                 </div>
                 <pre className="workspace-files-line-content code-highlight">
                   <code>
-                    <HighlightedCodeLine line={line} tokens={sourceHighlight.tokenLines?.[index] ?? null} />
+                    <HighlightedCodeLine line={line} tokens={sourceHighlight.tokenLines?.[sourceIndex] ?? null} />
                   </code>
                 </pre>
               </div>
@@ -904,6 +1087,10 @@ export function WorkspaceFilesPanel({
             </div>
           )
         })}
+
+        {bottomSpacerHeight > 0 ? (
+          <div className="workspace-files-code-spacer" aria-hidden="true" style={{ height: bottomSpacerHeight }} />
+        ) : null}
       </div>
     )
   }

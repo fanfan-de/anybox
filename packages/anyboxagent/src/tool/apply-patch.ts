@@ -41,33 +41,44 @@ type SplitContent = {
 }
 
 const APPLY_PATCH_FORMAT = [
-  "Patch must exactly follow this grammar-like format.",
-  "Each tool call accepts exactly one *** Begin Patch / *** End Patch wrapper. Put all file directives inside that single wrapper:",
-  "*** Begin Patch",
-  "*** Add File: path/to/file",
-  "+new file line",
-  "+",
-  "+another line",
-  "*** Update File: path/to/file",
-  "@@ optional context label",
-  " unchanged context",
-  "-old line",
-  "+new line",
-  "*** Delete File: path/to/file",
-  "*** Update File: old/path",
-  "*** Move to: new/path",
-  "@@",
-  "-old line",
-  "+new line",
-  "*** End Patch",
+  "`patch` is a string and must strictly follow this Begin Patch format.",
+  "Each tool call accepts exactly one *** Begin Patch / *** End Patch wrapper. Put multiple file changes inside the same wrapper.",
   "",
-  "Rules: first non-empty line must be *** Begin Patch; final non-empty line must be *** End Patch.",
-  "Do not output more than one *** Begin Patch block in a single tool call.",
-  "For Add File, every file-content line MUST start with +, including blank lines as +.",
-  "For Update File, every changed line MUST start with space, -, or +.",
-  "Use *** End of File after the final change line when the new file should not end with a newline.",
-  "Never use Git diff syntax: no diff --git, no ---, no +++, and no @@ -1 +1 @@.",
+  "Lark grammar:",
+  'start: begin_patch hunk+ end_patch',
+  'begin_patch: "*** Begin Patch" LF',
+  'end_patch: "*** End Patch" LF?',
+  "",
+  "hunk: add_hunk | delete_hunk | update_hunk",
+  'add_hunk: "*** Add File: " filename LF add_line+',
+  'delete_hunk: "*** Delete File: " filename LF',
+  'update_hunk: "*** Update File: " filename LF change_move? change?',
+  "",
+  "filename: /(.+)/",
+  'add_line: "+" /(.*)/ LF -> line',
+  "",
+  'change_move: "*** Move to: " filename LF',
+  "change: (change_context | change_line)+ eof_line?",
+  'change_context: ("@@" | "@@ " /(.+)/) LF',
+  'change_line: ("+" | "-" | " ") /(.*)/ LF',
+  'eof_line: "*** End of File" LF',
+  "",
+  "%import common.LF",
+  "",
+  "Additional rules:",
+  "- The first non-empty line must be *** Begin Patch; the last non-empty line must be *** End Patch.",
+  "- Do not output multiple *** Begin Patch blocks in one tool call.",
+  "- Every Add File content line must start with +, including blank lines as +.",
+  "- Every Update File change line must start with a space, -, or +.",
+  "- Update File hunks must include at least one context or removed line; they cannot contain only added lines.",
+  "- Delete File does not accept hunks or file content.",
+  "- Move files with *** Update File: old/path followed by *** Move to: new/path.",
+  "- If the new file should not end with a newline, place *** End of File after the final change line.",
+  "- Do not use Git diff syntax: no diff --git, ---, +++, or @@ -1 +1 @@.",
 ].join("\n")
+
+const APPLY_PATCH_TOOL_DESCRIPTION =
+  "Use a single patch block for related, reviewable file changes."
 
 function parsePatchPath(raw: string): string | null {
   let value = raw.trim()
@@ -474,7 +485,7 @@ export const ApplyPatchTool = Tool.define(
   async () => {
     return {
       title: "Apply Patch",
-      description: `Use for structured *** Begin Patch edits, especially coordinated multi-file edits, creating/deleting/moving files, or changes where patch context is clearer. Prefer replace_text for one small exact single-file replacement.\n\n${APPLY_PATCH_FORMAT}`,
+      description: APPLY_PATCH_TOOL_DESCRIPTION,
       parameters: z.object({
         patch: z.string().min(1).describe(APPLY_PATCH_FORMAT),
       }),

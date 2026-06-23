@@ -1590,6 +1590,8 @@ export interface ComposerPluginOption {
   value: string
   label: string
   description: string
+  icon?: string
+  iconUrl?: string
 }
 
 export interface ProviderDraftState {

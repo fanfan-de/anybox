@@ -9,6 +9,7 @@ import { safeError } from "./safe-console"
 const DEFAULT_MONITOR_DEV_URL = "http://127.0.0.1:4174/"
 const MONITOR_DEV_SERVER_TIMEOUT_MS = 500
 const MONITOR_AGENT_BASE_URL_QUERY_PARAM = "agentBaseURL"
+const MONITOR_HTML_MARKERS = ['name="anybox-app" content="monitor"', "Anybox backend monitor"]
 
 type MonitorWindowTarget =
   | {
@@ -27,7 +28,7 @@ function normalizeMonitorURL(value: string) {
   return trimmed.endsWith("/") ? trimmed : `${trimmed}/`
 }
 
-async function isMonitorDevServerAvailable(url: string) {
+export async function isMonitorDevServerAvailable(url: string) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), MONITOR_DEV_SERVER_TIMEOUT_MS)
 
@@ -36,7 +37,10 @@ async function isMonitorDevServerAvailable(url: string) {
       cache: "no-store",
       signal: controller.signal,
     })
-    return response.ok
+    if (!response.ok) return false
+
+    const html = await response.text()
+    return MONITOR_HTML_MARKERS.some((marker) => html.includes(marker))
   } catch {
     return false
   } finally {

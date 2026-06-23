@@ -52,6 +52,19 @@ const CMD_DANGEROUS_COMMAND_PATTERNS = [
   /\bdel\b[\s\S]*(?:\/s|-\S*s)[\s\S]*(?:\/q|-\S*q)[\s\S]*(?:[a-z]:\\|\\$)/i,
 ]
 
+const PROTECTED_PROCESS_NAME_ENV = "ANYBOX_PROTECTED_PROCESS_NAMES"
+const PROTECTED_PROCESS_ID_ENV_KEYS = [
+  "ANYBOX_DESKTOP_PROCESS_ID",
+  "ANYBOX_AGENT_PROCESS_ID",
+  "ANYBOX_AGENT_PARENT_PROCESS_ID",
+] as const
+const DEFAULT_PROTECTED_PROCESS_NAMES = [
+  "anybox",
+  "anybox.exe",
+  "anybox-desktop-agent",
+  "anybox-desktop-agent.exe",
+] as const
+
 export type ShellKind = "bash" | "posix" | "powershell" | "cmd" | "wsl"
 
 export type ShellCommandInput = {
@@ -224,7 +237,105 @@ function shellFirstCommand(command: string) {
     ?.toLowerCase()
 }
 
+function escapeRegex(value: string) {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&")
+}
+
+function normalizeProcessTargetName(value: string) {
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) return ""
+  return normalized.endsWith(".exe") ? normalized.slice(0, -4) : normalized
+}
+
+function protectedProcessNamePattern(env: NodeJS.ProcessEnv = process.env) {
+  const names = new Set<string>()
+  for (const name of DEFAULT_PROTECTED_PROCESS_NAMES) {
+    const normalized = normalizeProcessTargetName(name)
+    if (normalized) names.add(normalized)
+  }
+
+  const configured = env[PROTECTED_PROCESS_NAME_ENV]
+  if (configured) {
+    for (const item of configured.split(/[,\n;\r]+/)) {
+      const normalized = normalizeProcessTargetName(item)
+      if (normalized) names.add(normalized)
+    }
+  }
+
+  return [...names]
+    .sort((left, right) => right.length - left.length)
+    .map((name) => `${escapeRegex(name)}(?:\\.exe)?`)
+    .join("|")
+}
+
+function protectedProcessIDs(env: NodeJS.ProcessEnv = process.env) {
+  const ids = new Set<number>()
+  const add = (value: unknown) => {
+    if (typeof value !== "string" && typeof value !== "number") return
+    const parsed = Number(value)
+    if (Number.isInteger(parsed) && parsed > 0) ids.add(parsed)
+  }
+
+  add(process.pid)
+  add(process.ppid)
+  for (const key of PROTECTED_PROCESS_ID_ENV_KEYS) {
+    add(env[key])
+  }
+
+  return [...ids].map(String)
+}
+
+function protectedProcessIDPattern(env: NodeJS.ProcessEnv = process.env) {
+  return protectedProcessIDs(env).map(escapeRegex).join("|")
+}
+
+function protectedProcessIDEnvRefPattern() {
+  return PROTECTED_PROCESS_ID_ENV_KEYS
+    .flatMap((key) => [
+      `\\$env:${escapeRegex(key)}`,
+      `%${escapeRegex(key)}%`,
+      `\\$\\{${escapeRegex(key)}\\}`,
+      `\\$${escapeRegex(key)}`,
+    ])
+    .join("|")
+}
+
+function isProtectedProcessTerminationCommand(command: string, env: NodeJS.ProcessEnv = process.env) {
+  const namePattern = protectedProcessNamePattern(env)
+  const pidPattern = protectedProcessIDPattern(env)
+  const pidEnvPattern = protectedProcessIDEnvRefPattern()
+  const pidTargetPattern = [pidPattern, pidEnvPattern].filter(Boolean).join("|")
+  const nameRegexes = [
+    new RegExp(`\\btaskkill\\b[\\s\\S]*(?:/im|/fi)\\s+["']?[^"']*\\b(?:${namePattern})\\b`, "i"),
+    new RegExp(`\\b(?:Stop-Process|spps)\\b[\\s\\S]*(?:-Name\\s+)?["']?(?:${namePattern})\\b`, "i"),
+    new RegExp(`\\b(?:Get-Process|gps|ps)\\b[\\s\\S]*\\b(?:${namePattern})\\b[\\s\\S]*\\|[\\s\\S]*\\b(?:Stop-Process|spps|kill)\\b`, "i"),
+    new RegExp(`\\bwmic\\b[\\s\\S]*\\bprocess\\b[\\s\\S]*(?:name|caption)[\\s\\S]*\\b(?:${namePattern})\\b[\\s\\S]*\\b(?:delete|call\\s+terminate)\\b`, "i"),
+    new RegExp(`\\b(?:Get-CimInstance|gcim|Get-WmiObject|gwmi)\\b[\\s\\S]*\\bWin32_Process\\b[\\s\\S]*\\b(?:${namePattern})\\b[\\s\\S]*\\b(?:Terminate|Stop-Process|Remove-CimInstance|Invoke-CimMethod)\\b`, "i"),
+    new RegExp(`\\b(?:pkill|killall)\\b[\\s\\S]*\\b(?:${namePattern})\\b`, "i"),
+  ]
+
+  if (nameRegexes.some((pattern) => pattern.test(command))) {
+    return true
+  }
+
+  if (!pidTargetPattern) return false
+
+  const pidTarget = `(?:${pidTargetPattern})(?=$|\\D)`
+  return [
+    new RegExp(`\\btaskkill\\b[\\s\\S]*/pid\\s+["']?${pidTarget}`, "i"),
+    new RegExp(`\\b(?:Stop-Process|spps)\\b[\\s\\S]*(?:-Id|-PID)\\s*["']?${pidTarget}`, "i"),
+    new RegExp(`\\bkill\\b(?:\\s+-(?:\\d+|[A-Z]+))*\\s+["']?${pidTarget}`, "i"),
+    new RegExp(`\\b(?:Get-Process|gps|ps)\\b[\\s\\S]*(?:-Id|-PID)?\\s*["']?${pidTarget}[\\s\\S]*\\|[\\s\\S]*\\b(?:Stop-Process|spps|kill)\\b`, "i"),
+    new RegExp(`\\bGetProcessById\\(\\s*["']?${pidTarget}["']?\\s*\\)[\\s\\S]*\\.Kill\\s*\\(`, "i"),
+    new RegExp(`\\bwmic\\b[\\s\\S]*\\bprocess\\b[\\s\\S]*(?:processid|handle)\\s*=?\\s*["']?${pidTarget}[\\s\\S]*\\b(?:delete|call\\s+terminate)\\b`, "i"),
+  ].some((pattern) => pattern.test(command))
+}
+
 export function isCriticalShellCommand(kind: ShellKind, command: string) {
+  if (isProtectedProcessTerminationCommand(command)) {
+    return true
+  }
+
   if (kind === "powershell") {
     return POWERSHELL_DANGEROUS_COMMAND_PATTERNS.some((pattern) => pattern.test(command))
   }

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import { Instance } from "#project/instance.ts"
 import * as Provider from "#provider/provider.ts"
 
-test("provider uses the dedicated DeepSeek adapter for built-in DeepSeek models", async () => {
+test("provider normalizes models.dev DeepSeek catalog entries to the dedicated adapter", async () => {
   const deepseekLanguageModel = {
     doGenerate() {},
     doStream() {},
@@ -17,7 +17,7 @@ test("provider uses the dedicated DeepSeek adapter for built-in DeepSeek models"
         name: "DeepSeek",
         env: ["DEEPSEEK_API_KEY"],
         api: "https://api.deepseek.com",
-        npm: "@ai-sdk/deepseek",
+        npm: "@ai-sdk/openai-compatible",
         models: {
           "deepseek-reasoner": {
             id: "deepseek-reasoner",

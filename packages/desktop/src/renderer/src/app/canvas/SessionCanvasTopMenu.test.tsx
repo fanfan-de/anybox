@@ -245,11 +245,13 @@ describe("SessionCanvasTopMenu project plugins", () => {
       value: "build-web-apps",
       label: "Build Web Apps",
       description: "Frontend workflows - 1 MCP, 3 skills",
+      icon: "BWA",
     },
     {
       value: "browser",
       label: "Browser",
       description: "Browser automation - 1 MCP",
+      iconUrl: "https://example.test/browser.png",
     },
   ]
 
@@ -268,8 +270,12 @@ describe("SessionCanvasTopMenu project plugins", () => {
     const selectedOption = within(menu).getByRole("menuitemcheckbox", { name: /Build Web Apps/ })
     expect(selectedOption).toHaveAttribute("aria-checked", "true")
     expect(selectedOption).toHaveAttribute("title", "Frontend workflows - 1 MCP, 3 skills")
+    expect(selectedOption.querySelector(".canvas-top-menu-plugin-mark-glyph")).toHaveTextContent("BWA")
 
-    fireEvent.click(within(menu).getByRole("menuitemcheckbox", { name: /Browser/ }))
+    const browserOption = within(menu).getByRole("menuitemcheckbox", { name: /Browser/ })
+    expect(browserOption.querySelector(".canvas-top-menu-plugin-mark img")).toHaveAttribute("src", "https://example.test/browser.png")
+
+    fireEvent.click(browserOption)
 
     expect(onPluginToggle).toHaveBeenCalledWith("browser")
   })

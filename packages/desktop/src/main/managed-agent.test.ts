@@ -4,6 +4,7 @@ import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const electronAppMock = vi.hoisted(() => ({
+  name: "Anybox",
   isPackaged: false,
   appPath: "",
   paths: {
@@ -21,6 +22,7 @@ vi.mock("electron", () => ({
     get isPackaged() {
       return electronAppMock.isPackaged
     },
+    getName: vi.fn(() => electronAppMock.name),
     getAppPath: vi.fn(() => electronAppMock.appPath),
     getPath: vi.fn((name: string) => electronAppMock.paths[name] ?? ""),
   },
@@ -70,6 +72,7 @@ async function withProcessEnv<T>(
 }
 
 beforeEach(() => {
+  electronAppMock.name = "Anybox"
   electronAppMock.isPackaged = false
   electronAppMock.appPath = ""
   electronAppMock.paths = {
@@ -120,6 +123,8 @@ describe("managed agent workspace dependencies", () => {
         expect(env[managedAgentInternals.env.workspaceDependenciesDir]).toBe(dependenciesDir)
         expect(env[managedAgentInternals.env.workspaceDependenciesVersion]).toBe("bundle-test-version")
         expect(env[managedAgentInternals.env.agentDataDir]).toBe(agentDataDir)
+        expect(env[managedAgentInternals.env.desktopProcessID]).toBe(String(process.pid))
+        expect(String(env[managedAgentInternals.env.protectedProcessNames])).toContain("anybox.exe")
         expect(env.ANYBOX_CONNECTOR_BUILD_CONFIG).toBe(connectorBuildConfigPath)
         expect(env.ANYBOX_SERVER_PORT).toBe("4567")
       },

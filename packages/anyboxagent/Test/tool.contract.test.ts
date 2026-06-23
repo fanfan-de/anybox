@@ -1263,6 +1263,36 @@ describe("tool contract", () => {
               risk: "medium",
             })
           }
+
+          expect(assessShellPermission("cmd", { command: "taskkill /F /IM Anybox.exe" }, Instance.directory)).toMatchObject({
+            action: "deny",
+            risk: "critical",
+          })
+          expect(assessShellPermission("powershell", { command: "Stop-Process -Name Anybox" }, Instance.directory)).toMatchObject({
+            action: "deny",
+            risk: "critical",
+          })
+          expect(assessShellPermission("bash", { command: `kill -9 ${process.ppid}` }, Instance.directory)).toMatchObject({
+            action: "deny",
+            risk: "critical",
+          })
+
+          await withProcessEnv(
+            {
+              ANYBOX_DESKTOP_PROCESS_ID: "424242",
+              ANYBOX_PROTECTED_PROCESS_NAMES: "electron.exe",
+            },
+            async () => {
+              expect(assessShellPermission("cmd", { command: "taskkill /PID %ANYBOX_DESKTOP_PROCESS_ID%" }, Instance.directory)).toMatchObject({
+                action: "deny",
+                risk: "critical",
+              })
+              expect(assessShellPermission("powershell", { command: "Stop-Process -Name electron" }, Instance.directory)).toMatchObject({
+                action: "deny",
+                risk: "critical",
+              })
+            },
+          )
         },
       })
     } finally {

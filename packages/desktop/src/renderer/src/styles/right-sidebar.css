@@ -3045,6 +3045,12 @@
   border-top: 1px solid rgba(166, 186, 208, 0.12);
 }
 
+.workspace-files-code-spacer {
+  flex: 0 0 auto;
+  min-width: 1px;
+  pointer-events: none;
+}
+
 .workspace-files-line {
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr);

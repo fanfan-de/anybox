@@ -265,6 +265,34 @@ function ProjectMcpMenuButton({
   )
 }
 
+function isComposerPluginImageIcon(icon: string) {
+  return /^(https?:\/\/|data:image\/)/.test(icon)
+}
+
+function composerPluginInitials(label: string) {
+  const words = label.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return "P"
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
+  return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase()
+}
+
+function ComposerPluginMark({ option }: { option: ComposerPluginOption }) {
+  const rawIcon = option.icon?.trim()
+  const imageIcon = option.iconUrl ?? (rawIcon && isComposerPluginImageIcon(rawIcon) ? rawIcon : undefined)
+
+  return (
+    <span className="canvas-top-menu-plugin-mark" aria-hidden="true">
+      {imageIcon ? (
+        <img src={imageIcon} alt="" />
+      ) : rawIcon && rawIcon.length <= 4 ? (
+        <span className="canvas-top-menu-plugin-mark-glyph">{rawIcon}</span>
+      ) : (
+        <span className="canvas-top-menu-plugin-mark-glyph">{composerPluginInitials(option.label)}</span>
+      )}
+    </span>
+  )
+}
+
 function ProjectPluginsMenuButton({
   pluginOptions,
   selectedPluginIDs,
@@ -344,8 +372,11 @@ function ProjectPluginsMenuButton({
                   title={option.description}
                   type="button"
                 >
-                  <span className="canvas-top-menu-context-option-label">
-                    <strong>{option.label}</strong>
+                  <span className="canvas-top-menu-plugin-option-main">
+                    <ComposerPluginMark option={option} />
+                    <span className="canvas-top-menu-context-option-label">
+                      <strong>{option.label}</strong>
+                    </span>
                   </span>
                   <span className="canvas-top-menu-context-option-status">{isSelected ? "Enabled" : "Enable"}</span>
                 </button>

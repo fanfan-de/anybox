@@ -21,6 +21,8 @@ const MANAGED_AGENT_DATA_DIR_ENV = "ANYBOX_AGENT_DATA_DIR"
 const CONNECTOR_BUILD_CONFIG_ENV = "ANYBOX_CONNECTOR_BUILD_CONFIG"
 const WORKSPACE_DEPENDENCIES_DIR_ENV = "ANYBOX_WORKSPACE_DEPENDENCIES_DIR"
 const WORKSPACE_DEPENDENCIES_VERSION_ENV = "ANYBOX_WORKSPACE_DEPENDENCIES_VERSION"
+const MANAGED_AGENT_DESKTOP_PROCESS_ID_ENV = "ANYBOX_DESKTOP_PROCESS_ID"
+const MANAGED_AGENT_PROTECTED_PROCESS_NAMES_ENV = "ANYBOX_PROTECTED_PROCESS_NAMES"
 const MANAGED_AGENT_PLUGIN_INSTALL_DIR_ENV_KEYS = [
   "ANYBOX_PLUGIN_INSTALL_DIR",
 ]
@@ -212,6 +214,22 @@ function proxyURLFromElectronProxyRule(rule: string) {
   }
 }
 
+function resolveManagedAgentProtectedProcessNames() {
+  const names = new Set(["anybox.exe", "anybox-desktop-agent.exe"])
+  const executableName = path.basename(process.execPath).trim().toLowerCase()
+  if (executableName) names.add(executableName)
+
+  const appName = app.getName().trim().toLowerCase()
+  if (appName) {
+    names.add(appName)
+    if (!appName.endsWith(".exe")) {
+      names.add(`${appName}.exe`)
+    }
+  }
+
+  return [...names].join(",")
+}
+
 async function resolveManagedAgentProxyEnv(targetURL = "https://anybox.com.cn"): Promise<ManagedAgentProxyEnv> {
   if (
     process.env.HTTPS_PROXY?.trim() ||
@@ -256,6 +274,8 @@ function buildManagedAgentStartEnv(
     ANYBOX_NODE_RUN_AS_NODE: "1",
     ANYBOX_SERVER_HOST: "127.0.0.1",
     ANYBOX_SERVER_PORT: String(port),
+    [MANAGED_AGENT_DESKTOP_PROCESS_ID_ENV]: String(process.pid),
+    [MANAGED_AGENT_PROTECTED_PROCESS_NAMES_ENV]: resolveManagedAgentProtectedProcessNames(),
   }
 
   for (const key of MANAGED_AGENT_PLUGIN_INSTALL_DIR_ENV_KEYS) {
@@ -575,6 +595,8 @@ export async function stopManagedAgent() {
 export const managedAgentInternals = {
   env: {
     agentDataDir: MANAGED_AGENT_DATA_DIR_ENV,
+    desktopProcessID: MANAGED_AGENT_DESKTOP_PROCESS_ID_ENV,
+    protectedProcessNames: MANAGED_AGENT_PROTECTED_PROCESS_NAMES_ENV,
     workspaceDependenciesDir: WORKSPACE_DEPENDENCIES_DIR_ENV,
     workspaceDependenciesVersion: WORKSPACE_DEPENDENCIES_VERSION_ENV,
   },
@@ -583,6 +605,7 @@ export const managedAgentInternals = {
   resolveBundledAgentLaunchSpecs,
   resolveManagedAgentLaunchSpecs,
   readWorkspaceDependenciesBundleVersion,
+  resolveManagedAgentProtectedProcessNames,
   proxyURLFromElectronProxyRule,
   resolveManagedAgentProxyEnv,
   buildManagedAgentStartEnv,

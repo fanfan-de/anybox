@@ -19,5 +19,6 @@ Use this skill when a user asks you to control a Windows desktop application thr
 - Each action must include a short `purpose` and one `safety` value.
 - Use `safety: "normal"` only for low-risk local UI operations.
 - Use `safety: "submit_or_send"`, `"delete"`, `"upload"`, or `"install"` when the action could submit, delete, upload, or install anything.
+- Never automate Anybox's own windows, including closing, minimizing, focusing, typing into, or clicking inside Anybox.
 - Never automate authentication dialogs, Windows security settings, payment flows, CAPTCHA, password managers, browser security warnings, lock screens, or terminal/shell windows.
 - If a tool returns a safety or stale-snapshot error, stop and observe again instead of retrying blindly.

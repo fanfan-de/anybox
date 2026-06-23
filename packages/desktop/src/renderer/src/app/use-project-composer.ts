@@ -239,6 +239,8 @@ function buildComposerPluginOptions(
       value: plugin.pluginID,
       label: catalogItem?.name ?? plugin.pluginID,
       description: describeComposerPlugin(plugin, catalogItem),
+      icon: catalogItem?.icon,
+      iconUrl: catalogItem?.iconUrl,
     }
   })
 }

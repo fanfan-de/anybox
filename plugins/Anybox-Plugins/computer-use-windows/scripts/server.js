@@ -25,6 +25,8 @@ const HARD_REJECT_SAFETY = new Set(["auth_or_secret", "finance", "security_setti
 const ELEVATED_REVIEW_SAFETY = new Set(["submit_or_send", "delete", "upload", "install"])
 const BLOCKED_PROCESSES = new Set([
   "1password.exe",
+  "anybox.exe",
+  "anybox-desktop-agent.exe",
   "bash.exe",
   "bitwarden.exe",
   "cmd.exe",
@@ -45,6 +47,7 @@ const BLOCKED_PROCESSES = new Set([
   "wt.exe",
 ])
 const BLOCKED_TITLE_PATTERNS = [
+  /^Anybox(?:\s+Agent\s+Desktop)?$/i,
   /\bCAPTCHA\b/i,
   /\bCredential\b/i,
   /\bUser Account Control\b/i,

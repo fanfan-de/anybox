@@ -223,6 +223,33 @@ describe("WorkspaceFilesPanel", () => {
     expect(codeContainer?.style.getPropertyValue("--code-highlight-fg")).not.toBe("")
   })
 
+  it("virtualizes large source files and renders distant lines after scrolling", () => {
+    const content = Array.from({ length: 500 }, (_, index) => `line ${index + 1}`).join("\n")
+    const { container } = renderWorkspaceFilesPanel(
+      createFileReviewState({
+        selectedFileContent: content,
+        selectedFileExtension: ".txt",
+        selectedFileKind: "text",
+        selectedFilePath: "notes/large.txt",
+        status: "ready",
+      }),
+    )
+
+    const codeContainer = container.querySelector<HTMLElement>(".workspace-files-code")
+    expect(codeContainer).not.toBeNull()
+    expect(codeContainer).toHaveAttribute("data-virtualized", "true")
+    expect(codeContainer).toHaveAttribute("data-line-count", "500")
+    expect(container.querySelectorAll(".workspace-files-line").length).toBeLessThan(90)
+    expect(screen.queryByTestId("workspace-file-line-200")).not.toBeInTheDocument()
+
+    codeContainer!.scrollTop = 200 * 24
+    fireEvent.scroll(codeContainer!)
+
+    expect(screen.getByTestId("workspace-file-line-200")).toHaveTextContent("line 200")
+    expect(screen.queryByTestId("workspace-file-line-1")).not.toBeInTheDocument()
+    expect(container.querySelectorAll(".workspace-files-line").length).toBeLessThan(90)
+  })
+
   it("renders Markdown files by default and can switch back to source", () => {
     renderWorkspaceFilesPanel(
       createFileReviewState({
@@ -328,13 +355,7 @@ describe("WorkspaceFilesPanel", () => {
     expect(video).toHaveAttribute("preload", "metadata")
   })
 
-  it("highlights and scrolls to linked line ranges without opening a comment draft", () => {
-    const scrollIntoView = vi.fn()
-    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
-      configurable: true,
-      value: scrollIntoView,
-    })
-
+  it("highlights linked line ranges without opening a comment draft", () => {
     renderWorkspaceFilesPanel(
       createFileReviewState({
         linkedLineRange: {
@@ -352,10 +373,33 @@ describe("WorkspaceFilesPanel", () => {
     expect(screen.getByTestId("workspace-file-line-2")).toHaveClass("is-linked", "is-selected")
     expect(screen.getByTestId("workspace-file-line-3")).toHaveClass("is-linked", "is-selected")
     expect(screen.queryByRole("textbox", { name: "File comment on lines 2-3" })).not.toBeInTheDocument()
-    expect(scrollIntoView).toHaveBeenCalledWith({
-      block: "center",
-      inline: "nearest",
+  })
+
+  it("scrolls the virtual source reader to linked line ranges outside the initial window", async () => {
+    const content = Array.from({ length: 320 }, (_, index) => `const value${index + 1} = ${index + 1}`).join("\n")
+    const { container } = renderWorkspaceFilesPanel(
+      createFileReviewState({
+        linkedLineRange: {
+          startLineNumber: 220,
+          endLineNumber: 222,
+        },
+        selectedFileContent: content,
+        selectedFileExtension: ".ts",
+        selectedFileKind: "text",
+        selectedFilePath: "src/large-linked.ts",
+        status: "ready",
+      }),
+    )
+
+    const codeContainer = container.querySelector<HTMLElement>(".workspace-files-code")
+    expect(codeContainer).not.toBeNull()
+
+    await waitFor(() => {
+      expect(codeContainer!.scrollTop).toBeGreaterThan(0)
+      expect(screen.getByTestId("workspace-file-line-220")).toHaveClass("is-linked", "is-selected")
+      expect(screen.getByTestId("workspace-file-line-222")).toHaveClass("is-linked", "is-selected")
     })
+    expect(screen.queryByTestId("workspace-file-line-1")).not.toBeInTheDocument()
   })
 
   it("keeps file reader text on readable panel colors", () => {
@@ -397,6 +441,9 @@ describe("WorkspaceFilesPanel", () => {
     )
     expect(styles).toMatch(
       /\.workspace-files-code\s*\{[^}]*scrollbar-color:\s*var\(--right-sidebar-scrollbar-thumb,\s*var\(--mix-seg-text-3-34-transparent-66\)\) transparent;[^}]*scrollbar-width:\s*thin;/s,
+    )
+    expect(styles).toMatch(
+      /\.workspace-files-code-spacer\s*\{[^}]*pointer-events:\s*none;/s,
     )
     expect(styles).toMatch(
       /\.workspace-files-tree-scroll\s*\{[^}]*scrollbar-color:\s*var\(--right-sidebar-scrollbar-thumb,\s*var\(--mix-seg-text-3-34-transparent-66\)\) transparent;[^}]*scrollbar-width:\s*thin;/s,

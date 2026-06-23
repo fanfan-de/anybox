@@ -7,6 +7,43 @@ import "./sqlite.cleanup.ts"
 import { Instance } from "#project/instance.ts"
 import { ApplyPatchTool } from "#tool/apply-patch.ts"
 
+const EXPECTED_APPLY_PATCH_FORMAT = [
+  "`patch` is a string and must strictly follow this Begin Patch format.",
+  "Each tool call accepts exactly one *** Begin Patch / *** End Patch wrapper. Put multiple file changes inside the same wrapper.",
+  "",
+  "Lark grammar:",
+  'start: begin_patch hunk+ end_patch',
+  'begin_patch: "*** Begin Patch" LF',
+  'end_patch: "*** End Patch" LF?',
+  "",
+  "hunk: add_hunk | delete_hunk | update_hunk",
+  'add_hunk: "*** Add File: " filename LF add_line+',
+  'delete_hunk: "*** Delete File: " filename LF',
+  'update_hunk: "*** Update File: " filename LF change_move? change?',
+  "",
+  "filename: /(.+)/",
+  'add_line: "+" /(.*)/ LF -> line',
+  "",
+  'change_move: "*** Move to: " filename LF',
+  "change: (change_context | change_line)+ eof_line?",
+  'change_context: ("@@" | "@@ " /(.+)/) LF',
+  'change_line: ("+" | "-" | " ") /(.*)/ LF',
+  'eof_line: "*** End of File" LF',
+  "",
+  "%import common.LF",
+  "",
+  "Additional rules:",
+  "- The first non-empty line must be *** Begin Patch; the last non-empty line must be *** End Patch.",
+  "- Do not output multiple *** Begin Patch blocks in one tool call.",
+  "- Every Add File content line must start with +, including blank lines as +.",
+  "- Every Update File change line must start with a space, -, or +.",
+  "- Update File hunks must include at least one context or removed line; they cannot contain only added lines.",
+  "- Delete File does not accept hunks or file content.",
+  "- Move files with *** Update File: old/path followed by *** Move to: new/path.",
+  "- If the new file should not end with a newline, place *** End of File after the final change line.",
+  "- Do not use Git diff syntax: no diff --git, ---, +++, or @@ -1 +1 @@.",
+].join("\n")
+
 async function withApplyPatchTool(
   fn: (input: {
     root: string
@@ -37,6 +74,17 @@ async function withApplyPatchTool(
 }
 
 describe("apply_patch Begin Patch format", () => {
+  it("keeps the top-level tool description compact and schema field description detailed", async () => {
+    const runtime = await ApplyPatchTool.init()
+    const patchDescription = runtime.parameters.shape.patch.description
+
+    expect(runtime.description).toBe("Use a single patch block for related, reviewable file changes.")
+    expect(runtime.description).not.toContain("replace_text")
+    expect(runtime.description).not.toContain("Lark grammar")
+    expect(runtime.description).not.toContain("start: begin_patch")
+    expect(patchDescription).toBe(EXPECTED_APPLY_PATCH_FORMAT)
+  })
+
   it("updates a file using context instead of line numbers", async () => {
     await withApplyPatchTool(async ({ root, executePatch }) => {
       const target = path.join(root, "notes.txt")

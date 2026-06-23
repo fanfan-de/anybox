@@ -1751,6 +1751,11 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   max-width: min(260px, calc(100vw - 64px));
 }
 
+.canvas-top-menu-plugin-panel {
+  min-width: 244px;
+  max-width: min(340px, calc(100vw - 64px));
+}
+
 .canvas-top-menu-fit-panel {
   width: max-content;
   min-width: 0;
@@ -1812,6 +1817,50 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   background: transparent;
   color: inherit;
   box-shadow: none;
+}
+
+.canvas-top-menu-plugin-option {
+  min-height: 40px;
+  padding: 4px 10px 4px 8px;
+}
+
+.canvas-top-menu-plugin-option-main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.canvas-top-menu-plugin-mark {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--context-menu-border);
+  border-radius: 6px;
+  background: var(--seg-panel);
+  color: var(--context-menu-text);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.canvas-top-menu-plugin-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.canvas-top-menu-plugin-mark-glyph {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .canvas-top-menu-context-option-label,

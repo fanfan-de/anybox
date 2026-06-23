@@ -344,8 +344,21 @@ export const TerminalWriteInputTool = Tool.define(
         },
       }
     },
-    assessPermission: async (_parameters, ctx) => {
+    assessPermission: async (parameters, ctx) => {
       const terminal = await getOrCreateTerminal(ctx.sessionID)
+      const shellKind = detectShellKind(terminal.info().shell)
+      if (isCriticalShellCommand(shellKind, parameters.data)) {
+        return {
+          action: "deny",
+          risk: "critical",
+          reason: "Raw terminal input matches a known dangerous shell pattern.",
+          resource: {
+            workdir: terminal.info().cwd,
+            paths: [terminal.info().cwd],
+          },
+        }
+      }
+
       return {
         action: "ask",
         risk: "medium",

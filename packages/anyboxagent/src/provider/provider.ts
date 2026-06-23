@@ -19,6 +19,7 @@ const OPENROUTER_SDK_PACKAGE = "@openrouter/ai-sdk-provider"
 const GOOGLE_VERTEX_SDK_PACKAGE = "@ai-sdk/google-vertex"
 const PROVIDER_VALIDATION_TIMEOUT_MS = 10_000
 const OPENAI_PROVIDER_ID = "openai"
+const DEEPSEEK_PROVIDER_ID = "deepseek"
 const ANYBOX_PROVIDER_ID = "anybox"
 const OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
 const ANYBOX_SDK_TYPE_TO_NPM: Record<string, string> = {
@@ -2140,13 +2141,17 @@ export async function getSDKProvider(model: Model, configID = resolveConfigID())
 // -----------------------------------------------------------------------------
 
 function fromModelsDevModel(provider: ModelsDev.DevProvider, model: ModelsDev.DevModel): Model {
+  const sdkPackage = provider.id === DEEPSEEK_PROVIDER_ID
+    ? DEEPSEEK_SDK_PACKAGE
+    : firstNonEmptyString(model.provider?.npm, provider.npm) ?? OPENAI_SDK_PACKAGE
+
   return {
     id: model.id,
     providerID: provider.id,
     api: {
       id: model.id,
       url: firstNonEmptyString(model.provider?.api, provider.api) ?? "",
-      npm: firstNonEmptyString(model.provider?.npm, provider.npm) ?? OPENAI_SDK_PACKAGE,
+      npm: sdkPackage,
     },
     name: model.name,
     capabilities: {
