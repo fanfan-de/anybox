@@ -4749,15 +4749,25 @@ body.is-dragging-settings-page {
 }
 
 .settings-theme-color-trigger:focus-visible {
-  border-color: rgba(79, 116, 200, 0.38);
-  box-shadow: 0 0 0 2px rgba(79, 116, 200, 0.12);
+  border-color: var(--mix-seg-accent-34-seg-border-66);
+  box-shadow: 0 0 0 2px var(--mix-seg-accent-16-transparent-84);
   outline: none;
 }
 
-.settings-theme-color-swatch,
-.settings-theme-color-popover-preview {
+.settings-theme-color-swatch {
+  --settings-theme-color-checker-a: color-mix(
+    in srgb,
+    var(--seg-border) 78%,
+    var(--settings-theme-token-code-bg)
+  );
+  --settings-theme-color-checker-b: var(--settings-theme-token-code-bg);
   background:
-    conic-gradient(#d6d6d6 25%, #ffffff 0 50%, #d6d6d6 0 75%, #ffffff 0)
+    conic-gradient(
+      var(--settings-theme-color-checker-a) 25%,
+      var(--settings-theme-color-checker-b) 0 50%,
+      var(--settings-theme-color-checker-a) 0 75%,
+      var(--settings-theme-color-checker-b) 0
+    )
     0 / 10px 10px;
 }
 
@@ -4768,19 +4778,24 @@ body.is-dragging-settings-page {
   height: 100%;
 }
 
-.settings-theme-color-swatch span,
-.settings-theme-color-popover-preview span {
+.settings-theme-color-swatch span {
   display: block;
   width: 100%;
   height: 100%;
 }
 
 .settings-theme-color-popover {
+  --settings-theme-color-checker-a: color-mix(
+    in srgb,
+    var(--seg-border) 78%,
+    var(--settings-theme-token-code-bg)
+  );
+  --settings-theme-color-checker-b: var(--settings-theme-token-code-bg);
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
   z-index: 30;
-  width: 260px;
+  width: 276px;
   padding: 10px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
@@ -4788,45 +4803,135 @@ body.is-dragging-settings-page {
   box-shadow: var(--shadow-md);
 }
 
-.settings-theme-color-popover-preview {
-  height: 48px;
+.settings-theme-color-field {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 146px;
+  padding: 0;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-xs);
+  background:
+    linear-gradient(to top, rgb(0 0 0), transparent),
+    linear-gradient(to right, rgb(255 255 255), transparent),
+    var(--settings-theme-color-field-hue);
+  cursor: crosshair;
   overflow: hidden;
+  touch-action: none;
 }
 
-.settings-theme-color-channel-list {
+.settings-theme-color-field:focus-visible {
+  border-color: var(--mix-seg-accent-34-seg-border-66);
+  box-shadow: 0 0 0 2px var(--mix-seg-accent-16-transparent-84);
+  outline: none;
+}
+
+.settings-theme-color-field-thumb {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--surface-elevated);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px var(--seg-text-1);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.settings-theme-color-slider-list {
   margin-top: 10px;
   display: grid;
   gap: 8px;
 }
 
-.settings-theme-color-channel {
+.settings-theme-color-slider {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) 48px;
+  grid-template-columns: 18px minmax(0, 1fr) 54px;
   align-items: center;
   gap: 8px;
 }
 
-.settings-theme-color-channel span {
+.settings-theme-color-slider span {
   color: var(--seg-text-3);
   font-size: 11px;
   font-weight: 800;
 }
 
-.settings-theme-color-channel input[type="range"] {
+.settings-theme-color-slider.is-hue {
+  --settings-theme-color-slider-bg: linear-gradient(
+    to right,
+    hsl(0 100% 50%),
+    hsl(60 100% 50%),
+    hsl(120 100% 50%),
+    hsl(180 100% 50%),
+    hsl(240 100% 50%),
+    hsl(300 100% 50%),
+    hsl(360 100% 50%)
+  );
+}
+
+.settings-theme-color-slider.is-alpha {
+  --settings-theme-color-slider-bg:
+    linear-gradient(to right, transparent, var(--settings-theme-alpha-color)),
+    conic-gradient(
+      var(--settings-theme-color-checker-a) 25%,
+      var(--settings-theme-color-checker-b) 0 50%,
+      var(--settings-theme-color-checker-a) 0 75%,
+      var(--settings-theme-color-checker-b) 0
+    )
+    0 / 10px 10px;
+}
+
+.settings-theme-color-slider input[type="range"] {
+  appearance: none;
   width: 100%;
   min-width: 0;
-  accent-color: var(--seg-accent);
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--seg-border);
+  border-radius: 999px;
+  background: var(--settings-theme-color-slider-bg);
+  cursor: pointer;
 }
 
-.settings-theme-color-channel input[type="range"]:focus-visible {
-  outline: none;
+.settings-theme-color-slider input[type="range"]:focus-visible {
+  border-color: var(--mix-seg-accent-34-seg-border-66);
   box-shadow: 0 0 0 2px var(--mix-seg-accent-16-transparent-84);
+  outline: none;
 }
 
-.settings-theme-color-channel input[type="number"] {
-  width: 48px;
+.settings-theme-color-slider input[type="range"]::-webkit-slider-runnable-track {
+  height: 100%;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.settings-theme-color-slider input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--surface-elevated);
+  border-radius: 999px;
+  background: var(--settings-theme-token-code-bg);
+  box-shadow: 0 0 0 1px var(--seg-text-2);
+}
+
+.settings-theme-color-slider input[type="range"]::-moz-range-track {
+  height: 100%;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.settings-theme-color-slider input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--surface-elevated);
+  border-radius: 999px;
+  background: var(--settings-theme-token-code-bg);
+  box-shadow: 0 0 0 1px var(--seg-text-2);
+}
+
+.settings-theme-color-number {
+  width: 54px;
   min-height: 28px;
   padding: 4px 6px;
   border: 1px solid var(--seg-border);
@@ -4837,9 +4942,9 @@ body.is-dragging-settings-page {
   text-align: center;
 }
 
-.settings-theme-color-channel input[type="number"]:focus-visible {
-  border-color: rgba(79, 116, 200, 0.38);
-  box-shadow: inset 0 0 0 1px rgba(79, 116, 200, 0.12);
+.settings-theme-color-number:focus-visible {
+  border-color: var(--mix-seg-accent-34-seg-border-66);
+  box-shadow: inset 0 0 0 1px var(--mix-seg-accent-16-transparent-84);
   outline: none;
 }
 
@@ -4856,8 +4961,8 @@ body.is-dragging-settings-page {
 }
 
 .settings-theme-color-input:focus-visible {
-  border-color: rgba(79, 116, 200, 0.38);
-  box-shadow: inset 0 0 0 1px rgba(79, 116, 200, 0.12);
+  border-color: var(--mix-seg-accent-34-seg-border-66);
+  box-shadow: inset 0 0 0 1px var(--mix-seg-accent-16-transparent-84);
   outline: none;
 }
 

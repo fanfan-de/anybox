@@ -1087,13 +1087,13 @@ describe("SettingsPage built-in tools", () => {
     )
 
     fireEvent.change(screen.getByRole("slider", {
-      name: "Foundation / Content Default Border Light border-default-light red",
+      name: "Foundation / Content Default Border Light border-default-light hue",
     }), {
-      target: { value: "17" },
+      target: { value: "180" },
     })
     expect(onAppearanceTokenChange).toHaveBeenCalledWith(
       "border-default-light",
-      "rgba(17, 37, 36, 0.08)",
+      "rgba(36, 41, 41, 0.08)",
     )
 
     const colorInput = screen.getByLabelText(
