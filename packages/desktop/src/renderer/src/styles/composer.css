@@ -1931,6 +1931,11 @@
   box-shadow: none;
 }
 
+.window-shell.has-html-background .composer,
+.window-shell.has-html-background .inline-side-chat-thread .composer {
+  background: var(--html-background-composer-surface);
+}
+
 .composer-utility-chip,
 .composer-utility-git-branch-button,
 .composer-utility-permission-toggle,

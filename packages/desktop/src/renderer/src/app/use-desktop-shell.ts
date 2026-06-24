@@ -16,6 +16,12 @@ import {
   type ResolvedColorMode,
 } from "./code-theme"
 import {
+  HTML_BACKGROUND_STORAGE_KEY,
+  readHtmlBackgroundConfigPreference,
+  serializeHtmlBackgroundConfig,
+  type HtmlBackgroundConfig,
+} from "./html-background/html-background-config"
+import {
   DEFAULT_RIGHT_SIDEBAR_WIDTH,
   DEFAULT_SIDEBAR_WIDTH,
   RIGHT_SIDEBAR_MIN_LEFT_EDGE_RATIO,
@@ -207,6 +213,7 @@ export function useDesktopShell() {
   const [isSystemDarkMode, setIsSystemDarkMode] = useState(readSystemDarkModePreference)
   const [brandTheme, setBrandTheme] = useState<BrandTheme>(readBrandThemePreference)
   const [fontFamily, setFontFamily] = useState<AppearanceFontFamily>(readFontFamilyPreference)
+  const [htmlBackgroundConfig, setHtmlBackgroundConfig] = useState<HtmlBackgroundConfig>(readHtmlBackgroundConfigPreference)
   const [appearanceOverrides, setAppearanceOverrides] = useState<AppearanceTokenMap>({})
   const [appearanceTokenValues, setAppearanceTokenValues] =
     useState<Record<AppearanceTokenName, string>>(EMPTY_APPEARANCE_TOKEN_VALUES)
@@ -538,6 +545,14 @@ export function useDesktopShell() {
       return
     }
   }, [fontFamily])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(HTML_BACKGROUND_STORAGE_KEY, serializeHtmlBackgroundConfig(htmlBackgroundConfig))
+    } catch {
+      return
+    }
+  }, [htmlBackgroundConfig])
 
   useEffect(() => {
     applyAppearanceOverrides(document.documentElement, appearanceOverrides)
@@ -938,6 +953,10 @@ export function useDesktopShell() {
     setAppearanceOverrides({})
   }
 
+  function handleHtmlBackgroundConfigChange(nextConfig: HtmlBackgroundConfig) {
+    setHtmlBackgroundConfig(nextConfig)
+  }
+
   const handleWindowAction = useCallback((action: WindowAction) => {
     if (!window.desktop?.windowAction) {
       console.warn("[desktop] windowAction is unavailable. preload may not be loaded.")
@@ -998,6 +1017,7 @@ export function useDesktopShell() {
     handleCodeThemeChange: setCodeThemePreference,
     handleColorModeChange: setColorMode,
     handleFontFamilyChange: setFontFamily,
+    handleHtmlBackgroundConfigChange,
     handleActivityRailVisibilityChange,
     handleAppearancePaletteReset,
     handleAppearanceTokenChange,
@@ -1017,6 +1037,7 @@ export function useDesktopShell() {
     isAgentDebugTraceEnabled,
     isDebugLineColorsEnabled,
     isDebugUiRegionsEnabled,
+    htmlBackgroundConfig,
     isSidebarCollapsed,
     isSidebarResizing,
     isRightSidebarCollapsed,

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { APPEARANCE_TOKEN_NAMES } from "../../../../shared/appearance"
 import type { DesktopAppUpdateState } from "../../../../shared/desktop-ipc-contract"
 import { I18nProvider } from "../i18n/I18nProvider"
+import { DEFAULT_HTML_BACKGROUND_CONFIG } from "../html-background/html-background-config"
 import { DEFAULT_ASSISTANT_TRACE_VISIBILITY, type McpServerDraftState } from "../types"
 import { SettingsPage } from "./SettingsPage"
 
@@ -86,6 +87,7 @@ function createSettingsPageProps(
     codeThemePreference: "auto",
     colorMode: "system",
     fontFamily: "default",
+    htmlBackgroundConfig: DEFAULT_HTML_BACKGROUND_CONFIG,
     deletingArchivedSessionID: null,
     deletingMcpServerID: null,
     deletingProviderID: null,
@@ -128,6 +130,7 @@ function createSettingsPageProps(
     onClose: vi.fn(),
     onColorModeChange: vi.fn(),
     onFontFamilyChange: vi.fn(),
+    onHtmlBackgroundConfigChange: vi.fn(),
     onDebugLineColorsChange: vi.fn(),
     onDebugUiRegionsChange: vi.fn(),
     onDeleteAllArchivedSessions: vi.fn(),
@@ -945,6 +948,74 @@ describe("SettingsPage built-in tools", () => {
     expect(onFontFamilyChange).toHaveBeenCalledWith("microsoft-yahei")
   })
 
+  it("edits the static HTML background settings from appearance", () => {
+    const onHtmlBackgroundConfigChange = vi.fn()
+
+    const { rerender } = render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          onHtmlBackgroundConfigChange,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
+
+    const enableButton = screen.getByRole("switch", { name: "Enable HTML background" })
+    expect(enableButton).toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText("HTML source"), {
+      target: {
+        value: "<main>Custom background</main>",
+      },
+    })
+
+    expect(onHtmlBackgroundConfigChange).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: false,
+      html: "<main>Custom background</main>",
+    }))
+
+    rerender(
+      <SettingsPage
+        {...createSettingsPageProps({
+          htmlBackgroundConfig: {
+            blurPx: 0,
+            dim: 0.18,
+            enabled: false,
+            html: "<main>Custom background</main>",
+            opacity: 0.78,
+            paused: false,
+            renderMode: "static",
+            surfaceOpacity: 0.68,
+          },
+          onHtmlBackgroundConfigChange,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("switch", { name: "Enable HTML background" }))
+    expect(onHtmlBackgroundConfigChange).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: true,
+      html: "<main>Custom background</main>",
+    }))
+
+    fireEvent.change(screen.getByRole("slider", { name: /Surface opacity/ }), {
+      target: {
+        value: "0.72",
+      },
+    })
+
+    expect(onHtmlBackgroundConfigChange).toHaveBeenCalledWith(expect.objectContaining({
+      surfaceOpacity: 0.72,
+    }))
+
+    fireEvent.click(screen.getByRole("switch", { name: "Dynamic script background" }))
+
+    expect(onHtmlBackgroundConfigChange).toHaveBeenCalledWith(expect.objectContaining({
+      renderMode: "dynamic",
+    }))
+  })
+
   it("filters appearance theme tokens by semantic token name", () => {
     render(<SettingsPage {...createSettingsPageProps()} />)
 
@@ -983,6 +1054,57 @@ describe("SettingsPage built-in tools", () => {
     })
 
     expect(screen.getByText("No matching tokens")).toBeInTheDocument()
+  })
+
+  it("edits appearance token alpha values", () => {
+    const appearanceTokenValues = createAppearanceTokenValues("#000000")
+    appearanceTokenValues["border-default-light"] = "rgba(41, 37, 36, 0.08)"
+    const onAppearanceTokenChange = vi.fn()
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          appearanceTokenValues,
+          onAppearanceTokenChange,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
+    fireEvent.click(screen.getByRole("button", {
+      name: "Foundation / Content Default Border Light border-default-light",
+    }))
+
+    const alphaInput = screen.getByRole("slider", {
+      name: "Foundation / Content Default Border Light border-default-light alpha",
+    }) as HTMLInputElement
+    expect(alphaInput.value).toBe("0.08")
+
+    fireEvent.change(alphaInput, { target: { value: "0.42" } })
+    expect(onAppearanceTokenChange).toHaveBeenCalledWith(
+      "border-default-light",
+      "rgba(41, 37, 36, 0.42)",
+    )
+
+    fireEvent.change(screen.getByRole("slider", {
+      name: "Foundation / Content Default Border Light border-default-light red",
+    }), {
+      target: { value: "17" },
+    })
+    expect(onAppearanceTokenChange).toHaveBeenCalledWith(
+      "border-default-light",
+      "rgba(17, 37, 36, 0.08)",
+    )
+
+    const colorInput = screen.getByLabelText(
+      "Foundation / Content Default Border Light border-default-light color value",
+    )
+    fireEvent.change(colorInput, { target: { value: "rgba(1, 2, 3, 0.5)" } })
+    fireEvent.blur(colorInput)
+    expect(onAppearanceTokenChange).toHaveBeenCalledWith(
+      "border-default-light",
+      "rgba(1, 2, 3, 0.5)",
+    )
   })
 
   it("filters appearance theme tokens by group", () => {

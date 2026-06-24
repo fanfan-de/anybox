@@ -97,6 +97,14 @@
   container-type: inline-size;
 }
 
+.window-shell.has-html-background .sidebar {
+  background: var(--html-background-sidebar-surface);
+}
+
+.window-shell.has-html-background .sidebar.is-right {
+  background: var(--html-background-panel-surface);
+}
+
 .sidebar-resizer {
   --sidebar-resizer-top-surface: var(--seg-pane-tab-bar-surface);
   grid-column: 3;
@@ -190,6 +198,10 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   height: 1px;
   background: var(--mix-seg-border-76-transparent-24);
   pointer-events: none;
+}
+
+.window-shell.has-html-background .left-sidebar-top-menu {
+  background: var(--html-background-left-top-menu-surface);
 }
 
 .left-sidebar-top-menu .shell-top-menu-content,

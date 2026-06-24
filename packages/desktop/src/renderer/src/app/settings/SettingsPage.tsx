@@ -40,7 +40,11 @@ import {
   ResetIcon,
   SearchIcon,
 } from "../icons"
-import { normalizeAppearanceColorInputValue } from "../appearance-theme"
+import {
+  getAppearanceColorChannels,
+  normalizeAppearanceColorInputValue,
+  withAppearanceColorChannels,
+} from "../appearance-theme"
 import {
   CODE_HIGHLIGHT_THEMES,
   CODE_THEME_LABELS,
@@ -88,6 +92,10 @@ import {
   type AppUpdateStatus,
 } from "../update/UpdateDialog"
 import type { AppLocale } from "../../../../shared/locale"
+import {
+  DEFAULT_HTML_BACKGROUND_CONFIG,
+  type HtmlBackgroundConfig,
+} from "../html-background/html-background-config"
 import { SettingsSelect } from "./SettingsSelect"
 
 const assistantTraceVisibilityOptions: Array<{
@@ -253,11 +261,11 @@ function ProviderLogo({ provider, className = "" }: { provider: ProviderCatalogI
 }
 
 function AppearanceColorTextInput({
-  label,
+  ariaLabel,
   onCommit,
   value,
 }: {
-  label: string
+  ariaLabel: string
   onCommit: (value: string) => void
   value: string
 }) {
@@ -275,7 +283,7 @@ function AppearanceColorTextInput({
 
   return (
     <input
-      aria-label={`${label} hex color`}
+      aria-label={ariaLabel}
       className="settings-theme-color-input"
       inputMode="text"
       spellCheck={false}
@@ -297,6 +305,158 @@ function AppearanceColorTextInput({
         }
       }}
     />
+  )
+}
+
+type AppearanceColorPickerChannelLabels = {
+  red: string
+  green: string
+  blue: string
+  alpha: string
+}
+
+type AppearanceRgbChannel = "red" | "green" | "blue"
+
+function clampAppearanceColorEditorValue(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value))
+}
+
+function AppearanceColorPicker({
+  ariaLabel,
+  channelLabels,
+  onChange,
+  value,
+}: {
+  ariaLabel: string
+  channelLabels: AppearanceColorPickerChannelLabels
+  onChange: (value: string) => void
+  value: string
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const channels = getAppearanceColorChannels(value)
+  const alphaPercent = Math.round(channels.alpha * 100)
+  const swatchColor = `rgba(${channels.red}, ${channels.green}, ${channels.blue}, ${channels.alpha})`
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    function handleDocumentPointerDown(event: globalThis.PointerEvent) {
+      const target = event.target
+      if (target instanceof Node && rootRef.current?.contains(target)) return
+
+      setIsOpen(false)
+    }
+
+    function handleWindowKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") setIsOpen(false)
+    }
+
+    document.addEventListener("pointerdown", handleDocumentPointerDown)
+    window.addEventListener("keydown", handleWindowKeyDown)
+    return () => {
+      document.removeEventListener("pointerdown", handleDocumentPointerDown)
+      window.removeEventListener("keydown", handleWindowKeyDown)
+    }
+  }, [isOpen])
+
+  function updateRgbChannel(channel: AppearanceRgbChannel, nextValue: number) {
+    if (!Number.isFinite(nextValue)) return
+
+    const nextChannels = {
+      red: channels.red,
+      green: channels.green,
+      blue: channels.blue,
+      alpha: channels.alpha,
+    }
+    nextChannels[channel] = Math.round(clampAppearanceColorEditorValue(nextValue, 0, 255))
+    onChange(withAppearanceColorChannels(value, nextChannels))
+  }
+
+  function updateAlpha(nextValue: number) {
+    if (!Number.isFinite(nextValue)) return
+
+    onChange(withAppearanceColorChannels(value, {
+      alpha: clampAppearanceColorEditorValue(nextValue, 0, 1),
+    }))
+  }
+
+  function renderRgbChannel(channel: AppearanceRgbChannel, label: string, shortLabel: string) {
+    return (
+      <div className="settings-theme-color-channel">
+        <span>{shortLabel}</span>
+        <input
+          aria-label={`${ariaLabel} ${label}`}
+          type="range"
+          min="0"
+          max="255"
+          step="1"
+          value={channels[channel]}
+          onChange={(event) => updateRgbChannel(channel, event.currentTarget.valueAsNumber)}
+        />
+        <input
+          aria-label={`${ariaLabel} ${label} value`}
+          type="number"
+          min="0"
+          max="255"
+          step="1"
+          value={channels[channel]}
+          onChange={(event) => updateRgbChannel(channel, event.currentTarget.valueAsNumber)}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="settings-theme-color-picker" ref={rootRef}>
+      <button
+        aria-label={ariaLabel}
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        className="settings-theme-color-trigger"
+        type="button"
+        onClick={() => setIsOpen((currentValue) => !currentValue)}
+      >
+        <span className="settings-theme-color-swatch" aria-hidden="true">
+          <span style={{ backgroundColor: swatchColor }} />
+        </span>
+      </button>
+
+      {isOpen ? (
+        <div className="settings-theme-color-popover" role="dialog" aria-label={ariaLabel}>
+          <div className="settings-theme-color-popover-preview" aria-hidden="true">
+            <span style={{ backgroundColor: swatchColor }} />
+          </div>
+
+          <div className="settings-theme-color-channel-list">
+            {renderRgbChannel("red", channelLabels.red, "R")}
+            {renderRgbChannel("green", channelLabels.green, "G")}
+            {renderRgbChannel("blue", channelLabels.blue, "B")}
+            <div className="settings-theme-color-channel">
+              <span>A</span>
+              <input
+                aria-label={`${ariaLabel} ${channelLabels.alpha}`}
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={channels.alpha}
+                onChange={(event) => updateAlpha(event.currentTarget.valueAsNumber)}
+              />
+              <input
+                aria-label={`${ariaLabel} ${channelLabels.alpha} value`}
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                value={alphaPercent}
+                onChange={(event) => updateAlpha(event.currentTarget.valueAsNumber / 100)}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -1149,6 +1309,7 @@ interface SettingsPageProps {
   codeThemePreference: CodeThemePreference
   colorMode: ColorMode
   fontFamily: AppearanceFontFamily
+  htmlBackgroundConfig: HtmlBackgroundConfig
   isActivityRailVisible: boolean
   isAgentDebugTraceEnabled: boolean
   isDebugLineColorsEnabled: boolean
@@ -1179,6 +1340,7 @@ interface SettingsPageProps {
   onCodeThemeChange: (theme: CodeThemePreference) => void
   onColorModeChange: (mode: ColorMode) => void
   onFontFamilyChange: (fontFamily: AppearanceFontFamily) => void
+  onHtmlBackgroundConfigChange: (config: HtmlBackgroundConfig) => void
   onActivityRailVisibilityChange: (value: boolean) => void
   onAppearancePaletteReset: () => void
   onAppearanceTokenChange: (tokenName: AppearanceTokenName, value: string) => void
@@ -1252,6 +1414,7 @@ export function SettingsPage({
   codeThemePreference,
   colorMode,
   fontFamily,
+  htmlBackgroundConfig,
   isActivityRailVisible,
   isAgentDebugTraceEnabled,
   isDebugLineColorsEnabled,
@@ -1281,6 +1444,7 @@ export function SettingsPage({
   onCodeThemeChange,
   onColorModeChange,
   onFontFamilyChange,
+  onHtmlBackgroundConfigChange,
   onActivityRailVisibilityChange,
   onAppearancePaletteReset,
   onAppearanceTokenChange,
@@ -1997,6 +2161,14 @@ export function SettingsPage({
       },
     ]
     const hasCustomAppearanceOverrides = Object.keys(appearanceOverrides).length > 0
+    const hasHtmlBackgroundSource = htmlBackgroundConfig.html.trim().length > 0
+
+    function updateHtmlBackgroundConfig(patch: Partial<HtmlBackgroundConfig>) {
+      onHtmlBackgroundConfigChange({
+        ...htmlBackgroundConfig,
+        ...patch,
+      })
+    }
 
     const primarySectionGroups = [
       {
@@ -2355,6 +2527,162 @@ export function SettingsPage({
                     </div>
                   </section>
 
+                  <section className="settings-panel settings-html-background-panel">
+                    <div className="settings-section-header">
+                      <div>
+                        <span className="label">{t("settings.appearance.htmlBackgroundLabel")}</span>
+                        <h3>{t("settings.appearance.htmlBackgroundTitle")}</h3>
+                      </div>
+                      <p>{t("settings.appearance.htmlBackgroundCopy")}</p>
+                    </div>
+
+                    <button
+                      className={htmlBackgroundConfig.enabled ? "settings-toggle-card is-active" : "settings-toggle-card"}
+                      role="switch"
+                      aria-checked={htmlBackgroundConfig.enabled}
+                      aria-label={t("settings.appearance.htmlBackgroundEnable")}
+                      type="button"
+                      disabled={!hasHtmlBackgroundSource}
+                      onClick={() => updateHtmlBackgroundConfig({ enabled: !htmlBackgroundConfig.enabled })}
+                    >
+                      <span className="settings-toggle-copy">
+                        <strong className="settings-toggle-title">
+                          <span>{t("settings.appearance.htmlBackgroundEnable")}</span>
+                        </strong>
+                        <small>
+                          {hasHtmlBackgroundSource
+                            ? t("settings.appearance.htmlBackgroundEnableCopy")
+                            : t("settings.appearance.htmlBackgroundEmptyCopy")}
+                        </small>
+                      </span>
+                      <span className="settings-toggle-control" aria-hidden="true">
+                        <span className="settings-toggle-thumb" />
+                      </span>
+                    </button>
+
+                    <label className="settings-html-background-editor">
+                      <span className="label">{t("settings.appearance.htmlBackgroundHtmlLabel")}</span>
+                      <textarea
+                        aria-label={t("settings.appearance.htmlBackgroundHtmlLabel")}
+                        spellCheck={false}
+                        value={htmlBackgroundConfig.html}
+                        placeholder={t("settings.appearance.htmlBackgroundPlaceholder")}
+                        onChange={(event: ChangeEvent<HTMLTextAreaElement>) => updateHtmlBackgroundConfig({
+                          enabled: event.target.value.trim().length > 0 ? htmlBackgroundConfig.enabled : false,
+                          html: event.target.value,
+                        })}
+                      />
+                    </label>
+
+                    <button
+                      className={htmlBackgroundConfig.renderMode === "dynamic" ? "settings-toggle-card is-active" : "settings-toggle-card"}
+                      role="switch"
+                      aria-checked={htmlBackgroundConfig.renderMode === "dynamic"}
+                      aria-label={t("settings.appearance.htmlBackgroundDynamicMode")}
+                      type="button"
+                      disabled={!hasHtmlBackgroundSource}
+                      onClick={() => updateHtmlBackgroundConfig({
+                        renderMode: htmlBackgroundConfig.renderMode === "dynamic" ? "static" : "dynamic",
+                      })}
+                    >
+                      <span className="settings-toggle-copy">
+                        <strong className="settings-toggle-title">{t("settings.appearance.htmlBackgroundDynamicMode")}</strong>
+                        <small>{t("settings.appearance.htmlBackgroundDynamicModeCopy")}</small>
+                      </span>
+                      <span className="settings-toggle-control" aria-hidden="true">
+                        <span className="settings-toggle-thumb" />
+                      </span>
+                    </button>
+
+                    <div className="settings-html-background-controls" aria-label={t("settings.appearance.htmlBackgroundVisualControls")}>
+                      <label className="settings-html-background-range">
+                        <span>{t("settings.appearance.htmlBackgroundOpacity")}</span>
+                        <input
+                          type="range"
+                          min="0.08"
+                          max="1"
+                          step="0.02"
+                          value={htmlBackgroundConfig.opacity}
+                          onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ opacity: Number(event.target.value) })}
+                        />
+                        <output>{Math.round(htmlBackgroundConfig.opacity * 100)}%</output>
+                      </label>
+
+                      <label className="settings-html-background-range">
+                        <span>{t("settings.appearance.htmlBackgroundSurfaceOpacity")}</span>
+                        <input
+                          type="range"
+                          min="0.36"
+                          max="1"
+                          step="0.02"
+                          value={htmlBackgroundConfig.surfaceOpacity}
+                          onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ surfaceOpacity: Number(event.target.value) })}
+                        />
+                        <output>{Math.round(htmlBackgroundConfig.surfaceOpacity * 100)}%</output>
+                      </label>
+
+                      <label className="settings-html-background-range">
+                        <span>{t("settings.appearance.htmlBackgroundBlur")}</span>
+                        <input
+                          type="range"
+                          min="0"
+                          max="24"
+                          step="1"
+                          value={htmlBackgroundConfig.blurPx}
+                          onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ blurPx: Number(event.target.value) })}
+                        />
+                        <output>{Math.round(htmlBackgroundConfig.blurPx)}px</output>
+                      </label>
+
+                      <label className="settings-html-background-range">
+                        <span>{t("settings.appearance.htmlBackgroundDim")}</span>
+                        <input
+                          type="range"
+                          min="0"
+                          max="0.86"
+                          step="0.02"
+                          value={htmlBackgroundConfig.dim}
+                          onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ dim: Number(event.target.value) })}
+                        />
+                        <output>{Math.round(htmlBackgroundConfig.dim * 100)}%</output>
+                      </label>
+                    </div>
+
+                    <button
+                      className={htmlBackgroundConfig.paused ? "settings-toggle-card is-active" : "settings-toggle-card"}
+                      role="switch"
+                      aria-checked={htmlBackgroundConfig.paused}
+                      aria-label={t("settings.appearance.htmlBackgroundPauseMotion")}
+                      type="button"
+                      disabled={!hasHtmlBackgroundSource}
+                      onClick={() => updateHtmlBackgroundConfig({ paused: !htmlBackgroundConfig.paused })}
+                    >
+                      <span className="settings-toggle-copy">
+                        <strong className="settings-toggle-title">{t("settings.appearance.htmlBackgroundPauseMotion")}</strong>
+                        <small>{t("settings.appearance.htmlBackgroundPauseMotionCopy")}</small>
+                      </span>
+                      <span className="settings-toggle-control" aria-hidden="true">
+                        <span className="settings-toggle-thumb" />
+                      </span>
+                    </button>
+
+                    <div className="settings-actions-row settings-html-background-actions">
+                      <span className="settings-helper-text">
+                        {htmlBackgroundConfig.renderMode === "dynamic"
+                          ? t("settings.appearance.htmlBackgroundDynamicSafetyCopy")
+                          : t("settings.appearance.htmlBackgroundSafetyCopy")}
+                      </span>
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        disabled={!hasHtmlBackgroundSource && !htmlBackgroundConfig.enabled}
+                        onClick={() => onHtmlBackgroundConfigChange({ ...DEFAULT_HTML_BACKGROUND_CONFIG })}
+                      >
+                        {t("settings.appearance.htmlBackgroundReset")}
+                      </button>
+                    </div>
+                  </section>
+
                   <section className="settings-panel">
                     <div className="settings-section-header">
                       <div>
@@ -2454,6 +2782,15 @@ export function SettingsPage({
                             const isCustomized = isLightCustomized || isDarkCustomized
                             const lightColorLabel = `${group.label} ${row.label} Light ${row.lightToken}`
                             const darkColorLabel = `${group.label} ${row.label} Dark ${row.darkToken}`
+                            const colorValueLabel = t("settings.appearance.tokenColorValue")
+                            const channelLabels = {
+                              red: t("settings.appearance.tokenRed"),
+                              green: t("settings.appearance.tokenGreen"),
+                              blue: t("settings.appearance.tokenBlue"),
+                              alpha: t("settings.appearance.tokenAlpha"),
+                            }
+                            const lightTokenValue = appearanceTokenValues[row.lightToken]
+                            const darkTokenValue = appearanceTokenValues[row.darkToken]
 
                             return (
                               <article
@@ -2472,31 +2809,29 @@ export function SettingsPage({
                                 <div className="settings-theme-token-controls">
                                   <div className="settings-theme-token-mode">
                                     <span>{t("settings.appearance.light")}</span>
-                                    <input
-                                      aria-label={lightColorLabel}
-                                      className="settings-theme-color-picker"
-                                      type="color"
-                                      value={appearanceTokenValues[row.lightToken]}
-                                      onChange={(event) => onAppearanceTokenChange(row.lightToken, event.target.value)}
+                                    <AppearanceColorPicker
+                                      ariaLabel={lightColorLabel}
+                                      channelLabels={channelLabels}
+                                      value={lightTokenValue}
+                                      onChange={(value) => onAppearanceTokenChange(row.lightToken, value)}
                                     />
                                     <AppearanceColorTextInput
-                                      label={lightColorLabel}
-                                      value={appearanceTokenValues[row.lightToken]}
+                                      ariaLabel={`${lightColorLabel} ${colorValueLabel}`}
+                                      value={lightTokenValue}
                                       onCommit={(value) => onAppearanceTokenChange(row.lightToken, value)}
                                     />
                                   </div>
                                   <div className="settings-theme-token-mode">
                                     <span>{t("settings.appearance.dark")}</span>
-                                    <input
-                                      aria-label={darkColorLabel}
-                                      className="settings-theme-color-picker"
-                                      type="color"
-                                      value={appearanceTokenValues[row.darkToken]}
-                                      onChange={(event) => onAppearanceTokenChange(row.darkToken, event.target.value)}
+                                    <AppearanceColorPicker
+                                      ariaLabel={darkColorLabel}
+                                      channelLabels={channelLabels}
+                                      value={darkTokenValue}
+                                      onChange={(value) => onAppearanceTokenChange(row.darkToken, value)}
                                     />
                                     <AppearanceColorTextInput
-                                      label={darkColorLabel}
-                                      value={appearanceTokenValues[row.darkToken]}
+                                      ariaLabel={`${darkColorLabel} ${colorValueLabel}`}
+                                      value={darkTokenValue}
                                       onCommit={(value) => onAppearanceTokenChange(row.darkToken, value)}
                                     />
                                   </div>

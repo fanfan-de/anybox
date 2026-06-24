@@ -214,12 +214,12 @@ describe("appearance sidebar tree row tokens", () => {
   })
 })
 
-describe("appearance thread view text tokens", () => {
-  it("registers response and reasoning text tokens", () => {
+describe("appearance thread view tokens", () => {
+  it("registers text and user-turn diff card tokens", () => {
     expect(APPEARANCE_TOKEN_GROUPS).toContainEqual({
       id: "component-thread-view",
       label: "Thread View",
-      description: "Dedicated semantic text colors for assistant response and reasoning content.",
+      description: "Dedicated semantic colors for thread text and user-turn diff cards.",
       rows: [
         {
           id: "semantic-thread-response-text",
@@ -235,19 +235,63 @@ describe("appearance thread view text tokens", () => {
           lightToken: "semantic-thread-reasoning-text-light",
           darkToken: "semantic-thread-reasoning-text-dark",
         },
+        {
+          id: "semantic-thread-user-turn-diff-card-surface",
+          label: "Diff Card Surface",
+          description: "Background fill for user-turn file change cards.",
+          lightToken: "semantic-thread-user-turn-diff-card-surface-light",
+          darkToken: "semantic-thread-user-turn-diff-card-surface-dark",
+        },
+        {
+          id: "semantic-thread-user-turn-diff-card-border",
+          label: "Diff Card Border",
+          description: "Outer border for user-turn file change cards and previews.",
+          lightToken: "semantic-thread-user-turn-diff-card-border-light",
+          darkToken: "semantic-thread-user-turn-diff-card-border-dark",
+        },
+        {
+          id: "semantic-thread-user-turn-diff-divider",
+          label: "Diff Row Divider",
+          description: "Divider color between user-turn file change rows.",
+          lightToken: "semantic-thread-user-turn-diff-divider-light",
+          darkToken: "semantic-thread-user-turn-diff-divider-dark",
+        },
+        {
+          id: "semantic-thread-user-turn-diff-row-surface-hover",
+          label: "Diff Row Hover",
+          description: "Hover background for user-turn file change rows and summary controls.",
+          lightToken: "semantic-thread-user-turn-diff-row-surface-hover-light",
+          darkToken: "semantic-thread-user-turn-diff-row-surface-hover-dark",
+        },
+        {
+          id: "semantic-thread-user-turn-diff-row-surface-focus",
+          label: "Diff Row Focus",
+          description: "Keyboard focus background for user-turn file change rows and summary controls.",
+          lightToken: "semantic-thread-user-turn-diff-row-surface-focus-light",
+          darkToken: "semantic-thread-user-turn-diff-row-surface-focus-dark",
+        },
+        {
+          id: "semantic-thread-user-turn-diff-preview-surface",
+          label: "Diff Preview Surface",
+          description: "Background fill for embedded user-turn diff previews.",
+          lightToken: "semantic-thread-user-turn-diff-preview-surface-light",
+          darkToken: "semantic-thread-user-turn-diff-preview-surface-dark",
+        },
       ],
     })
   })
 
-  it("normalizes thread view text overrides", () => {
+  it("normalizes thread view overrides", () => {
     const document = normalizeAppearanceConfigDocument({
       overrides: {
         "semantic-thread-response-text-light": " #123456 ",
         "semantic-thread-reasoning-text-dark": "#abcdef",
         "semantic-thread-response-text": "#000000",
+        "semantic-thread-user-turn-diff-card-surface": "#fedcba",
       },
       resolvedTokens: {
         "semantic-thread-reasoning-text-light": " #654321 ",
+        "semantic-thread-user-turn-diff-row-surface-focus-dark": " #334455 ",
       },
     })
 
@@ -255,9 +299,12 @@ describe("appearance thread view text tokens", () => {
       "semantic-thread-response-text-light": "#123456",
       "semantic-thread-response-text-dark": "#000000",
       "semantic-thread-reasoning-text-dark": "#abcdef",
+      "semantic-thread-user-turn-diff-card-surface-light": "#fedcba",
+      "semantic-thread-user-turn-diff-card-surface-dark": "#fedcba",
     })
     expect(document.resolvedTokens).toEqual({
       "semantic-thread-reasoning-text-light": "#654321",
+      "semantic-thread-user-turn-diff-row-surface-focus-dark": "#334455",
     })
   })
 })

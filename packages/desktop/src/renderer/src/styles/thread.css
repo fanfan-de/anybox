@@ -3045,11 +3045,11 @@ body.is-resizing-sidebar .user-turn-diff-file-entry {
   min-width: 0;
   margin-top: 8px;
   overflow: hidden;
-  border: 1px solid #e3e5e8;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #26292f;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  border: 1px solid var(--semantic-thread-user-turn-diff-card-border);
+  border-radius: var(--radius-panel);
+  background: var(--semantic-thread-user-turn-diff-card-surface);
+  color: var(--text-primary);
+  box-shadow: none;
 }
 
 .user-turn .user-turn-diff-card {
@@ -3070,19 +3070,26 @@ body.is-resizing-sidebar .user-turn-diff-file-entry {
   display: inline-flex;
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 30px;
   align-items: baseline;
   gap: 7px;
-  padding: 0;
+  margin-left: -4px;
+  padding: 0 4px;
   border: 0;
-  background: transparent;
-  color: inherit;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-primary);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.user-turn-diff-card-summary:hover,
+.user-turn-diff-card-summary:hover {
+  background: var(--semantic-thread-user-turn-diff-row-surface-hover);
+}
+
 .user-turn-diff-card-summary:focus-visible {
+  background: var(--semantic-thread-user-turn-diff-row-surface-focus);
   outline: none;
 }
 
@@ -3106,19 +3113,19 @@ body.is-resizing-sidebar .user-turn-diff-file-entry {
 }
 
 .user-turn-diff-stats .is-add {
-  color: #0f9f53;
+  color: var(--semantic-success-text);
 }
 
 .user-turn-diff-stats .is-remove {
-  color: #c4322d;
+  color: var(--semantic-error-text);
 }
 
 .user-turn-diff-actions {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 14px;
-  color: #858891;
+  gap: 6px;
+  color: var(--semantic-button-secondary-text);
 }
 
 .user-turn-diff-action,
@@ -3128,27 +3135,55 @@ body.is-resizing-sidebar .user-turn-diff-file-entry {
   justify-content: center;
   gap: 3px;
   min-height: 28px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: currentColor;
+  padding: 0 8px;
+  border: 1px solid var(--semantic-button-secondary-border);
+  border-radius: var(--radius-control);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
   font: inherit;
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1;
   cursor: pointer;
 }
 
-.user-turn-diff-action:hover,
-.user-turn-diff-action:focus-visible,
-.user-turn-diff-expand:hover,
-.user-turn-diff-expand:focus-visible {
-  color: #42464f;
+.user-turn-diff-expand {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--semantic-icon-button-text);
+  font-size: 16px;
+}
+
+.user-turn-diff-action:not(:disabled):hover,
+.user-turn-diff-action:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
   outline: none;
 }
 
-.user-turn-diff-action:disabled,
+.user-turn-diff-expand:not(:disabled):hover,
+.user-turn-diff-expand:not(:disabled):focus-visible {
+  background: var(--semantic-icon-button-surface-hover);
+  color: var(--semantic-icon-button-text-hover);
+  outline: none;
+}
+
+.user-turn-diff-action:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+  opacity: 0.68;
+  cursor: default;
+}
+
 .user-turn-diff-expand:disabled {
-  opacity: 0.45;
+  color: var(--semantic-button-secondary-disabled-text);
+  opacity: 0.68;
   cursor: default;
 }
 
@@ -3158,22 +3193,18 @@ body.is-resizing-sidebar .user-turn-diff-file-entry {
   height: 13px;
 }
 
-.user-turn-diff-expand {
-  width: 20px;
-}
-
 .user-turn-diff-file-list {
   display: grid;
   min-width: 0;
-  border-top: 1px solid #eceef1;
+  border-top: 1px solid var(--semantic-thread-user-turn-diff-divider);
 }
 
 .user-turn-diff-file-entry + .user-turn-diff-file-entry {
-  border-top: 1px solid #f0f1f3;
+  border-top: 1px solid var(--semantic-thread-user-turn-diff-divider);
 }
 
 .user-turn-diff-file-entry:has(.user-turn-diff-file-preview) + .user-turn-diff-file-entry {
-  border-top-color: #e6e9ee;
+  border-top-color: var(--semantic-thread-user-turn-diff-card-border);
 }
 
 .user-turn-diff-file-row {
@@ -3186,16 +3217,19 @@ body.is-resizing-sidebar .user-turn-diff-file-entry {
   gap: 9px;
   padding: 0 12px;
   border: 0;
-  background: transparent;
-  color: inherit;
+  background: none;
+  color: currentColor;
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.user-turn-diff-file-row:hover,
-.user-turn-diff-file-row:focus-visible {
-  background: #f8f9fb;
+button.user-turn-diff-file-row:hover {
+  background: var(--semantic-thread-user-turn-diff-row-surface-hover);
+}
+
+button.user-turn-diff-file-row:focus-visible {
+  background: var(--semantic-thread-user-turn-diff-row-surface-focus);
   outline: none;
 }
 
@@ -3205,7 +3239,7 @@ body.is-resizing-sidebar .user-turn-diff-file-entry {
 
 .user-turn-diff-file-path {
   min-width: 0;
-  color: #30343b;
+  color: var(--text-primary);
   font-size: 16px;
   line-height: 1.3;
   white-space: nowrap;
@@ -3219,7 +3253,7 @@ body.is-resizing-sidebar .user-turn-diff-file-entry {
   height: 18px;
   align-items: center;
   justify-content: center;
-  color: #858891;
+  color: var(--text-tertiary);
 }
 
 .user-turn-diff-file-chevron svg {
@@ -3230,22 +3264,23 @@ body.is-resizing-sidebar .user-turn-diff-file-entry {
 .user-turn-diff-file-preview {
   min-width: 0;
   margin: 0 10px 10px;
-  border: 1px solid rgba(166, 186, 208, 0.24);
-  border-radius: 6px;
+  border: 1px solid var(--semantic-thread-user-turn-diff-card-border);
+  border-radius: var(--radius-chip);
+  background: var(--semantic-thread-user-turn-diff-preview-surface);
   overflow: hidden;
 }
 
 .user-turn-historical-diff.right-sidebar-diff-preview,
 .user-turn-historical-diff-empty.right-sidebar-diff-empty {
-  background: #fbfcfe;
+  background: var(--semantic-thread-user-turn-diff-preview-surface);
 }
 
 .user-turn-diff-error {
   margin: 0;
   padding: 8px 12px;
-  border-top: 1px solid #f0d4d1;
-  background: #fff7f7;
-  color: #a53a31;
+  border-top: 1px solid var(--semantic-error-border);
+  background: var(--semantic-error-surface);
+  color: var(--semantic-error-text);
   font-size: 13px;
   line-height: 1.35;
 }

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import type { SerializedDockview } from "dockview-react"
 import { ActivityRail } from "./app/sidebar/ActivityRail"
 import { BuiltinToolsPage } from "./app/tools/BuiltinToolsPage"
@@ -10,6 +10,7 @@ import { RightSidebar } from "./app/sidebar/RightSidebar"
 import { Sidebar } from "./app/sidebar/Sidebar"
 import { SidebarResizer } from "./app/sidebar/SidebarResizer"
 import { NativeMacWindowControlsSlot, WindowChrome } from "./app/chrome/WindowChrome"
+import { HtmlBackgroundLayer } from "./app/html-background/HtmlBackgroundLayer"
 import { TerminalAreaHost } from "./app/terminal/TerminalAreaHost"
 import {
   useWorkspaceStoreSelector,
@@ -1010,6 +1011,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     colorMode,
     handleColorModeChange,
     handleFontFamilyChange,
+    handleHtmlBackgroundConfigChange,
+    htmlBackgroundConfig,
     isActivityRailVisible,
     isAgentDebugTraceEnabled,
     isDebugLineColorsEnabled,
@@ -2167,8 +2170,10 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   }
 
   const isMacOS = platform === "darwin"
+  const hasHtmlBackground = htmlBackgroundConfig.enabled && htmlBackgroundConfig.html.trim().length > 0
   const windowShellClassName = [
     "window-shell",
+    hasHtmlBackground ? "has-html-background" : "",
     isMacOS ? "is-macos" : "",
     isDebugLineColorsEnabled ? "debug-line-colors" : "",
     isDebugUiRegionsEnabled ? "debug-ui-regions" : "",
@@ -2239,10 +2244,17 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
         "--right-sidebar-resizer-width": "0px",
       }
     : appShellStyle
+  const windowShellStyle = hasHtmlBackground
+    ? ({
+        "--html-background-surface-opacity": `${Math.round(htmlBackgroundConfig.surfaceOpacity * 100)}%`,
+        "--html-background-content-opacity": `${Math.round(Math.min(0.92, htmlBackgroundConfig.surfaceOpacity + 0.14) * 100)}%`,
+      } as CSSProperties)
+    : undefined
 
   return (
     <WorkspaceStoreProvider store={workspaceStore}>
-      <div className={windowShellClassName}>
+      <div className={windowShellClassName} style={windowShellStyle}>
+        <HtmlBackgroundLayer config={htmlBackgroundConfig} />
         <main ref={appShellRef} className={appShellClassName} style={effectiveAppShellStyle}>
         {isActivityRailVisible ? (
           <ActivityRail
@@ -2891,6 +2903,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               codeThemePreference={codeThemePreference}
               colorMode={colorMode}
               fontFamily={fontFamily}
+              htmlBackgroundConfig={htmlBackgroundConfig}
               isActivityRailVisible={isActivityRailVisible}
               isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
               isDebugLineColorsEnabled={isDebugLineColorsEnabled}
@@ -2921,6 +2934,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onCodeThemeChange={handleCodeThemeChange}
               onColorModeChange={handleColorModeChange}
               onFontFamilyChange={handleFontFamilyChange}
+              onHtmlBackgroundConfigChange={handleHtmlBackgroundConfigChange}
               onActivityRailVisibilityChange={handleActivityRailVisibilityChange}
               onAppearancePaletteReset={handleAppearancePaletteReset}
               onAppearanceTokenChange={handleAppearanceTokenChange}

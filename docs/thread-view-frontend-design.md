@@ -469,6 +469,12 @@ Thread view 使用项目的语义 token：
 - `--surface-trace`
 - `--semantic-thread-response-text`
 - `--semantic-thread-reasoning-text`
+- `--semantic-thread-user-turn-diff-card-surface`
+- `--semantic-thread-user-turn-diff-card-border`
+- `--semantic-thread-user-turn-diff-divider`
+- `--semantic-thread-user-turn-diff-row-surface-hover`
+- `--semantic-thread-user-turn-diff-row-surface-focus`
+- `--semantic-thread-user-turn-diff-preview-surface`
 - `--semantic-markdown-text`
 - `--semantic-question-card-surface`
 - `--semantic-proposed-plan-card-surface`
@@ -479,12 +485,27 @@ Thread view 的 assistant 文本有两组专用 semantic token：
 - `semantic-thread-response-text`：assistant response 区域的普通 trace 文本。
 - `semantic-thread-reasoning-text`：assistant reasoning 区域的 reasoning 文本。
 
+User-turn 文件变更卡片使用一组专用 semantic token：
+
+- `semantic-thread-user-turn-diff-card-surface`：卡片背景。
+- `semantic-thread-user-turn-diff-card-border`：卡片外框和内嵌 diff preview 外框。
+- `semantic-thread-user-turn-diff-divider`：文件行分隔线。
+- `semantic-thread-user-turn-diff-row-surface-hover`：summary 和文件行 hover 背景。
+- `semantic-thread-user-turn-diff-row-surface-focus`：summary 和文件行键盘焦点背景。
+- `semantic-thread-user-turn-diff-preview-surface`：内嵌 diff preview 背景。
+
 运行时 CSS 使用无 light/dark 后缀的变量：
 
 - `--semantic-thread-response-text`
 - `--semantic-thread-reasoning-text`
+- `--semantic-thread-user-turn-diff-card-surface`
+- `--semantic-thread-user-turn-diff-card-border`
+- `--semantic-thread-user-turn-diff-divider`
+- `--semantic-thread-user-turn-diff-row-surface-hover`
+- `--semantic-thread-user-turn-diff-row-surface-focus`
+- `--semantic-thread-user-turn-diff-preview-surface`
 
-它们在 light/dark theme 下分别映射到 `semantic-thread-response-text-light/dark` 和 `semantic-thread-reasoning-text-light/dark`。需要注意，assistant response 如果进入 `ThreadMarkdown`，`.thread-markdown` 内部还会把 `--md-text` 指向 `--semantic-markdown-text`，所以 markdown 段落的最终颜色可能服从 markdown token，而不是 thread response token。
+它们在 light/dark theme 下分别映射到同名 `-light` / `-dark` token。需要注意，assistant response 如果进入 `ThreadMarkdown`，`.thread-markdown` 内部还会把 `--md-text` 指向 `--semantic-markdown-text`，所以 markdown 段落的最终颜色可能服从 markdown token，而不是 thread response token。
 
 `thread-shell` 和 `thread-column` 的面板背景当前没有对应的 `semantic-*` surface token。普通模式下它们透明；debug UI region 模式下才由 `--debug-region-thread-shell` 涂成蓝色。
 

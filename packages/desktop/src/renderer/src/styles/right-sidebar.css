@@ -103,6 +103,12 @@
   z-index: 1;
 }
 
+.window-shell.has-html-background .right-sidebar-top-menu {
+  --right-sidebar-tab-bar-bg: var(--html-background-tab-surface);
+  --right-sidebar-tab-active-bg: var(--html-background-shell-surface);
+  background: var(--html-background-right-top-menu-surface);
+}
+
 .right-sidebar-top-menu .shell-top-menu-content {
   min-width: 0;
   flex: 1 1 auto;
@@ -336,6 +342,10 @@
   justify-content: stretch;
   align-content: stretch;
   background: var(--seg-panel);
+}
+
+.window-shell.has-html-background .right-sidebar-launcher {
+  background: var(--html-background-panel-surface);
 }
 
 .right-sidebar-launcher-shell {
@@ -4017,6 +4027,31 @@
 
 .workspace-files-code {
   border: 0;
+}
+
+.window-shell.has-html-background .right-sidebar-view-host,
+.window-shell.has-html-background .right-sidebar-main-stack {
+  background: transparent;
+}
+
+.window-shell.has-html-background .workspace-files-panel,
+.window-shell.has-html-background .workspace-files-split,
+.window-shell.has-html-background .workspace-files-reader,
+.window-shell.has-html-background .workspace-files-tree {
+  background: var(--html-background-content-surface);
+}
+
+.window-shell.has-html-background .workspace-files-panel-header,
+.window-shell.has-html-background .workspace-files-pathbar,
+.window-shell.has-html-background .workspace-files-code,
+.window-shell.has-html-background .workspace-files-markdown-stage {
+  background: var(--html-background-content-surface);
+}
+
+.window-shell.has-html-background .workspace-files-view-toggle,
+.window-shell.has-html-background .workspace-files-image-toolbar,
+.window-shell.has-html-background .workspace-files-tree-search {
+  background: var(--html-background-content-muted-surface);
 }
 
 .workspace-files-markdown-stage {

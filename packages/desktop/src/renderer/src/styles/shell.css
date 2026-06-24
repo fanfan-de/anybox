@@ -16,6 +16,59 @@
   overflow: hidden;
   padding: 0;
   background: #e9edf2;
+  isolation: isolate;
+}
+
+.html-background-layer {
+  --html-background-blur: 0px;
+  --html-background-dim: 0.18;
+  --html-background-opacity: 0.78;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--seg-shell);
+}
+
+.html-background-frame {
+  position: absolute;
+  inset: calc(var(--html-background-blur) * -2);
+  width: calc(100% + (var(--html-background-blur) * 4));
+  height: calc(100% + (var(--html-background-blur) * 4));
+  border: 0;
+  opacity: var(--html-background-opacity);
+  filter: blur(var(--html-background-blur));
+  pointer-events: none;
+}
+
+.html-background-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--semantic-html-background-scrim);
+  opacity: var(--html-background-dim);
+  pointer-events: none;
+}
+
+.window-shell.has-html-background {
+  --html-background-surface-opacity: 68%;
+  --html-background-content-opacity: 82%;
+  --html-background-shell-surface: color-mix(in srgb, var(--seg-shell) var(--html-background-surface-opacity), transparent);
+  --html-background-panel-surface: color-mix(in srgb, var(--seg-panel) var(--html-background-surface-opacity), transparent);
+  --html-background-panel-muted-surface: color-mix(in srgb, var(--seg-panel-muted) var(--html-background-surface-opacity), transparent);
+  --html-background-content-surface: color-mix(in srgb, var(--seg-panel) var(--html-background-content-opacity), transparent);
+  --html-background-content-muted-surface: color-mix(in srgb, var(--seg-panel-muted) var(--html-background-content-opacity), transparent);
+  --html-background-sidebar-surface: color-mix(in srgb, var(--seg-sidebar) var(--html-background-surface-opacity), transparent);
+  --html-background-sidebar-strong-surface: color-mix(in srgb, var(--seg-sidebar-strong) var(--html-background-surface-opacity), transparent);
+  --html-background-tab-surface: color-mix(in srgb, var(--seg-pane-tab-bar-surface) var(--html-background-surface-opacity), transparent);
+  --html-background-left-top-menu-surface: color-mix(in srgb, var(--seg-left-sidebar-top-menu-surface) var(--html-background-surface-opacity), transparent);
+  --html-background-right-top-menu-surface: color-mix(in srgb, var(--seg-right-sidebar-top-menu-surface) var(--html-background-surface-opacity), transparent);
+  --html-background-composer-surface: color-mix(in srgb, var(--seg-composer-surface) var(--html-background-surface-opacity), transparent);
+  --top-chrome-surface: var(--html-background-tab-surface);
+  --top-chrome-active-surface: var(--html-background-shell-surface);
+  background: var(--seg-shell);
 }
 
 .window-controls {
@@ -106,6 +159,7 @@
   --right-sidebar-resizer-width: 10px;
   --right-sidebar-width: 480px;
   position: relative;
+  z-index: 1;
   min-height: 0;
   overflow: hidden;
   display: grid;
@@ -122,6 +176,18 @@
   border-radius: 0;
   background: var(--seg-shell);
   box-shadow: none;
+}
+
+.window-shell.has-html-background .app-shell {
+  background: transparent;
+}
+
+.window-shell.has-html-background .activity-rail {
+  background: var(--html-background-sidebar-strong-surface);
+}
+
+.window-shell.has-html-background .activity-rail-top-menu {
+  background: var(--html-background-left-top-menu-surface);
 }
 
 .app-loading-screen,
@@ -198,6 +264,10 @@
 
 .activity-rail.is-right .activity-rail-top-menu {
   background: var(--seg-right-sidebar-top-menu-surface);
+}
+
+.window-shell.has-html-background .activity-rail.is-right .activity-rail-top-menu {
+  background: var(--html-background-right-top-menu-surface);
 }
 
 .activity-rail .sidebar-toggle-button.is-rail {

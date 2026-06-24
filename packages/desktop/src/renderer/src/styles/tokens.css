@@ -50,7 +50,7 @@
   --text-tertiary-light: #a8a29e;
   --text-on-dark-light: #fafaf9;
   --border-subtle-light: rgba(41, 37, 36, 0.08);
-  --border-default-light: #e7e5e4;
+  --border-default-light: rgba(41, 37, 36, 0.08);
   --shadow-sm-light: 0 14px 30px rgba(41, 37, 36, 0.06);
   --shadow-md-light: 0 20px 46px rgba(41, 37, 36, 0.08);
   --shadow-lg-light: 0 28px 68px rgba(41, 37, 36, 0.12);
@@ -72,7 +72,7 @@
   --text-tertiary-dark: #a8a29e;
   --text-on-dark-dark: #fafaf9;
   --border-subtle-dark: rgba(231, 229, 228, 0.14);
-  --border-default-dark: rgba(231, 229, 228, 0.24);
+  --border-default-dark: rgba(231, 229, 228, 0.18);
   --shadow-sm-dark: 0 12px 28px rgba(12, 10, 9, 0.28);
   --shadow-md-dark: 0 18px 40px rgba(12, 10, 9, 0.34);
   --shadow-lg-dark: 0 28px 64px rgba(12, 10, 9, 0.42);
@@ -261,6 +261,8 @@
   --semantic-right-sidebar-top-menu-surface-dark: #221d1a;
   --semantic-terminal-surface-light: #ffffff;
   --semantic-terminal-surface-dark: #000000;
+  --semantic-html-background-scrim-light: var(--surface-shell-light);
+  --semantic-html-background-scrim-dark: var(--surface-shell-dark);
   --semantic-sidebar-tree-row-text-light: var(--text-secondary-light);
   --semantic-sidebar-tree-row-text-dark: var(--text-secondary-dark);
   --semantic-sidebar-tree-row-text-hover-light: var(--text-primary-light);
@@ -373,6 +375,18 @@
   --semantic-thread-response-text-dark: var(--text-primary-dark);
   --semantic-thread-reasoning-text-light: var(--text-secondary-light);
   --semantic-thread-reasoning-text-dark: var(--text-secondary-dark);
+  --semantic-thread-user-turn-diff-card-surface-light: var(--surface-panel-light);
+  --semantic-thread-user-turn-diff-card-surface-dark: var(--surface-panel-dark);
+  --semantic-thread-user-turn-diff-card-border-light: var(--mix-seg-border-82-transparent-18-light);
+  --semantic-thread-user-turn-diff-card-border-dark: var(--mix-seg-border-82-transparent-18-dark);
+  --semantic-thread-user-turn-diff-divider-light: var(--mix-seg-border-90-transparent-10-light);
+  --semantic-thread-user-turn-diff-divider-dark: var(--mix-seg-border-90-transparent-10-dark);
+  --semantic-thread-user-turn-diff-row-surface-hover-light: var(--semantic-sidebar-tree-row-surface-hover-light);
+  --semantic-thread-user-turn-diff-row-surface-hover-dark: var(--semantic-sidebar-tree-row-surface-hover-dark);
+  --semantic-thread-user-turn-diff-row-surface-focus-light: var(--mix-seg-panel-72-seg-panel-muted-28-light);
+  --semantic-thread-user-turn-diff-row-surface-focus-dark: var(--mix-seg-panel-72-seg-panel-muted-28-dark);
+  --semantic-thread-user-turn-diff-preview-surface-light: var(--surface-panel-muted-light);
+  --semantic-thread-user-turn-diff-preview-surface-dark: var(--surface-panel-muted-dark);
   --semantic-markdown-text-light: var(--text-primary-light);
   --semantic-markdown-text-dark: var(--text-primary-dark);
   --semantic-markdown-muted-text-light: var(--text-secondary-light);
@@ -405,6 +419,7 @@
   --semantic-left-sidebar-top-menu-surface: var(--semantic-left-sidebar-top-menu-surface-light);
   --semantic-right-sidebar-top-menu-surface: var(--semantic-right-sidebar-top-menu-surface-light);
   --semantic-terminal-surface: var(--semantic-terminal-surface-light);
+  --semantic-html-background-scrim: var(--semantic-html-background-scrim-light);
   --semantic-sidebar-tree-row-text: var(--semantic-sidebar-tree-row-text-light);
   --semantic-sidebar-tree-row-text-hover: var(--semantic-sidebar-tree-row-text-hover-light);
   --semantic-sidebar-tree-row-text-active: var(--semantic-sidebar-tree-row-text-active-light);
@@ -466,6 +481,12 @@
   --semantic-proposed-plan-card-surface: var(--semantic-proposed-plan-card-surface-light);
   --semantic-thread-response-text: var(--semantic-thread-response-text-light);
   --semantic-thread-reasoning-text: var(--semantic-thread-reasoning-text-light);
+  --semantic-thread-user-turn-diff-card-surface: var(--semantic-thread-user-turn-diff-card-surface-light);
+  --semantic-thread-user-turn-diff-card-border: var(--semantic-thread-user-turn-diff-card-border-light);
+  --semantic-thread-user-turn-diff-divider: var(--semantic-thread-user-turn-diff-divider-light);
+  --semantic-thread-user-turn-diff-row-surface-hover: var(--semantic-thread-user-turn-diff-row-surface-hover-light);
+  --semantic-thread-user-turn-diff-row-surface-focus: var(--semantic-thread-user-turn-diff-row-surface-focus-light);
+  --semantic-thread-user-turn-diff-preview-surface: var(--semantic-thread-user-turn-diff-preview-surface-light);
   --semantic-markdown-text: var(--semantic-markdown-text-light);
   --semantic-markdown-muted-text: var(--semantic-markdown-muted-text-light);
   --semantic-markdown-strong-text: var(--semantic-markdown-strong-text-light);
@@ -1027,7 +1048,7 @@
   --text-tertiary-light: #64748b;
   --text-on-dark-light: #f8fafc;
   --border-subtle-light: rgba(15, 23, 42, 0.08);
-  --border-default-light: #e2e8f0;
+  --border-default-light: rgba(15, 23, 42, 0.08);
   --shadow-sm-light: 0 14px 30px rgba(15, 23, 42, 0.06);
   --shadow-md-light: 0 20px 46px rgba(15, 23, 42, 0.08);
   --shadow-lg-light: 0 28px 68px rgba(15, 23, 42, 0.12);
@@ -1049,7 +1070,7 @@
   --text-tertiary-dark: #94a3b8;
   --text-on-dark-dark: #f8fafc;
   --border-subtle-dark: rgba(148, 163, 184, 0.14);
-  --border-default-dark: rgba(148, 163, 184, 0.24);
+  --border-default-dark: rgba(148, 163, 184, 0.18);
   --shadow-sm-dark: 0 12px 28px rgba(2, 6, 23, 0.28);
   --shadow-md-dark: 0 18px 40px rgba(2, 6, 23, 0.34);
   --shadow-lg-dark: 0 28px 64px rgba(2, 6, 23, 0.42);
@@ -1437,6 +1458,7 @@
     --semantic-left-sidebar-top-menu-surface: var(--semantic-left-sidebar-top-menu-surface-dark);
     --semantic-right-sidebar-top-menu-surface: var(--semantic-right-sidebar-top-menu-surface-dark);
     --semantic-terminal-surface: var(--semantic-terminal-surface-dark);
+    --semantic-html-background-scrim: var(--semantic-html-background-scrim-dark);
     --semantic-settings-slot-card-list-item-surface-default: var(--semantic-settings-slot-card-list-item-surface-default-dark);
     --semantic-settings-slot-card-list-item-surface-hover: var(--semantic-settings-slot-card-list-item-surface-hover-dark);
     --semantic-settings-slot-card-list-item-surface-focus: var(--semantic-settings-slot-card-list-item-surface-focus-dark);
@@ -1487,6 +1509,12 @@
     --semantic-proposed-plan-card-surface: var(--semantic-proposed-plan-card-surface-dark);
     --semantic-thread-response-text: var(--semantic-thread-response-text-dark);
     --semantic-thread-reasoning-text: var(--semantic-thread-reasoning-text-dark);
+    --semantic-thread-user-turn-diff-card-surface: var(--semantic-thread-user-turn-diff-card-surface-dark);
+    --semantic-thread-user-turn-diff-card-border: var(--semantic-thread-user-turn-diff-card-border-dark);
+    --semantic-thread-user-turn-diff-divider: var(--semantic-thread-user-turn-diff-divider-dark);
+    --semantic-thread-user-turn-diff-row-surface-hover: var(--semantic-thread-user-turn-diff-row-surface-hover-dark);
+    --semantic-thread-user-turn-diff-row-surface-focus: var(--semantic-thread-user-turn-diff-row-surface-focus-dark);
+    --semantic-thread-user-turn-diff-preview-surface: var(--semantic-thread-user-turn-diff-preview-surface-dark);
     --semantic-markdown-text: var(--semantic-markdown-text-dark);
     --semantic-markdown-muted-text: var(--semantic-markdown-muted-text-dark);
     --semantic-markdown-strong-text: var(--semantic-markdown-strong-text-dark);
@@ -1696,6 +1724,7 @@
   --semantic-left-sidebar-top-menu-surface: var(--semantic-left-sidebar-top-menu-surface-dark);
   --semantic-right-sidebar-top-menu-surface: var(--semantic-right-sidebar-top-menu-surface-dark);
   --semantic-terminal-surface: var(--semantic-terminal-surface-dark);
+  --semantic-html-background-scrim: var(--semantic-html-background-scrim-dark);
   --semantic-sidebar-tree-row-text: var(--semantic-sidebar-tree-row-text-dark);
   --semantic-sidebar-tree-row-text-hover: var(--semantic-sidebar-tree-row-text-hover-dark);
   --semantic-sidebar-tree-row-text-active: var(--semantic-sidebar-tree-row-text-active-dark);
@@ -1752,6 +1781,12 @@
   --semantic-proposed-plan-card-surface: var(--semantic-proposed-plan-card-surface-dark);
   --semantic-thread-response-text: var(--semantic-thread-response-text-dark);
   --semantic-thread-reasoning-text: var(--semantic-thread-reasoning-text-dark);
+  --semantic-thread-user-turn-diff-card-surface: var(--semantic-thread-user-turn-diff-card-surface-dark);
+  --semantic-thread-user-turn-diff-card-border: var(--semantic-thread-user-turn-diff-card-border-dark);
+  --semantic-thread-user-turn-diff-divider: var(--semantic-thread-user-turn-diff-divider-dark);
+  --semantic-thread-user-turn-diff-row-surface-hover: var(--semantic-thread-user-turn-diff-row-surface-hover-dark);
+  --semantic-thread-user-turn-diff-row-surface-focus: var(--semantic-thread-user-turn-diff-row-surface-focus-dark);
+  --semantic-thread-user-turn-diff-preview-surface: var(--semantic-thread-user-turn-diff-preview-surface-dark);
   --semantic-markdown-text: var(--semantic-markdown-text-dark);
   --semantic-markdown-muted-text: var(--semantic-markdown-muted-text-dark);
   --semantic-markdown-strong-text: var(--semantic-markdown-strong-text-dark);
