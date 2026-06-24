@@ -1586,7 +1586,6 @@ describe("plugin marketplace API", () => {
     expect(cachedRemotePlugin?.name).toBe("Remote Lab")
   })
 
-<<<<<<< Updated upstream
   test("loads multiple cached and imported registry plugins without treating indexes as manifest URLs", async () => {
     await useTempDatabase()
     if (!activeRoot) throw new Error("Temp root has not been initialized.")
@@ -1633,7 +1632,8 @@ describe("plugin marketplace API", () => {
     expect(namesByID.get("cached-two")).toBe("Cached Two")
     expect(namesByID.get("imported-one")).toBe("Imported One")
     expect(namesByID.get("imported-two")).toBe("Imported Two")
-=======
+  })
+
   test("loads cached remote registry metadata with multiple entries", async () => {
     await useTempDatabase()
     const cachePath = join(process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR!, "plugin-registry-cache.json")
@@ -1675,7 +1675,6 @@ describe("plugin marketplace API", () => {
     expect(response.status).toBe(200)
     expect(body.data?.find((plugin) => plugin.id === "cached-alpha")?.name).toBe("Cached Alpha")
     expect(body.data?.find((plugin) => plugin.id === "cached-beta")?.name).toBe("Cached Beta")
->>>>>>> Stashed changes
   })
 
   test("shows remote metadata without a package as catalog-only", async () => {

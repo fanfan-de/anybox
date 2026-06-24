@@ -3603,22 +3603,25 @@ describe("server api", () => {
         getEnvAll: () => ({
           DEEPSEEK_API_KEY: "test-deepseek-key",
         }),
-        importPackage: async () => ({
-          module: {
-            createOpenAICompatible(options: Record<string, unknown>) {
-              capturedFactoryInputs.push(options)
-              return {
-                languageModel(modelID: string) {
-                  return {
-                    ...languageModel,
-                    modelID,
-                  }
-                },
-              }
+        importPackage: async (pkg: string) => {
+          expect(pkg).toBe("@ai-sdk/deepseek")
+          return {
+            module: {
+              createDeepSeek(options: Record<string, unknown>) {
+                capturedFactoryInputs.push(options)
+                return {
+                  languageModel(modelID: string) {
+                    return {
+                      ...languageModel,
+                      modelID,
+                    }
+                  },
+                }
+              },
             },
-          },
-          version: "test-version",
-        }),
+            version: "test-version",
+          }
+        },
       })
       const restoreSettings = SettingsUseCase.setRuntimeDependenciesForTesting({
         getGenerateText: async () => async (input: Record<string, unknown>) => {
@@ -3651,7 +3654,6 @@ describe("server api", () => {
             apiKey: "test-deepseek-key",
             baseURL: "https://api.deepseek.test/v1",
             headers: undefined,
-            name: "deepseek",
           },
         ])
         const generateInput = capturedGenerateInput as unknown as Record<string, unknown>
