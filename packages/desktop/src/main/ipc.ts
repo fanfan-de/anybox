@@ -4,7 +4,11 @@ import { DesktopIpcSchemas, createSshWorkspaceUri, isSshWorkspaceUri } from "@an
 import { createHash, randomUUID } from "node:crypto"
 import { appendFile, mkdir, open, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
-import type { AppearanceConfigDocument } from "../shared/appearance"
+import type { AppearanceConfigDocument, AppearanceRuntimeState } from "../shared/appearance"
+import {
+  createDefaultAppearanceRuntimeState,
+  normalizeAppearanceRuntimeState,
+} from "../shared/appearance"
 import type { AppLocale, LocaleConfigDocument } from "../shared/locale"
 import type {
   DesktopIpcChannel,
@@ -22,10 +26,12 @@ import type {
 import {
   DESKTOP_APP_UPDATE_STATE_EVENT_CHANNEL,
   DESKTOP_AGENT_SESSION_EVENT_CHANNEL,
+  DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL,
   DESKTOP_AUTOMATION_EVENT_CHANNEL,
 } from "../shared/desktop-ipc-contract"
 import { getAgentConfig, readAgentSSEStream, requestAgentJSON, resolveAgentURL } from "./agent-client"
 import { AgentCompletionNotificationManager } from "./agent-completion-notification"
+import { openAppearanceWindow } from "./appearance-window"
 import { readAppearanceConfigSnapshot, writeAppearanceConfigSnapshot } from "./appearance-config"
 import { ComputerUseOverlayManager } from "./computer-use-overlay"
 import { filterAvailableExternalEditorsForTarget, listAvailableExternalEditors, openInExternalEditor } from "./external-editors"
@@ -154,6 +160,7 @@ import type { WorkbenchWindowManager } from "./workbench-window-manager"
 
 const AGENT_SESSION_EVENT_CHANNEL = DESKTOP_AGENT_SESSION_EVENT_CHANNEL
 const AUTOMATION_EVENT_CHANNEL = DESKTOP_AUTOMATION_EVENT_CHANNEL
+const APPEARANCE_STATE_EVENT_CHANNEL = DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL
 let appUpdateStateBridgeRegistered = false
 let automationEventBridgeRegistered = false
 
@@ -2669,7 +2676,9 @@ async function requestRemoteWorkspaceFile(directory: string, filePath: string) {
 }
 
 export interface IpcHandlerOptions {
+  mainDir?: string
   onLocaleChanged?: (locale: AppLocale) => void
+  rendererEntryUrl?: string
   workbenchWindowManager?: WorkbenchWindowManager
 }
 
@@ -2773,6 +2782,18 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   const externalEditorMenuResolvedIconCache = new Map<string, NativeImage | undefined>()
   const externalEditorMenuIconLoadCache = new Map<string, Promise<NativeImage | undefined>>()
   let cachedAvailableExternalEditors: ReturnType<typeof listAvailableExternalEditors> | null = null
+  let lastAppearanceRuntimeState = createDefaultAppearanceRuntimeState()
+
+  function broadcastAppearanceRuntimeState(state: AppearanceRuntimeState, exceptSender?: WebContents) {
+    const normalizedState = normalizeAppearanceRuntimeState(state, lastAppearanceRuntimeState)
+    lastAppearanceRuntimeState = normalizedState
+
+    for (const window of BrowserWindow.getAllWindows()) {
+      const webContents = window.webContents
+      if (exceptSender && webContents.id === exceptSender.id) continue
+      sendDesktopIpcEvent(webContents, APPEARANCE_STATE_EVENT_CHANNEL, normalizedState)
+    }
+  }
 
   if (!appUpdateStateBridgeRegistered) {
     appUpdateStateBridgeRegistered = true
@@ -3229,11 +3250,27 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     return options.workbenchWindowManager.getPanelDrag(input)
   })
 
-  handleDesktopIpc("desktop:get-appearance-config", async () => readAppearanceConfigSnapshot())
+  handleDesktopIpc("desktop:get-appearance-config", async () => {
+    const snapshot = await readAppearanceConfigSnapshot()
+    lastAppearanceRuntimeState = normalizeAppearanceRuntimeState({
+      ...lastAppearanceRuntimeState,
+      document: snapshot.document,
+    }, lastAppearanceRuntimeState)
+    return snapshot
+  })
 
-  handleDesktopIpc("desktop:save-appearance-config", async (_event, input: { document: AppearanceConfigDocument }) =>
-    writeAppearanceConfigSnapshot(input.document),
-  )
+  handleDesktopIpc("desktop:save-appearance-config", async (event, input: { document: AppearanceConfigDocument }) => {
+    const snapshot = await writeAppearanceConfigSnapshot(input.document)
+    broadcastAppearanceRuntimeState({
+      ...lastAppearanceRuntimeState,
+      document: snapshot.document,
+    }, event.sender)
+    return snapshot
+  })
+
+  handleDesktopIpc("desktop:publish-appearance-state", (event, input: AppearanceRuntimeState) => {
+    broadcastAppearanceRuntimeState(input, event.sender)
+  })
 
   handleDesktopIpc("desktop:get-locale-config", async () => readLocaleConfigSnapshot())
 
@@ -3293,6 +3330,17 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   })
 
   handleDesktopIpc("desktop:open-monitor-window", async () => openMonitorWindow())
+
+  handleDesktopIpc("desktop:open-appearance-window", async () => {
+    if (!options.mainDir || !options.rendererEntryUrl) {
+      throw new Error("Appearance window options are unavailable.")
+    }
+
+    return openAppearanceWindow({
+      mainDir: options.mainDir,
+      rendererEntryUrl: options.rendererEntryUrl,
+    })
+  })
 
   handleDesktopIpc("desktop:show-menu", (event, input: MenuKey | { menuKey: MenuKey; anchor?: MenuAnchor }) => {
     const win = BrowserWindow.fromWebContents(event.sender)

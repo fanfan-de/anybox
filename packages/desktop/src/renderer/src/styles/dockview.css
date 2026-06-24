@@ -4,7 +4,7 @@
   background: var(--seg-shell);
 }
 
-.window-shell.has-html-background .dockview-workbench-panes {
+.window-shell[data-background-mode="custom-html"] .dockview-workbench-panes {
   background: transparent;
 }
 
@@ -31,17 +31,17 @@
   font: inherit;
 }
 
-.window-shell.has-html-background .dockview-theme-anybox {
+.window-shell[data-background-mode="custom-html"] .dockview-theme-anybox {
   --dv-background-color: transparent;
   --dv-group-view-background-color: transparent;
-  --dv-tabs-and-actions-container-background-color: var(--html-background-tab-surface);
-  --dv-activegroup-visiblepanel-tab-background-color: var(--html-background-shell-surface);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--html-background-tab-surface);
+  --dv-tabs-and-actions-container-background-color: var(--surface-profile-tab);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--surface-profile-shell);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--surface-profile-tab);
 }
 
-.window-shell.has-html-background .dockview-theme-anybox .dv-view,
-.window-shell.has-html-background .dockview-theme-anybox .dv-groupview,
-.window-shell.has-html-background .dockview-theme-anybox .dv-content-container {
+.window-shell[data-background-mode="custom-html"] .dockview-theme-anybox .dv-view,
+.window-shell[data-background-mode="custom-html"] .dockview-theme-anybox .dv-groupview,
+.window-shell[data-background-mode="custom-html"] .dockview-theme-anybox .dv-content-container {
   background: transparent;
 }
 
@@ -90,10 +90,10 @@
   isolation: isolate;
 }
 
-.window-shell.has-html-background .dockview-theme-anybox .dv-tabs-and-actions-container {
-  --dockview-tab-bar-bg: var(--html-background-tab-surface);
-  --dockview-tab-active-bg: var(--html-background-shell-surface);
-  --dockview-tab-hover-bg: var(--html-background-panel-muted-surface);
+.window-shell[data-background-mode="custom-html"] .dockview-theme-anybox .dv-tabs-and-actions-container {
+  --dockview-tab-bar-bg: var(--surface-profile-tab);
+  --dockview-tab-active-bg: var(--surface-profile-shell);
+  --dockview-tab-hover-bg: var(--surface-profile-panel-muted);
 }
 
 .dockview-theme-anybox .dv-tabs-and-actions-container::after {

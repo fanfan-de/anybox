@@ -1,27 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react"
 import {
-  APPEARANCE_TOKEN_NAMES,
-  isAppearanceFontFamily,
-  normalizeAppearanceConfigDocument,
-  type AppearanceConfigDocument,
-  type AppearanceFontFamily,
-  type AppearanceTokenMap,
-  type AppearanceTokenName,
-} from "../../../shared/appearance"
-import { applyAppearanceOverrides, normalizeAppearanceColorInputValue, readResolvedAppearanceTokenValues } from "./appearance-theme"
-import {
-  normalizeCodeThemePreference,
-  resolveCodeHighlightTheme,
-  type CodeThemePreference,
-  type ResolvedColorMode,
-} from "./code-theme"
-import {
-  HTML_BACKGROUND_STORAGE_KEY,
-  readHtmlBackgroundConfigPreference,
-  serializeHtmlBackgroundConfig,
-  type HtmlBackgroundConfig,
-} from "./html-background/html-background-config"
-import {
   DEFAULT_RIGHT_SIDEBAR_WIDTH,
   DEFAULT_SIDEBAR_WIDTH,
   RIGHT_SIDEBAR_MIN_LEFT_EDGE_RATIO,
@@ -32,29 +10,19 @@ import {
   DEFAULT_ASSISTANT_TRACE_VISIBILITY,
   type AssistantTraceVisibility,
   type AssistantTraceVisibilityKey,
-  type BrandTheme,
-  type ColorMode,
   type WindowAction,
 } from "./types"
 import { clamp, resolveRightSidebarWidthBounds, resolveSidebarWidthBounds } from "./utils"
 import { SIDEBAR_RESIZE_END_EVENT } from "./sidebar-resize-events"
+import { useAppearanceState } from "./use-appearance-state"
 
 const ACTIVITY_RAIL_VISIBILITY_STORAGE_KEY = "desktop.activityRailVisible"
-const COLOR_MODE_STORAGE_KEY = "desktop.colorMode"
-const CODE_THEME_STORAGE_KEY = "desktop.codeTheme"
-const BRAND_THEME_STORAGE_KEY = "desktop.brandTheme"
-const FONT_FAMILY_STORAGE_KEY = "desktop.fontFamily"
 const DEBUG_UI_REGIONS_STORAGE_KEY = "desktop.debugUiRegions"
 const DEBUG_LINE_COLORS_STORAGE_KEY = "desktop.debugLineColors"
 const AGENT_DEBUG_TRACE_STORAGE_KEY = "desktop.agentDebugTrace"
 const ASSISTANT_TRACE_VISIBILITY_STORAGE_KEY = "desktop.assistantTraceVisibility.v1"
 const WINDOW_CONTROLS_CLEARANCE_FALLBACK = 124
 const WINDOW_CONTROLS_CLEARANCE_PADDING = 24
-const APPEARANCE_CONFIG_SAVE_DEBOUNCE_MS = 160
-
-const EMPTY_APPEARANCE_TOKEN_VALUES = Object.fromEntries(
-  APPEARANCE_TOKEN_NAMES.map((tokenName) => [tokenName, "#000000"]),
-) as Record<AppearanceTokenName, string>
 
 type SidebarResizerSide = "left" | "right"
 
@@ -94,59 +62,6 @@ function readBooleanPreference(key: string, fallback: boolean) {
 
 function readActivityRailVisibilityPreference() {
   return readBooleanPreference(ACTIVITY_RAIL_VISIBILITY_STORAGE_KEY, true)
-}
-
-function readColorModePreference(): ColorMode {
-  if (typeof window === "undefined") return "system"
-  try {
-    const stored = window.localStorage.getItem(COLOR_MODE_STORAGE_KEY)
-    if (stored === "light" || stored === "dark" || stored === "system") return stored
-    return "system"
-  } catch {
-    return "system"
-  }
-}
-
-function readCodeThemePreference(): CodeThemePreference {
-  if (typeof window === "undefined") return "auto"
-  try {
-    return normalizeCodeThemePreference(window.localStorage.getItem(CODE_THEME_STORAGE_KEY))
-  } catch {
-    return "auto"
-  }
-}
-
-function readBrandThemePreference(): BrandTheme {
-  if (typeof window === "undefined") return "terra"
-  try {
-    const stored = window.localStorage.getItem(BRAND_THEME_STORAGE_KEY)
-    if (stored === "terra" || stored === "sage") return stored
-    return "terra"
-  } catch {
-    return "terra"
-  }
-}
-
-function readSystemDarkModePreference() {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false
-  try {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-  } catch {
-    return false
-  }
-}
-
-function readFontFamilyPreference(): AppearanceFontFamily {
-  if (typeof window === "undefined") return "default"
-  try {
-    const stored = window.localStorage.getItem(FONT_FAMILY_STORAGE_KEY)
-    if (stored && isAppearanceFontFamily(stored)) {
-      return stored
-    }
-    return "default"
-  } catch {
-    return "default"
-  }
 }
 
 function readDebugUiRegionsPreference() {
@@ -208,18 +123,28 @@ export function useDesktopShell() {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
   const [rightSidebarWidth, setRightSidebarWidth] = useState(DEFAULT_RIGHT_SIDEBAR_WIDTH)
   const [isActivityRailVisible, setIsActivityRailVisible] = useState(readActivityRailVisibilityPreference)
-  const [colorMode, setColorMode] = useState<ColorMode>(readColorModePreference)
-  const [codeThemePreference, setCodeThemePreference] = useState<CodeThemePreference>(readCodeThemePreference)
-  const [isSystemDarkMode, setIsSystemDarkMode] = useState(readSystemDarkModePreference)
-  const [brandTheme, setBrandTheme] = useState<BrandTheme>(readBrandThemePreference)
-  const [fontFamily, setFontFamily] = useState<AppearanceFontFamily>(readFontFamilyPreference)
-  const [htmlBackgroundConfig, setHtmlBackgroundConfig] = useState<HtmlBackgroundConfig>(readHtmlBackgroundConfigPreference)
-  const [appearanceOverrides, setAppearanceOverrides] = useState<AppearanceTokenMap>({})
-  const [appearanceTokenValues, setAppearanceTokenValues] =
-    useState<Record<AppearanceTokenName, string>>(EMPTY_APPEARANCE_TOKEN_VALUES)
-  const [appearanceConfigPath, setAppearanceConfigPath] = useState<string | null>(null)
-  const [appearanceConfigError, setAppearanceConfigError] = useState<string | null>(null)
-  const [isAppearanceConfigReady, setIsAppearanceConfigReady] = useState(false)
+  const appearanceState = useAppearanceState()
+  const {
+    appearanceConfigError,
+    appearanceConfigPath,
+    appearanceConfigPreview,
+    appearanceOverrides,
+    appearanceTokenValues,
+    brandTheme,
+    codeThemePreference,
+    colorMode,
+    fontFamily,
+    handleAppearancePaletteReset,
+    handleAppearanceTokenChange,
+    handleAppearanceTokenReset,
+    handleBrandThemeChange,
+    handleCodeThemeChange,
+    handleColorModeChange,
+    handleFontFamilyChange,
+    handleHtmlBackgroundConfigChange,
+    htmlBackgroundConfig,
+    resolvedCodeTheme,
+  } = appearanceState
   const [isDebugUiRegionsEnabled, setIsDebugUiRegionsEnabled] = useState(readDebugUiRegionsPreference)
   const [isDebugLineColorsEnabled, setIsDebugLineColorsEnabled] = useState(readDebugLineColorsPreference)
   const [assistantTraceVisibility, setAssistantTraceVisibility] = useState(readAssistantTraceVisibilityPreference)
@@ -235,10 +160,6 @@ export function useDesktopShell() {
   const isSidebarResizing = false
   const isRightSidebarResizing = false
   const isAgentDebugTraceEnabled = assistantTraceVisibility.debugMetadata
-  const resolvedColorMode: ResolvedColorMode = colorMode === "dark" || (colorMode === "system" && isSystemDarkMode)
-    ? "dark"
-    : "light"
-  const resolvedCodeTheme = resolveCodeHighlightTheme(codeThemePreference, resolvedColorMode)
 
   function getLeftRailDisplayWidth() {
     return isActivityRailVisible ? 54 : 0
@@ -362,44 +283,6 @@ export function useDesktopShell() {
   }, [])
 
   useEffect(() => {
-    let mounted = true
-
-    if (!window.desktop?.getAppearanceConfig) {
-      setIsAppearanceConfigReady(true)
-      return () => {
-        mounted = false
-      }
-    }
-
-    void window.desktop.getAppearanceConfig()
-      .then((snapshot) => {
-        if (!mounted) return
-
-        const nextDocument = normalizeAppearanceConfigDocument(snapshot.document)
-        setAppearanceConfigPath(snapshot.path)
-        setAppearanceConfigError(null)
-        setColorMode(nextDocument.colorMode)
-        setBrandTheme(nextDocument.brandTheme)
-        setFontFamily(nextDocument.fontFamily)
-        setAppearanceOverrides(nextDocument.overrides)
-      })
-      .catch((error) => {
-        if (!mounted) return
-
-        setAppearanceConfigError(error instanceof Error ? error.message : String(error))
-      })
-      .finally(() => {
-        if (mounted) {
-          setIsAppearanceConfigReady(true)
-        }
-      })
-
-    return () => {
-      mounted = false
-    }
-  }, [])
-
-  useEffect(() => {
     const controls = windowControlsElement
     if (!controls) return
 
@@ -482,112 +365,6 @@ export function useDesktopShell() {
       return
     }
   }, [isActivityRailVisible])
-
-  useEffect(() => {
-    if (colorMode === "system") {
-      document.documentElement.removeAttribute("data-theme")
-    } else {
-      document.documentElement.setAttribute("data-theme", colorMode)
-    }
-    try {
-      window.localStorage.setItem(COLOR_MODE_STORAGE_KEY, colorMode)
-    } catch {
-      return
-    }
-  }, [colorMode])
-
-  useEffect(() => {
-    if (typeof window.matchMedia !== "function") return
-
-    let mediaQueryList: MediaQueryList
-    try {
-      mediaQueryList = window.matchMedia("(prefers-color-scheme: dark)")
-    } catch {
-      return
-    }
-
-    const handleChange = () => {
-      setIsSystemDarkMode(mediaQueryList.matches)
-    }
-
-    handleChange()
-    if (typeof mediaQueryList.addEventListener === "function") {
-      mediaQueryList.addEventListener("change", handleChange)
-      return () => mediaQueryList.removeEventListener("change", handleChange)
-    }
-
-    mediaQueryList.addListener(handleChange)
-    return () => mediaQueryList.removeListener(handleChange)
-  }, [])
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(CODE_THEME_STORAGE_KEY, codeThemePreference)
-    } catch {
-      return
-    }
-  }, [codeThemePreference])
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-brand-theme", brandTheme)
-    try {
-      window.localStorage.setItem(BRAND_THEME_STORAGE_KEY, brandTheme)
-    } catch {
-      return
-    }
-  }, [brandTheme])
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-font-family", fontFamily)
-    try {
-      window.localStorage.setItem(FONT_FAMILY_STORAGE_KEY, fontFamily)
-    } catch {
-      return
-    }
-  }, [fontFamily])
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(HTML_BACKGROUND_STORAGE_KEY, serializeHtmlBackgroundConfig(htmlBackgroundConfig))
-    } catch {
-      return
-    }
-  }, [htmlBackgroundConfig])
-
-  useEffect(() => {
-    applyAppearanceOverrides(document.documentElement, appearanceOverrides)
-    setAppearanceTokenValues(readResolvedAppearanceTokenValues(document.documentElement))
-  }, [appearanceOverrides, brandTheme, colorMode, fontFamily])
-
-  useEffect(() => {
-    const saveAppearanceConfig = window.desktop?.saveAppearanceConfig
-    if (!isAppearanceConfigReady || !saveAppearanceConfig) return
-
-    const timer = window.setTimeout(() => {
-      const nextDocument: AppearanceConfigDocument = {
-        version: 1,
-        brandTheme,
-        colorMode,
-        fontFamily,
-        overrides: appearanceOverrides,
-        resolvedTokens: readResolvedAppearanceTokenValues(document.documentElement),
-        updatedAt: Date.now(),
-      }
-
-      void saveAppearanceConfig({ document: nextDocument })
-        .then((snapshot) => {
-          setAppearanceConfigPath(snapshot.path)
-          setAppearanceConfigError(null)
-        })
-        .catch((error) => {
-          setAppearanceConfigError(error instanceof Error ? error.message : String(error))
-        })
-    }, APPEARANCE_CONFIG_SAVE_DEBOUNCE_MS)
-
-    return () => {
-      window.clearTimeout(timer)
-    }
-  }, [appearanceOverrides, brandTheme, colorMode, fontFamily, isAppearanceConfigReady])
 
   useEffect(() => {
     try {
@@ -926,37 +703,6 @@ export function useDesktopShell() {
     handleAssistantTraceVisibilityChange("debugMetadata", nextEnabled)
   }
 
-  function handleAppearanceTokenChange(tokenName: AppearanceTokenName, nextValue: string) {
-    const normalizedValue = normalizeAppearanceColorInputValue(nextValue)
-
-    setAppearanceOverrides((current) => {
-      if (current[tokenName] === normalizedValue) return current
-
-      return {
-        ...current,
-        [tokenName]: normalizedValue,
-      }
-    })
-  }
-
-  function handleAppearanceTokenReset(tokenName: AppearanceTokenName) {
-    setAppearanceOverrides((current) => {
-      if (!(tokenName in current)) return current
-
-      const nextOverrides = { ...current }
-      delete nextOverrides[tokenName]
-      return nextOverrides
-    })
-  }
-
-  function handleAppearancePaletteReset() {
-    setAppearanceOverrides({})
-  }
-
-  function handleHtmlBackgroundConfigChange(nextConfig: HtmlBackgroundConfig) {
-    setHtmlBackgroundConfig(nextConfig)
-  }
-
   const handleWindowAction = useCallback((action: WindowAction) => {
     if (!window.desktop?.windowAction) {
       console.warn("[desktop] windowAction is unavailable. preload may not be loaded.")
@@ -984,19 +730,6 @@ export function useDesktopShell() {
   const currentAppShellWidth = appShellRef.current?.getBoundingClientRect().width
   const sidebarWidthBounds = resolveLeftSidebarBounds(currentAppShellWidth)
   const rightSidebarWidthBounds = resolveRightSidebarBounds(currentAppShellWidth)
-  const appearanceConfigPreview = JSON.stringify(
-    {
-      version: 1,
-      path: appearanceConfigPath,
-      brandTheme,
-      colorMode,
-      fontFamily,
-      overrides: appearanceOverrides,
-      resolvedTokens: appearanceTokenValues,
-    },
-    null,
-    2,
-  )
 
   return {
     agentConnected,
@@ -1013,10 +746,10 @@ export function useDesktopShell() {
     codeThemePreference,
     colorMode,
     fontFamily,
-    handleBrandThemeChange: setBrandTheme,
-    handleCodeThemeChange: setCodeThemePreference,
-    handleColorModeChange: setColorMode,
-    handleFontFamilyChange: setFontFamily,
+    handleBrandThemeChange,
+    handleCodeThemeChange,
+    handleColorModeChange,
+    handleFontFamilyChange,
     handleHtmlBackgroundConfigChange,
     handleActivityRailVisibilityChange,
     handleAppearancePaletteReset,
@@ -1047,7 +780,6 @@ export function useDesktopShell() {
     rightSidebarWidthBounds,
     rightSidebarWidth,
     resolvedCodeTheme,
-    resolvedColorMode,
     sidebarWidthBounds,
     sidebarWidth,
     windowControlsRef,

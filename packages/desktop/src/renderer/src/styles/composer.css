@@ -1931,9 +1931,9 @@
   box-shadow: none;
 }
 
-.window-shell.has-html-background .composer,
-.window-shell.has-html-background .inline-side-chat-thread .composer {
-  background: var(--html-background-composer-surface);
+.window-shell[data-background-mode="custom-html"] .composer,
+.window-shell[data-background-mode="custom-html"] .inline-side-chat-thread .composer {
+  background: var(--surface-profile-composer);
 }
 
 .composer-utility-chip,

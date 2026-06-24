@@ -95,6 +95,7 @@ import type {
 import {
   DESKTOP_APP_UPDATE_STATE_EVENT_CHANNEL,
   DESKTOP_AGENT_SESSION_EVENT_CHANNEL,
+  DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL,
   DESKTOP_AUTOMATION_EVENT_CHANNEL,
   DESKTOP_MOBILE_BRIDGE_EVENT_CHANNEL,
   DESKTOP_PTY_EVENT_CHANNEL,
@@ -102,6 +103,7 @@ import {
   DESKTOP_WINDOW_STATE_EVENT_CHANNEL,
   DESKTOP_WORKSPACE_FILE_CHANGE_EVENT_CHANNEL,
 } from "../shared/desktop-ipc-contract"
+import type { AppearanceRuntimeState } from "../shared/appearance"
 
 const safeProcess = typeof process !== "undefined" ? process : undefined
 const preloadDirPath = path.dirname(fileURLToPath(import.meta.url))
@@ -190,6 +192,8 @@ try {
       invokeDesktop("desktop:get-appearance-config") as Promise<AppearanceConfigSnapshot>,
     saveAppearanceConfig: (input: { document: AppearanceConfigDocument }) =>
       invokeDesktop("desktop:save-appearance-config", input) as Promise<AppearanceConfigSnapshot>,
+    publishAppearanceState: (input: DesktopIpcInput<"desktop:publish-appearance-state">) =>
+      invokeDesktop("desktop:publish-appearance-state", input),
     getLocaleConfig: () =>
       invokeDesktop("desktop:get-locale-config") as Promise<LocaleConfigSnapshot>,
     saveLocaleConfig: (input: { document: LocaleConfigDocument }) =>
@@ -213,6 +217,8 @@ try {
     openPath: (input: DesktopIpcInput<"desktop:open-path">) =>
       invokeDesktop("desktop:open-path", input) as Promise<DesktopIpcOutput<"desktop:open-path">>,
     openMonitorWindow: () => invokeDesktop("desktop:open-monitor-window") as Promise<DesktopIpcOutput<"desktop:open-monitor-window">>,
+    openAppearanceWindow: () =>
+      invokeDesktop("desktop:open-appearance-window") as Promise<DesktopIpcOutput<"desktop:open-appearance-window">>,
     windowAction: (action: WindowAction) => invokeDesktop("desktop:window-action", action),
     getAgentConfig: () =>
       invokeDesktop("desktop:get-agent-config") as Promise<{
@@ -990,6 +996,20 @@ try {
 
       return () => {
         ipcRenderer.removeListener(DESKTOP_WORKBENCH_STATE_EVENT_CHANNEL, wrappedListener)
+      }
+    },
+    onAppearanceStateChange: (listener: (state: AppearanceRuntimeState) => void) => {
+      const wrappedListener = (
+        _event: Electron.IpcRendererEvent,
+        appearanceState: AppearanceRuntimeState,
+      ) => {
+        listener(appearanceState)
+      }
+
+      ipcRenderer.on(DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL, wrappedListener)
+
+      return () => {
+        ipcRenderer.removeListener(DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL, wrappedListener)
       }
     },
   } satisfies DesktopPreloadApi)

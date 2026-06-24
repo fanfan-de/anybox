@@ -3,8 +3,12 @@ import {
   APPEARANCE_FONT_FAMILIES,
   APPEARANCE_TOKEN_GROUPS,
   APPEARANCE_TOKEN_NAMES,
+  DEFAULT_APPEARANCE_CODE_THEME_PREFERENCE,
+  DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG,
   createDefaultAppearanceConfigDocument,
+  createDefaultAppearanceRuntimeState,
   normalizeAppearanceConfigDocument,
+  normalizeAppearanceRuntimeState,
 } from "./appearance"
 
 describe("appearance font family", () => {
@@ -21,6 +25,80 @@ describe("appearance font family", () => {
       "microsoft-yahei",
     )
     expect(normalizeAppearanceConfigDocument({ fontFamily: "invalid-font" }).fontFamily).toBe("default")
+  })
+})
+
+describe("appearance runtime state", () => {
+  it("normalizes cross-window appearance runtime payloads", () => {
+    const state = normalizeAppearanceRuntimeState({
+      document: {
+        brandTheme: "sage",
+        colorMode: "dark",
+        fontFamily: "microsoft-yahei",
+        overrides: {
+          "surface-app-light": " #123456 ",
+          "surface-app-dark": "#000000",
+        },
+        resolvedTokens: {
+          "surface-app-dark": " #654321 ",
+        },
+        updatedAt: 42,
+      },
+      codeThemePreference: "dracula",
+      htmlBackgroundConfig: {
+        blurPx: 99,
+        dim: -1,
+        enabled: true,
+        html: "<div>background</div>",
+        opacity: 2,
+        paused: true,
+        renderMode: "dynamic",
+        surfaceOpacity: 0,
+      },
+    })
+
+    expect(state.document).toMatchObject({
+      brandTheme: "sage",
+      colorMode: "dark",
+      fontFamily: "microsoft-yahei",
+      updatedAt: 42,
+    })
+    expect(state.document.overrides).toEqual({
+      "surface-app-light": "#123456",
+      "surface-app-dark": "#000000",
+    })
+    expect(state.document.resolvedTokens).toEqual({
+      "surface-app-dark": "#654321",
+    })
+    expect(state.codeThemePreference).toBe("dracula")
+    expect(state.htmlBackgroundConfig).toEqual({
+      blurPx: 24,
+      dim: 0,
+      enabled: true,
+      html: "<div>background</div>",
+      opacity: 1,
+      paused: true,
+      renderMode: "dynamic",
+      surfaceOpacity: 0.36,
+    })
+  })
+
+  it("falls back for invalid cross-window appearance runtime payloads", () => {
+    const fallback = createDefaultAppearanceRuntimeState(
+      normalizeAppearanceConfigDocument({
+        colorMode: "dark",
+        overrides: {
+          "surface-app-dark": "#101010",
+        },
+      }),
+    )
+
+    expect(normalizeAppearanceRuntimeState(null, fallback)).toBe(fallback)
+    expect(normalizeAppearanceRuntimeState({ codeThemePreference: 1 })).toEqual({
+      document: createDefaultAppearanceConfigDocument(),
+      codeThemePreference: DEFAULT_APPEARANCE_CODE_THEME_PREFERENCE,
+      htmlBackgroundConfig: DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG,
+    })
   })
 })
 

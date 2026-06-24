@@ -97,12 +97,12 @@
   container-type: inline-size;
 }
 
-.window-shell.has-html-background .sidebar {
-  background: var(--html-background-sidebar-surface);
+.window-shell[data-background-mode="custom-html"] .sidebar {
+  background: var(--surface-profile-sidebar);
 }
 
-.window-shell.has-html-background .sidebar.is-right {
-  background: var(--html-background-panel-surface);
+.window-shell[data-background-mode="custom-html"] .sidebar.is-right {
+  background: var(--surface-profile-panel);
 }
 
 .sidebar-resizer {
@@ -200,8 +200,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   pointer-events: none;
 }
 
-.window-shell.has-html-background .left-sidebar-top-menu {
-  background: var(--html-background-left-top-menu-surface);
+.window-shell[data-background-mode="custom-html"] .left-sidebar-top-menu {
+  background: var(--surface-profile-left-top-menu);
 }
 
 .left-sidebar-top-menu .shell-top-menu-content,

@@ -87,7 +87,7 @@ import type {
   WindowAction,
 } from "../main/types"
 import type { DesktopOpenPathInput, DesktopOpenPathResult, ReasoningEffort } from "@anybox/shared"
-import type { AppearanceConfigDocument, AppearanceConfigSnapshot } from "./appearance"
+import type { AppearanceConfigDocument, AppearanceConfigSnapshot, AppearanceRuntimeState } from "./appearance"
 import type { LocaleConfigDocument, LocaleConfigSnapshot } from "./locale"
 import type {
   PermissionRequestPrompt,
@@ -103,6 +103,7 @@ export const DESKTOP_PTY_EVENT_CHANNEL = "desktop:pty-event"
 export const DESKTOP_WINDOW_STATE_EVENT_CHANNEL = "desktop:window-state-changed"
 export const DESKTOP_WORKBENCH_STATE_EVENT_CHANNEL = "desktop:workbench-state-changed"
 export const DESKTOP_APP_UPDATE_STATE_EVENT_CHANNEL = "desktop:app-update-state-changed"
+export const DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL = "desktop:appearance-state-changed"
 
 export interface DesktopPluginCatalogInput {
   freshness?: "cached" | "fresh"
@@ -1013,6 +1014,10 @@ export interface DesktopIpcContract {
     input: { document: AppearanceConfigDocument }
     output: AppearanceConfigSnapshot
   }
+  "desktop:publish-appearance-state": {
+    input: AppearanceRuntimeState
+    output: void
+  }
   "desktop:get-locale-config": {
     input: void
     output: LocaleConfigSnapshot
@@ -1039,6 +1044,10 @@ export interface DesktopIpcContract {
       | { ok: true; reused: false; source: "dev-server"; url: string }
       | { filePath: string; ok: true; reused: false; source: "file" }
       | { ok: true; reused: true; source: "existing" }
+  }
+  "desktop:open-appearance-window": {
+    input: void
+    output: { ok: true; reused: boolean }
   }
   "desktop:show-menu": {
     input: MenuKey | { menuKey: MenuKey; anchor?: MenuAnchor }
@@ -1836,6 +1845,7 @@ export interface DesktopIpcEventPayloads {
   [DESKTOP_PTY_EVENT_CHANNEL]: PtyTransportIPCEvent
   [DESKTOP_WINDOW_STATE_EVENT_CHANNEL]: DesktopWindowState
   [DESKTOP_WORKBENCH_STATE_EVENT_CHANNEL]: WorkbenchStateEvent
+  [DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL]: AppearanceRuntimeState
 }
 
 export type DesktopIpcChannel = keyof DesktopIpcContract
@@ -1895,6 +1905,7 @@ export interface DesktopApiMethods {
   getWorkbenchPanelDrag(input: DesktopIpcInput<"desktop:workbench-get-panel-drag">): Promise<DesktopIpcOutput<"desktop:workbench-get-panel-drag">>
   getAppearanceConfig(): Promise<DesktopIpcOutput<"desktop:get-appearance-config">>
   saveAppearanceConfig(input: DesktopIpcInput<"desktop:save-appearance-config">): Promise<DesktopIpcOutput<"desktop:save-appearance-config">>
+  publishAppearanceState(input: DesktopIpcInput<"desktop:publish-appearance-state">): Promise<DesktopIpcOutput<"desktop:publish-appearance-state">>
   getLocaleConfig(): Promise<DesktopIpcOutput<"desktop:get-locale-config">>
   saveLocaleConfig(input: DesktopIpcInput<"desktop:save-locale-config">): Promise<DesktopIpcOutput<"desktop:save-locale-config">>
   showMenu(menuKey: MenuKey, anchor?: MenuAnchor): Promise<DesktopIpcOutput<"desktop:show-menu">>
@@ -1904,6 +1915,7 @@ export interface DesktopApiMethods {
   openExternalUrl(input: DesktopIpcInput<"desktop:open-external-url">): Promise<DesktopIpcOutput<"desktop:open-external-url">>
   openPath(input: DesktopIpcInput<"desktop:open-path">): Promise<DesktopIpcOutput<"desktop:open-path">>
   openMonitorWindow(): Promise<DesktopIpcOutput<"desktop:open-monitor-window">>
+  openAppearanceWindow(): Promise<DesktopIpcOutput<"desktop:open-appearance-window">>
   windowAction(action: DesktopIpcInput<"desktop:window-action">): Promise<DesktopIpcOutput<"desktop:window-action">>
   getAgentConfig(): Promise<DesktopIpcOutput<"desktop:get-agent-config">>
   getAgentHealth(): Promise<DesktopIpcOutput<"desktop:agent-health">>
@@ -2090,6 +2102,7 @@ export interface DesktopApiMethods {
   onPtyEvent(listener: (event: DesktopIpcEventPayload<typeof DESKTOP_PTY_EVENT_CHANNEL>) => void): () => void
   onWindowStateChange(listener: (state: DesktopIpcEventPayload<typeof DESKTOP_WINDOW_STATE_EVENT_CHANNEL>) => void): () => void
   onWorkbenchStateChange(listener: (event: DesktopIpcEventPayload<typeof DESKTOP_WORKBENCH_STATE_EVENT_CHANNEL>) => void): () => void
+  onAppearanceStateChange(listener: (state: DesktopIpcEventPayload<typeof DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL>) => void): () => void
 }
 
 export type DesktopPreloadApi = DesktopApiBase & DesktopApiMethods

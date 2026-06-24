@@ -1,18 +1,20 @@
+import {
+  APPEARANCE_CODE_HIGHLIGHT_THEMES,
+  DEFAULT_APPEARANCE_CODE_THEME_PREFERENCE,
+  isAppearanceCodeHighlightTheme,
+  normalizeAppearanceCodeThemePreference,
+  type AppearanceCodeHighlightTheme,
+  type AppearanceCodeThemePreference,
+} from "../../../shared/appearance"
+
 export const DEFAULT_LIGHT_CODE_THEME = "github-light"
 export const DEFAULT_DARK_CODE_THEME = "github-dark"
-export const DEFAULT_CODE_THEME_PREFERENCE = "auto"
+export const DEFAULT_CODE_THEME_PREFERENCE = DEFAULT_APPEARANCE_CODE_THEME_PREFERENCE
 
-export const CODE_HIGHLIGHT_THEMES = [
-  DEFAULT_LIGHT_CODE_THEME,
-  DEFAULT_DARK_CODE_THEME,
-  "vitesse-light",
-  "vitesse-dark",
-  "nord",
-  "dracula",
-] as const
+export const CODE_HIGHLIGHT_THEMES = APPEARANCE_CODE_HIGHLIGHT_THEMES
 
-export type CodeHighlightTheme = typeof CODE_HIGHLIGHT_THEMES[number]
-export type CodeThemePreference = typeof DEFAULT_CODE_THEME_PREFERENCE | CodeHighlightTheme
+export type CodeHighlightTheme = AppearanceCodeHighlightTheme
+export type CodeThemePreference = AppearanceCodeThemePreference
 export type ResolvedColorMode = "light" | "dark"
 
 export const CODE_THEME_LABELS: Record<CodeHighlightTheme, string> = {
@@ -24,15 +26,12 @@ export const CODE_THEME_LABELS: Record<CodeHighlightTheme, string> = {
   dracula: "Dracula",
 }
 
-const CODE_HIGHLIGHT_THEME_SET = new Set<string>(CODE_HIGHLIGHT_THEMES)
-
 export function isCodeHighlightTheme(value: string | null | undefined): value is CodeHighlightTheme {
-  return Boolean(value && CODE_HIGHLIGHT_THEME_SET.has(value))
+  return isAppearanceCodeHighlightTheme(value)
 }
 
 export function normalizeCodeThemePreference(value: string | null | undefined): CodeThemePreference {
-  if (value === DEFAULT_CODE_THEME_PREFERENCE || isCodeHighlightTheme(value)) return value
-  return DEFAULT_CODE_THEME_PREFERENCE
+  return normalizeAppearanceCodeThemePreference(value)
 }
 
 export function resolveCodeHighlightTheme(

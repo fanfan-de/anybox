@@ -105,6 +105,7 @@ void app.whenReady().then(async () => {
     safeError("[desktop] failed to install tray", error)
   }
   registerIpcHandlers(menus, {
+    mainDir,
     onLocaleChanged: (locale) => {
       const nextMenus = createApplicationMenus(locale, menuOptions)
       menus.applicationMenu = nextMenus.applicationMenu
@@ -112,6 +113,7 @@ void app.whenReady().then(async () => {
       Menu.setApplicationMenu(menus.applicationMenu)
       trayController?.setLocale(locale)
     },
+    rendererEntryUrl,
     workbenchWindowManager,
   })
   registerLocalImageProtocolHandler(protocol)

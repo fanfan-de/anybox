@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import type { SerializedDockview } from "dockview-react"
 import { ActivityRail } from "./app/sidebar/ActivityRail"
 import { BuiltinToolsPage } from "./app/tools/BuiltinToolsPage"
@@ -11,6 +11,7 @@ import { Sidebar } from "./app/sidebar/Sidebar"
 import { SidebarResizer } from "./app/sidebar/SidebarResizer"
 import { NativeMacWindowControlsSlot, WindowChrome } from "./app/chrome/WindowChrome"
 import { HtmlBackgroundLayer } from "./app/html-background/HtmlBackgroundLayer"
+import { resolveHtmlBackgroundAppearance } from "./app/html-background/html-background-config"
 import { TerminalAreaHost } from "./app/terminal/TerminalAreaHost"
 import {
   useWorkspaceStoreSelector,
@@ -32,9 +33,11 @@ import type {
   SessionSummary,
   ToolPermissionMode,
   Turn,
+  WindowAction,
   WorkspaceGroup,
 } from "./app/types"
 import { useAgentWorkspace } from "./app/use-agent-workspace"
+import { useAppearanceState } from "./app/use-appearance-state"
 import { useDesktopShell } from "./app/use-desktop-shell"
 import { useGlobalSkills } from "./app/use-global-skills"
 import { useSettingsPage } from "./app/use-settings-page"
@@ -93,6 +96,9 @@ function loadSettingsPage() {
 }
 
 const SettingsPage = lazy(loadSettingsPage)
+const AppearanceSettingsPanel = lazy(() =>
+  import("./app/settings/SettingsPage").then((module) => ({ default: module.AppearanceSettingsPanel })),
+)
 
 const WORKBENCH_TERMINAL_STORAGE_KEY = "desktop.terminal.workspace.v3:workbench"
 const EMPTY_CONNECTION_SEARCH_QUERIES: Record<ConnectionsTab, string> = {
@@ -459,6 +465,11 @@ function hasExplicitWorkbenchWindowID() {
   return new URLSearchParams(window.location.search).has("workbenchWindowID")
 }
 
+function getAppWindowMode() {
+  if (typeof window === "undefined") return null
+  return new URLSearchParams(window.location.search).get("appWindow")
+}
+
 function areStringArraysEqual(left: string[], right: string[]) {
   return left.length === right.length && left.every((value, index) => value === right[index])
 }
@@ -564,6 +575,10 @@ function useToolPermissionModeState() {
 }
 
 function AppContent() {
+  if (getAppWindowMode() === "appearance") {
+    return <AppearanceWindowApp />
+  }
+
   const [workbenchContext, setWorkbenchContext] = useState<WorkbenchWindowContext | null>(() =>
     hasExplicitWorkbenchWindowID() ? null : FALLBACK_WORKBENCH_CONTEXT,
   )
@@ -647,6 +662,124 @@ function AppContent() {
   }
 
   return <MainApp workbenchContext={workbenchContext} />
+}
+
+function useStandaloneWindowControls() {
+  const [isWindowMaximized, setIsWindowMaximized] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+
+    window.desktop
+      ?.getWindowState?.()
+      .then((state) => {
+        if (mounted) setIsWindowMaximized(state.isMaximized)
+      })
+      .catch(() => undefined)
+
+    const unsubscribe = window.desktop?.onWindowStateChange?.((state) => {
+      if (mounted) setIsWindowMaximized(state.isMaximized)
+    })
+
+    return () => {
+      mounted = false
+      unsubscribe?.()
+    }
+  }, [])
+
+  const handleWindowAction = useCallback((action: WindowAction) => {
+    if (!window.desktop?.windowAction) {
+      console.warn("[desktop] windowAction is unavailable. preload may not be loaded.")
+      return
+    }
+
+    void window.desktop.windowAction(action).catch((error) => {
+      console.error("[desktop] windowAction failed:", error)
+    })
+  }, [])
+
+  return { handleWindowAction, isWindowMaximized }
+}
+
+function AppearanceWindowApp() {
+  const {
+    appearanceConfigError,
+    appearanceConfigPath,
+    appearanceConfigPreview,
+    appearanceOverrides,
+    appearanceTokenValues,
+    brandTheme,
+    codeThemePreference,
+    colorMode,
+    fontFamily,
+    handleAppearancePaletteReset,
+    handleAppearanceTokenChange,
+    handleAppearanceTokenReset,
+    handleBrandThemeChange,
+    handleCodeThemeChange,
+    handleColorModeChange,
+    handleFontFamilyChange,
+    handleHtmlBackgroundConfigChange,
+    htmlBackgroundConfig,
+  } = useAppearanceState()
+  const { handleWindowAction, isWindowMaximized } = useStandaloneWindowControls()
+  const htmlBackgroundAppearance = resolveHtmlBackgroundAppearance(htmlBackgroundConfig)
+  const hasHtmlBackground = htmlBackgroundAppearance.hasHtmlBackground
+  const windowShellClassName = [
+    "window-shell",
+    "appearance-window-shell",
+    hasHtmlBackground ? "has-html-background" : "",
+  ].filter(Boolean).join(" ")
+  const windowShellStyle = hasHtmlBackground
+    ? ({
+        "--surface-profile-opacity": htmlBackgroundAppearance.surfaceOpacityPercent,
+        "--surface-profile-content-opacity": htmlBackgroundAppearance.contentOpacityPercent,
+      } as CSSProperties)
+    : undefined
+
+  return (
+    <div
+      className={windowShellClassName}
+      data-background-mode={htmlBackgroundAppearance.backgroundMode}
+      data-surface-profile={htmlBackgroundAppearance.surfaceProfile}
+      style={windowShellStyle}
+    >
+      <HtmlBackgroundLayer config={htmlBackgroundConfig} />
+      <main className="appearance-window-app-shell">
+        <header className="appearance-window-header">
+          <div className="appearance-window-title">
+            <span className="label">Appearance</span>
+            <strong>Theme Monitor</strong>
+          </div>
+          <WindowChrome controlsRef={null} isWindowMaximized={isWindowMaximized} onWindowAction={handleWindowAction} />
+        </header>
+        <section className="settings-page-main appearance-window-main" aria-label="Theme Monitor">
+          <Suspense fallback={null}>
+            <AppearanceSettingsPanel
+              appearanceConfigError={appearanceConfigError}
+              appearanceConfigPath={appearanceConfigPath}
+              appearanceConfigPreview={appearanceConfigPreview}
+              appearanceOverrides={appearanceOverrides}
+              appearanceTokenValues={appearanceTokenValues}
+              brandTheme={brandTheme}
+              codeThemePreference={codeThemePreference}
+              colorMode={colorMode}
+              fontFamily={fontFamily}
+              htmlBackgroundConfig={htmlBackgroundConfig}
+              onAppearancePaletteReset={handleAppearancePaletteReset}
+              onAppearanceTokenChange={handleAppearanceTokenChange}
+              onAppearanceTokenReset={handleAppearanceTokenReset}
+              onBrandThemeChange={handleBrandThemeChange}
+              onCodeThemeChange={handleCodeThemeChange}
+              onColorModeChange={handleColorModeChange}
+              onFontFamilyChange={handleFontFamilyChange}
+              onHtmlBackgroundConfigChange={handleHtmlBackgroundConfigChange}
+            />
+          </Suspense>
+        </section>
+      </main>
+    </div>
+  )
 }
 
 function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContext }) {
@@ -2170,7 +2303,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   }
 
   const isMacOS = platform === "darwin"
-  const hasHtmlBackground = htmlBackgroundConfig.enabled && htmlBackgroundConfig.html.trim().length > 0
+  const htmlBackgroundAppearance = resolveHtmlBackgroundAppearance(htmlBackgroundConfig)
+  const hasHtmlBackground = htmlBackgroundAppearance.hasHtmlBackground
   const windowShellClassName = [
     "window-shell",
     hasHtmlBackground ? "has-html-background" : "",
@@ -2246,14 +2380,19 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     : appShellStyle
   const windowShellStyle = hasHtmlBackground
     ? ({
-        "--html-background-surface-opacity": `${Math.round(htmlBackgroundConfig.surfaceOpacity * 100)}%`,
-        "--html-background-content-opacity": `${Math.round(Math.min(0.92, htmlBackgroundConfig.surfaceOpacity + 0.14) * 100)}%`,
+        "--surface-profile-opacity": htmlBackgroundAppearance.surfaceOpacityPercent,
+        "--surface-profile-content-opacity": htmlBackgroundAppearance.contentOpacityPercent,
       } as CSSProperties)
     : undefined
 
   return (
     <WorkspaceStoreProvider store={workspaceStore}>
-      <div className={windowShellClassName} style={windowShellStyle}>
+      <div
+        className={windowShellClassName}
+        data-background-mode={htmlBackgroundAppearance.backgroundMode}
+        data-surface-profile={htmlBackgroundAppearance.surfaceProfile}
+        style={windowShellStyle}
+      >
         <HtmlBackgroundLayer config={htmlBackgroundConfig} />
         <main ref={appShellRef} className={appShellClassName} style={effectiveAppShellStyle}>
         {isActivityRailVisible ? (

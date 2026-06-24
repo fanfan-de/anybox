@@ -8,6 +8,10 @@ export async function openMonitorWindow(): Promise<DesktopIpcOutput<"desktop:ope
   return window.desktop?.openMonitorWindow?.() ?? null
 }
 
+export async function openAppearanceWindow(): Promise<DesktopIpcOutput<"desktop:open-appearance-window"> | null> {
+  return window.desktop?.openAppearanceWindow?.() ?? null
+}
+
 export async function getAppUpdateSettings(): Promise<DesktopIpcOutput<"desktop:get-app-update-settings"> | null> {
   return window.desktop?.getAppUpdateSettings?.() ?? null
 }

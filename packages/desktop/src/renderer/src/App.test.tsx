@@ -1363,6 +1363,29 @@ describe("App", () => {
     })
   })
 
+  it("renders the appearance monitor route without loading workbench context", async () => {
+    window.history.pushState({}, "", "/?appWindow=appearance")
+    const getWorkbenchWindowContext = vi.fn().mockResolvedValue(null)
+    window.desktop!.getWorkbenchWindowContext = getWorkbenchWindowContext
+
+    try {
+      const { container } = render(<App />)
+
+      expect(await screen.findByText("Theme Monitor")).toBeInTheDocument()
+      expect(container.querySelector(".appearance-window-shell")).toBeInTheDocument()
+      const monitorShell = container.querySelector(".appearance-window-app-shell")
+      expect(monitorShell).toBeInTheDocument()
+      expect(monitorShell).not.toHaveClass("app-shell")
+      expect(screen.getByRole("region", { name: "Theme Monitor" })).toBeInTheDocument()
+      expect(await screen.findByText("Theme Config File")).toBeInTheDocument()
+      expect(getWorkbenchWindowContext).not.toHaveBeenCalled()
+      expect(window.desktop!.getAgentConfig).not.toHaveBeenCalled()
+      expect(window.desktop!.getAgentHealth).not.toHaveBeenCalled()
+    } finally {
+      window.history.replaceState({}, "", "/")
+    }
+  })
+
   it("renders the desktop shell with window controls in the right sidebar menu", async () => {
     const { container } = render(<App />)
     const inspector = screen.getByRole("complementary", { name: "Inspector sidebar" })
@@ -10009,6 +10032,42 @@ describe("App", () => {
     )
   })
 
+  it("sets the default solid surface profile on the window shell", () => {
+    const { container } = render(<App />)
+    const windowShell = container.querySelector(".window-shell") as HTMLElement | null
+
+    expect(windowShell).not.toBeNull()
+    expect(windowShell).toHaveAttribute("data-background-mode", "default")
+    expect(windowShell).toHaveAttribute("data-surface-profile", "solid")
+    expect(windowShell).not.toHaveClass("has-html-background")
+    expect(windowShell!.style.getPropertyValue("--surface-profile-opacity")).toBe("")
+    expect(container.querySelector(".html-background-layer")).toBeNull()
+  })
+
+  it("sets the translucent custom HTML surface profile on the window shell", () => {
+    window.localStorage.setItem("desktop.htmlBackground.v1", JSON.stringify({
+      blurPx: 0,
+      dim: 0.18,
+      enabled: true,
+      html: "<main>Custom background</main>",
+      opacity: 0.78,
+      paused: false,
+      renderMode: "static",
+      surfaceOpacity: 0.72,
+    }))
+
+    const { container } = render(<App />)
+    const windowShell = container.querySelector(".window-shell") as HTMLElement | null
+
+    expect(windowShell).not.toBeNull()
+    expect(windowShell).toHaveAttribute("data-background-mode", "custom-html")
+    expect(windowShell).toHaveAttribute("data-surface-profile", "translucent")
+    expect(windowShell).toHaveClass("has-html-background")
+    expect(windowShell!.style.getPropertyValue("--surface-profile-opacity")).toBe("72%")
+    expect(windowShell!.style.getPropertyValue("--surface-profile-content-opacity")).toBe("86%")
+    expect(container.querySelector(".html-background-layer")).not.toBeNull()
+  })
+
   it("toggles debug region colors from developer mode settings", async () => {
     const { container } = render(<App />)
     const windowShell = container.querySelector(".window-shell") as HTMLElement | null
@@ -13873,6 +13932,47 @@ describe("App", () => {
     )
     expect(styles).toMatch(/\.composer\s+\.composer-selector-button\.is-icon-only,\s*\.composer\s+\.composer-actions\s+\.primary-button\.is-icon-only\s*\{[^}]*color:\s*var\(--semantic-accent-icon\);/s)
     expect(styles).toMatch(/\.composer\s+\.composer-selector-button\.is-icon-only:not\(:disabled\):hover,[\s\S]*?\.composer\s+\.composer-actions\s+\.primary-button\.is-icon-only:not\(:disabled\):focus-visible\s*\{[^}]*background:\s*transparent;[^}]*color:\s*var\(--semantic-accent-icon-hover\);[^}]*transform:\s*none;/s)
+  })
+
+  it("maps custom HTML backgrounds through orthogonal surface profile tokens", () => {
+    expect(styles).not.toMatch(/\.window-shell\.has-html-background/)
+    expect(styles).not.toMatch(/--html-background-.*surface/)
+    expect(styles).toMatch(
+      /\.window-shell\s*\{[^}]*--surface-profile-shell:\s*var\(--surface-shell\);[^}]*--surface-profile-tab:\s*var\(--semantic-pane-tab-bar-surface\);[^}]*--surface-profile-composer:\s*var\(--semantic-composer-surface\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\[data-background-mode="custom-html"\]\[data-surface-profile="translucent"\]\s*\{[^}]*--surface-profile-shell:\s*color-mix\(in srgb,\s*var\(--surface-shell\) var\(--surface-profile-opacity\),\s*transparent\);[^}]*--surface-profile-content:\s*color-mix\(in srgb,\s*var\(--surface-panel\) var\(--surface-profile-content-opacity\),\s*transparent\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\[data-background-mode="custom-html"\]\s+\.activity-rail\s*\{[^}]*background:\s*var\(--surface-profile-sidebar-strong\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\[data-background-mode="custom-html"\]\s+\.dockview-theme-anybox\s*\{[^}]*--dv-tabs-and-actions-container-background-color:\s*var\(--surface-profile-tab\);[^}]*--dv-activegroup-visiblepanel-tab-background-color:\s*var\(--surface-profile-shell\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\[data-background-mode="custom-html"\]\s+\.composer,\s*\.window-shell\[data-background-mode="custom-html"\]\s+\.inline-side-chat-thread \.composer\s*\{[^}]*background:\s*var\(--surface-profile-composer\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\[data-background-mode="custom-html"\]\s+\.workspace-files-panel,[\s\S]*?\.workspace-files-tree\s*\{[^}]*background:\s*var\(--surface-profile-content\);/s,
+    )
+    expect(styles).toMatch(
+      /\.composer-menu-panel\s*\{[^}]*background:\s*var\(--seg-dropdown-menu-surface\);/s,
+    )
+    expect(styles).toMatch(
+      /\.settings-page-overlay,\s*\.provider-connect-overlay,\s*\.git-branch-create-overlay\s*\{[^}]*background:\s*var\(--surface-overlay\);/s,
+    )
+  })
+
+  it("keeps the appearance monitor on a single-column window grid", () => {
+    expect(styles).toMatch(
+      /\.appearance-window-app-shell\s*\{[^}]*--section-toolbar-height:\s*44px;[^}]*--section-toolbar-icon-size:\s*18px;[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);[^}]*grid-template-rows:\s*44px minmax\(0,\s*1fr\);[^}]*overflow:\s*hidden;/s,
+    )
+    expect(styles).toMatch(
+      /\.appearance-window-header\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*1;[^}]*min-height:\s*44px;/s,
+    )
+    expect(styles).toMatch(
+      /\.appearance-window-main\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*2;[^}]*min-width:\s*0;[^}]*min-height:\s*0;[^}]*overflow:\s*auto;/s,
+    )
   })
 
   it("aligns inline composer tags to the text bottom edge", () => {

@@ -84,6 +84,7 @@ import {
 import { clamp, formatTime } from "../utils"
 import {
   getStoragePaths,
+  openAppearanceWindow,
   openExternalUrl,
   openMonitorWindow,
 } from "./client"
@@ -809,6 +810,630 @@ function filterAppearanceTokenGroups(
   })
 }
 
+interface AppearanceTokenEditorProps {
+  appearanceOverrides: AppearanceTokenMap
+  appearanceTokenValues: Record<AppearanceTokenName, string>
+  onAppearanceTokenChange: (tokenName: AppearanceTokenName, value: string) => void
+  onAppearanceTokenReset: (tokenName: AppearanceTokenName) => void
+}
+
+export function AppearanceTokenEditor({
+  appearanceOverrides,
+  appearanceTokenValues,
+  onAppearanceTokenChange,
+  onAppearanceTokenReset,
+}: AppearanceTokenEditorProps) {
+  const { t } = useI18n()
+  const [themeTokenSearchQuery, setThemeTokenSearchQuery] = useState("")
+  const [themeTokenGroupFilter, setThemeTokenGroupFilter] = useState<AppearanceTokenGroupFilter>("all")
+  const [themeTokenCustomizationFilter, setThemeTokenCustomizationFilter] =
+    useState<AppearanceTokenCustomizationFilter>("all")
+  const appearanceTokenGroupFilterOptions = useMemo<Array<{ value: AppearanceTokenGroupFilter; label: string }>>(
+    () => [
+      { value: "all", label: t("settings.appearance.allTokenGroups") },
+      ...APPEARANCE_TOKEN_GROUPS.map((group) => ({ value: group.id, label: group.label })),
+    ],
+    [t],
+  )
+  const appearanceTokenCustomizationFilterOptions = useMemo<
+    Array<{ value: AppearanceTokenCustomizationFilter; label: string }>
+  >(
+    () => [
+      { value: "all", label: t("settings.appearance.allTokens") },
+      { value: "customized", label: t("settings.appearance.customizedTokens") },
+    ],
+    [t],
+  )
+  const filteredAppearanceTokenGroups = useMemo(
+    () =>
+      filterAppearanceTokenGroups(
+        APPEARANCE_TOKEN_GROUPS,
+        themeTokenSearchQuery,
+        appearanceTokenValues,
+        themeTokenGroupFilter,
+        themeTokenCustomizationFilter,
+        appearanceOverrides,
+      ),
+    [
+      appearanceOverrides,
+      appearanceTokenValues,
+      themeTokenCustomizationFilter,
+      themeTokenGroupFilter,
+      themeTokenSearchQuery,
+    ],
+  )
+  const appearanceTokenTotalCount = countAppearanceTokenRows(APPEARANCE_TOKEN_GROUPS)
+  const appearanceTokenVisibleCount = countAppearanceTokenRows(filteredAppearanceTokenGroups)
+  const colorValueLabel = t("settings.appearance.tokenColorValue")
+  const channelLabels = {
+    red: t("settings.appearance.tokenRed"),
+    green: t("settings.appearance.tokenGreen"),
+    blue: t("settings.appearance.tokenBlue"),
+    alpha: t("settings.appearance.tokenAlpha"),
+  }
+
+  return (
+    <>
+      <div className="settings-theme-token-toolbar">
+        <div className="settings-provider-search-control settings-theme-token-search" role="search">
+          <SearchIcon />
+          <input
+            aria-label={t("settings.appearance.searchTokensLabel")}
+            type="search"
+            value={themeTokenSearchQuery}
+            placeholder={t("settings.appearance.searchTokensPlaceholder")}
+            onChange={(event: ChangeEvent<HTMLInputElement>) => setThemeTokenSearchQuery(event.target.value)}
+          />
+        </div>
+        <div className="settings-theme-token-filter-controls">
+          <SettingsSelect<AppearanceTokenGroupFilter>
+            ariaLabel={t("settings.appearance.tokenGroupFilterLabel")}
+            className="settings-theme-token-filter-select"
+            options={appearanceTokenGroupFilterOptions}
+            value={themeTokenGroupFilter}
+            onChange={setThemeTokenGroupFilter}
+          />
+          <SettingsSelect<AppearanceTokenCustomizationFilter>
+            ariaLabel={t("settings.appearance.tokenStatusFilterLabel")}
+            className="settings-theme-token-status-select"
+            options={appearanceTokenCustomizationFilterOptions}
+            value={themeTokenCustomizationFilter}
+            onChange={setThemeTokenCustomizationFilter}
+          />
+          <span className="settings-theme-token-search-count" aria-live="polite">
+            {t("settings.appearance.searchTokensCount", {
+              total: appearanceTokenTotalCount,
+              visible: appearanceTokenVisibleCount,
+            })}
+          </span>
+        </div>
+      </div>
+
+      {filteredAppearanceTokenGroups.length === 0 ? (
+        <article className="settings-empty-state settings-theme-token-empty-result">
+          <span className="label">{t("app.search")}</span>
+          <h3>{t("settings.appearance.noTokenResultsTitle")}</h3>
+          <p>{t("settings.appearance.noTokenResultsCopy")}</p>
+        </article>
+      ) : (
+        filteredAppearanceTokenGroups.map((group) => (
+          <section key={group.id} className="settings-panel settings-theme-token-panel">
+            <div className="settings-section-header">
+              <div>
+                <h3>{group.label}</h3>
+              </div>
+              <p>{group.description}</p>
+            </div>
+
+            <div className="settings-theme-token-grid">
+              {group.rows.map((row) => {
+                const isLightCustomized = Boolean(appearanceOverrides[row.lightToken])
+                const isDarkCustomized = Boolean(appearanceOverrides[row.darkToken])
+                const isCustomized = isLightCustomized || isDarkCustomized
+                const lightColorLabel = `${group.label} ${row.label} Light ${row.lightToken}`
+                const darkColorLabel = `${group.label} ${row.label} Dark ${row.darkToken}`
+                const lightTokenValue = appearanceTokenValues[row.lightToken]
+                const darkTokenValue = appearanceTokenValues[row.darkToken]
+
+                return (
+                  <article
+                    key={row.id}
+                    className={
+                      isCustomized
+                        ? "settings-theme-token-card is-customized"
+                        : "settings-theme-token-card"
+                    }
+                  >
+                    <div className="settings-theme-token-copy">
+                      <strong>{row.label}</strong>
+                      <code className="settings-theme-token-name">{row.id}</code>
+                    </div>
+
+                    <div className="settings-theme-token-controls">
+                      <div className="settings-theme-token-mode">
+                        <span>{t("settings.appearance.light")}</span>
+                        <AppearanceColorPicker
+                          ariaLabel={lightColorLabel}
+                          channelLabels={channelLabels}
+                          value={lightTokenValue}
+                          onChange={(value) => onAppearanceTokenChange(row.lightToken, value)}
+                        />
+                        <AppearanceColorTextInput
+                          ariaLabel={`${lightColorLabel} ${colorValueLabel}`}
+                          value={lightTokenValue}
+                          onCommit={(value) => onAppearanceTokenChange(row.lightToken, value)}
+                        />
+                      </div>
+                      <div className="settings-theme-token-mode">
+                        <span>{t("settings.appearance.dark")}</span>
+                        <AppearanceColorPicker
+                          ariaLabel={darkColorLabel}
+                          channelLabels={channelLabels}
+                          value={darkTokenValue}
+                          onChange={(value) => onAppearanceTokenChange(row.darkToken, value)}
+                        />
+                        <AppearanceColorTextInput
+                          ariaLabel={`${darkColorLabel} ${colorValueLabel}`}
+                          value={darkTokenValue}
+                          onCommit={(value) => onAppearanceTokenChange(row.darkToken, value)}
+                        />
+                      </div>
+                      <button
+                        aria-label={t("settings.appearance.usePresetFor", {
+                          name: `${group.label} ${row.label}`,
+                        })}
+                        className="secondary-button settings-theme-token-reset"
+                        type="button"
+                        disabled={!isCustomized}
+                        title={t("settings.appearance.usePreset")}
+                        onClick={() => {
+                          onAppearanceTokenReset(row.lightToken)
+                          onAppearanceTokenReset(row.darkToken)
+                        }}
+                      >
+                        <ResetIcon size={14} />
+                      </button>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          </section>
+        ))
+      )}
+    </>
+  )
+}
+
+interface AppearanceSettingsPanelProps {
+  appearanceConfigError: string | null
+  appearanceConfigPath: string | null
+  appearanceConfigPreview: string
+  appearanceOverrides: AppearanceTokenMap
+  appearanceTokenValues: Record<AppearanceTokenName, string>
+  brandTheme: BrandTheme
+  codeThemePreference: CodeThemePreference
+  colorMode: ColorMode
+  fontFamily: AppearanceFontFamily
+  htmlBackgroundConfig: HtmlBackgroundConfig
+  isActivityRailVisible?: boolean
+  showShellLayoutSettings?: boolean
+  onActivityRailVisibilityChange?: (value: boolean) => void
+  onAppearancePaletteReset: () => void
+  onAppearanceTokenChange: (tokenName: AppearanceTokenName, value: string) => void
+  onAppearanceTokenReset: (tokenName: AppearanceTokenName) => void
+  onBrandThemeChange: (theme: BrandTheme) => void
+  onCodeThemeChange: (theme: CodeThemePreference) => void
+  onColorModeChange: (mode: ColorMode) => void
+  onFontFamilyChange: (fontFamily: AppearanceFontFamily) => void
+  onHtmlBackgroundConfigChange: (config: HtmlBackgroundConfig) => void
+  onOpenAppearanceWindow?: () => void
+}
+
+export function AppearanceSettingsPanel({
+  appearanceConfigError,
+  appearanceConfigPath,
+  appearanceConfigPreview,
+  appearanceOverrides,
+  appearanceTokenValues,
+  brandTheme,
+  codeThemePreference,
+  colorMode,
+  fontFamily,
+  htmlBackgroundConfig,
+  isActivityRailVisible = true,
+  showShellLayoutSettings = false,
+  onActivityRailVisibilityChange,
+  onAppearancePaletteReset,
+  onAppearanceTokenChange,
+  onAppearanceTokenReset,
+  onBrandThemeChange,
+  onCodeThemeChange,
+  onColorModeChange,
+  onFontFamilyChange,
+  onHtmlBackgroundConfigChange,
+  onOpenAppearanceWindow,
+}: AppearanceSettingsPanelProps) {
+  const { t } = useI18n()
+  const brandThemeOptions = [
+    {
+      value: "terra" as const,
+      label: t("settings.appearance.accentThemeTerra"),
+    },
+    {
+      value: "sage" as const,
+      label: t("settings.appearance.accentThemeSage"),
+    },
+  ]
+  const colorModeOptions: Array<{ value: ColorMode; label: string }> = [
+    { value: "light", label: t("settings.appearance.light") },
+    { value: "dark", label: t("settings.appearance.dark") },
+    { value: "system", label: t("settings.appearance.system") },
+  ]
+  const codeThemeOptions: Array<{ value: CodeThemePreference; label: string }> = [
+    { value: "auto", label: t("settings.appearance.codeThemeAuto") },
+    ...CODE_HIGHLIGHT_THEMES.map((theme) => ({
+      value: theme,
+      label: CODE_THEME_LABELS[theme],
+    })),
+  ]
+  const hasCustomAppearanceOverrides = Object.keys(appearanceOverrides).length > 0
+  const hasHtmlBackgroundSource = htmlBackgroundConfig.html.trim().length > 0
+
+  function updateHtmlBackgroundConfig(patch: Partial<HtmlBackgroundConfig>) {
+    onHtmlBackgroundConfigChange({
+      ...htmlBackgroundConfig,
+      ...patch,
+    })
+  }
+
+  return (
+    <div className="settings-appearance-layout">
+      <section className="settings-panel">
+        <div className="settings-select-list">
+          <div className="settings-select-row">
+            <span className="settings-select-copy">
+              <span className="settings-select-title">{t("settings.appearance.colorMode")}</span>
+            </span>
+            <span className="settings-select-control">
+              <SettingsSelect<ColorMode>
+                ariaLabel={t("settings.appearance.colorMode")}
+                options={colorModeOptions}
+                value={colorMode}
+                onChange={onColorModeChange}
+              />
+            </span>
+          </div>
+
+          <div className="settings-select-row">
+            <span className="settings-select-copy">
+              <span className="settings-select-title">{t("settings.appearance.accentTheme")}</span>
+            </span>
+            <span className="settings-select-control">
+              <SettingsSelect<BrandTheme>
+                ariaLabel={t("settings.appearance.accentTheme")}
+                options={brandThemeOptions}
+                value={brandTheme}
+                onChange={onBrandThemeChange}
+              />
+            </span>
+          </div>
+
+          <div className="settings-select-row">
+            <span className="settings-select-copy">
+              <span className="settings-select-title">{t("settings.appearance.codeTheme")}</span>
+            </span>
+            <span className="settings-select-control">
+              <SettingsSelect<CodeThemePreference>
+                ariaLabel={t("settings.appearance.codeTheme")}
+                options={codeThemeOptions}
+                value={codeThemePreference}
+                onChange={onCodeThemeChange}
+              />
+            </span>
+          </div>
+
+          <div className="settings-select-row">
+            <span className="settings-select-copy">
+              <span className="settings-select-title">{t("settings.appearance.interfaceFont")}</span>
+            </span>
+            <span className="settings-select-control">
+              <SettingsSelect<AppearanceFontFamily>
+                ariaLabel={t("settings.appearance.interfaceFont")}
+                options={fontFamilyOptions}
+                value={fontFamily}
+                onChange={onFontFamilyChange}
+              />
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section className="settings-panel settings-html-background-panel">
+        <div className="settings-section-header">
+          <div>
+            <span className="label">{t("settings.appearance.htmlBackgroundLabel")}</span>
+            <h3>{t("settings.appearance.htmlBackgroundTitle")}</h3>
+          </div>
+          <p>{t("settings.appearance.htmlBackgroundCopy")}</p>
+        </div>
+
+        <button
+          className={htmlBackgroundConfig.enabled ? "settings-toggle-card is-active" : "settings-toggle-card"}
+          role="switch"
+          aria-checked={htmlBackgroundConfig.enabled}
+          aria-label={t("settings.appearance.htmlBackgroundEnable")}
+          type="button"
+          disabled={!hasHtmlBackgroundSource}
+          onClick={() => updateHtmlBackgroundConfig({ enabled: !htmlBackgroundConfig.enabled })}
+        >
+          <span className="settings-toggle-copy">
+            <strong className="settings-toggle-title">
+              <span>{t("settings.appearance.htmlBackgroundEnable")}</span>
+            </strong>
+            <small>
+              {hasHtmlBackgroundSource
+                ? t("settings.appearance.htmlBackgroundEnableCopy")
+                : t("settings.appearance.htmlBackgroundEmptyCopy")}
+            </small>
+          </span>
+          <span className="settings-toggle-control" aria-hidden="true">
+            <span className="settings-toggle-thumb" />
+          </span>
+        </button>
+
+        <label className="settings-html-background-editor">
+          <span className="label">{t("settings.appearance.htmlBackgroundHtmlLabel")}</span>
+          <textarea
+            aria-label={t("settings.appearance.htmlBackgroundHtmlLabel")}
+            spellCheck={false}
+            value={htmlBackgroundConfig.html}
+            placeholder={t("settings.appearance.htmlBackgroundPlaceholder")}
+            onChange={(event: ChangeEvent<HTMLTextAreaElement>) => updateHtmlBackgroundConfig({
+              enabled: event.target.value.trim().length > 0 ? htmlBackgroundConfig.enabled : false,
+              html: event.target.value,
+            })}
+          />
+        </label>
+
+        <button
+          className={htmlBackgroundConfig.renderMode === "dynamic" ? "settings-toggle-card is-active" : "settings-toggle-card"}
+          role="switch"
+          aria-checked={htmlBackgroundConfig.renderMode === "dynamic"}
+          aria-label={t("settings.appearance.htmlBackgroundDynamicMode")}
+          type="button"
+          disabled={!hasHtmlBackgroundSource}
+          onClick={() => updateHtmlBackgroundConfig({
+            renderMode: htmlBackgroundConfig.renderMode === "dynamic" ? "static" : "dynamic",
+          })}
+        >
+          <span className="settings-toggle-copy">
+            <strong className="settings-toggle-title">{t("settings.appearance.htmlBackgroundDynamicMode")}</strong>
+            <small>{t("settings.appearance.htmlBackgroundDynamicModeCopy")}</small>
+          </span>
+          <span className="settings-toggle-control" aria-hidden="true">
+            <span className="settings-toggle-thumb" />
+          </span>
+        </button>
+
+        <div className="settings-html-background-controls" aria-label={t("settings.appearance.htmlBackgroundVisualControls")}>
+          <label className="settings-html-background-range">
+            <span>{t("settings.appearance.htmlBackgroundOpacity")}</span>
+            <input
+              type="range"
+              min="0.08"
+              max="1"
+              step="0.02"
+              value={htmlBackgroundConfig.opacity}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ opacity: Number(event.target.value) })}
+            />
+            <output>{Math.round(htmlBackgroundConfig.opacity * 100)}%</output>
+          </label>
+
+          <label className="settings-html-background-range">
+            <span>{t("settings.appearance.htmlBackgroundSurfaceOpacity")}</span>
+            <input
+              type="range"
+              min="0.36"
+              max="1"
+              step="0.02"
+              value={htmlBackgroundConfig.surfaceOpacity}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ surfaceOpacity: Number(event.target.value) })}
+            />
+            <output>{Math.round(htmlBackgroundConfig.surfaceOpacity * 100)}%</output>
+          </label>
+
+          <label className="settings-html-background-range">
+            <span>{t("settings.appearance.htmlBackgroundBlur")}</span>
+            <input
+              type="range"
+              min="0"
+              max="24"
+              step="1"
+              value={htmlBackgroundConfig.blurPx}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ blurPx: Number(event.target.value) })}
+            />
+            <output>{Math.round(htmlBackgroundConfig.blurPx)}px</output>
+          </label>
+
+          <label className="settings-html-background-range">
+            <span>{t("settings.appearance.htmlBackgroundDim")}</span>
+            <input
+              type="range"
+              min="0"
+              max="0.86"
+              step="0.02"
+              value={htmlBackgroundConfig.dim}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ dim: Number(event.target.value) })}
+            />
+            <output>{Math.round(htmlBackgroundConfig.dim * 100)}%</output>
+          </label>
+        </div>
+
+        <button
+          className={htmlBackgroundConfig.paused ? "settings-toggle-card is-active" : "settings-toggle-card"}
+          role="switch"
+          aria-checked={htmlBackgroundConfig.paused}
+          aria-label={t("settings.appearance.htmlBackgroundPauseMotion")}
+          type="button"
+          disabled={!hasHtmlBackgroundSource}
+          onClick={() => updateHtmlBackgroundConfig({ paused: !htmlBackgroundConfig.paused })}
+        >
+          <span className="settings-toggle-copy">
+            <strong className="settings-toggle-title">{t("settings.appearance.htmlBackgroundPauseMotion")}</strong>
+            <small>{t("settings.appearance.htmlBackgroundPauseMotionCopy")}</small>
+          </span>
+          <span className="settings-toggle-control" aria-hidden="true">
+            <span className="settings-toggle-thumb" />
+          </span>
+        </button>
+
+        <div className="settings-actions-row settings-html-background-actions">
+          <span className="settings-helper-text">
+            {htmlBackgroundConfig.renderMode === "dynamic"
+              ? t("settings.appearance.htmlBackgroundDynamicSafetyCopy")
+              : t("settings.appearance.htmlBackgroundSafetyCopy")}
+          </span>
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={!hasHtmlBackgroundSource && !htmlBackgroundConfig.enabled}
+            onClick={() => onHtmlBackgroundConfigChange({ ...DEFAULT_HTML_BACKGROUND_CONFIG })}
+          >
+            {t("settings.appearance.htmlBackgroundReset")}
+          </button>
+        </div>
+      </section>
+
+      <section className="settings-panel">
+        <div className="settings-section-header">
+          <div>
+            <span className="label">{t("settings.appearance.config")}</span>
+            <h3>{t("settings.appearance.themeConfigFile")}</h3>
+          </div>
+          <div className="settings-inline-actions">
+            {onOpenAppearanceWindow ? (
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={onOpenAppearanceWindow}
+              >
+                {t("settings.appearance.openWindow")}
+              </button>
+            ) : null}
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={!hasCustomAppearanceOverrides}
+              onClick={onAppearancePaletteReset}
+            >
+              {t("settings.appearance.resetPalette")}
+            </button>
+          </div>
+        </div>
+
+        <div className="settings-theme-config-meta">
+          <div className="settings-theme-config-path">
+            <span className="label">{t("settings.appearance.savedTo")}</span>
+            <code>{appearanceConfigPath ?? t("settings.appearance.configUnavailable")}</code>
+          </div>
+          <p className="settings-helper-text">
+            {t("settings.appearance.configAutoSavedCopy")}
+          </p>
+          {appearanceConfigError ? (
+            <p className="settings-helper-text settings-theme-config-error">{appearanceConfigError}</p>
+          ) : null}
+        </div>
+
+        <label className="settings-theme-config-preview">
+          <span className="label">{t("settings.appearance.currentJson")}</span>
+          <textarea
+            aria-label={t("settings.appearance.currentJsonLabel")}
+            readOnly
+            value={appearanceConfigPreview}
+          />
+        </label>
+      </section>
+
+      <AppearanceTokenEditor
+        appearanceOverrides={appearanceOverrides}
+        appearanceTokenValues={appearanceTokenValues}
+        onAppearanceTokenChange={onAppearanceTokenChange}
+        onAppearanceTokenReset={onAppearanceTokenReset}
+      />
+
+      {showShellLayoutSettings ? (
+        <>
+          <section className="settings-panel">
+            <div className="settings-section-header">
+              <div>
+                <span className="label">{t("settings.appearance.shell")}</span>
+                <h3>{t("settings.appearance.layoutVisibility")}</h3>
+              </div>
+              <p>{t("settings.appearance.layoutVisibilityCopy")}</p>
+            </div>
+
+            <button
+              className={isActivityRailVisible ? "settings-toggle-card is-active" : "settings-toggle-card"}
+              role="switch"
+              aria-checked={isActivityRailVisible}
+              aria-label={t("settings.appearance.showLeftRail")}
+              type="button"
+              onClick={() => onActivityRailVisibilityChange?.(!isActivityRailVisible)}
+            >
+              <span className="settings-toggle-copy">
+                <strong className="settings-toggle-title">
+                  <span className="settings-toggle-icon" aria-hidden="true">
+                    <LayoutSidebarLeftIcon />
+                  </span>
+                  <span>{t("settings.appearance.showLeftRail")}</span>
+                </strong>
+                <small>{t("settings.appearance.showLeftRailCopy")}</small>
+              </span>
+              <span className="settings-toggle-control" aria-hidden="true">
+                <span className="settings-toggle-thumb" />
+              </span>
+            </button>
+
+            <p className="settings-helper-text">
+              {t("settings.appearance.leftRailHiddenCopy")}
+            </p>
+          </section>
+
+          <section className="settings-panel">
+            <div className="settings-section-header">
+              <div>
+                <span className="label">{t("settings.appearance.current")}</span>
+                <h3>{t("settings.appearance.state")}</h3>
+              </div>
+              <p>{t("settings.appearance.stateCopy")}</p>
+            </div>
+
+            <div className="settings-section-summary">
+              <article className="settings-summary-card">
+                <span className="label">{t("settings.appearance.left")}</span>
+                <strong>
+                  {isActivityRailVisible ? t("settings.appearance.shown") : t("settings.appearance.hidden")}
+                </strong>
+                <p>
+                  {isActivityRailVisible
+                    ? t("settings.appearance.leftRailShownSummary")
+                    : t("settings.appearance.leftRailHiddenSummary")}
+                </p>
+              </article>
+              <article className="settings-summary-card">
+                <span className="label">{t("settings.appearance.right")}</span>
+                <strong>{t("settings.appearance.noRail")}</strong>
+                <p>{t("settings.appearance.rightNoRailSummary")}</p>
+              </article>
+            </div>
+          </section>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
 interface ModelListViewProps {
   catalog: ProviderCatalogItem[]
   models: ProviderModel[]
@@ -1491,10 +2116,6 @@ export function SettingsPage({
     const [selectedProviderID, setSelectedProviderID] = useState<string | null>(null)
     const [archivedSessionSearchQuery, setArchivedSessionSearchQuery] = useState("")
     const [providerSearch, setProviderSearch] = useState("")
-    const [themeTokenSearchQuery, setThemeTokenSearchQuery] = useState("")
-    const [themeTokenGroupFilter, setThemeTokenGroupFilter] = useState<AppearanceTokenGroupFilter>("all")
-    const [themeTokenCustomizationFilter, setThemeTokenCustomizationFilter] =
-      useState<AppearanceTokenCustomizationFilter>("all")
     const [isCustomProviderDialogOpen, setIsCustomProviderDialogOpen] = useState(false)
     const [editingCustomProviderID, setEditingCustomProviderID] = useState<string | null>(null)
     const [mcpServerSearchQuery, setMcpServerSearchQuery] = useState("")
@@ -1534,42 +2155,6 @@ export function SettingsPage({
     const filteredArchivedSessions = archivedSessions.filter((session) =>
       doesArchivedSessionMatchSearch(session, normalizedArchivedSessionSearchQuery),
     )
-    const appearanceTokenGroupFilterOptions = useMemo<Array<{ value: AppearanceTokenGroupFilter; label: string }>>(
-      () => [
-        { value: "all", label: t("settings.appearance.allTokenGroups") },
-        ...APPEARANCE_TOKEN_GROUPS.map((group) => ({ value: group.id, label: group.label })),
-      ],
-      [t],
-    )
-    const appearanceTokenCustomizationFilterOptions = useMemo<
-      Array<{ value: AppearanceTokenCustomizationFilter; label: string }>
-    >(
-      () => [
-        { value: "all", label: t("settings.appearance.allTokens") },
-        { value: "customized", label: t("settings.appearance.customizedTokens") },
-      ],
-      [t],
-    )
-    const filteredAppearanceTokenGroups = useMemo(
-      () =>
-        filterAppearanceTokenGroups(
-          APPEARANCE_TOKEN_GROUPS,
-          themeTokenSearchQuery,
-          appearanceTokenValues,
-          themeTokenGroupFilter,
-          themeTokenCustomizationFilter,
-          appearanceOverrides,
-        ),
-      [
-        appearanceOverrides,
-        appearanceTokenValues,
-        themeTokenCustomizationFilter,
-        themeTokenGroupFilter,
-        themeTokenSearchQuery,
-      ],
-    )
-    const appearanceTokenTotalCount = countAppearanceTokenRows(APPEARANCE_TOKEN_GROUPS)
-    const appearanceTokenVisibleCount = countAppearanceTokenRows(filteredAppearanceTokenGroups)
     const activeProvider = selectedProviderID ? catalog.find((item) => item.id === selectedProviderID) ?? null : null
     const isEditingCustomProvider = editingCustomProviderID !== null
     const customProviderBusy = savingProviderID === "custom" || testingProviderID === "custom"
@@ -2126,28 +2711,6 @@ export function SettingsPage({
       void onTestCustomProviderConnection(editingCustomProviderID ?? undefined)
     }
 
-    const brandThemeOptions = [
-      {
-        value: "terra" as const,
-        label: t("settings.appearance.accentThemeTerra"),
-      },
-      {
-        value: "sage" as const,
-        label: t("settings.appearance.accentThemeSage"),
-      },
-    ]
-    const colorModeOptions: Array<{ value: ColorMode; label: string }> = [
-      { value: "light", label: t("settings.appearance.light") },
-      { value: "dark", label: t("settings.appearance.dark") },
-      { value: "system", label: t("settings.appearance.system") },
-    ]
-    const codeThemeOptions: Array<{ value: CodeThemePreference; label: string }> = [
-      { value: "auto", label: t("settings.appearance.codeThemeAuto") },
-      ...CODE_HIGHLIGHT_THEMES.map((theme) => ({
-        value: theme,
-        label: CODE_THEME_LABELS[theme],
-      })),
-    ]
     const languageOptions: Array<{ value: AppLocale; label: string; description: string }> = [
       {
         value: "zh-CN",
@@ -2160,15 +2723,6 @@ export function SettingsPage({
         description: t("settings.appearance.localeEnDescription"),
       },
     ]
-    const hasCustomAppearanceOverrides = Object.keys(appearanceOverrides).length > 0
-    const hasHtmlBackgroundSource = htmlBackgroundConfig.html.trim().length > 0
-
-    function updateHtmlBackgroundConfig(patch: Partial<HtmlBackgroundConfig>) {
-      onHtmlBackgroundConfigChange({
-        ...htmlBackgroundConfig,
-        ...patch,
-      })
-    }
 
     const primarySectionGroups = [
       {
@@ -2466,464 +3020,30 @@ export function SettingsPage({
               ) : activeSection === "account" ? (
                 accountSection
               ) : activeSection === "appearance" ? (
-                <div className="settings-appearance-layout">
-                  <section className="settings-panel">
-                    <div className="settings-select-list">
-                      <div className="settings-select-row">
-                        <span className="settings-select-copy">
-                          <span className="settings-select-title">{t("settings.appearance.colorMode")}</span>
-                        </span>
-                        <span className="settings-select-control">
-                          <SettingsSelect<ColorMode>
-                            ariaLabel={t("settings.appearance.colorMode")}
-                            options={colorModeOptions}
-                            value={colorMode}
-                            onChange={onColorModeChange}
-                          />
-                        </span>
-                      </div>
-
-                      <div className="settings-select-row">
-                        <span className="settings-select-copy">
-                          <span className="settings-select-title">{t("settings.appearance.accentTheme")}</span>
-                        </span>
-                        <span className="settings-select-control">
-                          <SettingsSelect<BrandTheme>
-                            ariaLabel={t("settings.appearance.accentTheme")}
-                            options={brandThemeOptions}
-                            value={brandTheme}
-                            onChange={onBrandThemeChange}
-                          />
-                        </span>
-                      </div>
-
-                      <div className="settings-select-row">
-                        <span className="settings-select-copy">
-                          <span className="settings-select-title">{t("settings.appearance.codeTheme")}</span>
-                        </span>
-                        <span className="settings-select-control">
-                          <SettingsSelect<CodeThemePreference>
-                            ariaLabel={t("settings.appearance.codeTheme")}
-                            options={codeThemeOptions}
-                            value={codeThemePreference}
-                            onChange={onCodeThemeChange}
-                          />
-                        </span>
-                      </div>
-
-                      <div className="settings-select-row">
-                        <span className="settings-select-copy">
-                          <span className="settings-select-title">{t("settings.appearance.interfaceFont")}</span>
-                        </span>
-                        <span className="settings-select-control">
-                          <SettingsSelect<AppearanceFontFamily>
-                            ariaLabel={t("settings.appearance.interfaceFont")}
-                            options={fontFamilyOptions}
-                            value={fontFamily}
-                            onChange={onFontFamilyChange}
-                          />
-                        </span>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section className="settings-panel settings-html-background-panel">
-                    <div className="settings-section-header">
-                      <div>
-                        <span className="label">{t("settings.appearance.htmlBackgroundLabel")}</span>
-                        <h3>{t("settings.appearance.htmlBackgroundTitle")}</h3>
-                      </div>
-                      <p>{t("settings.appearance.htmlBackgroundCopy")}</p>
-                    </div>
-
-                    <button
-                      className={htmlBackgroundConfig.enabled ? "settings-toggle-card is-active" : "settings-toggle-card"}
-                      role="switch"
-                      aria-checked={htmlBackgroundConfig.enabled}
-                      aria-label={t("settings.appearance.htmlBackgroundEnable")}
-                      type="button"
-                      disabled={!hasHtmlBackgroundSource}
-                      onClick={() => updateHtmlBackgroundConfig({ enabled: !htmlBackgroundConfig.enabled })}
-                    >
-                      <span className="settings-toggle-copy">
-                        <strong className="settings-toggle-title">
-                          <span>{t("settings.appearance.htmlBackgroundEnable")}</span>
-                        </strong>
-                        <small>
-                          {hasHtmlBackgroundSource
-                            ? t("settings.appearance.htmlBackgroundEnableCopy")
-                            : t("settings.appearance.htmlBackgroundEmptyCopy")}
-                        </small>
-                      </span>
-                      <span className="settings-toggle-control" aria-hidden="true">
-                        <span className="settings-toggle-thumb" />
-                      </span>
-                    </button>
-
-                    <label className="settings-html-background-editor">
-                      <span className="label">{t("settings.appearance.htmlBackgroundHtmlLabel")}</span>
-                      <textarea
-                        aria-label={t("settings.appearance.htmlBackgroundHtmlLabel")}
-                        spellCheck={false}
-                        value={htmlBackgroundConfig.html}
-                        placeholder={t("settings.appearance.htmlBackgroundPlaceholder")}
-                        onChange={(event: ChangeEvent<HTMLTextAreaElement>) => updateHtmlBackgroundConfig({
-                          enabled: event.target.value.trim().length > 0 ? htmlBackgroundConfig.enabled : false,
-                          html: event.target.value,
-                        })}
-                      />
-                    </label>
-
-                    <button
-                      className={htmlBackgroundConfig.renderMode === "dynamic" ? "settings-toggle-card is-active" : "settings-toggle-card"}
-                      role="switch"
-                      aria-checked={htmlBackgroundConfig.renderMode === "dynamic"}
-                      aria-label={t("settings.appearance.htmlBackgroundDynamicMode")}
-                      type="button"
-                      disabled={!hasHtmlBackgroundSource}
-                      onClick={() => updateHtmlBackgroundConfig({
-                        renderMode: htmlBackgroundConfig.renderMode === "dynamic" ? "static" : "dynamic",
-                      })}
-                    >
-                      <span className="settings-toggle-copy">
-                        <strong className="settings-toggle-title">{t("settings.appearance.htmlBackgroundDynamicMode")}</strong>
-                        <small>{t("settings.appearance.htmlBackgroundDynamicModeCopy")}</small>
-                      </span>
-                      <span className="settings-toggle-control" aria-hidden="true">
-                        <span className="settings-toggle-thumb" />
-                      </span>
-                    </button>
-
-                    <div className="settings-html-background-controls" aria-label={t("settings.appearance.htmlBackgroundVisualControls")}>
-                      <label className="settings-html-background-range">
-                        <span>{t("settings.appearance.htmlBackgroundOpacity")}</span>
-                        <input
-                          type="range"
-                          min="0.08"
-                          max="1"
-                          step="0.02"
-                          value={htmlBackgroundConfig.opacity}
-                          onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ opacity: Number(event.target.value) })}
-                        />
-                        <output>{Math.round(htmlBackgroundConfig.opacity * 100)}%</output>
-                      </label>
-
-                      <label className="settings-html-background-range">
-                        <span>{t("settings.appearance.htmlBackgroundSurfaceOpacity")}</span>
-                        <input
-                          type="range"
-                          min="0.36"
-                          max="1"
-                          step="0.02"
-                          value={htmlBackgroundConfig.surfaceOpacity}
-                          onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ surfaceOpacity: Number(event.target.value) })}
-                        />
-                        <output>{Math.round(htmlBackgroundConfig.surfaceOpacity * 100)}%</output>
-                      </label>
-
-                      <label className="settings-html-background-range">
-                        <span>{t("settings.appearance.htmlBackgroundBlur")}</span>
-                        <input
-                          type="range"
-                          min="0"
-                          max="24"
-                          step="1"
-                          value={htmlBackgroundConfig.blurPx}
-                          onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ blurPx: Number(event.target.value) })}
-                        />
-                        <output>{Math.round(htmlBackgroundConfig.blurPx)}px</output>
-                      </label>
-
-                      <label className="settings-html-background-range">
-                        <span>{t("settings.appearance.htmlBackgroundDim")}</span>
-                        <input
-                          type="range"
-                          min="0"
-                          max="0.86"
-                          step="0.02"
-                          value={htmlBackgroundConfig.dim}
-                          onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ dim: Number(event.target.value) })}
-                        />
-                        <output>{Math.round(htmlBackgroundConfig.dim * 100)}%</output>
-                      </label>
-                    </div>
-
-                    <button
-                      className={htmlBackgroundConfig.paused ? "settings-toggle-card is-active" : "settings-toggle-card"}
-                      role="switch"
-                      aria-checked={htmlBackgroundConfig.paused}
-                      aria-label={t("settings.appearance.htmlBackgroundPauseMotion")}
-                      type="button"
-                      disabled={!hasHtmlBackgroundSource}
-                      onClick={() => updateHtmlBackgroundConfig({ paused: !htmlBackgroundConfig.paused })}
-                    >
-                      <span className="settings-toggle-copy">
-                        <strong className="settings-toggle-title">{t("settings.appearance.htmlBackgroundPauseMotion")}</strong>
-                        <small>{t("settings.appearance.htmlBackgroundPauseMotionCopy")}</small>
-                      </span>
-                      <span className="settings-toggle-control" aria-hidden="true">
-                        <span className="settings-toggle-thumb" />
-                      </span>
-                    </button>
-
-                    <div className="settings-actions-row settings-html-background-actions">
-                      <span className="settings-helper-text">
-                        {htmlBackgroundConfig.renderMode === "dynamic"
-                          ? t("settings.appearance.htmlBackgroundDynamicSafetyCopy")
-                          : t("settings.appearance.htmlBackgroundSafetyCopy")}
-                      </span>
-                      <button
-                        className="secondary-button"
-                        type="button"
-                        disabled={!hasHtmlBackgroundSource && !htmlBackgroundConfig.enabled}
-                        onClick={() => onHtmlBackgroundConfigChange({ ...DEFAULT_HTML_BACKGROUND_CONFIG })}
-                      >
-                        {t("settings.appearance.htmlBackgroundReset")}
-                      </button>
-                    </div>
-                  </section>
-
-                  <section className="settings-panel">
-                    <div className="settings-section-header">
-                      <div>
-                        <span className="label">{t("settings.appearance.config")}</span>
-                        <h3>{t("settings.appearance.themeConfigFile")}</h3>
-                      </div>
-                      <div className="settings-inline-actions">
-                        <button
-                          className="secondary-button"
-                          type="button"
-                          disabled={!hasCustomAppearanceOverrides}
-                          onClick={onAppearancePaletteReset}
-                        >
-                          {t("settings.appearance.resetPalette")}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="settings-theme-config-meta">
-                      <div className="settings-theme-config-path">
-                        <span className="label">{t("settings.appearance.savedTo")}</span>
-                        <code>{appearanceConfigPath ?? t("settings.appearance.configUnavailable")}</code>
-                      </div>
-                      <p className="settings-helper-text">
-                        {t("settings.appearance.configAutoSavedCopy")}
-                      </p>
-                      {appearanceConfigError ? (
-                        <p className="settings-helper-text settings-theme-config-error">{appearanceConfigError}</p>
-                      ) : null}
-                    </div>
-
-                    <label className="settings-theme-config-preview">
-                      <span className="label">{t("settings.appearance.currentJson")}</span>
-                      <textarea
-                        aria-label={t("settings.appearance.currentJsonLabel")}
-                        readOnly
-                        value={appearanceConfigPreview}
-                      />
-                    </label>
-                  </section>
-
-                  <div className="settings-theme-token-toolbar">
-                    <div className="settings-provider-search-control settings-theme-token-search" role="search">
-                      <SearchIcon />
-                      <input
-                        aria-label={t("settings.appearance.searchTokensLabel")}
-                        type="search"
-                        value={themeTokenSearchQuery}
-                        placeholder={t("settings.appearance.searchTokensPlaceholder")}
-                        onChange={(event: ChangeEvent<HTMLInputElement>) => setThemeTokenSearchQuery(event.target.value)}
-                      />
-                    </div>
-                    <div className="settings-theme-token-filter-controls">
-                      <SettingsSelect<AppearanceTokenGroupFilter>
-                        ariaLabel={t("settings.appearance.tokenGroupFilterLabel")}
-                        className="settings-theme-token-filter-select"
-                        options={appearanceTokenGroupFilterOptions}
-                        value={themeTokenGroupFilter}
-                        onChange={setThemeTokenGroupFilter}
-                      />
-                      <SettingsSelect<AppearanceTokenCustomizationFilter>
-                        ariaLabel={t("settings.appearance.tokenStatusFilterLabel")}
-                        className="settings-theme-token-status-select"
-                        options={appearanceTokenCustomizationFilterOptions}
-                        value={themeTokenCustomizationFilter}
-                        onChange={setThemeTokenCustomizationFilter}
-                      />
-                      <span className="settings-theme-token-search-count" aria-live="polite">
-                        {t("settings.appearance.searchTokensCount", {
-                          total: appearanceTokenTotalCount,
-                          visible: appearanceTokenVisibleCount,
-                        })}
-                      </span>
-                    </div>
-                  </div>
-
-                  {filteredAppearanceTokenGroups.length === 0 ? (
-                    <article className="settings-empty-state settings-theme-token-empty-result">
-                      <span className="label">{t("app.search")}</span>
-                      <h3>{t("settings.appearance.noTokenResultsTitle")}</h3>
-                      <p>{t("settings.appearance.noTokenResultsCopy")}</p>
-                    </article>
-                  ) : (
-                    filteredAppearanceTokenGroups.map((group) => (
-                      <section key={group.id} className="settings-panel settings-theme-token-panel">
-                        <div className="settings-section-header">
-                          <div>
-                            <h3>{group.label}</h3>
-                          </div>
-                          <p>{group.description}</p>
-                        </div>
-
-                        <div className="settings-theme-token-grid">
-                          {group.rows.map((row) => {
-                            const isLightCustomized = Boolean(appearanceOverrides[row.lightToken])
-                            const isDarkCustomized = Boolean(appearanceOverrides[row.darkToken])
-                            const isCustomized = isLightCustomized || isDarkCustomized
-                            const lightColorLabel = `${group.label} ${row.label} Light ${row.lightToken}`
-                            const darkColorLabel = `${group.label} ${row.label} Dark ${row.darkToken}`
-                            const colorValueLabel = t("settings.appearance.tokenColorValue")
-                            const channelLabels = {
-                              red: t("settings.appearance.tokenRed"),
-                              green: t("settings.appearance.tokenGreen"),
-                              blue: t("settings.appearance.tokenBlue"),
-                              alpha: t("settings.appearance.tokenAlpha"),
-                            }
-                            const lightTokenValue = appearanceTokenValues[row.lightToken]
-                            const darkTokenValue = appearanceTokenValues[row.darkToken]
-
-                            return (
-                              <article
-                                key={row.id}
-                                className={
-                                  isCustomized
-                                    ? "settings-theme-token-card is-customized"
-                                    : "settings-theme-token-card"
-                                }
-                              >
-                                <div className="settings-theme-token-copy">
-                                  <strong>{row.label}</strong>
-                                  <code className="settings-theme-token-name">{row.id}</code>
-                                </div>
-
-                                <div className="settings-theme-token-controls">
-                                  <div className="settings-theme-token-mode">
-                                    <span>{t("settings.appearance.light")}</span>
-                                    <AppearanceColorPicker
-                                      ariaLabel={lightColorLabel}
-                                      channelLabels={channelLabels}
-                                      value={lightTokenValue}
-                                      onChange={(value) => onAppearanceTokenChange(row.lightToken, value)}
-                                    />
-                                    <AppearanceColorTextInput
-                                      ariaLabel={`${lightColorLabel} ${colorValueLabel}`}
-                                      value={lightTokenValue}
-                                      onCommit={(value) => onAppearanceTokenChange(row.lightToken, value)}
-                                    />
-                                  </div>
-                                  <div className="settings-theme-token-mode">
-                                    <span>{t("settings.appearance.dark")}</span>
-                                    <AppearanceColorPicker
-                                      ariaLabel={darkColorLabel}
-                                      channelLabels={channelLabels}
-                                      value={darkTokenValue}
-                                      onChange={(value) => onAppearanceTokenChange(row.darkToken, value)}
-                                    />
-                                    <AppearanceColorTextInput
-                                      ariaLabel={`${darkColorLabel} ${colorValueLabel}`}
-                                      value={darkTokenValue}
-                                      onCommit={(value) => onAppearanceTokenChange(row.darkToken, value)}
-                                    />
-                                  </div>
-                                  <button
-                                    aria-label={t("settings.appearance.usePresetFor", {
-                                      name: `${group.label} ${row.label}`,
-                                    })}
-                                    className="secondary-button settings-theme-token-reset"
-                                    type="button"
-                                    disabled={!isCustomized}
-                                    title={t("settings.appearance.usePreset")}
-                                    onClick={() => {
-                                      onAppearanceTokenReset(row.lightToken)
-                                      onAppearanceTokenReset(row.darkToken)
-                                    }}
-                                  >
-                                    <ResetIcon size={14} />
-                                  </button>
-                                </div>
-                              </article>
-                            )
-                          })}
-                        </div>
-                      </section>
-                    ))
-                  )}
-
-                  <section className="settings-panel">
-                    <div className="settings-section-header">
-                      <div>
-                        <span className="label">{t("settings.appearance.shell")}</span>
-                        <h3>{t("settings.appearance.layoutVisibility")}</h3>
-                      </div>
-                      <p>{t("settings.appearance.layoutVisibilityCopy")}</p>
-                    </div>
-
-                    <button
-                      className={isActivityRailVisible ? "settings-toggle-card is-active" : "settings-toggle-card"}
-                      role="switch"
-                      aria-checked={isActivityRailVisible}
-                      aria-label={t("settings.appearance.showLeftRail")}
-                      type="button"
-                      onClick={() => onActivityRailVisibilityChange(!isActivityRailVisible)}
-                    >
-                      <span className="settings-toggle-copy">
-                        <strong className="settings-toggle-title">
-                          <span className="settings-toggle-icon" aria-hidden="true">
-                            <LayoutSidebarLeftIcon />
-                          </span>
-                          <span>{t("settings.appearance.showLeftRail")}</span>
-                        </strong>
-                        <small>{t("settings.appearance.showLeftRailCopy")}</small>
-                      </span>
-                      <span className="settings-toggle-control" aria-hidden="true">
-                        <span className="settings-toggle-thumb" />
-                      </span>
-                    </button>
-
-                    <p className="settings-helper-text">
-                      {t("settings.appearance.leftRailHiddenCopy")}
-                    </p>
-                  </section>
-
-                  <section className="settings-panel">
-                    <div className="settings-section-header">
-                      <div>
-                        <span className="label">{t("settings.appearance.current")}</span>
-                        <h3>{t("settings.appearance.state")}</h3>
-                      </div>
-                      <p>{t("settings.appearance.stateCopy")}</p>
-                    </div>
-
-                    <div className="settings-section-summary">
-                      <article className="settings-summary-card">
-                        <span className="label">{t("settings.appearance.left")}</span>
-                        <strong>
-                          {isActivityRailVisible ? t("settings.appearance.shown") : t("settings.appearance.hidden")}
-                        </strong>
-                        <p>
-                          {isActivityRailVisible
-                            ? t("settings.appearance.leftRailShownSummary")
-                            : t("settings.appearance.leftRailHiddenSummary")}
-                        </p>
-                      </article>
-                      <article className="settings-summary-card">
-                        <span className="label">{t("settings.appearance.right")}</span>
-                        <strong>{t("settings.appearance.noRail")}</strong>
-                        <p>{t("settings.appearance.rightNoRailSummary")}</p>
-                      </article>
-                    </div>
-                  </section>
-                </div>
+                <AppearanceSettingsPanel
+                  appearanceConfigError={appearanceConfigError}
+                  appearanceConfigPath={appearanceConfigPath}
+                  appearanceConfigPreview={appearanceConfigPreview}
+                  appearanceOverrides={appearanceOverrides}
+                  appearanceTokenValues={appearanceTokenValues}
+                  brandTheme={brandTheme}
+                  codeThemePreference={codeThemePreference}
+                  colorMode={colorMode}
+                  fontFamily={fontFamily}
+                  htmlBackgroundConfig={htmlBackgroundConfig}
+                  isActivityRailVisible={isActivityRailVisible}
+                  showShellLayoutSettings
+                  onActivityRailVisibilityChange={onActivityRailVisibilityChange}
+                  onAppearancePaletteReset={onAppearancePaletteReset}
+                  onAppearanceTokenChange={onAppearanceTokenChange}
+                  onAppearanceTokenReset={onAppearanceTokenReset}
+                  onBrandThemeChange={onBrandThemeChange}
+                  onCodeThemeChange={onCodeThemeChange}
+                  onColorModeChange={onColorModeChange}
+                  onFontFamilyChange={onFontFamilyChange}
+                  onHtmlBackgroundConfigChange={onHtmlBackgroundConfigChange}
+                  onOpenAppearanceWindow={() => void openAppearanceWindow()}
+                />
               ) : activeSection === "developer" ? (
                 <div className="settings-developer-layout">
                   <SettingsDisclosurePanel
