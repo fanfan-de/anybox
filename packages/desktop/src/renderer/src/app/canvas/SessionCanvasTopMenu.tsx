@@ -1089,6 +1089,7 @@ export function SessionCanvasTopMenu({
         </div>
       ) : null}
       controlsSpacerVariant="canvas"
+      dragRegion
       trailing={(
         <>
           <ExternalEditorMenuButton directory={gitDirectory} />

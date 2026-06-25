@@ -152,7 +152,7 @@ import type {
   MenuKey,
   WindowAction,
 } from "./types"
-import { isWindowMaximized, maximizeFramelessWindow, restoreFramelessWindow, sendWindowState } from "./window-state"
+import { isWindowMaximized, sendWindowState } from "./window-state"
 import {
   getWorkspaceGitFileStates,
   getWorkspaceGitDiff,
@@ -3311,10 +3311,7 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
 
     if (action === "minimize") win.minimize()
     if (action === "toggle-maximize") {
-      if (process.platform === "win32") {
-        if (isWindowMaximized(win)) restoreFramelessWindow(win)
-        else maximizeFramelessWindow(win)
-      } else if (win.isMaximized()) {
+      if (isWindowMaximized(win)) {
         win.unmaximize()
       } else {
         win.maximize()

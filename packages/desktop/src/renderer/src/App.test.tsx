@@ -1601,7 +1601,7 @@ describe("App", () => {
     expect(minimizeWindowButton.closest(".window-controls")).not.toBeNull()
     expect(minimizeWindowButton.closest(".right-sidebar-top-menu")).toBe(rightSidebarTopMenu)
     expect(container.querySelector(".dockview-theme-anybox .dv-tabs-and-actions-container")).not.toBeNull()
-    expect(container.querySelector(".session-canvas-top-menu.window-drag-region")).toBeNull()
+    expect(container.querySelector(".session-canvas-top-menu.window-drag-region")).not.toBeNull()
     expect(leftSidebarTopMenu).toHaveClass("shell-top-menu")
     expect(topMenu).toHaveClass("shell-top-menu")
     expect(rightSidebarTopMenu).toHaveClass("shell-top-menu")
@@ -13865,7 +13865,7 @@ describe("App", () => {
     expect(styles).toMatch(/\.sidebar-toggle-button\.is-top-menu svg\s*\{[^}]*width:\s*var\(--section-toolbar-icon-size\);[^}]*height:\s*var\(--section-toolbar-icon-size\);[^}]*stroke-width:\s*2;/s)
     expect(styles).toMatch(/\.session-tab-close svg\s*\{[^}]*width:\s*var\(--section-toolbar-aux-icon-size\);[^}]*height:\s*var\(--section-toolbar-aux-icon-size\);[^}]*stroke-width:\s*2;/s)
     expect(styles).toMatch(
-      /\.dockview-theme-anybox\s+\.dv-tabs-and-actions-container\s*\{[^}]*--dockview-tab-bar-bg:\s*var\(--seg-pane-tab-bar-surface\);[^}]*--dockview-tab-active-bg:\s*var\(--seg-shell\);[^}]*background:\s*var\(--dockview-tab-bar-bg\);[^}]*-webkit-app-region:\s*no-drag;/s,
+      /\.dockview-theme-anybox\s+\.dv-tabs-and-actions-container\s*\{[^}]*--dockview-tab-bar-bg:\s*var\(--seg-pane-tab-bar-surface\);[^}]*--dockview-tab-active-bg:\s*var\(--seg-shell\);[^}]*background:\s*var\(--dockview-tab-bar-bg\);[^}]*-webkit-app-region:\s*drag;/s,
     )
     expect(styles).toMatch(/--dockview-tab-hover-bg:\s*var\(--mix-seg-panel-66-seg-panel-muted-34\);/s)
     expect(styles).toMatch(

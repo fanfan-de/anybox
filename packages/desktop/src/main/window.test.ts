@@ -16,17 +16,19 @@ import {
 } from "./window"
 
 describe("session popout window options", () => {
-  it("creates a frameless Windows window that remains maximizable for top-edge snap", () => {
+  it("creates a native Windows window with a hidden title bar for system snap", () => {
     const options = resolvePopoutWindowOptions("C:\\desktop\\out\\main", { platform: "win32" })
 
-    expect(options.frame).toBe(false)
+    expect(options.frame).toBeUndefined()
     expect(options.maximizable).toBe(true)
     expect(options.roundedCorners).toBe(false)
-    expect(options.titleBarStyle).toBeUndefined()
+    expect(options.thickFrame).toBe(true)
+    expect(options.titleBarStyle).toBe("hidden")
+    expect("titleBarOverlay" in options).toBe(false)
     expect("trafficLightPosition" in options).toBe(false)
-    expect(options.backgroundMaterial).toBe("acrylic")
-    expect(options.backgroundColor).toBe("#00000000")
-    expect(options.transparent).toBe(true)
+    expect(options.backgroundMaterial).toBeUndefined()
+    expect(options.backgroundColor).toBe("#eff3f7")
+    expect(options.transparent).toBeUndefined()
     expect(options.webPreferences?.contextIsolation).toBe(true)
     expect(options.webPreferences?.nodeIntegration).toBe(false)
     expect(options.webPreferences?.preload).toContain("preload")
@@ -48,11 +50,9 @@ describe("session popout window options", () => {
     expect(options.webPreferences?.preload).toContain("preload")
   })
 
-  it("uses Windows Acrylic through transparent web contents", () => {
+  it("uses an opaque Windows window background for native resize and snap", () => {
     expect(resolveWindowBackgroundOptions("win32")).toEqual({
-      backgroundColor: "#00000000",
-      backgroundMaterial: "acrylic",
-      transparent: true,
+      backgroundColor: "#eff3f7",
     })
     expect(resolveWindowBackgroundOptions("darwin")).toEqual({ backgroundColor: "#eff3f7" })
     expect(resolveWindowBackgroundOptions("linux")).toEqual({ backgroundColor: "#eff3f7" })

@@ -85,7 +85,7 @@
   background: var(--dockview-tab-bar-bg);
   border-bottom: 0;
   color: var(--seg-text-2);
-  -webkit-app-region: no-drag;
+  -webkit-app-region: drag;
   user-select: none;
   isolation: isolate;
 }
