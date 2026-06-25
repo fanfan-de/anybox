@@ -15,6 +15,11 @@
   --surface-profile-left-top-menu: color-mix(in srgb, var(--semantic-shell-chrome-surface) var(--surface-profile-opacity), transparent);
   --surface-profile-right-top-menu: color-mix(in srgb, var(--semantic-shell-chrome-surface) var(--surface-profile-opacity), transparent);
   --surface-profile-composer: color-mix(in srgb, var(--semantic-composer-surface) var(--surface-profile-opacity), transparent);
+  --surface-profile-button-secondary: color-mix(in srgb, var(--semantic-button-secondary-surface) var(--surface-profile-content-opacity), transparent);
+  --surface-profile-button-secondary-hover: color-mix(in srgb, var(--semantic-button-secondary-surface-hover) var(--surface-profile-content-opacity), transparent);
+  --surface-profile-button-secondary-disabled: color-mix(in srgb, var(--semantic-button-secondary-disabled-surface) var(--surface-profile-content-opacity), transparent);
+  --surface-profile-settings-page: var(--semantic-settings-page-surface);
+  --surface-profile-settings-page-nav: var(--semantic-settings-page-surface);
   --top-chrome-surface: var(--surface-profile-tab);
   --top-chrome-active-surface: var(--surface-profile-shell);
   background: transparent;
@@ -94,13 +99,18 @@
 
 .window-shell.is-windows[data-background-mode="default"] .right-sidebar-launcher-card {
   border-color: var(--mix-seg-border-82-transparent-18);
-  background: var(--surface-profile-content-muted);
+  background: var(--surface-profile-button-secondary);
 }
 
 .window-shell.is-windows[data-background-mode="default"] .right-sidebar-launcher-card:hover,
 .window-shell.is-windows[data-background-mode="default"] .right-sidebar-launcher-card:focus-visible {
   border-color: var(--mix-seg-border-84-transparent-16);
-  background: var(--surface-profile-content);
+  background: var(--surface-profile-button-secondary-hover);
+}
+
+.window-shell.is-windows[data-background-mode="default"] .right-sidebar-launcher-card:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--surface-profile-button-secondary-disabled);
 }
 
 .window-shell.is-windows[data-background-mode="default"] .workspace-files-panel,
@@ -121,10 +131,10 @@
 }
 
 .window-shell.is-windows[data-background-mode="default"] .settings-page {
-  background: var(--surface-elevated);
+  background: var(--surface-profile-settings-page);
 }
 
 .window-shell.is-windows[data-background-mode="default"] .settings-page-nav,
 .window-shell.is-windows[data-background-mode="default"] .settings-page-primary-nav {
-  background: var(--surface-profile-content);
+  background: var(--surface-profile-settings-page-nav);
 }

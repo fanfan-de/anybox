@@ -3165,7 +3165,7 @@ export function SettingsPage({
             <h3>{appVersionLabel}</h3>
           </div>
           <button
-            className="primary-button settings-about-check-button"
+            className="secondary-button settings-about-check-button"
             type="button"
             disabled={!appUpdateState && isCheckingAppUpdate}
             onClick={handleAboutUpdateAction}
@@ -3259,7 +3259,7 @@ export function SettingsPage({
                         {t("settings.account.signInAgain")}
                       </button>
                       <button
-                        className="secondary-button"
+                        className="secondary-button is-danger"
                         type="button"
                         disabled={anyboxAccountBusy}
                         onClick={handleAnyboxAccountSignOut}

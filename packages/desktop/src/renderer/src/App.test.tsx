@@ -10379,6 +10379,12 @@ describe("App", () => {
     expect(screen.getByLabelText("Accent States Icon Active Dark semantic-accent-icon-active-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Shell Chrome Surface Light semantic-shell-chrome-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Shell Chrome Surface Dark semantic-shell-chrome-surface-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Settings Page Page Surface Light semantic-settings-page-surface-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Settings Page Page Surface Dark semantic-settings-page-surface-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Settings Page Switch Track Light semantic-settings-switch-track-surface-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Settings Page Switch Track Dark semantic-settings-switch-track-surface-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Settings Page Switch Thumb Light semantic-settings-switch-thumb-surface-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Settings Page Switch Thumb Dark semantic-settings-switch-thumb-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Dropdown Select Menu Surface Light semantic-dropdown-menu-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Dropdown Select Menu Surface Dark semantic-dropdown-menu-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Thread View Response Text Light semantic-thread-response-text-light")).toBeInTheDocument()
@@ -14054,6 +14060,15 @@ describe("App", () => {
     expect(styles).toMatch(/--semantic-shell-chrome-surface-dark:\s*#221d1a;/i)
     expect(styles).toMatch(/--semantic-shell-chrome-surface:\s*var\(--semantic-shell-chrome-surface-light\);/s)
     expect(styles).toMatch(/--semantic-shell-chrome-surface:\s*var\(--semantic-shell-chrome-surface-dark\);/s)
+    expect(styles).toMatch(/--semantic-settings-page-surface-light:\s*var\(--surface-shell-light\);/s)
+    expect(styles).toMatch(/--semantic-settings-page-surface-dark:\s*var\(--surface-shell-dark\);/s)
+    expect(styles).toMatch(/--semantic-settings-page-surface:\s*var\(--semantic-settings-page-surface-light\);/s)
+    expect(styles).toMatch(/--semantic-settings-page-surface:\s*var\(--semantic-settings-page-surface-dark\);/s)
+    expect(styles).toMatch(/--semantic-settings-switch-track-surface-light:\s*var\(--mix-seg-border-72-seg-panel-28-light\);/s)
+    expect(styles).toMatch(/--semantic-settings-switch-track-surface-active-dark:\s*var\(--brand-primary-dark\);/s)
+    expect(styles).toMatch(/--semantic-settings-switch-thumb-surface-disabled-dark:\s*var\(--surface-panel-dark\);/s)
+    expect(styles).toMatch(/--semantic-settings-switch-track-surface:\s*var\(--semantic-settings-switch-track-surface-light\);/s)
+    expect(styles).toMatch(/--semantic-settings-switch-track-surface:\s*var\(--semantic-settings-switch-track-surface-dark\);/s)
     expect(styles).toMatch(/--seg-shell-chrome-surface:\s*var\(--semantic-shell-chrome-surface\);/s)
     expect(styles).toMatch(/--seg-accent-icon:\s*var\(--semantic-accent-icon\);/s)
     expect(styles).toMatch(/--seg-accent-icon-hover:\s*var\(--semantic-accent-icon-hover\);/s)
@@ -14088,7 +14103,7 @@ describe("App", () => {
     expect(styles).toMatch(/--semantic-thread-divider-light:\s*var\(--mix-seg-divider-80-transparent-20-light\);/s)
     expect(styles).toMatch(/--semantic-thread-divider:\s*var\(--semantic-thread-divider-light\);/s)
     expect(styles).toMatch(/--semantic-thread-divider:\s*var\(--semantic-thread-divider-dark\);/s)
-    expect(styles).toMatch(/--semantic-thread-user-turn-diff-card-surface-light:\s*var\(--surface-panel-light\);/s)
+    expect(styles).toMatch(/--semantic-thread-user-turn-diff-card-surface-light:\s*var\(--semantic-thread-panel-surface-light\);/s)
     expect(styles).toMatch(/--semantic-thread-user-turn-diff-card-surface:\s*var\(--semantic-thread-user-turn-diff-card-surface-light\);/s)
     expect(styles).toMatch(/--semantic-thread-user-turn-diff-card-surface:\s*var\(--semantic-thread-user-turn-diff-card-surface-dark\);/s)
     expect(styles).toMatch(/--semantic-thread-user-turn-diff-row-surface-hover:\s*var\(--semantic-thread-user-turn-diff-row-surface-hover-light\);/s)
@@ -14180,7 +14195,7 @@ describe("App", () => {
       /@import "\.\/top-chrome\.css";\s*@import "\.\/windows-transparent\.css";\s*@import "\.\/debug\.css";/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\],[\s\S]*?\.session-popout-shell\.is-windows\s*\{[^}]*--surface-profile-opacity:\s*28%;[^}]*--surface-profile-content-opacity:\s*54%;[^}]*--surface-profile-shell:\s*color-mix\(in srgb,\s*var\(--surface-shell\) var\(--surface-profile-opacity\),\s*transparent\);[^}]*--surface-profile-content:\s*color-mix\(in srgb,\s*var\(--surface-panel\) var\(--surface-profile-content-opacity\),\s*transparent\);[^}]*background:\s*transparent;/s,
+      /\.window-shell\.is-windows\[data-background-mode="default"\],[\s\S]*?\.session-popout-shell\.is-windows\s*\{[^}]*--surface-profile-opacity:\s*28%;[^}]*--surface-profile-content-opacity:\s*54%;[^}]*--surface-profile-shell:\s*color-mix\(in srgb,\s*var\(--surface-shell\) var\(--surface-profile-opacity\),\s*transparent\);[^}]*--surface-profile-content:\s*color-mix\(in srgb,\s*var\(--surface-panel\) var\(--surface-profile-content-opacity\),\s*transparent\);[^}]*--surface-profile-settings-page:\s*var\(--semantic-settings-page-surface\);[^}]*--surface-profile-settings-page-nav:\s*var\(--semantic-settings-page-surface\);[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
       /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.app-shell,\s*\.session-popout-shell\.is-windows\s+\.session-popout-app\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
@@ -14210,7 +14225,7 @@ describe("App", () => {
       /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.right-sidebar-launcher\s*\{[^}]*background:\s*var\(--surface-profile-sidebar\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.right-sidebar-launcher-card\s*\{[^}]*background:\s*var\(--surface-profile-content-muted\);/s,
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.right-sidebar-launcher-card\s*\{[^}]*background:\s*var\(--surface-profile-button-secondary\);/s,
     )
     expect(styles).toMatch(
       /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.right-sidebar-view-host,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.right-sidebar-main-stack,[\s\S]*?\{[^}]*background:\s*transparent;/s,
@@ -14219,7 +14234,10 @@ describe("App", () => {
       /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.thread-shell,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.workbench-pane-live-region\s*\{[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.settings-page\s*\{[^}]*background:\s*var\(--surface-elevated\);/s,
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.settings-page\s*\{[^}]*background:\s*var\(--surface-profile-settings-page\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.settings-page-nav,\s*\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.settings-page-primary-nav\s*\{[^}]*background:\s*var\(--surface-profile-settings-page-nav\);/s,
     )
   })
 
@@ -14284,11 +14302,16 @@ describe("App", () => {
     expect(styles).toMatch(/\.user-turn-diff-card\s*\{[^}]*border:\s*1px solid var\(--semantic-thread-user-turn-diff-card-border\);[^}]*background:\s*var\(--semantic-thread-user-turn-diff-card-surface\);[^}]*box-shadow:\s*none;/s)
     expect(styles).toMatch(/\.user-turn-diff-stats \.is-add\s*\{[^}]*color:\s*var\(--semantic-success-text\);/s)
     expect(styles).toMatch(/\.user-turn-diff-stats \.is-remove\s*\{[^}]*color:\s*var\(--semantic-error-text\);/s)
+    expect(styles).toMatch(/\.right-sidebar-diff-row\.is-add \.right-sidebar-diff-line-number\s*\{[^}]*background:\s*transparent;/s)
+    expect(styles).toMatch(/\.right-sidebar-diff-row\.is-remove \.right-sidebar-diff-line-number\s*\{[^}]*background:\s*transparent;/s)
+    expect(styles).not.toMatch(
+      /\.right-sidebar-diff-row\.is-(?:add|remove) \.right-sidebar-diff-line-number\s*\{[^}]*background:\s*#(?:e8f5eb|feebe8);/s,
+    )
     expect(styles).toMatch(/\.user-turn-diff-action,[\s\S]*?\.user-turn-diff-expand\s*\{[^}]*border:\s*1px solid var\(--semantic-button-secondary-border\);[^}]*background:\s*var\(--semantic-button-secondary-surface\);[^}]*color:\s*var\(--semantic-button-secondary-text\);/s)
     expect(styles).toMatch(/button\.user-turn-diff-file-row:hover\s*\{[^}]*background:\s*var\(--semantic-thread-user-turn-diff-row-surface-hover\);/s)
     expect(styles).toMatch(/button\.user-turn-diff-file-row:focus-visible\s*\{[^}]*background:\s*var\(--semantic-thread-user-turn-diff-row-surface-focus\);[^}]*outline:\s*none;/s)
     expect(styles).toMatch(/\.thread-markdown\s*\{[^}]*--md-text:\s*var\(--semantic-markdown-text,\s*var\(--seg-text-1\)\);/s)
-    expect(styles).toMatch(/\.thread-markdown\s*\{[^}]*--md-inline-code-bg:\s*var\(--semantic-markdown-inline-code-surface,\s*var\(--seg-panel-muted\)\);/s)
+    expect(styles).toMatch(/\.thread-markdown\s*\{[^}]*--md-inline-code-bg:\s*var\(--semantic-markdown-inline-code-surface,\s*var\(--semantic-thread-panel-surface-muted\)\);/s)
     expect(styles).toMatch(/\.assistant-section\.is-reasoning \.trace-item-inline-title,[\s\S]*?\.assistant-section\.is-reasoning \.trace-item-plain-detail\s*\{[^}]*color:\s*var\(--semantic-thread-reasoning-text\);/s)
     expect(styles).toMatch(/\.assistant-shell\.is-sectioned\s*\{[^}]*border:\s*0;[^}]*padding:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s)
     expect(styles).toMatch(
@@ -14481,8 +14504,9 @@ describe("App", () => {
     expect(styles).toMatch(
       /\.settings-page-nav,\s*\.settings-page-primary-nav\s*\{[^}]*overflow:\s*auto;[^}]*scrollbar-gutter:\s*stable;[^}]*gap:\s*20px;/s,
     )
+    expect(styles).toMatch(/\.settings-page\s*\{[^}]*background:\s*var\(--semantic-settings-page-surface\);/s)
     expect(styles).toMatch(
-      /\.settings-page-nav,\s*\.settings-page-primary-nav\s*\{[^}]*background:\s*var\(--seg-shell\);[^}]*color:\s*var\(--seg-text-1\);/s,
+      /\.settings-page-nav,\s*\.settings-page-primary-nav\s*\{[^}]*background:\s*var\(--semantic-settings-page-surface\);[^}]*color:\s*var\(--seg-text-1\);/s,
     )
     expect(styles).toMatch(/\.settings-primary-nav-group-label,[\s\S]*?\.settings-helper-text,[\s\S]*?\.settings-page-copy,[\s\S]*?\.settings-section-header p,[\s\S]*?\.provider-row-copy,[\s\S]*?\.provider-model-empty,[\s\S]*?\.settings-toggle-copy small\s*\{[^}]*color:\s*var\(--seg-text-3\);/s)
     expect(styles).toMatch(

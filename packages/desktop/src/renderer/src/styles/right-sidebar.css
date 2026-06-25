@@ -378,10 +378,10 @@
   justify-items: center;
   align-content: center;
   gap: 16px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-button-secondary-border);
   border-radius: 0;
-  background: var(--seg-panel-muted);
-  color: var(--seg-text-1);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
   text-align: center;
   box-shadow: none;
   transform: none;
@@ -407,8 +407,9 @@
 
 .right-sidebar-launcher-card:hover,
 .right-sidebar-launcher-card:focus-visible {
-  border-color: var(--mix-seg-border-84-transparent-16);
-  background: color-mix(in srgb, var(--seg-panel-muted) 82%, var(--seg-text-3) 18%);
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
   outline: none;
 }
 
@@ -423,6 +424,9 @@
 }
 
 .right-sidebar-launcher-card:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
   cursor: not-allowed;
   opacity: 0.42;
 }

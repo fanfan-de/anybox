@@ -1137,6 +1137,15 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.queryByText("App Background")).not.toBeInTheDocument()
 
     fireEvent.change(searchBox, {
+      target: { value: "semantic-settings-switch-track-surface" },
+    })
+
+    expect(screen.getByText("Settings Page")).toBeInTheDocument()
+    expect(screen.getByText("Switch Track")).toBeInTheDocument()
+    expect(screen.getByText("semantic-settings-switch-track-surface")).toBeInTheDocument()
+    expect(screen.queryByText("App Background")).not.toBeInTheDocument()
+
+    fireEvent.change(searchBox, {
       target: { value: "semantic-button-primary-surface" },
     })
 

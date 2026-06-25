@@ -64,7 +64,7 @@
   max-height: min(calc(100dvh - 64px), 860px);
   border-color: var(--seg-border);
   border-radius: var(--seg-radius-md);
-  background: var(--seg-shell);
+  background: var(--semantic-settings-page-surface);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
@@ -1499,21 +1499,28 @@ body.is-dragging-settings-page {
   min-width: 108px;
   min-height: 44px;
   padding: 0 16px;
-  border-color: rgba(143, 99, 233, 0.42);
+  border-color: var(--semantic-button-secondary-border);
   border-radius: 7px;
-  background: #8f63e9;
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(81, 56, 145, 0.24);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
+  box-shadow: none;
   font-size: 16px;
   font-weight: 500;
 }
 
-.settings-about-check-button:hover,
-.settings-about-check-button:focus-visible {
-  border-color: rgba(124, 79, 224, 0.54);
-  background: #7f55de;
-  color: #ffffff;
-  box-shadow: 0 3px 8px rgba(81, 56, 145, 0.28);
+.settings-about-check-button:not(:disabled):hover,
+.settings-about-check-button:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  outline: none;
+}
+
+.settings-about-check-button:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+  cursor: default;
 }
 
 .settings-about-toggle-row {
@@ -1533,15 +1540,15 @@ body.is-dragging-settings-page {
 }
 
 .settings-about-toggle-row:focus-visible {
-  outline: 2px solid rgba(143, 99, 233, 0.36);
-  outline-offset: -2px;
+  outline: none;
+  background: var(--semantic-settings-switch-row-surface-focus);
 }
 
 .settings-about-toggle-row .settings-toggle-control {
   width: 58px;
   height: 32px;
-  border: 0;
-  background: #d7dce4;
+  border: 1px solid var(--semantic-settings-switch-track-border);
+  background: var(--semantic-settings-switch-track-surface);
 }
 
 .settings-about-toggle-row .settings-toggle-thumb {
@@ -1549,16 +1556,30 @@ body.is-dragging-settings-page {
   left: 2px;
   width: 28px;
   height: 28px;
-  background: #ffffff;
-  box-shadow: 0 1px 4px rgba(28, 32, 38, 0.24);
+  background: var(--semantic-settings-switch-thumb-surface);
+  box-shadow: none;
+}
+
+.settings-about-toggle-row:focus-visible .settings-toggle-control {
+  border-color: var(--semantic-settings-switch-track-border-focus);
 }
 
 .settings-about-toggle-row.is-active .settings-toggle-control {
-  background: #8f63e9;
+  border-color: var(--semantic-settings-switch-track-border-active);
+  background: var(--semantic-settings-switch-track-surface-active);
 }
 
 .settings-about-toggle-row.is-active .settings-toggle-thumb {
   transform: translateX(26px);
+}
+
+.settings-about-toggle-row:disabled .settings-toggle-control {
+  border-color: var(--semantic-settings-switch-track-border-disabled);
+  background: var(--semantic-settings-switch-track-surface-disabled);
+}
+
+.settings-about-toggle-row:disabled .settings-toggle-thumb {
+  background: var(--semantic-settings-switch-thumb-surface-disabled);
 }
 
 .settings-about-status {
@@ -4262,20 +4283,21 @@ body.is-dragging-settings-page {
 }
 
 .settings-toggle-card:hover {
-  transform: translateY(-1px);
-  border-color: rgba(95, 146, 194, 0.62);
-  box-shadow: 0 14px 34px rgba(46, 81, 118, 0.06);
+  transform: none;
+  border-color: var(--mix-seg-accent-34-seg-border-66);
+  box-shadow: none;
 }
 
 .settings-toggle-card:focus-visible {
   outline: none;
-  border-color: rgba(15, 103, 170, 0.72);
-  box-shadow: 0 0 0 1px rgba(15, 103, 170, 0.12);
+  border-color: var(--mix-seg-accent-42-seg-border-58);
+  background: var(--semantic-settings-switch-row-surface-focus);
+  box-shadow: none;
 }
 
 .settings-toggle-card.is-active {
-  border-color: rgba(79, 116, 200, 0.22);
-  background: var(--seg-accent-soft);
+  border-color: var(--mix-seg-accent-32-seg-border-68);
+  background: var(--mix-seg-accent-soft-74-seg-panel-26);
 }
 
 .settings-toggle-copy {
@@ -4324,9 +4346,9 @@ body.is-dragging-settings-page {
   flex: 0 0 auto;
   width: 48px;
   height: 28px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-settings-switch-track-border);
   border-radius: 999px;
-  background: #d7dde6;
+  background: var(--semantic-settings-switch-track-surface);
 }
 
 .settings-toggle-thumb {
@@ -4336,18 +4358,31 @@ body.is-dragging-settings-page {
   width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--semantic-settings-switch-thumb-surface);
   box-shadow: none;
   transition: transform 160ms ease;
 }
 
+.settings-toggle-card:focus-visible .settings-toggle-control {
+  border-color: var(--semantic-settings-switch-track-border-focus);
+}
+
 .settings-toggle-card.is-active .settings-toggle-control {
-  border-color: rgba(79, 116, 200, 0.26);
-  background: var(--seg-accent);
+  border-color: var(--semantic-settings-switch-track-border-active);
+  background: var(--semantic-settings-switch-track-surface-active);
 }
 
 .settings-toggle-card.is-active .settings-toggle-thumb {
   transform: translateX(20px);
+}
+
+.settings-toggle-card:disabled .settings-toggle-control {
+  border-color: var(--semantic-settings-switch-track-border-disabled);
+  background: var(--semantic-settings-switch-track-surface-disabled);
+}
+
+.settings-toggle-card:disabled .settings-toggle-thumb {
+  background: var(--semantic-settings-switch-thumb-surface-disabled);
 }
 
 .settings-color-mode-group {
@@ -5954,13 +5989,13 @@ body.is-dragging-settings-page {
 
 .settings-page {
   border: 1px solid var(--seg-border);
-  background: var(--seg-shell);
+  background: var(--semantic-settings-page-surface);
   box-shadow: var(--shadow-md);
 }
 
 .settings-page-nav,
 .settings-page-primary-nav {
-  background: var(--seg-shell);
+  background: var(--semantic-settings-page-surface);
   color: var(--seg-text-1);
 }
 
@@ -6035,17 +6070,30 @@ body.is-dragging-settings-page {
 }
 
 .settings-toggle-control {
-  border-color: var(--seg-border);
-  background: var(--mix-seg-border-72-seg-panel-28);
+  border-color: var(--semantic-settings-switch-track-border);
+  background: var(--semantic-settings-switch-track-surface);
 }
 
 .settings-toggle-thumb {
-  background: var(--seg-panel);
+  background: var(--semantic-settings-switch-thumb-surface);
+}
+
+.settings-toggle-card:focus-visible .settings-toggle-control {
+  border-color: var(--semantic-settings-switch-track-border-focus);
 }
 
 .settings-toggle-card.is-active .settings-toggle-control {
-  border-color: var(--seg-accent);
-  background: var(--seg-accent);
+  border-color: var(--semantic-settings-switch-track-border-active);
+  background: var(--semantic-settings-switch-track-surface-active);
+}
+
+.settings-toggle-card:disabled .settings-toggle-control {
+  border-color: var(--semantic-settings-switch-track-border-disabled);
+  background: var(--semantic-settings-switch-track-surface-disabled);
+}
+
+.settings-toggle-card:disabled .settings-toggle-thumb {
+  background: var(--semantic-settings-switch-thumb-surface-disabled);
 }
 
 /* Obsidian-style settings rows */
@@ -6122,7 +6170,6 @@ body.is-dragging-settings-page {
   padding: 0 24px;
   border: 0;
   border-radius: var(--seg-radius-sm);
-  background: var(--mix-seg-panel-72-seg-panel-muted-28);
   box-shadow: none;
 }
 
@@ -6282,6 +6329,20 @@ body.is-dragging-settings-page {
 }
 
 .settings-select {
+  --settings-select-surface: var(--semantic-dropdown-menu-surface, var(--seg-dropdown-menu-surface));
+  --settings-select-border: var(--seg-border);
+  --settings-select-text: var(--seg-text-1);
+  --settings-select-hover-surface: var(--semantic-sidebar-tree-row-surface-hover);
+  --settings-select-hover-text: var(--semantic-sidebar-tree-row-text-hover);
+  --settings-select-selected-surface: var(--semantic-sidebar-tree-row-surface-active);
+  --settings-select-selected-text: var(--semantic-sidebar-tree-row-text-active);
+  --settings-select-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md));
+  --settings-select-item-radius: var(--seg-radius-sm);
+  --settings-select-focus-border: var(--mix-seg-accent-34-seg-border-66);
+  --settings-select-shadow: var(--ui-shadow-md, var(--shadow-md));
+  --settings-select-trigger-surface: var(--mix-seg-panel-muted-72-seg-panel-28);
+  --settings-select-trigger-surface-hover: var(--mix-seg-panel-72-seg-panel-muted-28);
+
   position: relative;
   width: 100%;
   min-width: 0;
@@ -6291,9 +6352,9 @@ body.is-dragging-settings-page {
   width: 100%;
   min-height: 34px;
   padding: 0 10px;
-  border: 0;
-  border-radius: 7px;
-  background: var(--mix-seg-panel-muted-72-seg-panel-28);
+  border: 1px solid transparent;
+  border-radius: var(--settings-select-item-radius);
+  background: var(--settings-select-trigger-surface);
   color: var(--seg-text-1);
   font: inherit;
   font-size: 14px;
@@ -6302,20 +6363,20 @@ body.is-dragging-settings-page {
   display: flex;
   align-items: center;
   transition:
+    border-color 140ms ease,
     background 140ms ease,
-    color 140ms ease,
-    box-shadow 140ms ease;
+    color 140ms ease;
 }
 
 .settings-select-trigger:hover,
 .settings-select-trigger:focus-visible,
 .settings-select.is-open .settings-select-trigger {
-  background: var(--mix-seg-panel-72-seg-panel-muted-28);
+  border-color: var(--settings-select-focus-border);
+  background: var(--settings-select-trigger-surface-hover);
   color: var(--seg-text-1);
 }
 
 .settings-select-trigger:focus-visible {
-  box-shadow: 0 0 0 2px var(--mix-seg-accent-16-transparent-84);
   outline: none;
 }
 
@@ -6333,20 +6394,26 @@ body.is-dragging-settings-page {
 
 .settings-select-panel {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 8px);
   right: 0;
   z-index: 90;
   width: max-content;
   min-width: 100%;
   max-width: min(320px, calc(100vw - 48px));
   max-height: min(260px, 48vh);
-  padding: 4px;
-  overflow: auto;
-  border: 1px solid var(--seg-border);
-  border-radius: 7px;
-  background: var(--seg-dropdown-menu-surface);
-  box-shadow: 0 10px 24px rgba(46, 81, 118, 0.1);
+  padding: 8px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  border: 1px solid var(--settings-select-border);
+  border-radius: var(--settings-select-radius);
+  background: var(--settings-select-surface);
+  color: var(--settings-select-text);
+  box-shadow: var(--settings-select-shadow);
   scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .settings-select-panel::-webkit-scrollbar {
@@ -6363,16 +6430,19 @@ body.is-dragging-settings-page {
   width: 100%;
   min-height: 32px;
   padding: 0 10px;
-  border: 0;
-  border-radius: 5px;
+  border: 1px solid transparent;
+  border-radius: var(--settings-select-item-radius);
   background: transparent;
-  color: var(--seg-text-1);
+  color: inherit;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
-  display: block;
+  display: grid;
+  align-items: center;
 }
 
 .settings-select-option span {
@@ -6384,21 +6454,25 @@ body.is-dragging-settings-page {
 .settings-select-option:hover,
 .settings-select-option:focus-visible,
 .settings-select-option.is-active {
-  background: var(--semantic-sidebar-tree-row-surface-hover, var(--mix-seg-panel-muted-86-transparent-14));
-  color: var(--semantic-sidebar-tree-row-text-hover, var(--seg-text-1));
+  background: var(--settings-select-hover-surface);
+  color: var(--settings-select-hover-text);
   outline: none;
 }
 
+.settings-select-option:focus-visible {
+  border-color: var(--settings-select-focus-border);
+}
+
 .settings-select-option.is-selected {
-  background: var(--mix-seg-accent-soft-84-transparent-16);
-  color: var(--seg-accent-strong);
+  background: var(--settings-select-selected-surface);
+  color: var(--settings-select-selected-text);
 }
 
 .settings-select-option.is-selected:hover,
 .settings-select-option.is-selected:focus-visible,
 .settings-select-option.is-selected.is-active {
-  background: var(--mix-seg-accent-soft-72-transparent-28);
-  color: var(--seg-accent-strong);
+  background: var(--settings-select-selected-surface);
+  color: var(--settings-select-selected-text);
 }
 
 .settings-select-option:disabled {
@@ -6409,7 +6483,7 @@ body.is-dragging-settings-page {
 .settings-field .settings-select-trigger {
   min-height: 44px;
   padding: 0 12px;
-  background: var(--seg-panel-muted);
+  background: var(--settings-select-trigger-surface);
 }
 
 @media (max-width: 720px) {
@@ -6570,6 +6644,11 @@ body.is-dragging-settings-page {
   outline-offset: -2px;
 }
 
+.settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-about-toggle-row:focus-visible {
+  outline: none;
+  background: var(--semantic-settings-switch-row-surface-focus);
+}
+
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-about-copy,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-copy,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-select-copy,
@@ -6628,8 +6707,8 @@ body.is-dragging-settings-page {
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-select-control .settings-select-trigger {
   min-height: 34px;
-  border-radius: 6px;
-  background: var(--seg-panel-muted);
+  border-radius: var(--settings-select-item-radius);
+  background: var(--settings-select-trigger-surface);
   color: var(--seg-text-1);
   font-size: 14px;
 }
@@ -6637,7 +6716,7 @@ body.is-dragging-settings-page {
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-select-control .settings-select-trigger:hover,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-select-control .settings-select-trigger:focus-visible,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-select-control .settings-select.is-open .settings-select-trigger {
-  background: var(--mix-seg-panel-72-seg-panel-muted-28);
+  background: var(--settings-select-trigger-surface-hover);
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-about-check-button,
@@ -6654,16 +6733,18 @@ body.is-dragging-settings-page {
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-about-check-button {
   min-width: 104px;
-  border-color: rgba(143, 99, 233, 0.4);
-  background: #8f63e9;
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(81, 56, 145, 0.2);
+  border-color: var(--semantic-button-secondary-border);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
+  box-shadow: none;
 }
 
-.settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-about-check-button:hover,
-.settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-about-check-button:focus-visible {
-  background: #7f55de;
-  color: #ffffff;
+.settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-about-check-button:not(:disabled):hover,
+.settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-about-check-button:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  outline: none;
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-storage-actions {
@@ -6782,29 +6863,74 @@ body.is-dragging-settings-page {
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions .primary-button {
-  border-color: rgba(143, 99, 233, 0.4);
-  background: #8f63e9;
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(81, 56, 145, 0.18);
+  border-color: var(--semantic-button-primary-border);
+  background: var(--semantic-button-primary-surface);
+  color: var(--semantic-button-primary-text);
+  box-shadow: none;
 }
 
-.settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions .primary-button:hover,
-.settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions .primary-button:focus-visible {
-  background: #7f55de;
-  color: #ffffff;
+.settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions .primary-button:not(:disabled):hover,
+.settings-page-main:not(.is-services):not(.prompt-presets-page-main)
+  .settings-account-actions
+  .primary-button:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-primary-border-hover);
+  background: var(--semantic-button-primary-surface-hover);
+  color: var(--semantic-button-primary-text-hover);
+  outline: none;
+}
+
+.settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions .primary-button:disabled {
+  border-color: var(--semantic-button-primary-disabled-border);
+  background: var(--semantic-button-primary-disabled-surface);
+  color: var(--semantic-button-primary-disabled-text);
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions .secondary-button {
-  border-color: var(--seg-border);
-  background: var(--seg-panel-muted);
-  color: var(--seg-text-2);
+  border-color: var(--semantic-button-secondary-border);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
 }
 
-.settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions .secondary-button:hover,
-.settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions .secondary-button:focus-visible {
-  border-color: var(--mix-seg-accent-24-seg-border-76);
-  background: var(--mix-seg-panel-72-seg-panel-muted-28);
-  color: var(--seg-text-1);
+.settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions .secondary-button:not(:disabled):hover,
+.settings-page-main:not(.is-services):not(.prompt-presets-page-main)
+  .settings-account-actions
+  .secondary-button:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  outline: none;
+}
+
+.settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions .secondary-button.is-danger {
+  border-color: var(--semantic-button-danger-border);
+  background: var(--semantic-button-danger-surface);
+  color: var(--semantic-button-danger-text);
+}
+
+.settings-page-main:not(.is-services):not(.prompt-presets-page-main)
+  .settings-account-actions
+  .secondary-button.is-danger:not(:disabled):hover,
+.settings-page-main:not(.is-services):not(.prompt-presets-page-main)
+  .settings-account-actions
+  .secondary-button.is-danger:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-danger-border-hover);
+  background: var(--semantic-button-danger-surface-hover);
+  color: var(--semantic-button-danger-text-hover);
+  outline: none;
+}
+
+.settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions .secondary-button:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+}
+
+.settings-page-main:not(.is-services):not(.prompt-presets-page-main)
+  .settings-account-actions
+  .secondary-button.is-danger:disabled {
+  border-color: var(--semantic-button-danger-disabled-border);
+  background: var(--semantic-button-danger-disabled-surface);
+  color: var(--semantic-button-danger-disabled-text);
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-about-status {
