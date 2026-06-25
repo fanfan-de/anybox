@@ -3,6 +3,11 @@
 
 
 .settings-page-overlay {
+  --settings-scrollbar-size: 10px;
+  --settings-scrollbar-thumb: var(--mix-seg-text-3-34-transparent-66);
+  --settings-scrollbar-thumb-hover: var(--mix-seg-text-3-54-transparent-46);
+  --settings-scrollbar-thumb-active: var(--seg-text-3);
+  --settings-scrollbar-track: transparent;
   position: absolute;
   inset: 0;
   z-index: 40;
@@ -49,6 +54,11 @@
 
 .settings-page {
   --settings-nav-width: 220px;
+  --settings-scrollbar-size: 10px;
+  --settings-scrollbar-thumb: var(--mix-seg-text-3-34-transparent-66);
+  --settings-scrollbar-thumb-hover: var(--mix-seg-text-3-54-transparent-46);
+  --settings-scrollbar-thumb-active: var(--seg-text-3);
+  --settings-scrollbar-track: transparent;
   width: min(100%, 1320px);
   height: min(calc(100dvh - 64px), 860px);
   max-height: min(calc(100dvh - 64px), 860px);
@@ -362,6 +372,96 @@ body.is-dragging-settings-page {
   display: grid;
   align-content: start;
   gap: 18px;
+}
+
+.settings-page-overlay,
+.settings-page-nav,
+.settings-page-primary-nav,
+.settings-page-content,
+.settings-page-main,
+.settings-service-list,
+.settings-service-detail-panel {
+  scrollbar-width: thin;
+  scrollbar-color: var(--settings-scrollbar-thumb) var(--settings-scrollbar-track);
+}
+
+.settings-page-overlay::-webkit-scrollbar,
+.settings-page-nav::-webkit-scrollbar,
+.settings-page-primary-nav::-webkit-scrollbar,
+.settings-page-content::-webkit-scrollbar,
+.settings-page-main::-webkit-scrollbar,
+.settings-service-list::-webkit-scrollbar,
+.settings-service-detail-panel::-webkit-scrollbar {
+  width: var(--settings-scrollbar-size);
+  height: var(--settings-scrollbar-size);
+}
+
+.settings-page-overlay::-webkit-scrollbar-track,
+.settings-page-nav::-webkit-scrollbar-track,
+.settings-page-primary-nav::-webkit-scrollbar-track,
+.settings-page-content::-webkit-scrollbar-track,
+.settings-page-main::-webkit-scrollbar-track,
+.settings-service-list::-webkit-scrollbar-track,
+.settings-service-detail-panel::-webkit-scrollbar-track {
+  background: var(--settings-scrollbar-track);
+}
+
+.settings-page-overlay::-webkit-scrollbar-thumb,
+.settings-page-nav::-webkit-scrollbar-thumb,
+.settings-page-primary-nav::-webkit-scrollbar-thumb,
+.settings-page-content::-webkit-scrollbar-thumb,
+.settings-page-main::-webkit-scrollbar-thumb,
+.settings-service-list::-webkit-scrollbar-thumb,
+.settings-service-detail-panel::-webkit-scrollbar-thumb {
+  min-height: 32px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-color: var(--settings-scrollbar-thumb);
+  background-clip: content-box;
+}
+
+.settings-page-overlay:hover::-webkit-scrollbar-thumb,
+.settings-page-overlay:focus-within::-webkit-scrollbar-thumb,
+.settings-page-overlay::-webkit-scrollbar-thumb:hover,
+.settings-page-nav:hover::-webkit-scrollbar-thumb,
+.settings-page-nav:focus-within::-webkit-scrollbar-thumb,
+.settings-page-nav::-webkit-scrollbar-thumb:hover,
+.settings-page-primary-nav:hover::-webkit-scrollbar-thumb,
+.settings-page-primary-nav:focus-within::-webkit-scrollbar-thumb,
+.settings-page-primary-nav::-webkit-scrollbar-thumb:hover,
+.settings-page-content:hover::-webkit-scrollbar-thumb,
+.settings-page-content:focus-within::-webkit-scrollbar-thumb,
+.settings-page-content::-webkit-scrollbar-thumb:hover,
+.settings-page-main:hover::-webkit-scrollbar-thumb,
+.settings-page-main:focus-within::-webkit-scrollbar-thumb,
+.settings-page-main::-webkit-scrollbar-thumb:hover,
+.settings-service-list:hover::-webkit-scrollbar-thumb,
+.settings-service-list:focus-within::-webkit-scrollbar-thumb,
+.settings-service-list::-webkit-scrollbar-thumb:hover,
+.settings-service-detail-panel:hover::-webkit-scrollbar-thumb,
+.settings-service-detail-panel:focus-within::-webkit-scrollbar-thumb,
+.settings-service-detail-panel::-webkit-scrollbar-thumb:hover {
+  background-color: var(--settings-scrollbar-thumb-hover);
+}
+
+.settings-page-overlay::-webkit-scrollbar-thumb:active,
+.settings-page-nav::-webkit-scrollbar-thumb:active,
+.settings-page-primary-nav::-webkit-scrollbar-thumb:active,
+.settings-page-content::-webkit-scrollbar-thumb:active,
+.settings-page-main::-webkit-scrollbar-thumb:active,
+.settings-service-list::-webkit-scrollbar-thumb:active,
+.settings-service-detail-panel::-webkit-scrollbar-thumb:active {
+  background-color: var(--settings-scrollbar-thumb-active);
+}
+
+.settings-page-overlay::-webkit-scrollbar-corner,
+.settings-page-nav::-webkit-scrollbar-corner,
+.settings-page-primary-nav::-webkit-scrollbar-corner,
+.settings-page-content::-webkit-scrollbar-corner,
+.settings-page-main::-webkit-scrollbar-corner,
+.settings-service-list::-webkit-scrollbar-corner,
+.settings-service-detail-panel::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .settings-page-main-scroll-anchor {
@@ -10533,7 +10633,7 @@ body.is-dragging-settings-page {
   overflow-x: hidden;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: #c9c9c9 transparent;
+  scrollbar-color: var(--settings-scrollbar-thumb) var(--settings-scrollbar-track);
   padding-right: 6px;
   gap: 6px;
 }
@@ -10543,26 +10643,46 @@ body.is-dragging-settings-page {
   overflow-x: hidden;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: #c9c9c9 transparent;
+  scrollbar-color: var(--settings-scrollbar-thumb) var(--settings-scrollbar-track);
   padding-right: 6px;
 }
 
 .settings-page-main.is-services .settings-service-list::-webkit-scrollbar,
 .settings-page-main.is-services .settings-service-detail-panel::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: var(--settings-scrollbar-size);
+  height: var(--settings-scrollbar-size);
 }
 
 .settings-page-main.is-services .settings-service-list::-webkit-scrollbar-thumb,
 .settings-page-main.is-services .settings-service-detail-panel::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
+  min-height: 32px;
+  border: 3px solid transparent;
   border-radius: 999px;
-  background: #c9c9c9;
-  background-clip: padding-box;
+  background-color: var(--settings-scrollbar-thumb);
+  background-clip: content-box;
+}
+
+.settings-page-main.is-services .settings-service-list:hover::-webkit-scrollbar-thumb,
+.settings-page-main.is-services .settings-service-list:focus-within::-webkit-scrollbar-thumb,
+.settings-page-main.is-services .settings-service-list::-webkit-scrollbar-thumb:hover,
+.settings-page-main.is-services .settings-service-detail-panel:hover::-webkit-scrollbar-thumb,
+.settings-page-main.is-services .settings-service-detail-panel:focus-within::-webkit-scrollbar-thumb,
+.settings-page-main.is-services .settings-service-detail-panel::-webkit-scrollbar-thumb:hover {
+  background-color: var(--settings-scrollbar-thumb-hover);
+}
+
+.settings-page-main.is-services .settings-service-list::-webkit-scrollbar-thumb:active,
+.settings-page-main.is-services .settings-service-detail-panel::-webkit-scrollbar-thumb:active {
+  background-color: var(--settings-scrollbar-thumb-active);
 }
 
 .settings-page-main.is-services .settings-service-list::-webkit-scrollbar-track,
 .settings-page-main.is-services .settings-service-detail-panel::-webkit-scrollbar-track {
+  background: var(--settings-scrollbar-track);
+}
+
+.settings-page-main.is-services .settings-service-list::-webkit-scrollbar-corner,
+.settings-page-main.is-services .settings-service-detail-panel::-webkit-scrollbar-corner {
   background: transparent;
 }
 

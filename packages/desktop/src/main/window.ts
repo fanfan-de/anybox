@@ -94,7 +94,7 @@ export function resolveWindowChromeOptions(platform: NodeJS.Platform = process.p
 export function resolveWindowBackgroundOptions(platform: NodeJS.Platform = process.platform): WindowBackgroundOptions {
   if (platform === "win32") {
     return {
-      backgroundColor: "#eff3f7",
+      backgroundMaterial: "acrylic",
     }
   }
 

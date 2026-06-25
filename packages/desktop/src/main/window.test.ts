@@ -26,8 +26,8 @@ describe("session popout window options", () => {
     expect(options.titleBarStyle).toBe("hidden")
     expect("titleBarOverlay" in options).toBe(false)
     expect("trafficLightPosition" in options).toBe(false)
-    expect(options.backgroundMaterial).toBeUndefined()
-    expect(options.backgroundColor).toBe("#eff3f7")
+    expect(options.backgroundMaterial).toBe("acrylic")
+    expect(options.backgroundColor).toBeUndefined()
     expect(options.transparent).toBeUndefined()
     expect(options.webPreferences?.contextIsolation).toBe(true)
     expect(options.webPreferences?.nodeIntegration).toBe(false)
@@ -50,9 +50,9 @@ describe("session popout window options", () => {
     expect(options.webPreferences?.preload).toContain("preload")
   })
 
-  it("uses an opaque Windows window background for native resize and snap", () => {
+  it("uses Windows Acrylic without an opaque fallback for native resize and snap", () => {
     expect(resolveWindowBackgroundOptions("win32")).toEqual({
-      backgroundColor: "#eff3f7",
+      backgroundMaterial: "acrylic",
     })
     expect(resolveWindowBackgroundOptions("darwin")).toEqual({ backgroundColor: "#eff3f7" })
     expect(resolveWindowBackgroundOptions("linux")).toEqual({ backgroundColor: "#eff3f7" })

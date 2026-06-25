@@ -1895,7 +1895,7 @@
 }
 
 .right-sidebar-diff-row.is-add .right-sidebar-diff-line-number {
-  background: #e8f5eb;
+  background: transparent;
 }
 
 .right-sidebar-diff-row.is-remove {
@@ -1907,7 +1907,7 @@
 }
 
 .right-sidebar-diff-row.is-remove .right-sidebar-diff-line-number {
-  background: #feebe8;
+  background: transparent;
 }
 
 .right-sidebar-diff-empty {
@@ -4273,14 +4273,14 @@
 
 .workspace-files-tree-row:hover,
 .workspace-files-tree-row:focus-visible {
-  background: var(--mix-seg-accent-soft-76-seg-panel-24);
-  color: var(--seg-text-1);
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+  color: var(--semantic-sidebar-tree-row-text-hover);
   outline: none;
 }
 
 .workspace-files-tree-row.is-active {
-  background: var(--mix-seg-accent-soft-76-seg-panel-24);
-  color: var(--seg-accent-strong);
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  color: var(--semantic-sidebar-tree-row-text-active);
 }
 
 .workspace-files-tree-chevron,

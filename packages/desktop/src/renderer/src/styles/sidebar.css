@@ -1395,6 +1395,10 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   color: var(--semantic-sidebar-tree-row-text);
 }
 
+.session-row:not(.is-active) .session-row-label {
+  color: var(--text-primary);
+}
+
 .project-row:hover,
 .project-row:focus-visible,
 .session-row:hover,

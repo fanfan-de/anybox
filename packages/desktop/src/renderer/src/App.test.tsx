@@ -14385,6 +14385,13 @@ describe("App", () => {
     )
   })
 
+  it("lets the calendar top menu inherit the shell chrome surface", () => {
+    expect(styles).toMatch(
+      /\.calendar-page\s*\{[^}]*--calendar-top-surface:\s*var\(--top-chrome-surface,\s*var\(--seg-shell-chrome-surface,\s*var\(--surface-shell\)\)\);/s,
+    )
+    expect(styles).toMatch(/\.calendar-top-menu\s*\{[^}]*background:\s*var\(--calendar-top-surface\);/s)
+  })
+
   it("lets sidebar-hosted skills and MCP pages use the full canvas width", () => {
     expect(styles).toMatch(
       /\.settings-page-main\.is-services\s+\.settings-services-layout\.global-skills-page-layout\.is-sidebar-hosted,\s*\.settings-page-main\.is-services\s+\.settings-services-layout\.mcp-servers-page-layout\.is-sidebar-hosted\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s,
@@ -14398,6 +14405,19 @@ describe("App", () => {
   it("scopes provider scrolling to the column layout", () => {
     expect(styles).toMatch(/\.settings-page-main\.is-services\s*\{[^}]*overflow:\s*hidden;/s)
     expect(styles).toMatch(/\.settings-page-content,\s*\.settings-page-main\s*\{[^}]*scrollbar-gutter:\s*stable both-edges;/s)
+    expect(styles).toMatch(
+      /\.settings-page\s*\{[^}]*--settings-scrollbar-size:\s*10px;[^}]*--settings-scrollbar-thumb:\s*var\(--mix-seg-text-3-34-transparent-66\);[^}]*--settings-scrollbar-thumb-hover:\s*var\(--mix-seg-text-3-54-transparent-46\);[^}]*--settings-scrollbar-thumb-active:\s*var\(--seg-text-3\);[^}]*--settings-scrollbar-track:\s*transparent;/s,
+    )
+    expect(styles).toMatch(
+      /\.settings-page-overlay,\s*\.settings-page-nav,\s*\.settings-page-primary-nav,\s*\.settings-page-content,\s*\.settings-page-main,\s*\.settings-service-list,\s*\.settings-service-detail-panel\s*\{[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*var\(--settings-scrollbar-thumb\)\s+var\(--settings-scrollbar-track\);/s,
+    )
+    expect(styles).toMatch(
+      /\.settings-page-overlay::-webkit-scrollbar-thumb,\s*\.settings-page-nav::-webkit-scrollbar-thumb,\s*\.settings-page-primary-nav::-webkit-scrollbar-thumb,\s*\.settings-page-content::-webkit-scrollbar-thumb,\s*\.settings-page-main::-webkit-scrollbar-thumb,\s*\.settings-service-list::-webkit-scrollbar-thumb,\s*\.settings-service-detail-panel::-webkit-scrollbar-thumb\s*\{[^}]*min-height:\s*32px;[^}]*border:\s*3px solid transparent;[^}]*border-radius:\s*999px;[^}]*background-color:\s*var\(--settings-scrollbar-thumb\);[^}]*background-clip:\s*content-box;/s,
+    )
+    expect(styles).toMatch(
+      /\.settings-page-main\.is-services\s+\.settings-service-list\s*\{[^}]*scrollbar-color:\s*var\(--settings-scrollbar-thumb\)\s+var\(--settings-scrollbar-track\);/s,
+    )
+    expect(styles).not.toContain("#c9c9c9")
     expect(styles).toMatch(/\.toast-viewport\s*\{[^}]*position:\s*fixed;[^}]*top:\s*16px;[^}]*right:\s*48px;/s)
     expect(styles).not.toContain(".settings-toast-region")
     expect(styles).toMatch(/\.settings-service-list\s*\{[^}]*overflow:\s*auto;[^}]*scrollbar-gutter:\s*stable;/s)
