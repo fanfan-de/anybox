@@ -190,6 +190,14 @@ function selectCreateSessionProject(label: string) {
   fireEvent.click(screen.getByRole("option", { name: label }))
 }
 
+function getAppearanceThemeLibrary() {
+  const themeLibrary = screen.getByRole("heading", { name: "Theme Library" }).closest("section")
+  if (!themeLibrary) {
+    throw new Error("Theme Library section not found.")
+  }
+  return themeLibrary
+}
+
 function getSettingsCombobox(name: string) {
   return screen.getByRole("combobox", { name })
 }
@@ -817,6 +825,201 @@ describe("App", () => {
           updatedAt: typeof document.updatedAt === "number" ? document.updatedAt : 1,
         },
       })),
+      getAppearanceThemes: vi.fn().mockResolvedValue({
+        path: "C:\\Users\\tester\\AppData\\Roaming\\anybox-desktop-agent\\appearance-themes.json",
+        exists: false,
+        activeThemeID: "built-in:anybox-terra",
+        document: {
+          version: 1,
+          activeThemeID: "built-in:anybox-terra",
+          userThemes: [],
+        },
+        builtInThemes: [
+          {
+            id: "built-in:anybox-terra",
+            name: "Anybox Terra",
+            source: "built-in",
+            readonly: true,
+            createdAt: 0,
+            updatedAt: 0,
+            colorMode: "light",
+            brandTheme: "terra",
+            fontFamily: "default",
+            codeThemePreference: "auto",
+            htmlBackgroundConfig: {
+              blurPx: 0,
+              dim: 0.18,
+              enabled: false,
+              html: "",
+              opacity: 0.78,
+              paused: false,
+              renderMode: "static",
+              surfaceOpacity: 0.68,
+            },
+            overrides: {},
+          },
+          {
+            id: "built-in:sage-slate",
+            name: "Sage Slate",
+            source: "built-in",
+            readonly: true,
+            createdAt: 0,
+            updatedAt: 0,
+            colorMode: "system",
+            brandTheme: "sage",
+            fontFamily: "default",
+            codeThemePreference: "auto",
+            htmlBackgroundConfig: {
+              blurPx: 0,
+              dim: 0.18,
+              enabled: false,
+              html: "",
+              opacity: 0.78,
+              paused: false,
+              renderMode: "static",
+              surfaceOpacity: 0.68,
+            },
+            overrides: {},
+          },
+        ],
+        themes: [
+          {
+            id: "built-in:anybox-terra",
+            name: "Anybox Terra",
+            source: "built-in",
+            readonly: true,
+            createdAt: 0,
+            updatedAt: 0,
+            colorMode: "light",
+            brandTheme: "terra",
+            fontFamily: "default",
+            codeThemePreference: "auto",
+            htmlBackgroundConfig: {
+              blurPx: 0,
+              dim: 0.18,
+              enabled: false,
+              html: "",
+              opacity: 0.78,
+              paused: false,
+              renderMode: "static",
+              surfaceOpacity: 0.68,
+            },
+            overrides: {},
+          },
+          {
+            id: "built-in:sage-slate",
+            name: "Sage Slate",
+            source: "built-in",
+            readonly: true,
+            createdAt: 0,
+            updatedAt: 0,
+            colorMode: "system",
+            brandTheme: "sage",
+            fontFamily: "default",
+            codeThemePreference: "auto",
+            htmlBackgroundConfig: {
+              blurPx: 0,
+              dim: 0.18,
+              enabled: false,
+              html: "",
+              opacity: 0.78,
+              paused: false,
+              renderMode: "static",
+              surfaceOpacity: 0.68,
+            },
+            overrides: {},
+          },
+        ],
+      }),
+      saveAppearanceTheme: vi.fn().mockImplementation(async ({ theme }: { theme: Record<string, unknown> }) => {
+        const savedTheme = {
+          id: "user:test-theme",
+          source: "user",
+          readonly: false,
+          createdAt: 1,
+          updatedAt: 2,
+          ...theme,
+        }
+        return {
+          theme: savedTheme,
+          snapshot: {
+            path: "C:\\Users\\tester\\AppData\\Roaming\\anybox-desktop-agent\\appearance-themes.json",
+            exists: true,
+            activeThemeID: savedTheme.id,
+            document: {
+              version: 1,
+              activeThemeID: savedTheme.id,
+              userThemes: [savedTheme],
+            },
+            builtInThemes: [],
+            themes: [savedTheme],
+          },
+        }
+      }),
+      deleteAppearanceTheme: vi.fn().mockResolvedValue({
+        path: "C:\\Users\\tester\\AppData\\Roaming\\anybox-desktop-agent\\appearance-themes.json",
+        exists: true,
+        activeThemeID: "built-in:anybox-terra",
+        document: {
+          version: 1,
+          activeThemeID: "built-in:anybox-terra",
+          userThemes: [],
+        },
+        builtInThemes: [],
+        themes: [],
+      }),
+      setActiveAppearanceTheme: vi.fn().mockImplementation(async ({ themeID }: { themeID: string }) => ({
+        path: "C:\\Users\\tester\\AppData\\Roaming\\anybox-desktop-agent\\appearance-themes.json",
+        exists: true,
+        activeThemeID: themeID,
+        document: {
+          version: 1,
+          activeThemeID: themeID,
+          userThemes: [],
+        },
+        builtInThemes: [],
+        themes: [],
+      })),
+      duplicateAppearanceTheme: vi.fn().mockImplementation(async ({ themeID, name }: { themeID: string; name?: string }) => {
+        const theme = {
+          id: "user:copy-theme",
+          name: name ?? "Copy",
+          source: "user",
+          readonly: false,
+          createdAt: 1,
+          updatedAt: 2,
+          colorMode: themeID === "built-in:sage-slate" ? "system" : "light",
+          brandTheme: themeID === "built-in:sage-slate" ? "sage" : "terra",
+          fontFamily: "default",
+          codeThemePreference: "auto",
+          htmlBackgroundConfig: {
+            blurPx: 0,
+            dim: 0.18,
+            enabled: false,
+            html: "",
+            opacity: 0.78,
+            paused: false,
+            renderMode: "static",
+            surfaceOpacity: 0.68,
+          },
+          overrides: {},
+        }
+        return {
+          theme,
+          snapshot: {
+            path: "C:\\Users\\tester\\AppData\\Roaming\\anybox-desktop-agent\\appearance-themes.json",
+            exists: true,
+            activeThemeID: "built-in:anybox-terra",
+            document: {
+              version: 1,
+              activeThemeID: "built-in:anybox-terra",
+              userThemes: [theme],
+            },
+            builtInThemes: [],
+            themes: [theme],
+          },
+        }
+      }),
       getAgentConfig: vi.fn().mockResolvedValue({
         baseURL: "http://127.0.0.1:4096",
         defaultDirectory: "C:\\Projects\\anybox",
@@ -1480,6 +1683,7 @@ describe("App", () => {
     const { container } = render(<App />)
 
     expect(container.firstChild).toHaveClass("window-shell", "is-macos")
+    expect(container.firstChild).not.toHaveClass("is-windows")
     expect(container.querySelector(".mac-titlebar")).not.toBeInTheDocument()
     expect(container.querySelector(".window-controls.is-native-macos")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Minimize window" })).not.toBeInTheDocument()
@@ -10039,6 +10243,7 @@ describe("App", () => {
     expect(windowShell).not.toBeNull()
     expect(windowShell).toHaveAttribute("data-background-mode", "default")
     expect(windowShell).toHaveAttribute("data-surface-profile", "solid")
+    expect(windowShell).toHaveClass("is-windows")
     expect(windowShell).not.toHaveClass("has-html-background")
     expect(windowShell!.style.getPropertyValue("--surface-profile-opacity")).toBe("")
     expect(container.querySelector(".html-background-layer")).toBeNull()
@@ -10153,9 +10358,15 @@ describe("App", () => {
     await screen.findByRole("dialog", { name: "Settings" })
     fireEvent.click(screen.getByRole("button", { name: /^Appearance/ }))
 
-    fireEvent.click(getSettingsCombobox("Accent Theme"))
-    expect(await screen.findByRole("option", { name: "Warm Terra & Sand" })).toBeInTheDocument()
-    expect(screen.getByRole("option", { name: "Sage / Slate" })).toBeInTheDocument()
+    const themeLibrary = getAppearanceThemeLibrary()
+    expect(within(themeLibrary).getByRole("option", { name: /Anybox Terra/ })).toBeInTheDocument()
+    expect(within(themeLibrary).getByRole("option", { name: /Sage Slate/ })).toBeInTheDocument()
+    expect(within(themeLibrary).getByText("Color Mode")).toBeInTheDocument()
+    expect(within(themeLibrary).getByText("Accent Theme")).toBeInTheDocument()
+    expect(within(themeLibrary).getByText("Code Theme")).toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: "Color Mode" })).toBeInTheDocument()
+    expect(screen.queryByRole("combobox", { name: "Accent Theme" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("combobox", { name: "Code Theme" })).not.toBeInTheDocument()
     expect(screen.getByText("Theme Config File")).toBeInTheDocument()
     expect(screen.getByLabelText("Current appearance config JSON")).toBeInTheDocument()
     expect(screen.getByLabelText("Accent States Accent Base Light brand-primary")).toBeInTheDocument()
@@ -10178,6 +10389,8 @@ describe("App", () => {
     expect(screen.getByLabelText("Thread View Response Text Dark semantic-thread-response-text-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Thread View Reasoning Text Light semantic-thread-reasoning-text-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Thread View Reasoning Text Dark semantic-thread-reasoning-text-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Thread View Divider Light semantic-thread-divider-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Thread View Divider Dark semantic-thread-divider-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Thread View Diff Card Surface Light semantic-thread-user-turn-diff-card-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Thread View Diff Card Surface Dark semantic-thread-user-turn-diff-card-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Markdown Inline Code Surface Light semantic-markdown-inline-code-surface-light")).toBeInTheDocument()
@@ -10196,7 +10409,25 @@ describe("App", () => {
     expect(screen.queryByText("Line Colors")).not.toBeInTheDocument()
   })
 
-  it("switches the accent theme from appearance settings", async () => {
+  it("switches the color mode from appearance settings", async () => {
+    render(<App />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Open settings" }))
+    await screen.findByRole("dialog", { name: "Settings" })
+    fireEvent.click(screen.getByRole("button", { name: /^Appearance/ }))
+
+    await chooseSettingsSelectOption("Color Mode", "Dark")
+
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark")
+    expect(window.localStorage.getItem("desktop.colorMode")).toBe("dark")
+
+    await chooseSettingsSelectOption("Color Mode", "System")
+
+    expect(document.documentElement).not.toHaveAttribute("data-theme")
+    expect(window.localStorage.getItem("desktop.colorMode")).toBe("system")
+  })
+
+  it("applies the accent theme through the theme library", async () => {
     render(<App />)
 
     await waitFor(() => {
@@ -10207,31 +10438,14 @@ describe("App", () => {
     await screen.findByRole("dialog", { name: "Settings" })
     fireEvent.click(screen.getByRole("button", { name: /^Appearance/ }))
 
-    await chooseSettingsSelectOption("Accent Theme", "Sage / Slate")
+    const themeLibrary = getAppearanceThemeLibrary()
+    fireEvent.click(within(themeLibrary).getByRole("option", { name: /Sage Slate/ }))
+    fireEvent.click(within(themeLibrary).getByRole("button", { name: "Apply" }))
 
-    expect(document.documentElement).toHaveAttribute("data-brand-theme", "sage")
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute("data-brand-theme", "sage")
+    })
     expect(window.localStorage.getItem("desktop.brandTheme")).toBe("sage")
-
-    await chooseSettingsSelectOption("Accent Theme", "Warm Terra & Sand")
-
-    expect(document.documentElement).toHaveAttribute("data-brand-theme", "terra")
-    expect(window.localStorage.getItem("desktop.brandTheme")).toBe("terra")
-  })
-
-  it("saves the code theme from appearance settings", async () => {
-    render(<App />)
-
-    fireEvent.click(screen.getByRole("button", { name: "Open settings" }))
-    await screen.findByRole("dialog", { name: "Settings" })
-    fireEvent.click(screen.getByRole("button", { name: /^Appearance/ }))
-
-    await chooseSettingsSelectOption("Code Theme", "Dracula")
-
-    expect(window.localStorage.getItem("desktop.codeTheme")).toBe("dracula")
-
-    await chooseSettingsSelectOption("Code Theme", "Auto (GitHub Light/Dark)")
-
-    expect(window.localStorage.getItem("desktop.codeTheme")).toBe("auto")
   })
 
   it("normalizes invalid saved code themes to auto", async () => {
@@ -10243,7 +10457,8 @@ describe("App", () => {
     await screen.findByRole("dialog", { name: "Settings" })
     fireEvent.click(screen.getByRole("button", { name: /^Appearance/ }))
 
-    expect(getSettingsCombobox("Code Theme")).toHaveTextContent("Auto (GitHub Light/Dark)")
+    expect(screen.queryByRole("combobox", { name: "Code Theme" })).not.toBeInTheDocument()
+    expect(within(getAppearanceThemeLibrary()).getByText("Code Theme")).toBeInTheDocument()
     await waitFor(() => {
       expect(window.localStorage.getItem("desktop.codeTheme")).toBe("auto")
     })
@@ -10275,6 +10490,9 @@ describe("App", () => {
     const reasoningTextInput = screen.getByLabelText(
       "Thread View Reasoning Text Light semantic-thread-reasoning-text-light color value",
     ) as HTMLInputElement
+    const threadDividerInput = screen.getByLabelText(
+      "Thread View Divider Light semantic-thread-divider-light color value",
+    ) as HTMLInputElement
     const preview = screen.getByLabelText("Current appearance config JSON") as HTMLTextAreaElement
     const saveAppearanceConfig = window.desktop!.saveAppearanceConfig as ReturnType<typeof vi.fn>
 
@@ -10292,6 +10510,8 @@ describe("App", () => {
     fireEvent.blur(markdownInlineCodeInput)
     fireEvent.change(reasoningTextInput, { target: { value: "#445566" } })
     fireEvent.blur(reasoningTextInput)
+    fireEvent.change(threadDividerInput, { target: { value: "#223344" } })
+    fireEvent.blur(threadDividerInput)
 
     await waitFor(() => {
       expect(document.documentElement.style.getPropertyValue("--brand-primary")).toBe("#ffffff")
@@ -10301,6 +10521,7 @@ describe("App", () => {
       expect(document.documentElement.style.getPropertyValue("--semantic-thread-user-turn-diff-card-surface-light")).toBe("#334455")
       expect(document.documentElement.style.getPropertyValue("--semantic-markdown-inline-code-surface-light")).toBe("#ddeeff")
       expect(document.documentElement.style.getPropertyValue("--semantic-thread-reasoning-text-light")).toBe("#445566")
+      expect(document.documentElement.style.getPropertyValue("--semantic-thread-divider-light")).toBe("#223344")
     })
     await waitFor(() => {
       expect(saveAppearanceConfig).toHaveBeenCalled()
@@ -10313,6 +10534,7 @@ describe("App", () => {
       expect(preview.value).toContain("#334455")
       expect(preview.value).toContain("#ddeeff")
       expect(preview.value).toContain("#445566")
+      expect(preview.value).toContain("#223344")
     })
   })
 
@@ -13877,6 +14099,9 @@ describe("App", () => {
     expect(styles).toMatch(/--semantic-thread-response-text:\s*var\(--semantic-thread-response-text-dark\);/s)
     expect(styles).toMatch(/--semantic-thread-reasoning-text:\s*var\(--semantic-thread-reasoning-text-light\);/s)
     expect(styles).toMatch(/--semantic-thread-reasoning-text:\s*var\(--semantic-thread-reasoning-text-dark\);/s)
+    expect(styles).toMatch(/--semantic-thread-divider-light:\s*var\(--mix-seg-divider-80-transparent-20-light\);/s)
+    expect(styles).toMatch(/--semantic-thread-divider:\s*var\(--semantic-thread-divider-light\);/s)
+    expect(styles).toMatch(/--semantic-thread-divider:\s*var\(--semantic-thread-divider-dark\);/s)
     expect(styles).toMatch(/--semantic-thread-user-turn-diff-card-surface-light:\s*var\(--surface-panel-light\);/s)
     expect(styles).toMatch(/--semantic-thread-user-turn-diff-card-surface:\s*var\(--semantic-thread-user-turn-diff-card-surface-light\);/s)
     expect(styles).toMatch(/--semantic-thread-user-turn-diff-card-surface:\s*var\(--semantic-thread-user-turn-diff-card-surface-dark\);/s)
@@ -13963,6 +14188,49 @@ describe("App", () => {
     )
   })
 
+  it("wires Windows desktop transparency through the default surface profile", () => {
+    expect(styles).toMatch(/body\s*\{[^}]*background:\s*transparent;/s)
+    expect(readFileSync(resolve(process.cwd(), "src/renderer/src/styles/index.css"), "utf8")).toMatch(
+      /@import "\.\/top-chrome\.css";\s*@import "\.\/windows-transparent\.css";\s*@import "\.\/debug\.css";/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\.is-windows\[data-background-mode="default"\],[\s\S]*?\.session-popout-shell\.is-windows\s*\{[^}]*--surface-profile-opacity:\s*28%;[^}]*--surface-profile-content-opacity:\s*54%;[^}]*--surface-profile-shell:\s*color-mix\(in srgb,\s*var\(--surface-shell\) var\(--surface-profile-opacity\),\s*transparent\);[^}]*--surface-profile-content:\s*color-mix\(in srgb,\s*var\(--surface-panel\) var\(--surface-profile-content-opacity\),\s*transparent\);[^}]*background:\s*transparent;/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.app-shell,\s*\.session-popout-shell\.is-windows\s+\.session-popout-app\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.sidebar\s*\{[^}]*background:\s*var\(--surface-profile-sidebar\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.canvas\.is-workbench,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.canvas-region-top-menu\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.dockview-workbench-panes,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.dockview-theme-anybox \.dv-content-container\s*\{[^}]*background:\s*transparent;/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.dockview-theme-anybox\s*\{[^}]*--dv-background-color:\s*transparent;[^}]*--dv-tabs-and-actions-container-background-color:\s*var\(--surface-profile-tab\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.composer,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.inline-side-chat-thread \.composer\s*\{[^}]*background:\s*var\(--surface-profile-composer\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.right-sidebar-launcher\s*\{[^}]*background:\s*var\(--surface-profile-sidebar\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.right-sidebar-launcher-card\s*\{[^}]*background:\s*var\(--surface-profile-content-muted\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.right-sidebar-view-host,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.right-sidebar-main-stack,[\s\S]*?\{[^}]*background:\s*transparent;/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.thread-shell,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.workbench-pane-live-region\s*\{[^}]*background:\s*transparent;/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.settings-page\s*\{[^}]*background:\s*var\(--surface-elevated\);/s,
+    )
+  })
+
   it("keeps the appearance monitor on a single-column window grid", () => {
     expect(styles).toMatch(
       /\.appearance-window-app-shell\s*\{[^}]*--section-toolbar-height:\s*44px;[^}]*--section-toolbar-icon-size:\s*18px;[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);[^}]*grid-template-rows:\s*44px minmax\(0,\s*1fr\);[^}]*overflow:\s*hidden;/s,
@@ -14020,6 +14288,7 @@ describe("App", () => {
     expect(styles).toMatch(/\.assistant-section\.is-response\s+\.ask-user-question-card\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--semantic-question-card-surface\);/s)
     expect(styles).toMatch(/\.proposed-plan-card\s*\{[^}]*background:\s*var\(--semantic-proposed-plan-card-surface\);/s)
     expect(styles).toMatch(/\.assistant-section\.is-response \.trace-item-text,\s*\.assistant-section\.is-response \.trace-item-detail\s*\{[^}]*color:\s*var\(--semantic-thread-response-text\);/s)
+    expect(styles).toMatch(/\.assistant-process-trace-header::after\s*\{[^}]*background:\s*var\(--semantic-thread-divider\);/s)
     expect(styles).toMatch(/\.user-turn-diff-card\s*\{[^}]*border:\s*1px solid var\(--semantic-thread-user-turn-diff-card-border\);[^}]*background:\s*var\(--semantic-thread-user-turn-diff-card-surface\);[^}]*box-shadow:\s*none;/s)
     expect(styles).toMatch(/\.user-turn-diff-stats \.is-add\s*\{[^}]*color:\s*var\(--semantic-success-text\);/s)
     expect(styles).toMatch(/\.user-turn-diff-stats \.is-remove\s*\{[^}]*color:\s*var\(--semantic-error-text\);/s)

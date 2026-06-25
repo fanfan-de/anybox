@@ -38,7 +38,7 @@
   --right-sidebar-scrollbar-thumb-hover: var(--seg-text-3);
   padding: 0;
   gap: 0;
-  background: transparent;
+  background: var(--seg-sidebar);
 }
 
 .right-sidebar-main-stack {
@@ -341,11 +341,11 @@
   grid-template-columns: minmax(0, 1fr);
   justify-content: stretch;
   align-content: stretch;
-  background: var(--seg-panel);
+  background: var(--seg-sidebar);
 }
 
 .window-shell[data-background-mode="custom-html"] .right-sidebar-launcher {
-  background: var(--surface-profile-panel);
+  background: var(--surface-profile-sidebar);
 }
 
 .right-sidebar-launcher-shell {
@@ -2432,10 +2432,10 @@
   min-width: 0;
   min-height: 30px;
   padding: 0 8px 0 10px;
-  border: 1px solid var(--seg-divider);
+  border: 1px solid var(--semantic-button-secondary-border);
   border-radius: 6px;
-  background: var(--seg-panel-muted);
-  color: var(--seg-text-1);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2446,20 +2446,27 @@
 }
 
 .right-sidebar-diff-scope-button:hover,
-.right-sidebar-diff-scope-button:focus-visible {
-  background: var(--seg-panel);
+.right-sidebar-diff-scope-button:focus-visible,
+.right-sidebar-diff-scope-button[aria-expanded="true"] {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
   outline: none;
 }
 
-.right-sidebar-diff-scope-button:focus-visible {
-  outline: var(--focus-outline-width) solid var(--focus-outline-color);
-  outline-offset: 1px;
+.right-sidebar-diff-scope-button:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+  cursor: not-allowed;
+  opacity: 0.76;
 }
 
 .right-sidebar-diff-scope-button svg {
   width: 13px;
   height: 13px;
-  color: var(--seg-text-3);
+  color: currentColor;
+  opacity: 0.74;
 }
 
 .right-sidebar-diff-scope-label {

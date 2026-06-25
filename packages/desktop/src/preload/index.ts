@@ -194,6 +194,16 @@ try {
       invokeDesktop("desktop:save-appearance-config", input) as Promise<AppearanceConfigSnapshot>,
     publishAppearanceState: (input: DesktopIpcInput<"desktop:publish-appearance-state">) =>
       invokeDesktop("desktop:publish-appearance-state", input),
+    getAppearanceThemes: () =>
+      invokeDesktop("desktop:get-appearance-themes") as Promise<DesktopIpcOutput<"desktop:get-appearance-themes">>,
+    saveAppearanceTheme: (input: DesktopIpcInput<"desktop:save-appearance-theme">) =>
+      invokeDesktop("desktop:save-appearance-theme", input) as Promise<DesktopIpcOutput<"desktop:save-appearance-theme">>,
+    deleteAppearanceTheme: (input: DesktopIpcInput<"desktop:delete-appearance-theme">) =>
+      invokeDesktop("desktop:delete-appearance-theme", input) as Promise<DesktopIpcOutput<"desktop:delete-appearance-theme">>,
+    setActiveAppearanceTheme: (input: DesktopIpcInput<"desktop:set-active-appearance-theme">) =>
+      invokeDesktop("desktop:set-active-appearance-theme", input) as Promise<DesktopIpcOutput<"desktop:set-active-appearance-theme">>,
+    duplicateAppearanceTheme: (input: DesktopIpcInput<"desktop:duplicate-appearance-theme">) =>
+      invokeDesktop("desktop:duplicate-appearance-theme", input) as Promise<DesktopIpcOutput<"desktop:duplicate-appearance-theme">>,
     getLocaleConfig: () =>
       invokeDesktop("desktop:get-locale-config") as Promise<LocaleConfigSnapshot>,
     saveLocaleConfig: (input: { document: LocaleConfigDocument }) =>

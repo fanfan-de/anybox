@@ -1,6 +1,7 @@
 import { BrowserWindow } from "electron"
 import {
   installNativeMacWindowControls,
+  installWindowStateHandlers,
   installWindowZoomShortcuts,
   resolvePopoutWindowOptions,
 } from "./window"
@@ -41,6 +42,7 @@ export async function openAppearanceWindow(input: { mainDir: string; rendererEnt
 
   installNativeMacWindowControls(win)
   installWindowZoomShortcuts(win)
+  installWindowStateHandlers(win)
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }))
   win.once("ready-to-show", () => {
     if (!win.isDestroyed()) win.show()

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import type { ComponentProps } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { APPEARANCE_TOKEN_NAMES } from "../../../../shared/appearance"
+import type { AppearanceTheme } from "../../../../shared/appearance-themes"
 import type { DesktopAppUpdateState } from "../../../../shared/desktop-ipc-contract"
 import { I18nProvider } from "../i18n/I18nProvider"
 import { DEFAULT_HTML_BACKGROUND_CONFIG } from "../html-background/html-background-config"
@@ -63,6 +64,24 @@ function createAppearanceTokenValues(
   >["appearanceTokenValues"]
 }
 
+function createAppearanceTheme(overrides: Partial<AppearanceTheme> = {}): AppearanceTheme {
+  return {
+    id: "built-in:anybox-terra",
+    name: "Anybox Terra",
+    source: "built-in",
+    readonly: true,
+    createdAt: 0,
+    updatedAt: 0,
+    colorMode: "light",
+    brandTheme: "terra",
+    fontFamily: "default",
+    codeThemePreference: "auto",
+    htmlBackgroundConfig: DEFAULT_HTML_BACKGROUND_CONFIG,
+    overrides: {},
+    ...overrides,
+  }
+}
+
 function selectSettingsOption(label: string, option: string) {
   fireEvent.click(screen.getByRole("combobox", { name: label }))
   fireEvent.click(within(screen.getByRole("listbox", { name: label })).getByRole("option", { name: option }))
@@ -82,9 +101,7 @@ function createSettingsPageProps(
     archivedSessions: [],
     archivedSessionsError: null,
     assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
-    brandTheme: "sage",
     catalog: [],
-    codeThemePreference: "auto",
     colorMode: "system",
     fontFamily: "default",
     htmlBackgroundConfig: DEFAULT_HTML_BACKGROUND_CONFIG,
@@ -121,9 +138,7 @@ function createSettingsPageProps(
     onAppearanceTokenReset: vi.fn(),
     onAutomaticUpdatesToggle: vi.fn(),
     onAssistantTraceVisibilityChange: vi.fn(),
-    onBrandThemeChange: vi.fn(),
     onCancelProviderAuthFlow: vi.fn(),
-    onCodeThemeChange: vi.fn(),
     onCustomProviderDraftChange: vi.fn(),
     onCustomProviderDraftReset: vi.fn(),
     onCheckForUpdates: vi.fn(),
@@ -948,6 +963,87 @@ describe("SettingsPage built-in tools", () => {
     expect(onFontFamilyChange).toHaveBeenCalledWith("microsoft-yahei")
   })
 
+  it("manages appearance themes from the appearance settings", async () => {
+    const onAppearanceThemeApply = vi.fn().mockResolvedValue(undefined)
+    const onAppearanceThemeSaveCurrent = vi.fn().mockResolvedValue(createAppearanceTheme({
+      id: "user:saved",
+      name: "Focused Work",
+      source: "user",
+      readonly: false,
+    }))
+    const onAppearanceThemeDuplicate = vi.fn().mockResolvedValue(createAppearanceTheme({
+      id: "user:copy",
+      name: "Sage Slate Copy",
+      source: "user",
+      readonly: false,
+      brandTheme: "sage",
+    }))
+    const onAppearanceThemeDelete = vi.fn().mockResolvedValue(undefined)
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true)
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          activeAppearanceThemeID: "built-in:anybox-terra",
+          appearanceThemes: [
+            createAppearanceTheme(),
+            createAppearanceTheme({
+              id: "built-in:sage-slate",
+              name: "Sage Slate",
+              brandTheme: "sage",
+              colorMode: "system",
+            }),
+            createAppearanceTheme({
+              id: "user:custom",
+              name: "My Custom",
+              source: "user",
+              readonly: false,
+              overrides: {
+                "surface-panel-light": "#fefefe",
+              },
+            }),
+          ],
+          onAppearanceThemeApply,
+          onAppearanceThemeDelete,
+          onAppearanceThemeDuplicate,
+          onAppearanceThemeSaveCurrent,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
+
+    const library = screen.getByRole("heading", { name: "Theme Library" }).closest("section")!
+    expect(within(library).getByRole("option", { name: /Anybox Terra/ })).toHaveAttribute("aria-selected", "true")
+    expect(within(library).getByRole("button", { name: "Delete" })).toBeDisabled()
+
+    fireEvent.click(within(library).getByRole("option", { name: /My Custom/ }))
+    fireEvent.click(within(library).getByRole("button", { name: "Delete" }))
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledWith("Delete theme \"My Custom\"?")
+      expect(onAppearanceThemeDelete).toHaveBeenCalledWith("user:custom")
+    })
+
+    fireEvent.click(within(library).getByRole("option", { name: /Sage Slate/ }))
+    fireEvent.click(within(library).getByRole("button", { name: "Apply" }))
+    await waitFor(() => {
+      expect(onAppearanceThemeApply).toHaveBeenCalledWith("built-in:sage-slate")
+    })
+
+    fireEvent.click(within(library).getByRole("button", { name: "Duplicate" }))
+    await waitFor(() => {
+      expect(onAppearanceThemeDuplicate).toHaveBeenCalledWith("built-in:sage-slate", "Sage Slate Copy")
+    })
+
+    fireEvent.change(within(library).getByLabelText("Theme name"), {
+      target: { value: "Focused Work" },
+    })
+    fireEvent.click(within(library).getByRole("button", { name: "Save Current" }))
+    await waitFor(() => {
+      expect(onAppearanceThemeSaveCurrent).toHaveBeenCalledWith("Focused Work")
+    })
+  })
+
   it("edits the static HTML background settings from appearance", () => {
     const onHtmlBackgroundConfigChange = vi.fn()
 
@@ -1145,7 +1241,8 @@ describe("SettingsPage built-in tools", () => {
       <I18nProvider>
         <SettingsPage
           {...createSettingsPageProps({
-            brandTheme: "terra",
+            activeAppearanceThemeID: "built-in:anybox-terra",
+            appearanceThemes: [createAppearanceTheme()],
             fontFamily: "microsoft-yahei",
           })}
         />
@@ -1154,9 +1251,13 @@ describe("SettingsPage built-in tools", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "外观" }))
 
-    expect(screen.getByRole("combobox", { name: "强调主题" })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("combobox", { name: "强调主题" }))
-    expect(within(screen.getByRole("listbox", { name: "强调主题" })).getByRole("option", { name: "暖色 Terra 与沙色" })).toBeInTheDocument()
+    const themeLibrary = screen.getByRole("heading", { name: "主题库" }).closest("section")!
+    expect(within(themeLibrary).getByText("颜色模式")).toBeInTheDocument()
+    expect(within(themeLibrary).getByText("强调主题")).toBeInTheDocument()
+    expect(within(themeLibrary).getByText("代码主题")).toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: "颜色模式" })).toBeInTheDocument()
+    expect(screen.queryByRole("combobox", { name: "强调主题" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("combobox", { name: "代码主题" })).not.toBeInTheDocument()
     expect(screen.getByRole("combobox", { name: "界面字体" })).toBeInTheDocument()
     expect(screen.queryByText("选择亮色、暗色或跟随系统的配色方案。")).not.toBeInTheDocument()
     expect(screen.queryByText(/Choose the font used across the desktop interface/i)).not.toBeInTheDocument()

@@ -260,15 +260,17 @@
 }
 
 .automations-index-actions .automations-index-primary-action {
-  background: var(--surface-code);
-  color: var(--text-on-dark);
+  border: 1px solid var(--semantic-button-primary-border);
+  background: var(--semantic-button-primary-surface);
+  color: var(--semantic-button-primary-text);
   font-weight: 600;
 }
 
 .automations-index-actions .automations-index-primary-action:hover,
 .automations-index-actions .automations-index-primary-action:focus-visible {
-  background: var(--surface-code-strong);
-  color: var(--text-on-dark);
+  border-color: var(--semantic-button-primary-border-hover);
+  background: var(--semantic-button-primary-surface-hover);
+  color: var(--semantic-button-primary-text-hover);
 }
 
 .automations-index-actions svg,

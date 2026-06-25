@@ -4,7 +4,13 @@ import path from "node:path"
 import { resolveAppIconPath } from "./app-icon"
 import { ensureRendererHttpServer } from "./renderer-http-server"
 import { safeError, safeWarn } from "./safe-console"
-import { clearManualMaximize, sendWindowState } from "./window-state"
+import {
+  clearManualMaximize,
+  convertNativeMaximizeToManualMaximize,
+  installNormalWindowBoundsTracking,
+  isManualMaximizedWindow,
+  sendWindowState,
+} from "./window-state"
 import type { WorkbenchWindowManager } from "./workbench-window-manager"
 
 export interface CloseToTrayOptions {
@@ -52,7 +58,8 @@ const MAC_NATIVE_TRAFFIC_LIGHT_Y = 14
 const WINDOW_ZOOM_FACTORS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3] as const
 const WINDOW_ZOOM_FACTOR_EPSILON = 0.001
 
-type WindowChromeOptions = Pick<BrowserWindowConstructorOptions, "frame" | "roundedCorners" | "titleBarStyle">
+type WindowChromeOptions = Pick<BrowserWindowConstructorOptions, "frame" | "maximizable" | "roundedCorners" | "titleBarStyle">
+type WindowBackgroundOptions = Pick<BrowserWindowConstructorOptions, "backgroundColor" | "backgroundMaterial" | "transparent">
 type WindowZoomShortcutAction = "in" | "out" | "reset"
 type WindowZoomShortcutInput = {
   alt?: boolean
@@ -72,9 +79,31 @@ export function resolveWindowChromeOptions(platform: NodeJS.Platform = process.p
     }
   }
 
+  if (platform === "win32") {
+    return {
+      frame: false,
+      maximizable: true,
+      roundedCorners: false,
+    }
+  }
+
   return {
     frame: false,
     roundedCorners: false,
+  }
+}
+
+export function resolveWindowBackgroundOptions(platform: NodeJS.Platform = process.platform): WindowBackgroundOptions {
+  if (platform === "win32") {
+    return {
+      backgroundColor: "#00000000",
+      backgroundMaterial: "acrylic",
+      transparent: true,
+    }
+  }
+
+  return {
+    backgroundColor: "#eff3f7",
   }
 }
 
@@ -149,6 +178,33 @@ export function installWindowZoomShortcuts(win: BrowserWindow) {
   })
 }
 
+export function installWindowStateHandlers(win: BrowserWindow, platform: NodeJS.Platform = process.platform) {
+  installNormalWindowBoundsTracking(win, platform)
+
+  win.on("maximize", () => {
+    if (convertNativeMaximizeToManualMaximize(win, platform)) {
+      sendWindowState(win)
+      return
+    }
+
+    clearManualMaximize(win)
+    sendWindowState(win)
+  })
+  win.on("unmaximize", () => {
+    if (!isManualMaximizedWindow(win)) {
+      clearManualMaximize(win)
+    }
+    sendWindowState(win)
+  })
+  win.on("enter-full-screen", () => {
+    clearManualMaximize(win)
+    sendWindowState(win)
+  })
+  win.on("leave-full-screen", () => {
+    sendWindowState(win)
+  })
+}
+
 export function resolvePopoutWindowOptions(mainDir: string, options: { platform?: NodeJS.Platform } = {}) {
   return {
     width: 1120,
@@ -157,7 +213,7 @@ export function resolvePopoutWindowOptions(mainDir: string, options: { platform?
     minHeight: 520,
     ...resolveWindowChromeOptions(options.platform),
     autoHideMenuBar: true,
-    backgroundColor: "#eff3f7",
+    ...resolveWindowBackgroundOptions(options.platform),
     icon: resolveWindowIconPath(mainDir),
     webPreferences: {
       preload: resolvePreloadPath(mainDir),
@@ -237,7 +293,7 @@ export async function createWindow(mainDir: string, options: { closeToTray?: Clo
     minHeight: 760,
     ...resolveWindowChromeOptions(),
     autoHideMenuBar: true,
-    backgroundColor: "#eff3f7",
+    ...resolveWindowBackgroundOptions(),
     icon: resolveWindowIconPath(mainDir),
     show: false,
     webPreferences: {
@@ -250,6 +306,7 @@ export async function createWindow(mainDir: string, options: { closeToTray?: Clo
   })
   installNativeMacWindowControls(win)
   installWindowZoomShortcuts(win)
+  installWindowStateHandlers(win)
   installWindowDiagnostics(win, { label: "main", url: rendererEntryUrl })
   installCloseToTray(win, options.closeToTray)
   options.workbenchWindowManager?.registerMainWindow(win)
@@ -257,22 +314,6 @@ export async function createWindow(mainDir: string, options: { closeToTray?: Clo
   win.once("ready-to-show", () => {
     sendWindowState(win)
     win.show()
-  })
-
-  win.on("maximize", () => {
-    clearManualMaximize(win)
-    sendWindowState(win)
-  })
-  win.on("unmaximize", () => {
-    clearManualMaximize(win)
-    sendWindowState(win)
-  })
-  win.on("enter-full-screen", () => {
-    clearManualMaximize(win)
-    sendWindowState(win)
-  })
-  win.on("leave-full-screen", () => {
-    sendWindowState(win)
   })
 
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }))

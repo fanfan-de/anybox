@@ -18,6 +18,7 @@ import {
   type AppearanceTokenMap,
   type AppearanceTokenName,
 } from "../../../../shared/appearance"
+import type { AppearanceTheme } from "../../../../shared/appearance-themes"
 import type { DesktopAppUpdateState, DesktopProviderAuthPrompt, DesktopStoragePaths } from "../../../../shared/desktop-ipc-contract"
 import {
   AccountSettingsIcon,
@@ -48,11 +49,6 @@ import {
   normalizeAppearanceColorInputValue,
   withAppearanceColorChannels,
 } from "../appearance-theme"
-import {
-  CODE_HIGHLIGHT_THEMES,
-  CODE_THEME_LABELS,
-  type CodeThemePreference,
-} from "../code-theme"
 import { useI18n } from "../i18n/I18nProvider"
 import type { TranslationKey } from "../i18n/translations"
 import { writeTextToClipboard } from "../shared-ui"
@@ -60,7 +56,6 @@ import type {
   ArchivedSessionSummary,
   AssistantTraceVisibility,
   AssistantTraceVisibilityKey,
-  BrandTheme,
   ColorMode,
   CustomProviderDraftState,
   InstalledPlugin,
@@ -1178,14 +1173,288 @@ export function AppearanceTokenEditor({
   )
 }
 
+const appearanceThemeSwatchTokenPairs = [
+  ["surface-app-light", "surface-app-dark"],
+  ["surface-panel-light", "surface-panel-dark"],
+  ["text-primary-light", "text-primary-dark"],
+  ["brand-primary", "brand-primary-dark"],
+] as const satisfies readonly (readonly [AppearanceTokenName, AppearanceTokenName])[]
+
+function resolveAppearanceThemeSwatchColor(
+  theme: AppearanceTheme,
+  lightToken: AppearanceTokenName,
+  darkToken: AppearanceTokenName,
+  appearanceTokenValues: Record<AppearanceTokenName, string>,
+) {
+  const preferredToken = theme.colorMode === "dark" ? darkToken : lightToken
+  return theme.overrides[preferredToken]
+    ?? theme.overrides[lightToken]
+    ?? theme.overrides[darkToken]
+    ?? appearanceTokenValues[preferredToken]
+    ?? "var(--seg-panel)"
+}
+
+function AppearanceThemeSwatches({
+  appearanceTokenValues,
+  theme,
+}: {
+  appearanceTokenValues: Record<AppearanceTokenName, string>
+  theme: AppearanceTheme
+}) {
+  return (
+    <span className="settings-theme-library-swatches" aria-hidden="true">
+      {appearanceThemeSwatchTokenPairs.map(([lightToken, darkToken]) => (
+        <span
+          key={`${theme.id}:${lightToken}`}
+          style={{
+            "--settings-theme-library-swatch": resolveAppearanceThemeSwatchColor(
+              theme,
+              lightToken,
+              darkToken,
+              appearanceTokenValues,
+            ),
+          } as CSSProperties}
+        />
+      ))}
+    </span>
+  )
+}
+
+interface AppearanceThemeLibraryPanelProps {
+  activeThemeID?: string
+  appearanceTokenValues: Record<AppearanceTokenName, string>
+  error?: string | null
+  onApply?: (themeID: string) => void | Promise<void>
+  onDelete?: (themeID: string) => void | Promise<void>
+  onDuplicate?: (themeID: string, name?: string) => Promise<AppearanceTheme | null>
+  onSaveCurrent?: (name: string) => Promise<AppearanceTheme | null>
+  themes: readonly AppearanceTheme[]
+}
+
+function AppearanceThemeLibraryPanel({
+  activeThemeID,
+  appearanceTokenValues,
+  error,
+  onApply,
+  onDelete,
+  onDuplicate,
+  onSaveCurrent,
+  themes,
+}: AppearanceThemeLibraryPanelProps) {
+  const { t } = useI18n()
+  const defaultNewThemeName = t("settings.appearance.themeNewNameDefault")
+  const [selectedThemeID, setSelectedThemeID] = useState(() => activeThemeID ?? themes[0]?.id ?? "")
+  const [newThemeName, setNewThemeName] = useState(defaultNewThemeName)
+  const [pendingThemeAction, setPendingThemeAction] = useState<string | null>(null)
+  const selectedTheme = themes.find((theme) => theme.id === selectedThemeID) ?? themes[0] ?? null
+
+  useEffect(() => {
+    if (selectedThemeID && themes.some((theme) => theme.id === selectedThemeID)) return
+    setSelectedThemeID(activeThemeID ?? themes[0]?.id ?? "")
+  }, [activeThemeID, selectedThemeID, themes])
+
+  function getThemeSourceLabel(theme: AppearanceTheme) {
+    if (theme.source === "built-in") return t("settings.appearance.themeSourceBuiltIn")
+    if (theme.source === "imported") return t("settings.appearance.themeSourceImported")
+    return t("settings.appearance.themeSourceUser")
+  }
+
+  async function runThemeAction(actionID: string, action: () => Promise<void>) {
+    setPendingThemeAction(actionID)
+    try {
+      await action()
+    } finally {
+      setPendingThemeAction(null)
+    }
+  }
+
+  async function handleApplyTheme() {
+    if (!selectedTheme || !onApply) return
+    await runThemeAction("apply", async () => {
+      await onApply(selectedTheme.id)
+    })
+  }
+
+  async function handleSaveCurrentTheme() {
+    if (!onSaveCurrent) return
+
+    const name = newThemeName.trim() || defaultNewThemeName
+    await runThemeAction("save", async () => {
+      const theme = await onSaveCurrent(name)
+      if (theme) {
+        setSelectedThemeID(theme.id)
+        setNewThemeName(defaultNewThemeName)
+      }
+    })
+  }
+
+  async function handleDuplicateTheme() {
+    if (!selectedTheme || !onDuplicate) return
+
+    await runThemeAction("duplicate", async () => {
+      const theme = await onDuplicate(selectedTheme.id, `${selectedTheme.name} ${t("settings.appearance.themeCopySuffix")}`)
+      if (theme) {
+        setSelectedThemeID(theme.id)
+      }
+    })
+  }
+
+  async function handleDeleteTheme() {
+    if (!selectedTheme || selectedTheme.readonly || !onDelete) return
+    if (!window.confirm(t("settings.appearance.themeDeleteConfirm", { name: selectedTheme.name }))) return
+
+    await runThemeAction("delete", async () => {
+      await onDelete(selectedTheme.id)
+      setSelectedThemeID(activeThemeID ?? themes.find((theme) => theme.id !== selectedTheme.id)?.id ?? "")
+    })
+  }
+
+  if (themes.length === 0) return null
+
+  return (
+    <section className="settings-panel settings-theme-library-panel">
+      <div className="settings-section-header">
+        <div>
+          <span className="label">{t("settings.appearance.themeLibraryLabel")}</span>
+          <h3>{t("settings.appearance.themeLibraryTitle")}</h3>
+        </div>
+        <p>{t("settings.appearance.themeLibraryCopy")}</p>
+      </div>
+
+      <div className="settings-theme-library-shell">
+        <div
+          className="settings-theme-library-list"
+          role="listbox"
+          aria-label={t("settings.appearance.themeLibraryListLabel")}
+        >
+          {themes.map((theme) => {
+            const isActive = theme.id === activeThemeID
+            const isSelected = theme.id === selectedTheme?.id
+
+            return (
+              <button
+                key={theme.id}
+                className={[
+                  "settings-theme-library-item",
+                  isActive ? "is-active" : "",
+                  isSelected ? "is-selected" : "",
+                ].filter(Boolean).join(" ")}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => setSelectedThemeID(theme.id)}
+              >
+                <AppearanceThemeSwatches
+                  appearanceTokenValues={appearanceTokenValues}
+                  theme={theme}
+                />
+                <span className="settings-theme-library-item-copy">
+                  <strong>{theme.name}</strong>
+                  <small>
+                    {getThemeSourceLabel(theme)}
+                    {isActive ? ` · ${t("settings.appearance.themeCurrent")}` : ""}
+                  </small>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="settings-theme-library-detail">
+          {selectedTheme ? (
+            <>
+              <div className="settings-theme-library-detail-header">
+                <div>
+                  <span className="label">{getThemeSourceLabel(selectedTheme)}</span>
+                  <h4>{selectedTheme.name}</h4>
+                </div>
+                <AppearanceThemeSwatches
+                  appearanceTokenValues={appearanceTokenValues}
+                  theme={selectedTheme}
+                />
+              </div>
+
+              <dl className="settings-theme-library-meta">
+                <div>
+                  <dt>{t("settings.appearance.colorMode")}</dt>
+                  <dd>{selectedTheme.colorMode}</dd>
+                </div>
+                <div>
+                  <dt>{t("settings.appearance.accentTheme")}</dt>
+                  <dd>{selectedTheme.brandTheme}</dd>
+                </div>
+                <div>
+                  <dt>{t("settings.appearance.codeTheme")}</dt>
+                  <dd>{selectedTheme.codeThemePreference}</dd>
+                </div>
+              </dl>
+
+              <div className="settings-theme-library-actions">
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={!onApply || selectedTheme.id === activeThemeID || pendingThemeAction !== null}
+                  onClick={handleApplyTheme}
+                >
+                  {t("settings.appearance.themeApply")}
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={!onDuplicate || pendingThemeAction !== null}
+                  onClick={handleDuplicateTheme}
+                >
+                  {t("settings.appearance.themeDuplicate")}
+                </button>
+                <button
+                  className="secondary-button is-danger"
+                  type="button"
+                  disabled={selectedTheme.readonly || !onDelete || pendingThemeAction !== null}
+                  onClick={handleDeleteTheme}
+                >
+                  {t("settings.appearance.themeDelete")}
+                </button>
+              </div>
+            </>
+          ) : null}
+
+          <div className="settings-theme-library-save">
+            <label>
+              <span className="label">{t("settings.appearance.themeNameLabel")}</span>
+              <input
+                type="text"
+                value={newThemeName}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setNewThemeName(event.target.value)}
+              />
+            </label>
+            <button
+              className="primary-button"
+              type="button"
+              disabled={!onSaveCurrent || pendingThemeAction !== null}
+              onClick={handleSaveCurrentTheme}
+            >
+              {t("settings.appearance.themeSaveCurrent")}
+            </button>
+          </div>
+
+          {error ? (
+            <p className="settings-helper-text settings-theme-config-error">{error}</p>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 interface AppearanceSettingsPanelProps {
   appearanceConfigError: string | null
   appearanceConfigPath: string | null
   appearanceConfigPreview: string
   appearanceOverrides: AppearanceTokenMap
+  appearanceThemeError?: string | null
+  appearanceThemes?: readonly AppearanceTheme[]
+  activeAppearanceThemeID?: string
   appearanceTokenValues: Record<AppearanceTokenName, string>
-  brandTheme: BrandTheme
-  codeThemePreference: CodeThemePreference
   colorMode: ColorMode
   fontFamily: AppearanceFontFamily
   htmlBackgroundConfig: HtmlBackgroundConfig
@@ -1193,10 +1462,12 @@ interface AppearanceSettingsPanelProps {
   showShellLayoutSettings?: boolean
   onActivityRailVisibilityChange?: (value: boolean) => void
   onAppearancePaletteReset: () => void
+  onAppearanceThemeApply?: (themeID: string) => void | Promise<void>
+  onAppearanceThemeDelete?: (themeID: string) => void | Promise<void>
+  onAppearanceThemeDuplicate?: (themeID: string, name?: string) => Promise<AppearanceTheme | null>
+  onAppearanceThemeSaveCurrent?: (name: string) => Promise<AppearanceTheme | null>
   onAppearanceTokenChange: (tokenName: AppearanceTokenName, value: string) => void
   onAppearanceTokenReset: (tokenName: AppearanceTokenName) => void
-  onBrandThemeChange: (theme: BrandTheme) => void
-  onCodeThemeChange: (theme: CodeThemePreference) => void
   onColorModeChange: (mode: ColorMode) => void
   onFontFamilyChange: (fontFamily: AppearanceFontFamily) => void
   onHtmlBackgroundConfigChange: (config: HtmlBackgroundConfig) => void
@@ -1208,9 +1479,10 @@ export function AppearanceSettingsPanel({
   appearanceConfigPath,
   appearanceConfigPreview,
   appearanceOverrides,
+  appearanceThemeError,
+  appearanceThemes = [],
+  activeAppearanceThemeID,
   appearanceTokenValues,
-  brandTheme,
-  codeThemePreference,
   colorMode,
   fontFamily,
   htmlBackgroundConfig,
@@ -1218,37 +1490,22 @@ export function AppearanceSettingsPanel({
   showShellLayoutSettings = false,
   onActivityRailVisibilityChange,
   onAppearancePaletteReset,
+  onAppearanceThemeApply,
+  onAppearanceThemeDelete,
+  onAppearanceThemeDuplicate,
+  onAppearanceThemeSaveCurrent,
   onAppearanceTokenChange,
   onAppearanceTokenReset,
-  onBrandThemeChange,
-  onCodeThemeChange,
   onColorModeChange,
   onFontFamilyChange,
   onHtmlBackgroundConfigChange,
   onOpenAppearanceWindow,
 }: AppearanceSettingsPanelProps) {
   const { t } = useI18n()
-  const brandThemeOptions = [
-    {
-      value: "terra" as const,
-      label: t("settings.appearance.accentThemeTerra"),
-    },
-    {
-      value: "sage" as const,
-      label: t("settings.appearance.accentThemeSage"),
-    },
-  ]
   const colorModeOptions: Array<{ value: ColorMode; label: string }> = [
     { value: "light", label: t("settings.appearance.light") },
     { value: "dark", label: t("settings.appearance.dark") },
     { value: "system", label: t("settings.appearance.system") },
-  ]
-  const codeThemeOptions: Array<{ value: CodeThemePreference; label: string }> = [
-    { value: "auto", label: t("settings.appearance.codeThemeAuto") },
-    ...CODE_HIGHLIGHT_THEMES.map((theme) => ({
-      value: theme,
-      label: CODE_THEME_LABELS[theme],
-    })),
   ]
   const hasCustomAppearanceOverrides = Object.keys(appearanceOverrides).length > 0
   const hasHtmlBackgroundSource = htmlBackgroundConfig.html.trim().length > 0
@@ -1262,6 +1519,17 @@ export function AppearanceSettingsPanel({
 
   return (
     <div className="settings-appearance-layout">
+      <AppearanceThemeLibraryPanel
+        activeThemeID={activeAppearanceThemeID}
+        appearanceTokenValues={appearanceTokenValues}
+        error={appearanceThemeError}
+        themes={appearanceThemes}
+        onApply={onAppearanceThemeApply}
+        onDelete={onAppearanceThemeDelete}
+        onDuplicate={onAppearanceThemeDuplicate}
+        onSaveCurrent={onAppearanceThemeSaveCurrent}
+      />
+
       <section className="settings-panel">
         <div className="settings-select-list">
           <div className="settings-select-row">
@@ -1274,34 +1542,6 @@ export function AppearanceSettingsPanel({
                 options={colorModeOptions}
                 value={colorMode}
                 onChange={onColorModeChange}
-              />
-            </span>
-          </div>
-
-          <div className="settings-select-row">
-            <span className="settings-select-copy">
-              <span className="settings-select-title">{t("settings.appearance.accentTheme")}</span>
-            </span>
-            <span className="settings-select-control">
-              <SettingsSelect<BrandTheme>
-                ariaLabel={t("settings.appearance.accentTheme")}
-                options={brandThemeOptions}
-                value={brandTheme}
-                onChange={onBrandThemeChange}
-              />
-            </span>
-          </div>
-
-          <div className="settings-select-row">
-            <span className="settings-select-copy">
-              <span className="settings-select-title">{t("settings.appearance.codeTheme")}</span>
-            </span>
-            <span className="settings-select-control">
-              <SettingsSelect<CodeThemePreference>
-                ariaLabel={t("settings.appearance.codeTheme")}
-                options={codeThemeOptions}
-                value={codeThemePreference}
-                onChange={onCodeThemeChange}
               />
             </span>
           </div>
@@ -2095,6 +2335,9 @@ interface SettingsPageProps {
   appearanceConfigPath: string | null
   appearanceConfigPreview: string
   appearanceOverrides: AppearanceTokenMap
+  appearanceThemeError?: string | null
+  appearanceThemes?: readonly AppearanceTheme[]
+  activeAppearanceThemeID?: string
   appearanceTokenValues: Record<AppearanceTokenName, string>
   assistantTraceVisibility: AssistantTraceVisibility
   archivedSessions: ArchivedSessionSummary[]
@@ -2103,8 +2346,6 @@ interface SettingsPageProps {
   deletingArchivedSessionID: string | null
   deletingMcpServerID: string | null
   deletingProviderID: string | null
-  brandTheme: BrandTheme
-  codeThemePreference: CodeThemePreference
   colorMode: ColorMode
   fontFamily: AppearanceFontFamily
   htmlBackgroundConfig: HtmlBackgroundConfig
@@ -2134,13 +2375,15 @@ interface SettingsPageProps {
   savingProviderID: string | null
   testingProviderID: string | null
   selectionDraft: ProjectModelSelection
-  onBrandThemeChange: (theme: BrandTheme) => void
-  onCodeThemeChange: (theme: CodeThemePreference) => void
   onColorModeChange: (mode: ColorMode) => void
   onFontFamilyChange: (fontFamily: AppearanceFontFamily) => void
   onHtmlBackgroundConfigChange: (config: HtmlBackgroundConfig) => void
   onActivityRailVisibilityChange: (value: boolean) => void
   onAppearancePaletteReset: () => void
+  onAppearanceThemeApply?: (themeID: string) => void | Promise<void>
+  onAppearanceThemeDelete?: (themeID: string) => void | Promise<void>
+  onAppearanceThemeDuplicate?: (themeID: string, name?: string) => Promise<AppearanceTheme | null>
+  onAppearanceThemeSaveCurrent?: (name: string) => Promise<AppearanceTheme | null>
   onAppearanceTokenChange: (tokenName: AppearanceTokenName, value: string) => void
   onAppearanceTokenReset: (tokenName: AppearanceTokenName) => void
   onAssistantTraceVisibilityChange: (key: AssistantTraceVisibilityKey, value: boolean) => void
@@ -2200,6 +2443,9 @@ export function SettingsPage({
   appearanceConfigPath,
   appearanceConfigPreview,
   appearanceOverrides,
+  appearanceThemeError,
+  appearanceThemes,
+  activeAppearanceThemeID,
   appearanceTokenValues,
   assistantTraceVisibility,
   archivedSessions,
@@ -2208,8 +2454,6 @@ export function SettingsPage({
   deletingArchivedSessionID,
   deletingMcpServerID,
   deletingProviderID,
-  brandTheme,
-  codeThemePreference,
   colorMode,
   fontFamily,
   htmlBackgroundConfig,
@@ -2238,13 +2482,15 @@ export function SettingsPage({
   savingProviderID,
   testingProviderID,
   selectionDraft,
-  onBrandThemeChange,
-  onCodeThemeChange,
   onColorModeChange,
   onFontFamilyChange,
   onHtmlBackgroundConfigChange,
   onActivityRailVisibilityChange,
   onAppearancePaletteReset,
+  onAppearanceThemeApply,
+  onAppearanceThemeDelete,
+  onAppearanceThemeDuplicate,
+  onAppearanceThemeSaveCurrent,
   onAppearanceTokenChange,
   onAppearanceTokenReset,
   onAssistantTraceVisibilityChange,
@@ -3198,9 +3444,10 @@ export function SettingsPage({
                   appearanceConfigPath={appearanceConfigPath}
                   appearanceConfigPreview={appearanceConfigPreview}
                   appearanceOverrides={appearanceOverrides}
+                  appearanceThemeError={appearanceThemeError}
+                  appearanceThemes={appearanceThemes}
+                  activeAppearanceThemeID={activeAppearanceThemeID}
                   appearanceTokenValues={appearanceTokenValues}
-                  brandTheme={brandTheme}
-                  codeThemePreference={codeThemePreference}
                   colorMode={colorMode}
                   fontFamily={fontFamily}
                   htmlBackgroundConfig={htmlBackgroundConfig}
@@ -3208,10 +3455,12 @@ export function SettingsPage({
                   showShellLayoutSettings
                   onActivityRailVisibilityChange={onActivityRailVisibilityChange}
                   onAppearancePaletteReset={onAppearancePaletteReset}
+                  onAppearanceThemeApply={onAppearanceThemeApply}
+                  onAppearanceThemeDelete={onAppearanceThemeDelete}
+                  onAppearanceThemeDuplicate={onAppearanceThemeDuplicate}
+                  onAppearanceThemeSaveCurrent={onAppearanceThemeSaveCurrent}
                   onAppearanceTokenChange={onAppearanceTokenChange}
                   onAppearanceTokenReset={onAppearanceTokenReset}
-                  onBrandThemeChange={onBrandThemeChange}
-                  onCodeThemeChange={onCodeThemeChange}
                   onColorModeChange={onColorModeChange}
                   onFontFamilyChange={onFontFamilyChange}
                   onHtmlBackgroundConfigChange={onHtmlBackgroundConfigChange}

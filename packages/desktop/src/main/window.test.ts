@@ -11,17 +11,22 @@ import {
   resolveNativeMacWindowButtonPosition,
   resolveNextWindowZoomFactor,
   resolvePopoutWindowOptions,
+  resolveWindowBackgroundOptions,
   resolveWindowZoomShortcutAction,
 } from "./window"
 
 describe("session popout window options", () => {
-  it("creates a frameless first-class Windows Electron window with the desktop preload", () => {
+  it("creates a frameless Windows window that remains maximizable for top-edge snap", () => {
     const options = resolvePopoutWindowOptions("C:\\desktop\\out\\main", { platform: "win32" })
 
     expect(options.frame).toBe(false)
+    expect(options.maximizable).toBe(true)
     expect(options.roundedCorners).toBe(false)
     expect(options.titleBarStyle).toBeUndefined()
     expect("trafficLightPosition" in options).toBe(false)
+    expect(options.backgroundMaterial).toBe("acrylic")
+    expect(options.backgroundColor).toBe("#00000000")
+    expect(options.transparent).toBe(true)
     expect(options.webPreferences?.contextIsolation).toBe(true)
     expect(options.webPreferences?.nodeIntegration).toBe(false)
     expect(options.webPreferences?.preload).toContain("preload")
@@ -31,12 +36,26 @@ describe("session popout window options", () => {
     const options = resolvePopoutWindowOptions("/desktop/out/main", { platform: "darwin" })
 
     expect(options.frame).toBe(false)
+    expect(options.maximizable).toBeUndefined()
     expect(options.roundedCorners).toBe(true)
     expect(options.titleBarStyle).toBe("hidden")
     expect("trafficLightPosition" in options).toBe(false)
+    expect(options.backgroundMaterial).toBeUndefined()
+    expect(options.backgroundColor).toBe("#eff3f7")
+    expect(options.transparent).toBeUndefined()
     expect(options.webPreferences?.contextIsolation).toBe(true)
     expect(options.webPreferences?.nodeIntegration).toBe(false)
     expect(options.webPreferences?.preload).toContain("preload")
+  })
+
+  it("uses Windows Acrylic through transparent web contents", () => {
+    expect(resolveWindowBackgroundOptions("win32")).toEqual({
+      backgroundColor: "#00000000",
+      backgroundMaterial: "acrylic",
+      transparent: true,
+    })
+    expect(resolveWindowBackgroundOptions("darwin")).toEqual({ backgroundColor: "#eff3f7" })
+    expect(resolveWindowBackgroundOptions("linux")).toEqual({ backgroundColor: "#eff3f7" })
   })
 
   it("positions native macOS traffic lights inside the right window controls slot", () => {

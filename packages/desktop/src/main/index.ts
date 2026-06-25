@@ -17,6 +17,7 @@ import {
   createWindow,
   installDockIcon,
   installNativeMacWindowControls,
+  installWindowStateHandlers,
   installWindowZoomShortcuts,
   resolvePopoutWindowOptions,
   resolveRendererEntryUrl,
@@ -65,6 +66,7 @@ void app.whenReady().then(async () => {
     configureWindow: (window) => {
       installNativeMacWindowControls(window)
       installWindowZoomShortcuts(window)
+      installWindowStateHandlers(window)
     },
     createPopoutWindowOptions: () => resolvePopoutWindowOptions(mainDir),
   })

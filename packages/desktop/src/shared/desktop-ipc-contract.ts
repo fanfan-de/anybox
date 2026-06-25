@@ -88,6 +88,12 @@ import type {
 } from "../main/types"
 import type { DesktopOpenPathInput, DesktopOpenPathResult, ReasoningEffort } from "@anybox/shared"
 import type { AppearanceConfigDocument, AppearanceConfigSnapshot, AppearanceRuntimeState } from "./appearance"
+import type {
+  AppearanceThemeDuplicateInput,
+  AppearanceThemeLibrarySnapshot,
+  AppearanceThemeMutationResult,
+  AppearanceThemeSaveInput,
+} from "./appearance-themes"
 import type { LocaleConfigDocument, LocaleConfigSnapshot } from "./locale"
 import type {
   PermissionRequestPrompt,
@@ -200,6 +206,17 @@ export type {
   PermissionResolveResult,
   WindowAction
 }
+
+export type {
+  AppearanceTheme,
+  AppearanceThemeDocument,
+  AppearanceThemeDuplicateInput,
+  AppearanceThemeLibrarySnapshot,
+  AppearanceThemeMutationResult,
+  AppearanceThemePreset,
+  AppearanceThemeSaveInput,
+  AppearanceThemeSource,
+} from "./appearance-themes"
 
 export type AgentSessionSummary = AgentWorkspaceSession
 export type ExternalEditorSummary = {
@@ -1017,6 +1034,26 @@ export interface DesktopIpcContract {
   "desktop:publish-appearance-state": {
     input: AppearanceRuntimeState
     output: void
+  }
+  "desktop:get-appearance-themes": {
+    input: void
+    output: AppearanceThemeLibrarySnapshot
+  }
+  "desktop:save-appearance-theme": {
+    input: { theme: AppearanceThemeSaveInput }
+    output: AppearanceThemeMutationResult
+  }
+  "desktop:delete-appearance-theme": {
+    input: { themeID: string }
+    output: AppearanceThemeLibrarySnapshot
+  }
+  "desktop:set-active-appearance-theme": {
+    input: { themeID: string }
+    output: AppearanceThemeLibrarySnapshot
+  }
+  "desktop:duplicate-appearance-theme": {
+    input: AppearanceThemeDuplicateInput
+    output: AppearanceThemeMutationResult
   }
   "desktop:get-locale-config": {
     input: void
@@ -1906,6 +1943,11 @@ export interface DesktopApiMethods {
   getAppearanceConfig(): Promise<DesktopIpcOutput<"desktop:get-appearance-config">>
   saveAppearanceConfig(input: DesktopIpcInput<"desktop:save-appearance-config">): Promise<DesktopIpcOutput<"desktop:save-appearance-config">>
   publishAppearanceState(input: DesktopIpcInput<"desktop:publish-appearance-state">): Promise<DesktopIpcOutput<"desktop:publish-appearance-state">>
+  getAppearanceThemes(): Promise<DesktopIpcOutput<"desktop:get-appearance-themes">>
+  saveAppearanceTheme(input: DesktopIpcInput<"desktop:save-appearance-theme">): Promise<DesktopIpcOutput<"desktop:save-appearance-theme">>
+  deleteAppearanceTheme(input: DesktopIpcInput<"desktop:delete-appearance-theme">): Promise<DesktopIpcOutput<"desktop:delete-appearance-theme">>
+  setActiveAppearanceTheme(input: DesktopIpcInput<"desktop:set-active-appearance-theme">): Promise<DesktopIpcOutput<"desktop:set-active-appearance-theme">>
+  duplicateAppearanceTheme(input: DesktopIpcInput<"desktop:duplicate-appearance-theme">): Promise<DesktopIpcOutput<"desktop:duplicate-appearance-theme">>
   getLocaleConfig(): Promise<DesktopIpcOutput<"desktop:get-locale-config">>
   saveLocaleConfig(input: DesktopIpcInput<"desktop:save-locale-config">): Promise<DesktopIpcOutput<"desktop:save-locale-config">>
   showMenu(menuKey: MenuKey, anchor?: MenuAnchor): Promise<DesktopIpcOutput<"desktop:show-menu">>

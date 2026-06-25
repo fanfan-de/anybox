@@ -93,7 +93,7 @@
 .sidebar.is-right {
   grid-column: 6;
   border-left: 0;
-  background: transparent;
+  background: var(--seg-sidebar);
   container-type: inline-size;
 }
 
@@ -102,7 +102,7 @@
 }
 
 .window-shell[data-background-mode="custom-html"] .sidebar.is-right {
-  background: var(--surface-profile-panel);
+  background: var(--surface-profile-sidebar);
 }
 
 .sidebar-resizer {

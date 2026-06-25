@@ -33,6 +33,13 @@ import { getAgentConfig, readAgentSSEStream, requestAgentJSON, resolveAgentURL }
 import { AgentCompletionNotificationManager } from "./agent-completion-notification"
 import { openAppearanceWindow } from "./appearance-window"
 import { readAppearanceConfigSnapshot, writeAppearanceConfigSnapshot } from "./appearance-config"
+import {
+  deleteAppearanceTheme,
+  duplicateAppearanceTheme,
+  readAppearanceThemesSnapshot,
+  saveAppearanceTheme,
+  setActiveAppearanceTheme,
+} from "./appearance-themes-config"
 import { ComputerUseOverlayManager } from "./computer-use-overlay"
 import { filterAvailableExternalEditorsForTarget, listAvailableExternalEditors, openInExternalEditor } from "./external-editors"
 import { buildFolderWorkspaceForDirectory, buildFolderWorkspaces } from "./folder-workspaces"
@@ -3271,6 +3278,24 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   handleDesktopIpc("desktop:publish-appearance-state", (event, input: AppearanceRuntimeState) => {
     broadcastAppearanceRuntimeState(input, event.sender)
   })
+
+  handleDesktopIpc("desktop:get-appearance-themes", async () => readAppearanceThemesSnapshot())
+
+  handleDesktopIpc("desktop:save-appearance-theme", async (_event, input) =>
+    saveAppearanceTheme(input.theme)
+  )
+
+  handleDesktopIpc("desktop:delete-appearance-theme", async (_event, input) =>
+    deleteAppearanceTheme(input.themeID)
+  )
+
+  handleDesktopIpc("desktop:set-active-appearance-theme", async (_event, input) =>
+    setActiveAppearanceTheme(input.themeID)
+  )
+
+  handleDesktopIpc("desktop:duplicate-appearance-theme", async (_event, input) =>
+    duplicateAppearanceTheme(input)
+  )
 
   handleDesktopIpc("desktop:get-locale-config", async () => readLocaleConfigSnapshot())
 

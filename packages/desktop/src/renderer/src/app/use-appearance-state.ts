@@ -10,6 +10,14 @@ import {
   type AppearanceTokenMap,
   type AppearanceTokenName,
 } from "../../../shared/appearance"
+import {
+  createAppearanceThemeLibrarySnapshot,
+  createDefaultAppearanceThemeDocument,
+  findAppearanceThemeByID,
+  type AppearanceTheme,
+  type AppearanceThemeLibrarySnapshot,
+  type AppearanceThemeSaveInput,
+} from "../../../shared/appearance-themes"
 import { applyAppearanceOverrides, normalizeAppearanceColorInputValue, readResolvedAppearanceTokenValues } from "./appearance-theme"
 import {
   normalizeCodeThemePreference,
@@ -34,6 +42,14 @@ const APPEARANCE_CONFIG_SAVE_DEBOUNCE_MS = 160
 const EMPTY_APPEARANCE_TOKEN_VALUES = Object.fromEntries(
   APPEARANCE_TOKEN_NAMES.map((tokenName) => [tokenName, "#000000"]),
 ) as Record<AppearanceTokenName, string>
+
+function createDefaultAppearanceThemeSnapshot(): AppearanceThemeLibrarySnapshot {
+  return createAppearanceThemeLibrarySnapshot({
+    path: "",
+    exists: false,
+    document: createDefaultAppearanceThemeDocument(),
+  })
+}
 
 function readColorModePreference(): ColorMode {
   if (typeof window === "undefined") return "system"
@@ -123,6 +139,9 @@ export function useAppearanceState() {
   const [appearanceConfigPath, setAppearanceConfigPath] = useState<string | null>(null)
   const [appearanceConfigError, setAppearanceConfigError] = useState<string | null>(null)
   const [isAppearanceConfigReady, setIsAppearanceConfigReady] = useState(false)
+  const [appearanceThemeSnapshot, setAppearanceThemeSnapshot] =
+    useState<AppearanceThemeLibrarySnapshot>(createDefaultAppearanceThemeSnapshot)
+  const [appearanceThemeError, setAppearanceThemeError] = useState<string | null>(null)
   const lastRemoteAppearanceSignatureRef = useRef<string | null>(null)
   const lastPublishedAppearanceSignatureRef = useRef<string | null>(null)
 
@@ -201,6 +220,34 @@ export function useAppearanceState() {
         if (mounted) {
           setIsAppearanceConfigReady(true)
         }
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let mounted = true
+    const getAppearanceThemes = window.desktop?.getAppearanceThemes
+
+    if (!getAppearanceThemes) {
+      setAppearanceThemeSnapshot(createDefaultAppearanceThemeSnapshot())
+      return () => {
+        mounted = false
+      }
+    }
+
+    void getAppearanceThemes()
+      .then((snapshot) => {
+        if (!mounted) return
+        setAppearanceThemeSnapshot(snapshot)
+        setAppearanceThemeError(null)
+      })
+      .catch((error) => {
+        if (!mounted) return
+        setAppearanceThemeSnapshot(createDefaultAppearanceThemeSnapshot())
+        setAppearanceThemeError(error instanceof Error ? error.message : String(error))
       })
 
     return () => {
@@ -376,17 +423,136 @@ export function useAppearanceState() {
     setHtmlBackgroundConfig(nextConfig)
   }
 
+  function createAppearanceThemeSaveInput(name: string): AppearanceThemeSaveInput {
+    return {
+      name,
+      source: "user",
+      colorMode,
+      brandTheme,
+      fontFamily,
+      codeThemePreference,
+      htmlBackgroundConfig,
+      overrides: appearanceOverrides,
+    }
+  }
+
+  function applyAppearanceTheme(theme: AppearanceTheme) {
+    setColorMode(theme.colorMode)
+    setBrandTheme(theme.brandTheme)
+    setFontFamily(theme.fontFamily)
+    setCodeThemePreference(theme.codeThemePreference)
+    setHtmlBackgroundConfig({ ...theme.htmlBackgroundConfig })
+    setAppearanceOverrides({ ...theme.overrides })
+  }
+
+  async function handleAppearanceThemeApply(themeID: string) {
+    const theme = findAppearanceThemeByID(appearanceThemeSnapshot.themes, themeID)
+    if (!theme) {
+      setAppearanceThemeError("Theme not found.")
+      return
+    }
+
+    applyAppearanceTheme(theme)
+    setAppearanceThemeSnapshot((current) => ({
+      ...current,
+      activeThemeID: theme.id,
+      document: {
+        ...current.document,
+        activeThemeID: theme.id,
+      },
+    }))
+
+    const setActiveAppearanceTheme = window.desktop?.setActiveAppearanceTheme
+    if (!setActiveAppearanceTheme) return
+
+    try {
+      const snapshot = await setActiveAppearanceTheme({ themeID: theme.id })
+      setAppearanceThemeSnapshot(snapshot)
+      setAppearanceThemeError(null)
+    } catch (error) {
+      setAppearanceThemeError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  async function handleAppearanceThemeSaveCurrent(name: string): Promise<AppearanceTheme | null> {
+    const saveAppearanceTheme = window.desktop?.saveAppearanceTheme
+    if (!saveAppearanceTheme) {
+      setAppearanceThemeError("Desktop appearance theme APIs are unavailable.")
+      return null
+    }
+
+    try {
+      const result = await saveAppearanceTheme({ theme: createAppearanceThemeSaveInput(name) })
+      setAppearanceThemeSnapshot(result.snapshot)
+      setAppearanceThemeError(null)
+      return result.theme
+    } catch (error) {
+      setAppearanceThemeError(error instanceof Error ? error.message : String(error))
+      return null
+    }
+  }
+
+  async function handleAppearanceThemeDuplicate(themeID: string, name?: string): Promise<AppearanceTheme | null> {
+    const duplicateAppearanceTheme = window.desktop?.duplicateAppearanceTheme
+    if (!duplicateAppearanceTheme) {
+      setAppearanceThemeError("Desktop appearance theme APIs are unavailable.")
+      return null
+    }
+
+    try {
+      const result = await duplicateAppearanceTheme({ themeID, name })
+      setAppearanceThemeSnapshot(result.snapshot)
+      setAppearanceThemeError(null)
+      return result.theme
+    } catch (error) {
+      setAppearanceThemeError(error instanceof Error ? error.message : String(error))
+      return null
+    }
+  }
+
+  async function handleAppearanceThemeDelete(themeID: string) {
+    const deleteAppearanceTheme = window.desktop?.deleteAppearanceTheme
+    if (!deleteAppearanceTheme) {
+      setAppearanceThemeError("Desktop appearance theme APIs are unavailable.")
+      return
+    }
+
+    const wasActiveTheme = appearanceThemeSnapshot.activeThemeID === themeID
+
+    try {
+      const snapshot = await deleteAppearanceTheme({ themeID })
+      setAppearanceThemeSnapshot(snapshot)
+      setAppearanceThemeError(null)
+
+      if (wasActiveTheme) {
+        const fallbackTheme = findAppearanceThemeByID(snapshot.themes, snapshot.activeThemeID)
+        if (fallbackTheme) {
+          applyAppearanceTheme(fallbackTheme)
+        }
+      }
+    } catch (error) {
+      setAppearanceThemeError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
   return {
     appearanceConfigError,
     appearanceConfigPath,
     appearanceConfigPreview,
     appearanceOverrides,
+    appearanceThemeError,
+    appearanceThemes: appearanceThemeSnapshot.themes,
+    activeAppearanceThemeID: appearanceThemeSnapshot.activeThemeID,
     appearanceTokenValues,
     brandTheme,
     codeThemePreference,
     colorMode,
     fontFamily,
     handleAppearancePaletteReset,
+    handleAppearanceThemeApply,
+    handleAppearanceThemeDelete,
+    handleAppearanceThemeDuplicate,
+    handleAppearanceThemeSaveCurrent,
     handleAppearanceTokenChange,
     handleAppearanceTokenReset,
     handleBrandThemeChange: setBrandTheme,

@@ -208,7 +208,7 @@
 .assistant-section {
   border: 1px solid rgba(166, 186, 208, 0.42);
   border-radius: var(--seg-radius-xs);
-  background: #ffffff;
+  background: var(--semantic-thread-panel-surface);
   padding: 14px 16px;
   display: grid;
   gap: 12px;
@@ -239,7 +239,7 @@
 }
 
 .assistant-section.is-debug {
-  background: #f7fafc;
+  background: var(--semantic-thread-panel-surface-muted);
 }
 
 .assistant-process-trace {
@@ -286,8 +286,7 @@
   right: 4px;
   bottom: 0;
   height: 1px;
-  background: var(--seg-divider, var(--border-subtle));
-  opacity: 0.86;
+  background: var(--semantic-thread-divider);
   pointer-events: none;
 }
 
@@ -328,7 +327,7 @@
 }
 
 .assistant-process-trace-row.is-collapsing .assistant-process-trace-header {
-  background: var(--mix-seg-panel-muted-86-transparent-14);
+  background: var(--semantic-thread-panel-surface-hover);
 }
 
 .assistant-process-trace-row.is-collapsing .assistant-process-trace-chevron {
@@ -446,7 +445,7 @@
   padding: 10px 14px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-xs);
-  background: var(--seg-panel-muted);
+  background: var(--semantic-thread-panel-surface-muted);
 }
 
 .assistant-ephemeral-hint {
@@ -491,7 +490,7 @@
   border-radius: 0;
   border-left: 3px solid #c5ccd6;
   padding: 8px 10px;
-  background: var(--seg-panel-muted);
+  background: var(--semantic-thread-panel-surface-muted);
   display: grid;
   gap: 6px;
   min-width: 0;
@@ -509,7 +508,7 @@
 
 .trace-item-render-error {
   border-left-color: var(--seg-danger-text, var(--seg-danger));
-  background: color-mix(in srgb, var(--seg-danger, #d14343) 6%, var(--seg-panel-muted));
+  background: color-mix(in srgb, var(--seg-danger, #d14343) 6%, var(--semantic-thread-panel-surface-muted));
 }
 
 .trace-item-render-error .trace-item-detail {
@@ -807,13 +806,13 @@
 }
 
 .trace-kind-reasoning {
-  background: var(--seg-panel-muted);
+  background: var(--semantic-thread-panel-surface-muted);
   border-left-color: #94a4ba;
 }
 
 .trace-kind-reasoning,
 .trace-kind-tool {
-  background: var(--seg-panel-muted);
+  background: var(--semantic-thread-panel-surface-muted);
   border-left: 0;
   box-shadow: none;
 }
@@ -866,10 +865,10 @@
   --md-accent: var(--semantic-markdown-accent, var(--seg-accent-strong));
   --md-border: var(--semantic-markdown-border, var(--seg-border));
   --md-border-strong: var(--semantic-markdown-border-strong, var(--seg-border));
-  --md-quote-bg: var(--semantic-markdown-quote-surface, var(--seg-panel-muted));
-  --md-inline-code-bg: var(--semantic-markdown-inline-code-surface, var(--seg-panel-muted));
-  --md-table-head-bg: var(--semantic-markdown-table-head-surface, var(--seg-panel-muted));
-  --md-table-row-alt-bg: var(--semantic-markdown-table-row-alt-surface, var(--seg-panel-muted));
+  --md-quote-bg: var(--semantic-markdown-quote-surface, var(--semantic-thread-panel-surface-muted));
+  --md-inline-code-bg: var(--semantic-markdown-inline-code-surface, var(--semantic-thread-panel-surface-muted));
+  --md-table-head-bg: var(--semantic-markdown-table-head-surface, var(--semantic-thread-panel-surface-muted));
+  --md-table-row-alt-bg: var(--semantic-markdown-table-row-alt-surface, var(--semantic-thread-panel-surface-muted));
   --md-code-bg: var(--semantic-markdown-code-surface, var(--surface-code));
   --md-code-text: var(--semantic-markdown-code-text, var(--text-on-dark));
   --md-code-muted: var(--semantic-markdown-code-muted-text, rgba(250, 250, 249, 0.62));
@@ -1034,7 +1033,7 @@
   overflow-y: hidden;
   border: 1px solid var(--md-border);
   border-radius: var(--seg-radius-xs);
-  background: var(--seg-panel);
+  background: var(--semantic-thread-panel-surface);
   scrollbar-width: thin;
 }
 
@@ -1064,7 +1063,7 @@
 
 .thread-markdown td {
   color: var(--md-text);
-  background: var(--seg-panel);
+  background: var(--semantic-thread-panel-surface);
 }
 
 .thread-markdown tbody tr:nth-child(even) td {
@@ -1121,7 +1120,7 @@
   object-fit: contain;
   border: 1px solid var(--md-border);
   border-radius: 8px;
-  background: var(--seg-panel);
+  background: var(--semantic-thread-panel-surface);
 }
 
 .thread-html {
@@ -1138,11 +1137,11 @@
   max-height: 720px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
-  background: #ffffff;
+  background: var(--semantic-thread-panel-surface);
 }
 
 .trace-kind-text {
-  background: #ffffff;
+  background: var(--semantic-thread-panel-surface);
   border-left-color: rgba(81, 136, 188, 0.75);
 }
 
@@ -1392,7 +1391,7 @@
 .trace-item-file-chip:hover,
 .trace-item-file-chip:focus-visible {
   border-color: rgba(95, 146, 194, 0.7);
-  background: #ffffff;
+  background: var(--semantic-thread-panel-surface);
   color: #0f67aa;
   outline: none;
 }
@@ -1600,7 +1599,7 @@
 .trace-historical-diff.right-sidebar-diff-preview,
 .trace-historical-diff-empty.right-sidebar-diff-empty {
   border: 0;
-  background: #ffffff;
+  background: var(--semantic-thread-panel-surface);
 }
 
 .trace-historical-diff.right-sidebar-diff-preview {
@@ -2012,7 +2011,7 @@ body.is-image-lightbox-open {
 .permission-request-card {
   border: 1px solid rgba(166, 186, 208, 0.42);
   border-left-color: var(--seg-border);
-  background: #ffffff;
+  background: var(--semantic-thread-panel-surface);
   box-shadow: 0 18px 40px rgba(46, 81, 118, 0.12);
   padding: 20px;
   display: grid;
@@ -2023,7 +2022,7 @@ body.is-image-lightbox-open {
 
 .permission-request-inline .permission-request-card {
   box-shadow: none;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--semantic-thread-panel-surface);
 }
 
 .permission-request-subtitle,
@@ -2071,7 +2070,7 @@ body.is-image-lightbox-open {
   min-width: 0;
   padding: 12px;
   border: 1px solid var(--mix-seg-border-90-transparent-10);
-  background: var(--mix-seg-panel-muted-78-seg-panel-22);
+  background: var(--semantic-thread-panel-surface-muted);
   display: grid;
   gap: 6px;
 }
@@ -2111,7 +2110,7 @@ body.is-image-lightbox-open {
 
 .permission-request-disclosure {
   border: 1px solid var(--mix-seg-border-84-transparent-16);
-  background: var(--mix-seg-panel-muted-78-seg-panel-22);
+  background: var(--semantic-thread-panel-surface-muted);
   min-width: 0;
 }
 
@@ -2596,7 +2595,7 @@ body.is-resizing-sidebar .user-turn-diff-file-entry {
   padding: 0 4px 0 8px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-xs);
-  background: var(--seg-panel);
+  background: var(--semantic-thread-panel-surface);
   color: var(--seg-text-3, #64748b);
   font-size: 11px;
   line-height: 1;
@@ -2673,7 +2672,7 @@ body.is-resizing-sidebar .user-turn-diff-file-entry {
   padding: 10px 12px 12px;
   border: 1px solid var(--seg-border);
   border-radius: 10px;
-  background: var(--seg-panel);
+  background: var(--semantic-thread-panel-surface);
   box-shadow: none;
 }
 
@@ -2727,7 +2726,7 @@ body.is-resizing-sidebar .user-turn-diff-file-entry {
 
 .inline-side-chat-close:hover,
 .inline-side-chat-close:focus-visible {
-  background: var(--mix-seg-panel-muted-88-seg-panel-12);
+  background: var(--semantic-thread-panel-surface-hover);
   border-color: transparent;
   box-shadow: none;
   color: var(--seg-text-2);
@@ -2807,13 +2806,13 @@ body.is-resizing-sidebar .user-turn-diff-file-entry {
 .inline-side-chat-tab-add:hover,
 .inline-side-chat-tab-add:focus-visible {
   border-color: var(--seg-border);
-  background: var(--mix-seg-panel-muted-88-seg-panel-12);
+  background: var(--semantic-thread-panel-surface-hover);
   color: var(--seg-text-1);
 }
 
 .inline-side-chat-tab.is-active {
   border-color: var(--seg-border);
-  background: var(--seg-panel-muted);
+  background: var(--semantic-thread-panel-surface-muted);
   color: var(--seg-text-1);
   box-shadow: none;
 }
@@ -3693,7 +3692,7 @@ button.user-turn-diff-file-row:focus-visible {
 .trace-item-file-chip:hover,
 .trace-item-file-chip:focus-visible {
   border-color: var(--mix-seg-accent-48-seg-border-52);
-  background: var(--seg-panel);
+  background: var(--semantic-thread-panel-surface);
   color: var(--seg-accent-strong);
 }
 
@@ -3944,7 +3943,7 @@ button.trace-log-row {
 
 .trace-log-row:hover,
 .trace-log-row:focus-visible {
-  background: var(--mix-seg-panel-muted-86-transparent-14);
+  background: var(--semantic-thread-panel-surface-hover);
   color: var(--seg-text-1);
   outline: none;
 }

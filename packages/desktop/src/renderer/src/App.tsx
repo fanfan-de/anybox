@@ -707,28 +707,34 @@ function AppearanceWindowApp() {
     appearanceConfigPath,
     appearanceConfigPreview,
     appearanceOverrides,
+    appearanceThemeError,
+    appearanceThemes,
+    activeAppearanceThemeID,
     appearanceTokenValues,
-    brandTheme,
-    codeThemePreference,
     colorMode,
     fontFamily,
     handleAppearancePaletteReset,
+    handleAppearanceThemeApply,
+    handleAppearanceThemeDelete,
+    handleAppearanceThemeDuplicate,
+    handleAppearanceThemeSaveCurrent,
     handleAppearanceTokenChange,
     handleAppearanceTokenReset,
-    handleBrandThemeChange,
-    handleCodeThemeChange,
     handleColorModeChange,
     handleFontFamilyChange,
     handleHtmlBackgroundConfigChange,
     htmlBackgroundConfig,
   } = useAppearanceState()
   const { handleWindowAction, isWindowMaximized } = useStandaloneWindowControls()
+  const platform = typeof window === "undefined" ? "Desktop" : window.desktop?.platform ?? "Desktop"
+  const isWindows = platform === "win32"
   const htmlBackgroundAppearance = resolveHtmlBackgroundAppearance(htmlBackgroundConfig)
   const hasHtmlBackground = htmlBackgroundAppearance.hasHtmlBackground
   const windowShellClassName = [
     "window-shell",
     "appearance-window-shell",
     hasHtmlBackground ? "has-html-background" : "",
+    isWindows ? "is-windows" : "",
   ].filter(Boolean).join(" ")
   const windowShellStyle = hasHtmlBackground
     ? ({
@@ -760,17 +766,20 @@ function AppearanceWindowApp() {
               appearanceConfigPath={appearanceConfigPath}
               appearanceConfigPreview={appearanceConfigPreview}
               appearanceOverrides={appearanceOverrides}
+              appearanceThemeError={appearanceThemeError}
+              appearanceThemes={appearanceThemes}
+              activeAppearanceThemeID={activeAppearanceThemeID}
               appearanceTokenValues={appearanceTokenValues}
-              brandTheme={brandTheme}
-              codeThemePreference={codeThemePreference}
               colorMode={colorMode}
               fontFamily={fontFamily}
               htmlBackgroundConfig={htmlBackgroundConfig}
               onAppearancePaletteReset={handleAppearancePaletteReset}
+              onAppearanceThemeApply={handleAppearanceThemeApply}
+              onAppearanceThemeDelete={handleAppearanceThemeDelete}
+              onAppearanceThemeDuplicate={handleAppearanceThemeDuplicate}
+              onAppearanceThemeSaveCurrent={handleAppearanceThemeSaveCurrent}
               onAppearanceTokenChange={handleAppearanceTokenChange}
               onAppearanceTokenReset={handleAppearanceTokenReset}
-              onBrandThemeChange={handleBrandThemeChange}
-              onCodeThemeChange={handleCodeThemeChange}
               onColorModeChange={handleColorModeChange}
               onFontFamilyChange={handleFontFamilyChange}
               onHtmlBackgroundConfigChange={handleHtmlBackgroundConfigChange}
@@ -864,6 +873,7 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
   const didMarkMountedRef = useRef(false)
   const lastPublishedWorkbenchSnapshotSignatureRef = useRef<string | null>(null)
   const isMacOS = platform === "darwin"
+  const isWindows = platform === "win32"
   const windowControls = useMemo(
     () => (
       isMacOS
@@ -872,6 +882,11 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
     ),
     [handleWindowAction, isMacOS, isWindowMaximized],
   )
+  const sessionPopoutShellClassName = [
+    "session-popout-shell",
+    isMacOS ? "is-macos" : "",
+    isWindows ? "is-windows" : "",
+  ].filter(Boolean).join(" ")
 
   async function handleDetachSessionPanel(input: {
     bounds: { height: number; width: number; x: number; y: number }
@@ -1006,7 +1021,7 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
 
   return (
     <WorkspaceStoreProvider store={workspaceStore}>
-      <div className={isMacOS ? "session-popout-shell is-macos" : "session-popout-shell"}>
+      <div className={sessionPopoutShellClassName}>
         <main ref={appShellRef} className="session-popout-app" style={appShellStyle}>
           <WorkbenchShell
           assistantTraceVisibility={assistantTraceVisibility}
@@ -1117,20 +1132,24 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     appearanceConfigPath,
     appearanceConfigPreview,
     appearanceOverrides,
+    appearanceThemeError,
+    appearanceThemes,
+    activeAppearanceThemeID,
     appearanceTokenValues,
     assistantTraceVisibility,
     appShellRef,
     appShellStyle,
     brandTheme,
-    codeThemePreference,
     fontFamily,
     handleActivityRailVisibilityChange,
     handleAppearancePaletteReset,
+    handleAppearanceThemeApply,
+    handleAppearanceThemeDelete,
+    handleAppearanceThemeDuplicate,
+    handleAppearanceThemeSaveCurrent,
     handleAppearanceTokenChange,
     handleAppearanceTokenReset,
     handleAssistantTraceVisibilityChange,
-    handleBrandThemeChange,
-    handleCodeThemeChange,
     handleAgentDebugTraceChange,
     handleDebugLineColorsChange,
     handleDebugUiRegionsChange,
@@ -2303,12 +2322,14 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   }
 
   const isMacOS = platform === "darwin"
+  const isWindows = platform === "win32"
   const htmlBackgroundAppearance = resolveHtmlBackgroundAppearance(htmlBackgroundConfig)
   const hasHtmlBackground = htmlBackgroundAppearance.hasHtmlBackground
   const windowShellClassName = [
     "window-shell",
     hasHtmlBackground ? "has-html-background" : "",
     isMacOS ? "is-macos" : "",
+    isWindows ? "is-windows" : "",
     isDebugLineColorsEnabled ? "debug-line-colors" : "",
     isDebugUiRegionsEnabled ? "debug-ui-regions" : "",
     isWindowMaximized ? "is-maximized" : "",
@@ -3036,10 +3057,11 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               appearanceConfigPath={appearanceConfigPath}
               appearanceConfigPreview={appearanceConfigPreview}
               appearanceOverrides={appearanceOverrides}
+              appearanceThemeError={appearanceThemeError}
+              appearanceThemes={appearanceThemes}
+              activeAppearanceThemeID={activeAppearanceThemeID}
               appearanceTokenValues={appearanceTokenValues}
               assistantTraceVisibility={assistantTraceVisibility}
-              brandTheme={brandTheme}
-              codeThemePreference={codeThemePreference}
               colorMode={colorMode}
               fontFamily={fontFamily}
               htmlBackgroundConfig={htmlBackgroundConfig}
@@ -3069,13 +3091,15 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               savingProviderID={savingProviderID}
               testingProviderID={testingProviderID}
               selectionDraft={selectionDraft}
-              onBrandThemeChange={handleBrandThemeChange}
-              onCodeThemeChange={handleCodeThemeChange}
               onColorModeChange={handleColorModeChange}
               onFontFamilyChange={handleFontFamilyChange}
               onHtmlBackgroundConfigChange={handleHtmlBackgroundConfigChange}
               onActivityRailVisibilityChange={handleActivityRailVisibilityChange}
               onAppearancePaletteReset={handleAppearancePaletteReset}
+              onAppearanceThemeApply={handleAppearanceThemeApply}
+              onAppearanceThemeDelete={handleAppearanceThemeDelete}
+              onAppearanceThemeDuplicate={handleAppearanceThemeDuplicate}
+              onAppearanceThemeSaveCurrent={handleAppearanceThemeSaveCurrent}
               onAppearanceTokenChange={handleAppearanceTokenChange}
               onAppearanceTokenReset={handleAppearanceTokenReset}
               onAssistantTraceVisibilityChange={handleAssistantTraceVisibilityChange}

@@ -464,11 +464,13 @@ Thread view 使用项目的语义 token：
 
 - `--seg-text-*`
 - `--seg-border`
-- `--seg-panel`
 - `--surface-user-bubble`
 - `--surface-trace`
 - `--semantic-thread-response-text`
 - `--semantic-thread-reasoning-text`
+- `--semantic-thread-panel-surface`
+- `--semantic-thread-panel-surface-muted`
+- `--semantic-thread-panel-surface-hover`
 - `--semantic-thread-user-turn-diff-card-surface`
 - `--semantic-thread-user-turn-diff-card-border`
 - `--semantic-thread-user-turn-diff-divider`
@@ -485,6 +487,12 @@ Thread view 的 assistant 文本有两组专用 semantic token：
 - `semantic-thread-response-text`：assistant response 区域的普通 trace 文本。
 - `semantic-thread-reasoning-text`：assistant reasoning 区域的 reasoning 文本。
 
+Thread view 的面板背景使用专用 semantic token，不直接消费全局 `surface-panel` / `seg-panel`：
+
+- `semantic-thread-panel-surface`：thread-owned 面板、side chat、默认 assistant card、markdown table / HTML frame 背景。
+- `semantic-thread-panel-surface-muted`：低强调 trace、metadata、nested panel 背景。
+- `semantic-thread-panel-surface-hover`：thread 面板内紧凑控件的 hover / focus 背景。
+
 User-turn 文件变更卡片使用一组专用 semantic token：
 
 - `semantic-thread-user-turn-diff-card-surface`：卡片背景。
@@ -498,6 +506,9 @@ User-turn 文件变更卡片使用一组专用 semantic token：
 
 - `--semantic-thread-response-text`
 - `--semantic-thread-reasoning-text`
+- `--semantic-thread-panel-surface`
+- `--semantic-thread-panel-surface-muted`
+- `--semantic-thread-panel-surface-hover`
 - `--semantic-thread-user-turn-diff-card-surface`
 - `--semantic-thread-user-turn-diff-card-border`
 - `--semantic-thread-user-turn-diff-divider`

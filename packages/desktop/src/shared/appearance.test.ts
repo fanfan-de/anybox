@@ -293,11 +293,11 @@ describe("appearance sidebar tree row tokens", () => {
 })
 
 describe("appearance thread view tokens", () => {
-  it("registers text and user-turn diff card tokens", () => {
+  it("registers text, panel, and user-turn diff card tokens", () => {
     expect(APPEARANCE_TOKEN_GROUPS).toContainEqual({
       id: "component-thread-view",
       label: "Thread View",
-      description: "Dedicated semantic colors for thread text and user-turn diff cards.",
+      description: "Dedicated semantic colors for thread text, panel surfaces, and user-turn diff cards.",
       rows: [
         {
           id: "semantic-thread-response-text",
@@ -312,6 +312,34 @@ describe("appearance thread view tokens", () => {
           description: "Text color for assistant reasoning content in the thread view.",
           lightToken: "semantic-thread-reasoning-text-light",
           darkToken: "semantic-thread-reasoning-text-dark",
+        },
+        {
+          id: "semantic-thread-divider",
+          label: "Divider",
+          description: "Divider line color for thread trace headers.",
+          lightToken: "semantic-thread-divider-light",
+          darkToken: "semantic-thread-divider-dark",
+        },
+        {
+          id: "semantic-thread-panel-surface",
+          label: "Thread Panel Surface",
+          description: "Background fill for thread-owned panels such as side chats and default assistant cards.",
+          lightToken: "semantic-thread-panel-surface-light",
+          darkToken: "semantic-thread-panel-surface-dark",
+        },
+        {
+          id: "semantic-thread-panel-surface-muted",
+          label: "Thread Panel Muted",
+          description: "Low-emphasis background fill for trace, metadata, and nested thread panels.",
+          lightToken: "semantic-thread-panel-surface-muted-light",
+          darkToken: "semantic-thread-panel-surface-muted-dark",
+        },
+        {
+          id: "semantic-thread-panel-surface-hover",
+          label: "Thread Panel Hover",
+          description: "Hover and focus background fill for compact controls inside thread panels.",
+          lightToken: "semantic-thread-panel-surface-hover-light",
+          darkToken: "semantic-thread-panel-surface-hover-dark",
         },
         {
           id: "semantic-thread-user-turn-diff-card-surface",
@@ -365,10 +393,13 @@ describe("appearance thread view tokens", () => {
         "semantic-thread-response-text-light": " #123456 ",
         "semantic-thread-reasoning-text-dark": "#abcdef",
         "semantic-thread-response-text": "#000000",
+        "semantic-thread-divider": "#112233",
+        "semantic-thread-panel-surface": "#223344",
         "semantic-thread-user-turn-diff-card-surface": "#fedcba",
       },
       resolvedTokens: {
         "semantic-thread-reasoning-text-light": " #654321 ",
+        "semantic-thread-panel-surface-hover-dark": " #445566 ",
         "semantic-thread-user-turn-diff-row-surface-focus-dark": " #334455 ",
       },
     })
@@ -377,11 +408,16 @@ describe("appearance thread view tokens", () => {
       "semantic-thread-response-text-light": "#123456",
       "semantic-thread-response-text-dark": "#000000",
       "semantic-thread-reasoning-text-dark": "#abcdef",
+      "semantic-thread-divider-light": "#112233",
+      "semantic-thread-divider-dark": "#112233",
+      "semantic-thread-panel-surface-light": "#223344",
+      "semantic-thread-panel-surface-dark": "#223344",
       "semantic-thread-user-turn-diff-card-surface-light": "#fedcba",
       "semantic-thread-user-turn-diff-card-surface-dark": "#fedcba",
     })
     expect(document.resolvedTokens).toEqual({
       "semantic-thread-reasoning-text-light": "#654321",
+      "semantic-thread-panel-surface-hover-dark": "#445566",
       "semantic-thread-user-turn-diff-row-surface-focus-dark": "#334455",
     })
   })
