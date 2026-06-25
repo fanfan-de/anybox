@@ -4,7 +4,7 @@
   --top-chrome-height: 40px;
   --top-chrome-tab-height: 34px;
   --top-chrome-icon-button-size: 28px;
-  --top-chrome-surface: var(--seg-pane-tab-bar-surface, var(--seg-shell));
+  --top-chrome-surface: var(--seg-shell-chrome-surface, var(--seg-shell));
   --top-chrome-active-surface: var(--seg-shell);
   --top-chrome-hover-surface: color-mix(in srgb, var(--seg-text-2) 24%, transparent);
   --top-chrome-focus-surface: color-mix(in srgb, var(--seg-text-2) 24%, transparent);

@@ -6,7 +6,7 @@
 
 .automations-page {
   --automations-bg: var(--surface-app, var(--surface-panel));
-  --automations-sidebar-bg: var(--seg-right-sidebar-top-menu-surface, var(--surface-shell));
+  --automations-top-surface: var(--seg-shell-chrome-surface, var(--surface-shell));
   --automations-surface: var(--surface-panel);
   --automations-surface-subtle: var(--surface-panel-muted);
   --automations-panel-surface: var(--mix-seg-panel-muted-72-seg-panel-28, var(--surface-app));
@@ -41,7 +41,7 @@
 .automations-top-menu {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   border-bottom: 1px solid var(--automations-border);
-  background: var(--automations-sidebar-bg);
+  background: var(--automations-top-surface);
 }
 
 .automations-top-menu .shell-top-menu-content {
@@ -207,14 +207,24 @@
 }
 
 .automations-page .automations-run-now-button {
-  background: var(--surface-code-strong, #1c1917);
-  color: var(--text-on-dark, #fafaf9);
+  border: 1px solid var(--semantic-button-secondary-border);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
 }
 
 .automations-page .automations-run-now-button:hover,
 .automations-page .automations-run-now-button:focus-visible {
-  background: var(--surface-code, #27272a);
-  color: var(--text-on-dark, #fafaf9);
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+}
+
+.automations-page .automations-run-now-button:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+  cursor: not-allowed;
+  opacity: 0.72;
 }
 
 .automations-page .secondary-button {

@@ -10377,12 +10377,8 @@ describe("App", () => {
     expect(screen.getByLabelText("Accent States Icon Hover Dark semantic-accent-icon-hover-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Accent States Icon Active Light semantic-accent-icon-active-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Accent States Icon Active Dark semantic-accent-icon-active-dark")).toBeInTheDocument()
-    expect(screen.getByLabelText("Shell Chrome Pane Tab Bar Surface Light semantic-pane-tab-bar-surface-light")).toBeInTheDocument()
-    expect(screen.getByLabelText("Shell Chrome Pane Tab Bar Surface Dark semantic-pane-tab-bar-surface-dark")).toBeInTheDocument()
-    expect(screen.getByLabelText("Shell Chrome Left Sidebar Top Menu Surface Light semantic-left-sidebar-top-menu-surface-light")).toBeInTheDocument()
-    expect(screen.getByLabelText("Shell Chrome Left Sidebar Top Menu Surface Dark semantic-left-sidebar-top-menu-surface-dark")).toBeInTheDocument()
-    expect(screen.getByLabelText("Shell Chrome Right Sidebar Top Menu Surface Light semantic-right-sidebar-top-menu-surface-light")).toBeInTheDocument()
-    expect(screen.getByLabelText("Shell Chrome Right Sidebar Top Menu Surface Dark semantic-right-sidebar-top-menu-surface-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Shell Chrome Surface Light semantic-shell-chrome-surface-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Shell Chrome Surface Dark semantic-shell-chrome-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Dropdown Select Menu Surface Light semantic-dropdown-menu-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Dropdown Select Menu Surface Dark semantic-dropdown-menu-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Thread View Response Text Light semantic-thread-response-text-light")).toBeInTheDocument()
@@ -13865,13 +13861,13 @@ describe("App", () => {
     expect(styles).toMatch(/\.sidebar-toggle-button\.is-top-menu svg\s*\{[^}]*width:\s*var\(--section-toolbar-icon-size\);[^}]*height:\s*var\(--section-toolbar-icon-size\);[^}]*stroke-width:\s*2;/s)
     expect(styles).toMatch(/\.session-tab-close svg\s*\{[^}]*width:\s*var\(--section-toolbar-aux-icon-size\);[^}]*height:\s*var\(--section-toolbar-aux-icon-size\);[^}]*stroke-width:\s*2;/s)
     expect(styles).toMatch(
-      /\.dockview-theme-anybox\s+\.dv-tabs-and-actions-container\s*\{[^}]*--dockview-tab-bar-bg:\s*var\(--seg-pane-tab-bar-surface\);[^}]*--dockview-tab-active-bg:\s*var\(--seg-shell\);[^}]*background:\s*var\(--dockview-tab-bar-bg\);[^}]*-webkit-app-region:\s*drag;/s,
+      /\.dockview-theme-anybox\s+\.dv-tabs-and-actions-container\s*\{[^}]*--dockview-tab-bar-bg:\s*var\(--seg-shell-chrome-surface\);[^}]*--dockview-tab-active-bg:\s*var\(--seg-shell\);[^}]*background:\s*var\(--dockview-tab-bar-bg\);[^}]*-webkit-app-region:\s*drag;/s,
     )
     expect(styles).toMatch(/--dockview-tab-hover-bg:\s*var\(--mix-seg-panel-66-seg-panel-muted-34\);/s)
     expect(styles).toMatch(
       /\.dockview-theme-anybox\s+\.dv-tabs-and-actions-container::after\s*\{[^}]*bottom:\s*0;[^}]*height:\s*1px;[^}]*background:\s*var\(--dockview-tab-border\);/s,
     )
-    expect(styles).toMatch(/\.sidebar-resizer\s*\{[^}]*--sidebar-resizer-top-surface:\s*var\(--seg-pane-tab-bar-surface\);[^}]*background-color:\s*transparent;[^}]*background-image:\s*linear-gradient\(var\(--sidebar-resizer-top-surface\),\s*var\(--sidebar-resizer-top-surface\)\);[^}]*background-position:\s*top;[^}]*background-size:\s*100%\s*var\(--section-toolbar-height\);[^}]*background-repeat:\s*no-repeat;/s)
+    expect(styles).toMatch(/\.sidebar-resizer\s*\{[^}]*--sidebar-resizer-top-surface:\s*var\(--seg-shell-chrome-surface\);[^}]*background-color:\s*transparent;[^}]*background-image:\s*linear-gradient\(var\(--sidebar-resizer-top-surface\),\s*var\(--sidebar-resizer-top-surface\)\);[^}]*background-position:\s*top;[^}]*background-size:\s*100%\s*var\(--section-toolbar-height\);[^}]*background-repeat:\s*no-repeat;/s)
     expect(styles).toMatch(/\.sidebar-resizer\s*\{[^}]*--sidebar-resizer-line-x:\s*100%;[^}]*justify-self:\s*stretch;[^}]*background-image:/s)
     const sidebarResizerBlocks = Array.from(styles.matchAll(/\.sidebar-resizer\s*\{([^}]*)\}/g), (match) => match[1])
     const topChromeSidebarResizerBlock = sidebarResizerBlocks.find((block) => block.includes("--sidebar-resizer-line-x: 100%")) ?? ""
@@ -14054,21 +14050,11 @@ describe("App", () => {
     expect(styles).toMatch(/--semantic-accent-icon:\s*var\(--semantic-accent-icon-dark\);/s)
     expect(styles).toMatch(/--semantic-accent-icon-hover:\s*var\(--semantic-accent-icon-hover-dark\);/s)
     expect(styles).toMatch(/--semantic-accent-icon-active:\s*var\(--semantic-accent-icon-active-dark\);/s)
-    expect(styles).toMatch(/--semantic-pane-tab-bar-surface-light:\s*#f5f2ee;/i)
-    expect(styles).toMatch(/--semantic-pane-tab-bar-surface-dark:\s*#221d1a;/i)
-    expect(styles).toMatch(/--semantic-left-sidebar-top-menu-surface-light:\s*#f3ece7;/i)
-    expect(styles).toMatch(/--semantic-left-sidebar-top-menu-surface-dark:\s*#241f1c;/i)
-    expect(styles).toMatch(/--semantic-right-sidebar-top-menu-surface-light:\s*#f5f2ee;/i)
-    expect(styles).toMatch(/--semantic-right-sidebar-top-menu-surface-dark:\s*#221d1a;/i)
-    expect(styles).toMatch(/--semantic-pane-tab-bar-surface:\s*var\(--semantic-pane-tab-bar-surface-light\);/s)
-    expect(styles).toMatch(/--semantic-left-sidebar-top-menu-surface:\s*var\(--semantic-left-sidebar-top-menu-surface-light\);/s)
-    expect(styles).toMatch(/--semantic-right-sidebar-top-menu-surface:\s*var\(--semantic-right-sidebar-top-menu-surface-light\);/s)
-    expect(styles).toMatch(/--semantic-pane-tab-bar-surface:\s*var\(--semantic-pane-tab-bar-surface-dark\);/s)
-    expect(styles).toMatch(/--semantic-left-sidebar-top-menu-surface:\s*var\(--semantic-left-sidebar-top-menu-surface-dark\);/s)
-    expect(styles).toMatch(/--semantic-right-sidebar-top-menu-surface:\s*var\(--semantic-right-sidebar-top-menu-surface-dark\);/s)
-    expect(styles).toMatch(/--seg-pane-tab-bar-surface:\s*var\(--semantic-pane-tab-bar-surface\);/s)
-    expect(styles).toMatch(/--seg-left-sidebar-top-menu-surface:\s*var\(--semantic-left-sidebar-top-menu-surface\);/s)
-    expect(styles).toMatch(/--seg-right-sidebar-top-menu-surface:\s*var\(--semantic-right-sidebar-top-menu-surface\);/s)
+    expect(styles).toMatch(/--semantic-shell-chrome-surface-light:\s*#f5f2ee;/i)
+    expect(styles).toMatch(/--semantic-shell-chrome-surface-dark:\s*#221d1a;/i)
+    expect(styles).toMatch(/--semantic-shell-chrome-surface:\s*var\(--semantic-shell-chrome-surface-light\);/s)
+    expect(styles).toMatch(/--semantic-shell-chrome-surface:\s*var\(--semantic-shell-chrome-surface-dark\);/s)
+    expect(styles).toMatch(/--seg-shell-chrome-surface:\s*var\(--semantic-shell-chrome-surface\);/s)
     expect(styles).toMatch(/--seg-accent-icon:\s*var\(--semantic-accent-icon\);/s)
     expect(styles).toMatch(/--seg-accent-icon-hover:\s*var\(--semantic-accent-icon-hover\);/s)
     expect(styles).toMatch(/--seg-accent-icon-active:\s*var\(--semantic-accent-icon-active\);/s)
@@ -14083,12 +14069,12 @@ describe("App", () => {
     expect(styles).toMatch(/\.settings-page-close-button:hover,\s*\.settings-page-close-button:focus-visible\s*\{[^}]*color:\s*var\(--semantic-accent-icon-hover\);/s)
     expect(styles).toMatch(/\.session-canvas-top-menu\s+\.canvas-top-menu-editor-launch-button,\s*\.session-canvas-top-menu\s+\.canvas-top-menu-editor-menu-button,[\s\S]*?\{[^}]*color:\s*var\(--semantic-accent-icon\);/s)
     expect(styles).toMatch(/\.session-canvas-top-menu\s+\.canvas-top-menu-editor-menu-button\.is-active,[\s\S]*?\.session-canvas-top-menu\s+\.canvas-top-menu-editor-menu-button\.is-active:focus-visible\s*\{[^}]*color:\s*var\(--semantic-accent-icon-active\);[^}]*transform:\s*none;/s)
-    expect(styles).toMatch(/\.dockview-theme-anybox\s+\.dv-tabs-and-actions-container\s*\{[^}]*--dockview-tab-bar-bg:\s*var\(--seg-pane-tab-bar-surface\);[^}]*background:\s*var\(--dockview-tab-bar-bg\);/s)
-    expect(styles).toMatch(/\.left-sidebar-top-menu\s*\{[^}]*background:\s*var\(--seg-left-sidebar-top-menu-surface\);/s)
+    expect(styles).toMatch(/\.dockview-theme-anybox\s+\.dv-tabs-and-actions-container\s*\{[^}]*--dockview-tab-bar-bg:\s*var\(--seg-shell-chrome-surface\);[^}]*background:\s*var\(--dockview-tab-bar-bg\);/s)
+    expect(styles).toMatch(/\.left-sidebar-top-menu\s*\{[^}]*background:\s*var\(--seg-shell-chrome-surface\);/s)
     expect(styles).toMatch(/\.activity-rail\s*\{[^}]*padding:\s*0 0 14px;/s)
-    expect(styles).toMatch(/\.activity-rail-top-menu\s*\{[^}]*min-height:\s*var\(--section-toolbar-height\);[^}]*background:\s*var\(--seg-left-sidebar-top-menu-surface\);/s)
+    expect(styles).toMatch(/\.activity-rail-top-menu\s*\{[^}]*min-height:\s*var\(--section-toolbar-height\);[^}]*background:\s*var\(--seg-shell-chrome-surface\);/s)
     expect(styles).toMatch(/\.activity-rail-top-menu::after\s*\{[^}]*bottom:\s*0;[^}]*height:\s*1px;[^}]*background:\s*var\(--mix-seg-border-76-transparent-24\);/s)
-    expect(styles).toMatch(/\.right-sidebar-top-menu\s*\{[^}]*--right-sidebar-tab-bar-bg:\s*var\(--seg-pane-tab-bar-surface\);[^}]*background:\s*var\(--right-sidebar-tab-bar-bg\);/s)
+    expect(styles).toMatch(/\.right-sidebar-top-menu\s*\{[^}]*--right-sidebar-tab-bar-bg:\s*var\(--seg-shell-chrome-surface\);[^}]*background:\s*var\(--right-sidebar-tab-bar-bg\);/s)
     expect(styles).toMatch(/--semantic-composer-surface-light:\s*#ffffff;/i)
     expect(styles).toMatch(/--semantic-composer-surface:\s*var\(--semantic-composer-surface-light\);/s)
     expect(styles).toMatch(/--semantic-composer-surface:\s*var\(--semantic-composer-surface-dark\);/s)
@@ -14163,7 +14149,7 @@ describe("App", () => {
     expect(styles).not.toMatch(/\.window-shell\.has-html-background/)
     expect(styles).not.toMatch(/--html-background-.*surface/)
     expect(styles).toMatch(
-      /\.window-shell\s*\{[^}]*--surface-profile-shell:\s*var\(--surface-shell\);[^}]*--surface-profile-tab:\s*var\(--semantic-pane-tab-bar-surface\);[^}]*--surface-profile-composer:\s*var\(--semantic-composer-surface\);/s,
+      /\.window-shell\s*\{[^}]*--surface-profile-shell:\s*var\(--surface-shell\);[^}]*--surface-profile-tab:\s*var\(--semantic-shell-chrome-surface\);[^}]*--surface-profile-composer:\s*var\(--semantic-composer-surface\);/s,
     )
     expect(styles).toMatch(
       /\.window-shell\[data-background-mode="custom-html"\]\[data-surface-profile="translucent"\]\s*\{[^}]*--surface-profile-shell:\s*color-mix\(in srgb,\s*var\(--surface-shell\) var\(--surface-profile-opacity\),\s*transparent\);[^}]*--surface-profile-content:\s*color-mix\(in srgb,\s*var\(--surface-panel\) var\(--surface-profile-content-opacity\),\s*transparent\);/s,
@@ -14203,7 +14189,13 @@ describe("App", () => {
       /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.sidebar\s*\{[^}]*background:\s*var\(--surface-profile-sidebar\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.canvas\.is-workbench,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.canvas-region-top-menu\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.canvas\.is-workbench\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.canvas-region-top-menu\s*\{[^}]*background:\s*var\(--top-chrome-surface,\s*var\(--surface-profile-tab\)\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\[data-background-mode="custom-html"\]\s+\.canvas-region-top-menu\s*\{[^}]*background:\s*var\(--top-chrome-surface,\s*var\(--surface-profile-tab\)\);/s,
     )
     expect(styles).toMatch(
       /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.dockview-workbench-panes,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.dockview-theme-anybox \.dv-content-container\s*\{[^}]*background:\s*transparent;/s,

@@ -112,6 +112,37 @@ describe("appearance token catalog", () => {
     expect(new Set(groupedTokenNames)).toEqual(new Set(APPEARANCE_TOKEN_NAMES))
   })
 
+  it("registers a single shell chrome surface token and migrates old split tokens", () => {
+    expect(APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-shell-chrome")).toEqual({
+      id: "component-shell-chrome",
+      label: "Shell Chrome",
+      description: "Dedicated semantic surfaces for shell-level navigation and menu bars.",
+      rows: [
+        {
+          id: "semantic-shell-chrome-surface",
+          label: "Surface",
+          description: "Background fill for shell-level pane tabs and sidebar top menus.",
+          lightToken: "semantic-shell-chrome-surface-light",
+          darkToken: "semantic-shell-chrome-surface-dark",
+        },
+      ],
+    })
+
+    const document = normalizeAppearanceConfigDocument({
+      overrides: {
+        "semantic-pane-tab-bar-surface-light": " #111111 ",
+        "semantic-left-sidebar-top-menu-surface-dark": "#222222",
+        "semantic-right-sidebar-top-menu-surface": "#333333",
+        "semantic-shell-chrome-surface-light": "#444444",
+      },
+    })
+
+    expect(document.overrides).toEqual({
+      "semantic-shell-chrome-surface-light": "#444444",
+      "semantic-shell-chrome-surface-dark": "#222222",
+    })
+  })
+
   it("registers and normalizes button semantic tokens", () => {
     const buttonGroup = APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-buttons")
 

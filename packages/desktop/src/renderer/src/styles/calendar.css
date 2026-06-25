@@ -7,7 +7,7 @@
 
 .calendar-page {
   --calendar-bg: var(--surface-app, var(--surface-panel));
-  --calendar-top-surface: var(--seg-right-sidebar-top-menu-surface, var(--surface-shell));
+  --calendar-top-surface: var(--seg-shell-chrome-surface, var(--surface-shell));
   --calendar-panel: var(--surface-panel);
   --calendar-panel-muted: var(--surface-panel-muted);
   --calendar-panel-inset: var(--surface-app, var(--surface-panel));

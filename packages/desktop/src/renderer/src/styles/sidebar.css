@@ -106,7 +106,7 @@
 }
 
 .sidebar-resizer {
-  --sidebar-resizer-top-surface: var(--seg-pane-tab-bar-surface);
+  --sidebar-resizer-top-surface: var(--seg-shell-chrome-surface);
   grid-column: 3;
   position: relative;
   z-index: 4;
@@ -185,7 +185,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   padding-right: 12px;
   align-items: stretch;
   gap: 0;
-  background: var(--seg-left-sidebar-top-menu-surface);
+  background: var(--seg-shell-chrome-surface);
   isolation: isolate;
 }
 

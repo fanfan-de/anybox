@@ -14,6 +14,17 @@
   background: var(--seg-shell);
 }
 
+.tools-top-menu {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.tools-top-menu .shell-top-menu-content {
+  grid-column: 2;
+  width: auto;
+  justify-self: center;
+  justify-content: center;
+}
+
 .tools-top-menu-label {
   min-width: 0;
   display: inline-flex;
@@ -33,6 +44,7 @@
 }
 
 .tools-top-menu-window-controls {
+  grid-column: 3;
   align-self: stretch;
   justify-self: end;
   align-items: center;

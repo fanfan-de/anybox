@@ -73,7 +73,7 @@
 }
 
 .right-sidebar-top-menu {
-  --right-sidebar-tab-bar-bg: var(--seg-pane-tab-bar-surface);
+  --right-sidebar-tab-bar-bg: var(--seg-shell-chrome-surface);
   --right-sidebar-tab-border: var(--seg-border);
   --right-sidebar-tab-divider: var(--seg-divider);
   --right-sidebar-tab-radius: 0px;

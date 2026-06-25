@@ -11,9 +11,9 @@
   --surface-profile-content-muted: color-mix(in srgb, var(--surface-panel-muted) var(--surface-profile-content-opacity), transparent);
   --surface-profile-sidebar: color-mix(in srgb, var(--surface-sidebar) var(--surface-profile-opacity), transparent);
   --surface-profile-sidebar-strong: color-mix(in srgb, var(--surface-sidebar-strong) var(--surface-profile-opacity), transparent);
-  --surface-profile-tab: color-mix(in srgb, var(--semantic-pane-tab-bar-surface) var(--surface-profile-opacity), transparent);
-  --surface-profile-left-top-menu: color-mix(in srgb, var(--semantic-left-sidebar-top-menu-surface) var(--surface-profile-opacity), transparent);
-  --surface-profile-right-top-menu: color-mix(in srgb, var(--semantic-right-sidebar-top-menu-surface) var(--surface-profile-opacity), transparent);
+  --surface-profile-tab: color-mix(in srgb, var(--semantic-shell-chrome-surface) var(--surface-profile-opacity), transparent);
+  --surface-profile-left-top-menu: color-mix(in srgb, var(--semantic-shell-chrome-surface) var(--surface-profile-opacity), transparent);
+  --surface-profile-right-top-menu: color-mix(in srgb, var(--semantic-shell-chrome-surface) var(--surface-profile-opacity), transparent);
   --surface-profile-composer: color-mix(in srgb, var(--semantic-composer-surface) var(--surface-profile-opacity), transparent);
   --top-chrome-surface: var(--surface-profile-tab);
   --top-chrome-active-surface: var(--surface-profile-shell);
@@ -58,9 +58,12 @@
   background: transparent;
 }
 
-.window-shell.is-windows[data-background-mode="default"] .canvas.is-workbench,
-.window-shell.is-windows[data-background-mode="default"] .canvas-region-top-menu {
+.window-shell.is-windows[data-background-mode="default"] .canvas.is-workbench {
   background: var(--surface-profile-shell);
+}
+
+.window-shell.is-windows[data-background-mode="default"] .canvas-region-top-menu {
+  background: var(--top-chrome-surface, var(--surface-profile-tab));
 }
 
 .window-shell.is-windows[data-background-mode="default"] .dockview-workbench-panes,

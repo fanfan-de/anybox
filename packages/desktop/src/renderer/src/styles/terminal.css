@@ -72,7 +72,7 @@
   min-height: 42px;
   padding: 0 14px;
   justify-content: flex-start;
-  background: var(--seg-pane-tab-bar-surface);
+  background: var(--seg-shell-chrome-surface);
   border-bottom: 1px solid var(--seg-border);
 }
 
@@ -548,7 +548,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before,
 }
 
 .terminal-tabs {
-  background: var(--seg-pane-tab-bar-surface);
+  background: var(--seg-shell-chrome-surface);
 }
 
 .terminal-panel-toggle-button,

@@ -15,10 +15,10 @@
   --dv-tabs-and-actions-container-font-size: 13px;
   --dv-background-color: var(--seg-shell);
   --dv-group-view-background-color: var(--seg-shell);
-  --dv-tabs-and-actions-container-background-color: var(--seg-pane-tab-bar-surface);
+  --dv-tabs-and-actions-container-background-color: var(--seg-shell-chrome-surface);
   --dv-activegroup-visiblepanel-tab-background-color: var(--seg-shell);
   --dv-activegroup-visiblepanel-tab-color: var(--seg-text);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--seg-pane-tab-bar-surface);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--seg-shell-chrome-surface);
   --dv-inactivegroup-visiblepanel-tab-color: var(--seg-text-muted);
   --dv-tab-divider-color: var(--seg-divider);
   --dv-separator-border: var(--seg-border);
@@ -70,7 +70,7 @@
 }
 
 .dockview-theme-anybox .dv-tabs-and-actions-container {
-  --dockview-tab-bar-bg: var(--seg-pane-tab-bar-surface);
+  --dockview-tab-bar-bg: var(--seg-shell-chrome-surface);
   --dockview-tab-border: var(--seg-border);
   --dockview-tab-divider: var(--seg-divider);
   --dockview-tab-radius: 0px;
