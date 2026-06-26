@@ -191,6 +191,7 @@
   box-shadow: none;
   transition:
     background 160ms ease,
+    border-color 160ms ease,
     color 160ms ease,
     opacity 160ms ease;
 }
@@ -207,22 +208,22 @@
 }
 
 .automations-page .automations-run-now-button {
-  border: 1px solid var(--semantic-button-secondary-border);
-  background: var(--semantic-button-secondary-surface);
-  color: var(--semantic-button-secondary-text);
+  border: 1px solid var(--semantic-button-primary-border);
+  background: var(--semantic-button-primary-surface);
+  color: var(--semantic-button-primary-text);
 }
 
 .automations-page .automations-run-now-button:hover,
 .automations-page .automations-run-now-button:focus-visible {
-  border-color: var(--semantic-button-secondary-border-hover);
-  background: var(--semantic-button-secondary-surface-hover);
-  color: var(--semantic-button-secondary-text-hover);
+  border-color: var(--semantic-button-primary-border-hover);
+  background: var(--semantic-button-primary-surface-hover);
+  color: var(--semantic-button-primary-text-hover);
 }
 
 .automations-page .automations-run-now-button:disabled {
-  border-color: var(--semantic-button-secondary-disabled-border);
-  background: var(--semantic-button-secondary-disabled-surface);
-  color: var(--semantic-button-secondary-disabled-text);
+  border-color: var(--semantic-button-primary-disabled-border);
+  background: var(--semantic-button-primary-disabled-surface);
+  color: var(--semantic-button-primary-disabled-text);
   cursor: not-allowed;
   opacity: 0.72;
 }

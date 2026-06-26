@@ -51,9 +51,9 @@ const zhCNTokenGroupCopy = {
     label: "终端",
     description: "嵌入式终端表面的专用语义颜色。",
   },
-  "component-settings-page": {
-    label: "设置页",
-    description: "设置弹窗、设置外壳和主导航区域的专用语义背景。",
+  "component-popup-panel": {
+    label: "弹出面板",
+    description: "设置窗口、浮层面板和面板式弹出内容的专用语义背景。",
   },
   "component-settings-switches": {
     label: "设置开关",
@@ -314,6 +314,26 @@ const zhCNTokenRowCopy = {
     label: "危险按钮禁用文字",
     description: "危险操作按钮禁用时的文字和图标颜色。",
   },
+  "semantic-icon-button-text": {
+    label: "图标按钮颜色",
+    description: "独立纯图标按钮默认状态的图标颜色。",
+  },
+  "semantic-icon-button-text-hover": {
+    label: "图标按钮悬停颜色",
+    description: "独立纯图标按钮悬停和聚焦状态的图标颜色。",
+  },
+  "semantic-icon-button-text-active": {
+    label: "图标按钮激活颜色",
+    description: "独立纯图标按钮激活状态的图标颜色。",
+  },
+  "semantic-icon-button-surface-hover": {
+    label: "图标按钮悬停背景",
+    description: "需要状态底色的纯图标按钮悬停和聚焦背景。",
+  },
+  "semantic-icon-button-surface-active": {
+    label: "图标按钮激活背景",
+    description: "需要状态底色的纯图标按钮激活背景。",
+  },
   "semantic-success": {
     label: "基础色",
     description: "主要成功状态色。",
@@ -418,9 +438,9 @@ const zhCNTokenRowCopy = {
     label: "终端背景",
     description: "终端内容区域的背景。",
   },
-  "semantic-settings-page-surface": {
-    label: "页面背景",
-    description: "设置弹窗外壳和设置主导航的背景。",
+  "semantic-popup-panel-surface": {
+    label: "面板背景",
+    description: "设置窗口、浮层面板和面板式弹出内容的背景。",
   },
   "semantic-settings-switch-row-surface-focus": {
     label: "开关聚焦行",

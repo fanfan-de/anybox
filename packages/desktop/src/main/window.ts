@@ -4,6 +4,7 @@ import path from "node:path"
 import { resolveAppIconPath } from "./app-icon"
 import { ensureRendererHttpServer } from "./renderer-http-server"
 import { safeError, safeWarn } from "./safe-console"
+import { recordShutdownDiagnostic } from "./shutdown-diagnostics"
 import { sendWindowState } from "./window-state"
 import type { WorkbenchWindowManager } from "./workbench-window-manager"
 
@@ -222,25 +223,33 @@ function installWindowDiagnostics(win: BrowserWindow, input: { label: string; ur
   const prefix = `[desktop][window:${input.label}]`
 
   win.on("unresponsive", () => {
-    safeWarn(prefix, "unresponsive", { url: input.url, webContentsID: win.webContents.id })
+    const payload = { label: input.label, url: win.webContents.getURL() || input.url, webContentsID: win.webContents.id }
+    recordShutdownDiagnostic("window-unresponsive", payload)
+    safeWarn(prefix, "unresponsive", payload)
   })
 
   win.webContents.on("render-process-gone", (_event, details) => {
-    safeError(prefix, "render-process-gone", {
+    const payload = {
       ...details,
+      label: input.label,
       url: win.webContents.getURL() || input.url,
       webContentsID: win.webContents.id,
-    })
+    }
+    recordShutdownDiagnostic("render-process-gone", payload)
+    safeError(prefix, "render-process-gone", payload)
   })
 
   win.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
-    safeError(prefix, "did-fail-load", {
+    const payload = {
       errorCode,
       errorDescription,
       isMainFrame,
+      label: input.label,
       validatedURL,
       webContentsID: win.webContents.id,
-    })
+    }
+    recordShutdownDiagnostic("did-fail-load", payload)
+    safeError(prefix, "did-fail-load", payload)
   })
 
   win.webContents.on("console-message", (_event, level, message, line, sourceId) => {

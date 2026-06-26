@@ -1599,7 +1599,7 @@ export function AutomationsPage({ projects, windowControls, onOpenSession }: Aut
                     return (
                       <>
                         <button
-                          className="secondary-button automations-run-now-button"
+                          className="primary-button automations-run-now-button"
                           type="button"
                           disabled={isRunning || Boolean(activeRun)}
                           onClick={() => void runAutomation(selectedAutomation.id)}

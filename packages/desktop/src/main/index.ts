@@ -1,4 +1,4 @@
-import { app, Menu, protocol, session, type BrowserWindow } from "electron"
+import { app, BrowserWindow, Menu, protocol, session } from "electron"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { registerIpcHandlers } from "./ipc"
@@ -11,6 +11,7 @@ import { createApplicationMenus, type ApplicationMenuOptions } from "./menu"
 import { ensureMobileBridgeServerRunning, stopMobileBridgeServer } from "./mobile-bridge-server"
 import { stopRendererHttpServer } from "./renderer-http-server"
 import { safeError } from "./safe-console"
+import { installProcessCrashDiagnostics, recordShutdownDiagnostic } from "./shutdown-diagnostics"
 import { DesktopTrayController } from "./tray"
 import { checkForAppUpdates, initializeAutoUpdater } from "./updater"
 import {
@@ -30,9 +31,18 @@ const PREVIEW_WEBVIEW_PARTITION = "persist:preview"
 registerLocalImageProtocolScheme(protocol)
 registerLocalPreviewProtocolScheme(protocol)
 app.setAppUserModelId("com.anybox.app")
+installProcessCrashDiagnostics()
 
 let isQuitting = false
 let trayController: DesktopTrayController | null = null
+
+function getAppLifecycleDiagnosticState() {
+  return {
+    isQuitting,
+    trayInstalled: trayController?.isInstalled() ?? false,
+    windowCount: BrowserWindow.getAllWindows().length,
+  }
+}
 
 void app.whenReady().then(async () => {
   installDockIcon(mainDir)
@@ -140,6 +150,7 @@ void app.whenReady().then(async () => {
 })
 
 app.on("before-quit", () => {
+  recordShutdownDiagnostic("before-quit", getAppLifecycleDiagnosticState())
   isQuitting = true
   trayController?.destroy()
   void stopManagedAgent()
@@ -148,6 +159,22 @@ app.on("before-quit", () => {
 })
 
 app.on("window-all-closed", () => {
+  recordShutdownDiagnostic("window-all-closed", getAppLifecycleDiagnosticState())
   if (isQuitting) return
   if (process.platform !== "darwin" && !trayController?.isInstalled()) app.quit()
+})
+
+app.on("will-quit", () => {
+  recordShutdownDiagnostic("will-quit", getAppLifecycleDiagnosticState())
+})
+
+app.on("quit", (_event, exitCode) => {
+  recordShutdownDiagnostic("quit", {
+    ...getAppLifecycleDiagnosticState(),
+    exitCode,
+  })
+})
+
+app.on("child-process-gone", (_event, details) => {
+  recordShutdownDiagnostic("child-process-gone", details)
 })

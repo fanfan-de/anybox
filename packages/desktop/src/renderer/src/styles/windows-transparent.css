@@ -16,8 +16,8 @@
   --surface-profile-button-secondary: var(--semantic-button-secondary-surface);
   --surface-profile-button-secondary-hover: var(--semantic-button-secondary-surface-hover);
   --surface-profile-button-secondary-disabled: var(--semantic-button-secondary-disabled-surface);
-  --surface-profile-settings-page: var(--semantic-settings-page-surface);
-  --surface-profile-settings-page-nav: var(--semantic-settings-page-surface);
+  --surface-profile-popup-panel: var(--semantic-popup-panel-surface);
+  --surface-profile-popup-panel-nav: var(--semantic-popup-panel-surface);
   --top-chrome-surface: var(--surface-profile-tab);
   --top-chrome-active-surface: var(--surface-profile-shell);
   background: transparent;
@@ -129,10 +129,10 @@
 }
 
 .window-shell.is-windows[data-background-mode="default"] .settings-page {
-  background: var(--surface-profile-settings-page);
+  background: var(--surface-profile-popup-panel);
 }
 
 .window-shell.is-windows[data-background-mode="default"] .settings-page-nav,
 .window-shell.is-windows[data-background-mode="default"] .settings-page-primary-nav {
-  background: var(--surface-profile-settings-page-nav);
+  background: var(--surface-profile-popup-panel-nav);
 }

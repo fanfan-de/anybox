@@ -66,8 +66,8 @@ function createAppearanceTokenValues(
 
 function createAppearanceTheme(overrides: Partial<AppearanceTheme> = {}): AppearanceTheme {
   return {
-    id: "built-in:anybox-terra",
-    name: "Anybox Terra",
+    id: "built-in:classic",
+    name: "经典",
     source: "built-in",
     readonly: true,
     createdAt: 0,
@@ -978,13 +978,19 @@ describe("SettingsPage built-in tools", () => {
       readonly: false,
       brandTheme: "sage",
     }))
+    const onAppearanceThemeRename = vi.fn().mockResolvedValue(createAppearanceTheme({
+      id: "user:custom",
+      name: "Renamed Custom",
+      source: "user",
+      readonly: false,
+    }))
     const onAppearanceThemeDelete = vi.fn().mockResolvedValue(undefined)
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true)
 
     render(
       <SettingsPage
         {...createSettingsPageProps({
-          activeAppearanceThemeID: "built-in:anybox-terra",
+          activeAppearanceThemeID: "built-in:classic",
           appearanceThemes: [
             createAppearanceTheme(),
             createAppearanceTheme({
@@ -1006,6 +1012,7 @@ describe("SettingsPage built-in tools", () => {
           onAppearanceThemeApply,
           onAppearanceThemeDelete,
           onAppearanceThemeDuplicate,
+          onAppearanceThemeRename,
           onAppearanceThemeSaveCurrent,
         })}
       />,
@@ -1014,10 +1021,18 @@ describe("SettingsPage built-in tools", () => {
     fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
 
     const library = screen.getByRole("heading", { name: "Theme Library" }).closest("section")!
-    expect(within(library).getByRole("option", { name: /Anybox Terra/ })).toHaveAttribute("aria-selected", "true")
+    expect(within(library).getByRole("option", { name: /经典/ })).toHaveAttribute("aria-selected", "true")
     expect(within(library).getByRole("button", { name: "Delete" })).toBeDisabled()
 
     fireEvent.click(within(library).getByRole("option", { name: /My Custom/ }))
+    fireEvent.change(within(library).getByLabelText("Theme name"), {
+      target: { value: "Renamed Custom" },
+    })
+    fireEvent.click(within(library).getByRole("button", { name: "Update Name" }))
+    await waitFor(() => {
+      expect(onAppearanceThemeRename).toHaveBeenCalledWith("user:custom", "Renamed Custom")
+    })
+
     fireEvent.click(within(library).getByRole("button", { name: "Delete" }))
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalledWith("Delete theme \"My Custom\"?")
@@ -1170,7 +1185,7 @@ describe("SettingsPage built-in tools", () => {
     fireEvent.click(screen.getByRole("option", { name: "Product areas" }))
 
     expect(screen.getByText("Thread View")).toBeInTheDocument()
-    expect(screen.getByText("Settings Page")).toBeInTheDocument()
+    expect(screen.getByText("Popup Panel")).toBeInTheDocument()
     expect(screen.queryByText("Buttons")).not.toBeInTheDocument()
   })
 
@@ -1292,7 +1307,7 @@ describe("SettingsPage built-in tools", () => {
       <I18nProvider>
         <SettingsPage
           {...createSettingsPageProps({
-            activeAppearanceThemeID: "built-in:anybox-terra",
+            activeAppearanceThemeID: "built-in:classic",
             appearanceThemes: [createAppearanceTheme()],
             fontFamily: "microsoft-yahei",
           })}

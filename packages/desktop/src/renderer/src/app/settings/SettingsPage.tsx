@@ -1311,6 +1311,7 @@ interface AppearanceThemeLibraryPanelProps {
   onApply?: (themeID: string) => void | Promise<void>
   onDelete?: (themeID: string) => void | Promise<void>
   onDuplicate?: (themeID: string, name?: string) => Promise<AppearanceTheme | null>
+  onRename?: (themeID: string, name: string) => Promise<AppearanceTheme | null>
   onSaveCurrent?: (name: string) => Promise<AppearanceTheme | null>
   themes: readonly AppearanceTheme[]
 }
@@ -1322,20 +1323,46 @@ function AppearanceThemeLibraryPanel({
   onApply,
   onDelete,
   onDuplicate,
+  onRename,
   onSaveCurrent,
   themes,
 }: AppearanceThemeLibraryPanelProps) {
   const { t } = useI18n()
   const defaultNewThemeName = t("settings.appearance.themeNewNameDefault")
   const [selectedThemeID, setSelectedThemeID] = useState(() => activeThemeID ?? themes[0]?.id ?? "")
-  const [newThemeName, setNewThemeName] = useState(defaultNewThemeName)
+  const [themeNameDraft, setThemeNameDraft] = useState(defaultNewThemeName)
   const [pendingThemeAction, setPendingThemeAction] = useState<string | null>(null)
+  const pendingSelectedThemeIDRef = useRef<string | null>(null)
   const selectedTheme = themes.find((theme) => theme.id === selectedThemeID) ?? themes[0] ?? null
+  const trimmedThemeName = themeNameDraft.trim()
+  const isRenameDisabled =
+    !selectedTheme ||
+    selectedTheme.readonly ||
+    !onRename ||
+    pendingThemeAction !== null ||
+    !trimmedThemeName ||
+    trimmedThemeName === selectedTheme.name
 
   useEffect(() => {
+    const pendingSelectedThemeID = pendingSelectedThemeIDRef.current
+    if (pendingSelectedThemeID && themes.some((theme) => theme.id === pendingSelectedThemeID)) {
+      pendingSelectedThemeIDRef.current = null
+      setSelectedThemeID(pendingSelectedThemeID)
+      return
+    }
+
     if (selectedThemeID && themes.some((theme) => theme.id === selectedThemeID)) return
     setSelectedThemeID(activeThemeID ?? themes[0]?.id ?? "")
   }, [activeThemeID, selectedThemeID, themes])
+
+  useEffect(() => {
+    if (!selectedTheme || selectedTheme.readonly) {
+      setThemeNameDraft(defaultNewThemeName)
+      return
+    }
+
+    setThemeNameDraft(selectedTheme.name)
+  }, [defaultNewThemeName, selectedTheme?.id, selectedTheme?.name, selectedTheme?.readonly])
 
   function getThemeSourceLabel(theme: AppearanceTheme) {
     if (theme.source === "built-in") return t("settings.appearance.themeSourceBuiltIn")
@@ -1362,12 +1389,28 @@ function AppearanceThemeLibraryPanel({
   async function handleSaveCurrentTheme() {
     if (!onSaveCurrent) return
 
-    const name = newThemeName.trim() || defaultNewThemeName
+    const name = trimmedThemeName || defaultNewThemeName
     await runThemeAction("save", async () => {
       const theme = await onSaveCurrent(name)
       if (theme) {
+        pendingSelectedThemeIDRef.current = theme.id
+        if (themes.some((item) => item.id === theme.id)) {
+          pendingSelectedThemeIDRef.current = null
+          setSelectedThemeID(theme.id)
+        }
+        setThemeNameDraft(defaultNewThemeName)
+      }
+    })
+  }
+
+  async function handleRenameTheme() {
+    if (!selectedTheme || selectedTheme.readonly || !onRename || isRenameDisabled) return
+
+    await runThemeAction("rename", async () => {
+      const theme = await onRename(selectedTheme.id, trimmedThemeName)
+      if (theme) {
         setSelectedThemeID(theme.id)
-        setNewThemeName(defaultNewThemeName)
+        setThemeNameDraft(theme.name)
       }
     })
   }
@@ -1378,7 +1421,11 @@ function AppearanceThemeLibraryPanel({
     await runThemeAction("duplicate", async () => {
       const theme = await onDuplicate(selectedTheme.id, `${selectedTheme.name} ${t("settings.appearance.themeCopySuffix")}`)
       if (theme) {
-        setSelectedThemeID(theme.id)
+        pendingSelectedThemeIDRef.current = theme.id
+        if (themes.some((item) => item.id === theme.id)) {
+          pendingSelectedThemeIDRef.current = null
+          setSelectedThemeID(theme.id)
+        }
       }
     })
   }
@@ -1507,10 +1554,20 @@ function AppearanceThemeLibraryPanel({
               <span className="label">{t("settings.appearance.themeNameLabel")}</span>
               <input
                 type="text"
-                value={newThemeName}
-                onChange={(event: ChangeEvent<HTMLInputElement>) => setNewThemeName(event.target.value)}
+                value={themeNameDraft}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setThemeNameDraft(event.target.value)}
               />
             </label>
+            {selectedTheme && !selectedTheme.readonly ? (
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={isRenameDisabled}
+                onClick={handleRenameTheme}
+              >
+                {t("settings.appearance.themeRename")}
+              </button>
+            ) : null}
             <button
               className="primary-button"
               type="button"
@@ -1549,6 +1606,7 @@ interface AppearanceSettingsPanelProps {
   onAppearanceThemeApply?: (themeID: string) => void | Promise<void>
   onAppearanceThemeDelete?: (themeID: string) => void | Promise<void>
   onAppearanceThemeDuplicate?: (themeID: string, name?: string) => Promise<AppearanceTheme | null>
+  onAppearanceThemeRename?: (themeID: string, name: string) => Promise<AppearanceTheme | null>
   onAppearanceThemeSaveCurrent?: (name: string) => Promise<AppearanceTheme | null>
   onAppearanceTokenChange: (tokenName: AppearanceTokenName, value: string) => void
   onAppearanceTokenReset: (tokenName: AppearanceTokenName) => void
@@ -1577,6 +1635,7 @@ export function AppearanceSettingsPanel({
   onAppearanceThemeApply,
   onAppearanceThemeDelete,
   onAppearanceThemeDuplicate,
+  onAppearanceThemeRename,
   onAppearanceThemeSaveCurrent,
   onAppearanceTokenChange,
   onAppearanceTokenReset,
@@ -1611,6 +1670,7 @@ export function AppearanceSettingsPanel({
         onApply={onAppearanceThemeApply}
         onDelete={onAppearanceThemeDelete}
         onDuplicate={onAppearanceThemeDuplicate}
+        onRename={onAppearanceThemeRename}
         onSaveCurrent={onAppearanceThemeSaveCurrent}
       />
 
@@ -2454,6 +2514,7 @@ interface SettingsPageProps {
   onAppearanceThemeApply?: (themeID: string) => void | Promise<void>
   onAppearanceThemeDelete?: (themeID: string) => void | Promise<void>
   onAppearanceThemeDuplicate?: (themeID: string, name?: string) => Promise<AppearanceTheme | null>
+  onAppearanceThemeRename?: (themeID: string, name: string) => Promise<AppearanceTheme | null>
   onAppearanceThemeSaveCurrent?: (name: string) => Promise<AppearanceTheme | null>
   onAppearanceTokenChange: (tokenName: AppearanceTokenName, value: string) => void
   onAppearanceTokenReset: (tokenName: AppearanceTokenName) => void
@@ -2561,6 +2622,7 @@ export function SettingsPage({
   onAppearanceThemeApply,
   onAppearanceThemeDelete,
   onAppearanceThemeDuplicate,
+  onAppearanceThemeRename,
   onAppearanceThemeSaveCurrent,
   onAppearanceTokenChange,
   onAppearanceTokenReset,
@@ -3529,6 +3591,7 @@ export function SettingsPage({
                   onAppearanceThemeApply={onAppearanceThemeApply}
                   onAppearanceThemeDelete={onAppearanceThemeDelete}
                   onAppearanceThemeDuplicate={onAppearanceThemeDuplicate}
+                  onAppearanceThemeRename={onAppearanceThemeRename}
                   onAppearanceThemeSaveCurrent={onAppearanceThemeSaveCurrent}
                   onAppearanceTokenChange={onAppearanceTokenChange}
                   onAppearanceTokenReset={onAppearanceTokenReset}

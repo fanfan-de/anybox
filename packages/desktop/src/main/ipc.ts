@@ -37,6 +37,7 @@ import {
   deleteAppearanceTheme,
   duplicateAppearanceTheme,
   readAppearanceThemesSnapshot,
+  renameAppearanceTheme,
   saveAppearanceTheme,
   setActiveAppearanceTheme,
 } from "./appearance-themes-config"
@@ -3295,6 +3296,10 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
 
   handleDesktopIpc("desktop:duplicate-appearance-theme", async (_event, input) =>
     duplicateAppearanceTheme(input)
+  )
+
+  handleDesktopIpc("desktop:rename-appearance-theme", async (_event, input) =>
+    renameAppearanceTheme(input)
   )
 
   handleDesktopIpc("desktop:get-locale-config", async () => readLocaleConfigSnapshot())

@@ -208,19 +208,19 @@ describe("appearance token catalog", () => {
     })
   })
 
-  it("registers and normalizes the settings page surface token", () => {
-    expect(APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-settings-page")).toEqual({
-      id: "component-settings-page",
+  it("registers and normalizes the popup panel surface token", () => {
+    expect(APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-popup-panel")).toEqual({
+      id: "component-popup-panel",
       layer: "product",
-      label: "Settings Page",
-      description: "Dedicated semantic surface for the settings dialog and settings navigation shell.",
+      label: "Popup Panel",
+      description: "Dedicated semantic surface for panel-style popups, floating sheets, and modal panels.",
       rows: [
         {
-          id: "semantic-settings-page-surface",
-          label: "Page Surface",
-          description: "Background fill for the settings dialog shell and primary settings navigation.",
-          lightToken: "semantic-settings-page-surface-light",
-          darkToken: "semantic-settings-page-surface-dark",
+          id: "semantic-popup-panel-surface",
+          label: "Panel Surface",
+          description: "Background fill for popup panels such as settings, floating sheets, and panel-style popovers.",
+          lightToken: "semantic-popup-panel-surface-light",
+          darkToken: "semantic-popup-panel-surface-dark",
         },
       ],
     })
@@ -306,7 +306,7 @@ describe("appearance token catalog", () => {
 
     const document = normalizeAppearanceConfigDocument({
       overrides: {
-        "semantic-settings-page-surface": " #111111 ",
+        "semantic-popup-panel-surface-light": " #111111 ",
         "semantic-settings-page-surface-dark": "#222222",
         "semantic-settings-switch-track-surface": " #444444 ",
         "semantic-settings-switch-thumb-surface-disabled-dark": "#555555",
@@ -318,15 +318,24 @@ describe("appearance token catalog", () => {
     })
 
     expect(document.overrides).toEqual({
-      "semantic-settings-page-surface-light": "#111111",
-      "semantic-settings-page-surface-dark": "#222222",
+      "semantic-popup-panel-surface-light": "#111111",
+      "semantic-popup-panel-surface-dark": "#222222",
       "semantic-settings-switch-track-surface-light": "#444444",
       "semantic-settings-switch-track-surface-dark": "#444444",
       "semantic-settings-switch-thumb-surface-disabled-dark": "#555555",
     })
     expect(document.resolvedTokens).toEqual({
-      "semantic-settings-page-surface-light": "#333333",
+      "semantic-popup-panel-surface-light": "#333333",
       "semantic-settings-switch-track-surface-light": "#666666",
+    })
+
+    expect(normalizeAppearanceConfigDocument({
+      overrides: {
+        "semantic-settings-page-surface": "#777777",
+      },
+    }).overrides).toEqual({
+      "semantic-popup-panel-surface-light": "#777777",
+      "semantic-popup-panel-surface-dark": "#777777",
     })
   })
 
@@ -361,6 +370,11 @@ describe("appearance token catalog", () => {
       "semantic-button-danger-disabled-surface",
       "semantic-button-danger-disabled-border",
       "semantic-button-danger-disabled-text",
+      "semantic-icon-button-text",
+      "semantic-icon-button-text-hover",
+      "semantic-icon-button-text-active",
+      "semantic-icon-button-surface-hover",
+      "semantic-icon-button-surface-active",
     ])
 
     const document = normalizeAppearanceConfigDocument({
@@ -369,10 +383,13 @@ describe("appearance token catalog", () => {
         "semantic-button-primary-surface-dark": "#123456",
         "semantic-button-secondary-text": "#abcdef",
         "semantic-button-danger-disabled-border-light": " #654321 ",
+        "semantic-icon-button-text": "#334455",
+        "semantic-icon-button-surface-hover-dark": " #223344 ",
         "not-a-token": "#000000",
       },
       resolvedTokens: {
         "semantic-button-danger-text-hover-dark": " #222222 ",
+        "semantic-icon-button-text-hover-light": " #445566 ",
       },
     })
 
@@ -382,9 +399,13 @@ describe("appearance token catalog", () => {
       "semantic-button-secondary-text-light": "#abcdef",
       "semantic-button-secondary-text-dark": "#abcdef",
       "semantic-button-danger-disabled-border-light": "#654321",
+      "semantic-icon-button-text-light": "#334455",
+      "semantic-icon-button-text-dark": "#334455",
+      "semantic-icon-button-surface-hover-dark": "#223344",
     })
     expect(document.resolvedTokens).toEqual({
       "semantic-button-danger-text-hover-dark": "#222222",
+      "semantic-icon-button-text-hover-light": "#445566",
     })
   })
 })

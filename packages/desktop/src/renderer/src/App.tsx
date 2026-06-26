@@ -717,6 +717,7 @@ function AppearanceWindowApp() {
     handleAppearanceThemeApply,
     handleAppearanceThemeDelete,
     handleAppearanceThemeDuplicate,
+    handleAppearanceThemeRename,
     handleAppearanceThemeSaveCurrent,
     handleAppearanceTokenChange,
     handleAppearanceTokenReset,
@@ -768,6 +769,7 @@ function AppearanceWindowApp() {
               onAppearanceThemeApply={handleAppearanceThemeApply}
               onAppearanceThemeDelete={handleAppearanceThemeDelete}
               onAppearanceThemeDuplicate={handleAppearanceThemeDuplicate}
+              onAppearanceThemeRename={handleAppearanceThemeRename}
               onAppearanceThemeSaveCurrent={handleAppearanceThemeSaveCurrent}
               onAppearanceTokenChange={handleAppearanceTokenChange}
               onAppearanceTokenReset={handleAppearanceTokenReset}
@@ -1137,6 +1139,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     handleAppearanceThemeApply,
     handleAppearanceThemeDelete,
     handleAppearanceThemeDuplicate,
+    handleAppearanceThemeRename,
     handleAppearanceThemeSaveCurrent,
     handleAppearanceTokenChange,
     handleAppearanceTokenReset,
@@ -3081,6 +3084,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onAppearanceThemeApply={handleAppearanceThemeApply}
               onAppearanceThemeDelete={handleAppearanceThemeDelete}
               onAppearanceThemeDuplicate={handleAppearanceThemeDuplicate}
+              onAppearanceThemeRename={handleAppearanceThemeRename}
               onAppearanceThemeSaveCurrent={handleAppearanceThemeSaveCurrent}
               onAppearanceTokenChange={handleAppearanceTokenChange}
               onAppearanceTokenReset={handleAppearanceTokenReset}

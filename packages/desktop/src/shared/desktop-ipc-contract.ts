@@ -92,6 +92,7 @@ import type {
   AppearanceThemeDuplicateInput,
   AppearanceThemeLibrarySnapshot,
   AppearanceThemeMutationResult,
+  AppearanceThemeRenameInput,
   AppearanceThemeSaveInput,
 } from "./appearance-themes"
 import type { LocaleConfigDocument, LocaleConfigSnapshot } from "./locale"
@@ -214,6 +215,7 @@ export type {
   AppearanceThemeLibrarySnapshot,
   AppearanceThemeMutationResult,
   AppearanceThemePreset,
+  AppearanceThemeRenameInput,
   AppearanceThemeSaveInput,
   AppearanceThemeSource,
 } from "./appearance-themes"
@@ -1053,6 +1055,10 @@ export interface DesktopIpcContract {
   }
   "desktop:duplicate-appearance-theme": {
     input: AppearanceThemeDuplicateInput
+    output: AppearanceThemeMutationResult
+  }
+  "desktop:rename-appearance-theme": {
+    input: AppearanceThemeRenameInput
     output: AppearanceThemeMutationResult
   }
   "desktop:get-locale-config": {
@@ -1948,6 +1954,7 @@ export interface DesktopApiMethods {
   deleteAppearanceTheme(input: DesktopIpcInput<"desktop:delete-appearance-theme">): Promise<DesktopIpcOutput<"desktop:delete-appearance-theme">>
   setActiveAppearanceTheme(input: DesktopIpcInput<"desktop:set-active-appearance-theme">): Promise<DesktopIpcOutput<"desktop:set-active-appearance-theme">>
   duplicateAppearanceTheme(input: DesktopIpcInput<"desktop:duplicate-appearance-theme">): Promise<DesktopIpcOutput<"desktop:duplicate-appearance-theme">>
+  renameAppearanceTheme(input: DesktopIpcInput<"desktop:rename-appearance-theme">): Promise<DesktopIpcOutput<"desktop:rename-appearance-theme">>
   getLocaleConfig(): Promise<DesktopIpcOutput<"desktop:get-locale-config">>
   saveLocaleConfig(input: DesktopIpcInput<"desktop:save-locale-config">): Promise<DesktopIpcOutput<"desktop:save-locale-config">>
   showMenu(menuKey: MenuKey, anchor?: MenuAnchor): Promise<DesktopIpcOutput<"desktop:show-menu">>

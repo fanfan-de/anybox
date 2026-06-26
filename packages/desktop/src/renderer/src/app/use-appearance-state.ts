@@ -510,6 +510,24 @@ export function useAppearanceState() {
     }
   }
 
+  async function handleAppearanceThemeRename(themeID: string, name: string): Promise<AppearanceTheme | null> {
+    const renameAppearanceTheme = window.desktop?.renameAppearanceTheme
+    if (!renameAppearanceTheme) {
+      setAppearanceThemeError("Desktop appearance theme APIs are unavailable.")
+      return null
+    }
+
+    try {
+      const result = await renameAppearanceTheme({ themeID, name })
+      setAppearanceThemeSnapshot(result.snapshot)
+      setAppearanceThemeError(null)
+      return result.theme
+    } catch (error) {
+      setAppearanceThemeError(error instanceof Error ? error.message : String(error))
+      return null
+    }
+  }
+
   async function handleAppearanceThemeDelete(themeID: string) {
     const deleteAppearanceTheme = window.desktop?.deleteAppearanceTheme
     if (!deleteAppearanceTheme) {
@@ -552,6 +570,7 @@ export function useAppearanceState() {
     handleAppearanceThemeApply,
     handleAppearanceThemeDelete,
     handleAppearanceThemeDuplicate,
+    handleAppearanceThemeRename,
     handleAppearanceThemeSaveCurrent,
     handleAppearanceTokenChange,
     handleAppearanceTokenReset,

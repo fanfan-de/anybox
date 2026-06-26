@@ -64,7 +64,7 @@
   max-height: min(calc(100dvh - 64px), 860px);
   border-color: var(--seg-border);
   border-radius: var(--seg-radius-md);
-  background: var(--semantic-settings-page-surface);
+  background: var(--semantic-popup-panel-surface);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
@@ -148,38 +148,43 @@ body.is-dragging-settings-page {
 
 .settings-page-close-button {
   width: 32px;
+  min-width: 32px;
   height: 32px;
+  min-height: 32px;
   padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--seg-radius-xs);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
-  color: #66798b;
+  color: var(--semantic-icon-button-text);
+  box-shadow: none;
   cursor: pointer;
-  transition:
-    color 160ms ease,
-    transform 160ms ease;
+  transition: color 160ms ease;
 }
 
 .settings-page-close-button svg {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.3;
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .settings-page-close-button:hover {
-  color: #1c364b;
-  transform: translateY(-1px);
+  border-color: transparent;
+  background: transparent;
+  color: var(--semantic-icon-button-text-hover);
 }
 
 .settings-page-close-button:focus-visible {
-  outline: var(--focus-outline-width) solid var(--focus-outline-color);
-  outline-offset: var(--focus-outline-offset);
-  color: var(--color-accent-strong);
+  outline: none;
+  border-color: transparent;
+  background: transparent;
+  color: var(--semantic-icon-button-text-hover);
 }
 
 .settings-page-header h2,
@@ -4889,7 +4894,8 @@ body.is-dragging-settings-page {
     flex-direction: column;
   }
 
-  .settings-theme-library-save .primary-button {
+  .settings-theme-library-save .primary-button,
+  .settings-theme-library-save .secondary-button {
     width: 100%;
   }
 }
@@ -5579,8 +5585,7 @@ body.is-dragging-settings-page {
 .composer-selector-button,
 .terminal-panel-toggle-button,
 .terminal-tab-close,
-.terminal-panel-create,
-.settings-page-close-button {
+.terminal-panel-create {
   border-radius: var(--ui-radius-xs);
 }
 
@@ -5619,8 +5624,7 @@ body.is-dragging-settings-page {
 }
 
 .settings-service-item:hover,
-.settings-toggle-card:hover,
-.settings-page-close-button:hover {
+.settings-toggle-card:hover {
   transform: translateY(-1px);
 }
 
@@ -5672,8 +5676,7 @@ body.is-dragging-settings-page {
 .row-action,
 .terminal-tab-close,
 .terminal-panel-create,
-.terminal-panel-toggle-button,
-.settings-page-close-button {
+.terminal-panel-toggle-button {
   border: 1px solid transparent;
   border-radius: var(--seg-radius-xs);
   background: transparent;
@@ -5803,7 +5806,6 @@ body.is-dragging-settings-page {
 .canvas-region-top-menu-add-button,
 .terminal-panel-toggle-button,
 .terminal-panel-create,
-.settings-page-close-button,
 .composer-selector-button.is-icon-only,
 .composer-actions .primary-button.is-icon-only {
   width: var(--icon-button-size);
@@ -5830,7 +5832,6 @@ body.is-dragging-settings-page {
 .activity-rail-bottom .terminal-panel-toggle-button,
 .terminal-tab-close,
 .terminal-panel-create,
-.settings-page-close-button,
 .session-canvas-top-menu .canvas-top-menu-editor-launch-button,
 .session-canvas-top-menu .canvas-top-menu-editor-menu-button {
   border-color: transparent;
@@ -5869,8 +5870,6 @@ body.is-dragging-settings-page {
 .terminal-tab-close:focus-visible,
 .terminal-panel-create:hover,
 .terminal-panel-create:focus-visible,
-.settings-page-close-button:hover,
-.settings-page-close-button:focus-visible,
 .session-canvas-top-menu .canvas-top-menu-editor-launch-button:hover,
 .session-canvas-top-menu .canvas-top-menu-editor-launch-button:focus-visible,
 .session-canvas-top-menu .canvas-top-menu-editor-menu-button:hover,
@@ -6004,13 +6003,13 @@ body.is-dragging-settings-page {
 
 .settings-page {
   border: 1px solid var(--seg-border);
-  background: var(--semantic-settings-page-surface);
+  background: var(--semantic-popup-panel-surface);
   box-shadow: var(--shadow-md);
 }
 
 .settings-page-nav,
 .settings-page-primary-nav {
-  background: var(--semantic-settings-page-surface);
+  background: var(--semantic-popup-panel-surface);
   color: var(--seg-text-1);
 }
 
@@ -6047,11 +6046,6 @@ body.is-dragging-settings-page {
   border-color: transparent;
   background: var(--semantic-sidebar-tree-row-surface-active);
   color: var(--semantic-sidebar-tree-row-text-active);
-}
-
-.settings-page-close-button:hover,
-.settings-page-close-button:focus-visible {
-  color: var(--semantic-accent-icon-hover);
 }
 
 .settings-banner,

@@ -18,6 +18,7 @@ import {
   deleteAppearanceTheme,
   duplicateAppearanceTheme,
   readAppearanceThemesSnapshot,
+  renameAppearanceTheme,
   saveAppearanceTheme,
   setActiveAppearanceTheme,
 } from "./appearance-themes-config"
@@ -45,6 +46,7 @@ describe("appearance theme library persistence", () => {
       },
       builtInThemes: [
         { id: DEFAULT_APPEARANCE_THEME_ID, readonly: true },
+        { id: "built-in:transparent-frosted", readonly: true },
         { id: "built-in:sage-slate", readonly: true },
         { id: "built-in:night-workbench", readonly: true },
         { id: "built-in:soft-light", readonly: true },
@@ -150,6 +152,84 @@ describe("appearance theme library persistence", () => {
 
   it("does not delete built-in themes", async () => {
     await expect(deleteAppearanceTheme(DEFAULT_APPEARANCE_THEME_ID)).rejects.toThrow("Built-in themes cannot be deleted.")
+  })
+
+  it("renames user themes without changing the active theme", async () => {
+    await saveAppearanceTheme({
+      id: "user:active",
+      name: "Active",
+      colorMode: "light",
+      brandTheme: "terra",
+      fontFamily: "default",
+      codeThemePreference: "auto",
+      htmlBackgroundConfig: {
+        blurPx: 0,
+        dim: 0.18,
+        enabled: false,
+        html: "",
+        opacity: 0.78,
+        paused: false,
+        renderMode: "static",
+        surfaceOpacity: 0.68,
+      },
+      overrides: {},
+    })
+    await saveAppearanceTheme({
+      id: "user:target",
+      name: "Target",
+      colorMode: "dark",
+      brandTheme: "sage",
+      fontFamily: "default",
+      codeThemePreference: "auto",
+      htmlBackgroundConfig: {
+        blurPx: 0,
+        dim: 0.18,
+        enabled: false,
+        html: "",
+        opacity: 0.78,
+        paused: false,
+        renderMode: "static",
+        surfaceOpacity: 0.68,
+      },
+      overrides: {
+        "surface-panel-dark": "#111111",
+      },
+    })
+    await setActiveAppearanceTheme("user:active")
+
+    const result = await renameAppearanceTheme({
+      themeID: "user:target",
+      name: "  Renamed   Target  ",
+    })
+
+    expect(result.theme).toMatchObject({
+      id: "user:target",
+      name: "Renamed Target",
+      colorMode: "dark",
+      brandTheme: "sage",
+      overrides: {
+        "surface-panel-dark": "#111111",
+      },
+    })
+    expect(result.snapshot.activeThemeID).toBe("user:active")
+    await expect(readAppearanceThemesSnapshot()).resolves.toMatchObject({
+      activeThemeID: "user:active",
+      document: {
+        userThemes: expect.arrayContaining([
+          expect.objectContaining({
+            id: "user:target",
+            name: "Renamed Target",
+          }),
+        ]),
+      },
+    })
+  })
+
+  it("does not rename built-in themes", async () => {
+    await expect(renameAppearanceTheme({
+      themeID: DEFAULT_APPEARANCE_THEME_ID,
+      name: "Renamed",
+    })).rejects.toThrow("Built-in themes cannot be renamed.")
   })
 
   it("sets active theme ids for built-in and user themes", async () => {

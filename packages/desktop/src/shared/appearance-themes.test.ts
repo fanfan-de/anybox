@@ -11,7 +11,8 @@ import {
 describe("appearance theme library", () => {
   it("keeps built-in theme ids stable and readonly", () => {
     expect(BUILT_IN_APPEARANCE_THEME_PRESETS.map((theme) => theme.id)).toEqual([
-      "built-in:anybox-terra",
+      "built-in:classic",
+      "built-in:transparent-frosted",
       "built-in:sage-slate",
       "built-in:night-workbench",
       "built-in:soft-light",
@@ -51,7 +52,7 @@ describe("appearance theme library", () => {
           },
         },
         {
-          id: "built-in:anybox-terra",
+          id: "built-in:classic",
           name: "Invalid",
         },
       ],
@@ -119,7 +120,7 @@ describe("appearance theme library", () => {
     })
 
     expect(snapshot.activeThemeID).toBe("user:one")
-    expect(snapshot.builtInThemes).toHaveLength(4)
+    expect(snapshot.builtInThemes).toHaveLength(5)
     expect(snapshot.themes.map((theme) => theme.id)).toContain("user:one")
   })
 

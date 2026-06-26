@@ -828,16 +828,16 @@ describe("App", () => {
       getAppearanceThemes: vi.fn().mockResolvedValue({
         path: "C:\\Users\\tester\\AppData\\Roaming\\anybox-desktop-agent\\appearance-themes.json",
         exists: false,
-        activeThemeID: "built-in:anybox-terra",
+        activeThemeID: "built-in:classic",
         document: {
           version: 1,
-          activeThemeID: "built-in:anybox-terra",
+          activeThemeID: "built-in:classic",
           userThemes: [],
         },
         builtInThemes: [
           {
-            id: "built-in:anybox-terra",
-            name: "Anybox Terra",
+            id: "built-in:classic",
+            name: "经典",
             source: "built-in",
             readonly: true,
             createdAt: 0,
@@ -884,8 +884,8 @@ describe("App", () => {
         ],
         themes: [
           {
-            id: "built-in:anybox-terra",
-            name: "Anybox Terra",
+            id: "built-in:classic",
+            name: "经典",
             source: "built-in",
             readonly: true,
             createdAt: 0,
@@ -959,10 +959,10 @@ describe("App", () => {
       deleteAppearanceTheme: vi.fn().mockResolvedValue({
         path: "C:\\Users\\tester\\AppData\\Roaming\\anybox-desktop-agent\\appearance-themes.json",
         exists: true,
-        activeThemeID: "built-in:anybox-terra",
+        activeThemeID: "built-in:classic",
         document: {
           version: 1,
-          activeThemeID: "built-in:anybox-terra",
+          activeThemeID: "built-in:classic",
           userThemes: [],
         },
         builtInThemes: [],
@@ -1009,10 +1009,50 @@ describe("App", () => {
           snapshot: {
             path: "C:\\Users\\tester\\AppData\\Roaming\\anybox-desktop-agent\\appearance-themes.json",
             exists: true,
-            activeThemeID: "built-in:anybox-terra",
+            activeThemeID: "built-in:classic",
             document: {
               version: 1,
-              activeThemeID: "built-in:anybox-terra",
+              activeThemeID: "built-in:classic",
+              userThemes: [theme],
+            },
+            builtInThemes: [],
+            themes: [theme],
+          },
+        }
+      }),
+      renameAppearanceTheme: vi.fn().mockImplementation(async ({ themeID, name }: { themeID: string; name: string }) => {
+        const theme = {
+          id: themeID,
+          name,
+          source: "user",
+          readonly: false,
+          createdAt: 1,
+          updatedAt: 2,
+          colorMode: "light",
+          brandTheme: "terra",
+          fontFamily: "default",
+          codeThemePreference: "auto",
+          htmlBackgroundConfig: {
+            blurPx: 0,
+            dim: 0.18,
+            enabled: false,
+            html: "",
+            opacity: 0.78,
+            paused: false,
+            renderMode: "static",
+            surfaceOpacity: 0.68,
+          },
+          overrides: {},
+        }
+        return {
+          theme,
+          snapshot: {
+            path: "C:\\Users\\tester\\AppData\\Roaming\\anybox-desktop-agent\\appearance-themes.json",
+            exists: true,
+            activeThemeID: "built-in:classic",
+            document: {
+              version: 1,
+              activeThemeID: "built-in:classic",
               userThemes: [theme],
             },
             builtInThemes: [],
@@ -10361,7 +10401,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Appearance/ }))
 
     const themeLibrary = getAppearanceThemeLibrary()
-    expect(within(themeLibrary).getByRole("option", { name: /Anybox Terra/ })).toBeInTheDocument()
+    expect(within(themeLibrary).getByRole("option", { name: /经典/ })).toBeInTheDocument()
     expect(within(themeLibrary).getByRole("option", { name: /Sage Slate/ })).toBeInTheDocument()
     expect(within(themeLibrary).getByText("Color Mode")).toBeInTheDocument()
     expect(within(themeLibrary).getByText("Accent Theme")).toBeInTheDocument()
@@ -10381,8 +10421,8 @@ describe("App", () => {
     expect(screen.getByLabelText("Accent States Icon Active Dark semantic-accent-icon-active-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Shell Chrome Surface Light semantic-shell-chrome-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Shell Chrome Surface Dark semantic-shell-chrome-surface-dark")).toBeInTheDocument()
-    expect(screen.getByLabelText("Settings Page Page Surface Light semantic-settings-page-surface-light")).toBeInTheDocument()
-    expect(screen.getByLabelText("Settings Page Page Surface Dark semantic-settings-page-surface-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Popup Panel Panel Surface Light semantic-popup-panel-surface-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Popup Panel Panel Surface Dark semantic-popup-panel-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Settings Switches Switch Track Light semantic-settings-switch-track-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Settings Switches Switch Track Dark semantic-settings-switch-track-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Settings Switches Switch Thumb Light semantic-settings-switch-thumb-surface-light")).toBeInTheDocument()
@@ -10409,6 +10449,8 @@ describe("App", () => {
     expect(screen.getByLabelText("Composer Input Border Dark semantic-composer-border-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Composer Button Surface Light semantic-composer-button-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Composer Button Surface Dark semantic-composer-button-surface-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Buttons Icon Button Text Light semantic-icon-button-text-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Buttons Icon Button Text Hover Dark semantic-icon-button-text-hover-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Composer Icon Button Text Light semantic-composer-icon-button-text-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Composer Icon Button Hover Surface Dark semantic-composer-icon-button-surface-hover-dark")).toBeInTheDocument()
     expect(screen.queryByLabelText("Composer Icon Button Disabled Text Light semantic-composer-icon-button-disabled-text-light")).not.toBeInTheDocument()
@@ -14112,10 +14154,11 @@ describe("App", () => {
     expect(styles).toMatch(/--semantic-shell-chrome-surface-dark:\s*#221d1a;/i)
     expect(styles).toMatch(/--semantic-shell-chrome-surface:\s*var\(--semantic-shell-chrome-surface-light\);/s)
     expect(styles).toMatch(/--semantic-shell-chrome-surface:\s*var\(--semantic-shell-chrome-surface-dark\);/s)
-    expect(styles).toMatch(/--semantic-settings-page-surface-light:\s*var\(--surface-shell-light\);/s)
-    expect(styles).toMatch(/--semantic-settings-page-surface-dark:\s*var\(--surface-shell-dark\);/s)
-    expect(styles).toMatch(/--semantic-settings-page-surface:\s*var\(--semantic-settings-page-surface-light\);/s)
-    expect(styles).toMatch(/--semantic-settings-page-surface:\s*var\(--semantic-settings-page-surface-dark\);/s)
+    expect(styles).toMatch(/--semantic-popup-panel-surface-light:\s*var\(--surface-shell-light\);/s)
+    expect(styles).toMatch(/--semantic-popup-panel-surface-dark:\s*var\(--surface-shell-dark\);/s)
+    expect(styles).toMatch(/--semantic-popup-panel-surface:\s*var\(--semantic-popup-panel-surface-light\);/s)
+    expect(styles).toMatch(/--semantic-popup-panel-surface:\s*var\(--semantic-popup-panel-surface-dark\);/s)
+    expect(styles).toMatch(/--semantic-settings-page-surface:\s*var\(--semantic-popup-panel-surface\);/s)
     expect(styles).toMatch(/--semantic-settings-switch-track-surface-light:\s*var\(--mix-seg-border-72-seg-panel-28-light\);/s)
     expect(styles).toMatch(/--semantic-settings-switch-track-surface-active-dark:\s*var\(--brand-primary-dark\);/s)
     expect(styles).toMatch(/--semantic-settings-switch-thumb-surface-disabled-dark:\s*var\(--surface-panel-dark\);/s)
@@ -14133,7 +14176,8 @@ describe("App", () => {
     expect(styles).toMatch(/\.canvas-region-top-menu\s+\.sidebar-toggle-button\.is-top-menu,[\s\S]*?\.canvas-region-top-menu-add-button,[\s\S]*?\{[^}]*color:\s*var\(--semantic-accent-icon\);/s)
     expect(styles).toMatch(/\.canvas-region-top-menu\s+\.sidebar-toggle-button\.is-top-menu:hover,[\s\S]*?\.canvas-region-top-menu-add-button:focus-visible,[\s\S]*?\{[^}]*background:\s*transparent;[^}]*border-color:\s*transparent;[^}]*color:\s*var\(--semantic-accent-icon-hover\);[^}]*transform:\s*none;/s)
     expect(styles).toMatch(/\.terminal-panel-toggle-button\.is-active,[\s\S]*?\{[^}]*background:\s*transparent;[^}]*color:\s*var\(--semantic-accent-icon-active\);[^}]*transform:\s*none;/s)
-    expect(styles).toMatch(/\.settings-page-close-button:hover,\s*\.settings-page-close-button:focus-visible\s*\{[^}]*color:\s*var\(--semantic-accent-icon-hover\);/s)
+    expect(styles).toMatch(/\.settings-page-close-button:hover\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;[^}]*color:\s*var\(--semantic-icon-button-text-hover\);/s)
+    expect(styles).toMatch(/\.settings-page-close-button:focus-visible\s*\{[^}]*outline:\s*none;[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;[^}]*color:\s*var\(--semantic-icon-button-text-hover\);/s)
     expect(styles).toMatch(/\.session-canvas-top-menu\s+\.canvas-top-menu-editor-launch-button,\s*\.session-canvas-top-menu\s+\.canvas-top-menu-editor-menu-button\s*\{[^}]*color:\s*var\(--semantic-accent-icon\);/s)
     expect(styles).toMatch(/\.session-canvas-top-menu\s+\.canvas-top-menu-editor-menu-button\.is-active,[\s\S]*?\.session-canvas-top-menu\s+\.canvas-top-menu-editor-menu-button\.is-active:focus-visible\s*\{[^}]*color:\s*var\(--semantic-accent-icon-active\);[^}]*transform:\s*none;/s)
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.dv-tabs-and-actions-container\s*\{[^}]*--dockview-tab-bar-bg:\s*var\(--seg-shell-chrome-surface\);[^}]*background:\s*var\(--dockview-tab-bar-bg\);/s)
@@ -14266,7 +14310,7 @@ describe("App", () => {
       /@import "\.\/top-chrome\.css";\s*@import "\.\/windows-transparent\.css";\s*@import "\.\/debug\.css";/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\],[\s\S]*?\.session-popout-shell\.is-windows\s*\{[^}]*--surface-profile-shell:\s*var\(--surface-shell\);[^}]*--surface-profile-content:\s*var\(--surface-panel\);[^}]*--surface-profile-composer:\s*var\(--semantic-composer-surface\);[^}]*--surface-profile-settings-page:\s*var\(--semantic-settings-page-surface\);[^}]*--surface-profile-settings-page-nav:\s*var\(--semantic-settings-page-surface\);[^}]*background:\s*transparent;/s,
+      /\.window-shell\.is-windows\[data-background-mode="default"\],[\s\S]*?\.session-popout-shell\.is-windows\s*\{[^}]*--surface-profile-shell:\s*var\(--surface-shell\);[^}]*--surface-profile-content:\s*var\(--surface-panel\);[^}]*--surface-profile-composer:\s*var\(--semantic-composer-surface\);[^}]*--surface-profile-popup-panel:\s*var\(--semantic-popup-panel-surface\);[^}]*--surface-profile-popup-panel-nav:\s*var\(--semantic-popup-panel-surface\);[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
       /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.app-shell,\s*\.session-popout-shell\.is-windows\s+\.session-popout-app\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
@@ -14305,10 +14349,10 @@ describe("App", () => {
       /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.thread-shell,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.workbench-pane-live-region\s*\{[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.settings-page\s*\{[^}]*background:\s*var\(--surface-profile-settings-page\);/s,
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.settings-page\s*\{[^}]*background:\s*var\(--surface-profile-popup-panel\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.settings-page-nav,\s*\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.settings-page-primary-nav\s*\{[^}]*background:\s*var\(--surface-profile-settings-page-nav\);/s,
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.settings-page-nav,\s*\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.settings-page-primary-nav\s*\{[^}]*background:\s*var\(--surface-profile-popup-panel-nav\);/s,
     )
   })
 
@@ -14465,6 +14509,9 @@ describe("App", () => {
 
   it("keeps calendar scrollbars aligned with the shared UI kit", () => {
     expect(styles).toMatch(
+      /\.calendar-quick-add-dialog\s*\{[^}]*background:\s*var\(--semantic-popup-panel-surface\);/s,
+    )
+    expect(styles).toMatch(
       /\.calendar-page\s*\{[^}]*--calendar-scrollbar-size:\s*10px;[^}]*--calendar-scrollbar-thumb:\s*var\(--mix-seg-text-3-34-transparent-66\);[^}]*--calendar-scrollbar-thumb-hover:\s*var\(--mix-seg-text-3-54-transparent-46\);[^}]*--calendar-scrollbar-thumb-active:\s*var\(--seg-text-3\);[^}]*--calendar-scrollbar-track:\s*transparent;/s,
     )
     expect(styles).toMatch(
@@ -14549,6 +14596,8 @@ describe("App", () => {
   })
 
   it("keeps built-in tools as an open section instead of a framed panel", () => {
+    expect(styles).toMatch(/\.builtin-tools-page\s*\{[^}]*--tools-obs-bg:\s*var\(--surface-panel\);/s)
+    expect(styles).not.toMatch(/:root\[data-theme="dark"\]\s+\.builtin-tools-page\s*\{[^}]*--tools-obs-bg:/s)
     expect(styles).toMatch(/\.builtin-tools-page\s+\.tools-panel\s*\{[^}]*padding:\s*0;[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*background:\s*transparent;/s)
     expect(styles).toMatch(/\.builtin-tools-page\s+\.tools-detail-header\s*\{[^}]*padding-top:\s*18px;[^}]*border-top:\s*1px solid var\(--tools-obs-border\);[^}]*border-bottom:\s*1px solid var\(--tools-obs-border\);/s)
     expect(styles).toMatch(/@media\s*\(max-width:\s*900px\)\s*\{[\s\S]*?\.builtin-tools-page\s+\.tools-panel\s*\{[^}]*padding:\s*0;/s)
@@ -14573,13 +14622,14 @@ describe("App", () => {
   })
 
   it("keeps the settings primary nav grouped and pill-led", () => {
-    expect(styles).toMatch(/\.settings-page-close-button\s*\{[^}]*width:\s*32px;[^}]*background:\s*transparent;/s)
+    expect(styles).toMatch(/\.settings-page-close-button\s*\{[^}]*width:\s*32px;[^}]*min-width:\s*32px;[^}]*border:\s*1px solid transparent;[^}]*background:\s*transparent;[^}]*color:\s*var\(--semantic-icon-button-text\);/s)
+    expect(styles).toMatch(/\.settings-page-close-button svg\s*\{[^}]*width:\s*16px;[^}]*height:\s*16px;/s)
     expect(styles).toMatch(
       /\.settings-page-nav,\s*\.settings-page-primary-nav\s*\{[^}]*overflow:\s*auto;[^}]*scrollbar-gutter:\s*stable;[^}]*gap:\s*20px;/s,
     )
-    expect(styles).toMatch(/\.settings-page\s*\{[^}]*background:\s*var\(--semantic-settings-page-surface\);/s)
+    expect(styles).toMatch(/\.settings-page\s*\{[^}]*background:\s*var\(--semantic-popup-panel-surface\);/s)
     expect(styles).toMatch(
-      /\.settings-page-nav,\s*\.settings-page-primary-nav\s*\{[^}]*background:\s*var\(--semantic-settings-page-surface\);[^}]*color:\s*var\(--seg-text-1\);/s,
+      /\.settings-page-nav,\s*\.settings-page-primary-nav\s*\{[^}]*background:\s*var\(--semantic-popup-panel-surface\);[^}]*color:\s*var\(--seg-text-1\);/s,
     )
     expect(styles).toMatch(/\.settings-primary-nav-group-label,[\s\S]*?\.settings-helper-text,[\s\S]*?\.settings-page-copy,[\s\S]*?\.settings-section-header p,[\s\S]*?\.provider-row-copy,[\s\S]*?\.provider-model-empty,[\s\S]*?\.settings-toggle-copy small\s*\{[^}]*color:\s*var\(--seg-text-3\);/s)
     expect(styles).toMatch(

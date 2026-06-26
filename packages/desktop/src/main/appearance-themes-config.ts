@@ -16,6 +16,7 @@ import {
   type AppearanceThemeDuplicateInput,
   type AppearanceThemeLibrarySnapshot,
   type AppearanceThemeMutationResult,
+  type AppearanceThemeRenameInput,
   type AppearanceThemeSaveInput,
 } from "../shared/appearance-themes"
 
@@ -119,6 +120,41 @@ export async function duplicateAppearanceTheme(
   const nextSnapshot = await writeAppearanceThemesSnapshot({
     ...snapshot.document,
     userThemes: [...snapshot.document.userThemes, theme],
+  })
+
+  return {
+    snapshot: nextSnapshot,
+    theme: findAppearanceThemeByID(nextSnapshot.themes, theme.id),
+  }
+}
+
+export async function renameAppearanceTheme(
+  input: AppearanceThemeRenameInput,
+): Promise<AppearanceThemeMutationResult> {
+  const themeID = normalizeAppearanceThemeID(input.themeID)
+  if (!themeID) {
+    throw new Error("Theme not found.")
+  }
+  if (isBuiltInAppearanceThemeID(themeID)) {
+    throw new Error("Built-in themes cannot be renamed.")
+  }
+
+  const snapshot = await readAppearanceThemesSnapshot()
+  const existingTheme = snapshot.document.userThemes.find((theme) => theme.id === themeID)
+  if (!existingTheme) {
+    throw new Error("Theme not found.")
+  }
+
+  const theme = normalizeAppearanceThemeSaveInput({
+    ...existingTheme,
+    name: input.name,
+  }, {
+    fallbackID: existingTheme.id,
+    existingTheme,
+  })
+  const nextSnapshot = await writeAppearanceThemesSnapshot({
+    ...snapshot.document,
+    userThemes: snapshot.document.userThemes.map((item) => item.id === existingTheme.id ? theme : item),
   })
 
   return {

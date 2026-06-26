@@ -204,6 +204,8 @@ try {
       invokeDesktop("desktop:set-active-appearance-theme", input) as Promise<DesktopIpcOutput<"desktop:set-active-appearance-theme">>,
     duplicateAppearanceTheme: (input: DesktopIpcInput<"desktop:duplicate-appearance-theme">) =>
       invokeDesktop("desktop:duplicate-appearance-theme", input) as Promise<DesktopIpcOutput<"desktop:duplicate-appearance-theme">>,
+    renameAppearanceTheme: (input: DesktopIpcInput<"desktop:rename-appearance-theme">) =>
+      invokeDesktop("desktop:rename-appearance-theme", input) as Promise<DesktopIpcOutput<"desktop:rename-appearance-theme">>,
     getLocaleConfig: () =>
       invokeDesktop("desktop:get-locale-config") as Promise<LocaleConfigSnapshot>,
     saveLocaleConfig: (input: { document: LocaleConfigDocument }) =>

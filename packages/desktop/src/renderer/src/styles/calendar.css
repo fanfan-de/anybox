@@ -57,14 +57,29 @@
 
 .calendar-top-menu {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  border-bottom: 1px solid var(--calendar-border);
+  height: var(--top-chrome-height, var(--section-toolbar-height, 40px));
+  min-height: var(--top-chrome-height, var(--section-toolbar-height, 40px));
+  border-bottom: 0;
   background: var(--calendar-top-surface);
+  isolation: isolate;
+}
+
+.calendar-top-menu::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  height: 1px;
+  background: var(--top-chrome-border, var(--calendar-border));
+  pointer-events: none;
 }
 
 .calendar-top-menu-content,
 .calendar-top-menu-window-controls {
   min-width: 0;
-  min-height: 40px;
+  min-height: var(--top-chrome-height, var(--section-toolbar-height, 40px));
   align-items: center;
 }
 
@@ -454,7 +469,7 @@
   border: 1px solid var(--calendar-border);
   border-radius: var(--calendar-panel-radius);
   color: var(--calendar-text);
-  background: var(--calendar-panel);
+  background: var(--semantic-popup-panel-surface);
   box-shadow: var(--shadow-lg);
   overflow: auto;
 }

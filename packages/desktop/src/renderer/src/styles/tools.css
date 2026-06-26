@@ -681,7 +681,7 @@
 /* Obsidian-style built-in tools page */
 
 .builtin-tools-page {
-  --tools-obs-bg: #ffffff;
+  --tools-obs-bg: var(--surface-panel);
   --tools-obs-surface: #fafafa;
   --tools-obs-surface-hover: #f4f4f4;
   --tools-obs-border: #dedede;
@@ -1056,7 +1056,6 @@
 }
 
 :root[data-theme="dark"] .builtin-tools-page {
-  --tools-obs-bg: var(--seg-shell);
   --tools-obs-surface: var(--seg-panel);
   --tools-obs-surface-hover: var(--seg-panel-muted);
   --tools-obs-border: var(--seg-border);
