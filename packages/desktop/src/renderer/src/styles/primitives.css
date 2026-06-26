@@ -81,7 +81,7 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--seg-text-2);
+  color: var(--semantic-segmented-control-item-text);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -96,7 +96,7 @@
 }
 
 .top-menu-segment small {
-  color: var(--seg-text-3);
+  color: var(--semantic-segmented-control-item-meta-text);
   font-size: 12px;
   font-weight: 620;
   font-variant-numeric: tabular-nums;
@@ -104,8 +104,8 @@
 
 .top-menu-segment:hover,
 .top-menu-segment:focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--seg-text-1);
+  background: var(--semantic-segmented-control-item-surface-hover);
+  color: var(--semantic-segmented-control-item-text-hover);
   outline: none;
   box-shadow: none;
 }
@@ -113,25 +113,26 @@
 .top-menu-segment.is-active,
 .top-menu-segment[aria-selected="true"],
 .top-menu-segment[aria-pressed="true"] {
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--seg-text-1);
+  background: var(--semantic-segmented-control-item-surface-active);
+  color: var(--semantic-segmented-control-item-text-active);
 }
 
 .top-menu-segment.is-active small,
 .top-menu-segment[aria-selected="true"] small,
 .top-menu-segment[aria-pressed="true"] small {
-  color: var(--seg-text-2);
+  color: var(--semantic-segmented-control-item-meta-text-active);
 }
 
 .top-menu-segment:disabled {
   opacity: 0.45;
   cursor: default;
+  color: var(--semantic-segmented-control-item-text-disabled);
 }
 
 .top-menu-segment:disabled:hover,
 .top-menu-segment:disabled:focus-visible {
   background: transparent;
-  color: var(--seg-text-2);
+  color: var(--semantic-segmented-control-item-text-disabled);
 }
 
 .empty-state {
@@ -360,9 +361,22 @@
 }
 
 .secondary-button.is-danger {
-  border-color: rgba(166, 75, 60, 0.22);
-  background: #fff4f2;
-  color: var(--seg-danger);
+  border-color: var(--semantic-button-danger-border);
+  background: var(--semantic-button-danger-surface);
+  color: var(--semantic-button-danger-text);
+}
+
+.secondary-button.is-danger:not(:disabled):hover,
+.secondary-button.is-danger:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-danger-border-hover);
+  background: var(--semantic-button-danger-surface-hover);
+  color: var(--semantic-button-danger-text-hover);
+}
+
+.secondary-button.is-danger:disabled {
+  border-color: var(--semantic-button-danger-disabled-border);
+  background: var(--semantic-button-danger-disabled-surface);
+  color: var(--semantic-button-danger-disabled-text);
 }
 
 /* Sage / Teal & Slate theme overrides */
@@ -441,7 +455,20 @@
 }
 
 .secondary-button.is-danger {
-  border-color: var(--seg-danger-border);
-  background: var(--seg-danger-surface);
-  color: var(--seg-danger-text);
+  border-color: var(--semantic-button-danger-border);
+  background: var(--semantic-button-danger-surface);
+  color: var(--semantic-button-danger-text);
+}
+
+.secondary-button.is-danger:not(:disabled):hover,
+.secondary-button.is-danger:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-danger-border-hover);
+  background: var(--semantic-button-danger-surface-hover);
+  color: var(--semantic-button-danger-text-hover);
+}
+
+.secondary-button.is-danger:disabled {
+  border-color: var(--semantic-button-danger-disabled-border);
+  background: var(--semantic-button-danger-disabled-surface);
+  color: var(--semantic-button-danger-disabled-text);
 }

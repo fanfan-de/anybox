@@ -1187,6 +1187,9 @@ describe("SettingsPage built-in tools", () => {
 
     expect(screen.getByText("\u5e94\u7528\u80cc\u666f")).toBeInTheDocument()
     expect(screen.getByText("\u6700\u5e95\u5c42\u7684\u753b\u5e03\u80cc\u666f\u3002")).toBeInTheDocument()
+    expect(screen.getByText("\u8f93\u5165\u6846\u8fb9\u6846")).toBeInTheDocument()
+    expect(screen.getByText("\u9009\u533a\u80cc\u666f")).toBeInTheDocument()
+    expect(screen.getByText("Markdown \u6587\u672c\u88ab\u9f20\u6807\u9009\u4e2d\u65f6\u7684\u9ad8\u4eae\u80cc\u666f\u3002")).toBeInTheDocument()
     expect(screen.queryByText("The farthest canvas background.")).not.toBeInTheDocument()
 
     const searchBox = screen.getByRole("searchbox", { name: "\u641c\u7d22 semantic token" })

@@ -3,7 +3,6 @@
 
 
 .assistant-shell,
-.composer,
 .empty-state {
   border: 1px solid rgba(166, 186, 208, 0.42);
   box-shadow: 0 14px 34px rgba(46, 81, 118, 0.06);
@@ -1809,7 +1808,7 @@
   max-width: var(--pane-content-max-width);
   margin: 0 auto 8px;
   padding: 10px 16px 14px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--seg-composer-border);
   border-radius: var(--seg-radius-sm);
   background: var(--seg-composer-surface);
   box-shadow: 0 10px 24px rgba(46, 81, 118, 0.05);
@@ -1912,7 +1911,7 @@
   max-width: none;
   margin: 0;
   padding: 10px 12px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--seg-composer-border);
   border-radius: 8px;
   background: var(--seg-composer-surface);
   box-shadow: none;
@@ -1921,7 +1920,7 @@
 /* Sage / Teal & Slate theme overrides */
 
 .composer {
-  border-color: var(--seg-border);
+  border-color: var(--seg-composer-border);
   background: var(--seg-composer-surface);
   box-shadow: none;
 }
@@ -2050,6 +2049,14 @@
   box-shadow: none;
 }
 
+.composer .composer-selector-button.is-icon-only,
+.composer .composer-actions .primary-button.is-icon-only,
+.composer .composer-actions .secondary-button.is-icon-only {
+  border-color: transparent;
+  background: var(--semantic-composer-icon-button-surface);
+  color: var(--semantic-composer-icon-button-text);
+}
+
 .composer .composer-selector-button:not(:disabled):hover,
 .composer .composer-selector-button:not(:disabled):focus-visible,
 .composer .composer-actions .primary-button:not(:disabled):hover,
@@ -2064,17 +2071,51 @@
   box-shadow: none;
 }
 
+.composer .composer-selector-button.is-icon-only:not(:disabled):hover,
+.composer .composer-selector-button.is-icon-only:not(:disabled):focus-visible,
+.composer .composer-actions .primary-button.is-icon-only:not(:disabled):hover,
+.composer .composer-actions .primary-button.is-icon-only:not(:disabled):focus-visible,
+.composer .composer-actions .secondary-button.is-icon-only:not(:disabled):hover,
+.composer .composer-actions .secondary-button.is-icon-only:not(:disabled):focus-visible {
+  border-color: transparent;
+  background: var(--semantic-composer-icon-button-surface-hover);
+  color: var(--semantic-composer-icon-button-text-hover);
+}
+
+.composer .composer-selector-button.is-icon-only.is-active,
+.composer .composer-selector-button.is-icon-only:not(:disabled):active,
+.composer .composer-actions .primary-button.is-icon-only:not(:disabled):active,
+.composer .composer-actions .secondary-button.is-icon-only:not(:disabled):active {
+  border-color: transparent;
+  background: var(--semantic-composer-icon-button-surface-hover);
+  color: var(--semantic-composer-icon-button-text-hover);
+}
+
 .composer .composer-selector-button.is-unavailable {
-  color: var(--seg-text-3);
-  opacity: 0.62;
+  color: var(--semantic-composer-icon-button-text);
+  opacity: 0.82;
 }
 
 .composer .composer-selector-button.is-unavailable:hover,
-.composer .composer-selector-button.is-unavailable:focus-visible,
+.composer .composer-selector-button.is-unavailable:focus-visible {
+  background: var(--semantic-composer-icon-button-surface-hover);
+  color: var(--semantic-composer-icon-button-text-hover);
+  opacity: 1;
+}
+
 .composer .composer-selector-button.is-unavailable.is-active {
-  background: var(--seg-composer-button-surface);
-  color: var(--seg-text-2);
-  opacity: 0.86;
+  background: var(--semantic-composer-icon-button-surface-hover);
+  color: var(--semantic-composer-icon-button-text-hover);
+  opacity: 1;
+}
+
+.composer .composer-selector-button.is-icon-only:disabled,
+.composer .composer-actions .primary-button.is-icon-only:disabled,
+.composer .composer-actions .secondary-button.is-icon-only:disabled {
+  border-color: transparent;
+  background: var(--semantic-composer-icon-button-surface);
+  color: var(--semantic-composer-icon-button-text);
+  opacity: 0.76;
 }
 
 .composer .composer-menu-option.is-selected {

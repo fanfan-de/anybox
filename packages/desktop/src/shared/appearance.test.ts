@@ -126,6 +126,56 @@ describe("appearance token catalog", () => {
     ]))
   })
 
+  it("registers composer icon button tokens in the composer group", () => {
+    const composerGroup = APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-composer")
+
+    expect(composerGroup?.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "semantic-composer-icon-button-surface",
+        lightToken: "semantic-composer-icon-button-surface-light",
+        darkToken: "semantic-composer-icon-button-surface-dark",
+      }),
+      expect.objectContaining({
+        id: "semantic-composer-icon-button-surface-hover",
+        lightToken: "semantic-composer-icon-button-surface-hover-light",
+        darkToken: "semantic-composer-icon-button-surface-hover-dark",
+      }),
+      expect.objectContaining({
+        id: "semantic-composer-icon-button-text",
+        lightToken: "semantic-composer-icon-button-text-light",
+        darkToken: "semantic-composer-icon-button-text-dark",
+      }),
+      expect.objectContaining({
+        id: "semantic-composer-icon-button-text-hover",
+        lightToken: "semantic-composer-icon-button-text-hover-light",
+        darkToken: "semantic-composer-icon-button-text-hover-dark",
+      }),
+    ]))
+    expect(composerGroup?.rows.map((row) => row.id)).not.toEqual(expect.arrayContaining([
+      "semantic-composer-icon-button-surface-active",
+      "semantic-composer-icon-button-disabled-surface",
+      "semantic-composer-icon-button-border",
+      "semantic-composer-icon-button-border-hover",
+      "semantic-composer-icon-button-border-active",
+      "semantic-composer-icon-button-disabled-border",
+      "semantic-composer-icon-button-text-active",
+      "semantic-composer-icon-button-disabled-text",
+    ]))
+
+    const document = normalizeAppearanceConfigDocument({
+      overrides: {
+        "semantic-composer-icon-button-text": "#111111",
+        "semantic-composer-icon-button-surface-hover-dark": "#222222",
+      },
+    })
+
+    expect(document.overrides).toMatchObject({
+      "semantic-composer-icon-button-text-light": "#111111",
+      "semantic-composer-icon-button-text-dark": "#111111",
+      "semantic-composer-icon-button-surface-hover-dark": "#222222",
+    })
+  })
+
   it("registers a single shell chrome surface token and migrates old split tokens", () => {
     expect(APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-shell-chrome")).toEqual({
       id: "component-shell-chrome",
@@ -335,6 +385,109 @@ describe("appearance token catalog", () => {
     })
     expect(document.resolvedTokens).toEqual({
       "semantic-button-danger-text-hover-dark": "#222222",
+    })
+  })
+})
+
+describe("appearance segmented control tokens", () => {
+  it("registers and normalizes segmented control semantic tokens", () => {
+    expect(APPEARANCE_TOKEN_GROUPS).toContainEqual({
+      id: "component-segmented-controls",
+      layer: "component",
+      label: "Segmented Controls",
+      description: "Container and item state colors used by segmented controls and view switches.",
+      rows: [
+        {
+          id: "semantic-segmented-control-surface",
+          label: "Control Surface",
+          description: "Outer container fill for compact segmented controls.",
+          lightToken: "semantic-segmented-control-surface-light",
+          darkToken: "semantic-segmented-control-surface-dark",
+        },
+        {
+          id: "semantic-segmented-control-border",
+          label: "Control Border",
+          description: "Outer container border for compact segmented controls.",
+          lightToken: "semantic-segmented-control-border-light",
+          darkToken: "semantic-segmented-control-border-dark",
+        },
+        {
+          id: "semantic-segmented-control-item-surface-hover",
+          label: "Item Hover Surface",
+          description: "Hover and focus fill for segmented control items.",
+          lightToken: "semantic-segmented-control-item-surface-hover-light",
+          darkToken: "semantic-segmented-control-item-surface-hover-dark",
+        },
+        {
+          id: "semantic-segmented-control-item-surface-active",
+          label: "Item Active Surface",
+          description: "Selected-item fill for segmented controls.",
+          lightToken: "semantic-segmented-control-item-surface-active-light",
+          darkToken: "semantic-segmented-control-item-surface-active-dark",
+        },
+        {
+          id: "semantic-segmented-control-item-text",
+          label: "Item Text",
+          description: "Default text and icon color for segmented control items.",
+          lightToken: "semantic-segmented-control-item-text-light",
+          darkToken: "semantic-segmented-control-item-text-dark",
+        },
+        {
+          id: "semantic-segmented-control-item-text-hover",
+          label: "Item Hover Text",
+          description: "Hover and focus text color for segmented control items.",
+          lightToken: "semantic-segmented-control-item-text-hover-light",
+          darkToken: "semantic-segmented-control-item-text-hover-dark",
+        },
+        {
+          id: "semantic-segmented-control-item-text-active",
+          label: "Item Active Text",
+          description: "Selected-item text and icon color for segmented controls.",
+          lightToken: "semantic-segmented-control-item-text-active-light",
+          darkToken: "semantic-segmented-control-item-text-active-dark",
+        },
+        {
+          id: "semantic-segmented-control-item-meta-text",
+          label: "Item Meta Text",
+          description: "Muted supporting text inside segmented control items.",
+          lightToken: "semantic-segmented-control-item-meta-text-light",
+          darkToken: "semantic-segmented-control-item-meta-text-dark",
+        },
+        {
+          id: "semantic-segmented-control-item-meta-text-active",
+          label: "Item Active Meta Text",
+          description: "Supporting text color inside selected segmented control items.",
+          lightToken: "semantic-segmented-control-item-meta-text-active-light",
+          darkToken: "semantic-segmented-control-item-meta-text-active-dark",
+        },
+        {
+          id: "semantic-segmented-control-item-text-disabled",
+          label: "Item Disabled Text",
+          description: "Disabled text and icon color for segmented control items.",
+          lightToken: "semantic-segmented-control-item-text-disabled-light",
+          darkToken: "semantic-segmented-control-item-text-disabled-dark",
+        },
+      ],
+    })
+
+    const document = normalizeAppearanceConfigDocument({
+      overrides: {
+        "semantic-segmented-control-surface": " #111111 ",
+        "semantic-segmented-control-item-text-active-dark": "#222222",
+        "not-a-token": "#000000",
+      },
+      resolvedTokens: {
+        "semantic-segmented-control-item-surface-hover-light": " #333333 ",
+      },
+    })
+
+    expect(document.overrides).toEqual({
+      "semantic-segmented-control-surface-light": "#111111",
+      "semantic-segmented-control-surface-dark": "#111111",
+      "semantic-segmented-control-item-text-active-dark": "#222222",
+    })
+    expect(document.resolvedTokens).toEqual({
+      "semantic-segmented-control-item-surface-hover-light": "#333333",
     })
   })
 })
@@ -629,6 +782,20 @@ describe("appearance markdown tokens", () => {
           description: "Markdown heading rails, list markers, and lightweight emphasis.",
           lightToken: "semantic-markdown-accent-light",
           darkToken: "semantic-markdown-accent-dark",
+        },
+        {
+          id: "semantic-markdown-selection-background",
+          label: "Selection Background",
+          description: "Selection highlight background inside rendered Markdown.",
+          lightToken: "semantic-markdown-selection-background-light",
+          darkToken: "semantic-markdown-selection-background-dark",
+        },
+        {
+          id: "semantic-markdown-selection-text",
+          label: "Selection Text",
+          description: "Selection text color inside rendered Markdown.",
+          lightToken: "semantic-markdown-selection-text-light",
+          darkToken: "semantic-markdown-selection-text-dark",
         },
         {
           id: "semantic-markdown-border",

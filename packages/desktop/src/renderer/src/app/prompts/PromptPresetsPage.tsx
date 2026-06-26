@@ -1124,7 +1124,7 @@ export function PromptPresetsPage({
                           </button>
                           {selectedPromptPreset.source === "custom" ? (
                             <button
-                              className="secondary-button"
+                              className="secondary-button is-danger"
                               type="button"
                               disabled={selectedPromptPresetBusy || isLoadingPromptPreset}
                               onClick={() => void onDeletePromptPreset()}

@@ -2261,9 +2261,9 @@ body.is-dragging-settings-page {
   min-width: 0;
   min-height: 44px;
   padding: 2px;
-  border: 1px solid var(--mix-seg-border-96-transparent-4);
+  border: 1px solid var(--semantic-segmented-control-border);
   border-radius: 8px;
-  background: var(--mix-seg-panel-muted-72-seg-panel-28);
+  background: var(--semantic-segmented-control-surface);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   overflow: hidden;
@@ -2276,7 +2276,7 @@ body.is-dragging-settings-page {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--seg-text-2);
+  color: var(--semantic-segmented-control-item-text);
   font: inherit;
   font-size: 13px;
   font-weight: 740;
@@ -2290,8 +2290,8 @@ body.is-dragging-settings-page {
 
 .mcp-transport-segment:not(:disabled):hover,
 .mcp-transport-segment:not(:disabled):focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--seg-text-1);
+  background: var(--semantic-segmented-control-item-surface-hover);
+  color: var(--semantic-segmented-control-item-text-hover);
   box-shadow: none;
   outline: none;
 }
@@ -2302,8 +2302,8 @@ body.is-dragging-settings-page {
 }
 
 .mcp-transport-segment.is-active {
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--seg-text-1);
+  background: var(--semantic-segmented-control-item-surface-active);
+  color: var(--semantic-segmented-control-item-text-active);
   box-shadow: none;
 }
 
@@ -2857,9 +2857,9 @@ body.is-dragging-settings-page {
 .mcp-transport-segmented-control {
   min-height: 34px;
   padding: 2px;
-  border-color: var(--seg-border);
+  border-color: var(--semantic-segmented-control-border);
   border-radius: 8px;
-  background: var(--seg-panel-muted);
+  background: var(--semantic-segmented-control-surface);
 }
 
 .mcp-transport-segmented-control.is-connector {
@@ -2869,22 +2869,22 @@ body.is-dragging-settings-page {
 .mcp-transport-segment {
   min-height: 28px;
   border-radius: 6px;
-  color: var(--seg-text-2);
+  color: var(--semantic-segmented-control-item-text);
   font-size: 14px;
   font-weight: 650;
 }
 
 .mcp-transport-segment:not(:disabled):hover,
 .mcp-transport-segment:not(:disabled):focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--seg-text-1);
+  background: var(--semantic-segmented-control-item-surface-hover);
+  color: var(--semantic-segmented-control-item-text-hover);
   box-shadow: none;
   outline: none;
 }
 
 .mcp-transport-segment.is-active {
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--seg-text-1);
+  background: var(--semantic-segmented-control-item-surface-active);
+  color: var(--semantic-segmented-control-item-text-active);
   box-shadow: none;
 }
 
@@ -2894,7 +2894,7 @@ body.is-dragging-settings-page {
 }
 
 .mcp-transport-segment.is-active:disabled {
-  color: var(--seg-text-1);
+  color: var(--semantic-segmented-control-item-text-active);
   opacity: 1;
 }
 
@@ -3801,11 +3801,11 @@ body.is-dragging-settings-page {
 }
 
 .settings-prompt-editor-mode-switch {
-  min-height: 34px;
+  min-height: 36px;
   padding: 3px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-segmented-control-border);
   border-radius: var(--seg-radius-xs);
-  background: var(--seg-panel-muted);
+  background: var(--semantic-segmented-control-surface);
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -3817,7 +3817,7 @@ body.is-dragging-settings-page {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--seg-text-2);
+  color: var(--semantic-segmented-control-item-text);
   box-shadow: none;
   font-size: 12px;
   font-weight: 600;
@@ -3827,8 +3827,8 @@ body.is-dragging-settings-page {
 
 .settings-prompt-editor-mode-button:hover,
 .settings-prompt-editor-mode-button:focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--seg-text-1);
+  background: var(--semantic-segmented-control-item-surface-hover);
+  color: var(--semantic-segmented-control-item-text-hover);
 }
 
 .settings-prompt-editor-mode-button:focus-visible {
@@ -3836,8 +3836,8 @@ body.is-dragging-settings-page {
 }
 
 .settings-prompt-editor-mode-button.is-active {
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--seg-text-1);
+  background: var(--semantic-segmented-control-item-surface-active);
+  color: var(--semantic-segmented-control-item-text-active);
   box-shadow: none;
 }
 
@@ -5832,9 +5832,7 @@ body.is-dragging-settings-page {
 .terminal-panel-create,
 .settings-page-close-button,
 .session-canvas-top-menu .canvas-top-menu-editor-launch-button,
-.session-canvas-top-menu .canvas-top-menu-editor-menu-button,
-.composer .composer-selector-button.is-icon-only,
-.composer .composer-actions .primary-button.is-icon-only {
+.session-canvas-top-menu .canvas-top-menu-editor-menu-button {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
@@ -5876,11 +5874,7 @@ body.is-dragging-settings-page {
 .session-canvas-top-menu .canvas-top-menu-editor-launch-button:hover,
 .session-canvas-top-menu .canvas-top-menu-editor-launch-button:focus-visible,
 .session-canvas-top-menu .canvas-top-menu-editor-menu-button:hover,
-.session-canvas-top-menu .canvas-top-menu-editor-menu-button:focus-visible,
-.composer .composer-selector-button.is-icon-only:not(:disabled):hover,
-.composer .composer-selector-button.is-icon-only:not(:disabled):focus-visible,
-.composer .composer-actions .primary-button.is-icon-only:not(:disabled):hover,
-.composer .composer-actions .primary-button.is-icon-only:not(:disabled):focus-visible {
+.session-canvas-top-menu .canvas-top-menu-editor-menu-button:focus-visible {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
@@ -10524,7 +10518,23 @@ body.is-dragging-settings-page {
 }
 
 .secondary-button.is-danger {
-  color: #8f3127;
+  border-color: var(--semantic-button-danger-border);
+  background: var(--semantic-button-danger-surface);
+  color: var(--semantic-button-danger-text);
+}
+
+.secondary-button.is-danger:not(:disabled):hover,
+.secondary-button.is-danger:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-danger-border-hover);
+  background: var(--semantic-button-danger-surface-hover);
+  color: var(--semantic-button-danger-text-hover);
+  outline: none;
+}
+
+.secondary-button.is-danger:disabled {
+  border-color: var(--semantic-button-danger-disabled-border);
+  background: var(--semantic-button-danger-disabled-surface);
+  color: var(--semantic-button-danger-disabled-text);
 }
 
 .sidebar-toggle-button.is-rail.is-collapsed {
@@ -10767,6 +10777,25 @@ body.is-dragging-settings-page {
   border-color: var(--semantic-button-secondary-disabled-border);
   background: var(--semantic-button-secondary-disabled-surface);
   color: var(--semantic-button-secondary-disabled-text);
+}
+
+.settings-page-main.is-services .secondary-button.is-danger {
+  border-color: var(--semantic-button-danger-border);
+  background: var(--semantic-button-danger-surface);
+  color: var(--semantic-button-danger-text);
+}
+
+.settings-page-main.is-services .secondary-button.is-danger:not(:disabled):hover,
+.settings-page-main.is-services .secondary-button.is-danger:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-danger-border-hover);
+  background: var(--semantic-button-danger-surface-hover);
+  color: var(--semantic-button-danger-text-hover);
+}
+
+.settings-page-main.is-services .secondary-button.is-danger:disabled {
+  border-color: var(--semantic-button-danger-disabled-border);
+  background: var(--semantic-button-danger-disabled-surface);
+  color: var(--semantic-button-danger-disabled-text);
 }
 
 .settings-service-list-body,

@@ -138,9 +138,9 @@
   align-items: center;
   gap: 2px;
   padding: 2px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-segmented-control-border);
   border-radius: 8px;
-  background: var(--seg-panel-muted);
+  background: var(--semantic-segmented-control-surface);
 }
 
 .global-skills-mode-button {
@@ -149,7 +149,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--seg-text-2);
+  color: var(--semantic-segmented-control-item-text);
   font-size: 12px;
   font-weight: 650;
   cursor: pointer;
@@ -157,20 +157,19 @@
 
 .global-skills-mode-button:hover,
 .global-skills-mode-button:focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--seg-text-1);
+  background: var(--semantic-segmented-control-item-surface-hover);
+  color: var(--semantic-segmented-control-item-text-hover);
   box-shadow: none;
 }
 
 .global-skills-mode-button.is-active {
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--seg-text-1);
+  background: var(--semantic-segmented-control-item-surface-active);
+  color: var(--semantic-segmented-control-item-text-active);
   box-shadow: none;
 }
 
 .global-skills-mode-button:focus-visible {
-  outline: var(--focus-outline-width) solid var(--focus-outline-color);
-  outline-offset: var(--focus-outline-offset);
+  outline: none;
 }
 
 .global-skills-readonly-badge {
@@ -1896,41 +1895,41 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 
 .canvas-top-menu-segmented-option:hover,
 .canvas-top-menu-segmented-option:focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
+  background: var(--semantic-segmented-control-item-surface-hover);
   border-color: transparent;
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  color: var(--semantic-segmented-control-item-text-hover);
   box-shadow: none;
 }
 
 .canvas-top-menu-segmented-option.is-selected {
-  background: var(--semantic-sidebar-tree-row-surface-active);
+  background: var(--semantic-segmented-control-item-surface-active);
   border-color: transparent;
-  color: var(--seg-text-1);
+  color: var(--semantic-segmented-control-item-text-active);
   box-shadow: none;
 }
 
 .canvas-top-menu-quick-panel .composer-menu-option.canvas-top-menu-segmented-option {
   background: transparent;
-  color: var(--seg-text-2);
+  color: var(--semantic-segmented-control-item-text);
   box-shadow: none;
 }
 
 .canvas-top-menu-quick-panel .composer-menu-option.canvas-top-menu-segmented-option:not(:disabled):hover,
 .canvas-top-menu-quick-panel .composer-menu-option.canvas-top-menu-segmented-option:not(:disabled):focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--semantic-segmented-control-item-surface-hover);
+  color: var(--semantic-segmented-control-item-text-hover);
   box-shadow: none;
 }
 
 .canvas-top-menu-quick-panel .composer-menu-option.canvas-top-menu-segmented-option.is-selected {
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--seg-text-1);
+  background: var(--semantic-segmented-control-item-surface-active);
+  color: var(--semantic-segmented-control-item-text-active);
   box-shadow: none;
 }
 
 .canvas-top-menu-quick-panel .composer-menu-option.canvas-top-menu-segmented-option:disabled:not(.is-current) {
-  background: var(--semantic-button-secondary-disabled-surface);
-  color: var(--semantic-button-secondary-disabled-text);
+  background: transparent;
+  color: var(--semantic-segmented-control-item-text-disabled);
   cursor: not-allowed;
   opacity: 0.76;
 }
@@ -1938,7 +1937,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .canvas-top-menu-quick-panel
   .composer-menu-option.canvas-top-menu-segmented-option:disabled:not(.is-current)
   .composer-menu-option-check {
-  color: var(--semantic-button-secondary-disabled-text);
+  color: var(--semantic-segmented-control-item-text-disabled);
 }
 
 .canvas-top-menu-skill-selector-panel {

@@ -100,4 +100,10 @@ describe("PromptPresetsPage", () => {
 
     expect(onPromptDraftLabelChange).toHaveBeenCalledWith("First line Second line Third line")
   })
+
+  it("uses the danger button variant for deleting custom prompt presets", () => {
+    render(<PromptPresetsPage {...createProps()} />)
+
+    expect(screen.getByRole("button", { name: "Delete" })).toHaveClass("secondary-button", "is-danger")
+  })
 })

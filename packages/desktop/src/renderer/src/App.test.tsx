@@ -4077,6 +4077,7 @@ describe("App", () => {
 
     const editor = await screen.findByRole("textbox", { name: "Global skill editor" })
     expect(editor).toHaveValue(content)
+    expect(screen.getByRole("button", { name: "Delete" })).toHaveClass("secondary-button", "is-danger")
     await waitFor(() => {
       expect(editor).toHaveFocus()
     })
@@ -10386,6 +10387,10 @@ describe("App", () => {
     expect(screen.getByLabelText("Settings Switches Switch Track Dark semantic-settings-switch-track-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Settings Switches Switch Thumb Light semantic-settings-switch-thumb-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Settings Switches Switch Thumb Dark semantic-settings-switch-thumb-surface-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Segmented Controls Control Surface Light semantic-segmented-control-surface-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Segmented Controls Item Active Surface Dark semantic-segmented-control-item-surface-active-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Segmented Controls Item Active Text Light semantic-segmented-control-item-text-active-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Segmented Controls Item Meta Text Light semantic-segmented-control-item-meta-text-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Dropdown Select Menu Surface Light semantic-dropdown-menu-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Dropdown Select Menu Surface Dark semantic-dropdown-menu-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Thread View Response Text Light semantic-thread-response-text-light")).toBeInTheDocument()
@@ -10397,9 +10402,16 @@ describe("App", () => {
     expect(screen.getByLabelText("Thread View Diff Card Surface Light semantic-thread-user-turn-diff-card-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Thread View Diff Card Surface Dark semantic-thread-user-turn-diff-card-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Markdown Inline Code Surface Light semantic-markdown-inline-code-surface-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Markdown Selection Background Light semantic-markdown-selection-background-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Markdown Selection Text Dark semantic-markdown-selection-text-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Markdown Code Block Surface Dark semantic-markdown-code-surface-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Composer Input Border Light semantic-composer-border-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Composer Input Border Dark semantic-composer-border-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Composer Button Surface Light semantic-composer-button-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Composer Button Surface Dark semantic-composer-button-surface-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Composer Icon Button Text Light semantic-composer-icon-button-text-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Composer Icon Button Hover Surface Dark semantic-composer-icon-button-surface-hover-dark")).toBeInTheDocument()
+    expect(screen.queryByLabelText("Composer Icon Button Disabled Text Light semantic-composer-icon-button-disabled-text-light")).not.toBeInTheDocument()
     expect(screen.getByRole("switch", { name: "Show left rail" })).toBeInTheDocument()
     expect(screen.queryByRole("switch", { name: "Show debug region colors" })).not.toBeInTheDocument()
     expect(screen.queryByRole("switch", { name: "Show line debug colors" })).not.toBeInTheDocument()
@@ -13807,6 +13819,45 @@ describe("App", () => {
     )
   })
 
+  it("wires segmented controls through dedicated semantic tokens", () => {
+    expect(styles).toMatch(
+      /--semantic-segmented-control-surface-light:\s*var\(--surface-panel-muted-light\);/s,
+    )
+    expect(styles).toMatch(
+      /--semantic-segmented-control-item-surface-active-dark:\s*var\(--mix-seg-accent-soft-84-transparent-16-dark\);/s,
+    )
+    expect(styles).toMatch(
+      /--semantic-segmented-control-item-text-active:\s*var\(--semantic-segmented-control-item-text-active-light\);/s,
+    )
+    expect(styles).toMatch(
+      /:root\[data-theme="dark"\]\s*\{[\s\S]*--semantic-segmented-control-item-text-active:\s*var\(--semantic-segmented-control-item-text-active-dark\);/s,
+    )
+    expect(styles).toMatch(
+      /\.top-menu-segment:hover,\s*\.top-menu-segment:focus-visible\s*\{[^}]*background:\s*var\(--semantic-segmented-control-item-surface-hover\);[^}]*color:\s*var\(--semantic-segmented-control-item-text-hover\);/s,
+    )
+    expect(styles).toMatch(
+      /\.top-menu-segment\.is-active,\s*\.top-menu-segment\[aria-selected="true"\],\s*\.top-menu-segment\[aria-pressed="true"\]\s*\{[^}]*background:\s*var\(--semantic-segmented-control-item-surface-active\);[^}]*color:\s*var\(--semantic-segmented-control-item-text-active\);/s,
+    )
+    expect(styles).toMatch(
+      /\.top-menu-segment small\s*\{[^}]*color:\s*var\(--semantic-segmented-control-item-meta-text\);/s,
+    )
+    expect(styles).toMatch(
+      /\.top-menu-segment\.is-active small,[\s\S]*?\.top-menu-segment\[aria-pressed="true"\] small\s*\{[^}]*color:\s*var\(--semantic-segmented-control-item-meta-text-active\);/s,
+    )
+    expect(styles).toMatch(
+      /\.global-skills-mode-toggle\s*\{[^}]*border:\s*1px solid var\(--semantic-segmented-control-border\);[^}]*background:\s*var\(--semantic-segmented-control-surface\);/s,
+    )
+    expect(styles).toMatch(
+      /\.settings-prompt-editor-mode-switch\s*\{[^}]*min-height:\s*36px;[^}]*border:\s*1px solid var\(--semantic-segmented-control-border\);[^}]*background:\s*var\(--semantic-segmented-control-surface\);/s,
+    )
+    expect(styles).toMatch(
+      /\.mcp-transport-segment\.is-active\s*\{[^}]*background:\s*var\(--semantic-segmented-control-item-surface-active\);[^}]*color:\s*var\(--semantic-segmented-control-item-text-active\);/s,
+    )
+    expect(styles).toMatch(
+      /\.canvas-top-menu-segmented-option\.is-selected\s*\{[^}]*background:\s*var\(--semantic-segmented-control-item-surface-active\);[^}]*color:\s*var\(--semantic-segmented-control-item-text-active\);/s,
+    )
+  })
+
   it("keeps preview comment hover highlight visibly blue across theme overrides", () => {
     const hoverHighlightBlocks = Array.from(
       styles.matchAll(/\.preview-hover-highlight\s*\{([^}]*)\}/g),
@@ -14083,7 +14134,7 @@ describe("App", () => {
     expect(styles).toMatch(/\.canvas-region-top-menu\s+\.sidebar-toggle-button\.is-top-menu:hover,[\s\S]*?\.canvas-region-top-menu-add-button:focus-visible,[\s\S]*?\{[^}]*background:\s*transparent;[^}]*border-color:\s*transparent;[^}]*color:\s*var\(--semantic-accent-icon-hover\);[^}]*transform:\s*none;/s)
     expect(styles).toMatch(/\.terminal-panel-toggle-button\.is-active,[\s\S]*?\{[^}]*background:\s*transparent;[^}]*color:\s*var\(--semantic-accent-icon-active\);[^}]*transform:\s*none;/s)
     expect(styles).toMatch(/\.settings-page-close-button:hover,\s*\.settings-page-close-button:focus-visible\s*\{[^}]*color:\s*var\(--semantic-accent-icon-hover\);/s)
-    expect(styles).toMatch(/\.session-canvas-top-menu\s+\.canvas-top-menu-editor-launch-button,\s*\.session-canvas-top-menu\s+\.canvas-top-menu-editor-menu-button,[\s\S]*?\{[^}]*color:\s*var\(--semantic-accent-icon\);/s)
+    expect(styles).toMatch(/\.session-canvas-top-menu\s+\.canvas-top-menu-editor-launch-button,\s*\.session-canvas-top-menu\s+\.canvas-top-menu-editor-menu-button\s*\{[^}]*color:\s*var\(--semantic-accent-icon\);/s)
     expect(styles).toMatch(/\.session-canvas-top-menu\s+\.canvas-top-menu-editor-menu-button\.is-active,[\s\S]*?\.session-canvas-top-menu\s+\.canvas-top-menu-editor-menu-button\.is-active:focus-visible\s*\{[^}]*color:\s*var\(--semantic-accent-icon-active\);[^}]*transform:\s*none;/s)
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.dv-tabs-and-actions-container\s*\{[^}]*--dockview-tab-bar-bg:\s*var\(--seg-shell-chrome-surface\);[^}]*background:\s*var\(--dockview-tab-bar-bg\);/s)
     expect(styles).toMatch(/\.left-sidebar-top-menu\s*\{[^}]*background:\s*var\(--seg-shell-chrome-surface\);/s)
@@ -14092,8 +14143,11 @@ describe("App", () => {
     expect(styles).toMatch(/\.activity-rail-top-menu::after\s*\{[^}]*bottom:\s*0;[^}]*height:\s*1px;[^}]*background:\s*var\(--mix-seg-border-76-transparent-24\);/s)
     expect(styles).toMatch(/\.right-sidebar-top-menu\s*\{[^}]*--right-sidebar-tab-bar-bg:\s*var\(--seg-shell-chrome-surface\);[^}]*background:\s*var\(--right-sidebar-tab-bar-bg\);/s)
     expect(styles).toMatch(/--semantic-composer-surface-light:\s*#ffffff;/i)
+    expect(styles).toMatch(/--semantic-composer-border-light:\s*var\(--border-default-light\);/s)
     expect(styles).toMatch(/--semantic-composer-surface:\s*var\(--semantic-composer-surface-light\);/s)
     expect(styles).toMatch(/--semantic-composer-surface:\s*var\(--semantic-composer-surface-dark\);/s)
+    expect(styles).toMatch(/--semantic-composer-border:\s*var\(--semantic-composer-border-light\);/s)
+    expect(styles).toMatch(/--semantic-composer-border:\s*var\(--semantic-composer-border-dark\);/s)
     expect(styles).not.toMatch(/--semantic-composer-surface:\s*var\(--surface-panel\);/s)
     expect(styles).toMatch(/--semantic-thread-response-text-light:\s*var\(--text-primary-light\);/s)
     expect(styles).toMatch(/--semantic-thread-reasoning-text-light:\s*var\(--text-secondary-light\);/s)
@@ -14110,6 +14164,9 @@ describe("App", () => {
     expect(styles).toMatch(/--semantic-thread-user-turn-diff-row-surface-hover:\s*var\(--semantic-thread-user-turn-diff-row-surface-hover-light\);/s)
     expect(styles).toMatch(/--semantic-thread-user-turn-diff-row-surface-hover:\s*var\(--semantic-thread-user-turn-diff-row-surface-hover-dark\);/s)
     expect(styles).toMatch(/--semantic-markdown-inline-code-surface-light:\s*var\(--mix-seg-accent-soft-80-seg-panel-20-light\);/s)
+    expect(styles).toMatch(/--semantic-markdown-selection-background-light:\s*var\(--mix-seg-accent-soft-84-transparent-16-light\);/s)
+    expect(styles).toMatch(/--semantic-markdown-selection-background:\s*var\(--semantic-markdown-selection-background-light\);/s)
+    expect(styles).toMatch(/--semantic-markdown-selection-background:\s*var\(--semantic-markdown-selection-background-dark\);/s)
     expect(styles).toMatch(/--semantic-markdown-code-surface-light:\s*#27272a;/s)
     expect(styles).toMatch(/--semantic-markdown-inline-code-surface:\s*var\(--semantic-markdown-inline-code-surface-light\);/s)
     expect(styles).toMatch(/--semantic-markdown-inline-code-surface:\s*var\(--semantic-markdown-inline-code-surface-dark\);/s)
@@ -14124,11 +14181,18 @@ describe("App", () => {
     expect(styles).toMatch(
       /--semantic-composer-button-surface:\s*var\(--semantic-composer-button-surface-light\);/s,
     )
+    expect(styles).toMatch(
+      /--semantic-composer-icon-button-text:\s*var\(--semantic-composer-icon-button-text-light\);/s,
+    )
+    expect(styles).toMatch(
+      /--semantic-composer-icon-button-text:\s*var\(--semantic-composer-icon-button-text-dark\);/s,
+    )
     expect(styles).toMatch(/--seg-composer-button-surface:\s*var\(--semantic-composer-button-surface\);/s)
     expect(styles).toMatch(/--seg-composer-surface:\s*var\(--semantic-composer-surface\);/s)
+    expect(styles).toMatch(/--seg-composer-border:\s*var\(--semantic-composer-border\);/s)
     expect(styles).toMatch(/--seg-dropdown-menu-surface:\s*var\(--semantic-dropdown-menu-surface\);/s)
     expect(styles).toMatch(
-      /\.composer\s*\{[^}]*background:\s*var\(--seg-composer-surface\);/s,
+      /\.composer\s*\{[^}]*border:\s*1px solid var\(--seg-composer-border\);[^}]*background:\s*var\(--seg-composer-surface\);/s,
     )
     expect(styles).toMatch(
       /\.composer-selector-button\s*\{[^}]*min-height:\s*34px;/s,
@@ -14157,8 +14221,8 @@ describe("App", () => {
     expect(styles).toMatch(
       /\.composer-selector-button\.is-icon-only,\s*\.composer-actions\s+\.primary-button\.is-icon-only\s*\{[^}]*width:\s*var\(--icon-button-size\);[^}]*min-width:\s*var\(--icon-button-size\);/s,
     )
-    expect(styles).toMatch(/\.composer\s+\.composer-selector-button\.is-icon-only,\s*\.composer\s+\.composer-actions\s+\.primary-button\.is-icon-only\s*\{[^}]*color:\s*var\(--semantic-accent-icon\);/s)
-    expect(styles).toMatch(/\.composer\s+\.composer-selector-button\.is-icon-only:not\(:disabled\):hover,[\s\S]*?\.composer\s+\.composer-actions\s+\.primary-button\.is-icon-only:not\(:disabled\):focus-visible\s*\{[^}]*background:\s*transparent;[^}]*color:\s*var\(--semantic-accent-icon-hover\);[^}]*transform:\s*none;/s)
+    expect(styles).toMatch(/\.composer\s+\.composer-selector-button\.is-icon-only,\s*\.composer\s+\.composer-actions\s+\.primary-button\.is-icon-only,\s*\.composer\s+\.composer-actions\s+\.secondary-button\.is-icon-only\s*\{[^}]*background:\s*var\(--semantic-composer-icon-button-surface\);[^}]*color:\s*var\(--semantic-composer-icon-button-text\);/s)
+    expect(styles).toMatch(/\.composer\s+\.composer-selector-button\.is-icon-only:not\(:disabled\):hover,[\s\S]*?\.composer\s+\.composer-actions\s+\.secondary-button\.is-icon-only:not\(:disabled\):focus-visible\s*\{[^}]*background:\s*var\(--semantic-composer-icon-button-surface-hover\);[^}]*color:\s*var\(--semantic-composer-icon-button-text-hover\);/s)
   })
 
   it("maps custom HTML backgrounds through token-driven surface profile tokens", () => {
@@ -14318,6 +14382,8 @@ describe("App", () => {
     expect(styles).toMatch(/button\.user-turn-diff-file-row:hover\s*\{[^}]*background:\s*var\(--semantic-thread-user-turn-diff-row-surface-hover\);/s)
     expect(styles).toMatch(/button\.user-turn-diff-file-row:focus-visible\s*\{[^}]*background:\s*var\(--semantic-thread-user-turn-diff-row-surface-focus\);[^}]*outline:\s*none;/s)
     expect(styles).toMatch(/\.thread-markdown\s*\{[^}]*--md-text:\s*var\(--semantic-markdown-text,\s*var\(--seg-text-1\)\);/s)
+    expect(styles).toMatch(/\.thread-markdown\s*\{[^}]*--md-selection-bg:\s*var\(--semantic-markdown-selection-background,\s*var\(--selection-background\)\);/s)
+    expect(styles).toMatch(/\.thread-markdown::selection,\s*\.thread-markdown ::selection\s*\{[^}]*background:\s*var\(--md-selection-bg\);[^}]*color:\s*var\(--md-selection-text\);/s)
     expect(styles).toMatch(/\.thread-markdown\s*\{[^}]*--md-inline-code-bg:\s*var\(--semantic-markdown-inline-code-surface,\s*var\(--semantic-thread-panel-surface-muted\)\);/s)
     expect(styles).toMatch(/\.assistant-section\.is-reasoning \.trace-item-inline-title,[\s\S]*?\.assistant-section\.is-reasoning \.trace-item-plain-detail\s*\{[^}]*color:\s*var\(--semantic-thread-reasoning-text\);/s)
     expect(styles).toMatch(/\.assistant-shell\.is-sectioned\s*\{[^}]*border:\s*0;[^}]*padding:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s)

@@ -59,6 +59,10 @@ const zhCNTokenGroupCopy = {
     label: "设置开关",
     description: "设置页开关控件的行背景、轨道和滑块颜色。",
   },
+  "component-segmented-controls": {
+    label: "分段控件",
+    description: "视图、页面分区和模式切换类分段控件的容器与选项状态颜色。",
+  },
   "component-dropdown-select": {
     label: "下拉选择",
     description: "展开后的下拉菜单和选择器菜单的专用语义背景。",
@@ -458,6 +462,46 @@ const zhCNTokenRowCopy = {
     label: "开关禁用滑块",
     description: "设置开关禁用时的滑块填充色。",
   },
+  "semantic-segmented-control-surface": {
+    label: "控件背景",
+    description: "紧凑型分段控件外层容器的背景。",
+  },
+  "semantic-segmented-control-border": {
+    label: "控件边框",
+    description: "紧凑型分段控件外层容器的边框。",
+  },
+  "semantic-segmented-control-item-surface-hover": {
+    label: "选项悬停背景",
+    description: "分段控件选项悬停和聚焦时的背景。",
+  },
+  "semantic-segmented-control-item-surface-active": {
+    label: "选项激活背景",
+    description: "分段控件当前选中选项的背景。",
+  },
+  "semantic-segmented-control-item-text": {
+    label: "选项文字",
+    description: "分段控件选项默认文字和图标颜色。",
+  },
+  "semantic-segmented-control-item-text-hover": {
+    label: "选项悬停文字",
+    description: "分段控件选项悬停和聚焦时的文字颜色。",
+  },
+  "semantic-segmented-control-item-text-active": {
+    label: "选项激活文字",
+    description: "分段控件当前选中选项的文字和图标颜色。",
+  },
+  "semantic-segmented-control-item-meta-text": {
+    label: "选项辅助文字",
+    description: "分段控件选项内弱化辅助文字的颜色。",
+  },
+  "semantic-segmented-control-item-meta-text-active": {
+    label: "选项激活辅助文字",
+    description: "分段控件当前选中选项内辅助文字的颜色。",
+  },
+  "semantic-segmented-control-item-text-disabled": {
+    label: "选项禁用文字",
+    description: "分段控件禁用选项的文字和图标颜色。",
+  },
   "semantic-dropdown-menu-surface": {
     label: "菜单背景",
     description: "展开后的下拉菜单和选择器菜单背景。",
@@ -534,6 +578,14 @@ const zhCNTokenRowCopy = {
     label: "强调",
     description: "Markdown 标题引导线、列表标记和轻量强调色。",
   },
+  "semantic-markdown-selection-background": {
+    label: "选区背景",
+    description: "Markdown 文本被鼠标选中时的高亮背景。",
+  },
+  "semantic-markdown-selection-text": {
+    label: "选区文字",
+    description: "Markdown 文本被鼠标选中时的文字颜色。",
+  },
   "semantic-markdown-border": {
     label: "边框",
     description: "Markdown 表格、图片和分隔线的默认边框。",
@@ -606,6 +658,10 @@ const zhCNTokenRowCopy = {
     label: "输入框背景",
     description: "任务输入区域的专用背景。",
   },
+  "semantic-composer-border": {
+    label: "输入框边框",
+    description: "任务输入区域边线和描边的专用颜色。",
+  },
   "semantic-composer-button-surface": {
     label: "按钮背景",
     description: "输入框内部按钮悬停时的填充色。",
@@ -621,6 +677,22 @@ const zhCNTokenRowCopy = {
   "semantic-composer-button-text-strong": {
     label: "按钮强调文字",
     description: "输入框内部菜单和控件选中状态的文字与图标颜色。",
+  },
+  "semantic-composer-icon-button-surface": {
+    label: "图标按钮背景",
+    description: "输入框内纯图标按钮默认状态的填充色。",
+  },
+  "semantic-composer-icon-button-surface-hover": {
+    label: "图标按钮悬停背景",
+    description: "输入框内纯图标按钮悬停和聚焦时的填充色。",
+  },
+  "semantic-composer-icon-button-text": {
+    label: "图标按钮文字",
+    description: "输入框内纯图标按钮默认状态的图标颜色。",
+  },
+  "semantic-composer-icon-button-text-hover": {
+    label: "图标按钮悬停文字",
+    description: "输入框内纯图标按钮悬停和聚焦时的图标颜色。",
   },
   "focus-outline-color": {
     label: "焦点环",

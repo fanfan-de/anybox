@@ -863,6 +863,8 @@
   --md-faint: var(--semantic-markdown-muted-text, var(--seg-text-3));
   --md-strong: var(--semantic-markdown-strong-text, var(--seg-text-1));
   --md-accent: var(--semantic-markdown-accent, var(--seg-accent-strong));
+  --md-selection-bg: var(--semantic-markdown-selection-background, var(--selection-background));
+  --md-selection-text: var(--semantic-markdown-selection-text, var(--md-text));
   --md-border: var(--semantic-markdown-border, var(--seg-border));
   --md-border-strong: var(--semantic-markdown-border-strong, var(--seg-border));
   --md-quote-bg: var(--semantic-markdown-quote-surface, var(--semantic-thread-panel-surface-muted));
@@ -880,6 +882,12 @@
   line-height: 1.66;
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.thread-markdown::selection,
+.thread-markdown ::selection {
+  background: var(--md-selection-bg);
+  color: var(--md-selection-text);
 }
 
 .thread-markdown > :first-child {
@@ -952,6 +960,10 @@
 
 .thread-markdown :where(li + li) {
   margin-top: 0.34em;
+}
+
+.thread-markdown li {
+  color: var(--md-text);
 }
 
 .thread-markdown li::marker {
@@ -3885,6 +3897,10 @@ button.user-turn-diff-file-row:focus-visible {
 .assistant-section.is-response .trace-item-text,
 .assistant-section.is-response .trace-item-detail {
   color: var(--semantic-thread-response-text);
+}
+
+.assistant-section.is-response .thread-markdown {
+  color: var(--md-text);
 }
 
 .assistant-section.is-reasoning .trace-item-inline-title,

@@ -258,7 +258,7 @@ export function GlobalSkillsCanvas({
           {selectedFileReadOnly ? <span className="global-skills-readonly-badge">Read-only</span> : null}
           {!selectedFileReadOnly ? (
             <>
-              <button className="secondary-button" disabled={!selectedSkillDirectoryName || deletingGlobalSkillDirectory !== null} type="button" onClick={() => void onDelete()}>
+              <button className="secondary-button is-danger" disabled={!selectedSkillDirectoryName || deletingGlobalSkillDirectory !== null} type="button" onClick={() => void onDelete()}>
                 {deletingGlobalSkillDirectory ? "Deleting..." : "Delete"}
               </button>
               <button className="primary-button" disabled={!isDirty || isSavingFile} type="button" onClick={() => void onSave()}>
