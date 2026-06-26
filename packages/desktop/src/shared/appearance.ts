@@ -305,7 +305,6 @@ export type AppearanceCodeThemePreference =
 
 export type AppearanceHtmlBackgroundRenderMode = "dynamic" | "static"
 export type AppearanceDesktopBackgroundMode = "default" | "custom-html"
-export type AppearanceSurfaceProfile = "solid" | "translucent"
 
 export interface AppearanceHtmlBackgroundConfig {
   blurPx: number
@@ -320,10 +319,7 @@ export interface AppearanceHtmlBackgroundConfig {
 
 export interface AppearanceHtmlBackgroundState {
   backgroundMode: AppearanceDesktopBackgroundMode
-  contentOpacityPercent: string
   hasHtmlBackground: boolean
-  surfaceOpacityPercent: string
-  surfaceProfile: AppearanceSurfaceProfile
 }
 
 export const DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG: AppearanceHtmlBackgroundConfig = {
@@ -367,8 +363,19 @@ export interface AppearanceTokenRow {
   darkToken: AppearanceTokenName
 }
 
+export type AppearanceTokenLayer = "foundation" | "component" | "product" | "status" | "global"
+
+export const APPEARANCE_TOKEN_LAYERS = [
+  "foundation",
+  "component",
+  "product",
+  "status",
+  "global",
+] as const satisfies readonly AppearanceTokenLayer[]
+
 export interface AppearanceTokenGroup {
   id: string
+  layer: AppearanceTokenLayer
   label: string
   description: string
   rows: readonly AppearanceTokenRow[]
@@ -377,6 +384,7 @@ export interface AppearanceTokenGroup {
 export const APPEARANCE_TOKEN_GROUPS = [
   {
     id: "foundation-surfaces",
+    layer: "foundation",
     label: "Foundation / Surfaces",
     description: "Primary app, shell, panel, sidebar, trace, overlay, and code surfaces.",
     rows: [
@@ -468,6 +476,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "foundation-content",
+    layer: "foundation",
     label: "Foundation / Content",
     description: "Text and border tokens that define the base contrast system.",
     rows: [
@@ -517,6 +526,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "accent",
+    layer: "foundation",
     label: "Accent States",
     description: "Interactive brand tones that drive button, hover, and active emphasis.",
     rows: [
@@ -580,6 +590,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "component-buttons",
+    layer: "component",
     label: "Buttons",
     description: "Dedicated semantic colors for primary, secondary, and danger action buttons.",
     rows: [
@@ -776,6 +787,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "status-success",
+    layer: "status",
     label: "Status / Success",
     description: "Success tones from base hue to text, border, and surface treatments.",
     rows: [
@@ -825,6 +837,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "status-warning",
+    layer: "status",
     label: "Status / Warning",
     description: "Warning tones from base hue to text, border, and surface treatments.",
     rows: [
@@ -874,6 +887,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "status-error",
+    layer: "status",
     label: "Status / Error",
     description: "Error tones from base hue to text, border, and surface treatments.",
     rows: [
@@ -923,6 +937,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "status-info",
+    layer: "status",
     label: "Status / Info",
     description: "Informational tones from base hue to text, border, and surface treatments.",
     rows: [
@@ -972,6 +987,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "component-shell-chrome",
+    layer: "product",
     label: "Shell Chrome",
     description: "Dedicated semantic surfaces for shell-level navigation and menu bars.",
     rows: [
@@ -986,6 +1002,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "component-terminal",
+    layer: "component",
     label: "Terminal",
     description: "Dedicated semantic color for embedded terminal surfaces.",
     rows: [
@@ -1000,8 +1017,9 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "component-settings-page",
+    layer: "product",
     label: "Settings Page",
-    description: "Dedicated semantic surfaces and switch controls for the settings dialog and settings navigation shell.",
+    description: "Dedicated semantic surface for the settings dialog and settings navigation shell.",
     rows: [
       {
         id: "semantic-settings-page-surface",
@@ -1010,6 +1028,14 @@ export const APPEARANCE_TOKEN_GROUPS = [
         lightToken: "semantic-settings-page-surface-light",
         darkToken: "semantic-settings-page-surface-dark",
       },
+    ],
+  },
+  {
+    id: "component-settings-switches",
+    layer: "component",
+    label: "Settings Switches",
+    description: "Switch row, track, and thumb colors used by settings toggle controls.",
+    rows: [
       {
         id: "semantic-settings-switch-row-surface-focus",
         label: "Switch Focus Row",
@@ -1084,6 +1110,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "component-dropdown-select",
+    layer: "component",
     label: "Dropdown Select",
     description: "Dedicated semantic color for expanded dropdown and select menus.",
     rows: [
@@ -1098,6 +1125,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "component-question-card",
+    layer: "product",
     label: "Question Card",
     description: "Dedicated semantic color for agent question cards.",
     rows: [
@@ -1112,6 +1140,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "component-proposed-plan-card",
+    layer: "product",
     label: "Proposed Plan",
     description: "Dedicated semantic color for proposed plan cards.",
     rows: [
@@ -1126,6 +1155,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "component-thread-view",
+    layer: "product",
     label: "Thread View",
     description: "Dedicated semantic colors for thread text, panel surfaces, and user-turn diff cards.",
     rows: [
@@ -1217,6 +1247,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "component-markdown",
+    layer: "product",
     label: "Markdown",
     description: "Dedicated semantic colors for rendered Markdown content.",
     rows: [
@@ -1322,6 +1353,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "component-sidebar-tree-rows",
+    layer: "product",
     label: "Sidebar Tree Rows",
     description: "Dedicated row tokens for the left sidebar workspace and skills trees.",
     rows: [
@@ -1371,6 +1403,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "component-settings-list-detail-rows",
+    layer: "component",
     label: "Settings List Detail Rows",
     description: "Dedicated row tokens for settings, plugins, connectors, MCP, and similar list-detail screens.",
     rows: [
@@ -1385,6 +1418,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "component-composer",
+    layer: "product",
     label: "Composer",
     description: "Dedicated semantic colors for the task composer surface and controls.",
     rows: [
@@ -1427,6 +1461,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
   },
   {
     id: "global-interaction",
+    layer: "global",
     label: "Global Interaction",
     description: "Focus, selection, and translucent panel tokens used across multiple components.",
     rows: [
@@ -1465,6 +1500,9 @@ export const APPEARANCE_TOKEN_GROUPS = [
 type AppearanceTokenMetadata = {
   label: string
   description: string
+  groupID: string
+  groupLabel: string
+  layer: AppearanceTokenLayer
   rowID: string
   mode: "light" | "dark"
 }
@@ -1477,6 +1515,9 @@ export const APPEARANCE_TOKEN_METADATA = Object.fromEntries(
         {
           label: row.label,
           description: row.description,
+          groupID: group.id,
+          groupLabel: group.label,
+          layer: group.layer,
           rowID: row.id,
           mode: "light" as const,
         },
@@ -1486,6 +1527,9 @@ export const APPEARANCE_TOKEN_METADATA = Object.fromEntries(
         {
           label: row.label,
           description: row.description,
+          groupID: group.id,
+          groupLabel: group.label,
+          layer: group.layer,
           rowID: row.id,
           mode: "dark" as const,
         },
@@ -2301,10 +2345,7 @@ export function resolveAppearanceHtmlBackgroundState(
 
   return {
     backgroundMode: hasHtmlBackground ? "custom-html" : "default",
-    contentOpacityPercent: `${Math.round(Math.min(0.92, config.surfaceOpacity + 0.14) * 100)}%`,
     hasHtmlBackground,
-    surfaceOpacityPercent: `${Math.round(config.surfaceOpacity * 100)}%`,
-    surfaceProfile: hasHtmlBackground ? "translucent" : "solid",
   }
 }
 

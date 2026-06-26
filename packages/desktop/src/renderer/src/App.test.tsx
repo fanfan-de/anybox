@@ -10236,20 +10236,21 @@ describe("App", () => {
     )
   })
 
-  it("sets the default solid surface profile on the window shell", () => {
+  it("sets the default background mode without runtime surface opacity", () => {
     const { container } = render(<App />)
     const windowShell = container.querySelector(".window-shell") as HTMLElement | null
 
     expect(windowShell).not.toBeNull()
     expect(windowShell).toHaveAttribute("data-background-mode", "default")
-    expect(windowShell).toHaveAttribute("data-surface-profile", "solid")
+    expect(windowShell).not.toHaveAttribute("data-surface-profile")
     expect(windowShell).toHaveClass("is-windows")
     expect(windowShell).not.toHaveClass("has-html-background")
     expect(windowShell!.style.getPropertyValue("--surface-profile-opacity")).toBe("")
+    expect(windowShell!.style.getPropertyValue("--surface-profile-content-opacity")).toBe("")
     expect(container.querySelector(".html-background-layer")).toBeNull()
   })
 
-  it("sets the translucent custom HTML surface profile on the window shell", () => {
+  it("sets the custom HTML background mode without runtime surface opacity", () => {
     window.localStorage.setItem("desktop.htmlBackground.v1", JSON.stringify({
       blurPx: 0,
       dim: 0.18,
@@ -10266,10 +10267,10 @@ describe("App", () => {
 
     expect(windowShell).not.toBeNull()
     expect(windowShell).toHaveAttribute("data-background-mode", "custom-html")
-    expect(windowShell).toHaveAttribute("data-surface-profile", "translucent")
+    expect(windowShell).not.toHaveAttribute("data-surface-profile")
     expect(windowShell).toHaveClass("has-html-background")
-    expect(windowShell!.style.getPropertyValue("--surface-profile-opacity")).toBe("72%")
-    expect(windowShell!.style.getPropertyValue("--surface-profile-content-opacity")).toBe("86%")
+    expect(windowShell!.style.getPropertyValue("--surface-profile-opacity")).toBe("")
+    expect(windowShell!.style.getPropertyValue("--surface-profile-content-opacity")).toBe("")
     expect(container.querySelector(".html-background-layer")).not.toBeNull()
   })
 
@@ -10381,10 +10382,10 @@ describe("App", () => {
     expect(screen.getByLabelText("Shell Chrome Surface Dark semantic-shell-chrome-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Settings Page Page Surface Light semantic-settings-page-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Settings Page Page Surface Dark semantic-settings-page-surface-dark")).toBeInTheDocument()
-    expect(screen.getByLabelText("Settings Page Switch Track Light semantic-settings-switch-track-surface-light")).toBeInTheDocument()
-    expect(screen.getByLabelText("Settings Page Switch Track Dark semantic-settings-switch-track-surface-dark")).toBeInTheDocument()
-    expect(screen.getByLabelText("Settings Page Switch Thumb Light semantic-settings-switch-thumb-surface-light")).toBeInTheDocument()
-    expect(screen.getByLabelText("Settings Page Switch Thumb Dark semantic-settings-switch-thumb-surface-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Settings Switches Switch Track Light semantic-settings-switch-track-surface-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Settings Switches Switch Track Dark semantic-settings-switch-track-surface-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Settings Switches Switch Thumb Light semantic-settings-switch-thumb-surface-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Settings Switches Switch Thumb Dark semantic-settings-switch-thumb-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Dropdown Select Menu Surface Light semantic-dropdown-menu-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Dropdown Select Menu Surface Dark semantic-dropdown-menu-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Thread View Response Text Light semantic-thread-response-text-light")).toBeInTheDocument()
@@ -14160,20 +14161,26 @@ describe("App", () => {
     expect(styles).toMatch(/\.composer\s+\.composer-selector-button\.is-icon-only:not\(:disabled\):hover,[\s\S]*?\.composer\s+\.composer-actions\s+\.primary-button\.is-icon-only:not\(:disabled\):focus-visible\s*\{[^}]*background:\s*transparent;[^}]*color:\s*var\(--semantic-accent-icon-hover\);[^}]*transform:\s*none;/s)
   })
 
-  it("maps custom HTML backgrounds through orthogonal surface profile tokens", () => {
+  it("maps custom HTML backgrounds through token-driven surface profile tokens", () => {
     expect(styles).not.toMatch(/\.window-shell\.has-html-background/)
     expect(styles).not.toMatch(/--html-background-.*surface/)
+    expect(styles).not.toMatch(/data-surface-profile/)
+    expect(styles).not.toMatch(/--surface-profile-opacity/)
+    expect(styles).not.toMatch(/--surface-profile-content-opacity/)
     expect(styles).toMatch(
       /\.window-shell\s*\{[^}]*--surface-profile-shell:\s*var\(--surface-shell\);[^}]*--surface-profile-tab:\s*var\(--semantic-shell-chrome-surface\);[^}]*--surface-profile-composer:\s*var\(--semantic-composer-surface\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\[data-surface-profile="translucent"\]\s*\{[^}]*--surface-profile-shell:\s*color-mix\(in srgb,\s*var\(--surface-shell\) var\(--surface-profile-opacity\),\s*transparent\);[^}]*--surface-profile-content:\s*color-mix\(in srgb,\s*var\(--surface-panel\) var\(--surface-profile-content-opacity\),\s*transparent\);/s,
+      /\.window-shell\[data-background-mode="custom-html"\]\s*\{[^}]*--top-chrome-surface:\s*var\(--surface-profile-tab\);[^}]*--top-chrome-active-surface:\s*var\(--surface-profile-shell\);[^}]*background:\s*var\(--surface-shell\);/s,
+    )
+    expect(styles).toMatch(
+      /\.window-shell\[data-background-mode="custom-html"\]\s+\.app-shell\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
     )
     expect(styles).toMatch(
       /\.window-shell\[data-background-mode="custom-html"\]\s+\.activity-rail\s*\{[^}]*background:\s*var\(--surface-profile-sidebar-strong\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s+\.dockview-theme-anybox\s*\{[^}]*--dv-tabs-and-actions-container-background-color:\s*var\(--surface-profile-tab\);[^}]*--dv-activegroup-visiblepanel-tab-background-color:\s*var\(--surface-profile-shell\);/s,
+      /\.window-shell\[data-background-mode="custom-html"\]\s+\.dockview-theme-anybox\s*\{[^}]*--dv-background-color:\s*var\(--surface-profile-shell\);[^}]*--dv-tabs-and-actions-container-background-color:\s*var\(--surface-profile-tab\);[^}]*--dv-activegroup-visiblepanel-tab-background-color:\s*var\(--surface-profile-shell\);/s,
     )
     expect(styles).toMatch(
       /\.window-shell\[data-background-mode="custom-html"\]\s+\.composer,\s*\.window-shell\[data-background-mode="custom-html"\]\s+\.inline-side-chat-thread \.composer\s*\{[^}]*background:\s*var\(--surface-profile-composer\);/s,
@@ -14189,13 +14196,13 @@ describe("App", () => {
     )
   })
 
-  it("wires Windows desktop transparency through the default surface profile", () => {
+  it("wires Windows desktop backgrounds through token-driven surface profiles", () => {
     expect(styles).toMatch(/body\s*\{[^}]*background:\s*transparent;/s)
     expect(readFileSync(resolve(process.cwd(), "src/renderer/src/styles/index.css"), "utf8")).toMatch(
       /@import "\.\/top-chrome\.css";\s*@import "\.\/windows-transparent\.css";\s*@import "\.\/debug\.css";/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\],[\s\S]*?\.session-popout-shell\.is-windows\s*\{[^}]*--surface-profile-opacity:\s*28%;[^}]*--surface-profile-content-opacity:\s*54%;[^}]*--surface-profile-shell:\s*color-mix\(in srgb,\s*var\(--surface-shell\) var\(--surface-profile-opacity\),\s*transparent\);[^}]*--surface-profile-content:\s*color-mix\(in srgb,\s*var\(--surface-panel\) var\(--surface-profile-content-opacity\),\s*transparent\);[^}]*--surface-profile-settings-page:\s*var\(--semantic-settings-page-surface\);[^}]*--surface-profile-settings-page-nav:\s*var\(--semantic-settings-page-surface\);[^}]*background:\s*transparent;/s,
+      /\.window-shell\.is-windows\[data-background-mode="default"\],[\s\S]*?\.session-popout-shell\.is-windows\s*\{[^}]*--surface-profile-shell:\s*var\(--surface-shell\);[^}]*--surface-profile-content:\s*var\(--surface-panel\);[^}]*--surface-profile-composer:\s*var\(--semantic-composer-surface\);[^}]*--surface-profile-settings-page:\s*var\(--semantic-settings-page-surface\);[^}]*--surface-profile-settings-page-nav:\s*var\(--semantic-settings-page-surface\);[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
       /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.app-shell,\s*\.session-popout-shell\.is-windows\s+\.session-popout-app\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
@@ -14213,10 +14220,10 @@ describe("App", () => {
       /\.window-shell\[data-background-mode="custom-html"\]\s+\.canvas-region-top-menu\s*\{[^}]*background:\s*var\(--top-chrome-surface,\s*var\(--surface-profile-tab\)\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.dockview-workbench-panes,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.dockview-theme-anybox \.dv-content-container\s*\{[^}]*background:\s*transparent;/s,
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.dockview-workbench-panes,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.dockview-theme-anybox \.dv-content-container\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.dockview-theme-anybox\s*\{[^}]*--dv-background-color:\s*transparent;[^}]*--dv-tabs-and-actions-container-background-color:\s*var\(--surface-profile-tab\);/s,
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.dockview-theme-anybox\s*\{[^}]*--dv-background-color:\s*var\(--surface-profile-shell\);[^}]*--dv-tabs-and-actions-container-background-color:\s*var\(--surface-profile-tab\);/s,
     )
     expect(styles).toMatch(
       /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.composer,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.inline-side-chat-thread \.composer\s*\{[^}]*background:\s*var\(--surface-profile-composer\);/s,

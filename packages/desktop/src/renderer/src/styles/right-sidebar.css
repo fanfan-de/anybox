@@ -4042,7 +4042,7 @@
 
 .window-shell[data-background-mode="custom-html"] .right-sidebar-view-host,
 .window-shell[data-background-mode="custom-html"] .right-sidebar-main-stack {
-  background: transparent;
+  background: var(--surface-profile-content);
 }
 
 .window-shell[data-background-mode="custom-html"] .workspace-files-panel,

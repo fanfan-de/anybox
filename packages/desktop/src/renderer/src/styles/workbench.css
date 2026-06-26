@@ -3058,11 +3058,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .window-shell[data-background-mode="custom-html"] .canvas.is-workbench {
-  background: transparent;
-}
-
-.window-shell[data-background-mode="custom-html"] .workbench-pane-live-region {
-  background: transparent;
+  background: var(--surface-profile-shell);
 }
 
 .window-shell[data-background-mode="custom-html"] .canvas-region-top-menu {

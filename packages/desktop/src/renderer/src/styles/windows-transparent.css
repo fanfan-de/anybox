@@ -2,22 +2,20 @@
 
 .window-shell.is-windows[data-background-mode="default"],
 .session-popout-shell.is-windows {
-  --surface-profile-opacity: 28%;
-  --surface-profile-content-opacity: 54%;
-  --surface-profile-shell: color-mix(in srgb, var(--surface-shell) var(--surface-profile-opacity), transparent);
-  --surface-profile-panel: color-mix(in srgb, var(--surface-panel) var(--surface-profile-opacity), transparent);
-  --surface-profile-panel-muted: color-mix(in srgb, var(--surface-panel-muted) var(--surface-profile-opacity), transparent);
-  --surface-profile-content: color-mix(in srgb, var(--surface-panel) var(--surface-profile-content-opacity), transparent);
-  --surface-profile-content-muted: color-mix(in srgb, var(--surface-panel-muted) var(--surface-profile-content-opacity), transparent);
-  --surface-profile-sidebar: color-mix(in srgb, var(--surface-sidebar) var(--surface-profile-opacity), transparent);
-  --surface-profile-sidebar-strong: color-mix(in srgb, var(--surface-sidebar-strong) var(--surface-profile-opacity), transparent);
-  --surface-profile-tab: color-mix(in srgb, var(--semantic-shell-chrome-surface) var(--surface-profile-opacity), transparent);
-  --surface-profile-left-top-menu: color-mix(in srgb, var(--semantic-shell-chrome-surface) var(--surface-profile-opacity), transparent);
-  --surface-profile-right-top-menu: color-mix(in srgb, var(--semantic-shell-chrome-surface) var(--surface-profile-opacity), transparent);
-  --surface-profile-composer: color-mix(in srgb, var(--semantic-composer-surface) var(--surface-profile-opacity), transparent);
-  --surface-profile-button-secondary: color-mix(in srgb, var(--semantic-button-secondary-surface) var(--surface-profile-content-opacity), transparent);
-  --surface-profile-button-secondary-hover: color-mix(in srgb, var(--semantic-button-secondary-surface-hover) var(--surface-profile-content-opacity), transparent);
-  --surface-profile-button-secondary-disabled: color-mix(in srgb, var(--semantic-button-secondary-disabled-surface) var(--surface-profile-content-opacity), transparent);
+  --surface-profile-shell: var(--surface-shell);
+  --surface-profile-panel: var(--surface-panel);
+  --surface-profile-panel-muted: var(--surface-panel-muted);
+  --surface-profile-content: var(--surface-panel);
+  --surface-profile-content-muted: var(--surface-panel-muted);
+  --surface-profile-sidebar: var(--surface-sidebar);
+  --surface-profile-sidebar-strong: var(--surface-sidebar-strong);
+  --surface-profile-tab: var(--semantic-shell-chrome-surface);
+  --surface-profile-left-top-menu: var(--semantic-shell-chrome-surface);
+  --surface-profile-right-top-menu: var(--semantic-shell-chrome-surface);
+  --surface-profile-composer: var(--semantic-composer-surface);
+  --surface-profile-button-secondary: var(--semantic-button-secondary-surface);
+  --surface-profile-button-secondary-hover: var(--semantic-button-secondary-surface-hover);
+  --surface-profile-button-secondary-disabled: var(--semantic-button-secondary-disabled-surface);
   --surface-profile-settings-page: var(--semantic-settings-page-surface);
   --surface-profile-settings-page-nav: var(--semantic-settings-page-surface);
   --top-chrome-surface: var(--surface-profile-tab);
@@ -75,12 +73,12 @@
 .window-shell.is-windows[data-background-mode="default"] .dockview-theme-anybox .dv-view,
 .window-shell.is-windows[data-background-mode="default"] .dockview-theme-anybox .dv-groupview,
 .window-shell.is-windows[data-background-mode="default"] .dockview-theme-anybox .dv-content-container {
-  background: transparent;
+  background: var(--surface-profile-shell);
 }
 
 .window-shell.is-windows[data-background-mode="default"] .dockview-theme-anybox {
-  --dv-background-color: transparent;
-  --dv-group-view-background-color: transparent;
+  --dv-background-color: var(--surface-profile-shell);
+  --dv-group-view-background-color: var(--surface-profile-shell);
   --dv-tabs-and-actions-container-background-color: var(--surface-profile-tab);
   --dv-activegroup-visiblepanel-tab-background-color: var(--surface-profile-shell);
   --dv-inactivegroup-visiblepanel-tab-background-color: var(--surface-profile-tab);

@@ -5,7 +5,7 @@
 }
 
 .window-shell[data-background-mode="custom-html"] .dockview-workbench-panes {
-  background: transparent;
+  background: var(--surface-profile-shell);
 }
 
 .dockview-theme-anybox {
@@ -32,8 +32,8 @@
 }
 
 .window-shell[data-background-mode="custom-html"] .dockview-theme-anybox {
-  --dv-background-color: transparent;
-  --dv-group-view-background-color: transparent;
+  --dv-background-color: var(--surface-profile-shell);
+  --dv-group-view-background-color: var(--surface-profile-shell);
   --dv-tabs-and-actions-container-background-color: var(--surface-profile-tab);
   --dv-activegroup-visiblepanel-tab-background-color: var(--surface-profile-shell);
   --dv-inactivegroup-visiblepanel-tab-background-color: var(--surface-profile-tab);
@@ -42,7 +42,7 @@
 .window-shell[data-background-mode="custom-html"] .dockview-theme-anybox .dv-view,
 .window-shell[data-background-mode="custom-html"] .dockview-theme-anybox .dv-groupview,
 .window-shell[data-background-mode="custom-html"] .dockview-theme-anybox .dv-content-container {
-  background: transparent;
+  background: var(--surface-profile-shell);
 }
 
 .dockview-theme-anybox .dv-view,

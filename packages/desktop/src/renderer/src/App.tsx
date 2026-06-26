@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { SerializedDockview } from "dockview-react"
 import { ActivityRail } from "./app/sidebar/ActivityRail"
 import { BuiltinToolsPage } from "./app/tools/BuiltinToolsPage"
@@ -736,19 +736,10 @@ function AppearanceWindowApp() {
     hasHtmlBackground ? "has-html-background" : "",
     isWindows ? "is-windows" : "",
   ].filter(Boolean).join(" ")
-  const windowShellStyle = hasHtmlBackground
-    ? ({
-        "--surface-profile-opacity": htmlBackgroundAppearance.surfaceOpacityPercent,
-        "--surface-profile-content-opacity": htmlBackgroundAppearance.contentOpacityPercent,
-      } as CSSProperties)
-    : undefined
-
   return (
     <div
       className={windowShellClassName}
       data-background-mode={htmlBackgroundAppearance.backgroundMode}
-      data-surface-profile={htmlBackgroundAppearance.surfaceProfile}
-      style={windowShellStyle}
     >
       <HtmlBackgroundLayer config={htmlBackgroundConfig} />
       <main className="appearance-window-app-shell">
@@ -2399,20 +2390,11 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
         "--right-sidebar-resizer-width": "0px",
       }
     : appShellStyle
-  const windowShellStyle = hasHtmlBackground
-    ? ({
-        "--surface-profile-opacity": htmlBackgroundAppearance.surfaceOpacityPercent,
-        "--surface-profile-content-opacity": htmlBackgroundAppearance.contentOpacityPercent,
-      } as CSSProperties)
-    : undefined
-
   return (
     <WorkspaceStoreProvider store={workspaceStore}>
       <div
         className={windowShellClassName}
         data-background-mode={htmlBackgroundAppearance.backgroundMode}
-        data-surface-profile={htmlBackgroundAppearance.surfaceProfile}
-        style={windowShellStyle}
       >
         <HtmlBackgroundLayer config={htmlBackgroundConfig} />
         <main ref={appShellRef} className={appShellClassName} style={effectiveAppShellStyle}>

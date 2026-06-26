@@ -6,12 +6,10 @@ import {
   type AppearanceHtmlBackgroundConfig,
   type AppearanceHtmlBackgroundRenderMode,
   type AppearanceHtmlBackgroundState,
-  type AppearanceSurfaceProfile,
 } from "../../../../shared/appearance"
 
 export type HtmlBackgroundRenderMode = AppearanceHtmlBackgroundRenderMode
 export type DesktopBackgroundMode = AppearanceDesktopBackgroundMode
-export type SurfaceProfile = AppearanceSurfaceProfile
 export type HtmlBackgroundConfig = AppearanceHtmlBackgroundConfig
 export type HtmlBackgroundAppearanceState = AppearanceHtmlBackgroundState
 

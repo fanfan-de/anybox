@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   APPEARANCE_FONT_FAMILIES,
   APPEARANCE_TOKEN_GROUPS,
+  APPEARANCE_TOKEN_LAYERS,
   APPEARANCE_TOKEN_NAMES,
   DEFAULT_APPEARANCE_CODE_THEME_PREFERENCE,
   DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG,
@@ -112,9 +113,23 @@ describe("appearance token catalog", () => {
     expect(new Set(groupedTokenNames)).toEqual(new Set(APPEARANCE_TOKEN_NAMES))
   })
 
+  it("assigns every token group to a controlled abstraction layer", () => {
+    const layerSet = new Set(APPEARANCE_TOKEN_LAYERS)
+
+    expect(APPEARANCE_TOKEN_GROUPS.every((group) => layerSet.has(group.layer))).toBe(true)
+    expect(APPEARANCE_TOKEN_GROUPS.map((group) => group.layer)).toEqual(expect.arrayContaining([
+      "foundation",
+      "component",
+      "product",
+      "status",
+      "global",
+    ]))
+  })
+
   it("registers a single shell chrome surface token and migrates old split tokens", () => {
     expect(APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-shell-chrome")).toEqual({
       id: "component-shell-chrome",
+      layer: "product",
       label: "Shell Chrome",
       description: "Dedicated semantic surfaces for shell-level navigation and menu bars.",
       rows: [
@@ -146,8 +161,9 @@ describe("appearance token catalog", () => {
   it("registers and normalizes the settings page surface token", () => {
     expect(APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-settings-page")).toEqual({
       id: "component-settings-page",
+      layer: "product",
       label: "Settings Page",
-      description: "Dedicated semantic surfaces and switch controls for the settings dialog and settings navigation shell.",
+      description: "Dedicated semantic surface for the settings dialog and settings navigation shell.",
       rows: [
         {
           id: "semantic-settings-page-surface",
@@ -156,6 +172,15 @@ describe("appearance token catalog", () => {
           lightToken: "semantic-settings-page-surface-light",
           darkToken: "semantic-settings-page-surface-dark",
         },
+      ],
+    })
+
+    expect(APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-settings-switches")).toEqual({
+      id: "component-settings-switches",
+      layer: "component",
+      label: "Settings Switches",
+      description: "Switch row, track, and thumb colors used by settings toggle controls.",
+      rows: [
         {
           id: "semantic-settings-switch-row-surface-focus",
           label: "Switch Focus Row",
@@ -318,6 +343,7 @@ describe("appearance proposed plan card tokens", () => {
   it("registers the proposed plan card token group", () => {
     expect(APPEARANCE_TOKEN_GROUPS).toContainEqual({
       id: "component-proposed-plan-card",
+      layer: "product",
       label: "Proposed Plan",
       description: "Dedicated semantic color for proposed plan cards.",
       rows: [
@@ -358,6 +384,7 @@ describe("appearance sidebar tree row tokens", () => {
   it("registers the sidebar tree row token group", () => {
     expect(APPEARANCE_TOKEN_GROUPS).toContainEqual({
       id: "component-sidebar-tree-rows",
+      layer: "product",
       label: "Sidebar Tree Rows",
       description: "Dedicated row tokens for the left sidebar workspace and skills trees.",
       rows: [
@@ -439,6 +466,7 @@ describe("appearance thread view tokens", () => {
   it("registers text, panel, and user-turn diff card tokens", () => {
     expect(APPEARANCE_TOKEN_GROUPS).toContainEqual({
       id: "component-thread-view",
+      layer: "product",
       label: "Thread View",
       description: "Dedicated semantic colors for thread text, panel surfaces, and user-turn diff cards.",
       rows: [
@@ -570,6 +598,7 @@ describe("appearance markdown tokens", () => {
   it("registers the markdown token group", () => {
     expect(APPEARANCE_TOKEN_GROUPS).toContainEqual({
       id: "component-markdown",
+      layer: "product",
       label: "Markdown",
       description: "Dedicated semantic colors for rendered Markdown content.",
       rows: [

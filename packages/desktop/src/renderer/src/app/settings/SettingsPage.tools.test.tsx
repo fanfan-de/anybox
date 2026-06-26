@@ -1095,15 +1095,7 @@ describe("SettingsPage built-in tools", () => {
       html: "<main>Custom background</main>",
     }))
 
-    fireEvent.change(screen.getByRole("slider", { name: /Surface opacity/ }), {
-      target: {
-        value: "0.72",
-      },
-    })
-
-    expect(onHtmlBackgroundConfigChange).toHaveBeenCalledWith(expect.objectContaining({
-      surfaceOpacity: 0.72,
-    }))
+    expect(screen.queryByRole("slider", { name: /Surface opacity/ })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("switch", { name: "Dynamic script background" }))
 
@@ -1125,7 +1117,7 @@ describe("SettingsPage built-in tools", () => {
     })
 
     expect(screen.getByText("Row Surface Active")).toBeInTheDocument()
-    expect(screen.getByText("semantic-sidebar-tree-row-surface-active")).toBeInTheDocument()
+    expect(screen.getByTitle(/^semantic-sidebar-tree-row-surface-active \//)).toBeInTheDocument()
     expect(screen.queryByText("App Background")).not.toBeInTheDocument()
 
     fireEvent.change(searchBox, {
@@ -1133,16 +1125,16 @@ describe("SettingsPage built-in tools", () => {
     })
 
     expect(screen.getByText("Settings List Detail Rows")).toBeInTheDocument()
-    expect(screen.getByText("semantic-settings-list-detail-row-surface-hover")).toBeInTheDocument()
+    expect(screen.getByTitle(/^semantic-settings-list-detail-row-surface-hover \//)).toBeInTheDocument()
     expect(screen.queryByText("App Background")).not.toBeInTheDocument()
 
     fireEvent.change(searchBox, {
       target: { value: "semantic-settings-switch-track-surface" },
     })
 
-    expect(screen.getByText("Settings Page")).toBeInTheDocument()
+    expect(screen.getByText("Settings Switches")).toBeInTheDocument()
     expect(screen.getByText("Switch Track")).toBeInTheDocument()
-    expect(screen.getByText("semantic-settings-switch-track-surface")).toBeInTheDocument()
+    expect(screen.getByTitle(/^semantic-settings-switch-track-surface \//)).toBeInTheDocument()
     expect(screen.queryByText("App Background")).not.toBeInTheDocument()
 
     fireEvent.change(searchBox, {
@@ -1151,7 +1143,7 @@ describe("SettingsPage built-in tools", () => {
 
     expect(screen.getByText("Buttons")).toBeInTheDocument()
     expect(screen.getByText("Primary Surface")).toBeInTheDocument()
-    expect(screen.getByText("semantic-button-primary-surface")).toBeInTheDocument()
+    expect(screen.getByTitle(/^semantic-button-primary-surface \//)).toBeInTheDocument()
     expect(screen.queryByText("App Background")).not.toBeInTheDocument()
 
     fireEvent.change(searchBox, {
@@ -1159,6 +1151,53 @@ describe("SettingsPage built-in tools", () => {
     })
 
     expect(screen.getByText("No matching tokens")).toBeInTheDocument()
+  })
+
+  it("filters appearance theme tokens by abstraction layer", () => {
+    render(<SettingsPage {...createSettingsPageProps()} />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Filter token layer" }))
+    fireEvent.click(screen.getByRole("option", { name: "Components" }))
+
+    expect(screen.getByText("Buttons")).toBeInTheDocument()
+    expect(screen.getByText("Settings Switches")).toBeInTheDocument()
+    expect(screen.queryByText("App Background")).not.toBeInTheDocument()
+    expect(screen.queryByText("Thread View")).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Filter token layer" }))
+    fireEvent.click(screen.getByRole("option", { name: "Product areas" }))
+
+    expect(screen.getByText("Thread View")).toBeInTheDocument()
+    expect(screen.getByText("Settings Page")).toBeInTheDocument()
+    expect(screen.queryByText("Buttons")).not.toBeInTheDocument()
+  })
+
+  it("localizes appearance token metadata in Chinese", () => {
+    window.localStorage.setItem("desktop.locale", "zh-CN")
+
+    render(
+      <I18nProvider>
+        <SettingsPage {...createSettingsPageProps()} />
+      </I18nProvider>,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "\u5916\u89c2" }))
+
+    expect(screen.getByText("\u5e94\u7528\u80cc\u666f")).toBeInTheDocument()
+    expect(screen.getByText("\u6700\u5e95\u5c42\u7684\u753b\u5e03\u80cc\u666f\u3002")).toBeInTheDocument()
+    expect(screen.queryByText("The farthest canvas background.")).not.toBeInTheDocument()
+
+    const searchBox = screen.getByRole("searchbox", { name: "\u641c\u7d22 semantic token" })
+    fireEvent.change(searchBox, {
+      target: { value: "\u5f00\u5173\u8f68\u9053" },
+    })
+
+    expect(screen.getByText("\u8bbe\u7f6e\u5f00\u5173")).toBeInTheDocument()
+    expect(screen.getByText("\u5f00\u5173\u8f68\u9053")).toBeInTheDocument()
+    expect(screen.getByText("\u8bbe\u7f6e\u5f00\u5173\u63a7\u4ef6\u7684\u9ed8\u8ba4\u8f68\u9053\u586b\u5145\u8272\u3002")).toBeInTheDocument()
+    expect(screen.queryByText("\u5e94\u7528\u80cc\u666f")).not.toBeInTheDocument()
   })
 
   it("edits appearance token alpha values", () => {

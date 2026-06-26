@@ -12,12 +12,15 @@ import {
   type PointerEvent,
 } from "react"
 import {
+  APPEARANCE_TOKEN_LAYERS,
   APPEARANCE_TOKEN_GROUPS,
   type AppearanceFontFamily,
   type AppearanceTokenGroup,
+  type AppearanceTokenLayer,
   type AppearanceTokenMap,
   type AppearanceTokenName,
 } from "../../../../shared/appearance"
+import { getAppearanceTokenGroupCopy, getAppearanceTokenRowCopy } from "../../../../shared/appearance-token-copy"
 import type { AppearanceTheme } from "../../../../shared/appearance-themes"
 import type { DesktopAppUpdateState, DesktopProviderAuthPrompt, DesktopStoragePaths } from "../../../../shared/desktop-ipc-contract"
 import {
@@ -215,6 +218,14 @@ function getProviderSourceLabel(provider: ProviderCatalogItem, t: SettingsTransl
   if (provider.source === "env") return t("settings.provider.sourceEnvironment")
   if (provider.source === "custom") return t("settings.provider.sourceCustom")
   return t("settings.provider.sourceCatalog")
+}
+
+function getAppearanceTokenLayerLabel(layer: AppearanceTokenLayer, t: SettingsTranslate) {
+  if (layer === "foundation") return t("settings.appearance.tokenLayerFoundation")
+  if (layer === "component") return t("settings.appearance.tokenLayerComponent")
+  if (layer === "product") return t("settings.appearance.tokenLayerProduct")
+  if (layer === "status") return t("settings.appearance.tokenLayerStatus")
+  return t("settings.appearance.tokenLayerGlobal")
 }
 
 const providerLogoBaseURL = "https://models.dev/logos"
@@ -915,6 +926,7 @@ function countAppearanceTokenRows(groups: readonly AppearanceTokenGroup[]) {
 }
 
 type AppearanceTokenGroupFilter = "all" | (typeof APPEARANCE_TOKEN_GROUPS)[number]["id"]
+type AppearanceTokenLayerFilter = "all" | AppearanceTokenLayer
 type AppearanceTokenCustomizationFilter = "all" | "customized"
 
 function isAppearanceTokenRowCustomized(
@@ -929,14 +941,22 @@ function matchesAppearanceTokenRowSearch(
   row: AppearanceTokenGroup["rows"][number],
   appearanceTokenValues: Record<AppearanceTokenName, string>,
   normalizedQuery: string,
+  locale: AppLocale,
 ) {
+  const groupCopy = getAppearanceTokenGroupCopy(locale, group)
+  const rowCopy = getAppearanceTokenRowCopy(locale, row)
   const haystack = [
     group.id,
+    group.layer,
     group.label,
     group.description,
+    groupCopy.label,
+    groupCopy.description,
     row.id,
     row.label,
     row.description,
+    rowCopy.label,
+    rowCopy.description,
     row.lightToken,
     row.darkToken,
     appearanceTokenValues[row.lightToken] ?? "",
@@ -952,6 +972,8 @@ function filterAppearanceTokenGroups(
   groups: readonly AppearanceTokenGroup[],
   rawQuery: string,
   appearanceTokenValues: Record<AppearanceTokenName, string>,
+  locale: AppLocale,
+  layerFilter: AppearanceTokenLayerFilter,
   groupFilter: AppearanceTokenGroupFilter,
   customizationFilter: AppearanceTokenCustomizationFilter,
   appearanceOverrides: AppearanceTokenMap,
@@ -959,9 +981,20 @@ function filterAppearanceTokenGroups(
   const normalizedQuery = rawQuery.trim().toLowerCase()
 
   return groups.flatMap((group) => {
+    if (layerFilter !== "all" && group.layer !== layerFilter) return []
     if (groupFilter !== "all" && group.id !== groupFilter) return []
 
-    const groupHaystack = `${group.id} ${group.label} ${group.description}`.toLowerCase()
+    const groupCopy = getAppearanceTokenGroupCopy(locale, group)
+    const groupHaystack = [
+      group.id,
+      group.layer,
+      group.label,
+      group.description,
+      groupCopy.label,
+      groupCopy.description,
+    ]
+      .join(" ")
+      .toLowerCase()
     const rows = group.rows.filter((row) => {
       if (customizationFilter === "customized" && !isAppearanceTokenRowCustomized(row, appearanceOverrides)) {
         return false
@@ -969,7 +1002,7 @@ function filterAppearanceTokenGroups(
 
       if (!normalizedQuery || groupHaystack.includes(normalizedQuery)) return true
 
-      return matchesAppearanceTokenRowSearch(group, row, appearanceTokenValues, normalizedQuery)
+      return matchesAppearanceTokenRowSearch(group, row, appearanceTokenValues, normalizedQuery, locale)
     })
 
     if (rows.length === 0) return []
@@ -991,17 +1024,38 @@ export function AppearanceTokenEditor({
   onAppearanceTokenChange,
   onAppearanceTokenReset,
 }: AppearanceTokenEditorProps) {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const [themeTokenSearchQuery, setThemeTokenSearchQuery] = useState("")
+  const [themeTokenLayerFilter, setThemeTokenLayerFilter] = useState<AppearanceTokenLayerFilter>("all")
   const [themeTokenGroupFilter, setThemeTokenGroupFilter] = useState<AppearanceTokenGroupFilter>("all")
   const [themeTokenCustomizationFilter, setThemeTokenCustomizationFilter] =
     useState<AppearanceTokenCustomizationFilter>("all")
+  const availableAppearanceTokenGroups = useMemo(
+    () =>
+      APPEARANCE_TOKEN_GROUPS.filter((group) =>
+        themeTokenLayerFilter === "all" || group.layer === themeTokenLayerFilter,
+      ),
+    [themeTokenLayerFilter],
+  )
+  const appearanceTokenLayerFilterOptions = useMemo<Array<{ value: AppearanceTokenLayerFilter; label: string }>>(
+    () => [
+      { value: "all", label: t("settings.appearance.allTokenLayers") },
+      ...APPEARANCE_TOKEN_LAYERS.map((layer) => ({
+        value: layer,
+        label: getAppearanceTokenLayerLabel(layer, t),
+      })),
+    ],
+    [t],
+  )
   const appearanceTokenGroupFilterOptions = useMemo<Array<{ value: AppearanceTokenGroupFilter; label: string }>>(
     () => [
       { value: "all", label: t("settings.appearance.allTokenGroups") },
-      ...APPEARANCE_TOKEN_GROUPS.map((group) => ({ value: group.id, label: group.label })),
+      ...availableAppearanceTokenGroups.map((group) => ({
+        value: group.id,
+        label: getAppearanceTokenGroupCopy(locale, group).label,
+      })),
     ],
-    [t],
+    [availableAppearanceTokenGroups, locale, t],
   )
   const appearanceTokenCustomizationFilterOptions = useMemo<
     Array<{ value: AppearanceTokenCustomizationFilter; label: string }>
@@ -1018,6 +1072,8 @@ export function AppearanceTokenEditor({
         APPEARANCE_TOKEN_GROUPS,
         themeTokenSearchQuery,
         appearanceTokenValues,
+        locale,
+        themeTokenLayerFilter,
         themeTokenGroupFilter,
         themeTokenCustomizationFilter,
         appearanceOverrides,
@@ -1025,12 +1081,25 @@ export function AppearanceTokenEditor({
     [
       appearanceOverrides,
       appearanceTokenValues,
+      locale,
       themeTokenCustomizationFilter,
       themeTokenGroupFilter,
+      themeTokenLayerFilter,
       themeTokenSearchQuery,
     ],
   )
-  const appearanceTokenTotalCount = countAppearanceTokenRows(APPEARANCE_TOKEN_GROUPS)
+  useEffect(() => {
+    if (themeTokenGroupFilter === "all") return
+
+    const selectedGroup = APPEARANCE_TOKEN_GROUPS.find((group) => group.id === themeTokenGroupFilter)
+    if (selectedGroup && (themeTokenLayerFilter === "all" || selectedGroup.layer === themeTokenLayerFilter)) {
+      return
+    }
+
+    setThemeTokenGroupFilter("all")
+  }, [themeTokenGroupFilter, themeTokenLayerFilter])
+
+  const appearanceTokenTotalCount = countAppearanceTokenRows(availableAppearanceTokenGroups)
   const appearanceTokenVisibleCount = countAppearanceTokenRows(filteredAppearanceTokenGroups)
   const colorValueLabel = t("settings.appearance.tokenColorValue")
   const channelLabels = {
@@ -1054,6 +1123,13 @@ export function AppearanceTokenEditor({
           />
         </div>
         <div className="settings-theme-token-filter-controls">
+          <SettingsSelect<AppearanceTokenLayerFilter>
+            ariaLabel={t("settings.appearance.tokenLayerFilterLabel")}
+            className="settings-theme-token-layer-select"
+            options={appearanceTokenLayerFilterOptions}
+            value={themeTokenLayerFilter}
+            onChange={setThemeTokenLayerFilter}
+          />
           <SettingsSelect<AppearanceTokenGroupFilter>
             ariaLabel={t("settings.appearance.tokenGroupFilterLabel")}
             className="settings-theme-token-filter-select"
@@ -1084,90 +1160,98 @@ export function AppearanceTokenEditor({
           <p>{t("settings.appearance.noTokenResultsCopy")}</p>
         </article>
       ) : (
-        filteredAppearanceTokenGroups.map((group) => (
-          <section key={group.id} className="settings-panel settings-theme-token-panel">
-            <div className="settings-section-header">
-              <div>
-                <h3>{group.label}</h3>
+        filteredAppearanceTokenGroups.map((group) => {
+          const groupLayerLabel = getAppearanceTokenLayerLabel(group.layer, t)
+          const groupCopy = getAppearanceTokenGroupCopy(locale, group)
+
+          return (
+            <section key={group.id} className="settings-panel settings-theme-token-panel">
+              <div className="settings-section-header">
+                <div>
+                  <span className="settings-theme-token-layer-badge">{groupLayerLabel}</span>
+                  <h3>{groupCopy.label}</h3>
+                </div>
+                <p>{groupCopy.description}</p>
               </div>
-              <p>{group.description}</p>
-            </div>
 
-            <div className="settings-theme-token-grid">
-              {group.rows.map((row) => {
-                const isLightCustomized = Boolean(appearanceOverrides[row.lightToken])
-                const isDarkCustomized = Boolean(appearanceOverrides[row.darkToken])
-                const isCustomized = isLightCustomized || isDarkCustomized
-                const lightColorLabel = `${group.label} ${row.label} Light ${row.lightToken}`
-                const darkColorLabel = `${group.label} ${row.label} Dark ${row.darkToken}`
-                const lightTokenValue = appearanceTokenValues[row.lightToken]
-                const darkTokenValue = appearanceTokenValues[row.darkToken]
+              <div className="settings-theme-token-grid">
+                {group.rows.map((row) => {
+                  const rowCopy = getAppearanceTokenRowCopy(locale, row)
+                  const isLightCustomized = Boolean(appearanceOverrides[row.lightToken])
+                  const isDarkCustomized = Boolean(appearanceOverrides[row.darkToken])
+                  const isCustomized = isLightCustomized || isDarkCustomized
+                  const lightColorLabel = `${groupCopy.label} ${rowCopy.label} ${t("settings.appearance.light")} ${row.lightToken}`
+                  const darkColorLabel = `${groupCopy.label} ${rowCopy.label} ${t("settings.appearance.dark")} ${row.darkToken}`
+                  const lightTokenValue = appearanceTokenValues[row.lightToken]
+                  const darkTokenValue = appearanceTokenValues[row.darkToken]
 
-                return (
-                  <article
-                    key={row.id}
-                    className={
-                      isCustomized
-                        ? "settings-theme-token-card is-customized"
-                        : "settings-theme-token-card"
-                    }
-                  >
-                    <div className="settings-theme-token-copy">
-                      <strong>{row.label}</strong>
-                      <code className="settings-theme-token-name">{row.id}</code>
-                    </div>
-
-                    <div className="settings-theme-token-controls">
-                      <div className="settings-theme-token-mode">
-                        <span>{t("settings.appearance.light")}</span>
-                        <AppearanceColorPicker
-                          ariaLabel={lightColorLabel}
-                          channelLabels={channelLabels}
-                          value={lightTokenValue}
-                          onChange={(value) => onAppearanceTokenChange(row.lightToken, value)}
-                        />
-                        <AppearanceColorTextInput
-                          ariaLabel={`${lightColorLabel} ${colorValueLabel}`}
-                          value={lightTokenValue}
-                          onCommit={(value) => onAppearanceTokenChange(row.lightToken, value)}
-                        />
+                  return (
+                    <article
+                      key={row.id}
+                      className={
+                        isCustomized
+                          ? "settings-theme-token-card is-customized"
+                          : "settings-theme-token-card"
+                      }
+                      title={`${row.id} / ${row.lightToken} / ${row.darkToken}`}
+                    >
+                      <div className="settings-theme-token-copy">
+                        <strong>{rowCopy.label}</strong>
+                        <span className="settings-theme-token-description">{rowCopy.description}</span>
                       </div>
-                      <div className="settings-theme-token-mode">
-                        <span>{t("settings.appearance.dark")}</span>
-                        <AppearanceColorPicker
-                          ariaLabel={darkColorLabel}
-                          channelLabels={channelLabels}
-                          value={darkTokenValue}
-                          onChange={(value) => onAppearanceTokenChange(row.darkToken, value)}
-                        />
-                        <AppearanceColorTextInput
-                          ariaLabel={`${darkColorLabel} ${colorValueLabel}`}
-                          value={darkTokenValue}
-                          onCommit={(value) => onAppearanceTokenChange(row.darkToken, value)}
-                        />
+
+                      <div className="settings-theme-token-controls">
+                        <div className="settings-theme-token-mode">
+                          <span>{t("settings.appearance.light")}</span>
+                          <AppearanceColorPicker
+                            ariaLabel={lightColorLabel}
+                            channelLabels={channelLabels}
+                            value={lightTokenValue}
+                            onChange={(value) => onAppearanceTokenChange(row.lightToken, value)}
+                          />
+                          <AppearanceColorTextInput
+                            ariaLabel={`${lightColorLabel} ${colorValueLabel}`}
+                            value={lightTokenValue}
+                            onCommit={(value) => onAppearanceTokenChange(row.lightToken, value)}
+                          />
+                        </div>
+                        <div className="settings-theme-token-mode">
+                          <span>{t("settings.appearance.dark")}</span>
+                          <AppearanceColorPicker
+                            ariaLabel={darkColorLabel}
+                            channelLabels={channelLabels}
+                            value={darkTokenValue}
+                            onChange={(value) => onAppearanceTokenChange(row.darkToken, value)}
+                          />
+                          <AppearanceColorTextInput
+                            ariaLabel={`${darkColorLabel} ${colorValueLabel}`}
+                            value={darkTokenValue}
+                            onCommit={(value) => onAppearanceTokenChange(row.darkToken, value)}
+                          />
+                        </div>
+                        <button
+                          aria-label={t("settings.appearance.usePresetFor", {
+                            name: `${groupCopy.label} ${rowCopy.label}`,
+                          })}
+                          className="secondary-button settings-theme-token-reset"
+                          type="button"
+                          disabled={!isCustomized}
+                          title={t("settings.appearance.usePreset")}
+                          onClick={() => {
+                            onAppearanceTokenReset(row.lightToken)
+                            onAppearanceTokenReset(row.darkToken)
+                          }}
+                        >
+                          <ResetIcon size={14} />
+                        </button>
                       </div>
-                      <button
-                        aria-label={t("settings.appearance.usePresetFor", {
-                          name: `${group.label} ${row.label}`,
-                        })}
-                        className="secondary-button settings-theme-token-reset"
-                        type="button"
-                        disabled={!isCustomized}
-                        title={t("settings.appearance.usePreset")}
-                        onClick={() => {
-                          onAppearanceTokenReset(row.lightToken)
-                          onAppearanceTokenReset(row.darkToken)
-                        }}
-                      >
-                        <ResetIcon size={14} />
-                      </button>
-                    </div>
-                  </article>
-                )
-              })}
-            </div>
-          </section>
-        ))
+                    </article>
+                  )
+                })}
+              </div>
+            </section>
+          )
+        })
       )}
     </>
   )
@@ -1641,19 +1725,6 @@ export function AppearanceSettingsPanel({
               onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ opacity: Number(event.target.value) })}
             />
             <output>{Math.round(htmlBackgroundConfig.opacity * 100)}%</output>
-          </label>
-
-          <label className="settings-html-background-range">
-            <span>{t("settings.appearance.htmlBackgroundSurfaceOpacity")}</span>
-            <input
-              type="range"
-              min="0.36"
-              max="1"
-              step="0.02"
-              value={htmlBackgroundConfig.surfaceOpacity}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ surfaceOpacity: Number(event.target.value) })}
-            />
-            <output>{Math.round(htmlBackgroundConfig.surfaceOpacity * 100)}%</output>
           </label>
 
           <label className="settings-html-background-range">
