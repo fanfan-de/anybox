@@ -10243,6 +10243,7 @@ describe("App", () => {
 
     expect(leftActivityRail).not.toBeNull()
     expect(within(leftActivityRail!).getByRole("button", { name: "Open workspace" })).toBeInTheDocument()
+    expect(within(leftActivityRail!).getByRole("button", { name: "Open connections and extensions" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Open skills" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Open prompts" })).not.toBeInTheDocument()
 
@@ -10260,7 +10261,7 @@ describe("App", () => {
     expect(within(configurationGroup).getByRole("button", { name: "Open prompts and skills" })).toBeInTheDocument()
     expect(within(configurationGroup).queryByRole("button", { name: "Open skills" })).not.toBeInTheDocument()
     expect(within(configurationGroup).queryByRole("button", { name: "Open prompts" })).not.toBeInTheDocument()
-    expect(within(configurationGroup).getByRole("button", { name: "Open connections and extensions" })).toBeInTheDocument()
+    expect(within(configurationGroup).queryByRole("button", { name: "Open connections and extensions" })).not.toBeInTheDocument()
     expect(within(configurationGroup).queryByRole("button", { name: "Open MCP" })).not.toBeInTheDocument()
     expect(within(configurationGroup).queryByRole("button", { name: "Open plugins" })).not.toBeInTheDocument()
     expect(within(configurationGroup).queryByRole("button", { name: "Open connectors" })).not.toBeInTheDocument()

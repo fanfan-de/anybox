@@ -20,6 +20,24 @@ function renderActivityRail() {
 }
 
 describe("ActivityRail", () => {
+  it("places the connections hub directly under workspace in the primary rail", () => {
+    const { props } = renderActivityRail()
+    const rail = screen.getByLabelText("Primary navigation rail")
+    const primaryStack = within(rail).getByLabelText("Primary views")
+    const buttons = within(primaryStack).getAllByRole("button")
+
+    expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Open workspace",
+      "Open connections and extensions",
+      "Open calendar",
+      "Open automations",
+    ])
+
+    fireEvent.click(within(primaryStack).getByRole("button", { name: "Open connections and extensions" }))
+
+    expect(props.onViewChange).toHaveBeenCalledWith("connections")
+  })
+
   it("keeps settings as the last control in the left rail footer", () => {
     const { props } = renderActivityRail()
     const rail = screen.getByLabelText("Primary navigation rail")
@@ -48,17 +66,21 @@ describe("ActivityRail", () => {
     expect(expandedToggle.querySelector(".lucide-chevron-down")).not.toBeNull()
   })
 
-  it("collapses external capability shortcuts into one connections entry", () => {
+  it("keeps external capability shortcuts out of the configuration stack", () => {
     const { props } = renderActivityRail()
 
     fireEvent.click(screen.getByRole("button", { name: "Show configuration shortcuts" }))
 
     expect(screen.queryByRole("button", { name: "Open SSH" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Open MCP" })).not.toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "Open plugins" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Open connectors" })).not.toBeInTheDocument()
+    expect(within(screen.getByLabelText("Configuration views")).queryByRole("button", {
+      name: "Open connections and extensions",
+    })).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: "Open connections and extensions" }))
+    fireEvent.click(within(screen.getByLabelText("Primary views")).getByRole("button", {
+      name: "Open connections and extensions",
+    }))
 
     expect(props.onViewChange).toHaveBeenCalledWith("connections")
   })

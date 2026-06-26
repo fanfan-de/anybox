@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "XQdq/zPTPaQ=",
+  "success": true,
+  "projectFilePath": "C:\\Projects\\Anybox\\plugins\\Anybox-Plugins\\computer-use-windows\\helper\\ComputerUse.Helper\\ComputerUse.Helper.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\19128\\.nuget\\packages\\microsoft.net.illink.tasks\\9.0.8\\microsoft.net.illink.tasks.9.0.8.nupkg.sha512",
+    "C:\\Users\\19128\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\9.0.8\\microsoft.netcore.app.runtime.win-x64.9.0.8.nupkg.sha512",
+    "C:\\Users\\19128\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\9.0.8\\microsoft.windowsdesktop.app.runtime.win-x64.9.0.8.nupkg.sha512",
+    "C:\\Users\\19128\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\9.0.8\\microsoft.aspnetcore.app.runtime.win-x64.9.0.8.nupkg.sha512"
+  ],
+  "logs": []
+}

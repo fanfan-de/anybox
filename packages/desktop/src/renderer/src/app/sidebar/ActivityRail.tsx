@@ -4,9 +4,9 @@ import {
   ChevronRightIcon,
   AutomationIcon,
   CalendarIcon,
-  ConnectedStatusIcon,
   FileTextIcon,
   LayoutSidebarLeftIcon,
+  PluginIcon,
   SettingsIcon,
   ToolsIcon,
 } from "../icons"
@@ -28,13 +28,13 @@ interface ActivityRailProps {
 
 const primaryLeftRailViews = [
   { view: "workspace" as const, labelKey: "shell.openWorkspace", Icon: LayoutSidebarLeftIcon },
+  { view: "connections" as const, labelKey: "shell.openConnectionsAndExtensions", Icon: PluginIcon },
   { view: "calendar" as const, labelKey: "shell.openCalendar", Icon: CalendarIcon },
   { view: "automations" as const, labelKey: "shell.openAutomations", Icon: AutomationIcon },
 ]
 
 const configurationLeftRailViews = [
   { view: "resources" as const, labelKey: "shell.openPromptsAndSkills", Icon: FileTextIcon },
-  { view: "connections" as const, labelKey: "shell.openConnectionsAndExtensions", Icon: ConnectedStatusIcon },
   { view: "tools" as const, labelKey: "shell.openTools", Icon: ToolsIcon },
 ]
 
