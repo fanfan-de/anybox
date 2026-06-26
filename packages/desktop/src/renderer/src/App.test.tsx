@@ -13932,6 +13932,7 @@ describe("App", () => {
     expect(styles).toMatch(/\.canvas-top-stack\s*\{[^}]*display:\s*grid;[^}]*gap:\s*6px;/s)
     expect(styles).toMatch(/\.workbench-pane\s*\{[^}]*flex:\s*1 1 0;[^}]*position:\s*relative;[^}]*overflow:\s*hidden;/s)
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.workbench-pane\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*min-height:\s*0;/s)
+    expect(styles).toMatch(/\.dockview-theme-anybox\s+\.dv-view,\s*\.dockview-theme-anybox\s+\.dv-groupview,\s*\.dockview-theme-anybox\s+\.dv-content-container\s*\{[^}]*min-width:\s*0;[^}]*min-height:\s*0;[^}]*background:\s*var\(--seg-shell\);/s)
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.dv-content-container,[\s\S]*?\.dockview-theme-anybox\s+\.workbench-pane-live-region\s*\{[^}]*-webkit-app-region:\s*no-drag;/s)
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.workbench-pane\s+button,[\s\S]*?\.dockview-theme-anybox\s+\.workbench-pane\s+\[contenteditable="true"\]\s*\{[^}]*-webkit-app-region:\s*no-drag;/s)
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.workbench-pane-live-region\.is-dockview-managed\s*\{[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto auto;/s)
