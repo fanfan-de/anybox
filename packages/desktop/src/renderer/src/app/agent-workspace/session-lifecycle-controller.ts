@@ -25,7 +25,7 @@ import type {
   SessionSummary,
   SidebarActionKey,
   SideChatLink,
-  Turn,
+  ThreadMessage,
   WorkspaceGroup,
 } from "../types"
 import type { SessionMessageTree } from "../session-message-tree"
@@ -175,7 +175,7 @@ interface UseSessionLifecycleControllerOptions {
   setComposerAttachmentsByTabKey: StateSetter<Record<string, ComposerAttachment[]>>
   setComposerDraftStateByTabKey: StateSetter<Record<string, ComposerDraftState>>
   setComposerParentMessageIDByTabKey: StateSetter<Record<string, string>>
-  setConversations: StateSetter<Record<string, Turn[]>>
+  setConversations: StateSetter<Record<string, ThreadMessage[]>>
   setContextUsageBySession: StateSetter<Record<string, SessionContextUsage>>
   setCreateSessionTabs: StateSetter<CreateSessionTab[]>
   setDeletingSessionID: StateSetter<string | null>

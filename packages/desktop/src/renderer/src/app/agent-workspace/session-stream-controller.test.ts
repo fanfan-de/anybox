@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest"
-import type { AssistantTraceItem, AssistantTurn, SessionTaskListView, Turn, UserTurn } from "../types"
+import type { AssistantTraceItem, AssistantThreadMessage, SessionTaskListView, ThreadMessage, UserThreadMessage } from "../types"
 import {
-  applyExecutionModeToUserTurnPresentation,
+  applyExecutionModeToUserMessagePresentation,
   compactHighFrequencyDeltaStreamEvent,
-  conversationTurnsAreEquivalent,
-  ensureAssistantTurnPresentation,
+  conversationMessagesAreEquivalent,
+  ensureAssistantThreadMessagePresentation,
   isBackendUserMessageRecordedStreamEvent,
   isCompletedStreamEvent,
   isHighFrequencyDeltaStreamEvent,
@@ -15,16 +15,16 @@ import {
   isSubagentCreatedStreamEvent,
   isTaskStateStreamEvent,
   isTerminalStreamEvent,
-  mergeConversationTurnsFromHistory,
-  mergeExternalUserTurnsFromHistory,
+  mergeConversationMessagesFromHistory,
+  mergeExternalUserMessagesFromHistory,
   readLatestSessionContextUsageFromHistory,
   readSubagentCreatedChildSessionID,
   readSessionContextUsageFromDoneEventData,
   readSessionContextUsageFromLlmCompletedEventData,
   readSessionTaskListViewFromStreamEvent,
-  reconcileConversationTurns,
-  revealBackendRecordedUserTurnPresentation,
-  revealPendingSteerUserTurnsAtHandoffPresentation,
+  reconcileConversationMessages,
+  revealBackendRecordedUserMessagePresentation,
+  revealPendingSteerUserMessagesAtHandoffPresentation,
   resolveExecutionModeRoute,
   resolveStreamMessageID,
   resolveStreamCursor,
@@ -33,7 +33,7 @@ import {
   STEER_INPUT_CONSUMED_STATE_REASON,
 } from "./session-stream-controller"
 
-function createUserTurn(id: string, text: string): UserTurn {
+function createUserThreadMessage(id: string, text: string): UserThreadMessage {
   return {
     id,
     kind: "user",
@@ -42,7 +42,7 @@ function createUserTurn(id: string, text: string): UserTurn {
   }
 }
 
-function createAssistantTurn(id: string, itemID: string, text: string, sourceID = "source-1", messageID?: string): AssistantTurn {
+function createAssistantThreadMessage(id: string, itemID: string, text: string, sourceID = "source-1", messageID?: string): AssistantThreadMessage {
   return {
     id,
     messageID,
@@ -67,7 +67,7 @@ function createAssistantTurn(id: string, itemID: string, text: string, sourceID 
   }
 }
 
-function createCancelledAssistantTurn(id: string, messageID?: string): AssistantTurn {
+function createCancelledAssistantThreadMessage(id: string, messageID?: string): AssistantThreadMessage {
   return {
     id,
     messageID,
@@ -95,7 +95,7 @@ function createCancelledAssistantTurn(id: string, messageID?: string): Assistant
   }
 }
 
-function createPendingToolAssistantTurn(id: string, messageID?: string): AssistantTurn {
+function createPendingToolAssistantThreadMessage(id: string, messageID?: string): AssistantThreadMessage {
   return {
     id,
     messageID,
@@ -127,7 +127,7 @@ function createPendingToolAssistantTurn(id: string, messageID?: string): Assista
   }
 }
 
-function createCancelledToolAssistantTurn(id: string, messageID?: string): AssistantTurn {
+function createCancelledToolAssistantThreadMessage(id: string, messageID?: string): AssistantThreadMessage {
   return {
     id,
     messageID,
@@ -169,7 +169,7 @@ function createCancelledToolAssistantTurn(id: string, messageID?: string): Assis
   }
 }
 
-function createErroredToolAssistantTurn(id: string, messageID?: string): AssistantTurn {
+function createErroredToolAssistantThreadMessage(id: string, messageID?: string): AssistantThreadMessage {
   return {
     id,
     messageID,
@@ -486,134 +486,134 @@ describe("session stream controller helpers", () => {
     expect(resolveExecutionModeRoute({
       mode: "steer",
       requestedMode: "steer",
-      currentAssistantTurnID: "assistant-temp",
-      createdAssistantTurnID: "assistant-temp",
-      existingAssistantTurnID: "assistant-backend",
+      currentAssistantThreadMessageID: "assistant-temp",
+      createdAssistantThreadMessageID: "assistant-temp",
+      existingAssistantThreadMessageID: "assistant-backend",
     })).toEqual({
-      assistantTurnID: "assistant-backend",
-      clearSteerUserTurn: false,
-      createAssistantTurn: false,
-      removeAssistantTurnID: "assistant-temp",
+      assistantThreadMessageID: "assistant-backend",
+      clearSteerUserMessage: false,
+      createAssistantThreadMessage: false,
+      removeAssistantThreadMessageID: "assistant-temp",
     })
 
     expect(resolveExecutionModeRoute({
       mode: "steer",
       requestedMode: "steer",
-      currentAssistantTurnID: "assistant-active",
-      createdAssistantTurnID: "assistant-steer",
+      currentAssistantThreadMessageID: "assistant-active",
+      createdAssistantThreadMessageID: "assistant-steer",
     })).toEqual({
-      assistantTurnID: "assistant-steer",
-      clearSteerUserTurn: false,
-      createAssistantTurn: false,
+      assistantThreadMessageID: "assistant-steer",
+      clearSteerUserMessage: false,
+      createAssistantThreadMessage: false,
     })
 
     expect(resolveExecutionModeRoute({
       mode: "queued",
       requestedMode: "steer",
-      currentAssistantTurnID: "assistant-active",
+      currentAssistantThreadMessageID: "assistant-active",
     })).toEqual({
-      assistantTurnID: "assistant-active",
-      clearSteerUserTurn: true,
-      createAssistantTurn: true,
+      assistantThreadMessageID: "assistant-active",
+      clearSteerUserMessage: true,
+      createAssistantThreadMessage: true,
     })
 
     expect(resolveExecutionModeRoute({
       mode: "new-turn",
       requestedMode: "new-turn",
-      currentAssistantTurnID: "assistant-new",
+      currentAssistantThreadMessageID: "assistant-new",
     })).toEqual({
-      assistantTurnID: "assistant-new",
-      clearSteerUserTurn: false,
-      createAssistantTurn: false,
+      assistantThreadMessageID: "assistant-new",
+      clearSteerUserMessage: false,
+      createAssistantThreadMessage: false,
     })
 
     expect(resolveExecutionModeRoute({
       mode: "queued",
       requestedMode: "queue",
-      currentAssistantTurnID: "assistant-queued-placeholder",
+      currentAssistantThreadMessageID: "assistant-queued-placeholder",
     })).toEqual({
-      assistantTurnID: "assistant-queued-placeholder",
-      clearSteerUserTurn: false,
-      createAssistantTurn: false,
+      assistantThreadMessageID: "assistant-queued-placeholder",
+      clearSteerUserMessage: false,
+      createAssistantThreadMessage: false,
     })
   })
 
   it("applies backend execution mode to pending user turn presentation", () => {
-    const pendingUser: UserTurn = {
-      ...createUserTurn("user-pending", "Continue with this"),
+    const pendingUser: UserThreadMessage = {
+      ...createUserThreadMessage("user-pending", "Continue with this"),
       submissionMode: "queued",
     }
-    const assistant = createPendingToolAssistantTurn("assistant-active")
+    const assistant = createPendingToolAssistantThreadMessage("assistant-active")
 
-    const nextTurnTurns = applyExecutionModeToUserTurnPresentation({
+    const nextMessageTurns = applyExecutionModeToUserMessagePresentation({
       turns: [assistant, pendingUser],
-      userTurnID: pendingUser.id,
-      assistantTurnID: assistant.id,
+      userThreadMessageID: pendingUser.id,
+      assistantThreadMessageID: assistant.id,
       mode: "new-turn",
     })
-    expect(nextTurnTurns[1]).toMatchObject({
+    expect(nextMessageTurns[1]).toMatchObject({
       id: pendingUser.id,
       kind: "user",
       text: "Continue with this",
     })
-    expect(nextTurnTurns[1]).not.toHaveProperty("submissionMode")
-    expect(nextTurnTurns[1]).not.toHaveProperty("streamInsertion")
+    expect(nextMessageTurns[1]).not.toHaveProperty("submissionMode")
+    expect(nextMessageTurns[1]).not.toHaveProperty("streamInsertion")
 
-    const queuedTurns = applyExecutionModeToUserTurnPresentation({
+    const queuedMessages = applyExecutionModeToUserMessagePresentation({
       turns: [
         assistant,
         {
           ...pendingUser,
           submissionMode: "steer",
           streamInsertion: {
-            assistantTurnID: assistant.id,
+            assistantThreadMessageID: assistant.id,
             afterItemCount: 1,
             status: "pending",
           },
         },
       ],
-      userTurnID: pendingUser.id,
-      assistantTurnID: assistant.id,
+      userThreadMessageID: pendingUser.id,
+      assistantThreadMessageID: assistant.id,
       mode: "queued",
     })
-    expect(queuedTurns[1]).toMatchObject({
+    expect(queuedMessages[1]).toMatchObject({
       id: pendingUser.id,
       kind: "user",
       submissionMode: "queued",
     })
-    expect(queuedTurns[1]).not.toHaveProperty("streamInsertion")
+    expect(queuedMessages[1]).not.toHaveProperty("streamInsertion")
 
-    const steerTurns = applyExecutionModeToUserTurnPresentation({
+    const steerMessages = applyExecutionModeToUserMessagePresentation({
       turns: [
         assistant,
         {
           ...pendingUser,
           submissionMode: "steer",
           streamInsertion: {
-            assistantTurnID: assistant.id,
+            assistantThreadMessageID: assistant.id,
             afterItemCount: assistant.items.length,
             status: "pending",
           },
         },
       ],
-      userTurnID: pendingUser.id,
-      assistantTurnID: assistant.id,
+      userThreadMessageID: pendingUser.id,
+      assistantThreadMessageID: assistant.id,
       mode: "steer",
     })
-    expect(steerTurns[1]).toMatchObject({
+    expect(steerMessages[1]).toMatchObject({
       id: pendingUser.id,
       kind: "user",
       submissionMode: "steer",
       streamInsertion: {
-        assistantTurnID: assistant.id,
+        assistantThreadMessageID: assistant.id,
         afterItemCount: assistant.items.length,
         status: "pending",
       },
     })
 
-    const recordedTurns = revealBackendRecordedUserTurnPresentation({
-      turns: steerTurns,
-      userTurnID: pendingUser.id,
+    const recordedTurns = revealBackendRecordedUserMessagePresentation({
+      turns: steerMessages,
+      userThreadMessageID: pendingUser.id,
     })
     expect(recordedTurns[1]).toMatchObject({
       id: pendingUser.id,
@@ -625,45 +625,45 @@ describe("session stream controller helpers", () => {
   })
 
   it("reveals pending steer user turns at the continued-by-user handoff boundary", () => {
-    const assistant = createPendingToolAssistantTurn("assistant-active")
-    const otherAssistant = createPendingToolAssistantTurn("assistant-other")
-    const pendingSteer: UserTurn = {
-      ...createUserTurn("user-steer", "Stop task"),
+    const assistant = createPendingToolAssistantThreadMessage("assistant-active")
+    const otherAssistant = createPendingToolAssistantThreadMessage("assistant-other")
+    const pendingSteer: UserThreadMessage = {
+      ...createUserThreadMessage("user-steer", "Stop task"),
       submissionMode: "steer",
     }
-    const queued: UserTurn = {
-      ...createUserTurn("user-queued", "Run after this"),
+    const queued: UserThreadMessage = {
+      ...createUserThreadMessage("user-queued", "Run after this"),
       submissionMode: "queued",
     }
-    const insertedForAssistant: UserTurn = {
-      ...createUserTurn("user-inserted", "Guide here"),
+    const insertedForAssistant: UserThreadMessage = {
+      ...createUserThreadMessage("user-inserted", "Guide here"),
       submissionMode: "steer",
       streamInsertion: {
-        assistantTurnID: assistant.id,
+        assistantThreadMessageID: assistant.id,
         afterItemCount: 1,
         status: "pending",
       },
     }
-    const insertedForOtherAssistant: UserTurn = {
-      ...createUserTurn("user-other", "Guide elsewhere"),
+    const insertedForOtherAssistant: UserThreadMessage = {
+      ...createUserThreadMessage("user-other", "Guide elsewhere"),
       submissionMode: "steer",
       streamInsertion: {
-        assistantTurnID: otherAssistant.id,
+        assistantThreadMessageID: otherAssistant.id,
         afterItemCount: 1,
         status: "pending",
       },
     }
-    const consumedInsertion: UserTurn = {
-      ...createUserTurn("user-consumed", "Already shown"),
+    const consumedInsertion: UserThreadMessage = {
+      ...createUserThreadMessage("user-consumed", "Already shown"),
       submissionMode: "steer",
       streamInsertion: {
-        assistantTurnID: assistant.id,
+        assistantThreadMessageID: assistant.id,
         afterItemCount: 1,
         status: "consumed",
       },
     }
 
-    const nextTurns = revealPendingSteerUserTurnsAtHandoffPresentation({
+    const nextMessages = revealPendingSteerUserMessagesAtHandoffPresentation({
       turns: [
         assistant,
         pendingSteer,
@@ -672,64 +672,64 @@ describe("session stream controller helpers", () => {
         insertedForOtherAssistant,
         consumedInsertion,
       ],
-      assistantTurnID: assistant.id,
+      assistantThreadMessageID: assistant.id,
     })
 
-    expect(nextTurns[1]).toMatchObject({
+    expect(nextMessages[1]).toMatchObject({
       id: pendingSteer.id,
       kind: "user",
       text: pendingSteer.text,
     })
-    expect(nextTurns[1]).not.toHaveProperty("submissionMode")
-    expect(nextTurns[1]).not.toHaveProperty("streamInsertion")
+    expect(nextMessages[1]).not.toHaveProperty("submissionMode")
+    expect(nextMessages[1]).not.toHaveProperty("streamInsertion")
 
-    expect(nextTurns[2]).toMatchObject({
+    expect(nextMessages[2]).toMatchObject({
       id: queued.id,
       kind: "user",
       submissionMode: "queued",
     })
 
-    expect(nextTurns[3]).toMatchObject({
+    expect(nextMessages[3]).toMatchObject({
       id: insertedForAssistant.id,
       kind: "user",
       text: insertedForAssistant.text,
     })
-    expect(nextTurns[3]).not.toHaveProperty("submissionMode")
-    expect(nextTurns[3]).not.toHaveProperty("streamInsertion")
+    expect(nextMessages[3]).not.toHaveProperty("submissionMode")
+    expect(nextMessages[3]).not.toHaveProperty("streamInsertion")
 
-    expect(nextTurns[4]).toMatchObject({
+    expect(nextMessages[4]).toMatchObject({
       id: insertedForOtherAssistant.id,
       kind: "user",
       submissionMode: "steer",
       streamInsertion: {
-        assistantTurnID: otherAssistant.id,
+        assistantThreadMessageID: otherAssistant.id,
         status: "pending",
       },
     })
-    expect(nextTurns[5]).toMatchObject({
+    expect(nextMessages[5]).toMatchObject({
       id: consumedInsertion.id,
       kind: "user",
       submissionMode: "steer",
       streamInsertion: {
-        assistantTurnID: assistant.id,
+        assistantThreadMessageID: assistant.id,
         status: "consumed",
       },
     })
   })
 
   it("ensures a missing stream assistant target before applying live events", () => {
-    const turns: Turn[] = [
-      createUserTurn("user-1", "Prompt"),
+    const turns: ThreadMessage[] = [
+      createUserThreadMessage("user-1", "Prompt"),
     ]
 
-    const nextTurns = ensureAssistantTurnPresentation({
+    const nextMessages = ensureAssistantThreadMessagePresentation({
       turns,
-      assistantTurnID: "assistant-steer",
+      assistantThreadMessageID: "assistant-steer",
       detail: "Receiving backend session activity.",
     })
 
-    expect(nextTurns).toHaveLength(2)
-    expect(nextTurns[1]).toMatchObject({
+    expect(nextMessages).toHaveLength(2)
+    expect(nextMessages[1]).toMatchObject({
       id: "assistant-steer",
       kind: "assistant",
       isStreaming: true,
@@ -742,10 +742,10 @@ describe("session stream controller helpers", () => {
       ],
     })
 
-    expect(ensureAssistantTurnPresentation({
-      turns: nextTurns,
-      assistantTurnID: "assistant-steer",
-    })).toBe(nextTurns)
+    expect(ensureAssistantThreadMessagePresentation({
+      turns: nextMessages,
+      assistantThreadMessageID: "assistant-steer",
+    })).toBe(nextMessages)
   })
 
   it("reads task snapshots directly from runtime and tool part events", () => {
@@ -966,19 +966,19 @@ describe("session stream controller helpers", () => {
   })
 
   it("preserves user presentation and assistant identity when history reloads", () => {
-    const previousUser: UserTurn = {
-      ...createUserTurn("user-local", "local display"),
+    const previousUser: UserThreadMessage = {
+      ...createUserThreadMessage("user-local", "local display"),
       displayText: "local display",
       attachments: [{ name: "design.png", path: "C:/tmp/design.png" }],
       references: [{ id: "ref-1", label: "src/App.tsx", kind: "file" }],
     }
-    const previousAssistant = createAssistantTurn("assistant-local", "item-local", "Done", "source-1")
-    const nextTurns: Turn[] = [
-      createUserTurn("user-history", "history text"),
-      createAssistantTurn("assistant-history", "item-history", "Done", "source-1", "msg-assistant-history"),
+    const previousAssistant = createAssistantThreadMessage("assistant-local", "item-local", "Done", "source-1")
+    const nextMessages: ThreadMessage[] = [
+      createUserThreadMessage("user-history", "history text"),
+      createAssistantThreadMessage("assistant-history", "item-history", "Done", "source-1", "msg-assistant-history"),
     ]
 
-    const merged = mergeConversationTurnsFromHistory([previousUser, previousAssistant], nextTurns)
+    const merged = mergeConversationMessagesFromHistory([previousUser, previousAssistant], nextMessages)
 
     expect(merged[0]).toMatchObject({
       id: "user-history",
@@ -1000,8 +1000,8 @@ describe("session stream controller helpers", () => {
   })
 
   it("inserts externally persisted user turns before the streaming assistant placeholder", () => {
-    const streamingAssistant: AssistantTurn = {
-      ...createAssistantTurn("assistant-streaming", "item-streaming", "Streaming reply"),
+    const streamingAssistant: AssistantThreadMessage = {
+      ...createAssistantThreadMessage("assistant-streaming", "item-streaming", "Streaming reply"),
       timestamp: 20,
       isStreaming: true,
       runtime: {
@@ -1011,21 +1011,21 @@ describe("session stream controller helpers", () => {
       },
       state: "Waiting for agent stream",
     }
-    const currentTurns: Turn[] = [
-      createUserTurn("user-existing", "Earlier prompt"),
-      createAssistantTurn("assistant-existing", "item-existing", "Earlier reply"),
+    const currentMessages: ThreadMessage[] = [
+      createUserThreadMessage("user-existing", "Earlier prompt"),
+      createAssistantThreadMessage("assistant-existing", "item-existing", "Earlier reply"),
       streamingAssistant,
     ]
-    const historyTurns: Turn[] = [
-      createUserTurn("user-existing", "Earlier prompt"),
+    const historyMessages: ThreadMessage[] = [
+      createUserThreadMessage("user-existing", "Earlier prompt"),
       {
-        ...createUserTurn("user-mobile", "Message from mobile"),
+        ...createUserThreadMessage("user-mobile", "Message from mobile"),
         timestamp: 19,
       },
     ]
 
-    const merged = mergeExternalUserTurnsFromHistory(currentTurns, historyTurns, {
-      beforeTurnID: "assistant-streaming",
+    const merged = mergeExternalUserMessagesFromHistory(currentMessages, historyMessages, {
+      beforeMessageID: "assistant-streaming",
     })
 
     expect(merged.map((turn) => turn.id)).toEqual([
@@ -1037,8 +1037,8 @@ describe("session stream controller helpers", () => {
   })
 
   it("replaces the optimistic local user turn when subscription history contains the same prompt", () => {
-    const streamingAssistant: AssistantTurn = {
-      ...createAssistantTurn("assistant-streaming", "item-streaming", "Streaming reply"),
+    const streamingAssistant: AssistantThreadMessage = {
+      ...createAssistantThreadMessage("assistant-streaming", "item-streaming", "Streaming reply"),
       timestamp: 20,
       isStreaming: true,
       runtime: {
@@ -1048,23 +1048,23 @@ describe("session stream controller helpers", () => {
       },
       state: "Waiting for agent stream",
     }
-    const currentTurns: Turn[] = [
+    const currentMessages: ThreadMessage[] = [
       {
-        ...createUserTurn("user-local", "Create a Markdown document"),
+        ...createUserThreadMessage("user-local", "Create a Markdown document"),
         displayText: "Create a Markdown document",
         timestamp: 18,
       },
       streamingAssistant,
     ]
-    const historyTurns: Turn[] = [
+    const historyMessages: ThreadMessage[] = [
       {
-        ...createUserTurn("message-user-backend", "Create a Markdown document"),
+        ...createUserThreadMessage("message-user-backend", "Create a Markdown document"),
         timestamp: 19,
       },
     ]
 
-    const merged = mergeExternalUserTurnsFromHistory(currentTurns, historyTurns, {
-      beforeTurnID: "assistant-streaming",
+    const merged = mergeExternalUserMessagesFromHistory(currentMessages, historyMessages, {
+      beforeMessageID: "assistant-streaming",
     })
 
     expect(merged).toHaveLength(2)
@@ -1080,24 +1080,24 @@ describe("session stream controller helpers", () => {
   })
 
   it("can replace user presentation when switching active branch history", () => {
-    const previousTurns: Turn[] = [
+    const previousMessages: ThreadMessage[] = [
       {
-        ...createUserTurn("user-root", "root"),
+        ...createUserThreadMessage("user-root", "root"),
         displayText: "root",
       },
-      createAssistantTurn("assistant-root", "item-root", "Root answer", "source-root", "assistant-root-message"),
+      createAssistantThreadMessage("assistant-root", "item-root", "Root answer", "source-root", "assistant-root-message"),
       {
-        ...createUserTurn("user-old-branch", "old branch text"),
+        ...createUserThreadMessage("user-old-branch", "old branch text"),
         displayText: "old branch text",
       },
     ]
-    const nextTurns: Turn[] = [
-      createUserTurn("user-root", "root"),
-      createAssistantTurn("assistant-root-history", "item-root-history", "Root answer", "source-root", "assistant-root-message"),
-      createUserTurn("user-new-branch", "new branch text"),
+    const nextMessages: ThreadMessage[] = [
+      createUserThreadMessage("user-root", "root"),
+      createAssistantThreadMessage("assistant-root-history", "item-root-history", "Root answer", "source-root", "assistant-root-message"),
+      createUserThreadMessage("user-new-branch", "new branch text"),
     ]
 
-    const merged = mergeConversationTurnsFromHistory(previousTurns, nextTurns, {
+    const merged = mergeConversationMessagesFromHistory(previousMessages, nextMessages, {
       preserveUserPresentation: false,
     })
 
@@ -1110,54 +1110,54 @@ describe("session stream controller helpers", () => {
   })
 
   it("preserves trace item identity without keeping stale local timestamps", () => {
-    const previousTurn = createAssistantTurn(
+    const previousMessage = createAssistantThreadMessage(
       "assistant-local",
       "trace-local",
       "Create the task list first",
       "part-task-text",
       "message-task",
     )
-    previousTurn.items = previousTurn.items.map((item) => ({
+    previousMessage.items = previousMessage.items.map((item) => ({
       ...item,
       timestamp: 500,
     }))
 
-    const historyTurn = createAssistantTurn(
+    const historyMessage = createAssistantThreadMessage(
       "assistant-history",
       "trace-history",
       "Create the task list first",
       "part-task-text",
       "message-task",
     )
-    historyTurn.items = historyTurn.items.map((item) => ({
+    historyMessage.items = historyMessage.items.map((item) => ({
       ...item,
       timestamp: 100,
     }))
 
-    const merged = mergeConversationTurnsFromHistory([previousTurn], [historyTurn])
+    const merged = mergeConversationMessagesFromHistory([previousMessage], [historyMessage])
 
     expect(merged[0]?.id).toBe("assistant-local")
-    expect((merged[0] as AssistantTurn).items[0]).toMatchObject({
+    expect((merged[0] as AssistantThreadMessage).items[0]).toMatchObject({
       id: "trace-local",
       timestamp: 100,
     })
   })
 
   it("treats equal conversation turns as equivalent for no-op history refreshes", () => {
-    const turns: Turn[] = [
-      createUserTurn("user-1", "hello"),
-      createAssistantTurn("assistant-1", "item-1", "Done", "source-1", "message-1"),
+    const turns: ThreadMessage[] = [
+      createUserThreadMessage("user-1", "hello"),
+      createAssistantThreadMessage("assistant-1", "item-1", "Done", "source-1", "message-1"),
     ]
 
-    expect(conversationTurnsAreEquivalent(turns, turns.map((turn) => ({ ...turn })))).toBe(true)
-    expect(conversationTurnsAreEquivalent(turns, [...turns, createUserTurn("user-2", "again")])).toBe(false)
+    expect(conversationMessagesAreEquivalent(turns, turns.map((turn) => ({ ...turn })))).toBe(true)
+    expect(conversationMessagesAreEquivalent(turns, [...turns, createUserThreadMessage("user-2", "again")])).toBe(false)
   })
 
   it("keeps a cancelled assistant turn cancelled when late pending tool history is merged by message id", () => {
-    const originalTurn = createCancelledAssistantTurn("assistant-local", "message-tool")
-    const latePendingToolTurn = createPendingToolAssistantTurn("assistant-history", "message-tool")
+    const originalMessage = createCancelledAssistantThreadMessage("assistant-local", "message-tool")
+    const latePendingToolMessage = createPendingToolAssistantThreadMessage("assistant-history", "message-tool")
 
-    const reconciled = reconcileConversationTurns([originalTurn, latePendingToolTurn])
+    const reconciled = reconcileConversationMessages([originalMessage, latePendingToolMessage])
 
     expect(reconciled).toHaveLength(1)
     expect(reconciled[0]).toMatchObject({
@@ -1184,10 +1184,10 @@ describe("session stream controller helpers", () => {
   })
 
   it("keeps a local cancellation when history reloads a late unmatched pending tool turn", () => {
-    const previousTurn = createCancelledAssistantTurn("assistant-local")
-    const historyTurn = createPendingToolAssistantTurn("assistant-history", "message-tool")
+    const previousMessage = createCancelledAssistantThreadMessage("assistant-local")
+    const historyMessage = createPendingToolAssistantThreadMessage("assistant-history", "message-tool")
 
-    const merged = mergeConversationTurnsFromHistory([previousTurn], [historyTurn])
+    const merged = mergeConversationMessagesFromHistory([previousMessage], [historyMessage])
 
     expect(merged).toHaveLength(1)
     expect(merged[0]).toMatchObject({
@@ -1211,10 +1211,10 @@ describe("session stream controller helpers", () => {
   })
 
   it("keeps a cancelled tool trace when a late matching tool error history is merged", () => {
-    const originalTurn = createCancelledToolAssistantTurn("assistant-local", "message-tool")
-    const lateErroredToolTurn = createErroredToolAssistantTurn("assistant-history", "message-tool")
+    const originalMessage = createCancelledToolAssistantThreadMessage("assistant-local", "message-tool")
+    const lateErroredToolMessage = createErroredToolAssistantThreadMessage("assistant-history", "message-tool")
 
-    const reconciled = reconcileConversationTurns([originalTurn, lateErroredToolTurn])
+    const reconciled = reconcileConversationMessages([originalMessage, lateErroredToolMessage])
 
     expect(reconciled).toHaveLength(1)
     expect(reconciled[0]).toMatchObject({
@@ -1238,7 +1238,7 @@ describe("session stream controller helpers", () => {
   })
 
   it("reconciles approval-resolution tool updates back into the original assistant message", () => {
-    const originalTurn: AssistantTurn = {
+    const originalMessage: AssistantThreadMessage = {
       id: "assistant-original",
       messageID: "msg-tool",
       kind: "assistant",
@@ -1277,7 +1277,7 @@ describe("session stream controller helpers", () => {
         },
       ],
     }
-    const approvalResolutionTurn: AssistantTurn = {
+    const approvalResolutionMessage: AssistantThreadMessage = {
       id: "assistant-resolution",
       messageID: "msg-tool",
       kind: "assistant",
@@ -1305,7 +1305,7 @@ describe("session stream controller helpers", () => {
       ],
     }
 
-    const reconciled = reconcileConversationTurns([originalTurn, approvalResolutionTurn])
+    const reconciled = reconcileConversationMessages([originalMessage, approvalResolutionMessage])
 
     expect(reconciled).toHaveLength(1)
     expect(reconciled[0]).toMatchObject({
@@ -1326,18 +1326,18 @@ describe("session stream controller helpers", () => {
         }),
       ],
     })
-    expect((reconciled[0] as AssistantTurn).items.some((item) => item.title === "Approval required")).toBe(false)
+    expect((reconciled[0] as AssistantThreadMessage).items.some((item) => item.title === "Approval required")).toBe(false)
   })
 
   it("uses earlier canonical trace timestamps when merging assistant turns by message", () => {
-    const currentTurn = createAssistantTurn(
+    const currentMessage = createAssistantThreadMessage(
       "assistant-current",
       "trace-task-local",
       "Creating tasks.",
       "part-task-tool",
       "message-task",
     )
-    currentTurn.items = [
+    currentMessage.items = [
       {
         id: "trace-task-local",
         kind: "tool",
@@ -1352,14 +1352,14 @@ describe("session stream controller helpers", () => {
       },
     ]
 
-    const incomingTurn = createAssistantTurn(
+    const incomingMessage = createAssistantThreadMessage(
       "assistant-history",
       "trace-task-history",
       "Creating tasks.",
       "part-task-tool",
       "message-task",
     )
-    incomingTurn.items = [
+    incomingMessage.items = [
       {
         id: "trace-task-history",
         kind: "tool",
@@ -1374,24 +1374,24 @@ describe("session stream controller helpers", () => {
       },
     ]
 
-    const reconciled = reconcileConversationTurns([currentTurn, incomingTurn])
+    const reconciled = reconcileConversationMessages([currentMessage, incomingMessage])
 
     expect(reconciled).toHaveLength(1)
-    expect((reconciled[0] as AssistantTurn).items[0]).toMatchObject({
+    expect((reconciled[0] as AssistantThreadMessage).items[0]).toMatchObject({
       id: "trace-task-local",
       timestamp: 100,
     })
   })
 
   it("merges task tool traces by tool call id when stream and history part ids differ", () => {
-    const currentTurn = createAssistantTurn(
+    const currentMessage = createAssistantThreadMessage(
       "assistant-current",
       "trace-task-local",
       "Creating tasks.",
       "stream-task-create",
       "message-task",
     )
-    currentTurn.items = [
+    currentMessage.items = [
       {
         id: "trace-task-local",
         kind: "tool",
@@ -1407,14 +1407,14 @@ describe("session stream controller helpers", () => {
       },
     ]
 
-    const incomingTurn = createAssistantTurn(
+    const incomingMessage = createAssistantThreadMessage(
       "assistant-history",
       "trace-task-history",
       "Creating tasks.",
       "recorded-task-create",
       "message-task",
     )
-    incomingTurn.items = [
+    incomingMessage.items = [
       {
         id: "trace-task-history",
         kind: "tool",
@@ -1430,11 +1430,11 @@ describe("session stream controller helpers", () => {
       },
     ]
 
-    const reconciled = reconcileConversationTurns([currentTurn, incomingTurn])
+    const reconciled = reconcileConversationMessages([currentMessage, incomingMessage])
 
     expect(reconciled).toHaveLength(1)
-    const assistantTurn = reconciled[0] as AssistantTurn
-    const toolItems = assistantTurn.items.filter((item) => item.kind === "tool")
+    const assistantMessage = reconciled[0] as AssistantThreadMessage
+    const toolItems = assistantMessage.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
     expect(toolItems[0]).toMatchObject({
       id: "trace-task-local",
@@ -1448,14 +1448,14 @@ describe("session stream controller helpers", () => {
   })
 
   it("preserves streamed tool trace identity during history refresh by message and tool call id", () => {
-    const previousTurn = createAssistantTurn(
+    const previousMessage = createAssistantThreadMessage(
       "assistant-local",
       "trace-task-local",
       "Creating tasks.",
       "stream-task-create",
       "message-task",
     )
-    previousTurn.items = [
+    previousMessage.items = [
       {
         id: "trace-task-local",
         kind: "tool",
@@ -1470,14 +1470,14 @@ describe("session stream controller helpers", () => {
       },
     ]
 
-    const historyTurn = createAssistantTurn(
+    const historyMessage = createAssistantThreadMessage(
       "assistant-history",
       "trace-task-history",
       "Creating tasks.",
       "recorded-task-create",
       "message-task",
     )
-    historyTurn.items = [
+    historyMessage.items = [
       {
         id: "trace-task-history",
         kind: "tool",
@@ -1493,7 +1493,7 @@ describe("session stream controller helpers", () => {
       },
     ]
 
-    const merged = mergeConversationTurnsFromHistory([previousTurn], [historyTurn])
+    const merged = mergeConversationMessagesFromHistory([previousMessage], [historyMessage])
 
     expect(merged).toHaveLength(1)
     expect(merged[0]).toMatchObject({
@@ -1512,22 +1512,22 @@ describe("session stream controller helpers", () => {
   })
 
   it("keeps a merged assistant turn streaming when history refresh reports a running backend phase", () => {
-    const currentTurn = createAssistantTurn(
+    const currentMessage = createAssistantThreadMessage(
       "assistant-local",
       "trace-task-local",
       "Creating tasks.",
       "stream-task-create",
       "message-task",
     )
-    currentTurn.runtime = {
+    currentMessage.runtime = {
       phase: "tool_running",
       startedAt: 100,
       updatedAt: 150,
       toolName: "task_create",
     }
-    currentTurn.state = "Running tools"
-    currentTurn.isStreaming = true
-    currentTurn.items = [
+    currentMessage.state = "Running tools"
+    currentMessage.isStreaming = true
+    currentMessage.items = [
       {
         id: "trace-task-local",
         kind: "tool",
@@ -1542,21 +1542,21 @@ describe("session stream controller helpers", () => {
       },
     ]
 
-    const historyTurn = createAssistantTurn(
+    const historyMessage = createAssistantThreadMessage(
       "assistant-history",
       "trace-task-history",
       "Creating tasks.",
       "recorded-task-create",
       "message-task",
     )
-    historyTurn.runtime = {
+    historyMessage.runtime = {
       phase: "waiting_llm",
       startedAt: 100,
       updatedAt: 200,
     }
-    historyTurn.state = "Waiting for model stream"
-    historyTurn.isStreaming = true
-    historyTurn.items = [
+    historyMessage.state = "Waiting for model stream"
+    historyMessage.isStreaming = true
+    historyMessage.items = [
       {
         id: "trace-task-history",
         kind: "tool",
@@ -1572,7 +1572,7 @@ describe("session stream controller helpers", () => {
       },
     ]
 
-    const reconciled = reconcileConversationTurns([currentTurn, historyTurn])
+    const reconciled = reconcileConversationMessages([currentMessage, historyMessage])
 
     expect(reconciled).toHaveLength(1)
     expect(reconciled[0]).toMatchObject({
@@ -1593,14 +1593,14 @@ describe("session stream controller helpers", () => {
   })
 
   it("merges different assistant messages that belong to the same backend turn", () => {
-    const shellTurn = createAssistantTurn(
+    const shellMessage = createAssistantThreadMessage(
       "assistant-shell",
       "trace-shell-text",
       "I will inspect the workspace.",
       "part-shell-text",
       "message-shell",
     )
-    shellTurn.items = [
+    shellMessage.items = [
       {
         id: "trace-shell-text",
         kind: "text",
@@ -1626,14 +1626,14 @@ describe("session stream controller helpers", () => {
       },
     ]
 
-    const taskTurn = createAssistantTurn(
+    const taskMessage = createAssistantThreadMessage(
       "assistant-task",
       "trace-task-text",
       "I will create the task list.",
       "part-task-text",
       "message-task",
     )
-    taskTurn.items = [
+    taskMessage.items = [
       {
         id: "trace-task-text",
         kind: "text",
@@ -1659,10 +1659,10 @@ describe("session stream controller helpers", () => {
       },
     ]
 
-    const reconciled = reconcileConversationTurns([shellTurn, taskTurn])
+    const reconciled = reconcileConversationMessages([shellMessage, taskMessage])
 
     expect(reconciled).toHaveLength(1)
-    expect((reconciled[0] as AssistantTurn).items.map((item) => item.kind === "tool" ? item.title : item.text)).toEqual([
+    expect((reconciled[0] as AssistantThreadMessage).items.map((item) => item.kind === "tool" ? item.title : item.text)).toEqual([
       "I will inspect the workspace.",
       "powershell_command",
       "I will create the task list.",
@@ -1688,7 +1688,7 @@ describe("session stream controller helpers", () => {
       timestamp: 200,
       isStreaming: true,
     }
-    const currentTurn: AssistantTurn = {
+    const currentMessage: AssistantThreadMessage = {
       id: "assistant-local",
       messageID: "message-stream",
       kind: "assistant",
@@ -1702,11 +1702,11 @@ describe("session stream controller helpers", () => {
       isStreaming: true,
       items: [...completedItems, liveItem],
     }
-    const incomingTurn: AssistantTurn = {
-      ...currentTurn,
+    const incomingMessage: AssistantThreadMessage = {
+      ...currentMessage,
       id: "assistant-backend",
       runtime: {
-        ...currentTurn.runtime,
+        ...currentMessage.runtime,
         updatedAt: 220,
       },
       items: [
@@ -1718,16 +1718,16 @@ describe("session stream controller helpers", () => {
       ],
     }
 
-    const merged = reconcileConversationTurns([currentTurn, incomingTurn])
-    const mergedTurn = merged[0]
+    const merged = reconcileConversationMessages([currentMessage, incomingMessage])
+    const mergedMessage = merged[0]
 
-    expect(mergedTurn?.kind).toBe("assistant")
-    if (mergedTurn?.kind !== "assistant") return
+    expect(mergedMessage?.kind).toBe("assistant")
+    if (mergedMessage?.kind !== "assistant") return
     completedItems.forEach((item, index) => {
-      expect(mergedTurn.items[index]).toBe(item)
+      expect(mergedMessage.items[index]).toBe(item)
     })
-    expect(mergedTurn.items[100]).not.toBe(liveItem)
-    expect(mergedTurn.items[100]?.text).toBe("Hello world")
+    expect(mergedMessage.items[100]).not.toBe(liveItem)
+    expect(mergedMessage.items[100]?.text).toBe("Hello world")
   })
 
   it("reuses an unchanged completed tool item and items array during trace merge", () => {
@@ -1743,7 +1743,7 @@ describe("session stream controller helpers", () => {
       toolOutputText: "Tasks created",
       timestamp: 10,
     }
-    const currentTurn: AssistantTurn = {
+    const currentMessage: AssistantThreadMessage = {
       id: "assistant-local",
       messageID: "message-tool",
       kind: "assistant",
@@ -1756,32 +1756,32 @@ describe("session stream controller helpers", () => {
       state: "completed",
       items: [completedTool],
     }
-    const incomingTurn: AssistantTurn = {
-      ...currentTurn,
+    const incomingMessage: AssistantThreadMessage = {
+      ...currentMessage,
       id: "assistant-backend",
       items: [{ ...completedTool, id: "tool-backend", timestamp: 20 }],
     }
 
-    const merged = reconcileConversationTurns([currentTurn, incomingTurn])
-    const mergedTurn = merged[0]
+    const merged = reconcileConversationMessages([currentMessage, incomingMessage])
+    const mergedMessage = merged[0]
 
-    expect(mergedTurn?.kind).toBe("assistant")
-    if (mergedTurn?.kind !== "assistant") return
-    expect(mergedTurn.items).toBe(currentTurn.items)
-    expect(mergedTurn.items[0]).toBe(completedTool)
+    expect(mergedMessage?.kind).toBe("assistant")
+    if (mergedMessage?.kind !== "assistant") return
+    expect(mergedMessage.items).toBe(currentMessage.items)
+    expect(mergedMessage.items[0]).toBe(completedTool)
   })
 
   it("reuses semantically unchanged trace items when preserving history identities", () => {
-    const previousTurn = createAssistantTurn("assistant-local", "trace-local", "Done", "source-history", "message-history")
-    const previousItem = previousTurn.items[0]!
-    const historyTurn = createAssistantTurn("assistant-history", "trace-history", "Done", "source-history", "message-history")
+    const previousMessage = createAssistantThreadMessage("assistant-local", "trace-local", "Done", "source-history", "message-history")
+    const previousItem = previousMessage.items[0]!
+    const historyMessage = createAssistantThreadMessage("assistant-history", "trace-history", "Done", "source-history", "message-history")
 
-    const merged = mergeConversationTurnsFromHistory([previousTurn], [historyTurn])
-    const mergedTurn = merged[0]
+    const merged = mergeConversationMessagesFromHistory([previousMessage], [historyMessage])
+    const mergedMessage = merged[0]
 
-    expect(mergedTurn?.kind).toBe("assistant")
-    if (mergedTurn?.kind !== "assistant") return
-    expect(mergedTurn.items[0]).toBe(previousItem)
+    expect(mergedMessage?.kind).toBe("assistant")
+    if (mergedMessage?.kind !== "assistant") return
+    expect(mergedMessage.items[0]).toBe(previousItem)
   })
 
   it("keeps item arrays stable unless stale approval blockers are removed", () => {
@@ -1801,7 +1801,7 @@ describe("session stream controller helpers", () => {
       visibilityKey: "approvals",
       timestamp: 2,
     }
-    const currentTurn: AssistantTurn = {
+    const currentMessage: AssistantThreadMessage = {
       id: "assistant-local",
       messageID: "message-approval",
       kind: "assistant",
@@ -1814,24 +1814,24 @@ describe("session stream controller helpers", () => {
       state: "completed",
       items: [completedItem],
     }
-    const unchangedMerge = reconcileConversationTurns([currentTurn, { ...currentTurn, id: "assistant-backend", items: [] }])
-    const unchangedTurn = unchangedMerge[0]
-    expect(unchangedTurn?.kind).toBe("assistant")
-    if (unchangedTurn?.kind !== "assistant") return
-    expect(unchangedTurn.items).toBe(currentTurn.items)
+    const unchangedMerge = reconcileConversationMessages([currentMessage, { ...currentMessage, id: "assistant-backend", items: [] }])
+    const unchangedMessage = unchangedMerge[0]
+    expect(unchangedMessage?.kind).toBe("assistant")
+    if (unchangedMessage?.kind !== "assistant") return
+    expect(unchangedMessage.items).toBe(currentMessage.items)
 
-    const turnWithStaleApproval: AssistantTurn = {
-      ...currentTurn,
+    const messageWithStaleApproval: AssistantThreadMessage = {
+      ...currentMessage,
       items: [completedItem, staleApproval],
     }
-    const cleanedMerge = reconcileConversationTurns([
-      turnWithStaleApproval,
-      { ...turnWithStaleApproval, id: "assistant-backend", items: [] },
+    const cleanedMerge = reconcileConversationMessages([
+      messageWithStaleApproval,
+      { ...messageWithStaleApproval, id: "assistant-backend", items: [] },
     ])
-    const cleanedTurn = cleanedMerge[0]
-    expect(cleanedTurn?.kind).toBe("assistant")
-    if (cleanedTurn?.kind !== "assistant") return
-    expect(cleanedTurn.items).not.toBe(turnWithStaleApproval.items)
-    expect(cleanedTurn.items).toEqual([completedItem])
+    const cleanedMessage = cleanedMerge[0]
+    expect(cleanedMessage?.kind).toBe("assistant")
+    if (cleanedMessage?.kind !== "assistant") return
+    expect(cleanedMessage.items).not.toBe(messageWithStaleApproval.items)
+    expect(cleanedMessage.items).toEqual([completedItem])
   })
 })

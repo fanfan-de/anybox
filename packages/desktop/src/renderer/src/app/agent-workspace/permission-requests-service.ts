@@ -1,12 +1,12 @@
 import { startTransition, type MutableRefObject } from "react"
 import { getAgentSessionBridge } from "../agent-session/client"
-import { buildFailureTurn, buildStreamingAssistantTurn } from "../stream"
+import { buildFailureThreadMessage, buildStreamingAssistantThreadMessage } from "../stream"
 import type {
-  AssistantTurn,
+  AssistantThreadMessage,
   PendingAgentStream,
   PermissionDecision,
   PermissionRequest,
-  Turn,
+  ThreadMessage,
 } from "../types"
 import { createID } from "../utils"
 import type { SessionDataLoadOptions } from "./session-data-load-cache"
@@ -73,7 +73,7 @@ export async function loadPendingPermissionRequestsForSession({
 }
 
 interface RespondPermissionRequestInput {
-  appendConversationTurns: (sessionID: string, nextTurns: Turn[]) => void
+  appendConversationMessages: (sessionID: string, nextMessages: ThreadMessage[]) => void
   input: {
     sessionID: string
     request: PermissionRequest
@@ -93,15 +93,15 @@ interface RespondPermissionRequestInput {
   ) => void
   setPermissionRequestActionError: (update: string | null) => void
   setPermissionRequestActionRequestID: (update: string | null) => void
-  updateAssistantConversationTurn: (
+  updateAssistantConversationMessage: (
     sessionID: string,
-    turnID: string,
-    updater: (turn: AssistantTurn) => AssistantTurn,
+    assistantMessageID: string,
+    updater: (message: AssistantThreadMessage) => AssistantThreadMessage,
   ) => void
 }
 
 export async function respondPermissionRequest({
-  appendConversationTurns,
+  appendConversationMessages,
   input,
   loadPendingPermissionRequestsForSession,
   loadSessionDiffForSession,
@@ -114,7 +114,7 @@ export async function respondPermissionRequest({
   setPendingPermissionRequestsBySession,
   setPermissionRequestActionError,
   setPermissionRequestActionRequestID,
-  updateAssistantConversationTurn,
+  updateAssistantConversationMessage,
 }: RespondPermissionRequestInput) {
   const agentSession = getAgentSessionBridge()
   if (!agentSession || permissionRequestActionRequestID) return
@@ -174,16 +174,16 @@ export async function respondPermissionRequest({
 
     if (canStreamResume) {
       const streamID = createID("stream")
-      const streamingTurn = buildStreamingAssistantTurn(input.decision === "deny" ? "Continue after denial" : "Continue after approval")
+      const streamingMessage = buildStreamingAssistantThreadMessage(input.decision === "deny" ? "Continue after denial" : "Continue after approval")
       pendingStreamsRef.current[streamID] = {
         sessionID: input.sessionID,
         backendSessionID: input.request.sessionID,
-        assistantTurnID: streamingTurn.id,
+        assistantThreadMessageID: streamingMessage.id,
         requestedMode: "new-turn",
-        createdAssistantTurnID: streamingTurn.id,
+        createdAssistantThreadMessageID: streamingMessage.id,
       }
 
-      appendConversationTurns(input.sessionID, [streamingTurn])
+      appendConversationMessages(input.sessionID, [streamingMessage])
 
       try {
         await agentSession.resumeTurn({
@@ -194,8 +194,8 @@ export async function respondPermissionRequest({
         const message = error instanceof Error ? error.message : String(error)
         delete pendingStreamsRef.current[streamID]
         startTransition(() => {
-          updateAssistantConversationTurn(input.sessionID, streamingTurn.id, (current) =>
-            buildFailureTurn(message, current),
+          updateAssistantConversationMessage(input.sessionID, streamingMessage.id, (current) =>
+            buildFailureThreadMessage(message, current),
           )
         })
         throw error

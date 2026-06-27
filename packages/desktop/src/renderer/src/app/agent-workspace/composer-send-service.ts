@@ -2,15 +2,15 @@ import { startTransition, type MutableRefObject } from "react"
 import { getAgentSessionBridge } from "../agent-session/client"
 import { createEmptyComposerDraftState } from "../composer/draft-state"
 import {
-  buildAgentTurn,
-  buildAgentTurnFromEvents,
-  buildFailureTurn,
-  buildStreamingAssistantTurn,
-  buildUserTurn,
+  buildAgentThreadMessage,
+  buildAgentThreadMessageFromEvents,
+  buildFailureThreadMessage,
+  buildStreamingAssistantThreadMessage,
+  buildUserThreadMessage,
 } from "../stream"
 import { appendPendingConversationInput, removePendingConversationInput } from "../pending-conversation-inputs"
 import type {
-  AssistantTurn,
+  AssistantThreadMessage,
   ComposerAttachment,
   ComposerCommentReference,
   ComposerDraftState,
@@ -18,8 +18,8 @@ import type {
   PendingConversationInput,
   ReasoningEffort,
   SessionSummary,
-  Turn,
-  UserTurn,
+  ThreadMessage,
+  UserThreadMessage,
   WorkspaceGroup,
 } from "../types"
 import { createID } from "../utils"
@@ -83,11 +83,11 @@ interface SendPromptToSessionInput {
     freeformText?: string
   }
   reasoningEffort?: ReasoningEffort | null
-  references?: UserTurn["references"]
+  references?: UserThreadMessage["references"]
   selectedModel?: string | null
   selectedSkillIDs: string[]
   session: SessionSummary
-  submissionMode?: UserTurn["submissionMode"]
+  submissionMode?: UserThreadMessage["submissionMode"]
   tabKey: string
   text: string
   workspace: WorkspaceGroup
@@ -97,9 +97,9 @@ interface SendPromptToSessionEnvironment {
   agentConnected: boolean
   agentDefaultDirectory: string
   agentSessions: Record<string, string>
-  appendConversationTurns: (sessionID: string, nextTurns: Turn[]) => void
-  replaceConversationTurns: (sessionID: string, nextTurns: Turn[]) => void
-  getConversationTurns: (sessionID: string) => Turn[]
+  appendConversationMessages: (sessionID: string, nextMessages: ThreadMessage[]) => void
+  replaceConversationMessages: (sessionID: string, nextMessages: ThreadMessage[]) => void
+  getConversationMessages: (sessionID: string) => ThreadMessage[]
   pendingStreamsRef: MutableRefObject<Record<string, PendingAgentStream>>
   platform: string
   refreshWorkspaceFromDirectory: (directory: string) => void | Promise<WorkspaceGroup | null>
@@ -118,10 +118,10 @@ interface SendPromptToSessionEnvironment {
   ) => void
   setSessionDirectoryBySession: (update: WorkspaceStateUpdater<Record<string, string>>) => void
   setWorkspaces: (update: WorkspaceStateUpdater<WorkspaceGroup[]>) => void
-  updateAssistantConversationTurn: (
+  updateAssistantConversationMessage: (
     sessionID: string,
-    turnID: string,
-    updater: (turn: AssistantTurn) => AssistantTurn,
+    assistantMessageID: string,
+    updater: (message: AssistantThreadMessage) => AssistantThreadMessage,
   ) => void
 }
 
@@ -133,9 +133,9 @@ export async function sendPromptToSession(
     agentConnected,
     agentDefaultDirectory,
     agentSessions,
-    appendConversationTurns,
-    replaceConversationTurns,
-    getConversationTurns,
+    appendConversationMessages,
+    replaceConversationMessages,
+    getConversationMessages,
     pendingStreamsRef,
     platform,
     refreshWorkspaceFromDirectory,
@@ -148,7 +148,7 @@ export async function sendPromptToSession(
     setPendingConversationInputsBySession,
     setSessionDirectoryBySession,
     setWorkspaces,
-    updateAssistantConversationTurn,
+    updateAssistantConversationMessage,
   } = environment
   const {
     attachments,
@@ -181,26 +181,26 @@ export async function sendPromptToSession(
   }))
   const model = resolveComposerTurnModel(selectedModel, session)
   const effectiveSelectedSkillIDs = resolveComposerSkillSelectionForSession(session, selectedSkillIDs)
-  const userTurnDisplayText = displayText?.trim() || normalizeQuestionAnswerText(questionAnswer) || undefined
-  const userTurn: UserTurn = buildUserTurn({
+  const userMessageDisplayText = displayText?.trim() || normalizeQuestionAnswerText(questionAnswer) || undefined
+  const userMessage: UserThreadMessage = buildUserThreadMessage({
     attachments: attachmentInputs,
-    displayText: userTurnDisplayText,
+    displayText: userMessageDisplayText,
     fallbackText: normalizedText,
     questionAnswer,
     references,
   })
   const pendingInput: PendingConversationInput | null = pendingInputMode
     ? {
-        id: userTurn.id,
+        id: userMessage.id,
         sessionID: uiSessionID,
-        text: userTurn.text,
-        ...(userTurn.displayText ? { displayText: userTurn.displayText } : {}),
-        ...(userTurn.attachments?.length ? { attachments: userTurn.attachments } : {}),
-        ...(userTurn.references?.length ? { references: userTurn.references } : {}),
-        ...(userTurn.questionAnswer ? { questionAnswer: userTurn.questionAnswer } : {}),
+        text: userMessage.text,
+        ...(userMessage.displayText ? { displayText: userMessage.displayText } : {}),
+        ...(userMessage.attachments?.length ? { attachments: userMessage.attachments } : {}),
+        ...(userMessage.references?.length ? { references: userMessage.references } : {}),
+        ...(userMessage.questionAnswer ? { questionAnswer: userMessage.questionAnswer } : {}),
         mode: pendingInputMode,
         status: "pending",
-        createdAt: userTurn.timestamp,
+        createdAt: userMessage.timestamp,
       }
     : null
 
@@ -218,16 +218,16 @@ export async function sendPromptToSession(
   if (pendingInput) {
     setPendingConversationInputsBySession((current) => appendPendingConversationInput(current, pendingInput))
   } else if (parentMessageID) {
-    const currentTurns = getConversationTurns(uiSessionID)
-    const parentTurnIndex = currentTurns.findIndex((turn) =>
+    const currentMessages = getConversationMessages(uiSessionID)
+    const parentTurnIndex = currentMessages.findIndex((turn) =>
       turn.kind === "assistant"
         ? (turn.messageID ?? turn.id) === parentMessageID
         : turn.id === parentMessageID,
     )
-    const parentPathTurns = parentTurnIndex >= 0 ? currentTurns.slice(0, parentTurnIndex + 1) : currentTurns
-    replaceConversationTurns(uiSessionID, [...parentPathTurns, userTurn])
+    const parentPathTurns = parentTurnIndex >= 0 ? currentMessages.slice(0, parentTurnIndex + 1) : currentMessages
+    replaceConversationMessages(uiSessionID, [...parentPathTurns, userMessage])
   } else {
-    appendConversationTurns(uiSessionID, [userTurn])
+    appendConversationMessages(uiSessionID, [userMessage])
   }
   setWorkspaces((prev) => {
     const nextUpdatedAt = Date.now()
@@ -239,7 +239,7 @@ export async function sendPromptToSession(
         ? {
             ...currentSession,
             status: "Live",
-            summary: userTurn.text,
+            summary: userMessage.text,
             updated: nextUpdatedAt,
           }
         : currentSession,
@@ -248,9 +248,9 @@ export async function sendPromptToSession(
   })
 
   if (!agentConnected || !window.desktop?.createAgentSession || !agentSession) {
-    const fallback = buildAgentTurn(userTurn.text, session, workspace.name, platform)
+    const fallback = buildAgentThreadMessage(userMessage.text, session, workspace.name, platform)
     startTransition(() => {
-      appendConversationTurns(uiSessionID, [fallback])
+      appendConversationMessages(uiSessionID, [fallback])
     })
     return
   }
@@ -259,7 +259,7 @@ export async function sendPromptToSession(
     ...current,
     [tabKey]: true,
   }))
-  let streamingTurnID: string | null = null
+  let streamingMessageID: string | null = null
   let streamID: string | null = null
 
   try {
@@ -285,34 +285,34 @@ export async function sendPromptToSession(
     }
 
     if (canStream) {
-      const streamingTurn = buildStreamingAssistantTurn(userTurn.text)
-      const assistantTurnID = streamingTurn.id
-      if (!assistantTurnID) {
+      const streamingMessage = buildStreamingAssistantThreadMessage(userMessage.text)
+      const assistantThreadMessageID = streamingMessage.id
+      if (!assistantThreadMessageID) {
         throw new Error("Assistant stream target is missing")
       }
 
-      streamingTurnID = streamingTurn?.id ?? null
+      streamingMessageID = streamingMessage?.id ?? null
       streamID = createID("stream")
       pendingStreamsRef.current[streamID] = {
         sessionID: uiSessionID,
         backendSessionID,
-        assistantTurnID,
+        assistantThreadMessageID,
         ...(pendingInput ? { pendingInput } : {}),
         ...(pendingInput ? { pendingInputID: pendingInput.id } : {}),
-        userTurnID: userTurn.id,
+        userThreadMessageID: userMessage.id,
         requestedMode: pendingInput?.mode === "steer" ? "steer" : pendingInput?.mode === "queued" ? "queue" : "new-turn",
-        createdAssistantTurnID: streamingTurn.id,
+        createdAssistantThreadMessageID: streamingMessage.id,
       }
 
       if (!pendingInput) {
-        appendConversationTurns(uiSessionID, [streamingTurn])
+        appendConversationMessages(uiSessionID, [streamingMessage])
       }
 
       await agentSession.sendTurn({
         clientTurnID: streamID,
         backendSessionID,
         ...(normalizedText ? { text: normalizedText } : {}),
-        ...(userTurnDisplayText ? { displayText: userTurnDisplayText } : {}),
+        ...(userMessageDisplayText ? { displayText: userMessageDisplayText } : {}),
         ...(parentMessageID ? { parentMessageID } : {}),
         ...(attachmentInputs.length > 0 ? { attachments: attachmentInputs } : {}),
         ...(questionAnswer ? { questionAnswer } : {}),
@@ -329,7 +329,7 @@ export async function sendPromptToSession(
       clientTurnID: createID("turn"),
       backendSessionID,
       ...(normalizedText ? { text: normalizedText } : {}),
-      ...(userTurnDisplayText ? { displayText: userTurnDisplayText } : {}),
+      ...(userMessageDisplayText ? { displayText: userMessageDisplayText } : {}),
       ...(parentMessageID ? { parentMessageID } : {}),
       ...(attachmentInputs.length > 0 ? { attachments: attachmentInputs } : {}),
       ...(questionAnswer ? { questionAnswer } : {}),
@@ -343,9 +343,9 @@ export async function sendPromptToSession(
       throw new Error("Desktop preload did not return batch agent events")
     }
 
-    const backendTurn = buildAgentTurnFromEvents(result.events, userTurn.text)
+    const backendTurn = buildAgentThreadMessageFromEvents(result.events, userMessage.text)
     startTransition(() => {
-      appendConversationTurns(uiSessionID, [backendTurn])
+      appendConversationMessages(uiSessionID, [backendTurn])
     })
     void reloadSessionHistoryForSession(uiSessionID, backendSessionID).catch((error) => {
       console.error("[desktop] session history refresh failed after send:", error)
@@ -363,13 +363,13 @@ export async function sendPromptToSession(
     }
 
     startTransition(() => {
-      if (streamingTurnID) {
-        const failedTurnID = streamingTurnID
-        updateAssistantConversationTurn(uiSessionID, failedTurnID, (current) => buildFailureTurn(message, current))
+      if (streamingMessageID) {
+        const failedMessageID = streamingMessageID
+        updateAssistantConversationMessage(uiSessionID, failedMessageID, (current) => buildFailureThreadMessage(message, current))
         return
       }
 
-      appendConversationTurns(uiSessionID, [buildFailureTurn(message)])
+      appendConversationMessages(uiSessionID, [buildFailureThreadMessage(message)])
     })
   } finally {
     setIsSendingByTabKey((current) => {

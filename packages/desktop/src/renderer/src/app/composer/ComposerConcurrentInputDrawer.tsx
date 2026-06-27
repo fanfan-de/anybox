@@ -15,13 +15,13 @@ export function ComposerConcurrentInputDrawer({
   canSteer,
   hasPendingPermissionRequests,
   isCancelling,
-  onSteerQueuedTurn,
+  onSteerQueuedMessage,
   pendingInputs,
 }: {
   canSteer: boolean
   hasPendingPermissionRequests: boolean
   isCancelling: boolean
-  onSteerQueuedTurn?: (input: PendingConversationInput) => void | Promise<void>
+  onSteerQueuedMessage?: (input: PendingConversationInput) => void | Promise<void>
   pendingInputs: PendingConversationInput[]
 }) {
   if (pendingInputs.length === 0) return null
@@ -46,8 +46,8 @@ export function ComposerConcurrentInputDrawer({
               <button
                 aria-label="引导当前 turn"
                 className="composer-concurrent-input-steer-button"
-                disabled={steerDisabled || !onSteerQueuedTurn}
-                onClick={() => void onSteerQueuedTurn?.(input)}
+                disabled={steerDisabled || !onSteerQueuedMessage}
+                onClick={() => void onSteerQueuedMessage?.(input)}
                 title="引导当前正在运行的 turn"
                 type="button"
               >

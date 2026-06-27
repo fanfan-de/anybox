@@ -25,9 +25,9 @@ import {
   reportRendererMemoryDiagnostics,
   updateRendererCurrentSessionDiagnostics,
 } from "./renderer-memory-diagnostics"
-import type { LeftSidebarView, SessionDiffSummary, SessionModelSelection, Turn, WorkspaceGroup } from "./types"
+import type { LeftSidebarView, SessionDiffSummary, SessionModelSelection, ThreadMessage, WorkspaceGroup } from "./types"
 import type { ThreadScrollSnapshot } from "./thread/ThreadView"
-import { persistUserTurns } from "./user-turn-presentation"
+import { persistUserMessages } from "./user-message-presentation"
 import { findSession, updateSessionInWorkspaces, updateSessionModelSelectionInWorkspaces } from "./workspace"
 import {
   createInitialDockviewLayout,
@@ -80,24 +80,24 @@ function buildSessionDiffSummarySignature(diffSummary: SessionDiffSummary | unde
     .join("\u0001") ?? ""
 }
 
-function hydrateTurnDiffSummary(
-  turns: Turn[],
-  turnID: string,
+function hydrateMessageDiffSummary(
+  messages: ThreadMessage[],
+  messageID: string,
   diffSummary: SessionDiffSummary,
 ) {
   let didUpdate = false
-  const nextTurns = turns.map((turn) => {
-    if (turn.id !== turnID) return turn
-    if (buildSessionDiffSummarySignature(turn.diffSummary) === buildSessionDiffSummarySignature(diffSummary)) return turn
+  const nextMessages = messages.map((message) => {
+    if (message.id !== messageID) return message
+    if (buildSessionDiffSummarySignature(message.diffSummary) === buildSessionDiffSummarySignature(diffSummary)) return message
 
     didUpdate = true
     return {
-      ...turn,
+      ...message,
       diffSummary,
     }
   })
 
-  return didUpdate ? nextTurns : turns
+  return didUpdate ? nextMessages : messages
 }
 
 function isThreadScrollKeyStale(key: string, validSessionIDs: Set<string>) {
@@ -351,13 +351,13 @@ export function useAgentWorkspace({
     activeSideChatSession,
     activeSideChatSessionsByAnchorMessageID,
     activeSideChatTabKey,
-    activeSideChatTurns,
+    activeSideChatMessages,
     activeTabKey,
     activeWorkspace,
     activeWorkspaceFileScopeDirectory,
     activeWorkspaceFileScopeName,
     activeWorkspaceFileState,
-    activeTurns,
+    activeMessages,
     canvasSessionTabs,
     canInsertPreviewInteractionsIntoDraft,
     canInsertWorkspaceFileCommentsIntoDraft,
@@ -387,11 +387,11 @@ export function useAgentWorkspace({
       diffSummary: activeSessionDiff,
       messageTree: activeMessageTree,
       sessionID: activeSessionID,
-      turns: activeTurns,
+      turns: activeMessages,
     })
     updateRendererCurrentSessionDiagnostics(diagnostics)
     reportRendererMemoryDiagnostics("active-session-update")
-  }, [activeMessageTree, activeSessionDiff, activeSessionID, activeTurns])
+  }, [activeMessageTree, activeSessionDiff, activeSessionID, activeMessages])
 
   useEffect(() => {
     if (!isRendererPerfProfilerEnabled()) return
@@ -526,8 +526,8 @@ export function useAgentWorkspace({
     workspaces,
   })
   const {
-    appendConversationTurns,
-    replaceConversationTurns,
+    appendConversationMessages,
+    replaceConversationMessages,
     clearRuntimeDebugRefreshTimer,
     clearSessionDiffRefreshTimer,
     ensurePendingPermissionRequestsLoaded,
@@ -540,7 +540,7 @@ export function useAgentWorkspace({
     reloadSessionHistoryForSession,
     resolveBackendSessionID,
     scheduleSessionDiffRefreshForSession,
-    updateAssistantConversationTurn,
+    updateAssistantConversationMessage,
   } = streamController
 
   useWorkspaceLoadingController({
@@ -743,14 +743,14 @@ export function useAgentWorkspace({
     agentDefaultDirectory,
     agentSessions,
     cancellingSessionIDs,
-    appendConversationTurns,
-    replaceConversationTurns,
+    appendConversationMessages,
+    replaceConversationMessages,
     composerParentMessageIDByTabKey,
     composerAttachmentsByTabKey,
     composerDraftStateByTabKey,
     createSessionForWorkspace,
     createSessionTabs,
-    getConversationTurns: (sessionID) => conversationStore.getSessionTurns(sessionID),
+    getConversationMessages: (sessionID) => conversationStore.getSessionMessages(sessionID),
     isSendingByTabKey,
     loadPendingPermissionRequestsForSession,
     loadSessionDiffForSession,
@@ -778,7 +778,7 @@ export function useAgentWorkspace({
     setPermissionRequestActionRequestID,
     setSessionDirectoryBySession,
     setWorkspaces,
-    updateAssistantConversationTurn,
+    updateAssistantConversationMessage,
     workspaces,
   })
 
@@ -873,22 +873,22 @@ export function useAgentWorkspace({
     setWorkspaces((current) => updateSessionModelSelectionInWorkspaces(current, sessionID, selection))
   }
 
-  function handleTurnDiffSummaryHydrate(
-    turnID: string,
+  function handleMessageDiffSummaryHydrate(
+    messageID: string,
     diffSummary: SessionDiffSummary,
     sessionID = activeSessionID,
   ) {
     if (!sessionID) return
 
     setConversations((prev) => {
-      const currentTurns = prev[sessionID] ?? []
-      const nextTurns = hydrateTurnDiffSummary(currentTurns, turnID, diffSummary)
-      if (nextTurns === currentTurns) return prev
+      const currentMessages = prev[sessionID] ?? []
+      const nextMessages = hydrateMessageDiffSummary(currentMessages, messageID, diffSummary)
+      if (nextMessages === currentMessages) return prev
 
-      persistUserTurns(sessionID, nextTurns)
+      persistUserMessages(sessionID, nextMessages)
       return {
         ...prev,
-        [sessionID]: nextTurns,
+        [sessionID]: nextMessages,
       }
     })
   }
@@ -1012,11 +1012,11 @@ export function useAgentWorkspace({
     activeSideChatSession,
     activeSideChatSessionsByAnchorMessageID,
     activeSideChatTabKey,
-    activeSideChatTurns,
+    activeSideChatMessages,
     activeWorkspaceFileScopeDirectory,
     activeWorkspaceFileScopeName,
     activeWorkspaceFileState,
-    activeTurns,
+    activeMessages,
     canvasSessionTabs,
     canInsertPreviewInteractionsIntoDraft,
     canInsertWorkspaceFileCommentsIntoDraft,
@@ -1105,7 +1105,7 @@ export function useAgentWorkspace({
     handleSelectSideChatTab,
     handleSidebarAction,
     handleSessionModelSelectionChange,
-    handleTurnDiffSummaryHydrate,
+    handleMessageDiffSummaryHydrate,
     readThreadScrollSnapshot,
     saveThreadScrollSnapshot,
     focusedPaneID,

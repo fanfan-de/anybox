@@ -2034,9 +2034,9 @@ describe("App", () => {
     render(<App />)
 
     const threadSideChatButton = await screen.findByRole("button", { name: "Open side chat" })
-    const assistantTurn = threadSideChatButton.closest(".assistant-turn") as HTMLElement | null
+    const assistantMessage = threadSideChatButton.closest(".assistant-turn") as HTMLElement | null
 
-    expect(assistantTurn).not.toBeNull()
+    expect(assistantMessage).not.toBeNull()
 
     fireEvent.click(threadSideChatButton)
 
@@ -2047,7 +2047,7 @@ describe("App", () => {
       expect(screen.queryByRole("region", { name: "Side chat" })).not.toBeInTheDocument()
     })
 
-    const responseActionRow = (assistantTurn as HTMLElement).querySelector(".assistant-response-side-chat") as HTMLElement | null
+    const responseActionRow = (assistantMessage as HTMLElement).querySelector(".assistant-response-side-chat") as HTMLElement | null
 
     expect(responseActionRow).not.toBeNull()
     expect(within(responseActionRow as HTMLElement).getByRole("button", { name: "Open side chat (1)" })).toHaveAttribute(
@@ -2215,17 +2215,17 @@ describe("App", () => {
 
     const responseText =
       "I am collapsing the information-heavy workspace cards into a project tree so the rail behaves like navigation, not like a second content surface."
-    const assistantTurn = (await screen.findByText(responseText)).closest(".assistant-turn") as HTMLElement | null
+    const assistantMessage = (await screen.findByText(responseText)).closest(".assistant-turn") as HTMLElement | null
 
-    expect(assistantTurn).not.toBeNull()
+    expect(assistantMessage).not.toBeNull()
 
-    fireEvent.click(within(assistantTurn as HTMLElement).getByRole("button", { name: "Copy assistant response" }))
+    fireEvent.click(within(assistantMessage as HTMLElement).getByRole("button", { name: "Copy assistant response" }))
 
     await waitFor(() => {
       expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(responseText)
     })
 
-    expect(within(assistantTurn as HTMLElement).getByRole("button", { name: "Copied assistant response" })).toBeInTheDocument()
+    expect(within(assistantMessage as HTMLElement).getByRole("button", { name: "Copied assistant response" })).toBeInTheDocument()
   })
 
   it("renders full assistant sections inside right sidebar side chat", async () => {
@@ -6646,22 +6646,22 @@ describe("App", () => {
 
     render(<App />)
 
-    const assistantTurn = (await screen.findByText("All checks passed.")).closest(".assistant-turn") as HTMLElement | null
+    const assistantMessage = (await screen.findByText("All checks passed.")).closest(".assistant-turn") as HTMLElement | null
 
-    expect(assistantTurn).not.toBeNull()
+    expect(assistantMessage).not.toBeNull()
 
-    const sectionElementsBeforeExpand = Array.from((assistantTurn as HTMLElement).querySelectorAll(".assistant-section"))
+    const sectionElementsBeforeExpand = Array.from((assistantMessage as HTMLElement).querySelectorAll(".assistant-section"))
     const sectionTitlesBeforeExpand = sectionElementsBeforeExpand.map((section) => section.getAttribute("aria-label"))
 
     expect(sectionTitlesBeforeExpand).toEqual(["Response", "File Changes"])
-    const threadColumn = (assistantTurn as HTMLElement).closest(".thread-column") as HTMLElement
+    const threadColumn = (assistantMessage as HTMLElement).closest(".thread-column") as HTMLElement
     const processedTraceButton = within(threadColumn).getByRole("button", { name: /Processed/ })
     expect(processedTraceButton).toHaveAttribute("aria-expanded", "false")
     fireEvent.click(processedTraceButton)
 
     const processSectionElements = Array.from(threadColumn.querySelectorAll(".assistant-process-item-row.assistant-section"))
     const processSectionTitles = processSectionElements.map((section) => section.getAttribute("aria-label"))
-    const sectionElements = Array.from((assistantTurn as HTMLElement).querySelectorAll(".assistant-section"))
+    const sectionElements = Array.from((assistantMessage as HTMLElement).querySelectorAll(".assistant-section"))
     const sectionTitles = sectionElements.map((section) => section.getAttribute("aria-label"))
 
     expect(processSectionTitles).toEqual(["Reasoning", "Tools", "Reasoning", "Tools"])
@@ -6869,12 +6869,12 @@ describe("App", () => {
 
     render(<App />)
 
-    const finalAssistantTurn = (await screen.findByText("Finished the cycle.")).closest(".assistant-turn") as HTMLElement | null
+    const finalAssistantMessage = (await screen.findByText("Finished the cycle.")).closest(".assistant-turn") as HTMLElement | null
 
-    expect(finalAssistantTurn).not.toBeNull()
+    expect(finalAssistantMessage).not.toBeNull()
     expect(screen.queryByText("Created the first draft of the release notes.")).not.toBeInTheDocument()
 
-    const threadColumn = (finalAssistantTurn as HTMLElement).closest(".thread-column") as HTMLElement
+    const threadColumn = (finalAssistantMessage as HTMLElement).closest(".thread-column") as HTMLElement
     const processTraceButton = within(threadColumn).getByRole("button", { name: /Processed/ })
     expect(processTraceButton).toHaveAttribute("aria-expanded", "false")
     fireEvent.click(processTraceButton)
@@ -6882,7 +6882,7 @@ describe("App", () => {
     expect(within(threadColumn).getByText("Created the first draft of the release notes.")).toBeInTheDocument()
 
     const processFileChangeSections = Array.from(threadColumn.querySelectorAll(".assistant-process-item-row.assistant-section.is-file-change"))
-    const finalFileChangeSections = within(finalAssistantTurn as HTMLElement).getAllByRole("region", { name: "File Changes" })
+    const finalFileChangeSections = within(finalAssistantMessage as HTMLElement).getAllByRole("region", { name: "File Changes" })
     expect(processFileChangeSections).toHaveLength(1)
     expect(finalFileChangeSections).toHaveLength(1)
 
@@ -6904,7 +6904,7 @@ describe("App", () => {
     expect(within(finalFileChangeSection).getByLabelText("2 additions, 1 deletions")).toBeInTheDocument()
     expect(within(finalFileChangeSection).queryByText("docs/release-notes.md")).not.toBeInTheDocument()
     expect(threadColumn.querySelectorAll(".assistant-process-item-row.assistant-section.is-file-change")).toHaveLength(1)
-    expect(within(finalAssistantTurn as HTMLElement).getAllByRole("region", { name: "File Changes" })).toHaveLength(1)
+    expect(within(finalAssistantMessage as HTMLElement).getAllByRole("region", { name: "File Changes" })).toHaveLength(1)
   })
 
   it("replays detached backend turns from the session event stream", async () => {
@@ -7281,14 +7281,14 @@ describe("App", () => {
     fireEvent.click(getComposerSendButton())
 
     const reasoningText = await screen.findByText("Planning live update.")
-    const assistantTurn = reasoningText.closest(".assistant-turn") as HTMLElement | null
+    const assistantMessage = reasoningText.closest(".assistant-turn") as HTMLElement | null
 
-    expect(assistantTurn).not.toBeNull()
+    expect(assistantMessage).not.toBeNull()
 
-    const reasoningSection = within(assistantTurn as HTMLElement).getByRole("region", { name: "Reasoning" })
+    const reasoningSection = within(assistantMessage as HTMLElement).getByRole("region", { name: "Reasoning" })
     expect(within(reasoningSection).getByText("Planning live update.")).toBeInTheDocument()
-    expect(within(assistantTurn as HTMLElement).queryByRole("region", { name: "Response" })).not.toBeInTheDocument()
-    expect(within(assistantTurn as HTMLElement).queryByRole("region", { name: "File Changes" })).not.toBeInTheDocument()
+    expect(within(assistantMessage as HTMLElement).queryByRole("region", { name: "Response" })).not.toBeInTheDocument()
+    expect(within(assistantMessage as HTMLElement).queryByRole("region", { name: "File Changes" })).not.toBeInTheDocument()
 
     act(() => {
       streamListener?.(createRequestStreamEvent({
@@ -7300,7 +7300,7 @@ describe("App", () => {
     })
 
     expect(await screen.findByText("Streaming answer")).toBeInTheDocument()
-    expect(within(assistantTurn as HTMLElement).queryByRole("region", { name: "File Changes" })).not.toBeInTheDocument()
+    expect(within(assistantMessage as HTMLElement).queryByRole("region", { name: "File Changes" })).not.toBeInTheDocument()
 
     act(() => {
       streamListener?.(createRequestStreamEvent({
@@ -7356,8 +7356,8 @@ describe("App", () => {
       }))
     })
 
-    expect(within(assistantTurn as HTMLElement).queryByRole("region", { name: "File Changes" })).not.toBeInTheDocument()
-    expect(within(assistantTurn as HTMLElement).getByRole("region", { name: "Response" })).toBeInTheDocument()
+    expect(within(assistantMessage as HTMLElement).queryByRole("region", { name: "File Changes" })).not.toBeInTheDocument()
+    expect(within(assistantMessage as HTMLElement).getByRole("region", { name: "Response" })).toBeInTheDocument()
 
     act(() => {
       streamListener?.(createRequestStreamEvent({
@@ -7412,13 +7412,13 @@ describe("App", () => {
     })
 
     await waitFor(() => {
-      expect(within(assistantTurn as HTMLElement).getByRole("region", { name: "Response" })).toBeInTheDocument()
+      expect(within(assistantMessage as HTMLElement).getByRole("region", { name: "Response" })).toBeInTheDocument()
     })
 
-    const responseSection = within(assistantTurn as HTMLElement).getByRole("region", { name: "Response" })
+    const responseSection = within(assistantMessage as HTMLElement).getByRole("region", { name: "Response" })
     expect(within(responseSection).getByText("Streaming answer")).toBeInTheDocument()
 
-    const fileChangeSection = within(assistantTurn as HTMLElement).getByRole("region", { name: "File Changes" })
+    const fileChangeSection = within(assistantMessage as HTMLElement).getByRole("region", { name: "File Changes" })
     const fileChangeSummary = within(fileChangeSection).getByRole("button", { name: "已编辑 2 个文件" })
     expect(fileChangeSummary).toHaveAttribute("aria-expanded", "false")
     expect(within(fileChangeSection).queryByText("1 file change (+2 -1)")).not.toBeInTheDocument()

@@ -1,6 +1,6 @@
 export interface AgentSessionTurnTarget {
   sessionID: string
-  assistantTurnID: string
+  assistantThreadMessageID: string
 }
 
 interface AgentSessionEventRouterOptions {

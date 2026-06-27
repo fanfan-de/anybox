@@ -34,8 +34,8 @@ import type {
   SessionDiffScope,
   SessionDiffSummary,
   SessionSummary,
-  Turn,
-  UserTurn,
+  ThreadMessage,
+  UserThreadMessage,
   WorkspaceGroup,
 } from "../types"
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "../thread-markdown"
@@ -56,7 +56,7 @@ interface RightSidebarSideChatPanelState {
   session: SessionSummary
   sideChatSessions: SessionSummary[]
   tabKey: string
-  turns: Turn[]
+  turns: ThreadMessage[]
 }
 
 interface RightSidebarProps {
@@ -144,8 +144,8 @@ interface RightSidebarProps {
     selectedReasoningEffort?: ReasoningEffort | null
     selectedModel?: string | null
     selectedSkillIDs: string[]
-    steerQueuedTurnID?: string
-    submissionMode?: UserTurn["submissionMode"]
+    steerQueuedMessageID?: string
+    submissionMode?: UserThreadMessage["submissionMode"]
     waitForPendingModelSelection: () => Promise<void>
   }) => void | Promise<void>
   onSessionModelSelectionChange?: (sessionID: string, selection: SessionSummary["modelSelection"] | undefined) => void

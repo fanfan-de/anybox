@@ -4,7 +4,7 @@ import type {
   CreateSessionTab,
   MobileBridgeEvent,
   SessionDiffState,
-  Turn,
+  ThreadMessage,
   WorkbenchTabReference,
   WorkspaceFileChangeIPCEvent,
   WorkspaceGroup,
@@ -40,7 +40,7 @@ interface UseWorkspaceLoadingControllerOptions {
   scheduleSessionDiffRefreshForSession: (sessionID: string) => void
   setAgentSessions: StateSetter<Record<string, string>>
   setCanLoadSessionHistory: StateSetter<boolean>
-  setConversations: StateSetter<Record<string, Turn[]>>
+  setConversations: StateSetter<Record<string, ThreadMessage[]>>
   setCreateSessionTabs: StateSetter<CreateSessionTab[]>
   setExpandedFolderIDs: StateSetter<string[]>
   setIsInitialWorkspaceLoadPending: StateSetter<boolean>

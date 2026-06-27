@@ -369,9 +369,9 @@ export interface WorkbenchShellProps {
   onSetDraft: (tabKey: string, value: ComposerDraftState) => void
   onToggleLeftSidebar: () => void
   onToggleRightSidebar: () => void
-  onTurnDiffRestore: (diffs: SessionDiffFile[], sessionID: string | null, paneID: string) => void | Promise<void>
-  onTurnDiffReview: (files: string[], sessionID: string | null, paneID: string) => void | Promise<void>
-  onTurnDiffSummaryHydrate: (turnID: string, diffSummary: SessionDiffSummary, sessionID?: string | null) => void | Promise<void>
+  onMessageDiffRestore: (diffs: SessionDiffFile[], sessionID: string | null, paneID: string) => void | Promise<void>
+  onMessageDiffReview: (files: string[], sessionID: string | null, paneID: string) => void | Promise<void>
+  onMessageDiffSummaryHydrate: (messageID: string, diffSummary: SessionDiffSummary, sessionID?: string | null) => void | Promise<void>
   isDetachedWindow?: boolean
 }
 
@@ -918,9 +918,9 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
           onSend={props.onSend}
           onSessionModelSelectionChange={props.onSessionModelSelectionChange}
           onSetDraft={props.onSetDraft}
-          onTurnDiffRestore={props.onTurnDiffRestore}
-          onTurnDiffReview={props.onTurnDiffReview}
-          onTurnDiffSummaryHydrate={props.onTurnDiffSummaryHydrate}
+          onMessageDiffRestore={props.onMessageDiffRestore}
+          onMessageDiffReview={props.onMessageDiffReview}
+          onMessageDiffSummaryHydrate={props.onMessageDiffSummaryHydrate}
         />
       </RendererProfiler>
     )

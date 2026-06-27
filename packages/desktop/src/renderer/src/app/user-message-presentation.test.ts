@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { buildTurnsFromHistory, buildUserTurn } from "./stream"
-import { mergeUserTurnPresentationState, persistUserTurns, readPersistedUserTurns } from "./user-turn-presentation"
+import { buildThreadMessagesFromHistory, buildUserThreadMessage } from "./stream"
+import { mergeUserMessagePresentationState, persistUserMessages, readPersistedUserMessages } from "./user-message-presentation"
 
 describe("user turn presentation persistence", () => {
   beforeEach(() => {
@@ -8,8 +8,8 @@ describe("user turn presentation persistence", () => {
   })
 
   it("restores comment tags after rebuilding a session from history", () => {
-    persistUserTurns("session-1", [
-      buildUserTurn({
+    persistUserMessages("session-1", [
+      buildUserThreadMessage({
         displayText: "@App.tsx:L10-L14",
         references: [
           {
@@ -23,7 +23,7 @@ describe("user turn presentation persistence", () => {
       }),
     ])
 
-    const historyTurns = buildTurnsFromHistory([
+    const historyMessages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "msg-user-comment",
@@ -41,9 +41,9 @@ describe("user turn presentation persistence", () => {
       },
     ])
 
-    const mergedTurns = mergeUserTurnPresentationState(readPersistedUserTurns("session-1"), historyTurns)
+    const mergedMessages = mergeUserMessagePresentationState(readPersistedUserMessages("session-1"), historyMessages)
 
-    expect(mergedTurns[0]).toMatchObject({
+    expect(mergedMessages[0]).toMatchObject({
       kind: "user",
       displayText: "@App.tsx:L10-L14",
       references: [
@@ -55,14 +55,14 @@ describe("user turn presentation persistence", () => {
         },
       ],
     })
-    expect(mergedTurns[0]?.kind === "user" ? mergedTurns[0].text : "").not.toContain(
+    expect(mergedMessages[0]?.kind === "user" ? mergedMessages[0].text : "").not.toContain(
       "Review the selected lines before making changes.",
     )
   })
 
   it("persists and restores user turn diff summaries", () => {
-    persistUserTurns("session-1", [
-      buildUserTurn({
+    persistUserMessages("session-1", [
+      buildUserThreadMessage({
         displayText: "Update the app",
         diffSummary: {
           stats: {
@@ -83,7 +83,7 @@ describe("user turn presentation persistence", () => {
       }),
     ])
 
-    expect(readPersistedUserTurns("session-1")[0]).toMatchObject({
+    expect(readPersistedUserMessages("session-1")[0]).toMatchObject({
       kind: "user",
       diffSummary: {
         stats: {
@@ -104,19 +104,19 @@ describe("user turn presentation persistence", () => {
   })
 
   it("persists and restores steering submission mode", () => {
-    persistUserTurns("session-1", [
-      buildUserTurn({
+    persistUserMessages("session-1", [
+      buildUserThreadMessage({
         displayText: "Adjust the current task",
         submissionMode: "steer",
         streamInsertion: {
-          assistantTurnID: "assistant-live",
+          assistantThreadMessageID: "assistant-live",
           afterItemCount: 1,
         },
         timestamp: 10,
       }),
     ])
 
-    const restoredTurn = readPersistedUserTurns("session-1")[0]
+    const restoredTurn = readPersistedUserMessages("session-1")[0]
     expect(restoredTurn).toMatchObject({
       kind: "user",
       submissionMode: "steer",
@@ -125,15 +125,15 @@ describe("user turn presentation persistence", () => {
   })
 
   it("does not persist queued submission mode", () => {
-    persistUserTurns("session-1", [
-      buildUserTurn({
+    persistUserMessages("session-1", [
+      buildUserThreadMessage({
         displayText: "Send this next",
         submissionMode: "queued",
         timestamp: 10,
       }),
     ])
 
-    const restoredTurn = readPersistedUserTurns("session-1")[0]
+    const restoredTurn = readPersistedUserMessages("session-1")[0]
     expect(restoredTurn).toMatchObject({
       kind: "user",
       displayText: "Send this next",
@@ -142,13 +142,13 @@ describe("user turn presentation persistence", () => {
   })
 
   it("keeps backend diff summaries when merging user presentation state", () => {
-    const previousTurns = [
-      buildUserTurn({
+    const previousMessages = [
+      buildUserThreadMessage({
         displayText: "local text",
         timestamp: 10,
       }),
     ]
-    const historyTurns = buildTurnsFromHistory([
+    const historyMessages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "msg-user-diff",
@@ -175,9 +175,9 @@ describe("user turn presentation persistence", () => {
       },
     ])
 
-    const mergedTurns = mergeUserTurnPresentationState(previousTurns, historyTurns)
+    const mergedMessages = mergeUserMessagePresentationState(previousMessages, historyMessages)
 
-    expect(mergedTurns[0]).toMatchObject({
+    expect(mergedMessages[0]).toMatchObject({
       kind: "user",
       displayText: "local text",
       diffSummary: {
@@ -194,34 +194,34 @@ describe("user turn presentation persistence", () => {
   })
 
   it("does not copy stale user presentation onto a different active branch message", () => {
-    const previousTurns = [
-      buildUserTurn({
+    const previousMessages = [
+      buildUserThreadMessage({
         id: "msg-root-user",
         displayText: "Plan a Tokyo trip",
         timestamp: 10,
       }),
-      buildUserTurn({
+      buildUserThreadMessage({
         id: "msg-old-branch-user",
         displayText: "Use rollback and fix the route order",
         timestamp: 20,
       }),
     ]
-    const nextTurns = [
-      buildUserTurn({
+    const nextMessages = [
+      buildUserThreadMessage({
         id: "msg-root-user",
         displayText: "Plan a Tokyo trip",
         timestamp: 10,
       }),
-      buildUserTurn({
+      buildUserThreadMessage({
         id: "msg-rollback-user",
         displayText: "Rollback: route order was wrong",
         timestamp: 30,
       }),
     ]
 
-    const mergedTurns = mergeUserTurnPresentationState(previousTurns, nextTurns)
+    const mergedMessages = mergeUserMessagePresentationState(previousMessages, nextMessages)
 
-    expect(mergedTurns[1]).toMatchObject({
+    expect(mergedMessages[1]).toMatchObject({
       id: "msg-rollback-user",
       kind: "user",
       displayText: "Rollback: route order was wrong",

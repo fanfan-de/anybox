@@ -1,12 +1,16 @@
-import type { AssistantTraceItem, AssistantTurn, Turn, UserTurn } from "./types"
+import type { AssistantTraceItem, AssistantThreadMessage, ThreadMessage, UserThreadMessage } from "./types"
 
-function getStreamInsertionAssistantTurn(turns: Turn[], turn: UserTurn) {
-  const assistantTurnID = turn.streamInsertion?.assistantTurnID
-  if (!assistantTurnID) return null
+function readStreamInsertionAssistantThreadMessageID(turn: UserThreadMessage) {
+  return turn.streamInsertion?.assistantThreadMessageID ?? turn.streamInsertion?.assistantTurnID
+}
+
+function getStreamInsertionAssistantMessage(turns: ThreadMessage[], turn: UserThreadMessage) {
+  const assistantThreadMessageID = readStreamInsertionAssistantThreadMessageID(turn)
+  if (!assistantThreadMessageID) return null
 
   return turns.find(
-    (candidate): candidate is AssistantTurn =>
-      candidate.kind === "assistant" && candidate.id === assistantTurnID,
+    (candidate): candidate is AssistantThreadMessage =>
+      candidate.kind === "assistant" && candidate.id === assistantThreadMessageID,
   ) ?? null
 }
 
@@ -25,27 +29,27 @@ function getActiveToolBeforeInsertionIndex(items: AssistantTraceItem[], requeste
     : null
 }
 
-function getStreamInsertionRequestedIndex(items: AssistantTraceItem[], turn: UserTurn, cursor: number) {
+function getStreamInsertionRequestedIndex(items: AssistantTraceItem[], turn: UserThreadMessage, cursor: number) {
   return Math.min(
     items.length,
     Math.max(cursor, turn.streamInsertion?.afterItemCount ?? cursor),
   )
 }
 
-export function hasStreamInsertionTarget(turns: Turn[], turn: UserTurn) {
-  return Boolean(getStreamInsertionAssistantTurn(turns, turn))
+export function hasStreamInsertionTarget(turns: ThreadMessage[], turn: UserThreadMessage) {
+  return Boolean(getStreamInsertionAssistantMessage(turns, turn))
 }
 
-export function isStreamInsertionReady(turns: Turn[], turn: UserTurn) {
-  const assistantTurn = getStreamInsertionAssistantTurn(turns, turn)
-  if (!assistantTurn) return false
+export function isStreamInsertionReady(turns: ThreadMessage[], turn: UserThreadMessage) {
+  const assistantMessage = getStreamInsertionAssistantMessage(turns, turn)
+  if (!assistantMessage) return false
 
-  const requestedIndex = getStreamInsertionRequestedIndex(assistantTurn.items, turn, 0)
-  if (assistantTurn.items.length <= requestedIndex) return false
+  const requestedIndex = getStreamInsertionRequestedIndex(assistantMessage.items, turn, 0)
+  if (assistantMessage.items.length <= requestedIndex) return false
 
-  if (getActiveToolBeforeInsertionIndex(assistantTurn.items, requestedIndex)) return false
+  if (getActiveToolBeforeInsertionIndex(assistantMessage.items, requestedIndex)) return false
 
-  const followingTool = assistantTurn.items.find(
+  const followingTool = assistantMessage.items.find(
     (item, index) => index >= requestedIndex && item.kind === "tool",
   )
   if (followingTool) return isToolInsertionBoundaryReady(followingTool)
@@ -53,11 +57,11 @@ export function isStreamInsertionReady(turns: Turn[], turn: UserTurn) {
   return true
 }
 
-function isStreamInsertionConsumed(turn: UserTurn) {
+function isStreamInsertionConsumed(turn: UserThreadMessage) {
   return turn.streamInsertion?.status !== "pending"
 }
 
-export function isPendingSteerUserTurn(turns: Turn[], turn: UserTurn) {
+export function isPendingSteerUserMessage(turns: ThreadMessage[], turn: UserThreadMessage) {
   if (turn.submissionMode !== "steer") return false
 
   if (turn.streamInsertion?.status === "pending") return true
@@ -69,32 +73,32 @@ export function isPendingSteerUserTurn(turns: Turn[], turn: UserTurn) {
   return true
 }
 
-export function getPendingStreamInsertionUserTurns(turns: Turn[]) {
+export function getPendingStreamInsertionUserMessages(turns: ThreadMessage[]) {
   return turns.filter(
-    (turn): turn is UserTurn =>
+    (turn): turn is UserThreadMessage =>
       turn.kind === "user" &&
-      isPendingSteerUserTurn(turns, turn),
+      isPendingSteerUserMessage(turns, turn),
   )
 }
 
-export function isPendingQueuedUserTurn(_turns: Turn[], turn: UserTurn) {
+export function isPendingQueuedUserMessage(_turns: ThreadMessage[], turn: UserThreadMessage) {
   return turn.submissionMode === "queued"
 }
 
-export function getPendingQueuedUserTurns(turns: Turn[]) {
+export function getPendingQueuedUserMessages(turns: ThreadMessage[]) {
   return turns.filter(
-    (turn): turn is UserTurn =>
+    (turn): turn is UserThreadMessage =>
       turn.kind === "user" &&
-      isPendingQueuedUserTurn(turns, turn),
+      isPendingQueuedUserMessage(turns, turn),
   )
 }
 
-export function getAssistantStreamInsertionUserTurns(turns: Turn[], assistantTurn: AssistantTurn) {
+export function getAssistantStreamInsertionUserMessages(turns: ThreadMessage[], assistantMessage: AssistantThreadMessage) {
   return turns
     .filter(
-      (turn): turn is UserTurn =>
+      (turn): turn is UserThreadMessage =>
         turn.kind === "user" &&
-        turn.streamInsertion?.assistantTurnID === assistantTurn.id &&
+        readStreamInsertionAssistantThreadMessageID(turn) === assistantMessage.id &&
         isStreamInsertionConsumed(turn) &&
         isStreamInsertionReady(turns, turn),
     )
@@ -106,7 +110,7 @@ export function getAssistantStreamInsertionUserTurns(turns: Turn[], assistantTur
     })
 }
 
-export function resolveStreamInsertionItemIndex(items: AssistantTraceItem[], turn: UserTurn, cursor: number) {
+export function resolveStreamInsertionItemIndex(items: AssistantTraceItem[], turn: UserThreadMessage, cursor: number) {
   const requestedIndex = getStreamInsertionRequestedIndex(items, turn, cursor)
   const followingToolIndex = items.findIndex((item, index) => index >= requestedIndex && item.kind === "tool")
 

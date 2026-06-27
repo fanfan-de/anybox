@@ -200,7 +200,7 @@ describe("ChangesPanel", () => {
   })
 
   it("shows patch restore, stage, and editor actions for latest-turn files in git workspaces", async () => {
-    const latestTurnDiff: SessionDiffSummary = {
+    const latestMessageDiff: SessionDiffSummary = {
       scope: "session:last-turn",
       restoreMode: "patch",
       availableScopes: scopeOptions,
@@ -244,7 +244,7 @@ describe("ChangesPanel", () => {
       },
       targetPath: "C:\\Projects\\Atlas\\README.md",
     }))
-    const onDiffScopeLoad = vi.fn(async () => latestTurnDiff)
+    const onDiffScopeLoad = vi.fn(async () => latestMessageDiff)
     const onDiffFileRestore = vi.fn()
 
     window.desktop = {
@@ -258,7 +258,7 @@ describe("ChangesPanel", () => {
       <ChangesPanel
         activeSession={createSession()}
         activeSessionDirectory={"C:\\Projects\\Atlas"}
-        activeSessionDiff={latestTurnDiff}
+        activeSessionDiff={latestMessageDiff}
         activeSessionDiffState={{
           status: "ready",
           errorMessage: null,
@@ -278,7 +278,7 @@ describe("ChangesPanel", () => {
       diffs: [
         {
           file: "README.md",
-          patch: latestTurnDiff.diffs[0]?.patch,
+          patch: latestMessageDiff.diffs[0]?.patch,
         },
       ],
     }))

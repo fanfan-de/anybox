@@ -8,9 +8,9 @@ import type { SessionMessageTree } from "./session-message-tree"
 import type {
   AssistantTraceFileChange,
   AssistantTraceItem,
-  AssistantTurn,
+  AssistantThreadMessage,
   SessionDiffSummary,
-  Turn,
+  ThreadMessage,
 } from "./types"
 
 interface RendererDiagnosticsApi {
@@ -191,9 +191,9 @@ export function buildRendererSessionMemoryDiagnostics(input: {
   diffSummary?: SessionDiffSummary | null
   messageTree?: SessionMessageTree | null
   sessionID?: string | null
-  turns: Turn[]
+  turns: ThreadMessage[]
 }): DesktopRendererSessionMemoryDiagnostics {
-  let assistantTurnCount = 0
+  let assistantMessageCount = 0
   let draftPatchChars = 0
   let maxTraceItemChars = 0
   let streamingAssistantTurnCount = 0
@@ -204,12 +204,12 @@ export function buildRendererSessionMemoryDiagnostics(input: {
 
   for (const turn of input.turns) {
     if (turn.kind !== "assistant") continue
-    const assistantTurn = turn as AssistantTurn
-    assistantTurnCount += 1
-    if (assistantTurn.isStreaming) streamingAssistantTurnCount += 1
-    traceItemCount += assistantTurn.items.length
+    const assistantMessage = turn as AssistantThreadMessage
+    assistantMessageCount += 1
+    if (assistantMessage.isStreaming) streamingAssistantTurnCount += 1
+    traceItemCount += assistantMessage.items.length
 
-    for (const item of assistantTurn.items) {
+    for (const item of assistantMessage.items) {
       const size = traceItemSize(item)
       draftPatchChars += size.draftPatchChars
       maxTraceItemChars = Math.max(maxTraceItemChars, size.totalChars)
@@ -220,7 +220,7 @@ export function buildRendererSessionMemoryDiagnostics(input: {
   }
 
   return {
-    assistantTurnCount,
+    assistantTurnCount: assistantMessageCount,
     currentSessionID: input.sessionID ?? null,
     diffChars: sessionDiffChars(input.diffSummary),
     draftPatchChars,

@@ -30,12 +30,12 @@ describe("agent session event router", () => {
 
     router.setTurnTarget("backend-1", "turn-1", {
       sessionID: "ui-1",
-      assistantTurnID: "assistant-1",
+      assistantThreadMessageID: "assistant-1",
     })
 
     expect(router.getTurnTarget("backend-1", "turn-1")).toEqual({
       sessionID: "ui-1",
-      assistantTurnID: "assistant-1",
+      assistantThreadMessageID: "assistant-1",
     })
 
     router.cleanupTurnTarget("backend-1", "turn-1")

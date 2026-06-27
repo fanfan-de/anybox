@@ -1,11 +1,11 @@
-import { buildUserTurnText } from "./stream"
-import type { SessionDiffSummary, Turn, UserTurn, UserTurnAttachment, UserTurnReference } from "./types"
+import { buildUserThreadMessageText } from "./stream"
+import type { SessionDiffSummary, ThreadMessage, UserThreadMessage, UserThreadMessageAttachment, UserThreadMessageReference } from "./types"
 
-const USER_TURN_PRESENTATION_STORAGE_KEY = "desktop.userTurnPresentation.v1"
+const USER_TURN_PRESENTATION_STORAGE_KEY = "desktop.userMessagePresentation.v1"
 const MAX_PERSISTED_SESSION_COUNT = 100
 const MAX_PERSISTED_USER_TURNS_PER_SESSION = 200
 
-type PersistedUserTurnPresentationMap = Record<string, UserTurn[]>
+type PersistedUserMessagePresentationMap = Record<string, UserThreadMessage[]>
 
 function readString(value: unknown) {
   return typeof value === "string" ? value : ""
@@ -15,7 +15,7 @@ function readNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0
 }
 
-function sanitizeUserTurnDiffSummary(value: unknown): SessionDiffSummary | undefined {
+function sanitizeUserMessageDiffSummary(value: unknown): SessionDiffSummary | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
 
   const record = value as Record<string, unknown>
@@ -64,7 +64,7 @@ function sanitizeUserTurnDiffSummary(value: unknown): SessionDiffSummary | undef
   }
 }
 
-function sanitizeUserTurnAttachments(value: unknown): UserTurnAttachment[] | undefined {
+function sanitizeUserThreadMessageAttachments(value: unknown): UserThreadMessageAttachment[] | undefined {
   if (!Array.isArray(value)) return undefined
 
   const attachments = value
@@ -78,14 +78,14 @@ function sanitizeUserTurnAttachments(value: unknown): UserTurnAttachment[] | und
       return {
         name,
         ...(path ? { path } : {}),
-      } satisfies UserTurnAttachment
+      } satisfies UserThreadMessageAttachment
     })
-    .filter((item): item is UserTurnAttachment => item !== null)
+    .filter((item): item is UserThreadMessageAttachment => item !== null)
 
   return attachments.length > 0 ? attachments : undefined
 }
 
-function sanitizeUserTurnReferences(value: unknown): UserTurnReference[] | undefined {
+function sanitizeUserThreadMessageReferences(value: unknown): UserThreadMessageReference[] | undefined {
   if (!Array.isArray(value)) return undefined
 
   const references = value
@@ -104,14 +104,14 @@ function sanitizeUserTurnReferences(value: unknown): UserTurnReference[] | undef
         label,
         ...(title ? { title } : {}),
         ...(kind === "comment" || kind === "file" ? { kind } : {}),
-      } satisfies UserTurnReference
+      } satisfies UserThreadMessageReference
     })
-    .filter((item): item is UserTurnReference => item !== null)
+    .filter((item): item is UserThreadMessageReference => item !== null)
 
   return references.length > 0 ? references : undefined
 }
 
-function sanitizeUserTurn(value: unknown): UserTurn | null {
+function sanitizeUserMessage(value: unknown): UserThreadMessage | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
 
   const record = value as Record<string, unknown>
@@ -124,9 +124,9 @@ function sanitizeUserTurn(value: unknown): UserTurn | null {
   }
 
   const displayText = readString(record.displayText).trim()
-  const attachments = sanitizeUserTurnAttachments(record.attachments)
-  const references = sanitizeUserTurnReferences(record.references)
-  const diffSummary = sanitizeUserTurnDiffSummary(record.diffSummary)
+  const attachments = sanitizeUserThreadMessageAttachments(record.attachments)
+  const references = sanitizeUserThreadMessageReferences(record.references)
+  const diffSummary = sanitizeUserMessageDiffSummary(record.diffSummary)
   const submissionMode = record.submissionMode === "steer" ? "steer" : undefined
   const questionAnswer =
     record.questionAnswer && typeof record.questionAnswer === "object" && !Array.isArray(record.questionAnswer)
@@ -146,7 +146,7 @@ function sanitizeUserTurn(value: unknown): UserTurn | null {
             questionID,
             ...(selectedOptions.length > 0 ? { selectedOptions } : {}),
             ...(freeformText ? { freeformText } : {}),
-          } satisfies UserTurn["questionAnswer"]
+          } satisfies UserThreadMessage["questionAnswer"]
         })()
       : undefined
 
@@ -164,7 +164,7 @@ function sanitizeUserTurn(value: unknown): UserTurn | null {
   }
 }
 
-function cloneUserTurnDiffSummary(diffSummary: SessionDiffSummary): SessionDiffSummary {
+function cloneUserMessageDiffSummary(diffSummary: SessionDiffSummary): SessionDiffSummary {
   return {
     ...(diffSummary.title ? { title: diffSummary.title } : {}),
     ...(diffSummary.body ? { body: diffSummary.body } : {}),
@@ -173,7 +173,7 @@ function cloneUserTurnDiffSummary(diffSummary: SessionDiffSummary): SessionDiffS
   }
 }
 
-function readPersistedPresentationMap(): PersistedUserTurnPresentationMap {
+function readPersistedPresentationMap(): PersistedUserMessagePresentationMap {
   if (typeof window === "undefined") return {}
 
   try {
@@ -188,8 +188,8 @@ function readPersistedPresentationMap(): PersistedUserTurnPresentationMap {
         if (!Array.isArray(turns)) return []
 
         const sanitizedTurns = turns
-          .map((item) => sanitizeUserTurn(item))
-          .filter((item): item is UserTurn => item !== null)
+          .map((item) => sanitizeUserMessage(item))
+          .filter((item): item is UserThreadMessage => item !== null)
 
         return sanitizedTurns.length > 0 ? [[sessionID, sanitizedTurns]] : []
       }),
@@ -199,7 +199,7 @@ function readPersistedPresentationMap(): PersistedUserTurnPresentationMap {
   }
 }
 
-function writePersistedPresentationMap(value: PersistedUserTurnPresentationMap) {
+function writePersistedPresentationMap(value: PersistedUserMessagePresentationMap) {
   if (typeof window === "undefined") return
 
   try {
@@ -209,9 +209,9 @@ function writePersistedPresentationMap(value: PersistedUserTurnPresentationMap) 
   }
 }
 
-function selectPersistableUserTurns(turns: Turn[]) {
+function selectPersistableUserMessages(turns: ThreadMessage[]) {
   return turns
-    .filter((turn): turn is UserTurn => turn.kind === "user")
+    .filter((turn): turn is UserThreadMessage => turn.kind === "user")
     .slice(-MAX_PERSISTED_USER_TURNS_PER_SESSION)
     .map((turn) => {
       const {
@@ -225,7 +225,7 @@ function selectPersistableUserTurns(turns: Turn[]) {
         ...(submissionMode === "steer" ? { submissionMode } : {}),
         ...(turn.attachments?.length ? { attachments: turn.attachments.map((attachment) => ({ ...attachment })) } : {}),
         ...(turn.references?.length ? { references: turn.references.map((reference) => ({ ...reference })) } : {}),
-        ...(turn.diffSummary ? { diffSummary: cloneUserTurnDiffSummary(turn.diffSummary) } : {}),
+        ...(turn.diffSummary ? { diffSummary: cloneUserMessageDiffSummary(turn.diffSummary) } : {}),
         ...(turn.questionAnswer
           ? {
               questionAnswer: {
@@ -240,7 +240,7 @@ function selectPersistableUserTurns(turns: Turn[]) {
     })
 }
 
-function prunePersistedPresentationMap(value: PersistedUserTurnPresentationMap) {
+function prunePersistedPresentationMap(value: PersistedUserMessagePresentationMap) {
   const rankedSessions = Object.entries(value)
     .map(([sessionID, turns]) => ({
       sessionID,
@@ -253,15 +253,15 @@ function prunePersistedPresentationMap(value: PersistedUserTurnPresentationMap) 
   return Object.fromEntries(rankedSessions.map(({ sessionID, turns }) => [sessionID, turns]))
 }
 
-export function readPersistedUserTurns(sessionID: string) {
+export function readPersistedUserMessages(sessionID: string) {
   return readPersistedPresentationMap()[sessionID] ?? []
 }
 
-export function persistUserTurns(sessionID: string, turns: Turn[]) {
+export function persistUserMessages(sessionID: string, turns: ThreadMessage[]) {
   const normalizedSessionID = sessionID.trim()
   if (!normalizedSessionID) return
 
-  const nextSessionTurns = selectPersistableUserTurns(turns)
+  const nextSessionTurns = selectPersistableUserMessages(turns)
   const nextMap = readPersistedPresentationMap()
 
   if (nextSessionTurns.length > 0) {
@@ -273,44 +273,44 @@ export function persistUserTurns(sessionID: string, turns: Turn[]) {
   writePersistedPresentationMap(prunePersistedPresentationMap(nextMap))
 }
 
-function isLocalGeneratedUserTurn(turn: UserTurn) {
+function isLocalGeneratedUserMessage(turn: UserThreadMessage) {
   return turn.id.startsWith("user-")
 }
 
-export function mergeUserTurnPresentationState(previousTurns: Turn[], nextTurns: Turn[]) {
-  const previousUserTurns = previousTurns.filter((turn): turn is UserTurn => turn.kind === "user")
-  const previousUserTurnByID = new Map(previousUserTurns.map((turn) => [turn.id, turn]))
-  const usedPreviousUserTurnIDs = new Set<string>()
-  let fallbackPreviousUserTurnIndex = 0
+export function mergeUserMessagePresentationState(previousMessages: ThreadMessage[], nextMessages: ThreadMessage[]) {
+  const previousUserMessages = previousMessages.filter((turn): turn is UserThreadMessage => turn.kind === "user")
+  const previousUserMessageByID = new Map(previousUserMessages.map((turn) => [turn.id, turn]))
+  const usedPreviousUserThreadMessageIDs = new Set<string>()
+  let fallbackPreviousUserMessageIndex = 0
 
-  function takeFallbackUserTurn() {
-    while (fallbackPreviousUserTurnIndex < previousUserTurns.length) {
-      const candidate = previousUserTurns[fallbackPreviousUserTurnIndex++]
-      if (!candidate || usedPreviousUserTurnIDs.has(candidate.id)) continue
-      if (!isLocalGeneratedUserTurn(candidate)) continue
+  function takeFallbackUserMessage() {
+    while (fallbackPreviousUserMessageIndex < previousUserMessages.length) {
+      const candidate = previousUserMessages[fallbackPreviousUserMessageIndex++]
+      if (!candidate || usedPreviousUserThreadMessageIDs.has(candidate.id)) continue
+      if (!isLocalGeneratedUserMessage(candidate)) continue
 
-      usedPreviousUserTurnIDs.add(candidate.id)
+      usedPreviousUserThreadMessageIDs.add(candidate.id)
       return candidate
     }
 
     return undefined
   }
 
-  const mergedTurns = nextTurns.map((turn) => {
+  const mergedMessages = nextMessages.map((turn) => {
     if (turn.kind !== "user") return turn
 
-    const exactPreviousTurn = previousUserTurnByID.get(turn.id)
-    const previousTurn = exactPreviousTurn ?? takeFallbackUserTurn()
-    if (!previousTurn) return turn
-    usedPreviousUserTurnIDs.add(previousTurn.id)
+    const exactPreviousTurn = previousUserMessageByID.get(turn.id)
+    const previousMessage = exactPreviousTurn ?? takeFallbackUserMessage()
+    if (!previousMessage) return turn
+    usedPreviousUserThreadMessageIDs.add(previousMessage.id)
 
-    const mergedDisplayText = previousTurn.displayText ?? turn.displayText
-    const mergedAttachments = previousTurn.attachments?.length ? previousTurn.attachments : turn.attachments
-    const mergedReferences = previousTurn.references?.length ? previousTurn.references : turn.references
+    const mergedDisplayText = previousMessage.displayText ?? turn.displayText
+    const mergedAttachments = previousMessage.attachments?.length ? previousMessage.attachments : turn.attachments
+    const mergedReferences = previousMessage.references?.length ? previousMessage.references : turn.references
 
     return {
       ...turn,
-      text: buildUserTurnText({
+      text: buildUserThreadMessageText({
         text: mergedDisplayText ?? turn.displayText ?? turn.text,
         attachmentNames: mergedAttachments?.map((attachment) => attachment.name),
         referenceLabels: mergedReferences?.map((reference) => reference.label),
@@ -319,35 +319,35 @@ export function mergeUserTurnPresentationState(previousTurns: Turn[], nextTurns:
       ...(mergedAttachments?.length ? { attachments: mergedAttachments } : {}),
       ...(mergedReferences?.length ? { references: mergedReferences } : {}),
       ...(turn.diffSummary ? { diffSummary: turn.diffSummary } : {}),
-      ...(previousTurn.submissionMode === "steer" ? { submissionMode: previousTurn.submissionMode } : {}),
+      ...(previousMessage.submissionMode === "steer" ? { submissionMode: previousMessage.submissionMode } : {}),
     }
   })
 
-  if (mergedTurns.length === 0) {
-    return previousTurns.length > 0 ? previousTurns : mergedTurns
+  if (mergedMessages.length === 0) {
+    return previousMessages.length > 0 ? previousMessages : mergedMessages
   }
 
-  if (mergedTurns.length >= previousTurns.length) {
-    return mergedTurns
+  if (mergedMessages.length >= previousMessages.length) {
+    return mergedMessages
   }
 
-  const hasMatchingPrefix = mergedTurns.every((turn, index) => {
-    const previousTurn = previousTurns[index]
-    if (!previousTurn || previousTurn.kind !== turn.kind) return false
+  const hasMatchingPrefix = mergedMessages.every((turn, index) => {
+    const previousMessage = previousMessages[index]
+    if (!previousMessage || previousMessage.kind !== turn.kind) return false
 
-    if (previousTurn.id === turn.id) return true
+    if (previousMessage.id === turn.id) return true
 
-    if (previousTurn.kind === "user" && turn.kind === "user") {
-      return previousTurn.text === turn.text &&
-        (previousTurn.questionAnswer?.questionID ?? "") === (turn.questionAnswer?.questionID ?? "")
+    if (previousMessage.kind === "user" && turn.kind === "user") {
+      return previousMessage.text === turn.text &&
+        (previousMessage.questionAnswer?.questionID ?? "") === (turn.questionAnswer?.questionID ?? "")
     }
 
-    if (previousTurn.kind === "assistant" && turn.kind === "assistant") {
-      return previousTurn.state === turn.state && previousTurn.items.length === turn.items.length
+    if (previousMessage.kind === "assistant" && turn.kind === "assistant") {
+      return previousMessage.state === turn.state && previousMessage.items.length === turn.items.length
     }
 
     return false
   })
 
-  return hasMatchingPrefix ? [...mergedTurns, ...previousTurns.slice(mergedTurns.length)] : mergedTurns
+  return hasMatchingPrefix ? [...mergedMessages, ...previousMessages.slice(mergedMessages.length)] : mergedMessages
 }

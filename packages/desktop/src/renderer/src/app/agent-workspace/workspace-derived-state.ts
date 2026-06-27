@@ -13,7 +13,7 @@ import type {
   SessionRuntimeDebugState,
   SessionTaskListView,
   SessionSummary,
-  Turn,
+  ThreadMessage,
   WorkbenchTabReference,
   WorkspaceFileComment,
   WorkspaceFileReviewState,
@@ -52,9 +52,9 @@ const EMPTY_PENDING_CONVERSATION_INPUTS: PendingConversationInput[] = []
 const EMPTY_PERMISSION_REQUESTS: PermissionRequest[] = []
 const EMPTY_SIDE_CHAT_COUNTS_BY_ANCHOR_MESSAGE_ID: Record<string, number> = {}
 const EMPTY_SIDE_CHAT_SESSIONS_BY_ANCHOR_MESSAGE_ID: Record<string, SessionSummary[]> = {}
-const EMPTY_TURNS: Turn[] = []
+const EMPTY_MESSAGES: ThreadMessage[] = []
 const sideChatSessionsByParentCache = new WeakMap<WorkspaceGroup[], Map<string, Record<string, SessionSummary[]>>>()
-const runningSessionIDsCache = new WeakMap<Record<string, Turn[]>, WeakMap<Record<string, boolean>, string[]>>()
+const runningSessionIDsCache = new WeakMap<Record<string, ThreadMessage[]>, WeakMap<Record<string, boolean>, string[]>>()
 
 function getSideChatCreatedAt(session: SessionSummary) {
   return session.created ?? session.updated
@@ -257,7 +257,7 @@ function getSessionIDFromTabKey(tabKey: string) {
 }
 
 function getRunningSessionIDs(
-  conversations: Record<string, Turn[]>,
+  conversations: Record<string, ThreadMessage[]>,
   isSendingByTabKey: Record<string, boolean>,
   conversationActivityBySession?: ConversationActivityMap,
 ) {
@@ -270,7 +270,7 @@ function getRunningSessionIDs(
     }
 
     for (const [sessionID, activity] of Object.entries(conversationActivityBySession)) {
-      if (activity.hasStreamingAssistantTurn) {
+      if (activity.hasStreamingAssistantMessage) {
         sessionIDs.add(sessionID)
       }
     }
@@ -304,7 +304,7 @@ function getRunningSessionIDs(
   return nextSessionIDs
 }
 
-function hasStreamingAssistantTurn(turns: Turn[]) {
+function hasStreamingAssistantMessage(turns: ThreadMessage[]) {
   return turns.some((turn) => turn.kind === "assistant" && turn.isStreaming)
 }
 
@@ -315,7 +315,7 @@ function isRuntimeDebugBusy(debug: SessionRuntimeDebugSnapshot | null | undefine
 function isSessionInterruptible(input: {
   cancellingSessionIDs: Record<string, boolean>
   conversationActivityBySession?: ConversationActivityMap
-  conversations: Record<string, Turn[]>
+  conversations: Record<string, ThreadMessage[]>
   isSendingByTabKey: Record<string, boolean>
   sessionID: string | null | undefined
   sessionRuntimeDebugBySession: Record<string, SessionRuntimeDebugSnapshot>
@@ -327,8 +327,8 @@ function isSessionInterruptible(input: {
     Boolean(input.cancellingSessionIDs[input.sessionID]) ||
     (
       input.conversationActivityBySession
-        ? Boolean(input.conversationActivityBySession[input.sessionID]?.hasStreamingAssistantTurn)
-        : hasStreamingAssistantTurn(input.conversations[input.sessionID] ?? [])
+        ? Boolean(input.conversationActivityBySession[input.sessionID]?.hasStreamingAssistantMessage)
+        : hasStreamingAssistantMessage(input.conversations[input.sessionID] ?? [])
     ) ||
     isRuntimeDebugBusy(input.sessionRuntimeDebugBySession[input.sessionID])
   )
@@ -358,7 +358,7 @@ export interface BuildWorkspaceDerivedStateInput {
   composerParentMessageIDByTabKey?: Record<string, string>
   conversationActivityBySession?: ConversationActivityMap
   contextUsageBySession: Record<string, SessionContextUsage>
-  conversations: Record<string, Turn[]>
+  conversations: Record<string, ThreadMessage[]>
   messageTreeBySession?: Record<string, SessionMessageTree>
   createSessionTabs: CreateSessionTab[]
   isCreatingSessionByTabKey: Record<string, boolean>
@@ -626,12 +626,12 @@ export function buildWorkbenchSurfaceState(
       : EMPTY_PENDING_CONVERSATION_INPUTS,
     activeSideChatSession: paneActiveSideChatSession,
     activeSideChatTabKey: paneActiveSideChatTabKey,
-    activeSideChatTurns: paneActiveSideChatSession ? input.conversations[paneActiveSideChatSession.id] ?? EMPTY_TURNS : EMPTY_TURNS,
+    activeSideChatMessages: paneActiveSideChatSession ? input.conversations[paneActiveSideChatSession.id] ?? EMPTY_MESSAGES : EMPTY_MESSAGES,
     activeSessionDirectory: currentActiveSessionID
       ? input.sessionDirectoryBySession[currentActiveSessionID] ?? currentWorkspace?.directory ?? null
       : null,
     activeSessionSelectedDiffFile: currentActiveSessionID ? input.selectedDiffFileBySession[currentActiveSessionID] ?? null : null,
-    activeTurns: currentActiveSessionID ? input.conversations[currentActiveSessionID] ?? EMPTY_TURNS : EMPTY_TURNS,
+    activeMessages: currentActiveSessionID ? input.conversations[currentActiveSessionID] ?? EMPTY_MESSAGES : EMPTY_MESSAGES,
     messageTree: currentActiveSessionID ? input.messageTreeBySession?.[currentActiveSessionID] ?? null : null,
     composerAttachments: currentActiveTabKey ? input.composerAttachmentsByTabKey[currentActiveTabKey] ?? EMPTY_COMPOSER_ATTACHMENTS : EMPTY_COMPOSER_ATTACHMENTS,
     composerParentMessageID: currentActiveTabKey ? input.composerParentMessageIDByTabKey?.[currentActiveTabKey] ?? null : null,
@@ -713,10 +713,10 @@ function createInactiveWorkbenchSurfaceState(surface: Pick<WorkbenchSurfaceState
     activeSideChatPendingInputs: EMPTY_PENDING_CONVERSATION_INPUTS,
     activeSideChatSession: null,
     activeSideChatTabKey: null,
-    activeSideChatTurns: EMPTY_TURNS,
+    activeSideChatMessages: EMPTY_MESSAGES,
     activeSessionDirectory: null,
     activeSessionSelectedDiffFile: null,
-    activeTurns: EMPTY_TURNS,
+    activeMessages: EMPTY_MESSAGES,
     messageTree: null,
     composerAttachments: EMPTY_COMPOSER_ATTACHMENTS,
     composerParentMessageID: null,
@@ -781,7 +781,7 @@ export function workbenchPaneStatesAreEqual(left: WorkbenchPaneState | null, rig
 
   for (const key of leftKeys) {
     if (!Object.prototype.hasOwnProperty.call(right, key)) return false
-    if (key === "activeTurns" || key === "activeSideChatTurns") {
+    if (key === "activeMessages" || key === "activeSideChatMessages") {
       continue
     }
     if (key === "tabs") {
@@ -1158,7 +1158,7 @@ export function buildWorkspaceDerivedState({
     isInitialWorkspaceLoadPending && selectedWorkspace && seedWorkspaceIDs.has(selectedWorkspace.id)
       ? null
       : selectedWorkspace?.project.id ?? null
-  const activeTurns = activeSession ? conversations[activeSession.id] ?? [] : []
+  const activeMessages = activeSession ? conversations[activeSession.id] ?? [] : []
   const activeSessionDiff = activeSession ? sessionDiffBySession[activeSession.id] ?? null : null
   const activeSessionDiffState = activeSession
     ? sessionDiffStateBySession[activeSession.id] ?? DEFAULT_SESSION_DIFF_STATE
@@ -1189,7 +1189,7 @@ export function buildWorkspaceDerivedState({
       ? activeSideChatSelection.session
       : null
   const activeSideChatTabKey = activeSideChatSession ? getWorkbenchTabKey(createSessionWorkbenchTab(activeSideChatSession.id)) : null
-  const activeSideChatTurns = activeSideChatSession ? conversations[activeSideChatSession.id] ?? [] : []
+  const activeSideChatMessages = activeSideChatSession ? conversations[activeSideChatSession.id] ?? [] : []
   const activeSideChatPendingPermissionRequests =
     activeSideChatSession ? pendingPermissionRequestsBySession[activeSideChatSession.id] ?? [] : []
   const activeSideChatPendingInputs =
@@ -1309,14 +1309,14 @@ export function buildWorkspaceDerivedState({
     activeSideChatSession,
     activeSideChatSessionsByAnchorMessageID,
     activeSideChatTabKey,
-    activeSideChatTurns,
+    activeSideChatMessages,
     activeTab,
     activeTabKey,
     activeWorkspace,
     activeWorkspaceFileScopeDirectory,
     activeWorkspaceFileScopeName,
     activeWorkspaceFileState,
-    activeTurns,
+    activeMessages,
     canvasSessionTabs,
     canInsertPreviewInteractionsIntoDraft,
     canInsertWorkspaceFileCommentsIntoDraft,

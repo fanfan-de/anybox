@@ -15,7 +15,7 @@ import type {
   ComposerPluginOption,
   ComposerSkillOption,
   ComposerTagData,
-  UserTurnReference,
+  UserThreadMessageReference,
 } from "../types"
 import { formatPreviewInteractionContext } from "../preview/interactions/registry"
 import { $createComposerTagNode, $isComposerTagNode, ComposerTagNode } from "./ComposerTagNode"
@@ -30,7 +30,7 @@ export interface CompiledComposerSubmission {
   taggedFilePaths: string[]
   taggedMcpServerIDs: string[]
   taggedPluginIDs: string[]
-  userReferences: UserTurnReference[]
+  userReferences: UserThreadMessageReference[]
   transportText: string
 }
 
@@ -195,7 +195,7 @@ function buildComposerCommentReferences(tags: ComposerTagData[]): ComposerCommen
 }
 
 function buildComposerUserReferences(tags: ComposerTagData[]) {
-  const references: UserTurnReference[] = []
+  const references: UserThreadMessageReference[] = []
   const seen = new Set<string>()
 
   for (const tag of tags) {

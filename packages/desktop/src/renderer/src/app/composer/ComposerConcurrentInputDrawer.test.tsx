@@ -18,7 +18,7 @@ describe("ComposerConcurrentInputDrawer", () => {
   })
 
   it("renders queued pending submissions with the steer action", () => {
-    const onSteerQueuedTurn = vi.fn()
+    const onSteerQueuedMessage = vi.fn()
     const queuedInput: PendingConversationInput = {
       id: "input-queued",
       sessionID: "session-1",
@@ -34,7 +34,7 @@ describe("ComposerConcurrentInputDrawer", () => {
         hasPendingPermissionRequests={false}
         isCancelling={false}
         pendingInputs={[queuedInput]}
-        onSteerQueuedTurn={onSteerQueuedTurn}
+        onSteerQueuedMessage={onSteerQueuedMessage}
       />,
     )
 
@@ -42,7 +42,7 @@ describe("ComposerConcurrentInputDrawer", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "引导当前 turn" }))
 
-    expect(onSteerQueuedTurn).toHaveBeenCalledWith(queuedInput)
+    expect(onSteerQueuedMessage).toHaveBeenCalledWith(queuedInput)
   })
 
   it("renders pending steer submissions with a waiting note", () => {
@@ -52,7 +52,7 @@ describe("ComposerConcurrentInputDrawer", () => {
       text: "Adjust current turn",
       mode: "steer",
       status: "pending",
-      targetAssistantTurnID: "assistant-active",
+      targetAssistantThreadMessageID: "assistant-active",
       afterItemCount: 1,
       createdAt: 2,
     }

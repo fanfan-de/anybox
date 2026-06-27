@@ -223,9 +223,9 @@ describe("workspace derived state", () => {
     })
 
     expect(derived.activeSession?.id).toBe(parentSession.id)
-    expect(derived.activeTurns).toHaveLength(1)
+    expect(derived.activeMessages).toHaveLength(1)
     expect(derived.activeSideChatSession?.id).toBe(sideChatSession.id)
-    expect(derived.activeSideChatTurns).toHaveLength(1)
+    expect(derived.activeSideChatMessages).toHaveLength(1)
     expect(derived.activeSideChatCountsByAnchorMessageID).toEqual({ "message-1": 2, "message-2": 1 })
     expect(derived.activeSideChatSessionsByAnchorMessageID["message-1"]?.map((session) => session.id)).toEqual([
       "side-chat-2",
@@ -297,13 +297,13 @@ describe("workspace derived state", () => {
       activeTabKey: panelAID,
       sessionID: sessionA.id,
     })
-    expect(derivedWithAActive.workbenchPanelStateByID[panelAID]?.activeTurns[0]?.id).toBe("turn-a")
+    expect(derivedWithAActive.workbenchPanelStateByID[panelAID]?.activeMessages[0]?.id).toBe("turn-a")
     expect(derivedWithAActive.workbenchPanelStateByID[panelAID]?.draftState.plainText).toBe("draft A")
     expect(derivedWithAActive.workbenchPanelStateByID[panelBID]).toMatchObject({
       activeTabKey: panelBID,
       sessionID: sessionB.id,
     })
-    expect(derivedWithAActive.workbenchPanelStateByID[panelBID]?.activeTurns[0]?.id).toBe("turn-b")
+    expect(derivedWithAActive.workbenchPanelStateByID[panelBID]?.activeMessages[0]?.id).toBe("turn-b")
     expect(derivedWithAActive.workbenchPanelStateByID[panelBID]?.composerAttachments).toEqual([
       { name: "b.txt", path: "C:/work/workspace-1/b.txt" },
     ])
@@ -372,7 +372,7 @@ describe("workspace derived state", () => {
       dockviewLayout: layout,
       workspaces: [workspace],
     })
-    expect(derivedWithTurns.workbenchPanelStateByID[panelAID]?.activeTurns).toHaveLength(1)
+    expect(derivedWithTurns.workbenchPanelStateByID[panelAID]?.activeMessages).toHaveLength(1)
 
     const publishSnapshotAfterTurns = buildWorkbenchPublishSnapshot({
       createSessionTabs: [createSessionTab],

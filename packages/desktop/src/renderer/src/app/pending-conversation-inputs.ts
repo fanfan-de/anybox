@@ -1,4 +1,4 @@
-import type { PendingConversationInput, UserTurn } from "./types"
+import type { PendingConversationInput, UserThreadMessage } from "./types"
 
 export type PendingConversationInputMap = Record<string, PendingConversationInput[]>
 
@@ -84,12 +84,12 @@ export function removePendingConversationInput(
   return removeSessionIfEmpty(current, sessionID, nextInputs)
 }
 
-export function pendingConversationInputToUserTurn(
+export function pendingConversationInputToUserThreadMessage(
   input: PendingConversationInput,
   options: {
-    streamInsertion?: UserTurn["streamInsertion"]
+    streamInsertion?: UserThreadMessage["streamInsertion"]
   } = {},
-): UserTurn {
+): UserThreadMessage {
   return {
     id: input.id,
     kind: "user",

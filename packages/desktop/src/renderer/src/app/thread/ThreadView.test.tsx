@@ -1,7 +1,7 @@
 import { createRef, type ComponentProps } from "react"
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
-import { DEFAULT_ASSISTANT_TRACE_VISIBILITY, type AssistantTraceItem, type AssistantTraceItemKind, type AssistantTurn, type SessionSummary, type Turn, type UserTurn } from "../types"
+import { DEFAULT_ASSISTANT_TRACE_VISIBILITY, type AssistantTraceItem, type AssistantTraceItemKind, type AssistantThreadMessage, type SessionSummary, type ThreadMessage, type UserThreadMessage } from "../types"
 import type { SessionMessageTree } from "../session-message-tree"
 import { SIDEBAR_RESIZE_END_EVENT } from "../sidebar-resize-events"
 import { I18nProvider } from "../i18n/I18nProvider"
@@ -23,7 +23,7 @@ const sessionB: SessionSummary = {
   title: "Session 2",
 }
 
-function assistantTurn(id: string, text: string): AssistantTurn {
+function assistantMessage(id: string, text: string): AssistantThreadMessage {
   return {
     id,
     kind: "assistant",
@@ -48,7 +48,7 @@ function assistantTurn(id: string, text: string): AssistantTurn {
   }
 }
 
-function assistantTraceTurn(id: string, items: AssistantTraceItem[], isStreaming: boolean): AssistantTurn {
+function assistantTraceTurn(id: string, items: AssistantTraceItem[], isStreaming: boolean): AssistantThreadMessage {
   return {
     id,
     kind: "assistant",
@@ -64,7 +64,7 @@ function assistantTraceTurn(id: string, items: AssistantTraceItem[], isStreaming
   }
 }
 
-function userTurn(id: string, text: string): UserTurn {
+function userMessage(id: string, text: string): UserThreadMessage {
   return {
     id,
     kind: "user",
@@ -74,13 +74,13 @@ function userTurn(id: string, text: string): UserTurn {
 }
 
 function createThreadProps(
-  activeTurns: Turn[],
+  activeMessages: ThreadMessage[],
   threadColumnRef = createRef<HTMLDivElement | null>(),
   overrides: Partial<ComponentProps<typeof ThreadView>> = {},
 ) {
   return {
     activeSession: session,
-    activeTurns,
+    activeMessages,
     assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
     isAgentDebugTraceEnabled: false,
     isResolvingPermissionRequest: false,
@@ -95,9 +95,9 @@ function createThreadProps(
   } satisfies ComponentProps<typeof ThreadView>
 }
 
-function renderThread(activeTurns: Turn[], overrides: Partial<ComponentProps<typeof ThreadView>> = {}) {
+function renderThread(activeMessages: ThreadMessage[], overrides: Partial<ComponentProps<typeof ThreadView>> = {}) {
   const threadColumnRef = createRef<HTMLDivElement | null>()
-  const props = createThreadProps(activeTurns, threadColumnRef, overrides)
+  const props = createThreadProps(activeMessages, threadColumnRef, overrides)
   const view = render(<ThreadView {...props} />)
 
   return {
@@ -284,12 +284,12 @@ function toolStatusTraceItem(status: NonNullable<AssistantTraceItem["status"]>):
 
 describe("ThreadView trace item renderers", () => {
   it("renders every assistant trace item kind through the registry", () => {
-    const activeTurns = traceItemKinds.flatMap<Turn>((kind, index) => [
-      userTurn(`user-${kind}`, `Trigger ${kind}`),
+    const activeMessages = traceItemKinds.flatMap<ThreadMessage>((kind, index) => [
+      userMessage(`user-${kind}`, `Trigger ${kind}`),
       assistantTraceTurn(`assistant-${kind}`, [traceSmokeItem(kind)], false),
-      ...(index === traceItemKinds.length - 1 ? [] : [userTurn(`separator-${kind}`, `Next ${kind}`)]),
+      ...(index === traceItemKinds.length - 1 ? [] : [userMessage(`separator-${kind}`, `Next ${kind}`)]),
     ])
-    const { container } = renderThread(activeTurns, {
+    const { container } = renderThread(activeMessages, {
       assistantTraceVisibility: {
         ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
         debugMetadata: true,
@@ -993,7 +993,7 @@ describe("ThreadView image trace items", () => {
     rerender(
       <ThreadView
         {...props}
-        activeTurns={[
+        activeMessages={[
           assistantTraceTurn("assistant-patch-draft", [
             buildToolItem(Array.from({ length: 12 }, (_, index) => ({
               content: `line ${index + 1}`,
@@ -1589,7 +1589,7 @@ describe("ThreadView trace collapse", () => {
       fireEvent.click(getByRole("button", { name: /Shell/ }))
       expect(container.textContent).toContain("Input")
 
-      rerender(<ThreadView {...props} activeTurns={[assistantTraceTurn("assistant-1", completedItems, false)]} />)
+      rerender(<ThreadView {...props} activeMessages={[assistantTraceTurn("assistant-1", completedItems, false)]} />)
 
       expect(container.textContent).toContain("Inspect files first")
       expect(container.textContent).toContain("Then compare the rendering states")
@@ -1810,7 +1810,7 @@ describe("ThreadView trace collapse", () => {
   })
 
   it("does not duplicate unfinished task turns in the final response process trace", () => {
-    const taskTurn = assistantTraceTurn(
+    const taskMessage = assistantTraceTurn(
       "assistant-task",
       [
         {
@@ -1824,15 +1824,15 @@ describe("ThreadView trace collapse", () => {
       ],
       false,
     )
-    taskTurn.runtime = {
-      ...taskTurn.runtime,
+    taskMessage.runtime = {
+      ...taskMessage.runtime,
       phase: "tool_running",
     }
-    taskTurn.state = "tool_running"
+    taskMessage.state = "tool_running"
 
     const { container, getByText, queryByRole } = renderThread([
-      userTurn("user-1", "Create task and continue."),
-      taskTurn,
+      userMessage("user-1", "Create task and continue."),
+      taskMessage,
       assistantTraceTurn(
         "assistant-final",
         [
@@ -1878,7 +1878,7 @@ describe("ThreadView trace collapse", () => {
       ],
       true,
     )
-    const taskTurn = assistantTraceTurn(
+    const taskMessage = assistantTraceTurn(
       "assistant-task",
       [
         {
@@ -1902,9 +1902,9 @@ describe("ThreadView trace collapse", () => {
     )
 
     const { getByText } = renderThread([
-      userTurn("user-1", "Use multiagent."),
+      userMessage("user-1", "Use multiagent."),
       spawnTurn,
-      taskTurn,
+      taskMessage,
     ])
 
     const taskText = getByText("I will create the task list first.")
@@ -1928,7 +1928,7 @@ describe("ThreadView trace collapse", () => {
       ],
       false,
     )
-    const taskTurn = assistantTraceTurn(
+    const taskMessage = assistantTraceTurn(
       "assistant-task",
       [
         {
@@ -1944,9 +1944,9 @@ describe("ThreadView trace collapse", () => {
     )
 
     const { getByText } = renderThread([
-      userTurn("user-1", "Use multiagent."),
+      userMessage("user-1", "Use multiagent."),
       spawnTurn,
-      taskTurn,
+      taskMessage,
     ])
 
     const spawnText = getByText("Now I will start the child agents.")
@@ -2046,7 +2046,7 @@ describe("ThreadView trace collapse", () => {
       updatedAt: 228_000,
     }
 
-    const { getByRole } = renderThread([userTurn("user-1", "Prompt"), processTurn, finalTurn])
+    const { getByRole } = renderThread([userMessage("user-1", "Prompt"), processTurn, finalTurn])
 
     const processedTrace = getByRole("button", { name: /Processed/ })
     expect(processedTrace).toHaveTextContent("2m 8s")
@@ -2302,7 +2302,7 @@ describe("ThreadView trace collapse", () => {
       expect(queryByText("Processed")).toBeNull()
       expect(getByText("I will inspect the project first.")).toBeInTheDocument()
 
-      rerender(<ThreadView {...props} activeTurns={[assistantTraceTurn("assistant-1", completedItems, false)]} />)
+      rerender(<ThreadView {...props} activeMessages={[assistantTraceTurn("assistant-1", completedItems, false)]} />)
 
       const processedTrace = getByRole("button", { name: /Processed/ })
       expect(processedTrace).toHaveAttribute("aria-expanded", "false")
@@ -2903,7 +2903,7 @@ describe("ThreadView assistant response markdown", () => {
           status: "completed",
         },
       ], false),
-      userTurn("user-1", "Thanks"),
+      userMessage("user-1", "Thanks"),
     ])
 
     expect(getByRole("heading", { name: "Historical Plan" })).toBeInTheDocument()
@@ -2933,7 +2933,7 @@ describe("ThreadView assistant response markdown", () => {
     expect(getByRole("button", { name: "取消" })).toBeEnabled()
     expect(getByRole("button", { name: "确认实施" })).toBeEnabled()
 
-    rerender(<ThreadView {...props} activeTurns={[planTurn, userTurn("user-1", "Continue")]} />)
+    rerender(<ThreadView {...props} activeMessages={[planTurn, userMessage("user-1", "Continue")]} />)
 
     expect(getByRole("heading", { name: "Fresh Plan" })).toBeInTheDocument()
     expect(queryByText("已过期")).not.toBeInTheDocument()
@@ -3015,7 +3015,7 @@ describe("ThreadView assistant response markdown", () => {
 
     expect(getByRole("button", { name: "确认实施" })).toBeDisabled()
 
-    rerender(<ThreadView {...props} activeTurns={[assistantTraceTurn("assistant-1", [buildResponseItem(completePlan)], true)]} />)
+    rerender(<ThreadView {...props} activeMessages={[assistantTraceTurn("assistant-1", [buildResponseItem(completePlan)], true)]} />)
 
     expect(getByRole("button", { name: "取消" })).toBeEnabled()
     expect(getByRole("button", { name: "确认实施" })).toBeEnabled()
@@ -3157,7 +3157,7 @@ describe("ThreadView message actions", () => {
       value: { writeText },
     })
 
-    const { getByRole } = renderThread([userTurn("user-1", "Hello from user")])
+    const { getByRole } = renderThread([userMessage("user-1", "Hello from user")])
 
     fireEvent.click(getByRole("button", { name: "Copy user message" }))
 
@@ -3165,7 +3165,7 @@ describe("ThreadView message actions", () => {
   })
 
   it("keeps short user messages expanded without a long-message control", () => {
-    const { container, queryByRole } = renderThread([userTurn("user-1", "Short prompt")])
+    const { container, queryByRole } = renderThread([userMessage("user-1", "Short prompt")])
 
     expect(container.querySelector(".user-bubble-text-frame.is-collapsible")).toBeNull()
     expect(queryByRole("button", { name: "Show full message" })).toBeNull()
@@ -3183,7 +3183,7 @@ describe("ThreadView message actions", () => {
 
     try {
       const longText = Array.from({ length: 24 }, (_, index) => `Line ${index + 1}: long pasted content`).join("\n")
-      const { container, getByRole } = renderThread([userTurn("user-long", longText)])
+      const { container, getByRole } = renderThread([userMessage("user-long", longText)])
       const textFrame = container.querySelector(".user-bubble-text-frame") as HTMLElement | null
       const toggleButton = getByRole("button", { name: "Show full message" })
 
@@ -3205,11 +3205,11 @@ describe("ThreadView message actions", () => {
   })
 
   it("renders steering submission status on user turns", () => {
-    const insertedTurn: UserTurn = {
-      ...userTurn("user-steer", "Adjust the current task"),
+    const insertedTurn: UserThreadMessage = {
+      ...userMessage("user-steer", "Adjust the current task"),
       submissionMode: "steer",
       streamInsertion: {
-        assistantTurnID: "assistant-live",
+        assistantThreadMessageID: "assistant-live",
         afterItemCount: 0,
         status: "consumed",
       },
@@ -3238,8 +3238,8 @@ describe("ThreadView message actions", () => {
   })
 
   it("renders active steer-marked user turns without insertion metadata as committed messages", () => {
-    const steerTurn: UserTurn = {
-      ...userTurn("user-steer", "Adjust during tool input"),
+    const steerMessage: UserThreadMessage = {
+      ...userMessage("user-steer", "Adjust during tool input"),
       submissionMode: "steer",
     }
 
@@ -3258,7 +3258,7 @@ describe("ThreadView message actions", () => {
         ],
         true,
       ),
-      steerTurn,
+      steerMessage,
     ])
 
     expect(container.querySelectorAll(".user-turn")).toHaveLength(1)
@@ -3266,8 +3266,8 @@ describe("ThreadView message actions", () => {
   })
 
   it("renders active queued-marked user turns as committed messages", () => {
-    const queuedTurn: UserTurn = {
-      ...userTurn("user-queued", "Adjust patch target"),
+    const queuedMessage: UserThreadMessage = {
+      ...userMessage("user-queued", "Adjust patch target"),
       submissionMode: "queued",
     }
 
@@ -3287,7 +3287,7 @@ describe("ThreadView message actions", () => {
         ],
         true,
       ),
-      queuedTurn,
+      queuedMessage,
     ])
 
     expect(container.querySelectorAll(".user-turn")).toHaveLength(1)
@@ -3295,11 +3295,11 @@ describe("ThreadView message actions", () => {
   })
 
   it("renders stream-inserted steer turns between live assistant trace items", () => {
-    const insertedTurn: UserTurn = {
-      ...userTurn("user-steer", "Adjust the current task"),
+    const insertedTurn: UserThreadMessage = {
+      ...userMessage("user-steer", "Adjust the current task"),
       submissionMode: "steer",
       streamInsertion: {
-        assistantTurnID: "assistant-live",
+        assistantThreadMessageID: "assistant-live",
         afterItemCount: 1,
       },
     }
@@ -3337,11 +3337,11 @@ describe("ThreadView message actions", () => {
   })
 
   it("places stream-inserted steer turns after the following tool call", () => {
-    const insertedTurn: UserTurn = {
-      ...userTurn("user-steer", "Hello during tool step"),
+    const insertedTurn: UserThreadMessage = {
+      ...userMessage("user-steer", "Hello during tool step"),
       submissionMode: "steer",
       streamInsertion: {
-        assistantTurnID: "assistant-live",
+        assistantThreadMessageID: "assistant-live",
         afterItemCount: 1,
       },
     }
@@ -3387,8 +3387,8 @@ describe("ThreadView message actions", () => {
 
   it("renders assistant turn file changes after the final assistant output and handles card actions", async () => {
     const onFileChangeSelect = vi.fn()
-    const onTurnDiffReview = vi.fn().mockResolvedValue(undefined)
-    const onTurnDiffRestore = vi.fn().mockResolvedValue(undefined)
+    const onMessageDiffReview = vi.fn().mockResolvedValue(undefined)
+    const onMessageDiffRestore = vi.fn().mockResolvedValue(undefined)
     const confirmRestore = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true)
     const diffSummary = {
       diffSummary: {
@@ -3418,7 +3418,7 @@ describe("ThreadView message actions", () => {
 
     const { getByRole, getByText, queryByRole } = renderThread(
       [
-        userTurn("user-with-diff", "Update the app"),
+        userMessage("user-with-diff", "Update the app"),
         assistantTraceTurn(
           "assistant-first",
           [
@@ -3451,7 +3451,7 @@ describe("ThreadView message actions", () => {
           ...diffSummary,
         },
       ],
-      { onFileChangeSelect, onTurnDiffRestore, onTurnDiffReview },
+      { onFileChangeSelect, onMessageDiffRestore, onMessageDiffReview },
     )
 
     const summaryButton = getByRole("button", { name: /2 个文件已更改/i })
@@ -3479,17 +3479,17 @@ describe("ThreadView message actions", () => {
     fireEvent.click(getByRole("button", { name: /撤销/i }))
 
     expect(onFileChangeSelect).toHaveBeenCalledWith("src/styles.css")
-    expect(onTurnDiffReview).toHaveBeenCalledWith(["src/App.tsx", "src/styles.css"])
+    expect(onMessageDiffReview).toHaveBeenCalledWith(["src/App.tsx", "src/styles.css"])
     expect(confirmRestore).toHaveBeenCalledTimes(1)
     expect(confirmRestore).toHaveBeenCalledWith(
       "尝试反向应用这 2 个文件的变更？不能自动撤销的文件会提示失败，已成功撤销的文件会保留结果。",
     )
-    expect(onTurnDiffRestore).not.toHaveBeenCalled()
+    expect(onMessageDiffRestore).not.toHaveBeenCalled()
 
     fireEvent.click(getByRole("button", { name: /撤销/i }))
 
     await waitFor(() => {
-      expect(onTurnDiffRestore).toHaveBeenCalledWith([
+      expect(onMessageDiffRestore).toHaveBeenCalledWith([
         expect.objectContaining({
           file: "src/App.tsx",
           patch: expect.stringContaining("-old app"),
@@ -3508,7 +3508,7 @@ describe("ThreadView message actions", () => {
     const onFileChangeSelect = vi.fn()
     renderThread(
       [
-        userTurn("user-diff-summary-only", "Create a Tetris game"),
+        userMessage("user-diff-summary-only", "Create a Tetris game"),
         {
           ...assistantTraceTurn(
             "assistant-tetris",
@@ -3563,8 +3563,8 @@ describe("ThreadView message actions", () => {
   })
 
   it("keeps inline diffs scoped to each turn when the same file changes later", () => {
-    const buildDiffUserTurn = (id: string): UserTurn => userTurn(id, "Update shared file")
-    const buildPatchAssistantTurn = (id: string, oldValue: string, newValue: string): AssistantTurn => ({
+    const buildDiffUserMessage = (id: string): UserThreadMessage => userMessage(id, "Update shared file")
+    const buildPatchAssistantMessage = (id: string, oldValue: string, newValue: string): AssistantThreadMessage => ({
       ...assistantTraceTurn(
         id,
         [
@@ -3605,10 +3605,10 @@ describe("ThreadView message actions", () => {
     })
 
     renderThread([
-      buildDiffUserTurn("user-first-diff"),
-      buildPatchAssistantTurn("assistant-first-diff", "old", "first turn"),
-      buildDiffUserTurn("user-second-diff"),
-      buildPatchAssistantTurn("assistant-second-diff", "first turn", "second turn"),
+      buildDiffUserMessage("user-first-diff"),
+      buildPatchAssistantMessage("assistant-first-diff", "old", "first turn"),
+      buildDiffUserMessage("user-second-diff"),
+      buildPatchAssistantMessage("assistant-second-diff", "first turn", "second turn"),
     ])
 
     const sharedFileButtons = screen.getAllByRole("button", { name: "展开 src/shared.ts 变更" })
@@ -3624,9 +3624,9 @@ describe("ThreadView message actions", () => {
   })
 
   it("uses the active workspace diff only for the latest turn without a saved patch", () => {
-    const onTurnDiffSummaryHydrate = vi.fn()
-    const buildDiffUserTurn = (id: string): UserTurn => userTurn(id, "Update shared file")
-    const buildDiffAssistantTurn = (id: string, text: string): AssistantTurn => ({
+    const onMessageDiffSummaryHydrate = vi.fn()
+    const buildDiffUserMessage = (id: string): UserThreadMessage => userMessage(id, "Update shared file")
+    const buildDiffAssistantMessage = (id: string, text: string): AssistantThreadMessage => ({
       ...assistantTraceTurn(
         id,
         [
@@ -3653,10 +3653,10 @@ describe("ThreadView message actions", () => {
 
     renderThread(
       [
-        buildDiffUserTurn("user-old-summary"),
-        buildDiffAssistantTurn("assistant-old-summary", "Old turn finished."),
-        buildDiffUserTurn("user-latest-summary"),
-        buildDiffAssistantTurn("assistant-latest-summary", "Latest turn finished."),
+        buildDiffUserMessage("user-old-summary"),
+        buildDiffAssistantMessage("assistant-old-summary", "Old turn finished."),
+        buildDiffUserMessage("user-latest-summary"),
+        buildDiffAssistantMessage("assistant-latest-summary", "Latest turn finished."),
       ],
       {
         activeSessionDiff: {
@@ -3680,7 +3680,7 @@ describe("ThreadView message actions", () => {
             },
           ],
         },
-        onTurnDiffSummaryHydrate,
+        onMessageDiffSummaryHydrate,
       },
     )
 
@@ -3690,7 +3690,7 @@ describe("ThreadView message actions", () => {
 
     expect(screen.getByRole("region", { name: "Diff preview for src/shared.ts" })).toBeInTheDocument()
     expect(screen.getByText('const value = "latest workspace"')).toBeInTheDocument()
-    expect(onTurnDiffSummaryHydrate).toHaveBeenCalledWith(
+    expect(onMessageDiffSummaryHydrate).toHaveBeenCalledWith(
       "assistant-latest-summary",
       expect.objectContaining({
         diffs: [
@@ -3706,7 +3706,7 @@ describe("ThreadView message actions", () => {
   it("shows user turn restore progress and errors", async () => {
     const confirmRestore = vi.spyOn(window, "confirm").mockReturnValue(true)
     let rejectRestore: (error: Error) => void = () => undefined
-    const onTurnDiffRestore = vi.fn(
+    const onMessageDiffRestore = vi.fn(
       () =>
         new Promise<void>((_resolve, reject) => {
           rejectRestore = reject
@@ -3715,7 +3715,7 @@ describe("ThreadView message actions", () => {
 
     renderThread([
       {
-        ...userTurn("user-restore-error", "Restore changes"),
+        ...userMessage("user-restore-error", "Restore changes"),
         diffSummary: {
           stats: {
             files: 1,
@@ -3725,7 +3725,7 @@ describe("ThreadView message actions", () => {
           diffs: [{ file: "src/App.tsx", additions: 1, deletions: 0 }],
         },
       },
-    ], { onTurnDiffRestore })
+    ], { onMessageDiffRestore })
 
     const restoreButton = screen.getByRole("button", { name: /撤销/i })
     fireEvent.click(restoreButton)
@@ -3746,7 +3746,7 @@ describe("ThreadView message actions", () => {
   it("hides the user turn file change summary when the diff is empty", () => {
     renderThread([
       {
-        ...userTurn("user-empty-diff", "No changes"),
+        ...userMessage("user-empty-diff", "No changes"),
         diffSummary: {
           diffs: [],
         },
@@ -3840,7 +3840,7 @@ describe("ThreadView message actions", () => {
       messageID: "message-1",
     }
 
-    const { container, queryByRole } = renderThread([userTurn("user-1", "Prompt"), completedIntermediateTurn], {
+    const { container, queryByRole } = renderThread([userMessage("user-1", "Prompt"), completedIntermediateTurn], {
       isSessionRunning: true,
       messageTree,
       onBranchSelect,
@@ -3865,7 +3865,7 @@ describe("ThreadView message actions", () => {
 
     const { container, getAllByRole, getByRole, getByText, queryByText } = renderThread(
       [
-        userTurn("user-with-diff", "Please update the file."),
+        userMessage("user-with-diff", "Please update the file."),
         {
           ...assistantTraceTurn(
             "assistant-1",
@@ -3971,7 +3971,7 @@ describe("ThreadView message actions", () => {
 
     const { getAllByRole, getByRole, getByText, queryByText } = renderThread(
       [
-        userTurn("user-1", "Check the setup."),
+        userMessage("user-1", "Check the setup."),
         assistantTraceTurn(
           "assistant-intermediate",
           [
@@ -4031,7 +4031,7 @@ describe("ThreadView message actions", () => {
 
   it("folds stale streaming intermediate assistant messages into the final response trace", () => {
     const { container, getByRole, getByText, queryByText } = renderThread([
-      userTurn("user-1", "Build the game."),
+      userMessage("user-1", "Build the game."),
       assistantTraceTurn(
         "assistant-stale-stream",
         [
@@ -4066,14 +4066,14 @@ describe("ThreadView message actions", () => {
     const processedTraceButton = getByRole("button", { name: /Processed/ })
     const finalResponse = getByText("好的，经典横刀立马开局。")
     const processTraceRow = processedTraceButton.closest(".assistant-process-trace-row") as HTMLElement | null
-    const finalAssistantTurn = finalResponse.closest(".assistant-turn") as HTMLElement | null
+    const finalAssistantMessage = finalResponse.closest(".assistant-turn") as HTMLElement | null
 
     expect(processedTraceButton).toHaveAttribute("aria-expanded", "false")
     expect(queryByText("OK, now let me create the full HTML file.")).toBeNull()
     expect(container.querySelectorAll(".assistant-turn")).toHaveLength(1)
     expect(processTraceRow).not.toBeNull()
-    expect(finalAssistantTurn).not.toBeNull()
-    expect(processTraceRow!.compareDocumentPosition(finalAssistantTurn!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(finalAssistantMessage).not.toBeNull()
+    expect(processTraceRow!.compareDocumentPosition(finalAssistantMessage!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
     fireEvent.click(processedTraceButton)
 
@@ -4167,7 +4167,7 @@ describe("ThreadView message actions", () => {
       rootMessageIDs: ["user-1"],
       sessionID: "session-1",
     }
-    const reasoningTurn: AssistantTurn = {
+    const reasoningTurn: AssistantThreadMessage = {
       ...assistantTraceTurn(
         "assistant-reasoning",
         [
@@ -4184,7 +4184,7 @@ describe("ThreadView message actions", () => {
       ),
       messageID: "message-reasoning",
     }
-    const finalTurn: AssistantTurn = {
+    const finalTurn: AssistantThreadMessage = {
       ...assistantTraceTurn(
         "assistant-final",
         [
@@ -4202,7 +4202,7 @@ describe("ThreadView message actions", () => {
       messageID: "message-final",
     }
 
-    const { container } = renderThread([userTurn("user-1", "Prompt"), reasoningTurn, finalTurn], {
+    const { container } = renderThread([userMessage("user-1", "Prompt"), reasoningTurn, finalTurn], {
       messageTree,
       onBranchSelect,
       onForkFromMessage,
@@ -4226,7 +4226,7 @@ describe("ThreadView message actions", () => {
 describe("ThreadView turn motion", () => {
   it("marks initial history turns as stable", () => {
     const { container } = renderThread([
-      userTurn("user-1", "Prompt"),
+      userMessage("user-1", "Prompt"),
       assistantTraceTurn("assistant-1", [
         {
           id: "assistant-1-text",
@@ -4239,54 +4239,54 @@ describe("ThreadView turn motion", () => {
       ], false),
     ])
 
-    expect(container.querySelector('[data-turn-id="user-1"]')?.getAttribute("data-turn-motion")).toBe("history")
-    expect(container.querySelector('[data-turn-id="assistant-1"]')?.getAttribute("data-turn-motion")).toBe("history")
+    expect(container.querySelector('[data-thread-message-id="user-1"]')?.getAttribute("data-thread-message-motion")).toBe("history")
+    expect(container.querySelector('[data-thread-message-id="assistant-1"]')?.getAttribute("data-thread-message-motion")).toBe("history")
   })
 
   it("marks newly appended visible turns as new or live", () => {
-    const { container, rerender, props } = renderThread([userTurn("user-1", "Prompt")])
+    const { container, rerender, props } = renderThread([userMessage("user-1", "Prompt")])
 
     rerender(
       <ThreadView
         {...props}
-        activeTurns={[
-          userTurn("user-1", "Prompt"),
-          userTurn("user-2", "Follow up"),
-          assistantTurn("assistant-1", "Streaming"),
+        activeMessages={[
+          userMessage("user-1", "Prompt"),
+          userMessage("user-2", "Follow up"),
+          assistantMessage("assistant-1", "Streaming"),
         ]}
       />,
     )
 
-    expect(container.querySelector('[data-turn-id="user-2"]')?.getAttribute("data-turn-motion")).toBe("new")
-    expect(container.querySelector('[data-turn-id="assistant-1"]')?.getAttribute("data-turn-motion")).toBe("live")
+    expect(container.querySelector('[data-thread-message-id="user-2"]')?.getAttribute("data-thread-message-motion")).toBe("new")
+    expect(container.querySelector('[data-thread-message-id="assistant-1"]')?.getAttribute("data-thread-message-motion")).toBe("live")
   })
 
   it("does not replay motion when switching back to an already rendered session", () => {
-    const { container, rerender, props } = renderThread([userTurn("user-1", "Prompt")])
+    const { container, rerender, props } = renderThread([userMessage("user-1", "Prompt")])
 
     rerender(
       <ThreadView
         {...props}
         activeSession={sessionB}
-        activeTurns={[userTurn("user-2", "Other")]}
+        activeMessages={[userMessage("user-2", "Other")]}
       />,
     )
     rerender(
       <ThreadView
         {...props}
         activeSession={session}
-        activeTurns={[userTurn("user-1", "Prompt")]}
+        activeMessages={[userMessage("user-1", "Prompt")]}
       />,
     )
 
-    expect(container.querySelector('[data-turn-id="user-1"]')?.getAttribute("data-turn-motion")).toBe("history")
+    expect(container.querySelector('[data-thread-message-id="user-1"]')?.getAttribute("data-thread-message-motion")).toBe("history")
   })
 })
 
 describe("ThreadView virtual list", () => {
   it("renders only the visible window for long threads and swaps rows on scroll", async () => {
-    const activeTurns = Array.from({ length: 120 }, (_, index) => userTurn(`user-${index}`, `Prompt ${index}`))
-    const { container, threadColumn } = renderThread(activeTurns, {
+    const activeMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+    const { container, threadColumn } = renderThread(activeMessages, {
       scrollStateKey: "virtual-list-session",
     })
     setScrollMetrics(threadColumn, {
@@ -4297,7 +4297,7 @@ describe("ThreadView virtual list", () => {
 
     expect(threadColumn).toHaveClass("is-virtualized")
     expect(container.querySelector(".thread-virtual-spacer")).not.toBeNull()
-    expect(container.querySelectorAll("[data-turn-id]").length).toBeLessThan(80)
+    expect(container.querySelectorAll("[data-thread-message-id]").length).toBeLessThan(80)
     await waitFor(() => expect(screen.getByText("Prompt 119")).toBeInTheDocument())
 
     threadColumn.scrollTop = 0
@@ -4330,8 +4330,8 @@ describe("ThreadView virtual list", () => {
     globalThis.ResizeObserver = ManualResizeObserver
 
     try {
-      const activeTurns = Array.from({ length: 120 }, (_, index) => userTurn(`user-${index}`, `Prompt ${index}`))
-      const { container, threadColumn } = renderThread(activeTurns, {
+      const activeMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+      const { container, threadColumn } = renderThread(activeMessages, {
         scrollStateKey: "virtual-list-resize-entry-session",
       })
       setScrollMetrics(threadColumn, {
@@ -4369,8 +4369,8 @@ describe("ThreadView virtual list", () => {
   })
 
   it("coalesces virtual viewport scroll updates until animation frame", async () => {
-    const activeTurns = Array.from({ length: 120 }, (_, index) => userTurn(`user-${index}`, `Prompt ${index}`))
-    const { threadColumn } = renderThread(activeTurns, {
+    const activeMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+    const { threadColumn } = renderThread(activeMessages, {
       scrollStateKey: "virtual-list-scroll-frame-session",
     })
     setScrollMetrics(threadColumn, {
@@ -4412,7 +4412,7 @@ describe("ThreadView scroll restoration", () => {
     rerender(
       <ThreadView
         {...props}
-        activeTurns={[userTurn("user-1", "Prompt"), assistantTurn("assistant-1", "Loaded history")]}
+        activeMessages={[userMessage("user-1", "Prompt"), assistantMessage("assistant-1", "Loaded history")]}
       />,
     )
 
@@ -4420,7 +4420,7 @@ describe("ThreadView scroll restoration", () => {
   })
 
   it("restores a user's detached position when switching back to a session", () => {
-    const { rerender, props, threadColumn } = renderThread([userTurn("user-1", "Prompt")])
+    const { rerender, props, threadColumn } = renderThread([userMessage("user-1", "Prompt")])
     setScrollMetrics(threadColumn, {
       clientHeight: 400,
       scrollHeight: 1200,
@@ -4440,7 +4440,7 @@ describe("ThreadView scroll restoration", () => {
       <ThreadView
         {...props}
         activeSession={sessionB}
-        activeTurns={[userTurn("user-2", "Other prompt")]}
+        activeMessages={[userMessage("user-2", "Other prompt")]}
       />,
     )
     expect(threadColumn.scrollTop).toBe(900)
@@ -4450,7 +4450,7 @@ describe("ThreadView scroll restoration", () => {
       scrollHeight: 1200,
       scrollTop: 0,
     })
-    rerender(<ThreadView {...props} activeTurns={[userTurn("user-1", "Prompt")]} />)
+    rerender(<ThreadView {...props} activeMessages={[userMessage("user-1", "Prompt")]} />)
 
     expect(threadColumn.scrollTop).toBe(260)
   })
@@ -4461,7 +4461,7 @@ describe("ThreadView scroll restoration", () => {
     const saveScrollSnapshot = vi.fn((key: string, snapshot: { scrollTop: number; pinnedToBottom: boolean; updatedAt: number }) => {
       snapshots[key] = snapshot
     })
-    const { rerender, props, threadColumn } = renderThread([userTurn("user-1", "Prompt")], {
+    const { rerender, props, threadColumn } = renderThread([userMessage("user-1", "Prompt")], {
       readScrollSnapshot,
       saveScrollSnapshot,
       scrollStateKey: "session:session-1",
@@ -4491,7 +4491,7 @@ describe("ThreadView scroll restoration", () => {
     rerender(
       <ThreadView
         {...props}
-        activeTurns={[userTurn("user-1", "Prompt"), userTurn("user-2", "Another prompt")]}
+        activeMessages={[userMessage("user-1", "Prompt"), userMessage("user-2", "Another prompt")]}
         scrollStateKey="session:session-1"
       />,
     )
@@ -4505,7 +4505,7 @@ describe("ThreadView scroll restoration", () => {
     const saveScrollSnapshot = vi.fn((key: string, snapshot: { scrollTop: number; pinnedToBottom: boolean; updatedAt: number }) => {
       snapshots[key] = snapshot
     })
-    const { rerender, props, threadColumn } = renderThread([userTurn("user-1", "Prompt")], {
+    const { rerender, props, threadColumn } = renderThread([userMessage("user-1", "Prompt")], {
       readScrollSnapshot,
       saveScrollSnapshot,
       scrollStateKey: "session:session-1",
@@ -4532,7 +4532,7 @@ describe("ThreadView scroll restoration", () => {
       <ThreadView
         {...props}
         activeSession={sessionB}
-        activeTurns={[userTurn("user-2", "Other prompt")]}
+        activeMessages={[userMessage("user-2", "Other prompt")]}
         scrollStateKey="session:session-2"
       />,
     )
@@ -4543,13 +4543,13 @@ describe("ThreadView scroll restoration", () => {
       scrollHeight: 1200,
       scrollTop: 0,
     })
-    rerender(<ThreadView {...props} activeTurns={[userTurn("user-1", "Prompt")]} scrollStateKey="session:session-1" />)
+    rerender(<ThreadView {...props} activeMessages={[userMessage("user-1", "Prompt")]} scrollStateKey="session:session-1" />)
 
     expect(threadColumn.scrollTop).toBe(260)
   })
 
   it("continues following latest content while the user remains pinned to bottom", () => {
-    const { rerender, props, threadColumn } = renderThread([userTurn("user-1", "Prompt")])
+    const { rerender, props, threadColumn } = renderThread([userMessage("user-1", "Prompt")])
     setScrollMetrics(threadColumn, {
       clientHeight: 400,
       scrollHeight: 800,
@@ -4567,7 +4567,7 @@ describe("ThreadView scroll restoration", () => {
     rerender(
       <ThreadView
         {...props}
-        activeTurns={[userTurn("user-1", "Prompt"), assistantTurn("assistant-1", "Streaming response")]}
+        activeMessages={[userMessage("user-1", "Prompt"), assistantMessage("assistant-1", "Streaming response")]}
       />,
     )
 
@@ -4578,7 +4578,7 @@ describe("ThreadView scroll restoration", () => {
     const layoutSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
       if (this.classList.contains("thread-column")) return createElementRect({ top: 0, height: 400 })
 
-      const turnID = this.getAttribute("data-turn-id")
+      const turnID = this.getAttribute("data-thread-message-id")
       if (turnID === "assistant-1") return createElementRect({ top: 64, height: 900 })
 
       return createElementRect()
@@ -4597,7 +4597,7 @@ describe("ThreadView scroll restoration", () => {
 
     try {
       const { rerender, props, threadColumn } = renderThread([
-        userTurn("user-1", "Prompt"),
+        userMessage("user-1", "Prompt"),
         buildStreamingTurn("First chunk"),
       ], {
         scrollStateKey: "session:streaming-layout-follow",
@@ -4619,8 +4619,8 @@ describe("ThreadView scroll restoration", () => {
       rerender(
         <ThreadView
           {...props}
-          activeTurns={[
-            userTurn("user-1", "Prompt"),
+          activeMessages={[
+            userMessage("user-1", "Prompt"),
             buildStreamingTurn("First chunk\nSecond chunk"),
           ]}
         />,
@@ -4673,7 +4673,7 @@ describe("ThreadView scroll restoration", () => {
 
     try {
       const { rerender, props, threadColumn } = renderThread([
-        userTurn("user-1", "Prompt"),
+        userMessage("user-1", "Prompt"),
         buildStreamingTurn("First chunk"),
       ], {
         scrollStateKey: "session:streaming-response-before-trace",
@@ -4695,8 +4695,8 @@ describe("ThreadView scroll restoration", () => {
       rerender(
         <ThreadView
           {...props}
-          activeTurns={[
-            userTurn("user-1", "Prompt"),
+          activeMessages={[
+            userMessage("user-1", "Prompt"),
             buildStreamingTurn("First chunk\nSecond chunk"),
           ]}
         />,
@@ -4716,7 +4716,7 @@ describe("ThreadView scroll restoration", () => {
 
       return createElementRect()
     })
-    const historyTurns = Array.from({ length: 120 }, (_, index) => userTurn(`user-${index}`, `Prompt ${index}`))
+    const historyMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
     const buildStreamingTurn = (text: string) => assistantTraceTurn("assistant-virtual", [
       {
         id: "response-virtual",
@@ -4742,7 +4742,7 @@ describe("ThreadView scroll restoration", () => {
 
     try {
       const { rerender, props, threadColumn } = renderThread([
-        ...historyTurns,
+        ...historyMessages,
         buildStreamingTurn("First chunk"),
       ], {
         scrollStateKey: "session:virtual-streaming-response-before-trace",
@@ -4766,8 +4766,8 @@ describe("ThreadView scroll restoration", () => {
       rerender(
         <ThreadView
           {...props}
-          activeTurns={[
-            ...historyTurns,
+          activeMessages={[
+            ...historyMessages,
             buildStreamingTurn("First chunk\nSecond chunk"),
           ]}
         />,
@@ -4814,7 +4814,7 @@ describe("ThreadView scroll restoration", () => {
 
     try {
       const { rerender, props, threadColumn } = renderThread([
-        userTurn("user-1", "Prompt"),
+        userMessage("user-1", "Prompt"),
         buildStreamingTurn("First chunk"),
       ], {
         scrollStateKey: "session:streaming-smooth-follow",
@@ -4833,8 +4833,8 @@ describe("ThreadView scroll restoration", () => {
       rerender(
         <ThreadView
           {...props}
-          activeTurns={[
-            userTurn("user-1", "Prompt"),
+          activeMessages={[
+            userMessage("user-1", "Prompt"),
             buildStreamingTurn("First chunk\nSecond chunk"),
           ]}
         />,
@@ -4863,7 +4863,7 @@ describe("ThreadView scroll restoration", () => {
       },
     ], true)
     const { rerender, props, threadColumn } = renderThread([
-      userTurn("user-1", "Prompt"),
+      userMessage("user-1", "Prompt"),
       buildStreamingTurn("First chunk"),
     ], {
       scrollStateKey: "session:wheel-detached-race",
@@ -4884,8 +4884,8 @@ describe("ThreadView scroll restoration", () => {
     rerender(
       <ThreadView
         {...props}
-        activeTurns={[
-          userTurn("user-1", "Prompt"),
+        activeMessages={[
+          userMessage("user-1", "Prompt"),
           buildStreamingTurn("First chunk\nSecond chunk"),
         ]}
       />,
@@ -4898,7 +4898,7 @@ describe("ThreadView scroll restoration", () => {
     const layoutSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
       if (this.classList.contains("thread-column")) return createElementRect({ top: 0, height: 400 })
 
-      const turnID = this.getAttribute("data-turn-id")
+      const turnID = this.getAttribute("data-thread-message-id")
       if (turnID === "assistant-1") return createElementRect({ top: 64, height: 700 })
       if (turnID === "user-steer") return createElementRect({ top: 430, height: 80 })
 
@@ -4924,18 +4924,18 @@ describe("ThreadView scroll restoration", () => {
         isStreaming: true,
       },
     ]
-    const steerTurn: UserTurn = {
-      ...userTurn("user-steer", "Adjust the current task"),
+    const steerMessage: UserThreadMessage = {
+      ...userMessage("user-steer", "Adjust the current task"),
       submissionMode: "steer",
       streamInsertion: {
-        assistantTurnID: "assistant-1",
+        assistantThreadMessageID: "assistant-1",
         afterItemCount: 1,
       },
     }
 
     try {
       const { rerender, props, threadColumn } = renderThread([
-        userTurn("user-1", "Prompt"),
+        userMessage("user-1", "Prompt"),
         assistantTraceTurn("assistant-1", assistantItems, true),
       ])
       setScrollMetrics(threadColumn, {
@@ -4947,10 +4947,10 @@ describe("ThreadView scroll restoration", () => {
       rerender(
         <ThreadView
           {...props}
-          activeTurns={[
-            userTurn("user-1", "Prompt"),
+          activeMessages={[
+            userMessage("user-1", "Prompt"),
             assistantTraceTurn("assistant-1", assistantItems, true),
-            steerTurn,
+            steerMessage,
           ]}
         />,
       )
@@ -4989,7 +4989,7 @@ describe("ThreadView scroll restoration", () => {
       text: item.id === "response-1" ? "Done" : item.text,
     }))
     const { rerender, props, threadColumn } = renderThread([
-      userTurn("user-1", "Prompt"),
+      userMessage("user-1", "Prompt"),
       assistantTraceTurn("assistant-1", streamingItems, true),
     ])
     setScrollMetrics(threadColumn, {
@@ -5001,7 +5001,7 @@ describe("ThreadView scroll restoration", () => {
     rerender(
       <ThreadView
         {...props}
-        activeTurns={[userTurn("user-1", "Prompt"), assistantTraceTurn("assistant-1", completedItems, false)]}
+        activeMessages={[userMessage("user-1", "Prompt"), assistantTraceTurn("assistant-1", completedItems, false)]}
       />,
     )
 
@@ -5032,7 +5032,7 @@ describe("ThreadView scroll restoration", () => {
     globalThis.ResizeObserver = ManualResizeObserver
 
     try {
-      const { threadColumn } = renderThread([userTurn("user-1", "Prompt"), assistantTurn("assistant-1", "Loaded history")])
+      const { threadColumn } = renderThread([userMessage("user-1", "Prompt"), assistantMessage("assistant-1", "Loaded history")])
       setScrollMetrics(threadColumn, {
         clientHeight: 400,
         scrollHeight: 800,

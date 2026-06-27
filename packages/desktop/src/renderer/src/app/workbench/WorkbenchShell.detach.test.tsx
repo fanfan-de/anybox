@@ -308,9 +308,9 @@ function createProps(overrides: Partial<WorkbenchShellProps> = {}): WorkbenchShe
     onToggleLeftSidebar: vi.fn(),
     onToggleRightSidebar: vi.fn(),
     onToolPermissionModeChange: vi.fn(),
-    onTurnDiffRestore: vi.fn(),
-    onTurnDiffReview: vi.fn(),
-    onTurnDiffSummaryHydrate: vi.fn(),
+    onMessageDiffRestore: vi.fn(),
+    onMessageDiffReview: vi.fn(),
+    onMessageDiffSummaryHydrate: vi.fn(),
     ...overrides,
   }
 }

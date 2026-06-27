@@ -314,11 +314,11 @@ describe("session lifecycle cleanup helpers", () => {
     const pendingStreams: Record<string, PendingAgentStream> = {
       "stream-1": {
         sessionID: "session-1",
-        assistantTurnID: "assistant-1",
+        assistantThreadMessageID: "assistant-1",
       },
       "stream-2": {
         sessionID: "session-2",
-        assistantTurnID: "assistant-2",
+        assistantThreadMessageID: "assistant-2",
       },
     }
 
@@ -327,7 +327,7 @@ describe("session lifecycle cleanup helpers", () => {
     expect(pendingStreams).toEqual({
       "stream-2": {
         sessionID: "session-2",
-        assistantTurnID: "assistant-2",
+        assistantThreadMessageID: "assistant-2",
       },
     })
   })

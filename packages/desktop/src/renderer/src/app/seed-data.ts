@@ -1,4 +1,4 @@
-import type { AssistantTraceItem, AssistantTraceItemKind, AssistantTurnRuntime, Turn, WorkspaceGroup } from "./types"
+import type { AssistantTraceItem, AssistantTraceItemKind, AssistantThreadMessageRuntime, ThreadMessage, WorkspaceGroup } from "./types"
 
 const timestamp = (value: string) => new Date(value).getTime()
 
@@ -18,7 +18,7 @@ function traceItem(
   }
 }
 
-function completedRuntime(time: string): AssistantTurnRuntime {
+function completedRuntime(time: string): AssistantThreadMessageRuntime {
   const value = timestamp(time)
   return {
     phase: "completed",
@@ -80,7 +80,7 @@ export const seedWorkspaces: WorkspaceGroup[] = [
         status: "Review",
         updated: timestamp("2026-03-31T08:42:00+08:00"),
         focus: "Review",
-        summary: "Turn the assistant output into a review-first stream with stronger scanability.",
+        summary: "ThreadMessage the assistant output into a review-first stream with stronger scanability.",
       },
     ],
   },
@@ -109,7 +109,7 @@ export const seedWorkspaces: WorkspaceGroup[] = [
   },
 ]
 
-export const initialConversations: Record<string, Turn[]> = {
+export const initialConversations: Record<string, ThreadMessage[]> = {
   "session-layout-pass": [
     {
       id: "layout-user-1",

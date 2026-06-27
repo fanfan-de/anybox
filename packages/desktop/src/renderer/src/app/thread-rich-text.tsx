@@ -6,11 +6,11 @@ import {
   type MarkdownArtifactLinkTarget,
   type MarkdownLocalFileLinkTarget,
 } from "./thread-markdown"
-import type { UserTurnReference } from "./types"
+import type { UserThreadMessageReference } from "./types"
 
 type ThreadRichTextElement = "div" | "p" | "span"
 
-type ThreadRichTextReference = UserTurnReference
+type ThreadRichTextReference = UserThreadMessageReference
 
 const EMPTY_THREAD_RICH_TEXT_REFERENCES: ThreadRichTextReference[] = []
 

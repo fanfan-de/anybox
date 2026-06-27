@@ -26,11 +26,11 @@ import {
 } from "../icons"
 import { joinClassNames, writeTextToClipboard } from "../shared-ui"
 import { getSessionMessageIDForTurn, type SessionMessageBranchOption, type SessionMessageTree } from "../session-message-tree"
-import { buildTurnsFromHistory } from "../stream"
+import { buildThreadMessagesFromHistory } from "../stream"
 import {
-  getAssistantStreamInsertionUserTurns,
+  getAssistantStreamInsertionUserMessages,
   hasStreamInsertionTarget,
-  isPendingSteerUserTurn,
+  isPendingSteerUserMessage,
   resolveStreamInsertionItemIndex,
 } from "../stream-insertion"
 import {
@@ -59,9 +59,9 @@ import type {
   AssistantTraceSectionKey,
   AssistantTraceVisibility,
   AssistantTraceVisibilityKey,
-  AssistantTurn,
-  AssistantTurnPhase,
-  AssistantTurnRuntime,
+  AssistantThreadMessage,
+  AssistantThreadMessagePhase,
+  AssistantThreadMessageRuntime,
   ComposerAttachment,
   ComposerDraftState,
   ComposerPastedImageAttachment,
@@ -72,17 +72,17 @@ import type {
   SessionDiffFile,
   SessionDiffSummary,
   SessionSummary,
-  Turn,
-  UserTurn
+  ThreadMessage,
+  UserThreadMessage
 } from "../types"
 import { useProjectComposer } from "../use-project-composer"
-import { mergeUserTurnPresentationState, readPersistedUserTurns } from "../user-turn-presentation"
+import { mergeUserMessagePresentationState, readPersistedUserMessages } from "../user-message-presentation"
 import { formatTime } from "../utils"
 import { isSideChatSession } from "../workspace"
 
 type ProposedPlanConfirmHandler = (input: { planMarkdown: string }) => void | Promise<void>
 type ProposedPlanCardStatus = "idle" | "cancelled" | "confirming" | "confirmed"
-export type ThreadTurnMotion = "history" | "new" | "live"
+export type ThreadMessageMotion = "history" | "new" | "live"
 type ThreadScrollMode = "follow" | "detached"
 
 export interface ThreadScrollSnapshot {
@@ -109,7 +109,7 @@ interface ThreadViewProps {
   activeProjectID?: string | null
   activeSession: SessionSummary | null
   activeSessionDiff?: SessionDiffSummary | null
-  activeTurns: Turn[]
+  activeMessages: ThreadMessage[]
   assistantTraceVisibility: AssistantTraceVisibility
   composerRefreshVersion?: number
   isAgentDebugTraceEnabled: boolean
@@ -122,9 +122,9 @@ interface ThreadViewProps {
   onArtifactLinkOpen?: (target: MarkdownArtifactLinkTarget) => void
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
   onOpenSideChat?: (anchorMessageID: string) => void | Promise<void>
-  onTurnDiffSummaryHydrate?: (turnID: string, diffSummary: SessionDiffSummary) => void | Promise<void>
-  onTurnDiffRestore?: (diffs: SessionDiffFile[]) => void | Promise<void>
-  onTurnDiffReview?: (files: string[]) => void | Promise<void>
+  onMessageDiffSummaryHydrate?: (messageID: string, diffSummary: SessionDiffSummary) => void | Promise<void>
+  onMessageDiffRestore?: (diffs: SessionDiffFile[]) => void | Promise<void>
+  onMessageDiffReview?: (files: string[]) => void | Promise<void>
   pendingConversationInputs?: PendingConversationInput[]
   pendingPermissionRequests: PermissionRequest[]
   permissionRequestActionError: string | null
@@ -141,7 +141,7 @@ interface ThreadViewProps {
   sideChatPermissionRequestActionRequestID?: string | null
   sideChatSession?: SessionSummary | null
   sideChatSessionsByAnchorMessageID?: Record<string, SessionSummary[]>
-  sideChatTurns?: Turn[]
+  sideChatMessages?: ThreadMessage[]
   scrollStateKey?: string | null
   threadColumnRef: RefObject<HTMLDivElement | null>
   isThreadVisible?: boolean
@@ -173,8 +173,8 @@ interface ThreadViewProps {
     selectedReasoningEffort?: ReasoningEffort | null
     selectedModel?: string | null
     selectedSkillIDs: string[]
-    steerQueuedTurnID?: string
-    submissionMode?: UserTurn["submissionMode"]
+    steerQueuedMessageID?: string
+    submissionMode?: UserThreadMessage["submissionMode"]
     waitForPendingModelSelection: () => Promise<void>
   }) => void | Promise<void>
   onSessionModelSelectionChange?: (sessionID: string, selection: SessionSummary["modelSelection"] | undefined) => void
@@ -237,7 +237,7 @@ const TRACE_PATCH_PREVIEW_CHARACTER_LIMIT = 20000
 const TRACE_PATCH_PREVIEW_LINE_LIMIT = 200
 const threadScrollSnapshots = new Map<string, ThreadScrollSnapshot>()
 
-interface LatestAssistantTurnState {
+interface LatestAssistantMessageState {
   id: string
   isStreaming: boolean
 }
@@ -245,10 +245,10 @@ interface LatestAssistantTurnState {
 type ThreadDisplayRow =
   | {
       estimatedHeight: number
-      kind: "user-turn"
+      kind: "user-message"
       rowID: string
-      turn: UserTurn
-      turnIndex: number
+      message: UserThreadMessage
+      messageIndex: number
     }
   | {
       blocks: AssistantTraceBlock[]
@@ -258,9 +258,9 @@ type ThreadDisplayRow =
       kind: "process-header"
       rowID: string
       shouldCollapseReasoningAndTools: boolean
-      turn: AssistantTurn
-      turnID: string
-      turnIndex: number
+      message: AssistantThreadMessage
+      messageID: string
+      messageIndex: number
     }
   | {
       collapsing: boolean
@@ -271,20 +271,20 @@ type ThreadDisplayRow =
       rowID: string
       section: AssistantTraceSectionKey
       shouldCollapseReasoningAndTools: boolean
-      turn: AssistantTurn
-      turnID: string
-      turnIndex: number
+      message: AssistantThreadMessage
+      messageID: string
+      messageIndex: number
     }
   | {
       ephemeralHint: string | null
       estimatedHeight: number
-      insertedUserTurns: UserTurn[]
+      insertedUserMessages: UserThreadMessage[]
       kind: "assistant"
       rowID: string
       processPrefixItems: AssistantTraceItem[]
       renderedItems: AssistantTraceItem[]
-      turn: AssistantTurn
-      turnIndex: number
+      message: AssistantThreadMessage
+      messageIndex: number
     }
   | {
       estimatedHeight: number
@@ -293,8 +293,8 @@ type ThreadDisplayRow =
     }
 
 type ThreadViewUiState = {
-  processTraceCollapseMotionByTurnID: Record<string, boolean>
-  processTraceExpansionByTurnID: Record<string, boolean>
+  processTraceCollapseMotionByMessageID: Record<string, boolean>
+  processTraceExpansionByMessageID: Record<string, boolean>
 }
 
 interface AssistantTraceRenderSplit {
@@ -418,7 +418,7 @@ function readThreadScrollSnapshot(threadColumn: HTMLDivElement): ThreadScrollSna
   }
 }
 
-function readLatestAssistantTurnState(turns: Turn[]): LatestAssistantTurnState | null {
+function readLatestAssistantMessageState(turns: ThreadMessage[]): LatestAssistantMessageState | null {
   for (let index = turns.length - 1; index >= 0; index -= 1) {
     const turn = turns[index]
     if (turn.kind === "assistant") return { id: turn.id, isStreaming: Boolean(turn.isStreaming) }
@@ -427,8 +427,8 @@ function readLatestAssistantTurnState(turns: Turn[]): LatestAssistantTurnState |
   return null
 }
 
-function readAssistantTurnOrderTimestamp(turn: AssistantTurn) {
-  const traceTimestamps = turn.items
+function readAssistantMessageOrderTimestamp(message: AssistantThreadMessage) {
+  const traceTimestamps = message.items
     .filter((item) => !item.sourceID?.endsWith(":prompt") && item.kind !== "system")
     .map((item) => item.timestamp)
     .filter((timestamp) => Number.isFinite(timestamp))
@@ -436,15 +436,15 @@ function readAssistantTurnOrderTimestamp(turn: AssistantTurn) {
   if (traceTimestamps.length > 0) return Math.min(...traceTimestamps)
 
   const runtimeTimestamps = [
-    turn.runtime.firstVisibleAt,
-    turn.runtime.startedAt,
-    turn.timestamp,
+    message.runtime.firstVisibleAt,
+    message.runtime.startedAt,
+    message.timestamp,
   ].filter((timestamp): timestamp is number => Number.isFinite(timestamp))
 
   return runtimeTimestamps.length > 0 ? Math.min(...runtimeTimestamps) : 0
 }
 
-function orderAdjacentAssistantTurnsForDisplay(turns: Turn[]) {
+function orderAdjacentAssistantMessagesForDisplay(turns: ThreadMessage[]) {
   const orderedTurns = [...turns]
   let assistantBlockStart = -1
 
@@ -457,7 +457,7 @@ function orderAdjacentAssistantTurnsForDisplay(turns: Turn[]) {
 
     const assistantBlock = orderedTurns.slice(startIndex, endIndex)
     const shouldOrderByTraceTime = assistantBlock.some(
-      (turn) => turn.kind === "assistant" && (turn.isStreaming || !isTerminalAssistantTurnPhase(turn.runtime.phase)),
+      (turn) => turn.kind === "assistant" && (turn.isStreaming || !isTerminalAssistantMessagePhase(turn.runtime.phase)),
     )
     if (!shouldOrderByTraceTime) return
 
@@ -468,7 +468,7 @@ function orderAdjacentAssistantTurnsForDisplay(turns: Turn[]) {
         const rightTurn = right.turn
         if (leftTurn.kind !== "assistant" || rightTurn.kind !== "assistant") return left.index - right.index
 
-        const timestampDelta = readAssistantTurnOrderTimestamp(leftTurn) - readAssistantTurnOrderTimestamp(rightTurn)
+        const timestampDelta = readAssistantMessageOrderTimestamp(leftTurn) - readAssistantMessageOrderTimestamp(rightTurn)
         return timestampDelta || left.index - right.index
       })
       .map(({ turn }) => turn)
@@ -610,37 +610,37 @@ function estimateAssistantTraceItemHeight(item: AssistantTraceItem) {
 
 function estimateAssistantThreadRowHeight(row: {
   ephemeralHint: string | null
-  insertedUserTurns: UserTurn[]
+  insertedUserMessages: UserThreadMessage[]
   renderedItems: AssistantTraceItem[]
-  turn: AssistantTurn
+  message: AssistantThreadMessage
 }) {
-  if (row.ephemeralHint) return 96 + row.insertedUserTurns.length * 92
+  if (row.ephemeralHint) return 96 + row.insertedUserMessages.length * 92
 
   const itemEstimate = row.renderedItems.reduce((height, item) => height + estimateAssistantTraceItemHeight(item), 64)
 
-  return Math.max(row.turn.isStreaming ? 180 : 140, itemEstimate + row.insertedUserTurns.length * 92)
+  return Math.max(row.message.isStreaming ? 180 : 140, itemEstimate + row.insertedUserMessages.length * 92)
 }
 
-function estimateUserThreadRowHeight(turn: UserTurn) {
-  const bodyText = getUserTurnBodyText(turn)
-  const isCollapsedByDefault = shouldCollapseUserTurnText(bodyText)
+function estimateUserThreadRowHeight(message: UserThreadMessage) {
+  const bodyText = getUserMessageBodyText(message)
+  const isCollapsedByDefault = shouldCollapseUserMessageText(bodyText)
   const textLength = isCollapsedByDefault ? Math.min(bodyText.length, COLLAPSED_USER_MESSAGE_ESTIMATED_CHARACTERS) : bodyText.length
-  const attachmentCount = turn.attachments?.length ?? 0
-  const diffHeight = hasUserTurnDiffSummary(turn) ? 220 : 0
+  const attachmentCount = message.attachments?.length ?? 0
+  const diffHeight = hasUserMessageDiffSummary(message) ? 220 : 0
   const collapseControlHeight = isCollapsedByDefault ? 30 : 0
   return 64 + Math.ceil(textLength / 90) * 22 + collapseControlHeight + attachmentCount * 28 + diffHeight
 }
 
 function buildThreadDisplayRows({
   activeSession,
-  activeTurns,
+  activeMessages,
   assistantTraceVisibility,
   isResolvingPermissionRequest,
   pendingPermissionRequests,
   uiState,
 }: {
   activeSession: SessionSummary | null
-  activeTurns: Turn[]
+  activeMessages: ThreadMessage[]
   assistantTraceVisibility: AssistantTraceVisibility
   isResolvingPermissionRequest: boolean
   pendingPermissionRequests: PermissionRequest[]
@@ -649,35 +649,35 @@ function buildThreadDisplayRows({
   if (!activeSession) return []
 
   const rows: ThreadDisplayRow[] = []
-  activeTurns.forEach((turn, turnIndex) => {
+  activeMessages.forEach((turn, messageIndex) => {
     if (turn.kind === "user") {
-      if (hasStreamInsertionTarget(activeTurns, turn)) return
+      if (hasStreamInsertionTarget(activeMessages, turn)) return
 
       rows.push({
         estimatedHeight: estimateUserThreadRowHeight(turn),
-        kind: "user-turn",
+        kind: "user-message",
         rowID: turn.id,
-        turn,
-        turnIndex,
+        message: turn,
+        messageIndex,
       })
       return
     }
 
-    if (shouldFoldAssistantTurnIntoFinalRunTrace(activeTurns, turnIndex, turn)) return
+    if (shouldFoldAssistantMessageIntoFinalRunTrace(activeMessages, messageIndex, turn)) return
 
     const processPrefixItems = collectAssistantRunProcessPrefixItems(
-      activeTurns,
-      turnIndex,
+      activeMessages,
+      messageIndex,
       assistantTraceVisibility,
     )
-    const insertedUserTurns = getAssistantStreamInsertionUserTurns(activeTurns, turn)
+    const insertedUserMessages = getAssistantStreamInsertionUserMessages(activeMessages, turn)
     const renderedItems = filterRenderedAssistantTraceItems(
       turn.items,
       !turn.isStreaming,
       assistantTraceVisibility,
     )
     const ephemeralHint = renderedItems.length === 0 ? getAssistantEphemeralHint(turn) : null
-    if (renderedItems.length === 0 && !ephemeralHint && insertedUserTurns.length === 0) return
+    if (renderedItems.length === 0 && !ephemeralHint && insertedUserMessages.length === 0) return
 
     const shouldCollapseReasoningAndTools = canCollapseAssistantProcessTrace(turn)
     const traceDisplayBlocks = buildAssistantTraceDisplayBlocks({
@@ -687,9 +687,9 @@ function buildThreadDisplayRows({
       shouldCollapseReasoningAndTools,
       traceVisibility: assistantTraceVisibility,
     })
-    const processTraceCollapsing = Boolean(uiState.processTraceCollapseMotionByTurnID[turn.id])
+    const processTraceCollapsing = Boolean(uiState.processTraceCollapseMotionByMessageID[turn.id])
     const processTraceExpanded =
-      (uiState.processTraceExpansionByTurnID[turn.id] ?? !shouldCollapseReasoningAndTools) && !processTraceCollapsing
+      (uiState.processTraceExpansionByMessageID[turn.id] ?? !shouldCollapseReasoningAndTools) && !processTraceCollapsing
 
     if (!ephemeralHint && traceDisplayBlocks.shouldRenderProcessTrace) {
       rows.push({
@@ -700,9 +700,9 @@ function buildThreadDisplayRows({
         kind: "process-header",
         rowID: `process-header:${turn.id}`,
         shouldCollapseReasoningAndTools,
-        turn,
-        turnID: turn.id,
-        turnIndex,
+        message: turn,
+        messageID: turn.id,
+        messageIndex,
       })
 
       if (processTraceExpanded || processTraceCollapsing) {
@@ -717,9 +717,9 @@ function buildThreadDisplayRows({
               rowID: `process-item:${turn.id}:${blockIndex}:${item.id}:${itemIndex}`,
               section: block.sectionKey,
               shouldCollapseReasoningAndTools,
-              turn,
-              turnID: turn.id,
-              turnIndex,
+              message: turn,
+              messageID: turn.id,
+              messageIndex,
             })
           })
         })
@@ -734,17 +734,17 @@ function buildThreadDisplayRows({
       ephemeralHint,
       estimatedHeight: estimateAssistantThreadRowHeight({
         ephemeralHint,
-        insertedUserTurns,
+        insertedUserMessages,
         renderedItems: assistantRenderedItems,
-        turn,
+        message: turn,
       }),
-      insertedUserTurns,
+      insertedUserMessages,
       kind: "assistant",
       processPrefixItems,
       renderedItems: assistantRenderedItems,
       rowID: turn.id,
-      turn,
-      turnIndex,
+      message: turn,
+      messageIndex,
     })
   })
 
@@ -792,11 +792,11 @@ function getRestorableThreadScrollSnapshot(snapshot: ThreadScrollSnapshot | null
   return snapshot
 }
 
-function getUserTurnBodyText(turn: UserTurn) {
-  const displayText = turn.displayText?.trim() || ""
-  const references = turn.references ?? []
+function getUserMessageBodyText(message: UserThreadMessage) {
+  const displayText = message.displayText?.trim() || ""
+  const references = message.references ?? []
 
-  return displayText || (references.length > 0 ? references.map((reference) => `@${reference.label}`).join(" ") : turn.text)
+  return displayText || (references.length > 0 ? references.map((reference) => `@${reference.label}`).join(" ") : message.text)
 }
 
 function countTextLines(text: string) {
@@ -804,20 +804,20 @@ function countTextLines(text: string) {
   return text.split(/\r\n|\r|\n/).length
 }
 
-function shouldCollapseUserTurnText(text: string) {
+function shouldCollapseUserMessageText(text: string) {
   return text.length >= LONG_USER_MESSAGE_CHARACTER_THRESHOLD || countTextLines(text) >= LONG_USER_MESSAGE_LINE_THRESHOLD
 }
 
-function CollapsibleUserTurnText({
+function CollapsibleUserMessageText({
   references,
   text,
 }: {
-  references?: UserTurn["references"]
+  references?: UserThreadMessage["references"]
   text: string
 }) {
   const contentID = useId()
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const isCollapsible = shouldCollapseUserTurnText(text)
+  const isCollapsible = shouldCollapseUserMessageText(text)
   const [isExpanded, setIsExpanded] = useState(false)
 
   useEffect(() => {
@@ -871,13 +871,13 @@ function CollapsibleUserTurnText({
   )
 }
 
-function UserTurnBubble({ turn }: { turn: UserTurn }) {
-  const displayText = turn.displayText?.trim() || ""
-  const references = turn.references ?? []
-  const attachments = turn.attachments ?? []
+function UserThreadMessageBubble({ message }: { message: UserThreadMessage }) {
+  const displayText = message.displayText?.trim() || ""
+  const references = message.references ?? []
+  const attachments = message.attachments ?? []
   const hasStructuredContent = Boolean(displayText) || references.length > 0 || attachments.length > 0
-  const bodyText = getUserTurnBodyText(turn)
-  const steerNote = turn.submissionMode === "steer"
+  const bodyText = getUserMessageBodyText(message)
+  const steerNote = message.submissionMode === "steer"
     ? (
         <div className="user-bubble-steer-note" aria-label="Submitted while the agent is running">
           <span>提交，但不中断模型运行</span>
@@ -889,7 +889,7 @@ function UserTurnBubble({ turn }: { turn: UserTurn }) {
   if (!hasStructuredContent && !steerNote) {
     return (
       <div className="user-bubble">
-        <CollapsibleUserTurnText text={turn.text} />
+        <CollapsibleUserMessageText text={message.text} />
       </div>
     )
   }
@@ -897,7 +897,7 @@ function UserTurnBubble({ turn }: { turn: UserTurn }) {
   return (
     <div className="user-bubble">
       <div className="user-bubble-content">
-        <CollapsibleUserTurnText references={references} text={bodyText} />
+        <CollapsibleUserMessageText references={references} text={bodyText} />
         {steerNote}
 
         {attachments.length > 0 ? (
@@ -920,30 +920,36 @@ function UserTurnBubble({ turn }: { turn: UserTurn }) {
   )
 }
 
-const UserTurnArticle = memo(function UserTurnArticle({
+const UserThreadMessageArticle = memo(function UserThreadMessageArticle({
   className,
   copied,
   diffCard,
+  message,
   motion,
   onCopy,
-  turn,
 }: {
   className?: string
   copied: boolean
   diffCard?: ReactNode
-  motion: ThreadTurnMotion
-  onCopy: (turnID: string, text: string) => void | Promise<void>
-  turn: UserTurn
+  motion: ThreadMessageMotion
+  onCopy: (messageID: string, text: string) => void | Promise<void>
+  message: UserThreadMessage
 }) {
-  const userCopyText = getUserTurnBodyText(turn).trim()
+  const userCopyText = getUserMessageBodyText(message).trim()
 
   return (
-    <article className={joinClassNames("turn user-turn", className)} data-turn-id={turn.id} data-turn-motion={motion}>
+    <article
+      className={joinClassNames("turn user-turn", className)}
+      data-turn-id={message.id}
+      data-thread-message-id={message.id}
+      data-turn-motion={motion}
+      data-thread-message-motion={motion}
+    >
       <div className="turn-meta">
         <span>You</span>
-        <time>{formatTime(turn.timestamp)}</time>
+        <time>{formatTime(message.timestamp)}</time>
       </div>
-      <UserTurnBubble turn={turn} />
+      <UserThreadMessageBubble message={message} />
       {diffCard}
       {userCopyText ? (
         <div className="user-message-actions">
@@ -955,7 +961,7 @@ const UserTurnArticle = memo(function UserTurnArticle({
             type="button"
             aria-label={copied ? "Copied user message" : "Copy user message"}
             title={copied ? "Copied" : "Copy"}
-            onClick={() => void onCopy(turn.id, userCopyText)}
+            onClick={() => void onCopy(message.id, userCopyText)}
           >
             <CopyIcon />
           </button>
@@ -965,7 +971,7 @@ const UserTurnArticle = memo(function UserTurnArticle({
   )
 })
 
-function normalizeTurnDiffSummary(diffSummary: SessionDiffSummary | undefined): AssistantTraceFileChange[] {
+function normalizeMessageDiffSummary(diffSummary: SessionDiffSummary | undefined): AssistantTraceFileChange[] {
   return diffSummary?.diffs
     .filter((change) => change.file.trim())
     .map((change) => ({
@@ -986,7 +992,7 @@ function buildFileChangeSignature(change: Pick<AssistantTraceFileChange, "additi
   return `${change.file}\u0000${change.additions}\u0000${change.deletions}\u0000${buildLargeStringSignature(change.patch)}`
 }
 
-function hydrateUserTurnFileChangesFromPatchSources(
+function hydrateUserMessageFileChangesFromPatchSources(
   fileChanges: AssistantTraceFileChange[],
   patchSourceFileChanges: AssistantTraceFileChange[],
 ) {
@@ -1011,24 +1017,24 @@ function hydrateUserTurnFileChangesFromPatchSources(
   })
 }
 
-function hydrateUserTurnFileChangesFromWorkspaceDiff(
+function hydrateUserMessageFileChangesFromWorkspaceDiff(
   fileChanges: AssistantTraceFileChange[],
   activeSessionDiff?: SessionDiffSummary | null,
 ) {
   if (!activeSessionDiff?.diffs.length) return fileChanges
 
-  return hydrateUserTurnFileChangesFromPatchSources(fileChanges, activeSessionDiff.diffs)
+  return hydrateUserMessageFileChangesFromPatchSources(fileChanges, activeSessionDiff.diffs)
 }
 
-function collectAssistantPatchFileChanges(assistantTurn: AssistantTurn | null): AssistantTraceFileChange[] {
-  if (!assistantTurn) return []
+function collectAssistantPatchFileChanges(assistantMessage: AssistantThreadMessage | null): AssistantTraceFileChange[] {
+  if (!assistantMessage) return []
 
-  return assistantTurn.items.flatMap((item) =>
+  return assistantMessage.items.flatMap((item) =>
     item.fileChanges?.filter((change) => change.file.trim() && change.patch?.trim()) ?? [],
   )
 }
 
-function buildHydratedUserTurnDiffSummary(
+function buildHydratedUserMessageDiffSummary(
   diffSummary: SessionDiffSummary | undefined,
   fileChanges: AssistantTraceFileChange[],
 ): SessionDiffSummary | null {
@@ -1064,7 +1070,7 @@ function buildDiffSummarySignature(diffSummary: SessionDiffSummary | null) {
     .join("\u0001") ?? ""
 }
 
-function summarizeUserTurnDiffStats(
+function summarizeUserMessageDiffStats(
   diffSummary: SessionDiffSummary | undefined,
   fileChanges: AssistantTraceFileChange[],
 ) {
@@ -1085,37 +1091,37 @@ function summarizeUserTurnDiffStats(
   }
 }
 
-function formatUserTurnDiffSummaryLabel(fileCount: number) {
+function formatUserMessageDiffSummaryLabel(fileCount: number) {
   return `${fileCount} 个文件已更改`
 }
 
-function TurnDiffCard({
+function MessageDiffCard({
   onFileChangeSelect,
   activeSessionDiff,
   allowWorkspaceDiffFallback = false,
-  onTurnDiffSummaryHydrate,
+  onMessageDiffSummaryHydrate,
   patchSourceFileChanges = [],
-  onTurnDiffRestore,
-  onTurnDiffReview,
+  onMessageDiffRestore,
+  onMessageDiffReview,
   diffSummary,
-  turnID,
+  messageID,
 }: {
   activeSessionDiff?: SessionDiffSummary | null
   allowWorkspaceDiffFallback?: boolean
   diffSummary?: SessionDiffSummary
   onFileChangeSelect?: (file: string) => void
-  onTurnDiffSummaryHydrate?: (turnID: string, diffSummary: SessionDiffSummary) => void | Promise<void>
+  onMessageDiffSummaryHydrate?: (messageID: string, diffSummary: SessionDiffSummary) => void | Promise<void>
   patchSourceFileChanges?: AssistantTraceFileChange[]
-  onTurnDiffRestore?: (diffs: SessionDiffFile[]) => void | Promise<void>
-  onTurnDiffReview?: (files: string[]) => void | Promise<void>
-  turnID: string
+  onMessageDiffRestore?: (diffs: SessionDiffFile[]) => void | Promise<void>
+  onMessageDiffReview?: (files: string[]) => void | Promise<void>
+  messageID: string
 }) {
-  const fileChangesFromTurnSources = hydrateUserTurnFileChangesFromPatchSources(
-    normalizeTurnDiffSummary(diffSummary),
+  const fileChangesFromTurnSources = hydrateUserMessageFileChangesFromPatchSources(
+    normalizeMessageDiffSummary(diffSummary),
     patchSourceFileChanges,
   )
   const fileChanges = allowWorkspaceDiffFallback
-    ? hydrateUserTurnFileChangesFromWorkspaceDiff(fileChangesFromTurnSources, activeSessionDiff)
+    ? hydrateUserMessageFileChangesFromWorkspaceDiff(fileChangesFromTurnSources, activeSessionDiff)
     : fileChangesFromTurnSources
   const fileChangeSignature = fileChanges
     .map(buildFileChangeSignature)
@@ -1125,7 +1131,7 @@ function TurnDiffCard({
   const [fullHeightFile, setFullHeightFile] = useState<string | null>(null)
   const [isRestoring, setIsRestoring] = useState(false)
   const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(null)
-  const hydratedDiffSummary = buildHydratedUserTurnDiffSummary(diffSummary, fileChanges)
+  const hydratedDiffSummary = buildHydratedUserMessageDiffSummary(diffSummary, fileChanges)
   const hydratedDiffSummarySignature = buildDiffSummarySignature(hydratedDiffSummary)
 
   useEffect(() => {
@@ -1134,18 +1140,18 @@ function TurnDiffCard({
     setFullHeightFile(null)
     setIsRestoring(false)
     setActionErrorMessage(null)
-  }, [fileChangeSignature, turnID])
+  }, [fileChangeSignature, messageID])
 
   useEffect(() => {
     if (!hydratedDiffSummary) return
-    void onTurnDiffSummaryHydrate?.(turnID, hydratedDiffSummary)
-  }, [hydratedDiffSummarySignature, onTurnDiffSummaryHydrate, turnID])
+    void onMessageDiffSummaryHydrate?.(messageID, hydratedDiffSummary)
+  }, [hydratedDiffSummarySignature, onMessageDiffSummaryHydrate, messageID])
 
   if (fileChanges.length === 0) return null
 
-  const stats = summarizeUserTurnDiffStats(diffSummary, fileChanges)
-  const listID = `user-turn-diff-list-${turnID}`
-  const summaryLabel = formatUserTurnDiffSummaryLabel(stats.files)
+  const stats = summarizeUserMessageDiffStats(diffSummary, fileChanges)
+  const listID = `user-turn-diff-list-${messageID}`
+  const summaryLabel = formatUserMessageDiffSummaryLabel(stats.files)
   const filePaths = fileChanges.map((change) => change.file)
 
   const handleListToggle = () => {
@@ -1158,18 +1164,18 @@ function TurnDiffCard({
   }
 
   const handleReviewClick = async () => {
-    if (!onTurnDiffReview) return
+    if (!onMessageDiffReview) return
 
     setActionErrorMessage(null)
     try {
-      await onTurnDiffReview(filePaths)
+      await onMessageDiffReview(filePaths)
     } catch (error) {
       setActionErrorMessage(error instanceof Error ? error.message : String(error))
     }
   }
 
   const handleRestoreClick = async () => {
-    if (!onTurnDiffRestore || isRestoring) return
+    if (!onMessageDiffRestore || isRestoring) return
     const confirmed = window.confirm(
       `尝试反向应用这 ${stats.files} 个文件的变更？不能自动撤销的文件会提示失败，已成功撤销的文件会保留结果。`,
     )
@@ -1178,7 +1184,7 @@ function TurnDiffCard({
     setIsRestoring(true)
     setActionErrorMessage(null)
     try {
-      await onTurnDiffRestore(fileChanges)
+      await onMessageDiffRestore(fileChanges)
     } catch (error) {
       setActionErrorMessage(error instanceof Error ? error.message : String(error))
     } finally {
@@ -1202,11 +1208,11 @@ function TurnDiffCard({
             <span className="is-remove">-{stats.deletions}</span>
           </span>
         </button>
-        <div className="user-turn-diff-actions" aria-label="Turn file change actions">
+        <div className="user-turn-diff-actions" aria-label="Message file change actions">
           <button
             type="button"
             className="user-turn-diff-action"
-            disabled={!onTurnDiffRestore || isRestoring}
+            disabled={!onMessageDiffRestore || isRestoring}
             onClick={() => void handleRestoreClick()}
           >
             <span>{isRestoring ? "撤销中" : "撤销"}</span>
@@ -1215,7 +1221,7 @@ function TurnDiffCard({
           <button
             type="button"
             className="user-turn-diff-action"
-            disabled={!onTurnDiffReview}
+            disabled={!onMessageDiffReview}
             onClick={() => void handleReviewClick()}
           >
             <span>审核</span>
@@ -1238,7 +1244,7 @@ function TurnDiffCard({
           {fileChanges.map((change, changeIndex) => {
             const hasPatch = Boolean(change.patch?.trim())
             const isExpanded = expandedFile === change.file
-            const previewID = `user-turn-diff-preview-${turnID}-${changeIndex}`
+            const previewID = `user-turn-diff-preview-${messageID}-${changeIndex}`
             const rowContent = (
               <>
                 <span className="user-turn-diff-file-path">{change.file}</span>
@@ -1253,7 +1259,7 @@ function TurnDiffCard({
             )
 
             return (
-              <div key={`${turnID}-${change.file}-${changeIndex}`} className="user-turn-diff-file-entry">
+              <div key={`${messageID}-${change.file}-${changeIndex}`} className="user-turn-diff-file-entry">
                 {hasPatch ? (
                   <button
                     type="button"
@@ -1308,11 +1314,11 @@ function TurnDiffCard({
   )
 }
 
-function hasUserTurnDiffSummary(turn: UserTurn) {
-  return normalizeTurnDiffSummary(turn.diffSummary).length > 0
+function hasUserMessageDiffSummary(message: UserThreadMessage) {
+  return normalizeMessageDiffSummary(message.diffSummary).length > 0
 }
 
-function hasFollowingAssistantBeforeNextUser(turns: Turn[], startIndex: number) {
+function hasFollowingAssistantBeforeNextUser(turns: ThreadMessage[], startIndex: number) {
   for (let index = startIndex + 1; index < turns.length; index += 1) {
     const candidate = turns[index]
     if (candidate.kind === "user") return false
@@ -1322,7 +1328,7 @@ function hasFollowingAssistantBeforeNextUser(turns: Turn[], startIndex: number) 
   return false
 }
 
-function findPreviousUserTurn(turns: Turn[], startIndex: number) {
+function findPreviousUserMessage(turns: ThreadMessage[], startIndex: number) {
   for (let index = startIndex - 1; index >= 0; index -= 1) {
     const candidate = turns[index]
     if (candidate.kind === "user") return candidate
@@ -1331,47 +1337,47 @@ function findPreviousUserTurn(turns: Turn[], startIndex: number) {
   return null
 }
 
-function getAssistantTrailingUserDiffTurn(turns: Turn[], assistantIndex: number, assistantTurn: AssistantTurn) {
-  if (assistantTurn.isStreaming || hasFollowingAssistantBeforeNextUser(turns, assistantIndex)) return null
+function getAssistantTrailingUserDiffMessage(turns: ThreadMessage[], assistantIndex: number, assistantMessage: AssistantThreadMessage) {
+  if (assistantMessage.isStreaming || hasFollowingAssistantBeforeNextUser(turns, assistantIndex)) return null
 
-  const userTurn = findPreviousUserTurn(turns, assistantIndex)
-  if (!userTurn || !hasUserTurnDiffSummary(userTurn)) return null
+  const userMessage = findPreviousUserMessage(turns, assistantIndex)
+  if (!userMessage || !hasUserMessageDiffSummary(userMessage)) return null
 
-  return userTurn
+  return userMessage
 }
 
-function shouldRenderDiffOnStandaloneUserTurn(turns: Turn[], userIndex: number, turn: UserTurn) {
-  return hasUserTurnDiffSummary(turn) && !hasFollowingAssistantBeforeNextUser(turns, userIndex)
+function shouldRenderDiffOnStandaloneUserMessage(turns: ThreadMessage[], userIndex: number, message: UserThreadMessage) {
+  return hasUserMessageDiffSummary(message) && !hasFollowingAssistantBeforeNextUser(turns, userIndex)
 }
 
-function isAssistantLatestRenderableTurn(turns: Turn[], assistantIndex: number, assistantTurn: AssistantTurn) {
+function isAssistantLatestRenderableMessage(turns: ThreadMessage[], assistantIndex: number, assistantMessage: AssistantThreadMessage) {
   if (assistantIndex === turns.length - 1) return true
 
   const followingTurns = turns.slice(assistantIndex + 1)
   return followingTurns.length > 0 &&
     followingTurns.every(
-      (turn) => turn.kind === "user" && turn.streamInsertion?.assistantTurnID === assistantTurn.id,
+      (turn) => turn.kind === "user" && turn.streamInsertion?.assistantThreadMessageID === assistantMessage.id,
     )
 }
 
-function isAssistantFinalMessageInUserTurn(turns: Turn[], assistantIndex: number, assistantTurn: AssistantTurn) {
+function isAssistantFinalMessageInUserMessage(turns: ThreadMessage[], assistantIndex: number, assistantMessage: AssistantThreadMessage) {
   for (let index = assistantIndex + 1; index < turns.length; index += 1) {
     const candidate = turns[index]
-    if (candidate.kind === "user" && candidate.streamInsertion?.assistantTurnID !== assistantTurn.id) return true
+    if (candidate.kind === "user" && candidate.streamInsertion?.assistantThreadMessageID !== assistantMessage.id) return true
     if (candidate.kind === "assistant") return false
   }
 
   return true
 }
 
-function isRegularUserRunBoundary(turns: Turn[], turnIndex: number) {
-  const turn = turns[turnIndex]
+function isRegularUserRunBoundary(turns: ThreadMessage[], messageIndex: number) {
+  const turn = turns[messageIndex]
   return turn?.kind === "user" &&
     !hasStreamInsertionTarget(turns, turn) &&
-    !isPendingSteerUserTurn(turns, turn)
+    !isPendingSteerUserMessage(turns, turn)
 }
 
-function findAssistantRunStartIndex(turns: Turn[], assistantIndex: number) {
+function findAssistantRunStartIndex(turns: ThreadMessage[], assistantIndex: number) {
   for (let index = assistantIndex - 1; index >= 0; index -= 1) {
     if (isRegularUserRunBoundary(turns, index)) return index + 1
   }
@@ -1379,7 +1385,7 @@ function findAssistantRunStartIndex(turns: Turn[], assistantIndex: number) {
   return 0
 }
 
-function findAssistantRunEndIndex(turns: Turn[], assistantIndex: number) {
+function findAssistantRunEndIndex(turns: ThreadMessage[], assistantIndex: number) {
   for (let index = assistantIndex + 1; index < turns.length; index += 1) {
     if (isRegularUserRunBoundary(turns, index)) return index
   }
@@ -1387,7 +1393,7 @@ function findAssistantRunEndIndex(turns: Turn[], assistantIndex: number) {
   return turns.length
 }
 
-function findAssistantRunFinalTurnIndex(turns: Turn[], assistantIndex: number) {
+function findAssistantRunFinalTurnIndex(turns: ThreadMessage[], assistantIndex: number) {
   const runEndIndex = findAssistantRunEndIndex(turns, assistantIndex)
   for (let index = runEndIndex - 1; index >= assistantIndex; index -= 1) {
     if (turns[index]?.kind === "assistant") return index
@@ -1396,21 +1402,21 @@ function findAssistantRunFinalTurnIndex(turns: Turn[], assistantIndex: number) {
   return -1
 }
 
-function assistantTurnHasTextResponse(turn: AssistantTurn) {
-  return turn.items.some(
+function assistantMessageHasTextResponse(message: AssistantThreadMessage) {
+  return message.items.some(
     (item) => traceSectionKeyForItem(item) === "response" && item.kind === "text" && Boolean(item.text?.trim()),
   )
 }
 
-function isTerminalAssistantTurnPhase(phase: AssistantTurnPhase) {
+function isTerminalAssistantMessagePhase(phase: AssistantThreadMessagePhase) {
   return phase === "completed" || phase === "failed" || phase === "cancelled"
 }
 
-function canCollapseAssistantProcessTrace(turn: AssistantTurn) {
-  return !turn.isStreaming && isTerminalAssistantTurnPhase(turn.runtime.phase)
+function canCollapseAssistantProcessTrace(message: AssistantThreadMessage) {
+  return !message.isStreaming && isTerminalAssistantMessagePhase(message.runtime.phase)
 }
 
-function buildAssistantProcessTraceCollapseEligibilityByTurnID(turns: Turn[]) {
+function buildAssistantProcessTraceCollapseEligibilityByMessageID(turns: ThreadMessage[]) {
   const result: Record<string, boolean> = {}
   turns.forEach((turn) => {
     if (turn.kind !== "assistant") return
@@ -1419,19 +1425,19 @@ function buildAssistantProcessTraceCollapseEligibilityByTurnID(turns: Turn[]) {
   return result
 }
 
-function shouldFoldAssistantTurnIntoFinalRunTrace(turns: Turn[], assistantIndex: number, turn: AssistantTurn) {
+function shouldFoldAssistantMessageIntoFinalRunTrace(turns: ThreadMessage[], assistantIndex: number, message: AssistantThreadMessage) {
   const finalAssistantIndex = findAssistantRunFinalTurnIndex(turns, assistantIndex)
   if (finalAssistantIndex <= assistantIndex) return false
 
   const finalTurn = turns[finalAssistantIndex]
   if (finalTurn?.kind !== "assistant") return false
-  if (!canCollapseAssistantProcessTrace(finalTurn) || !assistantTurnHasTextResponse(finalTurn)) return false
+  if (!canCollapseAssistantProcessTrace(finalTurn) || !assistantMessageHasTextResponse(finalTurn)) return false
 
-  return canCollapseAssistantProcessTrace(turn) || Boolean(turn.isStreaming)
+  return canCollapseAssistantProcessTrace(message) || Boolean(message.isStreaming)
 }
 
 function collectAssistantRunProcessPrefixItems(
-  turns: Turn[],
+  turns: ThreadMessage[],
   finalAssistantIndex: number,
   traceVisibility: AssistantTraceVisibility,
 ) {
@@ -1441,7 +1447,7 @@ function collectAssistantRunProcessPrefixItems(
   for (let index = runStartIndex; index < finalAssistantIndex; index += 1) {
     const turn = turns[index]
     if (turn?.kind !== "assistant") continue
-    if (!shouldFoldAssistantTurnIntoFinalRunTrace(turns, index, turn)) continue
+    if (!shouldFoldAssistantMessageIntoFinalRunTrace(turns, index, turn)) continue
     items.push(...filterRenderedAssistantTraceItems(turn.items, true, traceVisibility))
   }
 
@@ -1745,12 +1751,12 @@ function formatDurationMilliseconds(durationMs: number) {
   return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`
 }
 
-function formatAssistantTraceDuration(runtime?: AssistantTurnRuntime) {
+function formatAssistantTraceDuration(runtime?: AssistantThreadMessageRuntime) {
   if (!runtime) return null
   return formatDurationMilliseconds(runtime.updatedAt - runtime.startedAt)
 }
 
-function formatAssistantProcessTraceDuration(blocks: AssistantTraceBlock[], runtime?: AssistantTurnRuntime) {
+function formatAssistantProcessTraceDuration(blocks: AssistantTraceBlock[], runtime?: AssistantThreadMessageRuntime) {
   const timestamps = blocks
     .flatMap((block) => block.items)
     .map((item) => item.timestamp)
@@ -1845,8 +1851,8 @@ function AssistantProcessTraceHeader({
   )
 }
 
-function getAssistantEphemeralHint(turn: AssistantTurn) {
-  switch (turn.runtime.phase) {
+function getAssistantEphemeralHint(message: AssistantThreadMessage) {
+  switch (message.runtime.phase) {
     case "requesting":
     case "waiting_first_event":
     case "preparing":
@@ -1856,11 +1862,11 @@ function getAssistantEphemeralHint(turn: AssistantTurn) {
     case "reasoning":
       return "Thinking..."
     case "tool_running":
-      return turn.runtime.toolName ? `Running ${turn.runtime.toolName}...` : "Running tools..."
+      return message.runtime.toolName ? `Running ${message.runtime.toolName}...` : "Running tools..."
     case "waiting_approval":
       return "Waiting for approval..."
     case "blocked":
-      return turn.state || "Blocked..."
+      return message.state || "Blocked..."
     case "responding":
       return "Responding..."
     default:
@@ -2056,7 +2062,7 @@ function AssistantTraceSection({
 
 interface AssistantTraceBlockViewProps {
   answeredQuestionIDs: Set<string>
-  assistantTurnPhase?: AssistantTurnPhase
+  assistantMessagePhase?: AssistantThreadMessagePhase
   block: AssistantTraceBlock
   isLatestMessage: boolean
   isQuestionAnswerDisabled?: boolean
@@ -2080,7 +2086,7 @@ function getAssistantTraceBlockStackClassName(sectionKey: AssistantTraceSectionK
 
 function AssistantTraceBlockView({
   answeredQuestionIDs,
-  assistantTurnPhase,
+  assistantMessagePhase,
   block,
   isLatestMessage,
   isQuestionAnswerDisabled,
@@ -2109,7 +2115,7 @@ function AssistantTraceBlockView({
           return (
             <TraceItemView
               key={item.id}
-              assistantTurnPhase={assistantTurnPhase}
+              assistantMessagePhase={assistantMessagePhase}
               item={item}
               isQuestionAnswered={isQuestionAnswered}
               isQuestionAnswerDisabled={isQuestionAnswerDisabled}
@@ -2142,7 +2148,7 @@ function getReasoningDisclosurePreview(item: AssistantTraceItem, fallbackLine: s
 
 function AssistantProcessTraceDisclosure({
   answeredQuestionIDs,
-  assistantTurnPhase,
+  assistantMessagePhase,
   blocks,
   isLatestMessage,
   isQuestionAnswerDisabled,
@@ -2157,7 +2163,7 @@ function AssistantProcessTraceDisclosure({
   traceVisibility,
 }: Omit<AssistantTraceBlockViewProps, "block" | "sectionID"> & {
   blocks: AssistantTraceBlock[]
-  runtime?: AssistantTurnRuntime
+  runtime?: AssistantThreadMessageRuntime
 }) {
   const [isExpanded, setIsExpanded] = useState(() => !shouldCollapseReasoningAndTools)
   const { t } = useI18n()
@@ -2195,7 +2201,7 @@ function AssistantProcessTraceDisclosure({
             <AssistantTraceBlockView
               key={`process-${block.sectionKey}-${index}`}
               answeredQuestionIDs={answeredQuestionIDs}
-              assistantTurnPhase={assistantTurnPhase}
+              assistantMessagePhase={assistantMessagePhase}
               block={block}
               isQuestionAnswerDisabled={isQuestionAnswerDisabled}
               isLatestMessage={isLatestMessage}
@@ -2216,7 +2222,7 @@ function AssistantProcessTraceDisclosure({
   )
 }
 
-function AssistantTurnPlaceholder({ message }: { message: string }) {
+function AssistantMessagePlaceholder({ message }: { message: string }) {
   return (
     <section className="assistant-section assistant-ephemeral-state" aria-live="polite" aria-label="Assistant status">
       <p className="assistant-ephemeral-hint">{message}</p>
@@ -2224,9 +2230,9 @@ function AssistantTurnPlaceholder({ message }: { message: string }) {
   )
 }
 
-interface AssistantTurnSectionsProps {
+interface AssistantMessageSectionsProps {
   answeredQuestionIDs: Set<string>
-  assistantTurnPhase?: AssistantTurnPhase
+  assistantMessagePhase?: AssistantThreadMessagePhase
   isQuestionAnswerDisabled?: boolean
   isLatestMessage: boolean
   items: AssistantTraceItem[]
@@ -2238,7 +2244,7 @@ interface AssistantTurnSectionsProps {
   onProposedPlanConfirm?: ProposedPlanConfirmHandler
   processPrefixItems?: AssistantTraceItem[]
   renderProcessTrace?: boolean
-  runtime?: AssistantTurnRuntime
+  runtime?: AssistantThreadMessageRuntime
   showFileChanges: boolean
   shouldCollapseReasoningAndTools: boolean
   traceVisibility: AssistantTraceVisibility
@@ -2310,9 +2316,9 @@ function useAssistantTraceRenderSplit(items: AssistantTraceItem[]) {
   }, [items])
 }
 
-const AssistantTurnSectionsContent = memo(function AssistantTurnSectionsContent({
+const AssistantMessageSectionsContent = memo(function AssistantMessageSectionsContent({
   answeredQuestionIDs,
-  assistantTurnPhase,
+  assistantMessagePhase,
   isQuestionAnswerDisabled = false,
   isLatestMessage,
   items,
@@ -2328,9 +2334,9 @@ const AssistantTurnSectionsContent = memo(function AssistantTurnSectionsContent(
   showFileChanges,
   shouldCollapseReasoningAndTools,
   traceVisibility,
-}: AssistantTurnSectionsProps) {
+}: AssistantMessageSectionsProps) {
   const traceDisplayBlocks = measureRendererPerf(
-    "AssistantTurnSections.buildTraceBlocks",
+    "AssistantMessageSections.buildTraceBlocks",
     () => buildAssistantTraceDisplayBlocks({
       items,
       processPrefixItems,
@@ -2350,8 +2356,8 @@ const AssistantTurnSectionsContent = memo(function AssistantTurnSectionsContent(
   const processBlocks = shouldRenderProcessTrace ? traceDisplayBlocks.processBlocks : []
   const mainBlocks = traceDisplayBlocks.mainBlocks
   const sectionsProfiler = useMemo(
-    () => createRendererProfilerOnRender("AssistantTurnSections commit", () => ({
-      assistantTurnPhase: assistantTurnPhase ?? null,
+    () => createRendererProfilerOnRender("AssistantMessageSections commit", () => ({
+      assistantMessagePhase: assistantMessagePhase ?? null,
       isLatestMessage,
       itemCount: items.length,
       mainBlockCount: mainBlocks.length,
@@ -2360,7 +2366,7 @@ const AssistantTurnSectionsContent = memo(function AssistantTurnSectionsContent(
       shouldRenderProcessTrace,
     })),
     [
-      assistantTurnPhase,
+      assistantMessagePhase,
       isLatestMessage,
       items.length,
       mainBlocks.length,
@@ -2371,11 +2377,11 @@ const AssistantTurnSectionsContent = memo(function AssistantTurnSectionsContent(
   )
 
   return (
-    <RendererProfiler id="AssistantTurnSections" onRender={sectionsProfiler}>
+    <RendererProfiler id="AssistantMessageSections" onRender={sectionsProfiler}>
       {shouldRenderProcessTrace ? (
         <AssistantProcessTraceDisclosure
           answeredQuestionIDs={answeredQuestionIDs}
-          assistantTurnPhase={assistantTurnPhase}
+          assistantMessagePhase={assistantMessagePhase}
           blocks={processBlocks}
           isQuestionAnswerDisabled={isQuestionAnswerDisabled}
           isLatestMessage={isLatestMessage}
@@ -2394,7 +2400,7 @@ const AssistantTurnSectionsContent = memo(function AssistantTurnSectionsContent(
         <AssistantTraceBlockView
           key={`${block.sectionKey}-${index}`}
           answeredQuestionIDs={answeredQuestionIDs}
-          assistantTurnPhase={assistantTurnPhase}
+          assistantMessagePhase={assistantMessagePhase}
           block={block}
           isQuestionAnswerDisabled={isQuestionAnswerDisabled}
           isLatestMessage={isLatestMessage}
@@ -2413,21 +2419,21 @@ const AssistantTurnSectionsContent = memo(function AssistantTurnSectionsContent(
   )
 })
 
-const StableAssistantTraceSections = memo(function StableAssistantTraceSections(props: AssistantTurnSectionsProps) {
-  return <AssistantTurnSectionsContent {...props} />
+const StableAssistantTraceSections = memo(function StableAssistantTraceSections(props: AssistantMessageSectionsProps) {
+  return <AssistantMessageSectionsContent {...props} />
 })
 
-const LiveAssistantTraceSections = memo(function LiveAssistantTraceSections(props: AssistantTurnSectionsProps) {
-  return <AssistantTurnSectionsContent {...props} />
+const LiveAssistantTraceSections = memo(function LiveAssistantTraceSections(props: AssistantMessageSectionsProps) {
+  return <AssistantMessageSectionsContent {...props} />
 })
 
-const AssistantTurnSections = memo(function AssistantTurnSections(props: AssistantTurnSectionsProps) {
+const AssistantMessageSections = memo(function AssistantMessageSections(props: AssistantMessageSectionsProps) {
   const renderProcessTrace = props.renderProcessTrace ?? true
   const canSplitStreamingSuffix = renderProcessTrace === false && (props.processPrefixItems?.length ?? 0) === 0
   const traceRenderSplit = useAssistantTraceRenderSplit(props.items)
 
   if (!canSplitStreamingSuffix || !traceRenderSplit.isSplit) {
-    return <AssistantTurnSectionsContent {...props} />
+    return <AssistantMessageSectionsContent {...props} />
   }
 
   return (
@@ -2446,15 +2452,15 @@ const AssistantTurnSections = memo(function AssistantTurnSections(props: Assista
   )
 })
 
-const AssistantTurnSectionsWithStreamInsertions = memo(function AssistantTurnSectionsWithStreamInsertions({
+const AssistantMessageSectionsWithStreamInsertions = memo(function AssistantMessageSectionsWithStreamInsertions({
   answeredQuestionIDs,
-  assistantTurnPhase,
-  copiedUserTurnID,
-  insertedUserTurns,
+  assistantMessagePhase,
+  copiedUserThreadMessageID,
+  insertedUserMessages,
   isQuestionAnswerDisabled = false,
   isLatestMessage,
   items,
-  getTurnMotion,
+  getMessageMotion,
   onCopyUserMessage,
   onOpenImagePreview,
   onAskUserQuestionAnswer,
@@ -2470,14 +2476,14 @@ const AssistantTurnSectionsWithStreamInsertions = memo(function AssistantTurnSec
   traceVisibility,
 }: {
   answeredQuestionIDs: Set<string>
-  assistantTurnPhase?: AssistantTurnPhase
-  copiedUserTurnID: string | null
-  insertedUserTurns: UserTurn[]
+  assistantMessagePhase?: AssistantThreadMessagePhase
+  copiedUserThreadMessageID: string | null
+  insertedUserMessages: UserThreadMessage[]
   isQuestionAnswerDisabled?: boolean
   isLatestMessage: boolean
   items: AssistantTraceItem[]
-  getTurnMotion: (turnID: string, isLive?: boolean) => ThreadTurnMotion
-  onCopyUserMessage: (turnID: string, text: string) => void | Promise<void>
+  getMessageMotion: (messageID: string, isLive?: boolean) => ThreadMessageMotion
+  onCopyUserMessage: (messageID: string, text: string) => void | Promise<void>
   onOpenImagePreview?: (payload: ImagePreviewPayload) => void
   onAskUserQuestionAnswer?: QuestionAnswerHandler
   onFileChangeSelect: ((file: string) => void) | undefined
@@ -2486,13 +2492,13 @@ const AssistantTurnSectionsWithStreamInsertions = memo(function AssistantTurnSec
   onProposedPlanConfirm?: ProposedPlanConfirmHandler
   processPrefixItems?: AssistantTraceItem[]
   renderProcessTrace?: boolean
-  runtime?: AssistantTurnRuntime
+  runtime?: AssistantThreadMessageRuntime
   showFileChanges: boolean
   shouldCollapseReasoningAndTools: boolean
   traceVisibility: AssistantTraceVisibility
 }) {
   const insertionSegments = useMemo(() => {
-    if (insertedUserTurns.length === 0) return []
+    if (insertedUserMessages.length === 0) return []
 
     let cursor = 0
     let didRenderProcessPrefix = false
@@ -2506,7 +2512,7 @@ const AssistantTurnSectionsWithStreamInsertions = memo(function AssistantTurnSec
       | {
           kind: "user"
           key: string
-          turn: UserTurn
+          message: UserThreadMessage
         }
     > = []
 
@@ -2522,27 +2528,27 @@ const AssistantTurnSectionsWithStreamInsertions = memo(function AssistantTurnSec
       })
     }
 
-    insertedUserTurns.forEach((turn, index) => {
+    insertedUserMessages.forEach((turn, index) => {
       const insertionIndex = resolveStreamInsertionItemIndex(items, turn, cursor)
 
       pushItemSegment(items.slice(cursor, insertionIndex), `segment-${index}`)
       segments.push({
         kind: "user",
         key: turn.id,
-        turn,
+        message: turn,
       })
       cursor = insertionIndex
     })
 
     pushItemSegment(items.slice(cursor), "segment-final")
     return segments
-  }, [insertedUserTurns, items, processPrefixItems])
+  }, [insertedUserMessages, items, processPrefixItems])
 
-  if (insertedUserTurns.length === 0) {
+  if (insertedUserMessages.length === 0) {
     return (
-      <AssistantTurnSections
+      <AssistantMessageSections
         answeredQuestionIDs={answeredQuestionIDs}
-        assistantTurnPhase={assistantTurnPhase}
+        assistantMessagePhase={assistantMessagePhase}
         isQuestionAnswerDisabled={isQuestionAnswerDisabled}
         isLatestMessage={isLatestMessage}
         items={items}
@@ -2567,22 +2573,22 @@ const AssistantTurnSectionsWithStreamInsertions = memo(function AssistantTurnSec
       {insertionSegments.map((segment) => {
         if (segment.kind === "user") {
           return (
-            <UserTurnArticle
+            <UserThreadMessageArticle
               key={segment.key}
               className="assistant-stream-insertion-user-turn"
-              copied={copiedUserTurnID === segment.turn.id}
-              motion={getTurnMotion(segment.turn.id)}
+              copied={copiedUserThreadMessageID === segment.message.id}
+              motion={getMessageMotion(segment.message.id)}
               onCopy={onCopyUserMessage}
-              turn={segment.turn}
+              message={segment.message}
             />
           )
         }
 
         return (
-          <AssistantTurnSections
+          <AssistantMessageSections
             key={segment.key}
             answeredQuestionIDs={answeredQuestionIDs}
-            assistantTurnPhase={assistantTurnPhase}
+            assistantMessagePhase={assistantMessagePhase}
             isQuestionAnswerDisabled={isQuestionAnswerDisabled}
             isLatestMessage={isLatestMessage}
             items={segment.items}
@@ -2954,7 +2960,7 @@ export interface InlineSideChatThreadProps {
   permissionRequestActionRequestID: string | null
   session: SessionSummary
   sideChatSessions: SessionSummary[]
-  turns: Turn[]
+  turns: ThreadMessage[]
   isThreadVisible?: boolean
   readScrollSnapshot?: (key: string) => ThreadScrollSnapshot | null
   saveScrollSnapshot?: (key: string, snapshot: ThreadScrollSnapshot) => void
@@ -2989,8 +2995,8 @@ export interface InlineSideChatThreadProps {
     selectedReasoningEffort?: ReasoningEffort | null
     selectedModel?: string | null
     selectedSkillIDs: string[]
-    steerQueuedTurnID?: string
-    submissionMode?: UserTurn["submissionMode"]
+    steerQueuedMessageID?: string
+    submissionMode?: UserThreadMessage["submissionMode"]
     waitForPendingModelSelection: () => Promise<void>
   }) => void | Promise<void>
   onSelectSideChat: (sessionID: string) => void | Promise<void>
@@ -3046,7 +3052,7 @@ export function InlineSideChatThread({
     sessionModelSelection: session.modelSelection,
     sessionID: session.id,
   })
-  const [hydratedTurnsBySessionID, setHydratedTurnsBySessionID] = useState<Record<string, Turn[]>>({})
+  const [hydratedTurnsBySessionID, setHydratedTurnsBySessionID] = useState<Record<string, ThreadMessage[]>>({})
   const [isCreatingSideChatTab, setIsCreatingSideChatTab] = useState(false)
   const [deletingSideChatTabID, setDeletingSideChatTabID] = useState<string | null>(null)
   const [sideChatTabMenu, setSideChatTabMenu] = useState<{ sessionID: string; x: number; y: number } | null>(null)
@@ -3086,8 +3092,8 @@ export function InlineSideChatThread({
     void agentSession.loadHistory({ backendSessionID: session.id })
       .then((messages) => {
         if (isCancelled) return
-        const nextTurns = buildTurnsFromHistory(messages)
-        const nextHydratedTurns = mergeUserTurnPresentationState(readPersistedUserTurns(session.id), nextTurns)
+        const nextMessages = buildThreadMessagesFromHistory(messages)
+        const nextHydratedTurns = mergeUserMessagePresentationState(readPersistedUserMessages(session.id), nextMessages)
         setHydratedTurnsBySessionID((current) => ({
           ...current,
           [session.id]: nextHydratedTurns,
@@ -3267,7 +3273,7 @@ export function InlineSideChatThread({
           <ThreadView
             activeProjectID={activeProjectID}
             activeSession={session}
-            activeTurns={effectiveTurns}
+            activeMessages={effectiveTurns}
             assistantTraceVisibility={assistantTraceVisibility}
             composerRefreshVersion={composerRefreshVersion}
             isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
@@ -3300,12 +3306,12 @@ export function InlineSideChatThread({
           hasPendingPermissionRequests={pendingPermissionRequests.length > 0 || isResolvingPermissionRequest}
           isCancelling={isCancelling}
           pendingInputs={pendingSubmissionInputs}
-          onSteerQueuedTurn={(input) =>
+          onSteerQueuedMessage={(input) =>
             void onSend({
               selectedReasoningEffort: composer.selectedReasoningEffort,
               selectedModel: composer.selectedModel,
               selectedSkillIDs: composer.selectedSkillIDs,
-              steerQueuedTurnID: input.id,
+              steerQueuedMessageID: input.id,
               waitForPendingModelSelection: composer.awaitPendingModelSelection,
             })
           }
@@ -3499,7 +3505,7 @@ function ProposedPlanCard({
 }
 
 interface TraceItemViewProps {
-  assistantTurnPhase?: AssistantTurnPhase
+  assistantMessagePhase?: AssistantThreadMessagePhase
   item: AssistantTraceItem
   isQuestionAnswered?: boolean
   isQuestionAnswerDisabled?: boolean
@@ -3524,7 +3530,7 @@ type RequiredTraceItemRendererProps = Required<
 type TraceItemRendererProps = RequiredTraceItemRendererProps &
   Pick<
     TraceItemViewProps,
-    | "assistantTurnPhase"
+    | "assistantMessagePhase"
     | "item"
     | "isQuestionAnswered"
     | "onAskUserQuestionAnswer"
@@ -5431,7 +5437,7 @@ class TraceItemRenderBoundary extends Component<TraceItemRenderBoundaryProps, Tr
 }
 
 const TraceItemView = memo(function TraceItemView({
-  assistantTurnPhase,
+  assistantMessagePhase,
   item,
   isQuestionAnswered = false,
   isQuestionAnswerDisabled = false,
@@ -5446,7 +5452,7 @@ const TraceItemView = memo(function TraceItemView({
   traceVisibility,
 }: TraceItemViewProps) {
   const renderedItem =
-    assistantTurnPhase === "cancelled" &&
+    assistantMessagePhase === "cancelled" &&
     item.kind === "tool" &&
     item.status !== "cancelled" &&
     item.status !== "completed" &&
@@ -5632,7 +5638,7 @@ interface PermissionRequestInlinePromptProps {
   pendingPermissionRequests: PermissionRequest[]
   permissionRequestActionError: string | null
   permissionRequestActionRequestID: string | null
-  motion: ThreadTurnMotion
+  motion: ThreadMessageMotion
   onPermissionRequestResponse: PermissionRequestResponseHandler
 }
 
@@ -5654,7 +5660,9 @@ function PermissionRequestInlinePrompt({
     <article
       className="turn assistant-turn permission-request-turn"
       data-turn-id={`permission-request:${request.id}`}
+      data-thread-message-id={`permission-request:${request.id}`}
       data-turn-motion={motion}
+      data-thread-message-motion={motion}
     >
       <section className="permission-request-inline" role="region" aria-labelledby="permission-request-title">
         <header className="permission-request-inline-header">
@@ -5687,7 +5695,7 @@ function PermissionRequestInlinePrompt({
   )
 }
 
-function collectAnsweredQuestionIDs(turns: Turn[]) {
+function collectAnsweredQuestionIDs(turns: ThreadMessage[]) {
   const answeredQuestionIDs = new Set<string>()
 
   for (const turn of turns) {
@@ -5789,7 +5797,7 @@ function getThreadViewPropsChangeReason(left: ThreadViewProps, right: ThreadView
   if (buildDiffSummarySignature(left.activeSessionDiff ?? null) !== buildDiffSummarySignature(right.activeSessionDiff ?? null)) {
     return "activeSessionDiff"
   }
-  if (!areArraysShallowEqual(left.activeTurns, right.activeTurns)) return "activeTurns"
+  if (!areArraysShallowEqual(left.activeMessages, right.activeMessages)) return "activeMessages"
   if (left.assistantTraceVisibility !== right.assistantTraceVisibility) return "assistantTraceVisibility"
   if (left.composerRefreshVersion !== right.composerRefreshVersion) return "composerRefreshVersion"
   if (left.isAgentDebugTraceEnabled !== right.isAgentDebugTraceEnabled) return "isAgentDebugTraceEnabled"
@@ -5828,7 +5836,7 @@ function getThreadViewPropsChangeReason(left: ThreadViewProps, right: ThreadView
   )) {
     return "sideChatSessionsByAnchorMessageID"
   }
-  if (!areArraysShallowEqual(left.sideChatTurns, right.sideChatTurns)) return "sideChatTurns"
+  if (!areArraysShallowEqual(left.sideChatMessages, right.sideChatMessages)) return "sideChatMessages"
   if (left.sideChatPlacement !== right.sideChatPlacement) return "sideChatPlacement"
   if (left.scrollStateKey !== right.scrollStateKey) return "scrollStateKey"
   if (left.threadColumnRef !== right.threadColumnRef) return "threadColumnRef"
@@ -5846,8 +5854,8 @@ function areThreadViewPropsEqual(left: ThreadViewProps, right: ThreadViewProps) 
     reason,
     previousSessionID: left.activeSession?.id ?? null,
     nextSessionID: right.activeSession?.id ?? null,
-    previousTurnCount: left.activeTurns.length,
-    nextTurnCount: right.activeTurns.length,
+    previousMessageCount: left.activeMessages.length,
+    nextMessageCount: right.activeMessages.length,
   })
   return false
 }
@@ -5864,7 +5872,7 @@ function VisibleThreadView({
   activeProjectID = null,
   activeSession,
   activeSessionDiff = null,
-  activeTurns,
+  activeMessages,
   assistantTraceVisibility,
   composerRefreshVersion = 0,
   isAgentDebugTraceEnabled,
@@ -5877,9 +5885,9 @@ function VisibleThreadView({
   onArtifactLinkOpen,
   onLocalFileLinkOpen,
   onOpenSideChat,
-  onTurnDiffSummaryHydrate,
-  onTurnDiffRestore,
-  onTurnDiffReview,
+  onMessageDiffSummaryHydrate,
+  onMessageDiffRestore,
+  onMessageDiffReview,
   onAskUserQuestionAnswer,
   pendingConversationInputs = [],
   pendingPermissionRequests,
@@ -5897,7 +5905,7 @@ function VisibleThreadView({
   sideChatPermissionRequestActionRequestID = null,
   sideChatSession = null,
   sideChatSessionsByAnchorMessageID = {},
-  sideChatTurns = [],
+  sideChatMessages = [],
   sideChatPlacement = "inline",
   scrollStateKey,
   threadColumnRef,
@@ -5917,11 +5925,11 @@ function VisibleThreadView({
   onPermissionRequestResponse,
   onSideChatSelect,
 }: ThreadViewProps) {
-  const answeredQuestionIDs = useMemo(() => collectAnsweredQuestionIDs(activeTurns), [activeTurns])
-  const displayTurns = useMemo(() => orderAdjacentAssistantTurnsForDisplay(activeTurns), [activeTurns])
+  const answeredQuestionIDs = useMemo(() => collectAnsweredQuestionIDs(activeMessages), [activeMessages])
+  const displayMessages = useMemo(() => orderAdjacentAssistantMessagesForDisplay(activeMessages), [activeMessages])
   const readOnlySideChat = isSideChatSession(activeSession)
-  const [copiedResponseTurnID, setCopiedResponseTurnID] = useState<string | null>(null)
-  const [copiedUserTurnID, setCopiedUserTurnID] = useState<string | null>(null)
+  const [copiedResponseMessageID, setCopiedResponseMessageID] = useState<string | null>(null)
+  const [copiedUserThreadMessageID, setCopiedUserThreadMessageID] = useState<string | null>(null)
   const [activeImagePreview, setActiveImagePreview] = useState<ActiveImagePreview | null>(null)
   const copiedResponseTimeoutRef = useRef<number | null>(null)
   const copiedUserTimeoutRef = useRef<number | null>(null)
@@ -5938,22 +5946,22 @@ function VisibleThreadView({
   const lastUserScrollIntentAtRef = useRef(0)
   const lastUserScrollIntentDirectionRef = useRef<"up" | "down" | null>(null)
   const followScrollSyncSuppressedUntilRef = useRef(0)
-  const latestAssistantTurnStateRef = useRef<LatestAssistantTurnState | null>(null)
-  const previousActiveTurnCountRef = useRef(activeTurns.length)
+  const latestAssistantMessageStateRef = useRef<LatestAssistantMessageState | null>(null)
+  const previousActiveMessageCountRef = useRef(activeMessages.length)
   const userScrollIntentConsumedRef = useRef(false)
   const lastKnownScrollTopRef = useRef(0)
   const currentScrollStateKeyRef = useRef<string | null>(null)
-  const renderedTurnIDsByScrollKeyRef = useRef<Record<string, Set<string>>>({})
+  const renderedMessageIDsByScrollKeyRef = useRef<Record<string, Set<string>>>({})
   const threadVirtualHeightCachesRef = useRef<Record<string, Map<string, number>>>({})
   const pendingThreadVirtualMeasurementsRef = useRef<Record<string, Map<string, number>>>({})
   const pendingThreadVirtualMeasurementFrameRef = useRef<number | null>(null)
   const pendingThreadVirtualMeasurementScrollSyncKeyRef = useRef<string | null>(null)
   const pendingThreadVirtualViewportFrameRef = useRef<number | null>(null)
-  const previousProcessTraceCollapseEligibilityByTurnIDRef = useRef<Record<string, boolean>>({})
+  const previousProcessTraceCollapseEligibilityByMessageIDRef = useRef<Record<string, boolean>>({})
   const [threadVirtualMeasurementVersion, setThreadVirtualMeasurementVersion] = useState(0)
   const [threadViewUiState, setThreadViewUiState] = useState<ThreadViewUiState>(() => ({
-    processTraceCollapseMotionByTurnID: {},
-    processTraceExpansionByTurnID: {},
+    processTraceCollapseMotionByMessageID: {},
+    processTraceExpansionByMessageID: {},
   }))
   const [threadVirtualViewport, setThreadVirtualViewport] = useState<ThreadVirtualViewport>({
     height: 0,
@@ -5970,39 +5978,39 @@ function VisibleThreadView({
   const activeSessionID = activeSession?.id ?? null
   const effectiveScrollStateKey = scrollStateKey ?? activeSessionID ?? "thread:no-session"
   const isResizeLightweightMode = useSidebarResizeLightweightMode()
-  const visibleTurnIDs = useMemo(() => {
-    const ids = displayTurns.map((turn) => turn.id)
+  const visibleMessageIDs = useMemo(() => {
+    const ids = displayMessages.map((turn) => turn.id)
     const pendingRequestID = pendingPermissionRequests[0]?.id
     return pendingRequestID ? [...ids, `permission-request:${pendingRequestID}`] : ids
-  }, [displayTurns, pendingPermissionRequests])
-  const visibleTurnIDsKey = visibleTurnIDs.join("\u0000")
-  const pendingProcessTraceAutoCollapseTurnIDs = (() => {
-    const previousEligibility = previousProcessTraceCollapseEligibilityByTurnIDRef.current
+  }, [displayMessages, pendingPermissionRequests])
+  const visibleMessageIDsKey = visibleMessageIDs.join("\u0000")
+  const pendingProcessTraceAutoCollapseMessageIDs = (() => {
+    const previousEligibility = previousProcessTraceCollapseEligibilityByMessageIDRef.current
     const ids: string[] = []
 
-    displayTurns.forEach((turn) => {
+    displayMessages.forEach((turn) => {
       if (turn.kind !== "assistant") return
-      if (threadViewUiState.processTraceExpansionByTurnID[turn.id] !== undefined) return
+      if (threadViewUiState.processTraceExpansionByMessageID[turn.id] !== undefined) return
       if (previousEligibility[turn.id] !== false || !canCollapseAssistantProcessTrace(turn)) return
       ids.push(turn.id)
     })
 
     return ids
   })()
-  const pendingProcessTraceAutoCollapseKey = pendingProcessTraceAutoCollapseTurnIDs.join("\u0000")
+  const pendingProcessTraceAutoCollapseKey = pendingProcessTraceAutoCollapseMessageIDs.join("\u0000")
   const effectiveThreadViewUiState = useMemo(() => {
-    if (pendingProcessTraceAutoCollapseTurnIDs.length === 0) return threadViewUiState
+    if (pendingProcessTraceAutoCollapseMessageIDs.length === 0) return threadViewUiState
 
-    const processTraceCollapseMotionByTurnID = {
-      ...threadViewUiState.processTraceCollapseMotionByTurnID,
+    const processTraceCollapseMotionByMessageID = {
+      ...threadViewUiState.processTraceCollapseMotionByMessageID,
     }
-    pendingProcessTraceAutoCollapseTurnIDs.forEach((turnID) => {
-      processTraceCollapseMotionByTurnID[turnID] = true
+    pendingProcessTraceAutoCollapseMessageIDs.forEach((messageID) => {
+      processTraceCollapseMotionByMessageID[messageID] = true
     })
 
     return {
       ...threadViewUiState,
-      processTraceCollapseMotionByTurnID,
+      processTraceCollapseMotionByMessageID,
     }
   }, [pendingProcessTraceAutoCollapseKey, threadViewUiState])
   const displayRows = useMemo(
@@ -6010,25 +6018,25 @@ function VisibleThreadView({
       "ThreadView.buildDisplayRows",
       () => buildThreadDisplayRows({
         activeSession,
-        activeTurns: displayTurns,
+        activeMessages: displayMessages,
         assistantTraceVisibility,
         isResolvingPermissionRequest,
         pendingPermissionRequests,
         uiState: effectiveThreadViewUiState,
       }),
       () => ({
-        assistantItemCount: displayTurns.reduce(
+        assistantItemCount: displayMessages.reduce(
           (count, turn) => count + (turn.kind === "assistant" ? turn.items.length : 0),
           0,
         ),
         pendingPermissionRequestCount: pendingPermissionRequests.length,
         sessionID: activeSession?.id ?? null,
-        turnCount: displayTurns.length,
+        messageCount: displayMessages.length,
       }),
     ),
     [
       activeSession,
-      displayTurns,
+      displayMessages,
       assistantTraceVisibility,
       isResolvingPermissionRequest,
       pendingPermissionRequests,
@@ -6052,35 +6060,35 @@ function VisibleThreadView({
     [shouldVirtualizeThreadRows, displayRows.length, threadVirtualLayout, threadVirtualViewport],
   )
   const threadVirtualRenderedRangeKey = `${threadVirtualRange.startIndex}:${threadVirtualRange.endIndex}:${threadVirtualLayout.totalHeight}`
-  const activeProcessTraceCollapseMotionKey = Object.keys(effectiveThreadViewUiState.processTraceCollapseMotionByTurnID)
+  const activeProcessTraceCollapseMotionKey = Object.keys(effectiveThreadViewUiState.processTraceCollapseMotionByMessageID)
     .sort()
     .join("\u0000")
 
   useLayoutEffect(() => {
-    previousProcessTraceCollapseEligibilityByTurnIDRef.current =
-      buildAssistantProcessTraceCollapseEligibilityByTurnID(displayTurns)
-  }, [displayTurns])
+    previousProcessTraceCollapseEligibilityByMessageIDRef.current =
+      buildAssistantProcessTraceCollapseEligibilityByMessageID(displayMessages)
+  }, [displayMessages])
 
   useLayoutEffect(() => {
-    if (pendingProcessTraceAutoCollapseTurnIDs.length === 0) return
+    if (pendingProcessTraceAutoCollapseMessageIDs.length === 0) return
 
     setThreadViewUiState((current) => {
       let changed = false
-      const processTraceCollapseMotionByTurnID = {
-        ...current.processTraceCollapseMotionByTurnID,
+      const processTraceCollapseMotionByMessageID = {
+        ...current.processTraceCollapseMotionByMessageID,
       }
 
-      pendingProcessTraceAutoCollapseTurnIDs.forEach((turnID) => {
-        if (current.processTraceExpansionByTurnID[turnID] !== undefined) return
-        if (processTraceCollapseMotionByTurnID[turnID]) return
-        processTraceCollapseMotionByTurnID[turnID] = true
+      pendingProcessTraceAutoCollapseMessageIDs.forEach((messageID) => {
+        if (current.processTraceExpansionByMessageID[messageID] !== undefined) return
+        if (processTraceCollapseMotionByMessageID[messageID]) return
+        processTraceCollapseMotionByMessageID[messageID] = true
         changed = true
       })
 
       return changed
         ? {
             ...current,
-            processTraceCollapseMotionByTurnID,
+            processTraceCollapseMotionByMessageID,
           }
         : current
     })
@@ -6089,20 +6097,20 @@ function VisibleThreadView({
   useEffect(() => {
     if (!activeProcessTraceCollapseMotionKey) return
 
-    const turnIDs = activeProcessTraceCollapseMotionKey.split("\u0000")
-    const timerIDs = turnIDs.map((turnID) =>
+    const messageIDs = activeProcessTraceCollapseMotionKey.split("\u0000")
+    const timerIDs = messageIDs.map((messageID) =>
       window.setTimeout(() => {
         setThreadViewUiState((current) => {
-          if (!current.processTraceCollapseMotionByTurnID[turnID]) return current
+          if (!current.processTraceCollapseMotionByMessageID[messageID]) return current
 
-          const processTraceCollapseMotionByTurnID = {
-            ...current.processTraceCollapseMotionByTurnID,
+          const processTraceCollapseMotionByMessageID = {
+            ...current.processTraceCollapseMotionByMessageID,
           }
-          delete processTraceCollapseMotionByTurnID[turnID]
+          delete processTraceCollapseMotionByMessageID[messageID]
 
           return {
             ...current,
-            processTraceCollapseMotionByTurnID,
+            processTraceCollapseMotionByMessageID,
           }
         })
       }, THREAD_AUTO_COLLAPSE_MOTION_MS),
@@ -6204,7 +6212,7 @@ function VisibleThreadView({
     if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
       pendingObservedContentScrollSyncKeyRef.current = null
       syncThreadScrollAfterContentChange(key, {
-        smoothFollow: latestAssistantTurnStateRef.current?.isStreaming === true,
+        smoothFollow: latestAssistantMessageStateRef.current?.isStreaming === true,
       })
       return
     }
@@ -6217,7 +6225,7 @@ function VisibleThreadView({
       if (!pendingKey) return
       if (smoothFollowScrollRef.current?.key === pendingKey) return
       syncThreadScrollAfterContentChange(pendingKey, {
-        smoothFollow: latestAssistantTurnStateRef.current?.isStreaming === true,
+        smoothFollow: latestAssistantMessageStateRef.current?.isStreaming === true,
       })
     })
   }
@@ -6695,9 +6703,9 @@ function VisibleThreadView({
     syncThreadScrollAfterContentChange(key)
   })
 
-  function readThreadTurnMotion(turnID: string, isLive = false): ThreadTurnMotion {
-    const renderedTurnIDs = renderedTurnIDsByScrollKeyRef.current[effectiveScrollStateKey]
-    if (!renderedTurnIDs || renderedTurnIDs.has(turnID) || !isThreadVisible) return "history"
+  function readThreadMessageMotion(messageID: string, isLive = false): ThreadMessageMotion {
+    const renderedMessageIDs = renderedMessageIDsByScrollKeyRef.current[effectiveScrollStateKey]
+    if (!renderedMessageIDs || renderedMessageIDs.has(messageID) || !isThreadVisible) return "history"
     return isLive ? "live" : "new"
   }
 
@@ -6727,17 +6735,17 @@ function VisibleThreadView({
     }
   }, [])
 
-  const handleCopyAssistantResponse = useEffectEvent(async (turnID: string, text: string) => {
+  const handleCopyAssistantResponse = useEffectEvent(async (messageID: string, text: string) => {
     try {
       await writeTextToClipboard(text)
-      setCopiedResponseTurnID(turnID)
+      setCopiedResponseMessageID(messageID)
 
       if (copiedResponseTimeoutRef.current !== null) {
         window.clearTimeout(copiedResponseTimeoutRef.current)
       }
 
       copiedResponseTimeoutRef.current = window.setTimeout(() => {
-        setCopiedResponseTurnID((current) => (current === turnID ? null : current))
+        setCopiedResponseMessageID((current) => (current === messageID ? null : current))
         copiedResponseTimeoutRef.current = null
       }, 1600)
     } catch (error) {
@@ -6745,17 +6753,17 @@ function VisibleThreadView({
     }
   })
 
-  const handleCopyUserMessage = useEffectEvent(async (turnID: string, text: string) => {
+  const handleCopyUserMessage = useEffectEvent(async (messageID: string, text: string) => {
     try {
       await writeTextToClipboard(text)
-      setCopiedUserTurnID(turnID)
+      setCopiedUserThreadMessageID(messageID)
 
       if (copiedUserTimeoutRef.current !== null) {
         window.clearTimeout(copiedUserTimeoutRef.current)
       }
 
       copiedUserTimeoutRef.current = window.setTimeout(() => {
-        setCopiedUserTurnID((current) => (current === turnID ? null : current))
+        setCopiedUserThreadMessageID((current) => (current === messageID ? null : current))
         copiedUserTimeoutRef.current = null
       }, 1600)
     } catch (error) {
@@ -6957,37 +6965,37 @@ function VisibleThreadView({
     const threadColumn = threadColumnRef.current
     if (!threadColumn) return
 
-    const previousLatestAssistantTurnState = latestAssistantTurnStateRef.current
-    const previousActiveTurnCount = previousActiveTurnCountRef.current
-    const latestAssistantTurnState = readLatestAssistantTurnState(displayTurns)
-    const isCompletingLatestAssistantTurn = Boolean(
-      previousLatestAssistantTurnState &&
-      latestAssistantTurnState &&
-      previousLatestAssistantTurnState.id === latestAssistantTurnState.id &&
-      previousLatestAssistantTurnState.isStreaming &&
-      !latestAssistantTurnState.isStreaming,
+    const previousLatestAssistantMessageState = latestAssistantMessageStateRef.current
+    const previousActiveMessageCount = previousActiveMessageCountRef.current
+    const latestAssistantMessageState = readLatestAssistantMessageState(displayMessages)
+    const isCompletingLatestAssistantMessage = Boolean(
+      previousLatestAssistantMessageState &&
+      latestAssistantMessageState &&
+      previousLatestAssistantMessageState.id === latestAssistantMessageState.id &&
+      previousLatestAssistantMessageState.isStreaming &&
+      !latestAssistantMessageState.isStreaming,
     )
-    const isUpdatingSameStreamingAssistantTurn = Boolean(
-      previousLatestAssistantTurnState &&
-      latestAssistantTurnState &&
-      previousLatestAssistantTurnState.id === latestAssistantTurnState.id &&
-      previousLatestAssistantTurnState.isStreaming &&
-      latestAssistantTurnState.isStreaming &&
-      previousActiveTurnCount === displayTurns.length,
+    const isUpdatingSameStreamingAssistantMessage = Boolean(
+      previousLatestAssistantMessageState &&
+      latestAssistantMessageState &&
+      previousLatestAssistantMessageState.id === latestAssistantMessageState.id &&
+      previousLatestAssistantMessageState.isStreaming &&
+      latestAssistantMessageState.isStreaming &&
+      previousActiveMessageCount === displayMessages.length,
     )
 
-    if (isCompletingLatestAssistantTurn) {
+    if (isCompletingLatestAssistantMessage) {
       followScrollSyncSuppressedUntilRef.current = Date.now() + THREAD_COMPLETION_SCROLL_SYNC_SUPPRESS_MS
     }
 
     syncThreadScrollAfterContentChange(effectiveScrollStateKey, {
-      preserveFollowPosition: isCompletingLatestAssistantTurn,
-      smoothFollow: isUpdatingSameStreamingAssistantTurn,
+      preserveFollowPosition: isCompletingLatestAssistantMessage,
+      smoothFollow: isUpdatingSameStreamingAssistantMessage,
     })
-    latestAssistantTurnStateRef.current = latestAssistantTurnState
-    previousActiveTurnCountRef.current = displayTurns.length
+    latestAssistantMessageStateRef.current = latestAssistantMessageState
+    previousActiveMessageCountRef.current = displayMessages.length
   }, [
-    displayTurns,
+    displayMessages,
     effectiveScrollStateKey,
     pendingPermissionRequests.length,
     permissionRequestActionRequestID,
@@ -7000,12 +7008,12 @@ function VisibleThreadView({
   })
 
   useLayoutEffect(() => {
-    const renderedTurnIDs = renderedTurnIDsByScrollKeyRef.current[effectiveScrollStateKey] ?? new Set<string>()
-    for (const turnID of visibleTurnIDs) {
-      renderedTurnIDs.add(turnID)
+    const renderedMessageIDs = renderedMessageIDsByScrollKeyRef.current[effectiveScrollStateKey] ?? new Set<string>()
+    for (const messageID of visibleMessageIDs) {
+      renderedMessageIDs.add(messageID)
     }
-    renderedTurnIDsByScrollKeyRef.current[effectiveScrollStateKey] = renderedTurnIDs
-  }, [effectiveScrollStateKey, visibleTurnIDsKey])
+    renderedMessageIDsByScrollKeyRef.current[effectiveScrollStateKey] = renderedMessageIDs
+  }, [effectiveScrollStateKey, visibleMessageIDsKey])
 
   function handleThreadScrollIntent(event?: { currentTarget: HTMLDivElement }) {
     cancelSmoothFollowScroll()
@@ -7096,50 +7104,50 @@ function VisibleThreadView({
     saveThreadScrollSnapshotValue(effectiveScrollStateKey, snapshot)
   }
 
-  function toggleProcessTraceRow(turnID: string, expanded: boolean, collapsing: boolean) {
+  function toggleProcessTraceRow(messageID: string, expanded: boolean, collapsing: boolean) {
     const threadColumn = threadColumnRef.current
     if (threadColumn) {
       detachThreadScrollFromFollow(threadColumn, effectiveScrollStateKey)
     }
 
     setThreadViewUiState((current) => {
-      const processTraceCollapseMotionByTurnID = {
-        ...current.processTraceCollapseMotionByTurnID,
+      const processTraceCollapseMotionByMessageID = {
+        ...current.processTraceCollapseMotionByMessageID,
       }
-      delete processTraceCollapseMotionByTurnID[turnID]
+      delete processTraceCollapseMotionByMessageID[messageID]
 
       return {
         ...current,
-        processTraceCollapseMotionByTurnID,
-        processTraceExpansionByTurnID: {
-          ...current.processTraceExpansionByTurnID,
-          [turnID]: collapsing ? true : !expanded,
+        processTraceCollapseMotionByMessageID,
+        processTraceExpansionByMessageID: {
+          ...current.processTraceExpansionByMessageID,
+          [messageID]: collapsing ? true : !expanded,
         },
       }
     })
   }
 
   function renderDisplayRow(row: ThreadDisplayRow) {
-    if (row.kind === "user-turn") {
-      const { turn, turnIndex } = row
+    if (row.kind === "user-message") {
+      const { message, messageIndex } = row
       return (
-        <UserTurnArticle
+        <UserThreadMessageArticle
           key={row.rowID}
-          copied={copiedUserTurnID === turn.id}
-          motion={readThreadTurnMotion(turn.id)}
+          copied={copiedUserThreadMessageID === message.id}
+          motion={readThreadMessageMotion(message.id)}
           onCopy={handleCopyUserMessage}
-          turn={turn}
+          message={message}
           diffCard={
-            shouldRenderDiffOnStandaloneUserTurn(displayTurns, turnIndex, turn) ? (
-              <TurnDiffCard
-                turnID={turn.id}
-                diffSummary={turn.diffSummary}
+            shouldRenderDiffOnStandaloneUserMessage(displayMessages, messageIndex, message) ? (
+              <MessageDiffCard
+                messageID={message.id}
+                diffSummary={message.diffSummary}
                 activeSessionDiff={activeSessionDiff}
-                allowWorkspaceDiffFallback={turnIndex === displayTurns.length - 1}
+                allowWorkspaceDiffFallback={messageIndex === displayMessages.length - 1}
                 onFileChangeSelect={onFileChangeSelect}
-                onTurnDiffSummaryHydrate={onTurnDiffSummaryHydrate}
-                onTurnDiffRestore={onTurnDiffRestore}
-                onTurnDiffReview={onTurnDiffReview}
+                onMessageDiffSummaryHydrate={onMessageDiffSummaryHydrate}
+                onMessageDiffRestore={onMessageDiffRestore}
+                onMessageDiffReview={onMessageDiffReview}
               />
             ) : null
           }
@@ -7156,7 +7164,7 @@ function VisibleThreadView({
           pendingPermissionRequests={pendingPermissionRequests}
           permissionRequestActionError={permissionRequestActionError}
           permissionRequestActionRequestID={permissionRequestActionRequestID}
-          motion={readThreadTurnMotion(
+          motion={readThreadMessageMotion(
             pendingPermissionRequests[0]?.id ? `permission-request:${pendingPermissionRequests[0].id}` : "permission-request",
           )}
           onPermissionRequestResponse={onPermissionRequestResponse}
@@ -7165,7 +7173,7 @@ function VisibleThreadView({
     }
 
     if (row.kind === "process-header") {
-      const duration = formatAssistantProcessTraceDuration(row.blocks, row.turn.runtime)
+      const duration = formatAssistantProcessTraceDuration(row.blocks, row.message.runtime)
       const summary = summarizeProcessTraceBlocks(row.blocks)
 
       return (
@@ -7180,21 +7188,23 @@ function VisibleThreadView({
           )}
           data-depth="0"
           data-kind="process-header"
-          data-turn-id={row.turnID}
-          data-turn-motion={readThreadTurnMotion(row.turnID, row.turn.isStreaming)}
+          data-turn-id={row.messageID}
+          data-thread-message-id={row.messageID}
+          data-turn-motion={readThreadMessageMotion(row.messageID, row.message.isStreaming)}
+          data-thread-message-motion={readThreadMessageMotion(row.messageID, row.message.isStreaming)}
         >
           <AssistantProcessTraceHeader
             duration={duration}
             isExpanded={row.expanded}
             summary={summary}
-            onToggle={() => toggleProcessTraceRow(row.turnID, row.expanded, row.collapsing)}
+            onToggle={() => toggleProcessTraceRow(row.messageID, row.expanded, row.collapsing)}
           />
         </article>
       )
     }
 
     if (row.kind === "process-item") {
-      const isLatestAssistantMessage = isAssistantLatestRenderableTurn(displayTurns, row.turnIndex, row.turn)
+      const isLatestAssistantMessage = isAssistantLatestRenderableMessage(displayMessages, row.messageIndex, row.message)
 
       return (
         <article
@@ -7208,13 +7218,14 @@ function VisibleThreadView({
           )}
           data-depth="1"
           data-kind="process-item"
-          data-turn-id={row.turnID}
+          data-turn-id={row.messageID}
+          data-thread-message-id={row.messageID}
           role="region"
           aria-label={traceSectionTitle(row.section)}
         >
           <div className={getAssistantTraceBlockStackClassName(row.section)}>
             <TraceItemView
-              assistantTurnPhase={row.turn.runtime.phase}
+              assistantMessagePhase={row.message.runtime.phase}
               item={row.item}
               isQuestionAnswered={Boolean(
                 row.item.questionPrompt?.answered ||
@@ -7236,24 +7247,24 @@ function VisibleThreadView({
       )
     }
 
-    const { ephemeralHint, insertedUserTurns, processPrefixItems, turn, turnIndex } = row
-    const traceItems = turn.items
-    const sideChatAnchorMessageID = turn.messageID ?? turn.id
-    const turnMessageID = getSessionMessageIDForTurn(turn)
-    const canExposeResponseActions = !isSessionRunning && isAssistantFinalMessageInUserTurn(displayTurns, turnIndex, turn)
-    const branchOptions = canExposeResponseActions ? messageTree?.branchOptionsByParentID[turnMessageID] ?? [] : []
+    const { ephemeralHint, insertedUserMessages, processPrefixItems, message, messageIndex } = row
+    const traceItems = message.items
+    const sideChatAnchorMessageID = message.messageID ?? message.id
+    const threadMessageID = getSessionMessageIDForTurn(message)
+    const canExposeResponseActions = !isSessionRunning && isAssistantFinalMessageInUserMessage(displayMessages, messageIndex, message)
+    const branchOptions = canExposeResponseActions ? messageTree?.branchOptionsByParentID[threadMessageID] ?? [] : []
     const existingSideChatCount = sideChatCountsByAnchorMessageID[sideChatAnchorMessageID] ?? 0
     const lastResponseItems = canExposeResponseActions ? getLastAssistantResponseSectionItems(traceItems, assistantTraceVisibility) : []
     const responseCopyText = canExposeResponseActions ? buildAssistantResponseCopyText(lastResponseItems) : ""
     const canOpenSideChat =
       !readOnlySideChat &&
-      !turn.isStreaming &&
+      !message.isStreaming &&
       canExposeResponseActions &&
       lastResponseItems.length > 0 &&
       Boolean(onOpenSideChat)
     const canForkFromMessage =
       !readOnlySideChat &&
-      !turn.isStreaming &&
+      !message.isStreaming &&
       canExposeResponseActions &&
       Boolean(onForkFromMessage)
     const activeInlineSideChat = sideChatSession?.origin?.anchorMessageID === sideChatAnchorMessageID ? sideChatSession : null
@@ -7271,48 +7282,50 @@ function VisibleThreadView({
         : existingSideChatCount > 0
           ? `${existingSideChatCount} side chat thread${existingSideChatCount === 1 ? "" : "s"}`
           : "Open a side chat for this reply"
-    const hasAssistantDiffSummary = normalizeTurnDiffSummary(turn.diffSummary).length > 0
-    const trailingUserDiffTurn = hasAssistantDiffSummary ? null : getAssistantTrailingUserDiffTurn(displayTurns, turnIndex, turn)
+    const hasAssistantDiffSummary = normalizeMessageDiffSummary(message.diffSummary).length > 0
+    const trailingUserDiffMessage = hasAssistantDiffSummary ? null : getAssistantTrailingUserDiffMessage(displayMessages, messageIndex, message)
     const shouldRenderResponseActions = Boolean(
       responseCopyText ||
       canOpenSideChat ||
       canForkFromMessage ||
       branchOptions.length > 1,
     )
-    const isLatestAssistantMessage = isAssistantLatestRenderableTurn(displayTurns, turnIndex, turn)
+    const isLatestAssistantMessage = isAssistantLatestRenderableMessage(displayMessages, messageIndex, message)
 
     return (
       <article
         key={row.rowID}
         className="turn assistant-turn"
-        data-turn-id={turn.id}
-        data-turn-motion={readThreadTurnMotion(turn.id, turn.isStreaming)}
+        data-turn-id={message.id}
+        data-thread-message-id={message.id}
+        data-turn-motion={readThreadMessageMotion(message.id, message.isStreaming)}
+        data-thread-message-motion={readThreadMessageMotion(message.id, message.isStreaming)}
       >
-        <div className={turn.isStreaming ? "assistant-shell is-sectioned is-streaming" : "assistant-shell is-sectioned"}>
+        <div className={message.isStreaming ? "assistant-shell is-sectioned is-streaming" : "assistant-shell is-sectioned"}>
           {ephemeralHint ? (
             <>
-              <AssistantTurnPlaceholder message={ephemeralHint} />
-              {insertedUserTurns.map((insertedTurn) => (
-                <UserTurnArticle
-                  key={insertedTurn.id}
+              <AssistantMessagePlaceholder message={ephemeralHint} />
+              {insertedUserMessages.map((insertedMessage) => (
+                <UserThreadMessageArticle
+                  key={insertedMessage.id}
                   className="assistant-stream-insertion-user-turn"
-                  copied={copiedUserTurnID === insertedTurn.id}
-                  motion={readThreadTurnMotion(insertedTurn.id)}
+                  copied={copiedUserThreadMessageID === insertedMessage.id}
+                  motion={readThreadMessageMotion(insertedMessage.id)}
                   onCopy={handleCopyUserMessage}
-                  turn={insertedTurn}
+                  message={insertedMessage}
                 />
               ))}
             </>
           ) : (
-            <AssistantTurnSectionsWithStreamInsertions
+            <AssistantMessageSectionsWithStreamInsertions
               answeredQuestionIDs={answeredQuestionIDs}
-              assistantTurnPhase={turn.runtime.phase}
+              assistantMessagePhase={message.runtime.phase}
               isQuestionAnswerDisabled={isResolvingPermissionRequest || pendingPermissionRequests.length > 0}
-              copiedUserTurnID={copiedUserTurnID}
-              insertedUserTurns={insertedUserTurns}
+              copiedUserThreadMessageID={copiedUserThreadMessageID}
+              insertedUserMessages={insertedUserMessages}
               isLatestMessage={isLatestAssistantMessage}
               items={traceItems}
-              getTurnMotion={readThreadTurnMotion}
+              getMessageMotion={readThreadMessageMotion}
               onCopyUserMessage={handleCopyUserMessage}
               onOpenImagePreview={handleOpenImagePreview}
               onAskUserQuestionAnswer={onAskUserQuestionAnswer}
@@ -7322,35 +7335,35 @@ function VisibleThreadView({
               onProposedPlanConfirm={onProposedPlanConfirm}
               processPrefixItems={processPrefixItems}
               renderProcessTrace={false}
-              runtime={turn.runtime}
-              showFileChanges={!turn.isStreaming}
-              shouldCollapseReasoningAndTools={canCollapseAssistantProcessTrace(turn)}
+              runtime={message.runtime}
+              showFileChanges={!message.isStreaming}
+              shouldCollapseReasoningAndTools={canCollapseAssistantProcessTrace(message)}
               traceVisibility={assistantTraceVisibility}
             />
           )}
           {hasAssistantDiffSummary ? (
-            <TurnDiffCard
-              turnID={turn.id}
-              diffSummary={turn.diffSummary}
+            <MessageDiffCard
+              messageID={message.id}
+              diffSummary={message.diffSummary}
               activeSessionDiff={activeSessionDiff}
               allowWorkspaceDiffFallback={isLatestAssistantMessage}
-              patchSourceFileChanges={collectAssistantPatchFileChanges(turn)}
+              patchSourceFileChanges={collectAssistantPatchFileChanges(message)}
               onFileChangeSelect={onFileChangeSelect}
-              onTurnDiffSummaryHydrate={onTurnDiffSummaryHydrate}
-              onTurnDiffRestore={onTurnDiffRestore}
-              onTurnDiffReview={onTurnDiffReview}
+              onMessageDiffSummaryHydrate={onMessageDiffSummaryHydrate}
+              onMessageDiffRestore={onMessageDiffRestore}
+              onMessageDiffReview={onMessageDiffReview}
             />
-          ) : trailingUserDiffTurn ? (
-            <TurnDiffCard
-              turnID={trailingUserDiffTurn.id}
-              diffSummary={trailingUserDiffTurn.diffSummary}
+          ) : trailingUserDiffMessage ? (
+            <MessageDiffCard
+              messageID={trailingUserDiffMessage.id}
+              diffSummary={trailingUserDiffMessage.diffSummary}
               activeSessionDiff={activeSessionDiff}
               allowWorkspaceDiffFallback={isLatestAssistantMessage}
-              patchSourceFileChanges={collectAssistantPatchFileChanges(turn)}
+              patchSourceFileChanges={collectAssistantPatchFileChanges(message)}
               onFileChangeSelect={onFileChangeSelect}
-              onTurnDiffSummaryHydrate={onTurnDiffSummaryHydrate}
-              onTurnDiffRestore={onTurnDiffRestore}
-              onTurnDiffReview={onTurnDiffReview}
+              onMessageDiffSummaryHydrate={onMessageDiffSummaryHydrate}
+              onMessageDiffRestore={onMessageDiffRestore}
+              onMessageDiffReview={onMessageDiffReview}
             />
           ) : null}
           {shouldRenderResponseActions ? (
@@ -7381,7 +7394,7 @@ function VisibleThreadView({
                   permissionRequestActionRequestID={sideChatPermissionRequestActionRequestID}
                   session={activeInlineSideChat}
                   sideChatSessions={sideChatSessionsByAnchorMessageID[sideChatAnchorMessageID] ?? [activeInlineSideChat]}
-                  turns={sideChatTurns}
+                  turns={sideChatMessages}
                   isThreadVisible={isThreadVisible}
                   readScrollSnapshot={readScrollSnapshot}
                   saveScrollSnapshot={saveScrollSnapshot}
@@ -7409,12 +7422,12 @@ function VisibleThreadView({
                   <button
                     className={joinClassNames(
                       "assistant-response-action-button message-action-icon-button",
-                      copiedResponseTurnID === turn.id && "is-active",
+                      copiedResponseMessageID === message.id && "is-active",
                     )}
                     type="button"
-                    aria-label={copiedResponseTurnID === turn.id ? "Copied assistant response" : "Copy assistant response"}
-                    title={copiedResponseTurnID === turn.id ? "Copied" : "Copy"}
-                    onClick={() => void handleCopyAssistantResponse(turn.id, responseCopyText)}
+                    aria-label={copiedResponseMessageID === message.id ? "Copied assistant response" : "Copy assistant response"}
+                    title={copiedResponseMessageID === message.id ? "Copied" : "Copy"}
+                    onClick={() => void handleCopyAssistantResponse(message.id, responseCopyText)}
                   >
                     <CopyIcon />
                   </button>
@@ -7440,7 +7453,7 @@ function VisibleThreadView({
                     type="button"
                     aria-label="Fork from here"
                     title="Fork from here"
-                    onClick={() => void onForkFromMessage?.(turnMessageID)}
+                    onClick={() => void onForkFromMessage?.(threadMessageID)}
                   >
                     <ForkIcon />
                   </button>
@@ -7493,7 +7506,7 @@ function VisibleThreadView({
             <div className="assistant-shell">
               <header className="assistant-header">
                 <div>
-                  <span className="label">Agent Turn</span>
+                  <span className="label">Agent Message</span>
                   <h3>No session selected</h3>
                 </div>
               </header>

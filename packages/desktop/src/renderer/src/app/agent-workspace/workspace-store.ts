@@ -42,7 +42,7 @@ import {
   conversationActivityMapsAreEqual,
   createConversationStore,
   type ConversationActivityMap,
-  type ConversationMap,
+  type ConversationMessageMap,
   type ConversationStoreApi,
 } from "./conversation-store"
 
@@ -321,7 +321,7 @@ export interface AgentStreamSliceState {
   conversationActivityBySession: ConversationActivityMap
   conversationStore: ConversationStoreApi
   contextUsageBySession: Record<string, SessionContextUsage>
-  conversations: ConversationMap
+  conversations: ConversationMessageMap
   messageTreeBySession: Record<string, SessionMessageTree>
   pendingConversationInputsBySession: Record<string, PendingConversationInput[]>
   pendingPermissionRequestsBySession: Record<string, PermissionRequest[]>
@@ -394,7 +394,7 @@ export interface AgentStreamSliceActions {
   setContextUsageBySession: (
     update: WorkspaceStateUpdater<Record<string, SessionContextUsage>>,
   ) => void
-  setConversations: (update: WorkspaceStateUpdater<ConversationMap>) => void
+  setConversations: (update: WorkspaceStateUpdater<ConversationMessageMap>) => void
   setMessageTreeBySession: (update: WorkspaceStateUpdater<Record<string, SessionMessageTree>>) => void
   setPendingConversationInputsBySession: (
     update: WorkspaceStateUpdater<Record<string, PendingConversationInput[]>>,

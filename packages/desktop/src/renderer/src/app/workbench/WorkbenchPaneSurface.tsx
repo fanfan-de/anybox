@@ -20,7 +20,7 @@ import type {
   SessionDiffSummary,
   SessionModelSelection,
   ToolPermissionMode,
-  UserTurn,
+  UserThreadMessage,
   WorkspaceGroup,
 } from "../types"
 import { useProjectComposer } from "../use-project-composer"
@@ -28,7 +28,7 @@ import { RendererProfiler, createRendererProfilerOnRender } from "../perf-profil
 import { isSideChatSession } from "../workspace"
 import { ThreadView, type ThreadScrollSnapshot } from "../thread/ThreadView"
 import type { WorkbenchPaneState } from "../agent-workspace/workspace-derived-state"
-import { useConversationTurns, type ConversationStoreApi } from "../agent-workspace/conversation-store"
+import { useConversationMessages, type ConversationStoreApi } from "../agent-workspace/conversation-store"
 
 const THREAD_TOP_RESET_THRESHOLD_PX = 2
 const SESSION_BAG_DESCRIPTION_MAX_LENGTH = 2000
@@ -400,16 +400,16 @@ export interface WorkbenchPaneSurfaceProps {
     selectedModel?: string | null
     selectedSkillIDs?: string[]
     sessionID?: string | null
-    steerQueuedTurnID?: string
-    submissionMode?: UserTurn["submissionMode"]
+    steerQueuedMessageID?: string
+    submissionMode?: UserThreadMessage["submissionMode"]
     tabKey?: string | null
     waitForPendingModelSelection?: (() => Promise<void>) | null
   }) => Promise<void>
   onSessionModelSelectionChange: (sessionID: string, selection: SessionModelSelection | undefined) => void
   onSetDraft: (tabKey: string, value: ComposerDraftState) => void
-  onTurnDiffRestore: (diffs: SessionDiffFile[], sessionID: string | null, paneID: string) => void | Promise<void>
-  onTurnDiffReview: (files: string[], sessionID: string | null, paneID: string) => void | Promise<void>
-  onTurnDiffSummaryHydrate: (turnID: string, diffSummary: SessionDiffSummary, sessionID?: string | null) => void | Promise<void>
+  onMessageDiffRestore: (diffs: SessionDiffFile[], sessionID: string | null, paneID: string) => void | Promise<void>
+  onMessageDiffReview: (files: string[], sessionID: string | null, paneID: string) => void | Promise<void>
+  onMessageDiffSummaryHydrate: (messageID: string, diffSummary: SessionDiffSummary, sessionID?: string | null) => void | Promise<void>
 }
 
 function InactiveWorkbenchPaneSurface({
@@ -493,17 +493,17 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   onSend,
   onSessionModelSelectionChange,
   onSetDraft,
-  onTurnDiffRestore,
-  onTurnDiffReview,
-  onTurnDiffSummaryHydrate,
+  onMessageDiffRestore,
+  onMessageDiffReview,
+  onMessageDiffSummaryHydrate,
 }: WorkbenchPaneSurfaceProps) {
   const { t } = useI18n()
   const threadColumnRef = useRef<HTMLDivElement | null>(null)
   const bagOperationVersionRef = useRef(0)
   const [bagDialogState, setBagDialogState] = useState<SessionBagDialogState | null>(null)
   const [bagDescription, setBagDescription] = useState("")
-  const activeTurns = useConversationTurns(conversationStore, pane.sessionID)
-  const activeSideChatTurns = useConversationTurns(conversationStore, pane.activeSideChatSession?.id ?? null)
+  const activeMessages = useConversationMessages(conversationStore, pane.sessionID)
+  const activeSideChatMessages = useConversationMessages(conversationStore, pane.activeSideChatSession?.id ?? null)
   const composerParentMessagePreview = pane.composerParentMessageID
     ? pane.messageTree?.nodesByID[pane.composerParentMessageID]?.preview
     : undefined
@@ -596,11 +596,11 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
       paneID: pane.id,
       sessionID: pane.sessionID,
       tabKey: pane.tabKey,
-      turnCount: activeTurns.length,
-      sideChatTurnCount: activeSideChatTurns.length,
+      messageCount: activeMessages.length,
+      sideChatMessageCount: activeSideChatMessages.length,
       isThreadVisible: pane.isActivePanel,
     })),
-    [activeSideChatTurns.length, activeTurns.length, pane.id, pane.isActivePanel, pane.sessionID, pane.tabKey],
+    [activeSideChatMessages.length, activeMessages.length, pane.id, pane.isActivePanel, pane.sessionID, pane.tabKey],
   )
 
   async function discardPreparedSessionBag(prepare: SessionBagPrepareResult | undefined) {
@@ -739,7 +739,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
               toolPermissionMode={toolPermissionMode}
               toolPermissionModeError={toolPermissionModeError}
               onToolPermissionModeChange={onToolPermissionModeChange}
-              onOpenReview={() => onTurnDiffReview([], pane.sessionID, pane.id)}
+              onOpenReview={() => onMessageDiffReview([], pane.sessionID, pane.id)}
               onOpenSubagentSession={onOpenSubagentSession}
               skillOptions={composer.skillOptions}
               selectedSkillIDs={composer.selectedSkillIDs}
@@ -861,7 +861,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   pendingConversationInputs={pane.pendingConversationInputs}
                   permissionRequestActionError={permissionRequestActionError}
                   permissionRequestActionRequestID={permissionRequestActionRequestID}
-                  activeTurns={activeTurns}
+                  activeMessages={activeMessages}
                   messageTree={pane.messageTree}
                   sideChatAttachments={pane.activeSideChatAttachments}
                   sideChatCountsByAnchorMessageID={pane.sideChatCountsByAnchorMessageID}
@@ -875,7 +875,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   sideChatPermissionRequestActionRequestID={permissionRequestActionRequestID}
                   sideChatSession={pane.activeSideChatSession}
                   sideChatSessionsByAnchorMessageID={pane.sideChatSessionsByAnchorMessageID}
-                  sideChatTurns={activeSideChatTurns}
+                  sideChatMessages={activeSideChatMessages}
                   sideChatPlacement={sideChatPlacement === "right-sidebar" ? "external" : "inline"}
                   scrollStateKey={pane.tabKey}
                   threadColumnRef={threadColumnRef}
@@ -896,9 +896,9 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                     })
                   }
                   onFileChangeSelect={(file) => onInspectFileInSidebar(file, pane.sessionID, pane.id)}
-                  onTurnDiffRestore={(files) => onTurnDiffRestore(files, pane.sessionID, pane.id)}
-                  onTurnDiffReview={(files) => onTurnDiffReview(files, pane.sessionID, pane.id)}
-                  onTurnDiffSummaryHydrate={(turnID, diffSummary) => onTurnDiffSummaryHydrate(turnID, diffSummary, pane.sessionID)}
+                  onMessageDiffRestore={(files) => onMessageDiffRestore(files, pane.sessionID, pane.id)}
+                  onMessageDiffReview={(files) => onMessageDiffReview(files, pane.sessionID, pane.id)}
+                  onMessageDiffSummaryHydrate={(messageID, diffSummary) => onMessageDiffSummaryHydrate(messageID, diffSummary, pane.sessionID)}
                   onArtifactLinkOpen={(target) =>
                     onArtifactLinkOpen?.({
                       paneID: pane.id,
@@ -970,7 +970,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                       selectedModel: input.selectedModel,
                       selectedSkillIDs: input.selectedSkillIDs,
                       sessionID: pane.activeSideChatSession?.id,
-                      steerQueuedTurnID: input.steerQueuedTurnID,
+                      steerQueuedMessageID: input.steerQueuedMessageID,
                       submissionMode: input.submissionMode,
                       tabKey: pane.activeSideChatTabKey,
                       waitForPendingModelSelection: input.waitForPendingModelSelection,
@@ -996,14 +996,14 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   hasPendingPermissionRequests={pane.pendingPermissionRequests.length > 0 || isResolvingPermissionRequest}
                   isCancelling={pane.isCancelling}
                   pendingInputs={pendingSubmissionInputs}
-                  onSteerQueuedTurn={(input) => {
+                  onSteerQueuedMessage={(input) => {
                     void onSend({
                       paneID: pane.id,
                       selectedReasoningEffort: composer.selectedReasoningEffort,
                       selectedModel: composer.selectedModel,
                       selectedSkillIDs: composer.selectedSkillIDs,
                       sessionID: pane.sessionID,
-                      steerQueuedTurnID: input.id,
+                      steerQueuedMessageID: input.id,
                       tabKey: pane.tabKey,
                       waitForPendingModelSelection: composer.awaitPendingModelSelection,
                     })

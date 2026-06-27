@@ -88,17 +88,17 @@ ComposerUtilityBar
 
 ## 4. 内容模型
 
-`ThreadView` 输入的核心数据是 `activeTurns: Turn[]`。数据层级可以按下面的树理解：
+`ThreadView` 输入的核心数据是 `activeMessages: ThreadMessage[]`。数据层级可以按下面的树理解：
 
 ```text
-activeTurns: Turn[]
-├─ UserTurn  # 用户输入回合
+activeMessages: ThreadMessage[]
+├─ UserThreadMessage  # 用户输入回合
 │  ├─ text / displayText  # 原始文本与展示文本
 │  ├─ references[]  # @ 文件、链接等引用
 │  ├─ attachments[]  # 图片、PDF 等附件
 │  ├─ diffSummary?  # 该输入关联的变更摘要
 │  └─ submissionMode?  # 普通发送或 steer
-└─ AssistantTurn  # agent 输出回合
+└─ AssistantThreadMessage  # agent 输出回合
    ├─ messageID?  # 会话树中的消息 ID
    ├─ runtime  # 执行状态
    │  ├─ phase  # running/completed/cancelled 等阶段
@@ -160,7 +160,7 @@ streaming 更新需要保持历史 trace 的 structural sharing：
 ```mermaid
 flowchart LR
   subgraph data["数据输入"]
-    turns["activeTurns: Turn[]"]
+    messages["activeMessages: ThreadMessage[]"]
     session["activeSession / messageTree"]
     pending["pendingPermissionRequests"]
   end
@@ -179,7 +179,7 @@ flowchart LR
 
   subgraph rowRender["行级渲染"]
     dispatch["renderDisplayRow(row)"]
-    user["UserTurnArticle"]
+    user["UserThreadMessageArticle"]
     permission["PermissionRequestInlinePrompt"]
     processHeader["Processed header"]
     processItem["process item row"]
@@ -187,7 +187,7 @@ flowchart LR
   end
 
   subgraph assistantRender["Assistant 内部分块"]
-    sections["AssistantTurnSections"]
+    sections["AssistantMessageSections"]
     blocks["AssistantTraceBlockView"]
     trace["TraceItemView"]
     renderer["traceItemRenderers[item.kind]"]
@@ -200,7 +200,7 @@ flowchart LR
     lightbox["ImageLightbox"]
   end
 
-  turns --> displayRows
+  messages --> displayRows
   session --> displayRows
   pending --> displayRows
   displayRows --> virtual
@@ -254,10 +254,10 @@ ThreadView
 ```text
 renderDisplayRow(row)
 ├─ row.kind = user-turn  # 用户消息
-│  └─ UserTurnArticle
-│     ├─ UserTurnBubble
-│     │  └─ CollapsibleUserTurnText
-│     ├─ TurnDiffCard?
+│  └─ UserThreadMessageArticle
+│     ├─ UserThreadMessageBubble
+│     │  └─ CollapsibleUserMessageText
+│     ├─ MessageDiffCard?
 │     └─ copy user message button
 ├─ row.kind = permission-request  # 阻塞式权限决策
 │  └─ PermissionRequestInlinePrompt
@@ -270,15 +270,15 @@ renderDisplayRow(row)
 └─ row.kind = assistant-turn  # assistant 回合主体
    └─ article.turn.assistant-turn
       └─ div.assistant-shell
-         ├─ AssistantTurnPlaceholder?  # streaming/ephemeral 状态
-         ├─ inserted UserTurnArticle[]?  # 流式插入的用户 steer
-         ├─ AssistantTurnSectionsWithStreamInsertions
-         │  └─ AssistantTurnSections
+         ├─ AssistantMessagePlaceholder?  # streaming/ephemeral 状态
+         ├─ inserted UserThreadMessageArticle[]?  # 流式插入的用户 steer
+         ├─ AssistantMessageSectionsWithStreamInsertions
+         │  └─ AssistantMessageSections
          │     ├─ AssistantProcessTraceDisclosure?
          │     └─ AssistantTraceBlockView[]
          │        └─ AssistantTraceSection
          │           └─ TraceItemView[]
-         ├─ TurnDiffCard?
+         ├─ MessageDiffCard?
          └─ div.assistant-response-side-chat?  # 回复动作与 inline side chat
             ├─ InlineSideChatThread?
             └─ div.assistant-response-actions
@@ -545,7 +545,7 @@ User-turn 文件变更卡片使用一组专用 semantic token：
 
 改动 thread view 时，按以下顺序检查：
 
-1. 是否改变了 `Turn` 或 `AssistantTraceItem` 的分组、显示、折叠规则。
+1. 是否改变了 `ThreadMessage` 或 `AssistantTraceItem` 的分组、显示、折叠规则。
 2. 是否影响 response、trace、file-change、permission、question、side chat 的视觉层级。
 3. 是否影响多 pane、窄屏、inline side chat 嵌套场景。
 4. 是否需要更新 `ThreadView.test.tsx` 或 `App.test.tsx` 中的行为断言。

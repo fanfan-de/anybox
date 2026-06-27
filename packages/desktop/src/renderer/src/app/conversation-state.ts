@@ -1,37 +1,37 @@
-import type { AssistantTurn, Turn } from "./types"
+import type { AssistantThreadMessage, ThreadMessage } from "./types"
 
-export type ConversationMap = Record<string, Turn[]>
+export type ConversationMessageMap = Record<string, ThreadMessage[]>
 export type SessionIDMap = Record<string, string>
 
-export function appendConversationTurns(conversations: ConversationMap, sessionID: string, nextTurns: Turn[]) {
+export function appendConversationMessages(conversations: ConversationMessageMap, sessionID: string, nextMessages: ThreadMessage[]) {
   return {
     ...conversations,
-    [sessionID]: [...(conversations[sessionID] ?? []), ...nextTurns],
+    [sessionID]: [...(conversations[sessionID] ?? []), ...nextMessages],
   }
 }
 
-export function updateAssistantTurn(
-  conversations: ConversationMap,
+export function updateAssistantThreadMessage(
+  conversations: ConversationMessageMap,
   sessionID: string,
-  turnID: string,
-  updater: (turn: AssistantTurn) => AssistantTurn,
+  assistantMessageID: string,
+  updater: (message: AssistantThreadMessage) => AssistantThreadMessage,
 ) {
-  const turns = conversations[sessionID] ?? []
+  const messages = conversations[sessionID] ?? []
   let updated = false
-  const nextTurns = turns.map((turn) => {
-    if (turn.kind !== "assistant" || turn.id !== turnID) return turn
+  const nextMessages = messages.map((message) => {
+    if (message.kind !== "assistant" || message.id !== assistantMessageID) return message
     updated = true
-    return updater(turn)
+    return updater(message)
   })
 
   if (!updated) return conversations
   return {
     ...conversations,
-    [sessionID]: nextTurns,
+    [sessionID]: nextMessages,
   }
 }
 
-export function ensureConversationSessions(conversations: ConversationMap, sessionIDs: string[]) {
+export function ensureConversationSessions(conversations: ConversationMessageMap, sessionIDs: string[]) {
   const next = { ...conversations }
   for (const sessionID of sessionIDs) {
     next[sessionID] ??= []
@@ -47,7 +47,7 @@ export function ensureAgentSessions(agentSessions: SessionIDMap, sessionIDs: str
   return next
 }
 
-export function removeConversationSession(conversations: ConversationMap, sessionID: string) {
+export function removeConversationSession(conversations: ConversationMessageMap, sessionID: string) {
   const next = { ...conversations }
   delete next[sessionID]
   return next

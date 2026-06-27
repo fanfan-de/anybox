@@ -1,39 +1,39 @@
 import { type SetStateAction, useRef, useSyncExternalStore } from "react"
-import type { AssistantTraceItem, AssistantTurn, Turn } from "../types"
+import type { AssistantTraceItem, AssistantThreadMessage, ThreadMessage } from "../types"
 
-export type ConversationMap = Record<string, Turn[]>
-export type ConversationStoreUpdater = SetStateAction<ConversationMap>
+export type ConversationMessageMap = Record<string, ThreadMessage[]>
+export type ConversationStoreUpdater = SetStateAction<ConversationMessageMap>
 
 export interface ConversationActivity {
-  hasStreamingAssistantTurn: boolean
-  turnCount: number
+  hasStreamingAssistantMessage: boolean
+  messageCount: number
 }
 
 export type ConversationActivityMap = Record<string, ConversationActivity>
 
 interface NormalizedSessionConversation {
   activity: ConversationActivity
-  traceItemsByTurnID: Record<string, AssistantTraceItem[]>
-  turnByID: Record<string, Turn>
-  turnIDs: string[]
-  turns: Turn[]
+  traceItemsByMessageID: Record<string, AssistantTraceItem[]>
+  messageByID: Record<string, ThreadMessage>
+  messageIDs: string[]
+  messages: ThreadMessage[]
 }
 
 export interface ConversationStoreApi {
   appendAssistantDelta: (
     sessionID: string,
-    turnID: string,
-    updater: (turn: AssistantTurn) => AssistantTurn,
+    assistantMessageID: string,
+    updater: (message: AssistantThreadMessage) => AssistantThreadMessage,
   ) => boolean
   getActivityBySession: () => ConversationActivityMap
-  getConversations: () => ConversationMap
+  getConversations: () => ConversationMessageMap
   getSessionActivity: (sessionID: string | null | undefined) => ConversationActivity
-  getSessionTurns: (sessionID: string | null | undefined) => Turn[]
+  getSessionMessages: (sessionID: string | null | undefined) => ThreadMessage[]
   hasSession: (sessionID: string | null | undefined) => boolean
-  replaceConversations: (nextConversations: ConversationMap) => boolean
+  replaceConversations: (nextConversations: ConversationMessageMap) => boolean
   replaceTraceItem: (
     sessionID: string,
-    turnID: string,
+    assistantMessageID: string,
     itemID: string,
     item: AssistantTraceItem,
   ) => boolean
@@ -47,27 +47,27 @@ interface ThreadDebugWatchOptions {
   sessionID?: string | null
 }
 
-interface ThreadDebugAssistantTurnSnapshot {
+interface ThreadDebugAssistantMessageSnapshot {
   sessionID: string
-  turn: AssistantTurn
+  message: AssistantThreadMessage
 }
 
 type ThreadDebugWatchSnapshot =
   | {
       kind: "latest-streaming"
-      snapshot: ThreadDebugAssistantTurnSnapshot
+      snapshot: ThreadDebugAssistantMessageSnapshot
     }
   | {
-      kind: "assistant-turns"
-      snapshots: ThreadDebugAssistantTurnSnapshot[]
+      kind: "assistant-messages"
+      snapshots: ThreadDebugAssistantMessageSnapshot[]
     }
 
 interface ThreadDebugApi {
-  getAssistantTurns: (sessionID?: string | null) => ThreadDebugAssistantTurnSnapshot[]
-  getConversations: () => ConversationMap
-  getSessionTurns: (sessionID: string) => Turn[]
-  getStreamingTurns: (sessionID?: string | null) => ThreadDebugAssistantTurnSnapshot[]
-  latestStreaming: (sessionID?: string | null) => ThreadDebugAssistantTurnSnapshot | null
+  getAssistantMessages: (sessionID?: string | null) => ThreadDebugAssistantMessageSnapshot[]
+  getConversations: () => ConversationMessageMap
+  getSessionMessages: (sessionID: string) => ThreadMessage[]
+  getStreamingMessages: (sessionID?: string | null) => ThreadDebugAssistantMessageSnapshot[]
+  latestStreaming: (sessionID?: string | null) => ThreadDebugAssistantMessageSnapshot | null
   sessionIDs: () => string[]
   unwatch: () => void
   watch: (options?: ThreadDebugWatchOptions | string | null) => () => void
@@ -79,45 +79,45 @@ declare global {
   }
 }
 
-const EMPTY_TURNS: Turn[] = []
+const EMPTY_MESSAGES: ThreadMessage[] = []
 const EMPTY_CONVERSATION_ACTIVITY: ConversationActivity = {
-  hasStreamingAssistantTurn: false,
-  turnCount: 0,
+  hasStreamingAssistantMessage: false,
+  messageCount: 0,
 }
 
-function resolveConversationUpdate(current: ConversationMap, update: ConversationStoreUpdater) {
-  return typeof update === "function" ? (update as (value: ConversationMap) => ConversationMap)(current) : update
+function resolveConversationUpdate(current: ConversationMessageMap, update: ConversationStoreUpdater) {
+  return typeof update === "function" ? (update as (value: ConversationMessageMap) => ConversationMessageMap)(current) : update
 }
 
-function createSessionConversation(turns: Turn[]): NormalizedSessionConversation {
-  const turnByID: Record<string, Turn> = {}
-  const traceItemsByTurnID: Record<string, AssistantTraceItem[]> = {}
-  const turnIDs: string[] = []
-  let hasStreamingAssistantTurn = false
+function createSessionConversation(messages: ThreadMessage[]): NormalizedSessionConversation {
+  const messageByID: Record<string, ThreadMessage> = {}
+  const traceItemsByMessageID: Record<string, AssistantTraceItem[]> = {}
+  const messageIDs: string[] = []
+  let hasStreamingAssistantMessage = false
 
-  for (const turn of turns) {
-    turnIDs.push(turn.id)
-    turnByID[turn.id] = turn
-    if (turn.kind === "assistant") {
-      traceItemsByTurnID[turn.id] = turn.items
-      hasStreamingAssistantTurn ||= Boolean(turn.isStreaming)
+  for (const message of messages) {
+    messageIDs.push(message.id)
+    messageByID[message.id] = message
+    if (message.kind === "assistant") {
+      traceItemsByMessageID[message.id] = message.items
+      hasStreamingAssistantMessage ||= Boolean(message.isStreaming)
     }
   }
 
   return {
     activity: {
-      hasStreamingAssistantTurn,
-      turnCount: turns.length,
+      hasStreamingAssistantMessage,
+      messageCount: messages.length,
     },
-    traceItemsByTurnID,
-    turnByID,
-    turnIDs,
-    turns,
+    traceItemsByMessageID,
+    messageByID,
+    messageIDs,
+    messages,
   }
 }
 
 function conversationActivityIsEqual(left: ConversationActivity, right: ConversationActivity) {
-  return left.hasStreamingAssistantTurn === right.hasStreamingAssistantTurn && left.turnCount === right.turnCount
+  return left.hasStreamingAssistantMessage === right.hasStreamingAssistantMessage && left.messageCount === right.messageCount
 }
 
 function conversationActivityMapsAreEqual(left: ConversationActivityMap, right: ConversationActivityMap) {
@@ -132,7 +132,7 @@ function conversationActivityMapsAreEqual(left: ConversationActivityMap, right: 
   })
 }
 
-function conversationsAreEquivalent(left: ConversationMap, right: ConversationMap) {
+function conversationsAreEquivalent(left: ConversationMessageMap, right: ConversationMessageMap) {
   if (Object.is(left, right)) return true
   const leftKeys = Object.keys(left)
   const rightKeys = Object.keys(right)
@@ -162,16 +162,16 @@ function readThreadDebugWatchOptions(input?: ThreadDebugWatchOptions | string | 
   }
 }
 
-function findStreamingAssistantTurns(conversations: ConversationMap, sessionID?: string | null) {
-  const snapshots: ThreadDebugAssistantTurnSnapshot[] = []
+function findStreamingAssistantMessages(conversations: ConversationMessageMap, sessionID?: string | null) {
+  const snapshots: ThreadDebugAssistantMessageSnapshot[] = []
   const entries = sessionID
-    ? ([[sessionID, conversations[sessionID] ?? EMPTY_TURNS]] as Array<[string, Turn[]]>)
+    ? ([[sessionID, conversations[sessionID] ?? EMPTY_MESSAGES]] as Array<[string, ThreadMessage[]]>)
     : Object.entries(conversations)
 
-  for (const [currentSessionID, turns] of entries) {
-    for (const turn of turns) {
-      if (turn.kind === "assistant" && turn.isStreaming) {
-        snapshots.push({ sessionID: currentSessionID, turn })
+  for (const [currentSessionID, messages] of entries) {
+    for (const message of messages) {
+      if (message.kind === "assistant" && message.isStreaming) {
+        snapshots.push({ sessionID: currentSessionID, message })
       }
     }
   }
@@ -179,16 +179,16 @@ function findStreamingAssistantTurns(conversations: ConversationMap, sessionID?:
   return snapshots
 }
 
-function findAssistantTurns(conversations: ConversationMap, sessionID?: string | null) {
-  const snapshots: ThreadDebugAssistantTurnSnapshot[] = []
+function findAssistantMessages(conversations: ConversationMessageMap, sessionID?: string | null) {
+  const snapshots: ThreadDebugAssistantMessageSnapshot[] = []
   const entries = sessionID
-    ? ([[sessionID, conversations[sessionID] ?? EMPTY_TURNS]] as Array<[string, Turn[]]>)
+    ? ([[sessionID, conversations[sessionID] ?? EMPTY_MESSAGES]] as Array<[string, ThreadMessage[]]>)
     : Object.entries(conversations)
 
-  for (const [currentSessionID, turns] of entries) {
-    for (const turn of turns) {
-      if (turn.kind === "assistant") {
-        snapshots.push({ sessionID: currentSessionID, turn })
+  for (const [currentSessionID, messages] of entries) {
+    for (const message of messages) {
+      if (message.kind === "assistant") {
+        snapshots.push({ sessionID: currentSessionID, message })
       }
     }
   }
@@ -196,18 +196,18 @@ function findAssistantTurns(conversations: ConversationMap, sessionID?: string |
   return snapshots
 }
 
-function findLatestStreamingAssistantTurn(conversations: ConversationMap, sessionID?: string | null) {
-  const snapshots = findStreamingAssistantTurns(conversations, sessionID)
-  return snapshots.reduce<ThreadDebugAssistantTurnSnapshot | null>((latest, snapshot) => {
+function findLatestStreamingAssistantMessage(conversations: ConversationMessageMap, sessionID?: string | null) {
+  const snapshots = findStreamingAssistantMessages(conversations, sessionID)
+  return snapshots.reduce<ThreadDebugAssistantMessageSnapshot | null>((latest, snapshot) => {
     if (!latest) return snapshot
-    const latestUpdatedAt = latest.turn.runtime.updatedAt || latest.turn.timestamp
-    const snapshotUpdatedAt = snapshot.turn.runtime.updatedAt || snapshot.turn.timestamp
+    const latestUpdatedAt = latest.message.runtime.updatedAt || latest.message.timestamp
+    const snapshotUpdatedAt = snapshot.message.runtime.updatedAt || snapshot.message.timestamp
     return snapshotUpdatedAt >= latestUpdatedAt ? snapshot : latest
   }, null)
 }
 
-function readThreadDebugWatchSnapshot(conversations: ConversationMap, sessionID?: string | null): ThreadDebugWatchSnapshot {
-  const latestStreaming = findLatestStreamingAssistantTurn(conversations, sessionID)
+function readThreadDebugWatchSnapshot(conversations: ConversationMessageMap, sessionID?: string | null): ThreadDebugWatchSnapshot {
+  const latestStreaming = findLatestStreamingAssistantMessage(conversations, sessionID)
   if (latestStreaming) {
     return {
       kind: "latest-streaming",
@@ -216,8 +216,8 @@ function readThreadDebugWatchSnapshot(conversations: ConversationMap, sessionID?
   }
 
   return {
-    kind: "assistant-turns",
-    snapshots: findAssistantTurns(conversations, sessionID),
+    kind: "assistant-messages",
+    snapshots: findAssistantMessages(conversations, sessionID),
   }
 }
 
@@ -231,22 +231,22 @@ function installThreadDebugApi(store: ConversationStoreApi) {
   let lastWatchSignature = ""
 
   const readLatestStreamingSnapshot = (sessionID?: string | null) =>
-    findLatestStreamingAssistantTurn(store.getConversations(), sessionID)
+    findLatestStreamingAssistantMessage(store.getConversations(), sessionID)
 
   const cloneSnapshot = <T,>(value: T): T => cloneThreadDebugValue(value)
 
   const api: ThreadDebugApi = {
-    getAssistantTurns(sessionID) {
-      return cloneSnapshot(findAssistantTurns(store.getConversations(), sessionID))
+    getAssistantMessages(sessionID) {
+      return cloneSnapshot(findAssistantMessages(store.getConversations(), sessionID))
     },
     getConversations() {
       return cloneSnapshot(store.getConversations())
     },
-    getSessionTurns(sessionID) {
-      return cloneSnapshot(store.getSessionTurns(sessionID))
+    getSessionMessages(sessionID) {
+      return cloneSnapshot(store.getSessionMessages(sessionID))
     },
-    getStreamingTurns(sessionID) {
-      return cloneSnapshot(findStreamingAssistantTurns(store.getConversations(), sessionID))
+    getStreamingMessages(sessionID) {
+      return cloneSnapshot(findStreamingAssistantMessages(store.getConversations(), sessionID))
     },
     latestStreaming(sessionID) {
       return cloneSnapshot(readLatestStreamingSnapshot(sessionID))
@@ -276,11 +276,11 @@ function installThreadDebugApi(store: ConversationStoreApi) {
 
         lastWatchSignature = signature
         if (snapshot.kind === "latest-streaming") {
-          console.log("[anybox thread debug] latest streaming assistant turn", cloneSnapshot(snapshot.snapshot))
+          console.log("[anybox thread debug] latest streaming assistant message", cloneSnapshot(snapshot.snapshot))
           return
         }
 
-        console.log("[anybox thread debug] assistant turns", cloneSnapshot(snapshot.snapshots))
+        console.log("[anybox thread debug] assistant messages", cloneSnapshot(snapshot.snapshots))
       }
 
       const scheduleEmit = () => {
@@ -301,14 +301,14 @@ function installThreadDebugApi(store: ConversationStoreApi) {
   window.__ANYBOX_THREAD_DEBUG__ = api
 }
 
-export function createConversationStore(initialConversations: ConversationMap = {}): ConversationStoreApi {
-  let conversations: ConversationMap = {}
+export function createConversationStore(initialConversations: ConversationMessageMap = {}): ConversationStoreApi {
+  let conversations: ConversationMessageMap = {}
   let activityBySession: ConversationActivityMap = {}
   const sessions = new Map<string, NormalizedSessionConversation>()
   const listeners = new Set<() => void>()
   const sessionListeners = new Map<string, Set<() => void>>()
 
-  function rebuildFromConversations(nextConversations: ConversationMap) {
+  function rebuildFromConversations(nextConversations: ConversationMessageMap) {
     const previousConversations = conversations
     const previousActivityBySession = activityBySession
     const changedSessionIDs = new Set<string>()
@@ -321,10 +321,10 @@ export function createConversationStore(initialConversations: ConversationMap = 
       }
     }
 
-    for (const [sessionID, turns] of Object.entries(nextConversations)) {
+    for (const [sessionID, messages] of Object.entries(nextConversations)) {
       const previousSession = sessions.get(sessionID)
-      if (!previousSession || !Object.is(previousSession.turns, turns)) {
-        const nextSession = createSessionConversation(turns)
+      if (!previousSession || !Object.is(previousSession.messages, messages)) {
+        const nextSession = createSessionConversation(messages)
         sessions.set(sessionID, nextSession)
         changedSessionIDs.add(sessionID)
         nextActivityBySession[sessionID] = nextSession.activity
@@ -359,7 +359,7 @@ export function createConversationStore(initialConversations: ConversationMap = 
     }
   }
 
-  function replaceConversations(nextConversations: ConversationMap) {
+  function replaceConversations(nextConversations: ConversationMessageMap) {
     if (conversationsAreEquivalent(conversations, nextConversations)) return false
     const { changedSessionIDs } = rebuildFromConversations(nextConversations)
     emitChanges(changedSessionIDs)
@@ -371,16 +371,16 @@ export function createConversationStore(initialConversations: ConversationMap = 
   }
 
   const api: ConversationStoreApi = {
-    appendAssistantDelta(sessionID, turnID, updater) {
+    appendAssistantDelta(sessionID, assistantMessageID, updater) {
       return updateConversations((current) => {
-        const currentTurns = current[sessionID] ?? EMPTY_TURNS
+        const currentMessages = current[sessionID] ?? EMPTY_MESSAGES
         let didUpdate = false
-        const nextTurns = currentTurns.map((turn) => {
-          if (turn.kind !== "assistant" || turn.id !== turnID) return turn
+        const nextMessages = currentMessages.map((turn) => {
+          if (turn.kind !== "assistant" || turn.id !== assistantMessageID) return turn
           didUpdate = true
           return updater(turn)
         })
-        return didUpdate ? { ...current, [sessionID]: nextTurns } : current
+        return didUpdate ? { ...current, [sessionID]: nextMessages } : current
       })
     },
     getActivityBySession() {
@@ -392,19 +392,19 @@ export function createConversationStore(initialConversations: ConversationMap = 
     getSessionActivity(sessionID) {
       return sessionID ? activityBySession[sessionID] ?? EMPTY_CONVERSATION_ACTIVITY : EMPTY_CONVERSATION_ACTIVITY
     },
-    getSessionTurns(sessionID) {
-      return sessionID ? sessions.get(sessionID)?.turns ?? EMPTY_TURNS : EMPTY_TURNS
+    getSessionMessages(sessionID) {
+      return sessionID ? sessions.get(sessionID)?.messages ?? EMPTY_MESSAGES : EMPTY_MESSAGES
     },
     hasSession(sessionID) {
       return Boolean(sessionID && Object.prototype.hasOwnProperty.call(conversations, sessionID))
     },
     replaceConversations,
-    replaceTraceItem(sessionID, turnID, itemID, item) {
+    replaceTraceItem(sessionID, assistantMessageID, itemID, item) {
       return updateConversations((current) => {
-        const currentTurns = current[sessionID] ?? EMPTY_TURNS
+        const currentMessages = current[sessionID] ?? EMPTY_MESSAGES
         let didUpdate = false
-        const nextTurns = currentTurns.map((turn) => {
-          if (turn.kind !== "assistant" || turn.id !== turnID) return turn
+        const nextMessages = currentMessages.map((turn) => {
+          if (turn.kind !== "assistant" || turn.id !== assistantMessageID) return turn
           const itemIndex = turn.items.findIndex((candidate) => candidate.id === itemID)
           if (itemIndex === -1) return turn
           const nextItems = [...turn.items]
@@ -415,7 +415,7 @@ export function createConversationStore(initialConversations: ConversationMap = 
             items: nextItems,
           }
         })
-        return didUpdate ? { ...current, [sessionID]: nextTurns } : current
+        return didUpdate ? { ...current, [sessionID]: nextMessages } : current
       })
     },
     subscribe(listener) {
@@ -446,7 +446,7 @@ export function createConversationStore(initialConversations: ConversationMap = 
   return api
 }
 
-export function useConversationTurns(
+export function useConversationMessages(
   store: ConversationStoreApi,
   sessionID: string | null | undefined,
 ) {
@@ -458,8 +458,8 @@ export function useConversationTurns(
 
   return useSyncExternalStore(
     (listener) => storeRef.current.subscribeSession(sessionIDRef.current, listener),
-    () => storeRef.current.getSessionTurns(sessionIDRef.current),
-    () => storeRef.current.getSessionTurns(sessionIDRef.current),
+    () => storeRef.current.getSessionMessages(sessionIDRef.current),
+    () => storeRef.current.getSessionMessages(sessionIDRef.current),
   )
 }
 

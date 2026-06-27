@@ -16,7 +16,7 @@ import { TerminalAreaHost } from "./app/terminal/TerminalAreaHost"
 import {
   useWorkspaceStoreSelector,
 } from "./app/agent-workspace/workspace-store"
-import { useConversationTurns } from "./app/agent-workspace/conversation-store"
+import { useConversationMessages } from "./app/agent-workspace/conversation-store"
 import { WorkspaceStoreProvider } from "./app/agent-workspace/workspace-store-context"
 import { resolveWorkspaceRelativePath } from "./app/agent-workspace/workspace-loading-hooks"
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "./app/thread-markdown"
@@ -32,7 +32,7 @@ import type {
   SessionDiffSummary,
   SessionSummary,
   ToolPermissionMode,
-  Turn,
+  ThreadMessage,
   WindowAction,
   WorkspaceGroup,
 } from "./app/types"
@@ -112,7 +112,7 @@ const EMPTY_SIDE_CHAT_DRAFT_STATE = createEmptyComposerDraftState()
 const EMPTY_SIDE_CHAT_ATTACHMENTS: ComposerAttachment[] = []
 const EMPTY_SIDE_CHAT_PENDING_INPUTS: PendingConversationInput[] = []
 const EMPTY_SIDE_CHAT_PERMISSION_REQUESTS: PermissionRequest[] = []
-const EMPTY_SIDE_CHAT_TURNS: Turn[] = []
+const EMPTY_SIDE_CHAT_MESSAGES: ThreadMessage[] = []
 const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/
 const WINDOWS_UNC_PATH_PATTERN = /^(?:\\\\|\/\/)[^\\/]+[\\/][^\\/]+/
 const URI_SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:/i
@@ -158,7 +158,7 @@ interface RightSidebarSideChatPanelState {
   session: SessionSummary
   sideChatSessions: SessionSummary[]
   tabKey: string
-  turns: Turn[]
+  turns: ThreadMessage[]
   workspaceDirectory: string | null
   workspaceID: string | null
 }
@@ -826,7 +826,7 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
     handleSessionBranchSelect,
     handleSessionModelSelectionChange,
     handleSelectSideChatTab,
-    handleTurnDiffSummaryHydrate,
+    handleMessageDiffSummaryHydrate,
     isResolvingPermissionRequest,
     permissionRequestActionError,
     permissionRequestActionRequestID,
@@ -1075,9 +1075,9 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
           onToggleLeftSidebar={() => undefined}
           onToggleRightSidebar={() => undefined}
           onToolPermissionModeChange={handleToolPermissionModeChange}
-          onTurnDiffRestore={handlePopoutDiffNoop}
-          onTurnDiffReview={handlePopoutDiffNoop}
-          onTurnDiffSummaryHydrate={handleTurnDiffSummaryHydrate}
+          onMessageDiffRestore={handlePopoutDiffNoop}
+          onMessageDiffReview={handlePopoutDiffNoop}
+          onMessageDiffSummaryHydrate={handleMessageDiffSummaryHydrate}
           />
         </main>
       </div>
@@ -1313,7 +1313,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     handleSessionSelect,
     handleSelectSideChatTab,
     handleSessionModelSelectionChange,
-    handleTurnDiffSummaryHydrate,
+    handleMessageDiffSummaryHydrate,
     handleSidebarAction,
     hoveredFolderID,
     isCreatingProject,
@@ -1880,12 +1880,12 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
 
       const sessionSelection = findSession(state.sessions.workspaces, session.id)
       const tabKey = getWorkbenchTabKey(createSessionWorkbenchTab(session.id))
-      const turns = state.agentStream.conversations[session.id] ?? EMPTY_SIDE_CHAT_TURNS
+      const turns = state.agentStream.conversations[session.id] ?? EMPTY_SIDE_CHAT_MESSAGES
       const activity = state.agentStream.conversationActivityBySession[session.id]
       const isInterruptible = Boolean(
         state.composer.isSendingByTabKey[tabKey] ||
         state.agentStream.cancellingSessionIDs[session.id] ||
-        activity?.hasStreamingAssistantTurn ||
+        activity?.hasStreamingAssistantMessage ||
         turns.some((turn) => turn.kind === "assistant" && turn.isStreaming),
       )
 
@@ -1915,7 +1915,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     rightSidebarSideChatPanelStatesAreEqual,
   )
   const conversationStore = useWorkspaceStoreSelector(workspaceStore, (state) => state.agentStream.conversationStore)
-  const liveRightSidebarSideChatTurns = useConversationTurns(
+  const liveRightSidebarSideChatTurns = useConversationMessages(
     conversationStore,
     rightSidebarSideChatPanelState?.session.id ?? null,
   )
@@ -2111,7 +2111,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     handleActiveSessionDiffFileSelect(file, sessionID)
   }
 
-  async function handleTurnDiffReview(_files: string[], sessionID: string | null, paneID: string) {
+  async function handleMessageDiffReview(_files: string[], sessionID: string | null, paneID: string) {
     if (isRightSidebarCollapsed) {
       handleRightSidebarToggle()
     }
@@ -2120,7 +2120,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     await handleActiveSessionDiffRefresh(sessionID)
   }
 
-  async function handleTurnDiffRestore(diffs: SessionDiffFile[], sessionID: string | null, paneID: string) {
+  async function handleMessageDiffRestore(diffs: SessionDiffFile[], sessionID: string | null, paneID: string) {
     if (isRightSidebarCollapsed) {
       handleRightSidebarToggle()
     }
@@ -2869,9 +2869,9 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 onSetDraft={setDraftForTab}
                 onToggleLeftSidebar={handleSidebarToggle}
                 onToggleRightSidebar={handleRightSidebarToggle}
-                onTurnDiffRestore={handleTurnDiffRestore}
-                onTurnDiffReview={handleTurnDiffReview}
-                onTurnDiffSummaryHydrate={handleTurnDiffSummaryHydrate}
+                onMessageDiffRestore={handleMessageDiffRestore}
+                onMessageDiffReview={handleMessageDiffReview}
+                onMessageDiffSummaryHydrate={handleMessageDiffSummaryHydrate}
               />
             </>
           )}

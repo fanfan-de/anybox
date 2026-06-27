@@ -161,7 +161,7 @@ export function PreviewInteractionToolbar({
             className={isActive ? "preview-comment-mode-button is-active" : "preview-comment-mode-button"}
             aria-label={plugin.label}
             aria-pressed={isActive}
-            title={isActive ? `Turn off ${plugin.label.toLowerCase()}` : `Turn on ${plugin.label.toLowerCase()}`}
+            title={isActive ? `ThreadMessage off ${plugin.label.toLowerCase()}` : `ThreadMessage on ${plugin.label.toLowerCase()}`}
             onClick={() => onActiveInteractionChange(isActive ? null : plugin.id)}
           >
             <CommentAddIcon size={15} />

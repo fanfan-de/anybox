@@ -3,7 +3,7 @@ import { useRef, useState, type Dispatch, type SetStateAction } from "react"
 import { describe, expect, it, vi } from "vitest"
 import { createComposerDraftStateFromPlainText } from "../composer/draft-state"
 import type {
-  AssistantTurn,
+  AssistantThreadMessage,
   ComposerAttachment,
   ComposerDraftState,
   CreateSessionTab,
@@ -11,7 +11,7 @@ import type {
   PendingConversationInput,
   PermissionRequest,
   SessionSummary,
-  Turn,
+  ThreadMessage,
   WorkspaceGroup,
 } from "../types"
 import { useComposerController } from "./composer-controller"
@@ -44,7 +44,7 @@ function createWorkspace(session: SessionSummary): WorkspaceGroup {
   }
 }
 
-function createStreamingAssistantTurn(id: string, toolStatus: "pending" | "running" = "running"): AssistantTurn {
+function createStreamingAssistantThreadMessage(id: string, toolStatus: "pending" | "running" = "running"): AssistantThreadMessage {
   return {
     id,
     kind: "assistant",
@@ -109,16 +109,16 @@ function useComposerHarness(input?: {
   const [pendingConversationInputsBySession, setPendingConversationInputsBySessionState] = useState<Record<string, PendingConversationInput[]>>({})
   const [sessionDirectoryBySession, setSessionDirectoryBySessionState] = useState<Record<string, string>>({})
   const [workspaces, setWorkspacesState] = useState<WorkspaceGroup[]>([workspace])
-  const turnsRef = useRef<Record<string, Turn[]>>({})
+  const turnsRef = useRef<Record<string, ThreadMessage[]>>({})
   const pendingStreamsRef = useRef<Record<string, PendingAgentStream>>({})
   const permissionRequestsRequestRef = useRef<Record<string, number>>({})
-  const updateAssistantConversationTurn = useRef(vi.fn((
+  const updateAssistantConversationMessage = useRef(vi.fn((
     sessionID: string,
-    turnID: string,
-    updater: (turn: AssistantTurn) => AssistantTurn,
+    assistantMessageID: string,
+    updater: (message: AssistantThreadMessage) => AssistantThreadMessage,
   ) => {
     turnsRef.current[sessionID] = (turnsRef.current[sessionID] ?? []).map((turn) =>
-      turn.kind === "assistant" && turn.id === turnID ? updater(turn) : turn,
+      turn.kind === "assistant" && turn.id === assistantMessageID ? updater(turn) : turn,
     )
   })).current
   const createdSession = createSession("created-session-1")
@@ -145,15 +145,15 @@ function useComposerHarness(input?: {
     agentDefaultDirectory: "C:/work",
     agentSessions,
     cancellingSessionIDs,
-    appendConversationTurns: (sessionID, nextTurns) => {
-      turnsRef.current[sessionID] = [...(turnsRef.current[sessionID] ?? []), ...nextTurns]
+    appendConversationMessages: (sessionID, nextMessages) => {
+      turnsRef.current[sessionID] = [...(turnsRef.current[sessionID] ?? []), ...nextMessages]
     },
     composerAttachmentsByTabKey: attachmentsByTabKey,
     composerDraftStateByTabKey: draftsByTabKey,
     composerParentMessageIDByTabKey,
     createSessionForWorkspace,
     createSessionTabs,
-    getConversationTurns: (sessionID) => turnsRef.current[sessionID] ?? [],
+    getConversationMessages: (sessionID) => turnsRef.current[sessionID] ?? [],
     isSendingByTabKey,
     loadPendingPermissionRequestsForSession: vi.fn(async () => undefined),
     loadSessionDiffForSession: vi.fn(async () => undefined),
@@ -167,8 +167,8 @@ function useComposerHarness(input?: {
     refreshWorkspaceForSession: vi.fn(),
     refreshWorkspaceFromDirectory: vi.fn(),
     reloadSessionHistoryForSession: vi.fn(async () => undefined),
-    replaceConversationTurns: (sessionID, nextTurns) => {
-      turnsRef.current[sessionID] = nextTurns
+    replaceConversationMessages: (sessionID, nextMessages) => {
+      turnsRef.current[sessionID] = nextMessages
     },
     sessionDirectoryBySession,
     setAgentSessions: (update) => applyUpdate(setAgentSessionsState, agentSessions, update),
@@ -187,7 +187,7 @@ function useComposerHarness(input?: {
     setPermissionRequestActionRequestID: vi.fn(),
     setSessionDirectoryBySession: (update) => applyUpdate(setSessionDirectoryBySessionState, sessionDirectoryBySession, update),
     setWorkspaces: (update) => applyUpdate(setWorkspacesState, workspaces, update),
-    updateAssistantConversationTurn,
+    updateAssistantConversationMessage,
     workspaces,
   })
 
@@ -200,7 +200,7 @@ function useComposerHarness(input?: {
     pendingConversationInputsBySession,
     pendingStreamsRef,
     turnsRef,
-    updateAssistantConversationTurn,
+    updateAssistantConversationMessage,
     workspaces,
   }
 }
@@ -276,12 +276,12 @@ describe("composer controller", () => {
       )
 
       result.current.pendingStreamsRef.current["stream-active"] = {
-        assistantTurnID: "assistant-active",
+        assistantThreadMessageID: "assistant-active",
         backendSessionID: "backend-session-1",
         backendTurnID: "turn-active",
         sessionID: "session-1",
       }
-      result.current.turnsRef.current["session-1"] = [createStreamingAssistantTurn("assistant-active")]
+      result.current.turnsRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-active")]
 
       await act(async () => {
         await result.current.controller.handleSend()
@@ -345,12 +345,12 @@ describe("composer controller", () => {
       )
 
       result.current.pendingStreamsRef.current["stream-active"] = {
-        assistantTurnID: "assistant-active",
+        assistantThreadMessageID: "assistant-active",
         backendSessionID: "backend-session-1",
         backendTurnID: "turn-active",
         sessionID: "session-1",
       }
-      result.current.turnsRef.current["session-1"] = [createStreamingAssistantTurn("assistant-active")]
+      result.current.turnsRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-active")]
 
       await act(async () => {
         await result.current.controller.handleSend()
@@ -421,12 +421,12 @@ describe("composer controller", () => {
       )
 
       result.current.pendingStreamsRef.current["stream-active"] = {
-        assistantTurnID: "assistant-active",
+        assistantThreadMessageID: "assistant-active",
         backendSessionID: "backend-session-1",
         backendTurnID: "turn-active",
         sessionID: "session-1",
       }
-      result.current.turnsRef.current["session-1"] = [createStreamingAssistantTurn("assistant-active")]
+      result.current.turnsRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-active")]
 
       await act(async () => {
         await result.current.controller.handleSend()
@@ -438,18 +438,18 @@ describe("composer controller", () => {
       const queuedStreamEntry = Object.entries(result.current.pendingStreamsRef.current).find(
         ([, stream]) => stream.requestedMode === "queue",
       )
-      const queuedAssistantTurnID = queuedStreamEntry?.[1].createdAssistantTurnID
+      const queuedAssistantThreadMessageID = queuedStreamEntry?.[1].createdAssistantThreadMessageID
 
       expect(queuedInput).toBeDefined()
       expect(queuedStreamEntry).toBeDefined()
-      expect(queuedAssistantTurnID).toBeTruthy()
-      if (!queuedInput || !queuedStreamEntry || !queuedAssistantTurnID) {
+      expect(queuedAssistantThreadMessageID).toBeTruthy()
+      if (!queuedInput || !queuedStreamEntry || !queuedAssistantThreadMessageID) {
         throw new Error("Expected queued pending input, stream, and assistant placeholder")
       }
 
       await act(async () => {
         await result.current.controller.handleSend({
-          steerQueuedTurnID: queuedInput.id,
+          steerQueuedMessageID: queuedInput.id,
         })
       })
 
@@ -469,19 +469,19 @@ describe("composer controller", () => {
       const steerStreamEntry = Object.entries(result.current.pendingStreamsRef.current).find(
         ([, stream]) => stream.requestedMode === "steer",
       )
-      const steerAssistantTurnID = steerStreamEntry?.[1].createdAssistantTurnID
+      const steerAssistantThreadMessageID = steerStreamEntry?.[1].createdAssistantThreadMessageID
       expect(steerStreamEntry).toBeDefined()
-      expect(steerAssistantTurnID).toBeTruthy()
-      expect(steerAssistantTurnID).not.toBe("assistant-active")
-      if (!steerStreamEntry || !steerAssistantTurnID) {
+      expect(steerAssistantThreadMessageID).toBeTruthy()
+      expect(steerAssistantThreadMessageID).not.toBe("assistant-active")
+      if (!steerStreamEntry || !steerAssistantThreadMessageID) {
         throw new Error("Expected steer stream and assistant placeholder")
       }
 
-      const nextTurns = result.current.turnsRef.current["session-1"] ?? []
-      expect(nextTurns.find((turn) => turn.id === queuedInput.id)).toBeUndefined()
-      expect(nextTurns.find((turn) => turn.id === queuedAssistantTurnID)).toBeUndefined()
-      expect(nextTurns.some((turn) => turn.kind === "user" && turn.text === "Existing prompt")).toBe(false)
-      expect(nextTurns.find((turn) => turn.id === steerAssistantTurnID)).toBeUndefined()
+      const nextMessages = result.current.turnsRef.current["session-1"] ?? []
+      expect(nextMessages.find((turn) => turn.id === queuedInput.id)).toBeUndefined()
+      expect(nextMessages.find((turn) => turn.id === queuedAssistantThreadMessageID)).toBeUndefined()
+      expect(nextMessages.some((turn) => turn.kind === "user" && turn.text === "Existing prompt")).toBe(false)
+      expect(nextMessages.find((turn) => turn.id === steerAssistantThreadMessageID)).toBeUndefined()
       const steerInput = result.current.pendingConversationInputsBySession["session-1"]?.find(
         (input) => input.mode === "steer",
       )
@@ -493,8 +493,8 @@ describe("composer controller", () => {
       expect(result.current.pendingStreamsRef.current[queuedStreamEntry[0]]).toBeUndefined()
       expect(Object.values(result.current.pendingStreamsRef.current)).toContainEqual(
         expect.objectContaining({
-          assistantTurnID: steerAssistantTurnID,
-          createdAssistantTurnID: steerAssistantTurnID,
+          assistantThreadMessageID: steerAssistantThreadMessageID,
+          createdAssistantThreadMessageID: steerAssistantThreadMessageID,
           pendingInputID: steerInput?.id,
           requestedMode: "steer",
           sessionID: "session-1",
@@ -546,12 +546,12 @@ describe("composer controller", () => {
       )
 
       result.current.pendingStreamsRef.current["stream-active"] = {
-        assistantTurnID: "assistant-active",
+        assistantThreadMessageID: "assistant-active",
         backendSessionID: "backend-session-1",
         backendTurnID: "turn-active",
         sessionID: "session-1",
       }
-      result.current.turnsRef.current["session-1"] = [createStreamingAssistantTurn("assistant-active", "pending")]
+      result.current.turnsRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-active", "pending")]
 
       await act(async () => {
         await result.current.controller.handleSend({
@@ -583,7 +583,7 @@ describe("composer controller", () => {
         (stream) => stream.requestedMode === "steer",
       )
       expect(steerStream).toBeDefined()
-      expect(steerStream?.assistantTurnID).not.toBe("assistant-active")
+      expect(steerStream?.assistantThreadMessageID).not.toBe("assistant-active")
       expect(result.current.turnsRef.current["session-1"]).toHaveLength(1)
       expect(result.current.pendingConversationInputsBySession["session-1"]?.[0]).toMatchObject({
         mode: "steer",
@@ -592,8 +592,8 @@ describe("composer controller", () => {
       })
       expect(Object.values(result.current.pendingStreamsRef.current)).toContainEqual(
         expect.objectContaining({
-          assistantTurnID: steerStream?.assistantTurnID,
-          createdAssistantTurnID: steerStream?.assistantTurnID,
+          assistantThreadMessageID: steerStream?.assistantThreadMessageID,
+          createdAssistantThreadMessageID: steerStream?.assistantThreadMessageID,
           pendingInputID: result.current.pendingConversationInputsBySession["session-1"]?.[0]?.id,
           requestedMode: "steer",
           sessionID: "session-1",
@@ -1014,7 +1014,7 @@ describe("composer controller", () => {
       const { result } = renderHook(() => useComposerHarness())
 
       result.current.pendingStreamsRef.current["stream-1"] = {
-        assistantTurnID: "assistant-1",
+        assistantThreadMessageID: "assistant-1",
         backendSessionID: "backend-session-1",
         sessionID: "session-1",
       }
@@ -1098,7 +1098,7 @@ describe("composer controller", () => {
       const { result } = renderHook(() => useComposerHarness())
 
       result.current.pendingStreamsRef.current["stream-1"] = {
-        assistantTurnID: "assistant-1",
+        assistantThreadMessageID: "assistant-1",
         backendSessionID: "backend-session-1",
         sessionID: "session-1",
       }
@@ -1143,7 +1143,7 @@ describe("composer controller", () => {
       const { result } = renderHook(() => useComposerHarness())
 
       result.current.pendingStreamsRef.current["stream-1"] = {
-        assistantTurnID: "assistant-1",
+        assistantThreadMessageID: "assistant-1",
         backendSessionID: "backend-session-1",
         sessionID: "session-1",
       }
@@ -1190,11 +1190,11 @@ describe("composer controller", () => {
       const { result } = renderHook(() => useComposerHarness())
 
       result.current.pendingStreamsRef.current["stream-1"] = {
-        assistantTurnID: "assistant-active",
+        assistantThreadMessageID: "assistant-active",
         backendSessionID: "backend-session-1",
         sessionID: "session-1",
       }
-      result.current.turnsRef.current["session-1"] = [createStreamingAssistantTurn("assistant-active")]
+      result.current.turnsRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-active")]
 
       await act(async () => {
         await result.current.controller.handleCancelSend()
@@ -1251,11 +1251,11 @@ describe("composer controller", () => {
       const { result } = renderHook(() => useComposerHarness())
 
       result.current.pendingStreamsRef.current["stream-1"] = {
-        assistantTurnID: "assistant-stale",
+        assistantThreadMessageID: "assistant-stale",
         backendSessionID: "backend-session-1",
         sessionID: "session-1",
       }
-      result.current.turnsRef.current["session-1"] = [createStreamingAssistantTurn("assistant-visible")]
+      result.current.turnsRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-visible")]
 
       await act(async () => {
         await result.current.controller.handleCancelSend()

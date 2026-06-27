@@ -2,20 +2,20 @@ import { startTransition, useEffect, useEffectEvent, useRef, useState, type Muta
 import { getAgentSessionBridge, type AgentSessionBridgeEvent } from "../agent-session/client"
 import { AgentSessionEventRouter } from "../agent-session/event-router"
 import {
-  appendConversationTurns as appendConversationTurnsToMap,
-  updateAssistantTurn as updateAssistantTurnInMap,
+  appendConversationMessages as appendConversationMessagesToMap,
+  updateAssistantThreadMessage as updateAssistantMessageInMap,
 } from "../conversation-state"
 import {
-  applyAgentStreamEventToTurn,
-  buildSessionStreamingAssistantTurn,
-  buildTurnsFromHistory,
+  applyAgentStreamEventToThreadMessage,
+  buildSessionStreamingAssistantThreadMessage,
+  buildThreadMessagesFromHistory,
 } from "../stream"
 import type {
   AgentSessionStreamIPCEvent,
   AgentSessionExecutionMode,
   AgentStreamIPCEvent,
   AssistantTraceItem,
-  AssistantTurn,
+  AssistantThreadMessage,
   LoadedSessionHistoryMessage,
   PendingAgentStream,
   PendingConversationInput,
@@ -26,17 +26,17 @@ import type {
   SessionRuntimeDebugSnapshot,
   SessionRuntimeDebugState,
   SessionTaskListView,
-  Turn,
-  UserTurn,
+  ThreadMessage,
+  UserThreadMessage,
   WorkspaceGroup,
 } from "../types"
 import { buildSessionMessageTree, type SessionMessageTree } from "../session-message-tree"
 import {
-  pendingConversationInputToUserTurn,
+  pendingConversationInputToUserThreadMessage,
   removePendingConversationInput,
   updatePendingConversationInput,
 } from "../pending-conversation-inputs"
-import { mergeUserTurnPresentationState, persistUserTurns, readPersistedUserTurns } from "../user-turn-presentation"
+import { mergeUserMessagePresentationState, persistUserMessages, readPersistedUserMessages } from "../user-message-presentation"
 import { findSession } from "../workspace"
 import {
   loadPendingPermissionRequestsForSession as loadPendingPermissionRequestsForSessionService,
@@ -72,7 +72,7 @@ const EXTERNAL_TURN_HISTORY_REFRESH_RETRY_MS = 500
 export const STEER_INPUT_CONSUMED_STATE_REASON = "Steer input consumed."
 
 type StreamEventUpdateTarget = {
-  assistantTurnID: string
+  assistantThreadMessageID: string
   sessionID: string
 }
 
@@ -88,88 +88,88 @@ type ExecutionModeEventPayload = {
 }
 
 export type ExecutionModeRouteDecision = {
-  assistantTurnID: string
-  clearSteerUserTurn: boolean
-  createAssistantTurn: boolean
-  removeAssistantTurnID?: string
+  assistantThreadMessageID: string
+  clearSteerUserMessage: boolean
+  createAssistantThreadMessage: boolean
+  removeAssistantThreadMessageID?: string
 }
 
 export function resolveExecutionModeRoute(input: {
   mode: AgentSessionExecutionMode
   requestedMode?: PendingAgentStream["requestedMode"]
-  currentAssistantTurnID: string
-  createdAssistantTurnID?: string
-  existingAssistantTurnID?: string
+  currentAssistantThreadMessageID: string
+  createdAssistantThreadMessageID?: string
+  existingAssistantThreadMessageID?: string
 }): ExecutionModeRouteDecision {
   if (input.mode === "steer") {
-    const assistantTurnID =
-      input.existingAssistantTurnID ??
-      input.createdAssistantTurnID ??
-      input.currentAssistantTurnID
+    const assistantThreadMessageID =
+      input.existingAssistantThreadMessageID ??
+      input.createdAssistantThreadMessageID ??
+      input.currentAssistantThreadMessageID
     return {
-      assistantTurnID,
-      clearSteerUserTurn: false,
-      createAssistantTurn: false,
-      ...(input.createdAssistantTurnID && input.createdAssistantTurnID !== assistantTurnID
-        ? { removeAssistantTurnID: input.createdAssistantTurnID }
+      assistantThreadMessageID,
+      clearSteerUserMessage: false,
+      createAssistantThreadMessage: false,
+      ...(input.createdAssistantThreadMessageID && input.createdAssistantThreadMessageID !== assistantThreadMessageID
+        ? { removeAssistantThreadMessageID: input.createdAssistantThreadMessageID }
         : {}),
     }
   }
 
   if (input.requestedMode === "steer") {
-    if (input.existingAssistantTurnID) {
+    if (input.existingAssistantThreadMessageID) {
       return {
-        assistantTurnID: input.existingAssistantTurnID,
-        clearSteerUserTurn: true,
-        createAssistantTurn: false,
+        assistantThreadMessageID: input.existingAssistantThreadMessageID,
+        clearSteerUserMessage: true,
+        createAssistantThreadMessage: false,
       }
     }
-    if (input.createdAssistantTurnID) {
+    if (input.createdAssistantThreadMessageID) {
       return {
-        assistantTurnID: input.createdAssistantTurnID,
-        clearSteerUserTurn: true,
-        createAssistantTurn: false,
+        assistantThreadMessageID: input.createdAssistantThreadMessageID,
+        clearSteerUserMessage: true,
+        createAssistantThreadMessage: false,
       }
     }
     return {
-      assistantTurnID: input.currentAssistantTurnID,
-      clearSteerUserTurn: true,
-      createAssistantTurn: true,
+      assistantThreadMessageID: input.currentAssistantThreadMessageID,
+      clearSteerUserMessage: true,
+      createAssistantThreadMessage: true,
     }
   }
 
   return {
-    assistantTurnID: input.currentAssistantTurnID,
-    clearSteerUserTurn: false,
-    createAssistantTurn: false,
+    assistantThreadMessageID: input.currentAssistantThreadMessageID,
+    clearSteerUserMessage: false,
+    createAssistantThreadMessage: false,
   }
 }
 
-export function applyExecutionModeToUserTurnPresentation(input: {
-  turns: Turn[]
-  userTurnID: string
-  assistantTurnID: string
+export function applyExecutionModeToUserMessagePresentation(input: {
+  turns: ThreadMessage[]
+  userThreadMessageID: string
+  assistantThreadMessageID: string
   mode: AgentSessionExecutionMode
 }) {
   let didUpdate = false
 
-  const nextTurns = input.turns.map((turn): Turn => {
-    if (turn.kind !== "user" || turn.id !== input.userTurnID) return turn
+  const nextMessages = input.turns.map((turn): ThreadMessage => {
+    if (turn.kind !== "user" || turn.id !== input.userThreadMessageID) return turn
 
     if (input.mode === "steer") {
       return turn
     }
 
     if (input.mode === "queued") {
-      const { streamInsertion: _streamInsertion, ...queuedTurn } = turn
-      const nextTurn: UserTurn = {
-        ...queuedTurn,
+      const { streamInsertion: _streamInsertion, ...queuedMessage } = turn
+      const nextMessage: UserThreadMessage = {
+        ...queuedMessage,
         submissionMode: "queued",
       }
       didUpdate =
-        turn.submissionMode !== nextTurn.submissionMode ||
+        turn.submissionMode !== nextMessage.submissionMode ||
         Boolean(turn.streamInsertion)
-      return didUpdate ? nextTurn : turn
+      return didUpdate ? nextMessage : turn
     }
 
     const { submissionMode: _submissionMode, streamInsertion: _streamInsertion, ...regularTurn } = turn
@@ -177,17 +177,17 @@ export function applyExecutionModeToUserTurnPresentation(input: {
     return didUpdate ? regularTurn : turn
   })
 
-  return didUpdate ? nextTurns : input.turns
+  return didUpdate ? nextMessages : input.turns
 }
 
-export function revealBackendRecordedUserTurnPresentation(input: {
-  turns: Turn[]
-  userTurnID: string
+export function revealBackendRecordedUserMessagePresentation(input: {
+  turns: ThreadMessage[]
+  userThreadMessageID: string
 }) {
   let didUpdate = false
 
-  const nextTurns = input.turns.map((turn): Turn => {
-    if (turn.kind !== "user" || turn.id !== input.userTurnID) return turn
+  const nextMessages = input.turns.map((turn): ThreadMessage => {
+    if (turn.kind !== "user" || turn.id !== input.userThreadMessageID) return turn
     const {
       submissionMode: _submissionMode,
       streamInsertion: _streamInsertion,
@@ -197,20 +197,20 @@ export function revealBackendRecordedUserTurnPresentation(input: {
     return didUpdate ? regularTurn : turn
   })
 
-  return didUpdate ? nextTurns : input.turns
+  return didUpdate ? nextMessages : input.turns
 }
 
-export function revealPendingSteerUserTurnsAtHandoffPresentation(input: {
-  turns: Turn[]
-  assistantTurnID: string
+export function revealPendingSteerUserMessagesAtHandoffPresentation(input: {
+  turns: ThreadMessage[]
+  assistantThreadMessageID: string
 }) {
   let didUpdate = false
 
-  const nextTurns = input.turns.map((turn): Turn => {
+  const nextMessages = input.turns.map((turn): ThreadMessage => {
     if (turn.kind !== "user" || turn.submissionMode !== "steer") return turn
     if (
       turn.streamInsertion &&
-      (turn.streamInsertion.assistantTurnID !== input.assistantTurnID ||
+      (turn.streamInsertion.assistantThreadMessageID !== input.assistantThreadMessageID ||
         turn.streamInsertion.status === "consumed")
     ) {
       return turn
@@ -221,33 +221,33 @@ export function revealPendingSteerUserTurnsAtHandoffPresentation(input: {
     return regularTurn
   })
 
-  return didUpdate ? nextTurns : input.turns
+  return didUpdate ? nextMessages : input.turns
 }
 
-function buildSessionStreamingAssistantTurnWithID(assistantTurnID: string, detail?: string): AssistantTurn {
-  const turn = buildSessionStreamingAssistantTurn(detail)
+function buildSessionStreamingAssistantThreadMessageWithID(assistantThreadMessageID: string, detail?: string): AssistantThreadMessage {
+  const turn = buildSessionStreamingAssistantThreadMessage(detail)
   return {
     ...turn,
-    id: assistantTurnID,
+    id: assistantThreadMessageID,
     items: turn.items.map((item) => ({
       ...item,
-      sourceID: item.sourceID === `${turn.id}:prompt` ? `${assistantTurnID}:prompt` : item.sourceID,
+      sourceID: item.sourceID === `${turn.id}:prompt` ? `${assistantThreadMessageID}:prompt` : item.sourceID,
     })),
   }
 }
 
-export function ensureAssistantTurnPresentation(input: {
-  turns: Turn[]
-  assistantTurnID: string
+export function ensureAssistantThreadMessagePresentation(input: {
+  turns: ThreadMessage[]
+  assistantThreadMessageID: string
   detail?: string
 }) {
-  if (input.turns.some((turn) => turn.kind === "assistant" && turn.id === input.assistantTurnID)) {
+  if (input.turns.some((turn) => turn.kind === "assistant" && turn.id === input.assistantThreadMessageID)) {
     return input.turns
   }
 
   return [
     ...input.turns,
-    buildSessionStreamingAssistantTurnWithID(input.assistantTurnID, input.detail),
+    buildSessionStreamingAssistantThreadMessageWithID(input.assistantThreadMessageID, input.detail),
   ]
 }
 
@@ -326,22 +326,22 @@ export function isSteerHandoffBoundaryStreamEvent(streamEvent: { event: string; 
 }
 
 function updateConversationMapWithDeltaGroups(
-  conversations: Record<string, Turn[]>,
+  conversations: Record<string, ThreadMessage[]>,
   groupedUpdates: Map<string, Map<string, Array<AgentSessionStreamIPCEvent | AgentStreamIPCEvent>>>,
 ) {
   let nextConversations = conversations
 
   for (const [sessionID, updatesByTurnID] of groupedUpdates) {
-    const currentTurns = nextConversations[sessionID] ?? []
+    const currentMessages = nextConversations[sessionID] ?? []
     let didUpdateSession = false
-    const nextTurns = currentTurns.map((turn) => {
+    const nextMessages = currentMessages.map((turn) => {
       if (turn.kind !== "assistant") return turn
       const streamEvents = updatesByTurnID.get(turn.id)
       if (!streamEvents?.length) return turn
 
       didUpdateSession = true
       return streamEvents.reduce(
-        (nextTurn, streamEvent) => applyAgentStreamEventToTurn(nextTurn, streamEvent),
+        (nextMessage, streamEvent) => applyAgentStreamEventToThreadMessage(nextMessage, streamEvent),
         turn,
       )
     })
@@ -349,7 +349,7 @@ function updateConversationMapWithDeltaGroups(
     if (!didUpdateSession) continue
     nextConversations = {
       ...nextConversations,
-      [sessionID]: reconcileConversationTurns(nextTurns),
+      [sessionID]: reconcileConversationMessages(nextMessages),
     }
   }
 
@@ -613,11 +613,11 @@ function isTerminalTraceStatus(status: AssistantTraceItem["status"]) {
   return status === "completed" || status === "error" || status === "denied" || status === "cancelled"
 }
 
-function canIncomingTurnOverrideCancellation(turn: AssistantTurn) {
+function canIncomingTurnOverrideCancellation(turn: AssistantThreadMessage) {
   return turn.runtime.phase === "completed" || turn.runtime.phase === "failed"
 }
 
-function shouldPreserveCancelledTurn(current: AssistantTurn, incoming: AssistantTurn) {
+function shouldPreserveCancelledTurn(current: AssistantThreadMessage, incoming: AssistantThreadMessage) {
   return current.runtime.phase === "cancelled" &&
     (!canIncomingTurnOverrideCancellation(incoming) || isLateToolFailureForCancelledTurn(current, incoming))
 }
@@ -669,7 +669,7 @@ function toolTraceItemsShareIdentity(left: AssistantTraceItem, right: AssistantT
   return leftIdentities.some((identity) => rightIdentities.has(identity))
 }
 
-function isLateToolFailureForCancelledTurn(current: AssistantTurn, incoming: AssistantTurn) {
+function isLateToolFailureForCancelledTurn(current: AssistantThreadMessage, incoming: AssistantThreadMessage) {
   if (incoming.runtime.phase !== "failed") return false
   if (incoming.items.some((item) => item.kind === "error")) return false
 
@@ -832,7 +832,7 @@ function mergeAssistantTraceItems(currentItems: AssistantTraceItem[], nextItems:
   )
 }
 
-function assistantRuntimeAfterTraceMerge(current: AssistantTurn, incoming: AssistantTurn, items: AssistantTraceItem[]) {
+function assistantRuntimeAfterTraceMerge(current: AssistantThreadMessage, incoming: AssistantThreadMessage, items: AssistantTraceItem[]) {
   const hasWaitingTool = items.some((item) => item.kind === "tool" && item.status === "waiting-approval")
   const hasActiveTool = items.some(
     (item) => item.kind === "tool" && (item.status === "pending" || item.status === "running"),
@@ -889,7 +889,7 @@ function assistantRuntimeAfterTraceMerge(current: AssistantTurn, incoming: Assis
   }
 }
 
-function isTerminalAssistantRuntimePhase(phase: AssistantTurn["runtime"]["phase"]) {
+function isTerminalAssistantRuntimePhase(phase: AssistantThreadMessage["runtime"]["phase"]) {
   return (
     phase === "completed" ||
     phase === "cancelled" ||
@@ -899,7 +899,7 @@ function isTerminalAssistantRuntimePhase(phase: AssistantTurn["runtime"]["phase"
   )
 }
 
-function mergeAssistantTurnsByMessageID(current: AssistantTurn, incoming: AssistantTurn): AssistantTurn {
+function mergeAssistantMessagesByMessageID(current: AssistantThreadMessage, incoming: AssistantThreadMessage): AssistantThreadMessage {
   const preserveCancellation = shouldPreserveCancelledTurn(current, incoming)
   const mergedItems = mergeAssistantTraceItems(current.items, incoming.items)
   const items = preserveCancellation ? cancelInterruptedToolTraceItems(mergedItems) : mergedItems
@@ -935,27 +935,27 @@ function mergeAssistantTurnsByMessageID(current: AssistantTurn, incoming: Assist
   }
 }
 
-export function reconcileConversationTurns(turns: Turn[]) {
-  const result: Turn[] = []
+export function reconcileConversationMessages(turns: ThreadMessage[]) {
+  const result: ThreadMessage[] = []
   const assistantIndexByMessageID = new Map<string, number>()
   const assistantIndexByBackendTurnID = new Map<string, number>()
 
-  function registerAssistantTurnIndex(turn: AssistantTurn, index: number) {
+  function registerAssistantMessageIndex(turn: AssistantThreadMessage, index: number) {
     if (turn.messageID) {
       assistantIndexByMessageID.set(turn.messageID, index)
     }
-    for (const backendTurnID of getAssistantTurnBackendTurnIDs(turn)) {
+    for (const backendTurnID of getAssistantMessageBackendTurnIDs(turn)) {
       assistantIndexByBackendTurnID.set(backendTurnID, index)
     }
   }
 
-  function findExistingAssistantTurnIndex(turn: AssistantTurn) {
+  function findExistingAssistantMessageIndex(turn: AssistantThreadMessage) {
     if (turn.messageID) {
       const messageIndex = assistantIndexByMessageID.get(turn.messageID)
       if (messageIndex !== undefined) return messageIndex
     }
 
-    for (const backendTurnID of getAssistantTurnBackendTurnIDs(turn)) {
+    for (const backendTurnID of getAssistantMessageBackendTurnIDs(turn)) {
       const backendTurnIndex = assistantIndexByBackendTurnID.get(backendTurnID)
       if (backendTurnIndex !== undefined) return backendTurnIndex
     }
@@ -969,34 +969,34 @@ export function reconcileConversationTurns(turns: Turn[]) {
       continue
     }
 
-    const existingIndex = findExistingAssistantTurnIndex(turn)
+    const existingIndex = findExistingAssistantMessageIndex(turn)
     if (existingIndex === undefined) {
-      const nextTurn = {
+      const nextMessage = {
         ...turn,
         items: removeStaleApprovalBlockers(turn.items),
       }
-      registerAssistantTurnIndex(nextTurn, result.length)
+      registerAssistantMessageIndex(nextMessage, result.length)
       result.push({
-        ...nextTurn,
+        ...nextMessage,
       })
       continue
     }
 
-    const existingTurn = result[existingIndex]
-    if (!existingTurn || existingTurn.kind !== "assistant") {
+    const existingMessage = result[existingIndex]
+    if (!existingMessage || existingMessage.kind !== "assistant") {
       result.push(turn)
       continue
     }
 
-    const mergedTurn = mergeAssistantTurnsByMessageID(existingTurn, turn)
-    result[existingIndex] = mergedTurn
-    registerAssistantTurnIndex(mergedTurn, existingIndex)
+    const mergedMessage = mergeAssistantMessagesByMessageID(existingMessage, turn)
+    result[existingIndex] = mergedMessage
+    registerAssistantMessageIndex(mergedMessage, existingIndex)
   }
 
   return result
 }
 
-function getAssistantTurnResponseText(turn: AssistantTurn) {
+function getAssistantMessageResponseText(turn: AssistantThreadMessage) {
   return turn.items
     .filter((item) => item.kind === "text" || item.kind === "question")
     .map((item) => normalizeTraceText(item.text))
@@ -1004,7 +1004,7 @@ function getAssistantTurnResponseText(turn: AssistantTurn) {
     .join("\n\n")
 }
 
-function getAssistantTurnSourceIDs(turn: AssistantTurn) {
+function getAssistantMessageSourceIDs(turn: AssistantThreadMessage) {
   return new Set(
     turn.items
       .map((item) => item.sourceID)
@@ -1012,7 +1012,7 @@ function getAssistantTurnSourceIDs(turn: AssistantTurn) {
   )
 }
 
-function getAssistantTurnBackendTurnIDs(turn: AssistantTurn) {
+function getAssistantMessageBackendTurnIDs(turn: AssistantThreadMessage) {
   return new Set(
     turn.items
       .map((item) => item.backendTurnID)
@@ -1020,45 +1020,45 @@ function getAssistantTurnBackendTurnIDs(turn: AssistantTurn) {
   )
 }
 
-function assistantTurnsAreCompatible(previousTurn: AssistantTurn, nextTurn: AssistantTurn) {
-  if (previousTurn.id === nextTurn.id) return true
-  if (previousTurn.messageID && nextTurn.messageID && previousTurn.messageID === nextTurn.messageID) return true
+function assistantMessagesAreCompatible(previousMessage: AssistantThreadMessage, nextMessage: AssistantThreadMessage) {
+  if (previousMessage.id === nextMessage.id) return true
+  if (previousMessage.messageID && nextMessage.messageID && previousMessage.messageID === nextMessage.messageID) return true
 
-  const previousBackendTurnIDs = getAssistantTurnBackendTurnIDs(previousTurn)
+  const previousBackendTurnIDs = getAssistantMessageBackendTurnIDs(previousMessage)
   if (previousBackendTurnIDs.size > 0) {
-    for (const backendTurnID of getAssistantTurnBackendTurnIDs(nextTurn)) {
+    for (const backendTurnID of getAssistantMessageBackendTurnIDs(nextMessage)) {
       if (previousBackendTurnIDs.has(backendTurnID)) return true
     }
   }
 
-  const previousSourceIDs = getAssistantTurnSourceIDs(previousTurn)
+  const previousSourceIDs = getAssistantMessageSourceIDs(previousMessage)
   if (previousSourceIDs.size > 0) {
-    for (const sourceID of getAssistantTurnSourceIDs(nextTurn)) {
+    for (const sourceID of getAssistantMessageSourceIDs(nextMessage)) {
       if (previousSourceIDs.has(sourceID)) return true
     }
   }
 
-  const previousResponseText = getAssistantTurnResponseText(previousTurn)
-  const nextResponseText = getAssistantTurnResponseText(nextTurn)
+  const previousResponseText = getAssistantMessageResponseText(previousMessage)
+  const nextResponseText = getAssistantMessageResponseText(nextMessage)
   return Boolean(previousResponseText && previousResponseText === nextResponseText)
 }
 
-function findMatchingAssistantTurnIndex(
-  previousAssistantTurns: AssistantTurn[],
-  nextTurn: AssistantTurn,
+function findMatchingAssistantMessageIndex(
+  previousAssistantMessages: AssistantThreadMessage[],
+  nextMessage: AssistantThreadMessage,
   preferredIndex: number,
   usedIndices: Set<number>,
 ) {
-  const idMatchIndex = previousAssistantTurns.findIndex(
-    (turn, index) => !usedIndices.has(index) && turn.id === nextTurn.id,
+  const idMatchIndex = previousAssistantMessages.findIndex(
+    (turn, index) => !usedIndices.has(index) && turn.id === nextMessage.id,
   )
   if (idMatchIndex !== -1) return idMatchIndex
 
-  const preferredTurn = previousAssistantTurns[preferredIndex]
+  const preferredTurn = previousAssistantMessages[preferredIndex]
   if (
     preferredTurn &&
     !usedIndices.has(preferredIndex) &&
-    assistantTurnsAreCompatible(preferredTurn, nextTurn)
+    assistantMessagesAreCompatible(preferredTurn, nextMessage)
   ) {
     return preferredIndex
   }
@@ -1066,28 +1066,28 @@ function findMatchingAssistantTurnIndex(
   if (
     preferredTurn &&
     !usedIndices.has(preferredIndex) &&
-    shouldPreserveCancelledTurn(preferredTurn, nextTurn)
+    shouldPreserveCancelledTurn(preferredTurn, nextMessage)
   ) {
     return preferredIndex
   }
 
-  return previousAssistantTurns.findIndex(
-    (turn, index) => !usedIndices.has(index) && assistantTurnsAreCompatible(turn, nextTurn),
+  return previousAssistantMessages.findIndex(
+    (turn, index) => !usedIndices.has(index) && assistantMessagesAreCompatible(turn, nextMessage),
   )
 }
 
-function preserveAssistantTurnIdentity(previousTurns: Turn[], nextTurns: Turn[]) {
-  const previousAssistantTurns = previousTurns.filter((turn): turn is AssistantTurn => turn.kind === "assistant")
-  if (previousAssistantTurns.length === 0) return nextTurns
+function preserveAssistantMessageIdentity(previousMessages: ThreadMessage[], nextMessages: ThreadMessage[]) {
+  const previousAssistantMessages = previousMessages.filter((turn): turn is AssistantThreadMessage => turn.kind === "assistant")
+  if (previousAssistantMessages.length === 0) return nextMessages
 
   const usedIndices = new Set<number>()
   let nextAssistantIndex = 0
 
-  return nextTurns.map((turn) => {
+  return nextMessages.map((turn) => {
     if (turn.kind !== "assistant") return turn
 
-    const matchIndex = findMatchingAssistantTurnIndex(
-      previousAssistantTurns,
+    const matchIndex = findMatchingAssistantMessageIndex(
+      previousAssistantMessages,
       turn,
       nextAssistantIndex,
       usedIndices,
@@ -1096,122 +1096,122 @@ function preserveAssistantTurnIdentity(previousTurns: Turn[], nextTurns: Turn[])
 
     if (matchIndex === -1) return turn
 
-    const previousTurn = previousAssistantTurns[matchIndex]
-    if (!previousTurn) return turn
+    const previousMessage = previousAssistantMessages[matchIndex]
+    if (!previousMessage) return turn
 
     usedIndices.add(matchIndex)
 
     const turnWithPreservedIdentity = {
       ...turn,
-      id: previousTurn.id,
-      items: preserveTraceItemIdentity(previousTurn.items, turn.items),
+      id: previousMessage.id,
+      items: preserveTraceItemIdentity(previousMessage.items, turn.items),
     }
-    return shouldPreserveCancelledTurn(previousTurn, turn)
-      ? mergeAssistantTurnsByMessageID(previousTurn, turnWithPreservedIdentity)
+    return shouldPreserveCancelledTurn(previousMessage, turn)
+      ? mergeAssistantMessagesByMessageID(previousMessage, turnWithPreservedIdentity)
       : turnWithPreservedIdentity
   })
 }
 
-function isLocalGeneratedUserTurn(turn: UserTurn) {
+function isLocalGeneratedUserMessage(turn: UserThreadMessage) {
   return turn.id.startsWith("user-")
 }
 
-function normalizeUserTurnIdentityText(turn: UserTurn) {
+function normalizeUserMessageIdentityText(turn: UserThreadMessage) {
   return (turn.displayText ?? turn.text).replace(/\s+/g, " ").trim()
 }
 
-function userTurnsAreCompatible(previousTurn: UserTurn, nextTurn: UserTurn) {
-  if (previousTurn.id === nextTurn.id) return true
+function userMessagesAreCompatible(previousMessage: UserThreadMessage, nextMessage: UserThreadMessage) {
+  if (previousMessage.id === nextMessage.id) return true
 
-  const previousQuestionID = previousTurn.questionAnswer?.questionID ?? ""
-  const nextQuestionID = nextTurn.questionAnswer?.questionID ?? ""
+  const previousQuestionID = previousMessage.questionAnswer?.questionID ?? ""
+  const nextQuestionID = nextMessage.questionAnswer?.questionID ?? ""
   if (previousQuestionID || nextQuestionID) return previousQuestionID === nextQuestionID
 
-  const previousText = normalizeUserTurnIdentityText(previousTurn)
-  const nextText = normalizeUserTurnIdentityText(nextTurn)
+  const previousText = normalizeUserMessageIdentityText(previousMessage)
+  const nextText = normalizeUserMessageIdentityText(nextMessage)
   return Boolean(previousText && previousText === nextText)
 }
 
-export function mergeConversationTurnsFromHistory(
-  previousTurns: Turn[],
-  nextTurns: Turn[],
+export function mergeConversationMessagesFromHistory(
+  previousMessages: ThreadMessage[],
+  nextMessages: ThreadMessage[],
   options?: { preserveUserPresentation?: boolean },
 ) {
   const turnsWithUserPresentation = options?.preserveUserPresentation === false
-    ? nextTurns
-    : mergeUserTurnPresentationState(previousTurns, nextTurns)
-  return preserveAssistantTurnIdentity(previousTurns, turnsWithUserPresentation)
+    ? nextMessages
+    : mergeUserMessagePresentationState(previousMessages, nextMessages)
+  return preserveAssistantMessageIdentity(previousMessages, turnsWithUserPresentation)
 }
 
-export function mergeExternalUserTurnsFromHistory(
-  previousTurns: Turn[],
-  historyTurns: Turn[],
-  options?: { beforeTurnID?: string },
+export function mergeExternalUserMessagesFromHistory(
+  previousMessages: ThreadMessage[],
+  historyMessages: ThreadMessage[],
+  options?: { beforeMessageID?: string },
 ) {
-  const previousUserTurnIDs = new Set(
-    previousTurns
-      .filter((turn): turn is UserTurn => turn.kind === "user")
+  const previousUserThreadMessageIDs = new Set(
+    previousMessages
+      .filter((turn): turn is UserThreadMessage => turn.kind === "user")
       .map((turn) => turn.id),
   )
-  const missingUserTurns = historyTurns
-    .filter((turn): turn is UserTurn => turn.kind === "user" && !previousUserTurnIDs.has(turn.id))
+  const missingUserMessages = historyMessages
+    .filter((turn): turn is UserThreadMessage => turn.kind === "user" && !previousUserThreadMessageIDs.has(turn.id))
     .sort((left, right) => left.timestamp - right.timestamp)
 
-  if (missingUserTurns.length === 0) return previousTurns
+  if (missingUserMessages.length === 0) return previousMessages
 
-  const nextTurns = [...previousTurns]
-  const replacedLocalUserTurnIndices = new Set<number>()
+  const nextMessages = [...previousMessages]
+  const replacedLocalUserMessageIndices = new Set<number>()
 
-  function findLocalUserTurnReplacementIndex(userTurn: UserTurn) {
-    const anchorIndex = options?.beforeTurnID ? nextTurns.findIndex((turn) => turn.id === options.beforeTurnID) : -1
+  function findLocalUserMessageReplacementIndex(userMessage: UserThreadMessage) {
+    const anchorIndex = options?.beforeMessageID ? nextMessages.findIndex((turn) => turn.id === options.beforeMessageID) : -1
     if (anchorIndex < 0) return -1
 
     for (let index = anchorIndex - 1; index >= 0; index -= 1) {
-      const candidate = nextTurns[index]
+      const candidate = nextMessages[index]
       if (!candidate) continue
       if (candidate.kind === "assistant") break
       if (candidate.kind !== "user") continue
-      if (replacedLocalUserTurnIndices.has(index)) continue
-      if (!isLocalGeneratedUserTurn(candidate)) continue
-      if (!userTurnsAreCompatible(candidate, userTurn)) continue
+      if (replacedLocalUserMessageIndices.has(index)) continue
+      if (!isLocalGeneratedUserMessage(candidate)) continue
+      if (!userMessagesAreCompatible(candidate, userMessage)) continue
       return index
     }
 
     return -1
   }
 
-  for (const userTurn of missingUserTurns) {
-    const replacementIndex = findLocalUserTurnReplacementIndex(userTurn)
+  for (const userMessage of missingUserMessages) {
+    const replacementIndex = findLocalUserMessageReplacementIndex(userMessage)
     if (replacementIndex >= 0) {
-      const currentTurn = nextTurns[replacementIndex]
-      if (currentTurn?.kind === "user") {
-        const [mergedUserTurn] = mergeUserTurnPresentationState([currentTurn], [userTurn])
-        nextTurns[replacementIndex] = mergedUserTurn ?? userTurn
-        replacedLocalUserTurnIndices.add(replacementIndex)
-        previousUserTurnIDs.add(userTurn.id)
+      const currentMessage = nextMessages[replacementIndex]
+      if (currentMessage?.kind === "user") {
+        const [mergedUserMessage] = mergeUserMessagePresentationState([currentMessage], [userMessage])
+        nextMessages[replacementIndex] = mergedUserMessage ?? userMessage
+        replacedLocalUserMessageIndices.add(replacementIndex)
+        previousUserThreadMessageIDs.add(userMessage.id)
         continue
       }
     }
 
-    const timestampIndex = nextTurns.findIndex(
-      (turn) => turn.timestamp > userTurn.timestamp || (turn.kind === "assistant" && turn.timestamp === userTurn.timestamp),
+    const timestampIndex = nextMessages.findIndex(
+      (turn) => turn.timestamp > userMessage.timestamp || (turn.kind === "assistant" && turn.timestamp === userMessage.timestamp),
     )
-    const anchorIndex = options?.beforeTurnID ? nextTurns.findIndex((turn) => turn.id === options.beforeTurnID) : -1
+    const anchorIndex = options?.beforeMessageID ? nextMessages.findIndex((turn) => turn.id === options.beforeMessageID) : -1
     const insertIndex = anchorIndex >= 0 && (timestampIndex < 0 || anchorIndex < timestampIndex)
       ? anchorIndex
       : timestampIndex
 
     if (insertIndex < 0) {
-      nextTurns.push(userTurn)
+      nextMessages.push(userMessage)
     } else {
-      nextTurns.splice(insertIndex, 0, userTurn)
+      nextMessages.splice(insertIndex, 0, userMessage)
     }
   }
 
-  return reconcileConversationTurns(nextTurns)
+  return reconcileConversationMessages(nextMessages)
 }
 
-export function conversationTurnsAreEquivalent(leftTurns: Turn[], rightTurns: Turn[]) {
+export function conversationMessagesAreEquivalent(leftTurns: ThreadMessage[], rightTurns: ThreadMessage[]) {
   if (leftTurns === rightTurns) return true
   if (leftTurns.length !== rightTurns.length) return false
 
@@ -1389,7 +1389,7 @@ interface UseSessionStreamControllerOptions {
   setCancellingSessionIDs: StateSetter<Record<string, boolean>>
   setCanLoadSessionHistory: StateSetter<boolean>
   setContextUsageBySession: StateSetter<Record<string, SessionContextUsage>>
-  setConversations: StateSetter<Record<string, Turn[]>>
+  setConversations: StateSetter<Record<string, ThreadMessage[]>>
   setMessageTreeBySession: StateSetter<Record<string, SessionMessageTree>>
   setPendingConversationInputsBySession: StateSetter<Record<string, PendingConversationInput[]>>
   setPendingPermissionRequestsBySession: StateSetter<Record<string, PermissionRequest[]>>
@@ -1646,19 +1646,19 @@ export function useSessionStreamController({
     return agentSessions[sessionID] ?? sessionID
   }
 
-  function findAssistantTurnIDByMessageID(sessionID: string, messageID: string | undefined) {
+  function findAssistantThreadMessageIDByMessageID(sessionID: string, messageID: string | undefined) {
     if (!messageID) return undefined
-    const turn = conversationStore.getSessionTurns(sessionID).find(
-      (candidate): candidate is AssistantTurn =>
+    const turn = conversationStore.getSessionMessages(sessionID).find(
+      (candidate): candidate is AssistantThreadMessage =>
         candidate.kind === "assistant" &&
         (candidate.messageID === messageID || candidate.items.some((item) => item.messageID === messageID)),
     )
     return turn?.id
   }
 
-  function findAssistantTurnIDByBackendTurnID(sessionID: string, backendTurnID: string | undefined) {
+  function findAssistantThreadMessageIDByBackendTurnID(sessionID: string, backendTurnID: string | undefined) {
     if (!backendTurnID) return undefined
-    const turns = conversationStore.getSessionTurns(sessionID)
+    const turns = conversationStore.getSessionMessages(sessionID)
     for (let index = turns.length - 1; index >= 0; index -= 1) {
       const turn = turns[index]
       if (turn?.kind !== "assistant") continue
@@ -1694,25 +1694,25 @@ export function useSessionStreamController({
     })
   }
 
-  function replaceConversationTurns(sessionID: string, nextTurns: Turn[]) {
+  function replaceConversationMessages(sessionID: string, nextMessages: ThreadMessage[]) {
     bumpConversationVersion(sessionID)
     setConversations((prev) => ({
       ...prev,
-      [sessionID]: reconcileConversationTurns(nextTurns),
+      [sessionID]: reconcileConversationMessages(nextMessages),
     }))
   }
 
-  function appendConversationTurns(sessionID: string, nextTurns: Turn[]) {
+  function appendConversationMessages(sessionID: string, nextMessages: ThreadMessage[]) {
     bumpConversationVersion(sessionID)
     setConversations((prev) => {
-      const next = appendConversationTurnsToMap(prev, sessionID, nextTurns)
-      next[sessionID] = reconcileConversationTurns(next[sessionID] ?? [])
-      persistUserTurns(sessionID, next[sessionID] ?? [])
+      const next = appendConversationMessagesToMap(prev, sessionID, nextMessages)
+      next[sessionID] = reconcileConversationMessages(next[sessionID] ?? [])
+      persistUserMessages(sessionID, next[sessionID] ?? [])
       return next
     })
   }
 
-  function clearLatestSteerUserTurnForAssistant(sessionID: string, assistantTurnID: string) {
+  function clearLatestSteerUserMessageForAssistant(sessionID: string, assistantThreadMessageID: string) {
     setConversations((prev) => {
       const current = prev[sessionID] ?? []
       let targetIndex = -1
@@ -1721,7 +1721,7 @@ export function useSessionStreamController({
         if (
           turn?.kind === "user" &&
           turn.submissionMode === "steer" &&
-          (!turn.streamInsertion || turn.streamInsertion.assistantTurnID === assistantTurnID)
+          (!turn.streamInsertion || turn.streamInsertion.assistantThreadMessageID === assistantThreadMessageID)
         ) {
           targetIndex = index
           break
@@ -1731,13 +1731,13 @@ export function useSessionStreamController({
       if (targetIndex < 0) return prev
 
       bumpConversationVersion(sessionID)
-      const nextTurns = current.map((turn, index): Turn => {
+      const nextMessages = current.map((turn, index): ThreadMessage => {
         if (index !== targetIndex || turn.kind !== "user") return turn
         const { submissionMode: _submissionMode, streamInsertion: _streamInsertion, ...regularTurn } = turn
         return regularTurn
       })
-      const reconciled = reconcileConversationTurns(nextTurns)
-      persistUserTurns(sessionID, reconciled)
+      const reconciled = reconcileConversationMessages(nextMessages)
+      persistUserMessages(sessionID, reconciled)
       return {
         ...prev,
         [sessionID]: reconciled,
@@ -1745,25 +1745,25 @@ export function useSessionStreamController({
     })
   }
 
-  function applyExecutionModeToUserTurn(input: {
+  function applyExecutionModeToUserThreadMessage(input: {
     sessionID: string
-    userTurnID: string
-    assistantTurnID: string
+    userThreadMessageID: string
+    assistantThreadMessageID: string
     mode: AgentSessionExecutionMode
   }) {
     setConversations((prev) => {
       const current = prev[input.sessionID] ?? []
-      const nextTurns = applyExecutionModeToUserTurnPresentation({
+      const nextMessages = applyExecutionModeToUserMessagePresentation({
         turns: current,
-        userTurnID: input.userTurnID,
-        assistantTurnID: input.assistantTurnID,
+        userThreadMessageID: input.userThreadMessageID,
+        assistantThreadMessageID: input.assistantThreadMessageID,
         mode: input.mode,
       })
 
-      if (nextTurns === current) return prev
+      if (nextMessages === current) return prev
       bumpConversationVersion(input.sessionID)
-      const reconciled = reconcileConversationTurns(nextTurns)
-      persistUserTurns(input.sessionID, reconciled)
+      const reconciled = reconcileConversationMessages(nextMessages)
+      persistUserMessages(input.sessionID, reconciled)
       return {
         ...prev,
         [input.sessionID]: reconciled,
@@ -1771,30 +1771,30 @@ export function useSessionStreamController({
     })
   }
 
-  function revealBackendRecordedUserTurn(input: {
+  function revealBackendRecordedUserThreadMessage(input: {
     sessionID: string
-    userTurnID: string
-    beforeTurnID?: string
+    userThreadMessageID: string
+    beforeMessageID?: string
   }) {
-    if (commitPendingConversationInputAsUserTurn({
+    if (commitPendingConversationInputAsUserThreadMessage({
       sessionID: input.sessionID,
-      inputID: input.userTurnID,
-      beforeTurnID: input.beforeTurnID,
+      inputID: input.userThreadMessageID,
+      beforeMessageID: input.beforeMessageID,
     })) {
       return
     }
 
     setConversations((prev) => {
       const current = prev[input.sessionID] ?? []
-      const nextTurns = revealBackendRecordedUserTurnPresentation({
+      const nextMessages = revealBackendRecordedUserMessagePresentation({
         turns: current,
-        userTurnID: input.userTurnID,
+        userThreadMessageID: input.userThreadMessageID,
       })
 
-      if (nextTurns === current) return prev
+      if (nextMessages === current) return prev
       bumpConversationVersion(input.sessionID)
-      const reconciled = reconcileConversationTurns(nextTurns)
-      persistUserTurns(input.sessionID, reconciled)
+      const reconciled = reconcileConversationMessages(nextMessages)
+      persistUserMessages(input.sessionID, reconciled)
       return {
         ...prev,
         [input.sessionID]: reconciled,
@@ -1812,12 +1812,12 @@ export function useSessionStreamController({
     )?.pendingInput ?? null
   }
 
-  function readAssistantItemCount(sessionID: string, assistantTurnID: string | undefined) {
-    if (!assistantTurnID) return 0
-    const assistantTurn = conversationStore.getSessionTurns(sessionID).find(
-      (turn): turn is AssistantTurn => turn.kind === "assistant" && turn.id === assistantTurnID,
+  function readAssistantItemCount(sessionID: string, assistantThreadMessageID: string | undefined) {
+    if (!assistantThreadMessageID) return 0
+    const assistantMessage = conversationStore.getSessionMessages(sessionID).find(
+      (turn): turn is AssistantThreadMessage => turn.kind === "assistant" && turn.id === assistantThreadMessageID,
     )
-    return assistantTurn?.items.length ?? 0
+    return assistantMessage?.items.length ?? 0
   }
 
   function removePendingConversationInputForSession(sessionID: string, inputID: string) {
@@ -1845,44 +1845,44 @@ export function useSessionStreamController({
     }
   }
 
-  function insertCommittedUserTurn(
-    turns: Turn[],
-    userTurn: UserTurn,
-    beforeTurnID: string | undefined,
+  function insertCommittedUserThreadMessage(
+    turns: ThreadMessage[],
+    userMessage: UserThreadMessage,
+    beforeMessageID: string | undefined,
   ) {
-    if (turns.some((turn) => turn.id === userTurn.id)) return turns
-    if (!beforeTurnID) return [...turns, userTurn]
+    if (turns.some((turn) => turn.id === userMessage.id)) return turns
+    if (!beforeMessageID) return [...turns, userMessage]
 
-    const beforeIndex = turns.findIndex((turn) => turn.id === beforeTurnID)
-    if (beforeIndex === -1) return [...turns, userTurn]
+    const beforeIndex = turns.findIndex((turn) => turn.id === beforeMessageID)
+    if (beforeIndex === -1) return [...turns, userMessage]
 
     return [
       ...turns.slice(0, beforeIndex),
-      userTurn,
+      userMessage,
       ...turns.slice(beforeIndex),
     ]
   }
 
-  function commitPendingConversationInputAsUserTurn(input: {
+  function commitPendingConversationInputAsUserThreadMessage(input: {
     sessionID: string
     inputID: string
-    beforeTurnID?: string
-    streamInsertion?: UserTurn["streamInsertion"]
+    beforeMessageID?: string
+    streamInsertion?: UserThreadMessage["streamInsertion"]
   }) {
     const pendingInput = findPendingConversationInput(input.sessionID, input.inputID)
     if (!pendingInput) return false
 
-    const userTurn = pendingConversationInputToUserTurn(pendingInput, {
+    const userMessage = pendingConversationInputToUserThreadMessage(pendingInput, {
       ...(input.streamInsertion ? { streamInsertion: input.streamInsertion } : {}),
     })
     setConversations((prev) => {
       const current = prev[input.sessionID] ?? []
-      const nextTurns = insertCommittedUserTurn(current, userTurn, input.beforeTurnID)
-      if (nextTurns === current) return prev
+      const nextMessages = insertCommittedUserThreadMessage(current, userMessage, input.beforeMessageID)
+      if (nextMessages === current) return prev
 
       bumpConversationVersion(input.sessionID)
-      const reconciled = reconcileConversationTurns(nextTurns)
-      persistUserTurns(input.sessionID, reconciled)
+      const reconciled = reconcileConversationMessages(nextMessages)
+      persistUserMessages(input.sessionID, reconciled)
       return {
         ...prev,
         [input.sessionID]: reconciled,
@@ -1895,38 +1895,38 @@ export function useSessionStreamController({
   function commitPendingSteerInputAsConsumedInsertion(input: {
     sessionID: string
     inputID: string
-    assistantTurnID: string
+    assistantThreadMessageID: string
   }) {
     const pendingInput = findPendingConversationInput(input.sessionID, input.inputID)
     if (!pendingInput || pendingInput.mode !== "steer") return false
 
-    return commitPendingConversationInputAsUserTurn({
+    return commitPendingConversationInputAsUserThreadMessage({
       sessionID: input.sessionID,
       inputID: input.inputID,
-      beforeTurnID: undefined,
+      beforeMessageID: undefined,
       streamInsertion: {
-        assistantTurnID: input.assistantTurnID,
-        afterItemCount: pendingInput.afterItemCount ?? readAssistantItemCount(input.sessionID, input.assistantTurnID),
+        assistantThreadMessageID: input.assistantThreadMessageID,
+        afterItemCount: pendingInput.afterItemCount ?? readAssistantItemCount(input.sessionID, input.assistantThreadMessageID),
         status: "consumed",
       },
     })
   }
 
-  function revealPendingSteerUserTurnsAtHandoff(input: {
+  function revealPendingSteerUserMessagesAtHandoff(input: {
     sessionID: string
-    assistantTurnID: string
+    assistantThreadMessageID: string
   }) {
     setConversations((prev) => {
       const current = prev[input.sessionID] ?? []
-      const nextTurns = revealPendingSteerUserTurnsAtHandoffPresentation({
+      const nextMessages = revealPendingSteerUserMessagesAtHandoffPresentation({
         turns: current,
-        assistantTurnID: input.assistantTurnID,
+        assistantThreadMessageID: input.assistantThreadMessageID,
       })
 
-      if (nextTurns === current) return prev
+      if (nextMessages === current) return prev
       bumpConversationVersion(input.sessionID)
-      const reconciled = reconcileConversationTurns(nextTurns)
-      persistUserTurns(input.sessionID, reconciled)
+      const reconciled = reconcileConversationMessages(nextMessages)
+      persistUserMessages(input.sessionID, reconciled)
       return {
         ...prev,
         [input.sessionID]: reconciled,
@@ -1934,7 +1934,7 @@ export function useSessionStreamController({
     })
   }
 
-  function revealPendingUserTurnForBackendEvent(input: {
+  function revealPendingUserThreadMessageForBackendEvent(input: {
     uiSessionID: string
     backendSessionID: string
     backendTurnID: string
@@ -1943,25 +1943,25 @@ export function useSessionStreamController({
       target.sessionID === input.uiSessionID &&
       (target.backendSessionID ?? input.backendSessionID) === input.backendSessionID &&
       target.backendTurnID === input.backendTurnID &&
-      Boolean(target.userTurnID)
+      Boolean(target.userThreadMessageID)
     )
-    if (!pending?.userTurnID) return
-    revealBackendRecordedUserTurn({
+    if (!pending?.userThreadMessageID) return
+    revealBackendRecordedUserThreadMessage({
       sessionID: pending.sessionID,
-      userTurnID: pending.userTurnID,
-      beforeTurnID: pending.assistantTurnID,
+      userThreadMessageID: pending.userThreadMessageID,
+      beforeMessageID: pending.assistantThreadMessageID,
     })
   }
 
-  function markPendingSteerUserTurnsConsumed(sessionID: string, assistantTurnID: string) {
+  function markPendingSteerUserMessagesConsumed(sessionID: string, assistantThreadMessageID: string) {
     setConversations((prev) => {
       const current = prev[sessionID] ?? []
       let didUpdate = false
-      const nextTurns = current.map((turn): Turn => {
+      const nextMessages = current.map((turn): ThreadMessage => {
         if (
           turn.kind !== "user" ||
           turn.submissionMode !== "steer" ||
-          turn.streamInsertion?.assistantTurnID !== assistantTurnID ||
+          turn.streamInsertion?.assistantThreadMessageID !== assistantThreadMessageID ||
           turn.streamInsertion.status !== "pending"
         ) {
           return turn
@@ -1979,8 +1979,8 @@ export function useSessionStreamController({
 
       if (!didUpdate) return prev
       bumpConversationVersion(sessionID)
-      const reconciled = reconcileConversationTurns(nextTurns)
-      persistUserTurns(sessionID, reconciled)
+      const reconciled = reconcileConversationMessages(nextMessages)
+      persistUserMessages(sessionID, reconciled)
       return {
         ...prev,
         [sessionID]: reconciled,
@@ -1988,13 +1988,13 @@ export function useSessionStreamController({
     })
   }
 
-  function removeConversationTurn(sessionID: string, turnID: string) {
+  function removeConversationMessage(sessionID: string, messageID: string) {
     setConversations((prev) => {
       const current = prev[sessionID] ?? []
-      if (!current.some((turn) => turn.id === turnID)) return prev
+      if (!current.some((message) => message.id === messageID)) return prev
       bumpConversationVersion(sessionID)
-      const reconciled = reconcileConversationTurns(current.filter((turn) => turn.id !== turnID))
-      persistUserTurns(sessionID, reconciled)
+      const reconciled = reconcileConversationMessages(current.filter((message) => message.id !== messageID))
+      persistUserMessages(sessionID, reconciled)
       return {
         ...prev,
         [sessionID]: reconciled,
@@ -2004,44 +2004,44 @@ export function useSessionStreamController({
 
   function ensureAssistantConversationTurn(input: {
     sessionID: string
-    assistantTurnID: string
+    assistantThreadMessageID: string
     detail?: string
   }) {
-    if (conversationStore.getSessionTurns(input.sessionID).some(
-      (turn) => turn.kind === "assistant" && turn.id === input.assistantTurnID,
+    if (conversationStore.getSessionMessages(input.sessionID).some(
+      (turn) => turn.kind === "assistant" && turn.id === input.assistantThreadMessageID,
     )) {
       return
     }
 
     setConversations((prev) => {
       const current = prev[input.sessionID] ?? []
-      const nextTurns = ensureAssistantTurnPresentation({
+      const nextMessages = ensureAssistantThreadMessagePresentation({
         turns: current,
-        assistantTurnID: input.assistantTurnID,
+        assistantThreadMessageID: input.assistantThreadMessageID,
         detail: input.detail,
       })
-      if (nextTurns === current) return prev
+      if (nextMessages === current) return prev
 
       bumpConversationVersion(input.sessionID)
       return {
         ...prev,
-        [input.sessionID]: reconcileConversationTurns(nextTurns),
+        [input.sessionID]: reconcileConversationMessages(nextMessages),
       }
     })
   }
 
-  function updateAssistantConversationTurn(
+  function updateAssistantConversationMessage(
     sessionID: string,
-    turnID: string,
-    updater: Parameters<typeof updateAssistantTurnInMap>[3],
+    assistantMessageID: string,
+    updater: Parameters<typeof updateAssistantMessageInMap>[3],
   ) {
     bumpConversationVersion(sessionID)
     setConversations((prev) => {
-      const next = updateAssistantTurnInMap(prev, sessionID, turnID, updater)
+      const next = updateAssistantMessageInMap(prev, sessionID, assistantMessageID, updater)
       if (next === prev) return prev
       return {
         ...next,
-        [sessionID]: reconcileConversationTurns(next[sessionID] ?? []),
+        [sessionID]: reconcileConversationMessages(next[sessionID] ?? []),
       }
     })
   }
@@ -2110,9 +2110,9 @@ export function useSessionStreamController({
 
     for (const update of updatesToFlush) {
       const updatesByTurnID = groupedUpdates.get(update.target.sessionID) ?? new Map<string, PendingStreamDeltaUpdate["event"][]>()
-      const events = updatesByTurnID.get(update.target.assistantTurnID) ?? []
+      const events = updatesByTurnID.get(update.target.assistantThreadMessageID) ?? []
       events.push(update.event)
-      updatesByTurnID.set(update.target.assistantTurnID, events)
+      updatesByTurnID.set(update.target.assistantThreadMessageID, events)
       groupedUpdates.set(update.target.sessionID, updatesByTurnID)
     }
 
@@ -2152,13 +2152,13 @@ export function useSessionStreamController({
     }
   }
 
-  function applyStreamEventToAssistantTurn(
+  function applyStreamEventToAssistantMessage(
     target: StreamEventUpdateTarget,
     streamEvent: AgentSessionStreamIPCEvent | AgentStreamIPCEvent,
   ) {
     ensureAssistantConversationTurn({
       sessionID: target.sessionID,
-      assistantTurnID: target.assistantTurnID,
+      assistantThreadMessageID: target.assistantThreadMessageID,
       detail: "Receiving backend session activity.",
     })
 
@@ -2169,8 +2169,8 @@ export function useSessionStreamController({
 
     flushPendingDeltaUpdates({ forceAll: true })
     startTransition(() => {
-      updateAssistantConversationTurn(target.sessionID, target.assistantTurnID, (turn) =>
-        applyAgentStreamEventToTurn(turn, streamEvent),
+      updateAssistantConversationMessage(target.sessionID, target.assistantThreadMessageID, (turn) =>
+        applyAgentStreamEventToThreadMessage(turn, streamEvent),
       )
     })
   }
@@ -2182,36 +2182,36 @@ export function useSessionStreamController({
     }
   }, [])
 
-  function replaceConversationTurnsFromHistory(
+  function replaceConversationMessagesFromHistory(
     sessionID: string,
-    nextTurns: Turn[],
+    nextMessages: ThreadMessage[],
     options?: { preserveUserPresentation?: boolean },
   ) {
     bumpConversationVersion(sessionID)
     setConversations((prev) => {
-      const currentTurns = prev[sessionID] ?? []
-      const previousTurns = currentTurns.length ? currentTurns : readPersistedUserTurns(sessionID)
-      const mergedTurns = reconcileConversationTurns(mergeConversationTurnsFromHistory(previousTurns, nextTurns, {
+      const currentMessages = prev[sessionID] ?? []
+      const previousMessages = currentMessages.length ? currentMessages : readPersistedUserMessages(sessionID)
+      const mergedMessages = reconcileConversationMessages(mergeConversationMessagesFromHistory(previousMessages, nextMessages, {
         preserveUserPresentation: options?.preserveUserPresentation,
       }))
-      if (conversationTurnsAreEquivalent(currentTurns, mergedTurns)) return prev
+      if (conversationMessagesAreEquivalent(currentMessages, mergedMessages)) return prev
 
-      persistUserTurns(sessionID, mergedTurns)
+      persistUserMessages(sessionID, mergedMessages)
       return {
         ...prev,
-        [sessionID]: mergedTurns,
+        [sessionID]: mergedMessages,
       }
     })
   }
 
-  function ensureAssistantTurnForBackendTurn(input: {
+  function ensureAssistantMessageForBackendTurn(input: {
     uiSessionID: string
     backendSessionID: string
     turnID: string
   }) {
     const existing = sessionEventRouterRef.current.getTurnTarget(input.backendSessionID, input.turnID)
     if (existing) {
-      return existing.assistantTurnID
+      return existing.assistantThreadMessageID
     }
 
     const pending = Object.values(pendingStreamsRef.current).find(
@@ -2225,27 +2225,27 @@ export function useSessionStreamController({
       pending.backendTurnID = input.turnID
       sessionEventRouterRef.current.setTurnTarget(input.backendSessionID, input.turnID, {
         sessionID: input.uiSessionID,
-        assistantTurnID: pending.assistantTurnID,
+        assistantThreadMessageID: pending.assistantThreadMessageID,
       })
-      return pending.assistantTurnID
+      return pending.assistantThreadMessageID
     }
 
-    const streamingTurn = buildSessionStreamingAssistantTurn()
+    const streamingMessage = buildSessionStreamingAssistantThreadMessage()
     sessionEventRouterRef.current.setTurnTarget(input.backendSessionID, input.turnID, {
       sessionID: input.uiSessionID,
-      assistantTurnID: streamingTurn.id,
+      assistantThreadMessageID: streamingMessage.id,
     })
 
-    appendConversationTurns(input.uiSessionID, [streamingTurn])
+    appendConversationMessages(input.uiSessionID, [streamingMessage])
 
-    return streamingTurn.id
+    return streamingMessage.id
   }
 
   async function mergeExternalTurnUserHistory(input: {
     uiSessionID: string
     backendSessionID: string
     backendTurnID: string
-    assistantTurnID: string
+    assistantThreadMessageID: string
   }) {
     if (!canLoadSessionHistory) return
     const refreshKey = `${input.backendSessionID}:${input.backendTurnID}`
@@ -2266,26 +2266,26 @@ export function useSessionStreamController({
 
     try {
       const messages = await agentSession.loadHistory({ backendSessionID: input.backendSessionID }) ?? []
-      const historyTurns = buildTurnsFromHistory(messages)
-      const currentTurns = conversationStore.getSessionTurns(input.uiSessionID)
-      const candidateTurns = mergeExternalUserTurnsFromHistory(currentTurns, historyTurns, {
-        beforeTurnID: input.assistantTurnID,
+      const historyMessages = buildThreadMessagesFromHistory(messages)
+      const currentMessages = conversationStore.getSessionMessages(input.uiSessionID)
+      const candidateTurns = mergeExternalUserMessagesFromHistory(currentMessages, historyMessages, {
+        beforeMessageID: input.assistantThreadMessageID,
       })
-      if (conversationTurnsAreEquivalent(currentTurns, candidateTurns)) return
+      if (conversationMessagesAreEquivalent(currentMessages, candidateTurns)) return
 
       externalTurnUserHistoryMergedRef.current.add(refreshKey)
       startTransition(() => {
         setConversations((prev) => {
-          const currentTurns = prev[input.uiSessionID] ?? []
-          const mergedTurns = mergeExternalUserTurnsFromHistory(currentTurns, historyTurns, {
-            beforeTurnID: input.assistantTurnID,
+          const currentMessages = prev[input.uiSessionID] ?? []
+          const mergedMessages = mergeExternalUserMessagesFromHistory(currentMessages, historyMessages, {
+            beforeMessageID: input.assistantThreadMessageID,
           })
-          if (conversationTurnsAreEquivalent(currentTurns, mergedTurns)) return prev
+          if (conversationMessagesAreEquivalent(currentMessages, mergedMessages)) return prev
           bumpConversationVersion(input.uiSessionID)
-          persistUserTurns(input.uiSessionID, mergedTurns)
+          persistUserMessages(input.uiSessionID, mergedMessages)
           return {
             ...prev,
-            [input.uiSessionID]: mergedTurns,
+            [input.uiSessionID]: mergedMessages,
           }
         })
       })
@@ -2311,7 +2311,7 @@ export function useSessionStreamController({
       return
     }
 
-    const previousAssistantTurnID = target.assistantTurnID
+    const previousAssistantThreadMessageID = target.assistantThreadMessageID
     target.backendSessionID = backendSessionID
     target.backendTurnID = backendTurnID
     target.executionMode = executionMode.mode
@@ -2321,30 +2321,30 @@ export function useSessionStreamController({
     const route = resolveExecutionModeRoute({
       mode: executionMode.mode,
       requestedMode: target.requestedMode,
-      currentAssistantTurnID: target.assistantTurnID,
-      createdAssistantTurnID: target.createdAssistantTurnID,
-      existingAssistantTurnID: existingTarget?.assistantTurnID,
+      currentAssistantThreadMessageID: target.assistantThreadMessageID,
+      createdAssistantThreadMessageID: target.createdAssistantThreadMessageID,
+      existingAssistantThreadMessageID: existingTarget?.assistantThreadMessageID,
     })
 
-    if (route.createAssistantTurn) {
-      const streamingTurn = buildSessionStreamingAssistantTurn()
-      target.assistantTurnID = streamingTurn.id
-      target.createdAssistantTurnID = streamingTurn.id
-      appendConversationTurns(target.sessionID, [streamingTurn])
+    if (route.createAssistantThreadMessage) {
+      const streamingMessage = buildSessionStreamingAssistantThreadMessage()
+      target.assistantThreadMessageID = streamingMessage.id
+      target.createdAssistantThreadMessageID = streamingMessage.id
+      appendConversationMessages(target.sessionID, [streamingMessage])
     } else {
-      target.assistantTurnID = route.assistantTurnID
+      target.assistantThreadMessageID = route.assistantThreadMessageID
     }
 
-    if (route.removeAssistantTurnID) {
-      removeConversationTurn(target.sessionID, route.removeAssistantTurnID)
+    if (route.removeAssistantThreadMessageID) {
+      removeConversationMessage(target.sessionID, route.removeAssistantThreadMessageID)
     }
 
     if (target.pendingInputID) {
       if (executionMode.mode === "new-turn") {
-        commitPendingConversationInputAsUserTurn({
+        commitPendingConversationInputAsUserThreadMessage({
           sessionID: target.sessionID,
           inputID: target.pendingInputID,
-          beforeTurnID: target.assistantTurnID,
+          beforeMessageID: target.assistantThreadMessageID,
         })
       } else {
         updatePendingConversationInputForSession(
@@ -2355,8 +2355,8 @@ export function useSessionStreamController({
             status: executionMode.mode === "steer" ? "accepted" : "pending",
             ...(executionMode.mode === "steer"
               ? {
-                  targetAssistantTurnID: target.assistantTurnID,
-                  afterItemCount: pendingInput.afterItemCount ?? readAssistantItemCount(target.sessionID, target.assistantTurnID),
+                  targetAssistantThreadMessageID: target.assistantThreadMessageID,
+                  afterItemCount: pendingInput.afterItemCount ?? readAssistantItemCount(target.sessionID, target.assistantThreadMessageID),
                 }
               : {}),
           }),
@@ -2364,20 +2364,20 @@ export function useSessionStreamController({
       }
     }
 
-    if (target.userTurnID && !target.pendingInputID) {
-      applyExecutionModeToUserTurn({
+    if (target.userThreadMessageID && !target.pendingInputID) {
+      applyExecutionModeToUserThreadMessage({
         sessionID: target.sessionID,
-        userTurnID: target.userTurnID,
-        assistantTurnID: target.assistantTurnID,
+        userThreadMessageID: target.userThreadMessageID,
+        assistantThreadMessageID: target.assistantThreadMessageID,
         mode: executionMode.mode,
       })
-    } else if (route.clearSteerUserTurn) {
-      clearLatestSteerUserTurnForAssistant(target.sessionID, previousAssistantTurnID)
+    } else if (route.clearSteerUserMessage) {
+      clearLatestSteerUserMessageForAssistant(target.sessionID, previousAssistantThreadMessageID)
     }
 
     sessionEventRouterRef.current.setTurnTarget(backendSessionID, backendTurnID, {
       sessionID: target.sessionID,
-      assistantTurnID: target.assistantTurnID,
+      assistantThreadMessageID: target.assistantThreadMessageID,
     })
   }
 
@@ -2409,8 +2409,8 @@ export function useSessionStreamController({
 
     const backendTurnID = resolveStreamTurnID(streamEvent)
     const streamMessageID = resolveStreamMessageID(streamEvent)
-    const messageAssistantTurnID = findAssistantTurnIDByMessageID(target.sessionID, streamMessageID)
-    const backendAssistantTurnID = findAssistantTurnIDByBackendTurnID(target.sessionID, backendTurnID)
+    const messageAssistantThreadMessageID = findAssistantThreadMessageIDByMessageID(target.sessionID, streamMessageID)
+    const backendAssistantThreadMessageID = findAssistantThreadMessageIDByBackendTurnID(target.sessionID, backendTurnID)
     if (backendTurnID) {
       const backendSessionID = target.backendSessionID ?? resolveBackendSessionID(target.sessionID)
       if (sessionEventRouterRef.current.hasBackendTurnSettled(backendSessionID, backendTurnID)) {
@@ -2426,35 +2426,35 @@ export function useSessionStreamController({
       target.backendTurnID = backendTurnID
       sessionEventRouterRef.current.setTurnTarget(backendSessionID, backendTurnID, {
         sessionID: target.sessionID,
-        assistantTurnID: messageAssistantTurnID ?? backendAssistantTurnID ?? target.assistantTurnID,
+        assistantThreadMessageID: messageAssistantThreadMessageID ?? backendAssistantThreadMessageID ?? target.assistantThreadMessageID,
       })
     }
 
-    const assistantTurnID = messageAssistantTurnID ?? backendAssistantTurnID ?? target.assistantTurnID
-    applyStreamEventToAssistantTurn(
+    const assistantThreadMessageID = messageAssistantThreadMessageID ?? backendAssistantThreadMessageID ?? target.assistantThreadMessageID
+    applyStreamEventToAssistantMessage(
       {
         sessionID: target.sessionID,
-        assistantTurnID,
+        assistantThreadMessageID,
       },
       streamEvent,
     )
-    if (target.userTurnID && isBackendUserMessageRecordedStreamEvent(streamEvent)) {
-      revealBackendRecordedUserTurn({
+    if (target.userThreadMessageID && isBackendUserMessageRecordedStreamEvent(streamEvent)) {
+      revealBackendRecordedUserThreadMessage({
         sessionID: target.sessionID,
-        userTurnID: target.userTurnID,
-        beforeTurnID: assistantTurnID,
+        userThreadMessageID: target.userThreadMessageID,
+        beforeMessageID: assistantThreadMessageID,
       })
     }
     if (isSteerHandoffBoundaryStreamEvent(streamEvent)) {
       if (target.pendingInputID) {
-        commitPendingConversationInputAsUserTurn({
+        commitPendingConversationInputAsUserThreadMessage({
           sessionID: target.sessionID,
           inputID: target.pendingInputID,
         })
       }
-      revealPendingSteerUserTurnsAtHandoff({
+      revealPendingSteerUserMessagesAtHandoff({
         sessionID: target.sessionID,
-        assistantTurnID,
+        assistantThreadMessageID,
       })
     }
     if (isSteerInputConsumedStreamEvent(streamEvent)) {
@@ -2463,10 +2463,10 @@ export function useSessionStreamController({
         !commitPendingSteerInputAsConsumedInsertion({
           sessionID: target.sessionID,
           inputID: target.pendingInputID,
-          assistantTurnID,
+          assistantThreadMessageID,
         })
       ) {
-        markPendingSteerUserTurnsConsumed(target.sessionID, assistantTurnID)
+        markPendingSteerUserMessagesConsumed(target.sessionID, assistantThreadMessageID)
       }
     }
 
@@ -2560,50 +2560,50 @@ export function useSessionStreamController({
     if (sessionEventRouterRef.current.hasBackendTurnSettled(streamEvent.sessionID, backendTurnID)) return
 
     const streamMessageID = resolveStreamMessageID(streamEvent)
-    const messageAssistantTurnID = findAssistantTurnIDByMessageID(uiSessionID, streamMessageID)
-    const backendAssistantTurnID = findAssistantTurnIDByBackendTurnID(uiSessionID, backendTurnID)
-    const assistantTurnID = messageAssistantTurnID ?? backendAssistantTurnID ?? ensureAssistantTurnForBackendTurn({
+    const messageAssistantThreadMessageID = findAssistantThreadMessageIDByMessageID(uiSessionID, streamMessageID)
+    const backendAssistantThreadMessageID = findAssistantThreadMessageIDByBackendTurnID(uiSessionID, backendTurnID)
+    const assistantThreadMessageID = messageAssistantThreadMessageID ?? backendAssistantThreadMessageID ?? ensureAssistantMessageForBackendTurn({
       uiSessionID,
       backendSessionID: streamEvent.sessionID,
       turnID: backendTurnID,
     })
-    if (!messageAssistantTurnID && !backendAssistantTurnID) {
+    if (!messageAssistantThreadMessageID && !backendAssistantThreadMessageID) {
       void mergeExternalTurnUserHistory({
         uiSessionID,
         backendSessionID: streamEvent.sessionID,
         backendTurnID,
-        assistantTurnID,
+        assistantThreadMessageID,
       })
     }
-    if (messageAssistantTurnID || backendAssistantTurnID) {
+    if (messageAssistantThreadMessageID || backendAssistantThreadMessageID) {
       sessionEventRouterRef.current.setTurnTarget(streamEvent.sessionID, backendTurnID, {
         sessionID: uiSessionID,
-        assistantTurnID,
+        assistantThreadMessageID,
       })
     }
 
-    applyStreamEventToAssistantTurn(
+    applyStreamEventToAssistantMessage(
       {
         sessionID: uiSessionID,
-        assistantTurnID,
+        assistantThreadMessageID,
       },
       streamEvent,
     )
     if (isBackendUserMessageRecordedStreamEvent(streamEvent)) {
-      revealPendingUserTurnForBackendEvent({
+      revealPendingUserThreadMessageForBackendEvent({
         uiSessionID,
         backendSessionID: streamEvent.sessionID,
         backendTurnID,
       })
     }
     if (isSteerHandoffBoundaryStreamEvent(streamEvent)) {
-      revealPendingSteerUserTurnsAtHandoff({
+      revealPendingSteerUserMessagesAtHandoff({
         sessionID: uiSessionID,
-        assistantTurnID,
+        assistantThreadMessageID,
       })
     }
     if (isSteerInputConsumedStreamEvent(streamEvent)) {
-      markPendingSteerUserTurnsConsumed(uiSessionID, assistantTurnID)
+      markPendingSteerUserMessagesConsumed(uiSessionID, assistantThreadMessageID)
     }
 
     if (isLlmCompletedStreamEvent(streamEvent)) {
@@ -2714,7 +2714,7 @@ export function useSessionStreamController({
       const nextContextUsage = readLatestSessionContextUsageFromHistory(messages)
       const nextMessageTree = buildSessionMessageTree(allMessages, activeMessageID)
       startTransition(() => {
-        replaceConversationTurnsFromHistory(sessionID, buildTurnsFromHistory(messages), {
+        replaceConversationMessagesFromHistory(sessionID, buildThreadMessagesFromHistory(messages), {
           preserveUserPresentation: options.preserveUserPresentation,
         })
         setMessageTreeBySession((current) => {
@@ -2951,7 +2951,7 @@ export function useSessionStreamController({
   })
 
   return {
-    appendConversationTurns,
+    appendConversationMessages,
     clearRuntimeDebugRefreshTimer,
     clearSessionDiffRefreshTimer,
     loadPendingPermissionRequestsForSession,
@@ -2963,11 +2963,11 @@ export function useSessionStreamController({
     refreshWorkspaceForSession,
     refreshWorkspaceFromDirectory,
     reloadSessionHistoryForSession,
-    replaceConversationTurns,
+    replaceConversationMessages,
     resolveBackendSessionID,
     scheduleRuntimeDebugRefresh,
     scheduleSessionDiffRefreshForSession,
-    updateAssistantConversationTurn,
+    updateAssistantConversationMessage,
     updateSessionContextUsage,
   }
 }

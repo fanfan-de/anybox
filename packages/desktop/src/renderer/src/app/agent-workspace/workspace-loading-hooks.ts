@@ -9,7 +9,7 @@ import type {
   CreateSessionTab,
   LoadedFolderWorkspace,
   SessionDiffState,
-  Turn,
+  ThreadMessage,
   WorkbenchTabReference,
   MobileBridgeEvent,
   WorkspaceFileChangeIPCEvent,
@@ -87,7 +87,7 @@ interface RefreshWorkspaceFromDirectoryInput {
   directory: string
   setAgentSessions: (update: (current: Record<string, string>) => Record<string, string>) => void
   setCanLoadSessionHistory: (update: boolean) => void
-  setConversations: (update: (current: Record<string, Turn[]>) => Record<string, Turn[]>) => void
+  setConversations: (update: (current: Record<string, ThreadMessage[]>) => Record<string, ThreadMessage[]>) => void
   setSessionDirectoryBySession: (update: (current: Record<string, string>) => Record<string, string>) => void
   setWorkspaces: (update: (current: WorkspaceGroup[]) => WorkspaceGroup[]) => void
   workspaceRefreshRequestRef: MutableRefObject<Record<string, number>>
@@ -357,7 +357,7 @@ interface UseInitialFolderWorkspacesEffectOptions {
   preserveLocalWorkspaceStateOnInitialLoadRef: MutableRefObject<boolean>
   setAgentSessions: (update: (current: Record<string, string>) => Record<string, string>) => void
   setCanLoadSessionHistory: (update: boolean) => void
-  setConversations: (update: (current: Record<string, Turn[]>) => Record<string, Turn[]>) => void
+  setConversations: (update: (current: Record<string, ThreadMessage[]>) => Record<string, ThreadMessage[]>) => void
   setCreateSessionTabs: (update: CreateSessionTab[]) => void
   setExpandedFolderIDs: (update: string[]) => void
   setIsInitialWorkspaceLoadPending: (update: boolean) => void

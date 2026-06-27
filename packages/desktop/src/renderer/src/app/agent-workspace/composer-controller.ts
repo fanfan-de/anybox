@@ -7,7 +7,7 @@ import {
   normalizeComposerDraftState,
 } from "../composer/draft-state"
 import type {
-  AssistantTurn,
+  AssistantThreadMessage,
   ComposerAttachment,
   ComposerCommentReference,
   ComposerDraftState,
@@ -19,12 +19,12 @@ import type {
   PermissionRequest,
   ReasoningEffort,
   SessionSummary,
-  Turn,
-  UserTurn,
+  ThreadMessage,
+  UserThreadMessage,
   WorkspaceGroup,
 } from "../types"
 import { getAgentSessionBridge } from "../agent-session/client"
-import { buildFailureTurn } from "../stream"
+import { buildFailureThreadMessage } from "../stream"
 import {
   findSession,
   findWorkspaceByID,
@@ -60,8 +60,8 @@ interface UseComposerControllerOptions {
   agentDefaultDirectory: string
   agentSessions: Record<string, string>
   cancellingSessionIDs: Record<string, boolean>
-  appendConversationTurns: (sessionID: string, nextTurns: Turn[]) => void
-  replaceConversationTurns: (sessionID: string, nextTurns: Turn[]) => void
+  appendConversationMessages: (sessionID: string, nextMessages: ThreadMessage[]) => void
+  replaceConversationMessages: (sessionID: string, nextMessages: ThreadMessage[]) => void
   composerAttachmentsByTabKey: Record<string, ComposerAttachment[]>
   composerDraftStateByTabKey: Record<string, ComposerDraftState>
   composerParentMessageIDByTabKey: Record<string, string>
@@ -77,7 +77,7 @@ interface UseComposerControllerOptions {
   ) => Promise<CreateSessionResult | null>
   createSessionTabs: CreateSessionTab[]
   isSendingByTabKey: Record<string, boolean>
-  getConversationTurns: (sessionID: string) => Turn[]
+  getConversationMessages: (sessionID: string) => ThreadMessage[]
   loadPendingPermissionRequestsForSession: (sessionID: string, backendSessionID?: string) => Promise<void>
   loadSessionDiffForSession: (sessionID: string, backendSessionID?: string) => Promise<void>
   loadSessionRuntimeDebugForSession: (sessionID: string, backendSessionID?: string) => Promise<void>
@@ -104,10 +104,10 @@ interface UseComposerControllerOptions {
   setPermissionRequestActionRequestID: StateSetter<string | null>
   setSessionDirectoryBySession: StateSetter<Record<string, string>>
   setWorkspaces: StateSetter<WorkspaceGroup[]>
-  updateAssistantConversationTurn: (
+  updateAssistantConversationMessage: (
     sessionID: string,
-    turnID: string,
-    updater: (turn: AssistantTurn) => AssistantTurn,
+    assistantMessageID: string,
+    updater: (message: AssistantThreadMessage) => AssistantThreadMessage,
   ) => void
   workspaces: WorkspaceGroup[]
 }
@@ -120,14 +120,14 @@ export function useComposerController({
   agentDefaultDirectory,
   agentSessions,
   cancellingSessionIDs,
-  appendConversationTurns,
-  replaceConversationTurns,
+  appendConversationMessages,
+  replaceConversationMessages,
   composerAttachmentsByTabKey,
   composerDraftStateByTabKey,
   composerParentMessageIDByTabKey,
   createSessionForWorkspace,
   createSessionTabs,
-  getConversationTurns,
+  getConversationMessages,
   isSendingByTabKey,
   loadPendingPermissionRequestsForSession,
   loadSessionDiffForSession,
@@ -155,7 +155,7 @@ export function useComposerController({
   setPermissionRequestActionRequestID,
   setSessionDirectoryBySession,
   setWorkspaces,
-  updateAssistantConversationTurn,
+  updateAssistantConversationMessage,
   workspaces,
 }: UseComposerControllerOptions) {
   function setDraftForTab(tabKey: string, value: ComposerDraftState) {
@@ -201,11 +201,11 @@ export function useComposerController({
       freeformText?: string
     }
     reasoningEffort?: ReasoningEffort | null
-    references?: UserTurn["references"]
+    references?: UserThreadMessage["references"]
     selectedModel?: string | null
     session: SessionSummary
     selectedSkillIDs: string[]
-    submissionMode?: UserTurn["submissionMode"]
+    submissionMode?: UserThreadMessage["submissionMode"]
     tabKey: string
     text: string
     workspace: WorkspaceGroup
@@ -214,9 +214,9 @@ export function useComposerController({
       agentConnected,
       agentDefaultDirectory,
       agentSessions,
-      appendConversationTurns,
-      replaceConversationTurns,
-      getConversationTurns,
+      appendConversationMessages,
+      replaceConversationMessages,
+      getConversationMessages,
       pendingStreamsRef,
       platform,
       refreshWorkspaceFromDirectory,
@@ -229,7 +229,7 @@ export function useComposerController({
       setPendingConversationInputsBySession,
       setSessionDirectoryBySession,
       setWorkspaces,
-      updateAssistantConversationTurn,
+      updateAssistantConversationMessage,
     })
   }
 
@@ -273,8 +273,8 @@ export function useComposerController({
     selectedModel?: string | null
     selectedSkillIDs?: string[]
     sessionID?: string | null
-    steerQueuedTurnID?: string
-    submissionMode?: UserTurn["submissionMode"]
+    steerQueuedMessageID?: string
+    submissionMode?: UserThreadMessage["submissionMode"]
     tabKey?: string | null
     waitForPendingModelSelection?: (() => Promise<void>) | null
   }) {
@@ -296,14 +296,14 @@ export function useComposerController({
     const isSending = Boolean(targetTabKey && isSendingByTabKey[targetTabKey])
     const isConcurrentSessionInput = isSending || hasPendingStreamForSession(targetSessionID)
 
-    if (input?.steerQueuedTurnID) {
+    if (input?.steerQueuedMessageID) {
       await handleSteerQueuedSubmission({
         selectedReasoningEffort: input.selectedReasoningEffort,
         selectedModel: input.selectedModel,
         selectedSkillIDs: input.selectedSkillIDs ?? [],
         sessionID: targetSessionID,
         tabKey: targetTabKey,
-        turnID: input.steerQueuedTurnID,
+        turnID: input.steerQueuedMessageID,
         waitForPendingModelSelection: input.waitForPendingModelSelection,
       })
       return
@@ -398,7 +398,7 @@ export function useComposerController({
 
     if (shouldStartInPlanning) {
       if (!window.desktop?.updateSessionWorkflow) {
-        appendConversationTurns(created.session.id, [buildFailureTurn("Plan Mode is unavailable for this session.")])
+        appendConversationMessages(created.session.id, [buildFailureThreadMessage("Plan Mode is unavailable for this session.")])
         return
       }
 
@@ -419,7 +419,7 @@ export function useComposerController({
         )
       } catch (error) {
         console.error("[desktop] enter plan mode for new session failed:", error)
-        appendConversationTurns(created.session.id, [buildFailureTurn(error instanceof Error ? error.message : String(error))])
+        appendConversationMessages(created.session.id, [buildFailureThreadMessage(error instanceof Error ? error.message : String(error))])
         return
       }
     }
@@ -465,7 +465,7 @@ export function useComposerController({
 
     const pendingEntry = Object.entries(pendingStreamsRef.current).find(([, stream]) =>
       stream.sessionID === sessionID &&
-      (stream.pendingInputID === queuedInput.id || stream.userTurnID === queuedInput.id) &&
+      (stream.pendingInputID === queuedInput.id || stream.userThreadMessageID === queuedInput.id) &&
       stream.requestedMode === "queue" &&
       !stream.cancelRequested
     )
@@ -503,13 +503,13 @@ export function useComposerController({
     }
 
     delete pendingStreamsRef.current[streamID]
-    const assistantTurnID = stream.createdAssistantTurnID ?? stream.assistantTurnID
+    const assistantThreadMessageID = stream.createdAssistantThreadMessageID ?? stream.assistantThreadMessageID
     setPendingConversationInputsBySession((current) =>
       removePendingConversationInput(current, sessionID, queuedInput.id),
     )
-    replaceConversationTurns(
+    replaceConversationMessages(
       sessionID,
-      getConversationTurns(sessionID).filter((turn) => turn.id !== assistantTurnID),
+      getConversationMessages(sessionID).filter((turn) => turn.id !== assistantThreadMessageID),
     )
 
     await handleSend({
@@ -598,7 +598,7 @@ export function useComposerController({
       )
     } catch (error) {
       console.error("[desktop] approve proposed plan failed:", error)
-      appendConversationTurns(targetSessionID, [buildFailureTurn(error instanceof Error ? error.message : String(error))])
+      appendConversationMessages(targetSessionID, [buildFailureThreadMessage(error instanceof Error ? error.message : String(error))])
       return
     }
 
@@ -721,7 +721,7 @@ export function useComposerController({
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      appendConversationTurns(sessionID, [buildFailureTurn(message)])
+      appendConversationMessages(sessionID, [buildFailureThreadMessage(message)])
     }
   }
 
@@ -732,7 +732,7 @@ export function useComposerController({
     note?: string
   }) {
     await respondPermissionRequest({
-      appendConversationTurns,
+      appendConversationMessages,
       input,
       loadPendingPermissionRequestsForSession,
       loadSessionDiffForSession,
@@ -745,7 +745,7 @@ export function useComposerController({
       setPendingPermissionRequestsBySession,
       setPermissionRequestActionError,
       setPermissionRequestActionRequestID,
-      updateAssistantConversationTurn,
+      updateAssistantConversationMessage,
     })
   }
 
