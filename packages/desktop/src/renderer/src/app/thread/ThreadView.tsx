@@ -225,6 +225,7 @@ const THREAD_VIRTUAL_OVERSCAN_ROWS = 2
 const THREAD_VIRTUAL_ROW_GAP_PX = 7
 const THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX = 12
 const THREAD_VIRTUAL_ROW_MEASURE_EPSILON_PX = 1
+const THREAD_SIDEBAR_RESIZE_OBSERVER_THROTTLE_MS = 80
 const LONG_USER_MESSAGE_CHARACTER_THRESHOLD = COMPOSER_LONG_TEXT_CHARACTER_THRESHOLD
 const LONG_USER_MESSAGE_LINE_THRESHOLD = COMPOSER_LONG_TEXT_LINE_THRESHOLD
 const SHORT_PROCESS_REASONING_CHARACTER_THRESHOLD = 160
@@ -5920,6 +5921,9 @@ function VisibleThreadView({
   const pendingObservedContentScrollSyncKeyRef = useRef<string | null>(null)
   const pendingSidebarResizeScrollSyncRef = useRef(false)
   const pendingSidebarResizeContentObservationRef = useRef(false)
+  const pendingSidebarResizeObservedEntriesRef = useRef<Map<Element, ResizeObserverEntry>>(new Map())
+  const pendingSidebarResizeObservedContentKeyRef = useRef<string | null>(null)
+  const pendingSidebarResizeObservedContentTimerRef = useRef<number | null>(null)
   const smoothFollowScrollRef = useRef<ThreadSmoothFollowScroll | null>(null)
   const lastUserScrollIntentAtRef = useRef(0)
   const lastUserScrollIntentDirectionRef = useRef<"up" | "down" | null>(null)
@@ -6665,19 +6669,83 @@ function VisibleThreadView({
     scheduleObservedContentScrollSync(key)
   }
 
+  function clearSidebarResizeObservedContentTimer() {
+    if (pendingSidebarResizeObservedContentTimerRef.current === null) return
+    window.clearTimeout(pendingSidebarResizeObservedContentTimerRef.current)
+    pendingSidebarResizeObservedContentTimerRef.current = null
+  }
+
+  const flushThrottledSidebarResizeObservedContent = useEffectEvent((key: string) => {
+    const entries = Array.from(pendingSidebarResizeObservedEntriesRef.current.values())
+    pendingSidebarResizeObservedEntriesRef.current.clear()
+    pendingSidebarResizeObservedContentKeyRef.current = null
+
+    const shouldRefreshObservedContent = pendingSidebarResizeContentObservationRef.current
+    pendingSidebarResizeContentObservationRef.current = false
+
+    if (shouldRefreshObservedContent) {
+      observeThreadContentRef.current?.()
+    }
+
+    if (shouldVirtualizeThreadRows) {
+      if (entries.length > 0) {
+        measureThreadVirtualRowsFromResizeEntries(entries, { syncScroll: true })
+      }
+      if (shouldRefreshObservedContent) {
+        measureRenderedThreadVirtualRows({ syncScroll: true })
+      }
+    }
+
+    cancelThreadAnimationFrame(pendingThreadVirtualMeasurementFrameRef.current)
+    pendingThreadVirtualMeasurementFrameRef.current = null
+    const didFlushMeasurements = flushQueuedThreadVirtualMeasurements()
+
+    const shouldSyncScroll =
+      pendingSidebarResizeScrollSyncRef.current ||
+      shouldRefreshObservedContent ||
+      entries.length > 0 ||
+      didFlushMeasurements
+    pendingSidebarResizeScrollSyncRef.current = false
+
+    if (shouldSyncScroll) {
+      cancelThreadAnimationFrame(pendingObservedContentScrollSyncFrameRef.current)
+      pendingObservedContentScrollSyncFrameRef.current = null
+      pendingObservedContentScrollSyncKeyRef.current = null
+      syncThreadScrollAfterContentChange(key)
+    }
+  })
+
+  function scheduleThrottledSidebarResizeObservedContent(
+    entries: ResizeObserverEntry[] = [],
+    key = effectiveScrollStateKey,
+    options: { refreshObservedContent?: boolean } = {},
+  ) {
+    pendingSidebarResizeScrollSyncRef.current = true
+    pendingSidebarResizeObservedContentKeyRef.current = key
+
+    for (const entry of entries) {
+      pendingSidebarResizeObservedEntriesRef.current.set(entry.target, entry)
+    }
+
+    if (options.refreshObservedContent) {
+      pendingSidebarResizeContentObservationRef.current = true
+    }
+
+    if (pendingSidebarResizeObservedContentTimerRef.current !== null) return
+
+    pendingSidebarResizeObservedContentTimerRef.current = window.setTimeout(() => {
+      pendingSidebarResizeObservedContentTimerRef.current = null
+      flushThrottledSidebarResizeObservedContent(pendingSidebarResizeObservedContentKeyRef.current ?? key)
+    }, THREAD_SIDEBAR_RESIZE_OBSERVER_THROTTLE_MS)
+  }
+
   const flushDeferredSidebarResizeScrollSync = useEffectEvent((key: string) => {
     cancelThreadAnimationFrame(pendingObservedContentScrollSyncFrameRef.current)
     pendingObservedContentScrollSyncFrameRef.current = null
     pendingObservedContentScrollSyncKeyRef.current = null
 
-    const shouldRefreshObservedContent = pendingSidebarResizeContentObservationRef.current
-    pendingSidebarResizeContentObservationRef.current = false
-    if (shouldRefreshObservedContent) {
-      observeThreadContentRef.current?.()
-      if (shouldVirtualizeThreadRows) {
-        measureRenderedThreadVirtualRows({ syncScroll: true })
-      }
-    }
+    clearSidebarResizeObservedContentTimer()
+    flushThrottledSidebarResizeObservedContent(key)
 
     cancelThreadAnimationFrame(pendingThreadVirtualMeasurementFrameRef.current)
     pendingThreadVirtualMeasurementFrameRef.current = null
@@ -6716,6 +6784,9 @@ function VisibleThreadView({
       pendingThreadVirtualMeasurementFrameRef.current = null
       cancelThreadAnimationFrame(pendingThreadVirtualViewportFrameRef.current)
       pendingThreadVirtualViewportFrameRef.current = null
+      clearSidebarResizeObservedContentTimer()
+      pendingSidebarResizeObservedEntriesRef.current.clear()
+      pendingSidebarResizeObservedContentKeyRef.current = null
       contentResizeObserverRef.current?.disconnect()
       contentResizeObserverRef.current = null
       contentMutationObserverRef.current?.disconnect()
@@ -6867,8 +6938,7 @@ function VisibleThreadView({
 
     const resizeObserver = new ResizeObserver((entries) => {
       if (isSidebarResizeInProgress()) {
-        pendingSidebarResizeScrollSyncRef.current = true
-        pendingSidebarResizeContentObservationRef.current = true
+        scheduleThrottledSidebarResizeObservedContent(entries, effectiveScrollStateKey)
         return
       }
 
@@ -6902,8 +6972,9 @@ function VisibleThreadView({
     if (typeof MutationObserver !== "undefined") {
       const mutationObserver = new MutationObserver(() => {
         if (isSidebarResizeInProgress()) {
-          pendingSidebarResizeScrollSyncRef.current = true
-          pendingSidebarResizeContentObservationRef.current = true
+          scheduleThrottledSidebarResizeObservedContent([], effectiveScrollStateKey, {
+            refreshObservedContent: true,
+          })
           return
         }
 
@@ -6945,8 +7016,9 @@ function VisibleThreadView({
     if (!shouldVirtualizeThreadRows) return
 
     if (isSidebarResizeInProgress()) {
-      pendingSidebarResizeScrollSyncRef.current = true
-      pendingSidebarResizeContentObservationRef.current = true
+      scheduleThrottledSidebarResizeObservedContent([], effectiveScrollStateKey, {
+        refreshObservedContent: true,
+      })
       return
     }
 

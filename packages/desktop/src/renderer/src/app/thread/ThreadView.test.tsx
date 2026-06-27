@@ -5188,4 +5188,64 @@ describe("ThreadView scroll restoration", () => {
       globalThis.ResizeObserver = originalResizeObserver
     }
   })
+
+  it("throttles observed content scroll sync while a sidebar resize remains active", () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+    let triggerResize: (() => void) | null = null
+
+    class ManualResizeObserver implements ResizeObserver {
+      readonly callback: ResizeObserverCallback
+
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback
+        triggerResize = () => {
+          callback([], this)
+        }
+      }
+
+      observe() {}
+
+      unobserve() {}
+
+      disconnect() {}
+    }
+
+    globalThis.ResizeObserver = ManualResizeObserver
+    vi.useFakeTimers()
+
+    try {
+      const { threadColumn } = renderThread([userMessage("user-1", "Prompt"), assistantMessage("assistant-1", "Loaded history")])
+      setScrollMetrics(threadColumn, {
+        clientHeight: 400,
+        scrollHeight: 800,
+        scrollTop: 400,
+      })
+
+      document.body.classList.add("is-resizing-sidebar")
+      setScrollMetrics(threadColumn, {
+        clientHeight: 400,
+        scrollHeight: 1400,
+        scrollTop: 400,
+      })
+
+      act(() => {
+        triggerResize?.()
+      })
+      expect(threadColumn.scrollTop).toBe(400)
+
+      act(() => {
+        vi.advanceTimersByTime(79)
+      })
+      expect(threadColumn.scrollTop).toBe(400)
+
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
+      expect(threadColumn.scrollTop).toBe(1400)
+    } finally {
+      document.body.classList.remove("is-resizing-sidebar")
+      vi.useRealTimers()
+      globalThis.ResizeObserver = originalResizeObserver
+    }
+  })
 })
