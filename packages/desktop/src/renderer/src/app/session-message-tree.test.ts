@@ -125,7 +125,7 @@ describe("session message tree", () => {
     expect(tree?.activePathMessageIDs).toEqual(["user-1", "user-2", "assistant-1"])
   })
 
-  it("hides intermediate text responses from the same assistant turn", () => {
+  it("hides intermediate text responses from the same backend turn", () => {
     const tree = buildSessionMessageTree([
       createMessage({ id: "user-1", role: "user", created: 1, text: "Start" }),
       createMessage({
@@ -168,7 +168,7 @@ describe("session message tree", () => {
     expect(tree?.activePathMessageIDs).toEqual(["user-1", "assistant-final"])
   })
 
-  it("falls back to the latest text response when a turn has no last message id", () => {
+  it("falls back to the latest text response when a backend turn has no last message id", () => {
     const tree = buildSessionMessageTree([
       createMessage({ id: "user-1", role: "user", created: 1, text: "Start" }),
       createMessage({

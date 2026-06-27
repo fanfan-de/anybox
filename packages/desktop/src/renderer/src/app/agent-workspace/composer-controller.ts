@@ -303,7 +303,7 @@ export function useComposerController({
         selectedSkillIDs: input.selectedSkillIDs ?? [],
         sessionID: targetSessionID,
         tabKey: targetTabKey,
-        turnID: input.steerQueuedMessageID,
+        queuedInputID: input.steerQueuedMessageID,
         waitForPendingModelSelection: input.waitForPendingModelSelection,
       })
       return
@@ -447,9 +447,9 @@ export function useComposerController({
     selectedReasoningEffort?: ReasoningEffort | null
     selectedModel?: string | null
     selectedSkillIDs: string[]
+    queuedInputID: string
     sessionID?: string | null
     tabKey?: string | null
-    turnID: string
     waitForPendingModelSelection?: (() => Promise<void>) | null
   }) {
     const sessionID = input.sessionID
@@ -458,7 +458,7 @@ export function useComposerController({
 
     const queuedInput = (pendingConversationInputsBySession[sessionID] ?? []).find(
       (pendingInput) =>
-        pendingInput.id === input.turnID &&
+        pendingInput.id === input.queuedInputID &&
         pendingInput.mode === "queued",
     )
     if (!queuedInput) return
@@ -487,7 +487,7 @@ export function useComposerController({
       backendSessionID,
       clientTurnID: streamID,
     }).catch((error) => {
-      console.error("[desktop] queued turn abort before steer failed:", error)
+      console.error("[desktop] queued input abort before steer failed:", error)
       return null
     })
 

@@ -183,8 +183,8 @@ describe("workspace derived state", () => {
       composerDraftStateByTabKey: {},
       contextUsageBySession: {},
       conversations: {
-        [parentSession.id]: [{ id: "turn-1", kind: "user", text: "hello", timestamp: 1 }],
-        [sideChatSession.id]: [{ id: "turn-2", kind: "user", text: "side", timestamp: 2 }],
+        [parentSession.id]: [{ id: "message-1", kind: "user", text: "hello", timestamp: 1 }],
+        [sideChatSession.id]: [{ id: "message-2", kind: "user", text: "side", timestamp: 2 }],
       },
       createSessionTabs: [createSessionTab],
       isCreatingSessionByTabKey: {},
@@ -275,8 +275,8 @@ describe("workspace derived state", () => {
         [createTabKey]: { lexicalJSON: "{}", plainText: "draft create" },
       },
       conversations: {
-        [sessionA.id]: [{ id: "turn-a", kind: "user" as const, text: "from A", timestamp: 1 }],
-        [sessionB.id]: [{ id: "turn-b", kind: "user" as const, text: "from B", timestamp: 2 }],
+        [sessionA.id]: [{ id: "message-a", kind: "user" as const, text: "from A", timestamp: 1 }],
+        [sessionB.id]: [{ id: "message-b", kind: "user" as const, text: "from B", timestamp: 2 }],
       },
       createSessionTabs: [createSessionTab],
       isCreatingSessionByTabKey: {
@@ -297,13 +297,13 @@ describe("workspace derived state", () => {
       activeTabKey: panelAID,
       sessionID: sessionA.id,
     })
-    expect(derivedWithAActive.workbenchPanelStateByID[panelAID]?.activeMessages[0]?.id).toBe("turn-a")
+    expect(derivedWithAActive.workbenchPanelStateByID[panelAID]?.activeMessages[0]?.id).toBe("message-a")
     expect(derivedWithAActive.workbenchPanelStateByID[panelAID]?.draftState.plainText).toBe("draft A")
     expect(derivedWithAActive.workbenchPanelStateByID[panelBID]).toMatchObject({
       activeTabKey: panelBID,
       sessionID: sessionB.id,
     })
-    expect(derivedWithAActive.workbenchPanelStateByID[panelBID]?.activeMessages[0]?.id).toBe("turn-b")
+    expect(derivedWithAActive.workbenchPanelStateByID[panelBID]?.activeMessages[0]?.id).toBe("message-b")
     expect(derivedWithAActive.workbenchPanelStateByID[panelBID]?.composerAttachments).toEqual([
       { name: "b.txt", path: "C:/work/workspace-1/b.txt" },
     ])

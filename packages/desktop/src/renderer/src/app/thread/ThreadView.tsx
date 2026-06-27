@@ -1114,13 +1114,13 @@ function MessageDiffCard({
   onMessageDiffReview?: (files: string[]) => void | Promise<void>
   messageID: string
 }) {
-  const fileChangesFromTurnSources = hydrateUserMessageFileChangesFromPatchSources(
+  const fileChangesFromPatchSources = hydrateUserMessageFileChangesFromPatchSources(
     normalizeMessageDiffSummary(diffSummary),
     patchSourceFileChanges,
   )
   const fileChanges = allowWorkspaceDiffFallback
-    ? hydrateUserMessageFileChangesFromWorkspaceDiff(fileChangesFromTurnSources, activeSessionDiff)
-    : fileChangesFromTurnSources
+    ? hydrateUserMessageFileChangesFromWorkspaceDiff(fileChangesFromPatchSources, activeSessionDiff)
+    : fileChangesFromPatchSources
   const fileChangeSignature = fileChanges
     .map(buildFileChangeSignature)
     .join("\u0001")

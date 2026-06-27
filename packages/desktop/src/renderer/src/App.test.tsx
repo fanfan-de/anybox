@@ -543,7 +543,7 @@ const PROMPT_PRESET_FIXTURES: PromptPresetFixture[] = [
   {
     id: "system-default",
     label: "System prompt",
-    description: "Base instructions applied to every session turn.",
+    description: "Base instructions applied to every session execution.",
     source: "bundled" as const,
     hasOverride: false,
     editable: true,
@@ -1729,7 +1729,7 @@ describe("App", () => {
     expect(screen.queryByRole("button", { name: "Minimize window" })).not.toBeInTheDocument()
   })
 
-  it("does not publish workbench snapshots for streaming turn updates", async () => {
+  it("does not publish workbench snapshots for streaming response updates", async () => {
     let streamListener: DesktopAgentSessionEventListener | undefined
     const publishWorkbenchSnapshot = vi.fn().mockImplementation(async (input) => input)
 
@@ -2326,7 +2326,7 @@ describe("App", () => {
     })
   })
 
-  it("streams right sidebar side chat output before the turn completes", async () => {
+  it("streams right sidebar side chat output before the backend turn completes", async () => {
     let activeStreamID = ""
     let activeBackendSessionID = ""
 
@@ -9050,7 +9050,7 @@ describe("App", () => {
     })
   })
 
-  it("renders the first streamed turn immediately after sending from the create session canvas", async () => {
+  it("renders the first streamed response immediately after sending from the create session canvas", async () => {
     let streamListener: DesktopAgentSessionEventListener | undefined
     let releaseStream: (() => void) | undefined
     let activeStreamID = ""
@@ -9527,7 +9527,7 @@ describe("App", () => {
     expect(
       Array.from(document.querySelectorAll(".settings-prompt-assignment-title"), (node) => node.textContent),
     ).toEqual(["System prompt", "Plan mode prompt", "Side chat prompt", "Git commit message prompt"])
-    expect(screen.queryByText("Every turn")).not.toBeInTheDocument()
+    expect(screen.queryByText("Every execution")).not.toBeInTheDocument()
     expect(screen.queryByText("Plan only")).not.toBeInTheDocument()
     expect(screen.queryByText("Side chat only")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "System prompt" })).toBeInTheDocument()
@@ -12608,7 +12608,7 @@ describe("App", () => {
     expect(screen.queryByText("Preparing...")).not.toBeInTheDocument()
   })
 
-  it("ignores stale session stream events after the request stream settles a turn", async () => {
+  it("ignores stale session stream events after the request stream settles a backend turn", async () => {
     let streamListener: DesktopAgentSessionEventListener | undefined
     let sessionStreamListener: DesktopAgentSessionEventListener | undefined
     let releaseStream: (() => void) | undefined
@@ -12828,7 +12828,7 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(screen.queryByRole("heading", { name: "Backend response received" })).not.toBeInTheDocument()
-      expect(screen.queryByText("Backend finished streaming this turn.")).not.toBeInTheDocument()
+      expect(screen.queryByText("Backend finished streaming this response.")).not.toBeInTheDocument()
       expect(getComposerSendButton()).toBeEnabled()
     })
   })

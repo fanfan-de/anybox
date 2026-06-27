@@ -211,8 +211,8 @@ export const initialConversations: Record<string, ThreadMessage[]> = {
           text: "The thread is now organized as an event trace so the agent's reasoning, output, and tool activity stay visible in the order they happened.",
         }),
         traceItem("review-trace-4", "patch", "2026-03-31T08:36:04+08:00", "Patch", {
-          title: "Trace-first turn",
-          detail: "The turn exposes reasoning, response text, and structured events without collapsing them into a summary-first card.",
+          title: "Trace-first response",
+          detail: "The response exposes reasoning, response text, and structured events without collapsing them into a summary-first card.",
           status: "completed",
         }),
       ],

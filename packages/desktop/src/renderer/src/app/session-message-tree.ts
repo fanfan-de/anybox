@@ -88,11 +88,11 @@ function hasAssistantResponseText(message: LoadedSessionHistoryMessage) {
   return message.parts.some((part) => readTextPartPreview(part).trim())
 }
 
-function getMessageTurnID(message: LoadedSessionHistoryMessage) {
+function getMessageBackendTurnID(message: LoadedSessionHistoryMessage) {
   return readString(message["turn"]?.id).trim() || readString(message.info.turnID).trim()
 }
 
-function getMessageTurnLastMessageID(message: LoadedSessionHistoryMessage) {
+function getMessageBackendTurnLastMessageID(message: LoadedSessionHistoryMessage) {
   return readString(message["turn"]?.lastMessageID).trim() || readString(message.info.lastMessageID).trim()
 }
 
@@ -105,25 +105,25 @@ function isAssistantResponseTreeCandidate(message: LoadedSessionHistoryMessage) 
   )
 }
 
-function selectFinalAssistantMessagesByTurn(messages: LoadedSessionHistoryMessage[]) {
-  const candidatesByTurnID = new Map<string, LoadedSessionHistoryMessage[]>()
+function selectFinalAssistantMessagesByBackendTurn(messages: LoadedSessionHistoryMessage[]) {
+  const candidatesByBackendTurnID = new Map<string, LoadedSessionHistoryMessage[]>()
 
   for (const message of messages) {
     if (!isAssistantResponseTreeCandidate(message)) continue
-    const turnID = getMessageTurnID(message)
-    if (!turnID) continue
-    candidatesByTurnID.set(turnID, [...(candidatesByTurnID.get(turnID) ?? []), message])
+    const backendTurnID = getMessageBackendTurnID(message)
+    if (!backendTurnID) continue
+    candidatesByBackendTurnID.set(backendTurnID, [...(candidatesByBackendTurnID.get(backendTurnID) ?? []), message])
   }
 
   const finalAssistantMessageIDs = new Set<string>()
-  const finalAssistantMessageIDByTurnID = new Map<string, string>()
+  const finalAssistantMessageIDByBackendTurnID = new Map<string, string>()
 
-  for (const [turnID, candidates] of candidatesByTurnID) {
+  for (const [backendTurnID, candidates] of candidatesByBackendTurnID) {
     const candidatesByID = new Map(candidates.map((candidate) => [candidate.info.id, candidate]))
     let finalMessage: LoadedSessionHistoryMessage | undefined
 
     for (const candidate of candidates) {
-      const lastMessageID = getMessageTurnLastMessageID(candidate)
+      const lastMessageID = getMessageBackendTurnLastMessageID(candidate)
       if (!lastMessageID) continue
       finalMessage = candidatesByID.get(lastMessageID)
       if (finalMessage) break
@@ -137,11 +137,11 @@ function selectFinalAssistantMessagesByTurn(messages: LoadedSessionHistoryMessag
 
     if (!finalMessage?.info.id) continue
     finalAssistantMessageIDs.add(finalMessage.info.id)
-    finalAssistantMessageIDByTurnID.set(turnID, finalMessage.info.id)
+    finalAssistantMessageIDByBackendTurnID.set(backendTurnID, finalMessage.info.id)
   }
 
   return {
-    finalAssistantMessageIDByTurnID,
+    finalAssistantMessageIDByBackendTurnID,
     finalAssistantMessageIDs,
   }
 }
@@ -155,8 +155,8 @@ function shouldIncludeMessageTreeNode(
   if (message.info.role !== "assistant") return false
   if (!hasAssistantResponseText(message)) return false
 
-  const turnID = getMessageTurnID(message)
-  if (!turnID) return true
+  const backendTurnID = getMessageBackendTurnID(message)
+  if (!backendTurnID) return true
 
   return finalAssistantMessageIDs.has(message.info.id)
 }
@@ -225,9 +225,9 @@ export function buildSessionMessageTree(
     )
   }
   const {
-    finalAssistantMessageIDByTurnID,
+    finalAssistantMessageIDByBackendTurnID,
     finalAssistantMessageIDs,
-  } = selectFinalAssistantMessagesByTurn(messages)
+  } = selectFinalAssistantMessagesByBackendTurn(messages)
 
   const nodes = messages
     .filter((message) => shouldIncludeMessageTreeNode(message, finalAssistantMessageIDs))
@@ -282,11 +282,11 @@ export function buildSessionMessageTree(
 
     if (activeMessageID) {
       const activeMessage = messageByID.get(activeMessageID)
-      const activeTurnID = activeMessage ? getMessageTurnID(activeMessage) : ""
-      const activeTurnFinalMessageID = activeTurnID
-        ? finalAssistantMessageIDByTurnID.get(activeTurnID) ?? null
+      const activeBackendTurnID = activeMessage ? getMessageBackendTurnID(activeMessage) : ""
+      const activeBackendTurnFinalMessageID = activeBackendTurnID
+        ? finalAssistantMessageIDByBackendTurnID.get(activeBackendTurnID) ?? null
         : null
-      if (activeTurnFinalMessageID && nodesByID[activeTurnFinalMessageID]) return activeTurnFinalMessageID
+      if (activeBackendTurnFinalMessageID && nodesByID[activeBackendTurnFinalMessageID]) return activeBackendTurnFinalMessageID
 
       let parentMessageID = parentIDByMessageID.get(activeMessageID) ?? null
       const seenParentIDs = new Set<string>()

@@ -331,12 +331,12 @@ function updateConversationMapWithDeltaGroups(
 ) {
   let nextConversations = conversations
 
-  for (const [sessionID, updatesByTurnID] of groupedUpdates) {
+  for (const [sessionID, updatesByAssistantThreadMessageID] of groupedUpdates) {
     const currentMessages = nextConversations[sessionID] ?? []
     let didUpdateSession = false
     const nextMessages = currentMessages.map((message) => {
       if (message.kind !== "assistant") return message
-      const streamEvents = updatesByTurnID.get(message.id)
+      const streamEvents = updatesByAssistantThreadMessageID.get(message.id)
       if (!streamEvents?.length) return message
 
       didUpdateSession = true
@@ -2111,11 +2111,12 @@ export function useSessionStreamController({
     const groupedUpdates = new Map<string, Map<string, PendingStreamDeltaUpdate["event"][]>>()
 
     for (const update of updatesToFlush) {
-      const updatesByTurnID = groupedUpdates.get(update.target.sessionID) ?? new Map<string, PendingStreamDeltaUpdate["event"][]>()
-      const events = updatesByTurnID.get(update.target.assistantThreadMessageID) ?? []
+      const updatesByAssistantThreadMessageID =
+        groupedUpdates.get(update.target.sessionID) ?? new Map<string, PendingStreamDeltaUpdate["event"][]>()
+      const events = updatesByAssistantThreadMessageID.get(update.target.assistantThreadMessageID) ?? []
       events.push(update.event)
-      updatesByTurnID.set(update.target.assistantThreadMessageID, events)
-      groupedUpdates.set(update.target.sessionID, updatesByTurnID)
+      updatesByAssistantThreadMessageID.set(update.target.assistantThreadMessageID, events)
+      groupedUpdates.set(update.target.sessionID, updatesByAssistantThreadMessageID)
     }
 
     for (const sessionID of groupedUpdates.keys()) {

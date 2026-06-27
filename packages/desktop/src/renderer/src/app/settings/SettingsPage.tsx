@@ -133,7 +133,7 @@ const assistantTraceVisibilityOptions: Array<{
   {
     key: "sources",
     title: "Sources",
-    description: "Show cited URLs and document references that the model used during this turn.",
+    description: "Show cited URLs and document references that the model used during this response.",
   },
   {
     key: "files",

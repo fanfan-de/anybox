@@ -6,9 +6,9 @@ function getPendingSubmissionText(input: PendingConversationInput) {
 }
 
 function getPendingSubmissionNote(input: PendingConversationInput) {
-  if (input.mode === "queued") return "已排队，当前 turn 结束后发送"
-  if (input.status === "consumed") return "已引导，当前 turn 会读取这条输入"
-  return "将在当前 turn 到达安全边界后继续"
+  if (input.mode === "queued") return "已排队，当前执行结束后发送"
+  if (input.status === "consumed") return "已引导，当前执行会读取这条输入"
+  return "将在当前执行到达安全边界后继续"
 }
 
 export function ComposerConcurrentInputDrawer({
@@ -44,11 +44,11 @@ export function ComposerConcurrentInputDrawer({
           {input.mode === "queued" ? (
             <div className="composer-concurrent-input-actions">
               <button
-                aria-label="引导当前 turn"
+                aria-label="引导当前执行"
                 className="composer-concurrent-input-steer-button"
                 disabled={steerDisabled || !onSteerQueuedMessage}
                 onClick={() => void onSteerQueuedMessage?.(input)}
-                title="引导当前正在运行的 turn"
+                title="引导当前正在运行的执行过程"
                 type="button"
               >
                 引导

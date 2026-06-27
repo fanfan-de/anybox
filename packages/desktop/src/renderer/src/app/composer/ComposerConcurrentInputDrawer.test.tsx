@@ -4,7 +4,7 @@ import { ComposerConcurrentInputDrawer } from "./ComposerConcurrentInputDrawer"
 import type { PendingConversationInput } from "../types"
 
 describe("ComposerConcurrentInputDrawer", () => {
-  it("stays hidden until a submitted turn is pending", () => {
+  it("stays hidden until a submitted input is pending", () => {
     render(
       <ComposerConcurrentInputDrawer
         canSteer
@@ -14,7 +14,7 @@ describe("ComposerConcurrentInputDrawer", () => {
       />,
     )
 
-    expect(screen.queryByRole("button", { name: "引导当前 turn" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "引导当前执行" })).toBeNull()
   })
 
   it("renders queued pending submissions with the steer action", () => {
@@ -40,7 +40,7 @@ describe("ComposerConcurrentInputDrawer", () => {
 
     expect(screen.getByText("Queued request")).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: "引导当前 turn" }))
+    fireEvent.click(screen.getByRole("button", { name: "引导当前执行" }))
 
     expect(onSteerQueuedMessage).toHaveBeenCalledWith(queuedInput)
   })
@@ -49,7 +49,7 @@ describe("ComposerConcurrentInputDrawer", () => {
     const steerInput: PendingConversationInput = {
       id: "input-steer",
       sessionID: "session-1",
-      text: "Adjust current turn",
+      text: "Adjust current execution",
       mode: "steer",
       status: "pending",
       targetAssistantThreadMessageID: "assistant-active",
@@ -66,8 +66,8 @@ describe("ComposerConcurrentInputDrawer", () => {
       />,
     )
 
-    expect(screen.getByText("Adjust current turn")).toBeInTheDocument()
-    expect(screen.getByText("将在当前 turn 到达安全边界后继续")).toBeInTheDocument()
+    expect(screen.getByText("Adjust current execution")).toBeInTheDocument()
+    expect(screen.getByText("将在当前执行到达安全边界后继续")).toBeInTheDocument()
   })
 
   it("renders steer submissions without insertion metadata with a waiting note", () => {
@@ -90,6 +90,6 @@ describe("ComposerConcurrentInputDrawer", () => {
     )
 
     expect(screen.getByText("Adjust during tool input")).toBeInTheDocument()
-    expect(screen.getByText("将在当前 turn 到达安全边界后继续")).toBeInTheDocument()
+    expect(screen.getByText("将在当前执行到达安全边界后继续")).toBeInTheDocument()
   })
 })
