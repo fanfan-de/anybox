@@ -10,7 +10,6 @@ export const MIN_CANVAS_WIDTH = 560
 export const SIDEBAR_RESIZER_WIDTH = 10
 export const RIGHT_SIDEBAR_MIN_LEFT_EDGE_RATIO = 1 / 3
 export const SIDEBAR_KEYBOARD_STEP = 16
-export const STREAM_PENDING_PREFIX = "Queued prompt:"
 export const STREAM_PENDING_REASONING = "Reasoning updates will appear here as soon as the backend emits them."
 export const STREAM_PENDING_NEXT_STEP = "Live output will keep appending inside this response while the backend responds."
 

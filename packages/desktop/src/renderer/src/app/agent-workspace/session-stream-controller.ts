@@ -241,7 +241,9 @@ function buildSessionStreamingAssistantThreadMessageWithID(
     ...(identity.llmCallID ? { llmCallID: identity.llmCallID } : {}),
     items: assistantMessage.items.map((item) => ({
       ...item,
-      sourceID: item.sourceID === `${assistantMessage.id}:prompt` ? `${assistantThreadMessageID}:prompt` : item.sourceID,
+      sourceID: item.sourceID === `${assistantMessage.id}:stream-placeholder`
+        ? `${assistantThreadMessageID}:stream-placeholder`
+        : item.sourceID,
     })),
   }
 }

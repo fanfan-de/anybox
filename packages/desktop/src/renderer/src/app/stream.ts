@@ -1,4 +1,3 @@
-import { STREAM_PENDING_PREFIX } from "./constants"
 import type {
   AgentStreamEvent,
   AgentRuntimeEvent,
@@ -30,6 +29,7 @@ import { compactText, createID } from "./utils"
 const STREAM_TEXT_RENDER_LIMIT = 160_000
 const STREAM_TOOL_INPUT_RENDER_LIMIT = 120_000
 const STREAM_RENDER_TRUNCATION_MARKER = "\n\n[Renderer truncated this live stream item to keep the desktop responsive.]"
+const STREAM_PLACEHOLDER_SUFFIX = ":stream-placeholder"
 
 function readString(value: unknown) {
   return typeof value === "string" ? value : ""
@@ -310,8 +310,8 @@ function readCanonicalPartTimestamp(part: Record<string, unknown>) {
   return readPartTimeTimestamp(part.time)
 }
 
-function isPromptTraceItem(item: AssistantTraceItem) {
-  return Boolean(item.sourceID?.endsWith(":prompt"))
+function isInitialStreamPlaceholder(item: AssistantTraceItem) {
+  return Boolean(item.sourceID?.endsWith(STREAM_PLACEHOLDER_SUFFIX))
 }
 
 function insertTraceItemByTimestamp(items: AssistantTraceItem[], nextItem: AssistantTraceItem) {
@@ -322,7 +322,7 @@ function insertTraceItemByTimestamp(items: AssistantTraceItem[], nextItem: Assis
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
     if (!item) continue
-    if (isPromptTraceItem(item)) break
+    if (isInitialStreamPlaceholder(item)) break
 
     const itemTimestamp = readTraceTimestamp(item.timestamp)
     if (itemTimestamp === null || itemTimestamp <= nextTimestamp) break
@@ -1051,10 +1051,10 @@ function cancelInterruptedToolTraceItems(items: AssistantTraceItem[], detail: st
   )
 }
 
-function settleQueuedPrompt(items: AssistantTraceItem[], assistantMessageID: string, status: AssistantTraceStatus = "completed") {
-  const promptSourceID = `${assistantMessageID}:prompt`
+function settleInitialStreamPlaceholder(items: AssistantTraceItem[], assistantMessageID: string, status: AssistantTraceStatus = "completed") {
+  const placeholderSourceID = `${assistantMessageID}${STREAM_PLACEHOLDER_SUFFIX}`
   return items.map((item) =>
-    item.sourceID === promptSourceID && item.status === "pending"
+    item.sourceID === placeholderSourceID && item.status === "pending"
       ? {
           ...item,
           status,
@@ -1774,7 +1774,7 @@ function appendSystemTrace(
   timestamp?: number,
   ownership?: TraceItemOwnership,
 ) {
-  const nextItems = clearStreamingItems(settleQueuedPrompt(items, assistantMessageID))
+  const nextItems = clearStreamingItems(settleInitialStreamPlaceholder(items, assistantMessageID))
   return appendTraceItem(
     nextItems,
     createTraceItem({
@@ -2572,26 +2572,13 @@ export function buildThreadMessagesFromHistory(messages: LoadedSessionHistoryMes
 }
 
 export function buildStreamingAssistantThreadMessage(
-  prompt: string,
+  _prompt: string,
   identity: Partial<Pick<AssistantThreadMessage, "backendTurnID" | "segmentID" | "messageID" | "llmCallID">> = {},
 ): AssistantThreadMessage {
-  const compactPrompt = compactText(prompt, 72)
   const assistantMessageID = createID("assistant")
   const backendTurnID = identity.backendTurnID || `pending:${assistantMessageID}`
   const segmentID = identity.segmentID || identity.messageID || assistantMessageID
-  const items = [
-    createTraceItem({
-      kind: "system",
-      label: "Prompt",
-      title: STREAM_PENDING_PREFIX.replace(":", ""),
-      text: `"${compactPrompt}"`,
-      detail: "Waiting for backend response.",
-      status: "pending",
-      sourceID: `${assistantMessageID}:prompt`,
-      section: "workflow",
-      visibilityKey: "workflow",
-    }),
-  ]
+  const items: AssistantTraceItem[] = []
 
   return {
     id: assistantMessageID,
@@ -2625,7 +2612,7 @@ export function buildSessionStreamingAssistantThreadMessage(
       title: "Reconnecting session stream",
       detail,
       status: "pending",
-      sourceID: `${assistantMessageID}:prompt`,
+      sourceID: `${assistantMessageID}${STREAM_PLACEHOLDER_SUFFIX}`,
       section: "workflow",
       visibilityKey: "workflow",
     }),
@@ -2655,7 +2642,7 @@ export function buildFailureThreadMessage(
   debugEntries?: AssistantTraceDebugEntry[],
 ): AssistantThreadMessage {
   const assistantMessageID = existingMessage?.id ?? createID("assistant")
-  const baseItems = clearStreamingItems(settleQueuedPrompt(existingMessage?.items ?? [], assistantMessageID, "error"))
+  const baseItems = clearStreamingItems(settleInitialStreamPlaceholder(existingMessage?.items ?? [], assistantMessageID, "error"))
   const updatedAt = Date.now()
   const items = appendTraceItem(
     baseItems,
@@ -2704,7 +2691,7 @@ export function markAssistantThreadMessageInterrupted(
 ): AssistantThreadMessage {
   const updatedAt = Date.now()
   const baseItems = cancelInterruptedToolTraceItems(
-    settleQueuedPrompt(assistantMessage.items, assistantMessage.id, "cancelled"),
+    settleInitialStreamPlaceholder(assistantMessage.items, assistantMessage.id, "cancelled"),
     detail,
   )
   const items = upsertTraceItem(
@@ -2749,7 +2736,7 @@ export function finalizeStreamAssistantThreadMessage(
     updatedAt?: number
   },
 ): AssistantThreadMessage {
-  const items = clearStreamingItems(settleQueuedPrompt(assistantMessage.items, assistantMessage.id))
+  const items = clearStreamingItems(settleInitialStreamPlaceholder(assistantMessage.items, assistantMessage.id))
   const waitingQuestion = items.find((item) => item.kind === "question")
   const metadataMessage = applyAssistantMessageMetadata(assistantMessage, input?.message)
   const nextMessageID = metadataMessage.messageID
@@ -3011,7 +2998,7 @@ function applyRuntimeEventToMessage(
   }
 
   const payload = event.payload
-  const preparedItems = settleQueuedPrompt(assistantMessage.items, assistantMessage.id)
+  const preparedItems = settleInitialStreamPlaceholder(assistantMessage.items, assistantMessage.id)
   const debugEntries = buildRuntimeEventDebugEntries(event, item.id)
   const eventTimestamp = event.timestamp > 0 ? event.timestamp : undefined
   const eventBackendTurnID = event.turnID || undefined
@@ -3442,7 +3429,7 @@ export function applyAgentStreamEventToThreadMessage(assistantMessage: Assistant
   }
 
   const payload = readRecord(item.data)
-  const preparedItems = settleQueuedPrompt(assistantMessage.items, assistantMessage.id)
+  const preparedItems = settleInitialStreamPlaceholder(assistantMessage.items, assistantMessage.id)
   const payloadBackendTurnID = readString(payload?.backendTurnID) || readString(payload?.turnID) || undefined
   const payloadOwnership = (messageID?: string): TraceItemOwnership => ({
     messageID: messageID || undefined,

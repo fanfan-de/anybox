@@ -1285,9 +1285,9 @@ describe("stream trace reducer", () => {
     })
     expect(message.runtime.phase).toBe("responding")
 
-    expect(message.items.map((item) => item.kind)).toEqual(["system", "reasoning", "text"])
-    expect(message.items[1]?.text).toBe("Planning live update.")
-    expect(message.items[2]).toMatchObject({
+    expect(message.items.map((item) => item.kind)).toEqual(["reasoning", "text"])
+    expect(message.items[0]?.text).toBe("Planning live update.")
+    expect(message.items[1]).toMatchObject({
       kind: "text",
       text: "Streaming answer",
       isStreaming: true,
@@ -1300,8 +1300,8 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(message.items.map((item) => item.kind)).toEqual(["system", "reasoning", "text", "system"])
-    expect(message.items[2]?.text).toBe("Streaming answer")
+    expect(message.items.map((item) => item.kind)).toEqual(["reasoning", "text", "system"])
+    expect(message.items[1]?.text).toBe("Streaming answer")
     expect(message.runtime.phase).toBe("completed")
   })
 
@@ -2625,10 +2625,10 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(message.items.map((item) => item.kind)).toEqual(["system", "reasoning", "tool", "reasoning", "system"])
-    expect(message.items[1]?.text).toBe("Inspecting workspace.")
-    expect(message.items[3]?.text).toBe("Evaluating test output.")
-    expect(message.items[4]?.title).toBe("Response complete")
+    expect(message.items.map((item) => item.kind)).toEqual(["reasoning", "tool", "reasoning", "system"])
+    expect(message.items[0]?.text).toBe("Inspecting workspace.")
+    expect(message.items[2]?.text).toBe("Evaluating test output.")
+    expect(message.items[3]?.title).toBe("Response complete")
   })
 
   it("updates the original text trace item when the same text part resumes after a tool event", () => {
@@ -2675,7 +2675,7 @@ describe("stream trace reducer", () => {
       text: "First sentence. Second sentence.",
       isStreaming: true,
     })
-    expect(message.items.map((item) => item.kind)).toEqual(["system", "text", "tool"])
+    expect(message.items.map((item) => item.kind)).toEqual(["text", "tool"])
 
     message = applyAgentStreamEventToThreadMessage(message, {
       event: "done",

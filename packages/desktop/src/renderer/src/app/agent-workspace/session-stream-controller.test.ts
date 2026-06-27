@@ -746,7 +746,7 @@ describe("session stream controller helpers", () => {
       state: "Waiting for agent stream",
       items: [
         expect.objectContaining({
-          sourceID: "assistant-steer:prompt",
+          sourceID: "assistant-steer:stream-placeholder",
           status: "pending",
         }),
       ],

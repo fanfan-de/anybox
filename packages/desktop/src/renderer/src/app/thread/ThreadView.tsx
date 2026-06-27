@@ -427,7 +427,7 @@ function readLatestAssistantMessageState(messages: ThreadMessage[]): LatestAssis
 
 function readAssistantMessageOrderTimestamp(message: AssistantThreadMessage) {
   const traceTimestamps = message.items
-    .filter((item) => !item.sourceID?.endsWith(":prompt") && item.kind !== "system")
+    .filter((item) => !item.sourceID?.endsWith(":stream-placeholder") && item.kind !== "system")
     .map((item) => item.timestamp)
     .filter((timestamp) => Number.isFinite(timestamp))
 
