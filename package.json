@@ -6,6 +6,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "corepack pnpm --filter anybox-desktop-agent dev",
+    "dev:cdp": "node ./scripts/dev-cdp.mjs",
     "dev:debug": "corepack pnpm --filter anybox-desktop-agent dev:debug",
     "dev:info": "corepack pnpm --filter anybox-desktop-agent dev:info",
     "dev:warn": "corepack pnpm --filter anybox-desktop-agent dev:warn",

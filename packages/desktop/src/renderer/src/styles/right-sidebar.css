@@ -536,6 +536,45 @@
 
 }
 
+@container right-sidebar (max-width: 360px) {
+  .right-sidebar-launcher {
+    padding: 10px;
+  }
+
+  .right-sidebar-launcher-tile-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(5, minmax(96px, 1fr));
+  }
+
+  .right-sidebar-launcher-card.is-files {
+    grid-column: span 1;
+    grid-row: span 1;
+  }
+
+  .right-sidebar-launcher-card.is-browser,
+  .right-sidebar-launcher-card.is-message-tree,
+  .right-sidebar-launcher-card.is-review,
+  .right-sidebar-launcher-card.is-terminal {
+    grid-column: span 1;
+  }
+
+  .right-sidebar-launcher-card {
+    min-height: 96px;
+    padding: 14px 16px;
+    gap: 10px;
+  }
+
+  .right-sidebar-launcher-card-icon,
+  .right-sidebar-launcher-card.is-files .right-sidebar-launcher-card-icon,
+  .right-sidebar-launcher-card.is-browser .right-sidebar-launcher-card-icon,
+  .right-sidebar-launcher-card.is-message-tree .right-sidebar-launcher-card-icon,
+  .right-sidebar-launcher-card.is-review .right-sidebar-launcher-card-icon,
+  .right-sidebar-launcher-card.is-terminal .right-sidebar-launcher-card-icon {
+    width: min(24%, 72px);
+    min-width: 46px;
+  }
+}
+
 .right-sidebar-top-menu-window-controls {
   align-self: stretch;
   flex: 0 0 auto;

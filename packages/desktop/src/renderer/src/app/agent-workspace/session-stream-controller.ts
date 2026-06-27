@@ -505,6 +505,31 @@ function normalizeTraceText(value: string | undefined) {
   return (value ?? "").trim()
 }
 
+function traceValueIsEquivalent(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true
+  if (typeof left !== typeof right) return false
+  if (!left || !right || typeof left !== "object") return false
+
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right)) return false
+    if (left.length !== right.length) return false
+    return left.every((value, index) => traceValueIsEquivalent(value, right[index]))
+  }
+
+  const leftRecord = left as Record<string, unknown>
+  const rightRecord = right as Record<string, unknown>
+  const keys = new Set([...Object.keys(leftRecord), ...Object.keys(rightRecord)])
+
+  for (const key of keys) {
+    if (!traceValueIsEquivalent(leftRecord[key], rightRecord[key])) return false
+  }
+  return true
+}
+
+function traceItemIsEquivalent(left: AssistantTraceItem, right: AssistantTraceItem) {
+  return traceValueIsEquivalent(left, right)
+}
+
 function findMatchingTraceItemIndex(
   previousItems: AssistantTraceItem[],
   nextItem: AssistantTraceItem,
@@ -573,11 +598,14 @@ function preserveTraceItemIdentity(
 
     usedIndices.add(matchIndex)
 
-    return {
+    const nextItemWithPreservedIdentity = {
       ...nextItem,
       id: previousItem.id,
       timestamp: Math.min(previousItem.timestamp, nextItem.timestamp),
     }
+    return traceItemIsEquivalent(previousItem, nextItemWithPreservedIdentity)
+      ? previousItem
+      : nextItemWithPreservedIdentity
   })
 }
 
@@ -595,16 +623,23 @@ function shouldPreserveCancelledTurn(current: AssistantTurn, incoming: Assistant
 }
 
 function cancelInterruptedToolTraceItems(items: AssistantTraceItem[]) {
-  return items.map((item) =>
-    item.kind === "tool" && !isTerminalTraceStatus(item.status)
-      ? {
-          ...item,
-          status: "cancelled" as const,
-          detail: item.detail || "Prompt cancellation requested.",
-          isStreaming: false,
-        }
-      : item,
-  )
+  let didUpdate = false
+  const nextItems = items.map((item) => {
+    if (item.kind !== "tool" || isTerminalTraceStatus(item.status)) return item
+
+    const nextItem = {
+      ...item,
+      status: "cancelled" as const,
+      detail: item.detail || "Prompt cancellation requested.",
+      isStreaming: false,
+    }
+    if (traceItemIsEquivalent(item, nextItem)) return item
+
+    didUpdate = true
+    return nextItem
+  })
+
+  return didUpdate ? nextItems : items
 }
 
 function getToolTraceIdentity(item: AssistantTraceItem) {
@@ -683,7 +718,7 @@ function mergeAssistantTraceItem(existing: AssistantTraceItem, nextItem: Assista
     nextItem.status === "error"
 
   if (keepsTerminalToolState || keepsCancelledToolState) {
-    return {
+    const merged = {
       ...existing,
       messageID: existing.messageID ?? nextItem.messageID,
       backendTurnID: existing.backendTurnID ?? nextItem.backendTurnID,
@@ -691,6 +726,7 @@ function mergeAssistantTraceItem(existing: AssistantTraceItem, nextItem: Assista
       toolCallID: existing.toolCallID ?? nextItem.toolCallID,
       debugEntries: mergeTraceDebugEntries(existing.debugEntries, nextItem.debugEntries),
     }
+    return traceItemIsEquivalent(existing, merged) ? existing : merged
   }
 
   const merged = {
@@ -709,22 +745,24 @@ function mergeAssistantTraceItem(existing: AssistantTraceItem, nextItem: Assista
     existing.text &&
     !nextItem.text
   ) {
-    return {
+    const mergedWithText = {
       ...merged,
       text: existing.text,
     }
+    return traceItemIsEquivalent(existing, mergedWithText) ? existing : mergedWithText
   }
 
   if (existing.kind === "tool" && nextItem.kind === "tool") {
-    return {
+    const mergedTool = {
       ...merged,
       text: nextItem.text ?? existing.text,
       toolInputText: nextItem.toolInputText ?? existing.toolInputText,
       toolOutputText: nextItem.toolOutputText ?? existing.toolOutputText,
     }
+    return traceItemIsEquivalent(existing, mergedTool) ? existing : mergedTool
   }
 
-  return merged
+  return traceItemIsEquivalent(existing, merged) ? existing : merged
 }
 
 function upsertAssistantTraceItem(items: AssistantTraceItem[], nextItem: AssistantTraceItem) {
@@ -751,16 +789,32 @@ function upsertAssistantTraceItem(items: AssistantTraceItem[], nextItem: Assista
 
   const merged = mergeAssistantTraceItem(existing, nextItem)
   const duplicateIndices = new Set(matchingIndices.slice(1))
-  return items.flatMap((item, index) => {
-    if (index === firstIndex) return [merged]
-    if (duplicateIndices.has(index)) return []
-    return [item]
+  if (duplicateIndices.size === 0 && Object.is(merged, existing)) return items
+
+  const nextItems: AssistantTraceItem[] = []
+  items.forEach((item, index) => {
+    if (index === firstIndex) {
+      nextItems.push(merged)
+      return
+    }
+    if (!duplicateIndices.has(index)) {
+      nextItems.push(item)
+    }
   })
+  return nextItems
 }
 
 function removeStaleApprovalBlockers(items: AssistantTraceItem[]) {
   const hasWaitingTool = items.some((item) => item.kind === "tool" && item.status === "waiting-approval")
   if (hasWaitingTool) return items
+
+  const hasStaleApprovalBlocker = items.some(
+    (item) =>
+      item.title === "Approval required" &&
+      item.status === "pending" &&
+      item.visibilityKey === "approvals",
+  )
+  if (!hasStaleApprovalBlocker) return items
 
   return items.filter(
     (item) =>

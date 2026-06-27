@@ -1,6 +1,6 @@
 # Thread View 前端设计说明
 
-更新日期：2026-06-03
+更新日期：2026-06-27
 
 ## 1. 文档定位
 
@@ -145,6 +145,13 @@ AssistantTraceItem[]
 └─ debug  # 默认隐藏的开发调试信息
    └─ debugEntries / developer metadata
 ```
+
+streaming 更新需要保持历史 trace 的 structural sharing：
+
+- stream merge 只替换真正变化的 live item；已完成且语义未变化的 `AssistantTraceItem` 必须复用旧对象引用。
+- `ThreadView` 在主 assistant row 中把尾部连续 live items 拆成 live segment，前面的 completed items 作为 stable segment 渲染。
+- live 判定只覆盖 `isStreaming`、`draftPatch.isStreaming`、以及 pending/running/waiting-approval tool；如果 live item 出现在历史中间，则回退到原整段渲染，保证顺序优先。
+- question answered 状态在 trace item 边界降成 boolean；不要把整份 answered question Set 传给所有 trace item。
 
 ### 数据到渲染流程图
 
@@ -359,6 +366,8 @@ reasoning 和 tools 默认弱化：
 - 样式整体比 response 更低对比。
 - tool 支持 input/output 二级 disclosure。
 - streaming 时用轻微 pulse 和 caret 表达运行中。
+- 折叠状态必须是真 lazy mount：完整 reasoning、tool input/output、patch diff 不进入 DOM，也不交给 Markdown/RichText/DiffPreview 渲染。
+- 超大内容先显示 bounded preview：reasoning 首行最多 480 字符；tool input/output 最多 12 行或 1200 字符；patch preview 最多 200 行或 20000 字符，用户显式展开后才挂完整内容。
 
 当前实现末尾有较多 CSS override，会把早期卡片样式改成更轻的透明形态。后续调整时应优先收敛这些 override，避免同一类元素在文件前后出现冲突规则。
 
@@ -369,6 +378,7 @@ file-change section 会汇总当前 assistant cycle 中的文件变更。为了�
 - 如果有 image item，保留图片和最近的非图片变更。
 - 否则优先显示最新 patch。
 - patch/file chip 可点击，并通过 `onFileChangeSelect` 打开右侧检查区域。
+- patch 行默认只显示文件摘要；展开文件行先挂截断 diff preview，点击 full diff 后才把完整 patch 交给 `DiffPreview`。
 
 ### Debug
 

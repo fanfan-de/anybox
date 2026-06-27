@@ -2,6 +2,7 @@ import { memo, useMemo, type MouseEvent, type ReactNode } from "react"
 import ReactMarkdown, { type Components, type UrlTransform } from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { toLocalImageProtocolUrl } from "../../../shared/local-image-protocol"
+import { RendererProfiler, createRendererProfilerOnRender, measureRendererPerf } from "./perf-profiler"
 import type { WorkspaceFileLineRange } from "./types"
 
 interface ThreadMarkdownProps {
@@ -463,7 +464,16 @@ export const ThreadMarkdown = memo(function ThreadMarkdown({
   resolveLinkTarget,
   text,
 }: ThreadMarkdownProps) {
-  const markdownText = useMemo(() => normalizeLooseLocalFileMarkdownLinks(text), [text])
+  const markdownText = useMemo(
+    () => measureRendererPerf(
+      "ThreadMarkdown.normalize",
+      () => normalizeLooseLocalFileMarkdownLinks(text),
+      () => ({
+        textLength: text.length,
+      }),
+    ),
+    [text],
+  )
   const transformMarkdownUrl = useMemo(
     () => createMarkdownUrlTransform({ resolveImageSrc, resolveLinkTarget }),
     [resolveImageSrc, resolveLinkTarget],
@@ -481,17 +491,26 @@ export const ThreadMarkdown = memo(function ThreadMarkdown({
     img: MarkdownImage,
     table: MarkdownTable,
   }), [onArtifactLinkOpen, onLocalFileLinkOpen, resolveLinkTarget])
+  const markdownProfiler = useMemo(
+    () => createRendererProfilerOnRender("ThreadMarkdown commit", () => ({
+      normalizedLength: markdownText.length,
+      textLength: text.length,
+    })),
+    [markdownText.length, text.length],
+  )
 
   return (
     <div className={className}>
-      <ReactMarkdown
-        components={components}
-        remarkPlugins={remarkPlugins}
-        skipHtml
-        urlTransform={transformMarkdownUrl}
-      >
-        {markdownText}
-      </ReactMarkdown>
+      <RendererProfiler id="ThreadMarkdown" onRender={markdownProfiler}>
+        <ReactMarkdown
+          components={components}
+          remarkPlugins={remarkPlugins}
+          skipHtml
+          urlTransform={transformMarkdownUrl}
+        >
+          {markdownText}
+        </ReactMarkdown>
+      </RendererProfiler>
     </div>
   )
 })

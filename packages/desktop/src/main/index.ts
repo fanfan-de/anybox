@@ -27,6 +27,11 @@ import { WorkbenchWindowManager } from "./workbench-window-manager"
 
 const mainDir = path.dirname(fileURLToPath(import.meta.url))
 const PREVIEW_WEBVIEW_PARTITION = "persist:preview"
+const remoteDebuggingPort = process.env.ANYBOX_REMOTE_DEBUGGING_PORT?.trim()
+
+if (!app.isPackaged && remoteDebuggingPort && /^\d+$/.test(remoteDebuggingPort)) {
+  app.commandLine.appendSwitch("remote-debugging-port", remoteDebuggingPort)
+}
 
 registerLocalImageProtocolScheme(protocol)
 registerLocalPreviewProtocolScheme(protocol)

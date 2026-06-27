@@ -829,6 +829,49 @@ describe("ThreadView image trace items", () => {
     expect(screen.queryByRole("region", { name: "Diff preview for src/app.tsx" })).not.toBeInTheDocument()
   })
 
+  it("truncates large patch previews until the full diff is requested", () => {
+    const hiddenTail = "FULL_PATCH_TAIL"
+    const patchLines = [
+      "diff --git a/src/large.ts b/src/large.ts",
+      "--- a/src/large.ts",
+      "+++ b/src/large.ts",
+      "@@ -1,260 +1,260 @@",
+      ...Array.from({ length: 260 }, (_, index) => `+export const value${index} = ${index}`),
+      `+${hiddenTail}`,
+    ]
+    const patchItem: AssistantTraceItem = {
+      id: "patch-large",
+      kind: "patch",
+      timestamp: 1,
+      label: "Model call",
+      title: "1 file change (+261 -0)",
+      fileChanges: [
+        {
+          file: "src/large.ts",
+          additions: 261,
+          deletions: 0,
+          patch: patchLines.join("\n"),
+        },
+      ],
+      status: "completed",
+    }
+
+    const { container, getByRole } = renderThread([
+      assistantTraceTurn("assistant-patch-large", [patchItem], false),
+    ])
+
+    fireEvent.click(getByRole("button", { name: "已编辑 1 个文件" }))
+    fireEvent.click(getByRole("button", { name: /已编辑\s*src\/large\.ts/ }))
+
+    expect(getByRole("region", { name: "Diff preview for src/large.ts" })).toBeInTheDocument()
+    expect(container.textContent).not.toContain(hiddenTail)
+    expect(getByRole("button", { name: "Show full diff" })).toBeInTheDocument()
+
+    fireEvent.click(getByRole("button", { name: "Show full diff" }))
+
+    expect(container.textContent).toContain(hiddenTail)
+  })
+
   it("renders streamed draft patch previews without requiring git diff line numbers", () => {
     const toolItem: AssistantTraceItem = {
       id: "tool-patch-draft",
@@ -1603,6 +1646,72 @@ describe("ThreadView trace collapse", () => {
     expect(completedSummary.closest('[role="button"]')).toHaveAttribute("aria-expanded", "false")
     expect(activeSummary).not.toHaveClass("trace-item-collapsed-line")
     expect(activeSummary.closest('[role="button"]')).toHaveAttribute("aria-expanded", "true")
+  })
+
+  it("mounts full long reasoning text only after expansion", () => {
+    const hiddenTail = "FULL_REASONING_TAIL"
+    const longReasoningLine = `${"Scanning context. ".repeat(50)}${hiddenTail}`
+    const { container } = renderThread([
+      assistantTraceTurn(
+        "assistant-1",
+        [
+          {
+            id: "reasoning-long",
+            kind: "reasoning",
+            timestamp: 1,
+            label: "Reasoning",
+            text: longReasoningLine,
+            status: "completed",
+          },
+        ],
+        false,
+      ),
+    ])
+
+    const reasoningToggle = container.querySelector(".trace-item-reasoning-toggle")
+    expect(reasoningToggle).not.toBeNull()
+    expect(container.textContent).not.toContain(hiddenTail)
+
+    fireEvent.click(reasoningToggle!)
+
+    expect(reasoningToggle).toHaveAttribute("aria-expanded", "true")
+    expect(container.textContent).toContain(hiddenTail)
+  })
+
+  it("shows tool input preview before mounting full tool input", () => {
+    const hiddenTail = "FULL_TOOL_INPUT_TAIL"
+    const toolInputText = `${"input chunk ".repeat(160)}${hiddenTail}`
+    const { container, getByRole, getByText } = renderThread([
+      assistantTraceTurn(
+        "assistant-tool-preview",
+        [
+          {
+            id: "tool-preview",
+            kind: "tool",
+            timestamp: 1,
+            label: "Tool",
+            title: "Shell",
+            status: "running",
+            isStreaming: true,
+            toolInputText,
+          },
+        ],
+        true,
+      ),
+    ], {
+      assistantTraceVisibility: {
+        ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+        toolInputs: true,
+      },
+    })
+
+    fireEvent.click(getByRole("button", { name: /Shell/ }))
+    expect(getByText("Input")).toBeInTheDocument()
+    expect(container.textContent).not.toContain(hiddenTail)
+
+    fireEvent.click(getByRole("button", { name: /Shell input/ }))
+
+    expect(container.textContent).toContain(hiddenTail)
   })
 
   it("collapses process trace before the final assistant response", () => {

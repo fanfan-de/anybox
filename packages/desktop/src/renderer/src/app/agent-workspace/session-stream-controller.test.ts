@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { AssistantTurn, SessionTaskListView, Turn, UserTurn } from "../types"
+import type { AssistantTraceItem, AssistantTurn, SessionTaskListView, Turn, UserTurn } from "../types"
 import {
   applyExecutionModeToUserTurnPresentation,
   compactHighFrequencyDeltaStreamEvent,
@@ -1668,5 +1668,170 @@ describe("session stream controller helpers", () => {
       "I will create the task list.",
       "task_create",
     ])
+  })
+
+  it("preserves completed trace item references when only the live response changes", () => {
+    const completedItems: AssistantTraceItem[] = Array.from({ length: 100 }, (_, index) => ({
+      id: `completed-${index}`,
+      kind: "reasoning",
+      label: "Reasoning",
+      status: "completed",
+      text: `Completed reasoning ${index}`,
+      timestamp: index + 1,
+    }))
+    const liveItem: AssistantTraceItem = {
+      id: "live-response",
+      kind: "text",
+      label: "Assistant",
+      status: "running",
+      text: "Hello",
+      timestamp: 200,
+      isStreaming: true,
+    }
+    const currentTurn: AssistantTurn = {
+      id: "assistant-local",
+      messageID: "message-stream",
+      kind: "assistant",
+      timestamp: 1,
+      runtime: {
+        phase: "responding",
+        startedAt: 1,
+        updatedAt: 200,
+      },
+      state: "responding",
+      isStreaming: true,
+      items: [...completedItems, liveItem],
+    }
+    const incomingTurn: AssistantTurn = {
+      ...currentTurn,
+      id: "assistant-backend",
+      runtime: {
+        ...currentTurn.runtime,
+        updatedAt: 220,
+      },
+      items: [
+        {
+          ...liveItem,
+          text: "Hello world",
+          timestamp: 220,
+        },
+      ],
+    }
+
+    const merged = reconcileConversationTurns([currentTurn, incomingTurn])
+    const mergedTurn = merged[0]
+
+    expect(mergedTurn?.kind).toBe("assistant")
+    if (mergedTurn?.kind !== "assistant") return
+    completedItems.forEach((item, index) => {
+      expect(mergedTurn.items[index]).toBe(item)
+    })
+    expect(mergedTurn.items[100]).not.toBe(liveItem)
+    expect(mergedTurn.items[100]?.text).toBe("Hello world")
+  })
+
+  it("reuses an unchanged completed tool item and items array during trace merge", () => {
+    const completedTool: AssistantTraceItem = {
+      id: "tool-completed",
+      kind: "tool",
+      label: "Tool",
+      title: "task_create",
+      status: "completed",
+      sourceID: "task-create-source",
+      partID: "task-create-part",
+      toolCallID: "task-create-call",
+      toolOutputText: "Tasks created",
+      timestamp: 10,
+    }
+    const currentTurn: AssistantTurn = {
+      id: "assistant-local",
+      messageID: "message-tool",
+      kind: "assistant",
+      timestamp: 1,
+      runtime: {
+        phase: "completed",
+        startedAt: 1,
+        updatedAt: 10,
+      },
+      state: "completed",
+      items: [completedTool],
+    }
+    const incomingTurn: AssistantTurn = {
+      ...currentTurn,
+      id: "assistant-backend",
+      items: [{ ...completedTool, id: "tool-backend", timestamp: 20 }],
+    }
+
+    const merged = reconcileConversationTurns([currentTurn, incomingTurn])
+    const mergedTurn = merged[0]
+
+    expect(mergedTurn?.kind).toBe("assistant")
+    if (mergedTurn?.kind !== "assistant") return
+    expect(mergedTurn.items).toBe(currentTurn.items)
+    expect(mergedTurn.items[0]).toBe(completedTool)
+  })
+
+  it("reuses semantically unchanged trace items when preserving history identities", () => {
+    const previousTurn = createAssistantTurn("assistant-local", "trace-local", "Done", "source-history", "message-history")
+    const previousItem = previousTurn.items[0]!
+    const historyTurn = createAssistantTurn("assistant-history", "trace-history", "Done", "source-history", "message-history")
+
+    const merged = mergeConversationTurnsFromHistory([previousTurn], [historyTurn])
+    const mergedTurn = merged[0]
+
+    expect(mergedTurn?.kind).toBe("assistant")
+    if (mergedTurn?.kind !== "assistant") return
+    expect(mergedTurn.items[0]).toBe(previousItem)
+  })
+
+  it("keeps item arrays stable unless stale approval blockers are removed", () => {
+    const completedItem: AssistantTraceItem = {
+      id: "response",
+      kind: "text",
+      label: "Assistant",
+      text: "Done",
+      timestamp: 1,
+    }
+    const staleApproval: AssistantTraceItem = {
+      id: "approval-stale",
+      kind: "system",
+      label: "Approval",
+      title: "Approval required",
+      status: "pending",
+      visibilityKey: "approvals",
+      timestamp: 2,
+    }
+    const currentTurn: AssistantTurn = {
+      id: "assistant-local",
+      messageID: "message-approval",
+      kind: "assistant",
+      timestamp: 1,
+      runtime: {
+        phase: "completed",
+        startedAt: 1,
+        updatedAt: 2,
+      },
+      state: "completed",
+      items: [completedItem],
+    }
+    const unchangedMerge = reconcileConversationTurns([currentTurn, { ...currentTurn, id: "assistant-backend", items: [] }])
+    const unchangedTurn = unchangedMerge[0]
+    expect(unchangedTurn?.kind).toBe("assistant")
+    if (unchangedTurn?.kind !== "assistant") return
+    expect(unchangedTurn.items).toBe(currentTurn.items)
+
+    const turnWithStaleApproval: AssistantTurn = {
+      ...currentTurn,
+      items: [completedItem, staleApproval],
+    }
+    const cleanedMerge = reconcileConversationTurns([
+      turnWithStaleApproval,
+      { ...turnWithStaleApproval, id: "assistant-backend", items: [] },
+    ])
+    const cleanedTurn = cleanedMerge[0]
+    expect(cleanedTurn?.kind).toBe("assistant")
+    if (cleanedTurn?.kind !== "assistant") return
+    expect(cleanedTurn.items).not.toBe(turnWithStaleApproval.items)
+    expect(cleanedTurn.items).toEqual([completedItem])
   })
 })

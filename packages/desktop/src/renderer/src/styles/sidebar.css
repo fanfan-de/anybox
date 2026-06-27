@@ -94,6 +94,7 @@
   grid-column: 6;
   border-left: 0;
   background: var(--seg-sidebar);
+  container-name: right-sidebar;
   container-type: inline-size;
 }
 
