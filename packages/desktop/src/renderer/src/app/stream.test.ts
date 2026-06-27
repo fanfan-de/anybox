@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { applyAgentStreamEventToThreadMessage, buildSessionStreamingAssistantThreadMessage, buildStreamingAssistantThreadMessage, buildThreadMessagesFromHistory, buildUserThreadMessage, buildUserThreadMessageText } from "./stream"
+import { applyAgentStreamEventToThreadMessage, buildSessionStreamingAssistantThreadMessage, buildStreamingAssistantThreadMessage, buildThreadMessagesFromHistory, buildThreadTurnsFromHistory, buildUserThreadMessage, buildUserThreadMessageText } from "./stream"
+import { deriveActiveMessages } from "./thread-turn-state"
 
 describe("stream trace reducer", () => {
   it("trusts backend order when history includes parent metadata", () => {
@@ -95,6 +96,85 @@ describe("stream trace reducer", () => {
     const responseItem = message.items.find((item) => item.kind === "text")
     expect(responseItem?.messageID).toBe("message-history")
     expect(responseItem?.backendTurnID).toBe("turn-history")
+  })
+
+  it("groups history messages by backend turn while keeping multiple assistant segments", () => {
+    const historyMessages = [
+      {
+        info: {
+          id: "user-turn-1",
+          sessionID: "session-history",
+          role: "user" as const,
+          created: 100,
+        },
+        turn: {
+          id: "turn-history",
+          sessionID: "session-history",
+          projectID: "project-history",
+          userMessageID: "user-turn-1",
+          status: "completed" as const,
+          createdAt: 100,
+          updatedAt: 400,
+          completedAt: 400,
+        },
+        parts: [{ id: "user-text", type: "text", text: "Prompt" }],
+      },
+      {
+        info: {
+          id: "assistant-a",
+          sessionID: "session-history",
+          role: "assistant" as const,
+          created: 200,
+          completed: 250,
+        },
+        turn: {
+          id: "turn-history",
+          sessionID: "session-history",
+          projectID: "project-history",
+          userMessageID: "user-turn-1",
+          status: "completed" as const,
+          createdAt: 100,
+          updatedAt: 400,
+          completedAt: 400,
+        },
+        parts: [{ id: "assistant-a-text", type: "text", text: "Answer A" }],
+      },
+      {
+        info: {
+          id: "assistant-b",
+          sessionID: "session-history",
+          role: "assistant" as const,
+          created: 300,
+          completed: 350,
+        },
+        turn: {
+          id: "turn-history",
+          sessionID: "session-history",
+          projectID: "project-history",
+          userMessageID: "user-turn-1",
+          status: "completed" as const,
+          createdAt: 100,
+          updatedAt: 400,
+          completedAt: 400,
+        },
+        parts: [{ id: "assistant-b-text", type: "text", text: "Answer B" }],
+      },
+    ]
+
+    const turns = buildThreadTurnsFromHistory(historyMessages)
+    expect(turns).toHaveLength(1)
+    expect(turns[0]?.turnID).toBe("turn-history")
+    expect(turns[0]?.messages.map((message) => message.id)).toEqual(["user-turn-1", "assistant-a", "assistant-b"])
+
+    const derivedMessages = deriveActiveMessages(turns)
+    expect(buildThreadMessagesFromHistory(historyMessages).map((message) => message.id)).toEqual(
+      derivedMessages.map((message) => message.id),
+    )
+    expect(
+      derivedMessages
+        .filter((message) => message.kind === "assistant")
+        .map((message) => message.segmentID),
+    ).toEqual(["assistant-a", "assistant-b"])
   })
 
   it("treats completed history as completed even when a workflow step-start remains pending", () => {
@@ -297,6 +377,35 @@ describe("stream trace reducer", () => {
     const responseItem = message.items.find((item) => item.kind === "text" && item.text === "Runtime answer")
     expect(responseItem?.messageID).toBe("message-runtime")
     expect(responseItem?.backendTurnID).toBe("turn-runtime")
+  })
+
+  it("binds canonical llm call identity to the active assistant segment", () => {
+    let message = buildSessionStreamingAssistantThreadMessage("Replaying backend activity", {
+      backendTurnID: "turn-runtime",
+      segmentID: "pending:turn-runtime",
+    })
+
+    message = applyAgentStreamEventToThreadMessage(message, {
+      id: "101:turn-runtime:2",
+      event: "runtime",
+      data: {
+        eventID: "llm-call-1",
+        sessionID: "session-runtime",
+        turnID: "turn-runtime",
+        seq: 2,
+        timestamp: 101,
+        type: "llm.call.started",
+        payload: {
+          messageID: "message-runtime",
+          iteration: 2,
+        },
+      },
+    })
+
+    expect(message.backendTurnID).toBe("turn-runtime")
+    expect(message.messageID).toBe("message-runtime")
+    expect(message.segmentID).toBe("message-runtime:2")
+    expect(message.llmCallID).toBe("llm-call-1")
   })
 
   it("uses canonical runtime timestamps for replayed turn duration", () => {

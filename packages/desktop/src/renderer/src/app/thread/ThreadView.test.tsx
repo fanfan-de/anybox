@@ -27,6 +27,8 @@ function assistantMessage(id: string, text: string): AssistantThreadMessage {
   return {
     id,
     kind: "assistant",
+    backendTurnID: `turn-${id}`,
+    segmentID: id,
     timestamp: 1,
     runtime: {
       phase: "responding",
@@ -52,6 +54,8 @@ function assistantTraceMessage(id: string, items: AssistantTraceItem[], isStream
   return {
     id,
     kind: "assistant",
+    backendTurnID: `turn-${id}`,
+    segmentID: id,
     timestamp: 1,
     runtime: {
       phase: isStreaming ? "responding" : "completed",
@@ -3784,6 +3788,53 @@ describe("ThreadView message actions", () => {
     fireEvent.click(getByRole("button", { name: "Open side chat" }))
 
     expect(onOpenSideChat).toHaveBeenCalledWith("assistant-1")
+  })
+
+  it("uses segment id for side chat anchors when backend message id is duplicated within a turn", () => {
+    const onOpenSideChat = vi.fn()
+    const assistantA = {
+      ...assistantTraceMessage(
+        "assistant-a",
+        [
+          {
+            id: "response-a",
+            kind: "text" as const,
+            timestamp: 1,
+            label: "Assistant",
+            text: "First segment",
+            status: "completed" as const,
+          },
+        ],
+        false,
+      ),
+      backendTurnID: "turn-shared",
+      messageID: "message-shared",
+      segmentID: "message-shared:1",
+    }
+    const assistantB = {
+      ...assistantTraceMessage(
+        "assistant-b",
+        [
+          {
+            id: "response-b",
+            kind: "text" as const,
+            timestamp: 2,
+            label: "Assistant",
+            text: "Second segment",
+            status: "completed" as const,
+          },
+        ],
+        false,
+      ),
+      backendTurnID: "turn-shared",
+      messageID: "message-shared",
+      segmentID: "message-shared:2",
+    }
+    const { getByRole } = renderThread([assistantA, assistantB], { onOpenSideChat })
+
+    fireEvent.click(getByRole("button", { name: "Open side chat" }))
+
+    expect(onOpenSideChat).toHaveBeenCalledWith("message-shared:2")
   })
 
   it("hides final response actions while the session is still running", () => {

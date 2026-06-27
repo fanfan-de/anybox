@@ -120,6 +120,8 @@ export const initialConversations: Record<string, ThreadMessage[]> = {
     {
       id: "layout-agent-1",
       kind: "assistant",
+      backendTurnID: "layout-turn-1",
+      segmentID: "layout-agent-1",
       timestamp: timestamp("2026-03-31T09:13:00+08:00"),
       runtime: completedRuntime("2026-03-31T09:13:00+08:00"),
       state: "Shell structure aligned",
@@ -162,6 +164,8 @@ export const initialConversations: Record<string, ThreadMessage[]> = {
       id: "chat-agent-1",
       messageID: "chat-agent-message-1",
       kind: "assistant",
+      backendTurnID: "chat-turn-1",
+      segmentID: "chat-agent-message-1:1",
       timestamp: timestamp("2026-03-31T10:08:00+08:00"),
       runtime: completedRuntime("2026-03-31T10:08:00+08:00"),
       state: "Sidebar direction corrected",
@@ -197,6 +201,8 @@ export const initialConversations: Record<string, ThreadMessage[]> = {
     {
       id: "chat-review-1",
       kind: "assistant",
+      backendTurnID: "chat-review-turn-1",
+      segmentID: "chat-review-1",
       timestamp: timestamp("2026-03-31T08:36:00+08:00"),
       runtime: completedRuntime("2026-03-31T08:36:00+08:00"),
       state: "Review lane scoped",
@@ -222,6 +228,8 @@ export const initialConversations: Record<string, ThreadMessage[]> = {
     {
       id: "delivery-agent-1",
       kind: "assistant",
+      backendTurnID: "delivery-turn-1",
+      segmentID: "delivery-agent-1",
       timestamp: timestamp("2026-03-30T18:06:00+08:00"),
       runtime: completedRuntime("2026-03-30T18:06:00+08:00"),
       state: "Plan ready",

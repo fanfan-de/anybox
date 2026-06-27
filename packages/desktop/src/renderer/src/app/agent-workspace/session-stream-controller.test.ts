@@ -47,6 +47,8 @@ function createAssistantThreadMessage(id: string, itemID: string, text: string, 
     id,
     messageID,
     kind: "assistant",
+    backendTurnID: "turn-test",
+    segmentID: messageID ? `${messageID}:1` : id,
     timestamp: 2,
     runtime: {
       phase: "completed",
@@ -72,6 +74,8 @@ function createCancelledAssistantThreadMessage(id: string, messageID?: string): 
     id,
     messageID,
     kind: "assistant",
+    backendTurnID: "turn-test",
+    segmentID: messageID ? `${messageID}:1` : id,
     timestamp: 2,
     runtime: {
       phase: "cancelled",
@@ -100,6 +104,8 @@ function createPendingToolAssistantThreadMessage(id: string, messageID?: string)
     id,
     messageID,
     kind: "assistant",
+    backendTurnID: "turn-test",
+    segmentID: messageID ? `${messageID}:1` : id,
     timestamp: 4,
     runtime: {
       phase: "tool_running",
@@ -132,6 +138,8 @@ function createCancelledToolAssistantThreadMessage(id: string, messageID?: strin
     id,
     messageID,
     kind: "assistant",
+    backendTurnID: "turn-test",
+    segmentID: messageID ? `${messageID}:1` : id,
     timestamp: 2,
     runtime: {
       phase: "cancelled",
@@ -174,6 +182,8 @@ function createErroredToolAssistantThreadMessage(id: string, messageID?: string)
     id,
     messageID,
     kind: "assistant",
+    backendTurnID: "turn-test",
+    segmentID: messageID ? `${messageID}:1` : id,
     timestamp: 4,
     runtime: {
       phase: "failed",
@@ -1242,6 +1252,8 @@ describe("session stream controller helpers", () => {
       id: "assistant-original",
       messageID: "msg-tool",
       kind: "assistant",
+      backendTurnID: "turn-tool",
+      segmentID: "msg-tool:1",
       timestamp: 2,
       runtime: {
         phase: "waiting_approval",
@@ -1281,6 +1293,8 @@ describe("session stream controller helpers", () => {
       id: "assistant-resolution",
       messageID: "msg-tool",
       kind: "assistant",
+      backendTurnID: "turn-tool",
+      segmentID: "msg-tool:1",
       timestamp: 5,
       runtime: {
         phase: "completed",
@@ -1327,6 +1341,43 @@ describe("session stream controller helpers", () => {
       ],
     })
     expect((reconciled[0] as AssistantThreadMessage).items.some((item) => item.title === "Approval required")).toBe(false)
+  })
+
+  it("keeps assistant segments separate when only backend turn identity is shared", () => {
+    const firstMessage = {
+      ...createAssistantThreadMessage("assistant-a", "trace-a", "Answer A"),
+      backendTurnID: "turn-shared",
+      segmentID: "segment-a",
+    }
+    const secondMessage = {
+      ...createAssistantThreadMessage("assistant-b", "trace-b", "Answer B"),
+      backendTurnID: "turn-shared",
+      segmentID: "segment-b",
+    }
+
+    const reconciled = reconcileConversationMessages([firstMessage, secondMessage])
+
+    expect(reconciled).toHaveLength(2)
+    expect(reconciled.map((message) => message.id)).toEqual(["assistant-a", "assistant-b"])
+  })
+
+  it("merges assistant deltas that target the same segment", () => {
+    const currentMessage = {
+      ...createAssistantThreadMessage("assistant-local", "trace-local", "Hello"),
+      backendTurnID: "turn-shared",
+      segmentID: "segment-a",
+    }
+    const incomingMessage = {
+      ...createAssistantThreadMessage("assistant-backend", "trace-backend", "Hello world"),
+      backendTurnID: "turn-shared",
+      segmentID: "segment-a",
+    }
+
+    const reconciled = reconcileConversationMessages([currentMessage, incomingMessage])
+
+    expect(reconciled).toHaveLength(1)
+    expect(reconciled[0]?.id).toBe("assistant-local")
+    expect((reconciled[0] as AssistantThreadMessage).items.map((item) => item.text)).toContain("Hello world")
   })
 
   it("uses earlier canonical trace timestamps when merging assistant messages by message id", () => {
@@ -1592,7 +1643,7 @@ describe("session stream controller helpers", () => {
     })
   })
 
-  it("merges different assistant messages that belong to the same backend turn", () => {
+  it("keeps different assistant segments separate when they belong to the same backend turn", () => {
     const shellMessage = createAssistantThreadMessage(
       "assistant-shell",
       "trace-shell-text",
@@ -1600,6 +1651,8 @@ describe("session stream controller helpers", () => {
       "part-shell-text",
       "message-shell",
     )
+    shellMessage.backendTurnID = "turn-runtime"
+    shellMessage.segmentID = "message-shell:1"
     shellMessage.items = [
       {
         id: "trace-shell-text",
@@ -1633,6 +1686,8 @@ describe("session stream controller helpers", () => {
       "part-task-text",
       "message-task",
     )
+    taskMessage.backendTurnID = "turn-runtime"
+    taskMessage.segmentID = "message-task:1"
     taskMessage.items = [
       {
         id: "trace-task-text",
@@ -1661,13 +1716,8 @@ describe("session stream controller helpers", () => {
 
     const reconciled = reconcileConversationMessages([shellMessage, taskMessage])
 
-    expect(reconciled).toHaveLength(1)
-    expect((reconciled[0] as AssistantThreadMessage).items.map((item) => item.kind === "tool" ? item.title : item.text)).toEqual([
-      "I will inspect the workspace.",
-      "powershell_command",
-      "I will create the task list.",
-      "task_create",
-    ])
+    expect(reconciled).toHaveLength(2)
+    expect(reconciled.map((message) => message.id)).toEqual(["assistant-shell", "assistant-task"])
   })
 
   it("preserves completed trace item references when only the live response changes", () => {
@@ -1692,6 +1742,8 @@ describe("session stream controller helpers", () => {
       id: "assistant-local",
       messageID: "message-stream",
       kind: "assistant",
+      backendTurnID: "turn-stream",
+      segmentID: "message-stream:1",
       timestamp: 1,
       runtime: {
         phase: "responding",
@@ -1747,6 +1799,8 @@ describe("session stream controller helpers", () => {
       id: "assistant-local",
       messageID: "message-tool",
       kind: "assistant",
+      backendTurnID: "turn-tool",
+      segmentID: "message-tool:1",
       timestamp: 1,
       runtime: {
         phase: "completed",
@@ -1805,6 +1859,8 @@ describe("session stream controller helpers", () => {
       id: "assistant-local",
       messageID: "message-approval",
       kind: "assistant",
+      backendTurnID: "turn-approval",
+      segmentID: "message-approval:1",
       timestamp: 1,
       runtime: {
         phase: "completed",

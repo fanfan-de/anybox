@@ -93,32 +93,51 @@ ComposerUtilityBar
 
 ## 4. 内容模型
 
-`ThreadView` 输入的核心数据是 `activeMessages: ThreadMessage[]`。数据层级可以按下面的树理解：
+Canonical conversation state is `ConversationTurnMap = Record<string, ThreadTurn[]>`.
+`ThreadTurn` represents one backend execution lifecycle. `ThreadMessage` records user or assistant messages inside that lifecycle.
+`ThreadView` still receives `activeMessages: ThreadMessage[]`, but that array is a derived render view:
+
+```ts
+const activeMessages = turns.flatMap((turn) => turn.messages)
+```
+
+Do not treat `activeMessages` as the source of truth. New stream/history state should update `ThreadTurn[]` first, then derive flat messages for `ThreadView`, side chat, and legacy selectors.
+
+数据层级可以按下面的树理解：
 
 ```text
-activeMessages: ThreadMessage[]
-├─ UserThreadMessage  # 用户消息
-│  ├─ text / displayText  # 原始文本与展示文本
-│  ├─ references[]  # @ 文件、链接等引用
-│  ├─ attachments[]  # 图片、PDF 等附件
-│  ├─ diffSummary?  # 该输入关联的变更摘要
-│  └─ submissionMode?  # 普通发送或 steer
-└─ AssistantThreadMessage  # assistant 消息
-   ├─ messageID?  # 会话树中的消息 ID
-   ├─ runtime  # 执行状态
-   │  ├─ phase  # running/completed/cancelled 等阶段
-   │  └─ tasks?  # 运行时任务信息
-   ├─ diffSummary?  # assistant 产出的变更摘要
-   └─ items: AssistantTraceItem[]  # 可渲染的 trace 单元
-      ├─ kind  # renderer 分发依据
-      ├─ section?  # 显式 section 覆盖
-      ├─ status?  # pending/running/completed/error 等状态
-      ├─ text?  # 主文本
-      ├─ detail?  # 补充详情
-      ├─ filePaths?  # 可跳转文件
-      ├─ draftPatch?  # 流式或草稿补丁
-      ├─ debugEntries?  # developer debug 元数据
-      └─ questionPrompt? / image src? / patch payload?  # kind 专属负载
+ConversationTurnMap
+└─ sessionID: ThreadTurn[]
+   └─ ThreadTurn
+      ├─ turnID  # backend RuntimeEvent.turnID; local pending may use pending:*
+      ├─ status / phase / timestamps
+      ├─ userMessageID?
+      └─ messages: ThreadMessage[]
+         ├─ UserThreadMessage
+         │  ├─ text / displayText
+         │  ├─ references[]
+         │  ├─ attachments[]
+         │  ├─ diffSummary?
+         │  └─ submissionMode?
+         └─ AssistantThreadMessage
+            ├─ id  # frontend message instance id
+            ├─ messageID?  # backend assistant message id
+            ├─ backendTurnID  # owning turn id
+            ├─ segmentID  # assistant segment boundary
+            ├─ llmCallID?
+            ├─ runtime
+            │  └─ phase
+            ├─ diffSummary?
+            └─ items: AssistantTraceItem[]
+               ├─ kind
+               ├─ section?
+               ├─ status?
+               ├─ text?
+               ├─ detail?
+               ├─ filePaths?
+               ├─ draftPatch?
+               ├─ debugEntries?
+               └─ questionPrompt? / image src? / patch payload?
 ```
 
 assistant trace 会按 section 分组渲染。section 不是简单等同于 `item.kind`，而是由 `traceSectionKeyForItem` 和 `defaultTraceSectionKeyForItem` 计算得出；是否显示某类 trace 由 `assistantTraceVisibility` 控制。
@@ -165,12 +184,14 @@ streaming 更新需要保持历史 trace 的 structural sharing：
 ```mermaid
 flowchart LR
   subgraph data["数据输入"]
-    messages["activeMessages: ThreadMessage[]"]
+    turns["ConversationTurnMap / ThreadTurn[]"]
+    messages["activeMessages: ThreadMessage[]\n(derived flat view)"]
     session["activeSession / messageTree"]
     pending["pendingPermissionRequests"]
   end
 
   subgraph normalize["ThreadView 归一化"]
+    derive["deriveActiveMessages(turns)"]
     displayRows["buildThreadDisplayRows()"]
     virtual["virtual layout\n长列表时启用"]
     scroll["scroll state\n锁底 / 恢复 / 用户意图"]
@@ -205,7 +226,7 @@ flowchart LR
     lightbox["ImageLightbox"]
   end
 
-  messages --> displayRows
+  turns --> derive --> messages --> displayRows
   session --> displayRows
   pending --> displayRows
   displayRows --> virtual

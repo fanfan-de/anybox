@@ -1118,6 +1118,9 @@ export interface AssistantThreadMessage {
   id: string
   messageID?: string
   kind: "assistant"
+  backendTurnID: string
+  segmentID: string
+  llmCallID?: string
   timestamp: number
   diffSummary?: SessionDiffSummary
   runtime: AssistantThreadMessageRuntime
@@ -1127,6 +1130,29 @@ export interface AssistantThreadMessage {
 }
 
 export type ThreadMessage = UserThreadMessage | AssistantThreadMessage
+
+export type ThreadTurnStatus =
+  | "running"
+  | "completed"
+  | "blocked"
+  | "stopped"
+  | "continued_by_user"
+  | "failed"
+  | "cancelled"
+
+export interface ThreadTurn {
+  turnID: string
+  backendSessionID?: string
+  status: ThreadTurnStatus
+  phase?: RuntimePhase | AssistantThreadMessagePhase
+  startedAt: number
+  updatedAt: number
+  completedAt?: number
+  userMessageID?: string
+  messages: ThreadMessage[]
+}
+
+export type ConversationTurnMap = Record<string, ThreadTurn[]>
 
 export interface AgentStreamEvent {
   id?: string

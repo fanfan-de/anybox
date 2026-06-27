@@ -1,8 +1,14 @@
 import { type SetStateAction, useRef, useSyncExternalStore } from "react"
-import type { AssistantTraceItem, AssistantThreadMessage, ThreadMessage } from "../types"
+import type { AssistantTraceItem, AssistantThreadMessage, ConversationTurnMap, ThreadMessage, ThreadTurn } from "../types"
+import {
+  buildConversationTurnsFromMessagesMap,
+  deriveConversationMessages,
+  updateAssistantMessageInTurn,
+} from "../thread-turn-state"
 
 export type ConversationMessageMap = Record<string, ThreadMessage[]>
 export type ConversationStoreUpdater = SetStateAction<ConversationMessageMap>
+export type ConversationTurnStoreUpdater = SetStateAction<ConversationTurnMap>
 
 export interface ConversationActivity {
   hasStreamingAssistantMessage: boolean
@@ -27,10 +33,13 @@ export interface ConversationStoreApi {
   ) => boolean
   getActivityBySession: () => ConversationActivityMap
   getConversations: () => ConversationMessageMap
+  getSessionTurns: (sessionID: string | null | undefined) => ThreadTurn[]
+  getTurns: () => ConversationTurnMap
   getSessionActivity: (sessionID: string | null | undefined) => ConversationActivity
   getSessionMessages: (sessionID: string | null | undefined) => ThreadMessage[]
   hasSession: (sessionID: string | null | undefined) => boolean
   replaceConversations: (nextConversations: ConversationMessageMap) => boolean
+  replaceTurns: (nextTurns: ConversationTurnMap) => boolean
   replaceTraceItem: (
     sessionID: string,
     assistantMessageID: string,
@@ -40,6 +49,7 @@ export interface ConversationStoreApi {
   subscribe: (listener: () => void) => () => void
   subscribeSession: (sessionID: string | null | undefined, listener: () => void) => () => void
   updateConversations: (update: ConversationStoreUpdater) => boolean
+  updateTurns: (update: ConversationTurnStoreUpdater) => boolean
 }
 
 interface ThreadDebugWatchOptions {
@@ -66,6 +76,8 @@ interface ThreadDebugApi {
   getAssistantMessages: (sessionID?: string | null) => ThreadDebugAssistantMessageSnapshot[]
   getConversations: () => ConversationMessageMap
   getSessionMessages: (sessionID: string) => ThreadMessage[]
+  getSessionTurns: (sessionID: string) => ThreadTurn[]
+  getTurns: () => ConversationTurnMap
   getStreamingMessages: (sessionID?: string | null) => ThreadDebugAssistantMessageSnapshot[]
   latestStreaming: (sessionID?: string | null) => ThreadDebugAssistantMessageSnapshot | null
   sessionIDs: () => string[]
@@ -80,6 +92,7 @@ declare global {
 }
 
 const EMPTY_MESSAGES: ThreadMessage[] = []
+const EMPTY_TURNS: ThreadTurn[] = []
 const EMPTY_CONVERSATION_ACTIVITY: ConversationActivity = {
   hasStreamingAssistantMessage: false,
   messageCount: 0,
@@ -87,6 +100,10 @@ const EMPTY_CONVERSATION_ACTIVITY: ConversationActivity = {
 
 function resolveConversationUpdate(current: ConversationMessageMap, update: ConversationStoreUpdater) {
   return typeof update === "function" ? (update as (value: ConversationMessageMap) => ConversationMessageMap)(current) : update
+}
+
+function resolveTurnUpdate(current: ConversationTurnMap, update: ConversationTurnStoreUpdater) {
+  return typeof update === "function" ? (update as (value: ConversationTurnMap) => ConversationTurnMap)(current) : update
 }
 
 function createSessionConversation(messages: ThreadMessage[]): NormalizedSessionConversation {
@@ -133,6 +150,14 @@ function conversationActivityMapsAreEqual(left: ConversationActivityMap, right: 
 }
 
 function conversationsAreEquivalent(left: ConversationMessageMap, right: ConversationMessageMap) {
+  if (Object.is(left, right)) return true
+  const leftKeys = Object.keys(left)
+  const rightKeys = Object.keys(right)
+  if (leftKeys.length !== rightKeys.length) return false
+  return leftKeys.every((key) => Object.is(left[key], right[key]))
+}
+
+function turnsAreEquivalent(left: ConversationTurnMap, right: ConversationTurnMap) {
   if (Object.is(left, right)) return true
   const leftKeys = Object.keys(left)
   const rightKeys = Object.keys(right)
@@ -245,6 +270,12 @@ function installThreadDebugApi(store: ConversationStoreApi) {
     getSessionMessages(sessionID) {
       return cloneSnapshot(store.getSessionMessages(sessionID))
     },
+    getSessionTurns(sessionID) {
+      return cloneSnapshot(store.getSessionTurns(sessionID))
+    },
+    getTurns() {
+      return cloneSnapshot(store.getTurns())
+    },
     getStreamingMessages(sessionID) {
       return cloneSnapshot(findStreamingAssistantMessages(store.getConversations(), sessionID))
     },
@@ -302,13 +333,15 @@ function installThreadDebugApi(store: ConversationStoreApi) {
 }
 
 export function createConversationStore(initialConversations: ConversationMessageMap = {}): ConversationStoreApi {
+  let turnsBySession: ConversationTurnMap = {}
   let conversations: ConversationMessageMap = {}
   let activityBySession: ConversationActivityMap = {}
   const sessions = new Map<string, NormalizedSessionConversation>()
   const listeners = new Set<() => void>()
   const sessionListeners = new Map<string, Set<() => void>>()
 
-  function rebuildFromConversations(nextConversations: ConversationMessageMap) {
+  function rebuildFromTurns(nextTurnsBySession: ConversationTurnMap) {
+    const nextConversations = deriveConversationMessages(nextTurnsBySession)
     const previousConversations = conversations
     const previousActivityBySession = activityBySession
     const changedSessionIDs = new Set<string>()
@@ -321,8 +354,14 @@ export function createConversationStore(initialConversations: ConversationMessag
       }
     }
 
-    for (const [sessionID, messages] of Object.entries(nextConversations)) {
+    for (const [sessionID, derivedMessages] of Object.entries(nextConversations)) {
       const previousSession = sessions.get(sessionID)
+      const messages = previousSession && Object.is(turnsBySession[sessionID], nextTurnsBySession[sessionID])
+        ? previousSession.messages
+        : derivedMessages
+      if (messages !== derivedMessages) {
+        nextConversations[sessionID] = messages
+      }
       if (!previousSession || !Object.is(previousSession.messages, messages)) {
         const nextSession = createSessionConversation(messages)
         sessions.set(sessionID, nextSession)
@@ -334,6 +373,7 @@ export function createConversationStore(initialConversations: ConversationMessag
       nextActivityBySession[sessionID] = previousSession.activity
     }
 
+    turnsBySession = nextTurnsBySession
     conversations = nextConversations
     activityBySession = nextActivityBySession
 
@@ -359,28 +399,40 @@ export function createConversationStore(initialConversations: ConversationMessag
     }
   }
 
-  function replaceConversations(nextConversations: ConversationMessageMap) {
-    if (conversationsAreEquivalent(conversations, nextConversations)) return false
-    const { changedSessionIDs } = rebuildFromConversations(nextConversations)
+  function replaceTurns(nextTurns: ConversationTurnMap) {
+    if (turnsAreEquivalent(turnsBySession, nextTurns)) return false
+    const { changedSessionIDs } = rebuildFromTurns(nextTurns)
     emitChanges(changedSessionIDs)
     return changedSessionIDs.size > 0
+  }
+
+  function replaceConversations(nextConversations: ConversationMessageMap) {
+    if (conversationsAreEquivalent(conversations, nextConversations)) return false
+    return replaceTurns(buildConversationTurnsFromMessagesMap(nextConversations, turnsBySession))
   }
 
   function updateConversations(update: ConversationStoreUpdater) {
     return replaceConversations(resolveConversationUpdate(conversations, update))
   }
 
+  function updateTurns(update: ConversationTurnStoreUpdater) {
+    return replaceTurns(resolveTurnUpdate(turnsBySession, update))
+  }
+
   const api: ConversationStoreApi = {
     appendAssistantDelta(sessionID, assistantMessageID, updater) {
-      return updateConversations((current) => {
-        const currentMessages = current[sessionID] ?? EMPTY_MESSAGES
-        let didUpdate = false
-        const nextMessages = currentMessages.map((message) => {
-          if (message.kind !== "assistant" || message.id !== assistantMessageID) return message
-          didUpdate = true
-          return updater(message)
-        })
-        return didUpdate ? { ...current, [sessionID]: nextMessages } : current
+      return updateTurns((current) => {
+        const currentTurns = current[sessionID] ?? EMPTY_TURNS
+        const nextTurns = currentTurns.map((turn) =>
+          updateAssistantMessageInTurn([turn], {
+            turnID: turn.turnID,
+            id: assistantMessageID,
+            updater,
+          })[0] ?? turn,
+        )
+        return nextTurns === currentTurns || nextTurns.every((turn, index) => Object.is(turn, currentTurns[index]))
+          ? current
+          : { ...current, [sessionID]: nextTurns }
       })
     },
     getActivityBySession() {
@@ -388,6 +440,12 @@ export function createConversationStore(initialConversations: ConversationMessag
     },
     getConversations() {
       return conversations
+    },
+    getSessionTurns(sessionID) {
+      return sessionID ? turnsBySession[sessionID] ?? EMPTY_TURNS : EMPTY_TURNS
+    },
+    getTurns() {
+      return turnsBySession
     },
     getSessionActivity(sessionID) {
       return sessionID ? activityBySession[sessionID] ?? EMPTY_CONVERSATION_ACTIVITY : EMPTY_CONVERSATION_ACTIVITY
@@ -399,6 +457,7 @@ export function createConversationStore(initialConversations: ConversationMessag
       return Boolean(sessionID && Object.prototype.hasOwnProperty.call(conversations, sessionID))
     },
     replaceConversations,
+    replaceTurns,
     replaceTraceItem(sessionID, assistantMessageID, itemID, item) {
       return updateConversations((current) => {
         const currentMessages = current[sessionID] ?? EMPTY_MESSAGES
@@ -438,6 +497,7 @@ export function createConversationStore(initialConversations: ConversationMessag
       }
     },
     updateConversations,
+    updateTurns,
   }
 
   replaceConversations(initialConversations)

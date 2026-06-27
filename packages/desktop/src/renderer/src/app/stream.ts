@@ -17,11 +17,14 @@ import type {
   SessionTaskSummary,
   SessionSummary,
   ThreadMessage,
+  ThreadTurn,
+  ThreadTurnStatus,
   UserThreadMessage,
   UserThreadMessageAttachment,
   UserThreadMessageReference,
 } from "./types"
 import { toDraftPatchPreview } from "./streaming-patch-preview"
+import { deriveActiveMessages, reconcileThreadTurns } from "./thread-turn-state"
 import { compactText, createID } from "./utils"
 
 const STREAM_TEXT_RENDER_LIMIT = 160_000
@@ -115,6 +118,22 @@ function applyAssistantMessageMetadata(assistantMessage: AssistantThreadMessage,
 
 function resolvePayloadMessageID(payload: Record<string, unknown>) {
   return readString(payload.messageID) || readMessageID(payload.message)
+}
+
+function resolveAssistantSegmentID(input: {
+  eventID?: string
+  fallbackID: string
+  iteration?: unknown
+  messageID?: string
+}) {
+  const messageID = readString(input.messageID)
+  if (messageID) {
+    const iteration = readNumber(input.iteration) || 1
+    return `${messageID}:${iteration}`
+  }
+
+  const eventID = readString(input.eventID)
+  return eventID ? `llm:${eventID}` : input.fallbackID
 }
 
 function readRuntimeEvent(item: AgentStreamEvent): AgentRuntimeEvent | null {
@@ -2318,6 +2337,8 @@ function buildAssistantThreadMessageFromHistory(message: LoadedSessionHistoryMes
     id: message.info.id || createID("assistant"),
     messageID: message.info.id || undefined,
     kind: "assistant",
+    backendTurnID: ownership.backendTurnID || message.info.id || createID("turn"),
+    segmentID: message.info.id || createID("segment"),
     timestamp: createdAt,
     diffSummary: readSessionDiffSummary(message.info.diffSummary),
     runtime: createAssistantThreadMessageRuntime({
@@ -2393,6 +2414,8 @@ function buildCompactionMarkerMessage(message: LoadedSessionHistoryMessage, item
     id: message.info.id || createID("assistant"),
     messageID: message.info.id || undefined,
     kind: "assistant",
+    backendTurnID: ownership.backendTurnID || message.info.id || createID("turn"),
+    segmentID: message.info.id || createID("segment"),
     timestamp: createdAt,
     runtime: createAssistantThreadMessageRuntime({
       phase: "completed",
@@ -2406,8 +2429,99 @@ function buildCompactionMarkerMessage(message: LoadedSessionHistoryMessage, item
   } satisfies AssistantThreadMessage
 }
 
-export function buildThreadMessagesFromHistory(messages: LoadedSessionHistoryMessage[]) {
-  const threadMessages: ThreadMessage[] = []
+function normalizeHistoryTurnStatus(value: unknown, fallback: ThreadTurnStatus): ThreadTurnStatus {
+  const status = readString(value)
+  if (
+    status === "running" ||
+    status === "completed" ||
+    status === "blocked" ||
+    status === "stopped" ||
+    status === "continued_by_user" ||
+    status === "failed" ||
+    status === "cancelled"
+  ) {
+    return status
+  }
+  return fallback
+}
+
+function turnStatusFromHistoryMessage(message: ThreadMessage, historyMessage: LoadedSessionHistoryMessage): ThreadTurnStatus {
+  const backendTurn = historyMessage["turn"]
+  if (message.kind === "assistant") {
+    const assistantStatus: ThreadTurnStatus =
+      message.runtime.phase === "blocked"
+        ? "blocked"
+        : message.runtime.phase === "continued_by_user"
+          ? "continued_by_user"
+          : message.runtime.phase === "failed"
+            ? "failed"
+            : message.runtime.phase === "cancelled"
+              ? "cancelled"
+              : message.runtime.phase === "completed"
+                ? "completed"
+                : "running"
+    return normalizeHistoryTurnStatus(backendTurn?.status, assistantStatus)
+  }
+
+  return normalizeHistoryTurnStatus(backendTurn?.status, "completed")
+}
+
+function resolveHistoryTurnID(historyMessage: LoadedSessionHistoryMessage, message: ThreadMessage) {
+  if (historyMessage["turn"]?.id) return historyMessage["turn"]!.id
+  const infoTurnID = readString(historyMessage.info.turnID)
+  if (infoTurnID) return infoTurnID
+  if (message.kind === "assistant") return message.backendTurnID
+  return `pending:${message.id}`
+}
+
+function appendHistoryThreadMessage(
+  turns: ThreadTurn[],
+  historyMessage: LoadedSessionHistoryMessage,
+  message: ThreadMessage,
+) {
+  const backendTurn = historyMessage["turn"]
+  const turnID = resolveHistoryTurnID(historyMessage, message)
+  const turnIndex = turns.findIndex((turn) => turn.turnID === turnID)
+  const startedAt = readNumber(backendTurn?.createdAt) || message.timestamp
+  const updatedAt = readNumber(backendTurn?.updatedAt) || (
+    message.kind === "assistant" ? message.runtime.updatedAt : message.timestamp
+  )
+  const completedAt = readNumber(backendTurn?.completedAt) || undefined
+  const userMessageID = readString(backendTurn?.userMessageID) || (message.kind === "user" ? message.id : undefined)
+  const phase = readString(backendTurn?.phase) as ThreadTurn["phase"] | ""
+  const status = turnStatusFromHistoryMessage(message, historyMessage)
+
+  if (turnIndex < 0) {
+    turns.push({
+      turnID,
+      ...(readString(backendTurn?.sessionID) ? { backendSessionID: readString(backendTurn?.sessionID) } : {}),
+      status,
+      ...(phase ? { phase } : message.kind === "assistant" ? { phase: message.runtime.phase } : {}),
+      startedAt,
+      updatedAt,
+      ...(completedAt ? { completedAt } : {}),
+      ...(userMessageID ? { userMessageID } : {}),
+      messages: [message],
+    })
+    return
+  }
+
+  const current = turns[turnIndex]
+  turns[turnIndex] = {
+    ...current,
+    ...(readString(backendTurn?.sessionID) ? { backendSessionID: readString(backendTurn?.sessionID) } : {}),
+    status: current.status === "running" ? status : current.status,
+    ...(phase ? { phase } : {}),
+    startedAt: Math.min(current.startedAt, startedAt),
+    updatedAt: Math.max(current.updatedAt, updatedAt),
+    completedAt: current.completedAt ?? completedAt,
+    userMessageID: current.userMessageID ?? userMessageID,
+    messages: [...current.messages, message],
+  }
+}
+
+export function buildThreadTurnsFromHistory(messages: LoadedSessionHistoryMessage[]) {
+  const threadTurns: ThreadTurn[] = []
   let pendingCompactionItems: AssistantTraceItem[] = []
   const hasParentMetadata = messages.some((message) =>
     Object.prototype.hasOwnProperty.call(message.info, "parentMessageID"),
@@ -2430,25 +2544,41 @@ export function buildThreadMessagesFromHistory(messages: LoadedSessionHistoryMes
     if (isInternalHistoryMessage(message)) continue
 
     if (message.info.role === "user") {
-      threadMessages.push(buildUserThreadMessageFromHistory(message))
+      appendHistoryThreadMessage(threadTurns, message, buildUserThreadMessageFromHistory(message))
       continue
     }
 
     const assistantMessage = buildAssistantThreadMessageFromHistory(message)
-    threadMessages.push(prependAssistantItems(assistantMessage, pendingCompactionItems))
+    appendHistoryThreadMessage(threadTurns, message, prependAssistantItems(assistantMessage, pendingCompactionItems))
     pendingCompactionItems = []
   }
 
   if (pendingCompactionItems.length > 0) {
-    threadMessages.push(buildCompactionMarkerMessage(messages[messages.length - 1]!, pendingCompactionItems))
+    const lastHistoryMessage = messages[messages.length - 1]
+    if (lastHistoryMessage) {
+      appendHistoryThreadMessage(
+        threadTurns,
+        lastHistoryMessage,
+        buildCompactionMarkerMessage(lastHistoryMessage, pendingCompactionItems),
+      )
+    }
   }
 
-  return threadMessages
+  return reconcileThreadTurns(threadTurns)
 }
 
-export function buildStreamingAssistantThreadMessage(prompt: string): AssistantThreadMessage {
+export function buildThreadMessagesFromHistory(messages: LoadedSessionHistoryMessage[]) {
+  return deriveActiveMessages(buildThreadTurnsFromHistory(messages))
+}
+
+export function buildStreamingAssistantThreadMessage(
+  prompt: string,
+  identity: Partial<Pick<AssistantThreadMessage, "backendTurnID" | "segmentID" | "messageID" | "llmCallID">> = {},
+): AssistantThreadMessage {
   const compactPrompt = compactText(prompt, 72)
   const assistantMessageID = createID("assistant")
+  const backendTurnID = identity.backendTurnID || `pending:${assistantMessageID}`
+  const segmentID = identity.segmentID || identity.messageID || assistantMessageID
   const items = [
     createTraceItem({
       kind: "system",
@@ -2465,7 +2595,11 @@ export function buildStreamingAssistantThreadMessage(prompt: string): AssistantT
 
   return {
     id: assistantMessageID,
+    ...(identity.messageID ? { messageID: identity.messageID } : {}),
     kind: "assistant",
+    backendTurnID,
+    segmentID,
+    ...(identity.llmCallID ? { llmCallID: identity.llmCallID } : {}),
     timestamp: Date.now(),
     runtime: createAssistantThreadMessageRuntime({
       phase: "waiting_first_event",
@@ -2477,8 +2611,13 @@ export function buildStreamingAssistantThreadMessage(prompt: string): AssistantT
   }
 }
 
-export function buildSessionStreamingAssistantThreadMessage(detail = "Replaying backend session activity.") : AssistantThreadMessage {
+export function buildSessionStreamingAssistantThreadMessage(
+  detail = "Replaying backend session activity.",
+  identity: Partial<Pick<AssistantThreadMessage, "backendTurnID" | "segmentID" | "messageID" | "llmCallID">> = {},
+) : AssistantThreadMessage {
   const assistantMessageID = createID("assistant")
+  const backendTurnID = identity.backendTurnID || `pending:${assistantMessageID}`
+  const segmentID = identity.segmentID || identity.messageID || assistantMessageID
   const items = [
     createTraceItem({
       kind: "system",
@@ -2494,7 +2633,11 @@ export function buildSessionStreamingAssistantThreadMessage(detail = "Replaying 
 
   return {
     id: assistantMessageID,
+    ...(identity.messageID ? { messageID: identity.messageID } : {}),
     kind: "assistant",
+    backendTurnID,
+    segmentID,
+    ...(identity.llmCallID ? { llmCallID: identity.llmCallID } : {}),
     timestamp: Date.now(),
     runtime: createAssistantThreadMessageRuntime({
       phase: "waiting_first_event",
@@ -2528,6 +2671,10 @@ export function buildFailureThreadMessage(
 
   return {
     id: assistantMessageID,
+    backendTurnID: existingMessage?.backendTurnID ?? `pending:${assistantMessageID}`,
+    segmentID: existingMessage?.segmentID ?? existingMessage?.messageID ?? assistantMessageID,
+    ...(existingMessage?.llmCallID ? { llmCallID: existingMessage.llmCallID } : {}),
+    ...(existingMessage?.messageID ? { messageID: existingMessage.messageID } : {}),
     kind: "assistant",
     timestamp: existingMessage?.timestamp ?? updatedAt,
     runtime: existingMessage?.runtime
@@ -2892,24 +3039,14 @@ function applyRuntimeEventToMessage(
     return updateRuntimeMessageLifecycle(
       {
         ...assistantMessage,
+        backendTurnID: eventBackendTurnID ?? assistantMessage.backendTurnID,
         isStreaming: true,
       },
       {
         phase: "preparing",
         state: readBoolean(payload.resume) ? "Resuming agent stream" : "Agent stream connected",
       },
-      appendSystemTrace(
-        preparedItems,
-        assistantMessage.id,
-        readBoolean(payload.resume) ? "Agent stream resumed" : "Agent stream connected",
-        "Renderer subscribed to canonical runtime updates.",
-        "completed",
-        debugEntries,
-        "workflow",
-        "workflow",
-        eventTimestamp,
-        eventOwnership(),
-      ),
+      preparedItems,
     )
   }
 
@@ -2937,11 +3074,20 @@ function applyRuntimeEventToMessage(
   if (event.type === "llm.call.started") {
     if (!canInferModelWaitFromRuntimePhase(assistantMessage.runtime.phase)) return assistantMessage
     const messageID = resolvePayloadMessageID(payload) || assistantMessage.messageID
+    const segmentID = resolveAssistantSegmentID({
+      eventID: event.eventID,
+      fallbackID: assistantMessage.segmentID,
+      iteration: payload.iteration,
+      messageID,
+    })
 
     return updateRuntimeMessageLifecycle(
       {
         ...assistantMessage,
+        backendTurnID: eventBackendTurnID ?? assistantMessage.backendTurnID,
         messageID,
+        segmentID,
+        llmCallID: event.eventID,
         isStreaming: true,
       },
       {
@@ -3538,6 +3684,8 @@ export function buildAgentThreadMessage(prompt: string, session: SessionSummary,
   return {
     id: createID("assistant"),
     kind: "assistant",
+    backendTurnID: `seed:${session.id}`,
+    segmentID: createID("segment"),
     timestamp: Date.now(),
     runtime: createAssistantThreadMessageRuntime({
       phase: "completed",

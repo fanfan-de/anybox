@@ -174,7 +174,14 @@ export async function respondPermissionRequest({
 
     if (canStreamResume) {
       const streamID = createID("stream")
-      const streamingMessage = buildStreamingAssistantThreadMessage(input.decision === "deny" ? "Continue after denial" : "Continue after approval")
+      const streamingMessage = buildStreamingAssistantThreadMessage(
+        input.decision === "deny" ? "Continue after denial" : "Continue after approval",
+        {
+          backendTurnID: input.request.messageID,
+          messageID: input.request.messageID,
+          segmentID: input.request.messageID,
+        },
+      )
       pendingStreamsRef.current[streamID] = {
         sessionID: input.sessionID,
         backendSessionID: input.request.sessionID,

@@ -231,8 +231,6 @@ const SHORT_PROCESS_REASONING_CHARACTER_THRESHOLD = 160
 const SHORT_PROCESS_REASONING_LINE_THRESHOLD = 3
 const COLLAPSED_USER_MESSAGE_ESTIMATED_CHARACTERS = 640
 const TRACE_REASONING_PREVIEW_CHARACTER_LIMIT = 480
-const TRACE_TOOL_IO_PREVIEW_CHARACTER_LIMIT = 1200
-const TRACE_TOOL_IO_PREVIEW_LINE_LIMIT = 12
 const TRACE_PATCH_PREVIEW_CHARACTER_LIMIT = 20000
 const TRACE_PATCH_PREVIEW_LINE_LIMIT = 200
 const threadScrollSnapshots = new Map<string, ThreadScrollSnapshot>()
@@ -487,6 +485,21 @@ function orderAdjacentAssistantMessagesForDisplay(messages: ThreadMessage[]) {
 
   flushAssistantBlock(orderedMessages.length)
   return orderedMessages
+}
+
+function resolveAssistantSideChatAnchorMessageID(messages: ThreadMessage[], message: AssistantThreadMessage) {
+  if (!message.messageID) return message.id
+
+  const hasDuplicateBackendMessageSegment = messages.some(
+    (candidate) =>
+      candidate.kind === "assistant" &&
+      candidate.id !== message.id &&
+      candidate.backendTurnID === message.backendTurnID &&
+      candidate.messageID === message.messageID &&
+      candidate.segmentID !== message.segmentID,
+  )
+
+  return hasDuplicateBackendMessageSegment ? message.segmentID : message.messageID
 }
 
 function readThreadColumnPaddingTop(threadColumn: HTMLDivElement) {
@@ -5041,15 +5054,6 @@ function getToolTraceDisplayState(item: AssistantTraceItem): {
   }
 }
 
-function TraceTextPreviewNote({ preview }: { preview: TraceTextPreview }) {
-  if (!preview.isTruncated) return null
-  return (
-    <span className="trace-file-change-note">
-      Preview truncated from {preview.originalLength} characters
-    </span>
-  )
-}
-
 function ToolTraceItemView({
   className,
   debugEntries,
@@ -5095,20 +5099,6 @@ function ToolTraceItemView({
   const visibleToolOutputText = traceVisibility.toolOutputs ? item.toolOutputText : undefined
   const inputSectionDetail = showsToolInputs ? item.detail : undefined
   const outputSectionDetail = !showsToolInputs && traceVisibility.toolOutputs ? item.detail : undefined
-  const visibleToolInputPreview = createTraceTextPreview(
-    [visibleToolInputText, inputSectionDetail].filter(Boolean).join("\n\n"),
-    {
-      characterLimit: TRACE_TOOL_IO_PREVIEW_CHARACTER_LIMIT,
-      lineLimit: TRACE_TOOL_IO_PREVIEW_LINE_LIMIT,
-    },
-  )
-  const visibleToolOutputPreview = createTraceTextPreview(
-    [visibleToolOutputText, outputSectionDetail].filter(Boolean).join("\n\n"),
-    {
-      characterLimit: TRACE_TOOL_IO_PREVIEW_CHARACTER_LIMIT,
-      lineLimit: TRACE_TOOL_IO_PREVIEW_LINE_LIMIT,
-    },
-  )
   const hasInputDisclosureContent = Boolean(visibleToolInputText || inputSectionDetail)
   const hasOutputDisclosureContent = Boolean(visibleToolOutputText || outputSectionDetail)
   const hasDisclosureContent = Boolean(hasInputDisclosureContent || hasOutputDisclosureContent || debugEntries.length > 0)
@@ -5279,11 +5269,6 @@ function ToolTraceItemView({
                   {visibleToolInputText ? <ThreadRichText className="trace-item-text" text={visibleToolInputText} /> : null}
                   {inputSectionDetail ? <ThreadRichText className="trace-item-detail" text={inputSectionDetail} /> : null}
                 </div>
-              ) : visibleToolInputPreview.text ? (
-                <div className="trace-item-subsection-body trace-tool-io-pane is-preview" aria-hidden="true">
-                  <ThreadRichText className="trace-item-text" text={visibleToolInputPreview.text} />
-                  <TraceTextPreviewNote preview={visibleToolInputPreview} />
-                </div>
               ) : null}
             </div>
           ) : null}
@@ -5313,11 +5298,6 @@ function ToolTraceItemView({
                 >
                   {visibleToolOutputText ? <ThreadRichText className="trace-item-text" text={visibleToolOutputText} /> : null}
                   {outputSectionDetail ? <ThreadRichText className="trace-item-detail" text={outputSectionDetail} /> : null}
-                </div>
-              ) : visibleToolOutputPreview.text ? (
-                <div className="trace-item-subsection-body trace-tool-io-pane is-preview" aria-hidden="true">
-                  <ThreadRichText className="trace-item-text" text={visibleToolOutputPreview.text} />
-                  <TraceTextPreviewNote preview={visibleToolOutputPreview} />
                 </div>
               ) : null}
             </div>
@@ -7242,7 +7222,7 @@ function VisibleThreadView({
 
     const { ephemeralHint, insertedUserMessages, processPrefixItems, message, messageIndex } = row
     const traceItems = message.items
-    const sideChatAnchorMessageID = message.messageID ?? message.id
+    const sideChatAnchorMessageID = resolveAssistantSideChatAnchorMessageID(displayMessages, message)
     const threadMessageID = getSessionMessageIDForMessage(message)
     const canExposeResponseActions = !isSessionRunning && isAssistantFinalMessageInUserMessage(displayMessages, messageIndex, message)
     const branchOptions = canExposeResponseActions ? messageTree?.branchOptionsByParentID[threadMessageID] ?? [] : []

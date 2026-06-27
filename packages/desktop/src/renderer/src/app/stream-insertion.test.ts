@@ -14,6 +14,8 @@ function assistantMessage(status: "running" | "completed" | "cancelled"): Assist
   return {
     id: "assistant-live",
     kind: "assistant",
+    backendTurnID: "turn-live",
+    segmentID: "assistant-live",
     timestamp: 1,
     runtime: {
       phase: status === "running" ? "tool_running" : status === "cancelled" ? "cancelled" : "responding",

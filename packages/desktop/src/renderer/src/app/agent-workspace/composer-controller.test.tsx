@@ -48,6 +48,8 @@ function createStreamingAssistantThreadMessage(id: string, toolStatus: "pending"
   return {
     id,
     kind: "assistant",
+    backendTurnID: `turn-${id}`,
+    segmentID: id,
     timestamp: 1,
     runtime: {
       phase: "tool_running",

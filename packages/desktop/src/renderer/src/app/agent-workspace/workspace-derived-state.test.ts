@@ -406,6 +406,8 @@ describe("workspace derived state", () => {
           {
             id: "assistant-1",
             kind: "assistant",
+            backendTurnID: "turn-assistant-1",
+            segmentID: "assistant-1",
             timestamp: 1,
             runtime: {
               phase: "reasoning",
@@ -421,6 +423,8 @@ describe("workspace derived state", () => {
           {
             id: "assistant-2",
             kind: "assistant",
+            backendTurnID: "turn-assistant-2",
+            segmentID: "assistant-2",
             timestamp: 2,
             runtime: {
               phase: "completed",

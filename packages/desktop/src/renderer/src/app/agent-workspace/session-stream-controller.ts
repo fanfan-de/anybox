@@ -5,6 +5,7 @@ import {
   appendConversationMessages as appendConversationMessagesToMap,
   updateAssistantThreadMessage as updateAssistantMessageInMap,
 } from "../conversation-state"
+import { ensureThreadTurn } from "../thread-turn-state"
 import {
   applyAgentStreamEventToThreadMessage,
   buildSessionStreamingAssistantThreadMessage,
@@ -74,6 +75,7 @@ export const STEER_INPUT_CONSUMED_STATE_REASON = "Steer input consumed."
 type StreamEventUpdateTarget = {
   assistantThreadMessageID: string
   sessionID: string
+  identity?: Partial<Pick<AssistantThreadMessage, "backendTurnID" | "segmentID" | "messageID" | "llmCallID">>
 }
 
 type PendingStreamDeltaUpdate = {
@@ -224,11 +226,19 @@ export function revealPendingSteerUserMessagesAtHandoffPresentation(input: {
   return didUpdate ? nextMessages : input.messages
 }
 
-function buildSessionStreamingAssistantThreadMessageWithID(assistantThreadMessageID: string, detail?: string): AssistantThreadMessage {
-  const assistantMessage = buildSessionStreamingAssistantThreadMessage(detail)
+function buildSessionStreamingAssistantThreadMessageWithID(
+  assistantThreadMessageID: string,
+  detail?: string,
+  identity: Partial<Pick<AssistantThreadMessage, "backendTurnID" | "segmentID" | "messageID" | "llmCallID">> = {},
+): AssistantThreadMessage {
+  const assistantMessage = buildSessionStreamingAssistantThreadMessage(detail, identity)
   return {
     ...assistantMessage,
     id: assistantThreadMessageID,
+    segmentID: identity.segmentID ?? assistantMessage.segmentID,
+    backendTurnID: identity.backendTurnID ?? assistantMessage.backendTurnID,
+    ...(identity.messageID ? { messageID: identity.messageID } : {}),
+    ...(identity.llmCallID ? { llmCallID: identity.llmCallID } : {}),
     items: assistantMessage.items.map((item) => ({
       ...item,
       sourceID: item.sourceID === `${assistantMessage.id}:prompt` ? `${assistantThreadMessageID}:prompt` : item.sourceID,
@@ -240,6 +250,7 @@ export function ensureAssistantThreadMessagePresentation(input: {
   messages: ThreadMessage[]
   assistantThreadMessageID: string
   detail?: string
+  identity?: Partial<Pick<AssistantThreadMessage, "backendTurnID" | "segmentID" | "messageID" | "llmCallID">>
 }) {
   if (input.messages.some((message) => message.kind === "assistant" && message.id === input.assistantThreadMessageID)) {
     return input.messages
@@ -247,7 +258,7 @@ export function ensureAssistantThreadMessagePresentation(input: {
 
   return [
     ...input.messages,
-    buildSessionStreamingAssistantThreadMessageWithID(input.assistantThreadMessageID, input.detail),
+    buildSessionStreamingAssistantThreadMessageWithID(input.assistantThreadMessageID, input.detail, input.identity),
   ]
 }
 
@@ -295,6 +306,37 @@ function readRuntimeStreamPayload(value: unknown) {
 function readRuntimeStreamType(streamEvent: { event: string; data: unknown }) {
   if (streamEvent.event !== "runtime") return undefined
   return readString(readRuntimeStreamEvent(streamEvent.data)?.type)
+}
+
+type LlmCallSegmentIdentity = {
+  backendTurnID: string
+  llmCallID: string
+  messageID?: string
+  segmentID: string
+}
+
+function resolveLlmCallSegmentIdentity(
+  streamEvent: { event: string; data: unknown },
+  backendTurnID: string | undefined,
+): LlmCallSegmentIdentity | null {
+  const runtimeEvent = readRuntimeStreamEvent(streamEvent.data)
+  if (!runtimeEvent || runtimeEvent.type !== "llm.call.started") return null
+
+  const turnID = backendTurnID || readString(runtimeEvent.turnID)
+  if (!turnID) return null
+
+  const payload = readRecord(runtimeEvent.payload)
+  const messageID = resolveStreamMessageID(streamEvent)
+  const iteration = readStreamNumber(payload?.iteration) ?? 1
+  const eventID = readString(runtimeEvent.eventID)
+  if (!eventID) return null
+
+  return {
+    backendTurnID: turnID,
+    llmCallID: eventID,
+    ...(messageID ? { messageID } : {}),
+    segmentID: messageID ? `${messageID}:${iteration}` : `llm:${eventID}`,
+  }
 }
 
 export function isSteerInputConsumedStreamEvent(streamEvent: { event: string; data: unknown }) {
@@ -917,6 +959,9 @@ function mergeAssistantMessagesByMessageID(current: AssistantThreadMessage, inco
     ...current,
     ...incoming,
     id: current.id,
+    backendTurnID: incoming.backendTurnID || current.backendTurnID,
+    segmentID: incoming.segmentID || current.segmentID,
+    llmCallID: incoming.llmCallID ?? current.llmCallID,
     timestamp: current.timestamp,
     messageID: current.messageID ?? incoming.messageID,
     runtime,
@@ -937,27 +982,32 @@ function mergeAssistantMessagesByMessageID(current: AssistantThreadMessage, inco
 
 export function reconcileConversationMessages(messages: ThreadMessage[]) {
   const result: ThreadMessage[] = []
+  const assistantIndexByID = new Map<string, number>()
+  const assistantIndexBySegmentID = new Map<string, number>()
   const assistantIndexByMessageID = new Map<string, number>()
-  const assistantIndexByBackendTurnID = new Map<string, number>()
 
   function registerAssistantMessageIndex(message: AssistantThreadMessage, index: number) {
-    if (message.messageID) {
-      assistantIndexByMessageID.set(message.messageID, index)
+    assistantIndexByID.set(message.id, index)
+    if (message.segmentID) {
+      assistantIndexBySegmentID.set(message.segmentID, index)
     }
-    for (const backendTurnID of getAssistantMessageBackendTurnIDs(message)) {
-      assistantIndexByBackendTurnID.set(backendTurnID, index)
+    if (message.messageID && (!message.segmentID || message.segmentID === message.messageID)) {
+      assistantIndexByMessageID.set(message.messageID, index)
     }
   }
 
   function findExistingAssistantMessageIndex(message: AssistantThreadMessage) {
-    if (message.messageID) {
-      const messageIndex = assistantIndexByMessageID.get(message.messageID)
-      if (messageIndex !== undefined) return messageIndex
+    const idIndex = assistantIndexByID.get(message.id)
+    if (idIndex !== undefined) return idIndex
+
+    if (message.segmentID) {
+      const segmentIndex = assistantIndexBySegmentID.get(message.segmentID)
+      if (segmentIndex !== undefined) return segmentIndex
     }
 
-    for (const backendTurnID of getAssistantMessageBackendTurnIDs(message)) {
-      const backendTurnIndex = assistantIndexByBackendTurnID.get(backendTurnID)
-      if (backendTurnIndex !== undefined) return backendTurnIndex
+    if (message.messageID && (!message.segmentID || message.segmentID === message.messageID)) {
+      const messageIndex = assistantIndexByMessageID.get(message.messageID)
+      if (messageIndex !== undefined) return messageIndex
     }
 
     return undefined
@@ -1012,23 +1062,16 @@ function getAssistantMessageSourceIDs(message: AssistantThreadMessage) {
   )
 }
 
-function getAssistantMessageBackendTurnIDs(message: AssistantThreadMessage) {
-  return new Set(
-    message.items
-      .map((item) => item.backendTurnID)
-      .filter((backendTurnID): backendTurnID is string => Boolean(backendTurnID)),
-  )
-}
-
 function assistantMessagesAreCompatible(previousMessage: AssistantThreadMessage, nextMessage: AssistantThreadMessage) {
   if (previousMessage.id === nextMessage.id) return true
-  if (previousMessage.messageID && nextMessage.messageID && previousMessage.messageID === nextMessage.messageID) return true
-
-  const previousBackendTurnIDs = getAssistantMessageBackendTurnIDs(previousMessage)
-  if (previousBackendTurnIDs.size > 0) {
-    for (const backendTurnID of getAssistantMessageBackendTurnIDs(nextMessage)) {
-      if (previousBackendTurnIDs.has(backendTurnID)) return true
-    }
+  if (previousMessage.segmentID && nextMessage.segmentID && previousMessage.segmentID === nextMessage.segmentID) return true
+  if (
+    previousMessage.messageID &&
+    nextMessage.messageID &&
+    previousMessage.messageID === nextMessage.messageID &&
+    (!previousMessage.segmentID || !nextMessage.segmentID || previousMessage.segmentID === nextMessage.segmentID)
+  ) {
+    return true
   }
 
   const previousSourceIDs = getAssistantMessageSourceIDs(previousMessage)
@@ -1526,6 +1569,72 @@ export function useSessionStreamController({
     conversationVersionRef.current[sessionID] = (conversationVersionRef.current[sessionID] ?? 0) + 1
   }
 
+  function applyRuntimeTurnEventToConversationTurns(input: {
+    backendSessionID: string
+    fallbackUserMessageID?: string
+    streamEvent: { event: string; data: unknown }
+    uiSessionID: string
+  }) {
+    const runtimeEvent = readRuntimeStreamEvent(input.streamEvent.data)
+    if (!runtimeEvent) return
+
+    const turnID = readString(runtimeEvent.turnID)
+    if (!turnID) return
+
+    const timestamp = readStreamNumber(runtimeEvent.timestamp) ?? Date.now()
+    const payload = readRecord(runtimeEvent.payload)
+    const payloadPhase = readString(payload?.phase)
+    const payloadStatus = readString(payload?.status)
+    const userMessageID = readString(payload?.userMessageID) ?? input.fallbackUserMessageID
+    const isTerminalTurnEvent =
+      runtimeEvent.type === "turn.completed" ||
+      runtimeEvent.type === "turn.failed" ||
+      runtimeEvent.type === "turn.cancelled"
+    const status =
+      runtimeEvent.type === "turn.failed"
+        ? "failed"
+        : runtimeEvent.type === "turn.cancelled"
+          ? "cancelled"
+          : isTerminalTurnEvent
+            ? payloadStatus || "completed"
+            : "running"
+
+    if (
+      runtimeEvent.type !== "turn.started" &&
+      runtimeEvent.type !== "turn.state.changed" &&
+      !isTerminalTurnEvent
+    ) {
+      return
+    }
+
+    const didUpdate = conversationStore.updateTurns((current) => {
+      const currentTurns = current[input.uiSessionID] ?? []
+      const ensuredTurns = ensureThreadTurn(currentTurns, {
+        turnID,
+        backendSessionID: input.backendSessionID,
+        status: status as Parameters<typeof ensureThreadTurn>[1]["status"],
+        phase: payloadPhase as Parameters<typeof ensureThreadTurn>[1]["phase"],
+        userMessageID,
+        timestamp,
+      })
+      const nextTurns = isTerminalTurnEvent
+        ? ensuredTurns.map((turn) => (
+            turn.turnID === turnID
+              ? {
+                  ...turn,
+                  completedAt: timestamp,
+                  updatedAt: Math.max(turn.updatedAt, timestamp),
+                }
+              : turn
+          ))
+        : ensuredTurns
+
+      return nextTurns === currentTurns ? current : { ...current, [input.uiSessionID]: nextTurns }
+    })
+
+    if (didUpdate) bumpConversationVersion(input.uiSessionID)
+  }
+
   function clearSessionDiffRefreshTimer(sessionID: string) {
     clearSessionDiffRefreshTimerService(sessionID, sessionDiffRefreshTimerRef)
   }
@@ -1658,16 +1767,19 @@ export function useSessionStreamController({
     return message?.id
   }
 
-  function findAssistantThreadMessageIDByBackendTurnID(sessionID: string, backendTurnID: string | undefined) {
-    if (!backendTurnID) return undefined
+  function findAssistantThreadMessageIDBySegmentID(sessionID: string, segmentID: string | undefined) {
+    if (!segmentID) return undefined
     const messages = conversationStore.getSessionMessages(sessionID)
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index]
       if (message?.kind !== "assistant") continue
-      if (isTerminalAssistantRuntimePhase(message.runtime.phase)) continue
-      if (message.items.some((item) => item.backendTurnID === backendTurnID)) return message.id
+      if (message.segmentID === segmentID) return message.id
     }
     return undefined
+  }
+
+  function findAssistantThreadMessageIDByTurnTarget(sessionID: string, currentSegmentID: string | undefined, assistantThreadMessageID: string | undefined) {
+    return findAssistantThreadMessageIDBySegmentID(sessionID, currentSegmentID) ?? assistantThreadMessageID
   }
 
   function cleanupTurnTarget(backendSessionID: string | undefined, turnID: string | undefined) {
@@ -2008,6 +2120,7 @@ export function useSessionStreamController({
     sessionID: string
     assistantThreadMessageID: string
     detail?: string
+    identity?: Partial<Pick<AssistantThreadMessage, "backendTurnID" | "segmentID" | "messageID" | "llmCallID">>
   }) {
     if (conversationStore.getSessionMessages(input.sessionID).some(
       (message) => message.kind === "assistant" && message.id === input.assistantThreadMessageID,
@@ -2021,6 +2134,7 @@ export function useSessionStreamController({
         messages: current,
         assistantThreadMessageID: input.assistantThreadMessageID,
         detail: input.detail,
+        identity: input.identity,
       })
       if (nextMessages === current) return prev
 
@@ -2163,6 +2277,7 @@ export function useSessionStreamController({
       sessionID: target.sessionID,
       assistantThreadMessageID: target.assistantThreadMessageID,
       detail: "Receiving backend session activity.",
+      identity: target.identity,
     })
 
     if (isHighFrequencyDeltaStreamEvent(streamEvent)) {
@@ -2213,7 +2328,7 @@ export function useSessionStreamController({
     turnID: string
   }) {
     const existing = sessionEventRouterRef.current.getTurnTarget(input.backendSessionID, input.turnID)
-    if (existing) {
+    if (existing?.assistantThreadMessageID) {
       return existing.assistantThreadMessageID
     }
 
@@ -2228,19 +2343,102 @@ export function useSessionStreamController({
       pending.backendTurnID = input.turnID
       sessionEventRouterRef.current.setTurnTarget(input.backendSessionID, input.turnID, {
         sessionID: input.uiSessionID,
+        turnID: input.turnID,
         assistantThreadMessageID: pending.assistantThreadMessageID,
       })
       return pending.assistantThreadMessageID
     }
 
-    const streamingMessage = buildSessionStreamingAssistantThreadMessage()
+    const streamingMessage = buildSessionStreamingAssistantThreadMessage(undefined, {
+      backendTurnID: input.turnID,
+      segmentID: `pending:${input.turnID}`,
+    })
     sessionEventRouterRef.current.setTurnTarget(input.backendSessionID, input.turnID, {
       sessionID: input.uiSessionID,
+      turnID: input.turnID,
       assistantThreadMessageID: streamingMessage.id,
     })
 
     appendConversationMessages(input.uiSessionID, [streamingMessage])
 
+    return streamingMessage.id
+  }
+
+  function getAssistantConversationMessage(sessionID: string, assistantThreadMessageID: string | undefined) {
+    if (!assistantThreadMessageID) return null
+    return conversationStore.getSessionMessages(sessionID).find(
+      (message): message is AssistantThreadMessage => message.kind === "assistant" && message.id === assistantThreadMessageID,
+    ) ?? null
+  }
+
+  function canBindAssistantPlaceholderToSegment(
+    message: AssistantThreadMessage | null,
+    identity: LlmCallSegmentIdentity,
+    currentSegmentID: string | undefined,
+  ) {
+    if (!message || currentSegmentID) return false
+    if (message.messageID && identity.messageID && message.messageID !== identity.messageID) return false
+    if (message.messageID && !identity.messageID) return false
+    return (
+      message.segmentID === message.id ||
+      message.segmentID.startsWith("pending:") ||
+      message.segmentID === identity.segmentID
+    )
+  }
+
+  function bindAssistantMessageToSegment(
+    sessionID: string,
+    assistantThreadMessageID: string,
+    identity: LlmCallSegmentIdentity,
+  ) {
+    updateAssistantConversationMessage(sessionID, assistantThreadMessageID, (message) => ({
+      ...message,
+      backendTurnID: identity.backendTurnID,
+      segmentID: identity.segmentID,
+      llmCallID: identity.llmCallID,
+      ...(identity.messageID ? { messageID: identity.messageID } : {}),
+    }))
+  }
+
+  function ensureAssistantSegmentForLlmCall(input: {
+    uiSessionID: string
+    backendSessionID: string
+    turnID: string
+    identity: LlmCallSegmentIdentity
+  }) {
+    const existingSegmentAssistantThreadMessageID = findAssistantThreadMessageIDBySegmentID(
+      input.uiSessionID,
+      input.identity.segmentID,
+    )
+    if (existingSegmentAssistantThreadMessageID) return existingSegmentAssistantThreadMessageID
+
+    const existingTarget = sessionEventRouterRef.current.getTurnTarget(input.backendSessionID, input.turnID)
+    const targetAssistant = getAssistantConversationMessage(input.uiSessionID, existingTarget?.assistantThreadMessageID)
+    if (
+      existingTarget?.assistantThreadMessageID &&
+      canBindAssistantPlaceholderToSegment(targetAssistant, input.identity, existingTarget.currentSegmentID)
+    ) {
+      bindAssistantMessageToSegment(input.uiSessionID, existingTarget.assistantThreadMessageID, input.identity)
+      return existingTarget.assistantThreadMessageID
+    }
+
+    const pending = Object.values(pendingStreamsRef.current).find(
+      (target) =>
+        target.sessionID === input.uiSessionID &&
+        target.backendSessionID === input.backendSessionID &&
+        target.backendTurnID === input.turnID,
+    )
+    const pendingAssistant = getAssistantConversationMessage(input.uiSessionID, pending?.assistantThreadMessageID)
+    if (
+      pending?.assistantThreadMessageID &&
+      canBindAssistantPlaceholderToSegment(pendingAssistant, input.identity, existingTarget?.currentSegmentID)
+    ) {
+      bindAssistantMessageToSegment(input.uiSessionID, pending.assistantThreadMessageID, input.identity)
+      return pending.assistantThreadMessageID
+    }
+
+    const streamingMessage = buildSessionStreamingAssistantThreadMessage("Receiving backend session activity.", input.identity)
+    appendConversationMessages(input.uiSessionID, [streamingMessage])
     return streamingMessage.id
   }
 
@@ -2380,6 +2578,8 @@ export function useSessionStreamController({
 
     sessionEventRouterRef.current.setTurnTarget(backendSessionID, backendTurnID, {
       sessionID: target.sessionID,
+      turnID: backendTurnID,
+      currentSegmentID: existingTarget?.currentSegmentID,
       assistantThreadMessageID: target.assistantThreadMessageID,
     })
   }
@@ -2412,10 +2612,17 @@ export function useSessionStreamController({
 
     const backendTurnID = resolveStreamTurnID(streamEvent)
     const streamMessageID = resolveStreamMessageID(streamEvent)
-    const messageAssistantThreadMessageID = findAssistantThreadMessageIDByMessageID(target.sessionID, streamMessageID)
-    const backendAssistantThreadMessageID = findAssistantThreadMessageIDByBackendTurnID(target.sessionID, backendTurnID)
+    const backendSessionID = target.backendSessionID ?? resolveBackendSessionID(target.sessionID)
+    const turnTarget = backendTurnID ? sessionEventRouterRef.current.getTurnTarget(backendSessionID, backendTurnID) : null
+    const llmSegmentIdentity = resolveLlmCallSegmentIdentity(streamEvent, backendTurnID)
+    const segmentAssistantThreadMessageID = findAssistantThreadMessageIDBySegmentID(
+      target.sessionID,
+      llmSegmentIdentity?.segmentID ?? turnTarget?.currentSegmentID,
+    )
+    const messageAssistantThreadMessageID = turnTarget?.currentSegmentID
+      ? undefined
+      : findAssistantThreadMessageIDByMessageID(target.sessionID, streamMessageID)
     if (backendTurnID) {
-      const backendSessionID = target.backendSessionID ?? resolveBackendSessionID(target.sessionID)
       if (sessionEventRouterRef.current.hasBackendTurnSettled(backendSessionID, backendTurnID)) {
         delete pendingStreamsRef.current[streamEvent.streamID]
         if (target.pendingInputID) {
@@ -2427,17 +2634,47 @@ export function useSessionStreamController({
 
       target.backendSessionID = backendSessionID
       target.backendTurnID = backendTurnID
-      sessionEventRouterRef.current.setTurnTarget(backendSessionID, backendTurnID, {
-        sessionID: target.sessionID,
-        assistantThreadMessageID: messageAssistantThreadMessageID ?? backendAssistantThreadMessageID ?? target.assistantThreadMessageID,
+      applyRuntimeTurnEventToConversationTurns({
+        uiSessionID: target.sessionID,
+        backendSessionID,
+        streamEvent,
+        fallbackUserMessageID: target.userThreadMessageID,
       })
     }
 
-    const assistantThreadMessageID = messageAssistantThreadMessageID ?? backendAssistantThreadMessageID ?? target.assistantThreadMessageID
+    const assistantThreadMessageID = llmSegmentIdentity && backendTurnID
+      ? ensureAssistantSegmentForLlmCall({
+          uiSessionID: target.sessionID,
+          backendSessionID,
+          turnID: backendTurnID,
+          identity: llmSegmentIdentity,
+        })
+      : segmentAssistantThreadMessageID ??
+        messageAssistantThreadMessageID ??
+        findAssistantThreadMessageIDByTurnTarget(
+          target.sessionID,
+          turnTarget?.currentSegmentID,
+          turnTarget?.assistantThreadMessageID,
+        ) ??
+        target.assistantThreadMessageID
+    if (llmSegmentIdentity) {
+      target.assistantThreadMessageID = assistantThreadMessageID
+    }
+
+    if (backendTurnID) {
+      sessionEventRouterRef.current.setTurnTarget(backendSessionID, backendTurnID, {
+        sessionID: target.sessionID,
+        turnID: backendTurnID,
+        currentSegmentID: llmSegmentIdentity?.segmentID ?? turnTarget?.currentSegmentID,
+        assistantThreadMessageID,
+      })
+    }
+
     applyStreamEventToAssistantMessage(
       {
         sessionID: target.sessionID,
         assistantThreadMessageID,
+        identity: llmSegmentIdentity ?? undefined,
       },
       streamEvent,
     )
@@ -2562,15 +2799,53 @@ export function useSessionStreamController({
 
     if (sessionEventRouterRef.current.hasBackendTurnSettled(streamEvent.sessionID, backendTurnID)) return
 
-    const streamMessageID = resolveStreamMessageID(streamEvent)
-    const messageAssistantThreadMessageID = findAssistantThreadMessageIDByMessageID(uiSessionID, streamMessageID)
-    const backendAssistantThreadMessageID = findAssistantThreadMessageIDByBackendTurnID(uiSessionID, backendTurnID)
-    const assistantThreadMessageID = messageAssistantThreadMessageID ?? backendAssistantThreadMessageID ?? ensureAssistantMessageForBackendTurn({
+    const runtimeType = readRuntimeStreamType(streamEvent)
+    const existingTurnTarget = sessionEventRouterRef.current.getTurnTarget(streamEvent.sessionID, backendTurnID)
+    applyRuntimeTurnEventToConversationTurns({
       uiSessionID,
       backendSessionID: streamEvent.sessionID,
-      turnID: backendTurnID,
+      streamEvent,
     })
-    if (!messageAssistantThreadMessageID && !backendAssistantThreadMessageID) {
+    if (runtimeType === "turn.started" && !existingTurnTarget?.assistantThreadMessageID) {
+      sessionEventRouterRef.current.setTurnTarget(streamEvent.sessionID, backendTurnID, {
+        sessionID: uiSessionID,
+        turnID: backendTurnID,
+      })
+      if (shouldRefreshRuntimeDebugForStreamEvent(streamEvent)) {
+        scheduleRuntimeDebugRefresh(uiSessionID, streamEvent.sessionID)
+      }
+      return
+    }
+
+    const streamMessageID = resolveStreamMessageID(streamEvent)
+    const llmSegmentIdentity = resolveLlmCallSegmentIdentity(streamEvent, backendTurnID)
+    const segmentAssistantThreadMessageID = findAssistantThreadMessageIDBySegmentID(
+      uiSessionID,
+      llmSegmentIdentity?.segmentID ?? existingTurnTarget?.currentSegmentID,
+    )
+    const messageAssistantThreadMessageID = existingTurnTarget?.currentSegmentID
+      ? undefined
+      : findAssistantThreadMessageIDByMessageID(uiSessionID, streamMessageID)
+    const assistantThreadMessageID = llmSegmentIdentity
+      ? ensureAssistantSegmentForLlmCall({
+          uiSessionID,
+          backendSessionID: streamEvent.sessionID,
+          turnID: backendTurnID,
+          identity: llmSegmentIdentity,
+        })
+      : segmentAssistantThreadMessageID ??
+        messageAssistantThreadMessageID ??
+        findAssistantThreadMessageIDByTurnTarget(
+          uiSessionID,
+          existingTurnTarget?.currentSegmentID,
+          existingTurnTarget?.assistantThreadMessageID,
+        ) ??
+        ensureAssistantMessageForBackendTurn({
+          uiSessionID,
+          backendSessionID: streamEvent.sessionID,
+          turnID: backendTurnID,
+        })
+    if (!messageAssistantThreadMessageID && !segmentAssistantThreadMessageID && !existingTurnTarget?.assistantThreadMessageID) {
       void mergeExternalTurnUserHistory({
         uiSessionID,
         backendSessionID: streamEvent.sessionID,
@@ -2578,17 +2853,18 @@ export function useSessionStreamController({
         assistantThreadMessageID,
       })
     }
-    if (messageAssistantThreadMessageID || backendAssistantThreadMessageID) {
-      sessionEventRouterRef.current.setTurnTarget(streamEvent.sessionID, backendTurnID, {
-        sessionID: uiSessionID,
-        assistantThreadMessageID,
-      })
-    }
+    sessionEventRouterRef.current.setTurnTarget(streamEvent.sessionID, backendTurnID, {
+      sessionID: uiSessionID,
+      turnID: backendTurnID,
+      currentSegmentID: llmSegmentIdentity?.segmentID ?? existingTurnTarget?.currentSegmentID,
+      assistantThreadMessageID,
+    })
 
     applyStreamEventToAssistantMessage(
       {
         sessionID: uiSessionID,
         assistantThreadMessageID,
+        identity: llmSegmentIdentity ?? undefined,
       },
       streamEvent,
     )
