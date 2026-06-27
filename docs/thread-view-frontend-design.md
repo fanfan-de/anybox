@@ -20,6 +20,11 @@
 - `packages/desktop/src/renderer/src/app/thread/ThreadView.test.tsx`
 - `packages/desktop/src/renderer/src/App.test.tsx`
 
+### 命名边界
+
+前端 `ThreadView` 只把 `ThreadMessage` 投影为 UI message/row：user message、assistant message、process row、permission request row。这里的 message 不是 backend runtime turn。
+
+backend `Turn` 保留给一次执行生命周期/runtime 容器，包括 `turnID`、`backendTurnID`、runtime debug/export、agent-session turn target 等字段。文档和前端代码里提到 `turn` 时，应只出现在这些 backend/runtime 语义中。
 ## 2. 设计目标
 
 Thread view 不是普通聊天窗口，而是 agent 工作台里的执行记录视图。它需要同时支持三类阅读：
@@ -92,13 +97,13 @@ ComposerUtilityBar
 
 ```text
 activeMessages: ThreadMessage[]
-├─ UserThreadMessage  # 用户输入回合
+├─ UserThreadMessage  # 用户消息
 │  ├─ text / displayText  # 原始文本与展示文本
 │  ├─ references[]  # @ 文件、链接等引用
 │  ├─ attachments[]  # 图片、PDF 等附件
 │  ├─ diffSummary?  # 该输入关联的变更摘要
 │  └─ submissionMode?  # 普通发送或 steer
-└─ AssistantThreadMessage  # agent 输出回合
+└─ AssistantThreadMessage  # assistant 消息
    ├─ messageID?  # 会话树中的消息 ID
    ├─ runtime  # 执行状态
    │  ├─ phase  # running/completed/cancelled 等阶段
@@ -183,7 +188,7 @@ flowchart LR
     permission["PermissionRequestInlinePrompt"]
     processHeader["Processed header"]
     processItem["process item row"]
-    assistant["assistant-turn"]
+    assistant["assistant-message"]
   end
 
   subgraph assistantRender["Assistant 内部分块"]
@@ -238,7 +243,7 @@ ThreadView
 └─ VisibleThreadView  # 正常可见状态
    └─ section.thread-shell  # thread 区域外壳
       ├─ div.thread-column  # 独立滚动列
-      │  ├─ empty state: article.turn.assistant-turn
+      │  ├─ empty state: article.thread-message.assistant-message
       │  │  └─ TraceItemView(system)
       │  └─ renderThreadRows()  # 根据虚拟化状态渲染 row
       │     ├─ direct rows: renderDisplayRow(row)[]
@@ -253,7 +258,7 @@ ThreadView
 
 ```text
 renderDisplayRow(row)
-├─ row.kind = user-turn  # 用户消息
+├─ row.kind = user-message  # 用户消息
 │  └─ UserThreadMessageArticle
 │     ├─ UserThreadMessageBubble
 │     │  └─ CollapsibleUserMessageText
@@ -267,8 +272,8 @@ renderDisplayRow(row)
 ├─ row.kind = process-item  # 展开的单条 process trace
 │  └─ article.assistant-process-item-row.assistant-section
 │     └─ TraceItemView
-└─ row.kind = assistant-turn  # assistant 回合主体
-   └─ article.turn.assistant-turn
+└─ row.kind = assistant-message  # assistant message 主体
+   └─ article.thread-message.assistant-message
       └─ div.assistant-shell
          ├─ AssistantMessagePlaceholder?  # streaming/ephemeral 状态
          ├─ inserted UserThreadMessageArticle[]?  # 流式插入的用户 steer
@@ -349,9 +354,9 @@ InlineSideChatThread  # 挂在某条 assistant response 下的分支讨论
 
 ### 用户消息
 
-用户 turn 右对齐：
+用户 message 右对齐：
 
-- `.user-turn` 使用 `justify-items: end`。
+- `.user-message` 使用 `justify-items: end`。
 - `.user-bubble` 最大宽度为 `min(100%, 520px)`。
 - 背景使用 `--surface-user-bubble`，区别于 assistant 正文。
 - 附件以 chip strip 显示，长文件名省略。
@@ -391,7 +396,7 @@ debug 信息由 developer mode 和 trace visibility 控制。默认不应该干�
 `ThreadView` 维护 `isPinnedToBottomRef`：
 
 - 切换 session 时强制滚动到底部。
-- 如果用户当前接近底部，新的 turn 或权限请求到来时继续锁底。
+- 如果用户当前接近底部，新的 message 或权限请求到来时继续锁底。
 - 如果用户向上阅读历史，后续更新不会强行打断阅读位置。
 
 底部锁定阈值为 `THREAD_BOTTOM_LOCK_THRESHOLD_PX = 32`。
@@ -412,7 +417,7 @@ assistant response 后方可显示动作行：
 side chat 是挂在某条 assistant response 下的嵌套讨论：
 
 - 只允许主 session 的非 streaming assistant response 打开。
-- side chat 锚点为 `turn.messageID ?? turn.id`。
+- side chat 锚点为 `message.messageID ?? message.id`。
 - 打开后渲染 `InlineSideChatThread`。
 - `InlineSideChatThread` 内部再次渲染一个 `ThreadView`，并在下方放置专用 `Composer`。
 - side chat composer 隐藏 model selector 和项目 tag command，placeholder 为 `Ask a follow-up about this reply.`。
@@ -481,12 +486,12 @@ Thread view 使用项目的语义 token：
 - `--semantic-thread-panel-surface`
 - `--semantic-thread-panel-surface-muted`
 - `--semantic-thread-panel-surface-hover`
-- `--semantic-thread-user-turn-diff-card-surface`
-- `--semantic-thread-user-turn-diff-card-border`
-- `--semantic-thread-user-turn-diff-divider`
-- `--semantic-thread-user-turn-diff-row-surface-hover`
-- `--semantic-thread-user-turn-diff-row-surface-focus`
-- `--semantic-thread-user-turn-diff-preview-surface`
+- `--semantic-thread-user-message-diff-card-surface`
+- `--semantic-thread-user-message-diff-card-border`
+- `--semantic-thread-user-message-diff-divider`
+- `--semantic-thread-user-message-diff-row-surface-hover`
+- `--semantic-thread-user-message-diff-row-surface-focus`
+- `--semantic-thread-user-message-diff-preview-surface`
 - `--semantic-markdown-text`
 - `--semantic-question-card-surface`
 - `--semantic-proposed-plan-card-surface`
@@ -503,14 +508,14 @@ Thread view 的面板背景使用专用 semantic token，不直接消费全局 `
 - `semantic-thread-panel-surface-muted`：低强调 trace、metadata、nested panel 背景。
 - `semantic-thread-panel-surface-hover`：thread 面板内紧凑控件的 hover / focus 背景。
 
-User-turn 文件变更卡片使用一组专用 semantic token：
+User-message 文件变更卡片使用一组专用 semantic token：
 
-- `semantic-thread-user-turn-diff-card-surface`：卡片背景。
-- `semantic-thread-user-turn-diff-card-border`：卡片外框和内嵌 diff preview 外框。
-- `semantic-thread-user-turn-diff-divider`：文件行分隔线。
-- `semantic-thread-user-turn-diff-row-surface-hover`：summary 和文件行 hover 背景。
-- `semantic-thread-user-turn-diff-row-surface-focus`：summary 和文件行键盘焦点背景。
-- `semantic-thread-user-turn-diff-preview-surface`：内嵌 diff preview 背景。
+- `semantic-thread-user-message-diff-card-surface`：卡片背景。
+- `semantic-thread-user-message-diff-card-border`：卡片外框和内嵌 diff preview 外框。
+- `semantic-thread-user-message-diff-divider`：文件行分隔线。
+- `semantic-thread-user-message-diff-row-surface-hover`：summary 和文件行 hover 背景。
+- `semantic-thread-user-message-diff-row-surface-focus`：summary 和文件行键盘焦点背景。
+- `semantic-thread-user-message-diff-preview-surface`：内嵌 diff preview 背景。
 
 运行时 CSS 使用无 light/dark 后缀的变量：
 
@@ -519,12 +524,12 @@ User-turn 文件变更卡片使用一组专用 semantic token：
 - `--semantic-thread-panel-surface`
 - `--semantic-thread-panel-surface-muted`
 - `--semantic-thread-panel-surface-hover`
-- `--semantic-thread-user-turn-diff-card-surface`
-- `--semantic-thread-user-turn-diff-card-border`
-- `--semantic-thread-user-turn-diff-divider`
-- `--semantic-thread-user-turn-diff-row-surface-hover`
-- `--semantic-thread-user-turn-diff-row-surface-focus`
-- `--semantic-thread-user-turn-diff-preview-surface`
+- `--semantic-thread-user-message-diff-card-surface`
+- `--semantic-thread-user-message-diff-card-border`
+- `--semantic-thread-user-message-diff-divider`
+- `--semantic-thread-user-message-diff-row-surface-hover`
+- `--semantic-thread-user-message-diff-row-surface-focus`
+- `--semantic-thread-user-message-diff-preview-surface`
 
 它们在 light/dark theme 下分别映射到同名 `-light` / `-dark` token。需要注意，assistant response 如果进入 `ThreadMarkdown`，`.thread-markdown` 内部还会把 `--md-text` 指向 `--semantic-markdown-text`，所以 markdown 段落的最终颜色可能服从 markdown token，而不是 thread response token。
 

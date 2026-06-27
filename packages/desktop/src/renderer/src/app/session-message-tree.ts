@@ -89,11 +89,11 @@ function hasAssistantResponseText(message: LoadedSessionHistoryMessage) {
 }
 
 function getMessageTurnID(message: LoadedSessionHistoryMessage) {
-  return readString(message.turn?.id).trim() || readString(message.info.turnID).trim()
+  return readString(message["turn"]?.id).trim() || readString(message.info.turnID).trim()
 }
 
 function getMessageTurnLastMessageID(message: LoadedSessionHistoryMessage) {
-  return readString(message.turn?.lastMessageID).trim() || readString(message.info.lastMessageID).trim()
+  return readString(message["turn"]?.lastMessageID).trim() || readString(message.info.lastMessageID).trim()
 }
 
 function isAssistantResponseTreeCandidate(message: LoadedSessionHistoryMessage) {
@@ -337,7 +337,7 @@ export function buildSessionMessageTree(
   }
 }
 
-export function getSessionMessageIDForTurn(input: {
+export function getSessionMessageIDForMessage(input: {
   kind: "user" | "assistant"
   id: string
   messageID?: string

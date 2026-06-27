@@ -1,9 +1,9 @@
 import { buildUserThreadMessageText } from "./stream"
 import type { SessionDiffSummary, ThreadMessage, UserThreadMessage, UserThreadMessageAttachment, UserThreadMessageReference } from "./types"
 
-const USER_TURN_PRESENTATION_STORAGE_KEY = "desktop.userMessagePresentation.v1"
+const USER_MESSAGE_PRESENTATION_STORAGE_KEY = "desktop.userMessagePresentation.v1"
 const MAX_PERSISTED_SESSION_COUNT = 100
-const MAX_PERSISTED_USER_TURNS_PER_SESSION = 200
+const MAX_PERSISTED_USER_MESSAGES_PER_SESSION = 200
 
 type PersistedUserMessagePresentationMap = Record<string, UserThreadMessage[]>
 
@@ -177,21 +177,21 @@ function readPersistedPresentationMap(): PersistedUserMessagePresentationMap {
   if (typeof window === "undefined") return {}
 
   try {
-    const storedValue = window.localStorage.getItem(USER_TURN_PRESENTATION_STORAGE_KEY)
+    const storedValue = window.localStorage.getItem(USER_MESSAGE_PRESENTATION_STORAGE_KEY)
     if (!storedValue) return {}
 
     const parsed = JSON.parse(storedValue) as unknown
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}
 
     return Object.fromEntries(
-      Object.entries(parsed).flatMap(([sessionID, turns]) => {
-        if (!Array.isArray(turns)) return []
+      Object.entries(parsed).flatMap(([sessionID, messages]) => {
+        if (!Array.isArray(messages)) return []
 
-        const sanitizedTurns = turns
+        const sanitizedMessages = messages
           .map((item) => sanitizeUserMessage(item))
           .filter((item): item is UserThreadMessage => item !== null)
 
-        return sanitizedTurns.length > 0 ? [[sessionID, sanitizedTurns]] : []
+        return sanitizedMessages.length > 0 ? [[sessionID, sanitizedMessages]] : []
       }),
     )
   } catch {
@@ -203,35 +203,35 @@ function writePersistedPresentationMap(value: PersistedUserMessagePresentationMa
   if (typeof window === "undefined") return
 
   try {
-    window.localStorage.setItem(USER_TURN_PRESENTATION_STORAGE_KEY, JSON.stringify(value))
+    window.localStorage.setItem(USER_MESSAGE_PRESENTATION_STORAGE_KEY, JSON.stringify(value))
   } catch {
     // Ignore storage failures.
   }
 }
 
-function selectPersistableUserMessages(turns: ThreadMessage[]) {
-  return turns
-    .filter((turn): turn is UserThreadMessage => turn.kind === "user")
-    .slice(-MAX_PERSISTED_USER_TURNS_PER_SESSION)
-    .map((turn) => {
+function selectPersistableUserMessages(messages: ThreadMessage[]) {
+  return messages
+    .filter((message): message is UserThreadMessage => message.kind === "user")
+    .slice(-MAX_PERSISTED_USER_MESSAGES_PER_SESSION)
+    .map((message) => {
       const {
         streamInsertion: _streamInsertion,
         submissionMode,
-        ...persistableTurn
-      } = turn
+        ...persistableMessage
+      } = message
 
       return {
-        ...persistableTurn,
+        ...persistableMessage,
         ...(submissionMode === "steer" ? { submissionMode } : {}),
-        ...(turn.attachments?.length ? { attachments: turn.attachments.map((attachment) => ({ ...attachment })) } : {}),
-        ...(turn.references?.length ? { references: turn.references.map((reference) => ({ ...reference })) } : {}),
-        ...(turn.diffSummary ? { diffSummary: cloneUserMessageDiffSummary(turn.diffSummary) } : {}),
-        ...(turn.questionAnswer
+        ...(message.attachments?.length ? { attachments: message.attachments.map((attachment) => ({ ...attachment })) } : {}),
+        ...(message.references?.length ? { references: message.references.map((reference) => ({ ...reference })) } : {}),
+        ...(message.diffSummary ? { diffSummary: cloneUserMessageDiffSummary(message.diffSummary) } : {}),
+        ...(message.questionAnswer
           ? {
               questionAnswer: {
-                ...turn.questionAnswer,
-                ...(turn.questionAnswer.selectedOptions
-                  ? { selectedOptions: [...turn.questionAnswer.selectedOptions] }
+                ...message.questionAnswer,
+                ...(message.questionAnswer.selectedOptions
+                  ? { selectedOptions: [...message.questionAnswer.selectedOptions] }
                   : {}),
               },
             }
@@ -242,30 +242,30 @@ function selectPersistableUserMessages(turns: ThreadMessage[]) {
 
 function prunePersistedPresentationMap(value: PersistedUserMessagePresentationMap) {
   const rankedSessions = Object.entries(value)
-    .map(([sessionID, turns]) => ({
+    .map(([sessionID, messages]) => ({
       sessionID,
-      turns,
-      lastTimestamp: turns[turns.length - 1]?.timestamp ?? 0,
+      messages,
+      lastTimestamp: messages[messages.length - 1]?.timestamp ?? 0,
     }))
     .sort((left, right) => right.lastTimestamp - left.lastTimestamp)
     .slice(0, MAX_PERSISTED_SESSION_COUNT)
 
-  return Object.fromEntries(rankedSessions.map(({ sessionID, turns }) => [sessionID, turns]))
+  return Object.fromEntries(rankedSessions.map(({ sessionID, messages }) => [sessionID, messages]))
 }
 
 export function readPersistedUserMessages(sessionID: string) {
   return readPersistedPresentationMap()[sessionID] ?? []
 }
 
-export function persistUserMessages(sessionID: string, turns: ThreadMessage[]) {
+export function persistUserMessages(sessionID: string, messages: ThreadMessage[]) {
   const normalizedSessionID = sessionID.trim()
   if (!normalizedSessionID) return
 
-  const nextSessionTurns = selectPersistableUserMessages(turns)
+  const nextSessionMessages = selectPersistableUserMessages(messages)
   const nextMap = readPersistedPresentationMap()
 
-  if (nextSessionTurns.length > 0) {
-    nextMap[normalizedSessionID] = nextSessionTurns
+  if (nextSessionMessages.length > 0) {
+    nextMap[normalizedSessionID] = nextSessionMessages
   } else {
     delete nextMap[normalizedSessionID]
   }
@@ -273,13 +273,13 @@ export function persistUserMessages(sessionID: string, turns: ThreadMessage[]) {
   writePersistedPresentationMap(prunePersistedPresentationMap(nextMap))
 }
 
-function isLocalGeneratedUserMessage(turn: UserThreadMessage) {
-  return turn.id.startsWith("user-")
+function isLocalGeneratedUserMessage(message: UserThreadMessage) {
+  return message.id.startsWith("user-")
 }
 
 export function mergeUserMessagePresentationState(previousMessages: ThreadMessage[], nextMessages: ThreadMessage[]) {
-  const previousUserMessages = previousMessages.filter((turn): turn is UserThreadMessage => turn.kind === "user")
-  const previousUserMessageByID = new Map(previousUserMessages.map((turn) => [turn.id, turn]))
+  const previousUserMessages = previousMessages.filter((message): message is UserThreadMessage => message.kind === "user")
+  const previousUserMessageByID = new Map(previousUserMessages.map((message) => [message.id, message]))
   const usedPreviousUserThreadMessageIDs = new Set<string>()
   let fallbackPreviousUserMessageIndex = 0
 
@@ -296,29 +296,29 @@ export function mergeUserMessagePresentationState(previousMessages: ThreadMessag
     return undefined
   }
 
-  const mergedMessages = nextMessages.map((turn) => {
-    if (turn.kind !== "user") return turn
+  const mergedMessages = nextMessages.map((message) => {
+    if (message.kind !== "user") return message
 
-    const exactPreviousTurn = previousUserMessageByID.get(turn.id)
-    const previousMessage = exactPreviousTurn ?? takeFallbackUserMessage()
-    if (!previousMessage) return turn
+    const exactPreviousMessage = previousUserMessageByID.get(message.id)
+    const previousMessage = exactPreviousMessage ?? takeFallbackUserMessage()
+    if (!previousMessage) return message
     usedPreviousUserThreadMessageIDs.add(previousMessage.id)
 
-    const mergedDisplayText = previousMessage.displayText ?? turn.displayText
-    const mergedAttachments = previousMessage.attachments?.length ? previousMessage.attachments : turn.attachments
-    const mergedReferences = previousMessage.references?.length ? previousMessage.references : turn.references
+    const mergedDisplayText = previousMessage.displayText ?? message.displayText
+    const mergedAttachments = previousMessage.attachments?.length ? previousMessage.attachments : message.attachments
+    const mergedReferences = previousMessage.references?.length ? previousMessage.references : message.references
 
     return {
-      ...turn,
+      ...message,
       text: buildUserThreadMessageText({
-        text: mergedDisplayText ?? turn.displayText ?? turn.text,
+        text: mergedDisplayText ?? message.displayText ?? message.text,
         attachmentNames: mergedAttachments?.map((attachment) => attachment.name),
         referenceLabels: mergedReferences?.map((reference) => reference.label),
       }),
       ...(mergedDisplayText ? { displayText: mergedDisplayText } : {}),
       ...(mergedAttachments?.length ? { attachments: mergedAttachments } : {}),
       ...(mergedReferences?.length ? { references: mergedReferences } : {}),
-      ...(turn.diffSummary ? { diffSummary: turn.diffSummary } : {}),
+      ...(message.diffSummary ? { diffSummary: message.diffSummary } : {}),
       ...(previousMessage.submissionMode === "steer" ? { submissionMode: previousMessage.submissionMode } : {}),
     }
   })
@@ -331,19 +331,19 @@ export function mergeUserMessagePresentationState(previousMessages: ThreadMessag
     return mergedMessages
   }
 
-  const hasMatchingPrefix = mergedMessages.every((turn, index) => {
+  const hasMatchingPrefix = mergedMessages.every((message, index) => {
     const previousMessage = previousMessages[index]
-    if (!previousMessage || previousMessage.kind !== turn.kind) return false
+    if (!previousMessage || previousMessage.kind !== message.kind) return false
 
-    if (previousMessage.id === turn.id) return true
+    if (previousMessage.id === message.id) return true
 
-    if (previousMessage.kind === "user" && turn.kind === "user") {
-      return previousMessage.text === turn.text &&
-        (previousMessage.questionAnswer?.questionID ?? "") === (turn.questionAnswer?.questionID ?? "")
+    if (previousMessage.kind === "user" && message.kind === "user") {
+      return previousMessage.text === message.text &&
+        (previousMessage.questionAnswer?.questionID ?? "") === (message.questionAnswer?.questionID ?? "")
     }
 
-    if (previousMessage.kind === "assistant" && turn.kind === "assistant") {
-      return previousMessage.state === turn.state && previousMessage.items.length === turn.items.length
+    if (previousMessage.kind === "assistant" && message.kind === "assistant") {
+      return previousMessage.state === message.state && previousMessage.items.length === message.items.length
     }
 
     return false

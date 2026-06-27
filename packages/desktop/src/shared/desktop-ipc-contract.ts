@@ -446,19 +446,19 @@ export interface DesktopRendererPerformanceEntryCounts {
 }
 
 export interface DesktopRendererSessionMemoryDiagnostics {
-  assistantTurnCount: number
+  assistantMessageCount: number
   currentSessionID: string | null
   diffChars: number
   draftPatchChars: number
   maxTraceItemChars: number
   messageTreeContentChars: number
   messageTreeNodeCount: number
-  streamingAssistantTurnCount: number
+  streamingAssistantMessageCount: number
   toolInputChars: number
   toolOutputChars: number
   traceItemCount: number
   traceTextChars: number
-  turnCount: number
+  messageCount: number
   updatedAt: number
 }
 

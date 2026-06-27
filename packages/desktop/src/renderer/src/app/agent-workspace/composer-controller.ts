@@ -509,7 +509,7 @@ export function useComposerController({
     )
     replaceConversationMessages(
       sessionID,
-      getConversationMessages(sessionID).filter((turn) => turn.id !== assistantThreadMessageID),
+      getConversationMessages(sessionID).filter((message) => message.id !== assistantThreadMessageID),
     )
 
     await handleSend({

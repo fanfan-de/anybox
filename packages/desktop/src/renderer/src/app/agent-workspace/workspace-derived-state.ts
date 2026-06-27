@@ -289,8 +289,8 @@ function getRunningSessionIDs(
     if (sessionID) sessionIDs.add(sessionID)
   }
 
-  for (const [sessionID, turns] of Object.entries(conversations)) {
-    if (turns.some((turn) => turn.kind === "assistant" && turn.isStreaming)) {
+  for (const [sessionID, messages] of Object.entries(conversations)) {
+    if (messages.some((message) => message.kind === "assistant" && message.isStreaming)) {
       sessionIDs.add(sessionID)
     }
   }
@@ -304,8 +304,8 @@ function getRunningSessionIDs(
   return nextSessionIDs
 }
 
-function hasStreamingAssistantMessage(turns: ThreadMessage[]) {
-  return turns.some((turn) => turn.kind === "assistant" && turn.isStreaming)
+function hasStreamingAssistantMessage(messages: ThreadMessage[]) {
+  return messages.some((message) => message.kind === "assistant" && message.isStreaming)
 }
 
 function isRuntimeDebugBusy(debug: SessionRuntimeDebugSnapshot | null | undefined) {

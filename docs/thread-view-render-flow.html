@@ -480,7 +480,7 @@
       <header>
         <h1>ThreadView 数据到渲染流程图</h1>
         <p class="subtitle">
-          这张图把 ThreadView 看成一条流水线：上游是会话数据，中间把 turns 拆成可渲染的 rows，最后按 row 和 trace item 类型落到具体 UI 组件。
+          这张图把 ThreadView 看成一条流水线：上游是会话数据，中间把 messages 拆成可渲染的 rows，最后按 row 和 trace item 类型落到具体 UI 组件。
         </p>
         <div class="legend" aria-label="图例">
           <span><i class="data"></i>数据</span>
@@ -490,6 +490,15 @@
           <span><i class="output"></i>屏幕结果</span>
         </div>
       </header>
+      <section class="board" aria-label="Naming boundary">
+        <div class="shape-notes">
+          <strong>命名边界</strong>
+          <ul>
+            <li>Frontend ThreadView consumes <code>ThreadMessage</code> projections and splits messages into render rows.</li>
+            <li>Backend <code>Turn</code> remains the runtime execution lifecycle/container, including <code>turnID</code>, <code>backendTurnID</code>, runtime debug/export, and agent-session turn targets.</li>
+          </ul>
+        </div>
+      </section>
 
       <section class="board" aria-label="ThreadView 主流程">
         <div class="pipeline">
@@ -498,7 +507,7 @@
             <div class="stack">
               <div class="card">
                 <strong><code>activeMessages</code></strong>
-                <p>主会话的用户 turn 与 assistant message。</p>
+                <p>主会话的用户 message 与 assistant message。</p>
               </div>
               <div class="card">
                 <strong><code>activeSession</code></strong>
@@ -516,7 +525,7 @@
             <div class="stack">
               <div class="card">
                 <strong><code>buildThreadDisplayRows()</code></strong>
-                <p>把 turns 拆成 UI row，不再简单一 turn 对一块 UI。</p>
+                <p>把 messages 拆成 UI row，不再简单一 message 对一块 UI。</p>
               </div>
               <div class="split">
                 <div class="card mini">
@@ -530,7 +539,7 @@
               </div>
               <div class="card">
                 <strong><code>displayRows</code></strong>
-                <p>后续渲染只面向 row，而不是直接遍历 turns。</p>
+                <p>后续渲染只面向 row，而不是直接遍历 messages。</p>
               </div>
             </div>
           </section>
@@ -584,7 +593,7 @@
                   <p>用户输入气泡。</p>
                 </div>
                 <div class="card mini">
-                  <strong><code>assistant-turn</code></strong>
+                  <strong><code>assistant-message</code></strong>
                   <p>assistant 回合主体。</p>
                 </div>
               </div>
@@ -616,7 +625,7 @@
 
         <div class="branch-board">
           <section class="branch" aria-label="assistant 内部分块">
-            <h2>Assistant turn 内部再分一层</h2>
+            <h2>Assistant message 内部再分一层</h2>
             <div class="branch-flow">
               <div class="card">
                 <strong><code>AssistantMessageSections</code></strong>
@@ -642,7 +651,7 @@
             <ol>
               <li><code>WorkbenchPaneSurface</code>：确认 ThreadView 被放在哪。</li>
               <li><code>ThreadView</code>：入口与可见/不可见分支。</li>
-              <li><code>buildThreadDisplayRows</code>：turns 如何变成 rows。</li>
+              <li><code>buildThreadDisplayRows</code>：messages 如何变成 rows。</li>
               <li><code>renderDisplayRow</code>：row 如何变成组件。</li>
               <li><code>AssistantMessageSections</code>：assistant items 如何分 section。</li>
               <li><code>TraceItemView</code>：trace item 如何落到具体 renderer。</li>
@@ -662,7 +671,7 @@
             <article class="example-card">
               <header>
                 <h3>例子 A：activeMessages</h3>
-                <p>ThreadView 的主输入，用户 turn 和 assistant message 混在同一个数组里。</p>
+                <p>ThreadView 的主输入，用户 message 和 assistant message 混在同一个数组里。</p>
               </header>
               <pre><code>const activeMessages = [
   {
@@ -796,7 +805,7 @@
             <div class="step-card">
               <b>3</b>
               <strong>逐个扫描 activeMessages</strong>
-              <p>user message 通常变成 <code>user-turn</code>；assistant message 会进入更复杂的拆分逻辑。</p>
+              <p>user message 通常变成 <code>user-message</code>；assistant message 会进入更复杂的拆分逻辑。</p>
             </div>
             <div class="step-card">
               <b>4</b>
@@ -813,7 +822,7 @@
           <div class="example-grid">
             <article class="example-card is-logic">
               <header>
-                <h3>归一化前：turns 是按对话顺序排的</h3>
+                <h3>归一化前：messages 是按对话顺序排的</h3>
                 <p>它更像“消息历史”，还不适合直接做虚拟列表和行级渲染。</p>
               </header>
               <pre><code>activeMessages = [
@@ -844,24 +853,24 @@
                 <h3>归一化中：assistant message 会被拆开</h3>
                 <p>过程 trace 和最终回复分离，折叠逻辑也在这里决定。</p>
               </header>
-              <pre><code>for (const turn of activeMessages) {
-  if (turn.kind === "user") {
+              <pre><code>for (const message of activeMessages) {
+  if (message.kind === "user") {
     rows.push({
       kind: "user-message",
-      rowID: turn.id,
-      estimatedHeight: estimateUserThreadRowHeight(turn),
-      turn
+      rowID: message.id,
+      estimatedHeight: estimateUserThreadRowHeight(message),
+      message
     });
     continue;
   }
 
-  const processBlocks = buildAssistantTraceDisplayBlocks(turn.items);
-  const expanded = readProcessTraceExpanded(turn.id);
+  const processBlocks = buildAssistantTraceDisplayBlocks(message.items);
+  const expanded = readProcessTraceExpanded(message.id);
 
   if (processBlocks.shouldRenderProcessTrace) {
     rows.push({
       kind: "process-header",
-      rowID: `process-header:${turn.id}`,
+      rowID: `process-header:${message.id}`,
       expanded
     });
 
@@ -877,7 +886,7 @@
 
   rows.push({
     kind: "assistant",
-    rowID: turn.id,
+    rowID: message.id,
     renderedItems: responseItems,
     processPrefixItems,
     insertedUserMessages
@@ -888,7 +897,7 @@
             <article class="example-card is-logic">
               <header>
                 <h3>归一化后：displayRows 才是渲染输入</h3>
-                <p><code>renderDisplayRow(row)</code> 后面只看 row.kind，不再直接遍历 turns。</p>
+                <p><code>renderDisplayRow(row)</code> 后面只看 row.kind，不再直接遍历 messages。</p>
               </header>
               <pre><code>displayRows = [
   {
@@ -1258,7 +1267,7 @@ row = {
           <p class="intro">
             ThreadView 不直接维护“正在输出的字符串”。它把 <code>activeMessages</code> 当成外部传入的实时快照：
             每来一段流式事件，上层状态更新 <code>activeMessages</code>，ThreadView 重新计算
-            <code>displayRows</code>，React 再用稳定的 <code>turn.id</code> / <code>rowID</code> 更新同一块 UI。
+            <code>displayRows</code>，React 再用稳定的 <code>message.id</code> / <code>rowID</code> 更新同一块 UI。
           </p>
 
           <div class="flow-steps" aria-label="流式输出处理步骤">
@@ -1324,7 +1333,7 @@ displayRows = [
             <article class="example-card is-logic">
               <header>
                 <h3>时间点 2：同一个 assistant message 持续变长</h3>
-                <p>不是新增一个 assistant row，而是更新同一个 id 的 turn。</p>
+                <p>不是新增一个 assistant row，而是更新同一个 id 的 message。</p>
               </header>
               <pre><code>activeMessages = [
   { id: "user-1", kind: "user", text: "解释 ThreadView" },
@@ -1429,7 +1438,7 @@ displayRows = [
             <div class="step-card">
               <b>中</b>
               <strong>buildThreadDisplayRows</strong>
-              <p>遍历 turns，把 user、assistant、process trace、permission request 归一化为 row。</p>
+              <p>遍历 messages，把 user、assistant、process trace、permission request 归一化为 row。</p>
             </div>
             <div class="step-card">
               <b>出</b>
@@ -1493,7 +1502,7 @@ displayRows = [
             <article class="example-card is-logic">
               <header>
                 <h3>displayRows 之后：虚拟滚动和 row 渲染</h3>
-                <p>后续代码不再直接遍历 turns，而是消费统一 row 队列。</p>
+                <p>后续代码不再直接遍历 messages，而是消费统一 row 队列。</p>
               </header>
               <pre><code>const shouldVirtualizeThreadRows =
   displayRows.length >= 80;
@@ -1521,7 +1530,7 @@ function renderThreadRows() {
             <strong>先建立一个心智模型</strong>
             <ul>
               <li><code>displayRows</code> 不是消息数组，而是“屏幕施工队列”：每个 row 都告诉 UI 这里要放一块什么。</li>
-              <li><code>user-turn</code> 和 <code>assistant</code> 是消息主体；<code>process-header</code> 和 <code>process-item</code> 是从 assistant 主体里拆出来的过程区。</li>
+              <li><code>user-message</code> 和 <code>assistant</code> 是消息主体；<code>process-header</code> 和 <code>process-item</code> 是从 assistant 主体里拆出来的过程区。</li>
               <li><code>permission-request</code> 不在 <code>activeMessages</code> 里，但为了让它看起来像 thread 的一部分，也会被包装成 row。</li>
             </ul>
           </div>
@@ -1538,10 +1547,10 @@ function renderThreadRows() {
             </thead>
             <tbody>
               <tr>
-                <td><code>user-turn</code></td>
+                <td><code>user-message</code></td>
                 <td>主时间线里的用户输入气泡。它代表“用户正式发给 session 的一轮输入”，不是所有用户输入都会在顶层出现。</td>
-                <td><code>turn.kind === "user"</code> 时产生；如果这个 user message 是 <code>streamInsertion</code>，会被跳过，之后嵌到对应 <code>assistant</code> row 内部。</td>
-                <td><code>turn</code> 是完整用户数据；<code>messageIndex</code> 用来判断 diff card 放在用户行还是后面的 assistant 行；<code>estimatedHeight</code> 会按文本长度、附件、diff 估算。</td>
+                <td><code>message.kind === "user"</code> 时产生；如果这个 user message 是 <code>streamInsertion</code>，会被跳过，之后嵌到对应 <code>assistant</code> row 内部。</td>
+                <td><code>message</code> 是完整用户数据；<code>messageIndex</code> 用来判断 diff card 放在用户行还是后面的 assistant 行；<code>estimatedHeight</code> 会按文本长度、附件、diff 估算。</td>
                 <td><code>UserThreadMessageArticle</code>。如果它有独立 diff summary，还会旁挂 <code>MessageDiffCard</code>。</td>
               </tr>
               <tr>
@@ -1549,17 +1558,17 @@ function renderThreadRows() {
                 <td>assistant 过程区的“抽屉门”。它不是内容本身，而是把 reasoning、tools、workflow 等过程内容压缩成一条 Processed 摘要。</td>
                 <td>assistant message 完成后，如果最终回复前面有足够的过程内容，并且不只是很短的一句 reasoning，就会在 assistant row 前面插入。</td>
                 <td><code>blocks</code> 是抽屉里有哪些 section；<code>expanded</code> 决定是否露出 <code>process-item</code>；<code>collapsing</code> 用于完成态自动折叠动画；<code>messageID</code> 绑定原 assistant message。</td>
-                <td><code>AssistantProcessTraceHeader</code>。点击它会更新 <code>processTraceExpansionByTurnID</code>，从而让下一次 <code>displayRows</code> 决定是否插入 <code>process-item</code>。</td>
+                <td><code>AssistantProcessTraceHeader</code>。点击它会更新 <code>processTraceExpansionByMessageID</code>，从而让下一次 <code>displayRows</code> 决定是否插入 <code>process-item</code>。</td>
               </tr>
               <tr>
                 <td><code>process-item</code></td>
                 <td>抽屉展开后看到的真实过程内容。可以把它理解成“从 assistant message 里提前搬出来的单条 trace item”。</td>
                 <td>只有对应 <code>process-header</code> 处于展开状态，或者正在折叠动画中，才会逐条插入；折叠完成后这些 row 会从 <code>displayRows</code> 里消失。</td>
-                <td><code>item</code> 是原始 trace item；<code>section</code> 决定外层样式和 aria label；<code>itemID</code> 用于稳定定位；<code>rowID</code> 包含 turn、block、item，避免同一 item 出现在不同位置时冲突。</td>
+                <td><code>item</code> 是原始 trace item；<code>section</code> 决定外层样式和 aria label；<code>itemID</code> 用于稳定定位；<code>rowID</code> 包含 message、block、item，避免同一 item 出现在不同位置时冲突。</td>
                 <td><code>TraceItemView</code>。它还会继续按 <code>item.kind</code> 分发到 tool、text、patch、image、reasoning 等具体 renderer。</td>
               </tr>
               <tr>
-                <td><code>assistant</code></td>
+                <td><code>assistant-message</code></td>
                 <td>assistant message 的主体行。最终回复一定要回到这里，因为复制、fork、side chat、branch 这些动作都围绕最终 assistant message。</td>
                 <td>只要 assistant message 有可显示 item、临时提示、或插入的 user message，就会产生。流式早期可能只有 <code>ephemeralHint</code>；完成后过程内容可能被移到 Processed 区，只留下最终回复。</td>
                 <td><code>renderedItems</code> 是主体区真正显示的 trace items；<code>processPrefixItems</code> 是同一 assistant run 的前序过程；<code>insertedUserMessages</code> 是插队用户输入；<code>ephemeralHint</code> 是无内容时的 Thinking/Running 提示。</td>
@@ -1567,8 +1576,8 @@ function renderThreadRows() {
               </tr>
               <tr>
                 <td><code>permission-request</code></td>
-                <td>一个被包装成 thread row 的阻塞交互。它不是 turn，但用户需要在消息流里直接处理它，所以被放进 <code>displayRows</code>。</td>
-                <td>遍历完 turns 后，如果 <code>pendingPermissionRequests[0]</code> 存在，并且当前没有正在 resolving，就追加到队尾；用户允许/拒绝或进入 resolving 后消失。</td>
+                <td>一个被包装成 thread row 的阻塞交互。它不是 message，但用户需要在消息流里直接处理它，所以被放进 <code>displayRows</code>。</td>
+                <td>遍历完 messages 后，如果 <code>pendingPermissionRequests[0]</code> 存在，并且当前没有正在 resolving，就追加到队尾；用户允许/拒绝或进入 resolving 后消失。</td>
                 <td><code>rowID</code> 用权限请求 id 生成；<code>estimatedHeight: 420</code> 给虚拟滚动一个较大的初始空间，因为权限卡片内容较高。</td>
                 <td><code>PermissionRequestInlinePrompt</code>，使用当前 pending requests 和 resolving/error 状态渲染允许/拒绝操作。</td>
               </tr>
@@ -1580,7 +1589,7 @@ function renderThreadRows() {
             <ul>
               <li>先看 <code>row.kind</code>：它决定这行属于“消息主体、过程抽屉、抽屉内容、权限交互、上下文提示”哪一类。</li>
               <li>再看 <code>rowID</code>：它决定 React key、虚拟列表高度缓存、滚动恢复是不是能稳定追踪这一行。</li>
-              <li>如果是 assistant 相关 row，再看 <code>messageID</code> / <code>turn</code>：它们把拆出来的过程行重新关联回同一个 assistant message。</li>
+              <li>如果是 assistant 相关 row，再看 <code>messageID</code> / <code>message</code>：它们把拆出来的过程行重新关联回同一个 assistant message。</li>
               <li>最后看 <code>estimatedHeight</code>：它不决定最终视觉高度，只是虚拟滚动第一次排版的估算值。</li>
             </ul>
           </div>
@@ -1591,15 +1600,15 @@ function renderThreadRows() {
                 <h3>内部顺序：user message 怎么进 displayRows</h3>
                 <p>普通用户消息最简单，估算高度后直接入队。</p>
               </header>
-              <pre><code>if (turn.kind === "user") {
-  if (hasStreamInsertionTarget(activeMessages, turn)) return;
+              <pre><code>if (message.kind === "user") {
+  if (hasStreamInsertionTarget(activeMessages, message)) return;
 
   rows.push({
     kind: "user-message",
-    rowID: turn.id,
-    turn,
+    rowID: message.id,
+    message,
     messageIndex,
-    estimatedHeight: estimateUserThreadRowHeight(turn)
+    estimatedHeight: estimateUserThreadRowHeight(message)
   });
 
   return;
@@ -1609,23 +1618,23 @@ function renderThreadRows() {
             <article class="example-card is-logic">
               <header>
                 <h3>内部顺序：assistant message 怎么进 displayRows</h3>
-                <p>先拆过程区，再放 assistant 主体，所以一个 turn 可能产生多行。</p>
+                <p>先拆过程区，再放 assistant 主体，所以一个 message 可能产生多行。</p>
               </header>
               <pre><code>const processPrefixItems =
   collectAssistantRunProcessPrefixItems(activeMessages, messageIndex, visibility);
 
 const insertedUserMessages =
-  getAssistantStreamInsertionUserMessages(activeMessages, turn);
+  getAssistantStreamInsertionUserMessages(activeMessages, message);
 
 const renderedItems =
-  filterRenderedAssistantTraceItems(turn.items, !turn.isStreaming, visibility);
+  filterRenderedAssistantTraceItems(message.items, !message.isStreaming, visibility);
 
 const traceDisplayBlocks =
   buildAssistantTraceDisplayBlocks({
-    items: turn.items,
+    items: message.items,
     processPrefixItems,
-    showFileChanges: !turn.isStreaming,
-    shouldCollapseReasoningAndTools: canCollapseAssistantProcessTrace(turn),
+    showFileChanges: !message.isStreaming,
+    shouldCollapseReasoningAndTools: canCollapseAssistantProcessTrace(message),
     traceVisibility: visibility
   });
 
@@ -1639,7 +1648,7 @@ const traceDisplayBlocks =
                 <p>它们让 React identity、虚拟滚动和滚动恢复能稳定工作。</p>
               </header>
               <pre><code>type ThreadDisplayRow = {
-  kind: "assistant" | "user-turn" | "process-item" | ...;
+  kind: "assistant" | "user-message" | "process-item" | ...;
   rowID: string;
   estimatedHeight: number;
 };
@@ -1656,7 +1665,7 @@ const traceDisplayBlocks =
               <li><code>activeMessages</code> 是业务历史；<code>displayRows</code> 是屏幕历史。两者不是一一对应。</li>
               <li>一个 assistant message 可能变成 <code>process-header</code>、多个 <code>process-item</code>、一个 <code>assistant</code> row。</li>
               <li>stream insertion 的 user message 会从普通位置跳过，然后嵌回对应 assistant row 内部。</li>
-              <li>权限请求不属于 turns，但会被追加成 row，因此用户看到它像 thread 的一部分。</li>
+              <li>权限请求不属于 messages，但会被追加成 row，因此用户看到它像 thread 的一部分。</li>
               <li><code>displayRows</code> 之后的所有系统都更关心 row：虚拟滚动、滚动恢复、动画状态和最终 UI 分发。</li>
             </ul>
           </div>

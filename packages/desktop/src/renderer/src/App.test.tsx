@@ -2034,7 +2034,7 @@ describe("App", () => {
     render(<App />)
 
     const threadSideChatButton = await screen.findByRole("button", { name: "Open side chat" })
-    const assistantMessage = threadSideChatButton.closest(".assistant-turn") as HTMLElement | null
+    const assistantMessage = threadSideChatButton.closest(".assistant-message") as HTMLElement | null
 
     expect(assistantMessage).not.toBeNull()
 
@@ -2215,7 +2215,7 @@ describe("App", () => {
 
     const responseText =
       "I am collapsing the information-heavy workspace cards into a project tree so the rail behaves like navigation, not like a second content surface."
-    const assistantMessage = (await screen.findByText(responseText)).closest(".assistant-turn") as HTMLElement | null
+    const assistantMessage = (await screen.findByText(responseText)).closest(".assistant-message") as HTMLElement | null
 
     expect(assistantMessage).not.toBeNull()
 
@@ -6646,7 +6646,7 @@ describe("App", () => {
 
     render(<App />)
 
-    const assistantMessage = (await screen.findByText("All checks passed.")).closest(".assistant-turn") as HTMLElement | null
+    const assistantMessage = (await screen.findByText("All checks passed.")).closest(".assistant-message") as HTMLElement | null
 
     expect(assistantMessage).not.toBeNull()
 
@@ -6869,7 +6869,7 @@ describe("App", () => {
 
     render(<App />)
 
-    const finalAssistantMessage = (await screen.findByText("Finished the cycle.")).closest(".assistant-turn") as HTMLElement | null
+    const finalAssistantMessage = (await screen.findByText("Finished the cycle.")).closest(".assistant-message") as HTMLElement | null
 
     expect(finalAssistantMessage).not.toBeNull()
     expect(screen.queryByText("Created the first draft of the release notes.")).not.toBeInTheDocument()
@@ -7281,7 +7281,7 @@ describe("App", () => {
     fireEvent.click(getComposerSendButton())
 
     const reasoningText = await screen.findByText("Planning live update.")
-    const assistantMessage = reasoningText.closest(".assistant-turn") as HTMLElement | null
+    const assistantMessage = reasoningText.closest(".assistant-message") as HTMLElement | null
 
     expect(assistantMessage).not.toBeNull()
 
@@ -10440,8 +10440,8 @@ describe("App", () => {
     expect(screen.getByLabelText("Thread View Reasoning Text Dark semantic-thread-reasoning-text-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Thread View Divider Light semantic-thread-divider-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Thread View Divider Dark semantic-thread-divider-dark")).toBeInTheDocument()
-    expect(screen.getByLabelText("Thread View Diff Card Surface Light semantic-thread-user-turn-diff-card-surface-light")).toBeInTheDocument()
-    expect(screen.getByLabelText("Thread View Diff Card Surface Dark semantic-thread-user-turn-diff-card-surface-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Thread View Diff Card Surface Light semantic-thread-user-message-diff-card-surface-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Thread View Diff Card Surface Dark semantic-thread-user-message-diff-card-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Markdown Inline Code Surface Light semantic-markdown-inline-code-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Markdown Selection Background Light semantic-markdown-selection-background-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Markdown Selection Text Dark semantic-markdown-selection-text-dark")).toBeInTheDocument()
@@ -10540,7 +10540,7 @@ describe("App", () => {
       "Thread View Response Text Light semantic-thread-response-text-light color value",
     ) as HTMLInputElement
     const diffCardSurfaceInput = screen.getByLabelText(
-      "Thread View Diff Card Surface Light semantic-thread-user-turn-diff-card-surface-light color value",
+      "Thread View Diff Card Surface Light semantic-thread-user-message-diff-card-surface-light color value",
     ) as HTMLInputElement
     const markdownInlineCodeInput = screen.getByLabelText(
       "Markdown Inline Code Surface Light semantic-markdown-inline-code-surface-light color value",
@@ -10576,7 +10576,7 @@ describe("App", () => {
       expect(document.documentElement.style.getPropertyValue("--semantic-question-card-surface-light")).toBe("#123456")
       expect(document.documentElement.style.getPropertyValue("--semantic-proposed-plan-card-surface-light")).toBe("#654321")
       expect(document.documentElement.style.getPropertyValue("--semantic-thread-response-text-light")).toBe("#112233")
-      expect(document.documentElement.style.getPropertyValue("--semantic-thread-user-turn-diff-card-surface-light")).toBe("#334455")
+      expect(document.documentElement.style.getPropertyValue("--semantic-thread-user-message-diff-card-surface-light")).toBe("#334455")
       expect(document.documentElement.style.getPropertyValue("--semantic-markdown-inline-code-surface-light")).toBe("#ddeeff")
       expect(document.documentElement.style.getPropertyValue("--semantic-thread-reasoning-text-light")).toBe("#445566")
       expect(document.documentElement.style.getPropertyValue("--semantic-thread-divider-light")).toBe("#223344")
@@ -13018,13 +13018,13 @@ describe("App", () => {
     expect(await screen.findByText("Second reply")).toBeInTheDocument()
 
     await waitFor(() => {
-      const firstReplyTurn = screen.getByText("First reply").closest(".assistant-turn")
-      const secondReplyTurn = screen.getByText("Second reply").closest(".assistant-turn")
+      const firstReplyMessage = screen.getByText("First reply").closest(".assistant-message")
+      const secondReplyMessage = screen.getByText("Second reply").closest(".assistant-message")
 
-      expect(firstReplyTurn).not.toBeNull()
-      expect(secondReplyTurn).not.toBeNull()
-      expect(firstReplyTurn).not.toBe(secondReplyTurn)
-      expect(secondReplyTurn).not.toHaveTextContent("First reply")
+      expect(firstReplyMessage).not.toBeNull()
+      expect(secondReplyMessage).not.toBeNull()
+      expect(firstReplyMessage).not.toBe(secondReplyMessage)
+      expect(secondReplyMessage).not.toHaveTextContent("First reply")
     })
   })
 
@@ -14204,11 +14204,11 @@ describe("App", () => {
     expect(styles).toMatch(/--semantic-thread-divider-light:\s*var\(--mix-seg-divider-80-transparent-20-light\);/s)
     expect(styles).toMatch(/--semantic-thread-divider:\s*var\(--semantic-thread-divider-light\);/s)
     expect(styles).toMatch(/--semantic-thread-divider:\s*var\(--semantic-thread-divider-dark\);/s)
-    expect(styles).toMatch(/--semantic-thread-user-turn-diff-card-surface-light:\s*var\(--semantic-thread-panel-surface-light\);/s)
-    expect(styles).toMatch(/--semantic-thread-user-turn-diff-card-surface:\s*var\(--semantic-thread-user-turn-diff-card-surface-light\);/s)
-    expect(styles).toMatch(/--semantic-thread-user-turn-diff-card-surface:\s*var\(--semantic-thread-user-turn-diff-card-surface-dark\);/s)
-    expect(styles).toMatch(/--semantic-thread-user-turn-diff-row-surface-hover:\s*var\(--semantic-thread-user-turn-diff-row-surface-hover-light\);/s)
-    expect(styles).toMatch(/--semantic-thread-user-turn-diff-row-surface-hover:\s*var\(--semantic-thread-user-turn-diff-row-surface-hover-dark\);/s)
+    expect(styles).toMatch(/--semantic-thread-user-message-diff-card-surface-light:\s*var\(--semantic-thread-panel-surface-light\);/s)
+    expect(styles).toMatch(/--semantic-thread-user-message-diff-card-surface:\s*var\(--semantic-thread-user-message-diff-card-surface-light\);/s)
+    expect(styles).toMatch(/--semantic-thread-user-message-diff-card-surface:\s*var\(--semantic-thread-user-message-diff-card-surface-dark\);/s)
+    expect(styles).toMatch(/--semantic-thread-user-message-diff-row-surface-hover:\s*var\(--semantic-thread-user-message-diff-row-surface-hover-light\);/s)
+    expect(styles).toMatch(/--semantic-thread-user-message-diff-row-surface-hover:\s*var\(--semantic-thread-user-message-diff-row-surface-hover-dark\);/s)
     expect(styles).toMatch(/--semantic-markdown-inline-code-surface-light:\s*var\(--mix-seg-accent-soft-80-seg-panel-20-light\);/s)
     expect(styles).toMatch(/--semantic-markdown-selection-background-light:\s*var\(--mix-seg-accent-soft-84-transparent-16-light\);/s)
     expect(styles).toMatch(/--semantic-markdown-selection-background:\s*var\(--semantic-markdown-selection-background-light\);/s)
@@ -14387,8 +14387,8 @@ describe("App", () => {
   })
 
   it("keeps normal thread scrolling on stable layout heights", () => {
-    expect(styles).not.toMatch(/(?:^|\n)\.turn\s*\{[^}]*content-visibility:/s)
-    expect(styles).not.toMatch(/(?:^|\n)\.turn\s*\{[^}]*contain-intrinsic-size:/s)
+    expect(styles).not.toMatch(/(?:^|\n)\.thread-message\s*\{[^}]*content-visibility:/s)
+    expect(styles).not.toMatch(/(?:^|\n)\.thread-message\s*\{[^}]*contain-intrinsic-size:/s)
     expect(styles).toMatch(/\.thread-column\s*\{[^}]*--thread-composer-clearance:\s*52px;[^}]*padding:\s*14px 0 var\(--thread-composer-clearance\);[^}]*scroll-padding-bottom:\s*var\(--thread-composer-clearance\);/s)
     expect(styles).toMatch(/\.thread-shell\s*>\s*\.thread-column\s*\{[^}]*padding-bottom:\s*var\(--thread-composer-clearance\);/s)
     expect(styles).toMatch(/\.thread-shell\s*\+\s*\.composer-stack\s*\{[^}]*padding-top:\s*12px;/s)
@@ -14409,24 +14409,24 @@ describe("App", () => {
     )
   })
 
-  it("styles assistant turns as three stacked panels with call separators", () => {
+  it("styles assistant messages as three stacked panels with call separators", () => {
     expect(styles).toMatch(/\.permission-request-card\s*\{[^}]*border-left-color:\s*var\(--seg-warning-strong\);[^}]*background:\s*var\(--mix-seg-warning-surface-84-surface-trace-16\);/s)
     expect(styles).toMatch(/\.ask-user-question-card\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--semantic-question-card-surface\);/s)
     expect(styles).toMatch(/\.assistant-section\.is-response\s+\.ask-user-question-card\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--semantic-question-card-surface\);/s)
     expect(styles).toMatch(/\.proposed-plan-card\s*\{[^}]*background:\s*var\(--semantic-proposed-plan-card-surface\);/s)
     expect(styles).toMatch(/\.assistant-section\.is-response \.trace-item-text,\s*\.assistant-section\.is-response \.trace-item-detail\s*\{[^}]*color:\s*var\(--semantic-thread-response-text\);/s)
     expect(styles).toMatch(/\.assistant-process-trace-header::after\s*\{[^}]*background:\s*var\(--semantic-thread-divider\);/s)
-    expect(styles).toMatch(/\.user-turn-diff-card\s*\{[^}]*border:\s*1px solid var\(--semantic-thread-user-turn-diff-card-border\);[^}]*background:\s*var\(--semantic-thread-user-turn-diff-card-surface\);[^}]*box-shadow:\s*none;/s)
-    expect(styles).toMatch(/\.user-turn-diff-stats \.is-add\s*\{[^}]*color:\s*var\(--semantic-success-text\);/s)
-    expect(styles).toMatch(/\.user-turn-diff-stats \.is-remove\s*\{[^}]*color:\s*var\(--semantic-error-text\);/s)
+    expect(styles).toMatch(/\.user-message-diff-card\s*\{[^}]*border:\s*1px solid var\(--semantic-thread-user-message-diff-card-border\);[^}]*background:\s*var\(--semantic-thread-user-message-diff-card-surface\);[^}]*box-shadow:\s*none;/s)
+    expect(styles).toMatch(/\.user-message-diff-stats \.is-add\s*\{[^}]*color:\s*var\(--semantic-success-text\);/s)
+    expect(styles).toMatch(/\.user-message-diff-stats \.is-remove\s*\{[^}]*color:\s*var\(--semantic-error-text\);/s)
     expect(styles).toMatch(/\.right-sidebar-diff-row\.is-add \.right-sidebar-diff-line-number\s*\{[^}]*background:\s*transparent;/s)
     expect(styles).toMatch(/\.right-sidebar-diff-row\.is-remove \.right-sidebar-diff-line-number\s*\{[^}]*background:\s*transparent;/s)
     expect(styles).not.toMatch(
       /\.right-sidebar-diff-row\.is-(?:add|remove) \.right-sidebar-diff-line-number\s*\{[^}]*background:\s*#(?:e8f5eb|feebe8);/s,
     )
-    expect(styles).toMatch(/\.user-turn-diff-action,[\s\S]*?\.user-turn-diff-expand\s*\{[^}]*border:\s*1px solid var\(--semantic-button-secondary-border\);[^}]*background:\s*var\(--semantic-button-secondary-surface\);[^}]*color:\s*var\(--semantic-button-secondary-text\);/s)
-    expect(styles).toMatch(/button\.user-turn-diff-file-row:hover\s*\{[^}]*background:\s*var\(--semantic-thread-user-turn-diff-row-surface-hover\);/s)
-    expect(styles).toMatch(/button\.user-turn-diff-file-row:focus-visible\s*\{[^}]*background:\s*var\(--semantic-thread-user-turn-diff-row-surface-focus\);[^}]*outline:\s*none;/s)
+    expect(styles).toMatch(/\.user-message-diff-action,[\s\S]*?\.user-message-diff-expand\s*\{[^}]*border:\s*1px solid var\(--semantic-button-secondary-border\);[^}]*background:\s*var\(--semantic-button-secondary-surface\);[^}]*color:\s*var\(--semantic-button-secondary-text\);/s)
+    expect(styles).toMatch(/button\.user-message-diff-file-row:hover\s*\{[^}]*background:\s*var\(--semantic-thread-user-message-diff-row-surface-hover\);/s)
+    expect(styles).toMatch(/button\.user-message-diff-file-row:focus-visible\s*\{[^}]*background:\s*var\(--semantic-thread-user-message-diff-row-surface-focus\);[^}]*outline:\s*none;/s)
     expect(styles).toMatch(/\.thread-markdown\s*\{[^}]*--md-text:\s*var\(--semantic-markdown-text,\s*var\(--seg-text-1\)\);/s)
     expect(styles).toMatch(/\.thread-markdown\s*\{[^}]*--md-selection-bg:\s*var\(--semantic-markdown-selection-background,\s*var\(--selection-background\)\);/s)
     expect(styles).toMatch(/\.thread-markdown::selection,\s*\.thread-markdown ::selection\s*\{[^}]*background:\s*var\(--md-selection-bg\);[^}]*color:\s*var\(--md-selection-text\);/s)

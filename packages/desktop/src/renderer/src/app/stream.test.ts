@@ -3,7 +3,7 @@ import { applyAgentStreamEventToThreadMessage, buildSessionStreamingAssistantThr
 
 describe("stream trace reducer", () => {
   it("trusts backend order when history includes parent metadata", () => {
-    const turns = buildThreadMessagesFromHistory([
+    const messages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "assistant-root",
@@ -36,7 +36,7 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turns.map((turn) => turn.id)).toEqual([
+    expect(messages.map((message) => message.id)).toEqual([
       "assistant-root",
       "assistant-branch-head",
       "assistant-middle",
@@ -44,7 +44,7 @@ describe("stream trace reducer", () => {
   })
 
   it("keeps legacy created/id sorting when history has no parent metadata", () => {
-    const turns = buildThreadMessagesFromHistory([
+    const messages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "assistant-newer",
@@ -65,11 +65,11 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turns.map((turn) => turn.id)).toEqual(["assistant-older", "assistant-newer"])
+    expect(messages.map((message) => message.id)).toEqual(["assistant-older", "assistant-newer"])
   })
 
   it("annotates history trace items with message and backend turn ownership", () => {
-    const [turn] = buildThreadMessagesFromHistory([
+    const [message] = buildThreadMessagesFromHistory([
       {
         info: {
           id: "message-history",
@@ -89,16 +89,16 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turn?.kind).toBe("assistant")
-    if (turn?.kind !== "assistant") return
+    expect(message?.kind).toBe("assistant")
+    if (message?.kind !== "assistant") return
 
-    const responseItem = turn.items.find((item) => item.kind === "text")
+    const responseItem = message.items.find((item) => item.kind === "text")
     expect(responseItem?.messageID).toBe("message-history")
     expect(responseItem?.backendTurnID).toBe("turn-history")
   })
 
   it("treats completed history as completed even when a workflow step-start remains pending", () => {
-    const [turn] = buildThreadMessagesFromHistory([
+    const [message] = buildThreadMessagesFromHistory([
       {
         info: {
           id: "message-completed-with-step",
@@ -133,13 +133,13 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turn?.kind).toBe("assistant")
-    if (turn?.kind !== "assistant") return
+    expect(message?.kind).toBe("assistant")
+    if (message?.kind !== "assistant") return
 
-    expect(turn.runtime.phase).toBe("completed")
-    expect(turn.state).toBe("Backend response received")
-    expect(turn.isStreaming).toBe(false)
-    expect(turn.items).toEqual(
+    expect(message.runtime.phase).toBe("completed")
+    expect(message.state).toBe("Backend response received")
+    expect(message.isStreaming).toBe(false)
+    expect(message.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           kind: "step",
@@ -156,7 +156,7 @@ describe("stream trace reducer", () => {
   })
 
   it("keeps completed assistant messages streaming while their backend turn is still running", () => {
-    const [turn] = buildThreadMessagesFromHistory([
+    const [message] = buildThreadMessagesFromHistory([
       {
         info: {
           id: "message-running-after-tool",
@@ -192,20 +192,20 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turn?.kind).toBe("assistant")
-    if (turn?.kind !== "assistant") return
+    expect(message?.kind).toBe("assistant")
+    if (message?.kind !== "assistant") return
 
-    expect(turn.runtime.phase).toBe("waiting_llm")
-    expect(turn.state).toBe("Waiting for model stream")
-    expect(turn.isStreaming).toBe(true)
-    expect(turn.items.some((item) => item.kind === "system" && item.title === "Response complete")).toBe(false)
+    expect(message.runtime.phase).toBe("waiting_llm")
+    expect(message.state).toBe("Waiting for model stream")
+    expect(message.isStreaming).toBe(true)
+    expect(message.items.some((item) => item.kind === "system" && item.title === "Response complete")).toBe(false)
   })
 
   it("truncates oversized live text items before rendering them", () => {
-    let turn = buildStreamingAssistantThreadMessage("Stream a large response")
+    let message = buildStreamingAssistantThreadMessage("Stream a large response")
     const oversizedText = "x".repeat(170_000)
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       id: "101:turn-runtime:2",
       event: "runtime",
       data: {
@@ -225,7 +225,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const responseItem = turn.items.find((item) => item.kind === "text")
+    const responseItem = message.items.find((item) => item.kind === "text")
     const responseText = responseItem?.text ?? ""
 
     expect(responseText).toContain("Renderer truncated this live stream item")
@@ -236,10 +236,10 @@ describe("stream trace reducer", () => {
     })
   })
 
-  it("reduces canonical runtime events into an assistant turn", () => {
-    let turn = buildStreamingAssistantThreadMessage("Show runtime trace")
+  it("reduces canonical runtime events into an assistant message", () => {
+    let message = buildStreamingAssistantThreadMessage("Show runtime trace")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       id: "100:turn-runtime:1",
       event: "runtime",
       data: {
@@ -253,7 +253,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       id: "101:turn-runtime:2",
       event: "runtime",
       data: {
@@ -273,7 +273,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       id: "102:turn-runtime:3",
       event: "runtime",
       data: {
@@ -291,18 +291,18 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.phase).toBe("completed")
-    expect(turn.messageID).toBe("message-runtime")
-    expect(turn.isStreaming).toBe(false)
-    const responseItem = turn.items.find((item) => item.kind === "text" && item.text === "Runtime answer")
+    expect(message.runtime.phase).toBe("completed")
+    expect(message.messageID).toBe("message-runtime")
+    expect(message.isStreaming).toBe(false)
+    const responseItem = message.items.find((item) => item.kind === "text" && item.text === "Runtime answer")
     expect(responseItem?.messageID).toBe("message-runtime")
     expect(responseItem?.backendTurnID).toBe("turn-runtime")
   })
 
   it("uses canonical runtime timestamps for replayed turn duration", () => {
-    let turn = buildSessionStreamingAssistantThreadMessage("Replaying backend activity")
+    let message = buildSessionStreamingAssistantThreadMessage("Replaying backend activity")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       id: "10000:turn-runtime:1",
       event: "runtime",
       data: {
@@ -316,7 +316,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       id: "70000:turn-runtime:2",
       event: "runtime",
       data: {
@@ -336,7 +336,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       id: "130000:turn-runtime:3",
       event: "runtime",
       data: {
@@ -354,15 +354,15 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.startedAt).toBe(10_000)
-    expect(turn.runtime.updatedAt).toBe(130_000)
-    expect(turn.runtime.updatedAt - turn.runtime.startedAt).toBe(120_000)
+    expect(message.runtime.startedAt).toBe(10_000)
+    expect(message.runtime.updatedAt).toBe(130_000)
+    expect(message.runtime.updatedAt - message.runtime.startedAt).toBe(120_000)
   })
 
-  it("marks runtime cancelled turns as stopped streams", () => {
-    let turn = buildStreamingAssistantThreadMessage("Cancel runtime trace")
+  it("marks runtime cancelled messages as stopped streams", () => {
+    let message = buildStreamingAssistantThreadMessage("Cancel runtime trace")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-cancelled",
@@ -378,15 +378,15 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.phase).toBe("cancelled")
-    expect(turn.isStreaming).toBe(false)
-    expect(turn.state).toBe("Backend stream cancelled")
+    expect(message.runtime.phase).toBe("cancelled")
+    expect(message.isStreaming).toBe(false)
+    expect(message.state).toBe("Backend stream cancelled")
   })
 
   it("marks continued-by-user runtime completions as settled continuation turns", () => {
-    let turn = buildStreamingAssistantThreadMessage("Steer runtime trace")
+    let message = buildStreamingAssistantThreadMessage("Steer runtime trace")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-continued",
@@ -403,15 +403,15 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.phase).toBe("continued_by_user")
-    expect(turn.isStreaming).toBe(false)
-    expect(turn.state).toBe("Continued by user input")
+    expect(message.runtime.phase).toBe("continued_by_user")
+    expect(message.isStreaming).toBe(false)
+    expect(message.state).toBe("Continued by user input")
   })
 
   it("renders task state runtime events as workflow trace items", () => {
-    let turn = buildStreamingAssistantThreadMessage("Track tasks")
+    let message = buildStreamingAssistantThreadMessage("Track tasks")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-task-state",
@@ -479,13 +479,13 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const taskItem = turn.items.find((item) => item.kind === "task-state")
+    const taskItem = message.items.find((item) => item.kind === "task-state")
     expect(taskItem?.title).toBe("1/2 tasks")
     expect(taskItem?.progressItems?.map((item) => item.status)).toEqual(["completed", "in_progress"])
   })
 
   it("replaces repeated task state runtime snapshots for the same turn", () => {
-    let turn = buildStreamingAssistantThreadMessage("Track repeated task updates")
+    let assistantMessage = buildStreamingAssistantThreadMessage("Track repeated task updates")
     const createTaskStateEvent = (eventID: string, completed: number) => ({
       event: "runtime",
       data: {
@@ -535,13 +535,13 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, createTaskStateEvent("event-task-state-1", 0))
-    const firstTaskItem = turn.items.find((item) => item.kind === "task-state")
+    assistantMessage = applyAgentStreamEventToThreadMessage(assistantMessage, createTaskStateEvent("event-task-state-1", 0))
+    const firstTaskItem = assistantMessage.items.find((item) => item.kind === "task-state")
     if (firstTaskItem) {
-      turn = {
-        ...turn,
+      assistantMessage = {
+        ...assistantMessage,
         items: [
-          ...turn.items,
+          ...assistantMessage.items,
           {
             ...firstTaskItem,
             id: "stale-task-state",
@@ -551,9 +551,9 @@ describe("stream trace reducer", () => {
         ],
       }
     }
-    turn = applyAgentStreamEventToThreadMessage(turn, createTaskStateEvent("event-task-state-2", 1))
+    assistantMessage = applyAgentStreamEventToThreadMessage(assistantMessage, createTaskStateEvent("event-task-state-2", 1))
 
-    const taskItems = turn.items.filter((item) => item.kind === "task-state")
+    const taskItems = assistantMessage.items.filter((item) => item.kind === "task-state")
     expect(taskItems).toHaveLength(1)
     expect(taskItems[0]?.sourceID).toBe("task-state:turn-runtime")
     expect(taskItems[0]?.title).toBe("1/1 tasks")
@@ -561,7 +561,7 @@ describe("stream trace reducer", () => {
   })
 
   it("restores completed task tool history as regular tool trace items", () => {
-    const [turn] = buildThreadMessagesFromHistory([
+    const [message] = buildThreadMessagesFromHistory([
       {
         info: {
           id: "msg-task-state",
@@ -648,19 +648,19 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turn?.kind).toBe("assistant")
-    if (turn?.kind !== "assistant") return
-    const taskToolItem = turn.items.find((item) => item.kind === "tool" && item.toolCallID === "toolcall-task")
+    expect(message?.kind).toBe("assistant")
+    if (message?.kind !== "assistant") return
+    const taskToolItem = message.items.find((item) => item.kind === "tool" && item.toolCallID === "toolcall-task")
     expect(taskToolItem?.title).toBe("TaskUpdate")
     expect(taskToolItem?.toolOutputText).toBe("Task updated")
     expect(taskToolItem?.visibilityKey).toBe("toolCalls")
-    expect(turn.items.find((item) => item.kind === "task-state")).toBeUndefined()
+    expect(message.items.find((item) => item.kind === "task-state")).toBeUndefined()
   })
 
   it("settles on completed runtime phase even before a terminal event arrives", () => {
-    let turn = buildStreamingAssistantThreadMessage("Finish from state")
+    let message = buildStreamingAssistantThreadMessage("Finish from state")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-state-completed",
@@ -676,15 +676,15 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.phase).toBe("completed")
-    expect(turn.isStreaming).toBe(false)
-    expect(turn.state).toBe("stop")
+    expect(message.runtime.phase).toBe("completed")
+    expect(message.isStreaming).toBe(false)
+    expect(message.state).toBe("stop")
   })
 
   it("does not regress a settled runtime turn when older lifecycle events arrive late", () => {
-    let turn = buildStreamingAssistantThreadMessage("Handle duplicate stream ordering")
+    let message = buildStreamingAssistantThreadMessage("Handle duplicate stream ordering")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-completed",
@@ -701,7 +701,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-started-late",
@@ -714,7 +714,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-preparing-late",
@@ -730,15 +730,15 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.phase).toBe("completed")
-    expect(turn.isStreaming).toBe(false)
-    expect(turn.items.some((item) => item.kind === "text" && item.text === "Done.")).toBe(true)
+    expect(message.runtime.phase).toBe("completed")
+    expect(message.isStreaming).toBe(false)
+    expect(message.items.some((item) => item.kind === "text" && item.text === "Done.")).toBe(true)
   })
 
   it("keeps late-arriving runtime trace items in backend timestamp order", () => {
-    let turn = buildStreamingAssistantThreadMessage("Create tasks before spawning agents")
+    let message = buildStreamingAssistantThreadMessage("Create tasks before spawning agents")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-later-text",
@@ -757,7 +757,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-later-tool",
@@ -785,7 +785,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-earlier-text-late",
@@ -804,7 +804,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-earlier-tool-late",
@@ -832,7 +832,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const renderedTrace = turn.items
+    const renderedTrace = message.items
       .filter((item) => item.kind === "text" || item.kind === "tool")
       .map((item) => item.kind === "tool" ? item.title : item.text)
 
@@ -845,23 +845,23 @@ describe("stream trace reducer", () => {
   })
 
   it("does not regress a settled legacy stream when older events arrive late", () => {
-    let turn = buildStreamingAssistantThreadMessage("Handle legacy ordering")
+    let message = buildStreamingAssistantThreadMessage("Handle legacy ordering")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "done",
       data: {
         parts: [{ id: "part-text", type: "text", text: "Done." }],
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "started",
       data: {
         sessionID: "session-legacy",
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "delta",
       data: {
         kind: "text",
@@ -871,16 +871,16 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.phase).toBe("completed")
-    expect(turn.isStreaming).toBe(false)
-    expect(turn.items.some((item) => item.kind === "text" && item.text === "Done.")).toBe(true)
-    expect(turn.items.some((item) => item.kind === "text" && item.text === "late")).toBe(false)
+    expect(message.runtime.phase).toBe("completed")
+    expect(message.isStreaming).toBe(false)
+    expect(message.items.some((item) => item.kind === "text" && item.text === "Done.")).toBe(true)
+    expect(message.items.some((item) => item.kind === "text" && item.text === "late")).toBe(false)
   })
 
   it("preserves canonical runtime phases instead of folding them into reasoning", () => {
-    let turn = buildStreamingAssistantThreadMessage("Track phases")
+    let message = buildStreamingAssistantThreadMessage("Track phases")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-state-preparing",
@@ -896,11 +896,11 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.phase).toBe("preparing")
-    expect(turn.state).toBe("Preparing request")
-    expect(turn.isStreaming).toBe(true)
+    expect(message.runtime.phase).toBe("preparing")
+    expect(message.state).toBe("Preparing request")
+    expect(message.isStreaming).toBe(true)
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-state-waiting-llm",
@@ -916,15 +916,15 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.phase).toBe("waiting_llm")
-    expect(turn.state).toBe("Awaiting the next model stream.")
-    expect(turn.isStreaming).toBe(true)
+    expect(message.runtime.phase).toBe("waiting_llm")
+    expect(message.state).toBe("Awaiting the next model stream.")
+    expect(message.isStreaming).toBe(true)
   })
 
   it("keeps blocked runtime phase distinct from approval waiting", () => {
-    let turn = buildStreamingAssistantThreadMessage("Block generically")
+    let message = buildStreamingAssistantThreadMessage("Block generically")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-state-blocked",
@@ -940,15 +940,15 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.phase).toBe("blocked")
-    expect(turn.state).toBe("Waiting for a user answer.")
-    expect(turn.isStreaming).toBe(false)
+    expect(message.runtime.phase).toBe("blocked")
+    expect(message.state).toBe("Waiting for a user answer.")
+    expect(message.isStreaming).toBe(false)
   })
 
   it("uses runtime tool events to advance past earlier lifecycle phases when phase events are missing", () => {
-    let turn = buildStreamingAssistantThreadMessage("Wait for model")
+    let message = buildStreamingAssistantThreadMessage("Wait for model")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-state-waiting-llm",
@@ -963,7 +963,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-tool-started",
@@ -986,15 +986,15 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.phase).toBe("tool_running")
-    expect(turn.state).toBe("Running tools")
-    expect(turn.items.some((item) => item.kind === "tool" && item.title === "shell")).toBe(true)
+    expect(message.runtime.phase).toBe("tool_running")
+    expect(message.state).toBe("Running tools")
+    expect(message.items.some((item) => item.kind === "tool" && item.title === "shell")).toBe(true)
   })
 
   it("uses llm started events as a model-wait fallback after turn start", () => {
-    let turn = buildStreamingAssistantThreadMessage("Wait for model")
+    let message = buildStreamingAssistantThreadMessage("Wait for model")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-turn-started",
@@ -1007,9 +1007,9 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.phase).toBe("preparing")
+    expect(message.runtime.phase).toBe("preparing")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-llm-started",
@@ -1027,14 +1027,14 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.phase).toBe("waiting_llm")
-    expect(turn.state).toBe("Waiting for model stream")
+    expect(message.runtime.phase).toBe("waiting_llm")
+    expect(message.state).toBe("Waiting for model stream")
   })
 
   it("uses runtime tool events as a lifecycle fallback before any phase event arrives", () => {
-    let turn = buildStreamingAssistantThreadMessage("Run tool")
+    let message = buildStreamingAssistantThreadMessage("Run tool")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-tool-fallback",
@@ -1057,14 +1057,14 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.phase).toBe("tool_running")
-    expect(turn.state).toBe("Running tools")
+    expect(message.runtime.phase).toBe("tool_running")
+    expect(message.state).toBe("Running tools")
   })
 
   it("finalizes generic blocked turns without treating them as approval requests", () => {
-    let turn = buildStreamingAssistantThreadMessage("Block without approval")
+    let message = buildStreamingAssistantThreadMessage("Block without approval")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-blocked-complete",
@@ -1081,15 +1081,15 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.phase).toBe("blocked")
-    expect(turn.state).toBe("Backend response blocked")
-    expect(turn.items.some((item) => item.title === "Approval required")).toBe(false)
+    expect(message.runtime.phase).toBe("blocked")
+    expect(message.state).toBe("Backend response blocked")
+    expect(message.items.some((item) => item.title === "Approval required")).toBe(false)
   })
 
   it("does not render canonical user prompt parts as assistant response sections", () => {
-    let turn = buildStreamingAssistantThreadMessage("User prompt")
+    let message = buildStreamingAssistantThreadMessage("User prompt")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-user-part",
@@ -1109,15 +1109,15 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.items.some((item) => item.kind === "text" && item.text === "User prompt")).toBe(false)
-    expect(turn.runtime.phase).toBe("waiting_first_event")
-    expect(turn.isStreaming).toBe(true)
+    expect(message.items.some((item) => item.kind === "text" && item.text === "User prompt")).toBe(false)
+    expect(message.runtime.phase).toBe("waiting_first_event")
+    expect(message.isStreaming).toBe(true)
   })
 
   it("surfaces runtime compaction records as visible workflow status", () => {
-    let turn = buildStreamingAssistantThreadMessage("Trigger compaction")
+    let message = buildStreamingAssistantThreadMessage("Trigger compaction")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-compaction",
@@ -1140,7 +1140,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const compactionItem = turn.items.find((item) => item.kind === "compaction")
+    const compactionItem = message.items.find((item) => item.kind === "compaction")
     expect(compactionItem).toMatchObject({
       kind: "compaction",
       title: "Context auto-compacted",
@@ -1149,14 +1149,14 @@ describe("stream trace reducer", () => {
     })
     expect(compactionItem?.visibilityKey).toBeUndefined()
     expect(compactionItem?.debugEntries?.some((entry) => entry.label === "compaction.to" && entry.value === "message-boundary")).toBe(true)
-    expect(turn.isStreaming).toBe(true)
+    expect(message.isStreaming).toBe(true)
   })
 
   it("surfaces the response text while the stream is still running", () => {
-    let turn = buildStreamingAssistantThreadMessage("Show live trace")
-    expect(turn.runtime.phase).toBe("waiting_first_event")
+    let message = buildStreamingAssistantThreadMessage("Show live trace")
+    expect(message.runtime.phase).toBe("waiting_first_event")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "delta",
       data: {
         kind: "reasoning",
@@ -1164,9 +1164,9 @@ describe("stream trace reducer", () => {
         delta: "Planning live update.",
       },
     })
-    expect(turn.runtime.phase).toBe("reasoning")
+    expect(message.runtime.phase).toBe("reasoning")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "delta",
       data: {
         kind: "text",
@@ -1174,32 +1174,32 @@ describe("stream trace reducer", () => {
         delta: "Streaming answer",
       },
     })
-    expect(turn.runtime.phase).toBe("responding")
+    expect(message.runtime.phase).toBe("responding")
 
-    expect(turn.items.map((item) => item.kind)).toEqual(["system", "reasoning", "text"])
-    expect(turn.items[1]?.text).toBe("Planning live update.")
-    expect(turn.items[2]).toMatchObject({
+    expect(message.items.map((item) => item.kind)).toEqual(["system", "reasoning", "text"])
+    expect(message.items[1]?.text).toBe("Planning live update.")
+    expect(message.items[2]).toMatchObject({
       kind: "text",
       text: "Streaming answer",
       isStreaming: true,
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "done",
       data: {
         parts: [{ id: "part-text", type: "text", text: "Streaming answer" }],
       },
     })
 
-    expect(turn.items.map((item) => item.kind)).toEqual(["system", "reasoning", "text", "system"])
-    expect(turn.items[2]?.text).toBe("Streaming answer")
-    expect(turn.runtime.phase).toBe("completed")
+    expect(message.items.map((item) => item.kind)).toEqual(["system", "reasoning", "text", "system"])
+    expect(message.items[2]?.text).toBe("Streaming answer")
+    expect(message.runtime.phase).toBe("completed")
   })
 
   it("keeps repeated tool updates on the same trace item", () => {
-    let turn = buildStreamingAssistantThreadMessage("Run lint")
+    let message = buildStreamingAssistantThreadMessage("Run lint")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "part",
       data: {
         part: {
@@ -1214,7 +1214,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "part",
       data: {
         part: {
@@ -1231,7 +1231,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const toolItems = turn.items.filter((item) => item.kind === "tool")
+    const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
     expect(toolItems[0]?.status).toBe("completed")
     expect(toolItems[0]?.toolOutputText).toContain("\"fixed\": 3")
@@ -1239,9 +1239,9 @@ describe("stream trace reducer", () => {
   })
 
   it("renders unanswered ask-user-question tools as question prompts", () => {
-    let turn = buildStreamingAssistantThreadMessage("Ask a question")
+    let message = buildStreamingAssistantThreadMessage("Ask a question")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "part",
       data: {
         part: {
@@ -1265,15 +1265,15 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const questionItems = turn.items.filter((item) => item.kind === "question")
+    const questionItems = message.items.filter((item) => item.kind === "question")
     expect(questionItems).toHaveLength(1)
     expect(questionItems[0]?.questionPrompt?.questionID).toBe("que_target")
   })
 
   it("renders answered ask-user-question tools as normal tool trace items", () => {
-    let turn = buildStreamingAssistantThreadMessage("Answer a question")
+    let message = buildStreamingAssistantThreadMessage("Answer a question")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "part",
       data: {
         part: {
@@ -1301,8 +1301,8 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.items.some((item) => item.kind === "question")).toBe(false)
-    const toolItems = turn.items.filter((item) => item.kind === "tool")
+    expect(message.items.some((item) => item.kind === "question")).toBe(false)
+    const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
     expect(toolItems[0]).toMatchObject({
       kind: "tool",
@@ -1314,9 +1314,9 @@ describe("stream trace reducer", () => {
   it("preserves the full completed tool output for disclosure views", () => {
     const longOutput = `${"tool output line ".repeat(24)}tail-marker`
 
-    let turn = buildStreamingAssistantThreadMessage("Inspect long tool output")
+    let message = buildStreamingAssistantThreadMessage("Inspect long tool output")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "part",
       data: {
         part: {
@@ -1331,7 +1331,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const toolItems = turn.items.filter((item) => item.kind === "tool")
+    const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
     expect(toolItems[0]?.toolOutputText).toBe(longOutput)
     expect(toolItems[0]?.text).toBe(longOutput)
@@ -1340,9 +1340,9 @@ describe("stream trace reducer", () => {
   })
 
   it("captures completed tool inputs separately from outputs", () => {
-    let turn = buildStreamingAssistantThreadMessage("Inspect tool payloads")
+    let message = buildStreamingAssistantThreadMessage("Inspect tool payloads")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "part",
       data: {
         part: {
@@ -1363,7 +1363,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const toolItems = turn.items.filter((item) => item.kind === "tool")
+    const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
     expect(toolItems[0]?.toolInputText).toContain("\"file_path\": \"notes.txt\"")
     expect(toolItems[0]?.toolInputText).toContain("\"new_string\": \"input-marker\"")
@@ -1374,9 +1374,9 @@ describe("stream trace reducer", () => {
   it("preserves the full streamed tool input while the call is running", () => {
     const longRawInput = `${"streamed input line\n".repeat(40)}tail-input-marker`
 
-    let turn = buildStreamingAssistantThreadMessage("Inspect streamed tool payloads")
+    let message = buildStreamingAssistantThreadMessage("Inspect streamed tool payloads")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "part",
       data: {
         part: {
@@ -1391,7 +1391,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const toolItems = turn.items.filter((item) => item.kind === "tool")
+    const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
     expect(toolItems[0]?.toolInputText).toBe(longRawInput)
     expect(toolItems[0]?.toolInputText).toContain("tail-input-marker")
@@ -1399,9 +1399,9 @@ describe("stream trace reducer", () => {
   })
 
   it("renders runtime tool input deltas without waiting for a full pending tool event", () => {
-    let turn = buildStreamingAssistantThreadMessage("Inspect live tool input")
+    let message = buildStreamingAssistantThreadMessage("Inspect live tool input")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-tool-input-1",
@@ -1421,7 +1421,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-tool-input-2",
@@ -1441,10 +1441,10 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const toolItems = turn.items.filter((item) => item.kind === "tool")
+    const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
-    expect(turn.runtime.phase).toBe("tool_running")
-    expect(turn.state).toBe("Preparing tool call")
+    expect(message.runtime.phase).toBe("tool_running")
+    expect(message.state).toBe("Preparing tool call")
     expect(toolItems[0]).toMatchObject({
       kind: "tool",
       title: "write",
@@ -1458,9 +1458,9 @@ describe("stream trace reducer", () => {
   })
 
   it("reconciles streamed tool input with a completed part by tool call id", () => {
-    let turn = buildStreamingAssistantThreadMessage("Create tasks")
+    let message = buildStreamingAssistantThreadMessage("Create tasks")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-task-input",
@@ -1480,7 +1480,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-task-completed",
@@ -1509,7 +1509,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const toolItems = turn.items.filter((item) => item.kind === "tool")
+    const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
     expect(toolItems[0]).toMatchObject({
       id: "stream-task-create",
@@ -1533,9 +1533,9 @@ describe("stream trace reducer", () => {
       ].join("\n"),
     })
     const splitIndex = fullInput.indexOf("+new")
-    let turn = buildStreamingAssistantThreadMessage("Preview live patch input")
+    let message = buildStreamingAssistantThreadMessage("Preview live patch input")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-patch-input-1",
@@ -1555,7 +1555,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-patch-input-2",
@@ -1575,9 +1575,9 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const toolItems = turn.items.filter((item) => item.kind === "tool")
+    const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
-    expect(turn.items.filter((item) => item.kind === "patch")).toHaveLength(0)
+    expect(message.items.filter((item) => item.kind === "patch")).toHaveLength(0)
     expect(toolItems[0]).toMatchObject({
       kind: "tool",
       title: "apply_patch",
@@ -1610,9 +1610,9 @@ describe("stream trace reducer", () => {
       "*** End Patch",
     ].join("\n"))
     const splitIndex = fullInput.indexOf("+hello")
-    let turn = buildStreamingAssistantThreadMessage("Preview freeform patch input")
+    let message = buildStreamingAssistantThreadMessage("Preview freeform patch input")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-freeform-patch-input-1",
@@ -1632,7 +1632,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-freeform-patch-input-2",
@@ -1652,9 +1652,9 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const toolItems = turn.items.filter((item) => item.kind === "tool")
+    const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
-    expect(turn.items.filter((item) => item.kind === "patch")).toHaveLength(0)
+    expect(message.items.filter((item) => item.kind === "patch")).toHaveLength(0)
     expect(toolItems[0]?.draftPatch).toMatchObject({
       fileChanges: [
         expect.objectContaining({
@@ -1675,9 +1675,9 @@ describe("stream trace reducer", () => {
         "*** End Patch",
       ].join("\n"),
     })
-    let turn = buildStreamingAssistantThreadMessage("Preview lifecycle patch input")
+    let message = buildStreamingAssistantThreadMessage("Preview lifecycle patch input")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-patch-started",
@@ -1701,9 +1701,9 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const toolItems = turn.items.filter((item) => item.kind === "tool")
+    const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
-    expect(turn.items.filter((item) => item.kind === "patch")).toHaveLength(0)
+    expect(message.items.filter((item) => item.kind === "patch")).toHaveLength(0)
     expect(toolItems[0]).toMatchObject({
       sourceID: "tool-lifecycle-patch",
       status: "running",
@@ -1731,9 +1731,9 @@ describe("stream trace reducer", () => {
         "*** End Patch",
       ].join("\n"),
     })
-    let turn = buildStreamingAssistantThreadMessage("Replace live patch input")
+    let message = buildStreamingAssistantThreadMessage("Replace live patch input")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-patch-input",
@@ -1753,7 +1753,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-patch-generated",
@@ -1786,7 +1786,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const patchItems = turn.items.filter((item) => item.kind === "patch")
+    const patchItems = message.items.filter((item) => item.kind === "patch")
     expect(patchItems).toHaveLength(1)
     expect(patchItems[0]).toMatchObject({
       kind: "patch",
@@ -1800,7 +1800,7 @@ describe("stream trace reducer", () => {
         }),
       ],
     })
-    const toolItems = turn.items.filter((item) => item.kind === "tool")
+    const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
     expect(toolItems[0]?.draftPatch).toMatchObject({
       fileChanges: [
@@ -1824,9 +1824,9 @@ describe("stream trace reducer", () => {
         "*** End Patch",
       ].join("\n"),
     })
-    let turn = buildStreamingAssistantThreadMessage("Fail live patch input")
+    let message = buildStreamingAssistantThreadMessage("Fail live patch input")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-patch-input",
@@ -1846,7 +1846,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-patch-failed",
@@ -1871,9 +1871,9 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const toolItems = turn.items.filter((item) => item.kind === "tool")
+    const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
-    expect(turn.items.filter((item) => item.kind === "patch")).toHaveLength(0)
+    expect(message.items.filter((item) => item.kind === "patch")).toHaveLength(0)
     expect(toolItems[0]).toMatchObject({
       sourceID: "tool-input-patch",
       status: "error",
@@ -1896,9 +1896,9 @@ describe("stream trace reducer", () => {
         "*** End Patch",
       ].join("\n"),
     })
-    let turn = buildStreamingAssistantThreadMessage("Cancel live patch input")
+    let message = buildStreamingAssistantThreadMessage("Cancel live patch input")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-patch-input",
@@ -1918,7 +1918,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-patch-cancelled",
@@ -1944,9 +1944,9 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const toolItems = turn.items.filter((item) => item.kind === "tool")
+    const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
-    expect(turn.items.filter((item) => item.kind === "patch")).toHaveLength(0)
+    expect(message.items.filter((item) => item.kind === "patch")).toHaveLength(0)
     expect(toolItems[0]).toMatchObject({
       sourceID: "tool-input-patch",
       status: "cancelled",
@@ -1959,9 +1959,9 @@ describe("stream trace reducer", () => {
   })
 
   it("marks unfinished streamed tool input as cancelled when the turn is interrupted", () => {
-    let turn = buildStreamingAssistantThreadMessage("Inspect live tool input")
+    let message = buildStreamingAssistantThreadMessage("Inspect live tool input")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-tool-input-1",
@@ -1981,7 +1981,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-cancelled",
@@ -1997,9 +1997,9 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const toolItems = turn.items.filter((item) => item.kind === "tool")
+    const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
-    expect(turn.runtime.phase).toBe("cancelled")
+    expect(message.runtime.phase).toBe("cancelled")
     expect(toolItems[0]).toMatchObject({
       kind: "tool",
       title: "replace-text",
@@ -2009,20 +2009,20 @@ describe("stream trace reducer", () => {
       toolInputText: "{\"path\":\"game.ts\"",
       isStreaming: false,
     })
-    expect(turn.items).toEqual(
+    expect(message.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           kind: "system",
-          title: "Turn cancelled",
+          title: "Execution cancelled",
         }),
       ]),
     )
   })
 
   it("keeps cancelled streamed tool input when a late failed part arrives", () => {
-    let turn = buildStreamingAssistantThreadMessage("Inspect live tool input")
+    let message = buildStreamingAssistantThreadMessage("Inspect live tool input")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-tool-input-1",
@@ -2042,7 +2042,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-cancelled",
@@ -2058,7 +2058,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-late-failed",
@@ -2083,9 +2083,9 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const toolItems = turn.items.filter((item) => item.kind === "tool")
+    const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
-    expect(turn.runtime.phase).toBe("cancelled")
+    expect(message.runtime.phase).toBe("cancelled")
     expect(toolItems[0]).toMatchObject({
       kind: "tool",
       title: "replace-text",
@@ -2097,9 +2097,9 @@ describe("stream trace reducer", () => {
   })
 
   it("keeps late batched tool input cancelled after a local interrupt marker", () => {
-    let turn = buildStreamingAssistantThreadMessage("Inspect live tool input")
+    let message = buildStreamingAssistantThreadMessage("Inspect live tool input")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-cancelled",
@@ -2115,7 +2115,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-late-tool-input",
@@ -2135,8 +2135,8 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.runtime.phase).toBe("cancelled")
-    expect(turn.items).toEqual(
+    expect(message.runtime.phase).toBe("cancelled")
+    expect(message.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           kind: "tool",
@@ -2150,7 +2150,7 @@ describe("stream trace reducer", () => {
   })
 
   it("restores cancelled tool history without leaving pending tool traces active", () => {
-    const turns = buildThreadMessagesFromHistory([
+    const messages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "assistant-cancelled",
@@ -2175,16 +2175,16 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turns).toHaveLength(1)
-    const turn = turns[0]
-    expect(turn).toMatchObject({
+    expect(messages).toHaveLength(1)
+    const message = messages[0]
+    expect(message).toMatchObject({
       kind: "assistant",
       runtime: {
         phase: "cancelled",
       },
       isStreaming: false,
     })
-    expect(turn?.kind === "assistant" ? turn.items : []).toEqual(
+    expect(message?.kind === "assistant" ? message.items : []).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           kind: "tool",
@@ -2193,14 +2193,14 @@ describe("stream trace reducer", () => {
         }),
         expect.objectContaining({
           kind: "system",
-          title: "Turn cancelled",
+          title: "Execution cancelled",
         }),
       ]),
     )
   })
 
-  it("restores cancelled assistant turns as cancelled even when an abort error was persisted", () => {
-    const turns = buildThreadMessagesFromHistory([
+  it("restores cancelled assistant messages as cancelled even when an abort error was persisted", () => {
+    const messages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "assistant-cancelled-with-error",
@@ -2242,9 +2242,9 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turns).toHaveLength(1)
-    const turn = turns[0]
-    expect(turn).toMatchObject({
+    expect(messages).toHaveLength(1)
+    const message = messages[0]
+    expect(message).toMatchObject({
       kind: "assistant",
       state: "Backend stream cancelled",
       runtime: {
@@ -2252,7 +2252,7 @@ describe("stream trace reducer", () => {
       },
       isStreaming: false,
     })
-    expect(turn?.kind === "assistant" ? turn.items : []).toEqual(
+    expect(message?.kind === "assistant" ? message.items : []).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           kind: "tool",
@@ -2262,17 +2262,17 @@ describe("stream trace reducer", () => {
         }),
         expect.objectContaining({
           kind: "system",
-          title: "Turn cancelled",
+          title: "Execution cancelled",
         }),
       ]),
     )
-    expect(turn?.kind === "assistant" ? turn.items.some((item) => item.kind === "error") : true).toBe(false)
+    expect(message?.kind === "assistant" ? message.items.some((item) => item.kind === "error") : true).toBe(false)
   })
 
   it("keeps streamed reasoning visible when a sparse completion event is followed by tool input", () => {
-    let turn = buildStreamingAssistantThreadMessage("Inspect live reasoning before tools")
+    let message = buildStreamingAssistantThreadMessage("Inspect live reasoning before tools")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-reasoning-delta",
@@ -2289,7 +2289,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-reasoning-completed",
@@ -2308,7 +2308,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
         eventID: "event-tool-input",
@@ -2327,7 +2327,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.items).toEqual(
+    expect(message.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           kind: "reasoning",
@@ -2343,11 +2343,11 @@ describe("stream trace reducer", () => {
         }),
       ]),
     )
-    expect(turn.runtime.phase).toBe("tool_running")
+    expect(message.runtime.phase).toBe("tool_running")
   })
 
   it("derives source and attachment trace items from assistant parts", () => {
-    const turns = buildThreadMessagesFromHistory([
+    const messages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "msg-assistant-assets",
@@ -2389,7 +2389,7 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    const assistantItems = turns[0]?.kind === "assistant" ? turns[0].items : []
+    const assistantItems = messages[0]?.kind === "assistant" ? messages[0].items : []
     expect(assistantItems.map((item) => item.kind)).toEqual(["source", "tool", "image", "system"])
     expect(assistantItems[0]).toMatchObject({
       kind: "source",
@@ -2417,7 +2417,7 @@ describe("stream trace reducer", () => {
       "-old",
       "+new",
     ].join("\n")
-    const turns = buildThreadMessagesFromHistory([
+    const messages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "msg-assistant-patch",
@@ -2450,7 +2450,7 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    const assistantItems = turns[0]?.kind === "assistant" ? turns[0].items : []
+    const assistantItems = messages[0]?.kind === "assistant" ? messages[0].items : []
     const patchItem = assistantItems.find((item) => item.kind === "patch")
 
     expect(patchItem).toMatchObject({
@@ -2470,9 +2470,9 @@ describe("stream trace reducer", () => {
   })
 
   it("keeps non-contiguous reasoning segments separate around tool events", () => {
-    let turn = buildStreamingAssistantThreadMessage("Trace tool execution")
+    let message = buildStreamingAssistantThreadMessage("Trace tool execution")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "delta",
       data: {
         kind: "reasoning",
@@ -2481,7 +2481,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "part",
       data: {
         part: {
@@ -2496,7 +2496,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "delta",
       data: {
         kind: "reasoning",
@@ -2505,7 +2505,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "done",
       data: {
         parts: [
@@ -2516,16 +2516,16 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.items.map((item) => item.kind)).toEqual(["system", "reasoning", "tool", "reasoning", "system"])
-    expect(turn.items[1]?.text).toBe("Inspecting workspace.")
-    expect(turn.items[3]?.text).toBe("Evaluating test output.")
-    expect(turn.items[4]?.title).toBe("Response complete")
+    expect(message.items.map((item) => item.kind)).toEqual(["system", "reasoning", "tool", "reasoning", "system"])
+    expect(message.items[1]?.text).toBe("Inspecting workspace.")
+    expect(message.items[3]?.text).toBe("Evaluating test output.")
+    expect(message.items[4]?.title).toBe("Response complete")
   })
 
   it("updates the original text trace item when the same text part resumes after a tool event", () => {
-    let turn = buildStreamingAssistantThreadMessage("Resume text after tool")
+    let message = buildStreamingAssistantThreadMessage("Resume text after tool")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "delta",
       data: {
         kind: "text",
@@ -2535,7 +2535,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "part",
       data: {
         part: {
@@ -2550,7 +2550,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "delta",
       data: {
         kind: "text",
@@ -2560,15 +2560,15 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const streamingTextItems = turn.items.filter((item) => item.kind === "text")
+    const streamingTextItems = message.items.filter((item) => item.kind === "text")
     expect(streamingTextItems).toHaveLength(1)
     expect(streamingTextItems[0]).toMatchObject({
       text: "First sentence. Second sentence.",
       isStreaming: true,
     })
-    expect(turn.items.map((item) => item.kind)).toEqual(["system", "text", "tool"])
+    expect(message.items.map((item) => item.kind)).toEqual(["system", "text", "tool"])
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "done",
       data: {
         parts: [
@@ -2578,15 +2578,15 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const textItems = turn.items.filter((item) => item.kind === "text")
+    const textItems = message.items.filter((item) => item.kind === "text")
     expect(textItems).toHaveLength(1)
     expect(textItems[0]?.text).toBe("First sentence. Second sentence.")
   })
 
   it("replaces anonymous streamed text with the finalized text part on completion", () => {
-    let turn = buildStreamingAssistantThreadMessage("Follow up")
+    let message = buildStreamingAssistantThreadMessage("Follow up")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "delta",
       data: {
         kind: "text",
@@ -2595,28 +2595,28 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.items.filter((item) => item.kind === "text")).toHaveLength(1)
-    expect(turn.items.find((item) => item.kind === "text")).toMatchObject({
+    expect(message.items.filter((item) => item.kind === "text")).toHaveLength(1)
+    expect(message.items.find((item) => item.kind === "text")).toMatchObject({
       text: "First reply. Second reply.",
       isStreaming: true,
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "done",
       data: {
         parts: [{ id: "text-2", type: "text", text: "Second reply." }],
       },
     })
 
-    const textItems = turn.items.filter((item) => item.kind === "text")
+    const textItems = message.items.filter((item) => item.kind === "text")
     expect(textItems).toHaveLength(1)
     expect(textItems[0]?.text).toBe("Second reply.")
   })
 
-  it("marks blocked turns as waiting for approval when completion carries a waiting tool", () => {
-    let turn = buildStreamingAssistantThreadMessage("Review file access")
+  it("marks blocked assistant messages as waiting for approval when completion carries a waiting tool", () => {
+    let message = buildStreamingAssistantThreadMessage("Review file access")
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "part",
       data: {
         part: {
@@ -2631,7 +2631,7 @@ describe("stream trace reducer", () => {
       },
     })
 
-    turn = applyAgentStreamEventToThreadMessage(turn, {
+    message = applyAgentStreamEventToThreadMessage(message, {
       event: "done",
       data: {
         status: "blocked",
@@ -2649,13 +2649,13 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(turn.state).toBe("Waiting for permission approval")
-    expect(turn.runtime.phase).toBe("waiting_approval")
-    expect(turn.items.some((item) => item.title === "Approval required")).toBe(true)
+    expect(message.state).toBe("Waiting for permission approval")
+    expect(message.runtime.phase).toBe("waiting_approval")
+    expect(message.items.some((item) => item.title === "Approval required")).toBe(true)
   })
 
-  it("rebuilds user and assistant turns from persisted session history", () => {
-    const turns = buildThreadMessagesFromHistory([
+  it("rebuilds user and assistant messages from persisted session history", () => {
+    const messages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "msg-user-1",
@@ -2710,8 +2710,8 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turns).toHaveLength(2)
-    expect(turns[0]).toMatchObject({
+    expect(messages).toHaveLength(2)
+    expect(messages[0]).toMatchObject({
       id: "msg-user-1",
       kind: "user",
       displayText: "Reload this session",
@@ -2733,7 +2733,7 @@ describe("stream trace reducer", () => {
         ],
       },
     })
-    expect(turns[1]).toMatchObject({
+    expect(messages[1]).toMatchObject({
       id: "msg-assistant-1",
       messageID: "msg-assistant-1",
       kind: "assistant",
@@ -2755,12 +2755,12 @@ describe("stream trace reducer", () => {
         ],
       },
     })
-    expect(turns[1]?.kind === "assistant" ? turns[1].runtime.phase : null).toBe("completed")
-    expect(turns[1]?.kind === "assistant" ? turns[1].items.map((item) => item.kind) : []).toEqual(["reasoning", "text", "system"])
+    expect(messages[1]?.kind === "assistant" ? messages[1].runtime.phase : null).toBe("completed")
+    expect(messages[1]?.kind === "assistant" ? messages[1].items.map((item) => item.kind) : []).toEqual(["reasoning", "text", "system"])
   })
 
   it("restores internal compaction history as a status marker without leaking summary text", () => {
-    const turns = buildThreadMessagesFromHistory([
+    const messages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "msg-user-1",
@@ -2810,14 +2810,14 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turns).toHaveLength(2)
-    expect(turns[0]).toMatchObject({
+    expect(messages).toHaveLength(2)
+    expect(messages[0]).toMatchObject({
       id: "msg-user-1",
       kind: "user",
       text: "Keep going",
     })
 
-    const assistantMessage = turns[1]
+    const assistantMessage = messages[1]
     expect(assistantMessage?.kind).toBe("assistant")
     if (assistantMessage?.kind !== "assistant") return
 
@@ -2826,13 +2826,13 @@ describe("stream trace reducer", () => {
       kind: "compaction",
       title: "Context auto-compacted",
     })
-    expect(JSON.stringify(turns)).not.toContain("Secret compacted summary")
-    expect(JSON.stringify(turns)).not.toContain("<compacted_history>")
+    expect(JSON.stringify(messages)).not.toContain("Secret compacted summary")
+    expect(JSON.stringify(messages)).not.toContain("<compacted_history>")
   })
 
   it("restores referenced file tags from persisted user history", () => {
     const absolutePath = "C:\\Projects\\Atlas\\frontend\\src\\angry-birds.js"
-    const turns = buildThreadMessagesFromHistory([
+    const messages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "msg-user-file-reference",
@@ -2848,7 +2848,7 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turns[0]).toMatchObject({
+    expect(messages[0]).toMatchObject({
       id: "msg-user-file-reference",
       kind: "user",
       displayText: "@src/angry-birds.js",
@@ -2862,12 +2862,12 @@ describe("stream trace reducer", () => {
         },
       ],
     })
-    expect(turns[0]?.kind === "user" ? turns[0].text : "").toContain("References: src/angry-birds.js")
-    expect(turns[0]?.kind === "user" ? turns[0].displayText : "").not.toContain("Referenced files:")
+    expect(messages[0]?.kind === "user" ? messages[0].text : "").toContain("References: src/angry-birds.js")
+    expect(messages[0]?.kind === "user" ? messages[0].displayText : "").not.toContain("Referenced files:")
   })
 
   it("keeps backend-only history parts as hidden system trace items with debug metadata", () => {
-    const turns = buildThreadMessagesFromHistory([
+    const messages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "msg-assistant-debug",
@@ -2899,14 +2899,14 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turns).toHaveLength(1)
-    expect(turns[0]?.kind === "assistant" ? turns[0].items.map((item) => item.kind) : []).toEqual(["system", "text", "system"])
+    expect(messages).toHaveLength(1)
+    expect(messages[0]?.kind === "assistant" ? messages[0].items.map((item) => item.kind) : []).toEqual(["system", "text", "system"])
 
-    const permissionItem = turns[0]?.kind === "assistant"
-      ? turns[0].items.find((item) => item.title === "Permission requested")
+    const permissionItem = messages[0]?.kind === "assistant"
+      ? messages[0].items.find((item) => item.title === "Permission requested")
       : null
-    const responseItem = turns[0]?.kind === "assistant"
-      ? turns[0].items.find((item) => item.kind === "text")
+    const responseItem = messages[0]?.kind === "assistant"
+      ? messages[0].items.find((item) => item.kind === "text")
       : null
 
     expect(permissionItem).toMatchObject({
@@ -2918,8 +2918,8 @@ describe("stream trace reducer", () => {
     expect(responseItem?.debugEntries?.some((entry) => entry.label === "part.id" && entry.value === "part-text-1")).toBe(true)
   })
 
-  it("summarizes user attachments when the persisted turn has no text content", () => {
-    const turns = buildThreadMessagesFromHistory([
+  it("summarizes user attachments when the persisted message has no text content", () => {
+    const messages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "msg-user-attachments",
@@ -2934,14 +2934,14 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turns).toHaveLength(1)
-    expect(turns[0]).toMatchObject({
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toMatchObject({
       id: "msg-user-attachments",
       kind: "user",
       text: "Sent 2 attachments: hero.png, brief.pdf",
       timestamp: 15,
     })
-    expect(turns[0]?.kind === "user" ? turns[0].attachments : null).toEqual([
+    expect(messages[0]?.kind === "user" ? messages[0].attachments : null).toEqual([
       { name: "hero.png" },
       { name: "brief.pdf" },
     ])
@@ -2956,8 +2956,8 @@ describe("stream trace reducer", () => {
     ).toBe("Review these references\n\nAttachments: hero.png, brief.pdf")
   })
 
-  it("keeps file references as structured metadata on optimistic user turns", () => {
-    const turn = buildUserThreadMessage({
+  it("keeps file references as structured metadata on optimistic user messages", () => {
+    const message = buildUserThreadMessage({
       displayText: "@src/angry-birds.js",
       references: [
         {
@@ -2970,7 +2970,7 @@ describe("stream trace reducer", () => {
       timestamp: 30,
     })
 
-    expect(turn).toMatchObject({
+    expect(message).toMatchObject({
       kind: "user",
       displayText: "@src/angry-birds.js",
       timestamp: 30,
@@ -2982,7 +2982,7 @@ describe("stream trace reducer", () => {
         },
       ],
     })
-    expect(turn.text).toContain("References: src/angry-birds.js")
+    expect(message.text).toContain("References: src/angry-birds.js")
   })
 
   it("summarizes structured references without expanding their prompt text", () => {
@@ -2993,8 +2993,8 @@ describe("stream trace reducer", () => {
     ).toBe("Sent reference: focus-files.tsx:L2-L3")
   })
 
-  it("adds an error trace when the persisted assistant turn failed", () => {
-    const turns = buildThreadMessagesFromHistory([
+  it("adds an error trace when the persisted assistant message failed", () => {
+    const messages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "msg-assistant-error",
@@ -3009,18 +3009,18 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turns).toHaveLength(1)
-    expect(turns[0]).toMatchObject({
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toMatchObject({
       id: "msg-assistant-error",
       kind: "assistant",
       state: "Backend request failed",
     })
-    expect(turns[0]?.kind === "assistant" ? turns[0].runtime.phase : null).toBe("failed")
-    expect(turns[0]?.kind === "assistant" ? turns[0].items.map((item) => item.kind) : []).toEqual(["error"])
+    expect(messages[0]?.kind === "assistant" ? messages[0].runtime.phase : null).toBe("failed")
+    expect(messages[0]?.kind === "assistant" ? messages[0].items.map((item) => item.kind) : []).toEqual(["error"])
   })
 
   it("labels assistant-level tool argument validation failures distinctly", () => {
-    const turns = buildThreadMessagesFromHistory([
+    const messages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "msg-assistant-tool-args-error",
@@ -3035,21 +3035,21 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turns).toHaveLength(1)
-    expect(turns[0]).toMatchObject({
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toMatchObject({
       id: "msg-assistant-tool-args-error",
       kind: "assistant",
       state: "Tool argument validation failed",
     })
-    expect(turns[0]?.kind === "assistant" ? turns[0].items[0] : null).toMatchObject({
+    expect(messages[0]?.kind === "assistant" ? messages[0].items[0] : null).toMatchObject({
       kind: "error",
       title: "Tool argument validation failed",
       detail: "Tool argument validation failed: Invalid input: expected record, received string",
     })
   })
 
-  it("restores failed assistant turns from turn outcome error info", () => {
-    const turns = buildThreadMessagesFromHistory([
+  it("restores failed assistant messages from backend turn outcome error info", () => {
+    const messages = buildThreadMessagesFromHistory([
       {
         info: {
           id: "msg-assistant-api-error",
@@ -3090,9 +3090,9 @@ describe("stream trace reducer", () => {
       },
     ])
 
-    expect(turns).toHaveLength(1)
-    expect(turns[0]?.kind === "assistant" ? turns[0].runtime.phase : null).toBe("failed")
-    expect(turns[0]?.kind === "assistant" ? turns[0].items[0] : null).toMatchObject({
+    expect(messages).toHaveLength(1)
+    expect(messages[0]?.kind === "assistant" ? messages[0].runtime.phase : null).toBe("failed")
+    expect(messages[0]?.kind === "assistant" ? messages[0].items[0] : null).toMatchObject({
       kind: "error",
       title: "Backend request failed: AI_APICallError",
       detail: "Internal server error",

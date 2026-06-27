@@ -48,7 +48,7 @@ function assistantMessage(id: string, text: string): AssistantThreadMessage {
   }
 }
 
-function assistantTraceTurn(id: string, items: AssistantTraceItem[], isStreaming: boolean): AssistantThreadMessage {
+function assistantTraceMessage(id: string, items: AssistantTraceItem[], isStreaming: boolean): AssistantThreadMessage {
   return {
     id,
     kind: "assistant",
@@ -286,7 +286,7 @@ describe("ThreadView trace item renderers", () => {
   it("renders every assistant trace item kind through the registry", () => {
     const activeMessages = traceItemKinds.flatMap<ThreadMessage>((kind, index) => [
       userMessage(`user-${kind}`, `Trigger ${kind}`),
-      assistantTraceTurn(`assistant-${kind}`, [traceSmokeItem(kind)], false),
+      assistantTraceMessage(`assistant-${kind}`, [traceSmokeItem(kind)], false),
       ...(index === traceItemKinds.length - 1 ? [] : [userMessage(`separator-${kind}`, `Next ${kind}`)]),
     ])
     const { container } = renderThread(activeMessages, {
@@ -313,7 +313,7 @@ describe("ThreadView trace item renderers", () => {
       toolStatusTraceItem("cancelled"),
     ]
     const { container } = renderThread([
-      assistantTraceTurn("assistant-tools", items, true),
+      assistantTraceMessage("assistant-tools", items, true),
     ])
 
     expect(container.querySelectorAll(".trace-kind-tool .trace-log-row")).toHaveLength(items.length)
@@ -357,15 +357,15 @@ describe("ThreadView trace item renderers", () => {
     expect(cancelledToolName).not.toHaveClass("is-running")
   })
 
-  it("renders pending tool traces as cancelled when the assistant turn is cancelled", () => {
-    const turn = assistantTraceTurn("assistant-cancelled", [toolStatusTraceItem("pending")], false)
-    turn.runtime = {
-      ...turn.runtime,
+  it("renders pending tool traces as cancelled when the assistant message is cancelled", () => {
+    const assistantMessage = assistantTraceMessage("assistant-cancelled", [toolStatusTraceItem("pending")], false)
+    assistantMessage.runtime = {
+      ...assistantMessage.runtime,
       phase: "cancelled",
     }
-    turn.state = "Backend stream cancelled"
+    assistantMessage.state = "Backend stream cancelled"
 
-    const { container } = renderThread([turn])
+    const { container } = renderThread([assistantMessage])
 
     expect(screen.getByRole("button", { name: /Tool pending/ })).toBeInTheDocument()
     expect(container.querySelector(".trace-kind-tool.is-pending")).toBeNull()
@@ -386,7 +386,7 @@ describe("ThreadView trace item renderers", () => {
     }
 
     const { container } = renderThread([
-      assistantTraceTurn("assistant-streaming-shell", [toolItem], true),
+      assistantTraceMessage("assistant-streaming-shell", [toolItem], true),
     ])
 
     const toolName = container.querySelector(".trace-kind-tool .trace-tool-name")
@@ -398,7 +398,7 @@ describe("ThreadView trace item renderers", () => {
   it("keeps tool details available after expanding compact summaries", () => {
     renderThread(
       [
-        assistantTraceTurn("assistant-tools", [toolStatusTraceItem("running")], true),
+        assistantTraceMessage("assistant-tools", [toolStatusTraceItem("running")], true),
       ],
       {
         assistantTraceVisibility: {
@@ -423,7 +423,7 @@ describe("ThreadView trace item renderers", () => {
     }
     const { container } = renderThread(
       [
-        assistantTraceTurn("assistant-tools", [toolItem], false),
+        assistantTraceMessage("assistant-tools", [toolItem], false),
       ],
       {
         assistantTraceVisibility: {
@@ -460,7 +460,7 @@ describe("ThreadView trace item renderers", () => {
     const threadColumnRef = createRef<HTMLDivElement | null>()
     const props = createThreadProps(
       [
-        assistantTraceTurn("assistant-tools", [toolItem], false),
+        assistantTraceMessage("assistant-tools", [toolItem], false),
       ],
       threadColumnRef,
       {
@@ -510,7 +510,7 @@ describe("ThreadView trace item renderers", () => {
 
     renderThread(
       [
-        assistantTraceTurn("assistant-tools", [toolItem], false),
+        assistantTraceMessage("assistant-tools", [toolItem], false),
       ],
       {
         assistantTraceVisibility: {
@@ -530,7 +530,7 @@ describe("ThreadView trace item renderers", () => {
   it("renders workflow step trace items as lightweight log rows", () => {
     const { container } = renderThread(
       [
-        assistantTraceTurn(
+        assistantTraceMessage(
           "assistant-step",
           [
             {
@@ -588,7 +588,7 @@ describe("ThreadView side chat sessions", () => {
 })
 
 describe("ThreadView question prompts", () => {
-  it("keeps option buttons clickable while the assistant turn is waiting for an answer", () => {
+  it("keeps option buttons clickable while the assistant message is waiting for an answer", () => {
     const onAskUserQuestionAnswer = vi.fn().mockResolvedValue(undefined)
     const questionItem: AssistantTraceItem = {
       id: "question-1",
@@ -609,7 +609,7 @@ describe("ThreadView question prompts", () => {
       },
     }
     const { getByRole } = renderThread(
-      [assistantTraceTurn("assistant-1", [questionItem], true)],
+      [assistantTraceMessage("assistant-1", [questionItem], true)],
       { onAskUserQuestionAnswer },
     )
 
@@ -644,7 +644,7 @@ describe("ThreadView question prompts", () => {
       },
     }
     const { getByLabelText, queryByRole } = renderThread(
-      [assistantTraceTurn("assistant-1", [questionItem], false)],
+      [assistantTraceMessage("assistant-1", [questionItem], false)],
       { onAskUserQuestionAnswer: vi.fn().mockResolvedValue(undefined) },
     )
 
@@ -672,7 +672,7 @@ describe("ThreadView question prompts", () => {
       },
     }
     const { getByLabelText, getByText } = renderThread(
-      [assistantTraceTurn("assistant-1", [questionItem], false)],
+      [assistantTraceMessage("assistant-1", [questionItem], false)],
       { onAskUserQuestionAnswer: vi.fn().mockResolvedValue(undefined) },
     )
 
@@ -725,7 +725,7 @@ describe("ThreadView image trace items", () => {
     ]
 
     const { container, getByAltText, getByRole } = renderThread([
-      assistantTraceTurn("assistant-images", items, false),
+      assistantTraceMessage("assistant-images", items, false),
     ])
 
     expect(getByAltText("First preview")).toHaveAttribute("src", "https://example.com/first.png")
@@ -766,7 +766,7 @@ describe("ThreadView image trace items", () => {
       status: "completed",
     }
     const { getByRole, queryByRole } = renderThread([
-      assistantTraceTurn("assistant-patch", [patchItem], false),
+      assistantTraceMessage("assistant-patch", [patchItem], false),
     ], {
       onFileChangeSelect,
     })
@@ -805,7 +805,7 @@ describe("ThreadView image trace items", () => {
     }
 
     const { container, getByRole, getByText } = renderThread([
-      assistantTraceTurn("assistant-patch-static", [patchItem], false),
+      assistantTraceMessage("assistant-patch-static", [patchItem], false),
     ])
 
     expect(getByRole("button", { name: "已编辑 1 个文件" })).toHaveAttribute("aria-expanded", "false")
@@ -857,7 +857,7 @@ describe("ThreadView image trace items", () => {
     }
 
     const { container, getByRole } = renderThread([
-      assistantTraceTurn("assistant-patch-large", [patchItem], false),
+      assistantTraceMessage("assistant-patch-large", [patchItem], false),
     ])
 
     fireEvent.click(getByRole("button", { name: "已编辑 1 个文件" }))
@@ -912,7 +912,7 @@ describe("ThreadView image trace items", () => {
     }
 
     const { container, getAllByText, getByRole, getByText } = renderThread([
-      assistantTraceTurn("assistant-patch-draft", [toolItem], true),
+      assistantTraceMessage("assistant-patch-draft", [toolItem], true),
     ])
 
     expect(getByRole("region", { name: "Tools" })).toBeInTheDocument()
@@ -976,7 +976,7 @@ describe("ThreadView image trace items", () => {
     })
 
     const { container, props, rerender } = renderThread([
-      assistantTraceTurn("assistant-patch-draft", [
+      assistantTraceMessage("assistant-patch-draft", [
         buildToolItem([
           { content: "line 1", tone: "add" },
           { content: "line 2", tone: "add" },
@@ -994,7 +994,7 @@ describe("ThreadView image trace items", () => {
       <ThreadView
         {...props}
         activeMessages={[
-          assistantTraceTurn("assistant-patch-draft", [
+          assistantTraceMessage("assistant-patch-draft", [
             buildToolItem(Array.from({ length: 12 }, (_, index) => ({
               content: `line ${index + 1}`,
               tone: "add",
@@ -1045,7 +1045,7 @@ describe("ThreadView image trace items", () => {
     }
 
     const { container, getByRole, queryByText } = renderThread([
-      assistantTraceTurn("assistant-patch-draft-completed", [toolItem], false),
+      assistantTraceMessage("assistant-patch-draft-completed", [toolItem], false),
     ])
 
     const inlineSummary = container.querySelector(".trace-log-row .trace-tool-inline-draft-patch-summary")
@@ -1103,7 +1103,7 @@ describe("ThreadView image trace items", () => {
     }
 
     const { container, getByRole, getByText } = renderThread([
-      assistantTraceTurn("assistant-patch-draft-failed", [toolItem], false),
+      assistantTraceMessage("assistant-patch-draft-failed", [toolItem], false),
     ])
 
     const inlineSummary = container.querySelector(".trace-tool-inline-draft-patch-summary")
@@ -1150,7 +1150,7 @@ describe("ThreadView image trace items", () => {
     } as unknown as AssistantTraceItem
 
     const { container } = renderThread([
-      assistantTraceTurn("assistant-patch-draft-malformed-hunk", [toolItem], false),
+      assistantTraceMessage("assistant-patch-draft-malformed-hunk", [toolItem], false),
     ])
 
     expect(screen.getByText("src/safe.ts")).toBeInTheDocument()
@@ -1181,7 +1181,7 @@ describe("ThreadView image trace items", () => {
     } as unknown as AssistantTraceItem
 
     const { container } = renderThread([
-      assistantTraceTurn("assistant-patch-draft-malformed-files", [toolItem], false),
+      assistantTraceMessage("assistant-patch-draft-malformed-files", [toolItem], false),
     ])
 
     expect(screen.getByText("apply_patch")).toBeInTheDocument()
@@ -1213,7 +1213,7 @@ describe("ThreadView image trace items", () => {
 
     const { getByRole } = renderThread(
       [
-        assistantTraceTurn("assistant-patch-debug", [patchItem], false),
+        assistantTraceMessage("assistant-patch-debug", [patchItem], false),
       ],
       {
         assistantTraceVisibility: {
@@ -1248,7 +1248,7 @@ describe("ThreadView image trace items", () => {
     }
 
     const { getByRole, getByText, queryByText } = renderThread([
-      assistantTraceTurn("assistant-patch-ordinary", [patchItem], false),
+      assistantTraceMessage("assistant-patch-ordinary", [patchItem], false),
     ])
 
     expect(getByRole("button", { name: "已编辑 1 个文件" })).toBeInTheDocument()
@@ -1277,7 +1277,7 @@ describe("ThreadView image trace items", () => {
       },
     ]
     const { getByRole, queryByRole } = renderThread([
-      assistantTraceTurn("assistant-images", items, false),
+      assistantTraceMessage("assistant-images", items, false),
     ])
 
     const previewButton = getByRole("button", { name: "Preview First preview" })
@@ -1324,7 +1324,7 @@ describe("ThreadView image trace items", () => {
       },
     ]
     const { getByRole, queryByRole } = renderThread([
-      assistantTraceTurn("assistant-images", items, false),
+      assistantTraceMessage("assistant-images", items, false),
     ])
 
     fireEvent.click(getByRole("button", { name: "Preview Tall preview" }))
@@ -1353,7 +1353,7 @@ describe("ThreadView image trace items", () => {
       },
     ]
     const { getByRole } = renderThread([
-      assistantTraceTurn("assistant-images", items, false),
+      assistantTraceMessage("assistant-images", items, false),
     ])
 
     fireEvent.click(getByRole("button", { name: "Preview First preview" }))
@@ -1390,7 +1390,7 @@ describe("ThreadView image trace items", () => {
       },
     ]
     const { getByRole, queryByRole } = renderThread([
-      assistantTraceTurn("assistant-images", items, false),
+      assistantTraceMessage("assistant-images", items, false),
     ])
 
     fireEvent.click(getByRole("button", { name: "Preview First preview" }))
@@ -1421,7 +1421,7 @@ describe("ThreadView image trace items", () => {
       },
     ]
     const { getByAltText, getByRole, queryByRole } = renderThread([
-      assistantTraceTurn("assistant-images", items, false),
+      assistantTraceMessage("assistant-images", items, false),
     ])
 
     const thumbnail = getByAltText("Broken preview")
@@ -1438,7 +1438,7 @@ describe("ThreadView image trace items", () => {
 describe("ThreadView trace collapse", () => {
   it("collapses completed reasoning to the first line and expands from the section", () => {
     const { container, getByText } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -1481,7 +1481,7 @@ describe("ThreadView trace collapse", () => {
 
   it("renders expanded reasoning as plain full content", () => {
     const { container, getByRole, getByText } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -1514,7 +1514,7 @@ describe("ThreadView trace collapse", () => {
     const longReasoningLine =
       "The user wants to test the availability of all tools. Let me run a few simple test commands to verify that different tools are working."
     const { getByText, queryByRole } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -1543,7 +1543,7 @@ describe("ThreadView trace collapse", () => {
     expect(queryByRole("region", { name: "Reasoning content" })).toBeNull()
   })
 
-  it("keeps streaming reasoning open, then animates reasoning and tool content closed when the turn completes", () => {
+  it("keeps streaming reasoning open, then animates reasoning and tool content closed when the assistant message completes", () => {
     vi.useFakeTimers()
     const streamingItems: AssistantTraceItem[] = [
       {
@@ -1581,7 +1581,7 @@ describe("ThreadView trace collapse", () => {
     ]
     try {
       const { container, getByRole, props, rerender } = renderThread([
-        assistantTraceTurn("assistant-1", streamingItems, true),
+        assistantTraceMessage("assistant-1", streamingItems, true),
       ])
 
       expect(container.textContent).toContain("Then compare the rendering states")
@@ -1589,7 +1589,7 @@ describe("ThreadView trace collapse", () => {
       fireEvent.click(getByRole("button", { name: /Shell/ }))
       expect(container.textContent).toContain("Input")
 
-      rerender(<ThreadView {...props} activeMessages={[assistantTraceTurn("assistant-1", completedItems, false)]} />)
+      rerender(<ThreadView {...props} activeMessages={[assistantTraceMessage("assistant-1", completedItems, false)]} />)
 
       expect(container.textContent).toContain("Inspect files first")
       expect(container.textContent).toContain("Then compare the rendering states")
@@ -1609,9 +1609,9 @@ describe("ThreadView trace collapse", () => {
     }
   })
 
-  it("collapses completed reasoning parts while the turn is still streaming", () => {
+  it("collapses completed reasoning parts while the assistant message is still streaming", () => {
     const { container, getByText } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -1652,7 +1652,7 @@ describe("ThreadView trace collapse", () => {
     const hiddenTail = "FULL_REASONING_TAIL"
     const longReasoningLine = `${"Scanning context. ".repeat(50)}${hiddenTail}`
     const { container } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -1682,7 +1682,7 @@ describe("ThreadView trace collapse", () => {
     const hiddenTail = "FULL_TOOL_INPUT_TAIL"
     const toolInputText = `${"input chunk ".repeat(160)}${hiddenTail}`
     const { container, getByRole, getByText } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-tool-preview",
         [
           {
@@ -1716,7 +1716,7 @@ describe("ThreadView trace collapse", () => {
 
   it("collapses process trace before the final assistant response", () => {
     const { getByRole, getByText, queryByText } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -1760,8 +1760,8 @@ describe("ThreadView trace collapse", () => {
     expect(getByText("list-directory")).toBeInTheDocument()
   })
 
-  it("does not collapse process trace while the assistant turn is not terminal", () => {
-    const turn = assistantTraceTurn(
+  it("does not collapse process trace while the assistant message is not terminal", () => {
+    const assistantMessage = assistantTraceMessage(
       "assistant-1",
       [
         {
@@ -1794,9 +1794,9 @@ describe("ThreadView trace collapse", () => {
 
     const { getByText, queryByRole } = renderThread([
       {
-        ...turn,
+        ...assistantMessage,
         runtime: {
-          ...turn.runtime,
+          ...assistantMessage.runtime,
           phase: "waiting_llm",
         },
         state: "waiting_llm",
@@ -1809,8 +1809,8 @@ describe("ThreadView trace collapse", () => {
     expect(getByText("Now I will start the child agents.")).toBeInTheDocument()
   })
 
-  it("does not duplicate unfinished task turns in the final response process trace", () => {
-    const taskMessage = assistantTraceTurn(
+  it("does not duplicate unfinished task messages in the final response process trace", () => {
+    const taskMessage = assistantTraceMessage(
       "assistant-task",
       [
         {
@@ -1833,7 +1833,7 @@ describe("ThreadView trace collapse", () => {
     const { container, getByText, queryByRole } = renderThread([
       userMessage("user-1", "Create task and continue."),
       taskMessage,
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-final",
         [
           {
@@ -1855,8 +1855,8 @@ describe("ThreadView trace collapse", () => {
     expect(container.querySelectorAll(".trace-kind-tool")).toHaveLength(1)
   })
 
-  it("orders adjacent live assistant turns by trace time when they arrive out of sequence", () => {
-    const spawnTurn = assistantTraceTurn(
+  it("orders adjacent live assistant messages by trace time when they arrive out of sequence", () => {
+    const spawnMessage = assistantTraceMessage(
       "assistant-spawn",
       [
         {
@@ -1878,7 +1878,7 @@ describe("ThreadView trace collapse", () => {
       ],
       true,
     )
-    const taskMessage = assistantTraceTurn(
+    const taskMessage = assistantTraceMessage(
       "assistant-task",
       [
         {
@@ -1903,7 +1903,7 @@ describe("ThreadView trace collapse", () => {
 
     const { getByText } = renderThread([
       userMessage("user-1", "Use multiagent."),
-      spawnTurn,
+      spawnMessage,
       taskMessage,
     ])
 
@@ -1913,8 +1913,8 @@ describe("ThreadView trace collapse", () => {
     expect(taskText.compareDocumentPosition(spawnText) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it("preserves completed adjacent assistant turn order after live ordering settles", () => {
-    const spawnTurn = assistantTraceTurn(
+  it("preserves completed adjacent assistant message order after live ordering settles", () => {
+    const spawnMessage = assistantTraceMessage(
       "assistant-spawn",
       [
         {
@@ -1928,7 +1928,7 @@ describe("ThreadView trace collapse", () => {
       ],
       false,
     )
-    const taskMessage = assistantTraceTurn(
+    const taskMessage = assistantTraceMessage(
       "assistant-task",
       [
         {
@@ -1945,7 +1945,7 @@ describe("ThreadView trace collapse", () => {
 
     const { getByText } = renderThread([
       userMessage("user-1", "Use multiagent."),
-      spawnTurn,
+      spawnMessage,
       taskMessage,
     ])
 
@@ -1957,7 +1957,7 @@ describe("ThreadView trace collapse", () => {
 
   it("renders the whole process trace header as the collapse button", () => {
     const { getByRole } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -1991,7 +1991,7 @@ describe("ThreadView trace collapse", () => {
   })
 
   it("uses folded process item timestamps for the process trace duration", () => {
-    const processTurn = assistantTraceTurn(
+    const processMessage = assistantTraceMessage(
       "assistant-process",
       [
         {
@@ -2021,12 +2021,12 @@ describe("ThreadView trace collapse", () => {
       ],
       false,
     )
-    processTurn.runtime = {
+    processMessage.runtime = {
       phase: "completed",
       startedAt: 100_000,
       updatedAt: 220_000,
     }
-    const finalTurn = assistantTraceTurn(
+    const finalMessage = assistantTraceMessage(
       "assistant-final",
       [
         {
@@ -2040,13 +2040,13 @@ describe("ThreadView trace collapse", () => {
       ],
       false,
     )
-    finalTurn.runtime = {
+    finalMessage.runtime = {
       phase: "completed",
       startedAt: 220_000,
       updatedAt: 228_000,
     }
 
-    const { getByRole } = renderThread([userMessage("user-1", "Prompt"), processTurn, finalTurn])
+    const { getByRole } = renderThread([userMessage("user-1", "Prompt"), processMessage, finalMessage])
 
     const processedTrace = getByRole("button", { name: /Processed/ })
     expect(processedTrace).toHaveTextContent("2m 8s")
@@ -2060,7 +2060,7 @@ describe("ThreadView trace collapse", () => {
     const threadColumnRef = createRef<HTMLDivElement | null>()
     const props = createThreadProps(
       [
-        assistantTraceTurn(
+        assistantTraceMessage(
           "assistant-1",
           [
             {
@@ -2103,7 +2103,7 @@ describe("ThreadView trace collapse", () => {
 
   it("renders a single short reasoning note before the final response without Processed", () => {
     const { getByText, queryByRole } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -2134,7 +2134,7 @@ describe("ThreadView trace collapse", () => {
 
   it("keeps inlined short reasoning disclosure behavior unchanged", () => {
     const { container, getByText, queryByRole } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -2176,7 +2176,7 @@ describe("ThreadView trace collapse", () => {
 
   it("keeps multiple reasoning notes before the final response inside Processed", () => {
     const { getByRole, getByText, queryByText } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -2223,7 +2223,7 @@ describe("ThreadView trace collapse", () => {
     const longReasoning =
       "I need to inspect the existing thread rendering behavior, compare the process trace grouping rules, update the eligibility guard, and make sure the final answer remains easy to scan without hiding meaningful work."
     const { getByRole, getByText, queryByText } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -2257,7 +2257,7 @@ describe("ThreadView trace collapse", () => {
     expect(getByText(longReasoning)).toBeInTheDocument()
   })
 
-  it("animates the process trace closed when a streaming turn completes", async () => {
+  it("animates the process trace closed when a streaming assistant message completes", async () => {
     vi.useFakeTimers()
     const streamingItems: AssistantTraceItem[] = [
       {
@@ -2296,13 +2296,13 @@ describe("ThreadView trace collapse", () => {
 
     try {
       const { container, getByRole, getByText, props, queryByText, rerender } = renderThread([
-        assistantTraceTurn("assistant-1", streamingItems, true),
+        assistantTraceMessage("assistant-1", streamingItems, true),
       ])
 
       expect(queryByText("Processed")).toBeNull()
       expect(getByText("I will inspect the project first.")).toBeInTheDocument()
 
-      rerender(<ThreadView {...props} activeMessages={[assistantTraceTurn("assistant-1", completedItems, false)]} />)
+      rerender(<ThreadView {...props} activeMessages={[assistantTraceMessage("assistant-1", completedItems, false)]} />)
 
       const processedTrace = getByRole("button", { name: /Processed/ })
       expect(processedTrace).toHaveAttribute("aria-expanded", "false")
@@ -2350,7 +2350,7 @@ describe("ThreadView trace collapse", () => {
     try {
       const { getByRole, getByText, threadColumn } = renderThread(
         [
-          assistantTraceTurn(
+          assistantTraceMessage(
             "assistant-1",
             [
               {
@@ -2408,7 +2408,7 @@ describe("ThreadView trace collapse", () => {
   })
 
   it("collapses process trace when a failed tool is followed by a final response", () => {
-    const turn = assistantTraceTurn(
+    const assistantMessage = assistantTraceMessage(
       "assistant-1",
       [
         {
@@ -2441,9 +2441,9 @@ describe("ThreadView trace collapse", () => {
 
     const { getByRole, getByText, queryByText } = renderThread([
       {
-        ...turn,
+        ...assistantMessage,
         runtime: {
-          ...turn.runtime,
+          ...assistantMessage.runtime,
           phase: "failed",
         },
         state: "Backend stream failed",
@@ -2473,7 +2473,7 @@ describe("ThreadView assistant response markdown", () => {
     } as unknown as Window["desktop"]
 
     const { getByRole } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -2505,7 +2505,7 @@ describe("ThreadView assistant response markdown", () => {
     } as unknown as Window["desktop"]
 
     const { getByRole } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -2542,7 +2542,7 @@ describe("ThreadView assistant response markdown", () => {
     const originalElementsFromPoint = document.elementsFromPoint
 
     const { getByRole } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -2588,7 +2588,7 @@ describe("ThreadView assistant response markdown", () => {
 
   it("renders assistant response markdown as semantic elements", () => {
     const { container, getByRole } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -2620,7 +2620,7 @@ describe("ThreadView assistant response markdown", () => {
 
   it("renders assistant response HTML when the first-line marker requests HTML", () => {
     const { container } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -2656,7 +2656,7 @@ describe("ThreadView assistant response markdown", () => {
 
   it("keeps assistant response Markdown when the first-line marker requests Markdown", () => {
     const { container, getByRole } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -2680,7 +2680,7 @@ describe("ThreadView assistant response markdown", () => {
   it("opens local file links from completed assistant response markdown", () => {
     const onLocalFileLinkOpen = vi.fn()
     const { getByRole } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -2712,7 +2712,7 @@ describe("ThreadView assistant response markdown", () => {
   it("opens local file links from streaming assistant response rich text", () => {
     const onLocalFileLinkOpen = vi.fn()
     const { getByRole } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -2761,7 +2761,7 @@ describe("ThreadView assistant response markdown", () => {
     const proposedPlan = createProposedPlan()
 
     const { getByRole, queryByText } = renderThread([
-      assistantTraceTurn("assistant-1", [
+      assistantTraceMessage("assistant-1", [
         {
           id: "response-1",
           kind: "text",
@@ -2787,7 +2787,7 @@ describe("ThreadView assistant response markdown", () => {
     const proposedPlan = `I will draft the plan now.\n\n${createProposedPlan("Prefaced Plan")}`
 
     const { getByRole, queryByText } = renderThread([
-      assistantTraceTurn("assistant-1", [
+      assistantTraceMessage("assistant-1", [
         {
           id: "response-1",
           kind: "text",
@@ -2814,7 +2814,7 @@ describe("ThreadView assistant response markdown", () => {
     const proposedPlan = createProposedPlan()
 
     const { getByRole, queryByRole, getByText } = renderThread([
-      assistantTraceTurn("assistant-1", [
+      assistantTraceMessage("assistant-1", [
         {
           id: "response-1",
           kind: "text",
@@ -2841,7 +2841,7 @@ describe("ThreadView assistant response markdown", () => {
     const proposedPlan = createProposedPlan()
 
     const { getByRole, queryByRole, getByText } = renderThread([
-      assistantTraceTurn("assistant-1", [
+      assistantTraceMessage("assistant-1", [
         {
           id: "response-1",
           kind: "text",
@@ -2868,7 +2868,7 @@ describe("ThreadView assistant response markdown", () => {
     const proposedPlan = createProposedPlan()
 
     const { getByRole, getByText } = renderThread([
-      assistantTraceTurn("assistant-1", [
+      assistantTraceMessage("assistant-1", [
         {
           id: "response-1",
           kind: "text",
@@ -2893,7 +2893,7 @@ describe("ThreadView assistant response markdown", () => {
     const proposedPlan = createProposedPlan("Historical Plan")
 
     const { getByRole, queryByRole, queryByText } = renderThread([
-      assistantTraceTurn("assistant-1", [
+      assistantTraceMessage("assistant-1", [
         {
           id: "response-1",
           kind: "text",
@@ -2912,10 +2912,10 @@ describe("ThreadView assistant response markdown", () => {
     expect(queryByRole("button", { name: "确认实施" })).not.toBeInTheDocument()
   })
 
-  it("hides proposed plan actions once a newer turn appears", () => {
+  it("hides proposed plan actions once a newer message appears", () => {
     const onProposedPlanConfirm = vi.fn()
     const proposedPlan = createProposedPlan("Fresh Plan")
-    const planTurn = assistantTraceTurn("assistant-1", [
+    const planMessage = assistantTraceMessage("assistant-1", [
       {
         id: "response-1",
         kind: "text",
@@ -2926,14 +2926,14 @@ describe("ThreadView assistant response markdown", () => {
       },
     ], false)
 
-    const { getByRole, props, queryByRole, queryByText, rerender } = renderThread([planTurn], {
+    const { getByRole, props, queryByRole, queryByText, rerender } = renderThread([planMessage], {
       onProposedPlanConfirm,
     })
 
     expect(getByRole("button", { name: "取消" })).toBeEnabled()
     expect(getByRole("button", { name: "确认实施" })).toBeEnabled()
 
-    rerender(<ThreadView {...props} activeMessages={[planTurn, userMessage("user-1", "Continue")]} />)
+    rerender(<ThreadView {...props} activeMessages={[planMessage, userMessage("user-1", "Continue")]} />)
 
     expect(getByRole("heading", { name: "Fresh Plan" })).toBeInTheDocument()
     expect(queryByText("已过期")).not.toBeInTheDocument()
@@ -2952,7 +2952,7 @@ describe("ThreadView assistant response markdown", () => {
     ].join("\n")
 
     const { getByRole, queryByText } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -3008,14 +3008,14 @@ describe("ThreadView assistant response markdown", () => {
     })
 
     const { getByRole, props, rerender } = renderThread([
-      assistantTraceTurn("assistant-1", [buildResponseItem(partialPlan)], true),
+      assistantTraceMessage("assistant-1", [buildResponseItem(partialPlan)], true),
     ], {
       onProposedPlanConfirm,
     })
 
     expect(getByRole("button", { name: "确认实施" })).toBeDisabled()
 
-    rerender(<ThreadView {...props} activeMessages={[assistantTraceTurn("assistant-1", [buildResponseItem(completePlan)], true)]} />)
+    rerender(<ThreadView {...props} activeMessages={[assistantTraceMessage("assistant-1", [buildResponseItem(completePlan)], true)]} />)
 
     expect(getByRole("button", { name: "取消" })).toBeEnabled()
     expect(getByRole("button", { name: "确认实施" })).toBeEnabled()
@@ -3026,7 +3026,7 @@ describe("ThreadView assistant response markdown", () => {
 
   it("keeps reasoning and tool markdown-like content as plain rich text", () => {
     const { container, getByRole, queryByRole } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -3064,7 +3064,7 @@ describe("ThreadView assistant response markdown", () => {
 
   it("renders streaming responses as Markdown before completion", () => {
     const { container } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -3093,7 +3093,7 @@ describe("ThreadView assistant response markdown", () => {
 
   it("renders streaming Markdown-marked responses as Markdown without showing the marker", () => {
     const { container, getByRole } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -3121,7 +3121,7 @@ describe("ThreadView assistant response markdown", () => {
 
   it("hides response format markers while keeping streaming HTML-marked responses on the rich text path", () => {
     const { container } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -3150,7 +3150,7 @@ describe("ThreadView assistant response markdown", () => {
 })
 
 describe("ThreadView message actions", () => {
-  it("copies user message text from the user turn action", () => {
+  it("copies user message text from the user message action", () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -3204,8 +3204,8 @@ describe("ThreadView message actions", () => {
     }
   })
 
-  it("renders steering submission status on user turns", () => {
-    const insertedTurn: UserThreadMessage = {
+  it("renders steering submission status on user messages", () => {
+    const insertedMessage: UserThreadMessage = {
       ...userMessage("user-steer", "Adjust the current task"),
       submissionMode: "steer",
       streamInsertion: {
@@ -3216,7 +3216,7 @@ describe("ThreadView message actions", () => {
     }
 
     renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-live",
         [
           {
@@ -3230,21 +3230,21 @@ describe("ThreadView message actions", () => {
         ],
         false,
       ),
-      insertedTurn,
+      insertedMessage,
     ])
 
     expect(screen.getByText("提交，但不中断模型运行")).toBeInTheDocument()
     expect(screen.getByText("下次模型/工具调用后")).toBeInTheDocument()
   })
 
-  it("renders active steer-marked user turns without insertion metadata as committed messages", () => {
+  it("renders active steer-marked user messages without insertion metadata as committed messages", () => {
     const steerMessage: UserThreadMessage = {
       ...userMessage("user-steer", "Adjust during tool input"),
       submissionMode: "steer",
     }
 
     const { container } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-live",
         [
           {
@@ -3261,18 +3261,18 @@ describe("ThreadView message actions", () => {
       steerMessage,
     ])
 
-    expect(container.querySelectorAll(".user-turn")).toHaveLength(1)
+    expect(container.querySelectorAll(".user-message")).toHaveLength(1)
     expect(screen.getByText("Adjust during tool input")).toBeInTheDocument()
   })
 
-  it("renders active queued-marked user turns as committed messages", () => {
+  it("renders active queued-marked user messages as committed messages", () => {
     const queuedMessage: UserThreadMessage = {
       ...userMessage("user-queued", "Adjust patch target"),
       submissionMode: "queued",
     }
 
     const { container } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-live",
         [
           {
@@ -3290,12 +3290,12 @@ describe("ThreadView message actions", () => {
       queuedMessage,
     ])
 
-    expect(container.querySelectorAll(".user-turn")).toHaveLength(1)
+    expect(container.querySelectorAll(".user-message")).toHaveLength(1)
     expect(screen.getByText("Adjust patch target")).toBeInTheDocument()
   })
 
-  it("renders stream-inserted steer turns between live assistant trace items", () => {
-    const insertedTurn: UserThreadMessage = {
+  it("renders stream-inserted steer messages between live assistant trace items", () => {
+    const insertedMessage: UserThreadMessage = {
       ...userMessage("user-steer", "Adjust the current task"),
       submissionMode: "steer",
       streamInsertion: {
@@ -3304,7 +3304,7 @@ describe("ThreadView message actions", () => {
       },
     }
     const { container } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-live",
         [
           {
@@ -3326,18 +3326,18 @@ describe("ThreadView message actions", () => {
         ],
         true,
       ),
-      insertedTurn,
+      insertedMessage,
     ])
 
     const text = container.textContent ?? ""
     expect(text.indexOf("Before steer")).toBeLessThan(text.indexOf("Adjust the current task"))
     expect(text.indexOf("Adjust the current task")).toBeLessThan(text.indexOf("After steer"))
-    expect(container.querySelectorAll(".user-turn")).toHaveLength(1)
-    expect(container.querySelector(".assistant-stream-insertion-user-turn")).not.toBeNull()
+    expect(container.querySelectorAll(".user-message")).toHaveLength(1)
+    expect(container.querySelector(".assistant-stream-insertion-user-message")).not.toBeNull()
   })
 
-  it("places stream-inserted steer turns after the following tool call", () => {
-    const insertedTurn: UserThreadMessage = {
+  it("places stream-inserted steer messages after the following tool call", () => {
+    const insertedMessage: UserThreadMessage = {
       ...userMessage("user-steer", "Hello during tool step"),
       submissionMode: "steer",
       streamInsertion: {
@@ -3346,7 +3346,7 @@ describe("ThreadView message actions", () => {
       },
     }
     const { container } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-live",
         [
           {
@@ -3376,7 +3376,7 @@ describe("ThreadView message actions", () => {
         ],
         true,
       ),
-      insertedTurn,
+      insertedMessage,
     ])
 
     const text = container.textContent ?? ""
@@ -3385,7 +3385,7 @@ describe("ThreadView message actions", () => {
     expect(text.indexOf("Hello during tool step")).toBeLessThan(text.indexOf("After the steer"))
   })
 
-  it("renders assistant turn file changes after the final assistant output and handles card actions", async () => {
+  it("renders assistant message file changes after the final assistant output and handles card actions", async () => {
     const onFileChangeSelect = vi.fn()
     const onMessageDiffReview = vi.fn().mockResolvedValue(undefined)
     const onMessageDiffRestore = vi.fn().mockResolvedValue(undefined)
@@ -3419,7 +3419,7 @@ describe("ThreadView message actions", () => {
     const { getByRole, getByText, queryByRole } = renderThread(
       [
         userMessage("user-with-diff", "Update the app"),
-        assistantTraceTurn(
+        assistantTraceMessage(
           "assistant-first",
           [
             {
@@ -3434,7 +3434,7 @@ describe("ThreadView message actions", () => {
           false,
         ),
         {
-          ...assistantTraceTurn(
+          ...assistantTraceMessage(
             "assistant-final",
             [
               {
@@ -3504,13 +3504,13 @@ describe("ThreadView message actions", () => {
     confirmRestore.mockRestore()
   })
 
-  it("hydrates turn file change rows from the assistant patch trace before expanding inline", () => {
+  it("hydrates message file change rows from the assistant patch trace before expanding inline", () => {
     const onFileChangeSelect = vi.fn()
     renderThread(
       [
         userMessage("user-diff-summary-only", "Create a Tetris game"),
         {
-          ...assistantTraceTurn(
+          ...assistantTraceMessage(
             "assistant-tetris",
             [
               {
@@ -3562,10 +3562,10 @@ describe("ThreadView message actions", () => {
     expect(onFileChangeSelect).not.toHaveBeenCalled()
   })
 
-  it("keeps inline diffs scoped to each turn when the same file changes later", () => {
+  it("keeps inline diffs scoped to each message when the same file changes later", () => {
     const buildDiffUserMessage = (id: string): UserThreadMessage => userMessage(id, "Update shared file")
     const buildPatchAssistantMessage = (id: string, oldValue: string, newValue: string): AssistantThreadMessage => ({
-      ...assistantTraceTurn(
+      ...assistantTraceMessage(
         id,
         [
           {
@@ -3606,28 +3606,28 @@ describe("ThreadView message actions", () => {
 
     renderThread([
       buildDiffUserMessage("user-first-diff"),
-      buildPatchAssistantMessage("assistant-first-diff", "old", "first turn"),
+      buildPatchAssistantMessage("assistant-first-diff", "old", "first message"),
       buildDiffUserMessage("user-second-diff"),
-      buildPatchAssistantMessage("assistant-second-diff", "first turn", "second turn"),
+      buildPatchAssistantMessage("assistant-second-diff", "first message", "second message"),
     ])
 
     const sharedFileButtons = screen.getAllByRole("button", { name: "展开 src/shared.ts 变更" })
     fireEvent.click(sharedFileButtons[0]!)
 
     expect(screen.getByText('const value = "old"')).toBeInTheDocument()
-    expect(screen.getByText('const value = "first turn"')).toBeInTheDocument()
-    expect(screen.queryByText('const value = "second turn"')).not.toBeInTheDocument()
+    expect(screen.getByText('const value = "first message"')).toBeInTheDocument()
+    expect(screen.queryByText('const value = "second message"')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "展开 src/shared.ts 变更" }))
 
-    expect(screen.getByText('const value = "second turn"')).toBeInTheDocument()
+    expect(screen.getByText('const value = "second message"')).toBeInTheDocument()
   })
 
-  it("uses the active workspace diff only for the latest turn without a saved patch", () => {
+  it("uses the active workspace diff only for the latest message without a saved patch", () => {
     const onMessageDiffSummaryHydrate = vi.fn()
     const buildDiffUserMessage = (id: string): UserThreadMessage => userMessage(id, "Update shared file")
     const buildDiffAssistantMessage = (id: string, text: string): AssistantThreadMessage => ({
-      ...assistantTraceTurn(
+      ...assistantTraceMessage(
         id,
         [
           {
@@ -3654,9 +3654,9 @@ describe("ThreadView message actions", () => {
     renderThread(
       [
         buildDiffUserMessage("user-old-summary"),
-        buildDiffAssistantMessage("assistant-old-summary", "Old turn finished."),
+        buildDiffAssistantMessage("assistant-old-summary", "Old message finished."),
         buildDiffUserMessage("user-latest-summary"),
-        buildDiffAssistantMessage("assistant-latest-summary", "Latest turn finished."),
+        buildDiffAssistantMessage("assistant-latest-summary", "Latest message finished."),
       ],
       {
         activeSessionDiff: {
@@ -3703,7 +3703,7 @@ describe("ThreadView message actions", () => {
     )
   })
 
-  it("shows user turn restore progress and errors", async () => {
+  it("shows user message restore progress and errors", async () => {
     const confirmRestore = vi.spyOn(window, "confirm").mockReturnValue(true)
     let rejectRestore: (error: Error) => void = () => undefined
     const onMessageDiffRestore = vi.fn(
@@ -3743,7 +3743,7 @@ describe("ThreadView message actions", () => {
     confirmRestore.mockRestore()
   })
 
-  it("hides the user turn file change summary when the diff is empty", () => {
+  it("hides the user message file change summary when the diff is empty", () => {
     renderThread([
       {
         ...userMessage("user-empty-diff", "No changes"),
@@ -3760,7 +3760,7 @@ describe("ThreadView message actions", () => {
     const onOpenSideChat = vi.fn()
     const { getByRole, queryByText } = renderThread(
       [
-        assistantTraceTurn(
+        assistantTraceMessage(
           "assistant-1",
           [
             {
@@ -3822,8 +3822,8 @@ describe("ThreadView message actions", () => {
       rootMessageIDs: [],
       sessionID: "session-1",
     }
-    const completedIntermediateTurn = {
-      ...assistantTraceTurn(
+    const completedIntermediateMessage = {
+      ...assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -3840,7 +3840,7 @@ describe("ThreadView message actions", () => {
       messageID: "message-1",
     }
 
-    const { container, queryByRole } = renderThread([userMessage("user-1", "Prompt"), completedIntermediateTurn], {
+    const { container, queryByRole } = renderThread([userMessage("user-1", "Prompt"), completedIntermediateMessage], {
       isSessionRunning: true,
       messageTree,
       onBranchSelect,
@@ -3867,7 +3867,7 @@ describe("ThreadView message actions", () => {
       [
         userMessage("user-with-diff", "Please update the file."),
         {
-          ...assistantTraceTurn(
+          ...assistantTraceMessage(
             "assistant-1",
             [
               {
@@ -3939,7 +3939,7 @@ describe("ThreadView message actions", () => {
     const assistantShell = copyButtons[0]?.closest(".assistant-shell")
     const finalResponseSection = getByText("Deleted. The directory is empty now.").closest(".assistant-section")
     const fileChangeSection = getByRole("region", { name: "File Changes" })
-    const trailingDiffCard = container.querySelector(".assistant-shell > .user-turn-diff-card")
+    const trailingDiffCard = container.querySelector(".assistant-shell > .user-message-diff-card")
     fireEvent.click(processTraceButton)
     const firstResponseSection = getByText("I will check the directory first.").closest(".assistant-section")
 
@@ -3972,7 +3972,7 @@ describe("ThreadView message actions", () => {
     const { getAllByRole, getByRole, getByText, queryByText } = renderThread(
       [
         userMessage("user-1", "Check the setup."),
-        assistantTraceTurn(
+        assistantTraceMessage(
           "assistant-intermediate",
           [
             {
@@ -3986,7 +3986,7 @@ describe("ThreadView message actions", () => {
           ],
           false,
         ),
-        assistantTraceTurn(
+        assistantTraceMessage(
           "assistant-final",
           [
             {
@@ -4032,7 +4032,7 @@ describe("ThreadView message actions", () => {
   it("folds stale streaming intermediate assistant messages into the final response trace", () => {
     const { container, getByRole, getByText, queryByText } = renderThread([
       userMessage("user-1", "Build the game."),
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-stale-stream",
         [
           {
@@ -4047,7 +4047,7 @@ describe("ThreadView message actions", () => {
         ],
         true,
       ),
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-final",
         [
           {
@@ -4066,11 +4066,11 @@ describe("ThreadView message actions", () => {
     const processedTraceButton = getByRole("button", { name: /Processed/ })
     const finalResponse = getByText("好的，经典横刀立马开局。")
     const processTraceRow = processedTraceButton.closest(".assistant-process-trace-row") as HTMLElement | null
-    const finalAssistantMessage = finalResponse.closest(".assistant-turn") as HTMLElement | null
+    const finalAssistantMessage = finalResponse.closest(".assistant-message") as HTMLElement | null
 
     expect(processedTraceButton).toHaveAttribute("aria-expanded", "false")
     expect(queryByText("OK, now let me create the full HTML file.")).toBeNull()
-    expect(container.querySelectorAll(".assistant-turn")).toHaveLength(1)
+    expect(container.querySelectorAll(".assistant-message")).toHaveLength(1)
     expect(processTraceRow).not.toBeNull()
     expect(finalAssistantMessage).not.toBeNull()
     expect(processTraceRow!.compareDocumentPosition(finalAssistantMessage!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -4079,7 +4079,7 @@ describe("ThreadView message actions", () => {
 
     const foldedStreamingText = getByText("OK, now let me create the full HTML file.")
     expect(foldedStreamingText.closest(".assistant-process-item-row")).not.toBeNull()
-    expect(foldedStreamingText.closest(".assistant-turn")).toBeNull()
+    expect(foldedStreamingText.closest(".assistant-message")).toBeNull()
   })
 
   it("copies assistant responses without the response format marker", () => {
@@ -4089,7 +4089,7 @@ describe("ThreadView message actions", () => {
       value: { writeText },
     })
     const { getByRole } = renderThread([
-      assistantTraceTurn(
+      assistantTraceMessage(
         "assistant-1",
         [
           {
@@ -4110,7 +4110,7 @@ describe("ThreadView message actions", () => {
     expect(writeText).toHaveBeenCalledWith("<p>Copied response.</p>")
   })
 
-  it("only exposes branch controls on the final assistant message in a user turn", () => {
+  it("only exposes branch controls on the final assistant message in a user message", () => {
     const onBranchSelect = vi.fn()
     const onForkFromMessage = vi.fn()
     const messageTree: SessionMessageTree = {
@@ -4167,8 +4167,8 @@ describe("ThreadView message actions", () => {
       rootMessageIDs: ["user-1"],
       sessionID: "session-1",
     }
-    const reasoningTurn: AssistantThreadMessage = {
-      ...assistantTraceTurn(
+    const reasoningMessage: AssistantThreadMessage = {
+      ...assistantTraceMessage(
         "assistant-reasoning",
         [
           {
@@ -4184,8 +4184,8 @@ describe("ThreadView message actions", () => {
       ),
       messageID: "message-reasoning",
     }
-    const finalTurn: AssistantThreadMessage = {
-      ...assistantTraceTurn(
+    const finalMessage: AssistantThreadMessage = {
+      ...assistantTraceMessage(
         "assistant-final",
         [
           {
@@ -4202,7 +4202,7 @@ describe("ThreadView message actions", () => {
       messageID: "message-final",
     }
 
-    const { container } = renderThread([userMessage("user-1", "Prompt"), reasoningTurn, finalTurn], {
+    const { container } = renderThread([userMessage("user-1", "Prompt"), reasoningMessage, finalMessage], {
       messageTree,
       onBranchSelect,
       onForkFromMessage,
@@ -4223,11 +4223,11 @@ describe("ThreadView message actions", () => {
   })
 })
 
-describe("ThreadView turn motion", () => {
-  it("marks initial history turns as stable", () => {
+describe("ThreadView message motion", () => {
+  it("marks initial history messages as stable", () => {
     const { container } = renderThread([
       userMessage("user-1", "Prompt"),
-      assistantTraceTurn("assistant-1", [
+      assistantTraceMessage("assistant-1", [
         {
           id: "assistant-1-text",
           kind: "text",
@@ -4243,7 +4243,7 @@ describe("ThreadView turn motion", () => {
     expect(container.querySelector('[data-thread-message-id="assistant-1"]')?.getAttribute("data-thread-message-motion")).toBe("history")
   })
 
-  it("marks newly appended visible turns as new or live", () => {
+  it("marks newly appended visible messages as new or live", () => {
     const { container, rerender, props } = renderThread([userMessage("user-1", "Prompt")])
 
     rerender(
@@ -4578,12 +4578,12 @@ describe("ThreadView scroll restoration", () => {
     const layoutSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
       if (this.classList.contains("thread-column")) return createElementRect({ top: 0, height: 400 })
 
-      const turnID = this.getAttribute("data-thread-message-id")
-      if (turnID === "assistant-1") return createElementRect({ top: 64, height: 900 })
+      const messageID = this.getAttribute("data-thread-message-id")
+      if (messageID === "assistant-1") return createElementRect({ top: 64, height: 900 })
 
       return createElementRect()
     })
-    const buildStreamingTurn = (text: string) => assistantTraceTurn("assistant-1", [
+    const buildStreamingMessage = (text: string) => assistantTraceMessage("assistant-1", [
       {
         id: "response-1",
         kind: "text",
@@ -4598,7 +4598,7 @@ describe("ThreadView scroll restoration", () => {
     try {
       const { rerender, props, threadColumn } = renderThread([
         userMessage("user-1", "Prompt"),
-        buildStreamingTurn("First chunk"),
+        buildStreamingMessage("First chunk"),
       ], {
         scrollStateKey: "session:streaming-layout-follow",
       })
@@ -4621,7 +4621,7 @@ describe("ThreadView scroll restoration", () => {
           {...props}
           activeMessages={[
             userMessage("user-1", "Prompt"),
-            buildStreamingTurn("First chunk\nSecond chunk"),
+            buildStreamingMessage("First chunk\nSecond chunk"),
           ]}
         />,
       )
@@ -4639,7 +4639,7 @@ describe("ThreadView scroll restoration", () => {
 
       return createElementRect()
     })
-    const buildStreamingTurn = (text: string) => assistantTraceTurn("assistant-1", [
+    const buildStreamingMessage = (text: string) => assistantTraceMessage("assistant-1", [
       {
         id: "response-1",
         kind: "text",
@@ -4664,7 +4664,7 @@ describe("ThreadView scroll restoration", () => {
         timestamp: 3,
         label: "System",
         title: "No visible output",
-        detail: "The backend stored this assistant turn without replayable trace items.",
+        detail: "The backend stored this assistant message without replayable trace items.",
         status: "completed",
         section: "response",
         visibilityKey: "response",
@@ -4674,7 +4674,7 @@ describe("ThreadView scroll restoration", () => {
     try {
       const { rerender, props, threadColumn } = renderThread([
         userMessage("user-1", "Prompt"),
-        buildStreamingTurn("First chunk"),
+        buildStreamingMessage("First chunk"),
       ], {
         scrollStateKey: "session:streaming-response-before-trace",
       })
@@ -4697,7 +4697,7 @@ describe("ThreadView scroll restoration", () => {
           {...props}
           activeMessages={[
             userMessage("user-1", "Prompt"),
-            buildStreamingTurn("First chunk\nSecond chunk"),
+            buildStreamingMessage("First chunk\nSecond chunk"),
           ]}
         />,
       )
@@ -4717,7 +4717,7 @@ describe("ThreadView scroll restoration", () => {
       return createElementRect()
     })
     const historyMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
-    const buildStreamingTurn = (text: string) => assistantTraceTurn("assistant-virtual", [
+    const buildStreamingMessage = (text: string) => assistantTraceMessage("assistant-virtual", [
       {
         id: "response-virtual",
         kind: "text",
@@ -4733,7 +4733,7 @@ describe("ThreadView scroll restoration", () => {
         timestamp: 2,
         label: "System",
         title: "No visible output",
-        detail: "The backend stored this assistant turn without replayable trace items.",
+        detail: "The backend stored this assistant message without replayable trace items.",
         status: "completed",
         section: "response",
         visibilityKey: "response",
@@ -4743,7 +4743,7 @@ describe("ThreadView scroll restoration", () => {
     try {
       const { rerender, props, threadColumn } = renderThread([
         ...historyMessages,
-        buildStreamingTurn("First chunk"),
+        buildStreamingMessage("First chunk"),
       ], {
         scrollStateKey: "session:virtual-streaming-response-before-trace",
       })
@@ -4768,7 +4768,7 @@ describe("ThreadView scroll restoration", () => {
           {...props}
           activeMessages={[
             ...historyMessages,
-            buildStreamingTurn("First chunk\nSecond chunk"),
+            buildStreamingMessage("First chunk\nSecond chunk"),
           ]}
         />,
       )
@@ -4800,7 +4800,7 @@ describe("ThreadView scroll restoration", () => {
         callback(timestamp)
       }
     }
-    const buildStreamingTurn = (text: string) => assistantTraceTurn("assistant-1", [
+    const buildStreamingMessage = (text: string) => assistantTraceMessage("assistant-1", [
       {
         id: "response-1",
         kind: "text",
@@ -4815,7 +4815,7 @@ describe("ThreadView scroll restoration", () => {
     try {
       const { rerender, props, threadColumn } = renderThread([
         userMessage("user-1", "Prompt"),
-        buildStreamingTurn("First chunk"),
+        buildStreamingMessage("First chunk"),
       ], {
         scrollStateKey: "session:streaming-smooth-follow",
       })
@@ -4835,7 +4835,7 @@ describe("ThreadView scroll restoration", () => {
           {...props}
           activeMessages={[
             userMessage("user-1", "Prompt"),
-            buildStreamingTurn("First chunk\nSecond chunk"),
+            buildStreamingMessage("First chunk\nSecond chunk"),
           ]}
         />,
       )
@@ -4851,7 +4851,7 @@ describe("ThreadView scroll restoration", () => {
   })
 
   it("does not follow new streamed content after an upward wheel intent before the scroll event fires", () => {
-    const buildStreamingTurn = (text: string) => assistantTraceTurn("assistant-1", [
+    const buildStreamingMessage = (text: string) => assistantTraceMessage("assistant-1", [
       {
         id: "response-1",
         kind: "text",
@@ -4864,7 +4864,7 @@ describe("ThreadView scroll restoration", () => {
     ], true)
     const { rerender, props, threadColumn } = renderThread([
       userMessage("user-1", "Prompt"),
-      buildStreamingTurn("First chunk"),
+      buildStreamingMessage("First chunk"),
     ], {
       scrollStateKey: "session:wheel-detached-race",
     })
@@ -4886,7 +4886,7 @@ describe("ThreadView scroll restoration", () => {
         {...props}
         activeMessages={[
           userMessage("user-1", "Prompt"),
-          buildStreamingTurn("First chunk\nSecond chunk"),
+          buildStreamingMessage("First chunk\nSecond chunk"),
         ]}
       />,
     )
@@ -4894,13 +4894,13 @@ describe("ThreadView scroll restoration", () => {
     expect(threadColumn.scrollTop).toBe(400)
   })
 
-  it("scrolls to the bottom when a stream-inserted user turn becomes visible", () => {
+  it("scrolls to the bottom when a stream-inserted user message becomes visible", () => {
     const layoutSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
       if (this.classList.contains("thread-column")) return createElementRect({ top: 0, height: 400 })
 
-      const turnID = this.getAttribute("data-thread-message-id")
-      if (turnID === "assistant-1") return createElementRect({ top: 64, height: 700 })
-      if (turnID === "user-steer") return createElementRect({ top: 430, height: 80 })
+      const messageID = this.getAttribute("data-thread-message-id")
+      if (messageID === "assistant-1") return createElementRect({ top: 64, height: 700 })
+      if (messageID === "user-steer") return createElementRect({ top: 430, height: 80 })
 
       return createElementRect()
     })
@@ -4936,7 +4936,7 @@ describe("ThreadView scroll restoration", () => {
     try {
       const { rerender, props, threadColumn } = renderThread([
         userMessage("user-1", "Prompt"),
-        assistantTraceTurn("assistant-1", assistantItems, true),
+        assistantTraceMessage("assistant-1", assistantItems, true),
       ])
       setScrollMetrics(threadColumn, {
         clientHeight: 400,
@@ -4949,7 +4949,7 @@ describe("ThreadView scroll restoration", () => {
           {...props}
           activeMessages={[
             userMessage("user-1", "Prompt"),
-            assistantTraceTurn("assistant-1", assistantItems, true),
+            assistantTraceMessage("assistant-1", assistantItems, true),
             steerMessage,
           ]}
         />,
@@ -4961,7 +4961,7 @@ describe("ThreadView scroll restoration", () => {
     }
   })
 
-  it("does not realign to the latest assistant turn when streaming completes", () => {
+  it("does not realign to the latest assistant message when streaming completes", () => {
     const streamingItems: AssistantTraceItem[] = [
       {
         id: "reasoning-1",
@@ -4990,7 +4990,7 @@ describe("ThreadView scroll restoration", () => {
     }))
     const { rerender, props, threadColumn } = renderThread([
       userMessage("user-1", "Prompt"),
-      assistantTraceTurn("assistant-1", streamingItems, true),
+      assistantTraceMessage("assistant-1", streamingItems, true),
     ])
     setScrollMetrics(threadColumn, {
       clientHeight: 400,
@@ -5001,7 +5001,7 @@ describe("ThreadView scroll restoration", () => {
     rerender(
       <ThreadView
         {...props}
-        activeMessages={[userMessage("user-1", "Prompt"), assistantTraceTurn("assistant-1", completedItems, false)]}
+        activeMessages={[userMessage("user-1", "Prompt"), assistantTraceMessage("assistant-1", completedItems, false)]}
       />,
     )
 

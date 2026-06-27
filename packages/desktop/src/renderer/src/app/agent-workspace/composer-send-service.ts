@@ -219,13 +219,13 @@ export async function sendPromptToSession(
     setPendingConversationInputsBySession((current) => appendPendingConversationInput(current, pendingInput))
   } else if (parentMessageID) {
     const currentMessages = getConversationMessages(uiSessionID)
-    const parentTurnIndex = currentMessages.findIndex((turn) =>
-      turn.kind === "assistant"
-        ? (turn.messageID ?? turn.id) === parentMessageID
-        : turn.id === parentMessageID,
+    const parentMessageIndex = currentMessages.findIndex((message) =>
+      message.kind === "assistant"
+        ? (message.messageID ?? message.id) === parentMessageID
+        : message.id === parentMessageID,
     )
-    const parentPathTurns = parentTurnIndex >= 0 ? currentMessages.slice(0, parentTurnIndex + 1) : currentMessages
-    replaceConversationMessages(uiSessionID, [...parentPathTurns, userMessage])
+    const parentPathMessages = parentMessageIndex >= 0 ? currentMessages.slice(0, parentMessageIndex + 1) : currentMessages
+    replaceConversationMessages(uiSessionID, [...parentPathMessages, userMessage])
   } else {
     appendConversationMessages(uiSessionID, [userMessage])
   }
@@ -343,9 +343,9 @@ export async function sendPromptToSession(
       throw new Error("Desktop preload did not return batch agent events")
     }
 
-    const backendTurn = buildAgentThreadMessageFromEvents(result.events, userMessage.text)
+    const assistantMessage = buildAgentThreadMessageFromEvents(result.events, userMessage.text)
     startTransition(() => {
-      appendConversationMessages(uiSessionID, [backendTurn])
+      appendConversationMessages(uiSessionID, [assistantMessage])
     })
     void reloadSessionHistoryForSession(uiSessionID, backendSessionID).catch((error) => {
       console.error("[desktop] session history refresh failed after send:", error)

@@ -96,14 +96,14 @@ function readMessageID(value: unknown) {
   return readString(message?.id)
 }
 
-function applyAssistantMessageMetadata(turn: AssistantThreadMessage, messageValue: unknown): AssistantThreadMessage {
+function applyAssistantMessageMetadata(assistantMessage: AssistantThreadMessage, messageValue: unknown): AssistantThreadMessage {
   const message = readRecord(messageValue)
-  if (!message) return turn
+  if (!message) return assistantMessage
 
   const diffSummary = readSessionDiffSummary(message.diffSummary)
   const nextMessage: AssistantThreadMessage = {
-    ...turn,
-    messageID: readString(message.id) || turn.messageID,
+    ...assistantMessage,
+    messageID: readString(message.id) || assistantMessage.messageID,
   }
   if (diffSummary) {
     nextMessage.diffSummary = diffSummary
@@ -239,7 +239,7 @@ function traceItemOwnershipFromPart(
 function traceItemOwnershipFromHistoryMessage(message: LoadedSessionHistoryMessage): TraceItemOwnership {
   return normalizeTraceItemOwnership({
     messageID: message.info.id,
-    backendTurnID: message.turn?.id || readString(message.info.turnID),
+    backendTurnID: message["turn"]?.id || readString(message.info.turnID),
   })
 }
 
@@ -639,7 +639,7 @@ function buildCompletionDetail(input: {
     usageSummary,
   ].filter(Boolean)
 
-  return parts.length > 0 ? parts.join(" | ") : "Backend finished streaming this turn."
+  return parts.length > 0 ? parts.join(" | ") : "Backend finished streaming this execution."
 }
 
 function buildCompletionTraceItem(input: {
@@ -663,7 +663,7 @@ function buildCompletionTraceItem(input: {
     messageID: input.messageID,
     backendTurnID: input.backendTurnID,
     detail: input.status === "pending"
-      ? "The backend paused this turn until a permission decision is made."
+      ? "The backend paused this execution until a permission decision is made."
       : buildCompletionDetail({
           finishReason: input.finishReason,
           message: input.message,
@@ -975,7 +975,7 @@ function createAssistantThreadMessageRuntime(input: {
 }
 
 function updateAssistantThreadMessageLifecycle(
-  turn: AssistantThreadMessage,
+  assistantMessage: AssistantThreadMessage,
   input: {
     phase?: AssistantThreadMessagePhase
     state?: string
@@ -985,16 +985,16 @@ function updateAssistantThreadMessageLifecycle(
     approvalRequestID?: string | null
     errorMessage?: string | null
   },
-  items = turn.items,
+  items = assistantMessage.items,
 ): AssistantThreadMessage {
   const updatedAt = input.updatedAt ?? Date.now()
   const startedAt = input.startedAt ?? (
-    input.updatedAt !== undefined && input.updatedAt < turn.runtime.startedAt
+    input.updatedAt !== undefined && input.updatedAt < assistantMessage.runtime.startedAt
       ? input.updatedAt
-      : turn.runtime.startedAt
+      : assistantMessage.runtime.startedAt
   )
   const nextRuntime: AssistantThreadMessageRuntime = {
-    ...turn.runtime,
+    ...assistantMessage.runtime,
     startedAt,
     ...(input.phase ? { phase: input.phase } : {}),
     updatedAt,
@@ -1008,7 +1008,7 @@ function updateAssistantThreadMessageLifecycle(
   }
 
   return {
-    ...turn,
+    ...assistantMessage,
     ...(input.state ? { state: input.state } : {}),
     runtime: nextRuntime,
     items,
@@ -1032,8 +1032,8 @@ function cancelInterruptedToolTraceItems(items: AssistantTraceItem[], detail: st
   )
 }
 
-function settleQueuedPrompt(items: AssistantTraceItem[], turnID: string, status: AssistantTraceStatus = "completed") {
-  const promptSourceID = `${turnID}:prompt`
+function settleQueuedPrompt(items: AssistantTraceItem[], assistantMessageID: string, status: AssistantTraceStatus = "completed") {
+  const promptSourceID = `${assistantMessageID}:prompt`
   return items.map((item) =>
     item.sourceID === promptSourceID && item.status === "pending"
       ? {
@@ -1673,7 +1673,7 @@ function buildTraceItemFromPart(
       kind: "system",
       label: "Agent",
       title: readString(part.name) || "Agent update",
-      detail: "The backend recorded the active agent for this turn.",
+      detail: "The backend recorded the active agent for this execution.",
       status: "completed",
       section: "workflow",
       visibilityKey: "workflow",
@@ -1745,7 +1745,7 @@ function alignAnonymousTraceItemsWithParts(items: AssistantTraceItem[], parts: u
 
 function appendSystemTrace(
   items: AssistantTraceItem[],
-  turnID: string,
+  assistantMessageID: string,
   title: string,
   detail: string,
   status: AssistantTraceStatus = "completed",
@@ -1755,7 +1755,7 @@ function appendSystemTrace(
   timestamp?: number,
   ownership?: TraceItemOwnership,
 ) {
-  const nextItems = clearStreamingItems(settleQueuedPrompt(items, turnID))
+  const nextItems = clearStreamingItems(settleQueuedPrompt(items, assistantMessageID))
   return appendTraceItem(
     nextItems,
     createTraceItem({
@@ -2043,12 +2043,13 @@ function isCancellationNamedError(value: unknown) {
 function readAssistantHistoryFailure(message: LoadedSessionHistoryMessage): HistoryErrorPresentation | null {
   if (isAssistantHistoryCancelled(message)) return null
 
-  if (message.turn?.status === "failed") {
-    const turnError = readHistoryErrorPresentation(message.turn.errorInfo)
-    if (turnError) return turnError
+  const backendTurn = message["turn"]
+  if (backendTurn?.status === "failed") {
+    const backendTurnError = readHistoryErrorPresentation(backendTurn.errorInfo)
+    if (backendTurnError) return backendTurnError
 
-    const turnErrorMessage = readString(message.turn.error).trim()
-    if (turnErrorMessage) return { message: turnErrorMessage }
+    const backendTurnErrorMessage = readString(backendTurn.error).trim()
+    if (backendTurnErrorMessage) return { message: backendTurnErrorMessage }
   }
 
   return readAssistantNamedErrorPresentation(message.info.error)
@@ -2084,7 +2085,8 @@ function resolveSettledAssistantHistoryPhase(
   items: AssistantTraceItem[],
   message: LoadedSessionHistoryMessage,
 ): AssistantThreadMessagePhase | null {
-  const turnStatus = readString(message.turn?.status).toLowerCase()
+  const backendTurn = message["turn"]
+  const turnStatus = readString(backendTurn?.status).toLowerCase()
   const infoStatus = readString(message.info.status).toLowerCase()
 
   if (turnStatus === "running") return null
@@ -2106,10 +2108,11 @@ function resolveRunningAssistantHistoryPhase(
   items: AssistantTraceItem[],
   message: LoadedSessionHistoryMessage,
 ): AssistantThreadMessagePhase | null {
-  const turnStatus = readString(message.turn?.status).toLowerCase()
+  const backendTurn = message["turn"]
+  const turnStatus = readString(backendTurn?.status).toLowerCase()
   if (turnStatus !== "running") return null
 
-  const turnPhase = readString(message.turn?.phase).toLowerCase()
+  const turnPhase = readString(backendTurn?.phase).toLowerCase()
   switch (turnPhase) {
     case "preparing":
     case "waiting_llm":
@@ -2193,8 +2196,9 @@ function isAssistantHistoryCancelled(message: LoadedSessionHistoryMessage) {
   const finishReason = readString(info.finishReason).toLowerCase()
   const status = readString(info.status).toLowerCase()
   const reason = readString(info.reason).toLowerCase()
-  const turnStatus = readString(message.turn?.status).toLowerCase()
-  const turnPhase = readString(message.turn?.phase).toLowerCase()
+  const backendTurn = message["turn"]
+  const turnStatus = readString(backendTurn?.status).toLowerCase()
+  const turnPhase = readString(backendTurn?.phase).toLowerCase()
 
   return (
     finishReason === "cancelled" ||
@@ -2238,7 +2242,8 @@ function buildAssistantThreadMessageFromHistory(message: LoadedSessionHistoryMes
   const failure = readAssistantHistoryFailure(message)
   const errorMessage = failure?.message ?? ""
   const isCancelled = isAssistantHistoryCancelled(message)
-  const isBackendTurnRunning = readString(message.turn?.status).toLowerCase() === "running"
+  const backendTurn = message["turn"]
+  const isBackendTurnRunning = readString(backendTurn?.status).toLowerCase() === "running"
 
   if (errorMessage) {
     items = appendTraceItem(
@@ -2275,7 +2280,7 @@ function buildAssistantThreadMessageFromHistory(message: LoadedSessionHistoryMes
       createTraceItem({
         kind: "system",
         label: "System",
-        title: "Turn cancelled",
+        title: "Execution cancelled",
         detail: "Prompt cancellation requested.",
         status: "completed",
         sourceID: `${message.info.id}:cancelled`,
@@ -2293,7 +2298,7 @@ function buildAssistantThreadMessageFromHistory(message: LoadedSessionHistoryMes
         kind: "system",
         label: "System",
         title: "No visible output",
-        detail: "The backend stored this assistant turn without replayable trace items.",
+        detail: "The backend stored this assistant message without replayable trace items.",
         status: "completed",
         messageID: ownership.messageID,
         backendTurnID: ownership.backendTurnID,
@@ -2306,7 +2311,7 @@ function buildAssistantThreadMessageFromHistory(message: LoadedSessionHistoryMes
   const runtimePhase = resolveAssistantHistoryPhase(items, message)
   const createdAt = readNumber(message.info.created) || Date.now()
   const completedAt = isBackendTurnRunning
-    ? readNumber(message.turn?.updatedAt) || readNumber(message.info.completed) || createdAt
+    ? readNumber(backendTurn?.updatedAt) || readNumber(message.info.completed) || createdAt
     : readNumber(message.info.completed) || createdAt
 
   return {
@@ -2356,20 +2361,20 @@ function buildCompactionItemsFromHistory(message: LoadedSessionHistoryMessage) {
   ]
 }
 
-function prependAssistantItems(turn: AssistantThreadMessage, items: AssistantTraceItem[]) {
-  if (items.length === 0) return turn
-  const nextItems = upsertTraceItems(items, turn.items)
+function prependAssistantItems(assistantMessage: AssistantThreadMessage, items: AssistantTraceItem[]) {
+  if (items.length === 0) return assistantMessage
+  const nextItems = upsertTraceItems(items, assistantMessage.items)
   return {
-    ...turn,
+    ...assistantMessage,
     items: nextItems,
     runtime: {
-      ...turn.runtime,
-      firstVisibleAt: turn.runtime.firstVisibleAt ?? turn.runtime.startedAt,
+      ...assistantMessage.runtime,
+      firstVisibleAt: assistantMessage.runtime.firstVisibleAt ?? assistantMessage.runtime.startedAt,
     },
   }
 }
 
-function buildCompactionMarkerTurn(message: LoadedSessionHistoryMessage, items: AssistantTraceItem[]) {
+function buildCompactionMarkerMessage(message: LoadedSessionHistoryMessage, items: AssistantTraceItem[]) {
   const createdAt = readNumber(message.info.created) || Date.now()
   const ownership = traceItemOwnershipFromHistoryMessage(message)
   const nextItems = items.length > 0
@@ -2402,7 +2407,7 @@ function buildCompactionMarkerTurn(message: LoadedSessionHistoryMessage, items: 
 }
 
 export function buildThreadMessagesFromHistory(messages: LoadedSessionHistoryMessage[]) {
-  const turns: ThreadMessage[] = []
+  const threadMessages: ThreadMessage[] = []
   let pendingCompactionItems: AssistantTraceItem[] = []
   const hasParentMetadata = messages.some((message) =>
     Object.prototype.hasOwnProperty.call(message.info, "parentMessageID"),
@@ -2425,25 +2430,25 @@ export function buildThreadMessagesFromHistory(messages: LoadedSessionHistoryMes
     if (isInternalHistoryMessage(message)) continue
 
     if (message.info.role === "user") {
-      turns.push(buildUserThreadMessageFromHistory(message))
+      threadMessages.push(buildUserThreadMessageFromHistory(message))
       continue
     }
 
     const assistantMessage = buildAssistantThreadMessageFromHistory(message)
-    turns.push(prependAssistantItems(assistantMessage, pendingCompactionItems))
+    threadMessages.push(prependAssistantItems(assistantMessage, pendingCompactionItems))
     pendingCompactionItems = []
   }
 
   if (pendingCompactionItems.length > 0) {
-    turns.push(buildCompactionMarkerTurn(messages[messages.length - 1]!, pendingCompactionItems))
+    threadMessages.push(buildCompactionMarkerMessage(messages[messages.length - 1]!, pendingCompactionItems))
   }
 
-  return turns
+  return threadMessages
 }
 
 export function buildStreamingAssistantThreadMessage(prompt: string): AssistantThreadMessage {
   const compactPrompt = compactText(prompt, 72)
-  const turnID = createID("assistant")
+  const assistantMessageID = createID("assistant")
   const items = [
     createTraceItem({
       kind: "system",
@@ -2452,14 +2457,14 @@ export function buildStreamingAssistantThreadMessage(prompt: string): AssistantT
       text: `"${compactPrompt}"`,
       detail: "Waiting for backend response.",
       status: "pending",
-      sourceID: `${turnID}:prompt`,
+      sourceID: `${assistantMessageID}:prompt`,
       section: "workflow",
       visibilityKey: "workflow",
     }),
   ]
 
   return {
-    id: turnID,
+    id: assistantMessageID,
     kind: "assistant",
     timestamp: Date.now(),
     runtime: createAssistantThreadMessageRuntime({
@@ -2473,7 +2478,7 @@ export function buildStreamingAssistantThreadMessage(prompt: string): AssistantT
 }
 
 export function buildSessionStreamingAssistantThreadMessage(detail = "Replaying backend session activity.") : AssistantThreadMessage {
-  const turnID = createID("assistant")
+  const assistantMessageID = createID("assistant")
   const items = [
     createTraceItem({
       kind: "system",
@@ -2481,14 +2486,14 @@ export function buildSessionStreamingAssistantThreadMessage(detail = "Replaying 
       title: "Reconnecting session stream",
       detail,
       status: "pending",
-      sourceID: `${turnID}:prompt`,
+      sourceID: `${assistantMessageID}:prompt`,
       section: "workflow",
       visibilityKey: "workflow",
     }),
   ]
 
   return {
-    id: turnID,
+    id: assistantMessageID,
     kind: "assistant",
     timestamp: Date.now(),
     runtime: createAssistantThreadMessageRuntime({
@@ -2506,8 +2511,8 @@ export function buildFailureThreadMessage(
   existingMessage?: AssistantThreadMessage,
   debugEntries?: AssistantTraceDebugEntry[],
 ): AssistantThreadMessage {
-  const turnID = existingMessage?.id ?? createID("assistant")
-  const baseItems = clearStreamingItems(settleQueuedPrompt(existingMessage?.items ?? [], turnID, "error"))
+  const assistantMessageID = existingMessage?.id ?? createID("assistant")
+  const baseItems = clearStreamingItems(settleQueuedPrompt(existingMessage?.items ?? [], assistantMessageID, "error"))
   const updatedAt = Date.now()
   const items = appendTraceItem(
     baseItems,
@@ -2522,7 +2527,7 @@ export function buildFailureThreadMessage(
   )
 
   return {
-    id: turnID,
+    id: assistantMessageID,
     kind: "assistant",
     timestamp: existingMessage?.timestamp ?? updatedAt,
     runtime: existingMessage?.runtime
@@ -2547,12 +2552,12 @@ export function buildFailureThreadMessage(
 }
 
 export function markAssistantThreadMessageInterrupted(
-  turn: AssistantThreadMessage,
+  assistantMessage: AssistantThreadMessage,
   detail = "Prompt cancellation requested.",
 ): AssistantThreadMessage {
   const updatedAt = Date.now()
   const baseItems = cancelInterruptedToolTraceItems(
-    settleQueuedPrompt(turn.items, turn.id, "cancelled"),
+    settleQueuedPrompt(assistantMessage.items, assistantMessage.id, "cancelled"),
     detail,
   )
   const items = upsertTraceItem(
@@ -2560,10 +2565,10 @@ export function markAssistantThreadMessageInterrupted(
     createTraceItem({
       kind: "system",
       label: "System",
-      title: "Turn cancelled",
+      title: "Execution cancelled",
       detail,
       status: "completed",
-      sourceID: `${turn.id}:cancelled`,
+      sourceID: `${assistantMessage.id}:cancelled`,
       section: "workflow",
       visibilityKey: "workflow",
     }),
@@ -2571,7 +2576,7 @@ export function markAssistantThreadMessageInterrupted(
 
   return updateAssistantThreadMessageLifecycle(
     {
-      ...turn,
+      ...assistantMessage,
       isStreaming: false,
     },
     {
@@ -2587,7 +2592,7 @@ export function markAssistantThreadMessageInterrupted(
 }
 
 export function finalizeStreamAssistantThreadMessage(
-  turn: AssistantThreadMessage,
+  assistantMessage: AssistantThreadMessage,
   input?: {
     status?: string
     finishReason?: string
@@ -2597,26 +2602,26 @@ export function finalizeStreamAssistantThreadMessage(
     updatedAt?: number
   },
 ): AssistantThreadMessage {
-  const items = clearStreamingItems(settleQueuedPrompt(turn.items, turn.id))
+  const items = clearStreamingItems(settleQueuedPrompt(assistantMessage.items, assistantMessage.id))
   const waitingQuestion = items.find((item) => item.kind === "question")
-  const messageTurn = applyAssistantMessageMetadata(turn, input?.message)
-  const nextMessageID = messageTurn.messageID
+  const metadataMessage = applyAssistantMessageMetadata(assistantMessage, input?.message)
+  const nextMessageID = metadataMessage.messageID
   const ownership = normalizeTraceItemOwnership({
     messageID: nextMessageID,
     backendTurnID: input?.backendTurnID,
   })
   const lifecycleClock = input?.updatedAt === undefined ? {} : { updatedAt: input.updatedAt }
 
-  if (turn.runtime.phase === "failed") {
+  if (assistantMessage.runtime.phase === "failed") {
     return updateAssistantThreadMessageLifecycle(
       {
-        ...messageTurn,
+        ...metadataMessage,
         messageID: nextMessageID,
         isStreaming: false,
       },
       {
         phase: "failed",
-        state: turn.state,
+        state: assistantMessage.state,
         ...lifecycleClock,
       },
       items,
@@ -2626,7 +2631,7 @@ export function finalizeStreamAssistantThreadMessage(
   if (waitingQuestion) {
     return updateAssistantThreadMessageLifecycle(
       {
-        ...messageTurn,
+        ...metadataMessage,
         messageID: nextMessageID,
         isStreaming: false,
       },
@@ -2647,8 +2652,8 @@ export function finalizeStreamAssistantThreadMessage(
     const nextItems = upsertTraceItem(
       items,
       buildCompletionTraceItem({
-        id: `${turn.id}-blocked`,
-        sourceID: `${turn.id}:blocked`,
+        id: `${assistantMessage.id}-blocked`,
+        sourceID: `${assistantMessage.id}:blocked`,
         status: "pending",
         messageID: ownership.messageID,
         backendTurnID: ownership.backendTurnID,
@@ -2659,7 +2664,7 @@ export function finalizeStreamAssistantThreadMessage(
 
     return updateAssistantThreadMessageLifecycle(
       {
-        ...messageTurn,
+        ...metadataMessage,
         messageID: nextMessageID,
         isStreaming: false,
       },
@@ -2676,7 +2681,7 @@ export function finalizeStreamAssistantThreadMessage(
   if (input?.status === "blocked") {
     return updateAssistantThreadMessageLifecycle(
       {
-        ...messageTurn,
+        ...metadataMessage,
         messageID: nextMessageID,
         isStreaming: false,
       },
@@ -2695,7 +2700,7 @@ export function finalizeStreamAssistantThreadMessage(
   if (input?.status === "continued_by_user") {
     return updateAssistantThreadMessageLifecycle(
       {
-        ...messageTurn,
+        ...metadataMessage,
         messageID: nextMessageID,
         isStreaming: false,
       },
@@ -2713,7 +2718,7 @@ export function finalizeStreamAssistantThreadMessage(
 
   return updateAssistantThreadMessageLifecycle(
     {
-      ...messageTurn,
+      ...metadataMessage,
       messageID: nextMessageID,
       isStreaming: false,
     },
@@ -2728,8 +2733,8 @@ export function finalizeStreamAssistantThreadMessage(
     upsertTraceItem(
       items,
       buildCompletionTraceItem({
-        id: `${turn.id}-complete`,
-        sourceID: `${turn.id}:complete`,
+        id: `${assistantMessage.id}-complete`,
+        sourceID: `${assistantMessage.id}:complete`,
         finishReason: input?.finishReason,
         message: input?.message,
         messageID: ownership.messageID,
@@ -2819,11 +2824,11 @@ function mapRuntimePhaseToAssistantLifecycle(payload: Record<string, unknown>) {
 }
 
 function inferToolLifecycleFromTraceItem(
-  turn: AssistantThreadMessage,
+  assistantMessage: AssistantThreadMessage,
   item: AssistantTraceItem,
   approvalRequestID: string | null,
 ) {
-  if (item.kind !== "tool" || !canInferLifecycleFromTrace(turn.runtime.phase)) {
+  if (item.kind !== "tool" || !canInferLifecycleFromTrace(assistantMessage.runtime.phase)) {
     return null
   }
 
@@ -2848,18 +2853,18 @@ function inferToolLifecycleFromTraceItem(
   return null
 }
 
-function applyRuntimeEventToTurn(
-  turn: AssistantThreadMessage,
+function applyRuntimeEventToMessage(
+  assistantMessage: AssistantThreadMessage,
   item: AgentStreamEvent,
   event: AgentRuntimeEvent,
 ): AssistantThreadMessage {
-  const allowCancelledToolInputDelta = turn.runtime.phase === "cancelled" && event.type === "tool.input.delta"
-  if (isSettledAssistantPhase(turn.runtime.phase) && !isTerminalRuntimeEventType(event.type) && !allowCancelledToolInputDelta) {
-    return turn
+  const allowCancelledToolInputDelta = assistantMessage.runtime.phase === "cancelled" && event.type === "tool.input.delta"
+  if (isSettledAssistantPhase(assistantMessage.runtime.phase) && !isTerminalRuntimeEventType(event.type) && !allowCancelledToolInputDelta) {
+    return assistantMessage
   }
 
   const payload = event.payload
-  const preparedItems = settleQueuedPrompt(turn.items, turn.id)
+  const preparedItems = settleQueuedPrompt(assistantMessage.items, assistantMessage.id)
   const debugEntries = buildRuntimeEventDebugEntries(event, item.id)
   const eventTimestamp = event.timestamp > 0 ? event.timestamp : undefined
   const eventBackendTurnID = event.turnID || undefined
@@ -2867,7 +2872,7 @@ function applyRuntimeEventToTurn(
     messageID: messageID || undefined,
     backendTurnID: eventBackendTurnID,
   })
-  const updateRuntimeTurnLifecycle = (
+  const updateRuntimeMessageLifecycle = (
     nextMessage: AssistantThreadMessage,
     input: Parameters<typeof updateAssistantThreadMessageLifecycle>[1],
     items = nextMessage.items,
@@ -2884,9 +2889,9 @@ function applyRuntimeEventToTurn(
   )
 
   if (event.type === "turn.started") {
-    return updateRuntimeTurnLifecycle(
+    return updateRuntimeMessageLifecycle(
       {
-        ...turn,
+        ...assistantMessage,
         isStreaming: true,
       },
       {
@@ -2895,7 +2900,7 @@ function applyRuntimeEventToTurn(
       },
       appendSystemTrace(
         preparedItems,
-        turn.id,
+        assistantMessage.id,
         readBoolean(payload.resume) ? "Agent stream resumed" : "Agent stream connected",
         "Renderer subscribed to canonical runtime updates.",
         "completed",
@@ -2910,13 +2915,13 @@ function applyRuntimeEventToTurn(
 
   if (event.type === "turn.state.changed") {
     const lifecycle = mapRuntimePhaseToAssistantLifecycle(payload)
-    if (!lifecycle) return turn
+    if (!lifecycle) return assistantMessage
     const runtimePhase = readString(payload.phase)
-    const messageID = resolvePayloadMessageID(payload) || turn.messageID
+    const messageID = resolvePayloadMessageID(payload) || assistantMessage.messageID
 
-    return updateRuntimeTurnLifecycle(
+    return updateRuntimeMessageLifecycle(
       {
-        ...turn,
+        ...assistantMessage,
         messageID,
         isStreaming: !isSettledRuntimePhase(runtimePhase),
       },
@@ -2930,12 +2935,12 @@ function applyRuntimeEventToTurn(
   }
 
   if (event.type === "llm.call.started") {
-    if (!canInferModelWaitFromRuntimePhase(turn.runtime.phase)) return turn
-    const messageID = resolvePayloadMessageID(payload) || turn.messageID
+    if (!canInferModelWaitFromRuntimePhase(assistantMessage.runtime.phase)) return assistantMessage
+    const messageID = resolvePayloadMessageID(payload) || assistantMessage.messageID
 
-    return updateRuntimeTurnLifecycle(
+    return updateRuntimeMessageLifecycle(
       {
-        ...turn,
+        ...assistantMessage,
         messageID,
         isStreaming: true,
       },
@@ -2949,11 +2954,11 @@ function applyRuntimeEventToTurn(
   }
 
   if (event.type === "text.part.started" || event.type === "text.part.delta") {
-    const messageID = resolvePayloadMessageID(payload) || turn.messageID
+    const messageID = resolvePayloadMessageID(payload) || assistantMessage.messageID
 
-    return updateRuntimeTurnLifecycle(
+    return updateRuntimeMessageLifecycle(
       {
-        ...turn,
+        ...assistantMessage,
         messageID,
         isStreaming: true,
       },
@@ -2978,11 +2983,11 @@ function applyRuntimeEventToTurn(
   }
 
   if (event.type === "reasoning.part.started" || event.type === "reasoning.part.delta") {
-    const messageID = resolvePayloadMessageID(payload) || turn.messageID
+    const messageID = resolvePayloadMessageID(payload) || assistantMessage.messageID
 
-    return updateRuntimeTurnLifecycle(
+    return updateRuntimeMessageLifecycle(
       {
-        ...turn,
+        ...assistantMessage,
         messageID,
         isStreaming: true,
       },
@@ -3007,25 +3012,25 @@ function applyRuntimeEventToTurn(
   }
 
   if (event.type === "tool.input.delta") {
-    const messageID = resolvePayloadMessageID(payload) || turn.messageID
+    const messageID = resolvePayloadMessageID(payload) || assistantMessage.messageID
     const toolCallID = readString(payload.toolCallID)
     const partID = readString(payload.partID)
     const sourceID = partID || (toolCallID ? `tool-input:${toolCallID}` : "")
     const delta = readString(payload.delta)
-    if (!sourceID || !delta) return turn
+    if (!sourceID || !delta) return assistantMessage
     const rawLength = readNumber(payload.rawLength)
-    const isAlreadyCancelled = turn.runtime.phase === "cancelled"
+    const isAlreadyCancelled = assistantMessage.runtime.phase === "cancelled"
     const cancelledDetail = "Prompt cancellation requested."
 
-    return updateRuntimeTurnLifecycle(
+    return updateRuntimeMessageLifecycle(
       {
-        ...turn,
+        ...assistantMessage,
         messageID,
         isStreaming: !isAlreadyCancelled,
       },
       {
         phase: isAlreadyCancelled ? "cancelled" : "tool_running",
-        state: isAlreadyCancelled ? turn.state : "Preparing tool call",
+        state: isAlreadyCancelled ? assistantMessage.state : "Preparing tool call",
         toolName: isAlreadyCancelled ? null : readString(payload.toolName) || null,
       },
       appendToolInputDelta(preparedItems, {
@@ -3050,11 +3055,11 @@ function applyRuntimeEventToTurn(
 
   if (event.type === "part.removed") {
     const partID = readString(payload.partID)
-    if (!partID) return turn
+    if (!partID) return assistantMessage
 
-    return updateRuntimeTurnLifecycle(
+    return updateRuntimeMessageLifecycle(
       {
-        ...turn,
+        ...assistantMessage,
         isStreaming: true,
       },
       {},
@@ -3064,7 +3069,7 @@ function applyRuntimeEventToTurn(
 
   if (event.type === "task.state.updated") {
     const taskState = readTaskState(payload.state)
-    if (!taskState) return turn
+    if (!taskState) return assistantMessage
     const sourceID = `task-state:${event.turnID}`
     const baseItems = clearStreamingItems(preparedItems).filter(
       (traceItem) => traceItem.kind !== "task-state" || traceItem.sourceID === sourceID,
@@ -3080,10 +3085,10 @@ function applyRuntimeEventToTurn(
       }),
     )
 
-    return updateRuntimeTurnLifecycle(
+    return updateRuntimeMessageLifecycle(
       {
-        ...turn,
-        isStreaming: !isSettledAssistantPhase(turn.runtime.phase),
+        ...assistantMessage,
+        isStreaming: !isSettledAssistantPhase(assistantMessage.runtime.phase),
       },
       {},
       nextItems,
@@ -3092,20 +3097,20 @@ function applyRuntimeEventToTurn(
 
   if (event.type === "part.recorded") {
     const partRecord = readRecord(payload.part)
-    if (readString(partRecord?.type) !== "compaction") return turn
+    if (readString(partRecord?.type) !== "compaction") return assistantMessage
 
     const traceItems = buildTraceItemFromPart(partRecord, {
       debugEntries,
       backendTurnID: eventBackendTurnID,
     })
-    if (traceItems.length === 0) return turn
+    if (traceItems.length === 0) return assistantMessage
 
     const nextItems = upsertTraceItems(clearStreamingItems(preparedItems), traceItems)
 
-    return updateRuntimeTurnLifecycle(
+    return updateRuntimeMessageLifecycle(
       {
-        ...turn,
-        isStreaming: !isSettledAssistantPhase(turn.runtime.phase),
+        ...assistantMessage,
+        isStreaming: !isSettledAssistantPhase(assistantMessage.runtime.phase),
       },
       {},
       nextItems,
@@ -3125,31 +3130,31 @@ function applyRuntimeEventToTurn(
     event.type === "snapshot.captured"
   ) {
     const partRecord = readRecord(part)
-    const messageID = readString(partRecord?.messageID) || resolvePayloadMessageID(payload) || turn.messageID
+    const messageID = readString(partRecord?.messageID) || resolvePayloadMessageID(payload) || assistantMessage.messageID
     const traceItems = buildTraceItemFromPart(part, {
       debugEntries,
       messageID,
       backendTurnID: eventBackendTurnID,
     })
-    if (traceItems.length === 0) return turn
+    if (traceItems.length === 0) return assistantMessage
 
     let nextItems = upsertTraceItems(clearStreamingItems(preparedItems), traceItems)
     const primaryItem = traceItems[0]
     const partState = readRecord(partRecord?.state)
     const approvalRequestID = readString(partState?.approvalID) || null
-    const isStreaming = !isSettledAssistantPhase(turn.runtime.phase)
+    const isStreaming = !isSettledAssistantPhase(assistantMessage.runtime.phase)
 
     if (primaryItem?.kind === "tool") {
-      const inferredLifecycle = inferToolLifecycleFromTraceItem(turn, primaryItem, approvalRequestID)
+      const inferredLifecycle = inferToolLifecycleFromTraceItem(assistantMessage, primaryItem, approvalRequestID)
 
-      return updateRuntimeTurnLifecycle(
+      return updateRuntimeMessageLifecycle(
         {
-          ...turn,
+          ...assistantMessage,
           messageID,
           isStreaming,
         },
         inferredLifecycle ?? (
-          primaryItem.status === "waiting-approval" && turn.runtime.phase === "waiting_approval" && approvalRequestID
+          primaryItem.status === "waiting-approval" && assistantMessage.runtime.phase === "waiting_approval" && approvalRequestID
             ? { approvalRequestID }
             : {}
         ),
@@ -3157,9 +3162,9 @@ function applyRuntimeEventToTurn(
       )
     }
 
-    return updateRuntimeTurnLifecycle(
+    return updateRuntimeMessageLifecycle(
       {
-        ...turn,
+        ...assistantMessage,
         messageID,
         isStreaming,
       },
@@ -3170,20 +3175,20 @@ function applyRuntimeEventToTurn(
 
   if (event.type === "turn.completed") {
     const parts = Array.isArray(payload.parts) ? payload.parts : []
-    const messageID = resolvePayloadMessageID(payload) || turn.messageID
+    const messageID = resolvePayloadMessageID(payload) || assistantMessage.messageID
     const ownership = eventOwnership(messageID)
     const baseItems = settleDraftPatchPreviews(preparedItems, "completed")
     const finalizedItems = alignAnonymousTraceItemsWithParts(clearStreamingItems(baseItems), parts, ownership)
     const nextItems = mergeTraceParts(finalizedItems, parts, ownership)
 
     return finalizeStreamAssistantThreadMessage({
-      ...turn,
+      ...assistantMessage,
       messageID,
       runtime: eventTimestamp === undefined
-        ? turn.runtime
+        ? assistantMessage.runtime
         : {
-            ...turn.runtime,
-            startedAt: eventTimestamp < turn.runtime.startedAt ? eventTimestamp : turn.runtime.startedAt,
+            ...assistantMessage.runtime,
+            startedAt: eventTimestamp < assistantMessage.runtime.startedAt ? eventTimestamp : assistantMessage.runtime.startedAt,
             updatedAt: eventTimestamp,
           },
       state: "Backend response received",
@@ -3202,16 +3207,16 @@ function applyRuntimeEventToTurn(
     const parts = Array.isArray(payload.parts) ? payload.parts : []
     const failure = readHistoryErrorPresentation(payload.errorInfo)
     const message = failure?.message || readString(payload.error) || "Unknown backend error"
-    const messageID = resolvePayloadMessageID(payload) || turn.messageID
+    const messageID = resolvePayloadMessageID(payload) || assistantMessage.messageID
     const ownership = eventOwnership(messageID)
-    const messageTurn = applyAssistantMessageMetadata(turn, payload.message)
+    const metadataMessage = applyAssistantMessageMetadata(assistantMessage, payload.message)
     const baseItems = settleDraftPatchPreviews(preparedItems, "error")
     const nextItems = appendTraceItem(
       mergeTraceParts(clearStreamingItems(baseItems), parts, ownership),
       createTraceItem({
         kind: "error",
         label: "Error",
-        title: formatErrorTraceTitle("Runtime turn failed", failure),
+        title: formatErrorTraceTitle("Runtime execution failed", failure),
         detail: message,
         status: "error",
         messageID: ownership.messageID,
@@ -3220,9 +3225,9 @@ function applyRuntimeEventToTurn(
       }),
     )
 
-    return updateRuntimeTurnLifecycle(
+    return updateRuntimeMessageLifecycle(
       {
-        ...messageTurn,
+        ...metadataMessage,
         messageID,
         isStreaming: false,
       },
@@ -3237,20 +3242,20 @@ function applyRuntimeEventToTurn(
 
   if (event.type === "turn.cancelled") {
     const parts = Array.isArray(payload.parts) ? payload.parts : []
-    const detail = readString(payload.detail) || readString(payload.reason) || "The turn was cancelled."
-    const messageID = resolvePayloadMessageID(payload) || turn.messageID
+    const detail = readString(payload.detail) || readString(payload.reason) || "The execution was cancelled."
+    const messageID = resolvePayloadMessageID(payload) || assistantMessage.messageID
     const ownership = eventOwnership(messageID)
-    const cancelledTurn = markAssistantThreadMessageInterrupted(applyAssistantMessageMetadata(turn, payload.message), detail)
-    const cancelledItems = settleDraftPatchPreviews(cancelledTurn.items, "cancelled")
+    const cancelledMessage = markAssistantThreadMessageInterrupted(applyAssistantMessageMetadata(assistantMessage, payload.message), detail)
+    const cancelledItems = settleDraftPatchPreviews(cancelledMessage.items, "cancelled")
     const nextItems = upsertTraceItem(
       mergeTraceParts(cancelledItems, parts, ownership),
       createTraceItem({
         kind: "system",
         label: "System",
-        title: "Turn cancelled",
+        title: "Execution cancelled",
         detail,
         status: "completed",
-        sourceID: `${turn.id}:cancelled`,
+        sourceID: `${assistantMessage.id}:cancelled`,
         messageID: ownership.messageID,
         backendTurnID: ownership.backendTurnID,
         section: "workflow",
@@ -3260,9 +3265,9 @@ function applyRuntimeEventToTurn(
       }),
     )
 
-    return updateRuntimeTurnLifecycle(
+    return updateRuntimeMessageLifecycle(
       {
-        ...cancelledTurn,
+        ...cancelledMessage,
         messageID,
         isStreaming: false,
       },
@@ -3277,21 +3282,21 @@ function applyRuntimeEventToTurn(
     )
   }
 
-  return turn
+  return assistantMessage
 }
 
-export function applyAgentStreamEventToThreadMessage(turn: AssistantThreadMessage, item: AgentStreamEvent): AssistantThreadMessage {
+export function applyAgentStreamEventToThreadMessage(assistantMessage: AssistantThreadMessage, item: AgentStreamEvent): AssistantThreadMessage {
   const runtimeEvent = readRuntimeEvent(item)
   if (runtimeEvent) {
-    return applyRuntimeEventToTurn(turn, item, runtimeEvent)
+    return applyRuntimeEventToMessage(assistantMessage, item, runtimeEvent)
   }
 
-  if (isSettledAssistantPhase(turn.runtime.phase) && !isTerminalLegacyStreamEvent(item.event)) {
-    return turn
+  if (isSettledAssistantPhase(assistantMessage.runtime.phase) && !isTerminalLegacyStreamEvent(item.event)) {
+    return assistantMessage
   }
 
   const payload = readRecord(item.data)
-  const preparedItems = settleQueuedPrompt(turn.items, turn.id)
+  const preparedItems = settleQueuedPrompt(assistantMessage.items, assistantMessage.id)
   const payloadBackendTurnID = readString(payload?.backendTurnID) || readString(payload?.turnID) || undefined
   const payloadOwnership = (messageID?: string): TraceItemOwnership => ({
     messageID: messageID || undefined,
@@ -3303,7 +3308,7 @@ export function applyAgentStreamEventToThreadMessage(turn: AssistantThreadMessag
 
     return updateAssistantThreadMessageLifecycle(
       {
-        ...turn,
+        ...assistantMessage,
         isStreaming: true,
       },
       {
@@ -3312,7 +3317,7 @@ export function applyAgentStreamEventToThreadMessage(turn: AssistantThreadMessag
       },
       appendSystemTrace(
         preparedItems,
-        turn.id,
+        assistantMessage.id,
         "Agent stream connected",
         "Renderer subscribed to live backend updates.",
         "completed",
@@ -3330,7 +3335,7 @@ export function applyAgentStreamEventToThreadMessage(turn: AssistantThreadMessag
     const fullText = readString(payload?.text)
     const kind = readString(payload?.kind) || "text"
     const sourceID = readString(payload?.partID) || undefined
-    const messageID = resolvePayloadMessageID(payload ?? {}) || turn.messageID
+    const messageID = resolvePayloadMessageID(payload ?? {}) || assistantMessage.messageID
     const debugEntries = buildStreamEventDebugEntries("delta", payload, {
       "message.id": readString(payload?.messageID),
       "part.id": sourceID ?? "",
@@ -3339,7 +3344,7 @@ export function applyAgentStreamEventToThreadMessage(turn: AssistantThreadMessag
     if (kind === "reasoning") {
       return updateAssistantThreadMessageLifecycle(
         {
-          ...turn,
+          ...assistantMessage,
           messageID,
           isStreaming: true,
         },
@@ -3361,7 +3366,7 @@ export function applyAgentStreamEventToThreadMessage(turn: AssistantThreadMessag
 
     return updateAssistantThreadMessageLifecycle(
       {
-        ...turn,
+        ...assistantMessage,
         messageID,
         isStreaming: true,
       },
@@ -3383,30 +3388,30 @@ export function applyAgentStreamEventToThreadMessage(turn: AssistantThreadMessag
 
   if (item.event === "part") {
     const partRecord = readRecord(payload?.part)
-    const messageID = readString(partRecord?.messageID) || resolvePayloadMessageID(payload ?? {}) || turn.messageID
+    const messageID = readString(partRecord?.messageID) || resolvePayloadMessageID(payload ?? {}) || assistantMessage.messageID
     const traceItems = buildTraceItemFromPart(payload?.part, {
       debugEntries: buildStreamEventDebugEntries("part", payload),
       messageID,
       backendTurnID: payloadBackendTurnID,
     })
-    if (traceItems.length === 0) return turn
+    if (traceItems.length === 0) return assistantMessage
     const nextItems = upsertTraceItems(clearStreamingItems(preparedItems), traceItems)
     const primaryItem = traceItems[0]
     const partState = readRecord(partRecord?.state)
     const approvalRequestID = readString(partState?.approvalID) || null
-    const isStreaming = !isSettledAssistantPhase(turn.runtime.phase)
+    const isStreaming = !isSettledAssistantPhase(assistantMessage.runtime.phase)
 
     if (primaryItem?.kind === "tool") {
-      const inferredLifecycle = inferToolLifecycleFromTraceItem(turn, primaryItem, approvalRequestID)
+      const inferredLifecycle = inferToolLifecycleFromTraceItem(assistantMessage, primaryItem, approvalRequestID)
 
       return updateAssistantThreadMessageLifecycle(
         {
-          ...turn,
+          ...assistantMessage,
           messageID,
           isStreaming,
         },
         inferredLifecycle ?? (
-          primaryItem.status === "waiting-approval" && turn.runtime.phase === "waiting_approval" && approvalRequestID
+          primaryItem.status === "waiting-approval" && assistantMessage.runtime.phase === "waiting_approval" && approvalRequestID
             ? { approvalRequestID }
             : {}
         ),
@@ -3416,7 +3421,7 @@ export function applyAgentStreamEventToThreadMessage(turn: AssistantThreadMessag
 
     return updateAssistantThreadMessageLifecycle(
       {
-        ...turn,
+        ...assistantMessage,
         messageID,
         isStreaming,
       },
@@ -3427,7 +3432,7 @@ export function applyAgentStreamEventToThreadMessage(turn: AssistantThreadMessag
 
   if (item.event === "done") {
     const parts = Array.isArray(payload?.parts) ? payload.parts : []
-    const messageID = resolvePayloadMessageID(payload ?? {}) || turn.messageID
+    const messageID = resolvePayloadMessageID(payload ?? {}) || assistantMessage.messageID
     const ownership = payloadOwnership(messageID)
     const finalizedItems = alignAnonymousTraceItemsWithParts(clearStreamingItems(preparedItems), parts, ownership)
     const nextItems = mergeTraceParts(finalizedItems, parts, ownership)
@@ -3437,7 +3442,7 @@ export function applyAgentStreamEventToThreadMessage(turn: AssistantThreadMessag
     })
 
     return finalizeStreamAssistantThreadMessage({
-      ...turn,
+      ...assistantMessage,
       messageID,
       state: "Backend response received",
       items: nextItems,
@@ -3452,7 +3457,7 @@ export function applyAgentStreamEventToThreadMessage(turn: AssistantThreadMessag
 
   if (item.event === "error") {
     const message = readString(payload?.message) || "Unknown backend error"
-    const messageID = resolvePayloadMessageID(payload ?? {}) || turn.messageID
+    const messageID = resolvePayloadMessageID(payload ?? {}) || assistantMessage.messageID
     const ownership = payloadOwnership(messageID)
     const debugEntries = buildStreamEventDebugEntries("error", payload)
     const nextItems = appendTraceItem(
@@ -3471,7 +3476,7 @@ export function applyAgentStreamEventToThreadMessage(turn: AssistantThreadMessag
 
     return updateAssistantThreadMessageLifecycle(
       {
-        ...turn,
+        ...assistantMessage,
         messageID,
         isStreaming: false,
       },
@@ -3484,7 +3489,7 @@ export function applyAgentStreamEventToThreadMessage(turn: AssistantThreadMessag
     )
   }
 
-  return turn
+  return assistantMessage
 }
 
 export function buildAgentThreadMessage(prompt: string, session: SessionSummary, workspaceName: string, platform: string): AssistantThreadMessage {
@@ -3544,10 +3549,10 @@ export function buildAgentThreadMessage(prompt: string, session: SessionSummary,
 }
 
 export function buildAgentThreadMessageFromEvents(events: AgentStreamEvent[], prompt: string): AssistantThreadMessage {
-  let turn = buildStreamingAssistantThreadMessage(prompt)
+  let assistantMessage = buildStreamingAssistantThreadMessage(prompt)
   for (const event of events) {
-    turn = applyAgentStreamEventToThreadMessage(turn, event)
+    assistantMessage = applyAgentStreamEventToThreadMessage(assistantMessage, event)
   }
 
-  return turn.isStreaming ? finalizeStreamAssistantThreadMessage(turn) : turn
+  return assistantMessage.isStreaming ? finalizeStreamAssistantThreadMessage(assistantMessage) : assistantMessage
 }

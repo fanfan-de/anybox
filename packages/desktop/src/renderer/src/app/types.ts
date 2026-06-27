@@ -882,16 +882,11 @@ export interface UserThreadMessage {
   submissionMode?: "steer" | "queued"
   streamInsertion?: {
     assistantThreadMessageID?: string
-    /** @deprecated Use assistantThreadMessageID for the frontend message projection. */
-    assistantTurnID?: string
     afterItemCount: number
     status?: "pending" | "consumed"
   }
   timestamp: number
 }
-
-/** @deprecated Frontend conversation nodes are messages, not backend runtime turns. */
-export type UserTurn = UserThreadMessage
 
 export interface PendingConversationInput {
   id: string
@@ -904,8 +899,6 @@ export interface PendingConversationInput {
   mode: "queued" | "steer"
   status: "pending" | "accepted" | "consumed" | "cancelled" | "failed"
   targetAssistantThreadMessageID?: string
-  /** @deprecated Use targetAssistantThreadMessageID for the frontend message projection. */
-  targetAssistantTurnID?: string
   afterItemCount?: number
   createdAt: number
 }
@@ -915,18 +908,12 @@ export interface UserThreadMessageAttachment {
   path?: string
 }
 
-/** @deprecated Use UserThreadMessageAttachment. */
-export type UserTurnAttachment = UserThreadMessageAttachment
-
 export interface UserThreadMessageReference {
   id: string
   label: string
   title?: string
   kind?: "comment" | "file"
 }
-
-/** @deprecated Use UserThreadMessageReference. */
-export type UserTurnReference = UserThreadMessageReference
 
 export type AssistantTraceItemKind =
   | "system"
@@ -1018,9 +1005,6 @@ export type AssistantThreadMessagePhase =
   | "cancelled"
   | "failed"
 
-/** @deprecated Frontend assistant state belongs to the assistant thread message projection. */
-export type AssistantTurnPhase = AssistantThreadMessagePhase
-
 export interface AssistantThreadMessageRuntime {
   phase: AssistantThreadMessagePhase
   startedAt: number
@@ -1030,9 +1014,6 @@ export interface AssistantThreadMessageRuntime {
   approvalRequestID?: string
   errorMessage?: string
 }
-
-/** @deprecated Use AssistantThreadMessageRuntime. */
-export type AssistantTurnRuntime = AssistantThreadMessageRuntime
 
 export interface AssistantTraceDebugEntry {
   label: string
@@ -1145,13 +1126,7 @@ export interface AssistantThreadMessage {
   isStreaming?: boolean
 }
 
-/** @deprecated Frontend conversation nodes are messages, not backend runtime turns. */
-export type AssistantTurn = AssistantThreadMessage
-
 export type ThreadMessage = UserThreadMessage | AssistantThreadMessage
-
-/** @deprecated Use ThreadMessage for frontend conversation projections. */
-export type Turn = ThreadMessage
 
 export interface AgentStreamEvent {
   id?: string
@@ -1188,19 +1163,13 @@ export interface PendingAgentStream {
   sessionID: string
   backendSessionID?: string
   assistantThreadMessageID: string
-  /** @deprecated Use assistantThreadMessageID for the frontend message projection. */
-  assistantTurnID?: string
   backendTurnID?: string
   pendingInput?: PendingConversationInput
   pendingInputID?: string
   userThreadMessageID?: string
-  /** @deprecated Use userThreadMessageID for the frontend message projection. */
-  userTurnID?: string
   requestedMode?: "new-turn" | "queue" | "steer"
   executionMode?: AgentSessionExecutionMode
   createdAssistantThreadMessageID?: string
-  /** @deprecated Use createdAssistantThreadMessageID for the frontend message projection. */
-  createdAssistantTurnID?: string
   cancelRequested?: boolean
 }
 

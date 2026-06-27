@@ -387,7 +387,7 @@ export function useAgentWorkspace({
       diffSummary: activeSessionDiff,
       messageTree: activeMessageTree,
       sessionID: activeSessionID,
-      turns: activeMessages,
+      messages: activeMessages,
     })
     updateRendererCurrentSessionDiagnostics(diagnostics)
     reportRendererMemoryDiagnostics("active-session-update")

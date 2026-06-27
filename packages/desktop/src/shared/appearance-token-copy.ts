@@ -558,27 +558,27 @@ const zhCNTokenRowCopy = {
     label: "会话面板悬停",
     description: "会话面板内紧凑控件悬停和聚焦时的背景。",
   },
-  "semantic-thread-user-turn-diff-card-surface": {
+  "semantic-thread-user-message-diff-card-surface": {
     label: "变更卡片背景",
     description: "用户回合文件变更卡片的背景。",
   },
-  "semantic-thread-user-turn-diff-card-border": {
+  "semantic-thread-user-message-diff-card-border": {
     label: "变更卡片边框",
     description: "用户回合文件变更卡片和预览的外边框。",
   },
-  "semantic-thread-user-turn-diff-divider": {
+  "semantic-thread-user-message-diff-divider": {
     label: "变更行分隔线",
     description: "用户回合文件变更行之间的分隔线颜色。",
   },
-  "semantic-thread-user-turn-diff-row-surface-hover": {
+  "semantic-thread-user-message-diff-row-surface-hover": {
     label: "变更行悬停",
     description: "用户回合文件变更行和摘要控件的悬停背景。",
   },
-  "semantic-thread-user-turn-diff-row-surface-focus": {
+  "semantic-thread-user-message-diff-row-surface-focus": {
     label: "变更行聚焦",
     description: "用户回合文件变更行和摘要控件的键盘聚焦背景。",
   },
-  "semantic-thread-user-turn-diff-preview-surface": {
+  "semantic-thread-user-message-diff-preview-surface": {
     label: "变更预览背景",
     description: "嵌入式用户变更预览的背景。",
   },

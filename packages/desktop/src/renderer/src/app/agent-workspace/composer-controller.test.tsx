@@ -109,7 +109,7 @@ function useComposerHarness(input?: {
   const [pendingConversationInputsBySession, setPendingConversationInputsBySessionState] = useState<Record<string, PendingConversationInput[]>>({})
   const [sessionDirectoryBySession, setSessionDirectoryBySessionState] = useState<Record<string, string>>({})
   const [workspaces, setWorkspacesState] = useState<WorkspaceGroup[]>([workspace])
-  const turnsRef = useRef<Record<string, ThreadMessage[]>>({})
+  const messagesRef = useRef<Record<string, ThreadMessage[]>>({})
   const pendingStreamsRef = useRef<Record<string, PendingAgentStream>>({})
   const permissionRequestsRequestRef = useRef<Record<string, number>>({})
   const updateAssistantConversationMessage = useRef(vi.fn((
@@ -117,8 +117,8 @@ function useComposerHarness(input?: {
     assistantMessageID: string,
     updater: (message: AssistantThreadMessage) => AssistantThreadMessage,
   ) => {
-    turnsRef.current[sessionID] = (turnsRef.current[sessionID] ?? []).map((turn) =>
-      turn.kind === "assistant" && turn.id === assistantMessageID ? updater(turn) : turn,
+    messagesRef.current[sessionID] = (messagesRef.current[sessionID] ?? []).map((message) =>
+      message.kind === "assistant" && message.id === assistantMessageID ? updater(message) : message,
     )
   })).current
   const createdSession = createSession("created-session-1")
@@ -146,14 +146,14 @@ function useComposerHarness(input?: {
     agentSessions,
     cancellingSessionIDs,
     appendConversationMessages: (sessionID, nextMessages) => {
-      turnsRef.current[sessionID] = [...(turnsRef.current[sessionID] ?? []), ...nextMessages]
+      messagesRef.current[sessionID] = [...(messagesRef.current[sessionID] ?? []), ...nextMessages]
     },
     composerAttachmentsByTabKey: attachmentsByTabKey,
     composerDraftStateByTabKey: draftsByTabKey,
     composerParentMessageIDByTabKey,
     createSessionForWorkspace,
     createSessionTabs,
-    getConversationMessages: (sessionID) => turnsRef.current[sessionID] ?? [],
+    getConversationMessages: (sessionID) => messagesRef.current[sessionID] ?? [],
     isSendingByTabKey,
     loadPendingPermissionRequestsForSession: vi.fn(async () => undefined),
     loadSessionDiffForSession: vi.fn(async () => undefined),
@@ -168,7 +168,7 @@ function useComposerHarness(input?: {
     refreshWorkspaceFromDirectory: vi.fn(),
     reloadSessionHistoryForSession: vi.fn(async () => undefined),
     replaceConversationMessages: (sessionID, nextMessages) => {
-      turnsRef.current[sessionID] = nextMessages
+      messagesRef.current[sessionID] = nextMessages
     },
     sessionDirectoryBySession,
     setAgentSessions: (update) => applyUpdate(setAgentSessionsState, agentSessions, update),
@@ -199,7 +199,7 @@ function useComposerHarness(input?: {
     createSessionTabs,
     pendingConversationInputsBySession,
     pendingStreamsRef,
-    turnsRef,
+    messagesRef,
     updateAssistantConversationMessage,
     workspaces,
   }
@@ -213,12 +213,12 @@ describe("composer controller", () => {
       await result.current.controller.handleSend()
     })
 
-    expect(result.current.turnsRef.current["session-1"]).toHaveLength(2)
-    expect(result.current.turnsRef.current["session-1"]?.[0]).toMatchObject({
+    expect(result.current.messagesRef.current["session-1"]).toHaveLength(2)
+    expect(result.current.messagesRef.current["session-1"]?.[0]).toMatchObject({
       kind: "user",
       text: "Existing prompt",
     })
-    expect(result.current.turnsRef.current["session-1"]?.[1]).toMatchObject({
+    expect(result.current.messagesRef.current["session-1"]?.[1]).toMatchObject({
       kind: "assistant",
     })
   })
@@ -236,7 +236,7 @@ describe("composer controller", () => {
       await result.current.controller.handleSend()
     })
 
-    expect(result.current.turnsRef.current["session-1"]?.[0]).toMatchObject({
+    expect(result.current.messagesRef.current["session-1"]?.[0]).toMatchObject({
       kind: "user",
       text: "Existing prompt",
     })
@@ -281,7 +281,7 @@ describe("composer controller", () => {
         backendTurnID: "turn-active",
         sessionID: "session-1",
       }
-      result.current.turnsRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-active")]
+      result.current.messagesRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-active")]
 
       await act(async () => {
         await result.current.controller.handleSend()
@@ -294,8 +294,8 @@ describe("composer controller", () => {
       }))
       expect(interrupt).not.toHaveBeenCalled()
       expect(cancelTurn).not.toHaveBeenCalled()
-      expect(result.current.turnsRef.current["session-1"]).toHaveLength(1)
-      expect(result.current.turnsRef.current["session-1"]?.[0]).toMatchObject({
+      expect(result.current.messagesRef.current["session-1"]).toHaveLength(1)
+      expect(result.current.messagesRef.current["session-1"]?.[0]).toMatchObject({
         kind: "assistant",
       })
       expect(result.current.pendingConversationInputsBySession["session-1"]?.[0]).toMatchObject({
@@ -350,7 +350,7 @@ describe("composer controller", () => {
         backendTurnID: "turn-active",
         sessionID: "session-1",
       }
-      result.current.turnsRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-active")]
+      result.current.messagesRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-active")]
 
       await act(async () => {
         await result.current.controller.handleSend()
@@ -361,7 +361,7 @@ describe("composer controller", () => {
         concurrentInputMode: "queue",
         text: "Existing prompt",
       }))
-      expect(result.current.turnsRef.current["session-1"]).toHaveLength(1)
+      expect(result.current.messagesRef.current["session-1"]).toHaveLength(1)
       expect(result.current.pendingConversationInputsBySession["session-1"]?.[0]).toMatchObject({
         mode: "queued",
         status: "pending",
@@ -426,7 +426,7 @@ describe("composer controller", () => {
         backendTurnID: "turn-active",
         sessionID: "session-1",
       }
-      result.current.turnsRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-active")]
+      result.current.messagesRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-active")]
 
       await act(async () => {
         await result.current.controller.handleSend()
@@ -477,11 +477,11 @@ describe("composer controller", () => {
         throw new Error("Expected steer stream and assistant placeholder")
       }
 
-      const nextMessages = result.current.turnsRef.current["session-1"] ?? []
-      expect(nextMessages.find((turn) => turn.id === queuedInput.id)).toBeUndefined()
-      expect(nextMessages.find((turn) => turn.id === queuedAssistantThreadMessageID)).toBeUndefined()
-      expect(nextMessages.some((turn) => turn.kind === "user" && turn.text === "Existing prompt")).toBe(false)
-      expect(nextMessages.find((turn) => turn.id === steerAssistantThreadMessageID)).toBeUndefined()
+      const nextMessages = result.current.messagesRef.current["session-1"] ?? []
+      expect(nextMessages.find((message) => message.id === queuedInput.id)).toBeUndefined()
+      expect(nextMessages.find((message) => message.id === queuedAssistantThreadMessageID)).toBeUndefined()
+      expect(nextMessages.some((message) => message.kind === "user" && message.text === "Existing prompt")).toBe(false)
+      expect(nextMessages.find((message) => message.id === steerAssistantThreadMessageID)).toBeUndefined()
       const steerInput = result.current.pendingConversationInputsBySession["session-1"]?.find(
         (input) => input.mode === "steer",
       )
@@ -551,7 +551,7 @@ describe("composer controller", () => {
         backendTurnID: "turn-active",
         sessionID: "session-1",
       }
-      result.current.turnsRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-active", "pending")]
+      result.current.messagesRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-active", "pending")]
 
       await act(async () => {
         await result.current.controller.handleSend({
@@ -566,7 +566,7 @@ describe("composer controller", () => {
         text: "Existing prompt",
       }))
       expect(result.current.pendingStreamsRef.current["stream-active"]?.cancelRequested).toBeUndefined()
-      expect(result.current.turnsRef.current["session-1"]?.[0]).toMatchObject({
+      expect(result.current.messagesRef.current["session-1"]?.[0]).toMatchObject({
         kind: "assistant",
         runtime: {
           phase: "tool_running",
@@ -584,7 +584,7 @@ describe("composer controller", () => {
       )
       expect(steerStream).toBeDefined()
       expect(steerStream?.assistantThreadMessageID).not.toBe("assistant-active")
-      expect(result.current.turnsRef.current["session-1"]).toHaveLength(1)
+      expect(result.current.messagesRef.current["session-1"]).toHaveLength(1)
       expect(result.current.pendingConversationInputsBySession["session-1"]?.[0]).toMatchObject({
         mode: "steer",
         status: "pending",
@@ -621,7 +621,7 @@ describe("composer controller", () => {
       await result.current.controller.handleSend()
     })
 
-    expect(result.current.turnsRef.current["session-1"]).toBeUndefined()
+    expect(result.current.messagesRef.current["session-1"]).toBeUndefined()
   })
 
   it("does not send while permission requests are pending", async () => {
@@ -658,7 +658,7 @@ describe("composer controller", () => {
       await result.current.controller.handleSend()
     })
 
-    expect(result.current.turnsRef.current["session-1"]).toBeUndefined()
+    expect(result.current.messagesRef.current["session-1"]).toBeUndefined()
   })
 
   it("creates a session before sending from a create-session tab", async () => {
@@ -682,7 +682,7 @@ describe("composer controller", () => {
         skipInitialHistoryLoad: true,
       }),
     )
-    expect(result.current.turnsRef.current["created-session-1"]).toHaveLength(2)
+    expect(result.current.messagesRef.current["created-session-1"]).toHaveLength(2)
   })
 
   it("uses a saved model selection for the first create-session prompt", async () => {
@@ -935,7 +935,7 @@ describe("composer controller", () => {
         sessionID: "created-session-1",
         action: "enter-plan",
       })
-      expect(result.current.turnsRef.current["created-session-1"]).toHaveLength(2)
+      expect(result.current.messagesRef.current["created-session-1"]).toHaveLength(2)
       expect(result.current.workspaces[0]?.sessions.find((session) => session.id === "created-session-1")?.workflow?.mode).toBe(
         "planning",
       )
@@ -978,8 +978,8 @@ describe("composer controller", () => {
         sessionID: "created-session-1",
         action: "enter-plan",
       })
-      expect(result.current.turnsRef.current["created-session-1"]).toHaveLength(1)
-      expect(result.current.turnsRef.current["created-session-1"]?.[0]).toMatchObject({
+      expect(result.current.messagesRef.current["created-session-1"]).toHaveLength(1)
+      expect(result.current.messagesRef.current["created-session-1"]?.[0]).toMatchObject({
         kind: "assistant",
         runtime: {
           errorMessage: "Cannot enter plan mode",
@@ -1194,7 +1194,7 @@ describe("composer controller", () => {
         backendSessionID: "backend-session-1",
         sessionID: "session-1",
       }
-      result.current.turnsRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-active")]
+      result.current.messagesRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-active")]
 
       await act(async () => {
         await result.current.controller.handleCancelSend()
@@ -1207,7 +1207,7 @@ describe("composer controller", () => {
       })
       expect(result.current.pendingStreamsRef.current["stream-1"]?.cancelRequested).toBe(true)
       expect(result.current.cancellingSessionIDs["session-1"]).toBe(true)
-      expect(result.current.turnsRef.current["session-1"]?.[0]).toMatchObject({
+      expect(result.current.messagesRef.current["session-1"]?.[0]).toMatchObject({
         kind: "assistant",
         runtime: {
           phase: "tool_running",
@@ -1255,7 +1255,7 @@ describe("composer controller", () => {
         backendSessionID: "backend-session-1",
         sessionID: "session-1",
       }
-      result.current.turnsRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-visible")]
+      result.current.messagesRef.current["session-1"] = [createStreamingAssistantThreadMessage("assistant-visible")]
 
       await act(async () => {
         await result.current.controller.handleCancelSend()
@@ -1266,7 +1266,7 @@ describe("composer controller", () => {
         clientTurnID: "stream-1",
         reason: "user-interrupt",
       })
-      expect(result.current.turnsRef.current["session-1"]?.[0]).toMatchObject({
+      expect(result.current.messagesRef.current["session-1"]?.[0]).toMatchObject({
         kind: "assistant",
         runtime: {
           phase: "tool_running",

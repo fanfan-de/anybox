@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest"
 import { buildThreadMessagesFromHistory, buildUserThreadMessage } from "./stream"
 import { mergeUserMessagePresentationState, persistUserMessages, readPersistedUserMessages } from "./user-message-presentation"
 
-describe("user turn presentation persistence", () => {
+describe("user message presentation persistence", () => {
   beforeEach(() => {
     window.localStorage.clear()
   })
@@ -60,7 +60,7 @@ describe("user turn presentation persistence", () => {
     )
   })
 
-  it("persists and restores user turn diff summaries", () => {
+  it("persists and restores user message diff summaries", () => {
     persistUserMessages("session-1", [
       buildUserThreadMessage({
         displayText: "Update the app",
@@ -116,12 +116,12 @@ describe("user turn presentation persistence", () => {
       }),
     ])
 
-    const restoredTurn = readPersistedUserMessages("session-1")[0]
-    expect(restoredTurn).toMatchObject({
+    const restoredMessage = readPersistedUserMessages("session-1")[0]
+    expect(restoredMessage).toMatchObject({
       kind: "user",
       submissionMode: "steer",
     })
-    expect(restoredTurn?.streamInsertion).toBeUndefined()
+    expect(restoredMessage?.streamInsertion).toBeUndefined()
   })
 
   it("does not persist queued submission mode", () => {
@@ -133,12 +133,12 @@ describe("user turn presentation persistence", () => {
       }),
     ])
 
-    const restoredTurn = readPersistedUserMessages("session-1")[0]
-    expect(restoredTurn).toMatchObject({
+    const restoredMessage = readPersistedUserMessages("session-1")[0]
+    expect(restoredMessage).toMatchObject({
       kind: "user",
       displayText: "Send this next",
     })
-    expect(restoredTurn?.submissionMode).toBeUndefined()
+    expect(restoredMessage?.submissionMode).toBeUndefined()
   })
 
   it("keeps backend diff summaries when merging user presentation state", () => {

@@ -168,7 +168,7 @@ const activeTurns = new Map<string, TurnRuntime>()
 
 6. 前端展示状态
 
-   renderer 里的 `AssistantTurnPhase` 是 UI 层状态，定义在 `packages\desktop\src\renderer\src\app\types.ts`。它会把后端 phase 映射成更适合展示的状态，例如：
+   renderer 里的 `AssistantThreadMessagePhase` 是 assistant message projection 的 UI 层状态，定义在 `packages\desktop\src\renderer\src\app\types.ts`。它会把后端 runtime turn phase 映射成更适合展示的状态，例如：
 
    - `requesting`、`waiting_first_event`：前端本地状态，表示请求已经发出但还没有收到后端 runtime event。
    - `tool_running`：前端对后端 `executing_tool` 的展示名。
@@ -309,7 +309,7 @@ renderer 侧再根据 `backendSessionID`、`clientTurnID`、`turnID` 做事件�
 
 这种设计很贴合桌面 UI：
 
-- 用户发起 turn 时，request stream 能立刻关联到本地 UI turn。
+- 用户发起 backend turn 时，request stream 能立刻关联到本地 assistant message。
 - 打开的 canvas/session 可以订阅后台事件。
 - 断线可通过 `Last-Event-ID` 做重连。
 

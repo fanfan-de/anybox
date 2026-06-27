@@ -158,7 +158,7 @@ interface RightSidebarSideChatPanelState {
   session: SessionSummary
   sideChatSessions: SessionSummary[]
   tabKey: string
-  turns: ThreadMessage[]
+  messages: ThreadMessage[]
   workspaceDirectory: string | null
   workspaceID: string | null
 }
@@ -192,7 +192,7 @@ function rightSidebarSideChatPanelStatesAreEqual(
     left.sideChatSessions.length === right.sideChatSessions.length &&
     left.sideChatSessions.every((session, index) => session === right.sideChatSessions[index]) &&
     left.tabKey === right.tabKey &&
-    left.turns === right.turns &&
+    left.messages === right.messages &&
     left.workspaceDirectory === right.workspaceDirectory &&
     left.workspaceID === right.workspaceID
   )
@@ -1880,13 +1880,13 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
 
       const sessionSelection = findSession(state.sessions.workspaces, session.id)
       const tabKey = getWorkbenchTabKey(createSessionWorkbenchTab(session.id))
-      const turns = state.agentStream.conversations[session.id] ?? EMPTY_SIDE_CHAT_MESSAGES
+      const messages = state.agentStream.conversations[session.id] ?? EMPTY_SIDE_CHAT_MESSAGES
       const activity = state.agentStream.conversationActivityBySession[session.id]
       const isInterruptible = Boolean(
         state.composer.isSendingByTabKey[tabKey] ||
         state.agentStream.cancellingSessionIDs[session.id] ||
         activity?.hasStreamingAssistantMessage ||
-        turns.some((turn) => turn.kind === "assistant" && turn.isStreaming),
+        messages.some((message) => message.kind === "assistant" && message.isStreaming),
       )
 
       return {
@@ -1907,7 +1907,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
           ? sideChatSessions
           : [...sideChatSessions, session],
         tabKey,
-        turns,
+        messages,
         workspaceDirectory: sessionSelection.workspace?.directory ?? null,
         workspaceID: sessionSelection.workspace?.id ?? null,
       }
@@ -1915,7 +1915,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     rightSidebarSideChatPanelStatesAreEqual,
   )
   const conversationStore = useWorkspaceStoreSelector(workspaceStore, (state) => state.agentStream.conversationStore)
-  const liveRightSidebarSideChatTurns = useConversationMessages(
+  const liveRightSidebarSideChatMessages = useConversationMessages(
     conversationStore,
     rightSidebarSideChatPanelState?.session.id ?? null,
   )
@@ -1923,11 +1923,11 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     if (!rightSidebarSideChatPanelState) return null
     return {
       ...rightSidebarSideChatPanelState,
-      turns: liveRightSidebarSideChatTurns.length > 0
-        ? liveRightSidebarSideChatTurns
-        : rightSidebarSideChatPanelState.turns,
+      messages: liveRightSidebarSideChatMessages.length > 0
+        ? liveRightSidebarSideChatMessages
+        : rightSidebarSideChatPanelState.messages,
     }
-  }, [liveRightSidebarSideChatTurns, rightSidebarSideChatPanelState])
+  }, [liveRightSidebarSideChatMessages, rightSidebarSideChatPanelState])
   const rightSidebarThreadLinkContext = liveRightSidebarSideChatPanelState
   const rightSidebarProfiler = useMemo(
     () => createRendererProfilerOnRender("RightSidebar commit", () => ({

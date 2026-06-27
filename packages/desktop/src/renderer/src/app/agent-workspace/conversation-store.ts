@@ -375,10 +375,10 @@ export function createConversationStore(initialConversations: ConversationMessag
       return updateConversations((current) => {
         const currentMessages = current[sessionID] ?? EMPTY_MESSAGES
         let didUpdate = false
-        const nextMessages = currentMessages.map((turn) => {
-          if (turn.kind !== "assistant" || turn.id !== assistantMessageID) return turn
+        const nextMessages = currentMessages.map((message) => {
+          if (message.kind !== "assistant" || message.id !== assistantMessageID) return message
           didUpdate = true
-          return updater(turn)
+          return updater(message)
         })
         return didUpdate ? { ...current, [sessionID]: nextMessages } : current
       })
@@ -403,15 +403,15 @@ export function createConversationStore(initialConversations: ConversationMessag
       return updateConversations((current) => {
         const currentMessages = current[sessionID] ?? EMPTY_MESSAGES
         let didUpdate = false
-        const nextMessages = currentMessages.map((turn) => {
-          if (turn.kind !== "assistant" || turn.id !== assistantMessageID) return turn
-          const itemIndex = turn.items.findIndex((candidate) => candidate.id === itemID)
-          if (itemIndex === -1) return turn
-          const nextItems = [...turn.items]
+        const nextMessages = currentMessages.map((message) => {
+          if (message.kind !== "assistant" || message.id !== assistantMessageID) return message
+          const itemIndex = message.items.findIndex((candidate) => candidate.id === itemID)
+          if (itemIndex === -1) return message
+          const nextItems = [...message.items]
           nextItems[itemIndex] = item
           didUpdate = true
           return {
-            ...turn,
+            ...message,
             items: nextItems,
           }
         })

@@ -418,11 +418,11 @@ function getComposerSendButtonDescription({
   }
 
   if (sendButtonActsAsStop) {
-    return "Stop the current assistant turn. Press Shift+Enter for a newline."
+    return "Stop the current execution. Press Shift+Enter for a newline."
   }
 
   if (hasRunningTask) {
-    return "Queue this message after the current assistant turn. Press Shift+Enter for a newline."
+    return "Queue this message after the current execution. Press Shift+Enter for a newline."
   }
 
   return "Press Enter to send. Press Shift+Enter for a newline."

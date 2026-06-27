@@ -85,7 +85,7 @@ function createCancelledAssistantThreadMessage(id: string, messageID?: string): 
         id: `${id}-cancelled`,
         kind: "system",
         label: "System",
-        title: "Turn cancelled",
+        title: "Execution cancelled",
         detail: "Prompt cancellation requested.",
         status: "completed",
         sourceID: `${id}:cancelled`,
@@ -159,7 +159,7 @@ function createCancelledToolAssistantThreadMessage(id: string, messageID?: strin
         id: `${id}-cancelled`,
         kind: "system",
         label: "System",
-        title: "Turn cancelled",
+        title: "Execution cancelled",
         detail: "Prompt cancellation requested.",
         status: "completed",
         sourceID: `${id}:cancelled`,
@@ -538,29 +538,29 @@ describe("session stream controller helpers", () => {
     })
   })
 
-  it("applies backend execution mode to pending user turn presentation", () => {
+  it("applies backend execution mode to pending user message presentation", () => {
     const pendingUser: UserThreadMessage = {
       ...createUserThreadMessage("user-pending", "Continue with this"),
       submissionMode: "queued",
     }
     const assistant = createPendingToolAssistantThreadMessage("assistant-active")
 
-    const nextMessageTurns = applyExecutionModeToUserMessagePresentation({
-      turns: [assistant, pendingUser],
+    const nextMessages = applyExecutionModeToUserMessagePresentation({
+      messages: [assistant, pendingUser],
       userThreadMessageID: pendingUser.id,
       assistantThreadMessageID: assistant.id,
       mode: "new-turn",
     })
-    expect(nextMessageTurns[1]).toMatchObject({
+    expect(nextMessages[1]).toMatchObject({
       id: pendingUser.id,
       kind: "user",
       text: "Continue with this",
     })
-    expect(nextMessageTurns[1]).not.toHaveProperty("submissionMode")
-    expect(nextMessageTurns[1]).not.toHaveProperty("streamInsertion")
+    expect(nextMessages[1]).not.toHaveProperty("submissionMode")
+    expect(nextMessages[1]).not.toHaveProperty("streamInsertion")
 
     const queuedMessages = applyExecutionModeToUserMessagePresentation({
-      turns: [
+      messages: [
         assistant,
         {
           ...pendingUser,
@@ -584,7 +584,7 @@ describe("session stream controller helpers", () => {
     expect(queuedMessages[1]).not.toHaveProperty("streamInsertion")
 
     const steerMessages = applyExecutionModeToUserMessagePresentation({
-      turns: [
+      messages: [
         assistant,
         {
           ...pendingUser,
@@ -611,20 +611,20 @@ describe("session stream controller helpers", () => {
       },
     })
 
-    const recordedTurns = revealBackendRecordedUserMessagePresentation({
-      turns: steerMessages,
+    const recordedMessages = revealBackendRecordedUserMessagePresentation({
+      messages: steerMessages,
       userThreadMessageID: pendingUser.id,
     })
-    expect(recordedTurns[1]).toMatchObject({
+    expect(recordedMessages[1]).toMatchObject({
       id: pendingUser.id,
       kind: "user",
       text: "Continue with this",
     })
-    expect(recordedTurns[1]).not.toHaveProperty("submissionMode")
-    expect(recordedTurns[1]).not.toHaveProperty("streamInsertion")
+    expect(recordedMessages[1]).not.toHaveProperty("submissionMode")
+    expect(recordedMessages[1]).not.toHaveProperty("streamInsertion")
   })
 
-  it("reveals pending steer user turns at the continued-by-user handoff boundary", () => {
+  it("reveals pending steer user messages at the continued-by-user handoff boundary", () => {
     const assistant = createPendingToolAssistantThreadMessage("assistant-active")
     const otherAssistant = createPendingToolAssistantThreadMessage("assistant-other")
     const pendingSteer: UserThreadMessage = {
@@ -664,7 +664,7 @@ describe("session stream controller helpers", () => {
     }
 
     const nextMessages = revealPendingSteerUserMessagesAtHandoffPresentation({
-      turns: [
+      messages: [
         assistant,
         pendingSteer,
         queued,
@@ -718,12 +718,12 @@ describe("session stream controller helpers", () => {
   })
 
   it("ensures a missing stream assistant target before applying live events", () => {
-    const turns: ThreadMessage[] = [
+    const messages: ThreadMessage[] = [
       createUserThreadMessage("user-1", "Prompt"),
     ]
 
     const nextMessages = ensureAssistantThreadMessagePresentation({
-      turns,
+      messages,
       assistantThreadMessageID: "assistant-steer",
       detail: "Receiving backend session activity.",
     })
@@ -743,7 +743,7 @@ describe("session stream controller helpers", () => {
     })
 
     expect(ensureAssistantThreadMessagePresentation({
-      turns: nextMessages,
+      messages: nextMessages,
       assistantThreadMessageID: "assistant-steer",
     })).toBe(nextMessages)
   })
@@ -999,7 +999,7 @@ describe("session stream controller helpers", () => {
     })
   })
 
-  it("inserts externally persisted user turns before the streaming assistant placeholder", () => {
+  it("inserts externally persisted user messages before the streaming assistant placeholder", () => {
     const streamingAssistant: AssistantThreadMessage = {
       ...createAssistantThreadMessage("assistant-streaming", "item-streaming", "Streaming reply"),
       timestamp: 20,
@@ -1028,7 +1028,7 @@ describe("session stream controller helpers", () => {
       beforeMessageID: "assistant-streaming",
     })
 
-    expect(merged.map((turn) => turn.id)).toEqual([
+    expect(merged.map((message) => message.id)).toEqual([
       "user-existing",
       "assistant-existing",
       "user-mobile",
@@ -1036,7 +1036,7 @@ describe("session stream controller helpers", () => {
     ])
   })
 
-  it("replaces the optimistic local user turn when subscription history contains the same prompt", () => {
+  it("replaces the optimistic local user message when subscription history contains the same prompt", () => {
     const streamingAssistant: AssistantThreadMessage = {
       ...createAssistantThreadMessage("assistant-streaming", "item-streaming", "Streaming reply"),
       timestamp: 20,
@@ -1068,7 +1068,7 @@ describe("session stream controller helpers", () => {
     })
 
     expect(merged).toHaveLength(2)
-    expect(merged.map((turn) => turn.id)).toEqual([
+    expect(merged.map((message) => message.id)).toEqual([
       "message-user-backend",
       "assistant-streaming",
     ])
@@ -1143,17 +1143,17 @@ describe("session stream controller helpers", () => {
     })
   })
 
-  it("treats equal conversation turns as equivalent for no-op history refreshes", () => {
-    const turns: ThreadMessage[] = [
+  it("treats equal conversation messages as equivalent for no-op history refreshes", () => {
+    const messages: ThreadMessage[] = [
       createUserThreadMessage("user-1", "hello"),
       createAssistantThreadMessage("assistant-1", "item-1", "Done", "source-1", "message-1"),
     ]
 
-    expect(conversationMessagesAreEquivalent(turns, turns.map((turn) => ({ ...turn })))).toBe(true)
-    expect(conversationMessagesAreEquivalent(turns, [...turns, createUserThreadMessage("user-2", "again")])).toBe(false)
+    expect(conversationMessagesAreEquivalent(messages, messages.map((message) => ({ ...message })))).toBe(true)
+    expect(conversationMessagesAreEquivalent(messages, [...messages, createUserThreadMessage("user-2", "again")])).toBe(false)
   })
 
-  it("keeps a cancelled assistant turn cancelled when late pending tool history is merged by message id", () => {
+  it("keeps a cancelled assistant message cancelled when late pending tool history is merged by message id", () => {
     const originalMessage = createCancelledAssistantThreadMessage("assistant-local", "message-tool")
     const latePendingToolMessage = createPendingToolAssistantThreadMessage("assistant-history", "message-tool")
 
@@ -1177,13 +1177,13 @@ describe("session stream controller helpers", () => {
         }),
         expect.objectContaining({
           kind: "system",
-          title: "Turn cancelled",
+          title: "Execution cancelled",
         }),
       ]),
     })
   })
 
-  it("keeps a local cancellation when history reloads a late unmatched pending tool turn", () => {
+  it("keeps a local cancellation when history reloads a late unmatched pending tool message", () => {
     const previousMessage = createCancelledAssistantThreadMessage("assistant-local")
     const historyMessage = createPendingToolAssistantThreadMessage("assistant-history", "message-tool")
 
@@ -1329,7 +1329,7 @@ describe("session stream controller helpers", () => {
     expect((reconciled[0] as AssistantThreadMessage).items.some((item) => item.title === "Approval required")).toBe(false)
   })
 
-  it("uses earlier canonical trace timestamps when merging assistant turns by message", () => {
+  it("uses earlier canonical trace timestamps when merging assistant messages by message id", () => {
     const currentMessage = createAssistantThreadMessage(
       "assistant-current",
       "trace-task-local",
@@ -1511,7 +1511,7 @@ describe("session stream controller helpers", () => {
     })
   })
 
-  it("keeps a merged assistant turn streaming when history refresh reports a running backend phase", () => {
+  it("keeps a merged assistant message streaming when history refresh reports a running backend phase", () => {
     const currentMessage = createAssistantThreadMessage(
       "assistant-local",
       "trace-task-local",

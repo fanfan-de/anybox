@@ -5563,7 +5563,7 @@ body.is-dragging-settings-page {
 }
 
 .label,
-.turn-meta,
+.thread-message-meta,
 .trace-item-label,
 .trace-item-status,
 .assistant-section-label,
@@ -5648,7 +5648,7 @@ body.is-dragging-settings-page {
 }
 
 .label,
-.turn-meta,
+.thread-message-meta,
 .trace-item-label,
 .trace-item-status,
 .assistant-section-label,

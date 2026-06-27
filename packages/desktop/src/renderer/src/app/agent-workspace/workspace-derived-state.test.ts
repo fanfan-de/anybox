@@ -364,22 +364,22 @@ describe("workspace derived state", () => {
     expect(publishSnapshot.panels[panelAID]).not.toHaveProperty("workspaces")
     expect(publishSnapshot.panels).not.toHaveProperty(createPanelID)
 
-    const derivedWithTurns = buildDerivedState({
+    const derivedWithMessages = buildDerivedState({
       conversations: {
-        [sessionA.id]: [{ id: "turn-a", kind: "user", text: "from A", timestamp: 1 }],
+        [sessionA.id]: [{ id: "message-a", kind: "user", text: "from A", timestamp: 1 }],
       },
       createSessionTabs: [createSessionTab],
       dockviewLayout: layout,
       workspaces: [workspace],
     })
-    expect(derivedWithTurns.workbenchPanelStateByID[panelAID]?.activeMessages).toHaveLength(1)
+    expect(derivedWithMessages.workbenchPanelStateByID[panelAID]?.activeMessages).toHaveLength(1)
 
-    const publishSnapshotAfterTurns = buildWorkbenchPublishSnapshot({
+    const publishSnapshotAfterMessages = buildWorkbenchPublishSnapshot({
       createSessionTabs: [createSessionTab],
       dockviewLayout: layout,
       workspaces: [workspace],
     })
-    expect(workbenchPublishSnapshotsAreEqual(publishSnapshot, publishSnapshotAfterTurns)).toBe(true)
+    expect(workbenchPublishSnapshotsAreEqual(publishSnapshot, publishSnapshotAfterMessages)).toBe(true)
 
     const renamedSnapshot = buildWorkbenchPublishSnapshot({
       createSessionTabs: [createSessionTab],
@@ -389,7 +389,7 @@ describe("workspace derived state", () => {
     expect(workbenchPublishSnapshotsAreEqual(publishSnapshot, renamedSnapshot)).toBe(false)
   })
 
-  it("derives running sessions from sending tabs and streaming assistant turns", () => {
+  it("derives running sessions from sending tabs and streaming assistant messages", () => {
     const sendingSession = createSession("session-sending", "Sending")
     const streamingSession = createSession("session-streaming", "Streaming")
     const idleSession = createSession("session-idle", "Idle")

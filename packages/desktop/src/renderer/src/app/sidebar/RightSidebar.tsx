@@ -56,7 +56,7 @@ interface RightSidebarSideChatPanelState {
   session: SessionSummary
   sideChatSessions: SessionSummary[]
   tabKey: string
-  turns: ThreadMessage[]
+  messages: ThreadMessage[]
 }
 
 interface RightSidebarProps {
@@ -513,7 +513,7 @@ export function RightSidebar({
               permissionRequestActionRequestID={permissionRequestActionRequestID}
               session={sideChatPanelState.session}
               sideChatSessions={sideChatPanelState.sideChatSessions}
-              turns={sideChatPanelState.turns}
+              messages={sideChatPanelState.messages}
               onAskUserQuestionAnswer={(answer) =>
                 onAskUserQuestionAnswer({
                   freeformText: answer.freeformText,

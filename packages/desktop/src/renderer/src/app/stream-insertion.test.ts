@@ -88,8 +88,8 @@ function consumedSteerMessage(): UserThreadMessage {
 }
 
 function steerMessageWithoutInsertion(): UserThreadMessage {
-  const { streamInsertion: _streamInsertion, ...turn } = steerMessage()
-  return turn
+  const { streamInsertion: _streamInsertion, ...message } = steerMessage()
+  return message
 }
 
 function steerMessageAfterCurrentTool(): UserThreadMessage {
@@ -113,112 +113,112 @@ function queuedMessage(): UserThreadMessage {
 }
 
 describe("stream insertion presentation", () => {
-  it("keeps steer turns pending while the following tool is still running", () => {
-    const turn = steerMessage()
-    const turns: ThreadMessage[] = [assistantMessage("running"), turn]
+  it("keeps steer messages pending while the following tool is still running", () => {
+    const message = steerMessage()
+    const messages: ThreadMessage[] = [assistantMessage("running"), message]
 
-    expect(isStreamInsertionReady(turns, turn)).toBe(false)
-    expect(getPendingStreamInsertionUserMessages(turns)).toEqual([turn])
-    expect(getAssistantStreamInsertionUserMessages(turns, assistantMessage("running"))).toEqual([])
+    expect(isStreamInsertionReady(messages, message)).toBe(false)
+    expect(getPendingStreamInsertionUserMessages(messages)).toEqual([message])
+    expect(getAssistantStreamInsertionUserMessages(messages, assistantMessage("running"))).toEqual([])
   })
 
-  it("keeps steer turns pending when the insertion point is after an active tool", () => {
-    const turn = steerMessageAfterCurrentTool()
-    const turns: ThreadMessage[] = [assistantMessage("running"), turn]
+  it("keeps steer messages pending when the insertion point is after an active tool", () => {
+    const message = steerMessageAfterCurrentTool()
+    const messages: ThreadMessage[] = [assistantMessage("running"), message]
 
-    expect(isStreamInsertionReady(turns, turn)).toBe(false)
-    expect(getPendingStreamInsertionUserMessages(turns)).toEqual([turn])
-    expect(getAssistantStreamInsertionUserMessages(turns, assistantMessage("running"))).toEqual([])
+    expect(isStreamInsertionReady(messages, message)).toBe(false)
+    expect(getPendingStreamInsertionUserMessages(messages)).toEqual([message])
+    expect(getAssistantStreamInsertionUserMessages(messages, assistantMessage("running"))).toEqual([])
   })
 
-  it("keeps steer turns without insertion metadata pending while the previous assistant is streaming", () => {
-    const turn = steerMessageWithoutInsertion()
-    const turns: ThreadMessage[] = [assistantMessage("running"), turn]
+  it("keeps steer messages without insertion metadata pending while the previous assistant is streaming", () => {
+    const message = steerMessageWithoutInsertion()
+    const messages: ThreadMessage[] = [assistantMessage("running"), message]
 
-    expect(isPendingSteerUserMessage(turns, turn)).toBe(true)
-    expect(getPendingStreamInsertionUserMessages(turns)).toEqual([turn])
+    expect(isPendingSteerUserMessage(messages, message)).toBe(true)
+    expect(getPendingStreamInsertionUserMessages(messages)).toEqual([message])
   })
 
-  it("keeps steer turns without insertion metadata pending until execution mode resolves", () => {
+  it("keeps steer messages without insertion metadata pending until execution mode resolves", () => {
     const assistant: AssistantThreadMessage = {
       ...assistantMessage("completed"),
       isStreaming: false,
     }
-    const turn = steerMessageWithoutInsertion()
-    const turns: ThreadMessage[] = [assistant, turn]
+    const message = steerMessageWithoutInsertion()
+    const messages: ThreadMessage[] = [assistant, message]
 
-    expect(isPendingSteerUserMessage(turns, turn)).toBe(true)
-    expect(getPendingStreamInsertionUserMessages(turns)).toEqual([turn])
+    expect(isPendingSteerUserMessage(messages, message)).toBe(true)
+    expect(getPendingStreamInsertionUserMessages(messages)).toEqual([message])
   })
 
-  it("keeps pending steer turns in the drawer after the insertion point is otherwise ready", () => {
+  it("keeps pending steer messages in the drawer after the insertion point is otherwise ready", () => {
     const assistant = assistantMessage("completed")
-    const turn = pendingSteerMessage()
-    const turns: ThreadMessage[] = [assistant, turn]
+    const message = pendingSteerMessage()
+    const messages: ThreadMessage[] = [assistant, message]
 
-    expect(isStreamInsertionReady(turns, turn)).toBe(true)
-    expect(getPendingStreamInsertionUserMessages(turns)).toEqual([turn])
-    expect(getAssistantStreamInsertionUserMessages(turns, assistant)).toEqual([])
+    expect(isStreamInsertionReady(messages, message)).toBe(true)
+    expect(getPendingStreamInsertionUserMessages(messages)).toEqual([message])
+    expect(getAssistantStreamInsertionUserMessages(messages, assistant)).toEqual([])
   })
 
-  it("moves consumed steer turns into the thread after the insertion point is ready", () => {
+  it("moves consumed steer messages into the thread after the insertion point is ready", () => {
     const assistant = assistantMessage("completed")
-    const turn = consumedSteerMessage()
-    const turns: ThreadMessage[] = [assistant, turn]
+    const message = consumedSteerMessage()
+    const messages: ThreadMessage[] = [assistant, message]
 
-    expect(isStreamInsertionReady(turns, turn)).toBe(true)
-    expect(getPendingStreamInsertionUserMessages(turns)).toEqual([])
-    expect(getAssistantStreamInsertionUserMessages(turns, assistant)).toEqual([turn])
+    expect(isStreamInsertionReady(messages, message)).toBe(true)
+    expect(getPendingStreamInsertionUserMessages(messages)).toEqual([])
+    expect(getAssistantStreamInsertionUserMessages(messages, assistant)).toEqual([message])
   })
 
-  it("moves steer turns into the thread after the following tool boundary", () => {
+  it("moves steer messages into the thread after the following tool boundary", () => {
     const assistant = assistantMessage("completed")
-    const turn = steerMessage()
-    const turns: ThreadMessage[] = [assistant, turn]
+    const message = steerMessage()
+    const messages: ThreadMessage[] = [assistant, message]
 
-    expect(isStreamInsertionReady(turns, turn)).toBe(true)
-    expect(getPendingStreamInsertionUserMessages(turns)).toEqual([])
-    expect(getAssistantStreamInsertionUserMessages(turns, assistant)).toEqual([turn])
-    expect(resolveStreamInsertionItemIndex(assistant.items, turn, 0)).toBe(2)
+    expect(isStreamInsertionReady(messages, message)).toBe(true)
+    expect(getPendingStreamInsertionUserMessages(messages)).toEqual([])
+    expect(getAssistantStreamInsertionUserMessages(messages, assistant)).toEqual([message])
+    expect(resolveStreamInsertionItemIndex(assistant.items, message, 0)).toBe(2)
   })
 
-  it("moves steer turns into the thread after the active tool at the insertion point completes", () => {
+  it("moves steer messages into the thread after the active tool at the insertion point completes", () => {
     const assistant = assistantMessage("completed")
-    const turn = steerMessageAfterCurrentTool()
-    const turns: ThreadMessage[] = [assistant, turn]
+    const message = steerMessageAfterCurrentTool()
+    const messages: ThreadMessage[] = [assistant, message]
 
-    expect(isStreamInsertionReady(turns, turn)).toBe(true)
-    expect(getPendingStreamInsertionUserMessages(turns)).toEqual([])
-    expect(getAssistantStreamInsertionUserMessages(turns, assistant)).toEqual([turn])
-    expect(resolveStreamInsertionItemIndex(assistant.items, turn, 0)).toBe(2)
+    expect(isStreamInsertionReady(messages, message)).toBe(true)
+    expect(getPendingStreamInsertionUserMessages(messages)).toEqual([])
+    expect(getAssistantStreamInsertionUserMessages(messages, assistant)).toEqual([message])
+    expect(resolveStreamInsertionItemIndex(assistant.items, message, 0)).toBe(2)
   })
 
-  it("moves steer turns into the thread after a tool boundary is cancelled", () => {
+  it("moves steer messages into the thread after a tool boundary is cancelled", () => {
     const assistant = assistantMessage("cancelled")
-    const turn = steerMessage()
-    const turns: ThreadMessage[] = [assistant, turn]
+    const message = steerMessage()
+    const messages: ThreadMessage[] = [assistant, message]
 
-    expect(isStreamInsertionReady(turns, turn)).toBe(true)
-    expect(getPendingStreamInsertionUserMessages(turns)).toEqual([])
-    expect(getAssistantStreamInsertionUserMessages(turns, assistant)).toEqual([turn])
-    expect(resolveStreamInsertionItemIndex(assistant.items, turn, 0)).toBe(2)
+    expect(isStreamInsertionReady(messages, message)).toBe(true)
+    expect(getPendingStreamInsertionUserMessages(messages)).toEqual([])
+    expect(getAssistantStreamInsertionUserMessages(messages, assistant)).toEqual([message])
+    expect(resolveStreamInsertionItemIndex(assistant.items, message, 0)).toBe(2)
   })
 
-  it("keeps queued user turns pending until execution mode resolves", () => {
-    const turn = queuedMessage()
+  it("keeps queued user messages pending until execution mode resolves", () => {
+    const message = queuedMessage()
     const streamingAssistant = assistantMessage("running")
-    const streamingMessages: ThreadMessage[] = [streamingAssistant, turn]
+    const streamingMessages: ThreadMessage[] = [streamingAssistant, message]
 
-    expect(isPendingQueuedUserMessage(streamingMessages, turn)).toBe(true)
-    expect(getPendingQueuedUserMessages(streamingMessages)).toEqual([turn])
+    expect(isPendingQueuedUserMessage(streamingMessages, message)).toBe(true)
+    expect(getPendingQueuedUserMessages(streamingMessages)).toEqual([message])
 
     const completedAssistant: AssistantThreadMessage = {
       ...streamingAssistant,
       isStreaming: false,
     }
-    const completedTurns: ThreadMessage[] = [completedAssistant, turn]
+    const completedMessages: ThreadMessage[] = [completedAssistant, message]
 
-    expect(isPendingQueuedUserMessage(completedTurns, turn)).toBe(true)
-    expect(getPendingQueuedUserMessages(completedTurns)).toEqual([turn])
+    expect(isPendingQueuedUserMessage(completedMessages, message)).toBe(true)
+    expect(getPendingQueuedUserMessages(completedMessages)).toEqual([message])
   })
 })

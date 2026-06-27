@@ -34,19 +34,19 @@ type PerformanceWithMemory = Performance & {
 }
 
 const EMPTY_SESSION_DIAGNOSTICS: DesktopRendererSessionMemoryDiagnostics = {
-  assistantTurnCount: 0,
+  assistantMessageCount: 0,
   currentSessionID: null,
   diffChars: 0,
   draftPatchChars: 0,
   maxTraceItemChars: 0,
   messageTreeContentChars: 0,
   messageTreeNodeCount: 0,
-  streamingAssistantTurnCount: 0,
+  streamingAssistantMessageCount: 0,
   toolInputChars: 0,
   toolOutputChars: 0,
   traceItemCount: 0,
   traceTextChars: 0,
-  turnCount: 0,
+  messageCount: 0,
   updatedAt: 0,
 }
 
@@ -191,22 +191,22 @@ export function buildRendererSessionMemoryDiagnostics(input: {
   diffSummary?: SessionDiffSummary | null
   messageTree?: SessionMessageTree | null
   sessionID?: string | null
-  turns: ThreadMessage[]
+  messages: ThreadMessage[]
 }): DesktopRendererSessionMemoryDiagnostics {
   let assistantMessageCount = 0
   let draftPatchChars = 0
   let maxTraceItemChars = 0
-  let streamingAssistantTurnCount = 0
+  let streamingAssistantMessageCount = 0
   let toolInputChars = 0
   let toolOutputChars = 0
   let traceItemCount = 0
   let traceTextChars = 0
 
-  for (const turn of input.turns) {
-    if (turn.kind !== "assistant") continue
-    const assistantMessage = turn as AssistantThreadMessage
+  for (const message of input.messages) {
+    if (message.kind !== "assistant") continue
+    const assistantMessage = message as AssistantThreadMessage
     assistantMessageCount += 1
-    if (assistantMessage.isStreaming) streamingAssistantTurnCount += 1
+    if (assistantMessage.isStreaming) streamingAssistantMessageCount += 1
     traceItemCount += assistantMessage.items.length
 
     for (const item of assistantMessage.items) {
@@ -220,18 +220,18 @@ export function buildRendererSessionMemoryDiagnostics(input: {
   }
 
   return {
-    assistantTurnCount: assistantMessageCount,
+    assistantMessageCount,
     currentSessionID: input.sessionID ?? null,
     diffChars: sessionDiffChars(input.diffSummary),
     draftPatchChars,
     maxTraceItemChars,
     ...messageTreeStats(input.messageTree),
-    streamingAssistantTurnCount,
+    streamingAssistantMessageCount,
     toolInputChars,
     toolOutputChars,
     traceItemCount,
     traceTextChars,
-    turnCount: input.turns.length,
+    messageCount: input.messages.length,
     updatedAt: Date.now(),
   }
 }
