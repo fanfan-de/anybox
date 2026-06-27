@@ -543,8 +543,6 @@ describe("ThreadView trace item renderers", () => {
               timestamp: 1,
               label: "Step",
               title: "Model step finished",
-              detail: "The model completed one generation step.",
-              status: "completed",
               section: "workflow",
               visibilityKey: "workflow",
             },
@@ -564,7 +562,7 @@ describe("ThreadView trace item renderers", () => {
 
     expect(row).not.toBeNull()
     expect(row?.textContent).toContain("Model step finished")
-    expect(row?.textContent).not.toContain("The model completed one generation step.")
+    expect(row?.textContent).not.toContain("completed")
     expect(container.querySelector(".trace-kind-step .trace-item-step-row")).toBeNull()
     expect(container.querySelector(".trace-kind-step .trace-log-detail")).toBeNull()
   })
@@ -1762,6 +1760,82 @@ describe("ThreadView trace collapse", () => {
     expect(processedTrace).toHaveAttribute("aria-expanded", "true")
     expect(getByText("I will inspect the project first.")).toBeInTheDocument()
     expect(getByText("list-directory")).toBeInTheDocument()
+  })
+
+  it("keeps workflow events after the final response in their backend order", () => {
+    const { getByRole, getByText, queryByText } = renderThread(
+      [
+        assistantTraceMessage(
+          "assistant-1",
+          [
+            {
+              id: "step-start",
+              kind: "step",
+              timestamp: 1,
+              label: "Step",
+              title: "Model step started",
+              section: "workflow",
+              visibilityKey: "workflow",
+            },
+            {
+              id: "response-1",
+              kind: "text",
+              timestamp: 2,
+              label: "Assistant",
+              text: "The model replied.",
+              status: "completed",
+            },
+            {
+              id: "step-finish",
+              kind: "step",
+              timestamp: 3,
+              label: "Step",
+              title: "Model step finished",
+              section: "workflow",
+              visibilityKey: "workflow",
+            },
+            {
+              id: "response-complete",
+              kind: "system",
+              timestamp: 4,
+              label: "Workflow",
+              title: "Response complete",
+              detail: "Finish reason: stop",
+              status: "completed",
+              section: "workflow",
+              visibilityKey: "workflow",
+            },
+          ],
+          false,
+        ),
+      ],
+      {
+        assistantTraceVisibility: {
+          ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+          workflow: true,
+        },
+      },
+    )
+
+    const processedTrace = getByRole("button", { name: /Processed/ })
+    expect(processedTrace).toHaveAttribute("aria-expanded", "false")
+    expect(queryByText("Model step started")).toBeNull()
+
+    const responseText = getByText("The model replied.")
+    const stepFinishedText = getByText("Model step finished")
+    const responseCompleteText = getByText("Response complete")
+
+    expect(responseText.compareDocumentPosition(stepFinishedText) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(stepFinishedText.compareDocumentPosition(responseCompleteText) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(stepFinishedText.closest(".assistant-message")).not.toBeNull()
+    expect(responseCompleteText.closest(".assistant-message")).not.toBeNull()
+
+    fireEvent.click(processedTrace)
+
+    const stepStartedRow = getByText("Model step started").closest(".assistant-process-item-row")
+    expect(stepStartedRow).not.toBeNull()
+    expect(stepStartedRow).toHaveClass("is-workflow")
+    expect(stepStartedRow?.closest(".assistant-message")).toBeNull()
   })
 
   it("does not collapse process trace while the assistant message is not terminal", () => {

@@ -177,7 +177,7 @@ describe("stream trace reducer", () => {
     ).toEqual(["assistant-a", "assistant-b"])
   })
 
-  it("treats completed history as completed even when a workflow step-start remains pending", () => {
+  it("treats completed history as completed even when it includes model step events", () => {
     const [message] = buildThreadMessagesFromHistory([
       {
         info: {
@@ -219,11 +219,11 @@ describe("stream trace reducer", () => {
     expect(message.runtime.phase).toBe("completed")
     expect(message.state).toBe("Backend response received")
     expect(message.isStreaming).toBe(false)
+    expect(message.items.find((item) => item.kind === "step" && item.title === "Model step started")?.status).toBeUndefined()
     expect(message.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           kind: "step",
-          status: "pending",
           title: "Model step started",
         }),
         expect.objectContaining({
@@ -1201,10 +1201,26 @@ describe("stream trace reducer", () => {
     message = applyAgentStreamEventToThreadMessage(message, {
       event: "runtime",
       data: {
-        eventID: "event-user-part",
+        eventID: "event-preparing-user",
         sessionID: "session-runtime",
         turnID: "turn-runtime",
         seq: 1,
+        timestamp: 99,
+        type: "turn.state.changed",
+        payload: {
+          phase: "preparing",
+          messageID: "message-user",
+        },
+      },
+    })
+
+    message = applyAgentStreamEventToThreadMessage(message, {
+      event: "runtime",
+      data: {
+        eventID: "event-user-part",
+        sessionID: "session-runtime",
+        turnID: "turn-runtime",
+        seq: 2,
         timestamp: 100,
         type: "part.recorded",
         payload: {
@@ -1218,9 +1234,163 @@ describe("stream trace reducer", () => {
       },
     })
 
+    message = applyAgentStreamEventToThreadMessage(message, {
+      event: "runtime",
+      data: {
+        eventID: "event-user-snapshot",
+        sessionID: "session-runtime",
+        turnID: "turn-runtime",
+        seq: 3,
+        timestamp: 101,
+        type: "snapshot.captured",
+        payload: {
+          phase: "turn-start",
+          part: {
+            id: "part-user-snapshot",
+            messageID: "message-user",
+            type: "snapshot",
+            snapshot: "workspace baseline",
+          },
+        },
+      },
+    })
+
     expect(message.items.some((item) => item.kind === "text" && item.text === "User prompt")).toBe(false)
-    expect(message.runtime.phase).toBe("waiting_first_event")
+    expect(message.items.some((item) => item.kind === "snapshot")).toBe(false)
+    expect(message.runtime.phase).toBe("preparing")
     expect(message.isStreaming).toBe(true)
+  })
+
+  it("surfaces canonical model step records during runtime streaming without duplicating terminal replay", () => {
+    let message = buildStreamingAssistantThreadMessage("Track model steps")
+
+    message = applyAgentStreamEventToThreadMessage(message, {
+      event: "runtime",
+      data: {
+        eventID: "event-state-waiting-llm",
+        sessionID: "session-runtime",
+        turnID: "turn-runtime",
+        seq: 1,
+        timestamp: 100,
+        type: "turn.state.changed",
+        payload: {
+          phase: "waiting_llm",
+          messageID: "message-runtime",
+        },
+      },
+    })
+
+    message = applyAgentStreamEventToThreadMessage(message, {
+      event: "runtime",
+      data: {
+        eventID: "event-step-start",
+        sessionID: "session-runtime",
+        turnID: "turn-runtime",
+        seq: 2,
+        timestamp: 101,
+        type: "part.recorded",
+        payload: {
+          part: {
+            id: "part-step-start",
+            sessionID: "session-runtime",
+            messageID: "message-runtime",
+            type: "step-start",
+          },
+        },
+      },
+    })
+
+    expect(message.items.find((item) => item.sourceID === "part-step-start")).toMatchObject({
+      kind: "step",
+      title: "Model step started",
+      section: "workflow",
+      visibilityKey: "workflow",
+      messageID: "message-runtime",
+      backendTurnID: "turn-runtime",
+    })
+    expect(message.items.find((item) => item.sourceID === "part-step-start")?.status).toBeUndefined()
+    expect(message.items.find((item) => item.sourceID === "part-step-start")?.detail).toBeUndefined()
+
+    message = applyAgentStreamEventToThreadMessage(message, {
+      event: "runtime",
+      data: {
+        eventID: "event-step-finish",
+        sessionID: "session-runtime",
+        turnID: "turn-runtime",
+        seq: 3,
+        timestamp: 102,
+        type: "part.recorded",
+        payload: {
+          part: {
+            id: "part-step-finish",
+            sessionID: "session-runtime",
+            messageID: "message-runtime",
+            type: "step-finish",
+            reason: "stop",
+          },
+        },
+      },
+    })
+
+    expect(message.items.find((item) => item.sourceID === "part-step-finish")).toMatchObject({
+      kind: "step",
+      title: "Model step finished",
+      messageID: "message-runtime",
+      backendTurnID: "turn-runtime",
+    })
+    expect(message.items.find((item) => item.sourceID === "part-step-finish")?.status).toBeUndefined()
+    expect(message.items.find((item) => item.sourceID === "part-step-finish")?.detail).toBeUndefined()
+
+    message = applyAgentStreamEventToThreadMessage(message, {
+      event: "runtime",
+      data: {
+        eventID: "event-completed",
+        sessionID: "session-runtime",
+        turnID: "turn-runtime",
+        seq: 4,
+        timestamp: 103,
+        type: "turn.completed",
+        payload: {
+          status: "completed",
+          finishReason: "stop",
+          message: {
+            id: "message-runtime",
+          },
+          parts: [
+            {
+              id: "part-step-start",
+              sessionID: "session-runtime",
+              messageID: "message-runtime",
+              type: "step-start",
+            },
+            {
+              id: "part-step-finish",
+              sessionID: "session-runtime",
+              messageID: "message-runtime",
+              type: "step-finish",
+              reason: "stop",
+            },
+            {
+              id: "part-text",
+              sessionID: "session-runtime",
+              messageID: "message-runtime",
+              type: "text",
+              text: "Done.",
+            },
+          ],
+        },
+      },
+    })
+
+    expect(message.runtime.phase).toBe("completed")
+    expect(message.items.filter((item) => item.sourceID === "part-step-start")).toHaveLength(1)
+    expect(message.items.filter((item) => item.sourceID === "part-step-finish")).toHaveLength(1)
+    expect(message.items.map((item) => item.title ?? item.text)).toEqual([
+      "Model step started",
+      "Model step finished",
+      "Done.",
+      "Response complete",
+    ])
   })
 
   it("surfaces runtime compaction records as visible workflow status", () => {

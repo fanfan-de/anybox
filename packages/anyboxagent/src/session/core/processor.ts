@@ -824,6 +824,7 @@ export function create(input: {
     let needsCompaction = false
     const emitRuntimeEvent = input.turn?.emit.bind(input.turn)
     const emitStreamRuntimeEvent = input.turn?.emitStream?.bind(input.turn) ?? emitRuntimeEvent
+    const emittedCanonicalPartIDs = new Set<string>()
     let currentPhase: string | undefined
     const persistPart = async (part: Message.Part) => {
         if (emitRuntimeEvent) {
@@ -832,9 +833,21 @@ export function create(input: {
 
         await Session.updatePart(part)
     }
+    const emitCanonicalPartRecorded = (part: Message.Part) => {
+        if (!emitRuntimeEvent) {
+            return false
+        }
+
+        if (emittedCanonicalPartIDs.has(part.id)) {
+            return true
+        }
+
+        emittedCanonicalPartIDs.add(part.id)
+        emitRuntimeEvent("part.recorded", { part })
+        return true
+    }
     const persistCanonicalPart = async (part: Message.Part) => {
-        if (emitRuntimeEvent) {
-            emitRuntimeEvent("part.recorded", { part })
+        if (emitCanonicalPartRecorded(part)) {
             return
         }
 
@@ -1840,6 +1853,7 @@ export function create(input: {
                                             : undefined,
                                 }
                                 draft.remember(stepStartPart)
+                                emitCanonicalPartRecorded(stepStartPart)
                                 break;
                             case "start":
                                 //SessionStatus.set(input.sessionID, { type: "busy" })
@@ -1923,6 +1937,7 @@ export function create(input: {
                                     tokens: buildStepTokens(value.usage),
                                 }
                                 draft.remember(stepFinishPart)
+                                emitCanonicalPartRecorded(stepFinishPart)
 
                                 break;
                             case "tool-approval-request":

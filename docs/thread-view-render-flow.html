@@ -1045,8 +1045,13 @@
             <article class="example-card is-logic">
               <header>
                 <h3>输出：切成 processBlocks 和 mainBlocks</h3>
-                <p>最终 response 之前的过程内容进 Processed；最终 response 及之后留在正文区。</p>
+                <p>同一 turn 的最终 response 之前的过程内容进 Processed；最终 response 及之后的 trace 保持原顺序留在正文区。</p>
               </header>
+              <p>
+                Current behavior: Processed is bounded by the final response in the same turn. Trace items before
+                that final response can be folded; trace items after it, such as completion metadata, stay after
+                the response so the display order still matches backend event order.
+              </p>
               <pre><code>const finalResponseBlockIndex = 2;
 
 processBlocks = [
@@ -1056,6 +1061,7 @@ processBlocks = [
 
 mainBlocks = [
   { sectionKey: "response", items: [a1] },
+  { sectionKey: "workflow", items: [stepFinish, responseComplete] },
   { sectionKey: "file-change", items: [p1] }
 ];
 

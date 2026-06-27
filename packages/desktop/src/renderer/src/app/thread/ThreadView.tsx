@@ -5915,9 +5915,11 @@ function VisibleThreadView({
   const contentResizeObserverRef = useRef<ResizeObserver | null>(null)
   const contentMutationObserverRef = useRef<MutationObserver | null>(null)
   const observedThreadContentRef = useRef<WeakSet<Element>>(new WeakSet())
+  const observeThreadContentRef = useRef<(() => void) | null>(null)
   const pendingObservedContentScrollSyncFrameRef = useRef<number | null>(null)
   const pendingObservedContentScrollSyncKeyRef = useRef<string | null>(null)
   const pendingSidebarResizeScrollSyncRef = useRef(false)
+  const pendingSidebarResizeContentObservationRef = useRef(false)
   const smoothFollowScrollRef = useRef<ThreadSmoothFollowScroll | null>(null)
   const lastUserScrollIntentAtRef = useRef(0)
   const lastUserScrollIntentDirectionRef = useRef<"up" | "down" | null>(null)
@@ -6667,6 +6669,16 @@ function VisibleThreadView({
     cancelThreadAnimationFrame(pendingObservedContentScrollSyncFrameRef.current)
     pendingObservedContentScrollSyncFrameRef.current = null
     pendingObservedContentScrollSyncKeyRef.current = null
+
+    const shouldRefreshObservedContent = pendingSidebarResizeContentObservationRef.current
+    pendingSidebarResizeContentObservationRef.current = false
+    if (shouldRefreshObservedContent) {
+      observeThreadContentRef.current?.()
+      if (shouldVirtualizeThreadRows) {
+        measureRenderedThreadVirtualRows({ syncScroll: true })
+      }
+    }
+
     cancelThreadAnimationFrame(pendingThreadVirtualMeasurementFrameRef.current)
     pendingThreadVirtualMeasurementFrameRef.current = null
     flushQueuedThreadVirtualMeasurements()
@@ -6708,6 +6720,7 @@ function VisibleThreadView({
       contentResizeObserverRef.current = null
       contentMutationObserverRef.current?.disconnect()
       contentMutationObserverRef.current = null
+      observeThreadContentRef.current = null
     }
   }, [])
 
@@ -6853,6 +6866,12 @@ function VisibleThreadView({
     contentMutationObserverRef.current?.disconnect()
 
     const resizeObserver = new ResizeObserver((entries) => {
+      if (isSidebarResizeInProgress()) {
+        pendingSidebarResizeScrollSyncRef.current = true
+        pendingSidebarResizeContentObservationRef.current = true
+        return
+      }
+
       measureThreadVirtualRowsFromResizeEntries(entries, { syncScroll: true })
       syncThreadScrollAfterObservedContentChange(effectiveScrollStateKey)
     })
@@ -6877,10 +6896,17 @@ function VisibleThreadView({
     }
 
     observeThreadContent()
+    observeThreadContentRef.current = observeThreadContent
     contentResizeObserverRef.current = resizeObserver
 
     if (typeof MutationObserver !== "undefined") {
       const mutationObserver = new MutationObserver(() => {
+        if (isSidebarResizeInProgress()) {
+          pendingSidebarResizeScrollSyncRef.current = true
+          pendingSidebarResizeContentObservationRef.current = true
+          return
+        }
+
         observeThreadContent()
         syncThreadScrollAfterObservedContentChange(effectiveScrollStateKey)
       })
@@ -6892,6 +6918,9 @@ function VisibleThreadView({
       resizeObserver.disconnect()
       if (contentResizeObserverRef.current === resizeObserver) {
         contentResizeObserverRef.current = null
+      }
+      if (observeThreadContentRef.current === observeThreadContent) {
+        observeThreadContentRef.current = null
       }
       observedThreadContentRef.current = new WeakSet()
       contentMutationObserverRef.current?.disconnect()
@@ -6914,6 +6943,12 @@ function VisibleThreadView({
 
   useLayoutEffect(() => {
     if (!shouldVirtualizeThreadRows) return
+
+    if (isSidebarResizeInProgress()) {
+      pendingSidebarResizeScrollSyncRef.current = true
+      pendingSidebarResizeContentObservationRef.current = true
+      return
+    }
 
     const didMeasure = measureRenderedThreadVirtualRows({ syncScroll: true })
     if (didMeasure) {

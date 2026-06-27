@@ -189,6 +189,31 @@ function canInferModelWaitFromRuntimePhase(phase: AssistantThreadMessagePhase) {
   return phase === "requesting" || phase === "waiting_first_event" || phase === "preparing"
 }
 
+function canApplyRuntimePartRecordToAssistantPhase(phase: AssistantThreadMessagePhase) {
+  return (
+    phase === "waiting_llm" ||
+    phase === "reasoning" ||
+    phase === "responding" ||
+    phase === "tool_running" ||
+    phase === "waiting_approval"
+  )
+}
+
+function shouldApplyRuntimePartRecordToAssistant(
+  assistantMessage: AssistantThreadMessage,
+  partRecord: Record<string, unknown> | null,
+) {
+  if (!partRecord) return false
+  if (readString(partRecord.type) === "compaction") return true
+
+  const partMessageID = readString(partRecord.messageID)
+  return (
+    Boolean(partMessageID) &&
+    partMessageID === assistantMessage.messageID &&
+    canApplyRuntimePartRecordToAssistantPhase(assistantMessage.runtime.phase)
+  )
+}
+
 function describeOptionalStructuredValue(
   value: unknown,
   options?: {
@@ -1629,8 +1654,6 @@ function buildTraceItemFromPart(
       kind: "step",
       label: "Step",
       title: "Model step started",
-      detail: "The model started a new generation step.",
-      status: "pending",
       timestamp: timestamp ?? undefined,
       section: "workflow",
       visibilityKey: "workflow",
@@ -1645,8 +1668,6 @@ function buildTraceItemFromPart(
       kind: "step",
       label: "Step",
       title: "Model step finished",
-      detail: readString(part.reason) || "The model completed one generation step.",
-      status: "completed",
       timestamp: timestamp ?? undefined,
       section: "workflow",
       visibilityKey: "workflow",
@@ -3230,20 +3251,46 @@ function applyRuntimeEventToMessage(
 
   if (event.type === "part.recorded") {
     const partRecord = readRecord(payload.part)
-    if (readString(partRecord?.type) !== "compaction") return assistantMessage
+    if (!partRecord || !shouldApplyRuntimePartRecordToAssistant(assistantMessage, partRecord)) return assistantMessage
 
+    const partMessageID = readString(partRecord.messageID) || undefined
+    const isCompactionPart = readString(partRecord.type) === "compaction"
     const traceItems = buildTraceItemFromPart(partRecord, {
       debugEntries,
+      messageID: isCompactionPart ? undefined : partMessageID,
       backendTurnID: eventBackendTurnID,
     })
     if (traceItems.length === 0) return assistantMessage
 
     const nextItems = upsertTraceItems(clearStreamingItems(preparedItems), traceItems)
+    const primaryItem = traceItems[0]
+    const partState = readRecord(partRecord.state)
+    const approvalRequestID = readString(partState?.approvalID) || null
+    const isStreaming = !isSettledAssistantPhase(assistantMessage.runtime.phase)
+
+    if (primaryItem?.kind === "tool") {
+      const inferredLifecycle = inferToolLifecycleFromTraceItem(assistantMessage, primaryItem, approvalRequestID)
+
+      return updateRuntimeMessageLifecycle(
+        {
+          ...assistantMessage,
+          messageID: partMessageID || assistantMessage.messageID,
+          isStreaming,
+        },
+        inferredLifecycle ?? (
+          primaryItem.status === "waiting-approval" && assistantMessage.runtime.phase === "waiting_approval" && approvalRequestID
+            ? { approvalRequestID }
+            : {}
+        ),
+        nextItems,
+      )
+    }
 
     return updateRuntimeMessageLifecycle(
       {
         ...assistantMessage,
-        isStreaming: !isSettledAssistantPhase(assistantMessage.runtime.phase),
+        messageID: isCompactionPart ? assistantMessage.messageID : partMessageID || assistantMessage.messageID,
+        isStreaming,
       },
       {},
       nextItems,
@@ -3263,6 +3310,10 @@ function applyRuntimeEventToMessage(
     event.type === "snapshot.captured"
   ) {
     const partRecord = readRecord(part)
+    if (event.type === "snapshot.captured" && readString(payload.phase) === "turn-start") {
+      return assistantMessage
+    }
+
     const messageID = readString(partRecord?.messageID) || resolvePayloadMessageID(payload) || assistantMessage.messageID
     const traceItems = buildTraceItemFromPart(part, {
       debugEntries,
