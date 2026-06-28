@@ -1,5 +1,53 @@
 /* Generated from legacy styles.css: window shell, rails, and top-level chrome. */
 
+@property --activity-rail-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 54px;
+}
+
+@property --activity-rail-display-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 54px;
+}
+
+@property --sidebar-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 236px;
+}
+
+@property --sidebar-display-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 236px;
+}
+
+@property --sidebar-resizer-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 10px;
+}
+
+@property --right-sidebar-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 480px;
+}
+
+@property --right-sidebar-display-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 480px;
+}
+
+@property --right-sidebar-resizer-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 10px;
+}
+
 
 
 .window-shell {
