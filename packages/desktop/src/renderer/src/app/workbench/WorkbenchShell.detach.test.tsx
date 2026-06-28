@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import type { SerializedDockview } from "dockview-react"
 import { createWorkspaceStore } from "../agent-workspace/workspace-store"
 import { DEFAULT_ASSISTANT_TRACE_VISIBILITY } from "../types"
+import { resetRendererFrameCoordinatorForTest } from "../renderer-frame-coordinator"
 import { WorkbenchShell, type WorkbenchShellProps } from "./WorkbenchShell"
 
 const dockviewMock = vi.hoisted(() => {
@@ -11,6 +12,7 @@ const dockviewMock = vi.hoisted(() => {
   const layoutListeners = new Set<() => void>()
   const willDragPanelListeners = new Set<(event: any) => void>()
   const groupElement = document.createElement("div")
+  let lastProps: any = null
   let snapshot: SerializedDockview | null = null
 
   Object.defineProperty(groupElement, "getBoundingClientRect", {
@@ -75,6 +77,7 @@ const dockviewMock = vi.hoisted(() => {
     fromJSON: vi.fn(),
     getPanel: vi.fn(() => null),
     groups: [group] as any[],
+    layout: vi.fn(),
     onDidActiveGroupChange: vi.fn((listener: (group: any) => void) => {
       activeGroupListeners.add(listener)
       return {
@@ -128,6 +131,12 @@ const dockviewMock = vi.hoisted(() => {
     api,
     group,
     headerPanelApi,
+    get lastProps() {
+      return lastProps
+    },
+    set lastProps(value: any) {
+      lastProps = value
+    },
     panel,
     reset: () => {
       activeGroupListeners.clear()
@@ -175,6 +184,7 @@ const dockviewMock = vi.hoisted(() => {
       api.clear.mockClear()
       api.fromJSON.mockClear()
       api.getPanel.mockClear()
+      api.layout.mockClear()
       api.onDidActiveGroupChange.mockClear()
       api.onDidActivePanelChange.mockClear()
       api.onDidLayoutChange.mockClear()
@@ -185,6 +195,7 @@ const dockviewMock = vi.hoisted(() => {
       headerPanelApi.isActive = false
       headerPanelApi.onDidActiveChange.mockClear()
       headerPanelApi.setActive.mockClear()
+      lastProps = null
       tabPointerDown.mockClear()
     },
     tabPointerDown,
@@ -198,8 +209,11 @@ vi.mock("dockview-react", async () => {
   return {
     DockviewReact: (props: {
       defaultTabComponent?: React.FunctionComponent<any>
+      disableAutoResizing?: boolean
       onReady?: (event: { api: typeof dockviewMock.api }) => void
+      scrollbars?: "custom" | "native"
     }) => {
+      dockviewMock.lastProps = props
       React.useEffect(() => {
         props.onReady?.({ api: dockviewMock.api })
       }, [props])
@@ -317,7 +331,66 @@ function createProps(overrides: Partial<WorkbenchShellProps> = {}): WorkbenchShe
 
 describe("WorkbenchShell detach", () => {
   afterEach(() => {
+    resetRendererFrameCoordinatorForTest()
     vi.clearAllMocks()
+  })
+
+  it("configures Dockview for manual queued resizing and native tab scrolling", async () => {
+    dockviewMock.reset()
+
+    render(<WorkbenchShell {...createProps()} />)
+
+    await waitFor(() => {
+      expect(dockviewMock.lastProps?.disableAutoResizing).toBe(true)
+    })
+    expect(dockviewMock.lastProps?.scrollbars).toBe("native")
+  })
+
+  it("queues Dockview layouts from observed workbench size changes", async () => {
+    dockviewMock.reset()
+    const originalResizeObserver = globalThis.ResizeObserver
+    let resizeCallback: ResizeObserverCallback | null = null
+
+    class ManualResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallback = callback
+      }
+
+      disconnect = vi.fn()
+      observe = vi.fn()
+      unobserve = vi.fn()
+    }
+
+    globalThis.ResizeObserver = ManualResizeObserver as unknown as typeof ResizeObserver
+
+    try {
+      render(<WorkbenchShell {...createProps()} />)
+
+      await waitFor(() => {
+        expect(resizeCallback).not.toBeNull()
+      })
+
+      dockviewMock.api.layout.mockClear()
+
+      const dispatchResize = (callback: ResizeObserverCallback | null) => {
+        if (!callback) throw new Error("ResizeObserver callback was not registered.")
+        callback([
+          {
+            borderBoxSize: [{ blockSize: 419.6, inlineSize: 642.4 }] as ResizeObserverSize[],
+            contentRect: { height: 419.6, width: 642.4 } as DOMRectReadOnly,
+            target: document.createElement("div"),
+          } as unknown as ResizeObserverEntry,
+        ], {} as ResizeObserver)
+      }
+
+      dispatchResize(resizeCallback)
+
+      await waitFor(() => {
+        expect(dockviewMock.api.layout).toHaveBeenCalledWith(642, 420, false)
+      })
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver
+    }
   })
 
   it("clears stale store layout when Dockview rejects the restored layout", async () => {

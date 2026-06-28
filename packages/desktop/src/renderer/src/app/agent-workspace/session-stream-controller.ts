@@ -64,8 +64,12 @@ import { refreshWorkspaceFromDirectory as refreshWorkspaceFromDirectoryService }
 import type { ConversationStoreApi } from "./conversation-store"
 import type { WorkspaceStateUpdater } from "./workspace-store"
 import { clearRendererPerformanceEntries } from "../perf-profiler"
+import {
+  queueRendererStreamFlush,
+  type RendererFrameTaskCancel,
+} from "../renderer-frame-coordinator"
 
-const STREAM_DELTA_FLUSH_INTERVAL_MS = 32
+const STREAM_DELTA_FLUSH_INTERVAL_MS = 1_000
 const STREAM_DELTA_EVENTS_PER_FRAME = 240
 const STREAM_DELTA_PENDING_EVENT_LIMIT = 1_600
 const STREAM_DELTA_BACKPRESSURE_LOG_INTERVAL_MS = 5_000
@@ -1501,7 +1505,7 @@ export function useSessionStreamController({
   workspaces,
 }: UseSessionStreamControllerOptions) {
   const pendingDeltaUpdatesRef = useRef<PendingStreamDeltaUpdate[]>([])
-  const pendingDeltaFlushHandleRef = useRef<{ id: number; kind: "frame" | "timer" } | null>(null)
+  const pendingDeltaFlushCancelRef = useRef<RendererFrameTaskCancel | null>(null)
   const lastDeltaBackpressureLogAtRef = useRef(0)
   const externalTurnUserHistoryMergedRef = useRef<Set<string>>(new Set())
   const externalTurnHistoryRefreshInFlightRef = useRef<Set<string>>(new Set())
@@ -2165,14 +2169,8 @@ export function useSessionStreamController({
   }
 
   function clearPendingDeltaFlushTimer() {
-    const handle = pendingDeltaFlushHandleRef.current
-    if (!handle) return
-    if (handle.kind === "frame") {
-      window.cancelAnimationFrame(handle.id)
-    } else {
-      window.clearTimeout(handle.id)
-    }
-    pendingDeltaFlushHandleRef.current = null
+    pendingDeltaFlushCancelRef.current?.()
+    pendingDeltaFlushCancelRef.current = null
   }
 
   function logStreamDeltaBackpressure(
@@ -2249,26 +2247,15 @@ export function useSessionStreamController({
   }
 
   function schedulePendingDeltaFlush() {
-    if (pendingDeltaFlushHandleRef.current !== null) return
+    if (pendingDeltaFlushCancelRef.current !== null) return
 
-    if (window.requestAnimationFrame) {
-      pendingDeltaFlushHandleRef.current = {
-        id: window.requestAnimationFrame(() => {
-          pendingDeltaFlushHandleRef.current = null
-          flushPendingDeltaUpdates()
-        }),
-        kind: "frame",
-      }
-      return
-    }
-
-    pendingDeltaFlushHandleRef.current = {
-      id: window.setTimeout(() => {
-        pendingDeltaFlushHandleRef.current = null
-        flushPendingDeltaUpdates()
-      }, STREAM_DELTA_FLUSH_INTERVAL_MS),
-      kind: "timer",
-    }
+    pendingDeltaFlushCancelRef.current = queueRendererStreamFlush(() => {
+      pendingDeltaFlushCancelRef.current = null
+      flushPendingDeltaUpdates()
+    }, {
+      getPendingCount: () => pendingDeltaUpdatesRef.current.length,
+      interactiveIntervalMs: STREAM_DELTA_FLUSH_INTERVAL_MS,
+    })
   }
 
   function applyStreamEventToAssistantMessage(

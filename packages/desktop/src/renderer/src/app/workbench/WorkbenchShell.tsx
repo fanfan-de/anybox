@@ -60,8 +60,13 @@ import {
 } from "./dockview-state"
 import { WorkbenchPaneSurface, type WorkbenchPaneSurfaceProps } from "./WorkbenchPaneSurface"
 import { RendererProfiler, createRendererProfilerOnRender, measureRendererPerf } from "../perf-profiler"
+import {
+  queueRendererLayoutWrite,
+  type RendererFrameTaskCancel,
+} from "../renderer-frame-coordinator"
 
 type DetachedSessionPanelBounds = { x: number; y: number; width: number; height: number }
+type DockviewLayoutSize = { width: number; height: number }
 type WorkbenchDropPlacement = "within" | "left" | "right" | "top" | "bottom"
 type WorkbenchPanelDragPayload = {
   dragID: string
@@ -196,6 +201,29 @@ function getDockviewActiveSignature(activeState: WorkbenchDockviewActiveState) {
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([groupID, panelID]) => `${groupID}:${panelID ?? ""}`),
   ].join("\u0000")
+}
+
+function createDockviewLayoutSize(width: number, height: number): DockviewLayoutSize | null {
+  const roundedWidth = Math.round(width)
+  const roundedHeight = Math.round(height)
+  if (roundedWidth <= 0 || roundedHeight <= 0) return null
+  return {
+    height: roundedHeight,
+    width: roundedWidth,
+  }
+}
+
+function readResizeObserverEntrySize(entry: ResizeObserverEntry): DockviewLayoutSize | null {
+  const borderBoxSize = entry.borderBoxSize
+  const boxSize = Array.isArray(borderBoxSize) ? borderBoxSize[0] : borderBoxSize
+  const width = typeof boxSize?.inlineSize === "number" ? boxSize.inlineSize : entry.contentRect.width
+  const height = typeof boxSize?.blockSize === "number" ? boxSize.blockSize : entry.contentRect.height
+  return createDockviewLayoutSize(width, height)
+}
+
+function readElementLayoutSize(element: HTMLElement): DockviewLayoutSize | null {
+  const rect = element.getBoundingClientRect()
+  return createDockviewLayoutSize(rect.width, rect.height)
 }
 
 function isPointOutsideElement(element: HTMLElement, clientX: number, clientY: number) {
@@ -395,6 +423,11 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
   const latestDragPayloadRef = useRef<WorkbenchPanelDragPayload | null>(null)
   const isApplyingLayoutRef = useRef(false)
   const pendingDetachOperationCountRef = useRef(0)
+  const dockviewLayoutTaskKeyRef = useRef(createID("dockview-layout"))
+  const pendingDockviewLayoutCancelRef = useRef<RendererFrameTaskCancel | null>(null)
+  const pendingDockviewLayoutForceRef = useRef(false)
+  const pendingDockviewLayoutSizeRef = useRef<DockviewLayoutSize | null>(null)
+  const lastDockviewLayoutSizeRef = useRef<DockviewLayoutSize | null>(null)
   const lastAppliedSerializedSignatureRef = useRef<string | null>(null)
   const lastEmittedSerializedSignatureRef = useRef(getSerializedDockviewSignature(dockviewLayout))
   const lastEmittedActiveSignatureRef = useRef<string | null>(null)
@@ -436,6 +469,26 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
   const emitActiveDockviewChangeFromLayout = useCallback((layout: SerializedDockview | null) => {
     emitActiveDockviewChangeFromState(createDockviewActiveStateFromLayout(layout))
   }, [emitActiveDockviewChangeFromState])
+
+  const queueDockviewLayout = useCallback((dockviewApi: DockviewApi, size: DockviewLayoutSize, options?: { force?: boolean }) => {
+    pendingDockviewLayoutSizeRef.current = size
+    pendingDockviewLayoutForceRef.current = pendingDockviewLayoutForceRef.current || options?.force === true
+    if (pendingDockviewLayoutCancelRef.current !== null) return
+
+    pendingDockviewLayoutCancelRef.current = queueRendererLayoutWrite(dockviewLayoutTaskKeyRef.current, () => {
+      pendingDockviewLayoutCancelRef.current = null
+      const nextSize = pendingDockviewLayoutSizeRef.current
+      const force = pendingDockviewLayoutForceRef.current
+      pendingDockviewLayoutForceRef.current = false
+      if (!nextSize) return
+
+      const lastSize = lastDockviewLayoutSizeRef.current
+      if (!force && lastSize?.width === nextSize.width && lastSize.height === nextSize.height) return
+
+      lastDockviewLayoutSizeRef.current = nextSize
+      dockviewApi.layout(nextSize.width, nextSize.height, force)
+    })
+  }, [])
 
   const syncDockviewFromLayout = useCallback((dockviewApi: DockviewApi, serialized: SerializedDockview | null) => {
     const serializedSignature = getSerializedDockviewSignature(serialized)
@@ -548,6 +601,50 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
     if (!api) return
     syncDockviewFromLayout(api, dockviewLayout)
   }, [api, dockviewLayout, syncDockviewFromLayout])
+
+  useEffect(() => {
+    if (!api) return
+
+    const element = workbenchElementRef.current
+    if (!element) return
+
+    lastDockviewLayoutSizeRef.current = null
+
+    const queueCurrentLayout = (force = false) => {
+      const size = readElementLayoutSize(element)
+      if (!size) return
+      queueDockviewLayout(api, size, { force })
+    }
+
+    queueCurrentLayout(true)
+
+    if (typeof ResizeObserver === "undefined") {
+      const handleWindowResize = () => queueCurrentLayout(false)
+      window.addEventListener("resize", handleWindowResize)
+      return () => {
+        window.removeEventListener("resize", handleWindowResize)
+        pendingDockviewLayoutCancelRef.current?.()
+        pendingDockviewLayoutCancelRef.current = null
+        pendingDockviewLayoutSizeRef.current = null
+        pendingDockviewLayoutForceRef.current = false
+      }
+    }
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      const size = entries[0] ? readResizeObserverEntrySize(entries[0]) : null
+      if (!size) return
+      queueDockviewLayout(api, size)
+    })
+    resizeObserver.observe(element)
+
+    return () => {
+      resizeObserver.disconnect()
+      pendingDockviewLayoutCancelRef.current?.()
+      pendingDockviewLayoutCancelRef.current = null
+      pendingDockviewLayoutSizeRef.current = null
+      pendingDockviewLayoutForceRef.current = false
+    }
+  }, [api, queueDockviewLayout])
 
   useEffect(() => {
     if (!api || !dockviewLayout || api.totalPanels > 0) return
@@ -1133,6 +1230,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
             className="dockview-theme-anybox"
             components={components}
             defaultTabComponent={TabComponent}
+            disableAutoResizing
             disableFloatingGroups
             disableTabsOverflowList
             getTabContextMenuItems={() => []}
@@ -1140,6 +1238,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
             leftHeaderActionsComponent={LeftHeaderActions}
             noPanelsOverlay="emptyGroup"
             rightHeaderActionsComponent={RightHeaderActions}
+            scrollbars="native"
             singleTabMode="default"
             tabComponents={tabComponents}
             tabGroupAccent="off"
