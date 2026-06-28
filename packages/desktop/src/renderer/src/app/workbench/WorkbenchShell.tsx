@@ -710,8 +710,9 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
         }
         latestDragPayloadRef.current = payload
         try {
-          event.nativeEvent.dataTransfer?.setData(WORKBENCH_PANEL_DRAG_MIME, JSON.stringify(payload))
-          event.nativeEvent.dataTransfer?.setData("text/plain", panel.title ?? "Session")
+          const dataTransfer = "dataTransfer" in event.nativeEvent ? event.nativeEvent.dataTransfer : null
+          dataTransfer?.setData(WORKBENCH_PANEL_DRAG_MIME, JSON.stringify(payload))
+          dataTransfer?.setData("text/plain", panel.title ?? "Session")
         } catch {
           // Drag metadata is best-effort; the IPC drag token is the fallback for Electron windows.
         }

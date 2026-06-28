@@ -1,0 +1,29 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "target": "es5",
+        "declaration": true,
+        "declarationMap": false,
+        "sourceMap": false,
+        "strict": true,
+        "skipLibCheck": true,
+        "allowUnreachableCode": false,
+        "forceConsistentCasingInFileNames": true,
+        "esModuleInterop": true,
+        "downlevelIteration": true,
+        "incremental": true,
+        "noImplicitReturns": true,
+        "noImplicitAny": true,
+        "lib": [
+            "ES2015",
+            "ES2016.Array.Include",
+            "ES2017.String",
+            "ES2018.Promise",
+            "ES2019",
+            "ES2020",
+            "ES2021",
+            "DOM"
+        ]
+    },
+    "exclude": ["**/*.spec.ts"]
+}

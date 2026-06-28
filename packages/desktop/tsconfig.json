@@ -15,6 +15,14 @@
       "@anybox/shared": ["../shared/src/index.ts"],
       "@anybox/shared/*": ["../shared/src/*"],
       "@anybox/platform": ["../platform/src/index.ts"],
+      "dockview-react": ["../dockview-react/src/index.ts"],
+      "dockview": ["../dockview/src/index.ts"],
+      "dockview-core": ["../dockview-core/src/index.ts"],
+      "dockview-modules": ["../dockview-modules/src/index.ts"],
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"],
+      "react-dom": ["./node_modules/@types/react-dom"],
+      "react-dom/*": ["./node_modules/@types/react-dom/*"],
       "zod": ["../anyboxagent/node_modules/zod"]
     }
   },
@@ -25,7 +33,19 @@
     "src/**/*.d.ts",
     "vitest.config.ts",
     "../shared/src/**/*.ts",
-    "../platform/src/**/*.ts"
+    "../platform/src/**/*.ts",
+    "../dockview-core/src/**/*.ts",
+    "../dockview-modules/src/**/*.ts",
+    "../dockview/src/**/*.ts",
+    "../dockview-react/src/**/*.ts",
+    "../dockview-react/src/**/*.tsx"
   ],
-  "exclude": ["../shared/src/**/*.test.ts", "../platform/src/**/*.test.ts"]
+  "exclude": [
+    "../shared/src/**/*.test.ts",
+    "../platform/src/**/*.test.ts",
+    "../dockview-core/src/**/__tests__/**/*",
+    "../dockview-modules/src/**/__tests__/**/*",
+    "../dockview/src/**/__tests__/**/*",
+    "../dockview-react/src/**/__tests__/**/*"
+  ]
 }

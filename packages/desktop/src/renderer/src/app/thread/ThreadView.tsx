@@ -6322,9 +6322,14 @@ function VisibleThreadView({
     return false
   }
 
-  function getLatestThreadContentScrollTarget(threadColumn: HTMLDivElement): ThreadFollowScrollTarget {
+  function getLatestThreadContentScrollTarget(
+    threadColumn: HTMLDivElement,
+    options: { skipStreamingResponseMeasurement?: boolean } = {},
+  ): ThreadFollowScrollTarget {
+    const canMeasureStreamingResponse = options.skipStreamingResponseMeasurement !== true
+
     if (shouldVirtualizeThreadRows) {
-      if (shouldUseStreamingResponseScrollTargetForVirtualRows()) {
+      if (canMeasureStreamingResponse && shouldUseStreamingResponseScrollTargetForVirtualRows()) {
         const streamingResponseTarget = getStreamingResponseScrollTarget(threadColumn)
         if (streamingResponseTarget) return streamingResponseTarget
       }
@@ -6336,8 +6341,10 @@ function VisibleThreadView({
       }
     }
 
-    const streamingResponseTarget = getStreamingResponseScrollTarget(threadColumn)
-    if (streamingResponseTarget) return streamingResponseTarget
+    if (canMeasureStreamingResponse) {
+      const streamingResponseTarget = getStreamingResponseScrollTarget(threadColumn)
+      if (streamingResponseTarget) return streamingResponseTarget
+    }
 
     return {
       scrollTop: threadColumn.scrollHeight,
@@ -6345,8 +6352,11 @@ function VisibleThreadView({
     }
   }
 
-  function scrollThreadColumnToLatestThreadContent(threadColumn: HTMLDivElement) {
-    const target = getLatestThreadContentScrollTarget(threadColumn)
+  function scrollThreadColumnToLatestThreadContent(
+    threadColumn: HTMLDivElement,
+    options: { skipStreamingResponseMeasurement?: boolean } = {},
+  ) {
+    const target = getLatestThreadContentScrollTarget(threadColumn, options)
     if (!shouldVirtualizeThreadRows) {
       threadColumn.scrollTop = target.scrollTop
       return
@@ -6499,6 +6509,8 @@ function VisibleThreadView({
   }
 
   function scheduleSmoothFollowLatestThreadContent(threadColumn: HTMLDivElement, key = effectiveScrollStateKey) {
+    if (isSidebarResizeInProgress()) return false
+
     if (
       typeof window === "undefined" ||
       typeof window.requestAnimationFrame !== "function" ||
@@ -6580,6 +6592,16 @@ function VisibleThreadView({
     options: { smooth?: boolean } = {},
   ) {
     scrollModeRef.current = "follow"
+    const isResizingSidebar = isSidebarResizeInProgress()
+    if (isResizingSidebar) {
+      cancelSmoothFollowScroll()
+      scrollThreadColumnToLatestThreadContent(threadColumn, { skipStreamingResponseMeasurement: true })
+      lastKnownScrollTopRef.current = threadColumn.scrollTop
+      syncThreadVirtualViewport(threadColumn)
+      persistThreadScrollSnapshot(key, "follow")
+      return
+    }
+
     if (options.smooth && scheduleSmoothFollowLatestThreadContent(threadColumn, key)) return
 
     cancelSmoothFollowScroll()

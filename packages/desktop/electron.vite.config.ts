@@ -8,6 +8,16 @@ const workspaceAliases = {
   zod: resolve(__dirname, "../anyboxagent/node_modules/zod"),
 }
 
+const rendererAliases = [
+  ...Object.entries(workspaceAliases).map(([find, replacement]) => ({ find, replacement })),
+  { find: /^dockview-react$/, replacement: resolve(__dirname, "../dockview-react/src/index.ts") },
+  { find: /^dockview$/, replacement: resolve(__dirname, "../dockview/src/index.ts") },
+  { find: /^dockview-core$/, replacement: resolve(__dirname, "../dockview-core/src/index.ts") },
+  { find: /^dockview-modules$/, replacement: resolve(__dirname, "../dockview-modules/src/index.ts") },
+  { find: /^react$/, replacement: resolve(__dirname, "node_modules/react") },
+  { find: /^react-dom$/, replacement: resolve(__dirname, "node_modules/react-dom") },
+]
+
 const externalizeRuntimeDeps = externalizeDepsPlugin({
   exclude: ["@anybox/shared", "@anybox/platform"],
 })
@@ -36,7 +46,13 @@ export default defineConfig({
   renderer: {
     plugins: [react()],
     resolve: {
-      alias: workspaceAliases,
+      alias: rendererAliases,
+      dedupe: ["react", "react-dom"],
+    },
+    server: {
+      fs: {
+        allow: [resolve(__dirname, "../..")],
+      },
     },
   },
 })

@@ -4757,6 +4757,76 @@ describe("ThreadView scroll restoration", () => {
     }
   })
 
+  it("keeps following streamed content during a sidebar resize without measuring streaming response rects", () => {
+    const layoutSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (document.body.classList.contains("is-resizing-sidebar") && this.getAttribute("data-trace-item-id") === "response-1") {
+        throw new Error("streaming response rect should not be measured during sidebar resize")
+      }
+      if (this.classList.contains("thread-column")) return createElementRect({ top: 0, height: 400 })
+      if (this.getAttribute("data-trace-item-id") === "response-1") return createElementRect({ top: 64, height: 960 })
+
+      return createElementRect()
+    })
+    const buildStreamingMessage = (text: string) => assistantTraceMessage("assistant-1", [
+      {
+        id: "response-1",
+        kind: "text",
+        timestamp: 1,
+        label: "Assistant",
+        text,
+        status: "running",
+        isStreaming: true,
+      },
+      {
+        id: "tool-1",
+        kind: "tool",
+        timestamp: 2,
+        label: "Tool",
+        title: "ssh_shell_command",
+        detail: "completed",
+        status: "completed",
+      },
+    ], true)
+
+    try {
+      const { rerender, props, threadColumn } = renderThread([
+        userMessage("user-1", "Prompt"),
+        buildStreamingMessage("First chunk"),
+      ], {
+        scrollStateKey: "session:streaming-sidebar-resize-follow",
+      })
+      setScrollMetrics(threadColumn, {
+        clientHeight: 400,
+        scrollHeight: 800,
+        scrollTop: 400,
+      })
+
+      fireEvent.wheel(threadColumn, { deltaY: 120 })
+      fireEvent.scroll(threadColumn)
+
+      document.body.classList.add("is-resizing-sidebar")
+      setScrollMetrics(threadColumn, {
+        clientHeight: 400,
+        scrollHeight: 1600,
+        scrollTop: 400,
+      })
+      rerender(
+        <ThreadView
+          {...props}
+          activeMessages={[
+            userMessage("user-1", "Prompt"),
+            buildStreamingMessage("First chunk\nSecond chunk"),
+          ]}
+        />,
+      )
+
+      expect(threadColumn.scrollTop).toBe(1600)
+    } finally {
+      document.body.classList.remove("is-resizing-sidebar")
+      layoutSpy.mockRestore()
+    }
+  })
+
   it("keeps the active streaming response at the bottom when trailing trace rows render below it", () => {
     const layoutSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
       if (this.classList.contains("thread-column")) return createElementRect({ top: 0, height: 400 })
