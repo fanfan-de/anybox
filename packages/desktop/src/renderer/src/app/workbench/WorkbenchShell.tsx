@@ -231,6 +231,29 @@ function isPointOutsideElement(element: HTMLElement, clientX: number, clientY: n
   return clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom
 }
 
+function isDockviewGroupInGrid(group: ReturnType<DockviewApi["getGroup"]> | undefined) {
+  return group?.api.location.type === "grid"
+}
+
+function resolveDockviewPanelPosition(
+  api: DockviewApi,
+  options?: { targetGroupID?: string | null; direction?: "left" | "right" | "above" | "below" | "within" },
+) {
+  const targetGroup = options?.targetGroupID ? api.getGroup(options.targetGroupID) : undefined
+  const referenceGroup = isDockviewGroupInGrid(targetGroup)
+    ? targetGroup
+    : isDockviewGroupInGrid(api.activeGroup)
+      ? api.activeGroup
+      : api.groups.find((group) => isDockviewGroupInGrid(group))
+
+  return referenceGroup
+    ? {
+        direction: options?.direction ?? "within",
+        referenceGroup: referenceGroup.id,
+      }
+    : undefined
+}
+
 function readWorkbenchPanelDrag(event: DragEvent): WorkbenchPanelDragPayload | null {
   const rawValue = event.dataTransfer?.getData(WORKBENCH_PANEL_DRAG_MIME)
   if (!rawValue) return null
@@ -761,14 +784,12 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
       options?: { targetGroupID?: string | null; title?: string; activate?: boolean; direction?: "left" | "right" | "above" | "below" | "within" },
     ) => {
       const id = getWorkbenchDockPanelId(reference)
-      const position = options?.targetGroupID && api.getGroup(options.targetGroupID)
-        ? {
-            direction: options.direction ?? "within",
-            referenceGroup: options.targetGroupID,
-          }
-        : undefined
+      const position = resolveDockviewPanelPosition(api, {
+        direction: options?.direction,
+        targetGroupID: options?.targetGroupID,
+      })
 
-      const panel = api.addPanel({
+      const panelOptions = {
         id,
         component: WORKBENCH_DOCK_PANEL_COMPONENT,
         tabComponent: WORKBENCH_DOCK_TAB_COMPONENT,
@@ -776,7 +797,18 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
         title: options?.title ?? (reference.kind === "session" ? "Session" : "Create session"),
         inactive: options?.activate === false,
         position,
-      })
+      }
+      let panel: IDockviewPanel
+      try {
+        panel = api.addPanel(panelOptions)
+      } catch (error) {
+        if (!position) throw error
+        console.warn("[desktop] Failed to add Dockview panel at target group; adding to default group.", error)
+        panel = api.addPanel({
+          ...panelOptions,
+          position: undefined,
+        })
+      }
       if (options?.activate !== false) {
         activateDockviewPanel(panel)
       }
@@ -872,7 +904,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
         const targetGroupID = options.targetGroupID ?? api.activeGroup?.id ?? null
         const existing = api.getPanel(id)
         const targetGroup = targetGroupID ? api.getGroup(targetGroupID) : undefined
-        if (existing && targetGroup) {
+        if (existing && isDockviewGroupInGrid(targetGroup)) {
           existing.api.moveTo({
             group: targetGroup as any,
             position: options.direction === "top" ? "top" : options.direction === "bottom" ? "bottom" : options.direction,

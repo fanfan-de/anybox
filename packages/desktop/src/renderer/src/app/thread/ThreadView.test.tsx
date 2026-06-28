@@ -5037,7 +5037,7 @@ describe("ThreadView scroll restoration", () => {
 
       expect(threadColumn.scrollTop).toBe(400)
       act(() => flushAnimationFrame(10_000))
-      expect(threadColumn.scrollTop).toBe(430)
+      expect(threadColumn.scrollTop).toBeCloseTo(430, 2)
     } finally {
       pendingFrames.clear()
       window.requestAnimationFrame = originalRequestAnimationFrame

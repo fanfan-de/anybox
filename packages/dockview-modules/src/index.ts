@@ -1,4 +1,4 @@
-import { DockviewModule } from 'dockview-core';
+import type { DockviewModule } from 'dockview-core';
 import { TabGroupChipsModule } from './tabGroupChipsService';
 import { ContextMenuModule } from './contextMenu';
 import { AdvancedDnDModule } from './advancedDnDService';

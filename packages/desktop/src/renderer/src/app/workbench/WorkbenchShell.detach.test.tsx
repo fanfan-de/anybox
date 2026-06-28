@@ -31,8 +31,23 @@ const dockviewMock = vi.hoisted(() => {
 
   const group = {
     activePanel: null as any,
+    api: {
+      location: {
+        type: "grid",
+      },
+    },
     element: groupElement,
+    focus: vi.fn(),
     id: "group-1",
+  }
+  const floatingGroup = {
+    ...group,
+    api: {
+      location: {
+        type: "floating",
+      },
+    },
+    id: "floating-group",
   }
   const panel = {
     group,
@@ -60,6 +75,8 @@ const dockviewMock = vi.hoisted(() => {
       location: {
         type: "grid",
       },
+      setActive: vi.fn(),
+      setTitle: vi.fn(),
     },
   }
   const secondaryPanel = {
@@ -73,8 +90,60 @@ const dockviewMock = vi.hoisted(() => {
   const api = {
     activeGroup: group as any,
     activePanel: panel as any,
+    addPanel: vi.fn((options: any) => {
+      const nextPanel = {
+        group,
+        id: options.id,
+        title: options.title,
+        api: {
+          close: vi.fn(),
+          location: {
+            type: "grid",
+          },
+          setActive: vi.fn(),
+          setTitle: vi.fn(),
+        },
+      }
+      snapshot = {
+        activeGroup: "group-1",
+        grid: {
+          height: 800,
+          orientation: "HORIZONTAL",
+          root: {
+            data: [
+              {
+                data: {
+                  activeView: options.id,
+                  id: "group-1",
+                  views: [options.id],
+                },
+                size: 1000,
+                type: "leaf",
+              },
+            ],
+            type: "branch",
+          },
+          width: 1200,
+        },
+        panels: {
+          [options.id]: {
+            contentComponent: options.component,
+            id: options.id,
+            params: options.params,
+            tabComponent: options.tabComponent,
+            title: options.title,
+          },
+        },
+      } as unknown as SerializedDockview
+      return nextPanel
+    }),
     clear: vi.fn(),
     fromJSON: vi.fn(),
+    getGroup: vi.fn((id: string) => {
+      if (id === group.id) return group
+      if (id === floatingGroup.id) return floatingGroup
+      return undefined
+    }),
     getPanel: vi.fn(() => null),
     groups: [group] as any[],
     layout: vi.fn(),
@@ -180,9 +249,14 @@ const dockviewMock = vi.hoisted(() => {
           },
         },
       } as unknown as SerializedDockview
+      group.focus.mockClear()
       panel.api.close.mockClear()
+      panel.api.setActive.mockClear()
+      panel.api.setTitle.mockClear()
+      api.addPanel.mockClear()
       api.clear.mockClear()
       api.fromJSON.mockClear()
+      api.getGroup.mockClear()
       api.getPanel.mockClear()
       api.layout.mockClear()
       api.onDidActiveGroupChange.mockClear()
@@ -533,6 +607,69 @@ describe("WorkbenchShell detach", () => {
     })
     expect(onLayoutChange).not.toHaveBeenCalled()
     expect(dockviewMock.api.toJSON).not.toHaveBeenCalled()
+  })
+
+  it("opens panels in a grid group when the requested target group is floating", async () => {
+    dockviewMock.reset()
+    const onCommandsReady = vi.fn()
+
+    render(<WorkbenchShell {...createProps({ onCommandsReady })} />)
+
+    await waitFor(() => {
+      expect(onCommandsReady).toHaveBeenCalledWith(expect.objectContaining({ openPanel: expect.any(Function) }))
+    })
+    const commands = onCommandsReady.mock.calls.find(([value]) => value)?.[0]!
+
+    commands.openPanel({ kind: "session", sessionID: "session-3" }, {
+      targetGroupID: "floating-group",
+      title: "Session 3",
+    })
+
+    expect(dockviewMock.api.addPanel).toHaveBeenCalledWith(expect.objectContaining({
+      id: "session:session-3",
+      position: {
+        direction: "within",
+        referenceGroup: "group-1",
+      },
+    }))
+  })
+
+  it("retries opening a panel without position if Dockview rejects the target location", async () => {
+    dockviewMock.reset()
+    const onCommandsReady = vi.fn()
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    dockviewMock.api.addPanel.mockImplementationOnce((options: any) => {
+      if (options.position) throw new Error("invalid location")
+      return dockviewMock.panel
+    })
+
+    try {
+      render(<WorkbenchShell {...createProps({ onCommandsReady })} />)
+
+      await waitFor(() => {
+        expect(onCommandsReady).toHaveBeenCalledWith(expect.objectContaining({ openPanel: expect.any(Function) }))
+      })
+      const commands = onCommandsReady.mock.calls.find(([value]) => value)?.[0]!
+
+      commands.openPanel({ kind: "session", sessionID: "session-4" }, {
+        targetGroupID: "group-1",
+        title: "Session 4",
+      })
+
+      expect(dockviewMock.api.addPanel).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        id: "session:session-4",
+        position: {
+          direction: "within",
+          referenceGroup: "group-1",
+        },
+      }))
+      expect(dockviewMock.api.addPanel).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        id: "session:session-4",
+        position: undefined,
+      }))
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 
   it("emits the closed panel layout after a successful drag detach", async () => {

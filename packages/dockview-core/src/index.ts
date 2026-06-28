@@ -11,8 +11,8 @@ export {
  * To be a good citizen these are exported with a `Dockview` prefix to prevent accidental use by others.
  */
 export { Emitter as DockviewEmitter, Event as DockviewEvent } from './events';
+export type { IDisposable as DockviewIDisposable } from './lifecycle';
 export {
-    IDisposable as DockviewIDisposable,
     MutableDisposable as DockviewMutableDisposable,
     CompositeDisposable as DockviewCompositeDisposable,
     Disposable as DockviewDisposable,
@@ -21,28 +21,32 @@ export {
 export * from './panel/types';
 
 export * from './splitview/splitview';
-export {
+export type {
     SplitviewComponentOptions,
     PanelViewInitParameters,
     SplitviewOptions,
     SplitviewFrameworkOptions,
+} from './splitview/options';
+export {
     PROPERTY_KEYS_SPLITVIEW,
 } from './splitview/options';
 
 export * from './paneview/paneview';
 export * from './gridview/gridview';
-export {
+export type {
     GridviewComponentOptions,
     GridviewOptions,
     GridviewFrameworkOptions,
+} from './gridview/options';
+export {
     PROPERTY_KEYS_GRIDVIEW,
 } from './gridview/options';
 export * from './gridview/baseComponentGridview';
 
-export {
-    DraggablePaneviewPanel,
+export type {
     PaneviewDidDropEvent,
 } from './paneview/draggablePaneviewPanel';
+export { DraggablePaneviewPanel } from './paneview/draggablePaneviewPanel';
 
 export * from './dockview/components/panel/content';
 export * from './dockview/components/tab/tab';
@@ -50,24 +54,28 @@ export {
     DockviewGroupPanelModel,
     DockviewDidDropEvent,
     DockviewWillDropEvent,
+} from './dockview/dockviewGroupPanelModel';
+export type {
     DockviewGroupChangeEvent,
     DockviewGroupActivePanelChangeEvent,
     DockviewGroupLocation,
 } from './dockview/dockviewGroupPanelModel';
 export {
     DockviewWillShowOverlayLocationEvent,
+} from './dockview/events';
+export type {
     DockviewTabGroupChangeEvent,
     DockviewTabGroupCollapsedChangeEvent,
     DockviewTabGroupPanelChangeEvent,
     DockviewGroupDropLocation,
 } from './dockview/events';
-export {
+export type {
     TabDragEvent,
     GroupDragEvent,
 } from './dockview/components/titlebar/tabsContainer';
 export * from './dockview/types';
 export * from './dockview/dockviewGroupPanel';
-export {
+export type {
     IGroupPanelBaseProps,
     IDockviewPanelHeaderProps,
     IDockviewPanelProps,
@@ -82,7 +90,7 @@ export {
 export * from './dockview/options';
 export * from './dockview/theme';
 export * from './dockview/dockviewPanel';
-export {
+export type {
     DockviewTabGroupColor,
     ITabGroup,
     SerializedTabGroup,
@@ -90,19 +98,19 @@ export {
 } from './dockview/tabGroup';
 export {
     DEFAULT_TAB_GROUP_COLORS,
-    DockviewTabGroupColorEntry,
     TabGroupColorPalette,
     applyTabGroupAccent,
     resolveTabGroupAccent,
 } from './dockview/tabGroupAccent';
+export type { DockviewTabGroupColorEntry } from './dockview/tabGroupAccent';
 export { DefaultTab } from './dockview/components/tab/defaultTab';
-export {
-    DefaultDockviewDeserialzier,
+export type {
     IPanelDeserializer,
 } from './dockview/deserializer';
+export { DefaultDockviewDeserialzier } from './dockview/deserializer';
 
 export * from './dockview/dockviewComponent';
-export {
+export type {
     EdgeGroupOptions,
     EdgeGroupPosition,
     SerializedEdgeGroups,
@@ -110,67 +118,74 @@ export {
 export * from './gridview/gridviewComponent';
 export * from './splitview/splitviewComponent';
 export * from './paneview/paneviewComponent';
-export {
+export type {
     PaneviewComponentOptions,
     PaneviewOptions,
     PaneviewFrameworkOptions,
+    PaneviewDndOverlayEvent,
+} from './paneview/options';
+export {
     PROPERTY_KEYS_PANEVIEW,
     PaneviewUnhandledDragOverEvent,
-    PaneviewDndOverlayEvent,
 } from './paneview/options';
 
 export * from './gridview/gridviewPanel';
-export { SplitviewPanel, ISplitviewPanel } from './splitview/splitviewPanel';
+export type { ISplitviewPanel } from './splitview/splitviewPanel';
+export { SplitviewPanel } from './splitview/splitviewPanel';
 export * from './paneview/paneviewPanel';
 export * from './dockview/types';
-export { Box, AnchorPosition, AnchoredBox } from './types';
+export type { Box, AnchorPosition, AnchoredBox } from './types';
 
-export { DockviewPanelRenderer } from './overlay/overlayRenderContainer';
+export type { DockviewPanelRenderer } from './overlay/overlayRenderContainer';
 
-export {
+export type {
     Position,
-    positionToDirection,
-    directionToPosition,
     MeasuredValue,
     DroptargetOverlayModel,
 } from './dnd/droptarget';
-
 export {
+    positionToDirection,
+    directionToPosition,
+} from './dnd/droptarget';
+
+export type {
     FocusEvent,
     PanelDimensionChangeEvent,
     VisibilityEvent,
     ActiveEvent,
     PanelApi,
 } from './api/panelApi';
-export {
+export type {
     SizeEvent,
     GridviewPanelApi,
     GridConstraintChangeEvent,
 } from './api/gridviewPanelApi';
-export {
+export type {
     TitleEvent,
     RendererChangedEvent,
     DockviewPanelApi,
     DockviewPanelMoveParams,
 } from './api/dockviewPanelApi';
-export {
+export type {
     PanelSizeEvent,
     PanelConstraintChangeEvent,
     SplitviewPanelApi,
 } from './api/splitviewPanelApi';
-export { ExpansionEvent, PaneviewPanelApi } from './api/paneviewPanelApi';
-export {
+export type { ExpansionEvent, PaneviewPanelApi } from './api/paneviewPanelApi';
+export type {
     DockviewGroupPanelApi,
     DockviewGroupPanelLocationChangeEvent,
     DockviewGroupPanelCollapsedChangeEvent,
     DockviewGroupMoveParams,
 } from './api/dockviewGroupPanelApi';
 export {
-    CommonApi,
     SplitviewApi,
     PaneviewApi,
     GridviewApi,
     DockviewApi,
+} from './api/component.api';
+export type {
+    CommonApi,
     DockviewGetTabGroupsOptions,
 } from './api/component.api';
 export {
@@ -186,10 +201,12 @@ export {
     markDockviewPackageLoaded,
     isDockviewPackageLoaded,
     defineModule,
+} from './dockview/modules';
+export type {
     DockviewModule,
     ServiceCollection,
 } from './dockview/modules';
-export {
+export type {
     IAccessibilityHost,
     IAccessibilityService,
     IAdvancedDnDHost,
@@ -202,5 +219,5 @@ export {
 } from './dockview/moduleContracts';
 export { resolveMessages } from './dockview/accessibilityMessages';
 export { findRelativeZIndexParent } from './dom';
-export { IDragGhostSpec } from './dnd/backend';
+export type { IDragGhostSpec } from './dnd/backend';
 export { LiveRegionModule } from './dockview/liveRegionService';
