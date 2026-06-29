@@ -997,6 +997,11 @@
 }
 
 .composer-toolbar {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
   margin-top: 4px;
 }
 
@@ -1119,15 +1124,32 @@
 }
 
 .composer-selectors {
+  min-width: 0;
+  flex: 1 1 auto;
   align-items: flex-start;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.composer-selectors:has(.composer-menu-panel),
+.composer-selectors:has(.composer-attachment-unavailable-popover) {
+  overflow: visible;
 }
 
 .composer-menu-anchor {
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
   position: relative;
 }
 
+.composer-menu-anchor:has(.composer-selector-button.is-icon-only) {
+  flex: 0 0 auto;
+}
+
 .composer-selector-button {
+  max-width: 100%;
+  min-width: 0;
   min-height: 34px;
   padding: 0 12px;
   border-radius: var(--seg-radius-xs);
@@ -1138,11 +1160,20 @@
   background: transparent;
   color: var(--seg-text-2);
   cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
   transition:
     transform 160ms ease,
     background 160ms ease,
     border-color 160ms ease,
     color 160ms ease;
+}
+
+.composer-selector-button > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .composer-selector-button.is-icon-only,
@@ -1733,7 +1764,10 @@
 
 .composer-actions {
   margin-left: auto;
+  justify-self: end;
   flex-shrink: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .composer-editor-input[contenteditable="true"]:empty::before {

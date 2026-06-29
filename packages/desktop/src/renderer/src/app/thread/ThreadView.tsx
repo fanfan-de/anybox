@@ -283,28 +283,6 @@ function isSidebarResizeInProgress() {
   return typeof document !== "undefined" && document.body.classList.contains("is-resizing-sidebar")
 }
 
-function useSidebarResizeLightweightMode() {
-  const [isResizeLightweightMode, setIsResizeLightweightMode] = useState(() => isSidebarResizeInProgress())
-
-  useEffect(() => {
-    if (typeof document === "undefined") return
-
-    const syncResizeLightweightMode = () => {
-      setIsResizeLightweightMode(isSidebarResizeInProgress())
-    }
-
-    syncResizeLightweightMode()
-
-    if (typeof MutationObserver === "undefined") return
-
-    const observer = new MutationObserver(syncResizeLightweightMode)
-    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] })
-    return () => observer.disconnect()
-  }, [])
-
-  return isResizeLightweightMode
-}
-
 function CollapsibleUserMessageText({
   references,
   text,
@@ -4466,7 +4444,6 @@ function VisibleThreadView({
   } | null>(null)
   const activeSessionID = activeSession?.id ?? null
   const effectiveScrollStateKey = scrollStateKey ?? activeSessionID ?? "thread:no-session"
-  const isResizeLightweightMode = useSidebarResizeLightweightMode()
   const {
     flushQueuedThreadVirtualMeasurements,
     getThreadVirtualScrollMaxTop,
@@ -4849,7 +4826,7 @@ function VisibleThreadView({
     )
   }
   return (
-    <section className={joinClassNames("thread-shell", isResizeLightweightMode && "thread-resize-lightweight")}>
+    <section className="thread-shell">
       <div
         ref={threadColumnRef}
         className={joinClassNames("thread-column", shouldVirtualizeThreadRows && "is-virtualized")}

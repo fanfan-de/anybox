@@ -280,6 +280,16 @@
     align-items: stretch;
   }
 
+  .composer-toolbar {
+    display: flex;
+  }
+
+  .composer-selectors {
+    flex-direction: column;
+    align-items: stretch;
+    overflow: visible;
+  }
+
   .composer-actions,
   .settings-inline-actions {
     margin-left: 0;

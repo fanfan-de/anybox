@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react"
 import type { ThreadDisplayRow } from "./thread-display-rows"
 
-const THREAD_VIRTUALIZATION_MIN_ROWS = 80
+const THREAD_VIRTUALIZATION_MIN_ROWS = 8
 const THREAD_VIRTUAL_OVERSCAN_PX = 900
 const THREAD_VIRTUAL_OVERSCAN_ROWS = 2
 const THREAD_VIRTUAL_ROW_GAP_PX = 7
@@ -81,6 +81,12 @@ function readResizeEntryBlockSize(entry: ResizeObserverEntry) {
   return Number.isFinite(height) ? height : null
 }
 
+function readResizeEntryInlineSize(entry: ResizeObserverEntry) {
+  const borderBoxSize = Array.isArray(entry.borderBoxSize) ? entry.borderBoxSize[0] : entry.borderBoxSize
+  const width = borderBoxSize?.inlineSize ?? entry.contentRect?.width
+  return Number.isFinite(width) ? width : null
+}
+
 function buildThreadVirtualLayout(rows: ThreadDisplayRow[], measuredHeights: Map<string, number>): ThreadVirtualLayout {
   const items: ThreadVirtualLayoutItem[] = []
   let top = 0
@@ -148,6 +154,7 @@ export function useThreadVirtualList({
   const pendingThreadVirtualMeasurementFrameRef = useRef<number | null>(null)
   const pendingThreadVirtualMeasurementScrollSyncKeyRef = useRef<string | null>(null)
   const pendingThreadVirtualViewportFrameRef = useRef<number | null>(null)
+  const threadVirtualMeasuredWidthByKeyRef = useRef<Record<string, number>>({})
   const [threadVirtualMeasurementVersion, setThreadVirtualMeasurementVersion] = useState(0)
   const [threadVirtualViewport, setThreadVirtualViewport] = useState<ThreadVirtualViewport>({
     height: 0,
@@ -366,6 +373,28 @@ export function useThreadVirtualList({
     return Math.max(getThreadScrollMaxTop(threadColumn), virtualScrollHeight - threadColumn.clientHeight)
   }
 
+  function rememberThreadVirtualMeasuredWidth(width: number, key = scrollStateKey) {
+    if (!Number.isFinite(width) || width <= 0) return false
+
+    const previousWidth = threadVirtualMeasuredWidthByKeyRef.current[key]
+    if (
+      previousWidth !== undefined &&
+      Math.abs(previousWidth - width) < THREAD_VIRTUAL_ROW_MEASURE_EPSILON_PX
+    ) {
+      return false
+    }
+
+    threadVirtualMeasuredWidthByKeyRef.current[key] = width
+    return true
+  }
+
+  function entryMayAffectThreadVirtualRowWidth(entry: ResizeObserverEntry, threadColumn: HTMLDivElement) {
+    if (!(entry.target instanceof HTMLElement)) return false
+    if (entry.target === threadColumn) return true
+    if (entry.target.closest(".thread-column") !== threadColumn) return false
+    return entry.target.classList.contains("thread-virtual-spacer")
+  }
+
   function measureRenderedThreadVirtualRows(options: ThreadVirtualMeasurementOptions = {}) {
     const threadColumn = threadColumnRef.current
     if (!threadColumn || !shouldVirtualizeThreadRows) return false
@@ -388,17 +417,30 @@ export function useThreadVirtualList({
     options: ThreadVirtualMeasurementOptions = {},
   ) {
     if (!shouldVirtualizeThreadRows) return false
+    const threadColumn = threadColumnRef.current
+    if (!threadColumn) return false
 
     let didMeasure = false
+    let shouldMeasureRenderedRows = false
     for (const entry of entries) {
       if (!(entry.target instanceof HTMLElement)) continue
-      if (entry.target.closest(".thread-column") !== threadColumnRef.current) continue
+      if (entry.target.closest(".thread-column") !== threadColumn) continue
+
+      if (entryMayAffectThreadVirtualRowWidth(entry, threadColumn)) {
+        const width = readResizeEntryInlineSize(entry)
+        shouldMeasureRenderedRows = rememberThreadVirtualMeasuredWidth(width ?? entry.target.clientWidth) || shouldMeasureRenderedRows
+      }
+
       const rowID = entry.target.dataset.threadVirtualRowId
       if (!rowID) continue
 
       const height = readResizeEntryBlockSize(entry)
       if (height === null) continue
       didMeasure = queueThreadVirtualRowHeight(rowID, height, scrollStateKey, options) || didMeasure
+    }
+
+    if (shouldMeasureRenderedRows) {
+      didMeasure = measureRenderedThreadVirtualRows(options) || didMeasure
     }
 
     return didMeasure

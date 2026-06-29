@@ -417,6 +417,9 @@ export function shouldRenderDiffOnStandaloneUserMessage(
 }
 
 function estimateAssistantTraceItemHeight(item: AssistantTraceItem) {
+  const draftPatchFileCount = Array.isArray(item.draftPatch?.fileChanges) ? item.draftPatch.fileChanges.length : 0
+  if (item.kind === "tool" && draftPatchFileCount === 0) return 32
+
   const textLength = `${item.title ?? ""}${item.text ?? ""}${item.detail ?? ""}`.length
   const textHeight = Math.min(320, Math.max(42, Math.ceil(textLength / 110) * 22))
   const kindHeight =
@@ -425,7 +428,6 @@ function estimateAssistantTraceItemHeight(item: AssistantTraceItem) {
       : item.kind === "reasoning"
         ? 58
         : 48
-  const draftPatchFileCount = Array.isArray(item.draftPatch?.fileChanges) ? item.draftPatch.fileChanges.length : 0
   const draftPatchHeight = draftPatchFileCount > 0 ? Math.min(220, Math.max(48, draftPatchFileCount * 28 + 34)) : 0
   return Math.max(kindHeight + draftPatchHeight, textHeight)
 }

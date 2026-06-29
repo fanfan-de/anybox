@@ -94,7 +94,7 @@ export function useThreadContentObserver({
     pendingObservedContentScrollSyncFrameRef.current = null
     pendingObservedContentScrollSyncKeyRef.current = null
 
-    const shouldRefreshObservedContent = pendingSidebarResizeContentObservationRef.current
+    const shouldRefreshObservedContent = pendingSidebarResizeContentObservationRef.current || shouldVirtualizeThreadRows
     pendingSidebarResizeContentObservationRef.current = false
     if (shouldRefreshObservedContent) {
       observeThreadContentRef.current?.()
@@ -124,6 +124,7 @@ export function useThreadContentObserver({
       if (isSidebarResizeInProgress()) {
         pendingSidebarResizeScrollSyncRef.current = true
         pendingSidebarResizeContentObservationRef.current = true
+        measureThreadVirtualRowsFromResizeEntries(entries)
         return
       }
 

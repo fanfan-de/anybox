@@ -68,6 +68,27 @@ function getComposerSendButton() {
   return screen.getByRole("button", { name: /^(Send|Sending|Stop) task$|^Resolve approval first$/ })
 }
 
+function setElementScrollMetrics(
+  node: HTMLElement,
+  metrics: {
+    clientHeight: number
+    scrollHeight: number
+    scrollTop?: number
+  },
+) {
+  Object.defineProperty(node, "clientHeight", {
+    configurable: true,
+    value: metrics.clientHeight,
+  })
+  Object.defineProperty(node, "scrollHeight", {
+    configurable: true,
+    value: metrics.scrollHeight,
+  })
+  if (metrics.scrollTop !== undefined) {
+    node.scrollTop = metrics.scrollTop
+  }
+}
+
 async function openProviderSettingsSection() {
   fireEvent.click(screen.getByRole("button", { name: "Open settings" }))
   const settingsDialog = await screen.findByRole("dialog", { name: "Settings" })
@@ -12977,14 +12998,27 @@ describe("App", () => {
     await waitFor(() => {
       expect(window.desktop!.agentSession!.onEvent).toHaveBeenCalledTimes(1)
     })
+    const threadColumn = document.querySelector(".thread-column") as HTMLElement | null
+    expect(threadColumn).not.toBeNull()
+    setElementScrollMetrics(threadColumn!, {
+      clientHeight: 720,
+      scrollHeight: 3200,
+      scrollTop: 0,
+    })
 
     const draftInput = screen.getByRole("textbox", { name: "Task draft" })
     const sendButton = getComposerSendButton()
 
     setComposerDraftValue(draftInput, "First prompt")
     fireEvent.click(sendButton)
+    await waitFor(() => {
+      expect(window.desktop!.agentSession!.sendTurn).toHaveBeenCalled()
+    })
 
-    expect(await screen.findByText("First reply")).toBeInTheDocument()
+    const firstReplyText = await screen.findByText("First reply")
+    const firstReplyMessage = firstReplyText.closest('[data-thread-row-kind="assistant-response-row"]')
+    expect(firstReplyMessage).not.toBeNull()
+    const firstReplyMessageID = firstReplyMessage?.getAttribute("data-thread-message-id")
     await waitFor(() => {
       expect(sendButton).toBeEnabled()
     })
@@ -12995,12 +13029,10 @@ describe("App", () => {
     expect(await screen.findByText("Second reply")).toBeInTheDocument()
 
     await waitFor(() => {
-      const firstReplyMessage = screen.getByText("First reply").closest('[data-thread-row-kind="assistant-response-row"]')
       const secondReplyMessage = screen.getByText("Second reply").closest('[data-thread-row-kind="assistant-response-row"]')
 
-      expect(firstReplyMessage).not.toBeNull()
       expect(secondReplyMessage).not.toBeNull()
-      expect(firstReplyMessage).not.toBe(secondReplyMessage)
+      expect(secondReplyMessage?.getAttribute("data-thread-message-id")).not.toBe(firstReplyMessageID)
       expect(secondReplyMessage).not.toHaveTextContent("First reply")
     })
   })

@@ -593,7 +593,7 @@
                   </div>
                   <div class="io">
                     <b>处理</b>
-                    <p>少量 rows 直接 map；达到 80 rows 后只渲染 <code>virtualRange.items</code>。</p>
+                    <p>少量 rows 直接 map；达到 8 rows 后只渲染 <code>virtualRange.items</code>。</p>
                   </div>
                   <div class="io">
                     <b>输出</b>
@@ -667,7 +667,7 @@
             </article>
             <article class="card" data-tone="orange">
               <h3>虚拟列表</h3>
-              <p><code>displayRows.length >= 80</code> 时启用，先用 estimated height 布局，再通过 ResizeObserver 更新实测高度。</p>
+              <p><code>displayRows.length >= 8</code> 时启用，先用 estimated height 布局，再通过 ResizeObserver 更新实测高度。</p>
             </article>
             <article class="card" data-tone="violet">
               <h3>Inline side chat</h3>

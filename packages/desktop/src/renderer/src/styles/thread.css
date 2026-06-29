@@ -507,6 +507,14 @@
   animation: thread-detail-collapse 240ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
+.thread-column.is-virtualized .trace-item-reasoning-body.is-collapsing,
+.thread-column.is-virtualized .trace-log-detail.is-collapsing,
+body.is-resizing-sidebar .trace-item-reasoning-body.is-collapsing,
+body.is-resizing-sidebar .trace-log-detail.is-collapsing {
+  display: none;
+  animation: none;
+}
+
 .trace-item-collapsed-line {
   --trace-collapsed-fade-width: clamp(104px, 28%, 160px);
   overflow: hidden;
@@ -3403,16 +3411,6 @@ button.user-message-diff-file-row:focus-visible {
   }
 }
 
-@keyframes trace-tool-name-shimmer {
-  0% {
-    background-position: 160% 0;
-  }
-
-  100% {
-    background-position: -160% 0;
-  }
-}
-
 /* Sage / Teal & Slate theme overrides */
 
 .assistant-shell.is-streaming,
@@ -3817,6 +3815,10 @@ button.user-message-diff-file-row:focus-visible {
   contain: layout paint style;
 }
 
+.trace-log-row:not(.has-inline-draft-patch) {
+  height: 26px;
+}
+
 button.trace-log-row {
   cursor: pointer;
 }
@@ -3915,8 +3917,6 @@ button.trace-log-row {
 .trace-log-summary.trace-tool-name {
   --trace-tool-name-muted: var(--seg-text-3);
   --trace-tool-name-active: var(--brand-accent-active);
-  --trace-tool-name-glow: color-mix(in srgb, var(--brand-accent-active) 42%, transparent);
-  --trace-tool-name-glow-soft: color-mix(in srgb, var(--brand-accent-active) 22%, transparent);
   flex: 0 1 auto;
   color: var(--trace-tool-name-muted);
   font-family: var(--font-mono);
@@ -3927,15 +3927,9 @@ button.trace-log-row {
 .trace-log-filler {
   flex: 1 1 auto;
   min-width: 28px;
-  height: 2px;
-  background-image: radial-gradient(
-    circle at center,
-    color-mix(in srgb, var(--seg-text-3) 42%, transparent) 0 1px,
-    transparent 1.15px
-  );
-  background-repeat: repeat-x;
-  background-position: center;
-  background-size: 8px 2px;
+  height: 0;
+  border-bottom: 1px dotted var(--seg-divider);
+  opacity: 0.72;
   transform: translateY(1px);
 }
 
@@ -3946,34 +3940,6 @@ button.trace-log-row {
 
 .trace-log-summary.trace-tool-name:is(.is-active, .is-pending, .is-running) {
   color: var(--trace-tool-name-active);
-}
-
-@supports ((background-clip: text) or (-webkit-background-clip: text)) {
-  .trace-log-summary.trace-tool-name:is(.is-active, .is-pending, .is-running) {
-    color: transparent;
-    background-image: linear-gradient(
-      90deg,
-      var(--trace-tool-name-muted) 0%,
-      var(--trace-tool-name-muted) 22%,
-      color-mix(in srgb, var(--trace-tool-name-active) 18%, var(--surface-trace)) 38%,
-      var(--trace-tool-name-active) 50%,
-      color-mix(in srgb, var(--trace-tool-name-active) 18%, var(--surface-trace)) 62%,
-      var(--trace-tool-name-muted) 78%,
-      var(--trace-tool-name-muted) 100%
-    );
-    background-size: 300% 100%;
-    background-clip: text;
-    -webkit-background-clip: text;
-    text-shadow:
-      0 0 6px var(--trace-tool-name-glow),
-      0 0 14px var(--trace-tool-name-glow-soft);
-    animation: trace-tool-name-shimmer 1.6s ease-in-out infinite;
-  }
-
-  .trace-log-row:hover .trace-log-summary.trace-tool-name:is(.is-active, .is-pending, .is-running),
-  .trace-log-row:focus-visible .trace-log-summary.trace-tool-name:is(.is-active, .is-pending, .is-running) {
-    color: transparent;
-  }
 }
 
 .trace-log-meta {
@@ -4090,7 +4056,6 @@ button.trace-log-row {
   color: var(--seg-text-2);
 }
 
-.thread-resize-lightweight .trace-log-row,
 body.is-resizing-sidebar .trace-log-row,
 body.is-resizing-sidebar .trace-item,
 body.is-resizing-sidebar .thread-message {
@@ -4099,12 +4064,10 @@ body.is-resizing-sidebar .thread-message {
   box-shadow: none !important;
 }
 
-.thread-resize-lightweight .trace-tool-status-indicator::before,
 body.is-resizing-sidebar .trace-tool-status-indicator::before {
   animation: none !important;
 }
 
-.thread-resize-lightweight .trace-tool-name:is(.is-active, .is-pending, .is-running),
 body.is-resizing-sidebar .trace-tool-name:is(.is-active, .is-pending, .is-running) {
   color: var(--brand-accent-active) !important;
   background: none !important;

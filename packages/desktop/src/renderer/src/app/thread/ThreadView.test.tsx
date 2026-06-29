@@ -288,21 +288,26 @@ function toolStatusTraceItem(status: NonNullable<AssistantTraceItem["status"]>):
 
 describe("ThreadView trace item renderers", () => {
   it("renders every assistant trace item kind through the registry", () => {
-    const activeMessages = traceItemKinds.flatMap<ThreadMessage>((kind, index) => [
-      userMessage(`user-${kind}`, `Trigger ${kind}`),
-      assistantTraceMessage(`assistant-${kind}`, [traceSmokeItem(kind)], false),
-      ...(index === traceItemKinds.length - 1 ? [] : [userMessage(`separator-${kind}`, `Next ${kind}`)]),
-    ])
-    const { container } = renderThread(activeMessages, {
-      assistantTraceVisibility: {
-        ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
-        debugMetadata: true,
-        workflow: true,
-      },
-    })
-
     for (const kind of traceItemKinds) {
-      expect(container.querySelector(`.trace-kind-${kind}`)).not.toBeNull()
+      const { container, unmount } = renderThread(
+        [
+          userMessage(`user-${kind}`, `Trigger ${kind}`),
+          assistantTraceMessage(`assistant-${kind}`, [traceSmokeItem(kind)], false),
+        ],
+        {
+          assistantTraceVisibility: {
+            ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+            debugMetadata: true,
+            workflow: true,
+          },
+        },
+      )
+
+      try {
+        expect(container.querySelector(`.trace-kind-${kind}`)).not.toBeNull()
+      } finally {
+        unmount()
+      }
     }
   })
 
@@ -408,7 +413,7 @@ describe("ThreadView trace item renderers", () => {
     ] as const
 
     for (const [rowKind, sectionClassName] of liteRows) {
-      const row = container.querySelector(`[data-thread-row-kind="${rowKind}"]`) as HTMLElement | null
+      const row = container.querySelector(`.assistant-trace-lite-row[data-thread-row-kind="${rowKind}"]`) as HTMLElement | null
       expect(row).not.toBeNull()
       expect(row).toHaveClass("assistant-trace-lite-row")
       expect(row?.querySelector(`.assistant-trace-lite.${sectionClassName}[role="region"]`)).not.toBeNull()
@@ -4571,6 +4576,132 @@ describe("ThreadView virtual list", () => {
       expect(rowLayoutSpy).not.toHaveBeenCalled()
       rowLayoutSpy.mockRestore()
     } finally {
+      animationFrame.restore()
+      globalThis.ResizeObserver = originalResizeObserver
+    }
+  })
+
+  it("remeasures rendered virtual rows when the virtual viewport width changes", async () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+    const animationFrame = installManualAnimationFrame()
+    let resizeCallback: ResizeObserverCallback | null = null
+    let resizeObserverInstance: ResizeObserver | null = null
+
+    class ManualResizeObserver implements ResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallback = callback
+        resizeObserverInstance = this
+      }
+
+      observe() {}
+
+      unobserve() {}
+
+      disconnect() {}
+    }
+
+    globalThis.ResizeObserver = ManualResizeObserver
+
+    try {
+      const activeMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+      const { container, threadColumn } = renderThread(activeMessages, {
+        scrollStateKey: "virtual-list-width-change-session",
+      })
+      setScrollMetrics(threadColumn, {
+        clientHeight: 400,
+        scrollHeight: 12000,
+        scrollTop: threadColumn.scrollTop,
+      })
+
+      act(() => animationFrame.flush())
+      await waitFor(() => expect(screen.getByText("Prompt 119")).toBeInTheDocument())
+
+      const virtualRow = container.querySelector<HTMLElement>("[data-thread-virtual-row-id]")
+      expect(virtualRow).not.toBeNull()
+      const rowLayoutSpy = vi
+        .spyOn(virtualRow!, "getBoundingClientRect")
+        .mockReturnValue(createElementRect({ width: 320, height: 188 }))
+
+      act(() => {
+        resizeCallback?.([
+          {
+            borderBoxSize: [{ blockSize: 400, inlineSize: 320 }] as ResizeObserverSize[],
+            contentBoxSize: [],
+            contentRect: createElementRect({ width: 320, height: 400 }),
+            devicePixelContentBoxSize: [],
+            target: threadColumn,
+          },
+        ], resizeObserverInstance!)
+        animationFrame.flush()
+      })
+
+      expect(rowLayoutSpy).toHaveBeenCalled()
+      rowLayoutSpy.mockRestore()
+    } finally {
+      animationFrame.restore()
+      globalThis.ResizeObserver = originalResizeObserver
+    }
+  })
+
+  it("remeasures rendered virtual rows during sidebar resize without synchronizing scroll", async () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+    const animationFrame = installManualAnimationFrame()
+    let resizeCallback: ResizeObserverCallback | null = null
+    let resizeObserverInstance: ResizeObserver | null = null
+
+    class ManualResizeObserver implements ResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallback = callback
+        resizeObserverInstance = this
+      }
+
+      observe() {}
+
+      unobserve() {}
+
+      disconnect() {}
+    }
+
+    globalThis.ResizeObserver = ManualResizeObserver
+
+    try {
+      const activeMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+      const { container, threadColumn } = renderThread(activeMessages, {
+        scrollStateKey: "virtual-list-sidebar-resize-session",
+      })
+      setScrollMetrics(threadColumn, {
+        clientHeight: 400,
+        scrollHeight: 12000,
+        scrollTop: 240,
+      })
+
+      act(() => animationFrame.flush())
+
+      const virtualRow = container.querySelector<HTMLElement>("[data-thread-virtual-row-id]")
+      expect(virtualRow).not.toBeNull()
+      const rowLayoutSpy = vi
+        .spyOn(virtualRow!, "getBoundingClientRect")
+        .mockReturnValue(createElementRect({ width: 320, height: 188 }))
+
+      document.body.classList.add("is-resizing-sidebar")
+      act(() => {
+        resizeCallback?.([
+          {
+            borderBoxSize: [{ blockSize: 400, inlineSize: 320 }] as ResizeObserverSize[],
+            contentBoxSize: [],
+            contentRect: createElementRect({ width: 320, height: 400 }),
+            devicePixelContentBoxSize: [],
+            target: threadColumn,
+          },
+        ], resizeObserverInstance!)
+        animationFrame.flush()
+      })
+
+      expect(rowLayoutSpy).toHaveBeenCalled()
+      expect(threadColumn.scrollTop).toBe(240)
+      rowLayoutSpy.mockRestore()
+    } finally {
+      document.body.classList.remove("is-resizing-sidebar")
       animationFrame.restore()
       globalThis.ResizeObserver = originalResizeObserver
     }
