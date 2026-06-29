@@ -16,7 +16,7 @@ import { UnifiedPreviewPanel } from "../preview/UnifiedPreviewPanel"
 import { ShellTopMenu } from "../shared-ui"
 import type { CodeHighlightTheme } from "../code-theme"
 import type { SessionMessageTree } from "../session-message-tree"
-import { InlineSideChatThread } from "../thread/ThreadView"
+import { SideChatThread } from "../thread/ThreadView"
 import type {
   AssistantTraceVisibility,
   ComposerAttachment,
@@ -495,7 +495,7 @@ export function RightSidebar({
 
         return (
           <div className="right-sidebar-side-chat-panel">
-            <InlineSideChatThread
+            <SideChatThread
               activeProjectID={sideChatPanelState.activeProjectID}
               ariaLabel="Side chat"
               attachments={sideChatPanelState.attachments}

@@ -32,9 +32,7 @@ interface ThreadProjectionInput {
   messageTree?: SessionMessageTree | null
   pendingPermissionRequests: PermissionRequest[]
   sideChatCountsByAnchorMessageID: Record<string, number>
-  sideChatPlacement: "inline" | "external"
   sideChatSession?: SessionSummary | null
-  sideChatSessionsByAnchorMessageID?: Record<string, SessionSummary[]>
 }
 
 interface ThreadProjection {
@@ -182,9 +180,7 @@ export function useThreadProjection({
   messageTree = null,
   pendingPermissionRequests,
   sideChatCountsByAnchorMessageID,
-  sideChatPlacement,
   sideChatSession = null,
-  sideChatSessionsByAnchorMessageID = {},
 }: ThreadProjectionInput): ThreadProjection {
   const threadDisplayRowsCacheRef = useRef<ThreadDisplayRowsCache | null>(null)
   const activeSessionID = activeSession?.id ?? null
@@ -274,9 +270,7 @@ export function useThreadProjection({
               messageTree,
               readOnlySideChat,
               sideChatCountsByAnchorMessageID,
-              sideChatPlacement,
               sideChatSession,
-              sideChatSessionsByAnchorMessageID,
             },
             previousCache,
           )
@@ -303,9 +297,7 @@ export function useThreadProjection({
       messageTree,
       readOnlySideChat,
       sideChatCountsByAnchorMessageID,
-      sideChatPlacement,
       sideChatSession,
-      sideChatSessionsByAnchorMessageID,
       threadDisplayContext,
     ],
   )

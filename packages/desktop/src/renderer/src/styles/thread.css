@@ -118,6 +118,22 @@
   gap: 0;
 }
 
+.thread-column.is-content-visibility > .thread-row,
+.thread-column.is-content-visibility > .assistant-trace-lite-row,
+.thread-column.is-content-visibility > .thread-message {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 180px;
+}
+
+.thread-column.is-content-visibility > .assistant-trace-lite-row {
+  contain-intrinsic-size: auto 96px;
+}
+
+.thread-column.is-content-visibility > .assistant-file-change-row,
+.thread-column.is-content-visibility > .assistant-diff-row {
+  contain-intrinsic-size: auto 240px;
+}
+
 .thread-virtual-spacer {
   position: relative;
   flex: 0 0 auto;
@@ -186,7 +202,6 @@
 .assistant-approval-row,
 .assistant-diff-row,
 .assistant-actions-row,
-.assistant-inline-side-chat-row,
 .assistant-ephemeral-state-row,
 .assistant-empty-state-row {
   justify-items: stretch;

@@ -148,7 +148,7 @@ ConversationTurnMap
                └─ questionPrompt? / image src? / patch payload?
 ```
 
-assistant trace 会按 section 分组渲染。section 不是简单等同于 `item.kind`，而是由 `traceSectionKeyForItem` 和 `defaultTraceSectionKeyForItem` 计算得出；是否显示某类 trace 由 `assistantTraceVisibility` 控制。
+assistant trace 会按原始 item 顺序投影为 row；section 只决定 row 的语义、样式和可见性，不会改变原始 item 的相对顺序，也不会把多个原始 item 合并成一个 canonical row。section 不是简单等同于 `item.kind`，而是由 `traceSectionKeyForItem` 和 `defaultTraceSectionKeyForItem` 计算得出；是否显示某类 trace 由 `assistantTraceVisibility` 控制。
 
 ```text
 AssistantTraceItem[]
@@ -204,7 +204,7 @@ flowchart LR
     context["buildThreadDisplayContext()"]
     baseRows["buildThreadDisplayRowsIncremental()"]
     displayRows["decorateThreadDisplayRowsIncremental()"]
-    virtual["useThreadVirtualList()\n长列表时启用"]
+    virtual["useThreadVirtualList()\n>= 300 rows 时启用"]
     scroll["useThreadScrollController()\n锁底 / 恢复 / 用户意图"]
   end
 
@@ -226,7 +226,6 @@ flowchart LR
     workflowItem["assistant workflow/source/approval/debug row"]
     diff["assistant diff row"]
     actions["assistant actions row"]
-    sideChat["assistant inline side-chat row"]
     trace["TraceItemView"]
   end
 
@@ -234,6 +233,7 @@ flowchart LR
     response["最终回复正文"]
     traces["reasoning / tools / workflow"]
     actionUi["copy / branch / side chat / fork"]
+    sideChatPanel["RightSidebar side-chat panel"]
     lightbox["ImageLightbox"]
   end
 
@@ -258,7 +258,6 @@ flowchart LR
   dispatch --> workflowItem
   dispatch --> diff
   dispatch --> actions
-  dispatch --> sideChat
   responseItem --> trace
   reasoningItem --> trace
   toolItem --> trace
@@ -268,6 +267,7 @@ flowchart LR
   trace --> response
   trace --> traces
   actions --> actionUi
+  actionUi --> sideChatPanel
   trace --> lightbox
 ```
 
@@ -286,13 +286,20 @@ ThreadView
       │  ├─ empty state: article.thread-row.assistant-empty-state-row
       │  │  └─ TraceItemView(system)
       │  └─ ThreadRows  # 根据虚拟化状态渲染 row
-      │     ├─ direct rows: ThreadRowRenderer(row)[]
-      │     └─ virtualized rows  # 长 thread 时只渲染可见窗口
+      │     ├─ direct rows: ThreadRowRenderer(row)[]  # < 300 rows，自然文档流 + content-visibility
+      │     └─ virtualized rows  # >= 300 rows 时只渲染可见窗口
       │        └─ div.thread-virtual-spacer
       │           └─ div.thread-virtual-row[]
       │              └─ ThreadRowRenderer(row)
       └─ ImageLightbox?  # 图片预览浮层
 ```
+
+默认渲染路径按 `displayRows.length` 分层：
+
+- `< 300` rows：`ThreadRows` 直接 map 所有 row，`thread-column` 带 `is-content-visibility`，由浏览器文档流负责换行后的高度计算，并通过 `content-visibility: auto` 跳过离屏 row 的布局和绘制。
+- `>= 300` rows：`thread-column` 带 `is-virtualized`，继续使用 `thread-virtual-spacer` 和 absolute positioned `thread-virtual-row`，由 `useThreadVirtualList` 维护 `top`、`height`、`totalHeight` 和可见窗口。
+
+`content-visibility` 不叠加到 `.thread-virtual-row` 上。虚拟列表依赖 JS 测量和缓存真实 row 高度；让浏览器延迟虚拟 row 的高度计算会干扰滚动布局。
 
 `ThreadRowRenderer` 是 `thread-column` 的主要 UI 分发表；`VisibleThreadView` 只保留一个很薄的 `renderDisplayRow(row)` wrapper，用来注入 copy/lightbox/side chat 等 handler：
 
@@ -345,9 +352,6 @@ ThreadRowRenderer(row)
 │        ├─ copy assistant response button
 │        ├─ side chat button
 │        └─ fork button
-└─ row.kind = assistant-inline-side-chat
-   └─ article.assistant-inline-side-chat-row
-      └─ InlineSideChatThread
 ```
 
 `TraceItemView` 按 `item.kind` 分发到不同 renderer。多数简单类型最终走 `GenericTraceItemView`，复杂类型会渲染专用 UI：
@@ -380,21 +384,22 @@ TraceItemView
       └─ task-state → TaskStateTraceItemView
 ```
 
-inline side chat 是 `ThreadView` 内部最重的嵌套组件。主线 assistant response 打开 side chat 后，会渲染：
+side chat 不再作为主 `ThreadView` 的 display row 渲染。主线 assistant response 只渲染 actions row 中的 side chat button、count 和 active state；点击后由 workbench 打开右侧栏 side-chat tab：
 
 ```text
-InlineSideChatThread  # 挂在某条 assistant response 下的分支讨论
-├─ header.inline-side-chat-header  # 分支头部
-│  ├─ inline side chat tabs  # 多个 side chat thread
+RightSidebar side-chat tab
+└─ SideChatThread  # 当前由右侧栏承载，CSS class 暂沿用 inline-side-chat 前缀
+├─ header.inline-side-chat-header
+│  ├─ side chat tabs  # 多个 side chat thread
 │  ├─ create side chat tab button
 │  └─ hide side chat button
 ├─ inline-side-chat-tab-menu portal?  # tab 右键菜单
-└─ div.inline-side-chat-body  # 分支内容
+└─ div.inline-side-chat-body
    ├─ nested ThreadView?  # side chat 的消息历史
    └─ nested Composer  # side chat 专用输入框
 ```
 
-注意：主 pane 底部的紫色主输入框 `Composer` 不是主 `ThreadView` 的子组件，它是 `WorkbenchPaneSurface` 中 `ThreadView` 后面的 sibling。只有 `InlineSideChatThread` 内部的 nested composer 才属于 `ThreadView` 子树。
+注意：主 pane 底部的紫色主输入框 `Composer` 不是主 `ThreadView` 的子组件，它是 `WorkbenchPaneSurface` 中 `ThreadView` 后面的 sibling。side chat 专用 composer 属于右侧栏中的 `SideChatThread` 子树。
 
 ## 5. 视觉层级
 
@@ -435,10 +440,9 @@ reasoning 和 tools 默认弱化：
 
 ### File Change
 
-file-change section 会汇总当前 assistant cycle 中的文件变更。为了避免长 trace 淹没回复，当前策略是：
+file-change row 保留对应原始 patch/file/image item 的位置；相邻 file-change item 也会渲染成独立 row，不跨 response、reasoning、debug 或隐藏 item 聚合。为了避免长 trace 淹没回复，当前策略是：
 
-- 如果有 image item，保留图片和最近的非图片变更。
-- 否则优先显示最新 patch。
+- 每个 canonical file-change row 只消费一个原始 trace item。
 - patch/file chip 可点击，并通过 `onFileChangeSelect` 打开右侧检查区域。
 - patch 行默认只显示文件摘要；展开文件行先挂截断 diff preview，点击 full diff 后才把完整 patch 交给 `DiffPreview`。
 - assistant/user message diff card 默认只挂摘要头；文件列表、单文件行和 inline `DiffPreview` 在用户展开后才进入 DOM，避免长 thread 中的历史 diff row 持续增加渲染压力。
@@ -459,6 +463,8 @@ debug 信息由 developer mode 和 trace visibility 控制。默认不应该干�
 
 底部锁定阈值为 `THREAD_BOTTOM_LOCK_THRESHOLD_PX = 32`。
 
+拖拽调整 sidebar 宽度时，`use-thread-content-observer` 会暂停逐帧滚动同步。非虚拟路径不测量虚拟 row；虚拟路径只记录 pending resize 状态，等 `anybox:sidebar-resize-end` 后统一重新观察当前内容、测量已渲染的 `.thread-virtual-row`，再执行一次 scroll sync。
+
 ### 消息动作
 
 assistant response 后方可显示动作行：
@@ -470,18 +476,18 @@ assistant response 后方可显示动作行：
 
 用户消息也支持复制，但只显示 copy icon。
 
-### Inline Side Chat
+### Side Chat
 
-side chat 是挂在某条 assistant response 下的嵌套讨论：
+side chat 是挂在某条 assistant response 下的右侧栏讨论：
 
 - 只允许主 session 的非 streaming assistant response 打开。
 - side chat 锚点为 `message.messageID ?? message.id`。
-- 打开后渲染 `InlineSideChatThread`。
-- `InlineSideChatThread` 内部再次渲染一个 `ThreadView`，并在下方放置专用 `Composer`。
+- 打开后在 right sidebar 的 side-chat tab 中渲染 `SideChatThread`。
+- `SideChatThread` 内部再次渲染一个 `ThreadView`，并在下方放置专用 `Composer`。
 - side chat composer 隐藏 model selector 和项目 tag command，placeholder 为 `Ask a follow-up about this reply.`。
-- side chat session banner 在嵌套视图中关闭，避免重复说明。
+- side chat session banner 在右侧栏嵌套视图中关闭，避免重复说明。
 
-视觉上，inline side chat 使用浅色面板、左侧强调线和较小间距，表达“这是挂在这条回复下的分支”，不是主线 continuation。
+视觉上，side chat 使用右侧栏 panel 承载，主 thread 中只保留 side chat action button 的 count / active state，不增加主线纵向长度。
 
 ### 权限请求
 
@@ -523,8 +529,8 @@ agent 提问通过 `question` trace item 渲染：
 
 主要响应式规则在 `responsive.css`：
 
-- 小于 900px 时，assistant response actions、inline side chat header、session banner 纵向排列。
-- 小屏下 inline side chat 去掉左 margin，减少横向挤压。
+- 小于 900px 时，assistant response actions 和 session banner 纵向排列。
+- 小屏下 side chat 由 right sidebar panel 承载，不再挤压主 thread 的纵向 row。
 - 小屏下 pane content gutter 降低到 10px。
 - composer、utility bar、菜单 panel 会全宽显示。
 - permission request grid 在窄屏变成单列。
@@ -598,10 +604,10 @@ User-message 文件变更卡片使用一组专用 semantic token：
 ## 9. 当前设计债
 
 1. `thread.css` 是从 legacy styles 拆分出来的，存在“先定义卡片，再在文件末尾清空卡片”的覆盖链。
-2. `ThreadRowRenderer` 已经承接 row kind 分发，但 `ThreadView.tsx` 仍保留 TraceItemView、各类 trace renderer、lightbox 和 inline side chat；后续应继续把 trace renderer 拆到独立模块，降低主文件变更冲突。
+2. `ThreadRowRenderer` 已经承接 row kind 分发，但 `ThreadView.tsx` 仍保留 TraceItemView、各类 trace renderer 和 lightbox；后续应继续把 trace renderer 拆到独立模块，降低主文件变更冲突。
 3. side chat 入口在无 hover 环境和首次发现时不够明显。
 4. reasoning/tools/file-change 的视觉差异在最终 override 后偏弱，扫描执行状态时不够直观。
-5. inline side chat 是完整嵌套 thread，长会话中会显著增加主线纵向长度。
+5. side chat 是完整嵌套 thread，但由右侧栏承载；需要关注右侧栏宽度和长会话滚动体验。
 6. `thread-column` 隐藏滚动条，界面更干净，但长 thread 中位置感较弱。
 7. README 中提到的若干前端规格文档当前不存在，本文暂时作为 thread view 设计记录入口。
 
@@ -611,7 +617,7 @@ User-message 文件变更卡片使用一组专用 semantic token：
 
 1. 是否改变了 `ThreadMessage` 或 `AssistantTraceItem` 的分组、显示、折叠规则。
 2. 是否影响 response、trace、file-change、permission、question、side chat 的视觉层级。
-3. 是否影响多 pane、窄屏、inline side chat 嵌套场景。
+3. 是否影响多 pane、窄屏、right sidebar side chat 嵌套场景。
 4. 是否需要更新 `ThreadView.test.tsx` 或 `App.test.tsx` 中的行为断言。
 5. 是否需要同步更新本文档。
 

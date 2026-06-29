@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react"
 import type { ThreadDisplayRow } from "./thread-display-rows"
 
-const THREAD_VIRTUALIZATION_MIN_ROWS = 8
+const THREAD_VIRTUALIZATION_MIN_ROWS = 300
 const THREAD_VIRTUAL_OVERSCAN_PX = 900
 const THREAD_VIRTUAL_OVERSCAN_ROWS = 2
 const THREAD_VIRTUAL_ROW_GAP_PX = 7
@@ -178,34 +178,15 @@ export function useThreadVirtualList({
     () => buildThreadVirtualLayout(displayRows, threadVirtualHeightCache),
     [scrollStateKey, displayRows, threadVirtualHeightCache, threadVirtualMeasurementVersion],
   )
-  const activeInlineSideChatRowID = useMemo(
-    () => displayRows.find((row) => row.kind === "assistant-inline-side-chat")?.rowID ?? null,
-    [displayRows],
-  )
   const threadVirtualRange = useMemo(
-    () => {
-      const baseRange = shouldVirtualizeThreadRows
-        ? findThreadVirtualRange(threadVirtualLayout, threadVirtualViewport)
-        : {
-            endIndex: displayRows.length,
-            items: threadVirtualLayout.items,
-            startIndex: 0,
-          }
-
-      if (!shouldVirtualizeThreadRows || !activeInlineSideChatRowID) return baseRange
-      if (baseRange.items.some((item) => item.row.rowID === activeInlineSideChatRowID)) return baseRange
-
-      const keepAliveItem = threadVirtualLayout.items.find((item) => item.row.rowID === activeInlineSideChatRowID)
-      if (!keepAliveItem) return baseRange
-
-      const items = [...baseRange.items, keepAliveItem].sort((left, right) => left.index - right.index)
-      return {
-        endIndex: Math.max(baseRange.endIndex, keepAliveItem.index + 1),
-        items,
-        startIndex: Math.min(baseRange.startIndex, keepAliveItem.index),
-      }
-    },
-    [activeInlineSideChatRowID, shouldVirtualizeThreadRows, displayRows.length, threadVirtualLayout, threadVirtualViewport],
+    () => shouldVirtualizeThreadRows
+      ? findThreadVirtualRange(threadVirtualLayout, threadVirtualViewport)
+      : {
+          endIndex: displayRows.length,
+          items: threadVirtualLayout.items,
+          startIndex: 0,
+        },
+    [shouldVirtualizeThreadRows, displayRows.length, threadVirtualLayout, threadVirtualViewport],
   )
   const threadVirtualRenderedRangeKey = `${threadVirtualRange.startIndex}:${threadVirtualRange.endIndex}:${threadVirtualLayout.totalHeight}`
 

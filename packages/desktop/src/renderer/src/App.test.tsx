@@ -6683,7 +6683,15 @@ describe("App", () => {
     ))
     const sectionTitles = traceRegions.map((section) => section.getAttribute("aria-label"))
 
-    expect(sectionTitles).toEqual(["Reasoning", "Tools", "Reasoning", "Tools", "Response", "File Changes"])
+    expect(sectionTitles).toEqual([
+      "Reasoning",
+      "Tools",
+      "Reasoning",
+      "Tools",
+      "File Changes",
+      "File Changes",
+      "Response",
+    ])
     expect(threadColumn.querySelector(".assistant-section-header")).toBeNull()
 
     expect(within(traceRegions[0] as HTMLElement).getByText("Inspecting workspace.")).toBeInTheDocument()
@@ -6698,19 +6706,23 @@ describe("App", () => {
     expect(within(traceRegions[3] as HTMLElement).getByRole("button", { name: /^replace-text$/i })).toBeInTheDocument()
     expect(within(traceRegions[3] as HTMLElement).queryByText("Evaluating test output.")).not.toBeInTheDocument()
 
-    expect(within(traceRegions[4] as HTMLElement).getByText("All checks passed.")).toBeInTheDocument()
-    expect(within(traceRegions[4] as HTMLElement).queryByText("Inspecting workspace.")).not.toBeInTheDocument()
+    const firstFileChangeSummary = within(traceRegions[4] as HTMLElement).getByRole("button", { name: "已编辑 1 个文件" })
+    expect(firstFileChangeSummary).toHaveAttribute("aria-expanded", "false")
+    expect(within(traceRegions[4] as HTMLElement).queryByText("src/App.tsx")).not.toBeInTheDocument()
 
-    const sectionFileChangeSummary = within(traceRegions[5] as HTMLElement).getByRole("button", { name: "已编辑 2 个文件" })
-    expect(sectionFileChangeSummary).toHaveAttribute("aria-expanded", "false")
+    const secondFileChangeSummary = within(traceRegions[5] as HTMLElement).getByRole("button", { name: "已编辑 2 个文件" })
+    expect(secondFileChangeSummary).toHaveAttribute("aria-expanded", "false")
     expect(within(traceRegions[5] as HTMLElement).queryByText("1 file change (+2 -1)")).not.toBeInTheDocument()
     expect(within(traceRegions[5] as HTMLElement).queryByText("src/App.tsx")).not.toBeInTheDocument()
-    fireEvent.click(sectionFileChangeSummary)
+    fireEvent.click(secondFileChangeSummary)
     expect(within(traceRegions[5] as HTMLElement).getAllByText("src/App.tsx").length).toBeGreaterThan(0)
     expect(within(traceRegions[5] as HTMLElement).getByLabelText("2 additions, 1 deletions")).toBeInTheDocument()
     expect(within(traceRegions[5] as HTMLElement).getAllByText("src/styles.css").length).toBeGreaterThan(0)
     expect(within(traceRegions[5] as HTMLElement).getByLabelText("1 additions, 0 deletions")).toBeInTheDocument()
     expect(within(traceRegions[5] as HTMLElement).queryByText("All checks passed.")).not.toBeInTheDocument()
+
+    expect(within(traceRegions[6] as HTMLElement).getByText("All checks passed.")).toBeInTheDocument()
+    expect(within(traceRegions[6] as HTMLElement).queryByText("Inspecting workspace.")).not.toBeInTheDocument()
   })
 
   it("virtualizes large assistant trace row sets", async () => {
@@ -7432,20 +7444,30 @@ describe("App", () => {
     const responseSection = threadColumn.querySelector(`${ownerRowSelector} .assistant-section.is-response`) as HTMLElement
     expect(within(responseSection).getByText("Streaming answer")).toBeInTheDocument()
 
-    const fileChangeSection = threadColumn.querySelector(`${ownerRowSelector} .assistant-section.is-file-change`) as HTMLElement
-    const fileChangeSummary = within(fileChangeSection).getByRole("button", { name: "已编辑 2 个文件" })
-    expect(fileChangeSummary).toHaveAttribute("aria-expanded", "false")
-    expect(within(fileChangeSection).queryByText("1 file change (+2 -1)")).not.toBeInTheDocument()
-    expect(within(fileChangeSection).queryByText("src/App.tsx")).not.toBeInTheDocument()
-    fireEvent.click(fileChangeSummary)
-    expect(within(fileChangeSection).getAllByText("src/App.tsx").length).toBeGreaterThan(0)
-    expect(within(fileChangeSection).getByLabelText("2 additions, 1 deletions")).toBeInTheDocument()
-    expect(within(fileChangeSection).getAllByText("src/styles.css").length).toBeGreaterThan(0)
-    expect(within(fileChangeSection).getByLabelText("1 additions, 0 deletions")).toBeInTheDocument()
+    const fileChangeSections = Array.from(
+      threadColumn.querySelectorAll(`${ownerRowSelector} .assistant-section.is-file-change`),
+    ) as HTMLElement[]
+    expect(fileChangeSections).toHaveLength(2)
 
-    const reasoningPosition = reasoningSection.compareDocumentPosition(fileChangeSection)
-    const responsePosition = responseSection.compareDocumentPosition(fileChangeSection)
-    expect(reasoningPosition & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const firstFileChangeSummary = within(fileChangeSections[0] as HTMLElement).getByRole("button", { name: "已编辑 1 个文件" })
+    expect(firstFileChangeSummary).toHaveAttribute("aria-expanded", "false")
+
+    const secondFileChangeSection = fileChangeSections[1] as HTMLElement
+    const secondFileChangeSummary = within(secondFileChangeSection).getByRole("button", { name: "已编辑 2 个文件" })
+    expect(secondFileChangeSummary).toHaveAttribute("aria-expanded", "false")
+    expect(within(secondFileChangeSection).queryByText("1 file change (+2 -1)")).not.toBeInTheDocument()
+    expect(within(secondFileChangeSection).queryByText("src/App.tsx")).not.toBeInTheDocument()
+    fireEvent.click(secondFileChangeSummary)
+    expect(within(secondFileChangeSection).getAllByText("src/App.tsx").length).toBeGreaterThan(0)
+    expect(within(secondFileChangeSection).getByLabelText("2 additions, 1 deletions")).toBeInTheDocument()
+    expect(within(secondFileChangeSection).getAllByText("src/styles.css").length).toBeGreaterThan(0)
+    expect(within(secondFileChangeSection).getByLabelText("1 additions, 0 deletions")).toBeInTheDocument()
+
+    const firstFileChangePosition = reasoningSection.compareDocumentPosition(fileChangeSections[0] as HTMLElement)
+    const secondFileChangePosition = (fileChangeSections[0] as HTMLElement).compareDocumentPosition(secondFileChangeSection)
+    const responsePosition = responseSection.compareDocumentPosition(fileChangeSections[0] as HTMLElement)
+    expect(firstFileChangePosition & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(secondFileChangePosition & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(responsePosition & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
@@ -14401,6 +14423,10 @@ describe("App", () => {
     expect(styles).toMatch(/\.thread-column\s*\{[^}]*--thread-composer-clearance:\s*52px;[^}]*padding:\s*14px 0 var\(--thread-composer-clearance\);[^}]*scroll-padding-bottom:\s*var\(--thread-composer-clearance\);/s)
     expect(styles).toMatch(/\.thread-shell\s*>\s*\.thread-column\s*\{[^}]*padding-bottom:\s*var\(--thread-composer-clearance\);/s)
     expect(styles).toMatch(/\.thread-shell\s*\+\s*\.composer-stack\s*\{[^}]*padding-top:\s*12px;/s)
+    expect(styles).toMatch(/\.thread-column\.is-content-visibility\s*>\s*\.thread-row,[\s\S]*?\.thread-column\.is-content-visibility\s*>\s*\.thread-message\s*\{[^}]*content-visibility:\s*auto;[^}]*contain-intrinsic-size:\s*auto 180px;/s)
+    expect(styles).toMatch(/\.thread-column\.is-content-visibility\s*>\s*\.assistant-trace-lite-row\s*\{[^}]*contain-intrinsic-size:\s*auto 96px;/s)
+    expect(styles).toMatch(/\.thread-column\.is-content-visibility\s*>\s*\.assistant-file-change-row,[\s\S]*?\.thread-column\.is-content-visibility\s*>\s*\.assistant-diff-row\s*\{[^}]*contain-intrinsic-size:\s*auto 240px;/s)
+    expect(styles).not.toMatch(/\.thread-virtual-row\s*\{[^}]*content-visibility:/s)
     expect(styles).toMatch(/body\.is-resizing-sidebar \.assistant-trace-lite-row \.trace-item,[\s\S]*?content-visibility:\s*auto;/s)
   })
 

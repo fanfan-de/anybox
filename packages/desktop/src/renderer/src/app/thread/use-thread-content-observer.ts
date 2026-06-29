@@ -124,7 +124,6 @@ export function useThreadContentObserver({
       if (isSidebarResizeInProgress()) {
         pendingSidebarResizeScrollSyncRef.current = true
         pendingSidebarResizeContentObservationRef.current = true
-        measureThreadVirtualRowsFromResizeEntries(entries)
         return
       }
 

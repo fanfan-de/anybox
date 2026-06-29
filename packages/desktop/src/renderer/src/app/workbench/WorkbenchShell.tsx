@@ -339,7 +339,6 @@ export interface WorkbenchShellProps {
   assistantTraceVisibility: AssistantTraceVisibility
   composerRefreshVersion: number
   isActivityRailVisible: boolean
-  isAgentDebugTraceEnabled: boolean
   isResolvingPermissionRequest: boolean
   isSavingToolPermissionMode: boolean
   isRightSidebarCollapsed: boolean
@@ -387,7 +386,6 @@ export interface WorkbenchShellProps {
     workspaceDirectory: string | null
     workspaceID: string | null
   }) => void
-  sideChatPlacement?: WorkbenchPaneSurfaceProps["sideChatPlacement"]
   onMoveSessionPanel?: (input: {
     panelID: string
     placement: WorkbenchDropPlacement
@@ -395,10 +393,8 @@ export interface WorkbenchShellProps {
     targetGroupID?: string | null
     targetSurfaceID: string
   }) => boolean | Promise<boolean>
-  onCreateSideChatTab: WorkbenchPaneSurfaceProps["onCreateSideChatTab"]
-  onDeleteSideChatTab: WorkbenchPaneSurfaceProps["onDeleteSideChatTab"]
   onOpenCreateSessionTab: (preferredWorkspaceID?: string | null, paneID?: string) => void
-  onOpenSideChat: WorkbenchPaneSurfaceProps["onOpenSideChat"]
+  onOpenSideChat?: WorkbenchPaneSurfaceProps["onOpenSideChat"]
   onOpenSubagentSession?: WorkbenchPaneSurfaceProps["onOpenSubagentSession"]
   onBranchSelect: WorkbenchPaneSurfaceProps["onBranchSelect"]
   onClearComposerParentMessage: WorkbenchPaneSurfaceProps["onClearComposerParentMessage"]
@@ -411,7 +407,6 @@ export interface WorkbenchShellProps {
   onPasteComposerImageAttachments: WorkbenchPaneSurfaceProps["onPasteComposerImageAttachments"]
   onRemoveComposerAttachment: (path: string, tabKey?: string | null) => void
   onSelectCreateSessionTab: (createSessionTabID: string, paneID?: string) => void
-  onSelectSideChatTab: WorkbenchPaneSurfaceProps["onSelectSideChatTab"]
   onSelectSessionTab: (sessionID: string, paneID?: string) => void
   onCancelSend: WorkbenchPaneSurfaceProps["onCancelSend"]
   onPlanModeToggle: WorkbenchPaneSurfaceProps["onPlanModeToggle"]
@@ -1009,7 +1004,6 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
           composerRefreshVersion={props.composerRefreshVersion}
           conversationStore={conversationStore}
           isResolvingPermissionRequest={props.isResolvingPermissionRequest}
-          isAgentDebugTraceEnabled={props.isAgentDebugTraceEnabled}
           isSavingToolPermissionMode={props.isSavingToolPermissionMode}
           isTopRow={false}
           pane={pane}
@@ -1021,15 +1015,12 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
           workspaces={workspaces}
           readThreadScrollSnapshot={props.readThreadScrollSnapshot}
           saveThreadScrollSnapshot={props.saveThreadScrollSnapshot}
-          sideChatPlacement={props.sideChatPlacement}
           onCreateSessionSubmit={props.onCreateSessionSubmit}
           onCreateSessionWorkspaceChange={props.onCreateSessionWorkspaceChange}
           onOpenProjectFolder={props.onOpenProjectFolder}
           onInspectFileInSidebar={props.onInspectFileInSidebar}
           onArtifactLinkOpen={props.onArtifactLinkOpen}
           onLocalFileLinkOpen={props.onLocalFileLinkOpen}
-          onCreateSideChatTab={props.onCreateSideChatTab}
-          onDeleteSideChatTab={props.onDeleteSideChatTab}
           onOpenSideChat={props.onOpenSideChat}
           onOpenSubagentSession={props.onOpenSubagentSession}
           onBranchSelect={props.onBranchSelect}
@@ -1042,7 +1033,6 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
           onPickComposerAttachments={props.onPickComposerAttachments}
           onPasteComposerImageAttachments={props.onPasteComposerImageAttachments}
           onRemoveComposerAttachment={props.onRemoveComposerAttachment}
-          onSelectSideChatTab={props.onSelectSideChatTab}
           onCancelSend={props.onCancelSend}
           onPlanModeToggle={props.onPlanModeToggle}
           onSend={props.onSend}

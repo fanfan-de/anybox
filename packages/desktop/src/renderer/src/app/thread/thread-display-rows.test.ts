@@ -95,6 +95,42 @@ function toolItem(id: string, title: string, extra: Partial<AssistantTraceItem> 
   }
 }
 
+function patchItem(id: string, file: string, extra: Partial<AssistantTraceItem> = {}): AssistantTraceItem {
+  return {
+    id,
+    kind: "patch",
+    timestamp: 1,
+    label: "Patch",
+    title: file,
+    status: "completed",
+    fileChanges: [{
+      file,
+      additions: 1,
+      deletions: 0,
+    }],
+    ...extra,
+  }
+}
+
+function debugItem(id: string, text: string, extra: Partial<AssistantTraceItem> = {}): AssistantTraceItem {
+  return {
+    id,
+    kind: "system",
+    timestamp: 1,
+    label: "Debug",
+    text,
+    status: "completed",
+    ...extra,
+  }
+}
+
+function expectFileChangeRow(row: ThreadDisplayRow | undefined, itemID: string) {
+  expect(row?.kind).toBe("assistant-file-change-row")
+  if (row?.kind !== "assistant-file-change-row") return
+  expect(row.itemID).toBe(itemID)
+  expect(row.items.map((item) => item.itemID)).toEqual([itemID])
+}
+
 function buildRows(
   messages: ThreadMessage[],
   {
@@ -149,9 +185,7 @@ function decorateRowsIncremental(
     messageTree: null,
     readOnlySideChat: false,
     sideChatCountsByAnchorMessageID: {},
-    sideChatPlacement: "external",
     sideChatSession: null,
-    sideChatSessionsByAnchorMessageID: {},
     ...overrides,
     baseRows,
     context,
@@ -172,9 +206,7 @@ function decorateRows(
     messageTree: null,
     readOnlySideChat: false,
     sideChatCountsByAnchorMessageID: {},
-    sideChatPlacement: "external",
     sideChatSession: null,
-    sideChatSessionsByAnchorMessageID: {},
     ...overrides,
     baseRows,
     context,
@@ -226,6 +258,108 @@ describe("thread display rows", () => {
       "assistant-tool-row",
       "assistant-response-row",
     ])
+  })
+
+  it("preserves trace item order around a file change", () => {
+    const rows = buildRows([
+      assistantMessage("assistant-1", [
+        reasoningItem("reasoning-1", "Checking."),
+        patchItem("patch-1", "src/app.ts"),
+        textItem("response-1", "Done."),
+      ]),
+    ])
+
+    expect(rows.map((row) => row.kind)).toEqual([
+      "assistant-reasoning-row",
+      "assistant-file-change-row",
+      "assistant-response-row",
+    ])
+    expect(rows.map((row) => "itemID" in row ? row.itemID : undefined)).toEqual([
+      "reasoning-1",
+      "patch-1",
+      "response-1",
+    ])
+    expectFileChangeRow(rows[1], "patch-1")
+  })
+
+  it("does not merge adjacent file-change items", () => {
+    const rows = buildRows([
+      assistantMessage("assistant-1", [
+        patchItem("patch-1", "src/first.ts"),
+        patchItem("patch-2", "src/second.ts"),
+      ]),
+    ])
+
+    expect(rows.map((row) => row.kind)).toEqual([
+      "assistant-file-change-row",
+      "assistant-file-change-row",
+    ])
+    expectFileChangeRow(rows[0], "patch-1")
+    expectFileChangeRow(rows[1], "patch-2")
+  })
+
+  it("does not merge file-change items across a response", () => {
+    const rows = buildRows([
+      assistantMessage("assistant-1", [
+        patchItem("patch-1", "src/first.ts"),
+        textItem("response-1", "Checkpoint."),
+        patchItem("patch-2", "src/second.ts"),
+      ]),
+    ])
+
+    expect(rows.map((row) => row.kind)).toEqual([
+      "assistant-file-change-row",
+      "assistant-response-row",
+      "assistant-file-change-row",
+    ])
+    expect(rows.map((row) => "itemID" in row ? row.itemID : undefined)).toEqual([
+      "patch-1",
+      "response-1",
+      "patch-2",
+    ])
+  })
+
+  it("does not merge reasoning items across a file change", () => {
+    const rows = buildRows([
+      assistantMessage("assistant-1", [
+        reasoningItem("reasoning-1", "First thought."),
+        patchItem("patch-1", "src/app.ts"),
+        reasoningItem("reasoning-2", "Second thought."),
+      ]),
+    ])
+
+    expect(rows.map((row) => row.kind)).toEqual([
+      "assistant-reasoning-row",
+      "assistant-file-change-row",
+      "assistant-reasoning-row",
+    ])
+    expect(rows.map((row) => "itemID" in row ? row.itemID : undefined)).toEqual([
+      "reasoning-1",
+      "patch-1",
+      "reasoning-2",
+    ])
+  })
+
+  it("does not let hidden debug items create file-change aggregation", () => {
+    const rows = buildRows([
+      assistantMessage("assistant-1", [
+        patchItem("patch-1", "src/first.ts"),
+        debugItem("debug-1", "hidden debug metadata"),
+        patchItem("patch-2", "src/second.ts"),
+      ]),
+    ], {
+      traceVisibility: {
+        ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+        debugMetadata: false,
+      },
+    })
+
+    expect(rows.map((row) => row.kind)).toEqual([
+      "assistant-file-change-row",
+      "assistant-file-change-row",
+    ])
+    expectFileChangeRow(rows[0], "patch-1")
+    expectFileChangeRow(rows[1], "patch-2")
   })
 
   it("keeps a single short reasoning item as a reasoning row before the response", () => {
@@ -290,6 +424,30 @@ describe("thread display rows", () => {
     expect(rows[1]).toMatchObject({ kind: "assistant-tool-row", itemID: "tool-1" })
   })
 
+  it("places stream-inserted user messages between single-item file-change rows", () => {
+    const rows = buildRows([
+      assistantMessage("assistant-1", [
+        patchItem("patch-1", "src/first.ts"),
+        patchItem("patch-2", "src/second.ts"),
+        textItem("response-1", "Done."),
+      ]),
+      userMessage("user-steer", "Steer", {
+        assistantThreadMessageID: "assistant-1",
+        afterItemCount: 1,
+        status: "consumed",
+      }),
+    ])
+
+    expect(rows.map((row) => row.kind)).toEqual([
+      "assistant-file-change-row",
+      "assistant-inserted-user-message",
+      "assistant-file-change-row",
+      "assistant-response-row",
+    ])
+    expectFileChangeRow(rows[0], "patch-1")
+    expectFileChangeRow(rows[2], "patch-2")
+  })
+
   it("attaches folded assistant items to the final owner while preserving source metadata", () => {
     const rows = buildRows([
       userMessage("user-1", "Go"),
@@ -305,6 +463,27 @@ describe("thread display rows", () => {
       itemID: "intermediate-response",
       rawItemIndex: 0,
     })
+  })
+
+  it("orders folded assistant items by source message before raw item index", () => {
+    const rows = buildRows([
+      userMessage("user-1", "Go"),
+      assistantMessage("assistant-intermediate-1", [patchItem("patch-1", "src/first.ts")]),
+      assistantMessage("assistant-intermediate-2", [reasoningItem("reasoning-1", "Still working.")]),
+      assistantMessage("assistant-final", [textItem("final-response", "Done.")]),
+    ])
+
+    const finalOwnerRows = rows.filter((row) => "ownerMessageID" in row && row.ownerMessageID === "assistant-final")
+    expect(finalOwnerRows.map((row) => "itemID" in row ? row.itemID : undefined)).toEqual([
+      "patch-1",
+      "reasoning-1",
+      "final-response",
+    ])
+    expect(finalOwnerRows.map((row) => "sourceMessageID" in row ? row.sourceMessageID : undefined)).toEqual([
+      "assistant-intermediate-1",
+      "assistant-intermediate-2",
+      "assistant-final",
+    ])
   })
 
   it("reuses unchanged base rows while a streaming assistant row changes", () => {
@@ -450,24 +629,42 @@ describe("thread display rows", () => {
         anchorMessageID: "assistant-1",
       },
     } as SessionSummary
-    const withInlineSideChat = decorateRowsIncremental(messages, base.rows, withSideChatCount.cache, {
+    const withActiveSideChat = decorateRowsIncremental(messages, base.rows, withSideChatCount.cache, {
       sideChatCountsByAnchorMessageID: {
         "assistant-1": 1,
       },
-      sideChatPlacement: "inline",
       sideChatSession,
-      sideChatSessionsByAnchorMessageID: {
-        "assistant-1": [sideChatSession],
-      },
     })
 
-    expect(rowByID(withInlineSideChat.rows, "assistant:assistant-1:actions")).not.toBe(
+    expect(rowByID(withActiveSideChat.rows, "assistant:assistant-1:actions")).not.toBe(
       rowByID(withSideChatCount.rows, "assistant:assistant-1:actions"),
     )
-    expect(rowByID(withInlineSideChat.rows, "assistant:assistant-1:inline-side-chat")).toBeDefined()
-    expect(rowByID(withInlineSideChat.rows, "assistant:assistant-2:actions")).toBe(
+    expect(rowByID(withActiveSideChat.rows, "assistant:assistant-1:actions")).toMatchObject({
+      marksSideChatButtonActive: true,
+      sideChatButtonLabel: "Open side chat (1)",
+    })
+    expect(withActiveSideChat.rows.map((row) => row.rowID)).not.toContain("assistant:assistant-1:inline-side-chat")
+    expect(rowByID(withActiveSideChat.rows, "assistant:assistant-2:actions")).toBe(
       rowByID(withSideChatCount.rows, "assistant:assistant-2:actions"),
     )
+  })
+
+  it("builds response actions from the last visible response segment", () => {
+    const messages = [
+      assistantMessage("assistant-1", [
+        textItem("response-1", "First response."),
+        patchItem("patch-1", "src/app.ts"),
+        textItem("response-2", "Second response."),
+      ]),
+    ]
+    const baseRows = buildRows(messages)
+    const decoratedRows = decorateRows(messages, baseRows)
+    const actionsRow = rowByID(decoratedRows, "assistant:assistant-1:actions")
+
+    expect(actionsRow?.kind).toBe("assistant-actions")
+    if (actionsRow?.kind !== "assistant-actions") return
+    expect(actionsRow.responseItems.map((item) => item.id)).toEqual(["response-2"])
+    expect(actionsRow.responseCopyText).toBe("Second response.")
   })
 
   it("matches the non-cached build and decorate output", () => {
@@ -493,11 +690,7 @@ describe("thread display rows", () => {
       sideChatCountsByAnchorMessageID: {
         "assistant-2": 1,
       },
-      sideChatPlacement: "inline",
       sideChatSession,
-      sideChatSessionsByAnchorMessageID: {
-        "assistant-2": [sideChatSession],
-      },
     }
 
     const baselineBaseRows = buildRows(messages)

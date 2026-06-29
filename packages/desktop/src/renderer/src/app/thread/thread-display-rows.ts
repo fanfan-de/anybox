@@ -41,7 +41,6 @@ export type ThreadDisplayRowKind =
   | "assistant-approval-row"
   | "assistant-diff-card"
   | "assistant-actions"
-  | "assistant-inline-side-chat"
   | "assistant-ephemeral-state"
   | "assistant-inserted-user-message"
 
@@ -54,13 +53,6 @@ export type AssistantTraceItemRowKind =
   | "assistant-debug-row"
   | "assistant-source-row"
   | "assistant-approval-row"
-
-export interface AssistantTraceBlock<TItem = AssistantTraceItem> {
-  fileChangeGroupKey?: string
-  sectionKey: AssistantTraceSectionKey
-  title: string
-  items: TItem[]
-}
 
 export interface AssistantTraceRowItem {
   item: AssistantTraceItem
@@ -155,19 +147,11 @@ export interface AssistantActionsRow extends AssistantDisplayRowBase {
   threadMessageID: string
 }
 
-export interface AssistantInlineSideChatRow extends AssistantDisplayRowBase {
-  activeInlineSideChat: SessionSummary
-  kind: "assistant-inline-side-chat"
-  sideChatAnchorMessageID: string
-  sideChatSessions: SessionSummary[]
-}
-
 export type AssistantDisplayRow =
   | AssistantTraceItemRow
   | AssistantFileChangeRow
   | AssistantDiffCardRow
   | AssistantActionsRow
-  | AssistantInlineSideChatRow
   | AssistantEphemeralStateRow
   | AssistantInsertedUserMessageRow
 
@@ -206,9 +190,7 @@ export interface DecorateThreadDisplayRowsInput {
   messageTree?: SessionMessageTree | null
   readOnlySideChat: boolean
   sideChatCountsByAnchorMessageID: Record<string, number>
-  sideChatPlacement: "inline" | "external"
   sideChatSession?: SessionSummary | null
-  sideChatSessionsByAnchorMessageID?: Record<string, SessionSummary[]>
 }
 
 export interface ThreadDisplayRowsCacheStats {
@@ -235,12 +217,10 @@ interface BaseRowsCacheEntry {
 }
 
 interface DecorationRowsCacheEntry {
-  activeInlineSideChat: SessionSummary | null
   baseRow: AssistantDisplayRow
   branchOptions: SessionMessageBranchOption[]
   key: string
   rows: ThreadDisplayRow[]
-  sideChatSessions?: SessionSummary[]
   trailingDiffMessage: AssistantThreadMessage | UserThreadMessage | null
 }
 
@@ -314,30 +294,6 @@ function getTraceBlockItem<TItem>(value: TItem): AssistantTraceItem {
 
 function isAssistantTraceRowItem(value: unknown): value is AssistantTraceRowItem {
   return Boolean(value && typeof value === "object" && "item" in value && "rawItemIndex" in value)
-}
-
-function getTraceBlockItemID<TItem>(value: TItem) {
-  return getTraceBlockItem(value).id
-}
-
-function getTraceBlockItemRawIndex(value: AssistantTraceRowItem) {
-  return value.rawItemIndex
-}
-
-function getTraceBlockItemSource(value: AssistantTraceRowItem) {
-  return value.sourceMessage
-}
-
-function getTraceBlockItemSourceIndex(value: AssistantTraceRowItem) {
-  return value.sourceMessageIndex
-}
-
-function getTraceBlockItemSection<TItem>(value: TItem) {
-  return traceSectionKeyForItem(getTraceBlockItem(value))
-}
-
-function getTraceBlockFileChangeGroupKey<TItem>(value: TItem) {
-  return isAssistantTraceRowItem(value) ? value.sourceMessageID : "current-message"
 }
 
 export function getUserMessageBodyText(message: UserThreadMessage) {
@@ -529,80 +485,6 @@ export function traceSectionTitle(sectionKey: AssistantTraceSectionKey) {
     default:
       return "Reasoning"
   }
-}
-
-function buildTraceBlocks<TItem>(items: TItem[]) {
-  return items.reduce<AssistantTraceBlock<TItem>[]>(
-    (blocks, item) => {
-      const sectionKey = getTraceBlockItemSection(item)
-      if (sectionKey === "file-change") {
-        const fileChangeGroupKey = getTraceBlockFileChangeGroupKey(item)
-        const fileChangeBlock = blocks.find(
-          (block) => block.sectionKey === "file-change" && block.fileChangeGroupKey === fileChangeGroupKey,
-        )
-        if (fileChangeBlock) {
-          fileChangeBlock.items.push(item)
-          return blocks
-        }
-
-        blocks.push({
-          fileChangeGroupKey,
-          sectionKey,
-          title: traceSectionTitle(sectionKey),
-          items: [item],
-        })
-        return blocks
-      }
-
-      const fileChangeBlockIndex = blocks.findIndex((block) => block.sectionKey === "file-change")
-      const insertIndex = fileChangeBlockIndex === -1 ? blocks.length : fileChangeBlockIndex
-      const previousBlock = blocks[insertIndex - 1]
-
-      if (previousBlock && previousBlock.sectionKey === sectionKey) {
-        previousBlock.items.push(item)
-        return blocks
-      }
-
-      blocks.splice(insertIndex, 0, {
-        sectionKey,
-        title: traceSectionTitle(sectionKey),
-        items: [item],
-      })
-      return blocks
-    },
-    [],
-  )
-}
-
-export function buildAssistantTraceBlocks(items: AssistantTraceItem[]) {
-  return buildTraceBlocks(items)
-}
-
-export function summarizeFileChangeItems<TItem>(items: TItem[]) {
-  const imageItems = items.filter((item) => getTraceBlockItem(item).kind === "image")
-  const latestPatch = [...items].reverse().find((item) => getTraceBlockItem(item).kind === "patch")
-  const latestNonImageItem = latestPatch ?? [...items].reverse().find((item) => getTraceBlockItem(item).kind !== "image")
-
-  if (imageItems.length > 0) {
-    const includedIDs = new Set([
-      ...imageItems.map(getTraceBlockItemID),
-      ...(latestNonImageItem ? [getTraceBlockItemID(latestNonImageItem)] : []),
-    ])
-    return items.filter((item) => includedIDs.has(getTraceBlockItemID(item)))
-  }
-
-  if (latestPatch) return [latestPatch]
-
-  const latestItem = items[items.length - 1]
-  return latestItem ? [latestItem] : []
-}
-
-export function getAssistantTraceBlockRenderedItems<TItem>(block: AssistantTraceBlock<TItem>) {
-  return block.sectionKey === "file-change" ? summarizeFileChangeItems(block.items) : block.items
-}
-
-export function flattenAssistantTraceBlockItems<TItem>(blocks: AssistantTraceBlock<TItem>[]) {
-  return blocks.flatMap((block) => getAssistantTraceBlockRenderedItems(block))
 }
 
 function filterRenderedTraceItems<TItem>(
@@ -1194,8 +1076,8 @@ function buildFileChangeSummaryRow({
       rawItemIndex: firstItem?.rawItemIndex,
       rowID: `assistant:${message.id}:file-change:${summaryKey}`,
       section: "file-change",
-      sourceMessage: firstItem ? getTraceBlockItemSource(firstItem) : message,
-      sourceMessageIndex: firstItem ? getTraceBlockItemSourceIndex(firstItem) : messageIndex,
+      sourceMessage: firstItem?.sourceMessage ?? message,
+      sourceMessageIndex: firstItem?.sourceMessageIndex ?? messageIndex,
     }),
     itemID: firstItem?.itemID,
     items,
@@ -1206,50 +1088,45 @@ function buildFileChangeSummaryRow({
 
 function buildMainTraceRowEntries({
   context,
-  mainBlocks,
+  mainTraceItems,
   message,
   messageIndex,
   shouldCollapseTraceItemAfterMessageCompletion,
 }: {
   context: ThreadDisplayContext
-  mainBlocks: AssistantTraceBlock<AssistantTraceRowItem>[]
+  mainTraceItems: AssistantTraceRowItem[]
   message: AssistantThreadMessage
   messageIndex: number
   shouldCollapseTraceItemAfterMessageCompletion: boolean
 }) {
   const entries: MainTraceRowEntry[] = []
 
-  mainBlocks.forEach((block) => {
-    const renderedItems = getAssistantTraceBlockRenderedItems(block)
-    if (renderedItems.length === 0) return
-
-    if (block.sectionKey === "file-change") {
+  mainTraceItems.forEach((traceItem) => {
+    if (traceItem.section === "file-change") {
       entries.push({
-        endRawItemIndex: Math.max(...renderedItems.map(getTraceBlockItemRawIndex)) + 1,
+        endRawItemIndex: traceItem.rawItemIndex + 1,
         row: buildFileChangeSummaryRow({
           context,
-          items: renderedItems,
+          items: [traceItem],
           message,
           messageIndex,
           shouldCollapseTraceItemAfterMessageCompletion,
         }),
-        startRawItemIndex: Math.min(...renderedItems.map(getTraceBlockItemRawIndex)),
+        startRawItemIndex: traceItem.rawItemIndex,
       })
       return
     }
 
-    renderedItems.forEach((traceItem) => {
-      entries.push({
-        endRawItemIndex: traceItem.rawItemIndex + 1,
-        row: buildTraceItemRow({
-          context,
-          message,
-          messageIndex,
-          shouldCollapseTraceItemAfterMessageCompletion,
-          traceItem,
-        }),
-        startRawItemIndex: traceItem.rawItemIndex,
-      })
+    entries.push({
+      endRawItemIndex: traceItem.rawItemIndex + 1,
+      row: buildTraceItemRow({
+        context,
+        message,
+        messageIndex,
+        shouldCollapseTraceItemAfterMessageCompletion,
+        traceItem,
+      }),
+      startRawItemIndex: traceItem.rawItemIndex,
     })
   })
 
@@ -1382,11 +1259,11 @@ function buildAssistantMessageRows({
 
   const mainEntries = buildMainTraceRowEntries({
     context,
-    mainBlocks: buildTraceBlocks(filterRenderedTraceItems(
+    mainTraceItems: filterRenderedTraceItems(
       [...foldedRunTraceItems, ...ownTraceItems],
       !message.isStreaming,
       assistantTraceVisibility,
-    )),
+    ),
     message,
     messageIndex,
     shouldCollapseTraceItemAfterMessageCompletion,
@@ -1540,16 +1417,27 @@ export function getLastAssistantResponseSectionItems(
   items: AssistantTraceItem[],
   traceVisibility: AssistantTraceVisibility,
 ) {
-  const blocks = buildAssistantTraceBlocks(filterRenderedAssistantTraceItems(items, true, traceVisibility))
+  const visibleItems = filterRenderedAssistantTraceItems(items, true, traceVisibility)
+  let latestResponseItems: AssistantTraceItem[] = []
+  let currentResponseItems: AssistantTraceItem[] = []
 
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const block = blocks[index]
-    if (!block || block.sectionKey !== "response") continue
-    if (!block.items.some((item) => item.kind === "text" && Boolean(item.text?.trim()))) continue
-    return block.items
+  visibleItems.forEach((item) => {
+    if (traceSectionKeyForItem(item) !== "response") {
+      if (currentResponseItems.some((responseItem) => responseItem.kind === "text" && Boolean(responseItem.text?.trim()))) {
+        latestResponseItems = currentResponseItems
+      }
+      currentResponseItems = []
+      return
+    }
+
+    currentResponseItems.push(item)
+  })
+
+  if (currentResponseItems.some((item) => item.kind === "text" && Boolean(item.text?.trim()))) {
+    latestResponseItems = currentResponseItems
   }
 
-  return []
+  return latestResponseItems
 }
 
 export function buildAssistantResponseCopyText(items: AssistantTraceItem[]) {
@@ -1637,7 +1525,6 @@ function buildAssistantActionsRow({
   readOnlySideChat,
   sideChatAnchorMessageID,
   sideChatCountsByAnchorMessageID,
-  sideChatPlacement,
   sideChatSession,
 }: {
   assistantTraceVisibility: AssistantTraceVisibility
@@ -1649,7 +1536,6 @@ function buildAssistantActionsRow({
   readOnlySideChat: boolean
   sideChatAnchorMessageID: string
   sideChatCountsByAnchorMessageID: Record<string, number>
-  sideChatPlacement: "inline" | "external"
   sideChatSession?: SessionSummary | null
 }): AssistantActionsRow | null {
   const message = baseRow.message
@@ -1659,21 +1545,16 @@ function buildAssistantActionsRow({
   const existingSideChatCount = sideChatCountsByAnchorMessageID[sideChatAnchorMessageID] ?? 0
   const responseItems = canExposeResponseActions ? getLastAssistantResponseSectionItems(message.items, assistantTraceVisibility) : []
   const responseCopyText = canExposeResponseActions ? buildAssistantResponseCopyText(responseItems) : ""
-  const activeInlineSideChat = sideChatSession?.origin?.anchorMessageID === sideChatAnchorMessageID ? sideChatSession : null
-  const rendersSideChatInline = sideChatPlacement === "inline"
-  const marksSideChatButtonActive = rendersSideChatInline && Boolean(activeInlineSideChat)
+  const activeSideChatSession = sideChatSession?.origin?.anchorMessageID === sideChatAnchorMessageID ? sideChatSession : null
+  const marksSideChatButtonActive = Boolean(activeSideChatSession)
   const sideChatButtonLabel =
-    rendersSideChatInline && activeInlineSideChat
-      ? "Hide this side chat"
-      : existingSideChatCount > 0
-        ? `Open side chat (${existingSideChatCount})`
-        : "Open side chat"
+    existingSideChatCount > 0
+      ? `Open side chat (${existingSideChatCount})`
+      : "Open side chat"
   const sideChatButtonTitle =
-    rendersSideChatInline && activeInlineSideChat
-      ? "Hide this side chat"
-      : existingSideChatCount > 0
-        ? `${existingSideChatCount} side chat thread${existingSideChatCount === 1 ? "" : "s"}`
-        : "Open a side chat for this reply"
+    existingSideChatCount > 0
+      ? `${existingSideChatCount} side chat thread${existingSideChatCount === 1 ? "" : "s"}`
+      : "Open a side chat for this reply"
   const rowCanOpenSideChat =
     !readOnlySideChat &&
     !message.isStreaming &&
@@ -1714,42 +1595,10 @@ function buildAssistantActionsRow({
   }
 }
 
-function buildAssistantInlineSideChatRow({
-  baseRow,
-  sideChatAnchorMessageID,
-  sideChatPlacement,
-  sideChatSession,
-  sideChatSessionsByAnchorMessageID = {},
-}: {
-  baseRow: AssistantDisplayRow
-  sideChatAnchorMessageID: string
-  sideChatPlacement: "inline" | "external"
-  sideChatSession?: SessionSummary | null
-  sideChatSessionsByAnchorMessageID?: Record<string, SessionSummary[]>
-}): AssistantInlineSideChatRow | null {
-  if (sideChatPlacement !== "inline") return null
-
-  const activeInlineSideChat = sideChatSession?.origin?.anchorMessageID === sideChatAnchorMessageID ? sideChatSession : null
-  if (!activeInlineSideChat) return null
-
-  return {
-    ...buildAssistantDecorationBase(
-      baseRow,
-      "assistant-inline-side-chat",
-      `assistant:${baseRow.ownerMessageID}:inline-side-chat`,
-      520,
-    ),
-    activeInlineSideChat,
-    sideChatAnchorMessageID,
-    sideChatSessions: sideChatSessionsByAnchorMessageID[sideChatAnchorMessageID] ?? [activeInlineSideChat],
-  }
-}
-
 function isAssistantDecoratableBaseRow(row: ThreadDisplayRow): row is AssistantDisplayRow {
   return "ownerMessageID" in row &&
     row.kind !== "assistant-diff-card" &&
-    row.kind !== "assistant-actions" &&
-    row.kind !== "assistant-inline-side-chat"
+    row.kind !== "assistant-actions"
 }
 
 function buildLastDecoratableBaseRowByOwnerID(rows: ThreadDisplayRow[]) {
@@ -1786,19 +1635,6 @@ function readAssistantDecorationBranchOptions({
   return messageTree?.branchOptionsByParentID[threadMessageID] ?? EMPTY_BRANCH_OPTIONS
 }
 
-function getActiveInlineSideChatForAnchor({
-  sideChatAnchorMessageID,
-  sideChatPlacement,
-  sideChatSession,
-}: {
-  sideChatAnchorMessageID: string
-  sideChatPlacement: "inline" | "external"
-  sideChatSession?: SessionSummary | null
-}) {
-  if (sideChatPlacement !== "inline") return null
-  return sideChatSession?.origin?.anchorMessageID === sideChatAnchorMessageID ? sideChatSession : null
-}
-
 function createAssistantDecorationDiffState({
   baseRow,
   context,
@@ -1833,37 +1669,21 @@ function createAssistantDecorationDiffState({
 function createAssistantDecorationSideChatState({
   sideChatAnchorMessageID,
   sideChatCountsByAnchorMessageID,
-  sideChatPlacement,
   sideChatSession,
-  sideChatSessionsByAnchorMessageID,
 }: {
   sideChatAnchorMessageID: string
   sideChatCountsByAnchorMessageID: Record<string, number>
-  sideChatPlacement: "inline" | "external"
   sideChatSession?: SessionSummary | null
-  sideChatSessionsByAnchorMessageID: Record<string, SessionSummary[]>
 }) {
   const existingSideChatCount = sideChatCountsByAnchorMessageID[sideChatAnchorMessageID] ?? 0
-  const activeInlineSideChat = getActiveInlineSideChatForAnchor({
-    sideChatAnchorMessageID,
-    sideChatPlacement,
-    sideChatSession,
-  })
-  const sideChatSessions = activeInlineSideChat
-    ? sideChatSessionsByAnchorMessageID[sideChatAnchorMessageID]
-    : undefined
-  const renderedSideChatSessions = sideChatSessions ?? (activeInlineSideChat ? [activeInlineSideChat] : [])
+  const activeSideChatSession = sideChatSession?.origin?.anchorMessageID === sideChatAnchorMessageID ? sideChatSession : null
   const signature = joinCacheKeyParts([
     sideChatAnchorMessageID,
     existingSideChatCount,
-    activeInlineSideChat ? sideChatPlacement : "none",
-    sessionSummarySignature(activeInlineSideChat),
-    renderedSideChatSessions.map(sessionSummarySignature).join("|"),
+    sessionSummarySignature(activeSideChatSession),
   ])
 
   return {
-    activeInlineSideChat,
-    sideChatSessions,
     signature,
   }
 }
@@ -1879,9 +1699,7 @@ function createAssistantDecorationCacheState({
   readOnlySideChat,
   sideChatAnchorMessageID,
   sideChatCountsByAnchorMessageID,
-  sideChatPlacement,
   sideChatSession,
-  sideChatSessionsByAnchorMessageID,
 }: DecorateThreadDisplayRowsInput & {
   baseRow: AssistantDisplayRow
   sideChatAnchorMessageID: string
@@ -1895,9 +1713,7 @@ function createAssistantDecorationCacheState({
   const sideChatState = createAssistantDecorationSideChatState({
     sideChatAnchorMessageID,
     sideChatCountsByAnchorMessageID,
-    sideChatPlacement,
     sideChatSession,
-    sideChatSessionsByAnchorMessageID: sideChatSessionsByAnchorMessageID ?? {},
   })
   const key = joinCacheKeyParts([
     "decoration:assistant",
@@ -1917,10 +1733,8 @@ function createAssistantDecorationCacheState({
   ])
 
   return {
-    activeInlineSideChat: sideChatState.activeInlineSideChat,
     branchOptions,
     key,
-    sideChatSessions: sideChatState.sideChatSessions,
     trailingDiffMessage: diffState.trailingDiffMessage,
   }
 }
@@ -1935,8 +1749,6 @@ function canReuseDecorationRows(
     previousEntry.key === state.key &&
     previousEntry.baseRow === baseRow &&
     previousEntry.branchOptions === state.branchOptions &&
-    previousEntry.activeInlineSideChat === state.activeInlineSideChat &&
-    previousEntry.sideChatSessions === state.sideChatSessions &&
     previousEntry.trailingDiffMessage === state.trailingDiffMessage,
   )
 }
@@ -1955,9 +1767,7 @@ export function decorateThreadDisplayRowsIncremental(
     messageTree,
     readOnlySideChat,
     sideChatCountsByAnchorMessageID,
-    sideChatPlacement,
     sideChatSession,
-    sideChatSessionsByAnchorMessageID = {},
   } = input
   const sessionID = previousCache?.sessionID ?? null
   const compatiblePreviousCache = getCompatibleThreadDisplayRowsCache(previousCache, sessionID)
@@ -1991,7 +1801,6 @@ export function decorateThreadDisplayRowsIncremental(
       ...input,
       baseRow: row,
       sideChatAnchorMessageID,
-      sideChatSessionsByAnchorMessageID,
     })
     const previousEntry = compatiblePreviousCache?.decorationRowsByOwnerMessageID.get(row.ownerMessageID)
     if (canReuseDecorationRows(previousEntry, cacheState, row)) {
@@ -2019,27 +1828,15 @@ export function decorateThreadDisplayRowsIncremental(
       readOnlySideChat,
       sideChatAnchorMessageID,
       sideChatCountsByAnchorMessageID,
-      sideChatPlacement,
       sideChatSession,
     })
     if (actionsRow) decorationRows.push(actionsRow)
 
-    const inlineSideChatRow = buildAssistantInlineSideChatRow({
-      baseRow: row,
-      sideChatAnchorMessageID,
-      sideChatPlacement,
-      sideChatSession,
-      sideChatSessionsByAnchorMessageID,
-    })
-    if (inlineSideChatRow) decorationRows.push(inlineSideChatRow)
-
     cache.decorationRowsByOwnerMessageID.set(row.ownerMessageID, {
-      activeInlineSideChat: cacheState.activeInlineSideChat,
       baseRow: row,
       branchOptions: cacheState.branchOptions,
       key: cacheState.key,
       rows: decorationRows,
-      sideChatSessions: cacheState.sideChatSessions,
       trailingDiffMessage: cacheState.trailingDiffMessage,
     })
     rows.push(...decorationRows)

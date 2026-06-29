@@ -3,7 +3,6 @@ import { createPortal } from "react-dom"
 import { getAgentSessionBridge } from "../agent-session/client"
 import { Composer } from "../composer/Composer"
 import { ComposerConcurrentInputDrawer } from "../composer/ComposerConcurrentInputDrawer"
-import { createEmptyComposerDraftState } from "../composer/draft-state"
 import { DiffPreview } from "../diff/DiffPreview"
 import {
   ChangesIcon,
@@ -91,13 +90,10 @@ const EMPTY_FILE_CHANGES: AssistantTraceFileChange[] = []
 type ProposedPlanCardStatus = "idle" | "cancelled" | "confirming" | "confirmed"
 
 interface ThreadViewProps {
-  activeProjectID?: string | null
   activeSession: SessionSummary | null
   activeSessionDiff?: SessionDiffSummary | null
   activeMessages: ThreadMessage[]
   assistantTraceVisibility: AssistantTraceVisibility
-  composerRefreshVersion?: number
-  isAgentDebugTraceEnabled: boolean
   isResolvingPermissionRequest: boolean
   isSessionRunning?: boolean
   messageTree?: SessionMessageTree | null
@@ -114,60 +110,16 @@ interface ThreadViewProps {
   pendingPermissionRequests: PermissionRequest[]
   permissionRequestActionError: string | null
   permissionRequestActionRequestID: string | null
-  sideChatAttachments?: ComposerAttachment[]
   sideChatCountsByAnchorMessageID: Record<string, number>
-  sideChatDraftState?: ComposerDraftState
-  sideChatIsCancelling?: boolean
-  sideChatIsInterruptible?: boolean
-  sideChatIsSending?: boolean
-  sideChatPendingInputs?: PendingConversationInput[]
-  sideChatPendingPermissionRequests?: PermissionRequest[]
-  sideChatPermissionRequestActionError?: string | null
-  sideChatPermissionRequestActionRequestID?: string | null
   sideChatSession?: SessionSummary | null
-  sideChatSessionsByAnchorMessageID?: Record<string, SessionSummary[]>
-  sideChatMessages?: ThreadMessage[]
   scrollStateKey?: string | null
   threadColumnRef: RefObject<HTMLDivElement | null>
   isThreadVisible?: boolean
   readScrollSnapshot?: (key: string) => ThreadScrollSnapshot | null
   saveScrollSnapshot?: (key: string, snapshot: ThreadScrollSnapshot) => void
-  sideChatPlacement?: "inline" | "external"
   onAskUserQuestionAnswer: QuestionAnswerHandler
-  onSideChatDraftStateChange?: (value: ComposerDraftState) => void
-  onSideChatPickAttachments?: (input: {
-    allowImage: boolean
-    allowPdf: boolean
-    disabledReason: string | null
-  }) => void | Promise<void>
-  onSideChatPasteImageAttachments?: (input: {
-    allowImage: boolean
-    disabledReason: string | null
-    images: ComposerPastedImageAttachment[]
-  }) => void | Promise<void>
-  onSideChatRemoveAttachment?: (path: string) => void
-  onSideChatCancelSend?: () => void | Promise<void>
-  onSideChatSend?: (input: {
-    attachmentError?: string | null
-    draftStateOverride?: ComposerDraftState
-    questionAnswer?: {
-      questionID: string
-      selectedOptions?: string[]
-      freeformText?: string
-    }
-    selectedReasoningEffort?: ReasoningEffort | null
-    selectedModel?: string | null
-    selectedSkillIDs: string[]
-    steerQueuedMessageID?: string
-    submissionMode?: UserThreadMessage["submissionMode"]
-    waitForPendingModelSelection: () => Promise<void>
-  }) => void | Promise<void>
-  onSessionModelSelectionChange?: (sessionID: string, selection: SessionSummary["modelSelection"] | undefined) => void
-  onSideChatCreate?: (anchorMessageID: string) => void | Promise<void>
-  onSideChatDelete?: (sessionID: string) => void | Promise<void>
   onProposedPlanConfirm?: ProposedPlanConfirmHandler
   onPermissionRequestResponse: PermissionRequestResponseHandler
-  onSideChatSelect?: (sessionID: string) => void | Promise<void>
 }
 
 const IMAGE_LIGHTBOX_BODY_CLASS = "is-image-lightbox-open"
@@ -1387,7 +1339,7 @@ function ImageLightbox({
   )
 }
 
-export interface InlineSideChatThreadProps {
+export interface SideChatThreadProps {
   activeProjectID: string | null
   attachments: ComposerAttachment[]
   assistantTraceVisibility: AssistantTraceVisibility
@@ -1449,7 +1401,7 @@ export interface InlineSideChatThreadProps {
   variant?: "inline" | "sidebar"
 }
 
-export function InlineSideChatThread({
+export function SideChatThread({
   activeProjectID,
   attachments,
   assistantTraceVisibility,
@@ -1487,7 +1439,7 @@ export function InlineSideChatThread({
   onSessionModelSelectionChange,
   ariaLabel = "Nested side chat",
   variant = "inline",
-}: InlineSideChatThreadProps) {
+}: SideChatThreadProps) {
   const composer = useProjectComposer({
     attachmentPaths: attachments.map((attachment) => attachment.path),
     onSessionModelSelectionChange,
@@ -1545,7 +1497,7 @@ export function InlineSideChatThread({
       })
       .catch((error) => {
         if (isCancelled) return
-        console.error("[desktop] agentSession.loadHistory failed for inline side chat:", error)
+        console.error("[desktop] agentSession.loadHistory failed for side chat:", error)
       })
 
     return () => {
@@ -1715,12 +1667,9 @@ export function InlineSideChatThread({
       <div className="inline-side-chat-body">
         {shouldRenderNestedThread ? (
           <ThreadView
-            activeProjectID={activeProjectID}
             activeSession={session}
             activeMessages={effectiveMessages}
             assistantTraceVisibility={assistantTraceVisibility}
-            composerRefreshVersion={composerRefreshVersion}
-            isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
             isResolvingPermissionRequest={isResolvingPermissionRequest}
             isSessionRunning={isSending || isInterruptible}
             pendingConversationInputs={pendingInputs}
@@ -4222,7 +4171,6 @@ const THREAD_ROW_RENDERER_COMPONENTS = {
   AssistantMessagePlaceholder,
   AssistantTraceSection,
   BranchSwitcher,
-  InlineSideChatThread,
   MessageDiffCard,
   PermissionRequestInlinePrompt,
   UserThreadMessageArticle,
@@ -4273,15 +4221,12 @@ function areSessionSummariesEqual(left: SessionSummary | null | undefined, right
 }
 
 function getThreadViewPropsChangeReason(left: ThreadViewProps, right: ThreadViewProps) {
-  if (left.activeProjectID !== right.activeProjectID) return "activeProjectID"
   if (!areSessionSummariesEqual(left.activeSession, right.activeSession)) return "activeSession"
   if (buildDiffSummarySignature(left.activeSessionDiff ?? null) !== buildDiffSummarySignature(right.activeSessionDiff ?? null)) {
     return "activeSessionDiff"
   }
   if (!areArraysShallowEqual(left.activeMessages, right.activeMessages)) return "activeMessages"
   if (left.assistantTraceVisibility !== right.assistantTraceVisibility) return "assistantTraceVisibility"
-  if (left.composerRefreshVersion !== right.composerRefreshVersion) return "composerRefreshVersion"
-  if (left.isAgentDebugTraceEnabled !== right.isAgentDebugTraceEnabled) return "isAgentDebugTraceEnabled"
   if (left.isResolvingPermissionRequest !== right.isResolvingPermissionRequest) return "isResolvingPermissionRequest"
   if (left.isSessionRunning !== right.isSessionRunning) return "isSessionRunning"
   if (left.messageTree !== right.messageTree) return "messageTree"
@@ -4289,36 +4234,10 @@ function getThreadViewPropsChangeReason(left: ThreadViewProps, right: ThreadView
   if (!areArraysShallowEqual(left.pendingPermissionRequests, right.pendingPermissionRequests)) return "pendingPermissionRequests"
   if (left.permissionRequestActionError !== right.permissionRequestActionError) return "permissionRequestActionError"
   if (left.permissionRequestActionRequestID !== right.permissionRequestActionRequestID) return "permissionRequestActionRequestID"
-  if (!areArraysShallowEqual(left.sideChatAttachments, right.sideChatAttachments)) return "sideChatAttachments"
   if (!areRecordValuesEqual(left.sideChatCountsByAnchorMessageID, right.sideChatCountsByAnchorMessageID, Object.is)) {
     return "sideChatCountsByAnchorMessageID"
   }
-  if (left.sideChatDraftState !== right.sideChatDraftState) return "sideChatDraftState"
-  if (left.sideChatIsCancelling !== right.sideChatIsCancelling) return "sideChatIsCancelling"
-  if (left.sideChatIsInterruptible !== right.sideChatIsInterruptible) return "sideChatIsInterruptible"
-  if (left.sideChatIsSending !== right.sideChatIsSending) return "sideChatIsSending"
-  if (!areArraysShallowEqual(left.sideChatPendingInputs, right.sideChatPendingInputs)) {
-    return "sideChatPendingInputs"
-  }
-  if (!areArraysShallowEqual(left.sideChatPendingPermissionRequests, right.sideChatPendingPermissionRequests)) {
-    return "sideChatPendingPermissionRequests"
-  }
-  if (left.sideChatPermissionRequestActionError !== right.sideChatPermissionRequestActionError) {
-    return "sideChatPermissionRequestActionError"
-  }
-  if (left.sideChatPermissionRequestActionRequestID !== right.sideChatPermissionRequestActionRequestID) {
-    return "sideChatPermissionRequestActionRequestID"
-  }
   if (!areSessionSummariesEqual(left.sideChatSession, right.sideChatSession)) return "sideChatSession"
-  if (!areRecordValuesEqual(
-    left.sideChatSessionsByAnchorMessageID,
-    right.sideChatSessionsByAnchorMessageID,
-    areArraysShallowEqual,
-  )) {
-    return "sideChatSessionsByAnchorMessageID"
-  }
-  if (!areArraysShallowEqual(left.sideChatMessages, right.sideChatMessages)) return "sideChatMessages"
-  if (left.sideChatPlacement !== right.sideChatPlacement) return "sideChatPlacement"
   if (left.scrollStateKey !== right.scrollStateKey) return "scrollStateKey"
   if (left.threadColumnRef !== right.threadColumnRef) return "threadColumnRef"
   if (left.isThreadVisible !== right.isThreadVisible) return "isThreadVisible"
@@ -4350,13 +4269,10 @@ export const ThreadView = memo(function ThreadView(props: ThreadViewProps) {
 }, areThreadViewPropsEqual)
 
 function VisibleThreadView({
-  activeProjectID = null,
   activeSession,
   activeSessionDiff = null,
   activeMessages,
   assistantTraceVisibility,
-  composerRefreshVersion = 0,
-  isAgentDebugTraceEnabled,
   isResolvingPermissionRequest,
   isSessionRunning = false,
   messageTree = null,
@@ -4374,37 +4290,15 @@ function VisibleThreadView({
   pendingPermissionRequests,
   permissionRequestActionError,
   permissionRequestActionRequestID,
-  sideChatAttachments = [],
   sideChatCountsByAnchorMessageID,
-  sideChatDraftState = createEmptyComposerDraftState(),
-  sideChatIsCancelling = false,
-  sideChatIsInterruptible = false,
-  sideChatIsSending = false,
-  sideChatPendingInputs = [],
-  sideChatPendingPermissionRequests = [],
-  sideChatPermissionRequestActionError = null,
-  sideChatPermissionRequestActionRequestID = null,
   sideChatSession = null,
-  sideChatSessionsByAnchorMessageID = {},
-  sideChatMessages = [],
-  sideChatPlacement = "inline",
   scrollStateKey,
   threadColumnRef,
   isThreadVisible = true,
   readScrollSnapshot,
   saveScrollSnapshot,
-  onSideChatDraftStateChange,
-  onSideChatPickAttachments,
-  onSideChatPasteImageAttachments,
-  onSideChatRemoveAttachment,
-  onSideChatCancelSend,
-  onSideChatSend,
-  onSessionModelSelectionChange,
-  onSideChatCreate,
-  onSideChatDelete,
   onProposedPlanConfirm,
   onPermissionRequestResponse,
-  onSideChatSelect,
 }: ThreadViewProps) {
   const {
     answeredQuestionIDs,
@@ -4423,9 +4317,7 @@ function VisibleThreadView({
     messageTree,
     pendingPermissionRequests,
     sideChatCountsByAnchorMessageID,
-    sideChatPlacement,
     sideChatSession,
-    sideChatSessionsByAnchorMessageID,
   })
   const [copiedResponseMessageID, setCopiedResponseMessageID] = useState<string | null>(null)
   const [copiedUserThreadMessageID, setCopiedUserThreadMessageID] = useState<string | null>(null)
@@ -4767,18 +4659,14 @@ function VisibleThreadView({
     return (
       <ThreadRowRenderer
         key={row.rowID}
-        activeProjectID={activeProjectID}
         activeSession={activeSession}
         activeSessionDiff={activeSessionDiff}
         assistantTraceVisibility={assistantTraceVisibility}
         components={THREAD_ROW_RENDERER_COMPONENTS}
-        composerRefreshVersion={composerRefreshVersion}
         copiedResponseMessageID={copiedResponseMessageID}
         copiedUserThreadMessageID={copiedUserThreadMessageID}
         displayMessages={displayMessages}
-        isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
         isResolvingPermissionRequest={isResolvingPermissionRequest}
-        isThreadVisible={isThreadVisible}
         isTraceItemQuestionAnswered={isTraceItemQuestionAnswered}
         onArtifactLinkOpen={onArtifactLinkOpen}
         onAskUserQuestionAnswer={onAskUserQuestionAnswer}
@@ -4795,33 +4683,11 @@ function VisibleThreadView({
         onOpenSideChat={onOpenSideChat}
         onPermissionRequestResponse={onPermissionRequestResponse}
         onProposedPlanConfirm={onProposedPlanConfirm}
-        onSideChatCancelSend={onSideChatCancelSend}
-        onSideChatCreate={onSideChatCreate}
-        onSideChatDelete={onSideChatDelete}
-        onSideChatDraftStateChange={onSideChatDraftStateChange}
-        onSideChatPasteImageAttachments={onSideChatPasteImageAttachments}
-        onSideChatPickAttachments={onSideChatPickAttachments}
-        onSideChatRemoveAttachment={onSideChatRemoveAttachment}
-        onSideChatSelect={onSideChatSelect}
-        onSideChatSend={onSideChatSend}
-        onSessionModelSelectionChange={onSessionModelSelectionChange}
         pendingPermissionRequests={pendingPermissionRequests}
         permissionRequestActionError={permissionRequestActionError}
         permissionRequestActionRequestID={permissionRequestActionRequestID}
-        readScrollSnapshot={readScrollSnapshot}
         readThreadMessageMotion={readThreadMessageMotion}
         row={row}
-        saveScrollSnapshot={saveScrollSnapshot}
-        sideChatAttachments={sideChatAttachments}
-        sideChatDraftState={sideChatDraftState}
-        sideChatIsCancelling={sideChatIsCancelling}
-        sideChatIsInterruptible={sideChatIsInterruptible}
-        sideChatIsSending={sideChatIsSending}
-        sideChatMessages={sideChatMessages}
-        sideChatPendingInputs={sideChatPendingInputs}
-        sideChatPendingPermissionRequests={sideChatPendingPermissionRequests}
-        sideChatPermissionRequestActionError={sideChatPermissionRequestActionError}
-        sideChatPermissionRequestActionRequestID={sideChatPermissionRequestActionRequestID}
       />
     )
   }
@@ -4829,7 +4695,10 @@ function VisibleThreadView({
     <section className="thread-shell">
       <div
         ref={threadColumnRef}
-        className={joinClassNames("thread-column", shouldVirtualizeThreadRows && "is-virtualized")}
+        className={joinClassNames(
+          "thread-column",
+          shouldVirtualizeThreadRows ? "is-virtualized" : "is-content-visibility",
+        )}
         onKeyDownCapture={handleThreadKeyDownIntent}
         onPointerDownCapture={handleThreadScrollIntent}
         onPointerMoveCapture={handleThreadPointerMoveIntent}

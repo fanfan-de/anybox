@@ -593,7 +593,7 @@
                   </div>
                   <div class="io">
                     <b>处理</b>
-                    <p>少量 rows 直接 map；达到 8 rows 后只渲染 <code>virtualRange.items</code>。</p>
+                    <p><code>&lt; 300</code> rows 直接 map，并依赖自然文档流与 <code>content-visibility</code>；达到 300 rows 后只渲染 <code>virtualRange.items</code>。</p>
                   </div>
                   <div class="io">
                     <b>输出</b>
@@ -617,7 +617,7 @@
                   </div>
                   <div class="io">
                     <b>处理</b>
-                    <p>根据 <code>row.kind</code> 选择 user、permission、trace、diff、actions 或 side chat 外壳。</p>
+                    <p>根据 <code>row.kind</code> 选择 user、permission、trace、diff 或 actions 外壳。</p>
                   </div>
                   <div class="io">
                     <b>输出</b>
@@ -663,15 +663,15 @@
             </article>
             <article class="card" data-tone="green">
               <h3>投影两阶段</h3>
-              <p>base rows 展开 message 和 trace；decoration rows 只追加最终 assistant 消息后的 diff、actions、inline side chat。</p>
+              <p>base rows 展开 message 和 trace；decoration rows 只追加最终 assistant 消息后的 diff 和 actions。side chat 内容由右侧栏 tab 渲染。</p>
             </article>
             <article class="card" data-tone="orange">
               <h3>虚拟列表</h3>
-              <p><code>displayRows.length >= 8</code> 时启用，先用 estimated height 布局，再通过 ResizeObserver 更新实测高度。</p>
+              <p><code>displayRows.length >= 300</code> 时启用，先用 estimated height 布局，再通过 ResizeObserver 更新实测高度；中小线程默认走自然文档流。</p>
             </article>
             <article class="card" data-tone="violet">
-              <h3>Inline side chat</h3>
-              <p><code>assistant-inline-side-chat</code> row 内部会渲染嵌套 <code>ThreadView</code> 和自己的 composer。</p>
+              <h3>Right sidebar side chat</h3>
+              <p>side chat is no longer rendered as a main <code>ThreadView</code> row; the main thread keeps only the actions button/count/active state, and the right sidebar tab renders the side chat content.</p>
             </article>
           </div>
         </section>
@@ -730,11 +730,6 @@
                   <td><code>assistant-actions</code></td>
                   <td>branch / copy / side chat / fork action buttons</td>
                   <td>回复下方的操作栏。</td>
-                </tr>
-                <tr>
-                  <td><code>assistant-inline-side-chat</code></td>
-                  <td><code>InlineSideChatThread</code></td>
-                  <td>某条 assistant 回复下方的分支讨论区。</td>
                 </tr>
               </tbody>
             </table>

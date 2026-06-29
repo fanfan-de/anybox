@@ -317,7 +317,6 @@ export interface WorkbenchPaneSurfaceProps {
   composerRefreshVersion: number
   conversationStore: ConversationStoreApi
   isResolvingPermissionRequest: boolean
-  isAgentDebugTraceEnabled: boolean
   isSavingToolPermissionMode: boolean
   isTopRow: boolean
   pane: WorkbenchPaneState
@@ -329,7 +328,6 @@ export interface WorkbenchPaneSurfaceProps {
   workspaces: WorkspaceGroup[]
   readThreadScrollSnapshot: (key: string) => ThreadScrollSnapshot | null
   saveThreadScrollSnapshot: (key: string, snapshot: ThreadScrollSnapshot) => void
-  sideChatPlacement?: "inline" | "right-sidebar"
   onCreateSessionSubmit: (createSessionTabID?: string | null, paneID?: string) => Promise<void>
   onCreateSessionWorkspaceChange: (workspaceID: string, createSessionTabID?: string | null) => void
   onOpenProjectFolder: () => void | Promise<void>
@@ -348,9 +346,7 @@ export interface WorkbenchPaneSurfaceProps {
     workspaceDirectory: string | null
     workspaceID: string | null
   }) => void
-  onCreateSideChatTab: (anchorMessageID: string, options?: { paneID?: string | null; parentSessionID?: string | null; placement?: "inline" | "right-sidebar" }) => Promise<void>
-  onDeleteSideChatTab: (sessionID: string) => Promise<void>
-  onOpenSideChat: (anchorMessageID: string, options?: { paneID?: string | null; parentSessionID?: string | null; placement?: "inline" | "right-sidebar" }) => Promise<void>
+  onOpenSideChat?: (anchorMessageID: string, options?: { paneID?: string | null; parentSessionID?: string | null }) => Promise<void>
   onOpenSubagentSession?: (sessionID: string, title?: string) => void | Promise<void>
   onBranchSelect: (input: { messageID: string; sessionID?: string | null }) => Promise<void>
   onClearComposerParentMessage: (input?: { tabKey?: string | null }) => void
@@ -382,7 +378,6 @@ export interface WorkbenchPaneSurfaceProps {
   onPickComposerAttachments: (input: { allowImage: boolean; allowPdf: boolean; disabledReason: string | null; tabKey?: string | null }) => Promise<void>
   onPasteComposerImageAttachments: (input: { allowImage: boolean; disabledReason?: string | null; images: ComposerPastedImageAttachment[]; tabKey?: string | null }) => Promise<void>
   onRemoveComposerAttachment: (path: string, tabKey?: string | null) => void
-  onSelectSideChatTab: (sessionID: string) => void
   onCancelSend: (input?: { sessionID?: string | null; tabKey?: string | null }) => Promise<void>
   onPlanModeToggle: (input: { createSessionTabID?: string | null; sessionID?: string | null }) => Promise<void>
   onSend: (input?: {
@@ -454,7 +449,6 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   composerRefreshVersion,
   conversationStore,
   isResolvingPermissionRequest,
-  isAgentDebugTraceEnabled,
   isSavingToolPermissionMode,
   isTopRow,
   pane,
@@ -466,15 +460,12 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   workspaces,
   readThreadScrollSnapshot,
   saveThreadScrollSnapshot,
-  sideChatPlacement = "inline",
   onCreateSessionSubmit,
   onCreateSessionWorkspaceChange,
   onOpenProjectFolder,
   onInspectFileInSidebar,
   onArtifactLinkOpen,
   onLocalFileLinkOpen,
-  onCreateSideChatTab,
-  onDeleteSideChatTab,
   onOpenSideChat,
   onOpenSubagentSession,
   onBranchSelect,
@@ -487,7 +478,6 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   onPickComposerAttachments,
   onPasteComposerImageAttachments,
   onRemoveComposerAttachment,
-  onSelectSideChatTab,
   onCancelSend,
   onPlanModeToggle,
   onSend,
@@ -503,7 +493,6 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   const [bagDialogState, setBagDialogState] = useState<SessionBagDialogState | null>(null)
   const [bagDescription, setBagDescription] = useState("")
   const activeMessages = useConversationMessages(conversationStore, pane.sessionID)
-  const activeSideChatMessages = useConversationMessages(conversationStore, pane.activeSideChatSession?.id ?? null)
   const composerParentMessagePreview = pane.composerParentMessageID
     ? pane.messageTree?.nodesByID[pane.composerParentMessageID]?.preview
     : undefined
@@ -597,10 +586,9 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
       sessionID: pane.sessionID,
       tabKey: pane.tabKey,
       messageCount: activeMessages.length,
-      sideChatMessageCount: activeSideChatMessages.length,
       isThreadVisible: pane.isActivePanel,
     })),
-    [activeSideChatMessages.length, activeMessages.length, pane.id, pane.isActivePanel, pane.sessionID, pane.tabKey],
+    [activeMessages.length, pane.id, pane.isActivePanel, pane.sessionID, pane.tabKey],
   )
 
   async function discardPreparedSessionBag(prepare: SessionBagPrepareResult | undefined) {
@@ -849,13 +837,10 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
             <>
               <RendererProfiler id="WorkbenchPaneSurface.ThreadView" onRender={threadViewProfiler}>
                 <ThreadView
-                  activeProjectID={pane.projectID}
                   activeSession={pane.activeSession}
                   activeSessionDiff={pane.activeSessionDiff}
                   assistantTraceVisibility={assistantTraceVisibility}
-                  composerRefreshVersion={composerRefreshVersion}
                   isResolvingPermissionRequest={isResolvingPermissionRequest}
-                  isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
                   isSessionRunning={pane.isSending || pane.isInterruptible}
                   pendingPermissionRequests={pane.pendingPermissionRequests}
                   pendingConversationInputs={pane.pendingConversationInputs}
@@ -863,26 +848,13 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   permissionRequestActionRequestID={permissionRequestActionRequestID}
                   activeMessages={activeMessages}
                   messageTree={pane.messageTree}
-                  sideChatAttachments={pane.activeSideChatAttachments}
                   sideChatCountsByAnchorMessageID={pane.sideChatCountsByAnchorMessageID}
-                  sideChatDraftState={pane.activeSideChatDraftState}
-                  sideChatIsCancelling={pane.activeSideChatIsCancelling}
-                  sideChatIsInterruptible={pane.activeSideChatIsInterruptible}
-                  sideChatIsSending={pane.activeSideChatIsSending}
-                  sideChatPendingInputs={pane.activeSideChatPendingInputs}
-                  sideChatPendingPermissionRequests={pane.activeSideChatPendingPermissionRequests}
-                  sideChatPermissionRequestActionError={permissionRequestActionError}
-                  sideChatPermissionRequestActionRequestID={permissionRequestActionRequestID}
                   sideChatSession={pane.activeSideChatSession}
-                  sideChatSessionsByAnchorMessageID={pane.sideChatSessionsByAnchorMessageID}
-                  sideChatMessages={activeSideChatMessages}
-                  sideChatPlacement={sideChatPlacement === "right-sidebar" ? "external" : "inline"}
                   scrollStateKey={pane.tabKey}
                   threadColumnRef={threadColumnRef}
                   isThreadVisible={pane.isActivePanel}
                   readScrollSnapshot={readThreadScrollSnapshot}
                   saveScrollSnapshot={saveThreadScrollSnapshot}
-                  onSessionModelSelectionChange={onSessionModelSelectionChange}
                   onBranchSelect={(messageID) => onBranchSelect({ messageID, sessionID: pane.sessionID })}
                   onForkFromMessage={(messageID) => onForkFromMessage(messageID, { tabKey: pane.tabKey })}
                   onAskUserQuestionAnswer={(answer) =>
@@ -917,65 +889,13 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                       workspaceID: pane.workspace?.id ?? null,
                     })
                   }
-                  onOpenSideChat={(anchorMessageID) =>
-                    void onOpenSideChat(anchorMessageID, {
-                      paneID: pane.id,
-                      parentSessionID: pane.sessionID,
-                      placement: sideChatPlacement,
-                    })
-                  }
-                  onSideChatCreate={(anchorMessageID) =>
-                    void onCreateSideChatTab(anchorMessageID, {
-                      paneID: pane.id,
-                      parentSessionID: pane.sessionID,
-                      placement: sideChatPlacement,
-                    })
-                  }
-                  onSideChatDelete={(sessionID) => void onDeleteSideChatTab(sessionID)}
-                  onSideChatSelect={(sessionID) => void onSelectSideChatTab(sessionID)}
-                  onSideChatDraftStateChange={(value) => {
-                    if (pane.activeSideChatTabKey) {
-                      onSetDraft(pane.activeSideChatTabKey, value)
-                    }
-                  }}
-                  onSideChatPickAttachments={({ allowImage, allowPdf, disabledReason }) =>
-                    onPickComposerAttachments({
-                      allowImage,
-                      allowPdf,
-                      disabledReason,
-                      tabKey: pane.activeSideChatTabKey,
-                    })
-                  }
-                  onSideChatPasteImageAttachments={({ allowImage, disabledReason, images }) =>
-                    onPasteComposerImageAttachments({
-                      allowImage,
-                      disabledReason,
-                      images,
-                      tabKey: pane.activeSideChatTabKey,
-                    })
-                  }
-                  onSideChatRemoveAttachment={(path) => onRemoveComposerAttachment(path, pane.activeSideChatTabKey)}
-                  onSideChatCancelSend={() => void onCancelSend({
-                    sessionID: pane.activeSideChatSession?.id,
-                    tabKey: pane.activeSideChatTabKey,
-                  })}
-                  onSideChatSend={(input) =>
-                    void onSend({
-                      attachmentError: input.attachmentError,
-                      draftStateOverride: input.draftStateOverride,
-                      paneID: pane.id,
-                      preserveComposerState: Boolean(input.questionAnswer),
-                      questionAnswer: input.questionAnswer,
-                      selectedReasoningEffort: input.selectedReasoningEffort,
-                      selectedModel: input.selectedModel,
-                      selectedSkillIDs: input.selectedSkillIDs,
-                      sessionID: pane.activeSideChatSession?.id,
-                      steerQueuedMessageID: input.steerQueuedMessageID,
-                      submissionMode: input.submissionMode,
-                      tabKey: pane.activeSideChatTabKey,
-                      waitForPendingModelSelection: input.waitForPendingModelSelection,
-                    })
-                  }
+                  onOpenSideChat={onOpenSideChat
+                    ? (anchorMessageID) =>
+                        void onOpenSideChat(anchorMessageID, {
+                          paneID: pane.id,
+                          parentSessionID: pane.sessionID,
+                        })
+                    : undefined}
                   onProposedPlanConfirm={(input) =>
                     onApproveProposedPlan({
                       planMarkdown: input.planMarkdown,

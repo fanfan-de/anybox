@@ -76,11 +76,9 @@ import {
 } from "./workspace-store"
 
 type StateSetter<T> = (update: WorkspaceStateUpdater<T>) => void
-type SideChatPanelPlacement = "inline" | "right-sidebar"
 type SideChatOpenOptions = {
   parentSessionID?: string | null
   paneID?: string | null
-  placement?: SideChatPanelPlacement
 }
 
 export function filterSideChatMappingForCleanup(
@@ -668,15 +666,6 @@ export function useSessionLifecycleController({
     focusSession(selection.workspace.id, selection.session.id, paneID ?? undefined)
   }
 
-  function closeActiveSideChat(parentSessionID: string) {
-    setActiveSideChatSessionIDByParentSessionID((current) => {
-      if (!(parentSessionID in current)) return current
-      const next = { ...current }
-      delete next[parentSessionID]
-      return next
-    })
-  }
-
   function sortSideChatTabs(sessions: SessionSummary[]) {
     return [...sessions].sort((left, right) => {
       const createdDelta = (left.created ?? left.updated) - (right.created ?? right.updated)
@@ -941,9 +930,7 @@ export function useSessionLifecycleController({
       if (!nextSession) return
 
       await activateSideChatThread(parentSessionID, nextSession.id, parentSelection.workspace.id)
-      if (input?.placement === "right-sidebar") {
-        openSideChatRightSidebarTab(parentSessionID, anchorMessageID, nextSession)
-      }
+      openSideChatRightSidebarTab(parentSessionID, anchorMessageID, nextSession)
     } catch (error) {
       console.error("[desktop] createSideChat failed:", error)
     }
@@ -958,23 +945,6 @@ export function useSessionLifecycleController({
       return
     }
 
-    const activeInlineSideChatID = activeSideChatSessionIDByParentSessionID[parentSessionID] ?? null
-    const activeInlineSideChatSelection = findSession(workspaces, activeInlineSideChatID)
-    const opensRightSidebar = input?.placement === "right-sidebar"
-    if (
-      !opensRightSidebar &&
-      activeInlineSideChatSelection.session?.origin?.parentSessionID === parentSessionID &&
-      activeInlineSideChatSelection.session.origin.anchorMessageID === anchorMessageID
-    ) {
-      const deletedEmptySideChatIDs = await deleteSideChatSessionWithoutResponse(activeInlineSideChatSelection.session)
-      if (deletedEmptySideChatIDs && activeInlineSideChatSelection.workspace) {
-        applyArchivedSessions(deletedEmptySideChatIDs, activeInlineSideChatSelection.workspace.id)
-      } else {
-        closeActiveSideChat(parentSessionID)
-      }
-      return
-    }
-
     const syncedSideChats = await syncSideChatsForAnchor(parentSessionID, anchorMessageID, parentSelection.workspace.id)
     const latestSyncedSideChat = syncedSideChats[syncedSideChats.length - 1] ?? null
     const existing = latestSyncedSideChat
@@ -986,9 +956,7 @@ export function useSessionLifecycleController({
         upsertSideChatSessions(existing.workspace.id, [nextSession])
       }
       await activateSideChatThread(parentSessionID, nextSession.id, existing.workspace.id)
-      if (opensRightSidebar) {
-        openSideChatRightSidebarTab(parentSessionID, anchorMessageID, nextSession)
-      }
+      openSideChatRightSidebarTab(parentSessionID, anchorMessageID, nextSession)
       return
     }
 

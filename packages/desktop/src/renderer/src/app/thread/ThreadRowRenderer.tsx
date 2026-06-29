@@ -9,13 +9,8 @@ import type {
   AssistantTraceSectionKey,
   AssistantTraceVisibility,
   AssistantThreadMessage,
-  ComposerAttachment,
-  ComposerDraftState,
-  ComposerPastedImageAttachment,
-  PendingConversationInput,
   PermissionDecision,
   PermissionRequest,
-  ReasoningEffort,
   SessionDiffFile,
   SessionDiffSummary,
   SessionSummary,
@@ -29,7 +24,6 @@ import {
   type AssistantDiffCardRow,
   type AssistantEphemeralStateRow,
   type AssistantFileChangeRow,
-  type AssistantInlineSideChatRow,
   type AssistantInsertedUserMessageRow,
   type AssistantTraceItemRow,
   type AssistantTraceItemRowKind,
@@ -38,7 +32,6 @@ import {
   type ThreadDisplayRow,
   type UserMessageRow,
 } from "./thread-display-rows"
-import type { ThreadScrollSnapshot } from "./use-thread-scroll-controller"
 
 type AssistantTraceResponseRowKind = Extract<AssistantTraceItemRowKind, "assistant-response-row" | "assistant-question-row">
 type AssistantTraceLiteRowKind = Exclude<AssistantTraceItemRowKind, "assistant-response-row" | "assistant-question-row">
@@ -124,68 +117,6 @@ export interface BranchSwitcherRendererProps {
   options: SessionMessageBranchOption[]
 }
 
-export type InlineSideChatSendHandler = (input: {
-  attachmentError?: string | null
-  draftStateOverride?: ComposerDraftState
-  questionAnswer?: {
-    questionID: string
-    selectedOptions?: string[]
-    freeformText?: string
-  }
-  selectedReasoningEffort?: ReasoningEffort | null
-  selectedModel?: string | null
-  selectedSkillIDs: string[]
-  steerQueuedMessageID?: string
-  submissionMode?: UserThreadMessage["submissionMode"]
-  waitForPendingModelSelection: () => Promise<void>
-}) => void | Promise<void>
-
-export interface InlineSideChatThreadRendererProps {
-  activeProjectID: string | null
-  attachments: ComposerAttachment[]
-  assistantTraceVisibility: AssistantTraceVisibility
-  composerRefreshVersion: number
-  draftState: ComposerDraftState
-  isAgentDebugTraceEnabled: boolean
-  isResolvingPermissionRequest: boolean
-  isCancelling?: boolean
-  isInterruptible?: boolean
-  isSending: boolean
-  pendingInputs: PendingConversationInput[]
-  pendingPermissionRequests: PermissionRequest[]
-  permissionRequestActionError: string | null
-  permissionRequestActionRequestID: string | null
-  session: SessionSummary
-  sideChatSessions: SessionSummary[]
-  messages: ThreadMessage[]
-  isThreadVisible?: boolean
-  readScrollSnapshot?: (key: string) => ThreadScrollSnapshot | null
-  saveScrollSnapshot?: (key: string, snapshot: ThreadScrollSnapshot) => void
-  onDraftStateChange: (value: ComposerDraftState) => void
-  onHide: () => void
-  onAskUserQuestionAnswer: QuestionAnswerHandler
-  onArtifactLinkOpen?: (target: MarkdownArtifactLinkTarget) => void
-  onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
-  onPermissionRequestResponse: PermissionRequestResponseHandler
-  onPickAttachments: (input: {
-    allowImage: boolean
-    allowPdf: boolean
-    disabledReason: string | null
-  }) => void | Promise<void>
-  onPasteImageAttachments?: (input: {
-    allowImage: boolean
-    disabledReason: string | null
-    images: ComposerPastedImageAttachment[]
-  }) => void | Promise<void>
-  onRemoveAttachment: (path: string) => void
-  onCancelSend?: () => void | Promise<void>
-  onCreateSideChat: () => void | Promise<void>
-  onDeleteSideChat: (sessionID: string) => void | Promise<void>
-  onSend: InlineSideChatSendHandler
-  onSelectSideChat: (sessionID: string) => void | Promise<void>
-  onSessionModelSelectionChange?: (sessionID: string, selection: SessionSummary["modelSelection"] | undefined) => void
-}
-
 export interface ThreadRowRendererComponents {
   AssistantMessagePlaceholder: ComponentType<{ message: string }>
   AssistantTraceSection: ComponentType<{
@@ -194,7 +125,6 @@ export interface ThreadRowRendererComponents {
     title: string
   }>
   BranchSwitcher: ComponentType<BranchSwitcherRendererProps>
-  InlineSideChatThread: ComponentType<InlineSideChatThreadRendererProps>
   MessageDiffCard: ComponentType<MessageDiffCardRendererProps>
   PermissionRequestInlinePrompt: ComponentType<PermissionRequestInlinePromptRendererProps>
   UserThreadMessageArticle: ComponentType<UserThreadMessageArticleRendererProps>
@@ -288,66 +218,15 @@ interface AssistantActionsRowViewProps {
   row: AssistantActionsRow
 }
 
-interface AssistantInlineSideChatRowViewProps {
-  activeProjectID: string | null
-  attachments: ComposerAttachment[]
-  assistantTraceVisibility: AssistantTraceVisibility
-  components: ThreadRowRendererComponents
-  composerRefreshVersion: number
-  draftState: ComposerDraftState
-  isAgentDebugTraceEnabled: boolean
-  isCancelling: boolean
-  isInterruptible: boolean
-  isResolvingPermissionRequest: boolean
-  isSending: boolean
-  isThreadVisible: boolean
-  messages: ThreadMessage[]
-  motion: ThreadMessageMotion
-  onArtifactLinkOpen?: (target: MarkdownArtifactLinkTarget) => void
-  onAskUserQuestionAnswer: QuestionAnswerHandler
-  onCancelSend?: () => void | Promise<void>
-  onCreateSideChat?: (anchorMessageID: string) => void | Promise<void>
-  onDeleteSideChat?: (sessionID: string) => void | Promise<void>
-  onDraftStateChange?: (value: ComposerDraftState) => void
-  onHideSideChat?: (anchorMessageID: string) => void | Promise<void>
-  onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
-  onPasteImageAttachments?: (input: {
-    allowImage: boolean
-    disabledReason: string | null
-    images: ComposerPastedImageAttachment[]
-  }) => void | Promise<void>
-  onPermissionRequestResponse: PermissionRequestResponseHandler
-  onPickAttachments?: (input: {
-    allowImage: boolean
-    allowPdf: boolean
-    disabledReason: string | null
-  }) => void | Promise<void>
-  onRemoveAttachment?: (path: string) => void
-  onSelectSideChat?: (sessionID: string) => void | Promise<void>
-  onSend?: InlineSideChatSendHandler
-  onSessionModelSelectionChange?: (sessionID: string, selection: SessionSummary["modelSelection"] | undefined) => void
-  pendingInputs: PendingConversationInput[]
-  pendingPermissionRequests: PermissionRequest[]
-  permissionRequestActionError: string | null
-  permissionRequestActionRequestID: string | null
-  readScrollSnapshot?: (key: string) => ThreadScrollSnapshot | null
-  row: AssistantInlineSideChatRow
-  saveScrollSnapshot?: (key: string, snapshot: ThreadScrollSnapshot) => void
-}
-
 export interface ThreadRowRendererProps {
-  activeProjectID: string | null
   activeSession: SessionSummary | null
   activeSessionDiff?: SessionDiffSummary | null
   assistantTraceVisibility: AssistantTraceVisibility
   components: ThreadRowRendererComponents
-  composerRefreshVersion: number
   copiedResponseMessageID: string | null
   copiedUserThreadMessageID: string | null
   displayMessages: ThreadMessage[]
-  isAgentDebugTraceEnabled: boolean
   isResolvingPermissionRequest: boolean
-  isThreadVisible: boolean
   onArtifactLinkOpen?: (target: MarkdownArtifactLinkTarget) => void
   onAskUserQuestionAnswer: QuestionAnswerHandler
   onBranchSelect?: (messageID: string) => void | Promise<void>
@@ -363,41 +242,11 @@ export interface ThreadRowRendererProps {
   onOpenSideChat?: (anchorMessageID: string) => void | Promise<void>
   onPermissionRequestResponse: PermissionRequestResponseHandler
   onProposedPlanConfirm?: ProposedPlanConfirmHandler
-  onSideChatCancelSend?: () => void | Promise<void>
-  onSideChatCreate?: (anchorMessageID: string) => void | Promise<void>
-  onSideChatDelete?: (sessionID: string) => void | Promise<void>
-  onSideChatDraftStateChange?: (value: ComposerDraftState) => void
-  onSideChatPasteImageAttachments?: (input: {
-    allowImage: boolean
-    disabledReason: string | null
-    images: ComposerPastedImageAttachment[]
-  }) => void | Promise<void>
-  onSideChatPickAttachments?: (input: {
-    allowImage: boolean
-    allowPdf: boolean
-    disabledReason: string | null
-  }) => void | Promise<void>
-  onSideChatRemoveAttachment?: (path: string) => void
-  onSideChatSelect?: (sessionID: string) => void | Promise<void>
-  onSideChatSend?: InlineSideChatSendHandler
-  onSessionModelSelectionChange?: (sessionID: string, selection: SessionSummary["modelSelection"] | undefined) => void
   pendingPermissionRequests: PermissionRequest[]
   permissionRequestActionError: string | null
   permissionRequestActionRequestID: string | null
-  readScrollSnapshot?: (key: string) => ThreadScrollSnapshot | null
   readThreadMessageMotion: (messageID: string, isLive?: boolean) => ThreadMessageMotion
   row: ThreadDisplayRow
-  saveScrollSnapshot?: (key: string, snapshot: ThreadScrollSnapshot) => void
-  sideChatAttachments: ComposerAttachment[]
-  sideChatDraftState: ComposerDraftState
-  sideChatIsCancelling: boolean
-  sideChatIsInterruptible: boolean
-  sideChatIsSending: boolean
-  sideChatMessages: ThreadMessage[]
-  sideChatPendingInputs: PendingConversationInput[]
-  sideChatPendingPermissionRequests: PermissionRequest[]
-  sideChatPermissionRequestActionError: string | null
-  sideChatPermissionRequestActionRequestID: string | null
   isTraceItemQuestionAnswered: (item: AssistantTraceItem) => boolean
 }
 
@@ -977,164 +826,6 @@ function areAssistantActionsRowViewPropsEqual(left: AssistantActionsRowViewProps
   )
 }
 
-const AssistantInlineSideChatRowView = memo(function AssistantInlineSideChatRowView({
-  activeProjectID,
-  attachments,
-  assistantTraceVisibility,
-  components,
-  composerRefreshVersion,
-  draftState,
-  isAgentDebugTraceEnabled,
-  isCancelling,
-  isInterruptible,
-  isResolvingPermissionRequest,
-  isSending,
-  isThreadVisible,
-  messages,
-  motion,
-  onArtifactLinkOpen,
-  onAskUserQuestionAnswer,
-  onCancelSend,
-  onCreateSideChat,
-  onDeleteSideChat,
-  onDraftStateChange,
-  onHideSideChat,
-  onLocalFileLinkOpen,
-  onPasteImageAttachments,
-  onPermissionRequestResponse,
-  onPickAttachments,
-  onRemoveAttachment,
-  onSelectSideChat,
-  onSend,
-  onSessionModelSelectionChange,
-  pendingInputs,
-  pendingPermissionRequests,
-  permissionRequestActionError,
-  permissionRequestActionRequestID,
-  readScrollSnapshot,
-  row,
-  saveScrollSnapshot,
-}: AssistantInlineSideChatRowViewProps) {
-  const { InlineSideChatThread } = components
-
-  if (
-    !onDraftStateChange ||
-    !onPickAttachments ||
-    !onRemoveAttachment ||
-    !onCreateSideChat ||
-    !onDeleteSideChat ||
-    !onSelectSideChat ||
-    !onSend
-  ) {
-    return null
-  }
-
-  return (
-    <article
-      className="thread-row assistant-inline-side-chat-row"
-      data-thread-row-kind={row.kind}
-      data-thread-message-id={row.messageID}
-      data-thread-message-motion={motion}
-    >
-      <div className="assistant-response-side-chat">
-        <InlineSideChatThread
-          activeProjectID={activeProjectID}
-          attachments={attachments}
-          assistantTraceVisibility={assistantTraceVisibility}
-          composerRefreshVersion={composerRefreshVersion}
-          draftState={draftState}
-          isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
-          isResolvingPermissionRequest={isResolvingPermissionRequest}
-          isCancelling={isCancelling}
-          isInterruptible={isInterruptible}
-          isSending={isSending}
-          pendingInputs={pendingInputs}
-          pendingPermissionRequests={pendingPermissionRequests}
-          permissionRequestActionError={permissionRequestActionError}
-          permissionRequestActionRequestID={permissionRequestActionRequestID}
-          session={row.activeInlineSideChat}
-          sideChatSessions={row.sideChatSessions}
-          messages={messages}
-          isThreadVisible={isThreadVisible}
-          readScrollSnapshot={readScrollSnapshot}
-          saveScrollSnapshot={saveScrollSnapshot}
-          onDraftStateChange={onDraftStateChange}
-          onHide={() => void onHideSideChat?.(row.sideChatAnchorMessageID)}
-          onAskUserQuestionAnswer={onAskUserQuestionAnswer}
-          onArtifactLinkOpen={onArtifactLinkOpen}
-          onLocalFileLinkOpen={onLocalFileLinkOpen}
-          onPermissionRequestResponse={onPermissionRequestResponse}
-          onPickAttachments={onPickAttachments}
-          onPasteImageAttachments={onPasteImageAttachments}
-          onRemoveAttachment={onRemoveAttachment}
-          onCancelSend={onCancelSend}
-          onCreateSideChat={() => onCreateSideChat(row.sideChatAnchorMessageID)}
-          onDeleteSideChat={onDeleteSideChat}
-          onSend={onSend}
-          onSelectSideChat={onSelectSideChat}
-          onSessionModelSelectionChange={onSessionModelSelectionChange}
-        />
-      </div>
-    </article>
-  )
-}, areAssistantInlineSideChatRowViewPropsEqual)
-
-function areAssistantInlineSideChatRowsEqual(left: AssistantInlineSideChatRow, right: AssistantInlineSideChatRow) {
-  return (
-    left === right ||
-    (
-      left.rowID === right.rowID &&
-      left.message === right.message &&
-      left.messageID === right.messageID &&
-      left.motionKey === right.motionKey &&
-      left.activeInlineSideChat === right.activeInlineSideChat &&
-      left.sideChatAnchorMessageID === right.sideChatAnchorMessageID &&
-      left.sideChatSessions === right.sideChatSessions
-    )
-  )
-}
-
-function areAssistantInlineSideChatRowViewPropsEqual(left: AssistantInlineSideChatRowViewProps, right: AssistantInlineSideChatRowViewProps) {
-  return (
-    areAssistantInlineSideChatRowsEqual(left.row, right.row) &&
-    left.activeProjectID === right.activeProjectID &&
-    left.attachments === right.attachments &&
-    areAssistantTraceVisibilityEqual(left.assistantTraceVisibility, right.assistantTraceVisibility) &&
-    left.components === right.components &&
-    left.composerRefreshVersion === right.composerRefreshVersion &&
-    left.draftState === right.draftState &&
-    left.isAgentDebugTraceEnabled === right.isAgentDebugTraceEnabled &&
-    left.isCancelling === right.isCancelling &&
-    left.isInterruptible === right.isInterruptible &&
-    left.isResolvingPermissionRequest === right.isResolvingPermissionRequest &&
-    left.isSending === right.isSending &&
-    left.isThreadVisible === right.isThreadVisible &&
-    left.messages === right.messages &&
-    left.motion === right.motion &&
-    left.onArtifactLinkOpen === right.onArtifactLinkOpen &&
-    left.onAskUserQuestionAnswer === right.onAskUserQuestionAnswer &&
-    left.onCancelSend === right.onCancelSend &&
-    left.onCreateSideChat === right.onCreateSideChat &&
-    left.onDeleteSideChat === right.onDeleteSideChat &&
-    left.onDraftStateChange === right.onDraftStateChange &&
-    left.onHideSideChat === right.onHideSideChat &&
-    left.onLocalFileLinkOpen === right.onLocalFileLinkOpen &&
-    left.onPasteImageAttachments === right.onPasteImageAttachments &&
-    left.onPermissionRequestResponse === right.onPermissionRequestResponse &&
-    left.onPickAttachments === right.onPickAttachments &&
-    left.onRemoveAttachment === right.onRemoveAttachment &&
-    left.onSelectSideChat === right.onSelectSideChat &&
-    left.onSend === right.onSend &&
-    left.onSessionModelSelectionChange === right.onSessionModelSelectionChange &&
-    left.pendingInputs === right.pendingInputs &&
-    left.pendingPermissionRequests === right.pendingPermissionRequests &&
-    left.permissionRequestActionError === right.permissionRequestActionError &&
-    left.permissionRequestActionRequestID === right.permissionRequestActionRequestID &&
-    left.readScrollSnapshot === right.readScrollSnapshot &&
-    left.saveScrollSnapshot === right.saveScrollSnapshot
-  )
-}
-
 function isAssistantTraceSectionRow(row: ThreadDisplayRow): row is AssistantTraceSectionRow {
   return row.kind === "assistant-response-row" ||
     row.kind === "assistant-question-row" ||
@@ -1151,18 +842,14 @@ function isAssistantTraceLiteRow(row: ThreadDisplayRow): row is AssistantTraceLi
 }
 
 export function ThreadRowRenderer({
-  activeProjectID,
   activeSession,
   activeSessionDiff,
   assistantTraceVisibility,
   components,
-  composerRefreshVersion,
   copiedResponseMessageID,
   copiedUserThreadMessageID,
   displayMessages,
-  isAgentDebugTraceEnabled,
   isResolvingPermissionRequest,
-  isThreadVisible,
   isTraceItemQuestionAnswered,
   onArtifactLinkOpen,
   onAskUserQuestionAnswer,
@@ -1179,33 +866,11 @@ export function ThreadRowRenderer({
   onOpenSideChat,
   onPermissionRequestResponse,
   onProposedPlanConfirm,
-  onSideChatCancelSend,
-  onSideChatCreate,
-  onSideChatDelete,
-  onSideChatDraftStateChange,
-  onSideChatPasteImageAttachments,
-  onSideChatPickAttachments,
-  onSideChatRemoveAttachment,
-  onSideChatSelect,
-  onSideChatSend,
-  onSessionModelSelectionChange,
   pendingPermissionRequests,
   permissionRequestActionError,
   permissionRequestActionRequestID,
-  readScrollSnapshot,
   readThreadMessageMotion,
   row,
-  saveScrollSnapshot,
-  sideChatAttachments,
-  sideChatDraftState,
-  sideChatIsCancelling,
-  sideChatIsInterruptible,
-  sideChatIsSending,
-  sideChatMessages,
-  sideChatPendingInputs,
-  sideChatPendingPermissionRequests,
-  sideChatPermissionRequestActionError,
-  sideChatPermissionRequestActionRequestID,
 }: ThreadRowRendererProps) {
   if (row.kind === "user-message") {
     const { message, messageIndex } = row
@@ -1332,49 +997,6 @@ export function ThreadRowRenderer({
         onCopyAssistantResponse={onCopyAssistantResponse}
         onForkFromMessage={onForkFromMessage}
         onOpenSideChat={onOpenSideChat}
-        row={row}
-      />
-    )
-  }
-
-  if (row.kind === "assistant-inline-side-chat") {
-    return (
-      <AssistantInlineSideChatRowView
-        activeProjectID={activeProjectID}
-        attachments={sideChatAttachments}
-        assistantTraceVisibility={assistantTraceVisibility}
-        components={components}
-        composerRefreshVersion={composerRefreshVersion}
-        draftState={sideChatDraftState}
-        isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
-        isResolvingPermissionRequest={isResolvingPermissionRequest}
-        isCancelling={sideChatIsCancelling}
-        isInterruptible={sideChatIsInterruptible}
-        isSending={sideChatIsSending}
-        pendingInputs={sideChatPendingInputs}
-        pendingPermissionRequests={sideChatPendingPermissionRequests}
-        permissionRequestActionError={sideChatPermissionRequestActionError}
-        permissionRequestActionRequestID={sideChatPermissionRequestActionRequestID}
-        messages={sideChatMessages}
-        isThreadVisible={isThreadVisible}
-        readScrollSnapshot={readScrollSnapshot}
-        saveScrollSnapshot={saveScrollSnapshot}
-        onDraftStateChange={onSideChatDraftStateChange}
-        onHideSideChat={onOpenSideChat}
-        onAskUserQuestionAnswer={onAskUserQuestionAnswer}
-        onArtifactLinkOpen={onArtifactLinkOpen}
-        onLocalFileLinkOpen={onLocalFileLinkOpen}
-        onPermissionRequestResponse={onPermissionRequestResponse}
-        onPickAttachments={onSideChatPickAttachments}
-        onPasteImageAttachments={onSideChatPasteImageAttachments}
-        onRemoveAttachment={onSideChatRemoveAttachment}
-        onCancelSend={onSideChatCancelSend}
-        onCreateSideChat={onSideChatCreate}
-        onDeleteSideChat={onSideChatDelete}
-        onSend={onSideChatSend}
-        onSelectSideChat={onSideChatSelect}
-        onSessionModelSelectionChange={onSessionModelSelectionChange}
-        motion={readThreadMessageMotion(row.motionKey, row.message.isStreaming)}
         row={row}
       />
     )

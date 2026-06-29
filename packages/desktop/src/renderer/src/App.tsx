@@ -806,10 +806,7 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
     handleCanvasSessionTabClose,
     handleCanvasSessionTabSelect,
     handleCreateSessionSubmit,
-    handleCreateSideChatTab,
-    handleDeleteSideChatTab,
     handleCreateSessionWorkspaceChange,
-    handleOpenSideChat,
     handleClearComposerParentMessage,
     handleDockviewActiveChange,
     handleForkFromMessage,
@@ -825,7 +822,6 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
     handlePlanModeToggle,
     handleSessionBranchSelect,
     handleSessionModelSelectionChange,
-    handleSelectSideChatTab,
     handleMessageDiffSummaryHydrate,
     isResolvingPermissionRequest,
     permissionRequestActionError,
@@ -1020,7 +1016,6 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
           assistantTraceVisibility={assistantTraceVisibility}
           composerRefreshVersion={composerRefreshVersion}
           isActivityRailVisible={false}
-          isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
           isDetachedWindow
           isResolvingPermissionRequest={isResolvingPermissionRequest}
           isRightSidebarCollapsed
@@ -1046,8 +1041,6 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
           onCreateSessionSubmit={handleCreateSessionSubmit}
           onCreateSessionWorkspaceChange={handleCreateSessionWorkspaceChange}
           onOpenProjectFolder={() => undefined}
-          onCreateSideChatTab={handleCreateSideChatTab}
-          onDeleteSideChatTab={handleDeleteSideChatTab}
           onBranchSelect={handleSessionBranchSelect}
           onClearComposerParentMessage={handleClearComposerParentMessage}
           onDetachSessionPanel={handleDetachSessionPanel}
@@ -1060,7 +1053,6 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
           onLocalFileLinkOpen={handleLocalFileLinkOpen}
           onMoveSessionPanel={handleMoveSessionPanel}
           onOpenCreateSessionTab={() => undefined}
-          onOpenSideChat={handleOpenSideChat}
           onPasteComposerImageAttachments={handlePasteComposerImageAttachments}
           onPermissionRequestResponse={handlePermissionRequestResponse}
           onPickComposerAttachments={handlePickComposerAttachments}
@@ -1068,7 +1060,6 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
           onRemoveComposerAttachment={handleRemoveComposerAttachment}
           onSelectCreateSessionTab={() => undefined}
           onSelectSessionTab={handleCanvasSessionTabSelect}
-          onSelectSideChatTab={handleSelectSideChatTab}
           onSend={handleSend}
           onSessionModelSelectionChange={handleSessionModelSelectionChange}
           onSetDraft={setDraftForTab}
@@ -2039,10 +2030,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
       handleRightSidebarToggle()
     }
 
-    await handleOpenSideChat(anchorMessageID, {
-      ...options,
-      placement: "right-sidebar",
-    })
+    await handleOpenSideChat(anchorMessageID, options)
   }
 
   async function handleSelectSideChatTabInRightSidebar(sessionID: string, tabID = activeRightSidebarTab?.id ?? null) {
@@ -2809,12 +2797,11 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
             />
           ) : (
             <>
-              <WorkbenchShell
-                composerRefreshVersion={composerRefreshVersion}
-                assistantTraceVisibility={assistantTraceVisibility}
-                isActivityRailVisible={isActivityRailVisible}
-                isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
-                isResolvingPermissionRequest={isResolvingPermissionRequest}
+                <WorkbenchShell
+                  composerRefreshVersion={composerRefreshVersion}
+                  assistantTraceVisibility={assistantTraceVisibility}
+                  isActivityRailVisible={isActivityRailVisible}
+                  isResolvingPermissionRequest={isResolvingPermissionRequest}
                 isSavingToolPermissionMode={isSavingToolPermissionMode}
                 isRightSidebarCollapsed={isRightSidebarCollapsed}
                 isSidebarCollapsed={isSidebarCollapsed}
@@ -2843,9 +2830,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 onArtifactLinkOpen={handleArtifactLinkOpen}
                 onLocalFileLinkOpen={handleLocalFileLinkOpen}
                 onMoveSessionPanel={handleMoveSessionPanel}
-                sideChatPlacement="right-sidebar"
-                onCreateSideChatTab={handleCreateSideChatTab}
-                onDeleteSideChatTab={handleDeleteSideChatTab}
                 onBranchSelect={handleSessionBranchSelect}
                 onClearComposerParentMessage={handleClearComposerParentMessage}
                 onOpenCreateSessionTab={handleOpenCreateSessionTab}
@@ -2860,7 +2844,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 onPasteComposerImageAttachments={handlePasteComposerImageAttachments}
                 onRemoveComposerAttachment={handleRemoveComposerAttachment}
                 onSelectCreateSessionTab={handleCreateSessionTabSelect}
-                onSelectSideChatTab={handleSelectSideChatTab}
                 onSelectSessionTab={handleCanvasSessionTabSelect}
                 onCancelSend={handleCancelSend}
                 onPlanModeToggle={handlePlanModeToggle}
@@ -2968,7 +2951,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 onSideChatCreate={(anchorMessageID, parentSessionID) =>
                   handleCreateSideChatTab(anchorMessageID, {
                     parentSessionID,
-                    placement: "right-sidebar",
                   })
                 }
                 onSideChatDelete={handleDeleteSideChatTab}

@@ -86,7 +86,6 @@ function createThreadProps(
     activeSession: session,
     activeMessages,
     assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
-    isAgentDebugTraceEnabled: false,
     isResolvingPermissionRequest: false,
     pendingPermissionRequests: [],
     permissionRequestActionError: null,
@@ -4497,8 +4496,22 @@ describe("ThreadView message motion", () => {
 })
 
 describe("ThreadView virtual list", () => {
-  it("renders only the visible window for long threads and swaps rows on scroll", async () => {
+  it("keeps medium threads in natural flow with content visibility", () => {
     const activeMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+    const { container, threadColumn } = renderThread(activeMessages, {
+      scrollStateKey: "medium-content-visibility-session",
+    })
+
+    expect(threadColumn).toHaveClass("is-content-visibility")
+    expect(threadColumn).not.toHaveClass("is-virtualized")
+    expect(container.querySelector(".thread-virtual-spacer")).toBeNull()
+    expect(container.querySelectorAll("[data-thread-message-id]")).toHaveLength(120)
+    expect(screen.getByText("Prompt 0")).toBeInTheDocument()
+    expect(screen.getByText("Prompt 119")).toBeInTheDocument()
+  })
+
+  it("renders only the visible window for long threads and swaps rows on scroll", async () => {
+    const activeMessages = Array.from({ length: 320 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
     const { container, threadColumn } = renderThread(activeMessages, {
       scrollStateKey: "virtual-list-session",
     })
@@ -4509,16 +4522,74 @@ describe("ThreadView virtual list", () => {
     })
 
     expect(threadColumn).toHaveClass("is-virtualized")
+    expect(threadColumn).not.toHaveClass("is-content-visibility")
     expect(container.querySelector(".thread-virtual-spacer")).not.toBeNull()
     expect(container.querySelectorAll("[data-thread-message-id]").length).toBeLessThan(80)
-    await waitFor(() => expect(screen.getByText("Prompt 119")).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText("Prompt 319")).toBeInTheDocument())
 
     threadColumn.scrollTop = 0
     fireEvent.wheel(threadColumn, { deltaY: -120 })
     fireEvent.scroll(threadColumn)
 
     await waitFor(() => expect(screen.getByText("Prompt 0")).toBeInTheDocument())
-    expect(screen.queryByText("Prompt 119")).not.toBeInTheDocument()
+    expect(screen.queryByText("Prompt 319")).not.toBeInTheDocument()
+  })
+
+  it("does not measure virtual row layouts for medium threads during sidebar resize", () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+    let resizeCallback: ResizeObserverCallback | null = null
+    let resizeObserverInstance: ResizeObserver | null = null
+
+    class ManualResizeObserver implements ResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallback = callback
+        resizeObserverInstance = this
+      }
+
+      observe() {}
+
+      unobserve() {}
+
+      disconnect() {}
+    }
+
+    globalThis.ResizeObserver = ManualResizeObserver
+
+    try {
+      const activeMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+      const { container, threadColumn } = renderThread(activeMessages, {
+        scrollStateKey: "medium-sidebar-resize-session",
+      })
+      setScrollMetrics(threadColumn, {
+        clientHeight: 400,
+        scrollHeight: 12000,
+        scrollTop: 240,
+      })
+
+      const row = container.querySelector<HTMLElement>('[data-thread-row-kind="user-message"]')
+      expect(row).not.toBeNull()
+      const rowLayoutSpy = vi.spyOn(row!, "getBoundingClientRect")
+
+      document.body.classList.add("is-resizing-sidebar")
+      act(() => {
+        resizeCallback?.([
+          {
+            borderBoxSize: [{ blockSize: 400, inlineSize: 320 }] as ResizeObserverSize[],
+            contentBoxSize: [],
+            contentRect: createElementRect({ width: 320, height: 400 }),
+            devicePixelContentBoxSize: [],
+            target: threadColumn,
+          },
+        ], resizeObserverInstance!)
+      })
+
+      expect(rowLayoutSpy).not.toHaveBeenCalled()
+      expect(threadColumn.scrollTop).toBe(240)
+      rowLayoutSpy.mockRestore()
+    } finally {
+      document.body.classList.remove("is-resizing-sidebar")
+      globalThis.ResizeObserver = originalResizeObserver
+    }
   })
 
   it("updates virtual row measurements from ResizeObserver entries without reading row layout", async () => {
@@ -4543,7 +4614,7 @@ describe("ThreadView virtual list", () => {
     globalThis.ResizeObserver = ManualResizeObserver
 
     try {
-      const activeMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+      const activeMessages = Array.from({ length: 320 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
       const { container, threadColumn } = renderThread(activeMessages, {
         scrollStateKey: "virtual-list-resize-entry-session",
       })
@@ -4554,7 +4625,7 @@ describe("ThreadView virtual list", () => {
       })
 
       act(() => animationFrame.flush())
-      await waitFor(() => expect(screen.getByText("Prompt 119")).toBeInTheDocument())
+      await waitFor(() => expect(screen.getByText("Prompt 319")).toBeInTheDocument())
 
       const virtualRow = container.querySelector<HTMLElement>("[data-thread-virtual-row-id]")
       expect(virtualRow).not.toBeNull()
@@ -4570,10 +4641,10 @@ describe("ThreadView virtual list", () => {
             target: virtualRow!,
           },
         ], resizeObserverInstance!)
-        animationFrame.flush()
       })
 
       expect(rowLayoutSpy).not.toHaveBeenCalled()
+      act(() => animationFrame.flush())
       rowLayoutSpy.mockRestore()
     } finally {
       animationFrame.restore()
@@ -4603,7 +4674,7 @@ describe("ThreadView virtual list", () => {
     globalThis.ResizeObserver = ManualResizeObserver
 
     try {
-      const activeMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+      const activeMessages = Array.from({ length: 320 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
       const { container, threadColumn } = renderThread(activeMessages, {
         scrollStateKey: "virtual-list-width-change-session",
       })
@@ -4614,7 +4685,7 @@ describe("ThreadView virtual list", () => {
       })
 
       act(() => animationFrame.flush())
-      await waitFor(() => expect(screen.getByText("Prompt 119")).toBeInTheDocument())
+      await waitFor(() => expect(screen.getByText("Prompt 319")).toBeInTheDocument())
 
       const virtualRow = container.querySelector<HTMLElement>("[data-thread-virtual-row-id]")
       expect(virtualRow).not.toBeNull()
@@ -4643,7 +4714,7 @@ describe("ThreadView virtual list", () => {
     }
   })
 
-  it("remeasures rendered virtual rows during sidebar resize without synchronizing scroll", async () => {
+  it("defers rendered virtual row remeasurement until sidebar resize ends", async () => {
     const originalResizeObserver = globalThis.ResizeObserver
     const animationFrame = installManualAnimationFrame()
     let resizeCallback: ResizeObserverCallback | null = null
@@ -4665,7 +4736,7 @@ describe("ThreadView virtual list", () => {
     globalThis.ResizeObserver = ManualResizeObserver
 
     try {
-      const activeMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+      const activeMessages = Array.from({ length: 320 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
       const { container, threadColumn } = renderThread(activeMessages, {
         scrollStateKey: "virtual-list-sidebar-resize-session",
       })
@@ -4682,6 +4753,7 @@ describe("ThreadView virtual list", () => {
       const rowLayoutSpy = vi
         .spyOn(virtualRow!, "getBoundingClientRect")
         .mockReturnValue(createElementRect({ width: 320, height: 188 }))
+      rowLayoutSpy.mockClear()
 
       document.body.classList.add("is-resizing-sidebar")
       act(() => {
@@ -4697,8 +4769,15 @@ describe("ThreadView virtual list", () => {
         animationFrame.flush()
       })
 
-      expect(rowLayoutSpy).toHaveBeenCalled()
+      expect(rowLayoutSpy).not.toHaveBeenCalled()
       expect(threadColumn.scrollTop).toBe(240)
+
+      document.body.classList.remove("is-resizing-sidebar")
+      act(() => {
+        window.dispatchEvent(new Event(SIDEBAR_RESIZE_END_EVENT))
+      })
+
+      expect(rowLayoutSpy).toHaveBeenCalled()
       rowLayoutSpy.mockRestore()
     } finally {
       document.body.classList.remove("is-resizing-sidebar")
@@ -4708,7 +4787,7 @@ describe("ThreadView virtual list", () => {
   })
 
   it("coalesces virtual viewport scroll updates until animation frame", async () => {
-    const activeMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+    const activeMessages = Array.from({ length: 320 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
     const { threadColumn } = renderThread(activeMessages, {
       scrollStateKey: "virtual-list-scroll-frame-session",
     })
@@ -4718,7 +4797,7 @@ describe("ThreadView virtual list", () => {
       scrollTop: threadColumn.scrollTop,
     })
 
-    await waitFor(() => expect(screen.getByText("Prompt 119")).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText("Prompt 319")).toBeInTheDocument())
 
     const animationFrame = installManualAnimationFrame()
     try {
@@ -4726,13 +4805,13 @@ describe("ThreadView virtual list", () => {
       fireEvent.wheel(threadColumn, { deltaY: -120 })
       fireEvent.scroll(threadColumn)
 
-      expect(screen.getByText("Prompt 119")).toBeInTheDocument()
+      expect(screen.getByText("Prompt 319")).toBeInTheDocument()
       expect(screen.queryByText("Prompt 0")).not.toBeInTheDocument()
 
       act(() => animationFrame.flush())
 
       await waitFor(() => expect(screen.getByText("Prompt 0")).toBeInTheDocument())
-      expect(screen.queryByText("Prompt 119")).not.toBeInTheDocument()
+      expect(screen.queryByText("Prompt 319")).not.toBeInTheDocument()
     } finally {
       animationFrame.restore()
     }
@@ -5125,7 +5204,7 @@ describe("ThreadView scroll restoration", () => {
 
       return createElementRect()
     })
-    const historyMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+    const historyMessages = Array.from({ length: 320 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
     const buildStreamingMessage = (text: string) => assistantTraceMessage("assistant-virtual", [
       {
         id: "response-virtual",
@@ -5158,8 +5237,8 @@ describe("ThreadView scroll restoration", () => {
       })
       setScrollMetrics(threadColumn, {
         clientHeight: 400,
-        scrollHeight: 12000,
-        scrollTop: 11600,
+        scrollHeight: 30000,
+        scrollTop: 29600,
       })
 
       fireEvent.wheel(threadColumn, { deltaY: 120 })
@@ -5169,8 +5248,8 @@ describe("ThreadView scroll restoration", () => {
 
       setScrollMetrics(threadColumn, {
         clientHeight: 400,
-        scrollHeight: 13000,
-        scrollTop: 11600,
+        scrollHeight: 31000,
+        scrollTop: 29600,
       })
       rerender(
         <ThreadView
@@ -5182,7 +5261,7 @@ describe("ThreadView scroll restoration", () => {
         />,
       )
 
-      expect(threadColumn.scrollTop).toBe(12224)
+      expect(threadColumn.scrollTop).toBe(30224)
     } finally {
       layoutSpy.mockRestore()
       animationFrame.restore()
