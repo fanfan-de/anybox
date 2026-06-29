@@ -9,6 +9,13 @@
 主要实现文件：
 
 - `packages/desktop/src/renderer/src/app/thread/ThreadView.tsx`
+- `packages/desktop/src/renderer/src/app/thread/use-thread-projection.ts`
+- `packages/desktop/src/renderer/src/app/thread/thread-display-rows.ts`
+- `packages/desktop/src/renderer/src/app/thread/use-thread-virtual-list.ts`
+- `packages/desktop/src/renderer/src/app/thread/use-thread-scroll-controller.ts`
+- `packages/desktop/src/renderer/src/app/thread/use-thread-content-observer.ts`
+- `packages/desktop/src/renderer/src/app/thread/ThreadRows.tsx`
+- `packages/desktop/src/renderer/src/app/thread/ThreadRowRenderer.tsx`
 - `packages/desktop/src/renderer/src/styles/thread.css`
 - `packages/desktop/src/renderer/src/app/workbench/WorkbenchPaneSurface.tsx`
 - `packages/desktop/src/renderer/src/styles/workbench.css`
@@ -193,21 +200,22 @@ flowchart LR
 
   subgraph normalize["ThreadView 归一化"]
     derive["deriveActiveMessages(turns)"]
+    projection["useThreadProjection()"]
     context["buildThreadDisplayContext()"]
-    baseRows["buildThreadDisplayRows()"]
-    displayRows["decorateThreadDisplayRows()"]
-    virtual["virtual layout\n长列表时启用"]
-    scroll["scroll state\n锁底 / 恢复 / 用户意图"]
+    baseRows["buildThreadDisplayRowsIncremental()"]
+    displayRows["decorateThreadDisplayRowsIncremental()"]
+    virtual["useThreadVirtualList()\n长列表时启用"]
+    scroll["useThreadScrollController()\n锁底 / 恢复 / 用户意图"]
   end
 
   subgraph shell["Thread 外壳"]
     visible["VisibleThreadView"]
     column["section.thread-shell\n+ div.thread-column"]
-    rows["renderThreadRows()"]
+    rows["ThreadRows"]
   end
 
   subgraph rowRender["行级渲染"]
-    dispatch["renderDisplayRow(row)"]
+    dispatch["ThreadRowRenderer(row)"]
     user["UserThreadMessageArticle"]
     permission["PermissionRequestInlinePrompt"]
     responseItem["assistant response row"]
@@ -229,9 +237,9 @@ flowchart LR
     lightbox["ImageLightbox"]
   end
 
-  turns --> derive --> messages --> context --> baseRows --> displayRows
-  session --> baseRows
-  pending --> baseRows
+  turns --> derive --> messages --> projection --> context --> baseRows --> displayRows
+  session --> projection
+  pending --> projection
   session --> displayRows
   displayRows --> virtual
   displayRows --> visible
@@ -277,19 +285,19 @@ ThreadView
       ├─ div.thread-column  # 独立滚动列
       │  ├─ empty state: article.thread-row.assistant-empty-state-row
       │  │  └─ TraceItemView(system)
-      │  └─ renderThreadRows()  # 根据虚拟化状态渲染 row
-      │     ├─ direct rows: renderDisplayRow(row)[]
+      │  └─ ThreadRows  # 根据虚拟化状态渲染 row
+      │     ├─ direct rows: ThreadRowRenderer(row)[]
       │     └─ virtualized rows  # 长 thread 时只渲染可见窗口
       │        └─ div.thread-virtual-spacer
       │           └─ div.thread-virtual-row[]
-      │              └─ renderDisplayRow(row)
+      │              └─ ThreadRowRenderer(row)
       └─ ImageLightbox?  # 图片预览浮层
 ```
 
-`renderDisplayRow()` 是 `thread-column` 的主要 UI 分发表：
+`ThreadRowRenderer` 是 `thread-column` 的主要 UI 分发表；`VisibleThreadView` 只保留一个很薄的 `renderDisplayRow(row)` wrapper，用来注入 copy/lightbox/side chat 等 handler：
 
 ```text
-renderDisplayRow(row)
+ThreadRowRenderer(row)
 ├─ row.kind = user-message  # 用户消息
 │  └─ UserThreadMessageArticle
 │     ├─ UserThreadMessageBubble
@@ -590,11 +598,12 @@ User-message 文件变更卡片使用一组专用 semantic token：
 ## 9. 当前设计债
 
 1. `thread.css` 是从 legacy styles 拆分出来的，存在“先定义卡片，再在文件末尾清空卡片”的覆盖链。
-2. side chat 入口在无 hover 环境和首次发现时不够明显。
-3. reasoning/tools/file-change 的视觉差异在最终 override 后偏弱，扫描执行状态时不够直观。
-4. inline side chat 是完整嵌套 thread，长会话中会显著增加主线纵向长度。
-5. `thread-column` 隐藏滚动条，界面更干净，但长 thread 中位置感较弱。
-6. README 中提到的若干前端规格文档当前不存在，本文暂时作为 thread view 设计记录入口。
+2. `ThreadRowRenderer` 已经承接 row kind 分发，但 `ThreadView.tsx` 仍保留 TraceItemView、各类 trace renderer、lightbox 和 inline side chat；后续应继续把 trace renderer 拆到独立模块，降低主文件变更冲突。
+3. side chat 入口在无 hover 环境和首次发现时不够明显。
+4. reasoning/tools/file-change 的视觉差异在最终 override 后偏弱，扫描执行状态时不够直观。
+5. inline side chat 是完整嵌套 thread，长会话中会显著增加主线纵向长度。
+6. `thread-column` 隐藏滚动条，界面更干净，但长 thread 中位置感较弱。
+7. README 中提到的若干前端规格文档当前不存在，本文暂时作为 thread view 设计记录入口。
 
 ## 10. 维护约定
 

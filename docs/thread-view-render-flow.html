@@ -7,186 +7,755 @@
     <style>
       :root {
         color-scheme: light;
-        --page: #f6f7fb;
-        --ink: #162033;
-        --muted: #667085;
-        --line: #d7deea;
+        --page: #f7f8fb;
         --panel: #ffffff;
-        --accent: #2563eb;
-        --green: #137333;
-        --orange: #b45309;
+        --ink: #162033;
+        --muted: #667084;
+        --line: #d8e0ec;
+        --line-strong: #b8c4d4;
+        --blue: #1f6feb;
+        --blue-soft: #eaf2ff;
+        --green: #16794c;
+        --green-soft: #ebf8f1;
+        --orange: #b85f0d;
+        --orange-soft: #fff4e5;
+        --violet: #7446d8;
+        --violet-soft: #f2edff;
+        --red: #b42318;
+        --red-soft: #fff1f1;
+        --code: #eef3f9;
+        --shadow: 0 16px 42px rgba(22, 32, 51, 0.07);
       }
 
       * {
         box-sizing: border-box;
       }
 
+      html {
+        scroll-behavior: smooth;
+      }
+
       body {
         margin: 0;
-        background: var(--page);
+        background:
+          linear-gradient(180deg, rgba(234, 242, 255, 0.8), rgba(247, 248, 251, 0) 340px),
+          var(--page);
         color: var(--ink);
         font-family: Inter, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
       }
 
       main {
-        width: min(1120px, calc(100vw - 48px));
+        width: min(1120px, calc(100vw - 42px));
         margin: 0 auto;
-        padding: 40px 0 56px;
+        padding: 36px 0 58px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
       }
 
       h1 {
-        margin: 0 0 10px;
-        font-size: 30px;
+        font-size: 31px;
+        font-weight: 740;
         letter-spacing: 0;
       }
 
-      p {
+      h2 {
+        font-size: 20px;
+        font-weight: 720;
+        letter-spacing: 0;
+      }
+
+      h3 {
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+
+      p,
+      li {
         color: var(--muted);
-        line-height: 1.7;
+        line-height: 1.72;
       }
 
       a {
-        color: var(--accent);
+        color: var(--blue);
+        text-decoration: none;
       }
 
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 14px;
-        margin: 28px 0;
-      }
-
-      .card {
-        min-width: 0;
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        background: var(--panel);
-        padding: 18px;
-        box-shadow: 0 16px 38px rgba(22, 32, 51, 0.06);
-      }
-
-      .card h2 {
-        margin: 0 0 12px;
-        font-size: 16px;
+      a:hover {
+        text-decoration: underline;
       }
 
       code {
+        border: 1px solid #dce4ef;
         border-radius: 5px;
-        background: #eef2f7;
-        padding: 2px 5px;
+        background: var(--code);
+        padding: 1px 5px;
+        color: #26364d;
         font-family: Consolas, "SFMono-Regular", monospace;
         font-size: 0.92em;
       }
 
-      ul {
-        margin: 10px 0 0;
-        padding-left: 18px;
-        color: var(--muted);
-        line-height: 1.7;
+      .hero {
+        display: grid;
+        gap: 18px;
+        margin-bottom: 22px;
       }
 
-      .rows {
+      .hero-text {
+        display: grid;
+        gap: 10px;
+      }
+
+      .hero-text p {
+        max-width: 900px;
+      }
+
+      .one-line {
+        border: 1px solid #b8cef7;
+        border-radius: 8px;
+        background: var(--blue-soft);
+        padding: 16px 18px;
+        font-size: 15px;
+      }
+
+      .one-line strong {
+        color: var(--ink);
+      }
+
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .toc a {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.78);
+        color: var(--ink);
+        font-size: 13px;
+        padding: 7px 11px;
+      }
+
+      .layout {
+        display: grid;
+        gap: 18px;
+      }
+
+      .section {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .section-header {
+        border-bottom: 1px solid var(--line);
+        background: #fafcff;
+        padding: 18px 20px;
+      }
+
+      .section-header p {
+        margin-top: 6px;
+        font-size: 14px;
+      }
+
+      .timeline {
+        position: relative;
+        display: grid;
+        gap: 14px;
+        padding: 20px;
+      }
+
+      .timeline::before {
+        content: "";
+        position: absolute;
+        top: 38px;
+        bottom: 38px;
+        left: 40px;
+        width: 2px;
+        background: var(--line-strong);
+      }
+
+      .step {
+        position: relative;
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr);
+        gap: 16px;
+        align-items: start;
+      }
+
+      .step-number {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        border: 2px solid var(--blue);
+        border-radius: 999px;
+        background: var(--panel);
+        color: var(--blue);
+        font-weight: 760;
+      }
+
+      .step-body {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 15px 16px;
+      }
+
+      .step-title {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .tag {
+        border-radius: 999px;
+        background: #eef2f7;
+        color: #536175;
+        font-size: 12px;
+        line-height: 1;
+        padding: 5px 8px;
+      }
+
+      .tag[data-tone="source"] {
+        background: var(--blue-soft);
+        color: var(--blue);
+      }
+
+      .tag[data-tone="pane"] {
+        background: var(--violet-soft);
+        color: var(--violet);
+      }
+
+      .tag[data-tone="projection"] {
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .tag[data-tone="render"] {
+        background: var(--orange-soft);
+        color: var(--orange);
+      }
+
+      .io-grid {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 10px;
-        margin-top: 14px;
       }
 
-      .chip {
+      .io {
         border: 1px solid var(--line);
-        border-radius: 8px;
+        border-radius: 7px;
         background: #fbfcff;
-        padding: 10px 12px;
-        font-family: Consolas, "SFMono-Regular", monospace;
+        padding: 11px;
+      }
+
+      .io b {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--ink);
+        font-size: 12px;
+      }
+
+      .io p {
         font-size: 13px;
       }
 
-      .note {
-        border-left: 4px solid var(--green);
-        background: #f0fdf4;
+      .flow-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        padding: 18px 20px;
       }
 
-      .warn {
-        border-left: 4px solid var(--orange);
-        background: #fff7ed;
+      .pill {
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fbfcff;
+        padding: 9px 11px;
+        font-size: 13px;
+      }
+
+      .arrow {
+        color: var(--line-strong);
+        font-weight: 700;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        padding: 20px;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--blue);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 15px;
+      }
+
+      .card[data-tone="green"] {
+        border-left-color: var(--green);
+      }
+
+      .card[data-tone="orange"] {
+        border-left-color: var(--orange);
+      }
+
+      .card[data-tone="violet"] {
+        border-left-color: var(--violet);
+      }
+
+      .card[data-tone="red"] {
+        border-left-color: var(--red);
+        background: var(--red-soft);
+      }
+
+      .card p {
+        margin-top: 8px;
+        font-size: 13px;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        padding: 20px;
+      }
+
+      table {
+        width: 100%;
+        min-width: 760px;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 11px 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--ink);
+        font-weight: 700;
+        background: #fafcff;
+      }
+
+      td {
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .callout {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .callout .card {
+        box-shadow: none;
       }
 
       @media (max-width: 860px) {
-        .grid,
-        .rows {
+        main {
+          width: min(100vw - 28px, 1120px);
+          padding-top: 24px;
+        }
+
+        .io-grid,
+        .cards,
+        .callout {
           grid-template-columns: 1fr;
+        }
+
+        .timeline {
+          padding: 16px;
+        }
+
+        .timeline::before {
+          left: 35px;
+        }
+
+        .step {
+          grid-template-columns: 38px minmax(0, 1fr);
+          gap: 12px;
+        }
+
+        .step-number {
+          width: 38px;
+          height: 38px;
+        }
+      }
+
+      @media print {
+        body {
+          background: #ffffff;
+        }
+
+        main {
+          width: 100%;
+          padding: 12px;
+        }
+
+        .section {
+          box-shadow: none;
+          break-inside: avoid;
         }
       }
     </style>
   </head>
   <body>
     <main>
-      <h1>ThreadView 数据到渲染流程</h1>
-      <p>
-        当前 ThreadView 已删除过程折叠模型。Assistant trace item 不再先进入旧的过程抽屉，而是在
-        <code>thread-display-rows.ts</code> 中按展示语义拆成独立 row，最终仍由 <code>TraceItemView</code>
-        根据 <code>item.kind</code> 分发具体 renderer。
-      </p>
-
-      <section class="grid" aria-label="render flow">
-        <article class="card">
-          <h2>1. Source</h2>
-          <p><code>ConversationTurnMap</code> 是源数据，turn 内包含 user / assistant message。</p>
-        </article>
-        <article class="card">
-          <h2>2. Projection</h2>
-          <p><code>deriveActiveMessages()</code> 生成 ThreadView 消费的 <code>ThreadMessage[]</code>。</p>
-        </article>
-        <article class="card">
-          <h2>3. Rows</h2>
-          <p><code>buildThreadDisplayRows()</code> 负责把 assistant items 拆成语义 row。</p>
-        </article>
-        <article class="card">
-          <h2>4. Render</h2>
-          <p><code>renderDisplayRow()</code> 只按 row kind 选择外层结构，具体内容继续交给 <code>TraceItemView</code>。</p>
-        </article>
-      </section>
-
-      <section class="card">
-        <h2>Assistant Row Kind</h2>
-        <div class="rows">
-          <div class="chip">assistant-response-row</div>
-          <div class="chip">assistant-reasoning-row</div>
-          <div class="chip">assistant-tool-row</div>
-          <div class="chip">assistant-question-row</div>
-          <div class="chip">assistant-file-change-row</div>
-          <div class="chip">assistant-workflow-row</div>
-          <div class="chip">assistant-source-row</div>
-          <div class="chip">assistant-approval-row</div>
-          <div class="chip">assistant-debug-row</div>
+      <header class="hero">
+        <div class="hero-text">
+          <h1>ThreadView 数据到渲染流程</h1>
+          <p>
+            这页按阅读顺序整理当前 thread view 的渲染流程。先看一句话总览，再沿着编号主链路往下读；
+            分支逻辑和 row 类型放在后面，避免打断主流程。
+          </p>
         </div>
-      </section>
 
-      <section class="grid">
-        <article class="card note">
-          <h2>保留行为</h2>
-          <ul>
-            <li>trace visibility 过滤仍在 row builder 中执行。</li>
-            <li>stream-inserted user message 继续按 assistant item index 插入。</li>
-            <li>folded intermediate assistant item 仍归属 final assistant owner，并保留 source metadata。</li>
-            <li>file-change 继续摘要化；不同 source message 的 file-change 不合并。</li>
-          </ul>
+        <p class="one-line">
+          <strong>一句话：</strong>
+          运行事件写入 <code>ConversationStore</code>，pane 订阅当前 session 的 <code>activeMessages</code>，
+          <code>ThreadView</code> 投影成 <code>ThreadDisplayRow[]</code>，最后按 <code>row.kind</code> 渲染成屏幕 UI。
+        </p>
+
+        <nav class="toc" aria-label="阅读导航">
+          <a href="#main-flow">主链路</a>
+          <a href="#quick-path">快速路径</a>
+          <a href="#branches">关键分支</a>
+          <a href="#rows">row 类型分发表</a>
+          <a href="#takeaways">记忆边界</a>
+        </nav>
+      </header>
+
+      <div class="layout">
+        <section class="section" id="main-flow">
+          <div class="section-header">
+            <h2>主链路</h2>
+            <p>从数据进入 store 到 row 被组件渲染，按实际处理顺序阅读。</p>
+          </div>
+
+          <div class="timeline">
+            <article class="step">
+              <div class="step-number">1</div>
+              <div class="step-body">
+                <div class="step-title">
+                  <h3>上游事件改变会话内容</h3>
+                  <span class="tag" data-tone="source">source</span>
+                </div>
+                <div class="io-grid">
+                  <div class="io">
+                    <b>输入</b>
+                    <p>runtime stream event、history load、composer send。</p>
+                  </div>
+                  <div class="io">
+                    <b>处理</b>
+                    <p>调用 <code>updateConversationTurns</code> 或 <code>setConversations</code>。</p>
+                  </div>
+                  <div class="io">
+                    <b>输出</b>
+                    <p>下一版 <code>ConversationTurnMap</code>。</p>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="step">
+              <div class="step-number">2</div>
+              <div class="step-body">
+                <div class="step-title">
+                  <h3>ConversationStore 维护源数据</h3>
+                  <span class="tag" data-tone="source">canonical</span>
+                </div>
+                <div class="io-grid">
+                  <div class="io">
+                    <b>输入</b>
+                    <p><code>ThreadTurn[]</code> 按 session 写入。</p>
+                  </div>
+                  <div class="io">
+                    <b>处理</b>
+                    <p><code>deriveActiveMessages(turns)</code> 扁平化 turn 内 messages。</p>
+                  </div>
+                  <div class="io">
+                    <b>输出</b>
+                    <p><code>conversations[sessionID]</code>，即 <code>ThreadMessage[]</code>。</p>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="step">
+              <div class="step-number">3</div>
+              <div class="step-body">
+                <div class="step-title">
+                  <h3>WorkbenchPaneSurface 组装 ThreadView 输入</h3>
+                  <span class="tag" data-tone="pane">pane</span>
+                </div>
+                <div class="io-grid">
+                  <div class="io">
+                    <b>输入</b>
+                    <p><code>useConversationMessages(conversationStore, pane.sessionID)</code>。</p>
+                  </div>
+                  <div class="io">
+                    <b>处理</b>
+                    <p>合并 activeSession、messageTree、diff、permission、side chat、handlers。</p>
+                  </div>
+                  <div class="io">
+                    <b>输出</b>
+                    <p>完整的 <code>ThreadViewProps</code>。</p>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="step">
+              <div class="step-number">4</div>
+              <div class="step-body">
+                <div class="step-title">
+                  <h3>ThreadView 决定是否渲染真实内容</h3>
+                  <span class="tag" data-tone="pane">visibility</span>
+                </div>
+                <div class="io-grid">
+                  <div class="io">
+                    <b>输入</b>
+                    <p><code>isThreadVisible</code>。</p>
+                  </div>
+                  <div class="io">
+                    <b>处理</b>
+                    <p>非 active panel 走 <code>InactiveThreadView</code>；可见时进入 <code>VisibleThreadView</code>。</p>
+                  </div>
+                  <div class="io">
+                    <b>输出</b>
+                    <p>可见 pane 才进入完整投影和 row 渲染。</p>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="step">
+              <div class="step-number">5</div>
+              <div class="step-body">
+                <div class="step-title">
+                  <h3>useThreadProjection 把消息投影成 rows</h3>
+                  <span class="tag" data-tone="projection">projection</span>
+                </div>
+                <div class="io-grid">
+                  <div class="io">
+                    <b>输入</b>
+                    <p><code>activeMessages</code>、trace visibility、pending permission、messageTree、side chat。</p>
+                  </div>
+                  <div class="io">
+                    <b>处理</b>
+                    <p>排序 assistant block，构建 display context，生成 base rows，再追加 decoration rows。</p>
+                  </div>
+                  <div class="io">
+                    <b>输出</b>
+                    <p><code>displayRows: ThreadDisplayRow[]</code>。</p>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="step">
+              <div class="step-number">6</div>
+              <div class="step-body">
+                <div class="step-title">
+                  <h3>ThreadRows 决定直接渲染还是虚拟化</h3>
+                  <span class="tag" data-tone="render">list</span>
+                </div>
+                <div class="io-grid">
+                  <div class="io">
+                    <b>输入</b>
+                    <p><code>displayRows</code> 和滚动容器状态。</p>
+                  </div>
+                  <div class="io">
+                    <b>处理</b>
+                    <p>少量 rows 直接 map；达到 80 rows 后只渲染 <code>virtualRange.items</code>。</p>
+                  </div>
+                  <div class="io">
+                    <b>输出</b>
+                    <p>一组需要调用 <code>renderRow(row)</code> 的可见 row。</p>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="step">
+              <div class="step-number">7</div>
+              <div class="step-body">
+                <div class="step-title">
+                  <h3>ThreadRowRenderer 按 row.kind 分发</h3>
+                  <span class="tag" data-tone="render">render</span>
+                </div>
+                <div class="io-grid">
+                  <div class="io">
+                    <b>输入</b>
+                    <p>单个 <code>ThreadDisplayRow</code>。</p>
+                  </div>
+                  <div class="io">
+                    <b>处理</b>
+                    <p>根据 <code>row.kind</code> 选择 user、permission、trace、diff、actions 或 side chat 外壳。</p>
+                  </div>
+                  <div class="io">
+                    <b>输出</b>
+                    <p>屏幕上的 thread row；trace item 最终继续交给 <code>TraceItemView</code>。</p>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="quick-path">
+          <div class="section-header">
+            <h2>快速路径</h2>
+            <p>只想记住主线时，看这一行即可。</p>
+          </div>
+          <div class="flow-strip" aria-label="简化流程">
+            <span class="pill">Runtime / History / User input</span>
+            <span class="arrow">→</span>
+            <span class="pill">ConversationTurnMap</span>
+            <span class="arrow">→</span>
+            <span class="pill">deriveActiveMessages()</span>
+            <span class="arrow">→</span>
+            <span class="pill">WorkbenchPaneSurface</span>
+            <span class="arrow">→</span>
+            <span class="pill">useThreadProjection()</span>
+            <span class="arrow">→</span>
+            <span class="pill">ThreadRows</span>
+            <span class="arrow">→</span>
+            <span class="pill">ThreadRowRenderer</span>
+          </div>
+        </section>
+
+        <section class="section" id="branches">
+          <div class="section-header">
+            <h2>关键分支</h2>
+            <p>这些分支会影响读到的 UI，但不改变主数据路径。</p>
+          </div>
+          <div class="cards">
+            <article class="card" data-tone="violet">
+              <h3>可见性分支</h3>
+              <p><code>isThreadVisible === false</code> 时只渲染 <code>InactiveThreadView</code>，避免非 active pane 继续渲染大量 rows。</p>
+            </article>
+            <article class="card" data-tone="green">
+              <h3>投影两阶段</h3>
+              <p>base rows 展开 message 和 trace；decoration rows 只追加最终 assistant 消息后的 diff、actions、inline side chat。</p>
+            </article>
+            <article class="card" data-tone="orange">
+              <h3>虚拟列表</h3>
+              <p><code>displayRows.length >= 80</code> 时启用，先用 estimated height 布局，再通过 ResizeObserver 更新实测高度。</p>
+            </article>
+            <article class="card" data-tone="violet">
+              <h3>Inline side chat</h3>
+              <p><code>assistant-inline-side-chat</code> row 内部会渲染嵌套 <code>ThreadView</code> 和自己的 composer。</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="rows">
+          <div class="section-header">
+            <h2>row 类型分发表</h2>
+            <p><code>ThreadRowRenderer</code> 的核心工作就是这张表：输入 row.kind，输出对应 UI 外壳。</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>row.kind</th>
+                  <th>渲染组件 / 外壳</th>
+                  <th>用户看到什么</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>user-message</code></td>
+                  <td><code>UserThreadMessageArticle</code></td>
+                  <td>用户输入内容，必要时附带 diff card。</td>
+                </tr>
+                <tr>
+                  <td><code>permission-request</code></td>
+                  <td><code>PermissionRequestInlinePrompt</code></td>
+                  <td>工具权限确认、拒绝、自定义回答。</td>
+                </tr>
+                <tr>
+                  <td><code>assistant-response-row</code> / <code>assistant-question-row</code> / <code>assistant-file-change-row</code></td>
+                  <td><code>AssistantTraceSection</code> → <code>TraceItemView</code></td>
+                  <td>主回复、问题、文件变更摘要。</td>
+                </tr>
+                <tr>
+                  <td><code>assistant-reasoning-row</code> / <code>assistant-tool-row</code> / <code>assistant-workflow-row</code> / <code>assistant-source-row</code> / <code>assistant-approval-row</code> / <code>assistant-debug-row</code></td>
+                  <td><code>AssistantTraceLite</code> → <code>TraceItemView</code></td>
+                  <td>reasoning、工具、workflow、source、approval、debug 轨迹。</td>
+                </tr>
+                <tr>
+                  <td><code>assistant-ephemeral-state</code></td>
+                  <td><code>AssistantMessagePlaceholder</code></td>
+                  <td>Preparing、Thinking、Running tools 等临时状态。</td>
+                </tr>
+                <tr>
+                  <td><code>assistant-inserted-user-message</code></td>
+                  <td><code>UserThreadMessageArticle</code></td>
+                  <td>stream insertion 中插回 assistant 流程的 user message。</td>
+                </tr>
+                <tr>
+                  <td><code>assistant-diff-card</code></td>
+                  <td><code>MessageDiffCard</code></td>
+                  <td>文件变更 review / restore / open file。</td>
+                </tr>
+                <tr>
+                  <td><code>assistant-actions</code></td>
+                  <td>branch / copy / side chat / fork action buttons</td>
+                  <td>回复下方的操作栏。</td>
+                </tr>
+                <tr>
+                  <td><code>assistant-inline-side-chat</code></td>
+                  <td><code>InlineSideChatThread</code></td>
+                  <td>某条 assistant 回复下方的分支讨论区。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <section class="callout" id="takeaways" aria-label="记忆边界">
+        <article class="card">
+          <h3>记忆点 1：源数据</h3>
+          <p><code>ConversationTurnMap</code> 是源数据；<code>activeMessages</code> 只是给 UI 使用的扁平派生视图。</p>
         </article>
-        <article class="card warn">
-          <h2>已删除行为</h2>
-          <ul>
-            <li>不再生成 process header。</li>
-            <li>不再维护 process trace 展开/折叠状态。</li>
-            <li>不再有过程折叠按钮、chevron 或折叠动画。</li>
-          </ul>
+        <article class="card" data-tone="green">
+          <h3>记忆点 2：投影单位</h3>
+          <p><code>ThreadView</code> 真正渲染的不是 message，而是 <code>ThreadDisplayRow</code>。</p>
+        </article>
+        <article class="card" data-tone="orange">
+          <h3>记忆点 3：渲染分发</h3>
+          <p><code>ThreadRowRenderer</code> 只看 <code>row.kind</code>，不重新推导完整会话结构。</p>
         </article>
       </section>
-
-      <p>
-        详细结构请看
-        <a href="./thread-view-frontend-design.md">docs/thread-view-frontend-design.md</a>
-        和 <code>artifacts/thread-view-data-structure.png</code>。
-      </p>
     </main>
   </body>
 </html>

@@ -5,7 +5,6 @@ import type {
   AssistantThreadMessage,
   AssistantThreadMessagePhase,
   PermissionRequest,
-  SessionDiffSummary,
   SessionSummary,
   ThreadMessage,
 } from "../types"
@@ -25,7 +24,6 @@ import {
 interface ThreadProjectionInput {
   activeMessages: ThreadMessage[]
   activeSession: SessionSummary | null
-  activeSessionDiff?: SessionDiffSummary | null
   assistantTraceVisibility: AssistantTraceVisibility
   canForkFromMessage: boolean
   canOpenSideChat: boolean
@@ -71,8 +69,14 @@ function isTerminalAssistantMessagePhase(phase: AssistantThreadMessagePhase) {
 }
 
 function orderAdjacentAssistantMessagesForDisplay(messages: ThreadMessage[]) {
-  const orderedMessages = [...messages]
+  let orderedMessages: ThreadMessage[] | null = null
   let assistantBlockStart = -1
+
+  const readMessages = () => orderedMessages ?? messages
+  const ensureOrderedMessages = () => {
+    if (!orderedMessages) orderedMessages = [...messages]
+    return orderedMessages
+  }
 
   const flushAssistantBlock = (endIndex: number) => {
     if (assistantBlockStart < 0) return
@@ -81,7 +85,8 @@ function orderAdjacentAssistantMessagesForDisplay(messages: ThreadMessage[]) {
     assistantBlockStart = -1
     if (endIndex - startIndex <= 1) return
 
-    const assistantBlock = orderedMessages.slice(startIndex, endIndex)
+    const sourceMessages = readMessages()
+    const assistantBlock = sourceMessages.slice(startIndex, endIndex)
     const shouldOrderByTraceTime = assistantBlock.some(
       (message) => message.kind === "assistant" && (message.isStreaming || !isTerminalAssistantMessagePhase(message.runtime.phase)),
     )
@@ -99,20 +104,24 @@ function orderAdjacentAssistantMessagesForDisplay(messages: ThreadMessage[]) {
       })
       .map(({ message }) => message)
 
-    orderedMessages.splice(startIndex, endIndex - startIndex, ...orderedAssistantBlock)
+    const didReorder = orderedAssistantBlock.some((message, index) => message !== assistantBlock[index])
+    if (!didReorder) return
+
+    ensureOrderedMessages().splice(startIndex, endIndex - startIndex, ...orderedAssistantBlock)
   }
 
-  orderedMessages.forEach((message, index) => {
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = readMessages()[index]!
     if (message.kind === "assistant") {
       if (assistantBlockStart < 0) assistantBlockStart = index
-      return
+      continue
     }
 
     flushAssistantBlock(index)
-  })
+  }
 
-  flushAssistantBlock(orderedMessages.length)
-  return orderedMessages
+  flushAssistantBlock(messages.length)
+  return orderedMessages ?? messages
 }
 
 function collectAnsweredQuestionIDs(messages: ThreadMessage[]) {
@@ -165,7 +174,6 @@ function mergeThreadDisplayRowsCachesForDecoration(
 export function useThreadProjection({
   activeMessages,
   activeSession,
-  activeSessionDiff = null,
   assistantTraceVisibility,
   canForkFromMessage,
   canOpenSideChat,
@@ -179,15 +187,17 @@ export function useThreadProjection({
   sideChatSessionsByAnchorMessageID = {},
 }: ThreadProjectionInput): ThreadProjection {
   const threadDisplayRowsCacheRef = useRef<ThreadDisplayRowsCache | null>(null)
+  const activeSessionID = activeSession?.id ?? null
+  const pendingPermissionRequestID = pendingPermissionRequests[0]?.id ?? null
+  const pendingPermissionRequestCount = pendingPermissionRequests.length
   const answeredQuestionIDs = useMemo(() => collectAnsweredQuestionIDs(activeMessages), [activeMessages])
   const displayMessages = useMemo(() => orderAdjacentAssistantMessagesForDisplay(activeMessages), [activeMessages])
   const readOnlySideChat = isSideChatSession(activeSession)
 
   const visibleMessageIDs = useMemo(() => {
     const ids = displayMessages.map((message) => message.id)
-    const pendingRequestID = pendingPermissionRequests[0]?.id
-    return pendingRequestID ? [...ids, `permission-request:${pendingRequestID}`] : ids
-  }, [displayMessages, pendingPermissionRequests])
+    return pendingPermissionRequestID ? [...ids, `permission-request:${pendingPermissionRequestID}`] : ids
+  }, [displayMessages, pendingPermissionRequestID])
   const visibleMessageIDsKey = visibleMessageIDs.join("\u0000")
 
   const threadDisplayContext = useMemo(
@@ -204,7 +214,7 @@ export function useThreadProjection({
         () => {
           const result = buildThreadDisplayRowsIncremental(
             {
-              activeSession,
+              activeSessionID,
               activeMessages: displayMessages,
               assistantTraceVisibility,
               context: threadDisplayContext,
@@ -224,19 +234,20 @@ export function useThreadProjection({
           cacheHitCount: baseDisplayRowsStats.cacheHitCount,
           cacheMissCount: baseDisplayRowsStats.cacheMissCount,
           invalidatedMessageCount: baseDisplayRowsStats.invalidatedMessageCount,
-          pendingPermissionRequestCount: pendingPermissionRequests.length,
-          sessionID: activeSession?.id ?? null,
+          pendingPermissionRequestCount,
+          sessionID: activeSessionID,
           messageCount: displayMessages.length,
         }),
       )
     },
     [
-      activeSession,
+      activeSessionID,
       displayMessages,
       assistantTraceVisibility,
       threadDisplayContext,
       isResolvingPermissionRequest,
-      pendingPermissionRequests,
+      pendingPermissionRequestCount,
+      pendingPermissionRequestID,
     ],
   )
   const baseDisplayRows = baseDisplayRowsResult.rows
@@ -254,7 +265,6 @@ export function useThreadProjection({
         () => {
           const result = decorateThreadDisplayRowsIncremental(
             {
-              activeSessionDiff,
               assistantTraceVisibility,
               baseRows: baseDisplayRows,
               canForkFromMessage,
@@ -278,13 +288,12 @@ export function useThreadProjection({
           cacheHitCount: decorateDisplayRowsStats.cacheHitCount,
           cacheMissCount: decorateDisplayRowsStats.cacheMissCount,
           invalidatedMessageCount: decorateDisplayRowsStats.invalidatedMessageCount,
-          sessionID: activeSession?.id ?? null,
+          sessionID: activeSessionID,
         }),
       )
     },
     [
-      activeSession?.id,
-      activeSessionDiff,
+      activeSessionID,
       assistantTraceVisibility,
       baseDisplayRows,
       baseDisplayRowsResult.cache,
@@ -303,8 +312,8 @@ export function useThreadProjection({
   const displayRows = displayRowsResult.rows
 
   useEffect(() => {
-    threadDisplayRowsCacheRef.current = activeSession ? displayRowsResult.cache : null
-  }, [activeSession, displayRowsResult.cache])
+    threadDisplayRowsCacheRef.current = activeSessionID ? displayRowsResult.cache : null
+  }, [activeSessionID, displayRowsResult.cache])
 
   return {
     answeredQuestionIDs,

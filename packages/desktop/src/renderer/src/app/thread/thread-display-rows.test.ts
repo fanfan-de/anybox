@@ -142,7 +142,6 @@ function decorateRowsIncremental(
 ) {
   const context = overrides.context ?? buildThreadDisplayContext(messages)
   return decorateThreadDisplayRowsIncremental({
-    activeSessionDiff: null,
     assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
     canForkFromMessage: true,
     canOpenSideChat: true,
@@ -166,7 +165,6 @@ function decorateRows(
 ) {
   const context = overrides.context ?? buildThreadDisplayContext(messages)
   return decorateThreadDisplayRows({
-    activeSessionDiff: null,
     assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
     canForkFromMessage: true,
     canOpenSideChat: true,

@@ -187,7 +187,8 @@ export interface ThreadDisplayContext {
 }
 
 export interface BuildThreadDisplayRowsInput {
-  activeSession: SessionSummary | null
+  activeSession?: SessionSummary | null
+  activeSessionID?: string | null
   activeMessages: ThreadMessage[]
   assistantTraceVisibility: AssistantTraceVisibility
   context?: ThreadDisplayContext
@@ -196,7 +197,6 @@ export interface BuildThreadDisplayRowsInput {
 }
 
 export interface DecorateThreadDisplayRowsInput {
-  activeSessionDiff?: SessionDiffSummary | null
   assistantTraceVisibility: AssistantTraceVisibility
   baseRows: ThreadDisplayRow[]
   canForkFromMessage: boolean
@@ -1406,13 +1406,15 @@ export function buildThreadDisplayRowsIncremental(
 ): BuildThreadDisplayRowsIncrementalResult {
   const {
     activeSession,
+    activeSessionID,
     activeMessages,
     assistantTraceVisibility,
     context = buildThreadDisplayContext(activeMessages),
     isResolvingPermissionRequest,
     pendingPermissionRequests,
   } = input
-  const sessionID = activeSession?.id ?? null
+  const sessionID = activeSessionID ?? activeSession?.id ?? null
+  const hasActiveSession = Boolean(activeSession ?? sessionID)
   const compatiblePreviousCache = getCompatibleThreadDisplayRowsCache(previousCache, sessionID)
   const cache = createThreadDisplayRowsCache(sessionID)
   const stats = createThreadDisplayRowsCacheStats()
@@ -1423,7 +1425,7 @@ export function buildThreadDisplayRowsIncremental(
     })
   }
 
-  if (!activeSession) {
+  if (!hasActiveSession) {
     return {
       cache,
       rows: [],

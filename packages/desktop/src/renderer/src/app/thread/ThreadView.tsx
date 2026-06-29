@@ -4437,7 +4437,6 @@ function VisibleThreadView({
   } = useThreadProjection({
     activeMessages,
     activeSession,
-    activeSessionDiff,
     assistantTraceVisibility,
     canForkFromMessage: Boolean(onForkFromMessage),
     canOpenSideChat: Boolean(onOpenSideChat),
@@ -4518,9 +4517,13 @@ function VisibleThreadView({
       if (row.item.kind !== "text" || !row.item.isStreaming || traceSectionKeyForItem(row.item) !== "response") {
         continue
       }
-      return displayRows.slice(index + 1).some(
-        (candidate) => "ownerMessageID" in candidate && candidate.ownerMessageID === row.ownerMessageID,
-      )
+      for (let candidateIndex = index + 1; candidateIndex < displayRows.length; candidateIndex += 1) {
+        const candidate = displayRows[candidateIndex]
+        if (candidate && "ownerMessageID" in candidate && candidate.ownerMessageID === row.ownerMessageID) {
+          return true
+        }
+      }
+      return false
     }
 
     return false
