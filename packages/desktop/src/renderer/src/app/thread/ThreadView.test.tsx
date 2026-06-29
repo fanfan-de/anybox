@@ -1,7 +1,7 @@
 import { createRef, type ComponentProps } from "react"
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
-import { DEFAULT_ASSISTANT_TRACE_VISIBILITY, type AssistantTraceItem, type AssistantTraceItemKind, type AssistantThreadMessage, type SessionSummary, type ThreadMessage, type UserThreadMessage } from "../types"
+import { DEFAULT_ASSISTANT_TRACE_VISIBILITY, type AssistantTraceItem, type AssistantTraceItemKind, type AssistantThreadMessage, type PermissionRequest, type SessionSummary, type ThreadMessage, type UserThreadMessage } from "../types"
 import type { SessionMessageTree } from "../session-message-tree"
 import { SIDEBAR_RESIZE_END_EVENT } from "../sidebar-resize-events"
 import { I18nProvider } from "../i18n/I18nProvider"
@@ -74,6 +74,35 @@ function userMessage(id: string, text: string): UserThreadMessage {
     kind: "user",
     text,
     timestamp: 1,
+  }
+}
+
+function permissionRequest(overrides: Partial<PermissionRequest> = {}): PermissionRequest {
+  return {
+    id: "permission-1",
+    approvalID: "approval-1",
+    sessionID: session.id,
+    messageID: "assistant-approval",
+    toolCallID: "tool-call-1",
+    projectID: "project-1",
+    agent: "default",
+    status: "pending",
+    createdAt: 1,
+    prompt: {
+      title: "Check Node.js and npm availability",
+      summary: "Run a Git Bash command in C:/Projects/Anybox.",
+      rationale: "Tool requires approval before it can continue.",
+      risk: "high",
+      detailsAvailable: true,
+      details: {
+        command: "node --version && npm --version",
+        workdir: "C:/Projects/Anybox",
+        paths: ["C:/Projects/Anybox"],
+      },
+      allowedDecisions: ["deny", "allow"],
+      recommendedDecision: "allow",
+    },
+    ...overrides,
   }
 }
 
@@ -436,6 +465,55 @@ describe("ThreadView trace item renderers", () => {
     expect(fileChangeRow?.querySelector(".assistant-shell.is-sectioned")).not.toBeNull()
     expect(fileChangeRow?.querySelector(".assistant-section.is-file-change")).not.toBeNull()
     expect(fileChangeRow?.querySelector(".assistant-trace-lite")).toBeNull()
+  })
+
+  it("embeds a matching pending permission request inside the approval trace row", () => {
+    const request = permissionRequest()
+    const onPermissionRequestResponse = vi.fn()
+    const { container } = renderThread(
+      [
+        assistantTraceMessage(
+          "assistant-approval",
+          [
+            {
+              id: "approval-requested",
+              kind: "system",
+              timestamp: 1,
+              label: "Permission",
+              title: "Permission requested",
+              detail: "git_bash_command - Tool requires approval before it can continue.",
+              status: "pending",
+              approvalID: request.approvalID,
+              toolCallID: request.toolCallID,
+              section: "approvals",
+              visibilityKey: "approvals",
+            },
+          ],
+          false,
+        ),
+      ],
+      {
+        assistantTraceVisibility: {
+          ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+          approvals: true,
+        },
+        onPermissionRequestResponse,
+        pendingPermissionRequests: [request],
+      },
+    )
+
+    const approvalRow = container.querySelector('[data-thread-row-kind="assistant-approval-row"]') as HTMLElement | null
+    expect(approvalRow).not.toBeNull()
+    expect(approvalRow?.querySelector(".permission-request-card")).not.toBeNull()
+    expect(container.querySelector('[data-thread-row-kind="permission-request"]')).toBeNull()
+
+    fireEvent.click(within(approvalRow!).getByRole("button", { name: "Allow Check Node.js and npm availability" }))
+
+    expect(onPermissionRequestResponse).toHaveBeenCalledWith({
+      sessionID: session.id,
+      request,
+      decision: "allow",
+    })
   })
 
   it("renders tool traces as lightweight log rows", () => {

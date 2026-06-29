@@ -1954,6 +1954,18 @@ body.is-image-lightbox-open {
   background: var(--semantic-thread-panel-surface);
 }
 
+.assistant-approval-inline-card {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  margin-top: 12px;
+}
+
+.assistant-approval-inline-card .permission-request-card {
+  box-shadow: none;
+  background: var(--semantic-thread-panel-surface);
+}
+
 .permission-request-subtitle,
 .permission-request-rationale,
 .permission-request-note,

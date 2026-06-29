@@ -1105,6 +1105,7 @@ export interface AssistantTraceItem {
   messageID?: string
   backendTurnID?: string
   partID?: string
+  approvalID?: string
   toolCallID?: string
   section?: AssistantTraceSectionKey
   visibilityKey?: AssistantTraceVisibilityKey

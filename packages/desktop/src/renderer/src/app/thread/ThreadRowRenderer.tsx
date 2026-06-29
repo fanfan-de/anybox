@@ -18,6 +18,7 @@ import type {
   UserThreadMessage,
 } from "../types"
 import {
+  permissionRequestMatchesApprovalTraceItem,
   shouldRenderDiffOnStandaloneUserMessage,
   traceSectionTitle,
   type AssistantActionsRow,
@@ -112,6 +113,14 @@ export interface PermissionRequestInlinePromptRendererProps {
   onPermissionRequestResponse: PermissionRequestResponseHandler
 }
 
+export interface PermissionRequestCardRendererProps {
+  activeSession: SessionSummary
+  actionError: string | null
+  isResolving: boolean
+  request: PermissionRequest
+  onRespond: PermissionRequestResponseHandler
+}
+
 export interface BranchSwitcherRendererProps {
   onSelect?: (messageID: string) => void | Promise<void>
   options: SessionMessageBranchOption[]
@@ -126,6 +135,7 @@ export interface ThreadRowRendererComponents {
   }>
   BranchSwitcher: ComponentType<BranchSwitcherRendererProps>
   MessageDiffCard: ComponentType<MessageDiffCardRendererProps>
+  PermissionRequestCard: ComponentType<PermissionRequestCardRendererProps>
   PermissionRequestInlinePrompt: ComponentType<PermissionRequestInlinePromptRendererProps>
   UserThreadMessageArticle: ComponentType<UserThreadMessageArticleRendererProps>
   collectAssistantPatchFileChanges: (assistantMessage: AssistantThreadMessage | null) => AssistantTraceFileChange[]
@@ -179,6 +189,12 @@ interface AssistantTraceSectionRowViewProps extends TraceRowViewSharedProps {
 }
 
 interface AssistantTraceLiteRowViewProps extends TraceRowViewSharedProps {
+  activeSession: SessionSummary | null
+  isResolvingPermissionRequest: boolean
+  onPermissionRequestResponse: PermissionRequestResponseHandler
+  pendingPermissionRequest: PermissionRequest | null
+  permissionRequestActionError: string | null
+  permissionRequestActionRequestID: string | null
   row: AssistantTraceLiteRow
 }
 
@@ -513,20 +529,32 @@ function areAssistantTraceSectionRowViewPropsEqual(left: AssistantTraceSectionRo
 }
 
 const AssistantTraceLiteRowView = memo(function AssistantTraceLiteRowView({
+  activeSession,
   components,
   isQuestionAnswerDisabled,
   isQuestionAnswered,
+  isResolvingPermissionRequest,
   motion,
   onArtifactLinkOpen,
   onAskUserQuestionAnswer,
   onFileChangeSelect,
   onLocalFileLinkOpen,
   onOpenImagePreview,
+  onPermissionRequestResponse,
   onProposedPlanConfirm,
+  pendingPermissionRequest,
+  permissionRequestActionError,
+  permissionRequestActionRequestID,
   row,
   traceVisibility,
 }: AssistantTraceLiteRowViewProps) {
-  const { renderTraceItemForRow } = components
+  const { PermissionRequestCard, renderTraceItemForRow } = components
+  const pendingPermissionActionError =
+    pendingPermissionRequest &&
+    permissionRequestActionError &&
+    (!permissionRequestActionRequestID || permissionRequestActionRequestID === pendingPermissionRequest.id)
+      ? permissionRequestActionError
+      : null
 
   return (
     <article
@@ -554,6 +582,17 @@ const AssistantTraceLiteRowView = memo(function AssistantTraceLiteRowView({
           traceItem: row.traceItem,
           traceVisibility,
         })}
+        {activeSession && pendingPermissionRequest ? (
+          <div className="assistant-approval-inline-card">
+            <PermissionRequestCard
+              actionError={pendingPermissionActionError}
+              activeSession={activeSession}
+              isResolving={isResolvingPermissionRequest}
+              request={pendingPermissionRequest}
+              onRespond={onPermissionRequestResponse}
+            />
+          </div>
+        ) : null}
       </div>
     </article>
   )
@@ -562,7 +601,13 @@ const AssistantTraceLiteRowView = memo(function AssistantTraceLiteRowView({
 function areAssistantTraceLiteRowViewPropsEqual(left: AssistantTraceLiteRowViewProps, right: AssistantTraceLiteRowViewProps) {
   return (
     areAssistantTraceLiteRowsEqual(left.row, right.row) &&
-    areTraceRowSharedPropsEqual(left, right)
+    areTraceRowSharedPropsEqual(left, right) &&
+    left.activeSession === right.activeSession &&
+    left.isResolvingPermissionRequest === right.isResolvingPermissionRequest &&
+    left.onPermissionRequestResponse === right.onPermissionRequestResponse &&
+    left.pendingPermissionRequest === right.pendingPermissionRequest &&
+    left.permissionRequestActionError === right.permissionRequestActionError &&
+    left.permissionRequestActionRequestID === right.permissionRequestActionRequestID
   )
 }
 
@@ -841,6 +886,22 @@ function isAssistantTraceLiteRow(row: ThreadDisplayRow): row is AssistantTraceLi
     row.kind === "assistant-approval-row"
 }
 
+function findPendingPermissionRequestForApprovalRow({
+  isResolvingPermissionRequest,
+  pendingPermissionRequests,
+  row,
+}: {
+  isResolvingPermissionRequest: boolean
+  pendingPermissionRequests: PermissionRequest[]
+  row: AssistantTraceLiteRow
+}) {
+  if (isResolvingPermissionRequest || row.kind !== "assistant-approval-row") return null
+
+  return pendingPermissionRequests.find((request) =>
+    permissionRequestMatchesApprovalTraceItem(request, row.traceItem.item),
+  ) ?? null
+}
+
 export function ThreadRowRenderer({
   activeSession,
   activeSessionDiff,
@@ -913,18 +974,30 @@ export function ThreadRowRenderer({
   const isQuestionAnswerDisabled = isResolvingPermissionRequest || pendingPermissionRequests.length > 0
 
   if (isAssistantTraceLiteRow(row)) {
+    const pendingPermissionRequest = findPendingPermissionRequestForApprovalRow({
+      isResolvingPermissionRequest,
+      pendingPermissionRequests,
+      row,
+    })
+
     return (
       <AssistantTraceLiteRowView
+        activeSession={activeSession}
         components={components}
         isQuestionAnswered={isTraceItemQuestionAnswered(row.traceItem.item)}
         isQuestionAnswerDisabled={isQuestionAnswerDisabled}
+        isResolvingPermissionRequest={isResolvingPermissionRequest}
         motion={readThreadMessageMotion(row.motionKey, row.message.isStreaming)}
         onOpenImagePreview={onOpenImagePreview}
         onAskUserQuestionAnswer={onAskUserQuestionAnswer}
         onFileChangeSelect={onFileChangeSelect}
         onArtifactLinkOpen={onArtifactLinkOpen}
         onLocalFileLinkOpen={onLocalFileLinkOpen}
+        onPermissionRequestResponse={onPermissionRequestResponse}
         onProposedPlanConfirm={onProposedPlanConfirm}
+        pendingPermissionRequest={pendingPermissionRequest}
+        permissionRequestActionError={permissionRequestActionError}
+        permissionRequestActionRequestID={permissionRequestActionRequestID}
         row={row}
         traceVisibility={assistantTraceVisibility}
       />

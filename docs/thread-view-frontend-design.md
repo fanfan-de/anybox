@@ -494,6 +494,7 @@ side chat 是挂在某条 assistant response 下的右侧栏讨论：
 权限请求以 thread 内 inline prompt 显示：
 
 - `PermissionRequestInlinePrompt` 只显示当前第一个 pending request。
+- 如果 pending request 能通过 `approvalID` 或 `toolCallID` 匹配到可见的 `approvals` trace row，审批卡片嵌入该 `assistant-approval-row`，不再额外追加独立 `permission-request` row；只有缺少可匹配 trace 时才使用独立 prompt row 作为 fallback。
 - 卡片内有风险 chip、summary、rationale、allow/deny 操作。
 - details 默认折叠，包含 workdir、command、paths、body 等信息。
 - 设计上使用 warning 语义色，强调这是阻塞主 session 的决策点。

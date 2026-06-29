@@ -4172,6 +4172,7 @@ const THREAD_ROW_RENDERER_COMPONENTS = {
   AssistantTraceSection,
   BranchSwitcher,
   MessageDiffCard,
+  PermissionRequestCard,
   PermissionRequestInlinePrompt,
   UserThreadMessageArticle,
   collectAssistantPatchFileChanges,

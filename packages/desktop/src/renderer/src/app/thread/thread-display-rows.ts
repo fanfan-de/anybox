@@ -466,6 +466,15 @@ export function traceSectionKeyForItem(item: AssistantTraceItem): AssistantTrace
   return item.section ?? defaultTraceSectionKeyForItem(item)
 }
 
+export function permissionRequestMatchesApprovalTraceItem(request: PermissionRequest, item: AssistantTraceItem) {
+  if (traceSectionKeyForItem(item) !== "approvals" || item.status !== "pending") return false
+
+  return Boolean(
+    (item.approvalID && item.approvalID === request.approvalID) ||
+    (item.toolCallID && item.toolCallID === request.toolCallID),
+  )
+}
+
 export function traceSectionTitle(sectionKey: AssistantTraceSectionKey) {
   switch (sectionKey) {
     case "tools":
@@ -693,6 +702,7 @@ function assistantTraceItemSignatureValue(item: AssistantTraceItem) {
     filePaths: item.filePaths,
     height: item.height,
     id: item.id,
+    approvalID: item.approvalID,
     isStreaming: item.isStreaming,
     kind: item.kind,
     label: item.label,
@@ -1390,16 +1400,29 @@ export function buildThreadDisplayRowsIncremental(
     rows.push(...messageRows)
   })
 
-  const pendingRequestID = pendingPermissionRequests[0]?.id
-  if (pendingRequestID && !isResolvingPermissionRequest) {
-    rows.push({
-      estimatedHeight: 420,
-      kind: "permission-request",
-      messageID: `permission-request:${pendingRequestID}`,
-      messageIndex: activeMessages.length,
-      requestID: pendingRequestID,
-      rowID: `permission-request:${pendingRequestID}`,
-    })
+  const pendingRequest = pendingPermissionRequests[0]
+  if (pendingRequest && !isResolvingPermissionRequest) {
+    const existingApprovalRowIndex = rows.findIndex((row) =>
+      row.kind === "assistant-approval-row" &&
+      permissionRequestMatchesApprovalTraceItem(pendingRequest, row.traceItem.item),
+    )
+
+    if (existingApprovalRowIndex >= 0) {
+      const existingApprovalRow = rows[existingApprovalRowIndex]!
+      rows[existingApprovalRowIndex] = {
+        ...existingApprovalRow,
+        estimatedHeight: existingApprovalRow.estimatedHeight + 420,
+      }
+    } else {
+      rows.push({
+        estimatedHeight: 420,
+        kind: "permission-request",
+        messageID: `permission-request:${pendingRequest.id}`,
+        messageIndex: activeMessages.length,
+        requestID: pendingRequest.id,
+        rowID: `permission-request:${pendingRequest.id}`,
+      })
+    }
   }
 
   return {

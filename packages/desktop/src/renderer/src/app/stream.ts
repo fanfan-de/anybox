@@ -1599,6 +1599,8 @@ function buildTraceItemFromPart(
   if (type === "permission") {
     const action = readString(part.action)
     const reason = readString(part.reason)
+    const approvalID = readString(part.approvalID) || undefined
+    const toolCallID = readString(part.toolCallID) || undefined
     const status: AssistantTraceStatus = action === "deny" ? "denied" : action === "ask" ? "pending" : "completed"
     const title =
       action === "deny"
@@ -1625,6 +1627,8 @@ function buildTraceItemFromPart(
       detail,
       status,
       timestamp: timestamp ?? undefined,
+      approvalID,
+      toolCallID,
       section: "approvals",
       visibilityKey: "approvals",
       debugEntries,
