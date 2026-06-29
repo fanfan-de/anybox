@@ -1,0 +1,14 @@
+{
+   "aoubtText": {
+      "message": "About XDown"
+   },
+   "description": {
+      "message": "Internet Downloader enables you to download a desired item with an Internet Download Manager (xdown) application."
+   },
+   "downloadLinkTite": {
+      "message": "XDown Link"
+   },
+   "settingText": {
+      "message": "Setting XDown"
+   }
+}

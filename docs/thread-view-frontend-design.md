@@ -1,6 +1,6 @@
 # Thread View 前端设计说明
 
-更新日期：2026-06-27
+更新日期：2026-06-29
 
 ## 1. 文档定位
 
@@ -18,11 +18,12 @@
 相关测试：
 
 - `packages/desktop/src/renderer/src/app/thread/ThreadView.test.tsx`
+- `packages/desktop/src/renderer/src/app/thread/thread-display-rows.test.ts`
 - `packages/desktop/src/renderer/src/App.test.tsx`
 
 ### 命名边界
 
-前端 `ThreadView` 只把 `ThreadMessage` 投影为 UI message/row：user message、assistant message、process row、permission request row。这里的 message 不是 backend runtime turn。
+前端 `ThreadView` 只把 `ThreadMessage` 投影为 UI row：user message row、assistant trace/response/file-change/action row、permission request row。这里的 message 不是 backend runtime turn。
 
 backend `Turn` 保留给一次执行生命周期/runtime 容器，包括 `turnID`、`backendTurnID`、runtime debug/export、agent-session turn target 等字段。文档和前端代码里提到 `turn` 时，应只出现在这些 backend/runtime 语义中。
 ## 2. 设计目标
@@ -173,7 +174,7 @@ AssistantTraceItem[]
 streaming 更新需要保持历史 trace 的 structural sharing：
 
 - stream merge 只替换真正变化的 live item；已完成且语义未变化的 `AssistantTraceItem` 必须复用旧对象引用。
-- `ThreadView` 在主 assistant row 中把尾部连续 live items 拆成 live segment，前面的 completed items 作为 stable segment 渲染。
+- `thread-display-rows.ts` 为每个 `AssistantTraceItem` 建立稳定 row metadata；streaming 文本变化只更新对应 live row，不改变 `rowID`。
 - live 判定只覆盖 `isStreaming`、`draftPatch.isStreaming`、以及 pending/running/waiting-approval tool；如果 live item 出现在历史中间，则回退到原整段渲染，保证顺序优先。
 - question answered 状态在 trace item 边界降成 boolean；不要把整份 answered question Set 传给所有 trace item。
 
@@ -192,7 +193,9 @@ flowchart LR
 
   subgraph normalize["ThreadView 归一化"]
     derive["deriveActiveMessages(turns)"]
-    displayRows["buildThreadDisplayRows()"]
+    context["buildThreadDisplayContext()"]
+    baseRows["buildThreadDisplayRows()"]
+    displayRows["decorateThreadDisplayRows()"]
     virtual["virtual layout\n长列表时启用"]
     scroll["scroll state\n锁底 / 恢复 / 用户意图"]
   end
@@ -207,28 +210,29 @@ flowchart LR
     dispatch["renderDisplayRow(row)"]
     user["UserThreadMessageArticle"]
     permission["PermissionRequestInlinePrompt"]
-    processHeader["Processed header"]
-    processItem["process item row"]
-    assistant["assistant-message"]
-  end
-
-  subgraph assistantRender["Assistant 内部分块"]
-    sections["AssistantMessageSections"]
-    blocks["AssistantTraceBlockView"]
+    responseItem["assistant response row"]
+    reasoningItem["assistant reasoning row"]
+    toolItem["assistant tool row"]
+    questionItem["assistant question row"]
+    fileChange["assistant file-change row"]
+    workflowItem["assistant workflow/source/approval/debug row"]
+    diff["assistant diff row"]
+    actions["assistant actions row"]
+    sideChat["assistant inline side-chat row"]
     trace["TraceItemView"]
-    renderer["traceItemRenderers[item.kind]"]
   end
 
   subgraph output["屏幕结果"]
     response["最终回复正文"]
     traces["reasoning / tools / workflow"]
-    actions["copy / branch / side chat / fork"]
+    actionUi["copy / branch / side chat / fork"]
     lightbox["ImageLightbox"]
   end
 
-  turns --> derive --> messages --> displayRows
+  turns --> derive --> messages --> context --> baseRows --> displayRows
+  session --> baseRows
+  pending --> baseRows
   session --> displayRows
-  pending --> displayRows
   displayRows --> virtual
   displayRows --> visible
   scroll --> column
@@ -238,18 +242,25 @@ flowchart LR
   rows --> dispatch
   dispatch --> user
   dispatch --> permission
-  dispatch --> processHeader
-  dispatch --> processItem
-  dispatch --> assistant
-  processItem --> trace
-  assistant --> sections
-  sections --> blocks
-  blocks --> trace
-  trace --> renderer
-  renderer --> response
-  renderer --> traces
-  assistant --> actions
-  renderer --> lightbox
+  dispatch --> responseItem
+  dispatch --> reasoningItem
+  dispatch --> toolItem
+  dispatch --> questionItem
+  dispatch --> fileChange
+  dispatch --> workflowItem
+  dispatch --> diff
+  dispatch --> actions
+  dispatch --> sideChat
+  responseItem --> trace
+  reasoningItem --> trace
+  toolItem --> trace
+  questionItem --> trace
+  fileChange --> trace
+  workflowItem --> trace
+  trace --> response
+  trace --> traces
+  actions --> actionUi
+  trace --> lightbox
 ```
 
 ### UI 组件树
@@ -264,7 +275,7 @@ ThreadView
 └─ VisibleThreadView  # 正常可见状态
    └─ section.thread-shell  # thread 区域外壳
       ├─ div.thread-column  # 独立滚动列
-      │  ├─ empty state: article.thread-message.assistant-message
+      │  ├─ empty state: article.thread-row.assistant-empty-state-row
       │  │  └─ TraceItemView(system)
       │  └─ renderThreadRows()  # 根据虚拟化状态渲染 row
       │     ├─ direct rows: renderDisplayRow(row)[]
@@ -287,31 +298,48 @@ renderDisplayRow(row)
 │     └─ copy user message button
 ├─ row.kind = permission-request  # 阻塞式权限决策
 │  └─ PermissionRequestInlinePrompt
-├─ row.kind = process-header  # 折叠的 Processed 汇总行
-│  └─ article.assistant-process-trace-row
-│     └─ button.assistant-process-trace-header
-├─ row.kind = process-item  # 展开的单条 process trace
-│  └─ article.assistant-process-item-row.assistant-section
-│     └─ TraceItemView
-└─ row.kind = assistant-message  # assistant message 主体
-   └─ article.thread-message.assistant-message
-      └─ div.assistant-shell
-         ├─ AssistantMessagePlaceholder?  # streaming/ephemeral 状态
-         ├─ inserted UserThreadMessageArticle[]?  # 流式插入的用户 steer
-         ├─ AssistantMessageSectionsWithStreamInsertions
-         │  └─ AssistantMessageSections
-         │     ├─ AssistantProcessTraceDisclosure?
-         │     └─ AssistantTraceBlockView[]
-         │        └─ AssistantTraceSection
-         │           └─ TraceItemView[]
-         ├─ MessageDiffCard?
-         └─ div.assistant-response-side-chat?  # 回复动作与 inline side chat
-            ├─ InlineSideChatThread?
-            └─ div.assistant-response-actions
-               ├─ BranchSwitcher
-               ├─ copy assistant response button
-               ├─ side chat button
-               └─ fork button
+├─ row.kind = assistant-response-row
+│  └─ article.assistant-response-row
+│     └─ AssistantTraceSection
+│        └─ TraceItemView
+├─ row.kind = assistant-reasoning-row
+│  └─ article.assistant-reasoning-row
+│     └─ AssistantTraceSection
+│        └─ TraceItemView
+├─ row.kind = assistant-tool-row
+│  └─ article.assistant-tool-row
+│     └─ AssistantTraceSection
+│        └─ TraceItemView
+├─ row.kind = assistant-question-row
+│  └─ article.assistant-question-row
+│     └─ AssistantTraceSection
+│        └─ TraceItemView
+├─ row.kind = assistant-workflow-row / assistant-source-row / assistant-approval-row / assistant-debug-row
+│  └─ article.assistant-*-row
+│     └─ AssistantTraceSection
+│        └─ TraceItemView
+├─ row.kind = assistant-file-change-row
+│  └─ article.assistant-file-change-row
+│     └─ AssistantTraceSection
+│        └─ TraceItemView[]
+├─ row.kind = assistant-ephemeral-state
+│  └─ article.assistant-ephemeral-state-row
+│     └─ AssistantMessagePlaceholder
+├─ row.kind = assistant-inserted-user-message
+│  └─ UserThreadMessageArticle.assistant-stream-insertion-user-message
+├─ row.kind = assistant-diff-card
+│  └─ article.assistant-diff-row
+│     └─ MessageDiffCard
+├─ row.kind = assistant-actions
+│  └─ article.assistant-actions-row
+│     └─ div.assistant-response-actions
+│        ├─ BranchSwitcher
+│        ├─ copy assistant response button
+│        ├─ side chat button
+│        └─ fork button
+└─ row.kind = assistant-inline-side-chat
+   └─ article.assistant-inline-side-chat-row
+      └─ InlineSideChatThread
 ```
 
 `TraceItemView` 按 `item.kind` 分发到不同 renderer。多数简单类型最终走 `GenericTraceItemView`，复杂类型会渲染专用 UI：
@@ -405,6 +433,7 @@ file-change section 会汇总当前 assistant cycle 中的文件变更。为了�
 - 否则优先显示最新 patch。
 - patch/file chip 可点击，并通过 `onFileChangeSelect` 打开右侧检查区域。
 - patch 行默认只显示文件摘要；展开文件行先挂截断 diff preview，点击 full diff 后才把完整 patch 交给 `DiffPreview`。
+- assistant/user message diff card 默认只挂摘要头；文件列表、单文件行和 inline `DiffPreview` 在用户展开后才进入 DOM，避免长 thread 中的历史 diff row 持续增加渲染压力。
 
 ### Debug
 

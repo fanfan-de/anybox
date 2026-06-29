@@ -67,8 +67,6 @@ describe("i18n translations", () => {
   })
 
   it("exposes thread trace translations", () => {
-    expect(getTranslationDictionary("zh-CN")["thread.processTrace.title"]).toBe("\u5df2\u5904\u7406")
-    expect(getTranslationDictionary("en-US")["thread.processTrace.title"]).toBe("Processed")
     expect(getTranslationDictionary("zh-CN")["thread.toolTrace.inputLabel"]).toBe("\u8f93\u5165")
     expect(getTranslationDictionary("en-US")["thread.toolTrace.inputLabel"]).toBe("Input")
   })

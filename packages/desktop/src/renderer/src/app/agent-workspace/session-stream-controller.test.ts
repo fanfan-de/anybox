@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { applyAgentStreamEventToThreadMessage } from "../stream"
 import type { AssistantTraceItem, AssistantThreadMessage, SessionTaskListView, ThreadMessage, UserThreadMessage } from "../types"
 import {
   applyExecutionModeToUserMessagePresentation,
@@ -32,6 +33,7 @@ import {
   shouldRefreshRuntimeDebugForStreamEvent,
   STEER_INPUT_CONSUMED_STATE_REASON,
 } from "./session-stream-controller"
+import { createConversationStore } from "./conversation-store"
 
 function createUserThreadMessage(id: string, text: string): UserThreadMessage {
   return {
@@ -874,6 +876,55 @@ describe("session stream controller helpers", () => {
       delta: "token",
       kind: "text",
     })
+  })
+
+  it("applies high-frequency delta batches only to the targeted assistant in turn storage", () => {
+    const targetMessage = {
+      ...createAssistantThreadMessage("assistant-target", "target-part", "Hello", "target-part", "message-target"),
+      runtime: {
+        phase: "responding" as const,
+        startedAt: 2,
+        updatedAt: 3,
+      },
+      isStreaming: true,
+    }
+    const otherMessage = createAssistantThreadMessage("assistant-other", "other-part", "Other", "other-part", "message-other")
+    const store = createConversationStore({
+      "session-1": [targetMessage, otherMessage],
+    })
+    const originalOtherMessage = store.getSessionMessages("session-1")[1]
+    const streamEvents = [
+      {
+        event: "runtime",
+        data: createRuntimeEvent("text.part.delta", {
+          delta: " world",
+          messageID: "message-target",
+          partID: "target-part",
+        }),
+      },
+      {
+        event: "runtime",
+        data: createRuntimeEvent("text.part.delta", {
+          delta: "!",
+          messageID: "message-target",
+          partID: "target-part",
+        }),
+      },
+    ]
+
+    const didUpdate = store.appendAssistantDelta("session-1", "assistant-target", (message) =>
+      streamEvents.reduce(
+        (nextMessage, streamEvent) => applyAgentStreamEventToThreadMessage(nextMessage, streamEvent),
+        message,
+      ),
+    )
+    const messages = store.getSessionMessages("session-1")
+
+    expect(didUpdate).toBe(true)
+    expect(messages[1]).toBe(originalOtherMessage)
+    expect(messages[0]?.kind).toBe("assistant")
+    if (messages[0]?.kind !== "assistant") return
+    expect(messages[0].items.find((item) => item.sourceID === "target-part")?.text).toBe("Hello world!")
   })
 
   it("reads context usage from in-turn LLM completion events", () => {

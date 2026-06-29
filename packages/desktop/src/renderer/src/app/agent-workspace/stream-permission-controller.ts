@@ -83,10 +83,13 @@ export function useStreamPermissionController({ initialSessionID, store }: Strea
     store,
     (state) => state.agentStreamActions.setSessionDirectoryBySession,
   )
+  const appendAssistantDelta = useWorkspaceStoreSelector(store, (state) => state.agentStreamActions.appendAssistantDelta)
+  const updateConversationTurns = useWorkspaceStoreSelector(store, (state) => state.agentStreamActions.updateConversationTurns)
 
   return {
     agentSessionStoreRef,
     agentSessions,
+    appendAssistantDelta,
     cancellingSessionIDs,
     contextUsageBySession,
     conversationActivityBySession,
@@ -116,5 +119,6 @@ export function useStreamPermissionController({ initialSessionID, store }: Strea
     setSessionDirectoryBySession,
     skipNextHistoryLoadRef,
     subscribedSessionStreamsRef,
+    updateConversationTurns,
   }
 }

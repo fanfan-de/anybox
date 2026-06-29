@@ -2034,9 +2034,9 @@ describe("App", () => {
     render(<App />)
 
     const threadSideChatButton = await screen.findByRole("button", { name: "Open side chat" })
-    const assistantMessage = threadSideChatButton.closest(".assistant-message") as HTMLElement | null
+    const assistantActionsRow = threadSideChatButton.closest(".assistant-actions-row") as HTMLElement | null
 
-    expect(assistantMessage).not.toBeNull()
+    expect(assistantActionsRow).not.toBeNull()
 
     fireEvent.click(threadSideChatButton)
 
@@ -2047,7 +2047,7 @@ describe("App", () => {
       expect(screen.queryByRole("region", { name: "Side chat" })).not.toBeInTheDocument()
     })
 
-    const responseActionRow = (assistantMessage as HTMLElement).querySelector(".assistant-response-side-chat") as HTMLElement | null
+    const responseActionRow = assistantActionsRow?.querySelector(".assistant-response-side-chat") as HTMLElement | null
 
     expect(responseActionRow).not.toBeNull()
     expect(within(responseActionRow as HTMLElement).getByRole("button", { name: "Open side chat (1)" })).toHaveAttribute(
@@ -2215,17 +2215,22 @@ describe("App", () => {
 
     const responseText =
       "I am collapsing the information-heavy workspace cards into a project tree so the rail behaves like navigation, not like a second content surface."
-    const assistantMessage = (await screen.findByText(responseText)).closest(".assistant-message") as HTMLElement | null
+    const responseRow = (await screen.findByText(responseText)).closest('[data-thread-row-kind="assistant-response-row"]') as HTMLElement | null
+    const threadMessageID = responseRow?.dataset.threadMessageId
+    const actionRow = threadMessageID
+      ? document.querySelector(`.assistant-actions-row[data-thread-message-id="${threadMessageID}"]`) as HTMLElement | null
+      : null
 
-    expect(assistantMessage).not.toBeNull()
+    expect(responseRow).not.toBeNull()
+    expect(actionRow).not.toBeNull()
 
-    fireEvent.click(within(assistantMessage as HTMLElement).getByRole("button", { name: "Copy assistant response" }))
+    fireEvent.click(within(actionRow as HTMLElement).getByRole("button", { name: "Copy assistant response" }))
 
     await waitFor(() => {
       expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(responseText)
     })
 
-    expect(within(assistantMessage as HTMLElement).getByRole("button", { name: "Copied assistant response" })).toBeInTheDocument()
+    expect(within(actionRow as HTMLElement).getByRole("button", { name: "Copied assistant response" })).toBeInTheDocument()
   })
 
   it("renders full assistant sections inside right sidebar side chat", async () => {
@@ -2301,9 +2306,6 @@ describe("App", () => {
       within(nestedSideChat).queryByText("Focused on this reply only. Messages here stay outside the main thread context."),
     ).not.toBeInTheDocument()
     expect(within(nestedSideChat).getByRole("button", { name: "Hide side chat" })).toBeInTheDocument()
-    const sideChatProcessTrace = within(nestedSideChat).getByRole("button", { name: /Processed/ })
-    expect(sideChatProcessTrace).toHaveAttribute("aria-expanded", "false")
-    fireEvent.click(sideChatProcessTrace)
     expect(within(nestedSideChat).getByRole("region", { name: "Reasoning" })).toBeInTheDocument()
     expect(within(nestedSideChat).getByRole("button", { name: /read-file/i })).toBeInTheDocument()
     expect(within(nestedSideChat).getByRole("region", { name: "File Changes" })).toBeInTheDocument()
@@ -6646,56 +6648,51 @@ describe("App", () => {
 
     render(<App />)
 
-    const assistantMessage = (await screen.findByText("All checks passed.")).closest(".assistant-message") as HTMLElement | null
+    const finalResponseRow = (await screen.findByText("All checks passed.")).closest('[data-thread-row-kind="assistant-response-row"]') as HTMLElement | null
 
-    expect(assistantMessage).not.toBeNull()
+    expect(finalResponseRow).not.toBeNull()
 
-    const sectionElementsBeforeExpand = Array.from((assistantMessage as HTMLElement).querySelectorAll(".assistant-section"))
-    const sectionTitlesBeforeExpand = sectionElementsBeforeExpand.map((section) => section.getAttribute("aria-label"))
+    const threadColumn = (finalResponseRow as HTMLElement).closest(".thread-column") as HTMLElement
+    const ownerMessageID = (finalResponseRow as HTMLElement).dataset.threadMessageId
+    const traceRegions = Array.from(threadColumn.querySelectorAll(
+      `.assistant-reasoning-row[data-thread-message-id="${ownerMessageID}"] .assistant-trace-lite, ` +
+      `.assistant-tool-row[data-thread-message-id="${ownerMessageID}"] .assistant-trace-lite, ` +
+      `.assistant-response-row[data-thread-message-id="${ownerMessageID}"] .assistant-section, ` +
+      `.assistant-file-change-row[data-thread-message-id="${ownerMessageID}"] .assistant-section`,
+    ))
+    const sectionTitles = traceRegions.map((section) => section.getAttribute("aria-label"))
 
-    expect(sectionTitlesBeforeExpand).toEqual(["Response", "File Changes"])
-    const threadColumn = (assistantMessage as HTMLElement).closest(".thread-column") as HTMLElement
-    const processedTraceButton = within(threadColumn).getByRole("button", { name: /Processed/ })
-    expect(processedTraceButton).toHaveAttribute("aria-expanded", "false")
-    fireEvent.click(processedTraceButton)
-
-    const processSectionElements = Array.from(threadColumn.querySelectorAll(".assistant-process-item-row.assistant-section"))
-    const processSectionTitles = processSectionElements.map((section) => section.getAttribute("aria-label"))
-    const sectionElements = Array.from((assistantMessage as HTMLElement).querySelectorAll(".assistant-section"))
-    const sectionTitles = sectionElements.map((section) => section.getAttribute("aria-label"))
-
-    expect(processSectionTitles).toEqual(["Reasoning", "Tools", "Reasoning", "Tools"])
-    expect(sectionTitles).toEqual(["Response", "File Changes"])
+    expect(sectionTitles).toEqual(["Reasoning", "Tools", "Reasoning", "Tools", "Response", "File Changes"])
     expect(threadColumn.querySelector(".assistant-section-header")).toBeNull()
 
-    expect(within(processSectionElements[0] as HTMLElement).getByText("Inspecting workspace.")).toBeInTheDocument()
-    expect(within(processSectionElements[0] as HTMLElement).queryByRole("button", { name: /npm test/i })).not.toBeInTheDocument()
+    expect(within(traceRegions[0] as HTMLElement).getByText("Inspecting workspace.")).toBeInTheDocument()
+    expect(within(traceRegions[0] as HTMLElement).queryByRole("button", { name: /npm test/i })).not.toBeInTheDocument()
 
-    expect(within(processSectionElements[1] as HTMLElement).getByRole("button", { name: /^npm test$/i })).toBeInTheDocument()
-    expect(within(processSectionElements[1] as HTMLElement).queryByText("Inspecting workspace.")).not.toBeInTheDocument()
+    expect(within(traceRegions[1] as HTMLElement).getByRole("button", { name: /^npm test$/i })).toBeInTheDocument()
+    expect(within(traceRegions[1] as HTMLElement).queryByText("Inspecting workspace.")).not.toBeInTheDocument()
 
-    expect(within(processSectionElements[2] as HTMLElement).getByText("Evaluating test output.")).toBeInTheDocument()
-    expect(within(processSectionElements[2] as HTMLElement).queryByRole("button", { name: /replace-text/i })).not.toBeInTheDocument()
+    expect(within(traceRegions[2] as HTMLElement).getByText("Evaluating test output.")).toBeInTheDocument()
+    expect(within(traceRegions[2] as HTMLElement).queryByRole("button", { name: /replace-text/i })).not.toBeInTheDocument()
 
-    expect(within(processSectionElements[3] as HTMLElement).getByRole("button", { name: /^replace-text$/i })).toBeInTheDocument()
-    expect(within(processSectionElements[3] as HTMLElement).queryByText("Evaluating test output.")).not.toBeInTheDocument()
+    expect(within(traceRegions[3] as HTMLElement).getByRole("button", { name: /^replace-text$/i })).toBeInTheDocument()
+    expect(within(traceRegions[3] as HTMLElement).queryByText("Evaluating test output.")).not.toBeInTheDocument()
 
-    expect(within(sectionElements[0] as HTMLElement).getByText("All checks passed.")).toBeInTheDocument()
-    expect(within(sectionElements[0] as HTMLElement).queryByText("Inspecting workspace.")).not.toBeInTheDocument()
+    expect(within(traceRegions[4] as HTMLElement).getByText("All checks passed.")).toBeInTheDocument()
+    expect(within(traceRegions[4] as HTMLElement).queryByText("Inspecting workspace.")).not.toBeInTheDocument()
 
-    const sectionFileChangeSummary = within(sectionElements[1] as HTMLElement).getByRole("button", { name: "已编辑 2 个文件" })
+    const sectionFileChangeSummary = within(traceRegions[5] as HTMLElement).getByRole("button", { name: "已编辑 2 个文件" })
     expect(sectionFileChangeSummary).toHaveAttribute("aria-expanded", "false")
-    expect(within(sectionElements[1] as HTMLElement).queryByText("1 file change (+2 -1)")).not.toBeInTheDocument()
-    expect(within(sectionElements[1] as HTMLElement).queryByText("src/App.tsx")).not.toBeInTheDocument()
+    expect(within(traceRegions[5] as HTMLElement).queryByText("1 file change (+2 -1)")).not.toBeInTheDocument()
+    expect(within(traceRegions[5] as HTMLElement).queryByText("src/App.tsx")).not.toBeInTheDocument()
     fireEvent.click(sectionFileChangeSummary)
-    expect(within(sectionElements[1] as HTMLElement).getAllByText("src/App.tsx").length).toBeGreaterThan(0)
-    expect(within(sectionElements[1] as HTMLElement).getByLabelText("2 additions, 1 deletions")).toBeInTheDocument()
-    expect(within(sectionElements[1] as HTMLElement).getAllByText("src/styles.css").length).toBeGreaterThan(0)
-    expect(within(sectionElements[1] as HTMLElement).getByLabelText("1 additions, 0 deletions")).toBeInTheDocument()
-    expect(within(sectionElements[1] as HTMLElement).queryByText("All checks passed.")).not.toBeInTheDocument()
+    expect(within(traceRegions[5] as HTMLElement).getAllByText("src/App.tsx").length).toBeGreaterThan(0)
+    expect(within(traceRegions[5] as HTMLElement).getByLabelText("2 additions, 1 deletions")).toBeInTheDocument()
+    expect(within(traceRegions[5] as HTMLElement).getAllByText("src/styles.css").length).toBeGreaterThan(0)
+    expect(within(traceRegions[5] as HTMLElement).getByLabelText("1 additions, 0 deletions")).toBeInTheDocument()
+    expect(within(traceRegions[5] as HTMLElement).queryByText("All checks passed.")).not.toBeInTheDocument()
   })
 
-  it("virtualizes expanded assistant process trace rows", async () => {
+  it("virtualizes large assistant trace row sets", async () => {
     window.desktop!.listFolderWorkspaces = vi.fn().mockResolvedValue([
       {
         id: "C:\\Projects\\Atlas\\client",
@@ -6750,19 +6747,17 @@ describe("App", () => {
 
     render(<App />)
 
-    expect(await screen.findByText("Final answer.")).toBeInTheDocument()
-    const processedTraceButton = screen.getByRole("button", { name: /Processed/ })
-    const threadColumn = processedTraceButton.closest(".thread-column") as HTMLElement
-    expect(processedTraceButton).toHaveAttribute("aria-expanded", "false")
-    fireEvent.click(processedTraceButton)
+    const finalAnswer = await screen.findByText("Final answer.")
+    expect(finalAnswer).toBeInTheDocument()
+    const threadColumn = finalAnswer.closest(".thread-column") as HTMLElement
 
     await waitFor(() => {
       expect(threadColumn).toHaveClass("is-virtualized")
     })
 
-    const renderedProcessRows = threadColumn.querySelectorAll(".assistant-process-item-row")
-    expect(renderedProcessRows.length).toBeGreaterThan(0)
-    expect(renderedProcessRows.length).toBeLessThan(80)
+    const renderedVirtualRows = threadColumn.querySelectorAll(".thread-virtual-row")
+    expect(renderedVirtualRows.length).toBeGreaterThan(0)
+    expect(renderedVirtualRows.length).toBeLessThan(80)
   })
 
   it("keeps folded file-change summaries scoped to their source assistant message", async () => {
@@ -6869,24 +6864,20 @@ describe("App", () => {
 
     render(<App />)
 
-    const finalAssistantMessage = (await screen.findByText("Finished the cycle.")).closest(".assistant-message") as HTMLElement | null
+    const finalResponseRow = (await screen.findByText("Finished the cycle.")).closest('[data-thread-row-kind="assistant-response-row"]') as HTMLElement | null
 
-    expect(finalAssistantMessage).not.toBeNull()
-    expect(screen.queryByText("Created the first draft of the release notes.")).not.toBeInTheDocument()
+    expect(finalResponseRow).not.toBeNull()
+    expect(screen.getByText("Created the first draft of the release notes.")).toBeInTheDocument()
 
-    const threadColumn = (finalAssistantMessage as HTMLElement).closest(".thread-column") as HTMLElement
-    const processTraceButton = within(threadColumn).getByRole("button", { name: /Processed/ })
-    expect(processTraceButton).toHaveAttribute("aria-expanded", "false")
-    fireEvent.click(processTraceButton)
+    const threadColumn = (finalResponseRow as HTMLElement).closest(".thread-column") as HTMLElement
+    const ownerMessageID = (finalResponseRow as HTMLElement).dataset.threadMessageId
 
-    expect(within(threadColumn).getByText("Created the first draft of the release notes.")).toBeInTheDocument()
+    const fileChangeSections = Array.from(threadColumn.querySelectorAll(
+      `.assistant-file-change-row[data-thread-message-id="${ownerMessageID}"] .assistant-section.is-file-change`,
+    ))
+    expect(fileChangeSections).toHaveLength(2)
 
-    const processFileChangeSections = Array.from(threadColumn.querySelectorAll(".assistant-process-item-row.assistant-section.is-file-change"))
-    const finalFileChangeSections = within(finalAssistantMessage as HTMLElement).getAllByRole("region", { name: "File Changes" })
-    expect(processFileChangeSections).toHaveLength(1)
-    expect(finalFileChangeSections).toHaveLength(1)
-
-    const firstFileChangeSection = processFileChangeSections[0] as HTMLElement
+    const firstFileChangeSection = fileChangeSections[0] as HTMLElement
     const firstFileChangeSummary = within(firstFileChangeSection).getByRole("button", { name: "已编辑 1 个文件" })
     expect(firstFileChangeSummary).toHaveAttribute("aria-expanded", "false")
     expect(within(firstFileChangeSection).queryByText("docs/release-notes.md")).not.toBeInTheDocument()
@@ -6895,7 +6886,7 @@ describe("App", () => {
     expect(within(firstFileChangeSection).getByLabelText("4 additions, 0 deletions")).toBeInTheDocument()
     expect(within(firstFileChangeSection).queryByText("docs/release-checklist.md")).not.toBeInTheDocument()
 
-    const finalFileChangeSection = finalFileChangeSections[0] as HTMLElement
+    const finalFileChangeSection = fileChangeSections[1] as HTMLElement
     const finalFileChangeSummary = within(finalFileChangeSection).getByRole("button", { name: "已编辑 1 个文件" })
     expect(finalFileChangeSummary).toHaveAttribute("aria-expanded", "false")
     expect(within(finalFileChangeSection).queryByText("docs/release-checklist.md")).not.toBeInTheDocument()
@@ -6903,8 +6894,7 @@ describe("App", () => {
     expect(within(finalFileChangeSection).getAllByText("docs/release-checklist.md").length).toBeGreaterThan(0)
     expect(within(finalFileChangeSection).getByLabelText("2 additions, 1 deletions")).toBeInTheDocument()
     expect(within(finalFileChangeSection).queryByText("docs/release-notes.md")).not.toBeInTheDocument()
-    expect(threadColumn.querySelectorAll(".assistant-process-item-row.assistant-section.is-file-change")).toHaveLength(1)
-    expect(within(finalAssistantMessage as HTMLElement).getAllByRole("region", { name: "File Changes" })).toHaveLength(1)
+    expect(fileChangeSections).toHaveLength(2)
   })
 
   it("replays detached backend turns from the session event stream", async () => {
@@ -7281,14 +7271,17 @@ describe("App", () => {
     fireEvent.click(getComposerSendButton())
 
     const reasoningText = await screen.findByText("Planning live update.")
-    const assistantMessage = reasoningText.closest(".assistant-message") as HTMLElement | null
+    const reasoningRow = reasoningText.closest('[data-thread-row-kind="assistant-reasoning-row"]') as HTMLElement | null
 
-    expect(assistantMessage).not.toBeNull()
+    expect(reasoningRow).not.toBeNull()
 
-    const reasoningSection = within(assistantMessage as HTMLElement).getByRole("region", { name: "Reasoning" })
+    const threadColumn = (reasoningRow as HTMLElement).closest(".thread-column") as HTMLElement
+    const ownerMessageID = (reasoningRow as HTMLElement).dataset.threadMessageId
+    const ownerRowSelector = `[data-thread-message-id="${ownerMessageID}"]`
+    const reasoningSection = within(reasoningRow as HTMLElement).getByRole("region", { name: "Reasoning" })
     expect(within(reasoningSection).getByText("Planning live update.")).toBeInTheDocument()
-    expect(within(assistantMessage as HTMLElement).queryByRole("region", { name: "Response" })).not.toBeInTheDocument()
-    expect(within(assistantMessage as HTMLElement).queryByRole("region", { name: "File Changes" })).not.toBeInTheDocument()
+    expect(threadColumn.querySelector(`${ownerRowSelector} .assistant-section.is-response`)).toBeNull()
+    expect(threadColumn.querySelector(`${ownerRowSelector} .assistant-section.is-file-change`)).toBeNull()
 
     act(() => {
       streamListener?.(createRequestStreamEvent({
@@ -7300,7 +7293,7 @@ describe("App", () => {
     })
 
     expect(await screen.findByText("Streaming answer")).toBeInTheDocument()
-    expect(within(assistantMessage as HTMLElement).queryByRole("region", { name: "File Changes" })).not.toBeInTheDocument()
+    expect(threadColumn.querySelector(`${ownerRowSelector} .assistant-section.is-file-change`)).toBeNull()
 
     act(() => {
       streamListener?.(createRequestStreamEvent({
@@ -7356,8 +7349,8 @@ describe("App", () => {
       }))
     })
 
-    expect(within(assistantMessage as HTMLElement).queryByRole("region", { name: "File Changes" })).not.toBeInTheDocument()
-    expect(within(assistantMessage as HTMLElement).getByRole("region", { name: "Response" })).toBeInTheDocument()
+    expect(threadColumn.querySelector(`${ownerRowSelector} .assistant-section.is-file-change`)).toBeNull()
+    expect(threadColumn.querySelector(`${ownerRowSelector} .assistant-section.is-response`)).not.toBeNull()
 
     act(() => {
       streamListener?.(createRequestStreamEvent({
@@ -7412,13 +7405,13 @@ describe("App", () => {
     })
 
     await waitFor(() => {
-      expect(within(assistantMessage as HTMLElement).getByRole("region", { name: "Response" })).toBeInTheDocument()
+      expect(threadColumn.querySelector(`${ownerRowSelector} .assistant-section.is-response`)).not.toBeNull()
     })
 
-    const responseSection = within(assistantMessage as HTMLElement).getByRole("region", { name: "Response" })
+    const responseSection = threadColumn.querySelector(`${ownerRowSelector} .assistant-section.is-response`) as HTMLElement
     expect(within(responseSection).getByText("Streaming answer")).toBeInTheDocument()
 
-    const fileChangeSection = within(assistantMessage as HTMLElement).getByRole("region", { name: "File Changes" })
+    const fileChangeSection = threadColumn.querySelector(`${ownerRowSelector} .assistant-section.is-file-change`) as HTMLElement
     const fileChangeSummary = within(fileChangeSection).getByRole("button", { name: "已编辑 2 个文件" })
     expect(fileChangeSummary).toHaveAttribute("aria-expanded", "false")
     expect(within(fileChangeSection).queryByText("1 file change (+2 -1)")).not.toBeInTheDocument()
@@ -8086,11 +8079,6 @@ describe("App", () => {
       })
       expect(window.desktop!.agentSession!.resumeTurn).toHaveBeenCalledTimes(1)
     })
-
-    const processedTraceButton = screen.queryByRole("button", { name: /Processed/ })
-    if (processedTraceButton?.getAttribute("aria-expanded") === "false") {
-      fireEvent.click(processedTraceButton)
-    }
 
     const readFileToolRows = await screen.findAllByRole("button", { name: /read-file/i })
     const readFileToolRow = readFileToolRows.find((button) => button.classList.contains("trace-log-row"))
@@ -10705,12 +10693,6 @@ describe("App", () => {
 
     expect(await screen.findByRole("button", { name: "Atlas review" })).toBeInTheDocument()
     expect(await screen.findByText("Done.")).toBeInTheDocument()
-    const processedTraceButton = screen.getByRole("button", { name: /Processed/ })
-    expect(processedTraceButton).toHaveAttribute("aria-expanded", "false")
-    expect(screen.queryByText("Permission requested")).not.toBeInTheDocument()
-
-    fireEvent.click(processedTraceButton)
-
     expect(screen.getByText("Permission requested")).toBeInTheDocument()
     expect(screen.queryByText("Model step started")).not.toBeInTheDocument()
     expect(screen.queryByText("approval.id")).not.toBeInTheDocument()
@@ -10721,11 +10703,6 @@ describe("App", () => {
     expandSettingsDisclosure(/Trace Visibility/)
     fireEvent.click(screen.getByRole("switch", { name: "Show trace workflow events" }))
     fireEvent.click(screen.getByRole("switch", { name: "Show trace debug metadata" }))
-
-    const updatedProcessedTraceButton = screen.getByRole("button", { name: /Processed/ })
-    if (updatedProcessedTraceButton.getAttribute("aria-expanded") === "false") {
-      fireEvent.click(updatedProcessedTraceButton)
-    }
 
     expect(screen.getByText("Model step started")).toBeInTheDocument()
     expect(screen.getByText("approval.id")).toBeInTheDocument()
@@ -13018,8 +12995,8 @@ describe("App", () => {
     expect(await screen.findByText("Second reply")).toBeInTheDocument()
 
     await waitFor(() => {
-      const firstReplyMessage = screen.getByText("First reply").closest(".assistant-message")
-      const secondReplyMessage = screen.getByText("Second reply").closest(".assistant-message")
+      const firstReplyMessage = screen.getByText("First reply").closest('[data-thread-row-kind="assistant-response-row"]')
+      const secondReplyMessage = screen.getByText("Second reply").closest('[data-thread-row-kind="assistant-response-row"]')
 
       expect(firstReplyMessage).not.toBeNull()
       expect(secondReplyMessage).not.toBeNull()
@@ -14392,9 +14369,7 @@ describe("App", () => {
     expect(styles).toMatch(/\.thread-column\s*\{[^}]*--thread-composer-clearance:\s*52px;[^}]*padding:\s*14px 0 var\(--thread-composer-clearance\);[^}]*scroll-padding-bottom:\s*var\(--thread-composer-clearance\);/s)
     expect(styles).toMatch(/\.thread-shell\s*>\s*\.thread-column\s*\{[^}]*padding-bottom:\s*var\(--thread-composer-clearance\);/s)
     expect(styles).toMatch(/\.thread-shell\s*\+\s*\.composer-stack\s*\{[^}]*padding-top:\s*12px;/s)
-    expect(styles).not.toMatch(/\.assistant-process-item-row\s*\{[^}]*grid-template-rows:\s*1fr;/s)
-    expect(styles).toMatch(/\.assistant-process-item-row\.is-collapsing\s*\{[^}]*max-height:\s*420px;[^}]*overflow:\s*hidden;/s)
-    expect(styles).toMatch(/body\.is-resizing-sidebar \.assistant-section\.is-tools \.trace-item,[\s\S]*?content-visibility:\s*auto;/s)
+    expect(styles).toMatch(/body\.is-resizing-sidebar \.assistant-trace-lite-row \.trace-item,[\s\S]*?content-visibility:\s*auto;/s)
   })
 
   it("gives composer and user body text a slightly larger size than tag text", () => {
@@ -14415,7 +14390,7 @@ describe("App", () => {
     expect(styles).toMatch(/\.assistant-section\.is-response\s+\.ask-user-question-card\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--semantic-question-card-surface\);/s)
     expect(styles).toMatch(/\.proposed-plan-card\s*\{[^}]*background:\s*var\(--semantic-proposed-plan-card-surface\);/s)
     expect(styles).toMatch(/\.assistant-section\.is-response \.trace-item-text,\s*\.assistant-section\.is-response \.trace-item-detail\s*\{[^}]*color:\s*var\(--semantic-thread-response-text\);/s)
-    expect(styles).toMatch(/\.assistant-process-trace-header::after\s*\{[^}]*background:\s*var\(--semantic-thread-divider\);/s)
+    expect(styles).toMatch(/\.assistant-reasoning-row \.trace-item,[\s\S]*?\.assistant-trace-lite-row \.trace-item\s*\{[^}]*background:\s*transparent;/s)
     expect(styles).toMatch(/\.user-message-diff-card\s*\{[^}]*border:\s*1px solid var\(--semantic-thread-user-message-diff-card-border\);[^}]*background:\s*var\(--semantic-thread-user-message-diff-card-surface\);[^}]*box-shadow:\s*none;/s)
     expect(styles).toMatch(/\.user-message-diff-stats \.is-add\s*\{[^}]*color:\s*var\(--semantic-success-text\);/s)
     expect(styles).toMatch(/\.user-message-diff-stats \.is-remove\s*\{[^}]*color:\s*var\(--semantic-error-text\);/s)
@@ -14431,10 +14406,10 @@ describe("App", () => {
     expect(styles).toMatch(/\.thread-markdown\s*\{[^}]*--md-selection-bg:\s*var\(--semantic-markdown-selection-background,\s*var\(--selection-background\)\);/s)
     expect(styles).toMatch(/\.thread-markdown::selection,\s*\.thread-markdown ::selection\s*\{[^}]*background:\s*var\(--md-selection-bg\);[^}]*color:\s*var\(--md-selection-text\);/s)
     expect(styles).toMatch(/\.thread-markdown\s*\{[^}]*--md-inline-code-bg:\s*var\(--semantic-markdown-inline-code-surface,\s*var\(--semantic-thread-panel-surface-muted\)\);/s)
-    expect(styles).toMatch(/\.assistant-section\.is-reasoning \.trace-item-inline-title,[\s\S]*?\.assistant-section\.is-reasoning \.trace-item-plain-detail\s*\{[^}]*color:\s*var\(--semantic-thread-reasoning-text\);/s)
+    expect(styles).toMatch(/\.assistant-trace-lite\.is-reasoning \.trace-item-inline-title,[\s\S]*?\.assistant-trace-lite\.is-reasoning \.trace-item-plain-detail\s*\{[^}]*color:\s*var\(--semantic-thread-reasoning-text\);/s)
     expect(styles).toMatch(/\.assistant-shell\.is-sectioned\s*\{[^}]*border:\s*0;[^}]*padding:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s)
     expect(styles).toMatch(
-      /\.assistant-section\.is-reasoning,\s*\.assistant-section\.is-response,\s*\.assistant-section\.is-tools\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*padding:\s*0;/s,
+      /\.assistant-section\.is-response\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*padding:\s*0;/s,
     )
     expect(styles).toMatch(/\.assistant-reasoning-separator::before,\s*\.assistant-reasoning-separator::after\s*\{[^}]*height:\s*1px;/s)
     expect(styles).toMatch(/\.assistant-section\.is-response\s+\.trace-item-header\s*\{[^}]*display:\s*none;/s)

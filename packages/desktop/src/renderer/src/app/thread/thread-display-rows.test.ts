@@ -1,0 +1,518 @@
+import { describe, expect, it } from "vitest"
+import {
+  buildThreadDisplayContext,
+  buildThreadDisplayRows,
+  buildThreadDisplayRowsIncremental,
+  decorateThreadDisplayRows,
+  decorateThreadDisplayRowsIncremental,
+  type DecorateThreadDisplayRowsInput,
+  type ThreadDisplayRowsCache,
+  type ThreadDisplayRow,
+} from "./thread-display-rows"
+import type {
+  AssistantTraceItem,
+  AssistantTraceVisibility,
+  AssistantThreadMessage,
+  SessionSummary,
+  ThreadMessage,
+  UserThreadMessage,
+} from "../types"
+import { DEFAULT_ASSISTANT_TRACE_VISIBILITY } from "../types"
+
+const session = { id: "session-1" } as SessionSummary
+
+function assistantMessage(
+  id: string,
+  items: AssistantTraceItem[],
+  {
+    isStreaming = false,
+    phase = isStreaming ? "responding" : "completed",
+  }: {
+    isStreaming?: boolean
+    phase?: AssistantThreadMessage["runtime"]["phase"]
+  } = {},
+): AssistantThreadMessage {
+  return {
+    id,
+    backendTurnID: id,
+    segmentID: `${id}:segment`,
+    kind: "assistant",
+    timestamp: 1,
+    runtime: {
+      phase,
+      startedAt: 1,
+      updatedAt: 2,
+    },
+    state: "",
+    items,
+    isStreaming,
+  }
+}
+
+function userMessage(id: string, text: string, streamInsertion?: UserThreadMessage["streamInsertion"]): UserThreadMessage {
+  return {
+    id,
+    kind: "user",
+    text,
+    timestamp: 1,
+    ...(streamInsertion ? { submissionMode: "steer", streamInsertion } : {}),
+  }
+}
+
+function textItem(id: string, text: string, extra: Partial<AssistantTraceItem> = {}): AssistantTraceItem {
+  return {
+    id,
+    kind: "text",
+    timestamp: 1,
+    label: "Assistant",
+    text,
+    status: "completed",
+    ...extra,
+  }
+}
+
+function reasoningItem(id: string, text: string, extra: Partial<AssistantTraceItem> = {}): AssistantTraceItem {
+  return {
+    id,
+    kind: "reasoning",
+    timestamp: 1,
+    label: "Reasoning",
+    text,
+    status: "completed",
+    ...extra,
+  }
+}
+
+function toolItem(id: string, title: string, extra: Partial<AssistantTraceItem> = {}): AssistantTraceItem {
+  return {
+    id,
+    kind: "tool",
+    timestamp: 1,
+    label: "Tool",
+    title,
+    status: "completed",
+    ...extra,
+  }
+}
+
+function buildRows(
+  messages: ThreadMessage[],
+  {
+    traceVisibility = DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+  }: {
+    traceVisibility?: AssistantTraceVisibility
+  } = {},
+) {
+  const context = buildThreadDisplayContext(messages)
+  return buildThreadDisplayRows({
+    activeSession: session,
+    activeMessages: messages,
+    assistantTraceVisibility: traceVisibility,
+    context,
+    isResolvingPermissionRequest: false,
+    pendingPermissionRequests: [],
+  })
+}
+
+function buildRowsIncremental(
+  messages: ThreadMessage[],
+  previousCache?: ThreadDisplayRowsCache | null,
+  {
+    traceVisibility = DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+  }: {
+    traceVisibility?: AssistantTraceVisibility
+  } = {},
+) {
+  const context = buildThreadDisplayContext(messages)
+  return buildThreadDisplayRowsIncremental({
+    activeSession: session,
+    activeMessages: messages,
+    assistantTraceVisibility: traceVisibility,
+    context,
+    isResolvingPermissionRequest: false,
+    pendingPermissionRequests: [],
+  }, previousCache)
+}
+
+function decorateRowsIncremental(
+  messages: ThreadMessage[],
+  baseRows: ThreadDisplayRow[],
+  previousCache?: ThreadDisplayRowsCache | null,
+  overrides: Partial<DecorateThreadDisplayRowsInput> = {},
+) {
+  const context = overrides.context ?? buildThreadDisplayContext(messages)
+  return decorateThreadDisplayRowsIncremental({
+    activeSessionDiff: null,
+    assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+    canForkFromMessage: true,
+    canOpenSideChat: true,
+    isSessionRunning: false,
+    messageTree: null,
+    readOnlySideChat: false,
+    sideChatCountsByAnchorMessageID: {},
+    sideChatPlacement: "external",
+    sideChatSession: null,
+    sideChatSessionsByAnchorMessageID: {},
+    ...overrides,
+    baseRows,
+    context,
+  }, previousCache)
+}
+
+function decorateRows(
+  messages: ThreadMessage[],
+  baseRows: ThreadDisplayRow[],
+  overrides: Partial<DecorateThreadDisplayRowsInput> = {},
+) {
+  const context = overrides.context ?? buildThreadDisplayContext(messages)
+  return decorateThreadDisplayRows({
+    activeSessionDiff: null,
+    assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+    canForkFromMessage: true,
+    canOpenSideChat: true,
+    isSessionRunning: false,
+    messageTree: null,
+    readOnlySideChat: false,
+    sideChatCountsByAnchorMessageID: {},
+    sideChatPlacement: "external",
+    sideChatSession: null,
+    sideChatSessionsByAnchorMessageID: {},
+    ...overrides,
+    baseRows,
+    context,
+  })
+}
+
+function rowByID(rows: ThreadDisplayRow[], rowID: string) {
+  const row = rows.find((candidate) => candidate.rowID === rowID)
+  expect(row).toBeDefined()
+  return row!
+}
+
+describe("thread display rows", () => {
+  it("creates a flat assistant response row for a single response", () => {
+    const rows = buildRows([
+      assistantMessage("assistant-1", [textItem("response-1", "Done.")]),
+    ])
+
+    expect(rows.map((row) => row.kind)).toEqual(["assistant-response-row"])
+    expect(rows[0]?.rowID).toBe("assistant:assistant-1:response:assistant-1:response-1")
+  })
+
+  it("keeps response row IDs stable while streaming text changes", () => {
+    const firstRows = buildRows([
+      assistantMessage("assistant-1", [textItem("response-1", "Hel", { isStreaming: true, status: "running" })], {
+        isStreaming: true,
+      }),
+    ])
+    const nextRows = buildRows([
+      assistantMessage("assistant-1", [textItem("response-1", "Hello world", { isStreaming: true, status: "running" })], {
+        isStreaming: true,
+      }),
+    ])
+
+    expect(firstRows[0]?.rowID).toBe(nextRows[0]?.rowID)
+  })
+
+  it("creates semantic rows for reasoning, tool, and response items", () => {
+    const rows = buildRows([
+      assistantMessage("assistant-1", [
+        reasoningItem("reasoning-1", "I will inspect."),
+        toolItem("tool-1", "read-file"),
+        textItem("response-1", "Done."),
+      ]),
+    ])
+
+    expect(rows.map((row) => row.kind)).toEqual([
+      "assistant-reasoning-row",
+      "assistant-tool-row",
+      "assistant-response-row",
+    ])
+  })
+
+  it("keeps a single short reasoning item as a reasoning row before the response", () => {
+    const rows = buildRows([
+      assistantMessage("assistant-1", [
+        reasoningItem("reasoning-1", "Checking."),
+        textItem("response-1", "Done."),
+      ]),
+    ])
+
+    expect(rows.map((row) => row.kind)).toEqual([
+      "assistant-reasoning-row",
+      "assistant-response-row",
+    ])
+    expect(rows[0]).toMatchObject({
+      kind: "assistant-reasoning-row",
+      itemID: "reasoning-1",
+      section: "reasoning",
+    })
+  })
+
+  it("places stream-inserted user messages by raw assistant item index", () => {
+    const rows = buildRows([
+      assistantMessage("assistant-1", [
+        textItem("response-1", "Before"),
+        textItem("response-2", "After", { isStreaming: true, status: "running" }),
+      ], { isStreaming: true }),
+      userMessage("user-steer", "Steer", {
+        assistantThreadMessageID: "assistant-1",
+        afterItemCount: 1,
+        status: "consumed",
+      }),
+    ])
+
+    expect(rows.map((row) => row.kind)).toEqual([
+      "assistant-response-row",
+      "assistant-inserted-user-message",
+      "assistant-response-row",
+    ])
+  })
+
+  it("moves stream-inserted user messages after the following completed tool boundary", () => {
+    const rows = buildRows([
+      assistantMessage("assistant-1", [
+        textItem("response-1", "Before"),
+        toolItem("tool-1", "load-skill"),
+        textItem("response-2", "After", { isStreaming: true, status: "running" }),
+      ], { isStreaming: true }),
+      userMessage("user-steer", "Steer", {
+        assistantThreadMessageID: "assistant-1",
+        afterItemCount: 1,
+        status: "consumed",
+      }),
+    ])
+
+    expect(rows.map((row) => row.kind)).toEqual([
+      "assistant-response-row",
+      "assistant-tool-row",
+      "assistant-inserted-user-message",
+      "assistant-response-row",
+    ])
+    expect(rows[1]).toMatchObject({ kind: "assistant-tool-row", itemID: "tool-1" })
+  })
+
+  it("attaches folded assistant items to the final owner while preserving source metadata", () => {
+    const rows = buildRows([
+      userMessage("user-1", "Go"),
+      assistantMessage("assistant-intermediate", [textItem("intermediate-response", "Working.")]),
+      assistantMessage("assistant-final", [textItem("final-response", "Done.")]),
+    ])
+
+    const foldedItemRow = rows.find((row) => "sourceMessageID" in row && row.sourceMessageID === "assistant-intermediate")
+    expect(foldedItemRow).toMatchObject({
+      kind: "assistant-response-row",
+      ownerMessageID: "assistant-final",
+      sourceMessageID: "assistant-intermediate",
+      itemID: "intermediate-response",
+      rawItemIndex: 0,
+    })
+  })
+
+  it("reuses unchanged base rows while a streaming assistant row changes", () => {
+    const userOne = userMessage("user-1", "Start")
+    const stableAssistant = assistantMessage("assistant-stable", [textItem("stable-response", "Done.")])
+    const userTwo = userMessage("user-2", "Continue")
+    const streamingAssistant = assistantMessage(
+      "assistant-streaming",
+      [textItem("stream-response", "Hel", { isStreaming: true, status: "running" })],
+      { isStreaming: true },
+    )
+    const first = buildRowsIncremental([userOne, stableAssistant, userTwo, streamingAssistant])
+    const nextStreamingAssistant = assistantMessage(
+      "assistant-streaming",
+      [textItem("stream-response", "Hello world", { isStreaming: true, status: "running" })],
+      { isStreaming: true },
+    )
+    const next = buildRowsIncremental(
+      [userOne, stableAssistant, userTwo, nextStreamingAssistant],
+      first.cache,
+    )
+
+    expect(rowByID(next.rows, "user:user-1")).toBe(rowByID(first.rows, "user:user-1"))
+    expect(rowByID(next.rows, "assistant:assistant-stable:response:assistant-stable:stable-response")).toBe(
+      rowByID(first.rows, "assistant:assistant-stable:response:assistant-stable:stable-response"),
+    )
+    expect(rowByID(next.rows, "user:user-2")).toBe(rowByID(first.rows, "user:user-2"))
+    expect(rowByID(next.rows, "assistant:assistant-streaming:response:assistant-streaming:stream-response")).not.toBe(
+      rowByID(first.rows, "assistant:assistant-streaming:response:assistant-streaming:stream-response"),
+    )
+    expect(next.stats).toMatchObject({
+      cacheHitCount: 3,
+      cacheMissCount: 1,
+      invalidatedMessageCount: 1,
+    })
+  })
+
+  it("reuses assistant base rows when only the activeMessages array is new", () => {
+    const assistant = assistantMessage("assistant-1", [textItem("response-1", "Done.")])
+    const first = buildRowsIncremental([assistant])
+    const next = buildRowsIncremental([assistant], first.cache)
+
+    expect(next.rows[0]).toBe(first.rows[0])
+    expect(next.stats).toMatchObject({
+      cacheHitCount: 1,
+      cacheMissCount: 0,
+      invalidatedMessageCount: 0,
+    })
+  })
+
+  it("rebuilds final owner rows when a folded intermediate assistant changes without touching unrelated rows", () => {
+    const userOne = userMessage("user-1", "Go")
+    const intermediateAssistant = assistantMessage("assistant-intermediate", [
+      textItem("intermediate-response", "Working."),
+    ])
+    const finalAssistant = assistantMessage("assistant-final", [textItem("final-response", "Done.")])
+    const userTwo = userMessage("user-2", "Next")
+    const unrelatedAssistant = assistantMessage("assistant-unrelated", [textItem("unrelated-response", "Ready.")])
+    const first = buildRowsIncremental([
+      userOne,
+      intermediateAssistant,
+      finalAssistant,
+      userTwo,
+      unrelatedAssistant,
+    ])
+    const nextIntermediateAssistant = assistantMessage("assistant-intermediate", [
+      textItem("intermediate-response", "Still working."),
+    ])
+    const next = buildRowsIncremental([
+      userOne,
+      nextIntermediateAssistant,
+      finalAssistant,
+      userTwo,
+      unrelatedAssistant,
+    ], first.cache)
+
+    const firstFinalRows = first.rows.filter((row) => "ownerMessageID" in row && row.ownerMessageID === "assistant-final")
+    const nextFinalRows = next.rows.filter((row) => "ownerMessageID" in row && row.ownerMessageID === "assistant-final")
+    expect(nextFinalRows).toHaveLength(firstFinalRows.length)
+    nextFinalRows.forEach((row, index) => {
+      expect(row).not.toBe(firstFinalRows[index])
+    })
+    expect(rowByID(next.rows, "assistant:assistant-unrelated:response:assistant-unrelated:unrelated-response")).toBe(
+      rowByID(first.rows, "assistant:assistant-unrelated:response:assistant-unrelated:unrelated-response"),
+    )
+    expect(rowByID(next.rows, "user:user-1")).toBe(rowByID(first.rows, "user:user-1"))
+    expect(rowByID(next.rows, "user:user-2")).toBe(rowByID(first.rows, "user:user-2"))
+  })
+
+  it("keeps unrelated decoration rows stable when the final operable assistant changes", () => {
+    const userOne = userMessage("user-1", "Start")
+    const stableAssistant = assistantMessage("assistant-stable", [textItem("stable-response", "Done.")])
+    const userTwo = userMessage("user-2", "Continue")
+    const oldFinalAssistant = assistantMessage("assistant-old-final", [textItem("old-response", "First.")])
+    const firstMessages = [userOne, stableAssistant, userTwo, oldFinalAssistant]
+    const firstBase = buildRowsIncremental(firstMessages)
+    const firstDecorated = decorateRowsIncremental(firstMessages, firstBase.rows, firstBase.cache)
+    const newFinalAssistant = assistantMessage(
+      "assistant-new-final",
+      [textItem("new-response", "Second.", { isStreaming: true, status: "running" })],
+      { isStreaming: true },
+    )
+    const nextMessages = [userOne, stableAssistant, userTwo, oldFinalAssistant, newFinalAssistant]
+    const nextBase = buildRowsIncremental(nextMessages, firstDecorated.cache)
+    const nextDecorated = decorateRowsIncremental(nextMessages, nextBase.rows, nextBase.cache)
+
+    expect(rowByID(nextDecorated.rows, "assistant:assistant-stable:actions")).toBe(
+      rowByID(firstDecorated.rows, "assistant:assistant-stable:actions"),
+    )
+    expect(firstDecorated.rows.some((row) => row.rowID === "assistant:assistant-old-final:actions")).toBe(true)
+    expect(nextDecorated.rows.some((row) => row.rowID === "assistant:assistant-old-final:actions")).toBe(false)
+    expect(rowByID(nextDecorated.rows, "assistant:assistant-new-final:actions")).toBeDefined()
+  })
+
+  it("rebuilds only the matching anchor decoration rows when side chat state changes", () => {
+    const userOne = userMessage("user-1", "Start")
+    const assistantOne = assistantMessage("assistant-1", [textItem("response-1", "Done.")])
+    const userTwo = userMessage("user-2", "Next")
+    const assistantTwo = assistantMessage("assistant-2", [textItem("response-2", "Ready.")])
+    const messages = [userOne, assistantOne, userTwo, assistantTwo]
+    const base = buildRowsIncremental(messages)
+    const firstDecorated = decorateRowsIncremental(messages, base.rows, base.cache)
+    const withSideChatCount = decorateRowsIncremental(messages, base.rows, firstDecorated.cache, {
+      sideChatCountsByAnchorMessageID: {
+        "assistant-1": 1,
+      },
+    })
+
+    expect(rowByID(withSideChatCount.rows, "assistant:assistant-1:actions")).not.toBe(
+      rowByID(firstDecorated.rows, "assistant:assistant-1:actions"),
+    )
+    expect(rowByID(withSideChatCount.rows, "assistant:assistant-2:actions")).toBe(
+      rowByID(firstDecorated.rows, "assistant:assistant-2:actions"),
+    )
+    expect(rowByID(withSideChatCount.rows, "assistant:assistant-1:actions")).toMatchObject({
+      existingSideChatCount: 1,
+      sideChatButtonLabel: "Open side chat (1)",
+    })
+
+    const sideChatSession = {
+      id: "side-chat-1",
+      origin: {
+        anchorMessageID: "assistant-1",
+      },
+    } as SessionSummary
+    const withInlineSideChat = decorateRowsIncremental(messages, base.rows, withSideChatCount.cache, {
+      sideChatCountsByAnchorMessageID: {
+        "assistant-1": 1,
+      },
+      sideChatPlacement: "inline",
+      sideChatSession,
+      sideChatSessionsByAnchorMessageID: {
+        "assistant-1": [sideChatSession],
+      },
+    })
+
+    expect(rowByID(withInlineSideChat.rows, "assistant:assistant-1:actions")).not.toBe(
+      rowByID(withSideChatCount.rows, "assistant:assistant-1:actions"),
+    )
+    expect(rowByID(withInlineSideChat.rows, "assistant:assistant-1:inline-side-chat")).toBeDefined()
+    expect(rowByID(withInlineSideChat.rows, "assistant:assistant-2:actions")).toBe(
+      rowByID(withSideChatCount.rows, "assistant:assistant-2:actions"),
+    )
+  })
+
+  it("matches the non-cached build and decorate output", () => {
+    const messages = [
+      userMessage("user-1", "Go"),
+      assistantMessage("assistant-1", [
+        reasoningItem("reasoning-1", "Checking."),
+        toolItem("tool-1", "read-file"),
+        textItem("response-1", "Done."),
+      ]),
+      userMessage("user-2", "Next"),
+      assistantMessage("assistant-2", [
+        textItem("response-2", "Ready."),
+      ]),
+    ]
+    const sideChatSession = {
+      id: "side-chat-1",
+      origin: {
+        anchorMessageID: "assistant-2",
+      },
+    } as SessionSummary
+    const decorationOverrides: Partial<DecorateThreadDisplayRowsInput> = {
+      sideChatCountsByAnchorMessageID: {
+        "assistant-2": 1,
+      },
+      sideChatPlacement: "inline",
+      sideChatSession,
+      sideChatSessionsByAnchorMessageID: {
+        "assistant-2": [sideChatSession],
+      },
+    }
+
+    const baselineBaseRows = buildRows(messages)
+    const incrementalBaseRows = buildRowsIncremental(messages)
+    expect(incrementalBaseRows.rows).toEqual(baselineBaseRows)
+
+    const baselineDecoratedRows = decorateRows(messages, baselineBaseRows, decorationOverrides)
+    const incrementalDecoratedRows = decorateRowsIncremental(
+      messages,
+      incrementalBaseRows.rows,
+      incrementalBaseRows.cache,
+      decorationOverrides,
+    )
+    expect(incrementalDecoratedRows.rows).toEqual(baselineDecoratedRows)
+  })
+})

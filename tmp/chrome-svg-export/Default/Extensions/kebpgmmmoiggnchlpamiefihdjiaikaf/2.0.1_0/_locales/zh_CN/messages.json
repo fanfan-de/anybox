@@ -1,0 +1,14 @@
+{
+   "aoubtText": {
+      "message": "关于 XDown"
+   },
+   "description": {
+      "message": "Internet Downloader enables you to download a desired item with an Internet Download Manager (xdown) application."
+   },
+   "downloadLinkTite": {
+      "message": "使用 XDown 下载"
+   },
+   "settingText": {
+      "message": "设置 XDown"
+   }
+}

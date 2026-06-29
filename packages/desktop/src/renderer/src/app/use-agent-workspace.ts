@@ -254,6 +254,7 @@ export function useAgentWorkspace({
   const {
     agentSessionStoreRef,
     agentSessions,
+    appendAssistantDelta,
     cancellingSessionIDs,
     contextUsageBySession,
     conversationActivityBySession,
@@ -283,6 +284,7 @@ export function useAgentWorkspace({
     setSessionDirectoryBySession,
     skipNextHistoryLoadRef,
     subscribedSessionStreamsRef,
+    updateConversationTurns,
   } = useStreamPermissionController({ initialSessionID: initialSelection.session?.id ?? null, store: workspaceStore })
   const workspaceDerivedState = measureRendererPerf("useAgentWorkspace.buildWorkspaceDerivedState", () => buildWorkspaceDerivedState({
     activeSideChatSessionIDByParentSessionID,
@@ -480,6 +482,7 @@ export function useAgentWorkspace({
     agentDefaultDirectory,
     agentSessionStoreRef,
     agentSessions,
+    appendAssistantDelta,
     canLoadSessionHistory,
     contextUsageBySession,
     conversationVersionRef,
@@ -522,6 +525,7 @@ export function useAgentWorkspace({
     setWorkspaces,
     skipNextHistoryLoadRef,
     subscribedSessionStreamsRef,
+    updateConversationTurns,
     workspaceRefreshRequestRef,
     workspaces,
   })

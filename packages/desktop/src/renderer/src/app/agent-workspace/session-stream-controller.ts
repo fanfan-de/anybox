@@ -2,10 +2,15 @@ import { startTransition, useEffect, useEffectEvent, useRef, useState, type Muta
 import { getAgentSessionBridge, type AgentSessionBridgeEvent } from "../agent-session/client"
 import { AgentSessionEventRouter } from "../agent-session/event-router"
 import {
-  appendConversationMessages as appendConversationMessagesToMap,
-  updateAssistantThreadMessage as updateAssistantMessageInMap,
-} from "../conversation-state"
-import { ensureThreadTurn } from "../thread-turn-state"
+  appendMessagesToThreadTurns,
+  buildThreadTurnsFromMessages,
+  deriveActiveMessages,
+  ensureConversationTurnSessions,
+  ensureThreadTurn,
+  insertUserMessageIntoTurns,
+  mapMessageInTurns,
+  removeMessageFromTurns,
+} from "../thread-turn-state"
 import {
   applyAgentStreamEventToThreadMessage,
   buildSessionStreamingAssistantThreadMessage,
@@ -17,6 +22,7 @@ import type {
   AgentStreamIPCEvent,
   AssistantTraceItem,
   AssistantThreadMessage,
+  ConversationTurnMap,
   LoadedSessionHistoryMessage,
   PendingAgentStream,
   PendingConversationInput,
@@ -371,37 +377,6 @@ export function isSteerHandoffBoundaryStreamEvent(streamEvent: { event: string; 
   }
 
   return readString(payload?.status) === "continued_by_user"
-}
-
-function updateConversationMapWithDeltaGroups(
-  conversations: Record<string, ThreadMessage[]>,
-  groupedUpdates: Map<string, Map<string, Array<AgentSessionStreamIPCEvent | AgentStreamIPCEvent>>>,
-) {
-  let nextConversations = conversations
-
-  for (const [sessionID, updatesByAssistantThreadMessageID] of groupedUpdates) {
-    const currentMessages = nextConversations[sessionID] ?? []
-    let didUpdateSession = false
-    const nextMessages = currentMessages.map((message) => {
-      if (message.kind !== "assistant") return message
-      const streamEvents = updatesByAssistantThreadMessageID.get(message.id)
-      if (!streamEvents?.length) return message
-
-      didUpdateSession = true
-      return streamEvents.reduce(
-        (nextMessage, streamEvent) => applyAgentStreamEventToThreadMessage(nextMessage, streamEvent),
-        message,
-      )
-    })
-
-    if (!didUpdateSession) continue
-    nextConversations = {
-      ...nextConversations,
-      [sessionID]: reconcileConversationMessages(nextMessages),
-    }
-  }
-
-  return nextConversations
 }
 
 export function shouldRefreshRuntimeDebugForStreamEvent(streamEvent: { event: string; data: unknown }) {
@@ -1413,6 +1388,11 @@ interface UseSessionStreamControllerOptions {
     dispatch(action: { type: "subscription.state"; event: Extract<AgentSessionBridgeEvent, { kind: "subscription-state" }> } | { type: "session.cleanup"; sessionID: string } | { type: "subscription.remove"; backendSessionID: string }): void
   }>
   agentSessions: Record<string, string>
+  appendAssistantDelta: (
+    sessionID: string,
+    assistantMessageID: string,
+    updater: (message: AssistantThreadMessage) => AssistantThreadMessage,
+  ) => boolean
   canLoadSessionHistory: boolean
   contextUsageBySession: Record<string, SessionContextUsage>
   conversationVersionRef: MutableRefObject<Record<string, number>>
@@ -1453,6 +1433,7 @@ interface UseSessionStreamControllerOptions {
   setWorkspaces: StateSetter<WorkspaceGroup[]>
   skipNextHistoryLoadRef: MutableRefObject<Record<string, boolean>>
   subscribedSessionStreamsRef: MutableRefObject<Record<string, string>>
+  updateConversationTurns: (update: WorkspaceStateUpdater<ConversationTurnMap>) => boolean
   workspaceRefreshRequestRef: MutableRefObject<Record<string, number>>
   workspaces: WorkspaceGroup[]
 }
@@ -1462,6 +1443,7 @@ export function useSessionStreamController({
   agentDefaultDirectory,
   agentSessionStoreRef,
   agentSessions,
+  appendAssistantDelta,
   canLoadSessionHistory,
   conversationVersionRef,
   conversationStore,
@@ -1501,6 +1483,7 @@ export function useSessionStreamController({
   setWorkspaces,
   skipNextHistoryLoadRef,
   subscribedSessionStreamsRef,
+  updateConversationTurns,
   workspaceRefreshRequestRef,
   workspaces,
 }: UseSessionStreamControllerOptions) {
@@ -1575,6 +1558,31 @@ export function useSessionStreamController({
     conversationVersionRef.current[sessionID] = (conversationVersionRef.current[sessionID] ?? 0) + 1
   }
 
+  function persistCurrentSessionUserMessages(sessionID: string) {
+    persistUserMessages(sessionID, conversationStore.getSessionMessages(sessionID))
+  }
+
+  function commitSessionTurnUpdate(
+    sessionID: string,
+    updater: (turns: ConversationTurnMap[string]) => ConversationTurnMap[string],
+    options: { persistUsers?: boolean } = {},
+  ) {
+    const didUpdate = updateConversationTurns((current) => {
+      const currentTurns = current[sessionID] ?? []
+      const nextTurns = updater(currentTurns)
+      return nextTurns === currentTurns ? current : { ...current, [sessionID]: nextTurns }
+    })
+
+    if (didUpdate) {
+      bumpConversationVersion(sessionID)
+      if (options.persistUsers) {
+        persistCurrentSessionUserMessages(sessionID)
+      }
+    }
+
+    return didUpdate
+  }
+
   function applyRuntimeTurnEventToConversationTurns(input: {
     backendSessionID: string
     fallbackUserMessageID?: string
@@ -1613,7 +1621,7 @@ export function useSessionStreamController({
       return
     }
 
-    const didUpdate = conversationStore.updateTurns((current) => {
+    const didUpdate = updateConversationTurns((current) => {
       const currentTurns = current[input.uiSessionID] ?? []
       const ensuredTurns = ensureThreadTurn(currentTurns, {
         turnID,
@@ -1672,14 +1680,7 @@ export function useSessionStreamController({
   function ensureBackgroundObservedSession(sessionID: string | null) {
     if (!sessionID) return
 
-    setConversations((prev) => (
-      Object.prototype.hasOwnProperty.call(prev, sessionID)
-        ? prev
-        : {
-            ...prev,
-            [sessionID]: [],
-          }
-    ))
+    updateConversationTurns((current) => ensureConversationTurnSessions(current, [sessionID]))
     setBackgroundObservedSessionIDs((current) => (
       current.includes(sessionID)
         ? current
@@ -1823,18 +1824,16 @@ export function useSessionStreamController({
   }
 
   function appendConversationMessages(sessionID: string, nextMessages: ThreadMessage[]) {
-    bumpConversationVersion(sessionID)
-    setConversations((prev) => {
-      const next = appendConversationMessagesToMap(prev, sessionID, nextMessages)
-      next[sessionID] = reconcileConversationMessages(next[sessionID] ?? [])
-      persistUserMessages(sessionID, next[sessionID] ?? [])
-      return next
-    })
+    commitSessionTurnUpdate(
+      sessionID,
+      (currentTurns) => appendMessagesToThreadTurns(currentTurns, nextMessages),
+      { persistUsers: nextMessages.some((message) => message.kind === "user") },
+    )
   }
 
   function clearLatestSteerUserMessageForAssistant(sessionID: string, assistantThreadMessageID: string) {
-    setConversations((prev) => {
-      const current = prev[sessionID] ?? []
+    commitSessionTurnUpdate(sessionID, (currentTurns) => {
+      const current = deriveActiveMessages(currentTurns)
       let targetIndex = -1
       for (let index = current.length - 1; index >= 0; index -= 1) {
         const message = current[index]
@@ -1848,21 +1847,15 @@ export function useSessionStreamController({
         }
       }
 
-      if (targetIndex < 0) return prev
+      if (targetIndex < 0) return currentTurns
 
-      bumpConversationVersion(sessionID)
-      const nextMessages = current.map((message, index): ThreadMessage => {
-        if (index !== targetIndex || message.kind !== "user") return message
+      const targetMessageID = current[targetIndex]?.id
+      return mapMessageInTurns(currentTurns, (message) => {
+        if (message.id !== targetMessageID || message.kind !== "user") return message
         const { submissionMode: _submissionMode, streamInsertion: _streamInsertion, ...regularMessage } = message
         return regularMessage
       })
-      const reconciled = reconcileConversationMessages(nextMessages)
-      persistUserMessages(sessionID, reconciled)
-      return {
-        ...prev,
-        [sessionID]: reconciled,
-      }
-    })
+    }, { persistUsers: true })
   }
 
   function applyExecutionModeToUserThreadMessage(input: {
@@ -1871,24 +1864,28 @@ export function useSessionStreamController({
     assistantThreadMessageID: string
     mode: AgentSessionExecutionMode
   }) {
-    setConversations((prev) => {
-      const current = prev[input.sessionID] ?? []
-      const nextMessages = applyExecutionModeToUserMessagePresentation({
-        messages: current,
-        userThreadMessageID: input.userThreadMessageID,
-        assistantThreadMessageID: input.assistantThreadMessageID,
-        mode: input.mode,
-      })
+    commitSessionTurnUpdate(input.sessionID, (currentTurns) =>
+      mapMessageInTurns(currentTurns, (message) => {
+        if (message.kind !== "user" || message.id !== input.userThreadMessageID) return message
 
-      if (nextMessages === current) return prev
-      bumpConversationVersion(input.sessionID)
-      const reconciled = reconcileConversationMessages(nextMessages)
-      persistUserMessages(input.sessionID, reconciled)
-      return {
-        ...prev,
-        [input.sessionID]: reconciled,
-      }
-    })
+        if (input.mode === "steer") {
+          return message
+        }
+
+        if (input.mode === "queued") {
+          const { streamInsertion: _streamInsertion, ...queuedMessage } = message
+          const nextMessage: UserThreadMessage = {
+            ...queuedMessage,
+            submissionMode: "queued",
+          }
+          return message.submissionMode !== nextMessage.submissionMode || Boolean(message.streamInsertion)
+            ? nextMessage
+            : message
+        }
+
+        const { submissionMode: _submissionMode, streamInsertion: _streamInsertion, ...regularMessage } = message
+        return message.submissionMode || message.streamInsertion ? regularMessage : message
+      }), { persistUsers: true })
   }
 
   function revealBackendRecordedUserThreadMessage(input: {
@@ -1904,22 +1901,16 @@ export function useSessionStreamController({
       return
     }
 
-    setConversations((prev) => {
-      const current = prev[input.sessionID] ?? []
-      const nextMessages = revealBackendRecordedUserMessagePresentation({
-        messages: current,
-        userThreadMessageID: input.userThreadMessageID,
-      })
-
-      if (nextMessages === current) return prev
-      bumpConversationVersion(input.sessionID)
-      const reconciled = reconcileConversationMessages(nextMessages)
-      persistUserMessages(input.sessionID, reconciled)
-      return {
-        ...prev,
-        [input.sessionID]: reconciled,
-      }
-    })
+    commitSessionTurnUpdate(input.sessionID, (currentTurns) =>
+      mapMessageInTurns(currentTurns, (message) => {
+        if (message.kind !== "user" || message.id !== input.userThreadMessageID) return message
+        const {
+          submissionMode: _submissionMode,
+          streamInsertion: _streamInsertion,
+          ...regularMessage
+        } = message
+        return message.submissionMode || message.streamInsertion ? regularMessage : message
+      }), { persistUsers: true })
   }
 
   function findPendingConversationInput(sessionID: string, inputID: string) {
@@ -1965,24 +1956,6 @@ export function useSessionStreamController({
     }
   }
 
-  function insertCommittedUserThreadMessage(
-    messages: ThreadMessage[],
-    userMessage: UserThreadMessage,
-    beforeMessageID: string | undefined,
-  ) {
-    if (messages.some((message) => message.id === userMessage.id)) return messages
-    if (!beforeMessageID) return [...messages, userMessage]
-
-    const beforeIndex = messages.findIndex((message) => message.id === beforeMessageID)
-    if (beforeIndex === -1) return [...messages, userMessage]
-
-    return [
-      ...messages.slice(0, beforeIndex),
-      userMessage,
-      ...messages.slice(beforeIndex),
-    ]
-  }
-
   function commitPendingConversationInputAsUserThreadMessage(input: {
     sessionID: string
     inputID: string
@@ -1995,19 +1968,11 @@ export function useSessionStreamController({
     const userMessage = pendingConversationInputToUserThreadMessage(pendingInput, {
       ...(input.streamInsertion ? { streamInsertion: input.streamInsertion } : {}),
     })
-    setConversations((prev) => {
-      const current = prev[input.sessionID] ?? []
-      const nextMessages = insertCommittedUserThreadMessage(current, userMessage, input.beforeMessageID)
-      if (nextMessages === current) return prev
-
-      bumpConversationVersion(input.sessionID)
-      const reconciled = reconcileConversationMessages(nextMessages)
-      persistUserMessages(input.sessionID, reconciled)
-      return {
-        ...prev,
-        [input.sessionID]: reconciled,
-      }
-    })
+    commitSessionTurnUpdate(
+      input.sessionID,
+      (currentTurns) => insertUserMessageIntoTurns(currentTurns, userMessage, { beforeMessageID: input.beforeMessageID }),
+      { persistUsers: true },
+    )
     removePendingConversationInputForSession(input.sessionID, input.inputID)
     return true
   }
@@ -2036,22 +2001,20 @@ export function useSessionStreamController({
     sessionID: string
     assistantThreadMessageID: string
   }) {
-    setConversations((prev) => {
-      const current = prev[input.sessionID] ?? []
-      const nextMessages = revealPendingSteerUserMessagesAtHandoffPresentation({
-        messages: current,
-        assistantThreadMessageID: input.assistantThreadMessageID,
-      })
+    commitSessionTurnUpdate(input.sessionID, (currentTurns) =>
+      mapMessageInTurns(currentTurns, (message) => {
+        if (message.kind !== "user" || message.submissionMode !== "steer") return message
+        if (
+          message.streamInsertion &&
+          (message.streamInsertion.assistantThreadMessageID !== input.assistantThreadMessageID ||
+            message.streamInsertion.status === "consumed")
+        ) {
+          return message
+        }
 
-      if (nextMessages === current) return prev
-      bumpConversationVersion(input.sessionID)
-      const reconciled = reconcileConversationMessages(nextMessages)
-      persistUserMessages(input.sessionID, reconciled)
-      return {
-        ...prev,
-        [input.sessionID]: reconciled,
-      }
-    })
+        const { submissionMode: _submissionMode, streamInsertion: _streamInsertion, ...regularMessage } = message
+        return regularMessage
+      }), { persistUsers: true })
   }
 
   function revealPendingUserThreadMessageForBackendEvent(input: {
@@ -2074,10 +2037,8 @@ export function useSessionStreamController({
   }
 
   function markPendingSteerUserMessagesConsumed(sessionID: string, assistantThreadMessageID: string) {
-    setConversations((prev) => {
-      const current = prev[sessionID] ?? []
-      let didUpdate = false
-      const nextMessages = current.map((message): ThreadMessage => {
+    commitSessionTurnUpdate(sessionID, (currentTurns) =>
+      mapMessageInTurns(currentTurns, (message) => {
         if (
           message.kind !== "user" ||
           message.submissionMode !== "steer" ||
@@ -2087,7 +2048,6 @@ export function useSessionStreamController({
           return message
         }
 
-        didUpdate = true
         return {
           ...message,
           streamInsertion: {
@@ -2095,31 +2055,15 @@ export function useSessionStreamController({
             status: "consumed",
           },
         }
-      })
-
-      if (!didUpdate) return prev
-      bumpConversationVersion(sessionID)
-      const reconciled = reconcileConversationMessages(nextMessages)
-      persistUserMessages(sessionID, reconciled)
-      return {
-        ...prev,
-        [sessionID]: reconciled,
-      }
-    })
+      }), { persistUsers: true })
   }
 
   function removeConversationMessage(sessionID: string, messageID: string) {
-    setConversations((prev) => {
-      const current = prev[sessionID] ?? []
-      if (!current.some((message) => message.id === messageID)) return prev
-      bumpConversationVersion(sessionID)
-      const reconciled = reconcileConversationMessages(current.filter((message) => message.id !== messageID))
-      persistUserMessages(sessionID, reconciled)
-      return {
-        ...prev,
-        [sessionID]: reconciled,
-      }
-    })
+    commitSessionTurnUpdate(
+      sessionID,
+      (currentTurns) => removeMessageFromTurns(currentTurns, messageID),
+      { persistUsers: true },
+    )
   }
 
   function ensureAssistantConversationMessage(input: {
@@ -2134,38 +2078,24 @@ export function useSessionStreamController({
       return
     }
 
-    setConversations((prev) => {
-      const current = prev[input.sessionID] ?? []
-      const nextMessages = ensureAssistantThreadMessagePresentation({
-        messages: current,
-        assistantThreadMessageID: input.assistantThreadMessageID,
-        detail: input.detail,
-        identity: input.identity,
-      })
-      if (nextMessages === current) return prev
-
-      bumpConversationVersion(input.sessionID)
-      return {
-        ...prev,
-        [input.sessionID]: reconcileConversationMessages(nextMessages),
-      }
-    })
+    commitSessionTurnUpdate(input.sessionID, (currentTurns) =>
+      appendMessagesToThreadTurns(currentTurns, [
+        buildSessionStreamingAssistantThreadMessageWithID(
+          input.assistantThreadMessageID,
+          input.detail,
+          input.identity,
+        ),
+      ]))
   }
 
   function updateAssistantConversationMessage(
     sessionID: string,
     assistantMessageID: string,
-    updater: Parameters<typeof updateAssistantMessageInMap>[3],
+    updater: (message: AssistantThreadMessage) => AssistantThreadMessage,
   ) {
-    bumpConversationVersion(sessionID)
-    setConversations((prev) => {
-      const next = updateAssistantMessageInMap(prev, sessionID, assistantMessageID, updater)
-      if (next === prev) return prev
-      return {
-        ...next,
-        [sessionID]: reconcileConversationMessages(next[sessionID] ?? []),
-      }
-    })
+    if (appendAssistantDelta(sessionID, assistantMessageID, updater)) {
+      bumpConversationVersion(sessionID)
+    }
   }
 
   function clearPendingDeltaFlushTimer() {
@@ -2233,12 +2163,23 @@ export function useSessionStreamController({
       groupedUpdates.set(update.target.sessionID, updatesByAssistantThreadMessageID)
     }
 
-    for (const sessionID of groupedUpdates.keys()) {
-      bumpConversationVersion(sessionID)
-    }
-
     startTransition(() => {
-      setConversations((prev) => updateConversationMapWithDeltaGroups(prev, groupedUpdates))
+      for (const [sessionID, updatesByAssistantThreadMessageID] of groupedUpdates) {
+        let didUpdateSession = false
+        for (const [assistantThreadMessageID, streamEvents] of updatesByAssistantThreadMessageID) {
+          const didUpdateMessage = appendAssistantDelta(sessionID, assistantThreadMessageID, (message) =>
+            streamEvents.reduce(
+              (nextMessage, streamEvent) => applyAgentStreamEventToThreadMessage(nextMessage, streamEvent),
+              message,
+            ),
+          )
+          didUpdateSession ||= didUpdateMessage
+        }
+
+        if (didUpdateSession) {
+          bumpConversationVersion(sessionID)
+        }
+      }
     })
 
     if (pendingDeltaUpdatesRef.current.length > 0) {
@@ -2465,19 +2406,23 @@ export function useSessionStreamController({
 
       externalTurnUserHistoryMergedRef.current.add(refreshKey)
       startTransition(() => {
-        setConversations((prev) => {
-          const currentMessages = prev[input.uiSessionID] ?? []
+        const didUpdate = updateConversationTurns((current) => {
+          const currentTurns = current[input.uiSessionID] ?? []
+          const currentMessages = deriveActiveMessages(currentTurns)
           const mergedMessages = mergeExternalUserMessagesFromHistory(currentMessages, historyMessages, {
             beforeMessageID: input.assistantThreadMessageID,
           })
-          if (conversationMessagesAreEquivalent(currentMessages, mergedMessages)) return prev
-          bumpConversationVersion(input.uiSessionID)
-          persistUserMessages(input.uiSessionID, mergedMessages)
+          if (conversationMessagesAreEquivalent(currentMessages, mergedMessages)) return current
+          const nextTurns = buildThreadTurnsFromMessages(mergedMessages, currentTurns)
           return {
-            ...prev,
-            [input.uiSessionID]: mergedMessages,
+            ...current,
+            [input.uiSessionID]: nextTurns,
           }
         })
+        if (didUpdate) {
+          bumpConversationVersion(input.uiSessionID)
+          persistCurrentSessionUserMessages(input.uiSessionID)
+        }
       })
     } catch (error) {
       console.error("[desktop] external session user message history refresh failed:", error)

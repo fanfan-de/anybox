@@ -82,4 +82,55 @@ describe("conversation store canonical turns", () => {
     expect(sessionTwoListener).not.toHaveBeenCalled()
     expect(store.getSessionMessages("session-1").map((message) => message.id)).toEqual(["user-1", "assistant-1"])
   })
+
+  it("updates assistant deltas without replacing unrelated turn state", () => {
+    const store = createConversationStore({
+      "session-1": [userMessage("user-1"), assistantMessage("assistant-1", "segment-1", "Starting")],
+      "session-2": [userMessage("user-2"), assistantMessage("assistant-2", "segment-2", "Other")],
+    })
+    const sessionOneListener = vi.fn()
+    const sessionTwoListener = vi.fn()
+    store.subscribeSession("session-1", sessionOneListener)
+    store.subscribeSession("session-2", sessionTwoListener)
+    const originalSessionOneTurns = store.getSessionTurns("session-1")
+    const originalSessionTwoTurns = store.getSessionTurns("session-2")
+    const originalUserMessage = originalSessionOneTurns[0]?.messages[0]
+    const originalAssistantMessage = originalSessionOneTurns[0]?.messages[1]
+
+    const didUpdate = store.appendAssistantDelta("session-1", "assistant-1", (message) => ({
+      ...message,
+      isStreaming: true,
+      state: "responding",
+      runtime: {
+        ...message.runtime,
+        phase: "responding",
+        updatedAt: 4,
+      },
+    }))
+
+    const nextSessionOneTurns = store.getSessionTurns("session-1")
+    expect(didUpdate).toBe(true)
+    expect(sessionOneListener).toHaveBeenCalledTimes(1)
+    expect(sessionTwoListener).not.toHaveBeenCalled()
+    expect(nextSessionOneTurns).not.toBe(originalSessionOneTurns)
+    expect(store.getSessionTurns("session-2")).toBe(originalSessionTwoTurns)
+    expect(nextSessionOneTurns[0]?.messages[0]).toBe(originalUserMessage)
+    expect(nextSessionOneTurns[0]?.messages[1]).not.toBe(originalAssistantMessage)
+    expect(store.getSessionActivity("session-1").hasStreamingAssistantMessage).toBe(true)
+  })
+
+  it("does not notify or replace references for no-op assistant deltas", () => {
+    const store = createConversationStore({
+      "session-1": [userMessage("user-1"), assistantMessage("assistant-1", "segment-1", "Done")],
+    })
+    const sessionListener = vi.fn()
+    store.subscribeSession("session-1", sessionListener)
+    const originalTurns = store.getSessionTurns("session-1")
+
+    const didUpdate = store.appendAssistantDelta("session-1", "assistant-1", (message) => message)
+
+    expect(didUpdate).toBe(false)
+    expect(sessionListener).not.toHaveBeenCalled()
+    expect(store.getSessionTurns("session-1")).toBe(originalTurns)
+  })
 })

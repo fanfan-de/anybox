@@ -306,6 +306,134 @@ describe("ThreadView trace item renderers", () => {
     }
   })
 
+  it("renders semantic trace rows with lightweight containers while keeping response and file changes sectioned", () => {
+    const { container } = renderThread(
+      [
+        assistantTraceMessage(
+          "assistant-lite-trace",
+          [
+            {
+              id: "reasoning-lite",
+              kind: "reasoning",
+              timestamp: 1,
+              label: "Reasoning",
+              text: "Planning light path",
+              status: "completed",
+            },
+            toolStatusTraceItem("completed"),
+            {
+              id: "workflow-lite",
+              kind: "step",
+              timestamp: 1,
+              label: "Step",
+              title: "Workflow step finished",
+              section: "workflow",
+              visibilityKey: "workflow",
+              status: "completed",
+            },
+            {
+              id: "source-lite",
+              kind: "source",
+              timestamp: 1,
+              label: "Source",
+              title: "Source reference",
+              text: "Source visible",
+              status: "completed",
+            },
+            {
+              id: "approval-lite",
+              kind: "system",
+              timestamp: 1,
+              label: "Approval",
+              title: "Approval event",
+              text: "Approval visible",
+              section: "approvals",
+              visibilityKey: "approvals",
+              status: "completed",
+            },
+            {
+              id: "debug-lite",
+              kind: "system",
+              timestamp: 1,
+              label: "Debug",
+              title: "Debug event",
+              text: "Debug visible",
+              status: "completed",
+            },
+            {
+              id: "response-sectioned",
+              kind: "text",
+              timestamp: 1,
+              label: "Assistant",
+              text: "Final answer",
+              status: "completed",
+            },
+            {
+              id: "file-change-sectioned",
+              kind: "patch",
+              timestamp: 1,
+              label: "Patch",
+              title: "1 file change (+1 -0)",
+              fileChanges: [
+                {
+                  file: "src/light.ts",
+                  additions: 1,
+                  deletions: 0,
+                },
+              ],
+              status: "completed",
+            },
+          ],
+          false,
+        ),
+      ],
+      {
+        assistantTraceVisibility: {
+          ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+          approvals: true,
+          debugMetadata: true,
+          sources: true,
+          workflow: true,
+        },
+      },
+    )
+
+    const liteRows = [
+      ["assistant-reasoning-row", "is-reasoning"],
+      ["assistant-tool-row", "is-tools"],
+      ["assistant-workflow-row", "is-workflow"],
+      ["assistant-source-row", "is-sources"],
+      ["assistant-approval-row", "is-approvals"],
+      ["assistant-debug-row", "is-debug"],
+    ] as const
+
+    for (const [rowKind, sectionClassName] of liteRows) {
+      const row = container.querySelector(`[data-thread-row-kind="${rowKind}"]`) as HTMLElement | null
+      expect(row).not.toBeNull()
+      expect(row).toHaveClass("assistant-trace-lite-row")
+      expect(row?.querySelector(`.assistant-trace-lite.${sectionClassName}[role="region"]`)).not.toBeNull()
+      expect(row?.querySelector(".assistant-shell")).toBeNull()
+      expect(row?.querySelector(".assistant-section")).toBeNull()
+    }
+
+    expect(screen.getByText("Planning light path")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /^Tool completed/ })).toBeInTheDocument()
+    expect(screen.getByText("Workflow step finished")).toBeInTheDocument()
+    expect(screen.getByText("Source visible")).toBeInTheDocument()
+    expect(screen.getByText("Approval visible")).toBeInTheDocument()
+    expect(screen.getByText("Debug visible")).toBeInTheDocument()
+
+    const responseRow = screen.getByText("Final answer").closest('[data-thread-row-kind="assistant-response-row"]') as HTMLElement | null
+    expect(responseRow?.querySelector(".assistant-shell.is-sectioned")).not.toBeNull()
+    expect(responseRow?.querySelector(".assistant-section.is-response")).not.toBeNull()
+    expect(responseRow?.querySelector(".assistant-trace-lite")).toBeNull()
+
+    const fileChangeRow = container.querySelector('[data-thread-row-kind="assistant-file-change-row"]') as HTMLElement | null
+    expect(fileChangeRow?.querySelector(".assistant-shell.is-sectioned")).not.toBeNull()
+    expect(fileChangeRow?.querySelector(".assistant-section.is-file-change")).not.toBeNull()
+    expect(fileChangeRow?.querySelector(".assistant-trace-lite")).toBeNull()
+  })
+
   it("renders tool traces as lightweight log rows", () => {
     const items = [
       toolStatusTraceItem("pending"),
@@ -1716,8 +1844,8 @@ describe("ThreadView trace collapse", () => {
     expect(container.textContent).toContain(hiddenTail)
   })
 
-  it("collapses process trace before the final assistant response", () => {
-    const { getByRole, getByText, queryByText } = renderThread([
+  it("renders assistant trace items as semantic rows before the final response", () => {
+    const { getByText } = renderThread([
       assistantTraceMessage(
         "assistant-1",
         [
@@ -1750,20 +1878,19 @@ describe("ThreadView trace collapse", () => {
       ),
     ])
 
-    const processedTrace = getByRole("button", { name: /Processed/ })
-    expect(processedTrace).toHaveAttribute("aria-expanded", "false")
-    expect(queryByText("I will inspect the project first.")).toBeNull()
-    expect(getByText("The project is ready.")).toBeInTheDocument()
+    const firstResponse = getByText("I will inspect the project first.")
+    const tool = getByText("list-directory")
+    const finalResponse = getByText("The project is ready.")
 
-    fireEvent.click(processedTrace)
-
-    expect(processedTrace).toHaveAttribute("aria-expanded", "true")
-    expect(getByText("I will inspect the project first.")).toBeInTheDocument()
-    expect(getByText("list-directory")).toBeInTheDocument()
+    expect(firstResponse.closest('[data-thread-row-kind="assistant-response-row"]')).not.toBeNull()
+    expect(tool.closest('[data-thread-row-kind="assistant-tool-row"]')).not.toBeNull()
+    expect(finalResponse.closest('[data-thread-row-kind="assistant-response-row"]')).not.toBeNull()
+    expect(firstResponse.compareDocumentPosition(tool) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(tool.compareDocumentPosition(finalResponse) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it("keeps workflow events after the final response in their backend order", () => {
-    const { getByRole, getByText, queryByText } = renderThread(
+    const { getByText } = renderThread(
       [
         assistantTraceMessage(
           "assistant-1",
@@ -1817,28 +1944,21 @@ describe("ThreadView trace collapse", () => {
       },
     )
 
-    const processedTrace = getByRole("button", { name: /Processed/ })
-    expect(processedTrace).toHaveAttribute("aria-expanded", "false")
-    expect(queryByText("Model step started")).toBeNull()
-
+    const stepStartedText = getByText("Model step started")
     const responseText = getByText("The model replied.")
     const stepFinishedText = getByText("Model step finished")
     const responseCompleteText = getByText("Response complete")
 
+    expect(stepStartedText.closest('[data-thread-row-kind="assistant-workflow-row"]')).not.toBeNull()
+    expect(responseText.closest('[data-thread-row-kind="assistant-response-row"]')).not.toBeNull()
+    expect(stepFinishedText.closest('[data-thread-row-kind="assistant-workflow-row"]')).not.toBeNull()
+    expect(responseCompleteText.closest('[data-thread-row-kind="assistant-workflow-row"]')).not.toBeNull()
+    expect(stepStartedText.compareDocumentPosition(responseText) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(responseText.compareDocumentPosition(stepFinishedText) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(stepFinishedText.compareDocumentPosition(responseCompleteText) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(stepFinishedText.closest(".assistant-message")).not.toBeNull()
-    expect(responseCompleteText.closest(".assistant-message")).not.toBeNull()
-
-    fireEvent.click(processedTrace)
-
-    const stepStartedRow = getByText("Model step started").closest(".assistant-process-item-row")
-    expect(stepStartedRow).not.toBeNull()
-    expect(stepStartedRow).toHaveClass("is-workflow")
-    expect(stepStartedRow?.closest(".assistant-message")).toBeNull()
   })
 
-  it("does not collapse process trace while the assistant message is not terminal", () => {
+  it("renders assistant trace directly while the assistant message is not terminal", () => {
     const assistantMessage = assistantTraceMessage(
       "assistant-1",
       [
@@ -1870,7 +1990,7 @@ describe("ThreadView trace collapse", () => {
       false,
     )
 
-    const { getByText, queryByRole } = renderThread([
+    const { getByText } = renderThread([
       {
         ...assistantMessage,
         runtime: {
@@ -1881,13 +2001,12 @@ describe("ThreadView trace collapse", () => {
       },
     ])
 
-    expect(queryByRole("button", { name: /Processed/ })).toBeNull()
     expect(getByText("I will create the tasks first.")).toBeInTheDocument()
     expect(getByText("task_create")).toBeInTheDocument()
     expect(getByText("Now I will start the child agents.")).toBeInTheDocument()
   })
 
-  it("does not duplicate unfinished task messages in the final response process trace", () => {
+  it("does not duplicate unfinished task messages in the final response trace", () => {
     const taskMessage = assistantTraceMessage(
       "assistant-task",
       [
@@ -1908,7 +2027,7 @@ describe("ThreadView trace collapse", () => {
     }
     taskMessage.state = "tool_running"
 
-    const { container, getByText, queryByRole } = renderThread([
+    const { container, getByText } = renderThread([
       userMessage("user-1", "Create task and continue."),
       taskMessage,
       assistantTraceMessage(
@@ -1927,7 +2046,6 @@ describe("ThreadView trace collapse", () => {
       ),
     ])
 
-    expect(queryByRole("button", { name: /Processed/ })).toBeNull()
     expect(getByText("task_create")).toBeInTheDocument()
     expect(getByText("The task is running.")).toBeInTheDocument()
     expect(container.querySelectorAll(".trace-kind-tool")).toHaveLength(1)
@@ -2033,8 +2151,8 @@ describe("ThreadView trace collapse", () => {
     expect(spawnText.compareDocumentPosition(taskTool) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it("renders the whole process trace header as the collapse button", () => {
-    const { getByRole } = renderThread([
+  it("renders tool items in a tool row without a process header", () => {
+    const { getByText } = renderThread([
       assistantTraceMessage(
         "assistant-1",
         [
@@ -2059,18 +2177,13 @@ describe("ThreadView trace collapse", () => {
       ),
     ])
 
-    const processedTrace = getByRole("button", { name: /Processed/ })
-    const header = processedTrace.closest(".assistant-process-trace-header")
-
-    expect(header).toBe(processedTrace)
-    expect(header?.firstElementChild).toHaveClass("assistant-process-trace-copy")
-    expect(header?.lastElementChild).toHaveClass("assistant-process-trace-toggle")
-    expect(header?.querySelector(".assistant-process-trace-title")).toHaveTextContent("Processed")
+    expect(getByText("list-directory").closest('[data-thread-row-kind="assistant-tool-row"]')).not.toBeNull()
+    expect(getByText("The project is ready.").closest('[data-thread-row-kind="assistant-response-row"]')).not.toBeNull()
   })
 
-  it("uses folded process item timestamps for the process trace duration", () => {
+  it("folds completed intermediate assistant items into final semantic rows", () => {
     const processMessage = assistantTraceMessage(
-      "assistant-process",
+      "assistant-folded-prefix",
       [
         {
           id: "reasoning-1",
@@ -2124,13 +2237,19 @@ describe("ThreadView trace collapse", () => {
       updatedAt: 228_000,
     }
 
-    const { getByRole } = renderThread([userMessage("user-1", "Prompt"), processMessage, finalMessage])
+    const { getByText } = renderThread([userMessage("user-1", "Prompt"), processMessage, finalMessage])
 
-    const processedTrace = getByRole("button", { name: /Processed/ })
-    expect(processedTrace).toHaveTextContent("2m 8s")
+    expect(getByText("Inspect files first.").closest('[data-thread-row-kind="assistant-reasoning-row"]')).not.toBeNull()
+    expect(getByText("read-file").closest('[data-thread-row-kind="assistant-tool-row"]')).not.toBeNull()
+    expect(getByText("Almost done.").closest('[data-thread-row-kind="assistant-response-row"]')).not.toBeNull()
+    expect(getByText("The project is ready.").closest('[data-thread-row-kind="assistant-response-row"]')).not.toBeNull()
+    expect(getByText("Inspect files first.").closest("[data-thread-message-id]")).toHaveAttribute(
+      "data-thread-message-id",
+      "assistant-final",
+    )
   })
 
-  it("localizes the process trace title in Chinese mode", async () => {
+  it("does not render a localized process trace title in Chinese mode", async () => {
     const previousDesktop = window.desktop
     window.desktop = undefined
     window.localStorage.setItem("desktop.locale", "zh-CN")
@@ -2170,8 +2289,8 @@ describe("ThreadView trace collapse", () => {
     )
 
     try {
-      expect(await screen.findByText("\u5df2\u5904\u7406")).toBeInTheDocument()
-      expect(screen.getByRole("button", { name: /\u5df2\u5904\u7406/ })).toHaveAttribute("aria-expanded", "false")
+      expect(await screen.findByText("list-directory")).toBeInTheDocument()
+      expect(screen.queryByText("\u5df2\u5904\u7406")).toBeNull()
     } finally {
       view.unmount()
       window.localStorage.removeItem("desktop.locale")
@@ -2179,8 +2298,8 @@ describe("ThreadView trace collapse", () => {
     }
   })
 
-  it("renders a single short reasoning note before the final response without Processed", () => {
-    const { getByText, queryByRole } = renderThread([
+  it("renders a single short reasoning note before the final response as a reasoning row", () => {
+    const { getByText } = renderThread([
       assistantTraceMessage(
         "assistant-1",
         [
@@ -2205,7 +2324,6 @@ describe("ThreadView trace collapse", () => {
       ),
     ])
 
-    expect(queryByRole("button", { name: /Processed/ })).toBeNull()
     expect(getByText("The user is greeting me in Chinese.")).toBeInTheDocument()
     expect(getByText("Hello! How can I help?")).toBeInTheDocument()
   })
@@ -2236,7 +2354,6 @@ describe("ThreadView trace collapse", () => {
       ),
     ])
 
-    expect(queryByRole("button", { name: /Processed/ })).toBeNull()
     expect(container.textContent).toContain("Inspect files first")
     expect(container.textContent).not.toContain("Then compare the rendering states")
 
@@ -2252,8 +2369,8 @@ describe("ThreadView trace collapse", () => {
     expect(reasoningToggle).toHaveAttribute("aria-expanded", "true")
   })
 
-  it("keeps multiple reasoning notes before the final response inside Processed", () => {
-    const { getByRole, getByText, queryByText } = renderThread([
+  it("keeps multiple reasoning notes before the final response as reasoning rows", () => {
+    const { getByText } = renderThread([
       assistantTraceMessage(
         "assistant-1",
         [
@@ -2286,21 +2403,20 @@ describe("ThreadView trace collapse", () => {
       ),
     ])
 
-    const processedTrace = getByRole("button", { name: /Processed/ })
-    expect(processedTrace).toHaveAttribute("aria-expanded", "false")
-    expect(queryByText("Inspect files first.")).toBeNull()
-    expect(getByText("The project is ready.")).toBeInTheDocument()
-
-    fireEvent.click(processedTrace)
-
-    expect(getByText("Inspect files first.")).toBeInTheDocument()
-    expect(getByText("Compare the rendering states.")).toBeInTheDocument()
+    const firstReasoning = getByText("Inspect files first.")
+    const secondReasoning = getByText("Compare the rendering states.")
+    const finalResponse = getByText("The project is ready.")
+    expect(firstReasoning.closest('[data-thread-row-kind="assistant-reasoning-row"]')).not.toBeNull()
+    expect(secondReasoning.closest('[data-thread-row-kind="assistant-reasoning-row"]')).not.toBeNull()
+    expect(finalResponse.closest('[data-thread-row-kind="assistant-response-row"]')).not.toBeNull()
+    expect(firstReasoning.compareDocumentPosition(secondReasoning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(secondReasoning.compareDocumentPosition(finalResponse) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it("keeps long reasoning before the final response inside Processed", () => {
+  it("keeps long reasoning before the final response as a reasoning row", () => {
     const longReasoning =
       "I need to inspect the existing thread rendering behavior, compare the process trace grouping rules, update the eligibility guard, and make sure the final answer remains easy to scan without hiding meaningful work."
-    const { getByRole, getByText, queryByText } = renderThread([
+    const { getByText } = renderThread([
       assistantTraceMessage(
         "assistant-1",
         [
@@ -2325,18 +2441,11 @@ describe("ThreadView trace collapse", () => {
       ),
     ])
 
-    const processedTrace = getByRole("button", { name: /Processed/ })
-    expect(processedTrace).toHaveAttribute("aria-expanded", "false")
-    expect(queryByText(longReasoning)).toBeNull()
-    expect(getByText("The project is ready.")).toBeInTheDocument()
-
-    fireEvent.click(processedTrace)
-
-    expect(getByText(longReasoning)).toBeInTheDocument()
+    expect(getByText(longReasoning).closest('[data-thread-row-kind="assistant-reasoning-row"]')).not.toBeNull()
+    expect(getByText("The project is ready.").closest('[data-thread-row-kind="assistant-response-row"]')).not.toBeNull()
   })
 
-  it("animates the process trace closed when a streaming assistant message completes", async () => {
-    vi.useFakeTimers()
+  it("keeps semantic assistant rows visible when a streaming message completes", () => {
     const streamingItems: AssistantTraceItem[] = [
       {
         id: "response-1",
@@ -2372,37 +2481,20 @@ describe("ThreadView trace collapse", () => {
       isStreaming: false,
     }))
 
-    try {
-      const { container, getByRole, getByText, props, queryByText, rerender } = renderThread([
-        assistantTraceMessage("assistant-1", streamingItems, true),
-      ])
+    const { getByText, props, rerender } = renderThread([
+      assistantTraceMessage("assistant-1", streamingItems, true),
+    ])
 
-      expect(queryByText("Processed")).toBeNull()
-      expect(getByText("I will inspect the project first.")).toBeInTheDocument()
+    expect(getByText("I will inspect the project first.").closest('[data-thread-row-kind="assistant-response-row"]')).not.toBeNull()
 
-      rerender(<ThreadView {...props} activeMessages={[assistantTraceMessage("assistant-1", completedItems, false)]} />)
+    rerender(<ThreadView {...props} activeMessages={[assistantTraceMessage("assistant-1", completedItems, false)]} />)
 
-      const processedTrace = getByRole("button", { name: /Processed/ })
-      expect(processedTrace).toHaveAttribute("aria-expanded", "false")
-      expect(container.querySelector(".assistant-process-item-row.is-collapsing")).not.toBeNull()
-      expect(getByText("I will inspect the project first.")).toBeInTheDocument()
-      expect(getByText("The project is ready.")).toBeInTheDocument()
-
-      await act(async () => {
-        await Promise.resolve()
-      })
-      act(() => {
-        vi.advanceTimersByTime(250)
-      })
-
-      expect(queryByText("I will inspect the project first.")).toBeNull()
-      expect(getByText("The project is ready.")).toBeInTheDocument()
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(getByText("I will inspect the project first.").closest('[data-thread-row-kind="assistant-response-row"]')).not.toBeNull()
+    expect(getByText("list-directory").closest('[data-thread-row-kind="assistant-tool-row"]')).not.toBeNull()
+    expect(getByText("The project is ready.").closest('[data-thread-row-kind="assistant-response-row"]')).not.toBeNull()
   })
 
-  it("keeps manually expanded process trace content anchored instead of following the bottom", () => {
+  it("keeps visible semantic trace content anchored instead of following the bottom", () => {
     const originalResizeObserver = globalThis.ResizeObserver
     let triggerResize: (() => void) | null = null
 
@@ -2426,7 +2518,7 @@ describe("ThreadView trace collapse", () => {
     globalThis.ResizeObserver = ManualResizeObserver
 
     try {
-      const { getByRole, getByText, threadColumn } = renderThread(
+      const { getByText, threadColumn } = renderThread(
         [
           assistantTraceMessage(
             "assistant-1",
@@ -2459,7 +2551,7 @@ describe("ThreadView trace collapse", () => {
             false,
           ),
         ],
-        { scrollStateKey: "session:processed-manual-expand" },
+        { scrollStateKey: "session:semantic-trace-anchor" },
       )
       setScrollMetrics(threadColumn, {
         clientHeight: 400,
@@ -2467,7 +2559,6 @@ describe("ThreadView trace collapse", () => {
         scrollTop: 400,
       })
 
-      fireEvent.click(getByRole("button", { name: /Processed/ }))
       expect(getByText("I will inspect the project first.")).toBeInTheDocument()
 
       setScrollMetrics(threadColumn, {
@@ -2485,7 +2576,7 @@ describe("ThreadView trace collapse", () => {
     }
   })
 
-  it("collapses process trace when a failed tool is followed by a final response", () => {
+  it("renders failed tool trace before the final response as semantic rows", () => {
     const assistantMessage = assistantTraceMessage(
       "assistant-1",
       [
@@ -2517,7 +2608,7 @@ describe("ThreadView trace collapse", () => {
       false,
     )
 
-    const { getByRole, getByText, queryByText } = renderThread([
+    const { getByText } = renderThread([
       {
         ...assistantMessage,
         runtime: {
@@ -2528,16 +2619,10 @@ describe("ThreadView trace collapse", () => {
       },
     ])
 
-    const processedTrace = getByRole("button", { name: /Processed/ })
-    expect(processedTrace).toHaveAttribute("aria-expanded", "false")
-    expect(queryByText("Let me test the tools first.")).toBeNull()
-    expect(queryByText("lsp_workspace_symbols")).toBeNull()
+    expect(getByText("Let me test the tools first.").closest('[data-thread-row-kind="assistant-response-row"]')).not.toBeNull()
+    expect(getByText("lsp_workspace_symbols").closest('[data-thread-row-kind="assistant-tool-row"]')).not.toBeNull()
     expect(getByText("所有工具测试结果：")).toBeInTheDocument()
 
-    fireEvent.click(processedTrace)
-
-    expect(getByText("Let me test the tools first.")).toBeInTheDocument()
-    expect(getByText("lsp_workspace_symbols")).toBeInTheDocument()
   })
 })
 
@@ -3536,16 +3621,20 @@ describe("ThreadView message actions", () => {
     const finalAssistantOutput = getByText("Final answer after file updates.")
 
     expect(summaryButton).toBeInTheDocument()
-    expect(summaryButton).toHaveAttribute("aria-expanded", "true")
+    expect(summaryButton).toHaveAttribute("aria-expanded", "false")
     expect(finalAssistantOutput.compareDocumentPosition(summaryButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(getByRole("button", { name: "审核" })).toBeInTheDocument()
     expect(getByRole("button", { name: "撤销" })).toBeInTheDocument()
     expect(queryByRole("button", { name: /审核\s+src\/App\.tsx/i })).toBeNull()
+    expect(queryByRole("button", { name: /展开\s+src\/App\.tsx\s+变更/i })).toBeNull()
+
+    fireEvent.click(summaryButton)
+    expect(summaryButton).toHaveAttribute("aria-expanded", "true")
     expect(getByRole("button", { name: /展开\s+src\/App\.tsx\s+变更/i })).toBeInTheDocument()
     expect(queryByRole("region", { name: "Diff preview for src/App.tsx" })).not.toBeInTheDocument()
 
     fireEvent.click(getByRole("button", { name: "审核" }))
-    fireEvent.click(getByRole("button", { name: /src\/App\.tsx/i }))
+    fireEvent.click(getByRole("button", { name: /展开\s+src\/App\.tsx\s+变更/i }))
     expect(getByRole("region", { name: "Diff preview for src/App.tsx" })).toBeInTheDocument()
     expect(getByText("old app")).toBeInTheDocument()
     expect(getByText("new app")).toBeInTheDocument()
@@ -3632,6 +3721,7 @@ describe("ThreadView message actions", () => {
       },
     )
 
+    fireEvent.click(screen.getByRole("button", { name: /1 个文件已更改/i }))
     fireEvent.click(screen.getByRole("button", { name: "展开 tetris.html 变更" }))
 
     expect(screen.getByRole("region", { name: "Diff preview for tetris.html" })).toBeInTheDocument()
@@ -3689,6 +3779,9 @@ describe("ThreadView message actions", () => {
       buildPatchAssistantMessage("assistant-second-diff", "first message", "second message"),
     ])
 
+    screen.getAllByRole("button", { name: /1 个文件已更改/i }).forEach((button) => {
+      fireEvent.click(button)
+    })
     const sharedFileButtons = screen.getAllByRole("button", { name: "展开 src/shared.ts 变更" })
     fireEvent.click(sharedFileButtons[0]!)
 
@@ -3762,6 +3855,9 @@ describe("ThreadView message actions", () => {
       },
     )
 
+    screen.getAllByRole("button", { name: /1 个文件已更改/i }).forEach((button) => {
+      fireEvent.click(button)
+    })
     const latestSharedPatchButtons = screen.getAllByRole("button", { name: "展开 src/shared.ts 变更" })
     expect(latestSharedPatchButtons).toHaveLength(1)
     fireEvent.click(latestSharedPatchButtons[0]!)
@@ -3988,7 +4084,7 @@ describe("ThreadView message actions", () => {
     })
     const onOpenSideChat = vi.fn()
 
-    const { container, getAllByRole, getByRole, getByText, queryByText } = renderThread(
+    const { container, getAllByRole, getByRole, getByText } = renderThread(
       [
         userMessage("user-with-diff", "Please update the file."),
         {
@@ -4056,23 +4152,17 @@ describe("ThreadView message actions", () => {
     const sideChatButtons = getAllByRole("button", { name: "Open side chat" })
     expect(copyButtons).toHaveLength(1)
     expect(sideChatButtons).toHaveLength(1)
-    const processTraceButton = getByRole("button", { name: /Processed/ })
-    expect(processTraceButton).toHaveAttribute("aria-expanded", "false")
-    expect(queryByText("I will check the directory first.")).toBeNull()
 
-    const actionRow = copyButtons[0]?.closest(".assistant-response-side-chat")
-    const assistantShell = copyButtons[0]?.closest(".assistant-shell")
+    const actionRow = copyButtons[0]?.closest(".assistant-actions-row")
+    const firstResponseSection = getByText("I will check the directory first.").closest(".assistant-section")
     const finalResponseSection = getByText("Deleted. The directory is empty now.").closest(".assistant-section")
     const fileChangeSection = getByRole("region", { name: "File Changes" })
-    const trailingDiffCard = container.querySelector(".assistant-shell > .user-message-diff-card")
-    fireEvent.click(processTraceButton)
-    const firstResponseSection = getByText("I will check the directory first.").closest(".assistant-section")
+    const trailingDiffCard = container.querySelector(".assistant-diff-row .user-message-diff-card")
 
     expect(actionRow).not.toBeNull()
     expect(trailingDiffCard).not.toBeNull()
     const actionRowElement = actionRow as HTMLElement
     const trailingDiffCardElement = trailingDiffCard as HTMLElement
-    expect(assistantShell?.contains(actionRow)).toBe(true)
     expect(firstResponseSection?.contains(actionRow)).toBe(false)
     expect(finalResponseSection?.contains(actionRow)).toBe(false)
     expect(actionRow?.closest(".assistant-section")).toBeNull()
@@ -4094,7 +4184,7 @@ describe("ThreadView message actions", () => {
     })
     const onOpenSideChat = vi.fn()
 
-    const { getAllByRole, getByRole, getByText, queryByText } = renderThread(
+    const { getAllByRole, getByText } = renderThread(
       [
         userMessage("user-1", "Check the setup."),
         assistantTraceMessage(
@@ -4131,21 +4221,21 @@ describe("ThreadView message actions", () => {
 
     const copyButtons = getAllByRole("button", { name: "Copy assistant response" })
     const sideChatButtons = getAllByRole("button", { name: "Open side chat" })
-    const processTraceButton = getByRole("button", { name: /Processed/ })
-    const finalShell = getByText("The plugin is available.").closest(".assistant-shell")
+    const foldedTraceText = getByText("I will inspect the plugin first.")
+    const foldedResponseRow = foldedTraceText.closest('[data-thread-row-kind="assistant-response-row"]')
+    const finalResponseRow = getByText("The plugin is available.").closest('[data-thread-row-kind="assistant-response-row"]')
+    const actionRow = copyButtons[0]?.closest(".assistant-actions-row")
 
     expect(copyButtons).toHaveLength(1)
     expect(sideChatButtons).toHaveLength(1)
-    expect(processTraceButton).toHaveAttribute("aria-expanded", "false")
-    expect(queryByText("I will inspect the plugin first.")).toBeNull()
-    expect(finalShell?.querySelector(".assistant-response-actions")).not.toBeNull()
-
-    fireEvent.click(processTraceButton)
-    const foldedTraceText = getByText("I will inspect the plugin first.")
-    expect(foldedTraceText).toBeInTheDocument()
-    expect(foldedTraceText.closest(".thread-column")).toBe(finalShell?.closest(".thread-column"))
-    expect(foldedTraceText.closest(".assistant-process-item-row")).not.toBeNull()
-    expect(foldedTraceText.closest(".assistant-shell")).not.toBe(finalShell)
+    expect(actionRow).not.toBeNull()
+    expect(foldedResponseRow).not.toBeNull()
+    expect(finalResponseRow).not.toBeNull()
+    expect(foldedResponseRow).not.toBe(finalResponseRow)
+    expect(foldedResponseRow).toHaveAttribute("data-thread-message-id", "assistant-final")
+    expect(foldedTraceText.closest(".thread-column")).toBe(finalResponseRow?.closest(".thread-column"))
+    expect(foldedTraceText.compareDocumentPosition(getByText("The plugin is available.")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(finalResponseRow!.compareDocumentPosition(actionRow as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
     fireEvent.click(copyButtons[0]!)
     expect(writeText).toHaveBeenCalledWith("The plugin is available.")
@@ -4155,7 +4245,7 @@ describe("ThreadView message actions", () => {
   })
 
   it("folds stale streaming intermediate assistant messages into the final response trace", () => {
-    const { container, getByRole, getByText, queryByText } = renderThread([
+    const { container, getByText } = renderThread([
       userMessage("user-1", "Build the game."),
       assistantTraceMessage(
         "assistant-stale-stream",
@@ -4188,23 +4278,16 @@ describe("ThreadView message actions", () => {
       ),
     ])
 
-    const processedTraceButton = getByRole("button", { name: /Processed/ })
     const finalResponse = getByText("好的，经典横刀立马开局。")
-    const processTraceRow = processedTraceButton.closest(".assistant-process-trace-row") as HTMLElement | null
-    const finalAssistantMessage = finalResponse.closest(".assistant-message") as HTMLElement | null
-
-    expect(processedTraceButton).toHaveAttribute("aria-expanded", "false")
-    expect(queryByText("OK, now let me create the full HTML file.")).toBeNull()
-    expect(container.querySelectorAll(".assistant-message")).toHaveLength(1)
-    expect(processTraceRow).not.toBeNull()
-    expect(finalAssistantMessage).not.toBeNull()
-    expect(processTraceRow!.compareDocumentPosition(finalAssistantMessage!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-
-    fireEvent.click(processedTraceButton)
-
     const foldedStreamingText = getByText("OK, now let me create the full HTML file.")
-    expect(foldedStreamingText.closest(".assistant-process-item-row")).not.toBeNull()
-    expect(foldedStreamingText.closest(".assistant-message")).toBeNull()
+    const foldedStreamingRow = foldedStreamingText.closest('[data-thread-row-kind="assistant-response-row"]') as HTMLElement | null
+    const finalResponseRow = finalResponse.closest('[data-thread-row-kind="assistant-response-row"]') as HTMLElement | null
+
+    expect(container.querySelectorAll(".assistant-message")).toHaveLength(0)
+    expect(foldedStreamingRow).not.toBeNull()
+    expect(finalResponseRow).not.toBeNull()
+    expect(foldedStreamingRow).toHaveAttribute("data-thread-message-id", "assistant-final")
+    expect(foldedStreamingRow!.compareDocumentPosition(finalResponseRow!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it("copies assistant responses without the response format marker", () => {

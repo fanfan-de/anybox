@@ -1,13 +1,9 @@
-import { Component, memo, useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ErrorInfo, type FormEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject, type WheelEvent as ReactWheelEvent } from "react"
+﻿import { Component, memo, useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ErrorInfo, type FormEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject, type WheelEvent as ReactWheelEvent } from "react"
 import { createPortal } from "react-dom"
 import { getAgentSessionBridge } from "../agent-session/client"
 import { Composer } from "../composer/Composer"
 import { ComposerConcurrentInputDrawer } from "../composer/ComposerConcurrentInputDrawer"
-import {
-  COMPOSER_LONG_TEXT_CHARACTER_THRESHOLD,
-  COMPOSER_LONG_TEXT_LINE_THRESHOLD,
-  createEmptyComposerDraftState,
-} from "../composer/draft-state"
+import { createEmptyComposerDraftState } from "../composer/draft-state"
 import { DiffPreview } from "../diff/DiffPreview"
 import {
   ChangesIcon,
@@ -16,23 +12,15 @@ import {
   CloseIcon,
   CopyIcon,
   DeleteIcon,
-  ForkIcon,
   InfoIcon,
   MinimizeIcon,
   PaperclipIcon,
   PlusIcon,
   ResetIcon,
-  SideChatIcon,
 } from "../icons"
 import { joinClassNames, writeTextToClipboard } from "../shared-ui"
-import { getSessionMessageIDForMessage, type SessionMessageBranchOption, type SessionMessageTree } from "../session-message-tree"
+import { type SessionMessageBranchOption, type SessionMessageTree } from "../session-message-tree"
 import { buildThreadMessagesFromHistory } from "../stream"
-import {
-  getAssistantStreamInsertionUserMessages,
-  hasStreamInsertionTarget,
-  isPendingSteerUserMessage,
-  resolveStreamInsertionItemIndex,
-} from "../stream-insertion"
 import {
   ThreadMarkdown,
   normalizeMarkdownLinkTarget,
@@ -48,9 +36,7 @@ import {
   RendererProfiler,
   createRendererProfilerOnRender,
   logRendererPerf,
-  measureRendererPerf,
 } from "../perf-profiler"
-import { SIDEBAR_RESIZE_END_EVENT } from "../sidebar-resize-events"
 import type {
   AssistantTraceDebugEntry,
   AssistantTraceFileChange,
@@ -58,10 +44,8 @@ import type {
   AssistantTraceItemKind,
   AssistantTraceSectionKey,
   AssistantTraceVisibility,
-  AssistantTraceVisibilityKey,
   AssistantThreadMessage,
   AssistantThreadMessagePhase,
-  AssistantThreadMessageRuntime,
   ComposerAttachment,
   ComposerDraftState,
   ComposerPastedImageAttachment,
@@ -78,32 +62,33 @@ import type {
 import { useProjectComposer } from "../use-project-composer"
 import { mergeUserMessagePresentationState, readPersistedUserMessages } from "../user-message-presentation"
 import { formatTime } from "../utils"
-import { isSideChatSession } from "../workspace"
+import {
+  getUserMessageBodyText,
+  shouldCollapseUserMessageText,
+  traceSectionKeyForItem,
+  type ThreadDisplayRow,
+} from "./thread-display-rows"
+import {
+  ThreadRowRenderer,
+  type ImagePreviewPayload,
+  type PermissionRequestResponseHandler,
+  type ProposedPlanConfirmHandler,
+  type QuestionAnswerHandler,
+  type ThreadMessageMotion,
+  type ThreadRowRendererComponents,
+  type TraceRowItemRenderInput,
+} from "./ThreadRowRenderer"
+import { ThreadRows } from "./ThreadRows"
+import { useThreadContentObserver } from "./use-thread-content-observer"
+import { useThreadProjection } from "./use-thread-projection"
+import { useThreadScrollController, type ThreadFollowScrollTarget, type ThreadScrollSnapshot } from "./use-thread-scroll-controller"
+import { useThreadVirtualList } from "./use-thread-virtual-list"
 
-type ProposedPlanConfirmHandler = (input: { planMarkdown: string }) => void | Promise<void>
+export type { ThreadScrollSnapshot } from "./use-thread-scroll-controller"
+
+const EMPTY_FILE_CHANGES: AssistantTraceFileChange[] = []
+
 type ProposedPlanCardStatus = "idle" | "cancelled" | "confirming" | "confirmed"
-export type ThreadMessageMotion = "history" | "new" | "live"
-type ThreadScrollMode = "follow" | "detached"
-
-export interface ThreadScrollSnapshot {
-  scrollTop: number
-  pinnedToBottom: boolean
-  updatedAt: number
-}
-
-interface ThreadFollowScrollTarget {
-  scrollTop: number
-  visualScrollTop: number
-}
-
-interface ThreadSmoothFollowScroll {
-  duration: number
-  frameID: number | null
-  fromScrollTop: number
-  key: string
-  startedAt: number
-  targetScrollTop: number
-}
 
 interface ThreadViewProps {
   activeProjectID?: string | null
@@ -185,21 +170,6 @@ interface ThreadViewProps {
   onSideChatSelect?: (sessionID: string) => void | Promise<void>
 }
 
-type PermissionRequestResponseHandler = (input: {
-  sessionID: string
-  request: PermissionRequest
-  decision: PermissionDecision
-  note?: string
-}) => void | Promise<void>
-
-type QuestionAnswerHandler = (input: {
-  text: string
-  questionID?: string
-  sessionID?: string | null
-  selectedOptions?: string[]
-  freeformText?: string
-}) => void | Promise<void>
-
 const IMAGE_LIGHTBOX_BODY_CLASS = "is-image-lightbox-open"
 const IMAGE_LIGHTBOX_FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 const IMAGE_LIGHTBOX_MIN_ZOOM = 0.5
@@ -208,97 +178,15 @@ const PROPOSED_PLAN_OPEN_TAG = "<proposed_plan>"
 const PROPOSED_PLAN_CLOSE_TAG = "</proposed_plan>"
 const IMAGE_LIGHTBOX_ZOOM_STEP = 0.1
 const IMAGE_TALL_RATIO_THRESHOLD = 1.8
-const THREAD_BOTTOM_LOCK_THRESHOLD_PX = 32
-const THREAD_USER_SCROLL_INTENT_WINDOW_MS = 800
-const THREAD_COMPLETION_SCROLL_SYNC_SUPPRESS_MS = 600
-const THREAD_TOP_RESET_THRESHOLD_PX = 2
-const THREAD_FOLLOW_SMOOTH_SCROLL_MIN_DELTA_PX = 6
-const THREAD_FOLLOW_SMOOTH_SCROLL_MAX_DELTA_PX = 420
-const THREAD_FOLLOW_SMOOTH_SCROLL_MIN_DURATION_MS = 90
-const THREAD_FOLLOW_SMOOTH_SCROLL_MAX_DURATION_MS = 220
-const THREAD_FOLLOW_SMOOTH_SCROLL_PX_PER_MS = 2.4
 const THREAD_STREAMING_RESPONSE_SELECTOR = ".assistant-section.is-response .trace-item.is-streaming[data-kind=\"text\"]"
 const THREAD_AUTO_COLLAPSE_MOTION_MS = 240
-const THREAD_VIRTUALIZATION_MIN_ROWS = 80
-const THREAD_VIRTUAL_OVERSCAN_PX = 900
-const THREAD_VIRTUAL_OVERSCAN_ROWS = 2
-const THREAD_VIRTUAL_ROW_GAP_PX = 7
-const THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX = 12
-const THREAD_VIRTUAL_ROW_MEASURE_EPSILON_PX = 1
-const LONG_USER_MESSAGE_CHARACTER_THRESHOLD = COMPOSER_LONG_TEXT_CHARACTER_THRESHOLD
-const LONG_USER_MESSAGE_LINE_THRESHOLD = COMPOSER_LONG_TEXT_LINE_THRESHOLD
-const SHORT_PROCESS_REASONING_CHARACTER_THRESHOLD = 160
-const SHORT_PROCESS_REASONING_LINE_THRESHOLD = 3
-const COLLAPSED_USER_MESSAGE_ESTIMATED_CHARACTERS = 640
 const TRACE_REASONING_PREVIEW_CHARACTER_LIMIT = 480
 const TRACE_PATCH_PREVIEW_CHARACTER_LIMIT = 20000
 const TRACE_PATCH_PREVIEW_LINE_LIMIT = 200
-const threadScrollSnapshots = new Map<string, ThreadScrollSnapshot>()
 
 interface LatestAssistantMessageState {
   id: string
   isStreaming: boolean
-}
-
-type ThreadDisplayRow =
-  | {
-      estimatedHeight: number
-      kind: "user-message"
-      rowID: string
-      message: UserThreadMessage
-      messageIndex: number
-    }
-  | {
-      blocks: AssistantTraceBlock[]
-      collapsing: boolean
-      estimatedHeight: number
-      expanded: boolean
-      kind: "process-header"
-      rowID: string
-      shouldCollapseReasoningAndTools: boolean
-      message: AssistantThreadMessage
-      messageID: string
-      messageIndex: number
-    }
-  | {
-      collapsing: boolean
-      estimatedHeight: number
-      item: AssistantTraceItem
-      itemID: string
-      kind: "process-item"
-      rowID: string
-      section: AssistantTraceSectionKey
-      shouldCollapseReasoningAndTools: boolean
-      message: AssistantThreadMessage
-      messageID: string
-      messageIndex: number
-    }
-  | {
-      ephemeralHint: string | null
-      estimatedHeight: number
-      insertedUserMessages: UserThreadMessage[]
-      kind: "assistant-message"
-      rowID: string
-      processPrefixItems: AssistantTraceItem[]
-      renderedItems: AssistantTraceItem[]
-      message: AssistantThreadMessage
-      messageIndex: number
-    }
-  | {
-      estimatedHeight: number
-      kind: "permission-request"
-      rowID: string
-    }
-
-type ThreadViewUiState = {
-  processTraceCollapseMotionByMessageID: Record<string, boolean>
-  processTraceExpansionByMessageID: Record<string, boolean>
-}
-
-interface AssistantTraceRenderSplit {
-  stableItems: AssistantTraceItem[]
-  liveItems: AssistantTraceItem[]
-  isSplit: boolean
 }
 
 interface TraceTextPreview {
@@ -309,44 +197,7 @@ interface TraceTextPreview {
 
 type PatchPreviewState = "summary" | "preview" | "full"
 
-interface ThreadVirtualLayoutItem {
-  height: number
-  index: number
-  row: ThreadDisplayRow
-  top: number
-}
-
-interface ThreadVirtualLayout {
-  items: ThreadVirtualLayoutItem[]
-  totalHeight: number
-}
-
-interface ThreadVirtualRange {
-  endIndex: number
-  items: ThreadVirtualLayoutItem[]
-  startIndex: number
-}
-
-interface ThreadVirtualViewport {
-  height: number
-  paddingTop: number
-  scrollTop: number
-}
-
-interface ThreadVirtualViewportSyncOptions {
-  forceCommit?: boolean
-}
-
 type ImagePreviewFitMode = "fit-width" | "fit-contain"
-
-interface ImagePreviewPayload {
-  src: string
-  alt: string
-  width?: number
-  height?: number
-  mimeType?: string
-  triggerElement?: HTMLButtonElement | null
-}
 
 interface ActiveImagePreview extends ImagePreviewPayload {
   openedAt: number
@@ -366,23 +217,8 @@ function getFocusableElements(container: HTMLElement | null) {
   return Array.from(container.querySelectorAll<HTMLElement>(IMAGE_LIGHTBOX_FOCUSABLE_SELECTOR))
 }
 
-function isThreadColumnPinnedToBottom(threadColumn: HTMLDivElement) {
-  return threadColumn.scrollHeight - threadColumn.scrollTop - threadColumn.clientHeight <= THREAD_BOTTOM_LOCK_THRESHOLD_PX
-}
-
 function getThreadScrollMaxTop(threadColumn: HTMLDivElement) {
   return Math.max(0, threadColumn.scrollHeight - threadColumn.clientHeight)
-}
-
-function easeThreadFollowScroll(progress: number) {
-  return 1 - Math.pow(1 - progress, 3)
-}
-
-function getThreadSmoothFollowScrollDuration(delta: number) {
-  return Math.min(
-    THREAD_FOLLOW_SMOOTH_SCROLL_MAX_DURATION_MS,
-    Math.max(THREAD_FOLLOW_SMOOTH_SCROLL_MIN_DURATION_MS, delta / THREAD_FOLLOW_SMOOTH_SCROLL_PX_PER_MS),
-  )
 }
 
 function isUsableThreadLayoutRect(rect: DOMRect) {
@@ -400,22 +236,6 @@ function prefersReducedThreadMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches
 }
 
-function clampThreadScrollTop(threadColumn: HTMLDivElement, scrollTop: number) {
-  return Math.min(Math.max(0, scrollTop), getThreadScrollMaxTop(threadColumn))
-}
-
-function canRepresentThreadScrollTop(threadColumn: HTMLDivElement, scrollTop: number) {
-  return getThreadScrollMaxTop(threadColumn) >= scrollTop - THREAD_TOP_RESET_THRESHOLD_PX
-}
-
-function readThreadScrollSnapshot(threadColumn: HTMLDivElement): ThreadScrollSnapshot {
-  return {
-    scrollTop: threadColumn.scrollTop,
-    pinnedToBottom: isThreadColumnPinnedToBottom(threadColumn),
-    updatedAt: Date.now(),
-  }
-}
-
 function readLatestAssistantMessageState(messages: ThreadMessage[]): LatestAssistantMessageState | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]
@@ -423,90 +243,6 @@ function readLatestAssistantMessageState(messages: ThreadMessage[]): LatestAssis
   }
 
   return null
-}
-
-function readAssistantMessageOrderTimestamp(message: AssistantThreadMessage) {
-  const traceTimestamps = message.items
-    .filter((item) => !item.sourceID?.endsWith(":stream-placeholder") && item.kind !== "system")
-    .map((item) => item.timestamp)
-    .filter((timestamp) => Number.isFinite(timestamp))
-
-  if (traceTimestamps.length > 0) return Math.min(...traceTimestamps)
-
-  const runtimeTimestamps = [
-    message.runtime.firstVisibleAt,
-    message.runtime.startedAt,
-    message.timestamp,
-  ].filter((timestamp): timestamp is number => Number.isFinite(timestamp))
-
-  return runtimeTimestamps.length > 0 ? Math.min(...runtimeTimestamps) : 0
-}
-
-function orderAdjacentAssistantMessagesForDisplay(messages: ThreadMessage[]) {
-  const orderedMessages = [...messages]
-  let assistantBlockStart = -1
-
-  const flushAssistantBlock = (endIndex: number) => {
-    if (assistantBlockStart < 0) return
-
-    const startIndex = assistantBlockStart
-    assistantBlockStart = -1
-    if (endIndex - startIndex <= 1) return
-
-    const assistantBlock = orderedMessages.slice(startIndex, endIndex)
-    const shouldOrderByTraceTime = assistantBlock.some(
-      (message) => message.kind === "assistant" && (message.isStreaming || !isTerminalAssistantMessagePhase(message.runtime.phase)),
-    )
-    if (!shouldOrderByTraceTime) return
-
-    const orderedAssistantBlock = assistantBlock
-      .map((message, index) => ({ message, index }))
-      .sort((left, right) => {
-        const leftMessage = left.message
-        const rightMessage = right.message
-        if (leftMessage.kind !== "assistant" || rightMessage.kind !== "assistant") return left.index - right.index
-
-        const timestampDelta = readAssistantMessageOrderTimestamp(leftMessage) - readAssistantMessageOrderTimestamp(rightMessage)
-        return timestampDelta || left.index - right.index
-      })
-      .map(({ message }) => message)
-
-    orderedMessages.splice(startIndex, endIndex - startIndex, ...orderedAssistantBlock)
-  }
-
-  for (let index = 0; index < orderedMessages.length; index += 1) {
-    if (orderedMessages[index]?.kind === "assistant") {
-      if (assistantBlockStart < 0) assistantBlockStart = index
-      continue
-    }
-
-    flushAssistantBlock(index)
-  }
-
-  flushAssistantBlock(orderedMessages.length)
-  return orderedMessages
-}
-
-function resolveAssistantSideChatAnchorMessageID(messages: ThreadMessage[], message: AssistantThreadMessage) {
-  if (!message.messageID) return message.id
-
-  const hasDuplicateBackendMessageSegment = messages.some(
-    (candidate) =>
-      candidate.kind === "assistant" &&
-      candidate.id !== message.id &&
-      candidate.backendTurnID === message.backendTurnID &&
-      candidate.messageID === message.messageID &&
-      candidate.segmentID !== message.segmentID,
-  )
-
-  return hasDuplicateBackendMessageSegment ? message.segmentID : message.messageID
-}
-
-function readThreadColumnPaddingTop(threadColumn: HTMLDivElement) {
-  if (typeof window === "undefined") return 0
-
-  const value = Number.parseFloat(window.getComputedStyle(threadColumn).paddingTop)
-  return Number.isFinite(value) ? value : 0
 }
 
 function readThreadColumnPaddingBottom(threadColumn: HTMLDivElement) {
@@ -526,7 +262,7 @@ function getStreamingResponseScrollTarget(threadColumn: HTMLDivElement): ThreadF
 
   for (const element of candidates) {
     if (element.closest(".thread-column") !== threadColumn) continue
-    if (!element.closest(".assistant-message[data-thread-message-id]")) continue
+    if (!element.closest("[data-thread-row-kind=\"assistant-response-row\"][data-thread-message-id]")) continue
 
     const elementRect = element.getBoundingClientRect()
     if (!isUsableThreadLayoutRect(elementRect)) continue
@@ -541,236 +277,6 @@ function getStreamingResponseScrollTarget(threadColumn: HTMLDivElement): ThreadF
   }
 
   return null
-}
-
-function buildThreadVirtualLayout(rows: ThreadDisplayRow[], measuredHeights: Map<string, number>): ThreadVirtualLayout {
-  const items: ThreadVirtualLayoutItem[] = []
-  let top = 0
-
-  rows.forEach((row, index) => {
-    const measuredHeight = measuredHeights.get(row.rowID)
-    const height = Math.max(THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX, measuredHeight ?? row.estimatedHeight)
-    items.push({
-      height,
-      index,
-      row,
-      top,
-    })
-    top += height
-    if (index < rows.length - 1) {
-      top += THREAD_VIRTUAL_ROW_GAP_PX
-    }
-  })
-
-  return {
-    items,
-    totalHeight: top,
-  }
-}
-
-function findThreadVirtualRange(layout: ThreadVirtualLayout, viewport: ThreadVirtualViewport): ThreadVirtualRange {
-  if (layout.items.length === 0) {
-    return {
-      endIndex: 0,
-      items: [],
-      startIndex: 0,
-    }
-  }
-
-  const viewportTop = Math.max(0, viewport.scrollTop - viewport.paddingTop)
-  const startOffset = Math.max(0, viewportTop - THREAD_VIRTUAL_OVERSCAN_PX)
-  const endOffset = viewportTop + Math.max(0, viewport.height) + THREAD_VIRTUAL_OVERSCAN_PX
-  let startIndex = layout.items.findIndex((item) => item.top + item.height >= startOffset)
-  if (startIndex === -1) startIndex = layout.items.length - 1
-
-  let endIndex = startIndex
-  while (endIndex < layout.items.length && layout.items[endIndex]!.top <= endOffset) {
-    endIndex += 1
-  }
-
-  startIndex = Math.max(0, startIndex - THREAD_VIRTUAL_OVERSCAN_ROWS)
-  endIndex = Math.min(layout.items.length, endIndex + THREAD_VIRTUAL_OVERSCAN_ROWS)
-
-  return {
-    endIndex,
-    items: layout.items.slice(startIndex, endIndex),
-    startIndex,
-  }
-}
-
-function readResizeEntryBlockSize(entry: ResizeObserverEntry) {
-  const borderBoxSize = Array.isArray(entry.borderBoxSize)
-    ? entry.borderBoxSize[0]
-    : entry.borderBoxSize
-  const height = borderBoxSize?.blockSize ?? entry.contentRect?.height
-
-  return Number.isFinite(height) ? height : null
-}
-
-function estimateAssistantTraceItemHeight(item: AssistantTraceItem) {
-  const textLength = `${item.title ?? ""}${item.text ?? ""}${item.detail ?? ""}`.length
-  const textHeight = Math.min(320, Math.max(42, Math.ceil(textLength / 110) * 22))
-  const kindHeight =
-    item.kind === "tool" || item.kind === "patch" || item.kind === "file" || item.kind === "image"
-      ? 84
-      : item.kind === "reasoning"
-        ? 58
-        : 48
-  const draftPatchFileCount = normalizeTraceFileChanges(item.draftPatch?.fileChanges).length
-  const draftPatchHeight = draftPatchFileCount > 0 ? Math.min(220, Math.max(48, draftPatchFileCount * 28 + 34)) : 0
-  return Math.max(kindHeight + draftPatchHeight, textHeight)
-}
-
-function estimateAssistantThreadRowHeight(row: {
-  ephemeralHint: string | null
-  insertedUserMessages: UserThreadMessage[]
-  renderedItems: AssistantTraceItem[]
-  message: AssistantThreadMessage
-}) {
-  if (row.ephemeralHint) return 96 + row.insertedUserMessages.length * 92
-
-  const itemEstimate = row.renderedItems.reduce((height, item) => height + estimateAssistantTraceItemHeight(item), 64)
-
-  return Math.max(row.message.isStreaming ? 180 : 140, itemEstimate + row.insertedUserMessages.length * 92)
-}
-
-function estimateUserThreadRowHeight(message: UserThreadMessage) {
-  const bodyText = getUserMessageBodyText(message)
-  const isCollapsedByDefault = shouldCollapseUserMessageText(bodyText)
-  const textLength = isCollapsedByDefault ? Math.min(bodyText.length, COLLAPSED_USER_MESSAGE_ESTIMATED_CHARACTERS) : bodyText.length
-  const attachmentCount = message.attachments?.length ?? 0
-  const diffHeight = hasUserMessageDiffSummary(message) ? 220 : 0
-  const collapseControlHeight = isCollapsedByDefault ? 30 : 0
-  return 64 + Math.ceil(textLength / 90) * 22 + collapseControlHeight + attachmentCount * 28 + diffHeight
-}
-
-function buildThreadDisplayRows({
-  activeSession,
-  activeMessages,
-  assistantTraceVisibility,
-  isResolvingPermissionRequest,
-  pendingPermissionRequests,
-  uiState,
-}: {
-  activeSession: SessionSummary | null
-  activeMessages: ThreadMessage[]
-  assistantTraceVisibility: AssistantTraceVisibility
-  isResolvingPermissionRequest: boolean
-  pendingPermissionRequests: PermissionRequest[]
-  uiState: ThreadViewUiState
-}): ThreadDisplayRow[] {
-  if (!activeSession) return []
-
-  const rows: ThreadDisplayRow[] = []
-  activeMessages.forEach((message, messageIndex) => {
-    if (message.kind === "user") {
-      if (hasStreamInsertionTarget(activeMessages, message)) return
-
-      rows.push({
-        estimatedHeight: estimateUserThreadRowHeight(message),
-        kind: "user-message",
-        rowID: message.id,
-        message: message,
-        messageIndex,
-      })
-      return
-    }
-
-    if (shouldFoldAssistantMessageIntoFinalRunTrace(activeMessages, messageIndex, message)) return
-
-    const processPrefixItems = collectAssistantRunProcessPrefixItems(
-      activeMessages,
-      messageIndex,
-      assistantTraceVisibility,
-    )
-    const insertedUserMessages = getAssistantStreamInsertionUserMessages(activeMessages, message)
-    const renderedItems = filterRenderedAssistantTraceItems(
-      message.items,
-      !message.isStreaming,
-      assistantTraceVisibility,
-    )
-    const ephemeralHint = renderedItems.length === 0 ? getAssistantEphemeralHint(message) : null
-    if (renderedItems.length === 0 && !ephemeralHint && insertedUserMessages.length === 0) return
-
-    const shouldCollapseReasoningAndTools = canCollapseAssistantProcessTrace(message)
-    const traceDisplayBlocks = buildAssistantTraceDisplayBlocks({
-      items: message.items,
-      processPrefixItems,
-      showFileChanges: !message.isStreaming,
-      shouldCollapseReasoningAndTools,
-      traceVisibility: assistantTraceVisibility,
-    })
-    const processTraceCollapsing = Boolean(uiState.processTraceCollapseMotionByMessageID[message.id])
-    const processTraceExpanded =
-      (uiState.processTraceExpansionByMessageID[message.id] ?? !shouldCollapseReasoningAndTools) && !processTraceCollapsing
-
-    if (!ephemeralHint && traceDisplayBlocks.shouldRenderProcessTrace) {
-      rows.push({
-        blocks: traceDisplayBlocks.processBlocks,
-        collapsing: processTraceCollapsing,
-        estimatedHeight: 34,
-        expanded: processTraceExpanded,
-        kind: "process-header",
-        rowID: `process-header:${message.id}`,
-        shouldCollapseReasoningAndTools,
-        message: message,
-        messageID: message.id,
-        messageIndex,
-      })
-
-      if (processTraceExpanded || processTraceCollapsing) {
-        traceDisplayBlocks.processBlocks.forEach((block, blockIndex) => {
-          getAssistantTraceBlockRenderedItems(block).forEach((item, itemIndex) => {
-            rows.push({
-              collapsing: processTraceCollapsing,
-              estimatedHeight: estimateAssistantTraceItemHeight(item),
-              item,
-              itemID: item.id,
-              kind: "process-item",
-              rowID: `process-item:${message.id}:${blockIndex}:${item.id}:${itemIndex}`,
-              section: block.sectionKey,
-              shouldCollapseReasoningAndTools,
-              message: message,
-              messageID: message.id,
-              messageIndex,
-            })
-          })
-        })
-      }
-    }
-
-    const assistantRenderedItems = traceDisplayBlocks.shouldRenderProcessTrace
-      ? flattenAssistantTraceBlockItems(traceDisplayBlocks.mainBlocks)
-      : renderedItems
-
-    rows.push({
-      ephemeralHint,
-      estimatedHeight: estimateAssistantThreadRowHeight({
-        ephemeralHint,
-        insertedUserMessages,
-        renderedItems: assistantRenderedItems,
-        message: message,
-      }),
-      insertedUserMessages,
-        kind: "assistant-message",
-      processPrefixItems,
-      renderedItems: assistantRenderedItems,
-      rowID: message.id,
-      message: message,
-      messageIndex,
-    })
-  })
-
-  const pendingRequestID = pendingPermissionRequests[0]?.id
-  if (pendingRequestID && !isResolvingPermissionRequest) {
-    rows.push({
-      estimatedHeight: 420,
-      kind: "permission-request",
-      rowID: `permission-request:${pendingRequestID}`,
-    })
-  }
-
-  return rows
 }
 
 function isSidebarResizeInProgress() {
@@ -797,28 +303,6 @@ function useSidebarResizeLightweightMode() {
   }, [])
 
   return isResizeLightweightMode
-}
-
-function getRestorableThreadScrollSnapshot(snapshot: ThreadScrollSnapshot | null) {
-  if (!snapshot) return null
-  if (snapshot.pinnedToBottom || snapshot.scrollTop <= THREAD_TOP_RESET_THRESHOLD_PX) return null
-  return snapshot
-}
-
-function getUserMessageBodyText(message: UserThreadMessage) {
-  const displayText = message.displayText?.trim() || ""
-  const references = message.references ?? []
-
-  return displayText || (references.length > 0 ? references.map((reference) => `@${reference.label}`).join(" ") : message.text)
-}
-
-function countTextLines(text: string) {
-  if (!text) return 0
-  return text.split(/\r\n|\r|\n/).length
-}
-
-function shouldCollapseUserMessageText(text: string) {
-  return text.length >= LONG_USER_MESSAGE_CHARACTER_THRESHOLD || countTextLines(text) >= LONG_USER_MESSAGE_LINE_THRESHOLD
 }
 
 function CollapsibleUserMessageText({
@@ -940,6 +424,7 @@ const UserThreadMessageArticle = memo(function UserThreadMessageArticle({
   message,
   motion,
   onCopy,
+  rowKind = "user-message",
 }: {
   className?: string
   copied: boolean
@@ -947,12 +432,14 @@ const UserThreadMessageArticle = memo(function UserThreadMessageArticle({
   motion: ThreadMessageMotion
   onCopy: (messageID: string, text: string) => void | Promise<void>
   message: UserThreadMessage
+  rowKind?: string
 }) {
   const userCopyText = getUserMessageBodyText(message).trim()
 
   return (
     <article
       className={joinClassNames("thread-message user-message", className)}
+      data-thread-row-kind={rowKind}
       data-thread-message-id={message.id}
       data-thread-message-motion={motion}
     >
@@ -990,7 +477,7 @@ function normalizeMessageDiffSummary(diffSummary: SessionDiffSummary | undefined
       additions: change.additions,
       deletions: change.deletions,
       ...(change.patch?.trim() ? { patch: change.patch } : {}),
-    })) ?? []
+    })) ?? EMPTY_FILE_CHANGES
 }
 
 function buildLargeStringSignature(value: string | undefined) {
@@ -1038,7 +525,7 @@ function hydrateUserMessageFileChangesFromWorkspaceDiff(
 }
 
 function collectAssistantPatchFileChanges(assistantMessage: AssistantThreadMessage | null): AssistantTraceFileChange[] {
-  if (!assistantMessage) return []
+  if (!assistantMessage) return EMPTY_FILE_CHANGES
 
   return assistantMessage.items.flatMap((item) =>
     item.fileChanges?.filter((change) => change.file.trim() && change.patch?.trim()) ?? [],
@@ -1106,12 +593,94 @@ function formatUserMessageDiffSummaryLabel(fileCount: number) {
   return `${fileCount} 个文件已更改`
 }
 
+interface MessageDiffFileRowProps {
+  change: AssistantTraceFileChange
+  changeIndex: number
+  isExpanded: boolean
+  isFullHeight: boolean
+  messageID: string
+  onFileChangeSelect?: (file: string) => void
+  onFullHeightToggle: (file: string) => void
+  onToggle: (file: string) => void
+}
+
+const MessageDiffFileRow = memo(function MessageDiffFileRow({
+  change,
+  changeIndex,
+  isExpanded,
+  isFullHeight,
+  messageID,
+  onFileChangeSelect,
+  onFullHeightToggle,
+  onToggle,
+}: MessageDiffFileRowProps) {
+  const hasPatch = Boolean(change.patch?.trim())
+  const previewID = `user-message-diff-preview-${messageID}-${changeIndex}`
+  const rowContent = (
+    <>
+      <span className="user-message-diff-file-path">{change.file}</span>
+      <span className="user-message-diff-stats" aria-label={`${change.additions} additions, ${change.deletions} deletions`}>
+        <span className="is-add">+{change.additions}</span>
+        <span className="is-remove">-{change.deletions}</span>
+      </span>
+      <span className="user-message-diff-file-chevron" aria-hidden="true">
+        {hasPatch ? (isExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />) : <ChevronDownIcon />}
+      </span>
+    </>
+  )
+
+  return (
+    <div className="user-message-diff-file-entry">
+      {hasPatch ? (
+        <button
+          type="button"
+          className="user-message-diff-file-row"
+          aria-label={`${isExpanded ? "收起" : "展开"} ${change.file} 变更`}
+          aria-expanded={isExpanded}
+          aria-controls={previewID}
+          title={change.file}
+          onClick={() => onToggle(change.file)}
+        >
+          {rowContent}
+        </button>
+      ) : onFileChangeSelect ? (
+        <button
+          type="button"
+          className="user-message-diff-file-row"
+          aria-label={`审核 ${change.file}`}
+          title={change.file}
+          onClick={() => onFileChangeSelect(change.file)}
+        >
+          {rowContent}
+        </button>
+      ) : (
+        <div className="user-message-diff-file-row is-static" title={change.file}>
+          {rowContent}
+        </div>
+      )}
+      {hasPatch && isExpanded ? (
+        <div id={previewID} className="user-message-diff-file-preview">
+          <DiffPreview
+            className="trace-historical-diff user-message-historical-diff"
+            emptyClassName="trace-historical-diff-empty user-message-historical-diff-empty"
+            file={change.file}
+            isFullHeight={isFullHeight}
+            onToggleFullHeight={() => onFullHeightToggle(change.file)}
+            patch={change.patch}
+            viewMode="unified"
+          />
+        </div>
+      ) : null}
+    </div>
+  )
+})
+
 function MessageDiffCard({
   onFileChangeSelect,
   activeSessionDiff,
   allowWorkspaceDiffFallback = false,
   onMessageDiffSummaryHydrate,
-  patchSourceFileChanges = [],
+  patchSourceFileChanges = EMPTY_FILE_CHANGES,
   onMessageDiffRestore,
   onMessageDiffReview,
   diffSummary,
@@ -1127,26 +696,64 @@ function MessageDiffCard({
   onMessageDiffReview?: (files: string[]) => void | Promise<void>
   messageID: string
 }) {
-  const fileChangesFromPatchSources = hydrateUserMessageFileChangesFromPatchSources(
-    normalizeMessageDiffSummary(diffSummary),
-    patchSourceFileChanges,
+  const normalizedDiffFileChanges = useMemo(
+    () => normalizeMessageDiffSummary(diffSummary),
+    [diffSummary],
   )
-  const fileChanges = allowWorkspaceDiffFallback
-    ? hydrateUserMessageFileChangesFromWorkspaceDiff(fileChangesFromPatchSources, activeSessionDiff)
-    : fileChangesFromPatchSources
-  const fileChangeSignature = fileChanges
-    .map(buildFileChangeSignature)
-    .join("\u0001")
-  const [isListExpanded, setIsListExpanded] = useState(true)
+  const fileChangesFromPatchSources = useMemo(
+    () => hydrateUserMessageFileChangesFromPatchSources(normalizedDiffFileChanges, patchSourceFileChanges),
+    [normalizedDiffFileChanges, patchSourceFileChanges],
+  )
+  const fileChanges = useMemo(
+    () => allowWorkspaceDiffFallback
+      ? hydrateUserMessageFileChangesFromWorkspaceDiff(fileChangesFromPatchSources, activeSessionDiff)
+      : fileChangesFromPatchSources,
+    [activeSessionDiff, allowWorkspaceDiffFallback, fileChangesFromPatchSources],
+  )
+  const fileChangeSignature = useMemo(
+    () => fileChanges.map(buildFileChangeSignature).join("\u0001"),
+    [fileChanges],
+  )
+  const [isListExpanded, setIsListExpanded] = useState(false)
   const [expandedFile, setExpandedFile] = useState<string | null>(null)
   const [fullHeightFile, setFullHeightFile] = useState<string | null>(null)
   const [isRestoring, setIsRestoring] = useState(false)
   const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(null)
-  const hydratedDiffSummary = buildHydratedUserMessageDiffSummary(diffSummary, fileChanges)
-  const hydratedDiffSummarySignature = buildDiffSummarySignature(hydratedDiffSummary)
+  const hydratedDiffSummary = useMemo(
+    () => buildHydratedUserMessageDiffSummary(diffSummary, fileChanges),
+    [diffSummary, fileChanges],
+  )
+  const hydratedDiffSummarySignature = useMemo(
+    () => buildDiffSummarySignature(hydratedDiffSummary),
+    [hydratedDiffSummary],
+  )
+  const stats = useMemo(
+    () => summarizeUserMessageDiffStats(diffSummary, fileChanges),
+    [diffSummary, fileChanges],
+  )
+  const filePaths = useMemo(
+    () => fileChanges.map((change) => change.file),
+    [fileChanges],
+  )
+  const handleListToggle = useCallback(() => {
+    const nextIsListExpanded = !isListExpanded
+    setIsListExpanded(nextIsListExpanded)
+    if (!nextIsListExpanded) {
+      setExpandedFile(null)
+      setFullHeightFile(null)
+    }
+  }, [isListExpanded])
+
+  const handleFileToggle = useCallback((file: string) => {
+    setExpandedFile((current) => current === file ? null : file)
+  }, [])
+
+  const handleFullHeightToggle = useCallback((file: string) => {
+    setFullHeightFile((current) => current === file ? null : file)
+  }, [])
 
   useEffect(() => {
-    setIsListExpanded(true)
+    setIsListExpanded(false)
     setExpandedFile(null)
     setFullHeightFile(null)
     setIsRestoring(false)
@@ -1160,19 +767,8 @@ function MessageDiffCard({
 
   if (fileChanges.length === 0) return null
 
-  const stats = summarizeUserMessageDiffStats(diffSummary, fileChanges)
   const listID = `user-message-diff-list-${messageID}`
   const summaryLabel = formatUserMessageDiffSummaryLabel(stats.files)
-  const filePaths = fileChanges.map((change) => change.file)
-
-  const handleListToggle = () => {
-    const nextIsListExpanded = !isListExpanded
-    setIsListExpanded(nextIsListExpanded)
-    if (!nextIsListExpanded) {
-      setExpandedFile(null)
-      setFullHeightFile(null)
-    }
-  }
 
   const handleReviewClick = async () => {
     if (!onMessageDiffReview) return
@@ -1252,70 +848,19 @@ function MessageDiffCard({
       </div>
       {isListExpanded ? (
         <div id={listID} className="user-message-diff-file-list">
-          {fileChanges.map((change, changeIndex) => {
-            const hasPatch = Boolean(change.patch?.trim())
-            const isExpanded = expandedFile === change.file
-            const previewID = `user-message-diff-preview-${messageID}-${changeIndex}`
-            const rowContent = (
-              <>
-                <span className="user-message-diff-file-path">{change.file}</span>
-                <span className="user-message-diff-stats" aria-label={`${change.additions} additions, ${change.deletions} deletions`}>
-                  <span className="is-add">+{change.additions}</span>
-                  <span className="is-remove">-{change.deletions}</span>
-                </span>
-                <span className="user-message-diff-file-chevron" aria-hidden="true">
-                  {hasPatch ? (isExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />) : <ChevronDownIcon />}
-                </span>
-              </>
-            )
-
-            return (
-              <div key={`${messageID}-${change.file}-${changeIndex}`} className="user-message-diff-file-entry">
-                {hasPatch ? (
-                  <button
-                    type="button"
-                    className="user-message-diff-file-row"
-                    aria-label={`${isExpanded ? "收起" : "展开"} ${change.file} 变更`}
-                    aria-expanded={isExpanded}
-                    aria-controls={previewID}
-                    title={change.file}
-                    onClick={() => setExpandedFile((current) => current === change.file ? null : change.file)}
-                  >
-                    {rowContent}
-                  </button>
-                ) : onFileChangeSelect ? (
-                  <button
-                    type="button"
-                    className="user-message-diff-file-row"
-                    aria-label={`审核 ${change.file}`}
-                    title={change.file}
-                    onClick={() => onFileChangeSelect(change.file)}
-                  >
-                    {rowContent}
-                  </button>
-                ) : (
-                  <div className="user-message-diff-file-row is-static" title={change.file}>
-                    {rowContent}
-                  </div>
-                )}
-                {hasPatch && isExpanded ? (
-                  <div id={previewID} className="user-message-diff-file-preview">
-                    <DiffPreview
-                      className="trace-historical-diff user-message-historical-diff"
-                      emptyClassName="trace-historical-diff-empty user-message-historical-diff-empty"
-                      file={change.file}
-                      isFullHeight={fullHeightFile === change.file}
-                      onToggleFullHeight={() =>
-                        setFullHeightFile((current) => current === change.file ? null : change.file)
-                      }
-                      patch={change.patch}
-                      viewMode="unified"
-                    />
-                  </div>
-                ) : null}
-              </div>
-            )
-          })}
+          {fileChanges.map((change, changeIndex) => (
+            <MessageDiffFileRow
+              key={`${messageID}-${change.file}-${changeIndex}`}
+              change={change}
+              changeIndex={changeIndex}
+              isExpanded={expandedFile === change.file}
+              isFullHeight={fullHeightFile === change.file}
+              messageID={messageID}
+              onFileChangeSelect={onFileChangeSelect}
+              onFullHeightToggle={handleFullHeightToggle}
+              onToggle={handleFileToggle}
+            />
+          ))}
         </div>
       ) : null}
       {actionErrorMessage ? (
@@ -1323,146 +868,6 @@ function MessageDiffCard({
       ) : null}
     </div>
   )
-}
-
-function hasUserMessageDiffSummary(message: UserThreadMessage) {
-  return normalizeMessageDiffSummary(message.diffSummary).length > 0
-}
-
-function hasFollowingAssistantBeforeNextUser(messages: ThreadMessage[], startIndex: number) {
-  for (let index = startIndex + 1; index < messages.length; index += 1) {
-    const candidate = messages[index]
-    if (candidate.kind === "user") return false
-    if (candidate.kind === "assistant") return true
-  }
-
-  return false
-}
-
-function findPreviousUserMessage(messages: ThreadMessage[], startIndex: number) {
-  for (let index = startIndex - 1; index >= 0; index -= 1) {
-    const candidate = messages[index]
-    if (candidate.kind === "user") return candidate
-  }
-
-  return null
-}
-
-function getAssistantTrailingUserDiffMessage(messages: ThreadMessage[], assistantIndex: number, assistantMessage: AssistantThreadMessage) {
-  if (assistantMessage.isStreaming || hasFollowingAssistantBeforeNextUser(messages, assistantIndex)) return null
-
-  const userMessage = findPreviousUserMessage(messages, assistantIndex)
-  if (!userMessage || !hasUserMessageDiffSummary(userMessage)) return null
-
-  return userMessage
-}
-
-function shouldRenderDiffOnStandaloneUserMessage(messages: ThreadMessage[], userIndex: number, message: UserThreadMessage) {
-  return hasUserMessageDiffSummary(message) && !hasFollowingAssistantBeforeNextUser(messages, userIndex)
-}
-
-function isAssistantLatestRenderableMessage(messages: ThreadMessage[], assistantIndex: number, assistantMessage: AssistantThreadMessage) {
-  if (assistantIndex === messages.length - 1) return true
-
-  const followingMessages = messages.slice(assistantIndex + 1)
-  return followingMessages.length > 0 &&
-    followingMessages.every(
-      (message) => message.kind === "user" && message.streamInsertion?.assistantThreadMessageID === assistantMessage.id,
-    )
-}
-
-function isAssistantFinalMessageInUserMessage(messages: ThreadMessage[], assistantIndex: number, assistantMessage: AssistantThreadMessage) {
-  for (let index = assistantIndex + 1; index < messages.length; index += 1) {
-    const candidate = messages[index]
-    if (candidate.kind === "user" && candidate.streamInsertion?.assistantThreadMessageID !== assistantMessage.id) return true
-    if (candidate.kind === "assistant") return false
-  }
-
-  return true
-}
-
-function isRegularUserRunBoundary(messages: ThreadMessage[], messageIndex: number) {
-  const message = messages[messageIndex]
-  return message?.kind === "user" &&
-    !hasStreamInsertionTarget(messages, message) &&
-    !isPendingSteerUserMessage(messages, message)
-}
-
-function findAssistantRunStartIndex(messages: ThreadMessage[], assistantIndex: number) {
-  for (let index = assistantIndex - 1; index >= 0; index -= 1) {
-    if (isRegularUserRunBoundary(messages, index)) return index + 1
-  }
-
-  return 0
-}
-
-function findAssistantRunEndIndex(messages: ThreadMessage[], assistantIndex: number) {
-  for (let index = assistantIndex + 1; index < messages.length; index += 1) {
-    if (isRegularUserRunBoundary(messages, index)) return index
-  }
-
-  return messages.length
-}
-
-function findAssistantRunFinalMessageIndex(messages: ThreadMessage[], assistantIndex: number) {
-  const runEndIndex = findAssistantRunEndIndex(messages, assistantIndex)
-  for (let index = runEndIndex - 1; index >= assistantIndex; index -= 1) {
-    if (messages[index]?.kind === "assistant") return index
-  }
-
-  return -1
-}
-
-function assistantMessageHasTextResponse(message: AssistantThreadMessage) {
-  return message.items.some(
-    (item) => traceSectionKeyForItem(item) === "response" && item.kind === "text" && Boolean(item.text?.trim()),
-  )
-}
-
-function isTerminalAssistantMessagePhase(phase: AssistantThreadMessagePhase) {
-  return phase === "completed" || phase === "failed" || phase === "cancelled"
-}
-
-function canCollapseAssistantProcessTrace(message: AssistantThreadMessage) {
-  return !message.isStreaming && isTerminalAssistantMessagePhase(message.runtime.phase)
-}
-
-function buildAssistantProcessTraceCollapseEligibilityByMessageID(messages: ThreadMessage[]) {
-  const result: Record<string, boolean> = {}
-  messages.forEach((message) => {
-    if (message.kind !== "assistant") return
-    result[message.id] = canCollapseAssistantProcessTrace(message)
-  })
-  return result
-}
-
-function shouldFoldAssistantMessageIntoFinalRunTrace(messages: ThreadMessage[], assistantIndex: number, message: AssistantThreadMessage) {
-  const finalAssistantIndex = findAssistantRunFinalMessageIndex(messages, assistantIndex)
-  if (finalAssistantIndex <= assistantIndex) return false
-
-  const finalMessage = messages[finalAssistantIndex]
-  if (finalMessage?.kind !== "assistant") return false
-  if (!canCollapseAssistantProcessTrace(finalMessage) || !assistantMessageHasTextResponse(finalMessage)) return false
-
-  return canCollapseAssistantProcessTrace(message) || Boolean(message.isStreaming)
-}
-
-function collectAssistantRunProcessPrefixItems(
-  messages: ThreadMessage[],
-  finalAssistantIndex: number,
-  traceVisibility: AssistantTraceVisibility,
-) {
-  const runStartIndex = findAssistantRunStartIndex(messages, finalAssistantIndex)
-  const items: AssistantTraceItem[] = []
-
-  for (let index = runStartIndex; index < finalAssistantIndex; index += 1) {
-    const message = messages[index]
-    if (message?.kind !== "assistant") continue
-    if (!shouldFoldAssistantMessageIntoFinalRunTrace(messages, index, message)) continue
-    items.push(...filterRenderedAssistantTraceItems(message.items, true, traceVisibility))
-  }
-
-  return items
 }
 
 const primaryPermissionDecisions: PermissionDecision[] = ["deny", "allow"]
@@ -1478,430 +883,6 @@ function formatPermissionDecisionLabel(decision: PermissionDecision) {
     case "deny":
       return "Deny"
   }
-}
-
-function isResponseTraceItem(item: AssistantTraceItem) {
-  return item.kind === "text" || item.kind === "question"
-}
-
-function isToolTraceItem(item: AssistantTraceItem) {
-  return item.kind === "tool"
-}
-
-function isSourceTraceItem(item: AssistantTraceItem) {
-  return item.section === "sources" || item.kind === "source"
-}
-
-function isFileChangeTraceItem(item: AssistantTraceItem) {
-  return item.section === "file-change" || item.kind === "patch" || item.kind === "file" || item.kind === "image"
-}
-
-function defaultTraceSectionKeyForItem(item: AssistantTraceItem): AssistantTraceSectionKey {
-  if (isResponseTraceItem(item)) return "response"
-  if (isSourceTraceItem(item)) return "sources"
-  if (isFileChangeTraceItem(item)) return "file-change"
-  if (isToolTraceItem(item)) return "tools"
-  if (item.kind === "reasoning") return "reasoning"
-  if (item.kind === "compaction") return "workflow"
-  if (item.kind === "step" || item.kind === "retry" || item.kind === "snapshot" || item.kind === "subtask" || item.kind === "task-state") {
-    return "workflow"
-  }
-  if (item.kind === "system") return "debug"
-  return "workflow"
-}
-
-function traceVisibilityKeyForItem(item: AssistantTraceItem): AssistantTraceVisibilityKey | null {
-  if (item.kind === "error") return null
-  if (item.kind === "compaction") return null
-  if (item.visibilityKey) return item.visibilityKey
-
-  const sectionKey = traceSectionKeyForItem(item)
-  switch (sectionKey) {
-    case "response":
-      return "response"
-    case "reasoning":
-      return "reasoning"
-    case "tools":
-      return "toolCalls"
-    case "sources":
-      return "sources"
-    case "approvals":
-      return "approvals"
-    case "file-change":
-      return "files"
-    case "debug":
-      return "debugMetadata"
-    default:
-      return "workflow"
-  }
-}
-
-function traceSectionKeyForItem(item: AssistantTraceItem): AssistantTraceSectionKey {
-  return item.section ?? defaultTraceSectionKeyForItem(item)
-}
-
-function traceSectionTitle(sectionKey: AssistantTraceSectionKey) {
-  switch (sectionKey) {
-    case "tools":
-      return "Tools"
-    case "sources":
-      return "Sources"
-    case "approvals":
-      return "Approvals"
-    case "workflow":
-      return "Workflow"
-    case "response":
-      return "Response"
-    case "file-change":
-      return "File Changes"
-    case "debug":
-      return "Debug"
-    default:
-      return "Reasoning"
-  }
-}
-
-interface AssistantTraceBlock {
-  sectionKey: AssistantTraceSectionKey
-  title: string
-  items: AssistantTraceItem[]
-}
-
-function buildAssistantTraceBlocks(items: AssistantTraceItem[]) {
-  return items.reduce<AssistantTraceBlock[]>(
-    (blocks, item) => {
-      const sectionKey = traceSectionKeyForItem(item)
-      if (sectionKey === "file-change") {
-        const fileChangeBlock = blocks.find((block) => block.sectionKey === "file-change")
-        if (fileChangeBlock) {
-          fileChangeBlock.items.push(item)
-          return blocks
-        }
-
-        blocks.push({
-          sectionKey,
-          title: traceSectionTitle(sectionKey),
-          items: [item],
-        })
-        return blocks
-      }
-
-      const fileChangeBlockIndex = blocks.findIndex((block) => block.sectionKey === "file-change")
-      const insertIndex = fileChangeBlockIndex === -1 ? blocks.length : fileChangeBlockIndex
-      const previousBlock = blocks[insertIndex - 1]
-
-      if (previousBlock && previousBlock.sectionKey === sectionKey) {
-        previousBlock.items.push(item)
-        return blocks
-      }
-
-      blocks.splice(insertIndex, 0, {
-        sectionKey,
-        title: traceSectionTitle(sectionKey),
-        items: [item],
-      })
-      return blocks
-    },
-    [],
-  )
-}
-
-interface AssistantTraceDisplayBlocks {
-  blocks: AssistantTraceBlock[]
-  mainBlocks: AssistantTraceBlock[]
-  processBlocks: AssistantTraceBlock[]
-  shouldRenderProcessTrace: boolean
-}
-
-function getAssistantTraceBlockRenderedItems(block: AssistantTraceBlock) {
-  return block.sectionKey === "file-change" ? summarizeFileChangeItems(block.items) : block.items
-}
-
-function flattenAssistantTraceBlockItems(blocks: AssistantTraceBlock[]) {
-  return blocks.flatMap((block) => getAssistantTraceBlockRenderedItems(block))
-}
-
-function countNonEmptyTraceLines(value?: string) {
-  return value?.split(/\r?\n/).filter((line) => line.trim()).length ?? 0
-}
-
-function isSingleShortReasoningProcessTrace(blocks: AssistantTraceBlock[], hasProcessPrefix: boolean) {
-  if (hasProcessPrefix) return false
-
-  const items = blocks.flatMap((block) => block.items)
-  if (items.length !== 1) return false
-
-  const item = items[0]
-  if (!item || item.kind !== "reasoning" || traceSectionKeyForItem(item) !== "reasoning") return false
-  if (
-    item.toolInputText?.trim() ||
-    item.toolOutputText?.trim() ||
-    item.draftPatch ||
-    item.fileChanges?.length ||
-    item.filePaths?.length ||
-    item.src ||
-    item.progressItems?.length ||
-    item.debugEntries?.length
-  ) {
-    return false
-  }
-
-  const contentParts = [item.text, item.detail].map((part) => part?.trim()).filter((part): part is string => Boolean(part))
-  const characterCount = contentParts.join("\n").length
-  const lineCount = countNonEmptyTraceLines(item.text) + countNonEmptyTraceLines(item.detail)
-  return characterCount <= SHORT_PROCESS_REASONING_CHARACTER_THRESHOLD && lineCount <= SHORT_PROCESS_REASONING_LINE_THRESHOLD
-}
-
-function buildAssistantTraceDisplayBlocks({
-  items,
-  processPrefixItems = [],
-  showFileChanges,
-  shouldCollapseReasoningAndTools,
-  traceVisibility,
-}: {
-  items: AssistantTraceItem[]
-  processPrefixItems?: AssistantTraceItem[]
-  showFileChanges: boolean
-  shouldCollapseReasoningAndTools: boolean
-  traceVisibility: AssistantTraceVisibility
-}): AssistantTraceDisplayBlocks {
-  const blocks = buildAssistantTraceBlocks(filterRenderedAssistantTraceItems(items, showFileChanges, traceVisibility))
-  const finalResponseBlockIndex = shouldCollapseReasoningAndTools ? findFinalResponseBlockIndex(blocks) : -1
-  const processPrefixBlocks = processPrefixItems.length > 0 ? buildAssistantTraceBlocks(processPrefixItems) : []
-  const processTraceCandidateBlocks =
-    finalResponseBlockIndex >= 0 && (finalResponseBlockIndex > 0 || processPrefixBlocks.length > 0)
-      ? [...processPrefixBlocks, ...blocks.slice(0, finalResponseBlockIndex)]
-      : []
-  const shouldInlineShortReasoningProcessTrace = isSingleShortReasoningProcessTrace(
-    processTraceCandidateBlocks,
-    processPrefixBlocks.length > 0,
-  )
-  const shouldRenderProcessTrace = processTraceCandidateBlocks.length > 0 && !shouldInlineShortReasoningProcessTrace
-  const processBlocks = shouldRenderProcessTrace
-    ? processTraceCandidateBlocks
-    : []
-  const mainBlocks = shouldRenderProcessTrace ? blocks.slice(finalResponseBlockIndex) : blocks
-
-  return {
-    blocks,
-    mainBlocks,
-    processBlocks,
-    shouldRenderProcessTrace,
-  }
-}
-
-function filterRenderedAssistantTraceItems(
-  items: AssistantTraceItem[],
-  showFileChanges: boolean,
-  traceVisibility: AssistantTraceVisibility,
-) {
-  return items.filter((item) => {
-    const sectionKey = traceSectionKeyForItem(item)
-    if (!showFileChanges && sectionKey === "file-change") return false
-    const visibilityKey = traceVisibilityKeyForItem(item)
-    if (visibilityKey === null) return true
-    if (!traceVisibility[visibilityKey]) return false
-    return true
-  })
-}
-
-function buildAssistantResponseCopyText(items: AssistantTraceItem[]) {
-  return items
-    .filter((item) => item.kind === "text")
-    .map((item) => {
-      const segments = [item.title, item.text, item.detail]
-        .map((value, index) => {
-          if (!value) return ""
-          return index === 0 ? value.trim() : parseAssistantResponseFormat(value).text.trim()
-        })
-        .filter((value): value is string => Boolean(value))
-
-      return segments.join("\n\n")
-    })
-    .filter(Boolean)
-    .join("\n\n")
-    .trim()
-}
-
-function getLastAssistantResponseSectionItems(
-  items: AssistantTraceItem[],
-  traceVisibility: AssistantTraceVisibility,
-) {
-  const blocks = buildAssistantTraceBlocks(filterRenderedAssistantTraceItems(items, true, traceVisibility))
-
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const block = blocks[index]
-    if (block.sectionKey !== "response") continue
-    if (!block.items.some((item) => item.kind === "text" && Boolean(item.text?.trim()))) continue
-    return block.items
-  }
-
-  return []
-}
-
-function findFinalResponseBlockIndex(blocks: AssistantTraceBlock[]) {
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const block = blocks[index]
-    if (block.sectionKey !== "response") continue
-    if (!block.items.some((item) => item.kind === "text" && Boolean(item.text?.trim()))) continue
-    return index
-  }
-
-  return -1
-}
-
-function formatDurationMilliseconds(durationMs: number) {
-  if (!Number.isFinite(durationMs)) return null
-
-  const normalizedDurationMs = Math.max(0, durationMs)
-  if (normalizedDurationMs < 1000) return "<1s"
-
-  const totalSeconds = Math.round(normalizedDurationMs / 1000)
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`
-}
-
-function formatAssistantTraceDuration(runtime?: AssistantThreadMessageRuntime) {
-  if (!runtime) return null
-  return formatDurationMilliseconds(runtime.updatedAt - runtime.startedAt)
-}
-
-function formatAssistantProcessTraceDuration(blocks: AssistantTraceBlock[], runtime?: AssistantThreadMessageRuntime) {
-  const timestamps = blocks
-    .flatMap((block) => block.items)
-    .map((item) => item.timestamp)
-    .filter((timestamp) => Number.isFinite(timestamp))
-
-  if (timestamps.length === 0) return formatAssistantTraceDuration(runtime)
-
-  const itemStartedAt = Math.min(...timestamps)
-  const itemUpdatedAt = Math.max(...timestamps)
-  const runtimeStartedAt = runtime && Number.isFinite(runtime.startedAt) ? runtime.startedAt : null
-  const runtimeUpdatedAt = runtime && Number.isFinite(runtime.updatedAt) ? runtime.updatedAt : null
-  const canUseRuntimeRange =
-    runtimeStartedAt !== null &&
-    runtimeUpdatedAt !== null &&
-    runtimeUpdatedAt >= itemStartedAt
-  const startedAt = canUseRuntimeRange ? Math.min(itemStartedAt, runtimeStartedAt) : itemStartedAt
-  const updatedAt = canUseRuntimeRange ? Math.max(itemUpdatedAt, runtimeUpdatedAt) : itemUpdatedAt
-
-  return formatDurationMilliseconds(updatedAt - startedAt)
-}
-
-function pluralizeTraceUnit(count: number, singular: string, plural = `${singular}s`) {
-  return `${count} ${count === 1 ? singular : plural}`
-}
-
-function summarizeProcessTraceBlocks(blocks: AssistantTraceBlock[]) {
-  const items = blocks.flatMap((block) => block.items)
-  const toolCount = items.filter((item) => item.kind === "tool").length
-  const workflowCount = items.filter((item) => traceSectionKeyForItem(item) === "workflow").length
-  const reasoningCount = items.filter((item) => item.kind === "reasoning").length
-  const responseCount = items.filter((item) => item.kind === "text" && traceSectionKeyForItem(item) === "response").length
-  const fileCount = new Set(
-    items.flatMap((item) => [
-      ...(item.filePaths ?? []),
-      ...(item.fileChanges ?? []).map((change) => change.file),
-    ]),
-  ).size
-
-  const parts = [
-    toolCount > 0 ? pluralizeTraceUnit(toolCount, "tool call") : null,
-    workflowCount > 0 ? pluralizeTraceUnit(workflowCount, "workflow event") : null,
-    reasoningCount > 0 ? pluralizeTraceUnit(reasoningCount, "reasoning note") : null,
-    responseCount > 0 ? pluralizeTraceUnit(responseCount, "progress update") : null,
-    fileCount > 0 ? pluralizeTraceUnit(fileCount, "file") : null,
-  ].filter((part): part is string => Boolean(part))
-
-  return parts.length > 0 ? parts.join(" · ") : pluralizeTraceUnit(items.length, "event")
-}
-
-interface AssistantProcessTraceHeaderProps {
-  controlsID?: string
-  duration: string | null
-  isExpanded: boolean
-  onToggle: () => void
-  summary: string
-}
-
-function AssistantProcessTraceHeader({
-  controlsID,
-  duration,
-  isExpanded,
-  onToggle,
-  summary,
-}: AssistantProcessTraceHeaderProps) {
-  const { t } = useI18n()
-  const title = t("thread.processTrace.title")
-  const toggleAction = t(isExpanded ? "thread.processTrace.collapse" : "thread.processTrace.expand")
-  const details = [duration, summary].filter((part): part is string => Boolean(part)).join(" ")
-  const toggleLabel = details ? `${toggleAction} ${title} ${details}` : `${toggleAction} ${title}`
-
-  return (
-    <button
-      className="assistant-process-trace-header"
-      type="button"
-      aria-label={toggleLabel}
-      aria-expanded={isExpanded}
-      aria-controls={controlsID}
-      title={toggleLabel}
-      onClick={onToggle}
-    >
-      <div className="assistant-process-trace-copy">
-        <span className="assistant-process-trace-title">{title}</span>
-        {duration ? <span className="assistant-process-trace-duration">{duration}</span> : null}
-        <span className="assistant-process-trace-summary">{summary}</span>
-      </div>
-      <span className="assistant-process-trace-toggle" aria-hidden="true">
-        <span className="assistant-process-trace-chevron" aria-hidden="true">
-          {isExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
-        </span>
-      </span>
-    </button>
-  )
-}
-
-function getAssistantEphemeralHint(message: AssistantThreadMessage) {
-  switch (message.runtime.phase) {
-    case "requesting":
-    case "waiting_first_event":
-    case "preparing":
-      return "Preparing..."
-    case "waiting_llm":
-      return "Waiting for model..."
-    case "reasoning":
-      return "Thinking..."
-    case "tool_running":
-      return message.runtime.toolName ? `Running ${message.runtime.toolName}...` : "Running tools..."
-    case "waiting_approval":
-      return "Waiting for approval..."
-    case "blocked":
-      return message.state || "Blocked..."
-    case "responding":
-      return "Responding..."
-    default:
-      return null
-  }
-}
-
-function summarizeFileChangeItems(items: AssistantTraceItem[]) {
-  const imageItems = items.filter((item) => item.kind === "image")
-  const latestPatch = [...items].reverse().find((item) => item.kind === "patch")
-  const latestNonImageItem = latestPatch ?? [...items].reverse().find((item) => item.kind !== "image")
-
-  if (imageItems.length > 0) {
-    const includedIDs = new Set([
-      ...imageItems.map((item) => item.id),
-      ...(latestNonImageItem ? [latestNonImageItem.id] : []),
-    ])
-    return items.filter((item) => includedIDs.has(item.id))
-  }
-
-  if (latestPatch) return [latestPatch]
-
-  const latestItem = items[items.length - 1]
-  return latestItem ? [latestItem] : []
 }
 
 function isCollapsibleTraceItem(item: AssistantTraceItem) {
@@ -2071,80 +1052,11 @@ function AssistantTraceSection({
   )
 }
 
-interface AssistantTraceBlockViewProps {
-  answeredQuestionIDs: Set<string>
-  assistantMessagePhase?: AssistantThreadMessagePhase
-  block: AssistantTraceBlock
-  isLatestMessage: boolean
-  isQuestionAnswerDisabled?: boolean
-  onOpenImagePreview?: (payload: ImagePreviewPayload) => void
-  onAskUserQuestionAnswer?: QuestionAnswerHandler
-  onFileChangeSelect: ((file: string) => void) | undefined
-  onArtifactLinkOpen: ((target: MarkdownArtifactLinkTarget) => void) | undefined
-  onLocalFileLinkOpen: ((target: MarkdownLocalFileLinkTarget) => void) | undefined
-  onProposedPlanConfirm?: ProposedPlanConfirmHandler
-  sectionID: string
-  shouldCollapseReasoningAndTools: boolean
-  traceVisibility: AssistantTraceVisibility
-}
-
 function getAssistantTraceBlockStackClassName(sectionKey: AssistantTraceSectionKey) {
   if (sectionKey === "response") return "assistant-response-stack"
   if (sectionKey === "file-change") return "assistant-file-change-stack"
   if (sectionKey === "tools" || sectionKey === "workflow") return "trace-log-list"
   return "assistant-section-list"
-}
-
-function AssistantTraceBlockView({
-  answeredQuestionIDs,
-  assistantMessagePhase,
-  block,
-  isLatestMessage,
-  isQuestionAnswerDisabled,
-  onOpenImagePreview,
-  onAskUserQuestionAnswer,
-  onFileChangeSelect,
-  onArtifactLinkOpen,
-  onLocalFileLinkOpen,
-  onProposedPlanConfirm,
-  sectionID,
-  shouldCollapseReasoningAndTools,
-  traceVisibility,
-}: AssistantTraceBlockViewProps) {
-  const renderedItems = getAssistantTraceBlockRenderedItems(block)
-
-  return (
-    <AssistantTraceSection
-      key={sectionID}
-      sectionKey={block.sectionKey}
-      title={block.title}
-    >
-      <div className={getAssistantTraceBlockStackClassName(block.sectionKey)}>
-        {renderedItems.map((item) => {
-          const questionID = item.questionPrompt?.questionID
-          const isQuestionAnswered = Boolean(item.questionPrompt?.answered || (questionID && answeredQuestionIDs.has(questionID)))
-          return (
-            <TraceItemView
-              key={item.id}
-              assistantMessagePhase={assistantMessagePhase}
-              item={item}
-              isQuestionAnswered={isQuestionAnswered}
-              isQuestionAnswerDisabled={isQuestionAnswerDisabled}
-              onOpenImagePreview={onOpenImagePreview}
-              onAskUserQuestionAnswer={onAskUserQuestionAnswer}
-              onFileChangeSelect={onFileChangeSelect}
-              onArtifactLinkOpen={onArtifactLinkOpen}
-              onLocalFileLinkOpen={onLocalFileLinkOpen}
-              isLatestMessage={isLatestMessage}
-              onProposedPlanConfirm={onProposedPlanConfirm}
-              shouldCollapseAfterMessageCompletion={shouldCollapseReasoningAndTools}
-              traceVisibility={traceVisibility}
-            />
-          )
-        })}
-      </div>
-    </AssistantTraceSection>
-  )
 }
 
 function getReasoningDisclosurePreview(item: AssistantTraceItem, fallbackLine: string): TraceTextPreview {
@@ -2157,82 +1069,6 @@ function getReasoningDisclosurePreview(item: AssistantTraceItem, fallbackLine: s
     }
 }
 
-function AssistantProcessTraceDisclosure({
-  answeredQuestionIDs,
-  assistantMessagePhase,
-  blocks,
-  isLatestMessage,
-  isQuestionAnswerDisabled,
-  onOpenImagePreview,
-  onAskUserQuestionAnswer,
-  onFileChangeSelect,
-  onArtifactLinkOpen,
-  onLocalFileLinkOpen,
-  onProposedPlanConfirm,
-  runtime,
-  shouldCollapseReasoningAndTools,
-  traceVisibility,
-}: Omit<AssistantTraceBlockViewProps, "block" | "sectionID"> & {
-  blocks: AssistantTraceBlock[]
-  runtime?: AssistantThreadMessageRuntime
-}) {
-  const [isExpanded, setIsExpanded] = useState(() => !shouldCollapseReasoningAndTools)
-  const { t } = useI18n()
-  const processTraceKey = blocks.map((block) => block.items.map((item) => item.id).join(",")).join("|")
-  const duration = formatAssistantProcessTraceDuration(blocks, runtime)
-  const summary = summarizeProcessTraceBlocks(blocks)
-  const contentID = `assistant-process-trace-${(processTraceKey || "empty").replace(/[^a-zA-Z0-9_-]/g, "-")}`
-
-  useLayoutEffect(() => {
-    if (shouldCollapseReasoningAndTools) {
-      setIsExpanded(false)
-      return
-    }
-
-    setIsExpanded(true)
-  }, [processTraceKey, shouldCollapseReasoningAndTools])
-
-  return (
-    <section
-      className={joinClassNames("assistant-process-trace", isExpanded ? "is-expanded" : "is-collapsed")}
-      role="region"
-      aria-label={t("thread.processTrace.region")}
-    >
-      <AssistantProcessTraceHeader
-        controlsID={contentID}
-        duration={duration}
-        isExpanded={isExpanded}
-        summary={summary}
-        onToggle={() => setIsExpanded((current) => !current)}
-      />
-
-      {isExpanded ? (
-        <div id={contentID} className="assistant-process-trace-body">
-          {blocks.map((block, index) => (
-            <AssistantTraceBlockView
-              key={`process-${block.sectionKey}-${index}`}
-              answeredQuestionIDs={answeredQuestionIDs}
-              assistantMessagePhase={assistantMessagePhase}
-              block={block}
-              isQuestionAnswerDisabled={isQuestionAnswerDisabled}
-              isLatestMessage={isLatestMessage}
-              onOpenImagePreview={onOpenImagePreview}
-              onAskUserQuestionAnswer={onAskUserQuestionAnswer}
-              onFileChangeSelect={onFileChangeSelect}
-              onArtifactLinkOpen={onArtifactLinkOpen}
-              onLocalFileLinkOpen={onLocalFileLinkOpen}
-              onProposedPlanConfirm={onProposedPlanConfirm}
-              sectionID={`process-${block.sectionKey}-${index}`}
-              shouldCollapseReasoningAndTools={shouldCollapseReasoningAndTools}
-              traceVisibility={traceVisibility}
-            />
-          ))}
-        </div>
-      ) : null}
-    </section>
-  )
-}
-
 function AssistantMessagePlaceholder({ message }: { message: string }) {
   return (
     <section className="assistant-section assistant-ephemeral-state" aria-live="polite" aria-label="Assistant status">
@@ -2240,387 +1076,6 @@ function AssistantMessagePlaceholder({ message }: { message: string }) {
     </section>
   )
 }
-
-interface AssistantMessageSectionsProps {
-  answeredQuestionIDs: Set<string>
-  assistantMessagePhase?: AssistantThreadMessagePhase
-  isQuestionAnswerDisabled?: boolean
-  isLatestMessage: boolean
-  items: AssistantTraceItem[]
-  onOpenImagePreview?: (payload: ImagePreviewPayload) => void
-  onAskUserQuestionAnswer?: QuestionAnswerHandler
-  onFileChangeSelect: ((file: string) => void) | undefined
-  onArtifactLinkOpen: ((target: MarkdownArtifactLinkTarget) => void) | undefined
-  onLocalFileLinkOpen: ((target: MarkdownLocalFileLinkTarget) => void) | undefined
-  onProposedPlanConfirm?: ProposedPlanConfirmHandler
-  processPrefixItems?: AssistantTraceItem[]
-  renderProcessTrace?: boolean
-  runtime?: AssistantThreadMessageRuntime
-  showFileChanges: boolean
-  shouldCollapseReasoningAndTools: boolean
-  traceVisibility: AssistantTraceVisibility
-}
-
-function isLiveAssistantTraceItem(item: AssistantTraceItem) {
-  if (item.isStreaming || item.draftPatch?.isStreaming) return true
-  if (item.kind !== "tool") return false
-  return item.status === "pending" || item.status === "running" || item.status === "waiting-approval"
-}
-
-function splitAssistantTraceItemsForStreaming(items: AssistantTraceItem[]): AssistantTraceRenderSplit {
-  let liveStartIndex = items.length
-
-  while (liveStartIndex > 0 && isLiveAssistantTraceItem(items[liveStartIndex - 1]!)) {
-    liveStartIndex -= 1
-  }
-
-  if (liveStartIndex === items.length || liveStartIndex === 0) {
-    return {
-      stableItems: items,
-      liveItems: [],
-      isSplit: false,
-    }
-  }
-
-  for (let index = 0; index < liveStartIndex; index += 1) {
-    if (isLiveAssistantTraceItem(items[index]!)) {
-      return {
-        stableItems: items,
-        liveItems: [],
-        isSplit: false,
-      }
-    }
-  }
-
-  return {
-    stableItems: items.slice(0, liveStartIndex),
-    liveItems: items.slice(liveStartIndex),
-    isSplit: true,
-  }
-}
-
-function useAssistantTraceRenderSplit(items: AssistantTraceItem[]) {
-  const previousSplitRef = useRef<AssistantTraceRenderSplit | null>(null)
-
-  return useMemo(() => {
-    const nextSplit = splitAssistantTraceItemsForStreaming(items)
-    const previousSplit = previousSplitRef.current
-
-    if (nextSplit.isSplit && previousSplit?.isSplit) {
-      const stableItems = areArraysShallowEqual(previousSplit.stableItems, nextSplit.stableItems)
-        ? previousSplit.stableItems
-        : nextSplit.stableItems
-      const liveItems = areArraysShallowEqual(previousSplit.liveItems, nextSplit.liveItems)
-        ? previousSplit.liveItems
-        : nextSplit.liveItems
-      const reusedSplit = {
-        stableItems,
-        liveItems,
-        isSplit: true,
-      }
-      previousSplitRef.current = reusedSplit
-      return reusedSplit
-    }
-
-    previousSplitRef.current = nextSplit
-    return nextSplit
-  }, [items])
-}
-
-const AssistantMessageSectionsContent = memo(function AssistantMessageSectionsContent({
-  answeredQuestionIDs,
-  assistantMessagePhase,
-  isQuestionAnswerDisabled = false,
-  isLatestMessage,
-  items,
-  onOpenImagePreview,
-  onAskUserQuestionAnswer,
-  onFileChangeSelect,
-  onArtifactLinkOpen,
-  onLocalFileLinkOpen,
-  onProposedPlanConfirm,
-  processPrefixItems = [],
-  renderProcessTrace = true,
-  runtime,
-  showFileChanges,
-  shouldCollapseReasoningAndTools,
-  traceVisibility,
-}: AssistantMessageSectionsProps) {
-  const traceDisplayBlocks = measureRendererPerf(
-    "AssistantMessageSections.buildTraceBlocks",
-    () => buildAssistantTraceDisplayBlocks({
-      items,
-      processPrefixItems,
-      showFileChanges,
-      shouldCollapseReasoningAndTools,
-      traceVisibility,
-    }),
-    () => ({
-      itemCount: items.length,
-      processPrefixItemCount: processPrefixItems.length,
-      renderProcessTrace,
-      shouldCollapseReasoningAndTools,
-      showFileChanges,
-    }),
-  )
-  const shouldRenderProcessTrace = renderProcessTrace && traceDisplayBlocks.shouldRenderProcessTrace
-  const processBlocks = shouldRenderProcessTrace ? traceDisplayBlocks.processBlocks : []
-  const mainBlocks = traceDisplayBlocks.mainBlocks
-  const sectionsProfiler = useMemo(
-    () => createRendererProfilerOnRender("AssistantMessageSections commit", () => ({
-      assistantMessagePhase: assistantMessagePhase ?? null,
-      isLatestMessage,
-      itemCount: items.length,
-      mainBlockCount: mainBlocks.length,
-      processBlockCount: processBlocks.length,
-      processPrefixItemCount: processPrefixItems.length,
-      shouldRenderProcessTrace,
-    })),
-    [
-      assistantMessagePhase,
-      isLatestMessage,
-      items.length,
-      mainBlocks.length,
-      processBlocks.length,
-      processPrefixItems.length,
-      shouldRenderProcessTrace,
-    ],
-  )
-
-  return (
-    <RendererProfiler id="AssistantMessageSections" onRender={sectionsProfiler}>
-      {shouldRenderProcessTrace ? (
-        <AssistantProcessTraceDisclosure
-          answeredQuestionIDs={answeredQuestionIDs}
-          assistantMessagePhase={assistantMessagePhase}
-          blocks={processBlocks}
-          isQuestionAnswerDisabled={isQuestionAnswerDisabled}
-          isLatestMessage={isLatestMessage}
-          onOpenImagePreview={onOpenImagePreview}
-          onAskUserQuestionAnswer={onAskUserQuestionAnswer}
-          onFileChangeSelect={onFileChangeSelect}
-          onArtifactLinkOpen={onArtifactLinkOpen}
-          onLocalFileLinkOpen={onLocalFileLinkOpen}
-          onProposedPlanConfirm={onProposedPlanConfirm}
-          runtime={runtime}
-          shouldCollapseReasoningAndTools={shouldCollapseReasoningAndTools}
-          traceVisibility={traceVisibility}
-        />
-      ) : null}
-      {mainBlocks.map((block, index) => (
-        <AssistantTraceBlockView
-          key={`${block.sectionKey}-${index}`}
-          answeredQuestionIDs={answeredQuestionIDs}
-          assistantMessagePhase={assistantMessagePhase}
-          block={block}
-          isQuestionAnswerDisabled={isQuestionAnswerDisabled}
-          isLatestMessage={isLatestMessage}
-          onOpenImagePreview={onOpenImagePreview}
-          onAskUserQuestionAnswer={onAskUserQuestionAnswer}
-          onFileChangeSelect={onFileChangeSelect}
-          onArtifactLinkOpen={onArtifactLinkOpen}
-          onLocalFileLinkOpen={onLocalFileLinkOpen}
-          onProposedPlanConfirm={onProposedPlanConfirm}
-          sectionID={`${block.sectionKey}-${index}`}
-          shouldCollapseReasoningAndTools={shouldCollapseReasoningAndTools}
-          traceVisibility={traceVisibility}
-        />
-      ))}
-    </RendererProfiler>
-  )
-})
-
-const StableAssistantTraceSections = memo(function StableAssistantTraceSections(props: AssistantMessageSectionsProps) {
-  return <AssistantMessageSectionsContent {...props} />
-})
-
-const LiveAssistantTraceSections = memo(function LiveAssistantTraceSections(props: AssistantMessageSectionsProps) {
-  return <AssistantMessageSectionsContent {...props} />
-})
-
-const AssistantMessageSections = memo(function AssistantMessageSections(props: AssistantMessageSectionsProps) {
-  const renderProcessTrace = props.renderProcessTrace ?? true
-  const canSplitStreamingSuffix = renderProcessTrace === false && (props.processPrefixItems?.length ?? 0) === 0
-  const traceRenderSplit = useAssistantTraceRenderSplit(props.items)
-
-  if (!canSplitStreamingSuffix || !traceRenderSplit.isSplit) {
-    return <AssistantMessageSectionsContent {...props} />
-  }
-
-  return (
-    <>
-      <StableAssistantTraceSections
-        {...props}
-        items={traceRenderSplit.stableItems}
-      />
-      <LiveAssistantTraceSections
-        {...props}
-        items={traceRenderSplit.liveItems}
-        processPrefixItems={[]}
-        renderProcessTrace={false}
-      />
-    </>
-  )
-})
-
-const AssistantMessageSectionsWithStreamInsertions = memo(function AssistantMessageSectionsWithStreamInsertions({
-  answeredQuestionIDs,
-  assistantMessagePhase,
-  copiedUserThreadMessageID,
-  insertedUserMessages,
-  isQuestionAnswerDisabled = false,
-  isLatestMessage,
-  items,
-  getMessageMotion,
-  onCopyUserMessage,
-  onOpenImagePreview,
-  onAskUserQuestionAnswer,
-  onFileChangeSelect,
-  onArtifactLinkOpen,
-  onLocalFileLinkOpen,
-  onProposedPlanConfirm,
-  processPrefixItems = [],
-  renderProcessTrace = true,
-  runtime,
-  showFileChanges,
-  shouldCollapseReasoningAndTools,
-  traceVisibility,
-}: {
-  answeredQuestionIDs: Set<string>
-  assistantMessagePhase?: AssistantThreadMessagePhase
-  copiedUserThreadMessageID: string | null
-  insertedUserMessages: UserThreadMessage[]
-  isQuestionAnswerDisabled?: boolean
-  isLatestMessage: boolean
-  items: AssistantTraceItem[]
-  getMessageMotion: (messageID: string, isLive?: boolean) => ThreadMessageMotion
-  onCopyUserMessage: (messageID: string, text: string) => void | Promise<void>
-  onOpenImagePreview?: (payload: ImagePreviewPayload) => void
-  onAskUserQuestionAnswer?: QuestionAnswerHandler
-  onFileChangeSelect: ((file: string) => void) | undefined
-  onArtifactLinkOpen: ((target: MarkdownArtifactLinkTarget) => void) | undefined
-  onLocalFileLinkOpen: ((target: MarkdownLocalFileLinkTarget) => void) | undefined
-  onProposedPlanConfirm?: ProposedPlanConfirmHandler
-  processPrefixItems?: AssistantTraceItem[]
-  renderProcessTrace?: boolean
-  runtime?: AssistantThreadMessageRuntime
-  showFileChanges: boolean
-  shouldCollapseReasoningAndTools: boolean
-  traceVisibility: AssistantTraceVisibility
-}) {
-  const insertionSegments = useMemo(() => {
-    if (insertedUserMessages.length === 0) return []
-
-    let cursor = 0
-    let didRenderProcessPrefix = false
-    const segments: Array<
-      | {
-          kind: "items"
-          key: string
-          items: AssistantTraceItem[]
-          processPrefixItems: AssistantTraceItem[]
-        }
-      | {
-          kind: "user"
-          key: string
-          message: UserThreadMessage
-        }
-    > = []
-
-    const pushItemSegment = (segmentItems: AssistantTraceItem[], key: string) => {
-      if (segmentItems.length === 0) return
-      const segmentProcessPrefixItems = didRenderProcessPrefix ? [] : processPrefixItems
-      didRenderProcessPrefix = true
-      segments.push({
-        kind: "items",
-        key,
-        items: segmentItems,
-        processPrefixItems: segmentProcessPrefixItems,
-      })
-    }
-
-    insertedUserMessages.forEach((message, index) => {
-      const insertionIndex = resolveStreamInsertionItemIndex(items, message, cursor)
-
-      pushItemSegment(items.slice(cursor, insertionIndex), `segment-${index}`)
-      segments.push({
-        kind: "user",
-        key: message.id,
-        message: message,
-      })
-      cursor = insertionIndex
-    })
-
-    pushItemSegment(items.slice(cursor), "segment-final")
-    return segments
-  }, [insertedUserMessages, items, processPrefixItems])
-
-  if (insertedUserMessages.length === 0) {
-    return (
-      <AssistantMessageSections
-        answeredQuestionIDs={answeredQuestionIDs}
-        assistantMessagePhase={assistantMessagePhase}
-        isQuestionAnswerDisabled={isQuestionAnswerDisabled}
-        isLatestMessage={isLatestMessage}
-        items={items}
-        onOpenImagePreview={onOpenImagePreview}
-        onAskUserQuestionAnswer={onAskUserQuestionAnswer}
-        onFileChangeSelect={onFileChangeSelect}
-        onArtifactLinkOpen={onArtifactLinkOpen}
-        onLocalFileLinkOpen={onLocalFileLinkOpen}
-        onProposedPlanConfirm={onProposedPlanConfirm}
-        processPrefixItems={processPrefixItems}
-        renderProcessTrace={renderProcessTrace}
-        runtime={runtime}
-        showFileChanges={showFileChanges}
-        shouldCollapseReasoningAndTools={shouldCollapseReasoningAndTools}
-        traceVisibility={traceVisibility}
-      />
-    )
-  }
-
-  return (
-    <>
-      {insertionSegments.map((segment) => {
-        if (segment.kind === "user") {
-          return (
-            <UserThreadMessageArticle
-              key={segment.key}
-              className="assistant-stream-insertion-user-message"
-              copied={copiedUserThreadMessageID === segment.message.id}
-              motion={getMessageMotion(segment.message.id)}
-              onCopy={onCopyUserMessage}
-              message={segment.message}
-            />
-          )
-        }
-
-        return (
-          <AssistantMessageSections
-            key={segment.key}
-            answeredQuestionIDs={answeredQuestionIDs}
-            assistantMessagePhase={assistantMessagePhase}
-            isQuestionAnswerDisabled={isQuestionAnswerDisabled}
-            isLatestMessage={isLatestMessage}
-            items={segment.items}
-            onOpenImagePreview={onOpenImagePreview}
-            onAskUserQuestionAnswer={onAskUserQuestionAnswer}
-            onFileChangeSelect={onFileChangeSelect}
-            onArtifactLinkOpen={onArtifactLinkOpen}
-            onLocalFileLinkOpen={onLocalFileLinkOpen}
-            onProposedPlanConfirm={onProposedPlanConfirm}
-            processPrefixItems={segment.processPrefixItems}
-            renderProcessTrace={renderProcessTrace}
-            runtime={runtime}
-            showFileChanges={showFileChanges}
-            shouldCollapseReasoningAndTools={shouldCollapseReasoningAndTools}
-            traceVisibility={traceVisibility}
-          />
-        )
-      })}
-    </>
-  )
-})
 
 function TraceImagePreview({
   item,
@@ -4294,6 +2749,52 @@ function ToolDraftPatchFileChangeList({
   )
 }
 
+interface PatchFileChangeSummaryButtonProps {
+  isExpanded: boolean
+  label: string
+  listID: string
+  onToggle: () => void
+  reserveLiveDot?: boolean
+  showLiveDot?: boolean
+}
+
+const PatchFileChangeSummaryButton = memo(function PatchFileChangeSummaryButton({
+  isExpanded,
+  label,
+  listID,
+  onToggle,
+  reserveLiveDot = false,
+  showLiveDot = false,
+}: PatchFileChangeSummaryButtonProps) {
+  return (
+    <button
+      type="button"
+      className="trace-file-change-summary"
+      aria-expanded={isExpanded}
+      aria-controls={listID}
+      onClick={onToggle}
+    >
+      <span className="trace-file-change-summary-icon" aria-hidden="true">
+        <ChangesIcon />
+      </span>
+      <span className="trace-file-change-summary-label">{label}</span>
+      {reserveLiveDot ? (
+        <span
+          className={joinClassNames(
+            "trace-file-change-live-dot",
+            showLiveDot ? undefined : "is-hidden",
+          )}
+          aria-label="正在更新"
+          aria-hidden={showLiveDot ? undefined : true}
+        />
+      ) : null}
+      <span className="trace-file-change-summary-chevron" aria-hidden="true">
+        {isExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+      </span>
+    </button>
+  )
+})
+
 function GenericTraceItemView({
   className,
   debugEntries,
@@ -4356,21 +2857,27 @@ function PatchFileChangePreview({
   isStreaming: boolean
   defaultExpanded?: boolean
 }) {
-  const fileChangeSignature = fileChanges
-    .map((change) =>
-      [
-        change.file,
-        change.additions,
-        change.deletions,
-        Boolean(change.patch?.trim()),
-        hasFileChangePreview(change),
-        change.previewState ?? "",
-      ].join("\u0000")
-    )
-    .join("\u0001")
-  const fileChangeIdentitySignature = fileChanges
-    .map((change) => [change.file, change.fromFile ?? "", change.operation ?? ""].join("\u0000"))
-    .join("\u0001")
+  const fileChangeSignature = useMemo(
+    () => fileChanges
+      .map((change) =>
+        [
+          change.file,
+          change.additions,
+          change.deletions,
+          Boolean(change.patch?.trim()),
+          hasFileChangePreview(change),
+          change.previewState ?? "",
+        ].join("\u0000")
+      )
+      .join("\u0001"),
+    [fileChanges],
+  )
+  const fileChangeIdentitySignature = useMemo(
+    () => fileChanges
+      .map((change) => [change.file, change.fromFile ?? "", change.operation ?? ""].join("\u0000"))
+      .join("\u0001"),
+    [fileChanges],
+  )
   const expansionResetSignature = isDraftPatch ? fileChangeIdentitySignature : fileChangeSignature
   const [isListExpanded, setIsListExpanded] = useState(defaultExpanded)
   const [expandedFile, setExpandedFile] = useState<string | null>(null)
@@ -4385,11 +2892,22 @@ function PatchFileChangePreview({
   }, [defaultExpanded, expansionResetSignature, id])
 
   const listID = `trace-file-change-list-${id}`
-  const primaryFileChange = getPrimaryPatchFileChange(fileChanges)
-  const editedFileSummary = `已编辑 ${fileChanges.length} 个文件`
+  const primaryFileChange = useMemo(
+    () => getPrimaryPatchFileChange(fileChanges),
+    [fileChanges],
+  )
+  const editedFileSummary = useMemo(
+    () => `已编辑 ${fileChanges.length} 个文件`,
+    [fileChanges.length],
+  )
   const draftPatchPhase = getDraftPatchActionPhase(draftPatchStatus, isStreaming)
-  const draftFileSummary = getDraftPatchSummaryLabel(fileChanges, draftPatchPhase)
-  const handleSummaryToggle = () => {
+  const draftFileSummary = useMemo(
+    () => getDraftPatchSummaryLabel(fileChanges, draftPatchPhase),
+    [draftPatchPhase, fileChanges],
+  )
+  const summaryLabel = isDraftPatch && primaryFileChange ? draftFileSummary : editedFileSummary
+  const reservesLiveDot = isDraftPatch && Boolean(primaryFileChange)
+  const handleSummaryToggle = useCallback(() => {
     const nextIsListExpanded = !isListExpanded
     setIsListExpanded(nextIsListExpanded)
     if (!nextIsListExpanded) {
@@ -4397,42 +2915,18 @@ function PatchFileChangePreview({
       setFullHeightFile(null)
       setFullPatchFile(null)
     }
-  }
+  }, [isListExpanded])
 
   return (
     <>
-      <button
-        type="button"
-        className="trace-file-change-summary"
-        aria-expanded={isListExpanded}
-        aria-controls={listID}
-        onClick={handleSummaryToggle}
-      >
-        <span className="trace-file-change-summary-icon" aria-hidden="true">
-          <ChangesIcon />
-        </span>
-        {isDraftPatch && primaryFileChange ? (
-          <>
-            <span className="trace-file-change-summary-label">{draftFileSummary}</span>
-            <span
-              className={joinClassNames(
-                "trace-file-change-live-dot",
-                isStreaming ? undefined : "is-hidden",
-              )}
-              aria-label="正在更新"
-              aria-hidden={isStreaming ? undefined : true}
-            />
-          </>
-        ) : (
-          <>
-            <span className="trace-file-change-summary-label">{editedFileSummary}</span>
-            <span aria-hidden="true" />
-          </>
-        )}
-        <span className="trace-file-change-summary-chevron" aria-hidden="true">
-          {isListExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
-        </span>
-      </button>
+      <PatchFileChangeSummaryButton
+        isExpanded={isListExpanded}
+        label={summaryLabel}
+        listID={listID}
+        onToggle={handleSummaryToggle}
+        reserveLiveDot={reservesLiveDot}
+        showLiveDot={reservesLiveDot && isStreaming}
+      />
       {isListExpanded ? (
         <div id={listID} className="trace-file-change-list">
           {fileChanges.map((change, changeIndex) => {
@@ -5512,6 +4006,39 @@ const TraceItemView = memo(function TraceItemView({
   )
 })
 
+function renderTraceItemForRow({
+  isQuestionAnswerDisabled,
+  isQuestionAnswered,
+  onArtifactLinkOpen,
+  onAskUserQuestionAnswer,
+  onFileChangeSelect,
+  onLocalFileLinkOpen,
+  onOpenImagePreview,
+  onProposedPlanConfirm,
+  row,
+  traceItem,
+  traceVisibility,
+}: TraceRowItemRenderInput) {
+  return (
+    <TraceItemView
+      key={`${traceItem.sourceMessageID}:${traceItem.itemID}`}
+      assistantMessagePhase={row.message.runtime.phase}
+      item={traceItem.item}
+      isQuestionAnswered={isQuestionAnswered}
+      isQuestionAnswerDisabled={isQuestionAnswerDisabled}
+      onOpenImagePreview={onOpenImagePreview}
+      onAskUserQuestionAnswer={onAskUserQuestionAnswer}
+      onFileChangeSelect={onFileChangeSelect}
+      onArtifactLinkOpen={onArtifactLinkOpen}
+      onLocalFileLinkOpen={onLocalFileLinkOpen}
+      isLatestMessage={row.isLatestMessage}
+      onProposedPlanConfirm={onProposedPlanConfirm}
+      shouldCollapseAfterMessageCompletion={row.shouldCollapseTraceItemAfterMessageCompletion}
+      traceVisibility={traceVisibility}
+    />
+  )
+}
+
 function PermissionRequestCard({
   actionError,
   activeSession,
@@ -5636,7 +4163,8 @@ function PermissionRequestInlinePrompt({
 
   return (
     <article
-      className="thread-message assistant-message permission-request-message"
+      className="thread-row permission-request-message"
+      data-thread-row-kind="permission-request"
       data-thread-message-id={`permission-request:${request.id}`}
       data-thread-message-motion={motion}
     >
@@ -5669,20 +4197,6 @@ function PermissionRequestInlinePrompt({
       </section>
     </article>
   )
-}
-
-function collectAnsweredQuestionIDs(messages: ThreadMessage[]) {
-  const answeredQuestionIDs = new Set<string>()
-
-  for (const message of messages) {
-    if (message.kind !== "user") continue
-
-    const questionID = message.questionAnswer?.questionID
-    if (!questionID) continue
-    answeredQuestionIDs.add(questionID)
-  }
-
-  return answeredQuestionIDs
 }
 
 function InactiveThreadView({ threadColumnRef }: Pick<ThreadViewProps, "threadColumnRef">) {
@@ -5725,6 +4239,19 @@ function BranchSwitcher({
     </label>
   )
 }
+
+const THREAD_ROW_RENDERER_COMPONENTS = {
+  AssistantMessagePlaceholder,
+  AssistantTraceSection,
+  BranchSwitcher,
+  InlineSideChatThread,
+  MessageDiffCard,
+  PermissionRequestInlinePrompt,
+  UserThreadMessageArticle,
+  collectAssistantPatchFileChanges,
+  getAssistantTraceBlockStackClassName,
+  renderTraceItemForRow,
+} satisfies ThreadRowRendererComponents
 
 function areArraysShallowEqual<T>(left: readonly T[] | undefined, right: readonly T[] | undefined) {
   if (left === right) return true
@@ -5901,52 +4428,37 @@ function VisibleThreadView({
   onPermissionRequestResponse,
   onSideChatSelect,
 }: ThreadViewProps) {
-  const answeredQuestionIDs = useMemo(() => collectAnsweredQuestionIDs(activeMessages), [activeMessages])
-  const displayMessages = useMemo(() => orderAdjacentAssistantMessagesForDisplay(activeMessages), [activeMessages])
-  const readOnlySideChat = isSideChatSession(activeSession)
+  const {
+    answeredQuestionIDs,
+    displayMessages,
+    displayRows,
+    visibleMessageIDs,
+    visibleMessageIDsKey,
+  } = useThreadProjection({
+    activeMessages,
+    activeSession,
+    activeSessionDiff,
+    assistantTraceVisibility,
+    canForkFromMessage: Boolean(onForkFromMessage),
+    canOpenSideChat: Boolean(onOpenSideChat),
+    isResolvingPermissionRequest,
+    isSessionRunning,
+    messageTree,
+    pendingPermissionRequests,
+    sideChatCountsByAnchorMessageID,
+    sideChatPlacement,
+    sideChatSession,
+    sideChatSessionsByAnchorMessageID,
+  })
   const [copiedResponseMessageID, setCopiedResponseMessageID] = useState<string | null>(null)
   const [copiedUserThreadMessageID, setCopiedUserThreadMessageID] = useState<string | null>(null)
   const [activeImagePreview, setActiveImagePreview] = useState<ActiveImagePreview | null>(null)
   const copiedResponseTimeoutRef = useRef<number | null>(null)
   const copiedUserTimeoutRef = useRef<number | null>(null)
-  const scrollModeRef = useRef<ThreadScrollMode>("follow")
-  const latestScrollSnapshotRef = useRef<ThreadScrollSnapshot | null>(null)
-  const latestScrollSnapshotKeyRef = useRef<string | null>(null)
-  const contentResizeObserverRef = useRef<ResizeObserver | null>(null)
-  const contentMutationObserverRef = useRef<MutationObserver | null>(null)
-  const observedThreadContentRef = useRef<WeakSet<Element>>(new WeakSet())
-  const observeThreadContentRef = useRef<(() => void) | null>(null)
-  const pendingObservedContentScrollSyncFrameRef = useRef<number | null>(null)
-  const pendingObservedContentScrollSyncKeyRef = useRef<string | null>(null)
-  const pendingSidebarResizeScrollSyncRef = useRef(false)
-  const pendingSidebarResizeContentObservationRef = useRef(false)
-  const smoothFollowScrollRef = useRef<ThreadSmoothFollowScroll | null>(null)
-  const lastUserScrollIntentAtRef = useRef(0)
-  const lastUserScrollIntentDirectionRef = useRef<"up" | "down" | null>(null)
-  const followScrollSyncSuppressedUntilRef = useRef(0)
+  const observedContentScrollSyncRef = useRef<((key?: string) => void) | null>(null)
   const latestAssistantMessageStateRef = useRef<LatestAssistantMessageState | null>(null)
   const previousActiveMessageCountRef = useRef(activeMessages.length)
-  const userScrollIntentConsumedRef = useRef(false)
-  const lastKnownScrollTopRef = useRef(0)
-  const currentScrollStateKeyRef = useRef<string | null>(null)
   const renderedMessageIDsByScrollKeyRef = useRef<Record<string, Set<string>>>({})
-  const threadVirtualHeightCachesRef = useRef<Record<string, Map<string, number>>>({})
-  const pendingThreadVirtualMeasurementsRef = useRef<Record<string, Map<string, number>>>({})
-  const pendingThreadVirtualMeasurementFrameRef = useRef<number | null>(null)
-  const pendingThreadVirtualMeasurementScrollSyncKeyRef = useRef<string | null>(null)
-  const pendingThreadVirtualViewportFrameRef = useRef<number | null>(null)
-  const previousProcessTraceCollapseEligibilityByMessageIDRef = useRef<Record<string, boolean>>({})
-  const [threadVirtualMeasurementVersion, setThreadVirtualMeasurementVersion] = useState(0)
-  const [threadViewUiState, setThreadViewUiState] = useState<ThreadViewUiState>(() => ({
-    processTraceCollapseMotionByMessageID: {},
-    processTraceExpansionByMessageID: {},
-  }))
-  const [threadVirtualViewport, setThreadVirtualViewport] = useState<ThreadVirtualViewport>({
-    height: 0,
-    paddingTop: 0,
-    scrollTop: 0,
-  })
-  const threadVirtualViewportRef = useRef(threadVirtualViewport)
   const lastInlineLinkActivationRef = useRef<{
     href: string
     time: number
@@ -5956,367 +4468,59 @@ function VisibleThreadView({
   const activeSessionID = activeSession?.id ?? null
   const effectiveScrollStateKey = scrollStateKey ?? activeSessionID ?? "thread:no-session"
   const isResizeLightweightMode = useSidebarResizeLightweightMode()
-  const visibleMessageIDs = useMemo(() => {
-    const ids = displayMessages.map((message) => message.id)
-    const pendingRequestID = pendingPermissionRequests[0]?.id
-    return pendingRequestID ? [...ids, `permission-request:${pendingRequestID}`] : ids
-  }, [displayMessages, pendingPermissionRequests])
-  const visibleMessageIDsKey = visibleMessageIDs.join("\u0000")
-  const pendingProcessTraceAutoCollapseMessageIDs = (() => {
-    const previousEligibility = previousProcessTraceCollapseEligibilityByMessageIDRef.current
-    const ids: string[] = []
-
-    displayMessages.forEach((message) => {
-      if (message.kind !== "assistant") return
-      if (threadViewUiState.processTraceExpansionByMessageID[message.id] !== undefined) return
-      if (previousEligibility[message.id] !== false || !canCollapseAssistantProcessTrace(message)) return
-      ids.push(message.id)
-    })
-
-    return ids
-  })()
-  const pendingProcessTraceAutoCollapseKey = pendingProcessTraceAutoCollapseMessageIDs.join("\u0000")
-  const effectiveThreadViewUiState = useMemo(() => {
-    if (pendingProcessTraceAutoCollapseMessageIDs.length === 0) return threadViewUiState
-
-    const processTraceCollapseMotionByMessageID = {
-      ...threadViewUiState.processTraceCollapseMotionByMessageID,
-    }
-    pendingProcessTraceAutoCollapseMessageIDs.forEach((messageID) => {
-      processTraceCollapseMotionByMessageID[messageID] = true
-    })
-
-    return {
-      ...threadViewUiState,
-      processTraceCollapseMotionByMessageID,
-    }
-  }, [pendingProcessTraceAutoCollapseKey, threadViewUiState])
-  const displayRows = useMemo(
-    () => measureRendererPerf(
-      "ThreadView.buildDisplayRows",
-      () => buildThreadDisplayRows({
-        activeSession,
-        activeMessages: displayMessages,
-        assistantTraceVisibility,
-        isResolvingPermissionRequest,
-        pendingPermissionRequests,
-        uiState: effectiveThreadViewUiState,
-      }),
-      () => ({
-        assistantItemCount: displayMessages.reduce(
-          (count, message) => count + (message.kind === "assistant" ? message.items.length : 0),
-          0,
-        ),
-        pendingPermissionRequestCount: pendingPermissionRequests.length,
-        sessionID: activeSession?.id ?? null,
-        messageCount: displayMessages.length,
-      }),
-    ),
-    [
-      activeSession,
-      displayMessages,
-      assistantTraceVisibility,
-      isResolvingPermissionRequest,
-      pendingPermissionRequests,
-      effectiveThreadViewUiState,
-    ],
-  )
-  const shouldVirtualizeThreadRows = displayRows.length >= THREAD_VIRTUALIZATION_MIN_ROWS
-  const threadVirtualHeightCache = getThreadVirtualHeightCache(effectiveScrollStateKey)
-  const threadVirtualLayout = useMemo(
-    () => buildThreadVirtualLayout(displayRows, threadVirtualHeightCache),
-    [effectiveScrollStateKey, displayRows, threadVirtualHeightCache, threadVirtualMeasurementVersion],
-  )
-  const threadVirtualRange = useMemo(
-    () => (shouldVirtualizeThreadRows
-      ? findThreadVirtualRange(threadVirtualLayout, threadVirtualViewport)
-      : {
-          endIndex: displayRows.length,
-          items: threadVirtualLayout.items,
-          startIndex: 0,
-        }),
-    [shouldVirtualizeThreadRows, displayRows.length, threadVirtualLayout, threadVirtualViewport],
-  )
-  const threadVirtualRenderedRangeKey = `${threadVirtualRange.startIndex}:${threadVirtualRange.endIndex}:${threadVirtualLayout.totalHeight}`
-  const activeProcessTraceCollapseMotionKey = Object.keys(effectiveThreadViewUiState.processTraceCollapseMotionByMessageID)
-    .sort()
-    .join("\u0000")
-
-  useLayoutEffect(() => {
-    previousProcessTraceCollapseEligibilityByMessageIDRef.current =
-      buildAssistantProcessTraceCollapseEligibilityByMessageID(displayMessages)
-  }, [displayMessages])
-
-  useLayoutEffect(() => {
-    if (pendingProcessTraceAutoCollapseMessageIDs.length === 0) return
-
-    setThreadViewUiState((current) => {
-      let changed = false
-      const processTraceCollapseMotionByMessageID = {
-        ...current.processTraceCollapseMotionByMessageID,
-      }
-
-      pendingProcessTraceAutoCollapseMessageIDs.forEach((messageID) => {
-        if (current.processTraceExpansionByMessageID[messageID] !== undefined) return
-        if (processTraceCollapseMotionByMessageID[messageID]) return
-        processTraceCollapseMotionByMessageID[messageID] = true
-        changed = true
-      })
-
-      return changed
-        ? {
-            ...current,
-            processTraceCollapseMotionByMessageID,
-          }
-        : current
-    })
-  }, [pendingProcessTraceAutoCollapseKey])
-
-  useEffect(() => {
-    if (!activeProcessTraceCollapseMotionKey) return
-
-    const messageIDs = activeProcessTraceCollapseMotionKey.split("\u0000")
-    const timerIDs = messageIDs.map((messageID) =>
-      window.setTimeout(() => {
-        setThreadViewUiState((current) => {
-          if (!current.processTraceCollapseMotionByMessageID[messageID]) return current
-
-          const processTraceCollapseMotionByMessageID = {
-            ...current.processTraceCollapseMotionByMessageID,
-          }
-          delete processTraceCollapseMotionByMessageID[messageID]
-
-          return {
-            ...current,
-            processTraceCollapseMotionByMessageID,
-          }
-        })
-      }, THREAD_AUTO_COLLAPSE_MOTION_MS),
-    )
-
-    return () => {
-      timerIDs.forEach((timerID) => window.clearTimeout(timerID))
-    }
-  }, [activeProcessTraceCollapseMotionKey])
-
-  function getThreadVirtualHeightCache(key = effectiveScrollStateKey) {
-    const existingCache = threadVirtualHeightCachesRef.current[key]
-    if (existingCache) return existingCache
-
-    const nextCache = new Map<string, number>()
-    threadVirtualHeightCachesRef.current[key] = nextCache
-    return nextCache
-  }
-
-  function cancelThreadAnimationFrame(frameID: number | null) {
-    if (
-      frameID !== null &&
-      typeof window !== "undefined" &&
-      typeof window.cancelAnimationFrame === "function"
-    ) {
-      window.cancelAnimationFrame(frameID)
-    }
-  }
-
-  function threadVirtualRangeWouldChange(nextViewport: ThreadVirtualViewport) {
-    if (!shouldVirtualizeThreadRows) return false
-
-    const nextRange = findThreadVirtualRange(threadVirtualLayout, nextViewport)
-    return (
-      nextRange.startIndex !== threadVirtualRange.startIndex ||
-      nextRange.endIndex !== threadVirtualRange.endIndex
-    )
-  }
-
-  function commitThreadVirtualViewport(
-    nextViewport: ThreadVirtualViewport,
-    options: ThreadVirtualViewportSyncOptions = {},
-  ) {
-    const previousViewport = threadVirtualViewportRef.current
-    if (
-      Math.abs(previousViewport.height - nextViewport.height) < THREAD_VIRTUAL_ROW_MEASURE_EPSILON_PX &&
-      Math.abs(previousViewport.paddingTop - nextViewport.paddingTop) < THREAD_VIRTUAL_ROW_MEASURE_EPSILON_PX &&
-      Math.abs(previousViewport.scrollTop - nextViewport.scrollTop) < THREAD_VIRTUAL_ROW_MEASURE_EPSILON_PX
-    ) {
-      return
-    }
-
-    threadVirtualViewportRef.current = nextViewport
-    if (!options.forceCommit && !threadVirtualRangeWouldChange(nextViewport)) return
-
-    setThreadVirtualViewport(nextViewport)
-  }
-
-  function readThreadVirtualViewport(threadColumn: HTMLDivElement): ThreadVirtualViewport {
-    return {
-      height: threadColumn.clientHeight,
-      paddingTop: readThreadColumnPaddingTop(threadColumn),
-      scrollTop: threadColumn.scrollTop,
-    }
-  }
-
-  function syncThreadVirtualViewport(
-    threadColumn: HTMLDivElement,
-    options: ThreadVirtualViewportSyncOptions = {},
-  ) {
-    if (!shouldVirtualizeThreadRows) return
-
-    commitThreadVirtualViewport(readThreadVirtualViewport(threadColumn), options)
-  }
-
-  function scheduleThreadVirtualViewportSync(threadColumn: HTMLDivElement) {
-    if (!shouldVirtualizeThreadRows) return
-    if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
-      syncThreadVirtualViewport(threadColumn)
-      return
-    }
-    if (pendingThreadVirtualViewportFrameRef.current !== null) return
-
-    pendingThreadVirtualViewportFrameRef.current = window.requestAnimationFrame(() => {
-      pendingThreadVirtualViewportFrameRef.current = null
-      const currentThreadColumn = threadColumnRef.current
-      if (!currentThreadColumn) return
-      syncThreadVirtualViewport(currentThreadColumn)
-    })
-  }
+  const {
+    flushQueuedThreadVirtualMeasurements,
+    getThreadVirtualScrollMaxTop,
+    measureRenderedThreadVirtualRows,
+    measureThreadVirtualRowsFromResizeEntries,
+    scheduleThreadVirtualViewportSync,
+    shouldVirtualizeThreadRows,
+    syncThreadVirtualViewport,
+    threadVirtualLayout,
+    threadVirtualRange,
+    threadVirtualRenderedRangeKey,
+  } = useThreadVirtualList({
+    displayRows,
+    onScrollSyncRequested: scheduleObservedContentScrollSync,
+    scrollStateKey: effectiveScrollStateKey,
+    threadColumnRef,
+  })
+  const {
+    handleThreadKeyDownIntent,
+    handleThreadPointerMoveIntent,
+    handleThreadScroll,
+    handleThreadScrollIntent,
+    handleThreadWheelIntent,
+    isSmoothFollowScrollActiveForKey,
+    restoreDetachedThreadPositionIfNeeded,
+    suppressFollowScrollSync,
+    syncThreadScrollAfterContentChange,
+  } = useThreadScrollController({
+    getLatestThreadContentScrollTarget,
+    isSidebarResizeInProgress,
+    readScrollSnapshot,
+    saveScrollSnapshot,
+    scheduleThreadVirtualViewportSync,
+    scrollStateKey: effectiveScrollStateKey,
+    syncThreadVirtualViewport,
+    threadColumnRef,
+  })
 
   function scheduleObservedContentScrollSync(key = effectiveScrollStateKey) {
-    if (isSidebarResizeInProgress()) {
-      pendingSidebarResizeScrollSyncRef.current = true
-      return
-    }
-
-    pendingObservedContentScrollSyncKeyRef.current = key
-    if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
-      pendingObservedContentScrollSyncKeyRef.current = null
-      syncThreadScrollAfterContentChange(key, {
-        smoothFollow: latestAssistantMessageStateRef.current?.isStreaming === true,
-      })
-      return
-    }
-    if (pendingObservedContentScrollSyncFrameRef.current !== null) return
-
-    pendingObservedContentScrollSyncFrameRef.current = window.requestAnimationFrame(() => {
-      pendingObservedContentScrollSyncFrameRef.current = null
-      const pendingKey = pendingObservedContentScrollSyncKeyRef.current
-      pendingObservedContentScrollSyncKeyRef.current = null
-      if (!pendingKey) return
-      if (smoothFollowScrollRef.current?.key === pendingKey) return
-      syncThreadScrollAfterContentChange(pendingKey, {
-        smoothFollow: latestAssistantMessageStateRef.current?.isStreaming === true,
-      })
-    })
-  }
-
-  function commitThreadVirtualRowHeight(rowID: string, height: number, key = effectiveScrollStateKey) {
-    if (!Number.isFinite(height) || height < THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX) return false
-
-    const normalizedHeight = Math.max(THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX, height)
-    const heightCache = getThreadVirtualHeightCache(key)
-    const previousHeight = heightCache.get(rowID)
-    if (
-      previousHeight !== undefined &&
-      Math.abs(previousHeight - normalizedHeight) < THREAD_VIRTUAL_ROW_MEASURE_EPSILON_PX
-    ) {
-      return false
-    }
-
-    heightCache.set(rowID, normalizedHeight)
-    return true
-  }
-
-  function flushQueuedThreadVirtualMeasurements() {
-    let didMeasure = false
-
-    for (const [key, measurements] of Object.entries(pendingThreadVirtualMeasurementsRef.current)) {
-      for (const [rowID, height] of measurements) {
-        didMeasure = commitThreadVirtualRowHeight(rowID, height, key) || didMeasure
-      }
-    }
-
-    pendingThreadVirtualMeasurementsRef.current = {}
-    pendingThreadVirtualMeasurementFrameRef.current = null
-
-    if (didMeasure) {
-      setThreadVirtualMeasurementVersion((version) => version + 1)
-    }
-
-    const scrollSyncKey = pendingThreadVirtualMeasurementScrollSyncKeyRef.current
-    pendingThreadVirtualMeasurementScrollSyncKeyRef.current = null
-    if (didMeasure && scrollSyncKey) {
-      scheduleObservedContentScrollSync(scrollSyncKey)
-    }
-
-    return didMeasure
-  }
-
-  function scheduleQueuedThreadVirtualMeasurementsFlush() {
-    if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
-      flushQueuedThreadVirtualMeasurements()
-      return
-    }
-    if (pendingThreadVirtualMeasurementFrameRef.current !== null) return
-
-    pendingThreadVirtualMeasurementFrameRef.current = window.requestAnimationFrame(() => {
-      flushQueuedThreadVirtualMeasurements()
-    })
-  }
-
-  function queueThreadVirtualRowHeight(
-    rowID: string,
-    height: number,
-    key = effectiveScrollStateKey,
-    options: { syncScroll?: boolean } = {},
-  ) {
-    if (!Number.isFinite(height) || height < THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX) return false
-
-    const normalizedHeight = Math.max(THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX, height)
-    const existingMeasurements = pendingThreadVirtualMeasurementsRef.current[key]
-    const pendingHeight = existingMeasurements?.get(rowID)
-    if (
-      pendingHeight !== undefined &&
-      Math.abs(pendingHeight - normalizedHeight) < THREAD_VIRTUAL_ROW_MEASURE_EPSILON_PX
-    ) {
-      return false
-    }
-
-    const cachedHeight = getThreadVirtualHeightCache(key).get(rowID)
-    if (
-      pendingHeight === undefined &&
-      cachedHeight !== undefined &&
-      Math.abs(cachedHeight - normalizedHeight) < THREAD_VIRTUAL_ROW_MEASURE_EPSILON_PX
-    ) {
-      return false
-    }
-
-    const measurements = existingMeasurements ?? new Map<string, number>()
-    if (!existingMeasurements) pendingThreadVirtualMeasurementsRef.current[key] = measurements
-    measurements.set(rowID, normalizedHeight)
-
-    if (options.syncScroll) {
-      pendingThreadVirtualMeasurementScrollSyncKeyRef.current = key
-    }
-    scheduleQueuedThreadVirtualMeasurementsFlush()
-    return true
-  }
-
-  function getThreadVirtualScrollMaxTop(threadColumn: HTMLDivElement) {
-    const virtualScrollHeight =
-      threadVirtualLayout.totalHeight +
-      readThreadColumnPaddingTop(threadColumn) +
-      readThreadColumnPaddingBottom(threadColumn)
-    return Math.max(getThreadScrollMaxTop(threadColumn), virtualScrollHeight - threadColumn.clientHeight)
+    observedContentScrollSyncRef.current?.(key)
   }
 
   function shouldUseStreamingResponseScrollTargetForVirtualRows() {
     for (let index = displayRows.length - 1; index >= 0; index -= 1) {
       const row = displayRows[index]
-      if (row?.kind !== "assistant-message") continue
+      if (row?.kind !== "assistant-response-row") continue
 
-      const streamingResponseIndex = row.renderedItems.findIndex(
-        (item) => item.kind === "text" && item.isStreaming && traceSectionKeyForItem(item) === "response",
+      if (row.item.kind !== "text" || !row.item.isStreaming || traceSectionKeyForItem(row.item) !== "response") {
+        continue
+      }
+      return displayRows.slice(index + 1).some(
+        (candidate) => "ownerMessageID" in candidate && candidate.ownerMessageID === row.ownerMessageID,
       )
-      return streamingResponseIndex >= 0 && streamingResponseIndex < row.renderedItems.length - 1
     }
 
     return false
@@ -6352,366 +4556,22 @@ function VisibleThreadView({
     }
   }
 
-  function scrollThreadColumnToLatestThreadContent(
-    threadColumn: HTMLDivElement,
-    options: { skipStreamingResponseMeasurement?: boolean } = {},
-  ) {
-    const target = getLatestThreadContentScrollTarget(threadColumn, options)
-    if (!shouldVirtualizeThreadRows) {
-      threadColumn.scrollTop = target.scrollTop
-      return
-    }
-
-    threadColumn.scrollTop = target.scrollTop
-    syncThreadVirtualViewport(threadColumn)
-  }
-
-  function measureRenderedThreadVirtualRows(options: { syncScroll?: boolean } = {}) {
-    const threadColumn = threadColumnRef.current
-    if (!threadColumn || !shouldVirtualizeThreadRows) return false
-
-    let didMeasure = false
-    for (const element of Array.from(threadColumn.querySelectorAll<HTMLElement>("[data-thread-virtual-row-id]"))) {
-      const rowID = element.dataset.threadVirtualRowId
-      if (!rowID) continue
-
-      const height = Math.max(element.offsetHeight, element.getBoundingClientRect().height)
-      didMeasure = queueThreadVirtualRowHeight(rowID, height, effectiveScrollStateKey, options) || didMeasure
-    }
-
-    return didMeasure
-  }
-
-  function measureThreadVirtualRowsFromResizeEntries(
-    entries: ResizeObserverEntry[],
-    options: { syncScroll?: boolean } = {},
-  ) {
-    if (!shouldVirtualizeThreadRows) return false
-
-    let didMeasure = false
-    for (const entry of entries) {
-      if (!(entry.target instanceof HTMLElement)) continue
-      const rowID = entry.target.dataset.threadVirtualRowId
-      if (!rowID) continue
-
-      const height = readResizeEntryBlockSize(entry)
-      if (height === null) continue
-      didMeasure = queueThreadVirtualRowHeight(rowID, height, effectiveScrollStateKey, options) || didMeasure
-    }
-
-    return didMeasure
-  }
-
-  function captureThreadScrollSnapshot(
-    threadColumn: HTMLDivElement,
-    key = effectiveScrollStateKey,
-    mode: ThreadScrollMode = scrollModeRef.current,
-  ) {
-    const snapshot = {
-      ...readThreadScrollSnapshot(threadColumn),
-      pinnedToBottom: mode === "follow",
-    }
-    latestScrollSnapshotRef.current = snapshot
-    latestScrollSnapshotKeyRef.current = key
-    threadScrollSnapshots.set(key, snapshot)
-    return snapshot
-  }
-
-  function rememberThreadScrollSnapshot(key: string, snapshot: ThreadScrollSnapshot) {
-    latestScrollSnapshotRef.current = snapshot
-    latestScrollSnapshotKeyRef.current = key
-    threadScrollSnapshots.set(key, snapshot)
-  }
-
-  function readLatestThreadScrollSnapshotForKey(key = effectiveScrollStateKey) {
-    return latestScrollSnapshotKeyRef.current === key ? latestScrollSnapshotRef.current : null
-  }
-
-  function readStoredThreadScrollSnapshot(key = effectiveScrollStateKey) {
-    return readScrollSnapshot?.(key) ?? threadScrollSnapshots.get(key) ?? null
-  }
-
-  function persistThreadScrollSnapshot(
-    key = effectiveScrollStateKey,
-    mode: ThreadScrollMode = scrollModeRef.current,
-  ) {
-    const threadColumn = threadColumnRef.current
-    if (!threadColumn || !key) return
-
-    const snapshot = captureThreadScrollSnapshot(threadColumn, key, mode)
-    saveScrollSnapshot?.(key, snapshot)
-  }
-
-  function persistLatestThreadScrollSnapshot(key = effectiveScrollStateKey) {
-    const snapshot = readLatestThreadScrollSnapshotForKey(key)
-    if (!key || !snapshot) return false
-
-    threadScrollSnapshots.set(key, snapshot)
-    saveScrollSnapshot?.(key, snapshot)
-    return true
-  }
-
-  function saveThreadScrollSnapshotValue(key: string, snapshot: ThreadScrollSnapshot) {
-    if (!key) return
-
-    threadScrollSnapshots.set(key, snapshot)
-    saveScrollSnapshot?.(key, snapshot)
-  }
-
-  function rememberThreadTopScrollSnapshot(threadColumn: HTMLDivElement, key = effectiveScrollStateKey) {
-    if (!key) return
-    if (getThreadScrollMaxTop(threadColumn) <= THREAD_TOP_RESET_THRESHOLD_PX) return
-
-    cancelSmoothFollowScroll()
-    const snapshot: ThreadScrollSnapshot = {
-      scrollTop: 0,
-      pinnedToBottom: false,
-      updatedAt: Date.now(),
-    }
-    scrollModeRef.current = "detached"
-    lastKnownScrollTopRef.current = 0
-    rememberThreadScrollSnapshot(key, snapshot)
-    saveThreadScrollSnapshotValue(key, snapshot)
-  }
-
-  function detachThreadScrollFromFollow(threadColumn: HTMLDivElement, key = effectiveScrollStateKey) {
-    if (!key) return false
-    if (getThreadScrollMaxTop(threadColumn) <= THREAD_TOP_RESET_THRESHOLD_PX) return false
-
-    cancelSmoothFollowScroll()
-    const snapshot: ThreadScrollSnapshot = {
-      ...readThreadScrollSnapshot(threadColumn),
-      pinnedToBottom: false,
-    }
-    scrollModeRef.current = "detached"
-    lastKnownScrollTopRef.current = threadColumn.scrollTop
-    rememberThreadScrollSnapshot(key, snapshot)
-    saveThreadScrollSnapshotValue(key, snapshot)
-    return true
-  }
-
-  function setThreadScrollTop(threadColumn: HTMLDivElement, scrollTop: number) {
-    threadColumn.scrollTop = clampThreadScrollTop(threadColumn, scrollTop)
-    lastKnownScrollTopRef.current = threadColumn.scrollTop
-    syncThreadVirtualViewport(threadColumn)
-  }
-
-  function cancelSmoothFollowScroll() {
-    const frameID = smoothFollowScrollRef.current?.frameID ?? null
-    smoothFollowScrollRef.current = null
-    if (
-      frameID !== null &&
-      typeof window !== "undefined" &&
-      typeof window.cancelAnimationFrame === "function"
-    ) {
-      window.cancelAnimationFrame(frameID)
-    }
-  }
-
-  function scheduleSmoothFollowLatestThreadContent(threadColumn: HTMLDivElement, key = effectiveScrollStateKey) {
-    if (isSidebarResizeInProgress()) return false
-
-    if (
-      typeof window === "undefined" ||
-      typeof window.requestAnimationFrame !== "function" ||
-      prefersReducedThreadMotion()
-    ) {
-      return false
-    }
-
-    const target = getLatestThreadContentScrollTarget(threadColumn)
-    const delta = Math.abs(target.visualScrollTop - threadColumn.scrollTop)
-    if (
-      delta < THREAD_FOLLOW_SMOOTH_SCROLL_MIN_DELTA_PX ||
-      delta > THREAD_FOLLOW_SMOOTH_SCROLL_MAX_DELTA_PX
-    ) {
-      return false
-    }
-
-    cancelSmoothFollowScroll()
-    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now()
-    const animation: ThreadSmoothFollowScroll = {
-      duration: getThreadSmoothFollowScrollDuration(delta),
-      frameID: null,
-      fromScrollTop: threadColumn.scrollTop,
-      key,
-      startedAt,
-      targetScrollTop: target.visualScrollTop,
-    }
-
-    const pinnedSnapshot: ThreadScrollSnapshot = {
-      scrollTop: target.visualScrollTop,
-      pinnedToBottom: true,
-      updatedAt: Date.now(),
-    }
-    scrollModeRef.current = "follow"
-    rememberThreadScrollSnapshot(key, pinnedSnapshot)
-    saveThreadScrollSnapshotValue(key, pinnedSnapshot)
-
-    const step = (timestamp: number) => {
-      if (smoothFollowScrollRef.current !== animation) return
-
-      const currentThreadColumn = threadColumnRef.current
-      if (
-        !currentThreadColumn ||
-        currentThreadColumn !== threadColumn ||
-        currentScrollStateKeyRef.current !== key ||
-        scrollModeRef.current !== "follow"
-      ) {
-        smoothFollowScrollRef.current = null
-        return
-      }
-
-      const effectiveTimestamp = timestamp < animation.startedAt
-        ? animation.startedAt + animation.duration
-        : timestamp
-      const progress = Math.min(1, Math.max(0, (effectiveTimestamp - animation.startedAt) / animation.duration))
-      const easedProgress = easeThreadFollowScroll(progress)
-      const nextScrollTop =
-        animation.fromScrollTop +
-        (animation.targetScrollTop - animation.fromScrollTop) * easedProgress
-      setThreadScrollTop(currentThreadColumn, nextScrollTop)
-
-      if (progress >= 1) {
-        smoothFollowScrollRef.current = null
-        persistThreadScrollSnapshot(key, "follow")
-        return
-      }
-
-      animation.frameID = window.requestAnimationFrame(step)
-    }
-
-    smoothFollowScrollRef.current = animation
-    animation.frameID = window.requestAnimationFrame(step)
-    return true
-  }
-
-  function followLatestThreadContent(
-    threadColumn: HTMLDivElement,
-    key = effectiveScrollStateKey,
-    options: { smooth?: boolean } = {},
-  ) {
-    scrollModeRef.current = "follow"
-    const isResizingSidebar = isSidebarResizeInProgress()
-    if (isResizingSidebar) {
-      cancelSmoothFollowScroll()
-      scrollThreadColumnToLatestThreadContent(threadColumn, { skipStreamingResponseMeasurement: true })
-      lastKnownScrollTopRef.current = threadColumn.scrollTop
-      syncThreadVirtualViewport(threadColumn)
-      persistThreadScrollSnapshot(key, "follow")
-      return
-    }
-
-    if (options.smooth && scheduleSmoothFollowLatestThreadContent(threadColumn, key)) return
-
-    cancelSmoothFollowScroll()
-    scrollThreadColumnToLatestThreadContent(threadColumn)
-    lastKnownScrollTopRef.current = threadColumn.scrollTop
-    syncThreadVirtualViewport(threadColumn)
-    persistThreadScrollSnapshot(key, "follow")
-  }
-
-  function preserveCurrentFollowThreadPosition(threadColumn: HTMLDivElement, key = effectiveScrollStateKey) {
-    cancelSmoothFollowScroll()
-    scrollModeRef.current = "follow"
-    lastKnownScrollTopRef.current = threadColumn.scrollTop
-    syncThreadVirtualViewport(threadColumn)
-    persistThreadScrollSnapshot(key, "follow")
-  }
-
-  function restoreDetachedThreadPosition(
-    threadColumn: HTMLDivElement,
-    snapshot: ThreadScrollSnapshot,
-    key = effectiveScrollStateKey,
-  ) {
-    cancelSmoothFollowScroll()
-    scrollModeRef.current = "detached"
-    if (!canRepresentThreadScrollTop(threadColumn, snapshot.scrollTop)) {
-      rememberThreadScrollSnapshot(key, snapshot)
-      return false
-    }
-
-    setThreadScrollTop(threadColumn, snapshot.scrollTop)
-    persistThreadScrollSnapshot(key, "detached")
-    return true
-  }
-
-  function restoreSavedThreadPosition(
-    threadColumn: HTMLDivElement,
-    snapshot: ThreadScrollSnapshot | null,
-    key = effectiveScrollStateKey,
-  ) {
-    if (!snapshot || snapshot.pinnedToBottom) {
-      followLatestThreadContent(threadColumn, key)
-      return
-    }
-
-    restoreDetachedThreadPosition(threadColumn, snapshot, key)
-  }
-
-  function restoreDetachedThreadPositionIfNeeded(key = effectiveScrollStateKey) {
-    const threadColumn = threadColumnRef.current
-    if (!threadColumn || currentScrollStateKeyRef.current !== key) return false
-    if (scrollModeRef.current !== "detached") return false
-    if (threadColumn.scrollTop > THREAD_TOP_RESET_THRESHOLD_PX) return false
-
-    const snapshot =
-      getRestorableThreadScrollSnapshot(readLatestThreadScrollSnapshotForKey(key)) ??
-      getRestorableThreadScrollSnapshot(readStoredThreadScrollSnapshot(key))
-    if (!snapshot) return false
-
-    return restoreDetachedThreadPosition(threadColumn, snapshot, key)
-  }
-
-  function syncThreadScrollAfterContentChange(
-    key = effectiveScrollStateKey,
-    options: { preserveFollowPosition?: boolean; smoothFollow?: boolean } = {},
-  ) {
-    const threadColumn = threadColumnRef.current
-    if (!threadColumn || currentScrollStateKeyRef.current !== key) return
-
-    if (scrollModeRef.current === "follow") {
-      if (options.preserveFollowPosition || Date.now() <= followScrollSyncSuppressedUntilRef.current) {
-        preserveCurrentFollowThreadPosition(threadColumn, key)
-        return
-      }
-
-      followLatestThreadContent(threadColumn, key, { smooth: options.smoothFollow })
-      return
-    }
-
-    restoreDetachedThreadPositionIfNeeded(key)
-  }
-
-  function syncThreadScrollAfterObservedContentChange(key = effectiveScrollStateKey) {
-    scheduleObservedContentScrollSync(key)
-  }
-
-  const flushDeferredSidebarResizeScrollSync = useEffectEvent((key: string) => {
-    cancelThreadAnimationFrame(pendingObservedContentScrollSyncFrameRef.current)
-    pendingObservedContentScrollSyncFrameRef.current = null
-    pendingObservedContentScrollSyncKeyRef.current = null
-
-    const shouldRefreshObservedContent = pendingSidebarResizeContentObservationRef.current
-    pendingSidebarResizeContentObservationRef.current = false
-    if (shouldRefreshObservedContent) {
-      observeThreadContentRef.current?.()
-      if (shouldVirtualizeThreadRows) {
-        measureRenderedThreadVirtualRows({ syncScroll: true })
-      }
-    }
-
-    cancelThreadAnimationFrame(pendingThreadVirtualMeasurementFrameRef.current)
-    pendingThreadVirtualMeasurementFrameRef.current = null
-    flushQueuedThreadVirtualMeasurements()
-
-    if (!pendingSidebarResizeScrollSyncRef.current) return
-    pendingSidebarResizeScrollSyncRef.current = false
-    cancelThreadAnimationFrame(pendingObservedContentScrollSyncFrameRef.current)
-    pendingObservedContentScrollSyncFrameRef.current = null
-    pendingObservedContentScrollSyncKeyRef.current = null
-    syncThreadScrollAfterContentChange(key)
+  const {
+    scheduleObservedContentScrollSync: scheduleObservedContentScrollSyncFromObserver,
+  } = useThreadContentObserver({
+    flushQueuedThreadVirtualMeasurements,
+    isSidebarResizeInProgress,
+    isSmoothFollowScrollActiveForKey,
+    measureRenderedThreadVirtualRows,
+    measureThreadVirtualRowsFromResizeEntries,
+    shouldSmoothFollowObservedContentChange: () => latestAssistantMessageStateRef.current?.isStreaming === true,
+    shouldVirtualizeThreadRows,
+    scrollStateKey: effectiveScrollStateKey,
+    syncThreadScrollAfterContentChange,
+    threadColumnRef,
+    threadVirtualRenderedRangeKey,
   })
+  observedContentScrollSyncRef.current = scheduleObservedContentScrollSyncFromObserver
 
   function readThreadMessageMotion(messageID: string, isLive = false): ThreadMessageMotion {
     const renderedMessageIDs = renderedMessageIDsByScrollKeyRef.current[effectiveScrollStateKey]
@@ -6721,28 +4581,12 @@ function VisibleThreadView({
 
   useEffect(() => {
     return () => {
-      cancelSmoothFollowScroll()
-      const latestSnapshotKey = latestScrollSnapshotKeyRef.current
-      if (latestSnapshotKey) {
-        persistLatestThreadScrollSnapshot(latestSnapshotKey)
-      }
       if (copiedResponseTimeoutRef.current !== null) {
         window.clearTimeout(copiedResponseTimeoutRef.current)
       }
       if (copiedUserTimeoutRef.current !== null) {
         window.clearTimeout(copiedUserTimeoutRef.current)
       }
-      cancelThreadAnimationFrame(pendingObservedContentScrollSyncFrameRef.current)
-      pendingObservedContentScrollSyncFrameRef.current = null
-      cancelThreadAnimationFrame(pendingThreadVirtualMeasurementFrameRef.current)
-      pendingThreadVirtualMeasurementFrameRef.current = null
-      cancelThreadAnimationFrame(pendingThreadVirtualViewportFrameRef.current)
-      pendingThreadVirtualViewportFrameRef.current = null
-      contentResizeObserverRef.current?.disconnect()
-      contentResizeObserverRef.current = null
-      contentMutationObserverRef.current?.disconnect()
-      contentMutationObserverRef.current = null
-      observeThreadContentRef.current = null
     }
   }, [])
 
@@ -6869,89 +4713,6 @@ function VisibleThreadView({
 
   useLayoutEffect(() => {
     const threadColumn = threadColumnRef.current
-    if (!threadColumn) return
-
-    const previousScrollStateKey = currentScrollStateKeyRef.current
-    if (previousScrollStateKey && previousScrollStateKey !== effectiveScrollStateKey) {
-      persistLatestThreadScrollSnapshot(previousScrollStateKey)
-    }
-
-    currentScrollStateKeyRef.current = effectiveScrollStateKey
-    restoreSavedThreadPosition(threadColumn, readStoredThreadScrollSnapshot(effectiveScrollStateKey), effectiveScrollStateKey)
-  }, [effectiveScrollStateKey, readScrollSnapshot, threadColumnRef])
-
-  useLayoutEffect(() => {
-    const threadColumn = threadColumnRef.current
-    if (!threadColumn || typeof ResizeObserver === "undefined") return
-
-    contentResizeObserverRef.current?.disconnect()
-    contentMutationObserverRef.current?.disconnect()
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      if (isSidebarResizeInProgress()) {
-        pendingSidebarResizeScrollSyncRef.current = true
-        pendingSidebarResizeContentObservationRef.current = true
-        return
-      }
-
-      measureThreadVirtualRowsFromResizeEntries(entries, { syncScroll: true })
-      syncThreadScrollAfterObservedContentChange(effectiveScrollStateKey)
-    })
-    observedThreadContentRef.current = new WeakSet()
-    const observeThreadContent = () => {
-      if (!observedThreadContentRef.current.has(threadColumn)) {
-        resizeObserver.observe(threadColumn)
-        observedThreadContentRef.current.add(threadColumn)
-      }
-      for (const child of Array.from(threadColumn.children)) {
-        if (observedThreadContentRef.current.has(child)) continue
-        resizeObserver.observe(child)
-        observedThreadContentRef.current.add(child)
-      }
-      if (shouldVirtualizeThreadRows) {
-        for (const row of Array.from(threadColumn.querySelectorAll<HTMLElement>("[data-thread-virtual-row-id]"))) {
-          if (observedThreadContentRef.current.has(row)) continue
-          resizeObserver.observe(row)
-          observedThreadContentRef.current.add(row)
-        }
-      }
-    }
-
-    observeThreadContent()
-    observeThreadContentRef.current = observeThreadContent
-    contentResizeObserverRef.current = resizeObserver
-
-    if (typeof MutationObserver !== "undefined") {
-      const mutationObserver = new MutationObserver(() => {
-        if (isSidebarResizeInProgress()) {
-          pendingSidebarResizeScrollSyncRef.current = true
-          pendingSidebarResizeContentObservationRef.current = true
-          return
-        }
-
-        observeThreadContent()
-        syncThreadScrollAfterObservedContentChange(effectiveScrollStateKey)
-      })
-      mutationObserver.observe(threadColumn, { childList: true, subtree: shouldVirtualizeThreadRows })
-      contentMutationObserverRef.current = mutationObserver
-    }
-
-    return () => {
-      resizeObserver.disconnect()
-      if (contentResizeObserverRef.current === resizeObserver) {
-        contentResizeObserverRef.current = null
-      }
-      if (observeThreadContentRef.current === observeThreadContent) {
-        observeThreadContentRef.current = null
-      }
-      observedThreadContentRef.current = new WeakSet()
-      contentMutationObserverRef.current?.disconnect()
-      contentMutationObserverRef.current = null
-    }
-  }, [effectiveScrollStateKey, shouldVirtualizeThreadRows, threadColumnRef])
-
-  useLayoutEffect(() => {
-    const threadColumn = threadColumnRef.current
     if (!threadColumn || !shouldVirtualizeThreadRows) return
 
     syncThreadVirtualViewport(threadColumn, { forceCommit: true })
@@ -6962,37 +4723,6 @@ function VisibleThreadView({
     displayRows.length,
     threadVirtualLayout.totalHeight,
   ])
-
-  useLayoutEffect(() => {
-    if (!shouldVirtualizeThreadRows) return
-
-    if (isSidebarResizeInProgress()) {
-      pendingSidebarResizeScrollSyncRef.current = true
-      pendingSidebarResizeContentObservationRef.current = true
-      return
-    }
-
-    const didMeasure = measureRenderedThreadVirtualRows({ syncScroll: true })
-    if (didMeasure) {
-      syncThreadScrollAfterObservedContentChange(effectiveScrollStateKey)
-    }
-  }, [
-    effectiveScrollStateKey,
-    shouldVirtualizeThreadRows,
-    threadColumnRef,
-    threadVirtualRenderedRangeKey,
-  ])
-
-  useEffect(() => {
-    function handleSidebarResizeEnd() {
-      flushDeferredSidebarResizeScrollSync(effectiveScrollStateKey)
-    }
-
-    window.addEventListener(SIDEBAR_RESIZE_END_EVENT, handleSidebarResizeEnd)
-    return () => {
-      window.removeEventListener(SIDEBAR_RESIZE_END_EVENT, handleSidebarResizeEnd)
-    }
-  }, [effectiveScrollStateKey, flushDeferredSidebarResizeScrollSync])
 
   useLayoutEffect(() => {
     const threadColumn = threadColumnRef.current
@@ -7018,7 +4748,7 @@ function VisibleThreadView({
     )
 
     if (isCompletingLatestAssistantMessage) {
-      followScrollSyncSuppressedUntilRef.current = Date.now() + THREAD_COMPLETION_SCROLL_SYNC_SUPPRESS_MS
+      suppressFollowScrollSync()
     }
 
     syncThreadScrollAfterContentChange(effectiveScrollStateKey, {
@@ -7048,476 +4778,73 @@ function VisibleThreadView({
     renderedMessageIDsByScrollKeyRef.current[effectiveScrollStateKey] = renderedMessageIDs
   }, [effectiveScrollStateKey, visibleMessageIDsKey])
 
-  function handleThreadScrollIntent(event?: { currentTarget: HTMLDivElement }) {
-    cancelSmoothFollowScroll()
-    lastUserScrollIntentAtRef.current = Date.now()
-    userScrollIntentConsumedRef.current = false
-    if (event?.currentTarget) {
-      lastKnownScrollTopRef.current = event.currentTarget.scrollTop
-    }
-  }
-
-  function handleThreadPointerMoveIntent(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.pointerType === "mouse" && event.buttons === 0) return
-    handleThreadScrollIntent()
-  }
-
-  function handleThreadKeyDownIntent(event: KeyboardEvent<HTMLDivElement>) {
-    handleThreadScrollIntent(event)
-
-    if (event.key === "ArrowUp" || event.key === "PageUp" || event.key === "Home") {
-      lastUserScrollIntentDirectionRef.current = "up"
-      detachThreadScrollFromFollow(event.currentTarget)
-    } else if (event.key === "ArrowDown" || event.key === "PageDown" || event.key === "End") {
-      lastUserScrollIntentDirectionRef.current = "down"
-    }
-  }
-
-  function handleThreadWheelIntent(event: ReactWheelEvent<HTMLDivElement>) {
-    if (event.deltaY < 0) {
-      lastUserScrollIntentDirectionRef.current = "up"
-      detachThreadScrollFromFollow(event.currentTarget)
-    } else if (event.deltaY > 0) {
-      lastUserScrollIntentDirectionRef.current = "down"
-    }
-
-    handleThreadScrollIntent(event)
-
-    if (event.deltaY < 0 && event.currentTarget.scrollTop <= THREAD_TOP_RESET_THRESHOLD_PX) {
-      rememberThreadTopScrollSnapshot(event.currentTarget)
-    }
-  }
-
-  function hasRecentThreadScrollIntent() {
-    return (
-      !userScrollIntentConsumedRef.current &&
-      Date.now() - lastUserScrollIntentAtRef.current <= THREAD_USER_SCROLL_INTENT_WINDOW_MS
-    )
-  }
-
-  function hasRecentUpwardThreadScrollIntent() {
-    return (
-      lastUserScrollIntentDirectionRef.current === "up" &&
-      Date.now() - lastUserScrollIntentAtRef.current <= THREAD_USER_SCROLL_INTENT_WINDOW_MS
-    )
-  }
-
-  function handleThreadScroll() {
-    const threadColumn = threadColumnRef.current
-    if (!threadColumn) return
-    scheduleThreadVirtualViewportSync(threadColumn)
-
-    if (!hasRecentThreadScrollIntent()) {
-      if (threadColumn.scrollTop <= THREAD_TOP_RESET_THRESHOLD_PX) {
-        if (hasRecentUpwardThreadScrollIntent()) {
-          rememberThreadTopScrollSnapshot(threadColumn, effectiveScrollStateKey)
-          return
-        }
-        if (restoreDetachedThreadPositionIfNeeded(effectiveScrollStateKey)) {
-          return
-        }
-      }
-      lastKnownScrollTopRef.current = threadColumn.scrollTop
-      return
-    }
-    userScrollIntentConsumedRef.current = true
-
-    const previousScrollTop = lastKnownScrollTopRef.current
-    const rawSnapshot = readThreadScrollSnapshot(threadColumn)
-    const movedUp = rawSnapshot.scrollTop < previousScrollTop - 1
-    const nextMode: ThreadScrollMode = rawSnapshot.pinnedToBottom && !movedUp ? "follow" : "detached"
-    const snapshot = {
-      ...rawSnapshot,
-      pinnedToBottom: nextMode === "follow",
-    }
-
-    scrollModeRef.current = nextMode
-    lastKnownScrollTopRef.current = rawSnapshot.scrollTop
-    rememberThreadScrollSnapshot(effectiveScrollStateKey, snapshot)
-    saveThreadScrollSnapshotValue(effectiveScrollStateKey, snapshot)
-  }
-
-  function toggleProcessTraceRow(messageID: string, expanded: boolean, collapsing: boolean) {
-    const threadColumn = threadColumnRef.current
-    if (threadColumn) {
-      detachThreadScrollFromFollow(threadColumn, effectiveScrollStateKey)
-    }
-
-    setThreadViewUiState((current) => {
-      const processTraceCollapseMotionByMessageID = {
-        ...current.processTraceCollapseMotionByMessageID,
-      }
-      delete processTraceCollapseMotionByMessageID[messageID]
-
-      return {
-        ...current,
-        processTraceCollapseMotionByMessageID,
-        processTraceExpansionByMessageID: {
-          ...current.processTraceExpansionByMessageID,
-          [messageID]: collapsing ? true : !expanded,
-        },
-      }
-    })
+  function isTraceItemQuestionAnswered(item: AssistantTraceItem) {
+    const questionID = item.questionPrompt?.questionID
+    return Boolean(item.questionPrompt?.answered || (questionID && answeredQuestionIDs.has(questionID)))
   }
 
   function renderDisplayRow(row: ThreadDisplayRow) {
-    if (row.kind === "user-message") {
-      const { message, messageIndex } = row
-      return (
-        <UserThreadMessageArticle
-          key={row.rowID}
-          copied={copiedUserThreadMessageID === message.id}
-          motion={readThreadMessageMotion(message.id)}
-          onCopy={handleCopyUserMessage}
-          message={message}
-          diffCard={
-            shouldRenderDiffOnStandaloneUserMessage(displayMessages, messageIndex, message) ? (
-              <MessageDiffCard
-                messageID={message.id}
-                diffSummary={message.diffSummary}
-                activeSessionDiff={activeSessionDiff}
-                allowWorkspaceDiffFallback={messageIndex === displayMessages.length - 1}
-                onFileChangeSelect={onFileChangeSelect}
-                onMessageDiffSummaryHydrate={onMessageDiffSummaryHydrate}
-                onMessageDiffRestore={onMessageDiffRestore}
-                onMessageDiffReview={onMessageDiffReview}
-              />
-            ) : null
-          }
-        />
-      )
-    }
-
-    if (row.kind === "permission-request") {
-      return (
-        <PermissionRequestInlinePrompt
-          key={row.rowID}
-          activeSession={activeSession}
-          isResolvingPermissionRequest={isResolvingPermissionRequest}
-          pendingPermissionRequests={pendingPermissionRequests}
-          permissionRequestActionError={permissionRequestActionError}
-          permissionRequestActionRequestID={permissionRequestActionRequestID}
-          motion={readThreadMessageMotion(
-            pendingPermissionRequests[0]?.id ? `permission-request:${pendingPermissionRequests[0].id}` : "permission-request",
-          )}
-          onPermissionRequestResponse={onPermissionRequestResponse}
-        />
-      )
-    }
-
-    if (row.kind === "process-header") {
-      const duration = formatAssistantProcessTraceDuration(row.blocks, row.message.runtime)
-      const summary = summarizeProcessTraceBlocks(row.blocks)
-
-      return (
-        <article
-          key={row.rowID}
-          className={joinClassNames(
-            "thread-row",
-            "assistant-process-trace",
-            "assistant-process-trace-row",
-            row.expanded ? "is-expanded" : "is-collapsed",
-            row.collapsing && "is-collapsing",
-          )}
-          data-depth="0"
-          data-kind="process-header"
-          data-thread-message-id={row.messageID}
-          data-thread-message-motion={readThreadMessageMotion(row.messageID, row.message.isStreaming)}
-        >
-          <AssistantProcessTraceHeader
-            duration={duration}
-            isExpanded={row.expanded}
-            summary={summary}
-            onToggle={() => toggleProcessTraceRow(row.messageID, row.expanded, row.collapsing)}
-          />
-        </article>
-      )
-    }
-
-    if (row.kind === "process-item") {
-      const isLatestAssistantMessage = isAssistantLatestRenderableMessage(displayMessages, row.messageIndex, row.message)
-
-      return (
-        <article
-          key={row.rowID}
-          className={joinClassNames(
-            "thread-row",
-            "assistant-process-item-row",
-            "assistant-section",
-            `is-${row.section}`,
-            row.collapsing && "is-collapsing",
-          )}
-          data-depth="1"
-          data-kind="process-item"
-          data-thread-message-id={row.messageID}
-          role="region"
-          aria-label={traceSectionTitle(row.section)}
-        >
-          <div className={getAssistantTraceBlockStackClassName(row.section)}>
-            <TraceItemView
-              assistantMessagePhase={row.message.runtime.phase}
-              item={row.item}
-              isQuestionAnswered={Boolean(
-                row.item.questionPrompt?.answered ||
-                (row.item.questionPrompt?.questionID && answeredQuestionIDs.has(row.item.questionPrompt.questionID)),
-              )}
-              isQuestionAnswerDisabled={isResolvingPermissionRequest || pendingPermissionRequests.length > 0}
-              onOpenImagePreview={handleOpenImagePreview}
-              onAskUserQuestionAnswer={onAskUserQuestionAnswer}
-              onFileChangeSelect={onFileChangeSelect}
-              onArtifactLinkOpen={onArtifactLinkOpen}
-              onLocalFileLinkOpen={onLocalFileLinkOpen}
-              isLatestMessage={isLatestAssistantMessage}
-              onProposedPlanConfirm={onProposedPlanConfirm}
-              shouldCollapseAfterMessageCompletion={row.shouldCollapseReasoningAndTools}
-              traceVisibility={assistantTraceVisibility}
-            />
-          </div>
-        </article>
-      )
-    }
-
-    const { ephemeralHint, insertedUserMessages, processPrefixItems, message, messageIndex } = row
-    const traceItems = message.items
-    const sideChatAnchorMessageID = resolveAssistantSideChatAnchorMessageID(displayMessages, message)
-    const threadMessageID = getSessionMessageIDForMessage(message)
-    const canExposeResponseActions = !isSessionRunning && isAssistantFinalMessageInUserMessage(displayMessages, messageIndex, message)
-    const branchOptions = canExposeResponseActions ? messageTree?.branchOptionsByParentID[threadMessageID] ?? [] : []
-    const existingSideChatCount = sideChatCountsByAnchorMessageID[sideChatAnchorMessageID] ?? 0
-    const lastResponseItems = canExposeResponseActions ? getLastAssistantResponseSectionItems(traceItems, assistantTraceVisibility) : []
-    const responseCopyText = canExposeResponseActions ? buildAssistantResponseCopyText(lastResponseItems) : ""
-    const canOpenSideChat =
-      !readOnlySideChat &&
-      !message.isStreaming &&
-      canExposeResponseActions &&
-      lastResponseItems.length > 0 &&
-      Boolean(onOpenSideChat)
-    const canForkFromMessage =
-      !readOnlySideChat &&
-      !message.isStreaming &&
-      canExposeResponseActions &&
-      Boolean(onForkFromMessage)
-    const activeInlineSideChat = sideChatSession?.origin?.anchorMessageID === sideChatAnchorMessageID ? sideChatSession : null
-    const rendersSideChatInline = sideChatPlacement === "inline"
-    const marksSideChatButtonActive = rendersSideChatInline && Boolean(activeInlineSideChat)
-    const sideChatButtonLabel =
-      rendersSideChatInline && activeInlineSideChat
-        ? "Hide this side chat"
-        : existingSideChatCount > 0
-          ? `Open side chat (${existingSideChatCount})`
-          : "Open side chat"
-    const sideChatButtonTitle =
-      rendersSideChatInline && activeInlineSideChat
-        ? "Hide this side chat"
-        : existingSideChatCount > 0
-          ? `${existingSideChatCount} side chat thread${existingSideChatCount === 1 ? "" : "s"}`
-          : "Open a side chat for this reply"
-    const hasAssistantDiffSummary = normalizeMessageDiffSummary(message.diffSummary).length > 0
-    const trailingUserDiffMessage = hasAssistantDiffSummary ? null : getAssistantTrailingUserDiffMessage(displayMessages, messageIndex, message)
-    const shouldRenderResponseActions = Boolean(
-      responseCopyText ||
-      canOpenSideChat ||
-      canForkFromMessage ||
-      branchOptions.length > 1,
-    )
-    const isLatestAssistantMessage = isAssistantLatestRenderableMessage(displayMessages, messageIndex, message)
-
     return (
-      <article
+      <ThreadRowRenderer
         key={row.rowID}
-        className="thread-message assistant-message"
-        data-thread-message-id={message.id}
-        data-thread-message-motion={readThreadMessageMotion(message.id, message.isStreaming)}
-      >
-        <div className={message.isStreaming ? "assistant-shell is-sectioned is-streaming" : "assistant-shell is-sectioned"}>
-          {ephemeralHint ? (
-            <>
-              <AssistantMessagePlaceholder message={ephemeralHint} />
-              {insertedUserMessages.map((insertedMessage) => (
-                <UserThreadMessageArticle
-                  key={insertedMessage.id}
-                  className="assistant-stream-insertion-user-message"
-                  copied={copiedUserThreadMessageID === insertedMessage.id}
-                  motion={readThreadMessageMotion(insertedMessage.id)}
-                  onCopy={handleCopyUserMessage}
-                  message={insertedMessage}
-                />
-              ))}
-            </>
-          ) : (
-            <AssistantMessageSectionsWithStreamInsertions
-              answeredQuestionIDs={answeredQuestionIDs}
-              assistantMessagePhase={message.runtime.phase}
-              isQuestionAnswerDisabled={isResolvingPermissionRequest || pendingPermissionRequests.length > 0}
-              copiedUserThreadMessageID={copiedUserThreadMessageID}
-              insertedUserMessages={insertedUserMessages}
-              isLatestMessage={isLatestAssistantMessage}
-              items={traceItems}
-              getMessageMotion={readThreadMessageMotion}
-              onCopyUserMessage={handleCopyUserMessage}
-              onOpenImagePreview={handleOpenImagePreview}
-              onAskUserQuestionAnswer={onAskUserQuestionAnswer}
-              onFileChangeSelect={onFileChangeSelect}
-              onArtifactLinkOpen={onArtifactLinkOpen}
-              onLocalFileLinkOpen={onLocalFileLinkOpen}
-              onProposedPlanConfirm={onProposedPlanConfirm}
-              processPrefixItems={processPrefixItems}
-              renderProcessTrace={false}
-              runtime={message.runtime}
-              showFileChanges={!message.isStreaming}
-              shouldCollapseReasoningAndTools={canCollapseAssistantProcessTrace(message)}
-              traceVisibility={assistantTraceVisibility}
-            />
-          )}
-          {hasAssistantDiffSummary ? (
-            <MessageDiffCard
-              messageID={message.id}
-              diffSummary={message.diffSummary}
-              activeSessionDiff={activeSessionDiff}
-              allowWorkspaceDiffFallback={isLatestAssistantMessage}
-              patchSourceFileChanges={collectAssistantPatchFileChanges(message)}
-              onFileChangeSelect={onFileChangeSelect}
-              onMessageDiffSummaryHydrate={onMessageDiffSummaryHydrate}
-              onMessageDiffRestore={onMessageDiffRestore}
-              onMessageDiffReview={onMessageDiffReview}
-            />
-          ) : trailingUserDiffMessage ? (
-            <MessageDiffCard
-              messageID={trailingUserDiffMessage.id}
-              diffSummary={trailingUserDiffMessage.diffSummary}
-              activeSessionDiff={activeSessionDiff}
-              allowWorkspaceDiffFallback={isLatestAssistantMessage}
-              patchSourceFileChanges={collectAssistantPatchFileChanges(message)}
-              onFileChangeSelect={onFileChangeSelect}
-              onMessageDiffSummaryHydrate={onMessageDiffSummaryHydrate}
-              onMessageDiffRestore={onMessageDiffRestore}
-              onMessageDiffReview={onMessageDiffReview}
-            />
-          ) : null}
-          {shouldRenderResponseActions ? (
-            <div className="assistant-response-side-chat">
-              {rendersSideChatInline &&
-              activeInlineSideChat &&
-              onSideChatDraftStateChange &&
-              onSideChatPickAttachments &&
-              onSideChatRemoveAttachment &&
-              onSideChatCreate &&
-              onSideChatDelete &&
-              onSideChatSelect &&
-              onSideChatSend ? (
-                <InlineSideChatThread
-                  activeProjectID={activeProjectID}
-                  attachments={sideChatAttachments}
-                  assistantTraceVisibility={assistantTraceVisibility}
-                  composerRefreshVersion={composerRefreshVersion}
-                  draftState={sideChatDraftState}
-                  isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
-                  isResolvingPermissionRequest={isResolvingPermissionRequest}
-                  isCancelling={sideChatIsCancelling}
-                  isInterruptible={sideChatIsInterruptible}
-                  isSending={sideChatIsSending}
-                  pendingInputs={sideChatPendingInputs}
-                  pendingPermissionRequests={sideChatPendingPermissionRequests}
-                  permissionRequestActionError={sideChatPermissionRequestActionError}
-                  permissionRequestActionRequestID={sideChatPermissionRequestActionRequestID}
-                  session={activeInlineSideChat}
-                  sideChatSessions={sideChatSessionsByAnchorMessageID[sideChatAnchorMessageID] ?? [activeInlineSideChat]}
-                  messages={sideChatMessages}
-                  isThreadVisible={isThreadVisible}
-                  readScrollSnapshot={readScrollSnapshot}
-                  saveScrollSnapshot={saveScrollSnapshot}
-                  onDraftStateChange={onSideChatDraftStateChange}
-                  onHide={() => void onOpenSideChat?.(sideChatAnchorMessageID)}
-                  onAskUserQuestionAnswer={onAskUserQuestionAnswer}
-                  onArtifactLinkOpen={onArtifactLinkOpen}
-                  onLocalFileLinkOpen={onLocalFileLinkOpen}
-                  onPermissionRequestResponse={onPermissionRequestResponse}
-                  onPickAttachments={onSideChatPickAttachments}
-                  onPasteImageAttachments={onSideChatPasteImageAttachments}
-                  onRemoveAttachment={onSideChatRemoveAttachment}
-                  onCancelSend={onSideChatCancelSend}
-                  onCreateSideChat={() => onSideChatCreate(sideChatAnchorMessageID)}
-                  onDeleteSideChat={onSideChatDelete}
-                  onSend={onSideChatSend}
-                  onSelectSideChat={onSideChatSelect}
-                  onSessionModelSelectionChange={onSessionModelSelectionChange}
-                />
-              ) : null}
-
-              <div className="assistant-response-actions">
-                <BranchSwitcher options={branchOptions} onSelect={onBranchSelect} />
-                {responseCopyText ? (
-                  <button
-                    className={joinClassNames(
-                      "assistant-response-action-button message-action-icon-button",
-                      copiedResponseMessageID === message.id && "is-active",
-                    )}
-                    type="button"
-                    aria-label={copiedResponseMessageID === message.id ? "Copied assistant response" : "Copy assistant response"}
-                    title={copiedResponseMessageID === message.id ? "Copied" : "Copy"}
-                    onClick={() => void handleCopyAssistantResponse(message.id, responseCopyText)}
-                  >
-                    <CopyIcon />
-                  </button>
-                ) : null}
-                {canOpenSideChat ? (
-                  <button
-                    className={joinClassNames(
-                      "assistant-response-action-button message-action-icon-button",
-                      marksSideChatButtonActive && "is-active",
-                    )}
-                    type="button"
-                    aria-label={sideChatButtonLabel}
-                    aria-pressed={marksSideChatButtonActive}
-                    title={sideChatButtonTitle}
-                    onClick={() => void onOpenSideChat?.(sideChatAnchorMessageID)}
-                  >
-                    <SideChatIcon />
-                  </button>
-                ) : null}
-                {canForkFromMessage ? (
-                  <button
-                    className="assistant-response-action-button message-action-icon-button"
-                    type="button"
-                    aria-label="Fork from here"
-                    title="Fork from here"
-                    onClick={() => void onForkFromMessage?.(threadMessageID)}
-                  >
-                    <ForkIcon />
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </article>
+        activeProjectID={activeProjectID}
+        activeSession={activeSession}
+        activeSessionDiff={activeSessionDiff}
+        assistantTraceVisibility={assistantTraceVisibility}
+        components={THREAD_ROW_RENDERER_COMPONENTS}
+        composerRefreshVersion={composerRefreshVersion}
+        copiedResponseMessageID={copiedResponseMessageID}
+        copiedUserThreadMessageID={copiedUserThreadMessageID}
+        displayMessages={displayMessages}
+        isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
+        isResolvingPermissionRequest={isResolvingPermissionRequest}
+        isThreadVisible={isThreadVisible}
+        isTraceItemQuestionAnswered={isTraceItemQuestionAnswered}
+        onArtifactLinkOpen={onArtifactLinkOpen}
+        onAskUserQuestionAnswer={onAskUserQuestionAnswer}
+        onBranchSelect={onBranchSelect}
+        onCopyAssistantResponse={handleCopyAssistantResponse}
+        onCopyUserMessage={handleCopyUserMessage}
+        onFileChangeSelect={onFileChangeSelect}
+        onForkFromMessage={onForkFromMessage}
+        onLocalFileLinkOpen={onLocalFileLinkOpen}
+        onMessageDiffSummaryHydrate={onMessageDiffSummaryHydrate}
+        onMessageDiffRestore={onMessageDiffRestore}
+        onMessageDiffReview={onMessageDiffReview}
+        onOpenImagePreview={handleOpenImagePreview}
+        onOpenSideChat={onOpenSideChat}
+        onPermissionRequestResponse={onPermissionRequestResponse}
+        onProposedPlanConfirm={onProposedPlanConfirm}
+        onSideChatCancelSend={onSideChatCancelSend}
+        onSideChatCreate={onSideChatCreate}
+        onSideChatDelete={onSideChatDelete}
+        onSideChatDraftStateChange={onSideChatDraftStateChange}
+        onSideChatPasteImageAttachments={onSideChatPasteImageAttachments}
+        onSideChatPickAttachments={onSideChatPickAttachments}
+        onSideChatRemoveAttachment={onSideChatRemoveAttachment}
+        onSideChatSelect={onSideChatSelect}
+        onSideChatSend={onSideChatSend}
+        onSessionModelSelectionChange={onSessionModelSelectionChange}
+        pendingPermissionRequests={pendingPermissionRequests}
+        permissionRequestActionError={permissionRequestActionError}
+        permissionRequestActionRequestID={permissionRequestActionRequestID}
+        readScrollSnapshot={readScrollSnapshot}
+        readThreadMessageMotion={readThreadMessageMotion}
+        row={row}
+        saveScrollSnapshot={saveScrollSnapshot}
+        sideChatAttachments={sideChatAttachments}
+        sideChatDraftState={sideChatDraftState}
+        sideChatIsCancelling={sideChatIsCancelling}
+        sideChatIsInterruptible={sideChatIsInterruptible}
+        sideChatIsSending={sideChatIsSending}
+        sideChatMessages={sideChatMessages}
+        sideChatPendingInputs={sideChatPendingInputs}
+        sideChatPendingPermissionRequests={sideChatPendingPermissionRequests}
+        sideChatPermissionRequestActionError={sideChatPermissionRequestActionError}
+        sideChatPermissionRequestActionRequestID={sideChatPermissionRequestActionRequestID}
+      />
     )
   }
-
-  function renderThreadRows() {
-    if (!shouldVirtualizeThreadRows) {
-      return displayRows.map((row) => renderDisplayRow(row))
-    }
-
-    return (
-      <div
-        className="thread-virtual-spacer"
-        style={{ height: `${threadVirtualLayout.totalHeight}px` }}
-      >
-        {threadVirtualRange.items.map((item) => (
-          <div
-            key={item.row.rowID}
-            className="thread-virtual-row"
-            data-thread-virtual-row-id={item.row.rowID}
-            style={{ transform: `translateY(${item.top}px)` }}
-          >
-            {renderDisplayRow(item.row)}
-          </div>
-        ))}
-      </div>
-    )
-  }
-
   return (
     <section className={joinClassNames("thread-shell", isResizeLightweightMode && "thread-resize-lightweight")}>
       <div
@@ -7530,7 +4857,7 @@ function VisibleThreadView({
         onWheelCapture={handleThreadWheelIntent}
       >
         {!activeSession ? (
-          <article className="thread-message assistant-message">
+          <article className="thread-row assistant-empty-state-row" data-thread-row-kind="assistant-empty-state">
             <div className="assistant-shell">
               <header className="assistant-header">
                 <div>
@@ -7556,7 +4883,13 @@ function VisibleThreadView({
             </div>
           </article>
         ) : (
-          renderThreadRows()
+          <ThreadRows
+            displayRows={displayRows}
+            renderRow={renderDisplayRow}
+            shouldVirtualize={shouldVirtualizeThreadRows}
+            virtualLayout={threadVirtualLayout}
+            virtualRange={threadVirtualRange}
+          />
         )}
       </div>
       {activeImagePreview ? (

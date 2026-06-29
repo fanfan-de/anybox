@@ -4,8 +4,10 @@ import { createStore, type StoreApi } from "zustand/vanilla"
 import { createComposerDraftStateFromPlainText } from "../composer/draft-state"
 import { initialConversations, initialSelection, seedWorkspaces } from "../seed-data"
 import type {
+  AssistantThreadMessage,
   ComposerAttachment,
   ComposerDraftState,
+  ConversationTurnMap,
   CreateSessionTab,
   LeftSidebarView,
   PendingConversationInput,
@@ -389,6 +391,11 @@ export interface ComposerSliceActions {
 }
 
 export interface AgentStreamSliceActions {
+  appendAssistantDelta: (
+    sessionID: string,
+    assistantMessageID: string,
+    updater: (message: AssistantThreadMessage) => AssistantThreadMessage,
+  ) => boolean
   setAgentSessions: (update: WorkspaceStateUpdater<Record<string, string>>) => void
   setCancellingSessionIDs: (update: WorkspaceStateUpdater<Record<string, boolean>>) => void
   setContextUsageBySession: (
@@ -405,6 +412,7 @@ export interface AgentStreamSliceActions {
   setPermissionRequestActionError: (update: WorkspaceStateUpdater<string | null>) => void
   setPermissionRequestActionRequestID: (update: WorkspaceStateUpdater<string | null>) => void
   setSessionDirectoryBySession: (update: WorkspaceStateUpdater<Record<string, string>>) => void
+  updateConversationTurns: (update: WorkspaceStateUpdater<ConversationTurnMap>) => boolean
 }
 
 export interface ReviewSliceActions {
@@ -881,6 +889,28 @@ export function createWorkspaceStore({
         })),
     },
     agentStreamActions: {
+      appendAssistantDelta: (sessionID, assistantMessageID, updater) => {
+        let didUpdate = false
+        set((state) => {
+          const previousActivityBySession = state.agentStream.conversationStore.getActivityBySession()
+          didUpdate = state.agentStream.conversationStore.appendAssistantDelta(sessionID, assistantMessageID, updater)
+          if (!didUpdate) return state
+
+          const conversationActivityBySession = state.agentStream.conversationStore.getActivityBySession()
+          if (conversationActivityMapsAreEqual(previousActivityBySession, conversationActivityBySession)) {
+            return state
+          }
+
+          return {
+            agentStream: {
+              ...state.agentStream,
+              conversationActivityBySession,
+              conversations: state.agentStream.conversationStore.getConversations(),
+            },
+          }
+        })
+        return didUpdate
+      },
       setAgentSessions: (update) =>
         set((state) => ({
           agentStream: {
@@ -921,6 +951,28 @@ export function createWorkspaceStore({
             },
           }
         }),
+      updateConversationTurns: (update) => {
+        let didUpdate = false
+        set((state) => {
+          const previousActivityBySession = state.agentStream.conversationStore.getActivityBySession()
+          didUpdate = state.agentStream.conversationStore.updateTurns(update)
+          if (!didUpdate) return state
+
+          const conversationActivityBySession = state.agentStream.conversationStore.getActivityBySession()
+          if (conversationActivityMapsAreEqual(previousActivityBySession, conversationActivityBySession)) {
+            return state
+          }
+
+          return {
+            agentStream: {
+              ...state.agentStream,
+              conversationActivityBySession,
+              conversations: state.agentStream.conversationStore.getConversations(),
+            },
+          }
+        })
+        return didUpdate
+      },
       setMessageTreeBySession: (update) =>
         set((state) => ({
           agentStream: {

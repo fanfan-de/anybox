@@ -69,6 +69,25 @@ export function deriveConversationMessages(turnsBySession: ConversationTurnMap) 
   return conversations
 }
 
+export function ensureConversationTurnSessions(turnsBySession: ConversationTurnMap, sessionIDs: string[]) {
+  let nextTurnsBySession = turnsBySession
+  for (const sessionID of sessionIDs) {
+    if (Object.prototype.hasOwnProperty.call(nextTurnsBySession, sessionID)) continue
+    if (nextTurnsBySession === turnsBySession) {
+      nextTurnsBySession = { ...turnsBySession }
+    }
+    nextTurnsBySession[sessionID] = []
+  }
+  return nextTurnsBySession
+}
+
+export function removeConversationTurnSession(turnsBySession: ConversationTurnMap, sessionID: string) {
+  if (!Object.prototype.hasOwnProperty.call(turnsBySession, sessionID)) return turnsBySession
+  const nextTurnsBySession = { ...turnsBySession }
+  delete nextTurnsBySession[sessionID]
+  return nextTurnsBySession
+}
+
 function isPendingTurnID(turnID: string) {
   return turnID.startsWith(PENDING_TURN_PREFIX)
 }
@@ -139,6 +158,175 @@ function appendMessageToTurn(turn: ThreadTurn, message: ThreadMessage): ThreadTu
     updatedAt,
     messages: [...turn.messages, message],
   }
+}
+
+function reconcileOneTurn(turn: ThreadTurn) {
+  return reconcileThreadTurns([turn])[0] ?? turn
+}
+
+function updateTurnMessages(turn: ThreadTurn, messages: ThreadMessage[], updatedAt = Date.now()): ThreadTurn {
+  const userMessage = messages.find((message): message is UserThreadMessage => message.kind === "user")
+  const baseTurn = userMessage
+    ? {
+        ...turn,
+        userMessageID: turn.userMessageID ?? userMessage.id,
+      }
+    : (() => {
+        const { userMessageID: _userMessageID, ...turnWithoutUserMessageID } = turn
+        return turnWithoutUserMessageID
+      })()
+
+  return {
+    ...baseTurn,
+    updatedAt: Math.max(turn.updatedAt, updatedAt),
+    messages,
+  }
+}
+
+function findTurnIndexForAssistantMessage(turns: ThreadTurn[], message: AssistantThreadMessage) {
+  const normalized = normalizeAssistantThreadMessage(message)
+  const byTurnIDIndex = turns.findIndex((turn) => turn.turnID === normalized.backendTurnID)
+  if (byTurnIDIndex >= 0) return byTurnIDIndex
+
+  return turns.findIndex((turn) =>
+    turn.messages.some(
+      (candidate) =>
+        candidate.kind === "assistant" &&
+        (candidate.id === normalized.id ||
+          candidate.segmentID === normalized.segmentID ||
+          Boolean(normalized.messageID && candidate.messageID === normalized.messageID && candidate.segmentID === normalized.segmentID)),
+    ),
+  )
+}
+
+function appendUserMessageToTurns(turns: ThreadTurn[], message: UserThreadMessage) {
+  if (turns.some((turn) => turn.messages.some((candidate) => candidate.id === message.id))) return turns
+  return [
+    ...turns,
+    appendMessageToTurn(
+      createBaseTurn({
+        turnID: pendingTurnIDForUserMessage(message),
+        status: "running",
+        startedAt: message.timestamp,
+        updatedAt: message.timestamp,
+        userMessageID: message.id,
+      }),
+      message,
+    ),
+  ]
+}
+
+function appendAssistantMessageToTurns(turns: ThreadTurn[], message: AssistantThreadMessage) {
+  const normalized = normalizeAssistantThreadMessage(message)
+  let turnIndex = findTurnIndexForAssistantMessage(turns, normalized)
+
+  if (turnIndex < 0 && turns.length > 0) {
+    const latestTurn = turns[turns.length - 1]
+    const latestTurnHasAssistant = latestTurn.messages.some((candidate) => candidate.kind === "assistant")
+    if (!latestTurnHasAssistant && isPendingTurnID(latestTurn.turnID)) {
+      turnIndex = turns.length - 1
+    }
+  }
+
+  if (turnIndex < 0) {
+    const turn = createBaseTurn({
+      turnID: normalized.backendTurnID,
+      status: turnStatusFromAssistant(normalized),
+      startedAt: normalized.timestamp,
+      updatedAt: normalized.runtime.updatedAt,
+    })
+    return [...turns, reconcileOneTurn(appendMessageToTurn(turn, normalizeAssistantThreadMessage(normalized, turn.turnID)))]
+  }
+
+  const targetTurn = turns[turnIndex]
+  const normalizedForTurn = normalizeAssistantThreadMessage(normalized, targetTurn.turnID)
+  const nextTurn = reconcileOneTurn(appendMessageToTurn(
+    isPendingTurnID(targetTurn.turnID)
+      ? {
+          ...targetTurn,
+          turnID: normalizedForTurn.backendTurnID,
+        }
+      : targetTurn,
+    normalizedForTurn,
+  ))
+  if (Object.is(nextTurn, targetTurn)) return turns
+
+  return turns.map((turn, index) => (index === turnIndex ? nextTurn : turn))
+}
+
+export function appendMessagesToThreadTurns(turns: ThreadTurn[], nextMessages: ThreadMessage[]) {
+  if (nextMessages.length === 0) return turns
+  return nextMessages.reduce((currentTurns, message) => (
+    message.kind === "user"
+      ? appendUserMessageToTurns(currentTurns, message)
+      : appendAssistantMessageToTurns(currentTurns, message)
+  ), turns)
+}
+
+export function insertUserMessageIntoTurns(
+  turns: ThreadTurn[],
+  userMessage: UserThreadMessage,
+  options?: { beforeMessageID?: string },
+) {
+  if (turns.some((turn) => turn.messages.some((message) => message.id === userMessage.id))) return turns
+  const beforeMessageID = options?.beforeMessageID
+  if (!beforeMessageID) return appendUserMessageToTurns(turns, userMessage)
+
+  const turnIndex = turns.findIndex((turn) => turn.messages.some((message) => message.id === beforeMessageID))
+  if (turnIndex < 0) return appendUserMessageToTurns(turns, userMessage)
+
+  const targetTurn = turns[turnIndex]
+  const beforeIndex = targetTurn.messages.findIndex((message) => message.id === beforeMessageID)
+  if (beforeIndex < 0) return appendUserMessageToTurns(turns, userMessage)
+
+  const nextMessages = [
+    ...targetTurn.messages.slice(0, beforeIndex),
+    userMessage,
+    ...targetTurn.messages.slice(beforeIndex),
+  ]
+  const nextTurn = updateTurnMessages(targetTurn, nextMessages, userMessage.timestamp)
+  return turns.map((turn, index) => (index === turnIndex ? nextTurn : turn))
+}
+
+export function removeMessageFromTurns(turns: ThreadTurn[], messageID: string) {
+  let didUpdate = false
+  const nextTurns: ThreadTurn[] = []
+
+  for (const turn of turns) {
+    const nextMessages = turn.messages.filter((message) => message.id !== messageID)
+    if (nextMessages.length === turn.messages.length) {
+      nextTurns.push(turn)
+      continue
+    }
+
+    didUpdate = true
+    if (nextMessages.length === 0) continue
+    nextTurns.push(updateTurnMessages(turn, nextMessages))
+  }
+
+  return didUpdate ? nextTurns : turns
+}
+
+export function mapMessageInTurns(
+  turns: ThreadTurn[],
+  updater: (message: ThreadMessage) => ThreadMessage,
+) {
+  let didUpdate = false
+  const nextTurns = turns.map((turn) => {
+    let didUpdateTurn = false
+    const nextMessages = turn.messages.map((message) => {
+      const nextMessage = updater(message)
+      if (!Object.is(nextMessage, message)) {
+        didUpdate = true
+        didUpdateTurn = true
+      }
+      return nextMessage
+    })
+
+    return didUpdateTurn ? updateTurnMessages(turn, nextMessages) : turn
+  })
+
+  return didUpdate ? reconcileThreadTurns(nextTurns) : turns
 }
 
 export function buildThreadTurnsFromMessages(
@@ -382,24 +570,37 @@ export function updateAssistantMessageInTurn(
   const nextTurns = turns.map((turn) => {
     if (turn.turnID !== input.turnID) return turn
 
+    let didUpdateTurn = false
     const nextMessages = turn.messages.map((message): ThreadMessage => {
       if (message.kind !== "assistant") return message
       if (input.id && message.id === input.id) {
-        didUpdate = true
-        return input.updater(message)
+        const nextMessage = input.updater(message)
+        if (!Object.is(nextMessage, message)) {
+          didUpdate = true
+          didUpdateTurn = true
+        }
+        return nextMessage
       }
       if (input.segmentID && message.segmentID === input.segmentID) {
-        didUpdate = true
-        return input.updater(message)
+        const nextMessage = input.updater(message)
+        if (!Object.is(nextMessage, message)) {
+          didUpdate = true
+          didUpdateTurn = true
+        }
+        return nextMessage
       }
       if (input.messageID && message.messageID === input.messageID && (!input.segmentID || message.segmentID === input.segmentID)) {
-        didUpdate = true
-        return input.updater(message)
+        const nextMessage = input.updater(message)
+        if (!Object.is(nextMessage, message)) {
+          didUpdate = true
+          didUpdateTurn = true
+        }
+        return nextMessage
       }
       return message
     })
 
-    return didUpdate
+    return didUpdateTurn
       ? {
           ...turn,
           updatedAt: Date.now(),

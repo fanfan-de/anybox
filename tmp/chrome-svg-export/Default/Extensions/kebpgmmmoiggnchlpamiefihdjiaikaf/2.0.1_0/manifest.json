@@ -1,0 +1,30 @@
+{
+   "action": {
+      "default_popup": "xdown_settings.html",
+      "default_title": "XDown Manager"
+   },
+   "background": {
+      "service_worker": "xdown_worker.js"
+   },
+   "default_locale": "en",
+   "description": "__MSG_description__",
+   "homepage_url": "https://xdown.org",
+   "host_permissions": [ "\u003Call_urls>" ],
+   "icons": {
+      "128": "images/xdown_128.png",
+      "16": "images/xdown_16.png",
+      "24": "images/xdown_24.png",
+      "32": "images/xdown_32.png",
+      "48": "images/xdown_48.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtcGN5MQZWH+7Gl+KNipxnI/q+CFI6AuZwOzFTMVCGx3NS3jOoPL2vebtV366oR8cSXRsHyZ8GzSSBy1rMkM+U+nLf7L1IXrhETlw7RBspJU9vC/HHZQkMiDM1q3kwKLmqpuzfPssh71UCczuOVh2gungvw/Xm+bf3bDmPrHCBy14mdrNyywfhQCKgFzCNW4DnPsPjGpNZQ2cylILY+JcH61rwaMIj56Znpe6iP38GfBAmKYjEMRo4/n1Ry6CDWTmh+xBMVIFPMUM8Ip/EjBLraSPhOvc34XIsoo+beV3nEG3PEG1q6YKnOKpiQJF0qe3AbtPpieXniFXkY6ddF4yKQIDAQAB",
+   "manifest_version": 3,
+   "name": "XDown",
+   "permissions": [ "cookies", "nativeMessaging", "downloads", "contextMenus" ],
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "2.0.1",
+   "web_accessible_resources": [ {
+      "matches": [ "*://*/*" ],
+      "resources": [ "index.html" ]
+   } ]
+}
