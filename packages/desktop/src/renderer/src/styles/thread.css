@@ -62,7 +62,7 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  overflow-anchor: none;
+  overflow-anchor: auto;
   scrollbar-gutter: stable;
   scrollbar-color: var(--thread-scrollbar-thumb) transparent;
   scrollbar-width: thin;
