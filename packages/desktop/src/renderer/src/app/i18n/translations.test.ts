@@ -70,8 +70,6 @@ describe("i18n translations", () => {
     expect(getTranslationDictionary("zh-CN")["thread.toolTrace.inputLabel"]).toBe("\u8f93\u5165")
     expect(getTranslationDictionary("en-US")["thread.toolTrace.inputLabel"]).toBe("Input")
     expect(getTranslationDictionary("zh-CN")["thread.permission.trace.requested"]).toBe("请求权限")
-    expect(getTranslationDictionary("zh-CN")["thread.permission.state.waiting"]).toBe("等待决定")
-    expect(getTranslationDictionary("zh-CN")["thread.permission.state.error"]).toBe("错误")
     expect(translateLiteral("zh-CN", "Run MCP tool resolve-library-id from Context7 Docs.")).toBe(
       "运行 Context7 Docs 的 MCP 工具 resolve-library-id。",
     )

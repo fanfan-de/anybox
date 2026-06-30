@@ -10,6 +10,8 @@ import * as Config from "#config/config.ts"
 import * as Permission from "#permission/permission.ts"
 import * as Message from "#session/core/message.ts"
 import * as Session from "#session/core/session.ts"
+import * as EventStore from "#session/runtime/event-store.ts"
+import * as RuntimeEvent from "#session/runtime/runtime-event.ts"
 import * as db from "#database/Sqlite.ts"
 
 async function createGitRepo(root: string, seed: string) {
@@ -435,11 +437,44 @@ test("permission approval can complete a waiting read_file tool call without res
       },
     })
 
-    const resolved = await Permission.resolveRequest(request.id, {
-      decision: "allow",
+    const observedEvents: RuntimeEvent.RuntimeEvent[] = []
+    const unsubscribe = EventStore.subscribe((event) => {
+      if (event.sessionID === request.sessionID) {
+        observedEvents.push(structuredClone(event))
+      }
     })
 
+    const resolved = await (async () => {
+      try {
+        return await Permission.resolveRequest(request.id, {
+          decision: "allow",
+        })
+      } finally {
+        unsubscribe()
+      }
+    })()
+
     expect(resolved.request.status).toBe("approved")
+
+    const eventTypes = observedEvents.map((event) => event.type)
+    const resolvedIndex = eventTypes.indexOf("permission.resolved")
+    const approvedIndex = eventTypes.indexOf("tool.call.approved")
+    const startedIndex = eventTypes.indexOf("tool.call.started")
+    const completedIndex = eventTypes.indexOf("tool.call.completed")
+    expect(resolvedIndex).toBeGreaterThanOrEqual(0)
+    expect(approvedIndex).toBeGreaterThan(resolvedIndex)
+    expect(startedIndex).toBeGreaterThan(approvedIndex)
+    expect(completedIndex).toBeGreaterThan(startedIndex)
+
+    const startedEvent = observedEvents[startedIndex]
+    expect(startedEvent?.type).toBe("tool.call.started")
+    if (startedEvent?.type === "tool.call.started") {
+      expect(startedEvent.payload.part.callID).toBe(request.toolCallID)
+      expect(startedEvent.payload.part.state.status).toBe("running")
+      expect(startedEvent.payload.part.state.input).toEqual({
+        path: "README.md",
+      })
+    }
 
     const restoredSession = Session.DataBaseRead("sessions", request.sessionID)
     expect(restoredSession).not.toBeNull()
@@ -456,6 +491,122 @@ test("permission approval can complete a waiting read_file tool call without res
     if (updatedTool?.state.status === "completed") {
       expect(updatedTool.state.output).toContain("README.md")
     }
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true })
+  }
+}, 120000)
+
+test("permission approval emits tool running before a failed approved tool call", async () => {
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "anybox-permission-approve-failed-"))
+
+  try {
+    await createGitRepo(repositoryRoot, "permission-approve-failed")
+
+    const request = await Instance.provide({
+      directory: repositoryRoot,
+      async fn() {
+        const session = await Session.createSession({
+          directory: Instance.directory,
+          projectID: Instance.project.id,
+        })
+
+        const assistant: Message.Assistant = {
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "assistant",
+          created: Date.now(),
+          parentID: "",
+          modelID: "test-model",
+          providerID: "test-provider",
+          agent: "plan",
+          path: {
+            cwd: Instance.directory,
+            root: Instance.worktree,
+          },
+          cost: 0,
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: {
+              read: 0,
+              write: 0,
+            },
+          },
+        }
+
+        Session.DataBaseCreate("messages", assistant)
+
+        const toolPart = Message.ToolPart.parse({
+          id: Identifier.ascending("part"),
+          sessionID: session.id,
+          messageID: assistant.id,
+          type: "tool",
+          callID: "toolcall_missing_readme",
+          tool: "read_file",
+          state: {
+            status: "waiting-approval",
+            approvalID: "approval_missing_readme",
+            input: {
+              path: "MISSING.md",
+            },
+            title: "Read File",
+            time: {
+              start: Date.now(),
+            },
+          },
+        })
+
+        await Session.updatePart(toolPart)
+        return await Permission.registerApprovalRequest({
+          assistant,
+          toolPart,
+        })
+      },
+    })
+
+    const observedEvents: RuntimeEvent.RuntimeEvent[] = []
+    const unsubscribe = EventStore.subscribe((event) => {
+      if (event.sessionID === request.sessionID) {
+        observedEvents.push(structuredClone(event))
+      }
+    })
+
+    await (async () => {
+      try {
+        await Permission.resolveRequest(request.id, {
+          decision: "allow",
+        })
+      } finally {
+        unsubscribe()
+      }
+    })()
+
+    const eventTypes = observedEvents.map((event) => event.type)
+    const approvedIndex = eventTypes.indexOf("tool.call.approved")
+    const startedIndex = eventTypes.indexOf("tool.call.started")
+    const failedIndex = eventTypes.indexOf("tool.call.failed")
+    expect(approvedIndex).toBeGreaterThanOrEqual(0)
+    expect(startedIndex).toBeGreaterThan(approvedIndex)
+    expect(failedIndex).toBeGreaterThan(startedIndex)
+
+    const startedEvent = observedEvents[startedIndex]
+    expect(startedEvent?.type).toBe("tool.call.started")
+    if (startedEvent?.type === "tool.call.started") {
+      expect(startedEvent.payload.part.callID).toBe(request.toolCallID)
+      expect(startedEvent.payload.part.state.status).toBe("running")
+      expect(startedEvent.payload.part.state.input).toEqual({
+        path: "MISSING.md",
+      })
+    }
+
+    const toolParts = db.findManyWithSchema("parts", Message.Part, {
+      where: [{ column: "messageID", value: request.messageID }],
+    })
+    const updatedTool = toolParts.find(
+      (part): part is Message.ToolPart => part.type === "tool" && part.callID === request.toolCallID,
+    )
+    expect(updatedTool?.state.status).toBe("error")
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true })
   }

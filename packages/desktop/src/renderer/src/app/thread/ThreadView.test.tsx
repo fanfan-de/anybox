@@ -514,8 +514,8 @@ describe("ThreadView trace item renderers", () => {
     expect(approvalRow?.querySelector(".trace-item")).not.toBeNull()
     expect(approvalRow?.querySelector(".trace-item-status")).toBeNull()
     expect(approvalRow?.querySelector(".permission-request-card")).not.toBeNull()
+    expect(approvalRow?.querySelector(".permission-request-status")).toBeNull()
     expect(within(approvalRow!).getAllByText("Permission requested").length).toBeGreaterThanOrEqual(2)
-    expect(within(approvalRow!).getByText("Waiting")).toBeInTheDocument()
     expect(within(approvalRow!).queryByText("git_bash_command - Tool requires approval before it can continue.")).toBeNull()
     expect(container.querySelector('[data-thread-row-kind="permission-request"]')).toBeNull()
     expect(queryByRole("button", { name: "Fork from here" })).toBeNull()
@@ -549,7 +549,7 @@ describe("ThreadView trace item renderers", () => {
 
     expect(approvalRow?.querySelector(".trace-item-status")).toBeNull()
     expect(card).not.toBeNull()
-    expect(within(card!).getByText("Applying")).toBeInTheDocument()
+    expect(card?.querySelector(".permission-request-status")).toBeNull()
     for (const button of Array.from(card!.querySelectorAll(".permission-request-actions button"))) {
       expect(button).toBeDisabled()
     }
@@ -571,7 +571,7 @@ describe("ThreadView trace item renderers", () => {
 
     const card = container.querySelector(".permission-request-card") as HTMLElement | null
     expect(card).not.toBeNull()
-    expect(within(card!).getByText("Error")).toBeInTheDocument()
+    expect(card?.querySelector(".permission-request-status")).toBeNull()
     expect(within(card!).getByText("Approval failed")).toBeInTheDocument()
     expect(within(card!).getByRole("button", { name: "Allow: Check Node.js and npm availability" })).not.toBeDisabled()
   })
@@ -1241,6 +1241,10 @@ describe("ThreadView image trace items", () => {
     expect(getByRole("region", { name: "Tools" })).toBeInTheDocument()
     expect(screen.queryByRole("region", { name: "File Changes" })).not.toBeInTheDocument()
     expect(container.querySelector(".trace-file-change-summary")).toHaveAttribute("aria-expanded", "false")
+    const inlineToolName = container.querySelector(".trace-log-row.has-inline-draft-patch .trace-tool-name")
+    expect(inlineToolName).not.toBeNull()
+    expect(inlineToolName).toHaveTextContent("apply_patch")
+    expect(inlineToolName).toHaveAttribute("title", "apply_patch")
     const inlineSummary = container.querySelector(".trace-log-row .trace-tool-inline-draft-patch-summary")
     expect(inlineSummary).not.toBeNull()
     expect(inlineSummary?.querySelector(".trace-file-change-summary-icon")).toBeNull()

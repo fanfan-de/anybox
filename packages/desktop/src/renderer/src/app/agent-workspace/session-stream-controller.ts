@@ -3222,11 +3222,17 @@ export function useSessionStreamController({
     backendSessionID = resolveBackendSessionID(sessionID),
     options: SessionDataLoadOptions = {},
   ) {
-    await ensurePendingPermissionRequestsLoaded(sessionID, backendSessionID, {
-      force: true,
-      mode: "silent",
-      reason: "manual",
-      ...options,
+    return loadPendingPermissionRequestsForSessionService({
+      backendSessionID,
+      permissionRequestsRequestRef,
+      sessionID,
+      setPendingPermissionRequestsBySession,
+      options: {
+        force: true,
+        mode: "silent",
+        reason: "manual",
+        ...options,
+      },
     })
   }
 

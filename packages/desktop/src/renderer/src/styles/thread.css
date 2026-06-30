@@ -2009,7 +2009,6 @@ body.is-image-lightbox-open {
   font-weight: 600;
 }
 
-.permission-request-status,
 .permission-request-count {
   min-height: 22px;
   padding: 0 8px;
@@ -3514,7 +3513,7 @@ button.user-message-diff-file-row:focus-visible {
 
 .permission-request-card {
   border-left-color: var(--seg-warning-strong);
-  background: color-mix(in srgb, var(--seg-warning-surface) 48%, var(--surface-trace) 52%);
+  background: var(--mix-seg-warning-surface-84-surface-trace-16);
 }
 
 .ask-user-question-card {
@@ -4087,6 +4086,11 @@ button.trace-log-row {
   max-width: min(220px, 32%);
 }
 
+.trace-log-row.has-inline-draft-patch .trace-log-summary.trace-tool-name {
+  flex: 0 0 auto;
+  width: fit-content;
+}
+
 .trace-tool-inline-draft-patch-summary {
   flex: 0 1 auto;
   grid-template-columns: minmax(0, auto) auto 14px;
@@ -4096,6 +4100,12 @@ button.trace-log-row {
 
 .trace-tool-inline-draft-patch-summary .trace-file-change-summary-label.has-file-change {
   grid-template-columns: minmax(0, auto) auto;
+}
+
+.trace-tool-inline-draft-patch-summary .trace-file-change-file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .trace-tool-inline-draft-patch-summary .trace-file-change-summary-label,

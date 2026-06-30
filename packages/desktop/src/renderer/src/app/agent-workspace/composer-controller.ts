@@ -78,7 +78,10 @@ interface UseComposerControllerOptions {
   createSessionTabs: CreateSessionTab[]
   isSendingByTabKey: Record<string, boolean>
   getConversationMessages: (sessionID: string) => ThreadMessage[]
-  loadPendingPermissionRequestsForSession: (sessionID: string, backendSessionID?: string) => Promise<void>
+  loadPendingPermissionRequestsForSession: (
+    sessionID: string,
+    backendSessionID?: string,
+  ) => Promise<PermissionRequest[] | undefined>
   loadSessionDiffForSession: (sessionID: string, backendSessionID?: string) => Promise<void>
   loadSessionRuntimeDebugForSession: (sessionID: string, backendSessionID?: string) => Promise<void>
   pendingConversationInputsBySession: Record<string, PendingConversationInput[]>
@@ -737,6 +740,7 @@ export function useComposerController({
       loadPendingPermissionRequestsForSession,
       loadSessionDiffForSession,
       loadSessionRuntimeDebugForSession,
+      pendingPermissionRequestsBySession,
       pendingStreamsRef,
       permissionRequestActionRequestID,
       permissionRequestsRequestRef,

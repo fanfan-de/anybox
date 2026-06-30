@@ -34,6 +34,29 @@ function safeReadSession(sessionID: string) {
   }
 }
 
+async function resumeSessionIfReady(input: {
+  resume?: boolean
+  sessionID: string
+}) {
+  if (!input.resume) return undefined
+
+  const pendingRequests = await Permission.listRequests({
+    sessionID: input.sessionID,
+    status: "pending",
+  })
+  if (pendingRequests.length > 0) return undefined
+
+  const session = safeReadSession(input.sessionID)
+  if (!session) {
+    throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${input.sessionID}' not found`)
+  }
+
+  return Instance.provide({
+    directory: session.directory,
+    fn: () => Prompt.resume({ sessionID: session.id }),
+  })
+}
+
 export function PermissionsRoutes() {
   const app = new Hono<AppEnv>()
 
@@ -41,6 +64,7 @@ export function PermissionsRoutes() {
     const query = ListRequestsQuery.safeParse({
       status: c.req.query("status"),
       sessionID: c.req.query("sessionID"),
+      view: c.req.query("view"),
     })
     if (!query.success) {
       throw new ApiError(400, "INVALID_QUERY", "Query parameters must include an optional valid status and sessionID")
@@ -83,18 +107,10 @@ export function PermissionsRoutes() {
       throw new ApiError(400, "PERMISSION_REQUEST_RESOLUTION_FAILED", error instanceof Error ? error.message : String(error))
     })
 
-    let resumed: unknown
-    if (payload.data.resume) {
-      const session = safeReadSession(resolved.request.sessionID)
-      if (!session) {
-        throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${resolved.request.sessionID}' not found`)
-      }
-
-      resumed = await Instance.provide({
-        directory: session.directory,
-        fn: () => Prompt.resume({ sessionID: session.id }),
-      })
-    }
+    const resumed = await resumeSessionIfReady({
+      resume: payload.data.resume,
+      sessionID: resolved.request.sessionID,
+    })
 
     return c.json({
       success: true,
@@ -121,18 +137,10 @@ export function PermissionsRoutes() {
       throw new ApiError(400, "PERMISSION_REQUEST_RESOLUTION_FAILED", error instanceof Error ? error.message : String(error))
     })
 
-    let resumed: unknown
-    if (payload.data.resume) {
-      const session = safeReadSession(resolved.request.sessionID)
-      if (!session) {
-        throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${resolved.request.sessionID}' not found`)
-      }
-
-      resumed = await Instance.provide({
-        directory: session.directory,
-        fn: () => Prompt.resume({ sessionID: session.id }),
-      })
-    }
+    const resumed = await resumeSessionIfReady({
+      resume: payload.data.resume,
+      sessionID: resolved.request.sessionID,
+    })
 
     return c.json({
       success: true,
@@ -159,18 +167,10 @@ export function PermissionsRoutes() {
       throw new ApiError(400, "PERMISSION_REQUEST_RESOLUTION_FAILED", error instanceof Error ? error.message : String(error))
     })
 
-    let resumed: unknown
-    if (payload.data.resume) {
-      const session = safeReadSession(resolved.request.sessionID)
-      if (!session) {
-        throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${resolved.request.sessionID}' not found`)
-      }
-
-      resumed = await Instance.provide({
-        directory: session.directory,
-        fn: () => Prompt.resume({ sessionID: session.id }),
-      })
-    }
+    const resumed = await resumeSessionIfReady({
+      resume: payload.data.resume,
+      sessionID: resolved.request.sessionID,
+    })
 
     return c.json({
       success: true,

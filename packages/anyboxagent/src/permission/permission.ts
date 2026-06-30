@@ -1023,6 +1023,28 @@ async function completeApprovedRequest(
 
       const agentInfo = (await Agent.get(request.agent)) ?? Agent.planAgent
       const runtime = await toolInfo.init({ agent: agentInfo })
+      const running = Message.ToolPart.parse({
+        ...existing,
+        state: {
+          status: "running",
+          input: existing.state.input,
+          raw: existing.state.raw,
+          title: existing.state.title,
+          metadata: existing.state.metadata,
+          time: {
+            start: existing.state.time.start,
+          },
+        },
+      })
+
+      if (turn) {
+        turn.emit("tool.call.started", {
+          part: running,
+        })
+      } else {
+        await Session.updatePart(running)
+      }
+
       try {
         const output = Tool.normalizeToolOutput(
           await runtime.execute(request.input, {
@@ -1040,15 +1062,16 @@ async function completeApprovedRequest(
           .filter((attachment): attachment is Message.FilePart => Boolean(attachment))
 
         const completed = Message.ToolPart.parse({
-          ...existing,
+          ...running,
           state: {
             status: "completed",
-            input: existing.state.input,
+            input: running.state.input,
+            raw: running.state.raw,
             output: output.text,
-            title: output.title ?? existing.state.title ?? existing.tool,
+            title: output.title ?? running.state.title ?? running.tool,
             metadata: output.metadata ?? {},
             time: {
-              start: existing.state.time.start,
+              start: running.state.time.start,
               end: Date.now(),
             },
             attachments: attachments.length > 0 ? attachments : undefined,
@@ -1065,14 +1088,15 @@ async function completeApprovedRequest(
         return completed
       } catch (error) {
         const failed = Message.ToolPart.parse({
-          ...existing,
+          ...running,
           state: {
             status: "error",
-            input: existing.state.input,
+            input: running.state.input,
+            raw: running.state.raw,
             error: normalizeExecutionError(error),
             metadata: {},
             time: {
-              start: existing.state.time.start,
+              start: running.state.time.start,
               end: Date.now(),
             },
           },

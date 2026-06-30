@@ -8,8 +8,8 @@ vi.mock("../agent-session/client", () => ({
   getAgentSessionBridge: vi.fn(),
 }))
 
-function createPermissionRequest(): PermissionRequest {
-  return {
+function createPermissionRequest(overrides: Partial<PermissionRequest> = {}): PermissionRequest {
+  const base: PermissionRequest = {
     id: "permission-1",
     approvalID: "approval-1",
     sessionID: "backend-session-1",
@@ -33,6 +33,22 @@ function createPermissionRequest(): PermissionRequest {
       recommendedDecision: "allow",
     },
   }
+  return {
+    ...base,
+    ...overrides,
+    prompt: overrides.prompt
+      ? {
+          ...base.prompt,
+          ...overrides.prompt,
+          details: overrides.prompt.details
+            ? {
+                ...base.prompt.details,
+                ...overrides.prompt.details,
+              }
+            : overrides.prompt.details,
+        }
+      : base.prompt,
+  }
 }
 
 function createDeferred<T>() {
@@ -45,18 +61,22 @@ function createDeferred<T>() {
   return { promise, reject, resolve }
 }
 
-function setupPermissionResponseTest(options: { canResumeStream?: boolean } = {}) {
-  const request = createPermissionRequest()
+function setupPermissionResponseTest(options: {
+  canResumeStream?: boolean
+  requests?: PermissionRequest[]
+} = {}) {
+  const request = options.requests?.[0] ?? createPermissionRequest()
   let pendingPermissionRequestsBySession: Record<string, PermissionRequest[]> = {
-    "session-1": [request],
+    "session-1": options.requests ?? [request],
   }
   const respondPermissionRequestMock = vi.fn()
+  const resumeTurnMock = vi.fn()
   vi.mocked(getAgentSessionBridge).mockReturnValue({
     canResumeStream: options.canResumeStream ?? false,
     canStream: true,
     loadHistory: vi.fn(),
     sendTurn: vi.fn(),
-    resumeTurn: vi.fn(),
+    resumeTurn: resumeTurnMock,
     cancelTurn: vi.fn(),
     abortTurn: vi.fn(),
     interrupt: vi.fn(),
@@ -81,10 +101,11 @@ function setupPermissionResponseTest(options: { canResumeStream?: boolean } = {}
       request,
       sessionID: "session-1",
     },
-    loadPendingPermissionRequestsForSession: vi.fn(async () => undefined),
+    loadPendingPermissionRequestsForSession: vi.fn(async (): Promise<PermissionRequest[] | undefined> => undefined),
     loadSessionDiffForSession: vi.fn(async () => undefined),
     loadSessionRuntimeDebugForSession: vi.fn(async () => undefined),
     pendingStreamsRef: { current: {} },
+    pendingPermissionRequestsBySession,
     permissionRequestActionRequestID: null,
     permissionRequestsRequestRef: { current: {} },
     refreshWorkspaceForSession: vi.fn(),
@@ -99,6 +120,7 @@ function setupPermissionResponseTest(options: { canResumeStream?: boolean } = {}
     getPendingPermissionRequestsBySession: () => pendingPermissionRequestsBySession,
     input,
     request,
+    resumeTurnMock,
     respondPermissionRequestMock,
     setPendingPermissionRequestsBySession,
   }
@@ -171,5 +193,57 @@ describe("permission requests service", () => {
       createdAssistantThreadMessageID: streamingMessage.id,
     })
     expect(pendingStream?.backendTurnID).toBeUndefined()
+  })
+
+  it("does not resume a stream while another permission request remains pending", async () => {
+    const request = createPermissionRequest()
+    const otherRequest = createPermissionRequest({
+      approvalID: "approval-2",
+      id: "permission-2",
+      toolCallID: "tool-call-2",
+    })
+    const setup = setupPermissionResponseTest({
+      canResumeStream: true,
+      requests: [request, otherRequest],
+    })
+    setup.respondPermissionRequestMock.mockResolvedValue({})
+    setup.input.loadPendingPermissionRequestsForSession.mockResolvedValue([otherRequest])
+
+    await respondPermissionRequest(setup.input)
+
+    expect(setup.respondPermissionRequestMock).toHaveBeenCalledWith({
+      requestID: "permission-1",
+      decision: "allow",
+      note: undefined,
+      resume: false,
+    })
+    expect(setup.getPendingPermissionRequestsBySession()["session-1"]).toEqual([otherRequest])
+    expect(setup.input.appendConversationMessages).not.toHaveBeenCalled()
+    expect(setup.resumeTurnMock).not.toHaveBeenCalled()
+  })
+
+  it("does not ask the backend to resume while another permission request remains pending", async () => {
+    const request = createPermissionRequest()
+    const otherRequest = createPermissionRequest({
+      approvalID: "approval-2",
+      id: "permission-2",
+      toolCallID: "tool-call-2",
+    })
+    const setup = setupPermissionResponseTest({
+      canResumeStream: false,
+      requests: [request, otherRequest],
+    })
+    setup.respondPermissionRequestMock.mockResolvedValue({})
+    setup.input.loadPendingPermissionRequestsForSession.mockResolvedValue([otherRequest])
+
+    await respondPermissionRequest(setup.input)
+
+    expect(setup.respondPermissionRequestMock).toHaveBeenCalledWith({
+      requestID: "permission-1",
+      decision: "allow",
+      note: undefined,
+      resume: false,
+    })
+    expect(setup.getPendingPermissionRequestsBySession()["session-1"]).toEqual([otherRequest])
   })
 })

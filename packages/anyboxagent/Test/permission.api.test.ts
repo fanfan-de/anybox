@@ -28,6 +28,7 @@ type PermissionRequestRecord = z.infer<typeof Permission.Request>
 
 type PermissionRequestResponse = JsonEnvelope<{
   request: PermissionRequestRecord
+  resumed?: unknown
 }>
 
 type PermissionRequestListResponse = JsonEnvelope<PermissionRequestRecord[]>
@@ -118,6 +119,59 @@ async function createApprovalRequest(repositoryRoot: string, targetPath: string)
   })
 }
 
+async function createAdditionalApprovalRequest(
+  repositoryRoot: string,
+  input: {
+    messageID: string
+    sessionID: string
+    targetPath: string
+  },
+) {
+  return Instance.provide({
+    directory: repositoryRoot,
+    async fn() {
+      const assistant = Session.DataBaseRead("messages", input.messageID) as Message.Assistant | null
+      if (!assistant) {
+        throw new Error(`Assistant message '${input.messageID}' not found.`)
+      }
+
+      const toolPart = Message.ToolPart.parse({
+        id: Identifier.ascending("part"),
+        sessionID: input.sessionID,
+        messageID: assistant.id,
+        type: "tool",
+        callID: `toolcall_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        tool: "read_file",
+        state: {
+          status: "waiting-approval",
+          approvalID: `approval_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+          input: {
+            path: input.targetPath,
+          },
+          title: "Read File",
+          time: {
+            start: Date.now(),
+          },
+        },
+      })
+
+      await Session.updatePart(toolPart)
+
+      const request = await Permission.registerApprovalRequest({
+        assistant,
+        toolPart,
+      })
+
+      return {
+        request,
+        sessionID: input.sessionID,
+        messageID: assistant.id,
+        toolCallID: toolPart.callID,
+      }
+    },
+  })
+}
+
 function findToolPart(messageID: string, toolCallID: string) {
   const parts = db.findManyWithSchema("parts", Message.Part, {
     where: [{ column: "messageID", value: messageID }],
@@ -166,11 +220,64 @@ test("permission api approves a waiting tool request and completes the tool part
     expect(listResponse.status).toBe(200)
     expect(listBody.data?.some((request) => request.id === seeded.request.id)).toBe(true)
 
+    const fullListResponse = await app.request(
+      `http://localhost/api/permissions/requests?sessionID=${seeded.sessionID}&view=full`,
+    )
+    const fullListBody = (await fullListResponse.json()) as PermissionRequestListResponse
+    const listedFullRequest = fullListBody.data?.find((request) => request.id === seeded.request.id)
+
+    expect(fullListResponse.status).toBe(200)
+    expect(listedFullRequest?.input).toEqual({
+      path: "README.md",
+    })
+
     const toolPart = findToolPart(seeded.messageID, seeded.toolCallID)
     expect(toolPart?.state.status).toBe("completed")
     if (toolPart?.state.status === "completed") {
       expect(toolPart.state.output).toContain("README.md")
     }
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true })
+  }
+}, 120000)
+
+test("permission api defers resume while another approval request is still pending", async () => {
+  const app = createServerApp()
+  const repositoryRoot = await mkdtemp(path.join(tmpdir(), "anybox-permission-api-multiple-approval-"))
+
+  try {
+    await createGitRepo(repositoryRoot, "permission-api-multiple-approval")
+    const first = await createApprovalRequest(repositoryRoot, "README.md")
+    const second = await createAdditionalApprovalRequest(repositoryRoot, {
+      messageID: first.messageID,
+      sessionID: first.sessionID,
+      targetPath: "README.md",
+    })
+
+    const approveResponse = await app.request(
+      `http://localhost/api/permissions/requests/${first.request.id}/resolve`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          decision: "allow",
+          resume: true,
+        }),
+      },
+    )
+    const approveBody = (await approveResponse.json()) as PermissionRequestResponse
+
+    expect(approveResponse.status).toBe(200)
+    expect(approveBody.success).toBe(true)
+    expect(approveBody.data?.request.status).toBe("approved")
+    expect(approveBody.data?.resumed).toBeUndefined()
+
+    const pendingRequests = await Permission.listRequests({
+      sessionID: first.sessionID,
+      status: "pending",
+    })
+
+    expect(pendingRequests.map((request) => request.id)).toEqual([second.request.id])
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true })
   }

@@ -3568,7 +3568,7 @@ function ToolTraceItemView({
   const shouldRenderToolRowButton = hasDisclosureContent && !draftPatch
   const rowContent = (
     <>
-      <span className={toolNameClassName}>{summaryTitle}</span>
+      <span className={toolNameClassName} title={summaryTitle}>{summaryTitle}</span>
       {draftPatch ? (
         <ToolDraftPatchSummaryButton
           fileChanges={draftPatch.fileChanges}
@@ -4019,11 +4019,6 @@ function PermissionRequestCard({
   const rationale = translatePermissionText(locale, request.prompt.rationale)
   const detailBody = request.prompt.details?.body?.trim()
   const permissionDecisions = getAllowedPermissionDecisions(request)
-  const statusLabel = actionError
-    ? t("thread.permission.state.error")
-    : isResolving
-      ? t("thread.permission.state.applying")
-      : t("thread.permission.state.waiting")
   const detailLines = [
     rationale && rationale !== summary
       ? { key: "rationale", label: t(permissionDetailLabelTranslationKeys.rationale), value: rationale, isWide: true }
@@ -4054,7 +4049,6 @@ function PermissionRequestCard({
           <div className="permission-request-context">
             <span className="permission-request-context-label">{t("thread.permission.trace.label")}</span>
             <span className="permission-request-context-title">{t("thread.permission.trace.requested")}</span>
-            <span className="settings-badge permission-request-status">{statusLabel}</span>
           </div>
           <h3>{title}</h3>
           {summary ? <p className="permission-request-summary">{summary}</p> : null}

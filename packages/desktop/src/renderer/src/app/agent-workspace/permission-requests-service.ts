@@ -28,6 +28,10 @@ function buildPermissionRequestsSignature(requests: PermissionRequest[]) {
     .join("\u0001")
 }
 
+function pendingRequestsAfterResolving(requests: PermissionRequest[], resolvedRequestID: string) {
+  return requests.filter((request) => request.status === "pending" && request.id !== resolvedRequestID)
+}
+
 interface LoadPendingPermissionRequestsInput {
   backendSessionID: string
   permissionRequestsRequestRef: MutableRefObject<Record<string, number>>
@@ -45,14 +49,14 @@ export async function loadPendingPermissionRequestsForSession({
   setPendingPermissionRequestsBySession,
 }: LoadPendingPermissionRequestsInput) {
   const agentSession = getAgentSessionBridge()
-  if (!agentSession) return
+  if (!agentSession) return undefined
 
   const requestID = (permissionRequestsRequestRef.current[sessionID] ?? 0) + 1
   permissionRequestsRequestRef.current[sessionID] = requestID
 
   try {
     const nextRequests = await agentSession.loadPermissionRequests({ backendSessionID })
-    if (permissionRequestsRequestRef.current[sessionID] !== requestID) return
+    if (permissionRequestsRequestRef.current[sessionID] !== requestID) return undefined
 
     const nextPendingRequests = nextRequests.filter((request) => request.status === "pending")
     setPendingPermissionRequestsBySession((prev) => {
@@ -66,9 +70,11 @@ export async function loadPendingPermissionRequestsForSession({
         [sessionID]: nextPendingRequests,
       }
     })
+    return nextPendingRequests
   } catch (error) {
-    if (permissionRequestsRequestRef.current[sessionID] !== requestID) return
+    if (permissionRequestsRequestRef.current[sessionID] !== requestID) return undefined
     console.error("[desktop] agentSession.loadPermissionRequests failed:", error)
+    return undefined
   }
 }
 
@@ -80,10 +86,15 @@ interface RespondPermissionRequestInput {
     decision: PermissionDecision
     note?: string
   }
-  loadPendingPermissionRequestsForSession: (sessionID: string, backendSessionID: string, options?: SessionDataLoadOptions) => Promise<void>
+  loadPendingPermissionRequestsForSession: (
+    sessionID: string,
+    backendSessionID: string,
+    options?: SessionDataLoadOptions,
+  ) => Promise<PermissionRequest[] | undefined>
   loadSessionDiffForSession: (sessionID: string, backendSessionID: string, options?: SessionDataLoadOptions) => Promise<void>
   loadSessionRuntimeDebugForSession: (sessionID: string, backendSessionID: string, options?: SessionDataLoadOptions) => Promise<void>
   pendingStreamsRef: MutableRefObject<Record<string, PendingAgentStream>>
+  pendingPermissionRequestsBySession: Record<string, PermissionRequest[]>
   permissionRequestActionRequestID: string | null
   permissionRequestsRequestRef: MutableRefObject<Record<string, number>>
   refreshWorkspaceForSession: (sessionID: string) => void
@@ -107,6 +118,7 @@ export async function respondPermissionRequest({
   loadSessionDiffForSession,
   loadSessionRuntimeDebugForSession,
   pendingStreamsRef,
+  pendingPermissionRequestsBySession,
   permissionRequestActionRequestID,
   permissionRequestsRequestRef,
   refreshWorkspaceForSession,
@@ -121,6 +133,8 @@ export async function respondPermissionRequest({
 
   permissionRequestsRequestRef.current[input.sessionID] = (permissionRequestsRequestRef.current[input.sessionID] ?? 0) + 1
   const canStreamResume = agentSession.canResumeStream
+  const knownPendingRequests = pendingPermissionRequestsBySession[input.sessionID] ?? []
+  const knownRemainingRequests = pendingRequestsAfterResolving(knownPendingRequests, input.request.id)
   let requestResolved = false
   setPermissionRequestActionRequestID(input.request.id)
   setPermissionRequestActionError(null)
@@ -130,14 +144,16 @@ export async function respondPermissionRequest({
       requestID: input.request.id,
       decision: input.decision,
       note: input.note?.trim() || undefined,
-      resume: !canStreamResume,
+      resume: !canStreamResume && knownRemainingRequests.length === 0,
     })
     requestResolved = true
+    let localRemainingRequests = knownRemainingRequests
     setPendingPermissionRequestsBySession((prev) => {
       const current = prev[input.sessionID] ?? []
+      localRemainingRequests = pendingRequestsAfterResolving(current, input.request.id)
       return {
         ...prev,
-        [input.sessionID]: current.filter((request) => request.id !== input.request.id),
+        [input.sessionID]: localRemainingRequests,
       }
     })
 
@@ -162,16 +178,19 @@ export async function respondPermissionRequest({
     }).catch((error) => {
       console.error("[desktop] permission runtime refresh failed:", error)
     })
-    await loadPendingPermissionRequestsForSession(input.sessionID, input.request.sessionID, {
+    const refreshedPendingRequests = await loadPendingPermissionRequestsForSession(input.sessionID, input.request.sessionID, {
       force: true,
       mode: "silent",
       reason: "permission",
     }).catch((error) => {
       console.error("[desktop] permission request refresh failed:", error)
+      return undefined
     })
     refreshWorkspaceForSession(input.sessionID)
 
-    if (canStreamResume) {
+    const remainingPendingRequests = refreshedPendingRequests ?? localRemainingRequests
+
+    if (canStreamResume && remainingPendingRequests.length === 0) {
       const streamID = createID("stream")
       const streamingMessage = buildStreamingAssistantThreadMessage(
         input.decision === "deny" ? "Continue after denial" : "Continue after approval",

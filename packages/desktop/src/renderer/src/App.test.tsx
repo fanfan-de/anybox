@@ -7775,13 +7775,13 @@ describe("App", () => {
 
     render(<App />)
 
-    const approvalPanel = await screen.findByRole("region", { name: "Tool approval request" })
+    const approvalPanel = await screen.findByRole("article", { name: "Permission request: Read repo config" })
     expect(approvalPanel.closest(".thread-shell")).not.toBeNull()
     expect(within(approvalPanel).getByRole("heading", { name: "Read repo config" })).toBeInTheDocument()
     expect(within(approvalPanel).getByText("Read README.md")).toBeInTheDocument()
     expect(getComposerSendButton()).toBeDisabled()
-    expect(within(approvalPanel).getByRole("button", { name: "Allow Read repo config" })).toBeInTheDocument()
-    expect(within(approvalPanel).getByRole("button", { name: "Deny Read repo config" })).toBeInTheDocument()
+    expect(within(approvalPanel).getByRole("button", { name: "Allow: Read repo config" })).toBeInTheDocument()
+    expect(within(approvalPanel).getByRole("button", { name: "Deny: Read repo config" })).toBeInTheDocument()
     await waitFor(() => {
       expect(window.desktop!.agentSession!.loadPermissionRequests).toHaveBeenCalledWith({
         backendSessionID: "session-atlas-review",
@@ -7864,8 +7864,8 @@ describe("App", () => {
 
     render(<App />)
 
-    const approvalPanel = await screen.findByRole("region", { name: "Tool approval request" })
-    fireEvent.click(within(approvalPanel).getByRole("button", { name: "Allow Read repo config" }))
+    const approvalPanel = await screen.findByRole("article", { name: "Permission request: Read repo config" })
+    fireEvent.click(within(approvalPanel).getByRole("button", { name: "Allow: Read repo config" }))
 
     await waitFor(() => {
       expect(window.desktop!.agentSession!.respondPermissionRequest).toHaveBeenCalledWith({
@@ -7880,7 +7880,7 @@ describe("App", () => {
       }))
     })
     expect(await screen.findByText("Approval recorded and session resumed.")).toBeInTheDocument()
-    expect(screen.queryByRole("region", { name: "Tool approval request" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("article", { name: "Permission request: Read repo config" })).not.toBeInTheDocument()
     await waitFor(() => {
       expect(window.desktop!.agentSession!.loadHistory).toHaveBeenNthCalledWith(3, {
         backendSessionID: "session-atlas-review",
@@ -8041,17 +8041,17 @@ describe("App", () => {
       ])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
-    window.desktop!.agentSession!.respondPermissionRequest = vi.fn().mockResolvedValue(
-      createPermissionResolveResult({
-        id: "permission-atlas-1",
-        approvalID: "approval-atlas-1",
-        sessionID: "session-atlas-review",
-        messageID: "msg-assistant-1",
-        toolCallID: "toolcall-atlas-1",
-        projectID: "project-atlas",
-        createdAt: 100,
-      }),
-    )
+    const approvalResponse = createDeferred<PermissionResolveResult>()
+    const approvalResolveResult = createPermissionResolveResult({
+      id: "permission-atlas-1",
+      approvalID: "approval-atlas-1",
+      sessionID: "session-atlas-review",
+      messageID: "msg-assistant-1",
+      toolCallID: "toolcall-atlas-1",
+      projectID: "project-atlas",
+      createdAt: 100,
+    })
+    window.desktop!.agentSession!.respondPermissionRequest = vi.fn().mockReturnValue(approvalResponse.promise)
     window.desktop!.agentSession!.onEvent = vi.fn((listener) => {
       streamListener = listener
       return vi.fn()
@@ -8110,8 +8110,8 @@ describe("App", () => {
 
     expect(await screen.findByText("Waiting for permission approval before the tool can continue.")).toBeInTheDocument()
 
-    const approvalPanel = await screen.findByRole("region", { name: "Tool approval request" })
-    fireEvent.click(within(approvalPanel).getByRole("button", { name: "Allow Read repo config" }))
+    const approvalPanel = await screen.findByRole("article", { name: "Permission request: Read repo config" })
+    fireEvent.click(within(approvalPanel).getByRole("button", { name: "Allow: Read repo config" }))
 
     await waitFor(() => {
       expect(window.desktop!.agentSession!.respondPermissionRequest).toHaveBeenCalledWith({
@@ -8120,6 +8120,54 @@ describe("App", () => {
         note: undefined,
         resume: false,
       })
+    })
+
+    act(() => {
+      streamListener?.(createSubscriptionStreamEvent({
+        backendSessionID: "session-atlas-review",
+        id: "111:turn-approval:3",
+        event: "runtime",
+        data: {
+          type: "tool.call.started",
+          eventID: "event-tool-started-after-approval",
+          sessionID: "session-atlas-review",
+          turnID: "turn-approval",
+          seq: 3,
+          timestamp: 111,
+          payload: {
+            part: {
+              id: "tool-part-1",
+              sessionID: "session-atlas-review",
+              messageID: "msg-assistant-1",
+              type: "tool",
+              callID: "toolcall-atlas-1",
+              tool: "read-file",
+              state: {
+                status: "running",
+                input: {
+                  path: "README.md",
+                },
+                title: "Read repo config",
+                time: {
+                  start: 90,
+                },
+              },
+            },
+          },
+        },
+      }))
+    })
+
+    await waitFor(() => {
+      expect(document.querySelector(".trace-kind-tool.is-running .trace-log-row")).not.toBeNull()
+      expect(document.querySelector(".trace-kind-tool.is-waiting-approval")).toBeNull()
+    })
+
+    act(() => {
+      approvalResponse.resolve(approvalResolveResult)
+    })
+
+    await waitFor(() => {
       expect(window.desktop!.agentSession!.resumeTurn).toHaveBeenCalledTimes(1)
     })
 
@@ -8204,11 +8252,11 @@ describe("App", () => {
 
     render(<App />)
 
-    const approvalPanel = await screen.findByRole("region", { name: "Tool approval request" })
-    fireEvent.click(within(approvalPanel).getByRole("button", { name: "Allow Read repo config" }))
+    const approvalPanel = await screen.findByRole("article", { name: "Permission request: Read repo config" })
+    fireEvent.click(within(approvalPanel).getByRole("button", { name: "Allow: Read repo config" }))
 
     await waitFor(() => {
-      expect(screen.queryByRole("region", { name: "Tool approval request" })).not.toBeInTheDocument()
+      expect(screen.queryByRole("article", { name: "Permission request: Read repo config" })).not.toBeInTheDocument()
     })
     expect(getComposerSendButton()).toBeDisabled()
 
