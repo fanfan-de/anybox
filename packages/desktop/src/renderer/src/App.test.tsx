@@ -8104,11 +8104,11 @@ describe("App", () => {
     fireEvent.click(toolTraceToggle)
 
     expect(toolTraceToggle).toHaveAttribute("aria-expanded", "true")
-    expect(screen.queryByText("Waiting for permission approval before the tool can continue.")).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole("button", { name: /read-file input/i }))
-
     expect(await screen.findByText("Waiting for permission approval before the tool can continue.")).toBeInTheDocument()
+    const approvalInputExpandButton = screen.getByRole("button", { name: /^Expand read-file input content$/i })
+    expect(approvalInputExpandButton).toHaveAttribute("aria-expanded", "false")
+    fireEvent.click(approvalInputExpandButton)
+    expect(approvalInputExpandButton).toHaveAttribute("aria-expanded", "true")
 
     const approvalPanel = await screen.findByRole("article", { name: "Permission request: Read repo config" })
     fireEvent.click(within(approvalPanel).getByRole("button", { name: "Allow: Read repo config" }))
@@ -8177,7 +8177,7 @@ describe("App", () => {
       fireEvent.click(readFileToolRow)
     }
 
-    fireEvent.click(await screen.findByRole("button", { name: /read-file output/i }))
+    fireEvent.click(await screen.findByRole("button", { name: /^Expand read-file output content$/i }))
     expect(await screen.findByText("README loaded")).toBeInTheDocument()
     expect(screen.queryByText("Waiting for permission approval before the tool can continue.")).not.toBeInTheDocument()
     expect(screen.getAllByText("Resumed answer").length).toBeGreaterThan(0)
@@ -10885,8 +10885,11 @@ describe("App", () => {
 
     fireEvent.click(toolToggle)
 
-    expect(screen.queryByText(new RegExp(tailMarker))).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: /capture-long-output output/i }))
+    const outputPane = await screen.findByRole("region", { name: /capture-long-output output content/i })
+    expect(outputPane).not.toHaveClass("is-expanded")
+    const outputExpandButton = within(outputPane).getByRole("button", { name: /^Expand capture-long-output output content$/i })
+    fireEvent.click(outputExpandButton)
+    expect(outputPane).toHaveClass("is-expanded")
     expect(await screen.findByText(new RegExp(tailMarker))).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "Open settings" }))
@@ -10895,8 +10898,10 @@ describe("App", () => {
     expandSettingsDisclosure(/Trace Visibility/)
     fireEvent.click(screen.getByRole("switch", { name: "Show trace tool inputs" }))
 
-    expect(screen.queryByText(new RegExp(inputMarker))).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: /capture-long-output input/i }))
+    const inputPane = await screen.findByRole("region", { name: /capture-long-output input content/i })
+    expect(inputPane).not.toHaveClass("is-expanded")
+    fireEvent.click(within(inputPane).getByRole("button", { name: /^Expand capture-long-output input content$/i }))
+    expect(inputPane).toHaveClass("is-expanded")
     expect(await screen.findByText(new RegExp(inputMarker))).toBeInTheDocument()
   })
 
@@ -14201,10 +14206,16 @@ describe("App", () => {
       /\.session-canvas-top-menu\s*\{[^}]*min-height:\s*var\(--section-toolbar-height\);[^}]*padding-right:\s*calc\(var\(--window-controls-canvas-clearance\) \+ 8px\);[^}]*padding-top:\s*0;[^}]*padding-bottom:\s*0;[^}]*background:\s*transparent;[^}]*border-bottom:\s*0;/s,
     )
     expect(styles).toMatch(
+      /\.session-canvas-top-menu\s+\.shell-top-menu-trailing\s*\{[^}]*flex-wrap:\s*nowrap;/s,
+    )
+    expect(styles).toMatch(
       /\.session-canvas-top-menu-copy-main\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*gap:\s*10px;/s,
     )
     expect(styles).toMatch(
-      /\.session-canvas-top-menu-copy\s+\.label\s*\{[^}]*font-size:\s*12px;[^}]*font-weight:\s*600;[^}]*line-height:\s*1\.2;[^}]*text-transform:\s*none;[^}]*color:\s*var\(--text-primary\);/s,
+      /\.session-canvas-top-menu-copy\s*\{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;/s,
+    )
+    expect(styles).toMatch(
+      /\.session-canvas-top-menu-copy\s+\.label\s*\{[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;[^}]*font-size:\s*12px;[^}]*font-weight:\s*600;[^}]*line-height:\s*1\.2;[^}]*text-transform:\s*none;[^}]*color:\s*var\(--text-primary\);/s,
     )
     expect(styles).toMatch(
       /\.session-canvas-top-menu\s+\.canvas-top-menu-button\s*\{[^}]*min-height:\s*var\(--section-toolbar-pill-height\);[^}]*border-radius:\s*8px;[^}]*font-size:\s*12px;[^}]*line-height:\s*1\.2;/s,

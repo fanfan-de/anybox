@@ -11,6 +11,7 @@ import {
   CloseIcon,
   CopyIcon,
   DeleteIcon,
+  ExpandIcon,
   InfoIcon,
   MinimizeIcon,
   PaperclipIcon,
@@ -3431,6 +3432,7 @@ function TaskStateTraceItemView(props: TraceItemRendererProps) {
 
 type ToolTraceDisplayTone = "preparing" | "running" | "waiting-approval" | "success" | "error" | "denied" | "cancelled" | "idle"
 type ToolTraceDisplayIconType = "dot" | "success" | "error" | "tool"
+type ToolTraceIoPaneKind = "input" | "output"
 
 function getToolTraceDisplayState(item: AssistantTraceItem): {
   iconType: ToolTraceDisplayIconType
@@ -3507,6 +3509,101 @@ function getToolTraceDisplayState(item: AssistantTraceItem): {
   }
 }
 
+function joinToolTracePaneText(text: string | undefined, detail: string | undefined) {
+  return [text, detail].filter((value): value is string => Boolean(value)).join("\n\n")
+}
+
+function ToolTraceIoPane({
+  contentLabel,
+  detail,
+  id,
+  kind,
+  summaryTitle,
+  text,
+}: {
+  contentLabel: string
+  detail?: string
+  id: string
+  kind: ToolTraceIoPaneKind
+  summaryTitle: string
+  text?: string
+}) {
+  const [isCopied, setIsCopied] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
+  const copiedTimeoutRef = useRef<number | null>(null)
+  const { t } = useI18n()
+  const copyText = joinToolTracePaneText(text, detail)
+  const regionLabel = `${summaryTitle} ${contentLabel}`
+  const labelParams = { title: summaryTitle, label: contentLabel }
+  const copyLabel = t("thread.toolTrace.copyContent", labelParams)
+  const copiedLabel = t("thread.toolTrace.copiedContent", labelParams)
+  const expandLabel = t("thread.toolTrace.expandContent", labelParams)
+  const collapseLabel = t("thread.toolTrace.collapseContent", labelParams)
+  const contentID = `${id}-content`
+
+  function clearCopiedTimeout() {
+    if (copiedTimeoutRef.current === null) return
+    window.clearTimeout(copiedTimeoutRef.current)
+    copiedTimeoutRef.current = null
+  }
+
+  useEffect(() => clearCopiedTimeout, [])
+
+  async function handleCopy() {
+    if (!copyText) return
+
+    try {
+      await writeTextToClipboard(copyText)
+      setIsCopied(true)
+      clearCopiedTimeout()
+      copiedTimeoutRef.current = window.setTimeout(() => {
+        setIsCopied(false)
+        copiedTimeoutRef.current = null
+      }, 1600)
+    } catch (error) {
+      console.error("[desktop] Failed to copy tool trace content:", error)
+    }
+  }
+
+  return (
+    <div
+      id={id}
+      className={joinClassNames("trace-tool-io-pane", isExpanded && "is-expanded")}
+      role="region"
+      aria-label={regionLabel}
+      data-tool-io-kind={kind}
+    >
+      <div className="trace-tool-io-toolbar" aria-label={`${regionLabel} actions`}>
+        <button
+          className={joinClassNames("trace-tool-io-action", isCopied && "is-active")}
+          type="button"
+          aria-label={isCopied ? copiedLabel : copyLabel}
+          title={isCopied ? copiedLabel : copyLabel}
+          disabled={!copyText}
+          onClick={handleCopy}
+        >
+          <CopyIcon />
+        </button>
+        <button
+          className="trace-tool-io-action"
+          type="button"
+          aria-label={isExpanded ? collapseLabel : expandLabel}
+          title={isExpanded ? collapseLabel : expandLabel}
+          aria-expanded={isExpanded}
+          aria-controls={contentID}
+          onClick={() => setIsExpanded((current) => !current)}
+        >
+          {isExpanded ? <MinimizeIcon /> : <ExpandIcon />}
+        </button>
+      </div>
+      <div id={contentID} className="trace-tool-io-content">
+        {text ? <ThreadRichText className="trace-item-text" text={text} /> : null}
+        {detail ? <ThreadRichText className="trace-item-detail" text={detail} /> : null}
+      </div>
+    </div>
+  )
+}
+
 function ToolTraceItemView({
   className,
   debugEntries,
@@ -3517,15 +3614,9 @@ function ToolTraceItemView({
   const shouldCollapseTraceItem = shouldCollapseAfterMessageCompletion && isCollapsibleTraceItem(item)
   const [isExpanded, setIsExpanded] = useState(false)
   const [isDisclosureCollapsing, setIsDisclosureCollapsing] = useState(false)
-  const [isInputExpanded, setIsInputExpanded] = useState(false)
-  const [isOutputExpanded, setIsOutputExpanded] = useState(false)
   const disclosureCollapseTimerRef = useRef<number | null>(null)
   const { t } = useI18n()
   const summaryTitle = item.title || item.label
-  const inputLabel = t("thread.toolTrace.inputLabel")
-  const outputLabel = t("thread.toolTrace.outputLabel")
-  const inputAriaLabel = t("thread.toolTrace.inputAria")
-  const outputAriaLabel = t("thread.toolTrace.outputAria")
   const inputContentLabel = t("thread.toolTrace.inputContent")
   const outputContentLabel = t("thread.toolTrace.outputContent")
   const displayState = getToolTraceDisplayState(item)
@@ -3620,16 +3711,12 @@ function ToolTraceItemView({
 
     if (!isExpanded) {
       setIsDisclosureCollapsing(false)
-      setIsInputExpanded(false)
-      setIsOutputExpanded(false)
       return
     }
 
     setIsExpanded(false)
     if (prefersReducedThreadMotion()) {
       setIsDisclosureCollapsing(false)
-      setIsInputExpanded(false)
-      setIsOutputExpanded(false)
       return
     }
 
@@ -3637,8 +3724,6 @@ function ToolTraceItemView({
     disclosureCollapseTimerRef.current = window.setTimeout(() => {
       disclosureCollapseTimerRef.current = null
       setIsDisclosureCollapsing(false)
-      setIsInputExpanded(false)
-      setIsOutputExpanded(false)
     }, THREAD_AUTO_COLLAPSE_MOTION_MS)
 
     return clearToolDisclosureCollapseTimer
@@ -3649,13 +3734,7 @@ function ToolTraceItemView({
   function handleToolToggle() {
     clearToolDisclosureCollapseTimer()
     setIsDisclosureCollapsing(false)
-    setIsExpanded((current) => {
-      if (current) {
-        setIsInputExpanded(false)
-        setIsOutputExpanded(false)
-      }
-      return !current
-    })
+    setIsExpanded((current) => !current)
   }
 
   return (
@@ -3695,63 +3774,27 @@ function ToolTraceItemView({
 
       {hasDisclosureContent && (isExpanded || isDisclosureCollapsing) ? (
         <div id={disclosureID} className={joinClassNames("trace-log-detail", isDisclosureCollapsing && "is-collapsing")}>
-          {hasInputDisclosureContent ? (
-            <div className="trace-item-subsection">
-              <button
-                className="trace-item-subsection-toggle"
-                type="button"
-                aria-expanded={isInputExpanded}
-                aria-controls={inputDisclosureID}
-                aria-label={`${summaryTitle} ${inputAriaLabel}`}
-                onClick={() => setIsInputExpanded((current) => !current)}
-              >
-                <span className="trace-item-subsection-toggle-icon" aria-hidden="true">
-                  {isInputExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
-                </span>
-                <span className="trace-item-subsection-toggle-line">
-                  <span className="trace-item-subsection-label">{inputLabel}</span>
-                </span>
-              </button>
-              {isInputExpanded ? (
-                <div
+          {hasInputDisclosureContent || hasOutputDisclosureContent ? (
+            <div className="trace-tool-io-stack">
+              {hasInputDisclosureContent ? (
+                <ToolTraceIoPane
                   id={inputDisclosureID}
-                  className="trace-item-subsection-body trace-tool-io-pane"
-                  role="region"
-                  aria-label={`${summaryTitle} ${inputContentLabel}`}
-                >
-                  {visibleToolInputText ? <ThreadRichText className="trace-item-text" text={visibleToolInputText} /> : null}
-                  {inputSectionDetail ? <ThreadRichText className="trace-item-detail" text={inputSectionDetail} /> : null}
-                </div>
+                  kind="input"
+                  summaryTitle={summaryTitle}
+                  contentLabel={inputContentLabel}
+                  text={visibleToolInputText}
+                  detail={inputSectionDetail}
+                />
               ) : null}
-            </div>
-          ) : null}
-          {hasOutputDisclosureContent ? (
-            <div className="trace-item-subsection">
-              <button
-                className="trace-item-subsection-toggle"
-                type="button"
-                aria-expanded={isOutputExpanded}
-                aria-controls={outputDisclosureID}
-                aria-label={`${summaryTitle} ${outputAriaLabel}`}
-                onClick={() => setIsOutputExpanded((current) => !current)}
-              >
-                <span className="trace-item-subsection-toggle-icon" aria-hidden="true">
-                  {isOutputExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
-                </span>
-                <span className="trace-item-subsection-toggle-line">
-                  <span className="trace-item-subsection-label">{outputLabel}</span>
-                </span>
-              </button>
-              {isOutputExpanded ? (
-                <div
+              {hasOutputDisclosureContent ? (
+                <ToolTraceIoPane
                   id={outputDisclosureID}
-                  className="trace-item-subsection-body trace-tool-io-pane"
-                  role="region"
-                  aria-label={`${summaryTitle} ${outputContentLabel}`}
-                >
-                  {visibleToolOutputText ? <ThreadRichText className="trace-item-text" text={visibleToolOutputText} /> : null}
-                  {outputSectionDetail ? <ThreadRichText className="trace-item-detail" text={outputSectionDetail} /> : null}
-                </div>
+                  kind="output"
+                  summaryTitle={summaryTitle}
+                  contentLabel={outputContentLabel}
+                  text={visibleToolOutputText}
+                  detail={outputSectionDetail}
+                />
               ) : null}
             </div>
           ) : null}

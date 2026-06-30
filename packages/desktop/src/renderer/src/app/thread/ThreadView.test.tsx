@@ -734,17 +734,26 @@ describe("ThreadView trace item renderers", () => {
     )
 
     fireEvent.click(screen.getByRole("button", { name: /Tool running/ }))
-    fireEvent.click(screen.getByRole("button", { name: /Tool running input/ }))
 
+    expect(screen.queryByText("Input")).toBeNull()
     expect(screen.getByText("tool input")).toBeInTheDocument()
     expect(screen.getByText("Tool detail")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Copy Tool running input content" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Expand Tool running input content" })).toBeInTheDocument()
   })
 
-  it("renders expanded tool input and output as full content panes", () => {
+  it("renders expanded tool input and output as full content panes with pane actions", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+
     const toolItem: AssistantTraceItem = {
       ...toolStatusTraceItem("completed"),
       toolInputText: "tool input",
       toolOutputText: "tool output",
+      detail: "tool detail",
     }
     const { container } = renderThread(
       [
@@ -760,8 +769,6 @@ describe("ThreadView trace item renderers", () => {
     )
 
     fireEvent.click(screen.getByRole("button", { name: /Tool completed/ }))
-    fireEvent.click(screen.getByRole("button", { name: /Tool completed input/ }))
-    fireEvent.click(screen.getByRole("button", { name: /Tool completed output/ }))
 
     const inputPane = screen.getByRole("region", { name: "Tool completed input content" })
     const outputPane = screen.getByRole("region", { name: "Tool completed output content" })
@@ -769,10 +776,29 @@ describe("ThreadView trace item renderers", () => {
     expect(inputPane).not.toHaveClass("trace-fixed-content-pane")
     expect(outputPane).toHaveClass("trace-tool-io-pane")
     expect(outputPane).not.toHaveClass("trace-fixed-content-pane")
+    expect(within(inputPane).getByRole("button", { name: "Copy Tool completed input content" })).toBeInTheDocument()
+    expect(within(inputPane).getByRole("button", { name: "Expand Tool completed input content" })).toBeInTheDocument()
+    expect(within(outputPane).getByRole("button", { name: "Copy Tool completed output content" })).toBeInTheDocument()
+    const outputExpandButton = within(outputPane).getByRole("button", { name: "Expand Tool completed output content" })
+    expect(outputExpandButton).toHaveAttribute("aria-expanded", "false")
+    expect(screen.queryByText("Input")).toBeNull()
+    expect(screen.queryByText("Output")).toBeNull()
+    expect(container.querySelector(".trace-kind-tool .trace-tool-io-stack")).not.toBeNull()
+    expect(container.querySelectorAll(".trace-kind-tool .trace-tool-io-stack .trace-tool-io-pane")).toHaveLength(2)
     expect(container.querySelectorAll(".trace-kind-tool .trace-tool-io-pane")).toHaveLength(2)
+
+    fireEvent.click(within(inputPane).getByRole("button", { name: "Copy Tool completed input content" }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("tool input"))
+
+    fireEvent.click(within(outputPane).getByRole("button", { name: "Copy Tool completed output content" }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("tool output\n\ntool detail"))
+
+    fireEvent.click(outputExpandButton)
+    expect(outputPane).toHaveClass("is-expanded")
+    expect(within(outputPane).getByRole("button", { name: "Collapse Tool completed output content" })).toHaveAttribute("aria-expanded", "true")
   })
 
-  it("localizes tool input and output disclosures in Chinese mode", async () => {
+  it("localizes tool input and output content regions in Chinese mode", async () => {
     const previousDesktop = window.desktop
     window.desktop = undefined
     window.localStorage.setItem("desktop.locale", "zh-CN")
@@ -805,16 +831,15 @@ describe("ThreadView trace item renderers", () => {
     try {
       fireEvent.click(await screen.findByRole("button", { name: /Tool completed/ }))
 
-      expect(await screen.findByText("\u8f93\u5165")).toBeInTheDocument()
-      expect(screen.getByText("\u8f93\u51fa")).toBeInTheDocument()
+      expect(screen.queryByText("\u8f93\u5165")).toBeNull()
+      expect(screen.queryByText("\u8f93\u51fa")).toBeNull()
       expect(screen.queryByText("Input")).toBeNull()
       expect(screen.queryByText("Output")).toBeNull()
 
-      fireEvent.click(screen.getByRole("button", { name: /Tool completed \u8f93\u5165/ }))
-      fireEvent.click(screen.getByRole("button", { name: /Tool completed \u8f93\u51fa/ }))
-
       expect(screen.getByRole("region", { name: "Tool completed \u8f93\u5165\u5185\u5bb9" })).toBeInTheDocument()
       expect(screen.getByRole("region", { name: "Tool completed \u8f93\u51fa\u5185\u5bb9" })).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "\u590d\u5236 Tool completed \u8f93\u5165\u5185\u5bb9" })).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "\u5c55\u5f00 Tool completed \u8f93\u51fa\u5185\u5bb9" })).toBeInTheDocument()
     } finally {
       view.unmount()
       window.localStorage.removeItem("desktop.locale")
@@ -1914,7 +1939,8 @@ describe("ThreadView trace collapse", () => {
       expect(container.textContent).toContain("Then compare the rendering states")
 
       fireEvent.click(getByRole("button", { name: /Shell/ }))
-      expect(container.textContent).toContain("Input")
+      expect(container.textContent).not.toContain("Input")
+      expect(getByRole("region", { name: "Shell input content" })).toBeInTheDocument()
 
       rerender(<ThreadView {...props} activeMessages={[assistantTraceMessage("assistant-1", completedItems, false)]} />)
 
@@ -2005,10 +2031,10 @@ describe("ThreadView trace collapse", () => {
     expect(container.textContent).toContain(hiddenTail)
   })
 
-  it("shows tool input preview before mounting full tool input", () => {
+  it("keeps full tool input unmounted until the tool row expands", () => {
     const hiddenTail = "FULL_TOOL_INPUT_TAIL"
     const toolInputText = `${"input chunk ".repeat(160)}${hiddenTail}`
-    const { container, getByRole, getByText } = renderThread([
+    const { container, getByRole, queryByText } = renderThread([
       assistantTraceMessage(
         "assistant-tool-preview",
         [
@@ -2032,12 +2058,12 @@ describe("ThreadView trace collapse", () => {
       },
     })
 
-    fireEvent.click(getByRole("button", { name: /Shell/ }))
-    expect(getByText("Input")).toBeInTheDocument()
     expect(container.textContent).not.toContain(hiddenTail)
 
-    fireEvent.click(getByRole("button", { name: /Shell input/ }))
-
+    fireEvent.click(getByRole("button", { name: /Shell/ }))
+    expect(queryByText("Input")).toBeNull()
+    expect(screen.getByRole("button", { name: "Copy Shell input content" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Expand Shell input content" })).toBeInTheDocument()
     expect(container.textContent).toContain(hiddenTail)
   })
 
@@ -3416,8 +3442,8 @@ describe("ThreadView assistant response markdown", () => {
     expect(container.textContent).toContain("## Thinking")
 
     fireEvent.click(getByRole("button", { name: /Shell/ }))
-    fireEvent.click(getByRole("button", { name: /Shell output/ }))
 
+    expect(getByRole("button", { name: "Expand Shell output content" })).toBeInTheDocument()
     expect(queryByRole("heading", { name: "Tool output" })).toBeNull()
     expect(container.textContent).toContain("## Tool output")
   })

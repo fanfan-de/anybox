@@ -680,6 +680,13 @@ describe("appearance thread view tokens", () => {
           darkToken: "semantic-thread-panel-surface-muted-dark",
         },
         {
+          id: "semantic-thread-tool-io-panel-surface",
+          label: "Tool IO Panel Surface",
+          description: "Background fill for the unified tool input and output scroll panel.",
+          lightToken: "semantic-thread-tool-io-panel-surface-light",
+          darkToken: "semantic-thread-tool-io-panel-surface-dark",
+        },
+        {
           id: "semantic-thread-panel-surface-hover",
           label: "Thread Panel Hover",
           description: "Hover and focus background fill for compact controls inside thread panels.",
@@ -740,6 +747,7 @@ describe("appearance thread view tokens", () => {
         "semantic-thread-response-text": "#000000",
         "semantic-thread-divider": "#112233",
         "semantic-thread-panel-surface": "#223344",
+        "semantic-thread-tool-io-panel-surface": "#334455",
         "semantic-thread-user-message-diff-card-surface": "#fedcba",
       },
       resolvedTokens: {
@@ -757,6 +765,8 @@ describe("appearance thread view tokens", () => {
       "semantic-thread-divider-dark": "#112233",
       "semantic-thread-panel-surface-light": "#223344",
       "semantic-thread-panel-surface-dark": "#223344",
+      "semantic-thread-tool-io-panel-surface-light": "#334455",
+      "semantic-thread-tool-io-panel-surface-dark": "#334455",
       "semantic-thread-user-message-diff-card-surface-light": "#fedcba",
       "semantic-thread-user-message-diff-card-surface-dark": "#fedcba",
     })

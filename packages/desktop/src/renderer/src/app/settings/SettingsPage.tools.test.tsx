@@ -1162,6 +1162,15 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.queryByText("App Background")).not.toBeInTheDocument()
 
     fireEvent.change(searchBox, {
+      target: { value: "semantic-thread-tool-io-panel-surface" },
+    })
+
+    expect(screen.getByText("Thread View")).toBeInTheDocument()
+    expect(screen.getByText("Tool IO Panel Surface")).toBeInTheDocument()
+    expect(screen.getByTitle(/^semantic-thread-tool-io-panel-surface \//)).toBeInTheDocument()
+    expect(screen.queryByText("App Background")).not.toBeInTheDocument()
+
+    fireEvent.change(searchBox, {
       target: { value: "no-such-token" },
     })
 

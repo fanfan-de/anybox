@@ -235,6 +235,8 @@ export const APPEARANCE_TOKEN_NAMES = [
   "semantic-thread-panel-surface-dark",
   "semantic-thread-panel-surface-muted-light",
   "semantic-thread-panel-surface-muted-dark",
+  "semantic-thread-tool-io-panel-surface-light",
+  "semantic-thread-tool-io-panel-surface-dark",
   "semantic-thread-panel-surface-hover-light",
   "semantic-thread-panel-surface-hover-dark",
   "semantic-thread-user-message-diff-card-surface-light",
@@ -1352,6 +1354,13 @@ export const APPEARANCE_TOKEN_GROUPS = [
         darkToken: "semantic-thread-panel-surface-muted-dark",
       },
       {
+        id: "semantic-thread-tool-io-panel-surface",
+        label: "Tool IO Panel Surface",
+        description: "Background fill for the unified tool input and output scroll panel.",
+        lightToken: "semantic-thread-tool-io-panel-surface-light",
+        darkToken: "semantic-thread-tool-io-panel-surface-dark",
+      },
+      {
         id: "semantic-thread-panel-surface-hover",
         label: "Thread Panel Hover",
         description: "Hover and focus background fill for compact controls inside thread panels.",
@@ -2028,6 +2037,10 @@ const LEGACY_APPEARANCE_TOKEN_MIGRATIONS: Record<string, readonly AppearanceToke
     "semantic-thread-panel-surface-muted-light",
     "semantic-thread-panel-surface-muted-dark",
   ],
+  "semantic-thread-tool-io-panel-surface": [
+    "semantic-thread-tool-io-panel-surface-light",
+    "semantic-thread-tool-io-panel-surface-dark",
+  ],
   "semantic-thread-panel-surface-hover": [
     "semantic-thread-panel-surface-hover-light",
     "semantic-thread-panel-surface-hover-dark",
@@ -2383,6 +2396,8 @@ const DEFAULT_APPEARANCE_RESOLVED_TOKENS = {
   "semantic-thread-panel-surface-dark": "#292524",
   "semantic-thread-panel-surface-muted-light": "#f7f1ee",
   "semantic-thread-panel-surface-muted-dark": "#342d2a",
+  "semantic-thread-tool-io-panel-surface-light": "#f7f1ee",
+  "semantic-thread-tool-io-panel-surface-dark": "#342d2a",
   "semantic-thread-panel-surface-hover-light": "#f8f3f0",
   "semantic-thread-panel-surface-hover-dark": "#322b29",
   "semantic-markdown-text-light": "#000000",

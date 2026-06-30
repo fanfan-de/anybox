@@ -554,6 +554,10 @@ const zhCNTokenRowCopy = {
     label: "会话弱化面板",
     description: "轨迹、元数据和嵌套会话面板的低强调背景。",
   },
+  "semantic-thread-tool-io-panel-surface": {
+    label: "工具输入输出面板",
+    description: "工具输入和输出合并滚动面板的背景。",
+  },
   "semantic-thread-panel-surface-hover": {
     label: "会话面板悬停",
     description: "会话面板内紧凑控件悬停和聚焦时的背景。",

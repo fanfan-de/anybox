@@ -431,10 +431,11 @@ reasoning 和 tools 默认弱化：
 
 - 完成后的 reasoning/tool item 会折叠。
 - 样式整体比 response 更低对比。
-- tool 支持 input/output 二级 disclosure。
+- tool row 展开后直接显示 input/output 两个可访问 region，不再提供 input/output 内部二级 disclosure，也不显示可见的“输入/输出”标题。
 - streaming 时用轻微 pulse 和 caret 表达运行中。
-- 折叠状态必须是真 lazy mount：完整 reasoning、tool input/output、patch diff 不进入 DOM，也不交给 Markdown/RichText/DiffPreview 渲染。
-- 超大内容先显示 bounded preview：reasoning 首行最多 480 字符；tool input/output 最多 12 行或 1200 字符；patch preview 最多 200 行或 20000 字符，用户显式展开后才挂完整内容。
+- 折叠状态必须是真 lazy mount：完整 reasoning、tool input/output、patch diff 在对应 row 展开前不进入 DOM，也不交给 Markdown/RichText/DiffPreview 渲染。
+- 超大内容先显示 bounded preview：reasoning 首行最多 480 字符；patch preview 最多 200 行或 20000 字符，用户显式展开对应 row 后才挂完整内容。
+- 展开的 tool input/output 在视觉上合并为一个受控高度整体面板；每个 region 短内容自然高度，长内容默认在 180px 内部滚动；命令、路径、JSON、patch 和 shell 输出按终端式 `pre` 文本保留原始行，并通过横向滚动查看长行。每个 input/output region 右上角都有浮层式 icon-only 复制和展开按钮：复制写入该 region 的原始文本，展开取消当前 region 的垂直高度限制；展开态只保留横向滚动，不建立纵向内部滚动容器，鼠标 hover 在内容区域时纵向滚轮应继续驱动外层 thread view。按钮不参与内容布局，只在右侧保留避让空间，默认隐藏，仅在对应 region hover 或键盘 focus 进入时显示；默认/hover/focus/active 状态消费 icon button semantic token。面板背景由 `--semantic-thread-tool-io-panel-surface` 单独控制。
 
 当前实现末尾有较多 CSS override，会把早期卡片样式改成更轻的透明形态。后续调整时应优先收敛这些 override，避免同一类元素在文件前后出现冲突规则。
 
@@ -550,6 +551,7 @@ Thread view 使用项目的语义 token：
 - `--semantic-thread-reasoning-text`
 - `--semantic-thread-panel-surface`
 - `--semantic-thread-panel-surface-muted`
+- `--semantic-thread-tool-io-panel-surface`
 - `--semantic-thread-panel-surface-hover`
 - `--semantic-thread-user-message-diff-card-surface`
 - `--semantic-thread-user-message-diff-card-border`
@@ -571,6 +573,7 @@ Thread view 的面板背景使用专用 semantic token，不直接消费全局 `
 
 - `semantic-thread-panel-surface`：thread-owned 面板、side chat、默认 assistant card、markdown table / HTML frame 背景。
 - `semantic-thread-panel-surface-muted`：低强调 trace、metadata、nested panel 背景。
+- `semantic-thread-tool-io-panel-surface`：tool input/output 合并滚动面板背景，可独立于普通 nested panel 调整；对应的 light/dark token 暴露在外观设置的 Thread View 分组。
 - `semantic-thread-panel-surface-hover`：thread 面板内紧凑控件的 hover / focus 背景。
 
 User-message 文件变更卡片使用一组专用 semantic token：
@@ -588,6 +591,7 @@ User-message 文件变更卡片使用一组专用 semantic token：
 - `--semantic-thread-reasoning-text`
 - `--semantic-thread-panel-surface`
 - `--semantic-thread-panel-surface-muted`
+- `--semantic-thread-tool-io-panel-surface`
 - `--semantic-thread-panel-surface-hover`
 - `--semantic-thread-user-message-diff-card-surface`
 - `--semantic-thread-user-message-diff-card-border`

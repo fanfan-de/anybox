@@ -438,6 +438,8 @@
   --semantic-thread-panel-surface-dark: #292524;
   --semantic-thread-panel-surface-muted-light: #f7f1ee;
   --semantic-thread-panel-surface-muted-dark: #342d2a;
+  --semantic-thread-tool-io-panel-surface-light: var(--semantic-thread-panel-surface-muted-light);
+  --semantic-thread-tool-io-panel-surface-dark: var(--semantic-thread-panel-surface-muted-dark);
   --semantic-thread-panel-surface-hover-light: #f8f3f0;
   --semantic-thread-panel-surface-hover-dark: #322b29;
   --semantic-thread-user-message-diff-card-surface-light: var(--semantic-thread-panel-surface-light);
@@ -569,6 +571,7 @@
   --semantic-thread-divider: var(--semantic-thread-divider-light);
   --semantic-thread-panel-surface: var(--semantic-thread-panel-surface-light);
   --semantic-thread-panel-surface-muted: var(--semantic-thread-panel-surface-muted-light);
+  --semantic-thread-tool-io-panel-surface: var(--semantic-thread-tool-io-panel-surface-light);
   --semantic-thread-panel-surface-hover: var(--semantic-thread-panel-surface-hover-light);
   --semantic-thread-user-message-diff-card-surface: var(--semantic-thread-user-message-diff-card-surface-light);
   --semantic-thread-user-message-diff-card-border: var(--semantic-thread-user-message-diff-card-border-light);
@@ -1260,6 +1263,8 @@
   --semantic-thread-panel-surface-dark: #1e293b;
   --semantic-thread-panel-surface-muted-light: #f0f7f6;
   --semantic-thread-panel-surface-muted-dark: #182536;
+  --semantic-thread-tool-io-panel-surface-light: var(--semantic-thread-panel-surface-muted-light);
+  --semantic-thread-tool-io-panel-surface-dark: var(--semantic-thread-panel-surface-muted-dark);
   --semantic-thread-panel-surface-hover-light: #f2f8f7;
   --semantic-thread-panel-surface-hover-dark: #192537;
   --semantic-proposed-plan-card-surface-light: #ffffff;
@@ -1646,6 +1651,7 @@
     --semantic-thread-divider: var(--semantic-thread-divider-dark);
     --semantic-thread-panel-surface: var(--semantic-thread-panel-surface-dark);
     --semantic-thread-panel-surface-muted: var(--semantic-thread-panel-surface-muted-dark);
+    --semantic-thread-tool-io-panel-surface: var(--semantic-thread-tool-io-panel-surface-dark);
     --semantic-thread-panel-surface-hover: var(--semantic-thread-panel-surface-hover-dark);
     --semantic-thread-user-message-diff-card-surface: var(--semantic-thread-user-message-diff-card-surface-dark);
     --semantic-thread-user-message-diff-card-border: var(--semantic-thread-user-message-diff-card-border-dark);
@@ -1954,6 +1960,7 @@
   --semantic-thread-divider: var(--semantic-thread-divider-dark);
   --semantic-thread-panel-surface: var(--semantic-thread-panel-surface-dark);
   --semantic-thread-panel-surface-muted: var(--semantic-thread-panel-surface-muted-dark);
+  --semantic-thread-tool-io-panel-surface: var(--semantic-thread-tool-io-panel-surface-dark);
   --semantic-thread-panel-surface-hover: var(--semantic-thread-panel-surface-hover-dark);
   --semantic-thread-user-message-diff-card-surface: var(--semantic-thread-user-message-diff-card-surface-dark);
   --semantic-thread-user-message-diff-card-border: var(--semantic-thread-user-message-diff-card-border-dark);

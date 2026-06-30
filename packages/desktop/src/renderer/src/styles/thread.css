@@ -617,76 +617,181 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
   min-width: 0;
 }
 
-.trace-item-subsection {
+.trace-tool-io-stack {
+  box-sizing: border-box;
   display: grid;
-  gap: 6px;
+  overflow: hidden;
+  max-width: 100%;
   min-width: 0;
+  border: 1px solid var(--seg-divider);
+  border-radius: var(--seg-radius-xs);
+  background: var(--semantic-thread-tool-io-panel-surface);
+  contain: layout paint style;
 }
 
-.trace-item-subsection-toggle {
-  width: 100%;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  cursor: pointer;
-}
-
-.trace-item-subsection-toggle-icon {
-  width: 12px;
-  height: 12px;
-  margin-top: 3px;
-  color: #6b7d90;
-  flex: 0 0 auto;
-}
-
-.trace-item-subsection-toggle-icon svg {
-  width: 12px;
-  height: 12px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.trace-item-subsection-toggle-line {
-  min-width: 0;
-  margin: 0;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.trace-item-subsection-body {
-  padding-left: 18px;
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.trace-tool-io-pane,
 .trace-reasoning-pane {
   padding: 6px 8px 6px 18px;
   border-left: 1px solid var(--seg-divider);
 }
 
+.trace-tool-io-pane {
+  box-sizing: border-box;
+  position: relative;
+  display: grid;
+  max-width: 100%;
+  max-height: 180px;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: transparent;
+  contain: layout paint style;
+}
+
+.trace-tool-io-pane.is-expanded {
+  max-height: none;
+}
+
+.trace-tool-io-toolbar {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.trace-tool-io-pane:hover .trace-tool-io-toolbar,
+.trace-tool-io-pane:focus-within .trace-tool-io-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.trace-tool-io-action {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--seg-radius-xs);
+  background: transparent;
+  color: var(--semantic-icon-button-text);
+  cursor: pointer;
+}
+
+.trace-tool-io-action:hover,
+.trace-tool-io-action:focus-visible {
+  outline: none;
+  background: var(--semantic-icon-button-surface-hover);
+  color: var(--semantic-icon-button-text-hover);
+}
+
+.trace-tool-io-action.is-active {
+  background: var(--semantic-icon-button-surface-active);
+  color: var(--semantic-icon-button-text-active);
+}
+
+.trace-tool-io-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.trace-tool-io-action:disabled:hover,
+.trace-tool-io-action:disabled:focus-visible {
+  background: transparent;
+  color: currentColor;
+}
+
+.trace-tool-io-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.trace-tool-io-content {
+  box-sizing: border-box;
+  max-width: 100%;
+  max-height: 180px;
+  min-height: 0;
+  min-width: 0;
+  padding: 8px 70px 8px 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--thread-scrollbar-thumb) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.trace-tool-io-pane.is-expanded .trace-tool-io-content {
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: clip;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
+}
+
+.trace-tool-io-pane + .trace-tool-io-pane {
+  border-top: 1px solid var(--seg-divider);
+}
+
+.assistant-trace-lite.is-tools .trace-tool-io-pane .trace-item-text,
+.assistant-trace-lite.is-tools .trace-tool-io-pane .trace-item-detail,
+.trace-kind-tool .trace-tool-io-pane .trace-item-text,
+.trace-kind-tool .trace-tool-io-pane .trace-item-detail {
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.trace-tool-io-content::-webkit-scrollbar {
+  width: var(--thread-scrollbar-size);
+  height: var(--thread-scrollbar-size);
+}
+
+.trace-tool-io-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.trace-tool-io-content::-webkit-scrollbar-thumb {
+  min-height: 32px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--thread-scrollbar-thumb);
+  background-clip: content-box;
+}
+
+.trace-tool-io-content:hover::-webkit-scrollbar-track,
+.trace-tool-io-content:focus-within::-webkit-scrollbar-track,
+.trace-tool-io-content::-webkit-scrollbar-track:hover {
+  background: var(--thread-scrollbar-track);
+}
+
+.trace-tool-io-content:hover::-webkit-scrollbar-thumb,
+.trace-tool-io-content:focus-within::-webkit-scrollbar-thumb,
+.trace-tool-io-content::-webkit-scrollbar-thumb:hover {
+  background: var(--thread-scrollbar-thumb-hover);
+  background-clip: content-box;
+}
+
 .trace-reasoning-pane {
   padding: 0;
   border-left: 0;
-}
-
-.trace-item-subsection-label {
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #6b7d90;
 }
 
 .trace-item-status {
@@ -2983,8 +3088,7 @@ body.is-resizing-sidebar .user-message-diff-file-entry {
 .assistant-trace-lite.is-reasoning .trace-item-detail,
 .assistant-trace-lite.is-reasoning .trace-item-plain-detail,
 .assistant-trace-lite.is-tools .trace-item-inline-status,
-.assistant-trace-lite.is-tools .trace-item-detail,
-.assistant-trace-lite.is-tools .trace-item-subsection-label {
+.assistant-trace-lite.is-tools .trace-item-detail {
   color: var(--seg-text-3);
 }
 
@@ -3545,8 +3649,7 @@ button.user-message-diff-file-row:focus-visible {
 .trace-item-plain-detail,
 .assistant-section-empty,
 .assistant-reasoning-separator,
-.trace-item-inline-status,
-.trace-item-subsection-label {
+.trace-item-inline-status {
   color: var(--seg-text-3);
 }
 
@@ -3714,10 +3817,6 @@ button.user-message-diff-file-row:focus-visible {
 
 .trace-item-toggle-summary {
   gap: 4px 6px;
-}
-
-.trace-item-subsection-toggle {
-  gap: 4px;
 }
 
 .trace-item-toggle-leading-icon,
@@ -4122,6 +4221,12 @@ button.trace-log-row {
   border-left: 1px solid var(--seg-divider);
   color: var(--seg-text-2);
   contain: layout paint style;
+}
+
+.trace-kind-tool .trace-log-detail {
+  margin: 2px 0;
+  padding: 2px 8px 4px;
+  border-left: 0;
 }
 
 .trace-tool-draft-patch {
