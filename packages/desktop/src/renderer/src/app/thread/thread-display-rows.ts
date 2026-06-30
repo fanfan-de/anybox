@@ -186,6 +186,7 @@ export interface DecorateThreadDisplayRowsInput {
   canForkFromMessage: boolean
   canOpenSideChat: boolean
   context: ThreadDisplayContext
+  hasPendingPermissionRequests: boolean
   isSessionRunning: boolean
   messageTree?: SessionMessageTree | null
   readOnlySideChat: boolean
@@ -1543,6 +1544,7 @@ function buildAssistantActionsRow({
   baseRow,
   canForkFromMessage,
   canOpenSideChat,
+  hasPendingPermissionRequests,
   isSessionRunning,
   messageTree,
   readOnlySideChat,
@@ -1554,6 +1556,7 @@ function buildAssistantActionsRow({
   baseRow: AssistantDisplayRow
   canForkFromMessage: boolean
   canOpenSideChat: boolean
+  hasPendingPermissionRequests: boolean
   isSessionRunning: boolean
   messageTree?: SessionMessageTree | null
   readOnlySideChat: boolean
@@ -1563,7 +1566,7 @@ function buildAssistantActionsRow({
 }): AssistantActionsRow | null {
   const message = baseRow.message
   const threadMessageID = getSessionMessageIDForMessage(message)
-  const canExposeResponseActions = !isSessionRunning && baseRow.isFinalOperableMessage
+  const canExposeResponseActions = !isSessionRunning && !hasPendingPermissionRequests && baseRow.isFinalOperableMessage
   const branchOptions = canExposeResponseActions ? messageTree?.branchOptionsByParentID[threadMessageID] ?? [] : []
   const existingSideChatCount = sideChatCountsByAnchorMessageID[sideChatAnchorMessageID] ?? 0
   const responseItems = canExposeResponseActions ? getLastAssistantResponseSectionItems(message.items, assistantTraceVisibility) : []
@@ -1645,14 +1648,16 @@ function branchOptionsSignature(branchOptions: SessionMessageBranchOption[]) {
 
 function readAssistantDecorationBranchOptions({
   baseRow,
+  hasPendingPermissionRequests,
   isSessionRunning,
   messageTree,
 }: {
   baseRow: AssistantDisplayRow
+  hasPendingPermissionRequests: boolean
   isSessionRunning: boolean
   messageTree?: SessionMessageTree | null
 }) {
-  if (isSessionRunning || !baseRow.isFinalOperableMessage) return EMPTY_BRANCH_OPTIONS
+  if (isSessionRunning || hasPendingPermissionRequests || !baseRow.isFinalOperableMessage) return EMPTY_BRANCH_OPTIONS
 
   const threadMessageID = getSessionMessageIDForMessage(baseRow.message)
   return messageTree?.branchOptionsByParentID[threadMessageID] ?? EMPTY_BRANCH_OPTIONS
@@ -1717,6 +1722,7 @@ function createAssistantDecorationCacheState({
   canForkFromMessage,
   canOpenSideChat,
   context,
+  hasPendingPermissionRequests,
   isSessionRunning,
   messageTree,
   readOnlySideChat,
@@ -1729,6 +1735,7 @@ function createAssistantDecorationCacheState({
 }) {
   const branchOptions = readAssistantDecorationBranchOptions({
     baseRow,
+    hasPendingPermissionRequests,
     isSessionRunning,
     messageTree,
   })
@@ -1747,6 +1754,7 @@ function createAssistantDecorationCacheState({
     baseRow.isLatestMessage ? 1 : 0,
     diffState.signature,
     branchOptionsSignature(branchOptions),
+    hasPendingPermissionRequests ? 1 : 0,
     isSessionRunning ? 1 : 0,
     readOnlySideChat ? 1 : 0,
     canForkFromMessage ? 1 : 0,
@@ -1786,6 +1794,7 @@ export function decorateThreadDisplayRowsIncremental(
     canForkFromMessage,
     canOpenSideChat,
     context,
+    hasPendingPermissionRequests,
     isSessionRunning,
     messageTree,
     readOnlySideChat,
@@ -1846,6 +1855,7 @@ export function decorateThreadDisplayRowsIncremental(
       baseRow: row,
       canForkFromMessage,
       canOpenSideChat,
+      hasPendingPermissionRequests,
       isSessionRunning,
       messageTree,
       readOnlySideChat,

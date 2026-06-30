@@ -117,6 +117,7 @@ export interface PermissionRequestCardRendererProps {
   activeSession: SessionSummary
   actionError: string | null
   isResolving: boolean
+  queueCount?: number
   request: PermissionRequest
   onRespond: PermissionRequestResponseHandler
 }
@@ -555,6 +556,22 @@ const AssistantTraceLiteRowView = memo(function AssistantTraceLiteRowView({
     (!permissionRequestActionRequestID || permissionRequestActionRequestID === pendingPermissionRequest.id)
       ? permissionRequestActionError
       : null
+  const shouldRenderPermissionCard = Boolean(activeSession && pendingPermissionRequest)
+  const isPendingPermissionRequestResolving = Boolean(
+    pendingPermissionRequest &&
+      (permissionRequestActionRequestID === pendingPermissionRequest.id ||
+        (isResolvingPermissionRequest && !permissionRequestActionRequestID)),
+  )
+  const traceItem = row.section === "approvals"
+    ? {
+        ...row.traceItem,
+        item: {
+          ...row.traceItem.item,
+          detail: shouldRenderPermissionCard ? undefined : row.traceItem.item.detail,
+          status: undefined,
+        },
+      }
+    : row.traceItem
 
   return (
     <article
@@ -565,7 +582,11 @@ const AssistantTraceLiteRowView = memo(function AssistantTraceLiteRowView({
       data-thread-message-motion={motion}
     >
       <div
-        className={joinClassNames("assistant-trace-lite", `is-${row.section}`)}
+        className={joinClassNames(
+          "assistant-trace-lite",
+          `is-${row.section}`,
+          shouldRenderPermissionCard && "has-permission-card",
+        )}
         role="region"
         aria-label={traceSectionTitle(row.section)}
       >
@@ -579,7 +600,7 @@ const AssistantTraceLiteRowView = memo(function AssistantTraceLiteRowView({
           onOpenImagePreview,
           onProposedPlanConfirm,
           row,
-          traceItem: row.traceItem,
+          traceItem,
           traceVisibility,
         })}
         {activeSession && pendingPermissionRequest ? (
@@ -587,7 +608,7 @@ const AssistantTraceLiteRowView = memo(function AssistantTraceLiteRowView({
             <PermissionRequestCard
               actionError={pendingPermissionActionError}
               activeSession={activeSession}
-              isResolving={isResolvingPermissionRequest}
+              isResolving={isPendingPermissionRequestResolving}
               request={pendingPermissionRequest}
               onRespond={onPermissionRequestResponse}
             />
@@ -887,15 +908,13 @@ function isAssistantTraceLiteRow(row: ThreadDisplayRow): row is AssistantTraceLi
 }
 
 function findPendingPermissionRequestForApprovalRow({
-  isResolvingPermissionRequest,
   pendingPermissionRequests,
   row,
 }: {
-  isResolvingPermissionRequest: boolean
   pendingPermissionRequests: PermissionRequest[]
   row: AssistantTraceLiteRow
 }) {
-  if (isResolvingPermissionRequest || row.kind !== "assistant-approval-row") return null
+  if (row.kind !== "assistant-approval-row") return null
 
   return pendingPermissionRequests.find((request) =>
     permissionRequestMatchesApprovalTraceItem(request, row.traceItem.item),
@@ -975,7 +994,6 @@ export function ThreadRowRenderer({
 
   if (isAssistantTraceLiteRow(row)) {
     const pendingPermissionRequest = findPendingPermissionRequestForApprovalRow({
-      isResolvingPermissionRequest,
       pendingPermissionRequests,
       row,
     })

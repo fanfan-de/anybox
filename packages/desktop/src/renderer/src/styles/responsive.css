@@ -271,7 +271,6 @@
   .composer-toolbar,
   .sidebar-footer,
   .settings-actions-row,
-  .permission-request-inline-header,
   .permission-request-header,
   .permission-request-footer,
   .ask-user-question-header,
@@ -342,7 +341,6 @@
     grid-template-columns: 1fr;
   }
 
-  .permission-request-inline,
   .ask-user-question-card {
     padding: 16px;
   }

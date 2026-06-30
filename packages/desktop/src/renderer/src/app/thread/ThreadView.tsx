@@ -31,6 +31,7 @@ import { ThreadHtml } from "../thread-html"
 import { parseAssistantResponseFormat, stripStreamingResponseFormatMarker } from "../thread-response-format"
 import { ThreadRichText } from "../thread-rich-text"
 import { useI18n } from "../i18n/I18nProvider"
+import { translateLiteral, type TranslationKey } from "../i18n/translations"
 import {
   RendererProfiler,
   createRendererProfilerOnRender,
@@ -802,17 +803,48 @@ function MessageDiffCard({
 
 const primaryPermissionDecisions: PermissionDecision[] = ["deny", "allow"]
 
-function formatPermissionRiskLabel(risk: PermissionRequest["prompt"]["risk"]) {
-  return `${risk} risk`
+type PermissionRequestDetailKey = "rationale" | "workdir" | "command" | "paths" | "body"
+type PermissionTextLocale = Parameters<typeof translateLiteral>[0]
+
+const permissionRiskTranslationKeys = {
+  low: "thread.permission.risk.low",
+  medium: "thread.permission.risk.medium",
+  high: "thread.permission.risk.high",
+  critical: "thread.permission.risk.critical",
+} satisfies Record<PermissionRequest["prompt"]["risk"], TranslationKey>
+
+const permissionDecisionTranslationKeys = {
+  allow: "thread.permission.action.allow",
+  deny: "thread.permission.action.deny",
+} satisfies Record<PermissionDecision, TranslationKey>
+
+const permissionDetailLabelTranslationKeys = {
+  rationale: "thread.permission.detail.rationale",
+  workdir: "thread.permission.detail.workdir",
+  command: "thread.permission.detail.command",
+  paths: "thread.permission.detail.paths",
+  body: "thread.permission.detail.body",
+} satisfies Record<PermissionRequestDetailKey, TranslationKey>
+
+function getAllowedPermissionDecisions(request: PermissionRequest) {
+  const allowedDecisions = request.prompt.allowedDecisions.length > 0
+    ? request.prompt.allowedDecisions
+    : primaryPermissionDecisions
+  const orderedDecisions = primaryPermissionDecisions.filter((decision) => allowedDecisions.includes(decision))
+  return orderedDecisions.length > 0 ? orderedDecisions : primaryPermissionDecisions
 }
 
-function formatPermissionDecisionLabel(decision: PermissionDecision) {
-  switch (decision) {
-    case "allow":
-      return "Allow"
-    case "deny":
-      return "Deny"
-  }
+function formatPermissionRiskLabel(risk: PermissionRequest["prompt"]["risk"], translate: (key: TranslationKey) => string) {
+  return translate(permissionRiskTranslationKeys[risk])
+}
+
+function formatPermissionDecisionLabel(decision: PermissionDecision, translate: (key: TranslationKey) => string) {
+  return translate(permissionDecisionTranslationKeys[decision])
+}
+
+function translatePermissionText(locale: PermissionTextLocale, value?: string | null) {
+  const trimmed = value?.trim()
+  return trimmed ? translateLiteral(locale, trimmed) : ""
 }
 
 function isCollapsibleTraceItem(item: AssistantTraceItem) {
@@ -3970,24 +4002,42 @@ function PermissionRequestCard({
   actionError,
   activeSession,
   isResolving,
+  queueCount,
   request,
   onRespond,
 }: {
   actionError: string | null
   activeSession: SessionSummary
   isResolving: boolean
+  queueCount?: number
   request: PermissionRequest
   onRespond: PermissionRequestResponseHandler
 }) {
+  const { locale, t } = useI18n()
   const title = request.prompt.title.trim()
+  const summary = translatePermissionText(locale, request.prompt.summary)
+  const rationale = translatePermissionText(locale, request.prompt.rationale)
   const detailBody = request.prompt.details?.body?.trim()
+  const permissionDecisions = getAllowedPermissionDecisions(request)
+  const statusLabel = actionError
+    ? t("thread.permission.state.error")
+    : isResolving
+      ? t("thread.permission.state.applying")
+      : t("thread.permission.state.waiting")
   const detailLines = [
-    request.prompt.details?.workdir ? { label: "Workdir", value: request.prompt.details.workdir } : null,
-    request.prompt.details?.command ? { label: "Command", value: request.prompt.details.command } : null,
-    request.prompt.details?.paths && request.prompt.details.paths.length > 0
-      ? { label: "Paths", value: request.prompt.details.paths.join(", ") }
+    rationale && rationale !== summary
+      ? { key: "rationale", label: t(permissionDetailLabelTranslationKeys.rationale), value: rationale, isWide: true }
       : null,
-  ].filter((item): item is { label: string; value: string } => Boolean(item))
+    request.prompt.details?.workdir
+      ? { key: "workdir", label: t(permissionDetailLabelTranslationKeys.workdir), value: request.prompt.details.workdir, isWide: false }
+      : null,
+    request.prompt.details?.command
+      ? { key: "command", label: t(permissionDetailLabelTranslationKeys.command), value: request.prompt.details.command, isWide: true }
+      : null,
+    request.prompt.details?.paths && request.prompt.details.paths.length > 0
+      ? { key: "paths", label: t(permissionDetailLabelTranslationKeys.paths), value: request.prompt.details.paths.join(", "), isWide: true }
+      : null,
+  ].filter((item): item is { key: PermissionRequestDetailKey; label: string; value: string; isWide: boolean } => Boolean(item))
 
   function handleRespond(decision: PermissionDecision) {
     void onRespond({
@@ -3998,48 +4048,59 @@ function PermissionRequestCard({
   }
 
   return (
-    <article className="permission-request-card">
+    <article className="permission-request-card" aria-label={t("thread.permission.cardAria", { title })}>
       <header className="permission-request-header">
         <div>
-          <span className="label">Approval Required</span>
+          <div className="permission-request-context">
+            <span className="permission-request-context-label">{t("thread.permission.trace.label")}</span>
+            <span className="permission-request-context-title">{t("thread.permission.trace.requested")}</span>
+            <span className="settings-badge permission-request-status">{statusLabel}</span>
+          </div>
           <h3>{title}</h3>
-          <p className="permission-request-subtitle">{request.prompt.summary}</p>
-          <p className="permission-request-rationale">{request.prompt.rationale}</p>
+          {summary ? <p className="permission-request-summary">{summary}</p> : null}
         </div>
         <div className="permission-request-badges">
-          <span className={`permission-risk-chip is-${request.prompt.risk}`}>{formatPermissionRiskLabel(request.prompt.risk)}</span>
+          {queueCount && queueCount > 1 ? (
+            <span className="settings-badge permission-request-count">
+              {t("thread.permission.requestsWaiting", { count: queueCount })}
+            </span>
+          ) : null}
+          <span className={`permission-risk-chip is-${request.prompt.risk}`}>{formatPermissionRiskLabel(request.prompt.risk, t)}</span>
         </div>
       </header>
 
       <div className="permission-request-controls">
         <div className="settings-inline-actions permission-request-actions">
-          {primaryPermissionDecisions.map((decision) => (
-            <button
-              key={decision}
-              className={decision === "allow" ? "primary-button" : "secondary-button"}
-              aria-label={`${formatPermissionDecisionLabel(decision)} ${title}`}
-              disabled={isResolving}
-              onClick={() => handleRespond(decision)}
-              type="button"
-            >
-              {isResolving ? "Applying..." : formatPermissionDecisionLabel(decision)}
-            </button>
-          ))}
+          {permissionDecisions.map((decision) => {
+            const decisionLabel = formatPermissionDecisionLabel(decision, t)
+            return (
+              <button
+                key={decision}
+                className={decision === "allow" ? "primary-button" : "secondary-button"}
+                aria-label={t("thread.permission.decisionAria", { decision: decisionLabel, title })}
+                disabled={isResolving}
+                onClick={() => handleRespond(decision)}
+                type="button"
+              >
+                {isResolving ? t("thread.permission.applying") : decisionLabel}
+              </button>
+            )
+          })}
         </div>
       </div>
 
       {request.prompt.detailsAvailable && (detailLines.length > 0 || detailBody) ? (
         <details className="permission-request-disclosure">
-          <summary>View details</summary>
+          <summary>{t("thread.permission.details")}</summary>
           <div className="permission-request-grid permission-request-grid-compact">
             <div className="permission-request-meta">
-              <span className="permission-request-meta-label">Requested</span>
+              <span className="permission-request-meta-label">{t("thread.permission.requested")}</span>
               <strong>{formatTime(request.createdAt)}</strong>
             </div>
             {detailLines.map((item) => (
               <div
-                key={item.label}
-                className={item.label === "Paths" || item.label === "Command" ? "permission-request-meta permission-request-meta-wide" : "permission-request-meta"}
+                key={item.key}
+                className={item.isWide ? "permission-request-meta permission-request-meta-wide" : "permission-request-meta"}
               >
                 <span className="permission-request-meta-label">{item.label}</span>
                 <strong>{item.value}</strong>
@@ -4047,7 +4108,7 @@ function PermissionRequestCard({
             ))}
             {detailBody ? (
               <div className="permission-request-meta permission-request-meta-wide">
-                <span className="permission-request-meta-label">Body</span>
+                <span className="permission-request-meta-label">{t(permissionDetailLabelTranslationKeys.body)}</span>
                 <pre className="permission-request-body">{detailBody}</pre>
               </div>
             ) : null}
@@ -4056,7 +4117,7 @@ function PermissionRequestCard({
       ) : null}
 
       <div className="permission-request-footer">
-        <p className="permission-request-note">The session resumes after this decision is recorded.</p>
+        <p className="permission-request-note">{t("thread.permission.note")}</p>
       </div>
 
       {actionError ? <p className="permission-request-error">{actionError}</p> : null}
@@ -4083,10 +4144,11 @@ function PermissionRequestInlinePrompt({
   motion,
   onPermissionRequestResponse,
 }: PermissionRequestInlinePromptProps) {
-  if (!activeSession || isResolvingPermissionRequest || pendingPermissionRequests.length === 0) return null
+  if (!activeSession || pendingPermissionRequests.length === 0) return null
 
   const [request] = pendingPermissionRequests
-  const remainingCount = pendingPermissionRequests.length - 1
+  const isRequestResolving = permissionRequestActionRequestID === request.id ||
+    (isResolvingPermissionRequest && !permissionRequestActionRequestID)
 
   return (
     <article
@@ -4095,20 +4157,7 @@ function PermissionRequestInlinePrompt({
       data-thread-message-id={`permission-request:${request.id}`}
       data-thread-message-motion={motion}
     >
-      <section className="permission-request-inline" role="region" aria-labelledby="permission-request-title">
-        <header className="permission-request-inline-header">
-          <div>
-            <span className="label">Tool Approval</span>
-            <h3 id="permission-request-title">Tool approval request</h3>
-            <p className="permission-request-inline-copy">Confirm or deny this tool call directly in the thread shell.</p>
-          </div>
-          {remainingCount > 0 ? (
-            <span className="settings-badge permission-request-count">
-              {remainingCount + 1} requests waiting
-            </span>
-          ) : null}
-        </header>
-
+      <section className="permission-request-inline">
         <PermissionRequestCard
           actionError={
             permissionRequestActionError &&
@@ -4117,7 +4166,8 @@ function PermissionRequestInlinePrompt({
               : null
           }
           activeSession={activeSession}
-          isResolving={false}
+          isResolving={isRequestResolving}
+          queueCount={pendingPermissionRequests.length}
           request={request}
           onRespond={onPermissionRequestResponse}
         />

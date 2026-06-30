@@ -187,6 +187,7 @@ function decorateRowsIncremental(
     sideChatCountsByAnchorMessageID: {},
     sideChatSession: null,
     ...overrides,
+    hasPendingPermissionRequests: overrides.hasPendingPermissionRequests ?? false,
     baseRows,
     context,
   }, previousCache)
@@ -208,6 +209,7 @@ function decorateRows(
     sideChatCountsByAnchorMessageID: {},
     sideChatSession: null,
     ...overrides,
+    hasPendingPermissionRequests: overrides.hasPendingPermissionRequests ?? false,
     baseRows,
     context,
   })
@@ -665,6 +667,22 @@ describe("thread display rows", () => {
     if (actionsRow?.kind !== "assistant-actions") return
     expect(actionsRow.responseItems.map((item) => item.id)).toEqual(["response-2"])
     expect(actionsRow.responseCopyText).toBe("Second response.")
+  })
+
+  it("suppresses assistant response actions while a permission request is pending", () => {
+    const messages = [
+      assistantMessage("assistant-1", [
+        textItem("response-1", "Waiting on approval."),
+      ]),
+    ]
+    const baseRows = buildRows(messages)
+    const decoratedRows = decorateRows(messages, baseRows)
+    const pendingDecoratedRows = decorateRows(messages, baseRows, {
+      hasPendingPermissionRequests: true,
+    })
+
+    expect(decoratedRows.some((row) => row.rowID === "assistant:assistant-1:actions")).toBe(true)
+    expect(pendingDecoratedRows.some((row) => row.rowID === "assistant:assistant-1:actions")).toBe(false)
   })
 
   it("matches the non-cached build and decorate output", () => {

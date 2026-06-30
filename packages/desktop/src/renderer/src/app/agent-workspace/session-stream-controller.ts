@@ -15,6 +15,9 @@ import {
   applyAgentStreamEventToThreadMessage,
   buildSessionStreamingAssistantThreadMessage,
   buildThreadMessagesFromHistory,
+  LIVE_SESSION_ACTIVITY_PRESENTATION,
+  RECONNECTING_SESSION_STREAM_PRESENTATION,
+  type SessionStreamingPresentation,
 } from "../stream"
 import type {
   AgentSessionStreamIPCEvent,
@@ -79,6 +82,7 @@ const STREAM_DELTA_FLUSH_INTERVAL_MS = 1_000
 const STREAM_DELTA_EVENTS_PER_FRAME = 240
 const STREAM_DELTA_PENDING_EVENT_LIMIT = 1_600
 const STREAM_DELTA_BACKPRESSURE_LOG_INTERVAL_MS = 5_000
+export const SESSION_STREAM_RECONNECT_REPLAY_WINDOW_MS = 30_000
 const EXTERNAL_TURN_HISTORY_REFRESH_RETRY_MS = 500
 export const STEER_INPUT_CONSUMED_STATE_REASON = "Steer input consumed."
 
@@ -93,10 +97,76 @@ type PendingStreamDeltaUpdate = {
   target: StreamEventUpdateTarget
 }
 
+export interface SessionStreamReconnectReplayWindow {
+  expiresAt: number
+  turnID?: string
+}
+
+export type SessionStreamReconnectReplayWindows = Record<string, SessionStreamReconnectReplayWindow>
+
 type ExecutionModeEventPayload = {
   sessionID: string
   turnID: string
   mode: AgentSessionExecutionMode
+}
+
+export function noteSessionStreamSubscriptionStateForPresentation(
+  windows: SessionStreamReconnectReplayWindows,
+  event: Extract<AgentSessionBridgeEvent, { kind: "subscription-state" }>,
+  now = Date.now(),
+) {
+  if (event.state === "reconnecting") {
+    windows[event.backendSessionID] = {
+      expiresAt: now + SESSION_STREAM_RECONNECT_REPLAY_WINDOW_MS,
+    }
+    return
+  }
+
+  if (event.state === "closed") {
+    delete windows[event.backendSessionID]
+  }
+}
+
+export function clearSessionStreamReconnectReplayWindow(
+  windows: SessionStreamReconnectReplayWindows,
+  backendSessionID: string | undefined,
+) {
+  if (!backendSessionID) return
+  delete windows[backendSessionID]
+}
+
+export function resolveSessionStreamPlaceholderPresentation(input: {
+  backendSessionID: string
+  backendTurnID?: string
+  isTerminal?: boolean
+  now?: number
+  windows: SessionStreamReconnectReplayWindows
+}): SessionStreamingPresentation {
+  const now = input.now ?? Date.now()
+  const window = input.windows[input.backendSessionID]
+  if (!window) return LIVE_SESSION_ACTIVITY_PRESENTATION
+
+  if (window.expiresAt <= now) {
+    delete input.windows[input.backendSessionID]
+    return LIVE_SESSION_ACTIVITY_PRESENTATION
+  }
+
+  if (!input.backendTurnID) {
+    return LIVE_SESSION_ACTIVITY_PRESENTATION
+  }
+
+  if (!window.turnID) {
+    window.turnID = input.backendTurnID
+  }
+
+  const isReconnectReplayTurn = window.turnID === input.backendTurnID
+  if (input.isTerminal) {
+    delete input.windows[input.backendSessionID]
+  }
+
+  return isReconnectReplayTurn
+    ? RECONNECTING_SESSION_STREAM_PRESENTATION
+    : LIVE_SESSION_ACTIVITY_PRESENTATION
 }
 
 export type ExecutionModeRouteDecision = {
@@ -192,6 +262,25 @@ export function applyExecutionModeToUserMessagePresentation(input: {
   return didUpdate ? nextMessages : input.messages
 }
 
+export function findPendingStreamForBackendTurn(
+  streams: Record<string, PendingAgentStream>,
+  input: {
+    backendSessionID: string
+    sessionID: string
+    turnID: string
+  },
+) {
+  const candidates = Object.values(streams).filter((target) =>
+    target.sessionID === input.sessionID &&
+    target.backendSessionID === input.backendSessionID,
+  )
+  const exact = candidates.find((target) => target.backendTurnID === input.turnID)
+  if (exact) return exact
+
+  const unbound = candidates.filter((target) => !target.backendTurnID)
+  return unbound.length === 1 ? unbound[0] : undefined
+}
+
 export function revealBackendRecordedUserMessagePresentation(input: {
   messages: ThreadMessage[]
   userThreadMessageID: string
@@ -238,10 +327,10 @@ export function revealPendingSteerUserMessagesAtHandoffPresentation(input: {
 
 function buildSessionStreamingAssistantThreadMessageWithID(
   assistantThreadMessageID: string,
-  detail?: string,
+  presentation: SessionStreamingPresentation,
   identity: Partial<Pick<AssistantThreadMessage, "backendTurnID" | "segmentID" | "messageID" | "llmCallID">> = {},
 ): AssistantThreadMessage {
-  const assistantMessage = buildSessionStreamingAssistantThreadMessage(detail, identity)
+  const assistantMessage = buildSessionStreamingAssistantThreadMessage(presentation, identity)
   return {
     ...assistantMessage,
     id: assistantThreadMessageID,
@@ -261,7 +350,7 @@ function buildSessionStreamingAssistantThreadMessageWithID(
 export function ensureAssistantThreadMessagePresentation(input: {
   messages: ThreadMessage[]
   assistantThreadMessageID: string
-  detail?: string
+  presentation?: SessionStreamingPresentation
   identity?: Partial<Pick<AssistantThreadMessage, "backendTurnID" | "segmentID" | "messageID" | "llmCallID">>
 }) {
   if (input.messages.some((message) => message.kind === "assistant" && message.id === input.assistantThreadMessageID)) {
@@ -270,7 +359,11 @@ export function ensureAssistantThreadMessagePresentation(input: {
 
   return [
     ...input.messages,
-    buildSessionStreamingAssistantThreadMessageWithID(input.assistantThreadMessageID, input.detail, input.identity),
+    buildSessionStreamingAssistantThreadMessageWithID(
+      input.assistantThreadMessageID,
+      input.presentation ?? LIVE_SESSION_ACTIVITY_PRESENTATION,
+      input.identity,
+    ),
   ]
 }
 
@@ -1490,6 +1583,7 @@ export function useSessionStreamController({
   const pendingDeltaUpdatesRef = useRef<PendingStreamDeltaUpdate[]>([])
   const pendingDeltaFlushCancelRef = useRef<RendererFrameTaskCancel | null>(null)
   const lastDeltaBackpressureLogAtRef = useRef(0)
+  const reconnectReplayWindowsRef = useRef<SessionStreamReconnectReplayWindows>({})
   const externalTurnUserHistoryMergedRef = useRef<Set<string>>(new Set())
   const externalTurnHistoryRefreshInFlightRef = useRef<Set<string>>(new Set())
   const externalTurnHistoryLastAttemptAtRef = useRef<Record<string, number>>({})
@@ -2069,7 +2163,7 @@ export function useSessionStreamController({
   function ensureAssistantConversationMessage(input: {
     sessionID: string
     assistantThreadMessageID: string
-    detail?: string
+    presentation: SessionStreamingPresentation
     identity?: Partial<Pick<AssistantThreadMessage, "backendTurnID" | "segmentID" | "messageID" | "llmCallID">>
   }) {
     if (conversationStore.getSessionMessages(input.sessionID).some(
@@ -2082,7 +2176,7 @@ export function useSessionStreamController({
       appendMessagesToThreadTurns(currentTurns, [
         buildSessionStreamingAssistantThreadMessageWithID(
           input.assistantThreadMessageID,
-          input.detail,
+          input.presentation,
           input.identity,
         ),
       ]))
@@ -2202,11 +2296,12 @@ export function useSessionStreamController({
   function applyStreamEventToAssistantMessage(
     target: StreamEventUpdateTarget,
     streamEvent: AgentSessionStreamIPCEvent | AgentStreamIPCEvent,
+    presentation: SessionStreamingPresentation,
   ) {
     ensureAssistantConversationMessage({
       sessionID: target.sessionID,
       assistantThreadMessageID: target.assistantThreadMessageID,
-      detail: "Receiving backend session activity.",
+      presentation,
       identity: target.identity,
     })
 
@@ -2256,21 +2351,23 @@ export function useSessionStreamController({
     uiSessionID: string
     backendSessionID: string
     turnID: string
+    presentation: SessionStreamingPresentation
   }) {
     const existing = sessionEventRouterRef.current.getTurnTarget(input.backendSessionID, input.turnID)
     if (existing?.assistantThreadMessageID) {
       return existing.assistantThreadMessageID
     }
 
-    const pending = Object.values(pendingStreamsRef.current).find(
-      (target) =>
-        target.sessionID === input.uiSessionID &&
-        target.backendSessionID === input.backendSessionID &&
-        (!target.backendTurnID || target.backendTurnID === input.turnID),
-    )
+    const pending = findPendingStreamForBackendTurn(pendingStreamsRef.current, {
+      sessionID: input.uiSessionID,
+      backendSessionID: input.backendSessionID,
+      turnID: input.turnID,
+    })
 
     if (pending) {
-      pending.backendTurnID = input.turnID
+      if (!pending.backendTurnID) {
+        pending.backendTurnID = input.turnID
+      }
       sessionEventRouterRef.current.setTurnTarget(input.backendSessionID, input.turnID, {
         sessionID: input.uiSessionID,
         turnID: input.turnID,
@@ -2279,7 +2376,7 @@ export function useSessionStreamController({
       return pending.assistantThreadMessageID
     }
 
-    const streamingMessage = buildSessionStreamingAssistantThreadMessage(undefined, {
+    const streamingMessage = buildSessionStreamingAssistantThreadMessage(input.presentation, {
       backendTurnID: input.turnID,
       segmentID: `pending:${input.turnID}`,
     })
@@ -2335,6 +2432,7 @@ export function useSessionStreamController({
     backendSessionID: string
     turnID: string
     identity: LlmCallSegmentIdentity
+    presentation: SessionStreamingPresentation
   }) {
     const existingSegmentAssistantThreadMessageID = findAssistantThreadMessageIDBySegmentID(
       input.uiSessionID,
@@ -2352,22 +2450,24 @@ export function useSessionStreamController({
       return existingTarget.assistantThreadMessageID
     }
 
-    const pending = Object.values(pendingStreamsRef.current).find(
-      (target) =>
-        target.sessionID === input.uiSessionID &&
-        target.backendSessionID === input.backendSessionID &&
-        target.backendTurnID === input.turnID,
-    )
+    const pending = findPendingStreamForBackendTurn(pendingStreamsRef.current, {
+      sessionID: input.uiSessionID,
+      backendSessionID: input.backendSessionID,
+      turnID: input.turnID,
+    })
     const pendingAssistant = getAssistantConversationMessage(input.uiSessionID, pending?.assistantThreadMessageID)
     if (
       pending?.assistantThreadMessageID &&
       canBindAssistantPlaceholderToSegment(pendingAssistant, input.identity, existingTarget?.currentSegmentID)
     ) {
+      if (!pending.backendTurnID) {
+        pending.backendTurnID = input.turnID
+      }
       bindAssistantMessageToSegment(input.uiSessionID, pending.assistantThreadMessageID, input.identity)
       return pending.assistantThreadMessageID
     }
 
-    const streamingMessage = buildSessionStreamingAssistantThreadMessage("Receiving backend session activity.", input.identity)
+    const streamingMessage = buildSessionStreamingAssistantThreadMessage(input.presentation, input.identity)
     appendConversationMessages(input.uiSessionID, [streamingMessage])
     return streamingMessage.id
   }
@@ -2462,7 +2562,7 @@ export function useSessionStreamController({
     })
 
     if (route.createAssistantThreadMessage) {
-      const streamingMessage = buildSessionStreamingAssistantThreadMessage()
+      const streamingMessage = buildSessionStreamingAssistantThreadMessage(LIVE_SESSION_ACTIVITY_PRESENTATION)
       target.assistantThreadMessageID = streamingMessage.id
       target.createdAssistantThreadMessageID = streamingMessage.id
       appendConversationMessages(target.sessionID, [streamingMessage])
@@ -2522,6 +2622,9 @@ export function useSessionStreamController({
     const target = pendingStreamsRef.current[streamEvent.streamID]
     if (!target) return
 
+    const backendSessionID = target.backendSessionID ?? resolveBackendSessionID(target.sessionID)
+    clearSessionStreamReconnectReplayWindow(reconnectReplayWindowsRef.current, backendSessionID)
+
     const executionMode = readExecutionModeEvent(streamEvent)
     if (executionMode) {
       applyExecutionModeToPendingRequest(streamEvent.streamID, executionMode)
@@ -2531,7 +2634,6 @@ export function useSessionStreamController({
     const cursor = resolveStreamCursor(streamEvent)
     if (cursor && sessionEventRouterRef.current.rememberSeenCursor(target.sessionID, cursor)) {
       const backendTurnID = resolveStreamTurnID(streamEvent)
-      const backendSessionID = target.backendSessionID ?? resolveBackendSessionID(target.sessionID)
       if (backendTurnID && isTerminalStreamEvent(streamEvent)) {
         delete pendingStreamsRef.current[streamEvent.streamID]
         if (target.pendingInputID) {
@@ -2546,7 +2648,6 @@ export function useSessionStreamController({
 
     const backendTurnID = resolveStreamTurnID(streamEvent)
     const streamMessageID = resolveStreamMessageID(streamEvent)
-    const backendSessionID = target.backendSessionID ?? resolveBackendSessionID(target.sessionID)
     const turnTarget = backendTurnID ? sessionEventRouterRef.current.getTurnTarget(backendSessionID, backendTurnID) : null
     const llmSegmentIdentity = resolveLlmCallSegmentIdentity(streamEvent, backendTurnID)
     const segmentAssistantThreadMessageID = findAssistantThreadMessageIDBySegmentID(
@@ -2582,6 +2683,7 @@ export function useSessionStreamController({
           backendSessionID,
           turnID: backendTurnID,
           identity: llmSegmentIdentity,
+          presentation: LIVE_SESSION_ACTIVITY_PRESENTATION,
         })
       : segmentAssistantThreadMessageID ??
         messageAssistantThreadMessageID ??
@@ -2611,6 +2713,7 @@ export function useSessionStreamController({
         identity: llmSegmentIdentity ?? undefined,
       },
       streamEvent,
+      LIVE_SESSION_ACTIVITY_PRESENTATION,
     )
     if (target.userThreadMessageID && isBackendUserMessageRecordedStreamEvent(streamEvent)) {
       revealBackendRecordedUserThreadMessage({
@@ -2715,6 +2818,7 @@ export function useSessionStreamController({
     const backendTurnID = resolveStreamTurnID(streamEvent)
     if (!backendTurnID) {
       if (isTerminalStreamEvent(streamEvent)) {
+        clearSessionStreamReconnectReplayWindow(reconnectReplayWindowsRef.current, streamEvent.sessionID)
         clearCancellingSession(uiSessionID)
         clearBackgroundObservedSession(uiSessionID)
         if (isCompletedStreamEvent(streamEvent)) {
@@ -2731,7 +2835,19 @@ export function useSessionStreamController({
       return
     }
 
-    if (sessionEventRouterRef.current.hasBackendTurnSettled(streamEvent.sessionID, backendTurnID)) return
+    if (sessionEventRouterRef.current.hasBackendTurnSettled(streamEvent.sessionID, backendTurnID)) {
+      if (isTerminalStreamEvent(streamEvent)) {
+        clearSessionStreamReconnectReplayWindow(reconnectReplayWindowsRef.current, streamEvent.sessionID)
+      }
+      return
+    }
+
+    const sessionStreamPresentation = resolveSessionStreamPlaceholderPresentation({
+      windows: reconnectReplayWindowsRef.current,
+      backendSessionID: streamEvent.sessionID,
+      backendTurnID,
+      isTerminal: isTerminalStreamEvent(streamEvent),
+    })
 
     const runtimeType = readRuntimeStreamType(streamEvent)
     const existingTurnTarget = sessionEventRouterRef.current.getTurnTarget(streamEvent.sessionID, backendTurnID)
@@ -2766,6 +2882,7 @@ export function useSessionStreamController({
           backendSessionID: streamEvent.sessionID,
           turnID: backendTurnID,
           identity: llmSegmentIdentity,
+          presentation: sessionStreamPresentation,
         })
       : segmentAssistantThreadMessageID ??
         messageAssistantThreadMessageID ??
@@ -2778,6 +2895,7 @@ export function useSessionStreamController({
           uiSessionID,
           backendSessionID: streamEvent.sessionID,
           turnID: backendTurnID,
+          presentation: sessionStreamPresentation,
         })
     if (!messageAssistantThreadMessageID && !segmentAssistantThreadMessageID && !existingTurnTarget?.assistantThreadMessageID) {
       void mergeExternalTurnUserHistory({
@@ -2801,6 +2919,7 @@ export function useSessionStreamController({
         identity: llmSegmentIdentity ?? undefined,
       },
       streamEvent,
+      sessionStreamPresentation,
     )
     if (isBackendUserMessageRecordedStreamEvent(streamEvent)) {
       revealPendingUserThreadMessageForBackendEvent({
@@ -2871,6 +2990,7 @@ export function useSessionStreamController({
 
   function handleAgentSessionBridgeEvent(sessionEvent: AgentSessionBridgeEvent) {
     if (sessionEvent.kind === "subscription-state") {
+      noteSessionStreamSubscriptionStateForPresentation(reconnectReplayWindowsRef.current, sessionEvent)
       agentSessionStoreRef.current.dispatch({
         type: "subscription.state",
         event: sessionEvent,

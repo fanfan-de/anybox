@@ -5,6 +5,10 @@ const DEFAULT_NOTIFICATION_TITLE = "\u4efb\u52a1\u5df2\u5b8c\u6210"
 const DEFAULT_NOTIFICATION_BODY = "Agent \u5df2\u5b8c\u6210\u5f53\u524d\u4efb\u52a1\u3002"
 const DEFAULT_DEDUP_LIMIT = 1_000
 const DEFAULT_RESPONSE_PREVIEW_LENGTH = 160
+const NON_TASK_COMPLETION_FINISH_REASONS = new Set([
+  "approval-denied",
+  "approval-resolved",
+])
 
 interface RuntimeEventRecord {
   eventID?: string
@@ -65,6 +69,7 @@ function readCompletionEventKey(input: Pick<AgentCompletionNotificationInput, "d
   const runtimeEvent = readRuntimeEvent(input.data)
   if (!runtimeEvent || runtimeEvent.type !== "turn.completed") return null
   if (readString(runtimeEvent.payload?.status) !== "completed") return null
+  if (NON_TASK_COMPLETION_FINISH_REASONS.has(readString(runtimeEvent.payload?.finishReason) ?? "")) return null
 
   return runtimeEvent.eventID ?? `${runtimeEvent.sessionID}:${runtimeEvent.turnID}`
 }

@@ -120,18 +120,10 @@ export async function respondPermissionRequest({
   if (!agentSession || permissionRequestActionRequestID) return
 
   permissionRequestsRequestRef.current[input.sessionID] = (permissionRequestsRequestRef.current[input.sessionID] ?? 0) + 1
-  const removedRequest = input.request
   const canStreamResume = agentSession.canResumeStream
   let requestResolved = false
   setPermissionRequestActionRequestID(input.request.id)
   setPermissionRequestActionError(null)
-  setPendingPermissionRequestsBySession((prev) => {
-    const current = prev[input.sessionID] ?? []
-    return {
-      ...prev,
-      [input.sessionID]: current.filter((request) => request.id !== input.request.id),
-    }
-  })
 
   try {
     await agentSession.respondPermissionRequest({
@@ -141,6 +133,13 @@ export async function respondPermissionRequest({
       resume: !canStreamResume,
     })
     requestResolved = true
+    setPendingPermissionRequestsBySession((prev) => {
+      const current = prev[input.sessionID] ?? []
+      return {
+        ...prev,
+        [input.sessionID]: current.filter((request) => request.id !== input.request.id),
+      }
+    })
 
     await reloadSessionHistoryForSession(input.sessionID, input.request.sessionID, {
       force: true,
@@ -176,11 +175,6 @@ export async function respondPermissionRequest({
       const streamID = createID("stream")
       const streamingMessage = buildStreamingAssistantThreadMessage(
         input.decision === "deny" ? "Continue after denial" : "Continue after approval",
-        {
-          backendTurnID: input.request.messageID,
-          messageID: input.request.messageID,
-          segmentID: input.request.messageID,
-        },
       )
       pendingStreamsRef.current[streamID] = {
         sessionID: input.sessionID,
@@ -214,17 +208,6 @@ export async function respondPermissionRequest({
 
     if (!requestResolved) {
       setPermissionRequestActionError(message)
-      setPendingPermissionRequestsBySession((prev) => {
-        const current = prev[input.sessionID] ?? []
-        if (current.some((request) => request.id === removedRequest.id)) {
-          return prev
-        }
-
-        return {
-          ...prev,
-          [input.sessionID]: [removedRequest, ...current],
-        }
-      })
     }
   } finally {
     setPermissionRequestActionRequestID(null)

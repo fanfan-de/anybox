@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest"
-import { applyAgentStreamEventToThreadMessage, buildSessionStreamingAssistantThreadMessage, buildStreamingAssistantThreadMessage, buildThreadMessagesFromHistory, buildThreadTurnsFromHistory, buildUserThreadMessage, buildUserThreadMessageText } from "./stream"
+import {
+  applyAgentStreamEventToThreadMessage,
+  buildSessionStreamingAssistantThreadMessage,
+  buildStreamingAssistantThreadMessage,
+  buildThreadMessagesFromHistory,
+  buildThreadTurnsFromHistory,
+  buildUserThreadMessage,
+  buildUserThreadMessageText,
+  LIVE_SESSION_ACTIVITY_PRESENTATION,
+  RECONNECTING_SESSION_STREAM_PRESENTATION,
+} from "./stream"
 import { deriveActiveMessages } from "./thread-turn-state"
 
 describe("stream trace reducer", () => {
@@ -380,7 +390,7 @@ describe("stream trace reducer", () => {
   })
 
   it("binds canonical llm call identity to the active assistant segment", () => {
-    let message = buildSessionStreamingAssistantThreadMessage("Replaying backend activity", {
+    let message = buildSessionStreamingAssistantThreadMessage(RECONNECTING_SESSION_STREAM_PRESENTATION, {
       backendTurnID: "turn-runtime",
       segmentID: "pending:turn-runtime",
     })
@@ -408,8 +418,43 @@ describe("stream trace reducer", () => {
     expect(message.llmCallID).toBe("llm-call-1")
   })
 
+  it("labels session stream placeholders by explicit presentation", () => {
+    const liveMessage = buildSessionStreamingAssistantThreadMessage(LIVE_SESSION_ACTIVITY_PRESENTATION)
+    const reconnectingMessage = buildSessionStreamingAssistantThreadMessage(RECONNECTING_SESSION_STREAM_PRESENTATION)
+
+    expect(liveMessage.items[0]).toMatchObject({
+      kind: "system",
+      title: "Receiving backend session activity",
+      detail: "Applying live backend session updates.",
+      status: "pending",
+    })
+    expect(reconnectingMessage.items[0]).toMatchObject({
+      kind: "system",
+      title: "Reconnecting session stream",
+      detail: "Replaying backend session activity.",
+      status: "pending",
+    })
+
+    const settledMessage = applyAgentStreamEventToThreadMessage(liveMessage, {
+      event: "runtime",
+      data: {
+        eventID: "event-started",
+        sessionID: "session-runtime",
+        turnID: "turn-runtime",
+        seq: 1,
+        timestamp: 100,
+        type: "turn.started",
+        payload: {},
+      },
+    })
+    expect(settledMessage.items[0]).toMatchObject({
+      sourceID: `${liveMessage.id}:stream-placeholder`,
+      status: "completed",
+    })
+  })
+
   it("uses canonical runtime timestamps for replayed turn duration", () => {
-    let message = buildSessionStreamingAssistantThreadMessage("Replaying backend activity")
+    let message = buildSessionStreamingAssistantThreadMessage(RECONNECTING_SESSION_STREAM_PRESENTATION)
 
     message = applyAgentStreamEventToThreadMessage(message, {
       id: "10000:turn-runtime:1",

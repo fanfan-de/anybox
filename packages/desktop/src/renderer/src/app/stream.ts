@@ -2623,8 +2623,23 @@ export function buildStreamingAssistantThreadMessage(
   }
 }
 
+export interface SessionStreamingPresentation {
+  detail: string
+  title: string
+}
+
+export const LIVE_SESSION_ACTIVITY_PRESENTATION = {
+  title: "Receiving backend session activity",
+  detail: "Applying live backend session updates.",
+} satisfies SessionStreamingPresentation
+
+export const RECONNECTING_SESSION_STREAM_PRESENTATION = {
+  title: "Reconnecting session stream",
+  detail: "Replaying backend session activity.",
+} satisfies SessionStreamingPresentation
+
 export function buildSessionStreamingAssistantThreadMessage(
-  detail = "Replaying backend session activity.",
+  presentation: SessionStreamingPresentation,
   identity: Partial<Pick<AssistantThreadMessage, "backendTurnID" | "segmentID" | "messageID" | "llmCallID">> = {},
 ) : AssistantThreadMessage {
   const assistantMessageID = createID("assistant")
@@ -2634,8 +2649,8 @@ export function buildSessionStreamingAssistantThreadMessage(
     createTraceItem({
       kind: "system",
       label: "System",
-      title: "Reconnecting session stream",
-      detail,
+      title: presentation.title,
+      detail: presentation.detail,
       status: "pending",
       sourceID: `${assistantMessageID}${STREAM_PLACEHOLDER_SUFFIX}`,
       section: "workflow",

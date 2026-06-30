@@ -1904,16 +1904,15 @@ body.is-image-lightbox-open {
 
 .permission-request-inline {
   display: grid;
-  gap: 16px;
+  gap: 10px;
   min-width: 0;
   max-width: 100%;
-  padding: 18px;
-  border: 1px solid rgba(166, 186, 208, 0.46);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 247, 255, 0.92) 100%);
-  box-shadow: 0 16px 36px rgba(46, 81, 118, 0.09);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
-.permission-request-inline-header,
 .permission-request-header,
 .permission-request-footer,
 .permission-request-badges {
@@ -1924,27 +1923,25 @@ body.is-image-lightbox-open {
   min-width: 0;
 }
 
-.permission-request-inline-header > div,
 .permission-request-header > div {
   min-width: 0;
 }
 
-.permission-request-inline-header h3,
 .permission-request-header h3 {
-  margin: 4px 0 0;
-  line-height: 1.1;
-  color: #17232f;
-  font-size: 20px;
+  margin: 5px 0 0;
+  line-height: 1.2;
+  color: var(--seg-text-1);
+  font-size: 16px;
 }
 
 .permission-request-card {
-  border: 1px solid rgba(166, 186, 208, 0.42);
-  border-left-color: var(--seg-border);
+  border: 1px solid var(--seg-border);
+  border-left-color: var(--seg-warning-strong);
   background: var(--semantic-thread-panel-surface);
-  box-shadow: 0 18px 40px rgba(46, 81, 118, 0.12);
-  padding: 20px;
+  box-shadow: none;
+  padding: 14px;
   display: grid;
-  gap: 16px;
+  gap: 12px;
   min-width: 0;
   max-width: 100%;
 }
@@ -1958,7 +1955,7 @@ body.is-image-lightbox-open {
   display: grid;
   gap: 0;
   min-width: 0;
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .assistant-approval-inline-card .permission-request-card {
@@ -1966,40 +1963,66 @@ body.is-image-lightbox-open {
   background: var(--semantic-thread-panel-surface);
 }
 
-.permission-request-subtitle,
-.permission-request-rationale,
+.permission-request-summary,
 .permission-request-note,
-.permission-request-inline-copy,
 .permission-request-error {
   margin: 0;
-  line-height: 1.55;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
-.permission-request-subtitle,
-.permission-request-rationale,
-.permission-request-note,
-.permission-request-inline-copy {
-  color: #526375;
+.permission-request-summary,
+.permission-request-note {
+  color: var(--seg-text-2);
 }
 
-.permission-request-rationale {
+.permission-request-summary {
+  margin-top: 6px;
   font-size: 13px;
 }
 
 .permission-request-error {
-  color: #a33d2f;
+  color: var(--seg-danger-text, var(--semantic-error-text));
 }
 
 .permission-request-badges {
   flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 8px;
+}
+
+.permission-request-context {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+  color: var(--seg-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.permission-request-context-title {
+  color: var(--seg-text-2);
+  font-weight: 600;
+}
+
+.permission-request-status,
+.permission-request-count {
+  min-height: 22px;
+  padding: 0 8px;
+  border-color: var(--mix-seg-border-84-transparent-16);
+  background: var(--semantic-thread-panel-surface-muted);
+  color: var(--seg-text-2);
+  letter-spacing: 0;
 }
 
 .permission-request-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -2009,11 +2032,11 @@ body.is-image-lightbox-open {
 
 .permission-request-meta {
   min-width: 0;
-  padding: 12px;
+  padding: 9px 10px;
   border: 1px solid var(--mix-seg-border-90-transparent-10);
   background: var(--semantic-thread-panel-surface-muted);
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .permission-request-meta-wide {
@@ -2021,16 +2044,16 @@ body.is-image-lightbox-open {
 }
 
 .permission-request-meta-label {
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   text-transform: uppercase;
-  color: #6b7d90;
+  color: var(--seg-text-3);
 }
 
 .permission-request-meta strong {
-  color: #17232f;
-  line-height: 1.5;
+  color: var(--seg-text-1);
+  line-height: 1.4;
   word-break: break-word;
 }
 
@@ -2038,15 +2061,16 @@ body.is-image-lightbox-open {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  color: #17232f;
-  line-height: 1.55;
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  color: var(--seg-text-1);
+  line-height: 1.45;
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 
 .permission-request-controls {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .permission-request-disclosure {
@@ -2058,12 +2082,12 @@ body.is-image-lightbox-open {
 .permission-request-disclosure summary {
   cursor: pointer;
   list-style: none;
-  padding: 12px 14px;
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  padding: 9px 10px;
+  font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   text-transform: uppercase;
-  color: #4b6074;
+  color: var(--seg-text-2);
 }
 
 .permission-request-disclosure summary::-webkit-details-marker {
@@ -2071,12 +2095,12 @@ body.is-image-lightbox-open {
 }
 
 .permission-request-disclosure[open] summary {
-  border-bottom: 1px solid rgba(166, 186, 208, 0.3);
+  border-bottom: 1px solid var(--mix-seg-border-84-transparent-16);
 }
 
 .permission-request-disclosure[open] .permission-request-grid,
 .permission-request-disclosure[open] .permission-request-memory-actions {
-  padding: 12px;
+  padding: 8px;
 }
 
 .permission-request-memory-actions {
@@ -2087,10 +2111,25 @@ body.is-image-lightbox-open {
 
 .permission-request-footer {
   align-items: center;
+  min-height: 18px;
 }
 
 .permission-request-actions {
   flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.permission-request-actions .primary-button,
+.permission-request-actions .secondary-button {
+  min-height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.permission-request-card .permission-risk-chip {
+  min-height: 22px;
+  padding: 0 8px;
+  letter-spacing: 0;
 }
 
 .permission-request-count {
@@ -3475,7 +3514,7 @@ button.user-message-diff-file-row:focus-visible {
 
 .permission-request-card {
   border-left-color: var(--seg-warning-strong);
-  background: var(--mix-seg-warning-surface-84-surface-trace-16);
+  background: color-mix(in srgb, var(--seg-warning-surface) 48%, var(--surface-trace) 52%);
 }
 
 .ask-user-question-card {

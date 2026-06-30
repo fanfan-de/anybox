@@ -106,6 +106,8 @@ describe("agent completion notification parsing", () => {
     ["turn.completed", { status: "blocked" }],
     ["turn.completed", { status: "stopped" }],
     ["turn.completed", { status: "continued_by_user" }],
+    ["turn.completed", { finishReason: "approval-resolved", status: "completed" }],
+    ["turn.completed", { finishReason: "approval-denied", status: "completed" }],
   ])("ignores %s completion state", (type, payload) => {
     expect(internal.readCompletionEventKey({
       event: "runtime",

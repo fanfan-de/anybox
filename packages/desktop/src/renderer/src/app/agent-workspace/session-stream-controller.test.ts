@@ -1,11 +1,24 @@
 import { describe, expect, it } from "vitest"
-import { applyAgentStreamEventToThreadMessage } from "../stream"
-import type { AssistantTraceItem, AssistantThreadMessage, SessionTaskListView, ThreadMessage, UserThreadMessage } from "../types"
+import {
+  applyAgentStreamEventToThreadMessage,
+  LIVE_SESSION_ACTIVITY_PRESENTATION,
+  RECONNECTING_SESSION_STREAM_PRESENTATION,
+} from "../stream"
+import type {
+  AssistantTraceItem,
+  AssistantThreadMessage,
+  PendingAgentStream,
+  SessionTaskListView,
+  ThreadMessage,
+  UserThreadMessage,
+} from "../types"
 import {
   applyExecutionModeToUserMessagePresentation,
   compactHighFrequencyDeltaStreamEvent,
   conversationMessagesAreEquivalent,
+  clearSessionStreamReconnectReplayWindow,
   ensureAssistantThreadMessagePresentation,
+  findPendingStreamForBackendTurn,
   isBackendUserMessageRecordedStreamEvent,
   isCompletedStreamEvent,
   isHighFrequencyDeltaStreamEvent,
@@ -18,6 +31,7 @@ import {
   isTerminalStreamEvent,
   mergeConversationMessagesFromHistory,
   mergeExternalUserMessagesFromHistory,
+  noteSessionStreamSubscriptionStateForPresentation,
   readLatestSessionContextUsageFromHistory,
   readSubagentCreatedChildSessionID,
   readSessionContextUsageFromDoneEventData,
@@ -27,9 +41,12 @@ import {
   revealBackendRecordedUserMessagePresentation,
   revealPendingSteerUserMessagesAtHandoffPresentation,
   resolveExecutionModeRoute,
+  resolveSessionStreamPlaceholderPresentation,
   resolveStreamMessageID,
   resolveStreamCursor,
   resolveStreamTurnID,
+  SESSION_STREAM_RECONNECT_REPLAY_WINDOW_MS,
+  type SessionStreamReconnectReplayWindows,
   shouldRefreshRuntimeDebugForStreamEvent,
   STEER_INPUT_CONSUMED_STATE_REASON,
 } from "./session-stream-controller"
@@ -737,7 +754,7 @@ describe("session stream controller helpers", () => {
     const nextMessages = ensureAssistantThreadMessagePresentation({
       messages,
       assistantThreadMessageID: "assistant-steer",
-      detail: "Receiving backend session activity.",
+      presentation: LIVE_SESSION_ACTIVITY_PRESENTATION,
     })
 
     expect(nextMessages).toHaveLength(2)
@@ -749,6 +766,8 @@ describe("session stream controller helpers", () => {
       items: [
         expect.objectContaining({
           sourceID: "assistant-steer:stream-placeholder",
+          title: "Receiving backend session activity",
+          detail: "Applying live backend session updates.",
           status: "pending",
         }),
       ],
@@ -758,6 +777,128 @@ describe("session stream controller helpers", () => {
       messages: nextMessages,
       assistantThreadMessageID: "assistant-steer",
     })).toBe(nextMessages)
+  })
+
+  it("selects reconnect presentation only for the active reconnect replay window", () => {
+    const windows: SessionStreamReconnectReplayWindows = {}
+
+    expect(resolveSessionStreamPlaceholderPresentation({
+      windows,
+      backendSessionID: "backend-1",
+      backendTurnID: "turn-live",
+      now: 100,
+    })).toBe(LIVE_SESSION_ACTIVITY_PRESENTATION)
+
+    noteSessionStreamSubscriptionStateForPresentation(windows, {
+      kind: "subscription-state",
+      backendSessionID: "backend-1",
+      state: "reconnecting",
+      receivedAt: 100,
+    }, 100)
+    noteSessionStreamSubscriptionStateForPresentation(windows, {
+      kind: "subscription-state",
+      backendSessionID: "backend-1",
+      state: "connected",
+      receivedAt: 110,
+    }, 110)
+
+    expect(resolveSessionStreamPlaceholderPresentation({
+      windows,
+      backendSessionID: "backend-1",
+      backendTurnID: "turn-replay",
+      now: 120,
+    })).toBe(RECONNECTING_SESSION_STREAM_PRESENTATION)
+    expect(windows["backend-1"]?.turnID).toBe("turn-replay")
+    expect(resolveSessionStreamPlaceholderPresentation({
+      windows,
+      backendSessionID: "backend-1",
+      backendTurnID: "turn-live",
+      now: 130,
+    })).toBe(LIVE_SESSION_ACTIVITY_PRESENTATION)
+    expect(resolveSessionStreamPlaceholderPresentation({
+      windows,
+      backendSessionID: "backend-1",
+      backendTurnID: "turn-replay",
+      isTerminal: true,
+      now: 140,
+    })).toBe(RECONNECTING_SESSION_STREAM_PRESENTATION)
+    expect(windows["backend-1"]).toBeUndefined()
+  })
+
+  it("expires and clears reconnect replay windows", () => {
+    const windows: SessionStreamReconnectReplayWindows = {}
+
+    noteSessionStreamSubscriptionStateForPresentation(windows, {
+      kind: "subscription-state",
+      backendSessionID: "backend-1",
+      state: "reconnecting",
+      receivedAt: 100,
+    }, 100)
+    expect(resolveSessionStreamPlaceholderPresentation({
+      windows,
+      backendSessionID: "backend-1",
+      backendTurnID: "turn-expired",
+      now: 101 + SESSION_STREAM_RECONNECT_REPLAY_WINDOW_MS,
+    })).toBe(LIVE_SESSION_ACTIVITY_PRESENTATION)
+    expect(windows["backend-1"]).toBeUndefined()
+
+    noteSessionStreamSubscriptionStateForPresentation(windows, {
+      kind: "subscription-state",
+      backendSessionID: "backend-1",
+      state: "reconnecting",
+      receivedAt: 200,
+    }, 200)
+    clearSessionStreamReconnectReplayWindow(windows, "backend-1")
+    expect(resolveSessionStreamPlaceholderPresentation({
+      windows,
+      backendSessionID: "backend-1",
+      backendTurnID: "turn-cleared",
+      now: 210,
+    })).toBe(LIVE_SESSION_ACTIVITY_PRESENTATION)
+  })
+
+  it("matches pending streams by exact turn before unique unbound fallback", () => {
+    const exact: PendingAgentStream = {
+      sessionID: "session-1",
+      backendSessionID: "backend-1",
+      backendTurnID: "turn-1",
+      assistantThreadMessageID: "assistant-exact",
+    }
+    const unbound: PendingAgentStream = {
+      sessionID: "session-1",
+      backendSessionID: "backend-1",
+      assistantThreadMessageID: "assistant-unbound",
+    }
+
+    expect(findPendingStreamForBackendTurn({ exact, unbound }, {
+      sessionID: "session-1",
+      backendSessionID: "backend-1",
+      turnID: "turn-1",
+    })).toBe(exact)
+    expect(findPendingStreamForBackendTurn({ unbound }, {
+      sessionID: "session-1",
+      backendSessionID: "backend-1",
+      turnID: "turn-2",
+    })).toBe(unbound)
+  })
+
+  it("does not guess between multiple unbound pending streams", () => {
+    const first: PendingAgentStream = {
+      sessionID: "session-1",
+      backendSessionID: "backend-1",
+      assistantThreadMessageID: "assistant-first",
+    }
+    const second: PendingAgentStream = {
+      sessionID: "session-1",
+      backendSessionID: "backend-1",
+      assistantThreadMessageID: "assistant-second",
+    }
+
+    expect(findPendingStreamForBackendTurn({ first, second }, {
+      sessionID: "session-1",
+      backendSessionID: "backend-1",
+      turnID: "turn-2",
+    })).toBeUndefined()
   })
 
   it("reads task snapshots directly from runtime and tool part events", () => {

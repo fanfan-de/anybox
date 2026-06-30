@@ -106,6 +106,32 @@ function permissionRequest(overrides: Partial<PermissionRequest> = {}): Permissi
   }
 }
 
+function approvalTraceMessageForRequest(
+  request: PermissionRequest,
+  overrides: Partial<AssistantTraceItem> = {},
+): AssistantThreadMessage {
+  return assistantTraceMessage(
+    "assistant-approval",
+    [
+      {
+        id: "approval-requested",
+        kind: "system",
+        timestamp: 1,
+        label: "Permission",
+        title: "Permission requested",
+        detail: "git_bash_command - Tool requires approval before it can continue.",
+        status: "pending",
+        approvalID: request.approvalID,
+        toolCallID: request.toolCallID,
+        section: "approvals",
+        visibilityKey: "approvals",
+        ...overrides,
+      },
+    ],
+    false,
+  )
+}
+
 function createThreadProps(
   activeMessages: ThreadMessage[],
   threadColumnRef = createRef<HTMLDivElement | null>(),
@@ -467,13 +493,95 @@ describe("ThreadView trace item renderers", () => {
     expect(fileChangeRow?.querySelector(".assistant-trace-lite")).toBeNull()
   })
 
-  it("embeds a matching pending permission request inside the approval trace row", () => {
+  it("renders a matching pending permission request alongside the approval event row", () => {
     const request = permissionRequest()
     const onPermissionRequestResponse = vi.fn()
+    const { container, queryByRole } = renderThread(
+      [approvalTraceMessageForRequest(request)],
+      {
+        assistantTraceVisibility: {
+          ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+          approvals: true,
+        },
+        onPermissionRequestResponse,
+        onForkFromMessage: vi.fn(),
+        pendingPermissionRequests: [request],
+      },
+    )
+
+    const approvalRow = container.querySelector('[data-thread-row-kind="assistant-approval-row"]') as HTMLElement | null
+    expect(approvalRow).not.toBeNull()
+    expect(approvalRow?.querySelector(".trace-item")).not.toBeNull()
+    expect(approvalRow?.querySelector(".trace-item-status")).toBeNull()
+    expect(approvalRow?.querySelector(".permission-request-card")).not.toBeNull()
+    expect(within(approvalRow!).getAllByText("Permission requested").length).toBeGreaterThanOrEqual(2)
+    expect(within(approvalRow!).getByText("Waiting")).toBeInTheDocument()
+    expect(within(approvalRow!).queryByText("git_bash_command - Tool requires approval before it can continue.")).toBeNull()
+    expect(container.querySelector('[data-thread-row-kind="permission-request"]')).toBeNull()
+    expect(queryByRole("button", { name: "Fork from here" })).toBeNull()
+
+    fireEvent.click(within(approvalRow!).getByRole("button", { name: "Allow: Check Node.js and npm availability" }))
+
+    expect(onPermissionRequestResponse).toHaveBeenCalledWith({
+      sessionID: session.id,
+      request,
+      decision: "allow",
+    })
+  })
+
+  it("keeps the pending permission card visible while the response is applying", () => {
+    const request = permissionRequest()
+    const { container } = renderThread(
+      [approvalTraceMessageForRequest(request)],
+      {
+        assistantTraceVisibility: {
+          ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+          approvals: true,
+        },
+        isResolvingPermissionRequest: true,
+        pendingPermissionRequests: [request],
+        permissionRequestActionRequestID: request.id,
+      },
+    )
+
+    const approvalRow = container.querySelector('[data-thread-row-kind="assistant-approval-row"]') as HTMLElement | null
+    const card = approvalRow?.querySelector(".permission-request-card") as HTMLElement | null
+
+    expect(approvalRow?.querySelector(".trace-item-status")).toBeNull()
+    expect(card).not.toBeNull()
+    expect(within(card!).getByText("Applying")).toBeInTheDocument()
+    for (const button of Array.from(card!.querySelectorAll(".permission-request-actions button"))) {
+      expect(button).toBeDisabled()
+    }
+  })
+
+  it("keeps the pending permission card actionable after a response error", () => {
+    const request = permissionRequest()
+    const { container } = renderThread(
+      [approvalTraceMessageForRequest(request)],
+      {
+        assistantTraceVisibility: {
+          ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+          approvals: true,
+        },
+        pendingPermissionRequests: [request],
+        permissionRequestActionError: "Approval failed",
+      },
+    )
+
+    const card = container.querySelector(".permission-request-card") as HTMLElement | null
+    expect(card).not.toBeNull()
+    expect(within(card!).getByText("Error")).toBeInTheDocument()
+    expect(within(card!).getByText("Approval failed")).toBeInTheDocument()
+    expect(within(card!).getByRole("button", { name: "Allow: Check Node.js and npm availability" })).not.toBeDisabled()
+  })
+
+  it("renders multiple approval events as stateless log rows", () => {
+    const request = permissionRequest()
     const { container } = renderThread(
       [
         assistantTraceMessage(
-          "assistant-approval",
+          "assistant-approval-history",
           [
             {
               id: "approval-requested",
@@ -481,8 +589,19 @@ describe("ThreadView trace item renderers", () => {
               timestamp: 1,
               label: "Permission",
               title: "Permission requested",
-              detail: "git_bash_command - Tool requires approval before it can continue.",
               status: "pending",
+              approvalID: request.approvalID,
+              toolCallID: request.toolCallID,
+              section: "approvals",
+              visibilityKey: "approvals",
+            },
+            {
+              id: "approval-allowed",
+              kind: "system",
+              timestamp: 2,
+              label: "Permission",
+              title: "Permission allowed",
+              status: "completed",
               approvalID: request.approvalID,
               toolCallID: request.toolCallID,
               section: "approvals",
@@ -497,23 +616,15 @@ describe("ThreadView trace item renderers", () => {
           ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
           approvals: true,
         },
-        onPermissionRequestResponse,
-        pendingPermissionRequests: [request],
       },
     )
 
-    const approvalRow = container.querySelector('[data-thread-row-kind="assistant-approval-row"]') as HTMLElement | null
-    expect(approvalRow).not.toBeNull()
-    expect(approvalRow?.querySelector(".permission-request-card")).not.toBeNull()
-    expect(container.querySelector('[data-thread-row-kind="permission-request"]')).toBeNull()
-
-    fireEvent.click(within(approvalRow!).getByRole("button", { name: "Allow Check Node.js and npm availability" }))
-
-    expect(onPermissionRequestResponse).toHaveBeenCalledWith({
-      sessionID: session.id,
-      request,
-      decision: "allow",
-    })
+    const approvalRows = Array.from(container.querySelectorAll('[data-thread-row-kind="assistant-approval-row"]'))
+    expect(approvalRows).toHaveLength(2)
+    expect(screen.getByText("Permission requested")).toBeInTheDocument()
+    expect(screen.getByText("Permission allowed")).toBeInTheDocument()
+    expect(container.querySelector(".trace-item-status")).toBeNull()
+    expect(container.querySelector(".permission-request-card")).toBeNull()
   })
 
   it("renders tool traces as lightweight log rows", () => {
