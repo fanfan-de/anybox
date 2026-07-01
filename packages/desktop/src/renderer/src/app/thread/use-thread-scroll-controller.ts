@@ -38,9 +38,8 @@ interface UseThreadScrollControllerInput {
   isSidebarResizeInProgress: () => boolean
   readScrollSnapshot?: (key: string) => ThreadScrollSnapshot | null
   saveScrollSnapshot?: (key: string, snapshot: ThreadScrollSnapshot) => void
-  scheduleThreadVirtualViewportSync: (threadColumn: HTMLDivElement) => void
+  scrollToThreadOffset?: (scrollTop: number) => void
   scrollStateKey: string
-  syncThreadVirtualViewport: (threadColumn: HTMLDivElement, options?: { forceCommit?: boolean }) => void
   threadColumnRef: RefObject<HTMLDivElement | null>
 }
 
@@ -108,9 +107,8 @@ export function useThreadScrollController({
   isSidebarResizeInProgress,
   readScrollSnapshot,
   saveScrollSnapshot,
-  scheduleThreadVirtualViewportSync,
+  scrollToThreadOffset,
   scrollStateKey,
-  syncThreadVirtualViewport,
   threadColumnRef,
 }: UseThreadScrollControllerInput) {
   const scrollModeRef = useRef<ThreadScrollMode>("follow")
@@ -224,10 +222,20 @@ export function useThreadScrollController({
     return true
   }
 
-  function setThreadScrollTop(threadColumn: HTMLDivElement, scrollTop: number) {
-    threadColumn.scrollTop = clampThreadScrollTop(threadColumn, scrollTop)
+  function setThreadScrollTop(
+    threadColumn: HTMLDivElement,
+    scrollTop: number,
+    options: { clampToDomScrollRange?: boolean } = {},
+  ) {
+    const nextScrollTop = options.clampToDomScrollRange === false
+      ? Math.max(0, scrollTop)
+      : clampThreadScrollTop(threadColumn, scrollTop)
+    if (scrollToThreadOffset) {
+      scrollToThreadOffset(nextScrollTop)
+    } else {
+      threadColumn.scrollTop = nextScrollTop
+    }
     lastKnownScrollTopRef.current = threadColumn.scrollTop
-    syncThreadVirtualViewport(threadColumn)
   }
 
   function scrollThreadColumnToLatestThreadContent(
@@ -235,8 +243,7 @@ export function useThreadScrollController({
     options: { skipStreamingResponseMeasurement?: boolean } = {},
   ) {
     const target = getLatestThreadContentScrollTarget(threadColumn, options)
-    threadColumn.scrollTop = target.scrollTop
-    syncThreadVirtualViewport(threadColumn)
+    setThreadScrollTop(threadColumn, target.scrollTop, { clampToDomScrollRange: false })
   }
 
   function scheduleSmoothFollowLatestThreadContent(threadColumn: HTMLDivElement, key = scrollStateKey) {
@@ -328,7 +335,6 @@ export function useThreadScrollController({
       cancelSmoothFollowScroll()
       scrollThreadColumnToLatestThreadContent(threadColumn, { skipStreamingResponseMeasurement: true })
       lastKnownScrollTopRef.current = threadColumn.scrollTop
-      syncThreadVirtualViewport(threadColumn)
       persistThreadScrollSnapshot(key, "follow")
       return
     }
@@ -338,7 +344,6 @@ export function useThreadScrollController({
     cancelSmoothFollowScroll()
     scrollThreadColumnToLatestThreadContent(threadColumn)
     lastKnownScrollTopRef.current = threadColumn.scrollTop
-    syncThreadVirtualViewport(threadColumn)
     persistThreadScrollSnapshot(key, "follow")
   }
 
@@ -346,7 +351,6 @@ export function useThreadScrollController({
     cancelSmoothFollowScroll()
     scrollModeRef.current = "follow"
     lastKnownScrollTopRef.current = threadColumn.scrollTop
-    syncThreadVirtualViewport(threadColumn)
     persistThreadScrollSnapshot(key, "follow")
   }
 
@@ -479,7 +483,6 @@ export function useThreadScrollController({
   function handleThreadScroll() {
     const threadColumn = threadColumnRef.current
     if (!threadColumn) return
-    scheduleThreadVirtualViewportSync(threadColumn)
 
     if (!hasRecentThreadScrollIntent()) {
       if (threadColumn.scrollTop <= THREAD_TOP_RESET_THRESHOLD_PX) {

@@ -1,21 +1,10 @@
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, type RefObject } from "react"
 import { SIDEBAR_RESIZE_END_EVENT } from "../sidebar-resize-events"
 
-interface ThreadVirtualMeasurementOptions {
-  syncScroll?: boolean
-}
-
 interface UseThreadContentObserverInput {
-  flushQueuedThreadVirtualMeasurements: () => boolean
   isSidebarResizeInProgress: () => boolean
   isSmoothFollowScrollActiveForKey: (key: string) => boolean
-  measureRenderedThreadVirtualRows: (options?: ThreadVirtualMeasurementOptions) => boolean
-  measureThreadVirtualRowsFromResizeEntries: (
-    entries: ResizeObserverEntry[],
-    options?: ThreadVirtualMeasurementOptions,
-  ) => boolean
   shouldSmoothFollowObservedContentChange: () => boolean
-  shouldVirtualizeThreadRows: boolean
   scrollStateKey: string
   syncThreadScrollAfterContentChange: (
     key?: string,
@@ -36,13 +25,9 @@ function cancelThreadAnimationFrame(frameID: number | null) {
 }
 
 export function useThreadContentObserver({
-  flushQueuedThreadVirtualMeasurements,
   isSidebarResizeInProgress,
   isSmoothFollowScrollActiveForKey,
-  measureRenderedThreadVirtualRows,
-  measureThreadVirtualRowsFromResizeEntries,
   shouldSmoothFollowObservedContentChange,
-  shouldVirtualizeThreadRows,
   scrollStateKey,
   syncThreadScrollAfterContentChange,
   threadColumnRef,
@@ -85,31 +70,18 @@ export function useThreadContentObserver({
     })
   }
 
-  function syncThreadScrollAfterObservedContentChange(key = scrollStateKey) {
-    scheduleObservedContentScrollSync(key)
-  }
-
   const flushDeferredSidebarResizeScrollSync = useEffectEvent((key: string) => {
     cancelThreadAnimationFrame(pendingObservedContentScrollSyncFrameRef.current)
     pendingObservedContentScrollSyncFrameRef.current = null
     pendingObservedContentScrollSyncKeyRef.current = null
 
-    const shouldRefreshObservedContent = pendingSidebarResizeContentObservationRef.current || shouldVirtualizeThreadRows
-    pendingSidebarResizeContentObservationRef.current = false
-    if (shouldRefreshObservedContent) {
+    if (pendingSidebarResizeContentObservationRef.current) {
+      pendingSidebarResizeContentObservationRef.current = false
       observeThreadContentRef.current?.()
-      if (shouldVirtualizeThreadRows) {
-        measureRenderedThreadVirtualRows({ syncScroll: true })
-      }
     }
-
-    flushQueuedThreadVirtualMeasurements()
 
     if (!pendingSidebarResizeScrollSyncRef.current) return
     pendingSidebarResizeScrollSyncRef.current = false
-    cancelThreadAnimationFrame(pendingObservedContentScrollSyncFrameRef.current)
-    pendingObservedContentScrollSyncFrameRef.current = null
-    pendingObservedContentScrollSyncKeyRef.current = null
     syncThreadScrollAfterContentChange(key)
   })
 
@@ -120,34 +92,31 @@ export function useThreadContentObserver({
     contentResizeObserverRef.current?.disconnect()
     contentMutationObserverRef.current?.disconnect()
 
-    const resizeObserver = new ResizeObserver((entries) => {
+    const resizeObserver = new ResizeObserver(() => {
       if (isSidebarResizeInProgress()) {
         pendingSidebarResizeScrollSyncRef.current = true
         pendingSidebarResizeContentObservationRef.current = true
         return
       }
 
-      measureThreadVirtualRowsFromResizeEntries(entries, { syncScroll: true })
-      syncThreadScrollAfterObservedContentChange(scrollStateKey)
+      scheduleObservedContentScrollSync(scrollStateKey)
     })
+
     observedThreadContentRef.current = new WeakSet()
     const observeThreadContent = () => {
       if (!observedThreadContentRef.current.has(threadColumn)) {
         resizeObserver.observe(threadColumn)
         observedThreadContentRef.current.add(threadColumn)
       }
-      for (const child of Array.from(threadColumn.children)) {
-        if (observedThreadContentRef.current.has(child)) continue
-        resizeObserver.observe(child)
-        observedThreadContentRef.current.add(child)
-      }
-      if (shouldVirtualizeThreadRows) {
-        for (const row of Array.from(threadColumn.querySelectorAll<HTMLElement>("[data-thread-virtual-row-id]"))) {
-          if (row.closest(".thread-column") !== threadColumn) continue
-          if (observedThreadContentRef.current.has(row)) continue
-          resizeObserver.observe(row)
-          observedThreadContentRef.current.add(row)
-        }
+
+      const observedElements = threadColumn.querySelectorAll<HTMLElement>(
+        ".thread-virtual-spacer, [data-thread-virtual-row-id]",
+      )
+      for (const element of Array.from(observedElements)) {
+        if (element.closest(".thread-column") !== threadColumn) continue
+        if (observedThreadContentRef.current.has(element)) continue
+        resizeObserver.observe(element)
+        observedThreadContentRef.current.add(element)
       }
     }
 
@@ -164,9 +133,9 @@ export function useThreadContentObserver({
         }
 
         observeThreadContent()
-        syncThreadScrollAfterObservedContentChange(scrollStateKey)
+        scheduleObservedContentScrollSync(scrollStateKey)
       })
-      mutationObserver.observe(threadColumn, { childList: true, subtree: shouldVirtualizeThreadRows })
+      mutationObserver.observe(threadColumn, { childList: true, subtree: true })
       contentMutationObserverRef.current = mutationObserver
     }
 
@@ -182,27 +151,7 @@ export function useThreadContentObserver({
       contentMutationObserverRef.current?.disconnect()
       contentMutationObserverRef.current = null
     }
-  }, [scrollStateKey, shouldVirtualizeThreadRows, threadColumnRef])
-
-  useLayoutEffect(() => {
-    if (!shouldVirtualizeThreadRows) return
-
-    if (isSidebarResizeInProgress()) {
-      pendingSidebarResizeScrollSyncRef.current = true
-      pendingSidebarResizeContentObservationRef.current = true
-      return
-    }
-
-    const didMeasure = measureRenderedThreadVirtualRows({ syncScroll: true })
-    if (didMeasure) {
-      syncThreadScrollAfterObservedContentChange(scrollStateKey)
-    }
-  }, [
-    scrollStateKey,
-    shouldVirtualizeThreadRows,
-    threadColumnRef,
-    threadVirtualRenderedRangeKey,
-  ])
+  }, [scrollStateKey, threadColumnRef, threadVirtualRenderedRangeKey])
 
   useEffect(() => {
     function handleSidebarResizeEnd() {
@@ -229,6 +178,5 @@ export function useThreadContentObserver({
 
   return {
     scheduleObservedContentScrollSync,
-    syncThreadScrollAfterObservedContentChange,
   }
 }

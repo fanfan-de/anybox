@@ -171,10 +171,6 @@ function getFocusableElements(container: HTMLElement | null) {
   return Array.from(container.querySelectorAll<HTMLElement>(IMAGE_LIGHTBOX_FOCUSABLE_SELECTOR))
 }
 
-function getThreadScrollMaxTop(threadColumn: HTMLDivElement) {
-  return Math.max(0, threadColumn.scrollHeight - threadColumn.clientHeight)
-}
-
 function isUsableThreadLayoutRect(rect: DOMRect) {
   return (
     Number.isFinite(rect.top) &&
@@ -4392,8 +4388,6 @@ function VisibleThreadView({
     answeredQuestionIDs,
     displayMessages,
     displayRows,
-    visibleMessageIDs,
-    visibleMessageIDsKey,
   } = useThreadProjection({
     activeMessages,
     activeSession,
@@ -4415,6 +4409,7 @@ function VisibleThreadView({
   const observedContentScrollSyncRef = useRef<((key?: string) => void) | null>(null)
   const latestAssistantMessageStateRef = useRef<LatestAssistantMessageState | null>(null)
   const previousActiveMessageCountRef = useRef(activeMessages.length)
+  const previousDisplayMessageIDsByScrollKeyRef = useRef<Record<string, Set<string>>>({})
   const renderedMessageIDsByScrollKeyRef = useRef<Record<string, Set<string>>>({})
   const lastInlineLinkActivationRef = useRef<{
     href: string
@@ -4425,22 +4420,36 @@ function VisibleThreadView({
   const activeSessionID = activeSession?.id ?? null
   const effectiveScrollStateKey = scrollStateKey ?? activeSessionID ?? "thread:no-session"
   const {
-    flushQueuedThreadVirtualMeasurements,
     getThreadVirtualScrollMaxTop,
-    measureRenderedThreadVirtualRows,
-    measureThreadVirtualRowsFromResizeEntries,
-    scheduleThreadVirtualViewportSync,
-    shouldVirtualizeThreadRows,
-    syncThreadVirtualViewport,
-    threadVirtualLayout,
-    threadVirtualRange,
+    rowVirtualizer,
+    scrollToThreadVirtualOffset,
+    threadVirtualItems,
     threadVirtualRenderedRangeKey,
+    threadVirtualTotalSize,
   } = useThreadVirtualList({
     displayRows,
-    onScrollSyncRequested: scheduleObservedContentScrollSync,
-    scrollStateKey: effectiveScrollStateKey,
+    getInitialOffset: getInitialThreadVirtualOffset,
     threadColumnRef,
   })
+  const renderedVirtualMessageIDsKey = useMemo(() => {
+    const messageIDs = new Set<string>()
+    for (const virtualItem of threadVirtualItems) {
+      const row = displayRows[virtualItem.index]
+      if (row) messageIDs.add(row.messageID)
+    }
+
+    return Array.from(messageIDs).join("\u0001")
+  }, [displayRows, threadVirtualItems])
+  const displayMessageIDs = useMemo(
+    () => displayMessages.map((message) => message.id),
+    [displayMessages],
+  )
+  const newDisplayMessageIDs = useMemo(() => {
+    const previousMessageIDs = previousDisplayMessageIDsByScrollKeyRef.current[effectiveScrollStateKey]
+    if (!previousMessageIDs) return new Set<string>()
+
+    return new Set(displayMessageIDs.filter((messageID) => !previousMessageIDs.has(messageID)))
+  }, [displayMessageIDs, effectiveScrollStateKey])
   const {
     handleThreadKeyDownIntent,
     handleThreadPointerMoveIntent,
@@ -4456,14 +4465,15 @@ function VisibleThreadView({
     isSidebarResizeInProgress,
     readScrollSnapshot,
     saveScrollSnapshot,
-    scheduleThreadVirtualViewportSync,
+    scrollToThreadOffset: scrollToThreadVirtualOffset,
     scrollStateKey: effectiveScrollStateKey,
-    syncThreadVirtualViewport,
     threadColumnRef,
   })
 
-  function scheduleObservedContentScrollSync(key = effectiveScrollStateKey) {
-    observedContentScrollSyncRef.current?.(key)
+  function getInitialThreadVirtualOffset() {
+    const snapshot = readScrollSnapshot?.(effectiveScrollStateKey)
+    if (!snapshot || snapshot.pinnedToBottom) return 0
+    return snapshot.scrollTop
   }
 
   function shouldUseStreamingResponseScrollTargetForVirtualRows() {
@@ -4492,40 +4502,24 @@ function VisibleThreadView({
   ): ThreadFollowScrollTarget {
     const canMeasureStreamingResponse = options.skipStreamingResponseMeasurement !== true
 
-    if (shouldVirtualizeThreadRows) {
-      if (canMeasureStreamingResponse && shouldUseStreamingResponseScrollTargetForVirtualRows()) {
-        const streamingResponseTarget = getStreamingResponseScrollTarget(threadColumn)
-        if (streamingResponseTarget) return streamingResponseTarget
-      }
-
-      const scrollTop = getThreadVirtualScrollMaxTop(threadColumn)
-      return {
-        scrollTop,
-        visualScrollTop: scrollTop,
-      }
-    }
-
-    if (canMeasureStreamingResponse) {
+    if (canMeasureStreamingResponse && shouldUseStreamingResponseScrollTargetForVirtualRows()) {
       const streamingResponseTarget = getStreamingResponseScrollTarget(threadColumn)
       if (streamingResponseTarget) return streamingResponseTarget
     }
 
+    const scrollTop = getThreadVirtualScrollMaxTop(threadColumn)
     return {
-      scrollTop: threadColumn.scrollHeight,
-      visualScrollTop: getThreadScrollMaxTop(threadColumn),
+      scrollTop,
+      visualScrollTop: scrollTop,
     }
   }
 
   const {
     scheduleObservedContentScrollSync: scheduleObservedContentScrollSyncFromObserver,
   } = useThreadContentObserver({
-    flushQueuedThreadVirtualMeasurements,
     isSidebarResizeInProgress,
     isSmoothFollowScrollActiveForKey,
-    measureRenderedThreadVirtualRows,
-    measureThreadVirtualRowsFromResizeEntries,
     shouldSmoothFollowObservedContentChange: () => latestAssistantMessageStateRef.current?.isStreaming === true,
-    shouldVirtualizeThreadRows,
     scrollStateKey: effectiveScrollStateKey,
     syncThreadScrollAfterContentChange,
     threadColumnRef,
@@ -4535,6 +4529,7 @@ function VisibleThreadView({
 
   function readThreadMessageMotion(messageID: string, isLive = false): ThreadMessageMotion {
     const renderedMessageIDs = renderedMessageIDsByScrollKeyRef.current[effectiveScrollStateKey]
+    if (newDisplayMessageIDs.has(messageID) && isThreadVisible) return isLive ? "live" : "new"
     if (!renderedMessageIDs || renderedMessageIDs.has(messageID) || !isThreadVisible) return "history"
     return isLive ? "live" : "new"
   }
@@ -4673,19 +4668,6 @@ function VisibleThreadView({
 
   useLayoutEffect(() => {
     const threadColumn = threadColumnRef.current
-    if (!threadColumn || !shouldVirtualizeThreadRows) return
-
-    syncThreadVirtualViewport(threadColumn, { forceCommit: true })
-  }, [
-    effectiveScrollStateKey,
-    shouldVirtualizeThreadRows,
-    threadColumnRef,
-    displayRows.length,
-    threadVirtualLayout.totalHeight,
-  ])
-
-  useLayoutEffect(() => {
-    const threadColumn = threadColumnRef.current
     if (!threadColumn) return
 
     const previousLatestAssistantMessageState = latestAssistantMessageStateRef.current
@@ -4730,13 +4712,17 @@ function VisibleThreadView({
     restoreDetachedThreadPositionIfNeeded(effectiveScrollStateKey)
   })
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const renderedMessageIDs = renderedMessageIDsByScrollKeyRef.current[effectiveScrollStateKey] ?? new Set<string>()
-    for (const messageID of visibleMessageIDs) {
-      renderedMessageIDs.add(messageID)
+    for (const messageID of renderedVirtualMessageIDsKey.split("\u0001")) {
+      if (messageID) renderedMessageIDs.add(messageID)
     }
     renderedMessageIDsByScrollKeyRef.current[effectiveScrollStateKey] = renderedMessageIDs
-  }, [effectiveScrollStateKey, visibleMessageIDsKey])
+  }, [effectiveScrollStateKey, renderedVirtualMessageIDsKey])
+
+  useEffect(() => {
+    previousDisplayMessageIDsByScrollKeyRef.current[effectiveScrollStateKey] = new Set(displayMessageIDs)
+  }, [displayMessageIDs, effectiveScrollStateKey])
 
   function isTraceItemQuestionAnswered(item: AssistantTraceItem) {
     const questionID = item.questionPrompt?.questionID
@@ -4785,7 +4771,7 @@ function VisibleThreadView({
         ref={threadColumnRef}
         className={joinClassNames(
           "thread-column",
-          shouldVirtualizeThreadRows ? "is-virtualized" : "is-content-visibility",
+          activeSession && "is-virtualized",
         )}
         onKeyDownCapture={handleThreadKeyDownIntent}
         onPointerDownCapture={handleThreadScrollIntent}
@@ -4823,9 +4809,9 @@ function VisibleThreadView({
           <ThreadRows
             displayRows={displayRows}
             renderRow={renderDisplayRow}
-            shouldVirtualize={shouldVirtualizeThreadRows}
-            virtualLayout={threadVirtualLayout}
-            virtualRange={threadVirtualRange}
+            virtualItems={threadVirtualItems}
+            virtualizer={rowVirtualizer}
+            virtualTotalSize={threadVirtualTotalSize}
           />
         )}
       </div>

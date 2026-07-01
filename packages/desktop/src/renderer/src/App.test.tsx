@@ -6778,19 +6778,22 @@ describe("App", () => {
       },
     ])
 
-    render(<App />)
+    const { container } = render(<App />)
 
-    const finalAnswer = await screen.findByText("Final answer.")
-    expect(finalAnswer).toBeInTheDocument()
-    const threadColumn = finalAnswer.closest(".thread-column") as HTMLElement
-
-    await waitFor(() => {
-      expect(threadColumn).toHaveClass("is-virtualized")
+    const threadColumn = await waitFor(() => {
+      const node = container.querySelector<HTMLElement>(".thread-column")
+      expect(node).not.toBeNull()
+      expect(node).toHaveClass("is-virtualized")
+      return node!
     })
 
-    const renderedVirtualRows = threadColumn.querySelectorAll(".thread-virtual-row")
-    expect(renderedVirtualRows.length).toBeGreaterThan(0)
-    expect(renderedVirtualRows.length).toBeLessThan(80)
+    await waitFor(() => {
+      const renderedVirtualRows = threadColumn.querySelectorAll(".thread-virtual-row")
+      expect(renderedVirtualRows.length).toBeGreaterThan(0)
+      expect(renderedVirtualRows.length).toBeLessThan(80)
+    })
+
+    expect(screen.queryByText("Final answer.")).not.toBeInTheDocument()
   })
 
   it("keeps folded file-change summaries scoped to their source assistant message", async () => {
@@ -14476,17 +14479,19 @@ describe("App", () => {
     )
   })
 
-  it("keeps normal thread scrolling on stable layout heights", () => {
+  it("uses TanStack virtual layout without content-visibility branches", () => {
     expect(styles).not.toMatch(/(?:^|\n)\.thread-message\s*\{[^}]*content-visibility:/s)
     expect(styles).not.toMatch(/(?:^|\n)\.thread-message\s*\{[^}]*contain-intrinsic-size:/s)
     expect(styles).toMatch(/\.thread-column\s*\{[^}]*--thread-composer-clearance:\s*52px;[^}]*overflow-anchor:\s*auto;[^}]*padding:\s*14px 0 var\(--thread-composer-clearance\);[^}]*scroll-padding-bottom:\s*var\(--thread-composer-clearance\);/s)
     expect(styles).toMatch(/\.thread-shell\s*>\s*\.thread-column\s*\{[^}]*padding-bottom:\s*var\(--thread-composer-clearance\);/s)
     expect(styles).toMatch(/\.thread-shell\s*\+\s*\.composer-stack\s*\{[^}]*padding-top:\s*12px;/s)
-    expect(styles).toMatch(/\.thread-column\.is-content-visibility\s*>\s*\.thread-row,[\s\S]*?\.thread-column\.is-content-visibility\s*>\s*\.thread-message\s*\{[^}]*content-visibility:\s*auto;[^}]*contain-intrinsic-size:\s*auto 180px;/s)
-    expect(styles).toMatch(/\.thread-column\.is-content-visibility\s*>\s*\.assistant-trace-lite-row\s*\{[^}]*contain-intrinsic-size:\s*auto 96px;/s)
-    expect(styles).toMatch(/\.thread-column\.is-content-visibility\s*>\s*\.assistant-file-change-row,[\s\S]*?\.thread-column\.is-content-visibility\s*>\s*\.assistant-diff-row\s*\{[^}]*contain-intrinsic-size:\s*auto 240px;/s)
+    expect(styles).not.toMatch(/\.thread-column\.is-content-visibility/)
+    expect(styles).toMatch(/\.thread-column\.is-virtualized\s*\{[^}]*gap:\s*0;/s)
+    expect(styles).toMatch(/\.thread-virtual-spacer\s*\{[^}]*box-sizing:\s*border-box;[^}]*position:\s*relative;[^}]*flex:\s*0 0 auto;[^}]*width:\s*100%;/s)
+    expect(styles).toMatch(/\.thread-virtual-row\s*\{[^}]*position:\s*absolute;[^}]*top:\s*0;[^}]*left:\s*0;[^}]*box-sizing:\s*border-box;[^}]*width:\s*100%;/s)
     expect(styles).not.toMatch(/\.thread-virtual-row\s*\{[^}]*content-visibility:/s)
-    expect(styles).toMatch(/body\.is-resizing-sidebar \.assistant-trace-lite-row \.trace-item,[\s\S]*?content-visibility:\s*auto;/s)
+    expect(styles).not.toMatch(/content-visibility:\s*auto;/)
+    expect(styles).not.toMatch(/contain-intrinsic-size:/)
   })
 
   it("gives composer and user body text a slightly larger size than tag text", () => {

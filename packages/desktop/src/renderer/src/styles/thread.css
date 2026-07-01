@@ -120,23 +120,8 @@
   gap: 0;
 }
 
-.thread-column.is-content-visibility > .thread-row,
-.thread-column.is-content-visibility > .assistant-trace-lite-row,
-.thread-column.is-content-visibility > .thread-message {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 180px;
-}
-
-.thread-column.is-content-visibility > .assistant-trace-lite-row {
-  contain-intrinsic-size: auto 96px;
-}
-
-.thread-column.is-content-visibility > .assistant-file-change-row,
-.thread-column.is-content-visibility > .assistant-diff-row {
-  contain-intrinsic-size: auto 240px;
-}
-
 .thread-virtual-spacer {
+  box-sizing: border-box;
   position: relative;
   flex: 0 0 auto;
   width: 100%;
@@ -147,6 +132,7 @@
   position: absolute;
   top: 0;
   left: 0;
+  box-sizing: border-box;
   width: 100%;
   min-width: 0;
 }
@@ -2615,18 +2601,6 @@ body.is-image-lightbox-open {
 .assistant-trace-lite.is-reasoning .trace-item,
 .assistant-section.is-file-change .trace-item {
   border-radius: var(--seg-radius-xs);
-}
-
-body.is-resizing-sidebar .assistant-trace-lite-row .trace-item,
-body.is-resizing-sidebar .assistant-section.is-file-change .trace-item {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 72px;
-}
-
-body.is-resizing-sidebar .trace-file-change-entry,
-body.is-resizing-sidebar .user-message-diff-file-entry {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 40px;
 }
 
 .assistant-trace-lite.is-tools .trace-item,

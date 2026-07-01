@@ -1,43 +1,46 @@
 import type { ReactNode } from "react"
+import type { VirtualItem } from "@tanstack/react-virtual"
 import type { ThreadDisplayRow } from "./thread-display-rows"
-import type { ThreadVirtualLayout, ThreadVirtualRange } from "./use-thread-virtual-list"
+import type { ThreadRowVirtualizer } from "./use-thread-virtual-list"
 
 interface ThreadRowsProps {
   displayRows: ThreadDisplayRow[]
   renderRow: (row: ThreadDisplayRow) => ReactNode
-  shouldVirtualize: boolean
-  virtualLayout: ThreadVirtualLayout
-  virtualRange: ThreadVirtualRange
+  virtualItems: VirtualItem[]
+  virtualizer: ThreadRowVirtualizer
+  virtualTotalSize: number
 }
 
 export function ThreadRows({
   displayRows,
   renderRow,
-  shouldVirtualize,
-  virtualLayout,
-  virtualRange,
+  virtualItems,
+  virtualizer,
+  virtualTotalSize,
 }: ThreadRowsProps) {
-  if (!shouldVirtualize) {
-    return <>{displayRows.map((row) => renderRow(row))}</>
-  }
-
   return (
     <div
+      ref={virtualizer.containerRef}
       className="thread-virtual-spacer"
-      style={{ height: `${virtualLayout.totalHeight}px` }}
+      style={{ height: `${virtualTotalSize}px` }}
     >
-      {virtualRange.items.map((item) => (
-        <div
-          key={item.row.rowID}
-          className="thread-virtual-row"
-          data-thread-virtual-row-id={item.row.rowID}
-          data-thread-row-kind={item.row.kind}
-          data-thread-message-id={item.row.messageID}
-          style={{ transform: `translateY(${item.top}px)` }}
-        >
-          {renderRow(item.row)}
-        </div>
-      ))}
+      {virtualItems.map((virtualItem) => {
+        const row = displayRows[virtualItem.index]
+        if (!row) return null
+
+        return (
+          <div
+            key={virtualItem.key}
+            ref={virtualizer.measureElement}
+            className="thread-virtual-row"
+            data-index={virtualItem.index}
+            data-thread-virtual-row-id={row.rowID}
+            style={{ transform: `translateY(${virtualItem.start}px)` }}
+          >
+            {renderRow(row)}
+          </div>
+        )
+      })}
     </div>
   )
 }
