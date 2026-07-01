@@ -21,6 +21,7 @@ interface UseThreadVirtualListInput {
   displayRows: ThreadDisplayRow[]
   getInitialOffset?: () => number
   threadColumnRef: RefObject<HTMLDivElement | null>
+  virtualListKey: string
 }
 
 function readThreadColumnPaddingTop(threadColumn: HTMLDivElement) {
@@ -123,14 +124,15 @@ export function useThreadVirtualList({
   displayRows,
   getInitialOffset,
   threadColumnRef,
+  virtualListKey,
 }: UseThreadVirtualListInput) {
   const estimateSize = useCallback(
     (index: number) => estimateThreadRowSize(displayRows[index]),
     [displayRows],
   )
   const getItemKey = useCallback(
-    (index: number) => displayRows[index]?.rowID ?? `thread-row:${index}`,
-    [displayRows],
+    (index: number) => `${virtualListKey}\u0000${displayRows[index]?.rowID ?? `thread-row:${index}`}`,
+    [displayRows, virtualListKey],
   )
   const initialOffset = useCallback(
     () => normalizeThreadVirtualOffset(getInitialOffset?.()),
@@ -157,8 +159,6 @@ export function useThreadVirtualList({
     gap: THREAD_VIRTUAL_ROW_GAP_PX,
     getItemKey,
     getScrollElement: () => threadColumnRef.current,
-    directDomUpdates: true,
-    directDomUpdatesMode: "transform",
     initialRect: {
       height: THREAD_VIRTUAL_INITIAL_VIEWPORT_HEIGHT_PX,
       width: 0,
@@ -168,7 +168,6 @@ export function useThreadVirtualList({
     observeElementRect: observeThreadVirtualElementRect,
     overscan: THREAD_VIRTUAL_OVERSCAN_ROWS,
     scrollToFn,
-    useFlushSync: false,
   })
 
   const threadVirtualItems = rowVirtualizer.getVirtualItems()

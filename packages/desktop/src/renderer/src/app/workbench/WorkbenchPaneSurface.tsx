@@ -426,23 +426,35 @@ function InactiveWorkbenchPaneSurface({
 
 export const WorkbenchPaneSurface = memo(function WorkbenchPaneSurface(props: WorkbenchPaneSurfaceProps) {
   const lastActivePropsRef = useRef<WorkbenchPaneSurfaceProps | null>(null)
+  const lastPaneActiveRef = useRef(false)
+  const threadActivationVersionRef = useRef(0)
+
+  if (props.pane.isActivePanel && !lastPaneActiveRef.current) {
+    threadActivationVersionRef.current += 1
+  }
+  lastPaneActiveRef.current = props.pane.isActivePanel
+  const threadActivationVersion = threadActivationVersionRef.current
 
   if (props.pane.isActivePanel || import.meta.env.MODE === "test") {
     lastActivePropsRef.current = props
-    return <ActiveWorkbenchPaneSurface {...props} />
+    return <ActiveWorkbenchPaneSurface {...props} threadActivationVersion={threadActivationVersion} />
   }
 
   const cachedProps = lastActivePropsRef.current
   if (cachedProps) {
-    return <ActiveWorkbenchPaneSurface {...cachedProps} />
+    return <ActiveWorkbenchPaneSurface {...cachedProps} threadActivationVersion={threadActivationVersion} />
   }
 
   if (!props.pane.isActivePanel) {
     return <InactiveWorkbenchPaneSurface isTopRow={props.isTopRow} pane={props.pane} />
   }
 
-  return <ActiveWorkbenchPaneSurface {...props} />
+  return <ActiveWorkbenchPaneSurface {...props} threadActivationVersion={threadActivationVersion} />
 })
+
+interface ActiveWorkbenchPaneSurfaceProps extends WorkbenchPaneSurfaceProps {
+  threadActivationVersion: number
+}
 
 const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   assistantTraceVisibility,
@@ -486,7 +498,8 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   onMessageDiffRestore,
   onMessageDiffReview,
   onMessageDiffSummaryHydrate,
-}: WorkbenchPaneSurfaceProps) {
+  threadActivationVersion,
+}: ActiveWorkbenchPaneSurfaceProps) {
   const { t } = useI18n()
   const threadColumnRef = useRef<HTMLDivElement | null>(null)
   const bagOperationVersionRef = useRef(0)
@@ -853,6 +866,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   scrollStateKey={pane.tabKey}
                   threadColumnRef={threadColumnRef}
                   isThreadVisible={pane.isActivePanel}
+                  virtualMeasurementKey={`${pane.tabKey ?? pane.sessionID ?? pane.id}:${String(threadActivationVersion)}`}
                   readScrollSnapshot={readThreadScrollSnapshot}
                   saveScrollSnapshot={saveThreadScrollSnapshot}
                   onBranchSelect={(messageID) => onBranchSelect({ messageID, sessionID: pane.sessionID })}

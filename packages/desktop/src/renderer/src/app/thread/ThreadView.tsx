@@ -117,6 +117,7 @@ interface ThreadViewProps {
   scrollStateKey?: string | null
   threadColumnRef: RefObject<HTMLDivElement | null>
   isThreadVisible?: boolean
+  virtualMeasurementKey?: string | null
   readScrollSnapshot?: (key: string) => ThreadScrollSnapshot | null
   saveScrollSnapshot?: (key: string, snapshot: ThreadScrollSnapshot) => void
   onAskUserQuestionAnswer: QuestionAnswerHandler
@@ -4325,6 +4326,7 @@ function getThreadViewPropsChangeReason(left: ThreadViewProps, right: ThreadView
   if (left.scrollStateKey !== right.scrollStateKey) return "scrollStateKey"
   if (left.threadColumnRef !== right.threadColumnRef) return "threadColumnRef"
   if (left.isThreadVisible !== right.isThreadVisible) return "isThreadVisible"
+  if (left.virtualMeasurementKey !== right.virtualMeasurementKey) return "virtualMeasurementKey"
   if (left.readScrollSnapshot !== right.readScrollSnapshot) return "readScrollSnapshot"
   if (left.saveScrollSnapshot !== right.saveScrollSnapshot) return "saveScrollSnapshot"
   return null
@@ -4379,6 +4381,7 @@ function VisibleThreadView({
   scrollStateKey,
   threadColumnRef,
   isThreadVisible = true,
+  virtualMeasurementKey,
   readScrollSnapshot,
   saveScrollSnapshot,
   onProposedPlanConfirm,
@@ -4425,10 +4428,12 @@ function VisibleThreadView({
     scrollToThreadVirtualOffset,
     threadVirtualItems,
     threadVirtualRenderedRangeKey,
+    threadVirtualTotalSize,
   } = useThreadVirtualList({
     displayRows,
     getInitialOffset: getInitialThreadVirtualOffset,
     threadColumnRef,
+    virtualListKey: effectiveScrollStateKey,
   })
   const renderedVirtualMessageIDsKey = useMemo(() => {
     const messageIDs = new Set<string>()
@@ -4810,6 +4815,8 @@ function VisibleThreadView({
             renderRow={renderDisplayRow}
             virtualItems={threadVirtualItems}
             virtualizer={rowVirtualizer}
+            virtualMeasurementKey={virtualMeasurementKey ?? effectiveScrollStateKey}
+            virtualTotalSize={threadVirtualTotalSize}
           />
         )}
       </div>
