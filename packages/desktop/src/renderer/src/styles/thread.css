@@ -1377,6 +1377,8 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
   border-left: 0;
   padding: 0;
   background: transparent;
+  /* File-change cards contain one vertical content stack; avoid grid sizing during sidebar resize. */
+  display: block;
   box-shadow: none;
   gap: 6px;
 }
@@ -2603,6 +2605,8 @@ body.is-image-lightbox-open {
 .assistant-section.is-response .trace-item {
   border: 0;
   background: transparent;
+  /* Response trace items only expose one visible child; grid track sizing is expensive during width resize. */
+  display: block;
   padding: 0;
 }
 

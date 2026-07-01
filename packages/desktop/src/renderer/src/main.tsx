@@ -1,5 +1,5 @@
 import "@xterm/xterm/css/xterm.css"
-import "dockview-react/dist/styles/dockview.css"
+import "../../../../dockview-react/dist/styles/dockview.css"
 import React from "react"
 import { createRoot } from "react-dom/client"
 import { App } from "./App"

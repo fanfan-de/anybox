@@ -255,6 +255,13 @@ export function useDesktopShell() {
   }
 
   function queueSidebarResizePreview(resizeState: ActiveSidebarResize, width: number) {
+    if (
+      resizeState.previewCancel === null &&
+      Math.abs(resizeState.latestWidth - width) < 0.5
+    ) {
+      return
+    }
+
     resizeState.latestWidth = width
     if (resizeState.previewCancel !== null) return
 

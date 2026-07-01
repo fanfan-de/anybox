@@ -4754,6 +4754,22 @@ describe("ThreadView virtual list", () => {
     expect(screen.queryByText("Prompt 319")).not.toBeInTheDocument()
   })
 
+  it("virtualizes dense task threads before resize layout becomes expensive", () => {
+    const activeMessages = Array.from({ length: 240 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+    const { container, threadColumn } = renderThread(activeMessages, {
+      scrollStateKey: "virtual-list-dense-task-session",
+    })
+    setScrollMetrics(threadColumn, {
+      clientHeight: 400,
+      scrollHeight: 12000,
+      scrollTop: threadColumn.scrollTop,
+    })
+
+    expect(threadColumn).toHaveClass("is-virtualized")
+    expect(container.querySelector(".thread-virtual-spacer")).not.toBeNull()
+    expect(container.querySelectorAll("[data-thread-message-id]").length).toBeLessThan(80)
+  })
+
   it("does not measure virtual row layouts for medium threads during sidebar resize", () => {
     const originalResizeObserver = globalThis.ResizeObserver
     let resizeCallback: ResizeObserverCallback | null = null

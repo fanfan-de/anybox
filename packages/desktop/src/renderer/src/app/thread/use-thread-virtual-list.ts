@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react"
 import type { ThreadDisplayRow } from "./thread-display-rows"
 
-const THREAD_VIRTUALIZATION_MIN_ROWS = 300
-const THREAD_VIRTUAL_OVERSCAN_PX = 900
+const THREAD_VIRTUALIZATION_MIN_ROWS = 180
+const THREAD_VIRTUAL_OVERSCAN_PX = 160
 const THREAD_VIRTUAL_OVERSCAN_ROWS = 2
 const THREAD_VIRTUAL_ROW_GAP_PX = 7
 const THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX = 12

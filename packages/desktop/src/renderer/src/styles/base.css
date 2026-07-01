@@ -71,10 +71,13 @@ body.is-resizing-terminal-panel * {
   user-select: none;
 }
 
-body.is-resizing-sidebar,
-body.is-resizing-sidebar * {
+body.is-resizing-sidebar {
   cursor: col-resize !important;
   user-select: none;
+}
+
+body.is-resizing-sidebar :is(button, [role="button"], a, input, textarea, select, .sidebar-resizer) {
+  cursor: col-resize !important;
 }
 
 body.is-resizing-sidebar .preview-frame {
