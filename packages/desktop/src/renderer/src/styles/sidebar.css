@@ -176,6 +176,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  contain: layout paint;
 }
 
 .left-sidebar-top-menu {
@@ -245,6 +246,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   display: flex;
   flex-direction: column;
   padding: 16px 14px 18px;
+  contain: layout paint;
 }
 
 .view-toolbar,
@@ -314,6 +316,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  contain: layout paint;
 }
 
 .sidebar-projects::-webkit-scrollbar {
@@ -991,6 +994,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   scrollbar-width: thin;
   scrollbar-color: var(--skills-tree-scrollbar-thumb) var(--skills-tree-scrollbar-track);
   padding-right: 4px;
+  contain: layout paint;
 }
 
 .skills-tree-root::-webkit-scrollbar {

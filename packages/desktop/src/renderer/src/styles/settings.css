@@ -1101,6 +1101,7 @@ body.is-dragging-settings-page {
 .mcp-tools-policy-list {
   display: grid;
   gap: 12px;
+  contain: layout paint;
 }
 
 .mcp-tool-policy-card {
@@ -1112,6 +1113,7 @@ body.is-dragging-settings-page {
   grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
   gap: 14px;
   align-items: center;
+  contain: layout paint;
 }
 
 .mcp-tool-policy-card.is-expanded {
@@ -1208,6 +1210,7 @@ body.is-dragging-settings-page {
   gap: 10px;
   padding-top: 12px;
   border-top: 1px solid var(--seg-border);
+  contain: layout paint;
 }
 
 .mcp-tool-policy-schema {
@@ -1233,6 +1236,7 @@ body.is-dragging-settings-page {
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
+  contain: layout paint;
 }
 
 .settings-field input::placeholder,

@@ -1,0 +1,554 @@
+[
+  {
+    "name": "baseline-left",
+    "side": "left",
+    "disableContainment": true,
+    "filePath": "C:\\Projects\\Anybox\\tmp\\containment-traces\\baseline-left.json",
+    "preparation": {
+      "disableContainment": true,
+      "innerWidth": 1636,
+      "innerHeight": 909,
+      "dpr": 1.100000023841858,
+      "containThread": "none",
+      "containSidebar": "none",
+      "containRight": "none"
+    },
+    "before": {
+      "innerWidth": 1636,
+      "innerHeight": 909,
+      "dpr": 1.100000023841858,
+      "leftAria": "236",
+      "rightAria": "480",
+      "shellVars": {
+        "left": "236px",
+        "right": "480px"
+      },
+      "leftResizer": {
+        "left": 289.98577880859375,
+        "right": 299.98577880859375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "rightResizer": {
+        "left": 1146.3636474609375,
+        "right": 1156.3636474609375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "thread": {
+        "left": 299.98577880859375,
+        "right": 1145.9800415039062,
+        "top": 80.90908813476562,
+        "bottom": 691.1647644042969,
+        "width": 845.9942626953125,
+        "height": 610.2556762695312
+      },
+      "rightSidebar": {
+        "left": 1156.3636474609375,
+        "right": 1636.3636169433594,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 479.9999694824219,
+        "height": 908.1817626953125
+      },
+      "bodyClass": ""
+    },
+    "after": {
+      "innerWidth": 1636,
+      "innerHeight": 909,
+      "dpr": 1.100000023841858,
+      "leftAria": "356",
+      "rightAria": "480",
+      "shellVars": {
+        "left": "236px",
+        "right": "480px"
+      },
+      "leftResizer": {
+        "left": 409.98577880859375,
+        "right": 419.98577880859375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "rightResizer": {
+        "left": 1146.3636474609375,
+        "right": 1156.3636474609375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "thread": {
+        "left": 419.98577880859375,
+        "right": 1145.9800415039062,
+        "top": 80.90908813476562,
+        "bottom": 691.1647644042969,
+        "width": 725.9942626953125,
+        "height": 610.2556762695312
+      },
+      "rightSidebar": {
+        "left": 1156.3636474609375,
+        "right": 1636.3636169433594,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 479.9999694824219,
+        "height": 908.1817626953125
+      },
+      "bodyClass": ""
+    },
+    "trace": {
+      "events": 13525,
+      "totals": {
+        "Layout": {
+          "count": 46,
+          "totalMs": 75.04,
+          "maxMs": 4.74
+        },
+        "Paint": {
+          "count": 318,
+          "totalMs": 38.86,
+          "maxMs": 1.29
+        },
+        "EventDispatch": {
+          "count": 201,
+          "totalMs": 43.08,
+          "maxMs": 35.21
+        }
+      },
+      "threadCommitTrace": {
+        "count": 0,
+        "totalMs": 0,
+        "maxMs": 0
+      }
+    },
+    "inpMs": 40,
+    "maxEventTimingMs": 40,
+    "eventTimingCount": 14,
+    "threadViewCommit": {
+      "count": 1,
+      "totalActualMs": 0,
+      "avgActualMs": 0,
+      "maxActualMs": 0
+    },
+    "perfLogCount": 64
+  },
+  {
+    "name": "after-left",
+    "side": "left",
+    "disableContainment": false,
+    "filePath": "C:\\Projects\\Anybox\\tmp\\containment-traces\\after-left.json",
+    "preparation": {
+      "disableContainment": false,
+      "innerWidth": 1636,
+      "innerHeight": 909,
+      "dpr": 1.100000023841858,
+      "containThread": "layout paint",
+      "containSidebar": "layout paint",
+      "containRight": "layout paint"
+    },
+    "before": {
+      "innerWidth": 1636,
+      "innerHeight": 909,
+      "dpr": 1.100000023841858,
+      "leftAria": "236",
+      "rightAria": "480",
+      "shellVars": {
+        "left": "236px",
+        "right": "480px"
+      },
+      "leftResizer": {
+        "left": 289.98577880859375,
+        "right": 299.98577880859375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "rightResizer": {
+        "left": 1146.3636474609375,
+        "right": 1156.3636474609375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "thread": {
+        "left": 299.98577880859375,
+        "right": 1145.9800415039062,
+        "top": 80.90908813476562,
+        "bottom": 691.1647644042969,
+        "width": 845.9942626953125,
+        "height": 610.2556762695312
+      },
+      "rightSidebar": {
+        "left": 1156.3636474609375,
+        "right": 1636.3636169433594,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 479.9999694824219,
+        "height": 908.1817626953125
+      },
+      "bodyClass": ""
+    },
+    "after": {
+      "innerWidth": 1636,
+      "innerHeight": 909,
+      "dpr": 1.100000023841858,
+      "leftAria": "356",
+      "rightAria": "480",
+      "shellVars": {
+        "left": "236px",
+        "right": "480px"
+      },
+      "leftResizer": {
+        "left": 409.98577880859375,
+        "right": 419.98577880859375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "rightResizer": {
+        "left": 1146.3636474609375,
+        "right": 1156.3636474609375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "thread": {
+        "left": 419.98577880859375,
+        "right": 1145.9800415039062,
+        "top": 80.90908813476562,
+        "bottom": 691.1647644042969,
+        "width": 725.9942626953125,
+        "height": 610.2556762695312
+      },
+      "rightSidebar": {
+        "left": 1156.3636474609375,
+        "right": 1636.3636169433594,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 479.9999694824219,
+        "height": 908.1817626953125
+      },
+      "bodyClass": ""
+    },
+    "trace": {
+      "events": 14308,
+      "totals": {
+        "Layout": {
+          "count": 46,
+          "totalMs": 77.89,
+          "maxMs": 4.88
+        },
+        "Paint": {
+          "count": 291,
+          "totalMs": 45.83,
+          "maxMs": 1.22
+        },
+        "EventDispatch": {
+          "count": 201,
+          "totalMs": 41.58,
+          "maxMs": 34.37
+        }
+      },
+      "threadCommitTrace": {
+        "count": 0,
+        "totalMs": 0,
+        "maxMs": 0
+      }
+    },
+    "inpMs": 48,
+    "maxEventTimingMs": 456,
+    "eventTimingCount": 128,
+    "threadViewCommit": {
+      "count": 1,
+      "totalActualMs": 0,
+      "avgActualMs": 0,
+      "maxActualMs": 0
+    },
+    "perfLogCount": 61
+  },
+  {
+    "name": "baseline-right",
+    "side": "right",
+    "disableContainment": true,
+    "filePath": "C:\\Projects\\Anybox\\tmp\\containment-traces\\baseline-right.json",
+    "preparation": {
+      "disableContainment": true,
+      "innerWidth": 1636,
+      "innerHeight": 909,
+      "dpr": 1.100000023841858,
+      "containThread": "none",
+      "containSidebar": "none",
+      "containRight": "none"
+    },
+    "before": {
+      "innerWidth": 1636,
+      "innerHeight": 909,
+      "dpr": 1.100000023841858,
+      "leftAria": "236",
+      "rightAria": "480",
+      "shellVars": {
+        "left": "236px",
+        "right": "480px"
+      },
+      "leftResizer": {
+        "left": 289.98577880859375,
+        "right": 299.98577880859375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "rightResizer": {
+        "left": 1146.3636474609375,
+        "right": 1156.3636474609375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "thread": {
+        "left": 299.98577880859375,
+        "right": 1145.9800415039062,
+        "top": 80.90908813476562,
+        "bottom": 691.1647644042969,
+        "width": 845.9942626953125,
+        "height": 610.2556762695312
+      },
+      "rightSidebar": {
+        "left": 1156.3636474609375,
+        "right": 1636.3636169433594,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 479.9999694824219,
+        "height": 908.1817626953125
+      },
+      "bodyClass": ""
+    },
+    "after": {
+      "innerWidth": 1636,
+      "innerHeight": 909,
+      "dpr": 1.100000023841858,
+      "leftAria": "236",
+      "rightAria": "600",
+      "shellVars": {
+        "left": "236px",
+        "right": "480px"
+      },
+      "leftResizer": {
+        "left": 289.98577880859375,
+        "right": 299.98577880859375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "rightResizer": {
+        "left": 1026.3636474609375,
+        "right": 1036.3636474609375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "thread": {
+        "left": 299.98577880859375,
+        "right": 1025.9800415039062,
+        "top": 80.90908813476562,
+        "bottom": 691.1647644042969,
+        "width": 725.9942626953125,
+        "height": 610.2556762695312
+      },
+      "rightSidebar": {
+        "left": 1036.3636474609375,
+        "right": 1636.3636474609375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 600,
+        "height": 908.1817626953125
+      },
+      "bodyClass": ""
+    },
+    "trace": {
+      "events": 13458,
+      "totals": {
+        "Layout": {
+          "count": 46,
+          "totalMs": 82.71,
+          "maxMs": 5.44
+        },
+        "Paint": {
+          "count": 304,
+          "totalMs": 38.47,
+          "maxMs": 2.03
+        },
+        "EventDispatch": {
+          "count": 207,
+          "totalMs": 43.54,
+          "maxMs": 38.14
+        }
+      },
+      "threadCommitTrace": {
+        "count": 0,
+        "totalMs": 0,
+        "maxMs": 0
+      }
+    },
+    "inpMs": 48,
+    "maxEventTimingMs": 352,
+    "eventTimingCount": 84,
+    "threadViewCommit": {
+      "count": 1,
+      "totalActualMs": 0,
+      "avgActualMs": 0,
+      "maxActualMs": 0
+    },
+    "perfLogCount": 61
+  },
+  {
+    "name": "after-right",
+    "side": "right",
+    "disableContainment": false,
+    "filePath": "C:\\Projects\\Anybox\\tmp\\containment-traces\\after-right.json",
+    "preparation": {
+      "disableContainment": false,
+      "innerWidth": 1636,
+      "innerHeight": 909,
+      "dpr": 1.100000023841858,
+      "containThread": "layout paint",
+      "containSidebar": "layout paint",
+      "containRight": "layout paint"
+    },
+    "before": {
+      "innerWidth": 1636,
+      "innerHeight": 909,
+      "dpr": 1.100000023841858,
+      "leftAria": "236",
+      "rightAria": "480",
+      "shellVars": {
+        "left": "236px",
+        "right": "480px"
+      },
+      "leftResizer": {
+        "left": 289.98577880859375,
+        "right": 299.98577880859375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "rightResizer": {
+        "left": 1146.3636474609375,
+        "right": 1156.3636474609375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "thread": {
+        "left": 299.98577880859375,
+        "right": 1145.9800415039062,
+        "top": 80.90908813476562,
+        "bottom": 691.1647644042969,
+        "width": 845.9942626953125,
+        "height": 610.2556762695312
+      },
+      "rightSidebar": {
+        "left": 1156.3636474609375,
+        "right": 1636.3636169433594,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 479.9999694824219,
+        "height": 908.1817626953125
+      },
+      "bodyClass": ""
+    },
+    "after": {
+      "innerWidth": 1636,
+      "innerHeight": 909,
+      "dpr": 1.100000023841858,
+      "leftAria": "236",
+      "rightAria": "600",
+      "shellVars": {
+        "left": "236px",
+        "right": "480px"
+      },
+      "leftResizer": {
+        "left": 289.98577880859375,
+        "right": 299.98577880859375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "rightResizer": {
+        "left": 1026.3636474609375,
+        "right": 1036.3636474609375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 10,
+        "height": 908.1817626953125
+      },
+      "thread": {
+        "left": 299.98577880859375,
+        "right": 1025.9800415039062,
+        "top": 80.90908813476562,
+        "bottom": 691.1647644042969,
+        "width": 725.9942626953125,
+        "height": 610.2556762695312
+      },
+      "rightSidebar": {
+        "left": 1036.3636474609375,
+        "right": 1636.3636474609375,
+        "top": 0.9090908765792847,
+        "bottom": 909.0908535718918,
+        "width": 600,
+        "height": 908.1817626953125
+      },
+      "bodyClass": ""
+    },
+    "trace": {
+      "events": 13866,
+      "totals": {
+        "Layout": {
+          "count": 47,
+          "totalMs": 92.4,
+          "maxMs": 9.99
+        },
+        "Paint": {
+          "count": 277,
+          "totalMs": 42.66,
+          "maxMs": 1.54
+        },
+        "EventDispatch": {
+          "count": 242,
+          "totalMs": 41.51,
+          "maxMs": 36.09
+        }
+      },
+      "threadCommitTrace": {
+        "count": 0,
+        "totalMs": 0,
+        "maxMs": 0
+      }
+    },
+    "inpMs": 48,
+    "maxEventTimingMs": 336,
+    "eventTimingCount": 92,
+    "threadViewCommit": {
+      "count": 2,
+      "totalActualMs": 0,
+      "avgActualMs": 0,
+      "maxActualMs": 0
+    },
+    "perfLogCount": 90
+  }
+]

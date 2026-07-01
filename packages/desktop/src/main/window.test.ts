@@ -58,6 +58,12 @@ describe("session popout window options", () => {
     expect(resolveWindowBackgroundOptions("linux")).toEqual({ backgroundColor: "#eff3f7" })
   })
 
+  it("can disable Windows Acrylic for performance diagnostics", () => {
+    expect(resolveWindowBackgroundOptions("win32", { env: { ANYBOX_DISABLE_WINDOWS_ACRYLIC: "1" } })).toEqual({
+      backgroundColor: "#eff3f7",
+    })
+  })
+
   it("positions native macOS traffic lights inside the right window controls slot", () => {
     expect(resolveNativeMacWindowButtonPosition(1440)).toEqual({ x: 1364, y: 14 })
     expect(resolveNativeMacWindowButtonPosition(72)).toEqual({ x: 12, y: 14 })

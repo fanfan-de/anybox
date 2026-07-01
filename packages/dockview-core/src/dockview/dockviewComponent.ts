@@ -632,6 +632,7 @@ export class DockviewComponent
 
     private _shellManager: ShellManager | undefined;
     private _floatingOverlayHost: HTMLDivElement | undefined;
+    private _lastFloatingOverlayHostBounds: Box | undefined;
     private _inShellLayout = false;
 
     private readonly _onDidRemoveGroup = new Emitter<DockviewGroupPanel>();
@@ -1021,7 +1022,8 @@ export class DockviewComponent
             this.element,
             (w, h) => this._layoutFromShell(w, h),
             options.theme?.gap ?? 0,
-            options.theme?.edgeGroupCollapsedSize
+            options.theme?.edgeGroupCollapsedSize,
+            options.disableAutoResizing === true
         );
         // The shell wraps the dockview element, so move the popup anchor
         // into the shell so overflow dropdowns in edge groups position correctly
@@ -2322,13 +2324,27 @@ export class DockviewComponent
         if (!this._floatingOverlayHost || !this._shellManager) {
             return;
         }
-        const shellRect = this._shellManager.element.getBoundingClientRect();
-        const gridRect = this.element.getBoundingClientRect();
+
+        const bounds = this._shellManager.getDockviewBounds();
+        if (!bounds) {
+            return;
+        }
+
+        if (
+            this._lastFloatingOverlayHostBounds?.left === bounds.left &&
+            this._lastFloatingOverlayHostBounds.top === bounds.top &&
+            this._lastFloatingOverlayHostBounds.width === bounds.width &&
+            this._lastFloatingOverlayHostBounds.height === bounds.height
+        ) {
+            return;
+        }
+
+        this._lastFloatingOverlayHostBounds = { ...bounds };
         const host = this._floatingOverlayHost;
-        host.style.left = `${gridRect.left - shellRect.left}px`;
-        host.style.top = `${gridRect.top - shellRect.top}px`;
-        host.style.width = `${gridRect.width}px`;
-        host.style.height = `${gridRect.height}px`;
+        host.style.left = `${bounds.left}px`;
+        host.style.top = `${bounds.top}px`;
+        host.style.width = `${bounds.width}px`;
+        host.style.height = `${bounds.height}px`;
     }
 
     private _layoutFromShell(width: number, height: number): void {

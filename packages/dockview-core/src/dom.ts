@@ -3,7 +3,9 @@ import {
     Emitter,
     addDisposableListener,
 } from './events';
-import { IDisposable, CompositeDisposable } from './lifecycle';
+import { IDisposable, CompositeDisposable, Disposable } from './lifecycle';
+
+const OVERFLOW_OBSERVER_MEASURE_DELAY_MS = 80;
 
 export interface OverflowEvent {
     hasScrollX: boolean;
@@ -14,24 +16,50 @@ export class OverflowObserver extends CompositeDisposable {
     private readonly _onDidChange = new Emitter<OverflowEvent>();
     readonly onDidChange = this._onDidChange.event;
 
-    private _value: OverflowEvent | null = null;
+    private _measurementTimer: ReturnType<typeof setTimeout> | undefined;
 
     constructor(el: HTMLElement) {
         super();
 
         this.addDisposables(
             this._onDidChange,
-            watchElementResize(el, (entry) => {
-                const hasScrollX =
-                    entry.target.scrollWidth > entry.target.clientWidth;
-
-                const hasScrollY =
-                    entry.target.scrollHeight > entry.target.clientHeight;
-
-                this._value = { hasScrollX, hasScrollY };
-                this._onDidChange.fire(this._value);
-            })
+            Disposable.from(() => this._clearScheduledMeasurement()),
+            watchElementResize(el, () => this._scheduleMeasurement(el))
         );
+    }
+
+    private _scheduleMeasurement(el: HTMLElement): void {
+        if (this.isDisposed) {
+            return;
+        }
+
+        this._clearScheduledMeasurement();
+        this._measurementTimer = setTimeout(() => {
+            this._measurementTimer = undefined;
+            this._measure(el);
+        }, OVERFLOW_OBSERVER_MEASURE_DELAY_MS);
+    }
+
+    private _clearScheduledMeasurement(): void {
+        if (this._measurementTimer === undefined) {
+            return;
+        }
+
+        clearTimeout(this._measurementTimer);
+        this._measurementTimer = undefined;
+    }
+
+    private _measure(el: HTMLElement): void {
+        if (this.isDisposed) {
+            return;
+        }
+
+        const nextValue = {
+            hasScrollX: el.scrollWidth > el.clientWidth,
+            hasScrollY: el.scrollHeight > el.clientHeight,
+        };
+
+        this._onDidChange.fire(nextValue);
     }
 }
 
@@ -39,15 +67,27 @@ export function watchElementResize(
     element: HTMLElement,
     cb: (entry: ResizeObserverEntry) => void
 ): IDisposable {
+    let latestEntry: ResizeObserverEntry | undefined;
+    let pendingAnimationFrame: number | undefined;
+
     const observer = new ResizeObserver((entires) => {
         /**
          * Fast browser window resize produces Error: ResizeObserver loop limit exceeded.
          * The error isn't visible in browser console, doesn't affect functionality, but degrades performance.
          * See https://stackoverflow.com/questions/49384120/resizeobserver-loop-limit-exceeded/58701523#58701523
          */
-        requestAnimationFrame(() => {
-            const firstEntry = entires[0];
-            cb(firstEntry);
+        latestEntry = entires[0];
+        if (pendingAnimationFrame !== undefined) {
+            return;
+        }
+
+        pendingAnimationFrame = requestAnimationFrame(() => {
+            pendingAnimationFrame = undefined;
+            const entry = latestEntry;
+            latestEntry = undefined;
+            if (entry) {
+                cb(entry);
+            }
         });
     });
 
@@ -55,6 +95,11 @@ export function watchElementResize(
 
     return {
         dispose: () => {
+            if (pendingAnimationFrame !== undefined) {
+                cancelAnimationFrame(pendingAnimationFrame);
+                pendingAnimationFrame = undefined;
+            }
+            latestEntry = undefined;
             observer.unobserve(element);
             observer.disconnect();
         },

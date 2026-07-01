@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import type { SerializedDockview } from "dockview-react"
 import { createWorkspaceStore } from "../agent-workspace/workspace-store"
 import { DEFAULT_ASSISTANT_TRACE_VISIBILITY } from "../types"
-import { resetRendererFrameCoordinatorForTest } from "../renderer-frame-coordinator"
+import { flushRendererFrameNow, resetRendererFrameCoordinatorForTest } from "../renderer-frame-coordinator"
 import { WorkbenchShell, type WorkbenchShellProps } from "./WorkbenchShell"
 
 const dockviewMock = vi.hoisted(() => {
@@ -442,22 +442,33 @@ describe("WorkbenchShell detach", () => {
 
       dockviewMock.api.layout.mockClear()
 
-      const dispatchResize = (callback: ResizeObserverCallback | null) => {
+      const dispatchResize = (callback: ResizeObserverCallback | null, width = 642.4, height = 419.6) => {
         if (!callback) throw new Error("ResizeObserver callback was not registered.")
         callback([
           {
-            borderBoxSize: [{ blockSize: 419.6, inlineSize: 642.4 }] as ResizeObserverSize[],
-            contentRect: { height: 419.6, width: 642.4 } as DOMRectReadOnly,
+            borderBoxSize: [{ blockSize: height, inlineSize: width }] as ResizeObserverSize[],
+            contentRect: { height, width } as DOMRectReadOnly,
             target: document.createElement("div"),
           } as unknown as ResizeObserverEntry,
         ], {} as ResizeObserver)
       }
 
       dispatchResize(resizeCallback)
+      flushRendererFrameNow("workbench-test")
 
-      await waitFor(() => {
-        expect(dockviewMock.api.layout).toHaveBeenCalledWith(642, 420, false)
-      })
+      expect(dockviewMock.api.layout).toHaveBeenCalledWith(642, 420, false)
+      expect(dockviewMock.api.layout).toHaveBeenCalledTimes(1)
+
+      dispatchResize(resizeCallback)
+      flushRendererFrameNow("workbench-test")
+
+      expect(dockviewMock.api.layout).toHaveBeenCalledTimes(1)
+
+      dispatchResize(resizeCallback, 643.4, 419.6)
+      flushRendererFrameNow("workbench-test")
+
+      expect(dockviewMock.api.layout).toHaveBeenLastCalledWith(643, 420, false)
+      expect(dockviewMock.api.layout).toHaveBeenCalledTimes(2)
     } finally {
       globalThis.ResizeObserver = originalResizeObserver
     }

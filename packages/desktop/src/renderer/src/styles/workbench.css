@@ -973,6 +973,7 @@
   align-items: stretch;
   gap: 0;
   padding: 0;
+  contain: layout paint;
 }
 
 .workbench-split {
@@ -1001,6 +1002,7 @@
   background: transparent;
   box-shadow: none;
   overflow: hidden;
+  contain: layout paint;
 }
 
 .workbench-pane.is-focused {
@@ -1013,6 +1015,7 @@
   inset: 0;
   min-width: 0;
   min-height: 0;
+  contain: layout paint;
   --pane-drop-preview-motion-duration: 220ms;
   --pane-drop-preview-fade-duration: 180ms;
   --pane-drop-preview-motion-curve: cubic-bezier(0.22, 1, 0.36, 1);
@@ -1036,6 +1039,7 @@
   box-shadow: none;
   box-sizing: border-box;
   overflow: hidden;
+  contain: layout paint;
   --pane-content-max-width: 880px;
   --pane-content-gutter: clamp(16px, 2.4vw, 32px);
   --pane-terminal-gutter: clamp(12px, 1.8vw, 18px);

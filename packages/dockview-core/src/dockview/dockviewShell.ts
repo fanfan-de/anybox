@@ -5,6 +5,7 @@ import {
     LayoutPriority,
     Orientation,
     Splitview,
+    SplitviewViewBounds,
 } from '../splitview/splitview';
 import { watchElementResize } from '../dom';
 
@@ -341,6 +342,10 @@ class MiddleColumnView implements IView, IDisposable {
         return 0;
     }
 
+    getCenterBounds(): SplitviewViewBounds | undefined {
+        return this._splitview.getViewBounds(this._centerIndex);
+    }
+
     resizeView(position: 'top' | 'bottom', size: number): void {
         const index = position === 'top' ? this._topIndex : this._bottomIndex;
         if (index !== undefined) {
@@ -407,7 +412,8 @@ export class ShellManager implements IDisposable {
         dockviewElement: HTMLElement,
         layoutGrid: (width: number, height: number) => void,
         gap = 0,
-        defaultCollapsedSize = 35
+        defaultCollapsedSize = 35,
+        disableAutoResizing = false
     ) {
         this._gap = gap;
         this._defaultCollapsedSize = defaultCollapsedSize;
@@ -436,20 +442,24 @@ export class ShellManager implements IDisposable {
             0
         );
 
+        const shellResizeDisposable = disableAutoResizing
+            ? undefined
+            : watchElementResize(this._shellElement, (entry) => {
+                  const width = Math.round(entry.contentRect.width);
+                  const height = Math.round(entry.contentRect.height);
+                  if (
+                      width === this._currentWidth &&
+                      height === this._currentHeight
+                  ) {
+                      return;
+                  }
+                  this._currentWidth = width;
+                  this._currentHeight = height;
+                  this.layout(width, height);
+              });
+
         this._disposables.addDisposables(
-            watchElementResize(this._shellElement, (entry) => {
-                const width = Math.round(entry.contentRect.width);
-                const height = Math.round(entry.contentRect.height);
-                if (
-                    width === this._currentWidth &&
-                    height === this._currentHeight
-                ) {
-                    return;
-                }
-                this._currentWidth = width;
-                this._currentHeight = height;
-                this.layout(width, height);
-            }),
+            ...(shellResizeDisposable ? [shellResizeDisposable] : []),
             this._outerSplitview,
             this._middleColumn,
             centerView
@@ -458,6 +468,23 @@ export class ShellManager implements IDisposable {
 
     get element(): HTMLElement {
         return this._shellElement;
+    }
+
+    getDockviewBounds(): SplitviewViewBounds | undefined {
+        const middleBounds = this._outerSplitview.getViewBounds(
+            this._middleIndex
+        );
+        const centerBounds = this._middleColumn.getCenterBounds();
+        if (!middleBounds || !centerBounds) {
+            return undefined;
+        }
+
+        return {
+            height: centerBounds.height,
+            left: middleBounds.left + centerBounds.left,
+            top: middleBounds.top + centerBounds.top,
+            width: centerBounds.width,
+        };
     }
 
     /**
@@ -550,6 +577,8 @@ export class ShellManager implements IDisposable {
     }
 
     layout(width: number, height: number): void {
+        this._currentWidth = Math.round(width);
+        this._currentHeight = Math.round(height);
         // Outer splitview is HORIZONTAL: layout(size=width, orthogonalSize=height)
         this._outerSplitview.layout(width, height);
     }

@@ -67,16 +67,80 @@ import {
 
 type DetachedSessionPanelBounds = { x: number; y: number; width: number; height: number }
 type DockviewLayoutSize = { width: number; height: number }
+type DockviewLayoutDebugEventType = "observed" | "queued" | "coalesced" | "skipped-same-size" | "layout"
+type DockviewLayoutDebugSource = "element" | "resize-observer" | "window-resize"
 type WorkbenchDropPlacement = "within" | "left" | "right" | "top" | "bottom"
 type WorkbenchPanelDragPayload = {
   dragID: string
   panelID: string
   sourceSurfaceID: string
 }
+type DockviewLayoutDebugSample = {
+  force: boolean
+  height: number
+  lastHeight: number | null
+  lastWidth: number | null
+  pending: boolean
+  source: DockviewLayoutDebugSource
+  time: number
+  type: DockviewLayoutDebugEventType
+  width: number
+}
+type DockviewLayoutDebugSize = {
+  height: number
+  width: number
+}
+type DockviewLayoutDebugSummary = {
+  alternatingSizeCount: number
+  appliedSamples: number
+  firstSize: DockviewLayoutDebugSize | null
+  heightDeltas: Record<string, number>
+  heightRange: DockviewLayoutDebugSize["height"][] | null
+  lastSize: DockviewLayoutDebugSize | null
+  maxAbsHeightDelta: number
+  maxAbsWidthDelta: number
+  sourceCounts: Record<DockviewLayoutDebugSource, number>
+  uniqueSizeCount: number
+  widthDeltas: Record<string, number>
+  widthRange: DockviewLayoutDebugSize["width"][] | null
+}
+type DockviewLayoutDebugState = {
+  applied: number
+  coalesced: number
+  enabled?: boolean
+  observed: number
+  queued: number
+  samples: DockviewLayoutDebugSample[]
+  summary: DockviewLayoutDebugSummary
+  skippedSameSize: number
+}
+type DockviewLayoutDebugWindow = Window & {
+  __ANYBOX_DOCKVIEW_LAYOUT_DEBUG__?: DockviewLayoutDebugState
+}
 
 const MIN_POPOUT_WIDTH = 720
 const MIN_POPOUT_HEIGHT = 520
 const WORKBENCH_PANEL_DRAG_MIME = "application/x-anybox-workbench-panel"
+const DOCKVIEW_LAYOUT_DEBUG_SAMPLE_LIMIT = 180
+
+const emptyDockviewLayoutDebugSummary: DockviewLayoutDebugSummary = {
+  alternatingSizeCount: 0,
+  appliedSamples: 0,
+  firstSize: null,
+  heightDeltas: {},
+  heightRange: null,
+  lastSize: null,
+  maxAbsHeightDelta: 0,
+  maxAbsWidthDelta: 0,
+  sourceCounts: {
+    element: 0,
+    "resize-observer": 0,
+    "window-resize": 0,
+  },
+  uniqueSizeCount: 0,
+  widthDeltas: {},
+  widthRange: null,
+}
 
 function useWorkbenchPanelState(
   store: WorkspaceStoreApi,
@@ -224,6 +288,163 @@ function readResizeObserverEntrySize(entry: ResizeObserverEntry): DockviewLayout
 function readElementLayoutSize(element: HTMLElement): DockviewLayoutSize | null {
   const rect = element.getBoundingClientRect()
   return createDockviewLayoutSize(rect.width, rect.height)
+}
+
+function dockviewLayoutSizesAreEqual(left: DockviewLayoutSize | null, right: DockviewLayoutSize | null) {
+  return left?.width === right?.width && left?.height === right?.height
+}
+
+function isDockviewLayoutDebugEnabled() {
+  if (typeof window === "undefined") return false
+  const debugWindow = window as DockviewLayoutDebugWindow
+  if (debugWindow.__ANYBOX_DOCKVIEW_LAYOUT_DEBUG__?.enabled === true) return true
+
+  try {
+    return window.localStorage.getItem("anybox:dockview-layout-debug") === "1"
+  } catch {
+    return false
+  }
+}
+
+function readDockviewLayoutDebugState(): DockviewLayoutDebugState | null {
+  if (!isDockviewLayoutDebugEnabled()) return null
+
+  const debugWindow = window as DockviewLayoutDebugWindow
+  const existing = debugWindow.__ANYBOX_DOCKVIEW_LAYOUT_DEBUG__
+  if (existing && Array.isArray(existing.samples)) {
+    existing.summary ??= emptyDockviewLayoutDebugSummary
+    return existing
+  }
+
+  const state: DockviewLayoutDebugState = {
+    applied: 0,
+    coalesced: 0,
+    enabled: true,
+    observed: 0,
+    queued: 0,
+    samples: [],
+    summary: emptyDockviewLayoutDebugSummary,
+    skippedSameSize: 0,
+  }
+  debugWindow.__ANYBOX_DOCKVIEW_LAYOUT_DEBUG__ = state
+  return state
+}
+
+function incrementDockviewLayoutDeltaCount(deltaCounts: Record<string, number>, delta: number) {
+  const key = delta > 0 ? `+${delta}` : String(delta)
+  deltaCounts[key] = (deltaCounts[key] ?? 0) + 1
+}
+
+function createDockviewLayoutDebugSummary(samples: DockviewLayoutDebugSample[]): DockviewLayoutDebugSummary {
+  const layoutSamples = samples.filter((sample) => sample.type === "layout")
+  if (layoutSamples.length === 0) return emptyDockviewLayoutDebugSummary
+
+  const uniqueSizes = new Set<string>()
+  const widthDeltas: Record<string, number> = {}
+  const heightDeltas: Record<string, number> = {}
+  const sourceCounts: Record<DockviewLayoutDebugSource, number> = {
+    element: 0,
+    "resize-observer": 0,
+    "window-resize": 0,
+  }
+  let minWidth = Number.POSITIVE_INFINITY
+  let maxWidth = Number.NEGATIVE_INFINITY
+  let minHeight = Number.POSITIVE_INFINITY
+  let maxHeight = Number.NEGATIVE_INFINITY
+  let maxAbsWidthDelta = 0
+  let maxAbsHeightDelta = 0
+  let alternatingSizeCount = 0
+
+  for (let i = 0; i < layoutSamples.length; i += 1) {
+    const sample = layoutSamples[i]
+    uniqueSizes.add(`${sample.width}x${sample.height}`)
+    sourceCounts[sample.source] += 1
+    minWidth = Math.min(minWidth, sample.width)
+    maxWidth = Math.max(maxWidth, sample.width)
+    minHeight = Math.min(minHeight, sample.height)
+    maxHeight = Math.max(maxHeight, sample.height)
+
+    const previous = layoutSamples[i - 1]
+    if (previous) {
+      const widthDelta = sample.width - previous.width
+      const heightDelta = sample.height - previous.height
+      incrementDockviewLayoutDeltaCount(widthDeltas, widthDelta)
+      incrementDockviewLayoutDeltaCount(heightDeltas, heightDelta)
+      maxAbsWidthDelta = Math.max(maxAbsWidthDelta, Math.abs(widthDelta))
+      maxAbsHeightDelta = Math.max(maxAbsHeightDelta, Math.abs(heightDelta))
+    }
+
+    const twoBack = layoutSamples[i - 2]
+    if (
+      previous &&
+      twoBack &&
+      sample.width === twoBack.width &&
+      sample.height === twoBack.height &&
+      (sample.width !== previous.width || sample.height !== previous.height)
+    ) {
+      alternatingSizeCount += 1
+    }
+  }
+
+  const firstSample = layoutSamples[0]
+  const lastSample = layoutSamples[layoutSamples.length - 1]
+
+  return {
+    alternatingSizeCount,
+    appliedSamples: layoutSamples.length,
+    firstSize: {
+      height: firstSample.height,
+      width: firstSample.width,
+    },
+    heightDeltas,
+    heightRange: [minHeight, maxHeight],
+    lastSize: {
+      height: lastSample.height,
+      width: lastSample.width,
+    },
+    maxAbsHeightDelta,
+    maxAbsWidthDelta,
+    sourceCounts,
+    uniqueSizeCount: uniqueSizes.size,
+    widthDeltas,
+    widthRange: [minWidth, maxWidth],
+  }
+}
+
+function recordDockviewLayoutDebugSample(
+  type: DockviewLayoutDebugEventType,
+  size: DockviewLayoutSize,
+  input: {
+    force: boolean
+    lastSize: DockviewLayoutSize | null
+    pending: boolean
+    source: DockviewLayoutDebugSource
+  },
+) {
+  const state = readDockviewLayoutDebugState()
+  if (!state) return
+
+  if (type === "observed") state.observed += 1
+  if (type === "queued") state.queued += 1
+  if (type === "coalesced") state.coalesced += 1
+  if (type === "skipped-same-size") state.skippedSameSize += 1
+  if (type === "layout") state.applied += 1
+
+  state.samples.push({
+    force: input.force,
+    height: size.height,
+    lastHeight: input.lastSize?.height ?? null,
+    lastWidth: input.lastSize?.width ?? null,
+    pending: input.pending,
+    source: input.source,
+    time: Number(performance.now().toFixed(2)),
+    type,
+    width: size.width,
+  })
+  if (state.samples.length > DOCKVIEW_LAYOUT_DEBUG_SAMPLE_LIMIT) {
+    state.samples.splice(0, state.samples.length - DOCKVIEW_LAYOUT_DEBUG_SAMPLE_LIMIT)
+  }
+  state.summary = createDockviewLayoutDebugSummary(state.samples)
 }
 
 function isPointOutsideElement(element: HTMLElement, clientX: number, clientY: number) {
@@ -445,6 +666,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
   const pendingDockviewLayoutCancelRef = useRef<RendererFrameTaskCancel | null>(null)
   const pendingDockviewLayoutForceRef = useRef(false)
   const pendingDockviewLayoutSizeRef = useRef<DockviewLayoutSize | null>(null)
+  const pendingDockviewLayoutSourceRef = useRef<DockviewLayoutDebugSource>("element")
   const lastDockviewLayoutSizeRef = useRef<DockviewLayoutSize | null>(null)
   const lastAppliedSerializedSignatureRef = useRef<string | null>(null)
   const lastEmittedSerializedSignatureRef = useRef(getSerializedDockviewSignature(dockviewLayout))
@@ -488,23 +710,69 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
     emitActiveDockviewChangeFromState(createDockviewActiveStateFromLayout(layout))
   }, [emitActiveDockviewChangeFromState])
 
-  const queueDockviewLayout = useCallback((dockviewApi: DockviewApi, size: DockviewLayoutSize, options?: { force?: boolean }) => {
+  const queueDockviewLayout = useCallback((dockviewApi: DockviewApi, size: DockviewLayoutSize, options?: { force?: boolean; source?: DockviewLayoutDebugSource }) => {
+    const force = options?.force === true
+    const source = options?.source ?? "resize-observer"
+    const lastSize = lastDockviewLayoutSizeRef.current
+    const hasPendingLayout = pendingDockviewLayoutCancelRef.current !== null
+
+    if (!force && !hasPendingLayout && dockviewLayoutSizesAreEqual(lastSize, size)) {
+      recordDockviewLayoutDebugSample("skipped-same-size", size, {
+        force,
+        lastSize,
+        pending: false,
+        source,
+      })
+      return
+    }
+
     pendingDockviewLayoutSizeRef.current = size
-    pendingDockviewLayoutForceRef.current = pendingDockviewLayoutForceRef.current || options?.force === true
-    if (pendingDockviewLayoutCancelRef.current !== null) return
+    pendingDockviewLayoutSourceRef.current = source
+    pendingDockviewLayoutForceRef.current = pendingDockviewLayoutForceRef.current || force
+    if (hasPendingLayout) {
+      recordDockviewLayoutDebugSample("coalesced", size, {
+        force,
+        lastSize,
+        pending: true,
+        source,
+      })
+      return
+    }
+
+    recordDockviewLayoutDebugSample("queued", size, {
+      force,
+      lastSize,
+      pending: false,
+      source,
+    })
 
     pendingDockviewLayoutCancelRef.current = queueRendererLayoutWrite(dockviewLayoutTaskKeyRef.current, () => {
       pendingDockviewLayoutCancelRef.current = null
       const nextSize = pendingDockviewLayoutSizeRef.current
-      const force = pendingDockviewLayoutForceRef.current
+      const shouldForce = pendingDockviewLayoutForceRef.current
+      const pendingSource = pendingDockviewLayoutSourceRef.current
       pendingDockviewLayoutForceRef.current = false
       if (!nextSize) return
 
-      const lastSize = lastDockviewLayoutSizeRef.current
-      if (!force && lastSize?.width === nextSize.width && lastSize.height === nextSize.height) return
+      const previousSize = lastDockviewLayoutSizeRef.current
+      if (!shouldForce && dockviewLayoutSizesAreEqual(previousSize, nextSize)) {
+        recordDockviewLayoutDebugSample("skipped-same-size", nextSize, {
+          force: shouldForce,
+          lastSize: previousSize,
+          pending: false,
+          source: pendingSource,
+        })
+        return
+      }
 
       lastDockviewLayoutSizeRef.current = nextSize
-      dockviewApi.layout(nextSize.width, nextSize.height, force)
+      recordDockviewLayoutDebugSample("layout", nextSize, {
+        force: shouldForce,
+        lastSize: previousSize,
+        pending: false,
+        source: pendingSource,
+      })
+      dockviewApi.layout(nextSize.width, nextSize.height, false)
     })
   }, [])
 
@@ -628,22 +896,29 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
 
     lastDockviewLayoutSizeRef.current = null
 
-    const queueCurrentLayout = (force = false) => {
+    const queueCurrentLayout = (force = false, source: DockviewLayoutDebugSource = "element") => {
       const size = readElementLayoutSize(element)
       if (!size) return
-      queueDockviewLayout(api, size, { force })
+      recordDockviewLayoutDebugSample("observed", size, {
+        force,
+        lastSize: lastDockviewLayoutSizeRef.current,
+        pending: pendingDockviewLayoutCancelRef.current !== null,
+        source,
+      })
+      queueDockviewLayout(api, size, { force, source })
     }
 
     queueCurrentLayout(true)
 
     if (typeof ResizeObserver === "undefined") {
-      const handleWindowResize = () => queueCurrentLayout(false)
+      const handleWindowResize = () => queueCurrentLayout(false, "window-resize")
       window.addEventListener("resize", handleWindowResize)
       return () => {
         window.removeEventListener("resize", handleWindowResize)
         pendingDockviewLayoutCancelRef.current?.()
         pendingDockviewLayoutCancelRef.current = null
         pendingDockviewLayoutSizeRef.current = null
+        pendingDockviewLayoutSourceRef.current = "element"
         pendingDockviewLayoutForceRef.current = false
       }
     }
@@ -651,7 +926,13 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
     const resizeObserver = new ResizeObserver((entries) => {
       const size = entries[0] ? readResizeObserverEntrySize(entries[0]) : null
       if (!size) return
-      queueDockviewLayout(api, size)
+      recordDockviewLayoutDebugSample("observed", size, {
+        force: false,
+        lastSize: lastDockviewLayoutSizeRef.current,
+        pending: pendingDockviewLayoutCancelRef.current !== null,
+        source: "resize-observer",
+      })
+      queueDockviewLayout(api, size, { source: "resize-observer" })
     })
     resizeObserver.observe(element)
 
@@ -660,6 +941,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
       pendingDockviewLayoutCancelRef.current?.()
       pendingDockviewLayoutCancelRef.current = null
       pendingDockviewLayoutSizeRef.current = null
+      pendingDockviewLayoutSourceRef.current = "element"
       pendingDockviewLayoutForceRef.current = false
     }
   }, [api, queueDockviewLayout])

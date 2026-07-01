@@ -70,6 +70,317 @@ interface ISashDragSnapState {
     readonly size: number;
 }
 
+export interface SplitviewViewBounds {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+}
+
+type SplitviewPerfMeasure = {
+    startMark: string;
+    endMark: string;
+    measureName: string;
+};
+
+type SplitviewDebugOptions = {
+    collectChildLayoutStats?: boolean;
+    skipChildLayout?: boolean;
+    traceChildLayouts?: boolean;
+    transformPosition?: boolean;
+};
+
+type SplitviewChildLayoutState = {
+    size: number;
+    orthogonalSize: number;
+    visible: boolean;
+};
+
+type SplitviewLayoutStyleProperty = 'left' | 'top' | 'width' | 'height';
+
+type SplitviewChildLayoutDebugInput = {
+    childIndex: number;
+    orthogonalSize: number;
+    orientation: Orientation;
+    size: number;
+    splitviewId: number;
+    viewLabel: string;
+    visible: boolean;
+};
+
+type SplitviewChildLayoutDebugStats = SplitviewChildLayoutDebugInput & {
+    count: number;
+    lastMs: number;
+    maxMs: number;
+    skippedCount: number;
+    totalMs: number;
+};
+
+type SplitviewChildLayoutDebugSummaryEntry =
+    SplitviewChildLayoutDebugInput & {
+        avgMs: number;
+        count: number;
+        key: string;
+        lastMs: number;
+        maxMs: number;
+        skippedCount: number;
+        totalMs: number;
+    };
+
+type SplitviewChildLayoutDebugState = {
+    childLayouts: Record<string, SplitviewChildLayoutDebugStats>;
+    reset: () => void;
+    skippedChildLayouts: number;
+    summary: SplitviewChildLayoutDebugSummaryEntry[];
+};
+
+type SplitviewDebugGlobal = typeof globalThis & {
+    __ANYBOX_SPLITVIEW_DEBUG__?: SplitviewDebugOptions;
+    __ANYBOX_SPLITVIEW_DEBUG_STATE__?: SplitviewChildLayoutDebugState;
+};
+
+let splitviewPerfMeasureId = 0;
+let splitviewDebugInstanceId = 0;
+
+function getSplitviewDebugOptions(): SplitviewDebugOptions {
+    return (
+        (globalThis as SplitviewDebugGlobal).__ANYBOX_SPLITVIEW_DEBUG__ ?? {}
+    );
+}
+
+function beginSplitviewPerfMeasure(
+    label: string
+): SplitviewPerfMeasure | undefined {
+    if (
+        typeof performance === 'undefined' ||
+        typeof performance.mark !== 'function'
+    ) {
+        return undefined;
+    }
+
+    const id = ++splitviewPerfMeasureId;
+    const startMark = `dockview.splitview.${label}:${id}:start`;
+    const endMark = `dockview.splitview.${label}:${id}:end`;
+
+    performance.mark(startMark);
+
+    return {
+        startMark,
+        endMark,
+        measureName: `dockview.splitview.${label}:${id}`,
+    };
+}
+
+function endSplitviewPerfMeasure(measure?: SplitviewPerfMeasure): void {
+    if (
+        !measure ||
+        typeof performance === 'undefined' ||
+        typeof performance.mark !== 'function'
+    ) {
+        return;
+    }
+
+    performance.mark(measure.endMark);
+
+    if (typeof performance.measure === 'function') {
+        performance.measure(
+            measure.measureName,
+            measure.startMark,
+            measure.endMark
+        );
+    }
+}
+
+function setStyleIfChanged(
+    element: HTMLElement,
+    property: SplitviewLayoutStyleProperty,
+    value: string
+): void {
+    if (element.style.getPropertyValue(property) === value) {
+        return;
+    }
+
+    if (value === '') {
+        element.style.removeProperty(property);
+    } else {
+        element.style.setProperty(property, value);
+    }
+}
+
+function setTransformIfChanged(element: HTMLElement, value: string): void {
+    if (element.style.transform === value) {
+        return;
+    }
+
+    element.style.transform = value;
+}
+
+function createSplitviewTranslateTransform(
+    x: number,
+    y: number
+): string {
+    return `translate3d(${x}px, ${y}px, 0)`;
+}
+
+function readSplitviewChildLayoutDebugLabel(view: ViewItem): string {
+    const childView = view.view;
+    const constructorName = childView.constructor.name || 'View';
+    const element = childView.element;
+
+    if (
+        typeof HTMLElement !== 'undefined' &&
+        element instanceof HTMLElement
+    ) {
+        const className = element.className.trim().replace(/\s+/g, '.');
+        return className ? `${constructorName}.${className}` : constructorName;
+    }
+
+    return constructorName;
+}
+
+function isSplitviewChildLayoutStatsEnabled(
+    debugOptions: SplitviewDebugOptions
+): boolean {
+    return (
+        debugOptions.traceChildLayouts === true ||
+        debugOptions.collectChildLayoutStats === true
+    );
+}
+
+function readSplitviewPerfNow(): number {
+    if (
+        typeof performance !== 'undefined' &&
+        typeof performance.now === 'function'
+    ) {
+        return performance.now();
+    }
+
+    return Date.now();
+}
+
+function roundSplitviewDebugNumber(value: number): number {
+    return Math.round(value * 1000) / 1000;
+}
+
+function createSplitviewChildLayoutDebugState(): SplitviewChildLayoutDebugState {
+    const state: SplitviewChildLayoutDebugState = {
+        childLayouts: {},
+        reset: () => {
+            state.childLayouts = {};
+            state.skippedChildLayouts = 0;
+            state.summary = [];
+        },
+        skippedChildLayouts: 0,
+        summary: [],
+    };
+
+    return state;
+}
+
+function ensureSplitviewChildLayoutDebugState(): SplitviewChildLayoutDebugState {
+    const debugGlobal = globalThis as SplitviewDebugGlobal;
+    debugGlobal.__ANYBOX_SPLITVIEW_DEBUG_STATE__ ??=
+        createSplitviewChildLayoutDebugState();
+    return debugGlobal.__ANYBOX_SPLITVIEW_DEBUG_STATE__;
+}
+
+function createSplitviewChildLayoutDebugKey(
+    splitviewId: number,
+    childIndex: number
+): string {
+    return `${splitviewId}:${childIndex}`;
+}
+
+function readSplitviewChildLayoutDebugStats(
+    state: SplitviewChildLayoutDebugState,
+    key: string,
+    input: SplitviewChildLayoutDebugInput
+): SplitviewChildLayoutDebugStats {
+    const existing = state.childLayouts[key];
+    if (existing) {
+        existing.childIndex = input.childIndex;
+        existing.orthogonalSize = input.orthogonalSize;
+        existing.orientation = input.orientation;
+        existing.size = input.size;
+        existing.splitviewId = input.splitviewId;
+        existing.viewLabel = input.viewLabel;
+        existing.visible = input.visible;
+        return existing;
+    }
+
+    const stats: SplitviewChildLayoutDebugStats = {
+        ...input,
+        count: 0,
+        lastMs: 0,
+        maxMs: 0,
+        skippedCount: 0,
+        totalMs: 0,
+    };
+    state.childLayouts[key] = stats;
+    return stats;
+}
+
+function updateSplitviewChildLayoutDebugSummary(
+    state: SplitviewChildLayoutDebugState
+): void {
+    state.summary = Object.entries(state.childLayouts)
+        .map(([key, stats]) => ({
+            avgMs: roundSplitviewDebugNumber(
+                stats.count > 0 ? stats.totalMs / stats.count : 0
+            ),
+            childIndex: stats.childIndex,
+            count: stats.count,
+            key,
+            lastMs: roundSplitviewDebugNumber(stats.lastMs),
+            maxMs: roundSplitviewDebugNumber(stats.maxMs),
+            orthogonalSize: stats.orthogonalSize,
+            orientation: stats.orientation,
+            size: stats.size,
+            skippedCount: stats.skippedCount,
+            splitviewId: stats.splitviewId,
+            totalMs: roundSplitviewDebugNumber(stats.totalMs),
+            viewLabel: stats.viewLabel,
+            visible: stats.visible,
+        }))
+        .sort(
+            (a, b) =>
+                b.totalMs - a.totalMs ||
+                b.maxMs - a.maxMs ||
+                a.key.localeCompare(b.key)
+        );
+}
+
+function recordSplitviewChildLayoutDuration(
+    input: SplitviewChildLayoutDebugInput,
+    durationMs: number
+): void {
+    const state = ensureSplitviewChildLayoutDebugState();
+    const key = createSplitviewChildLayoutDebugKey(
+        input.splitviewId,
+        input.childIndex
+    );
+    const stats = readSplitviewChildLayoutDebugStats(state, key, input);
+    stats.count += 1;
+    stats.lastMs = durationMs;
+    stats.maxMs = Math.max(stats.maxMs, durationMs);
+    stats.totalMs += durationMs;
+    updateSplitviewChildLayoutDebugSummary(state);
+}
+
+function recordSplitviewSkippedChildLayout(
+    input: SplitviewChildLayoutDebugInput
+): void {
+    const state = ensureSplitviewChildLayoutDebugState();
+    const key = createSplitviewChildLayoutDebugKey(
+        input.splitviewId,
+        input.childIndex
+    );
+    const stats = readSplitviewChildLayoutDebugStats(state, key, input);
+    stats.skippedCount += 1;
+    state.skippedChildLayouts += 1;
+    updateSplitviewChildLayoutDebugSummary(state);
+}
+
 type ViewItemSize = number | { cachedVisibleSize: number };
 
 export type DistributeSizing = { type: 'distribute' };
@@ -101,6 +412,12 @@ export class Splitview {
     private readonly viewContainer: HTMLElement;
     private readonly sashContainer: HTMLElement;
     private readonly viewItems: ViewItem[] = [];
+    private readonly viewBounds: (SplitviewViewBounds | undefined)[] = [];
+    private readonly viewLayoutStates: (
+        | SplitviewChildLayoutState
+        | undefined
+    )[] = [];
+    private readonly debugId = ++splitviewDebugInstanceId;
     private readonly sashes: ISashItem[] = [];
     private _orientation: Orientation;
     private _size = 0;
@@ -428,6 +745,8 @@ export class Splitview {
         }
 
         this.viewItems.splice(index, 0, viewItem);
+        this.viewBounds.splice(index, 0, undefined);
+        this.viewLayoutStates.splice(index, 0, undefined);
 
         if (this.viewItems.length > 1) {
             //add sash
@@ -630,6 +949,8 @@ export class Splitview {
     ): IView {
         // Remove view
         const viewItem = this.viewItems.splice(index, 1)[0];
+        this.viewBounds.splice(index, 1);
+        this.viewLayoutStates.splice(index, 1);
         viewItem.dispose();
 
         // Remove sash
@@ -661,6 +982,15 @@ export class Splitview {
         return viewItem.cachedVisibleSize;
     }
 
+    getViewBounds(index: number): SplitviewViewBounds | undefined {
+        if (index < 0 || index >= this.viewItems.length) {
+            throw new Error('Index out of bounds');
+        }
+
+        const bounds = this.viewBounds[index];
+        return bounds ? { ...bounds } : undefined;
+    }
+
     public moveView(from: number, to: number): void {
         const cachedVisibleSize = this.getViewCachedVisibleSize(from);
         const sizing =
@@ -672,56 +1002,62 @@ export class Splitview {
     }
 
     public layout(size: number, orthogonalSize: number): void {
-        const previousSize = Math.max(this.size, this._contentSize);
-        this.size = size;
-        this.orthogonalSize = orthogonalSize;
+        const perfMeasure = beginSplitviewPerfMeasure('layout');
 
-        if (!this.proportions) {
-            const indexes = range(this.viewItems.length);
-            const lowPriorityIndexes = indexes.filter(
-                (i) => this.viewItems[i].priority === LayoutPriority.Low
-            );
-            const highPriorityIndexes = indexes.filter(
-                (i) => this.viewItems[i].priority === LayoutPriority.High
-            );
+        try {
+            const previousSize = Math.max(this.size, this._contentSize);
+            this.size = size;
+            this.orthogonalSize = orthogonalSize;
 
-            this.resize(
-                this.viewItems.length - 1,
-                size - previousSize,
-                undefined,
-                lowPriorityIndexes,
-                highPriorityIndexes
-            );
-        } else {
-            let total = 0;
+            if (!this.proportions) {
+                const indexes = range(this.viewItems.length);
+                const lowPriorityIndexes = indexes.filter(
+                    (i) => this.viewItems[i].priority === LayoutPriority.Low
+                );
+                const highPriorityIndexes = indexes.filter(
+                    (i) => this.viewItems[i].priority === LayoutPriority.High
+                );
 
-            for (let i = 0; i < this.viewItems.length; i++) {
-                const item = this.viewItems[i];
-                const proportion = this.proportions[i];
+                this.resize(
+                    this.viewItems.length - 1,
+                    size - previousSize,
+                    undefined,
+                    lowPriorityIndexes,
+                    highPriorityIndexes
+                );
+            } else {
+                let total = 0;
 
-                if (typeof proportion === 'number') {
-                    total += proportion;
-                } else {
-                    size -= item.size;
+                for (let i = 0; i < this.viewItems.length; i++) {
+                    const item = this.viewItems[i];
+                    const proportion = this.proportions[i];
+
+                    if (typeof proportion === 'number') {
+                        total += proportion;
+                    } else {
+                        size -= item.size;
+                    }
+                }
+
+                for (let i = 0; i < this.viewItems.length; i++) {
+                    const item = this.viewItems[i];
+                    const proportion = this.proportions[i];
+
+                    if (typeof proportion === 'number' && total > 0) {
+                        item.size = clamp(
+                            Math.round((proportion * size) / total),
+                            item.minimumSize,
+                            item.maximumSize
+                        );
+                    }
                 }
             }
 
-            for (let i = 0; i < this.viewItems.length; i++) {
-                const item = this.viewItems[i];
-                const proportion = this.proportions[i];
-
-                if (typeof proportion === 'number' && total > 0) {
-                    item.size = clamp(
-                        Math.round((proportion * size) / total),
-                        item.minimumSize,
-                        item.maximumSize
-                    );
-                }
-            }
+            this.distributeEmptySpace();
+            this.layoutViews();
+        } finally {
+            endSplitviewPerfMeasure(perfMeasure);
         }
-
-        this.distributeEmptySpace();
-        this.layoutViews();
     }
 
     private relayout(
@@ -798,95 +1134,288 @@ export class Splitview {
      * For each view `i` the offet must be adjusted by `m * i/(n - 1)`.
      */
     private layoutViews(): void {
-        this._contentSize = this.viewItems.reduce((r, i) => r + i.size, 0);
+        const perfMeasure = beginSplitviewPerfMeasure('layoutViews');
 
-        this.updateSashEnablement();
+        try {
+            this._contentSize = this.viewItems.reduce((r, i) => r + i.size, 0);
 
-        if (this.viewItems.length === 0) {
+            this.updateSashEnablement();
+
+            if (this.viewItems.length === 0) {
+                this.viewBounds.length = 0;
+                this.viewLayoutStates.length = 0;
+                return;
+            }
+            this.viewBounds.length = this.viewItems.length;
+            this.viewLayoutStates.length = this.viewItems.length;
+
+            const visibleViewItems = this.viewItems.filter((i) => i.visible);
+
+            const sashCount = Math.max(0, visibleViewItems.length - 1);
+            const marginReducedSize =
+                (this.margin * sashCount) /
+                Math.max(1, visibleViewItems.length);
+
+            let totalLeftOffset = 0;
+            const viewLeftOffsets: number[] = [];
+
+            const sashWidth = 4; // hardcoded in css
+
+            const runningVisiblePanelCount = this.viewItems.reduce(
+                (arr, viewItem, i) => {
+                    const flag = viewItem.visible ? 1 : 0;
+                    if (i === 0) {
+                        arr.push(flag);
+                    } else {
+                        arr.push(arr[i - 1] + flag);
+                    }
+
+                    return arr;
+                },
+                [] as number[]
+            );
+
+            const debugOptions = getSplitviewDebugOptions();
+            const collectChildLayoutStats =
+                isSplitviewChildLayoutStatsEnabled(debugOptions);
+            const useTransformPosition =
+                debugOptions.transformPosition === true;
+
+            // calculate both view and cash positions
+            this.viewItems.forEach((view, i) => {
+                totalLeftOffset += this.viewItems[i].size;
+                viewLeftOffsets.push(totalLeftOffset);
+
+                const size = view.visible ? view.size - marginReducedSize : 0;
+
+                const visiblePanelsBeforeThisView = Math.max(
+                    0,
+                    runningVisiblePanelCount[i] - 1
+                );
+
+                const offset =
+                    i === 0 || visiblePanelsBeforeThisView === 0
+                        ? 0
+                        : viewLeftOffsets[i - 1] +
+                          (visiblePanelsBeforeThisView / sashCount) *
+                              marginReducedSize;
+
+                if (i < this.viewItems.length - 1) {
+                    // calculate sash position
+                    const newSize = view.visible
+                        ? offset + size - sashWidth / 2 + this.margin / 2
+                        : offset;
+
+                    if (this._orientation === Orientation.HORIZONTAL) {
+                        if (useTransformPosition) {
+                            setStyleIfChanged(
+                                this.sashes[i].container,
+                                'left',
+                                '0px'
+                            );
+                            setStyleIfChanged(
+                                this.sashes[i].container,
+                                'top',
+                                '0px'
+                            );
+                            setTransformIfChanged(
+                                this.sashes[i].container,
+                                createSplitviewTranslateTransform(newSize, 0)
+                            );
+                        } else {
+                            setStyleIfChanged(
+                                this.sashes[i].container,
+                                'left',
+                                `${newSize}px`
+                            );
+                            setStyleIfChanged(
+                                this.sashes[i].container,
+                                'top',
+                                '0px'
+                            );
+                            setTransformIfChanged(
+                                this.sashes[i].container,
+                                ''
+                            );
+                        }
+                    }
+                    if (this._orientation === Orientation.VERTICAL) {
+                        if (useTransformPosition) {
+                            setStyleIfChanged(
+                                this.sashes[i].container,
+                                'left',
+                                '0px'
+                            );
+                            setStyleIfChanged(
+                                this.sashes[i].container,
+                                'top',
+                                '0px'
+                            );
+                            setTransformIfChanged(
+                                this.sashes[i].container,
+                                createSplitviewTranslateTransform(0, newSize)
+                            );
+                        } else {
+                            setStyleIfChanged(
+                                this.sashes[i].container,
+                                'left',
+                                '0px'
+                            );
+                            setStyleIfChanged(
+                                this.sashes[i].container,
+                                'top',
+                                `${newSize}px`
+                            );
+                            setTransformIfChanged(
+                                this.sashes[i].container,
+                                ''
+                            );
+                        }
+                    }
+                }
+
+                // calculate view position
+
+                if (this._orientation === Orientation.HORIZONTAL) {
+                    setStyleIfChanged(view.container, 'width', `${size}px`);
+                    if (useTransformPosition) {
+                        setStyleIfChanged(view.container, 'left', '0px');
+                        setStyleIfChanged(view.container, 'top', '0px');
+                        setTransformIfChanged(
+                            view.container,
+                            createSplitviewTranslateTransform(offset, 0)
+                        );
+                    } else {
+                        setStyleIfChanged(
+                            view.container,
+                            'left',
+                            `${offset}px`
+                        );
+                        setStyleIfChanged(view.container, 'top', '');
+                        setTransformIfChanged(view.container, '');
+                    }
+                    setStyleIfChanged(view.container, 'height', '');
+                    this.viewBounds[i] = {
+                        height: this._orthogonalSize,
+                        left: offset,
+                        top: 0,
+                        width: size,
+                    };
+                }
+                if (this._orientation === Orientation.VERTICAL) {
+                    setStyleIfChanged(view.container, 'height', `${size}px`);
+                    if (useTransformPosition) {
+                        setStyleIfChanged(view.container, 'top', '0px');
+                        setStyleIfChanged(view.container, 'left', '0px');
+                        setTransformIfChanged(
+                            view.container,
+                            createSplitviewTranslateTransform(0, offset)
+                        );
+                    } else {
+                        setStyleIfChanged(
+                            view.container,
+                            'top',
+                            `${offset}px`
+                        );
+                        setStyleIfChanged(view.container, 'left', '');
+                        setTransformIfChanged(view.container, '');
+                    }
+                    setStyleIfChanged(view.container, 'width', '');
+                    this.viewBounds[i] = {
+                        height: size,
+                        left: 0,
+                        top: offset,
+                        width: this._orthogonalSize,
+                    };
+                }
+
+                const childLayoutSize = view.size - marginReducedSize;
+                if (debugOptions.skipChildLayout) {
+                    if (collectChildLayoutStats) {
+                        recordSplitviewSkippedChildLayout({
+                            childIndex: i,
+                            orthogonalSize: this._orthogonalSize,
+                            orientation: this._orientation,
+                            size: childLayoutSize,
+                            splitviewId: this.debugId,
+                            viewLabel: readSplitviewChildLayoutDebugLabel(
+                                view
+                            ),
+                            visible: view.visible,
+                        });
+                    }
+                } else {
+                    this.layoutViewIfChanged(
+                        view,
+                        i,
+                        childLayoutSize,
+                        this._orthogonalSize,
+                        debugOptions
+                    );
+                }
+            });
+        } finally {
+            endSplitviewPerfMeasure(perfMeasure);
+        }
+    }
+
+    private layoutViewIfChanged(
+        view: ViewItem,
+        index: number,
+        size: number,
+        orthogonalSize: number,
+        debugOptions: SplitviewDebugOptions
+    ): void {
+        const collectChildLayoutStats =
+            isSplitviewChildLayoutStatsEnabled(debugOptions);
+        const childLayoutDebugInput = collectChildLayoutStats
+            ? {
+                  childIndex: index,
+                  orthogonalSize,
+                  orientation: this._orientation,
+                  size,
+                  splitviewId: this.debugId,
+                  viewLabel: readSplitviewChildLayoutDebugLabel(view),
+                  visible: view.visible,
+              }
+            : undefined;
+        const previousLayout = this.viewLayoutStates[index];
+        if (
+            previousLayout?.size === size &&
+            previousLayout.orthogonalSize === orthogonalSize &&
+            previousLayout.visible === view.visible
+        ) {
+            if (childLayoutDebugInput) {
+                recordSplitviewSkippedChildLayout(childLayoutDebugInput);
+            }
             return;
         }
 
-        const visibleViewItems = this.viewItems.filter((i) => i.visible);
+        const childPerfMeasure = debugOptions.traceChildLayouts
+            ? beginSplitviewPerfMeasure(`childLayout.${index}`)
+            : undefined;
+        const childLayoutStart = collectChildLayoutStats
+            ? readSplitviewPerfNow()
+            : 0;
+        let didLayout = false;
 
-        const sashCount = Math.max(0, visibleViewItems.length - 1);
-        const marginReducedSize =
-            (this.margin * sashCount) / Math.max(1, visibleViewItems.length);
-
-        let totalLeftOffset = 0;
-        const viewLeftOffsets: number[] = [];
-
-        const sashWidth = 4; // hardcoded in css
-
-        const runningVisiblePanelCount = this.viewItems.reduce(
-            (arr, viewItem, i) => {
-                const flag = viewItem.visible ? 1 : 0;
-                if (i === 0) {
-                    arr.push(flag);
-                } else {
-                    arr.push(arr[i - 1] + flag);
-                }
-
-                return arr;
-            },
-            [] as number[]
-        );
-
-        // calculate both view and cash positions
-        this.viewItems.forEach((view, i) => {
-            totalLeftOffset += this.viewItems[i].size;
-            viewLeftOffsets.push(totalLeftOffset);
-
-            const size = view.visible ? view.size - marginReducedSize : 0;
-
-            const visiblePanelsBeforeThisView = Math.max(
-                0,
-                runningVisiblePanelCount[i] - 1
-            );
-
-            const offset =
-                i === 0 || visiblePanelsBeforeThisView === 0
-                    ? 0
-                    : viewLeftOffsets[i - 1] +
-                      (visiblePanelsBeforeThisView / sashCount) *
-                          marginReducedSize;
-
-            if (i < this.viewItems.length - 1) {
-                // calculate sash position
-                const newSize = view.visible
-                    ? offset + size - sashWidth / 2 + this.margin / 2
-                    : offset;
-
-                if (this._orientation === Orientation.HORIZONTAL) {
-                    this.sashes[i].container.style.left = `${newSize}px`;
-                    this.sashes[i].container.style.top = `0px`;
-                }
-                if (this._orientation === Orientation.VERTICAL) {
-                    this.sashes[i].container.style.left = `0px`;
-                    this.sashes[i].container.style.top = `${newSize}px`;
-                }
+        try {
+            view.view.layout(size, orthogonalSize);
+            didLayout = true;
+            this.viewLayoutStates[index] = {
+                orthogonalSize,
+                size,
+                visible: view.visible,
+            };
+        } finally {
+            if (childLayoutDebugInput && didLayout) {
+                recordSplitviewChildLayoutDuration(
+                    childLayoutDebugInput,
+                    readSplitviewPerfNow() - childLayoutStart
+                );
             }
-
-            // calculate view position
-
-            if (this._orientation === Orientation.HORIZONTAL) {
-                view.container.style.width = `${size}px`;
-                view.container.style.left = `${offset}px`;
-                view.container.style.top = '';
-
-                view.container.style.height = '';
-            }
-            if (this._orientation === Orientation.VERTICAL) {
-                view.container.style.height = `${size}px`;
-                view.container.style.top = `${offset}px`;
-                view.container.style.width = '';
-                view.container.style.left = '';
-            }
-
-            view.view.layout(
-                view.size - marginReducedSize,
-                this._orthogonalSize
-            );
-        });
+            endSplitviewPerfMeasure(childPerfMeasure);
+        }
     }
 
     private findFirstSnapIndex(indexes: number[]): number | undefined {

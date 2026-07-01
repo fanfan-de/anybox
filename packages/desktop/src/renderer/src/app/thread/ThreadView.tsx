@@ -4829,13 +4829,16 @@ function VisibleThreadView({
           />
         )}
       </div>
-      {activeImagePreview ? (
-        <ImageLightbox
-          key={`${activeImagePreview.src}:${activeImagePreview.openedAt}`}
-          preview={activeImagePreview}
-          onClose={handleCloseImagePreview}
-        />
-      ) : null}
+      {activeImagePreview
+        ? createPortal(
+            <ImageLightbox
+              key={`${activeImagePreview.src}:${activeImagePreview.openedAt}`}
+              preview={activeImagePreview}
+              onClose={handleCloseImagePreview}
+            />,
+            document.body,
+          )
+        : null}
     </section>
   )
 }

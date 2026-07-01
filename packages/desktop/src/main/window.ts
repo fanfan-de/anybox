@@ -58,6 +58,9 @@ type WindowChromeOptions = Pick<
   "frame" | "maximizable" | "roundedCorners" | "thickFrame" | "titleBarStyle"
 >
 type WindowBackgroundOptions = Pick<BrowserWindowConstructorOptions, "backgroundColor" | "backgroundMaterial" | "transparent">
+type WindowBackgroundResolveOptions = {
+  env?: NodeJS.ProcessEnv
+}
 type WindowZoomShortcutAction = "in" | "out" | "reset"
 type WindowZoomShortcutInput = {
   alt?: boolean
@@ -92,8 +95,15 @@ export function resolveWindowChromeOptions(platform: NodeJS.Platform = process.p
   }
 }
 
-export function resolveWindowBackgroundOptions(platform: NodeJS.Platform = process.platform): WindowBackgroundOptions {
-  if (platform === "win32") {
+function isWindowsAcrylicDisabled(env: NodeJS.ProcessEnv = process.env) {
+  return env.ANYBOX_DISABLE_WINDOWS_ACRYLIC === "1"
+}
+
+export function resolveWindowBackgroundOptions(
+  platform: NodeJS.Platform = process.platform,
+  options: WindowBackgroundResolveOptions = {},
+): WindowBackgroundOptions {
+  if (platform === "win32" && !isWindowsAcrylicDisabled(options.env)) {
     return {
       backgroundMaterial: "acrylic",
     }

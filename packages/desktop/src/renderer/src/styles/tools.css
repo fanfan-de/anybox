@@ -4,6 +4,7 @@
 .tools-page-main {
   min-width: 0;
   min-height: 0;
+  contain: layout paint;
 }
 
 .tools-page {
@@ -169,6 +170,7 @@
   grid-template-columns: minmax(260px, 0.28fr) minmax(0, 1fr);
   gap: 18px;
   align-items: stretch;
+  contain: layout paint;
 }
 
 .tools-layout.is-sidebar-hosted {
@@ -181,6 +183,7 @@
   display: grid;
   align-content: start;
   gap: 18px;
+  contain: layout paint;
 }
 
 .tools-category-panel {
@@ -335,6 +338,7 @@
 .tools-card-list {
   display: grid;
   gap: 10px;
+  contain: layout paint;
 }
 
 .tools-toggle-card {
@@ -349,6 +353,7 @@
   gap: 0;
   cursor: default;
   overflow: hidden;
+  contain: layout paint;
   transition:
     border-color 160ms ease,
     background 160ms ease,
@@ -523,6 +528,7 @@
   display: grid;
   gap: 10px;
   padding: 0 18px 16px 46px;
+  contain: layout paint;
 }
 
 .tools-card-detail-grid {
@@ -596,6 +602,7 @@
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
+  contain: layout paint;
 }
 
 .tools-detail-empty-state {
