@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from "react"
 import type { ThreadDisplayRow } from "./thread-display-rows"
 
 const THREAD_VIRTUALIZATION_MIN_ROWS = 180
+const THREAD_VIRTUALIZATION_MIN_ESTIMATED_HEIGHT_PX = 14000
+const THREAD_VIRTUALIZATION_MIN_RESPONSE_ROWS = 20
+const THREAD_VIRTUALIZATION_MIN_RESPONSE_ESTIMATED_HEIGHT_PX = 1600
 const THREAD_VIRTUAL_OVERSCAN_PX = 160
 const THREAD_VIRTUAL_OVERSCAN_ROWS = 2
 const THREAD_VIRTUAL_ROW_GAP_PX = 7
@@ -112,6 +115,33 @@ function buildThreadVirtualLayout(rows: ThreadDisplayRow[], measuredHeights: Map
   }
 }
 
+function shouldVirtualizeThreadDisplayRows(rows: ThreadDisplayRow[]) {
+  if (rows.length >= THREAD_VIRTUALIZATION_MIN_ROWS) return true
+
+  let estimatedTotalHeight = 0
+  let responseRowCount = 0
+  let responseEstimatedHeight = 0
+
+  rows.forEach((row, index) => {
+    const rowHeight = Math.max(THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX, row.estimatedHeight)
+    estimatedTotalHeight += rowHeight
+    if (index < rows.length - 1) {
+      estimatedTotalHeight += THREAD_VIRTUAL_ROW_GAP_PX
+    }
+
+    if (row.kind === "assistant-response-row") {
+      responseRowCount += 1
+      responseEstimatedHeight += rowHeight
+    }
+  })
+
+  return (
+    estimatedTotalHeight >= THREAD_VIRTUALIZATION_MIN_ESTIMATED_HEIGHT_PX ||
+    responseRowCount >= THREAD_VIRTUALIZATION_MIN_RESPONSE_ROWS ||
+    responseEstimatedHeight >= THREAD_VIRTUALIZATION_MIN_RESPONSE_ESTIMATED_HEIGHT_PX
+  )
+}
+
 function findThreadVirtualRange(layout: ThreadVirtualLayout, viewport: ThreadVirtualViewport): ThreadVirtualRange {
   if (layout.items.length === 0) {
     return {
@@ -162,7 +192,7 @@ export function useThreadVirtualList({
     scrollTop: 0,
   })
   const threadVirtualViewportRef = useRef(threadVirtualViewport)
-  const shouldVirtualizeThreadRows = displayRows.length >= THREAD_VIRTUALIZATION_MIN_ROWS
+  const shouldVirtualizeThreadRows = shouldVirtualizeThreadDisplayRows(displayRows)
 
   function getThreadVirtualHeightCache(key = scrollStateKey) {
     const existingCache = threadVirtualHeightCachesRef.current[key]

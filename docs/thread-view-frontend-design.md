@@ -204,7 +204,7 @@ flowchart LR
     context["buildThreadDisplayContext()"]
     baseRows["buildThreadDisplayRowsIncremental()"]
     displayRows["decorateThreadDisplayRowsIncremental()"]
-    virtual["useThreadVirtualList()\n>= 300 rows 时启用"]
+    virtual["useThreadVirtualList()\n行数 / 估算高度 / response-heavy 时启用"]
     scroll["useThreadScrollController()\n锁底 / 恢复 / 用户意图"]
   end
 
@@ -286,18 +286,18 @@ ThreadView
       │  ├─ empty state: article.thread-row.assistant-empty-state-row
       │  │  └─ TraceItemView(system)
       │  └─ ThreadRows  # 根据虚拟化状态渲染 row
-      │     ├─ direct rows: ThreadRowRenderer(row)[]  # < 300 rows，自然文档流 + content-visibility
-      │     └─ virtualized rows  # >= 300 rows 时只渲染可见窗口
+      │     ├─ direct rows: ThreadRowRenderer(row)[]  # 中等短内容，自然文档流 + content-visibility
+      │     └─ virtualized rows  # 长线程、估算高度过高或 response-heavy 时只渲染可见窗口
       │        └─ div.thread-virtual-spacer
       │           └─ div.thread-virtual-row[]
       │              └─ ThreadRowRenderer(row)
       └─ ImageLightbox?  # 图片预览浮层
 ```
 
-默认渲染路径按 `displayRows.length` 分层：
+默认渲染路径按 row 数量、估算总高度和 response-heavy 程度分层：
 
-- `< 300` rows：`ThreadRows` 直接 map 所有 row，`thread-column` 带 `is-content-visibility`，由浏览器文档流负责换行后的高度计算，并通过 `content-visibility: auto` 跳过离屏 row 的布局和绘制。
-- `>= 300` rows：`thread-column` 带 `is-virtualized`，继续使用 `thread-virtual-spacer` 和 absolute positioned `thread-virtual-row`，由 `useThreadVirtualList` 维护 `top`、`height`、`totalHeight` 和可见窗口。
+- 中等短内容：`ThreadRows` 直接 map 所有 row，`thread-column` 带 `is-content-visibility`，由浏览器文档流负责换行后的高度计算，并通过 `content-visibility: auto` 跳过离屏 row 的布局和绘制。
+- 长线程、估算总高度过高、response row 数量过多或 response 估算高度过高：`thread-column` 带 `is-virtualized`，继续使用 `thread-virtual-spacer` 和 absolute positioned `thread-virtual-row`，由 `useThreadVirtualList` 维护 `top`、`height`、`totalHeight` 和可见窗口。这样 response-only 的长输出不会因为隐藏 trace 后低于行数阈值而退回自然文档流。
 
 `content-visibility` 不叠加到 `.thread-virtual-row` 上。虚拟列表依赖 JS 测量和缓存真实 row 高度；让浏览器延迟虚拟 row 的高度计算会干扰滚动布局。
 

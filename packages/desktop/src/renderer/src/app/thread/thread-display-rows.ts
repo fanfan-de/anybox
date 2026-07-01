@@ -378,7 +378,11 @@ function estimateAssistantTraceItemHeight(item: AssistantTraceItem) {
   if (item.kind === "tool" && draftPatchFileCount === 0) return 32
 
   const textLength = `${item.title ?? ""}${item.text ?? ""}${item.detail ?? ""}`.length
-  const textHeight = Math.min(320, Math.max(42, Math.ceil(textLength / 110) * 22))
+  const isResponseText = item.kind === "text" && traceSectionKeyForItem(item) === "response"
+  const textHeight = Math.min(
+    isResponseText ? 2200 : 320,
+    Math.max(42, Math.ceil(textLength / (isResponseText ? 88 : 110)) * 22),
+  )
   const kindHeight =
     item.kind === "tool" || item.kind === "patch" || item.kind === "file" || item.kind === "image"
       ? 84

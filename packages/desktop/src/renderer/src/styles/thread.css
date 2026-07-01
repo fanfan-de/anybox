@@ -2605,8 +2605,9 @@ body.is-image-lightbox-open {
 .assistant-section.is-response .trace-item {
   border: 0;
   background: transparent;
-  /* Response trace items only expose one visible child; grid track sizing is expensive during width resize. */
-  display: block;
+  /* Response trace items use a vertical flex stack; avoid grid track sizing during width resize. */
+  display: flex;
+  flex-direction: column;
   padding: 0;
 }
 

@@ -4770,6 +4770,38 @@ describe("ThreadView virtual list", () => {
     expect(container.querySelectorAll("[data-thread-message-id]").length).toBeLessThan(80)
   })
 
+  it("virtualizes response-heavy threads below the row-count threshold", () => {
+    const responseItems = Array.from({ length: 24 }, (_, index): AssistantTraceItem => ({
+      id: `response-${index}`,
+      kind: "text",
+      timestamp: index,
+      label: "Assistant",
+      text: `Response section ${index}. ${"Detailed delivery notes. ".repeat(80)}`,
+      status: "completed",
+    }))
+    const { container, threadColumn } = renderThread([
+      assistantTraceMessage("assistant-response-heavy", responseItems, false),
+    ], {
+      assistantTraceVisibility: {
+        ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+        approvals: false,
+        files: false,
+        reasoning: false,
+        sources: false,
+        toolCalls: false,
+        toolInputs: false,
+        toolOutputs: false,
+        workflow: false,
+      },
+      scrollStateKey: "virtual-list-response-heavy-session",
+    })
+
+    expect(threadColumn).toHaveClass("is-virtualized")
+    expect(threadColumn).not.toHaveClass("is-content-visibility")
+    expect(container.querySelector(".thread-virtual-spacer")).not.toBeNull()
+    expect(container.querySelectorAll('[data-thread-row-kind="assistant-response-row"]').length).toBeLessThan(24)
+  })
+
   it("does not measure virtual row layouts for medium threads during sidebar resize", () => {
     const originalResizeObserver = globalThis.ResizeObserver
     let resizeCallback: ResizeObserverCallback | null = null
