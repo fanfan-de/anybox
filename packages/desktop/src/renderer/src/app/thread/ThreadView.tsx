@@ -4425,7 +4425,6 @@ function VisibleThreadView({
     scrollToThreadVirtualOffset,
     threadVirtualItems,
     threadVirtualRenderedRangeKey,
-    threadVirtualTotalSize,
   } = useThreadVirtualList({
     displayRows,
     getInitialOffset: getInitialThreadVirtualOffset,
@@ -4811,7 +4810,6 @@ function VisibleThreadView({
             renderRow={renderDisplayRow}
             virtualItems={threadVirtualItems}
             virtualizer={rowVirtualizer}
-            virtualTotalSize={threadVirtualTotalSize}
           />
         )}
       </div>

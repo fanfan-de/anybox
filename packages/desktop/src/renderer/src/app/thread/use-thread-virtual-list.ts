@@ -55,10 +55,38 @@ function measureThreadVirtualElement(
   entry: ResizeObserverEntry | undefined,
   instance: Virtualizer<HTMLDivElement, HTMLDivElement>,
 ) {
-  return Math.max(
-    THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX,
-    measureVirtualElement(element, entry, instance),
-  )
+  if (entry) {
+    const observedSize = measureVirtualElement(element, entry, instance)
+    if (observedSize > 0) {
+      return Math.max(THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX, observedSize)
+    }
+  }
+
+  const measuredSize = measureThreadVirtualRowElement(element)
+  if (measuredSize !== null) {
+    return measuredSize
+  }
+
+  return readCachedOrEstimatedThreadVirtualRowSize(element, instance)
+}
+
+export function measureThreadVirtualRowElement(element: HTMLElement) {
+  const rect = element.getBoundingClientRect()
+  const width = element.clientWidth || rect.width
+  if (!element.isConnected || width <= 0 || rect.height <= 0) return null
+
+  return Math.max(THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX, rect.height)
+}
+
+function readCachedOrEstimatedThreadVirtualRowSize(
+  element: HTMLDivElement,
+  instance: Virtualizer<HTMLDivElement, HTMLDivElement>,
+) {
+  const index = instance.indexFromElement(element)
+  if (index < 0 || index >= instance.options.count) return THREAD_VIRTUAL_ROW_FALLBACK_HEIGHT_PX
+
+  const key = instance.options.getItemKey(index)
+  return instance.itemSizeCache.get(key) ?? instance.options.estimateSize(index)
 }
 
 function readThreadVirtualScrollRect(element: HTMLDivElement): Rect {
@@ -129,6 +157,8 @@ export function useThreadVirtualList({
     gap: THREAD_VIRTUAL_ROW_GAP_PX,
     getItemKey,
     getScrollElement: () => threadColumnRef.current,
+    directDomUpdates: true,
+    directDomUpdatesMode: "transform",
     initialRect: {
       height: THREAD_VIRTUAL_INITIAL_VIEWPORT_HEIGHT_PX,
       width: 0,

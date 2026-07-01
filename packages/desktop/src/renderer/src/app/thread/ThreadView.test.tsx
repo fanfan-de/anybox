@@ -205,6 +205,19 @@ function createElementRect(input: { top?: number; left?: number; width?: number;
   } as DOMRect
 }
 
+function readTransformYOffset(transform: string | undefined) {
+  if (!transform) return null
+
+  const translateYMatch = /^translateY\((-?\d+(?:\.\d+)?)px\)$/.exec(transform)
+  if (translateYMatch) return Number(translateYMatch[1])
+
+  const translate3dMatch =
+    /^translate3d\(0(?:px)?,\s*(-?\d+(?:\.\d+)?)px,\s*0(?:px)?\)$/.exec(transform)
+  if (translate3dMatch) return Number(translate3dMatch[1])
+
+  return null
+}
+
 function installManualAnimationFrame() {
   const originalRequestAnimationFrame = window.requestAnimationFrame
   const originalCancelAnimationFrame = window.cancelAnimationFrame
@@ -4881,6 +4894,227 @@ describe("ThreadView virtual list", () => {
     expect(virtualRow).not.toBeNull()
     expect(virtualRow?.dataset.index).toMatch(/^\d+$/)
     expect(virtualRow?.dataset.threadVirtualRowId).toMatch(/^user:user-/)
+  })
+
+  it("remeasures visible rows when stable-key content grows", async () => {
+    let responseRowHeight = 80
+    const layoutSpy = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.classList.contains("thread-column")) return createElementRect({ top: 0, height: 400 })
+        if (this.classList.contains("thread-virtual-row")) {
+          return createElementRect({
+            height: this.dataset.index === "0" ? responseRowHeight : 48,
+          })
+        }
+
+        return createElementRect()
+      })
+    const buildResponseMessage = (text: string) => assistantTraceMessage("assistant-1", [
+      {
+        id: "response-1",
+        kind: "text",
+        timestamp: 1,
+        label: "Assistant",
+        text,
+        status: "running",
+        isStreaming: true,
+      },
+    ], true)
+
+    try {
+      const { container, props, rerender } = renderThread([
+        buildResponseMessage("Short response"),
+        userMessage("user-after", "Next prompt"),
+      ], {
+        scrollStateKey: "virtual-list-stable-key-growth-session",
+      })
+
+      const readNextRowOffset = () =>
+        readTransformYOffset(
+          container.querySelector<HTMLElement>('[data-thread-virtual-row-id="user:user-after"]')?.style.transform,
+        )
+
+      await waitFor(() => expect(readNextRowOffset()).toBe(142))
+
+      responseRowHeight = 220
+      rerender(
+        <ThreadView
+          {...props}
+          activeMessages={[
+            buildResponseMessage("Short response\n\nAdditional streamed content that keeps the same row key."),
+            userMessage("user-after", "Next prompt"),
+          ]}
+        />,
+      )
+
+      await waitFor(() => expect(readNextRowOffset()).toBe(282))
+    } finally {
+      layoutSpy.mockRestore()
+    }
+  })
+
+  it("remeasures visible rows when the thread column narrows", async () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+    const resizeObservers: Array<{
+      callback: ResizeObserverCallback
+      instance: ResizeObserver
+      targets: Set<Element>
+    }> = []
+
+    class ManualResizeObserver implements ResizeObserver {
+      readonly callback: ResizeObserverCallback
+      readonly targets = new Set<Element>()
+
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback
+        resizeObservers.push({
+          callback,
+          instance: this,
+          targets: this.targets,
+        })
+      }
+
+      observe(target: Element) {
+        this.targets.add(target)
+      }
+
+      unobserve(target: Element) {
+        this.targets.delete(target)
+      }
+
+      disconnect() {
+        this.targets.clear()
+      }
+    }
+
+    globalThis.ResizeObserver = ManualResizeObserver
+
+    let threadColumnWidth = 640
+    let responseRowHeight = 80
+    const layoutSpy = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.classList.contains("thread-column")) {
+          return createElementRect({ width: threadColumnWidth, height: 400 })
+        }
+        if (this.classList.contains("thread-virtual-row")) {
+          return createElementRect({
+            width: threadColumnWidth,
+            height: this.dataset.index === "0" ? responseRowHeight : 48,
+          })
+        }
+
+        return createElementRect()
+      })
+    const responseMessage = assistantTraceMessage("assistant-1", [
+      {
+        id: "response-1",
+        kind: "text",
+        timestamp: 1,
+        label: "Assistant",
+        text: "A response that becomes taller when the pane width narrows.",
+        status: "completed",
+      },
+    ], false)
+
+    try {
+      const { container, threadColumn } = renderThread([
+        responseMessage,
+        userMessage("user-after", "Next prompt"),
+      ], {
+        scrollStateKey: "virtual-list-column-width-session",
+      })
+
+      const readNextRowOffset = () =>
+        readTransformYOffset(
+          container.querySelector<HTMLElement>('[data-thread-virtual-row-id="user:user-after"]')?.style.transform,
+        )
+
+      await waitFor(() => expect(readNextRowOffset()).toBe(142))
+
+      threadColumnWidth = 280
+      responseRowHeight = 220
+      act(() => {
+        for (const observer of resizeObservers) {
+          if (!observer.targets.has(threadColumn)) continue
+
+          observer.callback([
+            {
+              borderBoxSize: [{ blockSize: 400, inlineSize: threadColumnWidth }] as ResizeObserverSize[],
+              contentBoxSize: [],
+              contentRect: createElementRect({ width: threadColumnWidth, height: 400 }),
+              devicePixelContentBoxSize: [],
+              target: threadColumn,
+            },
+          ], observer.instance)
+        }
+      })
+
+      await waitFor(() => expect(readNextRowOffset()).toBe(282))
+    } finally {
+      layoutSpy.mockRestore()
+      globalThis.ResizeObserver = originalResizeObserver
+    }
+  })
+
+  it("keeps measured row offsets when inactive layout reports zero size", async () => {
+    let isThreadLayoutVisible = true
+    const layoutSpy = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.classList.contains("thread-column")) {
+          return isThreadLayoutVisible
+            ? createElementRect({ width: 320, height: 400 })
+            : createElementRect({ width: 0, height: 0 })
+        }
+        if (this.classList.contains("thread-virtual-row")) {
+          return isThreadLayoutVisible
+            ? createElementRect({ width: 320, height: this.dataset.index === "0" ? 80 : 48 })
+            : createElementRect({ width: 0, height: 0 })
+        }
+
+        return createElementRect()
+      })
+    const responseMessage = assistantTraceMessage("assistant-1", [
+      {
+        id: "response-1",
+        kind: "text",
+        timestamp: 1,
+        label: "Assistant",
+        text: "Short response",
+        status: "completed",
+      },
+    ], false)
+    const activeMessages = [
+      responseMessage,
+      userMessage("user-after", "Next prompt"),
+    ]
+
+    try {
+      const { container, props, rerender } = renderThread(activeMessages, {
+        scrollStateKey: "virtual-list-hidden-measurement-session",
+      })
+
+      const readNextRowOffset = () =>
+        readTransformYOffset(
+          container.querySelector<HTMLElement>('[data-thread-virtual-row-id="user:user-after"]')?.style.transform,
+        )
+
+      await waitFor(() => expect(readNextRowOffset()).toBe(142))
+
+      isThreadLayoutVisible = false
+      rerender(<ThreadView {...props} activeMessages={[...activeMessages]} />)
+
+      expect(readNextRowOffset()).toBe(142)
+
+      isThreadLayoutVisible = true
+      rerender(<ThreadView {...props} activeMessages={[...activeMessages]} />)
+
+      await waitFor(() => expect(readNextRowOffset()).toBe(142))
+    } finally {
+      layoutSpy.mockRestore()
+    }
   })
 })
 
