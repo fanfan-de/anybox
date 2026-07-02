@@ -76,5 +76,11 @@
         "lint:fix": "eslint 'src/**/*.{ts,tsx,js,jsx}' --fix",
         "format": "prettier --write 'src/**/*.{ts,tsx,js,jsx}'",
         "format:check": "prettier --check 'src/**/*.{ts,tsx,js,jsx}'"
+    },
+    "devDependencies": {
+        "gulp": "^5.0.1",
+        "gulp-concat": "^2.6.1",
+        "gulp-sass": "^6.0.1",
+        "sass": "^1.101.0"
     }
 }
