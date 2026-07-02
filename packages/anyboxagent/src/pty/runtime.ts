@@ -342,7 +342,9 @@ function createNodePtySidecarRuntimeAdapter(): PtyRuntimeAdapter {
   const workerPath = fileURLToPath(new URL("./node-pty-worker.mjs", import.meta.url))
 
   return {
-    spawn(input) {
+    async spawn(input) {
+      await ensureMacOSNodePtySpawnHelperExecutable()
+
       const child = spawnChild(nodeBinary, [workerPath], {
         stdio: ["pipe", "pipe", "pipe"],
         env: buildNodeSidecarEnvironment(),

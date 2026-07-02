@@ -28,6 +28,16 @@ const electronMock = vi.hoisted(() => {
     }
   }
 
+  function createFakeImage() {
+    const image = {
+      isEmpty: vi.fn(() => false),
+      resize: vi.fn(() => image),
+      setTemplateImage: vi.fn(),
+    }
+
+    return image
+  }
+
   return {
     app: {
       getAppPath: vi.fn(() => "C:\\app"),
@@ -38,7 +48,7 @@ const electronMock = vi.hoisted(() => {
     },
     nativeImage: {
       createEmpty: vi.fn(() => ({ isEmpty: () => true })),
-      createFromPath: vi.fn(() => ({ isEmpty: () => false })),
+      createFromPath: vi.fn(() => createFakeImage()),
     },
     Tray: FakeTray,
   }

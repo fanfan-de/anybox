@@ -26,7 +26,7 @@ vi.mock("node:fs", () => ({
   existsSync: fsMock.existsSync,
 }))
 
-import { resolveAppIconPath } from "./app-icon"
+import { resolveAppIconPath, resolveTrayIconPath } from "./app-icon"
 
 const processWithResources = process as NodeJS.Process & { resourcesPath?: string }
 const originalResourcesPath = processWithResources.resourcesPath
@@ -72,5 +72,15 @@ describe("resolveAppIconPath", () => {
     fsMock.existingPaths.add(expectedPath)
 
     expect(resolveAppIconPath("C:\\Projects\\Anybox\\packages\\desktop\\out\\main")).toBe(expectedPath)
+  })
+
+  it("resolves the packaged tray template resource", () => {
+    const resourcesPath = "C:\\Anybox\\resources"
+    const expectedPath = path.join(resourcesPath, "build", "trayTemplate.png")
+    setResourcesPath(resourcesPath)
+    fsMock.existingPaths.add(expectedPath)
+
+    expect(resolveTrayIconPath("C:\\Anybox\\resources\\app.asar\\out\\main")).toBe(expectedPath)
+    expect(fsMock.existsSync).toHaveBeenCalledWith(expectedPath)
   })
 })

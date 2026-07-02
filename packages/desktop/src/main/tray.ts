@@ -1,6 +1,6 @@
 import { Menu, Tray, nativeImage, type BrowserWindow, type MenuItemConstructorOptions, type NativeImage } from "electron"
 import type { AppLocale } from "../shared/locale"
-import { resolveAppIconPath } from "./app-icon"
+import { resolveAppIconPath, resolveTrayIconPath } from "./app-icon"
 
 const trayLabels = {
   "zh-CN": {
@@ -160,9 +160,19 @@ export class DesktopTrayController {
 }
 
 function resolveTrayImage(mainDir: string): NativeImage {
-  const iconPath = resolveAppIconPath(mainDir)
+  const trayIconPath = process.platform === "darwin" ? resolveTrayIconPath(mainDir) : undefined
+  const iconPath = trayIconPath ?? resolveAppIconPath(mainDir)
   if (!iconPath) return nativeImage.createEmpty()
 
   const image = nativeImage.createFromPath(iconPath)
-  return image.isEmpty() ? nativeImage.createEmpty() : image
+  if (image.isEmpty()) return nativeImage.createEmpty()
+
+  if (process.platform === "darwin") {
+    const templateImage = trayIconPath ? image : image.resize({ width: 18, height: 18 })
+    if (templateImage.isEmpty()) return nativeImage.createEmpty()
+    templateImage.setTemplateImage(true)
+    return templateImage
+  }
+
+  return image
 }

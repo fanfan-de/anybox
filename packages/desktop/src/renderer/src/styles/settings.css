@@ -224,7 +224,7 @@ body.is-dragging-settings-page {
   scrollbar-gutter: stable;
   padding: 20px 14px 24px 18px;
   border-right: 0;
-  background: var(--seg-panel);
+  background: transparent;
   display: grid;
   align-content: start;
   gap: 20px;
@@ -633,7 +633,7 @@ body.is-dragging-settings-page {
 .settings-empty-state,
 .settings-panel {
   padding: 18px;
-  background: var(--seg-panel);
+  background: transparent;
   display: grid;
   gap: 16px;
 }
@@ -650,7 +650,7 @@ body.is-dragging-settings-page {
   padding: 16px 18px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
-  background: var(--seg-panel);
+  background: transparent;
   color: var(--seg-text-1);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1385,7 +1385,7 @@ body.is-dragging-settings-page {
   overflow: visible;
   border: 0;
   border-radius: 14px;
-  background: #fafafa;
+  background: transparent;
 }
 
 .settings-general-layout > .settings-about-panel {
@@ -2164,7 +2164,7 @@ body.is-dragging-settings-page {
   min-width: 0;
   border: 1px solid var(--seg-border);
   border-radius: 10px;
-  background: var(--seg-panel);
+  background: transparent;
   box-shadow: none;
 }
 
@@ -2807,7 +2807,7 @@ body.is-dragging-settings-page {
   overflow: hidden;
   border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: var(--seg-panel);
+  background: transparent;
 }
 
 .mcp-config-grid .settings-field,
@@ -2971,7 +2971,7 @@ body.is-dragging-settings-page {
   gap: 0;
   border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: var(--seg-panel);
+  background: transparent;
 }
 
 .mcp-tool-policy-card {
@@ -3059,7 +3059,7 @@ body.is-dragging-settings-page {
 .settings-detail-hero,
 .settings-detail-meta-card {
   border: 1px solid var(--seg-border);
-  background: var(--seg-panel);
+  background: transparent;
   box-shadow: none;
 }
 
@@ -4070,7 +4070,7 @@ body.is-dragging-settings-page {
 .settings-detail-hero {
   padding: 18px;
   border-radius: var(--seg-radius-sm);
-  background: var(--seg-panel);
+  background: transparent;
 }
 
 .settings-detail-hero h3 {
@@ -4104,13 +4104,13 @@ body.is-dragging-settings-page {
 
 .provider-card {
   padding: 16px;
-  background: var(--seg-panel);
+  background: transparent;
   display: grid;
   gap: 14px;
 }
 
 .provider-card.is-muted {
-  background: linear-gradient(180deg, #fbfcfd 0%, #f4f7fa 100%);
+  background: transparent;
 }
 
 .provider-card-header {
@@ -4185,10 +4185,15 @@ body.is-dragging-settings-page {
 
 .settings-summary-card,
 .provider-row,
-.model-row,
+.model-row {
+  border: 1px solid var(--seg-border);
+  background: transparent;
+  box-shadow: none;
+}
+
 .provider-connect-modal {
   border: 1px solid var(--seg-border);
-  background: var(--seg-panel);
+  background: var(--semantic-popup-panel-surface);
   box-shadow: none;
 }
 
@@ -4227,7 +4232,7 @@ body.is-dragging-settings-page {
 }
 
 .provider-row.is-muted {
-  background: linear-gradient(180deg, #fbfcfd 0%, #f4f7fa 100%);
+  background: transparent;
 }
 
 .provider-row-main,
@@ -4275,7 +4280,7 @@ body.is-dragging-settings-page {
   padding: 18px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
-  background: var(--seg-panel);
+  background: transparent;
   color: #1b2f43;
   text-align: left;
   display: flex;
@@ -4419,7 +4424,7 @@ body.is-dragging-settings-page {
   padding: 14px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
-  background: var(--seg-panel);
+  background: transparent;
   color: var(--seg-text-2);
   text-align: left;
   transition:
@@ -4514,7 +4519,7 @@ body.is-dragging-settings-page {
   padding: 14px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
-  background: var(--seg-panel);
+  background: transparent;
   color: var(--seg-text-2);
   text-align: left;
   transition:
@@ -4604,7 +4609,7 @@ body.is-dragging-settings-page {
   padding: 16px 12px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
-  background: var(--seg-panel);
+  background: transparent;
   color: var(--color-text-secondary);
   font-size: 13px;
   font-weight: 500;
@@ -4685,7 +4690,7 @@ body.is-dragging-settings-page {
   min-width: 0;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
-  background: var(--seg-panel);
+  background: transparent;
 }
 
 .settings-theme-library-list {
@@ -5487,7 +5492,7 @@ body.is-dragging-settings-page {
 
 .settings-archive-item {
   border: 1px solid var(--seg-border);
-  background: var(--seg-panel);
+  background: transparent;
   box-shadow: none;
   padding: 16px 18px;
   border-radius: var(--seg-radius-sm);
@@ -6013,7 +6018,7 @@ body.is-dragging-settings-page {
 
 .settings-page-nav,
 .settings-page-primary-nav {
-  background: var(--semantic-popup-panel-surface);
+  background: transparent;
   color: var(--seg-text-1);
 }
 
@@ -6058,7 +6063,6 @@ body.is-dragging-settings-page {
 .settings-empty-state,
 .settings-toggle-card {
   border: 1px solid var(--seg-border);
-  background: var(--seg-panel);
   color: var(--seg-text-1);
   box-shadow: none;
 }
@@ -6270,7 +6274,7 @@ body.is-dragging-settings-page {
   padding: 18px 24px;
   border: 0;
   border-radius: var(--seg-radius-sm);
-  background: var(--mix-seg-panel-72-seg-panel-muted-28);
+  background: transparent;
   box-shadow: none;
   transform: none;
 }
@@ -6279,7 +6283,7 @@ body.is-dragging-settings-page {
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-card:focus-visible,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-card.is-active {
   border-color: transparent;
-  background: var(--mix-seg-panel-72-seg-panel-muted-28);
+  background: var(--semantic-sidebar-tree-row-surface-hover);
   box-shadow: none;
   transform: none;
 }
@@ -6522,7 +6526,7 @@ body.is-dragging-settings-page {
   overflow: hidden;
   border: 0;
   border-radius: 10px;
-  background: var(--seg-panel);
+  background: transparent;
   box-shadow: none;
 }
 
@@ -6539,7 +6543,7 @@ body.is-dragging-settings-page {
   padding: 16px 24px;
   border: 0;
   border-radius: 10px;
-  background: var(--seg-panel);
+  background: transparent;
   box-shadow: none;
 }
 
@@ -6632,7 +6636,7 @@ body.is-dragging-settings-page {
   padding: 16px 24px;
   border: 0;
   border-radius: 10px;
-  background: var(--seg-panel);
+  background: transparent;
   box-shadow: none;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(156px, 220px);
@@ -6646,7 +6650,7 @@ body.is-dragging-settings-page {
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-card:focus-visible,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-card.is-active {
   border-color: transparent;
-  background: var(--seg-panel);
+  background: var(--semantic-sidebar-tree-row-surface-hover);
   box-shadow: none;
   transform: none;
 }
@@ -7149,7 +7153,7 @@ body.is-dragging-settings-page {
   align-items: center;
   justify-content: center;
   padding: 8px 18px;
-  background: var(--seg-shell);
+  background: transparent;
 }
 
 .connections-page-content {
@@ -7204,7 +7208,7 @@ body.is-dragging-settings-page {
   min-width: 0;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
-  background: var(--seg-panel);
+  background: transparent;
 }
 
 .mobile-connection-hero {
@@ -7515,7 +7519,7 @@ body.is-dragging-settings-page {
   min-width: 0;
   border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: var(--seg-panel);
+  background: transparent;
   color: var(--seg-text-1);
   display: grid;
   text-align: left;
@@ -7641,7 +7645,7 @@ body.is-dragging-settings-page {
   padding: 18px;
   border: 1px solid var(--seg-border);
   border-radius: 10px;
-  background: var(--seg-panel);
+  background: transparent;
   display: grid;
   gap: 18px;
 }
@@ -8128,7 +8132,7 @@ body.is-dragging-settings-page {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--seg-panel);
+  background: transparent;
 }
 
 .connectors-page-main {
@@ -8276,7 +8280,7 @@ body.is-dragging-settings-page {
 
 .connectors-detail-panel {
   min-height: 0;
-  background: var(--seg-panel);
+  background: transparent;
   color: var(--seg-text-1);
   overflow: hidden;
 }
@@ -8380,7 +8384,7 @@ body.is-dragging-settings-page {
   overflow: hidden;
   border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: var(--seg-panel);
+  background: transparent;
   display: grid;
 }
 
@@ -8530,7 +8534,7 @@ body.is-dragging-settings-page {
   padding: 14px;
   border: 1px solid var(--seg-border);
   border-radius: 8px;
-  background: var(--seg-panel);
+  background: transparent;
 }
 
 .connectors-setup-steps {
@@ -8844,7 +8848,7 @@ body.is-dragging-settings-page {
 }
 
 .plugins-page {
-  background: var(--seg-panel);
+  background: transparent;
   color: var(--seg-text-1);
 }
 
@@ -9027,7 +9031,7 @@ body.is-dragging-settings-page {
   --plugins-detail-control-surface-muted: var(--seg-panel-muted);
   overflow: hidden;
   padding: 30px 34px 34px;
-  background: var(--plugins-market-surface);
+  background: transparent;
   color: var(--plugins-market-text);
   display: flex;
   flex-direction: column;
@@ -10549,7 +10553,7 @@ body.is-dragging-settings-page {
   width: 100%;
   box-sizing: border-box;
   border-radius: 12px;
-  background: var(--seg-panel);
+  background: transparent;
 }
 
 .settings-field small {
@@ -10625,7 +10629,7 @@ body.is-dragging-settings-page {
 
 .settings-page-primary-nav {
   padding: 28px 18px 28px 20px;
-  background: var(--seg-panel);
+  background: transparent;
   gap: 28px;
 }
 
@@ -10687,7 +10691,7 @@ body.is-dragging-settings-page {
   --settings-document-width: 1120px;
   --settings-document-side-panel-width: clamp(230px, 17vw, 300px);
   padding: 30px 34px 34px;
-  background: var(--seg-panel);
+  background: transparent;
 }
 
 .settings-page-main.is-services .settings-services-layout {
@@ -10983,7 +10987,7 @@ body.is-dragging-settings-page {
 .settings-page-main.is-services .settings-panel {
   border-color: var(--seg-border);
   border-radius: 12px;
-  background: var(--seg-panel);
+  background: transparent;
   box-shadow: none;
 }
 

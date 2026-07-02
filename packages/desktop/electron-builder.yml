@@ -19,6 +19,10 @@ extraResources:
     to: build/icon.ico
   - from: build/icon.png
     to: build/icon.png
+  - from: build/trayTemplate.png
+    to: build/trayTemplate.png
+  - from: build/trayTemplate@2x.png
+    to: build/trayTemplate@2x.png
   - from: build/agent-runtime
     to: agent
     filter:

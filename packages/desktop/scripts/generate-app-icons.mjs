@@ -48,6 +48,10 @@ function findDefaultSourceSvg() {
   return path.join(publicDir, fileName)
 }
 
+function findDefaultTrayTemplateSvg() {
+  return path.join(projectDir, "assets", "tray-template.svg")
+}
+
 function formatCommandResult(result) {
   return [result.stdout, result.stderr].filter(Boolean).join("\n").trim()
 }
@@ -175,6 +179,23 @@ function generateWithMacTools(sourceSvg, outputDir, pngSize) {
   console.log(`[desktop][icons] generated app icons from ${sourceSvg}`)
 }
 
+function generateTrayTemplateWithMacTools(sourceSvg, outputDir) {
+  const sipsPath = getToolPath("sips")
+  mkdirSync(outputDir, { recursive: true })
+  const tempDir = mkdtempSync(path.join(tmpdir(), "anybox-tray-icons-"))
+
+  try {
+    const rawPngPath = path.join(tempDir, "trayTemplate-raw.png")
+    run(sipsPath, ["-s", "format", "png", sourceSvg, "--out", rawPngPath])
+    resizePngWithSips(rawPngPath, path.join(outputDir, "trayTemplate@2x.png"), 36)
+    resizePngWithSips(rawPngPath, path.join(outputDir, "trayTemplate.png"), 18)
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true })
+  }
+
+  console.log(`[desktop][icons] generated tray template icons from ${sourceSvg}`)
+}
+
 function generateWithPowerShell(sourceSvg, outputDir, pngSize) {
   const powerShell = process.platform === "win32" ? "powershell" : "pwsh"
   run(powerShell, [
@@ -194,6 +215,7 @@ function generateWithPowerShell(sourceSvg, outputDir, pngSize) {
 
 const args = parseArgs(process.argv.slice(2))
 const sourceSvg = path.resolve(projectDir, args.get("source") ?? findDefaultSourceSvg())
+const trayTemplateSvg = path.resolve(projectDir, args.get("tray-source") ?? findDefaultTrayTemplateSvg())
 const outputDir = path.resolve(projectDir, args.get("out-dir") ?? "build")
 const pngSize = Number.parseInt(args.get("png-size") ?? "512", 10)
 
@@ -208,7 +230,11 @@ if (!existsSync(sourceSvg)) {
 if (process.platform === "win32") {
   generateWithPowerShell(sourceSvg, outputDir, pngSize)
 } else if (process.platform === "darwin") {
+  if (!existsSync(trayTemplateSvg)) {
+    throw new Error(`[desktop][icons] tray template SVG not found: ${trayTemplateSvg}`)
+  }
   generateWithMacTools(sourceSvg, outputDir, pngSize)
+  generateTrayTemplateWithMacTools(trayTemplateSvg, outputDir)
 } else {
   generateWithPowerShell(sourceSvg, outputDir, pngSize)
 }

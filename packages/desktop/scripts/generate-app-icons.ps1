@@ -160,10 +160,14 @@ $iconPngPath = Join-Path $OutputDir "icon.png"
 $iconMasterPath = Join-Path $OutputDir "icon-master.png"
 $iconIcoPath = Join-Path $OutputDir "icon.ico"
 $installerIcoPath = Join-Path $OutputDir "installerIcon.ico"
+$trayTemplatePngPath = Join-Path $OutputDir "trayTemplate.png"
+$trayTemplate2xPngPath = Join-Path $OutputDir "trayTemplate@2x.png"
 
 Copy-Item -LiteralPath $SourceSvg -Destination $iconSvgPath -Force
 [System.IO.File]::WriteAllBytes($iconPngPath, (New-ResizedPngBytes $square $PngSize))
 [System.IO.File]::WriteAllBytes($iconMasterPath, (New-ResizedPngBytes $square 1024))
+[System.IO.File]::WriteAllBytes($trayTemplatePngPath, (New-ResizedPngBytes $square 18))
+[System.IO.File]::WriteAllBytes($trayTemplate2xPngPath, (New-ResizedPngBytes $square 36))
 
 $icoSizes = @(16, 24, 32, 48, 64, 128, 256)
 $icoFrames = @()
