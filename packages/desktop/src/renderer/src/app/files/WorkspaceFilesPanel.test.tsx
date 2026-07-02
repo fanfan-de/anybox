@@ -126,7 +126,7 @@ describe("WorkspaceFilesPanel", () => {
     expect(onSelectFile).toHaveBeenCalledWith("README.md")
   })
 
-  it("collapses and restores the file tree from the path bar", () => {
+  it("collapses and restores the file filter panel from the path bar", () => {
     renderWorkspaceFilesPanel(
       createFileReviewState({
         treeEntriesByDirectoryPath: {
@@ -144,16 +144,61 @@ describe("WorkspaceFilesPanel", () => {
     )
 
     expect(screen.getByRole("searchbox", { name: "Filter workspace files" })).toBeVisible()
+    expect(screen.getByRole("separator", { name: "Resize file filter panel" })).toBeVisible()
 
-    fireEvent.click(screen.getByRole("button", { name: "Collapse file tree" }))
+    fireEvent.click(screen.getByRole("button", { name: "Hide file filters" }))
 
     expect(screen.queryByRole("searchbox", { name: "Filter workspace files" })).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Expand file tree" })).toHaveAttribute("aria-expanded", "false")
+    expect(screen.getByRole("button", { name: "Show file filters" })).toHaveAttribute("aria-expanded", "false")
+    expect(screen.queryByRole("separator", { name: "Resize file filter panel" })).not.toBeInTheDocument()
+    expect(document.querySelector(".workspace-files-split-handle")).toBeNull()
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand file tree" }))
+    fireEvent.click(screen.getByRole("button", { name: "Show file filters" }))
 
     expect(screen.getByRole("searchbox", { name: "Filter workspace files" })).toBeVisible()
-    expect(screen.getByRole("button", { name: "Collapse file tree" })).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("button", { name: "Hide file filters" })).toHaveAttribute("aria-expanded", "true")
+  })
+
+  it("resizes the file filter panel from the split separator", () => {
+    const { container } = renderWorkspaceFilesPanel(
+      createFileReviewState({
+        treeEntriesByDirectoryPath: {
+          "": [
+            {
+              path: "README.md",
+              name: "README.md",
+              kind: "file",
+              extension: "md",
+              hasChildren: false,
+            },
+          ],
+        },
+      }),
+    )
+    const split = container.querySelector<HTMLElement>(".workspace-files-split")
+    expect(split).not.toBeNull()
+    vi.spyOn(split!, "getBoundingClientRect").mockReturnValue({
+      bottom: 600,
+      height: 600,
+      left: 0,
+      right: 1000,
+      toJSON: () => ({}),
+      top: 0,
+      width: 1000,
+      x: 0,
+      y: 0,
+    } as DOMRect)
+
+    const separator = screen.getByRole("separator", { name: "Resize file filter panel" })
+    fireEvent.pointerDown(separator, { button: 0, clientX: 620 })
+
+    expect(split!.style.getPropertyValue("--workspace-files-tree-width")).toBe("380px")
+    expect(separator).toHaveAttribute("aria-valuenow", "380")
+
+    fireEvent.keyDown(separator, { key: "ArrowLeft" })
+
+    expect(split!.style.getPropertyValue("--workspace-files-tree-width")).toBe("404px")
+    expect(separator).toHaveAttribute("aria-valuenow", "404")
   })
 
   it("filters the loaded tree without rendering a result dropdown", () => {
@@ -415,10 +460,16 @@ describe("WorkspaceFilesPanel", () => {
       /\.workspace-files-reader\s*\{[^}]*height:\s*100%;[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\);/s,
     )
     expect(styles).toMatch(
-      /\.workspace-files-split\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) clamp\(320px,\s*44%,\s*520px\);/s,
+      /\.workspace-files-split\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) 8px var\(--workspace-files-tree-width,\s*clamp\(320px,\s*44%,\s*520px\)\);/s,
     )
     expect(styles).toMatch(
-      /\.workspace-files-tree-toggle\s*\{[^}]*width:\s*24px;[^}]*margin-left:\s*auto;[^}]*border:\s*0;[^}]*background:\s*transparent;/s,
+      /\.workspace-files-tree-toggle\s*\{[^}]*width:\s*24px;[^}]*margin-left:\s*auto;[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*display:\s*inline-flex;/s,
+    )
+    expect(styles).toMatch(
+      /\.workspace-files-splitter\s*\{[^}]*min-width:\s*8px;[^}]*height:\s*100%;[^}]*background:\s*transparent;[^}]*cursor:\s*col-resize;/s,
+    )
+    expect(styles).toMatch(
+      /\.workspace-files-splitter:hover::before,\s*\.workspace-files-splitter:focus-visible::before,\s*\.workspace-files-split\.is-resizing\s+\.workspace-files-splitter::before\s*\{[^}]*background:\s*var\(--seg-accent-strong\);/s,
     )
     expect(styles).toMatch(
       /\.workspace-files-split\.is-tree-collapsed\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s,

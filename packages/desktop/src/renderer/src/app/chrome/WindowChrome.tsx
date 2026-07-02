@@ -1,5 +1,5 @@
 import { type Ref } from "react"
-import { CloseIcon, MaximizeIcon, MinimizeIcon, RestoreIcon } from "../icons"
+import { CloseIcon, MaximizeIcon, MinimizeIcon, WindowRestoreIcon } from "../icons"
 import type { WindowAction } from "../types"
 
 interface WindowChromeProps {
@@ -20,7 +20,7 @@ export function WindowChrome({ controlsRef, isWindowMaximized, onWindowAction }:
         type="button"
         onClick={() => onWindowAction("toggle-maximize")}
       >
-        {isWindowMaximized ? <RestoreIcon /> : <MaximizeIcon />}
+        {isWindowMaximized ? <WindowRestoreIcon /> : <MaximizeIcon />}
       </button>
       <button className="window-control is-close" aria-label="Close window" type="button" onClick={() => onWindowAction("close")}>
         <CloseIcon />

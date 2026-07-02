@@ -346,6 +346,7 @@ function toolStatusTraceItem(status: NonNullable<AssistantTraceItem["status"]>):
     timestamp: 1,
     label: "Tool",
     title: `Tool ${status}`,
+    toolName: `Tool ${status}`,
     detail: "Tool detail",
     status,
     toolInputText: showsInput ? "tool input" : undefined,
@@ -693,6 +694,51 @@ describe("ThreadView trace item renderers", () => {
     const cancelledToolName = container.querySelector(".trace-kind-tool.is-cancelled .trace-tool-name")
     expect(cancelledToolName).not.toBeNull()
     expect(cancelledToolName).not.toHaveClass("is-running")
+  })
+
+  it("renders the toolName field as the tool row name", () => {
+    renderThread([
+      assistantTraceMessage(
+        "assistant-tool-name",
+        [
+          {
+            id: "tool-with-title",
+            kind: "tool",
+            timestamp: 1,
+            label: "Tool",
+            title: "Human title should not render",
+            toolName: "actual_tool_name",
+            status: "running",
+          },
+        ],
+        true,
+      ),
+    ])
+
+    expect(screen.getByText("actual_tool_name")).toBeInTheDocument()
+    expect(screen.queryByText("Human title should not render")).not.toBeInTheDocument()
+  })
+
+  it("promotes legacy tool titles to toolName before rendering", () => {
+    renderThread([
+      assistantTraceMessage(
+        "assistant-legacy-tool-name",
+        [
+          {
+            id: "legacy-tool",
+            kind: "tool",
+            timestamp: 1,
+            label: "Tool",
+            title: "legacy_tool_name",
+            status: "completed",
+          },
+        ],
+        false,
+      ),
+    ])
+
+    expect(screen.getByText("legacy_tool_name")).toBeInTheDocument()
+    expect(screen.queryByText("Tool")).not.toBeInTheDocument()
   })
 
   it("renders pending tool traces as cancelled when the assistant message is cancelled", () => {

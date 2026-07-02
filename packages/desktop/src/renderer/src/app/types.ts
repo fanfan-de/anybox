@@ -1088,6 +1088,7 @@ export interface AssistantTraceItem {
   timestamp: number
   label: string
   title?: string
+  toolName?: string
   text?: string
   detail?: string
   src?: string

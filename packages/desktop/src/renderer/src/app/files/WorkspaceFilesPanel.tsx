@@ -5,7 +5,9 @@ import {
   useState,
   type ChangeEvent,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type UIEvent as ReactUIEvent,
 } from "react"
 import {
@@ -22,6 +24,7 @@ import {
   MinimizeIcon,
   PlusIcon,
   SearchIcon,
+  SegmentedControlIcon,
 } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
 import type {
@@ -53,6 +56,12 @@ const SOURCE_READER_COMMENT_COMPOSER_ESTIMATED_HEIGHT = 154
 const SOURCE_READER_OVERSCAN_LINE_COUNT = 16
 const SOURCE_READER_FALLBACK_VIEWPORT_HEIGHT = 720
 const SOURCE_READER_OVERSCAN_PX = SOURCE_READER_LINE_ESTIMATED_HEIGHT * SOURCE_READER_OVERSCAN_LINE_COUNT
+const WORKSPACE_FILES_TREE_DEFAULT_WIDTH = 420
+const WORKSPACE_FILES_TREE_MIN_WIDTH = 260
+const WORKSPACE_FILES_TREE_MAX_WIDTH = 680
+const WORKSPACE_FILES_READER_MIN_WIDTH = 280
+const WORKSPACE_FILES_SPLITTER_WIDTH = 8
+const WORKSPACE_FILES_TREE_KEYBOARD_STEP = 24
 
 interface WorkspaceFilesPanelProps {
   canInsertCommentsIntoDraft: boolean
@@ -215,6 +224,24 @@ function changedPathsIncludeSelectedFile(scopeDirectory: string, selectedFilePat
       (normalizedRelativePath.length > 0 && normalizedSelectedFilePath.startsWith(`${normalizedRelativePath}/`))
     )
   })
+}
+
+function clampWorkspaceFilesTreeWidth(splitWidth: number, requestedWidth: number) {
+  if (!Number.isFinite(splitWidth) || splitWidth <= 0) {
+    return Math.min(WORKSPACE_FILES_TREE_MAX_WIDTH, Math.max(WORKSPACE_FILES_TREE_MIN_WIDTH, requestedWidth))
+  }
+
+  const availableMax = Math.max(
+    WORKSPACE_FILES_TREE_MIN_WIDTH,
+    splitWidth - WORKSPACE_FILES_READER_MIN_WIDTH - WORKSPACE_FILES_SPLITTER_WIDTH,
+  )
+  const maxWidth = Math.min(WORKSPACE_FILES_TREE_MAX_WIDTH, availableMax)
+  return Math.min(maxWidth, Math.max(WORKSPACE_FILES_TREE_MIN_WIDTH, requestedWidth))
+}
+
+function getWorkspaceFilesTreeWidthFromPointer(splitElement: HTMLDivElement, clientX: number) {
+  const splitRect = splitElement.getBoundingClientRect()
+  return clampWorkspaceFilesTreeWidth(splitRect.width, splitRect.right - clientX)
 }
 
 function getReaderEmptyStateCopy(state: WorkspaceFileReviewState, scopeDirectory: string | null) {
@@ -466,7 +493,10 @@ export function WorkspaceFilesPanel({
   const [imageViewMode, setImageViewMode] = useState<"fit" | "actual">("fit")
   const [imageScale, setImageScale] = useState(1)
   const [isTreeCollapsed, setIsTreeCollapsed] = useState(false)
+  const [treeWidthPx, setTreeWidthPx] = useState<number | null>(null)
+  const [isTreeResizing, setIsTreeResizing] = useState(false)
   const dragSelectionRef = useRef<WorkspaceFileLineRange | null>(null)
+  const splitRef = useRef<HTMLDivElement | null>(null)
   const sourceScrollRef = useRef<HTMLDivElement | null>(null)
   const [sourceViewport, setSourceViewport] = useState({
     scrollTop: 0,
@@ -521,6 +551,10 @@ export function WorkspaceFilesPanel({
     "--code-highlight-bg": sourceHighlight.backgroundColor ?? undefined,
     "--code-highlight-fg": sourceHighlight.foregroundColor ?? undefined,
   } as CSSProperties
+  const splitStyle = !isTreeCollapsed && treeWidthPx !== null
+    ? { "--workspace-files-tree-width": `${treeWidthPx}px` } as CSSProperties
+    : undefined
+  const treeWidthValue = Math.round(treeWidthPx ?? WORKSPACE_FILES_TREE_DEFAULT_WIDTH)
 
   const commentsByEndLine = useMemo(() => {
     const nextCommentsByEndLine = new Map<number, typeof state.comments>()
@@ -633,6 +667,30 @@ export function WorkspaceFilesPanel({
     dragSelectionRef.current = null
     setDragSelection(null)
   }, [state.selectedFilePath, state.pendingComment?.startLineNumber, state.pendingComment?.endLineNumber])
+
+  useEffect(() => {
+    if (!isTreeResizing) return
+
+    function handlePointerMove(event: PointerEvent) {
+      const splitElement = splitRef.current
+      if (!splitElement) return
+      event.preventDefault()
+      setTreeWidthPx(getWorkspaceFilesTreeWidthFromPointer(splitElement, event.clientX))
+    }
+
+    function stopResize() {
+      setIsTreeResizing(false)
+    }
+
+    window.addEventListener("pointermove", handlePointerMove)
+    window.addEventListener("pointerup", stopResize)
+    window.addEventListener("pointercancel", stopResize)
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove)
+      window.removeEventListener("pointerup", stopResize)
+      window.removeEventListener("pointercancel", stopResize)
+    }
+  }, [isTreeResizing])
 
   useEffect(() => {
     if (!isSelectedMarkdown) {
@@ -785,6 +843,57 @@ export function WorkspaceFilesPanel({
         viewportHeight: nextViewportHeight,
       }
     })
+  }
+
+  function handleTreeSplitterPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (isTreeCollapsed || event.button !== 0) return
+    const splitElement = splitRef.current
+    if (!splitElement) return
+
+    event.preventDefault()
+    setTreeWidthPx(getWorkspaceFilesTreeWidthFromPointer(splitElement, event.clientX))
+    setIsTreeResizing(true)
+  }
+
+  function updateTreeWidthBy(delta: number) {
+    const splitElement = splitRef.current
+    const splitWidth = splitElement?.getBoundingClientRect().width ?? 0
+    setTreeWidthPx((current) => (
+      clampWorkspaceFilesTreeWidth(splitWidth, (current ?? WORKSPACE_FILES_TREE_DEFAULT_WIDTH) + delta)
+    ))
+  }
+
+  function setTreeWidthLimit(limit: "min" | "max") {
+    const splitElement = splitRef.current
+    const splitWidth = splitElement?.getBoundingClientRect().width ?? 0
+    const requestedWidth = limit === "min"
+      ? WORKSPACE_FILES_TREE_MIN_WIDTH
+      : WORKSPACE_FILES_TREE_MAX_WIDTH
+    setTreeWidthPx(clampWorkspaceFilesTreeWidth(splitWidth, requestedWidth))
+  }
+
+  function handleTreeSplitterKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (isTreeCollapsed) return
+
+    if (event.key === "ArrowLeft") {
+      event.preventDefault()
+      updateTreeWidthBy(WORKSPACE_FILES_TREE_KEYBOARD_STEP)
+      return
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault()
+      updateTreeWidthBy(-WORKSPACE_FILES_TREE_KEYBOARD_STEP)
+      return
+    }
+    if (event.key === "Home") {
+      event.preventDefault()
+      setTreeWidthLimit("max")
+      return
+    }
+    if (event.key === "End") {
+      event.preventDefault()
+      setTreeWidthLimit("min")
+    }
   }
 
   function resolveWorkspaceMarkdownRelativeTarget(value: string): MarkdownLocalFileLinkTarget | null {
@@ -1176,38 +1285,62 @@ export function WorkspaceFilesPanel({
         {scopeName ? <span className="workspace-files-pathbar-scope">{scopeName}</span> : null}
         <button
           type="button"
-          className="workspace-files-tree-toggle"
+          className={isTreeCollapsed ? "workspace-files-tree-toggle is-collapsed" : "workspace-files-tree-toggle"}
           aria-controls="workspace-files-tree"
           aria-expanded={!isTreeCollapsed}
-          aria-label={isTreeCollapsed ? "Expand file tree" : "Collapse file tree"}
-          title={isTreeCollapsed ? "Expand file tree" : "Collapse file tree"}
+          aria-label={isTreeCollapsed ? "Show file filters" : "Hide file filters"}
+          title={isTreeCollapsed ? "Show file filters" : "Hide file filters"}
           onClick={() => setIsTreeCollapsed((current) => !current)}
         >
-          <FolderIcon />
+          <SegmentedControlIcon />
         </button>
       </div>
 
-      <div className={isTreeCollapsed ? "workspace-files-split is-tree-collapsed" : "workspace-files-split"}>
+      <div
+        ref={splitRef}
+        className={[
+          "workspace-files-split",
+          isTreeCollapsed ? "is-tree-collapsed" : "",
+          isTreeResizing ? "is-resizing" : "",
+        ].filter(Boolean).join(" ")}
+        style={splitStyle}
+      >
         <section className="workspace-files-reader" aria-label="Workspace file reader">
           {renderReaderContent()}
         </section>
 
         {isTreeCollapsed ? null : (
-          <aside id="workspace-files-tree" className="workspace-files-tree" aria-label="Workspace file tree">
-            <label className="workspace-files-tree-search">
-              <SearchIcon />
-              <input
-                aria-label="Filter workspace files"
-                type="search"
-                value={state.query}
-                placeholder="筛选文件..."
-                onChange={handleSearchChange}
-              />
-            </label>
-            <div className="workspace-files-tree-scroll">
-              {renderTreeContent()}
-            </div>
-          </aside>
+          <>
+            <div
+              className="workspace-files-splitter"
+              role="separator"
+              aria-controls="workspace-files-tree"
+              aria-label="Resize file filter panel"
+              aria-orientation="vertical"
+              aria-valuemin={WORKSPACE_FILES_TREE_MIN_WIDTH}
+              aria-valuemax={WORKSPACE_FILES_TREE_MAX_WIDTH}
+              aria-valuenow={treeWidthValue}
+              aria-valuetext={`${treeWidthValue}px`}
+              tabIndex={0}
+              onKeyDown={handleTreeSplitterKeyDown}
+              onPointerDown={handleTreeSplitterPointerDown}
+            />
+            <aside id="workspace-files-tree" className="workspace-files-tree" aria-label="Workspace file tree">
+              <label className="workspace-files-tree-search">
+                <SearchIcon />
+                <input
+                  aria-label="Filter workspace files"
+                  type="search"
+                  value={state.query}
+                  placeholder="筛选文件..."
+                  onChange={handleSearchChange}
+                />
+              </label>
+              <div className="workspace-files-tree-scroll">
+                {renderTreeContent()}
+              </div>
+            </aside>
+          </>
         )}
       </div>
     </section>

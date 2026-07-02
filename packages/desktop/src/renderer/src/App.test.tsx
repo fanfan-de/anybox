@@ -8691,6 +8691,9 @@ describe("App", () => {
     expect(sourcePane.querySelector('[data-testid^="pane-drop-"]')).toBeNull()
     expect(sourcePane.querySelector(".pane-drop-preview")).toBeNull()
     expect(document.querySelector(".dockview-theme-anybox")).not.toBeNull()
+    const dockviewShell = document.querySelector(".dv-shell.dockview-theme-anybox") as HTMLElement | null
+    expect(dockviewShell).not.toBeNull()
+    expect(dockviewShell?.style.getPropertyValue("--dv-drag-over-border")).toBe("1px solid var(--seg-accent)")
   })
 
   it("merges a tab into a sibling Dockview group and activates it there", async () => {
@@ -14023,6 +14026,11 @@ describe("App", () => {
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.dv-content-container,[\s\S]*?\.dockview-theme-anybox\s+\.workbench-pane-live-region\s*\{[^}]*-webkit-app-region:\s*no-drag;/s)
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.workbench-pane\s+button,[\s\S]*?\.dockview-theme-anybox\s+\.workbench-pane\s+\[contenteditable="true"\]\s*\{[^}]*-webkit-app-region:\s*no-drag;/s)
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.workbench-pane-live-region\.is-dockview-managed\s*\{[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto auto;/s)
+    expect(styles).toMatch(/\.dockview-workbench-panes\s*\{[^}]*--dv-drag-over-background-color:\s*var\(--mix-seg-accent-16-transparent-84\);[^}]*--dv-drag-over-border-color:\s*var\(--seg-accent\);[^}]*--dv-drag-over-border:\s*1px solid var\(--seg-accent\);/s)
+    expect(styles).toMatch(/\.dockview-theme-anybox\s*\{[^}]*--dv-drag-over-background-color:\s*var\(--mix-seg-accent-16-transparent-84\);[^}]*--dv-drag-over-border-color:\s*var\(--seg-accent\);[^}]*--dv-drag-over-border:\s*1px solid var\(--seg-accent\);/s)
+    expect(styles).toMatch(/\.dockview-workbench-panes\s+\.dv-drop-target-container\s*\{[^}]*--dv-transition-duration:\s*var\(--motion-base\);[^}]*-webkit-app-region:\s*no-drag;/s)
+    expect(styles).toMatch(/\.dockview-workbench-panes\s+\.dv-drop-target > \.dv-drop-target-dropzone\s*\{[^}]*-webkit-app-region:\s*no-drag;/s)
+    expect(styles).toMatch(/\.dockview-workbench-panes\s+\.dv-drop-target > \.dv-drop-target-dropzone > \.dv-drop-target-selection,\s*\.dockview-workbench-panes\s+\.dv-drop-target-container \.dv-drop-target-anchor\s*\{[^}]*background-color:\s*var\(--dv-drag-over-background-color\);[^}]*box-shadow:/s)
     expect(styles).toMatch(/@property --pane-drop-preview-sheen-x\s*\{[^}]*syntax:\s*"&lt;percentage&gt;"|@property --pane-drop-preview-sheen-x\s*\{[^}]*syntax:\s*"<percentage>";/s)
     expect(styles).toMatch(/@property --pane-drop-preview-sheen-y\s*\{[^}]*initial-value:\s*50%;/s)
     expect(styles).toMatch(/\.workbench-pane-stage\s*\{[^}]*--pane-drop-preview-motion-duration:\s*220ms;[^}]*--pane-drop-preview-fade-duration:\s*180ms;[^}]*--pane-drop-preview-motion-curve:\s*cubic-bezier\(0\.22,\s*1,\s*0\.36,\s*1\);[^}]*--pane-drop-preview-sheen-x:\s*50%;[^}]*--pane-drop-preview-sheen-y:\s*50%;/s)

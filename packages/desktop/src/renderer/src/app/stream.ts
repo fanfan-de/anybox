@@ -1092,6 +1092,32 @@ function isApplyPatchToolName(value?: string) {
   return value === "apply_patch" || value === "apply-patch"
 }
 
+function normalizeToolName(value: unknown) {
+  const toolName = readString(value).trim()
+  return toolName || undefined
+}
+
+function readTraceToolName(item: AssistantTraceItem | undefined) {
+  if (!item || item.kind !== "tool") return undefined
+  return normalizeToolName(item.toolName) ?? normalizeToolName(item.title) ?? normalizeToolName(item.label)
+}
+
+function resolveToolName(input: {
+  candidate?: unknown
+  existing?: AssistantTraceItem
+}) {
+  return normalizeToolName(input.candidate) ??
+    readTraceToolName(input.existing) ??
+    "Tool"
+}
+
+function resolveMergedToolName(existing: AssistantTraceItem, nextItem: AssistantTraceItem) {
+  const existingToolName = readTraceToolName(existing)
+  const nextToolName = readTraceToolName(nextItem)
+  if (nextToolName && (nextToolName !== "Tool" || !existingToolName)) return nextToolName
+  return existingToolName ?? nextToolName ?? "Tool"
+}
+
 function settleDraftPatchPreview(
   draftPatch: AssistantTraceDraftPatchPreview | undefined,
   status: AssistantTraceStatus | undefined,
@@ -1180,9 +1206,12 @@ function mergeTraceItem(existing: AssistantTraceItem, nextItem: AssistantTraceIt
   }
 
   if (existing.kind === "tool" && nextItem.kind === "tool") {
+    const toolName = resolveMergedToolName(existing, nextItem)
     const draftPatch = settleDraftPatchPreview(nextItem.draftPatch ?? existing.draftPatch, nextItem.status ?? existing.status)
     return {
       ...merged,
+      title: toolName,
+      toolName,
       text: nextItem.text ?? existing.text,
       toolInputText: nextItem.toolInputText ?? existing.toolInputText,
       toolOutputText: nextItem.toolOutputText ?? existing.toolOutputText,
@@ -1323,7 +1352,11 @@ function appendToolInputDelta(
   const status = input.status ?? (existing?.kind === "tool" && existing.status && !isTerminalTraceStatus(existing.status)
     ? existing.status
     : "pending")
-  const isApplyPatchTool = isApplyPatchToolName(input.toolName || existing?.title)
+  const toolName = resolveToolName({
+    candidate: input.toolName,
+    existing,
+  })
+  const isApplyPatchTool = isApplyPatchToolName(toolName)
   const parsedDraftPatch = isApplyPatchTool && input.toolCallID
     ? toDraftPatchPreview({
         rawToolInput: nextToolInputText,
@@ -1336,7 +1369,8 @@ function appendToolInputDelta(
     sourceID: existing?.sourceID ?? input.sourceID,
     kind: "tool",
     label: "Tool",
-    title: input.toolName || existing?.title || "Tool",
+    title: toolName,
+    toolName,
     text: existing?.toolOutputText ?? nextToolInputText,
     detail: input.detail || existing?.detail || "Preparing tool call.",
     timestamp: existing?.timestamp ?? input.timestamp,
@@ -1413,9 +1447,11 @@ function buildTraceItemFromPart(
                 : rawStatus === "cancelled" || rawStatus === "canceled"
                   ? "cancelled"
                   : "running"
-    const toolName = readString(part.tool) || "Tool"
-    const messageID = ownership.messageID
     const toolCallID = readString(part.callID)
+    const toolName = resolveToolName({
+      candidate: part.tool,
+    })
+    const messageID = ownership.messageID
     const rawToolInputText = createToolTraceInputText(status, state)
     const rawToolOutputText = createToolTraceOutputText(status, state)
     const toolInput = rawToolInputText
@@ -1462,6 +1498,7 @@ function buildTraceItemFromPart(
         kind: "tool",
         label: "Tool",
         title: toolName,
+        toolName,
         text: toolOutputText ?? toolInputText,
         detail: createToolTraceDetail(status, state),
         toolInputText,
@@ -2232,7 +2269,7 @@ function isStreamingAssistantHistoryPhase(phase: AssistantThreadMessagePhase) {
 
 function resolveAssistantHistoryToolName(items: AssistantTraceItem[]) {
   return items.find((item) => item.kind === "tool" && (item.status === "running" || item.status === "pending" || item.status === "waiting-approval"))
-    ?.title
+    ?.toolName
 }
 
 function isAssistantHistoryCancelled(message: LoadedSessionHistoryMessage) {
@@ -2845,7 +2882,7 @@ export function finalizeStreamAssistantThreadMessage(
       {
         phase: "waiting_approval",
         state: "Waiting for permission approval",
-        toolName: waitingTool?.title ?? null,
+        toolName: readTraceToolName(waitingTool) ?? null,
         ...lifecycleClock,
       },
       nextItems,
@@ -3010,7 +3047,7 @@ function inferToolLifecycleFromTraceItem(
     return {
       phase: "waiting_approval" as const,
       state: "Waiting for permission approval",
-      toolName: item.title ?? null,
+      toolName: readTraceToolName(item) ?? null,
       ...(approvalRequestID ? { approvalRequestID } : {}),
     }
   }
@@ -3019,7 +3056,7 @@ function inferToolLifecycleFromTraceItem(
     return {
       phase: "tool_running" as const,
       state: "Running tools",
-      toolName: item.title ?? null,
+      toolName: readTraceToolName(item) ?? null,
       approvalRequestID: null,
     }
   }

@@ -1839,9 +1839,71 @@ describe("stream trace reducer", () => {
       id: "stream-task-create",
       sourceID: "recorded-task-create",
       partID: "recorded-task-create",
+      toolName: "task_create",
       toolCallID: "call-task-create",
       status: "completed",
       toolOutputText: "Tasks created",
+    })
+  })
+
+  it("keeps an existing toolName when a later part omits the tool name", () => {
+    let message = buildStreamingAssistantThreadMessage("Preserve tool name")
+
+    message = applyAgentStreamEventToThreadMessage(message, {
+      event: "runtime",
+      data: {
+        eventID: "event-tool-input",
+        sessionID: "session-runtime",
+        turnID: "turn-runtime",
+        seq: 1,
+        timestamp: 200,
+        type: "tool.input.delta",
+        payload: {
+          messageID: "message-runtime",
+          partID: "stream-write",
+          toolCallID: "call-write",
+          toolName: "write",
+          delta: "{\"path\":\"README.md\"}",
+          rawLength: 20,
+        },
+      },
+    })
+
+    message = applyAgentStreamEventToThreadMessage(message, {
+      event: "runtime",
+      data: {
+        eventID: "event-tool-completed",
+        sessionID: "session-runtime",
+        turnID: "turn-runtime",
+        seq: 2,
+        timestamp: 220,
+        type: "tool.call.completed",
+        payload: {
+          part: {
+            id: "recorded-write",
+            sessionID: "session-runtime",
+            messageID: "message-runtime",
+            type: "tool",
+            callID: "call-write",
+            tool: "   ",
+            state: {
+              status: "completed",
+              input: { path: "README.md" },
+              output: "ok",
+              time: { start: 180, end: 220 },
+            },
+          },
+        },
+      },
+    })
+
+    const toolItems = message.items.filter((item) => item.kind === "tool")
+    expect(toolItems).toHaveLength(1)
+    expect(toolItems[0]).toMatchObject({
+      toolName: "write",
+      title: "write",
+      status: "completed",
+      toolOutputText: "ok",
     })
   })
 

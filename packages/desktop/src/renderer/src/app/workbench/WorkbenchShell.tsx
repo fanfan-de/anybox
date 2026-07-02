@@ -14,6 +14,7 @@ import {
   DockviewReact,
   type DockviewApi,
   type DockviewReadyEvent,
+  type DockviewTheme,
   type IDockviewPanel,
   type IDockviewHeaderActionsProps,
   type IDockviewPanelHeaderProps,
@@ -121,6 +122,15 @@ const MIN_POPOUT_WIDTH = 720
 const MIN_POPOUT_HEIGHT = 520
 const WORKBENCH_PANEL_DRAG_MIME = "application/x-anybox-workbench-panel"
 const DOCKVIEW_LAYOUT_DEBUG_SAMPLE_LIMIT = 180
+const ANYBOX_DOCKVIEW_THEME = {
+  name: "anybox",
+  className: "dockview-theme-anybox",
+  dndOverlayMounting: "absolute",
+  dndPanelOverlay: "group",
+  dndTabIndicator: "line",
+  dndOverlayBorder: "1px solid var(--seg-accent)",
+  tabGroupIndicator: "none",
+} satisfies DockviewTheme
 
 const emptyDockviewLayoutDebugSummary: DockviewLayoutDebugSummary = {
   alternatingSizeCount: 0,
@@ -1521,6 +1531,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
           singleTabMode="default"
           tabComponents={tabComponents}
           tabGroupAccent="off"
+          theme={ANYBOX_DOCKVIEW_THEME}
           onReady={handleReady}
         />
       </div>

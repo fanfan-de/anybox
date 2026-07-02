@@ -1161,6 +1161,9 @@ export const zhCN = {
   "mcp.validation.requireUrl": "远程 MCP 服务器需要服务器 URL。",
   "mcp.validation.requireConnectorId": "连接器 MCP 服务器需要连接器 id。",
   "mcp.validation.requireToolNames": "命名工具过滤器至少需要一个工具名称。",
+  "settings.account.communityTitle": "\u4ea7\u54c1\u4ea4\u6d41\u7fa4",
+  "settings.account.communityDescription": "\u5fae\u4fe1\u626b\u7801\u52a0\u5165 Anybox \u7528\u6237\u4ea4\u6d41\u7fa4",
+  "settings.account.communityQrAlt": "Anybox \u7528\u6237\u4ea4\u6d41\u7fa4\u4e8c\u7ef4\u7801",
 } as const
 
 export type TranslationKey = keyof typeof zhCN
@@ -1374,6 +1377,9 @@ export const enUS = {
   "settings.account.managedProviderTitle": "Managed in Account",
   "settings.account.managedProviderCopy": "Anybox login is managed by the Account page. Provider keeps endpoint, model, and connection test settings here.",
   "settings.account.noValue": "Not provided",
+  "settings.account.communityTitle": "Product community",
+  "settings.account.communityDescription": "Scan with WeChat to join the Anybox user community.",
+  "settings.account.communityQrAlt": "Anybox user community QR code",
   "settings.provider.refreshCatalog": "Refresh provider catalog",
   "settings.provider.searchProviders": "Search providers",
   "settings.provider.providerList": "Provider list",

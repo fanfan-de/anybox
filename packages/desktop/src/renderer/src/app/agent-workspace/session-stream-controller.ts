@@ -620,6 +620,11 @@ function normalizeTraceText(value: string | undefined) {
   return (value ?? "").trim()
 }
 
+function readToolTraceName(item: AssistantTraceItem | undefined) {
+  if (!item || item.kind !== "tool") return undefined
+  return normalizeTraceText(item.toolName) || normalizeTraceText(item.title) || undefined
+}
+
 function traceValueIsEquivalent(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) return true
   if (typeof left !== typeof right) return false
@@ -964,7 +969,7 @@ function assistantRuntimeAfterTraceMerge(current: AssistantThreadMessage, incomi
       phase: "waiting_approval" as const,
       updatedAt,
       firstVisibleAt: existingRuntime.firstVisibleAt ?? nextRuntime.firstVisibleAt,
-      toolName: waitingTool?.title ?? nextRuntime.toolName ?? existingRuntime.toolName,
+      toolName: readToolTraceName(waitingTool) ?? nextRuntime.toolName ?? existingRuntime.toolName,
     }
   }
 
@@ -978,7 +983,7 @@ function assistantRuntimeAfterTraceMerge(current: AssistantThreadMessage, incomi
       phase: "tool_running" as const,
       updatedAt,
       firstVisibleAt: existingRuntime.firstVisibleAt ?? nextRuntime.firstVisibleAt,
-      toolName: activeTool?.title ?? nextRuntime.toolName ?? existingRuntime.toolName,
+      toolName: readToolTraceName(activeTool) ?? nextRuntime.toolName ?? existingRuntime.toolName,
       approvalRequestID: undefined,
     }
   }

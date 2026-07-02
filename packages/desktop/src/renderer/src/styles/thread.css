@@ -4076,7 +4076,7 @@ button.trace-log-row {
 
 .trace-log-summary.trace-tool-name {
   --trace-tool-name-muted: var(--seg-text-3);
-  --trace-tool-name-active: var(--brand-accent-active);
+  --trace-tool-name-active: var(--trace-tool-name-muted);
   flex: 0 1 auto;
   color: var(--trace-tool-name-muted);
   font-family: var(--font-mono);

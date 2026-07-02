@@ -113,6 +113,7 @@ export const PlusIcon = createIcon(Plus)
 export const ForkIcon = createIcon(GitFork)
 export const SettingsIcon = createIcon(Settings)
 export const PluginIcon = createIcon(Puzzle)
+export const SegmentedControlIcon = createIcon(SlidersHorizontal)
 export const LayoutSidebarLeftIcon = createIcon(LayoutPanelLeft)
 export const LayoutSidebarRightIcon = createIcon(PanelRight)
 export const LeftSidebarIcon = createIcon(PanelLeft)
@@ -138,6 +139,24 @@ export const ArchiveIcon = createIcon(Archive)
 export const ArchiveRestoreIcon = createIcon(ArchiveRestore)
 export const MinimizeIcon = createIcon(Minus)
 export const MaximizeIcon = createIcon(Square)
+export function WindowRestoreIcon(props: LucideProps) {
+  return (
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M9 7h8v8h-2" />
+      <path d="M7 9h8v8H7z" />
+    </svg>
+  )
+}
 export const RestoreIcon = createIcon(Copy)
 export const CloseIcon = createIcon(X)
 export const TerminalIcon = createIcon(Terminal)

@@ -967,6 +967,10 @@ function normalizeTraceLogText(value?: string | null) {
   return firstNonEmptyLine(value ?? undefined)?.replace(/\s+/g, " ").trim() ?? null
 }
 
+function getToolTraceName(item: AssistantTraceItem) {
+  return normalizeTraceLogText(item.toolName) ?? "Tool"
+}
+
 function isWorkflowLogItem(item: AssistantTraceItem) {
   return (
     item.kind === "step" ||
@@ -979,6 +983,7 @@ function isWorkflowLogItem(item: AssistantTraceItem) {
 }
 
 function getTraceLogSummary(item: AssistantTraceItem) {
+  if (item.kind === "tool") return getToolTraceName(item)
   return normalizeTraceLogText(item.title) ?? normalizeTraceLogText(item.text) ?? normalizeTraceLogText(item.detail) ?? item.label
 }
 
@@ -3608,7 +3613,7 @@ function ToolTraceItemView({
   const [isDisclosureCollapsing, setIsDisclosureCollapsing] = useState(false)
   const disclosureCollapseTimerRef = useRef<number | null>(null)
   const { t } = useI18n()
-  const summaryTitle = item.title || item.label
+  const summaryTitle = getToolTraceName(item)
   const inputContentLabel = t("thread.toolTrace.inputContent")
   const outputContentLabel = t("thread.toolTrace.outputContent")
   const displayState = getToolTraceDisplayState(item)
@@ -3949,7 +3954,7 @@ const TraceItemView = memo(function TraceItemView({
     <TraceItemRenderBoundary
       itemID={renderedItem.id}
       itemKind={renderedItem.kind}
-      itemTitle={renderedItem.title || renderedItem.label}
+      itemTitle={renderedItem.kind === "tool" ? getToolTraceName(renderedItem) : renderedItem.title || renderedItem.label}
     >
       <Renderer
         className={className}

@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type DragEvent, type FormEvent, type MouseEvent, type ReactNode } from "react"
+import { Fragment, useMemo, useState, type CSSProperties, type DragEvent, type FormEvent, type MouseEvent, type ReactNode } from "react"
 import {
   BackIcon,
   CalendarIcon,
@@ -287,14 +287,22 @@ function getDeadlineItemId(todoId: string) {
   return `todo:${todoId}:deadline`
 }
 
-function getItemAccentColor(item: CalendarItem, source?: CalendarSource) {
+interface CalendarItemMarkerStyle extends CSSProperties {
+  "--calendar-item-marker"?: string
+}
+
+function getItemMarkerColor(item: CalendarItem, source?: CalendarSource) {
   return source?.color ?? item.color ?? (
     item.displayKind === "deadline" ? DEADLINE_COLOR :
     item.displayKind === "reminder" ? REMINDER_COLOR :
     item.displayKind === "agent_suggestion" ? AGENT_COLOR :
     item.entityType === "task" ? TODO_COLOR :
-    "#64748b"
+    "var(--calendar-text-faint)"
   )
+}
+
+function getItemMarkerStyle(item: CalendarItem, source?: CalendarSource): CalendarItemMarkerStyle {
+  return { "--calendar-item-marker": getItemMarkerColor(item, source) }
 }
 
 function getScheduleListSourceLabel(item: CalendarItem, source: CalendarSource | undefined, t: CalendarTranslate) {
@@ -1749,7 +1757,7 @@ function CalendarEventChip({ isSelected, item, locale, source, t, onClick, onCon
         isSelected && "is-selected",
       )}
       draggable={isMovable}
-      style={{ borderLeftColor: getItemAccentColor(item, source) }}
+      style={getItemMarkerStyle(item, source)}
       onClick={(event) => {
         event.stopPropagation()
         onClick()
@@ -1765,7 +1773,10 @@ function CalendarEventChip({ isSelected, item, locale, source, t, onClick, onCon
         }
       }}
     >
-      <span>{item.title}</span>
+      <span className="calendar-event-chip-title">
+        <span className="calendar-item-marker" aria-hidden="true" />
+        <span className="calendar-event-title-text">{item.title}</span>
+      </span>
       <small>{item.isSuggestion ? t("calendar.suggested") : item.startAt ? formatTime(item.startAt, locale) : getItemTypeLabel(item, t)}</small>
     </span>
   )
@@ -1843,14 +1854,15 @@ function MonthGrid({
                     item.id === selectedItemId && "is-selected",
                   )}
                   draggable={item.entityType !== "agent_suggestion"}
-                  style={{ borderLeftColor: getItemAccentColor(item, sourceById.get(item.sourceId)) }}
+                  style={getItemMarkerStyle(item, sourceById.get(item.sourceId))}
                   onClick={() => onItemSelect(item.id)}
                   onDragStart={(event) => onItemDragStart(event, item)}
                   onContextMenu={(event) => {
                     onItemContextMenu(event, item)
                   }}
                 >
-                  {item.title}
+                  <span className="calendar-item-marker" aria-hidden="true" />
+                  <span className="calendar-month-item-title">{item.title}</span>
                 </button>
               ))}
             </div>
@@ -1911,7 +1923,11 @@ function ScheduleList({ anchorDate, items, locale, selectedItemId, sourceById, t
                 <span className="calendar-schedule-copy">
                   <strong>{item.title}</strong>
                   <small>
-                    <span style={{ backgroundColor: getItemAccentColor(item, sourceById.get(item.sourceId)) }} />
+                    <span
+                      className="calendar-item-marker"
+                      aria-hidden="true"
+                      style={getItemMarkerStyle(item, sourceById.get(item.sourceId))}
+                    />
                     {getScheduleListSourceLabel(item, sourceById.get(item.sourceId), t)}
                   </small>
                 </span>

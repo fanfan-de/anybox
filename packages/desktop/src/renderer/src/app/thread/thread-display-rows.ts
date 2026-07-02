@@ -723,6 +723,7 @@ function assistantTraceItemSignatureValue(item: AssistantTraceItem) {
     text: item.text,
     timestamp: item.timestamp,
     title: item.title,
+    toolName: item.toolName,
     toolCallID: item.toolCallID,
     toolInputText: item.toolInputText,
     toolOutputText: item.toolOutputText,
@@ -893,9 +894,26 @@ function createAssistantBaseRowsCacheState({
   }
 }
 
+function normalizeToolTraceName(value?: string) {
+  const toolName = value?.trim()
+  return toolName || undefined
+}
+
+function normalizeTraceRowItem(item: AssistantTraceItem): AssistantTraceItem {
+  if (item.kind !== "tool") return item
+
+  const toolName = normalizeToolTraceName(item.toolName) ?? normalizeToolTraceName(item.title)
+  if (!toolName || toolName === item.toolName) return item
+
+  return {
+    ...item,
+    toolName,
+  }
+}
+
 function createTraceRowItems(message: AssistantThreadMessage, messageIndex: number): AssistantTraceRowItem[] {
   return message.items.map((item, rawItemIndex) => ({
-    item,
+    item: normalizeTraceRowItem(item),
     itemID: item.id,
     rawItemIndex,
     section: traceSectionKeyForItem(item),

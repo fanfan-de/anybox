@@ -804,6 +804,7 @@ function formatPlanCode(value: string | undefined) {
 
 const ANYBOX_ACCOUNT_DASHBOARD_URL = "https://provider.anybox.com.cn/app/dashboard"
 const ANYBOX_PRODUCT_HOME_URL = "https://anybox.com.cn"
+const ANYBOX_COMMUNITY_QR_IMAGE_SRC = "/anybox-community-qr.png"
 
 function getAnyboxRechargeUrl(provider: ProviderCatalogItem) {
   const account = provider.authState.account
@@ -3466,6 +3467,19 @@ export function SettingsPage({
               </>
             ) : null}
 
+            <div className="settings-account-community" aria-label={t("settings.account.communityTitle")}>
+              <span className="settings-account-community-copy">
+                <span className="settings-account-community-title">{t("settings.account.communityTitle")}</span>
+                <span className="settings-account-community-description">
+                  {t("settings.account.communityDescription")}
+                </span>
+              </span>
+              <img
+                className="settings-account-community-qr"
+                src={ANYBOX_COMMUNITY_QR_IMAGE_SRC}
+                alt={t("settings.account.communityQrAlt")}
+              />
+            </div>
           </div>
         </section>
       </div>

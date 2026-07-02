@@ -3924,9 +3924,6 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-  visibility: hidden;
 }
 
 .workspace-files-line:hover .workspace-files-line-comment-button,
@@ -3959,7 +3956,7 @@
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(320px, 44%, 520px);
+  grid-template-columns: minmax(0, 1fr) 8px var(--workspace-files-tree-width, clamp(320px, 44%, 520px));
   background: var(--seg-panel);
 }
 
@@ -3967,9 +3964,47 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+.workspace-files-split.is-resizing,
+.workspace-files-split.is-resizing * {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.workspace-files-splitter {
+  min-width: 8px;
+  min-height: 0;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: col-resize;
+  position: relative;
+  -webkit-app-region: no-drag;
+}
+
+.workspace-files-splitter::before {
+  content: "";
+  position: absolute;
+  inset: 0 3px;
+  background: var(--seg-border);
+}
+
+.workspace-files-splitter:hover,
+.workspace-files-splitter:focus-visible,
+.workspace-files-split.is-resizing .workspace-files-splitter {
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+  outline: none;
+}
+
+.workspace-files-splitter:hover::before,
+.workspace-files-splitter:focus-visible::before,
+.workspace-files-split.is-resizing .workspace-files-splitter::before {
+  background: var(--seg-accent-strong);
+}
+
 .workspace-files-reader {
   min-width: 0;
-  border-right: 1px solid var(--seg-border);
+  border-right: 0;
 }
 
 .workspace-files-split.is-tree-collapsed .workspace-files-reader {
@@ -4105,6 +4140,7 @@
 .window-shell[data-background-mode="custom-html"] .workspace-files-panel,
 .window-shell[data-background-mode="custom-html"] .workspace-files-split,
 .window-shell[data-background-mode="custom-html"] .workspace-files-reader,
+.window-shell[data-background-mode="custom-html"] .workspace-files-splitter,
 .window-shell[data-background-mode="custom-html"] .workspace-files-tree {
   background: var(--surface-profile-content);
 }

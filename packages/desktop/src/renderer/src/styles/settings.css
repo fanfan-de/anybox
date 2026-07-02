@@ -6866,6 +6866,47 @@ body.is-dragging-settings-page {
   outline-offset: 3px;
 }
 
+.settings-account-community {
+  min-width: 0;
+  padding: 24px 0 4px;
+  border-top: 1px solid var(--seg-border);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px 32px;
+}
+
+.settings-account-community-copy {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.settings-account-community-title {
+  color: var(--seg-text-1);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.settings-account-community-description {
+  max-width: 420px;
+  color: var(--seg-text-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settings-account-community-qr {
+  width: 184px;
+  height: 184px;
+  padding: 8px;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--seg-radius-xs);
+  background: var(--seg-panel);
+  object-fit: contain;
+  box-sizing: border-box;
+}
+
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-actions {
   width: auto;
   min-width: min(100%, 220px);
@@ -6959,6 +7000,7 @@ body.is-dragging-settings-page {
   .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-select-row,
   .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-storage-row,
   .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-actions-row,
+  .settings-account-community,
   .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-section-summary > .settings-toggle-card,
   .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-section-summary > .settings-summary-card,
   .settings-page-main:not(.is-services):not(.prompt-presets-page-main)
@@ -6985,6 +7027,12 @@ body.is-dragging-settings-page {
     justify-self: stretch;
     justify-content: flex-start;
     text-align: left;
+  }
+
+  .settings-account-community-qr {
+    width: 168px;
+    height: 168px;
+    justify-self: start;
   }
 }
 
