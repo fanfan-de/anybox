@@ -19,7 +19,6 @@ import { useWorkspaceLoadingController } from "./agent-workspace/workspace-loadi
 import { useWorkspaceSessionStore } from "./agent-workspace/workspace-session-store"
 import { createWorkspaceStore, seedWorkspaceIDs, type WorkspaceStoreApi } from "./agent-workspace/workspace-store"
 import { initialSelection } from "./seed-data"
-import { isRendererPerfProfilerEnabled, logRendererPerf, measureRendererPerf } from "./perf-profiler"
 import {
   buildRendererSessionMemoryDiagnostics,
   reportRendererMemoryDiagnostics,
@@ -140,10 +139,6 @@ export function useAgentWorkspace({
   const focusSessionFromAgentEventRef = useRef<(sessionID: string) => void>(() => undefined)
   const threadScrollSnapshotsRef = useRef<Record<string, ThreadScrollSnapshot>>({})
   const workspaceStoreRef = useRef<WorkspaceStoreApi | null>(null)
-  const renderStartRef = useRef<number | null>(null)
-  if (isRendererPerfProfilerEnabled()) {
-    renderStartRef.current = performance.now()
-  }
   if (!workspaceStoreRef.current) {
     const hasFolderWorkspaceLoader = Boolean(window.desktop?.listFolderWorkspaces)
     const initialWorkspaceState = createInitialWorkspaceState(!hasFolderWorkspaceLoader)
@@ -286,7 +281,7 @@ export function useAgentWorkspace({
     subscribedSessionStreamsRef,
     updateConversationTurns,
   } = useStreamPermissionController({ initialSessionID: initialSelection.session?.id ?? null, store: workspaceStore })
-  const workspaceDerivedState = measureRendererPerf("useAgentWorkspace.buildWorkspaceDerivedState", () => buildWorkspaceDerivedState({
+  const workspaceDerivedState = buildWorkspaceDerivedState({
     activeSideChatSessionIDByParentSessionID,
     composerAttachmentsByTabKey,
     composerDraftStateByTabKey,
@@ -319,12 +314,7 @@ export function useAgentWorkspace({
     workspaceFileCommentsByTarget,
     workspaceFileReviewState,
     workspaces,
-  }), () => ({
-    activeGroupID: dockviewActiveState.activeGroupID,
-    activePanelCount: Object.keys(dockviewActiveState.activePanelIDByGroupID).length,
-    workspaceCount: workspaces.length,
-    sessionCount: workspaces.reduce((count, workspace) => count + workspace.sessions.length, 0),
-  }))
+  })
 
   const {
     activeCreateSessionTab,
@@ -394,19 +384,6 @@ export function useAgentWorkspace({
     updateRendererCurrentSessionDiagnostics(diagnostics)
     reportRendererMemoryDiagnostics("active-session-update")
   }, [activeMessageTree, activeSessionDiff, activeSessionID, activeMessages])
-
-  useEffect(() => {
-    if (!isRendererPerfProfilerEnabled()) return
-
-    const startedAt = renderStartRef.current
-    logRendererPerf("useAgentWorkspace.renderToCommit", {
-      durationMs: startedAt === null ? null : Number((performance.now() - startedAt).toFixed(2)),
-      activeSessionID,
-      activeTabKey,
-      focusedPaneID,
-      visibleCanvasSessionCount: visibleCanvasSessionIDs.length,
-    })
-  })
 
   useEffect(() => {
     if (dockviewPersistenceTimerRef.current !== null) {

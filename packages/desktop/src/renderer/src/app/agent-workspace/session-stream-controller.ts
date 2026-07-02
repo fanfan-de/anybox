@@ -72,7 +72,6 @@ import { useAgentSessionStreamEffects } from "./session-stream-hooks"
 import { refreshWorkspaceFromDirectory as refreshWorkspaceFromDirectoryService } from "./workspace-loading-hooks"
 import type { ConversationStoreApi } from "./conversation-store"
 import type { WorkspaceStateUpdater } from "./workspace-store"
-import { clearRendererPerformanceEntries } from "../perf-profiler"
 import {
   queueRendererStreamFlush,
   type RendererFrameTaskCancel,
@@ -2288,7 +2287,6 @@ export function useSessionStreamController({
       pendingDeltaFlushCancelRef.current = null
       flushPendingDeltaUpdates()
     }, {
-      getPendingCount: () => pendingDeltaUpdatesRef.current.length,
       interactiveIntervalMs: STREAM_DELTA_FLUSH_INTERVAL_MS,
     })
   }
@@ -2776,7 +2774,6 @@ export function useSessionStreamController({
     }
 
     if (isTerminalStreamEvent(streamEvent)) {
-      clearRendererPerformanceEntries("session-stream-terminal")
       clearCancellingSession(target.sessionID)
       clearBackgroundObservedSession(target.sessionID)
       if (isCompletedStreamEvent(streamEvent)) {
@@ -2964,7 +2961,6 @@ export function useSessionStreamController({
     }
 
     if (isTerminalStreamEvent(streamEvent)) {
-      clearRendererPerformanceEntries("session-stream-terminal")
       clearCancellingSession(uiSessionID)
       clearBackgroundObservedSession(uiSessionID)
       if (isCompletedStreamEvent(streamEvent)) {

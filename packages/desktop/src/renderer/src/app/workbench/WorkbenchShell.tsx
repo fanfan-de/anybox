@@ -59,7 +59,6 @@ import {
   type WorkbenchDockPanelReference,
 } from "./dockview-state"
 import { WorkbenchPaneSurface, type WorkbenchPaneSurfaceProps } from "./WorkbenchPaneSurface"
-import { RendererProfiler, createRendererProfilerOnRender, measureRendererPerf } from "../perf-profiler"
 import {
   queueRendererLayoutWrite,
   type RendererFrameTaskCancel,
@@ -151,16 +150,12 @@ function useWorkbenchPanelState(
 ) {
   return useWorkspaceStoreSelector(
     store,
-    (state) => measureRendererPerf("WorkbenchPanel.buildRenderState", () => buildWorkbenchPanelRenderState(
-        buildWorkspaceDerivedStateInputFromStore(state, platform, seedWorkspaceIDs),
-        groupID,
-        panelID,
-        reference,
-      ), () => ({
-        groupID,
-        panelID: panelID ?? null,
-        referenceKind: reference?.kind ?? null,
-      })),
+    (state) => buildWorkbenchPanelRenderState(
+      buildWorkspaceDerivedStateInputFromStore(state, platform, seedWorkspaceIDs),
+      groupID,
+      panelID,
+      reference,
+    ),
     workbenchPaneStatesAreEqual,
   )
 }
@@ -1258,17 +1253,6 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
     )
     const workspaces = useWorkspaceStoreSelector(props.store, (state) => state.sessions.workspaces)
     const conversationStore = props.store.getState().agentStream.conversationStore
-    const paneProfiler = useMemo(
-      () => createRendererProfilerOnRender("WorkbenchPaneSurface commit", () => ({
-        groupID,
-        panelID: panelProps.api.id,
-        paneID: pane?.id ?? null,
-        sessionID: pane?.sessionID ?? null,
-        tabKey: pane?.tabKey ?? null,
-        isActivePanel: pane?.isActivePanel ?? null,
-      })),
-      [groupID, pane?.id, pane?.isActivePanel, pane?.sessionID, pane?.tabKey, panelProps.api.id],
-    )
     if (!pane) {
       return (
         <div
@@ -1280,51 +1264,49 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
     }
 
     return (
-      <RendererProfiler id="WorkbenchShell.PanelSurface" onRender={paneProfiler}>
-        <WorkbenchPaneSurface
-          assistantTraceVisibility={props.assistantTraceVisibility}
-          composerRefreshVersion={props.composerRefreshVersion}
-          conversationStore={conversationStore}
-          isResolvingPermissionRequest={props.isResolvingPermissionRequest}
-          isSavingToolPermissionMode={props.isSavingToolPermissionMode}
-          isTopRow={false}
-          pane={pane}
-          permissionRequestActionError={props.permissionRequestActionError}
-          permissionRequestActionRequestID={props.permissionRequestActionRequestID}
-          toolPermissionMode={props.toolPermissionMode}
-          toolPermissionModeError={props.toolPermissionModeError}
-          conversationWorkspaceID={props.conversationWorkspaceID ?? null}
-          workspaces={workspaces}
-          readThreadScrollSnapshot={props.readThreadScrollSnapshot}
-          saveThreadScrollSnapshot={props.saveThreadScrollSnapshot}
-          onCreateSessionSubmit={props.onCreateSessionSubmit}
-          onCreateSessionWorkspaceChange={props.onCreateSessionWorkspaceChange}
-          onOpenProjectFolder={props.onOpenProjectFolder}
-          onInspectFileInSidebar={props.onInspectFileInSidebar}
-          onArtifactLinkOpen={props.onArtifactLinkOpen}
-          onLocalFileLinkOpen={props.onLocalFileLinkOpen}
-          onOpenSideChat={props.onOpenSideChat}
-          onOpenSubagentSession={props.onOpenSubagentSession}
-          onBranchSelect={props.onBranchSelect}
-          onClearComposerParentMessage={props.onClearComposerParentMessage}
-          onForkFromMessage={props.onForkFromMessage}
-          onAskUserQuestionAnswer={props.onAskUserQuestionAnswer}
-          onApproveProposedPlan={props.onApproveProposedPlan}
-          onPermissionRequestResponse={props.onPermissionRequestResponse}
-          onToolPermissionModeChange={props.onToolPermissionModeChange}
-          onPickComposerAttachments={props.onPickComposerAttachments}
-          onPasteComposerImageAttachments={props.onPasteComposerImageAttachments}
-          onRemoveComposerAttachment={props.onRemoveComposerAttachment}
-          onCancelSend={props.onCancelSend}
-          onPlanModeToggle={props.onPlanModeToggle}
-          onSend={props.onSend}
-          onSessionModelSelectionChange={props.onSessionModelSelectionChange}
-          onSetDraft={props.onSetDraft}
-          onMessageDiffRestore={props.onMessageDiffRestore}
-          onMessageDiffReview={props.onMessageDiffReview}
-          onMessageDiffSummaryHydrate={props.onMessageDiffSummaryHydrate}
-        />
-      </RendererProfiler>
+      <WorkbenchPaneSurface
+        assistantTraceVisibility={props.assistantTraceVisibility}
+        composerRefreshVersion={props.composerRefreshVersion}
+        conversationStore={conversationStore}
+        isResolvingPermissionRequest={props.isResolvingPermissionRequest}
+        isSavingToolPermissionMode={props.isSavingToolPermissionMode}
+        isTopRow={false}
+        pane={pane}
+        permissionRequestActionError={props.permissionRequestActionError}
+        permissionRequestActionRequestID={props.permissionRequestActionRequestID}
+        toolPermissionMode={props.toolPermissionMode}
+        toolPermissionModeError={props.toolPermissionModeError}
+        conversationWorkspaceID={props.conversationWorkspaceID ?? null}
+        workspaces={workspaces}
+        readThreadScrollSnapshot={props.readThreadScrollSnapshot}
+        saveThreadScrollSnapshot={props.saveThreadScrollSnapshot}
+        onCreateSessionSubmit={props.onCreateSessionSubmit}
+        onCreateSessionWorkspaceChange={props.onCreateSessionWorkspaceChange}
+        onOpenProjectFolder={props.onOpenProjectFolder}
+        onInspectFileInSidebar={props.onInspectFileInSidebar}
+        onArtifactLinkOpen={props.onArtifactLinkOpen}
+        onLocalFileLinkOpen={props.onLocalFileLinkOpen}
+        onOpenSideChat={props.onOpenSideChat}
+        onOpenSubagentSession={props.onOpenSubagentSession}
+        onBranchSelect={props.onBranchSelect}
+        onClearComposerParentMessage={props.onClearComposerParentMessage}
+        onForkFromMessage={props.onForkFromMessage}
+        onAskUserQuestionAnswer={props.onAskUserQuestionAnswer}
+        onApproveProposedPlan={props.onApproveProposedPlan}
+        onPermissionRequestResponse={props.onPermissionRequestResponse}
+        onToolPermissionModeChange={props.onToolPermissionModeChange}
+        onPickComposerAttachments={props.onPickComposerAttachments}
+        onPasteComposerImageAttachments={props.onPasteComposerImageAttachments}
+        onRemoveComposerAttachment={props.onRemoveComposerAttachment}
+        onCancelSend={props.onCancelSend}
+        onPlanModeToggle={props.onPlanModeToggle}
+        onSend={props.onSend}
+        onSessionModelSelectionChange={props.onSessionModelSelectionChange}
+        onSetDraft={props.onSetDraft}
+        onMessageDiffRestore={props.onMessageDiffRestore}
+        onMessageDiffReview={props.onMessageDiffReview}
+        onMessageDiffSummaryHydrate={props.onMessageDiffSummaryHydrate}
+      />
     )
   }, [])
 
@@ -1510,13 +1492,6 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
   const tabComponents = useMemo(() => ({
     [WORKBENCH_DOCK_TAB_COMPONENT]: TabComponent,
   }), [TabComponent])
-  const dockviewProfiler = useMemo(
-    () => createRendererProfilerOnRender("Dockview commit", () => ({
-      surfaceID: props.surfaceID,
-      gridPaneCount: gridPaneIDs.length,
-    })),
-    [gridPaneIDs.length, props.surfaceID],
-  )
 
   return (
     <WorkbenchShellContext.Provider value={props}>
@@ -1530,26 +1505,24 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
         onDragOverCapture={handleWorkbenchDragOver}
         onDropCapture={handleWorkbenchDrop}
       >
-        <RendererProfiler id="WorkbenchShell.Dockview" onRender={dockviewProfiler}>
-          <DockviewReact
-            className="dockview-theme-anybox"
-            components={components}
-            defaultTabComponent={TabComponent}
-            disableAutoResizing
-            disableFloatingGroups
-            disableTabsOverflowList
-            getTabContextMenuItems={() => []}
-            hideBorders
-            leftHeaderActionsComponent={LeftHeaderActions}
-            noPanelsOverlay="emptyGroup"
-            rightHeaderActionsComponent={RightHeaderActions}
-            scrollbars="native"
-            singleTabMode="default"
-            tabComponents={tabComponents}
-            tabGroupAccent="off"
-            onReady={handleReady}
-          />
-        </RendererProfiler>
+        <DockviewReact
+          className="dockview-theme-anybox"
+          components={components}
+          defaultTabComponent={TabComponent}
+          disableAutoResizing
+          disableFloatingGroups
+          disableTabsOverflowList
+          getTabContextMenuItems={() => []}
+          hideBorders
+          leftHeaderActionsComponent={LeftHeaderActions}
+          noPanelsOverlay="emptyGroup"
+          rightHeaderActionsComponent={RightHeaderActions}
+          scrollbars="native"
+          singleTabMode="default"
+          tabComponents={tabComponents}
+          tabGroupAccent="off"
+          onReady={handleReady}
+        />
       </div>
     </WorkbenchShellContext.Provider>
   )

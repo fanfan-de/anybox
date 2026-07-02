@@ -42,7 +42,6 @@ import { useDesktopShell } from "./app/use-desktop-shell"
 import { useGlobalSkills } from "./app/use-global-skills"
 import { useSettingsPage } from "./app/use-settings-page"
 import { ToastProvider, useToast } from "./app/toast"
-import { RendererProfiler, createRendererProfilerOnRender } from "./app/perf-profiler"
 import { createEmptyComposerDraftState } from "./app/composer/draft-state"
 import type { BuiltinToolKindKey } from "./app/tools/BuiltinToolsPage"
 import { findSession, isGitWorkspaceProject, isSideChatSession, sameWorkspaceDirectory } from "./app/workspace"
@@ -1920,15 +1919,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     }
   }, [liveRightSidebarSideChatMessages, rightSidebarSideChatPanelState])
   const rightSidebarThreadLinkContext = liveRightSidebarSideChatPanelState
-  const rightSidebarProfiler = useMemo(
-    () => createRendererProfilerOnRender("RightSidebar commit", () => ({
-      activeTabID: activeRightSidebarTab?.id ?? null,
-      activeTabKind: activeRightSidebarTab?.kind ?? null,
-      activeSessionID: activeSession?.id ?? null,
-      tabCount: rightSidebar.tabs.length,
-    })),
-    [activeRightSidebarTab?.id, activeRightSidebarTab?.kind, activeSession?.id, rightSidebar.tabs.length],
-  )
 
   function handleOpenRightSidebarFilesTab() {
     openOrFocusRightSidebarTab({
@@ -2872,140 +2862,138 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onPointerDown={handleRightSidebarResizerPointerDown}
             />
 
-            <RendererProfiler id="MainApp.RightSidebar" onRender={rightSidebarProfiler}>
-              <RightSidebar
-                activeWorkspaceFileScopeDirectory={activeWorkspaceFileScopeDirectory}
-                activeWorkspaceFileScopeName={activeWorkspaceFileScopeName}
-                activeSessionDirectory={activeSessionDirectory}
-                activeSession={activeSession}
-                assistantTraceVisibility={assistantTraceVisibility}
-                canOpenReview={Boolean(activeSession)}
-                canOpenTerminal={Boolean(terminalSessionID)}
-                codeTheme={resolvedCodeTheme}
-                canInsertWorkspaceFileCommentsIntoDraft={canInsertWorkspaceFileCommentsIntoDraft}
-                composerRefreshVersion={composerRefreshVersion}
-                isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
-                isResolvingPermissionRequest={isResolvingPermissionRequest}
-                permissionRequestActionError={permissionRequestActionError}
-                permissionRequestActionRequestID={permissionRequestActionRequestID}
-                rightSidebar={rightSidebar}
-                selectedDiffFileBySession={selectedDiffFileBySession}
-                sessionDiffBySession={sessionDiffBySession}
-                sessionDiffStateBySession={sessionDiffStateBySession}
-                messageTreeBySession={messageTreeBySession}
-                sideChatPanelState={liveRightSidebarSideChatPanelState}
-                workspaces={workspaces}
-                onActivateTab={handleActivateRightSidebarTab}
-                onCloseTab={closeRightSidebarTab}
-                onAskUserQuestionAnswer={handleAskUserQuestionAnswer}
-                onArtifactLinkOpen={(target) =>
-                  handleArtifactLinkOpen({
-                    paneID: "right-sidebar",
-                    sessionID: rightSidebarThreadLinkContext?.session.id ?? null,
-                    target,
-                    workspaceDirectory: rightSidebarThreadLinkContext?.workspaceDirectory ?? null,
-                    workspaceID: rightSidebarThreadLinkContext?.workspaceID ?? null,
-                  })
+            <RightSidebar
+              activeWorkspaceFileScopeDirectory={activeWorkspaceFileScopeDirectory}
+              activeWorkspaceFileScopeName={activeWorkspaceFileScopeName}
+              activeSessionDirectory={activeSessionDirectory}
+              activeSession={activeSession}
+              assistantTraceVisibility={assistantTraceVisibility}
+              canOpenReview={Boolean(activeSession)}
+              canOpenTerminal={Boolean(terminalSessionID)}
+              codeTheme={resolvedCodeTheme}
+              canInsertWorkspaceFileCommentsIntoDraft={canInsertWorkspaceFileCommentsIntoDraft}
+              composerRefreshVersion={composerRefreshVersion}
+              isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
+              isResolvingPermissionRequest={isResolvingPermissionRequest}
+              permissionRequestActionError={permissionRequestActionError}
+              permissionRequestActionRequestID={permissionRequestActionRequestID}
+              rightSidebar={rightSidebar}
+              selectedDiffFileBySession={selectedDiffFileBySession}
+              sessionDiffBySession={sessionDiffBySession}
+              sessionDiffStateBySession={sessionDiffStateBySession}
+              messageTreeBySession={messageTreeBySession}
+              sideChatPanelState={liveRightSidebarSideChatPanelState}
+              workspaces={workspaces}
+              onActivateTab={handleActivateRightSidebarTab}
+              onCloseTab={closeRightSidebarTab}
+              onAskUserQuestionAnswer={handleAskUserQuestionAnswer}
+              onArtifactLinkOpen={(target) =>
+                handleArtifactLinkOpen({
+                  paneID: "right-sidebar",
+                  sessionID: rightSidebarThreadLinkContext?.session.id ?? null,
+                  target,
+                  workspaceDirectory: rightSidebarThreadLinkContext?.workspaceDirectory ?? null,
+                  workspaceID: rightSidebarThreadLinkContext?.workspaceID ?? null,
+                })
+              }
+              onDiffFileSelect={handleActiveSessionDiffFileSelect}
+              onDiffFileRestore={handleActiveSessionDiffFileRestore}
+              onSessionDiffScopeLoad={handleSessionDiffScopeLoad}
+              onLocalFileLinkOpen={(target) =>
+                handleLocalFileLinkOpen({
+                  paneID: "right-sidebar",
+                  sessionID: rightSidebarThreadLinkContext?.session.id ?? null,
+                  target,
+                  workspaceDirectory: rightSidebarThreadLinkContext?.workspaceDirectory ?? null,
+                  workspaceID: rightSidebarThreadLinkContext?.workspaceID ?? null,
+                })
+              }
+              onPreviewActiveInteractionChange={handlePreviewActiveInteractionChange}
+              onPreviewBack={handlePreviewBack}
+              onPreviewCommitInteraction={handlePreviewCommitInteraction}
+              onPreviewDraftUrlChange={handlePreviewDraftUrlChange}
+              onPreviewForward={handlePreviewForward}
+              onPreviewOpen={handlePreviewOpen}
+              onPreviewOpenExternal={handlePreviewOpenExternal}
+              onPreviewOpenUrl={handlePreviewOpenUrl}
+              onPreviewReload={handlePreviewReload}
+              onPermissionRequestResponse={handlePermissionRequestResponse}
+              onWorkspaceFileCommentCancel={handleWorkspaceFileCommentCancel}
+              onWorkspaceFileCommentChange={handleWorkspaceFileCommentChange}
+              onWorkspaceFileCommentConfirm={handleWorkspaceFileCommentConfirm}
+              onWorkspaceFileCommentStart={handleWorkspaceFileCommentStart}
+              onWorkspaceDirectoryLoad={handleWorkspaceDirectoryLoad}
+              onWorkspaceDirectoryToggle={handleWorkspaceDirectoryToggle}
+              onWorkspaceFileTreeInvalidate={handleWorkspaceFileTreeInvalidate}
+              onWorkspaceFileQueryChange={handleWorkspaceFileQueryChange}
+              onWorkspaceFileSelect={handleWorkspaceFileSelect}
+              onOpenBrowserTab={handleOpenRightSidebarBrowserTab}
+              onOpenFilesTab={handleOpenRightSidebarFilesTab}
+              onOpenMessageTreeTab={handleOpenRightSidebarMessageTreeTab}
+              onOpenReviewTab={handleOpenRightSidebarReviewTab}
+              onOpenTerminalTab={handleOpenRightSidebarTerminalTab}
+              onMessageTreeNodeSelect={handleMessageTreeNodeSelect}
+              onSideChatCancelSend={() => handleCancelSend({
+                sessionID: rightSidebarSideChatPanelState?.session.id,
+                tabKey: rightSidebarSideChatPanelState?.tabKey,
+              })}
+              onSideChatCreate={(anchorMessageID, parentSessionID) =>
+                handleCreateSideChatTab(anchorMessageID, {
+                  parentSessionID,
+                })
+              }
+              onSideChatDelete={handleDeleteSideChatTab}
+              onSideChatDraftStateChange={(value) => {
+                const tabKey = rightSidebarSideChatPanelState?.tabKey
+                if (tabKey) {
+                  setDraftForTab(tabKey, value)
                 }
-                onDiffFileSelect={handleActiveSessionDiffFileSelect}
-                onDiffFileRestore={handleActiveSessionDiffFileRestore}
-                onSessionDiffScopeLoad={handleSessionDiffScopeLoad}
-                onLocalFileLinkOpen={(target) =>
-                  handleLocalFileLinkOpen({
-                    paneID: "right-sidebar",
-                    sessionID: rightSidebarThreadLinkContext?.session.id ?? null,
-                    target,
-                    workspaceDirectory: rightSidebarThreadLinkContext?.workspaceDirectory ?? null,
-                    workspaceID: rightSidebarThreadLinkContext?.workspaceID ?? null,
-                  })
-                }
-                onPreviewActiveInteractionChange={handlePreviewActiveInteractionChange}
-                onPreviewBack={handlePreviewBack}
-                onPreviewCommitInteraction={handlePreviewCommitInteraction}
-                onPreviewDraftUrlChange={handlePreviewDraftUrlChange}
-                onPreviewForward={handlePreviewForward}
-                onPreviewOpen={handlePreviewOpen}
-                onPreviewOpenExternal={handlePreviewOpenExternal}
-                onPreviewOpenUrl={handlePreviewOpenUrl}
-                onPreviewReload={handlePreviewReload}
-                onPermissionRequestResponse={handlePermissionRequestResponse}
-                onWorkspaceFileCommentCancel={handleWorkspaceFileCommentCancel}
-                onWorkspaceFileCommentChange={handleWorkspaceFileCommentChange}
-                onWorkspaceFileCommentConfirm={handleWorkspaceFileCommentConfirm}
-                onWorkspaceFileCommentStart={handleWorkspaceFileCommentStart}
-                onWorkspaceDirectoryLoad={handleWorkspaceDirectoryLoad}
-                onWorkspaceDirectoryToggle={handleWorkspaceDirectoryToggle}
-                onWorkspaceFileTreeInvalidate={handleWorkspaceFileTreeInvalidate}
-                onWorkspaceFileQueryChange={handleWorkspaceFileQueryChange}
-                onWorkspaceFileSelect={handleWorkspaceFileSelect}
-                onOpenBrowserTab={handleOpenRightSidebarBrowserTab}
-                onOpenFilesTab={handleOpenRightSidebarFilesTab}
-                onOpenMessageTreeTab={handleOpenRightSidebarMessageTreeTab}
-                onOpenReviewTab={handleOpenRightSidebarReviewTab}
-                onOpenTerminalTab={handleOpenRightSidebarTerminalTab}
-                onMessageTreeNodeSelect={handleMessageTreeNodeSelect}
-                onSideChatCancelSend={() => handleCancelSend({
-                  sessionID: rightSidebarSideChatPanelState?.session.id,
+              }}
+              onSideChatPasteImageAttachments={({ allowImage, disabledReason, images }) =>
+                handlePasteComposerImageAttachments({
+                  allowImage,
+                  disabledReason,
+                  images,
                   tabKey: rightSidebarSideChatPanelState?.tabKey,
-                })}
-                onSideChatCreate={(anchorMessageID, parentSessionID) =>
-                  handleCreateSideChatTab(anchorMessageID, {
-                    parentSessionID,
-                  })
-                }
-                onSideChatDelete={handleDeleteSideChatTab}
-                onSideChatDraftStateChange={(value) => {
-                  const tabKey = rightSidebarSideChatPanelState?.tabKey
-                  if (tabKey) {
-                    setDraftForTab(tabKey, value)
-                  }
-                }}
-                onSideChatPasteImageAttachments={({ allowImage, disabledReason, images }) =>
-                  handlePasteComposerImageAttachments({
-                    allowImage,
-                    disabledReason,
-                    images,
-                    tabKey: rightSidebarSideChatPanelState?.tabKey,
-                  })
-                }
-                onSideChatPickAttachments={({ allowImage, allowPdf, disabledReason }) =>
-                  handlePickComposerAttachments({
-                    allowImage,
-                    allowPdf,
-                    disabledReason,
-                    tabKey: rightSidebarSideChatPanelState?.tabKey,
-                  })
-                }
-                onSideChatRemoveAttachment={(path) => handleRemoveComposerAttachment(path, rightSidebarSideChatPanelState?.tabKey)}
-                onSideChatSelect={handleSelectSideChatTabInRightSidebar}
-                onSideChatSend={(input) =>
-                  handleSend({
-                    attachmentError: input.attachmentError,
-                    draftStateOverride: input.draftStateOverride,
-                    preserveComposerState: Boolean(input.questionAnswer),
-                    questionAnswer: input.questionAnswer,
-                    selectedReasoningEffort: input.selectedReasoningEffort,
-                    selectedModel: input.selectedModel,
-                    selectedSkillIDs: input.selectedSkillIDs,
-                    sessionID: rightSidebarSideChatPanelState?.session.id,
-                    submissionMode: input.submissionMode,
-                    tabKey: rightSidebarSideChatPanelState?.tabKey,
-                    waitForPendingModelSelection: input.waitForPendingModelSelection,
-                  })
-                }
-                onSessionModelSelectionChange={handleSessionModelSelectionChange}
-                renderTerminalTab={(sessionID) => (
-                  <TerminalAreaHost
-                    brandTheme={brandTheme}
-                    colorMode={colorMode}
-                    currentSessionID={sessionID}
-                    layout="fill"
-                    storageKey={WORKBENCH_TERMINAL_STORAGE_KEY}
-                  />
-                )}
-                windowControls={windowControls}
-              />
-            </RendererProfiler>
+                })
+              }
+              onSideChatPickAttachments={({ allowImage, allowPdf, disabledReason }) =>
+                handlePickComposerAttachments({
+                  allowImage,
+                  allowPdf,
+                  disabledReason,
+                  tabKey: rightSidebarSideChatPanelState?.tabKey,
+                })
+              }
+              onSideChatRemoveAttachment={(path) => handleRemoveComposerAttachment(path, rightSidebarSideChatPanelState?.tabKey)}
+              onSideChatSelect={handleSelectSideChatTabInRightSidebar}
+              onSideChatSend={(input) =>
+                handleSend({
+                  attachmentError: input.attachmentError,
+                  draftStateOverride: input.draftStateOverride,
+                  preserveComposerState: Boolean(input.questionAnswer),
+                  questionAnswer: input.questionAnswer,
+                  selectedReasoningEffort: input.selectedReasoningEffort,
+                  selectedModel: input.selectedModel,
+                  selectedSkillIDs: input.selectedSkillIDs,
+                  sessionID: rightSidebarSideChatPanelState?.session.id,
+                  submissionMode: input.submissionMode,
+                  tabKey: rightSidebarSideChatPanelState?.tabKey,
+                  waitForPendingModelSelection: input.waitForPendingModelSelection,
+                })
+              }
+              onSessionModelSelectionChange={handleSessionModelSelectionChange}
+              renderTerminalTab={(sessionID) => (
+                <TerminalAreaHost
+                  brandTheme={brandTheme}
+                  colorMode={colorMode}
+                  currentSessionID={sessionID}
+                  layout="fill"
+                  storageKey={WORKBENCH_TERMINAL_STORAGE_KEY}
+                />
+              )}
+              windowControls={windowControls}
+            />
           </>
         ) : null}
 

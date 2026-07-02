@@ -1,5 +1,3 @@
-import { logRendererPerf } from "./perf-profiler"
-
 type FrameHandle =
   | {
       id: number
@@ -16,7 +14,6 @@ type StreamFlushTask = () => void
 export type RendererFrameTaskCancel = () => void
 
 export interface RendererStreamFlushOptions {
-  getPendingCount?: () => number
   interactiveIntervalMs?: number
 }
 
@@ -55,10 +52,6 @@ function clearScheduledFrame() {
   frameHandle = null
 }
 
-function formatInteractiveLayoutReasons() {
-  return Array.from(interactiveLayoutReasons.keys()).join(",")
-}
-
 function shouldFlushStream(timestamp: number, forceStream: boolean) {
   if (!streamFlushTask) return false
   if (forceStream || interactiveLayoutDepth === 0) return true
@@ -71,10 +64,6 @@ function runFrame(timestamp: number, options: { forceStream?: boolean; reason: s
   if (isFlushingFrame) return
 
   isFlushingFrame = true
-  const startedAt = readNow()
-  const layoutTaskCount = layoutWriteTasks.size
-  const pendingStreamCount = streamFlushOptions.getPendingCount?.() ?? null
-  let didFlushStream = false
 
   try {
     const pendingLayoutWrites = layoutWriteTasks
@@ -88,22 +77,11 @@ function runFrame(timestamp: number, options: { forceStream?: boolean; reason: s
       const task = streamFlushTask
       streamFlushTask = null
       streamFlushOptions = {}
-      didFlushStream = Boolean(task)
       lastStreamFlushAt = timestamp
       task?.()
     }
   } finally {
     isFlushingFrame = false
-
-    logRendererPerf("RendererFrameCoordinator.flush", {
-      durationMs: Number((readNow() - startedAt).toFixed(2)),
-      interactiveLayout: interactiveLayoutDepth > 0,
-      interactiveLayoutReasons: formatInteractiveLayoutReasons(),
-      layoutTaskCount,
-      pendingStreamCount,
-      reason: options.reason,
-      streamFlushCount: didFlushStream ? 1 : 0,
-    })
 
     if (hasPendingFrameWork()) {
       scheduleFrame()

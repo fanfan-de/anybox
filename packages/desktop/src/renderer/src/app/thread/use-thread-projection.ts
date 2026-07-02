@@ -8,7 +8,6 @@ import type {
   SessionSummary,
   ThreadMessage,
 } from "../types"
-import { measureRendererPerf } from "../perf-profiler"
 import { isSideChatSession } from "../workspace"
 import {
   buildThreadDisplayContext,
@@ -16,7 +15,6 @@ import {
   createThreadDisplayRowsCache,
   decorateThreadDisplayRowsIncremental,
   type ThreadDisplayRowsCache,
-  type ThreadDisplayRowsCacheStats,
   type ThreadDisplayContext,
   type ThreadDisplayRow,
 } from "./thread-display-rows"
@@ -136,14 +134,6 @@ function collectAnsweredQuestionIDs(messages: ThreadMessage[]) {
   return answeredQuestionIDs
 }
 
-function emptyThreadDisplayRowsCacheStats(): ThreadDisplayRowsCacheStats {
-  return {
-    cacheHitCount: 0,
-    cacheMissCount: 0,
-    invalidatedMessageCount: 0,
-  }
-}
-
 function mergeThreadDisplayRowsCachesForDecoration(
   baseCache: ThreadDisplayRowsCache,
   committedCache: ThreadDisplayRowsCache | null,
@@ -203,37 +193,16 @@ export function useThreadProjection({
 
   const baseDisplayRowsResult = useMemo(
     () => {
-      let baseDisplayRowsStats = emptyThreadDisplayRowsCacheStats()
-
-      return measureRendererPerf(
-        "ThreadView.buildBaseDisplayRows",
-        () => {
-          const result = buildThreadDisplayRowsIncremental(
-            {
-              activeSessionID,
-              activeMessages: displayMessages,
-              assistantTraceVisibility,
-              context: threadDisplayContext,
-              isResolvingPermissionRequest,
-              pendingPermissionRequests,
-            },
-            threadDisplayRowsCacheRef.current,
-          )
-          baseDisplayRowsStats = result.stats
-          return result
+      return buildThreadDisplayRowsIncremental(
+        {
+          activeSessionID,
+          activeMessages: displayMessages,
+          assistantTraceVisibility,
+          context: threadDisplayContext,
+          isResolvingPermissionRequest,
+          pendingPermissionRequests,
         },
-        () => ({
-          assistantItemCount: displayMessages.reduce(
-            (count, message) => count + (message.kind === "assistant" ? message.items.length : 0),
-            0,
-          ),
-          cacheHitCount: baseDisplayRowsStats.cacheHitCount,
-          cacheMissCount: baseDisplayRowsStats.cacheMissCount,
-          invalidatedMessageCount: baseDisplayRowsStats.invalidatedMessageCount,
-          pendingPermissionRequestCount,
-          sessionID: activeSessionID,
-          messageCount: displayMessages.length,
-        }),
+        threadDisplayRowsCacheRef.current,
       )
     },
     [
@@ -250,41 +219,26 @@ export function useThreadProjection({
 
   const displayRowsResult = useMemo(
     () => {
-      let decorateDisplayRowsStats = emptyThreadDisplayRowsCacheStats()
       const previousCache = mergeThreadDisplayRowsCachesForDecoration(
         baseDisplayRowsResult.cache,
         threadDisplayRowsCacheRef.current,
       )
 
-      return measureRendererPerf(
-        "ThreadView.decorateDisplayRows",
-        () => {
-          const result = decorateThreadDisplayRowsIncremental(
-            {
-              assistantTraceVisibility,
-              baseRows: baseDisplayRows,
-              canForkFromMessage,
-              canOpenSideChat,
-              context: threadDisplayContext,
-              hasPendingPermissionRequests: pendingPermissionRequestCount > 0,
-              isSessionRunning,
-              messageTree,
-              readOnlySideChat,
-              sideChatCountsByAnchorMessageID,
-              sideChatSession,
-            },
-            previousCache,
-          )
-          decorateDisplayRowsStats = result.stats
-          return result
+      return decorateThreadDisplayRowsIncremental(
+        {
+          assistantTraceVisibility,
+          baseRows: baseDisplayRows,
+          canForkFromMessage,
+          canOpenSideChat,
+          context: threadDisplayContext,
+          hasPendingPermissionRequests: pendingPermissionRequestCount > 0,
+          isSessionRunning,
+          messageTree,
+          readOnlySideChat,
+          sideChatCountsByAnchorMessageID,
+          sideChatSession,
         },
-        () => ({
-          baseRowCount: baseDisplayRows.length,
-          cacheHitCount: decorateDisplayRowsStats.cacheHitCount,
-          cacheMissCount: decorateDisplayRowsStats.cacheMissCount,
-          invalidatedMessageCount: decorateDisplayRowsStats.invalidatedMessageCount,
-          sessionID: activeSessionID,
-        }),
+        previousCache,
       )
     },
     [

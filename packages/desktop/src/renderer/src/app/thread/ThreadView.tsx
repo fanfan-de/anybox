@@ -33,11 +33,6 @@ import { parseAssistantResponseFormat, stripStreamingResponseFormatMarker } from
 import { ThreadRichText } from "../thread-rich-text"
 import { useI18n } from "../i18n/I18nProvider"
 import { translateLiteral, type TranslationKey } from "../i18n/translations"
-import {
-  RendererProfiler,
-  createRendererProfilerOnRender,
-  logRendererPerf,
-} from "../perf-profiler"
 import type {
   AssistantTraceDebugEntry,
   AssistantTraceFileChange,
@@ -3949,59 +3944,31 @@ const TraceItemView = memo(function TraceItemView({
   const debugEntries = traceVisibility.debugMetadata ? renderedItem.debugEntries ?? [] : []
   const isResponseItem = traceSectionKeyForItem(renderedItem) === "response"
   const Renderer = traceItemRenderers[renderedItem.kind]
-  const traceItemTextLength =
-    (renderedItem.title?.length ?? 0) +
-    (renderedItem.text?.length ?? 0) +
-    (renderedItem.detail?.length ?? 0)
-  const traceItemProfiler = useMemo(
-    () => createRendererProfilerOnRender("TraceItemView commit", () => ({
-      debugEntryCount: debugEntries.length,
-      isLatestMessage,
-      isResponseItem,
-      isStreaming: Boolean(renderedItem.isStreaming),
-      itemID: renderedItem.id,
-      itemKind: renderedItem.kind,
-      itemStatus: renderedItem.status ?? null,
-      textLength: traceItemTextLength,
-    })),
-    [
-      debugEntries.length,
-      isLatestMessage,
-      isResponseItem,
-      renderedItem.id,
-      renderedItem.isStreaming,
-      renderedItem.kind,
-      renderedItem.status,
-      traceItemTextLength,
-    ],
-  )
 
   return (
-    <RendererProfiler id="TraceItemView" onRender={traceItemProfiler}>
-      <TraceItemRenderBoundary
-        itemID={renderedItem.id}
-        itemKind={renderedItem.kind}
-        itemTitle={renderedItem.title || renderedItem.label}
-      >
-        <Renderer
-          className={className}
-          debugEntries={debugEntries}
-          isQuestionAnswered={isQuestionAnswered}
-          isLatestMessage={isLatestMessage}
-          isQuestionAnswerDisabled={isQuestionAnswerDisabled}
-          isResponseItem={isResponseItem}
-          item={renderedItem}
-          onAskUserQuestionAnswer={onAskUserQuestionAnswer}
-          onFileChangeSelect={onFileChangeSelect}
-          onArtifactLinkOpen={onArtifactLinkOpen}
-          onLocalFileLinkOpen={onLocalFileLinkOpen}
-          onOpenImagePreview={onOpenImagePreview}
-          onProposedPlanConfirm={onProposedPlanConfirm}
-          shouldCollapseAfterMessageCompletion={shouldCollapseAfterMessageCompletion}
-          traceVisibility={traceVisibility}
-        />
-      </TraceItemRenderBoundary>
-    </RendererProfiler>
+    <TraceItemRenderBoundary
+      itemID={renderedItem.id}
+      itemKind={renderedItem.kind}
+      itemTitle={renderedItem.title || renderedItem.label}
+    >
+      <Renderer
+        className={className}
+        debugEntries={debugEntries}
+        isQuestionAnswered={isQuestionAnswered}
+        isLatestMessage={isLatestMessage}
+        isQuestionAnswerDisabled={isQuestionAnswerDisabled}
+        isResponseItem={isResponseItem}
+        item={renderedItem}
+        onAskUserQuestionAnswer={onAskUserQuestionAnswer}
+        onFileChangeSelect={onFileChangeSelect}
+        onArtifactLinkOpen={onArtifactLinkOpen}
+        onLocalFileLinkOpen={onLocalFileLinkOpen}
+        onOpenImagePreview={onOpenImagePreview}
+        onProposedPlanConfirm={onProposedPlanConfirm}
+        shouldCollapseAfterMessageCompletion={shouldCollapseAfterMessageCompletion}
+        traceVisibility={traceVisibility}
+      />
+    </TraceItemRenderBoundary>
   )
 })
 
@@ -4336,13 +4303,6 @@ function areThreadViewPropsEqual(left: ThreadViewProps, right: ThreadViewProps) 
   const reason = getThreadViewPropsChangeReason(left, right)
   if (!reason) return true
 
-  logRendererPerf("ThreadView memo miss", {
-    reason,
-    previousSessionID: left.activeSession?.id ?? null,
-    nextSessionID: right.activeSession?.id ?? null,
-    previousMessageCount: left.activeMessages.length,
-    nextMessageCount: right.activeMessages.length,
-  })
   return false
 }
 
