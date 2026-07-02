@@ -6,7 +6,7 @@ import { InstallerDownloadButton } from "./InstallerDownloadButton"
 import { repositoryUrl } from "./releaseDownloads"
 
 const brandLogoBlack = "/brand-logo-black.svg"
-const wechatCommunityQrImage = "/wechat-community-qr-20260620.png"
+const wechatCommunityQrImage = "/wechat-community-qr-20260702.png"
 const icpRecordNumber = "苏ICP备2026030016号-1"
 const icpRecordUrl = "https://beian.miit.gov.cn/"
 
