@@ -823,6 +823,12 @@ describe("App", () => {
         state: createAppUpdateState({ phase: "checking" }),
       }),
       installAppUpdate: vi.fn().mockResolvedValue({ ok: true }),
+      getRunningSessionStatus: vi.fn().mockResolvedValue({
+        running: false,
+        count: 0,
+        sessionIDs: [],
+        checkedAt: 1,
+      }),
       getWindowState: vi.fn().mockResolvedValue({
         isMaximized: false,
       }),
@@ -9473,6 +9479,95 @@ describe("App", () => {
     expect(within(readyDialog).getByRole("button", { name: "Restart to install" })).toBeInTheDocument()
   })
 
+  it("defers automatic update prompts while an agent session is running", async () => {
+    let appUpdateListener: ((state: DesktopAppUpdateState) => void) | null = null
+    window.desktop!.onAppUpdateStateChange = vi.fn((listener: (state: DesktopAppUpdateState) => void) => {
+      appUpdateListener = listener
+      return vi.fn()
+    })
+    window.desktop!.getRunningSessionStatus = vi.fn()
+      .mockResolvedValueOnce({
+        running: true,
+        count: 1,
+        sessionIDs: ["session-running"],
+        checkedAt: 1,
+      })
+      .mockResolvedValue({
+        running: false,
+        count: 0,
+        sessionIDs: [],
+        checkedAt: 2,
+      })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(window.desktop!.onAppUpdateStateChange).toHaveBeenCalledTimes(1)
+    })
+
+    act(() => {
+      appUpdateListener?.(createAppUpdateState({
+        phase: "downloaded",
+        latestVersion: "1.2.4",
+        downloadPercent: 100,
+        releaseNotes: "Improved update experience.",
+      }))
+    })
+
+    await waitFor(() => {
+      expect(window.desktop!.getRunningSessionStatus).toHaveBeenCalledTimes(1)
+    })
+    expect(screen.queryByRole("dialog", { name: "Update ready to install" })).not.toBeInTheDocument()
+
+    act(() => {
+      appUpdateListener?.(createAppUpdateState({
+        phase: "downloaded",
+        latestVersion: "1.2.4",
+        downloadPercent: 100,
+        lastCheckedAt: 2,
+        releaseNotes: "Improved update experience.",
+      }))
+    })
+
+    expect(await screen.findByRole("dialog", { name: "Update ready to install" })).toBeInTheDocument()
+  })
+
+  it("blocks restart-to-install while an agent session is running", async () => {
+    window.desktop!.getAppUpdateState = vi.fn().mockResolvedValue(createAppUpdateState({
+      phase: "downloaded",
+      latestVersion: "1.2.4",
+      downloadPercent: 100,
+      lastCheckedAt: 1,
+    }))
+    window.desktop!.getRunningSessionStatus = vi.fn()
+      .mockResolvedValueOnce({
+        running: false,
+        count: 0,
+        sessionIDs: [],
+        checkedAt: 1,
+      })
+      .mockResolvedValueOnce({
+        running: true,
+        count: 1,
+        sessionIDs: ["session-running"],
+        checkedAt: 2,
+      })
+    window.desktop!.installAppUpdate = vi.fn().mockResolvedValue({ ok: true })
+
+    render(<App />)
+
+    const updateDialog = await screen.findByRole("dialog", { name: "Update ready to install" })
+    fireEvent.click(within(updateDialog).getByRole("button", { name: "Restart to install" }))
+
+    await waitFor(() => {
+      expect(window.desktop!.getRunningSessionStatus).toHaveBeenCalledTimes(2)
+    })
+    expect(window.desktop!.installAppUpdate).not.toHaveBeenCalled()
+    expect(
+      within(updateDialog).getByText("A session is running. Restart to install after the task finishes."),
+    ).toBeInTheDocument()
+  })
+
   it("edits prompt presets from the prompts page", async () => {
     let promptPresetSelection = { ...PROMPT_PRESET_SELECTION_FIXTURE }
     let promptPresetDocuments = [
@@ -11431,7 +11526,7 @@ describe("App", () => {
     expect(window.desktop!.getGlobalModels).toHaveBeenCalledTimes(2)
   })
 
-  it("closes settings on escape or backdrop click", async () => {
+  it("keeps settings open on escape and backdrop click until the close button is used", async () => {
     window.desktop!.getGlobalProviderCatalog = vi.fn().mockResolvedValue([
       {
         id: "deepseek",
@@ -11463,16 +11558,15 @@ describe("App", () => {
     expect(settingsOverlay).not.toBeNull()
     fireEvent.click(settingsOverlay!)
 
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument()
-    })
-    expect(appShell).not.toHaveClass("is-settings-open")
-
-    fireEvent.click(screen.getByRole("button", { name: "Open settings" }))
-    expect(await screen.findByRole("dialog", { name: "Settings" })).toBeInTheDocument()
+    expect(screen.getByRole("dialog", { name: "Settings" })).toBeInTheDocument()
     expect(appShell).toHaveClass("is-settings-open")
 
     fireEvent.keyDown(window, { key: "Escape" })
+
+    expect(screen.getByRole("dialog", { name: "Settings" })).toBeInTheDocument()
+    expect(appShell).toHaveClass("is-settings-open")
+
+    fireEvent.click(screen.getByRole("button", { name: "Close settings" }))
 
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument()

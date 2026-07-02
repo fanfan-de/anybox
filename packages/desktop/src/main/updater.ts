@@ -3,6 +3,7 @@ import * as electronUpdater from "electron-updater"
 import type { AppUpdater } from "electron-updater"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
+import { requestAgentJSON } from "./agent-client"
 import { readTrimmedDesktopEnv } from "./env-compat"
 import { safeError, safeLog, safeWarn } from "./safe-console"
 import type {
@@ -48,6 +49,13 @@ type AppUpdateRuntimeState = {
 type AppUpdateInfo = {
   version?: string
   releaseNotes?: unknown
+}
+
+type AgentDebugStatusPayload = {
+  runningSessions?: {
+    count?: unknown
+    items?: unknown
+  }
 }
 
 const APP_UPDATE_SETTINGS_FILE_NAME = "app-update-settings.json"
@@ -221,8 +229,30 @@ function hasRendererWindow() {
   return BrowserWindow.getAllWindows().some((window) => !window.isDestroyed())
 }
 
-function showFallbackMessageBox(options: Electron.MessageBoxOptions) {
+async function hasRunningAgentSessions() {
+  try {
+    const result = await requestAgentJSON<AgentDebugStatusPayload>("/api/debug/status")
+    const rawRunningSessions = result.data.runningSessions
+    const rawCount = rawRunningSessions?.count
+    const count = typeof rawCount === "number" && Number.isFinite(rawCount)
+      ? Math.max(0, Math.floor(rawCount))
+      : Array.isArray(rawRunningSessions?.items)
+        ? rawRunningSessions.items.length
+        : 0
+    return count > 0
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    safeWarn("[desktop][updater] failed to read running session status; deferring update dialog", message)
+    return true
+  }
+}
+
+async function showFallbackMessageBox(options: Electron.MessageBoxOptions) {
   if (hasRendererWindow()) return null
+  if (await hasRunningAgentSessions()) {
+    safeLog("[desktop][updater] deferred fallback update dialog because a session is running")
+    return null
+  }
   return showMessageBox(options)
 }
 
@@ -247,7 +277,7 @@ function handleUpdaterError(error: Error) {
   safeError("[desktop][updater] update check failed", error)
 
   if (consumeManualCheck()) {
-    showFallbackMessageBox({
+    void showFallbackMessageBox({
       type: "error",
       title: "Update Check Failed",
       message: "Unable to check for updates.",
@@ -303,7 +333,7 @@ function registerUpdaterEvents() {
     safeLog("[desktop][updater] no update available", describeVersion(info))
 
     if (consumeManualCheck()) {
-      showFallbackMessageBox({
+      void showFallbackMessageBox({
         type: "info",
         title: "No Updates Available",
         message: "Anybox is up to date.",
@@ -347,7 +377,7 @@ function registerUpdaterEvents() {
     })
     safeLog("[desktop][updater] update downloaded", describeVersion(info))
 
-    showFallbackMessageBox({
+    void showFallbackMessageBox({
       type: "info",
       title: "Update Ready",
       message: `Anybox ${describeVersion(info)} is ready to install.`,
@@ -355,8 +385,8 @@ function registerUpdaterEvents() {
       buttons: ["Restart Now", "Later"],
       defaultId: 0,
       cancelId: 1,
-    })?.then((result) => {
-      if (result.response === 0) {
+    }).then((result) => {
+      if (result?.response === 0) {
         autoUpdater.quitAndInstall(false, true)
       }
     })
@@ -403,7 +433,7 @@ export async function checkForAppUpdates(options: CheckOptions = {}) {
       lastCheckedAt: Date.now(),
     })
     if (options.manual) {
-      showFallbackMessageBox({
+      void showFallbackMessageBox({
         type: "info",
         title: "Updates Unavailable",
         message: "Update checks run in packaged builds.",
@@ -420,7 +450,7 @@ export async function checkForAppUpdates(options: CheckOptions = {}) {
 
   if (checking) {
     if (options.manual) {
-      showFallbackMessageBox({
+      void showFallbackMessageBox({
         type: "info",
         title: "Update Check In Progress",
         message: "Anybox is already checking for updates.",
@@ -463,11 +493,18 @@ export async function checkForAppUpdates(options: CheckOptions = {}) {
   }
 }
 
-export function installDownloadedAppUpdate(): DesktopAppUpdateInstallResult {
+export async function installDownloadedAppUpdate(): Promise<DesktopAppUpdateInstallResult> {
   if (appUpdateRuntimeState.phase !== "downloaded") {
     return {
       ok: false,
       reason: "update-not-downloaded",
+    }
+  }
+
+  if (await hasRunningAgentSessions()) {
+    return {
+      ok: false,
+      reason: "session-running",
     }
   }
 

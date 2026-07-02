@@ -68,6 +68,7 @@ import type {
 import {
   checkForAppUpdates,
   getAppUpdateState,
+  getRunningSessionStatus,
   installAppUpdate,
   setAutomaticUpdatesEnabled,
 } from "./app/settings/client"
@@ -88,6 +89,7 @@ function importSettingsPage() {
 }
 
 let settingsPageImportPromise: ReturnType<typeof importSettingsPage> | null = null
+const UPDATE_PROMPT_RETRY_DELAY_MS = 10_000
 
 function loadSettingsPage() {
   settingsPageImportPromise ??= importSettingsPage()
@@ -255,6 +257,18 @@ function createFallbackAppUpdateState(enabled: boolean, version = "Unknown"): De
     error: null,
     lastCheckedAt: null,
     releaseNotes: null,
+  }
+}
+
+async function hasRunningSessionBlockingAppUpdate(localRunningSessionIDs: string[]) {
+  if (localRunningSessionIDs.length > 0) return true
+
+  try {
+    const status = await getRunningSessionStatus()
+    return status?.running === true
+  } catch (error) {
+    console.warn("[desktop] running session status check failed; deferring update prompt", error)
+    return true
   }
 }
 
@@ -1096,6 +1110,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   const [promptSkillMode, setPromptSkillMode] = useState<PromptSkillMode>("prompts")
   const autoPromptedDownloadingUpdateRef = useRef<string | null>(null)
   const autoPromptedDownloadedUpdateRef = useRef<string | null>(null)
+  const updatePromptRetryTimerRef = useRef<number | null>(null)
+  const [updatePromptRetryTick, setUpdatePromptRetryTick] = useState(0)
   const [creatingWorktreeProjectID, setCreatingWorktreeProjectID] = useState<string | null>(null)
   const creatingWorktreeProjectIDRef = useRef<string | null>(null)
   const toast = useToast()
@@ -1210,24 +1226,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     window.addEventListener("keydown", handleUpdateDialogKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", handleUpdateDialogKeyDown, { capture: true })
   }, [isUpdateDialogOpen])
-
-  useEffect(() => {
-    if (!appUpdateState?.updateChecksSupported) return
-
-    const updateKey = appUpdateState.latestVersion ?? appUpdateState.version ?? "unknown"
-    if (appUpdateState.phase === "downloading") {
-      if (autoPromptedDownloadingUpdateRef.current !== updateKey) {
-        autoPromptedDownloadingUpdateRef.current = updateKey
-        setIsUpdateDialogOpen(true)
-      }
-      return
-    }
-
-    if (appUpdateState.phase === "downloaded" && autoPromptedDownloadedUpdateRef.current !== updateKey) {
-      autoPromptedDownloadedUpdateRef.current = updateKey
-      setIsUpdateDialogOpen(true)
-    }
-  }, [appUpdateState])
 
   const {
     activeSession,
@@ -1345,6 +1343,72 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     surfaceID,
     workbenchState: workbenchContext.state,
   })
+  const shouldDeferAppUpdateForRunningSession = useCallback(
+    () => hasRunningSessionBlockingAppUpdate(runningSessionIDs),
+    [runningSessionIDs],
+  )
+  const notifyAppUpdateDeferredForRunningSession = useCallback(
+    (messageKey: TranslationKey) => {
+      const text = t(messageKey)
+      setAppUpdateStatus({
+        tone: "muted",
+        text,
+      })
+      toast.info(text)
+    },
+    [t, toast],
+  )
+  const deferAppUpdateDialogIfSessionRunning = useCallback(
+    async (messageKey: TranslationKey) => {
+      if (!(await shouldDeferAppUpdateForRunningSession())) return false
+      notifyAppUpdateDeferredForRunningSession(messageKey)
+      return true
+    },
+    [notifyAppUpdateDeferredForRunningSession, shouldDeferAppUpdateForRunningSession],
+  )
+  useEffect(() => {
+    if (!appUpdateState?.updateChecksSupported) return
+    if (appUpdateState.phase !== "downloading" && appUpdateState.phase !== "downloaded") return
+
+    const updateKey = appUpdateState.latestVersion ?? appUpdateState.version ?? "unknown"
+    const promptedUpdateRef = appUpdateState.phase === "downloading"
+      ? autoPromptedDownloadingUpdateRef
+      : autoPromptedDownloadedUpdateRef
+    if (promptedUpdateRef.current === updateKey) return
+
+    let cancelled = false
+    if (updatePromptRetryTimerRef.current !== null) {
+      window.clearTimeout(updatePromptRetryTimerRef.current)
+      updatePromptRetryTimerRef.current = null
+    }
+
+    const schedulePromptRetry = () => {
+      if (cancelled || updatePromptRetryTimerRef.current !== null) return
+      updatePromptRetryTimerRef.current = window.setTimeout(() => {
+        updatePromptRetryTimerRef.current = null
+        setUpdatePromptRetryTick((current) => current + 1)
+      }, UPDATE_PROMPT_RETRY_DELAY_MS)
+    }
+
+    void shouldDeferAppUpdateForRunningSession().then((shouldDefer) => {
+      if (cancelled) return
+      if (shouldDefer) {
+        schedulePromptRetry()
+        return
+      }
+
+      promptedUpdateRef.current = updateKey
+      setIsUpdateDialogOpen(true)
+    })
+
+    return () => {
+      cancelled = true
+      if (updatePromptRetryTimerRef.current !== null) {
+        window.clearTimeout(updatePromptRetryTimerRef.current)
+        updatePromptRetryTimerRef.current = null
+      }
+    }
+  }, [appUpdateState, shouldDeferAppUpdateForRunningSession, updatePromptRetryTick])
   const [loadedCalendarProjects, setLoadedCalendarProjects] = useState<CalendarProjectOption[]>([])
   useEffect(() => {
     const listProjectWorkspaces = window.desktop?.listProjectWorkspaces
@@ -1706,6 +1770,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
 
   async function handleCheckForUpdates() {
     if (isCheckingAppUpdate) return
+    if (await deferAppUpdateDialogIfSessionRunning("updates.status.deferredForRunningSession")) return
 
     setIsUpdateDialogOpen(true)
     setIsCheckingAppUpdate(true)
@@ -1736,6 +1801,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
 
   async function handleInstallAppUpdate() {
     if (isInstallingAppUpdate) return
+    if (await deferAppUpdateDialogIfSessionRunning("updates.status.installBlockedForRunningSession")) return
 
     setIsInstallingAppUpdate(true)
     setAppUpdateStatus(null)
@@ -1747,6 +1813,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
           tone: "error",
           text: result?.reason === "update-not-downloaded"
             ? t("updates.status.notDownloaded")
+            : result?.reason === "session-running"
+              ? t("updates.status.installBlockedForRunningSession")
             : t("updates.status.installFailed"),
         })
       }
@@ -1797,7 +1865,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     }
   }
 
-  function handleOpenUpdateCenter() {
+  async function handleOpenUpdateCenter() {
+    if (await deferAppUpdateDialogIfSessionRunning("updates.status.deferredForRunningSession")) return
     setIsUpdateDialogOpen(true)
   }
 
@@ -3077,7 +3146,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onProviderDraftChange={setProviderDraftValue}
               onRefreshProviderCatalog={refreshProviderCatalog}
               onLoadArchivedSessions={loadArchivedSessions}
-              onOpenUpdateCenter={handleOpenUpdateCenter}
+              onOpenUpdateCenter={() => void handleOpenUpdateCenter()}
               onRestoreArchivedSession={restoreArchivedSession}
               onSaveMcpServer={saveMcpServer}
               onSaveProviderApiKey={saveProviderApiKey}

@@ -2930,20 +2930,6 @@ export function SettingsPage({
     }, [activeSection, selectedProviderID])
 
     useEffect(() => {
-      if (!isOpen) return
-
-      function handleWindowKeyDown(event: globalThis.KeyboardEvent) {
-        if (event.key !== "Escape") return
-
-        event.preventDefault()
-        onClose()
-      }
-
-      window.addEventListener("keydown", handleWindowKeyDown)
-      return () => window.removeEventListener("keydown", handleWindowKeyDown)
-    }, [isOpen, onClose])
-
-    useEffect(() => {
       if (isOpen) return
 
       settingsPageDragRef.current = null
@@ -3096,11 +3082,6 @@ export function SettingsPage({
         startOffset,
       }
       setIsSettingsPageDragging(true)
-    }
-
-    function handleSettingsOverlayClick(event: MouseEvent<HTMLElement>) {
-      if (event.target !== event.currentTarget) return
-      onClose()
     }
 
     async function handleOpenStoragePath(targetPath: string) {
@@ -3490,7 +3471,6 @@ export function SettingsPage({
         ref={settingsOverlayRef}
         className={isSettingsPageDragging ? "settings-page-overlay is-dragging-settings-page" : "settings-page-overlay"}
         role="presentation"
-        onClick={handleSettingsOverlayClick}
       >
         <div
           ref={settingsPageRef}
@@ -5004,24 +4984,19 @@ export function SettingsPage({
   }, [catalog, connectProviderID])
 
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen || !connectProviderID) return
 
     function handleWindowKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key !== "Escape") return
 
       event.preventDefault()
 
-      if (connectProviderID) {
-        setConnectProviderID(null)
-        return
-      }
-
-      onClose()
+      setConnectProviderID(null)
     }
 
     window.addEventListener("keydown", handleWindowKeyDown)
     return () => window.removeEventListener("keydown", handleWindowKeyDown)
-  }, [connectProviderID, isOpen, onClose])
+  }, [connectProviderID, isOpen])
 
   if (!isOpen) return null
 
@@ -5053,18 +5028,13 @@ export function SettingsPage({
     }
   }
 
-  function handleSettingsOverlayClick(event: MouseEvent<HTMLElement>) {
-    if (event.target !== event.currentTarget || connectProviderID) return
-    onClose()
-  }
-
   function handleProviderOverlayClick(event: MouseEvent<HTMLDivElement>) {
     if (event.target !== event.currentTarget) return
     setConnectProviderID(null)
   }
 
   return (
-    <section className="settings-page-overlay" role="presentation" onClick={handleSettingsOverlayClick}>
+    <section className="settings-page-overlay" role="presentation">
       <div className="settings-page" role="dialog" aria-modal="true" aria-labelledby="settings-page-title">
         <header className="settings-page-header">
           <div>

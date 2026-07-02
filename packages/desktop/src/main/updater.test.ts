@@ -31,6 +31,10 @@ const electronUpdaterMock = vi.hoisted(() => {
   }
 })
 
+const agentClientMock = vi.hoisted(() => ({
+  requestAgentJSON: vi.fn(),
+}))
+
 vi.mock("electron", () => ({
   app: {
     get isPackaged() {
@@ -53,6 +57,10 @@ vi.mock("electron-updater", () => ({
   default: {
     autoUpdater: electronUpdaterMock.autoUpdater,
   },
+}))
+
+vi.mock("./agent-client", () => ({
+  requestAgentJSON: agentClientMock.requestAgentJSON,
 }))
 
 const updater = await import("./updater")
@@ -80,6 +88,15 @@ beforeEach(async () => {
   electronUpdaterMock.autoUpdater.checkForUpdates.mockReset()
   electronUpdaterMock.autoUpdater.on.mockClear()
   electronUpdaterMock.autoUpdater.quitAndInstall.mockReset()
+  agentClientMock.requestAgentJSON.mockReset()
+  agentClientMock.requestAgentJSON.mockResolvedValue({
+    data: {
+      runningSessions: {
+        count: 0,
+        items: [],
+      },
+    },
+  })
   updater.internal.resetAppUpdateRuntimeStateForTests()
 })
 
@@ -123,6 +140,7 @@ describe("app updater state", () => {
 
   it("maps electron-updater events into a readable update state", async () => {
     electronMock.isPackaged = true
+    electronMock.windows = [{ isDestroyed: () => false, webContents: {} }]
     updater.initializeAutoUpdater()
 
     electronUpdaterMock.handlers.get("checking-for-update")?.()
@@ -191,14 +209,37 @@ describe("app updater state", () => {
       },
     })
 
-    expect(updater.installDownloadedAppUpdate()).toEqual({
+    await expect(updater.installDownloadedAppUpdate()).resolves.toEqual({
       ok: false,
       reason: "update-not-downloaded",
     })
 
+    electronMock.windows = [{ isDestroyed: () => false, webContents: {} }]
     electronUpdaterMock.handlers.get("update-downloaded")?.({ version: "1.2.4" })
-    expect(updater.installDownloadedAppUpdate()).toEqual({ ok: true })
+    await expect(updater.installDownloadedAppUpdate()).resolves.toEqual({ ok: true })
     expect(electronUpdaterMock.autoUpdater.quitAndInstall).toHaveBeenCalledWith(false, true)
+  })
+
+  it("blocks installing a downloaded update while an agent session is running", async () => {
+    electronMock.isPackaged = true
+    electronMock.windows = [{ isDestroyed: () => false, webContents: {} }]
+    agentClientMock.requestAgentJSON.mockResolvedValue({
+      data: {
+        runningSessions: {
+          count: 1,
+          items: [{ sessionID: "session-running" }],
+        },
+      },
+    })
+    updater.initializeAutoUpdater()
+
+    electronUpdaterMock.handlers.get("update-downloaded")?.({ version: "1.2.4" })
+
+    await expect(updater.installDownloadedAppUpdate()).resolves.toEqual({
+      ok: false,
+      reason: "session-running",
+    })
+    expect(electronUpdaterMock.autoUpdater.quitAndInstall).not.toHaveBeenCalled()
   })
 
   it("notifies listeners when update state changes", async () => {

@@ -45,6 +45,7 @@ import type {
   DesktopSaveSessionTraceExportDirectoryResult,
   DesktopSaveSessionTraceExportResult,
   DesktopPreloadApi,
+  DesktopRunningSessionStatus,
   WorkbenchStateEvent,
   WorkbenchSharedState,
   WorkbenchWindowContext,
@@ -154,6 +155,8 @@ try {
       invokeDesktop("desktop:check-for-app-updates") as Promise<DesktopAppUpdateCheckResult>,
     installAppUpdate: () =>
       invokeDesktop("desktop:install-app-update") as Promise<DesktopIpcOutput<"desktop:install-app-update">>,
+    getRunningSessionStatus: () =>
+      invokeDesktop("desktop:get-running-session-status") as Promise<DesktopRunningSessionStatus>,
     getStoragePaths: () =>
       invokeDesktop("desktop:get-storage-paths") as Promise<DesktopIpcOutput<"desktop:get-storage-paths">>,
     getWindowState: () =>

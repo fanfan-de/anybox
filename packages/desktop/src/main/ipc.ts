@@ -19,6 +19,7 @@ import type {
   DesktopRendererErrorReport,
   DesktopRendererMemoryDiagnosticsRecord,
   DesktopRendererMemoryDiagnosticsSnapshot,
+  DesktopRunningSessionStatus,
   DesktopSessionRollbackInput,
   DesktopSessionRollbackResult,
   McpServerInput,
@@ -185,6 +186,41 @@ const GIT_DISABLED_DIFF_SCOPES = [
   "git:commit",
   "git:branch",
 ] satisfies AgentSessionDiffScope[]
+
+type AgentDebugStatusPayload = {
+  runningSessions?: {
+    count?: unknown
+    items?: unknown
+  }
+}
+
+function normalizeRunningSessionStatus(payload: AgentDebugStatusPayload | null | undefined): DesktopRunningSessionStatus {
+  const rawItems = payload?.runningSessions?.items
+  const sessionIDs = (Array.isArray(rawItems) ? rawItems : [])
+    .map((item) => {
+      if (typeof item !== "object" || item === null) return ""
+      const sessionID = (item as { sessionID?: unknown }).sessionID
+      return typeof sessionID === "string" ? sessionID.trim() : ""
+    })
+    .filter((sessionID): sessionID is string => Boolean(sessionID))
+  const rawCount = payload?.runningSessions?.count
+  const parsedCount = typeof rawCount === "number" && Number.isFinite(rawCount)
+    ? Math.max(0, Math.floor(rawCount))
+    : sessionIDs.length
+  const count = Math.max(parsedCount, sessionIDs.length)
+
+  return {
+    running: count > 0,
+    count,
+    sessionIDs,
+    checkedAt: Date.now(),
+  }
+}
+
+async function getRunningSessionStatus(): Promise<DesktopRunningSessionStatus> {
+  const result = await requestAgentJSON<AgentDebugStatusPayload>("/api/debug/status")
+  return normalizeRunningSessionStatus(result.data)
+}
 
 function createNonGitScopeOptions(diff: AgentSessionDiffSummary): AgentSessionDiffSummary["availableScopes"] {
   return [
@@ -3119,6 +3155,8 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   handleDesktopIpc("desktop:check-for-app-updates", async () => checkForAppUpdates({ manual: true }))
 
   handleDesktopIpc("desktop:install-app-update", async () => installDownloadedAppUpdate())
+
+  handleDesktopIpc("desktop:get-running-session-status", async () => getRunningSessionStatus())
 
   handleDesktopIpc("desktop:get-storage-paths", async () => {
     const appData = app.getPath("userData")

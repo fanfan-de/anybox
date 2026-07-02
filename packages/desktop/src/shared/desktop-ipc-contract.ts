@@ -402,6 +402,13 @@ export interface DesktopAppUpdateInstallResult {
   reason?: string
 }
 
+export interface DesktopRunningSessionStatus {
+  running: boolean
+  count: number
+  sessionIDs: string[]
+  checkedAt: number
+}
+
 export interface DesktopStoragePaths {
   appData: string
   agentRoot: string
@@ -960,6 +967,10 @@ export interface DesktopIpcContract {
   "desktop:install-app-update": {
     input: void
     output: DesktopAppUpdateInstallResult
+  }
+  "desktop:get-running-session-status": {
+    input: void
+    output: DesktopRunningSessionStatus
   }
   "desktop:get-storage-paths": {
     input: void
@@ -1927,6 +1938,7 @@ export interface DesktopApiMethods {
   ): Promise<DesktopIpcOutput<"desktop:set-automatic-updates-enabled">>
   checkForAppUpdates(): Promise<DesktopIpcOutput<"desktop:check-for-app-updates">>
   installAppUpdate(): Promise<DesktopIpcOutput<"desktop:install-app-update">>
+  getRunningSessionStatus?(): Promise<DesktopIpcOutput<"desktop:get-running-session-status">>
   onAppUpdateStateChange(
     listener: (state: DesktopIpcEventPayload<typeof DESKTOP_APP_UPDATE_STATE_EVENT_CHANNEL>) => void,
   ): () => void

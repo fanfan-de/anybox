@@ -35,6 +35,10 @@ export async function installAppUpdate(): Promise<DesktopIpcOutput<"desktop:inst
   return window.desktop?.installAppUpdate?.() ?? null
 }
 
+export async function getRunningSessionStatus(): Promise<DesktopIpcOutput<"desktop:get-running-session-status"> | null> {
+  return window.desktop?.getRunningSessionStatus?.() ?? null
+}
+
 export async function getStoragePaths(): Promise<DesktopIpcOutput<"desktop:get-storage-paths"> | null> {
   return window.desktop?.getStoragePaths?.() ?? null
 }
