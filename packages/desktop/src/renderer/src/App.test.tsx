@@ -14830,7 +14830,7 @@ describe("App", () => {
     )
     expect(styles).toMatch(/\.settings-page\s*\{[^}]*background:\s*var\(--semantic-popup-panel-surface\);/s)
     expect(styles).toMatch(
-      /\.settings-page-nav,\s*\.settings-page-primary-nav\s*\{[^}]*background:\s*var\(--semantic-popup-panel-surface\);[^}]*color:\s*var\(--seg-text-1\);/s,
+      /\.settings-page-nav,\s*\.settings-page-primary-nav\s*\{[^}]*background:\s*transparent;[^}]*color:\s*var\(--seg-text-1\);/s,
     )
     expect(styles).toMatch(/\.settings-primary-nav-group-label,[\s\S]*?\.settings-helper-text,[\s\S]*?\.settings-page-copy,[\s\S]*?\.settings-section-header p,[\s\S]*?\.provider-row-copy,[\s\S]*?\.provider-model-empty,[\s\S]*?\.settings-toggle-copy small\s*\{[^}]*color:\s*var\(--seg-text-3\);/s)
     expect(styles).toMatch(
