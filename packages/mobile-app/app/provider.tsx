@@ -17,6 +17,7 @@ import {
   revokeCurrentDevice,
   type MobileStatus,
 } from "@/api/mobile-api"
+import { useI18n } from "@/i18n"
 import { useAccount } from "@/state/account"
 import { useConnection } from "@/state/connection"
 import {
@@ -30,6 +31,7 @@ type FeatherName = React.ComponentProps<typeof Feather>["name"]
 
 export default function ProviderScreen() {
   const router = useRouter()
+  const { t } = useI18n()
   const { account, refreshAccount } = useAccount()
   const { connection, clearConnection, saveConnection } = useConnection()
   const [status, setStatus] = useState<MobileStatus | null>(null)
@@ -53,7 +55,7 @@ export default function ProviderScreen() {
       }
       setStatus(await getStatus(connection))
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load desktop connection.")
+      setError(loadError instanceof Error ? loadError.message : t("provider.connectionRefreshFailed"))
     } finally {
       setLoading(false)
     }
@@ -75,7 +77,7 @@ export default function ProviderScreen() {
     try {
       setDesktops(await listAccountRelayDesktops(account))
     } catch (loadError) {
-      setDesktopError(describeAccountApiError(loadError, "Unable to load desktop devices."))
+      setDesktopError(describeAccountApiError(loadError, t("provider.desktopListFailed")))
     } finally {
       setDesktopLoading(false)
     }
@@ -99,7 +101,7 @@ export default function ProviderScreen() {
     refreshedAccountKeyRef.current = refreshKey
     let cancelled = false
     refreshAccount().catch((refreshError) => {
-      if (!cancelled) setDesktopError((current) => current ?? describeAccountApiError(refreshError, "Unable to refresh account."))
+      if (!cancelled) setDesktopError((current) => current ?? describeAccountApiError(refreshError, t("provider.desktopListFailed")))
     })
     return () => {
       cancelled = true
@@ -126,7 +128,7 @@ export default function ProviderScreen() {
       }
       await clearConnection()
     } catch (disconnectError) {
-      setError(disconnectError instanceof Error ? disconnectError.message : "Unable to change connection.")
+      setError(disconnectError instanceof Error ? disconnectError.message : t("provider.changeConnection"))
     } finally {
       setDisconnecting(false)
     }
@@ -134,10 +136,10 @@ export default function ProviderScreen() {
 
   const handleDisconnect = useCallback(() => {
     if (!connection) return
-    Alert.alert("Change connection?", "This revokes the current paired mobile device token.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("provider.changeTitle"), t("provider.changeMessage"), [
+      { text: t("app.cancel"), style: "cancel" },
       {
-        text: "Change",
+        text: t("provider.changeAction"),
         style: "destructive",
         onPress: () => void runDisconnect(),
       },
@@ -160,19 +162,19 @@ export default function ProviderScreen() {
         await revokeCurrentDevice(previousConnection).catch(() => undefined)
       }
     } catch (connectError) {
-      setDesktopError(describeAccountApiError(connectError, "Unable to connect this desktop."))
+      setDesktopError(describeAccountApiError(connectError, t("connection.failed")))
     } finally {
       setConnectingDesktopID(null)
     }
   }, [account, connection, saveConnection])
 
-  const connectionState = status?.online ? "Connected" : connection ? "Checking" : "Not connected"
+  const connectionState = status?.online ? t("home.provider.connected") : connection ? t("home.provider.checking") : t("settings.connection.offline")
   const connectionTone: ThemeTone = status?.online ? "success" : connection ? "neutral" : "danger"
   const relayDisabled = isRelayDisabledByEntitlement(account)
-  const desktopName = status?.desktopName?.trim() || currentDesktopName(connection?.desktopID, desktops) || "Desktop"
-  const transportLabel = connection?.transport === "relay" ? "Relay" : connection ? "Local" : "None"
+  const desktopName = status?.desktopName?.trim() || currentDesktopName(connection?.desktopID, desktops) || t("home.provider.defaultDesktop")
+  const transportLabel = connection?.transport === "relay" ? "Relay" : connection ? "Local" : t("app.unknown")
   const capabilityCount = status?.capabilities?.length ?? 0
-  const capabilityLabel = formatCapabilityCount(capabilityCount)
+  const capabilityLabel = formatCapabilityCount(capabilityCount, t)
   const diagnostics = buildDiagnostics({
     accountEmail: account?.user.email,
     accountWorkspace: account?.workspace?.name,
@@ -182,28 +184,28 @@ export default function ProviderScreen() {
 
   return (
     <Screen>
-      <Section title="Connection" caption={transportLabel}>
+      <Section title={t("provider.currentConnection")} caption={transportLabel}>
         <ConnectionSummary
           desktopName={desktopName}
           state={connectionState}
           tone={connectionTone}
           connected={Boolean(connection)}
         />
-        {error ? <StateCard title="Connection refresh failed" detail={error} tone="danger" /> : null}
+        {error ? <StateCard title={t("provider.connectionRefreshFailed")} detail={error} tone="danger" /> : null}
         <View style={{ flexDirection: "row", gap: 10 }}>
           <View style={{ flex: 1 }}>
-            <ActionButton icon="refresh-cw" label="Refresh" loading={loading} onPress={() => void load()} variant="secondary" />
+            <ActionButton icon="refresh-cw" label={t("app.refresh")} loading={loading} onPress={() => void load()} variant="secondary" />
           </View>
           <View style={{ flex: 1 }}>
-            <ActionButton icon="camera" label="Scan QR" onPress={() => router.push("/scan" as never)} variant="primary" />
+            <ActionButton icon="camera" label={t("connection.scanQr")} onPress={() => router.push("/scan" as never)} variant="primary" />
           </View>
         </View>
-        <ActionButton disabled={!connection} icon="repeat" label="Change Connection" loading={disconnecting} onPress={handleDisconnect} variant="danger" />
+        <ActionButton disabled={!connection} icon="repeat" label={t("provider.changeConnection")} loading={disconnecting} onPress={handleDisconnect} variant="danger" />
       </Section>
 
-      <Section title="Desktop Devices" caption={desktopLoading ? "Loading" : `${desktops.length}`}>
-        {relayDisabled ? <StateCard title="Relay unavailable" detail="当前套餐不支持 Relay。请在管理后台启用 Relay 权益后重试。" tone="danger" /> : null}
-        {desktopError ? <StateCard title="Desktop list failed" detail={desktopError} tone="danger" /> : null}
+      <Section title={t("connection.availableDesktops")} caption={desktopLoading ? t("app.searching") : `${desktops.length}`}>
+        {relayDisabled ? <StateCard title={t("provider.relayUnavailable")} detail={t("provider.relayUnavailableDetail")} tone="danger" /> : null}
+        {desktopError ? <StateCard title={t("provider.desktopListFailed")} detail={desktopError} tone="danger" /> : null}
         {!relayDisabled && sortedDesktops.length ? (
           sortedDesktops.map((desktop) => {
             const isCurrentDesktop = desktop.id === connection?.desktopID
@@ -211,16 +213,16 @@ export default function ProviderScreen() {
             const canConnectDesktop = desktop.online && connectingDesktopID !== desktop.id && (!isCurrentDesktop || !currentConnectionIsOnline)
             const actionLabel =
               connectingDesktopID === desktop.id
-                ? "Connecting"
+                ? t("connection.connecting")
                 : isCurrentDesktop
                   ? currentConnectionIsOnline
-                    ? "Current"
+                    ? t("provider.current")
                     : desktop.online
-                      ? "Reconnect"
-                      : "Current"
+                      ? t("provider.reconnect")
+                      : t("provider.current")
                   : desktop.online
-                    ? "Switch"
-                    : "Offline"
+                    ? t("provider.switch")
+                    : t("connection.offline")
             return (
               <DesktopDeviceRow
                 actionLabel={actionLabel}
@@ -238,27 +240,27 @@ export default function ProviderScreen() {
             )
           })
         ) : !relayDisabled ? (
-          <StateCard title={desktopLoading ? "Loading desktop devices" : "No desktop devices"} />
+          <StateCard title={desktopLoading ? t("connection.findingDesktops") : t("connection.noDesktops")} />
         ) : null}
-        <ActionButton icon="refresh-cw" label="Refresh Devices" loading={desktopLoading} onPress={() => void loadDesktops()} variant="secondary" />
+        <ActionButton icon="refresh-cw" label={t("provider.refreshDesktops")} loading={desktopLoading} onPress={() => void loadDesktops()} variant="secondary" />
       </Section>
 
       <CollapsiblePanel
         caption={capabilityLabel}
         expanded={advancedOpen}
         onToggle={() => setAdvancedOpen((current) => !current)}
-        title="Advanced"
+        title={t("provider.advanced")}
       >
         <DetailCard>
-          <DetailRow title="Provider URL" value={account?.baseUrl ?? connection?.baseUrl ?? "Unknown"} />
-          <DetailRow divided title="Version" value={status?.appVersion ?? "Unknown"} />
-          <DetailRow divided title="Capabilities" value={capabilityCount ? `${capabilityCount}` : "Unknown"} />
+          <DetailRow title={t("provider.providerUrl")} value={account?.baseUrl ?? connection?.baseUrl ?? t("app.unknown")} />
+          <DetailRow divided title={t("provider.version")} value={status?.appVersion ?? t("app.unknown")} />
+          <DetailRow divided title={t("provider.capabilities")} value={capabilityCount ? `${capabilityCount}` : t("app.unknown")} />
         </DetailCard>
         {status?.capabilities?.length ? <CapabilityCard capabilities={status.capabilities} /> : null}
         <DetailCard>
-          <DetailRow mono title="Endpoint" value={connection ? trimMiddle(connection.baseUrl, 76) : "Not connected"} />
-          {connection?.desktopID ? <DetailRow divided mono title="Desktop ID" value={trimMiddle(connection.desktopID, 76)} /> : null}
-          {connection?.deviceID ? <DetailRow divided mono title="Mobile Device ID" value={trimMiddle(connection.deviceID, 76)} /> : null}
+          <DetailRow mono title={t("provider.endpoint")} value={connection ? trimMiddle(connection.baseUrl, 76) : t("settings.connection.offline")} />
+          {connection?.desktopID ? <DetailRow divided mono title={t("provider.desktopId")} value={trimMiddle(connection.desktopID, 76)} /> : null}
+          {connection?.deviceID ? <DetailRow divided mono title={t("provider.mobileDeviceId")} value={trimMiddle(connection.deviceID, 76)} /> : null}
         </DetailCard>
         <DiagnosticsCard diagnostics={diagnostics} />
       </CollapsiblePanel>
@@ -277,6 +279,8 @@ function ConnectionSummary({
   state: string
   tone: ThemeTone
 }) {
+  const { t } = useI18n()
+
   return (
     <View
       style={{
@@ -298,7 +302,7 @@ function ConnectionSummary({
               fontWeight: theme.typography.weight.heavy,
             }}
           >
-            {connected ? desktopName : "No desktop connected"}
+            {connected ? desktopName : t("provider.noDesktopConnected")}
           </Text>
           {!connected ? (
             <Text
@@ -309,7 +313,7 @@ function ConnectionSummary({
                 lineHeight: theme.typography.lineHeight.sm,
               }}
             >
-              Connect a desktop to use project and chat focus.
+              {t("provider.connectDesktopHint")}
             </Text>
           ) : null}
         </View>
@@ -427,10 +431,13 @@ function DesktopDeviceRow({
   online: boolean
   version?: string
 }) {
-  const subtitle = online ? [version, formatCapabilityCount(capabilities)].filter(Boolean).join(" / ") : `Last seen ${formatRelativeTime(lastSeenAt)}`
+  const { locale, t } = useI18n()
+  const subtitle = online
+    ? [version, formatCapabilityCount(capabilities, t)].filter(Boolean).join(" / ")
+    : t("connection.lastSeen", { time: formatRelativeTime(lastSeenAt, locale) })
   return (
     <Pressable
-      accessibilityLabel={onPress ? `Connect ${name}` : undefined}
+      accessibilityLabel={onPress ? name : undefined}
       accessibilityRole={onPress ? "button" : undefined}
       accessible={Boolean(onPress)}
       disabled={!onPress}
@@ -538,6 +545,8 @@ function CollapsiblePanel({
 }
 
 function CapabilityCard({ capabilities }: { capabilities: string[] }) {
+  const { t } = useI18n()
+
   return (
     <View
       style={{
@@ -556,7 +565,7 @@ function CapabilityCard({ capabilities }: { capabilities: string[] }) {
           fontWeight: theme.typography.weight.bold,
         }}
       >
-        Capability list
+        {t("provider.capabilityList")}
       </Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.md }}>
         {capabilities.map((capability) => (
@@ -589,6 +598,8 @@ function CapabilityCard({ capabilities }: { capabilities: string[] }) {
 }
 
 function DiagnosticsCard({ diagnostics }: { diagnostics: string }) {
+  const { t } = useI18n()
+
   return (
     <View
       style={{
@@ -607,7 +618,7 @@ function DiagnosticsCard({ diagnostics }: { diagnostics: string }) {
           fontWeight: theme.typography.weight.bold,
         }}
       >
-        Diagnostics
+        {t("nav.diagnostics")}
       </Text>
       <Text
         selectable
@@ -739,9 +750,10 @@ function actionButtonColors(variant: "primary" | "secondary" | "danger") {
   }
 }
 
-function formatCapabilityCount(count: number) {
-  if (!count) return "Unknown capabilities"
-  return `${count} ${count === 1 ? "capability" : "capabilities"}`
+function formatCapabilityCount(count: number, t: ReturnType<typeof useI18n>["t"]) {
+  if (!count) return t("provider.unknownCapabilities")
+  if (count === 1 && t("provider.capabilityCount", { count }) === "1 capabilities") return "1 capability"
+  return t("provider.capabilityCount", { count })
 }
 
 function currentDesktopName(desktopID: string | undefined, desktops: MobileAccountRelayDesktop[]) {

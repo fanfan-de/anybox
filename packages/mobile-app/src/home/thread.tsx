@@ -2,6 +2,7 @@ import React from "react"
 import Feather from "@expo/vector-icons/Feather"
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native"
 import type { MobileApproval, MobileMessage, MobileProviderModel, MobileSessionSummary, MobileWorkspace } from "@/api/mobile-api"
+import { useI18n } from "@/i18n"
 import { ApprovalCard } from "./approval-card"
 import { messageContentSegments, messageRole, messageText, type MessageContentSegment } from "@/utils/message"
 import { DarkEmpty, DarkNotice } from "./shared"
@@ -65,7 +66,8 @@ export function ThreadViewPage({
   selectedModel: string | null
   sending: boolean
 }) {
-  const title = focusedSession?.title ?? "New session"
+  const { t } = useI18n()
+  const title = focusedSession?.title ?? t("thread.newSession")
   const timelineItems = React.useMemo(() => buildThreadTimeline(messages, approvals), [approvals, messages])
 
   return (
@@ -76,13 +78,13 @@ export function ThreadViewPage({
     >
       <View style={{ alignSelf: "center", flex: 1, width: "100%", maxWidth: 430, paddingBottom, paddingTop }}>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 10, height: 58, paddingHorizontal: 14 }}>
-          <TopIconButton accessibilityLabel="Open projects and sessions" icon="menu" onPress={onOpenDrawer} />
+          <TopIconButton accessibilityLabel={t("thread.openProjects")} icon="menu" onPress={onOpenDrawer} />
           <View style={{ alignItems: "center", flex: 1, flexDirection: "row" }}>
             <Text numberOfLines={1} style={{ color: "#e8e8e8", flexShrink: 1, fontSize: 25, fontWeight: "800" }}>
               {title}
             </Text>
           </View>
-          <TopIconButton accessibilityLabel="New session" disabled={!focusedWorkspace || sending} icon="edit-3" onPress={onNewChat} />
+          <TopIconButton accessibilityLabel={t("thread.newSession")} disabled={!focusedWorkspace || sending} icon="edit-3" onPress={onNewChat} />
         </View>
 
         <ScrollView
@@ -93,10 +95,10 @@ export function ThreadViewPage({
           style={{ flex: 1 }}
         >
           {messageError ? (
-            <DarkNotice title="Composer failed" detail={messageError} tone="danger" />
+            <DarkNotice title={t("thread.composerFailed")} detail={messageError} tone="danger" />
           ) : null}
           {approvalError ? (
-            <DarkNotice title="Approval action failed" detail={approvalError} tone="danger" />
+            <DarkNotice title={t("thread.approvalFailed")} detail={approvalError} tone="danger" />
           ) : null}
           {focusedWorkspace && !focusedSession ? (
             <AssistantIntro workspaceName={focusedWorkspace.name} />
@@ -118,7 +120,7 @@ export function ThreadViewPage({
                 )
               ))
             ) : (
-              <DarkEmpty title={messagesLoading ? "Loading session" : "No messages"} />
+              <DarkEmpty title={messagesLoading ? t("thread.loadingSession") : t("thread.noMessages")} />
             )
           ) : null}
         </ScrollView>
@@ -230,6 +232,8 @@ function AssistantMessageContent({ segments }: { segments: MessageContentSegment
 }
 
 function ReasoningSegment({ text }: { text: string }) {
+  const { t } = useI18n()
+
   if (!text.trim()) return null
 
   return (
@@ -244,7 +248,7 @@ function ReasoningSegment({ text }: { text: string }) {
     >
       <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
         <Feather color="#9a9a9a" name="activity" size={12} />
-        <Text style={{ color: "#a7a7a7", fontSize: 12, fontWeight: "800" }}>Reasoning</Text>
+        <Text style={{ color: "#a7a7a7", fontSize: 12, fontWeight: "800" }}>{t("thread.reasoning")}</Text>
       </View>
       <Text selectable style={{ color: "#a0a0a0", fontSize: 14, lineHeight: 20 }}>
         {text}
@@ -254,6 +258,8 @@ function ReasoningSegment({ text }: { text: string }) {
 }
 
 function ResponseSegment({ hasReasoning, text }: { hasReasoning: boolean; text: string }) {
+  const { t } = useI18n()
+
   if (!text.trim()) return null
 
   return (
@@ -261,7 +267,7 @@ function ResponseSegment({ hasReasoning, text }: { hasReasoning: boolean; text: 
       {hasReasoning ? (
         <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
           <Feather color="#bfbfbf" name="message-circle" size={12} />
-          <Text style={{ color: "#c7c7c7", fontSize: 12, fontWeight: "800" }}>Response</Text>
+          <Text style={{ color: "#c7c7c7", fontSize: 12, fontWeight: "800" }}>{t("thread.response")}</Text>
         </View>
       ) : null}
       <Text selectable style={{ color: "#dedede", fontSize: 16, lineHeight: 22 }}>
@@ -272,6 +278,8 @@ function ResponseSegment({ hasReasoning, text }: { hasReasoning: boolean; text: 
 }
 
 function AssistantIntro({ workspaceName }: { workspaceName: string }) {
+  const { t } = useI18n()
+
   return (
     <View style={{ gap: 10, paddingTop: 14 }}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
@@ -279,7 +287,7 @@ function AssistantIntro({ workspaceName }: { workspaceName: string }) {
         <Text style={{ color: "#e8e8e8", fontSize: 15, fontWeight: "800" }}>anybox</Text>
       </View>
       <Text selectable style={{ color: "#dedede", fontSize: 16, lineHeight: 22 }}>
-        {`Ready in ${workspaceName}. Send a task to create a focused session.`}
+        {t("thread.readyInWorkspace", { workspace: workspaceName })}
       </Text>
     </View>
   )
@@ -316,12 +324,13 @@ function ThreadComposer({
   sessionReady: boolean
   sending: boolean
 }) {
+  const { t } = useI18n()
   const [modelPanelOpen, setModelPanelOpen] = React.useState(false)
   const selectedModelOption = React.useMemo(
     () => modelOptions.find((model) => modelValue(model) === selectedModel) ?? null,
     [modelOptions, selectedModel],
   )
-  const modelLabel = selectedModelOption?.name ?? effectiveModel?.name ?? "Model"
+  const modelLabel = selectedModelOption?.name ?? effectiveModel?.name ?? t("thread.model")
   const modelButtonDisabled = !sessionReady || modelsLoading || Boolean(savingModel)
 
   function selectModel(value: string | null) {
@@ -378,14 +387,14 @@ function ThreadComposer({
             ) : null}
             {modelsLoading ? (
               <Text style={{ color: "#8f8f8f", fontSize: 13, fontWeight: "700", paddingHorizontal: 8, paddingVertical: 6 }}>
-                Loading models
+                {t("thread.loadingModels")}
               </Text>
             ) : (
               <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
                 <ModelOptionRow
-                  detail={effectiveModel ? effectiveModelLabel(effectiveModel) : "Use provider default"}
+                  detail={effectiveModel ? effectiveModelLabel(effectiveModel) : t("thread.useProviderDefault")}
                   selected={!selectedModel}
-                  title="Default"
+                  title={t("thread.defaultModel")}
                   onPress={() => selectModel(null)}
                 />
                 {modelOptions.length ? (
@@ -403,7 +412,7 @@ function ThreadComposer({
                   })
                 ) : (
                   <Text style={{ color: "#8f8f8f", fontSize: 13, fontWeight: "700", paddingHorizontal: 8, paddingVertical: 8 }}>
-                    No models available
+                    {t("thread.noModels")}
                   </Text>
                 )}
               </ScrollView>
@@ -413,7 +422,7 @@ function ThreadComposer({
         <View style={{ alignItems: "center", flexDirection: "row", height: 36, justifyContent: "space-between" }}>
           <ModelSelectorButton
             disabled={!sessionReady}
-            label={savingModel ? "Saving" : modelLabel}
+            label={savingModel ? t("thread.saving") : modelLabel}
             loading={modelsLoading || Boolean(savingModel)}
             open={modelPanelOpen}
             onPress={() => {

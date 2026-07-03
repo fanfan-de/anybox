@@ -1,10 +1,19 @@
-export function formatRelativeTime(value: number | undefined) {
-  if (!value) return "Unknown"
+import type { MobileLocale } from "@/i18n"
+
+export function formatRelativeTime(value: number | undefined, locale: MobileLocale = "en-US") {
+  if (!value) return locale === "zh-CN" ? "未知" : "Unknown"
   const elapsed = Date.now() - value
-  if (elapsed < 60_000) return "Just now"
-  if (elapsed < 3_600_000) return `${Math.max(1, Math.floor(elapsed / 60_000))}m ago`
-  if (elapsed < 86_400_000) return `${Math.max(1, Math.floor(elapsed / 3_600_000))}h ago`
-  return `${Math.max(1, Math.floor(elapsed / 86_400_000))}d ago`
+  if (elapsed < 60_000) return locale === "zh-CN" ? "刚刚" : "Just now"
+  if (elapsed < 3_600_000) {
+    const minutes = Math.max(1, Math.floor(elapsed / 60_000))
+    return locale === "zh-CN" ? `${minutes} 分钟前` : `${minutes}m ago`
+  }
+  if (elapsed < 86_400_000) {
+    const hours = Math.max(1, Math.floor(elapsed / 3_600_000))
+    return locale === "zh-CN" ? `${hours} 小时前` : `${hours}h ago`
+  }
+  const days = Math.max(1, Math.floor(elapsed / 86_400_000))
+  return locale === "zh-CN" ? `${days} 天前` : `${days}d ago`
 }
 
 export function trimMiddle(value: string, maxLength = 52) {

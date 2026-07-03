@@ -1,0 +1,57 @@
+
+> anybox@0.1.26 mobile:ios:metro /Users/fanfande/Documents/Projects/anybox
+> corepack pnpm --filter anybox-mobile-app ios:metro
+
+
+> anybox-mobile-app@0.2.3 ios:metro /Users/fanfande/Documents/Projects/anybox/packages/mobile-app
+> expo start --dev-client --host localhost --port 8081
+
+[90mStarting project at /Users/fanfande/Documents/Projects/anybox/packages/mobile-app[39m
+[90mExpo Autolinking module resolution enabled[39m
+[2mStarting Metro Bundler[22m
+
+▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+█ ▄▄▄▄▄ ██▄██ ▄ █▄▀▄█▄ ▀███ ▄▄▄▄▄ █
+█ █   █ █▀ ▀▀▄▀ █ ▀▀█▄ ██▀█ █   █ █
+█ █▄▄▄█ █▄█▄▄▄▀▄▄▄ █▄▄▄▀▄▀█ █▄▄▄█ █
+█▄▄▄▄▄▄▄█▄█▄█ █▄▀▄█▄▀ █ █▄█▄▄▄▄▄▄▄█
+█ ▄▀█▀ ▄ ████▄█   ▄█ █▀ ▀▄██▀ ▄▀███
+█ ▀ ▀▀▄▄█▀▄▀▀▀▄▄▄ ███ ▄▄██▄▄█▀  ▄▀█
+██ ▀▀  ▄▄  ▄ ▀█  ▄██  ▀█▀ █  █ ██▀█
+█▀▀▀▀▀▄▄█▀▀█████▄ ▄ █ █▄▀█ ▀▄ ▀▀▀▀█
+█▀▀█▀ ▀▄▄▀ ▄▀ ▄▀▄▀ ▀ ▀█  ▄▀▀ ▄▄█▄ █
+█ ██▀▄ ▄  ▀ ▄▀█▄ █▄▀▄ ▄▄▄ ▄▀▀▀▀ ▀ █
+█▀ ▀▄▀ ▄▄▀██▀▀▄█   ▄ █▀ ▀███  █▀▄▄█
+█ ██▀█ ▄ █▄█▀▄▄ ▄ ██▀▄▄ █   ▀▀▀▀ ▀█
+█▄▄▄▄▄▄▄▄ ▄ ▀ ▀▄ ▄▀▀  ██▀ ▄▄▄  █▄ █
+█ ▄▄▄▄▄ █  ▀█ ▄ ▄▀█ █▄▄▄  █▄█  ▀▄██
+█ █   █ ██▀ ▀▀▄▀  ▄█ █▀▄▀ ▄▄▄ ▄█▄▄█
+█ █▄▄▄█ █▀▀█ ▄▄▄▄ ▄▀▄ ███▄ ▀█ ▄ █▄█
+█▄▄▄▄▄▄▄█▄▄▄▄▄▄█▄▄▄██▄█▄▄▄▄▄█▄██▄██
+
+[2m› Scan the QR code above to open in a [1mdevelopment build[22m[2m. ([2mLearn more:[22m[2m[22m
+[2m[2m[4mhttps://expo.fyi/start[24m[22m[2m)[22m
+› Metro:
+[4mcom.anybox.mobile://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081[24m
+› Web: [4mhttp://localhost:8081[24m
+
+› Using [36mdevelopment build[39m [2m(Press [22m[2m[1ms[22m[22m[2m to switch to Expo Go)[22m
+› Press [1m?[22m [2m│[22m show all commands
+
+Logs for your project will appear below.[2m Press Ctrl+C to exit.[22m
+[1miOS[22m [0m[2mnode_modules/.pnpm/expo-router@56.2.8_562b7de768a7d31f14f3ad107a5a3799/node_
+modules/expo-router/[22m[0m[1mentry.js[22m [47m[37m░░░░░░░░░░░░░░░░[39m[49m[1m  0.0% [22m[2m(0/1)[22m
+[80D[2A[0J[1miOS[22m [0m[2mnode_modules/.pnpm/expo-router@56.2.8_562b7de768a7d31f14f3ad107a5a3799/node_
+modules/expo-router/[22m[0m[1mentry.js[22m [32m[42m▓▓▓[49m[39m[47m[37m░░░░░░░░░░░░░[39m[49m[1m 21.1% [22m[2m(212/462)[22m
+[80D[2A[0J[1miOS[22m [0m[2mnode_modules/.pnpm/expo-router@56.2.8_562b7de768a7d31f14f3ad107a5a3799/node_
+modules/expo-router/[22m[0m[1mentry.js[22m [32m[42m▓▓▓▓▓▓▓▓[49m[39m[47m[37m░░░░░░░░[39m[49m[1m 53.0% [22m[2m(674/926)[22m
+[80D[2A[0J[1miOS[22m [0m[2mnode_modules/.pnpm/expo-router@56.2.8_562b7de768a7d31f14f3ad107a5a3799/node_
+modules/expo-router/[22m[0m[1mentry.js[22m [32m[42m▓▓▓▓▓▓▓▓▓▓▓▓▓▓[49m[39m[47m[37m░░[39m[49m[1m 89.8% [22m[2m(1073/1132)[22m
+[80D[2A[0J[32m[1miOS[22m Bundled [39m[2m378ms[22m[0m[2m node_modules/.pnpm/expo-router@56.2.8_562b7de768a7d31f14f3ad107a5a3799/node_modules/expo-router/entry.js (1132 modules)[22m[0m
+[7m[33m[1m WARN [22m[39m[27m 🟡 Barcode scanning has been disabled
+[7m[33m[1m WARN [22m[39m[27m 🟡 Barcode scanning has been disabled
+[33m|[39m (node:75358) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[33m|[39m (Use `node --trace-warnings ...` to show where the warning was created)
+[33m|[39m (node:75358) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[33m|[39m (Use `node --trace-warnings ...` to show where the warning was created)
+[7m[31m[1m ERROR [22m[39m[27m [TypeError: undefined is not a function]

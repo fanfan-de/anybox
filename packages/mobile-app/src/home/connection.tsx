@@ -6,6 +6,7 @@ import { ListRow } from "@/components/list-row"
 import { Section } from "@/components/section"
 import { StateCard } from "@/components/state-card"
 import type { MobileAccountRelayDesktop } from "@/api/account-api"
+import { useI18n } from "@/i18n"
 import { formatRelativeTime } from "@/utils/format"
 import { DarkProviderRow } from "./shared"
 import type { ProviderStatusTone } from "./types"
@@ -129,12 +130,14 @@ export function MobileUtilityRow({
   onOpenSettings: () => void
   onOpenUpdates: () => void
 }) {
+  const { t } = useI18n()
+
   return (
     <View style={{ flexDirection: "row", gap: 10 }}>
-      <UtilityTile label="Provider" onPress={onOpenProvider} value="Details" />
-      <UtilityTile label="Updates" onPress={onOpenUpdates} value={appVersion} />
-      <UtilityTile label="Settings" onPress={onOpenSettings} value="Manage" />
-      <UtilityTile label="Diagnostics" onPress={onOpenDiagnostics} value="Health" />
+      <UtilityTile label={t("home.utility.provider")} onPress={onOpenProvider} value={t("home.utility.details")} />
+      <UtilityTile label={t("home.utility.updates")} onPress={onOpenUpdates} value={appVersion} />
+      <UtilityTile label={t("home.utility.settings")} onPress={onOpenSettings} value={t("home.utility.manage")} />
+      <UtilityTile label={t("home.utility.diagnostics")} onPress={onOpenDiagnostics} value={t("home.utility.health")} />
     </View>
   )
 }
@@ -254,39 +257,41 @@ export function ConnectionSetupSection({
   onTokenChange: (value: string) => void
   token: string
 }) {
+  const { locale, t } = useI18n()
+
   return (
-    <Section title="Connect Desktop" caption={accountDesktopsLoading ? "Searching" : `${accountDesktops.length}`}>
+    <Section title={t("connection.availableDesktops")} caption={accountDesktopsLoading ? t("app.searching") : `${accountDesktops.length}`}>
       <View style={{ flexDirection: "row", gap: 10 }}>
         <View style={{ flex: 1 }}>
-          <Button label="Scan QR" onPress={onScan} />
+          <Button label={t("connection.scanQr")} onPress={onScan} />
         </View>
         <View style={{ flex: 1 }}>
-          <Button label="Refresh" loading={accountDesktopsLoading} onPress={onRefreshDesktopList} variant="secondary" />
+          <Button label={t("app.refresh")} loading={accountDesktopsLoading} onPress={onRefreshDesktopList} variant="secondary" />
         </View>
       </View>
-      {accountDesktopsLoading ? <StateCard title="Finding desktop devices" /> : null}
-      {accountDesktopError ? <StateCard title="Desktop discovery failed" detail={accountDesktopError} tone="danger" /> : null}
+      {accountDesktopsLoading ? <StateCard title={t("connection.findingDesktops")} /> : null}
+      {accountDesktopError ? <StateCard title={t("connection.discoveryFailed")} detail={accountDesktopError} tone="danger" /> : null}
       {!accountDesktopsLoading && !accountDesktopError && !accountDesktops.length ? (
-        <StateCard title="No desktop devices" detail="Scan the QR code on the desktop Mobile connection page." />
+        <StateCard title={t("connection.noDesktops")} detail={t("connection.noDesktopsDetail")} />
       ) : null}
       {accountDesktops.map((desktop) => (
         <ListRow
           key={desktop.id}
           title={desktop.appVersion ? `${desktop.name} ${desktop.appVersion}` : desktop.name}
-          subtitle={desktop.online ? "Available through AnyboxProvider relay" : `Last seen ${formatRelativeTime(desktop.lastSeenAt)}`}
-          meta={connectingDesktopID === desktop.id ? "Connecting" : desktop.online ? "Online" : "Offline"}
+          subtitle={desktop.online ? t("connection.availableRelay") : t("connection.lastSeen", { time: formatRelativeTime(desktop.lastSeenAt, locale) })}
+          meta={connectingDesktopID === desktop.id ? t("connection.connecting") : desktop.online ? t("connection.online") : t("connection.offline")}
           onPress={desktop.online && connectingDesktopID !== desktop.id ? () => void onConnectDesktop(desktop) : undefined}
         />
       ))}
-      <Button label={manualOpen ? "Hide bridge URL" : "Use bridge URL"} onPress={onManualToggle} variant="secondary" />
+      <Button label={manualOpen ? t("connection.hideBridgeUrl") : t("connection.useBridgeUrl")} onPress={onManualToggle} variant="secondary" />
       {manualOpen ? (
         <>
-          <Field label="Bridge URL" onChangeText={onEndpointChange} placeholder="https://anybox.com.cn/?code=..." value={endpoint} />
-          <Field label="Token" onChangeText={onTokenChange} placeholder="Optional if URL includes token or code" secureTextEntry value={token} />
-          <Button disabled={!endpoint.trim()} label="Review connection" onPress={onReviewConnection} />
+          <Field label={t("connection.bridgeUrl")} onChangeText={onEndpointChange} placeholder="https://anybox.com.cn/?code=..." value={endpoint} />
+          <Field label={t("connection.token")} onChangeText={onTokenChange} placeholder={t("connection.optionalToken")} secureTextEntry value={token} />
+          <Button disabled={!endpoint.trim()} label={t("connection.review")} onPress={onReviewConnection} />
         </>
       ) : null}
-      {error ? <StateCard title="Connection failed" detail={error} tone="danger" /> : null}
+      {error ? <StateCard title={t("connection.failed")} detail={error} tone="danger" /> : null}
     </Section>
   )
 }

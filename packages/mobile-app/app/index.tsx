@@ -37,6 +37,7 @@ import {
 } from "@/api/mobile-api"
 import { useMobileEvents } from "@/hooks/use-mobile-events"
 import { formatAppVersionLabel, getCurrentAppInfo } from "@/services/app-updates"
+import { useI18n } from "@/i18n"
 import { useAccount } from "@/state/account"
 import { useConnection } from "@/state/connection"
 import { useFocus } from "@/state/focus"
@@ -66,6 +67,7 @@ export default function HomeScreen() {
   const drawerProgress = useRef(new Animated.Value(0)).current
   const { account, loading: accountLoading } = useAccount()
   const { connection, loading: connectionLoading, saveConnection } = useConnection()
+  const { t } = useI18n()
   const focus = useFocus()
   const [endpoint, setEndpoint] = useState("")
   const [token, setToken] = useState("")
@@ -625,7 +627,7 @@ export default function HomeScreen() {
       let targetSessionID = focusedSession?.id
       if (!targetSessionID) {
         const session = await createSession(connection, focusedWorkspace.id, {
-          title: buildSessionTitle(text),
+          title: buildSessionTitle(text, t("home.mobileChat")),
         })
         targetSessionID = session.id
         setOptimisticSession({ session, workspaceID: focusedWorkspace.id })
@@ -669,7 +671,7 @@ export default function HomeScreen() {
   if (accountLoading || connectionLoading || focus.loading) {
     return (
       <Screen>
-        <StateCard title="Opening Anybox" />
+        <StateCard title={t("home.openingAnybox")} />
       </Screen>
     )
   }
@@ -677,7 +679,7 @@ export default function HomeScreen() {
   if (!account && !connection) {
     return (
       <Screen>
-        <StateCard title="Opening email sign in" />
+        <StateCard title={t("home.openingEmailSignIn")} />
       </Screen>
     )
   }
@@ -688,15 +690,16 @@ export default function HomeScreen() {
     connection,
     onlineDesktops,
     status,
+    t,
   })
   const composerDisabled = sending || !draft.trim() || !connection || !focusedWorkspace
   const composerPlaceholder = !connection
-    ? "AnyboxProvider is offline"
+    ? t("connection.providerOffline")
     : !focusedWorkspace
-      ? "Select a project"
+      ? t("connection.selectProject")
       : focusedSession
-        ? `Send to ${focusedSession.title}`
-        : "Start a conversation in this project"
+        ? t("connection.sendTo", { title: focusedSession.title })
+        : t("connection.startConversation")
 
   return (
     <>

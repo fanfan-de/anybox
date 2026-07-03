@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { Alert, Image, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { getApprovals, getStatus, type MobileStatus } from "@/api/mobile-api"
+import { MOBILE_LOCALES, localeNames, useI18n, type MobileLocale } from "@/i18n"
 import { formatAppVersionLabel, getCurrentAppInfo } from "@/services/app-updates"
 import { useAccount } from "@/state/account"
 import { useConnection } from "@/state/connection"
@@ -18,6 +19,7 @@ export default function SettingsScreen() {
   const { width } = useWindowDimensions()
   const { account, clearAccount, loading: accountLoading } = useAccount()
   const { connection, loading: connectionLoading } = useConnection()
+  const { locale, localeLabel, setLocale, t } = useI18n()
   const focus = useFocus()
   const [status, setStatus] = useState<MobileStatus | null>(null)
   const [pendingApprovals, setPendingApprovals] = useState(0)
@@ -55,28 +57,28 @@ export default function SettingsScreen() {
   }, [loadConnectionOverview])
 
   const displayName = accountLoading
-    ? "Loading account"
-    : account?.user.displayName?.trim() || account?.user.name?.trim() || account?.user.username?.trim() || account?.user.email?.split("@")[0] || "Sign in to Anybox"
+    ? t("settings.loadingAccount")
+    : account?.user.displayName?.trim() || account?.user.name?.trim() || account?.user.username?.trim() || account?.user.email?.split("@")[0] || t("settings.signIn")
   const avatarLabel = (displayName.trim()[0] || account?.user.email?.trim()[0] || "A").toLocaleUpperCase()
   const avatarUrl = account?.user.avatarUrl?.trim()
   const connectionState = connectionLoading
-    ? "Loading"
+    ? t("settings.connection.loading")
     : status?.online
-      ? "Connected"
+      ? t("settings.connection.connected")
       : connection
         ? statusLoading
-          ? "Checking"
-          : "Needs attention"
-        : "Offline"
+          ? t("settings.connection.checking")
+          : t("settings.connection.needsAttention")
+        : t("settings.connection.offline")
   const connectionTone = status?.online ? "#74d58b" : connection ? "#f5c86b" : "#8a8a8a"
   const hasSavedFocus = Boolean(focus.workspaceID || focus.sessionID)
 
   function confirmClearFocus() {
     if (!focus.workspaceID && !focus.sessionID) return
-    Alert.alert("Clear saved focus?", "Anybox Mobile will forget the selected project and conversation on this phone.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("settings.clearFocusTitle"), t("settings.clearFocusMessage"), [
+      { text: t("app.cancel"), style: "cancel" },
       {
-        text: "Clear",
+        text: t("app.clear"),
         style: "destructive",
         onPress: () => {
           void focus.clearFocus()
@@ -85,20 +87,29 @@ export default function SettingsScreen() {
     ])
   }
 
-  function showLanguageInfo() {
-    Alert.alert("语言", "当前版本仅支持简体中文。")
+  function showLanguagePicker() {
+    Alert.alert(t("settings.languageTitle"), t("settings.languageMessage"), [
+      ...MOBILE_LOCALES.map((item) => ({
+        text: localeNames[item],
+        style: item === locale ? "default" as const : "default" as const,
+        onPress: () => {
+          void setLocale(item as MobileLocale)
+        },
+      })),
+      { text: t("app.cancel"), style: "cancel" as const },
+    ])
   }
 
   function showAppearanceInfo() {
-    Alert.alert("外观", "当前深色界面会继续跟随 Anybox 移动端设计，后续再接完整主题。")
+    Alert.alert(t("settings.appearanceTitle"), t("settings.appearanceMessage"))
   }
 
   function confirmSignOut() {
     if (!account || signingOut) return
-    Alert.alert("退出登录？", "这会移除此手机上的 Anybox Provider 登录状态。", [
-      { text: "取消", style: "cancel" },
+    Alert.alert(t("settings.signOutTitle"), t("settings.signOutMessage"), [
+      { text: t("app.cancel"), style: "cancel" },
       {
-        text: "退出登录",
+        text: t("settings.signOut"),
         style: "destructive",
         onPress: () => {
           void runSignOut()
@@ -114,7 +125,7 @@ export default function SettingsScreen() {
       await clearAccount()
       router.replace("/account" as never)
     } catch (signOutError) {
-      Alert.alert("退出登录失败", signOutError instanceof Error ? signOutError.message : "无法退出登录。")
+      Alert.alert(t("settings.signOutFailedTitle"), signOutError instanceof Error ? signOutError.message : t("settings.signOutFailedMessage"))
     } finally {
       setSigningOut(false)
     }
@@ -126,7 +137,7 @@ export default function SettingsScreen() {
         message: `Anybox${account?.baseUrl ? ` ${account.baseUrl}` : ""}`,
       })
     } catch (shareError) {
-      Alert.alert("Share failed", shareError instanceof Error ? shareError.message : "Unable to open sharing.")
+      Alert.alert(t("settings.shareFailedTitle"), shareError instanceof Error ? shareError.message : t("settings.shareFailedMessage"))
     }
   }
 
@@ -148,12 +159,12 @@ export default function SettingsScreen() {
       >
         <View style={{ gap: 18, width: "100%", maxWidth }}>
           <View style={{ alignItems: "center", flexDirection: "row", minHeight: 38 }}>
-            <HeaderIconButton icon="chevron-left" label="Back" onPress={() => router.back()} />
+            <HeaderIconButton icon="chevron-left" label={t("app.back")} onPress={() => router.back()} />
             <Text numberOfLines={1} style={{ color: "#f2f2f2", flex: 1, fontSize: 24, fontWeight: "900", textAlign: "center" }}>
               Anybox
             </Text>
             <View>
-              <HeaderIconButton icon="bell" label="Approvals" onPress={() => router.push("/approvals" as never)} />
+              <HeaderIconButton icon="bell" label={t("settings.approvals")} onPress={() => router.push("/approvals" as never)} />
               {pendingApprovals ? <View style={{ backgroundColor: "#ff5a64", borderRadius: 5, height: 10, position: "absolute", right: 6, top: 5, width: 10 }} /> : null}
             </View>
           </View>
@@ -191,7 +202,7 @@ export default function SettingsScreen() {
             <SettingsCardTitle title="Anybox" />
             <SettingsRow
               icon="activity"
-              title="Desktop Connection"
+              title={t("settings.desktopConnection")}
               value={connectionState}
               valueColor={connectionTone}
               onPress={() => router.push("/provider" as never)}
@@ -199,23 +210,23 @@ export default function SettingsScreen() {
           </SettingsCard>
 
           <SettingsCard>
-            <SettingsCardTitle title="Preferences" />
-            <SettingsRow icon="globe" title="语言" value="简体中文" onPress={showLanguageInfo} />
-            <SettingsRow icon="moon" title="外观" value="跟随系统" onPress={showAppearanceInfo} />
+            <SettingsCardTitle title={t("settings.preferences")} />
+            <SettingsRow icon="globe" title={t("settings.language")} value={localeLabel} onPress={showLanguagePicker} />
+            <SettingsRow icon="moon" title={t("settings.appearance")} value={t("settings.followSystem")} onPress={showAppearanceInfo} />
           </SettingsCard>
 
           <SettingsCard>
-            <SettingsCardTitle title="App" />
-            <SettingsRow icon="package" title="版本" value={appVersion} onPress={() => router.push("/updates" as never)} />
+            <SettingsCardTitle title={t("settings.app")} />
+            <SettingsRow icon="package" title={t("settings.version")} value={appVersion} onPress={() => router.push("/updates" as never)} />
           </SettingsCard>
 
           <SettingsCard>
-            <SettingsCardTitle title="Actions" />
-            <SettingsRow icon="share-2" title="Share Anybox" onPress={() => void shareAnybox()} />
-            {hasSavedFocus ? <SettingsRow icon="database" title="Saved Focus" value="Clear" onPress={confirmClearFocus} /> : null}
+            <SettingsCardTitle title={t("settings.actions")} />
+            <SettingsRow icon="share-2" title={t("settings.shareAnybox")} onPress={() => void shareAnybox()} />
+            {hasSavedFocus ? <SettingsRow icon="database" title={t("settings.savedFocus")} value={t("settings.clearSavedFocus")} onPress={confirmClearFocus} /> : null}
           </SettingsCard>
 
-          {account ? <SignOutButton loading={signingOut} onPress={confirmSignOut} /> : null}
+          {account ? <SignOutButton label={t("settings.signOut")} loading={signingOut} loadingLabel={t("settings.signingOut")} onPress={confirmSignOut} /> : null}
         </View>
       </ScrollView>
     </>
@@ -324,10 +335,20 @@ function SettingsRow({
   )
 }
 
-function SignOutButton({ loading, onPress }: { loading: boolean; onPress: () => void }) {
+function SignOutButton({
+  label,
+  loading,
+  loadingLabel,
+  onPress,
+}: {
+  label: string
+  loading: boolean
+  loadingLabel: string
+  onPress: () => void
+}) {
   return (
     <Pressable
-      accessibilityLabel="退出登录"
+      accessibilityLabel={label}
       accessibilityRole="button"
       disabled={loading}
       onPress={onPress}
@@ -346,7 +367,7 @@ function SignOutButton({ loading, onPress }: { loading: boolean; onPress: () => 
     >
       <Feather color="#eeeeee" name="log-out" size={22} />
       <Text numberOfLines={1} style={{ color: "#eeeeee", flex: 1, fontSize: 18, fontWeight: "700" }}>
-        {loading ? "正在退出登录" : "退出登录"}
+        {loading ? loadingLabel : label}
       </Text>
     </Pressable>
   )
