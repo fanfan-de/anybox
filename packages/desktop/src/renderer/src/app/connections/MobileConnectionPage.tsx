@@ -44,6 +44,11 @@ function getPrimaryPairingUrl(status: DesktopMobileBridgeStatus | null) {
   return isLoopbackBridgeHost(status.host) ? (status.pairingLocalUrl ?? "") : (status.pairingUrls[0] ?? "")
 }
 
+function getPrimaryLanPairingUrl(status: DesktopMobileBridgeStatus | null) {
+  if (!status || isLoopbackBridgeHost(status.host)) return ""
+  return status.pairingUrls[0] ?? ""
+}
+
 function uniqueUrls(urls: Array<string | null | undefined>) {
   return urls.filter((url, index): url is string => Boolean(url) && urls.indexOf(url) === index)
 }
@@ -64,6 +69,14 @@ function createPairingDeepLink(url: string) {
   return url ? `anybox-mobile://connect?url=${encodeURIComponent(url)}` : ""
 }
 
+function createConnectionOptionsDeepLink(input: { relayDeepLink?: string; lanUrl?: string; fallbackUrl?: string }) {
+  const params = new URLSearchParams()
+  if (input.relayDeepLink) params.set("relay", input.relayDeepLink)
+  if (input.lanUrl) params.set("lan", input.lanUrl)
+  if (params.toString()) return `anybox-mobile://connect-options?${params.toString()}`
+  return createPairingDeepLink(input.fallbackUrl ?? "")
+}
+
 function getCloudRelayPairingDeepLink(status: DesktopMobileBridgeStatus | null, now = Date.now()) {
   return status?.cloudRelay?.enabled &&
     status.cloudRelay.pairingDeepLink &&
@@ -75,9 +88,21 @@ function getCloudRelayPairingDeepLink(status: DesktopMobileBridgeStatus | null, 
 
 function getPrimaryPairingDeepLink(status: DesktopMobileBridgeStatus | null, pairingUrl: string, now = Date.now()) {
   const relayDeepLink = getCloudRelayPairingDeepLink(status, now)
-  return relayDeepLink
-    ? relayDeepLink
-    : createPairingDeepLink(pairingUrl)
+  return createConnectionOptionsDeepLink({
+    relayDeepLink,
+    lanUrl: getPrimaryLanPairingUrl(status),
+    fallbackUrl: pairingUrl,
+  })
+}
+
+function getPrimaryPairingExpiresAt(status: DesktopMobileBridgeStatus | null, now = Date.now()) {
+  if (!status) return null
+  const expiries = [
+    getCloudRelayPairingDeepLink(status, now) ? status.cloudRelay.pairingExpiresAt ?? null : null,
+    getPrimaryLanPairingUrl(status) ? status.pairingExpiresAt : null,
+  ].filter((value): value is number => Boolean(value))
+  if (expiries.length) return Math.min(...expiries)
+  return status.pairingExpiresAt
 }
 
 function quotePowerShellArgument(value: string) {
@@ -163,11 +188,7 @@ export function MobileConnectionPage() {
   const legacyUrls = useMemo(() => getLegacyUrls(status), [status])
   const pairingDeepLink = useMemo(() => getPrimaryPairingDeepLink(status, primaryPairingUrl, now), [now, primaryPairingUrl, status])
   const androidSmokeCommand = useMemo(() => createAndroidSmokeCommand(pairingDeepLink), [pairingDeepLink])
-  const pairingExpiryLabel = formatPairingExpiry(
-    getCloudRelayPairingDeepLink(status, now) ? status?.cloudRelay?.pairingExpiresAt ?? null : status?.pairingExpiresAt ?? null,
-    now,
-    t,
-  )
+  const pairingExpiryLabel = formatPairingExpiry(getPrimaryPairingExpiresAt(status, now), now, t)
 
   useEffect(() => {
     let cancelled = false

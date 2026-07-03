@@ -322,6 +322,16 @@ export interface NormalizedConnectionInput {
   pairingCode?: string
 }
 
+export type MobileConnectionOptionKind = "relay" | "lan" | "bridge"
+
+export interface NormalizedConnectionOption {
+  id: string
+  kind: MobileConnectionOptionKind
+  label: string
+  endpoint: string
+  connection: NormalizedConnectionInput
+}
+
 type Envelope<T> =
   | {
       success: true
@@ -359,10 +369,14 @@ export class MobileApiError extends Error {
   }
 }
 
+function readAnyboxDeepLinkRoute(value: URL) {
+  return value.hostname || value.pathname.replace(/^\/+/, "")
+}
+
 export function readBridgeUrlFromConnectDeepLink(value: string) {
   try {
     const parsed = new URL(value.trim())
-    const route = parsed.hostname || parsed.pathname.replace(/^\/+/, "")
+    const route = readAnyboxDeepLinkRoute(parsed)
     if (parsed.protocol !== "anybox-mobile:" || route !== "connect") return null
     return parsed.searchParams.get("url")?.trim() || null
   } catch {
@@ -373,7 +387,7 @@ export function readBridgeUrlFromConnectDeepLink(value: string) {
 export function readRelayPairingFromDeepLink(value: string) {
   try {
     const parsed = new URL(value.trim())
-    const route = parsed.hostname || parsed.pathname.replace(/^\/+/, "")
+    const route = readAnyboxDeepLinkRoute(parsed)
     if (parsed.protocol !== "anybox-mobile:" || route !== "pair") return null
     const code = parsed.searchParams.get("code")?.trim() ?? ""
     const baseUrl = parsed.searchParams.get("url")?.trim() || "https://anybox.com.cn"
@@ -383,9 +397,83 @@ export function readRelayPairingFromDeepLink(value: string) {
   }
 }
 
+export function readConnectionOptionsFromDeepLink(value: string) {
+  try {
+    const parsed = new URL(value.trim())
+    const route = readAnyboxDeepLinkRoute(parsed)
+    if (parsed.protocol !== "anybox-mobile:" || route !== "connect-options") return null
+
+    const options: Array<{ kind: MobileConnectionOptionKind; endpoint: string }> = []
+    const relay = parsed.searchParams.get("relay")?.trim()
+    const lan = parsed.searchParams.get("lan")?.trim()
+    const bridge = parsed.searchParams.get("bridge")?.trim()
+
+    if (relay) options.push({ kind: "relay", endpoint: relay })
+    if (lan) options.push({ kind: "lan", endpoint: lan })
+    if (bridge) options.push({ kind: "bridge", endpoint: bridge })
+    return options.length ? options : null
+  } catch {
+    return null
+  }
+}
+
 export function readConnectionUrlFromDeepLink(value: string) {
+  if (readConnectionOptionsFromDeepLink(value)) return value.trim()
   if (readRelayPairingFromDeepLink(value)) return value.trim()
   return readBridgeUrlFromConnectDeepLink(value)
+}
+
+function connectionOptionLabel(kind: MobileConnectionOptionKind) {
+  if (kind === "relay") return "Cloud relay"
+  if (kind === "lan") return "Local network"
+  return "Direct bridge"
+}
+
+function inferConnectionOptionKind(connection: NormalizedConnectionInput): MobileConnectionOptionKind {
+  return connection.transport === "relay" ? "relay" : "bridge"
+}
+
+function normalizeConnectionOption(
+  id: string,
+  kind: MobileConnectionOptionKind | undefined,
+  endpoint: string,
+  tokenInput: string,
+): NormalizedConnectionOption {
+  const connection = normalizeConnectionInput(endpoint, tokenInput)
+  const nextKind = kind ?? inferConnectionOptionKind(connection)
+  return {
+    id,
+    kind: nextKind,
+    label: connectionOptionLabel(nextKind),
+    endpoint,
+    connection,
+  }
+}
+
+export function normalizeConnectionOptionsInput(endpoint: string, tokenInput: string): NormalizedConnectionOption[] {
+  const optionInputs = readConnectionOptionsFromDeepLink(endpoint)
+  if (!optionInputs) {
+    const rawEndpoint = readConnectionUrlFromDeepLink(endpoint) ?? endpoint.trim()
+    return [normalizeConnectionOption("primary", undefined, rawEndpoint, tokenInput)]
+  }
+
+  const seen = new Set<string>()
+  const options: NormalizedConnectionOption[] = []
+  for (const [index, option] of optionInputs.entries()) {
+    if (seen.has(option.endpoint)) continue
+    seen.add(option.endpoint)
+    try {
+      options.push(normalizeConnectionOption(`${option.kind}-${index}`, option.kind, option.endpoint, tokenInput))
+    } catch {
+      // Ignore a malformed candidate if another candidate in the same QR code is usable.
+    }
+  }
+
+  if (!options.length) {
+    throw new Error("Connection QR code does not contain a usable Anybox connection option.")
+  }
+
+  return options
 }
 
 export function normalizeConnectionInput(endpoint: string, tokenInput: string): NormalizedConnectionInput {
@@ -479,7 +567,7 @@ export async function pairDevice(connection: MobileConnection & { pairingCode?: 
   })
 }
 
-export async function previewPairing(connection: MobileConnection & { pairingCode?: string }) {
+export async function previewPairing(connection: MobileConnection & { pairingCode?: string }, input?: { signal?: AbortSignal }) {
   if (connection.transport === "relay") {
     const params = new URLSearchParams()
     if (connection.pairingCode) params.set("code", connection.pairingCode)
@@ -487,6 +575,7 @@ export async function previewPairing(connection: MobileConnection & { pairingCod
     return requestRelay<MobilePairPreview>(
       { ...connection, token: "" },
       `/api/relay/pair/preview${query ? `?${query}` : ""}`,
+      { signal: input?.signal },
     )
   }
 
@@ -496,6 +585,7 @@ export async function previewPairing(connection: MobileConnection & { pairingCod
   return requestMobile<MobilePairPreview>(
     { baseUrl: connection.baseUrl, token: "" },
     `/api/mobile/pair/preview${query ? `?${query}` : ""}`,
+    { signal: input?.signal },
   )
 }
 

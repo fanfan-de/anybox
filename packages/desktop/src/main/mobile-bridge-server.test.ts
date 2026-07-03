@@ -134,6 +134,14 @@ function agentOk(data: unknown) {
   return { success: true, data }
 }
 
+function createConnectOptionsDeepLink(input: { relay?: string; lan?: string; bridge?: string }) {
+  const params = new URLSearchParams()
+  if (input.relay) params.set("relay", input.relay)
+  if (input.lan) params.set("lan", input.lan)
+  if (input.bridge) params.set("bridge", input.bridge)
+  return `anybox-mobile://connect-options?${params.toString()}`
+}
+
 function createMockProject(workspaceDir: string, now = Date.now()) {
   return {
     id: "project-smoke",
@@ -778,6 +786,7 @@ describe("mobile bridge server", () => {
       const handoffPath = path.join(userDataPath, "mobile-bridge-handoff.json")
       const handoff = JSON.parse(await fs.readFile(handoffPath, "utf8")) as {
         android?: {
+          deepLink?: string
           pairingUrl?: string
         }
       }
@@ -786,6 +795,7 @@ describe("mobile bridge server", () => {
       expect(status.publicPairingUrl).toBeNull()
       expect(JSON.stringify(status)).not.toContain("198.18.0.1")
       expect(handoff.android?.pairingUrl).toContain("192.168.1.20")
+      expect(handoff.android?.deepLink).toBe(createConnectOptionsDeepLink({ lan: handoff.android?.pairingUrl ?? "" }))
     } finally {
       networkSpy.mockRestore()
     }
@@ -813,7 +823,7 @@ describe("mobile bridge server", () => {
     expect(status.publicUrl).toBe(`https://anybox.com.cn/?token=${encodeURIComponent(status.token)}`)
     expect(status.publicPairingUrl).toBeTruthy()
     expect(handoff.android?.pairingUrl).toBe(status.publicPairingUrl)
-    expect(handoff.android?.deepLink).toBe(`anybox-mobile://connect?url=${encodeURIComponent(handoff.android?.pairingUrl ?? "")}`)
+    expect(handoff.android?.deepLink).toBe(`anybox-mobile://connect?url=${encodeURIComponent(status.publicPairingUrl ?? "")}`)
     expect(handoff.android?.smokeCommand).toContain("corepack pnpm mobile:android:smoke:bridge")
     expect(handoff.android?.handoffCommand).toContain("corepack pnpm mobile:android:handoff-check")
     expect(handoff.pairingExpiresAt).toBe(new Date(status.pairingExpiresAt ?? 0).toISOString())
@@ -892,7 +902,9 @@ describe("mobile bridge server", () => {
     expect(refreshDesktopCloudRelayPairingMock).toHaveBeenCalledTimes(1)
     expect(status.cloudRelay.pairingDeepLink).toBe(refreshedRelayStatus.pairingDeepLink)
     expect(handoff.android?.pairingUrl).toBe(refreshedRelayStatus.pairingDeepLink)
-    expect(handoff.android?.deepLink).toBe(refreshedRelayStatus.pairingDeepLink)
+    expect(handoff.android?.deepLink).toBe(createConnectOptionsDeepLink({
+      relay: refreshedRelayStatus.pairingDeepLink,
+    }))
     expect(handoff.android?.deepLink).not.toContain("expired-relay-pair")
     expect(handoff.pairingExpiresAt).toBe(new Date(refreshedRelayStatus.pairingExpiresAt).toISOString())
   })

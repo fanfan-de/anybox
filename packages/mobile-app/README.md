@@ -281,13 +281,13 @@ The Provider account is separate from desktop pairing: sign in with email for th
 
 ## Connection
 
-Use the Scan QR code action on the mobile app home screen to scan the desktop Mobile Connection QR code. The default QR code uses the public `https://anybox.com.cn` mobile bridge endpoint; Caddy forwards `/api/mobile/*` to the desktop bridge through the server-side reverse tunnel. The app previews the desktop name, address, capabilities, and QR expiry before pairing; confirming the connection exchanges the one-time code for a device token stored with `expo-secure-store`.
+Use the Scan QR code action on the mobile app home screen to scan the desktop Mobile Connection QR code. The desktop QR can carry multiple connection candidates, currently cloud relay and LAN when both are available. After scanning, the app previews each candidate from the phone, hides unavailable paths, and lets the user choose the connection method before exchanging the one-time code for a device token stored with `expo-secure-store`.
 
-The advanced URL login path remains available for troubleshooting. Paste the public URL from the desktop Mobile Connection page, including the `code` or `token` query parameter, or paste the full `anybox-mobile://connect?url=...` deep link. Local LAN URLs remain available only as a fallback when the public tunnel is disabled or unavailable.
+The advanced URL login path remains available for troubleshooting. Paste the public URL from the desktop Mobile Connection page, including the `code` or `token` query parameter, paste a LAN URL such as `http://192.168.x.x:4896/?code=...`, or paste a full `anybox-mobile://connect?url=...`, `anybox-mobile://pair?...`, or `anybox-mobile://connect-options?...` deep link.
 
 ## Current Scope
 
-- Connect to the desktop bridge with QR pairing or the advanced public URL/token flow and exchange it for a per-device token.
+- Connect to the desktop bridge with QR pairing, choose between available relay/LAN candidates, or use the advanced public URL/token flow and exchange it for a per-device token.
 - Register or sign in to the Anybox Provider account with email/password and store Provider agent tokens securely on iOS and Android.
 - Show bridge status, workspaces, recent chats, workspace chats, chat messages, and session tasks.
 - Create a chat inside an existing workspace.

@@ -19,7 +19,7 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo run:android",
+    "android": "expo start --android",
     "ios": "PATH=\"$HOME/.gem/ruby/2.6.0/bin:$PATH\" RUBYOPT='-rlogger' expo run:ios",
     "android:dev": "expo run:android",
     "ios:dev": "PATH=\"$HOME/.gem/ruby/2.6.0/bin:$PATH\" RUBYOPT='-rlogger' expo run:ios",

@@ -6,15 +6,15 @@ import { Button } from "@/components/button"
 import { Screen } from "@/components/screen"
 import { Section } from "@/components/section"
 import { StateCard } from "@/components/state-card"
-import { normalizeConnectionInput, readConnectionUrlFromDeepLink } from "@/api/mobile-api"
+import { normalizeConnectionOptionsInput, readConnectionUrlFromDeepLink } from "@/api/mobile-api"
 
-function readPairingBridgeUrl(value: string) {
-  const bridgeUrl = readConnectionUrlFromDeepLink(value) ?? value.trim()
-  if (!bridgeUrl) return null
+function readPairingConnectionInput(value: string) {
+  const connectionInput = readConnectionUrlFromDeepLink(value) ?? value.trim()
+  if (!connectionInput) return null
 
   try {
-    const normalized = normalizeConnectionInput(bridgeUrl, "")
-    return normalized.pairingCode ? bridgeUrl : null
+    const options = normalizeConnectionOptionsInput(connectionInput, "")
+    return options.some((option) => option.connection.pairingCode) ? connectionInput : null
   } catch {
     return null
   }
@@ -29,12 +29,12 @@ export default function ScanScreen() {
   function handleBarcodeScanned(result: BarcodeScanningResult) {
     if (paused) return
     setPaused(true)
-    const bridgeUrl = readPairingBridgeUrl(result.data)
-    if (!bridgeUrl) {
+    const connectionInput = readPairingConnectionInput(result.data)
+    if (!connectionInput) {
       setError("This is not an Anybox pairing QR code.")
       return
     }
-    router.replace(`/connect?url=${encodeURIComponent(bridgeUrl)}` as never)
+    router.replace(`/connect?url=${encodeURIComponent(connectionInput)}` as never)
   }
 
   if (!permission) {

@@ -22,7 +22,7 @@ import {
   getSessionModels,
   getStatus,
   getWorkspaces,
-  normalizeConnectionInput,
+  normalizeConnectionOptionsInput,
   readConnectionUrlFromDeepLink,
   respondApproval,
   sendPrompt,
@@ -52,6 +52,10 @@ import { getMobileDeviceName } from "@/utils/platform"
 const handledIncomingLinks = new Set<string>()
 const ACCOUNT_DESKTOP_REFRESH_INTERVAL_MS = 10_000
 const AUTO_CONNECT_RETRY_INTERVAL_MS = 30_000
+const OPEN_DRAWER_MIN_DX = 18
+const OPEN_DRAWER_MIN_VX = 0.65
+const DRAWER_GESTURE_DIRECTION_RATIO = 1.25
+const DRAWER_SETTLE_RATIO = 0.18
 
 export default function HomeScreen() {
   const router = useRouter()
@@ -142,6 +146,40 @@ export default function HomeScreen() {
         onPanResponderTerminate: openSessionDrawer,
       }),
     [closeSessionDrawer, drawerMounted, drawerProgress, drawerWidth, openSessionDrawer],
+  )
+
+  const openDrawerPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Boolean(connection) &&
+          !drawerMounted &&
+          gestureState.dx > OPEN_DRAWER_MIN_DX &&
+          gestureState.dx > Math.abs(gestureState.dy) * DRAWER_GESTURE_DIRECTION_RATIO,
+        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+          Boolean(connection) &&
+          !drawerMounted &&
+          gestureState.dx > OPEN_DRAWER_MIN_DX &&
+          gestureState.dx > Math.abs(gestureState.dy) * DRAWER_GESTURE_DIRECTION_RATIO,
+        onPanResponderGrant: () => {
+          drawerProgress.stopAnimation()
+          drawerProgress.setValue(0)
+          setDrawerMounted(true)
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const nextProgress = Math.max(0, Math.min(1, gestureState.dx / drawerWidth))
+          drawerProgress.setValue(nextProgress)
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dx > drawerWidth * DRAWER_SETTLE_RATIO || gestureState.vx > OPEN_DRAWER_MIN_VX) {
+            openSessionDrawer()
+            return
+          }
+          closeSessionDrawer()
+        },
+        onPanResponderTerminate: closeSessionDrawer,
+      }),
+    [closeSessionDrawer, connection, drawerMounted, drawerProgress, drawerWidth, openSessionDrawer],
   )
 
   useEffect(() => {
@@ -269,7 +307,7 @@ export default function HomeScreen() {
   const openConnectionConfirmation = useCallback((nextEndpoint: string, nextToken: string) => {
     setError(null)
     try {
-      normalizeConnectionInput(nextEndpoint, nextToken)
+      normalizeConnectionOptionsInput(nextEndpoint, nextToken)
       const params = new URLSearchParams({ url: nextEndpoint })
       if (nextToken.trim()) params.set("token", nextToken.trim())
       router.push(`/connect?${params.toString()}` as never)
@@ -287,8 +325,16 @@ export default function HomeScreen() {
       setEndpoint(bridgeUrl)
       setToken("")
       try {
-        const nextCandidate = normalizeConnectionInput(bridgeUrl, "")
-        if (connection && !nextCandidate.pairingCode && nextCandidate.baseUrl === connection.baseUrl && nextCandidate.token === connection.token) return
+        const nextOptions = normalizeConnectionOptionsInput(bridgeUrl, "")
+        if (
+          connection &&
+          nextOptions.length === 1 &&
+          !nextOptions[0]?.connection.pairingCode &&
+          nextOptions[0]?.connection.baseUrl === connection.baseUrl &&
+          nextOptions[0]?.connection.token === connection.token
+        ) {
+          return
+        }
       } catch {
         return
       }
@@ -686,7 +732,7 @@ export default function HomeScreen() {
           token={token}
         />
       ) : (
-        <View style={{ flex: 1, backgroundColor: "#171717" }}>
+        <View style={{ flex: 1, backgroundColor: "#171717" }} {...openDrawerPanResponder.panHandlers}>
           <ThreadViewPage
             actingApprovalID={actingApprovalID}
             approvalError={approvalError}

@@ -28,10 +28,11 @@ function usage() {
     "  pnpm --filter anybox-mobile-app run android:smoke:bridge -- --url \"https://anybox.com.cn/?code=...\"",
     "  pnpm --filter anybox-mobile-app run android:smoke:bridge -- --url \"anybox-mobile://connect?url=...\"",
     "  pnpm --filter anybox-mobile-app run android:smoke:bridge -- --url \"anybox-mobile://pair?code=...&url=https%3A%2F%2Fanybox.com.cn\"",
+    "  pnpm --filter anybox-mobile-app run android:smoke:bridge -- --url \"anybox-mobile://connect-options?...\"",
     "  pnpm --filter anybox-mobile-app run android:smoke:bridge",
     "",
     "Options:",
-    "  --url <value>          Bridge URL, anybox-mobile://connect, or anybox-mobile://pair deep link. Defaults to MOBILE_BRIDGE_URL.",
+    "  --url <value>          Bridge URL, anybox-mobile://connect, anybox-mobile://pair, or connect-options deep link. Defaults to MOBILE_BRIDGE_URL.",
     "  --token <value>        Token to append when the URL has no token/code. Defaults to MOBILE_BRIDGE_TOKEN.",
     "  --handoff <path>       Desktop handoff JSON path. Defaults to %APPDATA%/anybox-desktop-agent/mobile-bridge-handoff.json.",
     "  --apk <path>           APK path. Defaults to build/anybox-mobile-debug.apk.",
@@ -221,6 +222,23 @@ function readRelayPairingFromDeepLink(value) {
   }
 }
 
+function readConnectionOptionsFromDeepLink(value) {
+  try {
+    const parsed = new URL(value.trim())
+    const route = parsed.hostname || parsed.pathname.replace(/^\/+/, "")
+    if (parsed.protocol !== "anybox-mobile:" || route !== "connect-options") return null
+
+    const options = [
+      parsed.searchParams.get("relay")?.trim(),
+      parsed.searchParams.get("lan")?.trim(),
+      parsed.searchParams.get("bridge")?.trim(),
+    ].filter(Boolean)
+    return options.length ? options : null
+  } catch {
+    return null
+  }
+}
+
 function withTokenIfNeeded(rawUrl, token) {
   if (!token.trim()) return rawUrl
   const parsed = new URL(rawUrl)
@@ -254,6 +272,11 @@ function reverseBridgePort(port) {
 function normalizeBridgeInput(input, token) {
   const trimmed = input.trim()
   if (!trimmed) throw new Error("Bridge URL is required. Pass --url or set MOBILE_BRIDGE_URL.")
+  const connectionOptions = readConnectionOptionsFromDeepLink(trimmed)
+  if (connectionOptions) {
+    return normalizeBridgeInput(connectionOptions[0], token)
+  }
+
   const relayPairing = readRelayPairingFromDeepLink(trimmed)
   if (relayPairing) {
     return {

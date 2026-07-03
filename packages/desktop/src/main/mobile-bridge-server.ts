@@ -1210,6 +1210,14 @@ function createPairingDeepLink(url: string) {
   return `anybox-mobile://connect?url=${encodeURIComponent(url)}`
 }
 
+function createConnectionOptionsDeepLink(input: { relayDeepLink?: string | null; lanUrl?: string | null; fallbackUrl?: string | null }) {
+  const params = new URLSearchParams()
+  if (input.relayDeepLink) params.set("relay", input.relayDeepLink)
+  if (input.lanUrl) params.set("lan", input.lanUrl)
+  if (params.toString()) return `anybox-mobile://connect-options?${params.toString()}`
+  return input.fallbackUrl ? createPairingDeepLink(input.fallbackUrl) : ""
+}
+
 function ensureMobileBridgeTunnelRunning(port: number | null) {
   if (!port || mobileTunnelProcess || !shouldStartBridgeTunnel()) return
   const now = Date.now()
@@ -1296,14 +1304,23 @@ async function writeMobileHandoffFile(status: MobileBridgeStatus) {
   const relayPairingDeepLink = status.cloudRelay.enabled && status.cloudRelay.pairingExpiresAt && status.cloudRelay.pairingExpiresAt > now
     ? status.cloudRelay.pairingDeepLink
     : null
+  const lanPairingUrl = isLoopbackBridgeHost(status.host) ? null : status.pairingUrls[0] ?? null
   const primaryPairingUrl = status.publicPairingUrl ?? (isLoopbackBridgeHost(status.host) ? status.pairingLocalUrl : status.pairingUrls[0])
-  const pairingExpiresAt = relayPairingDeepLink ? status.cloudRelay.pairingExpiresAt : status.pairingExpiresAt
-  if (!status.running || (!relayPairingDeepLink && !primaryPairingUrl) || !pairingExpiresAt) {
+  const pairingExpiries = [
+    relayPairingDeepLink ? status.cloudRelay.pairingExpiresAt ?? null : null,
+    lanPairingUrl ? status.pairingExpiresAt : null,
+  ].filter((value): value is number => Boolean(value))
+  const pairingExpiresAt = pairingExpiries.length ? Math.min(...pairingExpiries) : status.pairingExpiresAt
+  if (!status.running || (!relayPairingDeepLink && !lanPairingUrl && !primaryPairingUrl) || !pairingExpiresAt) {
     await fs.rm(getMobileHandoffPath(), { force: true }).catch(() => undefined)
     return
   }
 
-  const deepLink = relayPairingDeepLink ?? createPairingDeepLink(primaryPairingUrl ?? "")
+  const deepLink = createConnectionOptionsDeepLink({
+    relayDeepLink: relayPairingDeepLink,
+    lanUrl: lanPairingUrl,
+    fallbackUrl: primaryPairingUrl,
+  })
   const document = {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
@@ -1319,7 +1336,7 @@ async function writeMobileHandoffFile(status: MobileBridgeStatus) {
       desktopID: status.cloudRelay.desktopID,
     },
     android: {
-      pairingUrl: relayPairingDeepLink ?? primaryPairingUrl,
+      pairingUrl: relayPairingDeepLink ?? lanPairingUrl ?? primaryPairingUrl,
       deepLink,
       smokeCommand: `corepack pnpm mobile:android:smoke:bridge -- --url ${quotePowerShellArgument(deepLink)}`,
       handoffCommand: `corepack pnpm mobile:android:handoff-check -- --real-bridge-url ${quotePowerShellArgument(deepLink)}`,

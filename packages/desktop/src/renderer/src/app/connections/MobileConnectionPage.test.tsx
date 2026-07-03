@@ -42,6 +42,14 @@ function createMobileBridgeStatus(overrides: Partial<DesktopMobileBridgeStatus> 
   }
 }
 
+function createConnectOptionsDeepLink(input: { relay?: string; lan?: string; bridge?: string }) {
+  const params = new URLSearchParams()
+  if (input.relay) params.set("relay", input.relay)
+  if (input.lan) params.set("lan", input.lan)
+  if (input.bridge) params.set("bridge", input.bridge)
+  return `anybox-mobile://connect-options?${params.toString()}`
+}
+
 describe("MobileConnectionPage", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -71,14 +79,14 @@ describe("MobileConnectionPage", () => {
     expect(screen.getByRole("button", { name: /Copy test command/ })).toBeInTheDocument()
     expect(screen.getByText("https://anybox.com.cn/?code=pair-123")).toBeInTheDocument()
     expect(screen.getByText("http://192.168.1.20:4896/?code=pair-123")).toBeInTheDocument()
-    expect(screen.getAllByText(/anybox-mobile:\/\/connect\?url=/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/anybox-mobile:\/\/connect-options\?/).length).toBeGreaterThan(0)
     expect(screen.getByText(/corepack pnpm mobile:android:smoke:bridge/)).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "Advanced token access" })).toBeInTheDocument()
     expect(screen.queryByText("http://192.168.1.20:4896/?token=legacy-token")).not.toBeInTheDocument()
 
     await waitFor(() => {
       expect(QRCode.toDataURL).toHaveBeenCalledWith(
-        "anybox-mobile://connect?url=https%3A%2F%2Fanybox.com.cn%2F%3Fcode%3Dpair-123",
+        createConnectOptionsDeepLink({ lan: "http://192.168.1.20:4896/?code=pair-123" }),
         expect.objectContaining({ type: "image/png" }),
       )
     })
@@ -118,7 +126,7 @@ describe("MobileConnectionPage", () => {
 
     await waitFor(() => {
       expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(
-        "anybox-mobile://connect?url=https%3A%2F%2Fanybox.com.cn%2F%3Fcode%3Dpair-123",
+        createConnectOptionsDeepLink({ lan: "http://192.168.1.20:4896/?code=pair-123" }),
       )
     })
   })
@@ -130,7 +138,7 @@ describe("MobileConnectionPage", () => {
 
     await waitFor(() => {
       expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(
-        'corepack pnpm mobile:android:smoke:bridge -- --url "anybox-mobile://connect?url=https%3A%2F%2Fanybox.com.cn%2F%3Fcode%3Dpair-123"',
+        `corepack pnpm mobile:android:smoke:bridge -- --url "${createConnectOptionsDeepLink({ lan: "http://192.168.1.20:4896/?code=pair-123" })}"`,
       )
     })
   })
@@ -159,7 +167,7 @@ describe("MobileConnectionPage", () => {
 
     await waitFor(() => {
       expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(
-        "anybox-mobile://connect?url=https%3A%2F%2Fanybox.com.cn%2F%3Fcode%3Dpair-123",
+        createConnectOptionsDeepLink({ lan: "http://192.168.1.20:4896/?code=pair-123" }),
       )
     })
     expect(window.navigator.clipboard.writeText).not.toHaveBeenCalledWith(
@@ -194,10 +202,44 @@ describe("MobileConnectionPage", () => {
 
     await waitFor(() => {
       expect(QRCode.toDataURL).toHaveBeenLastCalledWith(
-        "anybox-mobile://connect?url=https%3A%2F%2Fanybox.com.cn%2F%3Fcode%3Dpair-next",
+        createConnectOptionsDeepLink({ lan: "http://192.168.1.20:4896/?code=pair-next" }),
         expect.objectContaining({ type: "image/png" }),
       )
     })
+  })
+
+  it("includes cloud relay and LAN candidates in one QR code when both are available", async () => {
+    const relayDeepLink = "anybox-mobile://pair?code=relay-pair&url=https%3A%2F%2Fanybox.com.cn"
+    window.desktop!.getMobileBridgeStatus = vi.fn().mockResolvedValue(createMobileBridgeStatus({
+      cloudRelay: {
+        enabled: true,
+        state: "connected",
+        baseUrl: "https://anybox.com.cn",
+        desktopID: "desktop-123",
+        pairingCode: "relay-pair",
+        pairingExpiresAt: Date.now() + 60_000,
+        pairingDeepLink: relayDeepLink,
+        connectedAt: Date.now() - 30_000,
+        account: {
+          state: "connected",
+          email: "owner@example.com",
+        },
+      },
+    }))
+
+    render(<MobileConnectionPage />)
+
+    const expected = createConnectOptionsDeepLink({
+      relay: relayDeepLink,
+      lan: "http://192.168.1.20:4896/?code=pair-123",
+    })
+    await waitFor(() => {
+      expect(QRCode.toDataURL).toHaveBeenCalledWith(
+        expected,
+        expect.objectContaining({ type: "image/png" }),
+      )
+    })
+    expect(await screen.findByText(expected)).toBeInTheDocument()
   })
 
   it("shows paired devices and revokes an active device", async () => {

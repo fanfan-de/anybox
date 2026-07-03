@@ -221,14 +221,15 @@ sequenceDiagram
 ```text
 anybox-mobile://connect?url=...
 anybox-mobile://pair?code=...&url=...
+anybox-mobile://connect-options?relay=...&lan=...
 ```
 
 流程：
 
 1. `app/scan.tsx` 通过 `expo-camera` 扫描二维码，或 `app/index.tsx` 通过 `Linking` 接收 deep link。
-2. `readConnectionUrlFromDeepLink` 和 `normalizeConnectionInput` 解析连接信息。
-3. `app/connect.tsx` 调用 `previewPairing` 展示桌面信息和过期状态。
-4. 用户确认后调用 `pairDevice` 获取 device token。
+2. `readConnectionUrlFromDeepLink` 和 `normalizeConnectionOptionsInput` 解析连接候选；`connect-options` 可以同时携带 relay 和 LAN 候选。
+3. `app/connect.tsx` 对每个候选调用 `previewPairing`，只展示当前手机可访问且配对码有效的连接方式。
+4. 用户选择连接方式后调用 `pairDevice` 获取 device token。
 5. `ConnectionProvider.saveConnection` 写入 SecureStore。
 6. 如果存在旧连接，会尝试 `revokeCurrentDevice` 撤销旧设备 token。
 

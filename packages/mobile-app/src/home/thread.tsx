@@ -1,6 +1,6 @@
 import React from "react"
 import Feather from "@expo/vector-icons/Feather"
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native"
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native"
 import type { MobileApproval, MobileMessage, MobileProviderModel, MobileSessionSummary, MobileWorkspace } from "@/api/mobile-api"
 import { ApprovalCard } from "./approval-card"
 import { messageContentSegments, messageRole, messageText, type MessageContentSegment } from "@/utils/message"
@@ -69,8 +69,12 @@ export function ThreadViewPage({
   const timelineItems = React.useMemo(() => buildThreadTimeline(messages, approvals), [approvals, messages])
 
   return (
-    <View style={{ backgroundColor: "#171717", flex: 1, paddingBottom, paddingTop }}>
-      <View style={{ alignSelf: "center", flex: 1, width: "100%", maxWidth: 430 }}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={0}
+      style={{ backgroundColor: "#171717", flex: 1 }}
+    >
+      <View style={{ alignSelf: "center", flex: 1, width: "100%", maxWidth: 430, paddingBottom, paddingTop }}>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 10, height: 58, paddingHorizontal: 14 }}>
           <TopIconButton accessibilityLabel="Open projects and sessions" icon="menu" onPress={onOpenDrawer} />
           <View style={{ alignItems: "center", flex: 1, flexDirection: "row" }}>
@@ -82,6 +86,7 @@ export function ThreadViewPage({
         </View>
 
         <ScrollView
+          automaticallyAdjustKeyboardInsets
           contentContainerStyle={{ gap: 14, paddingBottom: 18, paddingHorizontal: 22, paddingTop: 16 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -135,7 +140,7 @@ export function ThreadViewPage({
           sending={sending}
         />
       </View>
-    </View>
+    </KeyboardAvoidingView>
   )
 }
 
