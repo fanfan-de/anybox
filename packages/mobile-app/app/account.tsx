@@ -1,11 +1,28 @@
-import { useRouter } from "expo-router"
+import Feather from "@expo/vector-icons/Feather"
+import { Stack, useLocalSearchParams, useRouter } from "expo-router"
+import { StatusBar } from "expo-status-bar"
 import React, { useEffect, useMemo, useState } from "react"
-import { Alert, Image, Text, View } from "react-native"
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+  type KeyboardTypeOptions,
+} from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { Button } from "@/components/button"
 import { Field } from "@/components/field"
 import { Screen } from "@/components/screen"
 import { Section } from "@/components/section"
 import { StateCard } from "@/components/state-card"
+import { useI18n } from "@/i18n"
 import { theme, type ThemeTone } from "@/theme"
 import { useAccount } from "@/state/account"
 import {
@@ -17,9 +34,31 @@ import {
 } from "@/utils/account-entitlements"
 
 type AccountMode = "login" | "register"
+type FeatherName = React.ComponentProps<typeof Feather>["name"]
+
+const authColors = {
+  canvas: "#10100f",
+  panel: "#171716",
+  panelStrong: "#1f1f1d",
+  border: "rgba(247, 247, 244, 0.14)",
+  borderStrong: "rgba(247, 247, 244, 0.24)",
+  text: "#f7f7f4",
+  textMuted: "rgba(247, 247, 244, 0.66)",
+  textSubtle: "rgba(247, 247, 244, 0.48)",
+  primary: "#f7f7f4",
+  primaryText: "#121211",
+  successBackground: "rgba(116, 213, 139, 0.13)",
+  successBorder: "rgba(116, 213, 139, 0.34)",
+  successText: "#b7efc3",
+  dangerBackground: "rgba(255, 107, 107, 0.12)",
+  dangerBorder: "rgba(255, 107, 107, 0.34)",
+  dangerText: "#ffb0a8",
+} as const
 
 export default function AccountScreen() {
   const router = useRouter()
+  const params = useLocalSearchParams<{ mode?: string }>()
+  const { t } = useI18n()
   const { account, clearAccount, defaultBaseUrl, loading, loginWithEmail, refreshAccount, registerWithEmail, updateProfile } = useAccount()
   const [mode, setMode] = useState<AccountMode>("login")
   const [baseUrl, setBaseUrl] = useState(account?.baseUrl ?? defaultBaseUrl)
@@ -54,6 +93,12 @@ export default function AccountScreen() {
     setEditingProfile(false)
   }, [account])
 
+  useEffect(() => {
+    if (account) return
+    if (params.mode !== "login" && params.mode !== "register") return
+    setMode(params.mode)
+  }, [account, params.mode])
+
   async function submit() {
     if (submitting) return
     setSubmitting(true)
@@ -66,8 +111,8 @@ export default function AccountScreen() {
         setMode("login")
         setMessage(
           registration.verificationEmailSent
-            ? "Account created. Verify your email, then sign in."
-            : "Account created. Email verification is required before sign in.",
+            ? t("account.createdVerify")
+            : t("account.createdVerificationRequired"),
         )
         return
       }
@@ -76,7 +121,7 @@ export default function AccountScreen() {
       setPassword("")
       router.replace("/")
     } catch (submitError) {
-      setError(describeAccountApiError(submitError, "Account request failed."))
+      setError(describeAccountApiError(submitError, t("account.requestFailed")))
     } finally {
       setSubmitting(false)
     }
@@ -102,9 +147,9 @@ export default function AccountScreen() {
     setError(null)
     try {
       await refreshAccount()
-      setMessage("Account refreshed.")
+      setMessage(t("account.refreshed"))
     } catch (refreshError) {
-      setError(describeAccountApiError(refreshError, "Unable to refresh account."))
+      setError(describeAccountApiError(refreshError, t("account.refreshFailed")))
     } finally {
       setSubmitting(false)
     }
@@ -125,10 +170,10 @@ export default function AccountScreen() {
         username: profileUsername.trim() || null,
         avatarUrl: profileAvatarUrl.trim() || null,
       })
-      setMessage("Profile saved.")
+      setMessage(t("account.profileSaved"))
       setEditingProfile(false)
     } catch (profileError) {
-      setError(describeAccountApiError(profileError, "Unable to save profile."))
+      setError(describeAccountApiError(profileError, t("account.profileSaveFailed")))
     } finally {
       setSubmitting(false)
     }
@@ -142,18 +187,42 @@ export default function AccountScreen() {
     setEditingProfile(false)
   }
 
+  function openAuthForm(nextMode: AccountMode) {
+    setMode(nextMode)
+    setError(null)
+    setMessage(null)
+  }
+
+  function closeAuthForm() {
+    setError(null)
+    setMessage(null)
+    if (router.canGoBack()) {
+      router.back()
+    } else {
+      router.replace("/")
+    }
+  }
+
+  function showHelp() {
+    Alert.alert(t("account.helpTitle"), t("account.helpMessage"))
+  }
+
   if (loading) {
     return (
-      <Screen>
-        <StateCard title="Loading account" />
-      </Screen>
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <Screen>
+          <StateCard title={t("settings.loadingAccount")} />
+        </Screen>
+      </>
     )
   }
 
   return (
-    <Screen>
+    <>
+      <Stack.Screen options={{ headerBackTitle: t("nav.settings"), headerShown: Boolean(account), title: t("nav.account") }} />
       {account ? (
-        <>
+        <Screen>
           <Section title="Profile">
             <ProfileSummary
               avatarUrl={account.user.avatarUrl ?? ""}
@@ -230,35 +299,546 @@ export default function AccountScreen() {
             </View>
             <Button label="Done" onPress={() => router.replace("/")} />
           </Section>
-        </>
+        </Screen>
       ) : (
-        <Section title={mode === "login" ? "Email sign in" : "Create account"}>
-          <Field label="Provider URL" onChangeText={setBaseUrl} placeholder="https://anybox.com.cn" value={baseUrl} />
-          {mode === "register" ? (
-            <Field label="Name" keyboardType="default" onChangeText={setName} placeholder="Optional" value={name} />
-          ) : null}
-          <Field label="Email" keyboardType="email-address" onChangeText={setEmail} placeholder="you@example.com" value={email} />
-          <Field label="Password" onChangeText={setPassword} placeholder="Password" secureTextEntry value={password} />
-          {message ? <StateCard title="Account created" detail={message} tone="success" /> : null}
-          {error ? <StateCard title="Account failed" detail={error} tone="danger" /> : null}
-          <Button
-            disabled={!baseUrl.trim() || !email.trim() || !password || (mode === "register" && password.length < 8)}
-            label={mode === "login" ? "Sign in" : "Create account"}
-            loading={submitting}
-            onPress={() => void submit()}
-          />
-          <Button
-            label={mode === "login" ? "Create account" : "I have an account"}
-            onPress={() => {
-              setMode((current) => (current === "login" ? "register" : "login"))
-              setError(null)
-              setMessage(null)
-            }}
-            variant="secondary"
-          />
-        </Section>
+        <SignedOutAccountScreen
+          baseUrl={baseUrl}
+          email={email}
+          error={error}
+          message={message}
+          mode={mode}
+          name={name}
+          onBackToLanding={closeAuthForm}
+          onHelp={showHelp}
+          onModeChange={openAuthForm}
+          onNameChange={setName}
+          onPasswordChange={setPassword}
+          onProviderUrlChange={setBaseUrl}
+          onSubmit={() => void submit()}
+          onEmailChange={setEmail}
+          password={password}
+          submitting={submitting}
+        />
       )}
-    </Screen>
+    </>
+  )
+}
+
+function SignedOutAccountScreen({
+  baseUrl,
+  email,
+  error,
+  message,
+  mode,
+  name,
+  onBackToLanding,
+  onEmailChange,
+  onHelp,
+  onModeChange,
+  onNameChange,
+  onPasswordChange,
+  onProviderUrlChange,
+  onSubmit,
+  password,
+  submitting,
+}: {
+  baseUrl: string
+  email: string
+  error: string | null
+  message: string | null
+  mode: AccountMode
+  name: string
+  onBackToLanding: () => void
+  onEmailChange: (value: string) => void
+  onHelp: () => void
+  onModeChange: (mode: AccountMode) => void
+  onNameChange: (value: string) => void
+  onPasswordChange: (value: string) => void
+  onProviderUrlChange: (value: string) => void
+  onSubmit: () => void
+  password: string
+  submitting: boolean
+}) {
+  const insets = useSafeAreaInsets()
+  const { height, width } = useWindowDimensions()
+  const { t } = useI18n()
+  const maxWidth = width >= 760 ? 430 : undefined
+
+  return (
+    <>
+      <StatusBar style="light" />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ backgroundColor: authColors.canvas, flex: 1 }}
+      >
+        <ScrollView
+          contentInsetAdjustmentBehavior="never"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          style={{ backgroundColor: authColors.canvas, flex: 1 }}
+          contentContainerStyle={{
+            alignItems: "center",
+            flexGrow: 1,
+            paddingBottom: Math.max(insets.bottom, 18) + 20,
+            paddingHorizontal: 24,
+            paddingTop: insets.top + 12,
+          }}
+        >
+          <View
+            style={{
+              flex: 1,
+              minHeight: Math.max(620, height - insets.top - insets.bottom - 32),
+              width: "100%",
+              maxWidth,
+            }}
+          >
+            <View style={{ alignItems: "flex-end", minHeight: 44 }}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={onHelp}
+                style={({ pressed }) => ({
+                  alignItems: "center",
+                  borderRadius: theme.radius.pill,
+                  flexDirection: "row",
+                  gap: theme.spacing.sm,
+                  opacity: pressed ? theme.opacity.pressed : 1,
+                  paddingHorizontal: theme.spacing.md,
+                  paddingVertical: theme.spacing.lg,
+                })}
+              >
+                <Feather color={authColors.textSubtle} name="help-circle" size={18} />
+                <Text
+                  style={{
+                    color: authColors.textMuted,
+                    fontSize: theme.typography.size.md,
+                    fontWeight: theme.typography.weight.bold,
+                  }}
+                >
+                  {t("account.help")}
+                </Text>
+              </Pressable>
+            </View>
+
+            <View
+              style={{
+                alignItems: "center",
+                paddingBottom: 24,
+                paddingTop: 24,
+              }}
+            >
+              <BrandLockup compact />
+            </View>
+
+            <EmailAuthForm
+              baseUrl={baseUrl}
+              email={email}
+              error={error}
+              message={message}
+              mode={mode}
+              name={name}
+              onBack={onBackToLanding}
+              onEmailChange={onEmailChange}
+              onModeChange={onModeChange}
+              onNameChange={onNameChange}
+              onPasswordChange={onPasswordChange}
+              onProviderUrlChange={onProviderUrlChange}
+              onSubmit={onSubmit}
+              password={password}
+              submitting={submitting}
+            />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </>
+  )
+}
+
+function BrandLockup({ compact }: { compact?: boolean }) {
+  return (
+    <View style={{ alignItems: "center", gap: compact ? 12 : 18 }}>
+      <Image
+        accessibilityIgnoresInvertColors
+        source={require("../assets/icon.png")}
+        style={{
+          borderRadius: compact ? 20 : 28,
+          height: compact ? 68 : 96,
+          width: compact ? 68 : 96,
+        }}
+      />
+      <Text
+        style={{
+          color: authColors.text,
+          fontSize: compact ? 34 : 48,
+          fontWeight: theme.typography.weight.heavy,
+          letterSpacing: theme.typography.letterSpacing.none,
+        }}
+      >
+        Anybox
+      </Text>
+    </View>
+  )
+}
+
+function EmailAuthForm({
+  baseUrl,
+  email,
+  error,
+  message,
+  mode,
+  name,
+  onBack,
+  onEmailChange,
+  onModeChange,
+  onNameChange,
+  onPasswordChange,
+  onProviderUrlChange,
+  onSubmit,
+  password,
+  submitting,
+}: {
+  baseUrl: string
+  email: string
+  error: string | null
+  message: string | null
+  mode: AccountMode
+  name: string
+  onBack: () => void
+  onEmailChange: (value: string) => void
+  onModeChange: (mode: AccountMode) => void
+  onNameChange: (value: string) => void
+  onPasswordChange: (value: string) => void
+  onProviderUrlChange: (value: string) => void
+  onSubmit: () => void
+  password: string
+  submitting: boolean
+}) {
+  const { t } = useI18n()
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const isRegister = mode === "register"
+  const submitDisabled = !baseUrl.trim() || !email.trim() || !password || (isRegister && password.length < 8)
+
+  return (
+    <View
+      style={{
+        backgroundColor: authColors.panel,
+        borderColor: authColors.border,
+        borderRadius: 24,
+        borderWidth: 1,
+        gap: 16,
+        padding: 18,
+      }}
+    >
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onBack}
+          style={({ pressed }) => ({
+            alignItems: "center",
+            backgroundColor: authColors.panelStrong,
+            borderColor: authColors.border,
+            borderRadius: theme.radius.pill,
+            borderWidth: 1,
+            height: 38,
+            justifyContent: "center",
+            opacity: pressed ? theme.opacity.pressed : 1,
+            width: 38,
+          })}
+        >
+          <Feather color={authColors.textMuted} name="chevron-left" size={22} />
+        </Pressable>
+        <View style={{ flex: 1 }}>
+          <Text
+            style={{
+              color: authColors.text,
+              fontSize: 22,
+              fontWeight: theme.typography.weight.heavy,
+            }}
+          >
+            {isRegister ? t("account.createAccount") : t("account.emailSignIn")}
+          </Text>
+        </View>
+      </View>
+
+      {message ? <AuthNotice message={message} tone="success" /> : null}
+      {error ? <AuthNotice message={error} tone="danger" /> : null}
+
+      {isRegister ? (
+        <AuthField
+          icon="user"
+          keyboardType="default"
+          label={t("account.name")}
+          onChangeText={onNameChange}
+          placeholder={t("account.namePlaceholder")}
+          value={name}
+        />
+      ) : null}
+      <AuthField
+        icon="mail"
+        keyboardType="email-address"
+        label={t("account.email")}
+        onChangeText={onEmailChange}
+        placeholder="you@example.com"
+        value={email}
+      />
+      <AuthField
+        icon="lock"
+        label={t("account.password")}
+        onChangeText={onPasswordChange}
+        placeholder={isRegister ? t("account.passwordRegisterPlaceholder") : t("account.passwordPlaceholder")}
+        secureTextEntry
+        value={password}
+      />
+
+      <View
+        style={{
+          borderColor: authColors.border,
+          borderTopWidth: 1,
+          paddingTop: 4,
+        }}
+      >
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setAdvancedOpen((current) => !current)}
+          style={({ pressed }) => ({
+            alignItems: "center",
+            flexDirection: "row",
+            gap: 10,
+            opacity: pressed ? theme.opacity.pressed : 1,
+            paddingVertical: 10,
+          })}
+        >
+          <Feather color={authColors.textSubtle} name="settings" size={17} />
+          <Text
+            style={{
+              color: authColors.textMuted,
+              flex: 1,
+              fontSize: theme.typography.size.sm,
+              fontWeight: theme.typography.weight.bold,
+            }}
+          >
+            {t("account.advanced")}
+          </Text>
+          <Feather color={authColors.textSubtle} name={advancedOpen ? "chevron-up" : "chevron-down"} size={18} />
+        </Pressable>
+        {advancedOpen ? (
+          <AuthField
+            icon="globe"
+            keyboardType="url"
+            label={t("account.providerUrl")}
+            onChangeText={onProviderUrlChange}
+            placeholder="https://anybox.com.cn"
+            value={baseUrl}
+          />
+        ) : null}
+      </View>
+
+      <AuthActionButton
+        disabled={submitDisabled}
+        icon={isRegister ? "user-plus" : "mail"}
+        label={isRegister ? t("account.createAccount") : t("account.signIn")}
+        loading={submitting}
+        onPress={onSubmit}
+      />
+      <AuthActionButton
+        label={isRegister ? t("account.haveAccount") : t("account.needAccount")}
+        onPress={() => onModeChange(isRegister ? "login" : "register")}
+        variant="ghost"
+      />
+      <AgreementFooter />
+    </View>
+  )
+}
+
+function AuthField({
+  icon,
+  keyboardType,
+  label,
+  onChangeText,
+  placeholder,
+  secureTextEntry,
+  value,
+}: {
+  icon: FeatherName
+  keyboardType?: KeyboardTypeOptions
+  label: string
+  onChangeText: (value: string) => void
+  placeholder: string
+  secureTextEntry?: boolean
+  value: string
+}) {
+  return (
+    <View style={{ gap: 8 }}>
+      <Text
+        style={{
+          color: authColors.textMuted,
+          fontSize: theme.typography.size.sm,
+          fontWeight: theme.typography.weight.bold,
+        }}
+      >
+        {label}
+      </Text>
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: authColors.panelStrong,
+          borderColor: authColors.border,
+          borderRadius: 18,
+          borderWidth: 1,
+          flexDirection: "row",
+          gap: 12,
+          minHeight: 54,
+          paddingHorizontal: 15,
+        }}
+      >
+        <Feather color={authColors.textSubtle} name={icon} size={19} />
+        <TextInput
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType={keyboardType ?? (secureTextEntry ? "default" : "email-address")}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={authColors.textSubtle}
+          secureTextEntry={secureTextEntry}
+          style={{
+            color: authColors.text,
+            flex: 1,
+            fontSize: theme.typography.size.lg,
+            minHeight: 54,
+            paddingVertical: 0,
+          }}
+          value={value}
+        />
+      </View>
+    </View>
+  )
+}
+
+function AuthActionButton({
+  disabled,
+  icon,
+  label,
+  loading,
+  onPress,
+  variant = "primary",
+}: {
+  disabled?: boolean
+  icon?: FeatherName
+  label: string
+  loading?: boolean
+  onPress: () => void
+  variant?: "primary" | "secondary" | "ghost"
+}) {
+  const isDisabled = disabled || loading
+  const isPrimary = variant === "primary"
+  const isGhost = variant === "ghost"
+  const foreground = isPrimary ? authColors.primaryText : authColors.text
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={isDisabled}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        alignItems: "center",
+        backgroundColor: isPrimary ? authColors.primary : isGhost ? "transparent" : authColors.panelStrong,
+        borderColor: isPrimary ? "transparent" : authColors.borderStrong,
+        borderRadius: theme.radius.pill,
+        borderWidth: isPrimary || isGhost ? 0 : 1,
+        flexDirection: "row",
+        gap: 10,
+        justifyContent: "center",
+        minHeight: isGhost ? 42 : 60,
+        opacity: isDisabled ? theme.opacity.disabled : pressed ? theme.opacity.pressedStrong : 1,
+        paddingHorizontal: 18,
+        paddingVertical: isGhost ? 8 : 15,
+      })}
+    >
+      {loading ? <ActivityIndicator color={foreground} /> : icon ? <Feather color={foreground} name={icon} size={21} /> : null}
+      <Text
+        style={{
+          color: foreground,
+          fontSize: isGhost ? theme.typography.size.md : 20,
+          fontWeight: theme.typography.weight.heavy,
+          textAlign: "center",
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  )
+}
+
+function AuthNotice({ message, tone }: { message: string; tone: "success" | "danger" }) {
+  const colors =
+    tone === "success"
+      ? {
+          background: authColors.successBackground,
+          border: authColors.successBorder,
+          text: authColors.successText,
+        }
+      : {
+          background: authColors.dangerBackground,
+          border: authColors.dangerBorder,
+          text: authColors.dangerText,
+        }
+
+  return (
+    <View
+      style={{
+        backgroundColor: colors.background,
+        borderColor: colors.border,
+        borderRadius: 16,
+        borderWidth: 1,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+      }}
+    >
+      <Text
+        style={{
+          color: colors.text,
+          fontSize: theme.typography.size.sm,
+          fontWeight: theme.typography.weight.bold,
+          lineHeight: theme.typography.lineHeight.sm,
+        }}
+      >
+        {message}
+      </Text>
+    </View>
+  )
+}
+
+function AgreementFooter() {
+  const { t } = useI18n()
+
+  function showLegalInfo(title: string, message: string) {
+    Alert.alert(title, message)
+  }
+
+  return (
+    <Text
+      style={{
+        color: authColors.textSubtle,
+        fontSize: theme.typography.size.sm,
+        lineHeight: 19,
+        paddingHorizontal: 8,
+        textAlign: "center",
+      }}
+    >
+      {t("account.agreementPrefix")}
+      <Text
+        onPress={() => showLegalInfo(t("account.userAgreement"), t("account.legalUnavailable"))}
+        style={{ color: authColors.textMuted, fontWeight: theme.typography.weight.bold }}
+      >
+        {t("account.userAgreement")}
+      </Text>
+      {t("account.agreementJoiner")}
+      <Text
+        onPress={() => showLegalInfo(t("account.privacyPolicy"), t("account.legalUnavailable"))}
+        style={{ color: authColors.textMuted, fontWeight: theme.typography.weight.bold }}
+      >
+        {t("account.privacyPolicy")}
+      </Text>
+    </Text>
   )
 }
 

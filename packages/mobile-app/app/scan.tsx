@@ -26,6 +26,14 @@ export default function ScanScreen() {
   const [paused, setPaused] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  function goBackOrHome() {
+    if (router.canGoBack()) {
+      router.back()
+    } else {
+      router.replace("/")
+    }
+  }
+
   function handleBarcodeScanned(result: BarcodeScanningResult) {
     if (paused) return
     setPaused(true)
@@ -51,7 +59,7 @@ export default function ScanScreen() {
         <Section title="Scan QR code">
           <StateCard title="Camera access is required" detail="Anybox Mobile uses the camera only to scan desktop pairing QR codes." />
           <Button label="Grant camera access" onPress={() => void requestPermission()} />
-          <Button label="Back" onPress={() => router.replace("/")} variant="secondary" />
+          <Button label="Back" onPress={goBackOrHome} variant="secondary" />
         </Section>
       </Screen>
     )

@@ -24,6 +24,7 @@
     "android:dev": "expo run:android",
     "ios:dev": "PATH=\"$HOME/.gem/ruby/2.6.0/bin:$PATH\" RUBYOPT='-rlogger' expo run:ios",
     "ios:metro": "expo start --dev-client --host localhost --port 8081",
+    "ios:open": "node ./scripts/ios-open-dev-client.mjs",
     "ios:simulator": "PATH=\"$HOME/.gem/ruby/2.6.0/bin:$PATH\" RUBYOPT='-rlogger' expo run:ios",
     "android:setup": "node ./scripts/android-toolchain-windows.mjs",
     "android:build:debug": "node ./scripts/build-android-debug.mjs",

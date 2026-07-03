@@ -30,6 +30,7 @@
     "mobile:android:dev": "corepack pnpm --filter anybox-mobile-app android:dev",
     "mobile:ios:dev": "corepack pnpm --filter anybox-mobile-app ios:dev",
     "mobile:ios:metro": "corepack pnpm --filter anybox-mobile-app ios:metro",
+    "mobile:ios:open": "corepack pnpm --filter anybox-mobile-app ios:open",
     "mobile:ios:simulator": "corepack pnpm --filter anybox-mobile-app ios:simulator",
     "mobile:android:setup": "corepack pnpm --filter anybox-mobile-app run android:setup",
     "mobile:android:build:debug": "corepack pnpm --filter anybox-mobile-app run android:build:debug",

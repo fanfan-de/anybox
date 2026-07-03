@@ -163,6 +163,14 @@ export default function ConnectScreen() {
   const [loadingPreview, setLoadingPreview] = useState(true)
   const [pairingOptionID, setPairingOptionID] = useState<string | null>(null)
 
+  function cancelConnection() {
+    if (router.canGoBack()) {
+      router.back()
+    } else {
+      router.replace("/")
+    }
+  }
+
   const bridgeUrl = useMemo(() => firstParam(params.url)?.trim() ?? "", [params.url])
   const bridgeToken = useMemo(() => firstParam(params.token)?.trim() ?? "", [params.token])
   const isConnectionOptionsLink = useMemo(() => Boolean(readConnectionOptionsFromDeepLink(bridgeUrl)), [bridgeUrl])
@@ -292,7 +300,7 @@ export default function ConnectScreen() {
       ) : null}
       <View style={{ flexDirection: "row", gap: 10 }}>
         <View style={{ flex: 1 }}>
-          <Button label="Cancel" onPress={() => router.replace("/")} variant="secondary" />
+          <Button label="Cancel" onPress={cancelConnection} variant="secondary" />
         </View>
       </View>
     </Screen>

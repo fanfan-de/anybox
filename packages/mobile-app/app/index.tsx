@@ -7,7 +7,7 @@ import { Screen } from "@/components/screen"
 import { StateCard } from "@/components/state-card"
 import { ConnectionHomePage } from "@/home/connection"
 import { SessionDrawerPage } from "@/home/drawer"
-import { buildSessionTitle, formatProviderStatus, sortSessions } from "@/home/format"
+import { buildSessionTitle, sortSessions } from "@/home/format"
 import { ThreadViewPage } from "@/home/thread"
 import {
   connectAccountRelayDesktop,
@@ -83,9 +83,6 @@ export default function HomeScreen() {
   const { connection, loading: connectionLoading, saveConnection } = useConnection()
   const { t } = useI18n()
   const focus = useFocus()
-  const [endpoint, setEndpoint] = useState("")
-  const [token, setToken] = useState("")
-  const [manualOpen, setManualOpen] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [accountDesktops, setAccountDesktops] = useState<MobileAccountRelayDesktop[]>([])
   const [accountDesktopsLoading, setAccountDesktopsLoading] = useState(false)
@@ -213,12 +210,6 @@ export default function HomeScreen() {
     setDraftModelSelection({})
   }, [connection, drawerProgress])
 
-  useEffect(() => {
-    if (!accountLoading && !connectionLoading && !account && !connection) {
-      router.replace("/account" as never)
-    }
-  }, [account, accountLoading, connection, connectionLoading, router])
-
   const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!connection) {
       setStatus(null)
@@ -328,26 +319,12 @@ export default function HomeScreen() {
     void connectAccountDesktop(desktop)
   }, [account, accountDesktopsLoading, connectAccountDesktop, connectingDesktopID, connection, onlineDesktops])
 
-  const openConnectionConfirmation = useCallback((nextEndpoint: string, nextToken: string) => {
-    setError(null)
-    try {
-      normalizeConnectionOptionsInput(nextEndpoint, nextToken)
-      const params = new URLSearchParams({ url: nextEndpoint })
-      if (nextToken.trim()) params.set("token", nextToken.trim())
-      router.push(`/connect?${params.toString()}` as never)
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to prepare connection.")
-    }
-  }, [router])
-
   const handleIncomingLink = useCallback(
     (url: string) => {
       if (handledIncomingLinks.has(url)) return
       handledIncomingLinks.add(url)
       const bridgeUrl = readConnectionUrlFromDeepLink(url)
       if (!bridgeUrl) return
-      setEndpoint(bridgeUrl)
-      setToken("")
       try {
         const nextOptions = normalizeConnectionOptionsInput(bridgeUrl, "")
         if (
@@ -858,22 +835,6 @@ export default function HomeScreen() {
     )
   }
 
-  if (!account && !connection) {
-    return (
-      <Screen>
-        <StateCard title={t("home.openingEmailSignIn")} />
-      </Screen>
-    )
-  }
-
-  const providerStatus = formatProviderStatus({
-    accountDesktopsLoading,
-    connectingDesktopID,
-    connection,
-    onlineDesktops,
-    status,
-    t,
-  })
   const composerDisabled = sending || !draft.trim() || !connection || !focusedWorkspace
   const composerPlaceholder = !connection
     ? t("connection.providerOffline")
@@ -894,27 +855,15 @@ export default function HomeScreen() {
           accountDesktopError={accountDesktopError}
           appVersion={formatAppVersionLabel(currentApp)}
           connectingDesktopID={connectingDesktopID}
-          endpoint={endpoint}
-          error={error}
-          manualOpen={manualOpen}
+          hasAccount={Boolean(account)}
           maxWidth={maxWidth}
           onConnectDesktop={connectAccountDesktop}
-          onEndpointChange={setEndpoint}
-          onManualToggle={() => setManualOpen((current) => !current)}
-          onOpenDiagnostics={() => router.push("/diagnostics" as never)}
-          onOpenProvider={() => router.push("/provider" as never)}
+          onOpenAccount={() => router.push("/account?mode=login" as never)}
           onOpenSettings={() => router.push("/settings" as never)}
-          onOpenUpdates={() => router.push("/updates" as never)}
           onRefreshDesktopList={() => void loadAccountDesktops(account)}
-          onReviewConnection={() => openConnectionConfirmation(endpoint, token)}
           onScan={() => router.push("/scan" as never)}
-          onTokenChange={setToken}
           paddingBottom={32 + insets.bottom}
           paddingTop={18 + insets.top}
-          providerDetail={providerStatus.detail}
-          providerLabel={providerStatus.label}
-          providerTone={providerStatus.tone}
-          token={token}
         />
       ) : (
         <View style={{ flex: 1, backgroundColor: "#171717" }} {...openDrawerPanResponder.panHandlers}>
