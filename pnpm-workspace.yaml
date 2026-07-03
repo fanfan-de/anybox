@@ -1,9 +1,12 @@
 packages:
   - 'packages/*'
 allowBuilds:
+  '@parcel/watcher': set this to true or false
   cpu-features: true
+  dtrace-provider: set this to true or false
   electron: true
   electron-winstaller: true
   esbuild: true
+  msgpackr-extract: set this to true or false
   node-pty: true
   ssh2: true

@@ -1,7 +1,7 @@
 import React from "react"
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native"
 import type { MobileApproval, MobileMessage, MobileSessionSummary, MobileWorkspace } from "@/api/mobile-api"
-import { messageRole, messageText } from "@/utils/message"
+import { messageHasVisibleContent, messageRole, messageText } from "@/utils/message"
 import { darkToneColor } from "./shared"
 import type { ProviderStatusTone } from "./types"
 
@@ -64,6 +64,7 @@ export function CurrentSessionHomePage({
 }) {
   const title = focusedSession?.title ?? "New session"
   const workspaceName = focusedWorkspace?.name ?? "Select project"
+  const visibleMessages = React.useMemo(() => messages.filter(messageHasVisibleContent), [messages])
 
   return (
     <View style={{ backgroundColor: "#171717", flex: 1, paddingBottom, paddingTop }}>
@@ -105,8 +106,8 @@ export function CurrentSessionHomePage({
           {messageError ? <DarkNotice title="Composer failed" detail={messageError} tone="danger" /> : null}
           {focusedWorkspace && !focusedSession ? <AssistantIntro workspaceName={focusedWorkspace.name} /> : null}
           {focusedSession ? (
-            messages.length ? (
-              messages.map((message, index) => (
+            visibleMessages.length ? (
+              visibleMessages.map((message, index) => (
                 <ThreadMessage key={message.info?.id ?? `${index}`} message={message} />
               ))
             ) : (

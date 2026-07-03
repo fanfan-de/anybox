@@ -4,7 +4,16 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput,
 import type { MobileApproval, MobileMessage, MobileProviderModel, MobileSessionSummary, MobileWorkspace } from "@/api/mobile-api"
 import { useI18n } from "@/i18n"
 import { ApprovalCard } from "./approval-card"
-import { messageContentSegments, messageRole, messageText, type MessageContentSegment } from "@/utils/message"
+import {
+  messageContentSegments,
+  messageHasVisibleContent,
+  messageRole,
+  messageText,
+  type MessageContentSegment,
+  type MobileQuestionPrompt,
+  type MessageToolContentSegment,
+  type MessageToolStatus,
+} from "@/utils/message"
 import { DarkEmpty, DarkNotice } from "./shared"
 
 type FeatherName = React.ComponentProps<typeof Feather>["name"]
@@ -25,6 +34,7 @@ export function ThreadViewPage({
   modelOptions,
   modelsLoading,
   onApproveApproval,
+  onAnswerQuestion,
   onChangeText,
   onDenyApproval,
   onModelSelect,
@@ -37,8 +47,10 @@ export function ThreadViewPage({
   savingModel,
   selectedModel,
   sending,
+  answeringQuestionID,
 }: {
   actingApprovalID: string | null
+  answeringQuestionID: string | null
   approvalError: string | null
   approvals: MobileApproval[]
   disabled: boolean
@@ -53,6 +65,7 @@ export function ThreadViewPage({
   modelOptions: MobileProviderModel[]
   modelsLoading: boolean
   onApproveApproval: (approval: MobileApproval) => void
+  onAnswerQuestion: (answer: { questionID: string; selectedOptions?: string[]; freeformText?: string }) => Promise<void>
   onChangeText: (value: string) => void
   onDenyApproval: (approval: MobileApproval) => void
   onModelSelect: (modelValue: string | null) => void
@@ -68,7 +81,8 @@ export function ThreadViewPage({
 }) {
   const { t } = useI18n()
   const title = focusedSession?.title ?? t("thread.newSession")
-  const timelineItems = React.useMemo(() => buildThreadTimeline(messages, approvals), [approvals, messages])
+  const visibleMessages = React.useMemo(() => messages.filter(messageHasVisibleContent), [messages])
+  const timelineItems = React.useMemo(() => buildThreadTimeline(visibleMessages, approvals), [approvals, visibleMessages])
 
   return (
     <KeyboardAvoidingView
@@ -107,7 +121,12 @@ export function ThreadViewPage({
             timelineItems.length ? (
               timelineItems.map((item, index) => (
                 item.type === "message" ? (
-                  <ThreadMessage key={item.message.info?.id ?? `message-${index}`} message={item.message} />
+                  <ThreadMessage
+                    answeringQuestionID={answeringQuestionID}
+                    key={item.message.info?.id ?? `message-${index}`}
+                    message={item.message}
+                    onAnswerQuestion={onAnswerQuestion}
+                  />
                 ) : (
                   <ApprovalCard
                     acting={actingApprovalID === item.approval.id}
@@ -186,11 +205,23 @@ function buildThreadTimeline(messages: MobileMessage[], approvals: MobileApprova
   return items
 }
 
-function ThreadMessage({ message }: { message: MobileMessage }) {
+function ThreadMessage({
+  answeringQuestionID,
+  message,
+  onAnswerQuestion,
+}: {
+  answeringQuestionID: string | null
+  message: MobileMessage
+  onAnswerQuestion: (answer: { questionID: string; selectedOptions?: string[]; freeformText?: string }) => Promise<void>
+}) {
+  const { t } = useI18n()
   const role = messageRole(message)
   const isUser = role === "user"
   const text = messageText(message)
   const contentSegments = messageContentSegments(message)
+  const hasReasoning = contentSegments.some((segment) => segment.kind === "reasoning" && segment.text.trim())
+  const isPending = message.info?.pending === true
+  const reasoningStatus = isPending ? t("thread.reasoningActive") : hasReasoning ? t("thread.reasoningComplete") : null
 
   if (isUser) {
     return (
@@ -206,34 +237,248 @@ function ThreadMessage({ message }: { message: MobileMessage }) {
 
   return (
     <View style={{ gap: 10 }}>
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-        <Text style={{ color: "#e8e8e8", fontSize: 16, fontWeight: "900" }}>⌘</Text>
-        <Text style={{ color: "#e8e8e8", fontSize: 15, fontWeight: "800" }}>anybox</Text>
-      </View>
-      <AssistantMessageContent segments={contentSegments.length ? contentSegments : [{ kind: "response", text: text || "..." }]} />
+      {reasoningStatus ? (
+        <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
+          <Feather color="#9a9a9a" name={isPending ? "activity" : "check-circle"} size={12} />
+          <Text style={{ color: "#a7a7a7", fontSize: 12, fontWeight: "800" }}>{reasoningStatus}</Text>
+        </View>
+      ) : null}
+      <AssistantMessageContent
+        answeringQuestionID={answeringQuestionID}
+        onAnswerQuestion={onAnswerQuestion}
+        segments={contentSegments.length ? contentSegments : [{ kind: "response", text: text || "..." }]}
+      />
     </View>
   )
 }
 
-function AssistantMessageContent({ segments }: { segments: MessageContentSegment[] }) {
-  const hasReasoning = segments.some((segment) => segment.kind === "reasoning" && segment.text.trim())
-
+function AssistantMessageContent({
+  answeringQuestionID,
+  onAnswerQuestion,
+  segments,
+}: {
+  answeringQuestionID: string | null
+  onAnswerQuestion: (answer: { questionID: string; selectedOptions?: string[]; freeformText?: string }) => Promise<void>
+  segments: MessageContentSegment[]
+}) {
   return (
     <View style={{ gap: 10 }}>
-      {segments.map((segment, index) => (
-        segment.kind === "reasoning" ? (
-          <ReasoningSegment key={`reasoning-${index}`} text={segment.text} />
-        ) : (
-          <ResponseSegment hasReasoning={hasReasoning} key={`response-${index}`} text={segment.text} />
-        )
-      ))}
+      {segments.map((segment, index) => {
+        if (segment.kind === "tool") {
+          if (segment.questionPrompt && !segment.questionPrompt.answered) {
+            return (
+              <QuestionSegment
+                disabled={answeringQuestionID === segment.questionPrompt.questionID}
+                key={`question-${segment.callID}-${index}`}
+                onAnswerQuestion={onAnswerQuestion}
+                prompt={segment.questionPrompt}
+              />
+            )
+          }
+          return <ToolSegment key={`tool-${segment.callID}-${index}`} segment={segment} />
+        }
+        if (segment.kind === "reasoning") {
+          return <ReasoningSegment key={`reasoning-${index}`} text={segment.text} />
+        }
+        return <ResponseSegment key={`response-${index}`} text={segment.text} />
+      })}
+    </View>
+  )
+}
+
+function QuestionSegment({
+  disabled,
+  onAnswerQuestion,
+  prompt,
+}: {
+  disabled: boolean
+  onAnswerQuestion: (answer: { questionID: string; selectedOptions?: string[]; freeformText?: string }) => Promise<void>
+  prompt: MobileQuestionPrompt
+}) {
+  const { t } = useI18n()
+  const [selectedOptions, setSelectedOptions] = React.useState<string[]>([])
+  const [freeformText, setFreeformText] = React.useState("")
+  const questionID = prompt.questionID
+  const canAnswer = Boolean(questionID) && !disabled
+  const trimmedFreeformText = freeformText.trim()
+  const hasStructuredAnswer = selectedOptions.length > 0 || Boolean(trimmedFreeformText)
+  const needsSubmitButton = prompt.multiple || prompt.allowFreeform || prompt.options.length === 0
+  const submitDisabled = !canAnswer || !hasStructuredAnswer
+
+  function toggleOption(value: string) {
+    if (!prompt.multiple) {
+      setSelectedOptions([value])
+      return
+    }
+
+    setSelectedOptions((current) =>
+      current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value],
+    )
+  }
+
+  async function submitAnswer(answer: { selectedOptions?: string[]; freeformText?: string }) {
+    if (!questionID || !canAnswer) return
+    await onAnswerQuestion({
+      questionID,
+      ...(answer.selectedOptions?.length ? { selectedOptions: answer.selectedOptions } : {}),
+      ...(answer.freeformText ? { freeformText: answer.freeformText } : {}),
+    })
+    setSelectedOptions([])
+    setFreeformText("")
+  }
+
+  return (
+    <View
+      style={{
+        backgroundColor: "#202020",
+        borderColor: "#3c332f",
+        borderRadius: 9,
+        borderWidth: 1,
+        gap: 10,
+        padding: 12,
+      }}
+    >
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 7 }}>
+        <Feather color="#c8a07d" name="help-circle" size={14} />
+        <Text style={{ color: "#d8d8d8", flexShrink: 1, fontSize: 13, fontWeight: "800" }}>
+          {t("thread.questionHeading")}
+        </Text>
+        {prompt.header ? (
+          <Text numberOfLines={1} style={{ color: "#9d9d9d", flex: 1, fontSize: 12, fontWeight: "700" }}>
+            {prompt.header}
+          </Text>
+        ) : null}
+      </View>
+
+      <Text selectable style={{ color: "#f0f0f0", fontSize: 16, fontWeight: "800", lineHeight: 23 }}>
+        {prompt.question}
+      </Text>
+
+      {prompt.options.length ? (
+        <View style={{ gap: 7 }}>
+          {prompt.options.map((option, index) => {
+            const selected = selectedOptions.includes(option.value)
+            return (
+              <Pressable
+                accessibilityRole="button"
+                disabled={!canAnswer}
+                key={`${option.value}-${index}`}
+                onPress={() => {
+                  if (!prompt.multiple) {
+                    void submitAnswer({ selectedOptions: [option.value] })
+                    return
+                  }
+                  toggleOption(option.value)
+                }}
+                style={({ pressed }) => ({
+                  alignItems: "flex-start",
+                  backgroundColor: selected ? "#2c2825" : "#181818",
+                  borderColor: selected ? "#b58a67" : "#343434",
+                  borderRadius: 7,
+                  borderWidth: 1,
+                  flexDirection: "row",
+                  gap: 9,
+                  minHeight: 44,
+                  opacity: pressed ? 0.78 : canAnswer ? 1 : 0.58,
+                  paddingHorizontal: 10,
+                  paddingVertical: 9,
+                })}
+              >
+                <View
+                  style={{
+                    alignItems: "center",
+                    backgroundColor: selected ? "#b58a67" : "transparent",
+                    borderColor: selected ? "#b58a67" : "#555555",
+                    borderRadius: prompt.multiple ? 4 : 9,
+                    borderWidth: 1,
+                    height: 18,
+                    justifyContent: "center",
+                    marginTop: 1,
+                    width: 18,
+                  }}
+                >
+                  {selected ? <Feather color="#171717" name="check" size={12} /> : (
+                    <Text style={{ color: "#9d9d9d", fontSize: 10, fontWeight: "800" }}>{index + 1}</Text>
+                  )}
+                </View>
+                <View style={{ flex: 1, gap: 3, minWidth: 0 }}>
+                  <Text style={{ color: "#eeeeee", fontSize: 14, fontWeight: "800", lineHeight: 19 }}>
+                    {option.label}
+                  </Text>
+                  {option.description ? (
+                    <Text style={{ color: "#a5a5a5", fontSize: 12, lineHeight: 17 }}>
+                      {option.description}
+                    </Text>
+                  ) : null}
+                </View>
+              </Pressable>
+            )
+          })}
+        </View>
+      ) : null}
+
+      {prompt.allowFreeform ? (
+        <TextInput
+          editable={canAnswer}
+          onChangeText={setFreeformText}
+          placeholder={prompt.placeholder || t("thread.questionPlaceholder")}
+          placeholderTextColor="#777777"
+          returnKeyType="done"
+          style={{
+            backgroundColor: "#171717",
+            borderColor: "#343434",
+            borderRadius: 7,
+            borderWidth: 1,
+            color: "#f2f2f2",
+            fontSize: 15,
+            minHeight: 42,
+            paddingHorizontal: 11,
+            paddingVertical: 9,
+          }}
+          value={freeformText}
+        />
+      ) : null}
+
+      {needsSubmitButton ? (
+        <View style={{ alignItems: "flex-end" }}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={submitDisabled}
+            onPress={() => void submitAnswer({
+              ...(selectedOptions.length ? { selectedOptions } : {}),
+              ...(trimmedFreeformText ? { freeformText: trimmedFreeformText } : {}),
+            })}
+            style={({ pressed }) => ({
+              alignItems: "center",
+              backgroundColor: submitDisabled ? "#333333" : "#f1f1f1",
+              borderRadius: 8,
+              minHeight: 38,
+              justifyContent: "center",
+              opacity: pressed ? 0.8 : 1,
+              paddingHorizontal: 15,
+            })}
+          >
+            <Text style={{ color: submitDisabled ? "#8f8f8f" : "#171717", fontSize: 14, fontWeight: "900" }}>
+              {disabled ? t("thread.questionSending") : t("thread.questionSubmit")}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      <Text style={{ color: "#8f8f8f", fontSize: 12, lineHeight: 17 }}>
+        {prompt.multiple
+          ? t("thread.questionChooseMany")
+          : prompt.options.length
+            ? t("thread.questionChooseOne")
+            : t("thread.questionOptional")}
+      </Text>
     </View>
   )
 }
 
 function ReasoningSegment({ text }: { text: string }) {
-  const { t } = useI18n()
-
   if (!text.trim()) return null
 
   return (
@@ -246,10 +491,6 @@ function ReasoningSegment({ text }: { text: string }) {
         paddingVertical: 2,
       }}
     >
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-        <Feather color="#9a9a9a" name="activity" size={12} />
-        <Text style={{ color: "#a7a7a7", fontSize: 12, fontWeight: "800" }}>{t("thread.reasoning")}</Text>
-      </View>
       <Text selectable style={{ color: "#a0a0a0", fontSize: 14, lineHeight: 20 }}>
         {text}
       </Text>
@@ -257,35 +498,116 @@ function ReasoningSegment({ text }: { text: string }) {
   )
 }
 
-function ResponseSegment({ hasReasoning, text }: { hasReasoning: boolean; text: string }) {
-  const { t } = useI18n()
-
+function ResponseSegment({ text }: { text: string }) {
   if (!text.trim()) return null
 
   return (
-    <View style={{ gap: hasReasoning ? 5 : 0 }}>
-      {hasReasoning ? (
-        <View style={{ alignItems: "center", flexDirection: "row", gap: 6 }}>
-          <Feather color="#bfbfbf" name="message-circle" size={12} />
-          <Text style={{ color: "#c7c7c7", fontSize: 12, fontWeight: "800" }}>{t("thread.response")}</Text>
+    <Text selectable style={{ color: "#dedede", fontSize: 16, lineHeight: 22 }}>
+      {text}
+    </Text>
+  )
+}
+
+function ToolSegment({ segment }: { segment: MessageToolContentSegment }) {
+  const { t } = useI18n()
+  const [expanded, setExpanded] = React.useState(false)
+  const descriptor = toolStatusDescriptor(segment.status, t)
+  const title = segment.title?.trim() || formatToolName(segment.tool)
+  const preview = segment.status === "completed"
+    ? segment.outputPreview || segment.inputPreview
+    : segment.error || segment.reason || segment.inputPreview || segment.outputPreview
+  const detailRows = [
+    segment.inputPreview ? { label: t("thread.toolInput"), value: segment.inputPreview } : null,
+    segment.outputPreview ? { label: t("thread.toolOutput"), value: segment.outputPreview } : null,
+    segment.error ? { label: t("thread.toolError"), value: segment.error } : null,
+    segment.reason ? { label: t("thread.toolReason"), value: segment.reason } : null,
+  ].filter((item): item is { label: string; value: string } => Boolean(item))
+  const canExpand = detailRows.length > 0
+
+  return (
+    <View
+      style={{
+        backgroundColor: "#202020",
+        borderColor: descriptor.borderColor,
+        borderRadius: 8,
+        borderWidth: 1,
+        overflow: "hidden",
+      }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        disabled={!canExpand}
+        onPress={() => setExpanded((current) => !current)}
+        style={({ pressed }) => ({
+          alignItems: "center",
+          flexDirection: "row",
+          gap: 9,
+          opacity: pressed ? 0.78 : 1,
+          paddingHorizontal: 10,
+          paddingVertical: 9,
+        })}
+      >
+        <Feather color={descriptor.color} name={descriptor.icon} size={13} />
+        <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+          <Text numberOfLines={1} style={{ color: "#d8d8d8", fontSize: 13, fontWeight: "800" }}>
+            {title}
+          </Text>
+          <Text numberOfLines={1} style={{ color: "#9d9d9d", fontSize: 12, lineHeight: 16 }}>
+            {preview ? `${descriptor.label} · ${preview}` : descriptor.label}
+          </Text>
+        </View>
+        {canExpand ? <Feather color="#818181" name={expanded ? "chevron-up" : "chevron-down"} size={14} /> : null}
+      </Pressable>
+      {expanded ? (
+        <View style={{ borderTopColor: "#303030", borderTopWidth: 1, gap: 8, paddingHorizontal: 10, paddingVertical: 9 }}>
+          {detailRows.map((row) => (
+            <View key={row.label} style={{ gap: 3 }}>
+              <Text style={{ color: "#8f8f8f", fontSize: 11, fontWeight: "800" }}>{row.label}</Text>
+              <Text selectable style={{ color: "#b8b8b8", fontSize: 12, lineHeight: 17 }}>
+                {row.value}
+              </Text>
+            </View>
+          ))}
         </View>
       ) : null}
-      <Text selectable style={{ color: "#dedede", fontSize: 16, lineHeight: 22 }}>
-        {text}
-      </Text>
     </View>
   )
+}
+
+function toolStatusDescriptor(status: MessageToolStatus, t: ReturnType<typeof useI18n>["t"]) {
+  switch (status) {
+    case "pending":
+      return { borderColor: "#3a3a3a", color: "#9a9a9a", icon: "clock" as FeatherName, label: t("thread.toolPending") }
+    case "running":
+      return { borderColor: "#3b4750", color: "#8fb7d8", icon: "activity" as FeatherName, label: t("thread.toolRunning") }
+    case "waiting-approval":
+      return { borderColor: "#4d432e", color: "#d6b76b", icon: "alert-circle" as FeatherName, label: t("thread.toolWaitingApproval") }
+    case "completed":
+      return { borderColor: "#334438", color: "#83c18b", icon: "check-circle" as FeatherName, label: t("thread.toolCompleted") }
+    case "failed":
+      return { borderColor: "#513635", color: "#e28a83", icon: "alert-triangle" as FeatherName, label: t("thread.toolFailed") }
+    case "denied":
+      return { borderColor: "#4a3934", color: "#c89a79", icon: "slash" as FeatherName, label: t("thread.toolDenied") }
+    case "cancelled":
+      return { borderColor: "#3f3f3f", color: "#a7a7a7", icon: "x-circle" as FeatherName, label: t("thread.toolCancelled") }
+    default:
+      return { borderColor: "#3a3a3a", color: "#9a9a9a", icon: "tool" as FeatherName, label: t("thread.toolUnknown") }
+  }
+}
+
+function formatToolName(tool: string | undefined) {
+  return (tool ?? "tool")
+    .replace(/^functions[._-]/, "")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim() || "tool"
 }
 
 function AssistantIntro({ workspaceName }: { workspaceName: string }) {
   const { t } = useI18n()
 
   return (
-    <View style={{ gap: 10, paddingTop: 14 }}>
-      <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
-        <Text style={{ color: "#e8e8e8", fontSize: 16, fontWeight: "900" }}>⌘</Text>
-        <Text style={{ color: "#e8e8e8", fontSize: 15, fontWeight: "800" }}>anybox</Text>
-      </View>
+    <View style={{ paddingTop: 14 }}>
       <Text selectable style={{ color: "#dedede", fontSize: 16, lineHeight: 22 }}>
         {t("thread.readyInWorkspace", { workspace: workspaceName })}
       </Text>

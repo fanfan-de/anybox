@@ -227,6 +227,16 @@ function startAgentStub() {
       return
     }
 
+    if (requestUrl.pathname === "/api/sessions/session-smoke/questions/answer" && request.method === "POST") {
+      const body = JSON.parse(await readNodeRequestBody(request)) as { questionID?: string; selectedOptions?: string[] }
+      jsonAgentResponse(response, 200, agentOk({
+        questionID: body.questionID,
+        selectedOptions: body.selectedOptions ?? [],
+        answered: true,
+      }))
+      return
+    }
+
     if (requestUrl.pathname === "/api/sessions/session-smoke/tasks" && request.method === "GET") {
       jsonAgentResponse(response, 200, agentOk({
         sessionID: "session-smoke",
@@ -624,6 +634,26 @@ describe("mobile bridge server", () => {
         }),
       )
 
+      const questionAnswer = await readMobileJSON(baseUrl, "/api/mobile/sessions/session-smoke/questions/answer", {
+        body: JSON.stringify({ questionID: "que_smoke", selectedOptions: ["first"] }),
+        headers: authHeaders,
+        method: "POST",
+      })
+      expect(questionAnswer.response.status).toBe(200)
+      expect(successData<{ answered: boolean; questionID: string }>(questionAnswer.body)).toMatchObject({
+        answered: true,
+        questionID: "que_smoke",
+      })
+      expect(desktopSend).toHaveBeenCalledWith(
+        DESKTOP_MOBILE_BRIDGE_EVENT_CHANNEL,
+        expect.objectContaining({
+          type: "session.updated",
+          source: "mobile",
+          sessionID: "session-smoke",
+          generatedAt: expect.any(Number),
+        }),
+      )
+
       const tasks = await readMobileJSON(baseUrl, "/api/mobile/sessions/session-smoke/tasks", { headers: authHeaders })
       expect(tasks.response.status).toBe(200)
       expect(successData<{ sessionID: string; summary: { total: number } }>(tasks.body)).toMatchObject({
@@ -727,6 +757,7 @@ describe("mobile bridge server", () => {
       expect(agent.requests).toEqual(expect.arrayContaining([
         "GET /api/sessions/session-smoke/messages",
         "POST /api/sessions/session-smoke/messages/stream",
+        "POST /api/sessions/session-smoke/questions/answer",
         "GET /api/sessions/session-smoke/tasks",
         "GET /api/sessions/session-smoke/models",
         "PATCH /api/sessions/session-smoke/model-selection",

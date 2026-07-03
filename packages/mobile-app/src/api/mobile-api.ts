@@ -56,6 +56,8 @@ export interface MobileWorkspace {
 export interface MobileMessage {
   info?: {
     id?: string
+    internal?: boolean
+    pending?: boolean
     role?: "user" | "assistant" | "system" | "tool" | string
     created?: number
     updated?: number
@@ -606,6 +608,25 @@ export async function getMessages(connection: MobileConnection, sessionID: strin
   return requestMobile<MobileMessage[]>(
     connection,
     `/api/mobile/sessions/${encodeURIComponent(sessionID)}/messages?view=active`,
+  )
+}
+
+export async function answerSessionQuestion(
+  connection: MobileConnection,
+  sessionID: string,
+  input: {
+    questionID: string
+    selectedOptions?: string[]
+    freeformText?: string
+  },
+) {
+  return requestMobile<unknown>(
+    connection,
+    `/api/mobile/sessions/${encodeURIComponent(sessionID)}/questions/answer`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
   )
 }
 

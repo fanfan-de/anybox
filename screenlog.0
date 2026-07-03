@@ -55,3 +55,35 @@ modules/expo-router/[22m[0m[1mentry.js[22m [32m[42m▓▓▓▓▓▓▓�
 [33m|[39m (node:75358) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 [33m|[39m (Use `node --trace-warnings ...` to show where the warning was created)
 [7m[31m[1m ERROR [22m[39m[27m [TypeError: undefined is not a function]
+/Users/fanfande/Documents/Projects/anybox/node_modules/.pnpm/@expo+cli@56.1.13_@expo+dom-webview@56.0.5_@expo+metro-runtime@56.0.13_expo-constants@5_aa992ed6583f4840f6ce2c2345006d71/node_modules/@expo/cli/build/src/utils/errors.js:130
+    throw error;
+    ^
+
+Error: Cannot find module '/Users/fanfande/Documents/Projects/anybox/node_modules/.pnpm/@expo+cli@56.1.13_@expo+dom-webview@56.0.5_@expo+metro-runtime@56.0.13_expo-constants@5_aa992ed6583f4840f6ce2c2345006d71/node_modules/@expo/metro/metro/lib/formatBundlingError.js'
+    at createEsmNotFoundErr (node:internal/modules/cjs/loader:1537:15)
+    at finalizeEsmResolution (node:internal/modules/cjs/loader:1526:9)
+    at resolveExports (node:internal/modules/cjs/loader:707:14)
+    at Module._findPath (node:internal/modules/cjs/loader:774:31)
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1485:27)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1071:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1095:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1116:12)
+    at Module._load (node:internal/modules/cjs/loader:1285:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1600:12)
+    at require (node:internal/modules/helpers:153:16)
+    at _formatBundlingError (/Users/fanfande/Documents/Projects/anybox/node_modules/.pnpm/@expo+cli@56.1.13_@expo+dom-webview@56.0.5_@expo+metro-runtime@56.0.13_expo-constants@5_aa992ed6583f4840f6ce2c2345006d71/node_modules/@expo/cli/build/src/start/server/metro/instantiateMetro.js:47:57)
+    at hmrServer._prepareMessage (/Users/fanfande/Documents/Projects/anybox/node_modules/.pnpm/@expo+cli@56.1.13_@expo+dom-webview@56.0.5_@expo+metro-runtime@56.0.13_expo-constants@5_aa992ed6583f4840f6ce2c2345006d71/node_modules/@expo/cli/build/src/start/server/metro/instantiateMetro.js:494:44)
+    at async HmrServer._handleFileChange (/Users/fanfande/Documents/Projects/anybox/node_modules/.pnpm/metro@0.84.4/node_modules/metro/src/HmrServer.js:268:21)
+    at async /Users/fanfande/Documents/Projects/anybox/node_modules/.pnpm/metro@0.84.4/node_modules/metro/src/HmrServer.js:161:11
+    at async execute (/Users/fanfande/Documents/Projects/anybox/node_modules/.pnpm/metro@0.84.4/node_modules/metro/src/lib/debounceAsyncQueue.js:16:17)
+    at async Timeout._onTimeout (/Users/fanfande/Documents/Projects/anybox/node_modules/.pnpm/metro@0.84.4/node_modules/metro/src/lib/debounceAsyncQueue.js:34:11) {
+  code: 'MODULE_NOT_FOUND',
+  path: '/Users/fanfande/Documents/Projects/anybox/node_modules/.pnpm/@expo+cli@56.1.13_@expo+dom-webview@56.0.5_@expo+metro-runtime@56.0.13_expo-constants@5_aa992ed6583f4840f6ce2c2345006d71/node_modules/@expo/metro'
+}
+
+Node.js v24.16.0
+/Users/fanfande/Documents/Projects/anybox/packages/mobile-app:
+[41m[30m ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL [39m[49m [31manybox-mobile-app@0.2.3 ios:metro: `expo start --dev-client --host localhost --port 8081`[39m
+[31mExit status 7[39m
+[41m[30m ELIFECYCLE [39m[49m [31mCommand failed with exit code 7.[39m

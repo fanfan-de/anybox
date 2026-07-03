@@ -664,6 +664,7 @@ function mobileAgentPath(url: URL) {
     if (action === "tasks") return `/api/sessions/${sessionID}/tasks${sanitizedSearch(url)}`
     if (action === "models") return `/api/sessions/${sessionID}/models${sanitizedSearch(url)}`
     if (action === "model-selection") return `/api/sessions/${sessionID}/model-selection`
+    if (action === "questions/answer") return `/api/sessions/${sessionID}/questions/answer`
   }
 
   return undefined
@@ -693,6 +694,7 @@ function mobileAgentRouteCapability(url: URL, method: string) {
     if (action === "tasks") return "session:read"
     if (action === "models") return "session:read"
     if (action === "model-selection") return "session:read"
+    if (action === "questions/answer") return "message:send"
   }
 
   return undefined
@@ -734,7 +736,9 @@ function mobileAgentRouteAudit(url: URL, method: string) {
                     ? "models.read"
                     : routeAction === "model-selection"
                       ? "model.selection.update"
-                  : "agent.proxy"
+                      : routeAction === "questions/answer"
+                        ? "question.answer"
+                        : "agent.proxy"
 
     return {
       action,
@@ -761,7 +765,7 @@ function mobileAgentRouteDesktopEvent(url: URL, method: string): Omit<MobileBrid
     }
   }
   if (method !== "POST") return null
-  if (action === "messages" || action === "messages/stream" || action === "resume/stream" || action === "cancel") {
+  if (action === "messages" || action === "messages/stream" || action === "resume/stream" || action === "cancel" || action === "questions/answer") {
     return {
       type: "session.updated",
       sessionID,

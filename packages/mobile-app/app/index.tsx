@@ -16,6 +16,7 @@ import {
   type MobileAccountSession,
 } from "@/api/account-api"
 import {
+  answerSessionQuestion,
   createSession,
   getApprovals,
   getMessages,
@@ -43,6 +44,7 @@ import { useConnection } from "@/state/connection"
 import { useFocus } from "@/state/focus"
 import { describeAccountApiError, isRelayDisabledByEntitlement } from "@/utils/account-entitlements"
 import {
+  applyMobileStreamToolEvent,
   appendMessageContentSegment,
   mergeOptimisticMessages,
   type PendingPromptOverlay,
@@ -96,6 +98,7 @@ export default function HomeScreen() {
   const [savingModel, setSavingModel] = useState(false)
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
+  const [answeringQuestionID, setAnsweringQuestionID] = useState<string | null>(null)
   const [drawerMounted, setDrawerMounted] = useState(false)
   const [pendingPrompt, setPendingPrompt] = useState<PendingPromptOverlay | null>(null)
   const [streamingAssistant, setStreamingAssistant] = useState<StreamingAssistantOverlay | null>(null)
@@ -603,6 +606,27 @@ export default function HomeScreen() {
     }
   }, [connection, load, modelSelection, selectedSessionID])
 
+  const handleAnswerQuestion = useCallback(async (answer: {
+    questionID: string
+    selectedOptions?: string[]
+    freeformText?: string
+  }) => {
+    if (!connection || !selectedSessionID) return
+    setAnsweringQuestionID(answer.questionID)
+    setMessageError(null)
+    try {
+      await answerSessionQuestion(connection, selectedSessionID, answer)
+      await Promise.all([
+        readSessionMessages(selectedSessionID).catch(() => undefined),
+        load({ silent: true }).catch(() => undefined),
+      ])
+    } catch (answerError) {
+      setMessageError(answerError instanceof Error ? answerError.message : "Unable to answer question.")
+    } finally {
+      setAnsweringQuestionID(null)
+    }
+  }, [connection, load, readSessionMessages, selectedSessionID])
+
   const handleSend = useCallback(async () => {
     const text = draft.trim()
     if (!text || sending) return
@@ -637,7 +661,17 @@ export default function HomeScreen() {
       }
 
       await sendPrompt(connection, targetSessionID, text, {
-        onEvent: () => {
+        onEvent: (event) => {
+          setStreamingAssistant((current) => {
+            const currentSegments = current?.segments ?? []
+            const nextSegments = applyMobileStreamToolEvent(currentSegments, event)
+            if (nextSegments === currentSegments) return current
+            return {
+              id: current?.id ?? streamID,
+              segments: nextSegments,
+              anchorMessageID: current?.anchorMessageID ?? anchorMessageID,
+            }
+          })
           void readSessionMessages(targetSessionID).catch(() => undefined)
         },
         onOpen: () => {
@@ -738,6 +772,7 @@ export default function HomeScreen() {
         <View style={{ flex: 1, backgroundColor: "#171717" }} {...openDrawerPanResponder.panHandlers}>
           <ThreadViewPage
             actingApprovalID={actingApprovalID}
+            answeringQuestionID={answeringQuestionID}
             approvalError={approvalError}
             approvals={sessionApprovals}
             disabled={composerDisabled}
@@ -752,6 +787,7 @@ export default function HomeScreen() {
             modelOptions={modelOptions}
             modelsLoading={modelsLoading}
             onApproveApproval={(approval) => void handleApprovalDecision(approval, "approve")}
+            onAnswerQuestion={handleAnswerQuestion}
             onChangeText={setDraft}
             onDenyApproval={(approval) => void handleApprovalDecision(approval, "deny")}
             onModelSelect={(modelValue) => void handleModelSelection(modelValue)}
