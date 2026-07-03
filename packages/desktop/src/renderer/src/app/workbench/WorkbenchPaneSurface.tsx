@@ -4,6 +4,7 @@ import { CreateSessionCanvas, getCreateSessionProjectWorkspaces } from "../canva
 import { SessionCanvasTopMenu } from "../canvas/SessionCanvasTopMenu"
 import { Composer } from "../composer/Composer"
 import { ComposerConcurrentInputDrawer } from "../composer/ComposerConcurrentInputDrawer"
+import { appendTextToComposerDraftState } from "../composer/draft-state"
 import { useDeferredComposerDraftSync } from "../composer/use-deferred-composer-draft-sync"
 import { ComposerUtilityBar } from "../ComposerUtilityBar"
 import { getSessionWorkflowBadge, type SessionWorkflowBadge as SessionWorkflowBadgeInfo } from "../session-workflow"
@@ -674,6 +675,14 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
     setBagDescription("")
   }
 
+  function handleAddTextToComposer(text: string) {
+    if (!pane.tabKey) return
+
+    const pendingDraft = flushDraftSync()
+    const draftState = pendingDraft?.draftState ?? pane.draftState
+    onSetDraft(pane.tabKey, appendTextToComposerDraftState(draftState, text))
+  }
+
   return (
     <section
       className={pane.isFocused ? "workbench-pane is-focused" : "workbench-pane"}
@@ -858,6 +867,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                       workspaceID: pane.workspace?.id ?? null,
                     })
                   }
+                  onAddToComposer={handleAddTextToComposer}
                   onOpenSideChat={onOpenSideChat
                     ? (anchorMessageID) =>
                         void onOpenSideChat(anchorMessageID, {

@@ -185,6 +185,21 @@ describe("getComposerKeyAction", () => {
     })
   })
 
+  it("lets classic slash command text send when the visible command menu has no available options", () => {
+    expect(
+      getComposerKeyAction({
+        key: "Enter",
+        isSubmitKeyEvent: true,
+        hasCommandMenu: true,
+        commandMenuItemCount: 0,
+        allowSubmitWhenCommandMenuEmpty: true,
+      }),
+    ).toEqual({
+      type: "send",
+      preventDefault: true,
+    })
+  })
+
   it("keeps arrow navigation passive when the visible menu is empty", () => {
     expect(
       getComposerKeyAction({
@@ -217,6 +232,14 @@ describe("getComposerKeyAction", () => {
 describe("getVisibleComposerCommandLabels", () => {
   it("shows ~plan when plan mode toggling is available", () => {
     expect(getVisibleComposerCommandLabels({ hasPlanModeToggle: true })).toContain("~plan")
+  })
+
+  it("can show command labels with the classic slash prefix", () => {
+    expect(getVisibleComposerCommandLabels({ hasPlanModeToggle: true, triggerPrefix: "/" })).toContain("/plan")
+  })
+
+  it("filters slash command labels using the command name", () => {
+    expect(getVisibleComposerCommandLabels({ query: "mod", showModelSelector: true, triggerPrefix: "/" })).toEqual(["/model"])
   })
 
   it("hides ~plan when plan mode toggling is unavailable", () => {

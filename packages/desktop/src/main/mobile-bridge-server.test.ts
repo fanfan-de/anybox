@@ -538,9 +538,26 @@ describe("mobile bridge server", () => {
       const project = createMockProject(workspaceDir)
       const session = createMockSession(workspaceDir)
       const approval = createMockApproval()
+      const projectModel = {
+        id: "gpt-project-smoke",
+        providerID: "openai",
+        providerName: "OpenAI",
+        name: "GPT Project Smoke",
+        status: "active",
+        available: true,
+      }
 
       requestAgentJSONMock.mockImplementation(async (agentPath: string, init?: RequestInit) => {
         if (agentPath === "/api/projects") return { data: [project] }
+        if (agentPath === "/api/projects/project-smoke/models") {
+          return {
+            data: {
+              effectiveModel: projectModel,
+              items: [projectModel],
+              selection: {},
+            },
+          }
+        }
         if (agentPath === "/api/projects/project-smoke/sessions" && init?.method === "POST") {
           return {
             data: {
@@ -590,6 +607,13 @@ describe("mobile bridge server", () => {
       const sessions = await readMobileJSON(baseUrl, `${workspaceRoute}/sessions`, { headers: authHeaders })
       expect(sessions.response.status).toBe(200)
       expect(successData<Array<{ id: string }>>(sessions.body)).toEqual([expect.objectContaining({ id: "session-smoke" })])
+
+      const workspaceModels = await readMobileJSON(baseUrl, `${workspaceRoute}/models`, { headers: authHeaders })
+      expect(workspaceModels.response.status).toBe(200)
+      expect(successData<{ items: Array<{ id: string }>; effectiveModel?: { id: string } }>(workspaceModels.body)).toMatchObject({
+        effectiveModel: { id: "gpt-project-smoke" },
+        items: [expect.objectContaining({ id: "gpt-project-smoke" })],
+      })
 
       const createdSession = await readMobileJSON(baseUrl, `${workspaceRoute}/sessions`, {
         body: JSON.stringify({ title: "Created Chat" }),

@@ -23,6 +23,8 @@ import {
   getSessionModels,
   getStatus,
   getWorkspaces,
+  getWorkspaceModels,
+  MobileApiError,
   normalizeConnectionOptionsInput,
   readConnectionUrlFromDeepLink,
   respondApproval,
@@ -46,9 +48,9 @@ import { describeAccountApiError, isRelayDisabledByEntitlement } from "@/utils/a
 import {
   applyMobileStreamToolEvent,
   appendMessageContentSegment,
-  mergeOptimisticMessages,
-  type PendingPromptOverlay,
-  type StreamingAssistantOverlay,
+  mergeActiveStreamMessages,
+  orderMobileMessagesForDisplay,
+  type ActiveMobileStream,
 } from "@/utils/message"
 import { getMobileDeviceName } from "@/utils/platform"
 
@@ -59,6 +61,16 @@ const OPEN_DRAWER_MIN_DX = 18
 const OPEN_DRAWER_MIN_VX = 0.65
 const DRAWER_GESTURE_DIRECTION_RATIO = 1.25
 const DRAWER_SETTLE_RATIO = 0.18
+
+function applyPrimaryModelSelection(selection: MobileModelSelection, modelValue: string | null) {
+  const nextSelection = { ...selection }
+  if (modelValue?.trim()) {
+    nextSelection.model = modelValue.trim()
+  } else {
+    delete nextSelection.model
+  }
+  return nextSelection
+}
 
 export default function HomeScreen() {
   const router = useRouter()
@@ -97,14 +109,19 @@ export default function HomeScreen() {
   const [modelError, setModelError] = useState<string | null>(null)
   const [savingModel, setSavingModel] = useState(false)
   const [draft, setDraft] = useState("")
+  const [draftWorkspaceID, setDraftWorkspaceID] = useState<string | null>(null)
+  const [draftModelSelection, setDraftModelSelection] = useState<MobileModelSelection>({})
   const [sending, setSending] = useState(false)
   const [answeringQuestionID, setAnsweringQuestionID] = useState<string | null>(null)
   const [drawerMounted, setDrawerMounted] = useState(false)
-  const [pendingPrompt, setPendingPrompt] = useState<PendingPromptOverlay | null>(null)
-  const [streamingAssistant, setStreamingAssistant] = useState<StreamingAssistantOverlay | null>(null)
+  const [activeStream, setActiveStream] = useState<ActiveMobileStream | null>(null)
+  const messagesRequestSeqRef = useRef(0)
+  const selectedSessionIDRef = useRef<string | null>(null)
   const autoConnectAttemptedAtRef = useRef<Record<string, number>>({})
   const accountDesktopRefreshInFlightRef = useRef(false)
+  const draftModelSelectionRef = useRef<MobileModelSelection>({})
   const currentApp = useMemo(() => getCurrentAppInfo(), [])
+  draftModelSelectionRef.current = draftModelSelection
 
   const openSessionDrawer = useCallback(() => {
     drawerProgress.stopAnimation()
@@ -192,6 +209,8 @@ export default function HomeScreen() {
     drawerProgress.stopAnimation()
     drawerProgress.setValue(0)
     setDrawerMounted(false)
+    setDraftWorkspaceID(null)
+    setDraftModelSelection({})
   }, [connection, drawerProgress])
 
   useEffect(() => {
@@ -369,8 +388,11 @@ export default function HomeScreen() {
     [workspaces],
   )
   const focusedWorkspace = useMemo(
-    () => workspaces.find((workspace) => workspace.id === focus.workspaceID) ?? sortedWorkspaces[0] ?? null,
-    [focus.workspaceID, sortedWorkspaces, workspaces],
+    () =>
+      workspaces.find((workspace) => workspace.id === (draftWorkspaceID ?? focus.workspaceID)) ??
+      sortedWorkspaces[0] ??
+      null,
+    [draftWorkspaceID, focus.workspaceID, sortedWorkspaces, workspaces],
   )
   const focusedSessions = useMemo(() => {
     const sessions = focusedWorkspace?.sessions ?? []
@@ -382,11 +404,24 @@ export default function HomeScreen() {
     }
     return sortSessions([optimisticSession.session, ...sessions])
   }, [focusedWorkspace, optimisticSession])
+  const isConversationDraftActive = Boolean(draftWorkspaceID && focusedWorkspace?.id === draftWorkspaceID)
   const focusedSession = useMemo(
-    () => (focus.sessionID ? focusedSessions.find((session) => session.id === focus.sessionID) ?? null : null),
-    [focus.sessionID, focusedSessions],
+    () => (
+      isConversationDraftActive
+        ? null
+        : focus.sessionID
+          ? focusedSessions.find((session) => session.id === focus.sessionID) ?? null
+          : null
+    ),
+    [focus.sessionID, focusedSessions, isConversationDraftActive],
   )
   const selectedSessionID = focusedSession?.id ?? null
+  selectedSessionIDRef.current = selectedSessionID
+
+  useEffect(() => {
+    messagesRequestSeqRef.current += 1
+    setActiveStream((current) => (current?.sessionID === selectedSessionID ? current : null))
+  }, [selectedSessionID])
 
   useEffect(() => {
     if (!optimisticSession) return
@@ -408,12 +443,17 @@ export default function HomeScreen() {
 
   const readSessionMessages = useCallback(async (sessionID: string) => {
     if (!connection) return
+    const requestSeq = messagesRequestSeqRef.current + 1
+    messagesRequestSeqRef.current = requestSeq
     const nextMessages = await getMessages(connection, sessionID)
-    setMessages(nextMessages)
+    if (messagesRequestSeqRef.current !== requestSeq) return
+    if (selectedSessionIDRef.current !== sessionID) return
+    setMessages(orderMobileMessagesForDisplay(nextMessages))
   }, [connection])
 
   const loadMessages = useCallback(async () => {
     if (!connection || !selectedSessionID) {
+      messagesRequestSeqRef.current += 1
       setMessages([])
       setMessagesLoading(false)
       setMessageError(null)
@@ -472,7 +512,9 @@ export default function HomeScreen() {
   }, [loadSessionApprovals])
 
   const loadSessionModels = useCallback(async (options?: { silent?: boolean }) => {
-    if (!connection || !selectedSessionID) {
+    const modelSessionID = selectedSessionID
+    const modelWorkspaceID = modelSessionID ? null : focusedWorkspace?.id ?? null
+    if (!connection || (!modelSessionID && !modelWorkspaceID)) {
       setModelOptions([])
       setModelSelection({})
       setEffectiveModel(null)
@@ -486,9 +528,11 @@ export default function HomeScreen() {
       setModelError(null)
     }
     try {
-      const result = await getSessionModels(connection, selectedSessionID)
+      const result = modelSessionID
+        ? await getSessionModels(connection, modelSessionID)
+        : await getWorkspaceModels(connection, modelWorkspaceID!)
       setModelOptions(result.items.filter((model) => model.available))
-      setModelSelection(result.selection ?? {})
+      setModelSelection(modelSessionID ? result.selection ?? {} : draftModelSelectionRef.current)
       setEffectiveModel(result.effectiveModel ?? null)
     } catch (loadError) {
       if (!options?.silent) {
@@ -497,7 +541,7 @@ export default function HomeScreen() {
     } finally {
       if (!options?.silent) setModelsLoading(false)
     }
-  }, [connection, selectedSessionID])
+  }, [connection, focusedWorkspace?.id, selectedSessionID])
 
   useEffect(() => {
     void loadSessionModels()
@@ -507,10 +551,15 @@ export default function HomeScreen() {
     void load({ silent: true })
     void loadSessionApprovals({ silent: true })
     void loadSessionModels({ silent: true })
-    if (selectedSessionID) {
+    const hasSelectedActiveStream = Boolean(
+      selectedSessionID &&
+      activeStream?.sessionID === selectedSessionID &&
+      activeStream.status !== "error",
+    )
+    if (selectedSessionID && !hasSelectedActiveStream) {
       void readSessionMessages(selectedSessionID).catch(() => undefined)
     }
-  }, [load, loadSessionApprovals, loadSessionModels, readSessionMessages, selectedSessionID])
+  }, [activeStream, load, loadSessionApprovals, loadSessionModels, readSessionMessages, selectedSessionID])
 
   useMobileEvents({
     connection,
@@ -519,13 +568,19 @@ export default function HomeScreen() {
   })
 
   const visibleMessages = useMemo(
-    () => mergeOptimisticMessages(messages, pendingPrompt, streamingAssistant),
-    [messages, pendingPrompt, streamingAssistant],
+    () => mergeActiveStreamMessages(
+      messages,
+      activeStream?.sessionID === selectedSessionID ? activeStream : null,
+    ),
+    [activeStream, messages, selectedSessionID],
   )
 
   const handleSelectWorkspace = useCallback(
     (workspace: MobileWorkspace) => {
       setOptimisticSession(null)
+      setDraftWorkspaceID(workspace.id)
+      setDraftModelSelection({})
+      setModelSelection({})
       void focus.setFocus({
         workspaceID: workspace.id,
         sessionID: null,
@@ -536,6 +591,8 @@ export default function HomeScreen() {
 
   const handleSelectSession = useCallback(
     (session: MobileSessionSummary, workspace?: MobileWorkspace) => {
+      setDraftWorkspaceID(null)
+      setDraftModelSelection({})
       setOptimisticSession((current) => (current?.session.id === session.id ? current : null))
       void focus.setFocus({
         workspaceID: workspace?.id ?? focusedWorkspace?.id ?? focus.workspaceID ?? null,
@@ -545,24 +602,30 @@ export default function HomeScreen() {
     [focus, focusedWorkspace?.id],
   )
 
-  const handleCreateConversation = useCallback(async () => {
-    if (!connection || !focusedWorkspace) return
-    setSending(true)
+  const handleCreateConversation = useCallback(() => {
+    if (!connection || !focusedWorkspace || sending) return
+    messagesRequestSeqRef.current += 1
+    selectedSessionIDRef.current = null
+    setOptimisticSession(null)
+    setDraftWorkspaceID(focusedWorkspace.id)
+    setDraftModelSelection({})
+    setActiveStream(null)
+    setMessages([])
+    setMessagesLoading(false)
     setMessageError(null)
+    setSessionApprovals([])
+    setApprovalsLoading(false)
     setApprovalError(null)
-    try {
-      const session = await createSession(connection, focusedWorkspace.id, { title: "Mobile chat" })
-      setOptimisticSession({ session, workspaceID: focusedWorkspace.id })
-      setMessages([])
-      setSessionApprovals([])
-      await focus.setFocus({ workspaceID: focusedWorkspace.id, sessionID: session.id })
-      await load({ silent: true })
-    } catch (createError) {
-      setMessageError(createError instanceof Error ? createError.message : "Unable to create conversation.")
-    } finally {
-      setSending(false)
-    }
-  }, [connection, focus, focusedWorkspace, load])
+    setActingApprovalID(null)
+    setModelOptions([])
+    setModelSelection({})
+    setEffectiveModel(null)
+    setModelsLoading(false)
+    setModelError(null)
+    setSavingModel(false)
+    setDraft("")
+    void focus.setFocus({ workspaceID: focusedWorkspace.id, sessionID: null })
+  }, [connection, focus, focusedWorkspace, sending])
 
   const handleApprovalDecision = useCallback(async (approval: MobileApproval, decision: "approve" | "deny") => {
     if (!connection) return
@@ -586,7 +649,14 @@ export default function HomeScreen() {
   }, [connection, load, readSessionApprovals, readSessionMessages, selectedSessionID])
 
   const handleModelSelection = useCallback(async (modelValue: string | null) => {
-    if (!connection || !selectedSessionID) return
+    if (!connection) return
+    if (!selectedSessionID) {
+      const nextSelection = applyPrimaryModelSelection(draftModelSelectionRef.current, modelValue)
+      setDraftModelSelection(nextSelection)
+      setModelSelection(nextSelection)
+      setModelError(null)
+      return
+    }
     const previousSelection = modelSelection
     setSavingModel(true)
     setModelError(null)
@@ -608,19 +678,34 @@ export default function HomeScreen() {
 
   const handleAnswerQuestion = useCallback(async (answer: {
     questionID: string
+    text: string
     selectedOptions?: string[]
     freeformText?: string
   }) => {
     if (!connection || !selectedSessionID) return
     setAnsweringQuestionID(answer.questionID)
     setMessageError(null)
+    const { text, ...structuredAnswer } = answer
     try {
-      await answerSessionQuestion(connection, selectedSessionID, answer)
+      await answerSessionQuestion(connection, selectedSessionID, structuredAnswer)
       await Promise.all([
         readSessionMessages(selectedSessionID).catch(() => undefined),
         load({ silent: true }).catch(() => undefined),
       ])
     } catch (answerError) {
+      if (answerError instanceof MobileApiError && answerError.code === "QUESTION_NOT_WAITING" && text.trim()) {
+        try {
+          await sendPrompt(connection, selectedSessionID, text.trim())
+          await Promise.all([
+            readSessionMessages(selectedSessionID).catch(() => undefined),
+            load({ silent: true }).catch(() => undefined),
+          ])
+          return
+        } catch (fallbackError) {
+          setMessageError(fallbackError instanceof Error ? fallbackError.message : "Unable to send answer.")
+          return
+        }
+      }
       setMessageError(answerError instanceof Error ? answerError.message : "Unable to answer question.")
     } finally {
       setAnsweringQuestionID(null)
@@ -641,62 +726,125 @@ export default function HomeScreen() {
 
     setSending(true)
     setDraft("")
-    const anchorMessageID = messages.at(-1)?.info?.id ?? null
-    setPendingPrompt({ id: `local-${Date.now()}`, text, anchorMessageID })
-    const streamID = `stream-${Date.now()}`
-    setStreamingAssistant({ id: streamID, segments: [], anchorMessageID })
+    const lastMessage = messages.length ? messages[messages.length - 1] : undefined
+    const anchorMessageID = lastMessage?.info?.id ?? null
+    const createdAt = Date.now()
+    const promptID = `local-${createdAt}`
+    const streamID = `stream-${createdAt}`
     setMessageError(null)
+    let targetSessionID = focusedSession?.id
+    const draftSelectionForNewSession = targetSessionID ? null : draftModelSelectionRef.current
 
     try {
-      let targetSessionID = focusedSession?.id
       if (!targetSessionID) {
         const session = await createSession(connection, focusedWorkspace.id, {
           title: buildSessionTitle(text, t("home.mobileChat")),
         })
         targetSessionID = session.id
+        selectedSessionIDRef.current = session.id
+        setDraftWorkspaceID(null)
+        setDraftModelSelection({})
         setOptimisticSession({ session, workspaceID: focusedWorkspace.id })
+        setMessages([])
         setSessionApprovals([])
         await focus.setFocus({ workspaceID: focusedWorkspace.id, sessionID: session.id })
+        const draftModel = draftSelectionForNewSession?.model?.trim()
+        if (draftModel) {
+          try {
+            const nextSelection = await updateSessionModelSelection(connection, session.id, { model: draftModel })
+            setModelSelection(nextSelection)
+          } catch (saveError) {
+            setModelSelection({})
+            setModelError(saveError instanceof Error ? saveError.message : "Unable to update model.")
+          }
+        }
         await load({ silent: true })
       }
 
-      await sendPrompt(connection, targetSessionID, text, {
+      const streamSessionID = targetSessionID
+      setActiveStream({
+        sessionID: streamSessionID,
+        anchorMessageID,
+        createdAt,
+        updatedAt: createdAt,
+        status: "streaming",
+        prompt: {
+          id: promptID,
+          text,
+        },
+        assistant: {
+          id: streamID,
+          segments: [],
+        },
+      })
+
+      await sendPrompt(connection, streamSessionID, text, {
         onEvent: (event) => {
-          setStreamingAssistant((current) => {
-            const currentSegments = current?.segments ?? []
+          setActiveStream((current) => {
+            if (!current || current.sessionID !== streamSessionID) return current
+            const currentSegments = current.assistant.segments
             const nextSegments = applyMobileStreamToolEvent(currentSegments, event)
             if (nextSegments === currentSegments) return current
             return {
-              id: current?.id ?? streamID,
-              segments: nextSegments,
-              anchorMessageID: current?.anchorMessageID ?? anchorMessageID,
+              ...current,
+              updatedAt: Date.now(),
+              status: current.status === "error" ? current.status : "streaming",
+              assistant: {
+                ...current.assistant,
+                segments: nextSegments,
+              },
             }
           })
-          void readSessionMessages(targetSessionID).catch(() => undefined)
         },
         onOpen: () => {
           setSending(false)
         },
-        onTextDelta: ({ kind, delta }) => {
-          setStreamingAssistant((current) => ({
-            id: current?.id ?? streamID,
-            segments: appendMessageContentSegment(
-              current?.segments ?? [],
-              kind === "reasoning" ? "reasoning" : "response",
-              delta,
-            ),
-            anchorMessageID: current?.anchorMessageID ?? anchorMessageID,
-          }))
+        onTextDelta: ({ kind, delta, sourceID }) => {
+          setActiveStream((current) => {
+            if (!current || current.sessionID !== streamSessionID) return current
+            return {
+              ...current,
+              updatedAt: Date.now(),
+              status: current.status === "error" ? current.status : "streaming",
+              assistant: {
+                ...current.assistant,
+                segments: appendMessageContentSegment(
+                  current.assistant.segments,
+                  kind === "reasoning" ? "reasoning" : "response",
+                  delta,
+                  sourceID,
+                ),
+              },
+            }
+          })
         },
       })
-      setPendingPrompt(null)
-      setStreamingAssistant(null)
-      await readSessionMessages(targetSessionID)
+      setActiveStream((current) => (
+        current?.sessionID === streamSessionID
+          ? { ...current, status: "settling", updatedAt: Date.now() }
+          : current
+      ))
+      try {
+        await readSessionMessages(streamSessionID)
+        setActiveStream((current) => (current?.sessionID === streamSessionID ? null : current))
+      } catch (refreshError) {
+        const message = refreshError instanceof Error ? refreshError.message : "Unable to refresh conversation."
+        setActiveStream((current) => (
+          current?.sessionID === streamSessionID
+            ? { ...current, status: "error", updatedAt: Date.now(), error: message }
+            : current
+        ))
+        setMessageError(message)
+      }
     } catch (sendError) {
-      setPendingPrompt(null)
-      setStreamingAssistant(null)
       setDraft(text)
-      setMessageError(sendError instanceof Error ? sendError.message : "Unable to send prompt.")
+      const message = sendError instanceof Error ? sendError.message : "Unable to send prompt."
+      setActiveStream((current) => (
+        targetSessionID && current?.sessionID === targetSessionID
+          ? { ...current, status: "error", updatedAt: Date.now(), error: message }
+          : null
+      ))
+      setMessageError(message)
     } finally {
       setSending(false)
     }
@@ -784,6 +932,7 @@ export default function HomeScreen() {
             messages={visibleMessages}
             messagesLoading={messagesLoading}
             modelError={modelError}
+            modelSelectionEnabled={Boolean(focusedWorkspace)}
             modelOptions={modelOptions}
             modelsLoading={modelsLoading}
             onApproveApproval={(approval) => void handleApprovalDecision(approval, "approve")}

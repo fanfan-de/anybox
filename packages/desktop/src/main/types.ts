@@ -1594,12 +1594,17 @@ export interface AgentPluginOAuthAppCredential {
 
 export type AgentPluginAppCredential = AgentPluginApiKeyAppCredential | AgentPluginOAuthAppCredential
 
-export interface AgentPluginPackageDownload {
-  type: "zip"
-  url?: string
-  sha256?: string
-  size?: number
-}
+export type AgentPluginPackageDownload =
+  | {
+    type: "zip"
+    url?: string
+    sha256?: string
+    size?: number
+  }
+  | {
+    type: "github-tree"
+    url: string
+  }
 
 export interface AgentPluginLocalizedText {
   "en-US"?: string

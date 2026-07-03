@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import { getAgentSessionBridge } from "../agent-session/client"
 import { Composer } from "../composer/Composer"
 import { ComposerConcurrentInputDrawer } from "../composer/ComposerConcurrentInputDrawer"
+import { appendTextToComposerDraftState } from "../composer/draft-state"
 import { DiffPreview } from "../diff/DiffPreview"
 import {
   ChangesIcon,
@@ -107,6 +108,7 @@ interface ThreadViewProps {
   pendingPermissionRequests: PermissionRequest[]
   permissionRequestActionError: string | null
   permissionRequestActionRequestID: string | null
+  onAddToComposer?: (text: string) => void | Promise<void>
   sideChatCountsByAnchorMessageID: Record<string, number>
   sideChatSession?: SessionSummary | null
   scrollStateKey?: string | null
@@ -133,6 +135,8 @@ const THREAD_AUTO_COLLAPSE_MOTION_MS = 240
 const TRACE_REASONING_PREVIEW_CHARACTER_LIMIT = 480
 const TRACE_PATCH_PREVIEW_CHARACTER_LIMIT = 20000
 const TRACE_PATCH_PREVIEW_LINE_LIMIT = 200
+const THREAD_COPY_CONTEXT_MENU_WIDTH = 184
+const THREAD_COPY_CONTEXT_MENU_HEIGHT = 82
 
 interface LatestAssistantMessageState {
   id: string
@@ -149,8 +153,18 @@ type PatchPreviewState = "summary" | "preview" | "full"
 
 type ImagePreviewFitMode = "fit-width" | "fit-contain"
 
+type ThreadCopyContextMenuKind = "assistant" | "user" | "selection"
+
 interface ActiveImagePreview extends ImagePreviewPayload {
   openedAt: number
+}
+
+interface ThreadCopyContextMenuState {
+  kind: ThreadCopyContextMenuKind
+  messageID: string | null
+  text: string
+  x: number
+  y: number
 }
 
 function clampImageZoom(value: number) {
@@ -227,6 +241,62 @@ function getStreamingResponseScrollTarget(threadColumn: HTMLDivElement): ThreadF
 
 function isSidebarResizeInProgress() {
   return typeof document !== "undefined" && document.body.classList.contains("is-resizing-sidebar")
+}
+
+function clampThreadCopyContextMenuPosition(x: number, y: number) {
+  if (typeof window === "undefined") return { x, y }
+
+  return {
+    x: Math.min(Math.max(8, x), Math.max(8, window.innerWidth - THREAD_COPY_CONTEXT_MENU_WIDTH - 8)),
+    y: Math.min(Math.max(8, y), Math.max(8, window.innerHeight - THREAD_COPY_CONTEXT_MENU_HEIGHT - 8)),
+  }
+}
+
+function getThreadCopyContextMenuCoordinates(event: ReactMouseEvent<HTMLElement>) {
+  if (event.clientX || event.clientY) {
+    return clampThreadCopyContextMenuPosition(event.clientX, event.clientY)
+  }
+
+  const rect = event.currentTarget.getBoundingClientRect()
+  return clampThreadCopyContextMenuPosition(rect.left + 12, rect.top + 12)
+}
+
+function nodeIsInsideElement(node: Node | null, element: HTMLElement) {
+  if (!node) return false
+  if (node === element) return true
+  return element.contains(node)
+}
+
+function selectionIntersectsThreadElement(selection: Selection, element: HTMLElement) {
+  for (let index = 0; index < selection.rangeCount; index += 1) {
+    const range = selection.getRangeAt(index)
+    const commonAncestor =
+      range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+        ? range.commonAncestorContainer
+        : range.commonAncestorContainer.parentNode
+    if (nodeIsInsideElement(commonAncestor, element)) return true
+
+    if (typeof range.intersectsNode === "function") {
+      try {
+        if (range.intersectsNode(element)) return true
+      } catch {
+        // Detached ranges can be ignored; another range may still intersect the thread.
+      }
+    }
+  }
+
+  return false
+}
+
+function readSelectedThreadText(threadColumn: HTMLDivElement) {
+  if (typeof window === "undefined") return ""
+
+  const selection = window.getSelection()
+  const selectedText = selection?.toString().trim() ?? ""
+  if (!selection || selection.isCollapsed || !selectedText) return ""
+  if (!selectionIntersectsThreadElement(selection, threadColumn)) return ""
+
+  return selectedText
 }
 
 function CollapsibleUserMessageText({
@@ -1607,6 +1677,10 @@ export function SideChatThread({
     }
   }
 
+  function handleAddTextToComposer(text: string) {
+    onDraftStateChange(appendTextToComposerDraftState(draftState, text))
+  }
+
   return (
     <section
       className={joinClassNames("inline-side-chat-thread", variant === "sidebar" && "is-sidebar")}
@@ -1720,6 +1794,7 @@ export function SideChatThread({
             }
             onArtifactLinkOpen={onArtifactLinkOpen}
             onLocalFileLinkOpen={onLocalFileLinkOpen}
+            onAddToComposer={handleAddTextToComposer}
             onPermissionRequestResponse={onPermissionRequestResponse}
           />
         ) : null}
@@ -4336,6 +4411,7 @@ function VisibleThreadView({
   onMessageDiffSummaryHydrate,
   onMessageDiffRestore,
   onMessageDiffReview,
+  onAddToComposer,
   onAskUserQuestionAnswer,
   pendingConversationInputs = [],
   pendingPermissionRequests,
@@ -4371,9 +4447,11 @@ function VisibleThreadView({
   })
   const [copiedResponseMessageID, setCopiedResponseMessageID] = useState<string | null>(null)
   const [copiedUserThreadMessageID, setCopiedUserThreadMessageID] = useState<string | null>(null)
+  const [threadCopyContextMenu, setThreadCopyContextMenu] = useState<ThreadCopyContextMenuState | null>(null)
   const [activeImagePreview, setActiveImagePreview] = useState<ActiveImagePreview | null>(null)
   const copiedResponseTimeoutRef = useRef<number | null>(null)
   const copiedUserTimeoutRef = useRef<number | null>(null)
+  const threadCopyContextMenuRef = useRef<HTMLDivElement | null>(null)
   const observedContentScrollSyncRef = useRef<((key?: string) => void) | null>(null)
   const latestAssistantMessageStateRef = useRef<LatestAssistantMessageState | null>(null)
   const previousActiveMessageCountRef = useRef(activeMessages.length)
@@ -4413,6 +4491,24 @@ function VisibleThreadView({
     () => displayMessages.map((message) => message.id),
     [displayMessages],
   )
+  const threadCopyTargets = useMemo(() => {
+    const assistant = new Map<string, string>()
+    const user = new Map<string, string>()
+
+    for (const row of displayRows) {
+      if (row.kind === "assistant-actions" && row.responseCopyText) {
+        assistant.set(row.ownerMessageID, row.responseCopyText)
+      } else if (row.kind === "user-message") {
+        const text = getUserMessageBodyText(row.message).trim()
+        if (text) user.set(row.message.id, text)
+      } else if (row.kind === "assistant-inserted-user-message") {
+        const text = getUserMessageBodyText(row.insertedMessage).trim()
+        if (text) user.set(row.insertedMessage.id, text)
+      }
+    }
+
+    return { assistant, user }
+  }, [displayRows])
   const newDisplayMessageIDs = useMemo(() => {
     const previousMessageIDs = previousDisplayMessageIDsByScrollKeyRef.current[effectiveScrollStateKey]
     if (!previousMessageIDs) return new Set<string>()
@@ -4514,6 +4610,38 @@ function VisibleThreadView({
     }
   }, [])
 
+  useEffect(() => {
+    if (!threadCopyContextMenu) return
+
+    function closeThreadCopyContextMenu() {
+      setThreadCopyContextMenu(null)
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target
+      if (target instanceof Node && threadCopyContextMenuRef.current?.contains(target)) return
+      closeThreadCopyContextMenu()
+    }
+
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeThreadCopyContextMenu()
+      }
+    }
+
+    const threadColumn = threadColumnRef.current
+    window.addEventListener("pointerdown", handlePointerDown)
+    window.addEventListener("keydown", handleKeyDown)
+    window.addEventListener("blur", closeThreadCopyContextMenu)
+    threadColumn?.addEventListener("scroll", closeThreadCopyContextMenu, { passive: true })
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown)
+      window.removeEventListener("keydown", handleKeyDown)
+      window.removeEventListener("blur", closeThreadCopyContextMenu)
+      threadColumn?.removeEventListener("scroll", closeThreadCopyContextMenu)
+    }
+  }, [threadColumnRef, threadCopyContextMenu])
+
   const handleCopyAssistantResponse = useEffectEvent(async (messageID: string, text: string) => {
     try {
       await writeTextToClipboard(text)
@@ -4549,6 +4677,101 @@ function VisibleThreadView({
       console.error("[desktop] Failed to copy user message:", error)
     }
   })
+
+  const handleCopySelectedThreadText = useEffectEvent(async (text: string) => {
+    try {
+      await writeTextToClipboard(text)
+    } catch (error) {
+      console.error("[desktop] Failed to copy selected thread text:", error)
+    }
+  })
+
+  function handleThreadContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
+    if (event.defaultPrevented) return
+
+    const threadColumn = threadColumnRef.current
+    if (!threadColumn) return
+
+    const selectedText = readSelectedThreadText(threadColumn)
+    const position = getThreadCopyContextMenuCoordinates(event)
+
+    if (selectedText) {
+      event.preventDefault()
+      event.stopPropagation()
+      setThreadCopyContextMenu({
+        kind: "selection",
+        messageID: null,
+        text: selectedText,
+        ...position,
+      })
+      return
+    }
+
+    let messageElement: HTMLElement | null = null
+    const eventPath = typeof event.nativeEvent.composedPath === "function"
+      ? event.nativeEvent.composedPath()
+      : [event.target]
+    for (const target of eventPath) {
+      if (!(target instanceof Element)) continue
+      const candidate = target.closest<HTMLElement>("[data-thread-message-id][data-thread-row-kind]")
+      if (candidate && threadColumn.contains(candidate)) {
+        messageElement = candidate
+        break
+      }
+    }
+
+    const messageID = messageElement?.dataset.threadMessageId
+    const rowKind = messageElement?.dataset.threadRowKind
+    if (!messageID || !rowKind) return
+
+    const userText = threadCopyTargets.user.get(messageID)
+    if (userText && (rowKind === "user-message" || rowKind === "assistant-inserted-user-message")) {
+      event.preventDefault()
+      event.stopPropagation()
+      setThreadCopyContextMenu({
+        kind: "user",
+        messageID,
+        text: userText,
+        ...position,
+      })
+      return
+    }
+
+    const assistantText = threadCopyTargets.assistant.get(messageID)
+    if (assistantText && (rowKind === "assistant-response-row" || rowKind === "assistant-actions")) {
+      event.preventDefault()
+      event.stopPropagation()
+      setThreadCopyContextMenu({
+        kind: "assistant",
+        messageID,
+        text: assistantText,
+        ...position,
+      })
+    }
+  }
+
+  async function handleThreadCopyContextMenuCopy(menu: ThreadCopyContextMenuState) {
+    setThreadCopyContextMenu(null)
+
+    if (menu.kind === "selection") {
+      await handleCopySelectedThreadText(menu.text)
+      return
+    }
+
+    if (menu.kind === "assistant" && menu.messageID) {
+      await handleCopyAssistantResponse(menu.messageID, menu.text)
+      return
+    }
+
+    if (menu.kind === "user" && menu.messageID) {
+      await handleCopyUserMessage(menu.messageID, menu.text)
+    }
+  }
+
+  async function handleThreadCopyContextMenuAddToComposer(menu: ThreadCopyContextMenuState) {
+    setThreadCopyContextMenu(null)
+    await onAddToComposer?.(menu.text)
+  }
 
   const handleOpenImagePreview = useEffectEvent((payload: ImagePreviewPayload) => {
     if (!payload.src) return
@@ -4745,6 +4968,7 @@ function VisibleThreadView({
         onKeyDownCapture={handleThreadKeyDownIntent}
         onPointerDownCapture={handleThreadScrollIntent}
         onPointerMoveCapture={handleThreadPointerMoveIntent}
+        onContextMenu={handleThreadContextMenu}
         onScroll={handleThreadScroll}
         onWheelCapture={handleThreadWheelIntent}
       >
@@ -4785,6 +5009,44 @@ function VisibleThreadView({
           />
         )}
       </div>
+      {threadCopyContextMenu
+        ? createPortal(
+            <div
+              ref={threadCopyContextMenuRef}
+              className="thread-copy-context-menu"
+              role="menu"
+              aria-label="Thread copy actions"
+              style={{ left: threadCopyContextMenu.x, top: threadCopyContextMenu.y }}
+              onContextMenu={(event) => event.preventDefault()}
+            >
+              <button
+                className="thread-copy-context-menu-item"
+                type="button"
+                role="menuitem"
+                onClick={() => void handleThreadCopyContextMenuCopy(threadCopyContextMenu)}
+              >
+                <span className="thread-copy-context-menu-icon" aria-hidden="true">
+                  <CopyIcon />
+                </span>
+                <span className="thread-copy-context-menu-label">复制</span>
+              </button>
+              {onAddToComposer ? (
+                <button
+                  className="thread-copy-context-menu-item"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => void handleThreadCopyContextMenuAddToComposer(threadCopyContextMenu)}
+                >
+                  <span className="thread-copy-context-menu-icon" aria-hidden="true">
+                    <PlusIcon />
+                  </span>
+                  <span className="thread-copy-context-menu-label">加入 Composer</span>
+                </button>
+              ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
       {activeImagePreview
         ? createPortal(
             <ImageLightbox

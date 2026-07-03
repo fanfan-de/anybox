@@ -286,6 +286,7 @@ export type MobileStreamTextDeltaKind = "text" | "reasoning"
 export interface MobileStreamTextDelta {
   kind: MobileStreamTextDeltaKind
   delta: string
+  sourceID?: string
 }
 
 export interface MobileStreamCallbacks {
@@ -634,6 +635,13 @@ export async function getSessionModels(connection: MobileConnection, sessionID: 
   return requestMobile<MobileSessionModelsResult>(
     connection,
     `/api/mobile/sessions/${encodeURIComponent(sessionID)}/models`,
+  )
+}
+
+export async function getWorkspaceModels(connection: MobileConnection, workspaceID: string) {
+  return requestMobile<MobileSessionModelsResult>(
+    connection,
+    `/api/mobile/workspaces/${encodeURIComponent(workspaceID)}/models`,
   )
 }
 
@@ -1059,6 +1067,7 @@ function readMobileStreamTextDelta(event: MobileStreamEvent): MobileStreamTextDe
   return {
     kind: data.type === "reasoning.part.delta" ? "reasoning" : "text",
     delta: payload.delta,
+    sourceID: typeof payload.partID === "string" && payload.partID.trim() ? payload.partID : undefined,
   }
 }
 

@@ -1,11 +1,5 @@
 import type { MobileMessage, MobileStreamEvent } from "@/api/mobile-api"
 
-export interface PendingPromptOverlay {
-  id: string
-  text: string
-  anchorMessageID?: string | null
-}
-
 export type AssistantTextContentKind = "reasoning" | "response"
 export type AssistantContentKind = AssistantTextContentKind | "tool"
 export type MessageToolStatus = "pending" | "running" | "waiting-approval" | "completed" | "failed" | "denied" | "cancelled" | "unknown"
@@ -13,6 +7,8 @@ export type MessageToolStatus = "pending" | "running" | "waiting-approval" | "co
 export interface MessageTextContentSegment {
   kind: AssistantTextContentKind
   text: string
+  sourceID?: string
+  sequence?: number
 }
 
 export interface MessageToolContentSegment {
@@ -28,6 +24,8 @@ export interface MessageToolContentSegment {
   error?: string
   reason?: string
   rawInput?: string
+  sourceID?: string
+  sequence?: number
 }
 
 export type MessageContentSegment = MessageTextContentSegment | MessageToolContentSegment
@@ -54,10 +52,23 @@ export interface MobileQuestionPrompt {
   answeredAt?: number
 }
 
-export interface StreamingAssistantOverlay {
-  id: string
-  segments: MessageContentSegment[]
+export type ActiveStreamStatus = "streaming" | "settling" | "error"
+
+export interface ActiveMobileStream {
+  sessionID: string
   anchorMessageID?: string | null
+  createdAt: number
+  updatedAt: number
+  status: ActiveStreamStatus
+  error?: string
+  prompt: {
+    id: string
+    text: string
+  }
+  assistant: {
+    id: string
+    segments: MessageContentSegment[]
+  }
 }
 
 export function messageRole(message: MobileMessage) {
@@ -85,6 +96,56 @@ export function messageHasVisibleContent(message: MobileMessage) {
   return Boolean(messageText(message).trim())
 }
 
+export function orderMobileMessagesForDisplay(messages: MobileMessage[]) {
+  const dedupedMessages = new Map<string, { index: number; message: MobileMessage }>()
+  const anonymousMessages: Array<{ index: number; message: MobileMessage }> = []
+
+  messages.forEach((message, index) => {
+    const id = message.info?.id
+    if (!id) {
+      anonymousMessages.push({ index, message })
+      return
+    }
+
+    const previous = dedupedMessages.get(id)
+    if (!previous) {
+      dedupedMessages.set(id, { index, message })
+      return
+    }
+
+    const previousUpdated = readNumber(previous.message.info?.updated) ?? readNumber(previous.message.info?.created) ?? previous.index
+    const nextUpdated = readNumber(message.info?.updated) ?? readNumber(message.info?.created) ?? index
+    if (nextUpdated >= previousUpdated) {
+      dedupedMessages.set(id, { index: previous.index, message })
+    }
+  })
+
+  return [...dedupedMessages.values(), ...anonymousMessages]
+    .sort((left, right) => {
+      const leftCreated = readNumber(left.message.info?.created)
+      const rightCreated = readNumber(right.message.info?.created)
+      const leftHasCreated = leftCreated !== undefined
+      const rightHasCreated = rightCreated !== undefined
+
+      if (leftHasCreated && rightHasCreated && leftCreated !== rightCreated) {
+        return leftCreated - rightCreated
+      }
+
+      if (leftHasCreated !== rightHasCreated) {
+        return leftHasCreated ? -1 : 1
+      }
+
+      const leftUpdated = readNumber(left.message.info?.updated)
+      const rightUpdated = readNumber(right.message.info?.updated)
+      if (leftUpdated !== undefined && rightUpdated !== undefined && leftUpdated !== rightUpdated) {
+        return leftUpdated - rightUpdated
+      }
+
+      return left.index - right.index
+    })
+    .map(({ message }) => message)
+}
+
 export function extractText(value: unknown): string {
   if (typeof value === "string") return value
   if (Array.isArray(value)) return value.map(extractText).filter(Boolean).join("\n")
@@ -98,20 +159,102 @@ export function extractText(value: unknown): string {
   return ""
 }
 
+function nextSegmentSequence(segments: MessageContentSegment[]) {
+  return segments.reduce((max, segment, index) => {
+    const sequence = segment.sequence ?? index
+    return sequence > max ? sequence : max
+  }, -1) + 1
+}
+
+function orderMessageContentSegments(segments: MessageContentSegment[]) {
+  return segments
+    .map((segment, index) => ({ index, segment }))
+    .sort((left, right) => {
+      const sourceOrder = compareSegmentSourceID(left.segment.sourceID, right.segment.sourceID)
+      if (sourceOrder !== 0) return sourceOrder
+
+      const leftSequence = left.segment.sequence ?? left.index
+      const rightSequence = right.segment.sequence ?? right.index
+      if (leftSequence !== rightSequence) return leftSequence - rightSequence
+
+      return left.index - right.index
+    })
+    .map(({ segment }) => segment)
+}
+
+function compareSegmentSourceID(left: string | undefined, right: string | undefined) {
+  if (!left || !right || left === right) return 0
+  return compareNaturalIdentifier(left, right)
+}
+
+function compareNaturalIdentifier(left: string, right: string) {
+  if (/^[a-z]+_[0-9a-f]{12}/i.test(left) && /^[a-z]+_[0-9a-f]{12}/i.test(right)) {
+    return left < right ? -1 : left > right ? 1 : 0
+  }
+
+  const leftParts = left.match(/\d+|\D+/g) ?? [left]
+  const rightParts = right.match(/\d+|\D+/g) ?? [right]
+  const length = Math.max(leftParts.length, rightParts.length)
+
+  for (let index = 0; index < length; index += 1) {
+    const leftPart = leftParts[index]
+    const rightPart = rightParts[index]
+    if (leftPart === undefined) return -1
+    if (rightPart === undefined) return 1
+    if (leftPart === rightPart) continue
+
+    const leftNumber = readSafeNaturalNumber(leftPart)
+    const rightNumber = readSafeNaturalNumber(rightPart)
+    if (leftNumber !== undefined && rightNumber !== undefined && leftNumber !== rightNumber) {
+      return leftNumber - rightNumber
+    }
+
+    return leftPart < rightPart ? -1 : 1
+  }
+
+  return 0
+}
+
+function readSafeNaturalNumber(value: string) {
+  if (!/^\d+$/.test(value)) return undefined
+  if (value.length > 12) return undefined
+  const number = Number(value)
+  return Number.isSafeInteger(number) ? number : undefined
+}
+
 export function appendMessageContentSegment(
   segments: MessageContentSegment[],
   kind: AssistantTextContentKind,
   text: string,
+  sourceID?: string,
 ): MessageContentSegment[] {
   if (!text) return segments
-  const last = segments.at(-1)
-  if (last?.kind === kind) {
+  if (sourceID) {
+    const index = segments.findIndex((segment) => segment.kind === kind && segment.sourceID === sourceID)
+    if (index >= 0) {
+      const previous = segments[index] as MessageTextContentSegment
+      const next = [
+        ...segments.slice(0, index),
+        { ...previous, text: `${previous.text}${text}` },
+        ...segments.slice(index + 1),
+      ]
+      return orderMessageContentSegments(next)
+    }
+
+    return orderMessageContentSegments([
+      ...segments,
+      { kind, text, sourceID, sequence: nextSegmentSequence(segments) },
+    ])
+  }
+
+  const last = segments.length ? segments[segments.length - 1] : undefined
+  if (last?.kind === kind && !last.sourceID) {
     return [
       ...segments.slice(0, -1),
       { ...last, text: `${last.text}${text}` },
     ]
   }
-  return [...segments, { kind, text }]
+  return [...segments, { kind, text, sequence: nextSegmentSequence(segments) }]
 }
 
 export function applyMobileStreamToolEvent(segments: MessageContentSegment[], event: MobileStreamEvent): MessageContentSegment[] {
@@ -120,57 +263,55 @@ export function applyMobileStreamToolEvent(segments: MessageContentSegment[], ev
 
   const index = segments.findIndex((segment) => segment.kind === "tool" && segment.callID === update.callID)
   const previous = index >= 0 ? segments[index] as MessageToolContentSegment : undefined
-  const next = mergeToolSegmentUpdate(previous, update)
+  const next = {
+    ...mergeToolSegmentUpdate(previous, update),
+    sequence: previous?.sequence ?? nextSegmentSequence(segments),
+  }
 
   if (index >= 0) {
-    return [
+    return orderMessageContentSegments([
       ...segments.slice(0, index),
       next,
       ...segments.slice(index + 1),
-    ]
+    ])
   }
 
-  return [...segments, next]
+  return orderMessageContentSegments([...segments, next])
 }
 
-export function mergeOptimisticMessages(
+export function mergeActiveStreamMessages(
   messages: MobileMessage[],
-  pendingPrompt: PendingPromptOverlay | null,
-  streamingAssistant: StreamingAssistantOverlay | null,
+  activeStream: ActiveMobileStream | null,
 ) {
-  const nextMessages = [...messages]
-  const searchStart = pendingPrompt
-    ? findOverlaySearchStart(nextMessages, pendingPrompt.anchorMessageID, 0)
-    : findOverlaySearchStart(nextMessages, streamingAssistant?.anchorMessageID, nextMessages.length)
-  let promptIndex = -1
+  const nextMessages = orderMobileMessagesForDisplay(messages)
+  if (!activeStream) return nextMessages
 
-  if (pendingPrompt) {
-    const pendingText = normalizeMessageText(pendingPrompt.text)
-    promptIndex = nextMessages.findIndex((message, index) => (
-      index >= searchStart &&
-      messageRole(message) === "user" &&
-      normalizeMessageText(extractText(message.parts)) === pendingText
-    ))
+  const searchStart = findOverlaySearchStart(nextMessages, activeStream.anchorMessageID, nextMessages.length)
+  const promptText = normalizeMessageText(activeStream.prompt.text)
+  let promptIndex = findActivePromptIndex(nextMessages, searchStart, promptText)
 
-    if (promptIndex === -1) {
-      promptIndex = nextMessages.length
-      nextMessages.push(createOverlayMessage(pendingPrompt.id, "user", pendingPrompt.text))
-    }
+  if (promptIndex === -1) {
+    promptIndex = searchStart
+    nextMessages.splice(
+      promptIndex,
+      0,
+      createOverlayMessage(activeStream.prompt.id, "user", activeStream.prompt.text, activeStream.createdAt),
+    )
   }
 
-  if (streamingAssistant) {
-    const assistantSearchStart = promptIndex >= 0 ? promptIndex + 1 : searchStart
-    const assistantIndex = nextMessages.findIndex((message, index) => (
-      index >= assistantSearchStart &&
-      messageRole(message) === "assistant"
-    ))
-    const assistantMessage = createAssistantOverlayMessage(streamingAssistant.id, streamingAssistant.segments)
+  const assistantMessage = createAssistantOverlayMessage(
+    activeStream.assistant.id,
+    activeStream.assistant.segments,
+    activeStream.status,
+    activeStream.createdAt + 1,
+    activeStream.updatedAt,
+  )
+  const assistantIndex = findActiveAssistantIndex(nextMessages, promptIndex + 1)
 
-    if (assistantIndex >= 0) {
-      nextMessages[assistantIndex] = assistantMessage
-    } else {
-      nextMessages.push(assistantMessage)
-    }
+  if (assistantIndex >= 0) {
+    nextMessages[assistantIndex] = assistantMessage
+  } else {
+    nextMessages.splice(promptIndex + 1, 0, assistantMessage)
   }
 
   return nextMessages satisfies MobileMessage[]
@@ -183,27 +324,49 @@ function findOverlaySearchStart(messages: MobileMessage[], anchorMessageID: stri
   return anchorIndex >= 0 ? anchorIndex + 1 : fallback
 }
 
-function createOverlayMessage(id: string, role: "user" | "assistant", text: string): MobileMessage {
-  const now = Date.now()
+function findActivePromptIndex(messages: MobileMessage[], searchStart: number, promptText: string) {
+  return messages.findIndex((message, index) => (
+    index >= searchStart &&
+    messageRole(message) === "user" &&
+    normalizeMessageText(extractText(message.parts)) === promptText
+  ))
+}
+
+function findActiveAssistantIndex(messages: MobileMessage[], searchStart: number) {
+  for (let index = searchStart; index < messages.length; index += 1) {
+    const role = messageRole(messages[index]!)
+    if (role === "assistant") return index
+    if (role === "user") return -1
+  }
+  return -1
+}
+
+function createOverlayMessage(id: string, role: "user" | "assistant", text: string, createdAt: number): MobileMessage {
   return {
     info: {
       id,
       role,
-      created: now,
-      updated: now,
+      created: createdAt,
+      updated: createdAt,
     },
     parts: [{ type: "text", text }],
   }
 }
 
-function createAssistantOverlayMessage(id: string, segments: MessageContentSegment[]): MobileMessage {
-  const now = Date.now()
+function createAssistantOverlayMessage(
+  id: string,
+  segments: MessageContentSegment[],
+  status: ActiveStreamStatus,
+  createdAt: number,
+  updatedAt: number,
+): MobileMessage {
   const parts = segments
     .map((segment) => (
       segment.kind === "tool"
-        ? toolSegmentToPart(id, segment, now)
+        ? toolSegmentToPart(id, segment, updatedAt)
         : segment.text
           ? {
+              ...(segment.sourceID ? { id: segment.sourceID } : {}),
               type: segment.kind === "reasoning" ? "reasoning" : "text",
               text: segment.text,
             }
@@ -214,10 +377,10 @@ function createAssistantOverlayMessage(id: string, segments: MessageContentSegme
   return {
     info: {
       id,
-      pending: true,
+      pending: status !== "error",
       role: "assistant",
-      created: now,
-      updated: now,
+      created: createdAt,
+      updated: updatedAt,
     },
     parts: parts.length ? parts : [{ type: "text", text: "..." }],
   }
@@ -235,11 +398,18 @@ function extractContentSegments(value: unknown, fallbackKind: AssistantContentKi
   if (!value || typeof value !== "object") return []
 
   const record = value as Record<string, unknown>
+  if (isNonDisplayablePartPayload(record)) return []
   const toolSegment = extractToolSegment(record)
   if (toolSegment) return [toolSegment]
   const kind = contentKind(record, fallbackKind)
   const directText = directRecordText(record)
-  if (directText && kind !== "tool") return [{ kind, text: directText }]
+  if (directText && kind !== "tool") {
+    return [{
+      kind,
+      text: directText,
+      sourceID: readString(record.id) || readString(record.partID) || undefined,
+    }]
+  }
   if (Array.isArray(record.parts)) return extractContentSegments(record.parts, kind)
   if (Array.isArray(record.content)) return extractContentSegments(record.content, kind)
   return []
@@ -263,7 +433,7 @@ function mergeAdjacentSegments(segments: MessageContentSegment[]) {
   return segments.reduce<MessageContentSegment[]>((result, segment) => (
     segment.kind === "tool"
       ? [...result, segment]
-      : appendMessageContentSegment(result, segment.kind, segment.text)
+      : appendMessageContentSegment(result, segment.kind, segment.text, segment.sourceID)
   ), [])
 }
 
@@ -289,6 +459,7 @@ function isNonDisplayablePartPayload(value: unknown): boolean {
 
 interface ToolSegmentUpdate {
   callID: string
+  sourceID?: string
   tool?: string
   status?: MessageToolStatus
   title?: string
@@ -318,6 +489,7 @@ function readMobileStreamToolUpdate(event: MobileStreamEvent): ToolSegmentUpdate
     return {
       callID,
       inputDelta: delta,
+      sourceID: readString(payload.partID) || undefined,
       status: "pending",
       tool: readString(payload.toolName) || undefined,
     }
@@ -337,6 +509,7 @@ function readMobileStreamToolUpdate(event: MobileStreamEvent): ToolSegmentUpdate
     questionPrompt: readAskUserQuestionPrompt(state?.metadata) ?? undefined,
     rawInput: readString(state?.raw) || undefined,
     reason: readString(state?.reason) || undefined,
+    sourceID: readString(part.id) || readString(payload.partID) || undefined,
     status,
     title: readString(state?.title) || undefined,
     tool: readString(part.tool) || undefined,
@@ -352,6 +525,7 @@ function mergeToolSegmentUpdate(previous: MessageToolContentSegment | undefined,
   const next: MessageToolContentSegment = {
     kind: "tool",
     callID: update.callID,
+    sourceID: update.sourceID ?? previous?.sourceID,
     tool: update.tool ?? previous?.tool ?? "tool",
     status: update.status ?? previous?.status ?? "unknown",
     title: update.title ?? previous?.title,
@@ -379,6 +553,7 @@ function extractToolSegment(record: Record<string, unknown>): MessageToolContent
   return {
     kind: "tool",
     callID,
+    sourceID: readString(record.id) || readString(record.partID) || undefined,
     tool,
     status,
     title: readString(state?.title) || readString(record.title) || undefined,
@@ -416,7 +591,7 @@ function toolSegmentToPart(messageID: string, segment: MessageToolContentSegment
     },
   }
   return {
-    id: `part-${segment.callID}`,
+    id: segment.sourceID ?? `part-${segment.callID}`,
     messageID,
     type: "tool",
     callID: segment.callID,

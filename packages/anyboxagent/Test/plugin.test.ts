@@ -1842,7 +1842,7 @@ describe("plugin marketplace API", () => {
     expect(requestedRawGitHubURL).toBe(true)
   })
 
-  test("imports OpenAI Codex plugin metadata with external asdk apps as catalog-only", async () => {
+  test("imports OpenAI Codex plugin metadata with external asdk apps without connector bindings", async () => {
     await useTempDatabase()
     const app = createServerApp()
     let requestedRawGitHubURL = false
@@ -1897,7 +1897,8 @@ describe("plugin marketplace API", () => {
     expect(importBody.data?.id).toBe("actively")
     expect(importBody.data?.apps).toEqual([])
     expect(importBody.data?.connectors).toEqual([])
-    expect(importBody.data?.installable).toBe(false)
+    expect(importBody.data?.installable).toBe(true)
+    expect(importBody.data?.download?.type).toBe("github-tree")
     expect(importBody.data?.iconUrl).toBe("https://raw.githubusercontent.com/openai/plugins/main/plugins/actively/assets/logo.png")
 
     const cachedCatalogResponse = await app.request("/api/plugins/catalog?freshness=cached")
@@ -2100,6 +2101,159 @@ describe("plugin marketplace API", () => {
     expect(packageDownloadCount).toBe(1)
     expect(installBody.data?.skillIDs).toEqual(["plugin:url-lab:review"])
     expect(existsSync(join(pluginInstallRoot(), "url-lab", "0.2.0", ".anybox-plugin", "plugin.json"))).toBe(true)
+  })
+
+  test("installs GitHub directory packages inferred from remote plugin metadata URLs", async () => {
+    await useTempDatabase()
+    const app = createServerApp()
+
+    const commitSha = "a".repeat(40)
+    const packageManifest = {
+      name: "tree-lab",
+      version: "0.3.0",
+      description: "Fixture plugin installed from a GitHub directory.",
+      skills: "skills",
+    }
+    const manifestText = `${JSON.stringify(packageManifest, null, 2)}\n`
+    const skillText = [
+      "---",
+      "name: review",
+      "description: Review GitHub directory fixture packages.",
+      "---",
+      "",
+      "Use when testing GitHub directory plugin installation.",
+      "",
+    ].join("\n")
+    const readmeText = "# Tree Lab\n"
+    const rawFileURLs = new Map([
+      [`https://raw.githubusercontent.com/example/anybox-plugins/${commitSha}/tree-lab/.anybox-plugin/plugin.json`, manifestText],
+      [`https://raw.githubusercontent.com/example/anybox-plugins/${commitSha}/tree-lab/skills/review/SKILL.md`, skillText],
+      [`https://raw.githubusercontent.com/example/anybox-plugins/${commitSha}/tree-lab/README.md`, readmeText],
+    ])
+    const jsonResponse = (value: unknown) => new Response(JSON.stringify(value), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+      },
+    })
+    const textResponse = (value: string) => new Response(value, {
+      status: 200,
+      headers: {
+        "content-length": String(Buffer.byteLength(value)),
+      },
+    })
+
+    let requestedRawGitHubURL = false
+    let fileDownloadCount = 0
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL ? input.toString() : input.url
+      if (url === "https://raw.githubusercontent.com/example/anybox-plugins/main/tree-lab/.anybox-plugin/plugin.json") {
+        requestedRawGitHubURL = true
+        return jsonResponse({
+          ...packageManifest,
+          interface: {
+            displayName: "Tree Lab",
+            shortDescription: "Installed from GitHub directory.",
+            category: "Docs",
+          },
+          skillPreviews: [
+            {
+              name: "review",
+              description: "Review GitHub directory fixture packages.",
+              directory: "review",
+            },
+          ],
+        })
+      }
+      if (url === "https://api.github.com/repos/example/anybox-plugins/commits/main") {
+        return jsonResponse({
+          sha: commitSha,
+        })
+      }
+      if (url === `https://api.github.com/repos/example/anybox-plugins/contents/tree-lab?ref=${commitSha}`) {
+        return jsonResponse([
+          { type: "dir", path: "tree-lab/.anybox-plugin" },
+          { type: "dir", path: "tree-lab/skills" },
+          {
+            type: "file",
+            path: "tree-lab/README.md",
+            size: Buffer.byteLength(readmeText),
+            download_url: `https://raw.githubusercontent.com/example/anybox-plugins/${commitSha}/tree-lab/README.md`,
+          },
+        ])
+      }
+      if (url === `https://api.github.com/repos/example/anybox-plugins/contents/tree-lab/.anybox-plugin?ref=${commitSha}`) {
+        return jsonResponse([
+          {
+            type: "file",
+            path: "tree-lab/.anybox-plugin/plugin.json",
+            size: Buffer.byteLength(manifestText),
+            download_url: `https://raw.githubusercontent.com/example/anybox-plugins/${commitSha}/tree-lab/.anybox-plugin/plugin.json`,
+          },
+        ])
+      }
+      if (url === `https://api.github.com/repos/example/anybox-plugins/contents/tree-lab/skills?ref=${commitSha}`) {
+        return jsonResponse([
+          { type: "dir", path: "tree-lab/skills/review" },
+        ])
+      }
+      if (url === `https://api.github.com/repos/example/anybox-plugins/contents/tree-lab/skills/review?ref=${commitSha}`) {
+        return jsonResponse([
+          {
+            type: "file",
+            path: "tree-lab/skills/review/SKILL.md",
+            size: Buffer.byteLength(skillText),
+            download_url: `https://raw.githubusercontent.com/example/anybox-plugins/${commitSha}/tree-lab/skills/review/SKILL.md`,
+          },
+        ])
+      }
+
+      const rawFile = rawFileURLs.get(url)
+      if (rawFile !== undefined) {
+        fileDownloadCount += 1
+        return textResponse(rawFile)
+      }
+
+      return new Response("not found", { status: 404 })
+    }) as typeof fetch
+
+    const importResponse = await app.request("/api/plugins/import-url", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        url: "https://github.com/example/anybox-plugins/tree/main/tree-lab",
+      }),
+    })
+    const importBody = (await importResponse.json()) as PluginCatalogItemEnvelope
+
+    expect(importResponse.status).toBe(200)
+    expect(requestedRawGitHubURL).toBe(true)
+    expect(importBody.data?.id).toBe("tree-lab")
+    expect(importBody.data?.installable).toBe(true)
+    expect(importBody.data?.download?.type).toBe("github-tree")
+    expect(importBody.data?.download?.url).toBe("https://raw.githubusercontent.com/example/anybox-plugins/main/tree-lab/")
+
+    const installResponse = await app.request("/api/plugins/installed/tree-lab", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        enabled: true,
+      }),
+    })
+    const installBody = (await installResponse.json()) as InstalledPluginEnvelope
+
+    expect(installResponse.status).toBe(200)
+    expect(fileDownloadCount).toBe(3)
+    expect(installBody.data?.skillIDs).toEqual(["plugin:tree-lab:review"])
+    expect(existsSync(join(pluginInstallRoot(), "tree-lab", "0.3.0", ".anybox-plugin", "plugin.json"))).toBe(true)
+    expect(existsSync(join(pluginInstallRoot(), "tree-lab", "0.3.0", "skills", "review", "SKILL.md"))).toBe(true)
+    expect(existsSync(join(pluginInstallRoot(), "tree-lab", "0.3.0", "README.md"))).toBe(true)
   })
 
   test("installs registry zip packages that use Windows path separators", async () => {

@@ -1,6 +1,7 @@
 import React from "react"
 import Feather from "@expo/vector-icons/Feather"
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native"
+import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native"
 import type { MobileApproval, MobileMessage, MobileProviderModel, MobileSessionSummary, MobileWorkspace } from "@/api/mobile-api"
 import { useI18n } from "@/i18n"
 import { ApprovalCard } from "./approval-card"
@@ -17,6 +18,14 @@ import {
 import { DarkEmpty, DarkNotice } from "./shared"
 
 type FeatherName = React.ComponentProps<typeof Feather>["name"]
+const THREAD_BOTTOM_STICKY_THRESHOLD = 72
+
+type QuestionAnswerInput = {
+  questionID: string
+  text: string
+  selectedOptions?: string[]
+  freeformText?: string
+}
 
 export function ThreadViewPage({
   actingApprovalID,
@@ -32,6 +41,7 @@ export function ThreadViewPage({
   messagesLoading,
   modelError,
   modelOptions,
+  modelSelectionEnabled,
   modelsLoading,
   onApproveApproval,
   onAnswerQuestion,
@@ -63,9 +73,10 @@ export function ThreadViewPage({
   messagesLoading: boolean
   modelError: string | null
   modelOptions: MobileProviderModel[]
+  modelSelectionEnabled: boolean
   modelsLoading: boolean
   onApproveApproval: (approval: MobileApproval) => void
-  onAnswerQuestion: (answer: { questionID: string; selectedOptions?: string[]; freeformText?: string }) => Promise<void>
+  onAnswerQuestion: (answer: QuestionAnswerInput) => Promise<void>
   onChangeText: (value: string) => void
   onDenyApproval: (approval: MobileApproval) => void
   onModelSelect: (modelValue: string | null) => void
@@ -83,6 +94,67 @@ export function ThreadViewPage({
   const title = focusedSession?.title ?? t("thread.newSession")
   const visibleMessages = React.useMemo(() => messages.filter(messageHasVisibleContent), [messages])
   const timelineItems = React.useMemo(() => buildThreadTimeline(visibleMessages, approvals), [approvals, visibleMessages])
+  const scrollViewRef = React.useRef<ScrollView | null>(null)
+  const stickyToBottomRef = React.useRef(true)
+  const scrollFrameRef = React.useRef<number | null>(null)
+  const previousSessionIDRef = React.useRef<string | null>(null)
+  const previousTailMessageIDRef = React.useRef<string | null>(null)
+  const tailMessage = visibleMessages.length ? visibleMessages[visibleMessages.length - 1] : null
+  const tailMessageID = tailMessage?.info?.id ?? null
+  const tailMessagePending = tailMessage?.info?.pending === true
+
+  const scrollTimelineToEnd = React.useCallback((animated = false) => {
+    if (scrollFrameRef.current !== null) {
+      cancelAnimationFrame(scrollFrameRef.current)
+    }
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = null
+      scrollViewRef.current?.scrollToEnd({ animated })
+    })
+  }, [])
+
+  React.useEffect(() => () => {
+    if (scrollFrameRef.current !== null) {
+      cancelAnimationFrame(scrollFrameRef.current)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    const sessionID = focusedSession?.id ?? null
+    if (previousSessionIDRef.current === sessionID) return
+    previousSessionIDRef.current = sessionID
+    previousTailMessageIDRef.current = tailMessageID
+    stickyToBottomRef.current = true
+    scrollTimelineToEnd(false)
+  }, [focusedSession?.id, scrollTimelineToEnd, tailMessageID])
+
+  React.useEffect(() => {
+    const previousTailMessageID = previousTailMessageIDRef.current
+    if (previousTailMessageID === tailMessageID) return
+    previousTailMessageIDRef.current = tailMessageID
+    if (sending || tailMessagePending || previousTailMessageID === null) {
+      stickyToBottomRef.current = true
+      scrollTimelineToEnd(false)
+    }
+  }, [scrollTimelineToEnd, sending, tailMessageID, tailMessagePending])
+
+  React.useEffect(() => {
+    if (!sending) return
+    stickyToBottomRef.current = true
+    scrollTimelineToEnd(true)
+  }, [scrollTimelineToEnd, sending])
+
+  const handleTimelineScroll = React.useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
+    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y
+    stickyToBottomRef.current = distanceFromBottom <= THREAD_BOTTOM_STICKY_THRESHOLD
+  }, [])
+
+  const handleTimelineContentSizeChange = React.useCallback(() => {
+    if (stickyToBottomRef.current) {
+      scrollTimelineToEnd(false)
+    }
+  }, [scrollTimelineToEnd])
 
   return (
     <KeyboardAvoidingView
@@ -105,6 +177,10 @@ export function ThreadViewPage({
           automaticallyAdjustKeyboardInsets
           contentContainerStyle={{ gap: 14, paddingBottom: 18, paddingHorizontal: 22, paddingTop: 16 }}
           keyboardShouldPersistTaps="handled"
+          onContentSizeChange={handleTimelineContentSizeChange}
+          onScroll={handleTimelineScroll}
+          ref={scrollViewRef}
+          scrollEventThrottle={80}
           showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
         >
@@ -150,6 +226,7 @@ export function ThreadViewPage({
           effectiveModel={effectiveModel}
           modelError={modelError}
           modelOptions={modelOptions}
+          modelSelectionEnabled={modelSelectionEnabled}
           modelsLoading={modelsLoading}
           onChangeText={onChangeText}
           onModelSelect={onModelSelect}
@@ -157,7 +234,6 @@ export function ThreadViewPage({
           placeholder={placeholder}
           savingModel={savingModel}
           selectedModel={selectedModel}
-          sessionReady={Boolean(focusedSession)}
           sending={sending}
         />
       </View>
@@ -212,7 +288,7 @@ function ThreadMessage({
 }: {
   answeringQuestionID: string | null
   message: MobileMessage
-  onAnswerQuestion: (answer: { questionID: string; selectedOptions?: string[]; freeformText?: string }) => Promise<void>
+  onAnswerQuestion: (answer: QuestionAnswerInput) => Promise<void>
 }) {
   const { t } = useI18n()
   const role = messageRole(message)
@@ -258,7 +334,7 @@ function AssistantMessageContent({
   segments,
 }: {
   answeringQuestionID: string | null
-  onAnswerQuestion: (answer: { questionID: string; selectedOptions?: string[]; freeformText?: string }) => Promise<void>
+  onAnswerQuestion: (answer: QuestionAnswerInput) => Promise<void>
   segments: MessageContentSegment[]
 }) {
   return (
@@ -292,7 +368,7 @@ function QuestionSegment({
   prompt,
 }: {
   disabled: boolean
-  onAnswerQuestion: (answer: { questionID: string; selectedOptions?: string[]; freeformText?: string }) => Promise<void>
+  onAnswerQuestion: (answer: QuestionAnswerInput) => Promise<void>
   prompt: MobileQuestionPrompt
 }) {
   const { t } = useI18n()
@@ -318,10 +394,23 @@ function QuestionSegment({
     )
   }
 
+  function displayTextForAnswer(answer: { selectedOptions?: string[]; freeformText?: string }) {
+    const freeform = answer.freeformText?.trim()
+    if (freeform) return freeform
+    return (answer.selectedOptions ?? [])
+      .map((value) => prompt.options.find((option) => option.value === value)?.label ?? value)
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .join(", ")
+  }
+
   async function submitAnswer(answer: { selectedOptions?: string[]; freeformText?: string }) {
     if (!questionID || !canAnswer) return
+    const text = displayTextForAnswer(answer)
+    if (!text) return
     await onAnswerQuestion({
       questionID,
+      text,
       ...(answer.selectedOptions?.length ? { selectedOptions: answer.selectedOptions } : {}),
       ...(answer.freeformText ? { freeformText: answer.freeformText } : {}),
     })
@@ -621,6 +710,7 @@ function ThreadComposer({
   effectiveModel,
   modelError,
   modelOptions,
+  modelSelectionEnabled,
   modelsLoading,
   onChangeText,
   onModelSelect,
@@ -628,7 +718,6 @@ function ThreadComposer({
   placeholder,
   savingModel,
   selectedModel,
-  sessionReady,
   sending,
 }: {
   disabled: boolean
@@ -636,6 +725,7 @@ function ThreadComposer({
   effectiveModel: MobileProviderModel | null
   modelError: string | null
   modelOptions: MobileProviderModel[]
+  modelSelectionEnabled: boolean
   modelsLoading: boolean
   onChangeText: (value: string) => void
   onModelSelect: (modelValue: string | null) => void
@@ -643,7 +733,6 @@ function ThreadComposer({
   placeholder: string
   savingModel: boolean
   selectedModel: string | null
-  sessionReady: boolean
   sending: boolean
 }) {
   const { t } = useI18n()
@@ -653,7 +742,7 @@ function ThreadComposer({
     [modelOptions, selectedModel],
   )
   const modelLabel = selectedModelOption?.name ?? effectiveModel?.name ?? t("thread.model")
-  const modelButtonDisabled = !sessionReady || modelsLoading || Boolean(savingModel)
+  const modelButtonDisabled = !modelSelectionEnabled || modelsLoading || Boolean(savingModel)
 
   function selectModel(value: string | null) {
     setModelPanelOpen(false)
@@ -743,7 +832,7 @@ function ThreadComposer({
         ) : null}
         <View style={{ alignItems: "center", flexDirection: "row", height: 36, justifyContent: "space-between" }}>
           <ModelSelectorButton
-            disabled={!sessionReady}
+            disabled={modelButtonDisabled}
             label={savingModel ? t("thread.saving") : modelLabel}
             loading={modelsLoading || Boolean(savingModel)}
             open={modelPanelOpen}

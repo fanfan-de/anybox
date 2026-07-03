@@ -17,7 +17,7 @@ import {
 } from "./desktop-cloud-relay-client"
 import { safeError, safeLog, safeWarn } from "./safe-console"
 import { getWebContentsForWindowSafely, sendWebContentsSafely } from "./safe-web-contents-send"
-import type { AgentFolderWorkspace, AgentProjectInfo, AgentProjectWorkspace, AgentSessionInfo, AgentWorkspaceSession } from "./types"
+import type { AgentFolderWorkspace, AgentProjectInfo, AgentProjectModelsResult, AgentProjectWorkspace, AgentSessionInfo, AgentWorkspaceSession } from "./types"
 import { getWorkspaceGitDiff } from "./workspace-diff"
 import {
   DESKTOP_MOBILE_BRIDGE_EVENT_CHANNEL,
@@ -824,6 +824,12 @@ function mobileWorkspaceDiffRoute(url: URL) {
   return encodedWorkspaceID ? decodeURIComponent(encodedWorkspaceID) : undefined
 }
 
+function mobileWorkspaceModelsRoute(url: URL) {
+  const match = url.pathname.match(/^\/api\/mobile\/workspaces\/([^/]+)\/models$/)
+  const encodedWorkspaceID = match?.[1]
+  return encodedWorkspaceID ? decodeURIComponent(encodedWorkspaceID) : undefined
+}
+
 function publicStatus() {
   return {
     service: "anybox-mobile-bridge",
@@ -903,6 +909,15 @@ async function getMobileWorkspaceDiff(workspaceID: string) {
   if (!workspace) return undefined
   const summary = await getWorkspaceGitDiff(workspace.directory)
   return summary ?? null
+}
+
+async function getMobileWorkspaceModels(workspaceID: string) {
+  const workspace = await getMobileWorkspace(workspaceID)
+  if (!workspace) return undefined
+  const result = await requestAgentJSON<AgentProjectModelsResult>(
+    `/api/projects/${encodeURIComponent(workspace.project.id)}/models`,
+  )
+  return result.data
 }
 
 async function listMobileApprovals(url: URL) {
@@ -1635,6 +1650,19 @@ async function handleMobileBridgeRequest(request: http.IncomingMessage, response
       return
     }
     jsonResponse(response, 200, ok(sessions))
+    return
+  }
+
+  const workspaceModelsWorkspaceID = mobileWorkspaceModelsRoute(url)
+  if (workspaceModelsWorkspaceID && mobileMethod === "GET") {
+    if (!requireMobileCapabilities(authorization, response, ["workspace:read"])) return
+    auditMobileBridgeAction(authorization, "models.read", { workspaceID: workspaceModelsWorkspaceID })
+    const data = await getMobileWorkspaceModels(workspaceModelsWorkspaceID)
+    if (data === undefined) {
+      jsonResponse(response, 404, errorBody("WORKSPACE_NOT_FOUND", "Mobile workspace not found."))
+      return
+    }
+    jsonResponse(response, 200, ok(data))
     return
   }
 

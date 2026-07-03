@@ -1985,12 +1985,17 @@ export interface PluginOAuthAppCredential {
 
 export type PluginAppCredential = PluginApiKeyAppCredential | PluginOAuthAppCredential
 
-export interface PluginPackageDownload {
-  type: "zip"
-  url?: string
-  sha256?: string
-  size?: number
-}
+export type PluginPackageDownload =
+  | {
+    type: "zip"
+    url?: string
+    sha256?: string
+    size?: number
+  }
+  | {
+    type: "github-tree"
+    url: string
+  }
 
 export interface PluginLocalizedText {
   "en-US"?: string

@@ -4600,6 +4600,134 @@ describe("ThreadView message actions", () => {
     expect(writeText).toHaveBeenCalledWith("<p>Copied response.</p>")
   })
 
+  it("opens a copy context menu from an assistant response row", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+    const responseText = "Copy this assistant reply from the context menu."
+    const { getByText } = renderThread([
+      assistantTraceMessage(
+        "assistant-context-copy",
+        [
+          {
+            id: "response-context-copy",
+            kind: "text",
+            timestamp: 1,
+            label: "Assistant",
+            text: responseText,
+            status: "completed",
+          },
+        ],
+        false,
+      ),
+    ])
+
+    fireEvent.contextMenu(getByText(responseText), { clientX: 120, clientY: 80 })
+
+    const menu = screen.getByRole("menu", { name: "Thread copy actions" })
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "复制" }))
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(responseText)
+    })
+  })
+
+  it("opens a copy context menu from a user message row", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+    const promptText = "Copy this user prompt from the context menu."
+    const { getByText } = renderThread([userMessage("user-context-copy", promptText)])
+
+    fireEvent.contextMenu(getByText(promptText), { clientX: 80, clientY: 40 })
+
+    const menu = screen.getByRole("menu", { name: "Thread copy actions" })
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "复制" }))
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(promptText)
+    })
+  })
+
+  it("prioritizes selected thread text in the copy context menu", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+    const responseText = "Copy only the selected text."
+    const { getByText } = renderThread([
+      assistantTraceMessage(
+        "assistant-selected-copy",
+        [
+          {
+            id: "response-selected-copy",
+            kind: "text",
+            timestamp: 1,
+            label: "Assistant",
+            text: responseText,
+            status: "completed",
+          },
+        ],
+        false,
+      ),
+    ])
+    const responseElement = getByText(responseText)
+    const selection = window.getSelection()
+    const range = document.createRange()
+    range.selectNodeContents(responseElement)
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+
+    fireEvent.contextMenu(responseElement, { clientX: 60, clientY: 30 })
+
+    const menu = screen.getByRole("menu", { name: "Thread copy actions" })
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "复制" }))
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(responseText)
+    })
+    selection?.removeAllRanges()
+  })
+
+  it("adds context menu text to the composer when requested", async () => {
+    const onAddToComposer = vi.fn().mockResolvedValue(undefined)
+    const responseText = "Send this text into the composer."
+    const { getByText } = renderThread(
+      [
+        assistantTraceMessage(
+          "assistant-compose-copy",
+          [
+            {
+              id: "response-compose-copy",
+              kind: "text",
+              timestamp: 1,
+              label: "Assistant",
+              text: responseText,
+              status: "completed",
+            },
+          ],
+          false,
+        ),
+      ],
+      { onAddToComposer },
+    )
+
+    fireEvent.contextMenu(getByText(responseText), { clientX: 90, clientY: 50 })
+
+    const menu = screen.getByRole("menu", { name: "Thread copy actions" })
+    expect(within(menu).getByRole("menuitem", { name: "复制" })).toBeInTheDocument()
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "加入 Composer" }))
+
+    await waitFor(() => {
+      expect(onAddToComposer).toHaveBeenCalledWith(responseText)
+    })
+  })
+
   it("only exposes branch controls on the final assistant message in a user message", () => {
     const onBranchSelect = vi.fn()
     const onForkFromMessage = vi.fn()

@@ -112,6 +112,7 @@ interface ComposerProps {
 
 type ComposerMenuKey = "model" | "reasoning" | null
 type ComposerCommandKey = "attach" | "bag" | "file" | "mcp" | "model" | "plan" | "plugin" | "reasoning" | "skill"
+type ComposerCommandTriggerPrefix = "~" | "/"
 
 interface ComposerModelProviderGroup {
   matchingOptions: ComposerModelOption[]
@@ -142,6 +143,7 @@ type ComposerCommandMenuState =
       kind: "command-trigger"
       match: ComposerTriggerMatch
       query: string
+      triggerPrefix: ComposerCommandTriggerPrefix
     }
   | {
       anchorRect: DOMRect | null
@@ -149,6 +151,7 @@ type ComposerCommandMenuState =
       match: ComposerTriggerMatch
       query: string
       selector: "file" | "mcp" | "plugin" | "skill"
+      triggerPrefix: ComposerCommandTriggerPrefix
     }
 
 type ComposerCommandMenuItem =
@@ -199,6 +202,7 @@ const EMPTY_PLUGIN_OPTIONS: ComposerPluginOption[] = []
 const EMPTY_SELECTED_PLUGIN_IDS: string[] = []
 
 const COMPOSER_COMMAND_TRIGGER_PREFIX = "~"
+const COMPOSER_CLASSIC_COMMAND_TRIGGER_PREFIX = "/"
 
 const COMPOSER_COMMANDS: Array<{
   description?: string
@@ -253,6 +257,26 @@ const COMPOSER_COMMANDS: Array<{
   },
 ]
 
+function isComposerCommandTriggerPrefix(value: string | undefined): value is ComposerCommandTriggerPrefix {
+  return value === COMPOSER_COMMAND_TRIGGER_PREFIX || value === COMPOSER_CLASSIC_COMMAND_TRIGGER_PREFIX
+}
+
+function getComposerCommandName(command: (typeof COMPOSER_COMMANDS)[number]) {
+  return command.label.slice(1)
+}
+
+function formatComposerCommandLabel(
+  command: (typeof COMPOSER_COMMANDS)[number],
+  triggerPrefix: ComposerCommandTriggerPrefix,
+) {
+  return `${triggerPrefix}${getComposerCommandName(command)}`
+}
+
+function hasComposerCommandQueryMatch(query: string) {
+  const normalizedQuery = query.trim().toLowerCase()
+  return COMPOSER_COMMANDS.some((command) => getComposerCommandName(command).includes(normalizedQuery))
+}
+
 export function getVisibleComposerCommandLabels({
   hasBagSubmit = false,
   hasPlanModeToggle = false,
@@ -260,6 +284,7 @@ export function getVisibleComposerCommandLabels({
   reasoningEffortOptionCount = 0,
   showModelSelector = false,
   showProjectTagCommands = false,
+  triggerPrefix = COMPOSER_COMMAND_TRIGGER_PREFIX,
 }: {
   hasBagSubmit?: boolean
   hasPlanModeToggle?: boolean
@@ -267,11 +292,12 @@ export function getVisibleComposerCommandLabels({
   reasoningEffortOptionCount?: number
   showModelSelector?: boolean
   showProjectTagCommands?: boolean
+  triggerPrefix?: ComposerCommandTriggerPrefix
 }) {
   const normalizedQuery = query.trim().toLowerCase()
 
   return COMPOSER_COMMANDS
-    .filter((command) => command.label.slice(1).includes(normalizedQuery))
+    .filter((command) => getComposerCommandName(command).includes(normalizedQuery))
     .filter((command) => {
       if ((command.value === "skill" || command.value === "mcp" || command.value === "plugin") && !showProjectTagCommands) {
         return false
@@ -295,7 +321,7 @@ export function getVisibleComposerCommandLabels({
 
       return true
     })
-    .map((command) => command.label)
+    .map((command) => formatComposerCommandLabel(command, triggerPrefix))
 }
 
 
@@ -639,11 +665,13 @@ export function readComposerBeforeTextForCommandMenu(anchorNode: unknown, anchor
 }
 
 export function getComposerKeyAction({
+  allowSubmitWhenCommandMenuEmpty = false,
   commandMenuItemCount,
   hasCommandMenu,
   isSubmitKeyEvent,
   key,
 }: {
+  allowSubmitWhenCommandMenuEmpty?: boolean
   commandMenuItemCount: number
   hasCommandMenu: boolean
   isSubmitKeyEvent: boolean
@@ -667,8 +695,12 @@ export function getComposerKeyAction({
     }
 
     if (isSubmitKeyEvent) {
-      return commandMenuItemCount > 0
-        ? { type: "select-active", preventDefault: true }
+      if (commandMenuItemCount > 0) {
+        return { type: "select-active", preventDefault: true }
+      }
+
+      return allowSubmitWhenCommandMenuEmpty
+        ? { type: "send", preventDefault: true }
         : { type: "noop", preventDefault: true }
     }
 
@@ -861,8 +893,11 @@ function deriveCommandMenuState() {
   const beforeText = readComposerBeforeTextForCommandMenu(anchorNode, selection.anchor.offset)
   if (beforeText === null) return null
 
-  const selectorMatch = findTriggerMatch(beforeText, /(^|\s)~(file|skill|mcp|plugin)(?:\s+([^\n]*))?$/)
+  const selectorMatch = findTriggerMatch(beforeText, /(^|\s)([~/])(file|skill|mcp|plugin)(?:\s+([^\n]*))?$/)
   if (selectorMatch) {
+    const triggerPrefix = selectorMatch.groups[1]
+    if (!isComposerCommandTriggerPrefix(triggerPrefix)) return null
+
     return {
       anchorRect: getComposerSelectionRect(),
       kind: "command-selector",
@@ -871,8 +906,9 @@ function deriveCommandMenuState() {
         start: selectorMatch.start,
         end: selection.anchor.offset,
       },
-      query: selectorMatch.groups[2] ?? "",
-      selector: selectorMatch.groups[1] as "file" | "mcp" | "plugin" | "skill",
+      query: selectorMatch.groups[3] ?? "",
+      selector: selectorMatch.groups[2] as "file" | "mcp" | "plugin" | "skill",
+      triggerPrefix,
     } satisfies ComposerCommandMenuState
   }
 
@@ -890,8 +926,16 @@ function deriveCommandMenuState() {
     } satisfies ComposerCommandMenuState
   }
 
-  const commandTriggerMatch = findTriggerMatch(beforeText, /(^|\s)~([^\s]*)$/)
+  const commandTriggerMatch = findTriggerMatch(beforeText, /(^|\s)([~/])([^\s]*)$/)
   if (commandTriggerMatch) {
+    const triggerPrefix = commandTriggerMatch.groups[1]
+    if (!isComposerCommandTriggerPrefix(triggerPrefix)) return null
+
+    const query = commandTriggerMatch.groups[2] ?? ""
+    if (triggerPrefix === COMPOSER_CLASSIC_COMMAND_TRIGGER_PREFIX && !hasComposerCommandQueryMatch(query)) {
+      return null
+    }
+
     return {
       anchorRect: getComposerSelectionRect(),
       kind: "command-trigger",
@@ -900,7 +944,8 @@ function deriveCommandMenuState() {
         start: commandTriggerMatch.start,
         end: selection.anchor.offset,
       },
-      query: commandTriggerMatch.groups[1] ?? "",
+      query,
+      triggerPrefix,
     } satisfies ComposerCommandMenuState
   }
 
@@ -1142,7 +1187,7 @@ export function Composer({
     return new Set(readComposerTagsFromDraftState(draftStateRef.current).map(readComposerTagIdentity))
   }
 
-  function buildComposerCommandItems(query: string) {
+  function buildComposerCommandItems(query: string, triggerPrefix: ComposerCommandTriggerPrefix = COMPOSER_COMMAND_TRIGGER_PREFIX) {
     const visibleLabels = new Set(getVisibleComposerCommandLabels({
       hasBagSubmit,
       hasPlanModeToggle: Boolean(onPlanModeToggle),
@@ -1150,15 +1195,20 @@ export function Composer({
       reasoningEffortOptionCount: reasoningEffortOptions.length,
       showModelSelector: Boolean(showModelSelector),
       showProjectTagCommands: Boolean(showProjectTagCommands),
+      triggerPrefix,
     }))
 
     return COMPOSER_COMMANDS
-      .filter((command) => visibleLabels.has(command.label))
       .map((command) => ({
+        command,
+        label: formatComposerCommandLabel(command, triggerPrefix),
+      }))
+      .filter(({ label }) => visibleLabels.has(label))
+      .map(({ command, label }) => ({
         type: "command",
         key: `command:${command.value}`,
         group: "Commands",
-        label: command.label,
+        label,
         description: command.descriptionKey ? t(command.descriptionKey) : command.description ?? "",
         value: command.value,
       } satisfies ComposerCommandMenuItem))
@@ -1245,7 +1295,7 @@ export function Composer({
     if (!state) return []
 
     if (state.kind === "command-trigger") {
-      return buildComposerCommandItems(state.query)
+      return buildComposerCommandItems(state.query, state.triggerPrefix)
     }
 
     if (state.kind === "command-selector") {
@@ -1530,7 +1580,7 @@ export function Composer({
     }
 
     if (commandMenuState.kind === "command-trigger") {
-      setCommandMenuItemsWithRef(buildComposerCommandItems(commandMenuState.query))
+      setCommandMenuItemsWithRef(buildComposerCommandItems(commandMenuState.query, commandMenuState.triggerPrefix))
       return
     }
 
@@ -1678,7 +1728,7 @@ export function Composer({
     if (!editor || !currentCommandMenuState || currentCommandMenuState.kind !== "command-trigger") return
 
     if (command === "file" || command === "skill" || command === "mcp" || command === "plugin") {
-      createTextReplacement(editor, currentCommandMenuState.match, `${COMPOSER_COMMAND_TRIGGER_PREFIX}${command} `)
+      createTextReplacement(editor, currentCommandMenuState.match, `${currentCommandMenuState.triggerPrefix}${command} `)
       return
     }
 
@@ -1778,6 +1828,9 @@ export function Composer({
       isSubmitKeyEvent: isComposerSubmitKeyEvent(event, isComposingRef.current),
       hasCommandMenu: currentCommandMenuState !== null,
       commandMenuItemCount: currentCommandMenuItems.length,
+      allowSubmitWhenCommandMenuEmpty:
+        currentCommandMenuState?.kind === "command-trigger" &&
+        currentCommandMenuState.triggerPrefix === COMPOSER_CLASSIC_COMMAND_TRIGGER_PREFIX,
     })
 
     logComposerDebug("footer-keydown-capture", {

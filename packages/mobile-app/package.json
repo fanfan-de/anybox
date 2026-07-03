@@ -42,6 +42,7 @@
     "release:github:prepare": "node ./scripts/prepare-github-mobile-release.mjs",
     "doctor": "node ./scripts/mobile-doctor.mjs",
     "smoke": "node ./scripts/mobile-smoke.mjs",
+    "test:message": "node ./scripts/message-merge-regression.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

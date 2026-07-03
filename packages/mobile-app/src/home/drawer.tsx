@@ -199,7 +199,7 @@ export function SessionDrawerPage({
 
         <View style={{ alignItems: "center", paddingHorizontal: 14, paddingTop: 10 }}>
           <View style={{ alignItems: "center", flexDirection: "row", gap: 18, justifyContent: "center", minHeight: 34 }}>
-            <DarkToolbarButton label={sending ? "Creating" : "New"} onPress={onNewChat} />
+            <DarkToolbarButton label={sending ? "Sending" : "New"} onPress={onNewChat} />
           </View>
         </View>
       </View>

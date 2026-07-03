@@ -2989,6 +2989,81 @@ body.is-image-lightbox-open {
   white-space: nowrap;
 }
 
+.thread-copy-context-menu {
+  --thread-copy-menu-surface: var(--semantic-dropdown-menu-surface, var(--seg-dropdown-menu-surface, var(--surface-elevated, #ffffff)));
+  --thread-copy-menu-border: var(--seg-border, rgba(17, 24, 39, 0.12));
+  --thread-copy-menu-text: var(--seg-text-1, #1f2937);
+  --thread-copy-menu-hover: var(--semantic-dropdown-menu-item-surface-hover, var(--seg-panel-muted, rgba(15, 23, 42, 0.06)));
+  --thread-copy-menu-radius: var(--semantic-dropdown-menu-radius, 8px);
+  --thread-copy-menu-shadow: var(--ui-shadow-md, var(--shadow-md, 0 14px 34px rgba(17, 24, 39, 0.14)));
+
+  position: fixed;
+  z-index: 1000;
+  width: max-content;
+  min-width: 160px;
+  max-width: min(220px, calc(100vw - 16px));
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--thread-copy-menu-border);
+  border-radius: var(--thread-copy-menu-radius);
+  background: var(--thread-copy-menu-surface);
+  color: var(--thread-copy-menu-text);
+  box-shadow: var(--thread-copy-menu-shadow);
+  animation: ui-context-menu-in 120ms ease;
+}
+
+.thread-copy-context-menu-item {
+  width: 100%;
+  min-height: 32px;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: max(4px, calc(var(--thread-copy-menu-radius) - 2px));
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  text-align: left;
+  cursor: pointer;
+}
+
+.thread-copy-context-menu-item:hover,
+.thread-copy-context-menu-item:focus-visible {
+  background: var(--thread-copy-menu-hover);
+  outline: none;
+}
+
+.thread-copy-context-menu-item:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--focus-outline-color);
+}
+
+.thread-copy-context-menu-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+}
+
+.thread-copy-context-menu-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.thread-copy-context-menu-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .inline-side-chat-body {
   display: grid;
   gap: 10px;

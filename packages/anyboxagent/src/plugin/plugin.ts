@@ -50,6 +50,10 @@ const MAX_PLUGIN_META_BYTES = 1024 * 1024
 const MAX_PLUGIN_COMPONENT_BYTES = 1024 * 1024
 const MAX_REMOTE_PLUGIN_META_COUNT = 200
 const PLUGIN_REGISTRY_FETCH_TIMEOUT_MS = 8000
+const MAX_PLUGIN_GITHUB_DIRECTORY_BYTES = 5 * 1024 * 1024
+const MAX_PLUGIN_GITHUB_TREE_FILES = 5000
+const MAX_PLUGIN_GITHUB_TREE_DEPTH = 32
+const GITHUB_COMMIT_SHA_PATTERN = /^[a-f0-9]{40}$/i
 const PLUGIN_DISPLAY_ASSET_MIME_TYPES = new Map([
   [".avif", "image/avif"],
   [".bmp", "image/bmp"],
@@ -204,7 +208,7 @@ const PluginAppCompatOAuthCredential = PluginOAuthAppCredential.or(
 export const PluginAppCredential = z.union([PluginOAuthAppCredential, PluginApiKeyAppCredential])
 export type PluginAppCredential = z.infer<typeof PluginAppCredential>
 
-export const PluginPackageDownload = z
+const PluginZipPackageDownload = z
   .object({
     type: z.literal("zip"),
     url: z.string().min(1).optional(),
@@ -212,6 +216,18 @@ export const PluginPackageDownload = z
     size: z.number().int().positive().optional(),
   })
   .strict()
+
+const PluginGitHubTreePackageDownload = z
+  .object({
+    type: z.literal("github-tree"),
+    url: z.string().min(1),
+  })
+  .strict()
+
+export const PluginPackageDownload = z.discriminatedUnion("type", [
+  PluginZipPackageDownload,
+  PluginGitHubTreePackageDownload,
+])
 export type PluginPackageDownload = z.infer<typeof PluginPackageDownload>
 
 const PluginRuntimeBase = {
@@ -542,6 +558,23 @@ const PluginRegistry = z
 
 const PluginRegistryIndex = z.array(z.string().min(1))
 
+const GitHubCommitResponse = z
+  .object({
+    sha: z.string().regex(GITHUB_COMMIT_SHA_PATTERN),
+  })
+  .passthrough()
+
+const GitHubContentsEntry = z
+  .object({
+    type: z.string().min(1),
+    path: z.string().min(1),
+    size: z.number().int().nonnegative().optional(),
+    download_url: z.string().nullable().optional(),
+  })
+  .passthrough()
+
+const GitHubContentsResponse = z.union([GitHubContentsEntry, z.array(GitHubContentsEntry)])
+
 export const PluginCatalogItem = z
   .object({
     id: z.string().min(1),
@@ -757,6 +790,126 @@ function normalizeGitHubBlobURL(rawUrl: string) {
   return new URL(`${owner}/${repo}/${branch}/${pathSegments.join("/")}`, "https://raw.githubusercontent.com/").toString()
 }
 
+type GitHubPackageLocator = {
+  owner: string
+  repo: string
+  ref: string
+  path: string
+}
+
+function encodedPath(path: string) {
+  return path.split("/").filter(Boolean).map(encodeURIComponent).join("/")
+}
+
+function decodedURLPathSegments(url: URL) {
+  return url.pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment))
+}
+
+function pluginRootPathForManifestPath(path: string) {
+  const segments = path.split("/").filter(Boolean)
+  if (segments.at(-1) !== "plugin.json") return path
+
+  const manifestDirectory = segments.at(-2)
+  if (manifestDirectory && PLUGIN_HIDDEN_MANIFEST_DIRECTORIES.has(manifestDirectory)) {
+    return segments.slice(0, -2).join("/")
+  }
+
+  return segments.slice(0, -1).join("/")
+}
+
+function normalizeGitHubPackagePath(pathSegments: string[]) {
+  const path = pluginRootPathForManifestPath(pathSegments.join("/"))
+  if (!path) return ""
+  const normalized = normalizeZipEntryPath(path)
+  if (!normalized) return ""
+  return normalized
+}
+
+function isValidGitHubRepositorySegment(value: string) {
+  return /^[A-Za-z0-9_.-]+$/.test(value)
+}
+
+function parseGitHubPackageURL(rawUrl: string): GitHubPackageLocator | undefined {
+  let url: URL
+  try {
+    url = new URL(rawUrl)
+  } catch {
+    return undefined
+  }
+
+  if (url.protocol !== "https:" || url.username || url.password) return undefined
+
+  let segments: string[]
+  try {
+    segments = decodedURLPathSegments(url)
+  } catch {
+    return undefined
+  }
+  if (url.hostname === "raw.githubusercontent.com") {
+    if (segments.length < 3) return undefined
+    const [owner, repo, ref, ...pathSegments] = segments
+    if (!owner || !repo || !ref || !isValidGitHubRepositorySegment(owner) || !isValidGitHubRepositorySegment(repo)) {
+      return undefined
+    }
+    let path: string
+    try {
+      path = normalizeGitHubPackagePath(pathSegments)
+    } catch {
+      return undefined
+    }
+    return {
+      owner,
+      repo,
+      ref,
+      path,
+    }
+  }
+
+  if (url.hostname !== "github.com" || segments.length < 4) return undefined
+  const [owner, repo, kind, ref, ...pathSegments] = segments
+  if (
+    !owner ||
+    !repo ||
+    !ref ||
+    !isValidGitHubRepositorySegment(owner) ||
+    !isValidGitHubRepositorySegment(repo) ||
+    (kind !== "tree" && kind !== "blob")
+  ) {
+    return undefined
+  }
+
+  let path: string
+  try {
+    path = normalizeGitHubPackagePath(pathSegments)
+  } catch {
+    return undefined
+  }
+
+  return {
+    owner,
+    repo,
+    ref,
+    path,
+  }
+}
+
+function githubTreeDownloadForManifestURL(manifestURL: string): PluginPackageDownload | undefined {
+  const rootURL = pluginRootURLForManifest(manifestURL).toString()
+  return parseGitHubPackageURL(rootURL)
+    ? PluginPackageDownload.parse({
+      type: "github-tree",
+      url: rootURL,
+    })
+    : undefined
+}
+
+function githubRawPluginManifestURL(locator: GitHubPackageLocator) {
+  const manifestPath = locator.path
+    ? `${locator.path}/${PLUGIN_MANIFEST_PATH.replace(/\\/g, "/")}`
+    : PLUGIN_MANIFEST_PATH.replace(/\\/g, "/")
+  return githubRawFileURL(locator, locator.ref, manifestPath)
+}
+
 function pluginRootURLForManifest(manifestURL: string) {
   const manifestDirectoryURL = new URL("./", manifestURL)
   const trimmedPath = manifestDirectoryURL.pathname.replace(/\/+$/, "")
@@ -772,6 +925,8 @@ function normalizePluginRegistryEntryURL(rawUrl: string) {
     throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin registry entry URL must not contain query parameters or fragments.")
   }
   if (!url.pathname.toLowerCase().endsWith("/plugin.json")) {
+    const githubLocator = parseGitHubPackageURL(url.toString())
+    if (githubLocator) return githubRawPluginManifestURL(githubLocator)
     throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin registry entry URL must point directly to plugin.json.")
   }
   return url.toString()
@@ -1432,6 +1587,83 @@ async function fetchJSONWithSchema<T>(
   }
 }
 
+async function fetchPackageJSONWithSchema<T>(
+  url: string,
+  schema: z.ZodType<T>,
+  maxBytes: number,
+  label: string,
+): Promise<T> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), PLUGIN_REGISTRY_FETCH_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        accept: "application/json",
+        "user-agent": "Anybox-Plugin-Installer",
+      },
+      signal: controller.signal,
+    }).catch((error) => {
+      throw new PluginError(
+        "PLUGIN_PACKAGE_DOWNLOAD_FAILED",
+        error instanceof Error ? `${label} could not be loaded: ${error.message}` : `${label} could not be loaded.`,
+      )
+    })
+
+    if (!response.ok) {
+      throw new PluginError("PLUGIN_PACKAGE_DOWNLOAD_FAILED", `${label} returned HTTP ${response.status}.`)
+    }
+
+    const declaredLength = Number(response.headers.get("content-length") ?? "0")
+    if (declaredLength > maxBytes) {
+      throw new PluginError("PLUGIN_PACKAGE_INVALID", `${label} is larger than the allowed size.`)
+    }
+
+    const text = await response.text()
+    if (Buffer.byteLength(text, "utf8") > maxBytes) {
+      throw new PluginError("PLUGIN_PACKAGE_INVALID", `${label} is larger than the allowed size.`)
+    }
+
+    return schema.parse(JSON.parse(text))
+  } catch (error) {
+    if (error instanceof PluginError) throw error
+    throw new PluginError(
+      "PLUGIN_PACKAGE_INVALID",
+      error instanceof Error ? `${label} is invalid: ${error.message}` : `${label} is invalid.`,
+    )
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function fetchPackageBytes(url: string, label: string, sizeLimit: number) {
+  const response = await fetch(url, {
+    headers: {
+      accept: "application/octet-stream,*/*",
+      "user-agent": "Anybox-Plugin-Installer",
+    },
+  }).catch((error) => {
+    throw new PluginError(
+      "PLUGIN_PACKAGE_DOWNLOAD_FAILED",
+      error instanceof Error ? error.message : `${label} could not be downloaded.`,
+    )
+  })
+
+  if (!response.ok) {
+    throw new PluginError(
+      "PLUGIN_PACKAGE_DOWNLOAD_FAILED",
+      `${label} returned HTTP ${response.status}.`,
+    )
+  }
+
+  const declaredLength = Number(response.headers.get("content-length") ?? "0")
+  if (declaredLength > sizeLimit) {
+    throw new PluginError("PLUGIN_PACKAGE_INVALID", `${label} is larger than the allowed download size.`)
+  }
+
+  return new Uint8Array(await response.arrayBuffer())
+}
+
 function normalizeRegistrySkillPreviews(pluginID: string, previews: z.infer<typeof PluginRegistrySkillPreview>[] | undefined) {
   return (previews ?? []).map((preview) =>
     PluginSkillPreview.parse({
@@ -1486,7 +1718,7 @@ async function fetchPluginMeta(manifestURL: string) {
   const parsed = await parseRemotePluginManifestDocument(item, manifestURL)
   return {
     manifest: resolveRemoteManifestAssets(parsed.manifest, manifestURL),
-    download: parsed.download,
+    download: parsed.download ?? githubTreeDownloadForManifestURL(manifestURL),
     skillPreviews: parsed.skillPreviews,
     source: "registry" as const,
   }
@@ -1800,6 +2032,12 @@ function catalogLocalization(manifest: PluginManifest) {
   return Object.keys(localized).length > 0 ? localized : undefined
 }
 
+function isInstallableDownload(download: PluginPackageDownload | undefined) {
+  if (!download) return false
+  if (download.type === "zip") return Boolean(download.url && download.sha256)
+  return Boolean(download.url && parseGitHubPackageURL(download.url))
+}
+
 function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
   const { manifest, packageRoot } = source
   const pluginID = normalizeManifestID(manifest.name)
@@ -1870,7 +2108,7 @@ function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
     ]),
     source: source.source,
     download: source.download,
-    installable: Boolean(packageRoot || (source.download?.url && source.download.sha256)),
+    installable: Boolean(packageRoot || isInstallableDownload(source.download)),
   })
 }
 
@@ -2655,10 +2893,172 @@ function matchingPackageRootForRegistry(stagingRoot: string, registrySource: Plu
   return matches[0]!
 }
 
-async function downloadPluginPackage(registrySource: PluginManifestSource) {
+function githubAPIURL(locator: GitHubPackageLocator, path: string) {
+  return `https://api.github.com/repos/${encodeURIComponent(locator.owner)}/${encodeURIComponent(locator.repo)}/${path}`
+}
+
+function githubContentsAPIURL(locator: GitHubPackageLocator, path: string, ref: string) {
+  const url = new URL(githubAPIURL(locator, path ? `contents/${encodedPath(path)}` : "contents"))
+  url.searchParams.set("ref", ref)
+  return url.toString()
+}
+
+function githubRawFileURL(locator: GitHubPackageLocator, ref: string, path: string) {
+  return `https://raw.githubusercontent.com/${encodeURIComponent(locator.owner)}/${encodeURIComponent(locator.repo)}/${encodeURIComponent(ref)}/${encodedPath(path)}`
+}
+
+async function resolveGitHubCommitRef(locator: GitHubPackageLocator) {
+  if (GITHUB_COMMIT_SHA_PATTERN.test(locator.ref)) return locator.ref
+  const commit = await fetchPackageJSONWithSchema(
+    githubAPIURL(locator, `commits/${encodeURIComponent(locator.ref)}`),
+    GitHubCommitResponse,
+    MAX_PLUGIN_META_BYTES,
+    "GitHub plugin package ref",
+  )
+  return commit.sha
+}
+
+async function fetchGitHubContents(locator: GitHubPackageLocator, path: string, ref: string) {
+  const result = await fetchPackageJSONWithSchema(
+    githubContentsAPIURL(locator, path, ref),
+    GitHubContentsResponse,
+    MAX_PLUGIN_GITHUB_DIRECTORY_BYTES,
+    "GitHub plugin package directory",
+  )
+  return Array.isArray(result) ? result : [result]
+}
+
+function relativeGitHubContentPath(locator: GitHubPackageLocator, path: string) {
+  const packageRoot = locator.path
+  if (!packageRoot) return normalizeZipEntryPath(path)
+  if (path === packageRoot) return null
+  if (!path.startsWith(`${packageRoot}/`)) {
+    throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package contains a path outside the plugin directory.")
+  }
+  return normalizeZipEntryPath(path.slice(packageRoot.length + 1))
+}
+
+async function listGitHubPackageFiles(locator: GitHubPackageLocator, ref: string) {
+  type GitHubPackageFile = {
+    relativePath: string
+    sourcePath: string
+    downloadURL?: string
+    size?: number
+  }
+
+  const files: GitHubPackageFile[] = []
+  let declaredBytes = 0
+
+  async function visit(path: string, depth: number): Promise<void> {
+    if (depth > MAX_PLUGIN_GITHUB_TREE_DEPTH) {
+      throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package directory is nested too deeply.")
+    }
+
+    const entries = await fetchGitHubContents(locator, path, ref)
+    if (entries.length === 1 && entries[0]?.type === "file" && path === locator.path) {
+      throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package URL must point to a directory.")
+    }
+
+    for (const entry of entries) {
+      if (entry.type === "dir") {
+        await visit(entry.path, depth + 1)
+        continue
+      }
+
+      if (entry.type === "symlink" || entry.type === "submodule") {
+        throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin packages must not contain symbolic links or submodules.")
+      }
+
+      if (entry.type !== "file") {
+        throw new PluginError("PLUGIN_PACKAGE_INVALID", `GitHub plugin package contains unsupported entry type '${entry.type}'.`)
+      }
+
+      const relativePath = relativeGitHubContentPath(locator, entry.path)
+      if (!relativePath) continue
+
+      declaredBytes += entry.size ?? 0
+      if (declaredBytes > MAX_PLUGIN_PACKAGE_BYTES) {
+        throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package is larger than the allowed download size.")
+      }
+      files.push({
+        relativePath,
+        sourcePath: entry.path,
+        downloadURL: entry.download_url ?? undefined,
+        size: entry.size,
+      })
+      if (files.length > MAX_PLUGIN_GITHUB_TREE_FILES) {
+        throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package contains too many files.")
+      }
+    }
+  }
+
+  await visit(locator.path, 0)
+  if (files.length === 0) {
+    throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package directory is empty.")
+  }
+  return files
+}
+
+async function downloadGitHubTreePluginPackage(registrySource: PluginManifestSource, download: Extract<PluginPackageDownload, { type: "github-tree" }>) {
   const pluginID = normalizePluginID(registrySource.manifest.name)
-  const download = registrySource.download
-  if (!download?.url || !download.sha256) {
+  const locator = parseGitHubPackageURL(download.url)
+  if (!locator) {
+    throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package URL is invalid.")
+  }
+
+  const safeID = assertPluginPathSegment(pluginID)
+  const safeVersion = assertPluginPathSegment(registrySource.manifest.version)
+  const tempRoot = join(Global.Path.cache, "plugin-installs", `${safeID}-${safeVersion}-${randomUUID()}`)
+  const stagingRoot = join(tempRoot, "github-tree")
+  const finalRoot = join(installedPluginPackagesRoot(), safeID, safeVersion)
+  const ref = await resolveGitHubCommitRef(locator)
+  const files = await listGitHubPackageFiles(locator, ref)
+  let downloadedBytes = 0
+
+  await mkdir(stagingRoot, { recursive: true })
+
+  try {
+    for (const file of files) {
+      const bytes = await fetchPackageBytes(
+        file.downloadURL ?? githubRawFileURL(locator, ref, file.sourcePath),
+        `GitHub plugin package file '${file.relativePath}'`,
+        Math.max(0, MAX_PLUGIN_PACKAGE_BYTES - downloadedBytes),
+      )
+      if (file.size !== undefined && bytes.byteLength !== file.size) {
+        throw new PluginError("PLUGIN_PACKAGE_INVALID", `GitHub plugin package file '${file.relativePath}' size does not match GitHub metadata.`)
+      }
+
+      downloadedBytes += bytes.byteLength
+      if (downloadedBytes > MAX_PLUGIN_PACKAGE_BYTES) {
+        throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package is larger than the allowed download size.")
+      }
+
+      const targetPath = resolve(stagingRoot, file.relativePath)
+      assertPathInside(stagingRoot, targetPath)
+      await mkdir(dirname(targetPath), { recursive: true })
+      await writeFile(targetPath, bytes)
+    }
+
+    validateExtractedTree(stagingRoot)
+    const packageRoot = matchingPackageRootForRegistry(stagingRoot, registrySource)
+    await rm(finalRoot, { recursive: true, force: true })
+    await mkdir(dirname(finalRoot), { recursive: true })
+    await cp(packageRoot, finalRoot, { recursive: true })
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true }).catch(() => {})
+  }
+
+  const installedManifest = safeReadPluginManifest(finalRoot)
+  if (!installedManifest) {
+    throw new PluginError("PLUGIN_PACKAGE_INVALID", "Installed plugin package is missing its manifest.")
+  }
+
+  return finalRoot
+}
+
+async function downloadZipPluginPackage(registrySource: PluginManifestSource, download: Extract<PluginPackageDownload, { type: "zip" }>) {
+  const pluginID = normalizePluginID(registrySource.manifest.name)
+  if (!download.url || !download.sha256) {
     throw new PluginError(
       "PLUGIN_PACKAGE_UNAVAILABLE",
       `Plugin '${pluginID}' does not provide a downloadable package yet.`,
@@ -2666,32 +3066,9 @@ async function downloadPluginPackage(registrySource: PluginManifestSource) {
   }
 
   const url = assertSupportedPackageURL(download.url)
-  const response = await fetch(url, {
-    headers: {
-      accept: "application/zip,application/octet-stream,*/*",
-      "user-agent": "Anybox-Plugin-Installer",
-    },
-  }).catch((error) => {
-    throw new PluginError(
-      "PLUGIN_PACKAGE_DOWNLOAD_FAILED",
-      error instanceof Error ? error.message : "Could not download plugin package.",
-    )
-  })
 
-  if (!response.ok) {
-    throw new PluginError(
-      "PLUGIN_PACKAGE_DOWNLOAD_FAILED",
-      `Could not download plugin package (${response.status}).`,
-    )
-  }
-
-  const declaredLength = Number(response.headers.get("content-length") ?? "0")
   const sizeLimit = Math.min(download.size ? Math.max(download.size * 2, download.size + 1024 * 1024) : MAX_PLUGIN_PACKAGE_BYTES, MAX_PLUGIN_PACKAGE_BYTES)
-  if (declaredLength > sizeLimit) {
-    throw new PluginError("PLUGIN_PACKAGE_INVALID", "Plugin package is larger than the allowed download size.")
-  }
-
-  const bytes = new Uint8Array(await response.arrayBuffer())
+  const bytes = await fetchPackageBytes(url.toString(), "Plugin package", sizeLimit)
   if (bytes.byteLength === 0 || bytes.byteLength > sizeLimit) {
     throw new PluginError("PLUGIN_PACKAGE_INVALID", "Plugin package is empty or too large.")
   }
@@ -2730,6 +3107,23 @@ async function downloadPluginPackage(registrySource: PluginManifestSource) {
   }
 
   return finalRoot
+}
+
+async function downloadPluginPackage(registrySource: PluginManifestSource) {
+  const pluginID = normalizePluginID(registrySource.manifest.name)
+  const download = registrySource.download
+  if (!download) {
+    throw new PluginError(
+      "PLUGIN_PACKAGE_UNAVAILABLE",
+      `Plugin '${pluginID}' does not provide a downloadable package yet.`,
+    )
+  }
+
+  if (download.type === "github-tree") {
+    return downloadGitHubTreePluginPackage(registrySource, download)
+  }
+
+  return downloadZipPluginPackage(registrySource, download)
 }
 
 async function copyPluginPackageToInstalled(source: PluginManifestSource) {
