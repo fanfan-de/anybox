@@ -950,9 +950,6 @@ export default function HomeScreen() {
                 <SessionDrawerPage
                   focusedSessionID={focusedSession?.id}
                   focusedWorkspaceID={focusedWorkspace?.id}
-                  onNewChat={() => {
-                    void handleCreateConversation()
-                  }}
                   onOpenSettings={() => {
                     closeSessionDrawer()
                     router.push("/settings" as never)
@@ -961,7 +958,6 @@ export default function HomeScreen() {
                   onSelectWorkspace={handleSelectWorkspace}
                   paddingBottom={Math.max(insets.bottom, 14)}
                   paddingTop={insets.top}
-                  sending={sending}
                   sessions={focusedSessions}
                   workspaces={sortedWorkspaces}
                 />

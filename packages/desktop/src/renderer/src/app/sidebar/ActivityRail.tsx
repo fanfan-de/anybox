@@ -8,6 +8,7 @@ import {
   LayoutSidebarLeftIcon,
   PluginIcon,
   SettingsIcon,
+  SmartphoneIcon,
   ToolsIcon,
 } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
@@ -29,6 +30,7 @@ interface ActivityRailProps {
 const primaryLeftRailViews = [
   { view: "workspace" as const, labelKey: "shell.openWorkspace", Icon: LayoutSidebarLeftIcon },
   { view: "connections" as const, labelKey: "shell.openConnectionsAndExtensions", Icon: PluginIcon },
+  { view: "mobile" as const, labelKey: "shell.openMobile", Icon: SmartphoneIcon },
   { view: "calendar" as const, labelKey: "shell.openCalendar", Icon: CalendarIcon },
   { view: "automations" as const, labelKey: "shell.openAutomations", Icon: AutomationIcon },
 ]

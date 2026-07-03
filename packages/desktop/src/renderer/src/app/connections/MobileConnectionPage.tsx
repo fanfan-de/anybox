@@ -1,12 +1,16 @@
-import { useEffect, useMemo, useState } from "react"
+import { type ReactNode, useEffect, useMemo, useState } from "react"
 import QRCode from "qrcode"
 import type { DesktopMobileBridgeStatus, DesktopMobileDeviceSummary } from "../../../../shared/desktop-ipc-contract"
 import { useI18n } from "../i18n/I18nProvider"
 import type { TranslationKey } from "../i18n/translations"
 import { CopyIcon, ResetIcon, SmartphoneIcon } from "../icons"
-import { writeTextToClipboard } from "../shared-ui"
+import { ShellTopMenu, writeTextToClipboard } from "../shared-ui"
 
 type MobileTranslate = (key: TranslationKey, params?: Record<string, string | number>) => string
+
+interface MobileConnectionPageProps {
+  windowControls?: ReactNode
+}
 
 function formatStartedAt(value: number | null, locale: string, t: MobileTranslate) {
   if (!value) return t("connections.mobile.notRunning")
@@ -139,14 +143,39 @@ function formatCloudRelayDetail(status: DesktopMobileBridgeStatus | null, t: Mob
   return `${baseUrl} - ${accountLabel}`
 }
 
-export function MobileConnectionPage() {
+function getCloudRelaySummary(status: DesktopMobileBridgeStatus | null, t: MobileTranslate) {
+  const cloudRelay = status?.cloudRelay
+  if (!cloudRelay) return t("connections.mobile.checking")
+  if (cloudRelay.enabled && cloudRelay.state === "connected") return t("connections.mobile.connected")
+  if (cloudRelay.enabled && cloudRelay.state === "registering") return t("connections.mobile.connecting")
+  if (cloudRelay.enabled) return cloudRelay.state || t("connections.mobile.enabled")
+  return t("connections.mobile.notConfigured")
+}
+
+function getCloudRelayTone(status: DesktopMobileBridgeStatus | null) {
+  const cloudRelay = status?.cloudRelay
+  if (cloudRelay?.enabled && cloudRelay.state === "connected") return "is-success"
+  if (cloudRelay?.enabled) return "is-warning"
+  return "is-muted"
+}
+
+function getBridgeTone(status: DesktopMobileBridgeStatus | null) {
+  if (!status) return "is-muted"
+  return status.running ? "is-success" : "is-warning"
+}
+
+function getLanTone(status: DesktopMobileBridgeStatus | null) {
+  return getPrimaryLanPairingUrl(status) ? "is-success" : "is-muted"
+}
+
+export function MobileConnectionPage({ windowControls }: MobileConnectionPageProps = {}) {
   const { locale, t } = useI18n()
   const [status, setStatus] = useState<DesktopMobileBridgeStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [isRefreshingPairing, setIsRefreshingPairing] = useState(false)
   const [isRotating, setIsRotating] = useState(false)
-  const [isLegacyOpen, setIsLegacyOpen] = useState(false)
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
   const [revokingDeviceID, setRevokingDeviceID] = useState<string | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
@@ -189,6 +218,7 @@ export function MobileConnectionPage() {
   const pairingDeepLink = useMemo(() => getPrimaryPairingDeepLink(status, primaryPairingUrl, now), [now, primaryPairingUrl, status])
   const androidSmokeCommand = useMemo(() => createAndroidSmokeCommand(pairingDeepLink), [pairingDeepLink])
   const pairingExpiryLabel = formatPairingExpiry(getPrimaryPairingExpiresAt(status, now), now, t)
+  const lanPairingUrl = useMemo(() => getPrimaryLanPairingUrl(status), [status])
 
   useEffect(() => {
     let cancelled = false
@@ -271,230 +301,284 @@ export function MobileConnectionPage() {
 
   return (
     <section className="mobile-connection-page" aria-label={t("connections.mobile.title")}>
-      <div className="mobile-connection-shell">
-        <header className="mobile-connection-hero">
-          <span className="mobile-connection-icon" aria-hidden="true">
+      <ShellTopMenu
+        as="header"
+        ariaLabel={t("mobile.topMenu")}
+        className="canvas-region-top-menu mobile-connection-top-menu"
+        contentClassName="canvas-region-top-menu-tabs-shell"
+        content={(
+          <div className="mobile-connection-top-menu-label">
             <SmartphoneIcon />
-          </span>
-          <div>
-            <h1>{t("connections.mobile.title")}</h1>
-            <p>{t("connections.mobile.description")}</p>
+            <span>{t("mobile.title")}</span>
           </div>
-        </header>
+        )}
+        dragRegion
+        layout="three-column"
+        trailing={windowControls}
+        trailingClassName="mobile-connection-top-menu-window-controls"
+      />
 
-        {error ? <div className="settings-banner is-error">{error}</div> : null}
+      <div className="mobile-connection-page-main">
+        <div className="mobile-connection-shell">
+          {error ? <div className="settings-banner is-error">{error}</div> : null}
 
-        <section className="mobile-connection-grid">
-          <article className="mobile-connection-card">
-            <span className="settings-field-label">{t("connections.mobile.bridgeStatus")}</span>
-            <strong>{status?.running ? t("connections.mobile.running") : t("connections.mobile.stopped")}</strong>
-            <small>{formatStartedAt(status?.startedAt ?? null, locale, t)}</small>
-          </article>
-          <article className="mobile-connection-card">
-            <span className="settings-field-label">{t("connections.mobile.listeningAddress")}</span>
-            <strong>{status?.host ?? "0.0.0.0"}</strong>
-            <small>{status?.port ? t("connections.mobile.port", { port: status.port }) : t("connections.mobile.portUnavailable")}</small>
-          </article>
-          <article className="mobile-connection-card">
-            <span className="settings-field-label">{t("connections.mobile.pairedDevices")}</span>
-            <strong>{activeDeviceCount}</strong>
-            <small>{devices.length ? t("connections.mobile.records", { count: devices.length }) : t("connections.mobile.noDevices")}</small>
-          </article>
-          <article className="mobile-connection-card">
-            <span className="settings-field-label">{t("connections.mobile.cloudRelay")}</span>
-            <strong>{status?.cloudRelay?.state ?? "disabled"}</strong>
-            <small>{formatCloudRelayDetail(status, t)}</small>
-          </article>
-        </section>
+          <div className="mobile-connection-workbench">
+            <section className="mobile-connection-pairing-panel" aria-label={t("connections.mobile.scanTitle")}>
+              <div className="mobile-connection-pairing-copy">
+                <h2>{t("connections.mobile.scanTitle")}</h2>
+              </div>
 
-        <section className="mobile-connection-panel">
-          <div className="settings-section-header">
-            <div>
-              <h3>{t("connections.mobile.scanTitle")}</h3>
-              <p>{pairingExpiryLabel}</p>
-            </div>
-            <div className="settings-inline-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={isRefreshingPairing}
-                onClick={() => void refreshPairingCode()}
-              >
-                <ResetIcon />
-                {isRefreshingPairing ? t("connections.mobile.refreshing") : t("connections.mobile.refreshQr")}
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={!pairingDeepLink}
-                onClick={() => void copyValue("deeplink", pairingDeepLink)}
-              >
-                <CopyIcon />
-                {copied === "deeplink" ? t("connections.mobile.copied") : t("connections.mobile.copyDeepLink")}
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={!androidSmokeCommand}
-                onClick={() => void copyValue("smoke-command", androidSmokeCommand)}
-              >
-                <CopyIcon />
-                {copied === "smoke-command" ? t("connections.mobile.copied") : t("connections.mobile.copyTestCommand")}
-              </button>
-            </div>
-          </div>
+              <div className="mobile-connection-pairing-body">
+                <div className="mobile-connection-qr-stage">
+                  <div className="mobile-connection-qr" aria-label={t("connections.mobile.qrCode")}>
+                    {qrDataUrl ? (
+                      <img src={qrDataUrl} alt={t("connections.mobile.qrCode")} />
+                    ) : (
+                      <span>{pairingDeepLink || primaryPairingUrl ? t("connections.mobile.generating") : t("connections.mobile.unavailable")}</span>
+                    )}
+                  </div>
+                  <p>{pairingExpiryLabel}</p>
+                  {!pairingDeepLink && status ? (
+                    <small>{t("connections.mobile.noPairingAddress")}</small>
+                  ) : null}
+                </div>
+              </div>
 
-          <div className="mobile-connection-qr" aria-label={t("connections.mobile.qrCode")}>
-            {qrDataUrl ? (
-              <img src={qrDataUrl} alt={t("connections.mobile.qrCode")} />
-            ) : (
-              <span>{pairingDeepLink || primaryPairingUrl ? t("connections.mobile.generating") : t("connections.mobile.unavailable")}</span>
-            )}
-          </div>
-
-          <div className="mobile-connection-url-list">
-            {pairingDeepLink ? (
-              <button
-                type="button"
-                className="mobile-connection-url-row"
-                onClick={() => void copyValue("deeplink-row", pairingDeepLink)}
-              >
-                <span>{pairingDeepLink}</span>
-                <CopyIcon />
-              </button>
-            ) : null}
-            {pairingUrls.map((url) => (
-              <button
-                key={url}
-                type="button"
-                className="mobile-connection-url-row"
-                onClick={() => void copyValue(url, url)}
-              >
-                <span>{url}</span>
-                <CopyIcon />
-              </button>
-            ))}
-            {androidSmokeCommand ? (
-              <button
-                type="button"
-                className="mobile-connection-url-row"
-                onClick={() => void copyValue("smoke-command-row", androidSmokeCommand)}
-              >
-                <span>{androidSmokeCommand}</span>
-                <CopyIcon />
-              </button>
-            ) : null}
-            {status && pairingUrls.length === 0 ? (
-              <div className="mobile-connection-empty">{t("connections.mobile.noPairingAddress")}</div>
-            ) : null}
-          </div>
-        </section>
-
-        <section className="mobile-connection-panel">
-          <div className="settings-section-header">
-            <div>
-              <h3>{t("connections.mobile.advancedTokenAccess")}</h3>
-            </div>
-            <button
-              type="button"
-              className="secondary-button"
-              aria-expanded={isLegacyOpen}
-              onClick={() => setIsLegacyOpen((current) => !current)}
-            >
-              {isLegacyOpen ? t("connections.mobile.hideAdvanced") : t("connections.mobile.showAdvanced")}
-            </button>
-          </div>
-
-          {isLegacyOpen ? (
-            <>
-              <div className="settings-inline-actions">
+              <div className="mobile-connection-primary-actions">
                 <button
                   type="button"
                   className="secondary-button"
-                  disabled={!primaryUrl}
-                  onClick={() => void copyValue("legacy-url", primaryUrl)}
-                >
-                  <CopyIcon />
-                  {copied === "legacy-url" ? t("connections.mobile.copied") : t("connections.mobile.copyLegacyUrl")}
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={!status?.token}
-                  onClick={() => void copyValue("token", status?.token ?? "")}
-                >
-                  <CopyIcon />
-                  {copied === "token" ? t("connections.mobile.copied") : t("connections.mobile.copyToken")}
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={isRotating}
-                  onClick={() => void rotateToken()}
+                  disabled={isRefreshingPairing}
+                  onClick={() => void refreshPairingCode()}
                 >
                   <ResetIcon />
-                  {isRotating ? t("connections.mobile.refreshing") : t("connections.mobile.rotateToken")}
+                  {isRefreshingPairing ? t("connections.mobile.refreshing") : t("connections.mobile.refreshQr")}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!pairingDeepLink}
+                  onClick={() => void copyValue("deeplink", pairingDeepLink)}
+                >
+                  <CopyIcon />
+                  {copied === "deeplink" ? t("connections.mobile.copied") : t("connections.mobile.copyConnectionLink")}
                 </button>
               </div>
-              <div className="mobile-connection-url-list">
-                {legacyUrls.map((url) => (
-                  <button
-                    key={url}
-                    type="button"
-                    className="mobile-connection-url-row"
-                    onClick={() => void copyValue(`legacy-${url}`, url)}
-                  >
-                    <span>{url}</span>
-                    <CopyIcon />
-                  </button>
-                ))}
-              </div>
-              <code className="mobile-connection-token">{status?.token ?? ""}</code>
-            </>
-          ) : null}
-        </section>
+            </section>
 
-        <section className="mobile-connection-panel">
-          <div className="settings-section-header">
-            <div>
-              <h3>{t("connections.mobile.pairedDevices")}</h3>
-            </div>
-            <button type="button" className="secondary-button" onClick={() => void refreshStatus()}>
-              {t("app.refresh")}
-            </button>
+            <aside className="mobile-connection-side-panel">
+              <section className="mobile-connection-panel mobile-connection-status-panel">
+                <div className="settings-section-header">
+                  <div>
+                    <h3>{t("connections.mobile.statusTitle")}</h3>
+                  </div>
+                </div>
+                <div className="mobile-connection-status-list">
+                  <div className="mobile-connection-status-row">
+                    <div>
+                      <span>{t("connections.mobile.desktopReady")}</span>
+                      <small>{formatStartedAt(status?.startedAt ?? null, locale, t)}</small>
+                    </div>
+                    <strong className={`mobile-connection-pill ${getBridgeTone(status)}`}>
+                      {status?.running ? t("connections.mobile.ready") : t("connections.mobile.stopped")}
+                    </strong>
+                  </div>
+                  <div className="mobile-connection-status-row">
+                    <div>
+                      <span>{t("connections.mobile.cloudRelay")}</span>
+                      <small>{formatCloudRelayDetail(status, t)}</small>
+                    </div>
+                    <strong className={`mobile-connection-pill ${getCloudRelayTone(status)}`}>
+                      {getCloudRelaySummary(status, t)}
+                    </strong>
+                  </div>
+                  <div className="mobile-connection-status-row">
+                    <div>
+                      <span>{t("connections.mobile.localNetwork")}</span>
+                      <small>{lanPairingUrl ? t("connections.mobile.localNetworkAvailable") : t("connections.mobile.noPairingAddress")}</small>
+                    </div>
+                    <strong className={`mobile-connection-pill ${getLanTone(status)}`}>
+                      {lanPairingUrl ? t("connections.mobile.available") : t("connections.mobile.unavailable")}
+                    </strong>
+                  </div>
+                  <div className="mobile-connection-status-row">
+                    <div>
+                      <span>{t("connections.mobile.pairedDevices")}</span>
+                      <small>{devices.length ? t("connections.mobile.records", { count: devices.length }) : t("connections.mobile.noDevices")}</small>
+                    </div>
+                    <strong>{activeDeviceCount}</strong>
+                  </div>
+                </div>
+              </section>
+
+              <section className="mobile-connection-panel mobile-connection-devices-panel">
+                <div className="settings-section-header">
+                  <div>
+                    <h3>{t("connections.mobile.pairedDevices")}</h3>
+                    <p>{t("connections.mobile.devicesDescription")}</p>
+                  </div>
+                  <button type="button" className="secondary-button" onClick={() => void refreshStatus()}>
+                    {t("app.refresh")}
+                  </button>
+                </div>
+
+                <div className="mobile-connection-device-list">
+                  {devices.length ? (
+                    devices.map((device) => {
+                      const revoked = Boolean(device.revokedAt)
+                      return (
+                        <div key={device.id} className={revoked ? "mobile-connection-device-row is-revoked" : "mobile-connection-device-row"}>
+                          <div className="mobile-connection-device-main">
+                            <strong>{device.name}</strong>
+                            <span>{formatCapabilities(device.capabilities, t)}</span>
+                          </div>
+                          <span>
+                            {revoked
+                              ? t("connections.mobile.revoked")
+                              : t("connections.mobile.lastSeen", { time: formatDeviceTime(device.lastSeenAt, locale) })}
+                          </span>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            disabled={revoked || revokingDeviceID === device.id}
+                            onClick={() => void revokeDevice(device.id)}
+                          >
+                            {revokingDeviceID === device.id ? t("connections.mobile.revoking") : t("connections.mobile.revoke")}
+                          </button>
+                        </div>
+                      )
+                    })
+                  ) : (
+                    <div className="mobile-connection-empty">{t("connections.mobile.emptyDevices")}</div>
+                  )}
+                </div>
+              </section>
+            </aside>
           </div>
 
-          <div className="mobile-connection-device-list">
-            {devices.length ? (
-              devices.map((device) => {
-                const revoked = Boolean(device.revokedAt)
-                return (
-                  <div key={device.id} className={revoked ? "mobile-connection-device-row is-revoked" : "mobile-connection-device-row"}>
-                    <div className="mobile-connection-device-main">
-                      <strong>{device.name}</strong>
-                      <span>{formatCapabilities(device.capabilities, t)}</span>
-                    </div>
-                    <span>
-                      {revoked
-                        ? t("connections.mobile.revoked")
-                        : t("connections.mobile.lastSeen", { time: formatDeviceTime(device.lastSeenAt, locale) })}
-                    </span>
+          <section className="mobile-connection-panel mobile-connection-advanced-panel">
+            <div className="settings-section-header">
+              <div>
+                <h3>{t("connections.mobile.advancedTroubleshooting")}</h3>
+                <p>{t("connections.mobile.advancedDescription")}</p>
+              </div>
+              <button
+                type="button"
+                className="secondary-button"
+                aria-expanded={isAdvancedOpen}
+                onClick={() => setIsAdvancedOpen((current) => !current)}
+              >
+                {isAdvancedOpen ? t("connections.mobile.hideAdvanced") : t("connections.mobile.showAdvanced")}
+              </button>
+            </div>
+
+            {isAdvancedOpen ? (
+              <div className="mobile-connection-advanced-body">
+                <div className="mobile-connection-technical-grid">
+                  <div>
+                    <span>{t("connections.mobile.listeningAddress")}</span>
+                    <strong>{status?.host ?? "0.0.0.0"}</strong>
+                  </div>
+                  <div>
+                    <span>{t("connections.mobile.portLabel")}</span>
+                    <strong>{status?.port ?? t("connections.mobile.portUnavailable")}</strong>
+                  </div>
+                  <div>
+                    <span>{t("connections.mobile.bridgeStatus")}</span>
+                    <strong>{status?.running ? t("connections.mobile.running") : t("connections.mobile.stopped")}</strong>
+                  </div>
+                </div>
+
+                <div className="settings-inline-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!primaryUrl}
+                    onClick={() => void copyValue("legacy-url", primaryUrl)}
+                  >
+                    <CopyIcon />
+                    {copied === "legacy-url" ? t("connections.mobile.copied") : t("connections.mobile.copyLegacyUrl")}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!status?.token}
+                    onClick={() => void copyValue("token", status?.token ?? "")}
+                  >
+                    <CopyIcon />
+                    {copied === "token" ? t("connections.mobile.copied") : t("connections.mobile.copyToken")}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!androidSmokeCommand}
+                    onClick={() => void copyValue("smoke-command", androidSmokeCommand)}
+                  >
+                    <CopyIcon />
+                    {copied === "smoke-command" ? t("connections.mobile.copied") : t("connections.mobile.copyTestCommand")}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={isRotating}
+                    onClick={() => void rotateToken()}
+                  >
+                    <ResetIcon />
+                    {isRotating ? t("connections.mobile.refreshing") : t("connections.mobile.rotateToken")}
+                  </button>
+                </div>
+                <div className="mobile-connection-url-list">
+                  {pairingDeepLink ? (
                     <button
                       type="button"
-                      className="secondary-button"
-                      disabled={revoked || revokingDeviceID === device.id}
-                      onClick={() => void revokeDevice(device.id)}
+                      className="mobile-connection-url-row"
+                      onClick={() => void copyValue("deeplink-row", pairingDeepLink)}
                     >
-                      {revokingDeviceID === device.id ? t("connections.mobile.revoking") : t("connections.mobile.revoke")}
+                      <span>{pairingDeepLink}</span>
+                      <CopyIcon />
                     </button>
-                  </div>
-                )
-              })
-            ) : (
-              <div className="mobile-connection-empty">{t("connections.mobile.emptyDevices")}</div>
-            )}
-          </div>
-        </section>
+                  ) : null}
+                  {pairingUrls.map((url) => (
+                    <button
+                      key={url}
+                      type="button"
+                      className="mobile-connection-url-row"
+                      onClick={() => void copyValue(url, url)}
+                    >
+                      <span>{url}</span>
+                      <CopyIcon />
+                    </button>
+                  ))}
+                  {androidSmokeCommand ? (
+                    <button
+                      type="button"
+                      className="mobile-connection-url-row"
+                      onClick={() => void copyValue("smoke-command-row", androidSmokeCommand)}
+                    >
+                      <span>{androidSmokeCommand}</span>
+                      <CopyIcon />
+                    </button>
+                  ) : null}
+                  {legacyUrls.map((url) => (
+                    <button
+                      key={url}
+                      type="button"
+                      className="mobile-connection-url-row"
+                      onClick={() => void copyValue(`legacy-${url}`, url)}
+                    >
+                      <span>{url}</span>
+                      <CopyIcon />
+                    </button>
+                  ))}
+                  {status && pairingUrls.length === 0 ? (
+                    <div className="mobile-connection-empty">{t("connections.mobile.noPairingAddress")}</div>
+                  ) : null}
+                </div>
+                <code className="mobile-connection-token">{status?.token ?? ""}</code>
+              </div>
+            ) : null}
+          </section>
+        </div>
       </div>
     </section>
   )

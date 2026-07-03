@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import QRCode from "qrcode"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { DesktopMobileBridgeStatus } from "../../../../shared/desktop-ipc-contract"
@@ -70,19 +70,37 @@ describe("MobileConnectionPage", () => {
     }
   })
 
+  it("renders the standalone mobile top menu with window controls", async () => {
+    render(<MobileConnectionPage windowControls={<button type="button">Window action</button>} />)
+
+    const topMenu = screen.getByLabelText("Mobile top menu")
+    expect(topMenu).toBeInTheDocument()
+    expect(within(topMenu).getByText("Mobile")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Window action" })).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Scan to connect Anybox Mobile" })).toBeInTheDocument()
+  })
+
   it("makes Android QR pairing the primary connection path", async () => {
     render(<MobileConnectionPage />)
 
     expect(await screen.findByRole("heading", { name: "Scan to connect Anybox Mobile" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /Refresh QR/ })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /Copy deep link/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Copy connection link/ })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Copy test command/ })).not.toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Advanced troubleshooting" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Connection status" })).toBeInTheDocument()
+    expect(screen.queryByText("https://anybox.com.cn/?code=pair-123")).not.toBeInTheDocument()
+    expect(screen.queryByText("http://192.168.1.20:4896/?code=pair-123")).not.toBeInTheDocument()
+    expect(screen.queryByText("http://192.168.1.20:4896/?token=legacy-token")).not.toBeInTheDocument()
+    expect(screen.queryByText(/corepack pnpm mobile:android:smoke:bridge/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Show advanced" }))
+
     expect(screen.getByRole("button", { name: /Copy test command/ })).toBeInTheDocument()
     expect(screen.getByText("https://anybox.com.cn/?code=pair-123")).toBeInTheDocument()
     expect(screen.getByText("http://192.168.1.20:4896/?code=pair-123")).toBeInTheDocument()
     expect(screen.getAllByText(/anybox-mobile:\/\/connect-options\?/).length).toBeGreaterThan(0)
     expect(screen.getByText(/corepack pnpm mobile:android:smoke:bridge/)).toBeInTheDocument()
-    expect(screen.getByRole("heading", { name: "Advanced token access" })).toBeInTheDocument()
-    expect(screen.queryByText("http://192.168.1.20:4896/?token=legacy-token")).not.toBeInTheDocument()
 
     await waitFor(() => {
       expect(QRCode.toDataURL).toHaveBeenCalledWith(
@@ -103,7 +121,7 @@ describe("MobileConnectionPage", () => {
     render(<MobileConnectionPage />)
 
     expect(await screen.findByText("No local pairing address is available.")).toBeInTheDocument()
-    expect(screen.getByText("Unavailable")).toBeInTheDocument()
+    expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0)
     expect(QRCode.toDataURL).not.toHaveBeenCalled()
   })
 
@@ -122,7 +140,7 @@ describe("MobileConnectionPage", () => {
   it("copies the Android deep link instead of the legacy token URL", async () => {
     render(<MobileConnectionPage />)
 
-    fireEvent.click(await screen.findByRole("button", { name: /Copy deep link/ }))
+    fireEvent.click(await screen.findByRole("button", { name: /Copy connection link/ }))
 
     await waitFor(() => {
       expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(
@@ -134,6 +152,7 @@ describe("MobileConnectionPage", () => {
   it("copies the Android bridge smoke command for handoff verification", async () => {
     render(<MobileConnectionPage />)
 
+    fireEvent.click(await screen.findByRole("button", { name: "Show advanced" }))
     fireEvent.click(await screen.findByRole("button", { name: /Copy test command/ }))
 
     await waitFor(() => {
@@ -163,7 +182,7 @@ describe("MobileConnectionPage", () => {
 
     render(<MobileConnectionPage />)
 
-    fireEvent.click(await screen.findByRole("button", { name: /Copy deep link/ }))
+    fireEvent.click(await screen.findByRole("button", { name: /Copy connection link/ }))
 
     await waitFor(() => {
       expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(
@@ -197,6 +216,7 @@ describe("MobileConnectionPage", () => {
       expect(desktop.refreshMobilePairingCode).toHaveBeenCalled()
     })
     expect(desktop.rotateMobileBridgeToken).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole("button", { name: "Show advanced" }))
     expect(await screen.findByText("https://anybox.com.cn/?code=pair-next")).toBeInTheDocument()
     expect(await screen.findByText("http://192.168.1.20:4896/?code=pair-next")).toBeInTheDocument()
 
@@ -239,6 +259,7 @@ describe("MobileConnectionPage", () => {
         expect.objectContaining({ type: "image/png" }),
       )
     })
+    fireEvent.click(await screen.findByRole("button", { name: "Show advanced" }))
     expect(await screen.findByText(expected)).toBeInTheDocument()
   })
 
@@ -264,7 +285,7 @@ describe("MobileConnectionPage", () => {
     expect(await screen.findByRole("heading", { name: "Paired devices" })).toBeInTheDocument()
     expect(screen.getByText("Pixel 8")).toBeInTheDocument()
     expect(screen.getByText("workspace:read, session:read")).toBeInTheDocument()
-    expect(screen.getByText("1")).toBeInTheDocument()
+    expect(screen.getAllByText("1").length).toBeGreaterThan(0)
 
     fireEvent.click(screen.getByRole("button", { name: "Revoke" }))
 

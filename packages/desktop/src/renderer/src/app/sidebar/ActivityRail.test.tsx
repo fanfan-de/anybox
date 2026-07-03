@@ -20,7 +20,7 @@ function renderActivityRail() {
 }
 
 describe("ActivityRail", () => {
-  it("places the connections hub directly under workspace in the primary rail", () => {
+  it("places mobile as a primary rail entry after connections", () => {
     const { props } = renderActivityRail()
     const rail = screen.getByLabelText("Primary navigation rail")
     const primaryStack = within(rail).getByLabelText("Primary views")
@@ -29,13 +29,16 @@ describe("ActivityRail", () => {
     expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([
       "Open workspace",
       "Open connections and extensions",
+      "Open mobile",
       "Open calendar",
       "Open automations",
     ])
 
     fireEvent.click(within(primaryStack).getByRole("button", { name: "Open connections and extensions" }))
+    fireEvent.click(within(primaryStack).getByRole("button", { name: "Open mobile" }))
 
     expect(props.onViewChange).toHaveBeenCalledWith("connections")
+    expect(props.onViewChange).toHaveBeenCalledWith("mobile")
   })
 
   it("keeps settings as the last control in the left rail footer", () => {
@@ -74,6 +77,9 @@ describe("ActivityRail", () => {
     expect(screen.queryByRole("button", { name: "Open SSH" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Open MCP" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Open connectors" })).not.toBeInTheDocument()
+    expect(within(screen.getByLabelText("Configuration views")).queryByRole("button", {
+      name: "Open mobile",
+    })).not.toBeInTheDocument()
     expect(within(screen.getByLabelText("Configuration views")).queryByRole("button", {
       name: "Open connections and extensions",
     })).not.toBeInTheDocument()

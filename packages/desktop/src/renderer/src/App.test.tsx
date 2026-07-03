@@ -10417,6 +10417,24 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Collapse left sidebar" }).closest(".activity-rail")).not.toBeNull()
   })
 
+  it("opens mobile as a standalone primary rail view", async () => {
+    const { container } = render(<App />)
+    const leftActivityRail = container.querySelector(".activity-rail:not(.is-right)") as HTMLElement | null
+
+    expect(leftActivityRail).not.toBeNull()
+    const mobileButton = within(leftActivityRail!).getByRole("button", { name: "Open mobile" })
+    expect(mobileButton).toBeInTheDocument()
+
+    fireEvent.click(mobileButton)
+
+    expect(await screen.findByLabelText("Mobile top menu")).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Scan to connect Anybox Mobile" })).toBeInTheDocument()
+    expect(screen.queryByLabelText("Connections and extensions top menu")).not.toBeInTheDocument()
+    expect(screen.queryByRole("tab", { name: "Mobile 1" })).not.toBeInTheDocument()
+    expect(document.querySelector("#app-sidebar")).not.toBeInTheDocument()
+    expect(screen.queryByRole("complementary", { name: "Inspector sidebar" })).not.toBeInTheDocument()
+  })
+
   it("keeps configuration rail entries collapsed at the bottom", () => {
     const { container } = render(<App />)
     const leftActivityRail = container.querySelector(".activity-rail:not(.is-right)") as HTMLElement | null
@@ -10424,6 +10442,7 @@ describe("App", () => {
     expect(leftActivityRail).not.toBeNull()
     expect(within(leftActivityRail!).getByRole("button", { name: "Open workspace" })).toBeInTheDocument()
     expect(within(leftActivityRail!).getByRole("button", { name: "Open connections and extensions" })).toBeInTheDocument()
+    expect(within(leftActivityRail!).getByRole("button", { name: "Open mobile" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Open skills" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Open prompts" })).not.toBeInTheDocument()
 
@@ -10442,6 +10461,7 @@ describe("App", () => {
     expect(within(configurationGroup).queryByRole("button", { name: "Open skills" })).not.toBeInTheDocument()
     expect(within(configurationGroup).queryByRole("button", { name: "Open prompts" })).not.toBeInTheDocument()
     expect(within(configurationGroup).queryByRole("button", { name: "Open connections and extensions" })).not.toBeInTheDocument()
+    expect(within(configurationGroup).queryByRole("button", { name: "Open mobile" })).not.toBeInTheDocument()
     expect(within(configurationGroup).queryByRole("button", { name: "Open MCP" })).not.toBeInTheDocument()
     expect(within(configurationGroup).queryByRole("button", { name: "Open plugins" })).not.toBeInTheDocument()
     expect(within(configurationGroup).queryByRole("button", { name: "Open connectors" })).not.toBeInTheDocument()

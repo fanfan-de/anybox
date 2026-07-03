@@ -9,7 +9,6 @@ interface ConnectionsPageProps {
   activeTab: ConnectionsTab
   children: ReactNode
   connectorCount: number
-  mobileCount?: number
   mcpCount: number
   pluginCount: number
   sshCount?: number
@@ -27,14 +26,12 @@ const CONNECTION_TABS: Array<{
   { key: "connectors", labelKey: "connections.tabs.connectors" },
   { key: "mcp", labelKey: "connections.tabs.mcp" },
   { key: "ssh", labelKey: "connections.tabs.ssh" },
-  { key: "mobile", labelKey: "connections.tabs.mobile" },
 ]
 
 function getSearchPlaceholderKey(tab: ConnectionsTab): TranslationKey {
   if (tab === "connectors") return "connections.search.connectors"
   if (tab === "mcp") return "connections.search.mcp"
   if (tab === "ssh") return "connections.search.ssh"
-  if (tab === "mobile") return "connections.search.mobile"
   return "connections.search.plugins"
 }
 
@@ -42,7 +39,6 @@ export function ConnectionsPage({
   activeTab,
   children,
   connectorCount,
-  mobileCount = 1,
   mcpCount,
   pluginCount,
   sshCount = 0,
@@ -58,7 +54,6 @@ export function ConnectionsPage({
     connectors: connectorCount,
     mcp: mcpCount,
     ssh: sshCount,
-    mobile: mobileCount,
   }
 
   return (

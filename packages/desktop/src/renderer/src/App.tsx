@@ -107,7 +107,6 @@ const EMPTY_CONNECTION_SEARCH_QUERIES: Record<ConnectionsTab, string> = {
   connectors: "",
   mcp: "",
   ssh: "",
-  mobile: "",
 }
 const EMPTY_SIDE_CHAT_DRAFT_STATE = createEmptyComposerDraftState()
 const EMPTY_SIDE_CHAT_ATTACHMENTS: ComposerAttachment[] = []
@@ -2381,9 +2380,10 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   const isAutomationsView = leftSidebarView === "automations"
   const isCalendarView = leftSidebarView === "calendar"
   const isConnectionsView = leftSidebarView === "connections"
+  const isMobileView = leftSidebarView === "mobile"
   const isBuiltinToolsView = leftSidebarView === "tools"
   const isShellSidebarManagedView = isResourcesView || isBuiltinToolsView
-  const isFullSurfaceView = isConnectionsView || isAutomationsView || isCalendarView
+  const isFullSurfaceView = isConnectionsView || isMobileView || isAutomationsView || isCalendarView
   const windowControls = useMemo(
     () => (
       isMacOS
@@ -2707,6 +2707,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 windowControls={windowControls}
               />
             </Suspense>
+          ) : isMobileView ? (
+            <MobileConnectionPage windowControls={windowControls} />
           ) : isAutomationsView ? (
             <Suspense fallback={null}>
               <AutomationsPage
@@ -2828,8 +2830,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                   onSearchQueryChange={handleConnectionSearchQueryChange}
                   onStartNewMcpServer={startNewMcpServer}
                 />
-              ) : activeConnectionsTab === "mobile" ? (
-                <MobileConnectionPage />
               ) : (
                 <SshConnectionsPage
                   searchQuery={connectionSearchQueries.ssh}

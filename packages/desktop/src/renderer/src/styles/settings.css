@@ -7165,7 +7165,6 @@ body.is-dragging-settings-page {
 .connections-page-content > .plugins-page,
 .connections-page-content > .connectors-page,
 .connections-page-content > .mcp-servers-page,
-.connections-page-content > .mobile-connection-page,
 .connections-page-content > .ssh-connections-page {
   height: 100%;
   background: transparent;
@@ -7190,106 +7189,158 @@ body.is-dragging-settings-page {
   min-width: 0;
   min-height: 0;
   height: 100%;
-  overflow: auto;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
   background: var(--seg-shell);
   color: var(--seg-text-1);
+}
+
+.mobile-connection-page-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
   padding: 26px;
 }
 
-.mobile-connection-shell {
-  width: min(100%, 980px);
-  display: grid;
-  gap: 18px;
+.mobile-connection-top-menu {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
-.mobile-connection-hero,
+.mobile-connection-top-menu .shell-top-menu-content {
+  grid-column: 2;
+  width: auto;
+  justify-self: center;
+  justify-content: center;
+}
+
+.mobile-connection-top-menu .shell-top-menu-trailing {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.mobile-connection-top-menu-label {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--seg-text-1);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.mobile-connection-top-menu-label svg {
+  width: 16px;
+  height: 16px;
+  color: var(--seg-text-2);
+}
+
+.mobile-connection-top-menu-window-controls {
+  min-width: var(--window-controls-canvas-clearance, 124px);
+}
+
+.mobile-connection-shell {
+  width: min(100%, 1180px);
+  margin: 0 auto;
+  display: grid;
+  gap: 20px;
+}
+
 .mobile-connection-panel,
-.mobile-connection-card {
+.mobile-connection-pairing-panel {
   min-width: 0;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
-  background: transparent;
+  background: var(--seg-panel);
 }
 
-.mobile-connection-hero {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 16px;
-  padding: 18px;
-}
-
-.mobile-connection-icon {
-  width: 42px;
-  height: 42px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background: var(--mix-brand-accent-active-12-transparent-88);
-  color: var(--brand-accent-active);
-}
-
-.mobile-connection-icon svg {
-  width: 22px;
-  height: 22px;
-}
-
-.mobile-connection-hero h1,
-.mobile-connection-panel h3,
-.mobile-connection-card strong {
+.mobile-connection-pairing-copy h2,
+.mobile-connection-panel h3 {
   margin: 0;
   color: var(--seg-text-1);
   letter-spacing: 0;
 }
 
-.mobile-connection-hero h1 {
-  font-size: 24px;
-  line-height: 1.2;
+.mobile-connection-pairing-copy h2 {
+  font-size: 22px;
+  line-height: 1.24;
 }
 
-.mobile-connection-hero p,
 .mobile-connection-panel p,
-.mobile-connection-card small,
 .mobile-connection-empty {
-  margin: 5px 0 0;
+  margin: 0;
   color: var(--seg-text-2);
   font-size: 13px;
   line-height: 1.45;
 }
 
-.mobile-connection-grid {
+.mobile-connection-workbench {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: minmax(520px, 1.55fr) minmax(320px, 0.9fr);
+  align-items: start;
+  gap: 18px;
 }
 
-.mobile-connection-card {
+.mobile-connection-pairing-panel {
   display: grid;
-  gap: 5px;
-  padding: 15px;
+  gap: 22px;
+  align-content: start;
+  padding: 22px;
 }
 
-.mobile-connection-card strong {
-  font-size: 19px;
-  line-height: 1.2;
+.mobile-connection-pairing-copy {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  text-align: center;
+}
+
+.mobile-connection-pairing-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+}
+
+.mobile-connection-qr-stage {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+.mobile-connection-qr-stage p {
+  margin: 0;
+  color: var(--seg-text-2);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.mobile-connection-qr-stage small {
+  max-width: 260px;
+  color: var(--seg-text-3);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
 }
 
 .mobile-connection-panel {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   padding: 16px;
 }
 
 .mobile-connection-qr {
-  width: 168px;
-  height: 168px;
-  padding: 10px;
+  width: 238px;
+  height: 238px;
+  padding: 14px;
   border: 1px solid var(--seg-border);
-  border-radius: var(--seg-radius-xs);
-  background: var(--seg-panel);
+  border-radius: var(--seg-radius-sm);
+  background: #ffffff;
   display: grid;
   place-items: center;
+  box-shadow: 0 1px 2px var(--mix-seg-text-3-10-transparent-90);
 }
 
 .mobile-connection-qr img {
@@ -7302,6 +7353,98 @@ body.is-dragging-settings-page {
 .mobile-connection-qr span {
   color: var(--seg-text-3);
   font-size: 12px;
+}
+
+.mobile-connection-status-row span {
+  color: var(--seg-text-1);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.mobile-connection-status-row small {
+  display: block;
+  margin-top: 3px;
+  color: var(--seg-text-2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.mobile-connection-primary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.mobile-connection-primary-actions .secondary-button,
+.mobile-connection-panel .secondary-button {
+  min-height: 34px;
+}
+
+.mobile-connection-side-panel {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.mobile-connection-status-list {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--seg-border);
+}
+
+.mobile-connection-status-row {
+  min-width: 0;
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--seg-border);
+}
+
+.mobile-connection-status-row > strong:not(.mobile-connection-pill) {
+  color: var(--seg-text-1);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.mobile-connection-pill {
+  min-width: 0;
+  max-width: 142px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 9px;
+  border: 1px solid var(--seg-border);
+  border-radius: 999px;
+  color: var(--seg-text-2);
+  background: var(--seg-panel-muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-connection-pill.is-success {
+  color: var(--semantic-success-text, var(--brand-accent-active));
+  border-color: var(--mix-brand-accent-active-28-transparent-72);
+  background: var(--mix-brand-accent-active-10-transparent-90);
+}
+
+.mobile-connection-pill.is-warning {
+  color: var(--semantic-warning-text);
+  border-color: var(--semantic-warning-border, var(--seg-border));
+  background: var(--semantic-warning-surface, var(--seg-panel-muted));
+}
+
+.mobile-connection-pill.is-muted {
+  color: var(--seg-text-3);
 }
 
 .mobile-connection-url-list {
@@ -7356,6 +7499,43 @@ body.is-dragging-settings-page {
   color: var(--seg-text-1);
 }
 
+.mobile-connection-advanced-body {
+  display: grid;
+  gap: 14px;
+}
+
+.mobile-connection-technical-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mobile-connection-technical-grid > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--seg-radius-xs);
+  background: var(--seg-panel-muted);
+}
+
+.mobile-connection-technical-grid span {
+  color: var(--seg-text-3);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.mobile-connection-technical-grid strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--seg-text-1);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .mobile-connection-device-list {
   min-width: 0;
   display: grid;
@@ -7366,11 +7546,15 @@ body.is-dragging-settings-page {
   min-width: 0;
   min-height: 44px;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(150px, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
-  padding: 8px 0;
+  gap: 8px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--seg-border);
+}
+
+.mobile-connection-device-row .secondary-button {
+  width: fit-content;
 }
 
 .mobile-connection-device-main {
@@ -7403,13 +7587,20 @@ body.is-dragging-settings-page {
   color: var(--seg-text-3);
 }
 
+@media (max-width: 980px) {
+  .mobile-connection-workbench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 720px) {
-  .mobile-connection-page {
+  .mobile-connection-page-main {
     padding: 18px;
   }
 
-  .mobile-connection-grid,
-  .mobile-connection-hero {
+  .mobile-connection-workbench,
+  .mobile-connection-pairing-body,
+  .mobile-connection-technical-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 

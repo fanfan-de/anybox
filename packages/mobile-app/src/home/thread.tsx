@@ -1,6 +1,6 @@
 import React from "react"
 import Feather from "@expo/vector-icons/Feather"
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native"
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native"
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native"
 import type { MobileApproval, MobileMessage, MobileProviderModel, MobileSessionSummary, MobileWorkspace } from "@/api/mobile-api"
 import { useI18n } from "@/i18n"
@@ -99,9 +99,12 @@ export function ThreadViewPage({
   const scrollFrameRef = React.useRef<number | null>(null)
   const previousSessionIDRef = React.useRef<string | null>(null)
   const previousTailMessageIDRef = React.useRef<string | null>(null)
+  const newSessionToastTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [newSessionToastVisible, setNewSessionToastVisible] = React.useState(false)
   const tailMessage = visibleMessages.length ? visibleMessages[visibleMessages.length - 1] : null
   const tailMessageID = tailMessage?.info?.id ?? null
   const tailMessagePending = tailMessage?.info?.pending === true
+  const showingWorkspaceIntro = Boolean(focusedWorkspace && !focusedSession)
 
   const scrollTimelineToEnd = React.useCallback((animated = false) => {
     if (scrollFrameRef.current !== null) {
@@ -116,6 +119,9 @@ export function ThreadViewPage({
   React.useEffect(() => () => {
     if (scrollFrameRef.current !== null) {
       cancelAnimationFrame(scrollFrameRef.current)
+    }
+    if (newSessionToastTimerRef.current !== null) {
+      clearTimeout(newSessionToastTimerRef.current)
     }
   }, [])
 
@@ -156,11 +162,30 @@ export function ThreadViewPage({
     }
   }, [scrollTimelineToEnd])
 
+  const showNewSessionToast = React.useCallback(() => {
+    if (newSessionToastTimerRef.current !== null) {
+      clearTimeout(newSessionToastTimerRef.current)
+    }
+    setNewSessionToastVisible(true)
+    newSessionToastTimerRef.current = setTimeout(() => {
+      setNewSessionToastVisible(false)
+      newSessionToastTimerRef.current = null
+    }, 3200)
+  }, [])
+
+  const handleNewChatPress = React.useCallback(() => {
+    if (showingWorkspaceIntro) {
+      showNewSessionToast()
+      return
+    }
+    onNewChat()
+  }, [onNewChat, showingWorkspaceIntro, showNewSessionToast])
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={0}
-      style={{ backgroundColor: "#171717", flex: 1 }}
+      style={{ backgroundColor: "#171717", flex: 1, position: "relative" }}
     >
       <View style={{ alignSelf: "center", flex: 1, width: "100%", maxWidth: 430, paddingBottom, paddingTop }}>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 10, height: 58, paddingHorizontal: 14 }}>
@@ -170,12 +195,19 @@ export function ThreadViewPage({
               {title}
             </Text>
           </View>
-          <TopIconButton accessibilityLabel={t("thread.newSession")} disabled={!focusedWorkspace || sending} icon="edit-3" onPress={onNewChat} />
+          <TopIconButton accessibilityLabel={t("thread.newSession")} disabled={!focusedWorkspace || sending} icon="edit-3" onPress={handleNewChatPress} />
         </View>
 
         <ScrollView
           automaticallyAdjustKeyboardInsets
-          contentContainerStyle={{ gap: 14, paddingBottom: 18, paddingHorizontal: 22, paddingTop: 16 }}
+          contentContainerStyle={{
+            flexGrow: showingWorkspaceIntro ? 1 : undefined,
+            gap: 14,
+            justifyContent: showingWorkspaceIntro ? "center" : undefined,
+            paddingBottom: showingWorkspaceIntro ? 88 : 18,
+            paddingHorizontal: 22,
+            paddingTop: 16,
+          }}
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={handleTimelineContentSizeChange}
           onScroll={handleTimelineScroll}
@@ -191,7 +223,7 @@ export function ThreadViewPage({
             <DarkNotice title={t("thread.approvalFailed")} detail={approvalError} tone="danger" />
           ) : null}
           {focusedWorkspace && !focusedSession ? (
-            <AssistantIntro workspaceName={focusedWorkspace.name} />
+            <AssistantIntro toastLabel={t("thread.alreadyInNewSession")} toastVisible={newSessionToastVisible} />
           ) : null}
           {focusedSession ? (
             timelineItems.length ? (
@@ -692,14 +724,62 @@ function formatToolName(tool: string | undefined) {
     .trim() || "tool"
 }
 
-function AssistantIntro({ workspaceName }: { workspaceName: string }) {
+function AssistantIntro({
+  toastLabel,
+  toastVisible,
+}: {
+  toastLabel: string
+  toastVisible: boolean
+}) {
   const { t } = useI18n()
 
   return (
-    <View style={{ paddingTop: 14 }}>
-      <Text selectable style={{ color: "#dedede", fontSize: 16, lineHeight: 22 }}>
-        {t("thread.readyInWorkspace", { workspace: workspaceName })}
+    <View style={{ alignItems: "center", gap: 14, paddingHorizontal: 6, paddingVertical: 24, position: "relative", width: "100%" }}>
+      <Image
+        accessibilityIgnoresInvertColors
+        source={require("../../assets/icon.png")}
+        style={{
+          borderRadius: 16,
+          height: 58,
+          width: 58,
+        }}
+      />
+      <Text selectable style={{ color: "#f1f1f1", fontSize: 25, fontWeight: "900", lineHeight: 31, textAlign: "center" }}>
+        {t("thread.startConversation")}
       </Text>
+      {toastVisible ? <NewSessionToast label={toastLabel} /> : null}
+    </View>
+  )
+}
+
+function NewSessionToast({ label }: { label: string }) {
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        left: 0,
+        position: "absolute",
+        right: 0,
+        top: 92,
+        zIndex: 10,
+      }}
+    >
+      <View
+        style={{
+          backgroundColor: "#565656",
+          borderRadius: 14,
+          maxWidth: "82%",
+          paddingHorizontal: 22,
+          paddingVertical: 15,
+          shadowColor: "#000000",
+          shadowOpacity: 0.22,
+          shadowRadius: 12,
+        }}
+      >
+        <Text style={{ color: "#ffffff", fontSize: 20, fontWeight: "800", lineHeight: 26, textAlign: "center" }}>
+          {label}
+        </Text>
+      </View>
     </View>
   )
 }

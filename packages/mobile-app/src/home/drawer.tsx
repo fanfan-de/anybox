@@ -3,30 +3,25 @@ import Feather from "@expo/vector-icons/Feather"
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native"
 import type { MobileSessionSummary, MobileWorkspace } from "@/api/mobile-api"
 import { formatRelativeTime } from "@/utils/format"
-import { DarkToolbarButton } from "./shared"
 
 export function SessionDrawerPage({
   focusedSessionID,
   focusedWorkspaceID,
-  onNewChat,
   onOpenSettings,
   onSelectSession,
   onSelectWorkspace,
   paddingBottom,
   paddingTop,
-  sending,
   sessions,
   workspaces,
 }: {
   focusedSessionID?: string
   focusedWorkspaceID?: string
-  onNewChat: () => void
   onOpenSettings: () => void
   onSelectSession: (session: MobileSessionSummary, workspace: MobileWorkspace) => void
   onSelectWorkspace: (workspace: MobileWorkspace) => void
   paddingBottom: number
   paddingTop: number
-  sending: boolean
   sessions: MobileSessionSummary[]
   workspaces: MobileWorkspace[]
 }) {
@@ -197,11 +192,6 @@ export function SessionDrawerPage({
           </ScrollView>
         </View>
 
-        <View style={{ alignItems: "center", paddingHorizontal: 14, paddingTop: 10 }}>
-          <View style={{ alignItems: "center", flexDirection: "row", gap: 18, justifyContent: "center", minHeight: 34 }}>
-            <DarkToolbarButton label={sending ? "Sending" : "New"} onPress={onNewChat} />
-          </View>
-        </View>
       </View>
     </View>
   )
