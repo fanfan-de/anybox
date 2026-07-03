@@ -18,6 +18,7 @@ import {
   type MobileStatus,
 } from "@/api/mobile-api"
 import { useI18n } from "@/i18n"
+import type { MobileTranslationKey } from "@/i18n"
 import { useAccount } from "@/state/account"
 import { useConnection } from "@/state/connection"
 import {
@@ -117,6 +118,14 @@ export default function ProviderScreen() {
       return right.lastSeenAt - left.lastSeenAt
     })
   }, [connection?.desktopID, desktops])
+  const currentDesktop = useMemo(
+    () => currentDesktopForConnection(connection?.desktopID, sortedDesktops),
+    [connection?.desktopID, sortedDesktops],
+  )
+  const switchableDesktops = useMemo(
+    () => sortedDesktops.filter((desktop) => desktop.id !== connection?.desktopID),
+    [connection?.desktopID, sortedDesktops],
+  )
 
   const runDisconnect = useCallback(async () => {
     if (!connection) return
@@ -175,6 +184,26 @@ export default function ProviderScreen() {
   const transportLabel = connection?.transport === "relay" ? "Relay" : connection ? "Local" : t("app.unknown")
   const capabilityCount = status?.capabilities?.length ?? 0
   const capabilityLabel = formatCapabilityCount(capabilityCount, t)
+  const connectionDetail = connection
+    ? [
+        t("provider.connectedVia", { transport: transportLabel }),
+        status?.appVersion ? t("provider.versionInline", { version: status.appVersion }) : null,
+        capabilityCount ? capabilityLabel : null,
+      ]
+      .filter(Boolean)
+      .join(" · ")
+    : t("provider.connectDesktopHint")
+  const canReconnectCurrentDesktop = Boolean(connection && currentDesktop?.online && status?.online !== true)
+  const desktopEmptyTitle = desktopLoading
+    ? t("connection.findingDesktops")
+    : connection
+      ? t("provider.noOtherDesktops")
+      : t("connection.noDesktops")
+  const desktopEmptyDetail = desktopLoading
+    ? undefined
+    : connection
+      ? t("provider.noOtherDesktopsDetail")
+      : t("connection.noDesktopsDetail")
   const diagnostics = buildDiagnostics({
     accountEmail: account?.user.email,
     accountWorkspace: account?.workspace?.name,
@@ -184,8 +213,9 @@ export default function ProviderScreen() {
 
   return (
     <Screen>
-      <Section title={t("provider.currentConnection")} caption={transportLabel}>
+      <Section title={t("provider.currentConnection")} caption={connection ? transportLabel : undefined}>
         <ConnectionSummary
+          detail={connectionDetail}
           desktopName={desktopName}
           state={connectionState}
           tone={connectionTone}
@@ -194,20 +224,48 @@ export default function ProviderScreen() {
         {error ? <StateCard title={t("provider.connectionRefreshFailed")} detail={error} tone="danger" /> : null}
         <View style={{ flexDirection: "row", gap: 10 }}>
           <View style={{ flex: 1 }}>
-            <ActionButton icon="refresh-cw" label={t("app.refresh")} loading={loading} onPress={() => void load()} variant="secondary" />
+            {canReconnectCurrentDesktop && currentDesktop ? (
+              <ActionButton
+                icon="refresh-cw"
+                label={t("provider.reconnect")}
+                loading={connectingDesktopID === currentDesktop.id}
+                onPress={() => void connectDesktop(currentDesktop)}
+                variant="primary"
+              />
+            ) : connection ? (
+              <ActionButton
+                icon="repeat"
+                label={t("provider.switchDesktop")}
+                loading={disconnecting}
+                onPress={handleDisconnect}
+                variant="primary"
+              />
+            ) : (
+              <ActionButton
+                icon="camera"
+                label={t("provider.scanQrConnect")}
+                onPress={() => router.push("/scan" as never)}
+                variant="primary"
+              />
+            )}
           </View>
           <View style={{ flex: 1 }}>
-            <ActionButton icon="camera" label={t("connection.scanQr")} onPress={() => router.push("/scan" as never)} variant="primary" />
+            <ActionButton
+              icon="refresh-cw"
+              label={connection ? t("provider.recheckConnection") : t("provider.refreshDesktops")}
+              loading={connection ? loading : desktopLoading}
+              onPress={() => void (connection ? load() : loadDesktops())}
+              variant="secondary"
+            />
           </View>
         </View>
-        <ActionButton disabled={!connection} icon="repeat" label={t("provider.changeConnection")} loading={disconnecting} onPress={handleDisconnect} variant="danger" />
       </Section>
 
-      <Section title={t("connection.availableDesktops")} caption={desktopLoading ? t("app.searching") : `${desktops.length}`}>
+      <Section title={t("provider.switchableDesktops")} caption={desktopLoading ? t("app.searching") : `${switchableDesktops.length}`}>
         {relayDisabled ? <StateCard title={t("provider.relayUnavailable")} detail={t("provider.relayUnavailableDetail")} tone="danger" /> : null}
         {desktopError ? <StateCard title={t("provider.desktopListFailed")} detail={desktopError} tone="danger" /> : null}
-        {!relayDisabled && sortedDesktops.length ? (
-          sortedDesktops.map((desktop) => {
+        {!relayDisabled && switchableDesktops.length ? (
+          switchableDesktops.map((desktop) => {
             const isCurrentDesktop = desktop.id === connection?.desktopID
             const currentConnectionIsOnline = isCurrentDesktop && status?.online === true
             const canConnectDesktop = desktop.online && connectingDesktopID !== desktop.id && (!isCurrentDesktop || !currentConnectionIsOnline)
@@ -240,25 +298,51 @@ export default function ProviderScreen() {
             )
           })
         ) : !relayDisabled ? (
-          <StateCard title={desktopLoading ? t("connection.findingDesktops") : t("connection.noDesktops")} />
+          <StateCard title={desktopEmptyTitle} detail={desktopEmptyDetail} />
         ) : null}
-        <ActionButton icon="refresh-cw" label={t("provider.refreshDesktops")} loading={desktopLoading} onPress={() => void loadDesktops()} variant="secondary" />
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <ActionButton
+              icon="refresh-cw"
+              label={t("provider.refreshDesktops")}
+              loading={desktopLoading}
+              onPress={() => void loadDesktops()}
+              variant="secondary"
+            />
+          </View>
+          {connection ? (
+            <View style={{ flex: 1 }}>
+              <ActionButton
+                icon="camera"
+                label={t("provider.addDesktop")}
+                onPress={() => router.push("/scan" as never)}
+                variant="secondary"
+              />
+            </View>
+          ) : null}
+        </View>
       </Section>
 
       <CollapsiblePanel
-        caption={capabilityLabel}
+        caption={connection ? capabilityLabel : undefined}
         expanded={advancedOpen}
         onToggle={() => setAdvancedOpen((current) => !current)}
-        title={t("provider.advanced")}
+        title={t("provider.connectionDetails")}
       >
         <DetailCard>
-          <DetailRow title={t("provider.providerUrl")} value={account?.baseUrl ?? connection?.baseUrl ?? t("app.unknown")} />
+          <DetailRow title={t("provider.transport")} value={transportLabel} />
           <DetailRow divided title={t("provider.version")} value={status?.appVersion ?? t("app.unknown")} />
           <DetailRow divided title={t("provider.capabilities")} value={capabilityCount ? `${capabilityCount}` : t("app.unknown")} />
         </DetailCard>
         {status?.capabilities?.length ? <CapabilityCard capabilities={status.capabilities} /> : null}
         <DetailCard>
-          <DetailRow mono title={t("provider.endpoint")} value={connection ? trimMiddle(connection.baseUrl, 76) : t("settings.connection.offline")} />
+          <DetailRow title={t("provider.providerUrl")} value={account?.baseUrl ?? connection?.baseUrl ?? t("app.unknown")} />
+          <DetailRow
+            divided
+            mono
+            title={t("provider.endpoint")}
+            value={connection ? trimMiddle(connection.baseUrl, 76) : t("settings.connection.offline")}
+          />
           {connection?.desktopID ? <DetailRow divided mono title={t("provider.desktopId")} value={trimMiddle(connection.desktopID, 76)} /> : null}
           {connection?.deviceID ? <DetailRow divided mono title={t("provider.mobileDeviceId")} value={trimMiddle(connection.deviceID, 76)} /> : null}
         </DetailCard>
@@ -270,11 +354,13 @@ export default function ProviderScreen() {
 
 function ConnectionSummary({
   connected,
+  detail,
   desktopName,
   state,
   tone,
 }: {
   connected: boolean
+  detail: string
   desktopName: string
   state: string
   tone: ThemeTone
@@ -304,7 +390,7 @@ function ConnectionSummary({
           >
             {connected ? desktopName : t("provider.noDesktopConnected")}
           </Text>
-          {!connected ? (
+          {detail ? (
             <Text
               numberOfLines={2}
               style={{
@@ -313,7 +399,7 @@ function ConnectionSummary({
                 lineHeight: theme.typography.lineHeight.sm,
               }}
             >
-              {t("provider.connectDesktopHint")}
+              {detail}
             </Text>
           ) : null}
         </View>
@@ -584,11 +670,11 @@ function CapabilityCard({ capabilities }: { capabilities: string[] }) {
               selectable
               style={{
                 color: theme.colors.textSubtle,
-                fontFamily: theme.typography.family.mono,
-                fontSize: theme.typography.size.xs,
+                fontSize: theme.typography.size.sm,
+                lineHeight: theme.typography.lineHeight.sm,
               }}
             >
-              {capability}
+              {formatCapabilityLabel(capability, t)}
             </Text>
           </View>
         ))}
@@ -756,9 +842,30 @@ function formatCapabilityCount(count: number, t: ReturnType<typeof useI18n>["t"]
   return t("provider.capabilityCount", { count })
 }
 
+const capabilityLabels: Partial<Record<string, MobileTranslationKey>> = {
+  "approval:read": "provider.capability.approvalRead",
+  "approval:respond": "provider.capability.approvalRespond",
+  "message:send": "provider.capability.messageSend",
+  "session:create": "provider.capability.sessionCreate",
+  "session:read": "provider.capability.sessionRead",
+  "task:cancel": "provider.capability.taskCancel",
+  "workspace-file:read": "provider.capability.workspaceFileRead",
+  "workspace:read": "provider.capability.workspaceRead",
+}
+
+function formatCapabilityLabel(capability: string, t: ReturnType<typeof useI18n>["t"]) {
+  const key = capabilityLabels[capability]
+  return key ? t(key) : capability
+}
+
 function currentDesktopName(desktopID: string | undefined, desktops: MobileAccountRelayDesktop[]) {
   if (!desktopID) return null
   return desktops.find((desktop) => desktop.id === desktopID)?.name ?? null
+}
+
+function currentDesktopForConnection(desktopID: string | undefined, desktops: MobileAccountRelayDesktop[]) {
+  if (!desktopID) return null
+  return desktops.find((desktop) => desktop.id === desktopID) ?? null
 }
 
 function buildDiagnostics({
