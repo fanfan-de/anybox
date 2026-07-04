@@ -11,7 +11,6 @@ function ConnectionsPageHarness() {
     plugins: "",
     connectors: "",
     mcp: "",
-    ssh: "",
   })
 
   return (
@@ -56,7 +55,7 @@ describe("ConnectionsPage", () => {
     expect(screen.getByRole("tab", { name: "插件 14" })).toHaveAttribute("aria-selected", "true")
     expect(screen.getByRole("tab", { name: "连接器 2" })).toHaveAttribute("aria-selected", "false")
     expect(screen.getByRole("tab", { name: "MCP 1" })).toHaveAttribute("aria-selected", "false")
-    expect(screen.getByRole("tab", { name: "SSH 0" })).toHaveAttribute("aria-selected", "false")
+    expect(screen.queryByRole("tab", { name: "SSH 0" })).not.toBeInTheDocument()
     expect(screen.queryByRole("tab", { name: "手机 1" })).not.toBeInTheDocument()
     expect(screen.getByRole("searchbox", { name: "搜索插件" }).closest(".connections-page-search-row")).toBeInTheDocument()
     expect(screen.getByRole("searchbox", { name: "搜索插件" }).closest(".connections-top-menu")).toBeNull()
@@ -74,7 +73,7 @@ describe("ConnectionsPage", () => {
     expect(screen.getByRole("tab", { name: "Plugins 14" })).toHaveAttribute("aria-selected", "true")
     expect(screen.getByRole("tab", { name: "Connectors 2" })).toHaveAttribute("aria-selected", "false")
     expect(screen.getByRole("tab", { name: "MCP 1" })).toHaveAttribute("aria-selected", "false")
-    expect(screen.getByRole("tab", { name: "SSH 0" })).toHaveAttribute("aria-selected", "false")
+    expect(screen.queryByRole("tab", { name: "SSH 0" })).not.toBeInTheDocument()
     expect(screen.queryByRole("tab", { name: "Mobile 1" })).not.toBeInTheDocument()
     expect(screen.getByRole("searchbox", { name: "Search plugins" })).toHaveAttribute(
       "placeholder",

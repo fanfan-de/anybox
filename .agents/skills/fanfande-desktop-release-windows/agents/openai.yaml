@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fanfande Desktop Release (Windows)"
+  short_description: "Build and publish Fanfande Studio Windows desktop releases."
+  default_prompt: "Use $fanfande-desktop-release-windows to bump, package, and publish a Fanfande Studio Windows desktop release."

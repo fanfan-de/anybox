@@ -1,0 +1,4 @@
+interface:
+  display_name: "Anybox 前端规范"
+  short_description: "Anybox 桌面端前端 UI 风格、交互与实现规范"
+  default_prompt: "使用 $anybox-frontend-guidelines 按 Anybox 前端规范调整一个桌面端 UI 组件。"

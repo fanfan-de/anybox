@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fanfande Plugin Structure"
+  short_description: "Build valid Fanfande Studio plugin packages."
+  default_prompt: "Use $fanfande-plugin-structure to design a valid plugin folder and manifest for Fanfande Studio."

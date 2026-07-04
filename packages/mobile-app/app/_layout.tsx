@@ -43,7 +43,6 @@ function AppStack() {
         <Stack.Screen name="settings" options={{ title: t("nav.settings") }} />
         <Stack.Screen name="updates" options={{ title: t("nav.updates") }} />
         <Stack.Screen name="diagnostics" options={{ title: t("nav.diagnostics") }} />
-        <Stack.Screen name="approvals" options={{ title: t("nav.approvals") }} />
       </Stack>
     </>
   )

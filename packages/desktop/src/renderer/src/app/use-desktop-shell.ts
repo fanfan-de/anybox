@@ -26,6 +26,7 @@ import {
 const ACTIVITY_RAIL_VISIBILITY_STORAGE_KEY = "desktop.activityRailVisible"
 const DEBUG_UI_REGIONS_STORAGE_KEY = "desktop.debugUiRegions"
 const DEBUG_LINE_COLORS_STORAGE_KEY = "desktop.debugLineColors"
+const MOBILE_CONNECTION_ADVANCED_INFO_STORAGE_KEY = "desktop.mobileConnectionAdvancedInfo"
 const AGENT_DEBUG_TRACE_STORAGE_KEY = "desktop.agentDebugTrace"
 const ASSISTANT_TRACE_VISIBILITY_STORAGE_KEY = "desktop.assistantTraceVisibility.v1"
 const WINDOW_CONTROLS_CLEARANCE_FALLBACK = 124
@@ -77,6 +78,10 @@ function readDebugUiRegionsPreference() {
 
 function readDebugLineColorsPreference() {
   return readBooleanPreference(DEBUG_LINE_COLORS_STORAGE_KEY, false)
+}
+
+function readMobileConnectionAdvancedInfoPreference() {
+  return readBooleanPreference(MOBILE_CONNECTION_ADVANCED_INFO_STORAGE_KEY, false)
 }
 
 function readAgentDebugTracePreference() {
@@ -162,6 +167,7 @@ export function useDesktopShell() {
   } = appearanceState
   const [isDebugUiRegionsEnabled, setIsDebugUiRegionsEnabled] = useState(readDebugUiRegionsPreference)
   const [isDebugLineColorsEnabled, setIsDebugLineColorsEnabled] = useState(readDebugLineColorsPreference)
+  const [isMobileConnectionAdvancedInfoEnabled, setIsMobileConnectionAdvancedInfoEnabled] = useState(readMobileConnectionAdvancedInfoPreference)
   const [assistantTraceVisibility, setAssistantTraceVisibility] = useState(readAssistantTraceVisibilityPreference)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false)
@@ -402,6 +408,14 @@ export function useDesktopShell() {
       return
     }
   }, [isDebugLineColorsEnabled])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(MOBILE_CONNECTION_ADVANCED_INFO_STORAGE_KEY, String(isMobileConnectionAdvancedInfoEnabled))
+    } catch {
+      return
+    }
+  }, [isMobileConnectionAdvancedInfoEnabled])
 
   useEffect(() => {
     try {
@@ -713,6 +727,10 @@ export function useDesktopShell() {
     setIsDebugLineColorsEnabled(nextEnabled)
   }
 
+  function handleMobileConnectionAdvancedInfoChange(nextEnabled: boolean) {
+    setIsMobileConnectionAdvancedInfoEnabled(nextEnabled)
+  }
+
   function handleAssistantTraceVisibilityChange(key: AssistantTraceVisibilityKey, nextEnabled: boolean) {
     setAssistantTraceVisibility((current) => {
       if (current[key] === nextEnabled) return current
@@ -791,6 +809,7 @@ export function useDesktopShell() {
     handleAgentDebugTraceChange,
     handleDebugLineColorsChange,
     handleDebugUiRegionsChange,
+    handleMobileConnectionAdvancedInfoChange,
     handleSidebarResizerKeyDown,
     handleSidebarResizerPointerDown,
     handleSidebarToggle,
@@ -802,6 +821,7 @@ export function useDesktopShell() {
     isAgentDebugTraceEnabled,
     isDebugLineColorsEnabled,
     isDebugUiRegionsEnabled,
+    isMobileConnectionAdvancedInfoEnabled,
     htmlBackgroundConfig,
     isSidebarCollapsed,
     isSidebarResizing,

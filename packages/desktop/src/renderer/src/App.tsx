@@ -3,8 +3,7 @@ import type { SerializedDockview } from "dockview-react"
 import { ActivityRail } from "./app/sidebar/ActivityRail"
 import { BuiltinToolsPage } from "./app/tools/BuiltinToolsPage"
 import { ConnectionsPage } from "./app/connections/ConnectionsPage"
-import { MobileConnectionPage } from "./app/connections/MobileConnectionPage"
-import { SshConnectionsPage } from "./app/connections/SshConnectionsPage"
+import { MobileConnectionPage, type MobileConnectionPanel } from "./app/connections/MobileConnectionPage"
 import { McpServersPage } from "./app/mcp/McpServersPage"
 import { RightSidebar } from "./app/sidebar/RightSidebar"
 import { Sidebar } from "./app/sidebar/Sidebar"
@@ -106,7 +105,6 @@ const EMPTY_CONNECTION_SEARCH_QUERIES: Record<ConnectionsTab, string> = {
   plugins: "",
   connectors: "",
   mcp: "",
-  ssh: "",
 }
 const EMPTY_SIDE_CHAT_DRAFT_STATE = createEmptyComposerDraftState()
 const EMPTY_SIDE_CHAT_ATTACHMENTS: ComposerAttachment[] = []
@@ -1152,6 +1150,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     handleAgentDebugTraceChange,
     handleDebugLineColorsChange,
     handleDebugUiRegionsChange,
+    handleMobileConnectionAdvancedInfoChange,
     handleRightSidebarResizerKeyDown,
     handleRightSidebarResizerPointerDown,
     handleRightSidebarToggle,
@@ -1168,6 +1167,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     isAgentDebugTraceEnabled,
     isDebugLineColorsEnabled,
     isDebugUiRegionsEnabled,
+    isMobileConnectionAdvancedInfoEnabled,
     isRightSidebarCollapsed,
     isRightSidebarResizing,
     isSidebarCollapsed,
@@ -1875,6 +1875,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   )
   const [activeBuiltinToolKind, setActiveBuiltinToolKind] = useState<BuiltinToolKindKey | null>(null)
   const [activeConnectionsTab, setActiveConnectionsTab] = useState<ConnectionsTab>("plugins")
+  const [activeMobileConnectionPanel, setActiveMobileConnectionPanel] = useState<MobileConnectionPanel>("this-mac")
   const [connectionSearchQueries, setConnectionSearchQueries] = useState<Record<ConnectionsTab, string>>(
     EMPTY_CONNECTION_SEARCH_QUERIES,
   )
@@ -2333,8 +2334,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   }
 
   function handleOpenRemoteFolderConfig() {
-    setActiveConnectionsTab("ssh")
-    handleLeftSidebarViewChange("connections")
+    setActiveMobileConnectionPanel("ssh")
+    handleLeftSidebarViewChange("mobile")
   }
 
   function handlePromptSkillModeChange(nextMode: PromptSkillMode) {
@@ -2708,7 +2709,15 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               />
             </Suspense>
           ) : isMobileView ? (
-            <MobileConnectionPage windowControls={windowControls} />
+            <MobileConnectionPage
+              activePanel={activeMobileConnectionPanel}
+              windowControls={windowControls}
+              onActivePanelChange={setActiveMobileConnectionPanel}
+              onWorkspaceOpened={async (workspace) => {
+                await refreshWorkspaceFromDirectory(workspace.directory)
+              }}
+              showAdvancedInfo={isMobileConnectionAdvancedInfoEnabled}
+            />
           ) : isAutomationsView ? (
             <Suspense fallback={null}>
               <AutomationsPage
@@ -2733,7 +2742,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               connectorCount={connectorCatalog.length}
               mcpCount={mcpServers.length}
               pluginCount={pluginCatalog.length}
-              sshCount={0}
               searchQuery={connectionSearchQueries[activeConnectionsTab]}
               windowControls={windowControls}
               onSearchQueryChange={handleConnectionSearchQueryChange}
@@ -2806,7 +2814,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                     onStartConnectorAuthFlow={startConnectorAuthFlow}
                   />
                 </Suspense>
-              ) : activeConnectionsTab === "mcp" ? (
+              ) : (
                 <McpServersPage
                   activeMcpServerID={activeMcpServerID}
                   activeMcpServerDiagnostic={activeMcpServerDiagnostic}
@@ -2829,13 +2837,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                   onSaveMcpServer={saveMcpServer}
                   onSearchQueryChange={handleConnectionSearchQueryChange}
                   onStartNewMcpServer={startNewMcpServer}
-                />
-              ) : (
-                <SshConnectionsPage
-                  searchQuery={connectionSearchQueries.ssh}
-                  onWorkspaceOpened={async (workspace) => {
-                    await refreshWorkspaceFromDirectory(workspace.directory)
-                  }}
                 />
               )}
             </ConnectionsPage>
@@ -3093,6 +3094,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
               isDebugLineColorsEnabled={isDebugLineColorsEnabled}
               isDebugUiRegionsEnabled={isDebugUiRegionsEnabled}
+              isMobileConnectionAdvancedInfoEnabled={isMobileConnectionAdvancedInfoEnabled}
               isDeletingAllArchivedSessions={isDeletingAllArchivedSessions}
               isLoading={isLoading}
               isLoadingArchivedSessions={isLoadingArchivedSessions}
@@ -3131,6 +3133,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onAgentDebugTraceChange={handleAgentDebugTraceChange}
               onDebugLineColorsChange={handleDebugLineColorsChange}
               onDebugUiRegionsChange={handleDebugUiRegionsChange}
+              onMobileConnectionAdvancedInfoChange={handleMobileConnectionAdvancedInfoChange}
               onAutomaticUpdatesToggle={() => void handleAutomaticUpdatesToggle()}
               onCheckForUpdates={() => void handleCheckForUpdates()}
               onClose={closeSettings}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "腾讯云 Docker 部署 anyboxProvider（Windows）"
+  short_description: "从 Windows 本地上传并用 Docker 部署 anyboxProvider 到腾讯云。"
+  default_prompt: "使用 $deploy-anybox-tencent-docker-windows 帮我把 Windows 本地 anyboxProvider 项目上传并部署到腾讯云。"

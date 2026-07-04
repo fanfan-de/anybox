@@ -452,8 +452,8 @@ function parseMobileHttpPayload(payload: unknown) {
   const record = readRecord(payload)
   const method = typeof record?.method === "string" ? record.method.trim().toUpperCase() : "GET"
   const requestPath = typeof record?.path === "string" ? record.path.trim() : ""
-  if (method !== "GET" && method !== "POST") {
-    throw new RelayCommandError("method_unsupported", "Relay only supports GET and POST mobile bridge requests.")
+  if (!isAllowedMobileHttpMethod(method, requestPath)) {
+    throw new RelayCommandError("method_unsupported", "Relay only supports GET, POST, and session model PATCH mobile bridge requests.")
   }
   if (!requestPath.startsWith("/api/mobile/") || requestPath.includes("://")) {
     throw new RelayCommandError("path_forbidden", "Relay mobile bridge path is invalid.")
@@ -470,6 +470,18 @@ function parseMobileHttpPayload(payload: unknown) {
     path: requestPath,
     body: typeof record?.body === "string" ? record.body : undefined,
     headers: safeHeaders,
+  }
+}
+
+function isAllowedMobileHttpMethod(method: string, requestPath: string) {
+  if (method === "GET" || method === "POST") return true
+  if (method !== "PATCH") return false
+
+  try {
+    const parsed = new URL(requestPath, "http://relay.local")
+    return parsed.origin === "http://relay.local" && /^\/api\/mobile\/sessions\/[^/]+\/model-selection$/.test(parsed.pathname)
+  } catch {
+    return false
   }
 }
 
@@ -870,4 +882,5 @@ function describeRelayRequestError(code: string | undefined, message: string | u
 
 export const internal = {
   describeRelayRequestError,
+  parseMobileHttpPayload,
 }

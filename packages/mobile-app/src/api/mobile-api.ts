@@ -715,15 +715,6 @@ export async function getApprovals(
   return requestMobile<MobileApproval[]>(connection, `/api/mobile/approvals${query ? `?${query}` : ""}`)
 }
 
-export async function getApprovalHistory(connection: MobileConnection, input?: { sessionID?: string }) {
-  const results = await Promise.all([
-    getApprovals(connection, { ...input, status: "approved" }),
-    getApprovals(connection, { ...input, status: "denied" }),
-    getApprovals(connection, { ...input, status: "expired" }),
-  ])
-  return results.flat().sort((left, right) => (right.resolution?.resolvedAt ?? right.createdAt) - (left.resolution?.resolvedAt ?? left.createdAt))
-}
-
 export async function respondApproval(
   connection: MobileConnection,
   approvalID: string,

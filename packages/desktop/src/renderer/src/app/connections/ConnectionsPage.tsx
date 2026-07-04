@@ -11,7 +11,6 @@ interface ConnectionsPageProps {
   connectorCount: number
   mcpCount: number
   pluginCount: number
-  sshCount?: number
   searchQuery: string
   windowControls?: ReactNode
   onSearchQueryChange: (value: string) => void
@@ -25,13 +24,11 @@ const CONNECTION_TABS: Array<{
   { key: "plugins", labelKey: "connections.tabs.plugins" },
   { key: "connectors", labelKey: "connections.tabs.connectors" },
   { key: "mcp", labelKey: "connections.tabs.mcp" },
-  { key: "ssh", labelKey: "connections.tabs.ssh" },
 ]
 
 function getSearchPlaceholderKey(tab: ConnectionsTab): TranslationKey {
   if (tab === "connectors") return "connections.search.connectors"
   if (tab === "mcp") return "connections.search.mcp"
-  if (tab === "ssh") return "connections.search.ssh"
   return "connections.search.plugins"
 }
 
@@ -41,7 +38,6 @@ export function ConnectionsPage({
   connectorCount,
   mcpCount,
   pluginCount,
-  sshCount = 0,
   searchQuery,
   windowControls,
   onSearchQueryChange,
@@ -53,7 +49,6 @@ export function ConnectionsPage({
     plugins: pluginCount,
     connectors: connectorCount,
     mcp: mcpCount,
-    ssh: sshCount,
   }
 
   return (

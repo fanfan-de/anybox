@@ -1,0 +1,4 @@
+interface:
+  display_name: "obsidian like"
+  short_description: "Design quiet Obsidian-like settings UI."
+  default_prompt: "Use $obsidian-like to design a quiet desktop settings interface with Obsidian-like spacing, cards, controls, and purple accents."

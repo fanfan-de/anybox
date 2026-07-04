@@ -1,0 +1,4 @@
+interface:
+  display_name: "Anybox 腾讯云服务器部署"
+  short_description: "服务器侧部署 anyboxProvider，不含上传流程"
+  default_prompt: "使用 $deploy-anybox-tencent-server 在代码包或项目目录已位于服务器后执行 anyboxProvider 的服务器侧部署。"

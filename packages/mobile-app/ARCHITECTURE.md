@@ -79,7 +79,6 @@ packages/mobile-app/
 | `app/provider.tsx` | 当前 Provider/连接诊断页，展示连接、账户、桌面设备和上下文 |
 | `app/scan.tsx` | 相机扫码，只接受 Anybox pairing QR |
 | `app/connect.tsx` | 配对确认页，预览 pairing、执行 pair、保存连接、替换旧连接 |
-| `app/approvals.tsx` | 全局或会话级审批列表，支持 pending/history 和 allow/deny |
 | `app/updates.tsx` | OTA 与原生 app 更新检查、下载/打开更新 |
 | `app/workspaces/[workspaceID].tsx` | 工作区详情、会话列表、文件浏览、文件搜索、git diff 摘要 |
 | `app/workspaces/[workspaceID]/file.tsx` | 文件预览，支持文本和图片，其他类型显示 unsupported |
@@ -186,7 +185,7 @@ POST {baseUrl}/api/relay/mobile/stream
 - 文件：`getWorkspaceFiles`、`searchWorkspaceFiles`、`getWorkspaceFileContent`
 - 会话：`createSession`、`getMessages`、`sendPrompt`、`resumeSession`、`cancelSession`
 - 任务：`getSessionTasks`
-- 审批：`getApprovals`、`getApprovalHistory`、`respondApproval`
+- 审批：`getApprovals`、`respondApproval`
 - 设备：`revokeCurrentDevice`
 - SSE URL：`mobileEventsURL`、`mobileSessionEventsURL`
 
@@ -292,10 +291,7 @@ anybox-mobile://connect-options?relay=...&lan=...
 
 ## 11. 审批与任务
 
-审批数据类型在 `src/api/mobile-api.ts` 中定义。页面层有两个入口：
-
-- `app/approvals.tsx`：全局或会话级审批列表，支持 pending/history。
-- `app/sessions/[sessionID].tsx`：会话内联展示最多两个 pending approvals，并可进入完整列表。
+审批数据类型在 `src/api/mobile-api.ts` 中定义。手机端不再提供独立审批页；当前会话的 pending approvals 由 `app/index.tsx` 拉取，并在 `src/home/thread.tsx` 的 Thread view 时间线内联展示。带 `messageID` 的审批会插在对应消息之后，没有锚点的审批会放在线程尾部。
 
 审批动作调用：
 
@@ -412,4 +408,3 @@ EAS profile 位于 `eas.json`：
 4. 需要实时更新时优先复用 `useMobileEvents` 或 `useSessionEvents` 的 “事件后重新拉取” 模式。
 5. 新路由放入 `app/`，并在 `app/_layout.tsx` 注册 Stack screen。
 6. 涉及原生权限、scheme、更新源或 build profile 时同步修改 `app.json`、`app.config.js` 或 `eas.json`。
-

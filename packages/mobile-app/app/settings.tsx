@@ -4,7 +4,7 @@ import { StatusBar } from "expo-status-bar"
 import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { Alert, Image, Pressable, ScrollView, Share, Text, useWindowDimensions, View } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { getApprovals, getStatus, type MobileStatus } from "@/api/mobile-api"
+import { getStatus, type MobileStatus } from "@/api/mobile-api"
 import { MOBILE_LOCALES, localeNames, useI18n, type MobileLocale } from "@/i18n"
 import { formatAppVersionLabel, getCurrentAppInfo } from "@/services/app-updates"
 import { useAccount } from "@/state/account"
@@ -22,7 +22,6 @@ export default function SettingsScreen() {
   const { locale, localeLabel, setLocale, t } = useI18n()
   const focus = useFocus()
   const [status, setStatus] = useState<MobileStatus | null>(null)
-  const [pendingApprovals, setPendingApprovals] = useState(0)
   const [statusLoading, setStatusLoading] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const appInfo = useMemo(() => getCurrentAppInfo(), [])
@@ -32,21 +31,15 @@ export default function SettingsScreen() {
   const loadConnectionOverview = useCallback(async () => {
     if (!connection) {
       setStatus(null)
-      setPendingApprovals(0)
       setStatusLoading(false)
       return
     }
     setStatusLoading(true)
     try {
-      const [nextStatus, nextApprovals] = await Promise.all([
-        getStatus(connection),
-        getApprovals(connection, { status: "pending" }).catch(() => []),
-      ])
+      const nextStatus = await getStatus(connection)
       setStatus(nextStatus)
-      setPendingApprovals(nextApprovals.length)
     } catch {
       setStatus(null)
-      setPendingApprovals(0)
     } finally {
       setStatusLoading(false)
     }
@@ -163,10 +156,7 @@ export default function SettingsScreen() {
             <Text numberOfLines={1} style={{ color: "#f2f2f2", flex: 1, fontSize: 24, fontWeight: "900", textAlign: "center" }}>
               Anybox
             </Text>
-            <View>
-              <HeaderIconButton icon="bell" label={t("settings.approvals")} onPress={() => router.push("/approvals" as never)} />
-              {pendingApprovals ? <View style={{ backgroundColor: "#ff5a64", borderRadius: 5, height: 10, position: "absolute", right: 6, top: 5, width: 10 }} /> : null}
-            </View>
+            <View style={{ width: 38 }} />
           </View>
 
           <Pressable

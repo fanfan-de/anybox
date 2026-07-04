@@ -298,7 +298,7 @@ The advanced URL login path remains available for troubleshooting. Paste the pub
 - Resume or stop the active session through the existing mobile bridge routes.
 - Revoke the current device token when changing connections.
 - Refresh mobile pairing codes, list paired devices, inspect device capabilities, and revoke paired mobile devices from the desktop Mobile Connection page.
-- View pending approval requests, approval history, and allow or deny requests from mobile.
+- View pending approval requests inline in the Thread view, then allow or deny them from mobile.
 - View read-only workspace git change summaries from the Workspace screen.
 - Check for OTA updates and native mobile release updates from the Updates screen.
 
@@ -318,7 +318,7 @@ The fastest iOS bring-up is Expo Go or a local simulator build:
 3. Sign in to Anybox Provider, then connect through the public relay desktop list or scan/paste a pairing link.
 4. Verify Home loads workspaces, open a chat, send a short prompt, and watch Messages and Tasks refresh.
 5. Open a Workspace and verify Chats, Changes, and read-only Files load.
-6. Trigger a tool approval from the desktop agent and verify the Approvals screen can allow or deny it.
+6. Trigger a tool approval from the desktop agent and verify the current Thread view shows the approval card and can allow or deny it.
 
 For native-device iOS handoff, prefer the public relay URL or a LAN URL reachable from the iPhone. Localhost URLs that work with Android smoke scripts through `adb reverse` will not work on iOS.
 
@@ -337,4 +337,4 @@ The mock pairing smoke (`mobile:android:smoke:pairing`) is the repeatable CI-sty
 4. Scan the desktop Mobile Connection QR code, confirm the desktop details, and connect. You can also use Advanced URL login to paste the public URL or `anybox-mobile://connect?...` deep link.
 5. Verify Home loads workspaces, open a chat, send a short prompt, and watch the Messages and Tasks sections refresh.
 6. Open a Workspace and verify Chats, Changes, and read-only Files load.
-7. Trigger a tool approval from the desktop agent and verify the Approvals screen can allow or deny it, then switch to History after resolving it.
+7. Trigger a tool approval from the desktop agent and verify the current Thread view shows the approval card and can allow or deny it.

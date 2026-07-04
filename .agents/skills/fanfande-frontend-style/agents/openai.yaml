@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fanfande Frontend Style"
+  short_description: "Fanfande Studio 全局前端产品风格规范"
+  default_prompt: "Use $fanfande-frontend-style to design or refactor Fanfande Studio frontend UI with the product style system."

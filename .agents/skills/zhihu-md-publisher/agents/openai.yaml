@@ -1,0 +1,4 @@
+interface:
+  display_name: "知乎 Markdown 发布"
+  short_description: "从本地 Markdown 自动发布知乎文章"
+  default_prompt: "Use $zhihu-md-publisher to publish a local Markdown article to Zhihu."

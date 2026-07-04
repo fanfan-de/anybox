@@ -7200,7 +7200,7 @@ body.is-dragging-settings-page {
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 26px;
+  padding: 30px 34px 34px;
 }
 
 .mobile-connection-top-menu {
@@ -7241,10 +7241,40 @@ body.is-dragging-settings-page {
 }
 
 .mobile-connection-shell {
-  width: min(100%, 1180px);
-  margin: 0 auto;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   display: grid;
   gap: 20px;
+}
+
+.mobile-connection-segment-list {
+  min-width: 0;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 0;
+}
+
+.mobile-connection-segment-list::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-connection-segment {
+  flex: 0 0 auto;
+}
+
+.mobile-connection-tab-panel {
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+
+.mobile-connection-tab-panel.is-ssh {
+  min-height: 0;
 }
 
 .mobile-connection-panel,
@@ -7276,17 +7306,24 @@ body.is-dragging-settings-page {
 }
 
 .mobile-connection-workbench {
+  min-width: 0;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(520px, 1.55fr) minmax(320px, 0.9fr);
-  align-items: start;
-  gap: 18px;
+  grid-template-columns: 300px minmax(0, 1fr);
+  align-items: stretch;
+  justify-items: stretch;
+  gap: 24px;
 }
 
 .mobile-connection-pairing-panel {
+  width: min(560px, 100%);
+  justify-self: center;
   display: grid;
   gap: 22px;
   align-content: start;
-  padding: 22px;
+  padding: 22px 0;
+  border: 0;
+  background: transparent;
 }
 
 .mobile-connection-pairing-copy {
@@ -7356,18 +7393,15 @@ body.is-dragging-settings-page {
 }
 
 .mobile-connection-status-row span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--seg-text-1);
   font-size: 13px;
   font-weight: 650;
   line-height: 1.35;
-}
-
-.mobile-connection-status-row small {
-  display: block;
-  margin-top: 3px;
-  color: var(--seg-text-2);
-  font-size: 12px;
-  line-height: 1.4;
 }
 
 .mobile-connection-primary-actions {
@@ -7377,70 +7411,222 @@ body.is-dragging-settings-page {
   gap: 10px;
 }
 
-.mobile-connection-primary-actions .secondary-button,
+.mobile-connection-refresh-button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--seg-radius-xs);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
+  font-size: 13px;
+  font-weight: 560;
+  line-height: 1;
+}
+
+.mobile-connection-refresh-button:hover,
+.mobile-connection-refresh-button:focus-visible {
+  border: 0;
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  outline: none;
+}
+
+.mobile-connection-refresh-button:disabled {
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+  cursor: default;
+  opacity: 0.72;
+}
+
+.mobile-connection-primary-actions .secondary-button:not(.mobile-connection-refresh-button),
 .mobile-connection-panel .secondary-button {
   min-height: 34px;
 }
 
 .mobile-connection-side-panel {
   min-width: 0;
+  min-height: 0;
+  padding-top: 16px;
   display: grid;
-  gap: 14px;
+  grid-template-rows: auto auto auto;
+  align-content: start;
+  gap: 10px;
+}
+
+.mobile-connection-sidebar-header {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mobile-connection-sidebar-header h2 {
+  margin: 0;
+  color: var(--semantic-settings-list-detail-row-primary-text);
+  font-size: 15px;
+  font-weight: 680;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.mobile-connection-sidebar-header span {
+  min-width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--semantic-settings-list-detail-count-surface);
+  color: var(--semantic-settings-list-detail-count-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.mobile-connection-side-panel .mobile-connection-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 8px;
+  gap: 10px;
+}
+
+.mobile-connection-side-panel .settings-section-header {
+  min-height: 30px;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.mobile-connection-side-panel .settings-section-header > div {
+  min-width: 0;
+}
+
+.mobile-connection-side-panel .settings-section-header h3 {
+  font-size: 13px;
+  font-weight: 680;
+  line-height: 1.2;
+}
+
+.mobile-connection-side-panel .mobile-connection-devices-panel {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--seg-divider);
+}
+
+.mobile-connection-side-panel .secondary-button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--seg-radius-xs);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
+  font-size: 13px;
+  font-weight: 560;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.mobile-connection-side-panel .secondary-button:not(:disabled):hover,
+.mobile-connection-side-panel .secondary-button:not(:disabled):focus-visible {
+  border: 0;
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  outline: none;
+}
+
+.mobile-connection-side-panel .secondary-button.is-danger {
+  background: var(--semantic-button-danger-surface);
+  color: var(--semantic-button-danger-text);
+}
+
+.mobile-connection-side-panel .secondary-button.is-danger:not(:disabled):hover,
+.mobile-connection-side-panel .secondary-button.is-danger:not(:disabled):focus-visible {
+  background: var(--semantic-button-danger-surface-hover);
+  color: var(--semantic-button-danger-text-hover);
+}
+
+.mobile-connection-side-panel .secondary-button:disabled {
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+  cursor: default;
+  opacity: 0.72;
+}
+
+.mobile-connection-side-panel .secondary-button.is-danger:disabled {
+  background: var(--semantic-button-danger-disabled-surface);
+  color: var(--semantic-button-danger-disabled-text);
 }
 
 .mobile-connection-status-list {
   display: grid;
-  gap: 0;
-  border-top: 1px solid var(--seg-border);
+  gap: 2px;
+  border-top: 0;
 }
 
 .mobile-connection-status-row {
   min-width: 0;
-  min-height: 54px;
+  min-height: 38px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--seg-border);
+  padding: 7px 8px;
+  border-bottom: 0;
+  border-radius: 8px;
+}
+
+.mobile-connection-status-row > div {
+  min-width: 0;
 }
 
 .mobile-connection-status-row > strong:not(.mobile-connection-pill) {
   color: var(--seg-text-1);
-  font-size: 18px;
+  font-size: 16px;
+  font-weight: 680;
   line-height: 1;
 }
 
 .mobile-connection-pill {
   min-width: 0;
-  max-width: 142px;
-  min-height: 24px;
+  max-width: 120px;
+  min-height: 18px;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 0 9px;
-  border: 1px solid var(--seg-border);
-  border-radius: 999px;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   color: var(--seg-text-2);
-  background: var(--seg-panel-muted);
+  background: transparent;
   font-size: 12px;
   font-weight: 650;
-  line-height: 1;
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.mobile-connection-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.86;
+}
+
 .mobile-connection-pill.is-success {
   color: var(--semantic-success-text, var(--brand-accent-active));
-  border-color: var(--mix-brand-accent-active-28-transparent-72);
-  background: var(--mix-brand-accent-active-10-transparent-90);
 }
 
 .mobile-connection-pill.is-warning {
   color: var(--semantic-warning-text);
-  border-color: var(--semantic-warning-border, var(--seg-border));
-  background: var(--semantic-warning-surface, var(--seg-panel-muted));
 }
 
 .mobile-connection-pill.is-muted {
@@ -7539,22 +7725,25 @@ body.is-dragging-settings-page {
 .mobile-connection-device-list {
   min-width: 0;
   display: grid;
-  border-top: 1px solid var(--seg-border);
+  gap: 0;
+  border-top: 1px solid var(--seg-divider);
 }
 
 .mobile-connection-device-row {
   min-width: 0;
-  min-height: 44px;
+  min-height: 38px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--seg-border);
+  padding: 8px 0;
+  border-bottom: 0;
 }
 
-.mobile-connection-device-row .secondary-button {
+.mobile-connection-device-action {
   width: fit-content;
+  min-height: 28px;
+  padding: 0 9px;
 }
 
 .mobile-connection-device-main {
@@ -7580,6 +7769,11 @@ body.is-dragging-settings-page {
 .mobile-connection-device-row span {
   color: var(--seg-text-2);
   font-size: 12px;
+  justify-self: end;
+}
+
+.mobile-connection-device-meta {
+  max-width: 104px;
 }
 
 .mobile-connection-device-row.is-revoked strong,
@@ -7587,9 +7781,35 @@ body.is-dragging-settings-page {
   color: var(--seg-text-3);
 }
 
-@media (max-width: 980px) {
+.mobile-connection-ssh-panel {
+  min-width: 0;
+  min-height: 640px;
+  height: min(760px, calc(100vh - 150px));
+  overflow: hidden;
+}
+
+.mobile-connection-ssh-panel > .ssh-connections-page {
+  height: 100%;
+  padding: 0;
+  background: transparent;
+}
+
+@media (max-width: 900px) {
   .mobile-connection-workbench {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobile-connection-pairing-panel,
+  .mobile-connection-side-panel {
+    justify-self: stretch;
+  }
+
+  .mobile-connection-pairing-panel {
+    width: auto;
+  }
+
+  .mobile-connection-side-panel {
+    padding-top: 0;
   }
 }
 
@@ -7605,11 +7825,17 @@ body.is-dragging-settings-page {
   }
 
   .mobile-connection-device-row {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
   }
 
-  .mobile-connection-device-row span {
-    grid-column: 1 / -1;
+  .mobile-connection-device-row .mobile-connection-device-meta {
+    grid-column: auto;
+  }
+
+  .mobile-connection-ssh-panel {
+    min-height: 720px;
+    height: auto;
+    overflow: visible;
   }
 }
 
@@ -7621,9 +7847,9 @@ body.is-dragging-settings-page {
   height: 100%;
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  gap: 22px;
-  padding: 22px 26px 28px;
+  grid-template-columns: minmax(252px, 304px) minmax(0, 1fr);
+  gap: 18px;
+  padding: 18px 22px 24px;
   overflow: hidden;
   background: var(--seg-shell);
   color: var(--seg-text-1);
@@ -7642,7 +7868,7 @@ body.is-dragging-settings-page {
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 16px;
+  gap: 10px;
 }
 
 .ssh-sidebar-header,
@@ -7654,7 +7880,7 @@ body.is-dragging-settings-page {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px;
 }
 
 .ssh-sidebar-header h2,
@@ -7666,24 +7892,23 @@ body.is-dragging-settings-page {
 }
 
 .ssh-sidebar-header h2 {
-  font-size: 20px;
+  font-size: 17px;
+  font-weight: 680;
   line-height: 1.2;
 }
 
 .ssh-detail-hero h2 {
-  font-size: 24px;
+  font-size: 19px;
   font-weight: 680;
-  line-height: 1.16;
+  line-height: 1.2;
 }
 
 .ssh-card-header h3 {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 650;
   line-height: 1.25;
 }
 
-.ssh-detail-hero p,
-.ssh-card-header p,
 .ssh-empty-state span {
   margin: 5px 0 0;
   color: var(--seg-text-2);
@@ -7697,19 +7922,19 @@ body.is-dragging-settings-page {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
-  padding-right: 6px;
+  padding-right: 4px;
 }
 
 .ssh-profile-card,
 .ssh-directory-row {
   width: 100%;
   min-width: 0;
-  border: 1px solid var(--seg-border);
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   background: transparent;
   color: var(--seg-text-1);
   display: grid;
@@ -7722,8 +7947,11 @@ body.is-dragging-settings-page {
 }
 
 .ssh-profile-card {
-  padding: 12px;
-  gap: 9px;
+  grid-template-columns: minmax(0, 1fr) minmax(34px, auto);
+  align-items: center;
+  min-height: 38px;
+  padding: 7px 9px;
+  gap: 8px;
 }
 
 .ssh-profile-card:hover,
@@ -7736,20 +7964,21 @@ body.is-dragging-settings-page {
 }
 
 .ssh-profile-card.is-active {
-  border-color: var(--mix-seg-accent-34-seg-border-66);
+  border-color: transparent;
   background: var(--semantic-settings-list-detail-row-surface-current);
-  box-shadow: inset 3px 0 0 var(--seg-accent);
 }
 
 .ssh-profile-card-main {
   min-width: 0;
-  display: grid;
-  gap: 3px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .ssh-profile-card-main strong,
 .ssh-directory-row strong {
   min-width: 0;
+  flex: 0 1 auto;
   overflow: hidden;
   color: var(--semantic-settings-list-detail-row-primary-text);
   font-size: 14px;
@@ -7763,6 +7992,7 @@ body.is-dragging-settings-page {
 .ssh-profile-card-path,
 .ssh-directory-row small {
   min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   color: var(--semantic-settings-list-detail-row-secondary-text);
   font-size: 12px;
@@ -7771,14 +8001,20 @@ body.is-dragging-settings-page {
   white-space: nowrap;
 }
 
+.ssh-profile-card-path {
+  max-width: 76px;
+  justify-self: end;
+  text-align: right;
+}
+
 .ssh-detail-panel {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(340px, 400px) minmax(0, 1fr);
   align-content: start;
   align-items: start;
-  gap: 16px;
+  gap: 12px;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
@@ -7788,18 +8024,18 @@ body.is-dragging-settings-page {
 .ssh-detail-hero {
   grid-column: 1 / -1;
   flex: 0 0 auto;
-  padding: 4px 0 2px;
-  align-items: flex-start;
+  padding: 0 0 2px;
+  align-items: center;
 }
 
 .ssh-detail-status {
   max-width: 260px;
-  min-height: 28px;
-  padding: 5px 10px;
-  border: 1px solid var(--seg-border);
-  border-radius: 999px;
-  background: var(--seg-panel);
-  color: var(--seg-text-2);
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--seg-text-3);
   overflow: hidden;
   font-size: 12px;
   font-weight: 620;
@@ -7833,12 +8069,12 @@ body.is-dragging-settings-page {
 
 .ssh-card {
   min-width: 0;
-  padding: 18px;
+  padding: 14px;
   border: 1px solid var(--seg-border);
-  border-radius: 10px;
-  background: transparent;
+  border-radius: var(--radius-panel);
+  background: var(--seg-panel);
   display: grid;
-  gap: 18px;
+  gap: 14px;
 }
 
 .ssh-card.is-disabled {
@@ -7849,7 +8085,7 @@ body.is-dragging-settings-page {
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .ssh-field {
@@ -7872,11 +8108,11 @@ body.is-dragging-settings-page {
 .ssh-field input {
   width: 100%;
   min-width: 0;
-  height: 36px;
+  height: 34px;
   box-sizing: border-box;
   padding: 0 11px;
   border: 1px solid var(--seg-border);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--seg-panel);
   color: var(--seg-text-1);
   font: inherit;
@@ -7898,16 +8134,75 @@ body.is-dragging-settings-page {
   flex-wrap: wrap;
 }
 
-.ssh-action-row .primary-button,
-.ssh-action-row .secondary-button,
-.ssh-sidebar-header .secondary-button,
-.ssh-card-header .primary-button,
-.ssh-path-actions .secondary-button,
-.ssh-empty-state .secondary-button {
-  min-height: 34px;
+.ssh-connections-page .primary-button,
+.ssh-connections-page .secondary-button {
+  min-height: 32px;
+  padding: 0 12px;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 620;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.ssh-connections-page .primary-button {
+  border-color: var(--semantic-button-primary-border);
+  background: var(--semantic-button-primary-surface);
+  color: var(--semantic-button-primary-text);
+}
+
+.ssh-connections-page .primary-button:not(:disabled):hover,
+.ssh-connections-page .primary-button:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-primary-border-hover);
+  background: var(--semantic-button-primary-surface-hover);
+  color: var(--semantic-button-primary-text-hover);
+}
+
+.ssh-connections-page .primary-button:disabled {
+  border-color: var(--semantic-button-primary-disabled-border);
+  background: var(--semantic-button-primary-disabled-surface);
+  color: var(--semantic-button-primary-disabled-text);
+}
+
+.ssh-connections-page .secondary-button {
+  border-color: var(--semantic-button-secondary-border);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
+}
+
+.ssh-connections-page .secondary-button:not(:disabled):hover,
+.ssh-connections-page .secondary-button:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+}
+
+.ssh-connections-page .secondary-button:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+}
+
+.ssh-connections-page .secondary-button.is-danger {
+  border-color: var(--semantic-button-danger-border);
+  background: var(--semantic-button-danger-surface);
+  color: var(--semantic-button-danger-text);
+}
+
+.ssh-connections-page .secondary-button.is-danger:not(:disabled):hover,
+.ssh-connections-page .secondary-button.is-danger:not(:disabled):focus-visible {
+  border-color: var(--semantic-button-danger-border-hover);
+  background: var(--semantic-button-danger-surface-hover);
+  color: var(--semantic-button-danger-text-hover);
+}
+
+.ssh-connections-page .secondary-button.is-danger:disabled {
+  border-color: var(--semantic-button-danger-disabled-border);
+  background: var(--semantic-button-danger-disabled-surface);
+  color: var(--semantic-button-danger-disabled-text);
 }
 
 .ssh-browser-card {
@@ -7916,10 +8211,11 @@ body.is-dragging-settings-page {
 }
 
 .ssh-browser-open-target {
-  min-width: min(100%, 240px);
-  display: grid;
-  justify-items: end;
-  gap: 6px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .ssh-browser-open-target span {
@@ -7934,27 +8230,27 @@ body.is-dragging-settings-page {
 }
 
 .ssh-path-toolbar {
-  min-height: 42px;
-  padding: 6px 8px;
+  min-height: 38px;
+  padding: 4px 6px;
   border: 1px solid var(--seg-border);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--seg-panel);
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .ssh-icon-button {
-  width: 30px;
-  min-width: 30px;
-  height: 30px;
-  min-height: 30px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
   padding: 0;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: var(--seg-text-3);
+  color: var(--semantic-icon-button-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -7968,15 +8264,20 @@ body.is-dragging-settings-page {
 
 .ssh-icon-button:hover,
 .ssh-icon-button:focus-visible {
-  border-color: var(--seg-border);
-  background: var(--semantic-settings-list-detail-row-surface-hover);
-  color: var(--seg-text-1);
+  border-color: transparent;
+  background: var(--semantic-icon-button-surface-hover);
+  color: var(--semantic-icon-button-text-hover);
   outline: none;
 }
 
 .ssh-icon-button:disabled {
   cursor: default;
   opacity: 0.42;
+}
+
+.ssh-icon-button:disabled:hover {
+  background: transparent;
+  color: var(--semantic-icon-button-text);
 }
 
 .ssh-icon-button svg {
@@ -8027,7 +8328,7 @@ body.is-dragging-settings-page {
 .ssh-path-crumb-wrap button {
   max-width: 180px;
   min-width: 0;
-  height: 28px;
+  height: 26px;
   padding: 0 7px;
   border: 1px solid transparent;
   border-radius: 5px;
@@ -8059,7 +8360,7 @@ body.is-dragging-settings-page {
 .ssh-path-edit-form input {
   width: 100%;
   min-width: 0;
-  height: 30px;
+  height: 28px;
   padding: 0 9px;
   border: 1px solid var(--seg-border);
   border-radius: 6px;
@@ -8085,10 +8386,10 @@ body.is-dragging-settings-page {
 
 .ssh-directory-filter {
   min-width: 0;
-  min-height: 36px;
+  min-height: 34px;
   padding: 0 10px;
   border: 1px solid var(--seg-border);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--seg-panel);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -8106,7 +8407,7 @@ body.is-dragging-settings-page {
 .ssh-directory-filter input {
   min-width: 0;
   width: 100%;
-  height: 32px;
+  height: 30px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -8281,7 +8582,7 @@ body.is-dragging-settings-page {
   }
 
   .ssh-path-toolbar {
-    grid-template-columns: 30px minmax(0, 1fr) 30px;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
   }
 
   .ssh-detail-status,
@@ -8296,10 +8597,6 @@ body.is-dragging-settings-page {
 
   .ssh-browser-open-target span {
     max-width: 100%;
-  }
-
-  .ssh-path-actions .secondary-button {
-    display: none;
   }
 
   .ssh-directory-row {

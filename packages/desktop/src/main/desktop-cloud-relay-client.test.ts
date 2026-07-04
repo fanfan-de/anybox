@@ -12,3 +12,32 @@ describe("desktop cloud relay entitlement errors", () => {
     expect(internal.describeRelayRequestError(undefined, undefined, 500)).toBe("Relay request failed with HTTP 500.")
   })
 })
+
+describe("desktop cloud relay mobile HTTP payloads", () => {
+  it("allows session model selection PATCH requests", () => {
+    expect(internal.parseMobileHttpPayload({
+      method: "patch",
+      path: "/api/mobile/sessions/session-smoke/model-selection",
+      body: "{\"model\":\"openai/gpt-smoke\"}",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer should-not-forward",
+      },
+    })).toEqual({
+      method: "PATCH",
+      path: "/api/mobile/sessions/session-smoke/model-selection",
+      body: "{\"model\":\"openai/gpt-smoke\"}",
+      headers: {
+        "content-type": "application/json",
+      },
+    })
+  })
+
+  it("rejects unrelated PATCH mobile bridge requests", () => {
+    expect(() => internal.parseMobileHttpPayload({
+      method: "PATCH",
+      path: "/api/mobile/sessions/session-smoke/messages",
+      body: "{\"text\":\"hello\"}",
+    })).toThrow("session model PATCH")
+  })
+})

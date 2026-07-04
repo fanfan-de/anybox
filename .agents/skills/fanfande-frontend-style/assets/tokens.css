@@ -1,0 +1,23 @@
+/* Optional seed file for new Fanfande-style UI experiments.
+   Prefer the host app's existing tokens before copying these names. */
+
+:root {
+  --ff-surface-app: var(--surface-app, #fafaf9);
+  --ff-surface-shell: var(--surface-shell, #f5f2ee);
+  --ff-surface-panel: var(--surface-panel, #ffffff);
+  --ff-surface-muted: var(--surface-panel-muted, #f7f1ee);
+  --ff-surface-elevated: var(--surface-elevated, rgba(255, 255, 255, 0.96));
+  --ff-border: var(--border-default, #e7e5e4);
+  --ff-border-subtle: var(--border-subtle, rgba(41, 37, 36, 0.08));
+  --ff-text: var(--text-primary, #292524);
+  --ff-text-muted: var(--text-secondary, #78716c);
+  --ff-text-faint: var(--text-tertiary, #a8a29e);
+  --ff-accent: var(--brand-primary, #d46b63);
+  --ff-accent-hover: var(--brand-primary-hover, #b9534c);
+  --ff-radius-control: var(--radius-control, 4px);
+  --ff-radius-panel: var(--radius-panel, 8px);
+  --ff-radius-overlay: var(--radius-overlay, 12px);
+  --ff-focus: var(--focus-outline-color, rgba(212, 107, 99, 0.32));
+  --ff-motion-fast: var(--motion-fast, 140ms);
+  --ff-motion-base: var(--motion-base, 180ms);
+}

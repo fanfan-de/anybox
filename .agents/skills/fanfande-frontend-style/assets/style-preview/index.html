@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fanfande Frontend Style Preview</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="activity-rail" aria-label="主导航">
+        <button class="rail-button is-active" aria-label="工作区">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v5H4zM4 14h7v5H4zM15 14h5v5h-5z" /></svg>
+        </button>
+        <button class="rail-button" aria-label="插件">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v4M16 3v4M7 7h10v5a5 5 0 0 1-10 0zM12 17v4" /></svg>
+        </button>
+        <button class="rail-button" aria-label="设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.05.05-1.8 3.12-.08-.02a1.72 1.72 0 0 0-1.96.78l-.04.07h-3.6l-.04-.07a1.72 1.72 0 0 0-1.96-.78l-.08.02-1.8-3.12.05-.05A1.7 1.7 0 0 0 4.6 15l-.08-.03v-3.94l.08-.03a1.7 1.7 0 0 0-.34-1.88l-.05-.05 1.8-3.12.08.02a1.72 1.72 0 0 0 1.96-.78l.04-.07h3.6l.04.07a1.72 1.72 0 0 0 1.96.78l.08-.02 1.8 3.12-.05.05A1.7 1.7 0 0 0 19.4 11l.08.03v3.94z" /></svg>
+        </button>
+      </aside>
+
+      <aside class="sidebar">
+        <div class="brand-block">
+          <div class="brand-mark">F</div>
+          <div>
+            <strong>Fanfande Studio</strong>
+          </div>
+        </div>
+
+        <nav class="side-nav" aria-label="样板导航">
+          <div class="nav-group">
+            <p>界面骨架</p>
+            <button class="nav-row is-current">
+              <span>App shell</span>
+            </button>
+            <button class="nav-row">
+              <span>Workbench</span>
+            </button>
+            <button class="nav-row">
+              <span>Settings rows</span>
+            </button>
+          </div>
+          <div class="nav-group">
+            <p>组件</p>
+            <button class="nav-row">
+              <span>Data display</span>
+            </button>
+            <button class="nav-row">
+              <span>Forms</span>
+            </button>
+            <button class="nav-row">
+              <span>Menus</span>
+            </button>
+          </div>
+        </nav>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div class="tabs" role="tablist" aria-label="预览标签">
+            <button class="tab is-active" role="tab" aria-selected="true">Specimen</button>
+            <button class="tab" role="tab">Plugin list</button>
+            <button class="tab" role="tab">Settings</button>
+          </div>
+          <div class="topbar-actions">
+            <button class="icon-button" id="themeToggle" aria-label="切换明暗主题" title="切换明暗主题">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a7 7 0 1 0 9 9 5.5 5.5 0 0 1-9-9z" /></svg>
+            </button>
+            <button class="canvas-dropdown-trigger" id="menuButton" aria-haspopup="dialog" aria-expanded="false">
+              <span>技能</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="content-scroll">
+          <section class="page-heading">
+            <div>
+              <h1>全局前端风格样板间</h1>
+            </div>
+            <div class="heading-actions">
+              <button class="secondary-button" id="toastButton">显示 Toast</button>
+              <button class="primary-button" id="dialogButton">打开 Dialog</button>
+            </div>
+          </section>
+
+          <section class="surface-grid" aria-label="组件样板">
+            <article class="panel span-2">
+              <div class="panel-header">
+                <div>
+                  <h2>Workbench pane</h2>
+                </div>
+                <span class="status-icon is-running" aria-label="运行中" title="运行中">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v6l4 2" /><path d="M21 12a9 9 0 1 1-3.2-6.9" /><path d="M21 4v5h-5" /></svg>
+                </span>
+              </div>
+              <div class="workbench-sample">
+                <div class="file-tree">
+                  <div class="tree-row is-selected"><span class="chevron">▾</span><span>packages</span></div>
+                  <div class="tree-row is-child"><span class="chevron">▾</span><span>desktop</span></div>
+                  <div class="tree-row is-child is-muted"><span class="chevron">•</span><span>styles</span></div>
+                  <div class="tree-row is-child is-muted"><span class="chevron">•</span><span>components</span></div>
+                </div>
+                <div class="editor-pane">
+                  <div class="editor-toolbar">
+                    <button class="tool-button is-active">Preview</button>
+                    <button class="tool-button">Tokens</button>
+                    <button class="tool-button">States</button>
+                  </div>
+                  <div class="code-card">
+                    <code>--surface-panel: #ffffff;</code>
+                    <code>--brand-primary: #d46b63;</code>
+                    <code>--radius-panel: 8px;</code>
+                    <code>--motion-base: 180ms;</code>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Controls</h2>
+                </div>
+              </div>
+              <div class="control-stack">
+                <div class="button-row">
+                  <button class="primary-button">保存</button>
+                  <button class="secondary-button">取消</button>
+                  <button class="danger-button">删除</button>
+                </div>
+                <label class="field">
+                  <span>工作区名称</span>
+                  <input value="Fanfande Studio" />
+                </label>
+                <label class="field">
+                  <span>运行模式</span>
+                  <div class="canvas-select" data-select>
+                    <button class="canvas-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                      <span data-select-value>自动</span>
+                    </button>
+                    <div class="canvas-select-menu" role="listbox" aria-label="运行模式">
+                      <button class="canvas-select-option is-selected" type="button" role="option" aria-selected="true">自动</button>
+                      <button class="canvas-select-option" type="button" role="option" aria-selected="false">手动确认</button>
+                      <button class="canvas-select-option" type="button" role="option" aria-selected="false">只读</button>
+                    </div>
+                  </div>
+                </label>
+                <label class="switch-row">
+                  <span>
+                    <strong>启用预览</strong>
+                  </span>
+                  <input type="checkbox" checked />
+                </label>
+              </div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Settings rows</h2>
+                </div>
+              </div>
+              <div class="settings-list">
+                <div class="setting-row">
+                  <span>
+                    <strong>主题</strong>
+                  </span>
+                  <div class="canvas-select" data-select>
+                    <button class="canvas-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                      <span data-select-value>跟随系统</span>
+                    </button>
+                    <div class="canvas-select-menu" role="listbox" aria-label="主题">
+                      <button class="canvas-select-option is-selected" type="button" role="option" aria-selected="true">跟随系统</button>
+                      <button class="canvas-select-option" type="button" role="option" aria-selected="false">浅色</button>
+                      <button class="canvas-select-option" type="button" role="option" aria-selected="false">深色</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <span>
+                    <strong>紧凑模式</strong>
+                  </span>
+                  <input type="checkbox" />
+                </div>
+                <div class="setting-row">
+                  <span>
+                    <strong>自动保存</strong>
+                  </span>
+                  <span class="status-icon is-ready" aria-label="已启用" title="已启用">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+                  </span>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel span-2">
+              <div class="panel-header">
+                <div>
+                  <h2>Data display</h2>
+                </div>
+                <button class="secondary-button compact">筛选</button>
+              </div>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>插件</th>
+                    <th>状态</th>
+                    <th>权限</th>
+                    <th>最近更新</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <strong>Markdown Preview</strong>
+                    </td>
+                    <td>
+                      <span class="status-icon is-ready" aria-label="已启用" title="已启用">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+                      </span>
+                    </td>
+                    <td>Workspace</td>
+                    <td>今天 09:42</td>
+                    <td><button class="ghost-button">配置</button></td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Git Assistant</strong>
+                    </td>
+                    <td>
+                      <span class="status-icon is-paused" aria-label="已暂停" title="已暂停">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
+                      </span>
+                    </td>
+                    <td>Repository</td>
+                    <td>昨天 18:10</td>
+                    <td><button class="ghost-button">启用</button></td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Local Preview</strong>
+                    </td>
+                    <td>
+                      <span class="status-icon is-warning" aria-label="需要确认" title="需要确认">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4" /><path d="M12 17h.01" /><path d="M10.3 4.2 2.6 18a1.7 1.7 0 0 0 1.5 2.5h15.8a1.7 1.7 0 0 0 1.5-2.5L13.7 4.2a1.9 1.9 0 0 0-3.4 0z" /></svg>
+                      </span>
+                    </td>
+                    <td>Network</td>
+                    <td>5 月 30 日</td>
+                    <td><button class="ghost-button">查看</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Feedback</h2>
+                </div>
+              </div>
+              <div class="feedback-stack">
+                <div class="banner is-info">
+                  <strong>有可用更新</strong>
+                </div>
+                <div class="banner is-warning">
+                  <strong>权限待确认</strong>
+                </div>
+                <div class="empty-state">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14v10H5zM8 11h8M8 14h5" /></svg>
+                  <strong>还没有运行记录</strong>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Form states</h2>
+                </div>
+              </div>
+              <div class="control-stack">
+                <label class="field">
+                  <span>远程地址</span>
+                  <input value="https://example.invalid/repo.git" aria-invalid="true" />
+                  <small class="field-error">无法连接到该远程地址。</small>
+                </label>
+                <label class="field">
+                  <span>同步间隔</span>
+                  <input type="number" value="15" />
+                </label>
+                <div class="progress-row">
+                  <span>同步中</span>
+                  <div class="progress-track"><div style="width: 62%"></div></div>
+                </div>
+              </div>
+            </article>
+          </section>
+        </div>
+      </main>
+
+      <aside class="inspector">
+        <div class="inspector-section">
+          <h2>Token snapshot</h2>
+          <div class="swatch-row"><span style="background: var(--brand-primary)"></span><code>brand-primary</code></div>
+          <div class="swatch-row"><span style="background: var(--surface-panel-muted)"></span><code>surface-muted</code></div>
+          <div class="swatch-row"><span style="background: var(--semantic-success)"></span><code>success</code></div>
+          <div class="swatch-row"><span style="background: var(--semantic-warning)"></span><code>warning</code></div>
+        </div>
+        <div class="inspector-section">
+          <h2>State model</h2>
+          <div class="state-list">
+            <span>default</span>
+            <span>hover</span>
+            <span>focus-visible</span>
+            <span>selected</span>
+            <span>disabled</span>
+            <span>loading</span>
+            <span>error</span>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="floating-menu canvas-dropdown" id="floatingMenu" role="dialog" aria-label="技能选择" aria-hidden="true">
+      <label class="canvas-menu-search">
+        <span class="sr-only">Search skills</span>
+        <input id="skillSearch" type="search" placeholder="Search skills" autocomplete="off" />
+      </label>
+      <div class="canvas-menu-list" role="listbox" aria-label="技能列表">
+        <button class="canvas-menu-item" role="option">agent-browser</button>
+        <button class="canvas-menu-item" role="option">algorithmic-art</button>
+        <button class="canvas-menu-item" role="option">brand-guidelines</button>
+        <button class="canvas-menu-item" role="option">canvas-design</button>
+        <button class="canvas-menu-item" role="option">claude-api</button>
+        <button class="canvas-menu-item" role="option">Computer Use Windows</button>
+        <button class="canvas-menu-item" role="option">doc-coauthoring</button>
+        <button class="canvas-menu-item" role="option">docx</button>
+      </div>
+    </div>
+
+    <div class="dialog-backdrop" id="dialogBackdrop" aria-hidden="true">
+      <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
+        <header>
+          <h2 id="dialogTitle">确认应用配置</h2>
+          <button class="icon-button" id="closeDialog" aria-label="关闭">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          </button>
+        </header>
+        <p>这会刷新当前工作区的预览和插件状态。未保存的输入会保留在本地草稿中。</p>
+        <footer>
+          <button class="secondary-button" id="cancelDialog">取消</button>
+          <button class="primary-button" id="confirmDialog">应用配置</button>
+        </footer>
+      </section>
+    </div>
+
+    <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

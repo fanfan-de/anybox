@@ -112,6 +112,7 @@ function createSettingsPageProps(
     isAgentDebugTraceEnabled: false,
     isDebugLineColorsEnabled: false,
     isDebugUiRegionsEnabled: false,
+    isMobileConnectionAdvancedInfoEnabled: false,
     isDeletingAllArchivedSessions: false,
     isLoading: false,
     isLoadingArchivedSessions: false,
@@ -148,6 +149,7 @@ function createSettingsPageProps(
     onHtmlBackgroundConfigChange: vi.fn(),
     onDebugLineColorsChange: vi.fn(),
     onDebugUiRegionsChange: vi.fn(),
+    onMobileConnectionAdvancedInfoChange: vi.fn(),
     onDeleteAllArchivedSessions: vi.fn(),
     onDeleteArchivedSession: vi.fn(),
     onDeleteMcpServer: vi.fn(),
@@ -858,6 +860,18 @@ describe("SettingsPage built-in tools", () => {
     await waitFor(() => {
       expect(openMonitorWindow).toHaveBeenCalledTimes(1)
     })
+  })
+
+  it("toggles mobile connection advanced info from developer mode settings", () => {
+    const onMobileConnectionAdvancedInfoChange = vi.fn()
+
+    render(<SettingsPage {...createSettingsPageProps({ onMobileConnectionAdvancedInfoChange })} />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Developer Mode" }))
+    fireEvent.click(screen.getByRole("button", { name: /Mobile Connection/ }))
+    fireEvent.click(screen.getByRole("switch", { name: "Show mobile connection advanced info" }))
+
+    expect(onMobileConnectionAdvancedInfoChange).toHaveBeenCalledWith(true)
   })
 
   it("keeps storage paths inside the developer mode storage disclosure", async () => {

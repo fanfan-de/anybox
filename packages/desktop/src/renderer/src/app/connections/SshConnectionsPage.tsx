@@ -14,6 +14,7 @@ import type {
 import {
   ArrowUpIcon,
   ChevronRightIcon,
+  EditIcon,
   FileTextIcon,
   FolderIcon,
   FolderOpenIcon,
@@ -239,13 +240,13 @@ export function SshConnectionsPage({ searchQuery, onWorkspaceOpened }: SshConnec
   }, [])
 
   function validateDraft() {
-    if (!draft.name.trim()) return "Name is required."
-    if (!draft.host.trim()) return "Host is required."
-    if (!draft.username.trim()) return "Username is required."
-    if (!draft.privateKeyPath.trim()) return "Private key path is required."
-    if (!draft.defaultRemotePath.trim().startsWith("/")) return "Default remote path must be an absolute POSIX path."
+    if (!draft.name.trim()) return t("ssh.validation.requireName")
+    if (!draft.host.trim()) return t("ssh.validation.requireHost")
+    if (!draft.username.trim()) return t("ssh.validation.requireUsername")
+    if (!draft.privateKeyPath.trim()) return t("ssh.validation.requirePrivateKey")
+    if (!draft.defaultRemotePath.trim().startsWith("/")) return t("ssh.validation.defaultPathAbsolute")
     const port = Number.parseInt(draft.port, 10)
-    if (!Number.isInteger(port) || port <= 0 || port > 65535) return "Port must be between 1 and 65535."
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) return t("ssh.validation.portRange")
     return null
   }
 
@@ -271,7 +272,7 @@ export function SshConnectionsPage({ searchQuery, onWorkspaceOpened }: SshConnec
       if (saved) {
         await loadProfiles()
         selectProfile(saved)
-        toast.success("SSH profile saved.")
+        toast.success(t("ssh.profile.saved"))
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error))
@@ -291,7 +292,7 @@ export function SshConnectionsPage({ searchQuery, onWorkspaceOpened }: SshConnec
       setActiveProfileID(null)
       setEntries([])
       await loadProfiles()
-      toast.success("SSH profile deleted.")
+      toast.success(t("ssh.profile.deleted"))
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error))
     } finally {
@@ -542,19 +543,18 @@ export function SshConnectionsPage({ searchQuery, onWorkspaceOpened }: SshConnec
   }
 
   return (
-    <section className="ssh-connections-page" aria-label="SSH remote workspaces">
-      <aside className="ssh-profile-sidebar" aria-label="SSH profiles">
+    <section className="ssh-connections-page" aria-label={t("ssh.page.aria")}>
+      <aside className="ssh-profile-sidebar" aria-label={t("ssh.profiles.aria")}>
         <div className="ssh-sidebar-header">
           <div>
-            <span className="label">Remote workspaces</span>
-            <h2>SSH profiles</h2>
+            <h2>{t("ssh.profiles.title")}</h2>
           </div>
           <button
             className="secondary-button"
             type="button"
             onClick={startNewProfile}
           >
-            New profile
+            {t("ssh.profiles.new")}
           </button>
         </div>
 
@@ -568,15 +568,15 @@ export function SshConnectionsPage({ searchQuery, onWorkspaceOpened }: SshConnec
             >
               <span className="ssh-profile-card-main">
                 <strong>{profile.name}</strong>
-                <span>{profile.username}@{profile.host}:{profile.port}</span>
+                <span title={`${profile.username}@${profile.host}:${profile.port}`}>{profile.username}@{profile.host}:{profile.port}</span>
               </span>
-              <span className="ssh-profile-card-path">{profile.defaultRemotePath}</span>
+              <span className="ssh-profile-card-path" title={profile.defaultRemotePath}>{profile.defaultRemotePath}</span>
             </button>
           ))}
           {filteredProfiles.length === 0 ? (
             <div className="ssh-empty-state">
-              <strong>No SSH profiles</strong>
-              <span>Create a profile with a host, username, and private key path.</span>
+              <strong>{t("ssh.profiles.emptyTitle")}</strong>
+              <span>{t("ssh.profiles.emptyCopy")}</span>
             </div>
           ) : null}
         </div>
@@ -585,12 +585,10 @@ export function SshConnectionsPage({ searchQuery, onWorkspaceOpened }: SshConnec
       <main className="ssh-detail-panel">
         <header className="ssh-detail-hero">
           <div>
-            <span className="label">SSH connection</span>
-            <h2>{draft.id ? draft.name || "Untitled profile" : "New SSH profile"}</h2>
-            <p>Use a private key to open a Linux server directory as an Agent workspace.</p>
+            <h2>{draft.id ? draft.name || t("ssh.detail.untitled") : t("ssh.detail.newProfile")}</h2>
           </div>
-          <div className="ssh-detail-status">
-            {activeProfile ? `${activeProfile.username}@${activeProfile.host}` : "Not saved"}
+          <div className="ssh-detail-status" title={activeProfile ? `${activeProfile.username}@${activeProfile.host}` : undefined}>
+            {activeProfile ? `${activeProfile.username}@${activeProfile.host}` : t("ssh.detail.notSaved")}
           </div>
         </header>
 
@@ -600,33 +598,32 @@ export function SshConnectionsPage({ searchQuery, onWorkspaceOpened }: SshConnec
           </div>
         ) : null}
 
-        <section className="ssh-card" aria-label="SSH profile form">
+        <section className="ssh-card" aria-label={t("ssh.form.aria")}>
           <div className="ssh-card-header">
             <div>
-              <h3>Connection details</h3>
-              <p>Private key passphrases are stored through the credential store, not in the profile file.</p>
+              <h3>{t("ssh.form.title")}</h3>
             </div>
           </div>
 
           <div className="ssh-form-grid">
             <label className="ssh-field">
-              <span>Name</span>
-              <input value={draft.name} placeholder="Production server" onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+              <span>{t("ssh.form.name")}</span>
+              <input value={draft.name} placeholder={t("ssh.form.namePlaceholder")} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
             </label>
             <label className="ssh-field">
-              <span>Host</span>
+              <span>{t("ssh.form.host")}</span>
               <input value={draft.host} placeholder="203.0.113.10" onChange={(event) => setDraft({ ...draft, host: event.target.value })} />
             </label>
             <label className="ssh-field">
-              <span>Port</span>
+              <span>{t("ssh.form.port")}</span>
               <input value={draft.port} inputMode="numeric" onChange={(event) => setDraft({ ...draft, port: event.target.value })} />
             </label>
             <label className="ssh-field">
-              <span>Username</span>
+              <span>{t("ssh.form.username")}</span>
               <input value={draft.username} placeholder="ubuntu" onChange={(event) => setDraft({ ...draft, username: event.target.value })} />
             </label>
             <label className="ssh-field is-wide">
-              <span>Private key path</span>
+              <span>{t("ssh.form.privateKeyPath")}</span>
               <input
                 value={draft.privateKeyPath}
                 placeholder="C:\\Users\\you\\.ssh\\id_rsa"
@@ -634,7 +631,7 @@ export function SshConnectionsPage({ searchQuery, onWorkspaceOpened }: SshConnec
               />
             </label>
             <label className="ssh-field">
-              <span>Default remote path</span>
+              <span>{t("ssh.form.defaultRemotePath")}</span>
               <input
                 value={draft.defaultRemotePath}
                 placeholder="/home/ubuntu/app"
@@ -642,11 +639,11 @@ export function SshConnectionsPage({ searchQuery, onWorkspaceOpened }: SshConnec
               />
             </label>
             <label className="ssh-field">
-              <span>Key passphrase</span>
+              <span>{t("ssh.form.passphrase")}</span>
               <input
                 type="password"
                 value={draft.passphrase}
-                placeholder={activeProfile?.hasPassphrase ? "Saved passphrase unchanged" : "Optional"}
+                placeholder={activeProfile?.hasPassphrase ? t("ssh.form.passphraseSavedPlaceholder") : t("ssh.form.passphraseOptional")}
                 onChange={(event) => setDraft({ ...draft, passphrase: event.target.value })}
               />
             </label>
@@ -654,26 +651,25 @@ export function SshConnectionsPage({ searchQuery, onWorkspaceOpened }: SshConnec
 
           <div className="ssh-action-row">
             <button className="primary-button" type="button" disabled={isBusy} onClick={() => void saveProfile()}>
-              Save profile
+              {t("ssh.actions.saveProfile")}
             </button>
             <button className="secondary-button" type="button" disabled={isBusy || !draft.id} onClick={() => void testProfile()}>
-              Test connection
+              {t("ssh.actions.testConnection")}
             </button>
             <button className="secondary-button is-danger" type="button" disabled={isBusy || !draft.id} onClick={() => void deleteProfile()}>
-              Delete
+              {t("app.delete")}
             </button>
           </div>
         </section>
 
         <section
           className={activeProfile ? "ssh-card ssh-browser-card" : "ssh-card ssh-browser-card is-disabled"}
-          aria-label="Remote directory browser"
+          aria-label={t("ssh.browser.aria")}
           onKeyDown={handleBrowserKeyDown}
         >
           <div className="ssh-card-header">
             <div>
               <h3>{t("ssh.browser.title")}</h3>
-              <p>{t("ssh.browser.description")}</p>
             </div>
             <div className="ssh-browser-open-target">
               <button className="primary-button" type="button" disabled={isBusy || !activeProfile} onClick={() => void openWorkspace()}>
@@ -726,8 +722,15 @@ export function SshConnectionsPage({ searchQuery, onWorkspaceOpened }: SshConnec
               )}
             </div>
             <div className="ssh-path-actions">
-              <button className="secondary-button" type="button" disabled={!activeProfile} onClick={startPathEditing}>
-                {t("ssh.browser.editPath")}
+              <button
+                className="ssh-icon-button"
+                type="button"
+                aria-label={t("ssh.browser.editPath")}
+                title={t("ssh.browser.editPath")}
+                disabled={!activeProfile}
+                onClick={startPathEditing}
+              >
+                <EditIcon />
               </button>
               <button
                 className="ssh-icon-button"

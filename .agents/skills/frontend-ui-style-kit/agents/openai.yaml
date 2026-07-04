@@ -1,0 +1,4 @@
+interface:
+  display_name: "前端 UI 样式模板"
+  short_description: "可复用的前端基础 UI 样式模板。"
+  default_prompt: "使用 $frontend-ui-style-kit 为这个前端应用套用统一的右键菜单样式。"

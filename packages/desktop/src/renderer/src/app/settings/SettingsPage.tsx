@@ -2485,6 +2485,7 @@ interface SettingsPageProps {
   isAgentDebugTraceEnabled: boolean
   isDebugLineColorsEnabled: boolean
   isDebugUiRegionsEnabled: boolean
+  isMobileConnectionAdvancedInfoEnabled: boolean
   isDeletingAllArchivedSessions: boolean
   isLoading: boolean
   isLoadingArchivedSessions: boolean
@@ -2523,6 +2524,7 @@ interface SettingsPageProps {
   onAgentDebugTraceChange: (value: boolean) => void
   onDebugLineColorsChange: (value: boolean) => void
   onDebugUiRegionsChange: (value: boolean) => void
+  onMobileConnectionAdvancedInfoChange: (value: boolean) => void
   onAutomaticUpdatesToggle: () => void
   onCheckForUpdates: () => void
   onClose: () => void
@@ -2594,6 +2596,7 @@ export function SettingsPage({
   isAgentDebugTraceEnabled,
   isDebugLineColorsEnabled,
   isDebugUiRegionsEnabled,
+  isMobileConnectionAdvancedInfoEnabled,
   isDeletingAllArchivedSessions,
   isLoading,
   isLoadingArchivedSessions,
@@ -2631,6 +2634,7 @@ export function SettingsPage({
   onAgentDebugTraceChange,
   onDebugLineColorsChange,
   onDebugUiRegionsChange,
+  onMobileConnectionAdvancedInfoChange,
   onAutomaticUpdatesToggle,
   onCheckForUpdates,
   onClose,
@@ -3717,6 +3721,41 @@ export function SettingsPage({
                   </SettingsDisclosurePanel>
 
                   <SettingsDisclosurePanel
+                    panelID="developer-mobile-connection"
+                    label="Mobile"
+                    title="Mobile Connection"
+                    description="Control whether the mobile connection page reveals bridge URLs, token access, and handoff test commands."
+                  >
+                    <div className="settings-section-summary">
+                      <button
+                        className={isMobileConnectionAdvancedInfoEnabled ? "settings-toggle-card is-active" : "settings-toggle-card"}
+                        role="switch"
+                        aria-checked={isMobileConnectionAdvancedInfoEnabled}
+                        aria-label="Show mobile connection advanced info"
+                        type="button"
+                        onClick={() => onMobileConnectionAdvancedInfoChange(!isMobileConnectionAdvancedInfoEnabled)}
+                      >
+                        <span className="settings-toggle-copy">
+                          <strong className="settings-toggle-title">
+                            <span className="settings-toggle-icon" aria-hidden="true">
+                              <ConnectedStatusIcon />
+                            </span>
+                            <span>Show mobile connection advanced info</span>
+                          </strong>
+                          <small>Reveal raw pairing links, legacy token URLs, the bridge token, and Android smoke-test commands on the mobile connection page.</small>
+                        </span>
+                        <span className="settings-toggle-control" aria-hidden="true">
+                          <span className="settings-toggle-thumb" />
+                        </span>
+                      </button>
+                    </div>
+
+                    <p className="settings-helper-text">
+                      Keep this off for normal pairing flows. Turn it on only while debugging mobile bridge networking or preparing a handoff test.
+                    </p>
+                  </SettingsDisclosurePanel>
+
+                  <SettingsDisclosurePanel
                     panelID="developer-storage-locations"
                     label="Storage"
                     title="Storage Locations"
@@ -3795,6 +3834,15 @@ export function SettingsPage({
                           {assistantTraceVisibility.debugMetadata
                             ? "The main trace is showing backend metadata in addition to the enabled response, tool, approval, file, and workflow categories."
                             : "The main trace is showing the enabled user-facing categories while backend metadata stays collapsed."}
+                        </p>
+                      </article>
+                      <article className="settings-summary-card">
+                        <span className="label">Mobile Advanced Info</span>
+                        <strong>{isMobileConnectionAdvancedInfoEnabled ? "Shown" : "Hidden"}</strong>
+                        <p>
+                          {isMobileConnectionAdvancedInfoEnabled
+                            ? "The mobile connection page reveals bridge URLs, tokens, and handoff commands for debugging."
+                            : "The mobile connection page keeps bridge URLs, tokens, and test commands out of the normal pairing flow."}
                         </p>
                       </article>
                     </div>
