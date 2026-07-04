@@ -324,7 +324,7 @@ AnyBox Film Runtime 负责：
   -> 更新 Canvas 节点和事件日志
 ```
 
-因此，Cinema 需要一个独立的 `Cinema Provider Runtime`。它放在 `packages/anyboxagent`，复用 AnyBox 已有的凭证管理、项目解析、日志脱敏和 HTTP server，但不把视频任务硬塞进语言模型的 `generateText / streamText` 抽象。
+因此，Cinema 需要一个独立的 `Cinema Provider Runtime`。它放在 `packages/anyboxagent/src/cinema/provider-runtime.ts`，复用 AnyBox 已有的凭证管理、项目解析、日志脱敏和 HTTP server，但不把视频任务硬塞进语言模型的 `generateText / streamText` 抽象，也不放进语言模型 provider 目录。
 
 Cinema 插件不承载 provider runtime。插件负责初始化 skill 和现有本地 MCP/Agent 操作；Web Canvas 和 Agent 都应通过 AnyBox Agent 的 `/api/cinema/*` Runtime API 创建、刷新、取消生成任务，不直接写 `.anybox-cinema/tasks/*.json`。
 
@@ -896,7 +896,7 @@ plugins/Anybox-Plugins/cinema/skills/initialize-cinema-project/SKILL.md
 
 初始化仍然完全由 `Initialize Cinema Project` skill 描述，并使用通用文件创建工具与 Bash 执行，不写成 runtime 硬编码。
 
-插件不新增 provider runtime，也不注册 fal connector。Cinema provider runtime 位于 `packages/anyboxagent/src/server/usecases/cinema.ts`，插件只负责项目初始化和已有本地 MCP/Agent 操作。
+插件不新增 provider runtime，也不注册 fal connector。Cinema provider runtime 位于 `packages/anyboxagent/src/cinema/provider-runtime.ts`，`packages/anyboxagent/src/server/usecases/cinema.ts` 只负责任务编排、Canvas 同步和本地项目文件读写；插件只负责项目初始化和已有本地 MCP/Agent 操作。
 
 ### 18.7 Runtime 测试与验证
 

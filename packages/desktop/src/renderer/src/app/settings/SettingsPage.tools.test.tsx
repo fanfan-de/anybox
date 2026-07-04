@@ -439,16 +439,16 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.queryByRole("list", { name: "Project worktrees" })).not.toBeInTheDocument()
   })
 
-  it("shows Account after General and before Provider in settings navigation", () => {
+  it("shows video providers as a separate settings navigation item", () => {
     render(<SettingsPage {...createSettingsPageProps({ catalog: [createAnyboxProvider()] })} />)
 
     const nav = screen.getByLabelText("Settings sections")
     const labels = within(nav).getAllByRole("button").map((button) => button.textContent)
 
-    expect(labels.slice(0, 3)).toEqual(["General", "Account", "Provider"])
+    expect(labels.slice(0, 4)).toEqual(["General", "Account", "Provider", "Video Providers"])
   })
 
-  it("saves cinema video provider API keys from the Provider settings page", () => {
+  it("saves cinema video provider API keys from the Video Providers settings page", () => {
     const onCinemaVideoProviderDraftChange = vi.fn()
     const onSaveCinemaVideoProviderApiKey = vi.fn()
     render(
@@ -465,7 +465,7 @@ describe("SettingsPage built-in tools", () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole("button", { name: "Provider" }))
+    fireEvent.click(screen.getByRole("button", { name: "Video Providers" }))
 
     const videoPanel = screen.getByRole("heading", { name: "Video providers" }).closest(".settings-panel")
     expect(videoPanel).not.toBeNull()

@@ -11202,6 +11202,14 @@ body.is-dragging-settings-page {
   gap: 22px;
 }
 
+.settings-page-main.is-services .settings-video-providers-layout {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
 .settings-page-main.is-services .settings-services-layout.global-skills-page-layout {
   grid-template-columns:
     300px

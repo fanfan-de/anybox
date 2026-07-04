@@ -36,6 +36,7 @@ import {
   EyeIcon,
   EyeOffIcon,
   FileTextIcon,
+  FileVideoIcon,
   LayoutSidebarLeftIcon,
   MinimizeIcon,
   GeneralSettingsIcon,
@@ -810,14 +811,22 @@ function VideoProviderCredentialsPanel({
   onDraftChange: (providerID: string, field: "apiKey", value: string) => void
   onSaveApiKey: (providerID: string, apiKey?: string | null) => boolean | Promise<boolean>
 }) {
-  if (providers.length === 0) return null
+  if (providers.length === 0) {
+    return (
+      <article className="settings-empty-state">
+        <span className="label">{t("app.empty")}</span>
+        <h3>{t("settings.videoProviders.emptyTitle")}</h3>
+        <p>{t("settings.videoProviders.emptyCopy")}</p>
+      </article>
+    )
+  }
 
   return (
     <div className="settings-panel">
       <div className="settings-section-header">
         <div>
-          <h3>Video providers</h3>
-          <p>Cinema uses these saved credentials when generation tasks run.</p>
+          <h3>{t("settings.videoProviders.title")}</h3>
+          <p>{t("settings.videoProviders.copy")}</p>
         </div>
       </div>
 
@@ -853,7 +862,7 @@ function VideoProviderCredentialsPanel({
                         aria-label={`API key for ${provider.manifest.name}`}
                         type="password"
                         value={draft.apiKey}
-                        placeholder={isConnected ? "Stored key detected. Leave blank to keep it." : "Enter API key"}
+                        placeholder={isConnected ? t("settings.provider.storedKeyPlaceholder") : t("settings.provider.enterApiKey")}
                         onChange={(event) => onDraftChange(providerID, "apiKey", event.target.value)}
                       />
                     </span>
@@ -866,7 +875,7 @@ function VideoProviderCredentialsPanel({
                         disabled={isBusy}
                         onClick={() => void onSaveApiKey(providerID, null)}
                       >
-                        Clear
+                        {t("app.clear")}
                       </button>
                     ) : null}
                     <button
@@ -2419,7 +2428,7 @@ function doesMcpServerMatchSearch(
   return haystack.includes(query)
 }
 
-type SettingsSectionKey = "general" | "account" | "services" | "defaults" | "mcp" | "appearance" | "developer" | "archive"
+type SettingsSectionKey = "general" | "account" | "services" | "videoProviders" | "defaults" | "mcp" | "appearance" | "developer" | "archive"
 
 function doesArchivedSessionMatchSearch(session: ArchivedSessionSummary, query: string) {
   if (!query) return true
@@ -2946,7 +2955,8 @@ export function SettingsPage({
             : null
     const mcpServerCanSave = !mcpServerValidationError
     const showLoadedState = !isLoading && !loadError
-    const showProviderSections = activeSection === "services" || activeSection === "defaults" || activeSection === "mcp"
+    const showProviderSections = activeSection === "services" || activeSection === "videoProviders" || activeSection === "defaults" || activeSection === "mcp"
+    const useServiceSettingsChrome = activeSection === "services" || activeSection === "videoProviders"
     const appVersionNumber = appUpdateState?.version ?? "..."
     const appVersionLabel = `${t("settings.about.version")} ${appVersionNumber}`
     const automaticUpdatesEnabled = appUpdateState?.automaticUpdates ?? true
@@ -3404,6 +3414,7 @@ export function SettingsPage({
           { key: "general" as const, label: t("settings.nav.general"), Icon: GeneralSettingsIcon },
           { key: "account" as const, label: t("settings.nav.account"), Icon: AccountSettingsIcon },
           { key: "services" as const, label: t("settings.nav.provider"), Icon: ProviderSettingsIcon },
+          { key: "videoProviders" as const, label: t("settings.nav.videoProviders"), Icon: FileVideoIcon },
           { key: "defaults" as const, label: t("settings.nav.models"), Icon: ModelSettingsIcon },
           { key: "appearance" as const, label: t("settings.nav.appearance"), Icon: PaletteIcon },
           { key: "developer" as const, label: t("settings.nav.developer"), Icon: CodeModeIcon },
@@ -3670,7 +3681,7 @@ export function SettingsPage({
 
             <div
               ref={settingsMainRef}
-              className={activeSection === "services" ? "settings-page-main is-services" : "settings-page-main"}
+              className={useServiceSettingsChrome ? "settings-page-main is-services" : "settings-page-main"}
             >
               <div ref={settingsMainTopAnchorRef} className="settings-page-main-scroll-anchor" aria-hidden="true" />
 
@@ -4574,6 +4585,11 @@ export function SettingsPage({
                           <p>The right side will show credentials, endpoint overrides, and provider models for the current selection.</p>
                         </article>
                       )}
+                    </div>
+                  </section>
+                ) : activeSection === "videoProviders" ? (
+                  <section className="settings-video-providers-layout" aria-label={t("settings.videoProviders.pageAria")}>
+                    <div className="settings-service-detail-panel settings-video-providers-detail-panel">
                       <VideoProviderCredentialsPanel
                         providers={cinemaVideoProviders}
                         drafts={cinemaVideoProviderDrafts}
