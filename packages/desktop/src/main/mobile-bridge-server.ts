@@ -45,6 +45,8 @@ const DEFAULT_MOBILE_DEVICE_CAPABILITIES = [
   "workspace:read",
   "session:read",
   "session:create",
+  "session:update",
+  "session:delete",
   "message:send",
   "task:cancel",
   "approval:read",
@@ -656,6 +658,7 @@ function mobileAgentPath(url: URL) {
     const sessionID = segments[3]
     const action = segments.slice(4).join("/")
 
+    if (!action) return `/api/sessions/${sessionID}${sanitizedSearch(url)}`
     if (action === "messages") return `/api/sessions/${sessionID}/messages${sanitizedSearch(url)}`
     if (action === "messages/stream") return `/api/sessions/${sessionID}/messages/stream${sanitizedSearch(url)}`
     if (action === "resume/stream") return `/api/sessions/${sessionID}/resume/stream${sanitizedSearch(url)}`
@@ -664,6 +667,8 @@ function mobileAgentPath(url: URL) {
     if (action === "tasks") return `/api/sessions/${sessionID}/tasks${sanitizedSearch(url)}`
     if (action === "models") return `/api/sessions/${sessionID}/models${sanitizedSearch(url)}`
     if (action === "model-selection") return `/api/sessions/${sessionID}/model-selection`
+    if (action === "title") return `/api/sessions/${sessionID}/title`
+    if (action === "pinned") return `/api/sessions/${sessionID}/pinned`
     if (action === "questions/answer") return `/api/sessions/${sessionID}/questions/answer`
   }
 
@@ -686,6 +691,7 @@ function mobileAgentRouteCapability(url: URL, method: string) {
   if (resource === "sessions" && segments.length >= 4) {
     const action = segments.slice(4).join("/")
 
+    if (!action) return method === "DELETE" ? "session:create" : "session:read"
     if (action === "messages") return method === "GET" ? "session:read" : "message:send"
     if (action === "messages/stream") return "message:send"
     if (action === "resume/stream") return "message:send"
@@ -694,6 +700,8 @@ function mobileAgentRouteCapability(url: URL, method: string) {
     if (action === "tasks") return "session:read"
     if (action === "models") return "session:read"
     if (action === "model-selection") return "session:read"
+    if (action === "title") return "session:create"
+    if (action === "pinned") return "session:create"
     if (action === "questions/answer") return "message:send"
   }
 
@@ -717,28 +725,19 @@ function mobileAgentRouteAudit(url: URL, method: string) {
   if (resource === "sessions" && segments.length >= 4) {
     const sessionID = segments[3]
     const routeAction = segments.slice(4).join("/")
-    const action =
-      routeAction === "messages"
-        ? method === "GET"
-          ? "messages.read"
-          : "message.send"
-        : routeAction === "messages/stream"
-          ? "message.send"
-          : routeAction === "resume/stream"
-            ? "session.resume"
-            : routeAction === "events/stream"
-              ? "session.events.open"
-              : routeAction === "cancel"
-                ? "session.cancel"
-                : routeAction === "tasks"
-                  ? "tasks.read"
-                  : routeAction === "models"
-                    ? "models.read"
-                    : routeAction === "model-selection"
-                      ? "model.selection.update"
-                      : routeAction === "questions/answer"
-                        ? "question.answer"
-                        : "agent.proxy"
+    let action = "agent.proxy"
+    if (routeAction === "") action = method === "DELETE" ? "session.delete" : "session.read"
+    else if (routeAction === "messages") action = method === "GET" ? "messages.read" : "message.send"
+    else if (routeAction === "messages/stream") action = "message.send"
+    else if (routeAction === "resume/stream") action = "session.resume"
+    else if (routeAction === "events/stream") action = "session.events.open"
+    else if (routeAction === "cancel") action = "session.cancel"
+    else if (routeAction === "tasks") action = "tasks.read"
+    else if (routeAction === "models") action = "models.read"
+    else if (routeAction === "model-selection") action = "model.selection.update"
+    else if (routeAction === "title") action = "session.rename"
+    else if (routeAction === "pinned") action = "session.pin"
+    else if (routeAction === "questions/answer") action = "question.answer"
 
     return {
       action,
@@ -758,6 +757,18 @@ function mobileAgentRouteDesktopEvent(url: URL, method: string): Omit<MobileBrid
   const sessionID = segments[3]
   const action = segments.slice(4).join("/")
   if (!sessionID) return null
+  if (method === "DELETE" && !action) {
+    return {
+      type: "workspace.updated",
+      sessionID,
+    }
+  }
+  if (method === "PATCH" && (action === "title" || action === "pinned")) {
+    return {
+      type: "session.updated",
+      sessionID,
+    }
+  }
   if (method === "PATCH" && action === "model-selection") {
     return {
       type: "session.updated",
@@ -848,6 +859,7 @@ function mapMobileSession(session: AgentSessionInfo) {
     worktreeID: session.worktreeID,
     directory: session.directory,
     title: session.title,
+    pinned: session.pinned,
     kind: session.kind,
     policy: session.policy,
     automation: session.automation,
@@ -864,7 +876,10 @@ async function loadMobileProjectWorkspace(project: AgentProjectInfo): Promise<Ag
   const sessions = await requestAgentJSON<AgentSessionInfo[]>(`/api/projects/${encodeURIComponent(project.id)}/sessions`)
   return {
     ...project,
-    sessions: sessions.data.map(mapMobileSession).sort((left, right) => right.updated - left.updated),
+    sessions: sessions.data.map(mapMobileSession).sort((left, right) => {
+      if (Boolean(left.pinned) !== Boolean(right.pinned)) return left.pinned ? -1 : 1
+      return right.updated - left.updated
+    }),
   }
 }
 
@@ -899,6 +914,36 @@ async function createMobileWorkspaceSession(workspaceID: string, request: http.I
     body: JSON.stringify({
       title: title || undefined,
       directory: workspace.directory,
+    }),
+  })
+  return mapMobileSession(result.data)
+}
+
+async function renameMobileSession(sessionID: string, request: http.IncomingMessage) {
+  const body = await readRequestBody(request)
+  const parsed = body.trim() ? (JSON.parse(body) as { title?: unknown }) : {}
+  const result = await requestAgentJSON<AgentSessionInfo>(`/api/sessions/${encodeURIComponent(sessionID)}/title`, {
+    method: "PATCH",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      title: typeof parsed.title === "string" ? parsed.title.trim() : undefined,
+    }),
+  })
+  return mapMobileSession(result.data)
+}
+
+async function updateMobileSessionPinned(sessionID: string, request: http.IncomingMessage) {
+  const body = await readRequestBody(request)
+  const parsed = body.trim() ? (JSON.parse(body) as { pinned?: unknown }) : {}
+  const result = await requestAgentJSON<AgentSessionInfo>(`/api/sessions/${encodeURIComponent(sessionID)}/pinned`, {
+    method: "PATCH",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      pinned: typeof parsed.pinned === "boolean" ? parsed.pinned : undefined,
     }),
   })
   return mapMobileSession(result.data)
@@ -953,6 +998,7 @@ function workspaceEventSignature(workspace: AgentFolderWorkspace) {
       id: session.id,
       updated: session.updated,
       workflow: session.workflow,
+      pinned: session.pinned,
     })),
   })
 }
@@ -964,6 +1010,7 @@ function sessionEventSignature(session: AgentWorkspaceSession) {
     directory: session.directory,
     updated: session.updated,
     workflow: session.workflow,
+    pinned: session.pinned,
   })
 }
 
@@ -1712,6 +1759,28 @@ async function handleMobileBridgeRequest(request: http.IncomingMessage, response
       approvalID: requestID,
       sessionID,
     })
+    jsonResponse(response, 200, ok(result))
+    return
+  }
+
+  const sessionUpdateMatch = url.pathname.match(/^\/api\/mobile\/sessions\/([^/]+)\/(title|pinned)$/)
+  if (sessionUpdateMatch && mobileMethod === "PATCH") {
+    const [, sessionID, action] = sessionUpdateMatch
+    if (!sessionID || (action !== "title" && action !== "pinned")) {
+      jsonResponse(response, 404, errorBody("NOT_FOUND", "Mobile session update route not found."))
+      return
+    }
+    if (!requireMobileCapabilities(authorization, response, ["session:create"])) return
+    auditMobileBridgeAction(authorization, action === "title" ? "session.rename" : "session.pin", { sessionID })
+    const desktopEvent: Omit<MobileBridgeDesktopEvent, "generatedAt" | "source"> = {
+      type: "session.updated",
+      sessionID,
+    }
+    broadcastMobileBridgeDesktopEvent(desktopEvent)
+    const result = action === "title"
+      ? await renameMobileSession(sessionID, request)
+      : await updateMobileSessionPinned(sessionID, request)
+    broadcastMobileBridgeDesktopEvent(desktopEvent)
     jsonResponse(response, 200, ok(result))
     return
   }

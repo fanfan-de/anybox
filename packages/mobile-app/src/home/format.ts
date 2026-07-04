@@ -69,7 +69,12 @@ export function formatProviderStatus({
 }
 
 export function sortSessions(sessions: MobileSessionSummary[]) {
-  return [...sessions].sort((left, right) => right.updated - left.updated)
+  return [...sessions].sort(compareSessions)
+}
+
+export function compareSessions(left: MobileSessionSummary, right: MobileSessionSummary) {
+  if (Boolean(left.pinned) !== Boolean(right.pinned)) return left.pinned ? -1 : 1
+  return right.updated - left.updated
 }
 
 export function buildSessionTitle(text: string, fallback = "Mobile chat") {

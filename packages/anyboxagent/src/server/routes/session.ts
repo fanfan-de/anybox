@@ -107,6 +107,24 @@ export function SessionRoutes(options: { ptyRegistry: PtyRegistry }) {
     return ok(c, await SessionUseCase.updateSessionModelSelection(c.req.param("id"), payload))
   })
 
+  app.patch("/:id/title", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      SessionUseCase.UpdateSessionTitleBody,
+      "Body must include a non-empty 'title'",
+    )
+    return ok(c, SessionUseCase.updateSessionTitle(c.req.param("id"), payload))
+  })
+
+  app.patch("/:id/pinned", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      SessionUseCase.UpdateSessionPinnedBody,
+      "Body must include a boolean 'pinned'",
+    )
+    return ok(c, SessionUseCase.updateSessionPinned(c.req.param("id"), payload))
+  })
+
   app.patch("/:id/workflow", async (c) => {
     const payload = await parseJsonBody(
       c,

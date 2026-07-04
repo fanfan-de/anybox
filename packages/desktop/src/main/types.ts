@@ -300,6 +300,7 @@ export interface AgentSessionInfo {
   worktreeID?: string
   directory: string
   title: string
+  pinned?: boolean
   version?: string
   kind?: AgentSessionKind
   policy?: AgentSessionPolicy
@@ -320,6 +321,7 @@ export interface AgentWorkspaceSession {
   worktreeID?: string
   directory: string
   title: string
+  pinned?: boolean
   kind?: AgentSessionKind
   policy?: AgentSessionPolicy
   automation?: AgentSessionAutomationMetadata

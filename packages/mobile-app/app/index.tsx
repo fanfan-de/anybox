@@ -18,6 +18,7 @@ import {
 import {
   answerSessionQuestion,
   createSession,
+  deleteSession as deleteRemoteSession,
   getApprovals,
   getMessages,
   getSessionModels,
@@ -27,9 +28,11 @@ import {
   MobileApiError,
   normalizeConnectionOptionsInput,
   readConnectionUrlFromDeepLink,
+  renameSession,
   respondApproval,
   sendPrompt,
   updateSessionModelSelection,
+  updateSessionPinned,
   type MobileApproval,
   type MobileMessage,
   type MobileModelSelection,
@@ -70,6 +73,31 @@ function applyPrimaryModelSelection(selection: MobileModelSelection, modelValue:
     delete nextSelection.model
   }
   return nextSelection
+}
+
+function replaceSessionInWorkspaces(
+  workspaces: MobileWorkspace[],
+  workspaceID: string,
+  session: MobileSessionSummary,
+) {
+  return workspaces.map((workspace) => {
+    if (workspace.id !== workspaceID && !workspace.sessions.some((item) => item.id === session.id)) return workspace
+    return {
+      ...workspace,
+      updated: Math.max(workspace.updated, session.updated),
+      sessions: workspace.sessions.map((item) => (item.id === session.id ? session : item)),
+    }
+  })
+}
+
+function removeSessionFromWorkspaces(workspaces: MobileWorkspace[], sessionID: string) {
+  return workspaces.map((workspace) => {
+    if (!workspace.sessions.some((session) => session.id === sessionID)) return workspace
+    return {
+      ...workspace,
+      sessions: workspace.sessions.filter((session) => session.id !== sessionID),
+    }
+  })
 }
 
 export default function HomeScreen() {
@@ -579,6 +607,51 @@ export default function HomeScreen() {
     [focus, focusedWorkspace?.id],
   )
 
+  const handleRenameSession = useCallback(async (session: MobileSessionSummary, workspace: MobileWorkspace, title: string) => {
+    if (!connection) return
+    const updatedSession = await renameSession(connection, session.id, { title })
+    setOptimisticSession((current) => (
+      current?.session.id === updatedSession.id
+        ? { ...current, session: updatedSession }
+        : current
+    ))
+    setWorkspaces((current) => replaceSessionInWorkspaces(current, workspace.id, updatedSession))
+    void load({ silent: true })
+  }, [connection, load])
+
+  const handleTogglePinSession = useCallback(async (session: MobileSessionSummary, workspace: MobileWorkspace, pinned: boolean) => {
+    if (!connection) return
+    const updatedSession = await updateSessionPinned(connection, session.id, { pinned })
+    setOptimisticSession((current) => (
+      current?.session.id === updatedSession.id
+        ? { ...current, session: updatedSession }
+        : current
+    ))
+    setWorkspaces((current) => replaceSessionInWorkspaces(current, workspace.id, updatedSession))
+    void load({ silent: true })
+  }, [connection, load])
+
+  const handleDeleteSession = useCallback(async (session: MobileSessionSummary, workspace: MobileWorkspace) => {
+    if (!connection) return
+    await deleteRemoteSession(connection, session.id)
+    setOptimisticSession((current) => (current?.session.id === session.id ? null : current))
+    setWorkspaces((current) => removeSessionFromWorkspaces(current, session.id))
+    setActiveStream((current) => (current?.sessionID === session.id ? null : current))
+    if (focus.sessionID === session.id) {
+      messagesRequestSeqRef.current += 1
+      selectedSessionIDRef.current = null
+      setMessages([])
+      setMessagesLoading(false)
+      setMessageError(null)
+      setSessionApprovals([])
+      setApprovalsLoading(false)
+      setApprovalError(null)
+      setActingApprovalID(null)
+      await focus.setFocus({ workspaceID: workspace.id, sessionID: null })
+    }
+    void load({ silent: true })
+  }, [connection, focus, load])
+
   const handleCreateConversation = useCallback(() => {
     if (!connection || !focusedWorkspace || sending) return
     messagesRequestSeqRef.current += 1
@@ -950,12 +1023,15 @@ export default function HomeScreen() {
                 <SessionDrawerPage
                   focusedSessionID={focusedSession?.id}
                   focusedWorkspaceID={focusedWorkspace?.id}
+                  onDeleteSession={handleDeleteSession}
                   onOpenSettings={() => {
                     closeSessionDrawer()
                     router.push("/settings" as never)
                   }}
+                  onRenameSession={handleRenameSession}
                   onSelectSession={handleSelectSession}
                   onSelectWorkspace={handleSelectWorkspace}
+                  onTogglePinSession={handleTogglePinSession}
                   paddingBottom={Math.max(insets.bottom, 14)}
                   paddingTop={insets.top}
                   sessions={focusedSessions}

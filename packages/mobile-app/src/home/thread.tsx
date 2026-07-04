@@ -5,6 +5,7 @@ import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native"
 import type { MobileApproval, MobileMessage, MobileProviderModel, MobileSessionSummary, MobileWorkspace } from "@/api/mobile-api"
 import { useI18n } from "@/i18n"
 import { ApprovalCard } from "./approval-card"
+import { ThreadMarkdown } from "./thread-markdown"
 import {
   messageContentSegments,
   messageHasVisibleContent,
@@ -354,6 +355,7 @@ function ThreadMessage({
       <AssistantMessageContent
         answeringQuestionID={answeringQuestionID}
         onAnswerQuestion={onAnswerQuestion}
+        reasoningPending={isPending}
         segments={contentSegments.length ? contentSegments : [{ kind: "response", text: text || "..." }]}
       />
     </View>
@@ -363,10 +365,12 @@ function ThreadMessage({
 function AssistantMessageContent({
   answeringQuestionID,
   onAnswerQuestion,
+  reasoningPending,
   segments,
 }: {
   answeringQuestionID: string | null
   onAnswerQuestion: (answer: QuestionAnswerInput) => Promise<void>
+  reasoningPending: boolean
   segments: MessageContentSegment[]
 }) {
   return (
@@ -386,7 +390,7 @@ function AssistantMessageContent({
           return <ToolSegment key={`tool-${segment.callID}-${index}`} segment={segment} />
         }
         if (segment.kind === "reasoning") {
-          return <ReasoningSegment key={`reasoning-${index}`} text={segment.text} />
+          return <ReasoningSegment key={`reasoning-${index}`} pending={reasoningPending} text={segment.text} />
         }
         return <ResponseSegment key={`response-${index}`} text={segment.text} />
       })}
@@ -599,34 +603,52 @@ function QuestionSegment({
   )
 }
 
-function ReasoningSegment({ text }: { text: string }) {
+function ReasoningSegment({ pending, text }: { pending: boolean; text: string }) {
+  const [expanded, setExpanded] = React.useState(pending)
+  const collapsed = !pending && !expanded
+
+  React.useEffect(() => {
+    setExpanded(pending)
+  }, [pending])
+
   if (!text.trim()) return null
 
   return (
-    <View
-      style={{
-        borderLeftColor: "#4a4a4a",
-        borderLeftWidth: 2,
-        gap: 5,
-        paddingLeft: 10,
-        paddingVertical: 2,
-      }}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: pending, expanded: !collapsed }}
+      disabled={pending}
+      onPress={() => setExpanded((current) => !current)}
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.78 : 1,
+      })}
     >
-      <Text selectable style={{ color: "#a0a0a0", fontSize: 14, lineHeight: 20 }}>
-        {text}
-      </Text>
-    </View>
+      <View
+        style={{
+          borderLeftColor: "#4a4a4a",
+          borderLeftWidth: 2,
+          gap: 5,
+          paddingLeft: 10,
+          paddingVertical: 2,
+        }}
+      >
+        <Text
+          ellipsizeMode="tail"
+          numberOfLines={collapsed ? 2 : undefined}
+          selectable
+          style={{ color: "#a0a0a0", fontSize: 14, lineHeight: 20 }}
+        >
+          {text}
+        </Text>
+      </View>
+    </Pressable>
   )
 }
 
 function ResponseSegment({ text }: { text: string }) {
   if (!text.trim()) return null
 
-  return (
-    <Text selectable style={{ color: "#dedede", fontSize: 16, lineHeight: 22 }}>
-      {text}
-    </Text>
-  )
+  return <ThreadMarkdown text={text} />
 }
 
 function ToolSegment({ segment }: { segment: MessageToolContentSegment }) {

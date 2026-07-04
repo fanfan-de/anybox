@@ -31,6 +31,7 @@ export interface MobileSessionSummary {
   worktreeID?: string
   directory: string
   title: string
+  pinned?: boolean
   kind?: string
   created: number
   updated: number
@@ -603,6 +604,42 @@ export async function createSession(
     method: "POST",
     body: JSON.stringify(input),
   })
+}
+
+export async function renameSession(
+  connection: MobileConnection,
+  sessionID: string,
+  input: {
+    title: string
+  },
+) {
+  return requestMobile<MobileSessionSummary>(connection, `/api/mobile/sessions/${encodeURIComponent(sessionID)}/title`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function updateSessionPinned(
+  connection: MobileConnection,
+  sessionID: string,
+  input: {
+    pinned: boolean
+  },
+) {
+  return requestMobile<MobileSessionSummary>(connection, `/api/mobile/sessions/${encodeURIComponent(sessionID)}/pinned`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function deleteSession(connection: MobileConnection, sessionID: string) {
+  return requestMobile<{ sessionID: string; projectID: string }>(
+    connection,
+    `/api/mobile/sessions/${encodeURIComponent(sessionID)}`,
+    {
+      method: "DELETE",
+    },
+  )
 }
 
 export async function getMessages(connection: MobileConnection, sessionID: string) {

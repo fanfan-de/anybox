@@ -572,6 +572,28 @@ describe("mobile bridge server", () => {
           }
         }
         if (agentPath === "/api/projects/project-smoke/sessions") return { data: [session] }
+        if (agentPath === "/api/sessions/session-smoke/title" && init?.method === "PATCH") {
+          const body = JSON.parse(String(init.body ?? "{}")) as { title?: string }
+          return {
+            data: {
+              ...session,
+              title: body.title ?? session.title,
+              time: {
+                created: session.time.created,
+                updated: session.time.updated + 1,
+              },
+            },
+          }
+        }
+        if (agentPath === "/api/sessions/session-smoke/pinned" && init?.method === "PATCH") {
+          const body = JSON.parse(String(init.body ?? "{}")) as { pinned?: boolean }
+          return {
+            data: {
+              ...session,
+              pinned: body.pinned,
+            },
+          }
+        }
         if (agentPath.startsWith("/api/permissions/requests?")) return { data: [approval] }
         if (agentPath === "/api/permissions/requests/approval-smoke/resolve") {
           return { data: { approvalID: "approval-smoke", decision: "allow", approved: true } }
@@ -699,6 +721,39 @@ describe("mobile bridge server", () => {
       })
       expect(modelSelection.response.status).toBe(200)
       expect(successData<{ model?: string }>(modelSelection.body).model).toBe("openai/gpt-smoke")
+      expect(desktopSend).toHaveBeenCalledWith(
+        DESKTOP_MOBILE_BRIDGE_EVENT_CHANNEL,
+        expect.objectContaining({
+          type: "session.updated",
+          source: "mobile",
+          sessionID: "session-smoke",
+          generatedAt: expect.any(Number),
+        }),
+      )
+
+      const renamed = await readMobileJSON(baseUrl, "/api/mobile/sessions/session-smoke/title", {
+        body: JSON.stringify({ title: "Renamed Chat" }),
+        headers: authHeaders,
+        method: "PATCH",
+      })
+      expect(renamed.response.status).toBe(200)
+      expect(successData<{ created: number; id: string; title: string; updated: number }>(renamed.body)).toMatchObject({
+        created: session.time.created,
+        id: "session-smoke",
+        title: "Renamed Chat",
+        updated: session.time.updated + 1,
+      })
+
+      const pinned = await readMobileJSON(baseUrl, "/api/mobile/sessions/session-smoke/pinned", {
+        body: JSON.stringify({ pinned: true }),
+        headers: authHeaders,
+        method: "PATCH",
+      })
+      expect(pinned.response.status).toBe(200)
+      expect(successData<{ id: string; pinned?: boolean }>(pinned.body)).toMatchObject({
+        id: "session-smoke",
+        pinned: true,
+      })
       expect(desktopSend).toHaveBeenCalledWith(
         DESKTOP_MOBILE_BRIDGE_EVENT_CHANNEL,
         expect.objectContaining({

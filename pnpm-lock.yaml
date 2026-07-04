@@ -372,6 +372,9 @@ importers:
       react-native:
         specifier: 0.85.3
         version: 0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.16)(react@19.2.3)
+      react-native-markdown-renderer:
+        specifier: ^4.1.1
+        version: 4.1.1(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.16)(react@19.2.3))(react@19.2.3)
       react-native-safe-area-context:
         specifier: 5.7.0
         version: 5.7.0(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.16)(react@19.2.3))(react@19.2.3)
@@ -6451,6 +6454,12 @@ packages:
     peerDependencies:
       react: '*'
       react-native: '*'
+
+  react-native-markdown-renderer@4.1.1:
+    resolution: {integrity: sha512-6Bmtr3KKhbt8CQrIowtsrhzgqfinP+QAkkV6qhVyuy0x1bGrA3qBb3BAonJyVoJifm2X7DHHW/LcCZf9rxpGJg==}
+    peerDependencies:
+      react: '>=18.0.0'
+      react-native: '>=0.73.0'
 
   react-native-reanimated@4.4.1:
     resolution: {integrity: sha512-WCVBfhLE+AYI2l4inL6PC1vcfNOfmVYRSVSBkPiD12N3jvzByipnygwVpmunyhaNqbiSEDrFYcl7cOJnbHKykw==}
@@ -15401,6 +15410,12 @@ snapshots:
 
   react-native-is-edge-to-edge@1.3.1(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.16)(react@19.2.3))(react@19.2.3):
     dependencies:
+      react: 19.2.3
+      react-native: 0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.16)(react@19.2.3)
+
+  react-native-markdown-renderer@4.1.1(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.16)(react@19.2.3))(react@19.2.3):
+    dependencies:
+      markdown-it: 14.1.1
       react: 19.2.3
       react-native: 0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.16)(react@19.2.3)
 

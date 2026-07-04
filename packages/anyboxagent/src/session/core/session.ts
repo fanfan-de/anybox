@@ -149,6 +149,7 @@ export const SessionInfo = z
       })
       .optional(),
     title: z.string(),
+    pinned: z.boolean().optional(),
     activeMessageID: z.string().nullable().optional(),
     version: z.string(),
     workflow: z
@@ -1125,6 +1126,20 @@ function updateSessionTitle(
   return next
 }
 
+function updateSessionPinned(sessionID: string, pinned: boolean): SessionInfo | null {
+  const existing = DataBaseRead("sessions", sessionID) as SessionInfo | null
+  if (!existing) return null
+  if (Boolean(existing.pinned) === pinned) return existing
+
+  const next: SessionInfo = {
+    ...existing,
+    pinned: pinned ? true : undefined,
+  }
+
+  updateSessionRecord(next)
+  return next
+}
+
 function listByProject(projectID: string): SessionInfo[] {
   ensureSessionTables()
   return db
@@ -1468,6 +1483,7 @@ export {
   restoreArchivedSession,
   recordMessage,
   updateActiveMessageID,
+  updateSessionPinned,
   updateSessionTitle,
   updateTurn,
   updateSessionModelSelection,

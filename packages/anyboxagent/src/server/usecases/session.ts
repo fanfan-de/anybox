@@ -43,6 +43,14 @@ export const RollbackSessionBody = AgentRouteSchemas.sessions.rollback.body
 
 export const UpdateSessionModelSelectionBody = Config.ModelSelection
 
+export const UpdateSessionTitleBody = z.object({
+  title: z.string().trim().min(1).max(160),
+})
+
+export const UpdateSessionPinnedBody = z.object({
+  pinned: z.boolean(),
+})
+
 export const UpdateSessionWorkflowBody = AgentRouteSchemas.sessions.updateWorkflow.body
 
 export const StreamSessionAttachmentBody = SessionAttachmentBodySchema
@@ -716,6 +724,32 @@ export async function updateSessionModelSelection(
   }
 
   return toSessionModelSelectionPayload(Session.getSessionModelSelection(sessionID))
+}
+
+export function updateSessionTitle(
+  sessionID: string,
+  input: z.infer<typeof UpdateSessionTitleBody>,
+) {
+  requireSession(sessionID)
+  const updated = Session.updateSessionTitle(sessionID, input.title)
+  if (!updated) {
+    throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${sessionID}' not found`)
+  }
+
+  return mapSessionSummary(updated)
+}
+
+export function updateSessionPinned(
+  sessionID: string,
+  input: z.infer<typeof UpdateSessionPinnedBody>,
+) {
+  requireSession(sessionID)
+  const updated = Session.updateSessionPinned(sessionID, input.pinned)
+  if (!updated) {
+    throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${sessionID}' not found`)
+  }
+
+  return mapSessionSummary(updated)
 }
 
 export function updateSessionWorkflow(

@@ -1,0 +1,55 @@
+{
+  "name": "cinema",
+  "version": "0.1.0",
+  "description": "Folder-based AI film project workflows for anybox for cinema.",
+  "author": {
+    "name": "Anybox"
+  },
+  "homepage": "https://anybox.com.cn",
+  "keywords": [
+    "cinema",
+    "film",
+    "video",
+    "ai-video",
+    "local-project",
+    "storyboard",
+    "canvas"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "anybox for cinema",
+      "zh-CN": "anybox for cinema"
+    },
+    "shortDescription": {
+      "en-US": "Local AI film project workflows.",
+      "zh-CN": "本地 AI 影视项目工作流。"
+    },
+    "longDescription": {
+      "en-US": "Initialize and operate local folder-based film projects for anybox for cinema. This first version ships workflow skills only and uses generic shell and file tools rather than cinema-specific runtime tools.",
+      "zh-CN": "初始化并操作基于本地文件夹的 anybox for cinema 影视项目。当前首版只包含工作流 skill，使用通用 Shell 与文件工具，不依赖 Cinema 专用 Runtime 工具。"
+    },
+    "developerName": "Anybox",
+    "category": "Design",
+    "capabilities": [
+      "workflow",
+      "local-project",
+      "film-planning",
+      "canvas-ready"
+    ],
+    "logo": "CIN",
+    "brandColor": "#111827",
+    "defaultPrompt": [
+      "Initialize this folder as an anybox for cinema project",
+      "Prepare a local cinema project structure",
+      "Repair the anybox for cinema project metadata in this folder"
+    ]
+  },
+  "skills": "skills",
+  "skillPreviews": [
+    {
+      "name": "Initialize Cinema Project",
+      "description": "Initialize, inspect, repair, or migrate an anybox for cinema local film project using only generic shell and file editing tools.",
+      "directory": "initialize-cinema-project"
+    }
+  ]
+}
