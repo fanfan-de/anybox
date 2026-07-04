@@ -1101,7 +1101,7 @@ body.is-dragging-settings-page {
 .mcp-tools-policy-list {
   display: grid;
   gap: 12px;
-  contain: layout paint;
+  contain: none;
 }
 
 .mcp-tool-policy-card {
@@ -1113,7 +1113,7 @@ body.is-dragging-settings-page {
   grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
   gap: 14px;
   align-items: center;
-  contain: layout paint;
+  contain: none;
 }
 
 .mcp-tool-policy-card.is-expanded {
@@ -2967,7 +2967,7 @@ body.is-dragging-settings-page {
 }
 
 .mcp-tools-policy-list {
-  overflow: hidden;
+  overflow: visible;
   gap: 0;
   border: 1px solid var(--seg-border);
   border-radius: 8px;
@@ -2975,10 +2975,25 @@ body.is-dragging-settings-page {
 }
 
 .mcp-tool-policy-card {
+  position: relative;
   padding: 12px 14px;
   border: 0;
   border-radius: 0;
   background: transparent;
+}
+
+.mcp-tool-policy-card:focus-within {
+  z-index: 2;
+}
+
+.mcp-tool-policy-card:first-child {
+  border-top-left-radius: 7px;
+  border-top-right-radius: 7px;
+}
+
+.mcp-tool-policy-card:last-child {
+  border-bottom-right-radius: 7px;
+  border-bottom-left-radius: 7px;
 }
 
 .mcp-tool-policy-card + .mcp-tool-policy-card {

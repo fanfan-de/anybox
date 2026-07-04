@@ -1,8 +1,12 @@
 import { fireEvent, render, screen, within } from "@testing-library/react"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import type { ComponentProps } from "react"
 import { describe, expect, it, vi } from "vitest"
 import type { McpServerDiagnostic, McpServerDraftState } from "../types"
 import { McpServersPage } from "./McpServersPage"
+
+const settingsStyles = readFileSync(resolve(process.cwd(), "src/renderer/src/styles/settings.css"), "utf8")
 
 function createDraft(overrides: Partial<McpServerDraftState> = {}): McpServerDraftState {
   return {
@@ -116,6 +120,19 @@ function selectToolPolicy(toolName: string, label: string) {
 }
 
 describe("McpServersPage tool policies", () => {
+  it("lets MCP tool policy dropdowns overflow their rows", () => {
+    const policyListBlocks = Array.from(
+      settingsStyles.matchAll(/\.mcp-tools-policy-list\s*\{([^}]*)\}/g),
+      (match) => match[1],
+    )
+    const finalPolicyListBlock = policyListBlocks[policyListBlocks.length - 1] ?? ""
+
+    expect(policyListBlocks.some((block) => block.includes("contain: none;"))).toBe(true)
+    expect(finalPolicyListBlock).toContain("overflow: visible;")
+    expect(settingsStyles).toMatch(/\.mcp-tool-policy-card\s*\{[^}]*contain:\s*none;/s)
+    expect(settingsStyles).toMatch(/\.mcp-tool-policy-card:focus-within\s*\{[^}]*z-index:\s*2;/s)
+  })
+
   it("renders discovered tools and changes a per-tool policy", () => {
     const onMcpToolPolicyChange = vi.fn()
 
