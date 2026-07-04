@@ -1,7 +1,7 @@
 # anybox for cinema 设计文档
 
 版本：v0.1  
-状态：初始产品设计  
+状态：初始产品设计 + Web Canvas V1 实现记录  
 日期：2026-07-04
 
 ## 1. 产品定义
@@ -538,3 +538,141 @@ v0 成功标准：
 
 > AI 影视创作需要的不只是聊天，也不是单纯时间线，而是一个由 Agent 驱动、由 Canvas 可视化掌控、以本地文件夹为项目真相的创作工作台。
 
+## 18. Web Canvas V1 实现选择
+
+当前 V1 先验证“独立 Web UI + AnyBox 本地后端 + 本地项目文件夹”的最小闭环，不实现视频生成 provider、API key 配置、任务队列、Agent 节点执行、素材导入和完整时间线。
+
+### 18.1 前端包
+
+新增独立 package：
+
+```txt
+packages/cinema-web
+```
+
+技术栈：
+
+- React 19
+- TypeScript
+- Vite
+- `@xyflow/react`
+- `@tanstack/react-query`
+- Zustand
+- `lucide-react`
+
+Vite base 使用 `/cinema/`，开发端口默认是 `127.0.0.1:4175`。
+
+页面从 URL query 读取：
+
+- `projectID`：AnyBox 项目 ID。
+- `agentBaseURL`：可选 AnyBox agent 地址。生产同源时默认使用 `window.location.origin`。
+
+### 18.2 Canvas 形态
+
+V1 采用类似 Updream 的深色节点画布：
+
+- 深色点阵背景。
+- XYFlow 节点和连线。
+- 小地图。
+- 画布 controls。
+- 右键添加节点菜单。
+- 右侧节点 Inspector。
+- debounce 自动保存状态。
+
+V1 支持节点类型：
+
+```txt
+text
+prompt
+image
+video
+audio
+shot
+agent
+generation-task
+output
+```
+
+所有节点先使用统一卡片 UI，不直接预览本地媒体；`generation-task` 只是结构占位，不调用模型 API。
+
+### 18.3 AnyBox agent API
+
+AnyBox agent 挂载：
+
+```txt
+/api/cinema
+/cinema
+```
+
+V1 API：
+
+```txt
+GET  /api/cinema/projects/:projectID
+GET  /api/cinema/projects/:projectID/canvas
+PUT  /api/cinema/projects/:projectID/canvas
+POST /api/cinema/projects/:projectID/open-link
+```
+
+实现原则：
+
+- 只能通过 AnyBox `projectID` 解析项目根目录。
+- 只读写该项目下的 `.anybox-cinema/*`。
+- 浏览器不能传任意本地路径。
+- 未初始化项目不自动创建 `.anybox-cinema`，只返回明确错误。
+- `PUT canvas` 采用整文件原子写回，并追加 `events.jsonl` 的 `canvas.updated` 事件。
+
+静态服务：
+
+- 开发态优先使用 `ANYBOX_CINEMA_WEB_DIST` 或 `packages/cinema-web/dist`。
+- 打包态使用 `packages/desktop/build/agent-runtime/cinema-web`。
+- `/cinema/*` 对非 asset 页面 fallback 到 `index.html`。
+
+### 18.4 数据格式
+
+共享类型放在 `@anybox/shared/cinema`。
+
+V1 继续兼容初始化 skill 生成的 `canvas.json`：
+
+```json
+{
+  "schemaVersion": 1,
+  "canvasType": "node-canvas",
+  "viewport": { "x": 0, "y": 0, "zoom": 1 },
+  "nodes": [],
+  "edges": [],
+  "nodeTypes": []
+}
+```
+
+Web UI 内部映射：
+
+- 存储里的 `node.type` 是业务类型，例如 `text`、`agent`、`shot`。
+- XYFlow 的 `node.type` 固定为 `cinemaNode`。
+- 业务类型放入 `node.data.cinemaType`。
+- 保存时转换回 `.anybox-cinema/canvas.json` 格式。
+
+### 18.5 桌面入口
+
+AnyBox 桌面端在项目右键菜单增加：
+
+```txt
+Open Cinema
+```
+
+点击后：
+
+1. renderer 调用 `window.desktop.openCinemaProject({ projectID })`。
+2. main 进程请求 agent 的 `/api/cinema/projects/:projectID/open-link`。
+3. agent 返回 Cinema URL。
+4. renderer 复用现有 `handlePreviewOpenUrl(url, workspace.id)`，在右侧 Preview 打开。
+
+### 18.6 插件结构
+
+Cinema 插件 manifest 使用当前推荐结构：
+
+```txt
+plugins/Anybox-Plugins/cinema/plugin.json
+plugins/Anybox-Plugins/cinema/skills/initialize-cinema-project/SKILL.md
+```
+
+初始化仍然完全由 `Initialize Cinema Project` skill 描述，并使用通用文件创建工具与 Bash 执行，不写成 runtime 硬编码。

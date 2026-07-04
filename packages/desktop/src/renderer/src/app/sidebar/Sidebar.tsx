@@ -99,6 +99,7 @@ interface SidebarProps {
   onProjectClick: (workspace: WorkspaceGroup) => void
   onProjectCreateSession: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void | Promise<void>
   onProjectCreateWorktree: (workspace: WorkspaceGroup, input: ProjectWorktreeCreateRequest) => boolean | void | Promise<boolean | void>
+  onProjectOpenCinema: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectOpenInExplorer: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectPin: (workspace: WorkspaceGroup) => void
   onProjectRemove: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void
@@ -200,6 +201,7 @@ interface FolderWorkspaceViewProps {
   onProjectClick: (workspace: WorkspaceGroup) => void
   onProjectCreateSession: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void | Promise<void>
   onProjectCreateWorktree: (workspace: WorkspaceGroup, input: ProjectWorktreeCreateRequest) => boolean | void | Promise<boolean | void>
+  onProjectOpenCinema: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectOpenInExplorer: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectPin: (workspace: WorkspaceGroup) => void
   onProjectRemove: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void
@@ -275,7 +277,7 @@ function createWorktreeBranchName(workspace: WorkspaceGroup, workspaces: Workspa
 }
 
 const PROJECT_CONTEXT_MENU_WIDTH = 240
-const PROJECT_CONTEXT_MENU_HEIGHT = 188
+const PROJECT_CONTEXT_MENU_HEIGHT = 228
 
 interface WorkspaceSessionTreeNode {
   children: WorkspaceSessionTreeNode[]
@@ -346,6 +348,7 @@ interface ProjectContextMenuProps {
   onClose: () => void
   onProjectArchiveSessions: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectCreateWorktree: (workspace: WorkspaceGroup) => void | Promise<void>
+  onProjectOpenCinema: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectOpenInExplorer: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectPin: (workspace: WorkspaceGroup) => void
   onProjectRemove: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void
@@ -360,6 +363,7 @@ function ProjectContextMenu({
   onClose,
   onProjectArchiveSessions,
   onProjectCreateWorktree,
+  onProjectOpenCinema,
   onProjectOpenInExplorer,
   onProjectPin,
   onProjectRemove,
@@ -442,6 +446,20 @@ function ProjectContextMenu({
       >
         <span className="ui-context-menu__icon" aria-hidden="true"><FolderOpenIcon /></span>
         <span className="ui-context-menu__label">在资源管理器中打开</span>
+      </button>
+      <button
+        className="ui-context-menu__item"
+        role="menuitem"
+        type="button"
+        disabled={isMissingWorkspace}
+        onClick={(event) => {
+          event.stopPropagation()
+          onClose()
+          void onProjectOpenCinema(workspace)
+        }}
+      >
+        <span className="ui-context-menu__icon" aria-hidden="true"><FileTextIcon /></span>
+        <span className="ui-context-menu__label">Open Cinema</span>
       </button>
       {isGitProject ? (
         <button
@@ -646,6 +664,7 @@ function FolderWorkspaceView({
   onProjectClick,
   onProjectCreateSession,
   onProjectCreateWorktree,
+  onProjectOpenCinema,
   onProjectOpenInExplorer,
   onProjectPin,
   onProjectRemove,
@@ -914,6 +933,7 @@ function FolderWorkspaceView({
         onClose={closeProjectContextMenu}
         onProjectArchiveSessions={onProjectArchiveSessions}
         onProjectCreateWorktree={openWorktreeCreateDialog}
+        onProjectOpenCinema={onProjectOpenCinema}
         onProjectOpenInExplorer={onProjectOpenInExplorer}
         onProjectPin={onProjectPin}
         onProjectRemove={onProjectRemove}
@@ -1272,6 +1292,7 @@ export function Sidebar({
   onProjectClick,
   onProjectCreateSession,
   onProjectCreateWorktree,
+  onProjectOpenCinema,
   onProjectOpenInExplorer,
   onProjectPin,
   onProjectRemove,
@@ -1317,6 +1338,7 @@ export function Sidebar({
             onProjectClick={onProjectClick}
             onProjectCreateSession={onProjectCreateSession}
             onProjectCreateWorktree={onProjectCreateWorktree}
+            onProjectOpenCinema={onProjectOpenCinema}
             onProjectOpenInExplorer={onProjectOpenInExplorer}
             onProjectPin={onProjectPin}
             onProjectRemove={onProjectRemove}

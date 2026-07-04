@@ -3394,6 +3394,25 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     })
   })
 
+  handleDesktopIpc("desktop:open-cinema-project", async (_event, input: { projectID: string }) => {
+    const parsedInput = DesktopIpcSchemas.openCinemaProject.input.parse(input)
+    const projectID = parsedInput.projectID.trim()
+    if (!projectID) {
+      throw new Error("A project ID is required.")
+    }
+
+    const result = await requestAgentJSON<{ url: string }>(
+      `/api/cinema/projects/${encodeURIComponent(projectID)}/open-link`,
+      { method: "POST" },
+    )
+
+    return DesktopIpcSchemas.openCinemaProject.output.parse({
+      ok: true as const,
+      projectID,
+      url: result.data.url,
+    })
+  })
+
   handleDesktopIpc("desktop:open-monitor-window", async () => openMonitorWindow())
 
   handleDesktopIpc("desktop:open-appearance-window", async () => {

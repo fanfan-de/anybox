@@ -9,6 +9,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const desktopDir = path.resolve(scriptDir, "..")
 const repoRoot = path.resolve(desktopDir, "..", "..")
 const agentDir = path.join(repoRoot, "packages", "anyboxagent")
+const cinemaWebDistDir = path.join(repoRoot, "packages", "cinema-web", "dist")
 const browserNativeHostDir = path.join(repoRoot, "packages", "browser-native-host")
 const runtimeDir = path.join(desktopDir, "build", "agent-runtime")
 const browserConnectorSourceDir = path.join(agentDir, "connectors", "browser")
@@ -154,6 +155,17 @@ async function copyBundledConnectors() {
   await fsp.copyFile(path.join(feishuConnectorSourceDir, "server.js"), path.join(feishuConnectorTargetDir, "server.js"))
 }
 
+async function copyCinemaWebDist() {
+  const sourceIndex = path.join(cinemaWebDistDir, "index.html")
+  if (!(await pathExists(sourceIndex))) {
+    throw new Error(`Missing Cinema Web build at ${sourceIndex}. Run \`pnpm --filter anybox-cinema-web build\` first.`)
+  }
+
+  const targetDir = path.join(runtimeDir, "cinema-web")
+  await fsp.rm(targetDir, { recursive: true, force: true })
+  await fsp.cp(cinemaWebDistDir, targetDir, { recursive: true })
+}
+
 async function buildBrowserNativeHost(bunBinary) {
   const entrypoint = path.join(browserNativeHostDir, "src", "main.ts")
   if (!(await pathExists(entrypoint))) {
@@ -219,6 +231,7 @@ async function main() {
   await fsp.copyFile(path.join(agentDir, "src", "pty", "node-pty-worker.mjs"), path.join(runtimeDir, "node-pty-worker.mjs"))
   await copyNodePtyRuntime(runtimeNodeModulesDir)
   await fixNodePtySpawnHelperPermissions(runtimeNodeModulesDir)
+  await copyCinemaWebDist()
   await copyBundledConnectors()
   await buildBrowserNativeHost(bunBinary)
   await writeConnectorBuildConfig()

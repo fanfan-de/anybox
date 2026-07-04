@@ -86,7 +86,13 @@ import type {
   PtyTransportIPCEvent,
   WindowAction,
 } from "../main/types"
-import type { DesktopOpenPathInput, DesktopOpenPathResult, ReasoningEffort } from "@anybox/shared"
+import type {
+  DesktopOpenCinemaProjectInput,
+  DesktopOpenCinemaProjectResult,
+  DesktopOpenPathInput,
+  DesktopOpenPathResult,
+  ReasoningEffort,
+} from "@anybox/shared"
 import type { AppearanceConfigDocument, AppearanceConfigSnapshot, AppearanceRuntimeState } from "./appearance"
 import type {
   AppearanceThemeDuplicateInput,
@@ -1092,6 +1098,10 @@ export interface DesktopIpcContract {
     input: DesktopOpenPathInput
     output: DesktopOpenPathResult
   }
+  "desktop:open-cinema-project": {
+    input: DesktopOpenCinemaProjectInput
+    output: DesktopOpenCinemaProjectResult
+  }
   "desktop:open-monitor-window": {
     input: void
     output:
@@ -1975,6 +1985,7 @@ export interface DesktopApiMethods {
   openInExternalEditor(input: DesktopIpcInput<"desktop:open-in-external-editor">): Promise<DesktopIpcOutput<"desktop:open-in-external-editor">>
   openExternalUrl(input: DesktopIpcInput<"desktop:open-external-url">): Promise<DesktopIpcOutput<"desktop:open-external-url">>
   openPath(input: DesktopIpcInput<"desktop:open-path">): Promise<DesktopIpcOutput<"desktop:open-path">>
+  openCinemaProject(input: DesktopIpcInput<"desktop:open-cinema-project">): Promise<DesktopIpcOutput<"desktop:open-cinema-project">>
   openMonitorWindow(): Promise<DesktopIpcOutput<"desktop:open-monitor-window">>
   openAppearanceWindow(): Promise<DesktopIpcOutput<"desktop:open-appearance-window">>
   windowAction(action: DesktopIpcInput<"desktop:window-action">): Promise<DesktopIpcOutput<"desktop:window-action">>

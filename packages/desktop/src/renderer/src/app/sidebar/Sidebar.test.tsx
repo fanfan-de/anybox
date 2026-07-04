@@ -118,6 +118,7 @@ function renderSidebar(overrides: Partial<ComponentProps<typeof Sidebar>> = {}) 
     onProjectClick: vi.fn(),
     onProjectCreateSession: vi.fn(),
     onProjectCreateWorktree: vi.fn(),
+    onProjectOpenCinema: vi.fn(),
     onProjectOpenInExplorer: vi.fn(),
     onProjectPin: vi.fn(),
     onProjectRemove: vi.fn(),
@@ -397,11 +398,13 @@ describe("Sidebar", () => {
 
   it("opens workspace row actions from the context menu", () => {
     const onProjectArchiveSessions = vi.fn()
+    const onProjectOpenCinema = vi.fn()
     const onProjectOpenInExplorer = vi.fn()
     const onProjectPin = vi.fn()
     const onProjectRemove = vi.fn()
     renderSidebar({
       onProjectArchiveSessions,
+      onProjectOpenCinema,
       onProjectOpenInExplorer,
       onProjectPin,
       onProjectRemove,
@@ -422,6 +425,13 @@ describe("Sidebar", () => {
     })
     fireEvent.click(screen.getByRole("menuitem", { name: "在资源管理器中打开" }))
     expect(onProjectOpenInExplorer).toHaveBeenCalledWith(expect.objectContaining({ id: "workspace-1" }))
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Workspace" }), {
+      clientX: 120,
+      clientY: 140,
+    })
+    fireEvent.click(screen.getByRole("menuitem", { name: "Open Cinema" }))
+    expect(onProjectOpenCinema).toHaveBeenCalledWith(expect.objectContaining({ id: "workspace-1" }))
 
     fireEvent.contextMenu(screen.getByRole("button", { name: "Workspace" }), {
       clientX: 120,

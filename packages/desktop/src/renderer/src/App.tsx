@@ -1759,6 +1759,28 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     }
   }
 
+  async function handleProjectOpenCinema(workspace: WorkspaceGroup) {
+    const projectID = workspace.project.id.trim()
+    if (!projectID) {
+      toast.error("Cinema 需要有效的项目 ID。")
+      return
+    }
+
+    const openCinemaProject = window.desktop?.openCinemaProject
+    if (!openCinemaProject) {
+      toast.error("Cinema 入口不可用。")
+      return
+    }
+
+    try {
+      const result = await openCinemaProject({ projectID })
+      handlePreviewOpenUrl(result.url, workspace.id)
+    } catch (error) {
+      console.error("[desktop] open cinema project failed:", error)
+      toast.error(`打开 Cinema 失败：${getErrorMessage(error)}`)
+    }
+  }
+
   async function refreshAppUpdateState() {
     const state = await getAppUpdateState()
     if (state) {
@@ -2545,6 +2567,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onProjectCreateSession={handleProjectCreateSession}
               onProjectCreateWorktree={handleProjectCreateWorktree}
               onProjectClick={handleProjectClick}
+              onProjectOpenCinema={handleProjectOpenCinema}
               onProjectOpenInExplorer={handleProjectOpenInExplorer}
               onProjectPin={handleProjectPin}
               onProjectRemove={handleProjectRemove}

@@ -12,6 +12,8 @@ import { PtyRoutes } from "#server/routes/pty.ts"
 import { RemoteRoutes } from "#server/routes/remote.ts"
 import { WorkspaceFilesRoutes } from "#server/routes/workspace-files.ts"
 import { BrowserExtensionRoutes } from "#server/routes/browser-extension.ts"
+import { CinemaRoutes } from "#server/routes/cinema.ts"
+import { CinemaWebRoutes } from "#server/routes/cinema-web.ts"
 import { DebugRoutes } from "#server/routes/debug.ts"
 import { SettingsRoutes } from "#server/routes/settings.ts"
 import { SessionRoutes } from "#server/routes/session.ts"
@@ -132,8 +134,10 @@ export function createServerRuntime(options: Pick<ServerOptions, "corsWhitelist"
   app.route("/api/automations", AutomationRoutes())
   app.route("/api/automation-runs", AutomationRunRoutes())
   app.route("/api/calendar", CalendarRoutes())
+  app.route("/api/cinema", CinemaRoutes())
   app.route("/api/projects", ProjectRoutes({ ptyRegistry }))
   app.route("/api/sessions", SessionRoutes({ ptyRegistry }))
+  app.route("/", CinemaWebRoutes())
 
   app.notFound((c) => jsonError(c, 404, "NOT_FOUND", "Route not found"))
 

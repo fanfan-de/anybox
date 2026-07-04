@@ -7,7 +7,7 @@ const promptRoot = await mkdtemp(join(tmpdir(), "anybox-server-test-prompts-"))
 const databaseFile = join(databaseRoot, "agent-local-test.db")
 
 try {
-  const testFiles = ["Test/server.api.test.ts", "Test/plugin.test.ts"]
+  const testFiles = ["Test/server.api.test.ts", "Test/plugin.test.ts", "Test/cinema.api.test.ts"]
 
   for (const testFile of testFiles) {
     const child = Bun.spawn([process.execPath, "test", "--max-concurrency=1", testFile], {

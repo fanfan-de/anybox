@@ -231,6 +231,8 @@ try {
       }>,
     openPath: (input: DesktopIpcInput<"desktop:open-path">) =>
       invokeDesktop("desktop:open-path", input) as Promise<DesktopIpcOutput<"desktop:open-path">>,
+    openCinemaProject: (input: DesktopIpcInput<"desktop:open-cinema-project">) =>
+      invokeDesktop("desktop:open-cinema-project", input) as Promise<DesktopIpcOutput<"desktop:open-cinema-project">>,
     openMonitorWindow: () => invokeDesktop("desktop:open-monitor-window") as Promise<DesktopIpcOutput<"desktop:open-monitor-window">>,
     openAppearanceWindow: () =>
       invokeDesktop("desktop:open-appearance-window") as Promise<DesktopIpcOutput<"desktop:open-appearance-window">>,

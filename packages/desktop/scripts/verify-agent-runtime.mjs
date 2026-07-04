@@ -16,6 +16,7 @@ const pythonExecutable = process.platform === "win32"
 
 const requiredFiles = [
   path.join(runtimeDir, "agent-server.js"),
+  path.join(runtimeDir, "cinema-web", "index.html"),
   path.join(runtimeDir, "connectors", "browser", "server.js"),
   path.join(runtimeDir, "connectors", "node-repl", "server.js"),
   path.join(runtimeDir, "connectors", "node-repl", "browser-client.mjs"),
