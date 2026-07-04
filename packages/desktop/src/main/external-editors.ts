@@ -31,9 +31,13 @@ export interface ExternalEditorLaunchSpec {
 interface ExternalEditorDescriptor {
   id: ExternalEditorID
   label: string
+  platformLabels?: Partial<Record<NodeJS.Platform, string>>
   commandNames: string[]
+  darwinCommandNames?: string[]
   windowsPathTemplates: string[]
+  darwinPathTemplates?: string[]
   iconPathTemplates?: string[]
+  darwinIconPathTemplates?: string[]
 }
 
 interface ExternalEditorDependencies {
@@ -62,15 +66,24 @@ const EXTERNAL_EDITOR_DESCRIPTORS: ExternalEditorDescriptor[] = [
     id: "vscode",
     label: "VS Code",
     commandNames: ["code"],
+    darwinCommandNames: ["code"],
     windowsPathTemplates: [
       "%LOCALAPPDATA%\\Programs\\Microsoft VS Code\\Code.exe",
       "%ProgramFiles%\\Microsoft VS Code\\Code.exe",
       "%ProgramFiles(x86)%\\Microsoft VS Code\\Code.exe",
     ],
+    darwinPathTemplates: [
+      "/Applications/Visual Studio Code.app",
+      "%HOME%/Applications/Visual Studio Code.app",
+    ],
     iconPathTemplates: [
       "%LOCALAPPDATA%\\Programs\\Microsoft VS Code\\Code.exe",
       "%ProgramFiles%\\Microsoft VS Code\\Code.exe",
       "%ProgramFiles(x86)%\\Microsoft VS Code\\Code.exe",
+    ],
+    darwinIconPathTemplates: [
+      "/Applications/Visual Studio Code.app",
+      "%HOME%/Applications/Visual Studio Code.app",
     ],
   },
   {
@@ -83,40 +96,77 @@ const EXTERNAL_EDITOR_DESCRIPTORS: ExternalEditorDescriptor[] = [
     id: "cursor",
     label: "Cursor",
     commandNames: ["cursor"],
+    darwinCommandNames: ["cursor"],
     windowsPathTemplates: [
       "%LOCALAPPDATA%\\Programs\\Cursor\\Cursor.exe",
       "%ProgramFiles%\\Cursor\\Cursor.exe",
       "%ProgramFiles(x86)%\\Cursor\\Cursor.exe",
+    ],
+    darwinPathTemplates: [
+      "/Applications/Cursor.app",
+      "%HOME%/Applications/Cursor.app",
+    ],
+    darwinIconPathTemplates: [
+      "/Applications/Cursor.app",
+      "%HOME%/Applications/Cursor.app",
     ],
   },
   {
     id: "windsurf",
     label: "Windsurf",
     commandNames: ["windsurf"],
+    darwinCommandNames: ["windsurf"],
     windowsPathTemplates: [
       "%LOCALAPPDATA%\\Programs\\Windsurf\\Windsurf.exe",
       "%ProgramFiles%\\Windsurf\\Windsurf.exe",
       "%ProgramFiles(x86)%\\Windsurf\\Windsurf.exe",
+    ],
+    darwinPathTemplates: [
+      "/Applications/Windsurf.app",
+      "%HOME%/Applications/Windsurf.app",
+    ],
+    darwinIconPathTemplates: [
+      "/Applications/Windsurf.app",
+      "%HOME%/Applications/Windsurf.app",
     ],
   },
   {
     id: "githubDesktop",
     label: "GitHub Desktop",
     commandNames: ["github"],
+    darwinCommandNames: ["github"],
     windowsPathTemplates: [],
+    darwinPathTemplates: [
+      "/Applications/GitHub Desktop.app",
+      "%HOME%/Applications/GitHub Desktop.app",
+    ],
     iconPathTemplates: ["%LOCALAPPDATA%\\GitHubDesktop\\GitHubDesktop.exe"],
+    darwinIconPathTemplates: [
+      "/Applications/GitHub Desktop.app",
+      "%HOME%/Applications/GitHub Desktop.app",
+    ],
   },
   {
     id: "explorer",
     label: "File Explorer",
+    platformLabels: {
+      darwin: "Finder",
+    },
     commandNames: ["explorer.exe", "explorer"],
     windowsPathTemplates: ["%SystemRoot%\\explorer.exe"],
+    darwinPathTemplates: [
+      "/System/Library/CoreServices/Finder.app",
+    ],
   },
   {
     id: "terminal",
     label: "Terminal",
     commandNames: ["wt.exe", "wt"],
     windowsPathTemplates: ["%LOCALAPPDATA%\\Microsoft\\WindowsApps\\wt.exe"],
+    darwinPathTemplates: [
+      "/System/Applications/Utilities/Terminal.app",
+      "/Applications/Utilities/Terminal.app",
+    ],
   },
   {
     id: "wsl",
@@ -131,9 +181,18 @@ const VISUAL_STUDIO_SOLUTION_EXTENSIONS = new Set([".sln", ".slnx"])
 const VISUAL_STUDIO_PROJECT_EXTENSIONS = new Set([".csproj", ".fsproj", ".vbproj", ".vcxproj"])
 const VISUAL_STUDIO_SKIP_DIRECTORIES = new Set([".git", ".next", "bin", "build", "dist", "node_modules", "obj", "out"])
 const windowsPath = path.win32
+const posixPath = path.posix
 
-function expandWindowsPathTemplate(template: string, env: NodeJS.ProcessEnv) {
+function expandPathTemplate(template: string, env: NodeJS.ProcessEnv) {
   return template.replace(/%([^%]+)%/g, (_match, variableName: string) => env[variableName] ?? "")
+}
+
+function pathModuleForPlatform(platform: NodeJS.Platform) {
+  return platform === "win32" ? windowsPath : posixPath
+}
+
+function pathModuleForTarget(targetPath: string) {
+  return /^[a-zA-Z]:[\\/]/.test(targetPath) || targetPath.startsWith("\\\\") ? windowsPath : posixPath
 }
 
 function defaultResolveCommand(
@@ -143,12 +202,14 @@ function defaultResolveCommand(
     spawnSyncProcess = spawnSync,
   }: Pick<ExternalEditorDependencies, "platform" | "spawnSyncProcess"> = {},
 ) {
-  if (platform !== "win32") return undefined
-
-  const result = spawnSyncProcess("where.exe", [commandName], {
-    encoding: "utf8",
-    windowsHide: true,
-  })
+  const result = platform === "win32"
+    ? spawnSyncProcess("where.exe", [commandName], {
+        encoding: "utf8",
+        windowsHide: true,
+      })
+    : spawnSyncProcess("which", [commandName], {
+        encoding: "utf8",
+      })
 
   if (result.status !== 0) return undefined
 
@@ -182,16 +243,76 @@ function resolveTemplatePath(
   {
     env = process.env,
     existsSync = fs.existsSync,
-  }: Pick<ExternalEditorDependencies, "env" | "existsSync"> = {},
+    platform = process.platform,
+  }: Pick<ExternalEditorDependencies, "env" | "existsSync" | "platform"> = {},
 ) {
+  const platformPath = pathModuleForPlatform(platform)
   for (const template of templates) {
-    const candidate = windowsPath.normalize(expandWindowsPathTemplate(template, env))
+    const candidate = platformPath.normalize(expandPathTemplate(template, env))
     if (candidate && existsSync(candidate)) {
       return candidate
     }
   }
 
   return undefined
+}
+
+function getDescriptorPathTemplates(descriptor: ExternalEditorDescriptor, platform: NodeJS.Platform) {
+  switch (platform) {
+    case "win32":
+      return descriptor.windowsPathTemplates
+    case "darwin":
+      return descriptor.darwinPathTemplates ?? []
+    default:
+      return []
+  }
+}
+
+function getDescriptorCommandNames(descriptor: ExternalEditorDescriptor, platform: NodeJS.Platform) {
+  switch (platform) {
+    case "win32":
+      return descriptor.commandNames
+    case "darwin":
+      return descriptor.darwinCommandNames ?? []
+    default:
+      return []
+  }
+}
+
+function getDescriptorIconPathTemplates(descriptor: ExternalEditorDescriptor, platform: NodeJS.Platform) {
+  switch (platform) {
+    case "win32":
+      return descriptor.iconPathTemplates ?? []
+    case "darwin":
+      return descriptor.darwinIconPathTemplates ?? descriptor.darwinPathTemplates ?? []
+    default:
+      return []
+  }
+}
+
+function getDescriptorLabel(descriptor: ExternalEditorDescriptor, platform: NodeJS.Platform) {
+  return descriptor.platformLabels?.[platform] ?? descriptor.label
+}
+
+function resolveLaunchablePosixCommand(commandPath: string, existsSync: (targetPath: string) => boolean) {
+  const candidate = posixPath.normalize(commandPath.trim())
+  if (!candidate) return undefined
+  if (candidate.includes("/") && !existsSync(candidate)) return undefined
+  return candidate
+}
+
+function resolveLaunchableCommand(
+  commandPath: string,
+  {
+    existsSync,
+    platform,
+  }: {
+    existsSync: (targetPath: string) => boolean
+    platform: NodeJS.Platform
+  },
+) {
+  if (platform === "win32") return resolveLaunchableWindowsCommand(commandPath, existsSync)
+  return resolveLaunchablePosixCommand(commandPath, existsSync)
 }
 
 function resolveVisualStudioExecutable({
@@ -234,6 +355,7 @@ function resolveVisualStudioExecutable({
   return resolveTemplatePath(VISUAL_STUDIO_PATH_TEMPLATES, {
     env,
     existsSync,
+    platform,
   })
 }
 
@@ -247,7 +369,7 @@ function resolveDescriptorExecutable(
     spawnSyncProcess = spawnSync,
   }: ExternalEditorDependencies = {},
 ) {
-  if (platform !== "win32") return undefined
+  if (platform !== "win32" && platform !== "darwin") return undefined
 
   if (descriptor.id === "visualstudio") {
     return resolveVisualStudioExecutable({
@@ -259,26 +381,38 @@ function resolveDescriptorExecutable(
     })
   }
 
-  for (const commandName of descriptor.commandNames) {
+  for (const commandName of getDescriptorCommandNames(descriptor, platform)) {
     const resolvedCommand = resolveCommand(commandName)?.trim()
     if (!resolvedCommand) continue
 
-    const launchableCommand = resolveLaunchableWindowsCommand(resolvedCommand, existsSync)
+    const launchableCommand = resolveLaunchableCommand(resolvedCommand, {
+      existsSync,
+      platform,
+    })
     if (launchableCommand) return launchableCommand
   }
 
-  return resolveTemplatePath(descriptor.windowsPathTemplates, {
+  return resolveTemplatePath(getDescriptorPathTemplates(descriptor, platform), {
     env,
     existsSync,
+    platform,
   })
 }
 
 function resolveDescriptorIconPath(
   descriptor: ExternalEditorDescriptor,
   executablePath: string,
-  dependencies?: Pick<ExternalEditorDependencies, "env" | "existsSync">,
+  {
+    env = process.env,
+    existsSync = fs.existsSync,
+    platform = process.platform,
+  }: Pick<ExternalEditorDependencies, "env" | "existsSync" | "platform"> = {},
 ) {
-  const iconPath = resolveTemplatePath(descriptor.iconPathTemplates ?? [], dependencies)
+  const iconPath = resolveTemplatePath(getDescriptorIconPathTemplates(descriptor, platform), {
+    env,
+    existsSync,
+    platform,
+  })
   if (!iconPath || iconPath === executablePath) {
     return undefined
   }
@@ -364,6 +498,22 @@ function buildLaunchSpecForExecutable(
   }
 }
 
+function buildLaunchSpecForMacOpen(args: string[]): ExternalEditorLaunchSpec {
+  return {
+    command: "/usr/bin/open",
+    args,
+    shell: false,
+    waitForExit: true,
+    windowsHide: true,
+    windowsVerbatimArguments: false,
+  }
+}
+
+function resolveDarwinAppName(executablePath: string) {
+  if (posixPath.extname(executablePath) !== ".app") return null
+  return posixPath.basename(executablePath, ".app")
+}
+
 function readDirectoryEntries(
   directoryPath: string,
   readdirSync: typeof fs.readdirSync = fs.readdirSync,
@@ -429,7 +579,7 @@ function isGitRepositoryTarget(
     existsSync = fs.existsSync,
   }: Pick<ExternalEditorDependencies, "existsSync"> = {},
 ) {
-  return existsSync(windowsPath.join(targetPath, ".git"))
+  return existsSync(pathModuleForTarget(targetPath).join(targetPath, ".git"))
 }
 
 function isEditorSupportedForTarget(
@@ -452,9 +602,30 @@ export function buildExternalEditorLaunchSpec(
   targetPath: string,
   {
     env = process.env,
+    platform = process.platform,
     readdirSync = fs.readdirSync,
-  }: Pick<ExternalEditorDependencies, "env" | "readdirSync"> = {},
+  }: Pick<ExternalEditorDependencies, "env" | "platform" | "readdirSync"> = {},
 ): ExternalEditorLaunchSpec {
+  if (platform === "darwin") {
+    if (editor.id === "explorer") {
+      return buildLaunchSpecForMacOpen([targetPath])
+    }
+
+    if (editor.id === "terminal") {
+      return buildLaunchSpecForMacOpen(["-a", "Terminal", targetPath])
+    }
+
+    const appName = resolveDarwinAppName(editor.executablePath)
+    if (appName) {
+      return buildLaunchSpecForMacOpen(["-a", appName, targetPath])
+    }
+
+    return buildLaunchSpecForExecutable(editor.executablePath, [targetPath], {
+      env,
+      windowsHide: false,
+    })
+  }
+
   switch (editor.id) {
     case "terminal":
       return buildLaunchSpecForWindowsStart(editor.executablePath, ["-d", targetPath], { env })
@@ -472,16 +643,25 @@ export function buildExternalEditorLaunchSpec(
   }
 }
 
-export function listAvailableExternalEditors(dependencies?: ExternalEditorDependencies): ExternalEditorSummary[] {
+export function listAvailableExternalEditors({
+  platform = process.platform,
+  ...dependencies
+}: ExternalEditorDependencies = {}): ExternalEditorSummary[] {
   return EXTERNAL_EDITOR_DESCRIPTORS.flatMap((descriptor) => {
-    const executablePath = resolveDescriptorExecutable(descriptor, dependencies)
+    const executablePath = resolveDescriptorExecutable(descriptor, {
+      ...dependencies,
+      platform,
+    })
     if (!executablePath) return []
 
-    const iconPath = resolveDescriptorIconPath(descriptor, executablePath, dependencies)
+    const iconPath = resolveDescriptorIconPath(descriptor, executablePath, {
+      ...dependencies,
+      platform,
+    })
     return [
       {
         id: descriptor.id,
-        label: descriptor.label,
+        label: getDescriptorLabel(descriptor, platform),
         executablePath,
         ...(iconPath ? { iconPath } : {}),
       } satisfies ExternalEditorSummary,
@@ -521,8 +701,8 @@ export function openInExternalEditor(
   editor: ExternalEditorSummary
   targetPath: string
 }> {
-  if (platform !== "win32") {
-    throw new Error("Opening external editors is currently supported on Windows only.")
+  if (platform !== "win32" && platform !== "darwin") {
+    throw new Error("Opening external editors is currently supported on Windows and macOS only.")
   }
 
   const targetPath = input.targetPath.trim()
@@ -567,6 +747,7 @@ export function openInExternalEditor(
 
   const launch = buildExternalEditorLaunchSpec(editor, targetPath, {
     env: dependencies.env,
+    platform,
     readdirSync: dependencies.readdirSync,
   })
   const child = spawnProcess(launch.command, launch.args, {

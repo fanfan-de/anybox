@@ -25,8 +25,8 @@
       "zh-CN": "本地 AI 影视项目工作流。"
     },
     "longDescription": {
-      "en-US": "Initialize and operate local folder-based film projects for anybox for cinema. This first version ships workflow skills only and uses generic shell and file tools rather than cinema-specific runtime tools.",
-      "zh-CN": "初始化并操作基于本地文件夹的 anybox for cinema 影视项目。当前首版只包含工作流 skill，使用通用 Shell 与文件工具，不依赖 Cinema 专用 Runtime 工具。"
+      "en-US": "Initialize and operate local folder-based film projects for anybox for cinema. The plugin includes a project initialization skill and a local MCP server for reading Cinema project state and applying canvas commands through the Anybox Agent API.",
+      "zh-CN": "初始化并操作基于本地文件夹的 anybox for cinema 影视项目。插件包含项目初始化 skill，并提供本地 MCP server，通过 Anybox Agent API 读取 Cinema 项目状态、执行 Canvas 命令。"
     },
     "developerName": "Anybox",
     "category": "Design",
@@ -34,7 +34,8 @@
       "workflow",
       "local-project",
       "film-planning",
-      "canvas-ready"
+      "canvas-ready",
+      "mcp"
     ],
     "logo": "CIN",
     "brandColor": "#111827",
@@ -44,6 +45,70 @@
       "Repair the anybox for cinema project metadata in this folder"
     ]
   },
+  "mcpServers": [
+    {
+      "id": "cinema",
+      "name": "anybox for cinema",
+      "description": "Read and update local anybox for cinema projects through the local Anybox Agent Cinema API.",
+      "risk": "medium",
+      "permissions": [
+        "Reads Cinema project summaries from the local Anybox Agent API.",
+        "Creates and updates Cinema canvas nodes, edges, and viewport state in initialized local Cinema projects after approval.",
+        "Writes Cinema command events to the local project's .anybox-cinema/events.jsonl file."
+      ],
+      "tools": [
+        {
+          "name": "cinema_get_project_summary",
+          "title": "Get Cinema Project Summary",
+          "description": "Read an initialized Cinema project's summary, node counts, recent events, directory overview, and gaps.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "cinema_apply_command",
+          "title": "Apply Cinema Command",
+          "description": "Apply a validated Cinema canvas command such as create-node, update-node, connect-nodes, or update-viewport.",
+          "readOnly": false,
+          "destructive": false
+        },
+        {
+          "name": "cinema_create_shot_plan",
+          "title": "Create Cinema Shot Plan",
+          "description": "Create Shot and Prompt nodes for a multi-shot plan and connect them on the Cinema canvas.",
+          "readOnly": false,
+          "destructive": false
+        }
+      ],
+      "runtime": {
+        "transport": "stdio",
+        "command": "node",
+        "args": [
+          "${PLUGIN_ROOT}/scripts/server.js"
+        ],
+        "cwd": "${PLUGIN_ROOT}",
+        "env": {
+          "ANYBOX_CINEMA_AGENT_BASE_URL": "http://127.0.0.1:4096"
+        },
+        "timeoutMs": 30000,
+        "toolPolicies": {
+          "cinema_get_project_summary": {
+            "policy": "auto"
+          },
+          "cinema_apply_command": {
+            "policy": "ask"
+          },
+          "cinema_create_shot_plan": {
+            "policy": "ask"
+          }
+        }
+      },
+      "installReview": [
+        "Runs a local Node.js MCP server bundled with the Cinema plugin.",
+        "Uses the local Anybox Agent Cinema API.",
+        "Canvas write actions are configured to ask before execution."
+      ]
+    }
+  ],
   "skills": "skills",
   "skillPreviews": [
     {

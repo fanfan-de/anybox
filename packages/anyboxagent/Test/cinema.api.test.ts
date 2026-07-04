@@ -59,6 +59,48 @@ interface CinemaCanvasDocument {
   nodeTypes: string[]
 }
 
+interface CinemaProjectEvent {
+  time: string
+  type: string
+  actor: string
+  message: string
+  commandID?: string
+  data?: Record<string, unknown>
+}
+
+interface CinemaCommandResult {
+  canvas: CinemaCanvasDocument
+  event: CinemaProjectEvent
+}
+
+interface CinemaEventsResult {
+  events: CinemaProjectEvent[]
+  nextCursor: number
+}
+
+interface CinemaProjectStateSummary {
+  projectID: string
+  initialized: boolean
+  nodeCount: number
+  edgeCount: number
+  nodeTypeCounts: Record<string, number>
+  nodes: Array<{
+    id: string
+    type: string
+    title: string
+    text?: string
+    status?: string
+  }>
+  recentEvents: CinemaProjectEvent[]
+  directories: Array<{
+    path: string
+    exists: boolean
+    fileCount: number
+    sample: string[]
+  }>
+  gaps: string[]
+}
+
 async function readJson<T>(response: Response) {
   return await response.json() as JsonEnvelope<T>
 }
@@ -229,6 +271,195 @@ describe("cinema api", () => {
 
       const events = await readFile(join(root, ".anybox-cinema", "events.jsonl"), "utf8")
       expect(events).toContain("\"type\":\"canvas.updated\"")
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("applies cinema commands and exposes events plus project summary", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root)
+
+      const createResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: "cmd-create-shot",
+          type: "create-node",
+          actor: "test-agent",
+          node: {
+            id: "shot-1",
+            type: "shot",
+            title: "Shot 1",
+            position: { x: 880, y: 260 },
+            size: { width: 380, height: 250 },
+            data: { text: "Opening shot." },
+          },
+        }),
+      })
+      const createBody = await readJson<CinemaCommandResult>(createResponse)
+
+      expect(createResponse.status).toBe(200)
+      expect(createBody.success).toBe(true)
+      expect(createBody.data?.event).toMatchObject({
+        type: "command.create-node",
+        actor: "test-agent",
+        commandID: "cmd-create-shot",
+      })
+      expect(createBody.data?.canvas.nodes.map((node) => node.id)).toContain("shot-1")
+      expect(createBody.data?.canvas.nodeTypes).toContain("shot")
+
+      const updateResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "update-node",
+          actor: "cinema-web",
+          nodeID: "shot-1",
+          patch: {
+            title: "Shot 1 - revised",
+            data: { text: "A revised opening shot." },
+          },
+        }),
+      })
+      expect(updateResponse.status).toBe(200)
+
+      const connectResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "connect-nodes",
+          actor: "cinema-web",
+          edge: {
+            id: "edge-story-shot",
+            source: "story-brief",
+            target: "shot-1",
+          },
+        }),
+      })
+      expect(connectResponse.status).toBe(200)
+
+      const viewportResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "update-viewport",
+          actor: "cinema-web",
+          viewport: { x: 24, y: 48, zoom: 0.8 },
+        }),
+      })
+      expect(viewportResponse.status).toBe(200)
+
+      const disconnectResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "disconnect-edge",
+          actor: "cinema-web",
+          edgeID: "edge-story-shot",
+        }),
+      })
+      expect(disconnectResponse.status).toBe(200)
+
+      const duplicateDisconnectResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "disconnect-edge",
+          actor: "cinema-web",
+          edgeID: "edge-story-shot",
+        }),
+      })
+      expect(duplicateDisconnectResponse.status).toBe(200)
+
+      const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
+      expect(persisted.nodes.find((node) => node.id === "shot-1")?.title).toBe("Shot 1 - revised")
+      expect(persisted.edges.map((edge) => edge.id)).not.toContain("edge-story-shot")
+      expect(persisted.viewport).toEqual({ x: 24, y: 48, zoom: 0.8 })
+
+      const eventsResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/events?after=0&limit=10`)
+      const eventsBody = await readJson<CinemaEventsResult>(eventsResponse)
+
+      expect(eventsResponse.status).toBe(200)
+      expect(eventsBody.data?.events.map((event) => event.type)).toEqual([
+        "command.create-node",
+        "command.update-node",
+        "command.connect-nodes",
+        "command.update-viewport",
+        "command.disconnect-edge",
+        "command.disconnect-edge",
+      ])
+      expect(eventsBody.data?.nextCursor).toBe(6)
+
+      const summaryResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/summary`)
+      const summaryBody = await readJson<CinemaProjectStateSummary>(summaryResponse)
+
+      expect(summaryResponse.status).toBe(200)
+      expect(summaryBody.data).toMatchObject({
+        projectID: project.id,
+        initialized: true,
+        nodeCount: 3,
+        edgeCount: 1,
+      })
+      expect(summaryBody.data?.nodeTypeCounts.shot).toBe(1)
+      expect(summaryBody.data?.nodes.find((node) => node.id === "shot-1")).toMatchObject({
+        title: "Shot 1 - revised",
+        text: "A revised opening shot.",
+      })
+      expect(summaryBody.data?.recentEvents).toHaveLength(6)
+      expect(summaryBody.data?.directories.map((directory) => directory.path)).toContain("generated")
+      expect(summaryBody.data?.gaps).toContain("no-provider-configured")
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects invalid cinema commands without changing the canvas", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root)
+
+      const invalidPayloadResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "update-node",
+          nodeID: "story-brief",
+          patch: {},
+        }),
+      })
+      const invalidPayloadBody = await readJson(invalidPayloadResponse)
+
+      expect(invalidPayloadResponse.status).toBe(400)
+      expect(invalidPayloadBody.success).toBe(false)
+      expect(invalidPayloadBody.error?.code).toBe("INVALID_PAYLOAD")
+
+      const missingNodeResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "connect-nodes",
+          edge: {
+            id: "edge-missing-story",
+            source: "missing-node",
+            target: "story-brief",
+          },
+        }),
+      })
+      const missingNodeBody = await readJson(missingNodeResponse)
+
+      expect(missingNodeResponse.status).toBe(404)
+      expect(missingNodeBody.error?.code).toBe("CINEMA_NODE_NOT_FOUND")
+
+      const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
+      expect(persisted.edges.map((edge) => edge.id)).not.toContain("edge-missing-story")
     } finally {
       await rm(root, { recursive: true, force: true })
     }

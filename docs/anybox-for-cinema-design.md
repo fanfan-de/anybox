@@ -129,6 +129,8 @@ my-film-project/
     shots.json
     timeline.json
     tasks.jsonl
+    tasks/
+      <task-id>.json
     events.jsonl
     settings.json
   assets/
@@ -145,7 +147,8 @@ my-film-project/
 - `.anybox-cinema/canvas.json`：Canvas 节点、位置、连线。
 - `.anybox-cinema/shots.json`：分镜结构。
 - `.anybox-cinema/timeline.json`：轻量时间线或镜头排序。
-- `.anybox-cinema/tasks.jsonl`：模型调用任务记录。
+- `.anybox-cinema/tasks.jsonl`：模型调用任务追加记录和审计日志。
+- `.anybox-cinema/tasks/`：每个生成任务的当前状态、provider task ref、输入摘要和输出资产索引。
 - `.anybox-cinema/events.jsonl`：项目事件日志。
 - `.anybox-cinema/settings.json`：项目级设置。
 - `assets/`：用户导入的原始素材。
@@ -301,28 +304,151 @@ AnyBox Film Runtime 负责：
 - 浏览器不需要直接文件权限。
 - API key 永远不返回给前端。
 
-## 8. Provider 设计
+## 8. Provider Runtime 设计
 
 `anybox for cinema` 是 BYOK 模式：用户自己准备模型 API key。
+
+视频模型不应该直接复用当前 LLM provider 抽象。LLM 调用更像一次会话流，而视频生成通常是：
+
+```txt
+准备本地素材
+  -> 上传或转换为 provider 可访问输入
+  -> 创建异步生成任务
+  -> 轮询 / 回调获取状态
+  -> 下载临时结果
+  -> 写回本地项目
+  -> 更新 Canvas 节点和事件日志
+```
+
+因此，Cinema 需要一个独立的 `Cinema Provider Runtime`。它可以复用 AnyBox 已有的凭证管理、项目级配置、日志脱敏和 HTTP server，但不应把视频任务硬塞进语言模型的 `generateText / streamText` 抽象。
+
+### 8.1 Adapter 接口
 
 Provider adapter 统一封装各家视频模型 API：
 
 ```ts
-interface VideoProviderAdapter {
+interface CinemaVideoProviderAdapter {
   id: string
   name: string
-  listModels(): Promise<VideoModelInfo[]>
-  validateCredential(): Promise<ProviderCheckResult>
-  createTask(input: VideoGenerateInput): Promise<VideoTaskRef>
-  getTask(taskId: string): Promise<VideoTaskStatus>
-  cancelTask?(taskId: string): Promise<void>
+  manifest: CinemaVideoProviderManifest
+  validateCredential(ctx: ProviderContext): Promise<ProviderCheckResult>
+  createTask(input: CinemaVideoTaskInput, ctx: ProviderContext): Promise<CinemaProviderTaskRef>
+  getTask(ref: CinemaProviderTaskRef, ctx: ProviderContext): Promise<CinemaProviderTaskStatus>
+  cancelTask?(ref: CinemaProviderTaskRef, ctx: ProviderContext): Promise<void>
+  resolveOutputs?(
+    status: CinemaProviderTaskStatus,
+    ctx: ProviderContext,
+  ): Promise<CinemaGeneratedAsset[]>
 }
 ```
+
+`createTask` 只负责把统一输入转换成厂商任务；`getTask` 只负责把厂商状态映射回统一状态；`resolveOutputs` 负责把 provider 临时 URL、file id 或结果对象转换成本地项目资产。
+
+### 8.2 Provider Manifest
+
+UI 不应该为可灵、Seedance、Runway、Luma 等每家模型写一套表单。每个 adapter 应暴露 manifest，由 Web UI 根据 manifest 渲染参数面板。
+
+```ts
+type CinemaVideoProviderManifest = {
+  models: Array<{
+    id: string
+    label: string
+    modes: Array<
+      | "text-to-video"
+      | "image-to-video"
+      | "frames-to-video"
+      | "reference-to-video"
+      | "video-to-video"
+    >
+    durations: number[]
+    aspectRatios: string[]
+    resolutions: string[]
+    maxReferenceImages?: number
+    supportsSeed?: boolean
+    supportsNegativePrompt?: boolean
+    supportsAudio?: boolean
+    requiresPublicInputURL?: boolean
+    supportsProviderUpload?: boolean
+    parameterSchema: Record<string, unknown>
+  }>
+}
+```
+
+这样 Web UI 只需要理解统一能力字段和 `parameterSchema`，具体模型差异留给 adapter。
+
+### 8.3 统一任务状态
+
+各家 provider 状态命名不同，Cinema 内部统一为：
+
+```txt
+queued
+running
+succeeded
+failed
+canceled
+```
+
+每个任务保存一份当前状态：
+
+```json
+{
+  "id": "task_...",
+  "providerID": "fal",
+  "modelID": "fal-ai/...",
+  "mode": "image-to-video",
+  "status": "running",
+  "createdAt": "2026-07-04T00:00:00.000Z",
+  "updatedAt": "2026-07-04T00:00:10.000Z",
+  "providerTaskRef": {
+    "requestID": "..."
+  },
+  "input": {
+    "prompt": "...",
+    "assetIDs": ["asset_..."]
+  },
+  "outputAssetIDs": [],
+  "error": null
+}
+```
+
+`tasks.jsonl` 记录任务创建、状态刷新、下载完成、失败等事件；`tasks/<task-id>.json` 存当前可查询状态。
+
+### 8.4 Asset Resolver
+
+视频 provider 最大的不确定性在素材输入，不在任务接口本身。很多 API 不接受本地文件路径，而是要求公网 URL、provider file id、base64 或专有 upload 结果。
+
+Cinema Runtime 应先把本地素材解析成 provider 可接受输入：
+
+```ts
+interface CinemaAssetResolver {
+  resolveForProvider(input: {
+    projectID: string
+    assetID: string
+    providerID: string
+    requirement: "public-url" | "provider-upload" | "data-url" | "local-file"
+  }): Promise<CinemaResolvedAsset>
+}
+```
+
+初期策略：
+
+- 优先使用 provider 自带上传能力，例如 fal storage 或厂商文件 API。
+- 对小文件可使用 data URL，但只作为兼容路径。
+- 对只接受公网 URL 的 provider，先要求用户配置 S3 / R2 / OSS / COS / AnyBox 临时上传服务。
+- 所有 provider 临时结果必须下载到本地 `generated/<task-id>/`，不能只保存远端 URL。
+
+### 8.5 推荐接入顺序
 
 MVP 建议先接：
 
 - fal.ai
 - Replicate
+
+原因：
+
+- 两者都是聚合型 API，一次接入可覆盖多类视频模型。
+- 异步任务、轮询、结果 URL 的模型比较清晰。
+- 能快速验证“Canvas 创建任务 -> Runtime 调 provider -> 下载结果 -> 创建 Video Node”的闭环。
 
 第二阶段再接：
 
@@ -332,6 +458,30 @@ MVP 建议先接：
 - MiniMax / Hailuo
 - Vidu
 - Seedance / Wan
+
+这些 provider 应作为独立 adapter 接入，不改变 Web UI 和任务状态模型。
+
+### 8.6 后端 API 草案
+
+Cinema Web UI 和 Agent 都只调用 AnyBox Runtime API，不直接请求厂商 API。
+
+```txt
+GET  /api/cinema/projects/:projectID/video-providers
+GET  /api/cinema/projects/:projectID/video-providers/:providerID
+POST /api/cinema/projects/:projectID/generation-tasks
+GET  /api/cinema/projects/:projectID/generation-tasks
+GET  /api/cinema/projects/:projectID/generation-tasks/:taskID
+POST /api/cinema/projects/:projectID/generation-tasks/:taskID/refresh
+POST /api/cinema/projects/:projectID/generation-tasks/:taskID/cancel
+```
+
+任务成功后，Runtime 自动：
+
+1. 下载结果到 `generated/<task-id>/`。
+2. 创建或更新 `Video Node`。
+3. 将 `Generation Task Node` 连接到结果节点。
+4. 写入 `events.jsonl`。
+5. 通过 WebSocket 广播 Canvas 和任务状态变化。
 
 ## 9. API Key 与安全
 
@@ -417,9 +567,11 @@ Agent：连接 Image Node -> Prompt Node -> Generation Task Node，任务完成�
 - 节点拖拽和连线。
 - Canvas 布局保存。
 - 配置至少一个 BYOK provider。
+- Provider manifest 驱动模型和参数选择 UI。
 - 创建视频生成任务。
 - 轮询任务状态。
-- 下载结果到 `generated/`。
+- 通过 Asset Resolver 处理本地参考素材。
+- 下载结果到 `generated/<task-id>/`。
 - 生成结果自动成为 Video Node。
 - Agent 能读取项目并创建/修改节点。
 
@@ -458,10 +610,13 @@ Agent：连接 Image Node -> Prompt Node -> Generation Task Node，任务完成�
 ### Milestone 3：模型任务
 
 - API key 配置。
+- Cinema Provider Runtime。
+- Provider manifest 和统一任务状态。
+- Asset Resolver。
 - 接入 fal.ai 或 Replicate。
 - 创建生成任务。
 - 轮询任务状态。
-- 下载结果。
+- 下载结果到 `generated/<task-id>/`。
 - 创建结果节点。
 
 ### Milestone 4：Agent 集成
@@ -488,9 +643,11 @@ Agent：连接 Image Node -> Prompt Node -> Generation Task Node，任务完成�
 
 解决方向：
 
-- 优先接支持文件上传的 provider。
+- Provider adapter 只接收 Runtime 解析后的素材输入，不直接处理本地路径。
+- 优先接支持文件上传或 provider storage 的 provider。
 - 对只接受 URL 的 provider，支持用户配置自己的 R2 / S3 / OSS / COS。
 - 后续提供可选 AnyBox 临时上传服务。
+- 所有临时远端结果都必须落盘到 `generated/<task-id>/`。
 
 ### 16.2 浏览器与本地权限边界
 

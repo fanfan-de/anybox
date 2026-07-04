@@ -153,6 +153,89 @@ describe("external editor helpers", () => {
     ).toEqual(["explorer", "terminal", "wsl"])
   })
 
+  it("discovers macOS app bundles and uses platform-specific labels", () => {
+    const result = listAvailableExternalEditors({
+      platform: "darwin",
+      env: {
+        HOME: "/Users/demo",
+      },
+      existsSync: (targetPath) =>
+        [
+          "/Applications/Visual Studio Code.app",
+          "/Applications/Cursor.app",
+          "/Users/demo/Applications/Windsurf.app",
+          "/Applications/GitHub Desktop.app",
+          "/System/Library/CoreServices/Finder.app",
+          "/System/Applications/Utilities/Terminal.app",
+        ].includes(targetPath),
+      resolveCommand: () => undefined,
+    })
+
+    expect(result).toEqual([
+      {
+        id: "vscode",
+        label: "VS Code",
+        executablePath: "/Applications/Visual Studio Code.app",
+      },
+      {
+        id: "cursor",
+        label: "Cursor",
+        executablePath: "/Applications/Cursor.app",
+      },
+      {
+        id: "windsurf",
+        label: "Windsurf",
+        executablePath: "/Users/demo/Applications/Windsurf.app",
+      },
+      {
+        id: "githubDesktop",
+        label: "GitHub Desktop",
+        executablePath: "/Applications/GitHub Desktop.app",
+      },
+      {
+        id: "explorer",
+        label: "Finder",
+        executablePath: "/System/Library/CoreServices/Finder.app",
+      },
+      {
+        id: "terminal",
+        label: "Terminal",
+        executablePath: "/System/Applications/Utilities/Terminal.app",
+      },
+    ])
+  })
+
+  it("filters GitHub Desktop on macOS using the POSIX git directory path", () => {
+    const targetPath = "/Users/demo/Atlas"
+
+    expect(
+      listAvailableExternalEditorsForTarget(targetPath, {
+        platform: "darwin",
+        existsSync: (candidatePath) =>
+          [
+            "/Applications/GitHub Desktop.app",
+            "/System/Library/CoreServices/Finder.app",
+            "/System/Applications/Utilities/Terminal.app",
+            "/Users/demo/Atlas/.git",
+          ].includes(candidatePath),
+        resolveCommand: () => undefined,
+      }).map((editor) => editor.id),
+    ).toEqual(["githubDesktop", "explorer", "terminal"])
+
+    expect(
+      listAvailableExternalEditorsForTarget(targetPath, {
+        platform: "darwin",
+        existsSync: (candidatePath) =>
+          [
+            "/Applications/GitHub Desktop.app",
+            "/System/Library/CoreServices/Finder.app",
+            "/System/Applications/Utilities/Terminal.app",
+          ].includes(candidatePath),
+        resolveCommand: () => undefined,
+      }).map((editor) => editor.id),
+    ).toEqual(["explorer", "terminal"])
+  })
+
   it("wraps cmd launchers in a shell while leaving executables direct", () => {
     const commandLineEditor = {
       id: "vscode",
@@ -167,7 +250,7 @@ describe("external editor helpers", () => {
       executablePath: "C:\\Users\\demo\\AppData\\Local\\Programs\\Cursor\\Cursor.exe",
     } satisfies ExternalEditorSummary
 
-    expect(buildExternalEditorLaunchSpec(commandLineEditor, "C:\\Projects\\Atlas", { env: { SystemRoot: "C:\\Windows" } })).toEqual({
+    expect(buildExternalEditorLaunchSpec(commandLineEditor, "C:\\Projects\\Atlas", { env: { SystemRoot: "C:\\Windows" }, platform: "win32" })).toEqual({
       command: "C:\\Windows\\System32\\cmd.exe",
       args: ["/d", "/s", "/c", "\"\"C:\\Users\\demo\\AppData\\Local\\Programs\\Microsoft VS Code\\bin\\code.cmd\" \"C:\\Projects\\Atlas\""],
       shell: false,
@@ -175,7 +258,7 @@ describe("external editor helpers", () => {
       windowsHide: true,
       windowsVerbatimArguments: true,
     })
-    expect(buildExternalEditorLaunchSpec(guiEditor, "C:\\Projects\\Atlas", { env: { SystemRoot: "C:\\Windows" } })).toEqual({
+    expect(buildExternalEditorLaunchSpec(guiEditor, "C:\\Projects\\Atlas", { env: { SystemRoot: "C:\\Windows" }, platform: "win32" })).toEqual({
       command: guiEditor.executablePath,
       args: ["C:\\Projects\\Atlas"],
       shell: false,
@@ -204,6 +287,7 @@ describe("external editor helpers", () => {
 
     expect(
       buildExternalEditorLaunchSpec(visualStudioEditor, "C:\\Projects\\Atlas", {
+        platform: "win32",
         readdirSync: ((directoryPath: string) => {
           if (directoryPath === "C:\\Projects\\Atlas") {
             return [createDirent("src", "directory")]
@@ -222,7 +306,7 @@ describe("external editor helpers", () => {
       windowsHide: true,
       windowsVerbatimArguments: false,
     })
-    expect(buildExternalEditorLaunchSpec(terminalEditor, "C:\\Projects\\Atlas", { env: { SystemRoot: "C:\\Windows" } })).toEqual({
+    expect(buildExternalEditorLaunchSpec(terminalEditor, "C:\\Projects\\Atlas", { env: { SystemRoot: "C:\\Windows" }, platform: "win32" })).toEqual({
       command: "C:\\Windows\\System32\\cmd.exe",
       args: ["/d", "/s", "/c", "\"start \"\" \"C:\\Users\\demo\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe\" \"-d\" \"C:\\Projects\\Atlas\"\""],
       shell: false,
@@ -230,12 +314,55 @@ describe("external editor helpers", () => {
       windowsHide: true,
       windowsVerbatimArguments: true,
     })
-    expect(buildExternalEditorLaunchSpec(wslEditor, "C:\\Projects\\Atlas")).toEqual({
+    expect(buildExternalEditorLaunchSpec(wslEditor, "C:\\Projects\\Atlas", { platform: "win32" })).toEqual({
       command: wslEditor.executablePath,
       args: ["--cd", "C:\\Projects\\Atlas"],
       shell: false,
       waitForExit: false,
       windowsHide: false,
+      windowsVerbatimArguments: false,
+    })
+  })
+
+  it("uses macOS open commands for app bundles, Finder, and Terminal", () => {
+    const cursorEditor = {
+      id: "cursor",
+      label: "Cursor",
+      executablePath: "/Applications/Cursor.app",
+    } satisfies ExternalEditorSummary
+    const finderEditor = {
+      id: "explorer",
+      label: "Finder",
+      executablePath: "/System/Library/CoreServices/Finder.app",
+    } satisfies ExternalEditorSummary
+    const terminalEditor = {
+      id: "terminal",
+      label: "Terminal",
+      executablePath: "/System/Applications/Utilities/Terminal.app",
+    } satisfies ExternalEditorSummary
+
+    expect(buildExternalEditorLaunchSpec(cursorEditor, "/Users/demo/Atlas", { platform: "darwin" })).toEqual({
+      command: "/usr/bin/open",
+      args: ["-a", "Cursor", "/Users/demo/Atlas"],
+      shell: false,
+      waitForExit: true,
+      windowsHide: true,
+      windowsVerbatimArguments: false,
+    })
+    expect(buildExternalEditorLaunchSpec(finderEditor, "/Users/demo/Atlas", { platform: "darwin" })).toEqual({
+      command: "/usr/bin/open",
+      args: ["/Users/demo/Atlas"],
+      shell: false,
+      waitForExit: true,
+      windowsHide: true,
+      windowsVerbatimArguments: false,
+    })
+    expect(buildExternalEditorLaunchSpec(terminalEditor, "/Users/demo/Atlas", { platform: "darwin" })).toEqual({
+      command: "/usr/bin/open",
+      args: ["-a", "Terminal", "/Users/demo/Atlas"],
+      shell: false,
+      waitForExit: true,
+      windowsHide: true,
       windowsVerbatimArguments: false,
     })
   })
@@ -451,6 +578,56 @@ describe("external editor helpers", () => {
       }),
     )
     expect(unref).toHaveBeenCalled()
+  })
+
+  it("launches a selected macOS app bundle for an existing workspace directory", async () => {
+    const spawnProcess = vi.fn(() => ({
+      once: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+        if (event === "close") {
+          listener(0)
+        }
+      }),
+      removeListener: vi.fn(),
+      unref: vi.fn(),
+    }))
+
+    const result = await openInExternalEditor(
+      {
+        editorID: "cursor",
+        targetPath: "/Users/demo/Atlas",
+      },
+      {
+        platform: "darwin",
+        existsSync: (targetPath) => ["/Applications/Cursor.app"].includes(targetPath),
+        resolveCommand: () => undefined,
+        spawnProcess: spawnProcess as unknown as typeof import("node:child_process").spawn,
+        statSync: ((_targetPath: string) =>
+          ({
+            isDirectory: () => true,
+          }) as import("node:fs").Stats) as typeof import("node:fs").statSync,
+      },
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      editor: {
+        id: "cursor",
+        label: "Cursor",
+        executablePath: "/Applications/Cursor.app",
+      },
+      targetPath: "/Users/demo/Atlas",
+    })
+    expect(spawnProcess).toHaveBeenCalledWith(
+      "/usr/bin/open",
+      ["-a", "Cursor", "/Users/demo/Atlas"],
+      expect.objectContaining({
+        detached: true,
+        shell: false,
+        stdio: "ignore",
+        windowsHide: true,
+        windowsVerbatimArguments: false,
+      }),
+    )
   })
 
   it("rejects target-specific launchers when the workspace does not support them", async () => {

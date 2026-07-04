@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react"
 import {
-  addEdge,
   applyEdgeChanges,
   applyNodeChanges,
   Background,
@@ -15,7 +14,6 @@ import {
   type NodeChange,
   type NodeProps,
   type ReactFlowInstance,
-  type Viewport,
 } from "@xyflow/react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { create } from "zustand"
@@ -37,8 +35,9 @@ import {
   WandSparkles,
 } from "lucide-react"
 import {
-  CinemaCanvasDocumentSchema,
-  CinemaNodeTypeSchema,
+  type CinemaCommand,
+  type CinemaCommandResult,
+  type CinemaEventsResult,
   type CinemaCanvasDocument,
   type CinemaCanvasNode,
   type CinemaNodeType,
@@ -58,6 +57,7 @@ type CinemaFlowNodeData = {
 }
 
 type CinemaFlowNode = Node<CinemaFlowNodeData, "cinemaNode">
+type CinemaNodePatch = Extract<CinemaCommand, { type: "update-node" }>["patch"]
 type ContextMenuState = {
   x: number
   y: number
@@ -211,47 +211,30 @@ function toFlowNodes(canvas: CinemaCanvasDocument): CinemaFlowNode[] {
   })
 }
 
-function toCanvasDocument(input: {
-  nodes: CinemaFlowNode[]
-  edges: Edge[]
-  viewport: Viewport
-  nodeTypes: CinemaNodeType[]
-}): CinemaCanvasDocument {
-  return CinemaCanvasDocumentSchema.parse({
-    schemaVersion: 1,
-    canvasType: "node-canvas",
-    viewport: input.viewport,
-    nodes: input.nodes.map((node) => {
-      const width = typeof node.style?.width === "number"
-        ? node.style.width
-        : node.measured?.width ?? node.data.size?.width ?? DEFAULT_NODE_SIZE[node.data.cinemaType].width
-      const height = typeof node.style?.height === "number"
-        ? node.style.height
-        : node.measured?.height ?? node.data.size?.height ?? DEFAULT_NODE_SIZE[node.data.cinemaType].height
-      return {
-        id: node.id,
-        type: node.data.cinemaType,
-        title: node.data.title.trim() || "Untitled Node",
-        position: node.position,
-        size: { width, height },
-        data: node.data.rawData,
-      }
-    }),
-    edges: input.edges.map((edge) => ({
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      ...(edge.sourceHandle ? { sourceHandle: edge.sourceHandle } : {}),
-      ...(edge.targetHandle ? { targetHandle: edge.targetHandle } : {}),
-      ...(typeof edge.label === "string" ? { label: edge.label } : {}),
-      ...(edge.data ? { data: edge.data } : {}),
-    })),
-    nodeTypes: input.nodeTypes,
-  })
+function toCanvasNode(node: CinemaFlowNode): CinemaCanvasNode {
+  const width = typeof node.style?.width === "number"
+    ? node.style.width
+    : node.measured?.width ?? node.data.size?.width ?? DEFAULT_NODE_SIZE[node.data.cinemaType].width
+  const height = typeof node.style?.height === "number"
+    ? node.style.height
+    : node.measured?.height ?? node.data.size?.height ?? DEFAULT_NODE_SIZE[node.data.cinemaType].height
+
+  return {
+    id: node.id,
+    type: node.data.cinemaType,
+    title: node.data.title.trim() || "Untitled Node",
+    position: node.position,
+    size: { width, height },
+    data: node.data.rawData,
+  }
 }
 
 function makeNodeID(type: CinemaNodeType) {
   return `node-${type}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+function makeCommandID(type: CinemaCommand["type"]) {
+  return `cmd-${type}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 }
 
 function titleForType(type: CinemaNodeType) {
@@ -280,12 +263,8 @@ function createNode(type: CinemaNodeType, position: { x: number; y: number }): C
   }
 }
 
-function stringifyCanvas(canvas: CinemaCanvasDocument) {
-  return JSON.stringify(canvas)
-}
-
 function isMutationChange(changes: NodeChange[] | EdgeChange[]) {
-  return changes.some((change) => change.type !== "select")
+  return changes.some((change) => change.type !== "select" && change.type !== "dimensions")
 }
 
 function CinemaNodeCard({ data, selected }: NodeProps<CinemaFlowNode>) {
@@ -461,14 +440,29 @@ export function App() {
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<CinemaFlowNode, Edge> | null>(null)
   const [nodes, setNodes] = useState<CinemaFlowNode[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
-  const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 })
-  const [nodeTypeList, setNodeTypeList] = useState<CinemaNodeType[]>([...NODE_TYPES])
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
   const [saveState, setSaveState] = useState<SaveState>("idle")
   const [saveError, setSaveError] = useState<string | null>(null)
-  const lastSavedRef = useRef("")
-  const saveTimerRef = useRef<number | null>(null)
-  const saveCanvasRef = useRef<(canvas: CinemaCanvasDocument) => void>(() => {})
+  const saveStateRef = useRef<SaveState>("idle")
+  const nodePatchTimersRef = useRef(new Map<string, number>())
+  const nodePatchQueueRef = useRef(new Map<string, CinemaNodePatch>())
+  const eventCursorRef = useRef<number | null>(null)
+  const applyingCanvasRef = useRef(false)
+
+  const applyCanvas = useCallback((canvas: CinemaCanvasDocument) => {
+    applyingCanvasRef.current = true
+    setNodes(toFlowNodes(canvas))
+    setEdges(canvas.edges)
+    saveStateRef.current = "saved"
+    setSaveState("saved")
+    setSaveError(null)
+    window.requestAnimationFrame(() => {
+      reactFlow.setViewport(canvas.viewport)
+      window.setTimeout(() => {
+        applyingCanvasRef.current = false
+      }, 50)
+    })
+  }, [reactFlow])
 
   const projectQuery = useQuery({
     queryKey: ["cinema-project", agentBaseURL, projectID],
@@ -481,104 +475,202 @@ export function App() {
     enabled: Boolean(projectID) && projectQuery.data?.initialized === true,
     queryFn: () => requestJson<CinemaCanvasDocument>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/canvas`),
   })
+  const refetchCanvas = canvasQuery.refetch
 
-  const saveMutation = useMutation({
-    mutationFn: (canvas: CinemaCanvasDocument) =>
-      requestJson<CinemaCanvasDocument>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/canvas`, {
-        method: "PUT",
+  const commandMutation = useMutation({
+    mutationFn: (command: CinemaCommand) =>
+      requestJson<CinemaCommandResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(canvas),
-      }),
+        body: JSON.stringify(command),
+    }),
     onMutate: () => {
+      saveStateRef.current = "saving"
       setSaveState("saving")
       setSaveError(null)
     },
-    onSuccess: (canvas) => {
-      lastSavedRef.current = stringifyCanvas(canvas)
-      setSaveState("saved")
+    onSuccess: (result) => {
+      if (saveStateRef.current === "dirty" || nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0) {
+        saveStateRef.current = "dirty"
+        setSaveState("dirty")
+        return
+      }
+      applyCanvas(result.canvas)
     },
     onError: (error) => {
+      saveStateRef.current = "error"
       setSaveState("error")
-      setSaveError(error instanceof Error ? error.message : "Save failed")
+      setSaveError(error instanceof Error ? error.message : "Command failed")
     },
   })
 
   useEffect(() => {
-    saveCanvasRef.current = saveMutation.mutate
-  }, [saveMutation.mutate])
+    saveStateRef.current = saveState
+  }, [saveState])
+
+  useEffect(() => {
+    eventCursorRef.current = null
+  }, [agentBaseURL, projectID])
 
   useEffect(() => {
     if (!canvasQuery.data) return
-    const canvas = canvasQuery.data
-    setNodes(toFlowNodes(canvas))
-    setEdges(canvas.edges)
-    setViewport(canvas.viewport)
-    setNodeTypeList(canvas.nodeTypes.length > 0 ? canvas.nodeTypes : [...NODE_TYPES])
-    lastSavedRef.current = stringifyCanvas(canvas)
-    setSaveState("saved")
-    window.requestAnimationFrame(() => {
-      reactFlow.setViewport(canvas.viewport)
-    })
-  }, [canvasQuery.data, reactFlow])
+    applyCanvas(canvasQuery.data)
+  }, [applyCanvas, canvasQuery.data])
+
+  useEffect(() => () => {
+    for (const timer of nodePatchTimersRef.current.values()) window.clearTimeout(timer)
+    nodePatchTimersRef.current.clear()
+    nodePatchQueueRef.current.clear()
+  }, [])
 
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeID) ?? null,
     [nodes, selectedNodeID],
   )
 
-  const currentCanvas = useMemo(
-    () => toCanvasDocument({ nodes, edges, viewport, nodeTypes: nodeTypeList }),
-    [nodes, edges, viewport, nodeTypeList],
-  )
+  const queueNodePatch = useCallback((nodeID: string, patch: CinemaNodePatch) => {
+    const current = nodePatchQueueRef.current.get(nodeID)
+    nodePatchQueueRef.current.set(nodeID, {
+      ...current,
+      ...patch,
+      ...(current?.data || patch.data ? { data: patch.data ?? current?.data } : {}),
+    })
+
+    const existingTimer = nodePatchTimersRef.current.get(nodeID)
+    if (existingTimer) window.clearTimeout(existingTimer)
+    saveStateRef.current = "dirty"
+    setSaveState("dirty")
+
+    const timer = window.setTimeout(() => {
+      const nextPatch = nodePatchQueueRef.current.get(nodeID)
+      nodePatchQueueRef.current.delete(nodeID)
+      nodePatchTimersRef.current.delete(nodeID)
+      if (!nextPatch) return
+
+      commandMutation.mutate({
+        id: makeCommandID("update-node"),
+        type: "update-node",
+        actor: "cinema-web",
+        nodeID,
+        patch: nextPatch,
+      })
+    }, 650)
+    nodePatchTimersRef.current.set(nodeID, timer)
+  }, [commandMutation])
 
   useEffect(() => {
-    if (!projectID || !canvasQuery.data) return
-    const serialized = stringifyCanvas(currentCanvas)
-    if (serialized === lastSavedRef.current) return
+    if (!projectID || !canvasQuery.data || projectQuery.data?.initialized !== true) return
+    let cancelled = false
+    let intervalID: number | null = null
 
-    setSaveState((current) => current === "saving" ? current : "dirty")
-    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = window.setTimeout(() => {
-      saveCanvasRef.current(currentCanvas)
-    }, 700)
+    async function pollEvents() {
+      if (cancelled || saveStateRef.current === "dirty" || saveStateRef.current === "saving") return
 
-    return () => {
-      if (saveTimerRef.current) {
-        window.clearTimeout(saveTimerRef.current)
-        saveTimerRef.current = null
+      try {
+        if (eventCursorRef.current === null) {
+          const initial = await requestJson<CinemaEventsResult>(
+            agentBaseURL,
+            `/api/cinema/projects/${encodeURIComponent(projectID)}/events?limit=1`,
+          )
+          if (!cancelled) eventCursorRef.current = initial.nextCursor
+          return
+        }
+
+        const result = await requestJson<CinemaEventsResult>(
+          agentBaseURL,
+          `/api/cinema/projects/${encodeURIComponent(projectID)}/events?after=${eventCursorRef.current}&limit=50`,
+        )
+        if (cancelled) return
+        eventCursorRef.current = result.nextCursor
+        if (result.events.length > 0) {
+          await refetchCanvas()
+        }
+      } catch {
+        // Keep the canvas usable if the lightweight sync poll misses once.
       }
     }
-  }, [canvasQuery.data, currentCanvas, projectID])
+
+    void pollEvents()
+    intervalID = window.setInterval(() => void pollEvents(), 2400)
+
+    return () => {
+      cancelled = true
+      if (intervalID !== null) window.clearInterval(intervalID)
+    }
+  }, [agentBaseURL, canvasQuery.data, projectID, projectQuery.data?.initialized, refetchCanvas])
 
   const onNodesChange = useCallback((changes: NodeChange<CinemaFlowNode>[]) => {
-    if (isMutationChange(changes)) setSaveState("dirty")
+    const removedNodeIDs = changes
+      .filter((change): change is Extract<NodeChange<CinemaFlowNode>, { type: "remove" }> => change.type === "remove")
+      .map((change) => change.id)
+    if (isMutationChange(changes)) {
+      saveStateRef.current = "dirty"
+      setSaveState("dirty")
+    }
     setNodes((current) => applyNodeChanges(changes, current))
-  }, [])
+    for (const nodeID of removedNodeIDs) {
+      commandMutation.mutate({
+        id: makeCommandID("delete-node"),
+        type: "delete-node",
+        actor: "cinema-web",
+        nodeID,
+      }, {
+        onSuccess: () => {
+          if (selectedNodeID === nodeID) setSelectedNodeID(null)
+        },
+      })
+    }
+  }, [commandMutation, selectedNodeID, setSelectedNodeID])
 
   const onEdgesChange = useCallback((changes: EdgeChange<Edge>[]) => {
-    if (isMutationChange(changes)) setSaveState("dirty")
+    const removedEdgeIDs = changes
+      .filter((change): change is Extract<EdgeChange<Edge>, { type: "remove" }> => change.type === "remove")
+      .map((change) => change.id)
+    if (isMutationChange(changes)) {
+      saveStateRef.current = "dirty"
+      setSaveState("dirty")
+    }
     setEdges((current) => applyEdgeChanges(changes, current))
-  }, [])
+    for (const edgeID of removedEdgeIDs) {
+      commandMutation.mutate({
+        id: makeCommandID("disconnect-edge"),
+        type: "disconnect-edge",
+        actor: "cinema-web",
+        edgeID,
+      })
+    }
+  }, [commandMutation])
 
   const onConnect = useCallback((connection: Connection) => {
-    setSaveState("dirty")
-    setEdges((current) =>
-      addEdge({
-        ...connection,
-        id: `edge-${connection.source}-${connection.target}-${Date.now().toString(36)}`,
-      }, current)
-    )
-  }, [])
+    if (!connection.source || !connection.target) return
+    const edge = {
+      id: `edge-${connection.source}-${connection.target}-${Date.now().toString(36)}`,
+      source: connection.source,
+      target: connection.target,
+      ...(connection.sourceHandle ? { sourceHandle: connection.sourceHandle } : {}),
+      ...(connection.targetHandle ? { targetHandle: connection.targetHandle } : {}),
+    }
+    commandMutation.mutate({
+      id: makeCommandID("connect-nodes"),
+      type: "connect-nodes",
+      actor: "cinema-web",
+      edge,
+    })
+  }, [commandMutation])
 
   const addNode = useCallback((type: CinemaNodeType, position: { x: number; y: number }) => {
     const next = createNode(type, position)
-    setNodes((current) => [...current, next])
-    setSelectedNodeID(next.id)
-    if (!nodeTypeList.includes(type)) setNodeTypeList((current) => [...current, type])
-    setSaveState("dirty")
-  }, [nodeTypeList, setSelectedNodeID])
+    commandMutation.mutate({
+      id: makeCommandID("create-node"),
+      type: "create-node",
+      actor: "cinema-web",
+      node: toCanvasNode(next),
+    }, {
+      onSuccess: () => setSelectedNodeID(next.id),
+    })
+  }, [commandMutation, setSelectedNodeID])
 
   const onPaneContextMenu = useCallback((event: globalThis.MouseEvent | ReactMouseEvent<Element>) => {
     event.preventDefault()
@@ -608,15 +700,22 @@ export function App() {
           : node
       )
     )
-    setSaveState("dirty")
-  }, [])
+    const patch: CinemaNodePatch = {}
+    if (typeof update.title === "string") patch.title = update.title.trim() || "Untitled Node"
+    if (update.rawData) patch.data = update.rawData
+    if (Object.keys(patch).length > 0) queueNodePatch(nodeID, patch)
+  }, [queueNodePatch])
 
   const deleteNode = useCallback((nodeID: string) => {
-    setNodes((current) => current.filter((node) => node.id !== nodeID))
-    setEdges((current) => current.filter((edge) => edge.source !== nodeID && edge.target !== nodeID))
-    setSelectedNodeID(null)
-    setSaveState("dirty")
-  }, [setSelectedNodeID])
+    commandMutation.mutate({
+      id: makeCommandID("delete-node"),
+      type: "delete-node",
+      actor: "cinema-web",
+      nodeID,
+    }, {
+      onSuccess: () => setSelectedNodeID(null),
+    })
+  }, [commandMutation, setSelectedNodeID])
 
   if (!projectID) {
     return (
@@ -702,12 +801,20 @@ export function App() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onNodeDragStop={(_, node) => {
+              queueNodePatch(node.id, { position: node.position })
+            }}
             onNodeClick={(_, node) => setSelectedNodeID(node.id)}
             onPaneClick={() => setSelectedNodeID(null)}
             onPaneContextMenu={onPaneContextMenu}
             onMoveEnd={(_, nextViewport) => {
-              setViewport(nextViewport)
-              setSaveState("dirty")
+              if (applyingCanvasRef.current) return
+              commandMutation.mutate({
+                id: makeCommandID("update-viewport"),
+                type: "update-viewport",
+                actor: "cinema-web",
+                viewport: nextViewport,
+              })
             }}
             fitView
             minZoom={0.2}
