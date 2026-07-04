@@ -208,6 +208,23 @@ button {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--node-accent) 60%, transparent), 0 14px 42px rgba(0, 0, 0, 0.34);
 }
 
+.react-flow__handle.cinema-node-handle {
+  z-index: 3;
+  width: 13px;
+  height: 13px;
+  min-width: 13px;
+  min-height: 13px;
+  border: 2px solid var(--cinema-surface);
+  background: var(--node-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--node-accent) 58%, transparent);
+}
+
+.react-flow__handle.cinema-node-handle:hover {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--node-accent) 72%, transparent),
+    0 0 18px color-mix(in srgb, var(--node-accent) 38%, transparent);
+}
+
 .cinema-node-header,
 .cinema-node-footer {
   min-width: 0;

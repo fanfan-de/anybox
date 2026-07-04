@@ -4,7 +4,9 @@ import {
   applyNodeChanges,
   Background,
   Controls,
+  Handle,
   MiniMap,
+  Position,
   ReactFlow,
   useReactFlow,
   type Connection,
@@ -276,27 +278,44 @@ function CinemaNodeCard({ data, selected }: NodeProps<CinemaFlowNode>) {
       ? data.rawData.placeholder
       : meta.placeholder
   const status = typeof data.rawData.status === "string" ? data.rawData.status : null
+  const accentStyle = { "--node-accent": meta.accent } as CSSProperties
 
   return (
-    <article
-      className={`cinema-node ${selected ? "is-selected" : ""}`}
-      style={{ "--node-accent": meta.accent } as CSSProperties}
-    >
-      <header className="cinema-node-header">
-        <span className="cinema-node-type">
-          <Icon size={14} aria-hidden="true" />
-          {meta.label}
-        </span>
-        {status ? <span className="cinema-node-status">{status}</span> : null}
-      </header>
-      <div className="cinema-node-preview">
-        <Icon size={28} aria-hidden="true" />
-      </div>
-      <footer className="cinema-node-footer">
-        <strong>{data.title}</strong>
-        <span>{text}</span>
-      </footer>
-    </article>
+    <>
+      <Handle
+        id="input"
+        type="target"
+        position={Position.Left}
+        className="cinema-node-handle cinema-node-handle-input"
+        style={accentStyle}
+      />
+      <article
+        className={`cinema-node ${selected ? "is-selected" : ""}`}
+        style={accentStyle}
+      >
+        <header className="cinema-node-header">
+          <span className="cinema-node-type">
+            <Icon size={14} aria-hidden="true" />
+            {meta.label}
+          </span>
+          {status ? <span className="cinema-node-status">{status}</span> : null}
+        </header>
+        <div className="cinema-node-preview">
+          <Icon size={28} aria-hidden="true" />
+        </div>
+        <footer className="cinema-node-footer">
+          <strong>{data.title}</strong>
+          <span>{text}</span>
+        </footer>
+      </article>
+      <Handle
+        id="output"
+        type="source"
+        position={Position.Right}
+        className="cinema-node-handle cinema-node-handle-output"
+        style={accentStyle}
+      />
+    </>
   )
 }
 
