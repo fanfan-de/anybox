@@ -31,7 +31,8 @@ body,
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -149,6 +150,12 @@ button {
 .cinema-icon-button:hover {
   border-color: var(--cinema-border-strong);
   background: rgba(255, 255, 255, 0.11);
+}
+
+.cinema-command-button:disabled,
+.cinema-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
 }
 
 .cinema-canvas {
@@ -295,10 +302,11 @@ button {
 
 .cinema-inspector {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 14px;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   padding: 14px;
   border-left: 1px solid var(--cinema-border);
   background: rgba(12, 14, 18, 0.96);
@@ -326,6 +334,16 @@ button {
   color: var(--node-accent);
 }
 
+.cinema-inspector-body {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
 .cinema-field {
   display: grid;
   gap: 7px;
@@ -340,7 +358,8 @@ button {
 }
 
 .cinema-field input,
-.cinema-field textarea {
+.cinema-field textarea,
+.cinema-field select {
   width: 100%;
   min-width: 0;
   color: var(--cinema-text);
@@ -349,7 +368,8 @@ button {
   background: rgba(255, 255, 255, 0.06);
 }
 
-.cinema-field input {
+.cinema-field input,
+.cinema-field select {
   height: 34px;
   padding: 0 10px;
 }
@@ -360,11 +380,138 @@ button {
   resize: vertical;
 }
 
+.cinema-field textarea.is-compact {
+  height: 92px;
+  min-height: 76px;
+}
+
 .cinema-field input:focus,
-.cinema-field textarea:focus {
+.cinema-field textarea:focus,
+.cinema-field select:focus {
   border-color: var(--cinema-border-strong);
   background: rgba(255, 255, 255, 0.09);
   outline: none;
+}
+
+.cinema-field input:disabled,
+.cinema-field textarea:disabled,
+.cinema-field select:disabled {
+  color: var(--cinema-text-2);
+  cursor: not-allowed;
+  opacity: 0.78;
+}
+
+.cinema-task-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--cinema-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.cinema-task-status-row,
+.cinema-provider-auth > div,
+.cinema-task-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cinema-task-status-row {
+  justify-content: space-between;
+}
+
+.cinema-task-status-row code,
+.cinema-provider-auth code,
+.cinema-task-assets code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--cinema-text-2);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cinema-task-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  color: var(--cinema-text-2);
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--cinema-border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.cinema-task-status.is-running,
+.cinema-task-status.is-queued {
+  color: #93c5fd;
+  border-color: rgba(147, 197, 253, 0.35);
+}
+
+.cinema-task-status.is-succeeded {
+  color: #86efac;
+  border-color: rgba(134, 239, 172, 0.35);
+}
+
+.cinema-task-status.is-failed,
+.cinema-task-status.is-canceled {
+  color: var(--cinema-danger);
+  border-color: rgba(251, 113, 133, 0.35);
+}
+
+.cinema-provider-auth {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--cinema-border);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.cinema-provider-auth svg {
+  color: #fcd34d;
+}
+
+.cinema-provider-auth > div span,
+.cinema-task-assets span {
+  color: var(--cinema-text-2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cinema-task-actions {
+  flex-wrap: wrap;
+}
+
+.cinema-task-error {
+  margin: 0;
+  padding: 8px 9px;
+  color: var(--cinema-danger);
+  font-size: 12px;
+  line-height: 1.4;
+  border: 1px solid rgba(251, 113, 133, 0.28);
+  border-radius: 7px;
+  background: rgba(251, 113, 133, 0.08);
+}
+
+.cinema-task-assets {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.cinema-task-assets code {
+  padding: 7px;
+  border: 1px solid var(--cinema-border);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .cinema-inspector-meta {

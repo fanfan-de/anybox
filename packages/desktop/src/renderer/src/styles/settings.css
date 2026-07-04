@@ -11565,6 +11565,12 @@ body.is-dragging-settings-page {
   line-height: 1.45;
 }
 
+.provider-detail-helper .provider-detail-status-dot {
+  display: inline-block;
+  margin-right: 7px;
+  vertical-align: -1px;
+}
+
 .provider-radio-stack {
   gap: 8px;
 }

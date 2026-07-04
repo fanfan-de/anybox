@@ -5,6 +5,10 @@ import { createHash, randomUUID } from "node:crypto"
 import { appendFile, mkdir, open, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 import type { AppearanceConfigDocument, AppearanceRuntimeState } from "../shared/appearance"
+import type {
+  CinemaProviderAuthState,
+  CinemaVideoProvider,
+} from "@anybox/shared/cinema"
 import {
   createDefaultAppearanceRuntimeState,
   normalizeAppearanceRuntimeState,
@@ -4299,6 +4303,31 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
       const providerID = input.providerID.trim()
       const result = await requestAgentJSON<AgentProviderAuthState>(
         `/api/providers/${encodeURIComponent(providerID)}/auth/api-key`,
+        {
+          method: "PUT",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            apiKey: input.apiKey ?? null,
+          }),
+        },
+      )
+      return result.data
+    },
+  )
+
+  handleDesktopIpc("desktop:get-cinema-video-providers", async () => {
+    const result = await requestAgentJSON<CinemaVideoProvider[]>("/api/cinema/video-providers")
+    return result.data
+  })
+
+  handleDesktopIpc(
+    "desktop:save-cinema-video-provider-api-key",
+    async (_event, input: { providerID: string; apiKey?: string | null }) => {
+      const providerID = input.providerID.trim()
+      const result = await requestAgentJSON<CinemaProviderAuthState>(
+        `/api/cinema/video-providers/${encodeURIComponent(providerID)}/auth/api-key`,
         {
           method: "PUT",
           headers: {

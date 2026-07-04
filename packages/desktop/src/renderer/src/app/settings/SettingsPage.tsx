@@ -60,6 +60,8 @@ import type {
   AssistantTraceVisibility,
   AssistantTraceVisibilityKey,
   ColorMode,
+  CinemaVideoProvider,
+  CinemaVideoProviderDraftState,
   CustomProviderDraftState,
   InstalledPlugin,
   McpServerDiagnostic,
@@ -769,6 +771,125 @@ function getProviderSourceText(provider: ProviderCatalogItem, t: SettingsTransla
 
 function getProviderHeaderSummary(provider: ProviderCatalogItem, t: SettingsTranslate) {
   return `${getProviderStatusText(provider, t)} · ${t("settings.provider.sharedAcrossApp")} · ${getProviderSourceText(provider, t)}`
+}
+
+function getCinemaVideoProviderStatusText(provider: CinemaVideoProvider, t: SettingsTranslate) {
+  if (!provider.auth.requiresCredential) return t("app.connected")
+  switch (provider.auth.status) {
+    case "connected":
+      return t("app.connected")
+    case "pending":
+      return t("settings.provider.statusPending")
+    case "expired":
+      return t("settings.provider.statusExpired")
+    case "error":
+      return t("settings.provider.statusError")
+    case "not_connected":
+      return t("app.notConnected")
+  }
+}
+
+function getCinemaVideoProviderModelSummary(provider: CinemaVideoProvider) {
+  const models = provider.manifest.models
+  if (models.length === 0) return "No models"
+  return models.map((model) => model.label || model.id).join(", ")
+}
+
+function VideoProviderCredentialsPanel({
+  providers,
+  drafts,
+  savingProviderID,
+  t,
+  onDraftChange,
+  onSaveApiKey,
+}: {
+  providers: CinemaVideoProvider[]
+  drafts: Record<string, CinemaVideoProviderDraftState>
+  savingProviderID: string | null
+  t: SettingsTranslate
+  onDraftChange: (providerID: string, field: "apiKey", value: string) => void
+  onSaveApiKey: (providerID: string, apiKey?: string | null) => boolean | Promise<boolean>
+}) {
+  if (providers.length === 0) return null
+
+  return (
+    <div className="settings-panel">
+      <div className="settings-section-header">
+        <div>
+          <h3>Video providers</h3>
+          <p>Cinema uses these saved credentials when generation tasks run.</p>
+        </div>
+      </div>
+
+      <div className="provider-detail-body">
+        {providers.map((provider) => {
+          const providerID = provider.manifest.id
+          const draft = drafts[providerID] ?? { apiKey: "" }
+          const isBusy = savingProviderID === providerID
+          const isConnected = provider.auth.connected
+          const modelSummary = getCinemaVideoProviderModelSummary(provider)
+
+          return (
+            <div key={providerID} className="provider-detail-row">
+              <div className="provider-detail-row-copy">
+                <span className="settings-field-label">{provider.manifest.name}</span>
+                <p className="provider-detail-helper">
+                  <span
+                    className={isConnected ? "provider-detail-status-dot is-connected" : "provider-detail-status-dot"}
+                    aria-hidden="true"
+                  />
+                  {getCinemaVideoProviderStatusText(provider, t)} · {modelSummary}
+                </p>
+                {provider.auth.credentialProviderID ? (
+                  <p className="provider-detail-helper">{provider.auth.credentialProviderID}</p>
+                ) : null}
+              </div>
+
+              {provider.auth.requiresCredential ? (
+                <div className="provider-detail-row-control">
+                  <label className="provider-key-field">
+                    <span className="provider-key-input-wrap">
+                      <input
+                        aria-label={`API key for ${provider.manifest.name}`}
+                        type="password"
+                        value={draft.apiKey}
+                        placeholder={isConnected ? "Stored key detected. Leave blank to keep it." : "Enter API key"}
+                        onChange={(event) => onDraftChange(providerID, "apiKey", event.target.value)}
+                      />
+                    </span>
+                  </label>
+                  <div className="settings-inline-actions">
+                    {isConnected ? (
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => void onSaveApiKey(providerID, null)}
+                      >
+                        Clear
+                      </button>
+                    ) : null}
+                    <button
+                      className="primary-button"
+                      type="button"
+                      disabled={isBusy || draft.apiKey.trim().length === 0}
+                      onClick={() => void onSaveApiKey(providerID)}
+                    >
+                      {isBusy ? t("app.saving") : t("app.save")}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="provider-detail-row-control">
+                  <span className="settings-badge is-highlight">{t("app.connected")}</span>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function getProviderAuthMethodOptionLabel(provider: ProviderCatalogItem, capability: ProviderAuthCapability, t: SettingsTranslate) {
@@ -2475,6 +2596,7 @@ interface SettingsPageProps {
   archivedSessions: ArchivedSessionSummary[]
   archivedSessionsError: string | null
   catalog: ProviderCatalogItem[]
+  cinemaVideoProviders: CinemaVideoProvider[]
   deletingArchivedSessionID: string | null
   deletingMcpServerID: string | null
   deletingProviderID: string | null
@@ -2502,10 +2624,12 @@ interface SettingsPageProps {
   models: ProviderModel[]
   pluginCatalog?: PluginCatalogItem[]
   providerDrafts: Record<string, ProviderDraftState>
+  cinemaVideoProviderDrafts: Record<string, CinemaVideoProviderDraftState>
   customProviderDraft: CustomProviderDraftState
   restoringArchivedSessionID: string | null
   savingMcpServerID: string | null
   savingProviderID: string | null
+  savingCinemaVideoProviderID: string | null
   testingProviderID: string | null
   selectionDraft: ProjectModelSelection
   onColorModeChange: (mode: ColorMode) => void
@@ -2542,6 +2666,11 @@ interface SettingsPageProps {
     field: "apiKey" | "baseURL",
     value: string,
   ) => void
+  onCinemaVideoProviderDraftChange: (
+    providerID: string,
+    field: "apiKey",
+    value: string,
+  ) => void
   onCustomProviderDraftChange: (field: keyof CustomProviderDraftState, value: string) => void
   onCustomProviderDraftReset: (draft?: CustomProviderDraftState) => void
   onRefreshProviderCatalog: () => boolean | Promise<boolean>
@@ -2550,6 +2679,7 @@ interface SettingsPageProps {
   onRestoreArchivedSession: (sessionID: string) => boolean | Promise<boolean>
   onSaveMcpServer: () => boolean | Promise<boolean>
   onSaveProviderApiKey: (providerID: string, apiKey?: string | null) => boolean | Promise<boolean>
+  onSaveCinemaVideoProviderApiKey: (providerID: string, apiKey?: string | null) => boolean | Promise<boolean>
   onSaveProvider: (providerID: string) => boolean | Promise<boolean>
   onSaveCustomProvider: (providerID?: string) => boolean | Promise<boolean>
   onSelectionChange: <K extends keyof ProjectModelSelection>(field: K, value: ProjectModelSelection[K]) => void
@@ -2586,6 +2716,7 @@ export function SettingsPage({
   archivedSessions,
   archivedSessionsError,
   catalog,
+  cinemaVideoProviders,
   deletingArchivedSessionID,
   deletingMcpServerID,
   deletingProviderID,
@@ -2612,10 +2743,12 @@ export function SettingsPage({
   models,
   pluginCatalog = [],
   providerDrafts,
+  cinemaVideoProviderDrafts,
   customProviderDraft,
   restoringArchivedSessionID,
   savingMcpServerID,
   savingProviderID,
+  savingCinemaVideoProviderID,
   testingProviderID,
   selectionDraft,
   onColorModeChange,
@@ -2648,6 +2781,7 @@ export function SettingsPage({
   onMcpServerSelect,
   onProviderAuthMethodChange,
   onProviderDraftChange,
+  onCinemaVideoProviderDraftChange,
   onCustomProviderDraftChange,
   onCustomProviderDraftReset,
   onRefreshProviderCatalog,
@@ -2656,6 +2790,7 @@ export function SettingsPage({
   onRestoreArchivedSession,
   onSaveMcpServer,
   onSaveProviderApiKey,
+  onSaveCinemaVideoProviderApiKey,
   onSaveProvider,
   onSaveCustomProvider,
   onSelectionChange,
@@ -4439,6 +4574,14 @@ export function SettingsPage({
                           <p>The right side will show credentials, endpoint overrides, and provider models for the current selection.</p>
                         </article>
                       )}
+                      <VideoProviderCredentialsPanel
+                        providers={cinemaVideoProviders}
+                        drafts={cinemaVideoProviderDrafts}
+                        savingProviderID={savingCinemaVideoProviderID}
+                        t={t}
+                        onDraftChange={onCinemaVideoProviderDraftChange}
+                        onSaveApiKey={onSaveCinemaVideoProviderApiKey}
+                      />
                     </div>
                   </section>
                 ) : activeSection === "mcp" ? (

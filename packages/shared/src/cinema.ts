@@ -139,6 +139,112 @@ export const CinemaEventsResultSchema = z.object({
 })
 export type CinemaEventsResult = z.infer<typeof CinemaEventsResultSchema>
 
+export const CinemaGenerationModeSchema = z.enum([
+  "text-to-video",
+  "image-to-video",
+  "frames-to-video",
+  "reference-to-video",
+  "video-to-video",
+])
+export type CinemaGenerationMode = z.infer<typeof CinemaGenerationModeSchema>
+
+export const CinemaGenerationTaskStatusSchema = z.enum([
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+  "canceled",
+])
+export type CinemaGenerationTaskStatus = z.infer<typeof CinemaGenerationTaskStatusSchema>
+
+export const CinemaGeneratedAssetSchema = z.object({
+  id: z.string().min(1),
+  kind: z.enum(["video", "image", "audio", "file"]),
+  path: z.string().min(1),
+  mimeType: z.string().optional(),
+  sizeBytes: z.number().int().nonnegative().optional(),
+  url: z.string().url().optional(),
+})
+export type CinemaGeneratedAsset = z.infer<typeof CinemaGeneratedAssetSchema>
+
+export const CinemaVideoProviderManifestSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  credentialProviderID: z.string().min(1).optional(),
+  requiresCredential: z.boolean().default(false),
+  models: z.array(z.object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    modes: z.array(CinemaGenerationModeSchema).min(1),
+    durations: z.array(z.number().positive()).default([]),
+    aspectRatios: z.array(z.string().min(1)).default([]),
+    resolutions: z.array(z.string().min(1)).default([]),
+    maxReferenceImages: z.number().int().nonnegative().optional(),
+    supportsSeed: z.boolean().optional(),
+    supportsNegativePrompt: z.boolean().optional(),
+    supportsAudio: z.boolean().optional(),
+    requiresPublicInputURL: z.boolean().optional(),
+    supportsProviderUpload: z.boolean().optional(),
+    parameterSchema: z.record(z.string(), z.unknown()).default({}),
+  })).min(1),
+})
+export type CinemaVideoProviderManifest = z.infer<typeof CinemaVideoProviderManifestSchema>
+
+export const CinemaProviderAuthStateSchema = z.object({
+  providerID: z.string().min(1),
+  credentialProviderID: z.string().min(1),
+  requiresCredential: z.boolean(),
+  connected: z.boolean(),
+  status: z.enum(["connected", "not_connected", "pending", "expired", "error"]),
+  credentialKind: z.enum(["api_key", "oauth_session"]).optional(),
+  credentialSource: z.string().optional(),
+  connectionLabel: z.string().optional(),
+  lastError: z.string().optional(),
+})
+export type CinemaProviderAuthState = z.infer<typeof CinemaProviderAuthStateSchema>
+
+export const CinemaVideoProviderSchema = z.object({
+  manifest: CinemaVideoProviderManifestSchema,
+  auth: CinemaProviderAuthStateSchema,
+})
+export type CinemaVideoProvider = z.infer<typeof CinemaVideoProviderSchema>
+
+export const CinemaGenerationTaskSchema = z.object({
+  id: z.string().min(1),
+  projectID: z.string().min(1),
+  providerID: z.string().min(1),
+  modelID: z.string().min(1),
+  mode: CinemaGenerationModeSchema,
+  title: z.string().min(1),
+  status: CinemaGenerationTaskStatusSchema,
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+  taskNodeID: z.string().min(1).optional(),
+  outputNodeID: z.string().min(1).optional(),
+  providerTaskRef: z.record(z.string(), z.unknown()).optional(),
+  input: z.object({
+    prompt: z.string(),
+    sourceNodeIDs: z.array(z.string().min(1)).default([]),
+    parameters: z.record(z.string(), z.unknown()).default({}),
+  }),
+  outputAssets: z.array(CinemaGeneratedAssetSchema).default([]),
+  error: z.string().nullable().optional(),
+})
+export type CinemaGenerationTask = z.infer<typeof CinemaGenerationTaskSchema>
+
+export const CreateCinemaGenerationTaskBodySchema = z.object({
+  providerID: z.string().min(1),
+  modelID: z.string().min(1),
+  mode: CinemaGenerationModeSchema,
+  title: z.string().min(1).optional(),
+  prompt: z.string().default(""),
+  sourceNodeIDs: z.array(z.string().min(1)).default([]),
+  parameters: z.record(z.string(), z.unknown()).default({}),
+  position: CinemaPositionSchema.optional(),
+})
+export type CreateCinemaGenerationTaskBody = z.infer<typeof CreateCinemaGenerationTaskBodySchema>
+
 export const CinemaProjectSummarySchema = z.object({
   projectID: z.string().min(1),
   name: z.string().min(1),

@@ -40,6 +40,7 @@ Create this structure for a new project, leaving placeholders where product deta
     project.json
     providers.json
     canvas.json
+    tasks/
     events.jsonl
     README.md
   scripts/
@@ -61,6 +62,8 @@ Create this structure for a new project, leaving placeholders where product deta
 Directory intent:
 
 - `.anybox-cinema/`: project metadata owned by anybox for cinema.
+- `.anybox-cinema/providers.json`: non-secret provider preferences only; credentials live in AnyBox, not the project.
+- `.anybox-cinema/tasks/`: current generation task snapshots, created lazily by the AnyBox Agent Cinema Provider Runtime.
 - `assets/`: user-owned source media such as images, clips, audio, and fonts.
 - `references/`: mood boards, reference shots, style frames, and research notes.
 - `prompts/`: reusable prompt drafts and prompt experiments.
@@ -81,7 +84,7 @@ Directory intent:
 Recommended generic shell setup:
 
 ```bash
-mkdir -p .anybox-cinema scripts assets references prompts generated renders exports
+mkdir -p .anybox-cinema/tasks scripts assets references prompts generated renders exports
 PROJECT_ID="$(uuidgen 2>/dev/null | tr '[:upper:]' '[:lower:]' || date -u +cinema-%Y%m%d%H%M%S)"
 NOW="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 PROJECT_NAME="$(basename "$PWD")"
@@ -142,7 +145,8 @@ This file records provider slots only. Do not write secrets here.
   "secretStorage": "anybox-managed",
   "providers": [],
   "notes": [
-    "Provider credentials are configured in AnyBox or the plugin connector layer, not in this project file.",
+    "Provider credentials are configured in the AnyBox credential store, not in this project file.",
+    "Cinema v1 uses the cinema-fal credential provider id for fal.ai.",
     "This file may later store non-secret routing preferences, model labels, or project-level provider presets."
   ]
 }
@@ -270,4 +274,6 @@ After initialization or repair, tell the user:
   - write a project brief in `.anybox-cinema/project.json` or the Story Brief canvas node;
   - add reference materials to `references/`;
   - add source media to `assets/`;
-  - begin designing the external node canvas UI against `.anybox-cinema/canvas.json`.
+  - open the Cinema Web Canvas through AnyBox;
+  - configure the `cinema-fal` API key in AnyBox when real fal.ai generation is needed;
+  - create a Generation Task node and test the Mock provider first.

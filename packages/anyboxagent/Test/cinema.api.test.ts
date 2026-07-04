@@ -4,6 +4,12 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createServerApp } from "#server/server.ts"
+import {
+  setCinemaFalApiKeyForTest,
+  setCinemaFalClientFactoryForTest,
+  setCinemaKlingApiKeyForTest,
+  setCinemaKlingClientFactoryForTest,
+} from "#server/usecases/cinema.ts"
 
 interface JsonEnvelope<T = unknown> {
   success: boolean
@@ -99,6 +105,50 @@ interface CinemaProjectStateSummary {
     sample: string[]
   }>
   gaps: string[]
+}
+
+interface CinemaVideoProvider {
+  manifest: {
+    id: string
+    name: string
+    requiresCredential: boolean
+    credentialProviderID?: string
+    models: Array<{
+      id: string
+      modes: string[]
+    }>
+  }
+  auth: {
+    providerID: string
+    credentialProviderID: string
+    connected: boolean
+    status: string
+  }
+}
+
+interface CinemaGenerationTask {
+  id: string
+  projectID: string
+  providerID: string
+  modelID: string
+  mode: string
+  title: string
+  status: string
+  taskNodeID?: string
+  outputNodeID?: string
+  providerTaskRef?: Record<string, unknown>
+  input: {
+    prompt: string
+    sourceNodeIDs: string[]
+    parameters: Record<string, unknown>
+  }
+  outputAssets: Array<{
+    id: string
+    kind: string
+    path: string
+    mimeType?: string
+    sizeBytes?: number
+  }>
 }
 
 async function readJson<T>(response: Response) {
@@ -487,6 +537,581 @@ describe("cinema api", () => {
       expect(invalidPayloadBody.success).toBe(false)
       expect(invalidPayloadBody.error?.code).toBe("INVALID_PAYLOAD")
     } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("exposes cinema video providers and API key auth state", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root)
+
+      const globalProvidersResponse = await app.request("http://localhost/api/cinema/video-providers")
+      const globalProvidersBody = await readJson<CinemaVideoProvider[]>(globalProvidersResponse)
+
+      expect(globalProvidersResponse.status).toBe(200)
+      expect(globalProvidersBody.data?.map((provider) => provider.manifest.id)).toContain("kling")
+
+      const providersResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/video-providers`)
+      const providersBody = await readJson<CinemaVideoProvider[]>(providersResponse)
+
+      expect(providersResponse.status).toBe(200)
+      expect(providersBody.data?.map((provider) => provider.manifest.id)).toContain("mock")
+      expect(providersBody.data?.map((provider) => provider.manifest.id)).toContain("fal")
+      expect(providersBody.data?.map((provider) => provider.manifest.id)).toContain("kling")
+      expect(providersBody.data?.find((provider) => provider.manifest.id === "mock")?.auth.connected).toBe(true)
+
+      const authResponse = await app.request("http://localhost/api/cinema/video-providers/fal/auth/api-key")
+      const authBody = await readJson<CinemaVideoProvider["auth"]>(authResponse)
+
+      expect(authResponse.status).toBe(200)
+      expect(authBody.data).toMatchObject({
+        providerID: "fal",
+        credentialProviderID: "cinema-fal",
+      })
+
+      const klingAuthResponse = await app.request("http://localhost/api/cinema/video-providers/kling/auth/api-key")
+      const klingAuthBody = await readJson<CinemaVideoProvider["auth"]>(klingAuthResponse)
+
+      expect(klingAuthResponse.status).toBe(200)
+      expect(klingAuthBody.data).toMatchObject({
+        providerID: "kling",
+        credentialProviderID: "cinema-kling",
+      })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects generation tasks for uninitialized cinema projects", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+
+    try {
+      const project = await createProject(app, root)
+      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerID: "mock",
+          modelID: "mock-video",
+          mode: "text-to-video",
+          prompt: "A test prompt.",
+        }),
+      })
+      const body = await readJson(response)
+
+      expect(response.status).toBe(404)
+      expect(body.error?.code).toBe("CINEMA_PROJECT_NOT_INITIALIZED")
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("creates, refreshes, persists, and cancels mock generation tasks", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root)
+
+      const createResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerID: "mock",
+          modelID: "mock-video",
+          mode: "text-to-video",
+          title: "Mock Render",
+          prompt: "A quiet test shot.",
+          parameters: {
+            duration: 4,
+            aspect_ratio: "16:9",
+          },
+        }),
+      })
+      const createBody = await readJson<CinemaGenerationTask>(createResponse)
+
+      expect(createResponse.status).toBe(200)
+      expect(createBody.data).toMatchObject({
+        providerID: "mock",
+        modelID: "mock-video",
+        status: "running",
+        title: "Mock Render",
+      })
+      expect(createBody.data?.taskNodeID).toStartWith("node-generation-task-")
+
+      const taskID = createBody.data!.id
+      const refreshResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks/${encodeURIComponent(taskID)}/refresh`, {
+        method: "POST",
+      })
+      const refreshBody = await readJson<CinemaGenerationTask>(refreshResponse)
+
+      expect(refreshResponse.status).toBe(200)
+      expect(refreshBody.data?.status).toBe("succeeded")
+      expect(refreshBody.data?.outputAssets[0]?.path).toBe(`generated/${taskID}/mock-output.mp4`)
+
+      const persistedTask = JSON.parse(await readFile(join(root, ".anybox-cinema", "tasks", `${taskID}.json`), "utf8")) as CinemaGenerationTask
+      expect(persistedTask.status).toBe("succeeded")
+
+      const mockOutput = await readFile(join(root, "generated", taskID, "mock-output.mp4"), "utf8")
+      expect(mockOutput).toContain("A quiet test shot.")
+
+      const canvas = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
+      expect(canvas.nodes.find((node) => node.id === refreshBody.data?.taskNodeID)?.data?.status).toBe("succeeded")
+      expect(canvas.nodes.find((node) => node.id === refreshBody.data?.outputNodeID)?.type).toBe("video")
+      expect(canvas.edges.some((edge) => edge.source === refreshBody.data?.taskNodeID && edge.target === refreshBody.data?.outputNodeID)).toBe(true)
+
+      const tasksLog = await readFile(join(root, ".anybox-cinema", "tasks.jsonl"), "utf8")
+      expect(tasksLog).toContain("generation-task.created")
+      expect(tasksLog).toContain("generation-task.refreshed")
+
+      const cancelCreateResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerID: "mock",
+          modelID: "mock-video",
+          mode: "text-to-video",
+          title: "Cancel Me",
+          prompt: "Cancel this task.",
+        }),
+      })
+      const cancelCreateBody = await readJson<CinemaGenerationTask>(cancelCreateResponse)
+      const cancelResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks/${encodeURIComponent(cancelCreateBody.data!.id)}/cancel`, {
+        method: "POST",
+      })
+      const cancelBody = await readJson<CinemaGenerationTask>(cancelResponse)
+
+      expect(cancelResponse.status).toBe(200)
+      expect(cancelBody.data?.status).toBe("canceled")
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects fal generation tasks when the Cinema fal credential is missing", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root)
+
+      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerID: "fal",
+          modelID: "fal-ai/wan-25-preview/text-to-video",
+          mode: "text-to-video",
+          prompt: "This should not call fal without a key.",
+        }),
+      })
+      const body = await readJson(response)
+
+      expect(response.status).toBe(400)
+      expect(body.error?.code).toBe("CINEMA_PROVIDER_NOT_CONNECTED")
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects kling generation tasks when the Cinema kling credential is missing", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root)
+
+      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerID: "kling",
+          modelID: "kling-3.0-turbo",
+          mode: "text-to-video",
+          prompt: "This should not call Kling without a key.",
+        }),
+      })
+      const body = await readJson(response)
+
+      expect(response.status).toBe(400)
+      expect(body.error?.code).toBe("CINEMA_PROVIDER_NOT_CONNECTED")
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("creates and refreshes kling text-to-video generation tasks with a mocked client", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    const originalFetch = globalThis.fetch
+    const restoreKlingApiKey = setCinemaKlingApiKeyForTest("test-kling-key")
+    let createRequest: Record<string, unknown> | undefined
+    let refreshRequest: Record<string, unknown> | undefined
+
+    const restoreKlingClient = setCinemaKlingClientFactoryForTest((apiKey) => {
+      expect(apiKey).toBe("test-kling-key")
+      return {
+        createTask: async (input) => {
+          createRequest = {
+            mode: input.mode,
+            path: input.path,
+            payload: input.payload,
+          }
+          return {
+            code: 0,
+            request_id: "kling-request-1",
+            data: {
+              id: "kling-task-1",
+              status: "submitted",
+            },
+          }
+        },
+        refreshTask: async (input) => {
+          refreshRequest = {
+            taskID: input.taskID,
+            tasksPath: input.tasksPath,
+          }
+          return {
+            code: 0,
+            data: [
+              {
+                id: "kling-task-1",
+                status: "succeeded",
+                result: [
+                  {
+                    type: "video",
+                    url: "https://media.example.test/kling-output.mp4",
+                  },
+                ],
+              },
+            ],
+          }
+        },
+      }
+    })
+
+    globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      if (url === "https://media.example.test/kling-output.mp4") {
+        return new Response(new Uint8Array([5, 6, 7, 8]), {
+          status: 200,
+          headers: {
+            "content-type": "video/mp4",
+          },
+        })
+      }
+      return await originalFetch(input, init)
+    }) as typeof fetch
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root)
+
+      const createResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerID: "kling",
+          modelID: "kling-3.0-turbo",
+          mode: "text-to-video",
+          title: "Kling Render",
+          prompt: "A Kling test prompt.",
+          parameters: {
+            duration: 5,
+            aspect_ratio: "16:9",
+            resolution: "720p",
+          },
+        }),
+      })
+      const createBody = await readJson<CinemaGenerationTask>(createResponse)
+
+      expect(createResponse.status).toBe(200)
+      expect(createBody.data).toMatchObject({
+        providerID: "kling",
+        modelID: "kling-3.0-turbo",
+        status: "running",
+        title: "Kling Render",
+      })
+      expect(createBody.data?.providerTaskRef).toMatchObject({
+        taskID: "kling-task-1",
+        requestID: "kling-request-1",
+        createPath: "/text-to-video/kling-3.0-turbo",
+        tasksPath: "/tasks",
+      })
+      expect(createRequest).toMatchObject({
+        mode: "text-to-video",
+        path: "/text-to-video/kling-3.0-turbo",
+        payload: {
+          prompt: "A Kling test prompt.",
+          settings: {
+            duration: 5,
+            aspect_ratio: "16:9",
+            resolution: "720p",
+          },
+        },
+      })
+
+      const taskID = createBody.data!.id
+      const refreshResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks/${encodeURIComponent(taskID)}/refresh`, {
+        method: "POST",
+      })
+      const refreshBody = await readJson<CinemaGenerationTask>(refreshResponse)
+
+      expect(refreshResponse.status).toBe(200)
+      expect(refreshRequest).toMatchObject({
+        taskID: "kling-task-1",
+        tasksPath: "/tasks",
+      })
+      expect(refreshBody.data?.status).toBe("succeeded")
+      expect(refreshBody.data?.outputAssets[0]).toMatchObject({
+        kind: "video",
+        path: `generated/${taskID}/output-1.mp4`,
+        mimeType: "video/mp4",
+        sizeBytes: 4,
+      })
+
+      const downloaded = await readFile(join(root, "generated", taskID, "output-1.mp4"))
+      expect([...downloaded]).toEqual([5, 6, 7, 8])
+    } finally {
+      globalThis.fetch = originalFetch
+      restoreKlingClient()
+      restoreKlingApiKey()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("builds kling image-to-video tasks from source node URLs", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    const restoreKlingApiKey = setCinemaKlingApiKeyForTest("test-kling-key")
+    let createRequest: Record<string, unknown> | undefined
+
+    const restoreKlingClient = setCinemaKlingClientFactoryForTest((apiKey) => {
+      expect(apiKey).toBe("test-kling-key")
+      return {
+        createTask: async (input) => {
+          createRequest = {
+            mode: input.mode,
+            path: input.path,
+            payload: input.payload,
+          }
+          return {
+            code: 0,
+            request_id: "kling-request-i2v",
+            data: {
+              id: "kling-task-i2v",
+              status: "submitted",
+            },
+          }
+        },
+        refreshTask: async () => ({
+          code: 0,
+          data: [],
+        }),
+      }
+    })
+
+    try {
+      const project = await createProject(app, root)
+      const canvas = createCanvas()
+      canvas.nodes.push({
+        id: "source-frame",
+        type: "image",
+        title: "Source Frame",
+        position: { x: 980, y: 160 },
+        size: { width: 360, height: 220 },
+        data: {
+          url: "https://cdn.example.test/source-frame.png",
+        },
+      })
+      canvas.nodeTypes.push("image")
+      await initializeCinemaProject(root, canvas)
+
+      const createResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerID: "kling",
+          modelID: "kling-3.0-turbo",
+          mode: "image-to-video",
+          title: "Kling Image Render",
+          prompt: "Move the camera gently.",
+          sourceNodeIDs: ["source-frame"],
+          parameters: {
+            duration: 5,
+            resolution: "720p",
+          },
+        }),
+      })
+      const createBody = await readJson<CinemaGenerationTask>(createResponse)
+
+      expect(createResponse.status).toBe(200)
+      expect(createBody.data?.providerTaskRef).toMatchObject({
+        taskID: "kling-task-i2v",
+        createPath: "/image-to-video/kling-3.0-turbo",
+      })
+      expect(createRequest).toMatchObject({
+        mode: "image-to-video",
+        path: "/image-to-video/kling-3.0-turbo",
+        payload: {
+          contents: [
+            { type: "prompt", text: "Move the camera gently." },
+            { type: "first_frame", url: "https://cdn.example.test/source-frame.png" },
+          ],
+          settings: {
+            duration: 5,
+            resolution: "720p",
+          },
+        },
+      })
+    } finally {
+      restoreKlingClient()
+      restoreKlingApiKey()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("creates and refreshes fal generation tasks with a mocked client", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    const originalFetch = globalThis.fetch
+    const restoreFalApiKey = setCinemaFalApiKeyForTest("test-fal-key")
+    let submittedEndpoint = ""
+    let submittedInput: Record<string, unknown> | undefined
+    let statusRequest: Record<string, unknown> | undefined
+    let resultRequest: Record<string, unknown> | undefined
+
+    const restoreFalClient = setCinemaFalClientFactoryForTest((apiKey) => {
+      expect(apiKey).toBe("test-fal-key")
+      return {
+        queue: {
+          submit: async (endpointID: unknown, options: unknown) => {
+            submittedEndpoint = String(endpointID)
+            submittedInput = (options as { input?: Record<string, unknown> }).input
+            return { request_id: "fal-request-1" }
+          },
+          status: async (endpointID: unknown, options: unknown) => {
+            statusRequest = {
+              endpointID: String(endpointID),
+              requestId: (options as { requestId?: string }).requestId,
+              logs: (options as { logs?: boolean }).logs,
+            }
+            return { status: "COMPLETED" }
+          },
+          result: async (endpointID: unknown, options: unknown) => {
+            resultRequest = {
+              endpointID: String(endpointID),
+              requestId: (options as { requestId?: string }).requestId,
+            }
+            return {
+              data: {
+                video: {
+                  url: "https://media.example.test/fal-output.mp4",
+                },
+              },
+            }
+          },
+          cancel: async () => undefined,
+        },
+        storage: {
+          upload: async () => "https://storage.example.test/input.png",
+        },
+      } as never
+    })
+
+    globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      if (url === "https://media.example.test/fal-output.mp4") {
+        return new Response(new Uint8Array([1, 2, 3, 4]), {
+          status: 200,
+          headers: {
+            "content-type": "video/mp4",
+          },
+        })
+      }
+      return await originalFetch(input, init)
+    }) as typeof fetch
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root)
+
+      const createResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerID: "fal",
+          modelID: "fal-ai/wan-25-preview/text-to-video",
+          mode: "text-to-video",
+          title: "fal Render",
+          prompt: "A fal test prompt.",
+          parameters: {
+            duration: 5,
+            aspect_ratio: "16:9",
+          },
+        }),
+      })
+      const createBody = await readJson<CinemaGenerationTask>(createResponse)
+
+      expect(createResponse.status).toBe(200)
+      expect(createBody.data).toMatchObject({
+        providerID: "fal",
+        status: "running",
+        title: "fal Render",
+      })
+      expect(createBody.data?.providerTaskRef).toMatchObject({
+        endpointID: "fal-ai/wan-25-preview/text-to-video",
+        requestID: "fal-request-1",
+      })
+      expect(submittedEndpoint).toBe("fal-ai/wan-25-preview/text-to-video")
+      expect(submittedInput).toMatchObject({
+        prompt: "A fal test prompt.",
+        duration: 5,
+        aspect_ratio: "16:9",
+      })
+
+      const taskID = createBody.data!.id
+      const refreshResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks/${encodeURIComponent(taskID)}/refresh`, {
+        method: "POST",
+      })
+      const refreshBody = await readJson<CinemaGenerationTask>(refreshResponse)
+
+      expect(refreshResponse.status).toBe(200)
+      expect(statusRequest).toMatchObject({
+        endpointID: "fal-ai/wan-25-preview/text-to-video",
+        requestId: "fal-request-1",
+        logs: true,
+      })
+      expect(resultRequest).toMatchObject({
+        endpointID: "fal-ai/wan-25-preview/text-to-video",
+        requestId: "fal-request-1",
+      })
+      expect(refreshBody.data?.status).toBe("succeeded")
+      expect(refreshBody.data?.outputAssets[0]).toMatchObject({
+        kind: "video",
+        path: `generated/${taskID}/output-1.mp4`,
+        mimeType: "video/mp4",
+        sizeBytes: 4,
+      })
+
+      const downloaded = await readFile(join(root, "generated", taskID, "output-1.mp4"))
+      expect([...downloaded]).toEqual([1, 2, 3, 4])
+
+      const canvas = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
+      expect(canvas.nodes.find((node) => node.id === refreshBody.data?.taskNodeID)?.data?.status).toBe("succeeded")
+      expect(canvas.nodes.find((node) => node.id === refreshBody.data?.outputNodeID)?.data?.path).toBe(`generated/${taskID}/output-1.mp4`)
+    } finally {
+      globalThis.fetch = originalFetch
+      restoreFalClient()
+      restoreFalApiKey()
       await rm(root, { recursive: true, force: true })
     }
   })

@@ -93,13 +93,13 @@ anybox for cinema Web UI
   - Shot / Timeline View
 
 AnyBox Film Runtime
-  - Local HTTP / WebSocket server
+  - Local HTTP server
   - Project command executor
   - Project file writer
   - Provider adapter runtime
   - Task queue
   - Result downloader
-  - Event broadcaster
+  - Event log + polling/refetch sync
 
 AnyBox Agent
   - Reads project state
@@ -125,6 +125,7 @@ Local Film Project Folder
 my-film-project/
   .anybox-cinema/
     project.json
+    providers.json
     canvas.json
     shots.json
     timeline.json
@@ -144,6 +145,7 @@ my-film-project/
 ### 5.1 目录说明
 
 - `.anybox-cinema/project.json`：项目元信息。
+- `.anybox-cinema/providers.json`：项目级 provider 非秘密偏好；API key 不写入这里。
 - `.anybox-cinema/canvas.json`：Canvas 节点、位置、连线。
 - `.anybox-cinema/shots.json`：分镜结构。
 - `.anybox-cinema/timeline.json`：轻量时间线或镜头排序。
@@ -157,6 +159,8 @@ my-film-project/
 - `generated/`：模型生成结果。
 - `renders/`：预览渲染或中间产物。
 - `exports/`：最终导出。
+
+当前 MVP 初始化 skill 只保证 `project.json`、`providers.json`、`canvas.json`、`events.jsonl` 和基础素材目录存在。`tasks.jsonl`、`.anybox-cinema/tasks/` 与 `generated/<task-id>/` 由 AnyBox Agent 内的 Cinema Provider Runtime 在创建或刷新生成任务时按需写入。
 
 ## 6. Canvas 产品设计
 
@@ -294,7 +298,7 @@ AnyBox Film Runtime 负责：
 2. 执行文件读写或模型调用。
 3. 写入项目状态。
 4. 写入事件日志。
-5. 通过 WebSocket 广播变更。
+5. 通过事件日志让 Web UI polling/refetch 获取变更。
 
 这种模型可以保证：
 
@@ -320,7 +324,9 @@ AnyBox Film Runtime 负责：
   -> 更新 Canvas 节点和事件日志
 ```
 
-因此，Cinema 需要一个独立的 `Cinema Provider Runtime`。它可以复用 AnyBox 已有的凭证管理、项目级配置、日志脱敏和 HTTP server，但不应把视频任务硬塞进语言模型的 `generateText / streamText` 抽象。
+因此，Cinema 需要一个独立的 `Cinema Provider Runtime`。它放在 `packages/anyboxagent`，复用 AnyBox 已有的凭证管理、项目解析、日志脱敏和 HTTP server，但不把视频任务硬塞进语言模型的 `generateText / streamText` 抽象。
+
+Cinema 插件不承载 provider runtime。插件负责初始化 skill 和现有本地 MCP/Agent 操作；Web Canvas 和 Agent 都应通过 AnyBox Agent 的 `/api/cinema/*` Runtime API 创建、刷新、取消生成任务，不直接写 `.anybox-cinema/tasks/*.json`。
 
 ### 8.1 Adapter 接口
 
@@ -328,21 +334,19 @@ Provider adapter 统一封装各家视频模型 API：
 
 ```ts
 interface CinemaVideoProviderAdapter {
-  id: string
-  name: string
   manifest: CinemaVideoProviderManifest
-  validateCredential(ctx: ProviderContext): Promise<ProviderCheckResult>
-  createTask(input: CinemaVideoTaskInput, ctx: ProviderContext): Promise<CinemaProviderTaskRef>
-  getTask(ref: CinemaProviderTaskRef, ctx: ProviderContext): Promise<CinemaProviderTaskStatus>
-  cancelTask?(ref: CinemaProviderTaskRef, ctx: ProviderContext): Promise<void>
-  resolveOutputs?(
-    status: CinemaProviderTaskStatus,
-    ctx: ProviderContext,
-  ): Promise<CinemaGeneratedAsset[]>
+  createTask(input: ProviderAdapterCreateInput): Promise<CinemaGenerationTask>
+  refreshTask(input: ProviderAdapterRefreshInput): Promise<CinemaGenerationTask>
+  cancelTask?(input: ProviderAdapterRefreshInput): Promise<CinemaGenerationTask>
 }
 ```
 
-`createTask` 只负责把统一输入转换成厂商任务；`getTask` 只负责把厂商状态映射回统一状态；`resolveOutputs` 负责把 provider 临时 URL、file id 或结果对象转换成本地项目资产。
+`createTask` 负责把统一输入转换成厂商任务并保存 provider ref；`refreshTask` 负责把厂商状态映射回统一状态，并在成功时下载 provider 临时 URL 到本地项目；`cancelTask` 可选。
+
+当前已实现 adapter：
+
+- `mock`：无凭证，用于本地闭环测试。创建后进入 `running`，刷新后生成 `generated/<task-id>/mock-output.mp4` 并回写 Canvas。
+- `fal`：使用 `@fal-ai/client` 的 queue/status/result 能力。凭证 id 是 `cinema-fal`，不注册为插件 connector。
 
 ### 8.2 Provider Manifest
 
@@ -350,6 +354,11 @@ UI 不应该为可灵、Seedance、Runway、Luma 等每家模型写一套表单�
 
 ```ts
 type CinemaVideoProviderManifest = {
+  id: string
+  name: string
+  description?: string
+  credentialProviderID?: string
+  requiresCredential: boolean
   models: Array<{
     id: string
     label: string
@@ -376,6 +385,14 @@ type CinemaVideoProviderManifest = {
 
 这样 Web UI 只需要理解统一能力字段和 `parameterSchema`，具体模型差异留给 adapter。
 
+共享 schema 和类型放在 `@anybox/shared/cinema`，包括：
+
+- `CinemaVideoProviderManifest`
+- `CinemaProviderAuthState`
+- `CinemaGenerationTask`
+- `CinemaGeneratedAsset`
+- `CreateCinemaGenerationTaskBody`
+
 ### 8.3 统一任务状态
 
 各家 provider 状态命名不同，Cinema 内部统一为：
@@ -392,21 +409,26 @@ canceled
 
 ```json
 {
-  "id": "task_...",
+  "id": "task-...",
+  "projectID": "prj_...",
   "providerID": "fal",
   "modelID": "fal-ai/...",
-  "mode": "image-to-video",
+  "mode": "text-to-video",
+  "title": "Generation 10:24 AM",
   "status": "running",
   "createdAt": "2026-07-04T00:00:00.000Z",
   "updatedAt": "2026-07-04T00:00:10.000Z",
+  "taskNodeID": "node-generation-task-task-...",
   "providerTaskRef": {
+    "endpointID": "fal-ai/...",
     "requestID": "..."
   },
   "input": {
     "prompt": "...",
-    "assetIDs": ["asset_..."]
+    "sourceNodeIDs": [],
+    "parameters": {}
   },
-  "outputAssetIDs": [],
+  "outputAssets": [],
   "error": null
 }
 ```
@@ -430,28 +452,23 @@ interface CinemaAssetResolver {
 }
 ```
 
-初期策略：
+当前 MVP 策略：
 
-- 优先使用 provider 自带上传能力，例如 fal storage 或厂商文件 API。
-- 对小文件可使用 data URL，但只作为兼容路径。
-- 对只接受公网 URL 的 provider，先要求用户配置 S3 / R2 / OSS / COS / AnyBox 临时上传服务。
+- source node 若带 `data.url`，直接传给 provider。
+- source node 若带项目内 `data.path`，fal adapter 使用 fal storage 上传，生成 provider 可访问 URL。
+- 对只接受公网 URL 且没有 provider upload 能力的 provider，后续再接 S3 / R2 / OSS / COS / AnyBox 临时上传服务。
 - 所有 provider 临时结果必须下载到本地 `generated/<task-id>/`，不能只保存远端 URL。
 
 ### 8.5 推荐接入顺序
 
-MVP 建议先接：
+MVP 已接：
 
+- mock provider
 - fal.ai
+
+下一轮建议：
+
 - Replicate
-
-原因：
-
-- 两者都是聚合型 API，一次接入可覆盖多类视频模型。
-- 异步任务、轮询、结果 URL 的模型比较清晰。
-- 能快速验证“Canvas 创建任务 -> Runtime 调 provider -> 下载结果 -> 创建 Video Node”的闭环。
-
-第二阶段再接：
-
 - Kling
 - Runway
 - Luma
@@ -459,15 +476,23 @@ MVP 建议先接：
 - Vidu
 - Seedance / Wan
 
+原因：
+
+- fal.ai 和 Replicate 都是聚合型 API，一次接入可覆盖多类视频模型。
+- 异步任务、轮询、结果 URL 的模型比较清晰。
+- 能快速验证“Canvas 创建任务 -> Runtime 调 provider -> 下载结果 -> 创建 Video Node”的闭环。
+
 这些 provider 应作为独立 adapter 接入，不改变 Web UI 和任务状态模型。
 
-### 8.6 后端 API 草案
+### 8.6 后端 API
 
 Cinema Web UI 和 Agent 都只调用 AnyBox Runtime API，不直接请求厂商 API。
 
 ```txt
 GET  /api/cinema/projects/:projectID/video-providers
 GET  /api/cinema/projects/:projectID/video-providers/:providerID
+GET  /api/cinema/video-providers/:providerID/auth/api-key
+PUT  /api/cinema/video-providers/:providerID/auth/api-key
 POST /api/cinema/projects/:projectID/generation-tasks
 GET  /api/cinema/projects/:projectID/generation-tasks
 GET  /api/cinema/projects/:projectID/generation-tasks/:taskID
@@ -481,29 +506,32 @@ POST /api/cinema/projects/:projectID/generation-tasks/:taskID/cancel
 2. 创建或更新 `Video Node`。
 3. 将 `Generation Task Node` 连接到结果节点。
 4. 写入 `events.jsonl`。
-5. 通过 WebSocket 广播 Canvas 和任务状态变化。
+5. 写入 `.anybox-cinema/tasks.jsonl` 和 `.anybox-cinema/tasks/<task-id>.json`。
+
+当前 Web Canvas 复用现有 event polling/refetch Canvas，不新增 WebSocket。
 
 ## 9. API Key 与安全
 
-API key 由 AnyBox 管理，不进入 Web UI。
+API key 由 AnyBox credential store 管理，不进入项目文件。Cinema v1 的 fal.ai 凭证使用 `cinema-fal` provider credential id。
 
 安全原则：
 
-- Web UI 不读取 API key。
+- Web UI 不读取已保存的 API key，只能提交新 key 或清空 key。
 - Web UI 只发结构化任务命令。
 - AnyBox 使用用户 API key 调用 provider。
+- `.anybox-cinema/providers.json` 只保存非秘密偏好，不保存 API key。
 - 日志中必须脱敏 token、key、authorization。
 - 本地服务只监听 `127.0.0.1`。
-- Web UI 连接需要一次性 token。
-- WebSocket 会话有项目级权限。
 - 文件读取必须通过 AnyBox 授权接口。
+
+当前实现没有把 fal.ai 做成插件 connector。connector manifest 当前必须带 runtime，做一个“假 connector”会模糊边界；Cinema provider runtime 直接在 AnyBox Agent 中使用 credential store。
 
 ## 10. Web UI 入口
 
 Web UI 可以由 AnyBox 本地服务提供：
 
 ```txt
-http://127.0.0.1:<port>/cinema/projects/:projectId?token=<one-time-token>
+http://127.0.0.1:<port>/cinema/?projectID=<project-id>&agentBaseURL=<agent-url>
 ```
 
 也可以在未来部署为远程静态 Web App，但连接时仍通过 AnyBox Local Bridge 操作项目：
@@ -524,7 +552,7 @@ AnyBox 不需要承载复杂 Canvas 页面，只需要成为控制者。
 
 - 当前文件夹识别为 Cinema Project。
 - 初始化 `.anybox-cinema/`。
-- 启动 Film Runtime。
+- 启动 AnyBox Agent 内的 Cinema Provider Runtime。
 - 打开 `anybox for cinema` Web UI。
 - 管理视频 provider 的 API key。
 - 给 Agent 暴露 Cinema Project 工具。
@@ -540,7 +568,7 @@ MVP Agent 能力：
 - 基于用户想法创建分镜。
 - 为 Shot 生成 Prompt。
 - 根据参考图优化 Prompt。
-- 创建视频生成任务。
+- 通过 `/api/cinema/projects/:projectID/generation-tasks` 创建视频生成任务。
 - 生成多个版本。
 - 整理生成结果。
 - 总结项目进度。
@@ -566,11 +594,11 @@ Agent：连接 Image Node -> Prompt Node -> Generation Task Node，任务完成�
 - 添加 Text / Prompt / Image / Video / Shot / Task 节点。
 - 节点拖拽和连线。
 - Canvas 布局保存。
-- 配置至少一个 BYOK provider。
+- 显示 provider 连接状态，并配置 `cinema-fal` API key。
 - Provider manifest 驱动模型和参数选择 UI。
 - 创建视频生成任务。
-- 轮询任务状态。
-- 通过 Asset Resolver 处理本地参考素材。
+- 通过刷新任务状态推进 Mock/fal 队列任务。
+- fal adapter 使用 source node 的 URL 或项目内 path 解析参考素材。
 - 下载结果到 `generated/<task-id>/`。
 - 生成结果自动成为 Video Node。
 - Agent 能读取项目并创建/修改节点。
@@ -588,17 +616,21 @@ Agent：连接 Image Node -> Prompt Node -> Generation Task Node，任务完成�
 - 移动端。
 - 公网分享。
 - 多项目云端 Dashboard。
+- WebSocket 实时任务推送。
+- 本地媒体预览播放器。
+- 多 provider 市场。
+- Replicate 及更多真实 provider。
 
 ## 15. 初始里程碑
 
-### Milestone 1：本地项目与 Runtime
+### Milestone 1：本地项目与 Runtime（已完成基础闭环）
 
 - 初始化 `.anybox-cinema/`。
-- 启动本地 Film Runtime。
+- AnyBox Agent 提供 `/api/cinema` Runtime。
 - Web UI 能连接 AnyBox。
-- WebSocket 事件同步。
+- 事件轮询同步 Canvas。
 
-### Milestone 2：Canvas MVP
+### Milestone 2：Canvas MVP（已完成基础闭环）
 
 - 节点创建。
 - 节点拖拽。
@@ -607,15 +639,15 @@ Agent：连接 Image Node -> Prompt Node -> Generation Task Node，任务完成�
 - 缩放工具栏。
 - 保存和恢复布局。
 
-### Milestone 3：模型任务
+### Milestone 3：模型任务（Mock/fal 已完成）
 
 - API key 配置。
 - Cinema Provider Runtime。
 - Provider manifest 和统一任务状态。
-- Asset Resolver。
-- 接入 fal.ai 或 Replicate。
+- fal source URL/path 解析和 provider upload。
+- 接入 Mock provider 和 fal.ai。
 - 创建生成任务。
-- 轮询任务状态。
+- 刷新任务状态。
 - 下载结果到 `generated/<task-id>/`。
 - 创建结果节点。
 
@@ -624,7 +656,7 @@ Agent：连接 Image Node -> Prompt Node -> Generation Task Node，任务完成�
 - Agent 读取项目摘要。
 - Agent 创建 Shot Node。
 - Agent 更新 Prompt。
-- Agent 发起生成任务。
+- Agent 通过 Cinema task API 发起生成任务。
 - Agent 总结项目进度。
 
 ### Milestone 5：可用闭环
@@ -695,9 +727,9 @@ v0 成功标准：
 
 > AI 影视创作需要的不只是聊天，也不是单纯时间线，而是一个由 Agent 驱动、由 Canvas 可视化掌控、以本地文件夹为项目真相的创作工作台。
 
-## 18. Web Canvas V1 实现选择
+## 18. Web Canvas 与 Runtime MVP 实现选择
 
-当前 V1 先验证“独立 Web UI + AnyBox 本地后端 + 本地项目文件夹”的最小闭环，不实现视频生成 provider、API key 配置、任务队列、Agent 节点执行、素材导入和完整时间线。
+当前 MVP 验证“独立 Web UI + AnyBox Agent Runtime + 本地项目文件夹 + Mock/fal 生成任务”的闭环。完整时间线、本地媒体预览、WebSocket、多 provider 市场和更多真实 provider 放到后续版本。
 
 ### 18.1 前端包
 
@@ -750,7 +782,7 @@ generation-task
 output
 ```
 
-所有节点先使用统一卡片 UI，不直接预览本地媒体；`generation-task` 只是结构占位，不调用模型 API。
+所有节点先使用统一卡片 UI，不直接预览本地媒体。`generation-task` 节点的 Inspector 已接 Runtime API，可配置 provider、model、mode、prompt、params JSON，并显示状态、错误和输出路径。
 
 ### 18.3 AnyBox agent API
 
@@ -767,6 +799,17 @@ V1 API：
 GET  /api/cinema/projects/:projectID
 GET  /api/cinema/projects/:projectID/canvas
 PUT  /api/cinema/projects/:projectID/canvas
+GET  /api/cinema/projects/:projectID/events
+GET  /api/cinema/projects/:projectID/summary
+GET  /api/cinema/projects/:projectID/video-providers
+GET  /api/cinema/projects/:projectID/video-providers/:providerID
+GET  /api/cinema/video-providers/:providerID/auth/api-key
+PUT  /api/cinema/video-providers/:providerID/auth/api-key
+POST /api/cinema/projects/:projectID/generation-tasks
+GET  /api/cinema/projects/:projectID/generation-tasks
+GET  /api/cinema/projects/:projectID/generation-tasks/:taskID
+POST /api/cinema/projects/:projectID/generation-tasks/:taskID/refresh
+POST /api/cinema/projects/:projectID/generation-tasks/:taskID/cancel
 POST /api/cinema/projects/:projectID/open-link
 ```
 
@@ -777,6 +820,8 @@ POST /api/cinema/projects/:projectID/open-link
 - 浏览器不能传任意本地路径。
 - 未初始化项目不自动创建 `.anybox-cinema`，只返回明确错误。
 - `PUT canvas` 采用整文件原子写回，并追加 `events.jsonl` 的 `canvas.updated` 事件。
+- 生成任务写 `.anybox-cinema/tasks.jsonl` 和 `.anybox-cinema/tasks/<task-id>.json`。
+- 生成结果下载或写入 `generated/<task-id>/`，成功后 Runtime 自动同步 Canvas task node、output node 和 edge。
 
 静态服务：
 
@@ -808,6 +853,23 @@ Web UI 内部映射：
 - 业务类型放入 `node.data.cinemaType`。
 - 保存时转换回 `.anybox-cinema/canvas.json` 格式。
 
+任务节点数据约定：
+
+```json
+{
+  "text": "prompt text",
+  "taskID": "task-...",
+  "providerID": "mock|fal",
+  "modelID": "...",
+  "mode": "text-to-video",
+  "status": "running",
+  "sourceNodeIDs": [],
+  "parameters": {},
+  "outputAssets": [],
+  "error": null
+}
+```
+
 ### 18.5 桌面入口
 
 AnyBox 桌面端在项目右键菜单增加：
@@ -833,3 +895,19 @@ plugins/Anybox-Plugins/cinema/skills/initialize-cinema-project/SKILL.md
 ```
 
 初始化仍然完全由 `Initialize Cinema Project` skill 描述，并使用通用文件创建工具与 Bash 执行，不写成 runtime 硬编码。
+
+插件不新增 provider runtime，也不注册 fal connector。Cinema provider runtime 位于 `packages/anyboxagent/src/server/usecases/cinema.ts`，插件只负责项目初始化和已有本地 MCP/Agent 操作。
+
+### 18.7 Runtime 测试与验证
+
+当前 focused 验证命令：
+
+```bash
+corepack pnpm --filter @anybox/shared typecheck
+corepack pnpm --filter @anybox/shared test -- src/cinema.test.ts
+corepack pnpm --filter anyboxagent exec bun test Test/cinema.api.test.ts
+corepack pnpm --filter anybox-cinema-web typecheck
+corepack pnpm --filter anybox-cinema-web build
+```
+
+`anyboxagent` 全量 `tsc --noEmit` 当前仍受既有 unrelated 类型错误影响，已知错误集中在 `src/permission/permission.ts`、`src/server/routes/cinema-web.ts` 和 `Test/server.api.test.ts`。

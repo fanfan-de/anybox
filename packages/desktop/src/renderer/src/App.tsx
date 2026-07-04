@@ -1521,6 +1521,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     cancelConnectorAuthFlow,
     cancelInstalledPluginConnectorAuthFlow,
     catalog,
+    cinemaVideoProviders,
     closeSettings,
     clearPluginSelection,
     connectorApiKeyDrafts,
@@ -1597,6 +1598,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     promptUrlInstallPreview,
     promptUrlInstallSource,
     providerDrafts,
+    cinemaVideoProviderDrafts,
     customProviderDraft,
     createPromptPreset,
     deletePromptPreset,
@@ -1618,12 +1620,14 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     saveMcpServer,
     savePromptPreset,
     saveProviderApiKey,
+    saveCinemaVideoProviderApiKey,
     saveProvider,
     saveCustomProvider,
     savingMcpServerID,
     savingConnectorID,
     savingPromptPresetID,
     savingProviderID,
+    savingCinemaVideoProviderID,
     savingPluginConnectorID,
     testProviderConnection,
     testCustomProviderConnection,
@@ -1650,6 +1654,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     setBuiltinToolEnabled,
     setPromptDraftValue,
     setProviderDraftValue,
+    setCinemaVideoProviderDraftValue,
     setCustomProviderDraftValue,
     resetCustomProviderDraft,
     setSelectionDraftValue,
@@ -3098,6 +3103,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               archivedSessions={archivedSessions}
               archivedSessionsError={archivedSessionsError}
               catalog={catalog}
+              cinemaVideoProviders={cinemaVideoProviders}
               deletingArchivedSessionID={deletingArchivedSessionID}
               deletingMcpServerID={deletingMcpServerID}
               deletingProviderID={deletingProviderID}
@@ -3134,10 +3140,12 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               models={models}
               pluginCatalog={pluginCatalog}
               providerDrafts={providerDrafts}
+              cinemaVideoProviderDrafts={cinemaVideoProviderDrafts}
               customProviderDraft={customProviderDraft}
               restoringArchivedSessionID={restoringArchivedSessionID}
               savingMcpServerID={savingMcpServerID}
               savingProviderID={savingProviderID}
+              savingCinemaVideoProviderID={savingCinemaVideoProviderID}
               testingProviderID={testingProviderID}
               selectionDraft={selectionDraft}
               onColorModeChange={handleColorModeChange}
@@ -3170,12 +3178,14 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onMcpServerSelect={selectMcpServer}
               onProviderAuthMethodChange={setProviderAuthMethod}
               onProviderDraftChange={setProviderDraftValue}
+              onCinemaVideoProviderDraftChange={setCinemaVideoProviderDraftValue}
               onRefreshProviderCatalog={refreshProviderCatalog}
               onLoadArchivedSessions={loadArchivedSessions}
               onOpenUpdateCenter={() => void handleOpenUpdateCenter()}
               onRestoreArchivedSession={restoreArchivedSession}
               onSaveMcpServer={saveMcpServer}
               onSaveProviderApiKey={saveProviderApiKey}
+              onSaveCinemaVideoProviderApiKey={saveCinemaVideoProviderApiKey}
               onSaveProvider={saveProvider}
               onSaveCustomProvider={saveCustomProvider}
               onSelectionChange={setSelectionDraftValue}

@@ -93,6 +93,10 @@ import type {
   WorkspaceDiffFileRestoreResult,
   WorkspaceDiffPatchReverseApplyResult,
 } from "../shared/desktop-ipc-contract"
+import type {
+  CinemaProviderAuthState,
+  CinemaVideoProvider,
+} from "@anybox/shared/cinema"
 import {
   DESKTOP_APP_UPDATE_STATE_EVENT_CHANNEL,
   DESKTOP_AGENT_SESSION_EVENT_CHANNEL,
@@ -507,6 +511,10 @@ try {
       invokeDesktop("desktop:cancel-global-provider-auth-flow", input) as Promise<AgentProviderAuthFlow>,
     saveGlobalProviderApiKey: (input: { providerID: string; apiKey?: string | null }) =>
       invokeDesktop("desktop:save-global-provider-api-key", input) as Promise<AgentProviderAuthState>,
+    getCinemaVideoProviders: () =>
+      invokeDesktop("desktop:get-cinema-video-providers") as Promise<CinemaVideoProvider[]>,
+    saveCinemaVideoProviderApiKey: (input: { providerID: string; apiKey?: string | null }) =>
+      invokeDesktop("desktop:save-cinema-video-provider-api-key", input) as Promise<CinemaProviderAuthState>,
     deleteGlobalProviderAuthSession: (input: { providerID: string }) =>
       invokeDesktop("desktop:delete-global-provider-auth-session", input) as Promise<AgentProviderAuthState>,
     testGlobalProviderConnection: (input: {

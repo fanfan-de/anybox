@@ -26,15 +26,19 @@ import {
   FileText,
   Film,
   Image,
+  KeyRound,
   Loader2,
   MessageSquareText,
   Music,
   Plus,
+  Play,
+  RefreshCw,
   Scissors,
   Sparkles,
   Trash2,
   Video,
   WandSparkles,
+  XCircle,
 } from "lucide-react"
 import {
   type CinemaCommand,
@@ -42,8 +46,12 @@ import {
   type CinemaEventsResult,
   type CinemaCanvasDocument,
   type CinemaCanvasNode,
+  type CinemaGenerationMode,
+  type CinemaGenerationTask,
   type CinemaNodeType,
   type CinemaProjectSummary,
+  type CinemaVideoProvider,
+  type CreateCinemaGenerationTaskBody,
 } from "@anybox/shared/cinema"
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error"
@@ -66,6 +74,17 @@ type ContextMenuState = {
   flowX: number
   flowY: number
 } | null
+type GenerationTaskActionState = {
+  isCreating: boolean
+  isRefreshing: boolean
+  isCanceling: boolean
+  error: string | null
+}
+type DisplayAsset = {
+  id: string
+  kind: string
+  path: string
+}
 
 type UiState = {
   selectedNodeID: string | null
@@ -88,6 +107,8 @@ const NODE_TYPES = [
   "generation-task",
   "output",
 ] as const satisfies readonly CinemaNodeType[]
+
+const FALLBACK_GENERATION_MODE: CinemaGenerationMode = "text-to-video"
 
 const DEFAULT_NODE_SIZE: Record<CinemaNodeType, { width: number; height: number }> = {
   text: { width: 360, height: 220 },
@@ -243,6 +264,67 @@ function titleForType(type: CinemaNodeType) {
   return `${NODE_META[type].label} ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
 }
 
+function readRawString(rawData: Record<string, unknown>, key: string, fallback = "") {
+  const value = rawData[key]
+  return typeof value === "string" ? value : fallback
+}
+
+function readRawStringArray(rawData: Record<string, unknown>, key: string) {
+  const value = rawData[key]
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : []
+}
+
+function providerFor(providers: CinemaVideoProvider[], providerID: string) {
+  return providers.find((provider) => provider.manifest.id === providerID) ?? providers[0] ?? null
+}
+
+function modelFor(provider: CinemaVideoProvider | null, modelID: string) {
+  return provider?.manifest.models.find((model) => model.id === modelID) ?? provider?.manifest.models[0] ?? null
+}
+
+function modeFor(provider: CinemaVideoProvider | null, modelID: string, mode: string): CinemaGenerationMode {
+  const model = modelFor(provider, modelID)
+  if (model?.modes.includes(mode as CinemaGenerationMode)) return mode as CinemaGenerationMode
+  return model?.modes[0] ?? FALLBACK_GENERATION_MODE
+}
+
+function stringifyParameters(value: unknown) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return JSON.stringify(value, null, 2)
+  }
+  return "{}"
+}
+
+function parseParameters(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return {}
+  const parsed: unknown = JSON.parse(trimmed)
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Parameters must be a JSON object.")
+  }
+  return parsed as Record<string, unknown>
+}
+
+function readDisplayAssets(rawData: Record<string, unknown>): DisplayAsset[] {
+  const value = rawData.outputAssets
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item, index) => {
+    if (!item || typeof item !== "object") return []
+    const record = item as Record<string, unknown>
+    const path = typeof record.path === "string" ? record.path : ""
+    if (!path) return []
+    return [{
+      id: typeof record.id === "string" ? record.id : `asset-${index}`,
+      kind: typeof record.kind === "string" ? record.kind : "file",
+      path,
+    }]
+  })
+}
+
+function isFinalGenerationTaskStatus(status: string) {
+  return status === "succeeded" || status === "failed" || status === "canceled"
+}
+
 function createNode(type: CinemaNodeType, position: { x: number; y: number }): CinemaFlowNode {
   const size = DEFAULT_NODE_SIZE[type]
   return {
@@ -323,14 +405,261 @@ const nodeTypes = {
   cinemaNode: CinemaNodeCard,
 }
 
+function GenerationTaskPanel({
+  selectedNode,
+  providers,
+  tasks,
+  actionState,
+  onCreateGenerationTask,
+  onRefreshGenerationTask,
+  onCancelGenerationTask,
+}: {
+  selectedNode: CinemaFlowNode
+  providers: CinemaVideoProvider[]
+  tasks: CinemaGenerationTask[]
+  actionState: GenerationTaskActionState
+  onCreateGenerationTask: (body: CreateCinemaGenerationTaskBody, draftNodeID: string) => void
+  onRefreshGenerationTask: (taskID: string) => void
+  onCancelGenerationTask: (taskID: string) => void
+}) {
+  const rawData = selectedNode.data.rawData
+  const taskID = readRawString(rawData, "taskID")
+  const task = useMemo(() => tasks.find((item) => item.id === taskID) ?? null, [taskID, tasks])
+  const [providerID, setProviderID] = useState(() => readRawString(rawData, "providerID", providers[0]?.manifest.id ?? "mock"))
+  const [modelID, setModelID] = useState(() => {
+    const provider = providerFor(providers, providerID)
+    return readRawString(rawData, "modelID", provider?.manifest.models[0]?.id ?? "")
+  })
+  const [mode, setMode] = useState<CinemaGenerationMode>(() => {
+    const provider = providerFor(providers, providerID)
+    const initialModelID = readRawString(rawData, "modelID", provider?.manifest.models[0]?.id ?? "")
+    return modeFor(provider, initialModelID, readRawString(rawData, "mode"))
+  })
+  const [prompt, setPrompt] = useState(() => task?.input.prompt ?? readRawString(rawData, "text"))
+  const [parametersText, setParametersText] = useState(() => stringifyParameters(task?.input.parameters ?? rawData.parameters))
+  const [localError, setLocalError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const nextProviderID = readRawString(rawData, "providerID", providers[0]?.manifest.id ?? "mock")
+    const nextProvider = providerFor(providers, nextProviderID)
+    const nextModelID = readRawString(rawData, "modelID", nextProvider?.manifest.models[0]?.id ?? "")
+    setProviderID(nextProvider?.manifest.id ?? nextProviderID)
+    setModelID(nextModelID)
+    setMode(modeFor(nextProvider, nextModelID, readRawString(rawData, "mode")))
+    setPrompt(task?.input.prompt ?? readRawString(rawData, "text"))
+    setParametersText(stringifyParameters(task?.input.parameters ?? rawData.parameters))
+    setLocalError(null)
+  }, [providers, rawData, selectedNode.id, task?.id, task?.input.parameters, task?.input.prompt])
+
+  const provider = providerFor(providers, providerID)
+  const model = modelFor(provider, modelID)
+  const hasTaskRef = taskID.trim().length > 0
+  const currentStatus = task?.status ?? readRawString(rawData, "status", hasTaskRef ? "loading" : "draft")
+  const outputAssets = task?.outputAssets ?? readDisplayAssets(rawData)
+  const providerAuth = provider?.auth
+  const providerNeedsCredential = Boolean(providerAuth?.requiresCredential)
+  const providerConnected = providerAuth?.connected !== false
+  const formDisabled = hasTaskRef || actionState.isCreating
+  const canRefresh = Boolean(task && !isFinalGenerationTaskStatus(task.status))
+  const canCancel = Boolean(task && !isFinalGenerationTaskStatus(task.status))
+
+  const handleProviderChange = (nextProviderID: string) => {
+    const nextProvider = providerFor(providers, nextProviderID)
+    const nextModelID = nextProvider?.manifest.models[0]?.id ?? ""
+    setProviderID(nextProvider?.manifest.id ?? nextProviderID)
+    setModelID(nextModelID)
+    setMode(modeFor(nextProvider, nextModelID, ""))
+  }
+
+  const handleModelChange = (nextModelID: string) => {
+    setModelID(nextModelID)
+    setMode(modeFor(provider, nextModelID, mode))
+  }
+
+  const handleCreateTask = () => {
+    setLocalError(null)
+    if (!provider) {
+      setLocalError("No video provider is available.")
+      return
+    }
+    if (provider.auth.requiresCredential && !provider.auth.connected) {
+      setLocalError(`${provider.manifest.name} is not connected.`)
+      return
+    }
+    if (!model) {
+      setLocalError("Select a model before creating the task.")
+      return
+    }
+
+    let parameters: Record<string, unknown>
+    try {
+      parameters = parseParameters(parametersText)
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : "Parameters must be valid JSON.")
+      return
+    }
+
+    onCreateGenerationTask({
+      providerID: provider.manifest.id,
+      modelID: model.id,
+      mode: modeFor(provider, model.id, mode),
+      title: selectedNode.data.title,
+      prompt,
+      sourceNodeIDs: readRawStringArray(rawData, "sourceNodeIDs"),
+      parameters,
+      position: selectedNode.position,
+    }, selectedNode.id)
+  }
+
+  return (
+    <section className="cinema-task-panel" aria-label="Generation task">
+      <div className="cinema-task-status-row">
+        <span className={`cinema-task-status is-${currentStatus}`}>{currentStatus}</span>
+        {task ? <code>{task.id}</code> : null}
+      </div>
+
+      <label className="cinema-field">
+        <span>Provider</span>
+        <select
+          value={provider?.manifest.id ?? providerID}
+          disabled={formDisabled || providers.length === 0}
+          onChange={(event) => handleProviderChange(event.target.value)}
+        >
+          {providers.map((item) => (
+            <option key={item.manifest.id} value={item.manifest.id}>{item.manifest.name}</option>
+          ))}
+        </select>
+      </label>
+
+      {providerNeedsCredential ? (
+        <div className={`cinema-provider-auth ${providerConnected ? "is-connected" : "is-missing"}`}>
+          <div>
+            <KeyRound size={14} aria-hidden="true" />
+            <span>{providerConnected ? "Connected" : "Not connected"}</span>
+            {providerAuth?.credentialProviderID ? <code>{providerAuth.credentialProviderID}</code> : null}
+          </div>
+        </div>
+      ) : null}
+
+      <label className="cinema-field">
+        <span>Model</span>
+        <select
+          value={model?.id ?? modelID}
+          disabled={formDisabled || !provider}
+          onChange={(event) => handleModelChange(event.target.value)}
+        >
+          {provider?.manifest.models.map((item) => (
+            <option key={item.id} value={item.id}>{item.label}</option>
+          ))}
+        </select>
+      </label>
+
+      <label className="cinema-field">
+        <span>Mode</span>
+        <select
+          value={mode}
+          disabled={formDisabled || !model}
+          onChange={(event) => setMode(event.target.value as CinemaGenerationMode)}
+        >
+          {(model?.modes ?? [FALLBACK_GENERATION_MODE]).map((item) => (
+            <option key={item} value={item}>{item}</option>
+          ))}
+        </select>
+      </label>
+
+      <label className="cinema-field">
+        <span>Prompt</span>
+        <textarea
+          className="is-compact"
+          value={prompt}
+          disabled={formDisabled}
+          placeholder="Describe the clip to generate."
+          onChange={(event) => setPrompt(event.target.value)}
+        />
+      </label>
+
+      <label className="cinema-field">
+        <span>Params JSON</span>
+        <textarea
+          className="is-compact"
+          value={parametersText}
+          disabled={formDisabled}
+          spellCheck={false}
+          onChange={(event) => setParametersText(event.target.value)}
+        />
+      </label>
+
+      {(localError || actionState.error || task?.error) ? (
+        <p className="cinema-task-error">{localError ?? actionState.error ?? task?.error}</p>
+      ) : null}
+
+      <div className="cinema-task-actions">
+        {!hasTaskRef ? (
+          <button
+            type="button"
+            className="cinema-command-button"
+            disabled={actionState.isCreating || providerNeedsCredential && !providerConnected}
+            onClick={handleCreateTask}
+          >
+            {actionState.isCreating ? <Loader2 size={14} aria-hidden="true" className="is-spinning" /> : <Play size={14} aria-hidden="true" />}
+            Create
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="cinema-command-button"
+              disabled={!task || !canRefresh || actionState.isRefreshing}
+              onClick={() => task && onRefreshGenerationTask(task.id)}
+            >
+              {actionState.isRefreshing ? <Loader2 size={14} aria-hidden="true" className="is-spinning" /> : <RefreshCw size={14} aria-hidden="true" />}
+              Refresh
+            </button>
+            <button
+              type="button"
+              className="cinema-command-button"
+              disabled={!task || !canCancel || actionState.isCanceling}
+              onClick={() => task && onCancelGenerationTask(task.id)}
+            >
+              {actionState.isCanceling ? <Loader2 size={14} aria-hidden="true" className="is-spinning" /> : <XCircle size={14} aria-hidden="true" />}
+              Cancel
+            </button>
+          </>
+        )}
+      </div>
+
+      {outputAssets.length > 0 ? (
+        <div className="cinema-task-assets">
+          <span>Outputs</span>
+          {outputAssets.map((asset) => (
+            <code key={asset.id}>{asset.kind}: {asset.path}</code>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 function Inspector({
   selectedNode,
+  providers,
+  tasks,
+  taskActionState,
   onChangeNode,
   onDeleteNode,
+  onCreateGenerationTask,
+  onRefreshGenerationTask,
+  onCancelGenerationTask,
 }: {
   selectedNode: CinemaFlowNode | null
+  providers: CinemaVideoProvider[]
+  tasks: CinemaGenerationTask[]
+  taskActionState: GenerationTaskActionState
   onChangeNode: (nodeID: string, update: Partial<CinemaFlowNodeData>) => void
   onDeleteNode: (nodeID: string) => void
+  onCreateGenerationTask: (body: CreateCinemaGenerationTaskBody, draftNodeID: string) => void
+  onRefreshGenerationTask: (taskID: string) => void
+  onCancelGenerationTask: (taskID: string) => void
 }) {
   if (!selectedNode) {
     return (
@@ -359,30 +688,44 @@ function Inspector({
           <Trash2 size={15} aria-hidden="true" />
         </button>
       </header>
-      <label className="cinema-field">
-        <span>Title</span>
-        <input
-          value={selectedNode.data.title}
-          onChange={(event) => onChangeNode(selectedNode.id, { title: event.target.value })}
-        />
-      </label>
-      <label className="cinema-field">
-        <span>Text</span>
-        <textarea
-          value={text}
-          placeholder={meta.placeholder}
-          onChange={(event) =>
-            onChangeNode(selectedNode.id, {
-              rawData: {
-                ...selectedNode.data.rawData,
-                text: event.target.value,
-              },
-            })}
-        />
-      </label>
-      <div className="cinema-inspector-meta">
-        <span>ID</span>
-        <code>{selectedNode.id}</code>
+      <div className="cinema-inspector-body">
+        <label className="cinema-field">
+          <span>Title</span>
+          <input
+            value={selectedNode.data.title}
+            onChange={(event) => onChangeNode(selectedNode.id, { title: event.target.value })}
+          />
+        </label>
+        {selectedNode.data.cinemaType === "generation-task" ? (
+          <GenerationTaskPanel
+            selectedNode={selectedNode}
+            providers={providers}
+            tasks={tasks}
+            actionState={taskActionState}
+            onCreateGenerationTask={onCreateGenerationTask}
+            onRefreshGenerationTask={onRefreshGenerationTask}
+            onCancelGenerationTask={onCancelGenerationTask}
+          />
+        ) : (
+          <label className="cinema-field">
+            <span>Text</span>
+            <textarea
+              value={text}
+              placeholder={meta.placeholder}
+              onChange={(event) =>
+                onChangeNode(selectedNode.id, {
+                  rawData: {
+                    ...selectedNode.data.rawData,
+                    text: event.target.value,
+                  },
+                })}
+            />
+          </label>
+        )}
+        <div className="cinema-inspector-meta">
+          <span>ID</span>
+          <code>{selectedNode.id}</code>
+        </div>
       </div>
     </aside>
   )
@@ -496,6 +839,20 @@ export function App() {
   })
   const refetchCanvas = canvasQuery.refetch
 
+  const providersQuery = useQuery({
+    queryKey: ["cinema-video-providers", agentBaseURL, projectID],
+    enabled: Boolean(projectID) && projectQuery.data?.initialized === true,
+    queryFn: () => requestJson<CinemaVideoProvider[]>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/video-providers`),
+  })
+  const refetchProviders = providersQuery.refetch
+
+  const tasksQuery = useQuery({
+    queryKey: ["cinema-generation-tasks", agentBaseURL, projectID],
+    enabled: Boolean(projectID) && projectQuery.data?.initialized === true,
+    queryFn: () => requestJson<CinemaGenerationTask[]>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/generation-tasks`),
+  })
+  const refetchTasks = tasksQuery.refetch
+
   const commandMutation = useMutation({
     mutationFn: (command: CinemaCommand) =>
       requestJson<CinemaCommandResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`, {
@@ -522,6 +879,95 @@ export function App() {
       saveStateRef.current = "error"
       setSaveState("error")
       setSaveError(error instanceof Error ? error.message : "Command failed")
+    },
+  })
+
+  const refetchRuntimeState = useCallback(async () => {
+    await Promise.all([
+      refetchCanvas(),
+      refetchTasks(),
+      refetchProviders(),
+    ])
+  }, [refetchCanvas, refetchProviders, refetchTasks])
+
+  const createGenerationTaskMutation = useMutation({
+    mutationFn: ({ body }: { body: CreateCinemaGenerationTaskBody; draftNodeID: string }) =>
+      requestJson<CinemaGenerationTask>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/generation-tasks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }),
+    onMutate: () => {
+      saveStateRef.current = "saving"
+      setSaveState("saving")
+      setSaveError(null)
+    },
+    onSuccess: async (task, variables) => {
+      if (variables.draftNodeID !== task.taskNodeID) {
+        commandMutation.mutate({
+          id: makeCommandID("delete-node"),
+          type: "delete-node",
+          actor: "cinema-web",
+          nodeID: variables.draftNodeID,
+        })
+      }
+      if (task.taskNodeID) setSelectedNodeID(task.taskNodeID)
+      await refetchRuntimeState()
+      saveStateRef.current = "saved"
+      setSaveState("saved")
+    },
+    onError: (error) => {
+      saveStateRef.current = "error"
+      setSaveState("error")
+      setSaveError(error instanceof Error ? error.message : "Task creation failed")
+    },
+  })
+
+  const refreshGenerationTaskMutation = useMutation({
+    mutationFn: (taskID: string) =>
+      requestJson<CinemaGenerationTask>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/generation-tasks/${encodeURIComponent(taskID)}/refresh`, {
+        method: "POST",
+      }),
+    onMutate: () => {
+      saveStateRef.current = "saving"
+      setSaveState("saving")
+      setSaveError(null)
+    },
+    onSuccess: async (task) => {
+      if (task.taskNodeID) setSelectedNodeID(task.taskNodeID)
+      await refetchRuntimeState()
+      saveStateRef.current = "saved"
+      setSaveState("saved")
+    },
+    onError: (error) => {
+      saveStateRef.current = "error"
+      setSaveState("error")
+      setSaveError(error instanceof Error ? error.message : "Task refresh failed")
+    },
+  })
+
+  const cancelGenerationTaskMutation = useMutation({
+    mutationFn: (taskID: string) =>
+      requestJson<CinemaGenerationTask>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/generation-tasks/${encodeURIComponent(taskID)}/cancel`, {
+        method: "POST",
+      }),
+    onMutate: () => {
+      saveStateRef.current = "saving"
+      setSaveState("saving")
+      setSaveError(null)
+    },
+    onSuccess: async (task) => {
+      if (task.taskNodeID) setSelectedNodeID(task.taskNodeID)
+      await refetchRuntimeState()
+      saveStateRef.current = "saved"
+      setSaveState("saved")
+    },
+    onError: (error) => {
+      saveStateRef.current = "error"
+      setSaveState("error")
+      setSaveError(error instanceof Error ? error.message : "Task cancel failed")
     },
   })
 
@@ -604,7 +1050,7 @@ export function App() {
         if (cancelled) return
         eventCursorRef.current = result.nextCursor
         if (result.events.length > 0) {
-          await refetchCanvas()
+          await Promise.all([refetchCanvas(), refetchTasks()])
         }
       } catch {
         // Keep the canvas usable if the lightweight sync poll misses once.
@@ -618,7 +1064,7 @@ export function App() {
       cancelled = true
       if (intervalID !== null) window.clearInterval(intervalID)
     }
-  }, [agentBaseURL, canvasQuery.data, projectID, projectQuery.data?.initialized, refetchCanvas])
+  }, [agentBaseURL, canvasQuery.data, projectID, projectQuery.data?.initialized, refetchCanvas, refetchTasks])
 
   const onNodesChange = useCallback((changes: NodeChange<CinemaFlowNode>[]) => {
     const removedNodeIDs = changes
@@ -736,6 +1182,17 @@ export function App() {
     })
   }, [commandMutation, setSelectedNodeID])
 
+  const taskActionError =
+    createGenerationTaskMutation.error ??
+    refreshGenerationTaskMutation.error ??
+    cancelGenerationTaskMutation.error
+  const taskActionState: GenerationTaskActionState = {
+    isCreating: createGenerationTaskMutation.isPending,
+    isRefreshing: refreshGenerationTaskMutation.isPending,
+    isCanceling: cancelGenerationTaskMutation.isPending,
+    error: taskActionError instanceof Error ? taskActionError.message : null,
+  }
+
   if (!projectID) {
     return (
       <main className="cinema-shell">
@@ -759,8 +1216,8 @@ export function App() {
     )
   }
 
-  if (projectQuery.error || canvasQuery.error) {
-    const error = projectQuery.error ?? canvasQuery.error
+  if (projectQuery.error || canvasQuery.error || providersQuery.error || tasksQuery.error) {
+    const error = projectQuery.error ?? canvasQuery.error ?? providersQuery.error ?? tasksQuery.error
     return (
       <main className="cinema-shell">
         <div className="cinema-empty-state is-error">
@@ -809,6 +1266,14 @@ export function App() {
               <Plus size={15} aria-hidden="true" />
               Shot
             </button>
+            <button
+              type="button"
+              className="cinema-command-button"
+              onClick={() => addNode("generation-task", { x: 260, y: 220 })}
+            >
+              <Plus size={15} aria-hidden="true" />
+              Task
+            </button>
           </div>
         </header>
         <div className="cinema-canvas">
@@ -852,7 +1317,17 @@ export function App() {
           <ContextMenu menu={contextMenu} onAddNode={addNode} onClose={() => setContextMenu(null)} />
         </div>
       </section>
-      <Inspector selectedNode={selectedNode} onChangeNode={changeNode} onDeleteNode={deleteNode} />
+      <Inspector
+        selectedNode={selectedNode}
+        providers={providersQuery.data ?? []}
+        tasks={tasksQuery.data ?? []}
+        taskActionState={taskActionState}
+        onChangeNode={changeNode}
+        onDeleteNode={deleteNode}
+        onCreateGenerationTask={(body, draftNodeID) => createGenerationTaskMutation.mutate({ body, draftNodeID })}
+        onRefreshGenerationTask={(taskID) => refreshGenerationTaskMutation.mutate(taskID)}
+        onCancelGenerationTask={(taskID) => cancelGenerationTaskMutation.mutate(taskID)}
+      />
     </main>
   )
 }

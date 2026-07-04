@@ -102,6 +102,7 @@ function createSettingsPageProps(
     archivedSessionsError: null,
     assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
     catalog: [],
+    cinemaVideoProviders: [],
     colorMode: "system",
     fontFamily: "default",
     htmlBackgroundConfig: DEFAULT_HTML_BACKGROUND_CONFIG,
@@ -155,6 +156,7 @@ function createSettingsPageProps(
     onDeleteMcpServer: vi.fn(),
     onDeleteProvider: vi.fn(),
     onDeleteProviderAuthSession: vi.fn(),
+    onCinemaVideoProviderDraftChange: vi.fn(),
     onMcpServerDraftChange: vi.fn(),
     onMcpToolPolicyChange: vi.fn(),
     onMcpServerSelect: vi.fn(),
@@ -164,6 +166,7 @@ function createSettingsPageProps(
     onRestoreArchivedSession: vi.fn(),
     onSaveMcpServer: vi.fn(),
     onSaveCustomProvider: vi.fn(),
+    onSaveCinemaVideoProviderApiKey: vi.fn(),
     onSaveProvider: vi.fn(),
     onSaveProviderApiKey: vi.fn(),
     onSelectionChange: vi.fn(),
@@ -172,9 +175,11 @@ function createSettingsPageProps(
     onTestCustomProviderConnection: vi.fn(),
     onTestProviderConnection: vi.fn(),
     providerDrafts: {},
+    cinemaVideoProviderDrafts: {},
     restoringArchivedSessionID: null,
     savingMcpServerID: null,
     savingProviderID: null,
+    savingCinemaVideoProviderID: null,
     selectionDraft: {
       model: null,
       smallModel: null,
@@ -205,6 +210,36 @@ function createProvider(id: string, name: string): ComponentProps<typeof Setting
       status: "connected",
       capabilities: [],
       credentials: [],
+    },
+  }
+}
+
+function createCinemaVideoProvider(
+  id: string,
+  name: string,
+  connected = false,
+): ComponentProps<typeof SettingsPage>["cinemaVideoProviders"][number] {
+  return {
+    manifest: {
+      id,
+      name,
+      description: `${name} video provider`,
+      credentialProviderID: `cinema-${id}`,
+      requiresCredential: true,
+      models: [
+        {
+          id: `${id}-model`,
+          label: `${name} Model`,
+          modes: ["text-to-video"],
+        },
+      ],
+    },
+    auth: {
+      providerID: id,
+      credentialProviderID: `cinema-${id}`,
+      requiresCredential: true,
+      connected,
+      status: connected ? "connected" : "not_connected",
     },
   }
 }
@@ -411,6 +446,38 @@ describe("SettingsPage built-in tools", () => {
     const labels = within(nav).getAllByRole("button").map((button) => button.textContent)
 
     expect(labels.slice(0, 3)).toEqual(["General", "Account", "Provider"])
+  })
+
+  it("saves cinema video provider API keys from the Provider settings page", () => {
+    const onCinemaVideoProviderDraftChange = vi.fn()
+    const onSaveCinemaVideoProviderApiKey = vi.fn()
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          catalog: [createProvider("deepseek", "DeepSeek")],
+          cinemaVideoProviders: [createCinemaVideoProvider("kling", "Kling AI")],
+          cinemaVideoProviderDrafts: {
+            kling: { apiKey: "kling-test-key" },
+          },
+          onCinemaVideoProviderDraftChange,
+          onSaveCinemaVideoProviderApiKey,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Provider" }))
+
+    const videoPanel = screen.getByRole("heading", { name: "Video providers" }).closest(".settings-panel")
+    expect(videoPanel).not.toBeNull()
+    expect(within(videoPanel as HTMLElement).getByText("Kling AI")).toBeInTheDocument()
+
+    fireEvent.change(within(videoPanel as HTMLElement).getByLabelText("API key for Kling AI"), {
+      target: { value: "kling-updated-key" },
+    })
+    fireEvent.click(within(videoPanel as HTMLElement).getByRole("button", { name: "Save" }))
+
+    expect(onCinemaVideoProviderDraftChange).toHaveBeenCalledWith("kling", "apiKey", "kling-updated-key")
+    expect(onSaveCinemaVideoProviderApiKey).toHaveBeenCalledWith("kling")
   })
 
   it("uses the Anybox account page as the browser OAuth login entry", () => {

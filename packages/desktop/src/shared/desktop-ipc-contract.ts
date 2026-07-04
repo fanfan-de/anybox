@@ -93,6 +93,10 @@ import type {
   DesktopOpenPathResult,
   ReasoningEffort,
 } from "@anybox/shared"
+import type {
+  CinemaProviderAuthState,
+  CinemaVideoProvider,
+} from "@anybox/shared/cinema"
 import type { AppearanceConfigDocument, AppearanceConfigSnapshot, AppearanceRuntimeState } from "./appearance"
 import type {
   AppearanceThemeDuplicateInput,
@@ -1450,6 +1454,14 @@ export interface DesktopIpcContract {
     input: { providerID: string; apiKey?: string | null }
     output: AgentProviderAuthState
   }
+  "desktop:get-cinema-video-providers": {
+    input: void
+    output: CinemaVideoProvider[]
+  }
+  "desktop:save-cinema-video-provider-api-key": {
+    input: { providerID: string; apiKey?: string | null }
+    output: CinemaProviderAuthState
+  }
   "desktop:delete-global-provider-auth-session": {
     input: { providerID: string }
     output: AgentProviderAuthState
@@ -2069,6 +2081,8 @@ export interface DesktopApiMethods {
   getGlobalProviderAuthFlow(input: DesktopIpcInput<"desktop:get-global-provider-auth-flow">): Promise<DesktopIpcOutput<"desktop:get-global-provider-auth-flow">>
   cancelGlobalProviderAuthFlow(input: DesktopIpcInput<"desktop:cancel-global-provider-auth-flow">): Promise<DesktopIpcOutput<"desktop:cancel-global-provider-auth-flow">>
   saveGlobalProviderApiKey(input: DesktopIpcInput<"desktop:save-global-provider-api-key">): Promise<DesktopIpcOutput<"desktop:save-global-provider-api-key">>
+  getCinemaVideoProviders(): Promise<DesktopIpcOutput<"desktop:get-cinema-video-providers">>
+  saveCinemaVideoProviderApiKey(input: DesktopIpcInput<"desktop:save-cinema-video-provider-api-key">): Promise<DesktopIpcOutput<"desktop:save-cinema-video-provider-api-key">>
   deleteGlobalProviderAuthSession(input: DesktopIpcInput<"desktop:delete-global-provider-auth-session">): Promise<DesktopIpcOutput<"desktop:delete-global-provider-auth-session">>
   testGlobalProviderConnection(input: DesktopIpcInput<"desktop:test-global-provider-connection">): Promise<DesktopIpcOutput<"desktop:test-global-provider-connection">>
   upsertCustomProvider(input: DesktopIpcInput<"desktop:upsert-custom-provider">): Promise<DesktopIpcOutput<"desktop:upsert-custom-provider">>

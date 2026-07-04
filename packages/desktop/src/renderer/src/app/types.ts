@@ -1222,6 +1222,43 @@ export interface ProviderCatalogItem {
   lastAuthError?: string
 }
 
+export interface CinemaVideoProviderModel {
+  id: string
+  label: string
+  modes: string[]
+  durations?: number[]
+  aspectRatios?: string[]
+  resolutions?: string[]
+}
+
+export interface CinemaVideoProviderAuthState {
+  providerID: string
+  credentialProviderID: string
+  requiresCredential: boolean
+  connected: boolean
+  status: "connected" | "not_connected" | "pending" | "expired" | "error"
+  credentialKind?: "api_key" | "oauth_session"
+  credentialSource?: string
+  connectionLabel?: string
+  lastError?: string
+}
+
+export interface CinemaVideoProvider {
+  manifest: {
+    id: string
+    name: string
+    description?: string
+    credentialProviderID?: string
+    requiresCredential: boolean
+    models: CinemaVideoProviderModel[]
+  }
+  auth: CinemaVideoProviderAuthState
+}
+
+export interface CinemaVideoProviderDraftState {
+  apiKey: string
+}
+
 export interface ProviderAuthCapability {
   method: string
   label: string

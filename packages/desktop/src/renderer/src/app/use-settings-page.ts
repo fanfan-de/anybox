@@ -5,6 +5,8 @@ import type {
   BuiltinToolSummary,
   ConnectorDefinition,
   ConnectorStatus,
+  CinemaVideoProvider,
+  CinemaVideoProviderDraftState,
   CustomProviderDraftState,
   InstalledPlugin,
   LoadedSessionSnapshot,
@@ -168,6 +170,33 @@ function buildProviderDrafts(items: ProviderCatalogItem[]) {
     }
     return result
   }, {})
+}
+
+function buildCinemaVideoProviderDrafts(items: CinemaVideoProvider[]) {
+  return items.reduce<Record<string, CinemaVideoProviderDraftState>>((result, item) => {
+    result[item.manifest.id] = {
+      apiKey: "",
+    }
+    return result
+  }, {})
+}
+
+function mergeCinemaVideoProviderDrafts(
+  defaults: Record<string, CinemaVideoProviderDraftState>,
+  current: Record<string, CinemaVideoProviderDraftState>,
+) {
+  return Object.fromEntries(
+    Object.entries(defaults).map(([providerID, draft]) => {
+      const currentDraft = current[providerID]
+      return [
+        providerID,
+        {
+          ...draft,
+          apiKey: currentDraft?.apiKey ?? draft.apiKey,
+        },
+      ]
+    }),
+  )
 }
 
 function mergeProviderDrafts(
@@ -540,10 +569,12 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   const isPromptPresetEditorOpen = options.isPromptPresetEditorOpen ?? false
   const [isOpen, setIsOpen] = useState(false)
   const [catalog, setCatalog] = useState<ProviderCatalogItem[]>([])
+  const [cinemaVideoProviders, setCinemaVideoProviders] = useState<CinemaVideoProvider[]>([])
   const [models, setModels] = useState<ProviderModel[]>([])
   const [savedSelection, setSavedSelection] = useState<ProjectModelSelection>(EMPTY_PROJECT_MODEL_SELECTION)
   const [selectionDraft, setSelectionDraft] = useState<ProjectModelSelection>(EMPTY_PROJECT_MODEL_SELECTION)
   const [providerDrafts, setProviderDrafts] = useState<Record<string, ProviderDraftState>>({})
+  const [cinemaVideoProviderDrafts, setCinemaVideoProviderDrafts] = useState<Record<string, CinemaVideoProviderDraftState>>({})
   const [customProviderDraft, setCustomProviderDraft] =
     useState<CustomProviderDraftState>(defaultCustomProviderDraft)
   const [mcpServers, setMcpServers] = useState<McpServerSummary[]>([])
@@ -593,6 +624,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   const [promptLoadError, setPromptLoadError] = useState<string | null>(null)
   const [archivedSessionsError, setArchivedSessionsError] = useState<string | null>(null)
   const [savingProviderID, setSavingProviderID] = useState<string | null>(null)
+  const [savingCinemaVideoProviderID, setSavingCinemaVideoProviderID] = useState<string | null>(null)
   const [deletingProviderID, setDeletingProviderID] = useState<string | null>(null)
   const [testingProviderID, setTestingProviderID] = useState<string | null>(null)
   const [isRefreshingProviderCatalog, setIsRefreshingProviderCatalog] = useState(false)
@@ -898,13 +930,16 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
 
   async function loadSettingsData(optionsArg?: LoadSettingsOptions) {
     const loadProviderCatalog = window.desktop?.getGlobalProviderCatalog
+    const loadCinemaVideoProviders = window.desktop?.getCinemaVideoProviders
     const loadModels = window.desktop?.getGlobalModels
 
     if (!loadProviderCatalog || !loadModels) {
       setLoadError("Desktop provider settings APIs are unavailable.")
       setCatalog([])
+      setCinemaVideoProviders([])
       setModels([])
       setProviderDrafts({})
+      setCinemaVideoProviderDrafts({})
       return
     }
 
@@ -915,9 +950,10 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     setLoadError(null)
 
     try {
-      const [nextCatalog, modelPayload] = await Promise.all([
+      const [nextCatalog, modelPayload, nextCinemaVideoProviders] = await Promise.all([
         loadProviderCatalog(),
         loadModels(),
+        loadCinemaVideoProviders?.() ?? Promise.resolve([]),
       ])
       const normalizedCatalog = nextCatalog.map((item) => normalizeProviderCatalogItem(item))
 
@@ -925,22 +961,28 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
 
       const nextSelection = normalizeSelection(modelPayload.selection)
       setCatalog(normalizedCatalog)
+      setCinemaVideoProviders(nextCinemaVideoProviders)
       setModels(modelPayload.items)
       savedSelectionRef.current = nextSelection
       selectionDraftRef.current = nextSelection
       setSavedSelection(nextSelection)
       setSelectionDraft(nextSelection)
       const nextProviderDrafts = buildProviderDrafts(normalizedCatalog)
+      const nextCinemaVideoProviderDrafts = buildCinemaVideoProviderDrafts(nextCinemaVideoProviders)
       if (optionsArg?.preserveProviderDrafts) {
         setProviderDrafts((current) => mergeProviderDrafts(nextProviderDrafts, current))
+        setCinemaVideoProviderDrafts((current) => mergeCinemaVideoProviderDrafts(nextCinemaVideoProviderDrafts, current))
       } else {
         setProviderDrafts(nextProviderDrafts)
+        setCinemaVideoProviderDrafts(nextCinemaVideoProviderDrafts)
       }
     } catch (error) {
       if (requestIDRef.current !== requestID) return
       setCatalog([])
+      setCinemaVideoProviders([])
       setModels([])
       setProviderDrafts({})
+      setCinemaVideoProviderDrafts({})
       setLoadError(getErrorMessage(error))
     } finally {
       if (requestIDRef.current === requestID) {
@@ -1675,6 +1717,19 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
         [field]: value,
       },
     }))
+  }
+
+  function setCinemaVideoProviderDraftValue(providerID: string, field: "apiKey", value: string) {
+    setCinemaVideoProviderDrafts((current) => {
+      const nextDraft = {
+        apiKey: current[providerID]?.apiKey ?? "",
+      }
+      nextDraft[field] = value
+      return {
+        ...current,
+        [providerID]: nextDraft,
+      }
+    })
   }
 
   function setCustomProviderDraftValue(field: keyof CustomProviderDraftState, value: string) {
@@ -2646,6 +2701,36 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     }
   }
 
+  async function saveCinemaVideoProviderApiKey(providerID: string, nextApiKey?: string | null) {
+    if (!window.desktop?.saveCinemaVideoProviderApiKey) return false
+
+    const apiKey =
+      (nextApiKey === undefined ? cinemaVideoProviderDrafts[providerID]?.apiKey ?? "" : nextApiKey ?? "").trim()
+
+    setSavingCinemaVideoProviderID(providerID)
+
+    try {
+      await window.desktop.saveCinemaVideoProviderApiKey({
+        providerID,
+        apiKey: apiKey || null,
+      })
+      await loadSettingsData({ silent: true, preserveProviderDrafts: true })
+      showMessage({
+        tone: "success",
+        text: apiKey ? "Video provider API key saved." : "Video provider API key cleared.",
+      })
+      return true
+    } catch (error) {
+      showMessage({
+        tone: "error",
+        text: getErrorMessage(error),
+      })
+      return false
+    } finally {
+      setSavingCinemaVideoProviderID(null)
+    }
+  }
+
   async function deleteProviderAuthSession(providerID: string) {
     if (!window.desktop?.deleteGlobalProviderAuthSession) return false
 
@@ -3489,6 +3574,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     cancelInstalledPluginConnectorAuthFlow,
     cancelProviderAuthFlow,
     catalog,
+    cinemaVideoProviders,
     closeSettings,
     connectorApiKeyDrafts,
     connectorCatalog,
@@ -3569,6 +3655,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     promptUrlInstallPreview,
     promptUrlInstallSource,
     providerDrafts,
+    cinemaVideoProviderDrafts,
     customProviderDraft,
     createPromptPreset,
     deletePromptPreset,
@@ -3592,6 +3679,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     savePromptPresetSelection,
     savingPromptPresetSelectionField,
     saveProviderApiKey,
+    saveCinemaVideoProviderApiKey,
     saveProvider,
     saveCustomProvider,
     saveSelection,
@@ -3600,6 +3688,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     savingPluginConnectorID,
     savingPromptPresetID,
     savingProviderID,
+    savingCinemaVideoProviderID,
     testProviderConnection,
     testCustomProviderConnection,
     testingProviderID,
@@ -3625,6 +3714,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     setPluginDraftConfigValue,
     setPromptDraftValue,
     setProviderDraftValue,
+    setCinemaVideoProviderDraftValue,
     setCustomProviderDraftValue,
     resetCustomProviderDraft,
     setSelectionDraftValue,

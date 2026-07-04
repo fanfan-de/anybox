@@ -25,8 +25,8 @@
       "zh-CN": "本地 AI 影视项目工作流。"
     },
     "longDescription": {
-      "en-US": "Initialize and operate local folder-based film projects for anybox for cinema. The plugin includes a project initialization skill and a local MCP server that directly reads and updates the project's .anybox-cinema files.",
-      "zh-CN": "初始化并操作基于本地文件夹的 anybox for cinema 影视项目。插件包含项目初始化 skill，并提供本地 MCP server，直接读取和更新项目内的 .anybox-cinema 文件。"
+      "en-US": "Initialize and operate local folder-based film projects for anybox for cinema. The plugin includes a project initialization skill and local MCP helpers for project files; provider generation runtime lives in AnyBox Agent.",
+      "zh-CN": "初始化并操作基于本地文件夹的 anybox for cinema 影视项目。插件包含项目初始化 skill 和本地项目文件 MCP 辅助能力；provider 生成 runtime 位于 AnyBox Agent。"
     },
     "developerName": "Anybox",
     "category": "Design",
@@ -49,12 +49,13 @@
     {
       "id": "cinema",
       "name": "anybox for cinema",
-      "description": "Read and update local anybox for cinema projects directly through project files.",
+      "description": "Read and update local anybox for cinema project planning files. Video provider generation tasks should use the AnyBox Agent Cinema Runtime API.",
       "risk": "medium",
       "permissions": [
         "Reads Cinema project metadata, canvas state, and recent events from local project folders.",
         "Creates and updates Cinema canvas nodes, edges, and viewport state in initialized local Cinema projects after approval.",
-        "Writes Cinema canvas state to .anybox-cinema/canvas.json and command events to .anybox-cinema/events.jsonl."
+        "Writes Cinema canvas state to .anybox-cinema/canvas.json and command events to .anybox-cinema/events.jsonl.",
+        "Does not store provider credentials and does not run video provider adapters."
       ],
       "tools": [
         {
@@ -101,7 +102,8 @@
       },
       "installReview": [
         "Runs a local Node.js MCP server bundled with the Cinema plugin.",
-        "Reads and writes the selected local project's .anybox-cinema files directly.",
+        "Reads and writes the selected local project's .anybox-cinema planning files directly.",
+        "Does not provide Cinema video provider runtime; generation tasks are handled by AnyBox Agent.",
         "Canvas write actions are configured to ask before execution."
       ]
     }
