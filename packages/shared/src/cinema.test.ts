@@ -29,6 +29,15 @@ describe("cinema schemas", () => {
           label: "Kling 3.0 Turbo",
           modes: ["text-to-video"],
         },
+        {
+          id: "kling-image-3.0",
+          label: "Kling Image 3.0",
+          modalities: {
+            input: ["text", "image"],
+            output: ["image"],
+          },
+          modes: ["text-to-image", "image-to-image", "image-edit"],
+        },
       ],
     })
 
@@ -42,6 +51,7 @@ describe("cinema schemas", () => {
       timeoutMs: 10000,
     })
     expect(manifest.models[0]?.durations).toEqual([])
+    expect(manifest.models[1]?.modes).toEqual(["text-to-image", "image-to-image", "image-edit"])
 
     const task = CinemaGenerationTaskSchema.parse({
       id: "task-1",
@@ -88,20 +98,50 @@ describe("cinema schemas", () => {
         baseURL: "https://api-singapore.klingai.com",
         configuredBaseURL: "https://kling-proxy.example.com",
         baseURLSource: "settings",
+        adapterAvailable: true,
+        adapterID: "kling",
       },
     })
 
     expect(provider.runtime?.baseURL).toBe("https://api-singapore.klingai.com")
     expect(provider.runtime?.configuredBaseURL).toBe("https://kling-proxy.example.com")
     expect(provider.runtime?.baseURLSource).toBe("settings")
+    expect(provider.runtime?.adapterAvailable).toBe(true)
+    expect(provider.runtime?.adapterID).toBe("kling")
   })
 
   it("rejects unsupported generation task modes", () => {
+    const body = CreateCinemaGenerationTaskBodySchema.parse({
+      providerID: "kling",
+      modelID: "kling-3.0-turbo",
+      mode: "text-to-video",
+      taskNodeID: "video-node-1",
+    })
+
+    expect(body.taskNodeID).toBe("video-node-1")
+
     expect(() =>
       CreateCinemaGenerationTaskBodySchema.parse({
         providerID: "kling",
         modelID: "kling-3.0-turbo",
         mode: "not-a-mode",
+      })
+    ).toThrow()
+
+    expect(() =>
+      CreateCinemaGenerationTaskBodySchema.parse({
+        providerID: "kling",
+        modelID: "kling-image-3.0",
+        mode: "text-to-image",
+      })
+    ).toThrow()
+
+    expect(() =>
+      CreateCinemaGenerationTaskBodySchema.parse({
+        providerID: "kling",
+        modelID: "kling-3.0-turbo",
+        mode: "text-to-video",
+        taskNodeID: "",
       })
     ).toThrow()
   })

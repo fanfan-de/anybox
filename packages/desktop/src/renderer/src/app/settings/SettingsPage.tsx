@@ -809,6 +809,19 @@ function getCinemaVideoProviderSourceText(provider: CinemaVideoProvider, t: Sett
   return provider.auth.connected ? t("settings.provider.sourceFromSavedConfig") : t("settings.provider.sourceNoCredential")
 }
 
+function getCinemaVideoProviderEndpointSourceText(provider: CinemaVideoProvider, t: SettingsTranslate) {
+  switch (provider.runtime?.baseURLSource) {
+    case "settings":
+      return t("settings.videoProviders.endpointSourceSettings")
+    case "environment":
+      return t("settings.videoProviders.endpointSourceEnvironment")
+    case "default":
+      return t("settings.videoProviders.endpointSourceDefault")
+    default:
+      return ""
+  }
+}
+
 function getCinemaVideoProviderHeaderSummary(provider: CinemaVideoProvider, t: SettingsTranslate) {
   return [
     getCinemaVideoProviderStatusText(provider, t),
@@ -2950,6 +2963,10 @@ export function SettingsPage({
       : false
     const activeCinemaVideoProviderCanTest = Boolean(activeCinemaVideoProvider?.manifest.connectionTest)
     const activeCinemaVideoProviderConfiguredBaseURL = activeCinemaVideoProvider?.runtime?.configuredBaseURL ?? ""
+    const activeCinemaVideoProviderEndpoint = activeCinemaVideoProvider?.runtime?.baseURL ?? ""
+    const activeCinemaVideoProviderEndpointSource = activeCinemaVideoProvider
+      ? getCinemaVideoProviderEndpointSourceText(activeCinemaVideoProvider, t)
+      : ""
     const activeCinemaVideoProviderApiKeyDirty = (activeCinemaVideoProviderDraft?.apiKey.trim().length ?? 0) > 0
     const activeCinemaVideoProviderBaseURLDirty =
       (activeCinemaVideoProviderDraft?.baseURL.trim() ?? "") !== activeCinemaVideoProviderConfiguredBaseURL
@@ -4825,22 +4842,35 @@ export function SettingsPage({
                               <div className="provider-detail-row">
                                 <div className="provider-detail-row-copy">
                                   <span className="settings-field-label">{t("settings.videoProviders.endpointLabel")}</span>
-                                  <p className="provider-detail-helper">{t("settings.videoProviders.endpointPlaceholder")}</p>
+                                  <p className="provider-detail-helper">{t("settings.videoProviders.endpointInputHelper")}</p>
                                 </div>
 
-                                <label className="provider-key-field provider-detail-row-control">
-                                  <span className="provider-key-input-wrap provider-key-input-wrap-plain">
-                                    <input
-                                      aria-label={`Endpoint for ${activeCinemaVideoProvider.manifest.name}`}
-                                      type="url"
-                                      value={activeCinemaVideoProviderDraft.baseURL}
-                                      placeholder={activeCinemaVideoProvider.runtime?.baseURL ?? t("settings.videoProviders.endpointPlaceholder")}
-                                      onChange={(event) =>
-                                        onCinemaVideoProviderDraftChange(activeCinemaVideoProvider.manifest.id, "baseURL", event.target.value)
-                                      }
-                                    />
-                                  </span>
-                                </label>
+                                <div className="provider-detail-row-control provider-endpoint-control">
+                                  <div
+                                    className="provider-endpoint-current"
+                                    aria-label={`Current endpoint for ${activeCinemaVideoProvider.manifest.name}`}
+                                  >
+                                    <span>{t("settings.videoProviders.endpointCurrentLabel")}</span>
+                                    <code title={activeCinemaVideoProviderEndpoint}>
+                                      {activeCinemaVideoProviderEndpoint || t("settings.videoProviders.endpointUnavailable")}
+                                    </code>
+                                    {activeCinemaVideoProviderEndpointSource ? <small>{activeCinemaVideoProviderEndpointSource}</small> : null}
+                                  </div>
+
+                                  <label className="provider-key-field">
+                                    <span className="provider-key-input-wrap provider-key-input-wrap-plain">
+                                      <input
+                                        aria-label={`Endpoint for ${activeCinemaVideoProvider.manifest.name}`}
+                                        type="url"
+                                        value={activeCinemaVideoProviderDraft.baseURL}
+                                        placeholder={t("settings.videoProviders.endpointPlaceholder")}
+                                        onChange={(event) =>
+                                          onCinemaVideoProviderDraftChange(activeCinemaVideoProvider.manifest.id, "baseURL", event.target.value)
+                                        }
+                                      />
+                                    </span>
+                                  </label>
+                                </div>
                               </div>
 
                               {activeCinemaVideoProvider.manifest.website || activeCinemaVideoProvider.manifest.doc ? (

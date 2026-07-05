@@ -151,6 +151,14 @@ export const CinemaGenerationModeSchema = z.enum([
 ])
 export type CinemaGenerationMode = z.infer<typeof CinemaGenerationModeSchema>
 
+export const CinemaProviderModelModeSchema = z.enum([
+  ...CinemaGenerationModeSchema.options,
+  "text-to-image",
+  "image-to-image",
+  "image-edit",
+])
+export type CinemaProviderModelMode = z.infer<typeof CinemaProviderModelModeSchema>
+
 export const CinemaGenerationTaskStatusSchema = z.enum([
   "queued",
   "running",
@@ -209,7 +217,7 @@ export const CinemaVideoProviderManifestSchema = z.object({
       input: z.array(z.string().min(1)).default([]),
       output: z.array(z.string().min(1)).default([]),
     }).optional(),
-    modes: z.array(CinemaGenerationModeSchema).min(1),
+    modes: z.array(CinemaProviderModelModeSchema).min(1),
     durations: z.array(z.number().positive()).default([]),
     aspectRatios: z.array(z.string().min(1)).default([]),
     resolutions: z.array(z.string().min(1)).default([]),
@@ -245,6 +253,8 @@ export const CinemaVideoProviderRuntimeSchema = z.object({
   baseURL: z.string().min(1).optional(),
   configuredBaseURL: z.string().min(1).optional(),
   baseURLSource: z.enum(["settings", "environment", "default"]).optional(),
+  adapterAvailable: z.boolean().default(false),
+  adapterID: z.string().min(1).optional(),
 })
 export type CinemaVideoProviderRuntime = z.infer<typeof CinemaVideoProviderRuntimeSchema>
 
@@ -298,6 +308,7 @@ export const CreateCinemaGenerationTaskBodySchema = z.object({
   sourceNodeIDs: z.array(z.string().min(1)).default([]),
   parameters: z.record(z.string(), z.unknown()).default({}),
   position: CinemaPositionSchema.optional(),
+  taskNodeID: z.string().min(1).optional(),
 })
 export type CreateCinemaGenerationTaskBody = z.infer<typeof CreateCinemaGenerationTaskBodySchema>
 

@@ -49,8 +49,17 @@ import {
 
 type GenerateTextFunction = typeof import("ai")["generateText"]
 type GenerateImageFunction = typeof import("ai")["generateImage"]
+type CinemaProjectAssetRange = {
+  start: number
+  end: number
+  total: number
+}
+type ReadCinemaProjectAssetOptions = {
+  rangeHeader?: string | null
+}
 
 export {
+  setCinemaVideoProviderAdapterForTest,
   setCinemaVideoProviderCatalogCacheFileForTest,
   setCinemaVideoProviderCatalogForTest,
 } from "#cinema/provider-runtime.ts"
@@ -113,6 +122,7 @@ const TASKS_FILE = "tasks.jsonl"
 const TASKS_DIRECTORY = "tasks"
 const PROJECT_DIRECTORIES = ["assets", "references", "prompts", "generated", "renders", "exports"] as const
 const CINEMA_PROJECT_IMAGE_ASSET_MAX_BYTES = 25 * 1024 * 1024
+const CINEMA_PROJECT_VIDEO_ASSET_MAX_BYTES = 256 * 1024 * 1024
 const IMAGE_EXTENSION_BY_MIME: Record<string, string> = {
   "image/apng": ".png",
   "image/avif": ".avif",
@@ -133,6 +143,12 @@ const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
   ".png": "image/png",
   ".svg": "image/svg+xml",
   ".webp": "image/webp",
+}
+const VIDEO_MIME_BY_EXTENSION: Record<string, string> = {
+  ".mov": "video/quicktime",
+  ".mp4": "video/mp4",
+  ".m4v": "video/mp4",
+  ".webm": "video/webm",
 }
 
 const nowISO = () => new Date().toISOString()
@@ -416,6 +432,68 @@ function imageExtensionForMime(mime: string) {
 
 function imageMimeForPath(filePath: string) {
   return IMAGE_MIME_BY_EXTENSION[path.extname(filePath).toLowerCase()] ?? null
+}
+
+function projectAssetMimeForPath(filePath: string) {
+  const extension = path.extname(filePath).toLowerCase()
+  return IMAGE_MIME_BY_EXTENSION[extension] ?? VIDEO_MIME_BY_EXTENSION[extension] ?? null
+}
+
+function isSupportedPreviewAssetMime(mimeType: string) {
+  return isSupportedImageMime(mimeType) || Object.values(VIDEO_MIME_BY_EXTENSION).includes(mimeType)
+}
+
+function previewAssetMaxBytesForMime(mimeType: string) {
+  return mimeType.startsWith("video/") ? CINEMA_PROJECT_VIDEO_ASSET_MAX_BYTES : CINEMA_PROJECT_IMAGE_ASSET_MAX_BYTES
+}
+
+function parseCinemaProjectAssetRange(rangeHeader: string | null | undefined, sizeBytes: number): CinemaProjectAssetRange | null {
+  const header = rangeHeader?.trim()
+  if (!header) return null
+
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header)
+  if (!match) {
+    throw new ApiError(416, "CINEMA_ASSET_RANGE_NOT_SATISFIABLE", "Only a single byte range is supported.")
+  }
+
+  const [, startText, endText] = match
+  if (!startText && !endText) {
+    throw new ApiError(416, "CINEMA_ASSET_RANGE_NOT_SATISFIABLE", "Requested byte range is empty.")
+  }
+  if (sizeBytes <= 0) {
+    throw new ApiError(416, "CINEMA_ASSET_RANGE_NOT_SATISFIABLE", "Requested byte range cannot be served for an empty asset.")
+  }
+
+  if (!startText) {
+    const suffixLength = Number(endText)
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) {
+      throw new ApiError(416, "CINEMA_ASSET_RANGE_NOT_SATISFIABLE", "Requested suffix byte range is invalid.")
+    }
+    const start = Math.max(sizeBytes - suffixLength, 0)
+    return {
+      start,
+      end: sizeBytes - 1,
+      total: sizeBytes,
+    }
+  }
+
+  const start = Number(startText)
+  const requestedEnd = endText ? Number(endText) : sizeBytes - 1
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(requestedEnd) ||
+    start < 0 ||
+    requestedEnd < start ||
+    start >= sizeBytes
+  ) {
+    throw new ApiError(416, "CINEMA_ASSET_RANGE_NOT_SATISFIABLE", "Requested byte range is outside the asset.")
+  }
+
+  return {
+    start,
+    end: Math.min(requestedEnd, sizeBytes - 1),
+    total: sizeBytes,
+  }
 }
 
 const CINEMA_TEXT_GENERATION_SYSTEM_PROMPT = [
@@ -734,33 +812,45 @@ function summarizeNodeData(node: CinemaCanvasNode) {
 
 function findProjectGaps(canvas: CinemaCanvasDocument, providerConfigured: boolean) {
   const types = new Set(canvas.nodes.map((node) => node.type))
+  const hasGenerationTask = types.has("generation-task") || canvas.nodes.some((node) =>
+    node.type === "video" && typeof node.data?.taskID === "string" && node.data.taskID.trim().length > 0
+  )
   const gaps: string[] = []
   if (!types.has("shot")) gaps.push("no-shot-nodes")
   if (!types.has("prompt")) gaps.push("no-prompt-nodes")
-  if (!types.has("generation-task")) gaps.push("no-generation-tasks")
+  if (!hasGenerationTask) gaps.push("no-generation-tasks")
   if (!providerConfigured) gaps.push("no-provider-configured")
   return gaps
 }
 
-function taskNodeFor(task: CinemaGenerationTask, position = { x: 240, y: 220 }): CinemaCanvasNode {
+function taskNodeDataFor(task: CinemaGenerationTask) {
+  return {
+    text: task.input.prompt,
+    taskID: task.id,
+    providerID: task.providerID,
+    modelID: task.modelID,
+    mode: task.mode,
+    status: task.status,
+    sourceNodeIDs: task.input.sourceNodeIDs,
+    parameters: task.input.parameters,
+    outputAssets: task.outputAssets,
+    error: task.error ?? null,
+  }
+}
+
+function taskNodeFor(
+  task: CinemaGenerationTask,
+  position = { x: 240, y: 220 },
+  type: "generation-task" | "video" = "generation-task",
+  size = type === "video" ? { width: 520, height: 430 } : { width: 390, height: 240 },
+): CinemaCanvasNode {
   return {
     id: task.taskNodeID ?? `node-generation-task-${task.id}`,
-    type: "generation-task",
+    type,
     title: task.title,
     position,
-    size: { width: 390, height: 240 },
-    data: {
-      text: task.input.prompt,
-      taskID: task.id,
-      providerID: task.providerID,
-      modelID: task.modelID,
-      mode: task.mode,
-      status: task.status,
-      sourceNodeIDs: task.input.sourceNodeIDs,
-      parameters: task.input.parameters,
-      outputAssets: task.outputAssets,
-      error: task.error ?? null,
-    },
+    size,
+    data: taskNodeDataFor(task),
   }
 }
 
@@ -789,22 +879,28 @@ function outputNodeFor(task: CinemaGenerationTask): CinemaCanvasNode | null {
 function syncTaskToCanvasDocument(canvas: CinemaCanvasDocument, task: CinemaGenerationTask): CinemaCanvasDocument {
   const taskNodeID = task.taskNodeID ?? `node-generation-task-${task.id}`
   const existingTaskNode = canvas.nodes.find((node) => node.id === taskNodeID)
-  const nextTaskNode = taskNodeFor(task, existingTaskNode?.position)
+  const taskNodeType = existingTaskNode?.type === "video" ? "video" : "generation-task"
+  const nextTaskNode = taskNodeFor(
+    task,
+    existingTaskNode?.position,
+    taskNodeType,
+    existingTaskNode?.size,
+  )
   let nodes = existingTaskNode
     ? canvas.nodes.map((node) => node.id === taskNodeID
       ? {
         ...node,
-        title: nextTaskNode.title,
+        title: taskNodeType === "video" ? node.title : nextTaskNode.title,
         data: {
           ...node.data,
-          ...nextTaskNode.data,
+          ...taskNodeDataFor(task),
         },
       }
       : node)
     : [...canvas.nodes, nextTaskNode]
 
   let edges = canvas.edges
-  const outputNode = task.status === "succeeded" ? outputNodeFor(task) : null
+  const outputNode = taskNodeType === "video" ? null : task.status === "succeeded" ? outputNodeFor(task) : null
   if (outputNode) {
     const existingOutputNode = nodes.find((node) => node.id === outputNode.id)
     nodes = existingOutputNode
@@ -1296,14 +1392,18 @@ export async function createCinemaImageGeneration(
   }
 }
 
-export async function readCinemaProjectImageAsset(projectID: string, assetPath: string) {
+export async function readCinemaProjectAsset(
+  projectID: string,
+  assetPath: string,
+  options: ReadCinemaProjectAssetOptions = {},
+) {
   const { root, cinemaRoot } = resolveCinemaRoot(projectID)
   await assertCinemaProjectInitialized(cinemaRoot)
 
   const filePath = resolveProjectRelativeFile(root, assetPath)
-  const mimeType = imageMimeForPath(filePath)
-  if (!mimeType || !isSupportedImageMime(mimeType)) {
-    throw new ApiError(415, "CINEMA_ASSET_MIME_UNSUPPORTED", "Only project image assets can be previewed.")
+  const mimeType = projectAssetMimeForPath(filePath)
+  if (!mimeType || !isSupportedPreviewAssetMime(mimeType)) {
+    throw new ApiError(415, "CINEMA_ASSET_MIME_UNSUPPORTED", "Only project image and video assets can be previewed.")
   }
 
   const fileStat = await stat(filePath).catch((error: unknown) => {
@@ -1313,18 +1413,26 @@ export async function readCinemaProjectImageAsset(projectID: string, assetPath: 
     throw error
   })
   if (!fileStat.isFile()) {
-    throw new ApiError(415, "CINEMA_ASSET_MIME_UNSUPPORTED", "Only project image files can be previewed.")
+    throw new ApiError(415, "CINEMA_ASSET_MIME_UNSUPPORTED", "Only project image and video files can be previewed.")
   }
-  if (fileStat.size > CINEMA_PROJECT_IMAGE_ASSET_MAX_BYTES) {
-    throw new ApiError(413, "CINEMA_ASSET_TOO_LARGE", "Project image asset is too large to preview.")
+  if (fileStat.size > previewAssetMaxBytesForMime(mimeType)) {
+    throw new ApiError(413, "CINEMA_ASSET_TOO_LARGE", "Project asset is too large to preview.")
   }
 
+  const range = parseCinemaProjectAssetRange(options.rangeHeader, fileStat.size)
+  const bytes = await readFile(filePath)
+  const responseBytes = range ? bytes.subarray(range.start, range.end + 1) : bytes
+
   return {
-    bytes: await readFile(filePath),
+    bytes: responseBytes,
     mimeType,
     sizeBytes: fileStat.size,
+    contentLength: responseBytes.byteLength,
+    range,
   }
 }
+
+export const readCinemaProjectImageAsset = readCinemaProjectAsset
 
 export async function updateCinemaCanvas(projectID: string, canvas: CinemaCanvasDocument): Promise<CinemaCanvasDocument> {
   const { cinemaRoot } = resolveCinemaRoot(projectID)
@@ -1340,14 +1448,38 @@ export async function updateCinemaCanvas(projectID: string, canvas: CinemaCanvas
   return parsed
 }
 
-function taskWithCanvasIDs(task: CinemaGenerationTask): CinemaGenerationTask {
+function taskWithCanvasIDs(task: CinemaGenerationTask, options: { createOutputNode?: boolean } = {}): CinemaGenerationTask {
+  const { outputNodeID: currentOutputNodeID, ...taskWithoutOutputNodeID } = task
+  const createOutputNode = options.createOutputNode ?? true
   const taskNodeID = task.taskNodeID ?? `node-generation-task-${task.id}`
-  const outputNodeID = task.outputNodeID ?? (task.outputAssets.length > 0 ? `node-video-${task.id}` : undefined)
+  const outputNodeID = createOutputNode
+    ? currentOutputNodeID ?? (task.outputAssets.length > 0 ? `node-video-${task.id}` : undefined)
+    : undefined
   return {
-    ...task,
+    ...taskWithoutOutputNodeID,
     taskNodeID,
     ...(outputNodeID ? { outputNodeID } : {}),
   }
+}
+
+function isVideoTaskNode(canvas: CinemaCanvasDocument, task: CinemaGenerationTask) {
+  if (!task.taskNodeID) return false
+  return canvas.nodes.some((node) => node.id === task.taskNodeID && node.type === "video")
+}
+
+function resolveGenerationTaskNodeID(input: CreateCinemaGenerationTaskBody, taskID: string, canvas: CinemaCanvasDocument) {
+  const requestedTaskNodeID = input.taskNodeID?.trim()
+  if (!requestedTaskNodeID) return `node-generation-task-${taskID}`
+
+  const existingNode = canvas.nodes.find((node) => node.id === requestedTaskNodeID)
+  if (!existingNode) {
+    throw new ApiError(404, "CINEMA_NODE_NOT_FOUND", `Cinema node '${requestedTaskNodeID}' was not found.`)
+  }
+  if (existingNode.type !== "video" && existingNode.type !== "generation-task") {
+    throw new ApiError(409, "CINEMA_TASK_NODE_INVALID", "Generation tasks can only bind to video or generation task nodes.")
+  }
+
+  return requestedTaskNodeID
 }
 
 export async function createCinemaGenerationTask(
@@ -1358,11 +1490,13 @@ export async function createCinemaGenerationTask(
   await assertCinemaProjectInitialized(cinemaRoot)
   const provider = await CinemaProviderRuntime.getCinemaVideoProvider(input.providerID)
   CinemaProviderRuntime.assertCinemaVideoProviderModelSupports(input, provider.manifest)
-  const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(input.providerID)
 
   const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
   const createdAt = nowISO()
   const taskID = makeTaskID()
+  const taskNodeID = resolveGenerationTaskNodeID(input, taskID, canvas)
+  const createOutputNode = !canvas.nodes.some((node) => node.id === taskNodeID && node.type === "video")
+  const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(input.providerID)
   const task = taskWithCanvasIDs({
     id: taskID,
     projectID,
@@ -1373,7 +1507,7 @@ export async function createCinemaGenerationTask(
     status: "queued",
     createdAt,
     updatedAt: createdAt,
-    taskNodeID: `node-generation-task-${taskID}`,
+    taskNodeID,
     input: {
       prompt: input.prompt,
       sourceNodeIDs: input.sourceNodeIDs,
@@ -1381,9 +1515,9 @@ export async function createCinemaGenerationTask(
     },
     outputAssets: [],
     error: null,
-  })
+  }, { createOutputNode })
 
-  const created = taskWithCanvasIDs(await adapter.createTask({ root, cinemaRoot, task, canvas }))
+  const created = taskWithCanvasIDs(await adapter.createTask({ root, cinemaRoot, task, canvas }), { createOutputNode })
   await writeGenerationTask(cinemaRoot, created)
   await syncTaskToCanvas(cinemaRoot, created, `Created generation task '${created.title}'.`)
   await appendTaskAuditEvent(cinemaRoot, {
@@ -1415,7 +1549,9 @@ export async function refreshCinemaGenerationTask(projectID: string, taskID: str
   const task = await readGenerationTaskFromRoot(cinemaRoot, taskID)
   const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(task.providerID)
   const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
-  const refreshed = taskWithCanvasIDs(await adapter.refreshTask({ root, cinemaRoot, task, canvas }))
+  const refreshed = taskWithCanvasIDs(await adapter.refreshTask({ root, cinemaRoot, task, canvas }), {
+    createOutputNode: !isVideoTaskNode(canvas, task),
+  })
   await writeGenerationTask(cinemaRoot, refreshed)
   await syncTaskToCanvas(cinemaRoot, refreshed, `Refreshed generation task '${refreshed.title}'.`)
   await appendTaskAuditEvent(cinemaRoot, {
@@ -1439,7 +1575,9 @@ export async function cancelCinemaGenerationTask(projectID: string, taskID: stri
     ...current,
     status: "canceled" as const,
     updatedAt: nowISO(),
-  })))({ root, cinemaRoot, task, canvas }))
+  })))({ root, cinemaRoot, task, canvas }), {
+    createOutputNode: !isVideoTaskNode(canvas, task),
+  })
   await writeGenerationTask(cinemaRoot, canceled)
   await syncTaskToCanvas(cinemaRoot, canceled, `Canceled generation task '${canceled.title}'.`)
   await appendTaskAuditEvent(cinemaRoot, {

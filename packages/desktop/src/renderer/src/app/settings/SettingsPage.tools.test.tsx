@@ -454,16 +454,16 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.queryByRole("list", { name: "Project worktrees" })).not.toBeInTheDocument()
   })
 
-  it("shows video providers as a separate settings navigation item", () => {
+  it("shows visual providers as a separate settings navigation item", () => {
     render(<SettingsPage {...createSettingsPageProps({ catalog: [createAnyboxProvider()] })} />)
 
     const nav = screen.getByLabelText("Settings sections")
     const labels = within(nav).getAllByRole("button").map((button) => button.textContent)
 
-    expect(labels.slice(0, 4)).toEqual(["General", "Account", "Provider", "Video Providers"])
+    expect(labels.slice(0, 4)).toEqual(["General", "Account", "Provider", "Visual Providers"])
   })
 
-  it("saves cinema video provider API keys from the Video Providers settings page", async () => {
+  it("saves cinema video provider API keys from the Visual Providers settings page", async () => {
     const onCinemaVideoProviderDraftChange = vi.fn()
     const onSaveCinemaVideoProviderApiKey = vi.fn()
     const onTestCinemaVideoProviderConnection = vi.fn()
@@ -482,10 +482,13 @@ describe("SettingsPage built-in tools", () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole("button", { name: "Video Providers" }))
+    fireEvent.click(screen.getByRole("button", { name: "Visual Providers" }))
 
-    expect(screen.getByRole("list", { name: "Video provider list" })).toBeInTheDocument()
+    expect(screen.getByRole("list", { name: "Visual provider list" })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole("heading", { name: "Kling AI" })).toBeInTheDocument())
+    expect(screen.getByText("Current endpoint")).toBeInTheDocument()
+    expect(screen.getByText("https://api-singapore.klingai.com")).toBeInTheDocument()
+    expect(screen.getByText("Default endpoint")).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText("Endpoint for Kling AI"), {
       target: { value: "https://kling-proxy.example.com" },

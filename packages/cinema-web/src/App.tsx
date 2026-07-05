@@ -80,6 +80,11 @@ type ImageGenerationRequest = {
   style?: string
 }
 
+type VideoSourceImageAsset = CinemaGeneratedAsset & {
+  nodeID: string
+  nodeTitle: string
+}
+
 type CinemaFlowNodeData = {
   cinemaType: CinemaNodeType
   title: string
@@ -101,6 +106,12 @@ type CinemaFlowNodeData = {
   agentBaseURL?: string
   projectID?: string
   onGenerateImage?: (nodeID: string, request: ImageGenerationRequest) => void
+  videoProviders?: CinemaVideoProvider[]
+  generationTasks?: CinemaGenerationTask[]
+  sourceImageAsset?: VideoSourceImageAsset | null
+  isCreatingVideoTask?: boolean
+  videoGenerationError?: string | null
+  onCreateVideoGenerationTask?: (nodeID: string, body: CreateCinemaGenerationTaskBody) => void
 }
 
 type CinemaFlowNode = Node<CinemaFlowNodeData, "cinemaNode">
@@ -149,12 +160,26 @@ const NODE_TYPES = [
 const FALLBACK_GENERATION_MODE: CinemaGenerationMode = "text-to-video"
 const DEFAULT_IMAGE_GENERATION_SIZE = "1024x1024"
 const DEFAULT_IMAGE_GENERATION_COUNT = 1
+const DEFAULT_VIDEO_ASPECT_RATIO = "16:9"
+const DEFAULT_VIDEO_DURATION_SECONDS = 5
+const DEFAULT_VIDEO_RESOLUTION = "720p"
+const VIDEO_GENERATION_MODES = [
+  "text-to-video",
+  "image-to-video",
+  "frames-to-video",
+  "reference-to-video",
+  "video-to-video",
+  "edit",
+  "extend",
+  "motion-control",
+] as const satisfies readonly CinemaGenerationMode[]
+const VIDEO_NODE_MODES = ["text-to-video", "image-to-video"] as const satisfies readonly CinemaGenerationMode[]
 
 const DEFAULT_NODE_SIZE: Record<CinemaNodeType, { width: number; height: number }> = {
   text: { width: 480, height: 420 },
   prompt: { width: 380, height: 240 },
   image: { width: 420, height: 440 },
-  video: { width: 360, height: 220 },
+  video: { width: 520, height: 560 },
   audio: { width: 320, height: 180 },
   shot: { width: 380, height: 250 },
   agent: { width: 360, height: 220 },
@@ -356,10 +381,46 @@ function modelFor(provider: CinemaVideoProvider | null, modelID: string) {
   return provider?.manifest.models.find((model) => model.id === modelID) ?? provider?.manifest.models[0] ?? null
 }
 
+function providersForMode(providers: CinemaVideoProvider[], mode: CinemaGenerationMode) {
+  return providers.filter((provider) => provider.manifest.models.some((model) => model.modes.includes(mode)))
+}
+
+function providerForMode(providers: CinemaVideoProvider[], providerID: string, mode: CinemaGenerationMode) {
+  const availableProviders = providersForMode(providers, mode)
+  return availableProviders.find((provider) => provider.manifest.id === providerID) ?? availableProviders[0] ?? null
+}
+
+function modelForMode(provider: CinemaVideoProvider | null, modelID: string, mode: CinemaGenerationMode) {
+  const availableModels = provider?.manifest.models.filter((model) => model.modes.includes(mode)) ?? []
+  return availableModels.find((model) => model.id === modelID) ?? availableModels[0] ?? null
+}
+
+function isVideoGenerationMode(mode: string): mode is CinemaGenerationMode {
+  return (VIDEO_GENERATION_MODES as readonly string[]).includes(mode)
+}
+
 function modeFor(provider: CinemaVideoProvider | null, modelID: string, mode: string): CinemaGenerationMode {
   const model = modelFor(provider, modelID)
-  if (model?.modes.includes(mode as CinemaGenerationMode)) return mode as CinemaGenerationMode
-  return model?.modes[0] ?? FALLBACK_GENERATION_MODE
+  if (isVideoGenerationMode(mode) && model?.modes.includes(mode)) return mode
+  const fallbackMode = model?.modes.find(isVideoGenerationMode)
+  return fallbackMode ?? FALLBACK_GENERATION_MODE
+}
+
+function readVideoMode(rawData: Record<string, unknown>) {
+  const mode = readRawString(rawData, "mode", FALLBACK_GENERATION_MODE)
+  return (VIDEO_NODE_MODES as readonly string[]).includes(mode) ? mode as CinemaGenerationMode : FALLBACK_GENERATION_MODE
+}
+
+function defaultModelAspectRatio(model: ReturnType<typeof modelForMode>) {
+  return model?.aspectRatios[0] ?? DEFAULT_VIDEO_ASPECT_RATIO
+}
+
+function defaultModelDuration(model: ReturnType<typeof modelForMode>) {
+  return model?.durations[0] ?? DEFAULT_VIDEO_DURATION_SECONDS
+}
+
+function defaultModelResolution(model: ReturnType<typeof modelForMode>) {
+  return model?.resolutions[0] ?? DEFAULT_VIDEO_RESOLUTION
 }
 
 function stringifyParameters(value: unknown) {
@@ -395,6 +456,29 @@ function readDisplayAssets(rawData: Record<string, unknown>): DisplayAsset[] {
   })
 }
 
+function selectedImageAssetForNode(node: CinemaFlowNode): VideoSourceImageAsset | null {
+  const assets = readImageResultAssets(node.data.rawData)
+  const selectedAssetID = readRawString(node.data.rawData, "selectedAssetID")
+  const asset = assets.find((item) => item.id === selectedAssetID) ?? assets[0] ?? null
+  if (!asset) return null
+  return {
+    ...asset,
+    nodeID: node.id,
+    nodeTitle: node.data.title,
+  }
+}
+
+function sourceImageAssetForVideoNode(nodeID: string, nodes: CinemaFlowNode[], edges: Edge[]) {
+  for (const edge of edges) {
+    if (edge.target !== nodeID) continue
+    const sourceNode = nodes.find((node) => node.id === edge.source)
+    if (!sourceNode || sourceNode.data.cinemaType !== "image") continue
+    const asset = selectedImageAssetForNode(sourceNode)
+    if (asset) return asset
+  }
+  return null
+}
+
 function isFinalGenerationTaskStatus(status: string) {
   return status === "succeeded" || status === "failed" || status === "canceled"
 }
@@ -420,6 +504,17 @@ function createNode(type: CinemaNodeType, position: { x: number; y: number }): C
       status: "idle",
       placeholder: NODE_META[type].placeholder,
     }
+    : type === "video"
+      ? {
+        text: "",
+        mode: FALLBACK_GENERATION_MODE,
+        aspectRatio: DEFAULT_VIDEO_ASPECT_RATIO,
+        duration: DEFAULT_VIDEO_DURATION_SECONDS,
+        resolution: DEFAULT_VIDEO_RESOLUTION,
+        status: "draft",
+        parameters: {},
+        placeholder: "Describe the clip to generate.",
+      }
     : {
       text: "",
       placeholder: NODE_META[type].placeholder,
@@ -1097,6 +1192,492 @@ function ImageGenerationCanvasNode({
   )
 }
 
+function VideoGenerationCanvasNode({
+  id,
+  data,
+  selected,
+  accentStyle,
+}: {
+  id: string
+  data: CinemaFlowNodeData
+  selected?: boolean
+  accentStyle: CSSProperties
+}) {
+  const promptRef = useRef<HTMLTextAreaElement>(null)
+  const rawDataRef = useRef(data.rawData)
+  const onChangeRawDataRef = useRef(data.onChangeRawData)
+  const promptCommitTimerRef = useRef<number | null>(null)
+  const isPromptComposingRef = useRef(false)
+  const providers = data.videoProviders ?? []
+  const tasks = data.generationTasks ?? []
+  const taskID = readRawString(data.rawData, "taskID")
+  const task = tasks.find((item) => item.id === taskID) ?? null
+  const initialMode = readVideoMode(data.rawData)
+  const [mode, setModeState] = useState<CinemaGenerationMode>(initialMode)
+  const [providerID, setProviderIDState] = useState(() => readRawString(data.rawData, "providerID"))
+  const [modelID, setModelIDState] = useState(() => readRawString(data.rawData, "modelID"))
+  const [promptDraft, setPromptDraftState] = useState(() => task?.input.prompt ?? readRawString(data.rawData, "text"))
+  const [aspectRatioDraft, setAspectRatioDraftState] = useState(() => readRawString(data.rawData, "aspectRatio", DEFAULT_VIDEO_ASPECT_RATIO))
+  const [durationDraft, setDurationDraftState] = useState(() => String(readRawNumber(data.rawData, "duration", DEFAULT_VIDEO_DURATION_SECONDS)))
+  const [resolutionDraft, setResolutionDraftState] = useState(() => readRawString(data.rawData, "resolution", DEFAULT_VIDEO_RESOLUTION))
+  const promptDraftRef = useRef(promptDraft)
+  const modeRef = useRef(mode)
+  const providerIDRef = useRef(providerID)
+  const modelIDRef = useRef(modelID)
+  const aspectRatioDraftRef = useRef(aspectRatioDraft)
+  const durationDraftRef = useRef(durationDraft)
+  const resolutionDraftRef = useRef(resolutionDraft)
+
+  rawDataRef.current = data.rawData
+  onChangeRawDataRef.current = data.onChangeRawData
+
+  const selectedProvider = providerForMode(providers, providerID, mode)
+  const selectedModel = modelForMode(selectedProvider, modelID, mode)
+  const availableProviders = providersForMode(providers, mode)
+  const availableModels = selectedProvider?.manifest.models.filter((model) => model.modes.includes(mode)) ?? []
+  const outputAssets = task?.outputAssets ?? readDisplayAssets(data.rawData)
+  const outputAsset = outputAssets.find((asset) => asset.kind === "video") ?? outputAssets[0] ?? null
+  const previewSrc = outputAsset && data.agentBaseURL && data.projectID
+    ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, outputAsset.path)
+    : ""
+  const currentStatus = data.isCreatingVideoTask
+    ? "queued"
+    : task?.status ?? readRawString(data.rawData, "status", "draft")
+  const isWaiting = currentStatus === "queued" || currentStatus === "running"
+  const isBusy = data.isCreatingVideoTask || isWaiting
+  const providerNeedsCredential = Boolean(selectedProvider?.auth.requiresCredential)
+  const providerConnected = selectedProvider?.auth.connected !== false
+  const providerAdapterUnavailable = Boolean(selectedProvider) && selectedProvider?.runtime?.adapterAvailable !== true
+  const sourceImageAsset = data.sourceImageAsset
+  const needsSourceImage = mode === "image-to-video"
+  const sourceImageMissing = needsSourceImage && !sourceImageAsset
+  const nodeError = data.videoGenerationError ?? task?.error ?? readRawString(data.rawData, "error")
+  const submitDisabledReason = promptDraft.trim().length === 0
+    ? "先输入视频描述。"
+    : !selectedProvider
+      ? "没有可用的视频供应商。"
+      : !selectedModel
+        ? "没有可用的视频模型。"
+        : isBusy
+          ? "当前任务还在处理中。"
+          : providerNeedsCredential && !providerConnected
+            ? `${selectedProvider.manifest.name} 还没有连接。`
+            : sourceImageMissing
+              ? "图生视频需要先连接一个已有输出的图片节点。"
+              : null
+  const canGenerate =
+    submitDisabledReason === null
+
+  const setPromptDraft = useCallback((value: string) => {
+    promptDraftRef.current = value
+    setPromptDraftState(value)
+  }, [])
+
+  const setMode = useCallback((value: CinemaGenerationMode) => {
+    modeRef.current = value
+    setModeState(value)
+  }, [])
+
+  const setProviderID = useCallback((value: string) => {
+    providerIDRef.current = value
+    setProviderIDState(value)
+  }, [])
+
+  const setModelID = useCallback((value: string) => {
+    modelIDRef.current = value
+    setModelIDState(value)
+  }, [])
+
+  const setAspectRatioDraft = useCallback((value: string) => {
+    aspectRatioDraftRef.current = value
+    setAspectRatioDraftState(value)
+  }, [])
+
+  const setDurationDraft = useCallback((value: string) => {
+    durationDraftRef.current = value
+    setDurationDraftState(value)
+  }, [])
+
+  const setResolutionDraft = useCallback((value: string) => {
+    resolutionDraftRef.current = value
+    setResolutionDraftState(value)
+  }, [])
+
+  const normalizedDuration = useCallback(() => {
+    const parsed = Number.parseFloat(durationDraftRef.current)
+    if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_VIDEO_DURATION_SECONDS
+    return parsed
+  }, [])
+
+  const clearPromptCommitTimer = useCallback(() => {
+    if (promptCommitTimerRef.current === null) return
+    window.clearTimeout(promptCommitTimerRef.current)
+    promptCommitTimerRef.current = null
+  }, [])
+
+  const commitRawDataPatch = useCallback((patch: Record<string, unknown> = {}) => {
+    const previous = rawDataRef.current
+    const nextRawData: Record<string, unknown> = {
+      ...previous,
+      text: promptDraftRef.current,
+      mode: modeRef.current,
+      providerID: providerIDRef.current || undefined,
+      modelID: modelIDRef.current || undefined,
+      aspectRatio: aspectRatioDraftRef.current.trim() || DEFAULT_VIDEO_ASPECT_RATIO,
+      duration: normalizedDuration(),
+      resolution: resolutionDraftRef.current.trim() || DEFAULT_VIDEO_RESOLUTION,
+      ...patch,
+    }
+    const hasChange = Object.keys(nextRawData).some((key) => nextRawData[key] !== previous[key])
+      || Object.keys(previous).some((key) => !(key in nextRawData))
+    if (!hasChange) return
+
+    rawDataRef.current = nextRawData
+    onChangeRawDataRef.current?.(id, nextRawData)
+  }, [id, normalizedDuration])
+
+  const schedulePromptCommit = useCallback((value: string) => {
+    clearPromptCommitTimer()
+    promptCommitTimerRef.current = window.setTimeout(() => {
+      promptCommitTimerRef.current = null
+      commitRawDataPatch({ text: value })
+    }, 320)
+  }, [clearPromptCommitTimer, commitRawDataPatch])
+
+  useEffect(() => {
+    const nextMode = readVideoMode(data.rawData)
+    const nextProvider = providerForMode(providers, readRawString(data.rawData, "providerID"), nextMode)
+    const nextModel = modelForMode(nextProvider, readRawString(data.rawData, "modelID"), nextMode)
+    setMode(nextMode)
+    setProviderID(nextProvider?.manifest.id ?? "")
+    setModelID(nextModel?.id ?? "")
+    setAspectRatioDraft(readRawString(data.rawData, "aspectRatio", defaultModelAspectRatio(nextModel)))
+    setDurationDraft(String(readRawNumber(data.rawData, "duration", defaultModelDuration(nextModel))))
+    setResolutionDraft(readRawString(data.rawData, "resolution", defaultModelResolution(nextModel)))
+  }, [data.rawData, providers, setAspectRatioDraft, setDurationDraft, setMode, setModelID, setProviderID, setResolutionDraft])
+
+  useEffect(() => {
+    if (isPromptComposingRef.current || promptCommitTimerRef.current !== null) return
+    const nextPrompt = task?.input.prompt ?? readRawString(data.rawData, "text")
+    promptDraftRef.current = nextPrompt
+    setPromptDraftState(nextPrompt)
+  }, [data.rawData, task?.input.prompt])
+
+  useEffect(() => () => clearPromptCommitTimer(), [clearPromptCommitTimer])
+
+  const chooseMode = (nextMode: CinemaGenerationMode) => {
+    const nextProvider = providerForMode(providers, providerIDRef.current, nextMode)
+    const nextModel = modelForMode(nextProvider, modelIDRef.current, nextMode)
+    const nextAspectRatio = defaultModelAspectRatio(nextModel)
+    const nextDuration = defaultModelDuration(nextModel)
+    const nextResolution = defaultModelResolution(nextModel)
+    setMode(nextMode)
+    setProviderID(nextProvider?.manifest.id ?? "")
+    setModelID(nextModel?.id ?? "")
+    setAspectRatioDraft(nextAspectRatio)
+    setDurationDraft(String(nextDuration))
+    setResolutionDraft(nextResolution)
+    commitRawDataPatch({
+      mode: nextMode,
+      providerID: nextProvider?.manifest.id,
+      modelID: nextModel?.id,
+      aspectRatio: nextAspectRatio,
+      duration: nextDuration,
+      resolution: nextResolution,
+    })
+  }
+
+  const chooseProvider = (nextProviderID: string) => {
+    const nextProvider = providerForMode(providers, nextProviderID, modeRef.current)
+    const nextModel = modelForMode(nextProvider, "", modeRef.current)
+    const nextAspectRatio = defaultModelAspectRatio(nextModel)
+    const nextDuration = defaultModelDuration(nextModel)
+    const nextResolution = defaultModelResolution(nextModel)
+    setProviderID(nextProvider?.manifest.id ?? "")
+    setModelID(nextModel?.id ?? "")
+    setAspectRatioDraft(nextAspectRatio)
+    setDurationDraft(String(nextDuration))
+    setResolutionDraft(nextResolution)
+    commitRawDataPatch({
+      providerID: nextProvider?.manifest.id,
+      modelID: nextModel?.id,
+      aspectRatio: nextAspectRatio,
+      duration: nextDuration,
+      resolution: nextResolution,
+    })
+  }
+
+  const chooseModel = (nextModelID: string) => {
+    const nextModel = modelForMode(selectedProvider, nextModelID, modeRef.current)
+    const nextAspectRatio = defaultModelAspectRatio(nextModel)
+    const nextDuration = defaultModelDuration(nextModel)
+    const nextResolution = defaultModelResolution(nextModel)
+    setModelID(nextModel?.id ?? "")
+    setAspectRatioDraft(nextAspectRatio)
+    setDurationDraft(String(nextDuration))
+    setResolutionDraft(nextResolution)
+    commitRawDataPatch({
+      modelID: nextModel?.id,
+      aspectRatio: nextAspectRatio,
+      duration: nextDuration,
+      resolution: nextResolution,
+    })
+  }
+
+  const createTask = () => {
+    const prompt = promptDraftRef.current.trim()
+    if (!prompt) {
+      promptRef.current?.focus()
+      return
+    }
+    if (!selectedProvider || !selectedModel || isBusy || sourceImageMissing) return
+    clearPromptCommitTimer()
+    const duration = normalizedDuration()
+    const aspectRatio = aspectRatioDraftRef.current.trim() || defaultModelAspectRatio(selectedModel)
+    const resolution = resolutionDraftRef.current.trim() || defaultModelResolution(selectedModel)
+    const parameters = {
+      ...(rawDataRef.current.parameters && typeof rawDataRef.current.parameters === "object" && !Array.isArray(rawDataRef.current.parameters)
+        ? rawDataRef.current.parameters as Record<string, unknown>
+        : {}),
+      aspectRatio,
+      duration,
+      resolution,
+      ...(mode === "image-to-video" && sourceImageAsset
+        ? {
+            sourceImageAssetID: sourceImageAsset.id,
+            sourceImagePath: sourceImageAsset.path,
+          }
+        : {}),
+    }
+
+    commitRawDataPatch({
+      text: prompt,
+      mode,
+      providerID: selectedProvider.manifest.id,
+      modelID: selectedModel.id,
+      aspectRatio,
+      duration,
+      resolution,
+      parameters,
+      sourceNodeIDs: sourceImageAsset ? [sourceImageAsset.nodeID] : [],
+      status: "queued",
+      error: null,
+    })
+    data.onCreateVideoGenerationTask?.(id, {
+      taskNodeID: id,
+      providerID: selectedProvider.manifest.id,
+      modelID: selectedModel.id,
+      mode,
+      title: data.title,
+      prompt,
+      sourceNodeIDs: sourceImageAsset ? [sourceImageAsset.nodeID] : [],
+      parameters,
+    })
+  }
+
+  return (
+    <>
+      <Handle
+        id="input"
+        type="target"
+        position={Position.Left}
+        className="cinema-node-handle cinema-node-handle-input"
+        style={accentStyle}
+      />
+      <article className={`cinema-video-gen-node ${selected ? "is-selected" : ""}`} style={accentStyle}>
+        <header className="cinema-video-gen-header">
+          <span className="cinema-node-type">
+            <Video size={14} aria-hidden="true" />
+            {data.title}
+          </span>
+          <span className={`cinema-video-gen-status is-${currentStatus}`}>
+            {isBusy ? <Loader2 size={11} aria-hidden="true" className="is-spinning" /> : null}
+            {currentStatus}
+          </span>
+        </header>
+
+        <section className="cinema-video-gen-preview" aria-label="Generated video preview">
+          {previewSrc ? (
+            <video src={previewSrc} controls preload="metadata" />
+          ) : (
+            <div className="cinema-video-gen-empty">
+              <Play size={26} aria-hidden="true" />
+              <span>{isWaiting ? "Waiting for output" : "No video yet"}</span>
+            </div>
+          )}
+          {data.isCreatingVideoTask ? (
+            <div className="cinema-image-gen-overlay" aria-live="polite">
+              <Loader2 size={18} aria-hidden="true" className="is-spinning" />
+              <span>Submitting</span>
+            </div>
+          ) : null}
+        </section>
+
+        <section className="cinema-video-gen-composer nodrag nowheel" aria-label="Video generation controls">
+          <div className="cinema-video-mode-tabs" role="tablist" aria-label="Video generation mode">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "text-to-video"}
+              className={mode === "text-to-video" ? "is-active" : ""}
+              disabled={isBusy}
+              onClick={() => chooseMode("text-to-video")}
+            >
+              文生视频
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "image-to-video"}
+              className={mode === "image-to-video" ? "is-active" : ""}
+              disabled={isBusy}
+              onClick={() => chooseMode("image-to-video")}
+            >
+              图生视频
+            </button>
+          </div>
+          <textarea
+            ref={promptRef}
+            value={promptDraft}
+            placeholder={needsSourceImage ? "描述参考图要如何运动、镜头如何变化..." : "描述你想生成的视频片段..."}
+            spellCheck={false}
+            disabled={isBusy}
+            onKeyDown={(event) => event.stopPropagation()}
+            onChange={(event) => {
+              const value = event.target.value
+              setPromptDraft(value)
+              if (!isPromptComposingRef.current) schedulePromptCommit(value)
+            }}
+            onCompositionStart={() => {
+              isPromptComposingRef.current = true
+              clearPromptCommitTimer()
+            }}
+            onCompositionEnd={(event) => {
+              isPromptComposingRef.current = false
+              const value = event.currentTarget.value
+              setPromptDraft(value)
+              commitRawDataPatch({ text: value })
+            }}
+            onBlur={() => {
+              if (isPromptComposingRef.current) return
+              clearPromptCommitTimer()
+              commitRawDataPatch({ text: promptDraftRef.current })
+            }}
+          />
+          {needsSourceImage ? (
+            <div className={`cinema-video-source ${sourceImageAsset ? "is-ready" : "is-missing"}`}>
+              <Image size={13} aria-hidden="true" />
+              <span>{sourceImageAsset ? `参考图：${sourceImageAsset.nodeTitle}` : "连接一个已有输出的图片节点"}</span>
+            </div>
+          ) : null}
+          <div className="cinema-video-gen-controls">
+            <select
+              aria-label="Video provider"
+              value={selectedProvider?.manifest.id ?? ""}
+              disabled={isBusy || availableProviders.length === 0}
+              onKeyDown={(event) => event.stopPropagation()}
+              onChange={(event) => chooseProvider(event.target.value)}
+            >
+              {availableProviders.length > 0 ? availableProviders.map((provider) => (
+                <option key={provider.manifest.id} value={provider.manifest.id}>{provider.manifest.name}</option>
+              )) : (
+                <option value="">No provider</option>
+              )}
+            </select>
+            <select
+              aria-label="Video model"
+              value={selectedModel?.id ?? ""}
+              disabled={isBusy || !selectedProvider}
+              onKeyDown={(event) => event.stopPropagation()}
+              onChange={(event) => chooseModel(event.target.value)}
+            >
+              {availableModels.length > 0 ? availableModels.map((model) => (
+                <option key={model.id} value={model.id}>{model.label}</option>
+              )) : (
+                <option value="">No model</option>
+              )}
+            </select>
+            <select
+              aria-label="Aspect ratio"
+              value={aspectRatioDraft}
+              disabled={isBusy}
+              onKeyDown={(event) => event.stopPropagation()}
+              onChange={(event) => {
+                setAspectRatioDraft(event.target.value)
+                commitRawDataPatch({ aspectRatio: event.target.value })
+              }}
+            >
+              {[...new Set([...(selectedModel?.aspectRatios ?? []), aspectRatioDraft, DEFAULT_VIDEO_ASPECT_RATIO].filter(Boolean))].map((item) => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
+            <select
+              aria-label="Duration"
+              value={durationDraft}
+              disabled={isBusy}
+              onKeyDown={(event) => event.stopPropagation()}
+              onChange={(event) => {
+                setDurationDraft(event.target.value)
+                commitRawDataPatch({ duration: Number.parseFloat(event.target.value) || DEFAULT_VIDEO_DURATION_SECONDS })
+              }}
+            >
+              {[...new Set([...(selectedModel?.durations ?? []), Number.parseFloat(durationDraft) || DEFAULT_VIDEO_DURATION_SECONDS])]
+                .filter((value) => Number.isFinite(value) && value > 0)
+                .map((value) => (
+                  <option key={value} value={String(value)}>{value}s</option>
+                ))}
+            </select>
+            <select
+              aria-label="Resolution"
+              value={resolutionDraft}
+              disabled={isBusy}
+              onKeyDown={(event) => event.stopPropagation()}
+              onChange={(event) => {
+                setResolutionDraft(event.target.value)
+                commitRawDataPatch({ resolution: event.target.value })
+              }}
+            >
+              {[...new Set([...(selectedModel?.resolutions ?? []), resolutionDraft, DEFAULT_VIDEO_RESOLUTION].filter(Boolean))].map((item) => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="cinema-video-gen-submit"
+              title={submitDisabledReason ?? (providerAdapterUnavailable ? "当前 provider 还没有运行时，提交后会显示错误" : "Generate video")}
+              aria-label="Generate video"
+              disabled={!canGenerate}
+              onClick={createTask}
+            >
+              {data.isCreatingVideoTask
+                ? <Loader2 size={18} aria-hidden="true" className="is-spinning" />
+                : <ArrowUp size={18} aria-hidden="true" />}
+            </button>
+          </div>
+          {nodeError || sourceImageMissing || providerNeedsCredential && !providerConnected || providerAdapterUnavailable ? (
+            <p className="cinema-video-gen-error" role="alert" title={nodeError ?? undefined}>
+              {nodeError ?? (
+                sourceImageMissing
+                  ? "图生视频需要先连接一个已有输出的图片节点。"
+                  : providerAdapterUnavailable
+                    ? `${selectedProvider?.manifest.name ?? "Provider"} 还没有接入视频生成运行时。`
+                    : `${selectedProvider?.manifest.name ?? "Provider"} is not connected.`
+              )}
+            </p>
+          ) : null}
+        </section>
+      </article>
+      <Handle
+        id="output"
+        type="source"
+        position={Position.Right}
+        className="cinema-node-handle cinema-node-handle-output"
+        style={accentStyle}
+      />
+    </>
+  )
+}
+
 function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
   const meta = NODE_META[data.cinemaType]
   const Icon = meta.icon
@@ -1114,6 +1695,10 @@ function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
 
   if (data.cinemaType === "image") {
     return <ImageGenerationCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
+  }
+
+  if (data.cinemaType === "video") {
+    return <VideoGenerationCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
   }
 
   return (
@@ -1585,6 +2170,87 @@ function ImageGenerationInspectorPanel({
   )
 }
 
+function VideoGenerationInspectorPanel({
+  selectedNode,
+  tasks,
+  onChangeNode,
+}: {
+  selectedNode: CinemaFlowNode
+  tasks: CinemaGenerationTask[]
+  onChangeNode: (nodeID: string, update: Partial<CinemaFlowNodeData>) => void
+}) {
+  const rawData = selectedNode.data.rawData
+  const taskID = readRawString(rawData, "taskID")
+  const task = tasks.find((item) => item.id === taskID) ?? null
+  const parameters = task?.input.parameters ?? rawData.parameters
+  const outputAssets = task?.outputAssets ?? readDisplayAssets(rawData)
+  const error = task?.error ?? readRawString(rawData, "error")
+  const [parametersText, setParametersText] = useState(() => stringifyParameters(parameters))
+  const [localError, setLocalError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setParametersText(stringifyParameters(parameters))
+    setLocalError(null)
+  }, [parameters, selectedNode.id])
+
+  const commitParameters = () => {
+    try {
+      const parsed = parseParameters(parametersText)
+      onChangeNode(selectedNode.id, {
+        rawData: {
+          ...rawData,
+          parameters: parsed,
+        },
+      })
+      setLocalError(null)
+    } catch (parseError) {
+      setLocalError(parseError instanceof Error ? parseError.message : "Parameters must be valid JSON.")
+    }
+  }
+
+  return (
+    <section className="cinema-generation-panel" aria-label="Video generation details">
+      <div className="cinema-task-status-row">
+        <span className={`cinema-task-status is-${task?.status ?? readRawString(rawData, "status", "draft")}`}>
+          {task?.status ?? readRawString(rawData, "status", "draft")}
+        </span>
+        {taskID ? <code>{taskID}</code> : null}
+      </div>
+      <div className="cinema-inspector-meta">
+        <span>Provider / Model</span>
+        <code>{readRawString(rawData, "providerID") || "No provider"} / {readRawString(rawData, "modelID") || "No model"}</code>
+      </div>
+      <div className="cinema-inspector-meta">
+        <span>Mode</span>
+        <code>{readRawString(rawData, "mode", FALLBACK_GENERATION_MODE)}</code>
+      </div>
+      <label className="cinema-field">
+        <span>Params JSON</span>
+        <textarea
+          className="is-compact"
+          value={parametersText}
+          spellCheck={false}
+          onChange={(event) => setParametersText(event.target.value)}
+          onBlur={commitParameters}
+        />
+      </label>
+      {outputAssets.length > 0 ? (
+        <div className="cinema-task-assets">
+          <span>Outputs</span>
+          {outputAssets.map((asset) => (
+            <code key={asset.id}>{asset.kind}: {asset.path}</code>
+          ))}
+        </div>
+      ) : null}
+      {(localError || error) ? (
+        <div className="cinema-image-error-detail" role="alert">
+          {localError ?? error}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 function Inspector({
   selectedNode,
   providers,
@@ -1660,6 +2326,12 @@ function Inspector({
             selectedNode={selectedNode}
             imageModels={imageModels}
             effectiveImageModel={effectiveImageModel}
+            onChangeNode={onChangeNode}
+          />
+        ) : selectedNode.data.cinemaType === "video" ? (
+          <VideoGenerationInspectorPanel
+            selectedNode={selectedNode}
+            tasks={tasks}
             onChangeNode={onChangeNode}
           />
         ) : (
@@ -1767,27 +2439,21 @@ export function App() {
   const [textGenerationError, setTextGenerationError] = useState<{ nodeID: string; message: string } | null>(null)
   const [imageGenerationNodeID, setImageGenerationNodeID] = useState<string | null>(null)
   const [imageGenerationError, setImageGenerationError] = useState<{ nodeID: string; message: string } | null>(null)
+  const [videoGenerationNodeID, setVideoGenerationNodeID] = useState<string | null>(null)
+  const [videoGenerationError, setVideoGenerationError] = useState<{ nodeID: string; message: string } | null>(null)
   const saveStateRef = useRef<SaveState>("idle")
   const autoRefreshInFlightRef = useRef(false)
   const nodePatchTimersRef = useRef(new Map<string, number>())
   const nodePatchQueueRef = useRef(new Map<string, CinemaNodePatch>())
   const eventCursorRef = useRef<number | null>(null)
-  const applyingCanvasRef = useRef(false)
 
   const applyCanvas = useCallback((canvas: CinemaCanvasDocument) => {
-    applyingCanvasRef.current = true
     setNodes(toFlowNodes(canvas))
     setEdges(canvas.edges)
     saveStateRef.current = "saved"
     setSaveState("saved")
     setSaveError(null)
-    window.requestAnimationFrame(() => {
-      reactFlow.setViewport(canvas.viewport)
-      window.setTimeout(() => {
-        applyingCanvasRef.current = false
-      }, 50)
-    })
-  }, [reactFlow])
+  }, [])
 
   const projectQuery = useQuery({
     queryKey: ["cinema-project", agentBaseURL, projectID],
@@ -1871,15 +2537,19 @@ export function App() {
   }, [refetchCanvas, refetchImageModels, refetchProviders, refetchTasks, refetchTextModels])
 
   const createGenerationTaskMutation = useMutation({
-    mutationFn: ({ body }: { body: CreateCinemaGenerationTaskBody; draftNodeID: string }) =>
-      requestJson<CinemaGenerationTask>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/generation-tasks`, {
+    mutationFn: async ({ body, draftNodeID }: { body: CreateCinemaGenerationTaskBody; draftNodeID: string }) => {
+      await flushNodePatch(draftNodeID)
+      return await requestJson<CinemaGenerationTask>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/generation-tasks`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
-      }),
-    onMutate: () => {
+      })
+    },
+    onMutate: ({ draftNodeID }) => {
+      setVideoGenerationNodeID(draftNodeID)
+      setVideoGenerationError(null)
       saveStateRef.current = "saving"
       setSaveState("saving")
       setSaveError(null)
@@ -1899,10 +2569,41 @@ export function App() {
       saveStateRef.current = "saved"
       setSaveState("saved")
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      const message = error instanceof Error ? error.message : "Task creation failed"
+      const failedNode = nodes.find((node) => node.id === variables.draftNodeID)
+      if (failedNode) {
+        const failedRawData = {
+          ...failedNode.data.rawData,
+          status: "failed",
+          error: message,
+        }
+        setNodes((current) =>
+          current.map((node) =>
+            node.id === variables.draftNodeID
+              ? {
+                ...node,
+                data: {
+                  ...node.data,
+                  rawData: {
+                    ...node.data.rawData,
+                    status: "failed",
+                    error: message,
+                  },
+                },
+              }
+              : node
+          )
+        )
+        queueNodePatch(variables.draftNodeID, { data: failedRawData })
+      }
+      setVideoGenerationError({ nodeID: variables.draftNodeID, message })
       saveStateRef.current = "error"
       setSaveState("error")
-      setSaveError(error instanceof Error ? error.message : "Task creation failed")
+      setSaveError(message)
+    },
+    onSettled: () => {
+      setVideoGenerationNodeID(null)
     },
   })
 
@@ -2389,13 +3090,22 @@ export function App() {
         projectID,
         onGenerateImage: (nodeID: string, request: ImageGenerationRequest) =>
           createImageGenerationMutation.mutate({ nodeID, request }),
+        videoProviders: providersQuery.data ?? [],
+        generationTasks: tasksQuery.data ?? [],
+        sourceImageAsset: node.data.cinemaType === "video" ? sourceImageAssetForVideoNode(node.id, nodes, edges) : null,
+        isCreatingVideoTask: createGenerationTaskMutation.isPending && videoGenerationNodeID === node.id,
+        videoGenerationError: videoGenerationError?.nodeID === node.id ? videoGenerationError.message : null,
+        onCreateVideoGenerationTask: (nodeID: string, body: CreateCinemaGenerationTaskBody) =>
+          createGenerationTaskMutation.mutate({ body, draftNodeID: nodeID }),
       },
     })),
     [
       agentBaseURL,
       changeNode,
+      createGenerationTaskMutation,
       createImageGenerationMutation,
       createTextGenerationMutation,
+      edges,
       effectiveImageModel,
       effectiveTextModel,
       imageGenerationError,
@@ -2403,9 +3113,13 @@ export function App() {
       imageModels,
       nodes,
       projectID,
+      providersQuery.data,
+      tasksQuery.data,
       textGenerationError,
       textGenerationNodeID,
       textModels,
+      videoGenerationError,
+      videoGenerationNodeID,
     ],
   )
 
@@ -2485,7 +3199,15 @@ export function App() {
             <button
               type="button"
               className="cinema-command-button"
-              onClick={() => addNode("shot", { x: 180, y: 180 })}
+              onClick={() => addNode("video", { x: 180, y: 180 })}
+            >
+              <Plus size={15} aria-hidden="true" />
+              Video
+            </button>
+            <button
+              type="button"
+              className="cinema-command-button"
+              onClick={() => addNode("shot", { x: 210, y: 210 })}
             >
               <Plus size={15} aria-hidden="true" />
               Shot
@@ -2515,15 +3237,6 @@ export function App() {
             onNodeClick={(_, node) => setSelectedNodeID(node.id)}
             onPaneClick={() => setSelectedNodeID(null)}
             onPaneContextMenu={onPaneContextMenu}
-            onMoveEnd={(_, nextViewport) => {
-              if (applyingCanvasRef.current) return
-              commandMutation.mutate({
-                id: makeCommandID("update-viewport"),
-                type: "update-viewport",
-                actor: "cinema-web",
-                viewport: nextViewport,
-              })
-            }}
             fitView
             fitViewOptions={{ padding: 0.38 }}
             minZoom={0.2}

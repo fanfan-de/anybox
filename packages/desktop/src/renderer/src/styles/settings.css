@@ -11619,6 +11619,49 @@ body.is-dragging-settings-page {
   color: var(--seg-text-1);
 }
 
+.provider-endpoint-control {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.provider-endpoint-current {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--seg-border);
+  border-radius: 6px;
+  background: var(--seg-panel-muted);
+}
+
+.provider-endpoint-current span {
+  min-width: 0;
+  color: var(--seg-text-2);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.provider-endpoint-current code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--seg-text-1);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-endpoint-current small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--seg-text-3);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .provider-advanced-settings {
   border: 0;
   border-radius: 0;

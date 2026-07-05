@@ -1,14 +1,16 @@
+import { createHmac } from "node:crypto"
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { z } from "zod"
 import {
   type CinemaCanvasDocument,
+  type CinemaGeneratedAsset,
   type CinemaGenerationTask,
   type CinemaProviderAuthState,
   type TestCinemaVideoProviderConnectionBody,
   type CinemaVideoProvider,
   type CinemaVideoProviderManifest,
-  CinemaGenerationModeSchema,
+  CinemaProviderModelModeSchema,
   CinemaVideoProviderManifestSchema,
   type CreateCinemaGenerationTaskBody,
 } from "@anybox/shared/cinema"
@@ -23,6 +25,22 @@ const PROVIDERS_MODELSWIKI_API_URL =
   "https://raw.githubusercontent.com/fanfan-de/Providers-ModelsWiki/main/dist/api.json"
 const REQUEST_TIMEOUT_MS = 10 * 1000
 const CATALOG_SOURCE_ID = "providers-modelswiki"
+const KLINGAI_PROVIDER_ID = "klingai"
+const KLINGAI_DEFAULT_BASE_URL = "https://api-singapore.klingai.com"
+const KLINGAI_REQUEST_TIMEOUT_MS = 30 * 1000
+const KLINGAI_DOWNLOAD_TIMEOUT_MS = 120 * 1000
+const KLINGAI_VIDEO_ASSET_MAX_BYTES = 256 * 1024 * 1024
+const VIDEO_EXTENSION_BY_MIME: Record<string, string> = {
+  "video/mp4": ".mp4",
+  "video/quicktime": ".mov",
+  "video/webm": ".webm",
+}
+const VIDEO_MIME_BY_EXTENSION: Record<string, string> = {
+  ".m4v": "video/mp4",
+  ".mov": "video/quicktime",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+}
 
 const log = Log.create({ service: "cinema-video-provider-catalog" })
 
@@ -300,7 +318,7 @@ function normalizeStringList(values: string[] | undefined) {
 
 function normalizeModes(values: string[]) {
   return values.flatMap((value) => {
-    const parsed = CinemaGenerationModeSchema.safeParse(value)
+    const parsed = CinemaProviderModelModeSchema.safeParse(value)
     return parsed.success ? [parsed.data] : []
   })
 }
@@ -384,6 +402,687 @@ async function catalogManifests(): Promise<CinemaVideoProviderManifest[]> {
 
 const providerAdapters: Record<string, ProviderAdapter> = {}
 
+export function registerCinemaVideoProviderAdapter(providerID: string, adapter: ProviderAdapter) {
+  providerAdapters[providerID] = adapter
+}
+
+export function hasCinemaVideoProviderAdapter(providerID: string) {
+  return Boolean(providerAdapters[providerID])
+}
+
+function unregisterCinemaVideoProviderAdapter(providerID: string) {
+  delete providerAdapters[providerID]
+}
+
+export function setCinemaVideoProviderAdapterForTest(providerID: string, adapter: ProviderAdapter | undefined) {
+  const previous = providerAdapters[providerID]
+  if (adapter) {
+    registerCinemaVideoProviderAdapter(providerID, adapter)
+  } else {
+    unregisterCinemaVideoProviderAdapter(providerID)
+  }
+
+  return () => {
+    if (previous) {
+      registerCinemaVideoProviderAdapter(providerID, previous)
+    } else {
+      unregisterCinemaVideoProviderAdapter(providerID)
+    }
+  }
+}
+
+type KlingAIEndpointKind = "text2video" | "image2video"
+
+type KlingAIVideoResult = {
+  id?: string
+  url: string
+}
+
+type KlingAIParsedResponse = {
+  message?: string
+  data?: Record<string, unknown>
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value))
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+function numberOrStringValue(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return String(value)
+  return stringValue(value)
+}
+
+function taskUpdated(task: CinemaGenerationTask, patch: Partial<CinemaGenerationTask>): CinemaGenerationTask {
+  return {
+    ...task,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+function base64URL(input: string | Buffer) {
+  return Buffer.from(input)
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+}
+
+function createKlingAIJWT(input: { accessKey: string; secretKey: string }) {
+  const nowSeconds = Math.floor(Date.now() / 1000)
+  const header = base64URL(JSON.stringify({ alg: "HS256", typ: "JWT" }))
+  const payload = base64URL(JSON.stringify({
+    iss: input.accessKey,
+    exp: nowSeconds + 1800,
+    nbf: nowSeconds - 5,
+  }))
+  const signature = createHmac("sha256", input.secretKey)
+    .update(`${header}.${payload}`)
+    .digest()
+  return `${header}.${payload}.${base64URL(signature)}`
+}
+
+function unquoteCredentialValue(value: string) {
+  const trimmed = value.trim()
+  const match = /^["'](.+)["']$/.exec(trimmed)
+  return (match?.[1] ?? trimmed).trim()
+}
+
+function stripKlingAICredentialDecorators(value: string) {
+  return unquoteCredentialValue(
+    value
+      .trim()
+      .replace(/^authorization\s*:\s*/i, "")
+      .replace(/^bearer\s+/i, ""),
+  )
+}
+
+function firstCredentialCapture(value: string, patterns: RegExp[]) {
+  for (const pattern of patterns) {
+    const match = pattern.exec(value)
+    const captured = match?.[1] ? unquoteCredentialValue(match[1]) : undefined
+    if (captured) return captured
+  }
+  return undefined
+}
+
+function maybeSingleLabeledKlingAIAPIKey(value: string) {
+  const match = /^(?:api\s*key|apikey)\s*[:=]\s*(.+)$/i.exec(value.trim())
+  return match?.[1] ? stripKlingAICredentialDecorators(match[1]) : undefined
+}
+
+function maybeKlingAICredentialPair(value: string) {
+  const trimmed = stripKlingAICredentialDecorators(value)
+  if (!trimmed) return undefined
+
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (isRecord(parsed)) {
+        const accessKey = stringValue(parsed.accessKey) ?? stringValue(parsed.access_key) ?? stringValue(parsed.ak)
+        const secretKey = stringValue(parsed.secretKey) ?? stringValue(parsed.secret_key) ?? stringValue(parsed.sk)
+        if (accessKey && secretKey) return { accessKey, secretKey }
+      }
+    } catch {
+      return undefined
+    }
+  }
+
+  const labeledAccessKey = firstCredentialCapture(trimmed, [
+    /\baccess\s*key\s*id\s*[:=]\s*([^\s,;]+)/i,
+    /\baccess\s*key\s*[:=]\s*([^\s,;]+)/i,
+    /\baccess[_-]?key[_-]?id\s*[:=]\s*([^\s,;]+)/i,
+    /\baccess[_-]?key\s*[:=]\s*([^\s,;]+)/i,
+    /\baccessKey(?:ID|Id)?\s*[:=]\s*([^\s,;]+)/,
+    /\bak\s*[:=]\s*([^\s,;]+)/i,
+  ])
+  const labeledSecretKey = firstCredentialCapture(trimmed, [
+    /\baccess\s*key\s*secret\s*[:=]\s*([^\s,;]+)/i,
+    /\bsecret\s*key\s*[:=]\s*([^\s,;]+)/i,
+    /\baccess[_-]?key[_-]?secret\s*[:=]\s*([^\s,;]+)/i,
+    /\bsecret[_-]?key\s*[:=]\s*([^\s,;]+)/i,
+    /\bsecretKey\s*[:=]\s*([^\s,;]+)/,
+    /\bsk\s*[:=]\s*([^\s,;]+)/i,
+  ])
+  if (labeledAccessKey && labeledSecretKey) {
+    return {
+      accessKey: labeledAccessKey,
+      secretKey: labeledSecretKey,
+    }
+  }
+
+  const lines = trimmed.split(/\r?\n/).map(stripKlingAICredentialDecorators).filter(Boolean)
+  if (lines.length === 2 && !lines.some((line) => /[:=]/.test(line))) {
+    return {
+      accessKey: lines[0]!,
+      secretKey: lines[1]!,
+    }
+  }
+
+  const separator = trimmed.includes(":") ? ":" : trimmed.includes("|") ? "|" : trimmed.includes(",") ? "," : null
+  if (!separator) return undefined
+  const [rawAccessKey, ...secretParts] = trimmed.split(separator)
+  const accessKey = rawAccessKey?.trim() ?? ""
+  const secretKey = secretParts.join(separator).trim()
+  if (!accessKey || !secretKey) return undefined
+  return {
+    accessKey,
+    secretKey,
+  }
+}
+
+function isJWTLike(value: string) {
+  return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(stripKlingAICredentialDecorators(value))
+}
+
+async function klingAIBearerToken() {
+  const runtimeAuth = await ProviderAuth.resolveProviderRuntimeAuth(`cinema-${KLINGAI_PROVIDER_ID}`, {}, {
+    method: "api-key",
+    credentialMode: "active",
+  })
+  const apiKey = runtimeAuth.apiKey?.trim()
+  if (!apiKey) {
+    throw new ApiError(
+      401,
+      "CINEMA_KLINGAI_AUTH_MISSING",
+      "KlingAI requires credentials. Save a JWT token, ACCESS_KEY:SECRET_KEY, or JSON with accessKey/secretKey.",
+    )
+  }
+
+  const normalizedApiKey = maybeSingleLabeledKlingAIAPIKey(apiKey) ?? stripKlingAICredentialDecorators(apiKey)
+  if (isJWTLike(normalizedApiKey)) return normalizedApiKey
+  const pair = maybeKlingAICredentialPair(apiKey)
+  return pair ? createKlingAIJWT(pair) : normalizedApiKey
+}
+
+async function klingAIBaseURL() {
+  const settings = await Config.getCinemaVideoProviderSettings(KLINGAI_PROVIDER_ID)
+  const configuredBaseURL = normalizeBaseURL(settings.baseURL)
+  if (configuredBaseURL) return configuredBaseURL
+
+  const manifest = (await catalogManifests()).find((item) => item.id === KLINGAI_PROVIDER_ID)
+  return normalizeCatalogBaseURL(manifest?.baseURL) ?? KLINGAI_DEFAULT_BASE_URL
+}
+
+function defaultBaseURLForProvider(manifest: CinemaVideoProviderManifest) {
+  return (
+    normalizeCatalogBaseURL(manifest.baseURL) ??
+    (manifest.id === KLINGAI_PROVIDER_ID ? KLINGAI_DEFAULT_BASE_URL : undefined)
+  )
+}
+
+function klingAIEndpointPath(kind: KlingAIEndpointKind, taskID?: string) {
+  const basePath = `v1/videos/${kind}`
+  if (!taskID) return basePath
+  return `${basePath}/${encodeURIComponent(taskID)}`
+}
+
+function klingAIURL(baseURL: string, endpointPath: string) {
+  const normalizedEndpoint = endpointPath.replace(/^\/+/, "")
+  const base = new URL(`${baseURL}/`)
+  const baseHasVersion = base.pathname.replace(/\/+$/, "").endsWith("/v1")
+  const relativeEndpoint = baseHasVersion ? normalizedEndpoint.replace(/^v1\/+/, "") : normalizedEndpoint
+  return new URL(relativeEndpoint, base).toString()
+}
+
+function redactKlingAIErrorText(value: string) {
+  return value
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/("(?:authorization|api[_-]?key|access[_-]?key|secret[_-]?key|ak|sk)"\s*:\s*)"[^"]+"/gi, "$1\"[redacted]\"")
+    .slice(0, 1000)
+}
+
+function parseKlingAIJSON(text: string): Record<string, unknown> {
+  if (!text.trim()) return {}
+  try {
+    const parsed = JSON.parse(text)
+    return isRecord(parsed) ? parsed : {}
+  } catch {
+    return {
+      message: text,
+    }
+  }
+}
+
+function klingAIAPIErrorCode(status: number) {
+  if (status === 401 || status === 403) return "CINEMA_KLINGAI_AUTH_FAILED"
+  if (status === 429) return "CINEMA_KLINGAI_RATE_LIMITED"
+  return "CINEMA_KLINGAI_REQUEST_FAILED"
+}
+
+function klingAIRequestErrorMessage(status: number, remoteMessage: string) {
+  const detail = remoteMessage ? `: ${redactKlingAIErrorText(remoteMessage)}` : "."
+  if (status === 401 || status === 403) {
+    return `KlingAI rejected the saved credential with HTTP ${status}${detail} Save the full API Key, or for legacy Access Key credentials save AccessKeyID:AccessKeySecret without the Bearer prefix.`
+  }
+  return `KlingAI request failed with HTTP ${status}${detail}`
+}
+
+async function requestKlingAI(
+  endpointPath: string,
+  options: {
+    method?: "GET" | "POST"
+    body?: Record<string, unknown>
+  } = {},
+): Promise<KlingAIParsedResponse> {
+  const baseURL = await klingAIBaseURL()
+  const token = await klingAIBearerToken()
+  const headers = new Headers({
+    Authorization: `Bearer ${token}`,
+  })
+  if (options.body) headers.set("content-type", "application/json")
+
+  const response = await fetch(klingAIURL(baseURL, endpointPath), {
+    method: options.method ?? (options.body ? "POST" : "GET"),
+    headers,
+    ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+    signal: AbortSignal.timeout(KLINGAI_REQUEST_TIMEOUT_MS),
+  })
+  const responseText = await response.text()
+  const parsed = parseKlingAIJSON(responseText)
+  const remoteMessage = stringValue(parsed.message) ?? stringValue(parsed.msg) ?? stringValue(parsed.error) ?? responseText
+  if (!response.ok) {
+    throw new ApiError(
+      response.status === 401 || response.status === 403 ? 401 : 502,
+      klingAIAPIErrorCode(response.status),
+      klingAIRequestErrorMessage(response.status, remoteMessage),
+    )
+  }
+
+  const code = parsed.code
+  const okCode = code === undefined || code === 0 || code === "0"
+  if (!okCode) {
+    throw new ApiError(
+      502,
+      "CINEMA_KLINGAI_API_ERROR",
+      `KlingAI returned an error${remoteMessage ? `: ${redactKlingAIErrorText(remoteMessage)}` : "."}`,
+    )
+  }
+
+  return {
+    message: remoteMessage ? redactKlingAIErrorText(remoteMessage) : undefined,
+    data: isRecord(parsed.data) ? parsed.data : parsed,
+  }
+}
+
+function klingAITaskIDFromResponse(response: KlingAIParsedResponse) {
+  return stringValue(response.data?.task_id) ?? stringValue(response.data?.taskID) ?? stringValue(response.data?.id)
+}
+
+function klingAITaskStatusFromResponse(response: KlingAIParsedResponse): CinemaGenerationTask["status"] {
+  const status = stringValue(response.data?.task_status) ?? stringValue(response.data?.status)
+  switch (status?.toLowerCase()) {
+    case "submitted":
+    case "created":
+    case "pending":
+    case "queued":
+      return "queued"
+    case "processing":
+    case "running":
+    case "in_progress":
+      return "running"
+    case "succeed":
+    case "succeeded":
+    case "success":
+    case "completed":
+      return "succeeded"
+    case "failed":
+    case "failure":
+    case "error":
+      return "failed"
+    default:
+      return "running"
+  }
+}
+
+function klingAITaskMessage(response: KlingAIParsedResponse) {
+  return (
+    stringValue(response.data?.task_status_msg) ??
+    stringValue(response.data?.status_msg) ??
+    stringValue(response.data?.message) ??
+    response.message
+  )
+}
+
+function klingAIVideosFromResponse(response: KlingAIParsedResponse): KlingAIVideoResult[] {
+  const taskResult = isRecord(response.data?.task_result) ? response.data.task_result : response.data?.result
+  const resultRecord = isRecord(taskResult) ? taskResult : {}
+  const videos = Array.isArray(resultRecord.videos)
+    ? resultRecord.videos
+    : Array.isArray(response.data?.videos)
+      ? response.data.videos
+      : []
+  return videos.flatMap((item, index) => {
+    if (typeof item === "string" && item.trim()) return [{ id: `kling-video-${index + 1}`, url: item.trim() }]
+    if (!isRecord(item)) return []
+    const url = stringValue(item.url) ?? stringValue(item.video_url) ?? stringValue(item.download_url)
+    if (!url) return []
+    return [{
+      id: stringValue(item.id),
+      url,
+    }]
+  })
+}
+
+function safeKlingAISegment(value: string) {
+  const readable = value.replace(/[^A-Za-z0-9._-]/g, "_").replace(/^_+|_+$/g, "").slice(0, 80)
+  return readable || "kling-video"
+}
+
+function projectRelativePath(root: string, filePath: string) {
+  return path.relative(root, filePath).split(path.sep).join("/")
+}
+
+function resolveProjectRelativeFile(root: string, relativePath: string) {
+  const normalizedInput = relativePath.replace(/\\/g, "/").replace(/^\/+/, "")
+  if (!normalizedInput || normalizedInput.includes("\0") || path.isAbsolute(relativePath) || normalizedInput.split("/").includes("..")) {
+    throw new ApiError(400, "CINEMA_ASSET_PATH_INVALID", "Asset path must be a project-relative path.")
+  }
+
+  const resolvedRoot = path.resolve(root)
+  const resolvedPath = path.resolve(root, normalizedInput)
+  const relative = path.relative(resolvedRoot, resolvedPath)
+  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new ApiError(400, "CINEMA_ASSET_PATH_INVALID", "Asset path must stay inside the current project.")
+  }
+
+  return resolvedPath
+}
+
+function videoMimeAndExtensionFromResponse(response: Response, sourceURL: string) {
+  const contentType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase()
+  if (contentType && VIDEO_EXTENSION_BY_MIME[contentType]) {
+    return {
+      mimeType: contentType,
+      extension: VIDEO_EXTENSION_BY_MIME[contentType],
+    }
+  }
+
+  const extension = path.extname(new URL(sourceURL).pathname).toLowerCase()
+  const mimeType = VIDEO_MIME_BY_EXTENSION[extension]
+  if (mimeType) {
+    return {
+      mimeType,
+      extension,
+    }
+  }
+
+  return {
+    mimeType: "video/mp4",
+    extension: ".mp4",
+  }
+}
+
+async function downloadKlingAIVideoAssets(input: {
+  root: string
+  task: CinemaGenerationTask
+  videos: KlingAIVideoResult[]
+}): Promise<CinemaGeneratedAsset[]> {
+  const taskSegment = safeKlingAISegment(input.task.taskNodeID ?? input.task.id)
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+  const outputDirectory = path.join(input.root, "generated", "videos", taskSegment)
+  await mkdir(outputDirectory, { recursive: true })
+
+  const assets: CinemaGeneratedAsset[] = []
+  for (const [index, video] of input.videos.entries()) {
+    let sourceURL: URL
+    try {
+      sourceURL = new URL(video.url)
+    } catch {
+      throw new ApiError(502, "CINEMA_KLINGAI_OUTPUT_URL_INVALID", "KlingAI returned an invalid video output URL.")
+    }
+    if (sourceURL.protocol !== "http:" && sourceURL.protocol !== "https:") {
+      throw new ApiError(502, "CINEMA_KLINGAI_OUTPUT_URL_INVALID", "KlingAI video output URL must use http or https.")
+    }
+
+    const response = await fetch(sourceURL, {
+      signal: AbortSignal.timeout(KLINGAI_DOWNLOAD_TIMEOUT_MS),
+    })
+    if (!response.ok) {
+      throw new ApiError(502, "CINEMA_KLINGAI_OUTPUT_DOWNLOAD_FAILED", `Failed to download KlingAI video output (HTTP ${response.status}).`)
+    }
+    const expectedSize = Number(response.headers.get("content-length"))
+    if (Number.isFinite(expectedSize) && expectedSize > KLINGAI_VIDEO_ASSET_MAX_BYTES) {
+      throw new ApiError(413, "CINEMA_KLINGAI_OUTPUT_TOO_LARGE", "KlingAI video output is too large to save locally.")
+    }
+
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    if (bytes.byteLength === 0) {
+      throw new ApiError(502, "CINEMA_KLINGAI_OUTPUT_EMPTY", "KlingAI returned an empty video output.")
+    }
+    if (bytes.byteLength > KLINGAI_VIDEO_ASSET_MAX_BYTES) {
+      throw new ApiError(413, "CINEMA_KLINGAI_OUTPUT_TOO_LARGE", "KlingAI video output is too large to save locally.")
+    }
+
+    const { mimeType, extension } = videoMimeAndExtensionFromResponse(response, sourceURL.toString())
+    const filePath = path.join(outputDirectory, `${timestamp}-${index + 1}${extension}`)
+    await writeFile(filePath, bytes)
+    assets.push({
+      id: video.id ?? `video-${timestamp}-${index + 1}`,
+      kind: "video",
+      path: projectRelativePath(input.root, filePath),
+      mimeType,
+      sizeBytes: bytes.byteLength,
+      url: sourceURL.toString(),
+    })
+  }
+
+  return assets
+}
+
+function klingAIEndpointKindForTask(task: CinemaGenerationTask): KlingAIEndpointKind {
+  const refKind = stringValue(task.providerTaskRef?.kind)
+  if (refKind === "text2video" || refKind === "image2video") return refKind
+  return task.mode === "image-to-video" ? "image2video" : "text2video"
+}
+
+function klingAITaskRefFor(task: CinemaGenerationTask, taskID: string, kind: KlingAIEndpointKind) {
+  return {
+    providerID: KLINGAI_PROVIDER_ID,
+    taskID,
+    kind,
+    endpoint: klingAIEndpointPath(kind),
+  }
+}
+
+async function applyKlingAITaskResponse(input: {
+  root: string
+  task: CinemaGenerationTask
+  response: KlingAIParsedResponse
+}): Promise<CinemaGenerationTask> {
+  const status = klingAITaskStatusFromResponse(input.response)
+  const message = klingAITaskMessage(input.response)
+  if (status === "failed") {
+    return taskUpdated(input.task, {
+      status,
+      error: message ?? "KlingAI video generation failed.",
+    })
+  }
+
+  if (status !== "succeeded") {
+    return taskUpdated(input.task, {
+      status,
+      error: null,
+    })
+  }
+
+  if (input.task.outputAssets.length > 0) {
+    return taskUpdated(input.task, {
+      status,
+      error: null,
+    })
+  }
+
+  const videos = klingAIVideosFromResponse(input.response)
+  if (videos.length === 0) {
+    return taskUpdated(input.task, {
+      status: "failed",
+      error: "KlingAI marked the task succeeded but did not return a video output URL.",
+    })
+  }
+
+  try {
+    const outputAssets = await downloadKlingAIVideoAssets({
+      root: input.root,
+      task: input.task,
+      videos,
+    })
+    return taskUpdated(input.task, {
+      status: "succeeded",
+      outputAssets,
+      error: null,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return taskUpdated(input.task, {
+      status: "failed",
+      error: redactKlingAIErrorText(message || "Failed to download KlingAI video output."),
+    })
+  }
+}
+
+function parameterString(parameters: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = numberOrStringValue(parameters[key])
+    if (value) return value
+  }
+  return undefined
+}
+
+function klingAIQualityMode(parameters: Record<string, unknown>) {
+  const explicit = parameterString(parameters, "klingMode", "qualityMode", "mode")
+  if (explicit && /^(std|pro|4k)$/i.test(explicit)) return explicit.toLowerCase()
+
+  const resolution = parameterString(parameters, "resolution")
+  if (/4\s*k/i.test(resolution ?? "")) return "4k"
+  if (/1080|pro/i.test(resolution ?? "")) return "pro"
+  return "std"
+}
+
+function appendOptionalPayloadString(
+  target: Record<string, unknown>,
+  outputKey: string,
+  parameters: Record<string, unknown>,
+  ...inputKeys: string[]
+) {
+  const value = parameterString(parameters, ...inputKeys)
+  if (value) target[outputKey] = value
+}
+
+function klingAIExternalTaskID(taskID: string) {
+  return safeKlingAISegment(taskID).slice(0, 64)
+}
+
+async function klingAIImageInput(root: string, parameters: Record<string, unknown>) {
+  const sourceImageURL = stringValue(parameters.sourceImageURL) ?? stringValue(parameters.imageURL)
+  if (sourceImageURL) {
+    let url: URL
+    try {
+      url = new URL(sourceImageURL)
+    } catch {
+      throw new ApiError(400, "CINEMA_KLINGAI_SOURCE_IMAGE_INVALID", "KlingAI source image URL must be a valid absolute URL.")
+    }
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new ApiError(400, "CINEMA_KLINGAI_SOURCE_IMAGE_INVALID", "KlingAI source image URL must use http or https.")
+    }
+    return url.toString()
+  }
+
+  const sourceImagePath = stringValue(parameters.sourceImagePath) ?? stringValue(parameters.imagePath)
+  if (!sourceImagePath) {
+    throw new ApiError(
+      400,
+      "CINEMA_KLINGAI_SOURCE_IMAGE_REQUIRED",
+      "Image-to-video requires a source image. Connect an image node with a generated asset before submitting.",
+    )
+  }
+
+  const filePath = resolveProjectRelativeFile(root, sourceImagePath)
+  const fileStat = await stat(filePath).catch((error: unknown) => {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      throw new ApiError(404, "CINEMA_KLINGAI_SOURCE_IMAGE_NOT_FOUND", "KlingAI source image asset was not found.")
+    }
+    throw error
+  })
+  if (!fileStat.isFile()) {
+    throw new ApiError(400, "CINEMA_KLINGAI_SOURCE_IMAGE_INVALID", "KlingAI source image path must point to a file.")
+  }
+  if (fileStat.size > 25 * 1024 * 1024) {
+    throw new ApiError(413, "CINEMA_KLINGAI_SOURCE_IMAGE_TOO_LARGE", "KlingAI source image is too large.")
+  }
+
+  return Buffer.from(await readFile(filePath)).toString("base64")
+}
+
+async function klingAITaskPayload(input: ProviderAdapterCreateInput, kind: KlingAIEndpointKind) {
+  const parameters = input.task.input.parameters
+  const payload: Record<string, unknown> = {
+    model_name: input.task.modelID,
+    prompt: input.task.input.prompt,
+    external_task_id: klingAIExternalTaskID(input.task.id),
+  }
+
+  appendOptionalPayloadString(payload, "aspect_ratio", parameters, "aspectRatio", "aspect_ratio")
+  appendOptionalPayloadString(payload, "duration", parameters, "duration")
+  appendOptionalPayloadString(payload, "negative_prompt", parameters, "negativePrompt", "negative_prompt")
+  appendOptionalPayloadString(payload, "cfg_scale", parameters, "cfgScale", "cfg_scale")
+  payload.mode = klingAIQualityMode(parameters)
+
+  if (kind === "image2video") {
+    payload.image = await klingAIImageInput(input.root, parameters)
+  }
+
+  return payload
+}
+
+const KlingAIProviderAdapter: ProviderAdapter = {
+  manifest: {} as CinemaVideoProviderManifest,
+  createTask: async (input) => {
+    const kind = input.task.mode === "image-to-video" ? "image2video" : "text2video"
+    const payload = await klingAITaskPayload(input, kind)
+    const response = await requestKlingAI(klingAIEndpointPath(kind), {
+      method: "POST",
+      body: payload,
+    })
+    const providerTaskID = klingAITaskIDFromResponse(response)
+    if (!providerTaskID) {
+      throw new ApiError(502, "CINEMA_KLINGAI_TASK_ID_MISSING", "KlingAI did not return a task ID.")
+    }
+
+    const task = taskUpdated(input.task, {
+      providerTaskRef: klingAITaskRefFor(input.task, providerTaskID, kind),
+    })
+    return await applyKlingAITaskResponse({
+      root: input.root,
+      task,
+      response,
+    })
+  },
+  refreshTask: async (input) => {
+    const providerTaskID = stringValue(input.task.providerTaskRef?.taskID) ?? stringValue(input.task.providerTaskRef?.task_id)
+    if (!providerTaskID) {
+      return taskUpdated(input.task, {
+        status: "failed",
+        error: "KlingAI task is missing its provider task ID.",
+      })
+    }
+
+    const kind = klingAIEndpointKindForTask(input.task)
+    const response = await requestKlingAI(klingAIEndpointPath(kind, providerTaskID))
+    return await applyKlingAITaskResponse({
+      root: input.root,
+      task: input.task,
+      response,
+    })
+  },
+}
+
+registerCinemaVideoProviderAdapter(KLINGAI_PROVIDER_ID, KlingAIProviderAdapter)
+
 export function assertCinemaVideoProviderModelSupports(
   input: CreateCinemaGenerationTaskBody,
   manifest: CinemaVideoProviderManifest,
@@ -441,19 +1140,28 @@ async function providerAuthStateFor(manifest: CinemaVideoProviderManifest): Prom
 
 async function providerRuntimeFor(manifest: CinemaVideoProviderManifest): Promise<CinemaVideoProvider["runtime"]> {
   const settings = await Config.getCinemaVideoProviderSettings(manifest.id)
+  const adapterAvailable = hasCinemaVideoProviderAdapter(manifest.id)
+  const adapterRuntime = adapterAvailable
+    ? {
+        adapterAvailable,
+        adapterID: manifest.id,
+      }
+    : { adapterAvailable }
   const configuredBaseURL = normalizeBaseURL(settings.baseURL)
   if (configuredBaseURL) {
     return {
+      ...adapterRuntime,
       baseURL: configuredBaseURL,
       configuredBaseURL,
       baseURLSource: "settings",
     }
   }
 
-  const catalogBaseURL = normalizeCatalogBaseURL(manifest.baseURL)
-  if (!catalogBaseURL) return undefined
+  const defaultBaseURL = defaultBaseURLForProvider(manifest)
+  if (!defaultBaseURL) return adapterRuntime
   return {
-    baseURL: catalogBaseURL,
+    ...adapterRuntime,
+    baseURL: defaultBaseURL,
     baseURLSource: "default",
   }
 }

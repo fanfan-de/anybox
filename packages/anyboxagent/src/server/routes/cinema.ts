@@ -141,16 +141,23 @@ export function CinemaRoutes() {
   })
 
   app.get("/projects/:projectID/assets/*", async (c) => {
-    const asset = await CinemaUseCase.readCinemaProjectImageAsset(
+    const asset = await CinemaUseCase.readCinemaProjectAsset(
       c.req.param("projectID"),
       decodeCinemaAssetPath(c.req.url),
+      { rangeHeader: c.req.header("range") },
     )
+    const headers: Record<string, string> = {
+      "accept-ranges": "bytes",
+      "content-type": asset.mimeType,
+      "content-length": String(asset.contentLength),
+      "cache-control": "private, max-age=31536000, immutable",
+    }
+    if (asset.range) {
+      headers["content-range"] = `bytes ${asset.range.start}-${asset.range.end}/${asset.range.total}`
+    }
     return new Response(asset.bytes, {
-      headers: {
-        "content-type": asset.mimeType,
-        "content-length": String(asset.sizeBytes),
-        "cache-control": "private, max-age=31536000, immutable",
-      },
+      status: asset.range ? 206 : 200,
+      headers,
     })
   })
 
