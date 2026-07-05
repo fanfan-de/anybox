@@ -105,6 +105,21 @@ export const ImageGenerationSettings = z
   })
 export type ImageGenerationSettings = z.infer<typeof ImageGenerationSettings>
 
+export const CinemaVideoProviderSettings = z
+  .object({
+    baseURL: z.string().optional(),
+  })
+  .strict()
+  .meta({
+    ref: "CinemaVideoProviderSettings",
+  })
+export type CinemaVideoProviderSettings = z.infer<typeof CinemaVideoProviderSettings>
+
+const CinemaVideoProviderSettingsField = z
+  .record(z.string(), CinemaVideoProviderSettings)
+  .optional()
+  .describe("Cinema video provider runtime settings such as endpoint overrides")
+
 const EnabledProvidersField = z
   .array(z.string())
   .optional()
@@ -447,6 +462,7 @@ export const Info = z
       ),
     ...ProviderConfigFields,
     image_generation: ImageGenerationSettings.optional(),
+    cinema_video_providers: CinemaVideoProviderSettingsField,
     reasoning_effort: ReasoningEffortSchema.optional(),
     default_agent: z
       .string()
@@ -886,6 +902,39 @@ export async function setImageGenerationSettings(configID: string, input: ImageG
   const next: Info = {
     ...current,
     image_generation: Object.keys(parsed).length > 0 ? parsed : undefined,
+  }
+  return writeConfig(normalizedConfigID, Info.parse(next))
+}
+
+export async function getCinemaVideoProviderSettings(
+  providerID: string,
+  configID = GLOBAL_CONFIG_ID,
+): Promise<CinemaVideoProviderSettings> {
+  const config = readConfig(normalizeConfigID(configID))
+  return CinemaVideoProviderSettings.parse(config.cinema_video_providers?.[providerID] ?? {})
+}
+
+export async function setCinemaVideoProviderSettings(
+  configID: string,
+  providerID: string,
+  input: CinemaVideoProviderSettings,
+) {
+  const normalizedConfigID = normalizeConfigID(configID)
+  const current = readConfig(normalizedConfigID)
+  const parsed = CinemaVideoProviderSettings.parse(input)
+  const nextProviders = {
+    ...(current.cinema_video_providers ?? {}),
+  }
+
+  if (Object.keys(parsed).length > 0) {
+    nextProviders[providerID] = parsed
+  } else {
+    delete nextProviders[providerID]
+  }
+
+  const next: Info = {
+    ...current,
+    cinema_video_providers: Object.keys(nextProviders).length > 0 ? nextProviders : undefined,
   }
   return writeConfig(normalizedConfigID, Info.parse(next))
 }

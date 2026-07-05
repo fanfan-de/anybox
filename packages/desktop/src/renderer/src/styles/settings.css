@@ -3391,6 +3391,10 @@ body.is-dragging-settings-page {
   padding-right: 42px;
 }
 
+.provider-key-input-wrap-plain input {
+  padding-right: 12px;
+}
+
 .provider-key-visibility-button {
   position: absolute;
   top: 50%;
@@ -11571,6 +11575,7 @@ body.is-dragging-settings-page {
   color: var(--seg-text-2);
   font-size: 13px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .provider-detail-helper .provider-detail-status-dot {

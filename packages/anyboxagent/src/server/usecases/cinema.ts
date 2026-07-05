@@ -5,6 +5,13 @@ import {
   CinemaCanvasDocumentSchema,
   CinemaGenerationTaskSchema,
   CinemaProjectEventSchema,
+  type CinemaGeneratedAsset,
+  type CinemaImageGenerationResult,
+  type CinemaImageModel,
+  type CinemaImageModelsResult,
+  type CinemaTextGenerationResult,
+  type CinemaTextModel,
+  type CinemaTextModelsResult,
   type CinemaGenerationTask,
   type CinemaGenerationTaskStatus,
   type CinemaCanvasNode,
@@ -18,20 +25,84 @@ import {
   type CinemaProjectSummary,
   type CinemaProjectStateSummary,
   type CreateCinemaGenerationTaskBody,
+  type CreateCinemaImageGenerationBody,
+  type CreateCinemaTextGenerationBody,
 } from "@anybox/shared/cinema"
 import { isSshWorkspaceUri } from "@anybox/shared"
 import * as CinemaProviderRuntime from "#cinema/provider-runtime.ts"
+import * as Config from "#config/config.ts"
+import * as Provider from "#provider/provider.ts"
 import * as Project from "#project/project.ts"
+import { Instance } from "#project/instance.ts"
 import { ApiError } from "#server/error.ts"
 import { getServerBaseURL } from "#server/base-url.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
+import {
+  isSupportedImageMime,
+  readImageDimensions,
+} from "#session/support/image-assets.ts"
+import {
+  listProjectModelsWithFallback,
+  resolveEffectiveModelWithFallback,
+  resolveProjectModelSelectionWithGlobalFallback,
+} from "#server/usecases/model-list-cache.ts"
+
+type GenerateTextFunction = typeof import("ai")["generateText"]
+type GenerateImageFunction = typeof import("ai")["generateImage"]
 
 export {
-  setCinemaFalApiKeyForTest,
-  setCinemaFalClientFactoryForTest,
   setCinemaKlingApiKeyForTest,
   setCinemaKlingClientFactoryForTest,
 } from "#cinema/provider-runtime.ts"
+
+const defaultCinemaTextRuntimeDependencies = {
+  getGenerateText: async () => (await import("ai")).generateText,
+  getLanguage: Provider.getLanguage,
+  getModel: Provider.getModel,
+  listModels: listProjectModelsWithFallback,
+  resolveEffectiveModel: resolveEffectiveModelWithFallback,
+  resolveSelection: resolveProjectModelSelectionWithGlobalFallback,
+}
+let cinemaTextRuntimeDependencies = defaultCinemaTextRuntimeDependencies
+
+const defaultCinemaImageRuntimeDependencies = {
+  getGenerateImage: async () => (await import("ai")).generateImage,
+  getImage: Provider.getImage,
+  getImageGenerationSettings: Config.getImageGenerationSettings,
+  getModel: Provider.getModel,
+  listModels: listProjectModelsWithFallback,
+  resolveEffectiveModel: resolveEffectiveModelWithFallback,
+  resolveSelection: resolveProjectModelSelectionWithGlobalFallback,
+}
+let cinemaImageRuntimeDependencies = defaultCinemaImageRuntimeDependencies
+
+export function setCinemaTextRuntimeDependenciesForTest(
+  overrides: Partial<typeof defaultCinemaTextRuntimeDependencies>,
+) {
+  const previous = cinemaTextRuntimeDependencies
+  cinemaTextRuntimeDependencies = {
+    ...previous,
+    ...overrides,
+  }
+
+  return () => {
+    cinemaTextRuntimeDependencies = previous
+  }
+}
+
+export function setCinemaImageRuntimeDependenciesForTest(
+  overrides: Partial<typeof defaultCinemaImageRuntimeDependencies>,
+) {
+  const previous = cinemaImageRuntimeDependencies
+  cinemaImageRuntimeDependencies = {
+    ...previous,
+    ...overrides,
+  }
+
+  return () => {
+    cinemaImageRuntimeDependencies = previous
+  }
+}
 
 const CINEMA_DIRECTORY = ".anybox-cinema"
 const CANVAS_FILE = "canvas.json"
@@ -41,6 +112,28 @@ const PROVIDERS_FILE = "providers.json"
 const TASKS_FILE = "tasks.jsonl"
 const TASKS_DIRECTORY = "tasks"
 const PROJECT_DIRECTORIES = ["assets", "references", "prompts", "generated", "renders", "exports"] as const
+const CINEMA_PROJECT_IMAGE_ASSET_MAX_BYTES = 25 * 1024 * 1024
+const IMAGE_EXTENSION_BY_MIME: Record<string, string> = {
+  "image/apng": ".png",
+  "image/avif": ".avif",
+  "image/bmp": ".bmp",
+  "image/gif": ".gif",
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/svg+xml": ".svg",
+  "image/webp": ".webp",
+}
+const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
+  ".apng": "image/apng",
+  ".avif": "image/avif",
+  ".bmp": "image/bmp",
+  ".gif": "image/gif",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webp": "image/webp",
+}
 
 const nowISO = () => new Date().toISOString()
 
@@ -216,6 +309,201 @@ function makeTaskID() {
 
 function titleForGenerationTask(input: CreateCinemaGenerationTaskBody) {
   return input.title?.trim() || `Generation ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+}
+
+function textModelValue(input: { providerID: string; id: string }) {
+  return `${input.providerID}/${input.id}`
+}
+
+function parseTextModelValue(value: string | null | undefined) {
+  const trimmed = value?.trim()
+  if (!trimmed) return null
+  const [providerID, ...rest] = trimmed.split("/")
+  const modelID = rest.join("/")
+  if (!providerID || !modelID) return null
+  return { providerID, modelID, value: trimmed }
+}
+
+function formatProviderLabel(providerID: string) {
+  return providerID
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ") || providerID
+}
+
+function toCinemaTextModel(model: Provider.PublicModel): CinemaTextModel {
+  return {
+    value: textModelValue(model),
+    providerID: model.providerID,
+    modelID: model.id,
+    label: model.name,
+    providerLabel: model.providerName?.trim() || formatProviderLabel(model.providerID),
+    available: model.available,
+  }
+}
+
+function toCinemaImageModel(model: Provider.PublicModel): CinemaImageModel {
+  return {
+    value: textModelValue(model),
+    providerID: model.providerID,
+    modelID: model.id,
+    label: model.name,
+    providerLabel: model.providerName?.trim() || formatProviderLabel(model.providerID),
+    available: model.available,
+  }
+}
+
+function isTextOutputModel(model: Provider.PublicModel) {
+  return model.available && model.capabilities.output.text
+}
+
+function isImageOutputModel(model: Provider.PublicModel) {
+  return model.available && model.capabilities.output.image
+}
+
+function findCinemaTextModel(models: CinemaTextModel[], value: string | null | undefined) {
+  const parsed = parseTextModelValue(value)
+  if (!parsed) return null
+  return models.find((model) => model.value === parsed.value) ?? null
+}
+
+function findCinemaImageModel(models: CinemaImageModel[], value: string | null | undefined) {
+  const parsed = parseTextModelValue(value)
+  if (!parsed) return null
+  return models.find((model) => model.value === parsed.value) ?? null
+}
+
+function normalizeImagePrompt(prompt: string, style?: string) {
+  const trimmedPrompt = prompt.trim()
+  const trimmedStyle = style?.trim()
+  return trimmedStyle ? `${trimmedPrompt}\n\nStyle: ${trimmedStyle}` : trimmedPrompt
+}
+
+function safeGeneratedImageNodeSegment(nodeID: string) {
+  const readable = nodeID.replace(/[^A-Za-z0-9._-]/g, "_").replace(/^_+|_+$/g, "").slice(0, 80)
+  return readable || `node_${randomUUID().slice(0, 8)}`
+}
+
+function compactImageGenerationError(error: unknown) {
+  const message = errorMessage(error)
+  return message.length <= 500 ? message : `${message.slice(0, 497)}...`
+}
+
+function projectRelativePath(root: string, filePath: string) {
+  return path.relative(root, filePath).split(path.sep).join("/")
+}
+
+function resolveProjectRelativeFile(root: string, relativePath: string) {
+  const normalizedInput = relativePath.replace(/\\/g, "/").replace(/^\/+/, "")
+  if (!normalizedInput || normalizedInput.includes("\0") || path.isAbsolute(relativePath) || normalizedInput.split("/").includes("..")) {
+    throw new ApiError(400, "CINEMA_ASSET_PATH_INVALID", "Asset path must be a project-relative path.")
+  }
+
+  const resolvedRoot = path.resolve(root)
+  const resolvedPath = path.resolve(root, normalizedInput)
+  const relative = path.relative(resolvedRoot, resolvedPath)
+  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new ApiError(400, "CINEMA_ASSET_PATH_INVALID", "Asset path must stay inside the current project.")
+  }
+
+  return resolvedPath
+}
+
+function imageExtensionForMime(mime: string) {
+  return IMAGE_EXTENSION_BY_MIME[mime.toLowerCase()] ?? null
+}
+
+function imageMimeForPath(filePath: string) {
+  return IMAGE_MIME_BY_EXTENSION[path.extname(filePath).toLowerCase()] ?? null
+}
+
+const CINEMA_TEXT_GENERATION_SYSTEM_PROMPT = [
+  "You are helping write text for an AI film project.",
+  "Follow the user's generation request.",
+  "Use the existing node text only as context.",
+  "Return only the generated text, with no explanations or commentary.",
+].join("\n")
+
+function buildCinemaTextGenerationPrompt(input: {
+  currentText: string
+  prompt: string
+}) {
+  return [
+    "Existing text:",
+    input.currentText.trim() || "(empty)",
+    "",
+    "Generation request:",
+    input.prompt.trim(),
+  ].join("\n")
+}
+
+function appendGeneratedText(currentText: string, generatedText: string) {
+  const trimmedGenerated = generatedText.trim()
+  const trimmedCurrent = currentText.trim()
+  if (!trimmedCurrent) return trimmedGenerated
+  return `${trimmedCurrent}\n\n${trimmedGenerated}`
+}
+
+function redactSensitiveErrorText(value: string) {
+  return value
+    .replace(/("?(?:authorization)"?\s*[:=]\s*)Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "$1Bearer [redacted]")
+    .replace(/\b(sk|ak|pk)-[A-Za-z0-9._-]{8,}\b/g, "$1-[redacted]")
+    .replace(/("?(?:api[_-]?key|access[_-]?token|secret)"?\s*[:=]\s*)("[^"]+"|[^\s,}]+)/gi, "$1[redacted]")
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const cause = error.cause instanceof Error ? error.cause.message : ""
+    const message = error.message && error.message !== error.name ? error.message : cause
+    return redactSensitiveErrorText(message || error.name)
+  }
+  return redactSensitiveErrorText(String(error))
+}
+
+function createCinemaTextGenerationRuntimeError(error: unknown, modelValue: string) {
+  if (Provider.InitError.isInstance(error)) {
+    const detail = errorMessage(error)
+    return new ApiError(
+      400,
+      "CINEMA_TEXT_PROVIDER_NOT_CONFIGURED",
+      detail && detail !== error.name
+        ? `Text model provider is not ready for '${modelValue}': ${detail}`
+        : `Text model provider is not ready for '${modelValue}'. Configure the provider credential and try again.`,
+    )
+  }
+
+  const detail = errorMessage(error)
+  return new ApiError(
+    502,
+    "CINEMA_TEXT_GENERATION_FAILED",
+    detail
+      ? `Text generation failed for '${modelValue}': ${detail}`
+      : `Text generation failed for '${modelValue}'.`,
+  )
+}
+
+function createCinemaImageGenerationRuntimeError(error: unknown, modelValue: string) {
+  if (Provider.InitError.isInstance(error)) {
+    const detail = errorMessage(error)
+    return new ApiError(
+      400,
+      "CINEMA_IMAGE_PROVIDER_NOT_CONFIGURED",
+      detail && detail !== error.name
+        ? `Image model provider is not ready for '${modelValue}': ${detail}`
+        : `Image model provider is not ready for '${modelValue}'. Configure the provider credential and try again.`,
+    )
+  }
+
+  const detail = errorMessage(error)
+  return new ApiError(
+    502,
+    "CINEMA_IMAGE_GENERATION_FAILED",
+    detail
+      ? `Image generation failed for '${modelValue}': ${detail}`
+      : `Image generation failed for '${modelValue}'.`,
+  )
 }
 
 function assertCanvasHasNode(canvas: CinemaCanvasDocument, nodeID: string) {
@@ -598,6 +886,443 @@ export const listCinemaVideoProviders = CinemaProviderRuntime.listCinemaVideoPro
 export const getCinemaVideoProvider = CinemaProviderRuntime.getCinemaVideoProvider
 export const getCinemaVideoProviderAuth = CinemaProviderRuntime.getCinemaVideoProviderAuth
 export const saveCinemaVideoProviderApiKey = CinemaProviderRuntime.saveCinemaVideoProviderApiKey
+export const saveCinemaVideoProviderSettings = CinemaProviderRuntime.saveCinemaVideoProviderSettings
+
+export async function listCinemaTextModels(projectID: string): Promise<CinemaTextModelsResult> {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+
+  const publicModels = await cinemaTextRuntimeDependencies.listModels(projectID)
+  const textPublicModels = publicModels.filter(isTextOutputModel)
+  const items = textPublicModels.map(toCinemaTextModel)
+  const selection = await cinemaTextRuntimeDependencies.resolveSelection(projectID, textPublicModels)
+  const effectivePublicModel = await cinemaTextRuntimeDependencies.resolveEffectiveModel(projectID, textPublicModels, selection.model)
+  const effectiveModel = effectivePublicModel ? toCinemaTextModel(effectivePublicModel) : null
+  const selectedModel = findCinemaTextModel(items, selection.model)
+
+  return {
+    items,
+    selection: {
+      model: selectedModel?.value ?? null,
+    },
+    effectiveModel,
+  }
+}
+
+async function resolveCinemaTextGenerationModel(projectID: string, requestedModel: string | null | undefined) {
+  const textModels = await listCinemaTextModels(projectID)
+  const requested = findCinemaTextModel(textModels.items, requestedModel)
+  const selected = requested ?? textModels.effectiveModel ?? null
+
+  if (!selected) {
+    throw new ApiError(
+      400,
+      "CINEMA_TEXT_MODEL_NOT_AVAILABLE",
+      "No text generation model is available for this project.",
+    )
+  }
+
+  try {
+    const model = await cinemaTextRuntimeDependencies.getModel(selected.providerID, selected.modelID, projectID)
+    if (!model.capabilities.input.text || !model.capabilities.output.text) {
+      throw new ApiError(
+        400,
+        "CINEMA_TEXT_MODEL_NOT_CAPABLE",
+        `Model '${selected.value}' does not support text input and output.`,
+      )
+    }
+    return { model, textModel: selected }
+  } catch (error) {
+    if (error instanceof ApiError) throw error
+    if (Provider.ModelNotFoundError.isInstance(error)) {
+      throw new ApiError(
+        400,
+        "CINEMA_TEXT_MODEL_NOT_AVAILABLE",
+        `Model '${selected.value}' is not available for this project.`,
+      )
+    }
+    throw error
+  }
+}
+
+export async function createCinemaTextGeneration(
+  projectID: string,
+  input: CreateCinemaTextGenerationBody,
+): Promise<CinemaTextGenerationResult> {
+  const { root, cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+
+  const prompt = input.prompt.trim()
+  if (!prompt) {
+    throw new ApiError(400, "CINEMA_TEXT_PROMPT_EMPTY", "Text generation prompt cannot be empty.")
+  }
+
+  const current = await readCinemaCanvasFromRoot(cinemaRoot)
+  const node = current.nodes.find((item) => item.id === input.nodeID)
+  if (!node) {
+    throw new ApiError(404, "CINEMA_NODE_NOT_FOUND", `Cinema node '${input.nodeID}' was not found.`)
+  }
+  if (node.type !== "text") {
+    throw new ApiError(409, "CINEMA_TEXT_NODE_INVALID", `Cinema node '${input.nodeID}' is not a text node.`)
+  }
+
+  const currentText = typeof node.data?.text === "string" ? node.data.text : ""
+  const { model, textModel } = await resolveCinemaTextGenerationModel(projectID, input.model)
+  const result = await Instance.provide({
+    directory: root,
+    fn: async () => {
+      try {
+        const languageModel = await cinemaTextRuntimeDependencies.getLanguage(model, projectID)
+        const generateText: GenerateTextFunction = await cinemaTextRuntimeDependencies.getGenerateText()
+        return await generateText({
+          model: languageModel,
+          system: CINEMA_TEXT_GENERATION_SYSTEM_PROMPT,
+          prompt: buildCinemaTextGenerationPrompt({
+            currentText,
+            prompt,
+          }),
+        })
+      } catch (error) {
+        throw createCinemaTextGenerationRuntimeError(error, textModel.value)
+      }
+    },
+  })
+  const generatedText = result.text.trim()
+
+  if (!generatedText) {
+    throw new ApiError(502, "CINEMA_TEXT_GENERATION_EMPTY", "The selected model returned an empty text generation.")
+  }
+
+  const nextText = appendGeneratedText(currentText, generatedText)
+  const nextCanvas = withNodeTypes({
+    ...current,
+    nodes: current.nodes.map((item) =>
+      item.id === node.id
+        ? {
+          ...item,
+          data: {
+            ...item.data,
+            text: nextText,
+            generationPrompt: "",
+            textModel: textModel.value,
+          },
+        }
+        : item
+    ),
+  })
+  const canvas = await writeCinemaCanvas(cinemaRoot, nextCanvas)
+
+  await appendCinemaEvent(cinemaRoot, {
+    time: nowISO(),
+    type: "text.generated",
+    actor: "cinema-runtime",
+    message: `Generated text for node '${node.title}'.`,
+    data: {
+      nodeID: node.id,
+      model: textModel.value,
+      generatedTextLength: generatedText.length,
+    },
+  })
+
+  return {
+    canvas,
+    nodeID: node.id,
+    text: nextText,
+    generatedText,
+    model: textModel.value,
+  }
+}
+
+export async function listCinemaImageModels(projectID: string): Promise<CinemaImageModelsResult> {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+
+  const publicModels = await cinemaImageRuntimeDependencies.listModels(projectID)
+  const imagePublicModels = publicModels.filter(isImageOutputModel)
+  const items = imagePublicModels.map(toCinemaImageModel)
+  const selection = await cinemaImageRuntimeDependencies.resolveSelection(projectID, imagePublicModels)
+  const effectivePublicModel = await cinemaImageRuntimeDependencies.resolveEffectiveModel(projectID, imagePublicModels, selection.image_model)
+  const effectiveModel = effectivePublicModel ? toCinemaImageModel(effectivePublicModel) : null
+  const selectedModel = findCinemaImageModel(items, selection.image_model)
+
+  return {
+    items,
+    selection: {
+      image_model: selectedModel?.value ?? null,
+    },
+    effectiveModel,
+  }
+}
+
+async function resolveCinemaImageGenerationModel(projectID: string, requestedModel: string | null | undefined) {
+  const imageModels = await listCinemaImageModels(projectID)
+  const requested = findCinemaImageModel(imageModels.items, requestedModel)
+  const selected = requested ?? imageModels.effectiveModel ?? null
+
+  if (!selected) {
+    throw new ApiError(
+      400,
+      "CINEMA_IMAGE_MODEL_NOT_AVAILABLE",
+      "No image generation model is available for this project.",
+    )
+  }
+
+  try {
+    const model = await cinemaImageRuntimeDependencies.getModel(selected.providerID, selected.modelID, projectID)
+    if (!model.capabilities.input.text || !model.capabilities.output.image) {
+      throw new ApiError(
+        400,
+        "CINEMA_IMAGE_MODEL_NOT_CAPABLE",
+        `Model '${selected.value}' does not support text-to-image generation.`,
+      )
+    }
+    return { model, imageModel: selected }
+  } catch (error) {
+    if (error instanceof ApiError) throw error
+    if (Provider.ModelNotFoundError.isInstance(error)) {
+      throw new ApiError(
+        400,
+        "CINEMA_IMAGE_MODEL_NOT_AVAILABLE",
+        `Model '${selected.value}' is not available for this project.`,
+      )
+    }
+    throw error
+  }
+}
+
+async function saveCinemaGeneratedImageAssets(input: {
+  root: string
+  nodeID: string
+  images: Array<{ uint8Array: Uint8Array; mediaType: string }>
+}) {
+  const nodeSegment = safeGeneratedImageNodeSegment(input.nodeID)
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+  const outputDirectory = path.join(input.root, "generated", "images", nodeSegment)
+  await mkdir(outputDirectory, { recursive: true })
+
+  const assets: CinemaGeneratedAsset[] = []
+  for (const [index, image] of input.images.entries()) {
+    const mimeType = image.mediaType.toLowerCase()
+    const extension = imageExtensionForMime(mimeType)
+    if (!extension || !isSupportedImageMime(mimeType)) {
+      throw new ApiError(
+        415,
+        "CINEMA_IMAGE_MIME_UNSUPPORTED",
+        `Generated image ${index + 1} has unsupported MIME type '${image.mediaType}'.`,
+      )
+    }
+
+    const bytes = image.uint8Array
+    if (bytes.byteLength === 0) {
+      throw new ApiError(502, "CINEMA_IMAGE_GENERATION_EMPTY", `Generated image ${index + 1} was empty.`)
+    }
+    if (bytes.byteLength > CINEMA_PROJECT_IMAGE_ASSET_MAX_BYTES) {
+      throw new ApiError(413, "CINEMA_IMAGE_ASSET_TOO_LARGE", `Generated image ${index + 1} is too large to save.`)
+    }
+
+    const filePath = path.join(outputDirectory, `${timestamp}-${index + 1}${extension}`)
+    await writeFile(filePath, bytes)
+    const dimensions = readImageDimensions(bytes, mimeType)
+    assets.push({
+      id: `image-${timestamp}-${index + 1}`,
+      kind: "image",
+      path: projectRelativePath(input.root, filePath),
+      mimeType,
+      sizeBytes: bytes.byteLength,
+      ...dimensions,
+    })
+  }
+
+  return assets
+}
+
+async function writeCinemaImageNodeFailure(input: {
+  cinemaRoot: string
+  canvas: CinemaCanvasDocument
+  nodeID: string
+  error: string
+}) {
+  const nextCanvas = withNodeTypes({
+    ...input.canvas,
+    nodes: input.canvas.nodes.map((item) =>
+      item.id === input.nodeID
+        ? {
+          ...item,
+          data: {
+            ...item.data,
+            status: "failed",
+            error: input.error,
+          },
+        }
+        : item
+    ),
+  })
+  await writeCinemaCanvas(input.cinemaRoot, nextCanvas)
+}
+
+export async function createCinemaImageGeneration(
+  projectID: string,
+  input: CreateCinemaImageGenerationBody,
+): Promise<CinemaImageGenerationResult> {
+  const { root, cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+
+  const prompt = input.prompt.trim()
+  if (!prompt) {
+    throw new ApiError(400, "CINEMA_IMAGE_PROMPT_EMPTY", "Image generation prompt cannot be empty.")
+  }
+
+  const current = await readCinemaCanvasFromRoot(cinemaRoot)
+  const node = current.nodes.find((item) => item.id === input.nodeID)
+  if (!node) {
+    throw new ApiError(404, "CINEMA_NODE_NOT_FOUND", `Cinema node '${input.nodeID}' was not found.`)
+  }
+  if (node.type !== "image") {
+    throw new ApiError(409, "CINEMA_IMAGE_NODE_INVALID", `Cinema node '${input.nodeID}' is not an image node.`)
+  }
+
+  try {
+    const defaults = await cinemaImageRuntimeDependencies.getImageGenerationSettings(projectID)
+    const count = input.count ?? defaults.default_count ?? 1
+    const size = input.size ?? defaults.default_size
+    if (count < 1 || count > 4) {
+      throw new ApiError(400, "CINEMA_IMAGE_COUNT_INVALID", "Image generation count must be between 1 and 4.")
+    }
+    if (size && !/^\d+x\d+$/.test(size)) {
+      throw new ApiError(400, "CINEMA_IMAGE_SIZE_INVALID", "Image generation size must use WIDTHxHEIGHT.")
+    }
+
+    const { model, imageModel } = await resolveCinemaImageGenerationModel(projectID, input.model)
+    const generationResult = await Instance.provide({
+      directory: root,
+      fn: async () => {
+        try {
+          const imageRuntimeModel = await cinemaImageRuntimeDependencies.getImage(model, projectID)
+          const generateImage: GenerateImageFunction = await cinemaImageRuntimeDependencies.getGenerateImage()
+          return await generateImage({
+            model: imageRuntimeModel,
+            prompt: normalizeImagePrompt(prompt, input.style),
+            n: count,
+            ...(size ? { size: size as `${number}x${number}` } : {}),
+            maxRetries: 0,
+          })
+        } catch (error) {
+          throw createCinemaImageGenerationRuntimeError(error, imageModel.value)
+        }
+      },
+    })
+    const generatedImages = generationResult.images.map((image) => ({
+      uint8Array: image.uint8Array,
+      mediaType: image.mediaType,
+    }))
+    if (generatedImages.length === 0) {
+      throw new ApiError(502, "CINEMA_IMAGE_GENERATION_EMPTY", "The selected model returned no images.")
+    }
+
+    const assets = await saveCinemaGeneratedImageAssets({
+      root,
+      nodeID: node.id,
+      images: generatedImages,
+    })
+    const generatedAt = nowISO()
+    const nextCanvas = withNodeTypes({
+      ...current,
+      nodes: current.nodes.map((item) =>
+        item.id === node.id
+          ? {
+            ...item,
+            data: {
+              ...item.data,
+              prompt,
+              style: input.style?.trim() || (typeof item.data?.style === "string" ? item.data.style : undefined),
+              model: imageModel.value,
+              size,
+              count,
+              status: "succeeded",
+              resultAssets: assets,
+              selectedAssetID: assets[0]?.id,
+              error: null,
+              generatedAt,
+            },
+          }
+          : item
+      ),
+    })
+    const canvas = await writeCinemaCanvas(cinemaRoot, nextCanvas)
+
+    await appendCinemaEvent(cinemaRoot, {
+      time: generatedAt,
+      type: "image.generated",
+      actor: "cinema-runtime",
+      message: `Generated ${assets.length} image${assets.length === 1 ? "" : "s"} for node '${node.title}'.`,
+      data: {
+        nodeID: node.id,
+        model: imageModel.value,
+        size,
+        count,
+        assetPaths: assets.map((asset) => asset.path),
+      },
+    })
+
+    return {
+      canvas,
+      nodeID: node.id,
+      model: imageModel.value,
+      assets: assets.map((asset) => ({ ...asset, kind: "image" })),
+    }
+  } catch (error) {
+    const message = compactImageGenerationError(error)
+    await writeCinemaImageNodeFailure({
+      cinemaRoot,
+      canvas: current,
+      nodeID: node.id,
+      error: message,
+    }).catch(() => undefined)
+    await appendCinemaEvent(cinemaRoot, {
+      time: nowISO(),
+      type: "image.generation_failed",
+      actor: "cinema-runtime",
+      message: `Image generation failed for node '${node.title}'.`,
+      data: {
+        nodeID: node.id,
+        error: message,
+      },
+    }).catch(() => undefined)
+
+    if (error instanceof ApiError) throw error
+    throw createCinemaImageGenerationRuntimeError(error, input.model ?? "selected image model")
+  }
+}
+
+export async function readCinemaProjectImageAsset(projectID: string, assetPath: string) {
+  const { root, cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+
+  const filePath = resolveProjectRelativeFile(root, assetPath)
+  const mimeType = imageMimeForPath(filePath)
+  if (!mimeType || !isSupportedImageMime(mimeType)) {
+    throw new ApiError(415, "CINEMA_ASSET_MIME_UNSUPPORTED", "Only project image assets can be previewed.")
+  }
+
+  const fileStat = await stat(filePath).catch((error: unknown) => {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      throw new ApiError(404, "CINEMA_ASSET_NOT_FOUND", "Project asset was not found.")
+    }
+    throw error
+  })
+  if (!fileStat.isFile()) {
+    throw new ApiError(415, "CINEMA_ASSET_MIME_UNSUPPORTED", "Only project image files can be previewed.")
+  }
+  if (fileStat.size > CINEMA_PROJECT_IMAGE_ASSET_MAX_BYTES) {
+    throw new ApiError(413, "CINEMA_ASSET_TOO_LARGE", "Project image asset is too large to preview.")
+  }
+
+  return {
+    bytes: await readFile(filePath),
+    mimeType,
+    sizeBytes: fileStat.size,
+  }
+}
 
 export async function updateCinemaCanvas(projectID: string, canvas: CinemaCanvasDocument): Promise<CinemaCanvasDocument> {
   const { cinemaRoot } = resolveCinemaRoot(projectID)

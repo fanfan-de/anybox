@@ -20,22 +20,31 @@ import {
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { create } from "zustand"
 import {
+  ALargeSmall,
+  ArrowUp,
   Bot,
   Check,
+  ChevronDown,
   Clock3,
+  Copy,
+  Download,
   FileText,
   Film,
+  Globe2,
   Image,
   KeyRound,
   Loader2,
+  Maximize2,
   MessageSquareText,
   Music,
+  PencilLine,
   Plus,
   Play,
   RefreshCw,
   Scissors,
   Sparkles,
   Trash2,
+  Type,
   Video,
   WandSparkles,
   XCircle,
@@ -48,6 +57,13 @@ import {
   type CinemaCanvasNode,
   type CinemaGenerationMode,
   type CinemaGenerationTask,
+  type CinemaGeneratedAsset,
+  type CinemaImageGenerationResult,
+  type CinemaImageModel,
+  type CinemaImageModelsResult,
+  type CinemaTextGenerationResult,
+  type CinemaTextModel,
+  type CinemaTextModelsResult,
   type CinemaNodeType,
   type CinemaProjectSummary,
   type CinemaVideoProvider,
@@ -55,6 +71,14 @@ import {
 } from "@anybox/shared/cinema"
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error"
+
+type ImageGenerationRequest = {
+  prompt: string
+  model: string | null
+  size?: string
+  count?: number
+  style?: string
+}
 
 type CinemaFlowNodeData = {
   cinemaType: CinemaNodeType
@@ -64,6 +88,19 @@ type CinemaFlowNodeData = {
     width: number
     height: number
   }
+  onChangeRawData?: (nodeID: string, rawData: Record<string, unknown>) => void
+  textModels?: CinemaTextModel[]
+  effectiveTextModel?: CinemaTextModel | null
+  isGeneratingText?: boolean
+  textGenerationError?: string | null
+  onGenerateText?: (nodeID: string, prompt: string, model: string | null) => void
+  imageModels?: CinemaImageModel[]
+  effectiveImageModel?: CinemaImageModel | null
+  isGeneratingImage?: boolean
+  imageGenerationError?: string | null
+  agentBaseURL?: string
+  projectID?: string
+  onGenerateImage?: (nodeID: string, request: ImageGenerationRequest) => void
 }
 
 type CinemaFlowNode = Node<CinemaFlowNodeData, "cinemaNode">
@@ -77,6 +114,7 @@ type ContextMenuState = {
 type GenerationTaskActionState = {
   isCreating: boolean
   isRefreshing: boolean
+  autoRefreshingTaskIDs: string[]
   isCanceling: boolean
   error: string | null
 }
@@ -109,11 +147,13 @@ const NODE_TYPES = [
 ] as const satisfies readonly CinemaNodeType[]
 
 const FALLBACK_GENERATION_MODE: CinemaGenerationMode = "text-to-video"
+const DEFAULT_IMAGE_GENERATION_SIZE = "1024x1024"
+const DEFAULT_IMAGE_GENERATION_COUNT = 1
 
 const DEFAULT_NODE_SIZE: Record<CinemaNodeType, { width: number; height: number }> = {
-  text: { width: 360, height: 220 },
+  text: { width: 480, height: 420 },
   prompt: { width: 380, height: 240 },
-  image: { width: 340, height: 220 },
+  image: { width: 420, height: 440 },
   video: { width: 360, height: 220 },
   audio: { width: 320, height: 180 },
   shot: { width: 380, height: 250 },
@@ -141,10 +181,10 @@ const NODE_META: Record<CinemaNodeType, {
     placeholder: "Prompt draft or reusable generation instruction.",
   },
   image: {
-    label: "Image",
+    label: "Image Gen",
     accent: "#f9a8d4",
     icon: Image,
-    placeholder: "Reference image, keyframe, or style frame.",
+    placeholder: "Describe the image you want to generate.",
   },
   video: {
     label: "Video",
@@ -274,6 +314,40 @@ function readRawStringArray(rawData: Record<string, unknown>, key: string) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : []
 }
 
+function readRawNumber(rawData: Record<string, unknown>, key: string, fallback: number) {
+  const value = rawData[key]
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback
+}
+
+function readImageResultAssets(rawData: Record<string, unknown>): CinemaGeneratedAsset[] {
+  const value = rawData.resultAssets
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item, index) => {
+    if (!item || typeof item !== "object") return []
+    const record = item as Record<string, unknown>
+    const path = typeof record.path === "string" ? record.path : ""
+    if (!path) return []
+    return [{
+      id: typeof record.id === "string" ? record.id : `image-${index}`,
+      kind: "image" as const,
+      path,
+      mimeType: typeof record.mimeType === "string" ? record.mimeType : undefined,
+      sizeBytes: typeof record.sizeBytes === "number" ? record.sizeBytes : undefined,
+      width: typeof record.width === "number" ? record.width : undefined,
+      height: typeof record.height === "number" ? record.height : undefined,
+    }]
+  })
+}
+
+function projectAssetPreviewURL(agentBaseURL: string, projectID: string, assetPath: string) {
+  const encodedPath = assetPath
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/")
+  return new URL(`/api/cinema/projects/${encodeURIComponent(projectID)}/assets/${encodedPath}`, agentBaseURL).toString()
+}
+
 function providerFor(providers: CinemaVideoProvider[], providerID: string) {
   return providers.find((provider) => provider.manifest.id === providerID) ?? providers[0] ?? null
 }
@@ -325,8 +399,32 @@ function isFinalGenerationTaskStatus(status: string) {
   return status === "succeeded" || status === "failed" || status === "canceled"
 }
 
+function formatTaskTimestamp(value: string | undefined) {
+  if (!value) return ""
+  const time = new Date(value)
+  if (Number.isNaN(time.getTime())) return ""
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(time)
+}
+
 function createNode(type: CinemaNodeType, position: { x: number; y: number }): CinemaFlowNode {
   const size = DEFAULT_NODE_SIZE[type]
+  const rawData = type === "image"
+    ? {
+      prompt: "",
+      size: DEFAULT_IMAGE_GENERATION_SIZE,
+      count: DEFAULT_IMAGE_GENERATION_COUNT,
+      status: "idle",
+      placeholder: NODE_META[type].placeholder,
+    }
+    : {
+      text: "",
+      placeholder: NODE_META[type].placeholder,
+    }
+
   return {
     id: makeNodeID(type),
     type: "cinemaNode",
@@ -338,10 +436,7 @@ function createNode(type: CinemaNodeType, position: { x: number; y: number }): C
     data: {
       cinemaType: type,
       title: titleForType(type),
-      rawData: {
-        text: "",
-        placeholder: NODE_META[type].placeholder,
-      },
+      rawData,
       size,
     },
   }
@@ -351,7 +446,658 @@ function isMutationChange(changes: NodeChange[] | EdgeChange[]) {
   return changes.some((change) => change.type !== "select" && change.type !== "dimensions")
 }
 
-function CinemaNodeCard({ data, selected }: NodeProps<CinemaFlowNode>) {
+function safeDownloadName(value: string) {
+  const cleaned = value.trim().replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 48)
+  return cleaned || "text-node"
+}
+
+function downloadTextFile(title: string, text: string) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = `${safeDownloadName(title)}.txt`
+  document.body.append(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+function TextCanvasNode({
+  id,
+  data,
+  selected,
+  accentStyle,
+}: {
+  id: string
+  data: CinemaFlowNodeData
+  selected?: boolean
+  accentStyle: CSSProperties
+}) {
+  const editorRef = useRef<HTMLTextAreaElement>(null)
+  const modelControlRef = useRef<HTMLDivElement>(null)
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
+  const text = readRawString(data.rawData, "text")
+  const generatorPrompt = readRawString(data.rawData, "generationPrompt")
+  const placeholder = readRawString(data.rawData, "placeholder", "双击编辑文本...")
+  const [textDraft, setTextDraftState] = useState(text)
+  const [generatorPromptDraft, setGeneratorPromptDraftState] = useState(generatorPrompt)
+  const textDraftRef = useRef(text)
+  const generatorPromptDraftRef = useRef(generatorPrompt)
+  const rawDataRef = useRef(data.rawData)
+  const onChangeRawDataRef = useRef(data.onChangeRawData)
+  const textCommitTimerRef = useRef<number | null>(null)
+  const generatorPromptCommitTimerRef = useRef<number | null>(null)
+  const isTextComposingRef = useRef(false)
+  const isGeneratorPromptComposingRef = useRef(false)
+  const textModels = data.textModels ?? []
+  const selectedTextModelValue = readRawString(data.rawData, "textModel")
+  const selectedTextModel =
+    textModels.find((model) => model.value === selectedTextModelValue) ??
+    data.effectiveTextModel ??
+    textModels[0] ??
+    null
+  const promptReady = generatorPromptDraft.trim().length > 0
+  const canGenerate = promptReady && Boolean(selectedTextModel) && !data.isGeneratingText
+
+  rawDataRef.current = data.rawData
+  onChangeRawDataRef.current = data.onChangeRawData
+
+  const setTextDraft = useCallback((value: string) => {
+    textDraftRef.current = value
+    setTextDraftState(value)
+  }, [])
+
+  const setGeneratorPromptDraft = useCallback((value: string) => {
+    generatorPromptDraftRef.current = value
+    setGeneratorPromptDraftState(value)
+  }, [])
+
+  const clearTextCommitTimer = useCallback(() => {
+    if (textCommitTimerRef.current === null) return
+    window.clearTimeout(textCommitTimerRef.current)
+    textCommitTimerRef.current = null
+  }, [])
+
+  const clearGeneratorPromptCommitTimer = useCallback(() => {
+    if (generatorPromptCommitTimerRef.current === null) return
+    window.clearTimeout(generatorPromptCommitTimerRef.current)
+    generatorPromptCommitTimerRef.current = null
+  }, [])
+
+  const commitRawDataPatch = useCallback((patch: Record<string, unknown> = {}) => {
+    const previous = rawDataRef.current
+    const nextRawData: Record<string, unknown> = {
+      ...previous,
+      text: textDraftRef.current,
+      generationPrompt: generatorPromptDraftRef.current,
+      ...patch,
+    }
+    const hasChange = Object.keys(nextRawData).some((key) => nextRawData[key] !== previous[key])
+      || Object.keys(previous).some((key) => !(key in nextRawData))
+    if (!hasChange) return
+
+    rawDataRef.current = nextRawData
+    onChangeRawDataRef.current?.(id, {
+      ...nextRawData,
+    })
+  }, [id])
+
+  const scheduleTextCommit = useCallback((value: string) => {
+    clearTextCommitTimer()
+    textCommitTimerRef.current = window.setTimeout(() => {
+      textCommitTimerRef.current = null
+      commitRawDataPatch({ text: value })
+    }, 320)
+  }, [clearTextCommitTimer, commitRawDataPatch])
+
+  const scheduleGeneratorPromptCommit = useCallback((value: string) => {
+    clearGeneratorPromptCommitTimer()
+    generatorPromptCommitTimerRef.current = window.setTimeout(() => {
+      generatorPromptCommitTimerRef.current = null
+      commitRawDataPatch({ generationPrompt: value })
+    }, 320)
+  }, [clearGeneratorPromptCommitTimer, commitRawDataPatch])
+
+  useEffect(() => {
+    if (isTextComposingRef.current || textCommitTimerRef.current !== null) return
+    textDraftRef.current = text
+    setTextDraftState(text)
+  }, [text])
+
+  useEffect(() => {
+    if (isGeneratorPromptComposingRef.current || generatorPromptCommitTimerRef.current !== null) return
+    generatorPromptDraftRef.current = generatorPrompt
+    setGeneratorPromptDraftState(generatorPrompt)
+  }, [generatorPrompt])
+
+  useEffect(() => () => {
+    clearTextCommitTimer()
+    clearGeneratorPromptCommitTimer()
+  }, [clearGeneratorPromptCommitTimer, clearTextCommitTimer])
+
+  useEffect(() => {
+    if (!isModelMenuOpen) return
+
+    const closeOnOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof globalThis.Node)) return
+      if (!modelControlRef.current?.contains(target)) setIsModelMenuOpen(false)
+    }
+
+    window.addEventListener("pointerdown", closeOnOutsidePointerDown)
+    return () => window.removeEventListener("pointerdown", closeOnOutsidePointerDown)
+  }, [isModelMenuOpen])
+  const focusEditor = () => {
+    editorRef.current?.focus()
+  }
+  const selectEditor = () => {
+    editorRef.current?.focus()
+    editorRef.current?.select()
+  }
+  const copyText = () => {
+    const value = textDraft || placeholder
+    void navigator.clipboard?.writeText(value)
+  }
+  const generateText = () => {
+    const prompt = generatorPromptDraft.trim()
+    if (!prompt) {
+      focusEditor()
+      return
+    }
+    if (!selectedTextModel || data.isGeneratingText) return
+    clearTextCommitTimer()
+    clearGeneratorPromptCommitTimer()
+    commitRawDataPatch({
+      text: textDraftRef.current,
+      generationPrompt: generatorPromptDraftRef.current,
+    })
+    setIsModelMenuOpen(false)
+    data.onGenerateText?.(id, prompt, selectedTextModel.value)
+  }
+
+  const handleStyle = { ...accentStyle, top: 132 } as CSSProperties
+
+  return (
+    <>
+      <Handle
+        id="input"
+        type="target"
+        position={Position.Left}
+        className="cinema-node-handle cinema-text-node-handle cinema-text-node-handle-input"
+        style={handleStyle}
+      />
+      <article
+        className={`cinema-text-node ${selected ? "is-selected" : ""}`}
+        style={accentStyle}
+      >
+        <div className="cinema-text-node-toolbar nodrag nowheel" role="toolbar" aria-label="Text tools">
+          <button type="button" className="cinema-text-toolbar-button is-size" title="字号" onClick={focusEditor}>
+            <ALargeSmall size={14} aria-hidden="true" />
+            <span>小</span>
+            <ChevronDown size={13} aria-hidden="true" />
+          </button>
+          <button type="button" className="cinema-text-toolbar-button" title="复制" onClick={copyText}>
+            <Copy size={13} aria-hidden="true" />
+            <span>复制</span>
+          </button>
+          <button type="button" className="cinema-text-toolbar-button" title="编辑" onClick={focusEditor}>
+            <PencilLine size={13} aria-hidden="true" />
+            <span>编辑</span>
+          </button>
+          <button type="button" className="cinema-text-toolbar-button" title="放大编辑" onClick={selectEditor}>
+            <Maximize2 size={13} aria-hidden="true" />
+            <span>放大编辑</span>
+          </button>
+          <button type="button" className="cinema-text-toolbar-button" title="下载" onClick={() => downloadTextFile(data.title, textDraft)}>
+            <Download size={13} aria-hidden="true" />
+            <span>下载</span>
+          </button>
+        </div>
+
+        <section className="cinema-text-editor-stack" aria-label="Text content">
+          <div className="cinema-text-node-label">
+            <Type size={13} aria-hidden="true" />
+            <span>{data.title}</span>
+            <PencilLine size={11} aria-hidden="true" />
+          </div>
+          <textarea
+            ref={editorRef}
+            className="cinema-text-editor nodrag nowheel"
+            value={textDraft}
+            placeholder={placeholder}
+            spellCheck={false}
+            onKeyDown={(event) => event.stopPropagation()}
+            onChange={(event) => {
+              const value = event.target.value
+              setTextDraft(value)
+              if (!isTextComposingRef.current) scheduleTextCommit(value)
+            }}
+            onCompositionStart={() => {
+              isTextComposingRef.current = true
+              clearTextCommitTimer()
+            }}
+            onCompositionEnd={(event) => {
+              isTextComposingRef.current = false
+              const value = event.currentTarget.value
+              setTextDraft(value)
+              commitRawDataPatch({ text: value })
+            }}
+            onBlur={() => {
+              if (isTextComposingRef.current) return
+              clearTextCommitTimer()
+              commitRawDataPatch({ text: textDraftRef.current })
+            }}
+          />
+        </section>
+
+        <section className="cinema-text-generator nodrag nowheel" aria-label="Text generation draft">
+          <button type="button" className="cinema-text-generator-media" title="添加参考图" aria-label="添加参考图">
+            <Image size={16} aria-hidden="true" />
+          </button>
+          <textarea
+            className="cinema-text-generator-input"
+            value={generatorPromptDraft}
+            placeholder="描述你想生成的文本内容..."
+            onKeyDown={(event) => event.stopPropagation()}
+            onChange={(event) => {
+              const value = event.target.value
+              setGeneratorPromptDraft(value)
+              if (!isGeneratorPromptComposingRef.current) scheduleGeneratorPromptCommit(value)
+            }}
+            onCompositionStart={() => {
+              isGeneratorPromptComposingRef.current = true
+              clearGeneratorPromptCommitTimer()
+            }}
+            onCompositionEnd={(event) => {
+              isGeneratorPromptComposingRef.current = false
+              const value = event.currentTarget.value
+              setGeneratorPromptDraft(value)
+              commitRawDataPatch({ generationPrompt: value })
+            }}
+            onBlur={() => {
+              if (isGeneratorPromptComposingRef.current) return
+              clearGeneratorPromptCommitTimer()
+              commitRawDataPatch({ generationPrompt: generatorPromptDraftRef.current })
+            }}
+          />
+          <div className="cinema-text-generator-lower">
+            {data.textGenerationError ? (
+              <p className="cinema-text-generator-error" role="alert" title={data.textGenerationError}>
+                {data.textGenerationError}
+              </p>
+            ) : null}
+            <footer className="cinema-text-generator-footer">
+              <button type="button" className="cinema-text-generator-pill" title="生成类型">
+                <Type size={13} aria-hidden="true" />
+                <span>文本生成</span>
+                <ChevronDown size={13} aria-hidden="true" />
+              </button>
+              <div className="cinema-text-model-control" ref={modelControlRef}>
+                <button
+                  type="button"
+                  className="cinema-text-generator-pill"
+                  title="模型"
+                  aria-haspopup="listbox"
+                  aria-expanded={isModelMenuOpen}
+                  disabled={textModels.length === 0 || data.isGeneratingText}
+                  onClick={() => setIsModelMenuOpen((current) => !current)}
+                >
+                  <span>{selectedTextModel?.label ?? "无可用模型"}</span>
+                  <ChevronDown size={13} aria-hidden="true" />
+                </button>
+                {isModelMenuOpen ? (
+                  <div className="cinema-text-model-menu" role="listbox" aria-label="选择文本模型">
+                    {textModels.length > 0 ? textModels.map((model) => (
+                      <button
+                        key={model.value}
+                        type="button"
+                        role="option"
+                        aria-selected={model.value === selectedTextModel?.value}
+                        className={`cinema-text-model-option ${model.value === selectedTextModel?.value ? "is-selected" : ""}`}
+                        onClick={() => {
+                          commitRawDataPatch({ textModel: model.value })
+                          setIsModelMenuOpen(false)
+                        }}
+                      >
+                        <span>{model.label}</span>
+                        <small>{model.providerLabel}</small>
+                      </button>
+                    )) : (
+                      <span className="cinema-text-model-empty">暂无可用文本模型</span>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className="cinema-text-generator-submit"
+                title={selectedTextModel ? "生成文本" : "没有可用文本模型"}
+                aria-label="生成文本"
+                disabled={!canGenerate}
+                onClick={generateText}
+              >
+                {data.isGeneratingText
+                  ? <Loader2 size={18} aria-hidden="true" className="is-spinning" />
+                  : <ArrowUp size={18} aria-hidden="true" />}
+              </button>
+            </footer>
+          </div>
+        </section>
+      </article>
+      <Handle
+        id="output"
+        type="source"
+        position={Position.Right}
+        className="cinema-node-handle cinema-text-node-handle cinema-text-node-handle-output"
+        style={handleStyle}
+      />
+    </>
+  )
+}
+
+function ImageGenerationCanvasNode({
+  id,
+  data,
+  selected,
+  accentStyle,
+}: {
+  id: string
+  data: CinemaFlowNodeData
+  selected?: boolean
+  accentStyle: CSSProperties
+}) {
+  const promptRef = useRef<HTMLTextAreaElement>(null)
+  const prompt = readRawString(data.rawData, "prompt")
+  const size = readRawString(data.rawData, "size", DEFAULT_IMAGE_GENERATION_SIZE)
+  const count = String(readRawNumber(data.rawData, "count", DEFAULT_IMAGE_GENERATION_COUNT))
+  const [promptDraft, setPromptDraftState] = useState(prompt)
+  const [sizeDraft, setSizeDraftState] = useState(size)
+  const [countDraft, setCountDraftState] = useState(count)
+  const promptDraftRef = useRef(prompt)
+  const sizeDraftRef = useRef(size)
+  const countDraftRef = useRef(count)
+  const rawDataRef = useRef(data.rawData)
+  const onChangeRawDataRef = useRef(data.onChangeRawData)
+  const promptCommitTimerRef = useRef<number | null>(null)
+  const isPromptComposingRef = useRef(false)
+  const imageModels = data.imageModels ?? []
+  const selectedImageModelValue = readRawString(data.rawData, "model")
+  const selectedImageModel =
+    imageModels.find((model) => model.value === selectedImageModelValue) ??
+    data.effectiveImageModel ??
+    imageModels[0] ??
+    null
+  const assets = readImageResultAssets(data.rawData)
+  const selectedAssetID = readRawString(data.rawData, "selectedAssetID")
+  const selectedAsset = assets.find((asset) => asset.id === selectedAssetID) ?? assets[0] ?? null
+  const status = readRawString(data.rawData, "status", "idle")
+  const nodeError = data.imageGenerationError ?? readRawString(data.rawData, "error")
+  const previewSrc = selectedAsset && data.agentBaseURL && data.projectID
+    ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, selectedAsset.path)
+    : ""
+  const promptReady = promptDraft.trim().length > 0
+  const canGenerate = promptReady && Boolean(selectedImageModel) && !data.isGeneratingImage
+
+  rawDataRef.current = data.rawData
+  onChangeRawDataRef.current = data.onChangeRawData
+
+  const normalizeCountDraft = useCallback(() => {
+    const parsed = Number.parseInt(countDraftRef.current, 10)
+    if (!Number.isFinite(parsed)) return DEFAULT_IMAGE_GENERATION_COUNT
+    return Math.min(4, Math.max(1, parsed))
+  }, [])
+
+  const setPromptDraft = useCallback((value: string) => {
+    promptDraftRef.current = value
+    setPromptDraftState(value)
+  }, [])
+
+  const setSizeDraft = useCallback((value: string) => {
+    sizeDraftRef.current = value
+    setSizeDraftState(value)
+  }, [])
+
+  const setCountDraft = useCallback((value: string) => {
+    countDraftRef.current = value
+    setCountDraftState(value)
+  }, [])
+
+  const clearPromptCommitTimer = useCallback(() => {
+    if (promptCommitTimerRef.current === null) return
+    window.clearTimeout(promptCommitTimerRef.current)
+    promptCommitTimerRef.current = null
+  }, [])
+
+  const commitRawDataPatch = useCallback((patch: Record<string, unknown> = {}) => {
+    const previous = rawDataRef.current
+    const nextRawData: Record<string, unknown> = {
+      ...previous,
+      prompt: promptDraftRef.current,
+      size: sizeDraftRef.current.trim() || DEFAULT_IMAGE_GENERATION_SIZE,
+      count: normalizeCountDraft(),
+      ...patch,
+    }
+    const hasChange = Object.keys(nextRawData).some((key) => nextRawData[key] !== previous[key])
+      || Object.keys(previous).some((key) => !(key in nextRawData))
+    if (!hasChange) return
+
+    rawDataRef.current = nextRawData
+    onChangeRawDataRef.current?.(id, {
+      ...nextRawData,
+    })
+  }, [id, normalizeCountDraft])
+
+  const schedulePromptCommit = useCallback((value: string) => {
+    clearPromptCommitTimer()
+    promptCommitTimerRef.current = window.setTimeout(() => {
+      promptCommitTimerRef.current = null
+      commitRawDataPatch({ prompt: value })
+    }, 320)
+  }, [clearPromptCommitTimer, commitRawDataPatch])
+
+  useEffect(() => {
+    if (isPromptComposingRef.current || promptCommitTimerRef.current !== null) return
+    promptDraftRef.current = prompt
+    setPromptDraftState(prompt)
+  }, [prompt])
+
+  useEffect(() => {
+    sizeDraftRef.current = size
+    setSizeDraftState(size)
+  }, [size])
+
+  useEffect(() => {
+    countDraftRef.current = count
+    setCountDraftState(count)
+  }, [count])
+
+  useEffect(() => () => clearPromptCommitTimer(), [clearPromptCommitTimer])
+
+  const generateImage = () => {
+    const nextPrompt = promptDraftRef.current.trim()
+    if (!nextPrompt) {
+      promptRef.current?.focus()
+      return
+    }
+    if (!selectedImageModel || data.isGeneratingImage) return
+    clearPromptCommitTimer()
+    const nextSize = sizeDraftRef.current.trim() || DEFAULT_IMAGE_GENERATION_SIZE
+    const nextCount = normalizeCountDraft()
+    commitRawDataPatch({
+      prompt: nextPrompt,
+      model: selectedImageModel.value,
+      size: nextSize,
+      count: nextCount,
+    })
+    data.onGenerateImage?.(id, {
+      prompt: nextPrompt,
+      model: selectedImageModel.value,
+      size: nextSize,
+      count: nextCount,
+      style: readRawString(rawDataRef.current, "style") || undefined,
+    })
+  }
+
+  return (
+    <>
+      <Handle
+        id="input"
+        type="target"
+        position={Position.Left}
+        className="cinema-node-handle cinema-node-handle-input"
+        style={accentStyle}
+      />
+      <article
+        className={`cinema-image-gen-node ${selected ? "is-selected" : ""}`}
+        style={accentStyle}
+      >
+        <header className="cinema-image-gen-header">
+          <span className="cinema-node-type">
+            <Image size={14} aria-hidden="true" />
+            {data.title}
+          </span>
+          <span className={`cinema-image-gen-status is-${data.isGeneratingImage ? "running" : status}`}>
+            {data.isGeneratingImage ? "generating" : status}
+          </span>
+        </header>
+
+        <section className="cinema-image-gen-preview" aria-label="Generated image preview">
+          {previewSrc ? (
+            <img src={previewSrc} alt={promptDraft || data.title} draggable={false} />
+          ) : (
+            <div className="cinema-image-gen-empty">
+              <Image size={28} aria-hidden="true" />
+              <span>No image yet</span>
+            </div>
+          )}
+          {data.isGeneratingImage ? (
+            <div className="cinema-image-gen-overlay" aria-live="polite">
+              <Loader2 size={18} aria-hidden="true" className="is-spinning" />
+              <span>Generating</span>
+            </div>
+          ) : null}
+        </section>
+
+        {assets.length > 1 ? (
+          <div className="cinema-image-gen-thumbnails nodrag nowheel" aria-label="Generated image choices">
+            {assets.map((asset) => {
+              const src = data.agentBaseURL && data.projectID
+                ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, asset.path)
+                : ""
+              return (
+                <button
+                  key={asset.id}
+                  type="button"
+                  className={`cinema-image-gen-thumb ${asset.id === selectedAsset?.id ? "is-selected" : ""}`}
+                  title={asset.path}
+                  onClick={() => commitRawDataPatch({ selectedAssetID: asset.id })}
+                >
+                  {src ? <img src={src} alt="" draggable={false} /> : <Image size={14} aria-hidden="true" />}
+                </button>
+              )
+            })}
+          </div>
+        ) : null}
+
+        <section className="cinema-image-gen-composer nodrag nowheel" aria-label="Image generation controls">
+          <textarea
+            ref={promptRef}
+            value={promptDraft}
+            placeholder="描述画面、主体、光线和镜头..."
+            spellCheck={false}
+            onKeyDown={(event) => event.stopPropagation()}
+            onChange={(event) => {
+              const value = event.target.value
+              setPromptDraft(value)
+              if (!isPromptComposingRef.current) schedulePromptCommit(value)
+            }}
+            onCompositionStart={() => {
+              isPromptComposingRef.current = true
+              clearPromptCommitTimer()
+            }}
+            onCompositionEnd={(event) => {
+              isPromptComposingRef.current = false
+              const value = event.currentTarget.value
+              setPromptDraft(value)
+              commitRawDataPatch({ prompt: value })
+            }}
+            onBlur={() => {
+              if (isPromptComposingRef.current) return
+              clearPromptCommitTimer()
+              commitRawDataPatch({ prompt: promptDraftRef.current })
+            }}
+          />
+          <div className="cinema-image-gen-controls">
+            <select
+              aria-label="Image model"
+              value={selectedImageModel?.value ?? ""}
+              disabled={imageModels.length === 0 || data.isGeneratingImage}
+              onKeyDown={(event) => event.stopPropagation()}
+              onChange={(event) => commitRawDataPatch({ model: event.target.value || undefined })}
+            >
+              {imageModels.length > 0 ? imageModels.map((model) => (
+                <option key={model.value} value={model.value}>{model.providerLabel} · {model.label}</option>
+              )) : (
+                <option value="">No image model</option>
+              )}
+            </select>
+            <input
+              aria-label="Image size"
+              value={sizeDraft}
+              disabled={data.isGeneratingImage}
+              inputMode="numeric"
+              onKeyDown={(event) => event.stopPropagation()}
+              onChange={(event) => setSizeDraft(event.target.value)}
+              onBlur={() => commitRawDataPatch({ size: sizeDraftRef.current.trim() || DEFAULT_IMAGE_GENERATION_SIZE })}
+            />
+            <input
+              aria-label="Image count"
+              type="number"
+              min={1}
+              max={4}
+              value={countDraft}
+              disabled={data.isGeneratingImage}
+              onKeyDown={(event) => event.stopPropagation()}
+              onChange={(event) => setCountDraft(event.target.value)}
+              onBlur={() => {
+                const normalized = normalizeCountDraft()
+                setCountDraft(String(normalized))
+                commitRawDataPatch({ count: normalized })
+              }}
+            />
+            <button
+              type="button"
+              className="cinema-image-gen-submit"
+              title={selectedImageModel ? "Generate image" : "No available image model"}
+              aria-label="Generate image"
+              disabled={!canGenerate}
+              onClick={generateImage}
+            >
+              {data.isGeneratingImage
+                ? <Loader2 size={18} aria-hidden="true" className="is-spinning" />
+                : <ArrowUp size={18} aria-hidden="true" />}
+            </button>
+          </div>
+          {nodeError ? (
+            <p className="cinema-image-gen-error" role="alert" title={nodeError}>
+              {nodeError}
+            </p>
+          ) : null}
+        </section>
+      </article>
+      <Handle
+        id="output"
+        type="source"
+        position={Position.Right}
+        className="cinema-node-handle cinema-node-handle-output"
+        style={accentStyle}
+      />
+    </>
+  )
+}
+
+function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
   const meta = NODE_META[data.cinemaType]
   const Icon = meta.icon
   const text = typeof data.rawData.text === "string" && data.rawData.text.trim()
@@ -361,6 +1107,14 @@ function CinemaNodeCard({ data, selected }: NodeProps<CinemaFlowNode>) {
       : meta.placeholder
   const status = typeof data.rawData.status === "string" ? data.rawData.status : null
   const accentStyle = { "--node-accent": meta.accent } as CSSProperties
+
+  if (data.cinemaType === "text") {
+    return <TextCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
+  }
+
+  if (data.cinemaType === "image") {
+    return <ImageGenerationCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
+  }
 
   return (
     <>
@@ -425,7 +1179,7 @@ function GenerationTaskPanel({
   const rawData = selectedNode.data.rawData
   const taskID = readRawString(rawData, "taskID")
   const task = useMemo(() => tasks.find((item) => item.id === taskID) ?? null, [taskID, tasks])
-  const [providerID, setProviderID] = useState(() => readRawString(rawData, "providerID", providers[0]?.manifest.id ?? "mock"))
+  const [providerID, setProviderID] = useState(() => readRawString(rawData, "providerID", providers[0]?.manifest.id ?? ""))
   const [modelID, setModelID] = useState(() => {
     const provider = providerFor(providers, providerID)
     return readRawString(rawData, "modelID", provider?.manifest.models[0]?.id ?? "")
@@ -440,7 +1194,7 @@ function GenerationTaskPanel({
   const [localError, setLocalError] = useState<string | null>(null)
 
   useEffect(() => {
-    const nextProviderID = readRawString(rawData, "providerID", providers[0]?.manifest.id ?? "mock")
+    const nextProviderID = readRawString(rawData, "providerID", providers[0]?.manifest.id ?? "")
     const nextProvider = providerFor(providers, nextProviderID)
     const nextModelID = readRawString(rawData, "modelID", nextProvider?.manifest.models[0]?.id ?? "")
     setProviderID(nextProvider?.manifest.id ?? nextProviderID)
@@ -457,11 +1211,60 @@ function GenerationTaskPanel({
   const currentStatus = task?.status ?? readRawString(rawData, "status", hasTaskRef ? "loading" : "draft")
   const outputAssets = task?.outputAssets ?? readDisplayAssets(rawData)
   const providerAuth = provider?.auth
+  const providerBaseURL = provider?.runtime?.baseURL
   const providerNeedsCredential = Boolean(providerAuth?.requiresCredential)
   const providerConnected = providerAuth?.connected !== false
   const formDisabled = hasTaskRef || actionState.isCreating
   const canRefresh = Boolean(task && !isFinalGenerationTaskStatus(task.status))
   const canCancel = Boolean(task && !isFinalGenerationTaskStatus(task.status))
+  const taskProviderRef = task?.providerTaskRef ?? {}
+  const providerTaskID = readRawString(taskProviderRef, "taskID")
+  const requestID = readRawString(taskProviderRef, "requestID")
+  const taskUpdatedAt = formatTaskTimestamp(task?.updatedAt)
+  const isAutoRefreshing = Boolean(task && actionState.autoRefreshingTaskIDs.includes(task.id))
+  const isWaitingForProvider = currentStatus === "queued" || currentStatus === "running"
+  const isTaskBusy = actionState.isCreating || actionState.isRefreshing || isAutoRefreshing || isWaitingForProvider
+  const feedbackTone = currentStatus === "failed"
+    ? "failed"
+    : currentStatus === "succeeded"
+      ? "succeeded"
+      : currentStatus === "canceled"
+        ? "canceled"
+        : isTaskBusy || hasTaskRef
+          ? "active"
+          : "idle"
+  const feedbackMessage = actionState.isCreating
+    ? "Submitting task to provider."
+    : actionState.isRefreshing
+      ? "Refreshing provider status."
+      : isAutoRefreshing
+        ? "Checking provider status."
+        : currentStatus === "queued"
+          ? "Task is queued with the provider."
+          : currentStatus === "running"
+            ? "Task submitted. Waiting for provider result."
+            : currentStatus === "succeeded"
+              ? "Generation completed."
+              : currentStatus === "failed"
+                ? "Generation failed."
+                : currentStatus === "canceled"
+                  ? "Generation canceled."
+                  : hasTaskRef && !task
+                    ? "Loading task state."
+                    : ""
+  const feedbackMeta = [
+    providerTaskID ? `provider ${providerTaskID}` : "",
+    requestID ? `request ${requestID}` : "",
+    taskUpdatedAt ? `updated ${taskUpdatedAt}` : "",
+    isWaitingForProvider && outputAssets.length === 0 ? "no output yet" : "",
+  ].filter(Boolean)
+  const FeedbackIcon = feedbackTone === "succeeded"
+    ? Check
+    : feedbackTone === "failed" || feedbackTone === "canceled"
+      ? XCircle
+      : feedbackTone === "active"
+        ? Loader2
+        : Clock3
 
   const handleProviderChange = (nextProviderID: string) => {
     const nextProvider = providerFor(providers, nextProviderID)
@@ -514,9 +1317,26 @@ function GenerationTaskPanel({
   return (
     <section className="cinema-task-panel" aria-label="Generation task">
       <div className="cinema-task-status-row">
-        <span className={`cinema-task-status is-${currentStatus}`}>{currentStatus}</span>
+        <span className={`cinema-task-status is-${currentStatus}`}>
+          {isTaskBusy ? <Loader2 size={12} aria-hidden="true" className="is-spinning" /> : null}
+          {currentStatus}
+        </span>
         {task ? <code>{task.id}</code> : null}
       </div>
+
+      {feedbackMessage ? (
+        <div className={`cinema-task-feedback is-${feedbackTone}`} role={feedbackTone === "failed" ? "alert" : "status"}>
+          <div className="cinema-task-feedback-main">
+            <FeedbackIcon size={14} aria-hidden="true" className={feedbackTone === "active" ? "is-spinning" : undefined} />
+            <span>{feedbackMessage}</span>
+          </div>
+          {feedbackMeta.length > 0 ? (
+            <div className="cinema-task-feedback-meta">
+              {feedbackMeta.map((item) => <span key={item}>{item}</span>)}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <label className="cinema-field">
         <span>Provider</span>
@@ -537,6 +1357,16 @@ function GenerationTaskPanel({
             <KeyRound size={14} aria-hidden="true" />
             <span>{providerConnected ? "Connected" : "Not connected"}</span>
             {providerAuth?.credentialProviderID ? <code>{providerAuth.credentialProviderID}</code> : null}
+          </div>
+        </div>
+      ) : null}
+
+      {providerBaseURL ? (
+        <div className="cinema-provider-auth is-connected">
+          <div>
+            <Globe2 size={14} aria-hidden="true" />
+            <span>Endpoint</span>
+            <code>{providerBaseURL}</code>
           </div>
         </div>
       ) : null}
@@ -640,11 +1470,128 @@ function GenerationTaskPanel({
   )
 }
 
+function ImageGenerationInspectorPanel({
+  selectedNode,
+  imageModels,
+  effectiveImageModel,
+  onChangeNode,
+}: {
+  selectedNode: CinemaFlowNode
+  imageModels: CinemaImageModel[]
+  effectiveImageModel: CinemaImageModel | null
+  onChangeNode: (nodeID: string, update: Partial<CinemaFlowNodeData>) => void
+}) {
+  const rawData = selectedNode.data.rawData
+  const assets = readImageResultAssets(rawData)
+  const selectedAssetID = readRawString(rawData, "selectedAssetID")
+  const selectedModelValue = readRawString(rawData, "model")
+  const selectedModel =
+    imageModels.find((model) => model.value === selectedModelValue) ??
+    effectiveImageModel ??
+    imageModels[0] ??
+    null
+  const error = readRawString(rawData, "error")
+  const generatedAt = readRawString(rawData, "generatedAt")
+
+  const patchRawData = (patch: Record<string, unknown>) => {
+    onChangeNode(selectedNode.id, {
+      rawData: {
+        ...rawData,
+        ...patch,
+      },
+    })
+  }
+
+  return (
+    <section className="cinema-generation-panel">
+      <label className="cinema-field">
+        <span>Prompt</span>
+        <textarea
+          value={readRawString(rawData, "prompt")}
+          placeholder="Describe the image to generate."
+          onChange={(event) => patchRawData({ prompt: event.target.value })}
+        />
+      </label>
+      <label className="cinema-field">
+        <span>Style</span>
+        <textarea
+          className="is-compact"
+          value={readRawString(rawData, "style")}
+          placeholder="Optional style hint."
+          onChange={(event) => patchRawData({ style: event.target.value })}
+        />
+      </label>
+      <label className="cinema-field">
+        <span>Model</span>
+        <select
+          value={selectedModel?.value ?? ""}
+          onChange={(event) => patchRawData({ model: event.target.value || undefined })}
+        >
+          {imageModels.length > 0 ? imageModels.map((model) => (
+            <option key={model.value} value={model.value}>{model.providerLabel} · {model.label}</option>
+          )) : (
+            <option value="">No image model</option>
+          )}
+        </select>
+      </label>
+      <label className="cinema-field">
+        <span>Size</span>
+        <input
+          value={readRawString(rawData, "size", DEFAULT_IMAGE_GENERATION_SIZE)}
+          onChange={(event) => patchRawData({ size: event.target.value })}
+        />
+      </label>
+      <label className="cinema-field">
+        <span>Count</span>
+        <input
+          type="number"
+          min={1}
+          max={4}
+          value={readRawNumber(rawData, "count", DEFAULT_IMAGE_GENERATION_COUNT)}
+          onChange={(event) => {
+            const nextCount = Math.min(4, Math.max(1, Number.parseInt(event.target.value, 10) || DEFAULT_IMAGE_GENERATION_COUNT))
+            patchRawData({ count: nextCount })
+          }}
+        />
+      </label>
+      {assets.length > 0 ? (
+        <div className="cinema-image-output-list">
+          <span>Outputs</span>
+          {assets.map((asset) => (
+            <button
+              key={asset.id}
+              type="button"
+              className={asset.id === selectedAssetID ? "is-selected" : ""}
+              title={asset.path}
+              onClick={() => patchRawData({ selectedAssetID: asset.id })}
+            >
+              <code>{asset.path}</code>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {generatedAt ? (
+        <div className="cinema-inspector-meta">
+          <span>Generated</span>
+          <code>{generatedAt}</code>
+        </div>
+      ) : null}
+      {error ? (
+        <div className="cinema-image-error-detail" role="alert">
+          {error}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 function Inspector({
   selectedNode,
   providers,
   tasks,
   taskActionState,
+  imageModels,
+  effectiveImageModel,
   onChangeNode,
   onDeleteNode,
   onCreateGenerationTask,
@@ -655,6 +1602,8 @@ function Inspector({
   providers: CinemaVideoProvider[]
   tasks: CinemaGenerationTask[]
   taskActionState: GenerationTaskActionState
+  imageModels: CinemaImageModel[]
+  effectiveImageModel: CinemaImageModel | null
   onChangeNode: (nodeID: string, update: Partial<CinemaFlowNodeData>) => void
   onDeleteNode: (nodeID: string) => void
   onCreateGenerationTask: (body: CreateCinemaGenerationTaskBody, draftNodeID: string) => void
@@ -705,6 +1654,13 @@ function Inspector({
             onCreateGenerationTask={onCreateGenerationTask}
             onRefreshGenerationTask={onRefreshGenerationTask}
             onCancelGenerationTask={onCancelGenerationTask}
+          />
+        ) : selectedNode.data.cinemaType === "image" ? (
+          <ImageGenerationInspectorPanel
+            selectedNode={selectedNode}
+            imageModels={imageModels}
+            effectiveImageModel={effectiveImageModel}
+            onChangeNode={onChangeNode}
           />
         ) : (
           <label className="cinema-field">
@@ -805,7 +1761,14 @@ export function App() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
   const [saveState, setSaveState] = useState<SaveState>("idle")
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [autoRefreshingTaskIDs, setAutoRefreshingTaskIDs] = useState<string[]>([])
+  const [autoRefreshError, setAutoRefreshError] = useState<string | null>(null)
+  const [textGenerationNodeID, setTextGenerationNodeID] = useState<string | null>(null)
+  const [textGenerationError, setTextGenerationError] = useState<{ nodeID: string; message: string } | null>(null)
+  const [imageGenerationNodeID, setImageGenerationNodeID] = useState<string | null>(null)
+  const [imageGenerationError, setImageGenerationError] = useState<{ nodeID: string; message: string } | null>(null)
   const saveStateRef = useRef<SaveState>("idle")
+  const autoRefreshInFlightRef = useRef(false)
   const nodePatchTimersRef = useRef(new Map<string, number>())
   const nodePatchQueueRef = useRef(new Map<string, CinemaNodePatch>())
   const eventCursorRef = useRef<number | null>(null)
@@ -846,6 +1809,20 @@ export function App() {
   })
   const refetchProviders = providersQuery.refetch
 
+  const textModelsQuery = useQuery({
+    queryKey: ["cinema-text-models", agentBaseURL, projectID],
+    enabled: Boolean(projectID) && projectQuery.data?.initialized === true,
+    queryFn: () => requestJson<CinemaTextModelsResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/text-models`),
+  })
+  const refetchTextModels = textModelsQuery.refetch
+
+  const imageModelsQuery = useQuery({
+    queryKey: ["cinema-image-models", agentBaseURL, projectID],
+    enabled: Boolean(projectID) && projectQuery.data?.initialized === true,
+    queryFn: () => requestJson<CinemaImageModelsResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/image-models`),
+  })
+  const refetchImageModels = imageModelsQuery.refetch
+
   const tasksQuery = useQuery({
     queryKey: ["cinema-generation-tasks", agentBaseURL, projectID],
     enabled: Boolean(projectID) && projectQuery.data?.initialized === true,
@@ -866,6 +1843,7 @@ export function App() {
       saveStateRef.current = "saving"
       setSaveState("saving")
       setSaveError(null)
+      setAutoRefreshError(null)
     },
     onSuccess: (result) => {
       if (saveStateRef.current === "dirty" || nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0) {
@@ -887,8 +1865,10 @@ export function App() {
       refetchCanvas(),
       refetchTasks(),
       refetchProviders(),
+      refetchTextModels(),
+      refetchImageModels(),
     ])
-  }, [refetchCanvas, refetchProviders, refetchTasks])
+  }, [refetchCanvas, refetchImageModels, refetchProviders, refetchTasks, refetchTextModels])
 
   const createGenerationTaskMutation = useMutation({
     mutationFn: ({ body }: { body: CreateCinemaGenerationTaskBody; draftNodeID: string }) =>
@@ -903,6 +1883,7 @@ export function App() {
       saveStateRef.current = "saving"
       setSaveState("saving")
       setSaveError(null)
+      setAutoRefreshError(null)
     },
     onSuccess: async (task, variables) => {
       if (variables.draftNodeID !== task.taskNodeID) {
@@ -934,6 +1915,7 @@ export function App() {
       saveStateRef.current = "saving"
       setSaveState("saving")
       setSaveError(null)
+      setAutoRefreshError(null)
     },
     onSuccess: async (task) => {
       if (task.taskNodeID) setSelectedNodeID(task.taskNodeID)
@@ -970,6 +1952,14 @@ export function App() {
       setSaveError(error instanceof Error ? error.message : "Task cancel failed")
     },
   })
+
+  const activeGenerationTaskIDs = useMemo(
+    () => (tasksQuery.data ?? [])
+      .filter((task) => !isFinalGenerationTaskStatus(task.status))
+      .map((task) => task.id),
+    [tasksQuery.data],
+  )
+  const activeGenerationTaskIDsKey = activeGenerationTaskIDs.join("|")
 
   useEffect(() => {
     saveStateRef.current = saveState
@@ -1025,6 +2015,134 @@ export function App() {
     nodePatchTimersRef.current.set(nodeID, timer)
   }, [commandMutation])
 
+  const flushNodePatch = useCallback(async (nodeID: string) => {
+    const existingTimer = nodePatchTimersRef.current.get(nodeID)
+    if (existingTimer) {
+      window.clearTimeout(existingTimer)
+      nodePatchTimersRef.current.delete(nodeID)
+    }
+
+    const patch = nodePatchQueueRef.current.get(nodeID)
+    nodePatchQueueRef.current.delete(nodeID)
+    if (!patch) return
+
+    saveStateRef.current = "saving"
+    setSaveState("saving")
+    setSaveError(null)
+    setAutoRefreshError(null)
+
+    try {
+      await requestJson<CinemaCommandResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: makeCommandID("update-node"),
+          type: "update-node",
+          actor: "cinema-web",
+          nodeID,
+          patch,
+        }),
+      })
+    } catch (error) {
+      nodePatchQueueRef.current.set(nodeID, patch)
+      saveStateRef.current = "error"
+      setSaveState("error")
+      setSaveError(error instanceof Error ? error.message : "Command failed")
+      throw error
+    }
+  }, [agentBaseURL, projectID])
+
+  const createTextGenerationMutation = useMutation({
+    mutationFn: async ({ nodeID, prompt, model }: { nodeID: string; prompt: string; model: string | null }) => {
+      await flushNodePatch(nodeID)
+      return await requestJson<CinemaTextGenerationResult>(
+        agentBaseURL,
+        `/api/cinema/projects/${encodeURIComponent(projectID)}/text-generations`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            nodeID,
+            prompt,
+            model,
+            writeMode: "append",
+          }),
+        },
+      )
+    },
+    onMutate: ({ nodeID }) => {
+      setTextGenerationNodeID(nodeID)
+      setTextGenerationError(null)
+      saveStateRef.current = "saving"
+      setSaveState("saving")
+      setSaveError(null)
+      setAutoRefreshError(null)
+    },
+    onSuccess: (result) => {
+      applyCanvas(result.canvas)
+      setSelectedNodeID(result.nodeID)
+    },
+    onError: (error, variables) => {
+      const message = error instanceof Error ? error.message : "Text generation failed"
+      setTextGenerationError({ nodeID: variables.nodeID, message })
+      if (saveStateRef.current !== "error") {
+        saveStateRef.current = nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0 ? "dirty" : "saved"
+        setSaveState(saveStateRef.current)
+      }
+    },
+    onSettled: () => {
+      setTextGenerationNodeID(null)
+    },
+  })
+
+  const createImageGenerationMutation = useMutation({
+    mutationFn: async ({ nodeID, request }: { nodeID: string; request: ImageGenerationRequest }) => {
+      await flushNodePatch(nodeID)
+      return await requestJson<CinemaImageGenerationResult>(
+        agentBaseURL,
+        `/api/cinema/projects/${encodeURIComponent(projectID)}/image-generations`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            nodeID,
+            ...request,
+          }),
+        },
+      )
+    },
+    onMutate: ({ nodeID }) => {
+      setImageGenerationNodeID(nodeID)
+      setImageGenerationError(null)
+      saveStateRef.current = "saving"
+      setSaveState("saving")
+      setSaveError(null)
+      setAutoRefreshError(null)
+    },
+    onSuccess: (result) => {
+      applyCanvas(result.canvas)
+      setSelectedNodeID(result.nodeID)
+    },
+    onError: (error, variables) => {
+      const message = error instanceof Error ? error.message : "Image generation failed"
+      setImageGenerationError({ nodeID: variables.nodeID, message })
+      void refetchCanvas()
+      if (saveStateRef.current !== "error") {
+        saveStateRef.current = nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0 ? "dirty" : "saved"
+        setSaveState(saveStateRef.current)
+      }
+    },
+    onSettled: () => {
+      setImageGenerationNodeID(null)
+    },
+  })
+
   useEffect(() => {
     if (!projectID || !canvasQuery.data || projectQuery.data?.initialized !== true) return
     let cancelled = false
@@ -1065,6 +2183,60 @@ export function App() {
       if (intervalID !== null) window.clearInterval(intervalID)
     }
   }, [agentBaseURL, canvasQuery.data, projectID, projectQuery.data?.initialized, refetchCanvas, refetchTasks])
+
+  useEffect(() => {
+    if (!projectID || projectQuery.data?.initialized !== true || activeGenerationTaskIDs.length === 0) {
+      setAutoRefreshingTaskIDs([])
+      return
+    }
+
+    let cancelled = false
+    let initialTimerID: number | null = null
+    let intervalID: number | null = null
+
+    async function refreshActiveTasks() {
+      if (
+        cancelled ||
+        autoRefreshInFlightRef.current ||
+        saveStateRef.current === "dirty" ||
+        saveStateRef.current === "saving"
+      ) {
+        return
+      }
+
+      autoRefreshInFlightRef.current = true
+      setAutoRefreshError(null)
+      setAutoRefreshingTaskIDs(activeGenerationTaskIDs)
+
+      try {
+        for (const taskID of activeGenerationTaskIDs) {
+          if (cancelled) break
+          await requestJson<CinemaGenerationTask>(
+            agentBaseURL,
+            `/api/cinema/projects/${encodeURIComponent(projectID)}/generation-tasks/${encodeURIComponent(taskID)}/refresh`,
+            { method: "POST" },
+          )
+        }
+        if (!cancelled) await refetchRuntimeState()
+      } catch (error) {
+        if (!cancelled) {
+          setAutoRefreshError(error instanceof Error ? error.message : "Automatic task refresh failed")
+        }
+      } finally {
+        if (!cancelled) setAutoRefreshingTaskIDs([])
+        autoRefreshInFlightRef.current = false
+      }
+    }
+
+    initialTimerID = window.setTimeout(() => void refreshActiveTasks(), 2600)
+    intervalID = window.setInterval(() => void refreshActiveTasks(), 9000)
+
+    return () => {
+      cancelled = true
+      if (initialTimerID !== null) window.clearTimeout(initialTimerID)
+      if (intervalID !== null) window.clearInterval(intervalID)
+    }
+  }, [activeGenerationTaskIDs, activeGenerationTaskIDsKey, agentBaseURL, projectID, projectQuery.data?.initialized, refetchRuntimeState])
 
   const onNodesChange = useCallback((changes: NodeChange<CinemaFlowNode>[]) => {
     const removedNodeIDs = changes
@@ -1189,9 +2361,53 @@ export function App() {
   const taskActionState: GenerationTaskActionState = {
     isCreating: createGenerationTaskMutation.isPending,
     isRefreshing: refreshGenerationTaskMutation.isPending,
+    autoRefreshingTaskIDs,
     isCanceling: cancelGenerationTaskMutation.isPending,
-    error: taskActionError instanceof Error ? taskActionError.message : null,
+    error: taskActionError instanceof Error ? taskActionError.message : autoRefreshError,
   }
+  const textModels = textModelsQuery.data?.items ?? []
+  const effectiveTextModel = textModelsQuery.data?.effectiveModel ?? null
+  const imageModels = imageModelsQuery.data?.items ?? []
+  const effectiveImageModel = imageModelsQuery.data?.effectiveModel ?? null
+  const renderedNodes = useMemo(
+    () => nodes.map((node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        onChangeRawData: (nodeID: string, rawData: Record<string, unknown>) => changeNode(nodeID, { rawData }),
+        textModels,
+        effectiveTextModel,
+        isGeneratingText: createTextGenerationMutation.isPending && textGenerationNodeID === node.id,
+        textGenerationError: textGenerationError?.nodeID === node.id ? textGenerationError.message : null,
+        onGenerateText: (nodeID: string, prompt: string, model: string | null) =>
+          createTextGenerationMutation.mutate({ nodeID, prompt, model }),
+        imageModels,
+        effectiveImageModel,
+        isGeneratingImage: createImageGenerationMutation.isPending && imageGenerationNodeID === node.id,
+        imageGenerationError: imageGenerationError?.nodeID === node.id ? imageGenerationError.message : null,
+        agentBaseURL,
+        projectID,
+        onGenerateImage: (nodeID: string, request: ImageGenerationRequest) =>
+          createImageGenerationMutation.mutate({ nodeID, request }),
+      },
+    })),
+    [
+      agentBaseURL,
+      changeNode,
+      createImageGenerationMutation,
+      createTextGenerationMutation,
+      effectiveImageModel,
+      effectiveTextModel,
+      imageGenerationError,
+      imageGenerationNodeID,
+      imageModels,
+      nodes,
+      projectID,
+      textGenerationError,
+      textGenerationNodeID,
+      textModels,
+    ],
+  )
 
   if (!projectID) {
     return (
@@ -1216,8 +2432,8 @@ export function App() {
     )
   }
 
-  if (projectQuery.error || canvasQuery.error || providersQuery.error || tasksQuery.error) {
-    const error = projectQuery.error ?? canvasQuery.error ?? providersQuery.error ?? tasksQuery.error
+  if (projectQuery.error || canvasQuery.error || providersQuery.error || textModelsQuery.error || imageModelsQuery.error || tasksQuery.error) {
+    const error = projectQuery.error ?? canvasQuery.error ?? providersQuery.error ?? textModelsQuery.error ?? imageModelsQuery.error ?? tasksQuery.error
     return (
       <main className="cinema-shell">
         <div className="cinema-empty-state is-error">
@@ -1261,6 +2477,14 @@ export function App() {
             <button
               type="button"
               className="cinema-command-button"
+              onClick={() => addNode("image", { x: 150, y: 150 })}
+            >
+              <Plus size={15} aria-hidden="true" />
+              Image Gen
+            </button>
+            <button
+              type="button"
+              className="cinema-command-button"
               onClick={() => addNode("shot", { x: 180, y: 180 })}
             >
               <Plus size={15} aria-hidden="true" />
@@ -1278,7 +2502,7 @@ export function App() {
         </header>
         <div className="cinema-canvas">
           <ReactFlow<CinemaFlowNode, Edge>
-            nodes={nodes}
+            nodes={renderedNodes}
             edges={edges}
             nodeTypes={nodeTypes}
             onInit={setFlowInstance}
@@ -1301,11 +2525,12 @@ export function App() {
               })
             }}
             fitView
+            fitViewOptions={{ padding: 0.38 }}
             minZoom={0.2}
             maxZoom={2}
           >
             <Background gap={32} size={1.2} color="rgba(255,255,255,0.16)" />
-            <Controls position="bottom-center" />
+            <Controls position="top-left" />
             <MiniMap
               position="bottom-left"
               nodeColor={(node) => NODE_META[(node as CinemaFlowNode).data.cinemaType].accent}
@@ -1322,6 +2547,8 @@ export function App() {
         providers={providersQuery.data ?? []}
         tasks={tasksQuery.data ?? []}
         taskActionState={taskActionState}
+        imageModels={imageModels}
+        effectiveImageModel={effectiveImageModel}
         onChangeNode={changeNode}
         onDeleteNode={deleteNode}
         onCreateGenerationTask={(body, draftNodeID) => createGenerationTaskMutation.mutate({ body, draftNodeID })}

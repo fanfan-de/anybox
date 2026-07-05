@@ -31,13 +31,14 @@ function resolveCinemaWebDist() {
   if (explicit) return explicit
 
   const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+  const bundledDist = path.join(moduleDir, "cinema-web")
   const candidates = [
-    path.join(moduleDir, "cinema-web"),
+    bundledDist,
     path.resolve(moduleDir, "..", "..", "..", "..", "cinema-web", "dist"),
     path.resolve(process.cwd(), "packages", "cinema-web", "dist"),
   ]
 
-  return candidates.find((candidate) => existsSync(path.join(candidate, "index.html"))) ?? candidates[0]
+  return candidates.find((candidate) => existsSync(path.join(candidate, "index.html"))) ?? bundledDist
 }
 
 function resolveRequestPath(distRoot: string, rawPath: string) {

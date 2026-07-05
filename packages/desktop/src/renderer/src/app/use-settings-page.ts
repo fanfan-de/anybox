@@ -176,6 +176,7 @@ function buildCinemaVideoProviderDrafts(items: CinemaVideoProvider[]) {
   return items.reduce<Record<string, CinemaVideoProviderDraftState>>((result, item) => {
     result[item.manifest.id] = {
       apiKey: "",
+      baseURL: item.runtime?.configuredBaseURL ?? "",
     }
     return result
   }, {})
@@ -193,6 +194,7 @@ function mergeCinemaVideoProviderDrafts(
         {
           ...draft,
           apiKey: currentDraft?.apiKey ?? draft.apiKey,
+          baseURL: currentDraft?.baseURL ?? draft.baseURL,
         },
       ]
     }),
@@ -1719,10 +1721,11 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     }))
   }
 
-  function setCinemaVideoProviderDraftValue(providerID: string, field: "apiKey", value: string) {
+  function setCinemaVideoProviderDraftValue(providerID: string, field: "apiKey" | "baseURL", value: string) {
     setCinemaVideoProviderDrafts((current) => {
       const nextDraft = {
         apiKey: current[providerID]?.apiKey ?? "",
+        baseURL: current[providerID]?.baseURL ?? "",
       }
       nextDraft[field] = value
       return {
@@ -2702,22 +2705,37 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   }
 
   async function saveCinemaVideoProviderApiKey(providerID: string, nextApiKey?: string | null) {
-    if (!window.desktop?.saveCinemaVideoProviderApiKey) return false
+    if (!window.desktop?.saveCinemaVideoProviderApiKey && !window.desktop?.saveCinemaVideoProviderSettings) return false
 
     const apiKey =
       (nextApiKey === undefined ? cinemaVideoProviderDrafts[providerID]?.apiKey ?? "" : nextApiKey ?? "").trim()
+    const provider = cinemaVideoProviders.find((item) => item.manifest.id === providerID)
+    const baseURL = (cinemaVideoProviderDrafts[providerID]?.baseURL ?? "").trim()
+    const previousBaseURL = provider?.runtime?.configuredBaseURL ?? ""
+    const shouldSaveApiKey = nextApiKey !== undefined || apiKey.length > 0
+    const shouldSaveBaseURL = nextApiKey === undefined && baseURL !== previousBaseURL
 
     setSavingCinemaVideoProviderID(providerID)
 
     try {
-      await window.desktop.saveCinemaVideoProviderApiKey({
-        providerID,
-        apiKey: apiKey || null,
-      })
+      if (shouldSaveApiKey) {
+        if (!window.desktop?.saveCinemaVideoProviderApiKey) return false
+        await window.desktop.saveCinemaVideoProviderApiKey({
+          providerID,
+          apiKey: apiKey || null,
+        })
+      }
+      if (shouldSaveBaseURL) {
+        if (!window.desktop?.saveCinemaVideoProviderSettings) return false
+        await window.desktop.saveCinemaVideoProviderSettings({
+          providerID,
+          baseURL: baseURL || null,
+        })
+      }
       await loadSettingsData({ silent: true, preserveProviderDrafts: true })
       showMessage({
         tone: "success",
-        text: apiKey ? "Video provider API key saved." : "Video provider API key cleared.",
+        text: nextApiKey === null ? "Video provider API key cleared." : "Video provider settings saved.",
       })
       return true
     } catch (error) {

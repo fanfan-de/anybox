@@ -16,7 +16,6 @@
     "@ai-sdk/provider": "^3.0.10",
     "@anybox/platform": "workspace:*",
     "@anybox/shared": "workspace:*",
-    "@fal-ai/client": "^1.10.1",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@opentui/core": "^0.1.90",
     "@opentui/solid": "^0.1.90",

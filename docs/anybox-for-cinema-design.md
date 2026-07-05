@@ -214,7 +214,9 @@ Canvas 表达的是创作过程：
 
 #### Image Node
 
-用于角色图、风格图、参考图、关键帧。
+当前 V1 中 `image` 节点表示生图节点，而不是静态素材卡片。用户在节点内输入 prompt，选择 image-capable model，设置尺寸和数量，点击生成后由 AnyBox Agent Runtime 调用 AI SDK image model，结果保存到当前项目的 `generated/images/<node-id>/`，并回写到同一个节点内预览。
+
+V1 不支持参考图输入、上传图、局部重绘、seed 或 negative prompt；静态参考图/素材节点后续再单独定义，或在 `image` 节点上扩展模式。
 
 #### Video Node
 
@@ -345,8 +347,7 @@ interface CinemaVideoProviderAdapter {
 
 当前已实现 adapter：
 
-- `mock`：无凭证，用于本地闭环测试。创建后进入 `running`，刷新后生成 `generated/<task-id>/mock-output.mp4` 并回写 Canvas。
-- `fal`：使用 `@fal-ai/client` 的 queue/status/result 能力。凭证 id 是 `cinema-fal`，不注册为插件 connector。
+- `kling`：使用 Kling AI 任务创建/查询接口。凭证 id 是 `cinema-kling`，不注册为插件 connector。
 
 ### 8.2 Provider Manifest
 
@@ -411,8 +412,8 @@ canceled
 {
   "id": "task-...",
   "projectID": "prj_...",
-  "providerID": "fal",
-  "modelID": "fal-ai/...",
+  "providerID": "kling",
+  "modelID": "kling-3.0-turbo",
   "mode": "text-to-video",
   "title": "Generation 10:24 AM",
   "status": "running",
@@ -420,8 +421,10 @@ canceled
   "updatedAt": "2026-07-04T00:00:10.000Z",
   "taskNodeID": "node-generation-task-task-...",
   "providerTaskRef": {
-    "endpointID": "fal-ai/...",
-    "requestID": "..."
+    "taskID": "...",
+    "requestID": "...",
+    "createPath": "/text-to-video/kling-3.0-turbo",
+    "tasksPath": "/tasks"
   },
   "input": {
     "prompt": "...",
@@ -455,7 +458,7 @@ interface CinemaAssetResolver {
 当前 MVP 策略：
 
 - source node 若带 `data.url`，直接传给 provider。
-- source node 若带项目内 `data.path`，fal adapter 使用 fal storage 上传，生成 provider 可访问 URL。
+- Kling image-to-video 当前要求 source node 提供公网 `data.url`，或在参数中显式传入可访问图片 URL/base64。
 - 对只接受公网 URL 且没有 provider upload 能力的 provider，后续再接 S3 / R2 / OSS / COS / AnyBox 临时上传服务。
 - 所有 provider 临时结果必须下载到本地 `generated/<task-id>/`，不能只保存远端 URL。
 
@@ -463,13 +466,11 @@ interface CinemaAssetResolver {
 
 MVP 已接：
 
-- mock provider
-- fal.ai
+- Kling AI
 
 下一轮建议：
 
 - Replicate
-- Kling
 - Runway
 - Luma
 - MiniMax / Hailuo
@@ -478,7 +479,6 @@ MVP 已接：
 
 原因：
 
-- fal.ai 和 Replicate 都是聚合型 API，一次接入可覆盖多类视频模型。
 - 异步任务、轮询、结果 URL 的模型比较清晰。
 - 能快速验证“Canvas 创建任务 -> Runtime 调 provider -> 下载结果 -> 创建 Video Node”的闭环。
 
@@ -491,6 +491,11 @@ Cinema Web UI 和 Agent 都只调用 AnyBox Runtime API，不直接请求厂商 
 ```txt
 GET  /api/cinema/projects/:projectID/video-providers
 GET  /api/cinema/projects/:projectID/video-providers/:providerID
+GET  /api/cinema/projects/:projectID/text-models
+POST /api/cinema/projects/:projectID/text-generations
+GET  /api/cinema/projects/:projectID/image-models
+POST /api/cinema/projects/:projectID/image-generations
+GET  /api/cinema/projects/:projectID/assets/*      # project-scoped generated image preview
 GET  /api/cinema/video-providers/:providerID/auth/api-key
 PUT  /api/cinema/video-providers/:providerID/auth/api-key
 POST /api/cinema/projects/:projectID/generation-tasks
@@ -512,7 +517,12 @@ POST /api/cinema/projects/:projectID/generation-tasks/:taskID/cancel
 
 ## 9. API Key 与安全
 
-API key 由 AnyBox credential store 管理，不进入项目文件。Cinema v1 的 fal.ai 凭证使用 `cinema-fal` provider credential id。
+API key 由 AnyBox credential store 管理，不进入项目文件。Cinema v1 的 Kling AI 凭证使用 `cinema-kling` provider credential id。Runtime 兼容两种保存格式：
+
+- 新版单个 Kling API Key：保存后按 `Authorization: Bearer <api-key>` 调用。
+- Access Key + Secret Key：在同一个输入框保存为 `accessKey:secretKey` 或 `{"accessKey":"...","secretKey":"..."}`，Runtime 会按 Kling JWT 规则生成短期 Bearer token。
+
+Provider 列表会返回运行时 `baseURL`、来源和已保存的覆盖值。设置页和 Cinema Generation 面板展示实际调用域名；默认值是 `https://api-singapore.klingai.com`。调用域名优先级为：设置页保存的 provider base URL > `ANYBOX_KLING_BASE_URL` > 默认值。
 
 安全原则：
 
@@ -524,7 +534,7 @@ API key 由 AnyBox credential store 管理，不进入项目文件。Cinema v1 �
 - 本地服务只监听 `127.0.0.1`。
 - 文件读取必须通过 AnyBox 授权接口。
 
-当前实现没有把 fal.ai 做成插件 connector。connector manifest 当前必须带 runtime，做一个“假 connector”会模糊边界；Cinema provider runtime 直接在 AnyBox Agent 中使用 credential store。
+当前实现没有把 Kling AI 做成插件 connector。connector manifest 当前必须带 runtime，做一个“假 connector”会模糊边界；Cinema provider runtime 直接在 AnyBox Agent 中使用 credential store。
 
 ## 10. Web UI 入口
 
@@ -594,11 +604,11 @@ Agent：连接 Image Node -> Prompt Node -> Generation Task Node，任务完成�
 - 添加 Text / Prompt / Image / Video / Shot / Task 节点。
 - 节点拖拽和连线。
 - Canvas 布局保存。
-- 显示 provider 连接状态，并配置 `cinema-fal` API key。
+- 显示 provider 连接状态和实际调用域名，并配置 `cinema-kling` API key 与可选 provider base URL。
 - Provider manifest 驱动模型和参数选择 UI。
 - 创建视频生成任务。
-- 通过刷新任务状态推进 Mock/fal 队列任务。
-- fal adapter 使用 source node 的 URL 或项目内 path 解析参考素材。
+- 通过刷新任务状态推进 Kling 队列任务。
+- Kling image-to-video 使用 source node 的公网 URL 或显式 URL/base64 参数解析参考素材。
 - 下载结果到 `generated/<task-id>/`。
 - 生成结果自动成为 Video Node。
 - Agent 能读取项目并创建/修改节点。
@@ -639,13 +649,12 @@ Agent：连接 Image Node -> Prompt Node -> Generation Task Node，任务完成�
 - 缩放工具栏。
 - 保存和恢复布局。
 
-### Milestone 3：模型任务（Mock/fal 已完成）
+### Milestone 3：模型任务（Kling 已完成基础闭环）
 
 - API key 配置。
 - Cinema Provider Runtime。
 - Provider manifest 和统一任务状态。
-- fal source URL/path 解析和 provider upload。
-- 接入 Mock provider 和 fal.ai。
+- Kling text-to-video 和 image-to-video 任务创建。
 - 创建生成任务。
 - 刷新任务状态。
 - 下载结果到 `generated/<task-id>/`。
@@ -729,7 +738,7 @@ v0 成功标准：
 
 ## 18. Web Canvas 与 Runtime MVP 实现选择
 
-当前 MVP 验证“独立 Web UI + AnyBox Agent Runtime + 本地项目文件夹 + Mock/fal 生成任务”的闭环。完整时间线、本地媒体预览、WebSocket、多 provider 市场和更多真实 provider 放到后续版本。
+当前 MVP 验证“独立 Web UI + AnyBox Agent Runtime + 本地项目文件夹 + Kling 真实 provider 生成任务”的闭环。完整时间线、本地媒体预览、WebSocket、多 provider 市场和更多真实 provider 放到后续版本。
 
 ### 18.1 前端包
 
@@ -782,7 +791,7 @@ generation-task
 output
 ```
 
-所有节点先使用统一卡片 UI，不直接预览本地媒体。`generation-task` 节点的 Inspector 已接 Runtime API，可配置 provider、model、mode、prompt、params JSON，并显示状态、错误和输出路径。
+大多数节点先使用统一卡片 UI，不直接预览本地媒体。`text` 节点已开始采用专用画布 UI：顶部悬浮文本工具条、正文编辑框、左右加号连接锚点，以及下方文本生成草稿输入区。文本生成区已接入 AnyBox 已配置的文本模型，节点可保存自己的 `data.textModel` 覆盖选择；点击箭头后由本地 Agent 进行非流式生成，并把结果追加写回当前正文。`image` 节点在当前版本是生图节点，节点内保存 `prompt/style/model/size/count/status/resultAssets/selectedAssetID/error/generatedAt`，生成成功后在同一节点内预览本地项目图片，多图结果显示缩略图条。`generation-task` 节点的 Inspector 已接 Runtime API，可配置 provider、model、mode、prompt、params JSON，并显示状态、错误和输出路径。
 
 ### 18.3 AnyBox agent API
 
@@ -803,6 +812,11 @@ GET  /api/cinema/projects/:projectID/events
 GET  /api/cinema/projects/:projectID/summary
 GET  /api/cinema/projects/:projectID/video-providers
 GET  /api/cinema/projects/:projectID/video-providers/:providerID
+GET  /api/cinema/projects/:projectID/text-models
+POST /api/cinema/projects/:projectID/text-generations
+GET  /api/cinema/projects/:projectID/image-models
+POST /api/cinema/projects/:projectID/image-generations
+GET  /api/cinema/projects/:projectID/assets/*
 GET  /api/cinema/video-providers/:providerID/auth/api-key
 PUT  /api/cinema/video-providers/:providerID/auth/api-key
 POST /api/cinema/projects/:projectID/generation-tasks
@@ -820,6 +834,8 @@ POST /api/cinema/projects/:projectID/open-link
 - 浏览器不能传任意本地路径。
 - 未初始化项目不自动创建 `.anybox-cinema`，只返回明确错误。
 - `PUT canvas` 采用整文件原子写回，并追加 `events.jsonl` 的 `canvas.updated` 事件。
+- 文本节点生成复用 AnyBox Provider/AI SDK 配置，API key 只留在本地 Agent 端，生成结果追加写回当前 `text` node。
+- 图片节点生成复用 AnyBox Provider/AI SDK image model 配置，默认模型来自项目/全局 `image_model` selection；生成结果保存到 `generated/images/<node-id>/`，只把项目相对路径写入 node data，预览通过 project-scoped asset API 读取。
 - 生成任务写 `.anybox-cinema/tasks.jsonl` 和 `.anybox-cinema/tasks/<task-id>.json`。
 - 生成结果下载或写入 `generated/<task-id>/`，成功后 Runtime 自动同步 Canvas task node、output node 和 edge。
 
@@ -859,7 +875,7 @@ Web UI 内部映射：
 {
   "text": "prompt text",
   "taskID": "task-...",
-  "providerID": "mock|fal",
+  "providerID": "kling",
   "modelID": "...",
   "mode": "text-to-video",
   "status": "running",
@@ -896,7 +912,7 @@ plugins/Anybox-Plugins/cinema/skills/initialize-cinema-project/SKILL.md
 
 初始化仍然完全由 `Initialize Cinema Project` skill 描述，并使用通用文件创建工具与 Bash 执行，不写成 runtime 硬编码。
 
-插件不新增 provider runtime，也不注册 fal connector。Cinema provider runtime 位于 `packages/anyboxagent/src/cinema/provider-runtime.ts`，`packages/anyboxagent/src/server/usecases/cinema.ts` 只负责任务编排、Canvas 同步和本地项目文件读写；插件只负责项目初始化和已有本地 MCP/Agent 操作。
+插件不新增 provider runtime，也不注册 Kling connector。Cinema provider runtime 位于 `packages/anyboxagent/src/cinema/provider-runtime.ts`，`packages/anyboxagent/src/server/usecases/cinema.ts` 只负责任务编排、Canvas 同步和本地项目文件读写；插件只负责项目初始化和已有本地 MCP/Agent 操作。
 
 ### 18.7 Runtime 测试与验证
 
@@ -910,4 +926,4 @@ corepack pnpm --filter anybox-cinema-web typecheck
 corepack pnpm --filter anybox-cinema-web build
 ```
 
-`anyboxagent` 全量 `tsc --noEmit` 当前仍受既有 unrelated 类型错误影响，已知错误集中在 `src/permission/permission.ts`、`src/server/routes/cinema-web.ts` 和 `Test/server.api.test.ts`。
+`anyboxagent` 全量 `tsc --noEmit` 当前仍受既有 unrelated 类型错误影响，已知错误集中在 `src/permission/permission.ts` 和 `Test/server.api.test.ts`。

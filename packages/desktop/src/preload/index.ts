@@ -515,6 +515,8 @@ try {
       invokeDesktop("desktop:get-cinema-video-providers") as Promise<CinemaVideoProvider[]>,
     saveCinemaVideoProviderApiKey: (input: { providerID: string; apiKey?: string | null }) =>
       invokeDesktop("desktop:save-cinema-video-provider-api-key", input) as Promise<CinemaProviderAuthState>,
+    saveCinemaVideoProviderSettings: (input: { providerID: string; baseURL?: string | null }) =>
+      invokeDesktop("desktop:save-cinema-video-provider-settings", input) as Promise<CinemaVideoProvider>,
     deleteGlobalProviderAuthSession: (input: { providerID: string }) =>
       invokeDesktop("desktop:delete-global-provider-auth-session", input) as Promise<AgentProviderAuthState>,
     testGlobalProviderConnection: (input: {

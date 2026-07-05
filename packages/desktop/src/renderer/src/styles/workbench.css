@@ -1748,10 +1748,13 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   --context-menu-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md, calc(var(--seg-radius-xs, 6px) + 2px)));
   --context-menu-focus: var(--focus-outline-color, rgba(212, 107, 99, 0.32));
   --context-menu-shadow: var(--ui-shadow-md, var(--shadow-md, 0 14px 34px rgba(17, 24, 39, 0.14)));
+  --context-menu-scrollbar-thumb: var(--mix-seg-text-3-54-transparent-46, var(--context-menu-muted));
+  --context-menu-scrollbar-track: var(--context-menu-surface);
 
   min-width: 184px;
   max-width: min(320px, calc(100vw - 64px));
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 6px;
   gap: 2px;
   border-color: var(--context-menu-border);
@@ -1759,6 +1762,24 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   background: var(--context-menu-surface);
   color: var(--context-menu-text);
   box-shadow: var(--context-menu-shadow);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--context-menu-scrollbar-thumb) var(--context-menu-scrollbar-track);
+}
+
+.canvas-top-menu-context-panel::-webkit-scrollbar {
+  width: 10px;
+}
+
+.canvas-top-menu-context-panel::-webkit-scrollbar-track {
+  background: var(--context-menu-scrollbar-track);
+}
+
+.canvas-top-menu-context-panel::-webkit-scrollbar-thumb {
+  border: 3px solid var(--context-menu-scrollbar-track);
+  border-radius: 999px;
+  background: var(--context-menu-scrollbar-thumb);
+  background-clip: padding-box;
 }
 
 .canvas-top-menu-permission-panel,

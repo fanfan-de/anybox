@@ -139,6 +139,7 @@ export async function resolveProjectModelSelectionWithGlobalFallback(
   return {
     model: resolveInheritedModelReference(items, projectSelection.model, globalSelection?.model),
     small_model: resolveInheritedModelReference(items, projectSelection.small_model, globalSelection?.small_model),
+    image_model: resolveInheritedModelReference(items, projectSelection.image_model, globalSelection?.image_model),
     reasoning_effort: projectSelection.reasoning_effort ?? globalSelection?.reasoning_effort,
   }
 }
@@ -153,11 +154,13 @@ export async function resolveEffectiveModelWithFallback(
 
   const projectSelection = await Provider.getSelection(projectID).catch(() => undefined)
   const configuredDefault = findModelByReference(items, projectSelection?.model)
+    ?? findModelByReference(items, projectSelection?.image_model)
   if (configuredDefault) return configuredDefault
 
   if (projectID !== Config.GLOBAL_CONFIG_ID) {
     const globalSelection = await Provider.getSelection(Config.GLOBAL_CONFIG_ID).catch(() => undefined)
     const globalDefault = findModelByReference(items, globalSelection?.model)
+      ?? findModelByReference(items, globalSelection?.image_model)
     if (globalDefault) return globalDefault
   }
 

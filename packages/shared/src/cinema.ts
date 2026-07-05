@@ -163,6 +163,8 @@ export const CinemaGeneratedAssetSchema = z.object({
   path: z.string().min(1),
   mimeType: z.string().optional(),
   sizeBytes: z.number().int().nonnegative().optional(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
   url: z.string().url().optional(),
 })
 export type CinemaGeneratedAsset = z.infer<typeof CinemaGeneratedAssetSchema>
@@ -204,11 +206,24 @@ export const CinemaProviderAuthStateSchema = z.object({
 })
 export type CinemaProviderAuthState = z.infer<typeof CinemaProviderAuthStateSchema>
 
+export const CinemaVideoProviderRuntimeSchema = z.object({
+  baseURL: z.string().min(1).optional(),
+  configuredBaseURL: z.string().min(1).optional(),
+  baseURLSource: z.enum(["settings", "environment", "default"]).optional(),
+})
+export type CinemaVideoProviderRuntime = z.infer<typeof CinemaVideoProviderRuntimeSchema>
+
 export const CinemaVideoProviderSchema = z.object({
   manifest: CinemaVideoProviderManifestSchema,
   auth: CinemaProviderAuthStateSchema,
+  runtime: CinemaVideoProviderRuntimeSchema.optional(),
 })
 export type CinemaVideoProvider = z.infer<typeof CinemaVideoProviderSchema>
+
+export const UpdateCinemaVideoProviderSettingsBodySchema = z.object({
+  baseURL: z.string().nullable().optional(),
+})
+export type UpdateCinemaVideoProviderSettingsBody = z.infer<typeof UpdateCinemaVideoProviderSettingsBodySchema>
 
 export const CinemaGenerationTaskSchema = z.object({
   id: z.string().min(1),
@@ -244,6 +259,74 @@ export const CreateCinemaGenerationTaskBodySchema = z.object({
   position: CinemaPositionSchema.optional(),
 })
 export type CreateCinemaGenerationTaskBody = z.infer<typeof CreateCinemaGenerationTaskBodySchema>
+
+export const CinemaTextModelSchema = z.object({
+  value: z.string().min(1),
+  providerID: z.string().min(1),
+  modelID: z.string().min(1),
+  label: z.string().min(1),
+  providerLabel: z.string().min(1),
+  available: z.boolean(),
+})
+export type CinemaTextModel = z.infer<typeof CinemaTextModelSchema>
+
+export const CinemaTextModelsResultSchema = z.object({
+  items: z.array(CinemaTextModelSchema),
+  selection: z.object({
+    model: z.string().nullable().optional(),
+  }).optional(),
+  effectiveModel: CinemaTextModelSchema.nullable().optional(),
+})
+export type CinemaTextModelsResult = z.infer<typeof CinemaTextModelsResultSchema>
+
+export const CreateCinemaTextGenerationBodySchema = z.object({
+  nodeID: z.string().min(1),
+  prompt: z.string().trim().min(1),
+  model: z.string().nullable().optional(),
+  writeMode: z.literal("append"),
+})
+export type CreateCinemaTextGenerationBody = z.infer<typeof CreateCinemaTextGenerationBodySchema>
+
+export const CinemaTextGenerationResultSchema = z.object({
+  canvas: CinemaCanvasDocumentSchema,
+  nodeID: z.string().min(1),
+  text: z.string(),
+  generatedText: z.string(),
+  model: z.string().min(1),
+})
+export type CinemaTextGenerationResult = z.infer<typeof CinemaTextGenerationResultSchema>
+
+export const CinemaImageModelSchema = CinemaTextModelSchema
+export type CinemaImageModel = z.infer<typeof CinemaImageModelSchema>
+
+export const CinemaImageModelsResultSchema = z.object({
+  items: z.array(CinemaImageModelSchema),
+  selection: z.object({
+    image_model: z.string().nullable().optional(),
+  }).optional(),
+  effectiveModel: CinemaImageModelSchema.nullable().optional(),
+})
+export type CinemaImageModelsResult = z.infer<typeof CinemaImageModelsResultSchema>
+
+export const CreateCinemaImageGenerationBodySchema = z.object({
+  nodeID: z.string().min(1),
+  prompt: z.string().trim().min(1),
+  model: z.string().nullable().optional(),
+  size: z.string().regex(/^\d+x\d+$/).optional(),
+  count: z.number().int().min(1).max(4).optional(),
+  style: z.string().trim().min(1).max(400).optional(),
+})
+export type CreateCinemaImageGenerationBody = z.infer<typeof CreateCinemaImageGenerationBodySchema>
+
+export const CinemaImageGenerationResultSchema = z.object({
+  canvas: CinemaCanvasDocumentSchema,
+  nodeID: z.string().min(1),
+  model: z.string().min(1),
+  assets: z.array(CinemaGeneratedAssetSchema.extend({
+    kind: z.literal("image"),
+  })),
+})
+export type CinemaImageGenerationResult = z.infer<typeof CinemaImageGenerationResultSchema>
 
 export const CinemaProjectSummarySchema = z.object({
   projectID: z.string().min(1),

@@ -1462,6 +1462,10 @@ export interface DesktopIpcContract {
     input: { providerID: string; apiKey?: string | null }
     output: CinemaProviderAuthState
   }
+  "desktop:save-cinema-video-provider-settings": {
+    input: { providerID: string; baseURL?: string | null }
+    output: CinemaVideoProvider
+  }
   "desktop:delete-global-provider-auth-session": {
     input: { providerID: string }
     output: AgentProviderAuthState
@@ -2083,6 +2087,7 @@ export interface DesktopApiMethods {
   saveGlobalProviderApiKey(input: DesktopIpcInput<"desktop:save-global-provider-api-key">): Promise<DesktopIpcOutput<"desktop:save-global-provider-api-key">>
   getCinemaVideoProviders(): Promise<DesktopIpcOutput<"desktop:get-cinema-video-providers">>
   saveCinemaVideoProviderApiKey(input: DesktopIpcInput<"desktop:save-cinema-video-provider-api-key">): Promise<DesktopIpcOutput<"desktop:save-cinema-video-provider-api-key">>
+  saveCinemaVideoProviderSettings(input: DesktopIpcInput<"desktop:save-cinema-video-provider-settings">): Promise<DesktopIpcOutput<"desktop:save-cinema-video-provider-settings">>
   deleteGlobalProviderAuthSession(input: DesktopIpcInput<"desktop:delete-global-provider-auth-session">): Promise<DesktopIpcOutput<"desktop:delete-global-provider-auth-session">>
   testGlobalProviderConnection(input: DesktopIpcInput<"desktop:test-global-provider-connection">): Promise<DesktopIpcOutput<"desktop:test-global-provider-connection">>
   upsertCustomProvider(input: DesktopIpcInput<"desktop:upsert-custom-provider">): Promise<DesktopIpcOutput<"desktop:upsert-custom-provider">>

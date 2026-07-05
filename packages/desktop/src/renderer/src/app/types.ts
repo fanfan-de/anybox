@@ -1253,10 +1253,16 @@ export interface CinemaVideoProvider {
     models: CinemaVideoProviderModel[]
   }
   auth: CinemaVideoProviderAuthState
+  runtime?: {
+    baseURL?: string
+    configuredBaseURL?: string
+    baseURLSource?: "settings" | "environment" | "default"
+  }
 }
 
 export interface CinemaVideoProviderDraftState {
   apiKey: string
+  baseURL: string
 }
 
 export interface ProviderAuthCapability {

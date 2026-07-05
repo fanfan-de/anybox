@@ -4342,6 +4342,26 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     },
   )
 
+  handleDesktopIpc(
+    "desktop:save-cinema-video-provider-settings",
+    async (_event, input: { providerID: string; baseURL?: string | null }) => {
+      const providerID = input.providerID.trim()
+      const result = await requestAgentJSON<CinemaVideoProvider>(
+        `/api/cinema/video-providers/${encodeURIComponent(providerID)}/settings`,
+        {
+          method: "PUT",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            baseURL: input.baseURL ?? null,
+          }),
+        },
+      )
+      return result.data
+    },
+  )
+
   handleDesktopIpc("desktop:delete-global-provider-auth-session", async (_event, input: { providerID: string }) => {
     const providerID = input.providerID.trim()
     const result = await requestAgentJSON<AgentProviderAuthState>(

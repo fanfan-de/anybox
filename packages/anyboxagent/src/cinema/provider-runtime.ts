@@ -1,6 +1,6 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises"
+import { createHmac } from "node:crypto"
+import { mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
-import { createFalClient, type FalClient } from "@fal-ai/client"
 import {
   type CinemaCanvasDocument,
   type CinemaGeneratedAsset,
@@ -13,16 +13,13 @@ import {
   type CreateCinemaGenerationTaskBody,
 } from "@anybox/shared/cinema"
 import * as ProviderAuth from "#auth/provider-auth.ts"
+import * as Config from "#config/config.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
 import { ApiError } from "#server/error.ts"
 
-const MOCK_PROVIDER_ID = "mock"
-const FAL_PROVIDER_ID = "fal"
-const FAL_CREDENTIAL_PROVIDER_ID = "cinema-fal"
 const KLING_PROVIDER_ID = "kling"
 const KLING_CREDENTIAL_PROVIDER_ID = "cinema-kling"
 
-const DEFAULT_FAL_MODEL_ID = "fal-ai/wan-25-preview/text-to-video"
 const DEFAULT_KLING_MODEL_ID = "kling-3.0-turbo"
 const DEFAULT_KLING_BASE_URL = "https://api-singapore.klingai.com"
 const DEFAULT_KLING_TEXT_TO_VIDEO_PATH = "/text-to-video/kling-3.0-turbo"
@@ -45,8 +42,6 @@ export type ProviderAdapter = {
   cancelTask?: (input: ProviderAdapterRefreshInput) => Promise<CinemaGenerationTask>
 }
 
-type FalClientFactory = (apiKey: string) => Pick<FalClient, "queue" | "storage">
-
 type KlingCreateTaskInput = {
   mode: CinemaGenerationMode
   path: string
@@ -68,48 +63,16 @@ type KlingClient = {
   cancelTask?: (input: KlingCancelTaskInput) => Promise<unknown>
 }
 
-type KlingClientFactory = (apiKey: string) => KlingClient
-
-const MOCK_PROVIDER_MANIFEST: CinemaVideoProviderManifest = {
-  id: MOCK_PROVIDER_ID,
-  name: "Mock Video",
-  description: "Local mock provider for validating the Cinema task runtime.",
-  requiresCredential: false,
-  models: [
-    {
-      id: "mock-video",
-      label: "Mock Video",
-      modes: ["text-to-video", "image-to-video"],
-      durations: [4, 8],
-      aspectRatios: ["16:9", "9:16", "1:1"],
-      resolutions: ["720p"],
-      supportsSeed: true,
-      supportsNegativePrompt: true,
-      parameterSchema: {},
-    },
-  ],
+type KlingClientFactory = (apiKey: string, options?: { baseURL?: string }) => KlingClient
+type KlingAuthCredential = {
+  bearerToken: string
+  kind: "api-key" | "access-secret"
 }
-
-const FAL_PROVIDER_MANIFEST: CinemaVideoProviderManifest = {
-  id: FAL_PROVIDER_ID,
-  name: "fal.ai",
-  description: "Run fal.ai queued video generation models with a user-provided API key.",
-  credentialProviderID: FAL_CREDENTIAL_PROVIDER_ID,
-  requiresCredential: true,
-  models: [
-    {
-      id: DEFAULT_FAL_MODEL_ID,
-      label: "WAN 2.5 Text to Video",
-      modes: ["text-to-video"],
-      durations: [5, 10],
-      aspectRatios: ["16:9", "9:16", "1:1"],
-      resolutions: ["480p", "1080p"],
-      supportsSeed: true,
-      supportsNegativePrompt: true,
-      supportsProviderUpload: true,
-      parameterSchema: {},
-    },
-  ],
+type KlingBaseURLSource = "settings" | "environment" | "default"
+type KlingBaseURLResolution = {
+  baseURL: string
+  source: KlingBaseURLSource
+  configuredBaseURL?: string
 }
 
 const KLING_PROVIDER_MANIFEST: CinemaVideoProviderManifest = {
@@ -134,32 +97,14 @@ const KLING_PROVIDER_MANIFEST: CinemaVideoProviderManifest = {
 
 const nowISO = () => new Date().toISOString()
 
-let falClientFactory: FalClientFactory = (apiKey) => createFalClient({ credentials: apiKey })
-let falApiKeyForTest: string | null = null
-let klingClientFactory: KlingClientFactory = (apiKey) => createKlingClient({ apiKey })
+let klingClientFactory: KlingClientFactory = (apiKey, options) => createKlingClient({ apiKey, baseURL: options?.baseURL })
 let klingApiKeyForTest: string | null = null
-
-export function setCinemaFalClientFactoryForTest(factory: FalClientFactory | null) {
-  const previous = falClientFactory
-  falClientFactory = factory ?? ((apiKey) => createFalClient({ credentials: apiKey }))
-  return () => {
-    falClientFactory = previous
-  }
-}
 
 export function setCinemaKlingClientFactoryForTest(factory: KlingClientFactory | null) {
   const previous = klingClientFactory
-  klingClientFactory = factory ?? ((apiKey) => createKlingClient({ apiKey }))
+  klingClientFactory = factory ?? ((apiKey, options) => createKlingClient({ apiKey, baseURL: options?.baseURL }))
   return () => {
     klingClientFactory = previous
-  }
-}
-
-export function setCinemaFalApiKeyForTest(apiKey: string | null) {
-  const previous = falApiKeyForTest
-  falApiKeyForTest = apiKey
-  return () => {
-    falApiKeyForTest = previous
   }
 }
 
@@ -192,18 +137,6 @@ export function getCinemaVideoProviderAdapter(providerID: string): ProviderAdapt
   return adapter
 }
 
-async function resolveFalApiKey() {
-  if (falApiKeyForTest) return falApiKeyForTest
-  const runtimeAuth = await ProviderAuth.resolveProviderRuntimeAuth(FAL_CREDENTIAL_PROVIDER_ID, {}, {
-    method: "api-key",
-    credentialMode: "active",
-  })
-  if (!runtimeAuth.apiKey) {
-    throw new ApiError(400, "CINEMA_PROVIDER_NOT_CONNECTED", "fal.ai is not connected. Save a fal.ai API key before creating fal tasks.")
-  }
-  return runtimeAuth.apiKey
-}
-
 async function resolveKlingApiKey() {
   if (klingApiKeyForTest) return klingApiKeyForTest
   const runtimeAuth = await ProviderAuth.resolveProviderRuntimeAuth(KLING_CREDENTIAL_PROVIDER_ID, {}, {
@@ -220,8 +153,54 @@ function klingPathFromEnv(name: string, fallback: string) {
   return getProcessEnvValue(name)?.trim() || fallback
 }
 
+function normalizeKlingBaseURL(value: string | null | undefined) {
+  const trimmed = value?.trim()
+  if (!trimmed) return undefined
+  let url: URL
+  try {
+    url = new URL(trimmed)
+  } catch {
+    throw new ApiError(400, "CINEMA_PROVIDER_BASE_URL_INVALID", "Kling AI base URL must be a valid absolute URL.")
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new ApiError(400, "CINEMA_PROVIDER_BASE_URL_INVALID", "Kling AI base URL must use http or https.")
+  }
+  url.hash = ""
+  url.search = ""
+  return url.toString().replace(/\/$/, "")
+}
+
+function getKlingEnvironmentBaseURL() {
+  return normalizeKlingBaseURL(getProcessEnvValue("ANYBOX_KLING_BASE_URL"))
+}
+
+async function resolveKlingBaseURL(): Promise<KlingBaseURLResolution> {
+  const settings = await Config.getCinemaVideoProviderSettings(KLING_PROVIDER_ID)
+  const configuredBaseURL = normalizeKlingBaseURL(settings.baseURL)
+  if (configuredBaseURL) {
+    return {
+      baseURL: configuredBaseURL,
+      configuredBaseURL,
+      source: "settings",
+    }
+  }
+
+  const environmentBaseURL = getKlingEnvironmentBaseURL()
+  if (environmentBaseURL) {
+    return {
+      baseURL: environmentBaseURL,
+      source: "environment",
+    }
+  }
+
+  return {
+    baseURL: DEFAULT_KLING_BASE_URL,
+    source: "default",
+  }
+}
+
 function getKlingBaseURL() {
-  return klingPathFromEnv("ANYBOX_KLING_BASE_URL", DEFAULT_KLING_BASE_URL)
+  return getKlingEnvironmentBaseURL() ?? DEFAULT_KLING_BASE_URL
 }
 
 function getKlingTextToVideoPath() {
@@ -301,11 +280,115 @@ function extractKlingStatus(value: unknown) {
   return extractStringLikeDeep(value, ["status", "task_status", "taskStatus", "state"])
 }
 
+function base64UrlEncode(value: string | Buffer) {
+  return Buffer.from(value)
+    .toString("base64")
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "")
+}
+
+function createKlingJwt(accessKey: string, secretKey: string) {
+  const now = Math.floor(Date.now() / 1000)
+  const encodedHeader = base64UrlEncode(JSON.stringify({ alg: "HS256", typ: "JWT" }))
+  const encodedPayload = base64UrlEncode(JSON.stringify({
+    iss: accessKey,
+    exp: now + 1800,
+    nbf: now - 5,
+  }))
+  const signingInput = `${encodedHeader}.${encodedPayload}`
+  const signature = createHmac("sha256", secretKey).update(signingInput).digest("base64")
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "")
+  return `${signingInput}.${signature}`
+}
+
+function readKlingCredentialPairFromRecord(record: Record<string, unknown>) {
+  const accessKey = readRecordString(record, "accessKey")
+    ?? readRecordString(record, "access_key")
+    ?? readRecordString(record, "ak")
+    ?? readRecordString(record, "accessKeyId")
+    ?? readRecordString(record, "access_key_id")
+  const secretKey = readRecordString(record, "secretKey")
+    ?? readRecordString(record, "secret_key")
+    ?? readRecordString(record, "sk")
+    ?? readRecordString(record, "accessKeySecret")
+    ?? readRecordString(record, "access_key_secret")
+  return accessKey && secretKey ? { accessKey, secretKey } : null
+}
+
+function parseKlingCredentialPair(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  try {
+    const parsed: unknown = JSON.parse(trimmed)
+    if (isRecord(parsed)) {
+      const pair = readKlingCredentialPairFromRecord(parsed)
+      if (pair) return pair
+    }
+  } catch {
+    // Plain text credential formats are handled below.
+  }
+
+  const keyedLines: Record<string, string> = {}
+  for (const line of trimmed.split(/\r?\n|;/)) {
+    const match = line.match(/^\s*([A-Za-z_ -]+)\s*[:=]\s*(.+?)\s*$/)
+    if (!match) continue
+    const key = match[1]!.toLowerCase().replace(/[\s_-]/g, "")
+    keyedLines[key] = match[2]!.trim()
+  }
+  const keyedPair = readKlingCredentialPairFromRecord({
+    accessKey: keyedLines.accesskey ?? keyedLines.ak ?? keyedLines.accesskeyid,
+    secretKey: keyedLines.secretkey ?? keyedLines.sk ?? keyedLines.accesskeysecret,
+  })
+  if (keyedPair) return keyedPair
+
+  const nonEmptyLines = trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  if (nonEmptyLines.length === 2) {
+    return { accessKey: nonEmptyLines[0]!, secretKey: nonEmptyLines[1]! }
+  }
+
+  const colonParts = trimmed.split(":")
+  if (colonParts.length === 2 && colonParts[0]!.trim() && colonParts[1]!.trim()) {
+    return { accessKey: colonParts[0]!.trim(), secretKey: colonParts[1]!.trim() }
+  }
+
+  return null
+}
+
+function resolveKlingAuthCredential(value: string): KlingAuthCredential {
+  const pair = parseKlingCredentialPair(value)
+  if (!pair) return { bearerToken: value, kind: "api-key" }
+  return {
+    bearerToken: createKlingJwt(pair.accessKey, pair.secretKey),
+    kind: "access-secret",
+  }
+}
+
+function createKlingRequestError(status: number, payload: unknown, credential: KlingAuthCredential) {
+  const providerMessage = extractKlingError(payload)
+  const message = providerMessage
+    ? `Kling AI request failed (${status}): ${providerMessage}`
+    : `Kling AI request failed (${status}).`
+  if (status === 401 && credential.kind === "api-key") {
+    return new ApiError(
+      502,
+      "CINEMA_PROVIDER_REQUEST_FAILED",
+      `${message} If your Kling console shows an Access Key and Secret Key pair, save both values instead of only one key.`,
+    )
+  }
+  return new ApiError(502, "CINEMA_PROVIDER_REQUEST_FAILED", message)
+}
+
 function createKlingClient({ apiKey, baseURL = getKlingBaseURL() }: { apiKey: string; baseURL?: string }): KlingClient {
+  const credential = resolveKlingAuthCredential(apiKey)
+
   async function request(pathname: string, init: RequestInit = {}) {
     const url = new URL(pathname, baseURL)
     const headers = new Headers(init.headers)
-    headers.set("authorization", `Bearer ${apiKey}`)
+    headers.set("authorization", `Bearer ${credential.bearerToken}`)
     if (!headers.has("content-type")) headers.set("content-type", "application/json")
 
     const response = await fetch(url, {
@@ -323,14 +406,7 @@ function createKlingClient({ apiKey, baseURL = getKlingBaseURL() }: { apiKey: st
     }
 
     if (!response.ok) {
-      const providerMessage = extractKlingError(payload)
-      throw new ApiError(
-        502,
-        "CINEMA_PROVIDER_REQUEST_FAILED",
-        providerMessage
-          ? `Kling AI request failed (${response.status}): ${providerMessage}`
-          : `Kling AI request failed (${response.status}).`,
-      )
+      throw createKlingRequestError(response.status, payload, credential)
     }
 
     const code = readKlingCode(payload)
@@ -465,44 +541,6 @@ async function downloadProviderOutputs(root: string, task: CinemaGenerationTask,
   }
 
   return assets
-}
-
-async function resolveSourceURLsForFal(
-  root: string,
-  client: Pick<FalClient, "storage">,
-  task: CinemaGenerationTask,
-  canvas: CinemaCanvasDocument,
-) {
-  const urls: string[] = []
-  for (const nodeID of task.input.sourceNodeIDs) {
-    const node = canvas.nodes.find((item) => item.id === nodeID)
-    if (!node?.data) continue
-    const url = typeof node.data.url === "string" ? node.data.url.trim() : ""
-    if (url) {
-      urls.push(url)
-      continue
-    }
-
-    const relativePath = typeof node.data.path === "string" ? node.data.path.trim() : ""
-    if (!relativePath) continue
-    const filePath = assertProjectRelativeFile(root, relativePath)
-    const bytes = await readFile(filePath)
-    const blob = new Blob([bytes], { type: guessMimeType(filePath) })
-    urls.push(await client.storage.upload(blob, { lifecycle: { expiresIn: "1d" } }))
-  }
-  return urls
-}
-
-async function buildFalInput(
-  input: ProviderAdapterCreateInput,
-  client: Pick<FalClient, "storage">,
-) {
-  const sourceURLs = await resolveSourceURLsForFal(input.root, client, input.task, input.canvas)
-  const parameters = { ...input.task.input.parameters } as Record<string, unknown>
-  if (!("prompt" in parameters)) parameters.prompt = input.task.input.prompt
-  if (sourceURLs[0] && !("image_url" in parameters)) parameters.image_url = sourceURLs[0]
-  if (sourceURLs.length > 1 && !("image_urls" in parameters)) parameters.image_urls = sourceURLs
-  return parameters
 }
 
 const KLING_CONTROL_PARAMETER_KEYS = new Set([
@@ -702,139 +740,16 @@ function klingOutputPayloadFromTaskRecord(taskRecord: unknown) {
   return taskRecord
 }
 
-async function createMockOutput(root: string, task: CinemaGenerationTask) {
-  const outputDir = path.join(root, "generated", task.id)
-  await mkdir(outputDir, { recursive: true })
-  const filePath = path.join(outputDir, "mock-output.mp4")
-  await writeFile(
-    filePath,
-    `Mock Cinema output for ${task.title}\n\nPrompt:\n${task.input.prompt}\n`,
-    "utf8",
-  )
-  const size = await stat(filePath)
-  return [{
-    id: `asset-${task.id}-1`,
-    kind: "video" as const,
-    path: projectRelativePath(root, filePath),
-    mimeType: "video/mp4",
-    sizeBytes: size.size,
-  }]
-}
-
 function isFinalTaskStatus(status: CinemaGenerationTaskStatus) {
   return status === "succeeded" || status === "failed" || status === "canceled"
-}
-
-const mockProviderAdapter: ProviderAdapter = {
-  manifest: MOCK_PROVIDER_MANIFEST,
-  async createTask({ task }) {
-    return {
-      ...task,
-      status: "running",
-      updatedAt: nowISO(),
-      providerTaskRef: {
-        mock: true,
-      },
-    }
-  },
-  async refreshTask({ root, task }) {
-    if (isFinalTaskStatus(task.status)) return task
-    const outputAssets = await createMockOutput(root, task)
-    return {
-      ...task,
-      status: "succeeded",
-      updatedAt: nowISO(),
-      outputAssets,
-      error: null,
-    }
-  },
-  async cancelTask({ task }) {
-    if (isFinalTaskStatus(task.status)) return task
-    return {
-      ...task,
-      status: "canceled",
-      updatedAt: nowISO(),
-    }
-  },
-}
-
-const falProviderAdapter: ProviderAdapter = {
-  manifest: FAL_PROVIDER_MANIFEST,
-  async createTask(input) {
-    const apiKey = await resolveFalApiKey()
-    const client = falClientFactory(apiKey)
-    const falInput = await buildFalInput(input, client)
-    const result = await client.queue.submit(input.task.modelID as never, {
-      input: falInput as never,
-    })
-    return {
-      ...input.task,
-      status: "running",
-      updatedAt: nowISO(),
-      providerTaskRef: {
-        endpointID: input.task.modelID,
-        requestID: result.request_id,
-      },
-    }
-  },
-  async refreshTask({ root, task }) {
-    if (isFinalTaskStatus(task.status)) return task
-    const apiKey = await resolveFalApiKey()
-    const client = falClientFactory(apiKey)
-    const endpointID = typeof task.providerTaskRef?.endpointID === "string" ? task.providerTaskRef.endpointID : task.modelID
-    const requestID = typeof task.providerTaskRef?.requestID === "string" ? task.providerTaskRef.requestID : ""
-    if (!requestID) {
-      throw new ApiError(409, "CINEMA_PROVIDER_TASK_REF_MISSING", `Cinema task '${task.id}' is missing a fal request ID.`)
-    }
-
-    const status = await client.queue.status(endpointID, { requestId: requestID, logs: true })
-    if (status.status !== "COMPLETED") {
-      return {
-        ...task,
-        status: "running",
-        updatedAt: nowISO(),
-        providerTaskRef: {
-          ...task.providerTaskRef,
-          falStatus: status.status,
-          queuePosition: "queue_position" in status ? status.queue_position : undefined,
-        },
-      }
-    }
-
-    const result = await client.queue.result(endpointID as never, { requestId: requestID })
-    const outputAssets = await downloadProviderOutputs(root, task, result.data)
-    return {
-      ...task,
-      status: "succeeded",
-      updatedAt: nowISO(),
-      providerTaskRef: {
-        ...task.providerTaskRef,
-        falStatus: status.status,
-      },
-      outputAssets,
-      error: null,
-    }
-  },
-  async cancelTask({ task }) {
-    if (isFinalTaskStatus(task.status)) return task
-    const apiKey = await resolveFalApiKey()
-    const client = falClientFactory(apiKey)
-    const endpointID = typeof task.providerTaskRef?.endpointID === "string" ? task.providerTaskRef.endpointID : task.modelID
-    const requestID = typeof task.providerTaskRef?.requestID === "string" ? task.providerTaskRef.requestID : ""
-    if (requestID) await client.queue.cancel(endpointID, { requestId: requestID })
-    return {
-      ...task,
-      status: "canceled",
-      updatedAt: nowISO(),
-    }
-  },
 }
 
 const klingProviderAdapter: ProviderAdapter = {
   manifest: KLING_PROVIDER_MANIFEST,
   async createTask(input) {
     const apiKey = await resolveKlingApiKey()
-    const client = klingClientFactory(apiKey)
+    const runtimeBaseURL = await resolveKlingBaseURL()
+    const client = klingClientFactory(apiKey, { baseURL: runtimeBaseURL.baseURL })
     const klingInput = await buildKlingInput(input)
     const result = await client.createTask({
       mode: input.task.mode,
@@ -856,6 +771,7 @@ const klingProviderAdapter: ProviderAdapter = {
         requestID: extractKlingRequestID(result),
         createPath: klingInput.createPath,
         tasksPath: klingInput.tasksPath,
+        baseURL: runtimeBaseURL.baseURL,
         klingStatus: extractKlingStatus(taskRecord) ?? extractKlingStatus(result),
       },
     }
@@ -863,7 +779,11 @@ const klingProviderAdapter: ProviderAdapter = {
   async refreshTask({ root, task }) {
     if (isFinalTaskStatus(task.status)) return task
     const apiKey = await resolveKlingApiKey()
-    const client = klingClientFactory(apiKey)
+    const runtimeBaseURL = await resolveKlingBaseURL()
+    const taskBaseURL = typeof task.providerTaskRef?.baseURL === "string"
+      ? normalizeKlingBaseURL(task.providerTaskRef.baseURL)
+      : undefined
+    const client = klingClientFactory(apiKey, { baseURL: taskBaseURL ?? runtimeBaseURL.baseURL })
     const taskID = typeof task.providerTaskRef?.taskID === "string" ? task.providerTaskRef.taskID : ""
     if (!taskID) {
       throw new ApiError(409, "CINEMA_PROVIDER_TASK_REF_MISSING", `Cinema task '${task.id}' is missing a Kling task ID.`)
@@ -915,7 +835,11 @@ const klingProviderAdapter: ProviderAdapter = {
   async cancelTask({ task }) {
     if (isFinalTaskStatus(task.status)) return task
     const apiKey = await resolveKlingApiKey()
-    const client = klingClientFactory(apiKey)
+    const runtimeBaseURL = await resolveKlingBaseURL()
+    const taskBaseURL = typeof task.providerTaskRef?.baseURL === "string"
+      ? normalizeKlingBaseURL(task.providerTaskRef.baseURL)
+      : undefined
+    const client = klingClientFactory(apiKey, { baseURL: taskBaseURL ?? runtimeBaseURL.baseURL })
     const taskID = typeof task.providerTaskRef?.taskID === "string" ? task.providerTaskRef.taskID : ""
     if (taskID && client.cancelTask) await client.cancelTask({ taskID })
     return {
@@ -927,8 +851,6 @@ const klingProviderAdapter: ProviderAdapter = {
 }
 
 const providerAdapters: Record<string, ProviderAdapter> = {
-  [MOCK_PROVIDER_ID]: mockProviderAdapter,
-  [FAL_PROVIDER_ID]: falProviderAdapter,
   [KLING_PROVIDER_ID]: klingProviderAdapter,
 }
 
@@ -962,10 +884,24 @@ async function providerAuthStateFor(manifest: CinemaVideoProviderManifest): Prom
   }
 }
 
+async function providerRuntimeFor(manifest: CinemaVideoProviderManifest): Promise<CinemaVideoProvider["runtime"]> {
+  if (manifest.id === KLING_PROVIDER_ID) {
+    const runtimeBaseURL = await resolveKlingBaseURL()
+    return {
+      baseURL: runtimeBaseURL.baseURL,
+      baseURLSource: runtimeBaseURL.source,
+      ...(runtimeBaseURL.configuredBaseURL ? { configuredBaseURL: runtimeBaseURL.configuredBaseURL } : {}),
+    }
+  }
+  return undefined
+}
+
 async function videoProviderFor(adapter: ProviderAdapter): Promise<CinemaVideoProvider> {
+  const runtime = await providerRuntimeFor(adapter.manifest)
   return {
     manifest: adapter.manifest,
     auth: await providerAuthStateFor(adapter.manifest),
+    ...(runtime ? { runtime } : {}),
   }
 }
 
@@ -988,6 +924,18 @@ export async function saveCinemaVideoProviderApiKey(providerID: string, apiKey: 
   }
   await ProviderAuth.saveProviderApiKey(adapter.manifest.credentialProviderID, apiKey)
   return await providerAuthStateFor(adapter.manifest)
+}
+
+export async function saveCinemaVideoProviderSettings(
+  providerID: string,
+  input: { baseURL?: string | null },
+): Promise<CinemaVideoProvider> {
+  const adapter = getCinemaVideoProviderAdapter(providerID)
+  const baseURL = normalizeKlingBaseURL(input.baseURL)
+  await Config.setCinemaVideoProviderSettings(Config.GLOBAL_CONFIG_ID, adapter.manifest.id, {
+    ...(baseURL ? { baseURL } : {}),
+  })
+  return await videoProviderFor(adapter)
 }
 
 export async function hasConnectedCinemaVideoProvider() {

@@ -808,7 +808,7 @@ function VideoProviderCredentialsPanel({
   drafts: Record<string, CinemaVideoProviderDraftState>
   savingProviderID: string | null
   t: SettingsTranslate
-  onDraftChange: (providerID: string, field: "apiKey", value: string) => void
+  onDraftChange: (providerID: string, field: "apiKey" | "baseURL", value: string) => void
   onSaveApiKey: (providerID: string, apiKey?: string | null) => boolean | Promise<boolean>
 }) {
   if (providers.length === 0) {
@@ -833,10 +833,13 @@ function VideoProviderCredentialsPanel({
       <div className="provider-detail-body">
         {providers.map((provider) => {
           const providerID = provider.manifest.id
-          const draft = drafts[providerID] ?? { apiKey: "" }
+          const draft = drafts[providerID] ?? { apiKey: "", baseURL: "" }
           const isBusy = savingProviderID === providerID
           const isConnected = provider.auth.connected
           const modelSummary = getCinemaVideoProviderModelSummary(provider)
+          const configuredBaseURL = provider.runtime?.configuredBaseURL ?? ""
+          const hasDraftApiKey = draft.apiKey.trim().length > 0
+          const hasDraftBaseURLChange = draft.baseURL.trim() !== configuredBaseURL
 
           return (
             <div key={providerID} className="provider-detail-row">
@@ -852,6 +855,9 @@ function VideoProviderCredentialsPanel({
                 {provider.auth.credentialProviderID ? (
                   <p className="provider-detail-helper">{provider.auth.credentialProviderID}</p>
                 ) : null}
+                {provider.runtime?.baseURL ? (
+                  <p className="provider-detail-helper">{t("settings.videoProviders.endpointLabel")}: {provider.runtime.baseURL}</p>
+                ) : null}
               </div>
 
               {provider.auth.requiresCredential ? (
@@ -859,11 +865,22 @@ function VideoProviderCredentialsPanel({
                   <label className="provider-key-field">
                     <span className="provider-key-input-wrap">
                       <input
-                        aria-label={`API key for ${provider.manifest.name}`}
+                        aria-label={`Credential for ${provider.manifest.name}`}
                         type="password"
                         value={draft.apiKey}
-                        placeholder={isConnected ? t("settings.provider.storedKeyPlaceholder") : t("settings.provider.enterApiKey")}
+                        placeholder={isConnected ? t("settings.videoProviders.storedCredentialPlaceholder") : t("settings.videoProviders.credentialPlaceholder")}
                         onChange={(event) => onDraftChange(providerID, "apiKey", event.target.value)}
+                      />
+                    </span>
+                  </label>
+                  <label className="provider-key-field">
+                    <span className="provider-key-input-wrap provider-key-input-wrap-plain">
+                      <input
+                        aria-label={`Endpoint for ${provider.manifest.name}`}
+                        type="url"
+                        value={draft.baseURL}
+                        placeholder={provider.runtime?.baseURL ?? t("settings.videoProviders.endpointPlaceholder")}
+                        onChange={(event) => onDraftChange(providerID, "baseURL", event.target.value)}
                       />
                     </span>
                   </label>
@@ -875,13 +892,13 @@ function VideoProviderCredentialsPanel({
                         disabled={isBusy}
                         onClick={() => void onSaveApiKey(providerID, null)}
                       >
-                        {t("app.clear")}
+                      {t("app.clear")}
                       </button>
                     ) : null}
                     <button
                       className="primary-button"
                       type="button"
-                      disabled={isBusy || draft.apiKey.trim().length === 0}
+                      disabled={isBusy || (!hasDraftApiKey && !hasDraftBaseURLChange)}
                       onClick={() => void onSaveApiKey(providerID)}
                     >
                       {isBusy ? t("app.saving") : t("app.save")}
@@ -2677,7 +2694,7 @@ interface SettingsPageProps {
   ) => void
   onCinemaVideoProviderDraftChange: (
     providerID: string,
-    field: "apiKey",
+    field: "apiKey" | "baseURL",
     value: string,
   ) => void
   onCustomProviderDraftChange: (field: keyof CustomProviderDraftState, value: string) => void

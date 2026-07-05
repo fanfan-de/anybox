@@ -1,9 +1,17 @@
 import { Hono } from "hono"
 import { z } from "zod"
+import { ApiError } from "#server/error.ts"
 import { ok, parseJsonBody, parseQuery } from "#server/http.ts"
 import type { AppEnv } from "#server/types.ts"
 import * as CinemaUseCase from "#server/usecases/cinema.ts"
-import { CinemaCanvasDocumentSchema, CinemaCommandSchema, CreateCinemaGenerationTaskBodySchema } from "@anybox/shared/cinema"
+import {
+  CinemaCanvasDocumentSchema,
+  CinemaCommandSchema,
+  CreateCinemaImageGenerationBodySchema,
+  CreateCinemaTextGenerationBodySchema,
+  CreateCinemaGenerationTaskBodySchema,
+  UpdateCinemaVideoProviderSettingsBodySchema,
+} from "@anybox/shared/cinema"
 
 const CinemaEventsQuerySchema = z.object({
   after: z.coerce.number().int().min(0).optional(),
@@ -13,6 +21,25 @@ const CinemaEventsQuerySchema = z.object({
 const CinemaProviderApiKeyBodySchema = z.object({
   apiKey: z.string().nullable().optional(),
 })
+
+function decodeCinemaAssetPath(url: string) {
+  const pathname = new URL(url).pathname
+  const marker = "/assets/"
+  const markerIndex = pathname.indexOf(marker)
+  if (markerIndex < 0) return ""
+
+  let assetPath = pathname.slice(markerIndex + marker.length)
+  try {
+    for (let index = 0; index < 3; index += 1) {
+      const decoded = assetPath.split("/").map((segment) => decodeURIComponent(segment)).join("/")
+      if (decoded === assetPath) break
+      assetPath = decoded
+    }
+  } catch {
+    throw new ApiError(400, "CINEMA_ASSET_PATH_INVALID", "Asset path is not valid URL encoding.")
+  }
+  return assetPath
+}
 
 export function CinemaRoutes() {
   const app = new Hono<AppEnv>()
@@ -32,6 +59,15 @@ export function CinemaRoutes() {
       "Body must contain an optional nullable 'apiKey' field.",
     )
     return ok(c, await CinemaUseCase.saveCinemaVideoProviderApiKey(c.req.param("providerID"), payload.apiKey))
+  })
+
+  app.put("/video-providers/:providerID/settings", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      UpdateCinemaVideoProviderSettingsBodySchema,
+      "Body must contain an optional nullable 'baseURL' field.",
+    )
+    return ok(c, await CinemaUseCase.saveCinemaVideoProviderSettings(c.req.param("providerID"), payload))
   })
 
   app.get("/projects/:projectID", async (c) =>
@@ -63,6 +99,46 @@ export function CinemaRoutes() {
   app.get("/projects/:projectID/video-providers/:providerID", async (c) =>
     ok(c, await CinemaUseCase.getCinemaVideoProvider(c.req.param("providerID")))
   )
+
+  app.get("/projects/:projectID/text-models", async (c) =>
+    ok(c, await CinemaUseCase.listCinemaTextModels(c.req.param("projectID")))
+  )
+
+  app.get("/projects/:projectID/image-models", async (c) =>
+    ok(c, await CinemaUseCase.listCinemaImageModels(c.req.param("projectID")))
+  )
+
+  app.post("/projects/:projectID/text-generations", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      CreateCinemaTextGenerationBodySchema,
+      "Body must be a valid Cinema text generation request",
+    )
+    return ok(c, await CinemaUseCase.createCinemaTextGeneration(c.req.param("projectID"), payload))
+  })
+
+  app.post("/projects/:projectID/image-generations", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      CreateCinemaImageGenerationBodySchema,
+      "Body must be a valid Cinema image generation request",
+    )
+    return ok(c, await CinemaUseCase.createCinemaImageGeneration(c.req.param("projectID"), payload))
+  })
+
+  app.get("/projects/:projectID/assets/*", async (c) => {
+    const asset = await CinemaUseCase.readCinemaProjectImageAsset(
+      c.req.param("projectID"),
+      decodeCinemaAssetPath(c.req.url),
+    )
+    return new Response(asset.bytes, {
+      headers: {
+        "content-type": asset.mimeType,
+        "content-length": String(asset.sizeBytes),
+        "cache-control": "private, max-age=31536000, immutable",
+      },
+    })
+  })
 
   app.get("/projects/:projectID/generation-tasks", async (c) =>
     ok(c, await CinemaUseCase.listCinemaGenerationTasks(c.req.param("projectID")))

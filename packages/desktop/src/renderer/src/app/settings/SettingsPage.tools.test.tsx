@@ -241,6 +241,10 @@ function createCinemaVideoProvider(
       connected,
       status: connected ? "connected" : "not_connected",
     },
+    runtime: {
+      baseURL: "https://api-singapore.klingai.com",
+      baseURLSource: "default",
+    },
   }
 }
 
@@ -457,7 +461,7 @@ describe("SettingsPage built-in tools", () => {
           catalog: [createProvider("deepseek", "DeepSeek")],
           cinemaVideoProviders: [createCinemaVideoProvider("kling", "Kling AI")],
           cinemaVideoProviderDrafts: {
-            kling: { apiKey: "kling-test-key" },
+            kling: { apiKey: "kling-test-key", baseURL: "" },
           },
           onCinemaVideoProviderDraftChange,
           onSaveCinemaVideoProviderApiKey,
@@ -470,12 +474,17 @@ describe("SettingsPage built-in tools", () => {
     const videoPanel = screen.getByRole("heading", { name: "Video providers" }).closest(".settings-panel")
     expect(videoPanel).not.toBeNull()
     expect(within(videoPanel as HTMLElement).getByText("Kling AI")).toBeInTheDocument()
+    expect(within(videoPanel as HTMLElement).getByText("Endpoint: https://api-singapore.klingai.com")).toBeInTheDocument()
 
-    fireEvent.change(within(videoPanel as HTMLElement).getByLabelText("API key for Kling AI"), {
+    fireEvent.change(within(videoPanel as HTMLElement).getByLabelText("Endpoint for Kling AI"), {
+      target: { value: "https://kling-proxy.example.com" },
+    })
+    fireEvent.change(within(videoPanel as HTMLElement).getByLabelText("Credential for Kling AI"), {
       target: { value: "kling-updated-key" },
     })
     fireEvent.click(within(videoPanel as HTMLElement).getByRole("button", { name: "Save" }))
 
+    expect(onCinemaVideoProviderDraftChange).toHaveBeenCalledWith("kling", "baseURL", "https://kling-proxy.example.com")
     expect(onCinemaVideoProviderDraftChange).toHaveBeenCalledWith("kling", "apiKey", "kling-updated-key")
     expect(onSaveCinemaVideoProviderApiKey).toHaveBeenCalledWith("kling")
   })
