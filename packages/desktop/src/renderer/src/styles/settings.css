@@ -11210,7 +11210,8 @@ body.is-dragging-settings-page {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 22px;
   align-items: stretch;
 }
 

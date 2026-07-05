@@ -17,8 +17,12 @@ describe("cinema schemas", () => {
     const manifest = CinemaVideoProviderManifestSchema.parse({
       id: "kling",
       name: "Kling AI",
+      baseURL: "https://api.example.com",
       credentialProviderID: "cinema-kling",
       requiresCredential: true,
+      connectionTest: {
+        path: "/v1/models",
+      },
       models: [
         {
           id: "kling-3.0-turbo",
@@ -29,6 +33,14 @@ describe("cinema schemas", () => {
     })
 
     expect(manifest.requiresCredential).toBe(true)
+    expect(manifest.baseURL).toBe("https://api.example.com")
+    expect(manifest.connectionTest).toMatchObject({
+      method: "GET",
+      path: "/v1/models",
+      auth: "bearer",
+      expectedStatus: [200],
+      timeoutMs: 10000,
+    })
     expect(manifest.models[0]?.durations).toEqual([])
 
     const task = CinemaGenerationTaskSchema.parse({

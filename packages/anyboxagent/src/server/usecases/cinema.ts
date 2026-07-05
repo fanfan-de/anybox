@@ -51,8 +51,8 @@ type GenerateTextFunction = typeof import("ai")["generateText"]
 type GenerateImageFunction = typeof import("ai")["generateImage"]
 
 export {
-  setCinemaKlingApiKeyForTest,
-  setCinemaKlingClientFactoryForTest,
+  setCinemaVideoProviderCatalogCacheFileForTest,
+  setCinemaVideoProviderCatalogForTest,
 } from "#cinema/provider-runtime.ts"
 
 const defaultCinemaTextRuntimeDependencies = {
@@ -883,10 +883,12 @@ export async function getCinemaCanvas(projectID: string): Promise<CinemaCanvasDo
 }
 
 export const listCinemaVideoProviders = CinemaProviderRuntime.listCinemaVideoProviders
+export const refreshCinemaVideoProviderCatalog = CinemaProviderRuntime.refreshCinemaVideoProviderCatalog
 export const getCinemaVideoProvider = CinemaProviderRuntime.getCinemaVideoProvider
 export const getCinemaVideoProviderAuth = CinemaProviderRuntime.getCinemaVideoProviderAuth
 export const saveCinemaVideoProviderApiKey = CinemaProviderRuntime.saveCinemaVideoProviderApiKey
 export const saveCinemaVideoProviderSettings = CinemaProviderRuntime.saveCinemaVideoProviderSettings
+export const testCinemaVideoProviderConnection = CinemaProviderRuntime.testCinemaVideoProviderConnection
 
 export async function listCinemaTextModels(projectID: string): Promise<CinemaTextModelsResult> {
   const { cinemaRoot } = resolveCinemaRoot(projectID)
@@ -1354,8 +1356,9 @@ export async function createCinemaGenerationTask(
 ): Promise<CinemaGenerationTask> {
   const { root, cinemaRoot } = resolveCinemaRoot(projectID)
   await assertCinemaProjectInitialized(cinemaRoot)
+  const provider = await CinemaProviderRuntime.getCinemaVideoProvider(input.providerID)
+  CinemaProviderRuntime.assertCinemaVideoProviderModelSupports(input, provider.manifest)
   const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(input.providerID)
-  CinemaProviderRuntime.assertCinemaVideoProviderModelSupports(input, adapter.manifest)
 
   const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
   const createdAt = nowISO()

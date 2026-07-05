@@ -792,128 +792,146 @@ function getCinemaVideoProviderStatusText(provider: CinemaVideoProvider, t: Sett
 
 function getCinemaVideoProviderModelSummary(provider: CinemaVideoProvider) {
   const models = provider.manifest.models
-  if (models.length === 0) return "No models"
-  return models.map((model) => model.label || model.id).join(", ")
+  return `${models.length} ${models.length === 1 ? "model" : "models"}`
 }
 
-function VideoProviderCredentialsPanel({
-  providers,
-  drafts,
-  savingProviderID,
-  t,
-  onDraftChange,
-  onSaveApiKey,
-}: {
-  providers: CinemaVideoProvider[]
-  drafts: Record<string, CinemaVideoProviderDraftState>
-  savingProviderID: string | null
-  t: SettingsTranslate
-  onDraftChange: (providerID: string, field: "apiKey" | "baseURL", value: string) => void
-  onSaveApiKey: (providerID: string, apiKey?: string | null) => boolean | Promise<boolean>
-}) {
-  if (providers.length === 0) {
+function getCinemaVideoProviderKindLabel(kind?: string) {
+  if (!kind) return "Catalog"
+  return kind
+    .split(/[-_]/)
+    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+    .join(" ")
+}
+
+function getCinemaVideoProviderSourceText(provider: CinemaVideoProvider, t: SettingsTranslate) {
+  if (provider.auth.credentialSource === "credential_store") return t("settings.provider.sourceSavedKey")
+  if (provider.auth.credentialSource === "environment") return t("settings.provider.sourceFromEnvironment")
+  return provider.auth.connected ? t("settings.provider.sourceFromSavedConfig") : t("settings.provider.sourceNoCredential")
+}
+
+function getCinemaVideoProviderHeaderSummary(provider: CinemaVideoProvider, t: SettingsTranslate) {
+  return [
+    getCinemaVideoProviderStatusText(provider, t),
+    getCinemaVideoProviderModelSummary(provider),
+    getCinemaVideoProviderKindLabel(provider.manifest.kind),
+    getCinemaVideoProviderSourceText(provider, t),
+  ].join(" · ")
+}
+
+function doesCinemaVideoProviderMatchSearch(provider: CinemaVideoProvider, rawQuery: string) {
+  const query = rawQuery.trim().toLowerCase()
+  if (!query) return true
+
+  const modelText = provider.manifest.models
+    .flatMap((model) => [
+      model.id,
+      model.label,
+      model.catalogID ?? "",
+      model.family ?? "",
+      model.lab ?? "",
+      model.baseModel ?? "",
+      model.modes.join(" "),
+    ])
+    .join(" ")
+  const haystack = [
+    provider.manifest.id,
+    provider.manifest.name,
+    provider.manifest.kind ?? "",
+    provider.manifest.authType ?? "",
+    provider.manifest.website ?? "",
+    provider.manifest.doc ?? "",
+    provider.manifest.regions?.join(" ") ?? "",
+    modelText,
+  ]
+    .join(" ")
+    .toLowerCase()
+
+  return haystack.includes(query)
+}
+
+function getVisibleCinemaVideoProvidersForSettings(providers: CinemaVideoProvider[], query: string) {
+  return providers.filter((provider) => doesCinemaVideoProviderMatchSearch(provider, query))
+}
+
+function formatCinemaVideoModelLimit(model: CinemaVideoProvider["manifest"]["models"][number]) {
+  const values = [
+    model.maxDurationSeconds ? `${model.maxDurationSeconds}s max` : null,
+    model.durations?.length ? `${model.durations.join("/")}s` : null,
+    model.resolutions?.length ? model.resolutions.join("/") : null,
+    model.aspectRatios?.length ? model.aspectRatios.join(", ") : null,
+  ].filter(Boolean)
+  return values.join(" · ")
+}
+
+function formatCinemaVideoPricing(model: CinemaVideoProvider["manifest"]["models"][number]) {
+  const first = model.pricing?.[0]
+  if (!first) return null
+  const amount = typeof first.amount === "number" ? first.amount : null
+  const currency = typeof first.currency === "string" ? first.currency : null
+  const unit = typeof first.unit === "string" ? first.unit : null
+  const note = typeof first.note === "string" ? first.note : null
+  if (amount !== null && currency && unit) return `${currency} ${amount} / ${unit}`
+  return note ?? unit
+}
+
+function CinemaVideoModelListView({ provider, t }: { provider: CinemaVideoProvider; t: SettingsTranslate }) {
+  if (provider.manifest.models.length === 0) {
     return (
       <article className="settings-empty-state">
-        <span className="label">{t("app.empty")}</span>
-        <h3>{t("settings.videoProviders.emptyTitle")}</h3>
-        <p>{t("settings.videoProviders.emptyCopy")}</p>
+        <span className="label">{t("settings.videoProviders.noModelsLabel")}</span>
+        <h3>{t("settings.videoProviders.noModelsTitle")}</h3>
+        <p>{t("settings.videoProviders.noModelsCopy")}</p>
       </article>
     )
   }
 
   return (
-    <div className="settings-panel">
-      <div className="settings-section-header">
-        <div>
-          <h3>{t("settings.videoProviders.title")}</h3>
-          <p>{t("settings.videoProviders.copy")}</p>
-        </div>
-      </div>
+    <div className="model-list cinema-video-model-list">
+      {provider.manifest.models.map((model) => {
+        const modalities = [
+          model.modalities?.input.length ? `${t("settings.videoProviders.inputPrefix")}: ${model.modalities.input.join("/")}` : null,
+          model.modalities?.output.length ? `${t("settings.videoProviders.outputPrefix")}: ${model.modalities.output.join("/")}` : null,
+        ].filter(Boolean)
+        const limit = formatCinemaVideoModelLimit(model)
+        const pricing = formatCinemaVideoPricing(model)
 
-      <div className="provider-detail-body">
-        {providers.map((provider) => {
-          const providerID = provider.manifest.id
-          const draft = drafts[providerID] ?? { apiKey: "", baseURL: "" }
-          const isBusy = savingProviderID === providerID
-          const isConnected = provider.auth.connected
-          const modelSummary = getCinemaVideoProviderModelSummary(provider)
-          const configuredBaseURL = provider.runtime?.configuredBaseURL ?? ""
-          const hasDraftApiKey = draft.apiKey.trim().length > 0
-          const hasDraftBaseURLChange = draft.baseURL.trim() !== configuredBaseURL
+        return (
+          <article key={model.id} className="model-row cinema-video-model-row">
+            <div className="model-row-main">
+              <div className="model-row-heading">
+                <div>
+                  <h4>{model.label}</h4>
+                  <p className="model-row-copy">
+                    <strong>{provider.manifest.name}</strong>
+                    {model.baseModel ? ` / ${model.baseModel}` : model.family ? ` / ${model.family}` : ""}
+                  </p>
+                </div>
 
-          return (
-            <div key={providerID} className="provider-detail-row">
-              <div className="provider-detail-row-copy">
-                <span className="settings-field-label">{provider.manifest.name}</span>
-                <p className="provider-detail-helper">
-                  <span
-                    className={isConnected ? "provider-detail-status-dot is-connected" : "provider-detail-status-dot"}
-                    aria-hidden="true"
-                  />
-                  {getCinemaVideoProviderStatusText(provider, t)} · {modelSummary}
-                </p>
-                {provider.auth.credentialProviderID ? (
-                  <p className="provider-detail-helper">{provider.auth.credentialProviderID}</p>
-                ) : null}
-                {provider.runtime?.baseURL ? (
-                  <p className="provider-detail-helper">{t("settings.videoProviders.endpointLabel")}: {provider.runtime.baseURL}</p>
-                ) : null}
+                <div className="model-row-statuses">
+                  {model.endpointType ? <span className="settings-badge">{model.endpointType}</span> : null}
+                  {model.supportsAudio ? <span className="settings-badge">{t("settings.videoProviders.audioBadge")}</span> : null}
+                  {model.sourceCheckedAt ? <span className="settings-badge">{model.sourceCheckedAt}</span> : null}
+                </div>
               </div>
 
-              {provider.auth.requiresCredential ? (
-                <div className="provider-detail-row-control">
-                  <label className="provider-key-field">
-                    <span className="provider-key-input-wrap">
-                      <input
-                        aria-label={`Credential for ${provider.manifest.name}`}
-                        type="password"
-                        value={draft.apiKey}
-                        placeholder={isConnected ? t("settings.videoProviders.storedCredentialPlaceholder") : t("settings.videoProviders.credentialPlaceholder")}
-                        onChange={(event) => onDraftChange(providerID, "apiKey", event.target.value)}
-                      />
-                    </span>
-                  </label>
-                  <label className="provider-key-field">
-                    <span className="provider-key-input-wrap provider-key-input-wrap-plain">
-                      <input
-                        aria-label={`Endpoint for ${provider.manifest.name}`}
-                        type="url"
-                        value={draft.baseURL}
-                        placeholder={provider.runtime?.baseURL ?? t("settings.videoProviders.endpointPlaceholder")}
-                        onChange={(event) => onDraftChange(providerID, "baseURL", event.target.value)}
-                      />
-                    </span>
-                  </label>
-                  <div className="settings-inline-actions">
-                    {isConnected ? (
-                      <button
-                        className="secondary-button"
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => void onSaveApiKey(providerID, null)}
-                      >
-                      {t("app.clear")}
-                      </button>
-                    ) : null}
-                    <button
-                      className="primary-button"
-                      type="button"
-                      disabled={isBusy || (!hasDraftApiKey && !hasDraftBaseURLChange)}
-                      onClick={() => void onSaveApiKey(providerID)}
-                    >
-                      {isBusy ? t("app.saving") : t("app.save")}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="provider-detail-row-control">
-                  <span className="settings-badge is-highlight">{t("app.connected")}</span>
-                </div>
-              )}
+              <div className="model-row-tags">
+                {model.modes.map((mode) => (
+                  <span key={`${model.id}-${mode}`} className="settings-badge">
+                    {mode}
+                  </span>
+                ))}
+                {modalities.map((item) => (
+                  <span key={`${model.id}-${item}`} className="settings-badge">
+                    {item}
+                  </span>
+                ))}
+                {limit ? <span className="settings-badge">{limit}</span> : null}
+                {pricing ? <span className="settings-badge">{pricing}</span> : null}
+              </div>
             </div>
-          )
-        })}
-      </div>
+          </article>
+        )
+      })}
     </div>
   )
 }
@@ -2643,6 +2661,7 @@ interface SettingsPageProps {
   isCheckingAppUpdate: boolean
   isSavingAutomaticUpdates: boolean
   isRefreshingProviderCatalog: boolean
+  isRefreshingCinemaVideoProviderCatalog: boolean
   loadError: string | null
   installedPlugins?: InstalledPlugin[]
   mcpServerDraft: McpServerDraftState
@@ -2700,6 +2719,7 @@ interface SettingsPageProps {
   onCustomProviderDraftChange: (field: keyof CustomProviderDraftState, value: string) => void
   onCustomProviderDraftReset: (draft?: CustomProviderDraftState) => void
   onRefreshProviderCatalog: () => boolean | Promise<boolean>
+  onRefreshCinemaVideoProviderCatalog: () => boolean | Promise<boolean>
   onLoadArchivedSessions: () => void | Promise<void>
   onOpenUpdateCenter: () => void
   onRestoreArchivedSession: (sessionID: string) => boolean | Promise<boolean>
@@ -2718,6 +2738,7 @@ interface SettingsPageProps {
       baseURL?: string | null
     },
   ) => boolean | Promise<boolean>
+  onTestCinemaVideoProviderConnection: (providerID: string) => boolean | Promise<boolean>
   onTestCustomProviderConnection: (providerID?: string) => boolean | Promise<boolean>
   onStartProviderAuthFlow: (
     providerID: string,
@@ -2762,6 +2783,7 @@ export function SettingsPage({
   isCheckingAppUpdate,
   isSavingAutomaticUpdates,
   isRefreshingProviderCatalog,
+  isRefreshingCinemaVideoProviderCatalog,
   loadError,
   installedPlugins = [],
   mcpServerDraft,
@@ -2811,6 +2833,7 @@ export function SettingsPage({
   onCustomProviderDraftChange,
   onCustomProviderDraftReset,
   onRefreshProviderCatalog,
+  onRefreshCinemaVideoProviderCatalog,
   onLoadArchivedSessions,
   onOpenUpdateCenter,
   onRestoreArchivedSession,
@@ -2820,6 +2843,7 @@ export function SettingsPage({
   onSaveProvider,
   onSaveCustomProvider,
   onSelectionChange,
+  onTestCinemaVideoProviderConnection,
   onTestProviderConnection,
   onTestCustomProviderConnection,
   onStartProviderAuthFlow,
@@ -2834,9 +2858,11 @@ export function SettingsPage({
     const [selectedProviderID, setSelectedProviderID] = useState<string | null>(null)
     const [archivedSessionSearchQuery, setArchivedSessionSearchQuery] = useState("")
     const [providerSearch, setProviderSearch] = useState("")
+    const [videoProviderSearch, setVideoProviderSearch] = useState("")
     const [isCustomProviderDialogOpen, setIsCustomProviderDialogOpen] = useState(false)
     const [editingCustomProviderID, setEditingCustomProviderID] = useState<string | null>(null)
     const [mcpServerSearchQuery, setMcpServerSearchQuery] = useState("")
+    const [selectedVideoProviderID, setSelectedVideoProviderID] = useState<string | null>(null)
     const [providerApiKeyModes, setProviderApiKeyModes] = useState<Record<string, ProviderApiKeyMode>>({})
     const [visibleProviderApiKeys, setVisibleProviderApiKeys] = useState<Record<string, boolean>>({})
     const settingsOverlayRef = useRef<HTMLElement | null>(null)
@@ -2860,6 +2886,7 @@ export function SettingsPage({
     const visibleModels = models.filter((model) => model.available && connectedProviderIDs.has(model.providerID))
     const visibleImageModels = visibleModels.filter((model) => model.capabilities.output.image)
     const filteredCatalog = getVisibleProvidersForSettings(catalog, providerSearch)
+    const filteredCinemaVideoProviders = getVisibleCinemaVideoProvidersForSettings(cinemaVideoProviders, videoProviderSearch)
     const mcpServerPluginSourceMap = useMemo(
       () => buildMcpServerPluginSourceMap(installedPlugins, pluginCatalog),
       [installedPlugins, pluginCatalog],
@@ -2874,6 +2901,9 @@ export function SettingsPage({
       doesArchivedSessionMatchSearch(session, normalizedArchivedSessionSearchQuery),
     )
     const activeProvider = selectedProviderID ? catalog.find((item) => item.id === selectedProviderID) ?? null : null
+    const activeCinemaVideoProvider = selectedVideoProviderID
+      ? cinemaVideoProviders.find((item) => item.manifest.id === selectedVideoProviderID) ?? null
+      : null
     const isEditingCustomProvider = editingCustomProviderID !== null
     const customProviderBusy = savingProviderID === "custom" || testingProviderID === "custom"
     const customProviderCanSubmit =
@@ -2908,6 +2938,23 @@ export function SettingsPage({
     const anyboxAccountRechargeUrl = anyboxAccountProvider ? getAnyboxRechargeUrl(anyboxAccountProvider) : null
     const activeProviderModels = activeProvider ? modelGroups[activeProvider.id] ?? [] : []
     const activeProviderBusy = activeProvider ? savingProviderID === activeProvider.id || deletingProviderID === activeProvider.id : false
+    const activeCinemaVideoProviderID = activeCinemaVideoProvider?.manifest.id ?? null
+    const activeCinemaVideoProviderDraft = activeCinemaVideoProviderID
+      ? (cinemaVideoProviderDrafts[activeCinemaVideoProviderID] ?? { apiKey: "", baseURL: "" })
+      : null
+    const activeCinemaVideoProviderBusy = activeCinemaVideoProviderID
+      ? savingCinemaVideoProviderID === activeCinemaVideoProviderID
+      : false
+    const activeCinemaVideoProviderIsTesting = activeCinemaVideoProviderID
+      ? testingProviderID === `cinema-video:${activeCinemaVideoProviderID}`
+      : false
+    const activeCinemaVideoProviderCanTest = Boolean(activeCinemaVideoProvider?.manifest.connectionTest)
+    const activeCinemaVideoProviderConfiguredBaseURL = activeCinemaVideoProvider?.runtime?.configuredBaseURL ?? ""
+    const activeCinemaVideoProviderApiKeyDirty = (activeCinemaVideoProviderDraft?.apiKey.trim().length ?? 0) > 0
+    const activeCinemaVideoProviderBaseURLDirty =
+      (activeCinemaVideoProviderDraft?.baseURL.trim() ?? "") !== activeCinemaVideoProviderConfiguredBaseURL
+    const activeCinemaVideoProviderCanSave =
+      activeCinemaVideoProviderApiKeyDirty || activeCinemaVideoProviderBaseURLDirty
     const activeProviderSelectedMethod =
       activeProviderDraft?.selectedAuthMethod ?? activeProvider?.authState.activeMethod ?? activeProvider?.authCapabilities[0]?.method ?? null
     const activeProviderSelectedCapability = activeProvider
@@ -3016,8 +3063,10 @@ export function SettingsPage({
       if (!isOpen) {
         setActiveSection("general")
         setSelectedProviderID(null)
+        setSelectedVideoProviderID(null)
         setArchivedSessionSearchQuery("")
         setProviderSearch("")
+        setVideoProviderSearch("")
       }
     }, [isOpen])
 
@@ -3085,7 +3134,23 @@ export function SettingsPage({
     }, [activeSection, catalog, providerSearch, selectedProviderID])
 
     useEffect(() => {
-      if (activeSection !== "services") return
+      if (activeSection !== "videoProviders") return
+
+      const visibleProviders = getVisibleCinemaVideoProvidersForSettings(cinemaVideoProviders, videoProviderSearch)
+      if (visibleProviders.length === 0) {
+        if (selectedVideoProviderID !== null) {
+          setSelectedVideoProviderID(null)
+        }
+        return
+      }
+
+      if (!selectedVideoProviderID || !visibleProviders.some((provider) => provider.manifest.id === selectedVideoProviderID)) {
+        setSelectedVideoProviderID(visibleProviders[0].manifest.id)
+      }
+    }, [activeSection, cinemaVideoProviders, videoProviderSearch, selectedVideoProviderID])
+
+    useEffect(() => {
+      if (activeSection !== "services" && activeSection !== "videoProviders") return
       if (!serviceDetailPanelRef.current) return
 
       if (typeof serviceDetailPanelRef.current.scrollTo === "function") {
@@ -3093,7 +3158,7 @@ export function SettingsPage({
       } else {
         serviceDetailPanelRef.current.scrollTop = 0
       }
-    }, [activeSection, selectedProviderID])
+    }, [activeSection, selectedProviderID, selectedVideoProviderID])
 
     useEffect(() => {
       if (isOpen) return
@@ -4605,16 +4670,270 @@ export function SettingsPage({
                     </div>
                   </section>
                 ) : activeSection === "videoProviders" ? (
-                  <section className="settings-video-providers-layout" aria-label={t("settings.videoProviders.pageAria")}>
-                    <div className="settings-service-detail-panel settings-video-providers-detail-panel">
-                      <VideoProviderCredentialsPanel
-                        providers={cinemaVideoProviders}
-                        drafts={cinemaVideoProviderDrafts}
-                        savingProviderID={savingCinemaVideoProviderID}
-                        t={t}
-                        onDraftChange={onCinemaVideoProviderDraftChange}
-                        onSaveApiKey={onSaveCinemaVideoProviderApiKey}
-                      />
+                  <section className="settings-services-layout settings-video-providers-layout" aria-label={t("settings.videoProviders.pageAria")}>
+                    <div className="settings-service-list-panel settings-provider-list-panel">
+                      <div className="settings-provider-search-row">
+                        <div className="settings-provider-search-control" role="search">
+                          <SearchIcon />
+                          <input
+                            aria-label={t("settings.videoProviders.searchProviders")}
+                            type="search"
+                            value={videoProviderSearch}
+                            placeholder={t("settings.videoProviders.searchProviders")}
+                            onChange={(event: ChangeEvent<HTMLInputElement>) => setVideoProviderSearch(event.target.value)}
+                          />
+                        </div>
+                        <button
+                          className="secondary-button settings-provider-refresh-button"
+                          aria-label={t("settings.videoProviders.refreshCatalog")}
+                          type="button"
+                          disabled={isRefreshingCinemaVideoProviderCatalog}
+                          onClick={() => void onRefreshCinemaVideoProviderCatalog()}
+                        >
+                          {isRefreshingCinemaVideoProviderCatalog ? t("settings.provider.refreshingCatalog") : t("app.refresh")}
+                        </button>
+                      </div>
+
+                      <div className="settings-service-list-body">
+                        {filteredCinemaVideoProviders.length > 0 ? (
+                          <div className="settings-service-list" role="list" aria-label={t("settings.videoProviders.providerListAria")}>
+                            {filteredCinemaVideoProviders.map((provider) => {
+                              const isActive = provider.manifest.id === activeCinemaVideoProvider?.manifest.id
+                              const isConnected = provider.auth.connected
+                              const connectionLabel = getCinemaVideoProviderStatusText(provider, t)
+                              const modelSummary = getCinemaVideoProviderModelSummary(provider)
+
+                              return (
+                                <button
+                                  key={provider.manifest.id}
+                                  className={isActive ? "settings-service-item is-active" : "settings-service-item"}
+                                  aria-label={`${provider.manifest.name} ${connectionLabel}`}
+                                  aria-pressed={isActive}
+                                  onClick={() => setSelectedVideoProviderID(provider.manifest.id)}
+                                >
+                                  <div className="settings-service-item-header">
+                                    <span className="settings-service-item-title">
+                                      <span className="provider-logo" aria-hidden="true">
+                                        <span className="provider-logo-fallback">{provider.manifest.name.slice(0, 1).toUpperCase()}</span>
+                                      </span>
+                                      <strong>{provider.manifest.name}</strong>
+                                    </span>
+                                    <span
+                                      className={
+                                        isConnected
+                                          ? "settings-status-indicator is-connected"
+                                          : "settings-status-indicator is-disconnected"
+                                      }
+                                      aria-hidden="true"
+                                      title={connectionLabel}
+                                    >
+                                      {isConnected ? <ConnectedStatusIcon /> : <DisconnectedStatusIcon />}
+                                    </span>
+                                  </div>
+                                  <span className="settings-service-item-copy">
+                                    {getCinemaVideoProviderKindLabel(provider.manifest.kind)} · {modelSummary}
+                                  </span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          <article className="settings-empty-state settings-service-list-empty-state">
+                            <span className="label">{t("settings.videoProviders.noMatchLabel")}</span>
+                            <h3>{t("settings.videoProviders.noSearchMatchTitle")}</h3>
+                            <p>{t("settings.videoProviders.noSearchMatchCopy")}</p>
+                          </article>
+                        )}
+                      </div>
+                    </div>
+
+                    <div ref={serviceDetailPanelRef} className="settings-service-detail-panel settings-video-providers-detail-panel">
+                      {activeCinemaVideoProvider && activeCinemaVideoProviderDraft ? (
+                        <>
+                          <div className="settings-panel provider-detail-card">
+                            <div className="provider-detail-header">
+                              <span className="provider-logo is-large" aria-hidden="true">
+                                <span className="provider-logo-fallback">{activeCinemaVideoProvider.manifest.name.slice(0, 1).toUpperCase()}</span>
+                              </span>
+                              <div className="provider-detail-heading">
+                                <h3>{activeCinemaVideoProvider.manifest.name}</h3>
+                                <p>
+                                  <span
+                                    className={
+                                      activeCinemaVideoProvider.auth.connected
+                                        ? "provider-detail-status-dot is-connected"
+                                        : "provider-detail-status-dot"
+                                    }
+                                    aria-hidden="true"
+                                  />
+                                  {getCinemaVideoProviderHeaderSummary(activeCinemaVideoProvider, t)}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="provider-detail-divider" />
+
+                            <div className="provider-detail-body">
+                              <div className="provider-account-summary" aria-label={`${activeCinemaVideoProvider.manifest.name} catalog summary`}>
+                                <div className="provider-account-summary-row">
+                                  <span>{t("settings.videoProviders.providerIdLabel")}</span>
+                                  <strong>{activeCinemaVideoProvider.manifest.id}</strong>
+                                </div>
+                                <div className="provider-account-summary-row">
+                                  <span>{t("settings.videoProviders.authTypeLabel")}</span>
+                                  <strong>{activeCinemaVideoProvider.manifest.authType ?? "unknown"}</strong>
+                                </div>
+                                {activeCinemaVideoProvider.manifest.regions?.length ? (
+                                  <div className="provider-account-summary-row">
+                                    <span>{t("settings.videoProviders.regionsLabel")}</span>
+                                    <strong>{activeCinemaVideoProvider.manifest.regions.join(", ")}</strong>
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              {activeCinemaVideoProvider.auth.requiresCredential ? (
+                                <div className="provider-detail-row">
+                                  <div className="provider-detail-row-copy">
+                                    <span className="settings-field-label">{t("settings.provider.apiKeyLabel")}</span>
+                                    <p className="provider-detail-helper">
+                                      {activeCinemaVideoProvider.auth.connected
+                                        ? t("settings.videoProviders.storedCredentialPlaceholder")
+                                        : t("settings.videoProviders.credentialPlaceholder")}
+                                    </p>
+                                  </div>
+
+                                  <label className="provider-key-field provider-detail-row-control">
+                                    <span className="provider-key-input-wrap provider-key-input-wrap-plain">
+                                      <input
+                                        aria-label={`Credential for ${activeCinemaVideoProvider.manifest.name}`}
+                                        type="password"
+                                        value={activeCinemaVideoProviderDraft.apiKey}
+                                        placeholder={
+                                          activeCinemaVideoProvider.auth.connected
+                                            ? t("settings.videoProviders.storedCredentialPlaceholder")
+                                            : t("settings.videoProviders.credentialPlaceholder")
+                                        }
+                                        onChange={(event) =>
+                                          onCinemaVideoProviderDraftChange(activeCinemaVideoProvider.manifest.id, "apiKey", event.target.value)
+                                        }
+                                      />
+                                    </span>
+                                  </label>
+                                </div>
+                              ) : null}
+
+                              <div className="provider-detail-row">
+                                <div className="provider-detail-row-copy">
+                                  <span className="settings-field-label">{t("settings.videoProviders.endpointLabel")}</span>
+                                  <p className="provider-detail-helper">{t("settings.videoProviders.endpointPlaceholder")}</p>
+                                </div>
+
+                                <label className="provider-key-field provider-detail-row-control">
+                                  <span className="provider-key-input-wrap provider-key-input-wrap-plain">
+                                    <input
+                                      aria-label={`Endpoint for ${activeCinemaVideoProvider.manifest.name}`}
+                                      type="url"
+                                      value={activeCinemaVideoProviderDraft.baseURL}
+                                      placeholder={activeCinemaVideoProvider.runtime?.baseURL ?? t("settings.videoProviders.endpointPlaceholder")}
+                                      onChange={(event) =>
+                                        onCinemaVideoProviderDraftChange(activeCinemaVideoProvider.manifest.id, "baseURL", event.target.value)
+                                      }
+                                    />
+                                  </span>
+                                </label>
+                              </div>
+
+                              {activeCinemaVideoProvider.manifest.website || activeCinemaVideoProvider.manifest.doc ? (
+                                <div className="settings-inline-actions">
+                                  {activeCinemaVideoProvider.manifest.website ? (
+                                    <button
+                                      className="secondary-button"
+                                      type="button"
+                                      onClick={() => void openExternalUrl(activeCinemaVideoProvider.manifest.website!)}
+                                    >
+                                      {t("settings.videoProviders.websiteAction")}
+                                    </button>
+                                  ) : null}
+                                  {activeCinemaVideoProvider.manifest.doc ? (
+                                    <button
+                                      className="secondary-button"
+                                      type="button"
+                                      onClick={() => void openExternalUrl(activeCinemaVideoProvider.manifest.doc!)}
+                                    >
+                                      {t("settings.videoProviders.docsAction")}
+                                    </button>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div className="provider-detail-footer">
+                              <div className="settings-inline-actions">
+                                <button
+                                  className="secondary-button"
+                                  type="button"
+                                  disabled={
+                                    activeCinemaVideoProviderBusy ||
+                                    activeCinemaVideoProviderIsTesting ||
+                                    !activeCinemaVideoProviderCanTest
+                                  }
+                                  title={
+                                    activeCinemaVideoProviderCanTest
+                                      ? undefined
+                                      : t("settings.videoProviders.testUnavailable")
+                                  }
+                                  onClick={() =>
+                                    void onTestCinemaVideoProviderConnection(activeCinemaVideoProvider.manifest.id)
+                                  }
+                                >
+                                  {activeCinemaVideoProviderIsTesting
+                                    ? t("settings.provider.testingConnection")
+                                    : t("settings.provider.testConnection")}
+                                </button>
+                                {activeCinemaVideoProvider.auth.connected ? (
+                                  <button
+                                    className="secondary-button"
+                                    type="button"
+                                    disabled={activeCinemaVideoProviderBusy || activeCinemaVideoProviderIsTesting}
+                                    onClick={() => void onSaveCinemaVideoProviderApiKey(activeCinemaVideoProvider.manifest.id, null)}
+                                  >
+                                    {t("app.clear")}
+                                  </button>
+                                ) : null}
+                                <button
+                                  className="primary-button"
+                                  aria-label={`Save ${activeCinemaVideoProvider.manifest.name} settings`}
+                                  type="button"
+                                  disabled={
+                                    activeCinemaVideoProviderBusy ||
+                                    activeCinemaVideoProviderIsTesting ||
+                                    !activeCinemaVideoProviderCanSave
+                                  }
+                                  onClick={() => void onSaveCinemaVideoProviderApiKey(activeCinemaVideoProvider.manifest.id)}
+                                >
+                                  {activeCinemaVideoProviderBusy ? t("app.saving") : t("app.save")}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="settings-panel">
+                            <div className="settings-section-header">
+                              <div>
+                                <h3>{t("settings.videoProviders.providerModels")}</h3>
+                              </div>
+                            </div>
+
+                            <CinemaVideoModelListView provider={activeCinemaVideoProvider} t={t} />
+                          </div>
+                        </>
+                      ) : (
+                        <article className="settings-empty-state settings-detail-empty-state">
+                          <span className="label">{t("settings.videoProviders.noProviderLabel")}</span>
+                          <h3>{t("settings.videoProviders.emptyTitle")}</h3>
+                          <p>{t("settings.videoProviders.emptyCopy")}</p>
+                        </article>
+                      )}
                     </div>
                   </section>
                 ) : activeSection === "mcp" ? (

@@ -145,6 +145,9 @@ export const CinemaGenerationModeSchema = z.enum([
   "frames-to-video",
   "reference-to-video",
   "video-to-video",
+  "edit",
+  "extend",
+  "motion-control",
 ])
 export type CinemaGenerationMode = z.infer<typeof CinemaGenerationModeSchema>
 
@@ -173,15 +176,47 @@ export const CinemaVideoProviderManifestSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string().optional(),
+  kind: z.string().optional(),
+  baseURL: z.string().optional(),
+  website: z.string().optional(),
+  doc: z.string().optional(),
+  regions: z.array(z.string().min(1)).default([]),
+  authType: z.string().optional(),
+  catalogSource: z.string().optional(),
   credentialProviderID: z.string().min(1).optional(),
   requiresCredential: z.boolean().default(false),
+  connectionTest: z.object({
+    method: z.enum(["GET", "POST", "HEAD"]).default("GET"),
+    url: z.string().min(1).optional(),
+    path: z.string().min(1).optional(),
+    auth: z.enum(["bearer", "x-api-key", "query", "none"]).default("bearer"),
+    apiKeyHeader: z.string().min(1).optional(),
+    apiKeyQueryParam: z.string().min(1).optional(),
+    headers: z.record(z.string(), z.string()).default({}),
+    body: z.unknown().optional(),
+    expectedStatus: z.array(z.number().int().min(100).max(599)).default([200]),
+    timeoutMs: z.number().int().positive().max(30000).default(10000),
+  }).optional(),
   models: z.array(z.object({
     id: z.string().min(1),
     label: z.string().min(1),
+    catalogID: z.string().optional(),
+    family: z.string().optional(),
+    lab: z.string().optional(),
+    baseModel: z.string().optional(),
+    endpointType: z.string().optional(),
+    modalities: z.object({
+      input: z.array(z.string().min(1)).default([]),
+      output: z.array(z.string().min(1)).default([]),
+    }).optional(),
     modes: z.array(CinemaGenerationModeSchema).min(1),
     durations: z.array(z.number().positive()).default([]),
     aspectRatios: z.array(z.string().min(1)).default([]),
     resolutions: z.array(z.string().min(1)).default([]),
+    maxDurationSeconds: z.number().positive().optional(),
+    pricing: z.array(z.record(z.string(), z.unknown())).default([]),
+    sourceURL: z.string().optional(),
+    sourceCheckedAt: z.string().optional(),
     maxReferenceImages: z.number().int().nonnegative().optional(),
     supportsSeed: z.boolean().optional(),
     supportsNegativePrompt: z.boolean().optional(),
@@ -189,7 +224,7 @@ export const CinemaVideoProviderManifestSchema = z.object({
     requiresPublicInputURL: z.boolean().optional(),
     supportsProviderUpload: z.boolean().optional(),
     parameterSchema: z.record(z.string(), z.unknown()).default({}),
-  })).min(1),
+  })).default([]),
 })
 export type CinemaVideoProviderManifest = z.infer<typeof CinemaVideoProviderManifestSchema>
 
@@ -224,6 +259,12 @@ export const UpdateCinemaVideoProviderSettingsBodySchema = z.object({
   baseURL: z.string().nullable().optional(),
 })
 export type UpdateCinemaVideoProviderSettingsBody = z.infer<typeof UpdateCinemaVideoProviderSettingsBodySchema>
+
+export const TestCinemaVideoProviderConnectionBodySchema = z.object({
+  apiKey: z.string().nullable().optional(),
+  baseURL: z.string().nullable().optional(),
+})
+export type TestCinemaVideoProviderConnectionBody = z.infer<typeof TestCinemaVideoProviderConnectionBodySchema>
 
 export const CinemaGenerationTaskSchema = z.object({
   id: z.string().min(1),

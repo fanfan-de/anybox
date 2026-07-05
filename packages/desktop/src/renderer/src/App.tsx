@@ -1571,6 +1571,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     isPromptUrlInstallDialogOpen,
     isBuiltinToolSelectionDirty,
     isRefreshingProviderCatalog,
+    isRefreshingCinemaVideoProviderCatalog,
     isDeletingAllArchivedSessions,
     isInstallingPromptUrlPrompts,
     isPreviewingPromptUrlInstall,
@@ -1607,6 +1608,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     openPromptUrlInstallDialog,
     previewPromptUrlInstall,
     refreshProviderCatalog,
+    refreshCinemaVideoProviderCatalog,
     resetBuiltinTools,
     resetPromptPreset,
     resettingPromptPresetID,
@@ -1629,6 +1631,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     savingProviderID,
     savingCinemaVideoProviderID,
     savingPluginConnectorID,
+    testCinemaVideoProviderConnection,
     testProviderConnection,
     testCustomProviderConnection,
     testingProviderID,
@@ -3133,6 +3136,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               isCheckingAppUpdate={isCheckingAppUpdate}
               isSavingAutomaticUpdates={isSavingAutomaticUpdates}
               isRefreshingProviderCatalog={isRefreshingProviderCatalog}
+              isRefreshingCinemaVideoProviderCatalog={isRefreshingCinemaVideoProviderCatalog}
               installedPlugins={installedPlugins}
               loadError={loadError}
               mcpServerDraft={mcpServerDraft}
@@ -3180,6 +3184,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onProviderDraftChange={setProviderDraftValue}
               onCinemaVideoProviderDraftChange={setCinemaVideoProviderDraftValue}
               onRefreshProviderCatalog={refreshProviderCatalog}
+              onRefreshCinemaVideoProviderCatalog={refreshCinemaVideoProviderCatalog}
               onLoadArchivedSessions={loadArchivedSessions}
               onOpenUpdateCenter={() => void handleOpenUpdateCenter()}
               onRestoreArchivedSession={restoreArchivedSession}
@@ -3189,6 +3194,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onSaveProvider={saveProvider}
               onSaveCustomProvider={saveCustomProvider}
               onSelectionChange={setSelectionDraftValue}
+              onTestCinemaVideoProviderConnection={testCinemaVideoProviderConnection}
               onTestProviderConnection={testProviderConnection}
               onTestCustomProviderConnection={testCustomProviderConnection}
               onStartProviderAuthFlow={startProviderAuthFlow}

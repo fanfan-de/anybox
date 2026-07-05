@@ -1225,10 +1225,24 @@ export interface ProviderCatalogItem {
 export interface CinemaVideoProviderModel {
   id: string
   label: string
+  catalogID?: string
+  family?: string
+  lab?: string
+  baseModel?: string
+  endpointType?: string
+  modalities?: {
+    input: string[]
+    output: string[]
+  }
   modes: string[]
   durations?: number[]
   aspectRatios?: string[]
   resolutions?: string[]
+  maxDurationSeconds?: number
+  pricing?: Array<Record<string, unknown>>
+  sourceURL?: string
+  sourceCheckedAt?: string
+  supportsAudio?: boolean
 }
 
 export interface CinemaVideoProviderAuthState {
@@ -1248,8 +1262,27 @@ export interface CinemaVideoProvider {
     id: string
     name: string
     description?: string
+    kind?: string
+    baseURL?: string
+    website?: string
+    doc?: string
+    regions?: string[]
+    authType?: string
+    catalogSource?: string
     credentialProviderID?: string
     requiresCredential: boolean
+    connectionTest?: {
+      method: "GET" | "POST" | "HEAD"
+      url?: string
+      path?: string
+      auth: "bearer" | "x-api-key" | "query" | "none"
+      apiKeyHeader?: string
+      apiKeyQueryParam?: string
+      headers: Record<string, string>
+      body?: unknown
+      expectedStatus: number[]
+      timeoutMs: number
+    }
     models: CinemaVideoProviderModel[]
   }
   auth: CinemaVideoProviderAuthState

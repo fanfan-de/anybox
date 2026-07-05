@@ -6,9 +6,8 @@ import { join } from "node:path"
 import { createServerApp } from "#server/server.ts"
 import {
   setCinemaImageRuntimeDependenciesForTest,
-  setCinemaKlingApiKeyForTest,
-  setCinemaKlingClientFactoryForTest,
   setCinemaTextRuntimeDependenciesForTest,
+  setCinemaVideoProviderCatalogForTest,
 } from "#server/usecases/cinema.ts"
 import { testDeepSeekModel, type PublicModel } from "#provider/provider.ts"
 import { Instance } from "#project/instance.ts"
@@ -113,10 +112,14 @@ interface CinemaVideoProvider {
   manifest: {
     id: string
     name: string
+    kind?: string
+    authType?: string
     requiresCredential: boolean
     credentialProviderID?: string
     models: Array<{
       id: string
+      label?: string
+      baseModel?: string
       modes: string[]
     }>
   }
@@ -131,6 +134,96 @@ interface CinemaVideoProvider {
     configuredBaseURL?: string
     baseURLSource?: "settings" | "environment" | "default"
   }
+}
+
+interface ProviderConnectionTestResult {
+  providerID: string
+  ok: boolean
+  status: string
+  checkedAt: number
+  message: string
+  diagnostics?: Record<string, unknown>
+}
+
+const TEST_VIDEO_PROVIDER_CATALOG = {
+  klingai: {
+    id: "klingai",
+    name: "KlingAI",
+    kind: "native",
+    website: "https://klingai.com/",
+    doc: "https://kling.ai/document-api/quickStart/productIntroduction/overview",
+    regions: ["global"],
+    auth_type: "api_key",
+    models: {
+      "kling-v3": {
+        id: "kling-v3",
+        catalog_id: "klingai/kling-3.0",
+        name: "Kling 3.0",
+        family: "Kling",
+        lab: "kuaishou",
+        base_model: "kuaishou/kling-3.0",
+        endpoint_type: "async_polling",
+        modalities: {
+          input: ["text", "image", "video"],
+          output: ["video", "audio"],
+        },
+        modes: ["text-to-video", "image-to-video", "reference-to-video", "motion-control", "edit"],
+        audio_output: true,
+        pricing: [{ unit: "unknown", note: "Pricing should be checked against current docs." }],
+        limit: {
+          durations: [3, 4, 5],
+          resolutions: ["720p"],
+          aspect_ratios: ["16:9", "9:16", "1:1"],
+          max_duration_seconds: 15,
+        },
+        source_url: "https://kling.ai/document-api/api/get-started/kling-skills",
+        source_checked_at: "2026-07-05",
+      },
+    },
+  },
+  fal: {
+    id: "fal",
+    name: "fal",
+    kind: "aggregator",
+    website: "https://fal.ai/",
+    doc: "https://fal.ai/docs",
+    regions: ["global"],
+    auth_type: "api_key",
+    models: {
+      "xai/grok-imagine-video/image-to-video": {
+        id: "xai/grok-imagine-video/image-to-video",
+        catalog_id: "fal/grok-imagine-video",
+        name: "Grok Imagine Video",
+        family: "Grok Imagine",
+        lab: "xai",
+        base_model: "xai/grok-imagine-video",
+        endpoint_type: "async_polling",
+        modalities: {
+          input: ["text", "image", "video"],
+          output: ["video", "audio"],
+        },
+        modes: ["image-to-video"],
+        audio_output: true,
+        pricing: [{ unit: "unknown" }],
+        limit: {
+          durations: [1, 2, 3],
+          resolutions: ["720p"],
+          aspect_ratios: ["16:9"],
+          max_duration_seconds: 3,
+        },
+      },
+    },
+  },
+  poe: {
+    id: "poe",
+    name: "Poe",
+    kind: "gateway",
+    website: "https://poe.com/",
+    doc: "https://creator.poe.com/docs/external-applications/openai-compatible-api",
+    regions: ["global"],
+    auth_type: "api_key",
+    models: {},
+  },
 }
 
 interface CinemaGenerationTask {
@@ -1259,6 +1352,7 @@ describe("cinema api", () => {
   test("exposes cinema video providers and API key auth state", async () => {
     const app = createServerApp()
     const root = await createTempProjectRoot()
+    const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest(TEST_VIDEO_PROVIDER_CATALOG)
 
     try {
       const project = await createProject(app, root)
@@ -1268,19 +1362,22 @@ describe("cinema api", () => {
       const globalProvidersBody = await readJson<CinemaVideoProvider[]>(globalProvidersResponse)
 
       expect(globalProvidersResponse.status).toBe(200)
-      expect(globalProvidersBody.data?.map((provider) => provider.manifest.id)).toEqual(["kling"])
-      expect(globalProvidersBody.data?.[0]?.runtime?.baseURL).toBe("https://api-singapore.klingai.com")
-      expect(globalProvidersBody.data?.[0]?.runtime?.baseURLSource).toBe("default")
+      expect(globalProvidersBody.data?.map((provider) => provider.manifest.id)).toEqual(["fal", "klingai", "poe"])
+      expect(globalProvidersBody.data?.find((provider) => provider.manifest.id === "poe")?.manifest.models).toEqual([])
+      expect(globalProvidersBody.data?.find((provider) => provider.manifest.id === "klingai")?.manifest.models[0]).toMatchObject({
+        id: "kling-v3",
+        label: "Kling 3.0",
+        baseModel: "kuaishou/kling-3.0",
+        modes: ["text-to-video", "image-to-video", "reference-to-video", "motion-control", "edit"],
+      })
 
       const providersResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/video-providers`)
       const providersBody = await readJson<CinemaVideoProvider[]>(providersResponse)
 
       expect(providersResponse.status).toBe(200)
-      expect(providersBody.data?.map((provider) => provider.manifest.id)).toEqual(["kling"])
-      expect(providersBody.data?.[0]?.runtime?.baseURL).toBe("https://api-singapore.klingai.com")
-      expect(providersBody.data?.[0]?.runtime?.baseURLSource).toBe("default")
+      expect(providersBody.data?.map((provider) => provider.manifest.id)).toEqual(["fal", "klingai", "poe"])
 
-      const settingsResponse = await app.request("http://localhost/api/cinema/video-providers/kling/settings", {
+      const settingsResponse = await app.request("http://localhost/api/cinema/video-providers/klingai/settings", {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1296,7 +1393,7 @@ describe("cinema api", () => {
         baseURLSource: "settings",
       })
 
-      const invalidSettingsResponse = await app.request("http://localhost/api/cinema/video-providers/kling/settings", {
+      const invalidSettingsResponse = await app.request("http://localhost/api/cinema/video-providers/klingai/settings", {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1308,7 +1405,24 @@ describe("cinema api", () => {
       expect(invalidSettingsResponse.status).toBe(400)
       expect(invalidSettingsBody.error?.code).toBe("CINEMA_PROVIDER_BASE_URL_INVALID")
 
-      const clearedSettingsResponse = await app.request("http://localhost/api/cinema/video-providers/kling/settings", {
+      const savedKeyResponse = await app.request("http://localhost/api/cinema/video-providers/klingai/auth/api-key", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          apiKey: "test-video-key",
+        }),
+      })
+      const savedKeyBody = await readJson<CinemaVideoProvider["auth"]>(savedKeyResponse)
+
+      expect(savedKeyResponse.status).toBe(200)
+      expect(savedKeyBody.data).toMatchObject({
+        providerID: "klingai",
+        credentialProviderID: "cinema-klingai",
+        connected: true,
+        status: "connected",
+      })
+
+      const clearedSettingsResponse = await app.request("http://localhost/api/cinema/video-providers/klingai/settings", {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -1318,56 +1432,178 @@ describe("cinema api", () => {
       const clearedSettingsBody = await readJson<CinemaVideoProvider>(clearedSettingsResponse)
 
       expect(clearedSettingsResponse.status).toBe(200)
-      expect(clearedSettingsBody.data?.runtime).toMatchObject({
-        baseURL: "https://api-singapore.klingai.com",
-        baseURLSource: "default",
-      })
-      expect(clearedSettingsBody.data?.runtime?.configuredBaseURL).toBeUndefined()
+      expect(clearedSettingsBody.data?.runtime).toBeUndefined()
 
-      const klingAuthResponse = await app.request("http://localhost/api/cinema/video-providers/kling/auth/api-key")
+      const klingAuthResponse = await app.request("http://localhost/api/cinema/video-providers/klingai/auth/api-key")
       const klingAuthBody = await readJson<CinemaVideoProvider["auth"]>(klingAuthResponse)
 
       expect(klingAuthResponse.status).toBe(200)
       expect(klingAuthBody.data).toMatchObject({
-        providerID: "kling",
-        credentialProviderID: "cinema-kling",
+        providerID: "klingai",
+        credentialProviderID: "cinema-klingai",
       })
+
+      const clearedKeyResponse = await app.request("http://localhost/api/cinema/video-providers/klingai/auth/api-key", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          apiKey: null,
+        }),
+      })
+      expect(clearedKeyResponse.status).toBe(200)
     } finally {
+      restoreVideoCatalog()
       await rm(root, { recursive: true, force: true })
     }
   })
 
-  test("rejects removed cinema video providers", async () => {
+  test("tests cinema video provider connections with catalog test endpoints", async () => {
     const app = createServerApp()
     const root = await createTempProjectRoot()
+    const server = Bun.serve({
+      port: 0,
+      fetch(request) {
+        if (new URL(request.url).pathname !== "/v1beta/models") {
+          return new Response("Not found", { status: 404 })
+        }
+        if (request.headers.get("authorization") !== "Bearer valid-video-key") {
+          return new Response("Unauthorized", { status: 401 })
+        }
+        return Response.json({ data: [] })
+      },
+    })
+    const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest({
+      ...TEST_VIDEO_PROVIDER_CATALOG,
+      klingai: {
+        ...TEST_VIDEO_PROVIDER_CATALOG.klingai,
+        base_url: `${server.url.toString().replace(/\/$/, "")}/v1beta`,
+        connection_test: {
+          method: "GET",
+          path: "/models",
+          auth: "bearer",
+          expected_status: [200],
+          timeout_ms: 1000,
+        },
+      },
+    })
+
+    try {
+      await createProject(app, root)
+
+      const missingKeyResponse = await app.request("http://localhost/api/cinema/video-providers/klingai/test-connection", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      })
+      const missingKeyBody = await readJson<ProviderConnectionTestResult>(missingKeyResponse)
+
+      expect(missingKeyResponse.status).toBe(200)
+      expect(missingKeyBody.data).toMatchObject({
+        providerID: "klingai",
+        ok: false,
+        status: "not_connected",
+      })
+
+      const successResponse = await app.request("http://localhost/api/cinema/video-providers/klingai/test-connection", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          apiKey: "valid-video-key",
+        }),
+      })
+      const successBody = await readJson<ProviderConnectionTestResult>(successResponse)
+
+      expect(successResponse.status).toBe(200)
+      expect(successBody.data).toMatchObject({
+        providerID: "klingai",
+        ok: true,
+        status: "working",
+      })
+      expect(successBody.data?.diagnostics?.status).toBe(200)
+      expect(successBody.data?.diagnostics?.url).toBe(`${server.url.toString().replace(/\/$/, "")}/v1beta/models`)
+
+      const invalidKeyResponse = await app.request("http://localhost/api/cinema/video-providers/klingai/test-connection", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          apiKey: "wrong-key",
+        }),
+      })
+      const invalidKeyBody = await readJson<ProviderConnectionTestResult>(invalidKeyResponse)
+
+      expect(invalidKeyResponse.status).toBe(200)
+      expect(invalidKeyBody.data).toMatchObject({
+        providerID: "klingai",
+        ok: false,
+        status: "auth_error",
+      })
+
+      const unsupportedResponse = await app.request("http://localhost/api/cinema/video-providers/poe/test-connection", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      })
+      const unsupportedBody = await readJson<ProviderConnectionTestResult>(unsupportedResponse)
+
+      expect(unsupportedResponse.status).toBe(200)
+      expect(unsupportedBody.data).toMatchObject({
+        providerID: "poe",
+        ok: false,
+        status: "unsupported",
+      })
+    } finally {
+      restoreVideoCatalog()
+      server.stop(true)
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects missing and catalog-only cinema video providers", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest(TEST_VIDEO_PROVIDER_CATALOG)
 
     try {
       const project = await createProject(app, root)
       await initializeCinemaProject(root)
 
-      for (const providerID of ["mock", "fal"]) {
-        const authResponse = await app.request(`http://localhost/api/cinema/video-providers/${providerID}/auth/api-key`)
-        const authBody = await readJson(authResponse)
+      const missingAuthResponse = await app.request("http://localhost/api/cinema/video-providers/mock/auth/api-key")
+      const missingAuthBody = await readJson(missingAuthResponse)
 
-        expect(authResponse.status).toBe(404)
-        expect(authBody.error?.code).toBe("CINEMA_PROVIDER_NOT_FOUND")
+      expect(missingAuthResponse.status).toBe(404)
+      expect(missingAuthBody.error?.code).toBe("CINEMA_PROVIDER_NOT_FOUND")
 
-        const createResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            providerID,
-            modelID: providerID === "fal" ? "fal-ai/wan-25-preview/text-to-video" : "mock-video",
-            mode: "text-to-video",
-            prompt: "Removed provider.",
-          }),
-        })
-        const createBody = await readJson(createResponse)
+      const missingCreateResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerID: "mock",
+          modelID: "mock-video",
+          mode: "text-to-video",
+          prompt: "Missing provider.",
+        }),
+      })
+      const missingCreateBody = await readJson(missingCreateResponse)
 
-        expect(createResponse.status).toBe(404)
-        expect(createBody.error?.code).toBe("CINEMA_PROVIDER_NOT_FOUND")
-      }
+      expect(missingCreateResponse.status).toBe(404)
+      expect(missingCreateBody.error?.code).toBe("CINEMA_PROVIDER_NOT_FOUND")
+
+      const catalogOnlyCreateResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerID: "klingai",
+          modelID: "kling-v3",
+          mode: "text-to-video",
+          prompt: "Catalog provider without runtime adapter.",
+        }),
+      })
+      const catalogOnlyCreateBody = await readJson(catalogOnlyCreateResponse)
+
+      expect(catalogOnlyCreateResponse.status).toBe(501)
+      expect(catalogOnlyCreateBody.error?.code).toBe("CINEMA_PROVIDER_RUNTIME_UNAVAILABLE")
     } finally {
+      restoreVideoCatalog()
       await rm(root, { recursive: true, force: true })
     }
   })
@@ -1375,6 +1611,7 @@ describe("cinema api", () => {
   test("rejects generation tasks for uninitialized cinema projects", async () => {
     const app = createServerApp()
     const root = await createTempProjectRoot()
+    const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest(TEST_VIDEO_PROVIDER_CATALOG)
 
     try {
       const project = await createProject(app, root)
@@ -1382,8 +1619,8 @@ describe("cinema api", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          providerID: "kling",
-          modelID: "kling-3.0-turbo",
+          providerID: "klingai",
+          modelID: "kling-v3",
           mode: "text-to-video",
           prompt: "A test prompt.",
         }),
@@ -1393,364 +1630,7 @@ describe("cinema api", () => {
       expect(response.status).toBe(404)
       expect(body.error?.code).toBe("CINEMA_PROJECT_NOT_INITIALIZED")
     } finally {
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  test("rejects kling generation tasks when the Cinema kling credential is missing", async () => {
-    const app = createServerApp()
-    const root = await createTempProjectRoot()
-
-    try {
-      const project = await createProject(app, root)
-      await initializeCinemaProject(root)
-
-      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          providerID: "kling",
-          modelID: "kling-3.0-turbo",
-          mode: "text-to-video",
-          prompt: "This should not call Kling without a key.",
-        }),
-      })
-      const body = await readJson(response)
-
-      expect(response.status).toBe(400)
-      expect(body.error?.code).toBe("CINEMA_PROVIDER_NOT_CONNECTED")
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  test("creates kling tasks with a JWT when saved credentials include access and secret keys", async () => {
-    const app = createServerApp()
-    const root = await createTempProjectRoot()
-    const originalFetch = globalThis.fetch
-    const restoreKlingApiKey = setCinemaKlingApiKeyForTest(JSON.stringify({
-      accessKey: "test-access-key",
-      secretKey: "test-secret-key",
-    }))
-    let authorization = ""
-    let createURL = ""
-
-    globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
-      if (url === "https://api-singapore.klingai.com/text-to-video/kling-3.0-turbo") {
-        createURL = url
-        authorization = new Headers(init?.headers).get("authorization") ?? ""
-        return Response.json({
-          code: 0,
-          request_id: "kling-jwt-request",
-          data: {
-            id: "kling-jwt-task",
-            status: "submitted",
-          },
-        })
-      }
-      return await originalFetch(input, init)
-    }) as typeof fetch
-
-    try {
-      const project = await createProject(app, root)
-      await initializeCinemaProject(root)
-
-      const createResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          providerID: "kling",
-          modelID: "kling-3.0-turbo",
-          mode: "text-to-video",
-          prompt: "A JWT auth test prompt.",
-        }),
-      })
-      const createBody = await readJson<CinemaGenerationTask>(createResponse)
-
-      expect(createResponse.status).toBe(200)
-      expect(createBody.data?.providerTaskRef).toMatchObject({
-        taskID: "kling-jwt-task",
-        requestID: "kling-jwt-request",
-      })
-      expect(createURL).toBe("https://api-singapore.klingai.com/text-to-video/kling-3.0-turbo")
-      expect(authorization).toStartWith("Bearer ")
-      const token = authorization.slice("Bearer ".length)
-      expect(token).not.toContain("test-access-key")
-      const [, payload] = token.split(".")
-      const decodedPayload = JSON.parse(Buffer.from(payload!, "base64url").toString("utf8")) as Record<string, unknown>
-      expect(decodedPayload.iss).toBe("test-access-key")
-      expect(typeof decodedPayload.exp).toBe("number")
-      expect(typeof decodedPayload.nbf).toBe("number")
-    } finally {
-      globalThis.fetch = originalFetch
-      restoreKlingApiKey()
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  test("creates and refreshes kling text-to-video generation tasks with an injected client", async () => {
-    const app = createServerApp()
-    const root = await createTempProjectRoot()
-    const originalFetch = globalThis.fetch
-    const restoreKlingApiKey = setCinemaKlingApiKeyForTest("test-kling-key")
-    let createRequest: Record<string, unknown> | undefined
-    let refreshRequest: Record<string, unknown> | undefined
-    const clientBaseURLs: Array<string | undefined> = []
-
-    const restoreKlingClient = setCinemaKlingClientFactoryForTest((apiKey, options) => {
-      expect(apiKey).toBe("test-kling-key")
-      clientBaseURLs.push(options?.baseURL)
-      return {
-        createTask: async (input) => {
-          createRequest = {
-            mode: input.mode,
-            path: input.path,
-            payload: input.payload,
-          }
-          return {
-            code: 0,
-            request_id: "kling-request-1",
-            data: {
-              id: "kling-task-1",
-              status: "submitted",
-            },
-          }
-        },
-        refreshTask: async (input) => {
-          refreshRequest = {
-            taskID: input.taskID,
-            tasksPath: input.tasksPath,
-          }
-          return {
-            code: 0,
-            data: [
-              {
-                id: "kling-task-1",
-                status: "succeeded",
-                result: [
-                  {
-                    type: "video",
-                    url: "https://media.example.test/kling-output.mp4",
-                  },
-                ],
-              },
-            ],
-          }
-        },
-      }
-    })
-
-    globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
-      if (url === "https://media.example.test/kling-output.mp4") {
-        return new Response(new Uint8Array([5, 6, 7, 8]), {
-          status: 200,
-          headers: {
-            "content-type": "video/mp4",
-          },
-        })
-      }
-      return await originalFetch(input, init)
-    }) as typeof fetch
-
-    try {
-      const project = await createProject(app, root)
-      await initializeCinemaProject(root)
-
-      const settingsResponse = await app.request("http://localhost/api/cinema/video-providers/kling/settings", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          baseURL: "https://kling-proxy.example.com",
-        }),
-      })
-      expect(settingsResponse.status).toBe(200)
-
-      const createResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          providerID: "kling",
-          modelID: "kling-3.0-turbo",
-          mode: "text-to-video",
-          title: "Kling Render",
-          prompt: "A Kling test prompt.",
-          parameters: {
-            duration: 5,
-            aspect_ratio: "16:9",
-            resolution: "720p",
-          },
-        }),
-      })
-      const createBody = await readJson<CinemaGenerationTask>(createResponse)
-
-      expect(createResponse.status).toBe(200)
-      expect(createBody.data).toMatchObject({
-        providerID: "kling",
-        modelID: "kling-3.0-turbo",
-        status: "running",
-        title: "Kling Render",
-      })
-      expect(createBody.data?.providerTaskRef).toMatchObject({
-        taskID: "kling-task-1",
-        requestID: "kling-request-1",
-        createPath: "/text-to-video/kling-3.0-turbo",
-        tasksPath: "/tasks",
-        baseURL: "https://kling-proxy.example.com",
-      })
-      expect(clientBaseURLs).toEqual(["https://kling-proxy.example.com"])
-      expect(createRequest).toMatchObject({
-        mode: "text-to-video",
-        path: "/text-to-video/kling-3.0-turbo",
-        payload: {
-          prompt: "A Kling test prompt.",
-          settings: {
-            duration: 5,
-            aspect_ratio: "16:9",
-            resolution: "720p",
-          },
-        },
-      })
-
-      const taskID = createBody.data!.id
-      const changedSettingsResponse = await app.request("http://localhost/api/cinema/video-providers/kling/settings", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          baseURL: "https://other-kling-proxy.example.com",
-        }),
-      })
-      expect(changedSettingsResponse.status).toBe(200)
-
-      const refreshResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks/${encodeURIComponent(taskID)}/refresh`, {
-        method: "POST",
-      })
-      const refreshBody = await readJson<CinemaGenerationTask>(refreshResponse)
-
-      expect(refreshResponse.status).toBe(200)
-      expect(refreshRequest).toMatchObject({
-        taskID: "kling-task-1",
-        tasksPath: "/tasks",
-      })
-      expect(clientBaseURLs).toEqual([
-        "https://kling-proxy.example.com",
-        "https://kling-proxy.example.com",
-      ])
-      expect(refreshBody.data?.status).toBe("succeeded")
-      expect(refreshBody.data?.outputAssets[0]).toMatchObject({
-        kind: "video",
-        path: `generated/${taskID}/output-1.mp4`,
-        mimeType: "video/mp4",
-        sizeBytes: 4,
-      })
-
-      const downloaded = await readFile(join(root, "generated", taskID, "output-1.mp4"))
-      expect([...downloaded]).toEqual([5, 6, 7, 8])
-    } finally {
-      try {
-        await app.request("http://localhost/api/cinema/video-providers/kling/settings", {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ baseURL: null }),
-        })
-      } catch {
-        // Best-effort cleanup for the global test config.
-      }
-      globalThis.fetch = originalFetch
-      restoreKlingClient()
-      restoreKlingApiKey()
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  test("builds kling image-to-video tasks from source node URLs", async () => {
-    const app = createServerApp()
-    const root = await createTempProjectRoot()
-    const restoreKlingApiKey = setCinemaKlingApiKeyForTest("test-kling-key")
-    let createRequest: Record<string, unknown> | undefined
-
-    const restoreKlingClient = setCinemaKlingClientFactoryForTest((apiKey) => {
-      expect(apiKey).toBe("test-kling-key")
-      return {
-        createTask: async (input) => {
-          createRequest = {
-            mode: input.mode,
-            path: input.path,
-            payload: input.payload,
-          }
-          return {
-            code: 0,
-            request_id: "kling-request-i2v",
-            data: {
-              id: "kling-task-i2v",
-              status: "submitted",
-            },
-          }
-        },
-        refreshTask: async () => ({
-          code: 0,
-          data: [],
-        }),
-      }
-    })
-
-    try {
-      const project = await createProject(app, root)
-      const canvas = createCanvas()
-      canvas.nodes.push({
-        id: "source-frame",
-        type: "image",
-        title: "Source Frame",
-        position: { x: 980, y: 160 },
-        size: { width: 360, height: 220 },
-        data: {
-          url: "https://cdn.example.test/source-frame.png",
-        },
-      })
-      canvas.nodeTypes.push("image")
-      await initializeCinemaProject(root, canvas)
-
-      const createResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          providerID: "kling",
-          modelID: "kling-3.0-turbo",
-          mode: "image-to-video",
-          title: "Kling Image Render",
-          prompt: "Move the camera gently.",
-          sourceNodeIDs: ["source-frame"],
-          parameters: {
-            duration: 5,
-            resolution: "720p",
-          },
-        }),
-      })
-      const createBody = await readJson<CinemaGenerationTask>(createResponse)
-
-      expect(createResponse.status).toBe(200)
-      expect(createBody.data?.providerTaskRef).toMatchObject({
-        taskID: "kling-task-i2v",
-        createPath: "/image-to-video/kling-3.0-turbo",
-      })
-      expect(createRequest).toMatchObject({
-        mode: "image-to-video",
-        path: "/image-to-video/kling-3.0-turbo",
-        payload: {
-          contents: [
-            { type: "prompt", text: "Move the camera gently." },
-            { type: "first_frame", url: "https://cdn.example.test/source-frame.png" },
-          ],
-          settings: {
-            duration: 5,
-            resolution: "720p",
-          },
-        },
-      })
-    } finally {
-      restoreKlingClient()
-      restoreKlingApiKey()
+      restoreVideoCatalog()
       await rm(root, { recursive: true, force: true })
     }
   })

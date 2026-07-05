@@ -106,6 +106,7 @@ const EMPTY_PROJECT_MODEL_SELECTION: ProjectModelSelection = {
 }
 const ANYBOX_ACCOUNT_PROVIDER_ID = "anybox"
 const ANYBOX_BROWSER_AUTH_METHOD = "anybox-browser"
+const CINEMA_VIDEO_PROVIDER_TEST_PREFIX = "cinema-video:"
 
 export function buildModelSelectionUpdatePayload(
   savedSelection: ProjectModelSelection,
@@ -630,6 +631,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   const [deletingProviderID, setDeletingProviderID] = useState<string | null>(null)
   const [testingProviderID, setTestingProviderID] = useState<string | null>(null)
   const [isRefreshingProviderCatalog, setIsRefreshingProviderCatalog] = useState(false)
+  const [isRefreshingCinemaVideoProviderCatalog, setIsRefreshingCinemaVideoProviderCatalog] = useState(false)
   const [isSavingSelection, setIsSavingSelection] = useState(false)
   const [savingMcpServerID, setSavingMcpServerID] = useState<string | null>(null)
   const [deletingMcpServerID, setDeletingMcpServerID] = useState<string | null>(null)
@@ -2812,6 +2814,38 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     }
   }
 
+  async function testCinemaVideoProviderConnection(providerID: string) {
+    if (!window.desktop?.testCinemaVideoProviderConnection) return false
+
+    const draft = cinemaVideoProviderDrafts[providerID]
+    const apiKey = draft?.apiKey.trim()
+    const baseURL = draft?.baseURL.trim()
+
+    setTestingProviderID(`${CINEMA_VIDEO_PROVIDER_TEST_PREFIX}${providerID}`)
+
+    try {
+      const result = await window.desktop.testCinemaVideoProviderConnection({
+        providerID,
+        ...(apiKey ? { apiKey } : {}),
+        ...(baseURL ? { baseURL } : {}),
+      })
+      await loadSettingsData({ silent: true, preserveProviderDrafts: true })
+      showMessage({
+        tone: result.ok ? "success" : "error",
+        text: result.message,
+      })
+      return result.ok
+    } catch (error) {
+      showMessage({
+        tone: "error",
+        text: getErrorMessage(error),
+      })
+      return false
+    } finally {
+      setTestingProviderID(null)
+    }
+  }
+
   async function testCustomProviderConnection(providerID?: string) {
     if (!window.desktop?.testCustomProviderConnection) return false
 
@@ -2871,6 +2905,39 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       return false
     } finally {
       setIsRefreshingProviderCatalog(false)
+    }
+  }
+
+  async function refreshCinemaVideoProviderCatalog() {
+    const refreshVideoProviderCatalogApi = window.desktop?.refreshCinemaVideoProviderCatalog
+    if (!refreshVideoProviderCatalogApi) {
+      showMessage({
+        tone: "error",
+        text: "Desktop video provider refresh API is unavailable.",
+      })
+      return false
+    }
+
+    setIsRefreshingCinemaVideoProviderCatalog(true)
+
+    try {
+      const nextCinemaVideoProviders = await refreshVideoProviderCatalogApi()
+      setCinemaVideoProviders(nextCinemaVideoProviders)
+      const nextCinemaVideoProviderDrafts = buildCinemaVideoProviderDrafts(nextCinemaVideoProviders)
+      setCinemaVideoProviderDrafts((current) => mergeCinemaVideoProviderDrafts(nextCinemaVideoProviderDrafts, current))
+      showMessage({
+        tone: "success",
+        text: "Video provider catalog refreshed.",
+      })
+      return true
+    } catch (error) {
+      showMessage({
+        tone: "error",
+        text: getErrorMessage(error),
+      })
+      return false
+    } finally {
+      setIsRefreshingCinemaVideoProviderCatalog(false)
     }
   }
 
@@ -3647,6 +3714,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     isSideChatPromptPresetDirty,
     isGitCommitPromptPresetDirty,
     isRefreshingProviderCatalog,
+    isRefreshingCinemaVideoProviderCatalog,
     isInstallingPromptUrlPrompts,
     isPreviewingPromptUrlInstall,
     isTranslatingPromptPreset,
@@ -3682,6 +3750,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     openPromptUrlInstallDialog,
     previewPromptUrlInstall,
     refreshProviderCatalog,
+    refreshCinemaVideoProviderCatalog,
     resetPromptPreset,
     resetBuiltinTools,
     resettingPromptPresetID,
@@ -3707,6 +3776,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     savingPromptPresetID,
     savingProviderID,
     savingCinemaVideoProviderID,
+    testCinemaVideoProviderConnection,
     testProviderConnection,
     testCustomProviderConnection,
     testingProviderID,

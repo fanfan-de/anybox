@@ -855,6 +855,12 @@ export interface DesktopProviderConnectionTestInput {
   baseURL?: string | null
 }
 
+export interface DesktopCinemaVideoProviderConnectionTestInput {
+  providerID: string
+  apiKey?: string | null
+  baseURL?: string | null
+}
+
 export interface DesktopCustomProviderInput {
   providerID?: string
   apiBaseURL: string
@@ -1458,6 +1464,10 @@ export interface DesktopIpcContract {
     input: void
     output: CinemaVideoProvider[]
   }
+  "desktop:refresh-cinema-video-provider-catalog": {
+    input: void
+    output: CinemaVideoProvider[]
+  }
   "desktop:save-cinema-video-provider-api-key": {
     input: { providerID: string; apiKey?: string | null }
     output: CinemaProviderAuthState
@@ -1465,6 +1475,10 @@ export interface DesktopIpcContract {
   "desktop:save-cinema-video-provider-settings": {
     input: { providerID: string; baseURL?: string | null }
     output: CinemaVideoProvider
+  }
+  "desktop:test-cinema-video-provider-connection": {
+    input: DesktopCinemaVideoProviderConnectionTestInput
+    output: AgentProviderConnectionTestResult
   }
   "desktop:delete-global-provider-auth-session": {
     input: { providerID: string }
@@ -2086,8 +2100,10 @@ export interface DesktopApiMethods {
   cancelGlobalProviderAuthFlow(input: DesktopIpcInput<"desktop:cancel-global-provider-auth-flow">): Promise<DesktopIpcOutput<"desktop:cancel-global-provider-auth-flow">>
   saveGlobalProviderApiKey(input: DesktopIpcInput<"desktop:save-global-provider-api-key">): Promise<DesktopIpcOutput<"desktop:save-global-provider-api-key">>
   getCinemaVideoProviders(): Promise<DesktopIpcOutput<"desktop:get-cinema-video-providers">>
+  refreshCinemaVideoProviderCatalog(): Promise<DesktopIpcOutput<"desktop:refresh-cinema-video-provider-catalog">>
   saveCinemaVideoProviderApiKey(input: DesktopIpcInput<"desktop:save-cinema-video-provider-api-key">): Promise<DesktopIpcOutput<"desktop:save-cinema-video-provider-api-key">>
   saveCinemaVideoProviderSettings(input: DesktopIpcInput<"desktop:save-cinema-video-provider-settings">): Promise<DesktopIpcOutput<"desktop:save-cinema-video-provider-settings">>
+  testCinemaVideoProviderConnection(input: DesktopIpcInput<"desktop:test-cinema-video-provider-connection">): Promise<DesktopIpcOutput<"desktop:test-cinema-video-provider-connection">>
   deleteGlobalProviderAuthSession(input: DesktopIpcInput<"desktop:delete-global-provider-auth-session">): Promise<DesktopIpcOutput<"desktop:delete-global-provider-auth-session">>
   testGlobalProviderConnection(input: DesktopIpcInput<"desktop:test-global-provider-connection">): Promise<DesktopIpcOutput<"desktop:test-global-provider-connection">>
   upsertCustomProvider(input: DesktopIpcInput<"desktop:upsert-custom-provider">): Promise<DesktopIpcOutput<"desktop:upsert-custom-provider">>

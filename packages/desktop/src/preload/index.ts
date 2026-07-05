@@ -513,10 +513,14 @@ try {
       invokeDesktop("desktop:save-global-provider-api-key", input) as Promise<AgentProviderAuthState>,
     getCinemaVideoProviders: () =>
       invokeDesktop("desktop:get-cinema-video-providers") as Promise<CinemaVideoProvider[]>,
+    refreshCinemaVideoProviderCatalog: () =>
+      invokeDesktop("desktop:refresh-cinema-video-provider-catalog") as Promise<CinemaVideoProvider[]>,
     saveCinemaVideoProviderApiKey: (input: { providerID: string; apiKey?: string | null }) =>
       invokeDesktop("desktop:save-cinema-video-provider-api-key", input) as Promise<CinemaProviderAuthState>,
     saveCinemaVideoProviderSettings: (input: { providerID: string; baseURL?: string | null }) =>
       invokeDesktop("desktop:save-cinema-video-provider-settings", input) as Promise<CinemaVideoProvider>,
+    testCinemaVideoProviderConnection: (input: { providerID: string; apiKey?: string | null; baseURL?: string | null }) =>
+      invokeDesktop("desktop:test-cinema-video-provider-connection", input) as Promise<AgentProviderConnectionTestResult>,
     deleteGlobalProviderAuthSession: (input: { providerID: string }) =>
       invokeDesktop("desktop:delete-global-provider-auth-session", input) as Promise<AgentProviderAuthState>,
     testGlobalProviderConnection: (input: {

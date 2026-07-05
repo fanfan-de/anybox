@@ -10,6 +10,7 @@ import {
   CreateCinemaImageGenerationBodySchema,
   CreateCinemaTextGenerationBodySchema,
   CreateCinemaGenerationTaskBodySchema,
+  TestCinemaVideoProviderConnectionBodySchema,
   UpdateCinemaVideoProviderSettingsBodySchema,
 } from "@anybox/shared/cinema"
 
@@ -48,6 +49,10 @@ export function CinemaRoutes() {
     ok(c, await CinemaUseCase.listCinemaVideoProviders())
   )
 
+  app.post("/video-providers/catalog/refresh", async (c) =>
+    ok(c, await CinemaUseCase.refreshCinemaVideoProviderCatalog())
+  )
+
   app.get("/video-providers/:providerID/auth/api-key", async (c) =>
     ok(c, await CinemaUseCase.getCinemaVideoProviderAuth(c.req.param("providerID")))
   )
@@ -68,6 +73,15 @@ export function CinemaRoutes() {
       "Body must contain an optional nullable 'baseURL' field.",
     )
     return ok(c, await CinemaUseCase.saveCinemaVideoProviderSettings(c.req.param("providerID"), payload))
+  })
+
+  app.post("/video-providers/:providerID/test-connection", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      TestCinemaVideoProviderConnectionBodySchema,
+      "Body must contain optional connection test fields.",
+    )
+    return ok(c, await CinemaUseCase.testCinemaVideoProviderConnection(c.req.param("providerID"), payload))
   })
 
   app.get("/projects/:projectID", async (c) =>

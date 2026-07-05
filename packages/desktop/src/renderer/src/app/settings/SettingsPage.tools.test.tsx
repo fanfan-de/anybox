@@ -123,6 +123,7 @@ function createSettingsPageProps(
     isCheckingAppUpdate: false,
     isSavingAutomaticUpdates: false,
     isRefreshingProviderCatalog: false,
+    isRefreshingCinemaVideoProviderCatalog: false,
     loadError: null,
     mcpServerDraft: createMcpDraft(),
     mcpServers: [],
@@ -163,6 +164,7 @@ function createSettingsPageProps(
     onLoadArchivedSessions: vi.fn(),
     onOpenUpdateCenter: vi.fn(),
     onRefreshProviderCatalog: vi.fn(),
+    onRefreshCinemaVideoProviderCatalog: vi.fn(),
     onRestoreArchivedSession: vi.fn(),
     onSaveMcpServer: vi.fn(),
     onSaveCustomProvider: vi.fn(),
@@ -172,6 +174,7 @@ function createSettingsPageProps(
     onSelectionChange: vi.fn(),
     onStartNewMcpServer: vi.fn(),
     onStartProviderAuthFlow: vi.fn(),
+    onTestCinemaVideoProviderConnection: vi.fn(),
     onTestCustomProviderConnection: vi.fn(),
     onTestProviderConnection: vi.fn(),
     providerDrafts: {},
@@ -226,6 +229,14 @@ function createCinemaVideoProvider(
       description: `${name} video provider`,
       credentialProviderID: `cinema-${id}`,
       requiresCredential: true,
+      connectionTest: {
+        method: "GET",
+        path: "/v1/models",
+        auth: "bearer",
+        headers: {},
+        expectedStatus: [200],
+        timeoutMs: 10000,
+      },
       models: [
         {
           id: `${id}-model`,
@@ -452,9 +463,10 @@ describe("SettingsPage built-in tools", () => {
     expect(labels.slice(0, 4)).toEqual(["General", "Account", "Provider", "Video Providers"])
   })
 
-  it("saves cinema video provider API keys from the Video Providers settings page", () => {
+  it("saves cinema video provider API keys from the Video Providers settings page", async () => {
     const onCinemaVideoProviderDraftChange = vi.fn()
     const onSaveCinemaVideoProviderApiKey = vi.fn()
+    const onTestCinemaVideoProviderConnection = vi.fn()
     render(
       <SettingsPage
         {...createSettingsPageProps({
@@ -465,27 +477,28 @@ describe("SettingsPage built-in tools", () => {
           },
           onCinemaVideoProviderDraftChange,
           onSaveCinemaVideoProviderApiKey,
+          onTestCinemaVideoProviderConnection,
         })}
       />,
     )
 
     fireEvent.click(screen.getByRole("button", { name: "Video Providers" }))
 
-    const videoPanel = screen.getByRole("heading", { name: "Video providers" }).closest(".settings-panel")
-    expect(videoPanel).not.toBeNull()
-    expect(within(videoPanel as HTMLElement).getByText("Kling AI")).toBeInTheDocument()
-    expect(within(videoPanel as HTMLElement).getByText("Endpoint: https://api-singapore.klingai.com")).toBeInTheDocument()
+    expect(screen.getByRole("list", { name: "Video provider list" })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Kling AI" })).toBeInTheDocument())
 
-    fireEvent.change(within(videoPanel as HTMLElement).getByLabelText("Endpoint for Kling AI"), {
+    fireEvent.change(screen.getByLabelText("Endpoint for Kling AI"), {
       target: { value: "https://kling-proxy.example.com" },
     })
-    fireEvent.change(within(videoPanel as HTMLElement).getByLabelText("Credential for Kling AI"), {
+    fireEvent.change(screen.getByLabelText("Credential for Kling AI"), {
       target: { value: "kling-updated-key" },
     })
-    fireEvent.click(within(videoPanel as HTMLElement).getByRole("button", { name: "Save" }))
+    fireEvent.click(screen.getByRole("button", { name: "Test connection" }))
+    fireEvent.click(screen.getByRole("button", { name: "Save Kling AI settings" }))
 
     expect(onCinemaVideoProviderDraftChange).toHaveBeenCalledWith("kling", "baseURL", "https://kling-proxy.example.com")
     expect(onCinemaVideoProviderDraftChange).toHaveBeenCalledWith("kling", "apiKey", "kling-updated-key")
+    expect(onTestCinemaVideoProviderConnection).toHaveBeenCalledWith("kling")
     expect(onSaveCinemaVideoProviderApiKey).toHaveBeenCalledWith("kling")
   })
 
