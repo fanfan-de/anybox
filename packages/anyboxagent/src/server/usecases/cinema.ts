@@ -4,14 +4,18 @@ import path from "node:path"
 import {
   CinemaCanvasDocumentSchema,
   CinemaGenerationTaskSchema,
+  CinemaProjectDirectoryListingSchema,
   CinemaProjectEventSchema,
   type CinemaGeneratedAsset,
   type CinemaImageGenerationResult,
   type CinemaImageModel,
   type CinemaImageModelsResult,
+  type CinemaProjectDirectoryEntry,
+  type CinemaProjectDirectoryListing,
   type CinemaTextGenerationResult,
   type CinemaTextModel,
   type CinemaTextModelsResult,
+  type CinemaGenerationProgress,
   type CinemaGenerationTask,
   type CinemaGenerationTaskStatus,
   type CinemaCanvasNode,
@@ -49,9 +53,9 @@ import {
   resolveEffectiveModelWithFallback,
   resolveProjectModelSelectionWithGlobalFallback,
 } from "#server/usecases/model-list-cache.ts"
+import * as Log from "#util/log.ts"
 
 type GenerateTextFunction = typeof import("ai")["generateText"]
-type GenerateImageFunction = typeof import("ai")["generateImage"]
 type CinemaProjectAssetRange = {
   start: number
   end: number
@@ -78,13 +82,7 @@ const defaultCinemaTextRuntimeDependencies = {
 let cinemaTextRuntimeDependencies = defaultCinemaTextRuntimeDependencies
 
 const defaultCinemaImageRuntimeDependencies = {
-  getGenerateImage: async () => (await import("ai")).generateImage,
-  getImage: ModelRuntime.getImage,
   getImageGenerationSettings: Config.getImageGenerationSettings,
-  getModel: ModelRegistry.getAISDKModel,
-  listModels: listProjectModelsWithFallback,
-  resolveEffectiveModel: resolveEffectiveModelWithFallback,
-  resolveSelection: resolveProjectModelSelectionWithGlobalFallback,
 }
 let cinemaImageRuntimeDependencies = defaultCinemaImageRuntimeDependencies
 
@@ -124,6 +122,8 @@ const PROVIDERS_FILE = "providers.json"
 const TASKS_FILE = "tasks.jsonl"
 const TASKS_DIRECTORY = "tasks"
 const PROJECT_DIRECTORIES = ["assets", "references", "prompts", "generated", "renders", "exports"] as const
+const PROJECT_DIRECTORY_LIST_LIMIT = 250
+const PROJECT_DIRECTORY_SKIPPED_NAMES = new Set([".git", "node_modules"])
 const CINEMA_PROJECT_IMAGE_ASSET_MAX_BYTES = 25 * 1024 * 1024
 const CINEMA_PROJECT_VIDEO_ASSET_MAX_BYTES = 256 * 1024 * 1024
 const IMAGE_EXTENSION_BY_MIME: Record<string, string> = {
@@ -153,8 +153,23 @@ const VIDEO_MIME_BY_EXTENSION: Record<string, string> = {
   ".m4v": "video/mp4",
   ".webm": "video/webm",
 }
+const CINEMA_IMAGE_GENERATION_MODE = "text-to-image" as const
+const CINEMA_CALLBACK_BASE_URL_ENV = "CINEMA_CALLBACK_BASE_URL"
 
 const nowISO = () => new Date().toISOString()
+const log = Log.create({ service: "cinema" })
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value))
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+function compactErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
 
 function safeReadProject(projectID: string) {
   const project = Project.get(projectID)
@@ -330,6 +345,99 @@ function titleForGenerationTask(input: CreateCinemaGenerationTaskBody) {
   return input.title?.trim() || `Generation ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
 }
 
+function progressForTaskStatus(
+  status: CinemaGenerationTaskStatus,
+  updatedAt: string,
+  message?: string | null,
+): CinemaGenerationProgress {
+  const base = {
+    updatedAt,
+    ...(message?.trim() ? { message: message.trim() } : {}),
+  }
+  switch (status) {
+    case "queued":
+      return { ...base, phase: "queued" }
+    case "running":
+      return { ...base, phase: "processing" }
+    case "succeeded":
+      return { ...base, phase: "succeeded", percent: 100 }
+    case "failed":
+      return { ...base, phase: "failed" }
+    case "canceled":
+      return { ...base, phase: "canceled" }
+  }
+}
+
+function taskWithProgress(task: CinemaGenerationTask): CinemaGenerationTask {
+  return {
+    ...task,
+    progress: task.progress ?? progressForTaskStatus(task.status, task.updatedAt, task.error),
+  }
+}
+
+function callbackBaseURL() {
+  const value = getProcessEnvValue(CINEMA_CALLBACK_BASE_URL_ENV)?.trim()
+  if (!value) return undefined
+
+  let url: URL
+  try {
+    url = new URL(value.endsWith("/") ? value : `${value}/`)
+  } catch {
+    throw new ApiError(500, "CINEMA_CALLBACK_BASE_URL_INVALID", `${CINEMA_CALLBACK_BASE_URL_ENV} must be a valid absolute URL.`)
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new ApiError(500, "CINEMA_CALLBACK_BASE_URL_INVALID", `${CINEMA_CALLBACK_BASE_URL_ENV} must use http or https.`)
+  }
+  return url
+}
+
+function callbackURLForTask(task: CinemaGenerationTask, token: string) {
+  const baseURL = callbackBaseURL()
+  if (!baseURL) return undefined
+
+  return new URL(
+    [
+      "api",
+      "cinema",
+      "projects",
+      encodeURIComponent(task.projectID),
+      "provider-callbacks",
+      encodeURIComponent(task.providerID),
+      encodeURIComponent(task.id),
+      encodeURIComponent(token),
+    ].join("/"),
+    baseURL,
+  ).toString()
+}
+
+function readProviderCallbackRef(task: CinemaGenerationTask) {
+  const callback = isRecord(task.providerTaskRef?.callback) ? task.providerTaskRef.callback : undefined
+  const token = stringValue(callback?.token)
+  const url = stringValue(callback?.url)
+  return token ? { token, url } : undefined
+}
+
+function taskWithProviderCallback(task: CinemaGenerationTask, createdAt: string): CinemaGenerationTask {
+  const existingRef = isRecord(task.providerTaskRef) ? task.providerTaskRef : {}
+  const existingCallback = isRecord(existingRef.callback) ? existingRef.callback : {}
+  const token = stringValue(existingCallback.token) ?? `${randomUUID()}${randomUUID()}`.replace(/-/g, "")
+  const url = callbackURLForTask(task, token)
+  if (!url) return task
+
+  return {
+    ...task,
+    providerTaskRef: {
+      ...existingRef,
+      callback: {
+        ...existingCallback,
+        token,
+        url,
+        createdAt: stringValue(existingCallback.createdAt) ?? createdAt,
+      },
+    },
+  }
+}
+
 function textModelValue(input: { providerID: string; id: string }) {
   return `${input.providerID}/${input.id}`
 }
@@ -373,12 +481,39 @@ function toCinemaImageModel(model: PublicModel): CinemaImageModel {
   }
 }
 
+type CinemaGenerationProvider = Awaited<ReturnType<typeof CinemaProviderRuntime.listCinemaVideoProviders>>[number]
+type CinemaGenerationProviderModel = CinemaGenerationProvider["manifest"]["models"][number]
+
+function toCinemaProviderImageModel(provider: CinemaGenerationProvider, model: CinemaGenerationProviderModel): CinemaImageModel {
+  return {
+    value: textModelValue({ providerID: provider.manifest.id, id: model.id }),
+    providerID: provider.manifest.id,
+    modelID: model.id,
+    label: model.label,
+    providerLabel: provider.manifest.name,
+    available: true,
+  }
+}
+
 function isTextOutputModel(model: PublicModel) {
   return model.available && model.capabilities.output.text
 }
 
 function isImageOutputModel(model: PublicModel) {
   return model.available && model.capabilities.output.image
+}
+
+function providerModelOutputsImage(model: CinemaGenerationProviderModel) {
+  if (model.modalities?.output.includes("image")) return true
+  return model.modes.some((mode) => mode.endsWith("-image") || mode === "image-edit")
+}
+
+function isAvailableCinemaProviderImageModel(provider: CinemaGenerationProvider, model: CinemaGenerationProviderModel) {
+  return provider.auth.connected &&
+    provider.runtime?.adapterAvailable === true &&
+    CinemaProviderRuntime.cinemaVideoProviderAdapterSupportsMode(provider.manifest.id, CINEMA_IMAGE_GENERATION_MODE) &&
+    model.modes.includes(CINEMA_IMAGE_GENERATION_MODE) &&
+    providerModelOutputsImage(model)
 }
 
 function findCinemaTextModel(models: CinemaTextModel[], value: string | null | undefined) {
@@ -427,6 +562,39 @@ function resolveProjectRelativeFile(root: string, relativePath: string) {
   }
 
   return resolvedPath
+}
+
+function normalizeProjectDirectoryPath(relativePath: string | undefined) {
+  const normalizedInput = (relativePath ?? "").trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "")
+  if (!normalizedInput) return ""
+  if (normalizedInput.includes("\0") || path.isAbsolute(relativePath ?? "") || normalizedInput.split("/").includes("..")) {
+    throw new ApiError(400, "CINEMA_DIRECTORY_PATH_INVALID", "Directory path must be project-relative.")
+  }
+  return normalizedInput
+}
+
+function resolveProjectRelativeDirectory(root: string, relativePath: string | undefined) {
+  const normalizedInput = normalizeProjectDirectoryPath(relativePath)
+  const resolvedRoot = path.resolve(root)
+  const resolvedPath = path.resolve(root, normalizedInput)
+  const relative = path.relative(resolvedRoot, resolvedPath)
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new ApiError(400, "CINEMA_DIRECTORY_PATH_INVALID", "Directory path must stay inside the current project.")
+  }
+  return {
+    relativePath: normalizedInput,
+    resolvedPath,
+  }
+}
+
+function parentProjectDirectoryPath(relativePath: string) {
+  if (!relativePath) return null
+  const parent = path.posix.dirname(relativePath)
+  return parent === "." ? "" : parent
+}
+
+function shouldSkipProjectDirectoryEntry(name: string) {
+  return name.startsWith(".") || PROJECT_DIRECTORY_SKIPPED_NAMES.has(name)
 }
 
 function imageExtensionForMime(mime: string) {
@@ -827,6 +995,7 @@ function findProjectGaps(canvas: CinemaCanvasDocument, providerConfigured: boole
 }
 
 function taskNodeDataFor(task: CinemaGenerationTask) {
+  const progress = task.progress ?? progressForTaskStatus(task.status, task.updatedAt, task.error)
   return {
     text: task.input.prompt,
     taskID: task.id,
@@ -834,11 +1003,42 @@ function taskNodeDataFor(task: CinemaGenerationTask) {
     modelID: task.modelID,
     mode: task.mode,
     status: task.status,
+    progress,
     sourceNodeIDs: task.input.sourceNodeIDs,
     parameters: task.input.parameters,
     outputAssets: task.outputAssets,
     error: task.error ?? null,
   }
+}
+
+function imageTaskNodeDataFor(task: CinemaGenerationTask, currentData: Record<string, unknown> | undefined) {
+  const imageAssets = task.outputAssets.filter((asset) => asset.kind === "image")
+  const parameters = task.input.parameters
+  const progress = task.progress ?? progressForTaskStatus(task.status, task.updatedAt, task.error)
+  const nextData: Record<string, unknown> = {
+    ...currentData,
+    prompt: task.input.prompt,
+    taskID: task.id,
+    providerID: task.providerID,
+    modelID: task.modelID,
+    model: textModelValue({ providerID: task.providerID, id: task.modelID }),
+    mode: task.mode,
+    status: task.status,
+    progress,
+    error: task.error ?? null,
+  }
+
+  if (typeof parameters.size === "string") nextData.size = parameters.size
+  if (typeof parameters.count === "number" && Number.isFinite(parameters.count)) nextData.count = parameters.count
+  if (typeof parameters.style === "string") nextData.style = parameters.style
+
+  if (imageAssets.length > 0) {
+    nextData.resultAssets = imageAssets
+    nextData.selectedAssetID = imageAssets[0]!.id
+    nextData.generatedAt = task.updatedAt
+  }
+
+  return nextData
 }
 
 function taskNodeFor(
@@ -882,6 +1082,18 @@ function outputNodeFor(task: CinemaGenerationTask): CinemaCanvasNode | null {
 function syncTaskToCanvasDocument(canvas: CinemaCanvasDocument, task: CinemaGenerationTask): CinemaCanvasDocument {
   const taskNodeID = task.taskNodeID ?? `node-generation-task-${task.id}`
   const existingTaskNode = canvas.nodes.find((node) => node.id === taskNodeID)
+  if (existingTaskNode?.type === "image") {
+    return withNodeTypes({
+      ...canvas,
+      nodes: canvas.nodes.map((node) => node.id === taskNodeID
+        ? {
+          ...node,
+          data: imageTaskNodeDataFor(task, node.data),
+        }
+        : node),
+    })
+  }
+
   const taskNodeType = existingTaskNode?.type === "video" ? "video" : "generation-task"
   const nextTaskNode = taskNodeFor(
     task,
@@ -979,6 +1191,60 @@ export async function getCinemaProject(projectID: string): Promise<CinemaProject
 export async function getCinemaCanvas(projectID: string): Promise<CinemaCanvasDocument> {
   const { cinemaRoot } = resolveCinemaRoot(projectID)
   return await readCinemaCanvasFromRoot(cinemaRoot)
+}
+
+export async function listCinemaProjectDirectory(
+  projectID: string,
+  directoryPath?: string,
+): Promise<CinemaProjectDirectoryListing> {
+  const { root, cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+  const { relativePath, resolvedPath } = resolveProjectRelativeDirectory(root, directoryPath)
+  const directoryStat = await stat(resolvedPath).catch((error: unknown) => {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      throw new ApiError(404, "CINEMA_DIRECTORY_NOT_FOUND", "Project directory was not found.")
+    }
+    throw error
+  })
+  if (!directoryStat.isDirectory()) {
+    throw new ApiError(400, "CINEMA_DIRECTORY_NOT_DIRECTORY", "Requested path is not a project directory.")
+  }
+
+  const dirents = await readdir(resolvedPath, { withFileTypes: true })
+  const visibleDirents = dirents
+    .filter((entry) => !shouldSkipProjectDirectoryEntry(entry.name))
+    .filter((entry) => entry.isDirectory() || entry.isFile())
+    .sort((a, b) => {
+      if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+  const listedDirents = visibleDirents.slice(0, PROJECT_DIRECTORY_LIST_LIMIT)
+  const entries = (await Promise.all(listedDirents.map(async (entry): Promise<CinemaProjectDirectoryEntry | null> => {
+    const entryPath = path.join(resolvedPath, entry.name)
+    const entryRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name
+    const entryStat = await stat(entryPath).catch(() => null)
+    if (!entryStat) return null
+    const kind = entry.isDirectory() ? "directory" : "file"
+    const mimeType = kind === "file" ? projectAssetMimeForPath(entryPath) ?? undefined : undefined
+    return {
+      name: entry.name,
+      path: entryRelativePath,
+      kind,
+      modifiedAt: entryStat.mtime.toISOString(),
+      ...(kind === "file" ? { sizeBytes: entryStat.size } : {}),
+      ...(mimeType ? { mimeType } : {}),
+      previewable: Boolean(mimeType && isSupportedPreviewAssetMime(mimeType)),
+    }
+  }))).filter((entry): entry is CinemaProjectDirectoryEntry => entry !== null)
+
+  return CinemaProjectDirectoryListingSchema.parse({
+    projectID,
+    root,
+    path: relativePath,
+    parentPath: parentProjectDirectoryPath(relativePath),
+    entries,
+    truncated: visibleDirents.length > PROJECT_DIRECTORY_LIST_LIMIT,
+  })
 }
 
 export const listCinemaVideoProviders = CinemaProviderRuntime.listCinemaVideoProviders
@@ -1138,18 +1404,18 @@ export async function listCinemaImageModels(projectID: string): Promise<CinemaIm
   const { cinemaRoot } = resolveCinemaRoot(projectID)
   await assertCinemaProjectInitialized(cinemaRoot)
 
-  const publicModels = await cinemaImageRuntimeDependencies.listModels(projectID)
-  const imagePublicModels = publicModels.filter(isImageOutputModel)
-  const items = imagePublicModels.map(toCinemaImageModel)
-  const selection = await cinemaImageRuntimeDependencies.resolveSelection(projectID, imagePublicModels)
-  const effectivePublicModel = await cinemaImageRuntimeDependencies.resolveEffectiveModel(projectID, imagePublicModels, selection.image_model)
-  const effectiveModel = effectivePublicModel ? toCinemaImageModel(effectivePublicModel) : null
-  const selectedModel = findCinemaImageModel(items, selection.image_model)
+  const providers = await CinemaProviderRuntime.listCinemaVideoProviders()
+  const items = providers.flatMap((provider) =>
+    provider.manifest.models
+      .filter((model) => isAvailableCinemaProviderImageModel(provider, model))
+      .map((model) => toCinemaProviderImageModel(provider, model))
+  )
+  const effectiveModel = items[0] ?? null
 
   return {
     items,
     selection: {
-      image_model: selectedModel?.value ?? null,
+      image_model: null,
     },
     effectiveModel,
   }
@@ -1168,27 +1434,19 @@ async function resolveCinemaImageGenerationModel(projectID: string, requestedMod
     )
   }
 
-  try {
-    const model = await cinemaImageRuntimeDependencies.getModel(selected.providerID, selected.modelID, projectID)
-    if (!model.capabilities.input.text || !model.capabilities.output.image) {
-      throw new ApiError(
-        400,
-        "CINEMA_IMAGE_MODEL_NOT_CAPABLE",
-        `Model '${selected.value}' does not support text-to-image generation.`,
-      )
-    }
-    return { model, imageModel: selected }
-  } catch (error) {
-    if (error instanceof ApiError) throw error
-    if (ModelRegistry.isModelNotFoundError(error)) {
-      throw new ApiError(
-        400,
-        "CINEMA_IMAGE_MODEL_NOT_AVAILABLE",
-        `Model '${selected.value}' is not available for this project.`,
-      )
-    }
-    throw error
+  const provider = await CinemaProviderRuntime.getCinemaVideoProvider(selected.providerID)
+  const model = provider.manifest.models.find((item) =>
+    item.id === selected.modelID && isAvailableCinemaProviderImageModel(provider, item)
+  )
+  if (!model || !isAvailableCinemaProviderImageModel(provider, model)) {
+    throw new ApiError(
+      400,
+      "CINEMA_IMAGE_MODEL_NOT_CAPABLE",
+      `Model '${selected.value}' does not support text-to-image generation through a connected generation provider.`,
+    )
   }
+
+  return { provider, model, imageModel: selected }
 }
 
 async function saveCinemaGeneratedImageAssets(input: {
@@ -1253,6 +1511,7 @@ async function writeCinemaImageNodeFailure(input: {
             ...item.data,
             status: "failed",
             error: input.error,
+            progress: progressForTaskStatus("failed", nowISO(), input.error),
           },
         }
         : item
@@ -1293,83 +1552,75 @@ export async function createCinemaImageGeneration(
       throw new ApiError(400, "CINEMA_IMAGE_SIZE_INVALID", "Image generation size must use WIDTHxHEIGHT.")
     }
 
-    const { model, imageModel } = await resolveCinemaImageGenerationModel(projectID, input.model)
-    const generationResult = await Instance.provide({
+    const { provider, imageModel } = await resolveCinemaImageGenerationModel(projectID, input.model)
+    const parameters: Record<string, unknown> = {
+      ...(size ? { size } : {}),
+      count,
+      ...(input.style?.trim() ? { style: input.style.trim() } : {}),
+    }
+    const taskID = makeTaskID()
+    const createdAt = nowISO()
+    const taskInput: CreateCinemaGenerationTaskBody = {
+      providerID: imageModel.providerID,
+      modelID: imageModel.modelID,
+      mode: CINEMA_IMAGE_GENERATION_MODE,
+      title: node.title,
+      prompt,
+      sourceNodeIDs: [],
+      parameters,
+      taskNodeID: node.id,
+    }
+    CinemaProviderRuntime.assertCinemaVideoProviderModelSupports(taskInput, provider.manifest)
+    const task = taskWithProviderCallback(taskWithCanvasIDs({
+      id: taskID,
+      projectID,
+      providerID: imageModel.providerID,
+      modelID: imageModel.modelID,
+      mode: CINEMA_IMAGE_GENERATION_MODE,
+      title: node.title,
+      status: "queued",
+      createdAt,
+      updatedAt: createdAt,
+      taskNodeID: node.id,
+      input: {
+        prompt,
+        sourceNodeIDs: [],
+        parameters,
+      },
+      outputAssets: [],
+      error: null,
+      progress: progressForTaskStatus("queued", createdAt),
+    }, { createOutputNode: false }), createdAt)
+    const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(provider.manifest.id)
+    const created = taskWithProgress(taskWithCanvasIDs(await Instance.provide({
       directory: root,
       fn: async () => {
         try {
-          const imageRuntimeModel = await cinemaImageRuntimeDependencies.getImage(model, projectID)
-          const generateImage: GenerateImageFunction = await cinemaImageRuntimeDependencies.getGenerateImage()
-          return await generateImage({
-            model: imageRuntimeModel,
-            prompt: normalizeImagePrompt(prompt, input.style),
-            n: count,
-            ...(size ? { size: size as `${number}x${number}` } : {}),
-            maxRetries: 0,
-          })
+          return await adapter.createTask({ root, cinemaRoot, task, canvas: current })
         } catch (error) {
           throw createCinemaImageGenerationRuntimeError(error, imageModel.value)
         }
       },
-    })
-    const generatedImages = generationResult.images.map((image) => ({
-      uint8Array: image.uint8Array,
-      mediaType: image.mediaType,
-    }))
-    if (generatedImages.length === 0) {
-      throw new ApiError(502, "CINEMA_IMAGE_GENERATION_EMPTY", "The selected model returned no images.")
-    }
-
-    const assets = await saveCinemaGeneratedImageAssets({
-      root,
-      nodeID: node.id,
-      images: generatedImages,
-    })
-    const generatedAt = nowISO()
-    const nextCanvas = withNodeTypes({
-      ...current,
-      nodes: current.nodes.map((item) =>
-        item.id === node.id
-          ? {
-            ...item,
-            data: {
-              ...item.data,
-              prompt,
-              style: input.style?.trim() || (typeof item.data?.style === "string" ? item.data.style : undefined),
-              model: imageModel.value,
-              size,
-              count,
-              status: "succeeded",
-              resultAssets: assets,
-              selectedAssetID: assets[0]?.id,
-              error: null,
-              generatedAt,
-            },
-          }
-          : item
-      ),
-    })
-    const canvas = await writeCinemaCanvas(cinemaRoot, nextCanvas)
-
-    await appendCinemaEvent(cinemaRoot, {
-      time: generatedAt,
-      type: "image.generated",
+    }), { createOutputNode: false }))
+    await writeGenerationTask(cinemaRoot, created)
+    const canvas = await syncTaskToCanvas(cinemaRoot, created, `Created image generation task '${created.title}'.`)
+    await appendTaskAuditEvent(cinemaRoot, {
+      time: nowISO(),
+      type: "generation-task.created",
       actor: "cinema-runtime",
-      message: `Generated ${assets.length} image${assets.length === 1 ? "" : "s"} for node '${node.title}'.`,
-      data: {
-        nodeID: node.id,
-        model: imageModel.value,
-        size,
-        count,
-        assetPaths: assets.map((asset) => asset.path),
-      },
+      taskID: created.id,
+      message: `Created image generation task '${created.title}'.`,
+      data: { task: created },
     })
+    const assets = created.outputAssets.flatMap((asset) => asset.kind === "image" ? [{ ...asset, kind: "image" as const }] : [])
 
     return {
       canvas,
       nodeID: node.id,
       model: imageModel.value,
-      assets: assets.map((asset) => ({ ...asset, kind: "image" })),
+      taskID: created.id,
+      status: created.status,
+      assets,
     }
   } catch (error) {
     const message = compactImageGenerationError(error)
@@ -1470,6 +1721,11 @@ function isVideoTaskNode(canvas: CinemaCanvasDocument, task: CinemaGenerationTas
   return canvas.nodes.some((node) => node.id === task.taskNodeID && node.type === "video")
 }
 
+function isInlineGenerationTaskNode(canvas: CinemaCanvasDocument, task: CinemaGenerationTask) {
+  if (!task.taskNodeID) return false
+  return canvas.nodes.some((node) => node.id === task.taskNodeID && (node.type === "video" || node.type === "image"))
+}
+
 function resolveGenerationTaskNodeID(input: CreateCinemaGenerationTaskBody, taskID: string, canvas: CinemaCanvasDocument) {
   const requestedTaskNodeID = input.taskNodeID?.trim()
   if (!requestedTaskNodeID) return `node-generation-task-${taskID}`
@@ -1478,8 +1734,14 @@ function resolveGenerationTaskNodeID(input: CreateCinemaGenerationTaskBody, task
   if (!existingNode) {
     throw new ApiError(404, "CINEMA_NODE_NOT_FOUND", `Cinema node '${requestedTaskNodeID}' was not found.`)
   }
-  if (existingNode.type !== "video" && existingNode.type !== "generation-task") {
-    throw new ApiError(409, "CINEMA_TASK_NODE_INVALID", "Generation tasks can only bind to video or generation task nodes.")
+  if (existingNode.type !== "video" && existingNode.type !== "image" && existingNode.type !== "generation-task") {
+    throw new ApiError(409, "CINEMA_TASK_NODE_INVALID", "Generation tasks can only bind to video, image, or generation task nodes.")
+  }
+  if (existingNode.type === "image" && input.mode !== CINEMA_IMAGE_GENERATION_MODE) {
+    throw new ApiError(409, "CINEMA_TASK_NODE_INVALID", "Image nodes can only bind to text-to-image generation tasks.")
+  }
+  if (existingNode.type === "video" && input.mode === CINEMA_IMAGE_GENERATION_MODE) {
+    throw new ApiError(409, "CINEMA_TASK_NODE_INVALID", "Video nodes cannot bind to text-to-image generation tasks.")
   }
 
   return requestedTaskNodeID
@@ -1498,9 +1760,9 @@ export async function createCinemaGenerationTask(
   const createdAt = nowISO()
   const taskID = makeTaskID()
   const taskNodeID = resolveGenerationTaskNodeID(input, taskID, canvas)
-  const createOutputNode = !canvas.nodes.some((node) => node.id === taskNodeID && node.type === "video")
+  const createOutputNode = !canvas.nodes.some((node) => node.id === taskNodeID && (node.type === "video" || node.type === "image"))
   const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(input.providerID)
-  const task = taskWithCanvasIDs({
+  const task = taskWithProviderCallback(taskWithCanvasIDs({
     id: taskID,
     projectID,
     providerID: input.providerID,
@@ -1518,9 +1780,10 @@ export async function createCinemaGenerationTask(
     },
     outputAssets: [],
     error: null,
-  }, { createOutputNode })
+    progress: progressForTaskStatus("queued", createdAt),
+  }, { createOutputNode }), createdAt)
 
-  const created = taskWithCanvasIDs(await adapter.createTask({ root, cinemaRoot, task, canvas }), { createOutputNode })
+  const created = taskWithProgress(taskWithCanvasIDs(await adapter.createTask({ root, cinemaRoot, task, canvas }), { createOutputNode }))
   await writeGenerationTask(cinemaRoot, created)
   await syncTaskToCanvas(cinemaRoot, created, `Created generation task '${created.title}'.`)
   await appendTaskAuditEvent(cinemaRoot, {
@@ -1552,9 +1815,9 @@ export async function refreshCinemaGenerationTask(projectID: string, taskID: str
   const task = await readGenerationTaskFromRoot(cinemaRoot, taskID)
   const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(task.providerID)
   const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
-  const refreshed = taskWithCanvasIDs(await adapter.refreshTask({ root, cinemaRoot, task, canvas }), {
-    createOutputNode: !isVideoTaskNode(canvas, task),
-  })
+  const refreshed = taskWithProgress(taskWithCanvasIDs(await adapter.refreshTask({ root, cinemaRoot, task, canvas }), {
+    createOutputNode: !isInlineGenerationTaskNode(canvas, task),
+  }))
   await writeGenerationTask(cinemaRoot, refreshed)
   await syncTaskToCanvas(cinemaRoot, refreshed, `Refreshed generation task '${refreshed.title}'.`)
   await appendTaskAuditEvent(cinemaRoot, {
@@ -1568,19 +1831,100 @@ export async function refreshCinemaGenerationTask(projectID: string, taskID: str
   return refreshed
 }
 
+async function processCinemaProviderCallback(input: {
+  projectID: string
+  providerID: string
+  taskID: string
+  payload: unknown
+}) {
+  const { root, cinemaRoot } = resolveCinemaRoot(input.projectID)
+  const task = await readGenerationTaskFromRoot(cinemaRoot, input.taskID)
+  const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(input.providerID)
+  if (!adapter.receiveCallback) {
+    throw new ApiError(400, "CINEMA_CALLBACK_UNSUPPORTED", `Cinema provider '${input.providerID}' does not support callbacks.`)
+  }
+
+  const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
+  const updated = taskWithProgress(taskWithCanvasIDs(await adapter.receiveCallback({
+    root,
+    cinemaRoot,
+    task,
+    canvas,
+    payload: input.payload,
+  }), {
+    createOutputNode: !isInlineGenerationTaskNode(canvas, task),
+  }))
+  await writeGenerationTask(cinemaRoot, updated)
+  await syncTaskToCanvas(cinemaRoot, updated, `Processed provider callback for generation task '${updated.title}'.`)
+  await appendTaskAuditEvent(cinemaRoot, {
+    time: nowISO(),
+    type: "generation-task.callback_processed",
+    actor: "cinema-runtime",
+    taskID: updated.id,
+    message: `Processed provider callback for generation task '${updated.title}' (${updated.status}).`,
+    data: { task: updated },
+  })
+}
+
+async function appendProviderCallbackFailure(cinemaRoot: string, taskID: string, error: unknown) {
+  const message = compactErrorMessage(error)
+  await appendTaskAuditEvent(cinemaRoot, {
+    time: nowISO(),
+    type: "generation-task.callback_failed",
+    actor: "cinema-runtime",
+    taskID,
+    message: `Provider callback processing failed: ${message}`,
+    data: { error: message },
+  }).catch(() => undefined)
+  log.error("Cinema provider callback processing failed", { taskID, error })
+}
+
+export async function acceptCinemaProviderCallback(
+  projectID: string,
+  providerID: string,
+  taskID: string,
+  token: string,
+  payload: unknown,
+): Promise<{ accepted: true; projectID: string; providerID: string; taskID: string }> {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+  const task = await readGenerationTaskFromRoot(cinemaRoot, taskID)
+  if (task.providerID !== providerID) {
+    throw new ApiError(403, "CINEMA_CALLBACK_PROVIDER_MISMATCH", "Provider callback does not match the generation task provider.")
+  }
+
+  const callback = readProviderCallbackRef(task)
+  if (!callback || callback.token !== token) {
+    throw new ApiError(403, "CINEMA_CALLBACK_TOKEN_INVALID", "Provider callback token is invalid.")
+  }
+
+  const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(providerID)
+  if (!adapter.receiveCallback) {
+    throw new ApiError(400, "CINEMA_CALLBACK_UNSUPPORTED", `Cinema provider '${providerID}' does not support callbacks.`)
+  }
+
+  queueMicrotask(() => {
+    void processCinemaProviderCallback({ projectID, providerID, taskID, payload })
+      .catch((error: unknown) => appendProviderCallbackFailure(cinemaRoot, taskID, error))
+  })
+
+  return { accepted: true, projectID, providerID, taskID }
+}
+
 export async function cancelCinemaGenerationTask(projectID: string, taskID: string): Promise<CinemaGenerationTask> {
   const { root, cinemaRoot } = resolveCinemaRoot(projectID)
   await assertCinemaProjectInitialized(cinemaRoot)
   const task = await readGenerationTaskFromRoot(cinemaRoot, taskID)
   const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(task.providerID)
   const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
-  const canceled = taskWithCanvasIDs(await (adapter.cancelTask ?? (async ({ task: current }) => ({
+  const canceled = taskWithProgress(taskWithCanvasIDs(await (adapter.cancelTask ?? (async ({ task: current }) => ({
     ...current,
     status: "canceled" as const,
     updatedAt: nowISO(),
+    progress: progressForTaskStatus("canceled", nowISO()),
   })))({ root, cinemaRoot, task, canvas }), {
-    createOutputNode: !isVideoTaskNode(canvas, task),
-  })
+    createOutputNode: !isInlineGenerationTaskNode(canvas, task),
+  }))
   await writeGenerationTask(cinemaRoot, canceled)
   await syncTaskToCanvas(cinemaRoot, canceled, `Canceled generation task '${canceled.title}'.`)
   await appendTaskAuditEvent(cinemaRoot, {

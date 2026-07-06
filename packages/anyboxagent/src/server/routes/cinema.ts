@@ -19,6 +19,10 @@ const CinemaEventsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional(),
 })
 
+const CinemaDirectoryQuerySchema = z.object({
+  path: z.string().optional(),
+})
+
 const CinemaProviderApiKeyBodySchema = z.object({
   apiKey: z.string().nullable().optional(),
 })
@@ -95,6 +99,16 @@ export function CinemaRoutes() {
   app.get("/projects/:projectID/summary", async (c) =>
     ok(c, await CinemaUseCase.getCinemaProjectStateSummary(c.req.param("projectID")))
   )
+
+  app.get("/projects/:projectID/files", async (c) => {
+    const query = parseQuery(
+      c.req.query(),
+      CinemaDirectoryQuerySchema,
+      "INVALID_QUERY",
+      "Query must include a valid optional project-relative path",
+    )
+    return ok(c, await CinemaUseCase.listCinemaProjectDirectory(c.req.param("projectID"), query.path))
+  })
 
   app.get("/projects/:projectID/events", async (c) => {
     const query = parseQuery(
@@ -185,6 +199,23 @@ export function CinemaRoutes() {
   app.post("/projects/:projectID/generation-tasks/:taskID/cancel", async (c) =>
     ok(c, await CinemaUseCase.cancelCinemaGenerationTask(c.req.param("projectID"), c.req.param("taskID")))
   )
+
+  app.post("/projects/:projectID/provider-callbacks/:providerID/:taskID/:token", async (c) => {
+    const payload = await c.req.json().catch(() => {
+      throw new ApiError(400, "INVALID_PAYLOAD", "Provider callback body must be valid JSON.")
+    })
+    return ok(
+      c,
+      await CinemaUseCase.acceptCinemaProviderCallback(
+        c.req.param("projectID"),
+        c.req.param("providerID"),
+        c.req.param("taskID"),
+        c.req.param("token"),
+        payload,
+      ),
+      202,
+    )
+  })
 
   app.put("/projects/:projectID/canvas", async (c) => {
     const payload = await parseJsonBody(

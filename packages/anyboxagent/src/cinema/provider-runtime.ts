@@ -7,6 +7,7 @@ import {
   type CinemaGeneratedAsset,
   type CinemaGenerationTask,
   type CinemaProviderAuthState,
+  type CinemaProviderModelMode,
   type TestCinemaVideoProviderConnectionBody,
   type CinemaVideoProvider,
   type CinemaVideoProviderManifest,
@@ -19,6 +20,10 @@ import * as Config from "#config/config.ts"
 import * as Global from "#global/global.ts"
 import * as Installation from "#installation/installation.ts"
 import { ApiError } from "#server/error.ts"
+import {
+  isSupportedImageMime,
+  readImageDimensions,
+} from "#session/support/image-assets.ts"
 import * as Log from "#util/log.ts"
 
 const PROVIDERS_MODELSWIKI_API_URL =
@@ -29,7 +34,29 @@ const KLINGAI_PROVIDER_ID = "klingai"
 const KLINGAI_DEFAULT_BASE_URL = "https://api-singapore.klingai.com"
 const KLINGAI_REQUEST_TIMEOUT_MS = 30 * 1000
 const KLINGAI_DOWNLOAD_TIMEOUT_MS = 120 * 1000
+const KLINGAI_IMAGE_ASSET_MAX_BYTES = 25 * 1024 * 1024
 const KLINGAI_VIDEO_ASSET_MAX_BYTES = 256 * 1024 * 1024
+const IMAGE_EXTENSION_BY_MIME: Record<string, string> = {
+  "image/apng": ".png",
+  "image/avif": ".avif",
+  "image/bmp": ".bmp",
+  "image/gif": ".gif",
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/svg+xml": ".svg",
+  "image/webp": ".webp",
+}
+const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
+  ".apng": "image/apng",
+  ".avif": "image/avif",
+  ".bmp": "image/bmp",
+  ".gif": "image/gif",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webp": "image/webp",
+}
 const VIDEO_EXTENSION_BY_MIME: Record<string, string> = {
   "video/mp4": ".mp4",
   "video/quicktime": ".mov",
@@ -52,11 +79,16 @@ export type ProviderAdapterCreateInput = {
 }
 
 export type ProviderAdapterRefreshInput = ProviderAdapterCreateInput
+export type ProviderAdapterCallbackInput = ProviderAdapterCreateInput & {
+  payload: unknown
+}
 
 export type ProviderAdapter = {
   manifest: CinemaVideoProviderManifest
+  supportedModes?: readonly CinemaProviderModelMode[]
   createTask: (input: ProviderAdapterCreateInput) => Promise<CinemaGenerationTask>
   refreshTask: (input: ProviderAdapterRefreshInput) => Promise<CinemaGenerationTask>
+  receiveCallback?: (input: ProviderAdapterCallbackInput) => Promise<CinemaGenerationTask>
   cancelTask?: (input: ProviderAdapterRefreshInput) => Promise<CinemaGenerationTask>
 }
 
@@ -410,6 +442,22 @@ export function hasCinemaVideoProviderAdapter(providerID: string) {
   return Boolean(providerAdapters[providerID])
 }
 
+export function cinemaVideoProviderAdapterSupportsMode(providerID: string, mode: CinemaProviderModelMode) {
+  const adapter = providerAdapters[providerID]
+  if (!adapter) return false
+  if (adapter.supportedModes) return adapter.supportedModes.includes(mode)
+  return mode === "text-to-video" || mode === "image-to-video"
+}
+
+export function findCinemaVideoProviderModelForMode(
+  manifest: CinemaVideoProviderManifest,
+  modelID: string,
+  mode: CinemaProviderModelMode,
+) {
+  return manifest.models.find((item) => item.id === modelID && item.modes.includes(mode))
+    ?? manifest.models.find((item) => item.id === modelID)
+}
+
 function unregisterCinemaVideoProviderAdapter(providerID: string) {
   delete providerAdapters[providerID]
 }
@@ -431,9 +479,14 @@ export function setCinemaVideoProviderAdapterForTest(providerID: string, adapter
   }
 }
 
-type KlingAIEndpointKind = "text2video" | "image2video"
+type KlingAIEndpointKind = "text2video" | "image2video" | "image-generation"
 
 type KlingAIVideoResult = {
+  id?: string
+  url: string
+}
+
+type KlingAIImageResult = {
   id?: string
   url: string
 }
@@ -616,7 +669,7 @@ function defaultBaseURLForProvider(manifest: CinemaVideoProviderManifest) {
 }
 
 function klingAIEndpointPath(kind: KlingAIEndpointKind, taskID?: string) {
-  const basePath = `v1/videos/${kind}`
+  const basePath = kind === "image-generation" ? "v1/images/generations" : `v1/videos/${kind}`
   if (!taskID) return basePath
   return `${basePath}/${encodeURIComponent(taskID)}`
 }
@@ -748,6 +801,44 @@ function klingAITaskMessage(response: KlingAIParsedResponse) {
   )
 }
 
+function klingAIProgressFromResponse(
+  response: KlingAIParsedResponse,
+  status: CinemaGenerationTask["status"],
+  message?: string,
+): CinemaGenerationTask["progress"] {
+  const updatedAt = new Date().toISOString()
+  const base = {
+    updatedAt,
+    ...(message ? { message } : {}),
+  }
+  const remoteStatus = (
+    stringValue(response.data?.task_status) ??
+    stringValue(response.data?.status) ??
+    ""
+  ).toLowerCase()
+
+  switch (status) {
+    case "queued":
+      return { ...base, phase: remoteStatus === "submitted" ? "submitted" : "queued" }
+    case "running":
+      return { ...base, phase: "processing" }
+    case "succeeded":
+      return { ...base, phase: "succeeded", percent: 100 }
+    case "failed":
+      return { ...base, phase: "failed" }
+    case "canceled":
+      return { ...base, phase: "canceled" }
+  }
+}
+
+function normalizeKlingAICallbackResponse(payload: unknown): KlingAIParsedResponse {
+  const record = isRecord(payload) ? payload : {}
+  return {
+    message: stringValue(record.message) ?? stringValue(record.msg) ?? stringValue(record.error),
+    data: isRecord(record.data) ? record.data : record,
+  }
+}
+
 function klingAIVideosFromResponse(response: KlingAIParsedResponse): KlingAIVideoResult[] {
   const taskResult = isRecord(response.data?.task_result) ? response.data.task_result : response.data?.result
   const resultRecord = isRecord(taskResult) ? taskResult : {}
@@ -760,6 +851,29 @@ function klingAIVideosFromResponse(response: KlingAIParsedResponse): KlingAIVide
     if (typeof item === "string" && item.trim()) return [{ id: `kling-video-${index + 1}`, url: item.trim() }]
     if (!isRecord(item)) return []
     const url = stringValue(item.url) ?? stringValue(item.video_url) ?? stringValue(item.download_url)
+    if (!url) return []
+    return [{
+      id: stringValue(item.id),
+      url,
+    }]
+  })
+}
+
+function klingAIImagesFromResponse(response: KlingAIParsedResponse): KlingAIImageResult[] {
+  const taskResult = isRecord(response.data?.task_result) ? response.data.task_result : response.data?.result
+  const resultRecord = isRecord(taskResult) ? taskResult : {}
+  const images = Array.isArray(resultRecord.images)
+    ? resultRecord.images
+    : Array.isArray(response.data?.images)
+      ? response.data.images
+      : []
+  return images.flatMap((item, index) => {
+    if (typeof item === "string" && item.trim()) return [{ id: `kling-image-${index + 1}`, url: item.trim() }]
+    if (!isRecord(item)) return []
+    const url = stringValue(item.url)
+      ?? stringValue(item.image_url)
+      ?? stringValue(item.imageUrl)
+      ?? stringValue(item.download_url)
     if (!url) return []
     return [{
       id: stringValue(item.id),
@@ -793,6 +907,30 @@ function resolveProjectRelativeFile(root: string, relativePath: string) {
   return resolvedPath
 }
 
+function imageMimeAndExtensionFromResponse(response: Response, sourceURL: string) {
+  const contentType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase()
+  if (contentType && IMAGE_EXTENSION_BY_MIME[contentType] && isSupportedImageMime(contentType)) {
+    return {
+      mimeType: contentType,
+      extension: IMAGE_EXTENSION_BY_MIME[contentType],
+    }
+  }
+
+  const extension = path.extname(new URL(sourceURL).pathname).toLowerCase()
+  const mimeType = IMAGE_MIME_BY_EXTENSION[extension]
+  if (mimeType && isSupportedImageMime(mimeType)) {
+    return {
+      mimeType,
+      extension,
+    }
+  }
+
+  return {
+    mimeType: "image/png",
+    extension: ".png",
+  }
+}
+
 function videoMimeAndExtensionFromResponse(response: Response, sourceURL: string) {
   const contentType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase()
   if (contentType && VIDEO_EXTENSION_BY_MIME[contentType]) {
@@ -815,6 +953,65 @@ function videoMimeAndExtensionFromResponse(response: Response, sourceURL: string
     mimeType: "video/mp4",
     extension: ".mp4",
   }
+}
+
+async function downloadKlingAIImageAssets(input: {
+  root: string
+  task: CinemaGenerationTask
+  images: KlingAIImageResult[]
+}): Promise<CinemaGeneratedAsset[]> {
+  const taskSegment = safeKlingAISegment(input.task.taskNodeID ?? input.task.id)
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+  const outputDirectory = path.join(input.root, "generated", "images", taskSegment)
+  await mkdir(outputDirectory, { recursive: true })
+
+  const assets: CinemaGeneratedAsset[] = []
+  for (const [index, image] of input.images.entries()) {
+    let sourceURL: URL
+    try {
+      sourceURL = new URL(image.url)
+    } catch {
+      throw new ApiError(502, "CINEMA_KLINGAI_OUTPUT_URL_INVALID", "KlingAI returned an invalid image output URL.")
+    }
+    if (sourceURL.protocol !== "http:" && sourceURL.protocol !== "https:") {
+      throw new ApiError(502, "CINEMA_KLINGAI_OUTPUT_URL_INVALID", "KlingAI image output URL must use http or https.")
+    }
+
+    const response = await fetch(sourceURL, {
+      signal: AbortSignal.timeout(KLINGAI_DOWNLOAD_TIMEOUT_MS),
+    })
+    if (!response.ok) {
+      throw new ApiError(502, "CINEMA_KLINGAI_OUTPUT_DOWNLOAD_FAILED", `Failed to download KlingAI image output (HTTP ${response.status}).`)
+    }
+    const expectedSize = Number(response.headers.get("content-length"))
+    if (Number.isFinite(expectedSize) && expectedSize > KLINGAI_IMAGE_ASSET_MAX_BYTES) {
+      throw new ApiError(413, "CINEMA_KLINGAI_OUTPUT_TOO_LARGE", "KlingAI image output is too large to save locally.")
+    }
+
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    if (bytes.byteLength === 0) {
+      throw new ApiError(502, "CINEMA_KLINGAI_OUTPUT_EMPTY", "KlingAI returned an empty image output.")
+    }
+    if (bytes.byteLength > KLINGAI_IMAGE_ASSET_MAX_BYTES) {
+      throw new ApiError(413, "CINEMA_KLINGAI_OUTPUT_TOO_LARGE", "KlingAI image output is too large to save locally.")
+    }
+
+    const { mimeType, extension } = imageMimeAndExtensionFromResponse(response, sourceURL.toString())
+    const filePath = path.join(outputDirectory, `${timestamp}-${index + 1}${extension}`)
+    await writeFile(filePath, bytes)
+    const dimensions = readImageDimensions(bytes, mimeType)
+    assets.push({
+      id: image.id ?? `image-${timestamp}-${index + 1}`,
+      kind: "image",
+      path: projectRelativePath(input.root, filePath),
+      mimeType,
+      sizeBytes: bytes.byteLength,
+      url: sourceURL.toString(),
+      ...dimensions,
+    })
+  }
+
+  return assets
 }
 
 async function downloadKlingAIVideoAssets(input: {
@@ -876,17 +1073,25 @@ async function downloadKlingAIVideoAssets(input: {
 
 function klingAIEndpointKindForTask(task: CinemaGenerationTask): KlingAIEndpointKind {
   const refKind = stringValue(task.providerTaskRef?.kind)
-  if (refKind === "text2video" || refKind === "image2video") return refKind
+  if (refKind === "text2video" || refKind === "image2video" || refKind === "image-generation") return refKind
+  if (task.mode === "text-to-image") return "image-generation"
   return task.mode === "image-to-video" ? "image2video" : "text2video"
 }
 
 function klingAITaskRefFor(task: CinemaGenerationTask, taskID: string, kind: KlingAIEndpointKind) {
+  const existingRef = isRecord(task.providerTaskRef) ? task.providerTaskRef : {}
   return {
+    ...existingRef,
     providerID: KLINGAI_PROVIDER_ID,
     taskID,
     kind,
     endpoint: klingAIEndpointPath(kind),
   }
+}
+
+function klingAICallbackURLForTask(task: CinemaGenerationTask) {
+  const callback = isRecord(task.providerTaskRef?.callback) ? task.providerTaskRef.callback : undefined
+  return stringValue(callback?.url)
 }
 
 async function applyKlingAITaskResponse(input: {
@@ -896,10 +1101,12 @@ async function applyKlingAITaskResponse(input: {
 }): Promise<CinemaGenerationTask> {
   const status = klingAITaskStatusFromResponse(input.response)
   const message = klingAITaskMessage(input.response)
+  const progress = klingAIProgressFromResponse(input.response, status, message)
   if (status === "failed") {
     return taskUpdated(input.task, {
       status,
       error: message ?? "KlingAI video generation failed.",
+      progress,
     })
   }
 
@@ -907,6 +1114,7 @@ async function applyKlingAITaskResponse(input: {
     return taskUpdated(input.task, {
       status,
       error: null,
+      progress,
     })
   }
 
@@ -914,7 +1122,40 @@ async function applyKlingAITaskResponse(input: {
     return taskUpdated(input.task, {
       status,
       error: null,
+      progress,
     })
+  }
+
+  if (input.task.mode === "text-to-image") {
+    const images = klingAIImagesFromResponse(input.response)
+    if (images.length === 0) {
+      return taskUpdated(input.task, {
+        status: "failed",
+        error: "KlingAI marked the task succeeded but did not return an image output URL.",
+        progress: klingAIProgressFromResponse(input.response, "failed", "KlingAI marked the task succeeded but did not return an image output URL."),
+      })
+    }
+
+    try {
+      const outputAssets = await downloadKlingAIImageAssets({
+        root: input.root,
+        task: input.task,
+        images,
+      })
+      return taskUpdated(input.task, {
+        status: "succeeded",
+        outputAssets,
+        error: null,
+        progress,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return taskUpdated(input.task, {
+        status: "failed",
+        error: redactKlingAIErrorText(message || "Failed to download KlingAI image output."),
+        progress: klingAIProgressFromResponse(input.response, "failed", redactKlingAIErrorText(message || "Failed to download KlingAI image output.")),
+      })
+    }
   }
 
   const videos = klingAIVideosFromResponse(input.response)
@@ -922,6 +1163,7 @@ async function applyKlingAITaskResponse(input: {
     return taskUpdated(input.task, {
       status: "failed",
       error: "KlingAI marked the task succeeded but did not return a video output URL.",
+      progress: klingAIProgressFromResponse(input.response, "failed", "KlingAI marked the task succeeded but did not return a video output URL."),
     })
   }
 
@@ -935,12 +1177,14 @@ async function applyKlingAITaskResponse(input: {
       status: "succeeded",
       outputAssets,
       error: null,
+      progress,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     return taskUpdated(input.task, {
       status: "failed",
       error: redactKlingAIErrorText(message || "Failed to download KlingAI video output."),
+      progress: klingAIProgressFromResponse(input.response, "failed", redactKlingAIErrorText(message || "Failed to download KlingAI video output.")),
     })
   }
 }
@@ -951,6 +1195,28 @@ function parameterString(parameters: Record<string, unknown>, ...keys: string[])
     if (value) return value
   }
   return undefined
+}
+
+function promptWithStyle(prompt: string, parameters: Record<string, unknown>) {
+  const style = parameterString(parameters, "style")
+  return style ? `${prompt.trim()}\n\nStyle: ${style}` : prompt
+}
+
+function aspectRatioFromSize(value: string | undefined) {
+  const match = /^(\d+)x(\d+)$/.exec(value ?? "")
+  if (!match) return undefined
+  const width = Number(match[1])
+  const height = Number(match[2])
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return undefined
+
+  let left = width
+  let right = height
+  while (right !== 0) {
+    const remainder = left % right
+    left = right
+    right = remainder
+  }
+  return `${width / left}:${height / left}`
 }
 
 function klingAIQualityMode(parameters: Record<string, unknown>) {
@@ -1022,15 +1288,24 @@ async function klingAITaskPayload(input: ProviderAdapterCreateInput, kind: Kling
   const parameters = input.task.input.parameters
   const payload: Record<string, unknown> = {
     model_name: input.task.modelID,
-    prompt: input.task.input.prompt,
+    prompt: kind === "image-generation" ? promptWithStyle(input.task.input.prompt, parameters) : input.task.input.prompt,
     external_task_id: klingAIExternalTaskID(input.task.id),
   }
+  const callbackURL = klingAICallbackURLForTask(input.task)
+  if (callbackURL) payload.callback_url = callbackURL
 
   appendOptionalPayloadString(payload, "aspect_ratio", parameters, "aspectRatio", "aspect_ratio")
+  if (kind === "image-generation" && !payload.aspect_ratio) {
+    const aspectRatio = aspectRatioFromSize(parameterString(parameters, "size"))
+    if (aspectRatio) payload.aspect_ratio = aspectRatio
+  }
   appendOptionalPayloadString(payload, "duration", parameters, "duration")
   appendOptionalPayloadString(payload, "negative_prompt", parameters, "negativePrompt", "negative_prompt")
   appendOptionalPayloadString(payload, "cfg_scale", parameters, "cfgScale", "cfg_scale")
-  payload.mode = klingAIQualityMode(parameters)
+  appendOptionalPayloadString(payload, "resolution", parameters, "resolution")
+  const count = Number(parameters.count)
+  if (Number.isInteger(count) && count > 0) payload.n = count
+  if (kind !== "image-generation") payload.mode = klingAIQualityMode(parameters)
 
   if (kind === "image2video") {
     payload.image = await klingAIImageInput(input.root, parameters)
@@ -1041,8 +1316,13 @@ async function klingAITaskPayload(input: ProviderAdapterCreateInput, kind: Kling
 
 const KlingAIProviderAdapter: ProviderAdapter = {
   manifest: {} as CinemaVideoProviderManifest,
+  supportedModes: ["text-to-video", "image-to-video", "text-to-image"],
   createTask: async (input) => {
-    const kind = input.task.mode === "image-to-video" ? "image2video" : "text2video"
+    const kind = input.task.mode === "text-to-image"
+      ? "image-generation"
+      : input.task.mode === "image-to-video"
+        ? "image2video"
+        : "text2video"
     const payload = await klingAITaskPayload(input, kind)
     const response = await requestKlingAI(klingAIEndpointPath(kind), {
       method: "POST",
@@ -1068,11 +1348,30 @@ const KlingAIProviderAdapter: ProviderAdapter = {
       return taskUpdated(input.task, {
         status: "failed",
         error: "KlingAI task is missing its provider task ID.",
+        progress: {
+          phase: "failed",
+          message: "KlingAI task is missing its provider task ID.",
+          updatedAt: new Date().toISOString(),
+        },
       })
     }
 
     const kind = klingAIEndpointKindForTask(input.task)
     const response = await requestKlingAI(klingAIEndpointPath(kind, providerTaskID))
+    return await applyKlingAITaskResponse({
+      root: input.root,
+      task: input.task,
+      response,
+    })
+  },
+  receiveCallback: async (input) => {
+    const response = normalizeKlingAICallbackResponse(input.payload)
+    const callbackTaskID = klingAITaskIDFromResponse(response)
+    const providerTaskID = stringValue(input.task.providerTaskRef?.taskID) ?? stringValue(input.task.providerTaskRef?.task_id)
+    if (callbackTaskID && providerTaskID && callbackTaskID !== providerTaskID) {
+      throw new ApiError(400, "CINEMA_KLINGAI_CALLBACK_TASK_MISMATCH", "KlingAI callback task ID does not match the saved provider task ID.")
+    }
+
     return await applyKlingAITaskResponse({
       root: input.root,
       task: input.task,
@@ -1087,12 +1386,15 @@ export function assertCinemaVideoProviderModelSupports(
   input: CreateCinemaGenerationTaskBody,
   manifest: CinemaVideoProviderManifest,
 ) {
-  const model = manifest.models.find((item) => item.id === input.modelID)
+  const model = findCinemaVideoProviderModelForMode(manifest, input.modelID, input.mode)
   if (!model) {
     throw new ApiError(400, "CINEMA_PROVIDER_MODEL_NOT_FOUND", `Cinema provider '${manifest.id}' does not expose model '${input.modelID}'.`)
   }
   if (!model.modes.includes(input.mode)) {
     throw new ApiError(400, "CINEMA_PROVIDER_MODE_UNSUPPORTED", `Model '${input.modelID}' does not support mode '${input.mode}'.`)
+  }
+  if (providerAdapters[manifest.id] && !cinemaVideoProviderAdapterSupportsMode(manifest.id, input.mode)) {
+    throw new ApiError(400, "CINEMA_PROVIDER_MODE_UNSUPPORTED", `Cinema provider '${manifest.id}' runtime does not support mode '${input.mode}'.`)
   }
 }
 

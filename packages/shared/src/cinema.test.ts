@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   CinemaImageGenerationResultSchema,
   CinemaImageModelsResultSchema,
+  CinemaProjectDirectoryListingSchema,
   CinemaTextGenerationResultSchema,
   CinemaTextModelsResultSchema,
   CinemaGenerationTaskSchema,
@@ -70,6 +71,27 @@ describe("cinema schemas", () => {
 
     expect(task.input.sourceNodeIDs).toEqual([])
     expect(task.outputAssets).toEqual([])
+    expect(task.progress).toBeUndefined()
+
+    const taskWithProgress = CinemaGenerationTaskSchema.parse({
+      ...task,
+      progress: {
+        phase: "processing",
+        message: "Provider is rendering.",
+        updatedAt: "2026-07-04T00:01:00.000Z",
+      },
+    })
+    expect(taskWithProgress.progress?.phase).toBe("processing")
+
+    const completedTask = CinemaGenerationTaskSchema.parse({
+      ...task,
+      status: "succeeded",
+      progress: {
+        phase: "succeeded",
+        percent: 100,
+      },
+    })
+    expect(completedTask.progress?.percent).toBe(100)
   })
 
   it("parses provider runtime metadata", () => {
@@ -110,7 +132,7 @@ describe("cinema schemas", () => {
     expect(provider.runtime?.adapterID).toBe("kling")
   })
 
-  it("rejects unsupported generation task modes", () => {
+  it("parses provider task modes while rejecting unknown task modes", () => {
     const body = CreateCinemaGenerationTaskBodySchema.parse({
       providerID: "kling",
       modelID: "kling-3.0-turbo",
@@ -128,13 +150,13 @@ describe("cinema schemas", () => {
       })
     ).toThrow()
 
-    expect(() =>
-      CreateCinemaGenerationTaskBodySchema.parse({
-        providerID: "kling",
-        modelID: "kling-image-3.0",
-        mode: "text-to-image",
-      })
-    ).toThrow()
+    const imageBody = CreateCinemaGenerationTaskBodySchema.parse({
+      providerID: "kling",
+      modelID: "kling-image-3.0",
+      mode: "text-to-image",
+    })
+
+    expect(imageBody.mode).toBe("text-to-image")
 
     expect(() =>
       CreateCinemaGenerationTaskBodySchema.parse({
@@ -222,33 +244,33 @@ describe("cinema schemas", () => {
     const models = CinemaImageModelsResultSchema.parse({
       items: [
         {
-          value: "openai/gpt-image-1",
-          providerID: "openai",
-          modelID: "gpt-image-1",
-          label: "GPT Image 1",
-          providerLabel: "OpenAI",
+          value: "klingai/kling-image-v3",
+          providerID: "klingai",
+          modelID: "kling-image-v3",
+          label: "Kling Image 3.0",
+          providerLabel: "KlingAI",
           available: true,
         },
       ],
       selection: {
-        image_model: "openai/gpt-image-1",
+        image_model: null,
       },
       effectiveModel: {
-        value: "openai/gpt-image-1",
-        providerID: "openai",
-        modelID: "gpt-image-1",
-        label: "GPT Image 1",
-        providerLabel: "OpenAI",
+        value: "klingai/kling-image-v3",
+        providerID: "klingai",
+        modelID: "kling-image-v3",
+        label: "Kling Image 3.0",
+        providerLabel: "KlingAI",
         available: true,
       },
     })
 
-    expect(models.effectiveModel?.value).toBe("openai/gpt-image-1")
+    expect(models.effectiveModel?.value).toBe("klingai/kling-image-v3")
 
     const body = CreateCinemaImageGenerationBodySchema.parse({
       nodeID: "image-1",
       prompt: "A neon storyboard frame.",
-      model: "openai/gpt-image-1",
+      model: "klingai/kling-image-v3",
       size: "1024x1024",
       count: 2,
       style: "cinematic",
@@ -266,7 +288,9 @@ describe("cinema schemas", () => {
         nodeTypes: [],
       },
       nodeID: "image-1",
-      model: "openai/gpt-image-1",
+      model: "klingai/kling-image-v3",
+      taskID: "task-image-1",
+      status: "running",
       assets: [
         {
           id: "asset-1",
@@ -306,5 +330,33 @@ describe("cinema schemas", () => {
         count: 5,
       })
     ).toThrow()
+  })
+
+  it("parses project directory listings", () => {
+    const listing = CinemaProjectDirectoryListingSchema.parse({
+      projectID: "project-1",
+      root: "/tmp/project",
+      path: "generated/images",
+      parentPath: "generated",
+      entries: [
+        {
+          name: "shot-1.png",
+          path: "generated/images/shot-1.png",
+          kind: "file",
+          sizeBytes: 128,
+          modifiedAt: "2026-07-06T00:00:00.000Z",
+          mimeType: "image/png",
+          previewable: true,
+        },
+        {
+          name: "refs",
+          path: "generated/images/refs",
+          kind: "directory",
+        },
+      ],
+    })
+
+    expect(listing.entries[0]?.previewable).toBe(true)
+    expect(listing.entries[1]?.previewable).toBe(false)
   })
 })

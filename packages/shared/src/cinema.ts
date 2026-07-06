@@ -159,6 +159,9 @@ export const CinemaProviderModelModeSchema = z.enum([
 ])
 export type CinemaProviderModelMode = z.infer<typeof CinemaProviderModelModeSchema>
 
+export const CinemaTaskModeSchema = CinemaProviderModelModeSchema
+export type CinemaTaskMode = z.infer<typeof CinemaTaskModeSchema>
+
 export const CinemaGenerationTaskStatusSchema = z.enum([
   "queued",
   "running",
@@ -167,6 +170,26 @@ export const CinemaGenerationTaskStatusSchema = z.enum([
   "canceled",
 ])
 export type CinemaGenerationTaskStatus = z.infer<typeof CinemaGenerationTaskStatusSchema>
+
+export const CinemaGenerationProgressPhaseSchema = z.enum([
+  "queued",
+  "submitted",
+  "processing",
+  "downloading",
+  "finalizing",
+  "succeeded",
+  "failed",
+  "canceled",
+])
+export type CinemaGenerationProgressPhase = z.infer<typeof CinemaGenerationProgressPhaseSchema>
+
+export const CinemaGenerationProgressSchema = z.object({
+  phase: CinemaGenerationProgressPhaseSchema,
+  percent: z.number().min(0).max(100).optional(),
+  message: z.string().min(1).optional(),
+  updatedAt: z.string().min(1).optional(),
+})
+export type CinemaGenerationProgress = z.infer<typeof CinemaGenerationProgressSchema>
 
 export const CinemaGeneratedAssetSchema = z.object({
   id: z.string().min(1),
@@ -281,7 +304,7 @@ export const CinemaGenerationTaskSchema = z.object({
   projectID: z.string().min(1),
   providerID: z.string().min(1),
   modelID: z.string().min(1),
-  mode: CinemaGenerationModeSchema,
+  mode: CinemaTaskModeSchema,
   title: z.string().min(1),
   status: CinemaGenerationTaskStatusSchema,
   createdAt: z.string().min(1),
@@ -289,6 +312,7 @@ export const CinemaGenerationTaskSchema = z.object({
   taskNodeID: z.string().min(1).optional(),
   outputNodeID: z.string().min(1).optional(),
   providerTaskRef: z.record(z.string(), z.unknown()).optional(),
+  progress: CinemaGenerationProgressSchema.optional(),
   input: z.object({
     prompt: z.string(),
     sourceNodeIDs: z.array(z.string().min(1)).default([]),
@@ -302,7 +326,7 @@ export type CinemaGenerationTask = z.infer<typeof CinemaGenerationTaskSchema>
 export const CreateCinemaGenerationTaskBodySchema = z.object({
   providerID: z.string().min(1),
   modelID: z.string().min(1),
-  mode: CinemaGenerationModeSchema,
+  mode: CinemaTaskModeSchema,
   title: z.string().min(1).optional(),
   prompt: z.string().default(""),
   sourceNodeIDs: z.array(z.string().min(1)).default([]),
@@ -374,6 +398,8 @@ export const CinemaImageGenerationResultSchema = z.object({
   canvas: CinemaCanvasDocumentSchema,
   nodeID: z.string().min(1),
   model: z.string().min(1),
+  taskID: z.string().min(1).optional(),
+  status: CinemaGenerationTaskStatusSchema.optional(),
   assets: z.array(CinemaGeneratedAssetSchema.extend({
     kind: z.literal("image"),
   })),
@@ -389,6 +415,27 @@ export const CinemaProjectSummarySchema = z.object({
   project: z.record(z.string(), z.unknown()).optional(),
 })
 export type CinemaProjectSummary = z.infer<typeof CinemaProjectSummarySchema>
+
+export const CinemaProjectDirectoryEntrySchema = z.object({
+  name: z.string().min(1),
+  path: z.string(),
+  kind: z.enum(["file", "directory"]),
+  sizeBytes: z.number().int().nonnegative().optional(),
+  modifiedAt: z.string().min(1).optional(),
+  mimeType: z.string().optional(),
+  previewable: z.boolean().default(false),
+})
+export type CinemaProjectDirectoryEntry = z.infer<typeof CinemaProjectDirectoryEntrySchema>
+
+export const CinemaProjectDirectoryListingSchema = z.object({
+  projectID: z.string().min(1),
+  root: z.string().min(1),
+  path: z.string(),
+  parentPath: z.string().nullable(),
+  entries: z.array(CinemaProjectDirectoryEntrySchema),
+  truncated: z.boolean().default(false),
+})
+export type CinemaProjectDirectoryListing = z.infer<typeof CinemaProjectDirectoryListingSchema>
 
 export const CinemaNodeSummarySchema = z.object({
   id: z.string().min(1),

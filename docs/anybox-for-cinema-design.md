@@ -214,7 +214,7 @@ Canvas 表达的是创作过程：
 
 #### Image Node
 
-当前 V1 中 `image` 节点表示生图节点，而不是静态素材卡片。用户在节点内输入 prompt，选择 image-capable model，设置尺寸和数量，点击生成后由 AnyBox Agent Runtime 调用 AI SDK image model，结果保存到当前项目的 `generated/images/<node-id>/`，并回写到同一个节点内预览。
+当前 V1 中 `image` 节点表示生图节点，而不是静态素材卡片。用户在节点内输入 prompt，选择生成 Provider 提供的 `text-to-image` 生图模型，设置尺寸和数量，点击生成后由 AnyBox Agent Runtime 创建异步生成任务，结果保存到当前项目的 `generated/images/<node-id>/`，并回写到同一个节点内预览。
 
 V1 不支持参考图输入、上传图、局部重绘、seed 或 negative prompt；静态参考图/素材节点后续再单独定义，或在 `image` 节点上扩展模式。
 
@@ -835,7 +835,7 @@ POST /api/cinema/projects/:projectID/open-link
 - 未初始化项目不自动创建 `.anybox-cinema`，只返回明确错误。
 - `PUT canvas` 采用整文件原子写回，并追加 `events.jsonl` 的 `canvas.updated` 事件。
 - 文本节点生成复用 AnyBox Provider/AI SDK 配置，API key 只留在本地 Agent 端，生成结果追加写回当前 `text` node。
-- 图片节点生成复用 AnyBox Provider/AI SDK image model 配置，默认模型来自项目/全局 `image_model` selection；生成结果保存到 `generated/images/<node-id>/`，只把项目相对路径写入 node data，预览通过 project-scoped asset API 读取。
+- 图片节点生成只使用 Cinema 生成 Provider 的 `text-to-image` runtime；生成结果保存到 `generated/images/<node-id>/`，只把项目相对路径写入 node data，预览通过 project-scoped asset API 读取。
 - 生成任务写 `.anybox-cinema/tasks.jsonl` 和 `.anybox-cinema/tasks/<task-id>.json`。
 - 生成结果下载或写入 `generated/<task-id>/`，成功后 Runtime 自动同步 Canvas task node、output node 和 edge。
 
