@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   CinemaImageGenerationResultSchema,
+  CinemaImportedImageAssetResultSchema,
   CinemaImageModelsResultSchema,
   CinemaProjectDirectoryListingSchema,
   CinemaTextGenerationResultSchema,
@@ -10,6 +11,7 @@ import {
   CinemaVideoProviderManifestSchema,
   CreateCinemaGenerationTaskBodySchema,
   CreateCinemaImageGenerationBodySchema,
+  CreateCinemaImportedImageAssetBodySchema,
   CreateCinemaTextGenerationBodySchema,
 } from "./cinema"
 
@@ -158,6 +160,30 @@ describe("cinema schemas", () => {
 
     expect(imageBody.mode).toBe("text-to-image")
 
+    const referenceVideoBody = CreateCinemaGenerationTaskBodySchema.parse({
+      providerID: "kling",
+      modelID: "kling-3.0-turbo",
+      mode: "reference-to-video",
+      parameters: {
+        inputSlots: [
+          {
+            slot: "referenceImage",
+            nodeID: "image-1",
+            edgeID: "edge-image-1-video-1",
+            assetID: "reference-1",
+            path: "assets/reference-1.png",
+          },
+        ],
+        referenceImageAssetID: "reference-1",
+        referenceImageAssetIDs: ["reference-1", "reference-2"],
+        referenceImagePath: "assets/reference-1.png",
+        referenceImagePaths: ["assets/reference-1.png", "assets/reference-2.png"],
+      },
+    })
+
+    expect(referenceVideoBody.mode).toBe("reference-to-video")
+    expect(referenceVideoBody.parameters.referenceImageAssetIDs).toEqual(["reference-1", "reference-2"])
+
     expect(() =>
       CreateCinemaGenerationTaskBodySchema.parse({
         providerID: "kling",
@@ -178,6 +204,7 @@ describe("cinema schemas", () => {
           label: "GPT-5.4",
           providerLabel: "OpenAI",
           available: true,
+          supportsImageInput: true,
         },
       ],
       selection: {
@@ -190,19 +217,27 @@ describe("cinema schemas", () => {
         label: "GPT-5.4",
         providerLabel: "OpenAI",
         available: true,
+        supportsImageInput: true,
       },
     })
 
     expect(models.items[0]?.value).toBe("openai/gpt-5.4")
+    expect(models.items[0]?.supportsImageInput).toBe(true)
 
     const body = CreateCinemaTextGenerationBodySchema.parse({
       nodeID: "text-1",
       prompt: "Expand this beat.",
       model: "openai/gpt-5.4",
+      sourceImageAssetID: "image-1",
+      sourceImageAssetIDs: ["image-1", "image-2"],
+      sourceImagePath: "generated/images/image-1.png",
+      sourceImagePaths: ["generated/images/image-1.png", "generated/images/image-2.png"],
       writeMode: "append",
     })
 
     expect(body.writeMode).toBe("append")
+    expect(body.sourceImagePath).toBe("generated/images/image-1.png")
+    expect(body.sourceImagePaths).toEqual(["generated/images/image-1.png", "generated/images/image-2.png"])
 
     const result = CinemaTextGenerationResultSchema.parse({
       canvas: {
@@ -250,6 +285,7 @@ describe("cinema schemas", () => {
           label: "Kling Image 3.0",
           providerLabel: "KlingAI",
           available: true,
+          supportsImageInput: true,
         },
       ],
       selection: {
@@ -262,21 +298,34 @@ describe("cinema schemas", () => {
         label: "Kling Image 3.0",
         providerLabel: "KlingAI",
         available: true,
+        supportsImageInput: true,
       },
     })
 
     expect(models.effectiveModel?.value).toBe("klingai/kling-image-v3")
+    expect(models.effectiveModel?.supportsImageInput).toBe(true)
 
     const body = CreateCinemaImageGenerationBodySchema.parse({
       nodeID: "image-1",
       prompt: "A neon storyboard frame.",
+      userPrompt: "A neon storyboard frame.",
       model: "klingai/kling-image-v3",
       size: "1024x1024",
       count: 2,
       style: "cinematic",
+      sourceNodeIDs: ["text-1", "image-ref-1"],
+      sourceTextPrompts: ["Storyboard note."],
+      sourceImageAssetID: "reference-1",
+      sourceImageAssetIDs: ["reference-1", "reference-2"],
+      sourceImagePath: "assets/reference-1.png",
+      sourceImagePaths: ["assets/reference-1.png", "assets/reference-2.png"],
     })
 
     expect(body.count).toBe(2)
+    expect(body.sourceNodeIDs).toEqual(["text-1", "image-ref-1"])
+    expect(body.sourceTextPrompts).toEqual(["Storyboard note."])
+    expect(body.sourceImagePath).toBe("assets/reference-1.png")
+    expect(body.sourceImagePaths).toEqual(["assets/reference-1.png", "assets/reference-2.png"])
 
     const result = CinemaImageGenerationResultSchema.parse({
       canvas: {
@@ -305,6 +354,26 @@ describe("cinema schemas", () => {
     })
 
     expect(result.assets[0]?.width).toBe(1)
+
+    const importBody = CreateCinemaImportedImageAssetBodySchema.parse({
+      fileName: "reference.png",
+      mimeType: "image/png",
+      dataBase64: "iVBORw0KGgo=",
+    })
+    expect(importBody.fileName).toBe("reference.png")
+
+    const imported = CinemaImportedImageAssetResultSchema.parse({
+      asset: {
+        id: "import-1",
+        kind: "image",
+        path: "assets/imported/reference.png",
+        mimeType: "image/png",
+        sizeBytes: 8,
+        width: 1,
+        height: 1,
+      },
+    })
+    expect(imported.asset.kind).toBe("image")
   })
 
   it("rejects invalid image generation payloads", () => {

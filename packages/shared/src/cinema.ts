@@ -4,6 +4,7 @@ export const CinemaNodeTypeSchema = z.enum([
   "text",
   "prompt",
   "image",
+  "local-image",
   "video",
   "audio",
   "shot",
@@ -278,6 +279,7 @@ export const CinemaVideoProviderRuntimeSchema = z.object({
   baseURLSource: z.enum(["settings", "environment", "default"]).optional(),
   adapterAvailable: z.boolean().default(false),
   adapterID: z.string().min(1).optional(),
+  supportedModes: z.array(CinemaProviderModelModeSchema).optional(),
 })
 export type CinemaVideoProviderRuntime = z.infer<typeof CinemaVideoProviderRuntimeSchema>
 
@@ -343,6 +345,7 @@ export const CinemaTextModelSchema = z.object({
   label: z.string().min(1),
   providerLabel: z.string().min(1),
   available: z.boolean(),
+  supportsImageInput: z.boolean().default(false),
 })
 export type CinemaTextModel = z.infer<typeof CinemaTextModelSchema>
 
@@ -359,6 +362,10 @@ export const CreateCinemaTextGenerationBodySchema = z.object({
   nodeID: z.string().min(1),
   prompt: z.string().trim().min(1),
   model: z.string().nullable().optional(),
+  sourceImageAssetID: z.string().min(1).optional(),
+  sourceImageAssetIDs: z.array(z.string().min(1)).optional(),
+  sourceImagePath: z.string().min(1).optional(),
+  sourceImagePaths: z.array(z.string().min(1)).optional(),
   writeMode: z.literal("append"),
 })
 export type CreateCinemaTextGenerationBody = z.infer<typeof CreateCinemaTextGenerationBodySchema>
@@ -387,10 +394,17 @@ export type CinemaImageModelsResult = z.infer<typeof CinemaImageModelsResultSche
 export const CreateCinemaImageGenerationBodySchema = z.object({
   nodeID: z.string().min(1),
   prompt: z.string().trim().min(1),
+  userPrompt: z.string().optional(),
   model: z.string().nullable().optional(),
   size: z.string().regex(/^\d+x\d+$/).optional(),
   count: z.number().int().min(1).max(4).optional(),
   style: z.string().trim().min(1).max(400).optional(),
+  sourceNodeIDs: z.array(z.string().min(1)).optional(),
+  sourceTextPrompts: z.array(z.string().trim().min(1)).optional(),
+  sourceImageAssetID: z.string().min(1).optional(),
+  sourceImageAssetIDs: z.array(z.string().min(1)).optional(),
+  sourceImagePath: z.string().min(1).optional(),
+  sourceImagePaths: z.array(z.string().min(1)).optional(),
 })
 export type CreateCinemaImageGenerationBody = z.infer<typeof CreateCinemaImageGenerationBodySchema>
 
@@ -405,6 +419,20 @@ export const CinemaImageGenerationResultSchema = z.object({
   })),
 })
 export type CinemaImageGenerationResult = z.infer<typeof CinemaImageGenerationResultSchema>
+
+export const CreateCinemaImportedImageAssetBodySchema = z.object({
+  fileName: z.string().trim().min(1).max(240),
+  mimeType: z.string().trim().min(1).max(120).optional(),
+  dataBase64: z.string().min(1),
+})
+export type CreateCinemaImportedImageAssetBody = z.infer<typeof CreateCinemaImportedImageAssetBodySchema>
+
+export const CinemaImportedImageAssetResultSchema = z.object({
+  asset: CinemaGeneratedAssetSchema.extend({
+    kind: z.literal("image"),
+  }),
+})
+export type CinemaImportedImageAssetResult = z.infer<typeof CinemaImportedImageAssetResultSchema>
 
 export const CinemaProjectSummarySchema = z.object({
   projectID: z.string().min(1),

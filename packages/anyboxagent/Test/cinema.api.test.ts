@@ -10,7 +10,7 @@ import {
   setCinemaVideoProviderAdapterForTest,
   setCinemaVideoProviderCatalogForTest,
 } from "#server/usecases/cinema.ts"
-import { testDeepSeekModel, type PublicModel } from "#provider/provider.ts"
+import { testDeepSeekModel, type Model, type PublicModel } from "#provider/provider.ts"
 import { Instance } from "#project/instance.ts"
 
 interface JsonEnvelope<T = unknown> {
@@ -126,6 +126,18 @@ interface CinemaProjectDirectoryListing {
   truncated: boolean
 }
 
+interface CinemaImportedImageAssetResult {
+  asset: {
+    id: string
+    kind: "image"
+    path: string
+    mimeType?: string
+    sizeBytes?: number
+    width?: number
+    height?: number
+  }
+}
+
 interface CinemaVideoProvider {
   manifest: {
     id: string
@@ -153,6 +165,7 @@ interface CinemaVideoProvider {
     baseURLSource?: "settings" | "environment" | "default"
     adapterAvailable?: boolean
     adapterID?: string
+    supportedModes?: string[]
   }
 }
 
@@ -321,6 +334,29 @@ const TEST_IMAGE_PROVIDER_CATALOG = {
   },
 }
 
+const TEST_IMAGE_INPUT_PROVIDER_CATALOG = {
+  mockimageinput: {
+    id: "mockimageinput",
+    name: "Mock Image Input Provider",
+    kind: "native",
+    regions: ["global"],
+    models: {
+      "mock-image-input": {
+        id: "mock-image-input",
+        name: "Mock Image Input",
+        family: "Mock Image",
+        endpoint_type: "async_polling",
+        modalities: {
+          input: ["text", "image"],
+          output: ["image"],
+        },
+        modes: ["text-to-image"],
+        pricing: [],
+      },
+    },
+  },
+}
+
 const TEST_DUPLICATE_ID_IMAGE_PROVIDER_CATALOG = {
   duplicate: {
     id: "duplicate",
@@ -405,6 +441,7 @@ interface CinemaTextModel {
   label: string
   providerLabel: string
   available: boolean
+  supportsImageInput: boolean
 }
 
 interface CinemaTextModelsResult {
@@ -430,6 +467,7 @@ interface CinemaImageModel {
   label: string
   providerLabel: string
   available: boolean
+  supportsImageInput: boolean
 }
 
 interface CinemaImageModelsResult {
@@ -481,8 +519,8 @@ async function createProject(app: ReturnType<typeof createServerApp>, directory:
   return body.data!
 }
 
-async function clearKlingVideoApiKey(app: ReturnType<typeof createServerApp>) {
-  return await app.request("http://localhost/api/cinema/video-providers/klingai/auth/api-key", {
+async function clearKlingVideoApiKey(app: ReturnType<typeof createServerApp>, providerID = "klingai") {
+  return await app.request(`http://localhost/api/cinema/video-providers/${encodeURIComponent(providerID)}/auth/api-key`, {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -534,6 +572,27 @@ function createPublicTextModel(): PublicModel {
     ...testDeepSeekModel,
     providerName: "DeepSeek",
     available: true,
+  }
+}
+
+function createPublicVisionTextModel(): Model & PublicModel {
+  return {
+    ...testDeepSeekModel,
+    id: "deepseek-vision",
+    name: "DeepSeek Vision",
+    providerName: "DeepSeek",
+    available: true,
+    capabilities: {
+      ...testDeepSeekModel.capabilities,
+      input: {
+        ...testDeepSeekModel.capabilities.input,
+        image: true,
+      },
+      output: {
+        ...testDeepSeekModel.capabilities.output,
+        text: true,
+      },
+    },
   }
 }
 
@@ -951,6 +1010,7 @@ describe("cinema api", () => {
           label: "DeepSeek Chat",
           providerLabel: "DeepSeek",
           available: true,
+          supportsImageInput: false,
         },
       ])
       expect(modelsBody.data?.effectiveModel?.value).toBe("deepseek/deepseek-chat")
@@ -1119,6 +1179,75 @@ describe("cinema api", () => {
     }
   })
 
+  test("generates text with a source image when the text model supports image input", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    const publicTextModel = createPublicVisionTextModel()
+    let seenInput: any = null
+    const restoreTextRuntime = setCinemaTextRuntimeDependenciesForTest({
+      listModels: async () => [publicTextModel],
+      resolveSelection: async () => ({
+        model: "deepseek/deepseek-vision",
+        small_model: undefined,
+        image_model: undefined,
+        reasoning_effort: undefined,
+      }),
+      resolveEffectiveModel: async () => publicTextModel,
+      getModel: async () => publicTextModel,
+      getLanguage: async (model) => model as never,
+      getGenerateText: async () => (async (input: any) => {
+        seenInput = input
+        return { text: "Image-aware line." } as any
+      }) as never,
+    })
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root)
+      await mkdir(join(root, "assets"), { recursive: true })
+      await writeFile(
+        join(root, "assets", "reference.png"),
+        Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lwJ0XwAAAABJRU5ErkJggg==", "base64"),
+      )
+      await writeFile(
+        join(root, "assets", "reference-2.png"),
+        Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lwJ0XwAAAABJRU5ErkJggg==", "base64"),
+      )
+
+      const modelsResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/text-models`)
+      const modelsBody = await readJson<CinemaTextModelsResult>(modelsResponse)
+      expect(modelsBody.data?.items[0]?.supportsImageInput).toBe(true)
+
+      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/text-generations`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          nodeID: "story-brief",
+          prompt: "Describe the image.",
+          model: "deepseek/deepseek-vision",
+          sourceImageAssetID: "reference",
+          sourceImageAssetIDs: ["reference", "reference-2"],
+          sourceImagePath: "assets/reference.png",
+          sourceImagePaths: ["assets/reference.png", "assets/reference-2.png"],
+          writeMode: "append",
+        }),
+      })
+      const body = await readJson<CinemaTextGenerationResult>(response)
+
+      expect(response.status).toBe(200)
+      expect(body.data?.generatedText).toBe("Image-aware line.")
+      expect(seenInput?.prompt).toBeUndefined()
+      expect(seenInput?.messages?.[0]?.content?.[0]?.type).toBe("text")
+      expect(seenInput?.messages?.[0]?.content?.[1]?.type).toBe("image")
+      expect(seenInput?.messages?.[0]?.content?.[1]?.mediaType).toBe("image/png")
+      expect(seenInput?.messages?.[0]?.content?.[2]?.type).toBe("image")
+      expect(seenInput?.messages?.[0]?.content?.[2]?.mediaType).toBe("image/png")
+    } finally {
+      restoreTextRuntime()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   test("rejects text generation when no text model is available", async () => {
     const app = createServerApp()
     const root = await createTempProjectRoot()
@@ -1183,6 +1312,7 @@ describe("cinema api", () => {
           label: "Mock Image",
           providerLabel: "Mock Image Provider",
           available: true,
+          supportsImageInput: false,
         },
       ])
       expect(modelsBody.data?.selection?.image_model).toBeNull()
@@ -1291,6 +1421,157 @@ describe("cinema api", () => {
     }
   })
 
+  test("creates image generation tasks with source images when the image model supports image input", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    const restoreCatalog = setCinemaVideoProviderCatalogForTest(TEST_IMAGE_INPUT_PROVIDER_CATALOG)
+    let seenTask: CinemaGenerationTask | null = null
+    const restoreImageRuntime = setCinemaImageRuntimeDependenciesForTest({
+      getImageGenerationSettings: async () => ({
+        default_size: "512x512",
+        default_count: 1,
+      }),
+    })
+    const restoreImageAdapter = setCinemaVideoProviderAdapterForTest("mockimageinput", {
+      manifest: {} as never,
+      supportedModes: ["text-to-image"],
+      createTask: async ({ task }) => {
+        seenTask = task
+        return {
+          ...task,
+          status: "queued" as const,
+          updatedAt: "2026-07-05T00:00:00.000Z",
+          providerTaskRef: {
+            providerID: "mockimageinput",
+            taskID: "mock-image-input-task-1",
+            kind: "image-generation",
+          },
+        }
+      },
+      refreshTask: async ({ task }) => task,
+    })
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root, createCanvasWithImageNode())
+      await mkdir(join(root, "assets"), { recursive: true })
+      await writeFile(join(root, "assets", "reference.png"), tinyPngBytes())
+      await writeFile(join(root, "assets", "reference-2.png"), tinyPngBytes())
+
+      const modelsResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/image-models`)
+      const modelsBody = await readJson<CinemaImageModelsResult>(modelsResponse)
+      expect(modelsResponse.status).toBe(200)
+      expect(modelsBody.data?.items[0]).toMatchObject({
+        value: "mockimageinput/mock-image-input",
+        supportsImageInput: true,
+      })
+
+      const generateResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/image-generations`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          nodeID: "image-gen",
+          prompt: "Storyboard note.\n\nUse the reference image.",
+          userPrompt: "Use the reference image.",
+          model: "mockimageinput/mock-image-input",
+          sourceNodeIDs: ["text-param", "image-ref-node"],
+          sourceTextPrompts: ["Storyboard note."],
+          sourceImageAssetID: "reference",
+          sourceImageAssetIDs: ["reference", "reference-2"],
+          sourceImagePath: "assets/reference.png",
+          sourceImagePaths: ["assets/reference.png", "assets/reference-2.png"],
+        }),
+      })
+      const generateBody = await readJson<CinemaImageGenerationResult>(generateResponse)
+
+      expect(generateResponse.status).toBe(200)
+      const capturedTask = seenTask as CinemaGenerationTask | null
+      expect(capturedTask?.input.prompt).toBe("Storyboard note.\n\nUse the reference image.")
+      expect(capturedTask?.input.sourceNodeIDs).toEqual(["text-param", "image-ref-node"])
+      expect(capturedTask?.input.parameters).toMatchObject({
+        userPrompt: "Use the reference image.",
+        sourceTextPrompts: ["Storyboard note."],
+        sourceImageAssetID: "reference",
+        sourceImageAssetIDs: ["reference", "reference-2"],
+        sourceImagePath: "assets/reference.png",
+        sourceImagePaths: ["assets/reference.png", "assets/reference-2.png"],
+      })
+
+      const task = JSON.parse(await readFile(join(root, ".anybox-cinema", "tasks", `${generateBody.data!.taskID}.json`), "utf8")) as CinemaGenerationTask
+      expect(task.input.prompt).toBe("Storyboard note.\n\nUse the reference image.")
+      expect(task.input.sourceNodeIDs).toEqual(["text-param", "image-ref-node"])
+      expect(task.input.parameters).toMatchObject({
+        userPrompt: "Use the reference image.",
+        sourceTextPrompts: ["Storyboard note."],
+        sourceImageAssetID: "reference",
+        sourceImageAssetIDs: ["reference", "reference-2"],
+        sourceImagePath: "assets/reference.png",
+        sourceImagePaths: ["assets/reference.png", "assets/reference-2.png"],
+      })
+
+      const imageNode = generateBody.data?.canvas.nodes.find((node) => node.id === "image-gen")
+      expect(imageNode?.data).toMatchObject({
+        prompt: "Use the reference image.",
+        sourceNodeIDs: ["text-param", "image-ref-node"],
+        sourceTextPrompts: ["Storyboard note."],
+        sourceImageAssetID: "reference",
+        sourceImageAssetIDs: ["reference", "reference-2"],
+        sourceImagePath: "assets/reference.png",
+        sourceImagePaths: ["assets/reference.png", "assets/reference-2.png"],
+      })
+    } finally {
+      restoreImageAdapter()
+      restoreImageRuntime()
+      restoreCatalog()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects image generation source images when the image model does not support image input", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    const restoreCatalog = setCinemaVideoProviderCatalogForTest(TEST_IMAGE_PROVIDER_CATALOG)
+    const restoreImageRuntime = setCinemaImageRuntimeDependenciesForTest({
+      getImageGenerationSettings: async () => ({
+        default_size: "512x512",
+        default_count: 1,
+      }),
+    })
+    const restoreImageAdapter = setCinemaVideoProviderAdapterForTest("mockimage", {
+      manifest: {} as never,
+      supportedModes: ["text-to-image"],
+      createTask: async ({ task }) => task,
+      refreshTask: async ({ task }) => task,
+    })
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root, createCanvasWithImageNode())
+      await mkdir(join(root, "assets"), { recursive: true })
+      await writeFile(join(root, "assets", "reference.png"), tinyPngBytes())
+
+      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/image-generations`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          nodeID: "image-gen",
+          prompt: "Use the reference image.",
+          model: "mockimage/mock-image",
+          sourceImagePath: "assets/reference.png",
+        }),
+      })
+      const body = await readJson(response)
+
+      expect(response.status).toBe(400)
+      expect(body.error?.code).toBe("CINEMA_IMAGE_MODEL_IMAGE_INPUT_NOT_CAPABLE")
+    } finally {
+      restoreImageAdapter()
+      restoreImageRuntime()
+      restoreCatalog()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   test("resolves text-to-image models when catalog entries share a provider model id", async () => {
     const app = createServerApp()
     const root = await createTempProjectRoot()
@@ -1333,6 +1614,7 @@ describe("cinema api", () => {
           label: "Shared Image",
           providerLabel: "Duplicate ID Provider",
           available: true,
+          supportsImageInput: false,
         },
       ])
 
@@ -1689,6 +1971,64 @@ describe("cinema api", () => {
     }
   })
 
+  test("imports image assets into the project for canvas previews", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root)
+      const imageBytes = tinyPngBytes()
+
+      const importResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/assets/imports`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          fileName: "Logo Mark.png",
+          mimeType: "image/png",
+          dataBase64: Buffer.from(imageBytes).toString("base64"),
+        }),
+      })
+      const importBody = await readJson<CinemaImportedImageAssetResult>(importResponse)
+
+      expect(importResponse.status).toBe(200)
+      expect(importBody.data?.asset).toMatchObject({
+        kind: "image",
+        mimeType: "image/png",
+        sizeBytes: imageBytes.byteLength,
+        width: 1,
+        height: 1,
+      })
+      expect(importBody.data?.asset.path).toMatch(/^assets\/imported\/Logo-Mark-import-.+\.png$/)
+
+      const importedFile = await readFile(join(root, ...(importBody.data?.asset.path.split("/") ?? [])))
+      expect(Array.from(importedFile)).toEqual(Array.from(imageBytes))
+
+      const previewResponse = await app.request(
+        `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/assets/${encodeAssetPath(importBody.data!.asset.path)}`,
+      )
+      const previewBytes = new Uint8Array(await previewResponse.arrayBuffer())
+      expect(previewResponse.status).toBe(200)
+      expect(previewResponse.headers.get("content-type")).toBe("image/png")
+      expect(Array.from(previewBytes)).toEqual(Array.from(imageBytes))
+
+      const invalidResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/assets/imports`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          fileName: "note.txt",
+          mimeType: "text/plain",
+          dataBase64: Buffer.from("not an image", "utf8").toString("base64"),
+        }),
+      })
+      const invalidBody = await readJson(invalidResponse)
+      expect(invalidResponse.status).toBe(415)
+      expect(invalidBody.error?.code).toBe("CINEMA_IMAGE_MIME_UNSUPPORTED")
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   test("returns a clear error when the text model runtime fails", async () => {
     const app = createServerApp()
     const root = await createTempProjectRoot()
@@ -1814,6 +2154,7 @@ describe("cinema api", () => {
     const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest(TEST_VIDEO_PROVIDER_CATALOG)
     const restoreVideoAdapter = setCinemaVideoProviderAdapterForTest("klingai", {
       manifest: {} as never,
+      supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "text-to-image"],
       createTask: async ({ task }) => task,
       refreshTask: async ({ task }) => task,
     })
@@ -1832,7 +2173,7 @@ describe("cinema api", () => {
         id: "kling-v3",
         label: "Kling 3.0",
         baseModel: "kuaishou/kling-3.0",
-        modes: ["text-to-video", "image-to-video", "reference-to-video", "motion-control", "edit"],
+        modes: ["text-to-video", "image-to-video", "frames-to-video", "reference-to-video", "motion-control", "edit"],
       })
       expect(globalProvidersBody.data?.find((provider) => provider.manifest.id === "klingai")?.manifest.models[1]).toMatchObject({
         id: "kling-image-v3",
@@ -1849,6 +2190,7 @@ describe("cinema api", () => {
         baseURLSource: "default",
         adapterAvailable: true,
         adapterID: "klingai",
+        supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "text-to-image"],
       })
       expect(globalProvidersBody.data?.find((provider) => provider.manifest.id === "fal")?.runtime?.adapterAvailable).toBe(false)
 
@@ -1875,6 +2217,7 @@ describe("cinema api", () => {
         baseURLSource: "settings",
         adapterAvailable: true,
         adapterID: "klingai",
+        supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "text-to-image"],
       })
 
       const invalidSettingsResponse = await app.request("http://localhost/api/cinema/video-providers/klingai/settings", {
@@ -1921,6 +2264,7 @@ describe("cinema api", () => {
         baseURLSource: "default",
         adapterAvailable: true,
         adapterID: "klingai",
+        supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "text-to-image"],
       })
 
       const klingAuthResponse = await app.request("http://localhost/api/cinema/video-providers/klingai/auth/api-key")
@@ -1939,6 +2283,117 @@ describe("cinema api", () => {
       restoreVideoAdapter()
       restoreVideoCatalog()
       await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("exposes split KlingAI catalog providers with runtime adapters", async () => {
+    const app = createServerApp()
+    const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest({
+      "klingai-cn": {
+        ...TEST_VIDEO_PROVIDER_CATALOG.klingai,
+        id: "klingai-cn",
+        name: "KlingAI China",
+        regions: ["cn"],
+        base_url: "https://api-beijing.klingai.com",
+      },
+      "klingai-global": {
+        ...TEST_VIDEO_PROVIDER_CATALOG.klingai,
+        id: "klingai-global",
+        name: "KlingAI Global",
+        regions: ["global"],
+        base_url: "https://api-singapore.klingai.com",
+      },
+    })
+
+    try {
+      const response = await app.request("http://localhost/api/cinema/video-providers")
+      const body = await readJson<CinemaVideoProvider[]>(response)
+
+      expect(response.status).toBe(200)
+      expect(body.data?.map((provider) => provider.manifest.id)).toEqual(["klingai-cn", "klingai-global"])
+      expect(body.data?.find((provider) => provider.manifest.id === "klingai-cn")?.runtime).toMatchObject({
+        baseURL: "https://api-beijing.klingai.com",
+        baseURLSource: "default",
+        adapterAvailable: true,
+        adapterID: "klingai-cn",
+        supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "text-to-image"],
+      })
+      expect(body.data?.find((provider) => provider.manifest.id === "klingai-global")?.runtime).toMatchObject({
+        baseURL: "https://api-singapore.klingai.com",
+        baseURLSource: "default",
+        adapterAvailable: true,
+        adapterID: "klingai-global",
+        supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "text-to-image"],
+      })
+    } finally {
+      restoreVideoCatalog()
+    }
+  })
+
+  test("exposes reference-to-video runtime support when the adapter declares it", async () => {
+    const app = createServerApp()
+    const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest(TEST_VIDEO_PROVIDER_CATALOG)
+    const restoreVideoAdapter = setCinemaVideoProviderAdapterForTest("klingai", {
+      manifest: {} as never,
+      supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "reference-to-video", "text-to-image"],
+      createTask: async ({ task }) => task,
+      refreshTask: async ({ task }) => task,
+    })
+
+    try {
+      const response = await app.request("http://localhost/api/cinema/video-providers")
+      const body = await readJson<CinemaVideoProvider[]>(response)
+      const provider = body.data?.find((item) => item.manifest.id === "klingai")
+
+      expect(response.status).toBe(200)
+      expect(provider?.manifest.models.find((model) => model.id === "kling-v3")?.modes).toContain("reference-to-video")
+      expect(provider?.runtime).toMatchObject({
+        adapterAvailable: true,
+        adapterID: "klingai",
+        supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "reference-to-video", "text-to-image"],
+      })
+    } finally {
+      restoreVideoAdapter()
+      restoreVideoCatalog()
+    }
+  })
+
+  test("uses legacy KlingAI credentials for split catalog providers", async () => {
+    const app = createServerApp()
+    const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest({
+      ...TEST_VIDEO_PROVIDER_CATALOG,
+      "klingai-cn": {
+        ...TEST_VIDEO_PROVIDER_CATALOG.klingai,
+        id: "klingai-cn",
+        name: "KlingAI China",
+        regions: ["cn"],
+        base_url: "https://api-beijing.klingai.com",
+      },
+    })
+
+    try {
+      const savedKeyResponse = await app.request("http://localhost/api/cinema/video-providers/klingai/auth/api-key", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          apiKey: "legacy-kling-key",
+        }),
+      })
+      expect(savedKeyResponse.status).toBe(200)
+
+      const authResponse = await app.request("http://localhost/api/cinema/video-providers/klingai-cn/auth/api-key")
+      const authBody = await readJson<CinemaVideoProvider["auth"]>(authResponse)
+
+      expect(authResponse.status).toBe(200)
+      expect(authBody.data).toMatchObject({
+        providerID: "klingai-cn",
+        credentialProviderID: "cinema-klingai",
+        connected: true,
+        status: "connected",
+      })
+    } finally {
+      await clearKlingVideoApiKey(app)
+      restoreVideoCatalog()
     }
   })
 
@@ -2115,6 +2570,99 @@ describe("cinema api", () => {
     }
   })
 
+  test("carries reference image parameters for reference-to-video generation tasks", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    let capturedParameters: Record<string, unknown> | undefined
+    const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest(TEST_VIDEO_PROVIDER_CATALOG)
+    const restoreVideoAdapter = setCinemaVideoProviderAdapterForTest("klingai", {
+      manifest: {} as never,
+      supportedModes: ["reference-to-video"],
+      createTask: async ({ task }) => {
+        capturedParameters = task.input.parameters
+        return task
+      },
+      refreshTask: async ({ task }) => task,
+    })
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root, createCanvasWithVideoNode())
+
+      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerID: "klingai",
+          modelID: "kling-v3",
+          mode: "reference-to-video",
+          prompt: "Use the reference images for the subject and scene.",
+          taskNodeID: "video-gen",
+          parameters: {
+            aspectRatio: "16:9",
+            duration: 5,
+            resolution: "720p",
+            inputSlots: [
+              {
+                slot: "referenceImage",
+                nodeID: "image-a",
+                edgeID: "edge-image-a-video-gen",
+                assetID: "reference-a",
+                path: "assets/reference-a.png",
+              },
+              {
+                slot: "referenceImage",
+                nodeID: "image-b",
+                edgeID: "edge-image-b-video-gen",
+                assetID: "reference-b",
+                path: "assets/reference-b.png",
+              },
+            ],
+            referenceImageAssetID: "reference-a",
+            referenceImageAssetIDs: ["reference-a", "reference-b"],
+            referenceImagePath: "assets/reference-a.png",
+            referenceImagePaths: ["assets/reference-a.png", "assets/reference-b.png"],
+            sourceImageAssetID: "legacy-source",
+            sourceImagePath: "assets/source.png",
+          },
+        }),
+      })
+      const body = await readJson<CinemaGenerationTask>(response)
+
+      expect(response.status).toBe(200)
+      expect(body.data?.mode).toBe("reference-to-video")
+      expect(capturedParameters).toMatchObject({
+        referenceImageAssetID: "reference-a",
+        referenceImageAssetIDs: ["reference-a", "reference-b"],
+        referenceImagePath: "assets/reference-a.png",
+        referenceImagePaths: ["assets/reference-a.png", "assets/reference-b.png"],
+        sourceImageAssetID: "legacy-source",
+        sourceImagePath: "assets/source.png",
+      })
+      expect(capturedParameters?.inputSlots).toEqual([
+        {
+          slot: "referenceImage",
+          nodeID: "image-a",
+          edgeID: "edge-image-a-video-gen",
+          assetID: "reference-a",
+          path: "assets/reference-a.png",
+        },
+        {
+          slot: "referenceImage",
+          nodeID: "image-b",
+          edgeID: "edge-image-b-video-gen",
+          assetID: "reference-b",
+          path: "assets/reference-b.png",
+        },
+      ])
+      expect(body.data?.input.parameters).toEqual(capturedParameters)
+    } finally {
+      restoreVideoAdapter()
+      restoreVideoCatalog()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   test("keeps legacy generation task output node behavior when no task node is provided", async () => {
     const app = createServerApp()
     const root = await createTempProjectRoot()
@@ -2177,6 +2725,7 @@ describe("cinema api", () => {
     process.env.CINEMA_CALLBACK_BASE_URL = "https://cinema-callback.example.test/"
     let createRequestBody: Record<string, unknown> | undefined
     let createAuthorization = ""
+    const providerID = "klingai-cn"
     let server: ReturnType<typeof Bun.serve> | undefined
     server = Bun.serve({
       port: 0,
@@ -2226,8 +2775,10 @@ describe("cinema api", () => {
     })
     const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest({
       ...TEST_VIDEO_PROVIDER_CATALOG,
-      klingai: {
+      [providerID]: {
         ...TEST_VIDEO_PROVIDER_CATALOG.klingai,
+        id: providerID,
+        name: "KlingAI China",
         base_url: server.url.toString().replace(/\/$/, ""),
       },
     })
@@ -2235,7 +2786,7 @@ describe("cinema api", () => {
     try {
       const project = await createProject(app, root)
       await initializeCinemaProject(root, createCanvasWithVideoNode())
-      const keyResponse = await app.request("http://localhost/api/cinema/video-providers/klingai/auth/api-key", {
+      const keyResponse = await app.request(`http://localhost/api/cinema/video-providers/${encodeURIComponent(providerID)}/auth/api-key`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -2248,7 +2799,7 @@ describe("cinema api", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          providerID: "klingai",
+          providerID,
           modelID: "kling-v3",
           mode: "text-to-video",
           prompt: "A tiny cinematic cat.",
@@ -2265,14 +2816,14 @@ describe("cinema api", () => {
       expect(createResponse.status).toBe(200)
       expect(createBody.data?.status).toBe("queued")
       expect(createBody.data?.providerTaskRef).toMatchObject({
-        providerID: "klingai",
+        providerID,
         taskID: "kling-task-1",
         kind: "text2video",
       })
       const callbackRef = createBody.data?.providerTaskRef?.callback as Record<string, unknown> | undefined
       expect(typeof callbackRef?.token).toBe("string")
       expect(String(callbackRef?.url ?? "")).toContain(
-        `/api/cinema/projects/${encodeURIComponent(project.id)}/provider-callbacks/klingai/${encodeURIComponent(createBody.data!.id)}/`,
+        `/api/cinema/projects/${encodeURIComponent(project.id)}/provider-callbacks/${providerID}/${encodeURIComponent(createBody.data!.id)}/`,
       )
       expect(createRequestBody?.callback_url).toBe(callbackRef?.url)
       expect(createAuthorization).toMatch(/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/)
@@ -2321,7 +2872,161 @@ describe("cinema api", () => {
       } else {
         process.env.CINEMA_CALLBACK_BASE_URL = previousCallbackBaseURL
       }
-      await clearKlingVideoApiKey(app)
+      await clearKlingVideoApiKey(app, providerID)
+      restoreVideoCatalog()
+      server.stop(true)
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("runs KlingAI adapter for start and end frame video", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    let createRequestBody: Record<string, unknown> | undefined
+    const providerID = "klingai-cn"
+    const server = Bun.serve({
+      port: 0,
+      async fetch(request) {
+        const url = new URL(request.url)
+        if (url.pathname === "/v1/videos/image2video" && request.method === "POST") {
+          createRequestBody = await request.json() as Record<string, unknown>
+          return Response.json({
+            code: 0,
+            data: {
+              task_id: "kling-frame-task-1",
+              task_status: "submitted",
+            },
+          })
+        }
+
+        return new Response("Not found", { status: 404 })
+      },
+    })
+    const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest({
+      ...TEST_VIDEO_PROVIDER_CATALOG,
+      [providerID]: {
+        ...TEST_VIDEO_PROVIDER_CATALOG.klingai,
+        id: providerID,
+        name: "KlingAI China",
+        base_url: server.url.toString().replace(/\/$/, ""),
+      },
+    })
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root, createCanvasWithVideoNode())
+      await mkdir(join(root, "assets"), { recursive: true })
+      await writeFile(join(root, "assets", "start.png"), tinyPngBytes())
+      await writeFile(join(root, "assets", "end.png"), tinyPngBytes())
+      const expectedImage = Buffer.from(tinyPngBytes()).toString("base64")
+      const keyResponse = await app.request(`http://localhost/api/cinema/video-providers/${encodeURIComponent(providerID)}/auth/api-key`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          apiKey: "Access Key ID: unit-ak\nAccess Key Secret: unit-sk",
+        }),
+      })
+      expect(keyResponse.status).toBe(200)
+
+      const createResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerID,
+          modelID: "kling-v3",
+          mode: "frames-to-video",
+          prompt: "Move from morning to night.",
+          taskNodeID: "video-gen",
+          parameters: {
+            aspectRatio: "16:9",
+            duration: 5,
+            resolution: "720p",
+            startFramePath: "assets/start.png",
+            endFramePath: "assets/end.png",
+          },
+        }),
+      })
+      const createBody = await readJson<CinemaGenerationTask>(createResponse)
+
+      expect(createResponse.status).toBe(200)
+      expect(createBody.data?.providerTaskRef).toMatchObject({
+        providerID,
+        taskID: "kling-frame-task-1",
+        kind: "image2video",
+      })
+      expect(createRequestBody).toMatchObject({
+        model_name: "kling-v3",
+        prompt: "Move from morning to night.",
+        aspect_ratio: "16:9",
+        duration: "5",
+        mode: "std",
+        image: expectedImage,
+        image_tail: expectedImage,
+        external_task_id: createBody.data?.id,
+      })
+    } finally {
+      await clearKlingVideoApiKey(app, providerID)
+      restoreVideoCatalog()
+      server.stop(true)
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects KlingAI reference-to-video without falling back to text2video", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    const requests: Array<{ method: string; pathname: string }> = []
+    const providerID = "klingai-cn"
+    const server = Bun.serve({
+      port: 0,
+      async fetch(request) {
+        const url = new URL(request.url)
+        requests.push({ method: request.method, pathname: url.pathname })
+        return Response.json({
+          code: 0,
+          data: {
+            task_id: "unexpected-kling-task",
+            task_status: "submitted",
+          },
+        })
+      },
+    })
+    const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest({
+      ...TEST_VIDEO_PROVIDER_CATALOG,
+      [providerID]: {
+        ...TEST_VIDEO_PROVIDER_CATALOG.klingai,
+        id: providerID,
+        name: "KlingAI China",
+        base_url: server.url.toString().replace(/\/$/, ""),
+      },
+    })
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root, createCanvasWithVideoNode())
+
+      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerID,
+          modelID: "kling-v3",
+          mode: "reference-to-video",
+          prompt: "Use two reference images.",
+          taskNodeID: "video-gen",
+          parameters: {
+            referenceImageAssetIDs: ["reference-a", "reference-b"],
+            referenceImagePaths: ["assets/reference-a.png", "assets/reference-b.png"],
+          },
+        }),
+      })
+      const body = await readJson(response)
+
+      expect(response.status).toBe(400)
+      expect(body.error?.code).toBe("CINEMA_PROVIDER_MODE_UNSUPPORTED")
+      expect(requests).toEqual([])
+    } finally {
+      await clearKlingVideoApiKey(app, providerID)
       restoreVideoCatalog()
       server.stop(true)
       await rm(root, { recursive: true, force: true })

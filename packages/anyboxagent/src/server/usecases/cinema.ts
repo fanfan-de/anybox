@@ -8,6 +8,7 @@ import {
   CinemaProjectEventSchema,
   type CinemaGeneratedAsset,
   type CinemaImageGenerationResult,
+  type CinemaImportedImageAssetResult,
   type CinemaImageModel,
   type CinemaImageModelsResult,
   type CinemaProjectDirectoryEntry,
@@ -30,6 +31,7 @@ import {
   type CinemaProjectStateSummary,
   type CreateCinemaGenerationTaskBody,
   type CreateCinemaImageGenerationBody,
+  type CreateCinemaImportedImageAssetBody,
   type CreateCinemaTextGenerationBody,
 } from "@anybox/shared/cinema"
 import { isSshWorkspaceUri } from "@anybox/shared"
@@ -467,6 +469,7 @@ function toCinemaTextModel(model: PublicModel): CinemaTextModel {
     label: model.name,
     providerLabel: model.providerName?.trim() || formatProviderLabel(model.providerID),
     available: model.available,
+    supportsImageInput: model.capabilities.input.image,
   }
 }
 
@@ -478,11 +481,17 @@ function toCinemaImageModel(model: PublicModel): CinemaImageModel {
     label: model.name,
     providerLabel: model.providerName?.trim() || formatProviderLabel(model.providerID),
     available: model.available,
+    supportsImageInput: model.capabilities.input.image,
   }
 }
 
 type CinemaGenerationProvider = Awaited<ReturnType<typeof CinemaProviderRuntime.listCinemaVideoProviders>>[number]
 type CinemaGenerationProviderModel = CinemaGenerationProvider["manifest"]["models"][number]
+
+function cinemaProviderModelSupportsImageInput(model: CinemaGenerationProviderModel) {
+  const modalities = model.modalities?.input.map((item) => item.trim().toLowerCase()) ?? []
+  return modalities.includes("image") || model.modes.some((mode) => mode === "image-to-image" || mode === "image-edit")
+}
 
 function toCinemaProviderImageModel(provider: CinemaGenerationProvider, model: CinemaGenerationProviderModel): CinemaImageModel {
   return {
@@ -492,6 +501,7 @@ function toCinemaProviderImageModel(provider: CinemaGenerationProvider, model: C
     label: model.label,
     providerLabel: provider.manifest.name,
     available: true,
+    supportsImageInput: cinemaProviderModelSupportsImageInput(model),
   }
 }
 
@@ -618,6 +628,18 @@ function previewAssetMaxBytesForMime(mimeType: string) {
   return mimeType.startsWith("video/") ? CINEMA_PROJECT_VIDEO_ASSET_MAX_BYTES : CINEMA_PROJECT_IMAGE_ASSET_MAX_BYTES
 }
 
+function safeImportedImageBaseName(fileName: string) {
+  const extension = path.extname(fileName)
+  const base = path.basename(fileName, extension)
+  return base
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 72)
+    || "image"
+}
+
 function parseCinemaProjectAssetRange(rangeHeader: string | null | undefined, sizeBytes: number): CinemaProjectAssetRange | null {
   const header = rangeHeader?.trim()
   if (!header) return null
@@ -692,6 +714,77 @@ function appendGeneratedText(currentText: string, generatedText: string) {
   const trimmedCurrent = currentText.trim()
   if (!trimmedCurrent) return trimmedGenerated
   return `${trimmedCurrent}\n\n${trimmedGenerated}`
+}
+
+async function readCinemaTextGenerationSourceImage(root: string, sourceImagePath: string) {
+  return await readCinemaSourceImage(root, sourceImagePath, {
+    unsupportedCode: "CINEMA_TEXT_SOURCE_IMAGE_UNSUPPORTED",
+    notFoundCode: "CINEMA_TEXT_SOURCE_IMAGE_NOT_FOUND",
+    tooLargeCode: "CINEMA_TEXT_SOURCE_IMAGE_TOO_LARGE",
+    unsupportedMessage: "Text generation source image must be a supported project image asset.",
+    notFoundMessage: "Text generation source image was not found.",
+    notFileMessage: "Text generation source image must be a file.",
+    tooLargeMessage: "Text generation source image is too large.",
+  })
+}
+
+async function readCinemaImageGenerationSourceImage(root: string, sourceImagePath: string) {
+  return await readCinemaSourceImage(root, sourceImagePath, {
+    unsupportedCode: "CINEMA_IMAGE_SOURCE_IMAGE_UNSUPPORTED",
+    notFoundCode: "CINEMA_IMAGE_SOURCE_IMAGE_NOT_FOUND",
+    tooLargeCode: "CINEMA_IMAGE_SOURCE_IMAGE_TOO_LARGE",
+    unsupportedMessage: "Image generation source image must be a supported project image asset.",
+    notFoundMessage: "Image generation source image was not found.",
+    notFileMessage: "Image generation source image must be a file.",
+    tooLargeMessage: "Image generation source image is too large.",
+  })
+}
+
+async function readCinemaSourceImage(root: string, sourceImagePath: string, messages: {
+  unsupportedCode: string
+  notFoundCode: string
+  tooLargeCode: string
+  unsupportedMessage: string
+  notFoundMessage: string
+  notFileMessage: string
+  tooLargeMessage: string
+}) {
+  const filePath = resolveProjectRelativeFile(root, sourceImagePath)
+  const mimeType = imageMimeForPath(filePath)
+  if (!mimeType || !isSupportedImageMime(mimeType)) {
+    throw new ApiError(415, messages.unsupportedCode, messages.unsupportedMessage)
+  }
+
+  const fileStat = await stat(filePath).catch((error: unknown) => {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      throw new ApiError(404, messages.notFoundCode, messages.notFoundMessage)
+    }
+    throw error
+  })
+  if (!fileStat.isFile()) {
+    throw new ApiError(415, messages.unsupportedCode, messages.notFileMessage)
+  }
+  if (fileStat.size > CINEMA_PROJECT_IMAGE_ASSET_MAX_BYTES) {
+    throw new ApiError(413, messages.tooLargeCode, messages.tooLargeMessage)
+  }
+
+  return {
+    data: await readFile(filePath),
+    mediaType: mimeType,
+    path: projectRelativePath(root, filePath),
+  }
+}
+
+function uniqueNonEmptyStrings(values: Array<string | undefined>) {
+  const result: string[] = []
+  const seen = new Set<string>()
+  for (const value of values) {
+    const item = value?.trim()
+    if (!item || seen.has(item)) continue
+    seen.add(item)
+    result.push(item)
+  }
+  return result
 }
 
 function redactSensitiveErrorText(value: string) {
@@ -1015,9 +1108,10 @@ function imageTaskNodeDataFor(task: CinemaGenerationTask, currentData: Record<st
   const imageAssets = task.outputAssets.filter((asset) => asset.kind === "image")
   const parameters = task.input.parameters
   const progress = task.progress ?? progressForTaskStatus(task.status, task.updatedAt, task.error)
+  const nodePrompt = typeof parameters.userPrompt === "string" ? parameters.userPrompt : task.input.prompt
   const nextData: Record<string, unknown> = {
     ...currentData,
-    prompt: task.input.prompt,
+    prompt: nodePrompt,
     taskID: task.id,
     providerID: task.providerID,
     modelID: task.modelID,
@@ -1031,6 +1125,18 @@ function imageTaskNodeDataFor(task: CinemaGenerationTask, currentData: Record<st
   if (typeof parameters.size === "string") nextData.size = parameters.size
   if (typeof parameters.count === "number" && Number.isFinite(parameters.count)) nextData.count = parameters.count
   if (typeof parameters.style === "string") nextData.style = parameters.style
+  if (Array.isArray(task.input.sourceNodeIDs)) nextData.sourceNodeIDs = task.input.sourceNodeIDs
+  if (Array.isArray(parameters.sourceTextPrompts)) {
+    nextData.sourceTextPrompts = parameters.sourceTextPrompts.filter((item): item is string => typeof item === "string")
+  }
+  if (typeof parameters.sourceImageAssetID === "string") nextData.sourceImageAssetID = parameters.sourceImageAssetID
+  if (Array.isArray(parameters.sourceImageAssetIDs)) {
+    nextData.sourceImageAssetIDs = parameters.sourceImageAssetIDs.filter((item): item is string => typeof item === "string")
+  }
+  if (typeof parameters.sourceImagePath === "string") nextData.sourceImagePath = parameters.sourceImagePath
+  if (Array.isArray(parameters.sourceImagePaths)) {
+    nextData.sourceImagePaths = parameters.sourceImagePaths.filter((item): item is string => typeof item === "string")
+  }
 
   if (imageAssets.length > 0) {
     nextData.resultAssets = imageAssets
@@ -1247,6 +1353,58 @@ export async function listCinemaProjectDirectory(
   })
 }
 
+export async function importCinemaProjectImageAsset(
+  projectID: string,
+  input: CreateCinemaImportedImageAssetBody,
+): Promise<CinemaImportedImageAssetResult> {
+  const { root, cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+
+  const suppliedMimeType = input.mimeType?.split(";")[0]?.trim().toLowerCase()
+  const fallbackMimeType = imageMimeForPath(input.fileName) ?? undefined
+  const mimeType = suppliedMimeType && isSupportedImageMime(suppliedMimeType)
+    ? suppliedMimeType
+    : fallbackMimeType
+  if (!mimeType || !isSupportedImageMime(mimeType)) {
+    throw new ApiError(415, "CINEMA_IMAGE_MIME_UNSUPPORTED", "Only image files can be imported into Cinema.")
+  }
+
+  const dataBase64 = input.dataBase64.trim().startsWith("data:")
+    ? input.dataBase64.trim().slice(input.dataBase64.trim().indexOf(",") + 1)
+    : input.dataBase64.trim()
+  const bytes = Buffer.from(dataBase64, "base64")
+  if (bytes.byteLength === 0) {
+    throw new ApiError(400, "CINEMA_IMAGE_IMPORT_EMPTY", "Imported image was empty.")
+  }
+  if (bytes.byteLength > CINEMA_PROJECT_IMAGE_ASSET_MAX_BYTES) {
+    throw new ApiError(413, "CINEMA_IMAGE_ASSET_TOO_LARGE", "Imported image is too large.")
+  }
+
+  const extension = imageExtensionForMime(mimeType)
+  if (!extension) {
+    throw new ApiError(415, "CINEMA_IMAGE_MIME_UNSUPPORTED", "Only image files can be imported into Cinema.")
+  }
+
+  const importDirectory = path.join(root, "assets", "imported")
+  await mkdir(importDirectory, { recursive: true })
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+  const id = `import-${timestamp}-${randomUUID().slice(0, 8)}`
+  const filePath = path.join(importDirectory, `${safeImportedImageBaseName(input.fileName)}-${id}${extension}`)
+  await writeFile(filePath, bytes)
+
+  return {
+    asset: {
+      id,
+      kind: "image",
+      path: projectRelativePath(root, filePath),
+      mimeType,
+      sizeBytes: bytes.byteLength,
+      ...readImageDimensions(bytes, mimeType),
+    },
+  }
+}
+
 export const listCinemaVideoProviders = CinemaProviderRuntime.listCinemaVideoProviders
 export const refreshCinemaVideoProviderCatalog = CinemaProviderRuntime.refreshCinemaVideoProviderCatalog
 export const getCinemaVideoProvider = CinemaProviderRuntime.getCinemaVideoProvider
@@ -1335,20 +1493,59 @@ export async function createCinemaTextGeneration(
 
   const currentText = typeof node.data?.text === "string" ? node.data.text : ""
   const { model, textModel } = await resolveCinemaTextGenerationModel(projectID, input.model)
+  const sourceImagePaths = uniqueNonEmptyStrings([
+    ...(input.sourceImagePaths ?? []),
+    input.sourceImagePath,
+  ])
+  const sourceImageAssetIDs = uniqueNonEmptyStrings([
+    ...(input.sourceImageAssetIDs ?? []),
+    input.sourceImageAssetID,
+  ])
+  const sourceImages = await Promise.all(
+    sourceImagePaths.map((sourceImagePath) => readCinemaTextGenerationSourceImage(root, sourceImagePath))
+  )
+  if (sourceImages.length > 0 && !model.capabilities.input.image) {
+    throw new ApiError(
+      400,
+      "CINEMA_TEXT_MODEL_IMAGE_INPUT_NOT_CAPABLE",
+      `Model '${textModel.value}' does not support image input.`,
+    )
+  }
+
   const result = await Instance.provide({
     directory: root,
     fn: async () => {
       try {
         const languageModel = await cinemaTextRuntimeDependencies.getLanguage(model, projectID)
         const generateText: GenerateTextFunction = await cinemaTextRuntimeDependencies.getGenerateText()
-        return await generateText({
-          model: languageModel,
-          system: CINEMA_TEXT_GENERATION_SYSTEM_PROMPT,
-          prompt: buildCinemaTextGenerationPrompt({
-            currentText,
-            prompt,
-          }),
+        const generationPrompt = buildCinemaTextGenerationPrompt({
+          currentText,
+          prompt,
         })
+        const request = sourceImages.length > 0
+          ? {
+            model: languageModel,
+            system: CINEMA_TEXT_GENERATION_SYSTEM_PROMPT,
+            messages: [
+              {
+                role: "user" as const,
+                content: [
+                  { type: "text" as const, text: generationPrompt },
+                  ...sourceImages.map((sourceImage) => ({
+                    type: "image" as const,
+                    image: sourceImage.data,
+                    mediaType: sourceImage.mediaType,
+                  })),
+                ],
+              },
+            ],
+          }
+          : {
+            model: languageModel,
+            system: CINEMA_TEXT_GENERATION_SYSTEM_PROMPT,
+            prompt: generationPrompt,
+          }
+        return await generateText(request as Parameters<GenerateTextFunction>[0])
       } catch (error) {
         throw createCinemaTextGenerationRuntimeError(error, textModel.value)
       }
@@ -1372,6 +1569,14 @@ export async function createCinemaTextGeneration(
             text: nextText,
             generationPrompt: "",
             textModel: textModel.value,
+            ...(sourceImages.length > 0
+              ? {
+                sourceImageAssetID: sourceImageAssetIDs[0],
+                sourceImageAssetIDs,
+                sourceImagePath: sourceImages[0]?.path,
+                sourceImagePaths: sourceImages.map((sourceImage) => sourceImage.path),
+              }
+              : {}),
           },
         }
         : item
@@ -1388,6 +1593,12 @@ export async function createCinemaTextGeneration(
       nodeID: node.id,
       model: textModel.value,
       generatedTextLength: generatedText.length,
+      ...(sourceImages.length > 0
+        ? {
+          sourceImagePath: sourceImages[0]?.path,
+          sourceImagePaths: sourceImages.map((sourceImage) => sourceImage.path),
+        }
+        : {}),
     },
   })
 
@@ -1552,11 +1763,41 @@ export async function createCinemaImageGeneration(
       throw new ApiError(400, "CINEMA_IMAGE_SIZE_INVALID", "Image generation size must use WIDTHxHEIGHT.")
     }
 
-    const { provider, imageModel } = await resolveCinemaImageGenerationModel(projectID, input.model)
+    const { provider, model, imageModel } = await resolveCinemaImageGenerationModel(projectID, input.model)
+    const sourceNodeIDs = uniqueNonEmptyStrings(input.sourceNodeIDs ?? [])
+    const sourceTextPrompts = uniqueNonEmptyStrings(input.sourceTextPrompts ?? [])
+    const sourceImagePaths = uniqueNonEmptyStrings([
+      ...(input.sourceImagePaths ?? []),
+      input.sourceImagePath,
+    ])
+    const sourceImageAssetIDs = uniqueNonEmptyStrings([
+      ...(input.sourceImageAssetIDs ?? []),
+      input.sourceImageAssetID,
+    ])
+    if (sourceImagePaths.length > 0 && !cinemaProviderModelSupportsImageInput(model)) {
+      throw new ApiError(
+        400,
+        "CINEMA_IMAGE_MODEL_IMAGE_INPUT_NOT_CAPABLE",
+        `Model '${imageModel.value}' does not support image input.`,
+      )
+    }
+    const sourceImages = await Promise.all(
+      sourceImagePaths.map((sourceImagePath) => readCinemaImageGenerationSourceImage(root, sourceImagePath))
+    )
     const parameters: Record<string, unknown> = {
       ...(size ? { size } : {}),
       count,
       ...(input.style?.trim() ? { style: input.style.trim() } : {}),
+      userPrompt: input.userPrompt?.trim() ?? prompt,
+      ...(sourceTextPrompts.length > 0 ? { sourceTextPrompts } : {}),
+      ...(sourceImages.length > 0
+        ? {
+          sourceImageAssetID: sourceImageAssetIDs[0],
+          sourceImageAssetIDs,
+          sourceImagePath: sourceImages[0]?.path,
+          sourceImagePaths: sourceImages.map((sourceImage) => sourceImage.path),
+        }
+        : {}),
     }
     const taskID = makeTaskID()
     const createdAt = nowISO()
@@ -1566,7 +1807,7 @@ export async function createCinemaImageGeneration(
       mode: CINEMA_IMAGE_GENERATION_MODE,
       title: node.title,
       prompt,
-      sourceNodeIDs: [],
+      sourceNodeIDs,
       parameters,
       taskNodeID: node.id,
     }
@@ -1584,7 +1825,7 @@ export async function createCinemaImageGeneration(
       taskNodeID: node.id,
       input: {
         prompt,
-        sourceNodeIDs: [],
+        sourceNodeIDs,
         parameters,
       },
       outputAssets: [],

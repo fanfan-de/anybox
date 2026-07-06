@@ -8,6 +8,7 @@ import {
   CinemaCanvasDocumentSchema,
   CinemaCommandSchema,
   CreateCinemaImageGenerationBodySchema,
+  CreateCinemaImportedImageAssetBodySchema,
   CreateCinemaTextGenerationBodySchema,
   CreateCinemaGenerationTaskBodySchema,
   TestCinemaVideoProviderConnectionBodySchema,
@@ -152,6 +153,15 @@ export function CinemaRoutes() {
       "Body must be a valid Cinema image generation request",
     )
     return ok(c, await CinemaUseCase.createCinemaImageGeneration(c.req.param("projectID"), payload))
+  })
+
+  app.post("/projects/:projectID/assets/imports", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      CreateCinemaImportedImageAssetBodySchema,
+      "Body must be a valid Cinema image import request",
+    )
+    return ok(c, await CinemaUseCase.importCinemaProjectImageAsset(c.req.param("projectID"), payload))
   })
 
   app.get("/projects/:projectID/assets/*", async (c) => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react"
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -20,13 +20,10 @@ import {
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { create } from "zustand"
 import {
-  ALargeSmall,
   ArrowLeft,
   ArrowUp,
   Bot,
-  Check,
   ChevronDown,
-  Clock3,
   Copy,
   Download,
   File,
@@ -35,16 +32,14 @@ import {
   Folder,
   Image,
   Loader2,
-  Maximize2,
   MessageSquareText,
   Music,
   PencilLine,
-  Plus,
   Play,
   RefreshCw,
   Scissors,
   Trash2,
-  Type,
+  Upload,
   Video,
   WandSparkles,
   X,
@@ -60,6 +55,7 @@ import {
   type CinemaGenerationTask,
   type CinemaGeneratedAsset,
   type CinemaImageGenerationResult,
+  type CinemaImportedImageAssetResult,
   type CinemaImageModel,
   type CinemaImageModelsResult,
   type CinemaTextGenerationResult,
@@ -74,18 +70,66 @@ import {
 } from "@anybox/shared/cinema"
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error"
+type CanvasPanel = "files"
 
 type ImageGenerationRequest = {
   prompt: string
+  userPrompt?: string
   model: string | null
   size?: string
   count?: number
   style?: string
+  sourceNodeIDs?: string[]
+  sourceTextPrompts?: string[]
+  sourceImageAssetID?: string
+  sourceImageAssetIDs?: string[]
+  sourceImagePath?: string
+  sourceImagePaths?: string[]
+}
+
+type TextGenerationRequest = {
+  prompt: string
+  model: string | null
+  sourceImageAssetID?: string
+  sourceImageAssetIDs?: string[]
+  sourceImagePath?: string
+  sourceImagePaths?: string[]
 }
 
 type VideoSourceImageAsset = CinemaGeneratedAsset & {
   nodeID: string
   nodeTitle: string
+  edgeID?: string
+  slot?: VideoInputSlot
+}
+
+type SourceTextParameter = {
+  edgeID: string
+  nodeID: string
+  nodeTitle: string
+  text: string
+}
+
+type VideoInputSlot =
+  | "textParameter"
+  | "sourceImage"
+  | "startFrame"
+  | "endFrame"
+  | "referenceImage"
+  | "sourceVideo"
+  | "mask"
+type VideoImageInputSlot = Extract<VideoInputSlot, "sourceImage" | "startFrame" | "endFrame" | "referenceImage">
+type VideoImageInputAssetValue = VideoSourceImageAsset | VideoSourceImageAsset[] | null
+type VideoImageInputAssets = Partial<Record<VideoImageInputSlot, VideoImageInputAssetValue>>
+
+type VideoModeInputContract = {
+  mode: CinemaGenerationMode
+  label: string
+  promptPlaceholder: string
+  requiredSlots: VideoInputSlot[]
+  optionalSlots: VideoInputSlot[]
+  maxReferenceImages?: number
+  enabledInVideoNode: boolean
 }
 
 type CinemaFlowNodeData = {
@@ -103,17 +147,21 @@ type CinemaFlowNodeData = {
   effectiveTextModel?: CinemaTextModel | null
   isGeneratingText?: boolean
   textGenerationError?: string | null
-  onGenerateText?: (nodeID: string, prompt: string, model: string | null) => void
+  sourceImageAssets?: VideoSourceImageAsset[]
+  onGenerateText?: (nodeID: string, request: TextGenerationRequest) => void
   imageModels?: CinemaImageModel[]
   effectiveImageModel?: CinemaImageModel | null
   isGeneratingImage?: boolean
   imageGenerationError?: string | null
+  sourceTextParameters?: SourceTextParameter[]
   agentBaseURL?: string
   projectID?: string
+  onDisconnectEdge?: (edgeID: string) => void
   onGenerateImage?: (nodeID: string, request: ImageGenerationRequest) => void
   videoProviders?: CinemaVideoProvider[]
   generationTasks?: CinemaGenerationTask[]
   sourceImageAsset?: VideoSourceImageAsset | null
+  videoInputImageAssets?: VideoImageInputAssets
   isCreatingVideoTask?: boolean
   videoGenerationError?: string | null
   onCreateVideoGenerationTask?: (nodeID: string, body: CreateCinemaGenerationTaskBody) => void
@@ -161,6 +209,16 @@ const DEFAULT_IMAGE_GENERATION_COUNT = 1
 const DEFAULT_VIDEO_ASPECT_RATIO = "16:9"
 const DEFAULT_VIDEO_DURATION_SECONDS = 5
 const DEFAULT_VIDEO_RESOLUTION = "720p"
+const LOCAL_IMAGE_FILE_ACCEPT = [
+  "image/apng",
+  "image/avif",
+  "image/bmp",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/svg+xml",
+  "image/webp",
+].join(",")
 const VIDEO_GENERATION_MODES = [
   "text-to-video",
   "image-to-video",
@@ -171,12 +229,114 @@ const VIDEO_GENERATION_MODES = [
   "extend",
   "motion-control",
 ] as const satisfies readonly CinemaGenerationMode[]
-const VIDEO_NODE_MODES = ["text-to-video", "image-to-video"] as const satisfies readonly CinemaGenerationMode[]
+const VIDEO_NODE_MODES = ["text-to-video", "image-to-video", "frames-to-video", "reference-to-video"] as const satisfies readonly CinemaGenerationMode[]
+const FALLBACK_VIDEO_NODE_MODES = ["text-to-video", "image-to-video"] as const satisfies readonly CinemaGenerationMode[]
+const VIDEO_INPUT_SLOTS = [
+  "textParameter",
+  "sourceImage",
+  "startFrame",
+  "endFrame",
+  "referenceImage",
+  "sourceVideo",
+  "mask",
+] as const satisfies readonly VideoInputSlot[]
+const VIDEO_IMAGE_INPUT_SLOTS = [
+  "sourceImage",
+  "startFrame",
+  "endFrame",
+  "referenceImage",
+] as const satisfies readonly VideoInputSlot[]
+const VIDEO_INPUT_SLOT_LABELS: Record<VideoInputSlot, string> = {
+  textParameter: "文本参数",
+  sourceImage: "参考图",
+  startFrame: "首帧",
+  endFrame: "尾帧",
+  referenceImage: "参考图",
+  sourceVideo: "源视频",
+  mask: "遮罩",
+}
+const VIDEO_INPUT_SLOT_EMPTY_TEXT: Record<VideoInputSlot, string> = {
+  textParameter: "连接文本节点作为参数",
+  sourceImage: "连接图片节点或图片生成节点",
+  startFrame: "连接首帧图片",
+  endFrame: "连接尾帧图片",
+  referenceImage: "连接参考图片",
+  sourceVideo: "连接视频节点",
+  mask: "连接遮罩素材",
+}
+const VIDEO_MODE_INPUT_CONTRACTS: Record<CinemaGenerationMode, VideoModeInputContract> = {
+  "text-to-video": {
+    mode: "text-to-video",
+    label: "文生视频",
+    promptPlaceholder: "描述你想生成的视频片段...",
+    requiredSlots: [],
+    optionalSlots: ["textParameter"],
+    enabledInVideoNode: true,
+  },
+  "image-to-video": {
+    mode: "image-to-video",
+    label: "图生视频",
+    promptPlaceholder: "描述参考图要如何运动、镜头如何变化...",
+    requiredSlots: ["sourceImage"],
+    optionalSlots: ["textParameter"],
+    enabledInVideoNode: true,
+  },
+  "frames-to-video": {
+    mode: "frames-to-video",
+    label: "首尾帧",
+    promptPlaceholder: "描述首帧到尾帧之间的运动和镜头变化...",
+    requiredSlots: ["startFrame", "endFrame"],
+    optionalSlots: ["textParameter"],
+    enabledInVideoNode: true,
+  },
+  "reference-to-video": {
+    mode: "reference-to-video",
+    label: "全能参考",
+    promptPlaceholder: "描述视频内容，并连接人物、场景、风格或物体参考...",
+    requiredSlots: ["referenceImage"],
+    optionalSlots: ["textParameter"],
+    maxReferenceImages: 4,
+    enabledInVideoNode: true,
+  },
+  "video-to-video": {
+    mode: "video-to-video",
+    label: "视频生视频",
+    promptPlaceholder: "描述要基于原视频生成的变化...",
+    requiredSlots: ["sourceVideo"],
+    optionalSlots: ["textParameter", "referenceImage"],
+    enabledInVideoNode: false,
+  },
+  edit: {
+    mode: "edit",
+    label: "视频编辑",
+    promptPlaceholder: "描述你希望如何修改原视频...",
+    requiredSlots: ["sourceVideo"],
+    optionalSlots: ["textParameter", "referenceImage", "mask"],
+    enabledInVideoNode: false,
+  },
+  extend: {
+    mode: "extend",
+    label: "视频扩展",
+    promptPlaceholder: "描述要如何延展当前视频...",
+    requiredSlots: ["sourceVideo"],
+    optionalSlots: ["textParameter"],
+    enabledInVideoNode: false,
+  },
+  "motion-control": {
+    mode: "motion-control",
+    label: "运动控制",
+    promptPlaceholder: "描述主体运动、镜头调度和控制要求...",
+    requiredSlots: ["sourceImage"],
+    optionalSlots: ["textParameter", "referenceImage"],
+    enabledInVideoNode: false,
+  },
+}
 
 const DEFAULT_NODE_SIZE: Record<CinemaNodeType, { width: number; height: number }> = {
-  text: { width: 480, height: 420 },
+  text: { width: 380, height: 240 },
   prompt: { width: 380, height: 240 },
   image: { width: 420, height: 440 },
+  "local-image": { width: 340, height: 320 },
   video: { width: 520, height: 560 },
   audio: { width: 320, height: 180 },
   shot: { width: 380, height: 250 },
@@ -208,6 +368,12 @@ const NODE_META: Record<CinemaNodeType, {
     accent: "#f9a8d4",
     icon: Image,
     placeholder: "Describe the image you want to generate.",
+  },
+  "local-image": {
+    label: "Image",
+    accent: "#fde68a",
+    icon: Image,
+    placeholder: "Imported local image.",
   },
   video: {
     label: "Video",
@@ -273,11 +439,12 @@ async function requestJson<T>(baseURL: string, pathname: string, init?: RequestI
 }
 
 function nodeSize(node: CinemaCanvasNode) {
+  if (node.type === "text") return DEFAULT_NODE_SIZE.text
   return node.size ?? DEFAULT_NODE_SIZE[node.type]
 }
 
 function flowNodeStyle(type: CinemaNodeType, size: { width: number; height: number }): CSSProperties {
-  return type === "image"
+  return type === "image" || type === "local-image"
     ? { width: size.width }
     : { width: size.width, height: size.height }
 }
@@ -333,6 +500,12 @@ function titleForType(type: CinemaNodeType) {
 function readRawString(rawData: Record<string, unknown>, key: string, fallback = "") {
   const value = rawData[key]
   return typeof value === "string" ? value : fallback
+}
+
+function readRawStringArray(rawData: Record<string, unknown>, key: string) {
+  const value = rawData[key]
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
 }
 
 function readRawNumber(rawData: Record<string, unknown>, key: string, fallback: number) {
@@ -543,8 +716,18 @@ function filePathSegments(directoryPath: string) {
   return directoryPath.split("/").filter(Boolean)
 }
 
+function providerRuntimeSupportsMode(provider: CinemaVideoProvider, mode: CinemaGenerationMode) {
+  const supportedModes = provider.runtime?.supportedModes ?? []
+  if (supportedModes.length > 0) return supportedModes.includes(mode)
+  if (provider.runtime?.adapterAvailable === true) return mode === "text-to-video" || mode === "image-to-video"
+  return false
+}
+
 function providersForMode(providers: CinemaVideoProvider[], mode: CinemaGenerationMode) {
-  return providers.filter((provider) => provider.manifest.models.some((model) => model.modes.includes(mode)))
+  return providers.filter((provider) =>
+    providerRuntimeSupportsMode(provider, mode) &&
+    provider.manifest.models.some((model) => model.modes.includes(mode))
+  )
 }
 
 function providerForMode(providers: CinemaVideoProvider[], providerID: string, mode: CinemaGenerationMode) {
@@ -557,9 +740,49 @@ function modelForMode(provider: CinemaVideoProvider | null, modelID: string, mod
   return availableModels.find((model) => model.id === modelID) ?? availableModels[0] ?? null
 }
 
+function videoModeInputContract(mode: CinemaGenerationMode) {
+  return VIDEO_MODE_INPUT_CONTRACTS[mode]
+}
+
+function videoModeRequiresSlot(mode: CinemaGenerationMode, slot: VideoInputSlot) {
+  return videoModeInputContract(mode).requiredSlots.includes(slot)
+}
+
+function isVideoImageInputSlot(slot: VideoInputSlot): slot is VideoImageInputSlot {
+  return (VIDEO_IMAGE_INPUT_SLOTS as readonly VideoInputSlot[]).includes(slot)
+}
+
+function videoModeImageInputSlots(contract: VideoModeInputContract) {
+  const slots: VideoImageInputSlot[] = []
+  const seen = new Set<VideoImageInputSlot>()
+  for (const slot of [...contract.requiredSlots, ...contract.optionalSlots]) {
+    if (!isVideoImageInputSlot(slot) || seen.has(slot)) continue
+    seen.add(slot)
+    slots.push(slot)
+  }
+  return slots
+}
+
+function videoImageInputAssetList(value: VideoImageInputAssetValue | undefined) {
+  if (Array.isArray(value)) return value
+  return value ? [value] : []
+}
+
+function enabledVideoNodeModeContracts(providers: CinemaVideoProvider[]) {
+  const contracts = VIDEO_NODE_MODES
+    .map(videoModeInputContract)
+    .filter((contract) => contract.enabledInVideoNode && providersForMode(providers, contract.mode).length > 0)
+  return contracts.length > 0
+    ? contracts
+    : FALLBACK_VIDEO_NODE_MODES.map(videoModeInputContract)
+}
+
 function readVideoMode(rawData: Record<string, unknown>) {
   const mode = readRawString(rawData, "mode", FALLBACK_GENERATION_MODE)
-  return (VIDEO_NODE_MODES as readonly string[]).includes(mode) ? mode as CinemaGenerationMode : FALLBACK_GENERATION_MODE
+  const parsedMode = (VIDEO_GENERATION_MODES as readonly string[]).includes(mode)
+    ? mode as CinemaGenerationMode
+    : FALLBACK_GENERATION_MODE
+  return videoModeInputContract(parsedMode).enabledInVideoNode ? parsedMode : FALLBACK_GENERATION_MODE
 }
 
 function defaultModelAspectRatio(model: ReturnType<typeof modelForMode>) {
@@ -572,6 +795,11 @@ function defaultModelDuration(model: ReturnType<typeof modelForMode>) {
 
 function defaultModelResolution(model: ReturnType<typeof modelForMode>) {
   return model?.resolutions[0] ?? DEFAULT_VIDEO_RESOLUTION
+}
+
+function generationTaskUserPrompt(task: CinemaGenerationTask | null) {
+  const value = task?.input.parameters.userPrompt
+  return typeof value === "string" ? value : null
 }
 
 function readDisplayAssets(rawData: Record<string, unknown>): DisplayAsset[] {
@@ -590,6 +818,79 @@ function readDisplayAssets(rawData: Record<string, unknown>): DisplayAsset[] {
   })
 }
 
+function readImageAsset(value: unknown): CinemaGeneratedAsset | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  const path = typeof record.path === "string" ? record.path : ""
+  if (!path) return null
+  return {
+    id: typeof record.id === "string" ? record.id : `image-${path}`,
+    kind: "image",
+    path,
+    mimeType: typeof record.mimeType === "string" ? record.mimeType : undefined,
+    sizeBytes: typeof record.sizeBytes === "number" ? record.sizeBytes : undefined,
+    width: typeof record.width === "number" ? record.width : undefined,
+    height: typeof record.height === "number" ? record.height : undefined,
+  }
+}
+
+function readImageAssets(value: unknown): CinemaGeneratedAsset[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => {
+    const asset = readImageAsset(item)
+    return asset ? [asset] : []
+  })
+}
+
+function mergeImageAssets(assets: CinemaGeneratedAsset[]) {
+  const result: CinemaGeneratedAsset[] = []
+  const seen = new Set<string>()
+  for (const asset of assets) {
+    const key = asset.path
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(asset)
+  }
+  return result
+}
+
+function mergeSourceImageAssets(assets: VideoSourceImageAsset[]) {
+  const result: VideoSourceImageAsset[] = []
+  const seen = new Set<string>()
+  for (const asset of assets) {
+    const key = sourceImageAssetKey(asset)
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(asset)
+  }
+  return result
+}
+
+function readEmbeddedSourceImageAssets(rawData: Record<string, unknown>, nodeID: string, nodeTitle: string): VideoSourceImageAsset[] {
+  const storedAssets = readImageAssets(rawData.sourceImageAssets)
+  const legacyAsset = readImageAsset(rawData.sourceImageAsset)
+  return mergeImageAssets([
+    ...storedAssets,
+    ...(legacyAsset ? [legacyAsset] : []),
+  ]).map((asset) => ({
+    ...asset,
+    nodeID,
+    nodeTitle,
+  }))
+}
+
+function readTextSourceImageAssets(rawData: Record<string, unknown>, nodeID: string): VideoSourceImageAsset[] {
+  return readEmbeddedSourceImageAssets(rawData, nodeID, "Text reference")
+}
+
+function readImageGenerationSourceImageAssets(rawData: Record<string, unknown>, nodeID: string): VideoSourceImageAsset[] {
+  return readEmbeddedSourceImageAssets(rawData, nodeID, "Image reference")
+}
+
+function readLocalImageAsset(rawData: Record<string, unknown>) {
+  return readImageAsset(rawData.asset)
+}
+
 function selectedImageAssetForNode(node: CinemaFlowNode): VideoSourceImageAsset | null {
   const assets = readImageResultAssets(node.data.rawData)
   const selectedAssetID = readRawString(node.data.rawData, "selectedAssetID")
@@ -602,15 +903,166 @@ function selectedImageAssetForNode(node: CinemaFlowNode): VideoSourceImageAsset 
   }
 }
 
+function selectedLocalImageAssetForNode(node: CinemaFlowNode): VideoSourceImageAsset | null {
+  const asset = readLocalImageAsset(node.data.rawData)
+  if (!asset) return null
+  return {
+    ...asset,
+    nodeID: node.id,
+    nodeTitle: node.data.title,
+  }
+}
+
+function selectedSourceImageAssetForNode(node: CinemaFlowNode): VideoSourceImageAsset | null {
+  if (node.data.cinemaType === "image") return selectedImageAssetForNode(node)
+  if (node.data.cinemaType === "local-image") return selectedLocalImageAssetForNode(node)
+  return null
+}
+
+function isVideoInputSlot(value: unknown): value is VideoInputSlot {
+  return typeof value === "string" && (VIDEO_INPUT_SLOTS as readonly string[]).includes(value)
+}
+
+function edgeTargetVideoSlot(edge: Edge): VideoInputSlot | null {
+  if (isVideoInputSlot(edge.targetHandle)) return edge.targetHandle
+  const data = edge.data
+  if (data && typeof data === "object" && !Array.isArray(data) && isVideoInputSlot((data as Record<string, unknown>).targetSlot)) {
+    return (data as Record<string, unknown>).targetSlot as VideoInputSlot
+  }
+  return null
+}
+
+function edgeMatchesVideoSlot(edge: Edge, slot: VideoInputSlot, legacySlot: VideoInputSlot | null = null) {
+  const edgeSlot = edgeTargetVideoSlot(edge)
+  if (edgeSlot) return edgeSlot === slot
+  return legacySlot === slot
+}
+
+function sourceImageAssetsForVideoSlot(
+  nodeID: string,
+  nodes: CinemaFlowNode[],
+  edges: Edge[],
+  slot: VideoImageInputSlot,
+) {
+  const assets: VideoSourceImageAsset[] = []
+  const seen = new Set<string>()
+  for (const edge of edges) {
+    if (edge.target !== nodeID || !edgeMatchesVideoSlot(edge, slot, "sourceImage")) continue
+    const sourceNode = nodes.find((node) => node.id === edge.source)
+    if (!sourceNode) continue
+    const asset = selectedSourceImageAssetForNode(sourceNode)
+    if (!asset) continue
+    const nextAsset = {
+      ...asset,
+      edgeID: edge.id,
+      slot,
+    }
+    const key = sourceImageAssetKey(nextAsset)
+    if (seen.has(key)) continue
+    seen.add(key)
+    assets.push(nextAsset)
+    if (slot !== "referenceImage") break
+  }
+  return assets
+}
+
+function sourceImageAssetForVideoSlot(
+  nodeID: string,
+  nodes: CinemaFlowNode[],
+  edges: Edge[],
+  slot: VideoImageInputSlot,
+) {
+  return sourceImageAssetsForVideoSlot(nodeID, nodes, edges, slot)[0] ?? null
+}
+
+function sourceImageAssetsForVideoNode(nodeID: string, nodes: CinemaFlowNode[], edges: Edge[]) {
+  const assets: VideoImageInputAssets = {}
+  for (const slot of VIDEO_IMAGE_INPUT_SLOTS) {
+    const slotAssets = sourceImageAssetsForVideoSlot(nodeID, nodes, edges, slot)
+    assets[slot] = slot === "referenceImage" ? slotAssets : slotAssets[0] ?? null
+  }
+  return assets
+}
+
 function sourceImageAssetForVideoNode(nodeID: string, nodes: CinemaFlowNode[], edges: Edge[]) {
+  return sourceImageAssetForVideoSlot(nodeID, nodes, edges, "sourceImage")
+}
+
+function sourceImageAssetsForNode(nodeID: string, nodes: CinemaFlowNode[], edges: Edge[]) {
+  const assets: VideoSourceImageAsset[] = []
+  const seen = new Set<string>()
   for (const edge of edges) {
     if (edge.target !== nodeID) continue
     const sourceNode = nodes.find((node) => node.id === edge.source)
-    if (!sourceNode || sourceNode.data.cinemaType !== "image") continue
-    const asset = selectedImageAssetForNode(sourceNode)
-    if (asset) return asset
+    if (!sourceNode) continue
+    const asset = selectedSourceImageAssetForNode(sourceNode)
+    if (!asset) continue
+    const key = `${asset.nodeID}:${asset.id}:${asset.path}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    assets.push(asset)
   }
-  return null
+  return assets
+}
+
+function sourceImageAssetKey(asset: Pick<VideoSourceImageAsset, "nodeID" | "id" | "path">) {
+  return `${asset.nodeID}:${asset.id}:${asset.path}`
+}
+
+function sourceImageSelectionPatch(assets: VideoSourceImageAsset[]) {
+  const selectedAssets = mergeSourceImageAssets(assets)
+  const firstAsset = selectedAssets[0]
+  return {
+    sourceImageSelectionMode: "manual",
+    sourceImageAssetID: firstAsset?.id ?? "",
+    sourceImageAssetIDs: selectedAssets.map((asset) => asset.id),
+    sourceImageAssetKey: firstAsset ? sourceImageAssetKey(firstAsset) : "",
+    sourceImageAssetKeys: selectedAssets.map((asset) => sourceImageAssetKey(asset)),
+    sourceImagePath: firstAsset?.path ?? "",
+    sourceImagePaths: selectedAssets.map((asset) => asset.path),
+  }
+}
+
+function sourceTextParametersForNode(nodeID: string, nodes: CinemaFlowNode[], edges: Edge[]) {
+  const parameters: SourceTextParameter[] = []
+  const seenNodeIDs = new Set<string>()
+  for (const edge of edges) {
+    if (edge.target !== nodeID) continue
+    const edgeSlot = edgeTargetVideoSlot(edge)
+    if (edgeSlot && edgeSlot !== "textParameter") continue
+    if (seenNodeIDs.has(edge.source)) continue
+    const sourceNode = nodes.find((node) => node.id === edge.source)
+    if (!sourceNode || sourceNode.data.cinemaType !== "text") continue
+    seenNodeIDs.add(edge.source)
+    parameters.push({
+      edgeID: edge.id,
+      nodeID: sourceNode.id,
+      nodeTitle: sourceNode.data.title,
+      text: readRawString(sourceNode.data.rawData, "text"),
+    })
+  }
+  return parameters
+}
+
+function imagePromptWithSourceText(userPrompt: string, parameters: SourceTextParameter[]) {
+  return [
+    ...parameters.map((parameter) => parameter.text.trim()).filter(Boolean),
+    userPrompt.trim(),
+  ].filter(Boolean).join("\n\n")
+}
+
+function uniqueSourceNodeIDs(...groups: string[][]) {
+  const result: string[] = []
+  const seen = new Set<string>()
+  for (const group of groups) {
+    for (const value of group) {
+      const item = value.trim()
+      if (!item || seen.has(item)) continue
+      seen.add(item)
+      result.push(item)
+    }
+  }
+  return result
 }
 
 function isFinalGenerationTaskStatus(status: string) {
@@ -626,6 +1078,19 @@ function formatTaskTimestamp(value: string | undefined) {
     minute: "2-digit",
     second: "2-digit",
   }).format(time)
+}
+
+function fileToDataBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read image file"))
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : ""
+      const commaIndex = result.indexOf(",")
+      resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result)
+    }
+    reader.readAsDataURL(file)
+  })
 }
 
 function createNode(type: CinemaNodeType, position: { x: number; y: number }): CinemaFlowNode {
@@ -649,6 +1114,11 @@ function createNode(type: CinemaNodeType, position: { x: number; y: number }): C
         parameters: {},
         placeholder: "Describe the clip to generate.",
       }
+    : type === "local-image"
+      ? {
+        status: "missing",
+        placeholder: NODE_META[type].placeholder,
+      }
     : {
       text: "",
       placeholder: NODE_META[type].placeholder,
@@ -663,6 +1133,32 @@ function createNode(type: CinemaNodeType, position: { x: number; y: number }): C
       cinemaType: type,
       title: titleForType(type),
       rawData,
+      size,
+    },
+  }
+}
+
+function createLocalImageNode(
+  asset: CinemaGeneratedAsset,
+  fileName: string,
+  position: { x: number; y: number },
+): CinemaFlowNode {
+  const type = "local-image" satisfies CinemaNodeType
+  const size = DEFAULT_NODE_SIZE[type]
+  return {
+    id: makeNodeID(type),
+    type: "cinemaNode",
+    position,
+    style: flowNodeStyle(type, size),
+    data: {
+      cinemaType: type,
+      title: fileName.trim() || titleForType(type),
+      rawData: {
+        asset,
+        sourceFileName: fileName,
+        status: "ready",
+        importedAt: new Date().toISOString(),
+      },
       size,
     },
   }
@@ -774,8 +1270,15 @@ function TextCanvasNode({
   accentStyle: CSSProperties
 }) {
   const editorRef = useRef<HTMLTextAreaElement>(null)
+  const generatorPromptRef = useRef<HTMLTextAreaElement>(null)
+  const sourceImageInputRef = useRef<HTMLInputElement>(null)
   const modelControlRef = useRef<HTMLDivElement>(null)
+  const [isTextEditorOpen, setIsTextEditorOpen] = useState(false)
+  const [isGeneratorOpen, setIsGeneratorOpen] = useState(() =>
+    Boolean(readRawString(data.rawData, "generationPrompt") || data.textGenerationError)
+  )
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
+  const [sourceImageImportError, setSourceImageImportError] = useState<string | null>(null)
   const text = readRawString(data.rawData, "text")
   const generatorPrompt = readRawString(data.rawData, "generationPrompt")
   const placeholder = readRawString(data.rawData, "placeholder", "双击编辑文本...")
@@ -796,6 +1299,39 @@ function TextCanvasNode({
     data.effectiveTextModel ??
     textModels[0] ??
     null
+  const supportsSourceImage = Boolean(selectedTextModel?.supportsImageInput)
+  const connectedSourceImageAssets = data.sourceImageAssets ?? []
+  const connectedSourceImageAssetPaths = new Set(connectedSourceImageAssets.map((asset) => asset.path))
+  const textSourceImageAssets = readTextSourceImageAssets(data.rawData, id)
+    .filter((asset) => !connectedSourceImageAssetPaths.has(asset.path))
+  const hiddenSourceImageAssetKeys = readRawStringArray(data.rawData, "hiddenSourceImageAssetKeys")
+  const sourceImageAssets = mergeSourceImageAssets([...connectedSourceImageAssets, ...textSourceImageAssets])
+    .filter((asset) => !hiddenSourceImageAssetKeys.includes(sourceImageAssetKey(asset)))
+  const isManualSourceImageSelection = readRawString(data.rawData, "sourceImageSelectionMode") === "manual"
+  const selectedSourceImageAssetKeys = readRawStringArray(data.rawData, "sourceImageAssetKeys")
+  const selectedSourceImageAssetKey = readRawString(data.rawData, "sourceImageAssetKey")
+  const selectedSourceImageAssetIDs = readRawStringArray(data.rawData, "sourceImageAssetIDs")
+  const selectedSourceImageAssetID = readRawString(data.rawData, "sourceImageAssetID")
+  const selectedSourceImagePaths = readRawStringArray(data.rawData, "sourceImagePaths")
+  const selectedSourceImagePath = readRawString(data.rawData, "sourceImagePath")
+  const hasSavedSourceImageSelection = isManualSourceImageSelection
+    || selectedSourceImageAssetKeys.length > 0
+    || Boolean(selectedSourceImageAssetKey)
+    || selectedSourceImageAssetIDs.length > 0
+    || Boolean(selectedSourceImageAssetID)
+    || selectedSourceImagePaths.length > 0
+    || Boolean(selectedSourceImagePath)
+  const selectedSourceImageAssets = hasSavedSourceImageSelection
+    ? sourceImageAssets.filter((asset) => {
+      const key = sourceImageAssetKey(asset)
+      return selectedSourceImageAssetKeys.includes(key)
+        || key === selectedSourceImageAssetKey
+        || selectedSourceImageAssetIDs.includes(asset.id)
+        || asset.id === selectedSourceImageAssetID
+        || selectedSourceImagePaths.includes(asset.path)
+        || asset.path === selectedSourceImagePath
+    })
+    : sourceImageAssets
   const promptReady = generatorPromptDraft.trim().length > 0
   const canGenerate = promptReady && Boolean(selectedTextModel) && !data.isGeneratingText
 
@@ -842,6 +1378,54 @@ function TextCanvasNode({
     })
   }, [id])
 
+  const importTextSourceImageMutation = useMutation({
+    mutationFn: async (files: File[]) => {
+      if (!data.agentBaseURL || !data.projectID) throw new Error("Project context is not ready")
+      const assets: CinemaGeneratedAsset[] = []
+      for (const file of files) {
+        const dataBase64 = await fileToDataBase64(file)
+        const result = await requestJson<CinemaImportedImageAssetResult>(
+          data.agentBaseURL,
+          `/api/cinema/projects/${encodeURIComponent(data.projectID)}/assets/imports`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              fileName: file.name,
+              mimeType: file.type || undefined,
+              dataBase64,
+            }),
+          },
+        )
+        assets.push(result.asset)
+      }
+      return assets
+    },
+    onMutate: () => {
+      setSourceImageImportError(null)
+    },
+    onSuccess: (assets) => {
+      const existingTextAssets = readTextSourceImageAssets(rawDataRef.current, id)
+        .map(({ nodeID: _nodeID, nodeTitle: _nodeTitle, ...asset }) => asset)
+      const nextTextAssets = mergeImageAssets([...existingTextAssets, ...assets])
+      const nextTextSourceAssets = assets.map((asset) => ({
+        ...asset,
+        nodeID: id,
+        nodeTitle: "Text reference",
+      }))
+      commitRawDataPatch({
+        sourceImageAsset: nextTextAssets[0] ?? null,
+        sourceImageAssets: nextTextAssets,
+        ...sourceImageSelectionPatch([...selectedSourceImageAssets, ...nextTextSourceAssets]),
+      })
+    },
+    onError: (error) => {
+      setSourceImageImportError(error instanceof Error ? error.message : "Image import failed")
+    },
+  })
+
   const scheduleTextCommit = useCallback((value: string) => {
     clearTextCommitTimer()
     textCommitTimerRef.current = window.setTimeout(() => {
@@ -887,21 +1471,56 @@ function TextCanvasNode({
     window.addEventListener("pointerdown", closeOnOutsidePointerDown)
     return () => window.removeEventListener("pointerdown", closeOnOutsidePointerDown)
   }, [isModelMenuOpen])
+
+  useEffect(() => {
+    if (generatorPrompt || data.textGenerationError) setIsGeneratorOpen(true)
+  }, [data.textGenerationError, generatorPrompt])
+
   const focusEditor = () => {
-    editorRef.current?.focus()
-  }
-  const selectEditor = () => {
-    editorRef.current?.focus()
-    editorRef.current?.select()
+    setIsTextEditorOpen(true)
+    window.requestAnimationFrame(() => editorRef.current?.focus())
   }
   const copyText = () => {
     const value = textDraft || placeholder
     void navigator.clipboard?.writeText(value)
   }
+  const openSourceImagePicker = () => {
+    setSourceImageImportError(null)
+    sourceImageInputRef.current?.click()
+  }
+  const handleSourceImageFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ""
+    if (files.length === 0) return
+    importTextSourceImageMutation.mutate(files)
+  }
+  const removeSourceImageAsset = (asset: VideoSourceImageAsset) => {
+    const removedKey = sourceImageAssetKey(asset)
+    const nextSelectedSourceImageAssets = selectedSourceImageAssets.filter((selectedAsset) =>
+      sourceImageAssetKey(selectedAsset) !== removedKey
+    )
+    const patch: Record<string, unknown> = sourceImageSelectionPatch(nextSelectedSourceImageAssets)
+
+    if (asset.nodeID === id) {
+      const nextTextAssets = readTextSourceImageAssets(rawDataRef.current, id)
+        .filter((textAsset) => sourceImageAssetKey(textAsset) !== removedKey)
+        .map(({ nodeID: _nodeID, nodeTitle: _nodeTitle, ...textAsset }) => textAsset)
+      patch.sourceImageAsset = nextTextAssets[0] ?? null
+      patch.sourceImageAssets = nextTextAssets
+    } else {
+      const currentHiddenKeys = readRawStringArray(rawDataRef.current, "hiddenSourceImageAssetKeys")
+      patch.hiddenSourceImageAssetKeys = currentHiddenKeys.includes(removedKey)
+        ? currentHiddenKeys
+        : [...currentHiddenKeys, removedKey]
+    }
+
+    commitRawDataPatch(patch)
+  }
   const generateText = () => {
     const prompt = generatorPromptDraft.trim()
     if (!prompt) {
-      focusEditor()
+      setIsGeneratorOpen(true)
+      window.requestAnimationFrame(() => generatorPromptRef.current?.focus())
       return
     }
     if (!selectedTextModel || data.isGeneratingText) return
@@ -910,12 +1529,22 @@ function TextCanvasNode({
     commitRawDataPatch({
       text: textDraftRef.current,
       generationPrompt: generatorPromptDraftRef.current,
+      ...(supportsSourceImage ? sourceImageSelectionPatch(selectedSourceImageAssets) : {}),
     })
     setIsModelMenuOpen(false)
-    data.onGenerateText?.(id, prompt, selectedTextModel.value)
+    data.onGenerateText?.(id, {
+      prompt,
+      model: selectedTextModel.value,
+      ...(supportsSourceImage && selectedSourceImageAssets.length > 0
+        ? {
+          sourceImageAssetID: selectedSourceImageAssets[0]?.id,
+          sourceImageAssetIDs: selectedSourceImageAssets.map((asset) => asset.id),
+          sourceImagePath: selectedSourceImageAssets[0]?.path,
+          sourceImagePaths: selectedSourceImageAssets.map((asset) => asset.path),
+        }
+        : {}),
+    })
   }
-
-  const handleStyle = { ...accentStyle, top: 132 } as CSSProperties
 
   return (
     <>
@@ -923,80 +1552,238 @@ function TextCanvasNode({
         id="input"
         type="target"
         position={Position.Left}
-        className="cinema-node-handle cinema-text-node-handle cinema-text-node-handle-input"
-        style={handleStyle}
+        className="cinema-node-handle cinema-node-handle-input"
+        style={accentStyle}
       />
       <article
-        className={`cinema-text-node ${selected ? "is-selected" : ""}`}
+        className={`cinema-node cinema-text-card-node ${selected ? "is-selected" : ""}`}
         style={accentStyle}
       >
-        <div className="cinema-text-node-toolbar nodrag nowheel" role="toolbar" aria-label="Text tools">
-          <button type="button" className="cinema-text-toolbar-button is-size" title="字号" onClick={focusEditor}>
-            <ALargeSmall size={14} aria-hidden="true" />
-            <span>小</span>
-            <ChevronDown size={13} aria-hidden="true" />
-          </button>
-          <button type="button" className="cinema-text-toolbar-button" title="复制" onClick={copyText}>
-            <Copy size={13} aria-hidden="true" />
-            <span>复制</span>
-          </button>
-          <button type="button" className="cinema-text-toolbar-button" title="编辑" onClick={focusEditor}>
-            <PencilLine size={13} aria-hidden="true" />
-            <span>编辑</span>
-          </button>
-          <button type="button" className="cinema-text-toolbar-button" title="放大编辑" onClick={selectEditor}>
-            <Maximize2 size={13} aria-hidden="true" />
-            <span>放大编辑</span>
-          </button>
-          <button type="button" className="cinema-text-toolbar-button" title="下载" onClick={() => downloadTextFile(data.title, textDraft)}>
-            <Download size={13} aria-hidden="true" />
-            <span>下载</span>
-          </button>
-          <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} className="cinema-text-toolbar-button is-danger" />
+        <header className="cinema-node-header">
+          <span className="cinema-node-type">
+            <FileText size={14} aria-hidden="true" />
+            Text
+          </span>
+          <div className="cinema-node-header-actions nodrag nowheel" role="toolbar" aria-label="Text node actions">
+            <button
+              type="button"
+              className={`cinema-node-action-button ${isTextEditorOpen ? "is-active" : ""}`}
+              title="编辑文本"
+              aria-label="编辑文本"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                focusEditor()
+              }}
+            >
+              <PencilLine size={13} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className={`cinema-node-action-button ${isGeneratorOpen ? "is-active" : ""}`}
+              title="生成文本"
+              aria-label="生成文本"
+              aria-expanded={isGeneratorOpen}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                setIsGeneratorOpen((current) => !current)
+              }}
+            >
+              {data.isGeneratingText
+                ? <Loader2 size={13} aria-hidden="true" className="is-spinning" />
+                : <WandSparkles size={13} aria-hidden="true" />}
+            </button>
+            <button
+              type="button"
+              className="cinema-node-action-button"
+              title="复制文本"
+              aria-label="复制文本"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                copyText()
+              }}
+            >
+              <Copy size={13} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="cinema-node-action-button"
+              title="下载文本"
+              aria-label="下载文本"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                downloadTextFile(data.title, textDraft)
+              }}
+            >
+              <Download size={13} aria-hidden="true" />
+            </button>
+            <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
+          </div>
+        </header>
+
+        <div className={`cinema-node-preview cinema-text-card-preview ${isTextEditorOpen ? "is-editing" : ""}`}>
+          {isTextEditorOpen ? (
+            <textarea
+              ref={editorRef}
+              className="cinema-text-card-editor nodrag nowheel"
+              value={textDraft}
+              placeholder={placeholder}
+              spellCheck={false}
+              onKeyDown={(event) => event.stopPropagation()}
+              onChange={(event) => {
+                const value = event.target.value
+                setTextDraft(value)
+                if (!isTextComposingRef.current) scheduleTextCommit(value)
+              }}
+              onCompositionStart={() => {
+                isTextComposingRef.current = true
+                clearTextCommitTimer()
+              }}
+              onCompositionEnd={(event) => {
+                isTextComposingRef.current = false
+                const value = event.currentTarget.value
+                setTextDraft(value)
+                commitRawDataPatch({ text: value })
+              }}
+              onBlur={() => {
+                if (isTextComposingRef.current) return
+                clearTextCommitTimer()
+                commitRawDataPatch({ text: textDraftRef.current })
+              }}
+            />
+          ) : (
+            <>
+              <FileText size={28} aria-hidden="true" />
+              <span className="cinema-text-card-preview-text">{textDraft || placeholder}</span>
+            </>
+          )}
         </div>
 
-        <section className="cinema-text-editor-stack" aria-label="Text content">
-          <div className="cinema-text-node-label">
-            <Type size={13} aria-hidden="true" />
-            <NodeTitleInput nodeID={id} title={data.title} onChangeTitle={data.onChangeTitle} />
-            <PencilLine size={11} aria-hidden="true" />
-          </div>
-          <textarea
-            ref={editorRef}
-            className="cinema-text-editor nodrag nowheel"
-            value={textDraft}
-            placeholder={placeholder}
-            spellCheck={false}
-            onKeyDown={(event) => event.stopPropagation()}
-            onChange={(event) => {
-              const value = event.target.value
-              setTextDraft(value)
-              if (!isTextComposingRef.current) scheduleTextCommit(value)
-            }}
-            onCompositionStart={() => {
-              isTextComposingRef.current = true
-              clearTextCommitTimer()
-            }}
-            onCompositionEnd={(event) => {
-              isTextComposingRef.current = false
-              const value = event.currentTarget.value
-              setTextDraft(value)
-              commitRawDataPatch({ text: value })
-            }}
-            onBlur={() => {
-              if (isTextComposingRef.current) return
-              clearTextCommitTimer()
-              commitRawDataPatch({ text: textDraftRef.current })
-            }}
-          />
-        </section>
+        <footer className="cinema-node-footer">
+          <NodeTitleInput nodeID={id} title={data.title} onChangeTitle={data.onChangeTitle} />
+          <span>{textDraft || placeholder}</span>
+        </footer>
+      </article>
 
-        <section className="cinema-text-generator nodrag nowheel" aria-label="Text generation draft">
-          <button type="button" className="cinema-text-generator-media" title="添加参考图" aria-label="添加参考图">
-            <Image size={16} aria-hidden="true" />
-          </button>
+      {isGeneratorOpen ? (
+        <section className="cinema-text-card-generator nodrag nowheel" aria-label="Text generation draft" style={accentStyle}>
+          <header className="cinema-text-card-generator-header">
+            <span>
+              <WandSparkles size={13} aria-hidden="true" />
+              文本生成
+            </span>
+            <button
+              type="button"
+              className="cinema-node-action-button"
+              title="关闭生成面板"
+              aria-label="关闭生成面板"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => setIsGeneratorOpen(false)}
+            >
+              <X size={13} aria-hidden="true" />
+            </button>
+          </header>
+          {supportsSourceImage ? (
+            <section className={`cinema-text-source-image ${selectedSourceImageAssets.length > 0 ? "is-ready" : "is-empty"}`} aria-label="Text generation source image">
+              {sourceImageAssets.length > 0 ? (
+                <>
+                  <div className="cinema-text-source-image-main">
+                    <Image size={13} aria-hidden="true" />
+                    <span>{selectedSourceImageAssets.length > 0 ? `参考图：${selectedSourceImageAssets.length} 张` : "选择参考图"}</span>
+                  </div>
+                  <div className="cinema-text-source-image-list" aria-label="可用参考图">
+                    {sourceImageAssets.map((asset) => {
+                      const src = data.agentBaseURL && data.projectID
+                        ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, asset.path)
+                        : ""
+                      const isSelected = selectedSourceImageAssets.some((selectedAsset) =>
+                        sourceImageAssetKey(selectedAsset) === sourceImageAssetKey(asset)
+                      )
+                      return (
+                        <div
+                          key={`${asset.nodeID}-${asset.id}-${asset.path}`}
+                          className="cinema-text-source-image-item"
+                        >
+                          <button
+                            type="button"
+                            className={`cinema-text-source-image-thumb ${isSelected ? "is-selected" : ""}`}
+                            title={`${asset.nodeTitle} · ${asset.path}`}
+                            aria-label={`选择参考图 ${asset.nodeTitle}`}
+                            aria-pressed={isSelected}
+                            onClick={() => {
+                              const nextSelectedSourceImageAssets = isSelected
+                                ? selectedSourceImageAssets.filter((selectedAsset) =>
+                                  sourceImageAssetKey(selectedAsset) !== sourceImageAssetKey(asset)
+                                )
+                                : [...selectedSourceImageAssets, asset]
+                              commitRawDataPatch(sourceImageSelectionPatch(nextSelectedSourceImageAssets))
+                            }}
+                          >
+                            {src ? <img src={src} alt="" draggable={false} /> : <Image size={14} aria-hidden="true" />}
+                          </button>
+                          <button
+                            type="button"
+                            className="cinema-text-source-image-remove"
+                            title={`移除参考图 ${asset.nodeTitle}`}
+                            aria-label={`移除参考图 ${asset.nodeTitle}`}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              removeSourceImageAsset(asset)
+                            }}
+                          >
+                            <X size={11} aria-hidden="true" />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="cinema-text-source-image-empty">
+                  <Image size={15} aria-hidden="true" />
+                  <span>连接图片节点，或在这里选择一张/多张图片</span>
+                </div>
+              )}
+              <div className="cinema-text-source-image-actions">
+                <button
+                  type="button"
+                  className="cinema-text-source-image-add"
+                  title="从本地选择参考图"
+                  aria-label="从本地选择参考图"
+                  disabled={importTextSourceImageMutation.isPending}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    openSourceImagePicker()
+                  }}
+                >
+                  {importTextSourceImageMutation.isPending
+                    ? <Loader2 size={13} aria-hidden="true" className="is-spinning" />
+                    : <Upload size={13} aria-hidden="true" />}
+                  <span>添加 Text 参考图</span>
+                </button>
+              </div>
+              {sourceImageImportError ? (
+                <p className="cinema-text-generator-error" role="alert" title={sourceImageImportError}>
+                  {sourceImageImportError}
+                </p>
+              ) : null}
+              <input
+                ref={sourceImageInputRef}
+                className="cinema-local-image-input"
+                type="file"
+                accept={LOCAL_IMAGE_FILE_ACCEPT}
+                multiple
+                onChange={handleSourceImageFileInputChange}
+              />
+            </section>
+          ) : null}
           <textarea
-            className="cinema-text-generator-input"
+            ref={generatorPromptRef}
+            className="cinema-text-card-generator-input"
             value={generatorPromptDraft}
             placeholder="描述你想生成的文本内容..."
             onKeyDown={(event) => event.stopPropagation()}
@@ -1021,22 +1808,17 @@ function TextCanvasNode({
               commitRawDataPatch({ generationPrompt: generatorPromptDraftRef.current })
             }}
           />
-          <div className="cinema-text-generator-lower">
+          <div className="cinema-text-card-generator-lower">
             {data.textGenerationError ? (
               <p className="cinema-text-generator-error" role="alert" title={data.textGenerationError}>
                 {data.textGenerationError}
               </p>
             ) : null}
-            <footer className="cinema-text-generator-footer">
-              <button type="button" className="cinema-text-generator-pill" title="生成类型">
-                <Type size={13} aria-hidden="true" />
-                <span>文本生成</span>
-                <ChevronDown size={13} aria-hidden="true" />
-              </button>
+            <footer className="cinema-text-card-generator-footer">
               <div className="cinema-text-model-control" ref={modelControlRef}>
                 <button
                   type="button"
-                  className="cinema-text-generator-pill"
+                  className="cinema-text-card-model-button"
                   title="模型"
                   aria-haspopup="listbox"
                   aria-expanded={isModelMenuOpen}
@@ -1071,7 +1853,7 @@ function TextCanvasNode({
               </div>
               <button
                 type="button"
-                className="cinema-text-generator-submit"
+                className="cinema-text-card-submit"
                 title={selectedTextModel ? "生成文本" : "没有可用文本模型"}
                 aria-label="生成文本"
                 disabled={!canGenerate}
@@ -1084,13 +1866,14 @@ function TextCanvasNode({
             </footer>
           </div>
         </section>
-      </article>
+      ) : null}
+
       <Handle
         id="output"
         type="source"
         position={Position.Right}
-        className="cinema-node-handle cinema-text-node-handle cinema-text-node-handle-output"
-        style={handleStyle}
+        className="cinema-node-handle cinema-node-handle-output"
+        style={accentStyle}
       />
     </>
   )
@@ -1108,6 +1891,8 @@ function ImageGenerationCanvasNode({
   accentStyle: CSSProperties
 }) {
   const promptRef = useRef<HTMLTextAreaElement>(null)
+  const sourceImageInputRef = useRef<HTMLInputElement>(null)
+  const [sourceImageImportError, setSourceImageImportError] = useState<string | null>(null)
   const prompt = readRawString(data.rawData, "prompt")
   const style = readRawString(data.rawData, "style")
   const size = readRawString(data.rawData, "size", DEFAULT_IMAGE_GENERATION_SIZE)
@@ -1125,6 +1910,7 @@ function ImageGenerationCanvasNode({
   const promptCommitTimerRef = useRef<number | null>(null)
   const isPromptComposingRef = useRef(false)
   const imageModels = data.imageModels ?? []
+  const sourceTextParameters = data.sourceTextParameters ?? []
   const tasks = data.generationTasks ?? []
   const taskID = readRawString(data.rawData, "taskID")
   const task = tasks.find((item) => item.id === taskID) ?? null
@@ -1134,6 +1920,39 @@ function ImageGenerationCanvasNode({
     data.effectiveImageModel ??
     imageModels[0] ??
     null
+  const supportsSourceImage = Boolean(selectedImageModel?.supportsImageInput)
+  const connectedSourceImageAssets = data.sourceImageAssets ?? []
+  const connectedSourceImageAssetPaths = new Set(connectedSourceImageAssets.map((asset) => asset.path))
+  const imageSourceImageAssets = readImageGenerationSourceImageAssets(data.rawData, id)
+    .filter((asset) => !connectedSourceImageAssetPaths.has(asset.path))
+  const hiddenSourceImageAssetKeys = readRawStringArray(data.rawData, "hiddenSourceImageAssetKeys")
+  const sourceImageAssets = mergeSourceImageAssets([...connectedSourceImageAssets, ...imageSourceImageAssets])
+    .filter((asset) => !hiddenSourceImageAssetKeys.includes(sourceImageAssetKey(asset)))
+  const isManualSourceImageSelection = readRawString(data.rawData, "sourceImageSelectionMode") === "manual"
+  const selectedSourceImageAssetKeys = readRawStringArray(data.rawData, "sourceImageAssetKeys")
+  const selectedSourceImageAssetKey = readRawString(data.rawData, "sourceImageAssetKey")
+  const selectedSourceImageAssetIDs = readRawStringArray(data.rawData, "sourceImageAssetIDs")
+  const selectedSourceImageAssetID = readRawString(data.rawData, "sourceImageAssetID")
+  const selectedSourceImagePaths = readRawStringArray(data.rawData, "sourceImagePaths")
+  const selectedSourceImagePath = readRawString(data.rawData, "sourceImagePath")
+  const hasSavedSourceImageSelection = isManualSourceImageSelection
+    || selectedSourceImageAssetKeys.length > 0
+    || Boolean(selectedSourceImageAssetKey)
+    || selectedSourceImageAssetIDs.length > 0
+    || Boolean(selectedSourceImageAssetID)
+    || selectedSourceImagePaths.length > 0
+    || Boolean(selectedSourceImagePath)
+  const selectedSourceImageAssets = hasSavedSourceImageSelection
+    ? sourceImageAssets.filter((asset) => {
+      const key = sourceImageAssetKey(asset)
+      return selectedSourceImageAssetKeys.includes(key)
+        || key === selectedSourceImageAssetKey
+        || selectedSourceImageAssetIDs.includes(asset.id)
+        || asset.id === selectedSourceImageAssetID
+        || selectedSourceImagePaths.includes(asset.path)
+        || asset.path === selectedSourceImagePath
+    })
+    : sourceImageAssets
   const taskImageAssets = task?.outputAssets.filter((asset): asset is CinemaGeneratedAsset & { kind: "image" } => asset.kind === "image") ?? []
   const assets = taskImageAssets.length > 0 ? taskImageAssets : readImageResultAssets(data.rawData)
   const selectedAssetID = readRawString(data.rawData, "selectedAssetID")
@@ -1156,7 +1975,8 @@ function ImageGenerationCanvasNode({
   const previewStyle = previewAspectRatio
     ? { "--cinema-image-preview-aspect-ratio": previewAspectRatio } as CSSProperties
     : undefined
-  const promptReady = promptDraft.trim().length > 0
+  const effectivePromptDraft = imagePromptWithSourceText(promptDraft, sourceTextParameters)
+  const promptReady = effectivePromptDraft.trim().length > 0
   const isImageTaskActive = status === "queued" || status === "running"
   const isImageBusy = Boolean(data.isGeneratingImage) || isImageTaskActive
   const canGenerate = promptReady && Boolean(selectedImageModel) && !isImageBusy
@@ -1216,6 +2036,54 @@ function ImageGenerationCanvasNode({
     })
   }, [id, normalizeCountDraft])
 
+  const importImageSourceImageMutation = useMutation({
+    mutationFn: async (files: File[]) => {
+      if (!data.agentBaseURL || !data.projectID) throw new Error("Project context is not ready")
+      const assets: CinemaGeneratedAsset[] = []
+      for (const file of files) {
+        const dataBase64 = await fileToDataBase64(file)
+        const result = await requestJson<CinemaImportedImageAssetResult>(
+          data.agentBaseURL,
+          `/api/cinema/projects/${encodeURIComponent(data.projectID)}/assets/imports`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              fileName: file.name,
+              mimeType: file.type || undefined,
+              dataBase64,
+            }),
+          },
+        )
+        assets.push(result.asset)
+      }
+      return assets
+    },
+    onMutate: () => {
+      setSourceImageImportError(null)
+    },
+    onSuccess: (assets) => {
+      const existingImageAssets = readImageGenerationSourceImageAssets(rawDataRef.current, id)
+        .map(({ nodeID: _nodeID, nodeTitle: _nodeTitle, ...asset }) => asset)
+      const nextImageAssets = mergeImageAssets([...existingImageAssets, ...assets])
+      const nextImageSourceAssets = assets.map((asset) => ({
+        ...asset,
+        nodeID: id,
+        nodeTitle: "Image reference",
+      }))
+      commitRawDataPatch({
+        sourceImageAsset: nextImageAssets[0] ?? null,
+        sourceImageAssets: nextImageAssets,
+        ...sourceImageSelectionPatch([...selectedSourceImageAssets, ...nextImageSourceAssets]),
+      })
+    },
+    onError: (error) => {
+      setSourceImageImportError(error instanceof Error ? error.message : "Image import failed")
+    },
+  })
+
   const schedulePromptCommit = useCallback((value: string) => {
     clearPromptCommitTimer()
     promptCommitTimerRef.current = window.setTimeout(() => {
@@ -1247,9 +2115,46 @@ function ImageGenerationCanvasNode({
 
   useEffect(() => () => clearPromptCommitTimer(), [clearPromptCommitTimer])
 
+  const openSourceImagePicker = () => {
+    setSourceImageImportError(null)
+    sourceImageInputRef.current?.click()
+  }
+
+  const handleSourceImageFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ""
+    if (files.length === 0) return
+    importImageSourceImageMutation.mutate(files)
+  }
+
+  const removeSourceImageAsset = (asset: VideoSourceImageAsset) => {
+    const removedKey = sourceImageAssetKey(asset)
+    const nextSelectedSourceImageAssets = selectedSourceImageAssets.filter((selectedAsset) =>
+      sourceImageAssetKey(selectedAsset) !== removedKey
+    )
+    const patch: Record<string, unknown> = sourceImageSelectionPatch(nextSelectedSourceImageAssets)
+
+    if (asset.nodeID === id) {
+      const nextImageAssets = readImageGenerationSourceImageAssets(rawDataRef.current, id)
+        .filter((imageAsset) => sourceImageAssetKey(imageAsset) !== removedKey)
+        .map(({ nodeID: _nodeID, nodeTitle: _nodeTitle, ...imageAsset }) => imageAsset)
+      patch.sourceImageAsset = nextImageAssets[0] ?? null
+      patch.sourceImageAssets = nextImageAssets
+    } else {
+      const currentHiddenKeys = readRawStringArray(rawDataRef.current, "hiddenSourceImageAssetKeys")
+      patch.hiddenSourceImageAssetKeys = currentHiddenKeys.includes(removedKey)
+        ? currentHiddenKeys
+        : [...currentHiddenKeys, removedKey]
+    }
+
+    commitRawDataPatch(patch)
+  }
+
   const generateImage = () => {
     const nextPrompt = promptDraftRef.current.trim()
-    if (!nextPrompt) {
+    const nextSourceTextPrompts = sourceTextParameters.map((parameter) => parameter.text.trim()).filter(Boolean)
+    const nextEffectivePrompt = imagePromptWithSourceText(nextPrompt, sourceTextParameters)
+    if (!nextEffectivePrompt) {
       promptRef.current?.focus()
       return
     }
@@ -1263,13 +2168,33 @@ function ImageGenerationCanvasNode({
       size: nextSize,
       count: nextCount,
       style: styleDraftRef.current,
+      sourceNodeIDs: uniqueSourceNodeIDs(
+        sourceTextParameters.map((parameter) => parameter.nodeID),
+        supportsSourceImage ? selectedSourceImageAssets.filter((asset) => asset.nodeID !== id).map((asset) => asset.nodeID) : [],
+      ),
+      sourceTextPrompts: nextSourceTextPrompts,
+      ...(supportsSourceImage ? sourceImageSelectionPatch(selectedSourceImageAssets) : {}),
     })
     data.onGenerateImage?.(id, {
-      prompt: nextPrompt,
+      prompt: nextEffectivePrompt,
+      userPrompt: nextPrompt,
       model: selectedImageModel.value,
       size: nextSize,
       count: nextCount,
       style: styleDraftRef.current.trim() || undefined,
+      sourceNodeIDs: uniqueSourceNodeIDs(
+        sourceTextParameters.map((parameter) => parameter.nodeID),
+        supportsSourceImage ? selectedSourceImageAssets.filter((asset) => asset.nodeID !== id).map((asset) => asset.nodeID) : [],
+      ),
+      sourceTextPrompts: nextSourceTextPrompts.length > 0 ? nextSourceTextPrompts : undefined,
+      ...(supportsSourceImage && selectedSourceImageAssets.length > 0
+        ? {
+          sourceImageAssetID: selectedSourceImageAssets[0]?.id,
+          sourceImageAssetIDs: selectedSourceImageAssets.map((asset) => asset.id),
+          sourceImagePath: selectedSourceImageAssets[0]?.path,
+          sourceImagePaths: selectedSourceImageAssets.map((asset) => asset.path),
+        }
+        : {}),
     })
   }
 
@@ -1347,6 +2272,33 @@ function ImageGenerationCanvasNode({
         ) : null}
 
         <section className="cinema-image-gen-composer nodrag nowheel" aria-label="Image generation controls">
+          {sourceTextParameters.length > 0 ? (
+            <div className="cinema-image-gen-param-tags" aria-label="Connected text parameters">
+              {sourceTextParameters.map((parameter) => (
+                <span
+                  key={parameter.edgeID}
+                  className={`cinema-image-gen-param-tag ${parameter.text.trim() ? "" : "is-empty"}`}
+                  title={parameter.text.trim() ? `${parameter.nodeTitle}: ${parameter.text.trim()}` : `${parameter.nodeTitle}: 空文本`}
+                >
+                  <FileText size={12} aria-hidden="true" />
+                  <span>{parameter.nodeTitle}</span>
+                  <button
+                    type="button"
+                    title={`移除文本参数 ${parameter.nodeTitle}`}
+                    aria-label={`移除文本参数 ${parameter.nodeTitle}`}
+                    disabled={isImageBusy}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      data.onDisconnectEdge?.(parameter.edgeID)
+                    }}
+                  >
+                    <X size={11} aria-hidden="true" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
           <textarea
             ref={promptRef}
             value={promptDraft}
@@ -1384,6 +2336,103 @@ function ImageGenerationCanvasNode({
             onChange={(event) => setStyleDraft(event.target.value)}
             onBlur={() => commitRawDataPatch({ style: styleDraftRef.current })}
           />
+          {supportsSourceImage ? (
+            <section className={`cinema-text-source-image ${selectedSourceImageAssets.length > 0 ? "is-ready" : "is-empty"}`} aria-label="Image generation source image">
+              {sourceImageAssets.length > 0 ? (
+                <>
+                  <div className="cinema-text-source-image-main">
+                    <Image size={13} aria-hidden="true" />
+                    <span>{selectedSourceImageAssets.length > 0 ? `参考图：${selectedSourceImageAssets.length} 张` : "选择参考图"}</span>
+                  </div>
+                  <div className="cinema-text-source-image-list" aria-label="可用参考图">
+                    {sourceImageAssets.map((asset) => {
+                      const src = data.agentBaseURL && data.projectID
+                        ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, asset.path)
+                        : ""
+                      const isSelected = selectedSourceImageAssets.some((selectedAsset) =>
+                        sourceImageAssetKey(selectedAsset) === sourceImageAssetKey(asset)
+                      )
+                      return (
+                        <div
+                          key={`${asset.nodeID}-${asset.id}-${asset.path}`}
+                          className="cinema-text-source-image-item"
+                        >
+                          <button
+                            type="button"
+                            className={`cinema-text-source-image-thumb ${isSelected ? "is-selected" : ""}`}
+                            title={`${asset.nodeTitle} · ${asset.path}`}
+                            aria-label={`选择参考图 ${asset.nodeTitle}`}
+                            aria-pressed={isSelected}
+                            disabled={isImageBusy}
+                            onClick={() => {
+                              const nextSelectedSourceImageAssets = isSelected
+                                ? selectedSourceImageAssets.filter((selectedAsset) =>
+                                  sourceImageAssetKey(selectedAsset) !== sourceImageAssetKey(asset)
+                                )
+                                : [...selectedSourceImageAssets, asset]
+                              commitRawDataPatch(sourceImageSelectionPatch(nextSelectedSourceImageAssets))
+                            }}
+                          >
+                            {src ? <img src={src} alt="" draggable={false} /> : <Image size={14} aria-hidden="true" />}
+                          </button>
+                          <button
+                            type="button"
+                            className="cinema-text-source-image-remove"
+                            title={`移除参考图 ${asset.nodeTitle}`}
+                            aria-label={`移除参考图 ${asset.nodeTitle}`}
+                            disabled={isImageBusy}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              removeSourceImageAsset(asset)
+                            }}
+                          >
+                            <X size={11} aria-hidden="true" />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="cinema-text-source-image-empty">
+                  <Image size={15} aria-hidden="true" />
+                  <span>连接图片节点，或在这里选择一张/多张图片</span>
+                </div>
+              )}
+              <div className="cinema-text-source-image-actions">
+                <button
+                  type="button"
+                  className="cinema-text-source-image-add"
+                  title="从本地选择参考图"
+                  aria-label="从本地选择参考图"
+                  disabled={isImageBusy || importImageSourceImageMutation.isPending}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    openSourceImagePicker()
+                  }}
+                >
+                  {importImageSourceImageMutation.isPending
+                    ? <Loader2 size={13} aria-hidden="true" className="is-spinning" />
+                    : <Upload size={13} aria-hidden="true" />}
+                  <span>添加参考图</span>
+                </button>
+              </div>
+              {sourceImageImportError ? (
+                <p className="cinema-image-gen-error" role="alert" title={sourceImageImportError}>
+                  {sourceImageImportError}
+                </p>
+              ) : null}
+              <input
+                ref={sourceImageInputRef}
+                className="cinema-local-image-input"
+                type="file"
+                accept={LOCAL_IMAGE_FILE_ACCEPT}
+                multiple
+                onChange={handleSourceImageFileInputChange}
+              />
+            </section>
+          ) : null}
           <div className="cinema-image-gen-controls">
             <select
               aria-label="Image model"
@@ -1473,11 +2522,15 @@ function VideoGenerationCanvasNode({
   const tasks = data.generationTasks ?? []
   const taskID = readRawString(data.rawData, "taskID")
   const task = tasks.find((item) => item.id === taskID) ?? null
+  const taskUserPrompt = generationTaskUserPrompt(task)
   const initialMode = readVideoMode(data.rawData)
   const [mode, setModeState] = useState<CinemaGenerationMode>(initialMode)
   const [providerID, setProviderIDState] = useState(() => readRawString(data.rawData, "providerID"))
   const [modelID, setModelIDState] = useState(() => readRawString(data.rawData, "modelID"))
-  const [promptDraft, setPromptDraftState] = useState(() => task?.input.prompt ?? readRawString(data.rawData, "text"))
+  const [promptDraft, setPromptDraftState] = useState(() => {
+    const rawPrompt = readRawString(data.rawData, "text")
+    return taskUserPrompt ?? (rawPrompt || task?.input.prompt || "")
+  })
   const [aspectRatioDraft, setAspectRatioDraftState] = useState(() => readRawString(data.rawData, "aspectRatio", DEFAULT_VIDEO_ASPECT_RATIO))
   const [durationDraft, setDurationDraftState] = useState(() => String(readRawNumber(data.rawData, "duration", DEFAULT_VIDEO_DURATION_SECONDS)))
   const [resolutionDraft, setResolutionDraftState] = useState(() => readRawString(data.rawData, "resolution", DEFAULT_VIDEO_RESOLUTION))
@@ -1496,6 +2549,11 @@ function VideoGenerationCanvasNode({
   const selectedModel = modelForMode(selectedProvider, modelID, mode)
   const availableProviders = providersForMode(providers, mode)
   const availableModels = selectedProvider?.manifest.models.filter((model) => model.modes.includes(mode)) ?? []
+  const modeContract = videoModeInputContract(mode)
+  const availableModeContracts = enabledVideoNodeModeContracts(providers)
+  const visibleModeContracts = availableModeContracts.some((contract) => contract.mode === mode)
+    ? availableModeContracts
+    : [modeContract, ...availableModeContracts]
   const outputAssets = task?.outputAssets ?? readDisplayAssets(data.rawData)
   const outputAsset = outputAssets.find((asset) => asset.kind === "video") ?? outputAssets[0] ?? null
   const previewSrc = outputAsset && data.agentBaseURL && data.projectID
@@ -1509,9 +2567,29 @@ function VideoGenerationCanvasNode({
   const providerNeedsCredential = Boolean(selectedProvider?.auth.requiresCredential)
   const providerConnected = selectedProvider?.auth.connected !== false
   const providerAdapterUnavailable = Boolean(selectedProvider) && selectedProvider?.runtime?.adapterAvailable !== true
-  const sourceImageAsset = data.sourceImageAsset
-  const needsSourceImage = mode === "image-to-video"
-  const sourceImageMissing = needsSourceImage && !sourceImageAsset
+  const videoImageSlots = videoModeImageInputSlots(modeContract)
+  const inputHandleStyle = videoImageSlots.length > 0 ? { ...accentStyle, top: "36%" } : accentStyle
+  const imageInputAssets = data.videoInputImageAssets ?? {}
+  const sourceImageAsset = videoImageInputAssetList(imageInputAssets.sourceImage)[0] ?? data.sourceImageAsset ?? null
+  const imageInputAssetsForSlot = (slot: VideoImageInputSlot) => {
+    const assets = slot === "sourceImage"
+      ? (sourceImageAsset ? [sourceImageAsset] : [])
+      : videoImageInputAssetList(imageInputAssets[slot])
+    return slot === "referenceImage"
+      ? assets.slice(0, modeContract.maxReferenceImages ?? assets.length)
+      : assets.slice(0, 1)
+  }
+  const activeImageInputAssets = videoImageSlots.flatMap((slot) =>
+    imageInputAssetsForSlot(slot).map((asset) => ({ slot, asset }))
+  )
+  const missingRequiredImageSlot = modeContract.requiredSlots.find((slot) =>
+    isVideoImageInputSlot(slot) && imageInputAssetsForSlot(slot).length === 0
+  )
+  const missingRequiredImageSlotLabel = missingRequiredImageSlot ? VIDEO_INPUT_SLOT_LABELS[missingRequiredImageSlot] : ""
+  const sourceTextParameters = data.sourceTextParameters ?? []
+  const effectivePromptDraft = imagePromptWithSourceText(promptDraft, sourceTextParameters)
+  const needsSourceImage = videoModeRequiresSlot(mode, "sourceImage")
+  const sourceImageMissing = Boolean(missingRequiredImageSlot)
   const nodeError = data.videoGenerationError ?? task?.error ?? readRawString(data.rawData, "error")
   const progress = effectiveGenerationProgress({
     task,
@@ -1520,8 +2598,8 @@ function VideoGenerationCanvasNode({
     message: nodeError,
     forceQueued: Boolean(data.isCreatingVideoTask),
   })
-  const submitDisabledReason = promptDraft.trim().length === 0
-    ? "先输入视频描述。"
+  const submitDisabledReason = effectivePromptDraft.trim().length === 0
+    ? "先输入视频描述，或连接一个文本参数节点。"
     : !selectedProvider
       ? "没有可用的视频供应商。"
       : !selectedModel
@@ -1530,9 +2608,11 @@ function VideoGenerationCanvasNode({
           ? "当前任务还在处理中。"
           : providerNeedsCredential && !providerConnected
             ? `${selectedProvider.manifest.name} 还没有连接。`
-            : sourceImageMissing
-              ? "图生视频需要先连接一个已有输出的图片节点。"
-              : null
+            : providerAdapterUnavailable
+              ? `${selectedProvider.manifest.name} does not have a generation runtime adapter yet.`
+              : sourceImageMissing
+                ? `${missingRequiredImageSlotLabel}需要先连接图片节点或图片生成节点。`
+                : null
   const canGenerate =
     submitDisabledReason === null
 
@@ -1626,10 +2706,11 @@ function VideoGenerationCanvasNode({
 
   useEffect(() => {
     if (isPromptComposingRef.current || promptCommitTimerRef.current !== null) return
-    const nextPrompt = task?.input.prompt ?? readRawString(data.rawData, "text")
+    const rawPrompt = readRawString(data.rawData, "text")
+    const nextPrompt = taskUserPrompt ?? (rawPrompt || task?.input.prompt || "")
     promptDraftRef.current = nextPrompt
     setPromptDraftState(nextPrompt)
-  }, [data.rawData, task?.input.prompt])
+  }, [data.rawData, task?.input.prompt, taskUserPrompt])
 
   useEffect(() => () => clearPromptCommitTimer(), [clearPromptCommitTimer])
 
@@ -1693,7 +2774,9 @@ function VideoGenerationCanvasNode({
   }
 
   const createTask = () => {
-    const prompt = promptDraftRef.current.trim()
+    const userPrompt = promptDraftRef.current.trim()
+    const sourceTextPrompts = sourceTextParameters.map((parameter) => parameter.text.trim()).filter(Boolean)
+    const prompt = imagePromptWithSourceText(userPrompt, sourceTextParameters)
     if (!prompt) {
       promptRef.current?.focus()
       return
@@ -1703,6 +2786,29 @@ function VideoGenerationCanvasNode({
     const duration = normalizedDuration()
     const aspectRatio = aspectRatioDraftRef.current.trim() || defaultModelAspectRatio(selectedModel)
     const resolution = resolutionDraftRef.current.trim() || defaultModelResolution(selectedModel)
+    const sourceNodeIDs = uniqueSourceNodeIDs(
+      sourceTextParameters.map((parameter) => parameter.nodeID),
+      activeImageInputAssets.map(({ asset }) => asset.nodeID),
+    )
+    const inputSlots = [
+      ...sourceTextParameters.map((parameter) => ({
+        slot: "textParameter",
+        nodeID: parameter.nodeID,
+        edgeID: parameter.edgeID,
+      })),
+      ...activeImageInputAssets.map(({ slot, asset }) => ({
+        slot,
+        nodeID: asset.nodeID,
+        edgeID: asset.edgeID,
+        assetID: asset.id,
+        path: asset.path,
+      })),
+    ]
+    const referenceImageAssets = imageInputAssetsForSlot("referenceImage")
+    const referenceImageAssetIDs = referenceImageAssets.map((asset) => asset.id)
+    const referenceImagePaths = referenceImageAssets.map((asset) => asset.path)
+    const startFrameAsset = imageInputAssetsForSlot("startFrame")[0] ?? null
+    const endFrameAsset = imageInputAssetsForSlot("endFrame")[0] ?? null
     const parameters = {
       ...(rawDataRef.current.parameters && typeof rawDataRef.current.parameters === "object" && !Array.isArray(rawDataRef.current.parameters)
         ? rawDataRef.current.parameters as Record<string, unknown>
@@ -1710,16 +2816,39 @@ function VideoGenerationCanvasNode({
       aspectRatio,
       duration,
       resolution,
-      ...(mode === "image-to-video" && sourceImageAsset
+      userPrompt,
+      sourceTextPrompts,
+      inputSlots,
+      ...(needsSourceImage && sourceImageAsset
         ? {
             sourceImageAssetID: sourceImageAsset.id,
             sourceImagePath: sourceImageAsset.path,
           }
         : {}),
+      ...(startFrameAsset
+        ? {
+            startFrameAssetID: startFrameAsset.id,
+            startFramePath: startFrameAsset.path,
+          }
+        : {}),
+      ...(endFrameAsset
+        ? {
+            endFrameAssetID: endFrameAsset.id,
+            endFramePath: endFrameAsset.path,
+          }
+        : {}),
+      ...(referenceImageAssets.length > 0
+        ? {
+            referenceImageAssetID: referenceImageAssets[0]!.id,
+            referenceImageAssetIDs,
+            referenceImagePath: referenceImageAssets[0]!.path,
+            referenceImagePaths,
+          }
+        : {}),
     }
 
     commitRawDataPatch({
-      text: prompt,
+      text: userPrompt,
       mode,
       providerID: selectedProvider.manifest.id,
       modelID: selectedModel.id,
@@ -1727,7 +2856,8 @@ function VideoGenerationCanvasNode({
       duration,
       resolution,
       parameters,
-      sourceNodeIDs: sourceImageAsset ? [sourceImageAsset.nodeID] : [],
+      sourceNodeIDs,
+      sourceTextPrompts,
       status: "queued",
       error: null,
     })
@@ -1738,7 +2868,7 @@ function VideoGenerationCanvasNode({
       mode,
       title: data.title,
       prompt,
-      sourceNodeIDs: sourceImageAsset ? [sourceImageAsset.nodeID] : [],
+      sourceNodeIDs,
       parameters,
     })
   }
@@ -1750,8 +2880,18 @@ function VideoGenerationCanvasNode({
         type="target"
         position={Position.Left}
         className="cinema-node-handle cinema-node-handle-input"
-        style={accentStyle}
+        style={inputHandleStyle}
       />
+      {videoImageSlots.map((slot, index) => (
+        <Handle
+          key={slot}
+          id={slot}
+          type="target"
+          position={Position.Left}
+          className="cinema-node-handle cinema-node-handle-input cinema-node-handle-slot"
+          style={{ ...accentStyle, top: `${58 + index * 14}%` }}
+        />
+      ))}
       <article className={`cinema-video-gen-node ${selected ? "is-selected" : ""}`} style={accentStyle}>
         <header className="cinema-video-gen-header">
           <span className="cinema-node-type">
@@ -1788,31 +2928,51 @@ function VideoGenerationCanvasNode({
 
         <section className="cinema-video-gen-composer nodrag nowheel" aria-label="Video generation controls">
           <div className="cinema-video-mode-tabs" role="tablist" aria-label="Video generation mode">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "text-to-video"}
-              className={mode === "text-to-video" ? "is-active" : ""}
-              disabled={isBusy}
-              onClick={() => chooseMode("text-to-video")}
-            >
-              文生视频
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "image-to-video"}
-              className={mode === "image-to-video" ? "is-active" : ""}
-              disabled={isBusy}
-              onClick={() => chooseMode("image-to-video")}
-            >
-              图生视频
-            </button>
+            {visibleModeContracts.map((contract) => (
+              <button
+                key={contract.mode}
+                type="button"
+                role="tab"
+                aria-selected={mode === contract.mode}
+                className={mode === contract.mode ? "is-active" : ""}
+                disabled={isBusy}
+                onClick={() => chooseMode(contract.mode)}
+              >
+                {contract.label}
+              </button>
+            ))}
           </div>
+          {sourceTextParameters.length > 0 ? (
+            <div className="cinema-video-gen-param-tags" aria-label="Connected text parameters">
+              {sourceTextParameters.map((parameter) => (
+                <span
+                  key={parameter.edgeID}
+                  className={`cinema-video-gen-param-tag ${parameter.text.trim() ? "" : "is-empty"}`}
+                  title={parameter.text.trim() ? `${parameter.nodeTitle}: ${parameter.text.trim()}` : `${parameter.nodeTitle}: 空文本`}
+                >
+                  <FileText size={12} aria-hidden="true" />
+                  <span>{parameter.nodeTitle}</span>
+                  <button
+                    type="button"
+                    title={`移除文本参数 ${parameter.nodeTitle}`}
+                    aria-label={`移除文本参数 ${parameter.nodeTitle}`}
+                    disabled={isBusy}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      data.onDisconnectEdge?.(parameter.edgeID)
+                    }}
+                  >
+                    <X size={11} aria-hidden="true" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
           <textarea
             ref={promptRef}
             value={promptDraft}
-            placeholder={needsSourceImage ? "描述参考图要如何运动、镜头如何变化..." : "描述你想生成的视频片段..."}
+            placeholder={modeContract.promptPlaceholder}
             spellCheck={false}
             disabled={isBusy}
             onKeyDown={(event) => event.stopPropagation()}
@@ -1837,11 +2997,74 @@ function VideoGenerationCanvasNode({
               commitRawDataPatch({ text: promptDraftRef.current })
             }}
           />
-          {needsSourceImage ? (
-            <div className={`cinema-video-source ${sourceImageAsset ? "is-ready" : "is-missing"}`}>
-              <Image size={13} aria-hidden="true" />
-              <span>{sourceImageAsset ? `参考图：${sourceImageAsset.nodeTitle}` : "连接一个已有输出的图片节点"}</span>
-            </div>
+          {videoImageSlots.length > 0 ? (
+            <section className="cinema-video-input-slots" aria-label="Video input slots">
+              {videoImageSlots.flatMap((slot) => {
+                const slotAssets = imageInputAssetsForSlot(slot)
+                const slotItems = slot === "referenceImage" && slotAssets.length > 0
+                  ? slotAssets
+                  : [slotAssets[0] ?? null]
+                return slotItems.map((asset, assetIndex) => {
+                const preview = asset && data.agentBaseURL && data.projectID
+                  ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, asset.path)
+                  : ""
+                const edgeID = asset?.edgeID ?? ""
+                const isRequired = modeContract.requiredSlots.includes(slot)
+                const slotLabel = slot === "referenceImage" && asset
+                  ? `${VIDEO_INPUT_SLOT_LABELS[slot]} ${assetIndex + 1}/${modeContract.maxReferenceImages ?? slotAssets.length}`
+                  : slot === "referenceImage" && modeContract.maxReferenceImages
+                    ? `${VIDEO_INPUT_SLOT_LABELS[slot]}（最多 ${modeContract.maxReferenceImages} 张）`
+                    : VIDEO_INPUT_SLOT_LABELS[slot]
+                return (
+                  <div
+                    key={asset ? `${slot}-${asset.edgeID ?? sourceImageAssetKey(asset)}` : slot}
+                    className={`cinema-video-input-slot ${asset ? "is-ready" : "is-missing"}`}
+                  >
+                    <div className="cinema-video-input-slot-main">
+                      <div className="cinema-video-input-slot-thumb" aria-hidden="true">
+                        {preview ? (
+                          <img src={preview} alt="" draggable={false} />
+                        ) : (
+                          <Image size={14} aria-hidden="true" />
+                        )}
+                      </div>
+                      <div className="cinema-video-input-slot-copy">
+                        <span className="cinema-video-input-slot-label">
+                          {slotLabel}
+                        </span>
+                        <span
+                          className="cinema-video-input-slot-value"
+                          title={asset ? `${asset.nodeTitle} · ${asset.path}` : VIDEO_INPUT_SLOT_EMPTY_TEXT[slot]}
+                        >
+                          {asset
+                            ? `${asset.nodeTitle} · ${asset.path}`
+                            : VIDEO_INPUT_SLOT_EMPTY_TEXT[slot]}
+                        </span>
+                      </div>
+                    </div>
+                    {edgeID ? (
+                      <button
+                        type="button"
+                        className="cinema-video-input-slot-remove"
+                        title={`移除${VIDEO_INPUT_SLOT_LABELS[slot]}`}
+                        aria-label={`移除${VIDEO_INPUT_SLOT_LABELS[slot]}`}
+                        disabled={isBusy}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          data.onDisconnectEdge?.(edgeID)
+                        }}
+                      >
+                        <X size={12} aria-hidden="true" />
+                      </button>
+                    ) : isRequired ? (
+                      <span className="cinema-video-input-slot-required">必填</span>
+                    ) : null}
+                  </div>
+                )
+                })
+              })}
+            </section>
           ) : null}
           <div className="cinema-video-gen-controls">
             <select
@@ -1917,7 +3140,7 @@ function VideoGenerationCanvasNode({
             <button
               type="button"
               className="cinema-video-gen-submit"
-              title={submitDisabledReason ?? (providerAdapterUnavailable ? "当前 provider 还没有运行时，提交后会显示错误" : "Generate video")}
+              title={submitDisabledReason ?? "Generate video"}
               aria-label="Generate video"
               disabled={!canGenerate}
               onClick={createTask}
@@ -1931,7 +3154,7 @@ function VideoGenerationCanvasNode({
             <p className="cinema-video-gen-error" role="alert" title={nodeError ?? undefined}>
               {nodeError ?? (
                 sourceImageMissing
-                  ? "图生视频需要先连接一个已有输出的图片节点。"
+                  ? `${missingRequiredImageSlotLabel}需要先连接图片节点或图片生成节点。`
                   : providerAdapterUnavailable
                     ? `${selectedProvider?.manifest.name ?? "Provider"} 还没有接入视频生成运行时。`
                     : `${selectedProvider?.manifest.name ?? "Provider"} is not connected.`
@@ -1939,6 +3162,93 @@ function VideoGenerationCanvasNode({
             </p>
           ) : null}
         </section>
+      </article>
+      <Handle
+        id="output"
+        type="source"
+        position={Position.Right}
+        className="cinema-node-handle cinema-node-handle-output"
+        style={accentStyle}
+      />
+    </>
+  )
+}
+
+function LocalImageCanvasNode({
+  id,
+  data,
+  selected,
+  accentStyle,
+}: {
+  id: string
+  data: CinemaFlowNodeData
+  selected?: boolean
+  accentStyle: CSSProperties
+}) {
+  const asset = readLocalImageAsset(data.rawData)
+  const [hasPreviewError, setHasPreviewError] = useState(false)
+  const previewSrc = asset && data.agentBaseURL && data.projectID
+    ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, asset.path)
+    : ""
+  const previewAspectRatio = asset?.width && asset.height ? `${asset.width} / ${asset.height}` : null
+  const previewStyle = previewAspectRatio
+    ? { "--cinema-local-image-aspect-ratio": previewAspectRatio } as CSSProperties
+    : undefined
+  const fileName = readRawString(data.rawData, "sourceFileName", data.title)
+  const meta = asset
+    ? [
+      asset.width && asset.height ? `${asset.width}x${asset.height}` : "",
+      formatFileSize(asset.sizeBytes),
+    ].filter(Boolean).join(" · ")
+    : ""
+
+  useEffect(() => {
+    setHasPreviewError(false)
+  }, [previewSrc])
+
+  return (
+    <>
+      <Handle
+        id="input"
+        type="target"
+        position={Position.Left}
+        className="cinema-node-handle cinema-node-handle-input"
+        style={accentStyle}
+      />
+      <article
+        className={`cinema-local-image-node ${selected ? "is-selected" : ""}`}
+        style={accentStyle}
+      >
+        <header className="cinema-local-image-header">
+          <span className="cinema-node-type">
+            <Image size={14} aria-hidden="true" />
+            <NodeTitleInput nodeID={id} title={data.title} onChangeTitle={data.onChangeTitle} />
+          </span>
+          <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
+        </header>
+
+        <section className="cinema-local-image-frame" aria-label="Image preview" style={previewStyle}>
+          {previewSrc && !hasPreviewError ? (
+            <img
+              src={previewSrc}
+              alt={fileName}
+              draggable={false}
+              onError={() => setHasPreviewError(true)}
+            />
+          ) : (
+            <div className={`cinema-local-image-empty ${hasPreviewError ? "is-error" : ""}`}>
+              <Image size={28} aria-hidden="true" />
+              <span>{hasPreviewError ? "Image unavailable" : "No image selected"}</span>
+            </div>
+          )}
+        </section>
+
+        {asset ? (
+          <footer className="cinema-local-image-meta">
+            <span title={asset.path}>{asset.path}</span>
+            {meta ? <small>{meta}</small> : null}
+          </footer>
+        ) : null}
       </article>
       <Handle
         id="output"
@@ -1968,6 +3278,10 @@ function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
 
   if (data.cinemaType === "image") {
     return <ImageGenerationCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
+  }
+
+  if (data.cinemaType === "local-image") {
+    return <LocalImageCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
   }
 
   if (data.cinemaType === "video") {
@@ -2070,13 +3384,13 @@ function ProjectFileBrowser({
     <aside
       id="cinema-file-browser"
       className="cinema-file-browser"
-      aria-label="Project file browser"
+      aria-label="项目文件"
       onClick={(event) => event.stopPropagation()}
     >
       <header className="cinema-file-browser-header">
         <div>
-          <span>Project</span>
-          <strong>Files</strong>
+          <span>本项目</span>
+          <strong>项目文件</strong>
         </div>
         <div className="cinema-file-browser-actions">
           <button
@@ -2200,16 +3514,34 @@ function ProjectFileBrowser({
 function ContextMenu({
   menu,
   onAddNode,
+  onImportLocalImageNode,
   onClose,
+  isImportingLocalImage,
 }: {
   menu: ContextMenuState
   onAddNode: (type: CinemaNodeType, position: { x: number; y: number }) => void
+  onImportLocalImageNode: (position: { x: number; y: number }) => void
   onClose: () => void
+  isImportingLocalImage: boolean
 }) {
   if (!menu) return null
 
   return (
     <div className="cinema-context-menu" style={{ left: menu.x, top: menu.y }} role="menu">
+      <button
+        type="button"
+        role="menuitem"
+        disabled={isImportingLocalImage}
+        onClick={() => {
+          onImportLocalImageNode({ x: menu.flowX, y: menu.flowY })
+          onClose()
+        }}
+      >
+        {isImportingLocalImage
+          ? <Loader2 size={15} aria-hidden="true" className="is-spinning" />
+          : <Upload size={15} aria-hidden="true" />}
+        <span>Add Image</span>
+      </button>
       {NODE_TYPES.map((type) => {
         const meta = NODE_META[type]
         const Icon = meta.icon
@@ -2232,31 +3564,34 @@ function ContextMenu({
   )
 }
 
-function SaveIndicator({ state, error }: { state: SaveState; error: string | null }) {
-  if (state === "saving") {
-    return (
-      <span className="cinema-save-indicator">
-        <Loader2 size={14} aria-hidden="true" className="is-spinning" />
-        Saving
-      </span>
-    )
-  }
-  if (state === "dirty") {
-    return (
-      <span className="cinema-save-indicator">
-        <Clock3 size={14} aria-hidden="true" />
-        Unsaved
-      </span>
-    )
-  }
-  if (state === "error") {
-    return <span className="cinema-save-indicator is-error">{error ?? "Save failed"}</span>
-  }
+function CanvasPanelNavigation({
+  activePanel,
+  onTogglePanel,
+}: {
+  activePanel: CanvasPanel | null
+  onTogglePanel: (panel: CanvasPanel) => void
+}) {
+  const isFilesOpen = activePanel === "files"
+
   return (
-    <span className="cinema-save-indicator">
-      <Check size={14} aria-hidden="true" />
-      Saved
-    </span>
+    <nav
+      className="cinema-canvas-nav"
+      aria-label="Canvas panels"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <button
+        type="button"
+        className={`cinema-canvas-nav-button ${isFilesOpen ? "is-active" : ""}`}
+        title={isFilesOpen ? "关闭项目文件" : "打开项目文件"}
+        aria-label={isFilesOpen ? "关闭项目文件" : "打开项目文件"}
+        aria-controls="cinema-file-browser"
+        aria-expanded={isFilesOpen}
+        aria-pressed={isFilesOpen}
+        onClick={() => onTogglePanel("files")}
+      >
+        <Folder size={18} aria-hidden="true" />
+      </button>
+    </nav>
   )
 }
 
@@ -2269,9 +3604,9 @@ export function App() {
   const [nodes, setNodes] = useState<CinemaFlowNode[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
-  const [isFileBrowserOpen, setIsFileBrowserOpen] = useState(true)
+  const [activeCanvasPanel, setActiveCanvasPanel] = useState<CanvasPanel | null>("files")
   const [saveState, setSaveState] = useState<SaveState>("idle")
-  const [saveError, setSaveError] = useState<string | null>(null)
+  const [, setSaveError] = useState<string | null>(null)
   const [autoRefreshingTaskIDs, setAutoRefreshingTaskIDs] = useState<string[]>([])
   const [textGenerationNodeID, setTextGenerationNodeID] = useState<string | null>(null)
   const [textGenerationError, setTextGenerationError] = useState<{ nodeID: string; message: string } | null>(null)
@@ -2284,6 +3619,8 @@ export function App() {
   const nodePatchTimersRef = useRef(new Map<string, number>())
   const nodePatchQueueRef = useRef(new Map<string, CinemaNodePatch>())
   const eventCursorRef = useRef<number | null>(null)
+  const localImageInputRef = useRef<HTMLInputElement | null>(null)
+  const pendingLocalImagePositionRef = useRef<{ x: number; y: number } | null>(null)
 
   const applyCanvas = useCallback((canvas: CinemaCanvasDocument) => {
     setNodes(toFlowNodes(canvas))
@@ -2585,7 +3922,10 @@ export function App() {
   }, [agentBaseURL, projectID])
 
   const createTextGenerationMutation = useMutation({
-    mutationFn: async ({ nodeID, prompt, model }: { nodeID: string; prompt: string; model: string | null }) => {
+    mutationFn: async ({ nodeID, request }: {
+      nodeID: string
+      request: TextGenerationRequest
+    }) => {
       await flushNodePatch(nodeID)
       return await requestJson<CinemaTextGenerationResult>(
         agentBaseURL,
@@ -2597,8 +3937,7 @@ export function App() {
           },
           body: JSON.stringify({
             nodeID,
-            prompt,
-            model,
+            ...request,
             writeMode: "append",
           }),
         },
@@ -2669,6 +4008,49 @@ export function App() {
     },
     onSettled: () => {
       setImageGenerationNodeID(null)
+    },
+  })
+
+  const importLocalImageMutation = useMutation({
+    mutationFn: async ({ file, position }: { file: File; position: { x: number; y: number } }) => {
+      const dataBase64 = await fileToDataBase64(file)
+      const result = await requestJson<CinemaImportedImageAssetResult>(
+        agentBaseURL,
+        `/api/cinema/projects/${encodeURIComponent(projectID)}/assets/imports`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fileName: file.name,
+            mimeType: file.type || undefined,
+            dataBase64,
+          }),
+        },
+      )
+      return { result, file, position }
+    },
+    onMutate: () => {
+      saveStateRef.current = "saving"
+      setSaveState("saving")
+      setSaveError(null)
+    },
+    onSuccess: ({ result, file, position }) => {
+      const next = createLocalImageNode(result.asset, file.name, position)
+      commandMutation.mutate({
+        id: makeCommandID("create-node"),
+        type: "create-node",
+        actor: "cinema-web",
+        node: toCanvasNode(next),
+      }, {
+        onSuccess: () => setSelectedNodeID(next.id),
+      })
+    },
+    onError: (error) => {
+      saveStateRef.current = "error"
+      setSaveState("error")
+      setSaveError(error instanceof Error ? error.message : "Image import failed")
     },
   })
 
@@ -2806,14 +4188,28 @@ export function App() {
     }
   }, [commandMutation])
 
+  const disconnectEdge = useCallback((edgeID: string) => {
+    setEdges((current) => current.filter((edge) => edge.id !== edgeID))
+    saveStateRef.current = "dirty"
+    setSaveState("dirty")
+    commandMutation.mutate({
+      id: makeCommandID("disconnect-edge"),
+      type: "disconnect-edge",
+      actor: "cinema-web",
+      edgeID,
+    })
+  }, [commandMutation])
+
   const onConnect = useCallback((connection: Connection) => {
     if (!connection.source || !connection.target) return
+    const targetSlot = isVideoInputSlot(connection.targetHandle) ? connection.targetHandle : null
     const edge = {
       id: `edge-${connection.source}-${connection.target}-${Date.now().toString(36)}`,
       source: connection.source,
       target: connection.target,
       ...(connection.sourceHandle ? { sourceHandle: connection.sourceHandle } : {}),
       ...(connection.targetHandle ? { targetHandle: connection.targetHandle } : {}),
+      ...(targetSlot ? { data: { targetSlot } } : {}),
     }
     commandMutation.mutate({
       id: makeCommandID("connect-nodes"),
@@ -2834,6 +4230,22 @@ export function App() {
       onSuccess: () => setSelectedNodeID(next.id),
     })
   }, [commandMutation, setSelectedNodeID])
+
+  const requestLocalImageImport = useCallback((position: { x: number; y: number }) => {
+    pendingLocalImagePositionRef.current = position
+    localImageInputRef.current?.click()
+  }, [])
+
+  const handleLocalImageFileChange = useCallback((file: File | null) => {
+    const position = pendingLocalImagePositionRef.current
+    pendingLocalImagePositionRef.current = null
+    if (!file || !position) return
+    importLocalImageMutation.mutate({ file, position })
+  }, [importLocalImageMutation])
+
+  const toggleCanvasPanel = useCallback((panel: CanvasPanel) => {
+    setActiveCanvasPanel((current) => current === panel ? null : panel)
+  }, [])
 
   const onPaneContextMenu = useCallback((event: globalThis.MouseEvent | ReactMouseEvent<Element>) => {
     event.preventDefault()
@@ -2896,19 +4308,27 @@ export function App() {
         effectiveTextModel,
         isGeneratingText: createTextGenerationMutation.isPending && textGenerationNodeID === node.id,
         textGenerationError: textGenerationError?.nodeID === node.id ? textGenerationError.message : null,
-        onGenerateText: (nodeID: string, prompt: string, model: string | null) =>
-          createTextGenerationMutation.mutate({ nodeID, prompt, model }),
+        sourceImageAssets: node.data.cinemaType === "text" || node.data.cinemaType === "image"
+          ? sourceImageAssetsForNode(node.id, nodes, edges)
+          : [],
+        onGenerateText: (nodeID: string, request: TextGenerationRequest) =>
+          createTextGenerationMutation.mutate({ nodeID, request }),
         imageModels,
         effectiveImageModel,
         isGeneratingImage: createImageGenerationMutation.isPending && imageGenerationNodeID === node.id,
         imageGenerationError: imageGenerationError?.nodeID === node.id ? imageGenerationError.message : null,
+        sourceTextParameters: node.data.cinemaType === "image" || node.data.cinemaType === "video"
+          ? sourceTextParametersForNode(node.id, nodes, edges)
+          : [],
         agentBaseURL,
         projectID,
+        onDisconnectEdge: disconnectEdge,
         onGenerateImage: (nodeID: string, request: ImageGenerationRequest) =>
           createImageGenerationMutation.mutate({ nodeID, request }),
         videoProviders: providersQuery.data ?? [],
         generationTasks: tasksQuery.data ?? [],
         sourceImageAsset: node.data.cinemaType === "video" ? sourceImageAssetForVideoNode(node.id, nodes, edges) : null,
+        videoInputImageAssets: node.data.cinemaType === "video" ? sourceImageAssetsForVideoNode(node.id, nodes, edges) : {},
         isCreatingVideoTask: createGenerationTaskMutation.isPending && videoGenerationNodeID === node.id,
         videoGenerationError: videoGenerationError?.nodeID === node.id ? videoGenerationError.message : null,
         onCreateVideoGenerationTask: (nodeID: string, body: CreateCinemaGenerationTaskBody) =>
@@ -2922,6 +4342,7 @@ export function App() {
       createImageGenerationMutation,
       createTextGenerationMutation,
       deleteNode,
+      disconnectEdge,
       edges,
       effectiveImageModel,
       effectiveTextModel,
@@ -2989,56 +4410,20 @@ export function App() {
 
   return (
     <main className="cinema-shell" onClick={() => setContextMenu(null)}>
+      <input
+        ref={localImageInputRef}
+        className="cinema-local-image-input"
+        type="file"
+        accept={LOCAL_IMAGE_FILE_ACCEPT}
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0] ?? null
+          event.currentTarget.value = ""
+          handleLocalImageFileChange(file)
+        }}
+      />
       <section className="cinema-workspace">
-        <header className="cinema-topbar">
-          <div>
-            <span className="cinema-brand">anybox for cinema</span>
-            <strong>{projectQuery.data?.name ?? "Cinema Project"}</strong>
-          </div>
-          <div className="cinema-topbar-actions">
-            <SaveIndicator state={saveState} error={saveError} />
-            <button
-              type="button"
-              className="cinema-command-button"
-              onClick={() => addNode("text", { x: 120, y: 120 })}
-            >
-              <Plus size={15} aria-hidden="true" />
-              Text
-            </button>
-            <button
-              type="button"
-              className="cinema-command-button"
-              onClick={() => addNode("image", { x: 150, y: 150 })}
-            >
-              <Plus size={15} aria-hidden="true" />
-              Image Gen
-            </button>
-            <button
-              type="button"
-              className="cinema-command-button"
-              onClick={() => addNode("video", { x: 180, y: 180 })}
-            >
-              <Plus size={15} aria-hidden="true" />
-              Video
-            </button>
-            <button
-              type="button"
-              className="cinema-command-button"
-              onClick={() => addNode("shot", { x: 210, y: 210 })}
-            >
-              <Plus size={15} aria-hidden="true" />
-              Shot
-            </button>
-            <button
-              type="button"
-              className="cinema-command-button"
-              onClick={() => addNode("generation-task", { x: 260, y: 220 })}
-            >
-              <Plus size={15} aria-hidden="true" />
-              Task
-            </button>
-          </div>
-        </header>
         <div className="cinema-canvas">
           <ReactFlow<CinemaFlowNode, Edge>
             nodes={renderedNodes}
@@ -3069,30 +4454,26 @@ export function App() {
               zoomable
             />
           </ReactFlow>
-          <ContextMenu menu={contextMenu} onAddNode={addNode} onClose={() => setContextMenu(null)} />
+          <ContextMenu
+            menu={contextMenu}
+            onAddNode={addNode}
+            onImportLocalImageNode={requestLocalImageImport}
+            onClose={() => setContextMenu(null)}
+            isImportingLocalImage={importLocalImageMutation.isPending}
+          />
+          {activeCanvasPanel === "files" ? (
+            <ProjectFileBrowser
+              projectID={projectID}
+              agentBaseURL={agentBaseURL}
+              onClose={() => setActiveCanvasPanel(null)}
+            />
+          ) : null}
+          <CanvasPanelNavigation
+            activePanel={activeCanvasPanel}
+            onTogglePanel={toggleCanvasPanel}
+          />
         </div>
       </section>
-      <button
-        type="button"
-        className={`cinema-file-browser-toggle ${isFileBrowserOpen ? "is-open" : ""}`}
-        title={isFileBrowserOpen ? "Hide files" : "Show files"}
-        aria-label={isFileBrowserOpen ? "Hide file browser" : "Show file browser"}
-        aria-controls="cinema-file-browser"
-        aria-expanded={isFileBrowserOpen}
-        onClick={(event) => {
-          event.stopPropagation()
-          setIsFileBrowserOpen((current) => !current)
-        }}
-      >
-        <Folder size={18} aria-hidden="true" />
-      </button>
-      {isFileBrowserOpen ? (
-        <ProjectFileBrowser
-          projectID={projectID}
-          agentBaseURL={agentBaseURL}
-          onClose={() => setIsFileBrowserOpen(false)}
-        />
-      ) : null}
     </main>
   )
 }

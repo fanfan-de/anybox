@@ -31,7 +31,11 @@ const PROVIDERS_MODELSWIKI_API_URL =
 const REQUEST_TIMEOUT_MS = 10 * 1000
 const CATALOG_SOURCE_ID = "providers-modelswiki"
 const KLINGAI_PROVIDER_ID = "klingai"
-const KLINGAI_DEFAULT_BASE_URL = "https://api-singapore.klingai.com"
+const KLINGAI_CN_PROVIDER_ID = "klingai-cn"
+const KLINGAI_GLOBAL_PROVIDER_ID = "klingai-global"
+const KLINGAI_PROVIDER_IDS = [KLINGAI_PROVIDER_ID, KLINGAI_CN_PROVIDER_ID, KLINGAI_GLOBAL_PROVIDER_ID] as const
+const KLINGAI_CN_DEFAULT_BASE_URL = "https://api-beijing.klingai.com"
+const KLINGAI_GLOBAL_DEFAULT_BASE_URL = "https://api-singapore.klingai.com"
 const KLINGAI_REQUEST_TIMEOUT_MS = 30 * 1000
 const KLINGAI_DOWNLOAD_TIMEOUT_MS = 120 * 1000
 const KLINGAI_IMAGE_ASSET_MAX_BYTES = 25 * 1024 * 1024
@@ -348,6 +352,16 @@ function normalizeStringList(values: string[] | undefined) {
   return [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean))]
 }
 
+function isKlingAIProviderID(providerID: string) {
+  return KLINGAI_PROVIDER_IDS.includes(providerID as typeof KLINGAI_PROVIDER_IDS[number])
+}
+
+function defaultKlingAIBaseURLForProvider(providerID: string) {
+  return providerID === KLINGAI_CN_PROVIDER_ID
+    ? KLINGAI_CN_DEFAULT_BASE_URL
+    : KLINGAI_GLOBAL_DEFAULT_BASE_URL
+}
+
 function normalizeModes(values: string[]) {
   return values.flatMap((value) => {
     const parsed = CinemaProviderModelModeSchema.safeParse(value)
@@ -355,10 +369,22 @@ function normalizeModes(values: string[]) {
   })
 }
 
+function augmentRuntimeSupportedCatalogModes(providerID: string, modes: CinemaProviderModelMode[]) {
+  if (!isKlingAIProviderID(providerID) || !modes.includes("image-to-video") || modes.includes("frames-to-video")) {
+    return modes
+  }
+  const imageToVideoIndex = modes.indexOf("image-to-video")
+  return [
+    ...modes.slice(0, imageToVideoIndex + 1),
+    "frames-to-video" as const,
+    ...modes.slice(imageToVideoIndex + 1),
+  ]
+}
+
 function manifestFromCatalogProvider(provider: RawCatalogProviderSchemaOutput): CinemaVideoProviderManifest {
   const models = Object.values(provider.models)
     .map((model) => {
-      const modes = normalizeModes(model.modes)
+      const modes = augmentRuntimeSupportedCatalogModes(provider.id, normalizeModes(model.modes))
       if (modes.length === 0) return null
       return {
         id: model.id,
@@ -447,6 +473,12 @@ export function cinemaVideoProviderAdapterSupportsMode(providerID: string, mode:
   if (!adapter) return false
   if (adapter.supportedModes) return adapter.supportedModes.includes(mode)
   return mode === "text-to-video" || mode === "image-to-video"
+}
+
+function cinemaVideoProviderAdapterSupportedModes(providerID: string): CinemaProviderModelMode[] {
+  const adapter = providerAdapters[providerID]
+  if (!adapter) return []
+  return [...(adapter.supportedModes ?? ["text-to-video", "image-to-video"])]
 }
 
 export function findCinemaVideoProviderModelForMode(
@@ -632,12 +664,33 @@ function isJWTLike(value: string) {
   return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(stripKlingAICredentialDecorators(value))
 }
 
-async function klingAIBearerToken() {
-  const runtimeAuth = await ProviderAuth.resolveProviderRuntimeAuth(`cinema-${KLINGAI_PROVIDER_ID}`, {}, {
-    method: "api-key",
-    credentialMode: "active",
-  })
-  const apiKey = runtimeAuth.apiKey?.trim()
+function klingAICredentialProviderIDs(providerID: string) {
+  const providerIDs = [`cinema-${providerID}`]
+  if (isKlingAIProviderID(providerID) && providerID !== KLINGAI_PROVIDER_ID) {
+    providerIDs.push(`cinema-${KLINGAI_PROVIDER_ID}`)
+  }
+  return [...new Set(providerIDs)]
+}
+
+function credentialProviderIDsForManifest(manifest: CinemaVideoProviderManifest) {
+  const primaryCredentialProviderID = manifest.credentialProviderID ?? `cinema-${manifest.id}`
+  const providerIDs = [primaryCredentialProviderID]
+  if (isKlingAIProviderID(manifest.id) && manifest.id !== KLINGAI_PROVIDER_ID) {
+    providerIDs.push(`cinema-${KLINGAI_PROVIDER_ID}`)
+  }
+  return [...new Set(providerIDs)]
+}
+
+async function klingAIBearerToken(providerID: string) {
+  let apiKey: string | undefined
+  for (const credentialProviderID of klingAICredentialProviderIDs(providerID)) {
+    const runtimeAuth = await ProviderAuth.resolveProviderRuntimeAuth(credentialProviderID, {}, {
+      method: "api-key",
+      credentialMode: "active",
+    })
+    apiKey = runtimeAuth.apiKey?.trim()
+    if (apiKey) break
+  }
   if (!apiKey) {
     throw new ApiError(
       401,
@@ -652,19 +705,19 @@ async function klingAIBearerToken() {
   return pair ? createKlingAIJWT(pair) : normalizedApiKey
 }
 
-async function klingAIBaseURL() {
-  const settings = await Config.getCinemaVideoProviderSettings(KLINGAI_PROVIDER_ID)
+async function klingAIBaseURL(providerID: string) {
+  const settings = await Config.getCinemaVideoProviderSettings(providerID)
   const configuredBaseURL = normalizeBaseURL(settings.baseURL)
   if (configuredBaseURL) return configuredBaseURL
 
-  const manifest = (await catalogManifests()).find((item) => item.id === KLINGAI_PROVIDER_ID)
-  return normalizeCatalogBaseURL(manifest?.baseURL) ?? KLINGAI_DEFAULT_BASE_URL
+  const manifest = (await catalogManifests()).find((item) => item.id === providerID)
+  return normalizeCatalogBaseURL(manifest?.baseURL) ?? defaultKlingAIBaseURLForProvider(providerID)
 }
 
 function defaultBaseURLForProvider(manifest: CinemaVideoProviderManifest) {
   return (
     normalizeCatalogBaseURL(manifest.baseURL) ??
-    (manifest.id === KLINGAI_PROVIDER_ID ? KLINGAI_DEFAULT_BASE_URL : undefined)
+    (isKlingAIProviderID(manifest.id) ? defaultKlingAIBaseURLForProvider(manifest.id) : undefined)
   )
 }
 
@@ -716,14 +769,15 @@ function klingAIRequestErrorMessage(status: number, remoteMessage: string) {
 }
 
 async function requestKlingAI(
+  providerID: string,
   endpointPath: string,
   options: {
     method?: "GET" | "POST"
     body?: Record<string, unknown>
   } = {},
 ): Promise<KlingAIParsedResponse> {
-  const baseURL = await klingAIBaseURL()
-  const token = await klingAIBearerToken()
+  const baseURL = await klingAIBaseURL(providerID)
+  const token = await klingAIBearerToken(providerID)
   const headers = new Headers({
     Authorization: `Bearer ${token}`,
   })
@@ -1074,15 +1128,28 @@ async function downloadKlingAIVideoAssets(input: {
 function klingAIEndpointKindForTask(task: CinemaGenerationTask): KlingAIEndpointKind {
   const refKind = stringValue(task.providerTaskRef?.kind)
   if (refKind === "text2video" || refKind === "image2video" || refKind === "image-generation") return refKind
-  if (task.mode === "text-to-image") return "image-generation"
-  return task.mode === "image-to-video" ? "image2video" : "text2video"
+  return klingAIEndpointKindForMode(task.mode)
+}
+
+function klingAIEndpointKindForMode(mode: CinemaProviderModelMode): KlingAIEndpointKind {
+  switch (mode) {
+    case "text-to-video":
+      return "text2video"
+    case "image-to-video":
+    case "frames-to-video":
+      return "image2video"
+    case "text-to-image":
+      return "image-generation"
+    default:
+      throw new ApiError(400, "CINEMA_KLINGAI_MODE_UNSUPPORTED", `KlingAI adapter does not support mode '${mode}'.`)
+  }
 }
 
 function klingAITaskRefFor(task: CinemaGenerationTask, taskID: string, kind: KlingAIEndpointKind) {
   const existingRef = isRecord(task.providerTaskRef) ? task.providerTaskRef : {}
   return {
     ...existingRef,
-    providerID: KLINGAI_PROVIDER_ID,
+    providerID: task.providerID,
     taskID,
     kind,
     endpoint: klingAIEndpointPath(kind),
@@ -1243,45 +1310,106 @@ function klingAIExternalTaskID(taskID: string) {
   return safeKlingAISegment(taskID).slice(0, 64)
 }
 
-async function klingAIImageInput(root: string, parameters: Record<string, unknown>) {
-  const sourceImageURL = stringValue(parameters.sourceImageURL) ?? stringValue(parameters.imageURL)
+async function klingAIImageInput(root: string, parameters: Record<string, unknown>, input: {
+  urlKeys: string[]
+  pathKeys: string[]
+  missingCode: string
+  missingMessage: string
+  invalidURLMessage: string
+  invalidSchemeMessage: string
+  notFoundMessage: string
+  invalidPathMessage: string
+  tooLargeMessage: string
+}) {
+  const sourceImageURL = input.urlKeys.map((key) => stringValue(parameters[key])).find(Boolean)
   if (sourceImageURL) {
     let url: URL
     try {
       url = new URL(sourceImageURL)
     } catch {
-      throw new ApiError(400, "CINEMA_KLINGAI_SOURCE_IMAGE_INVALID", "KlingAI source image URL must be a valid absolute URL.")
+      throw new ApiError(400, "CINEMA_KLINGAI_SOURCE_IMAGE_INVALID", input.invalidURLMessage)
     }
     if (url.protocol !== "http:" && url.protocol !== "https:") {
-      throw new ApiError(400, "CINEMA_KLINGAI_SOURCE_IMAGE_INVALID", "KlingAI source image URL must use http or https.")
+      throw new ApiError(400, "CINEMA_KLINGAI_SOURCE_IMAGE_INVALID", input.invalidSchemeMessage)
     }
     return url.toString()
   }
 
-  const sourceImagePath = stringValue(parameters.sourceImagePath) ?? stringValue(parameters.imagePath)
+  const sourceImagePath = input.pathKeys.map((key) => stringValue(parameters[key])).find(Boolean)
   if (!sourceImagePath) {
     throw new ApiError(
       400,
-      "CINEMA_KLINGAI_SOURCE_IMAGE_REQUIRED",
-      "Image-to-video requires a source image. Connect an image node with a generated asset before submitting.",
+      input.missingCode,
+      input.missingMessage,
     )
   }
 
   const filePath = resolveProjectRelativeFile(root, sourceImagePath)
   const fileStat = await stat(filePath).catch((error: unknown) => {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      throw new ApiError(404, "CINEMA_KLINGAI_SOURCE_IMAGE_NOT_FOUND", "KlingAI source image asset was not found.")
+      throw new ApiError(404, "CINEMA_KLINGAI_SOURCE_IMAGE_NOT_FOUND", input.notFoundMessage)
     }
     throw error
   })
   if (!fileStat.isFile()) {
-    throw new ApiError(400, "CINEMA_KLINGAI_SOURCE_IMAGE_INVALID", "KlingAI source image path must point to a file.")
+    throw new ApiError(400, "CINEMA_KLINGAI_SOURCE_IMAGE_INVALID", input.invalidPathMessage)
   }
   if (fileStat.size > 25 * 1024 * 1024) {
-    throw new ApiError(413, "CINEMA_KLINGAI_SOURCE_IMAGE_TOO_LARGE", "KlingAI source image is too large.")
+    throw new ApiError(413, "CINEMA_KLINGAI_SOURCE_IMAGE_TOO_LARGE", input.tooLargeMessage)
   }
 
   return Buffer.from(await readFile(filePath)).toString("base64")
+}
+
+async function klingAISourceImageInput(root: string, parameters: Record<string, unknown>) {
+  return await klingAIImageInput(root, parameters, {
+    urlKeys: ["sourceImageURL", "imageURL"],
+    pathKeys: ["sourceImagePath", "imagePath"],
+    missingCode: "CINEMA_KLINGAI_SOURCE_IMAGE_REQUIRED",
+    missingMessage: "Image-to-video requires a source image. Connect an image node with a generated asset before submitting.",
+    invalidURLMessage: "KlingAI source image URL must be a valid absolute URL.",
+    invalidSchemeMessage: "KlingAI source image URL must use http or https.",
+    notFoundMessage: "KlingAI source image asset was not found.",
+    invalidPathMessage: "KlingAI source image path must point to a file.",
+    tooLargeMessage: "KlingAI source image is too large.",
+  })
+}
+
+async function klingAIStartFrameInput(root: string, parameters: Record<string, unknown>) {
+  return await klingAIImageInput(root, parameters, {
+    urlKeys: ["startFrameURL", "startImageURL", "sourceImageURL", "imageURL"],
+    pathKeys: ["startFramePath", "startImagePath", "sourceImagePath", "imagePath"],
+    missingCode: "CINEMA_KLINGAI_START_FRAME_REQUIRED",
+    missingMessage: "Start/end frame video requires a start frame image.",
+    invalidURLMessage: "KlingAI start frame URL must be a valid absolute URL.",
+    invalidSchemeMessage: "KlingAI start frame URL must use http or https.",
+    notFoundMessage: "KlingAI start frame asset was not found.",
+    invalidPathMessage: "KlingAI start frame path must point to a file.",
+    tooLargeMessage: "KlingAI start frame image is too large.",
+  })
+}
+
+async function klingAIEndFrameInput(root: string, parameters: Record<string, unknown>) {
+  return await klingAIImageInput(root, parameters, {
+    urlKeys: ["endFrameURL", "endImageURL", "imageTailURL", "image_tail_url"],
+    pathKeys: ["endFramePath", "endImagePath", "imageTailPath", "image_tail_path"],
+    missingCode: "CINEMA_KLINGAI_END_FRAME_REQUIRED",
+    missingMessage: "Start/end frame video requires an end frame image.",
+    invalidURLMessage: "KlingAI end frame URL must be a valid absolute URL.",
+    invalidSchemeMessage: "KlingAI end frame URL must use http or https.",
+    notFoundMessage: "KlingAI end frame asset was not found.",
+    invalidPathMessage: "KlingAI end frame path must point to a file.",
+    tooLargeMessage: "KlingAI end frame image is too large.",
+  })
+}
+
+function hasKlingAIImageInput(parameters: Record<string, unknown>) {
+  return Boolean(
+    stringValue(parameters.sourceImageURL) ??
+    stringValue(parameters.imageURL) ??
+    stringValue(parameters.sourceImagePath) ??
+    stringValue(parameters.imagePath)
+  )
 }
 
 async function klingAITaskPayload(input: ProviderAdapterCreateInput, kind: KlingAIEndpointKind) {
@@ -1307,8 +1435,11 @@ async function klingAITaskPayload(input: ProviderAdapterCreateInput, kind: Kling
   if (Number.isInteger(count) && count > 0) payload.n = count
   if (kind !== "image-generation") payload.mode = klingAIQualityMode(parameters)
 
-  if (kind === "image2video") {
-    payload.image = await klingAIImageInput(input.root, parameters)
+  if (input.task.mode === "frames-to-video") {
+    payload.image = await klingAIStartFrameInput(input.root, parameters)
+    payload.image_tail = await klingAIEndFrameInput(input.root, parameters)
+  } else if (kind === "image2video" || (kind === "image-generation" && hasKlingAIImageInput(parameters))) {
+    payload.image = await klingAISourceImageInput(input.root, parameters)
   }
 
   return payload
@@ -1316,15 +1447,11 @@ async function klingAITaskPayload(input: ProviderAdapterCreateInput, kind: Kling
 
 const KlingAIProviderAdapter: ProviderAdapter = {
   manifest: {} as CinemaVideoProviderManifest,
-  supportedModes: ["text-to-video", "image-to-video", "text-to-image"],
+  supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "text-to-image"],
   createTask: async (input) => {
-    const kind = input.task.mode === "text-to-image"
-      ? "image-generation"
-      : input.task.mode === "image-to-video"
-        ? "image2video"
-        : "text2video"
+    const kind = klingAIEndpointKindForMode(input.task.mode)
     const payload = await klingAITaskPayload(input, kind)
-    const response = await requestKlingAI(klingAIEndpointPath(kind), {
+    const response = await requestKlingAI(input.task.providerID, klingAIEndpointPath(kind), {
       method: "POST",
       body: payload,
     })
@@ -1357,7 +1484,7 @@ const KlingAIProviderAdapter: ProviderAdapter = {
     }
 
     const kind = klingAIEndpointKindForTask(input.task)
-    const response = await requestKlingAI(klingAIEndpointPath(kind, providerTaskID))
+    const response = await requestKlingAI(input.task.providerID, klingAIEndpointPath(kind, providerTaskID))
     return await applyKlingAITaskResponse({
       root: input.root,
       task: input.task,
@@ -1380,7 +1507,9 @@ const KlingAIProviderAdapter: ProviderAdapter = {
   },
 }
 
-registerCinemaVideoProviderAdapter(KLINGAI_PROVIDER_ID, KlingAIProviderAdapter)
+for (const providerID of KLINGAI_PROVIDER_IDS) {
+  registerCinemaVideoProviderAdapter(providerID, KlingAIProviderAdapter)
+}
 
 export function assertCinemaVideoProviderModelSupports(
   input: CreateCinemaGenerationTaskBody,
@@ -1422,14 +1551,26 @@ async function providerAuthStateFor(manifest: CinemaVideoProviderManifest): Prom
     }
   }
 
-  const runtimeAuth = await ProviderAuth.resolveProviderRuntimeAuth(credentialProviderID, {}, {
-    method: "api-key",
-    credentialMode: "active",
-  })
+  let runtimeAuth: Awaited<ReturnType<typeof ProviderAuth.resolveProviderRuntimeAuth>> | undefined
+  let resolvedCredentialProviderID = credentialProviderID
+  for (const candidateCredentialProviderID of credentialProviderIDsForManifest(manifest)) {
+    const candidateRuntimeAuth = await ProviderAuth.resolveProviderRuntimeAuth(candidateCredentialProviderID, {}, {
+      method: "api-key",
+      credentialMode: "active",
+    })
+    if (!runtimeAuth || candidateRuntimeAuth.apiKey) {
+      runtimeAuth = candidateRuntimeAuth
+      resolvedCredentialProviderID = candidateCredentialProviderID
+    }
+    if (candidateRuntimeAuth.apiKey) break
+  }
+  if (!runtimeAuth) {
+    throw new ApiError(500, "CINEMA_PROVIDER_AUTH_UNAVAILABLE", `Cinema provider '${manifest.id}' auth state could not be resolved.`)
+  }
   const connected = Boolean(runtimeAuth.apiKey)
   return {
     providerID: manifest.id,
-    credentialProviderID,
+    credentialProviderID: resolvedCredentialProviderID,
     requiresCredential: true,
     connected,
     status: connected ? "connected" : runtimeAuth.authState.status,
@@ -1447,8 +1588,9 @@ async function providerRuntimeFor(manifest: CinemaVideoProviderManifest): Promis
     ? {
         adapterAvailable,
         adapterID: manifest.id,
+        supportedModes: cinemaVideoProviderAdapterSupportedModes(manifest.id),
       }
-    : { adapterAvailable }
+    : { adapterAvailable, supportedModes: [] }
   const configuredBaseURL = normalizeBaseURL(settings.baseURL)
   if (configuredBaseURL) {
     return {
@@ -1567,12 +1709,15 @@ async function apiKeyForConnectionTest(
     return transientApiKey || undefined
   }
 
-  const credentialProviderID = manifest.credentialProviderID ?? `cinema-${manifest.id}`
-  const runtimeAuth = await ProviderAuth.resolveProviderRuntimeAuth(credentialProviderID, {}, {
-    method: "api-key",
-    credentialMode: "active",
-  })
-  return runtimeAuth.apiKey?.trim() || undefined
+  for (const credentialProviderID of credentialProviderIDsForManifest(manifest)) {
+    const runtimeAuth = await ProviderAuth.resolveProviderRuntimeAuth(credentialProviderID, {}, {
+      method: "api-key",
+      credentialMode: "active",
+    })
+    const apiKey = runtimeAuth.apiKey?.trim()
+    if (apiKey) return apiKey
+  }
+  return undefined
 }
 
 function applyConnectionTestAuth(
