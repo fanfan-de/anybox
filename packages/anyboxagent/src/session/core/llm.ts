@@ -1,6 +1,7 @@
 import os from "os"
 //import { Installation } from "@/installation"
 import * as  Provider from "#provider/provider.ts"
+import * as ModelRuntime from "#model/runtime.ts"
 import * as  Log from "#util/log.ts"
 import {
   streamText,
@@ -39,7 +40,7 @@ const DEFAULT_LLM_STEP_TIMEOUT_MS = 10 * 60 * 1000
 type StreamLifecycleCallback<TEvent> = (event: TEvent) => PromiseLike<void> | void
 const defaultRuntimeDependencies = {
   streamText,
-  getLanguage: Provider.getLanguage,
+  getLanguage: ModelRuntime.getLanguage,
   outputText: () => Output.text(),
   stepCountIs,
 }

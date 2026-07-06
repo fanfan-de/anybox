@@ -105,6 +105,7 @@ import type {
   AgentSkillGitInstallResult,
   AgentMcpServerDiagnostic,
   AgentMcpServerSummary,
+  AgentModelCatalogResult,
   AgentInstalledPlugin,
   AgentPluginCatalogItem,
   AgentPluginConnectorStatus,
@@ -4509,6 +4510,12 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     return result.data
   })
 
+  handleDesktopIpc("desktop:get-global-model-catalog", async () => {
+    const result = await requestAgentJSON<AgentModelCatalogResult>("/api/model-catalog")
+
+    return result.data
+  })
+
   handleDesktopIpc(
     "desktop:update-global-provider",
     async (
@@ -5516,6 +5523,15 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   handleDesktopIpc("desktop:get-project-models", async (_event, input: { projectID: string }) => {
     const projectID = input.projectID.trim()
     const result = await requestAgentJSON<AgentProjectModelsResult>(`/api/projects/${encodeURIComponent(projectID)}/models`)
+
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:get-project-model-catalog", async (_event, input: { projectID: string }) => {
+    const projectID = input.projectID.trim()
+    const result = await requestAgentJSON<AgentModelCatalogResult>(
+      `/api/projects/${encodeURIComponent(projectID)}/model-catalog`,
+    )
 
     return result.data
   })

@@ -9342,6 +9342,11 @@ describe("App", () => {
     expect(screen.queryByText("Search providers")).not.toBeInTheDocument()
     fireEvent.click(providerNavButton)
     expect(await screen.findByRole("button", { name: "Refresh provider catalog" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "All" })).toHaveAttribute("aria-checked", "true")
+    expect(screen.getByRole("radio", { name: "Text" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Image" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Video" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Connected" })).toBeInTheDocument()
     expect(await screen.findByRole("searchbox", { name: "Search providers" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /DeepSeek.*Connected/ })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /OpenAI.*Not connected/ })).toBeInTheDocument()
@@ -9357,7 +9362,7 @@ describe("App", () => {
     ).not.toBeInTheDocument()
     expect(screen.getByText("Advanced settings")).toBeInTheDocument()
     expect(screen.queryByText("Override the provider default endpoint.")).not.toBeInTheDocument()
-    expect(screen.getByRole("heading", { name: "Provider Models" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Exposed models" })).toBeInTheDocument()
     expect(settingsDialog.querySelector(".settings-detail-hero")).toBeNull()
     expect(screen.queryByText("Provider ID")).not.toBeInTheDocument()
     expect(screen.queryByText("Environment")).not.toBeInTheDocument()
@@ -9379,7 +9384,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Models/ }))
 
     expect(screen.getByRole("button", { name: "Primary model: DeepSeek / DeepSeek Reasoner" })).toBeInTheDocument()
-    expect(screen.getByRole("heading", { name: "Connected Models" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Unified Models" })).toBeInTheDocument()
     expect(screen.getByText("DeepSeek Reasoner")).toBeInTheDocument()
 
     await waitFor(() => {

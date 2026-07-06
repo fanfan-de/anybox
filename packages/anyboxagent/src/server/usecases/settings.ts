@@ -9,6 +9,10 @@ import * as Mcp from "#mcp/manager.ts"
 import * as Plugin from "#plugin/plugin.ts"
 import * as ModelsDev from "#provider/modelsdev.ts"
 import * as AnyboxHTTP from "#provider/anybox-http.ts"
+import * as ModelRegistry from "#model/registry.ts"
+import * as ModelRuntime from "#model/runtime.ts"
+import * as ModelSelection from "#model/selection.ts"
+import type { Model } from "#model/types.ts"
 import * as Provider from "#provider/provider.ts"
 import * as ProviderTransform from "#provider/transform.ts"
 import { ApiError } from "#server/error.ts"
@@ -247,15 +251,34 @@ function parseModelReference(value: string) {
 }
 
 async function resolveSelectableModel(value: string) {
-  const ref = parseModelReference(value)
-
   try {
-    return await Provider.getModel(ref.providerID, ref.modelID)
+    return await ModelSelection.resolveSelectableModel(value)
   } catch (error) {
-    if (Provider.ModelNotFoundError.isInstance(error)) {
+    if (ModelRegistry.isModelNotFoundError(error)) {
       throw new ApiError(400, "MODEL_NOT_FOUND", `Model '${value}' is not available`)
     }
 
+    if (error instanceof Error && error.message.includes("must use the format provider/model")) {
+      throw new ApiError(400, "INVALID_MODEL_REFERENCE", error.message)
+    }
+
+    throw error
+  }
+}
+
+async function resolveImageSelectableModel(value: string) {
+  try {
+    return await ModelSelection.resolveImageSelectableModel(value)
+  } catch (error) {
+    if (ModelRegistry.isModelNotFoundError(error)) {
+      throw new ApiError(400, "MODEL_NOT_FOUND", `Model '${value}' is not available`)
+    }
+    if (error instanceof Error && error.message.includes("must use the format provider/model")) {
+      throw new ApiError(400, "INVALID_MODEL_REFERENCE", error.message)
+    }
+    if (error instanceof Error && error.message.includes("does not support image output")) {
+      throw new ApiError(400, "MODEL_NOT_IMAGE_CAPABLE", error.message)
+    }
     throw error
   }
 }
@@ -689,8 +712,14 @@ export async function listProviders() {
 
 export async function listModels() {
   return {
-    items: await Provider.listModels(),
+    items: await ModelRegistry.listAISDKModels(),
     selection: await Provider.getSelection(),
+  }
+}
+
+export async function listModelCatalog() {
+  return {
+    items: await ModelRegistry.listModelCatalog(Config.GLOBAL_CONFIG_ID),
   }
 }
 
@@ -824,14 +853,7 @@ export async function updateModelSelection(input: z.infer<typeof UpdateGlobalMod
   }
 
   if (input.image_model) {
-    const model = await resolveSelectableModel(input.image_model)
-    if (!model.capabilities.output.image) {
-      throw new ApiError(
-        400,
-        "MODEL_NOT_IMAGE_CAPABLE",
-        `Model '${input.image_model}' does not support image output`,
-      )
-    }
+    await resolveImageSelectableModel(input.image_model)
   }
 
   const selection = await Config.setModelSelection(Config.GLOBAL_CONFIG_ID, input)
@@ -1514,7 +1536,7 @@ export async function translatePromptPreset(input: z.infer<typeof PromptPresetTr
   try {
     const targetLanguage = PROMPT_TRANSLATION_LANGUAGES[input.languageID]
     const model = await resolvePromptTranslationModel(input.model)
-    const languageModel = await Provider.getLanguage(model, Config.GLOBAL_CONFIG_ID)
+    const languageModel = await ModelRuntime.getLanguage(model, Config.GLOBAL_CONFIG_ID)
     const generateText = await runtimeDependencies.getGenerateText()
     const result = await runPromptTranslationGeneration({
       content: input.content,
@@ -1625,8 +1647,8 @@ async function runPromptTranslationGeneration(input: {
   content: string
   generateText: GenerateTextFunction
   languageInstruction: string
-  languageModel: Awaited<ReturnType<typeof Provider.getLanguage>>
-  model: Provider.Model
+  languageModel: Awaited<ReturnType<typeof ModelRuntime.getLanguage>>
+  model: Model
 }) {
   try {
     const temperature = getPromptTranslationTemperature(input.model)
@@ -1648,7 +1670,7 @@ async function runPromptTranslationGeneration(input: {
   }
 }
 
-function getPromptTranslationTemperature(model: Provider.Model) {
+function getPromptTranslationTemperature(model: Model) {
   if (!model.capabilities.temperature) return undefined
   if (ProviderTransform.isProviderReasoningModel(model)) return undefined
   return 0
@@ -1693,7 +1715,7 @@ function buildUniquePromptTranslationLabel(input: {
 
 async function resolvePromptTranslationModel(value: string) {
   const ref = parseModelReference(value)
-  const publicModel = (await Provider.listModels(Config.GLOBAL_CONFIG_ID)).find(
+  const publicModel = (await ModelRegistry.listAISDKModels(Config.GLOBAL_CONFIG_ID)).find(
     (model) => model.providerID === ref.providerID && model.id === ref.modelID,
   )
 
@@ -1706,14 +1728,14 @@ async function resolvePromptTranslationModel(value: string) {
   }
 
   try {
-    const model = await Provider.getModel(ref.providerID, ref.modelID, Config.GLOBAL_CONFIG_ID)
+    const model = await ModelRegistry.getAISDKModel(ref.providerID, ref.modelID, Config.GLOBAL_CONFIG_ID)
     if (!model.capabilities.input.text || !model.capabilities.output.text) {
       throw new ApiError(400, "MODEL_NOT_TEXT_CAPABLE", `Model '${value}' does not support text input and output`)
     }
     return model
   } catch (error) {
     if (error instanceof ApiError) throw error
-    if (Provider.ModelNotFoundError.isInstance(error)) {
+    if (ModelRegistry.isModelNotFoundError(error)) {
       throw new ApiError(400, "MODEL_NOT_FOUND", `Model '${value}' is not available`)
     }
 

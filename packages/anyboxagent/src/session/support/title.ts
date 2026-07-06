@@ -1,5 +1,9 @@
 import * as Log from "#util/log.ts"
+import * as ModelRegistry from "#model/registry.ts"
+import * as ModelRuntime from "#model/runtime.ts"
+import * as ModelSelection from "#model/selection.ts"
 import * as Message from "#session/core/message.ts"
+import * as Provider from "#provider/provider.ts"
 import type { Model as ProviderModel } from "#provider/provider.ts"
 
 const log = Log.create({ service: "session.title" })
@@ -12,16 +16,11 @@ async function loadTitlePrompt() {
   return cachedTitlePrompt
 }
 
-async function getProviderModule() {
-  return await import("#provider/provider.ts")
-}
-
 async function getGenerateText() {
   return (await import("ai")).generateText
 }
 
 const defaultRuntimeDependencies = {
-  getProviderModule,
   getGenerateText,
   loadTitlePrompt,
 }
@@ -38,17 +37,6 @@ export function setRuntimeDependenciesForTesting(
 
   return () => {
     runtimeDependencies = previous
-  }
-}
-
-function parseModelReference(value?: string) {
-  if (!value) return
-  const [providerID, ...rest] = value.split("/")
-  const modelID = rest.join("/")
-  if (!providerID || !modelID) return
-  return {
-    providerID,
-    modelID,
   }
 }
 
@@ -133,13 +121,11 @@ function buildFallbackTitle(parts: Message.Part[]) {
 }
 
 async function resolveTitleModel(projectID: string, fallbackModel: ProviderModel) {
-  const Provider = await runtimeDependencies.getProviderModule()
-
   try {
     const selection = await Provider.getSelection(projectID)
-    const reference = parseModelReference(selection.small_model)
+    const reference = ModelSelection.parseModelReference(selection.small_model)
     if (!reference) return fallbackModel
-    return await Provider.getModel(reference.providerID, reference.modelID, projectID)
+    return await ModelRegistry.getAISDKModel(reference.providerID, reference.modelID, projectID)
   } catch {
     return fallbackModel
   }
@@ -173,13 +159,12 @@ export async function generateSessionTitle(input: {
   const fallbackTitle = buildFallbackTitle(input.parts)
 
   try {
-    const [system, model, Provider, generateText] = await Promise.all([
+    const [system, model, generateText] = await Promise.all([
       runtimeDependencies.loadTitlePrompt(),
       resolveTitleModel(input.projectID, input.fallbackModel),
-      runtimeDependencies.getProviderModule(),
       runtimeDependencies.getGenerateText(),
     ])
-    const languageModel = await Provider.getLanguage(model, input.projectID)
+    const languageModel = await ModelRuntime.getLanguage(model, input.projectID)
     const result = await withTimeout(
       generateText({
         model: languageModel,

@@ -36,7 +36,6 @@ import {
   EyeIcon,
   EyeOffIcon,
   FileTextIcon,
-  FileVideoIcon,
   LayoutSidebarLeftIcon,
   MinimizeIcon,
   GeneralSettingsIcon,
@@ -69,6 +68,7 @@ import type {
   McpServerDraftState,
   McpServerSummary,
   McpToolPolicyValue,
+  ModelCatalogItem,
   PluginCatalogItem,
   ProjectModelSelection,
   ProviderAuthCapability,
@@ -643,7 +643,7 @@ function AppearanceColorPicker({
   )
 }
 
-function buildModelTags(model: ProviderModel, t?: SettingsTranslate) {
+export function buildModelTags(model: ProviderModel, t?: SettingsTranslate) {
   const tags = [`${formatContextWindow(model.limit.context)} ctx`]
 
   if (model.capabilities.reasoning) tags.push(t ? t("settings.models.tagReasoning") : "Reasoning")
@@ -864,6 +864,58 @@ function doesCinemaVideoProviderMatchSearch(provider: CinemaVideoProvider, rawQu
 
 function getVisibleCinemaVideoProvidersForSettings(providers: CinemaVideoProvider[], query: string) {
   return providers.filter((provider) => doesCinemaVideoProviderMatchSearch(provider, query))
+}
+
+function emptyProviderCapabilities(): ProviderCapabilitySummary {
+  return {
+    text: false,
+    image: false,
+    video: false,
+  }
+}
+
+function getModelCatalogProviderCapabilities(models: ModelCatalogItem[]): ProviderCapabilitySummary {
+  return models.reduce<ProviderCapabilitySummary>((result, model) => ({
+    text: result.text || Boolean(model.capabilities.output.text),
+    image: result.image || Boolean(model.capabilities.output.image),
+    video: result.video || Boolean(model.capabilities.output.video),
+  }), emptyProviderCapabilities())
+}
+
+function getCinemaProviderCapabilities(provider: CinemaVideoProvider): ProviderCapabilitySummary {
+  return provider.manifest.models.reduce<ProviderCapabilitySummary>((result, model) => {
+    const output = model.modalities?.output ?? []
+    const modeText = model.modes.join(" ")
+
+    return {
+      text: result.text || output.includes("text") || (/\btext\b/.test(modeText) && !/\bvideo\b|\bimage\b/.test(modeText)),
+      image: result.image || output.includes("image") || (/\bimage\b/.test(modeText) && !/\bvideo\b/.test(modeText)),
+      video: result.video || output.includes("video") || /\bvideo\b/.test(modeText),
+    }
+  }, emptyProviderCapabilities())
+}
+
+function doesProviderCapabilityMatchFilter(item: ProviderSettingsListItem, filter: ProviderCapabilityFilterKey) {
+  switch (filter) {
+    case "all":
+      return true
+    case "connected":
+      return item.connected
+    case "text":
+      return item.capabilities.text
+    case "image":
+      return item.capabilities.image
+    case "video":
+      return item.capabilities.video
+  }
+}
+
+function getProviderCapabilityTags(capabilities: ProviderCapabilitySummary, t: SettingsTranslate) {
+  return [
+    capabilities.text ? t("settings.provider.filterText") : null,
+    capabilities.image ? t("settings.provider.filterImage") : null,
+    capabilities.video ? t("settings.provider.filterVideo") : null,
+  ].filter((tag): tag is string => typeof tag === "string")
 }
 
 function formatCinemaVideoModelLimit(model: CinemaVideoProvider["manifest"]["models"][number]) {
@@ -2157,9 +2209,18 @@ export function AppearanceSettingsPanel({
   )
 }
 
-interface ModelListViewProps {
-  catalog: ProviderCatalogItem[]
-  models: ProviderModel[]
+type ModelCatalogFilterKey = "all" | "text" | "image" | "video"
+
+interface ModelCatalogViewProps {
+  filter: ModelCatalogFilterKey
+  items: ModelCatalogItem[]
+  selectionDraft: ProjectModelSelection
+  onFilterChange: (filter: ModelCatalogFilterKey) => void
+  t: SettingsTranslate
+}
+
+interface ModelCatalogListViewProps {
+  items: ModelCatalogItem[]
   selectionDraft: ProjectModelSelection
   t: SettingsTranslate
 }
@@ -2405,37 +2466,102 @@ function getModelStatusLabel(status: string, t: SettingsTranslate) {
   }
 }
 
-function ModelListView({ catalog, models, selectionDraft, t }: ModelListViewProps) {
+function modelCatalogValue(item: ModelCatalogItem) {
+  return `${item.providerID}/${item.modelID}`
+}
+
+function legacyModelToCatalogItem(model: ProviderModel, catalog: ProviderCatalogItem[]): ModelCatalogItem {
+  const providerName = catalog.find((item) => item.id === model.providerID)?.name ?? model.providerName ?? model.providerID
+  return {
+    registryID: `${model.providerID}/${model.id}`,
+    providerID: model.providerID,
+    modelID: model.id,
+    name: model.name,
+    providerName,
+    ...(model.family ? { family: model.family } : {}),
+    runtimeKind: "ai-sdk",
+    selectable: true,
+    available: model.available,
+    capabilities: {
+      temperature: model.capabilities.temperature,
+      reasoning: model.capabilities.reasoning,
+      attachment: model.capabilities.attachment,
+      toolcall: model.capabilities.toolcall,
+      input: model.capabilities.input,
+      output: model.capabilities.output,
+      taskModes: [],
+    },
+    status: model.status,
+    source: "provider",
+  }
+}
+
+function modelCatalogFilterMatches(item: ModelCatalogItem, filter: ModelCatalogFilterKey) {
+  switch (filter) {
+    case "text":
+      return item.capabilities.output.text || item.capabilities.input.text
+    case "image":
+      return item.capabilities.output.image || item.capabilities.input.image
+    case "video":
+      return item.capabilities.output.video || item.capabilities.input.video
+    case "all":
+    default:
+      return true
+  }
+}
+
+function buildModelCatalogTags(item: ModelCatalogItem, t: SettingsTranslate) {
+  const tags: string[] = []
+  if (item.selectable) tags.push(t("settings.models.selectable"))
+  if (!item.selectable) tags.push(t("settings.models.readOnly"))
+  if (item.capabilities.output.text) tags.push(t("settings.models.filterText"))
+  if (item.capabilities.output.image) tags.push(t("settings.models.filterImage"))
+  if (item.capabilities.output.video) tags.push(t("settings.models.filterVideo"))
+  if (item.capabilities.taskModes.length > 0) {
+    tags.push(...item.capabilities.taskModes.slice(0, 2).map(formatModelTaskModeTag))
+  }
+  return tags
+}
+
+function formatModelTaskModeTag(mode: string) {
+  return mode
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ")
+}
+
+function ModelCatalogListView({ items, selectionDraft, t }: ModelCatalogListViewProps) {
   return (
     <div className="model-list">
-      {models.map((model) => {
-        const providerName = catalog.find((item) => item.id === model.providerID)?.name ?? model.providerID
-        const modelValue = toModelValue(model)
+      {items.map((item) => {
+        const itemValue = modelCatalogValue(item)
 
         return (
-          <article key={modelValue} className="model-row">
+          <article key={item.registryID} className={item.available ? "model-row" : "model-row is-muted"}>
             <div className="model-row-main">
               <div className="model-row-heading">
                 <div>
-                  <h4>{model.name}</h4>
+                  <h4>{item.name}</h4>
                   <p className="model-row-copy">
-                    <strong>{providerName}</strong>
-                    {model.family ? ` / ${model.family}` : ""}
+                    <strong>{item.providerName}</strong>
+                    {item.family ? ` / ${item.family}` : ""}
                   </p>
                 </div>
 
                 <div className="model-row-statuses">
-                  <span className="settings-badge">{getModelStatusLabel(model.status, t)}</span>
-                  <span className="settings-badge">{model.available ? t("settings.models.statusVisible") : t("settings.models.statusCatalog")}</span>
-                  {selectionDraft.model === modelValue ? <span className="settings-badge is-highlight">{t("app.primary")}</span> : null}
-                  {selectionDraft.smallModel === modelValue ? <span className="settings-badge is-highlight">{t("app.small")}</span> : null}
-                  {selectionDraft.imageModel === modelValue ? <span className="settings-badge is-highlight">{t("settings.models.imageBadge")}</span> : null}
+                  <span className="settings-badge">{getModelStatusLabel(item.status, t)}</span>
+                  <span className="settings-badge">{item.available ? t("settings.models.statusVisible") : t("settings.models.statusCatalog")}</span>
+                  {item.selectable ? null : <span className="settings-badge">{t("settings.models.readOnly")}</span>}
+                  {selectionDraft.model === itemValue ? <span className="settings-badge is-highlight">{t("app.primary")}</span> : null}
+                  {selectionDraft.smallModel === itemValue ? <span className="settings-badge is-highlight">{t("app.small")}</span> : null}
+                  {selectionDraft.imageModel === itemValue ? <span className="settings-badge is-highlight">{t("settings.models.imageBadge")}</span> : null}
                 </div>
               </div>
 
               <div className="model-row-tags">
-                {buildModelTags(model, t).map((tag) => (
-                  <span key={`${modelValue}-${tag}`} className="settings-badge">
+                {buildModelCatalogTags(item, t).map((tag) => (
+                  <span key={`${item.registryID}-${tag}`} className="settings-badge">
                     {tag}
                   </span>
                 ))}
@@ -2444,6 +2570,38 @@ function ModelListView({ catalog, models, selectionDraft, t }: ModelListViewProp
           </article>
         )
       })}
+    </div>
+  )
+}
+
+function ModelCatalogView({ filter, items, selectionDraft, onFilterChange, t }: ModelCatalogViewProps) {
+  const filteredItems = items.filter((item) => modelCatalogFilterMatches(item, filter))
+  const filterOptions: Array<{ value: ModelCatalogFilterKey; label: string }> = [
+    { value: "all", label: t("settings.models.filterAll") },
+    { value: "text", label: t("settings.models.filterText") },
+    { value: "image", label: t("settings.models.filterImage") },
+    { value: "video", label: t("settings.models.filterVideo") },
+  ]
+
+  return (
+    <div className="model-catalog-view">
+      <div className="settings-inline-toolbar">
+        <SettingsSelect
+          ariaLabel={t("settings.models.filterCatalog")}
+          options={filterOptions}
+          value={filter}
+          onChange={(value) => onFilterChange(value as ModelCatalogFilterKey)}
+        />
+      </div>
+
+      {filteredItems.length > 0 ? (
+        <ModelCatalogListView items={filteredItems} selectionDraft={selectionDraft} t={t} />
+      ) : (
+        <article className="settings-empty-state">
+          <span className="label">{t("settings.models.connectedModels")}</span>
+          <h3>{t("settings.models.noFilterMatchTitle")}</h3>
+        </article>
+      )}
     </div>
   )
 }
@@ -2476,7 +2634,33 @@ function doesMcpServerMatchSearch(
   return haystack.includes(query)
 }
 
-type SettingsSectionKey = "general" | "account" | "services" | "videoProviders" | "defaults" | "mcp" | "appearance" | "developer" | "archive"
+type SettingsSectionKey = "general" | "account" | "services" | "defaults" | "mcp" | "appearance" | "developer" | "archive"
+type ProviderCapabilityFilterKey = "all" | "text" | "image" | "video" | "connected"
+type ProviderDetailKind = "model" | "cinema"
+
+interface ProviderCapabilitySummary {
+  text: boolean
+  image: boolean
+  video: boolean
+}
+
+type ProviderSettingsListItem =
+  | {
+      key: string
+      kind: "model"
+      id: string
+      provider: ProviderCatalogItem
+      connected: boolean
+      capabilities: ProviderCapabilitySummary
+    }
+  | {
+      key: string
+      kind: "cinema"
+      id: string
+      provider: CinemaVideoProvider
+      connected: boolean
+      capabilities: ProviderCapabilitySummary
+    }
 
 function doesArchivedSessionMatchSearch(session: ArchivedSessionSummary, query: string) {
   if (!query) return true
@@ -2679,6 +2863,7 @@ interface SettingsPageProps {
   installedPlugins?: InstalledPlugin[]
   mcpServerDraft: McpServerDraftState
   mcpServers: McpServerSummary[]
+  modelCatalog: ModelCatalogItem[]
   models: ProviderModel[]
   pluginCatalog?: PluginCatalogItem[]
   providerDrafts: Record<string, ProviderDraftState>
@@ -2801,6 +2986,7 @@ export function SettingsPage({
   installedPlugins = [],
   mcpServerDraft,
   mcpServers,
+  modelCatalog,
   models,
   pluginCatalog = [],
   providerDrafts,
@@ -2871,7 +3057,9 @@ export function SettingsPage({
     const [selectedProviderID, setSelectedProviderID] = useState<string | null>(null)
     const [archivedSessionSearchQuery, setArchivedSessionSearchQuery] = useState("")
     const [providerSearch, setProviderSearch] = useState("")
-    const [videoProviderSearch, setVideoProviderSearch] = useState("")
+    const [providerCapabilityFilter, setProviderCapabilityFilter] = useState<ProviderCapabilityFilterKey>("all")
+    const [selectedProviderKind, setSelectedProviderKind] = useState<ProviderDetailKind | null>(null)
+    const [modelCatalogFilter, setModelCatalogFilter] = useState<ModelCatalogFilterKey>("all")
     const [isCustomProviderDialogOpen, setIsCustomProviderDialogOpen] = useState(false)
     const [editingCustomProviderID, setEditingCustomProviderID] = useState<string | null>(null)
     const [mcpServerSearchQuery, setMcpServerSearchQuery] = useState("")
@@ -2891,15 +3079,56 @@ export function SettingsPage({
       (option) => assistantTraceVisibility[option.key],
     ).length
 
-    const modelGroups = models.reduce<Record<string, ProviderModel[]>>((result, model) => {
+    const modelGroups = useMemo(() => models.reduce<Record<string, ProviderModel[]>>((result, model) => {
       result[model.providerID] = [...(result[model.providerID] ?? []), model]
       return result
-    }, {})
-    const connectedProviderIDs = new Set(catalog.filter((item) => item.available).map((item) => item.id))
-    const visibleModels = models.filter((model) => model.available && connectedProviderIDs.has(model.providerID))
-    const visibleImageModels = visibleModels.filter((model) => model.capabilities.output.image)
-    const filteredCatalog = getVisibleProvidersForSettings(catalog, providerSearch)
-    const filteredCinemaVideoProviders = getVisibleCinemaVideoProvidersForSettings(cinemaVideoProviders, videoProviderSearch)
+    }, {}), [models])
+    const connectedProviderIDs = useMemo(
+      () => new Set(catalog.filter((item) => item.available).map((item) => item.id)),
+      [catalog],
+    )
+    const visibleModels = useMemo(
+      () => models.filter((model) => model.available && connectedProviderIDs.has(model.providerID)),
+      [connectedProviderIDs, models],
+    )
+    const visibleImageModels = useMemo(
+      () => visibleModels.filter((model) => model.capabilities.output.image),
+      [visibleModels],
+    )
+    const effectiveModelCatalog = useMemo(
+      () => modelCatalog.length > 0
+        ? modelCatalog
+        : visibleModels.map((model) => legacyModelToCatalogItem(model, catalog)),
+      [catalog, modelCatalog, visibleModels],
+    )
+    const catalogModelGroups = useMemo(() => effectiveModelCatalog.reduce<Record<string, ModelCatalogItem[]>>((result, model) => {
+      if (model.source !== "provider") return result
+      result[model.providerID] = [...(result[model.providerID] ?? []), model]
+      return result
+    }, {}), [effectiveModelCatalog])
+    const filteredProviderItems = useMemo<ProviderSettingsListItem[]>(() => {
+      const filteredCatalog = getVisibleProvidersForSettings(catalog, providerSearch)
+      const filteredCinemaVideoProviders = getVisibleCinemaVideoProvidersForSettings(cinemaVideoProviders, providerSearch)
+
+      return [
+        ...filteredCatalog.map((provider): ProviderSettingsListItem => ({
+          key: `model:${provider.id}`,
+          kind: "model",
+          id: provider.id,
+          provider,
+          connected: isProviderConnected(provider),
+          capabilities: getModelCatalogProviderCapabilities(catalogModelGroups[provider.id] ?? []),
+        })),
+        ...filteredCinemaVideoProviders.map((provider): ProviderSettingsListItem => ({
+          key: `cinema:${provider.manifest.id}`,
+          kind: "cinema",
+          id: provider.manifest.id,
+          provider,
+          connected: provider.auth.connected || !provider.auth.requiresCredential,
+          capabilities: getCinemaProviderCapabilities(provider),
+        })),
+      ].filter((item) => doesProviderCapabilityMatchFilter(item, providerCapabilityFilter))
+    }, [catalog, catalogModelGroups, cinemaVideoProviders, providerCapabilityFilter, providerSearch])
     const mcpServerPluginSourceMap = useMemo(
       () => buildMcpServerPluginSourceMap(installedPlugins, pluginCatalog),
       [installedPlugins, pluginCatalog],
@@ -2913,8 +3142,10 @@ export function SettingsPage({
     const filteredArchivedSessions = archivedSessions.filter((session) =>
       doesArchivedSessionMatchSearch(session, normalizedArchivedSessionSearchQuery),
     )
-    const activeProvider = selectedProviderID ? catalog.find((item) => item.id === selectedProviderID) ?? null : null
-    const activeCinemaVideoProvider = selectedVideoProviderID
+    const activeProvider = selectedProviderKind === "model" && selectedProviderID
+      ? catalog.find((item) => item.id === selectedProviderID) ?? null
+      : null
+    const activeCinemaVideoProvider = selectedProviderKind === "cinema" && selectedVideoProviderID
       ? cinemaVideoProviders.find((item) => item.manifest.id === selectedVideoProviderID) ?? null
       : null
     const isEditingCustomProvider = editingCustomProviderID !== null
@@ -2949,7 +3180,7 @@ export function SettingsPage({
     const anyboxAccountBalance = anyboxAccountProvider ? formatProviderBalance(anyboxAccountView.account ?? undefined) : null
     const anyboxAccountPlanLabel = formatProviderPlanLabel(anyboxAccountView.account ?? undefined)
     const anyboxAccountRechargeUrl = anyboxAccountProvider ? getAnyboxRechargeUrl(anyboxAccountProvider) : null
-    const activeProviderModels = activeProvider ? modelGroups[activeProvider.id] ?? [] : []
+    const activeProviderModels = activeProvider ? catalogModelGroups[activeProvider.id] ?? [] : []
     const activeProviderBusy = activeProvider ? savingProviderID === activeProvider.id || deletingProviderID === activeProvider.id : false
     const activeCinemaVideoProviderID = activeCinemaVideoProvider?.manifest.id ?? null
     const activeCinemaVideoProviderDraft = activeCinemaVideoProviderID
@@ -3036,8 +3267,8 @@ export function SettingsPage({
             : null
     const mcpServerCanSave = !mcpServerValidationError
     const showLoadedState = !isLoading && !loadError
-    const showProviderSections = activeSection === "services" || activeSection === "videoProviders" || activeSection === "defaults" || activeSection === "mcp"
-    const useServiceSettingsChrome = activeSection === "services" || activeSection === "videoProviders"
+    const showProviderSections = activeSection === "services" || activeSection === "defaults" || activeSection === "mcp"
+    const useServiceSettingsChrome = activeSection === "services"
     const appVersionNumber = appUpdateState?.version ?? "..."
     const appVersionLabel = `${t("settings.about.version")} ${appVersionNumber}`
     const automaticUpdatesEnabled = appUpdateState?.automaticUpdates ?? true
@@ -3081,9 +3312,10 @@ export function SettingsPage({
         setActiveSection("general")
         setSelectedProviderID(null)
         setSelectedVideoProviderID(null)
+        setSelectedProviderKind(null)
         setArchivedSessionSearchQuery("")
         setProviderSearch("")
-        setVideoProviderSearch("")
+        setProviderCapabilityFilter("all")
       }
     }, [isOpen])
 
@@ -3137,37 +3369,34 @@ export function SettingsPage({
     useEffect(() => {
       if (activeSection !== "services") return
 
-      const visibleProviders = getVisibleProvidersForSettings(catalog, providerSearch)
-      if (visibleProviders.length === 0) {
-        if (selectedProviderID !== null) {
+      if (filteredProviderItems.length === 0) {
+        if (selectedProviderKind !== null || selectedProviderID !== null || selectedVideoProviderID !== null) {
+          setSelectedProviderKind(null)
           setSelectedProviderID(null)
-        }
-        return
-      }
-
-      if (!selectedProviderID || !visibleProviders.some((provider) => provider.id === selectedProviderID)) {
-        setSelectedProviderID(visibleProviders[0].id)
-      }
-    }, [activeSection, catalog, providerSearch, selectedProviderID])
-
-    useEffect(() => {
-      if (activeSection !== "videoProviders") return
-
-      const visibleProviders = getVisibleCinemaVideoProvidersForSettings(cinemaVideoProviders, videoProviderSearch)
-      if (visibleProviders.length === 0) {
-        if (selectedVideoProviderID !== null) {
           setSelectedVideoProviderID(null)
         }
         return
       }
 
-      if (!selectedVideoProviderID || !visibleProviders.some((provider) => provider.manifest.id === selectedVideoProviderID)) {
-        setSelectedVideoProviderID(visibleProviders[0].manifest.id)
+      const hasSelection = filteredProviderItems.some((item) =>
+        item.kind === selectedProviderKind &&
+        (item.kind === "model" ? item.id === selectedProviderID : item.id === selectedVideoProviderID),
+      )
+      if (hasSelection) return
+
+      const nextProvider = filteredProviderItems[0]
+      setSelectedProviderKind(nextProvider.kind)
+      if (nextProvider.kind === "model") {
+        setSelectedProviderID(nextProvider.id)
+        setSelectedVideoProviderID(null)
+      } else {
+        setSelectedVideoProviderID(nextProvider.id)
+        setSelectedProviderID(null)
       }
-    }, [activeSection, cinemaVideoProviders, videoProviderSearch, selectedVideoProviderID])
+    }, [activeSection, filteredProviderItems, selectedProviderID, selectedProviderKind, selectedVideoProviderID])
 
     useEffect(() => {
-      if (activeSection !== "services" && activeSection !== "videoProviders") return
+      if (activeSection !== "services") return
       if (!serviceDetailPanelRef.current) return
 
       if (typeof serviceDetailPanelRef.current.scrollTo === "function") {
@@ -3175,7 +3404,7 @@ export function SettingsPage({
       } else {
         serviceDetailPanelRef.current.scrollTop = 0
       }
-    }, [activeSection, selectedProviderID, selectedVideoProviderID])
+    }, [activeSection, selectedProviderID, selectedProviderKind, selectedVideoProviderID])
 
     useEffect(() => {
       if (isOpen) return
@@ -3513,7 +3742,6 @@ export function SettingsPage({
           { key: "general" as const, label: t("settings.nav.general"), Icon: GeneralSettingsIcon },
           { key: "account" as const, label: t("settings.nav.account"), Icon: AccountSettingsIcon },
           { key: "services" as const, label: t("settings.nav.provider"), Icon: ProviderSettingsIcon },
-          { key: "videoProviders" as const, label: t("settings.nav.videoProviders"), Icon: FileVideoIcon },
           { key: "defaults" as const, label: t("settings.nav.models"), Icon: ModelSettingsIcon },
           { key: "appearance" as const, label: t("settings.nav.appearance"), Icon: PaletteIcon },
           { key: "developer" as const, label: t("settings.nav.developer"), Icon: CodeModeIcon },
@@ -4197,7 +4425,39 @@ export function SettingsPage({
                 )
               ) : showLoadedState ? (
                 activeSection === "services" ? (
-                  <section className="settings-services-layout" aria-label="Provider layout">
+                  <section
+                    className="settings-services-layout"
+                    aria-label={t("settings.provider.pageAria")}
+                  >
+                    <nav
+                      className="top-menu-segment-list settings-service-view-switch"
+                      role="radiogroup"
+                      aria-label={t("settings.provider.filterAria")}
+                    >
+                      {([
+                        ["all", t("settings.provider.filterAll")] as const,
+                        ["text", t("settings.provider.filterText")] as const,
+                        ["image", t("settings.provider.filterImage")] as const,
+                        ["video", t("settings.provider.filterVideo")] as const,
+                        ["connected", t("settings.provider.filterConnected")] as const,
+                      ]).map(([filter, label]) => {
+                        const isActive = providerCapabilityFilter === filter
+
+                        return (
+                          <button
+                            key={filter}
+                            className={isActive ? "top-menu-segment is-active" : "top-menu-segment"}
+                            type="button"
+                            role="radio"
+                            aria-checked={isActive}
+                            onClick={() => setProviderCapabilityFilter(filter)}
+                          >
+                            {label}
+                          </button>
+                        )
+                      })}
+                    </nav>
+
                     <div className="settings-service-list-panel settings-provider-list-panel">
                       <div className="settings-provider-search-row">
                         <div className="settings-provider-search-control" role="search">
@@ -4223,56 +4483,131 @@ export function SettingsPage({
                           className="secondary-button settings-provider-refresh-button"
                           aria-label="Refresh provider catalog"
                           type="button"
-                          disabled={isRefreshingProviderCatalog}
-                          onClick={() => void onRefreshProviderCatalog()}
+                          disabled={isRefreshingProviderCatalog || isRefreshingCinemaVideoProviderCatalog}
+                          onClick={() => {
+                            void onRefreshProviderCatalog()
+                            void onRefreshCinemaVideoProviderCatalog()
+                          }}
                         >
-                          {isRefreshingProviderCatalog ? t("settings.provider.refreshingCatalog") : t("app.refresh")}
+                          {isRefreshingProviderCatalog || isRefreshingCinemaVideoProviderCatalog
+                            ? t("settings.provider.refreshingCatalog")
+                            : t("app.refresh")}
                         </button>
                       </div>
 
                       <div className="settings-service-list-body">
-                        {filteredCatalog.length > 0 ? (
-                          <div className="settings-service-list" role="list" aria-label="Provider list">
-                            {filteredCatalog.map((provider) => {
-                              const isActive = provider.id === activeProvider?.id
-                              const connectionLabel = getProviderConnectionLabel(provider, t)
-                              const sourceLabel = getProviderSourceLabel(provider, t)
+                        {filteredProviderItems.length > 0 ? (
+                          <div className="settings-service-list" role="list" aria-label={t("settings.provider.providerList")}>
+                            {filteredProviderItems.map((item) => {
+                              const isActive =
+                                item.kind === selectedProviderKind &&
+                                (item.kind === "model"
+                                  ? item.id === selectedProviderID
+                                  : item.id === selectedVideoProviderID)
+                              const capabilityTags = getProviderCapabilityTags(item.capabilities, t)
+
+                              if (item.kind === "model") {
+                                const provider = item.provider
+                                const connectionLabel = getProviderConnectionLabel(provider, t)
+                                const sourceLabel = getProviderSourceLabel(provider, t)
+
+                                return (
+                                  <button
+                                    key={item.key}
+                                    className={isActive ? "settings-service-item is-active" : "settings-service-item"}
+                                    aria-label={`${provider.name} ${connectionLabel}`}
+                                    aria-pressed={isActive}
+                                    onClick={() => {
+                                      setSelectedProviderKind("model")
+                                      setSelectedProviderID(provider.id)
+                                      setSelectedVideoProviderID(null)
+                                    }}
+                                  >
+                                    <div className="settings-service-item-header">
+                                      <span className="settings-service-item-title">
+                                        <ProviderLogo provider={provider} />
+                                        <strong>{provider.name}</strong>
+                                      </span>
+                                      <span
+                                        className={
+                                          item.connected
+                                            ? "settings-status-indicator is-connected"
+                                            : "settings-status-indicator is-disconnected"
+                                        }
+                                        aria-hidden="true"
+                                        title={connectionLabel}
+                                      >
+                                        {item.connected ? <ConnectedStatusIcon /> : <DisconnectedStatusIcon />}
+                                      </span>
+                                    </div>
+                                    <span className="settings-service-item-copy">
+                                      {provider.source !== "api" ? sourceLabel : t("settings.provider.sourceCatalog")}
+                                    </span>
+                                    {capabilityTags.length > 0 ? (
+                                      <span className="settings-service-item-tags" aria-hidden="true">
+                                        {capabilityTags.map((tag) => (
+                                          <span key={`${item.key}-${tag}`} className="settings-badge">{tag}</span>
+                                        ))}
+                                      </span>
+                                    ) : null}
+                                  </button>
+                                )
+                              }
+
+                              const provider = item.provider
+                              const connectionLabel = getCinemaVideoProviderStatusText(provider, t)
+                              const modelSummary = getCinemaVideoProviderModelSummary(provider)
 
                               return (
                                 <button
-                                  key={provider.id}
+                                  key={item.key}
                                   className={isActive ? "settings-service-item is-active" : "settings-service-item"}
-                                  aria-label={`${provider.name} ${connectionLabel}`}
+                                  aria-label={`${provider.manifest.name} ${connectionLabel}`}
                                   aria-pressed={isActive}
-                                  onClick={() => setSelectedProviderID(provider.id)}
+                                  onClick={() => {
+                                    setSelectedProviderKind("cinema")
+                                    setSelectedVideoProviderID(provider.manifest.id)
+                                    setSelectedProviderID(null)
+                                  }}
                                 >
                                   <div className="settings-service-item-header">
                                     <span className="settings-service-item-title">
-                                      <ProviderLogo provider={provider} />
-                                      <strong>{provider.name}</strong>
+                                      <span className="provider-logo" aria-hidden="true">
+                                        <span className="provider-logo-fallback">{provider.manifest.name.slice(0, 1).toUpperCase()}</span>
+                                      </span>
+                                      <strong>{provider.manifest.name}</strong>
                                     </span>
                                     <span
                                       className={
-                                        isProviderConnected(provider)
+                                        item.connected
                                           ? "settings-status-indicator is-connected"
                                           : "settings-status-indicator is-disconnected"
                                       }
                                       aria-hidden="true"
                                       title={connectionLabel}
                                     >
-                                      {isProviderConnected(provider) ? <ConnectedStatusIcon /> : <DisconnectedStatusIcon />}
+                                      {item.connected ? <ConnectedStatusIcon /> : <DisconnectedStatusIcon />}
                                     </span>
                                   </div>
-                                  {provider.source !== "api" ? <span className="settings-service-item-copy">{sourceLabel}</span> : null}
+                                  <span className="settings-service-item-copy">
+                                    {getCinemaVideoProviderKindLabel(provider.manifest.kind)} · {modelSummary}
+                                  </span>
+                                  {capabilityTags.length > 0 ? (
+                                    <span className="settings-service-item-tags" aria-hidden="true">
+                                      {capabilityTags.map((tag) => (
+                                        <span key={`${item.key}-${tag}`} className="settings-badge">{tag}</span>
+                                      ))}
+                                    </span>
+                                  ) : null}
                                 </button>
                               )
                             })}
                           </div>
                         ) : (
                           <article className="settings-empty-state settings-service-list-empty-state">
-                            <span className="label">No Match</span>
-                            <h3>No provider matches this search</h3>
-                            <p>Try a provider name, ID, endpoint, or environment variable.</p>
+                            <span className="label">{t("settings.videoProviders.noMatchLabel")}</span>
+                            <h3>{t("settings.provider.noSearchMatchTitle")}</h3>
+                            <p>{t("settings.provider.noSearchMatchCopy")}</p>
                           </article>
                         )}
                       </div>
@@ -4667,105 +5002,17 @@ export function SettingsPage({
                             </div>
 
                             {activeProviderModels.length > 0 ? (
-                              <ModelListView catalog={catalog} models={activeProviderModels} selectionDraft={selectionDraft} t={t} />
+                              <ModelCatalogListView items={activeProviderModels} selectionDraft={selectionDraft} t={t} />
                             ) : (
                               <article className="settings-empty-state">
-                                <span className="label">No Models</span>
-                                <h3>No models are visible for this provider yet</h3>
-                                <p>Connect a shared sign-in method or store an API key, then refresh the catalog to populate visible models.</p>
+                                <span className="label">{t("settings.provider.noModelsLabel")}</span>
+                                <h3>{t("settings.provider.noModelsTitle")}</h3>
+                                <p>{t("settings.provider.noModelsCopy")}</p>
                               </article>
                             )}
                           </div>
                         </>
-                      ) : (
-                        <article className="settings-empty-state settings-detail-empty-state">
-                          <span className="label">No Provider</span>
-                          <h3>Select a provider from the list</h3>
-                          <p>The right side will show credentials, endpoint overrides, and provider models for the current selection.</p>
-                        </article>
-                      )}
-                    </div>
-                  </section>
-                ) : activeSection === "videoProviders" ? (
-                  <section className="settings-services-layout settings-video-providers-layout" aria-label={t("settings.videoProviders.pageAria")}>
-                    <div className="settings-service-list-panel settings-provider-list-panel">
-                      <div className="settings-provider-search-row">
-                        <div className="settings-provider-search-control" role="search">
-                          <SearchIcon />
-                          <input
-                            aria-label={t("settings.videoProviders.searchProviders")}
-                            type="search"
-                            value={videoProviderSearch}
-                            placeholder={t("settings.videoProviders.searchProviders")}
-                            onChange={(event: ChangeEvent<HTMLInputElement>) => setVideoProviderSearch(event.target.value)}
-                          />
-                        </div>
-                        <button
-                          className="secondary-button settings-provider-refresh-button"
-                          aria-label={t("settings.videoProviders.refreshCatalog")}
-                          type="button"
-                          disabled={isRefreshingCinemaVideoProviderCatalog}
-                          onClick={() => void onRefreshCinemaVideoProviderCatalog()}
-                        >
-                          {isRefreshingCinemaVideoProviderCatalog ? t("settings.provider.refreshingCatalog") : t("app.refresh")}
-                        </button>
-                      </div>
-
-                      <div className="settings-service-list-body">
-                        {filteredCinemaVideoProviders.length > 0 ? (
-                          <div className="settings-service-list" role="list" aria-label={t("settings.videoProviders.providerListAria")}>
-                            {filteredCinemaVideoProviders.map((provider) => {
-                              const isActive = provider.manifest.id === activeCinemaVideoProvider?.manifest.id
-                              const isConnected = provider.auth.connected
-                              const connectionLabel = getCinemaVideoProviderStatusText(provider, t)
-                              const modelSummary = getCinemaVideoProviderModelSummary(provider)
-
-                              return (
-                                <button
-                                  key={provider.manifest.id}
-                                  className={isActive ? "settings-service-item is-active" : "settings-service-item"}
-                                  aria-label={`${provider.manifest.name} ${connectionLabel}`}
-                                  aria-pressed={isActive}
-                                  onClick={() => setSelectedVideoProviderID(provider.manifest.id)}
-                                >
-                                  <div className="settings-service-item-header">
-                                    <span className="settings-service-item-title">
-                                      <span className="provider-logo" aria-hidden="true">
-                                        <span className="provider-logo-fallback">{provider.manifest.name.slice(0, 1).toUpperCase()}</span>
-                                      </span>
-                                      <strong>{provider.manifest.name}</strong>
-                                    </span>
-                                    <span
-                                      className={
-                                        isConnected
-                                          ? "settings-status-indicator is-connected"
-                                          : "settings-status-indicator is-disconnected"
-                                      }
-                                      aria-hidden="true"
-                                      title={connectionLabel}
-                                    >
-                                      {isConnected ? <ConnectedStatusIcon /> : <DisconnectedStatusIcon />}
-                                    </span>
-                                  </div>
-                                  <span className="settings-service-item-copy">
-                                    {getCinemaVideoProviderKindLabel(provider.manifest.kind)} · {modelSummary}
-                                  </span>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        ) : (
-                          <article className="settings-empty-state settings-service-list-empty-state">
-                            <span className="label">{t("settings.videoProviders.noMatchLabel")}</span>
-                            <h3>{t("settings.videoProviders.noSearchMatchTitle")}</h3>
-                            <p>{t("settings.videoProviders.noSearchMatchCopy")}</p>
-                          </article>
-                        )}
-                      </div>
-                    </div>
-
-                    <div ref={serviceDetailPanelRef} className="settings-service-detail-panel settings-video-providers-detail-panel">
-                      {activeCinemaVideoProvider && activeCinemaVideoProviderDraft ? (
+                      ) : activeCinemaVideoProvider && activeCinemaVideoProviderDraft ? (
                         <>
                           <div className="settings-panel provider-detail-card">
                             <div className="provider-detail-header">
@@ -5419,18 +5666,24 @@ export function SettingsPage({
                     <section className="settings-panel">
                       <div className="settings-section-header">
                         <div>
-                          <span className="label">Available</span>
-                          <h3>Connected Models</h3>
+                          <span className="label">{t("settings.models.catalogLabel")}</span>
+                          <h3>{t("settings.models.unifiedCatalogTitle")}</h3>
                         </div>
                       </div>
 
-                      {visibleModels.length > 0 ? (
-                        <ModelListView catalog={catalog} models={visibleModels} selectionDraft={selectionDraft} t={t} />
+                      {effectiveModelCatalog.length > 0 ? (
+                        <ModelCatalogView
+                          filter={modelCatalogFilter}
+                          items={effectiveModelCatalog}
+                          selectionDraft={selectionDraft}
+                          onFilterChange={setModelCatalogFilter}
+                          t={t}
+                        />
                       ) : (
                         <article className="settings-empty-state">
-                          <span className="label">No Models</span>
-                          <h3>No connected provider is exposing models yet</h3>
-                          <p>Open the Provider page, configure a provider, then come back here to review the unlocked models.</p>
+                          <span className="label">{t("settings.models.connectedModels")}</span>
+                          <h3>{t("settings.models.noCatalogTitle")}</h3>
+                          <p>{t("settings.models.noCatalogCopy")}</p>
                         </article>
                       )}
                     </section>

@@ -6,6 +6,7 @@ import type {
   AgentArchivedSessionSummary,
   AgentAutomationIPCEvent,
   AgentFolderWorkspace,
+  AgentModelCatalogResult,
   AgentProjectModelSelection,
   AgentProjectWorkspace,
   AgentWorktreeRecord,
@@ -561,6 +562,8 @@ try {
         items: AgentProviderModel[]
         selection: AgentProjectModelSelection
       }>,
+    getGlobalModelCatalog: () =>
+      invokeDesktop("desktop:get-global-model-catalog") as Promise<AgentModelCatalogResult>,
     updateGlobalProvider: (input: {
       providerID: string
       provider: {
@@ -860,6 +863,8 @@ try {
           }
         } | null
       }>,
+    getProjectModelCatalog: (input: { projectID: string }) =>
+      invokeDesktop("desktop:get-project-model-catalog", input) as Promise<AgentModelCatalogResult>,
     getSessionModels: (input: { sessionID: string }) =>
       invokeDesktop("desktop:get-session-models", input) as Promise<{
         items: AgentProviderModel[]

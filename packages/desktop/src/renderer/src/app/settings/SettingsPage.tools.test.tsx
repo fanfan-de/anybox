@@ -127,6 +127,7 @@ function createSettingsPageProps(
     loadError: null,
     mcpServerDraft: createMcpDraft(),
     mcpServers: [],
+    modelCatalog: [],
     models: [],
     customProviderDraft: {
       apiBaseURL: "",
@@ -229,6 +230,7 @@ function createCinemaVideoProvider(
       description: `${name} video provider`,
       credentialProviderID: `cinema-${id}`,
       requiresCredential: true,
+      regions: [],
       connectionTest: {
         method: "GET",
         path: "/v1/models",
@@ -242,6 +244,11 @@ function createCinemaVideoProvider(
           id: `${id}-model`,
           label: `${name} Model`,
           modes: ["text-to-video"],
+          durations: [],
+          aspectRatios: [],
+          resolutions: [],
+          pricing: [],
+          parameterSchema: {},
         },
       ],
     },
@@ -255,6 +262,7 @@ function createCinemaVideoProvider(
     runtime: {
       baseURL: "https://api-singapore.klingai.com",
       baseURLSource: "default",
+      adapterAvailable: true,
     },
   }
 }
@@ -336,6 +344,49 @@ function createModel(
       context: 128000,
       output: 8192,
     },
+  }
+}
+
+function createModelCatalogItem(
+  providerID: string,
+  modelID: string,
+  name: string,
+  providerName: string,
+  overrides: Partial<ComponentProps<typeof SettingsPage>["modelCatalog"][number]> = {},
+): ComponentProps<typeof SettingsPage>["modelCatalog"][number] {
+  return {
+    registryID: `${providerID}/${modelID}`,
+    providerID,
+    modelID,
+    name,
+    providerName,
+    runtimeKind: "ai-sdk",
+    selectable: false,
+    available: false,
+    capabilities: {
+      temperature: true,
+      reasoning: false,
+      attachment: false,
+      toolcall: true,
+      input: {
+        text: true,
+        audio: false,
+        image: false,
+        video: false,
+        pdf: false,
+      },
+      output: {
+        text: true,
+        audio: false,
+        image: false,
+        video: false,
+        pdf: false,
+      },
+      taskModes: [],
+    },
+    status: "active",
+    source: "provider",
+    ...overrides,
   }
 }
 
@@ -454,16 +505,65 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.queryByRole("list", { name: "Project worktrees" })).not.toBeInTheDocument()
   })
 
-  it("shows visual providers as a separate settings navigation item", () => {
+  it("shows all provider sources behind capability filters", () => {
     render(<SettingsPage {...createSettingsPageProps({ catalog: [createAnyboxProvider()] })} />)
 
     const nav = screen.getByLabelText("Settings sections")
     const labels = within(nav).getAllByRole("button").map((button) => button.textContent)
 
-    expect(labels.slice(0, 4)).toEqual(["General", "Account", "Provider", "Visual Providers"])
+    expect(labels.slice(0, 4)).toEqual(["General", "Account", "Provider", "Models"])
+    expect(screen.queryByRole("button", { name: "Generation Providers" })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Provider" }))
+    const providerFilters = screen.getByRole("radiogroup", { name: "Filter providers" })
+    expect(within(providerFilters).getByRole("radio", { name: "All" })).toHaveAttribute("aria-checked", "true")
+    expect(within(providerFilters).getByRole("radio", { name: "Text" })).toBeInTheDocument()
+    expect(within(providerFilters).getByRole("radio", { name: "Image" })).toBeInTheDocument()
+    expect(within(providerFilters).getByRole("radio", { name: "Video" })).toBeInTheDocument()
+    expect(within(providerFilters).getByRole("radio", { name: "Connected" })).toBeInTheDocument()
   })
 
-  it("saves cinema video provider API keys from the Visual Providers settings page", async () => {
+  it("shows catalog models for an unconfigured provider as read-only", async () => {
+    const provider = {
+      ...createProvider("anyapi", "AnyAPI"),
+      source: "api" as const,
+      env: ["ANYAPI_API_KEY"],
+      configured: false,
+      available: false,
+      apiKeyConfigured: false,
+      modelCount: 1,
+      authState: {
+        providerID: "anyapi",
+        scope: "global" as const,
+        status: "not_connected" as const,
+        capabilities: [],
+        credentials: [],
+      },
+    }
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          catalog: [provider],
+          models: [],
+          modelCatalog: [
+            createModelCatalogItem("anyapi", "anyapi-chat", "AnyAPI Chat", "AnyAPI"),
+          ],
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Provider" }))
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "AnyAPI" })).toBeInTheDocument())
+    expect(screen.getByRole("heading", { name: "AnyAPI Chat" })).toBeInTheDocument()
+    expect(screen.getAllByText("Read only").length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getByRole("radio", { name: "Text" }))
+    expect(screen.getByRole("button", { name: /AnyAPI.*Not connected/ })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "AnyAPI Chat" })).toBeInTheDocument()
+  })
+
+  it("saves cinema video provider API keys from the video provider filter", async () => {
     const onCinemaVideoProviderDraftChange = vi.fn()
     const onSaveCinemaVideoProviderApiKey = vi.fn()
     const onTestCinemaVideoProviderConnection = vi.fn()
@@ -482,9 +582,10 @@ describe("SettingsPage built-in tools", () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole("button", { name: "Visual Providers" }))
+    fireEvent.click(screen.getByRole("button", { name: "Provider" }))
+    fireEvent.click(screen.getByRole("radio", { name: "Video" }))
 
-    expect(screen.getByRole("list", { name: "Visual provider list" })).toBeInTheDocument()
+    expect(screen.getByRole("list", { name: "Provider list" })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole("heading", { name: "Kling AI" })).toBeInTheDocument())
     expect(screen.getByText("Current endpoint")).toBeInTheDocument()
     expect(screen.getByText("https://api-singapore.klingai.com")).toBeInTheDocument()

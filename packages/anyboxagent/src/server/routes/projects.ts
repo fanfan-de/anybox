@@ -68,6 +68,10 @@ export function ProjectRoutes(options: { ptyRegistry: PtyRegistry }) {
     ok(c, await ProjectUseCase.listProjectModels(c.req.param("id"))),
   )
 
+  app.get("/:id/model-catalog", async (c) =>
+    ok(c, await ProjectUseCase.listProjectModelCatalog(c.req.param("id"))),
+  )
+
   app.put("/:id/providers/:providerID", async (c) => {
     const payload = await parseJsonBody(
       c,

@@ -3,9 +3,10 @@ import { basename, extname } from "node:path"
 import { AgentRouteSchemas, SessionAttachmentBodySchema, isSshWorkspaceUri } from "@anybox/shared"
 import z from "zod"
 import * as Config from "#config/config.ts"
+import * as ModelSelection from "#model/selection.ts"
+import type { PublicModel } from "#model/types.ts"
 import * as Project from "#project/project.ts"
 import type { PtyRegistry } from "#pty/registry.ts"
-import * as Provider from "#provider/provider.ts"
 import { Instance } from "#project/instance.ts"
 import { ApiError } from "#server/error.ts"
 import * as Message from "#session/core/message.ts"
@@ -134,19 +135,6 @@ function normalizeQuestionAnswerText(
   }
 
   return undefined
-}
-
-function parseModelReference(value: string) {
-  const [providerID, ...rest] = value.split("/")
-  const modelID = rest.join("/")
-  if (!providerID || !modelID) {
-    throw new ApiError(400, "INVALID_MODEL_REFERENCE", `Model '${value}' must use the format provider/model`)
-  }
-
-  return {
-    providerID,
-    modelID,
-  }
 }
 
 function buildDataURL(mime: string, buffer: Buffer) {
@@ -684,7 +672,7 @@ function toSessionModelSelectionPayload(selection: Session.SessionModelSelection
 
 async function resolveEffectiveModel(
   projectID: string,
-  items: Provider.PublicModel[],
+  items: PublicModel[],
   selection: Session.SessionModelSelection | undefined,
 ) {
   return findModelByReference(items, selection?.model) ?? resolveEffectiveModelWithFallback(projectID, items)
@@ -709,13 +697,11 @@ export async function updateSessionModelSelection(
   const session = requireSession(sessionID)
 
   if (input.model) {
-    const ref = parseModelReference(input.model)
-    await Provider.getModel(ref.providerID, ref.modelID, session.projectID)
+    await ModelSelection.resolveSelectableModel(input.model, session.projectID)
   }
 
   if (input.small_model) {
-    const ref = parseModelReference(input.small_model)
-    await Provider.getModel(ref.providerID, ref.modelID, session.projectID)
+    await ModelSelection.resolveSelectableModel(input.small_model, session.projectID)
   }
 
   const updated = Session.updateSessionModelSelection(sessionID, input)

@@ -2,7 +2,9 @@ import { generateImage } from "ai"
 import type { JSONValue } from "@ai-sdk/provider"
 import z from "zod"
 import * as Config from "#config/config.ts"
-import * as Provider from "#provider/provider.ts"
+import * as ModelRuntime from "#model/runtime.ts"
+import * as ModelSelection from "#model/selection.ts"
+import type { ModelReference } from "#model/types.ts"
 import * as Tool from "#tool/tool.ts"
 import * as ImageAssets from "#session/support/image-assets.ts"
 
@@ -26,7 +28,7 @@ function normalizePrompt(prompt: string, style?: string) {
   return trimmedStyle ? `${trimmedPrompt}\n\nStyle: ${trimmedStyle}` : trimmedPrompt
 }
 
-function imageModelLabel(ref: Provider.ModelReference) {
+function imageModelLabel(ref: ModelReference) {
   return `${ref.providerID}/${ref.modelID}`
 }
 
@@ -38,9 +40,18 @@ export const GenerateImageTool = Tool.define(
       description: "Generate images from a text prompt using the globally configured image generation model.",
       parameters: GenerateImageParameters,
       execute: async (parameters, ctx): Promise<Tool.ToolOutput<Record<string, unknown>, Record<string, unknown>>> => {
-        const imageModelRef = await Provider.getDefaultImageModelRef(Config.GLOBAL_CONFIG_ID)
-        const providerModel = await Provider.getModel(imageModelRef.providerID, imageModelRef.modelID, Config.GLOBAL_CONFIG_ID)
-        const imageModel = await Provider.getImage(providerModel, Config.GLOBAL_CONFIG_ID)
+        const selection = await Config.get(Config.GLOBAL_CONFIG_ID)
+        if (!selection.image_model) {
+          throw new Error("No image generation model is configured. Choose an image-capable model in model settings before using generate_image.")
+        }
+
+        const imageModelRef = ModelSelection.parseModelReference(selection.image_model)
+        if (!imageModelRef) {
+          throw new Error(`Configured image model '${selection.image_model}' must use the format provider/model.`)
+        }
+
+        const providerModel = await ModelSelection.resolveImageSelectableModel(selection.image_model, Config.GLOBAL_CONFIG_ID)
+        const imageModel = await ModelRuntime.getImage(providerModel, Config.GLOBAL_CONFIG_ID)
         const defaults = await Config.getImageGenerationSettings(Config.GLOBAL_CONFIG_ID)
         const prompt = normalizePrompt(parameters.prompt, parameters.style)
         const count = parameters.count ?? defaults.default_count ?? 1

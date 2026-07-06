@@ -12,6 +12,8 @@ import { Instance } from "#project/instance.ts"
 import * as Project from "#project/project.ts"
 import * as Worktree from "#project/worktree.ts"
 import * as ModelsDev from "#provider/modelsdev.ts"
+import * as ModelRegistry from "#model/registry.ts"
+import * as ModelSelection from "#model/selection.ts"
 import * as Plugin from "#plugin/plugin.ts"
 import * as Provider from "#provider/provider.ts"
 import { ApiError } from "#server/error.ts"
@@ -266,19 +268,6 @@ async function runProjectGitCommitMessageOperation<T>(operation: () => Promise<T
   }
 }
 
-function parseModelReference(value: string) {
-  const [providerID, ...rest] = value.split("/")
-  const modelID = rest.join("/")
-  if (!providerID || !modelID) {
-    throw new ApiError(400, "INVALID_MODEL_REFERENCE", `Model '${value}' must use the format provider/model`)
-  }
-
-  return {
-    providerID,
-    modelID,
-  }
-}
-
 function mapSessionSummary(session: Session.SessionInfo) {
   const normalized = Session.normalizeSessionInfo(session)
   return {
@@ -403,6 +392,14 @@ export async function listProjectModels(projectID: string) {
   }
 }
 
+export async function listProjectModelCatalog(projectID: string) {
+  safeReadProject(projectID)
+
+  return {
+    items: await ModelRegistry.listModelCatalog(projectID),
+  }
+}
+
 export async function updateProjectProvider(
   projectID: string,
   providerID: string,
@@ -459,13 +456,11 @@ export async function updateProjectModelSelection(
   safeReadProject(projectID)
 
   if (input.model) {
-    const ref = parseModelReference(input.model)
-    await Provider.getModel(ref.providerID, ref.modelID, projectID)
+    await ModelSelection.resolveSelectableModel(input.model, projectID)
   }
 
   if (input.small_model) {
-    const ref = parseModelReference(input.small_model)
-    await Provider.getModel(ref.providerID, ref.modelID, projectID)
+    await ModelSelection.resolveSelectableModel(input.small_model, projectID)
   }
 
   const selection = await Config.setModelSelection(projectID, input)
@@ -528,7 +523,7 @@ async function resolveProjectCommitMessageModel(projectID: string) {
     )
   }
 
-  const model = await Provider.getModel(publicModel.providerID, publicModel.id, projectID)
+  const model = await ModelRegistry.getAISDKModel(publicModel.providerID, publicModel.id, projectID)
   if (!model.capabilities.output.text) {
     throw new ApiError(
       400,

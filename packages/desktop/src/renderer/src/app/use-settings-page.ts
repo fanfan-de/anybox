@@ -16,6 +16,7 @@ import type {
   McpServerSummary,
   McpToolPolicies,
   McpToolPolicyValue,
+  ModelCatalogItem,
   PluginCatalogItem,
   PluginConnectorStatus,
   PluginDraftState,
@@ -574,6 +575,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   const [catalog, setCatalog] = useState<ProviderCatalogItem[]>([])
   const [cinemaVideoProviders, setCinemaVideoProviders] = useState<CinemaVideoProvider[]>([])
   const [models, setModels] = useState<ProviderModel[]>([])
+  const [modelCatalog, setModelCatalog] = useState<ModelCatalogItem[]>([])
   const [savedSelection, setSavedSelection] = useState<ProjectModelSelection>(EMPTY_PROJECT_MODEL_SELECTION)
   const [selectionDraft, setSelectionDraft] = useState<ProjectModelSelection>(EMPTY_PROJECT_MODEL_SELECTION)
   const [providerDrafts, setProviderDrafts] = useState<Record<string, ProviderDraftState>>({})
@@ -936,12 +938,14 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     const loadProviderCatalog = window.desktop?.getGlobalProviderCatalog
     const loadCinemaVideoProviders = window.desktop?.getCinemaVideoProviders
     const loadModels = window.desktop?.getGlobalModels
+    const loadModelCatalog = window.desktop?.getGlobalModelCatalog
 
     if (!loadProviderCatalog || !loadModels) {
       setLoadError("Desktop provider settings APIs are unavailable.")
       setCatalog([])
       setCinemaVideoProviders([])
       setModels([])
+      setModelCatalog([])
       setProviderDrafts({})
       setCinemaVideoProviderDrafts({})
       return
@@ -954,10 +958,11 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     setLoadError(null)
 
     try {
-      const [nextCatalog, modelPayload, nextCinemaVideoProviders] = await Promise.all([
+      const [nextCatalog, modelPayload, nextCinemaVideoProviders, nextModelCatalog] = await Promise.all([
         loadProviderCatalog(),
         loadModels(),
         loadCinemaVideoProviders?.() ?? Promise.resolve([]),
+        loadModelCatalog?.() ?? Promise.resolve({ items: [] }),
       ])
       const normalizedCatalog = nextCatalog.map((item) => normalizeProviderCatalogItem(item))
 
@@ -967,6 +972,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       setCatalog(normalizedCatalog)
       setCinemaVideoProviders(nextCinemaVideoProviders)
       setModels(modelPayload.items)
+      setModelCatalog(nextModelCatalog.items)
       savedSelectionRef.current = nextSelection
       selectionDraftRef.current = nextSelection
       setSavedSelection(nextSelection)
@@ -985,6 +991,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       setCatalog([])
       setCinemaVideoProviders([])
       setModels([])
+      setModelCatalog([])
       setProviderDrafts({})
       setCinemaVideoProviderDrafts({})
       setLoadError(getErrorMessage(error))
@@ -1002,6 +1009,8 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     try {
       const modelPayload = await loadModels()
       setModels(modelPayload.items)
+      const modelCatalogPayload = await window.desktop?.getGlobalModelCatalog?.()
+      if (modelCatalogPayload) setModelCatalog(modelCatalogPayload.items)
     } catch (error) {
       console.error("[desktop] load prompt translation models failed:", error)
     }
@@ -3725,6 +3734,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     mcpServerDraft,
     mcpServers,
     models,
+    modelCatalog,
     openSettings,
     pluginCatalog,
     pluginConnectorStatuses,

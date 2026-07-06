@@ -1583,6 +1583,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     mcpServerDraft,
     mcpServers,
     models,
+    modelCatalog,
     openSettings,
     pluginCatalog,
     pluginConnectorStatuses,
@@ -3142,6 +3143,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               mcpServerDraft={mcpServerDraft}
               mcpServers={mcpServers}
               models={models}
+              modelCatalog={modelCatalog}
               pluginCatalog={pluginCatalog}
               providerDrafts={providerDrafts}
               cinemaVideoProviderDrafts={cinemaVideoProviderDrafts}

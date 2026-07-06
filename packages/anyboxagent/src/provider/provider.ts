@@ -1759,9 +1759,38 @@ export async function listModels(configID = resolveConfigID()) {
     return providerFunctionOverrides.listModels(configID)
   }
 
+  const registry = await import("#model/registry.ts")
+  return registry.listAISDKModels(configID)
+}
+
+export async function listProviderSourceModels(configID = resolveConfigID()) {
+  if (providerFunctionOverrides.listModels) {
+    return providerFunctionOverrides.listModels(configID)
+  }
+
   const providers = await list(configID)
   return sortModels(
     Object.values(providers).flatMap((provider) => Object.values(provider.models).map((model) => toPublicModel(provider, model))),
+  )
+}
+
+export async function listProviderCatalogSourceModels(configID = resolveConfigID()) {
+  if (providerFunctionOverrides.listModels) {
+    return providerFunctionOverrides.listModels(configID)
+  }
+
+  const state = await resolveProjectProviders(configID)
+  const providerIDs = new Set([
+    ...Object.keys(state.catalog),
+    ...Object.keys(state.providers),
+  ])
+
+  return sortModels(
+    [...providerIDs].flatMap((providerID) => {
+      const provider = state.providers[providerID] ?? state.catalog[providerID]
+      if (!provider) return []
+      return Object.values(provider.models).map((model) => toPublicModel(provider, model))
+    }),
   )
 }
 
@@ -1777,6 +1806,15 @@ export async function getPublicProvider(providerID: string, configID = resolveCo
 }
 
 async function getModel(providerID: string, modelID: string, configID = resolveConfigID()) {
+  if (providerFunctionOverrides.getModel) {
+    return providerFunctionOverrides.getModel(providerID, modelID, configID)
+  }
+
+  const registry = await import("#model/registry.ts")
+  return registry.getAISDKModel(providerID, modelID, configID)
+}
+
+export async function getProviderSourceModel(providerID: string, modelID: string, configID = resolveConfigID()) {
   if (providerFunctionOverrides.getModel) {
     return providerFunctionOverrides.getModel(providerID, modelID, configID)
   }

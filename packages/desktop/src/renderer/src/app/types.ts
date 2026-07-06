@@ -11,6 +11,10 @@ import type {
 } from "../../../shared/permission"
 import type { ReasoningEffort as SharedReasoningEffort } from "@anybox/shared"
 import type {
+  CinemaProviderAuthState as SharedCinemaProviderAuthState,
+  CinemaVideoProvider as SharedCinemaVideoProvider,
+} from "@anybox/shared/cinema"
+import type {
   DesktopPreviewRenderer,
   DesktopResolvedPreviewTarget,
   MobileBridgeDesktopEvent as DesktopMobileBridgeEvent,
@@ -1222,76 +1226,9 @@ export interface ProviderCatalogItem {
   lastAuthError?: string
 }
 
-export interface CinemaVideoProviderModel {
-  id: string
-  label: string
-  catalogID?: string
-  family?: string
-  lab?: string
-  baseModel?: string
-  endpointType?: string
-  modalities?: {
-    input: string[]
-    output: string[]
-  }
-  modes: string[]
-  durations?: number[]
-  aspectRatios?: string[]
-  resolutions?: string[]
-  maxDurationSeconds?: number
-  pricing?: Array<Record<string, unknown>>
-  sourceURL?: string
-  sourceCheckedAt?: string
-  supportsAudio?: boolean
-}
-
-export interface CinemaVideoProviderAuthState {
-  providerID: string
-  credentialProviderID: string
-  requiresCredential: boolean
-  connected: boolean
-  status: "connected" | "not_connected" | "pending" | "expired" | "error"
-  credentialKind?: "api_key" | "oauth_session"
-  credentialSource?: string
-  connectionLabel?: string
-  lastError?: string
-}
-
-export interface CinemaVideoProvider {
-  manifest: {
-    id: string
-    name: string
-    description?: string
-    kind?: string
-    baseURL?: string
-    website?: string
-    doc?: string
-    regions?: string[]
-    authType?: string
-    catalogSource?: string
-    credentialProviderID?: string
-    requiresCredential: boolean
-    connectionTest?: {
-      method: "GET" | "POST" | "HEAD"
-      url?: string
-      path?: string
-      auth: "bearer" | "x-api-key" | "query" | "none"
-      apiKeyHeader?: string
-      apiKeyQueryParam?: string
-      headers: Record<string, string>
-      body?: unknown
-      expectedStatus: number[]
-      timeoutMs: number
-    }
-    models: CinemaVideoProviderModel[]
-  }
-  auth: CinemaVideoProviderAuthState
-  runtime?: {
-    baseURL?: string
-    configuredBaseURL?: string
-    baseURLSource?: "settings" | "environment" | "default"
-  }
-}
+export type CinemaProviderAuthState = SharedCinemaProviderAuthState
+export type CinemaVideoProvider = SharedCinemaVideoProvider
+export type CinemaVideoProviderModel = CinemaVideoProvider["manifest"]["models"][number]
 
 export interface CinemaVideoProviderDraftState {
   apiKey: string
@@ -1424,6 +1361,31 @@ export interface ProviderModel {
     input?: number
     output: number
   }
+}
+
+export interface ModelCatalogItemCapabilities extends Partial<Pick<
+  ProviderModelCapabilities,
+  "temperature" | "reasoning" | "attachment" | "toolcall"
+>> {
+  input: ProviderModelCapabilitiesModalities
+  output: ProviderModelCapabilitiesModalities
+  taskModes: string[]
+}
+
+export interface ModelCatalogItem {
+  registryID: string
+  providerID: string
+  modelID: string
+  name: string
+  providerName: string
+  family?: string
+  runtimeKind: "ai-sdk" | "cinema-task"
+  selectable: boolean
+  available: boolean
+  capabilities: ModelCatalogItemCapabilities
+  status: "alpha" | "beta" | "deprecated" | "active"
+  source: "provider" | "cinema"
+  metadata?: Record<string, unknown>
 }
 
 export interface ProjectModelSelection {

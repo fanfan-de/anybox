@@ -1153,6 +1153,35 @@ export interface AgentProviderModel {
   }
 }
 
+export interface AgentModelCatalogItemCapabilities extends Partial<Pick<
+  AgentProviderModelCapabilities,
+  "temperature" | "reasoning" | "attachment" | "toolcall"
+>> {
+  input: AgentProviderModelCapabilitiesModalities
+  output: AgentProviderModelCapabilitiesModalities
+  taskModes: string[]
+}
+
+export interface AgentModelCatalogItem {
+  registryID: string
+  providerID: string
+  modelID: string
+  name: string
+  providerName: string
+  family?: string
+  runtimeKind: "ai-sdk" | "cinema-task"
+  selectable: boolean
+  available: boolean
+  capabilities: AgentModelCatalogItemCapabilities
+  status: "alpha" | "beta" | "deprecated" | "active"
+  source: "provider" | "cinema"
+  metadata?: Record<string, unknown>
+}
+
+export interface AgentModelCatalogResult {
+  items: AgentModelCatalogItem[]
+}
+
 export interface AgentProjectModelSelection {
   model?: string
   small_model?: string

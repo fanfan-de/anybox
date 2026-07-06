@@ -1,4 +1,6 @@
 import * as Config from "#config/config.ts"
+import * as ModelRegistry from "#model/registry.ts"
+import type { PublicModel } from "#model/types.ts"
 import * as Provider from "#provider/provider.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
 
@@ -6,8 +8,8 @@ const MODEL_LIST_CACHE_TTL_MS = 30_000
 const DEFAULT_MODEL_LIST_TIMEOUT_MS = 2_500
 
 interface ModelListCacheEntry {
-  items: Provider.PublicModel[]
-  pending?: Promise<Provider.PublicModel[]>
+  items: PublicModel[]
+  pending?: Promise<PublicModel[]>
   updatedAt: number
 }
 
@@ -43,7 +45,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMS: number) {
 function startModelListLoad(projectID: string) {
   const existing = modelListCache.get(projectID)
   const generation = getCacheGeneration(projectID)
-  const pending = Provider.listModels(projectID)
+  const pending = ModelRegistry.listAISDKModels(projectID)
     .then((items) => {
       if (getCacheGeneration(projectID) === generation) {
         modelListCache.set(projectID, {
@@ -110,7 +112,7 @@ export async function listProjectModelsWithFallback(projectID: string) {
   }
 }
 
-export function findModelByReference(items: Provider.PublicModel[], value: string | undefined) {
+export function findModelByReference(items: PublicModel[], value: string | undefined) {
   const [providerID, ...rest] = value?.split("/") ?? []
   const modelID = rest.join("/")
   if (!providerID || !modelID) return null
@@ -119,7 +121,7 @@ export function findModelByReference(items: Provider.PublicModel[], value: strin
 }
 
 function resolveInheritedModelReference(
-  items: Provider.PublicModel[],
+  items: PublicModel[],
   projectValue: string | undefined,
   globalValue: string | undefined,
 ) {
@@ -128,7 +130,7 @@ function resolveInheritedModelReference(
 
 export async function resolveProjectModelSelectionWithGlobalFallback(
   projectID: string,
-  items: Provider.PublicModel[],
+  items: PublicModel[],
 ) {
   const projectSelection = await Provider.getSelection(projectID)
   const globalSelection =
@@ -146,7 +148,7 @@ export async function resolveProjectModelSelectionWithGlobalFallback(
 
 export async function resolveEffectiveModelWithFallback(
   projectID: string,
-  items: Provider.PublicModel[],
+  items: PublicModel[],
   preferredModel?: string,
 ) {
   const preferred = findModelByReference(items, preferredModel)

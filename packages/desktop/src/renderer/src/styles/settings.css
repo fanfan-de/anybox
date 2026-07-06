@@ -690,6 +690,12 @@ body.is-dragging-settings-page {
   text-transform: uppercase;
 }
 
+.settings-service-view-switch {
+  grid-column: 1 / -1;
+  align-self: start;
+  min-height: 30px;
+}
+
 .settings-disclosure-title {
   color: var(--seg-text-1);
   font-size: 16px;
@@ -3502,6 +3508,13 @@ body.is-dragging-settings-page {
   line-height: 1.55;
 }
 
+.settings-service-item-tags {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .settings-prompt-list,
 .settings-prompt-group,
 .settings-prompt-group-list {
@@ -4239,6 +4252,17 @@ body.is-dragging-settings-page {
   gap: 14px;
 }
 
+.model-catalog-view {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-inline-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .provider-row,
 .model-row {
   padding: 16px 18px;
@@ -4252,6 +4276,10 @@ body.is-dragging-settings-page {
 
 .provider-row.is-muted {
   background: transparent;
+}
+
+.model-row.is-muted {
+  opacity: 0.72;
 }
 
 .provider-row-main,

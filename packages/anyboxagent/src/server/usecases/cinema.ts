@@ -31,9 +31,12 @@ import {
 import { isSshWorkspaceUri } from "@anybox/shared"
 import * as CinemaProviderRuntime from "#cinema/provider-runtime.ts"
 import * as Config from "#config/config.ts"
-import * as Provider from "#provider/provider.ts"
+import * as ModelRegistry from "#model/registry.ts"
+import * as ModelRuntime from "#model/runtime.ts"
+import type { PublicModel } from "#model/types.ts"
 import * as Project from "#project/project.ts"
 import { Instance } from "#project/instance.ts"
+import { InitError } from "#provider/provider.ts"
 import { ApiError } from "#server/error.ts"
 import { getServerBaseURL } from "#server/base-url.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
@@ -66,8 +69,8 @@ export {
 
 const defaultCinemaTextRuntimeDependencies = {
   getGenerateText: async () => (await import("ai")).generateText,
-  getLanguage: Provider.getLanguage,
-  getModel: Provider.getModel,
+  getLanguage: ModelRuntime.getLanguage,
+  getModel: ModelRegistry.getAISDKModel,
   listModels: listProjectModelsWithFallback,
   resolveEffectiveModel: resolveEffectiveModelWithFallback,
   resolveSelection: resolveProjectModelSelectionWithGlobalFallback,
@@ -76,9 +79,9 @@ let cinemaTextRuntimeDependencies = defaultCinemaTextRuntimeDependencies
 
 const defaultCinemaImageRuntimeDependencies = {
   getGenerateImage: async () => (await import("ai")).generateImage,
-  getImage: Provider.getImage,
+  getImage: ModelRuntime.getImage,
   getImageGenerationSettings: Config.getImageGenerationSettings,
-  getModel: Provider.getModel,
+  getModel: ModelRegistry.getAISDKModel,
   listModels: listProjectModelsWithFallback,
   resolveEffectiveModel: resolveEffectiveModelWithFallback,
   resolveSelection: resolveProjectModelSelectionWithGlobalFallback,
@@ -348,7 +351,7 @@ function formatProviderLabel(providerID: string) {
     .join(" ") || providerID
 }
 
-function toCinemaTextModel(model: Provider.PublicModel): CinemaTextModel {
+function toCinemaTextModel(model: PublicModel): CinemaTextModel {
   return {
     value: textModelValue(model),
     providerID: model.providerID,
@@ -359,7 +362,7 @@ function toCinemaTextModel(model: Provider.PublicModel): CinemaTextModel {
   }
 }
 
-function toCinemaImageModel(model: Provider.PublicModel): CinemaImageModel {
+function toCinemaImageModel(model: PublicModel): CinemaImageModel {
   return {
     value: textModelValue(model),
     providerID: model.providerID,
@@ -370,11 +373,11 @@ function toCinemaImageModel(model: Provider.PublicModel): CinemaImageModel {
   }
 }
 
-function isTextOutputModel(model: Provider.PublicModel) {
+function isTextOutputModel(model: PublicModel) {
   return model.available && model.capabilities.output.text
 }
 
-function isImageOutputModel(model: Provider.PublicModel) {
+function isImageOutputModel(model: PublicModel) {
   return model.available && model.capabilities.output.image
 }
 
@@ -541,7 +544,7 @@ function errorMessage(error: unknown): string {
 }
 
 function createCinemaTextGenerationRuntimeError(error: unknown, modelValue: string) {
-  if (Provider.InitError.isInstance(error)) {
+  if (InitError.isInstance(error)) {
     const detail = errorMessage(error)
     return new ApiError(
       400,
@@ -563,7 +566,7 @@ function createCinemaTextGenerationRuntimeError(error: unknown, modelValue: stri
 }
 
 function createCinemaImageGenerationRuntimeError(error: unknown, modelValue: string) {
-  if (Provider.InitError.isInstance(error)) {
+  if (InitError.isInstance(error)) {
     const detail = errorMessage(error)
     return new ApiError(
       400,
@@ -1032,7 +1035,7 @@ async function resolveCinemaTextGenerationModel(projectID: string, requestedMode
     return { model, textModel: selected }
   } catch (error) {
     if (error instanceof ApiError) throw error
-    if (Provider.ModelNotFoundError.isInstance(error)) {
+    if (ModelRegistry.isModelNotFoundError(error)) {
       throw new ApiError(
         400,
         "CINEMA_TEXT_MODEL_NOT_AVAILABLE",
@@ -1177,7 +1180,7 @@ async function resolveCinemaImageGenerationModel(projectID: string, requestedMod
     return { model, imageModel: selected }
   } catch (error) {
     if (error instanceof ApiError) throw error
-    if (Provider.ModelNotFoundError.isInstance(error)) {
+    if (ModelRegistry.isModelNotFoundError(error)) {
       throw new ApiError(
         400,
         "CINEMA_IMAGE_MODEL_NOT_AVAILABLE",

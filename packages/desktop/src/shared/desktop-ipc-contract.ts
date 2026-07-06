@@ -26,6 +26,7 @@ import type {
   AgentInstalledGlobalSkill,
   AgentMcpServerDiagnostic,
   AgentMcpServerSummary,
+  AgentModelCatalogResult,
   AgentInstalledPlugin,
   AgentPluginCatalogItem,
   AgentPluginConnectorStatus,
@@ -154,6 +155,7 @@ export type {
   AgentInstalledGlobalSkill,
   AgentMcpServerDiagnostic,
   AgentMcpServerSummary,
+  AgentModelCatalogResult,
   AgentInstalledPlugin,
   AgentPluginCatalogItem,
   AgentPluginConnectorStatus,
@@ -1500,6 +1502,10 @@ export interface DesktopIpcContract {
     input: void
     output: { items: AgentProviderModel[]; selection: AgentProjectModelSelection }
   }
+  "desktop:get-global-model-catalog": {
+    input: void
+    output: AgentModelCatalogResult
+  }
   "desktop:update-global-provider": {
     input: { providerID: string; provider: DesktopProviderMutationInput }
     output: DesktopProviderMutationResult
@@ -1808,6 +1814,10 @@ export interface DesktopIpcContract {
     input: { projectID: string }
     output: AgentProjectModelsResult
   }
+  "desktop:get-project-model-catalog": {
+    input: { projectID: string }
+    output: AgentModelCatalogResult
+  }
   "desktop:get-session-models": {
     input: { sessionID: string }
     output: AgentProjectModelsResult
@@ -2109,6 +2119,7 @@ export interface DesktopApiMethods {
   upsertCustomProvider(input: DesktopIpcInput<"desktop:upsert-custom-provider">): Promise<DesktopIpcOutput<"desktop:upsert-custom-provider">>
   testCustomProviderConnection(input: DesktopIpcInput<"desktop:test-custom-provider-connection">): Promise<DesktopIpcOutput<"desktop:test-custom-provider-connection">>
   getGlobalModels(): Promise<DesktopIpcOutput<"desktop:get-global-models">>
+  getGlobalModelCatalog(): Promise<DesktopIpcOutput<"desktop:get-global-model-catalog">>
   updateGlobalProvider(input: DesktopIpcInput<"desktop:update-global-provider">): Promise<DesktopIpcOutput<"desktop:update-global-provider">>
   deleteGlobalProvider(input: DesktopIpcInput<"desktop:delete-global-provider">): Promise<DesktopIpcOutput<"desktop:delete-global-provider">>
   updateGlobalModelSelection(input: DesktopIpcInput<"desktop:update-global-model-selection">): Promise<DesktopIpcOutput<"desktop:update-global-model-selection">>
@@ -2187,6 +2198,7 @@ export interface DesktopApiMethods {
   getProjectProviderCatalog(input: DesktopIpcInput<"desktop:get-project-provider-catalog">): Promise<DesktopIpcOutput<"desktop:get-project-provider-catalog">>
   refreshProjectProviderCatalog(input: DesktopIpcInput<"desktop:refresh-project-provider-catalog">): Promise<DesktopIpcOutput<"desktop:refresh-project-provider-catalog">>
   getProjectModels(input: DesktopIpcInput<"desktop:get-project-models">): Promise<DesktopIpcOutput<"desktop:get-project-models">>
+  getProjectModelCatalog(input: DesktopIpcInput<"desktop:get-project-model-catalog">): Promise<DesktopIpcOutput<"desktop:get-project-model-catalog">>
   getSessionModels(input: DesktopIpcInput<"desktop:get-session-models">): Promise<DesktopIpcOutput<"desktop:get-session-models">>
   getProjectSkills(input: DesktopIpcInput<"desktop:get-project-skills">): Promise<DesktopIpcOutput<"desktop:get-project-skills">>
   getProjectSkillSelection(input: DesktopIpcInput<"desktop:get-project-skill-selection">): Promise<DesktopIpcOutput<"desktop:get-project-skill-selection">>

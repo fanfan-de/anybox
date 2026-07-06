@@ -6,6 +6,7 @@ import { fn } from "#util/fn.ts";
 import * as Status from "#session/runtime/status.ts";
 import * as Session from "#session/core/session.ts";
 import * as Processor from "#session/core/processor.ts";
+import * as ModelRegistry from "#model/registry.ts"
 import * as Provider from "#provider/provider.ts";
 import * as db from "#database/Sqlite.ts";
 import * as Agent from "#agent/agent.ts";
@@ -674,7 +675,7 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
             }
 
             // 本轮实际执行所需的模型、assistant 壳消息和工具集。
-            const model = await Provider.getModel(
+            const model = await ModelRegistry.getAISDKModel(
                 lastUser.model.providerID,
                 lastUser.model.modelID,
                 Instance.project.id,
@@ -1642,7 +1643,7 @@ async function resolvePromptModel(input: PromptInput): Promise<Provider.ModelRef
     const selectedReference = parseSelectedModelReference(selectedModel)
     if (selectedReference) {
         try {
-            await Provider.getModel(selectedReference.providerID, selectedReference.modelID, Instance.project.id)
+            await ModelRegistry.getAISDKModel(selectedReference.providerID, selectedReference.modelID, Instance.project.id)
             return selectedReference
         } catch {
             // Fall through to the project default if the stored session model is no longer valid.
@@ -1833,7 +1834,7 @@ async function autoGenerateSessionTitle(input: {
     if (titleSourceParts.length === 0) return
 
     try {
-        const fallbackModel = await Provider.getModel(
+        const fallbackModel = await ModelRegistry.getAISDKModel(
             input.model.providerID,
             input.model.modelID,
             input.projectID,

@@ -1,6 +1,7 @@
 import { generateText } from "ai"
 import type { LanguageModel } from "ai"
 import type { GitCommitMessageContext } from "#git/git.ts"
+import * as ModelRuntime from "#model/runtime.ts"
 import * as Provider from "#provider/provider.ts"
 import * as ProviderTransform from "#provider/transform.ts"
 import * as Log from "#util/log.ts"
@@ -10,7 +11,7 @@ const COMMIT_MESSAGE_TIMEOUT_MS = 10_000
 const MAX_COMMIT_MESSAGE_CHARS = 72
 
 type GenerateTextFunction = typeof generateText
-type GetLanguageFunction = typeof Provider.getLanguage
+type GetLanguageFunction = typeof ModelRuntime.getLanguage
 
 class GitCommitMessageError extends Error {
   readonly code: "EMPTY" | "FAILED"
@@ -24,7 +25,7 @@ class GitCommitMessageError extends Error {
 
 const defaultRuntimeDependencies = {
   getGenerateText: async () => generateText,
-  getLanguage: Provider.getLanguage,
+  getLanguage: ModelRuntime.getLanguage,
 }
 
 let runtimeDependencies = defaultRuntimeDependencies

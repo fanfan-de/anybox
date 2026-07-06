@@ -21,6 +21,8 @@ export function SettingsRoutes() {
 
   app.get("/models", async (c) => ok(c, await SettingsUseCase.listModels()))
 
+  app.get("/model-catalog", async (c) => ok(c, await SettingsUseCase.listModelCatalog()))
+
   app.post("/providers/custom", async (c) => {
     const payload = await parseJsonBody(
       c,

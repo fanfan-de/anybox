@@ -3,6 +3,7 @@ import * as Config from "#config/config.ts"
 import { Flag } from "#flag/flag.ts"
 import * as Log from "#util/log.ts"
 import * as Message from "#session/core/message.ts"
+import * as ModelRuntime from "#model/runtime.ts"
 import * as Provider from "#provider/provider.ts"
 import * as ProviderTransform from "#provider/transform.ts"
 import * as Session from "#session/core/session.ts"
@@ -444,7 +445,7 @@ async function generateCompactionSummary(input: {
   tools?: ToolSet
 }) {
   try {
-    const languageModel = await Provider.getLanguage(input.model, Instance.project.id)
+    const languageModel = await ModelRuntime.getLanguage(input.model, Instance.project.id)
     const modelMessages = await Message.toModelMessages(input.messages, input.model)
     const systemPrompt = input.system.join("\n")
     const providerOptions = ProviderTransform.buildProviderOptions({
