@@ -10142,8 +10142,9 @@ describe("App", () => {
     })
 
     expect(await screen.findByText("Provider catalog refreshed.")).toBeInTheDocument()
-    expect(screen.getByText("Provider catalog refreshed.").closest(".toast-card")).not.toBeNull()
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss notification" }))
+    const refreshedToast = screen.getByText("Provider catalog refreshed.").closest(".toast-card")
+    expect(refreshedToast).not.toBeNull()
+    fireEvent.click(within(refreshedToast as HTMLElement).getByRole("button", { name: "Dismiss notification" }))
     expect(screen.queryByText("Provider catalog refreshed.")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /OpenAI.*Not connected/ })).toBeInTheDocument()
   })
