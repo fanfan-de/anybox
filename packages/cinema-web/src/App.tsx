@@ -2069,6 +2069,12 @@ function TextCanvasNode({
     if (generatorPrompt || data.textGenerationError) setIsGeneratorOpen(true)
   }, [data.textGenerationError, generatorPrompt])
 
+  useEffect(() => {
+    if (selected) return
+    setIsTextEditorOpen(false)
+    setIsModelMenuOpen(false)
+  }, [selected])
+
   const focusEditor = () => {
     setIsTextEditorOpen(true)
     window.requestAnimationFrame(() => editorRef.current?.focus())
@@ -2160,7 +2166,9 @@ function TextCanvasNode({
             Text
           </span>
           <div className="cinema-node-header-actions nodrag nowheel" role="toolbar" aria-label="Text node actions">
-            <button
+            {selected ? (
+              <>
+                <button
               type="button"
               className={`cinema-node-action-button ${isTextEditorOpen ? "is-active" : ""}`}
               title="编辑文本"
@@ -2189,6 +2197,8 @@ function TextCanvasNode({
                 ? <Loader2 size={13} aria-hidden="true" className="is-spinning" />
                 : <WandSparkles size={13} aria-hidden="true" />}
             </button>
+              </>
+            ) : null}
             <button
               type="button"
               className="cinema-node-action-button"
@@ -2220,7 +2230,7 @@ function TextCanvasNode({
         </header>
 
         <div className={`cinema-node-preview cinema-text-card-preview ${isTextEditorOpen ? "is-editing" : ""} ${hasPreviewText ? "has-text" : ""}`}>
-          {isTextEditorOpen ? (
+          {selected && isTextEditorOpen ? (
             <textarea
               ref={editorRef}
               className="cinema-text-card-editor nodrag nowheel"
@@ -2270,8 +2280,8 @@ function TextCanvasNode({
         </footer>
       </article>
 
-      {isGeneratorOpen ? (
-        <section className="cinema-text-card-generator nodrag nowheel" aria-label="Text generation draft" style={accentStyle}>
+      {selected && isGeneratorOpen ? (
+        <section className="cinema-node-input-panel cinema-text-card-generator nodrag nowheel" aria-label="Text generation draft" style={accentStyle}>
           <header className="cinema-text-card-generator-header">
             <span>
               <WandSparkles size={13} aria-hidden="true" />
@@ -2939,7 +2949,8 @@ function ImageGenerationCanvasNode({
           </div>
         ) : null}
 
-        <section className="cinema-image-gen-composer nodrag nowheel" aria-label="Image generation controls">
+        {selected ? (
+          <section className="cinema-node-input-panel cinema-image-gen-composer nodrag nowheel" aria-label="Image generation controls">
           {sourceTextParameters.length > 0 ? (
             <div className="cinema-image-gen-param-tags" aria-label="Connected text parameters">
               {sourceTextParameters.map((parameter) => (
@@ -3197,7 +3208,8 @@ function ImageGenerationCanvasNode({
               {nodeError}
             </p>
           ) : null}
-        </section>
+          </section>
+        ) : null}
       </article>
       <Handle
         id="output"
@@ -3777,7 +3789,8 @@ function VideoGenerationCanvasNode({
 
         <GenerationProgress progress={progress} status={currentStatus} />
 
-        <section className="cinema-video-gen-composer nodrag nowheel" aria-label="Video generation controls">
+        {selected ? (
+          <section className="cinema-node-input-panel cinema-video-gen-composer nodrag nowheel" aria-label="Video generation controls">
           <div className="cinema-video-mode-tabs" role="tablist" aria-label="Video generation mode">
             {visibleModeContracts.map((contract) => (
               <button
@@ -4101,7 +4114,8 @@ function VideoGenerationCanvasNode({
             </p>
           ) : null}
           </div>
-        </section>
+          </section>
+        ) : null}
       </article>
       <Handle
         id="output"
@@ -4377,7 +4391,9 @@ function CustomApiCanvasNode({
           </div>
         </header>
 
-        <section className="cinema-custom-api-inputs nodrag nowheel" aria-label={`${runtimeLabel} inputs`}>
+        {selected ? (
+          <>
+            <section className="cinema-node-input-panel cinema-custom-api-inputs nodrag nowheel" aria-label={`${runtimeLabel} inputs`}>
           <div className="cinema-custom-api-section-title">
             <Code2 size={13} aria-hidden="true" />
             <span>Inputs</span>
@@ -4435,7 +4451,7 @@ function CustomApiCanvasNode({
           }) : (
             <p className="cinema-custom-api-empty">No input fields.</p>
           )}
-        </section>
+            </section>
 
         <section className="cinema-custom-api-config nodrag nowheel" aria-label={`${runtimeLabel} request configuration`}>
           <label className="cinema-custom-api-field">
@@ -4532,6 +4548,8 @@ function CustomApiCanvasNode({
             <span>Run</span>
           </button>
         </footer>
+          </>
+        ) : null}
 
         {nodeError ? (
           <p className="cinema-custom-api-error nodrag nowheel" role="alert" title={nodeError}>

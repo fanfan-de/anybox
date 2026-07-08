@@ -137,7 +137,16 @@ button {
   min-height: 13px;
   border: 2px solid var(--cinema-surface);
   background: var(--node-accent);
+  opacity: 0;
+  pointer-events: none;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--node-accent) 58%, transparent);
+  transition: opacity 120ms ease, box-shadow 120ms ease;
+}
+
+.react-flow__node-cinemaNode:hover .react-flow__handle.cinema-node-handle,
+.react-flow__node-cinemaNode:has(.is-selected) .react-flow__handle.cinema-node-handle {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .react-flow__handle.cinema-node-handle:hover {
@@ -1218,7 +1227,7 @@ button {
   width: 100%;
   height: auto;
   min-width: 380px;
-  min-height: 390px;
+  min-height: 0;
   overflow: hidden;
   padding: 10px;
   border: 1px solid var(--cinema-border);
@@ -1228,6 +1237,7 @@ button {
 }
 
 .cinema-image-gen-node.is-selected {
+  min-height: 390px;
   border-color: var(--node-accent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--node-accent) 58%, transparent), 0 14px 42px rgba(0, 0, 0, 0.34);
 }
@@ -1943,7 +1953,7 @@ button {
   width: 100%;
   height: auto;
   min-width: 500px;
-  min-height: 560px;
+  min-height: 0;
   overflow: visible;
   padding: 10px;
   border: 1px solid var(--cinema-border);
@@ -1953,6 +1963,7 @@ button {
 }
 
 .cinema-custom-api-node.is-selected {
+  min-height: 560px;
   border-color: var(--node-accent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--node-accent) 58%, transparent), 0 14px 42px rgba(0, 0, 0, 0.34);
 }
@@ -2284,7 +2295,7 @@ button {
   width: 100%;
   height: auto;
   min-width: 460px;
-  min-height: 390px;
+  min-height: 0;
   overflow: visible;
   padding: 10px;
   border: 1px solid var(--cinema-border);
@@ -2294,6 +2305,7 @@ button {
 }
 
 .cinema-video-gen-node.is-selected {
+  min-height: 390px;
   border-color: var(--node-accent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--node-accent) 58%, transparent), 0 14px 42px rgba(0, 0, 0, 0.34);
 }
