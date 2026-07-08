@@ -626,6 +626,32 @@ interface CinemaImageGenerationResult {
   assets: CinemaGeneratedAsset[]
 }
 
+interface CinemaCustomApiRunResult {
+  nodeID: string
+  requestPreview: {
+    method: "POST"
+    url: string
+    headers: Record<string, string>
+    body: unknown
+  }
+  statusCode?: number
+  responsePreview?: unknown
+  output?: {
+    text?: string
+    json?: unknown
+    imageUrl?: string
+  }
+  canvas?: CinemaCanvasDocument
+  elapsedMs?: number
+}
+
+interface CinemaCustomApiAuthState {
+  nodeID: string
+  credentialProviderID: string
+  connected: boolean
+  status: string
+}
+
 async function readJson<T>(response: Response) {
   return await response.json() as JsonEnvelope<T>
 }
@@ -812,6 +838,66 @@ function createCanvasWithVideoNode(overrides: Record<string, unknown> = {}): Cin
     },
   })
   canvas.nodeTypes = ["text", "agent", "video"]
+  return canvas
+}
+
+function createCanvasWithCustomApiNode(overrides: Record<string, unknown> = {}): CinemaCanvasDocument {
+  const canvas = createCanvas()
+  canvas.nodes.push({
+    id: "custom-api",
+    type: "custom-api",
+    title: "Custom API",
+    position: { x: 920, y: 260 },
+    size: { width: 520, height: 520 },
+    data: {
+      status: "idle",
+      inputSchema: {
+        type: "object",
+        properties: {
+          prompt: { type: "string" },
+          count: { type: "number" },
+          enabled: { type: "boolean" },
+        },
+        required: ["prompt"],
+      },
+      inputValues: {
+        prompt: "Default prompt",
+        count: 1,
+        enabled: true,
+      },
+      request: {
+        method: "POST",
+        url: "http://127.0.0.1:1/generate",
+        headersTemplate: {
+          "Content-Type": "application/json",
+          "X-Prompt": "{{inputs.prompt}}",
+        },
+        bodyTemplate: {
+          prompt: "{{inputs.prompt}}",
+          count: "{{inputs.count}}",
+          enabled: "{{inputs.enabled}}",
+          upstreamText: "{{upstream.text}}",
+          projectID: "{{system.projectID}}",
+        },
+        timeoutMs: 30000,
+      },
+      auth: {
+        type: "none",
+      },
+      outputMapping: {
+        text: "$.choices[0].message.content",
+        json: "$.usage",
+        imageUrl: "$.data[0].url",
+      },
+      ...overrides,
+    },
+  })
+  canvas.edges.push({
+    id: "edge-story-custom-api",
+    source: "story-brief",
+    target: "custom-api",
+  })
+  canvas.nodeTypes = ["text", "agent", "custom-api"]
   return canvas
 }
 
@@ -1093,6 +1179,113 @@ describe("cinema api", () => {
       expect(summaryBody.data?.recentEvents).toHaveLength(6)
       expect(summaryBody.data?.directories.map((directory) => directory.path)).toContain("generated")
       expect(summaryBody.data?.gaps).toContain("no-provider-configured")
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("persists custom node definitions through cinema commands", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root)
+
+      const definition = {
+        id: "def-openai-chat",
+        title: "OpenAI Chat",
+        runtime: "http-json-post",
+        inputSchema: {
+          type: "object",
+          properties: {
+            prompt: { type: "string" },
+          },
+          required: ["prompt"],
+        },
+        inputValues: {
+          prompt: "",
+        },
+        request: {
+          method: "POST",
+          url: "https://api.example.com/v1/chat/completions",
+          headersTemplate: {
+            "Content-Type": "application/json",
+          },
+          bodyTemplate: {
+            messages: [{ role: "user", content: "{{inputs.prompt}}" }],
+          },
+        },
+        auth: {
+          type: "bearer",
+        },
+        outputMapping: {
+          text: "$.choices[0].message.content",
+        },
+      }
+
+      const createDefinitionResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "create-custom-node-definition",
+          actor: "cinema-web",
+          definition,
+        }),
+      })
+      const createDefinitionBody = await readJson<CinemaCommandResult>(createDefinitionResponse)
+
+      expect(createDefinitionResponse.status).toBe(200)
+      expect(createDefinitionBody.data?.canvas.customNodeDefinitions?.[0]?.title).toBe("OpenAI Chat")
+
+      const updateDefinitionResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "update-custom-node-definition",
+          actor: "cinema-web",
+          definitionID: definition.id,
+          patch: {
+            title: "Internal Chat",
+          },
+        }),
+      })
+      expect(updateDefinitionResponse.status).toBe(200)
+
+      const createNodeResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "create-node",
+          actor: "cinema-web",
+          node: {
+            id: "custom-node-1",
+            type: "custom-node",
+            title: "Internal Chat",
+            position: { x: 700, y: 180 },
+            size: { width: 540, height: 600 },
+            data: {
+              definitionID: definition.id,
+              status: "idle",
+              inputValues: {
+                prompt: "Hello",
+              },
+              request: definition.request,
+              auth: {
+                type: "bearer",
+                credentialProviderID: "cinema-custom-api-custom-node-1",
+              },
+              outputMapping: definition.outputMapping,
+            },
+          },
+        }),
+      })
+      expect(createNodeResponse.status).toBe(200)
+
+      const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
+      expect(persisted.customNodeDefinitions?.[0]?.title).toBe("Internal Chat")
+      expect(persisted.nodes.find((node) => node.id === "custom-node-1")?.type).toBe("custom-node")
+      expect(persisted.nodeTypes).toContain("custom-node")
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -1420,6 +1613,290 @@ describe("cinema api", () => {
       expect(body.error?.code).toBe("CINEMA_TEXT_MODEL_NOT_AVAILABLE")
     } finally {
       restoreTextRuntime()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("previews custom API nodes without sending the external request", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    let requestCount = 0
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => {
+        requestCount += 1
+        return Response.json({ ok: true })
+      },
+    })
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root, createCanvasWithCustomApiNode({
+        request: {
+          method: "POST",
+          url: `http://127.0.0.1:${server.port}/generate`,
+          headersTemplate: {
+            "Content-Type": "application/json",
+            "X-Prompt": "{{inputs.prompt}}",
+          },
+          bodyTemplate: {
+            prompt: "{{inputs.prompt}}",
+            count: "{{inputs.count}}",
+            enabled: "{{inputs.enabled}}",
+            upstreamText: "{{upstream.text}}",
+          },
+        },
+      }))
+
+      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/custom-api-runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          nodeID: "custom-api",
+          mode: "preview",
+          inputValues: {
+            prompt: "Preview prompt",
+            count: 3,
+            enabled: false,
+          },
+        }),
+      })
+      const body = await readJson<CinemaCustomApiRunResult>(response)
+
+      expect(response.status).toBe(200)
+      expect(requestCount).toBe(0)
+      expect(body.data?.requestPreview.url).toBe(`http://127.0.0.1:${server.port}/generate`)
+      expect(body.data?.requestPreview.headers["X-Prompt"]).toBe("Preview prompt")
+      expect(body.data?.requestPreview.body).toEqual({
+        prompt: "Preview prompt",
+        count: 3,
+        enabled: false,
+        upstreamText: "A test story brief.",
+      })
+    } finally {
+      server.stop(true)
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("previews custom-node runtime instances through the custom API runner", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+
+    try {
+      const project = await createProject(app, root)
+      const canvas = createCanvasWithCustomApiNode({
+        definitionID: "def-chat",
+        definitionTitle: "Internal Chat",
+      })
+      const customNode = canvas.nodes.find((node) => node.id === "custom-api")
+      if (!customNode) throw new Error("Fixture custom node missing")
+      customNode.id = "custom-node"
+      customNode.type = "custom-node"
+      customNode.title = "Internal Chat"
+      customNode.data = {
+        ...customNode.data,
+        auth: {
+          type: "none",
+        },
+      }
+      for (const edge of canvas.edges) {
+        if (edge.target === "custom-api") edge.target = "custom-node"
+      }
+      canvas.nodeTypes = ["text", "agent", "custom-node"]
+      await initializeCinemaProject(root, canvas)
+
+      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/custom-api-runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          nodeID: "custom-node",
+          mode: "preview",
+          inputValues: {
+            prompt: "Preview prompt",
+          },
+        }),
+      })
+      const body = await readJson<CinemaCustomApiRunResult>(response)
+
+      expect(response.status).toBe(200)
+      expect(body.data?.nodeID).toBe("custom-node")
+      expect(body.data?.requestPreview.body).toMatchObject({
+        prompt: "Preview prompt",
+        upstreamText: "A test story brief.",
+      })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("runs custom API nodes and persists mapped outputs without leaking API keys", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    const credentialProviderID = "cinema-custom-api-test-run"
+    let seenAuthorization = ""
+    let seenRequestBody: Record<string, unknown> | null = null
+    let projectID = ""
+    const server = Bun.serve({
+      port: 0,
+      async fetch(request) {
+        seenAuthorization = request.headers.get("authorization") ?? ""
+        seenRequestBody = await request.json() as Record<string, unknown>
+        return Response.json({
+          choices: [
+            {
+              message: {
+                content: "Generated custom text.",
+              },
+            },
+          ],
+          usage: {
+            tokens: 7,
+          },
+          data: [
+            {
+              url: "https://example.com/generated.png",
+            },
+          ],
+        })
+      },
+    })
+
+    try {
+      const project = await createProject(app, root)
+      projectID = project.id
+      await initializeCinemaProject(root, createCanvasWithCustomApiNode({
+        request: {
+          method: "POST",
+          url: `http://127.0.0.1:${server.port}/generate`,
+          headersTemplate: {
+            "Content-Type": "application/json",
+          },
+          bodyTemplate: {
+            prompt: "{{inputs.prompt}}",
+            count: "{{inputs.count}}",
+            enabled: "{{inputs.enabled}}",
+            upstream: "{{upstream.text}}",
+            nodeID: "{{node.id}}",
+          },
+        },
+        auth: {
+          type: "bearer",
+          credentialProviderID,
+        },
+      }))
+
+      const authResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/custom-api-nodes/custom-api/auth/api-key`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          apiKey: "sk-custom-secret",
+        }),
+      })
+      const authBody = await readJson<CinemaCustomApiAuthState>(authResponse)
+      expect(authResponse.status).toBe(200)
+      expect(authBody.data?.connected).toBe(true)
+
+      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/custom-api-runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          nodeID: "custom-api",
+          inputValues: {
+            prompt: "Run prompt",
+            count: 2,
+            enabled: true,
+          },
+        }),
+      })
+      const body = await readJson<CinemaCustomApiRunResult>(response)
+
+      expect(response.status).toBe(200)
+      expect(seenAuthorization).toBe("Bearer sk-custom-secret")
+      expect(seenRequestBody).toEqual({
+        prompt: "Run prompt",
+        count: 2,
+        enabled: true,
+        upstream: "A test story brief.",
+        nodeID: "custom-api",
+      })
+      expect(body.data?.requestPreview.headers.Authorization).toBe("Bearer [redacted]")
+      expect(body.data?.output?.text).toBe("Generated custom text.")
+      expect(body.data?.output?.json).toEqual({ tokens: 7 })
+      expect(body.data?.output?.imageUrl).toBe("https://example.com/generated.png")
+
+      const generatedNode = body.data?.canvas?.nodes.find((node) => node.id === "custom-api")
+      expect(generatedNode?.data?.status).toBe("succeeded")
+      expect(generatedNode?.data?.outputText).toBe("Generated custom text.")
+      expect(generatedNode?.data?.outputJson).toEqual({ tokens: 7 })
+      expect(generatedNode?.data?.outputImageUrl).toBe("https://example.com/generated.png")
+
+      const persisted = await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")
+      expect(persisted).toContain("Generated custom text.")
+      expect(persisted).not.toContain("sk-custom-secret")
+
+      const events = await readFile(join(root, ".anybox-cinema", "events.jsonl"), "utf8")
+      expect(events).toContain("\"type\":\"custom-api.generated\"")
+      expect(events).not.toContain("sk-custom-secret")
+    } finally {
+      if (projectID) {
+        await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(projectID)}/custom-api-nodes/custom-api/auth/api-key`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ apiKey: null }),
+        }).catch(() => undefined)
+      }
+      server.stop(true)
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects invalid custom API runs and writes failed state for run attempts", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root, createCanvasWithCustomApiNode({
+        request: {
+          method: "POST",
+          url: "https://api.example.com/generate",
+          headersTemplate: {},
+          bodyTemplate: {
+            missing: "{{inputs.missing}}",
+          },
+        },
+      }))
+
+      const wrongNodeResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/custom-api-runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          nodeID: "story-brief",
+        }),
+      })
+      const wrongNodeBody = await readJson(wrongNodeResponse)
+
+      expect(wrongNodeResponse.status).toBe(409)
+      expect(wrongNodeBody.error?.code).toBe("CINEMA_CUSTOM_API_NODE_INVALID")
+
+      const missingVariableResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/custom-api-runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          nodeID: "custom-api",
+        }),
+      })
+      const missingVariableBody = await readJson(missingVariableResponse)
+
+      expect(missingVariableResponse.status).toBe(400)
+      expect(missingVariableBody.error?.code).toBe("CINEMA_CUSTOM_API_TEMPLATE_MISSING")
+
+      const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
+      const failedNode = persisted.nodes.find((node) => node.id === "custom-api")
+      expect(failedNode?.data?.status).toBe("failed")
+      expect(String(failedNode?.data?.error)).toContain("Template variable")
+    } finally {
       await rm(root, { recursive: true, force: true })
     }
   })

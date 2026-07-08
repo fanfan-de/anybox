@@ -23,18 +23,23 @@ import {
   type CinemaCanvasDocument,
   type CinemaCommand,
   type CinemaCommandResult,
+  type CinemaCustomApiAuthState,
+  type CinemaCustomApiOutput,
+  type CinemaCustomApiRunResult,
   type CinemaEventsResult,
   type CinemaNodeType,
   type CinemaOpenLink,
   type CinemaProjectEvent,
   type CinemaProjectSummary,
   type CinemaProjectStateSummary,
+  type CreateCinemaCustomApiRunBody,
   type CreateCinemaGenerationTaskBody,
   type CreateCinemaImageGenerationBody,
   type CreateCinemaImportedImageAssetBody,
   type CreateCinemaTextGenerationBody,
 } from "@anybox/shared/cinema"
 import { isSshWorkspaceUri } from "@anybox/shared"
+import * as ProviderAuth from "#auth/provider-auth.ts"
 import * as CinemaProviderRuntime from "#cinema/provider-runtime.ts"
 import * as Config from "#config/config.ts"
 import * as ModelRegistry from "#model/registry.ts"
@@ -128,6 +133,9 @@ const PROJECT_DIRECTORY_LIST_LIMIT = 250
 const PROJECT_DIRECTORY_SKIPPED_NAMES = new Set([".git", "node_modules"])
 const CINEMA_PROJECT_IMAGE_ASSET_MAX_BYTES = 25 * 1024 * 1024
 const CINEMA_PROJECT_VIDEO_ASSET_MAX_BYTES = 256 * 1024 * 1024
+const CINEMA_CUSTOM_API_DEFAULT_TIMEOUT_MS = 30 * 1000
+const CINEMA_CUSTOM_API_MAX_TIMEOUT_MS = 60 * 1000
+const CINEMA_CUSTOM_API_MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 const IMAGE_EXTENSION_BY_MIME: Record<string, string> = {
   "image/apng": ".png",
   "image/avif": ".avif",
@@ -809,9 +817,9 @@ function uniqueNonEmptyStrings(values: Array<string | undefined>) {
 function redactSensitiveErrorText(value: string) {
   return value
     .replace(/("?(?:authorization)"?\s*[:=]\s*)Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "$1Bearer [redacted]")
-    .replace(/\b(sk|ak|pk)-[A-Za-z0-9._-]{8,}\b/g, "$1-[redacted]")
-    .replace(/("?(?:api[_-]?key|access[_-]?token|secret)"?\s*[:=]\s*)("[^"]+"|[^\s,}]+)/gi, "$1[redacted]")
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/\b(sk|ak|pk)-[A-Za-z0-9._-]{8,}\b/g, "$1-[redacted]")
+    .replace(/("?(?:api[_-]?key|access[_-]?token|secret|cookie)"?\s*[:=]\s*)("[^"]+"|[^\s,}]+)/gi, "$1[redacted]")
 }
 
 function errorMessage(error: unknown): string {
@@ -821,6 +829,440 @@ function errorMessage(error: unknown): string {
     return redactSensitiveErrorText(message || error.name)
   }
   return redactSensitiveErrorText(String(error))
+}
+
+function customApiCredentialProviderIDFor(node: CinemaCanvasNode) {
+  const auth = isRecord(node.data?.auth) ? node.data.auth : {}
+  return stringValue(auth.credentialProviderID) ?? `cinema-custom-api-${node.id}`
+}
+
+function isCustomApiRuntimeNode(node: CinemaCanvasNode) {
+  return node.type === "custom-api" || node.type === "custom-node"
+}
+
+async function customApiAuthStateFor(node: CinemaCanvasNode): Promise<CinemaCustomApiAuthState> {
+  const credentialProviderID = customApiCredentialProviderIDFor(node)
+  const runtimeAuth = await ProviderAuth.resolveProviderRuntimeAuth(credentialProviderID, {}, {
+    method: "api-key",
+  })
+  const connected = Boolean(runtimeAuth.apiKey)
+  return {
+    nodeID: node.id,
+    credentialProviderID,
+    connected,
+    status: connected ? "connected" : "not_connected",
+  }
+}
+
+function sanitizeHeaders(headers: Record<string, string>) {
+  const result: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    result[key] = /authorization|api[-_]?key|token|secret|cookie/i.test(key)
+      ? redactSensitiveErrorText(value)
+      : value
+  }
+  return result
+}
+
+function validateCustomApiURL(value: string) {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new ApiError(400, "CINEMA_CUSTOM_API_URL_INVALID", "Custom API URL must be a valid absolute http(s) URL.")
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new ApiError(400, "CINEMA_CUSTOM_API_URL_INVALID", "Custom API URL must use http or https.")
+  }
+  if (url.username || url.password) {
+    throw new ApiError(400, "CINEMA_CUSTOM_API_URL_INVALID", "Custom API URL must not contain embedded credentials.")
+  }
+
+  const hostname = url.hostname.toLowerCase()
+  if (
+    hostname === "169.254.169.254" ||
+    hostname.startsWith("169.254.") ||
+    hostname === "metadata.google.internal" ||
+    hostname === "metadata"
+  ) {
+    throw new ApiError(400, "CINEMA_CUSTOM_API_URL_FORBIDDEN", "Custom API URL points to a blocked metadata host.")
+  }
+
+  return url.toString()
+}
+
+function normalizeCustomApiTimeout(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return CINEMA_CUSTOM_API_DEFAULT_TIMEOUT_MS
+  return Math.min(CINEMA_CUSTOM_API_MAX_TIMEOUT_MS, Math.max(1, Math.round(value)))
+}
+
+function customApiMissingConfigError(field: string) {
+  return new ApiError(400, "CINEMA_CUSTOM_API_CONFIG_INVALID", `Custom API node is missing a valid ${field}.`)
+}
+
+function getObjectField(value: unknown, field: string) {
+  if (!isRecord(value)) throw customApiMissingConfigError(field)
+  return value
+}
+
+function readCustomApiNodeConfig(node: CinemaCanvasNode) {
+  const data = node.data ?? {}
+  const request = getObjectField(data.request, "request")
+  const auth = isRecord(data.auth) ? data.auth : {}
+  const outputMapping = isRecord(data.outputMapping) ? data.outputMapping : {}
+  const headersTemplateValue = request.headersTemplate
+  const headersTemplate: Record<string, string> = {}
+  if (isRecord(headersTemplateValue)) {
+    for (const [key, value] of Object.entries(headersTemplateValue)) {
+      if (typeof value === "string") headersTemplate[key] = value
+    }
+  }
+
+  const method = typeof request.method === "string" ? request.method.trim().toUpperCase() : "POST"
+  if (method !== "POST") {
+    throw new ApiError(400, "CINEMA_CUSTOM_API_METHOD_UNSUPPORTED", "Custom API V1 only supports POST requests.")
+  }
+
+  const url = stringValue(request.url)
+  if (!url) throw customApiMissingConfigError("request.url")
+
+  const authType = typeof auth.type === "string" ? auth.type.trim() : "none"
+  if (authType !== "none" && authType !== "bearer" && authType !== "api-key-header") {
+    throw new ApiError(400, "CINEMA_CUSTOM_API_AUTH_UNSUPPORTED", "Custom API auth type is not supported.")
+  }
+
+  return {
+    inputValues: isRecord(data.inputValues) ? data.inputValues : {},
+    request: {
+      method: "POST" as const,
+      url,
+      headersTemplate,
+      bodyTemplate: "bodyTemplate" in request ? request.bodyTemplate : {},
+      timeoutMs: normalizeCustomApiTimeout(request.timeoutMs),
+    },
+    auth: {
+      type: authType as "none" | "bearer" | "api-key-header",
+      credentialProviderID: stringValue(auth.credentialProviderID) ?? customApiCredentialProviderIDFor(node),
+      headerName: stringValue(auth.headerName),
+    },
+    outputMapping: {
+      text: stringValue(outputMapping.text),
+      json: stringValue(outputMapping.json),
+      imageUrl: stringValue(outputMapping.imageUrl),
+    },
+  }
+}
+
+function customApiNodeText(node: CinemaCanvasNode) {
+  const data = node.data ?? {}
+  const candidates = [
+    data.outputText,
+    data.text,
+    data.prompt,
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim()
+  }
+  return ""
+}
+
+function buildCustomApiTemplateContext(input: {
+  projectID: string
+  runID: string
+  node: CinemaCanvasNode
+  canvas: CinemaCanvasDocument
+  inputValues: Record<string, unknown>
+}) {
+  const upstreamItems = input.canvas.edges
+    .filter((edge) => edge.target === input.node.id)
+    .flatMap((edge) => {
+      const source = input.canvas.nodes.find((node) => node.id === edge.source)
+      if (!source) return []
+      const data = source.data ?? {}
+      const item = {
+        nodeID: source.id,
+        nodeTitle: source.title,
+        type: source.type,
+        text: customApiNodeText(source),
+        outputText: typeof data.outputText === "string" ? data.outputText : undefined,
+        outputJson: data.outputJson,
+        outputImageUrl: typeof data.outputImageUrl === "string" ? data.outputImageUrl : undefined,
+      }
+      return [item]
+    })
+
+  return {
+    inputs: input.inputValues,
+    upstream: {
+      text: upstreamItems.map((item) => item.text).filter(Boolean).join("\n\n"),
+      items: upstreamItems,
+    },
+    node: {
+      id: input.node.id,
+      title: input.node.title,
+    },
+    system: {
+      projectID: input.projectID,
+      runID: input.runID,
+    },
+  }
+}
+
+function readPathValue(root: unknown, pathExpression: string) {
+  const segments = pathExpression.split(".").filter(Boolean)
+  let current = root
+  for (const segment of segments) {
+    if (!isRecord(current) && !Array.isArray(current)) return undefined
+    if (Array.isArray(current)) {
+      const index = Number(segment)
+      if (!Number.isInteger(index) || index < 0) return undefined
+      current = current[index]
+    } else {
+      current = current[segment]
+    }
+  }
+  return current
+}
+
+function formatTemplateValue(value: unknown) {
+  if (value === null || value === undefined) return ""
+  if (typeof value === "string") return value
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value)
+  return JSON.stringify(value)
+}
+
+function renderCustomApiTemplate(value: unknown, context: Record<string, unknown>): unknown {
+  if (typeof value === "string") {
+    const exact = /^\s*\{\{\s*([A-Za-z0-9_.]+)\s*\}\}\s*$/.exec(value)
+    if (exact) {
+      const resolved = readPathValue(context, exact[1]!)
+      if (resolved === undefined) {
+        throw new ApiError(400, "CINEMA_CUSTOM_API_TEMPLATE_MISSING", `Template variable '${exact[1]}' was not found.`)
+      }
+      return resolved
+    }
+
+    return value.replace(/\{\{\s*([A-Za-z0-9_.]+)\s*\}\}/g, (_match, key: string) => {
+      const resolved = readPathValue(context, key)
+      if (resolved === undefined) {
+        throw new ApiError(400, "CINEMA_CUSTOM_API_TEMPLATE_MISSING", `Template variable '${key}' was not found.`)
+      }
+      return formatTemplateValue(resolved)
+    })
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => renderCustomApiTemplate(item, context))
+  }
+
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, renderCustomApiTemplate(item, context)])
+    )
+  }
+
+  return value
+}
+
+function parseJsonPath(pathExpression: string) {
+  const pathValue = pathExpression.trim()
+  if (pathValue === "$") return [] as Array<string | number>
+  if (!pathValue.startsWith("$")) {
+    throw new ApiError(400, "CINEMA_CUSTOM_API_JSONPATH_INVALID", `Output mapping '${pathExpression}' must start with $.`)
+  }
+
+  const segments: Array<string | number> = []
+  let index = 1
+  while (index < pathValue.length) {
+    const char = pathValue[index]
+    if (char === ".") {
+      index += 1
+      const start = index
+      while (index < pathValue.length && pathValue[index] !== "." && pathValue[index] !== "[") index += 1
+      const segment = pathValue.slice(start, index)
+      if (!segment) throw new ApiError(400, "CINEMA_CUSTOM_API_JSONPATH_INVALID", `Output mapping '${pathExpression}' is invalid.`)
+      segments.push(segment)
+      continue
+    }
+
+    if (char === "[") {
+      const end = pathValue.indexOf("]", index)
+      if (end < 0) throw new ApiError(400, "CINEMA_CUSTOM_API_JSONPATH_INVALID", `Output mapping '${pathExpression}' is invalid.`)
+      const raw = pathValue.slice(index + 1, end).trim()
+      if (/^\d+$/.test(raw)) {
+        segments.push(Number(raw))
+      } else {
+        const quoted = /^["'](.+)["']$/.exec(raw)
+        if (!quoted) throw new ApiError(400, "CINEMA_CUSTOM_API_JSONPATH_INVALID", `Output mapping '${pathExpression}' is invalid.`)
+        segments.push(quoted[1]!)
+      }
+      index = end + 1
+      continue
+    }
+
+    throw new ApiError(400, "CINEMA_CUSTOM_API_JSONPATH_INVALID", `Output mapping '${pathExpression}' is invalid.`)
+  }
+
+  return segments
+}
+
+function readJsonPathValue(root: unknown, pathExpression: string) {
+  let current = root
+  for (const segment of parseJsonPath(pathExpression)) {
+    if (typeof segment === "number") {
+      if (!Array.isArray(current)) return undefined
+      current = current[segment]
+    } else {
+      if (!isRecord(current)) return undefined
+      current = current[segment]
+    }
+  }
+  return current
+}
+
+function mapCustomApiResponse(responseJson: unknown, mapping: { text?: string; json?: string; imageUrl?: string }): CinemaCustomApiOutput {
+  const output: CinemaCustomApiOutput = {}
+  if (mapping.text) {
+    const value = readJsonPathValue(responseJson, mapping.text)
+    if (value !== undefined) output.text = typeof value === "string" ? value : JSON.stringify(value)
+  }
+  if (mapping.json) {
+    const value = readJsonPathValue(responseJson, mapping.json)
+    if (value !== undefined) output.json = value
+  }
+  if (mapping.imageUrl) {
+    const value = readJsonPathValue(responseJson, mapping.imageUrl)
+    if (value !== undefined) output.imageUrl = typeof value === "string" ? value : String(value)
+  }
+  return output
+}
+
+async function readResponseTextWithLimit(response: Response) {
+  if (!response.body) return ""
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    if (!value) continue
+    total += value.byteLength
+    if (total > CINEMA_CUSTOM_API_MAX_RESPONSE_BYTES) {
+      await reader.cancel().catch(() => undefined)
+      throw new ApiError(413, "CINEMA_CUSTOM_API_RESPONSE_TOO_LARGE", "Custom API response body is too large.")
+    }
+    chunks.push(value)
+  }
+  const bytes = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder().decode(bytes)
+}
+
+async function executeCustomApiJsonRequest(input: {
+  url: string
+  headers: Record<string, string>
+  body: unknown
+  timeoutMs: number
+}) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), input.timeoutMs)
+  const startedAt = Date.now()
+  try {
+    const response = await fetch(input.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...input.headers,
+      },
+      body: JSON.stringify(input.body),
+      signal: controller.signal,
+      redirect: "follow",
+    })
+    const text = await readResponseTextWithLimit(response)
+    let responseJson: unknown
+    try {
+      responseJson = text ? JSON.parse(text) : null
+    } catch {
+      throw new ApiError(502, "CINEMA_CUSTOM_API_RESPONSE_INVALID_JSON", "Custom API response must be valid JSON.")
+    }
+    if (!response.ok) {
+      throw new ApiError(
+        502,
+        "CINEMA_CUSTOM_API_HTTP_ERROR",
+        `Custom API request failed with HTTP ${response.status}.`,
+      )
+    }
+    return {
+      statusCode: response.status,
+      responseJson,
+      elapsedMs: Date.now() - startedAt,
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new ApiError(504, "CINEMA_CUSTOM_API_TIMEOUT", "Custom API request timed out.")
+    }
+    throw new ApiError(502, "CINEMA_CUSTOM_API_REQUEST_FAILED", `Custom API request failed: ${errorMessage(error)}`)
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function writeCustomApiNodeResult(input: {
+  canvas: CinemaCanvasDocument
+  nodeID: string
+  inputValues: Record<string, unknown>
+  output?: CinemaCustomApiOutput
+  statusCode?: number
+  status: "succeeded" | "failed"
+  error?: string | null
+}) {
+  const timestamp = nowISO()
+  return withNodeTypes({
+    ...input.canvas,
+    nodes: input.canvas.nodes.map((node) =>
+      node.id === input.nodeID
+        ? {
+          ...node,
+          data: {
+            ...node.data,
+            inputValues: input.inputValues,
+            status: input.status,
+            outputText: input.output?.text,
+            outputJson: input.output?.json,
+            outputImageUrl: input.output?.imageUrl,
+            lastRunAt: timestamp,
+            ...(input.statusCode ? { lastStatusCode: input.statusCode } : {}),
+            error: input.error ?? null,
+          },
+        }
+        : node
+    ),
+  })
+}
+
+async function writeCustomApiNodeFailure(input: {
+  cinemaRoot: string
+  canvas: CinemaCanvasDocument
+  nodeID: string
+  inputValues: Record<string, unknown>
+  error: string
+  statusCode?: number
+}) {
+  const nextCanvas = writeCustomApiNodeResult({
+    canvas: input.canvas,
+    nodeID: input.nodeID,
+    inputValues: input.inputValues,
+    status: "failed",
+    error: input.error,
+    statusCode: input.statusCode,
+  })
+  await writeCinemaCanvas(input.cinemaRoot, nextCanvas)
 }
 
 function createCinemaTextGenerationRuntimeError(error: unknown, modelValue: string) {
@@ -911,6 +1353,12 @@ function describeCinemaCommand(command: CinemaCommand) {
       return `Created generation task '${command.node.title}'.`
     case "complete-generation-task":
       return `Completed generation task '${command.taskNodeID}'.`
+    case "create-custom-node-definition":
+      return `Created custom node definition '${command.definition.title}'.`
+    case "update-custom-node-definition":
+      return `Updated custom node definition '${command.definitionID}'.`
+    case "delete-custom-node-definition":
+      return `Deleted custom node definition '${command.definitionID}'.`
   }
 }
 
@@ -1015,6 +1463,46 @@ function applyCommandToCanvas(canvas: CinemaCanvasDocument, command: CinemaComma
 
       return next
     }
+    case "create-custom-node-definition": {
+      if ((canvas.customNodeDefinitions ?? []).some((definition) => definition.id === command.definition.id)) {
+        throw new ApiError(
+          409,
+          "CINEMA_COMMAND_INVALID",
+          `Custom node definition '${command.definition.id}' already exists.`,
+        )
+      }
+      return {
+        ...canvas,
+        customNodeDefinitions: [...(canvas.customNodeDefinitions ?? []), command.definition],
+      }
+    }
+    case "update-custom-node-definition": {
+      const definitions = canvas.customNodeDefinitions ?? []
+      if (!definitions.some((definition) => definition.id === command.definitionID)) {
+        throw new ApiError(
+          404,
+          "CINEMA_CUSTOM_NODE_DEFINITION_NOT_FOUND",
+          `Custom node definition '${command.definitionID}' was not found.`,
+        )
+      }
+      return {
+        ...canvas,
+        customNodeDefinitions: definitions.map((definition) =>
+          definition.id === command.definitionID
+            ? {
+              ...definition,
+              ...command.patch,
+              id: definition.id,
+            }
+            : definition
+        ),
+      }
+    }
+    case "delete-custom-node-definition":
+      return {
+        ...canvas,
+        customNodeDefinitions: (canvas.customNodeDefinitions ?? []).filter((definition) => definition.id !== command.definitionID),
+      }
   }
 }
 
@@ -1914,6 +2402,223 @@ export async function createCinemaImageGeneration(
 
     if (error instanceof ApiError) throw error
     throw createCinemaImageGenerationRuntimeError(error, input.model ?? "selected image model")
+  }
+}
+
+async function renderCustomApiRequest(input: {
+  projectID: string
+  runID: string
+  node: CinemaCanvasNode
+  canvas: CinemaCanvasDocument
+  inputValues: Record<string, unknown>
+  includeSecret: boolean
+}) {
+  const config = readCustomApiNodeConfig(input.node)
+  const mergedInputValues = {
+    ...config.inputValues,
+    ...input.inputValues,
+  }
+  const context = buildCustomApiTemplateContext({
+    projectID: input.projectID,
+    runID: input.runID,
+    node: input.node,
+    canvas: input.canvas,
+    inputValues: mergedInputValues,
+  })
+  const url = validateCustomApiURL(String(renderCustomApiTemplate(config.request.url, context)))
+  const headers: Record<string, string> = {}
+  for (const [key, value] of Object.entries(config.request.headersTemplate)) {
+    const headerName = key.trim()
+    if (!headerName) continue
+    headers[headerName] = String(renderCustomApiTemplate(value, context))
+  }
+  const body = renderCustomApiTemplate(config.request.bodyTemplate, context)
+
+  if (config.auth.type !== "none") {
+    if (!input.includeSecret) {
+      const headerName = config.auth.type === "bearer" ? "Authorization" : config.auth.headerName ?? "X-API-Key"
+      headers[headerName] = config.auth.type === "bearer" ? "Bearer [redacted]" : "[redacted]"
+    } else {
+      const runtimeAuth = await ProviderAuth.resolveProviderRuntimeAuth(config.auth.credentialProviderID, {}, {
+        method: "api-key",
+      })
+      if (!runtimeAuth.apiKey) {
+        throw new ApiError(
+          400,
+          "CINEMA_CUSTOM_API_AUTH_NOT_CONNECTED",
+          "Custom API node requires an API key before it can run.",
+        )
+      }
+      if (config.auth.type === "bearer") {
+        headers.Authorization = `Bearer ${runtimeAuth.apiKey}`
+      } else {
+        headers[config.auth.headerName ?? "X-API-Key"] = runtimeAuth.apiKey
+      }
+    }
+  }
+
+  return {
+    inputValues: mergedInputValues,
+    timeoutMs: config.request.timeoutMs,
+    mapping: config.outputMapping,
+    request: {
+      method: "POST" as const,
+      url,
+      headers,
+      body,
+    },
+  }
+}
+
+export async function saveCinemaCustomApiNodeApiKey(
+  projectID: string,
+  nodeID: string,
+  apiKey: string | null | undefined,
+): Promise<CinemaCustomApiAuthState> {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+
+  const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
+  const node = canvas.nodes.find((item) => item.id === nodeID)
+  if (!node) {
+    throw new ApiError(404, "CINEMA_NODE_NOT_FOUND", `Cinema node '${nodeID}' was not found.`)
+  }
+  if (!isCustomApiRuntimeNode(node)) {
+    throw new ApiError(409, "CINEMA_CUSTOM_API_NODE_INVALID", `Cinema node '${nodeID}' is not a Custom API node.`)
+  }
+
+  const credentialProviderID = customApiCredentialProviderIDFor(node)
+  await ProviderAuth.saveProviderApiKey(credentialProviderID, apiKey)
+  return await customApiAuthStateFor(node)
+}
+
+export async function createCinemaCustomApiRun(
+  projectID: string,
+  input: CreateCinemaCustomApiRunBody,
+): Promise<CinemaCustomApiRunResult> {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+
+  const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
+  const node = canvas.nodes.find((item) => item.id === input.nodeID)
+  if (!node) {
+    throw new ApiError(404, "CINEMA_NODE_NOT_FOUND", `Cinema node '${input.nodeID}' was not found.`)
+  }
+  if (!isCustomApiRuntimeNode(node)) {
+    throw new ApiError(409, "CINEMA_CUSTOM_API_NODE_INVALID", `Cinema node '${input.nodeID}' is not a Custom API node.`)
+  }
+
+  const runID = `custom-api-run-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`
+  const mode = input.mode ?? "run"
+
+  let rendered: Awaited<ReturnType<typeof renderCustomApiRequest>>
+  try {
+    rendered = await renderCustomApiRequest({
+      projectID,
+      runID,
+      node,
+      canvas,
+      inputValues: input.inputValues ?? {},
+      includeSecret: mode === "run",
+    })
+  } catch (error) {
+    if (mode === "run") {
+      const message = errorMessage(error)
+      await writeCustomApiNodeFailure({
+        cinemaRoot,
+        canvas,
+        nodeID: node.id,
+        inputValues: input.inputValues ?? {},
+        error: message,
+      }).catch(() => undefined)
+      await appendCinemaEvent(cinemaRoot, {
+        time: nowISO(),
+        type: "custom-api.failed",
+        actor: "cinema-runtime",
+        message: `Custom API run failed for node '${node.title}'.`,
+        data: {
+          nodeID: node.id,
+          error: message,
+        },
+      }).catch(() => undefined)
+    }
+    throw error
+  }
+
+  const requestPreview = {
+    ...rendered.request,
+    headers: sanitizeHeaders(rendered.request.headers),
+  }
+
+  if (mode === "preview") {
+    return {
+      nodeID: node.id,
+      requestPreview,
+    }
+  }
+
+  try {
+    const result = await executeCustomApiJsonRequest({
+      url: rendered.request.url,
+      headers: rendered.request.headers,
+      body: rendered.request.body,
+      timeoutMs: rendered.timeoutMs,
+    })
+    const output = mapCustomApiResponse(result.responseJson, rendered.mapping)
+    const nextCanvas = writeCustomApiNodeResult({
+      canvas,
+      nodeID: node.id,
+      inputValues: rendered.inputValues,
+      output,
+      statusCode: result.statusCode,
+      status: "succeeded",
+    })
+    const writtenCanvas = await writeCinemaCanvas(cinemaRoot, nextCanvas)
+    await appendCinemaEvent(cinemaRoot, {
+      time: nowISO(),
+      type: "custom-api.generated",
+      actor: "cinema-runtime",
+      message: `Ran Custom API node '${node.title}'.`,
+      data: {
+        nodeID: node.id,
+        statusCode: result.statusCode,
+        outputTextLength: output.text?.length ?? 0,
+        hasJsonOutput: output.json !== undefined,
+        hasImageUrlOutput: Boolean(output.imageUrl),
+      },
+    })
+
+    return {
+      nodeID: node.id,
+      requestPreview,
+      statusCode: result.statusCode,
+      responsePreview: result.responseJson,
+      output,
+      canvas: writtenCanvas,
+      elapsedMs: result.elapsedMs,
+    }
+  } catch (error) {
+    const message = errorMessage(error)
+    await writeCustomApiNodeFailure({
+      cinemaRoot,
+      canvas,
+      nodeID: node.id,
+      inputValues: rendered.inputValues,
+      error: message,
+    }).catch(() => undefined)
+    await appendCinemaEvent(cinemaRoot, {
+      time: nowISO(),
+      type: "custom-api.failed",
+      actor: "cinema-runtime",
+      message: `Custom API run failed for node '${node.title}'.`,
+      data: {
+        nodeID: node.id,
+        error: message,
+      },
+    }).catch(() => undefined)
+
+    if (error instanceof ApiError) throw error
+    throw new ApiError(502, "CINEMA_CUSTOM_API_REQUEST_FAILED", `Custom API request failed: ${message}`)
   }
 }
 

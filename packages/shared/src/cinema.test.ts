@@ -3,12 +3,18 @@ import {
   CinemaImageGenerationResultSchema,
   CinemaImportedImageAssetResultSchema,
   CinemaImageModelsResultSchema,
+  CinemaCommandSchema,
   CinemaProjectDirectoryListingSchema,
+  CinemaCustomApiAuthStateSchema,
+  CinemaCustomApiRunResultSchema,
+  CinemaCanvasDocumentSchema,
   CinemaTextGenerationResultSchema,
   CinemaTextModelsResultSchema,
   CinemaGenerationTaskSchema,
   CinemaVideoProviderSchema,
   CinemaVideoProviderManifestSchema,
+  CreateCinemaCustomApiNodeApiKeyBodySchema,
+  CreateCinemaCustomApiRunBodySchema,
   CreateCinemaGenerationTaskBodySchema,
   CreateCinemaImageGenerationBodySchema,
   CreateCinemaImportedImageAssetBodySchema,
@@ -16,6 +22,197 @@ import {
 } from "./cinema"
 
 describe("cinema schemas", () => {
+  it("parses custom API canvas nodes and run payloads", () => {
+    const canvas = CinemaCanvasDocumentSchema.parse({
+      schemaVersion: 1,
+      canvasType: "node-canvas",
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [
+        {
+          id: "custom-api-1",
+          type: "custom-api",
+          title: "Custom API",
+          position: { x: 100, y: 100 },
+          data: {
+            status: "idle",
+            inputSchema: {
+              type: "object",
+              properties: {
+                prompt: { type: "string" },
+              },
+              required: ["prompt"],
+            },
+            inputValues: {
+              prompt: "Rainy street.",
+            },
+            request: {
+              method: "POST",
+              url: "https://api.example.com/v1/chat/completions",
+              headersTemplate: {
+                "Content-Type": "application/json",
+              },
+              bodyTemplate: {
+                prompt: "{{inputs.prompt}}",
+              },
+            },
+            auth: {
+              type: "bearer",
+              credentialProviderID: "cinema-custom-api-1",
+            },
+            outputMapping: {
+              text: "$.choices[0].message.content",
+            },
+          },
+        },
+      ],
+      edges: [],
+      nodeTypes: ["custom-api"],
+    })
+
+    expect(canvas.nodes[0]?.type).toBe("custom-api")
+
+    const runBody = CreateCinemaCustomApiRunBodySchema.parse({
+      nodeID: "custom-api-1",
+      inputValues: {
+        prompt: "Rainy street.",
+      },
+    })
+    expect(runBody.mode).toBe("run")
+
+    const previewBody = CreateCinemaCustomApiRunBodySchema.parse({
+      nodeID: "custom-api-1",
+      mode: "preview",
+    })
+    expect(previewBody.mode).toBe("preview")
+
+    const authBody = CreateCinemaCustomApiNodeApiKeyBodySchema.parse({
+      apiKey: "sk-test",
+    })
+    expect(authBody.apiKey).toBe("sk-test")
+
+    const authState = CinemaCustomApiAuthStateSchema.parse({
+      nodeID: "custom-api-1",
+      credentialProviderID: "cinema-custom-api-1",
+      connected: true,
+      status: "connected",
+    })
+    expect(authState.connected).toBe(true)
+
+    const result = CinemaCustomApiRunResultSchema.parse({
+      nodeID: "custom-api-1",
+      requestPreview: {
+        method: "POST",
+        url: "https://api.example.com/v1/chat/completions",
+        headers: {
+          authorization: "Bearer [redacted]",
+        },
+        body: {
+          prompt: "Rainy street.",
+        },
+      },
+      statusCode: 200,
+      output: {
+        text: "Generated response.",
+        imageUrl: "https://example.com/image.png",
+        json: { ok: true },
+      },
+      elapsedMs: 20,
+    })
+    expect(result.output?.text).toBe("Generated response.")
+
+    expect(() =>
+      CreateCinemaCustomApiRunBodySchema.parse({
+        nodeID: "custom-api-1",
+        mode: "stream",
+      })
+    ).toThrow()
+  })
+
+  it("parses custom node definitions and definition commands", () => {
+    const canvas = CinemaCanvasDocumentSchema.parse({
+      schemaVersion: 1,
+      canvasType: "node-canvas",
+      viewport: { x: 0, y: 0, zoom: 1 },
+      customNodeDefinitions: [
+        {
+          id: "def-chat",
+          title: "OpenAI Chat",
+          runtime: "http-json-post",
+          inputSchema: {
+            type: "object",
+            properties: {
+              prompt: { type: "string" },
+            },
+            required: ["prompt"],
+          },
+          request: {
+            method: "POST",
+            url: "https://api.example.com/v1/chat/completions",
+            headersTemplate: {
+              "Content-Type": "application/json",
+            },
+            bodyTemplate: {
+              messages: [{ role: "user", content: "{{inputs.prompt}}" }],
+            },
+          },
+          auth: {
+            type: "bearer",
+          },
+          outputMapping: {
+            text: "$.choices[0].message.content",
+          },
+        },
+      ],
+      nodes: [
+        {
+          id: "custom-node-1",
+          type: "custom-node",
+          title: "OpenAI Chat",
+          position: { x: 100, y: 100 },
+          data: {
+            definitionID: "def-chat",
+            status: "idle",
+            inputValues: {
+              prompt: "Generate a shot beat.",
+            },
+            auth: {
+              type: "bearer",
+              credentialProviderID: "cinema-custom-node-1",
+            },
+          },
+        },
+      ],
+      edges: [],
+      nodeTypes: ["custom-node"],
+    })
+
+    expect(canvas.customNodeDefinitions[0]?.title).toBe("OpenAI Chat")
+    expect(canvas.nodes[0]?.type).toBe("custom-node")
+
+    const createCommand = CinemaCommandSchema.parse({
+      type: "create-custom-node-definition",
+      definition: canvas.customNodeDefinitions[0],
+    })
+    expect(createCommand.type).toBe("create-custom-node-definition")
+
+    const updateCommand = CinemaCommandSchema.parse({
+      type: "update-custom-node-definition",
+      definitionID: "def-chat",
+      patch: {
+        title: "OpenAI Chat Updated",
+      },
+    })
+    expect(updateCommand.type).toBe("update-custom-node-definition")
+
+    expect(() =>
+      CinemaCommandSchema.parse({
+        type: "update-custom-node-definition",
+        definitionID: "def-chat",
+        patch: {},
+      })
+    ).toThrow()
+  })
+
   it("parses provider manifests and generation tasks", () => {
     const manifest = CinemaVideoProviderManifestSchema.parse({
       id: "kling",

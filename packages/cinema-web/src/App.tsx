@@ -23,7 +23,9 @@ import {
   ArrowLeft,
   ArrowUp,
   Bot,
+  Braces,
   ChevronDown,
+  Code2,
   Copy,
   Download,
   File,
@@ -31,12 +33,14 @@ import {
   Film,
   Folder,
   Image,
+  KeyRound,
   Loader2,
   MessageSquareText,
   Music,
   PencilLine,
   Play,
   RefreshCw,
+  Server,
   Scissors,
   Trash2,
   Upload,
@@ -47,6 +51,9 @@ import {
 import {
   type CinemaCommand,
   type CinemaCommandResult,
+  type CinemaCustomApiAuthState,
+  type CinemaCustomNodeDefinition,
+  type CinemaCustomApiRunResult,
   type CinemaEventsResult,
   type CinemaCanvasDocument,
   type CinemaCanvasNode,
@@ -94,6 +101,18 @@ type TextGenerationRequest = {
   sourceImageAssetIDs?: string[]
   sourceImagePath?: string
   sourceImagePaths?: string[]
+}
+type CustomApiRunMode = "preview" | "run"
+type CustomApiRunRequest = {
+  inputValues?: Record<string, unknown>
+  mode?: CustomApiRunMode
+}
+type CustomApiAuthSaveRequest = {
+  apiKey: string | null
+}
+type CustomNodeDefinitionSaveRequest = {
+  title: string
+  rawData: Record<string, unknown>
 }
 
 type VideoSourceImageAsset = CinemaGeneratedAsset & {
@@ -186,6 +205,11 @@ type CinemaFlowNodeData = {
   isCreatingVideoTask?: boolean
   videoGenerationError?: string | null
   onCreateVideoGenerationTask?: (nodeID: string, body: CreateCinemaGenerationTaskBody) => void
+  isRunningCustomApi?: boolean
+  customApiError?: string | null
+  onRunCustomApi?: (nodeID: string, request: CustomApiRunRequest) => Promise<CinemaCustomApiRunResult | undefined>
+  onSaveCustomApiKey?: (nodeID: string, request: CustomApiAuthSaveRequest) => Promise<CinemaCustomApiAuthState | undefined>
+  onSaveCustomNodeDefinition?: (nodeID: string, request: CustomNodeDefinitionSaveRequest) => Promise<CinemaCustomNodeDefinition | undefined>
 }
 
 type CinemaFlowNode = Node<CinemaFlowNodeData, "cinemaNode">
@@ -289,6 +313,8 @@ const DEFAULT_NODE_SIZE: Record<CinemaNodeType, { width: number; height: number 
   audio: { width: 320, height: 180 },
   shot: { width: 380, height: 250 },
   agent: { width: 360, height: 220 },
+  "custom-api": { width: 540, height: 600 },
+  "custom-node": { width: 540, height: 600 },
   "generation-task": { width: 390, height: 240 },
   output: { width: 360, height: 220 },
 }
@@ -346,6 +372,18 @@ const NODE_META: Record<CinemaNodeType, {
     accent: "#fdba74",
     icon: Bot,
     placeholder: "AnyBox Agent task placeholder.",
+  },
+  "custom-api": {
+    label: "Custom API",
+    accent: "#5eead4",
+    icon: Server,
+    placeholder: "Configure a JSON POST endpoint.",
+  },
+  "custom-node": {
+    label: "Custom Node",
+    accent: "#5eead4",
+    icon: Braces,
+    placeholder: "Define a reusable JSON POST node.",
   },
   "generation-task": {
     label: "Generation",
@@ -459,6 +497,200 @@ function readRawStringArray(rawData: Record<string, unknown>, key: string) {
 function readRawNumber(rawData: Record<string, unknown>, key: string, fallback: number) {
   const value = rawData[key]
   return typeof value === "number" && Number.isFinite(value) ? value : fallback
+}
+
+function readRawRecord(rawData: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = rawData[key]
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function stringifyJson(value: unknown) {
+  return JSON.stringify(value ?? {}, null, 2)
+}
+
+function parseJsonObjectDraft(value: string, fallback: Record<string, unknown>) {
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function customApiCredentialProviderID(nodeID: string) {
+  return `cinema-custom-api-${nodeID}`
+}
+
+function makeCustomNodeDefinitionID(title: string) {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32) || "custom-node"
+  return `custom-node-def-${slug}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+function normalizeCustomApiAuthType(value: unknown): "none" | "bearer" | "api-key-header" {
+  return value === "bearer" || value === "api-key-header" ? value : "none"
+}
+
+function readStringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  const result: Record<string, string> = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item === "string") result[key] = item
+  }
+  return result
+}
+
+function customNodeDefinitionFromRawData(input: {
+  definitionID: string
+  title: string
+  rawData: Record<string, unknown>
+  existing?: CinemaCustomNodeDefinition
+}): CinemaCustomNodeDefinition {
+  const now = new Date().toISOString()
+  const request = readRawRecord(input.rawData, "request")
+  const auth = readRawRecord(input.rawData, "auth")
+  const outputMapping = readStringRecord(input.rawData.outputMapping)
+  const inputSchema = readRawRecord(input.rawData, "inputSchema")
+  const authType = normalizeCustomApiAuthType(auth.type)
+  const required = Array.isArray(inputSchema.required)
+    ? inputSchema.required.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : undefined
+  return {
+    id: input.definitionID,
+    title: input.title.trim() || "Custom Node",
+    runtime: "http-json-post",
+    inputSchema: {
+      ...inputSchema,
+      type: "object",
+      properties: readRawRecord(inputSchema, "properties"),
+      ...(required ? { required } : {}),
+    },
+    inputValues: readRawRecord(input.rawData, "inputValues"),
+    request: {
+      method: "POST",
+      url: readRawString(request, "url", "https://api.example.com/v1/chat/completions"),
+      headersTemplate: readStringRecord(request.headersTemplate),
+      bodyTemplate: "bodyTemplate" in request ? request.bodyTemplate : {},
+      timeoutMs: readRawNumber(request, "timeoutMs", 30000),
+    },
+    auth: {
+      type: authType,
+      ...(authType === "api-key-header" ? { headerName: readRawString(auth, "headerName", "X-API-Key") } : {}),
+    },
+    outputMapping: {
+      ...(outputMapping.text ? { text: outputMapping.text } : {}),
+      ...(outputMapping.json ? { json: outputMapping.json } : {}),
+      ...(outputMapping.imageUrl ? { imageUrl: outputMapping.imageUrl } : {}),
+    },
+    createdAt: input.existing?.createdAt ?? now,
+    updatedAt: now,
+  }
+}
+
+function customNodeRawDataFromDefinition(nodeID: string, definition: CinemaCustomNodeDefinition): Record<string, unknown> {
+  return {
+    status: "idle",
+    definitionID: definition.id,
+    definitionTitle: definition.title,
+    inputSchema: definition.inputSchema,
+    inputValues: definition.inputValues ?? {},
+    request: {
+      ...definition.request,
+      method: "POST",
+    },
+    auth: {
+      type: definition.auth.type,
+      credentialProviderID: customApiCredentialProviderID(nodeID),
+      headerName: definition.auth.headerName ?? "X-API-Key",
+    },
+    outputMapping: definition.outputMapping ?? {},
+  }
+}
+
+function defaultCustomApiRawData(nodeID: string, definition?: CinemaCustomNodeDefinition): Record<string, unknown> {
+  if (definition) return customNodeRawDataFromDefinition(nodeID, definition)
+
+  return {
+    status: "idle",
+    inputSchema: {
+      type: "object",
+      properties: {
+        prompt: {
+          type: "string",
+          title: "Prompt",
+          default: "",
+        },
+        model: {
+          type: "string",
+          title: "Model",
+          default: "",
+        },
+      },
+      required: ["prompt"],
+    },
+    inputValues: {
+      prompt: "",
+      model: "",
+    },
+    request: {
+      method: "POST",
+      url: "https://api.example.com/v1/chat/completions",
+      headersTemplate: {
+        "Content-Type": "application/json",
+      },
+      bodyTemplate: {
+        model: "{{inputs.model}}",
+        messages: [
+          {
+            role: "user",
+            content: "{{inputs.prompt}}",
+          },
+        ],
+      },
+      timeoutMs: 30000,
+    },
+    auth: {
+      type: "none",
+      credentialProviderID: customApiCredentialProviderID(nodeID),
+      headerName: "X-API-Key",
+    },
+    outputMapping: {
+      text: "$.choices[0].message.content",
+      json: "$",
+    },
+  }
+}
+
+function customApiSchemaProperties(schema: Record<string, unknown>) {
+  const properties = schema.properties
+  return properties && typeof properties === "object" && !Array.isArray(properties)
+    ? properties as Record<string, unknown>
+    : {}
+}
+
+function customApiFieldLabel(key: string, spec: unknown) {
+  if (spec && typeof spec === "object" && !Array.isArray(spec)) {
+    const title = (spec as Record<string, unknown>).title
+    if (typeof title === "string" && title.trim()) return title.trim()
+  }
+  return key
+}
+
+function customApiFieldType(spec: unknown) {
+  if (spec && typeof spec === "object" && !Array.isArray(spec)) {
+    const type = (spec as Record<string, unknown>).type
+    if (type === "number" || type === "integer" || type === "boolean" || type === "string") return type
+  }
+  return "string"
+}
+
+function customApiFieldEnum(spec: unknown) {
+  if (!spec || typeof spec !== "object" || Array.isArray(spec)) return []
+  const value = (spec as Record<string, unknown>).enum
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
 }
 
 const GENERATION_PROGRESS_PHASES = [
@@ -1233,13 +1465,23 @@ function sourceTextParametersForNode(nodeID: string, nodes: CinemaFlowNode[], ed
     if (targetInput && targetInput.slot !== "textParameter") continue
     if (seenNodeIDs.has(edge.source)) continue
     const sourceNode = nodes.find((node) => node.id === edge.source)
-    if (!sourceNode || sourceNode.data.cinemaType !== "text") continue
+    if (
+      !sourceNode ||
+      (sourceNode.data.cinemaType !== "text" &&
+        sourceNode.data.cinemaType !== "custom-api" &&
+        sourceNode.data.cinemaType !== "custom-node")
+    ) continue
+    const text = sourceNode.data.cinemaType === "custom-api"
+      ? readRawString(sourceNode.data.rawData, "outputText")
+      : sourceNode.data.cinemaType === "custom-node"
+        ? readRawString(sourceNode.data.rawData, "outputText")
+      : readRawString(sourceNode.data.rawData, "text")
     seenNodeIDs.add(edge.source)
     parameters.push({
       edgeID: edge.id,
       nodeID: sourceNode.id,
       nodeTitle: sourceNode.data.title,
-      text: readRawString(sourceNode.data.rawData, "text"),
+      text,
     })
   }
   return parameters
@@ -1295,6 +1537,7 @@ function fileToDataBase64(file: File) {
 }
 
 function createNode(type: CinemaNodeType, position: { x: number; y: number }): CinemaFlowNode {
+  const id = makeNodeID(type)
   const size = DEFAULT_NODE_SIZE[type]
   const rawData = type === "image"
     ? {
@@ -1320,13 +1563,15 @@ function createNode(type: CinemaNodeType, position: { x: number; y: number }): C
         status: "missing",
         placeholder: NODE_META[type].placeholder,
       }
+    : type === "custom-api" || type === "custom-node"
+      ? defaultCustomApiRawData(id)
     : {
       text: "",
       placeholder: NODE_META[type].placeholder,
     }
 
   return {
-    id: makeNodeID(type),
+    id,
     type: "cinemaNode",
     position,
     style: flowNodeStyle(type, size),
@@ -3635,6 +3880,414 @@ function LocalImageCanvasNode({
   )
 }
 
+function createCustomNodeFromDefinition(
+  definition: CinemaCustomNodeDefinition,
+  position: { x: number; y: number },
+): CinemaFlowNode {
+  const type = "custom-node" satisfies CinemaNodeType
+  const id = makeNodeID(type)
+  const size = DEFAULT_NODE_SIZE[type]
+  return {
+    id,
+    type: "cinemaNode",
+    position,
+    style: flowNodeStyle(type, size),
+    data: {
+      cinemaType: type,
+      title: definition.title,
+      rawData: defaultCustomApiRawData(id, definition),
+      size,
+    },
+  }
+}
+
+function CustomApiCanvasNode({
+  id,
+  data,
+  selected,
+  accentStyle,
+}: {
+  id: string
+  data: CinemaFlowNodeData
+  selected: boolean
+  accentStyle: CSSProperties
+}) {
+  const rawDataRef = useRef(data.rawData)
+  const [inputValues, setInputValues] = useState<Record<string, unknown>>(() => readRawRecord(data.rawData, "inputValues"))
+  const [schemaDraft, setSchemaDraft] = useState(() => stringifyJson(readRawRecord(data.rawData, "inputSchema")))
+  const [urlDraft, setUrlDraft] = useState(() => readRawString(readRawRecord(data.rawData, "request"), "url"))
+  const [timeoutDraft, setTimeoutDraft] = useState(() => String(readRawNumber(readRawRecord(data.rawData, "request"), "timeoutMs", 30000)))
+  const [headersDraft, setHeadersDraft] = useState(() => stringifyJson(readRawRecord(readRawRecord(data.rawData, "request"), "headersTemplate")))
+  const [bodyDraft, setBodyDraft] = useState(() => stringifyJson(readRawRecord(data.rawData, "request").bodyTemplate ?? {}))
+  const [mappingDraft, setMappingDraft] = useState(() => stringifyJson(readRawRecord(data.rawData, "outputMapping")))
+  const [authType, setAuthType] = useState(() => readRawString(readRawRecord(data.rawData, "auth"), "type", "none"))
+  const [authHeaderName, setAuthHeaderName] = useState(() => readRawString(readRawRecord(data.rawData, "auth"), "headerName", "X-API-Key"))
+  const [apiKeyDraft, setApiKeyDraft] = useState("")
+  const [credentialState, setCredentialState] = useState<CinemaCustomApiAuthState | null>(null)
+  const [preview, setPreview] = useState<CinemaCustomApiRunResult | null>(null)
+  const [localError, setLocalError] = useState<string | null>(null)
+  const isCustomNode = data.cinemaType === "custom-node"
+  const RuntimeIcon = isCustomNode ? Braces : Server
+  const runtimeLabel = isCustomNode ? "Custom Node" : "Custom API"
+  const status = readRawString(data.rawData, "status", "idle")
+  const outputText = readRawString(data.rawData, "outputText")
+  const outputImageUrl = readRawString(data.rawData, "outputImageUrl")
+  const outputJson = data.rawData.outputJson
+  const definitionID = readRawString(data.rawData, "definitionID")
+  const nodeError = data.customApiError ?? localError ?? readRawString(data.rawData, "error")
+  const isBusy = Boolean(data.isRunningCustomApi)
+
+  useEffect(() => {
+    rawDataRef.current = data.rawData
+    setInputValues(readRawRecord(data.rawData, "inputValues"))
+    setSchemaDraft(stringifyJson(readRawRecord(data.rawData, "inputSchema")))
+    setUrlDraft(readRawString(readRawRecord(data.rawData, "request"), "url"))
+    setTimeoutDraft(String(readRawNumber(readRawRecord(data.rawData, "request"), "timeoutMs", 30000)))
+    setHeadersDraft(stringifyJson(readRawRecord(readRawRecord(data.rawData, "request"), "headersTemplate")))
+    setBodyDraft(stringifyJson(readRawRecord(data.rawData, "request").bodyTemplate ?? {}))
+    setMappingDraft(stringifyJson(readRawRecord(data.rawData, "outputMapping")))
+    setAuthType(readRawString(readRawRecord(data.rawData, "auth"), "type", "none"))
+    setAuthHeaderName(readRawString(readRawRecord(data.rawData, "auth"), "headerName", "X-API-Key"))
+  }, [data.rawData])
+
+  const commitRawDataPatch = useCallback((patch: Record<string, unknown>) => {
+    const next = {
+      ...rawDataRef.current,
+      ...patch,
+    }
+    rawDataRef.current = next
+    data.onChangeRawData?.(id, next)
+  }, [data, id])
+
+  const parseDraft = useCallback((label: string, draft: string) => {
+    try {
+      return JSON.parse(draft)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid JSON"
+      setLocalError(`${label} JSON is invalid: ${message}`)
+      return undefined
+    }
+  }, [])
+
+  const commitConfigDrafts = useCallback(() => {
+    const inputSchema = parseDraft("Input schema", schemaDraft)
+    const headersTemplate = parseDraft("Headers", headersDraft)
+    const bodyTemplate = parseDraft("Body template", bodyDraft)
+    const outputMapping = parseDraft("Output mapping", mappingDraft)
+    if (
+      inputSchema === undefined ||
+      headersTemplate === undefined ||
+      bodyTemplate === undefined ||
+      outputMapping === undefined
+    ) {
+      return false
+    }
+    if (!inputSchema || typeof inputSchema !== "object" || Array.isArray(inputSchema)) {
+      setLocalError("Input schema must be a JSON object.")
+      return false
+    }
+    if (!headersTemplate || typeof headersTemplate !== "object" || Array.isArray(headersTemplate)) {
+      setLocalError("Headers must be a JSON object.")
+      return false
+    }
+    if (!outputMapping || typeof outputMapping !== "object" || Array.isArray(outputMapping)) {
+      setLocalError("Output mapping must be a JSON object.")
+      return false
+    }
+
+    const currentRequest = readRawRecord(rawDataRef.current, "request")
+    const currentAuth = readRawRecord(rawDataRef.current, "auth")
+    const timeoutMs = Number(timeoutDraft)
+    commitRawDataPatch({
+      inputSchema,
+      request: {
+        ...currentRequest,
+        method: "POST",
+        url: urlDraft.trim(),
+        headersTemplate,
+        bodyTemplate,
+        timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : 30000,
+      },
+      auth: {
+        ...currentAuth,
+        type: authType,
+        credentialProviderID: readRawString(currentAuth, "credentialProviderID", customApiCredentialProviderID(id)),
+        headerName: authHeaderName.trim() || "X-API-Key",
+      },
+      outputMapping,
+    })
+    setLocalError(null)
+    return true
+  }, [authHeaderName, authType, bodyDraft, commitRawDataPatch, headersDraft, id, mappingDraft, parseDraft, schemaDraft, timeoutDraft, urlDraft])
+
+  const updateInputValue = (key: string, value: unknown) => {
+    const next = {
+      ...inputValues,
+      [key]: value,
+    }
+    setInputValues(next)
+    commitRawDataPatch({ inputValues: next })
+  }
+
+  const inputSchema = parseJsonObjectDraft(schemaDraft, readRawRecord(data.rawData, "inputSchema"))
+  const schemaProperties = customApiSchemaProperties(inputSchema)
+  const fieldEntries = Object.entries(schemaProperties)
+
+  const run = async (mode: CustomApiRunMode) => {
+    if (!commitConfigDrafts()) return
+    const result = await data.onRunCustomApi?.(id, {
+      mode,
+      inputValues,
+    })
+    if (result) setPreview(result)
+  }
+
+  const saveApiKey = async () => {
+    if (!commitConfigDrafts()) return
+    const result = await data.onSaveCustomApiKey?.(id, {
+      apiKey: apiKeyDraft.trim() || null,
+    })
+    if (result) {
+      setCredentialState(result)
+      setApiKeyDraft("")
+      setLocalError(null)
+    }
+  }
+
+  const saveDefinition = async () => {
+    if (!commitConfigDrafts()) return
+    const result = await data.onSaveCustomNodeDefinition?.(id, {
+      title: data.title,
+      rawData: rawDataRef.current,
+    })
+    if (result) {
+      setLocalError(null)
+    }
+  }
+
+  return (
+    <>
+      <Handle
+        id="input"
+        type="target"
+        position={Position.Left}
+        className="cinema-node-handle cinema-node-handle-input"
+        style={accentStyle}
+      />
+      <article
+        className={`cinema-custom-api-node ${selected ? "is-selected" : ""}`}
+        style={accentStyle}
+      >
+        <header className="cinema-node-header">
+          <span className="cinema-node-type">
+            <RuntimeIcon size={14} aria-hidden="true" />
+            <NodeTitleInput nodeID={id} title={data.title} onChangeTitle={data.onChangeTitle} />
+          </span>
+          <div className="cinema-node-header-actions">
+            {definitionID ? <span className="cinema-node-status">defined</span> : null}
+            <span className={`cinema-node-status is-${isBusy ? "running" : status}`}>
+              {isBusy ? "running" : status}
+            </span>
+            <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
+          </div>
+        </header>
+
+        <section className="cinema-custom-api-inputs nodrag nowheel" aria-label={`${runtimeLabel} inputs`}>
+          <div className="cinema-custom-api-section-title">
+            <Braces size={13} aria-hidden="true" />
+            <span>Inputs</span>
+          </div>
+          {fieldEntries.length > 0 ? fieldEntries.map(([key, spec]) => {
+            const label = customApiFieldLabel(key, spec)
+            const fieldType = customApiFieldType(spec)
+            const enumValues = customApiFieldEnum(spec)
+            const value = inputValues[key]
+            if (enumValues.length > 0) {
+              return (
+                <label key={key} className="cinema-custom-api-field">
+                  <span>{label}</span>
+                  <select
+                    value={typeof value === "string" ? value : ""}
+                    disabled={isBusy}
+                    onChange={(event) => updateInputValue(key, event.target.value)}
+                  >
+                    <option value="">Select</option>
+                    {enumValues.map((item) => <option key={item} value={item}>{item}</option>)}
+                  </select>
+                </label>
+              )
+            }
+            if (fieldType === "boolean") {
+              return (
+                <label key={key} className="cinema-custom-api-check-field">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(value)}
+                    disabled={isBusy}
+                    onChange={(event) => updateInputValue(key, event.target.checked)}
+                  />
+                  <span>{label}</span>
+                </label>
+              )
+            }
+            return (
+              <label key={key} className="cinema-custom-api-field">
+                <span>{label}</span>
+                <input
+                  type={fieldType === "number" || fieldType === "integer" ? "number" : "text"}
+                  value={value === undefined || value === null ? "" : String(value)}
+                  disabled={isBusy}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  onChange={(event) => {
+                    const nextValue = fieldType === "number" || fieldType === "integer"
+                      ? Number(event.target.value)
+                      : event.target.value
+                    updateInputValue(key, nextValue)
+                  }}
+                />
+              </label>
+            )
+          }) : (
+            <p className="cinema-custom-api-empty">No input fields.</p>
+          )}
+        </section>
+
+        <section className="cinema-custom-api-config nodrag nowheel" aria-label={`${runtimeLabel} request configuration`}>
+          <label className="cinema-custom-api-field">
+            <span>URL</span>
+            <input
+              value={urlDraft}
+              disabled={isBusy}
+              spellCheck={false}
+              onKeyDown={(event) => event.stopPropagation()}
+              onChange={(event) => setUrlDraft(event.target.value)}
+              onBlur={commitConfigDrafts}
+            />
+          </label>
+          <div className="cinema-custom-api-grid">
+            <label className="cinema-custom-api-field">
+              <span>Auth</span>
+              <select
+                value={authType}
+                disabled={isBusy}
+                onChange={(event) => setAuthType(event.target.value)}
+                onBlur={commitConfigDrafts}
+              >
+                <option value="none">None</option>
+                <option value="bearer">Bearer</option>
+                <option value="api-key-header">API key header</option>
+              </select>
+            </label>
+            <label className="cinema-custom-api-field">
+              <span>Header</span>
+              <input
+                value={authHeaderName}
+                disabled={isBusy || authType !== "api-key-header"}
+                spellCheck={false}
+                onKeyDown={(event) => event.stopPropagation()}
+                onChange={(event) => setAuthHeaderName(event.target.value)}
+                onBlur={commitConfigDrafts}
+              />
+            </label>
+            <label className="cinema-custom-api-field">
+              <span>Timeout</span>
+              <input
+                value={timeoutDraft}
+                disabled={isBusy}
+                inputMode="numeric"
+                onKeyDown={(event) => event.stopPropagation()}
+                onChange={(event) => setTimeoutDraft(event.target.value)}
+                onBlur={commitConfigDrafts}
+              />
+            </label>
+          </div>
+          {authType !== "none" ? (
+            <div className="cinema-custom-api-key-row">
+              <KeyRound size={13} aria-hidden="true" />
+              <input
+                type="password"
+                value={apiKeyDraft}
+                disabled={isBusy}
+                placeholder={credentialState?.connected ? "API key saved" : "API key"}
+                onKeyDown={(event) => event.stopPropagation()}
+                onChange={(event) => setApiKeyDraft(event.target.value)}
+              />
+              <button type="button" disabled={isBusy} onClick={() => void saveApiKey()}>
+                Save
+              </button>
+            </div>
+          ) : null}
+          <div className="cinema-custom-api-json-grid">
+            <label>
+              <span>Input schema</span>
+              <textarea value={schemaDraft} disabled={isBusy} spellCheck={false} onKeyDown={(event) => event.stopPropagation()} onChange={(event) => setSchemaDraft(event.target.value)} onBlur={commitConfigDrafts} />
+            </label>
+            <label>
+              <span>Headers</span>
+              <textarea value={headersDraft} disabled={isBusy} spellCheck={false} onKeyDown={(event) => event.stopPropagation()} onChange={(event) => setHeadersDraft(event.target.value)} onBlur={commitConfigDrafts} />
+            </label>
+            <label>
+              <span>Body template</span>
+              <textarea value={bodyDraft} disabled={isBusy} spellCheck={false} onKeyDown={(event) => event.stopPropagation()} onChange={(event) => setBodyDraft(event.target.value)} onBlur={commitConfigDrafts} />
+            </label>
+            <label>
+              <span>Output mapping</span>
+              <textarea value={mappingDraft} disabled={isBusy} spellCheck={false} onKeyDown={(event) => event.stopPropagation()} onChange={(event) => setMappingDraft(event.target.value)} onBlur={commitConfigDrafts} />
+            </label>
+          </div>
+        </section>
+
+        <footer className="cinema-custom-api-footer nodrag nowheel">
+          <button type="button" disabled={isBusy} onClick={() => void saveDefinition()}>
+            <Braces size={14} aria-hidden="true" />
+            <span>Save Definition</span>
+          </button>
+          <button type="button" disabled={isBusy} onClick={() => void run("preview")}>
+            <Code2 size={14} aria-hidden="true" />
+            <span>Preview</span>
+          </button>
+          <button type="button" className="is-primary" disabled={isBusy || !urlDraft.trim()} onClick={() => void run("run")}>
+            {isBusy ? <Loader2 size={14} aria-hidden="true" className="is-spinning" /> : <Play size={14} aria-hidden="true" />}
+            <span>Run</span>
+          </button>
+        </footer>
+
+        {nodeError ? (
+          <p className="cinema-custom-api-error nodrag nowheel" role="alert" title={nodeError}>
+            {nodeError}
+          </p>
+        ) : null}
+
+        {preview || outputText || outputImageUrl || outputJson !== undefined ? (
+          <section className="cinema-custom-api-output nodrag nowheel" aria-label={`${runtimeLabel} output`}>
+            {preview ? (
+              <details>
+                <summary>Request preview</summary>
+                <pre>{stringifyJson(preview.requestPreview)}</pre>
+              </details>
+            ) : null}
+            {outputText ? <p>{outputText}</p> : null}
+            {outputImageUrl ? <span title={outputImageUrl}>{outputImageUrl}</span> : null}
+            {outputJson !== undefined ? (
+              <details>
+                <summary>JSON output</summary>
+                <pre>{stringifyJson(outputJson)}</pre>
+              </details>
+            ) : null}
+          </section>
+        ) : null}
+      </article>
+      <Handle
+        id="output"
+        type="source"
+        position={Position.Right}
+        className="cinema-node-handle cinema-node-handle-output"
+        style={accentStyle}
+      />
+    </>
+  )
+}
+
 function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
   const meta = NODE_META[data.cinemaType]
   const Icon = meta.icon
@@ -3660,6 +4313,10 @@ function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
 
   if (data.cinemaType === "video") {
     return <VideoGenerationCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
+  }
+
+  if (data.cinemaType === "custom-api" || data.cinemaType === "custom-node") {
+    return <CustomApiCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
   }
 
   return (
@@ -3887,13 +4544,17 @@ function ProjectFileBrowser({
 
 function ContextMenu({
   menu,
+  customNodeDefinitions,
   onAddNode,
+  onAddCustomNodeFromDefinition,
   onImportLocalImageNode,
   onClose,
   isImportingLocalImage,
 }: {
   menu: ContextMenuState
+  customNodeDefinitions: CinemaCustomNodeDefinition[]
   onAddNode: (type: CinemaNodeType, position: { x: number; y: number }) => void
+  onAddCustomNodeFromDefinition: (definition: CinemaCustomNodeDefinition, position: { x: number; y: number }) => void
   onImportLocalImageNode: (position: { x: number; y: number }) => void
   onClose: () => void
   isImportingLocalImage: boolean
@@ -3916,6 +4577,37 @@ function ContextMenu({
           : <Upload size={15} aria-hidden="true" />}
         <span>Add Image</span>
       </button>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => {
+          onAddNode("custom-node", { x: menu.flowX, y: menu.flowY })
+          onClose()
+        }}
+      >
+        <Braces size={15} aria-hidden="true" />
+        <span>Define Custom Node</span>
+      </button>
+      {customNodeDefinitions.length > 0 ? (
+        <>
+          <div className="cinema-context-menu-separator" role="separator" />
+          {customNodeDefinitions.map((definition) => (
+            <button
+              key={definition.id}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onAddCustomNodeFromDefinition(definition, { x: menu.flowX, y: menu.flowY })
+                onClose()
+              }}
+            >
+              <Braces size={15} aria-hidden="true" />
+              <span>Add {definition.title}</span>
+            </button>
+          ))}
+          <div className="cinema-context-menu-separator" role="separator" />
+        </>
+      ) : null}
       {NODE_TYPES.map((type) => {
         const meta = NODE_META[type]
         const Icon = meta.icon
@@ -3977,6 +4669,7 @@ export function App() {
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<CinemaFlowNode, Edge> | null>(null)
   const [nodes, setNodes] = useState<CinemaFlowNode[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
+  const [customNodeDefinitions, setCustomNodeDefinitions] = useState<CinemaCustomNodeDefinition[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
   const [activeCanvasPanel, setActiveCanvasPanel] = useState<CanvasPanel | null>("files")
   const [saveState, setSaveState] = useState<SaveState>("idle")
@@ -3988,6 +4681,8 @@ export function App() {
   const [imageGenerationError, setImageGenerationError] = useState<{ nodeID: string; message: string } | null>(null)
   const [videoGenerationNodeID, setVideoGenerationNodeID] = useState<string | null>(null)
   const [videoGenerationError, setVideoGenerationError] = useState<{ nodeID: string; message: string } | null>(null)
+  const [customApiNodeID, setCustomApiNodeID] = useState<string | null>(null)
+  const [customApiError, setCustomApiError] = useState<{ nodeID: string; message: string } | null>(null)
   const saveStateRef = useRef<SaveState>("idle")
   const autoRefreshInFlightRef = useRef(false)
   const nodePatchTimersRef = useRef(new Map<string, number>())
@@ -3999,6 +4694,7 @@ export function App() {
   const applyCanvas = useCallback((canvas: CinemaCanvasDocument) => {
     setNodes(toFlowNodes(canvas))
     setEdges(canvas.edges)
+    setCustomNodeDefinitions(canvas.customNodeDefinitions ?? [])
     saveStateRef.current = "saved"
     setSaveState("saved")
     setSaveError(null)
@@ -4385,6 +5081,91 @@ export function App() {
     },
   })
 
+  const runCustomApiMutation = useMutation({
+    mutationFn: async ({ nodeID, request }: { nodeID: string; request: CustomApiRunRequest }) => {
+      await flushNodePatch(nodeID)
+      return await requestJson<CinemaCustomApiRunResult>(
+        agentBaseURL,
+        `/api/cinema/projects/${encodeURIComponent(projectID)}/custom-api-runs`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            nodeID,
+            ...request,
+          }),
+        },
+      )
+    },
+    onMutate: ({ nodeID }) => {
+      setCustomApiNodeID(nodeID)
+      setCustomApiError(null)
+      saveStateRef.current = "saving"
+      setSaveState("saving")
+      setSaveError(null)
+    },
+    onSuccess: (result) => {
+      if (result.canvas) applyCanvas(result.canvas)
+      else {
+        saveStateRef.current = "saved"
+        setSaveState("saved")
+      }
+    },
+    onError: (error, variables) => {
+      const message = error instanceof Error ? error.message : "Custom API run failed"
+      setCustomApiError({ nodeID: variables.nodeID, message })
+      void refetchCanvas()
+      if (saveStateRef.current !== "error") {
+        saveStateRef.current = nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0 ? "dirty" : "saved"
+        setSaveState(saveStateRef.current)
+      }
+    },
+    onSettled: () => {
+      setCustomApiNodeID(null)
+    },
+  })
+
+  const saveCustomApiKeyMutation = useMutation({
+    mutationFn: async ({ nodeID, request }: { nodeID: string; request: CustomApiAuthSaveRequest }) => {
+      await flushNodePatch(nodeID)
+      return await requestJson<CinemaCustomApiAuthState>(
+        agentBaseURL,
+        `/api/cinema/projects/${encodeURIComponent(projectID)}/custom-api-nodes/${encodeURIComponent(nodeID)}/auth/api-key`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(request),
+        },
+      )
+    },
+    onMutate: ({ nodeID }) => {
+      setCustomApiNodeID(nodeID)
+      setCustomApiError(null)
+      saveStateRef.current = "saving"
+      setSaveState("saving")
+      setSaveError(null)
+    },
+    onSuccess: () => {
+      saveStateRef.current = "saved"
+      setSaveState("saved")
+    },
+    onError: (error, variables) => {
+      const message = error instanceof Error ? error.message : "Custom API key save failed"
+      setCustomApiError({ nodeID: variables.nodeID, message })
+      if (saveStateRef.current !== "error") {
+        saveStateRef.current = nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0 ? "dirty" : "saved"
+        setSaveState(saveStateRef.current)
+      }
+    },
+    onSettled: () => {
+      setCustomApiNodeID(null)
+    },
+  })
+
   const importLocalImageMutation = useMutation({
     mutationFn: async ({ file, position }: { file: File; position: { x: number; y: number } }) => {
       const dataBase64 = await fileToDataBase64(file)
@@ -4613,6 +5394,18 @@ export function App() {
     })
   }, [commandMutation, setSelectedNodeID])
 
+  const addCustomNodeFromDefinition = useCallback((definition: CinemaCustomNodeDefinition, position: { x: number; y: number }) => {
+    const next = createCustomNodeFromDefinition(definition, position)
+    commandMutation.mutate({
+      id: makeCommandID("create-node"),
+      type: "create-node",
+      actor: "cinema-web",
+      node: toCanvasNode(next),
+    }, {
+      onSuccess: () => setSelectedNodeID(next.id),
+    })
+  }, [commandMutation, setSelectedNodeID])
+
   const requestLocalImageImport = useCallback((position: { x: number; y: number }) => {
     pendingLocalImagePositionRef.current = position
     localImageInputRef.current?.click()
@@ -4674,6 +5467,71 @@ export function App() {
     })
   }, [commandMutation, setSelectedNodeID])
 
+  const saveCustomNodeDefinition = useCallback(async (
+    nodeID: string,
+    request: CustomNodeDefinitionSaveRequest,
+  ): Promise<CinemaCustomNodeDefinition | undefined> => {
+    const currentDefinitionID = readRawString(request.rawData, "definitionID")
+    const existing = currentDefinitionID
+      ? customNodeDefinitions.find((definition) => definition.id === currentDefinitionID)
+      : undefined
+    const definitionID = currentDefinitionID || makeCustomNodeDefinitionID(request.title)
+    const definition = customNodeDefinitionFromRawData({
+      definitionID,
+      title: request.title,
+      rawData: request.rawData,
+      existing,
+    })
+    const nextRawData = {
+      ...request.rawData,
+      definitionID: definition.id,
+      definitionTitle: definition.title,
+    }
+
+    setCustomApiNodeID(nodeID)
+    setCustomApiError(null)
+    try {
+      await flushNodePatch(nodeID)
+      await commandMutation.mutateAsync({
+        id: makeCommandID("update-node"),
+        type: "update-node",
+        actor: "cinema-web",
+        nodeID,
+        patch: {
+          data: nextRawData,
+        },
+      })
+
+      if (existing) {
+        const { id: _id, ...patch } = definition
+        await commandMutation.mutateAsync({
+          id: makeCommandID("update-custom-node-definition"),
+          type: "update-custom-node-definition",
+          actor: "cinema-web",
+          definitionID: definition.id,
+          patch,
+        })
+      } else {
+        await commandMutation.mutateAsync({
+          id: makeCommandID("create-custom-node-definition"),
+          type: "create-custom-node-definition",
+          actor: "cinema-web",
+          definition,
+        })
+      }
+      setSelectedNodeID(nodeID)
+      return definition
+    } catch (error) {
+      setCustomApiError({
+        nodeID,
+        message: error instanceof Error ? error.message : "Custom node definition save failed",
+      })
+      return undefined
+    } finally {
+      setCustomApiNodeID(null)
+    }
+  }, [commandMutation, customNodeDefinitions, flushNodePatch, setSelectedNodeID])
+
   const textModels = textModelsQuery.data?.items ?? []
   const effectiveTextModel = textModelsQuery.data?.effectiveModel ?? null
   const imageModels = imageModelsQuery.data?.items ?? []
@@ -4718,6 +5576,13 @@ export function App() {
         videoGenerationError: videoGenerationError?.nodeID === node.id ? videoGenerationError.message : null,
         onCreateVideoGenerationTask: (nodeID: string, body: CreateCinemaGenerationTaskBody) =>
           createGenerationTaskMutation.mutate({ body, draftNodeID: nodeID }),
+        isRunningCustomApi: runCustomApiMutation.isPending && customApiNodeID === node.id,
+        customApiError: customApiError?.nodeID === node.id ? customApiError.message : null,
+        onRunCustomApi: (nodeID: string, request: CustomApiRunRequest) =>
+          runCustomApiMutation.mutateAsync({ nodeID, request }),
+        onSaveCustomApiKey: (nodeID: string, request: CustomApiAuthSaveRequest) =>
+          saveCustomApiKeyMutation.mutateAsync({ nodeID, request }),
+        onSaveCustomNodeDefinition: saveCustomNodeDefinition,
       },
     })),
     [
@@ -4726,6 +5591,8 @@ export function App() {
       createGenerationTaskMutation,
       createImageGenerationMutation,
       createTextGenerationMutation,
+      customApiError,
+      customApiNodeID,
       deleteNode,
       disconnectEdge,
       edges,
@@ -4737,6 +5604,9 @@ export function App() {
       nodes,
       projectID,
       providersQuery.data,
+      runCustomApiMutation,
+      saveCustomApiKeyMutation,
+      saveCustomNodeDefinition,
       tasksQuery.data,
       textGenerationError,
       textGenerationNodeID,
@@ -4841,7 +5711,9 @@ export function App() {
           </ReactFlow>
           <ContextMenu
             menu={contextMenu}
+            customNodeDefinitions={customNodeDefinitions}
             onAddNode={addNode}
+            onAddCustomNodeFromDefinition={addCustomNodeFromDefinition}
             onImportLocalImageNode={requestLocalImageImport}
             onClose={() => setContextMenu(null)}
             isImportingLocalImage={importLocalImageMutation.isPending}
