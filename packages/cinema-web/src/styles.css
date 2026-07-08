@@ -2654,12 +2654,6 @@ button.cinema-video-input-slot-main {
   background: transparent;
 }
 
-.cinema-context-menu-separator {
-  height: 1px;
-  margin: 5px 3px;
-  background: var(--cinema-border);
-}
-
 .is-spinning {
   animation: cinema-spin 0.9s linear infinite;
 }

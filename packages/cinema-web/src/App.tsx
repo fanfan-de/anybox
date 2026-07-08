@@ -23,7 +23,6 @@ import {
   ArrowLeft,
   ArrowUp,
   Bot,
-  Braces,
   ChevronDown,
   Code2,
   Copy,
@@ -52,7 +51,6 @@ import {
   type CinemaCommand,
   type CinemaCommandResult,
   type CinemaCustomApiAuthState,
-  type CinemaCustomNodeDefinition,
   type CinemaCustomApiRunResult,
   type CinemaEventsResult,
   type CinemaCanvasDocument,
@@ -110,10 +108,6 @@ type CustomApiRunRequest = {
 type CustomApiAuthSaveRequest = {
   apiKey: string | null
 }
-type CustomNodeDefinitionSaveRequest = {
-  title: string
-  rawData: Record<string, unknown>
-}
 
 type VideoSourceImageAsset = CinemaGeneratedAsset & {
   nodeID: string
@@ -144,6 +138,13 @@ type VideoInputAssetValue = VideoSourceImageAsset | VideoSourceImageAsset[] | nu
 type VideoImageInputAssets = Partial<Record<VideoImageInputSlot, VideoImageInputAssetValue>>
 type VideoInputAssets = Partial<Record<VideoMediaInputSlot, VideoInputAssetValue>>
 type VideoInputAssetMap = Record<string, VideoInputAssetValue>
+type VideoParameterControl = "aspectRatio" | "duration" | "resolution"
+type VideoInputFulfillment =
+  | "user-text"
+  | "user-media"
+  | "visible-parameter"
+  | "hidden-default"
+  | "unsupported"
 
 type VideoModeInputContract = {
   mode: CinemaGenerationMode
@@ -162,6 +163,8 @@ type VideoInputControl = {
   maxCount?: number
   note?: string
   slot: VideoInputSlot | null
+  parameterControl: VideoParameterControl | null
+  fulfillment: VideoInputFulfillment
   label: string
   emptyText: string
 }
@@ -209,7 +212,6 @@ type CinemaFlowNodeData = {
   customApiError?: string | null
   onRunCustomApi?: (nodeID: string, request: CustomApiRunRequest) => Promise<CinemaCustomApiRunResult | undefined>
   onSaveCustomApiKey?: (nodeID: string, request: CustomApiAuthSaveRequest) => Promise<CinemaCustomApiAuthState | undefined>
-  onSaveCustomNodeDefinition?: (nodeID: string, request: CustomNodeDefinitionSaveRequest) => Promise<CinemaCustomNodeDefinition | undefined>
 }
 
 type CinemaFlowNode = Node<CinemaFlowNodeData, "cinemaNode">
@@ -253,7 +255,7 @@ const DEFAULT_IMAGE_GENERATION_SIZE = "1024x1024"
 const DEFAULT_IMAGE_GENERATION_COUNT = 1
 const DEFAULT_VIDEO_ASPECT_RATIO = "16:9"
 const DEFAULT_VIDEO_DURATION_SECONDS = 5
-const DEFAULT_VIDEO_RESOLUTION = "720p"
+const DEFAULT_VIDEO_RESOLUTION = "std"
 const FALLBACK_VIDEO_INPUT_COMBINATION_MODE: CinemaGenerationMode = "text-to-video"
 const LOCAL_IMAGE_FILE_ACCEPT = [
   "image/apng",
@@ -314,7 +316,6 @@ const DEFAULT_NODE_SIZE: Record<CinemaNodeType, { width: number; height: number 
   shot: { width: 380, height: 250 },
   agent: { width: 360, height: 220 },
   "custom-api": { width: 540, height: 600 },
-  "custom-node": { width: 540, height: 600 },
   "generation-task": { width: 390, height: 240 },
   output: { width: 360, height: 220 },
 }
@@ -378,12 +379,6 @@ const NODE_META: Record<CinemaNodeType, {
     accent: "#5eead4",
     icon: Server,
     placeholder: "Configure a JSON POST endpoint.",
-  },
-  "custom-node": {
-    label: "Custom Node",
-    accent: "#5eead4",
-    icon: Braces,
-    placeholder: "Define a reusable JSON POST node.",
   },
   "generation-task": {
     label: "Generation",
@@ -521,98 +516,7 @@ function customApiCredentialProviderID(nodeID: string) {
   return `cinema-custom-api-${nodeID}`
 }
 
-function makeCustomNodeDefinitionID(title: string) {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 32) || "custom-node"
-  return `custom-node-def-${slug}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
-}
-
-function normalizeCustomApiAuthType(value: unknown): "none" | "bearer" | "api-key-header" {
-  return value === "bearer" || value === "api-key-header" ? value : "none"
-}
-
-function readStringRecord(value: unknown): Record<string, string> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
-  const result: Record<string, string> = {}
-  for (const [key, item] of Object.entries(value)) {
-    if (typeof item === "string") result[key] = item
-  }
-  return result
-}
-
-function customNodeDefinitionFromRawData(input: {
-  definitionID: string
-  title: string
-  rawData: Record<string, unknown>
-  existing?: CinemaCustomNodeDefinition
-}): CinemaCustomNodeDefinition {
-  const now = new Date().toISOString()
-  const request = readRawRecord(input.rawData, "request")
-  const auth = readRawRecord(input.rawData, "auth")
-  const outputMapping = readStringRecord(input.rawData.outputMapping)
-  const inputSchema = readRawRecord(input.rawData, "inputSchema")
-  const authType = normalizeCustomApiAuthType(auth.type)
-  const required = Array.isArray(inputSchema.required)
-    ? inputSchema.required.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-    : undefined
-  return {
-    id: input.definitionID,
-    title: input.title.trim() || "Custom Node",
-    runtime: "http-json-post",
-    inputSchema: {
-      ...inputSchema,
-      type: "object",
-      properties: readRawRecord(inputSchema, "properties"),
-      ...(required ? { required } : {}),
-    },
-    inputValues: readRawRecord(input.rawData, "inputValues"),
-    request: {
-      method: "POST",
-      url: readRawString(request, "url", "https://api.example.com/v1/chat/completions"),
-      headersTemplate: readStringRecord(request.headersTemplate),
-      bodyTemplate: "bodyTemplate" in request ? request.bodyTemplate : {},
-      timeoutMs: readRawNumber(request, "timeoutMs", 30000),
-    },
-    auth: {
-      type: authType,
-      ...(authType === "api-key-header" ? { headerName: readRawString(auth, "headerName", "X-API-Key") } : {}),
-    },
-    outputMapping: {
-      ...(outputMapping.text ? { text: outputMapping.text } : {}),
-      ...(outputMapping.json ? { json: outputMapping.json } : {}),
-      ...(outputMapping.imageUrl ? { imageUrl: outputMapping.imageUrl } : {}),
-    },
-    createdAt: input.existing?.createdAt ?? now,
-    updatedAt: now,
-  }
-}
-
-function customNodeRawDataFromDefinition(nodeID: string, definition: CinemaCustomNodeDefinition): Record<string, unknown> {
-  return {
-    status: "idle",
-    definitionID: definition.id,
-    definitionTitle: definition.title,
-    inputSchema: definition.inputSchema,
-    inputValues: definition.inputValues ?? {},
-    request: {
-      ...definition.request,
-      method: "POST",
-    },
-    auth: {
-      type: definition.auth.type,
-      credentialProviderID: customApiCredentialProviderID(nodeID),
-      headerName: definition.auth.headerName ?? "X-API-Key",
-    },
-    outputMapping: definition.outputMapping ?? {},
-  }
-}
-
-function defaultCustomApiRawData(nodeID: string, definition?: CinemaCustomNodeDefinition): Record<string, unknown> {
-  if (definition) return customNodeRawDataFromDefinition(nodeID, definition)
-
+function defaultCustomApiRawData(nodeID: string): Record<string, unknown> {
   return {
     status: "idle",
     inputSchema: {
@@ -992,6 +896,64 @@ function slotForInputRole(role: string, modality: string): VideoInputSlot | null
   }
 }
 
+function parameterControlForInputRole(role: string): VideoParameterControl | null {
+  switch (normalizedProviderInputRole(role)) {
+    case "aspectratio":
+      return "aspectRatio"
+    case "duration":
+      return "duration"
+    case "qualitymode":
+    case "quality":
+    case "mode":
+    case "resolution":
+      return "resolution"
+    default:
+      return null
+  }
+}
+
+function providerInputHasDefaultValue(input: VideoProviderInputCombination["inputs"][number]) {
+  return Object.prototype.hasOwnProperty.call(input as Record<string, unknown>, "default")
+}
+
+function providerInputDefaultValue(input: VideoProviderInputCombination["inputs"][number]) {
+  return (input as Record<string, unknown>).default
+}
+
+function providerInputParameterKey(input: VideoProviderInputCombination["inputs"][number]) {
+  const apiField = (input as Record<string, unknown>).apiField
+  return typeof apiField === "string" && apiField.trim() ? apiField.trim() : input.role.trim()
+}
+
+function videoInputFulfillmentForSpec(
+  input: VideoProviderInputCombination["inputs"][number],
+  slot: VideoInputSlot | null,
+  parameterControl: VideoParameterControl | null,
+): VideoInputFulfillment {
+  if (slot === "textParameter") return "user-text"
+  if (slot) return "user-media"
+  if (parameterControl) return "visible-parameter"
+  if (providerInputHasDefaultValue(input)) return "hidden-default"
+  return "unsupported"
+}
+
+function canSatisfyRequiredVideoInput(input: VideoInputControl) {
+  return input.fulfillment !== "unsupported"
+}
+
+function hiddenDefaultParametersForCombination(combination: VideoProviderInputCombination | null) {
+  const parameters: Record<string, unknown> = {}
+  for (const input of combination?.inputs ?? []) {
+    const role = input.role.trim()
+    const modality = input.modality.trim()
+    const slot = slotForInputRole(role, modality)
+    const parameterControl = parameterControlForInputRole(role)
+    if (slot || parameterControl || !providerInputHasDefaultValue(input)) continue
+    parameters[providerInputParameterKey(input)] = providerInputDefaultValue(input)
+  }
+  return parameters
+}
+
 function videoInputKey(role: string, index: number) {
   const safeRole = role.trim().replace(/[^a-z0-9_-]+/gi, "-") || "input"
   return `input:${index}:${safeRole}`
@@ -1041,6 +1003,7 @@ function videoInputControlForSpec(input: VideoProviderInputCombination["inputs"]
   const role = input.role.trim()
   const modality = input.modality.trim()
   const slot = slotForInputRole(role, modality)
+  const parameterControl = parameterControlForInputRole(role)
   return {
     inputKey: videoInputKey(role, index),
     role,
@@ -1050,6 +1013,8 @@ function videoInputControlForSpec(input: VideoProviderInputCombination["inputs"]
     maxCount: input.maxCount,
     note: typeof input.note === "string" ? input.note : undefined,
     slot,
+    parameterControl,
+    fulfillment: videoInputFulfillmentForSpec(input, slot, parameterControl),
     label: labelForInputRole(role, modality),
     emptyText: emptyTextForInputRole(role, modality, slot),
   }
@@ -1058,7 +1023,7 @@ function videoInputControlForSpec(input: VideoProviderInputCombination["inputs"]
 function videoModeInputContractForCombination(combination: VideoProviderInputCombination | null): VideoModeInputContract {
   const inputs = combination?.inputs.map(videoInputControlForSpec) ?? []
   const promptInput = inputs.find((input) => input.slot === "textParameter")
-  const unsupportedRequiredInputs = inputs.filter((input) => input.required && !input.slot)
+  const unsupportedRequiredInputs = inputs.filter((input) => input.required && !canSatisfyRequiredVideoInput(input))
   return {
     mode: combination?.mode ?? FALLBACK_VIDEO_INPUT_COMBINATION_MODE,
     label: combination?.label ?? formatInputCombinationLabel(combination?.mode ?? FALLBACK_VIDEO_INPUT_COMBINATION_MODE),
@@ -1093,16 +1058,137 @@ function readVideoMode(rawData: Record<string, unknown>) {
   return readRawString(rawData, "mode", FALLBACK_VIDEO_INPUT_COMBINATION_MODE)
 }
 
-function defaultModelAspectRatio(model: VideoProviderModel | null) {
-  return model?.aspectRatios[0] ?? DEFAULT_VIDEO_ASPECT_RATIO
+function normalizedProviderInputRole(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "")
 }
 
-function defaultModelDuration(model: VideoProviderModel | null) {
-  return model?.durations[0] ?? DEFAULT_VIDEO_DURATION_SECONDS
+function providerInputOptionValues(input: VideoProviderInputCombination["inputs"][number]) {
+  const record = input as Record<string, unknown>
+  const options = Array.isArray(record.options)
+    ? record.options
+    : Array.isArray(record.values)
+      ? record.values
+      : []
+  return options
 }
 
-function defaultModelResolution(model: VideoProviderModel | null) {
-  return model?.resolutions[0] ?? DEFAULT_VIDEO_RESOLUTION
+function providerInputForRoles(
+  combination: VideoProviderInputCombination | null,
+  roles: string[],
+) {
+  return combination?.inputs.find((input) => providerInputMatchesRole(input, roles)) ?? null
+}
+
+function providerInputMatchesRole(
+  input: VideoProviderInputCombination["inputs"][number],
+  roles: string[],
+) {
+  const normalizedRole = normalizedProviderInputRole(input.role)
+  return roles.some((role) => normalizedRole === normalizedProviderInputRole(role))
+}
+
+function stringParameterOptionLabelsForCombination(
+  combination: VideoProviderInputCombination | null,
+  roles: string[],
+) {
+  const input = providerInputForRoles(combination, roles)
+  const labels = input ? (input as Record<string, unknown>).labels : undefined
+  if (!labels || typeof labels !== "object" || Array.isArray(labels)) return {}
+  return Object.fromEntries(
+    Object.entries(labels).flatMap(([value, label]) =>
+      typeof label === "string" && label.trim() ? [[value, label.trim()]] : []
+    ),
+  )
+}
+
+function stringParameterOptionsForCombination(
+  combination: VideoProviderInputCombination | null,
+  roles: string[],
+) {
+  const values = combination?.inputs.flatMap((input) =>
+    providerInputMatchesRole(input, roles)
+      ? providerInputOptionValues(input).flatMap((value) => typeof value === "string" && value.trim() ? [value.trim()] : [])
+      : []
+  ) ?? []
+  return [...new Set(values)]
+}
+
+function numberParameterOptionsForCombination(
+  combination: VideoProviderInputCombination | null,
+  roles: string[],
+) {
+  const values = combination?.inputs.flatMap((input) =>
+    providerInputMatchesRole(input, roles)
+      ? providerInputOptionValues(input).flatMap((value) => {
+          const numericValue = typeof value === "number" ? value : typeof value === "string" ? Number.parseFloat(value) : NaN
+          return Number.isFinite(numericValue) && numericValue > 0 ? [numericValue] : []
+        })
+      : []
+  ) ?? []
+  return [...new Set(values)]
+}
+
+function modelAspectRatioOptions(model: VideoProviderModel | null, combination: VideoProviderInputCombination | null) {
+  const inputOptions = stringParameterOptionsForCombination(combination, ["aspect_ratio", "aspectRatio"])
+  return inputOptions.length > 0 ? inputOptions : model?.aspectRatios ?? []
+}
+
+function modelDurationOptions(model: VideoProviderModel | null, combination: VideoProviderInputCombination | null) {
+  const inputOptions = numberParameterOptionsForCombination(combination, ["duration"])
+  return inputOptions.length > 0 ? inputOptions : model?.durations ?? []
+}
+
+function modelResolutionOptions(model: VideoProviderModel | null, combination: VideoProviderInputCombination | null) {
+  const inputOptions = stringParameterOptionsForCombination(combination, ["quality_mode", "qualityMode", "mode", "resolution"])
+  return inputOptions.length > 0 ? inputOptions : model?.resolutions ?? []
+}
+
+function defaultModelAspectRatio(model: VideoProviderModel | null, combination: VideoProviderInputCombination | null = null) {
+  return modelAspectRatioOptions(model, combination)[0] ?? DEFAULT_VIDEO_ASPECT_RATIO
+}
+
+function defaultModelDuration(model: VideoProviderModel | null, combination: VideoProviderInputCombination | null = null) {
+  return modelDurationOptions(model, combination)[0] ?? DEFAULT_VIDEO_DURATION_SECONDS
+}
+
+function defaultModelResolution(model: VideoProviderModel | null, combination: VideoProviderInputCombination | null = null) {
+  return modelResolutionOptions(model, combination)[0] ?? DEFAULT_VIDEO_RESOLUTION
+}
+
+function validAspectRatioForSelection(
+  value: string,
+  model: VideoProviderModel | null,
+  combination: VideoProviderInputCombination | null,
+) {
+  const trimmed = value.trim()
+  const options = modelAspectRatioOptions(model, combination)
+  return trimmed && (options.length === 0 || options.includes(trimmed))
+    ? trimmed
+    : defaultModelAspectRatio(model, combination)
+}
+
+function validDurationForSelection(
+  value: string,
+  model: VideoProviderModel | null,
+  combination: VideoProviderInputCombination | null,
+) {
+  const parsed = Number.parseFloat(value)
+  const options = modelDurationOptions(model, combination)
+  return Number.isFinite(parsed) && parsed > 0 && (options.length === 0 || options.includes(parsed))
+    ? parsed
+    : defaultModelDuration(model, combination)
+}
+
+function validResolutionForSelection(
+  value: string,
+  model: VideoProviderModel | null,
+  combination: VideoProviderInputCombination | null,
+) {
+  const trimmed = value.trim()
+  const options = modelResolutionOptions(model, combination)
+  return trimmed && (options.length === 0 || options.includes(trimmed))
+    ? trimmed
+    : defaultModelResolution(model, combination)
 }
 
 function generationTaskUserPrompt(task: CinemaGenerationTask | null) {
@@ -1468,13 +1554,10 @@ function sourceTextParametersForNode(nodeID: string, nodes: CinemaFlowNode[], ed
     if (
       !sourceNode ||
       (sourceNode.data.cinemaType !== "text" &&
-        sourceNode.data.cinemaType !== "custom-api" &&
-        sourceNode.data.cinemaType !== "custom-node")
+        sourceNode.data.cinemaType !== "custom-api")
     ) continue
     const text = sourceNode.data.cinemaType === "custom-api"
       ? readRawString(sourceNode.data.rawData, "outputText")
-      : sourceNode.data.cinemaType === "custom-node"
-        ? readRawString(sourceNode.data.rawData, "outputText")
       : readRawString(sourceNode.data.rawData, "text")
     seenNodeIDs.add(edge.source)
     parameters.push({
@@ -1563,7 +1646,7 @@ function createNode(type: CinemaNodeType, position: { x: number; y: number }): C
         status: "missing",
         placeholder: NODE_META[type].placeholder,
       }
-    : type === "custom-api" || type === "custom-node"
+    : type === "custom-api"
       ? defaultCustomApiRawData(id)
     : {
       text: "",
@@ -3000,6 +3083,13 @@ function VideoGenerationCanvasNode({
   const selectedModelSelectionID = selectedModel ? providerModelSelectionID(selectedModel) : ""
   const selectedInputCombination = inputCombinationForSelection(selectedProvider, selectedModel, mode)
   const selectedEndpoint: CinemaProviderEndpoint | undefined = selectedInputCombination?.endpoint
+  const aspectRatioOptions = modelAspectRatioOptions(selectedModel, selectedInputCombination)
+  const durationOptions = modelDurationOptions(selectedModel, selectedInputCombination)
+  const resolutionOptions = modelResolutionOptions(selectedModel, selectedInputCombination)
+  const resolutionOptionLabels = stringParameterOptionLabelsForCombination(
+    selectedInputCombination,
+    ["quality_mode", "qualityMode", "mode", "resolution"],
+  )
   const availableProviders = availableVideoProviders(providers)
   const availableModels = availableModelsForProvider(selectedProvider)
   const availableInputCombinations = inputCombinationsForModel(selectedProvider, selectedModel)
@@ -3223,9 +3313,24 @@ function VideoGenerationCanvasNode({
     setMode(nextMode)
     setProviderID(nextProvider?.manifest.id ?? "")
     setModelID(nextModel ? providerModelSelectionID(nextModel) : "")
-    setAspectRatioDraft(readRawString(data.rawData, "aspectRatio", defaultModelAspectRatio(nextModel)))
-    setDurationDraft(String(readRawNumber(data.rawData, "duration", defaultModelDuration(nextModel))))
-    setResolutionDraft(readRawString(data.rawData, "resolution", defaultModelResolution(nextModel)))
+    const nextAspectRatio = validAspectRatioForSelection(
+      readRawString(data.rawData, "aspectRatio", defaultModelAspectRatio(nextModel, nextCombination)),
+      nextModel,
+      nextCombination,
+    )
+    const nextDuration = validDurationForSelection(
+      String(readRawNumber(data.rawData, "duration", defaultModelDuration(nextModel, nextCombination))),
+      nextModel,
+      nextCombination,
+    )
+    const nextResolution = validResolutionForSelection(
+      readRawString(data.rawData, "resolution", defaultModelResolution(nextModel, nextCombination)),
+      nextModel,
+      nextCombination,
+    )
+    setAspectRatioDraft(nextAspectRatio)
+    setDurationDraft(String(nextDuration))
+    setResolutionDraft(nextResolution)
   }, [data.rawData, providers, setAspectRatioDraft, setDurationDraft, setMode, setModelID, setProviderID, setResolutionDraft])
 
   useEffect(() => {
@@ -3261,9 +3366,19 @@ function VideoGenerationCanvasNode({
   }
 
   const chooseMode = (nextMode: CinemaGenerationMode) => {
+    const nextCombination = inputCombinationForSelection(selectedProvider, selectedModel, nextMode)
+    const nextAspectRatio = validAspectRatioForSelection(aspectRatioDraftRef.current, selectedModel, nextCombination)
+    const nextDuration = validDurationForSelection(durationDraftRef.current, selectedModel, nextCombination)
+    const nextResolution = validResolutionForSelection(resolutionDraftRef.current, selectedModel, nextCombination)
     setMode(nextMode)
+    setAspectRatioDraft(nextAspectRatio)
+    setDurationDraft(String(nextDuration))
+    setResolutionDraft(nextResolution)
     commitRawDataPatch({
       mode: nextMode,
+      aspectRatio: nextAspectRatio,
+      duration: nextDuration,
+      resolution: nextResolution,
     })
   }
 
@@ -3272,9 +3387,9 @@ function VideoGenerationCanvasNode({
     const nextModel = modelForSelection(nextProvider, "")
     const nextCombination = inputCombinationForSelection(nextProvider, nextModel, modeRef.current)
     const nextMode = nextCombination?.mode ?? FALLBACK_VIDEO_INPUT_COMBINATION_MODE
-    const nextAspectRatio = defaultModelAspectRatio(nextModel)
-    const nextDuration = defaultModelDuration(nextModel)
-    const nextResolution = defaultModelResolution(nextModel)
+    const nextAspectRatio = defaultModelAspectRatio(nextModel, nextCombination)
+    const nextDuration = defaultModelDuration(nextModel, nextCombination)
+    const nextResolution = defaultModelResolution(nextModel, nextCombination)
     setMode(nextMode)
     setProviderID(nextProvider?.manifest.id ?? "")
     setModelID(nextModel ? providerModelSelectionID(nextModel) : "")
@@ -3295,9 +3410,9 @@ function VideoGenerationCanvasNode({
     const nextModel = modelForSelection(selectedProvider, nextModelID)
     const nextCombination = inputCombinationForSelection(selectedProvider, nextModel, modeRef.current)
     const nextMode = nextCombination?.mode ?? FALLBACK_VIDEO_INPUT_COMBINATION_MODE
-    const nextAspectRatio = defaultModelAspectRatio(nextModel)
-    const nextDuration = defaultModelDuration(nextModel)
-    const nextResolution = defaultModelResolution(nextModel)
+    const nextAspectRatio = defaultModelAspectRatio(nextModel, nextCombination)
+    const nextDuration = defaultModelDuration(nextModel, nextCombination)
+    const nextResolution = defaultModelResolution(nextModel, nextCombination)
     setMode(nextMode)
     setModelID(nextModel ? providerModelSelectionID(nextModel) : "")
     setAspectRatioDraft(nextAspectRatio)
@@ -3322,9 +3437,9 @@ function VideoGenerationCanvasNode({
     }
     if (!selectedProvider || !selectedModel || !selectedInputCombination || isBusy || requiredInputMissing || unsupportedRequiredInput) return
     clearPromptCommitTimer()
-    const duration = normalizedDuration()
-    const aspectRatio = aspectRatioDraftRef.current.trim() || defaultModelAspectRatio(selectedModel)
-    const resolution = resolutionDraftRef.current.trim() || defaultModelResolution(selectedModel)
+    const duration = validDurationForSelection(durationDraftRef.current, selectedModel, selectedInputCombination)
+    const aspectRatio = validAspectRatioForSelection(aspectRatioDraftRef.current, selectedModel, selectedInputCombination)
+    const resolution = validResolutionForSelection(resolutionDraftRef.current, selectedModel, selectedInputCombination)
     const sourceNodeIDs = uniqueSourceNodeIDs(
       sourceTextParameters.map((parameter) => parameter.nodeID),
       activeInputAssets.filter(({ asset }) => asset.nodeID !== id).map(({ asset }) => asset.nodeID),
@@ -3358,13 +3473,17 @@ function VideoGenerationCanvasNode({
     const sourceVideoAsset = inputAssetsForLegacySlot("sourceVideo")[0] ?? null
     const maskAsset = inputAssetsForLegacySlot("mask")[0] ?? null
     const inputCombinationMode = selectedInputCombination.mode
+    const hiddenDefaultParameters = hiddenDefaultParametersForCombination(selectedInputCombination)
     const parameters = {
       ...(rawDataRef.current.parameters && typeof rawDataRef.current.parameters === "object" && !Array.isArray(rawDataRef.current.parameters)
         ? rawDataRef.current.parameters as Record<string, unknown>
         : {}),
+      ...hiddenDefaultParameters,
       aspectRatio,
       duration,
       resolution,
+      qualityMode: resolution,
+      quality_mode: resolution,
       inputCombinationMode,
       selectedInputCombination: selectedInputCombination.mode,
       modelSelectionID: selectedModelSelectionID,
@@ -3718,7 +3837,7 @@ function VideoGenerationCanvasNode({
                 commitRawDataPatch({ aspectRatio: event.target.value })
               }}
             >
-              {[...new Set([...(selectedModel?.aspectRatios ?? []), aspectRatioDraft, DEFAULT_VIDEO_ASPECT_RATIO].filter(Boolean))].map((item) => (
+              {[...new Set([...aspectRatioOptions, aspectRatioDraft, DEFAULT_VIDEO_ASPECT_RATIO].filter(Boolean))].map((item) => (
                 <option key={item} value={item}>{item}</option>
               ))}
             </select>
@@ -3732,14 +3851,14 @@ function VideoGenerationCanvasNode({
                 commitRawDataPatch({ duration: Number.parseFloat(event.target.value) || DEFAULT_VIDEO_DURATION_SECONDS })
               }}
             >
-              {[...new Set([...(selectedModel?.durations ?? []), Number.parseFloat(durationDraft) || DEFAULT_VIDEO_DURATION_SECONDS])]
+              {[...new Set([...durationOptions, Number.parseFloat(durationDraft) || DEFAULT_VIDEO_DURATION_SECONDS])]
                 .filter((value) => Number.isFinite(value) && value > 0)
                 .map((value) => (
                   <option key={value} value={String(value)}>{value}s</option>
                 ))}
             </select>
             <select
-              aria-label="Resolution"
+              aria-label="Quality mode"
               value={resolutionDraft}
               disabled={isBusy}
               onKeyDown={(event) => event.stopPropagation()}
@@ -3748,8 +3867,8 @@ function VideoGenerationCanvasNode({
                 commitRawDataPatch({ resolution: event.target.value })
               }}
             >
-              {[...new Set([...(selectedModel?.resolutions ?? []), resolutionDraft, DEFAULT_VIDEO_RESOLUTION].filter(Boolean))].map((item) => (
-                <option key={item} value={item}>{item}</option>
+              {[...new Set([...resolutionOptions, resolutionDraft, DEFAULT_VIDEO_RESOLUTION].filter(Boolean))].map((item) => (
+                <option key={item} value={item}>{resolutionOptionLabels[item] ?? item}</option>
               ))}
             </select>
             <button
@@ -3880,27 +3999,6 @@ function LocalImageCanvasNode({
   )
 }
 
-function createCustomNodeFromDefinition(
-  definition: CinemaCustomNodeDefinition,
-  position: { x: number; y: number },
-): CinemaFlowNode {
-  const type = "custom-node" satisfies CinemaNodeType
-  const id = makeNodeID(type)
-  const size = DEFAULT_NODE_SIZE[type]
-  return {
-    id,
-    type: "cinemaNode",
-    position,
-    style: flowNodeStyle(type, size),
-    data: {
-      cinemaType: type,
-      title: definition.title,
-      rawData: defaultCustomApiRawData(id, definition),
-      size,
-    },
-  }
-}
-
 function CustomApiCanvasNode({
   id,
   data,
@@ -3926,14 +4024,11 @@ function CustomApiCanvasNode({
   const [credentialState, setCredentialState] = useState<CinemaCustomApiAuthState | null>(null)
   const [preview, setPreview] = useState<CinemaCustomApiRunResult | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
-  const isCustomNode = data.cinemaType === "custom-node"
-  const RuntimeIcon = isCustomNode ? Braces : Server
-  const runtimeLabel = isCustomNode ? "Custom Node" : "Custom API"
+  const runtimeLabel = "Custom API"
   const status = readRawString(data.rawData, "status", "idle")
   const outputText = readRawString(data.rawData, "outputText")
   const outputImageUrl = readRawString(data.rawData, "outputImageUrl")
   const outputJson = data.rawData.outputJson
-  const definitionID = readRawString(data.rawData, "definitionID")
   const nodeError = data.customApiError ?? localError ?? readRawString(data.rawData, "error")
   const isBusy = Boolean(data.isRunningCustomApi)
 
@@ -4054,17 +4149,6 @@ function CustomApiCanvasNode({
     }
   }
 
-  const saveDefinition = async () => {
-    if (!commitConfigDrafts()) return
-    const result = await data.onSaveCustomNodeDefinition?.(id, {
-      title: data.title,
-      rawData: rawDataRef.current,
-    })
-    if (result) {
-      setLocalError(null)
-    }
-  }
-
   return (
     <>
       <Handle
@@ -4080,11 +4164,10 @@ function CustomApiCanvasNode({
       >
         <header className="cinema-node-header">
           <span className="cinema-node-type">
-            <RuntimeIcon size={14} aria-hidden="true" />
+            <Server size={14} aria-hidden="true" />
             <NodeTitleInput nodeID={id} title={data.title} onChangeTitle={data.onChangeTitle} />
           </span>
           <div className="cinema-node-header-actions">
-            {definitionID ? <span className="cinema-node-status">defined</span> : null}
             <span className={`cinema-node-status is-${isBusy ? "running" : status}`}>
               {isBusy ? "running" : status}
             </span>
@@ -4094,7 +4177,7 @@ function CustomApiCanvasNode({
 
         <section className="cinema-custom-api-inputs nodrag nowheel" aria-label={`${runtimeLabel} inputs`}>
           <div className="cinema-custom-api-section-title">
-            <Braces size={13} aria-hidden="true" />
+            <Code2 size={13} aria-hidden="true" />
             <span>Inputs</span>
           </div>
           {fieldEntries.length > 0 ? fieldEntries.map(([key, spec]) => {
@@ -4238,10 +4321,6 @@ function CustomApiCanvasNode({
         </section>
 
         <footer className="cinema-custom-api-footer nodrag nowheel">
-          <button type="button" disabled={isBusy} onClick={() => void saveDefinition()}>
-            <Braces size={14} aria-hidden="true" />
-            <span>Save Definition</span>
-          </button>
           <button type="button" disabled={isBusy} onClick={() => void run("preview")}>
             <Code2 size={14} aria-hidden="true" />
             <span>Preview</span>
@@ -4315,7 +4394,7 @@ function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
     return <VideoGenerationCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
   }
 
-  if (data.cinemaType === "custom-api" || data.cinemaType === "custom-node") {
+  if (data.cinemaType === "custom-api") {
     return <CustomApiCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
   }
 
@@ -4544,17 +4623,13 @@ function ProjectFileBrowser({
 
 function ContextMenu({
   menu,
-  customNodeDefinitions,
   onAddNode,
-  onAddCustomNodeFromDefinition,
   onImportLocalImageNode,
   onClose,
   isImportingLocalImage,
 }: {
   menu: ContextMenuState
-  customNodeDefinitions: CinemaCustomNodeDefinition[]
   onAddNode: (type: CinemaNodeType, position: { x: number; y: number }) => void
-  onAddCustomNodeFromDefinition: (definition: CinemaCustomNodeDefinition, position: { x: number; y: number }) => void
   onImportLocalImageNode: (position: { x: number; y: number }) => void
   onClose: () => void
   isImportingLocalImage: boolean
@@ -4577,37 +4652,6 @@ function ContextMenu({
           : <Upload size={15} aria-hidden="true" />}
         <span>Add Image</span>
       </button>
-      <button
-        type="button"
-        role="menuitem"
-        onClick={() => {
-          onAddNode("custom-node", { x: menu.flowX, y: menu.flowY })
-          onClose()
-        }}
-      >
-        <Braces size={15} aria-hidden="true" />
-        <span>Define Custom Node</span>
-      </button>
-      {customNodeDefinitions.length > 0 ? (
-        <>
-          <div className="cinema-context-menu-separator" role="separator" />
-          {customNodeDefinitions.map((definition) => (
-            <button
-              key={definition.id}
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                onAddCustomNodeFromDefinition(definition, { x: menu.flowX, y: menu.flowY })
-                onClose()
-              }}
-            >
-              <Braces size={15} aria-hidden="true" />
-              <span>Add {definition.title}</span>
-            </button>
-          ))}
-          <div className="cinema-context-menu-separator" role="separator" />
-        </>
-      ) : null}
       {NODE_TYPES.map((type) => {
         const meta = NODE_META[type]
         const Icon = meta.icon
@@ -4669,7 +4713,6 @@ export function App() {
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<CinemaFlowNode, Edge> | null>(null)
   const [nodes, setNodes] = useState<CinemaFlowNode[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
-  const [customNodeDefinitions, setCustomNodeDefinitions] = useState<CinemaCustomNodeDefinition[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
   const [activeCanvasPanel, setActiveCanvasPanel] = useState<CanvasPanel | null>("files")
   const [saveState, setSaveState] = useState<SaveState>("idle")
@@ -4694,7 +4737,6 @@ export function App() {
   const applyCanvas = useCallback((canvas: CinemaCanvasDocument) => {
     setNodes(toFlowNodes(canvas))
     setEdges(canvas.edges)
-    setCustomNodeDefinitions(canvas.customNodeDefinitions ?? [])
     saveStateRef.current = "saved"
     setSaveState("saved")
     setSaveError(null)
@@ -5394,18 +5436,6 @@ export function App() {
     })
   }, [commandMutation, setSelectedNodeID])
 
-  const addCustomNodeFromDefinition = useCallback((definition: CinemaCustomNodeDefinition, position: { x: number; y: number }) => {
-    const next = createCustomNodeFromDefinition(definition, position)
-    commandMutation.mutate({
-      id: makeCommandID("create-node"),
-      type: "create-node",
-      actor: "cinema-web",
-      node: toCanvasNode(next),
-    }, {
-      onSuccess: () => setSelectedNodeID(next.id),
-    })
-  }, [commandMutation, setSelectedNodeID])
-
   const requestLocalImageImport = useCallback((position: { x: number; y: number }) => {
     pendingLocalImagePositionRef.current = position
     localImageInputRef.current?.click()
@@ -5467,71 +5497,6 @@ export function App() {
     })
   }, [commandMutation, setSelectedNodeID])
 
-  const saveCustomNodeDefinition = useCallback(async (
-    nodeID: string,
-    request: CustomNodeDefinitionSaveRequest,
-  ): Promise<CinemaCustomNodeDefinition | undefined> => {
-    const currentDefinitionID = readRawString(request.rawData, "definitionID")
-    const existing = currentDefinitionID
-      ? customNodeDefinitions.find((definition) => definition.id === currentDefinitionID)
-      : undefined
-    const definitionID = currentDefinitionID || makeCustomNodeDefinitionID(request.title)
-    const definition = customNodeDefinitionFromRawData({
-      definitionID,
-      title: request.title,
-      rawData: request.rawData,
-      existing,
-    })
-    const nextRawData = {
-      ...request.rawData,
-      definitionID: definition.id,
-      definitionTitle: definition.title,
-    }
-
-    setCustomApiNodeID(nodeID)
-    setCustomApiError(null)
-    try {
-      await flushNodePatch(nodeID)
-      await commandMutation.mutateAsync({
-        id: makeCommandID("update-node"),
-        type: "update-node",
-        actor: "cinema-web",
-        nodeID,
-        patch: {
-          data: nextRawData,
-        },
-      })
-
-      if (existing) {
-        const { id: _id, ...patch } = definition
-        await commandMutation.mutateAsync({
-          id: makeCommandID("update-custom-node-definition"),
-          type: "update-custom-node-definition",
-          actor: "cinema-web",
-          definitionID: definition.id,
-          patch,
-        })
-      } else {
-        await commandMutation.mutateAsync({
-          id: makeCommandID("create-custom-node-definition"),
-          type: "create-custom-node-definition",
-          actor: "cinema-web",
-          definition,
-        })
-      }
-      setSelectedNodeID(nodeID)
-      return definition
-    } catch (error) {
-      setCustomApiError({
-        nodeID,
-        message: error instanceof Error ? error.message : "Custom node definition save failed",
-      })
-      return undefined
-    } finally {
-      setCustomApiNodeID(null)
-    }
-  }, [commandMutation, customNodeDefinitions, flushNodePatch, setSelectedNodeID])
-
   const textModels = textModelsQuery.data?.items ?? []
   const effectiveTextModel = textModelsQuery.data?.effectiveModel ?? null
   const imageModels = imageModelsQuery.data?.items ?? []
@@ -5582,7 +5547,6 @@ export function App() {
           runCustomApiMutation.mutateAsync({ nodeID, request }),
         onSaveCustomApiKey: (nodeID: string, request: CustomApiAuthSaveRequest) =>
           saveCustomApiKeyMutation.mutateAsync({ nodeID, request }),
-        onSaveCustomNodeDefinition: saveCustomNodeDefinition,
       },
     })),
     [
@@ -5606,7 +5570,6 @@ export function App() {
       providersQuery.data,
       runCustomApiMutation,
       saveCustomApiKeyMutation,
-      saveCustomNodeDefinition,
       tasksQuery.data,
       textGenerationError,
       textGenerationNodeID,
@@ -5711,9 +5674,7 @@ export function App() {
           </ReactFlow>
           <ContextMenu
             menu={contextMenu}
-            customNodeDefinitions={customNodeDefinitions}
             onAddNode={addNode}
-            onAddCustomNodeFromDefinition={addCustomNodeFromDefinition}
             onImportLocalImageNode={requestLocalImageImport}
             onClose={() => setContextMenu(null)}
             isImportingLocalImage={importLocalImageMutation.isPending}

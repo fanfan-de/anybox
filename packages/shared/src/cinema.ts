@@ -10,76 +10,10 @@ export const CinemaNodeTypeSchema = z.enum([
   "shot",
   "agent",
   "custom-api",
-  "custom-node",
   "generation-task",
   "output",
 ])
 export type CinemaNodeType = z.infer<typeof CinemaNodeTypeSchema>
-
-export const CinemaCustomApiAuthTypeSchema = z.enum(["none", "bearer", "api-key-header"])
-export type CinemaCustomApiAuthType = z.infer<typeof CinemaCustomApiAuthTypeSchema>
-
-export const CinemaCustomNodeAuthConfigSchema = z.object({
-  type: CinemaCustomApiAuthTypeSchema.default("none"),
-  credentialProviderID: z.string().min(1).optional(),
-  headerName: z.string().min(1).optional(),
-}).default({
-  type: "none",
-})
-export type CinemaCustomNodeAuthConfig = z.infer<typeof CinemaCustomNodeAuthConfigSchema>
-
-const CinemaCustomNodeInputSchemaSchema = z.object({
-  type: z.literal("object"),
-  properties: z.record(z.string(), z.unknown()).default({}),
-  required: z.array(z.string().min(1)).optional(),
-}).passthrough()
-
-const CinemaCustomNodeRequestSchema = z.object({
-  method: z.literal("POST").default("POST"),
-  url: z.string().min(1),
-  headersTemplate: z.record(z.string(), z.string()).default({}),
-  bodyTemplate: z.unknown().default({}),
-  timeoutMs: z.number().int().positive().max(60000).optional(),
-})
-
-const CinemaCustomNodeOutputMappingSchema = z.object({
-  text: z.string().min(1).optional(),
-  json: z.string().min(1).optional(),
-  imageUrl: z.string().min(1).optional(),
-})
-
-export const CinemaCustomNodeDefinitionSchema = z.object({
-  id: z.string().min(1),
-  title: z.string().min(1),
-  description: z.string().optional(),
-  runtime: z.literal("http-json-post").default("http-json-post"),
-  inputSchema: CinemaCustomNodeInputSchemaSchema,
-  inputValues: z.record(z.string(), z.unknown()).default({}),
-  request: CinemaCustomNodeRequestSchema,
-  auth: CinemaCustomNodeAuthConfigSchema,
-  outputMapping: CinemaCustomNodeOutputMappingSchema.default({}),
-  createdAt: z.string().optional(),
-  updatedAt: z.string().optional(),
-})
-export type CinemaCustomNodeDefinition = z.infer<typeof CinemaCustomNodeDefinitionSchema>
-
-export const CinemaCustomNodeDefinitionPatchSchema = z.object({
-  title: z.string().min(1).optional(),
-  description: z.string().optional(),
-  runtime: z.literal("http-json-post").optional(),
-  inputSchema: CinemaCustomNodeInputSchemaSchema.optional(),
-  inputValues: z.record(z.string(), z.unknown()).optional(),
-  request: CinemaCustomNodeRequestSchema.optional(),
-  auth: z.object({
-    type: CinemaCustomApiAuthTypeSchema.optional(),
-    credentialProviderID: z.string().min(1).optional(),
-    headerName: z.string().min(1).optional(),
-  }).optional(),
-  outputMapping: CinemaCustomNodeOutputMappingSchema.optional(),
-  createdAt: z.string().optional(),
-  updatedAt: z.string().optional(),
-})
-export type CinemaCustomNodeDefinitionPatch = z.infer<typeof CinemaCustomNodeDefinitionPatchSchema>
 
 export const CinemaPositionSchema = z.object({
   x: z.number(),
@@ -128,7 +62,6 @@ export const CinemaCanvasDocumentSchema = z.object({
   nodes: z.array(CinemaCanvasNodeSchema),
   edges: z.array(CinemaCanvasEdgeSchema).default([]),
   nodeTypes: z.array(CinemaNodeTypeSchema).default([]),
-  customNodeDefinitions: z.array(CinemaCustomNodeDefinitionSchema).default([]),
 })
 export type CinemaCanvasDocument = z.infer<typeof CinemaCanvasDocumentSchema>
 
@@ -182,19 +115,6 @@ export const CinemaCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("complete-generation-task"),
     taskNodeID: z.string().min(1),
     outputNode: CinemaCanvasNodeSchema.optional(),
-  }),
-  CinemaCommandBaseSchema.extend({
-    type: z.literal("create-custom-node-definition"),
-    definition: CinemaCustomNodeDefinitionSchema,
-  }),
-  CinemaCommandBaseSchema.extend({
-    type: z.literal("update-custom-node-definition"),
-    definitionID: z.string().min(1),
-    patch: CinemaCustomNodeDefinitionPatchSchema.refine((patch) => Object.keys(patch).length > 0, "Patch must include at least one field"),
-  }),
-  CinemaCommandBaseSchema.extend({
-    type: z.literal("delete-custom-node-definition"),
-    definitionID: z.string().min(1),
   }),
 ])
 export type CinemaCommand = z.infer<typeof CinemaCommandSchema>

@@ -976,6 +976,62 @@ describe("cinema api", () => {
     }
   })
 
+  test("drops legacy custom node data while reading canvas", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+
+    try {
+      const project = await createProject(app, root)
+      const baseCanvas = createCanvas()
+      await initializeCinemaProject(root, baseCanvas)
+      await writeFile(
+        join(root, ".anybox-cinema", "canvas.json"),
+        `${JSON.stringify({
+          ...baseCanvas,
+          nodes: [
+            ...baseCanvas.nodes,
+            {
+              id: "legacy-custom-node",
+              type: "custom-node",
+              title: "Legacy Custom Node",
+              position: { x: 400, y: 320 },
+              data: {
+                status: "idle",
+              },
+            },
+          ],
+          edges: [
+            ...baseCanvas.edges,
+            {
+              id: "edge-story-legacy-custom-node",
+              source: "story-brief",
+              target: "legacy-custom-node",
+            },
+          ],
+          nodeTypes: [...baseCanvas.nodeTypes, "custom-node"],
+          customNodeDefinitions: [
+            {
+              id: "legacy-definition",
+              title: "Legacy Definition",
+            },
+          ],
+        }, null, 2)}\n`,
+        "utf8",
+      )
+
+      const canvasResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/canvas`)
+      const canvasBody = await readJson<CinemaCanvasDocument>(canvasResponse)
+
+      expect(canvasResponse.status).toBe(200)
+      expect(canvasBody.data?.nodes.map((node) => node.id)).not.toContain("legacy-custom-node")
+      expect(canvasBody.data?.edges.map((edge) => edge.id)).not.toContain("edge-story-legacy-custom-node")
+      expect(canvasBody.data?.nodeTypes).not.toContain("custom-node")
+      expect((canvasBody.data as Record<string, unknown> | undefined)?.customNodeDefinitions).toBeUndefined()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   test("does not initialize missing cinema projects while reading canvas", async () => {
     const app = createServerApp()
     const root = await createTempProjectRoot()
@@ -1179,113 +1235,6 @@ describe("cinema api", () => {
       expect(summaryBody.data?.recentEvents).toHaveLength(6)
       expect(summaryBody.data?.directories.map((directory) => directory.path)).toContain("generated")
       expect(summaryBody.data?.gaps).toContain("no-provider-configured")
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  test("persists custom node definitions through cinema commands", async () => {
-    const app = createServerApp()
-    const root = await createTempProjectRoot()
-
-    try {
-      const project = await createProject(app, root)
-      await initializeCinemaProject(root)
-
-      const definition = {
-        id: "def-openai-chat",
-        title: "OpenAI Chat",
-        runtime: "http-json-post",
-        inputSchema: {
-          type: "object",
-          properties: {
-            prompt: { type: "string" },
-          },
-          required: ["prompt"],
-        },
-        inputValues: {
-          prompt: "",
-        },
-        request: {
-          method: "POST",
-          url: "https://api.example.com/v1/chat/completions",
-          headersTemplate: {
-            "Content-Type": "application/json",
-          },
-          bodyTemplate: {
-            messages: [{ role: "user", content: "{{inputs.prompt}}" }],
-          },
-        },
-        auth: {
-          type: "bearer",
-        },
-        outputMapping: {
-          text: "$.choices[0].message.content",
-        },
-      }
-
-      const createDefinitionResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          type: "create-custom-node-definition",
-          actor: "cinema-web",
-          definition,
-        }),
-      })
-      const createDefinitionBody = await readJson<CinemaCommandResult>(createDefinitionResponse)
-
-      expect(createDefinitionResponse.status).toBe(200)
-      expect(createDefinitionBody.data?.canvas.customNodeDefinitions?.[0]?.title).toBe("OpenAI Chat")
-
-      const updateDefinitionResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          type: "update-custom-node-definition",
-          actor: "cinema-web",
-          definitionID: definition.id,
-          patch: {
-            title: "Internal Chat",
-          },
-        }),
-      })
-      expect(updateDefinitionResponse.status).toBe(200)
-
-      const createNodeResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          type: "create-node",
-          actor: "cinema-web",
-          node: {
-            id: "custom-node-1",
-            type: "custom-node",
-            title: "Internal Chat",
-            position: { x: 700, y: 180 },
-            size: { width: 540, height: 600 },
-            data: {
-              definitionID: definition.id,
-              status: "idle",
-              inputValues: {
-                prompt: "Hello",
-              },
-              request: definition.request,
-              auth: {
-                type: "bearer",
-                credentialProviderID: "cinema-custom-api-custom-node-1",
-              },
-              outputMapping: definition.outputMapping,
-            },
-          },
-        }),
-      })
-      expect(createNodeResponse.status).toBe(200)
-
-      const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
-      expect(persisted.customNodeDefinitions?.[0]?.title).toBe("Internal Chat")
-      expect(persisted.nodes.find((node) => node.id === "custom-node-1")?.type).toBe("custom-node")
-      expect(persisted.nodeTypes).toContain("custom-node")
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -1675,57 +1624,6 @@ describe("cinema api", () => {
       })
     } finally {
       server.stop(true)
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  test("previews custom-node runtime instances through the custom API runner", async () => {
-    const app = createServerApp()
-    const root = await createTempProjectRoot()
-
-    try {
-      const project = await createProject(app, root)
-      const canvas = createCanvasWithCustomApiNode({
-        definitionID: "def-chat",
-        definitionTitle: "Internal Chat",
-      })
-      const customNode = canvas.nodes.find((node) => node.id === "custom-api")
-      if (!customNode) throw new Error("Fixture custom node missing")
-      customNode.id = "custom-node"
-      customNode.type = "custom-node"
-      customNode.title = "Internal Chat"
-      customNode.data = {
-        ...customNode.data,
-        auth: {
-          type: "none",
-        },
-      }
-      for (const edge of canvas.edges) {
-        if (edge.target === "custom-api") edge.target = "custom-node"
-      }
-      canvas.nodeTypes = ["text", "agent", "custom-node"]
-      await initializeCinemaProject(root, canvas)
-
-      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/custom-api-runs`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          nodeID: "custom-node",
-          mode: "preview",
-          inputValues: {
-            prompt: "Preview prompt",
-          },
-        }),
-      })
-      const body = await readJson<CinemaCustomApiRunResult>(response)
-
-      expect(response.status).toBe(200)
-      expect(body.data?.nodeID).toBe("custom-node")
-      expect(body.data?.requestPreview.body).toMatchObject({
-        prompt: "Preview prompt",
-        upstreamText: "A test story brief.",
-      })
-    } finally {
       await rm(root, { recursive: true, force: true })
     }
   })
@@ -3546,6 +3444,23 @@ describe("cinema api", () => {
             aspectRatio: "16:9",
             duration: 3,
             resolution: "720p",
+            negativePrompt: "blur, low quality",
+            sound: "on",
+            cfgScale: 0.65,
+            cameraControl: {
+              type: "simple",
+              config: {
+                horizontal: 0,
+                vertical: 0,
+                pan: 0,
+                tilt: 0,
+                roll: 0,
+                zoom: 1,
+              },
+            },
+            watermarkInfo: {
+              enabled: false,
+            },
           },
         }),
       })
@@ -3573,8 +3488,26 @@ describe("cinema api", () => {
         aspect_ratio: "16:9",
         duration: "3",
         mode: "std",
+        negative_prompt: "blur, low quality",
+        sound: "on",
+        cfg_scale: 0.65,
+        camera_control: {
+          type: "simple",
+          config: {
+            horizontal: 0,
+            vertical: 0,
+            pan: 0,
+            tilt: 0,
+            roll: 0,
+            zoom: 1,
+          },
+        },
+        watermark_info: {
+          enabled: false,
+        },
         external_task_id: createBody.data?.id,
       })
+      expect(createRequestBody?.resolution).toBeUndefined()
 
       const refreshResponse = await app.request(
         `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks/${encodeURIComponent(createBody.data!.id)}/refresh`,

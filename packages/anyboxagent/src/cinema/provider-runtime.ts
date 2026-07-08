@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto"
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { z } from "zod"
 import {
   type CinemaCanvasDocument,
@@ -21,8 +22,6 @@ import {
 } from "@anybox/shared/cinema"
 import * as ProviderAuth from "#auth/provider-auth.ts"
 import * as Config from "#config/config.ts"
-import * as Global from "#global/global.ts"
-import * as Installation from "#installation/installation.ts"
 import { ApiError } from "#server/error.ts"
 import {
   isSupportedImageMime,
@@ -30,10 +29,8 @@ import {
 } from "#session/support/image-assets.ts"
 import * as Log from "#util/log.ts"
 
-const PROVIDERS_MODELSWIKI_API_URL =
-  "https://raw.githubusercontent.com/fanfan-de/Providers-ModelsWiki/main/dist/api.json"
 const REQUEST_TIMEOUT_MS = 10 * 1000
-const CATALOG_SOURCE_ID = "providers-modelswiki"
+const LOCAL_PROVIDER_MANIFEST_CATALOG_SOURCE = "local-provider-manifest"
 const KLINGAI_PROVIDER_ID = "klingai"
 const KLINGAI_CN_PROVIDER_ID = "klingai-cn"
 const KLINGAI_GLOBAL_PROVIDER_ID = "klingai-global"
@@ -254,131 +251,135 @@ type CinemaVideoProviderConnectionTestResult = {
   diagnostics?: Record<string, unknown>
 }
 
-type CacheSnapshot = {
-  data: RawCatalog
+const LocalProviderManifestCatalogSchema = z.union([
+  z.array(CinemaVideoProviderManifestSchema),
+  z.object({
+    schemaVersion: z.literal(1),
+    providers: z.array(CinemaVideoProviderManifestSchema),
+  }),
+])
+
+type ProviderManifestCatalogSnapshot = {
+  data: CinemaVideoProviderManifest[]
   signature?: string
 }
 
-let catalogOverride: RawCatalog | undefined
-let cachedCatalog: RawCatalog | undefined
-let loadedCacheSignature: string | undefined
-let cacheFilePathOverride: string | undefined
+let catalogOverride: CinemaVideoProviderManifest[] | undefined
+let cachedCatalogManifests: CinemaVideoProviderManifest[] | undefined
+let loadedManifestSignature: string | undefined
+let manifestFilePathOverride: string | undefined
 
-function cacheFilePath() {
-  return cacheFilePathOverride ?? path.join(Global.Path.cache, "cinema-video-providers.json")
+function defaultProviderManifestFilePath() {
+  return fileURLToPath(new URL("./provider-manifests.json", import.meta.url))
 }
 
-async function readCache(): Promise<CacheSnapshot | undefined> {
-  const filepath = cacheFilePath()
+function providerManifestFilePath() {
+  return manifestFilePathOverride ?? defaultProviderManifestFilePath()
+}
+
+function sortedProviderManifests(manifests: CinemaVideoProviderManifest[]) {
+  return [...manifests].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+}
+
+function validateProviderManifestIDs(manifests: CinemaVideoProviderManifest[], source: string) {
+  const ids = new Set<string>()
+  for (const manifest of manifests) {
+    if (ids.has(manifest.id)) {
+      throw new Error(`Duplicate Cinema provider manifest id '${manifest.id}' in ${source}.`)
+    }
+    ids.add(manifest.id)
+  }
+}
+
+function providerManifestsFromLocalCatalog(value: unknown, source: string) {
+  const parsed = LocalProviderManifestCatalogSchema.parse(value)
+  const manifests = Array.isArray(parsed) ? parsed : parsed.providers
+  validateProviderManifestIDs(manifests, source)
+  return sortedProviderManifests(manifests)
+}
+
+function providerManifestsFromCatalogInput(catalog: unknown, source: string) {
+  const localCatalog = LocalProviderManifestCatalogSchema.safeParse(catalog)
+  if (localCatalog.success) {
+    const manifests = Array.isArray(localCatalog.data) ? localCatalog.data : localCatalog.data.providers
+    validateProviderManifestIDs(manifests, source)
+    return sortedProviderManifests(manifests)
+  }
+
+  const rawCatalog = RawCatalogSchema.parse(catalog)
+  const manifests = Object.values(rawCatalog).map(manifestFromCatalogProvider)
+  validateProviderManifestIDs(manifests, source)
+  return sortedProviderManifests(manifests)
+}
+
+async function readLocalProviderManifestCatalog(): Promise<ProviderManifestCatalogSnapshot> {
+  const filepath = providerManifestFilePath()
   const signature = await stat(filepath)
     .then((fileStat) => `${fileStat.mtimeMs}:${fileStat.size}`)
     .catch(() => undefined)
-  const text = await readFile(filepath, "utf8").catch(() => undefined)
-  if (!text) return undefined
+  const text = await readFile(filepath, "utf8")
 
   try {
     return {
-      data: RawCatalogSchema.parse(JSON.parse(text)),
+      data: providerManifestsFromLocalCatalog(JSON.parse(text), filepath),
       signature,
     }
   } catch (error) {
-    log.error("Failed to parse cached Cinema video provider catalog", { error })
-    return undefined
-  }
-}
-
-async function invalidateIfCacheChanged() {
-  if (!loadedCacheSignature) return
-  const filepath = cacheFilePath()
-  const currentSignature = await stat(filepath)
-    .then((fileStat) => `${fileStat.mtimeMs}:${fileStat.size}`)
-    .catch(() => undefined)
-  if (!currentSignature || currentSignature === loadedCacheSignature) return
-
-  loadedCacheSignature = undefined
-  cachedCatalog = undefined
-}
-
-async function fetchRemoteCatalog(): Promise<RawCatalog> {
-  const response = await fetch(PROVIDERS_MODELSWIKI_API_URL, {
-    headers: {
-      "User-Agent": Installation.USER_AGENT,
-    },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  })
-
-  if (!response.ok) {
-    throw new Error(`Providers-ModelsWiki request failed with status ${response.status}`)
-  }
-
-  const text = await response.text()
-  const parsed = RawCatalogSchema.parse(JSON.parse(text))
-  const filepath = cacheFilePath()
-  await mkdir(path.dirname(filepath), { recursive: true })
-  await writeFile(filepath, text)
-  loadedCacheSignature = await stat(filepath)
-    .then((fileStat) => `${fileStat.mtimeMs}:${fileStat.size}`)
-    .catch(() => undefined)
-  cachedCatalog = parsed
-  return parsed
-}
-
-async function loadRawCatalog(): Promise<RawCatalog> {
-  if (catalogOverride) return catalogOverride
-  await invalidateIfCacheChanged()
-  if (cachedCatalog) return cachedCatalog
-
-  const cached = await readCache()
-  if (cached) {
-    loadedCacheSignature = cached.signature
-    cachedCatalog = cached.data
-    return cached.data
-  }
-
-  try {
-    return await fetchRemoteCatalog()
-  } catch (error) {
-    log.error("Failed to load Cinema video provider catalog", { error })
-    const fallback = await readCache()
-    if (fallback) {
-      loadedCacheSignature = fallback.signature
-      cachedCatalog = fallback.data
-      return fallback.data
-    }
+    log.error("Failed to parse local Cinema provider manifest catalog", { filepath, error })
     throw error
   }
 }
 
+async function invalidateIfProviderManifestFileChanged() {
+  if (!loadedManifestSignature) return
+  const filepath = providerManifestFilePath()
+  const currentSignature = await stat(filepath)
+    .then((fileStat) => `${fileStat.mtimeMs}:${fileStat.size}`)
+    .catch(() => undefined)
+  if (currentSignature === loadedManifestSignature) return
+
+  loadedManifestSignature = undefined
+  cachedCatalogManifests = undefined
+}
+
+async function loadProviderManifests(): Promise<CinemaVideoProviderManifest[]> {
+  if (catalogOverride) return catalogOverride
+  await invalidateIfProviderManifestFileChanged()
+  if (cachedCatalogManifests) return cachedCatalogManifests
+
+  const localCatalog = await readLocalProviderManifestCatalog()
+  loadedManifestSignature = localCatalog.signature
+  cachedCatalogManifests = localCatalog.data
+  return localCatalog.data
+}
+
 export async function refreshCinemaVideoProviderCatalog(): Promise<CinemaVideoProvider[]> {
-  if (catalogOverride) {
-    cachedCatalog = catalogOverride
-  } else {
-    await fetchRemoteCatalog()
-  }
+  cachedCatalogManifests = undefined
+  loadedManifestSignature = undefined
   return await listCinemaVideoProviders()
 }
 
-export function setCinemaVideoProviderCatalogForTest(catalog: RawCatalogInput | undefined) {
+export function setCinemaVideoProviderCatalogForTest(catalog: unknown | undefined) {
   const previous = catalogOverride
-  catalogOverride = catalog ? RawCatalogSchema.parse(catalog) : undefined
-  cachedCatalog = undefined
-  loadedCacheSignature = undefined
+  catalogOverride = catalog ? providerManifestsFromCatalogInput(catalog, "test override") : undefined
+  cachedCatalogManifests = undefined
+  loadedManifestSignature = undefined
   return () => {
     catalogOverride = previous
-    cachedCatalog = undefined
-    loadedCacheSignature = undefined
+    cachedCatalogManifests = undefined
+    loadedManifestSignature = undefined
   }
 }
 
 export function setCinemaVideoProviderCatalogCacheFileForTest(filepath: string | undefined) {
-  const previous = cacheFilePathOverride
-  cacheFilePathOverride = filepath
-  cachedCatalog = undefined
-  loadedCacheSignature = undefined
+  const previous = manifestFilePathOverride
+  manifestFilePathOverride = filepath
+  cachedCatalogManifests = undefined
+  loadedManifestSignature = undefined
   return () => {
-    cacheFilePathOverride = previous
-    cachedCatalog = undefined
-    loadedCacheSignature = undefined
+    manifestFilePathOverride = previous
+    cachedCatalogManifests = undefined
+    loadedManifestSignature = undefined
   }
 }
 
@@ -581,7 +582,7 @@ function manifestFromCatalogProvider(provider: RawCatalogProviderSchemaOutput): 
     doc: provider.doc,
     regions: normalizeStringList(provider.regions),
     authType: provider.auth_type,
-    catalogSource: CATALOG_SOURCE_ID,
+    catalogSource: LOCAL_PROVIDER_MANIFEST_CATALOG_SOURCE,
     credentialProviderID: `cinema-${provider.id}`,
     requiresCredential: provider.auth_type !== undefined,
     ...(provider.connection_test
@@ -608,10 +609,7 @@ type RawCatalogModelSchemaOutput = z.infer<typeof RawCatalogModelSchema>
 type RawCatalogProviderSchemaOutput = z.infer<typeof RawCatalogProviderSchema>
 
 async function catalogManifests(): Promise<CinemaVideoProviderManifest[]> {
-  const catalog = await loadRawCatalog()
-  return Object.values(catalog)
-    .map(manifestFromCatalogProvider)
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+  return await loadProviderManifests()
 }
 
 const providerAdapters: Record<string, ProviderAdapter> = {}
@@ -1675,7 +1673,7 @@ function aspectRatioFromSize(value: string | undefined) {
 }
 
 function klingAIQualityMode(parameters: Record<string, unknown>) {
-  const explicit = parameterString(parameters, "klingMode", "qualityMode", "mode")
+  const explicit = parameterString(parameters, "klingMode", "qualityMode", "quality_mode", "mode")
   if (explicit && /^(std|pro|4k)$/i.test(explicit)) return explicit.toLowerCase()
 
   const resolution = parameterString(parameters, "resolution")
@@ -1702,6 +1700,43 @@ function appendOptionalPayloadValue(
 ) {
   const value = parameterNumberOrString(parameters, ...inputKeys)
   if (value !== undefined) target[outputKey] = value
+}
+
+function appendOptionalPayloadNumber(
+  target: Record<string, unknown>,
+  outputKey: string,
+  parameters: Record<string, unknown>,
+  ...inputKeys: string[]
+) {
+  for (const key of inputKeys) {
+    const value = parameters[key]
+    if (typeof value === "number" && Number.isFinite(value)) {
+      target[outputKey] = value
+      return
+    }
+    const string = stringValue(value)
+    if (!string) continue
+    const number = Number.parseFloat(string)
+    if (Number.isFinite(number)) {
+      target[outputKey] = number
+      return
+    }
+  }
+}
+
+function appendOptionalPayloadObject(
+  target: Record<string, unknown>,
+  outputKey: string,
+  parameters: Record<string, unknown>,
+  ...inputKeys: string[]
+) {
+  for (const key of inputKeys) {
+    const value = parameters[key]
+    if (isRecord(value)) {
+      target[outputKey] = value
+      return
+    }
+  }
 }
 
 function klingAIExternalTaskID(taskID: string) {
@@ -1909,8 +1944,11 @@ async function klingAITaskPayload(input: ProviderAdapterCreateInput, kind: Kling
   }
   appendOptionalPayloadString(payload, "duration", parameters, "duration")
   appendOptionalPayloadString(payload, "negative_prompt", parameters, "negativePrompt", "negative_prompt")
-  appendOptionalPayloadString(payload, "cfg_scale", parameters, "cfgScale", "cfg_scale")
-  appendOptionalPayloadString(payload, "resolution", parameters, "resolution")
+  appendOptionalPayloadNumber(payload, "cfg_scale", parameters, "cfgScale", "cfg_scale")
+  if (kind === "image-generation") appendOptionalPayloadString(payload, "resolution", parameters, "resolution")
+  appendOptionalPayloadString(payload, "sound", parameters, "sound")
+  appendOptionalPayloadObject(payload, "camera_control", parameters, "cameraControl", "camera_control")
+  appendOptionalPayloadObject(payload, "watermark_info", parameters, "watermarkInfo", "watermark_info")
   const count = Number(parameters.count)
   if (Number.isInteger(count) && count > 0) payload.n = count
   if (kind !== "image-generation") payload.mode = klingAIQualityMode(parameters)

@@ -237,6 +237,39 @@ async function assertCinemaProjectInitialized(cinemaRoot: string) {
   }
 }
 
+function stripLegacyCustomNodesFromCanvasInput(input: unknown) {
+  const legacyCustomNodeType = "custom-node"
+  if (!isRecord(input)) return input
+
+  const rawNodes = Array.isArray(input.nodes) ? input.nodes : []
+  const legacyNodeIDs = new Set<string>()
+  const nodes = rawNodes.filter((node) => {
+    if (!isRecord(node) || node.type !== legacyCustomNodeType) return true
+    if (typeof node.id === "string") legacyNodeIDs.add(node.id)
+    return false
+  })
+
+  const edges = Array.isArray(input.edges)
+    ? input.edges.filter((edge) => {
+        if (!isRecord(edge)) return true
+        const source = typeof edge.source === "string" ? edge.source : ""
+        const target = typeof edge.target === "string" ? edge.target : ""
+        return !legacyNodeIDs.has(source) && !legacyNodeIDs.has(target)
+      })
+    : input.edges
+  const nodeTypes = Array.isArray(input.nodeTypes)
+    ? input.nodeTypes.filter((type) => type !== legacyCustomNodeType)
+    : input.nodeTypes
+  const { customNodeDefinitions: _customNodeDefinitions, ...rest } = input
+
+  return {
+    ...rest,
+    nodes,
+    edges,
+    nodeTypes,
+  }
+}
+
 async function readCinemaCanvasFromRoot(cinemaRoot: string): Promise<CinemaCanvasDocument> {
   const canvasPath = path.join(cinemaRoot, CANVAS_FILE)
 
@@ -255,7 +288,7 @@ async function readCinemaCanvasFromRoot(cinemaRoot: string): Promise<CinemaCanva
   }
 
   try {
-    return CinemaCanvasDocumentSchema.parse(JSON.parse(raw))
+    return CinemaCanvasDocumentSchema.parse(stripLegacyCustomNodesFromCanvasInput(JSON.parse(raw)))
   } catch (error) {
     throw createInvalidJsonError(CANVAS_FILE, error)
   }
@@ -837,7 +870,7 @@ function customApiCredentialProviderIDFor(node: CinemaCanvasNode) {
 }
 
 function isCustomApiRuntimeNode(node: CinemaCanvasNode) {
-  return node.type === "custom-api" || node.type === "custom-node"
+  return node.type === "custom-api"
 }
 
 async function customApiAuthStateFor(node: CinemaCanvasNode): Promise<CinemaCustomApiAuthState> {
@@ -1353,12 +1386,6 @@ function describeCinemaCommand(command: CinemaCommand) {
       return `Created generation task '${command.node.title}'.`
     case "complete-generation-task":
       return `Completed generation task '${command.taskNodeID}'.`
-    case "create-custom-node-definition":
-      return `Created custom node definition '${command.definition.title}'.`
-    case "update-custom-node-definition":
-      return `Updated custom node definition '${command.definitionID}'.`
-    case "delete-custom-node-definition":
-      return `Deleted custom node definition '${command.definitionID}'.`
   }
 }
 
@@ -1463,46 +1490,6 @@ function applyCommandToCanvas(canvas: CinemaCanvasDocument, command: CinemaComma
 
       return next
     }
-    case "create-custom-node-definition": {
-      if ((canvas.customNodeDefinitions ?? []).some((definition) => definition.id === command.definition.id)) {
-        throw new ApiError(
-          409,
-          "CINEMA_COMMAND_INVALID",
-          `Custom node definition '${command.definition.id}' already exists.`,
-        )
-      }
-      return {
-        ...canvas,
-        customNodeDefinitions: [...(canvas.customNodeDefinitions ?? []), command.definition],
-      }
-    }
-    case "update-custom-node-definition": {
-      const definitions = canvas.customNodeDefinitions ?? []
-      if (!definitions.some((definition) => definition.id === command.definitionID)) {
-        throw new ApiError(
-          404,
-          "CINEMA_CUSTOM_NODE_DEFINITION_NOT_FOUND",
-          `Custom node definition '${command.definitionID}' was not found.`,
-        )
-      }
-      return {
-        ...canvas,
-        customNodeDefinitions: definitions.map((definition) =>
-          definition.id === command.definitionID
-            ? {
-              ...definition,
-              ...command.patch,
-              id: definition.id,
-            }
-            : definition
-        ),
-      }
-    }
-    case "delete-custom-node-definition":
-      return {
-        ...canvas,
-        customNodeDefinitions: (canvas.customNodeDefinitions ?? []).filter((definition) => definition.id !== command.definitionID),
-      }
   }
 }
 
