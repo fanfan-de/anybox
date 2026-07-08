@@ -233,23 +233,6 @@ export function CinemaRoutes() {
     ok(c, await CinemaUseCase.cancelCinemaGenerationTask(c.req.param("projectID"), c.req.param("taskID")))
   )
 
-  app.post("/projects/:projectID/provider-callbacks/:providerID/:taskID/:token", async (c) => {
-    const payload = await c.req.json().catch(() => {
-      throw new ApiError(400, "INVALID_PAYLOAD", "Provider callback body must be valid JSON.")
-    })
-    return ok(
-      c,
-      await CinemaUseCase.acceptCinemaProviderCallback(
-        c.req.param("projectID"),
-        c.req.param("providerID"),
-        c.req.param("taskID"),
-        c.req.param("token"),
-        payload,
-      ),
-      202,
-    )
-  })
-
   app.put("/projects/:projectID/canvas", async (c) => {
     const payload = await parseJsonBody(
       c,

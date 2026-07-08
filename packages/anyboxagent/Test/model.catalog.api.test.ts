@@ -3,6 +3,7 @@ import "./sqlite.cleanup.ts"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { CinemaVideoProviderManifestSchema } from "@anybox/shared/cinema"
 import * as CinemaProviderRuntime from "#cinema/provider-runtime.ts"
 import * as Provider from "#provider/provider.ts"
 import { createServerApp } from "#server/server.ts"
@@ -212,4 +213,119 @@ test("model catalog API keeps legacy models selectable and exposes read-only cin
     restoreVideoCatalog()
     restoreProvider()
   }
+})
+
+test("normalizes generation form specs from provider manifest inputs", () => {
+  const provider = CinemaVideoProviderManifestSchema.parse({
+    id: "klingai-cn",
+    name: "KlingAI CN",
+    requiresCredential: false,
+    regions: [],
+    models: [
+      {
+        id: "kling-image-v3",
+        label: "Kling Image 3.0 Omni",
+        offeringID: "klingai-cn/kling-image-3.0-omni",
+        providerModelID: "kling-v3-omni",
+        modalities: {
+          input: ["text", "image"],
+          output: ["image"],
+        },
+        modes: ["omni-image"],
+        inputCombinations: [
+          {
+            mode: "omni-image",
+            label: "Omni image",
+            requiredModalities: ["text"],
+            optionalModalities: ["image"],
+            inputs: [
+              {
+                role: "prompt",
+                modality: "text",
+                required: true,
+                minCount: 1,
+                maxCount: 1,
+                maxLength: 2500,
+              },
+              {
+                role: "image_list",
+                apiField: "image_list",
+                modality: "image",
+                required: false,
+                minCount: 0,
+                maxCount: 10,
+              },
+              {
+                role: "result_type",
+                apiField: "result_type",
+                modality: "parameter",
+                required: false,
+                minCount: 0,
+                maxCount: 1,
+                default: "single",
+                options: ["single", "series"],
+              },
+              {
+                role: "count",
+                apiField: "count",
+                modality: "parameter",
+                required: false,
+                minCount: 0,
+                maxCount: 1,
+                default: 1,
+                min: 1,
+                max: 9,
+                visibleWhen: {
+                  result_type: "single",
+                },
+              },
+              {
+                role: "series_amount",
+                apiField: "series_amount",
+                modality: "parameter",
+                required: false,
+                minCount: 0,
+                maxCount: 1,
+                default: 4,
+                options: [2, 3, 4, "auto"],
+                visibleWhen: {
+                  result_type: "series",
+                },
+              },
+            ],
+          },
+        ],
+        pricing: [],
+        formSpecs: [],
+        parameterSchema: {},
+      },
+    ],
+  })
+  const model = provider.models[0]!
+  const combination = model.inputCombinations[0]!
+  const formSpec = CinemaProviderRuntime.normalizeGenerationFormSpec(provider, model, combination)
+
+  expect(formSpec).toMatchObject({
+    providerID: "klingai-cn",
+    modelID: "klingai-cn/kling-image-3.0-omni",
+    mode: "omni-image",
+    output: "image",
+  })
+  expect(formSpec.controls.find((control) => control.key === "image_list")).toMatchObject({
+    type: "image-list",
+    maxCount: 10,
+  })
+  expect(formSpec.controls.find((control) => control.key === "count")).toMatchObject({
+    type: "number",
+    max: 9,
+    visibleWhen: {
+      result_type: "single",
+    },
+  })
+  expect(formSpec.controls.find((control) => control.key === "series_amount")).toMatchObject({
+    type: "select",
+    visibleWhen: {
+      result_type: "series",
+    },
+  })
 })

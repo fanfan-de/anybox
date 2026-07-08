@@ -9,15 +9,20 @@ import {
   type CinemaGenerationTask,
   type CinemaProviderAuthState,
   type CinemaProviderInputCombination,
+  type CinemaProviderInputSpec,
   type CinemaProviderModelMode,
+  type GenerationControl,
+  type GenerationFormSpec,
   type TestCinemaVideoProviderConnectionBody,
   type CinemaVideoProvider,
   type CinemaVideoProviderManifest,
   type CinemaProviderEndpoint,
   CinemaProviderEndpointMethodSchema,
   CinemaProviderEndpointSchema,
+  CinemaProviderTaskQueryEndpointSchema,
   CinemaProviderModelModeSchema,
   CinemaVideoProviderManifestSchema,
+  ProviderInputUIControlSchema,
   type CreateCinemaGenerationTaskBody,
 } from "@anybox/shared/cinema"
 import * as ProviderAuth from "#auth/provider-auth.ts"
@@ -157,6 +162,7 @@ const RawCatalogModelSchema = z
     lab: z.string().min(1).optional(),
     base_model: z.string().min(1).optional(),
     endpoint_type: z.string().min(1).optional(),
+    task_query_endpoint: RawCatalogEndpointSchema.optional(),
     modalities: z
       .object({
         input: z.array(z.string().min(1)).default([]),
@@ -251,7 +257,7 @@ type CinemaVideoProviderConnectionTestResult = {
   diagnostics?: Record<string, unknown>
 }
 
-const LocalProviderManifestCatalogSchema = z.union([
+const LocalProviderManifestInlineCatalogSchema = z.union([
   z.array(CinemaVideoProviderManifestSchema),
   z.object({
     schemaVersion: z.literal(1),
@@ -259,14 +265,27 @@ const LocalProviderManifestCatalogSchema = z.union([
   }),
 ])
 
+const LocalProviderManifestIncludeCatalogSchema = z.object({
+  schemaVersion: z.literal(1),
+  includes: z.array(z.string().min(1)),
+})
+
+const LocalProviderModelIncludeListSchema = z.object({
+  includes: z.array(z.string().min(1)),
+})
+
+type CinemaVideoProviderModelManifest = CinemaVideoProviderManifest["models"][number]
+
 type ProviderManifestCatalogSnapshot = {
   data: CinemaVideoProviderManifest[]
   signature?: string
+  filepaths: string[]
 }
 
 let catalogOverride: CinemaVideoProviderManifest[] | undefined
 let cachedCatalogManifests: CinemaVideoProviderManifest[] | undefined
 let loadedManifestSignature: string | undefined
+let loadedManifestFilepaths: string[] = []
 let manifestFilePathOverride: string | undefined
 
 function defaultProviderManifestFilePath() {
@@ -291,15 +310,25 @@ function validateProviderManifestIDs(manifests: CinemaVideoProviderManifest[], s
   }
 }
 
+function validateProviderModelIDs(manifest: CinemaVideoProviderManifest, source: string) {
+  const ids = new Set<string>()
+  for (const model of manifest.models) {
+    if (ids.has(model.id)) {
+      throw new Error(`Duplicate Cinema provider model id '${model.id}' for provider '${manifest.id}' in ${source}.`)
+    }
+    ids.add(model.id)
+  }
+}
+
 function providerManifestsFromLocalCatalog(value: unknown, source: string) {
-  const parsed = LocalProviderManifestCatalogSchema.parse(value)
+  const parsed = LocalProviderManifestInlineCatalogSchema.parse(value)
   const manifests = Array.isArray(parsed) ? parsed : parsed.providers
   validateProviderManifestIDs(manifests, source)
   return sortedProviderManifests(manifests)
 }
 
 function providerManifestsFromCatalogInput(catalog: unknown, source: string) {
-  const localCatalog = LocalProviderManifestCatalogSchema.safeParse(catalog)
+  const localCatalog = LocalProviderManifestInlineCatalogSchema.safeParse(catalog)
   if (localCatalog.success) {
     const manifests = Array.isArray(localCatalog.data) ? localCatalog.data : localCatalog.data.providers
     validateProviderManifestIDs(manifests, source)
@@ -312,17 +341,111 @@ function providerManifestsFromCatalogInput(catalog: unknown, source: string) {
   return sortedProviderManifests(manifests)
 }
 
+async function localManifestFilesSignature(filepaths: string[]) {
+  const signatures = await Promise.all(
+    [...new Set(filepaths)].sort().map(async (filepath) => {
+      const signature = await stat(filepath)
+        .then((fileStat) => `${fileStat.mtimeMs}:${fileStat.size}`)
+        .catch(() => "missing")
+      return `${filepath}:${signature}`
+    })
+  )
+  return signatures.join("|")
+}
+
+function resolveProviderManifestIncludePath(source: string, includePath: string) {
+  return path.resolve(path.dirname(source), includePath)
+}
+
+async function readLocalManifestJsonFile(filepath: string, readFilepaths: Set<string>) {
+  const resolved = path.resolve(filepath)
+  readFilepaths.add(resolved)
+  const text = await readFile(resolved, "utf8")
+  return JSON.parse(text) as unknown
+}
+
+function providerModelFromLocalCatalogInput(value: unknown, source: string): CinemaVideoProviderModelManifest {
+  const parsed = CinemaVideoProviderManifestSchema.parse({
+    id: "__model_validation__",
+    name: "__model_validation__",
+    models: [value],
+  })
+  const model = parsed.models[0]
+  if (!model) {
+    throw new Error(`Cinema provider model manifest in ${source} did not produce a model.`)
+  }
+  return model
+}
+
+async function providerManifestFromLocalCatalogInput(
+  value: unknown,
+  source: string,
+  readFilepaths: Set<string>
+): Promise<CinemaVideoProviderManifest> {
+  const modelIncludeProvider = z
+    .object({
+      models: LocalProviderModelIncludeListSchema,
+    })
+    .passthrough()
+    .safeParse(value)
+
+  if (modelIncludeProvider.success) {
+    const models: CinemaVideoProviderModelManifest[] = []
+    for (const includePath of modelIncludeProvider.data.models.includes) {
+      const modelPath = resolveProviderManifestIncludePath(source, includePath)
+      const modelValue = await readLocalManifestJsonFile(modelPath, readFilepaths)
+      models.push(providerModelFromLocalCatalogInput(modelValue, modelPath))
+    }
+
+    const manifest = CinemaVideoProviderManifestSchema.parse({
+      ...modelIncludeProvider.data,
+      models,
+    })
+    validateProviderModelIDs(manifest, source)
+    return manifest
+  }
+
+  const manifest = CinemaVideoProviderManifestSchema.parse(value)
+  validateProviderModelIDs(manifest, source)
+  return manifest
+}
+
+async function providerManifestsFromLocalCatalogFile(value: unknown, source: string, readFilepaths: Set<string>) {
+  const inlineCatalog = LocalProviderManifestInlineCatalogSchema.safeParse(value)
+  if (inlineCatalog.success) {
+    const manifests = Array.isArray(inlineCatalog.data) ? inlineCatalog.data : inlineCatalog.data.providers
+    validateProviderManifestIDs(manifests, source)
+    return sortedProviderManifests(manifests)
+  }
+
+  const includeCatalog = LocalProviderManifestIncludeCatalogSchema.safeParse(value)
+  if (includeCatalog.success) {
+    const manifests: CinemaVideoProviderManifest[] = []
+    for (const includePath of includeCatalog.data.includes) {
+      const manifestPath = resolveProviderManifestIncludePath(source, includePath)
+      const manifestValue = await readLocalManifestJsonFile(manifestPath, readFilepaths)
+      manifests.push(await providerManifestFromLocalCatalogInput(manifestValue, manifestPath, readFilepaths))
+    }
+
+    validateProviderManifestIDs(manifests, source)
+    return sortedProviderManifests(manifests)
+  }
+
+  return providerManifestsFromLocalCatalog(value, source)
+}
+
 async function readLocalProviderManifestCatalog(): Promise<ProviderManifestCatalogSnapshot> {
-  const filepath = providerManifestFilePath()
-  const signature = await stat(filepath)
-    .then((fileStat) => `${fileStat.mtimeMs}:${fileStat.size}`)
-    .catch(() => undefined)
-  const text = await readFile(filepath, "utf8")
+  const filepath = path.resolve(providerManifestFilePath())
+  const readFilepaths = new Set<string>()
 
   try {
+    const catalog = await readLocalManifestJsonFile(filepath, readFilepaths)
+    const data = await providerManifestsFromLocalCatalogFile(catalog, filepath, readFilepaths)
+    const filepaths = [...readFilepaths]
     return {
-      data: providerManifestsFromLocalCatalog(JSON.parse(text), filepath),
-      signature,
+      data,
+      signature: await localManifestFilesSignature(filepaths),
+      filepaths,
     }
   } catch (error) {
     log.error("Failed to parse local Cinema provider manifest catalog", { filepath, error })
@@ -332,14 +455,13 @@ async function readLocalProviderManifestCatalog(): Promise<ProviderManifestCatal
 
 async function invalidateIfProviderManifestFileChanged() {
   if (!loadedManifestSignature) return
-  const filepath = providerManifestFilePath()
-  const currentSignature = await stat(filepath)
-    .then((fileStat) => `${fileStat.mtimeMs}:${fileStat.size}`)
-    .catch(() => undefined)
+  const filepaths = loadedManifestFilepaths.length > 0 ? loadedManifestFilepaths : [path.resolve(providerManifestFilePath())]
+  const currentSignature = await localManifestFilesSignature(filepaths)
   if (currentSignature === loadedManifestSignature) return
 
   loadedManifestSignature = undefined
   cachedCatalogManifests = undefined
+  loadedManifestFilepaths = []
 }
 
 async function loadProviderManifests(): Promise<CinemaVideoProviderManifest[]> {
@@ -349,6 +471,7 @@ async function loadProviderManifests(): Promise<CinemaVideoProviderManifest[]> {
 
   const localCatalog = await readLocalProviderManifestCatalog()
   loadedManifestSignature = localCatalog.signature
+  loadedManifestFilepaths = localCatalog.filepaths
   cachedCatalogManifests = localCatalog.data
   return localCatalog.data
 }
@@ -356,6 +479,7 @@ async function loadProviderManifests(): Promise<CinemaVideoProviderManifest[]> {
 export async function refreshCinemaVideoProviderCatalog(): Promise<CinemaVideoProvider[]> {
   cachedCatalogManifests = undefined
   loadedManifestSignature = undefined
+  loadedManifestFilepaths = []
   return await listCinemaVideoProviders()
 }
 
@@ -364,10 +488,12 @@ export function setCinemaVideoProviderCatalogForTest(catalog: unknown | undefine
   catalogOverride = catalog ? providerManifestsFromCatalogInput(catalog, "test override") : undefined
   cachedCatalogManifests = undefined
   loadedManifestSignature = undefined
+  loadedManifestFilepaths = []
   return () => {
     catalogOverride = previous
     cachedCatalogManifests = undefined
     loadedManifestSignature = undefined
+    loadedManifestFilepaths = []
   }
 }
 
@@ -376,10 +502,12 @@ export function setCinemaVideoProviderCatalogCacheFileForTest(filepath: string |
   manifestFilePathOverride = filepath
   cachedCatalogManifests = undefined
   loadedManifestSignature = undefined
+  loadedManifestFilepaths = []
   return () => {
     manifestFilePathOverride = previous
     cachedCatalogManifests = undefined
     loadedManifestSignature = undefined
+    loadedManifestFilepaths = []
   }
 }
 
@@ -422,6 +550,10 @@ function normalizeCatalogEndpoint(
 ): CinemaProviderEndpoint | undefined {
   if (!endpoint) return undefined
   const normalized: Record<string, unknown> = { ...endpoint }
+  if (!normalized.taskQuery && isRecord(normalized.task_query)) {
+    normalized.taskQuery = normalized.task_query
+  }
+  delete normalized.task_query
   if (typeof normalized.path === "string") {
     const pathValue = normalized.path.trim()
     if (pathValue) {
@@ -438,10 +570,47 @@ function normalizeCatalogEndpoint(
       delete normalized.url
     }
   }
+  if (isRecord(normalized.taskQuery)) {
+    const taskQuery = { ...normalized.taskQuery }
+    if (typeof taskQuery.path === "string") {
+      const pathValue = taskQuery.path.trim()
+      if (pathValue) {
+        taskQuery.path = pathValue
+      } else {
+        delete taskQuery.path
+      }
+    }
+    if (typeof taskQuery.url === "string") {
+      const urlValue = taskQuery.url.trim()
+      if (urlValue) {
+        taskQuery.url = urlValue
+      } else {
+        delete taskQuery.url
+      }
+    }
+    const parsedTaskQuery = CinemaProviderTaskQueryEndpointSchema.safeParse(taskQuery)
+    if (parsedTaskQuery.success) {
+      normalized.taskQuery = parsedTaskQuery.data
+    } else {
+      delete normalized.taskQuery
+      log.warn("Ignoring invalid Cinema provider catalog task query endpoint", { endpoint, error: parsedTaskQuery.error })
+    }
+  }
   const parsed = CinemaProviderEndpointSchema.safeParse(normalized)
   if (parsed.success) return parsed.data
   log.warn("Ignoring invalid Cinema provider catalog endpoint", { endpoint, error: parsed.error })
   return undefined
+}
+
+function normalizeCatalogTaskQueryEndpoint(endpoint: z.output<typeof RawCatalogEndpointSchema> | undefined) {
+  const normalized = normalizeCatalogEndpoint(endpoint)
+  if (!normalized) return undefined
+  if (normalized.taskQuery) return normalized.taskQuery
+  return CinemaProviderTaskQueryEndpointSchema.parse({
+    method: normalized.method,
+    path: normalized.path,
+    url: normalized.url,
+  })
 }
 
 function isKlingAIProviderID(providerID: string) {
@@ -462,6 +631,96 @@ function normalizeModes(values: string[]) {
   return [...new Set(modes)]
 }
 
+function optionalStringField(record: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === "string" && value.trim()) return value.trim()
+  }
+  return undefined
+}
+
+function optionalNumberField(record: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === "number" && Number.isFinite(value)) return value
+  }
+  return undefined
+}
+
+function optionalStringArrayField(record: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = record[key]
+    if (!Array.isArray(value)) continue
+    const items = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    if (items.length > 0) return items
+  }
+  return undefined
+}
+
+function optionalStringRecordField(record: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = record[key]
+    if (!isRecord(value)) continue
+    const entries = Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+    if (entries.length > 0) return Object.fromEntries(entries)
+  }
+  return undefined
+}
+
+function optionalUnknownRecordField(record: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = record[key]
+    if (isRecord(value)) return value
+  }
+  return undefined
+}
+
+function optionalOptionsField(record: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = record[key]
+    if (!Array.isArray(value)) continue
+    const options = value.filter((item): item is string | number | boolean =>
+      typeof item === "string" || typeof item === "number" || typeof item === "boolean"
+    )
+    if (options.length > 0) return options
+  }
+  return undefined
+}
+
+function optionalUIControlField(record: Record<string, unknown>, ...keys: string[]) {
+  const value = optionalStringField(record, ...keys)
+  const parsed = ProviderInputUIControlSchema.safeParse(value)
+  return parsed.success ? parsed.data : undefined
+}
+
+function normalizeCatalogInputSpec(input: z.output<typeof RawCatalogInputSpecSchema>): CinemaProviderInputSpec {
+  const record = input as Record<string, unknown>
+  return {
+    role: input.role,
+    modality: input.modality,
+    required: input.required,
+    minCount: input.min_count,
+    ...(input.max_count !== undefined ? { maxCount: input.max_count } : {}),
+    ...(optionalStringField(record, "apiField", "api_field") ? { apiField: optionalStringField(record, "apiField", "api_field") } : {}),
+    ...(optionalStringField(record, "providerField", "provider_field") ? { providerField: optionalStringField(record, "providerField", "provider_field") } : {}),
+    ...(optionalStringField(record, "label") ? { label: optionalStringField(record, "label") } : {}),
+    ...(optionalNumberField(record, "maxLength", "max_length") !== undefined ? { maxLength: optionalNumberField(record, "maxLength", "max_length") } : {}),
+    ...("default" in record ? { default: record.default } : {}),
+    ...(optionalOptionsField(record, "options") ? { options: optionalOptionsField(record, "options") } : {}),
+    ...(optionalStringRecordField(record, "labels") ? { labels: optionalStringRecordField(record, "labels") } : {}),
+    ...(optionalNumberField(record, "min") !== undefined ? { min: optionalNumberField(record, "min") } : {}),
+    ...(optionalNumberField(record, "max") !== undefined ? { max: optionalNumberField(record, "max") } : {}),
+    ...(optionalStringArrayField(record, "supportedFormats", "supported_formats") ? { supportedFormats: optionalStringArrayField(record, "supportedFormats", "supported_formats") } : {}),
+    ...(optionalNumberField(record, "maxFileSizeMB", "max_file_size_mb") !== undefined ? { maxFileSizeMB: optionalNumberField(record, "maxFileSizeMB", "max_file_size_mb") } : {}),
+    ...(optionalUIControlField(record, "uiControl", "ui_control") ? { uiControl: optionalUIControlField(record, "uiControl", "ui_control") } : {}),
+    ...(optionalStringField(record, "uiGroup", "ui_group") ? { uiGroup: optionalStringField(record, "uiGroup", "ui_group") } : {}),
+    ...(optionalNumberField(record, "uiOrder", "ui_order") !== undefined ? { uiOrder: optionalNumberField(record, "uiOrder", "ui_order") } : {}),
+    ...(optionalUnknownRecordField(record, "visibleWhen", "visible_when") ? { visibleWhen: optionalUnknownRecordField(record, "visibleWhen", "visible_when") } : {}),
+    ...(optionalUnknownRecordField(record, "disabledWhen", "disabled_when") ? { disabledWhen: optionalUnknownRecordField(record, "disabledWhen", "disabled_when") } : {}),
+    ...(input.note ? { note: input.note } : {}),
+  }
+}
+
 function inputCombinationsFromCatalogModel(model: RawCatalogModelSchemaOutput) {
   return (model.input_combinations ?? []).map((combination) => {
     const endpoint = normalizeCatalogEndpoint(combination.endpoint)
@@ -470,14 +729,7 @@ function inputCombinationsFromCatalogModel(model: RawCatalogModelSchemaOutput) {
       ...(combination.label ? { label: combination.label } : {}),
       requiredModalities: normalizeStringList(combination.required_modalities),
       optionalModalities: normalizeStringList(combination.optional_modalities),
-      inputs: combination.inputs.map((input) => ({
-        role: input.role,
-        modality: input.modality,
-        required: input.required,
-        minCount: input.min_count,
-        ...(input.max_count !== undefined ? { maxCount: input.max_count } : {}),
-        ...(input.note ? { note: input.note } : {}),
-      })),
+      inputs: combination.inputs.map((input) => normalizeCatalogInputSpec(input)),
       requirements: combination.requirements.map((requirement) => ({
         roles: normalizeStringList(requirement.roles),
         ...(requirement.min_total_count !== undefined ? { minTotalCount: requirement.min_total_count } : {}),
@@ -529,6 +781,7 @@ function manifestFromCatalogProvider(provider: RawCatalogProviderSchemaOutput): 
       const offeringID = catalogModelOfferingID(modelKey, model)
       const providerModelID = catalogModelProviderModelID(model)
       const inputCombinations = inputCombinationsFromCatalogModel(model)
+      const taskQueryEndpoint = normalizeCatalogTaskQueryEndpoint(model.task_query_endpoint)
       const supportsFirstLastFrame = model.supports_first_last_frame ?? inputCombinationsSupportFirstLastFrame(inputCombinations)
       const rawModes = model.modes ?? []
       const catalogModes = [...rawModes, ...inputCombinations.map((combination) => combination.mode)]
@@ -567,6 +820,7 @@ function manifestFromCatalogProvider(provider: RawCatalogProviderSchemaOutput): 
         ...(model.supports_audio_output ?? model.audio_output ? { supportsAudio: true } : {}),
         ...(supportsFirstLastFrame ? { supportsFirstLastFrame: true } : {}),
         ...(model.requires_public_input_url !== undefined ? { requiresPublicInputURL: model.requires_public_input_url } : {}),
+        ...(taskQueryEndpoint ? { taskQueryEndpoint } : {}),
         parameterSchema: {},
       }
     })
@@ -724,6 +978,136 @@ export function findCinemaVideoProviderInputCombinationForMode(
   return null
 }
 
+function generationControlKey(input: CinemaProviderInputSpec) {
+  return input.apiField?.trim() || input.role
+}
+
+function generationControlLabel(input: CinemaProviderInputSpec) {
+  const explicitLabel = input.label?.trim()
+  if (explicitLabel) return explicitLabel
+  return generationControlKey(input)
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function generationControlBase(input: CinemaProviderInputSpec) {
+  return {
+    key: generationControlKey(input),
+    label: generationControlLabel(input),
+    required: input.required,
+    ...(input.visibleWhen ? { visibleWhen: input.visibleWhen } : {}),
+    ...(input.disabledWhen ? { disabledWhen: input.disabledWhen } : {}),
+  }
+}
+
+function generationControlForInput(input: CinemaProviderInputSpec): GenerationControl {
+  const base = generationControlBase(input)
+  const uiControl = input.uiControl
+  const modality = input.modality.trim().toLowerCase()
+  const options = input.options?.filter((option) =>
+    typeof option === "string" || typeof option === "number" || typeof option === "boolean"
+  )
+
+  if (uiControl === "textarea" || input.role === "prompt" || base.key === "prompt" || modality === "text") {
+    return {
+      ...base,
+      type: "prompt",
+      ...(input.maxLength ? { maxLength: input.maxLength } : {}),
+      ...(typeof input.default === "string" ? { defaultValue: input.default } : {}),
+    }
+  }
+
+  if (uiControl === "image-list" || modality === "image") {
+    return {
+      ...base,
+      type: "image-list",
+      minCount: input.minCount,
+      ...(input.maxCount !== undefined ? { maxCount: input.maxCount } : {}),
+      ...(input.supportedFormats ? { supportedFormats: input.supportedFormats } : {}),
+      ...(input.maxFileSizeMB !== undefined ? { maxFileSizeMB: input.maxFileSizeMB } : {}),
+    }
+  }
+
+  if ((uiControl === "select" || uiControl === "segmented" || options) && options && options.length > 0) {
+    return {
+      ...base,
+      type: "select",
+      options,
+      ...(input.labels ? { labels: input.labels } : {}),
+      ...("default" in input ? { defaultValue: input.default } : {}),
+    }
+  }
+
+  if (uiControl === "number" || input.min !== undefined || input.max !== undefined) {
+    return {
+      ...base,
+      type: "number",
+      ...(input.min !== undefined ? { min: input.min } : {}),
+      ...(input.max !== undefined ? { max: input.max } : {}),
+      ...(typeof input.default === "number" ? { defaultValue: input.default } : {}),
+    }
+  }
+
+  if (uiControl === "switch" || typeof input.default === "boolean") {
+    return {
+      ...base,
+      type: "boolean",
+      ...(typeof input.default === "boolean" ? { defaultValue: input.default } : {}),
+    }
+  }
+
+  return {
+    ...base,
+    type: "json",
+    ...("default" in input ? { defaultValue: input.default } : {}),
+  }
+}
+
+function generationFormOutput(model: CinemaVideoProviderManifest["models"][number]): GenerationFormSpec["output"] {
+  return model.modalities?.output.includes("image") || model.modes.some((mode) => mode.endsWith("-image") || mode === "image-edit" || mode === "omni-image")
+    ? "image"
+    : "video"
+}
+
+export function normalizeGenerationFormSpec(
+  provider: CinemaVideoProviderManifest,
+  model: CinemaVideoProviderManifest["models"][number],
+  combination: CinemaProviderInputCombination,
+): GenerationFormSpec {
+  const controls = [...combination.inputs]
+    .sort((a, b) => (a.uiOrder ?? Number.MAX_SAFE_INTEGER) - (b.uiOrder ?? Number.MAX_SAFE_INTEGER))
+    .map((input) => generationControlForInput(input))
+
+  return {
+    providerID: provider.id,
+    modelID: cinemaVideoProviderModelSelectionID(model),
+    mode: combination.mode,
+    output: generationFormOutput(model),
+    controls,
+  }
+}
+
+function normalizedGenerationFormSpecsForModel(
+  provider: CinemaVideoProviderManifest,
+  model: CinemaVideoProviderManifest["models"][number],
+) {
+  return (model.inputCombinations ?? [])
+    .filter((combination) => combination.inputs.length > 0)
+    .map((combination) => normalizeGenerationFormSpec(provider, model, combination))
+}
+
+function manifestWithNormalizedGenerationFormSpecs(manifest: CinemaVideoProviderManifest): CinemaVideoProviderManifest {
+  return {
+    ...manifest,
+    models: manifest.models.map((model) => ({
+      ...model,
+      formSpecs: model.formSpecs.length > 0 ? model.formSpecs : normalizedGenerationFormSpecsForModel(manifest, model),
+    })),
+  }
+}
+
 function unregisterCinemaVideoProviderAdapter(providerID: string) {
   delete providerAdapters[providerID]
 }
@@ -745,7 +1129,7 @@ export function setCinemaVideoProviderAdapterForTest(providerID: string, adapter
   }
 }
 
-type KlingAIEndpointKind = "text2video" | "image2video" | "image-generation"
+type KlingAIEndpointKind = "text2video" | "image2video" | "image-generation" | "omni-image"
 type KlingAIRequestMethod = "GET" | "POST"
 
 type KlingAIVideoResult = {
@@ -957,13 +1341,20 @@ function defaultBaseURLForProvider(manifest: CinemaVideoProviderManifest) {
 }
 
 function klingAIEndpointPath(kind: KlingAIEndpointKind, taskID?: string) {
-  const basePath = kind === "image-generation" ? "v1/images/generations" : `v1/videos/${kind}`
+  const basePath = kind === "image-generation"
+    ? "v1/images/generations"
+    : kind === "omni-image"
+      ? "v1/images/omni-image"
+      : `v1/videos/${kind}`
   if (!taskID) return basePath
   return `${basePath}/${encodeURIComponent(taskID)}`
 }
 
 function klingAIEndpointKindFromPath(endpointPath: string): KlingAIEndpointKind | undefined {
   const normalized = endpointPath.replace(/^\/+/, "").toLowerCase()
+  if (normalized.includes("images/omni-image") || normalized.includes("omni-image")) {
+    return "omni-image"
+  }
   if (
     normalized.includes("image-generation") ||
     normalized.includes("images/generations") ||
@@ -1010,6 +1401,9 @@ function klingAILegacyEndpointAliasKind(endpointPath: string): KlingAIEndpointKi
     case "image-to-image":
     case "image-edit":
       return "image-generation"
+    case "omni-image":
+    case "images/omni-image":
+      return "omni-image"
     default:
       return undefined
   }
@@ -1018,6 +1412,15 @@ function klingAILegacyEndpointAliasKind(endpointPath: string): KlingAIEndpointKi
 function klingAITaskInputEndpoint(task: CinemaGenerationTask) {
   const endpoint = task.input.parameters.endpoint
   return isRecord(endpoint) ? endpoint : undefined
+}
+
+function klingAITaskInputQueryEndpoint(task: CinemaGenerationTask) {
+  const direct = task.input.parameters.taskQueryEndpoint
+  if (isRecord(direct)) return direct
+
+  const endpoint = klingAITaskInputEndpoint(task)
+  const nested = endpoint?.taskQuery ?? endpoint?.task_query
+  return isRecord(nested) ? nested : undefined
 }
 
 function klingAIRequestMethodFromEndpoint(endpoint: Record<string, unknown> | undefined): KlingAIRequestMethod | undefined {
@@ -1035,17 +1438,51 @@ function klingAICreateEndpointForTask(task: CinemaGenerationTask) {
     kind,
     method: klingAIRequestMethodFromEndpoint(endpoint) ?? "POST",
     path: endpointPath ? normalizedKlingAIEndpointPath(endpointPath, kind) : klingAIEndpointPath(kind),
+    taskQueryEndpoint: klingAITaskInputQueryEndpoint(task),
   }
 }
 
-function klingAIRefreshEndpointPathForTask(task: CinemaGenerationTask, kind: KlingAIEndpointKind, taskID: string) {
-  const endpointPath = stringValue(task.providerTaskRef?.endpoint)
-  if (!endpointPath) return klingAIEndpointPath(kind, taskID)
-  const normalized = endpointPath.trim().replace(/\/+$/, "")
-  if (!normalized) return klingAIEndpointPath(kind, taskID)
-  if (isKlingAITurboEndpointPath(normalized)) return klingAITurboTaskQueryEndpointPath(normalized, taskID)
+function taskQueryEndpointFromProviderRef(task: CinemaGenerationTask) {
+  const endpoint = task.providerTaskRef?.taskQueryEndpoint ?? task.providerTaskRef?.task_query_endpoint
+  return isRecord(endpoint) ? endpoint : undefined
+}
+
+function renderKlingAITaskQueryEndpoint(endpoint: Record<string, unknown>, taskID: string) {
+  const rawPath = stringValue(endpoint.path) ?? stringValue(endpoint.url)
+  if (!rawPath) return undefined
   const encodedTaskID = encodeURIComponent(taskID)
+  const rendered = rawPath
+    .trim()
+    .replace(/\{taskID\}|\{task_id\}/g, encodedTaskID)
+  if (!rendered) return undefined
+  if (rendered !== rawPath.trim()) return rendered
+
+  const normalized = rendered.replace(/\/+$/, "")
   return normalized.endsWith(`/${encodedTaskID}`) ? normalized : `${normalized}/${encodedTaskID}`
+}
+
+function klingAIRefreshEndpointForTask(task: CinemaGenerationTask, kind: KlingAIEndpointKind, taskID: string) {
+  const queryEndpoint = taskQueryEndpointFromProviderRef(task) ?? klingAITaskInputQueryEndpoint(task)
+  const queryEndpointPath = queryEndpoint ? renderKlingAITaskQueryEndpoint(queryEndpoint, taskID) : undefined
+  if (queryEndpointPath) {
+    return {
+      method: klingAIRequestMethodFromEndpoint(queryEndpoint) ?? "GET",
+      path: queryEndpointPath,
+    }
+  }
+
+  const endpointPath = stringValue(task.providerTaskRef?.endpoint)
+  if (!endpointPath) return { method: "GET" as const, path: klingAIEndpointPath(kind, taskID) }
+  const normalized = endpointPath.trim().replace(/\/+$/, "")
+  if (!normalized) return { method: "GET" as const, path: klingAIEndpointPath(kind, taskID) }
+  if (isKlingAITurboEndpointPath(normalized)) {
+    return { method: "GET" as const, path: klingAITurboTaskQueryEndpointPath(normalized, taskID) }
+  }
+  const encodedTaskID = encodeURIComponent(taskID)
+  return {
+    method: "GET" as const,
+    path: normalized.endsWith(`/${encodedTaskID}`) ? normalized : `${normalized}/${encodedTaskID}`,
+  }
 }
 
 function isKlingAITurboEndpointPath(endpointPath: string) {
@@ -1496,7 +1933,7 @@ async function downloadKlingAIVideoAssets(input: {
 
 function klingAIEndpointKindForTask(task: CinemaGenerationTask): KlingAIEndpointKind {
   const refKind = stringValue(task.providerTaskRef?.kind)
-  if (refKind === "text2video" || refKind === "image2video" || refKind === "image-generation") return refKind
+  if (refKind === "text2video" || refKind === "image2video" || refKind === "image-generation" || refKind === "omni-image") return refKind
   const refEndpointKind = stringValue(task.providerTaskRef?.endpoint)
     ? klingAIEndpointKindFromPath(String(task.providerTaskRef?.endpoint))
     : undefined
@@ -1516,25 +1953,27 @@ function klingAIEndpointKindForMode(mode: CinemaProviderModelMode): KlingAIEndpo
       return "image2video"
     case "text-to-image":
       return "image-generation"
+    case "omni-image":
+      return "omni-image"
     default:
       throw new ApiError(400, "CINEMA_KLINGAI_MODE_UNSUPPORTED", `KlingAI adapter does not support mode '${mode}'.`)
   }
 }
 
-function klingAITaskRefFor(task: CinemaGenerationTask, taskID: string, kind: KlingAIEndpointKind, endpointPath: string) {
+function klingAITaskRefFor(
+  task: CinemaGenerationTask,
+  taskID: string,
+  endpoint: ReturnType<typeof klingAICreateEndpointForTask>,
+) {
   const existingRef = isRecord(task.providerTaskRef) ? task.providerTaskRef : {}
   return {
     ...existingRef,
     providerID: task.providerID,
     taskID,
-    kind,
-    endpoint: endpointPath,
+    kind: endpoint.kind,
+    endpoint: endpoint.path,
+    ...(endpoint.taskQueryEndpoint ? { taskQueryEndpoint: endpoint.taskQueryEndpoint } : {}),
   }
-}
-
-function klingAICallbackURLForTask(task: CinemaGenerationTask) {
-  const callback = isRecord(task.providerTaskRef?.callback) ? task.providerTaskRef.callback : undefined
-  return stringValue(callback?.url)
 }
 
 async function applyKlingAITaskResponse(input: {
@@ -1569,7 +2008,7 @@ async function applyKlingAITaskResponse(input: {
     })
   }
 
-  if (input.task.mode === "text-to-image") {
+  if (input.task.mode === "text-to-image" || input.task.mode === "omni-image") {
     const images = klingAIImagesFromResponse(input.response)
     if (images.length === 0) {
       return taskUpdated(input.task, {
@@ -1739,6 +2178,43 @@ function appendOptionalPayloadObject(
   }
 }
 
+function stringArrayValue(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return value.map((item) => stringValue(item)).filter((item): item is string => Boolean(item))
+}
+
+function parameterStringList(parameters: Record<string, unknown>, ...keys: string[]) {
+  const values: string[] = []
+  for (const key of keys) {
+    values.push(...stringArrayValue(parameters[key]))
+    const single = stringValue(parameters[key])
+    if (single) values.push(single)
+  }
+  return normalizeStringList(values)
+}
+
+function klingAIElementListInput(parameters: Record<string, unknown>) {
+  const values = [parameters.element_list, parameters.elementList]
+  for (const value of values) {
+    if (!Array.isArray(value)) continue
+    const items: Record<string, unknown>[] = []
+    for (const item of value) {
+      if (isRecord(item)) {
+        items.push(item)
+        continue
+      }
+      if (typeof item === "number" && Number.isInteger(item) && item > 0) {
+        items.push({ element_id: item })
+        continue
+      }
+      const elementID = stringValue(item)
+      if (elementID && /^\d+$/.test(elementID)) items.push({ element_id: Number(elementID) })
+    }
+    if (items.length > 0) return items
+  }
+  return []
+}
+
 function klingAIExternalTaskID(taskID: string) {
   return safeKlingAISegment(taskID).slice(0, 64)
 }
@@ -1808,6 +2284,102 @@ async function klingAISourceImageInput(root: string, parameters: Record<string, 
   })
 }
 
+async function klingAIOmniImageListItemInput(root: string, value: string) {
+  const trimmed = value.trim()
+  const isRemoteURL = /^https?:\/\//i.test(trimmed)
+  return await klingAIImageInput(root, isRemoteURL ? { imageURL: trimmed } : { imagePath: trimmed }, {
+    urlKeys: ["imageURL"],
+    pathKeys: ["imagePath"],
+    missingCode: "CINEMA_KLINGAI_OMNI_IMAGE_REQUIRED",
+    missingMessage: "KlingAI Omni image input is missing.",
+    invalidURLMessage: "KlingAI Omni image URL must be a valid absolute URL.",
+    invalidSchemeMessage: "KlingAI Omni image URL must use http or https.",
+    notFoundMessage: "KlingAI Omni image asset was not found.",
+    invalidPathMessage: "KlingAI Omni image path must point to a file.",
+    tooLargeMessage: "KlingAI Omni image is too large.",
+  })
+}
+
+async function klingAIExplicitImageListInput(root: string, parameters: Record<string, unknown>) {
+  const values = [parameters.image_list, parameters.imageList]
+  for (const value of values) {
+    if (!Array.isArray(value)) continue
+    const items: Array<{ image: string }> = []
+    for (const item of value) {
+      const directImage = stringValue(item)
+      if (directImage) {
+        items.push({ image: await klingAIOmniImageListItemInput(root, directImage) })
+        continue
+      }
+      if (!isRecord(item)) continue
+      const image = parameterString(item, "image", "url", "imageURL", "sourceImageURL", "path", "imagePath", "sourceImagePath")
+      if (image) items.push({ image: await klingAIOmniImageListItemInput(root, image) })
+    }
+    if (items.length > 0) return items
+  }
+  return []
+}
+
+async function klingAIOmniImageListInput(root: string, parameters: Record<string, unknown>) {
+  const explicit = await klingAIExplicitImageListInput(root, parameters)
+  if (explicit.length > 0) return explicit.slice(0, 10)
+
+  const urlInputs = parameterStringList(
+    parameters,
+    "imageListURLs",
+    "image_list_urls",
+    "referenceImageURLs",
+    "referenceImageURL",
+    "sourceImageURLs",
+    "sourceImageURL",
+    "imageURLs",
+    "imageURL",
+  )
+  const pathInputs = parameterStringList(
+    parameters,
+    "imageListPaths",
+    "image_list_paths",
+    "referenceImagePaths",
+    "referenceImagePath",
+    "sourceImagePaths",
+    "sourceImagePath",
+    "imagePaths",
+    "imagePath",
+  )
+  const images: Array<{ image: string }> = []
+  for (const imageURL of urlInputs) {
+    images.push({
+      image: await klingAIImageInput(root, { imageURL }, {
+        urlKeys: ["imageURL"],
+        pathKeys: [],
+        missingCode: "CINEMA_KLINGAI_OMNI_IMAGE_REQUIRED",
+        missingMessage: "KlingAI Omni image input is missing.",
+        invalidURLMessage: "KlingAI Omni image URL must be a valid absolute URL.",
+        invalidSchemeMessage: "KlingAI Omni image URL must use http or https.",
+        notFoundMessage: "KlingAI Omni image asset was not found.",
+        invalidPathMessage: "KlingAI Omni image path must point to a file.",
+        tooLargeMessage: "KlingAI Omni image is too large.",
+      }),
+    })
+  }
+  for (const imagePath of pathInputs) {
+    images.push({
+      image: await klingAIImageInput(root, { imagePath }, {
+        urlKeys: [],
+        pathKeys: ["imagePath"],
+        missingCode: "CINEMA_KLINGAI_OMNI_IMAGE_REQUIRED",
+        missingMessage: "KlingAI Omni image input is missing.",
+        invalidURLMessage: "KlingAI Omni image URL must be a valid absolute URL.",
+        invalidSchemeMessage: "KlingAI Omni image URL must use http or https.",
+        notFoundMessage: "KlingAI Omni image asset was not found.",
+        invalidPathMessage: "KlingAI Omni image path must point to a file.",
+        tooLargeMessage: "KlingAI Omni image is too large.",
+      }),
+    })
+  }
+  return images.slice(0, 10)
+}
+
 async function klingAIStartFrameInput(root: string, parameters: Record<string, unknown>) {
   return await klingAIImageInput(root, parameters, {
     urlKeys: ["startFrameURL", "startImageURL", "sourceImageURL", "imageURL"],
@@ -1845,14 +2417,17 @@ function hasKlingAIImageInput(parameters: Record<string, unknown>) {
   )
 }
 
-function hasKlingAIStartEndFrameInput(parameters: Record<string, unknown>) {
-  const hasStartFrame = Boolean(
+function hasKlingAIStartFrameInput(parameters: Record<string, unknown>) {
+  return Boolean(
     stringValue(parameters.startFrameURL) ??
     stringValue(parameters.startImageURL) ??
     stringValue(parameters.startFramePath) ??
     stringValue(parameters.startImagePath)
   )
-  const hasEndFrame = Boolean(
+}
+
+function hasKlingAIEndFrameInput(parameters: Record<string, unknown>) {
+  return Boolean(
     stringValue(parameters.endFrameURL) ??
     stringValue(parameters.endImageURL) ??
     stringValue(parameters.imageTailURL) ??
@@ -1862,6 +2437,11 @@ function hasKlingAIStartEndFrameInput(parameters: Record<string, unknown>) {
     stringValue(parameters.imageTailPath) ??
     stringValue(parameters.image_tail_path)
   )
+}
+
+function hasKlingAIStartEndFrameInput(parameters: Record<string, unknown>) {
+  const hasStartFrame = hasKlingAIStartFrameInput(parameters)
+  const hasEndFrame = hasKlingAIEndFrameInput(parameters)
   return hasStartFrame && hasEndFrame
 }
 
@@ -1910,7 +2490,11 @@ async function klingAITurboTaskPayload(input: ProviderAdapterCreateInput, kind: 
         text: input.task.input.prompt,
       })
     }
-    contents.push(klingAITurboImageContent(await klingAISourceImageInput(input.root, parameters)))
+    contents.push(klingAITurboImageContent(
+      await (hasKlingAIStartFrameInput(parameters)
+        ? klingAIStartFrameInput(input.root, parameters)
+        : klingAISourceImageInput(input.root, parameters))
+    ))
     return {
       contents,
       settings: klingAITurboSettings(parameters, { includeAspectRatio: false }),
@@ -1929,33 +2513,48 @@ async function klingAITaskPayload(input: ProviderAdapterCreateInput, kind: Kling
   if (endpointPath && isKlingAITurboEndpointPath(endpointPath)) return await klingAITurboTaskPayload(input, kind)
 
   const parameters = input.task.input.parameters
+  const isImageKind = kind === "image-generation" || kind === "omni-image"
+  const isVideoKind = kind === "text2video" || kind === "image2video"
+  const omniResultType = kind === "omni-image" ? parameterString(parameters, "resultType", "result_type") : undefined
   const payload: Record<string, unknown> = {
     model_name: input.task.modelID,
-    prompt: kind === "image-generation" ? promptWithStyle(input.task.input.prompt, parameters) : input.task.input.prompt,
+    prompt: isImageKind ? promptWithStyle(input.task.input.prompt, parameters) : input.task.input.prompt,
     external_task_id: klingAIExternalTaskID(input.task.id),
   }
-  const callbackURL = klingAICallbackURLForTask(input.task)
-  if (callbackURL) payload.callback_url = callbackURL
 
   appendOptionalPayloadString(payload, "aspect_ratio", parameters, "aspectRatio", "aspect_ratio")
   if (kind === "image-generation" && !payload.aspect_ratio) {
     const aspectRatio = aspectRatioFromSize(parameterString(parameters, "size"))
     if (aspectRatio) payload.aspect_ratio = aspectRatio
   }
-  appendOptionalPayloadString(payload, "duration", parameters, "duration")
-  appendOptionalPayloadString(payload, "negative_prompt", parameters, "negativePrompt", "negative_prompt")
-  appendOptionalPayloadNumber(payload, "cfg_scale", parameters, "cfgScale", "cfg_scale")
-  if (kind === "image-generation") appendOptionalPayloadString(payload, "resolution", parameters, "resolution")
-  appendOptionalPayloadString(payload, "sound", parameters, "sound")
-  appendOptionalPayloadObject(payload, "camera_control", parameters, "cameraControl", "camera_control")
+  if (isVideoKind) appendOptionalPayloadString(payload, "duration", parameters, "duration")
+  if (kind !== "omni-image") {
+    appendOptionalPayloadString(payload, "negative_prompt", parameters, "negativePrompt", "negative_prompt")
+    appendOptionalPayloadNumber(payload, "cfg_scale", parameters, "cfgScale", "cfg_scale")
+  }
+  if (isImageKind) appendOptionalPayloadString(payload, "resolution", parameters, "resolution")
+  if (isVideoKind) {
+    appendOptionalPayloadString(payload, "sound", parameters, "sound")
+    appendOptionalPayloadObject(payload, "camera_control", parameters, "cameraControl", "camera_control")
+  }
   appendOptionalPayloadObject(payload, "watermark_info", parameters, "watermarkInfo", "watermark_info")
+  if (kind === "omni-image") {
+    if (omniResultType) payload.result_type = omniResultType
+    if (omniResultType === "series") appendOptionalPayloadValue(payload, "series_amount", parameters, "seriesAmount", "series_amount")
+    const elementList = klingAIElementListInput(parameters)
+    if (elementList.length > 0) payload.element_list = elementList
+    const imageList = await klingAIOmniImageListInput(input.root, parameters)
+    if (imageList.length > 0) payload.image_list = imageList
+  }
   const count = Number(parameters.count)
-  if (Number.isInteger(count) && count > 0) payload.n = count
-  if (kind !== "image-generation") payload.mode = klingAIQualityMode(parameters)
+  if (Number.isInteger(count) && count > 0 && !(kind === "omni-image" && omniResultType === "series")) payload.n = count
+  if (isVideoKind) payload.mode = klingAIQualityMode(parameters)
 
   if (hasKlingAIStartEndFrameInput(parameters)) {
     payload.image = await klingAIStartFrameInput(input.root, parameters)
     payload.image_tail = await klingAIEndFrameInput(input.root, parameters)
+  } else if (kind === "image2video" && hasKlingAIStartFrameInput(parameters)) {
+    payload.image = await klingAIStartFrameInput(input.root, parameters)
   } else if (kind === "image2video" || (kind === "image-generation" && hasKlingAIImageInput(parameters))) {
     payload.image = await klingAISourceImageInput(input.root, parameters)
   }
@@ -1988,7 +2587,7 @@ const KlingAIProviderAdapter: ProviderAdapter = {
     }
 
     const task = taskUpdated(input.task, {
-      providerTaskRef: klingAITaskRefFor(input.task, providerTaskID, endpoint.kind, endpoint.path),
+      providerTaskRef: klingAITaskRefFor(input.task, providerTaskID, endpoint),
     })
     return await applyKlingAITaskResponse({
       root: input.root,
@@ -2011,7 +2610,8 @@ const KlingAIProviderAdapter: ProviderAdapter = {
     }
 
     const kind = klingAIEndpointKindForTask(input.task)
-    const response = await requestKlingAI(input.task.providerID, klingAIRefreshEndpointPathForTask(input.task, kind, providerTaskID))
+    const endpoint = klingAIRefreshEndpointForTask(input.task, kind, providerTaskID)
+    const response = await requestKlingAI(input.task.providerID, endpoint.path, { method: endpoint.method })
     return await applyKlingAITaskResponse({
       root: input.root,
       task: input.task,
@@ -2154,10 +2754,11 @@ async function providerRuntimeFor(manifest: CinemaVideoProviderManifest): Promis
 }
 
 async function videoProviderFor(manifest: CinemaVideoProviderManifest): Promise<CinemaVideoProvider> {
+  const runtimeManifest = manifestWithNormalizedGenerationFormSpecs(manifest)
   const runtime = await providerRuntimeFor(manifest)
   return {
-    manifest,
-    auth: await providerAuthStateFor(manifest),
+    manifest: runtimeManifest,
+    auth: await providerAuthStateFor(runtimeManifest),
     ...(runtime ? { runtime } : {}),
   }
 }

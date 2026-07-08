@@ -27,6 +27,7 @@ import {
   type CinemaCustomApiOutput,
   type CinemaCustomApiRunResult,
   type CinemaEventsResult,
+  type GenerationFormSpec,
   type CinemaNodeType,
   type CinemaOpenLink,
   type CinemaProjectEvent,
@@ -163,8 +164,30 @@ const VIDEO_MIME_BY_EXTENSION: Record<string, string> = {
   ".m4v": "video/mp4",
   ".webm": "video/webm",
 }
-const CINEMA_IMAGE_GENERATION_MODE = "text-to-image" as const
-const CINEMA_CALLBACK_BASE_URL_ENV = "CINEMA_CALLBACK_BASE_URL"
+const CINEMA_IMAGE_GENERATION_MODES = ["text-to-image", "omni-image"] as const
+type CinemaImageGenerationMode = typeof CINEMA_IMAGE_GENERATION_MODES[number]
+
+function isCinemaImageGenerationMode(mode: string): mode is CinemaImageGenerationMode {
+  return (CINEMA_IMAGE_GENERATION_MODES as readonly string[]).includes(mode)
+}
+
+const CINEMA_VIDEO_GENERATION_MODES = new Set([
+  "text-to-video",
+  "image-to-video",
+  "frames-to-video",
+  "reference-to-video",
+  "video-to-video",
+  "edit",
+  "extend",
+  "motion-control",
+])
+
+function isCinemaVideoGenerationMode(mode: string) {
+  const normalized = mode.trim().toLowerCase()
+  return CINEMA_VIDEO_GENERATION_MODES.has(normalized) ||
+    normalized.includes("-to-video") ||
+    normalized.endsWith("-video")
+}
 
 const nowISO = () => new Date().toISOString()
 const log = Log.create({ service: "cinema" })
@@ -177,8 +200,8 @@ function stringValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined
 }
 
-function compactErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
+function numberValue(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined
 }
 
 function safeReadProject(projectID: string) {
@@ -418,69 +441,6 @@ function taskWithProgress(task: CinemaGenerationTask): CinemaGenerationTask {
   }
 }
 
-function callbackBaseURL() {
-  const value = getProcessEnvValue(CINEMA_CALLBACK_BASE_URL_ENV)?.trim()
-  if (!value) return undefined
-
-  let url: URL
-  try {
-    url = new URL(value.endsWith("/") ? value : `${value}/`)
-  } catch {
-    throw new ApiError(500, "CINEMA_CALLBACK_BASE_URL_INVALID", `${CINEMA_CALLBACK_BASE_URL_ENV} must be a valid absolute URL.`)
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new ApiError(500, "CINEMA_CALLBACK_BASE_URL_INVALID", `${CINEMA_CALLBACK_BASE_URL_ENV} must use http or https.`)
-  }
-  return url
-}
-
-function callbackURLForTask(task: CinemaGenerationTask, token: string) {
-  const baseURL = callbackBaseURL()
-  if (!baseURL) return undefined
-
-  return new URL(
-    [
-      "api",
-      "cinema",
-      "projects",
-      encodeURIComponent(task.projectID),
-      "provider-callbacks",
-      encodeURIComponent(task.providerID),
-      encodeURIComponent(task.id),
-      encodeURIComponent(token),
-    ].join("/"),
-    baseURL,
-  ).toString()
-}
-
-function readProviderCallbackRef(task: CinemaGenerationTask) {
-  const callback = isRecord(task.providerTaskRef?.callback) ? task.providerTaskRef.callback : undefined
-  const token = stringValue(callback?.token)
-  const url = stringValue(callback?.url)
-  return token ? { token, url } : undefined
-}
-
-function taskWithProviderCallback(task: CinemaGenerationTask, createdAt: string): CinemaGenerationTask {
-  const existingRef = isRecord(task.providerTaskRef) ? task.providerTaskRef : {}
-  const existingCallback = isRecord(existingRef.callback) ? existingRef.callback : {}
-  const token = stringValue(existingCallback.token) ?? `${randomUUID()}${randomUUID()}`.replace(/-/g, "")
-  const url = callbackURLForTask(task, token)
-  if (!url) return task
-
-  return {
-    ...task,
-    providerTaskRef: {
-      ...existingRef,
-      callback: {
-        ...existingCallback,
-        token,
-        url,
-        createdAt: stringValue(existingCallback.createdAt) ?? createdAt,
-      },
-    },
-  }
-}
-
 function textModelValue(input: { providerID: string; id: string }) {
   return `${input.providerID}/${input.id}`
 }
@@ -544,14 +504,18 @@ function cinemaProviderInputCombinationParameters(
     mode,
     stringValue(parameters.inputCombinationMode),
   )
+  const taskQueryEndpoint = combination?.endpoint?.taskQuery ?? model.taskQueryEndpoint
   return {
     ...(combination ? { inputCombinationMode: combination.mode } : {}),
     ...(combination?.endpoint ? { endpoint: combination.endpoint } : {}),
+    ...(taskQueryEndpoint ? { taskQueryEndpoint } : {}),
   }
 }
 
 function toCinemaProviderImageModel(provider: CinemaGenerationProvider, model: CinemaGenerationProviderModel): CinemaImageModel {
   const modelID = CinemaProviderRuntime.cinemaVideoProviderModelSelectionID(model)
+  const mode = cinemaProviderModelImageGenerationMode(provider, model)
+  const formSpec = mode ? model.formSpecs.find((spec) => spec.mode === mode) : undefined
   return {
     value: textModelValue({ providerID: provider.manifest.id, id: modelID }),
     providerID: provider.manifest.id,
@@ -562,6 +526,7 @@ function toCinemaProviderImageModel(provider: CinemaGenerationProvider, model: C
     providerLabel: provider.manifest.name,
     available: true,
     supportsImageInput: cinemaProviderModelSupportsImageInput(model),
+    ...(formSpec ? { formSpec } : {}),
   }
 }
 
@@ -573,16 +538,37 @@ function isImageOutputModel(model: PublicModel) {
   return model.available && model.capabilities.output.image
 }
 
+function providerModelOutputModalities(model: CinemaGenerationProviderModel) {
+  return model.modalities?.output.map((item) => item.trim().toLowerCase()).filter(Boolean) ?? []
+}
+
 function providerModelOutputsImage(model: CinemaGenerationProviderModel) {
-  if (model.modalities?.output.includes("image")) return true
+  const outputModalities = providerModelOutputModalities(model)
+  if (outputModalities.length > 0) return outputModalities.includes("image")
   return model.modes.some((mode) => mode.endsWith("-image") || mode === "image-edit")
+}
+
+function providerModelOutputsVideo(model: CinemaGenerationProviderModel) {
+  const outputModalities = providerModelOutputModalities(model)
+  if (outputModalities.length > 0) return outputModalities.includes("video")
+  return model.modes.some(isCinemaVideoGenerationMode) ||
+    (model.inputCombinations ?? []).some((combination) => isCinemaVideoGenerationMode(combination.mode))
+}
+
+function cinemaProviderModelImageGenerationMode(
+  provider: CinemaGenerationProvider,
+  model: CinemaGenerationProviderModel,
+): CinemaImageGenerationMode | null {
+  return CINEMA_IMAGE_GENERATION_MODES.find((mode) =>
+    model.modes.includes(mode) &&
+    CinemaProviderRuntime.cinemaVideoProviderModelRuntimeSupportsMode(provider.manifest.id, model, mode)
+  ) ?? null
 }
 
 function isAvailableCinemaProviderImageModel(provider: CinemaGenerationProvider, model: CinemaGenerationProviderModel) {
   return provider.auth.connected &&
     provider.runtime?.adapterAvailable === true &&
-    CinemaProviderRuntime.cinemaVideoProviderModelRuntimeSupportsMode(provider.manifest.id, model, CINEMA_IMAGE_GENERATION_MODE) &&
-    model.modes.includes(CINEMA_IMAGE_GENERATION_MODE) &&
+    cinemaProviderModelImageGenerationMode(provider, model) !== null &&
     providerModelOutputsImage(model)
 }
 
@@ -596,6 +582,18 @@ function findCinemaImageModel(models: CinemaImageModel[], value: string | null |
   const parsed = parseTextModelValue(value)
   if (!parsed) return null
   return models.find((model) => model.value === parsed.value) ?? null
+}
+
+function generationFormDefaultParameters(formSpec: GenerationFormSpec | undefined) {
+  const parameters: Record<string, unknown> = {}
+  if (!formSpec) return parameters
+
+  for (const control of formSpec.controls) {
+    if (!("defaultValue" in control)) continue
+    if (control.defaultValue === undefined) continue
+    parameters[control.key] = control.defaultValue
+  }
+  return parameters
 }
 
 function normalizeImagePrompt(prompt: string, style?: string) {
@@ -2140,20 +2138,19 @@ async function resolveCinemaImageGenerationModel(projectID: string, requestedMod
   }
 
   const provider = await CinemaProviderRuntime.getCinemaVideoProvider(selected.providerID)
-  const model = CinemaProviderRuntime.findCinemaVideoProviderModelForMode(
-    provider.manifest,
-    selected.modelID,
-    CINEMA_IMAGE_GENERATION_MODE,
-  )
-  if (!model || !isAvailableCinemaProviderImageModel(provider, model)) {
+  const model = CINEMA_IMAGE_GENERATION_MODES
+    .map((mode) => CinemaProviderRuntime.findCinemaVideoProviderModelForMode(provider.manifest, selected.modelID, mode))
+    .find((item): item is CinemaGenerationProviderModel => Boolean(item && isAvailableCinemaProviderImageModel(provider, item)))
+  const mode = model ? cinemaProviderModelImageGenerationMode(provider, model) : null
+  if (!model || !mode) {
     throw new ApiError(
       400,
       "CINEMA_IMAGE_MODEL_NOT_CAPABLE",
-      `Model '${selected.value}' does not support text-to-image generation through a connected generation provider.`,
+      `Model '${selected.value}' does not support image generation through a connected generation provider.`,
     )
   }
 
-  return { provider, model, imageModel: selected }
+  return { provider, model, imageModel: selected, mode }
 }
 
 async function saveCinemaGeneratedImageAssets(input: {
@@ -2249,17 +2246,23 @@ export async function createCinemaImageGeneration(
   }
 
   try {
+    const { provider, model, imageModel, mode } = await resolveCinemaImageGenerationModel(projectID, input.model)
+    const formSpec = imageModel.formSpec
     const defaults = await cinemaImageRuntimeDependencies.getImageGenerationSettings(projectID)
-    const count = input.count ?? defaults.default_count ?? 1
-    const size = input.size ?? defaults.default_size
-    if (count < 1 || count > 4) {
-      throw new ApiError(400, "CINEMA_IMAGE_COUNT_INVALID", "Image generation count must be between 1 and 4.")
+    const baseParameters: Record<string, unknown> = {
+      ...generationFormDefaultParameters(formSpec),
+      ...input.parameters,
+    }
+    const shouldApplyLegacyDefaults = !formSpec
+    const count = input.count ?? numberValue(baseParameters.count) ?? (shouldApplyLegacyDefaults ? defaults.default_count ?? 1 : undefined)
+    const size = input.size ?? stringValue(baseParameters.size) ?? (shouldApplyLegacyDefaults ? defaults.default_size : undefined)
+    if (count !== undefined && (!Number.isInteger(count) || count < 1)) {
+      throw new ApiError(400, "CINEMA_IMAGE_COUNT_INVALID", "Image generation count must be a positive integer.")
     }
     if (size && !/^\d+x\d+$/.test(size)) {
       throw new ApiError(400, "CINEMA_IMAGE_SIZE_INVALID", "Image generation size must use WIDTHxHEIGHT.")
     }
 
-    const { provider, model, imageModel } = await resolveCinemaImageGenerationModel(projectID, input.model)
     const sourceNodeIDs = uniqueNonEmptyStrings(input.sourceNodeIDs ?? [])
     const sourceTextPrompts = uniqueNonEmptyStrings(input.sourceTextPrompts ?? [])
     const sourceImagePaths = uniqueNonEmptyStrings([
@@ -2281,13 +2284,18 @@ export async function createCinemaImageGeneration(
       sourceImagePaths.map((sourceImagePath) => readCinemaImageGenerationSourceImage(root, sourceImagePath))
     )
     const parameters: Record<string, unknown> = {
+      ...baseParameters,
       ...(size ? { size } : {}),
-      count,
+      ...(count !== undefined ? { count } : {}),
       ...(input.style?.trim() ? { style: input.style.trim() } : {}),
       userPrompt: input.userPrompt?.trim() ?? prompt,
       ...(sourceTextPrompts.length > 0 ? { sourceTextPrompts } : {}),
       ...(sourceImages.length > 0
         ? {
+          image_list: sourceImages.slice(0, 10).map((sourceImage, index) => ({
+            image: sourceImage.path,
+            ...(sourceImageAssetIDs[index] ? { assetID: sourceImageAssetIDs[index] } : {}),
+          })),
           sourceImageAssetID: sourceImageAssetIDs[0],
           sourceImageAssetIDs,
           sourceImagePath: sourceImages[0]?.path,
@@ -2300,7 +2308,7 @@ export async function createCinemaImageGeneration(
     const taskInput: CreateCinemaGenerationTaskBody = {
       providerID: imageModel.providerID,
       modelID: imageModel.modelID,
-      mode: CINEMA_IMAGE_GENERATION_MODE,
+      mode,
       title: node.title,
       prompt,
       sourceNodeIDs,
@@ -2309,7 +2317,7 @@ export async function createCinemaImageGeneration(
     }
     const providerModel = CinemaProviderRuntime.assertCinemaVideoProviderModelSupports(taskInput, provider.manifest)
     const taskModelID = CinemaProviderRuntime.cinemaVideoProviderTaskModelID(providerModel)
-    const combinationParameters = cinemaProviderInputCombinationParameters(providerModel, CINEMA_IMAGE_GENERATION_MODE, parameters)
+    const combinationParameters = cinemaProviderInputCombinationParameters(providerModel, mode, parameters)
     const taskParameters = {
       ...parameters,
       ...combinationParameters,
@@ -2317,12 +2325,12 @@ export async function createCinemaImageGeneration(
       providerModelID: taskModelID,
       ...(providerModel.offeringID ? { offeringID: providerModel.offeringID } : {}),
     }
-    const task = taskWithProviderCallback(taskWithCanvasIDs({
+    const task = taskWithCanvasIDs({
       id: taskID,
       projectID,
       providerID: imageModel.providerID,
       modelID: taskModelID,
-      mode: CINEMA_IMAGE_GENERATION_MODE,
+      mode,
       title: node.title,
       status: "queued",
       createdAt,
@@ -2336,7 +2344,7 @@ export async function createCinemaImageGeneration(
       outputAssets: [],
       error: null,
       progress: progressForTaskStatus("queued", createdAt),
-    }, { createOutputNode: false }), createdAt)
+    }, { createOutputNode: false })
     const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(provider.manifest.id)
     const created = taskWithProgress(taskWithCanvasIDs(await Instance.provide({
       directory: root,
@@ -2700,14 +2708,36 @@ function resolveGenerationTaskNodeID(input: CreateCinemaGenerationTaskBody, task
   if (existingNode.type !== "video" && existingNode.type !== "image" && existingNode.type !== "generation-task") {
     throw new ApiError(409, "CINEMA_TASK_NODE_INVALID", "Generation tasks can only bind to video, image, or generation task nodes.")
   }
-  if (existingNode.type === "image" && input.mode !== CINEMA_IMAGE_GENERATION_MODE) {
-    throw new ApiError(409, "CINEMA_TASK_NODE_INVALID", "Image nodes can only bind to text-to-image generation tasks.")
+  if (existingNode.type === "image" && !isCinemaImageGenerationMode(input.mode)) {
+    throw new ApiError(409, "CINEMA_TASK_NODE_INVALID", "Image nodes can only bind to image generation tasks.")
   }
-  if (existingNode.type === "video" && input.mode === CINEMA_IMAGE_GENERATION_MODE) {
-    throw new ApiError(409, "CINEMA_TASK_NODE_INVALID", "Video nodes cannot bind to text-to-image generation tasks.")
+  if (existingNode.type === "video" && isCinemaImageGenerationMode(input.mode)) {
+    throw new ApiError(409, "CINEMA_TASK_NODE_INVALID", "Video nodes cannot bind to image generation tasks.")
   }
 
   return requestedTaskNodeID
+}
+
+function assertGenerationTaskNodeModelOutput(input: {
+  node: CinemaCanvasNode | undefined
+  model: CinemaGenerationProviderModel
+  mode: CreateCinemaGenerationTaskBody["mode"]
+  modelID: string
+}) {
+  if (input.node?.type === "video" && (!isCinemaVideoGenerationMode(input.mode) || !providerModelOutputsVideo(input.model))) {
+    throw new ApiError(
+      409,
+      "CINEMA_TASK_NODE_MODEL_INVALID",
+      `Video node '${input.node.id}' can only bind to video output models; '${input.modelID}' does not produce video output.`,
+    )
+  }
+  if (input.node?.type === "image" && (!isCinemaImageGenerationMode(input.mode) || !providerModelOutputsImage(input.model))) {
+    throw new ApiError(
+      409,
+      "CINEMA_TASK_NODE_MODEL_INVALID",
+      `Image node '${input.node.id}' can only bind to image output models; '${input.modelID}' does not produce image output.`,
+    )
+  }
 }
 
 export async function createCinemaGenerationTask(
@@ -2732,9 +2762,15 @@ export async function createCinemaGenerationTask(
   const createdAt = nowISO()
   const taskID = makeTaskID()
   const taskNodeID = resolveGenerationTaskNodeID(input, taskID, canvas)
+  assertGenerationTaskNodeModelOutput({
+    node: canvas.nodes.find((node) => node.id === taskNodeID),
+    model: providerModel,
+    mode: input.mode,
+    modelID: input.modelID,
+  })
   const createOutputNode = !canvas.nodes.some((node) => node.id === taskNodeID && (node.type === "video" || node.type === "image"))
   const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(input.providerID)
-  const task = taskWithProviderCallback(taskWithCanvasIDs({
+  const task = taskWithCanvasIDs({
     id: taskID,
     projectID,
     providerID: input.providerID,
@@ -2753,7 +2789,7 @@ export async function createCinemaGenerationTask(
     outputAssets: [],
     error: null,
     progress: progressForTaskStatus("queued", createdAt),
-  }, { createOutputNode }), createdAt)
+  }, { createOutputNode })
 
   const created = taskWithProgress(taskWithCanvasIDs(await adapter.createTask({ root, cinemaRoot, task, canvas }), { createOutputNode }))
   await writeGenerationTask(cinemaRoot, created)
@@ -2801,86 +2837,6 @@ export async function refreshCinemaGenerationTask(projectID: string, taskID: str
     data: { task: refreshed },
   })
   return refreshed
-}
-
-async function processCinemaProviderCallback(input: {
-  projectID: string
-  providerID: string
-  taskID: string
-  payload: unknown
-}) {
-  const { root, cinemaRoot } = resolveCinemaRoot(input.projectID)
-  const task = await readGenerationTaskFromRoot(cinemaRoot, input.taskID)
-  const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(input.providerID)
-  if (!adapter.receiveCallback) {
-    throw new ApiError(400, "CINEMA_CALLBACK_UNSUPPORTED", `Cinema provider '${input.providerID}' does not support callbacks.`)
-  }
-
-  const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
-  const updated = taskWithProgress(taskWithCanvasIDs(await adapter.receiveCallback({
-    root,
-    cinemaRoot,
-    task,
-    canvas,
-    payload: input.payload,
-  }), {
-    createOutputNode: !isInlineGenerationTaskNode(canvas, task),
-  }))
-  await writeGenerationTask(cinemaRoot, updated)
-  await syncTaskToCanvas(cinemaRoot, updated, `Processed provider callback for generation task '${updated.title}'.`)
-  await appendTaskAuditEvent(cinemaRoot, {
-    time: nowISO(),
-    type: "generation-task.callback_processed",
-    actor: "cinema-runtime",
-    taskID: updated.id,
-    message: `Processed provider callback for generation task '${updated.title}' (${updated.status}).`,
-    data: { task: updated },
-  })
-}
-
-async function appendProviderCallbackFailure(cinemaRoot: string, taskID: string, error: unknown) {
-  const message = compactErrorMessage(error)
-  await appendTaskAuditEvent(cinemaRoot, {
-    time: nowISO(),
-    type: "generation-task.callback_failed",
-    actor: "cinema-runtime",
-    taskID,
-    message: `Provider callback processing failed: ${message}`,
-    data: { error: message },
-  }).catch(() => undefined)
-  log.error("Cinema provider callback processing failed", { taskID, error })
-}
-
-export async function acceptCinemaProviderCallback(
-  projectID: string,
-  providerID: string,
-  taskID: string,
-  token: string,
-  payload: unknown,
-): Promise<{ accepted: true; projectID: string; providerID: string; taskID: string }> {
-  const { cinemaRoot } = resolveCinemaRoot(projectID)
-  await assertCinemaProjectInitialized(cinemaRoot)
-  const task = await readGenerationTaskFromRoot(cinemaRoot, taskID)
-  if (task.providerID !== providerID) {
-    throw new ApiError(403, "CINEMA_CALLBACK_PROVIDER_MISMATCH", "Provider callback does not match the generation task provider.")
-  }
-
-  const callback = readProviderCallbackRef(task)
-  if (!callback || callback.token !== token) {
-    throw new ApiError(403, "CINEMA_CALLBACK_TOKEN_INVALID", "Provider callback token is invalid.")
-  }
-
-  const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(providerID)
-  if (!adapter.receiveCallback) {
-    throw new ApiError(400, "CINEMA_CALLBACK_UNSUPPORTED", `Cinema provider '${providerID}' does not support callbacks.`)
-  }
-
-  queueMicrotask(() => {
-    void processCinemaProviderCallback({ projectID, providerID, taskID, payload })
-      .catch((error: unknown) => appendProviderCallbackFailure(cinemaRoot, taskID, error))
-  })
-
-  return { accepted: true, projectID, providerID, taskID }
 }
 
 export async function cancelCinemaGenerationTask(projectID: string, taskID: string): Promise<CinemaGenerationTask> {

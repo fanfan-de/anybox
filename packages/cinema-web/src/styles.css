@@ -373,18 +373,15 @@ button {
 }
 
 .cinema-text-generator-error {
-  display: -webkit-box;
+  display: block;
   min-width: 0;
   margin: 0;
-  overflow: hidden;
   color: var(--cinema-danger);
   font-size: 11px;
   font-weight: 650;
   line-height: 1.25;
-  white-space: normal;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .cinema-text-generator-footer {
@@ -689,7 +686,14 @@ button {
 .cinema-text-card-preview {
   gap: 8px;
   min-width: 0;
+  overflow: hidden;
   padding: 12px;
+}
+
+.cinema-text-card-preview.has-text {
+  display: block;
+  padding: 10px 12px;
+  place-items: stretch;
 }
 
 .cinema-text-card-preview.is-editing {
@@ -698,16 +702,40 @@ button {
 }
 
 .cinema-text-card-preview-text {
-  display: -webkit-box;
-  max-width: min(100%, 260px);
-  overflow: hidden;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  max-height: 100%;
+  overflow: auto;
+  padding: 2px 4px;
   color: var(--cinema-text-2);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.45;
+  border: 1px solid transparent;
+  border-radius: 4px;
   overflow-wrap: anywhere;
+  scrollbar-gutter: stable;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.cinema-text-card-preview.has-text .cinema-text-card-preview-text {
+  height: 100%;
+}
+
+.cinema-text-card-preview:not(.has-text) .cinema-text-card-preview-text {
+  max-width: min(100%, 260px);
+  overflow: hidden;
   text-align: center;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+}
+
+.cinema-text-card-preview-text:focus-visible {
+  color: var(--cinema-text);
+  border-color: var(--cinema-border-strong);
+  background: rgba(255, 255, 255, 0.04);
+  outline: none;
 }
 
 .cinema-text-card-editor,
@@ -959,6 +987,150 @@ button {
   opacity: 0.52;
 }
 
+.cinema-image-gen-composer .cinema-text-source-image {
+  order: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-main,
+.cinema-image-gen-composer .cinema-text-source-image-empty {
+  display: none;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  overflow: visible;
+  padding: 0;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-item {
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-thumb {
+  position: relative;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
+  color: var(--cinema-text-3);
+  border: 1px dashed var(--cinema-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-thumb:hover,
+.cinema-image-gen-composer .cinema-text-source-image-thumb:focus-visible {
+  color: var(--cinema-text);
+  border-color: var(--cinema-border-strong);
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-thumb.is-selected {
+  color: var(--cinema-text);
+  border-style: solid;
+  border-color: var(--node-accent);
+  background: var(--cinema-surface-2);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--node-accent) 52%, transparent);
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-thumb img {
+  object-fit: cover;
+  object-position: center;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-thumb:not(.is-selected) img {
+  opacity: 0.72;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-thumb.is-selected img {
+  opacity: 1;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-remove {
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  background: var(--cinema-surface-2);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-item:hover .cinema-text-source-image-remove,
+.cinema-image-gen-composer .cinema-text-source-image-item:focus-within .cinema-text-source-image-remove {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-actions {
+  display: flex;
+  align-items: center;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-add {
+  position: relative;
+  display: grid;
+  place-items: stretch;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0;
+  color: var(--cinema-text-3);
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-add .cinema-video-input-slot-thumb {
+  color: currentColor;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-add svg {
+  color: currentColor;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-add span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-add:hover,
+.cinema-image-gen-composer .cinema-text-source-image-add:focus-visible {
+  color: var(--cinema-text);
+  outline: none;
+}
+
+.cinema-image-gen-composer .cinema-text-source-image-add:hover .cinema-video-input-slot-thumb,
+.cinema-image-gen-composer .cinema-text-source-image-add:focus-visible .cinema-video-input-slot-thumb {
+  border-color: var(--cinema-border-strong);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.cinema-image-gen-composer .cinema-text-source-image .cinema-image-gen-error {
+  flex-basis: 100%;
+}
+
 .cinema-text-card-generator-lower {
   display: grid;
   gap: 6px;
@@ -1135,6 +1307,21 @@ button {
   white-space: nowrap;
 }
 
+.cinema-generation-progress.is-failed .cinema-generation-progress-meta,
+.cinema-generation-progress.is-canceled .cinema-generation-progress-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.cinema-generation-progress.is-failed .cinema-generation-progress-meta span:first-child,
+.cinema-generation-progress.is-canceled .cinema-generation-progress-meta span:first-child {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .cinema-generation-progress-meta span:last-child {
   flex: 0 0 auto;
   color: var(--cinema-text-3);
@@ -1305,6 +1492,10 @@ button {
   min-width: 0;
 }
 
+.cinema-image-gen-param-tags {
+  order: 0;
+}
+
 .cinema-image-gen-param-tag,
 .cinema-video-gen-param-tag {
   display: inline-flex;
@@ -1374,6 +1565,7 @@ button {
 }
 
 .cinema-image-gen-composer textarea {
+  order: 2;
   width: 100%;
   height: 64px;
   min-width: 0;
@@ -1418,15 +1610,138 @@ button {
   opacity: 0.62;
 }
 
-.cinema-image-gen-controls {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 92px 52px 34px;
+.cinema-image-advanced-panel .cinema-image-gen-style {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--cinema-border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.cinema-image-advanced-panel .cinema-image-gen-style:focus {
+  border-color: var(--cinema-border-strong);
+}
+
+.cinema-image-gen-quick-controls {
+  order: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
   gap: 6px;
   min-width: 0;
 }
 
-.cinema-image-gen-controls select,
-.cinema-image-gen-controls input {
+.cinema-image-gen-quick-controls > input,
+.cinema-image-gen-quick-controls .cinema-image-form-control {
+  flex: 1 1 78px;
+}
+
+.cinema-image-advanced-panel {
+  order: 4;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid var(--cinema-border);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.cinema-image-form-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cinema-image-form-controls .cinema-image-form-control {
+  flex: 1 1 116px;
+}
+
+.cinema-image-model-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  min-width: 0;
+}
+
+.cinema-image-advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 1 1 96px;
+  height: 32px;
+  min-height: 32px;
+  min-width: 0;
+  padding: 0 8px;
+  color: var(--cinema-text-2);
+  font-size: 12px;
+  font-weight: 650;
+  border: 1px solid var(--cinema-border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.cinema-image-advanced-toggle span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cinema-image-advanced-toggle svg {
+  flex: 0 0 auto;
+}
+
+.cinema-image-advanced-toggle:hover,
+.cinema-image-advanced-toggle:focus-visible,
+.cinema-image-advanced-toggle.is-open {
+  color: var(--cinema-text);
+  border-color: var(--cinema-border-strong);
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+}
+
+.cinema-image-advanced-toggle.is-open svg {
+  transform: rotate(180deg);
+}
+
+.cinema-image-advanced-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.cinema-image-form-control {
+  display: grid;
+  flex: 1 1 92px;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cinema-image-form-control > span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--cinema-text-3);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cinema-image-form-control.is-json {
+  flex-basis: 100%;
+}
+
+.cinema-image-gen-quick-controls select,
+.cinema-image-gen-quick-controls input,
+.cinema-image-form-controls select,
+.cinema-image-form-controls input,
+.cinema-image-model-controls select,
+.cinema-video-form-controls select,
+.cinema-video-form-controls input {
   width: 100%;
   min-width: 0;
   height: 32px;
@@ -1438,26 +1753,143 @@ button {
   background: rgba(255, 255, 255, 0.06);
 }
 
-.cinema-image-gen-controls select:focus,
-.cinema-image-gen-controls input:focus {
+.cinema-image-gen-quick-controls select:focus,
+.cinema-image-gen-quick-controls input:focus,
+.cinema-image-form-controls select:focus,
+.cinema-image-form-controls input:focus,
+.cinema-image-model-controls select:focus,
+.cinema-video-form-controls select:focus,
+.cinema-video-form-controls input:focus {
   border-color: var(--cinema-border-strong);
   outline: none;
 }
 
-.cinema-image-gen-controls select option,
-.cinema-video-gen-controls select option {
+.cinema-image-form-control.is-json textarea {
+  width: 100%;
+  height: 58px;
+  min-width: 0;
+  padding: 7px 8px;
+  color: var(--cinema-text);
+  font-size: 12px;
+  line-height: 1.35;
+  border: 1px solid var(--cinema-border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  resize: vertical;
+}
+
+.cinema-image-form-control.is-json textarea:focus {
+  border-color: var(--cinema-border-strong);
+  outline: none;
+}
+
+.cinema-image-form-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 8px 0 5px;
+  color: var(--cinema-text-2);
+  font-size: 11px;
+  font-weight: 750;
+  border: 1px solid var(--cinema-border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.cinema-image-form-switch span {
+  position: relative;
+  display: block;
+  width: 28px;
+  min-width: 28px;
+  height: 16px;
+  min-height: 16px;
+  border: 1px solid var(--cinema-border);
+  border-radius: 999px;
+  background: var(--cinema-surface-2);
+}
+
+.cinema-image-form-switch span::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--cinema-text-2);
+}
+
+.cinema-image-form-switch strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cinema-image-form-switch:hover,
+.cinema-image-form-switch:focus-visible,
+.cinema-image-form-switch.is-on {
+  color: var(--cinema-text);
+  border-color: var(--cinema-border-strong);
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+}
+
+.cinema-image-form-switch.is-on span::after {
+  left: 14px;
+  background: var(--cinema-text);
+}
+
+.cinema-image-form-switch:disabled,
+.cinema-image-form-control.is-json textarea:disabled,
+.cinema-image-gen-quick-controls select:disabled,
+.cinema-image-gen-quick-controls input:disabled,
+.cinema-image-form-controls select:disabled,
+.cinema-image-form-controls input:disabled,
+.cinema-image-model-controls select:disabled,
+.cinema-video-form-controls select:disabled,
+.cinema-video-form-controls input:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.cinema-image-gen-quick-controls .cinema-image-gen-submit {
+  flex: 0 0 32px;
+}
+
+.cinema-image-gen-quick-controls select option,
+.cinema-image-form-controls select option,
+.cinema-image-model-controls select option,
+.cinema-video-quick-controls select option,
+.cinema-video-model-controls select option,
+.cinema-video-form-controls select option {
   color: var(--cinema-text);
   background-color: var(--cinema-surface-2);
 }
 
-.cinema-image-gen-controls select option:checked,
-.cinema-video-gen-controls select option:checked {
+.cinema-image-gen-quick-controls select option:checked,
+.cinema-image-form-controls select option:checked,
+.cinema-image-model-controls select option:checked,
+.cinema-video-quick-controls select option:checked,
+.cinema-video-model-controls select option:checked,
+.cinema-video-form-controls select option:checked {
   color: var(--cinema-text);
   background-color: var(--cinema-surface-3);
 }
 
-.cinema-image-gen-controls select option:disabled,
-.cinema-video-gen-controls select option:disabled {
+.cinema-image-gen-quick-controls select option:disabled,
+.cinema-image-form-controls select option:disabled,
+.cinema-image-model-controls select option:disabled,
+.cinema-video-quick-controls select option:disabled,
+.cinema-video-model-controls select option:disabled,
+.cinema-video-form-controls select option:disabled {
   color: var(--cinema-text-3);
 }
 
@@ -1487,17 +1919,16 @@ button {
 }
 
 .cinema-image-gen-error {
-  display: -webkit-box;
+  order: 5;
+  display: block;
   min-width: 0;
   margin: 0;
-  overflow: hidden;
   color: var(--cinema-danger);
   font-size: 11px;
   font-weight: 650;
   line-height: 1.25;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .cinema-local-image-input {
@@ -1510,10 +1941,10 @@ button {
   grid-template-rows: auto auto auto auto auto auto;
   gap: 8px;
   width: 100%;
-  height: 100%;
+  height: auto;
   min-width: 500px;
   min-height: 560px;
-  overflow: hidden;
+  overflow: visible;
   padding: 10px;
   border: 1px solid var(--cinema-border);
   border-radius: 8px;
@@ -1699,24 +2130,23 @@ button {
 }
 
 .cinema-custom-api-error {
-  overflow: hidden;
   padding: 6px 8px;
   color: var(--cinema-danger);
   border: 1px solid rgba(251, 113, 133, 0.24);
   border-radius: 6px;
   background: rgba(251, 113, 133, 0.08);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .cinema-custom-api-output {
-  min-height: 0;
-  overflow: auto;
+  min-height: auto;
+  overflow: visible;
   padding: 8px;
   border: 1px solid var(--cinema-border);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.035);
-  scrollbar-width: thin;
 }
 
 .cinema-custom-api-output p,
@@ -1737,8 +2167,8 @@ button {
 }
 
 .cinema-custom-api-output pre {
-  max-height: 110px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   margin: 6px 0 0;
   color: var(--cinema-text);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
@@ -1847,15 +2277,15 @@ button {
 }
 
 .cinema-video-gen-node {
-  container-type: size;
+  container-type: inline-size;
   display: grid;
-  grid-template-rows: 34px auto auto minmax(0, 1fr);
+  grid-template-rows: 34px auto auto auto;
   gap: 9px;
   width: 100%;
-  height: 100%;
+  height: auto;
   min-width: 460px;
   min-height: 390px;
-  overflow: hidden;
+  overflow: visible;
   padding: 10px;
   border: 1px solid var(--cinema-border);
   border-radius: 8px;
@@ -1921,6 +2351,24 @@ button {
   border-color: rgba(251, 113, 133, 0.34);
 }
 
+.cinema-video-gen-model-chip {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 118px;
+  min-width: 0;
+  min-height: 24px;
+  overflow: hidden;
+  padding: 0 7px;
+  color: var(--cinema-text-2);
+  font-size: 11px;
+  font-weight: 650;
+  border: 1px solid var(--cinema-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .cinema-video-gen-preview {
   position: relative;
   display: grid;
@@ -1930,19 +2378,34 @@ button {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  aspect-ratio: 16 / 9;
   align-self: start;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   background: #0d0f13;
 }
 
+.cinema-video-gen-preview.is-empty {
+  aspect-ratio: var(--cinema-video-preview-aspect-ratio, 16 / 9);
+}
+
+.cinema-video-gen-preview.is-square {
+  width: min(100%, 392px);
+}
+
+.cinema-video-gen-preview.is-portrait {
+  width: min(100%, 392px);
+}
+
 .cinema-video-gen-preview video {
   display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: auto var(--cinema-video-preview-aspect-ratio, 16 / 9);
   background: #0d0f13;
   object-fit: contain;
+  object-position: center;
 }
 
 .cinema-video-gen-empty {
@@ -1960,26 +2423,47 @@ button {
 
 .cinema-video-gen-composer {
   display: grid;
+  grid-template-rows: auto auto;
   align-content: start;
-  gap: 7px;
+  gap: 0;
   min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  padding: 8px;
+  min-height: auto;
+  overflow: visible;
+  padding: 0;
   border: 1px solid var(--cinema-border);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
-  scrollbar-gutter: stable;
+}
+
+.cinema-video-gen-scroll {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  min-height: auto;
+  overflow: visible;
+  padding: 8px;
+}
+
+.cinema-video-gen-param-tags {
+  order: 0;
 }
 
 .cinema-video-mode-tabs {
   display: flex;
   gap: 8px;
+  min-height: 39px;
+  padding: 8px;
   min-width: 0;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: rgba(255, 255, 255, 0.035);
+  border-bottom: 1px solid var(--cinema-border);
+  scrollbar-width: thin;
 }
 
 .cinema-video-mode-tabs button {
+  flex: 0 0 auto;
   min-height: 26px;
   padding: 0 9px;
   color: var(--cinema-text-2);
@@ -2005,7 +2489,8 @@ button {
   opacity: 0.54;
 }
 
-.cinema-video-gen-composer textarea {
+.cinema-video-prompt-input {
+  order: 2;
   width: 100%;
   height: 50px;
   min-width: 0;
@@ -2018,53 +2503,73 @@ button {
   resize: none;
 }
 
-.cinema-video-gen-composer textarea::placeholder {
+.cinema-video-prompt-input::placeholder {
   color: var(--cinema-text-3);
 }
 
-.cinema-video-gen-composer textarea:focus {
+.cinema-video-prompt-input:focus {
   outline: none;
 }
 
 .cinema-video-input-slots {
-  display: grid;
+  position: relative;
+  order: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cinema-video-form-controls {
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
 }
 
+.cinema-video-form-controls .cinema-image-form-control {
+  flex: 1 1 116px;
+}
+
+.cinema-video-form-controls .cinema-image-form-control.is-json {
+  flex-basis: 100%;
+}
+
 .cinema-video-input-slot {
+  position: relative;
+  z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  min-height: 44px;
-  padding: 6px 7px;
+  place-items: stretch;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0;
   color: var(--cinema-text-2);
-  border: 1px solid var(--cinema-border);
-  border-radius: 7px;
-  background: var(--cinema-surface-3);
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
 }
 
 .cinema-video-input-slot.is-missing {
   color: var(--cinema-text-3);
-  border-color: var(--cinema-border);
 }
 
 .cinema-video-input-slot-main {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
+  place-items: stretch;
+  width: 48px;
   min-width: 0;
+  min-height: 0;
 }
 
 button.cinema-video-input-slot-main {
-  width: 100%;
+  width: 48px;
   padding: 0;
   color: inherit;
   font: inherit;
-  text-align: left;
+  text-align: center;
   border: 0;
   background: transparent;
 }
@@ -2078,7 +2583,7 @@ button.cinema-video-input-slot-main {
 .cinema-video-input-slot-import:focus-visible .cinema-video-input-slot-thumb {
   color: var(--cinema-text);
   border-color: var(--cinema-border-strong);
-  background: var(--cinema-surface-2);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .cinema-video-input-slot-import:focus-visible {
@@ -2091,16 +2596,23 @@ button.cinema-video-input-slot-main {
 }
 
 .cinema-video-input-slot-thumb {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-  min-height: 32px;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
   overflow: hidden;
-  color: var(--node-accent);
-  border: 1px solid var(--cinema-border);
-  border-radius: 6px;
+  color: var(--cinema-text-3);
+  border: 1px dashed var(--cinema-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.cinema-video-input-slot.is-ready .cinema-video-input-slot-thumb {
+  color: var(--cinema-text);
+  border-style: solid;
   background: var(--cinema-surface-2);
 }
 
@@ -2112,9 +2624,7 @@ button.cinema-video-input-slot-main {
 }
 
 .cinema-video-input-slot-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
+  display: none;
 }
 
 .cinema-video-input-slot-label,
@@ -2142,18 +2652,30 @@ button.cinema-video-input-slot-main {
 }
 
 .cinema-video-input-slot-remove {
+  position: absolute;
+  z-index: 2;
+  top: -6px;
+  right: -6px;
   display: inline-grid;
   place-items: center;
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  min-height: 24px;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
   padding: 0;
-  color: var(--cinema-text-2);
+  color: var(--cinema-text);
   border: 1px solid var(--cinema-border);
-  border-radius: 6px;
-  background: transparent;
+  border-radius: 999px;
+  background: var(--cinema-surface-2);
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cinema-video-input-slot:hover .cinema-video-input-slot-remove,
+.cinema-video-input-slot:focus-within .cinema-video-input-slot-remove {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .cinema-video-input-slot-remove:hover,
@@ -2170,39 +2692,72 @@ button.cinema-video-input-slot-main {
 }
 
 .cinema-video-input-slot-required {
+  display: none;
+}
+
+.cinema-video-input-slot.is-ready::after {
+  content: attr(data-slot-index);
+  position: absolute;
+  z-index: 1;
+  top: -5px;
+  right: -5px;
   display: inline-grid;
   place-items: center;
-  min-width: 34px;
-  height: 22px;
-  padding: 0 7px;
-  color: var(--cinema-danger);
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  color: var(--cinema-text);
   font-size: 10px;
   font-weight: 750;
   border: 1px solid var(--cinema-border);
   border-radius: 999px;
   background: var(--cinema-surface-2);
-  white-space: nowrap;
 }
 
-.cinema-video-gen-controls {
+.cinema-video-quick-controls {
+  order: 3;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 70px 64px 76px 34px;
+  grid-template-columns: minmax(0, 72px) minmax(0, 66px) minmax(0, 78px) minmax(86px, 1fr) 34px;
   gap: 6px;
   min-width: 0;
 }
 
-@container (min-height: 510px) {
-  .cinema-video-gen-composer {
+.cinema-video-advanced-panel {
+  order: 4;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid var(--cinema-border);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.cinema-video-model-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+  min-width: 0;
+}
+
+.cinema-video-gen-error {
+  order: 5;
+}
+
+@container (min-width: 500px) {
+  .cinema-video-gen-scroll {
     gap: 8px;
     padding: 9px;
   }
 
-  .cinema-video-gen-composer textarea {
+  .cinema-video-prompt-input {
     height: 58px;
   }
 }
 
-.cinema-video-gen-controls select {
+.cinema-video-quick-controls select,
+.cinema-video-model-controls select {
   width: 100%;
   min-width: 0;
   height: 32px;
@@ -2214,14 +2769,59 @@ button.cinema-video-input-slot-main {
   background: rgba(255, 255, 255, 0.06);
 }
 
-.cinema-video-gen-controls select:focus {
+.cinema-video-quick-controls select:focus,
+.cinema-video-model-controls select:focus {
   border-color: var(--cinema-border-strong);
   outline: none;
 }
 
-.cinema-video-gen-controls select:disabled {
+.cinema-video-quick-controls select:disabled,
+.cinema-video-model-controls select:disabled {
   cursor: not-allowed;
   opacity: 0.62;
+}
+
+.cinema-video-advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+  color: var(--cinema-text-2);
+  font-size: 12px;
+  font-weight: 650;
+  border: 1px solid var(--cinema-border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.cinema-video-advanced-toggle span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cinema-video-advanced-toggle svg {
+  flex: 0 0 auto;
+}
+
+.cinema-video-advanced-toggle:hover,
+.cinema-video-advanced-toggle:focus-visible,
+.cinema-video-advanced-toggle.is-open {
+  color: var(--cinema-text);
+  border-color: var(--cinema-border-strong);
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+}
+
+.cinema-video-advanced-toggle.is-open svg {
+  transform: rotate(180deg);
 }
 
 .cinema-video-gen-submit {
@@ -2250,17 +2850,15 @@ button.cinema-video-input-slot-main {
 }
 
 .cinema-video-gen-error {
-  display: -webkit-box;
+  display: block;
   min-width: 0;
   margin: 0;
-  overflow: hidden;
   color: var(--cinema-danger);
   font-size: 11px;
   font-weight: 650;
   line-height: 1.25;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .cinema-canvas-nav {
@@ -2516,8 +3114,8 @@ button.cinema-video-input-slot-main {
 .cinema-file-preview-empty span {
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .cinema-file-browser-note {

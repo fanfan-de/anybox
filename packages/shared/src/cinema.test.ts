@@ -13,6 +13,7 @@ import {
   CinemaGenerationTaskSchema,
   CinemaVideoProviderSchema,
   CinemaVideoProviderManifestSchema,
+  GenerationFormSpecSchema,
   CreateCinemaCustomApiNodeApiKeyBodySchema,
   CreateCinemaCustomApiRunBodySchema,
   CreateCinemaGenerationTaskBodySchema,
@@ -162,6 +163,10 @@ describe("cinema schemas", () => {
               endpoint: {
                 method: "POST",
                 path: "/text-to-video/kling-3.0-turbo",
+                taskQuery: {
+                  method: "GET",
+                  path: "/text-to-video/kling-3.0-turbo/tasks/{taskID}",
+                },
               },
             },
           ],
@@ -171,6 +176,10 @@ describe("cinema schemas", () => {
           label: "Kling Image 3.0",
           offeringID: "klingai-global/kling-image-3.0",
           providerModelID: "kling-v3",
+          taskQueryEndpoint: {
+            method: "GET",
+            path: "/v1/images/generations/{taskID}",
+          },
           modalities: {
             input: ["text", "image"],
             output: ["image"],
@@ -215,7 +224,15 @@ describe("cinema schemas", () => {
     expect(manifest.models[0]?.modes).toEqual(["text-to-video", "text-to-video.multi-shot"])
     expect(manifest.models[0]?.inputCombinations[0]?.mode).toBe("text-to-video.multi-shot")
     expect(manifest.models[0]?.inputCombinations[0]?.inputs[0]?.note).toBe("Use Shot n fixed format.")
+    expect(manifest.models[0]?.inputCombinations[0]?.endpoint?.taskQuery).toEqual({
+      method: "GET",
+      path: "/text-to-video/kling-3.0-turbo/tasks/{taskID}",
+    })
     expect(manifest.models[1]?.providerModelID).toBe("kling-v3")
+    expect(manifest.models[1]?.taskQueryEndpoint).toEqual({
+      method: "GET",
+      path: "/v1/images/generations/{taskID}",
+    })
     expect(manifest.models[1]?.modes).toEqual(["text-to-image", "image-to-image", "image-edit"])
     expect(manifest.models[1]?.inputCombinations[0]).toMatchObject({
       mode: "image-to-image",
@@ -364,6 +381,96 @@ describe("cinema schemas", () => {
     ).toThrow()
   })
 
+  it("parses generation form specs for Kling Omni image controls", () => {
+    const spec = GenerationFormSpecSchema.parse({
+      providerID: "klingai-cn",
+      modelID: "klingai-cn/kling-image-3.0-omni",
+      mode: "omni-image",
+      output: "image",
+      controls: [
+        {
+          type: "prompt",
+          key: "prompt",
+          label: "Prompt",
+          required: true,
+          maxLength: 2500,
+        },
+        {
+          type: "image-list",
+          key: "image_list",
+          label: "Reference images",
+          required: false,
+          minCount: 0,
+          maxCount: 10,
+          supportedFormats: ["jpg", "jpeg", "png"],
+          maxFileSizeMB: 10,
+        },
+        {
+          type: "select",
+          key: "resolution",
+          label: "Resolution",
+          required: false,
+          options: ["1k", "2k", "4k"],
+          labels: {
+            "1k": "1K",
+            "2k": "2K",
+            "4k": "4K",
+          },
+          defaultValue: "1k",
+        },
+        {
+          type: "select",
+          key: "result_type",
+          label: "Result type",
+          required: false,
+          options: ["single", "series"],
+          defaultValue: "single",
+        },
+        {
+          type: "number",
+          key: "count",
+          label: "Count",
+          required: false,
+          min: 1,
+          max: 9,
+          defaultValue: 1,
+          visibleWhen: {
+            result_type: "single",
+          },
+        },
+        {
+          type: "select",
+          key: "series_amount",
+          label: "Series amount",
+          required: false,
+          options: [2, 3, 4, 5, 6, 7, 8, 9, "auto"],
+          defaultValue: 4,
+          visibleWhen: {
+            result_type: "series",
+          },
+        },
+      ],
+    })
+
+    expect(spec.controls.find((control) => control.key === "image_list")).toMatchObject({
+      type: "image-list",
+      maxCount: 10,
+    })
+    expect(spec.controls.find((control) => control.key === "count")).toMatchObject({
+      type: "number",
+      max: 9,
+      visibleWhen: {
+        result_type: "single",
+      },
+    })
+    expect(spec.controls.find((control) => control.key === "series_amount")).toMatchObject({
+      type: "select",
+      visibleWhen: {
+        result_type: "series",
+      },
+    })
+  })
+
   it("parses text model lists and text generation payloads", () => {
     const models = CinemaTextModelsResultSchema.parse({
       items: [
@@ -481,8 +588,13 @@ describe("cinema schemas", () => {
       userPrompt: "A neon storyboard frame.",
       model: "klingai/kling-image-v3",
       size: "1024x1024",
-      count: 2,
+      count: 9,
       style: "cinematic",
+      parameters: {
+        resolution: "2k",
+        aspect_ratio: "16:9",
+        result_type: "single",
+      },
       sourceNodeIDs: ["text-1", "image-ref-1"],
       sourceTextPrompts: ["Storyboard note."],
       sourceImageAssetID: "reference-1",
@@ -491,7 +603,8 @@ describe("cinema schemas", () => {
       sourceImagePaths: ["assets/reference-1.png", "assets/reference-2.png"],
     })
 
-    expect(body.count).toBe(2)
+    expect(body.count).toBe(9)
+    expect(body.parameters.result_type).toBe("single")
     expect(body.sourceNodeIDs).toEqual(["text-1", "image-ref-1"])
     expect(body.sourceTextPrompts).toEqual(["Storyboard note."])
     expect(body.sourceImagePath).toBe("assets/reference-1.png")
@@ -566,7 +679,7 @@ describe("cinema schemas", () => {
       CreateCinemaImageGenerationBodySchema.parse({
         nodeID: "image-1",
         prompt: "Generate",
-        count: 5,
+        count: 0,
       })
     ).toThrow()
   })

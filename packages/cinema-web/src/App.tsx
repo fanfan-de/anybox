@@ -63,6 +63,8 @@ import {
   type CinemaImportedImageAssetResult,
   type CinemaImageModel,
   type CinemaImageModelsResult,
+  type GenerationControl,
+  type GenerationFormSpec,
   type CinemaTextGenerationResult,
   type CinemaTextModel,
   type CinemaTextModelsResult,
@@ -74,6 +76,26 @@ import {
   type CinemaVideoProvider,
   type CreateCinemaGenerationTaskBody,
 } from "@anybox/shared/cinema"
+import {
+  GENERATION_IMAGE_INPUT_SLOTS,
+  GENERATION_INPUT_SLOTS,
+  generationControlDefaultParameters,
+  generationModeInputContractForCombination,
+  hiddenDefaultParametersForCombination as generationHiddenDefaultParametersForCombination,
+  isGenerationImageInputSlot,
+  isGenerationMediaInputControl,
+  isGenerationMediaInputSlot,
+  slotForInputRole as generationSlotForInputRole,
+  type GenerationImageInputSlot,
+  type GenerationInputControl,
+  type GenerationInputSlot,
+  type GenerationMediaInputSlot,
+  type GenerationModeInputContract,
+} from "./features/generation/generationContract"
+import {
+  buildGenerationTaskParameters,
+  generationLegacyAssetsBySlot,
+} from "./features/generation/generationPayload"
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error"
 type CanvasPanel = "files"
@@ -85,6 +107,7 @@ type ImageGenerationRequest = {
   size?: string
   count?: number
   style?: string
+  parameters?: Record<string, unknown>
   sourceNodeIDs?: string[]
   sourceTextPrompts?: string[]
   sourceImageAssetID?: string
@@ -109,6 +132,12 @@ type CustomApiAuthSaveRequest = {
   apiKey: string | null
 }
 
+type VideoInputSlot = GenerationInputSlot
+type VideoMediaInputSlot = GenerationMediaInputSlot
+type VideoImageInputSlot = GenerationImageInputSlot
+type VideoModeInputContract = GenerationModeInputContract
+type VideoInputControl = GenerationInputControl
+
 type VideoSourceImageAsset = CinemaGeneratedAsset & {
   nodeID: string
   nodeTitle: string
@@ -123,51 +152,11 @@ type SourceTextParameter = {
   text: string
 }
 
-type VideoInputSlot =
-  | "textParameter"
-  | "sourceImage"
-  | "startFrame"
-  | "endFrame"
-  | "referenceImage"
-  | "sourceVideo"
-  | "mask"
-type VideoMediaInputSlot = Exclude<VideoInputSlot, "textParameter">
-type VideoImageInputSlot = Extract<VideoInputSlot, "sourceImage" | "startFrame" | "endFrame" | "referenceImage" | "mask">
 type VideoImageInputAssetValue = VideoSourceImageAsset | VideoSourceImageAsset[] | null
 type VideoInputAssetValue = VideoSourceImageAsset | VideoSourceImageAsset[] | null
 type VideoImageInputAssets = Partial<Record<VideoImageInputSlot, VideoImageInputAssetValue>>
 type VideoInputAssets = Partial<Record<VideoMediaInputSlot, VideoInputAssetValue>>
 type VideoInputAssetMap = Record<string, VideoInputAssetValue>
-type VideoParameterControl = "aspectRatio" | "duration" | "resolution"
-type VideoInputFulfillment =
-  | "user-text"
-  | "user-media"
-  | "visible-parameter"
-  | "hidden-default"
-  | "unsupported"
-
-type VideoModeInputContract = {
-  mode: CinemaGenerationMode
-  label: string
-  promptPlaceholder: string
-  inputs: VideoInputControl[]
-  unsupportedRequiredInputs: VideoInputControl[]
-}
-
-type VideoInputControl = {
-  inputKey: string
-  role: string
-  modality: string
-  required: boolean
-  minCount: number
-  maxCount?: number
-  note?: string
-  slot: VideoInputSlot | null
-  parameterControl: VideoParameterControl | null
-  fulfillment: VideoInputFulfillment
-  label: string
-  emptyText: string
-}
 
 type VideoProviderModel = CinemaVideoProvider["manifest"]["models"][number]
 type VideoProviderInputCombination = VideoProviderModel["inputCombinations"][number]
@@ -226,6 +215,8 @@ type DisplayAsset = {
   id: string
   kind: string
   path: string
+  width?: number
+  height?: number
 }
 
 type UiState = {
@@ -267,22 +258,8 @@ const LOCAL_IMAGE_FILE_ACCEPT = [
   "image/svg+xml",
   "image/webp",
 ].join(",")
-const VIDEO_INPUT_SLOTS = [
-  "textParameter",
-  "sourceImage",
-  "startFrame",
-  "endFrame",
-  "referenceImage",
-  "sourceVideo",
-  "mask",
-] as const satisfies readonly VideoInputSlot[]
-const VIDEO_IMAGE_INPUT_SLOTS = [
-  "sourceImage",
-  "startFrame",
-  "endFrame",
-  "referenceImage",
-  "mask",
-] as const satisfies readonly VideoImageInputSlot[]
+const VIDEO_INPUT_SLOTS = GENERATION_INPUT_SLOTS
+const VIDEO_IMAGE_INPUT_SLOTS = GENERATION_IMAGE_INPUT_SLOTS
 const VIDEO_INPUT_SLOT_LABELS: Record<VideoInputSlot, string> = {
   textParameter: "文本参数",
   sourceImage: "参考图",
@@ -291,15 +268,6 @@ const VIDEO_INPUT_SLOT_LABELS: Record<VideoInputSlot, string> = {
   referenceImage: "参考图",
   sourceVideo: "源视频",
   mask: "蒙版",
-}
-const VIDEO_INPUT_SLOT_EMPTY_TEXT: Record<VideoInputSlot, string> = {
-  textParameter: "连接文本节点作为参数",
-  sourceImage: "连接图片节点或图片生成节点",
-  startFrame: "导入或连接首帧图片",
-  endFrame: "导入或连接尾帧图片",
-  referenceImage: "连接参考图片",
-  sourceVideo: "连接视频节点",
-  mask: "连接蒙版素材",
 }
 const VIDEO_LOCAL_IMAGE_INPUT_SLOTS = [
   "startFrame",
@@ -425,7 +393,7 @@ function nodeSize(node: CinemaCanvasNode) {
 }
 
 function flowNodeStyle(type: CinemaNodeType, size: { width: number; height: number }): CSSProperties {
-  return type === "image" || type === "local-image"
+  return type === "image" || type === "local-image" || type === "video" || type === "custom-api"
     ? { width: size.width }
     : { width: size.width, height: size.height }
 }
@@ -483,6 +451,11 @@ function readRawString(rawData: Record<string, unknown>, key: string, fallback =
   return typeof value === "string" ? value : fallback
 }
 
+function readOptionalRawString(rawData: Record<string, unknown>, key: string) {
+  const value = rawData[key]
+  return typeof value === "string" ? value : null
+}
+
 function readRawStringArray(rawData: Record<string, unknown>, key: string) {
   const value = rawData[key]
   if (!Array.isArray(value)) return []
@@ -499,6 +472,62 @@ function readRawRecord(rawData: Record<string, unknown>, key: string): Record<st
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
 
+function generationFormDefaultParameters(formSpec: GenerationFormSpec | null | undefined) {
+  return generationControlDefaultParameters(formSpec?.controls ?? [])
+}
+
+function readGenerationFormParameters(rawData: Record<string, unknown>, formSpec: GenerationFormSpec | null | undefined) {
+  return {
+    ...generationFormDefaultParameters(formSpec),
+    ...readRawRecord(rawData, "parameters"),
+  }
+}
+
+function generationControlVisible(control: GenerationControl, parameters: Record<string, unknown>) {
+  if (!control.visibleWhen) return true
+  return Object.entries(control.visibleWhen).every(([key, value]) => parameters[key] === value)
+}
+
+function generationSelectOptionIndex(control: Extract<GenerationControl, { type: "select" }>, value: unknown) {
+  return control.options.findIndex((option) => option === value)
+}
+
+function generationControlValueLabel(control: Extract<GenerationControl, { type: "select" }>, value: string | number | boolean) {
+  return control.labels?.[String(value)] ?? String(value)
+}
+
+function isPrimaryImageGenerationControl(control: GenerationControl) {
+  const key = normalizedProviderInputRole(control.key)
+  const label = normalizedProviderInputRole(control.label)
+  return key === "resolution" ||
+    key === "aspectratio" ||
+    key === "count" ||
+    key === "size" ||
+    label === "resolution" ||
+    label === "aspectratio" ||
+    label === "count" ||
+    label === "size"
+}
+
+function generationControlReady(control: GenerationControl, parameters: Record<string, unknown>) {
+  if (!control.required) return true
+  const value = parameters[control.key]
+  switch (control.type) {
+    case "prompt":
+      return typeof value === "string" && value.trim().length > 0
+    case "image-list":
+      return Array.isArray(value) && value.length >= (control.minCount ?? 1)
+    case "select":
+      return control.options.some((option) => option === value)
+    case "number":
+      return typeof value === "number" && Number.isFinite(value)
+    case "boolean":
+      return typeof value === "boolean"
+    case "json":
+      return value !== undefined && value !== null
+  }
+}
+
 function stringifyJson(value: unknown) {
   return JSON.stringify(value ?? {}, null, 2)
 }
@@ -510,6 +539,133 @@ function parseJsonObjectDraft(value: string, fallback: Record<string, unknown>) 
   } catch {
     return fallback
   }
+}
+
+function parseJsonDraft(value: string, fallback: unknown = {}) {
+  try {
+    return JSON.parse(value) as unknown
+  } catch {
+    return fallback
+  }
+}
+
+function GenerationParameterControlField({
+  control,
+  parameters,
+  disabled,
+  onChange,
+}: {
+  control: GenerationControl
+  parameters: Record<string, unknown>
+  disabled: boolean
+  onChange: (patch: Record<string, unknown>) => void
+}) {
+  if (control.type === "image-list") return null
+
+  if (control.type === "select") {
+    const selectedIndex = generationSelectOptionIndex(control, parameters[control.key])
+    return (
+      <label key={control.key} className="cinema-image-form-control">
+        <span>{control.label}</span>
+        <select
+          aria-label={control.label}
+          value={selectedIndex >= 0 ? String(selectedIndex) : ""}
+          disabled={disabled}
+          onKeyDown={(event) => event.stopPropagation()}
+          onChange={(event) => {
+            const option = control.options[Number(event.target.value)]
+            onChange({ [control.key]: option })
+          }}
+        >
+          {control.options.map((option, index) => (
+            <option key={`${control.key}-${index}`} value={String(index)}>
+              {generationControlValueLabel(control, option)}
+            </option>
+          ))}
+        </select>
+      </label>
+    )
+  }
+
+  if (control.type === "number") {
+    const value = parameters[control.key]
+    return (
+      <label key={control.key} className="cinema-image-form-control">
+        <span>{control.label}</span>
+        <input
+          aria-label={control.label}
+          type="number"
+          min={control.min}
+          max={control.max}
+          value={typeof value === "number" && Number.isFinite(value) ? String(value) : ""}
+          disabled={disabled}
+          onKeyDown={(event) => event.stopPropagation()}
+          onChange={(event) => {
+            const nextValue = event.target.value.trim()
+            const number = Number(nextValue)
+            onChange({
+              [control.key]: nextValue && Number.isFinite(number) ? number : undefined,
+            })
+          }}
+        />
+      </label>
+    )
+  }
+
+  if (control.type === "boolean") {
+    const checked = parameters[control.key] === true
+    return (
+      <div key={control.key} className="cinema-image-form-control">
+        <span>{control.label}</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          className={`cinema-image-form-switch ${checked ? "is-on" : ""}`}
+          disabled={disabled}
+          onClick={() => onChange({ [control.key]: !checked })}
+        >
+          <span aria-hidden="true" />
+          <strong>{checked ? "On" : "Off"}</strong>
+        </button>
+      </div>
+    )
+  }
+
+  if (control.type === "prompt") {
+    const value = parameters[control.key]
+    return (
+      <label key={control.key} className="cinema-image-form-control is-json">
+        <span>{control.label}</span>
+        <textarea
+          aria-label={control.label}
+          defaultValue={typeof value === "string" ? value : ""}
+          disabled={disabled}
+          maxLength={control.maxLength}
+          spellCheck={false}
+          onKeyDown={(event) => event.stopPropagation()}
+          onBlur={(event) => onChange({ [control.key]: event.currentTarget.value.trim() || undefined })}
+        />
+      </label>
+    )
+  }
+
+  return (
+    <label key={control.key} className="cinema-image-form-control is-json">
+      <span>{control.label}</span>
+      <textarea
+        aria-label={control.label}
+        defaultValue={stringifyJson(parameters[control.key])}
+        disabled={disabled}
+        spellCheck={false}
+        onKeyDown={(event) => event.stopPropagation()}
+        onBlur={(event) => {
+          const parsed = parseJsonDraft(event.currentTarget.value, {})
+          onChange({ [control.key]: parsed })
+        }}
+      />
+    </label>
+  )
 }
 
 function customApiCredentialProviderID(nodeID: string) {
@@ -756,6 +912,36 @@ function imagePreviewAspectRatio(asset: CinemaGeneratedAsset | null, fallbackSiz
   return `${Number(match[1])} / ${Number(match[2])}`
 }
 
+type PreviewAspectRatio = {
+  value: string
+  shape: "landscape" | "square" | "portrait"
+}
+
+function previewAspectRatioFromDimensions(width: number | undefined, height: number | undefined): PreviewAspectRatio | null {
+  if (!width || !height) return null
+  const ratio = width / height
+  return {
+    value: `${width} / ${height}`,
+    shape: ratio < 0.9 ? "portrait" : ratio > 1.1 ? "landscape" : "square",
+  }
+}
+
+function previewAspectRatioFromText(value: string | null | undefined): PreviewAspectRatio | null {
+  const match = /^(\d+(?:\.\d+)?)\s*[:/]\s*(\d+(?:\.\d+)?)$/.exec(value?.trim() ?? "")
+  if (!match) return null
+  const width = Number(match[1])
+  const height = Number(match[2])
+  return Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
+    ? previewAspectRatioFromDimensions(width, height)
+    : null
+}
+
+function videoPreviewAspectRatio(asset: { width?: number; height?: number } | null, fallbackAspectRatio: string) {
+  return previewAspectRatioFromDimensions(asset?.width, asset?.height)
+    ?? previewAspectRatioFromText(fallbackAspectRatio)
+    ?? previewAspectRatioFromText(DEFAULT_VIDEO_ASPECT_RATIO)!
+}
+
 function projectAssetPreviewURL(agentBaseURL: string, projectID: string, assetPath: string) {
   const encodedPath = assetPath
     .split("/")
@@ -822,15 +1008,45 @@ function providerRuntimeSupportsCombination(provider: CinemaVideoProvider, combi
   return supportedModes.includes(combinationMode)
 }
 
+const VIDEO_OUTPUT_GENERATION_MODES = new Set([
+  "text-to-video",
+  "image-to-video",
+  "frames-to-video",
+  "reference-to-video",
+  "video-to-video",
+  "edit",
+  "extend",
+  "motion-control",
+])
+
+function generationModeOutputsVideo(mode: string) {
+  const normalized = mode.trim().toLowerCase()
+  return VIDEO_OUTPUT_GENERATION_MODES.has(normalized) ||
+    normalized.includes("-to-video") ||
+    normalized.endsWith("-video")
+}
+
+function providerModelOutputModalities(model: VideoProviderModel) {
+  return model.modalities?.output.map((item) => item.trim().toLowerCase()).filter(Boolean) ?? []
+}
+
+function providerModelOutputsVideo(model: VideoProviderModel) {
+  const outputModalities = providerModelOutputModalities(model)
+  if (outputModalities.length > 0) return outputModalities.includes("video")
+  return model.modes.some(generationModeOutputsVideo) ||
+    (model.inputCombinations ?? []).some((combination) => generationModeOutputsVideo(combination.mode))
+}
+
 function modelInputCombinationsForProvider(provider: CinemaVideoProvider | null, model: VideoProviderModel | null) {
   if (!provider || !model) return []
   return (model.inputCombinations ?? []).filter((combination) =>
+    generationModeOutputsVideo(combination.mode) &&
     providerRuntimeSupportsCombination(provider, combination.mode)
   )
 }
 
 function modelHasAvailableInputCombinations(provider: CinemaVideoProvider, model: VideoProviderModel) {
-  return modelInputCombinationsForProvider(provider, model).length > 0
+  return providerModelOutputsVideo(model) && modelInputCombinationsForProvider(provider, model).length > 0
 }
 
 function availableVideoProviders(providers: CinemaVideoProvider[]) {
@@ -868,177 +1084,23 @@ function inputCombinationForSelection(
 }
 
 function slotForInputRole(role: string, modality: string): VideoInputSlot | null {
-  switch (role) {
-    case "prompt":
-      return "textParameter"
-    case "first_frame_image":
-      return "startFrame"
-    case "last_frame_image":
-      return "endFrame"
-    case "reference_image":
-    case "style_image":
-      return "referenceImage"
-    case "source_video":
-    case "reference_video":
-      return "sourceVideo"
-    case "mask_image":
-      return "mask"
-    case "source_image":
-    case "character_image":
-    case "control_image":
-    case "image":
-      return "sourceImage"
-    default:
-      if (modality === "text") return "textParameter"
-      if (modality === "image") return "sourceImage"
-      if (modality === "video") return "sourceVideo"
-      return null
-  }
-}
-
-function parameterControlForInputRole(role: string): VideoParameterControl | null {
-  switch (normalizedProviderInputRole(role)) {
-    case "aspectratio":
-      return "aspectRatio"
-    case "duration":
-      return "duration"
-    case "qualitymode":
-    case "quality":
-    case "mode":
-    case "resolution":
-      return "resolution"
-    default:
-      return null
-  }
-}
-
-function providerInputHasDefaultValue(input: VideoProviderInputCombination["inputs"][number]) {
-  return Object.prototype.hasOwnProperty.call(input as Record<string, unknown>, "default")
-}
-
-function providerInputDefaultValue(input: VideoProviderInputCombination["inputs"][number]) {
-  return (input as Record<string, unknown>).default
-}
-
-function providerInputParameterKey(input: VideoProviderInputCombination["inputs"][number]) {
-  const apiField = (input as Record<string, unknown>).apiField
-  return typeof apiField === "string" && apiField.trim() ? apiField.trim() : input.role.trim()
-}
-
-function videoInputFulfillmentForSpec(
-  input: VideoProviderInputCombination["inputs"][number],
-  slot: VideoInputSlot | null,
-  parameterControl: VideoParameterControl | null,
-): VideoInputFulfillment {
-  if (slot === "textParameter") return "user-text"
-  if (slot) return "user-media"
-  if (parameterControl) return "visible-parameter"
-  if (providerInputHasDefaultValue(input)) return "hidden-default"
-  return "unsupported"
-}
-
-function canSatisfyRequiredVideoInput(input: VideoInputControl) {
-  return input.fulfillment !== "unsupported"
+  return generationSlotForInputRole(role, modality)
 }
 
 function hiddenDefaultParametersForCombination(combination: VideoProviderInputCombination | null) {
-  const parameters: Record<string, unknown> = {}
-  for (const input of combination?.inputs ?? []) {
-    const role = input.role.trim()
-    const modality = input.modality.trim()
-    const slot = slotForInputRole(role, modality)
-    const parameterControl = parameterControlForInputRole(role)
-    if (slot || parameterControl || !providerInputHasDefaultValue(input)) continue
-    parameters[providerInputParameterKey(input)] = providerInputDefaultValue(input)
-  }
-  return parameters
-}
-
-function videoInputKey(role: string, index: number) {
-  const safeRole = role.trim().replace(/[^a-z0-9_-]+/gi, "-") || "input"
-  return `input:${index}:${safeRole}`
-}
-
-function formatInputCombinationLabel(mode: string) {
-  return mode
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
-    .join(" ")
-}
-
-function labelForInputRole(role: string, modality: string) {
-  switch (role) {
-    case "prompt":
-      return "提示词"
-    case "first_frame_image":
-      return "首帧"
-    case "last_frame_image":
-      return "尾帧"
-    case "reference_image":
-      return "参考图"
-    case "style_image":
-      return "风格图"
-    case "source_video":
-    case "reference_video":
-      return "源视频"
-    case "mask_image":
-      return "蒙版"
-    case "source_image":
-    case "character_image":
-    case "control_image":
-    case "image":
-      return "参考图"
-    default:
-      return role ? formatInputCombinationLabel(role) : formatInputCombinationLabel(modality)
-  }
-}
-
-function emptyTextForInputRole(role: string, modality: string, slot: VideoInputSlot | null) {
-  if (slot) return VIDEO_INPUT_SLOT_EMPTY_TEXT[slot]
-  return `暂不支持 ${role || modality} 输入`
-}
-
-function videoInputControlForSpec(input: VideoProviderInputCombination["inputs"][number], index: number): VideoInputControl {
-  const role = input.role.trim()
-  const modality = input.modality.trim()
-  const slot = slotForInputRole(role, modality)
-  const parameterControl = parameterControlForInputRole(role)
-  return {
-    inputKey: videoInputKey(role, index),
-    role,
-    modality,
-    required: input.required,
-    minCount: input.minCount,
-    maxCount: input.maxCount,
-    note: typeof input.note === "string" ? input.note : undefined,
-    slot,
-    parameterControl,
-    fulfillment: videoInputFulfillmentForSpec(input, slot, parameterControl),
-    label: labelForInputRole(role, modality),
-    emptyText: emptyTextForInputRole(role, modality, slot),
-  }
+  return generationHiddenDefaultParametersForCombination(combination)
 }
 
 function videoModeInputContractForCombination(combination: VideoProviderInputCombination | null): VideoModeInputContract {
-  const inputs = combination?.inputs.map(videoInputControlForSpec) ?? []
-  const promptInput = inputs.find((input) => input.slot === "textParameter")
-  const unsupportedRequiredInputs = inputs.filter((input) => input.required && !canSatisfyRequiredVideoInput(input))
-  return {
-    mode: combination?.mode ?? FALLBACK_VIDEO_INPUT_COMBINATION_MODE,
-    label: combination?.label ?? formatInputCombinationLabel(combination?.mode ?? FALLBACK_VIDEO_INPUT_COMBINATION_MODE),
-    promptPlaceholder: promptInput?.note ?? "描述视频内容、镜头运动和画面变化...",
-    inputs,
-    unsupportedRequiredInputs,
-  }
+  return generationModeInputContractForCombination(combination, FALLBACK_VIDEO_INPUT_COMBINATION_MODE)
 }
 
 function isVideoImageInputSlot(slot: VideoInputSlot): slot is VideoImageInputSlot {
-  return (VIDEO_IMAGE_INPUT_SLOTS as readonly VideoInputSlot[]).includes(slot)
+  return isGenerationImageInputSlot(slot)
 }
 
 function isVideoMediaInputSlot(slot: VideoInputSlot): slot is VideoMediaInputSlot {
-  return slot !== "textParameter"
+  return isGenerationMediaInputSlot(slot)
 }
 
 function canImportVideoInputLocalImage(slot: VideoInputSlot | null): slot is VideoImageInputSlot {
@@ -1046,7 +1108,7 @@ function canImportVideoInputLocalImage(slot: VideoInputSlot | null): slot is Vid
 }
 
 function isVideoMediaInputControl(input: VideoInputControl): input is VideoInputControl & { slot: VideoMediaInputSlot } {
-  return Boolean(input.slot && isVideoMediaInputSlot(input.slot))
+  return isGenerationMediaInputControl(input)
 }
 
 function videoInputAssetList(value: VideoInputAssetValue | undefined) {
@@ -1208,6 +1270,8 @@ function readDisplayAssets(rawData: Record<string, unknown>): DisplayAsset[] {
       id: typeof record.id === "string" ? record.id : `asset-${index}`,
       kind: typeof record.kind === "string" ? record.kind : "file",
       path,
+      width: typeof record.width === "number" ? record.width : undefined,
+      height: typeof record.height === "number" ? record.height : undefined,
     }]
   })
 }
@@ -2074,6 +2138,8 @@ function TextCanvasNode({
         : {}),
     })
   }
+  const hasPreviewText = textDraft.trim().length > 0
+  const previewText = hasPreviewText ? textDraft : placeholder
 
   return (
     <>
@@ -2153,7 +2219,7 @@ function TextCanvasNode({
           </div>
         </header>
 
-        <div className={`cinema-node-preview cinema-text-card-preview ${isTextEditorOpen ? "is-editing" : ""}`}>
+        <div className={`cinema-node-preview cinema-text-card-preview ${isTextEditorOpen ? "is-editing" : ""} ${hasPreviewText ? "has-text" : ""}`}>
           {isTextEditorOpen ? (
             <textarea
               ref={editorRef}
@@ -2185,15 +2251,22 @@ function TextCanvasNode({
             />
           ) : (
             <>
-              <FileText size={28} aria-hidden="true" />
-              <span className="cinema-text-card-preview-text">{textDraft || placeholder}</span>
+              {hasPreviewText ? null : <FileText size={28} aria-hidden="true" />}
+              <div
+                className="cinema-text-card-preview-text nodrag nowheel"
+                title={previewText}
+                tabIndex={0}
+                onKeyDown={(event) => event.stopPropagation()}
+              >
+                {previewText}
+              </div>
             </>
           )}
         </div>
 
         <footer className="cinema-node-footer">
           <NodeTitleInput nodeID={id} title={data.title} onChangeTitle={data.onChangeTitle} />
-          <span>{textDraft || placeholder}</span>
+          <span title={previewText}>{previewText}</span>
         </footer>
       </article>
 
@@ -2291,7 +2364,7 @@ function TextCanvasNode({
                 >
                   {importTextSourceImageMutation.isPending
                     ? <Loader2 size={13} aria-hidden="true" className="is-spinning" />
-                    : <Upload size={13} aria-hidden="true" />}
+                    : <Image size={13} aria-hidden="true" />}
                   <span>添加 Text 参考图</span>
                 </button>
               </div>
@@ -2430,6 +2503,7 @@ function ImageGenerationCanvasNode({
   const [styleDraft, setStyleDraftState] = useState(style)
   const [sizeDraft, setSizeDraftState] = useState(size)
   const [countDraft, setCountDraftState] = useState(count)
+  const [isImageAdvancedOpen, setIsImageAdvancedOpen] = useState(false)
   const promptDraftRef = useRef(prompt)
   const styleDraftRef = useRef(style)
   const sizeDraftRef = useRef(size)
@@ -2449,7 +2523,17 @@ function ImageGenerationCanvasNode({
     data.effectiveImageModel ??
     imageModels[0] ??
     null
-  const supportsSourceImage = Boolean(selectedImageModel?.supportsImageInput)
+  const imageFormSpec = selectedImageModel?.formSpec ?? null
+  const imageFormParameters = readGenerationFormParameters(data.rawData, imageFormSpec)
+  const imageFormParametersRef = useRef(imageFormParameters)
+  const visibleImageFormControls = imageFormSpec?.controls.filter((control) => generationControlVisible(control, imageFormParameters)) ?? []
+  const promptControl = visibleImageFormControls.find((control): control is Extract<GenerationControl, { type: "prompt" }> => control.type === "prompt") ?? null
+  const sourceImageControl = visibleImageFormControls.find((control): control is Extract<GenerationControl, { type: "image-list" }> => control.type === "image-list") ?? null
+  const parameterControls = visibleImageFormControls.filter((control) => control.type !== "prompt" && control.type !== "image-list")
+  const primaryImageParameterControls = parameterControls.filter(isPrimaryImageGenerationControl)
+  const advancedImageParameterControls = parameterControls.filter((control) => !isPrimaryImageGenerationControl(control))
+  const sourceImageMaxCount = sourceImageControl?.maxCount
+  const supportsSourceImage = Boolean(selectedImageModel?.supportsImageInput) && (!imageFormSpec || Boolean(sourceImageControl))
   const connectedSourceImageAssets = data.sourceImageAssets ?? []
   const connectedSourceImageAssetPaths = new Set(connectedSourceImageAssets.map((asset) => asset.path))
   const imageSourceImageAssets = readImageGenerationSourceImageAssets(data.rawData, id)
@@ -2482,6 +2566,9 @@ function ImageGenerationCanvasNode({
         || asset.path === selectedSourceImagePath
     })
     : sourceImageAssets
+  const submitSourceImageAssets = sourceImageMaxCount === undefined
+    ? selectedSourceImageAssets
+    : selectedSourceImageAssets.slice(0, sourceImageMaxCount)
   const taskImageAssets = task?.outputAssets.filter((asset): asset is CinemaGeneratedAsset & { kind: "image" } => asset.kind === "image") ?? []
   const assets = taskImageAssets.length > 0 ? taskImageAssets : readImageResultAssets(data.rawData)
   const selectedAssetID = readRawString(data.rawData, "selectedAssetID")
@@ -2508,10 +2595,13 @@ function ImageGenerationCanvasNode({
   const promptReady = effectivePromptDraft.trim().length > 0
   const isImageTaskActive = status === "queued" || status === "running"
   const isImageBusy = Boolean(data.isGeneratingImage) || isImageTaskActive
-  const canGenerate = promptReady && Boolean(selectedImageModel) && !isImageBusy
+  const formParametersReady = parameterControls.every((control) => generationControlReady(control, imageFormParameters))
+  const sourceImagesReady = !sourceImageControl?.required || submitSourceImageAssets.length >= (sourceImageControl.minCount ?? 1)
+  const canGenerate = promptReady && formParametersReady && sourceImagesReady && Boolean(selectedImageModel) && !isImageBusy
 
   rawDataRef.current = data.rawData
   onChangeRawDataRef.current = data.onChangeRawData
+  imageFormParametersRef.current = imageFormParameters
 
   const normalizeCountDraft = useCallback(() => {
     const parsed = Number.parseInt(countDraftRef.current, 10)
@@ -2564,6 +2654,18 @@ function ImageGenerationCanvasNode({
       ...nextRawData,
     })
   }, [id, normalizeCountDraft])
+
+  const commitFormParameterPatch = useCallback((patch: Record<string, unknown>) => {
+    const nextParameters = {
+      ...imageFormParametersRef.current,
+      ...patch,
+    }
+    for (const [key, value] of Object.entries(nextParameters)) {
+      if (value === undefined) delete nextParameters[key]
+    }
+    imageFormParametersRef.current = nextParameters
+    commitRawDataPatch({ parameters: nextParameters })
+  }, [commitRawDataPatch])
 
   const importImageSourceImageMutation = useMutation({
     mutationFn: async (files: File[]) => {
@@ -2691,40 +2793,77 @@ function ImageGenerationCanvasNode({
     clearPromptCommitTimer()
     const nextSize = sizeDraftRef.current.trim() || DEFAULT_IMAGE_GENERATION_SIZE
     const nextCount = normalizeCountDraft()
+    const nextParameters: Record<string, unknown> = imageFormSpec
+      ? { ...imageFormParametersRef.current }
+      : {
+        size: nextSize,
+        count: nextCount,
+        ...(styleDraftRef.current.trim() ? { style: styleDraftRef.current.trim() } : {}),
+      }
+    if (promptControl) nextParameters[promptControl.key] = nextEffectivePrompt
+    if (sourceImageControl) {
+      if (submitSourceImageAssets.length > 0) {
+        nextParameters[sourceImageControl.key] = submitSourceImageAssets.map((asset) => ({
+          image: asset.path,
+          assetID: asset.id,
+        }))
+      } else {
+        delete nextParameters[sourceImageControl.key]
+      }
+    }
     commitRawDataPatch({
       prompt: nextPrompt,
       model: selectedImageModel.value,
       size: nextSize,
       count: nextCount,
       style: styleDraftRef.current,
+      parameters: nextParameters,
       sourceNodeIDs: uniqueSourceNodeIDs(
         sourceTextParameters.map((parameter) => parameter.nodeID),
-        supportsSourceImage ? selectedSourceImageAssets.filter((asset) => asset.nodeID !== id).map((asset) => asset.nodeID) : [],
+        supportsSourceImage ? submitSourceImageAssets.filter((asset) => asset.nodeID !== id).map((asset) => asset.nodeID) : [],
       ),
       sourceTextPrompts: nextSourceTextPrompts,
-      ...(supportsSourceImage ? sourceImageSelectionPatch(selectedSourceImageAssets) : {}),
+      ...(supportsSourceImage ? sourceImageSelectionPatch(submitSourceImageAssets) : {}),
     })
     data.onGenerateImage?.(id, {
       prompt: nextEffectivePrompt,
       userPrompt: nextPrompt,
       model: selectedImageModel.value,
-      size: nextSize,
-      count: nextCount,
-      style: styleDraftRef.current.trim() || undefined,
+      parameters: nextParameters,
+      ...(!imageFormSpec
+        ? {
+          size: nextSize,
+          count: nextCount,
+          style: styleDraftRef.current.trim() || undefined,
+        }
+        : {}),
       sourceNodeIDs: uniqueSourceNodeIDs(
         sourceTextParameters.map((parameter) => parameter.nodeID),
-        supportsSourceImage ? selectedSourceImageAssets.filter((asset) => asset.nodeID !== id).map((asset) => asset.nodeID) : [],
+        supportsSourceImage ? submitSourceImageAssets.filter((asset) => asset.nodeID !== id).map((asset) => asset.nodeID) : [],
       ),
       sourceTextPrompts: nextSourceTextPrompts.length > 0 ? nextSourceTextPrompts : undefined,
-      ...(supportsSourceImage && selectedSourceImageAssets.length > 0
+      ...(supportsSourceImage && submitSourceImageAssets.length > 0
         ? {
-          sourceImageAssetID: selectedSourceImageAssets[0]?.id,
-          sourceImageAssetIDs: selectedSourceImageAssets.map((asset) => asset.id),
-          sourceImagePath: selectedSourceImageAssets[0]?.path,
-          sourceImagePaths: selectedSourceImageAssets.map((asset) => asset.path),
+          sourceImageAssetID: submitSourceImageAssets[0]?.id,
+          sourceImageAssetIDs: submitSourceImageAssets.map((asset) => asset.id),
+          sourceImagePath: submitSourceImageAssets[0]?.path,
+          sourceImagePaths: submitSourceImageAssets.map((asset) => asset.path),
         }
         : {}),
     })
+  }
+
+  const renderImageParameterControl = (control: GenerationControl) => {
+    if (control.type === "prompt" || control.type === "image-list") return null
+    return (
+      <GenerationParameterControlField
+        key={control.key}
+        control={control}
+        parameters={imageFormParameters}
+        disabled={isImageBusy}
+        onChange={commitFormParameterPatch}
+      />
+    )
   }
 
   return (
@@ -2832,6 +2971,7 @@ function ImageGenerationCanvasNode({
             ref={promptRef}
             value={promptDraft}
             placeholder="描述画面、主体、光线和镜头..."
+            maxLength={promptControl?.maxLength}
             spellCheck={false}
             onKeyDown={(event) => event.stopPropagation()}
             onChange={(event) => {
@@ -2854,16 +2994,6 @@ function ImageGenerationCanvasNode({
               clearPromptCommitTimer()
               commitRawDataPatch({ prompt: promptDraftRef.current })
             }}
-          />
-          <input
-            className="cinema-image-gen-style"
-            value={styleDraft}
-            placeholder="风格提示（可选）"
-            spellCheck={false}
-            disabled={isImageBusy}
-            onKeyDown={(event) => event.stopPropagation()}
-            onChange={(event) => setStyleDraft(event.target.value)}
-            onBlur={() => commitRawDataPatch({ style: styleDraftRef.current })}
           />
           {supportsSourceImage ? (
             <section className={`cinema-text-source-image ${selectedSourceImageAssets.length > 0 ? "is-ready" : "is-empty"}`} aria-label="Image generation source image">
@@ -2941,9 +3071,11 @@ function ImageGenerationCanvasNode({
                     openSourceImagePicker()
                   }}
                 >
-                  {importImageSourceImageMutation.isPending
-                    ? <Loader2 size={13} aria-hidden="true" className="is-spinning" />
-                    : <Upload size={13} aria-hidden="true" />}
+                  <div className="cinema-video-input-slot-thumb" aria-hidden="true">
+                    {importImageSourceImageMutation.isPending
+                      ? <Loader2 size={14} className="is-spinning" />
+                      : <Image size={14} />}
+                  </div>
                   <span>添加参考图</span>
                 </button>
               </div>
@@ -2962,44 +3094,45 @@ function ImageGenerationCanvasNode({
               />
             </section>
           ) : null}
-          <div className="cinema-image-gen-controls">
-            <select
-              aria-label="Image model"
-              value={selectedImageModel?.value ?? ""}
-              disabled={imageModels.length === 0 || isImageBusy}
-              onKeyDown={(event) => event.stopPropagation()}
-              onChange={(event) => commitRawDataPatch({ model: event.target.value || undefined })}
+          <div className={`cinema-image-gen-quick-controls ${imageFormSpec ? "is-form-spec" : ""}`}>
+            {imageFormSpec ? primaryImageParameterControls.map(renderImageParameterControl) : (
+              <>
+                <input
+                  aria-label="Image size"
+                  value={sizeDraft}
+                  disabled={isImageBusy}
+                  inputMode="numeric"
+                  onKeyDown={(event) => event.stopPropagation()}
+                  onChange={(event) => setSizeDraft(event.target.value)}
+                  onBlur={() => commitRawDataPatch({ size: sizeDraftRef.current.trim() || DEFAULT_IMAGE_GENERATION_SIZE })}
+                />
+                <input
+                  aria-label="Image count"
+                  type="number"
+                  min={1}
+                  max={4}
+                  value={countDraft}
+                  disabled={isImageBusy}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  onChange={(event) => setCountDraft(event.target.value)}
+                  onBlur={() => {
+                    const normalized = normalizeCountDraft()
+                    setCountDraft(String(normalized))
+                    commitRawDataPatch({ count: normalized })
+                  }}
+                />
+              </>
+            )}
+            <button
+              type="button"
+              className={`cinema-image-advanced-toggle ${isImageAdvancedOpen ? "is-open" : ""}`}
+              aria-expanded={isImageAdvancedOpen}
+              aria-controls={`${id}-image-advanced`}
+              onClick={() => setIsImageAdvancedOpen((value) => !value)}
             >
-              {imageModels.length > 0 ? imageModels.map((model) => (
-                <option key={model.value} value={model.value}>{model.providerLabel} · {model.label}</option>
-              )) : (
-                <option value="">No generation image model</option>
-              )}
-            </select>
-            <input
-              aria-label="Image size"
-              value={sizeDraft}
-              disabled={isImageBusy}
-              inputMode="numeric"
-              onKeyDown={(event) => event.stopPropagation()}
-              onChange={(event) => setSizeDraft(event.target.value)}
-              onBlur={() => commitRawDataPatch({ size: sizeDraftRef.current.trim() || DEFAULT_IMAGE_GENERATION_SIZE })}
-            />
-            <input
-              aria-label="Image count"
-              type="number"
-              min={1}
-              max={4}
-              value={countDraft}
-              disabled={isImageBusy}
-              onKeyDown={(event) => event.stopPropagation()}
-              onChange={(event) => setCountDraft(event.target.value)}
-              onBlur={() => {
-                const normalized = normalizeCountDraft()
-                setCountDraft(String(normalized))
-                commitRawDataPatch({ count: normalized })
-              }}
-            />
+              <span>Advanced</span>
+              <ChevronDown size={14} aria-hidden="true" />
+            </button>
             <button
               type="button"
               className="cinema-image-gen-submit"
@@ -3013,6 +3146,52 @@ function ImageGenerationCanvasNode({
                 : <ArrowUp size={18} aria-hidden="true" />}
             </button>
           </div>
+          {isImageAdvancedOpen ? (
+            <section id={`${id}-image-advanced`} className="cinema-image-advanced-panel" aria-label="Advanced image generation inputs">
+              {!imageFormSpec ? (
+                <input
+                  className="cinema-image-gen-style"
+                  value={styleDraft}
+                  placeholder="风格提示（可选）"
+                  spellCheck={false}
+                  disabled={isImageBusy}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  onChange={(event) => setStyleDraft(event.target.value)}
+                  onBlur={() => commitRawDataPatch({ style: styleDraftRef.current })}
+                />
+              ) : null}
+              {imageFormSpec && advancedImageParameterControls.length > 0 ? (
+                <section className="cinema-image-form-controls" aria-label="Image generation parameters">
+                  {advancedImageParameterControls.map(renderImageParameterControl)}
+                </section>
+              ) : null}
+              <section className="cinema-image-model-controls" aria-label="Image generation model">
+                <label className="cinema-image-form-control">
+                  <span>Model</span>
+                  <select
+                    aria-label="Image model"
+                    value={selectedImageModel?.value ?? ""}
+                    disabled={imageModels.length === 0 || isImageBusy}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    onChange={(event) => {
+                      const nextValue = event.target.value || undefined
+                      const nextModel = imageModels.find((model) => model.value === nextValue) ?? null
+                      commitRawDataPatch({
+                        model: nextValue,
+                        parameters: generationFormDefaultParameters(nextModel?.formSpec ?? null),
+                      })
+                    }}
+                  >
+                    {imageModels.length > 0 ? imageModels.map((model) => (
+                      <option key={model.value} value={model.value}>{model.providerLabel} 路 {model.label}</option>
+                    )) : (
+                      <option value="">No generation image model</option>
+                    )}
+                  </select>
+                </label>
+              </section>
+            </section>
+          ) : null}
           {nodeError ? (
             <p className="cinema-image-gen-error" role="alert" title={nodeError}>
               {nodeError}
@@ -3059,12 +3238,13 @@ function VideoGenerationCanvasNode({
   const [providerID, setProviderIDState] = useState(() => readRawString(data.rawData, "providerID"))
   const [modelID, setModelIDState] = useState(() => readRawString(data.rawData, "modelID"))
   const [promptDraft, setPromptDraftState] = useState(() => {
-    const rawPrompt = readRawString(data.rawData, "text")
-    return taskUserPrompt ?? (rawPrompt || task?.input.prompt || "")
+    const rawPrompt = readOptionalRawString(data.rawData, "text")
+    return rawPrompt ?? taskUserPrompt ?? task?.input.prompt ?? ""
   })
   const [aspectRatioDraft, setAspectRatioDraftState] = useState(() => readRawString(data.rawData, "aspectRatio", DEFAULT_VIDEO_ASPECT_RATIO))
   const [durationDraft, setDurationDraftState] = useState(() => String(readRawNumber(data.rawData, "duration", DEFAULT_VIDEO_DURATION_SECONDS)))
   const [resolutionDraft, setResolutionDraftState] = useState(() => readRawString(data.rawData, "resolution", DEFAULT_VIDEO_RESOLUTION))
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
   const [videoInputImageImportError, setVideoInputImageImportError] = useState<string | null>(null)
   const [importingVideoInputImageSlot, setImportingVideoInputImageSlot] = useState<VideoImageInputSlot | null>(null)
   const promptDraftRef = useRef(promptDraft)
@@ -3074,6 +3254,7 @@ function VideoGenerationCanvasNode({
   const aspectRatioDraftRef = useRef(aspectRatioDraft)
   const durationDraftRef = useRef(durationDraft)
   const resolutionDraftRef = useRef(resolutionDraft)
+  const videoFormParametersRef = useRef<Record<string, unknown>>({})
 
   rawDataRef.current = data.rawData
   onChangeRawDataRef.current = data.onChangeRawData
@@ -3090,16 +3271,33 @@ function VideoGenerationCanvasNode({
     selectedInputCombination,
     ["quality_mode", "qualityMode", "mode", "resolution"],
   )
+  const aspectRatioSelectOptions = [...new Set([...aspectRatioOptions, aspectRatioDraft, DEFAULT_VIDEO_ASPECT_RATIO].filter(Boolean))]
+  const durationSelectOptions = [...new Set([...durationOptions, Number.parseFloat(durationDraft) || DEFAULT_VIDEO_DURATION_SECONDS])]
+    .filter((value) => Number.isFinite(value) && value > 0)
+  const resolutionSelectOptions = [...new Set([...resolutionOptions, resolutionDraft, DEFAULT_VIDEO_RESOLUTION].filter(Boolean))]
   const availableProviders = availableVideoProviders(providers)
   const availableModels = availableModelsForProvider(selectedProvider)
   const availableInputCombinations = inputCombinationsForModel(selectedProvider, selectedModel)
   const visibleModeContracts = availableInputCombinations.map(videoModeInputContractForCombination)
   const modeContract = videoModeInputContractForCombination(selectedInputCombination)
+  const videoFormParameters = {
+    ...generationControlDefaultParameters(modeContract.parameterControls),
+    ...readRawRecord(data.rawData, "parameters"),
+  }
+  const visibleVideoParameterControls = modeContract.parameterControls.filter((control) =>
+    generationControlVisible(control, videoFormParameters)
+  )
+  videoFormParametersRef.current = videoFormParameters
   const outputAssets = task?.outputAssets ?? readDisplayAssets(data.rawData)
   const outputAsset = outputAssets.find((asset) => asset.kind === "video") ?? outputAssets[0] ?? null
   const previewSrc = outputAsset && data.agentBaseURL && data.projectID
     ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, outputAsset.path)
     : ""
+  const previewAspectRatio = videoPreviewAspectRatio(outputAsset, aspectRatioDraft)
+  const previewStyle = {
+    "--cinema-video-preview-aspect-ratio": previewAspectRatio.value,
+  } as CSSProperties
+  const previewClassName = `cinema-video-gen-preview ${previewSrc ? "has-video" : "is-empty"} is-${previewAspectRatio.shape}`
   const currentStatus = data.isCreatingVideoTask
     ? "queued"
     : task?.status ?? readRawString(data.rawData, "status", "draft")
@@ -3123,17 +3321,12 @@ function VideoGenerationCanvasNode({
       ? (sourceImageAsset ? [sourceImageAsset] : [])
       : videoInputAssetList(inputAssets[input.slot])
     const assets = localAssets.length > 0 ? localAssets : keyedAssets.length > 0 ? keyedAssets : roleAssets.length > 0 ? roleAssets : slotAssets
-    return input.slot === "referenceImage"
-      ? assets.slice(0, input.maxCount ?? assets.length)
-      : assets.slice(0, 1)
+    const maxCount = input.maxCount ?? (input.slot === "referenceImage" ? assets.length : 1)
+    return assets.slice(0, Math.max(0, maxCount))
   }
   const activeInputAssets = videoMediaInputs.flatMap((input) =>
     inputAssetsForControl(input).map((asset) => ({ input, asset }))
   )
-  const inputAssetsForLegacySlot = (slot: VideoMediaInputSlot) =>
-    videoMediaInputs
-      .filter((input) => input.slot === slot)
-      .flatMap((input) => inputAssetsForControl(input))
   const missingRequiredInput = videoMediaInputs.find((input) =>
     input.required && inputAssetsForControl(input).length < Math.max(input.minCount, 1)
   )
@@ -3141,6 +3334,10 @@ function VideoGenerationCanvasNode({
   const sourceTextParameters = data.sourceTextParameters ?? []
   const effectivePromptDraft = imagePromptWithSourceText(promptDraft, sourceTextParameters)
   const promptRequired = modeContract.inputs.some((input) => input.slot === "textParameter" && input.required)
+  const missingRequiredParameterControl = visibleVideoParameterControls.find((control) =>
+    !generationControlReady(control, videoFormParameters)
+  ) ?? null
+  const videoFormParametersReady = missingRequiredParameterControl === null
   const unsupportedRequiredInput = modeContract.unsupportedRequiredInputs[0] ?? null
   const requiredInputMissing = Boolean(missingRequiredInput)
   const hasSourceImageInput = videoMediaInputs.some((input) => input.slot === "sourceImage")
@@ -3169,11 +3366,13 @@ function VideoGenerationCanvasNode({
                 ? `${selectedProvider.manifest.name} does not have a generation runtime adapter yet.`
                 : unsupportedRequiredInput
                   ? `Required input ${unsupportedRequiredInput.label} is not supported by this UI yet.`
-                  : requiredInputMissing
-                    ? canImportVideoInputLocalImage(missingRequiredInput?.slot ?? null)
-                      ? `${missingRequiredInputLabel} needs an imported or connected image.`
-                      : `${missingRequiredInputLabel} needs a connected input node.`
-                    : null
+                  : !videoFormParametersReady
+                    ? `${missingRequiredParameterControl?.label ?? "Parameter"} is required.`
+                    : requiredInputMissing
+                      ? canImportVideoInputLocalImage(missingRequiredInput?.slot ?? null)
+                        ? `${missingRequiredInputLabel} needs an imported or connected image.`
+                        : `${missingRequiredInputLabel} needs a connected input node.`
+                      : null
   const canGenerate =
     submitDisabledReason === null
 
@@ -3244,6 +3443,18 @@ function VideoGenerationCanvasNode({
     rawDataRef.current = nextRawData
     onChangeRawDataRef.current?.(id, nextRawData)
   }, [id, normalizedDuration])
+
+  const commitVideoFormParameterPatch = useCallback((patch: Record<string, unknown>) => {
+    const nextParameters = {
+      ...videoFormParametersRef.current,
+      ...patch,
+    }
+    for (const [key, value] of Object.entries(nextParameters)) {
+      if (value === undefined) delete nextParameters[key]
+    }
+    videoFormParametersRef.current = nextParameters
+    commitRawDataPatch({ parameters: nextParameters })
+  }, [commitRawDataPatch])
 
   const writeVideoLocalInputAsset = useCallback((slot: VideoImageInputSlot, asset: CinemaGeneratedAsset | null) => {
     const previousValue = rawDataRef.current.videoLocalInputAssets
@@ -3335,8 +3546,8 @@ function VideoGenerationCanvasNode({
 
   useEffect(() => {
     if (isPromptComposingRef.current || promptCommitTimerRef.current !== null) return
-    const rawPrompt = readRawString(data.rawData, "text")
-    const nextPrompt = taskUserPrompt ?? (rawPrompt || task?.input.prompt || "")
+    const rawPrompt = readOptionalRawString(data.rawData, "text")
+    const nextPrompt = rawPrompt ?? taskUserPrompt ?? task?.input.prompt ?? ""
     promptDraftRef.current = nextPrompt
     setPromptDraftState(nextPrompt)
   }, [data.rawData, task?.input.prompt, taskUserPrompt])
@@ -3435,7 +3646,7 @@ function VideoGenerationCanvasNode({
       promptRef.current?.focus()
       return
     }
-    if (!selectedProvider || !selectedModel || !selectedInputCombination || isBusy || requiredInputMissing || unsupportedRequiredInput) return
+    if (!selectedProvider || !selectedModel || !selectedInputCombination || isBusy || requiredInputMissing || unsupportedRequiredInput || !videoFormParametersReady) return
     clearPromptCommitTimer()
     const duration = validDurationForSelection(durationDraftRef.current, selectedModel, selectedInputCombination)
     const aspectRatio = validAspectRatioForSelection(aspectRatioDraftRef.current, selectedModel, selectedInputCombination)
@@ -3444,94 +3655,31 @@ function VideoGenerationCanvasNode({
       sourceTextParameters.map((parameter) => parameter.nodeID),
       activeInputAssets.filter(({ asset }) => asset.nodeID !== id).map(({ asset }) => asset.nodeID),
     )
-    const inputSlots = [
-      ...sourceTextParameters.map((parameter) => ({
-        slot: "textParameter",
-        role: "prompt",
-        modality: "text",
-        inputKey: "textParameter",
-        nodeID: parameter.nodeID,
-        edgeID: parameter.edgeID,
-      })),
-      ...activeInputAssets.map(({ input, asset }) => ({
-        slot: input.slot,
-        role: input.role,
-        modality: input.modality,
-        inputKey: input.inputKey,
-        nodeID: asset.nodeID,
-        edgeID: asset.edgeID,
-        assetID: asset.id,
-        path: asset.path,
-      })),
-    ]
-    const sourceImageAssetForPayload = inputAssetsForLegacySlot("sourceImage")[0] ?? null
-    const referenceImageAssets = inputAssetsForLegacySlot("referenceImage")
-    const referenceImageAssetIDs = referenceImageAssets.map((asset) => asset.id)
-    const referenceImagePaths = referenceImageAssets.map((asset) => asset.path)
-    const startFrameAsset = inputAssetsForLegacySlot("startFrame")[0] ?? null
-    const endFrameAsset = inputAssetsForLegacySlot("endFrame")[0] ?? null
-    const sourceVideoAsset = inputAssetsForLegacySlot("sourceVideo")[0] ?? null
-    const maskAsset = inputAssetsForLegacySlot("mask")[0] ?? null
     const inputCombinationMode = selectedInputCombination.mode
     const hiddenDefaultParameters = hiddenDefaultParametersForCombination(selectedInputCombination)
-    const parameters = {
-      ...(rawDataRef.current.parameters && typeof rawDataRef.current.parameters === "object" && !Array.isArray(rawDataRef.current.parameters)
-        ? rawDataRef.current.parameters as Record<string, unknown>
-        : {}),
-      ...hiddenDefaultParameters,
-      aspectRatio,
-      duration,
-      resolution,
-      qualityMode: resolution,
-      quality_mode: resolution,
-      inputCombinationMode,
-      selectedInputCombination: selectedInputCombination.mode,
-      modelSelectionID: selectedModelSelectionID,
-      ...(selectedEndpoint ? { endpoint: selectedEndpoint } : {}),
-      ...(selectedModel.offeringID ? { offeringID: selectedModel.offeringID } : {}),
-      ...(selectedModel.providerModelID ? { providerModelID: selectedModel.providerModelID } : {}),
-      userPrompt,
-      sourceTextPrompts,
-      inputSlots,
-      ...(hasSourceImageInput && sourceImageAssetForPayload
-        ? {
-            sourceImageAssetID: sourceImageAssetForPayload.id,
-            sourceImagePath: sourceImageAssetForPayload.path,
-          }
-        : {}),
-      ...(startFrameAsset
-        ? {
-            startFrameAssetID: startFrameAsset.id,
-            startFramePath: startFrameAsset.path,
-          }
-        : {}),
-      ...(endFrameAsset
-        ? {
-            endFrameAssetID: endFrameAsset.id,
-            endFramePath: endFrameAsset.path,
-          }
-        : {}),
-      ...(referenceImageAssets.length > 0
-        ? {
-            referenceImageAssetID: referenceImageAssets[0]!.id,
-            referenceImageAssetIDs,
-            referenceImagePath: referenceImageAssets[0]!.path,
-            referenceImagePaths,
-          }
-        : {}),
-      ...(sourceVideoAsset
-        ? {
-            sourceVideoAssetID: sourceVideoAsset.id,
-            sourceVideoPath: sourceVideoAsset.path,
-          }
-        : {}),
-      ...(maskAsset
-        ? {
-            maskAssetID: maskAsset.id,
-            maskPath: maskAsset.path,
-          }
-        : {}),
-    }
+    const parameters = buildGenerationTaskParameters({
+      baseParameters: videoFormParametersRef.current,
+      hiddenDefaultParameters,
+      fixedParameters: {
+        aspectRatio,
+        duration,
+        resolution,
+        qualityMode: resolution,
+        quality_mode: resolution,
+        inputCombinationMode,
+        selectedInputCombination: selectedInputCombination.mode,
+        modelSelectionID: selectedModelSelectionID,
+        ...(selectedEndpoint ? { endpoint: selectedEndpoint } : {}),
+        ...(selectedModel.offeringID ? { offeringID: selectedModel.offeringID } : {}),
+        ...(selectedModel.providerModelID ? { providerModelID: selectedModel.providerModelID } : {}),
+        userPrompt,
+        sourceTextPrompts,
+      },
+      sourceTextParameters,
+      activeInputAssets,
+      legacyAssetsBySlot: generationLegacyAssetsBySlot(activeInputAssets),
+      includeSourceImageFields: hasSourceImageInput,
+    })
 
     commitRawDataPatch({
       text: userPrompt,
@@ -3596,6 +3744,12 @@ function VideoGenerationCanvasNode({
             <NodeTitleInput nodeID={id} title={data.title} onChangeTitle={data.onChangeTitle} />
           </span>
           <div className="cinema-node-header-actions">
+            <span
+              className="cinema-video-gen-model-chip"
+              title={selectedProvider && selectedModel ? `${selectedProvider.manifest.name} / ${selectedModel.label}` : "No video model selected"}
+            >
+              {selectedModel?.label ?? "No model"}
+            </span>
             <span className={`cinema-video-gen-status is-${currentStatus}`}>
               {isBusy ? <Loader2 size={11} aria-hidden="true" className="is-spinning" /> : null}
               {currentStatus}
@@ -3604,7 +3758,7 @@ function VideoGenerationCanvasNode({
           </div>
         </header>
 
-        <section className="cinema-video-gen-preview" aria-label="Generated video preview">
+        <section className={previewClassName} style={previewStyle} aria-label="Generated video preview">
           {previewSrc ? (
             <video src={previewSrc} controls preload="metadata" />
           ) : (
@@ -3639,6 +3793,7 @@ function VideoGenerationCanvasNode({
               </button>
             ))}
           </div>
+          <div key={mode} className="cinema-video-gen-scroll">
           {sourceTextParameters.length > 0 ? (
             <div className="cinema-video-gen-param-tags" aria-label="Connected text parameters">
               {sourceTextParameters.map((parameter) => (
@@ -3668,6 +3823,7 @@ function VideoGenerationCanvasNode({
           ) : null}
           <textarea
             ref={promptRef}
+            className="cinema-video-prompt-input"
             value={promptDraft}
             placeholder={modeContract.promptPlaceholder}
             spellCheck={false}
@@ -3695,8 +3851,11 @@ function VideoGenerationCanvasNode({
             }}
           />
           {videoMediaInputs.length > 0 ? (
-            <section className="cinema-video-input-slots" aria-label="Video input slots">
-              {videoMediaInputs.flatMap((input) => {
+            <section
+              className={`cinema-video-input-slots ${videoMediaInputs.some((input) => input.slot === "startFrame") && videoMediaInputs.some((input) => input.slot === "endFrame") ? "is-frame-pair" : ""}`}
+              aria-label="Video input slots"
+            >
+              {videoMediaInputs.flatMap((input, inputIndex) => {
                 const slotAssets = inputAssetsForControl(input)
                 const slotItems = input.slot === "referenceImage" && slotAssets.length > 0
                   ? slotAssets
@@ -3710,6 +3869,7 @@ function VideoGenerationCanvasNode({
                   const isRequired = input.required
                   const importSlot = canImportVideoInputLocalImage(input.slot) ? input.slot : null
                   const canImportLocalImage = importSlot !== null
+                  const canOpenLocalImagePicker = canImportLocalImage && !asset
                   const isImportingThisSlot = importSlot !== null && importingVideoInputImageSlot === importSlot
                   const isLocalImportedAsset = Boolean(asset && !edgeID && importSlot !== null && asset.nodeID === id)
                   const slotLabel = input.slot === "referenceImage" && asset
@@ -3719,6 +3879,11 @@ function VideoGenerationCanvasNode({
                       : input.label
                   const slotValueTitle = asset ? `${asset.nodeTitle} · ${asset.path}` : input.emptyText
                   const slotActionLabel = asset ? `替换本地${input.label}图片` : `导入本地${input.label}图片`
+                  const slotIndexLabel = input.slot === "startFrame"
+                    ? "1"
+                    : input.slot === "endFrame"
+                      ? "2"
+                      : String(input.slot === "referenceImage" ? assetIndex + 1 : inputIndex + 1)
                   const slotMainContent = (
                     <>
                       <div className="cinema-video-input-slot-thumb" aria-hidden="true">
@@ -3748,9 +3913,12 @@ function VideoGenerationCanvasNode({
                   return (
                   <div
                     key={asset ? `${input.inputKey}-${asset.edgeID ?? sourceImageAssetKey(asset)}` : input.inputKey}
-                    className={`cinema-video-input-slot ${asset ? "is-ready" : "is-missing"}`}
+                    className={`cinema-video-input-slot ${asset ? "is-ready" : "is-missing"} ${isRequired ? "is-required" : ""}`}
+                    data-slot-index={slotIndexLabel}
+                    data-slot-kind={input.slot}
+                    title={slotValueTitle}
                   >
-                    {canImportLocalImage ? (
+                    {canOpenLocalImagePicker ? (
                       <button
                         type="button"
                         className="cinema-video-input-slot-main cinema-video-input-slot-import"
@@ -3800,33 +3968,7 @@ function VideoGenerationCanvasNode({
               })}
             </section>
           ) : null}
-          <div className="cinema-video-gen-controls">
-            <select
-              aria-label="Video provider"
-              value={selectedProvider?.manifest.id ?? ""}
-              disabled={isBusy || availableProviders.length === 0}
-              onKeyDown={(event) => event.stopPropagation()}
-              onChange={(event) => chooseProvider(event.target.value)}
-            >
-              {availableProviders.length > 0 ? availableProviders.map((provider) => (
-                <option key={provider.manifest.id} value={provider.manifest.id}>{provider.manifest.name}</option>
-              )) : (
-                <option value="">No provider</option>
-              )}
-            </select>
-            <select
-              aria-label="Video model"
-              value={selectedModelSelectionID}
-              disabled={isBusy || !selectedProvider}
-              onKeyDown={(event) => event.stopPropagation()}
-              onChange={(event) => chooseModel(event.target.value)}
-            >
-              {availableModels.length > 0 ? availableModels.map((model) => (
-                <option key={providerModelSelectionID(model)} value={providerModelSelectionID(model)}>{model.label}</option>
-              )) : (
-                <option value="">No model</option>
-              )}
-            </select>
+          <div className="cinema-video-quick-controls">
             <select
               aria-label="Aspect ratio"
               value={aspectRatioDraft}
@@ -3837,7 +3979,7 @@ function VideoGenerationCanvasNode({
                 commitRawDataPatch({ aspectRatio: event.target.value })
               }}
             >
-              {[...new Set([...aspectRatioOptions, aspectRatioDraft, DEFAULT_VIDEO_ASPECT_RATIO].filter(Boolean))].map((item) => (
+              {aspectRatioSelectOptions.map((item) => (
                 <option key={item} value={item}>{item}</option>
               ))}
             </select>
@@ -3851,11 +3993,9 @@ function VideoGenerationCanvasNode({
                 commitRawDataPatch({ duration: Number.parseFloat(event.target.value) || DEFAULT_VIDEO_DURATION_SECONDS })
               }}
             >
-              {[...new Set([...durationOptions, Number.parseFloat(durationDraft) || DEFAULT_VIDEO_DURATION_SECONDS])]
-                .filter((value) => Number.isFinite(value) && value > 0)
-                .map((value) => (
-                  <option key={value} value={String(value)}>{value}s</option>
-                ))}
+              {durationSelectOptions.map((value) => (
+                <option key={value} value={String(value)}>{value}s</option>
+              ))}
             </select>
             <select
               aria-label="Quality mode"
@@ -3867,10 +4007,20 @@ function VideoGenerationCanvasNode({
                 commitRawDataPatch({ resolution: event.target.value })
               }}
             >
-              {[...new Set([...resolutionOptions, resolutionDraft, DEFAULT_VIDEO_RESOLUTION].filter(Boolean))].map((item) => (
+              {resolutionSelectOptions.map((item) => (
                 <option key={item} value={item}>{resolutionOptionLabels[item] ?? item}</option>
               ))}
             </select>
+            <button
+              type="button"
+              className={`cinema-video-advanced-toggle ${isAdvancedOpen ? "is-open" : ""}`}
+              aria-expanded={isAdvancedOpen}
+              aria-controls={`${id}-video-advanced`}
+              onClick={() => setIsAdvancedOpen((value) => !value)}
+            >
+              <span>Advanced</span>
+              <ChevronDown size={14} aria-hidden="true" />
+            </button>
             <button
               type="button"
               className="cinema-video-gen-submit"
@@ -3884,6 +4034,57 @@ function VideoGenerationCanvasNode({
                 : <ArrowUp size={18} aria-hidden="true" />}
             </button>
           </div>
+          {isAdvancedOpen ? (
+            <section id={`${id}-video-advanced`} className="cinema-video-advanced-panel" aria-label="Advanced video generation inputs">
+              {visibleVideoParameterControls.length > 0 ? (
+                <section className="cinema-video-form-controls" aria-label="Video generation parameters">
+                  {visibleVideoParameterControls.map((control) => (
+                    <GenerationParameterControlField
+                      key={control.key}
+                      control={control}
+                      parameters={videoFormParameters}
+                      disabled={isBusy}
+                      onChange={commitVideoFormParameterPatch}
+                    />
+                  ))}
+                </section>
+              ) : null}
+              <section className="cinema-video-model-controls" aria-label="Video provider and model">
+                <label className="cinema-image-form-control">
+                  <span>Provider</span>
+                  <select
+                    aria-label="Video provider"
+                    value={selectedProvider?.manifest.id ?? ""}
+                    disabled={isBusy || availableProviders.length === 0}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    onChange={(event) => chooseProvider(event.target.value)}
+                  >
+                    {availableProviders.length > 0 ? availableProviders.map((provider) => (
+                      <option key={provider.manifest.id} value={provider.manifest.id}>{provider.manifest.name}</option>
+                    )) : (
+                      <option value="">No provider</option>
+                    )}
+                  </select>
+                </label>
+                <label className="cinema-image-form-control">
+                  <span>Model</span>
+                  <select
+                    aria-label="Video model"
+                    value={selectedModelSelectionID}
+                    disabled={isBusy || !selectedProvider}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    onChange={(event) => chooseModel(event.target.value)}
+                  >
+                    {availableModels.length > 0 ? availableModels.map((model) => (
+                      <option key={providerModelSelectionID(model)} value={providerModelSelectionID(model)}>{model.label}</option>
+                    )) : (
+                      <option value="">No model</option>
+                    )}
+                  </select>
+                </label>
+              </section>
+            </section>
+          ) : null}
           {videoInputImageImportError || nodeError || unsupportedRequiredInput || requiredInputMissing || providerNeedsCredential && !providerConnected || providerAdapterUnavailable ? (
             <p className="cinema-video-gen-error" role="alert" title={videoInputImageImportError ?? nodeError ?? undefined}>
               {videoInputImageImportError ?? nodeError ?? (
@@ -3899,6 +4100,7 @@ function VideoGenerationCanvasNode({
               )}
             </p>
           ) : null}
+          </div>
         </section>
       </article>
       <Handle
@@ -5661,6 +5863,8 @@ export function App() {
             fitViewOptions={{ padding: 0.38 }}
             minZoom={0.2}
             maxZoom={2}
+            panOnDrag={[1]}
+            selectionOnDrag
           >
             <Background gap={32} size={1.2} color="rgba(255,255,255,0.16)" />
             <Controls position="bottom-center" orientation="horizontal" />

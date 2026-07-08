@@ -161,6 +161,7 @@ export const KnownCinemaProviderModelModeSchema = z.enum([
   "text-to-image",
   "image-to-image",
   "image-edit",
+  "omni-image",
 ])
 export type KnownCinemaProviderModelMode = z.infer<typeof KnownCinemaProviderModelModeSchema>
 
@@ -173,12 +174,90 @@ export type CinemaTaskMode = z.infer<typeof CinemaTaskModeSchema>
 export const CinemaProviderEndpointMethodSchema = z.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"])
 export type CinemaProviderEndpointMethod = z.infer<typeof CinemaProviderEndpointMethodSchema>
 
-export const CinemaProviderEndpointSchema = z.object({
+export const CinemaProviderTaskQueryEndpointSchema = z.object({
   method: CinemaProviderEndpointMethodSchema.optional(),
   path: z.string().min(1).optional(),
   url: z.string().min(1).optional(),
 }).passthrough()
+export type CinemaProviderTaskQueryEndpoint = z.infer<typeof CinemaProviderTaskQueryEndpointSchema>
+
+export const CinemaProviderEndpointSchema = z.object({
+  method: CinemaProviderEndpointMethodSchema.optional(),
+  path: z.string().min(1).optional(),
+  url: z.string().min(1).optional(),
+  taskQuery: CinemaProviderTaskQueryEndpointSchema.optional(),
+}).passthrough()
 export type CinemaProviderEndpoint = z.infer<typeof CinemaProviderEndpointSchema>
+
+export const GenerationControlOptionSchema = z.union([z.string(), z.number(), z.boolean()])
+export type GenerationControlOption = z.infer<typeof GenerationControlOptionSchema>
+
+export const GenerationControlVisibilitySchema = z.record(z.string(), z.unknown())
+export type GenerationControlVisibility = z.infer<typeof GenerationControlVisibilitySchema>
+
+export const ProviderInputUIControlSchema = z.enum([
+  "textarea",
+  "select",
+  "segmented",
+  "number",
+  "switch",
+  "image-list",
+  "json",
+])
+export type ProviderInputUIControl = z.infer<typeof ProviderInputUIControlSchema>
+
+const GenerationControlBaseSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  required: z.boolean(),
+  visibleWhen: GenerationControlVisibilitySchema.optional(),
+  disabledWhen: GenerationControlVisibilitySchema.optional(),
+})
+
+export const GenerationControlSchema = z.discriminatedUnion("type", [
+  GenerationControlBaseSchema.extend({
+    type: z.literal("prompt"),
+    maxLength: z.number().int().positive().optional(),
+    defaultValue: z.string().optional(),
+  }),
+  GenerationControlBaseSchema.extend({
+    type: z.literal("image-list"),
+    minCount: z.number().int().nonnegative().optional(),
+    maxCount: z.number().int().nonnegative().optional(),
+    supportedFormats: z.array(z.string().min(1)).optional(),
+    maxFileSizeMB: z.number().positive().optional(),
+  }),
+  GenerationControlBaseSchema.extend({
+    type: z.literal("select"),
+    options: z.array(GenerationControlOptionSchema),
+    labels: z.record(z.string(), z.string()).optional(),
+    defaultValue: z.unknown().optional(),
+  }),
+  GenerationControlBaseSchema.extend({
+    type: z.literal("number"),
+    min: z.number().optional(),
+    max: z.number().optional(),
+    defaultValue: z.number().optional(),
+  }),
+  GenerationControlBaseSchema.extend({
+    type: z.literal("boolean"),
+    defaultValue: z.boolean().optional(),
+  }),
+  GenerationControlBaseSchema.extend({
+    type: z.literal("json"),
+    defaultValue: z.unknown().optional(),
+  }),
+])
+export type GenerationControl = z.infer<typeof GenerationControlSchema>
+
+export const GenerationFormSpecSchema = z.object({
+  providerID: z.string().min(1),
+  modelID: z.string().min(1),
+  mode: z.string().min(1),
+  output: z.enum(["image", "video"]),
+  controls: z.array(GenerationControlSchema),
+})
+export type GenerationFormSpec = z.infer<typeof GenerationFormSpecSchema>
 
 export const CinemaProviderInputSpecSchema = z.object({
   role: z.string().min(1),
@@ -186,6 +265,22 @@ export const CinemaProviderInputSpecSchema = z.object({
   required: z.boolean().default(false),
   minCount: z.number().int().nonnegative().default(0),
   maxCount: z.number().int().nonnegative().optional(),
+  apiField: z.string().min(1).optional(),
+  providerField: z.string().min(1).optional(),
+  label: z.string().min(1).optional(),
+  maxLength: z.number().int().positive().optional(),
+  default: z.unknown().optional(),
+  options: z.array(GenerationControlOptionSchema).optional(),
+  labels: z.record(z.string(), z.string()).optional(),
+  min: z.number().optional(),
+  max: z.number().optional(),
+  supportedFormats: z.array(z.string().min(1)).optional(),
+  maxFileSizeMB: z.number().positive().optional(),
+  uiControl: ProviderInputUIControlSchema.optional(),
+  uiGroup: z.string().min(1).optional(),
+  uiOrder: z.number().optional(),
+  visibleWhen: GenerationControlVisibilitySchema.optional(),
+  disabledWhen: GenerationControlVisibilitySchema.optional(),
   note: z.string().min(1).optional(),
 }).passthrough()
 export type CinemaProviderInputSpec = z.infer<typeof CinemaProviderInputSpecSchema>
@@ -305,6 +400,8 @@ export const CinemaVideoProviderManifestSchema = z.object({
     supportsFirstLastFrame: z.boolean().optional(),
     requiresPublicInputURL: z.boolean().optional(),
     supportsProviderUpload: z.boolean().optional(),
+    taskQueryEndpoint: CinemaProviderTaskQueryEndpointSchema.optional(),
+    formSpecs: z.array(GenerationFormSpecSchema).default([]),
     parameterSchema: z.record(z.string(), z.unknown()).default({}),
   })).default([]),
 })
@@ -431,7 +528,9 @@ export const CinemaTextGenerationResultSchema = z.object({
 })
 export type CinemaTextGenerationResult = z.infer<typeof CinemaTextGenerationResultSchema>
 
-export const CinemaImageModelSchema = CinemaTextModelSchema
+export const CinemaImageModelSchema = CinemaTextModelSchema.extend({
+  formSpec: GenerationFormSpecSchema.optional(),
+})
 export type CinemaImageModel = z.infer<typeof CinemaImageModelSchema>
 
 export const CinemaImageModelsResultSchema = z.object({
@@ -449,8 +548,9 @@ export const CreateCinemaImageGenerationBodySchema = z.object({
   userPrompt: z.string().optional(),
   model: z.string().nullable().optional(),
   size: z.string().regex(/^\d+x\d+$/).optional(),
-  count: z.number().int().min(1).max(4).optional(),
+  count: z.number().int().min(1).optional(),
   style: z.string().trim().min(1).max(400).optional(),
+  parameters: z.record(z.string(), z.unknown()).default({}),
   sourceNodeIDs: z.array(z.string().min(1)).optional(),
   sourceTextPrompts: z.array(z.string().trim().min(1)).optional(),
   sourceImageAssetID: z.string().min(1).optional(),
