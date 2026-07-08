@@ -30,16 +30,61 @@ describe("cinema schemas", () => {
         {
           id: "kling-3.0-turbo",
           label: "Kling 3.0 Turbo",
-          modes: ["text-to-video"],
+          offeringID: "klingai-global/kling-3.0-turbo",
+          providerModelID: "kling-3.0-turbo",
+          modes: ["text-to-video", "text-to-video.multi-shot"],
+          inputCombinations: [
+            {
+              mode: "text-to-video.multi-shot",
+              label: "Text to video multi-shot",
+              inputs: [
+                {
+                  role: "prompt",
+                  modality: "text",
+                  required: true,
+                  minCount: 1,
+                  maxCount: 1,
+                  note: "Use Shot n fixed format.",
+                },
+              ],
+              endpoint: {
+                method: "POST",
+                path: "/text-to-video/kling-3.0-turbo",
+              },
+            },
+          ],
         },
         {
           id: "kling-image-3.0",
           label: "Kling Image 3.0",
+          offeringID: "klingai-global/kling-image-3.0",
+          providerModelID: "kling-v3",
           modalities: {
             input: ["text", "image"],
             output: ["image"],
           },
           modes: ["text-to-image", "image-to-image", "image-edit"],
+          inputCombinations: [
+            {
+              mode: "image-to-image",
+              label: "Image to image",
+              requiredModalities: ["image"],
+              optionalModalities: ["text"],
+              inputs: [
+                {
+                  role: "image",
+                  modality: "image",
+                  required: true,
+                  minCount: 1,
+                  maxCount: 1,
+                },
+              ],
+              endpoint: {
+                method: "POST",
+                path: "/v1/images/edits",
+              },
+            },
+          ],
         },
       ],
     })
@@ -54,7 +99,20 @@ describe("cinema schemas", () => {
       timeoutMs: 10000,
     })
     expect(manifest.models[0]?.durations).toEqual([])
+    expect(manifest.models[0]?.offeringID).toBe("klingai-global/kling-3.0-turbo")
+    expect(manifest.models[0]?.modes).toEqual(["text-to-video", "text-to-video.multi-shot"])
+    expect(manifest.models[0]?.inputCombinations[0]?.mode).toBe("text-to-video.multi-shot")
+    expect(manifest.models[0]?.inputCombinations[0]?.inputs[0]?.note).toBe("Use Shot n fixed format.")
+    expect(manifest.models[1]?.providerModelID).toBe("kling-v3")
     expect(manifest.models[1]?.modes).toEqual(["text-to-image", "image-to-image", "image-edit"])
+    expect(manifest.models[1]?.inputCombinations[0]).toMatchObject({
+      mode: "image-to-image",
+      endpoint: {
+        method: "POST",
+        path: "/v1/images/edits",
+      },
+      inputs: [{ role: "image", modality: "image", required: true, minCount: 1, maxCount: 1 }],
+    })
 
     const task = CinemaGenerationTaskSchema.parse({
       id: "task-1",
@@ -134,7 +192,7 @@ describe("cinema schemas", () => {
     expect(provider.runtime?.adapterID).toBe("kling")
   })
 
-  it("parses provider task modes while rejecting unknown task modes", () => {
+  it("parses provider task modes including catalog-defined combination modes", () => {
     const body = CreateCinemaGenerationTaskBodySchema.parse({
       providerID: "kling",
       modelID: "kling-3.0-turbo",
@@ -144,13 +202,13 @@ describe("cinema schemas", () => {
 
     expect(body.taskNodeID).toBe("video-node-1")
 
-    expect(() =>
-      CreateCinemaGenerationTaskBodySchema.parse({
-        providerID: "kling",
-        modelID: "kling-3.0-turbo",
-        mode: "not-a-mode",
-      })
-    ).toThrow()
+    const customModeBody = CreateCinemaGenerationTaskBodySchema.parse({
+      providerID: "kling",
+      modelID: "kling-3.0-turbo",
+      mode: "text-to-video.multi-shot",
+    })
+
+    expect(customModeBody.mode).toBe("text-to-video.multi-shot")
 
     const imageBody = CreateCinemaGenerationTaskBodySchema.parse({
       providerID: "kling",

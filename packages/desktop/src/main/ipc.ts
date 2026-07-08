@@ -134,6 +134,7 @@ import type {
   AgentPtySessionInfo,
   AgentSessionArchiveResult,
   AgentSessionBridgeIPCEvent,
+  AgentSessionCompactResult,
   AgentSessionDeleteResult,
   AgentSessionDiffScope,
   AgentSessionDiffSummary,
@@ -5841,6 +5842,23 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
       const search = input.view === "all" ? "?view=all" : ""
       const result = await requestAgentJSON<AgentSessionHistoryMessage[]>(
         `/api/sessions/${encodeURIComponent(sessionID)}/messages${search}`,
+      )
+
+      return result.data
+    },
+  )
+
+  handleDesktopIpc(
+    "desktop:agent-session-compact",
+    async (_event, input: { backendSessionID: string }) => {
+      const sessionID = input.backendSessionID.trim()
+      const result = await requestAgentJSON<AgentSessionCompactResult>(
+        `/api/sessions/${encodeURIComponent(sessionID)}/compact`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        },
       )
 
       return result.data

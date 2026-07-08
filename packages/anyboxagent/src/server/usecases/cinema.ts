@@ -493,11 +493,30 @@ function cinemaProviderModelSupportsImageInput(model: CinemaGenerationProviderMo
   return modalities.includes("image") || model.modes.some((mode) => mode === "image-to-image" || mode === "image-edit")
 }
 
-function toCinemaProviderImageModel(provider: CinemaGenerationProvider, model: CinemaGenerationProviderModel): CinemaImageModel {
+function cinemaProviderInputCombinationParameters(
+  model: CinemaGenerationProviderModel,
+  mode: CreateCinemaGenerationTaskBody["mode"],
+  parameters: Record<string, unknown>,
+) {
+  const combination = CinemaProviderRuntime.findCinemaVideoProviderInputCombinationForMode(
+    model,
+    mode,
+    stringValue(parameters.inputCombinationMode),
+  )
   return {
-    value: textModelValue({ providerID: provider.manifest.id, id: model.id }),
+    ...(combination ? { inputCombinationMode: combination.mode } : {}),
+    ...(combination?.endpoint ? { endpoint: combination.endpoint } : {}),
+  }
+}
+
+function toCinemaProviderImageModel(provider: CinemaGenerationProvider, model: CinemaGenerationProviderModel): CinemaImageModel {
+  const modelID = CinemaProviderRuntime.cinemaVideoProviderModelSelectionID(model)
+  return {
+    value: textModelValue({ providerID: provider.manifest.id, id: modelID }),
     providerID: provider.manifest.id,
-    modelID: model.id,
+    modelID,
+    offeringID: model.offeringID,
+    providerModelID: CinemaProviderRuntime.cinemaVideoProviderTaskModelID(model),
     label: model.label,
     providerLabel: provider.manifest.name,
     available: true,
@@ -521,7 +540,7 @@ function providerModelOutputsImage(model: CinemaGenerationProviderModel) {
 function isAvailableCinemaProviderImageModel(provider: CinemaGenerationProvider, model: CinemaGenerationProviderModel) {
   return provider.auth.connected &&
     provider.runtime?.adapterAvailable === true &&
-    CinemaProviderRuntime.cinemaVideoProviderAdapterSupportsMode(provider.manifest.id, CINEMA_IMAGE_GENERATION_MODE) &&
+    CinemaProviderRuntime.cinemaVideoProviderModelRuntimeSupportsMode(provider.manifest.id, model, CINEMA_IMAGE_GENERATION_MODE) &&
     model.modes.includes(CINEMA_IMAGE_GENERATION_MODE) &&
     providerModelOutputsImage(model)
 }
@@ -1646,8 +1665,10 @@ async function resolveCinemaImageGenerationModel(projectID: string, requestedMod
   }
 
   const provider = await CinemaProviderRuntime.getCinemaVideoProvider(selected.providerID)
-  const model = provider.manifest.models.find((item) =>
-    item.id === selected.modelID && isAvailableCinemaProviderImageModel(provider, item)
+  const model = CinemaProviderRuntime.findCinemaVideoProviderModelForMode(
+    provider.manifest,
+    selected.modelID,
+    CINEMA_IMAGE_GENERATION_MODE,
   )
   if (!model || !isAvailableCinemaProviderImageModel(provider, model)) {
     throw new ApiError(
@@ -1811,12 +1832,21 @@ export async function createCinemaImageGeneration(
       parameters,
       taskNodeID: node.id,
     }
-    CinemaProviderRuntime.assertCinemaVideoProviderModelSupports(taskInput, provider.manifest)
+    const providerModel = CinemaProviderRuntime.assertCinemaVideoProviderModelSupports(taskInput, provider.manifest)
+    const taskModelID = CinemaProviderRuntime.cinemaVideoProviderTaskModelID(providerModel)
+    const combinationParameters = cinemaProviderInputCombinationParameters(providerModel, CINEMA_IMAGE_GENERATION_MODE, parameters)
+    const taskParameters = {
+      ...parameters,
+      ...combinationParameters,
+      modelSelectionID: imageModel.modelID,
+      providerModelID: taskModelID,
+      ...(providerModel.offeringID ? { offeringID: providerModel.offeringID } : {}),
+    }
     const task = taskWithProviderCallback(taskWithCanvasIDs({
       id: taskID,
       projectID,
       providerID: imageModel.providerID,
-      modelID: imageModel.modelID,
+      modelID: taskModelID,
       mode: CINEMA_IMAGE_GENERATION_MODE,
       title: node.title,
       status: "queued",
@@ -1826,7 +1856,7 @@ export async function createCinemaImageGeneration(
       input: {
         prompt,
         sourceNodeIDs,
-        parameters,
+        parameters: taskParameters,
       },
       outputAssets: [],
       error: null,
@@ -1995,7 +2025,16 @@ export async function createCinemaGenerationTask(
   const { root, cinemaRoot } = resolveCinemaRoot(projectID)
   await assertCinemaProjectInitialized(cinemaRoot)
   const provider = await CinemaProviderRuntime.getCinemaVideoProvider(input.providerID)
-  CinemaProviderRuntime.assertCinemaVideoProviderModelSupports(input, provider.manifest)
+  const providerModel = CinemaProviderRuntime.assertCinemaVideoProviderModelSupports(input, provider.manifest)
+  const taskModelID = CinemaProviderRuntime.cinemaVideoProviderTaskModelID(providerModel)
+  const combinationParameters = cinemaProviderInputCombinationParameters(providerModel, input.mode, input.parameters)
+  const taskParameters = {
+    ...input.parameters,
+    ...combinationParameters,
+    modelSelectionID: input.modelID,
+    providerModelID: taskModelID,
+    ...(providerModel.offeringID ? { offeringID: providerModel.offeringID } : {}),
+  }
 
   const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
   const createdAt = nowISO()
@@ -2007,7 +2046,7 @@ export async function createCinemaGenerationTask(
     id: taskID,
     projectID,
     providerID: input.providerID,
-    modelID: input.modelID,
+    modelID: taskModelID,
     mode: input.mode,
     title: titleForGenerationTask(input),
     status: "queued",
@@ -2017,7 +2056,7 @@ export async function createCinemaGenerationTask(
     input: {
       prompt: input.prompt,
       sourceNodeIDs: input.sourceNodeIDs,
-      parameters: input.parameters,
+      parameters: taskParameters,
     },
     outputAssets: [],
     error: null,

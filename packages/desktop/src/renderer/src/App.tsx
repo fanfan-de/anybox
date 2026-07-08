@@ -810,6 +810,7 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
     platform,
   } = useDesktopShell()
   const {
+    composerCommandStatusByTabKey,
     composerRefreshVersion,
     handleApproveProposedPlan,
     handleCancelSend,
@@ -1023,62 +1024,63 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
       <div className={sessionPopoutShellClassName}>
         <main ref={appShellRef} className="session-popout-app" style={appShellStyle}>
           <WorkbenchShell
-          assistantTraceVisibility={assistantTraceVisibility}
-          composerRefreshVersion={composerRefreshVersion}
-          isActivityRailVisible={false}
-          isDetachedWindow
-          isResolvingPermissionRequest={isResolvingPermissionRequest}
-          isRightSidebarCollapsed
-          isSavingToolPermissionMode={isSavingToolPermissionMode}
-          isSidebarCollapsed
-          platform={platform}
-          store={workspaceStore}
-          windowControls={windowControls}
-          readThreadScrollSnapshot={readThreadScrollSnapshot}
-          saveThreadScrollSnapshot={saveThreadScrollSnapshot}
-          permissionRequestActionError={permissionRequestActionError}
-          permissionRequestActionRequestID={permissionRequestActionRequestID}
-          toolPermissionMode={toolPermissionMode}
-          toolPermissionModeError={toolPermissionModeError}
-          surfaceID={surfaceID}
-          onActiveDockviewChange={handleDockviewActiveChange}
-          onApproveProposedPlan={handleApproveProposedPlan}
-          onAskUserQuestionAnswer={handleAskUserQuestionAnswer}
-          onCancelSend={handleCancelSend}
-          onCloseCreateSessionTab={handleDockBack}
-          onCloseSessionTab={handleCanvasSessionTabClose}
-          onCommandsReady={handleWorkbenchDockviewCommandsReady}
-          onCreateSessionSubmit={handleCreateSessionSubmit}
-          onCreateSessionWorkspaceChange={handleCreateSessionWorkspaceChange}
-          onOpenProjectFolder={() => undefined}
-          onBranchSelect={handleSessionBranchSelect}
-          onClearComposerParentMessage={handleClearComposerParentMessage}
-          onDetachSessionPanel={handleDetachSessionPanel}
-          onDockBack={handleDockBack}
-          onFocusPane={handlePaneFocus}
-          onForkFromMessage={handleForkFromMessage}
-          onInspectFileInSidebar={() => undefined}
-          onLayoutChange={setDockviewLayout}
-          onArtifactLinkOpen={handleArtifactLinkOpen}
-          onLocalFileLinkOpen={handleLocalFileLinkOpen}
-          onMoveSessionPanel={handleMoveSessionPanel}
-          onOpenCreateSessionTab={() => undefined}
-          onPasteComposerImageAttachments={handlePasteComposerImageAttachments}
-          onPermissionRequestResponse={handlePermissionRequestResponse}
-          onPickComposerAttachments={handlePickComposerAttachments}
-          onPlanModeToggle={handlePlanModeToggle}
-          onRemoveComposerAttachment={handleRemoveComposerAttachment}
-          onSelectCreateSessionTab={() => undefined}
-          onSelectSessionTab={handleCanvasSessionTabSelect}
-          onSend={handleSend}
-          onSessionModelSelectionChange={handleSessionModelSelectionChange}
-          onSetDraft={setDraftForTab}
-          onToggleLeftSidebar={() => undefined}
-          onToggleRightSidebar={() => undefined}
-          onToolPermissionModeChange={handleToolPermissionModeChange}
-          onMessageDiffRestore={handlePopoutDiffNoop}
-          onMessageDiffReview={handlePopoutDiffNoop}
-          onMessageDiffSummaryHydrate={handleMessageDiffSummaryHydrate}
+            assistantTraceVisibility={assistantTraceVisibility}
+            composerCommandStatusByTabKey={composerCommandStatusByTabKey}
+            composerRefreshVersion={composerRefreshVersion}
+            isActivityRailVisible={false}
+            isDetachedWindow
+            isResolvingPermissionRequest={isResolvingPermissionRequest}
+            isRightSidebarCollapsed
+            isSavingToolPermissionMode={isSavingToolPermissionMode}
+            isSidebarCollapsed
+            platform={platform}
+            store={workspaceStore}
+            windowControls={windowControls}
+            readThreadScrollSnapshot={readThreadScrollSnapshot}
+            saveThreadScrollSnapshot={saveThreadScrollSnapshot}
+            permissionRequestActionError={permissionRequestActionError}
+            permissionRequestActionRequestID={permissionRequestActionRequestID}
+            toolPermissionMode={toolPermissionMode}
+            toolPermissionModeError={toolPermissionModeError}
+            surfaceID={surfaceID}
+            onActiveDockviewChange={handleDockviewActiveChange}
+            onApproveProposedPlan={handleApproveProposedPlan}
+            onAskUserQuestionAnswer={handleAskUserQuestionAnswer}
+            onCancelSend={handleCancelSend}
+            onCloseCreateSessionTab={handleDockBack}
+            onCloseSessionTab={handleCanvasSessionTabClose}
+            onCommandsReady={handleWorkbenchDockviewCommandsReady}
+            onCreateSessionSubmit={handleCreateSessionSubmit}
+            onCreateSessionWorkspaceChange={handleCreateSessionWorkspaceChange}
+            onOpenProjectFolder={() => undefined}
+            onBranchSelect={handleSessionBranchSelect}
+            onClearComposerParentMessage={handleClearComposerParentMessage}
+            onDetachSessionPanel={handleDetachSessionPanel}
+            onDockBack={handleDockBack}
+            onFocusPane={handlePaneFocus}
+            onForkFromMessage={handleForkFromMessage}
+            onInspectFileInSidebar={() => undefined}
+            onLayoutChange={setDockviewLayout}
+            onArtifactLinkOpen={handleArtifactLinkOpen}
+            onLocalFileLinkOpen={handleLocalFileLinkOpen}
+            onMoveSessionPanel={handleMoveSessionPanel}
+            onOpenCreateSessionTab={() => undefined}
+            onPasteComposerImageAttachments={handlePasteComposerImageAttachments}
+            onPermissionRequestResponse={handlePermissionRequestResponse}
+            onPickComposerAttachments={handlePickComposerAttachments}
+            onPlanModeToggle={handlePlanModeToggle}
+            onRemoveComposerAttachment={handleRemoveComposerAttachment}
+            onSelectCreateSessionTab={() => undefined}
+            onSelectSessionTab={handleCanvasSessionTabSelect}
+            onSend={handleSend}
+            onSessionModelSelectionChange={handleSessionModelSelectionChange}
+            onSetDraft={setDraftForTab}
+            onToggleLeftSidebar={() => undefined}
+            onToggleRightSidebar={() => undefined}
+            onToolPermissionModeChange={handleToolPermissionModeChange}
+            onMessageDiffRestore={handlePopoutDiffNoop}
+            onMessageDiffReview={handlePopoutDiffNoop}
+            onMessageDiffSummaryHydrate={handleMessageDiffSummaryHydrate}
           />
         </main>
       </div>
@@ -1232,6 +1234,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     activeWorkspaceFileScopeDirectory,
     activeWorkspaceFileScopeName,
     canInsertWorkspaceFileCommentsIntoDraft,
+    composerCommandStatusByTabKey,
     composerRefreshVersion,
     deletingSessionID,
     handleApproveProposedPlan,
@@ -2889,11 +2892,12 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
             />
           ) : (
             <>
-                <WorkbenchShell
-                  composerRefreshVersion={composerRefreshVersion}
-                  assistantTraceVisibility={assistantTraceVisibility}
-                  isActivityRailVisible={isActivityRailVisible}
-                  isResolvingPermissionRequest={isResolvingPermissionRequest}
+              <WorkbenchShell
+                composerCommandStatusByTabKey={composerCommandStatusByTabKey}
+                composerRefreshVersion={composerRefreshVersion}
+                assistantTraceVisibility={assistantTraceVisibility}
+                isActivityRailVisible={isActivityRailVisible}
+                isResolvingPermissionRequest={isResolvingPermissionRequest}
                 isSavingToolPermissionMode={isSavingToolPermissionMode}
                 isRightSidebarCollapsed={isRightSidebarCollapsed}
                 isSidebarCollapsed={isSidebarCollapsed}

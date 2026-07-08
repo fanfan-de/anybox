@@ -48,6 +48,17 @@ describe("i18n translations", () => {
     expect(t("en-US", "workbench.sessionBag.problem.count", { count: 12, max: 2000 })).toBe(
       "12 / 2000 chars",
     )
+    expect(t("zh-CN", "composer.context.buttonLabel", { percent: 25, input: "25k", window: "100k" })).toBe(
+      "上下文压力 25%（25k / 100k 输入 tokens）",
+    )
+    expect(t("en-US", "composer.context.cacheValue", { read: "2,000", write: 100 })).toBe(
+      "2,000 read / 100 write",
+    )
+    expect(t("zh-CN", "composer.compact.status.noop.title")).toBe("无需压缩")
+    expect(t("en-US", "composer.compact.status.noop.detail")).toBe(
+      "Recent turns are already kept raw; there is not enough older history yet.",
+    )
+    expect(t("zh-CN", "composer.compact.status.failed.detail", { message: "session busy" })).toBe("session busy")
     expect(translateLiteral("zh-CN", "DeepSeek V4 Pro does not support image or PDF input.")).toBe(
       "DeepSeek V4 Pro 不支持图片或 PDF 输入。",
     )

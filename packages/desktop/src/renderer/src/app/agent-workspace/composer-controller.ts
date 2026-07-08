@@ -1,4 +1,4 @@
-import type { MutableRefObject } from "react"
+import { useEffect, useRef, type MutableRefObject } from "react"
 import { buildComposerAttachment, isComposerAttachmentSupported } from "../composer/attachment-utils"
 import {
   compileComposerSubmission,
@@ -40,16 +40,39 @@ import {
   normalizeQuestionAnswerText,
   sendPromptToSession as sendPromptToSessionService,
 } from "./composer-send-service"
+import type { TranslationKey } from "../i18n/translations"
 import { respondPermissionRequest } from "./permission-requests-service"
 import { getWorkbenchTabReferenceFromKey } from "./workspace-derived-state"
 import type { WorkspaceStateUpdater } from "./workspace-store"
 
 type StateSetter<T> = (update: WorkspaceStateUpdater<T>) => void
+type ComposerSessionCommand = "compact"
+type ComposerCommandStatusParams = Record<string, string | number>
+export type ComposerCommandStatusTone = "info" | "success" | "error"
+
+export interface ComposerCommandStatus {
+  id: string
+  tone: ComposerCommandStatusTone
+  titleKey: TranslationKey
+  titleParams?: ComposerCommandStatusParams
+  detailKey?: TranslationKey
+  detailParams?: ComposerCommandStatusParams
+}
 
 interface CreateSessionResult {
   backendSessionID: string
   session: SessionSummary
   workspace: WorkspaceGroup
+}
+
+function readComposerSessionCommand(
+  text: string | undefined,
+  attachments: ComposerAttachment[],
+): ComposerSessionCommand | null {
+  if (attachments.length > 0) return null
+  const normalized = text?.trim().toLowerCase()
+  if (normalized === "/compact" || normalized === "~compact") return "compact"
+  return null
 }
 
 interface UseComposerControllerOptions {
@@ -97,6 +120,7 @@ interface UseComposerControllerOptions {
   setAgentSessions: StateSetter<Record<string, string>>
   setCancellingSessionIDs: StateSetter<Record<string, boolean>>
   setComposerAttachmentsByTabKey: StateSetter<Record<string, ComposerAttachment[]>>
+  setComposerCommandStatusByTabKey?: StateSetter<Record<string, ComposerCommandStatus>>
   setComposerDraftStateByTabKey: StateSetter<Record<string, ComposerDraftState>>
   setComposerParentMessageIDByTabKey: StateSetter<Record<string, string>>
   setCreateSessionTabs: StateSetter<CreateSessionTab[]>
@@ -148,6 +172,7 @@ export function useComposerController({
   setAgentSessions,
   setCancellingSessionIDs,
   setComposerAttachmentsByTabKey,
+  setComposerCommandStatusByTabKey,
   setComposerDraftStateByTabKey,
   setComposerParentMessageIDByTabKey,
   setCreateSessionTabs,
@@ -161,6 +186,16 @@ export function useComposerController({
   updateAssistantConversationMessage,
   workspaces,
 }: UseComposerControllerOptions) {
+  const commandStatusTimersRef = useRef<Record<string, number>>({})
+  const commandStatusIDCounterRef = useRef(0)
+
+  useEffect(() => () => {
+    for (const timeoutID of Object.values(commandStatusTimersRef.current)) {
+      window.clearTimeout(timeoutID)
+    }
+    commandStatusTimersRef.current = {}
+  }, [])
+
   function setDraftForTab(tabKey: string, value: ComposerDraftState) {
     setComposerDraftStateByTabKey((current) => {
       const nextDraftState = normalizeComposerDraftState(value)
@@ -260,6 +295,133 @@ export function useComposerController({
     }
   }
 
+  function clearComposerDraftForTab(tabKey: string) {
+    setComposerDraftStateByTabKey((current) => ({
+      ...current,
+      [tabKey]: createEmptyComposerDraftState(),
+    }))
+  }
+
+  function clearSendingForTab(tabKey: string) {
+    setIsSendingByTabKey((current) => {
+      if (!(tabKey in current)) return current
+      const next = { ...current }
+      delete next[tabKey]
+      return next
+    })
+  }
+
+  function clearComposerCommandStatus(tabKey: string, statusID?: string) {
+    setComposerCommandStatusByTabKey?.((current) => {
+      const currentStatus = current[tabKey]
+      if (!currentStatus) return current
+      if (statusID && currentStatus.id !== statusID) return current
+      const next = { ...current }
+      delete next[tabKey]
+      return next
+    })
+  }
+
+  function showComposerCommandStatus(
+    tabKey: string,
+    status: Omit<ComposerCommandStatus, "id">,
+    options?: { durationMs?: number },
+  ) {
+    if (!setComposerCommandStatusByTabKey) return
+
+    commandStatusIDCounterRef.current += 1
+    const statusID = `composer-status-${Date.now()}-${commandStatusIDCounterRef.current}`
+    const nextStatus: ComposerCommandStatus = {
+      id: statusID,
+      ...status,
+    }
+
+    const existingTimeoutID = commandStatusTimersRef.current[tabKey]
+    if (existingTimeoutID) {
+      window.clearTimeout(existingTimeoutID)
+      delete commandStatusTimersRef.current[tabKey]
+    }
+
+    setComposerCommandStatusByTabKey((current) => ({
+      ...current,
+      [tabKey]: nextStatus,
+    }))
+
+    const durationMs = options?.durationMs ?? 3500
+    if (durationMs <= 0) return
+    commandStatusTimersRef.current[tabKey] = window.setTimeout(() => {
+      delete commandStatusTimersRef.current[tabKey]
+      clearComposerCommandStatus(tabKey, statusID)
+    }, durationMs)
+  }
+
+  async function handleCompactCommand(input: {
+    isConcurrentSessionInput: boolean
+    sessionID: string
+    tabKey: string
+  }) {
+    const { isConcurrentSessionInput, sessionID, tabKey } = input
+    clearComposerDraftForTab(tabKey)
+
+    if (isConcurrentSessionInput) {
+      showComposerCommandStatus(tabKey, {
+        tone: "error",
+        titleKey: "composer.compact.status.unavailable.title",
+        detailKey: "composer.compact.status.unavailable.runningDetail",
+      })
+      return
+    }
+
+    const agentSession = getAgentSessionBridge()
+    const backendSessionID = agentSessions[sessionID] ?? sessionID
+    if (!agentSession?.compact || !backendSessionID) {
+      showComposerCommandStatus(tabKey, {
+        tone: "error",
+        titleKey: "composer.compact.status.unavailable.title",
+        detailKey: "composer.compact.status.unavailable.sessionDetail",
+      })
+      return
+    }
+
+    setIsSendingByTabKey((current) => ({
+      ...current,
+      [tabKey]: true,
+    }))
+
+    try {
+      const result = await agentSession.compact({ backendSessionID })
+      if (result.status === "compacted") {
+        await reloadSessionHistoryForSession(sessionID, backendSessionID)
+        showComposerCommandStatus(tabKey, {
+          tone: "success",
+          titleKey: "composer.compact.status.compacted.title",
+          detailKey: "composer.compact.status.compacted.detail",
+        })
+        return
+      }
+
+      showComposerCommandStatus(tabKey, {
+        tone: "info",
+        titleKey: "composer.compact.status.noop.title",
+        detailKey: "composer.compact.status.noop.detail",
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      showComposerCommandStatus(
+        tabKey,
+        {
+          tone: "error",
+          titleKey: "composer.compact.status.failed.title",
+          detailKey: "composer.compact.status.failed.detail",
+          detailParams: { message },
+        },
+        { durationMs: 7000 },
+      )
+    } finally {
+      clearSendingForTab(tabKey)
+    }
+  }
+
   async function handleSend(input?: {
     attachmentError?: string | null
     attachmentsOverride?: ComposerAttachment[]
@@ -308,6 +470,18 @@ export function useComposerController({
         tabKey: targetTabKey,
         queuedInputID: input.steerQueuedMessageID,
         waitForPendingModelSelection: input.waitForPendingModelSelection,
+      })
+      return
+    }
+
+    const sessionCommand = targetSessionID ? readComposerSessionCommand(effectiveText, attachments) : null
+    if (sessionCommand === "compact") {
+      if (!targetSessionID || !targetTabKey || pendingPermissionRequests.length > 0) return
+      if (input?.attachmentError) return
+      await handleCompactCommand({
+        isConcurrentSessionInput,
+        sessionID: targetSessionID,
+        tabKey: targetTabKey,
       })
       return
     }

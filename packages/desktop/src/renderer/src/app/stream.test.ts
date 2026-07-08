@@ -1438,7 +1438,7 @@ describe("stream trace reducer", () => {
     ])
   })
 
-  it("surfaces runtime compaction records as visible workflow status", () => {
+  it("keeps runtime compaction records out of assistant trace items", () => {
     let message = buildStreamingAssistantThreadMessage("Trigger compaction")
 
     message = applyAgentStreamEventToThreadMessage(message, {
@@ -1464,15 +1464,8 @@ describe("stream trace reducer", () => {
       },
     })
 
-    const compactionItem = message.items.find((item) => item.kind === "compaction")
-    expect(compactionItem).toMatchObject({
-      kind: "compaction",
-      title: "Context auto-compacted",
-      section: "workflow",
-      status: "completed",
-    })
-    expect(compactionItem?.visibilityKey).toBeUndefined()
-    expect(compactionItem?.debugEntries?.some((entry) => entry.label === "compaction.to" && entry.value === "message-boundary")).toBe(true)
+    expect(message.items.some((item) => item.kind === "compaction")).toBe(false)
+    expect(JSON.stringify(message.items)).not.toContain("message-boundary")
     expect(message.isStreaming).toBe(true)
   })
 
@@ -3145,7 +3138,7 @@ describe("stream trace reducer", () => {
     expect(messages[1]?.kind === "assistant" ? messages[1].items.map((item) => item.kind) : []).toEqual(["reasoning", "text", "system"])
   })
 
-  it("restores internal compaction history as a status marker without leaking summary text", () => {
+  it("keeps internal compaction history out of thread messages without leaking summary text", () => {
     const messages = buildThreadMessagesFromHistory([
       {
         info: {
@@ -3207,11 +3200,7 @@ describe("stream trace reducer", () => {
     expect(assistantMessage?.kind).toBe("assistant")
     if (assistantMessage?.kind !== "assistant") return
 
-    expect(assistantMessage.items.map((item) => item.kind)).toEqual(["compaction", "text", "system"])
-    expect(assistantMessage.items[0]).toMatchObject({
-      kind: "compaction",
-      title: "Context auto-compacted",
-    })
+    expect(assistantMessage.items.map((item) => item.kind)).toEqual(["text", "system"])
     expect(JSON.stringify(messages)).not.toContain("Secret compacted summary")
     expect(JSON.stringify(messages)).not.toContain("<compacted_history>")
   })

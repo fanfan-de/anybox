@@ -140,7 +140,7 @@ export const CinemaEventsResultSchema = z.object({
 })
 export type CinemaEventsResult = z.infer<typeof CinemaEventsResultSchema>
 
-export const CinemaGenerationModeSchema = z.enum([
+export const KnownCinemaGenerationModeSchema = z.enum([
   "text-to-video",
   "image-to-video",
   "frames-to-video",
@@ -150,18 +150,63 @@ export const CinemaGenerationModeSchema = z.enum([
   "extend",
   "motion-control",
 ])
+export type KnownCinemaGenerationMode = z.infer<typeof KnownCinemaGenerationModeSchema>
+
+export const CinemaGenerationModeSchema = z.string().min(1)
 export type CinemaGenerationMode = z.infer<typeof CinemaGenerationModeSchema>
 
-export const CinemaProviderModelModeSchema = z.enum([
-  ...CinemaGenerationModeSchema.options,
+export const KnownCinemaProviderModelModeSchema = z.enum([
+  ...KnownCinemaGenerationModeSchema.options,
   "text-to-image",
   "image-to-image",
   "image-edit",
 ])
+export type KnownCinemaProviderModelMode = z.infer<typeof KnownCinemaProviderModelModeSchema>
+
+export const CinemaProviderModelModeSchema = z.string().min(1)
 export type CinemaProviderModelMode = z.infer<typeof CinemaProviderModelModeSchema>
 
 export const CinemaTaskModeSchema = CinemaProviderModelModeSchema
 export type CinemaTaskMode = z.infer<typeof CinemaTaskModeSchema>
+
+export const CinemaProviderEndpointMethodSchema = z.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"])
+export type CinemaProviderEndpointMethod = z.infer<typeof CinemaProviderEndpointMethodSchema>
+
+export const CinemaProviderEndpointSchema = z.object({
+  method: CinemaProviderEndpointMethodSchema.optional(),
+  path: z.string().min(1).optional(),
+  url: z.string().min(1).optional(),
+}).passthrough()
+export type CinemaProviderEndpoint = z.infer<typeof CinemaProviderEndpointSchema>
+
+export const CinemaProviderInputSpecSchema = z.object({
+  role: z.string().min(1),
+  modality: z.string().min(1),
+  required: z.boolean().default(false),
+  minCount: z.number().int().nonnegative().default(0),
+  maxCount: z.number().int().nonnegative().optional(),
+  note: z.string().min(1).optional(),
+}).passthrough()
+export type CinemaProviderInputSpec = z.infer<typeof CinemaProviderInputSpecSchema>
+
+export const CinemaProviderInputRequirementSchema = z.object({
+  roles: z.array(z.string().min(1)).default([]),
+  minTotalCount: z.number().int().nonnegative().optional(),
+  note: z.string().min(1).optional(),
+}).passthrough()
+export type CinemaProviderInputRequirement = z.infer<typeof CinemaProviderInputRequirementSchema>
+
+export const CinemaProviderInputCombinationSchema = z.object({
+  mode: z.string().min(1),
+  label: z.string().min(1).optional(),
+  requiredModalities: z.array(z.string().min(1)).default([]),
+  optionalModalities: z.array(z.string().min(1)).default([]),
+  inputs: z.array(CinemaProviderInputSpecSchema).default([]),
+  requirements: z.array(CinemaProviderInputRequirementSchema).default([]),
+  endpoint: CinemaProviderEndpointSchema.optional(),
+  note: z.string().min(1).optional(),
+})
+export type CinemaProviderInputCombination = z.infer<typeof CinemaProviderInputCombinationSchema>
 
 export const CinemaGenerationTaskStatusSchema = z.enum([
   "queued",
@@ -232,6 +277,8 @@ export const CinemaVideoProviderManifestSchema = z.object({
   models: z.array(z.object({
     id: z.string().min(1),
     label: z.string().min(1),
+    offeringID: z.string().min(1).optional(),
+    providerModelID: z.string().min(1).optional(),
     catalogID: z.string().optional(),
     family: z.string().optional(),
     lab: z.string().optional(),
@@ -246,6 +293,7 @@ export const CinemaVideoProviderManifestSchema = z.object({
     aspectRatios: z.array(z.string().min(1)).default([]),
     resolutions: z.array(z.string().min(1)).default([]),
     maxDurationSeconds: z.number().positive().optional(),
+    inputCombinations: z.array(CinemaProviderInputCombinationSchema).default([]),
     pricing: z.array(z.record(z.string(), z.unknown())).default([]),
     sourceURL: z.string().optional(),
     sourceCheckedAt: z.string().optional(),
@@ -253,6 +301,7 @@ export const CinemaVideoProviderManifestSchema = z.object({
     supportsSeed: z.boolean().optional(),
     supportsNegativePrompt: z.boolean().optional(),
     supportsAudio: z.boolean().optional(),
+    supportsFirstLastFrame: z.boolean().optional(),
     requiresPublicInputURL: z.boolean().optional(),
     supportsProviderUpload: z.boolean().optional(),
     parameterSchema: z.record(z.string(), z.unknown()).default({}),
@@ -342,6 +391,8 @@ export const CinemaTextModelSchema = z.object({
   value: z.string().min(1),
   providerID: z.string().min(1),
   modelID: z.string().min(1),
+  offeringID: z.string().min(1).optional(),
+  providerModelID: z.string().min(1).optional(),
   label: z.string().min(1),
   providerLabel: z.string().min(1),
   available: z.boolean(),

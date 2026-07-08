@@ -29,6 +29,7 @@ import { isSideChatSession } from "../workspace"
 import { ThreadView, type ThreadScrollSnapshot } from "../thread/ThreadView"
 import type { WorkbenchPaneState } from "../agent-workspace/workspace-derived-state"
 import { useConversationMessages, type ConversationStoreApi } from "../agent-workspace/conversation-store"
+import type { ComposerCommandStatus } from "../agent-workspace/composer-controller"
 
 const THREAD_TOP_RESET_THRESHOLD_PX = 2
 const SESSION_BAG_DESCRIPTION_MAX_LENGTH = 2000
@@ -57,6 +58,20 @@ function ComposerBranchParentNotice({
       <button className="composer-branch-parent-clear" type="button" onClick={onClear}>
         Clear
       </button>
+    </div>
+  )
+}
+
+function ComposerCommandStatusNotice({ status }: { status: ComposerCommandStatus }) {
+  const { t } = useI18n()
+  const title = t(status.titleKey, status.titleParams)
+  const detail = status.detailKey ? t(status.detailKey, status.detailParams) : ""
+
+  return (
+    <div className={`composer-command-status-notice is-${status.tone}`} role="status">
+      <span className="composer-command-status-dot" aria-hidden="true" />
+      <span className="composer-command-status-title">{title}</span>
+      {detail ? <span className="composer-command-status-detail">{detail}</span> : null}
     </div>
   )
 }
@@ -314,6 +329,7 @@ export function SessionBagSubmissionDialog({
 
 export interface WorkbenchPaneSurfaceProps {
   assistantTraceVisibility: AssistantTraceVisibility
+  composerCommandStatusByTabKey?: Record<string, ComposerCommandStatus>
   composerRefreshVersion: number
   conversationStore: ConversationStoreApi
   isResolvingPermissionRequest: boolean
@@ -458,6 +474,7 @@ interface ActiveWorkbenchPaneSurfaceProps extends WorkbenchPaneSurfaceProps {
 
 const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   assistantTraceVisibility,
+  composerCommandStatusByTabKey,
   composerRefreshVersion,
   conversationStore,
   isResolvingPermissionRequest,
@@ -548,6 +565,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
     onSync: onSetDraft,
   })
   const composerWorkflowBadge = !readOnlySideChat ? getSessionWorkflowBadge(pane.activeSession?.workflow) : null
+  const composerCommandStatus = pane.tabKey ? composerCommandStatusByTabKey?.[pane.tabKey] ?? null : null
   const createSessionWorkflowBadge =
     pane.createSessionInitialWorkflowMode === "planning"
       ? getSessionWorkflowBadge({
@@ -916,6 +934,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                     canPasteImageAttachments={composer.attachmentCapabilities.image && composer.attachmentDisabledReason === null}
                     draftState={pane.draftState}
                     hasBagSubmit={mainSessionBagSessionID !== null}
+                    hasCompactCommand={!readOnlySideChat && Boolean(pane.activeSession)}
                     hasPendingPermissionRequests={pane.pendingPermissionRequests.length > 0 || isResolvingPermissionRequest}
                     isCancelling={pane.isCancelling}
                     isInterruptible={pane.isInterruptible}
@@ -992,6 +1011,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                       })
                     }}
                   />
+                {composerCommandStatus ? <ComposerCommandStatusNotice status={composerCommandStatus} /> : null}
                 {pane.composerParentMessageID ? (
                   <ComposerBranchParentNotice
                     messagePreview={composerParentMessagePreview}

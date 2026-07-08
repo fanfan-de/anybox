@@ -537,6 +537,18 @@ export interface AgentSessionTurnRequestInput {
   skills?: string[]
 }
 
+export interface AgentSessionCompactResult {
+  sessionID: string
+  status: "compacted" | "noop"
+  reason?: "not-enough-history"
+  compactedMessageID?: string
+  compactionID?: string
+  compactedFromMessageID?: string
+  compactedToMessageID?: string
+  sourceMessageCount: number
+  estimatedTokens?: number
+}
+
 export type AgentSessionWorkflowUpdateInput =
   | { action: "enter-plan" }
   | { action: "leave-plan" }

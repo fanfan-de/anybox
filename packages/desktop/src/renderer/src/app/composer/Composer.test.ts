@@ -71,7 +71,7 @@ describe("shouldApplyExternalComposerDraftState", () => {
 })
 
 describe("buildMenuStyle", () => {
-  it("positions the command menu above the active composer selection", () => {
+  it("positions the command menu vertically above the active composer selection", () => {
     const anchorRect = {
       left: 196,
       top: 412,
@@ -82,7 +82,22 @@ describe("buildMenuStyle", () => {
     } as DOMRect
 
     expect(buildMenuStyle(anchorRect, containerRect)).toEqual({
-      left: "56px",
+      bottom: "218px",
+    })
+  })
+
+  it("leaves horizontal sizing to the composer container", () => {
+    const anchorRect = {
+      left: 520,
+      top: 412,
+    } as DOMRect
+    const containerRect = {
+      left: 140,
+      bottom: 620,
+      width: 420,
+    } as DOMRect
+
+    expect(buildMenuStyle(anchorRect, containerRect)).toEqual({
       bottom: "218px",
     })
   })
@@ -238,8 +253,11 @@ describe("getVisibleComposerCommandLabels", () => {
     expect(getVisibleComposerCommandLabels({ hasPlanModeToggle: true, triggerPrefix: "/" })).toContain("/plan")
   })
 
-  it("filters slash command labels using the command name", () => {
-    expect(getVisibleComposerCommandLabels({ query: "mod", showModelSelector: true, triggerPrefix: "/" })).toEqual(["/model"])
+  it("does not expose model or reasoning picker shortcuts", () => {
+    expect(getVisibleComposerCommandLabels({ query: "mod", triggerPrefix: "/" })).toEqual([])
+    expect(getVisibleComposerCommandLabels({ query: "reason", triggerPrefix: "/" })).toEqual([])
+    expect(getVisibleComposerCommandLabels({ triggerPrefix: "~" })).not.toContain("~model")
+    expect(getVisibleComposerCommandLabels({ triggerPrefix: "~" })).not.toContain("~reasoning")
   })
 
   it("hides ~plan when plan mode toggling is unavailable", () => {
@@ -253,6 +271,12 @@ describe("getVisibleComposerCommandLabels", () => {
 
   it("hides ~report when report submission is unavailable", () => {
     expect(getVisibleComposerCommandLabels({ hasBagSubmit: false })).not.toContain("~report")
+  })
+
+  it("shows compact commands only when manual compaction is available", () => {
+    expect(getVisibleComposerCommandLabels({ hasCompactCommand: false })).not.toContain("~compact")
+    expect(getVisibleComposerCommandLabels({ hasCompactCommand: true })).toContain("~compact")
+    expect(getVisibleComposerCommandLabels({ hasCompactCommand: true, triggerPrefix: "/" })).toContain("/compact")
   })
 
   it("shows project plugin commands only when project tag commands are enabled", () => {

@@ -107,6 +107,8 @@ export function SessionRoutes(options: { ptyRegistry: PtyRegistry }) {
     return ok(c, await SessionUseCase.updateSessionModelSelection(c.req.param("id"), payload))
   })
 
+  app.post("/:id/compact", async (c) => ok(c, await SessionUseCase.compactSession(c.req.param("id"))))
+
   app.patch("/:id/title", async (c) => {
     const payload = await parseJsonBody(
       c,

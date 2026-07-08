@@ -465,16 +465,26 @@
   gap: 6px;
 }
 
+.context-pressure-anchor {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+
 .context-pressure-indicator.is-low {
-  color: #2a8357;
+  color: var(--seg-success-text);
 }
 
 .context-pressure-indicator.is-medium {
-  color: #9a6a18;
+  color: var(--seg-warning-text);
 }
 
 .context-pressure-indicator.is-high {
-  color: #b14537;
+  color: var(--seg-danger-text);
+}
+
+.context-pressure-indicator.is-unknown {
+  color: var(--seg-text-3);
 }
 
 .composer-utility-permission-panel {
@@ -484,11 +494,16 @@
 
 .composer-utility-chip.context-pressure-indicator {
   width: 28px;
+  min-width: 28px;
   height: 28px;
+  min-height: 28px;
+  padding: 0;
   border: 0;
   border-radius: 50%;
   background: transparent;
   box-shadow: none;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
 }
 
 .context-pressure-ring {
@@ -509,7 +524,7 @@
 }
 
 .context-pressure-ring-track {
-  stroke: rgba(116, 143, 169, 0.22);
+  stroke: var(--mix-seg-text-3-34-transparent-66);
 }
 
 .context-pressure-ring-progress {
@@ -523,6 +538,163 @@
 .context-pressure-ring-core {
   fill: currentColor;
   opacity: 0.88;
+}
+
+.context-pressure-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 9;
+  width: min(320px, calc(100vw - 32px));
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md));
+  background: var(--seg-dropdown-menu-surface);
+  color: var(--seg-text-1);
+  box-shadow: var(--shadow-sm);
+}
+
+.context-pressure-popover-header {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.context-pressure-popover-heading {
+  min-width: 0;
+}
+
+.context-pressure-popover-title,
+.context-pressure-popover-summary {
+  margin: 0;
+}
+
+.context-pressure-popover-title {
+  color: var(--seg-text-2);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.context-pressure-popover-value {
+  display: block;
+  margin-top: 2px;
+  color: var(--seg-text-1);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.context-pressure-popover-summary {
+  color: var(--seg-text-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.context-pressure-status {
+  flex: 0 0 auto;
+  min-height: 22px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--mix-seg-border-82-transparent-18);
+  border-radius: 999px;
+  background: var(--mix-seg-panel-muted-88-seg-panel-12);
+  color: var(--seg-text-2);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.context-pressure-status.is-low {
+  border-color: var(--seg-success-border);
+  background: var(--seg-success-surface);
+  color: var(--seg-success-text);
+}
+
+.context-pressure-status.is-medium {
+  border-color: var(--seg-warning-border);
+  background: var(--seg-warning-surface);
+  color: var(--seg-warning-text);
+}
+
+.context-pressure-status.is-high {
+  border-color: var(--seg-danger-border);
+  background: var(--seg-danger-surface);
+  color: var(--seg-danger-text);
+}
+
+.context-pressure-meter {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--mix-seg-text-2-12-transparent-88);
+  color: var(--seg-text-3);
+}
+
+.context-pressure-meter.is-low {
+  color: var(--seg-success-text);
+}
+
+.context-pressure-meter.is-medium {
+  color: var(--seg-warning-text);
+}
+
+.context-pressure-meter.is-high {
+  color: var(--seg-danger-text);
+}
+
+.context-pressure-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width 180ms ease, background 180ms ease;
+}
+
+.context-pressure-metrics {
+  margin: 0;
+  display: grid;
+  gap: 0;
+}
+
+.context-pressure-metrics > div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--mix-seg-border-82-transparent-18);
+}
+
+.context-pressure-metrics dt,
+.context-pressure-metrics dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.context-pressure-metrics dt {
+  color: var(--seg-text-2);
+  font-weight: 500;
+}
+
+.context-pressure-metrics dd {
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--seg-text-1);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-weight: 600;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .git-branch-create-overlay {
@@ -1444,55 +1616,87 @@
 }
 
 .composer-command-menu {
+  --composer-command-menu-max-height: min(320px, calc(100dvh - 220px));
   position: absolute;
   z-index: 4;
   left: 0;
   right: 0;
-  bottom: calc(100% + 12px);
+  bottom: calc(100% + 8px);
+  width: auto;
   min-width: 0;
   max-width: none;
-  max-height: min(360px, calc(100dvh - 220px));
+  max-height: var(--composer-command-menu-max-height);
   overflow: auto;
+  overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  padding: 10px;
+  padding: 6px;
   display: grid;
-  gap: 6px;
-  border: 1px solid rgba(156, 179, 204, 0.48);
-  border-radius: calc(var(--seg-radius-sm) + 4px);
-  background: rgba(251, 252, 253, 0.98);
-  box-shadow: 0 22px 48px rgba(31, 48, 66, 0.18);
-  backdrop-filter: blur(18px);
+  align-content: start;
+  gap: 2px;
+  border: 1px solid var(--mix-seg-border-82-transparent-18);
+  border-radius: var(--seg-radius-md);
+  background: var(--seg-dropdown-menu-surface);
+  color: var(--seg-text-1);
+  box-shadow: var(--shadow-md);
+  scrollbar-color: var(--mix-seg-text-3-34-transparent-66) transparent;
+  -webkit-app-region: no-drag;
+}
+
+.composer-command-menu[data-kind="command-trigger"] {
+  --composer-command-menu-max-height: min(352px, calc(100dvh - 220px));
+}
+
+.composer-command-menu::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.composer-command-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.composer-command-menu::-webkit-scrollbar-thumb {
+  border: 2px solid var(--seg-dropdown-menu-surface);
+  border-radius: 999px;
+  background: var(--mix-seg-text-3-34-transparent-66);
 }
 
 .composer-command-option {
   width: 100%;
-  min-height: 40px;
-  padding: 0 12px;
+  min-height: 32px;
+  padding: 0 10px;
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 8px;
   text-align: left;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--seg-radius-xs);
   background: transparent;
-  color: #314353;
+  color: var(--seg-text-1);
   cursor: pointer;
   transition:
     background 160ms ease,
     border-color 160ms ease,
     color 160ms ease;
+  outline: none;
 }
 
-.composer-command-option:hover,
-.composer-command-option:focus-visible,
-.composer-command-option.is-active {
-  background: #eef4fa;
-  border-color: rgba(125, 154, 184, 0.28);
-  color: #123a5a;
+.composer-command-option:not(:disabled):hover,
+.composer-command-option:not(:disabled):focus-visible {
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+  border-color: transparent;
+  color: var(--semantic-sidebar-tree-row-text-hover);
+}
+
+.composer-command-option.is-active:not(:disabled) {
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  border-color: var(--mix-seg-accent-24-seg-border-76);
+  color: var(--semantic-sidebar-tree-row-text-active);
 }
 
 .composer-command-option:disabled {
-  opacity: 0.58;
+  color: var(--semantic-button-secondary-disabled-text);
+  opacity: 0.76;
   cursor: default;
 }
 
@@ -1501,45 +1705,55 @@
   display: block;
 }
 
-.composer-command-option-copy.is-file {
-  display: flex;
+.composer-command-option-copy:has(.composer-command-option-description) {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.3fr) minmax(0, 1fr);
   align-items: baseline;
-  gap: 8px;
+  column-gap: 12px;
+}
+
+.composer-command-option-copy.is-file:has(.composer-command-option-description) {
+  grid-template-columns: minmax(112px, 0.36fr) minmax(0, 1fr);
 }
 
 .composer-command-option-copy strong {
   display: block;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.35;
 }
 
-.composer-command-option-copy.is-file strong {
-  flex: 0 1 auto;
+.composer-command-option-description {
   min-width: 0;
-}
-
-.composer-command-option-meta {
-  min-width: 0;
-  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  direction: rtl;
-  text-align: left;
-  color: #607488;
+  color: var(--seg-text-3);
   font-size: 12px;
   line-height: 1.4;
 }
 
+.composer-command-option:not(:disabled):hover .composer-command-option-description,
+.composer-command-option:not(:disabled):focus-visible .composer-command-option-description,
+.composer-command-option.is-active:not(:disabled) .composer-command-option-description {
+  color: var(--seg-text-2);
+}
+
+.composer-command-option-description.is-path {
+  direction: rtl;
+  text-align: left;
+}
+
 .composer-command-empty {
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(238, 244, 250, 0.72);
-  color: #607488;
+  padding: 8px 10px;
+  border-radius: var(--seg-radius-xs);
+  background: var(--mix-seg-panel-muted-86-transparent-14);
+  color: var(--seg-text-2);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -1892,6 +2106,58 @@
   white-space: nowrap;
 }
 
+.composer-command-status-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: var(--pane-content-max-width);
+  min-width: 0;
+  min-height: 26px;
+  margin: 0 auto;
+  padding: 0 10px;
+  border: 1px solid rgba(76, 94, 116, 0.14);
+  border-radius: var(--seg-radius-xs);
+  background: rgba(76, 94, 116, 0.06);
+  color: var(--seg-text-2, #475569);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.composer-command-status-notice.is-success {
+  border-color: rgba(40, 128, 84, 0.18);
+  background: rgba(40, 128, 84, 0.08);
+  color: #226a47;
+}
+
+.composer-command-status-notice.is-error {
+  border-color: rgba(174, 48, 55, 0.2);
+  background: rgba(174, 48, 55, 0.08);
+  color: #9a2630;
+}
+
+.composer-command-status-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.85;
+}
+
+.composer-command-status-title {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.composer-command-status-detail {
+  min-width: 0;
+  color: color-mix(in srgb, currentColor 72%, transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .composer-branch-parent-notice {
   display: flex;
   align-items: center;
@@ -2195,4 +2461,47 @@
   color: var(--seg-composer-button-text);
   box-shadow: none;
   outline: none;
+}
+
+.composer-utility-bar .context-pressure-indicator {
+  border-color: transparent;
+  background: var(--semantic-composer-icon-button-surface);
+  box-shadow: none;
+}
+
+.composer-utility-bar .context-pressure-indicator:not(:disabled):hover,
+.composer-utility-bar .context-pressure-indicator:not(:disabled):focus-visible,
+.composer-utility-bar .context-pressure-indicator.is-active {
+  border-color: transparent;
+  background: var(--semantic-composer-icon-button-surface-hover);
+  box-shadow: none;
+  outline: none;
+}
+
+.composer-utility-bar .context-pressure-indicator.is-low,
+.composer-utility-bar .context-pressure-indicator.is-low:not(:disabled):hover,
+.composer-utility-bar .context-pressure-indicator.is-low:not(:disabled):focus-visible,
+.composer-utility-bar .context-pressure-indicator.is-low.is-active {
+  color: var(--seg-success-text);
+}
+
+.composer-utility-bar .context-pressure-indicator.is-medium,
+.composer-utility-bar .context-pressure-indicator.is-medium:not(:disabled):hover,
+.composer-utility-bar .context-pressure-indicator.is-medium:not(:disabled):focus-visible,
+.composer-utility-bar .context-pressure-indicator.is-medium.is-active {
+  color: var(--seg-warning-text);
+}
+
+.composer-utility-bar .context-pressure-indicator.is-high,
+.composer-utility-bar .context-pressure-indicator.is-high:not(:disabled):hover,
+.composer-utility-bar .context-pressure-indicator.is-high:not(:disabled):focus-visible,
+.composer-utility-bar .context-pressure-indicator.is-high.is-active {
+  color: var(--seg-danger-text);
+}
+
+.composer-utility-bar .context-pressure-indicator.is-unknown,
+.composer-utility-bar .context-pressure-indicator.is-unknown:not(:disabled):hover,
+.composer-utility-bar .context-pressure-indicator.is-unknown:not(:disabled):focus-visible,
+.composer-utility-bar .context-pressure-indicator.is-unknown.is-active {
+  color: var(--seg-text-3);
 }

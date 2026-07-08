@@ -13502,11 +13502,24 @@ describe("App", () => {
       await Promise.resolve()
     })
 
-    expect(
-      await screen.findByRole("img", {
+    const contextButton = await screen.findByRole("button", {
         name: "Context pressure 50% (64k / 128k input tokens)",
-      }),
-    ).toBeInTheDocument()
+    })
+    expect(contextButton).toHaveAttribute("aria-expanded", "false")
+
+    fireEvent.click(contextButton)
+
+    const contextDialog = screen.getByRole("dialog", { name: "Context details" })
+    expect(contextButton).toHaveAttribute("aria-expanded", "true")
+    expect(within(contextDialog).getByText("50%")).toBeInTheDocument()
+    expect(within(contextDialog).getByText("Low")).toBeInTheDocument()
+    expect(within(contextDialog).getByText("Input")).toBeInTheDocument()
+    expect(within(contextDialog).getByText("Window")).toBeInTheDocument()
+    expect(within(contextDialog).getByText("Remaining")).toBeInTheDocument()
+    expect(within(contextDialog).getByText("Output")).toBeInTheDocument()
+    expect(within(contextDialog).getByText("3,200 tokens")).toBeInTheDocument()
+    expect(within(contextDialog).getByText("800 tokens")).toBeInTheDocument()
+    expect(within(contextDialog).getByText("1,600 read / 0 write")).toBeInTheDocument()
   })
 
   it("appends live terminal output directly into the active terminal view", async () => {

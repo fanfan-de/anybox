@@ -26,6 +26,7 @@ import { joinClassNames, SidebarToggleButton, SideChatBadge } from "../shared-ui
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "../thread-markdown"
 import type { ThreadScrollSnapshot } from "../thread/ThreadView"
 import type { AssistantTraceVisibility, ComposerDraftState, SessionDiffFile, SessionDiffSummary, ToolPermissionMode } from "../types"
+import type { ComposerCommandStatus } from "../agent-workspace/composer-controller"
 import { createID } from "../utils"
 import {
   buildWorkbenchHeaderState,
@@ -563,6 +564,7 @@ function activateDockviewPanel(panel: IDockviewPanel) {
 
 export interface WorkbenchShellProps {
   assistantTraceVisibility: AssistantTraceVisibility
+  composerCommandStatusByTabKey?: Record<string, ComposerCommandStatus>
   composerRefreshVersion: number
   isActivityRailVisible: boolean
   isResolvingPermissionRequest: boolean
@@ -1276,6 +1278,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
     return (
       <WorkbenchPaneSurface
         assistantTraceVisibility={props.assistantTraceVisibility}
+        composerCommandStatusByTabKey={props.composerCommandStatusByTabKey}
         composerRefreshVersion={props.composerRefreshVersion}
         conversationStore={conversationStore}
         isResolvingPermissionRequest={props.isResolvingPermissionRequest}

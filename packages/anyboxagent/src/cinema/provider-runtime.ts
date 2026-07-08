@@ -7,10 +7,14 @@ import {
   type CinemaGeneratedAsset,
   type CinemaGenerationTask,
   type CinemaProviderAuthState,
+  type CinemaProviderInputCombination,
   type CinemaProviderModelMode,
   type TestCinemaVideoProviderConnectionBody,
   type CinemaVideoProvider,
   type CinemaVideoProviderManifest,
+  type CinemaProviderEndpoint,
+  CinemaProviderEndpointMethodSchema,
+  CinemaProviderEndpointSchema,
   CinemaProviderModelModeSchema,
   CinemaVideoProviderManifestSchema,
   type CreateCinemaGenerationTaskBody,
@@ -90,15 +94,66 @@ export type ProviderAdapterCallbackInput = ProviderAdapterCreateInput & {
 export type ProviderAdapter = {
   manifest: CinemaVideoProviderManifest
   supportedModes?: readonly CinemaProviderModelMode[]
+  supportsInputCombination?: (
+    input: {
+      model: CinemaVideoProviderManifest["models"][number]
+      combination: CinemaProviderInputCombination
+    }
+  ) => boolean
   createTask: (input: ProviderAdapterCreateInput) => Promise<CinemaGenerationTask>
   refreshTask: (input: ProviderAdapterRefreshInput) => Promise<CinemaGenerationTask>
   receiveCallback?: (input: ProviderAdapterCallbackInput) => Promise<CinemaGenerationTask>
   cancelTask?: (input: ProviderAdapterRefreshInput) => Promise<CinemaGenerationTask>
 }
 
+const RawCatalogInputSpecSchema = z
+  .object({
+    role: z.string().min(1),
+    modality: z.string().min(1),
+    required: z.boolean().default(false),
+    min_count: z.number().int().nonnegative().default(0),
+    max_count: z.number().int().nonnegative().optional(),
+    note: z.string().min(1).optional(),
+  })
+  .passthrough()
+
+const RawCatalogInputRequirementSchema = z
+  .object({
+    roles: z.array(z.string().min(1)).default([]),
+    min_total_count: z.number().int().nonnegative().optional(),
+    note: z.string().min(1).optional(),
+  })
+  .passthrough()
+
+const RawCatalogEndpointSchema = z
+  .object({
+    method: z.preprocess(
+      (value) => typeof value === "string" ? value.trim().toUpperCase() : value,
+      CinemaProviderEndpointMethodSchema,
+    ).optional(),
+    path: z.string().min(1).optional(),
+    url: z.string().min(1).optional(),
+  })
+  .passthrough()
+
+const RawCatalogInputCombinationSchema = z
+  .object({
+    mode: z.string().min(1),
+    label: z.string().min(1).optional(),
+    required_modalities: z.array(z.string().min(1)).default([]),
+    optional_modalities: z.array(z.string().min(1)).default([]),
+    inputs: z.array(RawCatalogInputSpecSchema).default([]),
+    requirements: z.array(RawCatalogInputRequirementSchema).default([]),
+    endpoint: RawCatalogEndpointSchema.optional(),
+    note: z.string().min(1).optional(),
+  })
+  .passthrough()
+
 const RawCatalogModelSchema = z
   .object({
     id: z.string().min(1),
+    offering_id: z.string().min(1).optional(),
+    provider_model_id: z.string().min(1).optional(),
     catalog_id: z.string().min(1).optional(),
     name: z.string().min(1),
     family: z.string().min(1).optional(),
@@ -111,13 +166,21 @@ const RawCatalogModelSchema = z
         output: z.array(z.string().min(1)).default([]),
       })
       .optional(),
+    input_modalities: z.array(z.string().min(1)).optional(),
+    output_modalities: z.array(z.string().min(1)).optional(),
     modes: z.array(z.string().min(1)).default([]),
+    input_combinations: z.array(RawCatalogInputCombinationSchema).default([]),
     audio_output: z.boolean().optional(),
+    supports_audio_output: z.boolean().optional(),
+    supports_first_last_frame: z.boolean().optional(),
+    max_reference_images: z.number().int().nonnegative().optional(),
+    requires_public_input_url: z.boolean().optional(),
     pricing: z.array(z.record(z.string(), z.unknown())).default([]),
     limit: z
       .object({
         durations: z.array(z.number()).default([]),
         resolutions: z.array(z.string().min(1)).default([]),
+        resolution_labels: z.record(z.string(), z.string()).default({}),
         aspect_ratios: z.array(z.string().min(1)).default([]),
         max_duration_seconds: z.number().positive().optional(),
       })
@@ -171,7 +234,8 @@ const RawCatalogProviderSchema = z
   .passthrough()
 
 const RawCatalogSchema = z.record(z.string(), RawCatalogProviderSchema)
-type RawCatalog = z.infer<typeof RawCatalogSchema>
+type RawCatalog = z.output<typeof RawCatalogSchema>
+type RawCatalogInput = z.input<typeof RawCatalogSchema>
 
 type CinemaVideoProviderConnectionTestResult = {
   providerID: string
@@ -294,9 +358,9 @@ export async function refreshCinemaVideoProviderCatalog(): Promise<CinemaVideoPr
   return await listCinemaVideoProviders()
 }
 
-export function setCinemaVideoProviderCatalogForTest(catalog: RawCatalog | undefined) {
+export function setCinemaVideoProviderCatalogForTest(catalog: RawCatalogInput | undefined) {
   const previous = catalogOverride
-  catalogOverride = catalog
+  catalogOverride = catalog ? RawCatalogSchema.parse(catalog) : undefined
   cachedCatalog = undefined
   loadedCacheSignature = undefined
   return () => {
@@ -352,6 +416,33 @@ function normalizeStringList(values: string[] | undefined) {
   return [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean))]
 }
 
+function normalizeCatalogEndpoint(
+  endpoint: z.output<typeof RawCatalogEndpointSchema> | undefined,
+): CinemaProviderEndpoint | undefined {
+  if (!endpoint) return undefined
+  const normalized: Record<string, unknown> = { ...endpoint }
+  if (typeof normalized.path === "string") {
+    const pathValue = normalized.path.trim()
+    if (pathValue) {
+      normalized.path = pathValue
+    } else {
+      delete normalized.path
+    }
+  }
+  if (typeof normalized.url === "string") {
+    const urlValue = normalized.url.trim()
+    if (urlValue) {
+      normalized.url = urlValue
+    } else {
+      delete normalized.url
+    }
+  }
+  const parsed = CinemaProviderEndpointSchema.safeParse(normalized)
+  if (parsed.success) return parsed.data
+  log.warn("Ignoring invalid Cinema provider catalog endpoint", { endpoint, error: parsed.error })
+  return undefined
+}
+
 function isKlingAIProviderID(providerID: string) {
   return KLINGAI_PROVIDER_IDS.includes(providerID as typeof KLINGAI_PROVIDER_IDS[number])
 }
@@ -363,42 +454,102 @@ function defaultKlingAIBaseURLForProvider(providerID: string) {
 }
 
 function normalizeModes(values: string[]) {
-  return values.flatMap((value) => {
-    const parsed = CinemaProviderModelModeSchema.safeParse(value)
+  const modes = values.flatMap((value) => {
+    const parsed = CinemaProviderModelModeSchema.safeParse(value.trim())
     return parsed.success ? [parsed.data] : []
+  })
+  return [...new Set(modes)]
+}
+
+function inputCombinationsFromCatalogModel(model: RawCatalogModelSchemaOutput) {
+  return (model.input_combinations ?? []).map((combination) => {
+    const endpoint = normalizeCatalogEndpoint(combination.endpoint)
+    return {
+      mode: combination.mode,
+      ...(combination.label ? { label: combination.label } : {}),
+      requiredModalities: normalizeStringList(combination.required_modalities),
+      optionalModalities: normalizeStringList(combination.optional_modalities),
+      inputs: combination.inputs.map((input) => ({
+        role: input.role,
+        modality: input.modality,
+        required: input.required,
+        minCount: input.min_count,
+        ...(input.max_count !== undefined ? { maxCount: input.max_count } : {}),
+        ...(input.note ? { note: input.note } : {}),
+      })),
+      requirements: combination.requirements.map((requirement) => ({
+        roles: normalizeStringList(requirement.roles),
+        ...(requirement.min_total_count !== undefined ? { minTotalCount: requirement.min_total_count } : {}),
+        ...(requirement.note ? { note: requirement.note } : {}),
+      })),
+      ...(endpoint ? { endpoint } : {}),
+      ...(combination.note ? { note: combination.note } : {}),
+    }
   })
 }
 
-function augmentRuntimeSupportedCatalogModes(providerID: string, modes: CinemaProviderModelMode[]) {
-  if (!isKlingAIProviderID(providerID) || !modes.includes("image-to-video") || modes.includes("frames-to-video")) {
-    return modes
+function inputCombinationsSupportFirstLastFrame(inputCombinations: ReturnType<typeof inputCombinationsFromCatalogModel>) {
+  return inputCombinations.some((combination) => {
+    const roles = new Set(combination.inputs.map((input) => input.role))
+    return roles.has("first_frame_image") && roles.has("last_frame_image")
+  })
+}
+
+function maxReferenceImagesFromInputCombinations(inputCombinations: ReturnType<typeof inputCombinationsFromCatalogModel>) {
+  let maxReferenceImages: number | undefined
+  for (const combination of inputCombinations) {
+    for (const input of combination.inputs) {
+      if (input.role !== "reference_image" || input.maxCount === undefined) continue
+      maxReferenceImages = Math.max(maxReferenceImages ?? 0, input.maxCount)
+    }
   }
-  const imageToVideoIndex = modes.indexOf("image-to-video")
-  return [
-    ...modes.slice(0, imageToVideoIndex + 1),
-    "frames-to-video" as const,
-    ...modes.slice(imageToVideoIndex + 1),
-  ]
+  return maxReferenceImages
+}
+
+function catalogModelOfferingID(modelKey: string, model: RawCatalogModelSchemaOutput) {
+  return model.offering_id?.trim() || model.catalog_id?.trim() || modelKey
+}
+
+function catalogModelProviderModelID(model: RawCatalogModelSchemaOutput) {
+  return model.provider_model_id?.trim() || model.id
+}
+
+function catalogModelModalities(model: RawCatalogModelSchemaOutput) {
+  const input = normalizeStringList(model.input_modalities ?? model.modalities?.input)
+  const output = normalizeStringList(model.output_modalities ?? model.modalities?.output)
+  return input.length > 0 || output.length > 0
+    ? { input, output }
+    : undefined
 }
 
 function manifestFromCatalogProvider(provider: RawCatalogProviderSchemaOutput): CinemaVideoProviderManifest {
-  const models = Object.values(provider.models)
-    .map((model) => {
-      const modes = augmentRuntimeSupportedCatalogModes(provider.id, normalizeModes(model.modes))
+  const models = Object.entries(provider.models ?? {})
+    .map(([modelKey, model]) => {
+      const offeringID = catalogModelOfferingID(modelKey, model)
+      const providerModelID = catalogModelProviderModelID(model)
+      const inputCombinations = inputCombinationsFromCatalogModel(model)
+      const supportsFirstLastFrame = model.supports_first_last_frame ?? inputCombinationsSupportFirstLastFrame(inputCombinations)
+      const rawModes = model.modes ?? []
+      const catalogModes = [...rawModes, ...inputCombinations.map((combination) => combination.mode)]
+      const modes = normalizeModes(catalogModes)
       if (modes.length === 0) return null
+      const modalities = catalogModelModalities(model)
+      const maxReferenceImages = model.max_reference_images ?? maxReferenceImagesFromInputCombinations(inputCombinations)
       return {
-        id: model.id,
+        id: providerModelID,
         label: model.name,
-        ...(model.catalog_id ? { catalogID: model.catalog_id } : {}),
+        offeringID,
+        providerModelID,
+        catalogID: model.catalog_id ?? offeringID,
         ...(model.family ? { family: model.family } : {}),
         ...(model.lab ? { lab: model.lab } : {}),
         ...(model.base_model ? { baseModel: model.base_model } : {}),
         ...(model.endpoint_type ? { endpointType: model.endpoint_type } : {}),
-        ...(model.modalities
+        ...(modalities
           ? {
               modalities: {
-                input: normalizeStringList(model.modalities.input),
-                output: normalizeStringList(model.modalities.output),
+                input: modalities.input,
+                output: modalities.output,
               },
             }
           : {}),
@@ -407,10 +558,14 @@ function manifestFromCatalogProvider(provider: RawCatalogProviderSchemaOutput): 
         aspectRatios: normalizeStringList(model.limit?.aspect_ratios),
         resolutions: normalizeStringList(model.limit?.resolutions),
         ...(model.limit?.max_duration_seconds ? { maxDurationSeconds: model.limit.max_duration_seconds } : {}),
+        inputCombinations,
         pricing: model.pricing,
         ...(model.source_url ? { sourceURL: model.source_url } : {}),
         ...(model.source_checked_at ? { sourceCheckedAt: model.source_checked_at } : {}),
-        ...(model.audio_output ? { supportsAudio: true } : {}),
+        ...(maxReferenceImages !== undefined ? { maxReferenceImages } : {}),
+        ...(model.supports_audio_output ?? model.audio_output ? { supportsAudio: true } : {}),
+        ...(supportsFirstLastFrame ? { supportsFirstLastFrame: true } : {}),
+        ...(model.requires_public_input_url !== undefined ? { requiresPublicInputURL: model.requires_public_input_url } : {}),
         parameterSchema: {},
       }
     })
@@ -449,6 +604,7 @@ function manifestFromCatalogProvider(provider: RawCatalogProviderSchemaOutput): 
   })
 }
 
+type RawCatalogModelSchemaOutput = z.infer<typeof RawCatalogModelSchema>
 type RawCatalogProviderSchemaOutput = z.infer<typeof RawCatalogProviderSchema>
 
 async function catalogManifests(): Promise<CinemaVideoProviderManifest[]> {
@@ -468,17 +624,71 @@ export function hasCinemaVideoProviderAdapter(providerID: string) {
   return Boolean(providerAdapters[providerID])
 }
 
-export function cinemaVideoProviderAdapterSupportsMode(providerID: string, mode: CinemaProviderModelMode) {
-  const adapter = providerAdapters[providerID]
-  if (!adapter) return false
-  if (adapter.supportedModes) return adapter.supportedModes.includes(mode)
-  return mode === "text-to-video" || mode === "image-to-video"
+function modelInputCombinationModes(model: CinemaVideoProviderManifest["models"][number]) {
+  return (model.inputCombinations ?? []).map((combination) => combination.mode)
 }
 
-function cinemaVideoProviderAdapterSupportedModes(providerID: string): CinemaProviderModelMode[] {
+function cinemaVideoProviderAdapterSupportsInputCombination(
+  providerID: string,
+  model: CinemaVideoProviderManifest["models"][number],
+  combination: CinemaProviderInputCombination,
+) {
   const adapter = providerAdapters[providerID]
+  if (!adapter) return false
+  if (adapter.supportsInputCombination) return adapter.supportsInputCombination({ model, combination })
+  if (adapter.supportedModes) return adapter.supportedModes.includes(combination.mode)
+  return true
+}
+
+export function cinemaVideoProviderModelRuntimeSupportsMode(
+  providerID: string,
+  model: CinemaVideoProviderManifest["models"][number],
+  mode: CinemaProviderModelMode,
+) {
+  const adapter = providerAdapters[providerID]
+  if (!adapter) return false
+  const combination = findCinemaVideoProviderInputCombinationForMode(model, mode)
+  if (combination) return cinemaVideoProviderAdapterSupportsInputCombination(providerID, model, combination)
+  if (adapter.supportedModes) return adapter.supportedModes.includes(mode)
+  return model.modes.includes(mode)
+}
+
+function cinemaVideoProviderAdapterSupportedModes(manifest: CinemaVideoProviderManifest): CinemaProviderModelMode[] {
+  const adapter = providerAdapters[manifest.id]
   if (!adapter) return []
-  return [...(adapter.supportedModes ?? ["text-to-video", "image-to-video"])]
+  if (adapter.supportedModes) return [...adapter.supportedModes]
+  const modes: CinemaProviderModelMode[] = []
+  for (const model of manifest.models) {
+    const combinations = model.inputCombinations ?? []
+    if (combinations.length > 0) {
+      for (const combination of combinations) {
+        if (!cinemaVideoProviderAdapterSupportsInputCombination(manifest.id, model, combination)) continue
+        modes.push(combination.mode)
+      }
+    } else {
+      modes.push(...model.modes)
+    }
+  }
+  return [...new Set(modes)]
+}
+
+function cinemaVideoProviderModelMatchesID(
+  model: CinemaVideoProviderManifest["models"][number],
+  modelID: string,
+) {
+  return [
+    model.offeringID,
+    model.catalogID,
+    model.providerModelID,
+    model.id,
+  ].some((candidate) => candidate === modelID)
+}
+
+function cinemaVideoProviderModelSupportsMode(
+  model: CinemaVideoProviderManifest["models"][number],
+  mode: CinemaProviderModelMode,
+) {
+  return model.modes.includes(mode) || modelInputCombinationModes(model).includes(mode)
 }
 
 export function findCinemaVideoProviderModelForMode(
@@ -486,8 +696,34 @@ export function findCinemaVideoProviderModelForMode(
   modelID: string,
   mode: CinemaProviderModelMode,
 ) {
-  return manifest.models.find((item) => item.id === modelID && item.modes.includes(mode))
-    ?? manifest.models.find((item) => item.id === modelID)
+  return manifest.models.find((item) =>
+    cinemaVideoProviderModelMatchesID(item, modelID) && cinemaVideoProviderModelSupportsMode(item, mode)
+  )
+    ?? manifest.models.find((item) => cinemaVideoProviderModelMatchesID(item, modelID))
+}
+
+export function cinemaVideoProviderModelSelectionID(model: CinemaVideoProviderManifest["models"][number]) {
+  return model.offeringID ?? model.catalogID ?? model.id
+}
+
+export function cinemaVideoProviderTaskModelID(model: CinemaVideoProviderManifest["models"][number]) {
+  return model.providerModelID ?? model.id
+}
+
+export function findCinemaVideoProviderInputCombinationForMode(
+  model: CinemaVideoProviderManifest["models"][number],
+  mode: CinemaProviderModelMode,
+  requestedCombinationMode?: string,
+) {
+  const inputCombinations = model.inputCombinations ?? []
+  const requested = requestedCombinationMode?.trim()
+  if (requested) {
+    const requestedCombination = inputCombinations.find((combination) => combination.mode === requested)
+    if (requestedCombination) return requestedCombination
+  }
+  const exact = inputCombinations.find((combination) => combination.mode === mode)
+  if (exact) return exact
+  return null
 }
 
 function unregisterCinemaVideoProviderAdapter(providerID: string) {
@@ -512,6 +748,7 @@ export function setCinemaVideoProviderAdapterForTest(providerID: string, adapter
 }
 
 type KlingAIEndpointKind = "text2video" | "image2video" | "image-generation"
+type KlingAIRequestMethod = "GET" | "POST"
 
 type KlingAIVideoResult = {
   id?: string
@@ -727,6 +964,121 @@ function klingAIEndpointPath(kind: KlingAIEndpointKind, taskID?: string) {
   return `${basePath}/${encodeURIComponent(taskID)}`
 }
 
+function klingAIEndpointKindFromPath(endpointPath: string): KlingAIEndpointKind | undefined {
+  const normalized = endpointPath.replace(/^\/+/, "").toLowerCase()
+  if (
+    normalized.includes("image-generation") ||
+    normalized.includes("images/generations") ||
+    normalized.includes("text-to-image") ||
+    normalized.includes("image-to-image") ||
+    normalized.includes("image-edit")
+  ) {
+    return "image-generation"
+  }
+  if (
+    normalized.includes("image-to-video") ||
+    normalized.includes("image2video") ||
+    normalized.includes("frames-to-video") ||
+    normalized.includes("reference-to-video")
+  ) {
+    return "image2video"
+  }
+  if (normalized.includes("text-to-video") || normalized.includes("text2video")) return "text2video"
+  return undefined
+}
+
+function normalizedKlingAIEndpointPath(endpointPath: string, kind: KlingAIEndpointKind) {
+  const normalized = endpointPath.trim().replace(/^\/+/, "")
+  if (!normalized) return klingAIEndpointPath(kind)
+  if (normalized.startsWith("v1/") || /^https?:\/\//i.test(normalized)) return normalized
+  const legacyAliasKind = klingAILegacyEndpointAliasKind(normalized)
+  return legacyAliasKind ? klingAIEndpointPath(legacyAliasKind) : normalized
+}
+
+function klingAILegacyEndpointAliasKind(endpointPath: string): KlingAIEndpointKind | undefined {
+  const normalized = endpointPath.trim().replace(/^\/+|\/+$/g, "").toLowerCase()
+  switch (normalized) {
+    case "text-to-video":
+    case "text2video":
+      return "text2video"
+    case "image-to-video":
+    case "image2video":
+    case "frames-to-video":
+    case "reference-to-video":
+      return "image2video"
+    case "image-generation":
+    case "images/generations":
+    case "text-to-image":
+    case "image-to-image":
+    case "image-edit":
+      return "image-generation"
+    default:
+      return undefined
+  }
+}
+
+function klingAITaskInputEndpoint(task: CinemaGenerationTask) {
+  const endpoint = task.input.parameters.endpoint
+  return isRecord(endpoint) ? endpoint : undefined
+}
+
+function klingAIRequestMethodFromEndpoint(endpoint: Record<string, unknown> | undefined): KlingAIRequestMethod | undefined {
+  const method = stringValue(endpoint?.method)?.toUpperCase()
+  return method === "GET" || method === "POST" ? method : undefined
+}
+
+function klingAICreateEndpointForTask(task: CinemaGenerationTask) {
+  const endpoint = klingAITaskInputEndpoint(task)
+  const endpointPath = stringValue(endpoint?.path) ?? stringValue(endpoint?.url)
+  const kind = endpointPath
+    ? klingAIEndpointKindFromPath(endpointPath) ?? klingAIEndpointKindForMode(task.mode)
+    : klingAIEndpointKindForMode(task.mode)
+  return {
+    kind,
+    method: klingAIRequestMethodFromEndpoint(endpoint) ?? "POST",
+    path: endpointPath ? normalizedKlingAIEndpointPath(endpointPath, kind) : klingAIEndpointPath(kind),
+  }
+}
+
+function klingAIRefreshEndpointPathForTask(task: CinemaGenerationTask, kind: KlingAIEndpointKind, taskID: string) {
+  const endpointPath = stringValue(task.providerTaskRef?.endpoint)
+  if (!endpointPath) return klingAIEndpointPath(kind, taskID)
+  const normalized = endpointPath.trim().replace(/\/+$/, "")
+  if (!normalized) return klingAIEndpointPath(kind, taskID)
+  if (isKlingAITurboEndpointPath(normalized)) return klingAITurboTaskQueryEndpointPath(normalized, taskID)
+  const encodedTaskID = encodeURIComponent(taskID)
+  return normalized.endsWith(`/${encodedTaskID}`) ? normalized : `${normalized}/${encodedTaskID}`
+}
+
+function isKlingAITurboEndpointPath(endpointPath: string) {
+  return endpointPath.toLowerCase().includes("kling-3.0-turbo")
+}
+
+function klingAITurboTaskQueryEndpointPath(endpointPath: string, taskID: string) {
+  const encodedTaskID = encodeURIComponent(taskID)
+  if (/^https?:\/\//i.test(endpointPath)) {
+    const url = new URL(endpointPath)
+    url.pathname = `/${klingAITurboTaskQueryPath(url.pathname)}`
+    url.search = `task_ids=${encodedTaskID}`
+    return url.toString()
+  }
+  return `${klingAITurboTaskQueryPath(endpointPath)}?task_ids=${encodedTaskID}`
+}
+
+function klingAITurboTaskQueryPath(endpointPath: string) {
+  const segments = endpointPath
+    .replace(/^\/+|\/+$/g, "")
+    .split("/")
+    .filter(Boolean)
+  const endpointIndex = segments.findIndex((segment, index) => {
+    const current = segment.toLowerCase()
+    const next = segments[index + 1]?.toLowerCase()
+    return (current === "text-to-video" || current === "image-to-video") && next === "kling-3.0-turbo"
+  })
+  const prefix = endpointIndex > 0 ? segments.slice(0, endpointIndex) : []
+  return [...prefix, "tasks"].join("/")
+}
+
 function klingAIURL(baseURL: string, endpointPath: string) {
   const normalizedEndpoint = endpointPath.replace(/^\/+/, "")
   const base = new URL(`${baseURL}/`)
@@ -772,7 +1124,7 @@ async function requestKlingAI(
   providerID: string,
   endpointPath: string,
   options: {
-    method?: "GET" | "POST"
+    method?: KlingAIRequestMethod
     body?: Record<string, unknown>
   } = {},
 ): Promise<KlingAIParsedResponse> {
@@ -812,7 +1164,11 @@ async function requestKlingAI(
 
   return {
     message: remoteMessage ? redactKlingAIErrorText(remoteMessage) : undefined,
-    data: isRecord(parsed.data) ? parsed.data : parsed,
+    data: isRecord(parsed.data)
+      ? parsed.data
+      : Array.isArray(parsed.data) && isRecord(parsed.data[0])
+        ? parsed.data[0]
+        : parsed,
   }
 }
 
@@ -821,7 +1177,7 @@ function klingAITaskIDFromResponse(response: KlingAIParsedResponse) {
 }
 
 function klingAITaskStatusFromResponse(response: KlingAIParsedResponse): CinemaGenerationTask["status"] {
-  const status = stringValue(response.data?.task_status) ?? stringValue(response.data?.status)
+  const status = stringValue(response.data?.task_status) ?? stringValue(response.data?.status_name) ?? stringValue(response.data?.status)
   switch (status?.toLowerCase()) {
     case "submitted":
     case "created":
@@ -850,6 +1206,7 @@ function klingAITaskMessage(response: KlingAIParsedResponse) {
   return (
     stringValue(response.data?.task_status_msg) ??
     stringValue(response.data?.status_msg) ??
+    stringValue(response.data?.status_message) ??
     stringValue(response.data?.message) ??
     response.message
   )
@@ -867,6 +1224,7 @@ function klingAIProgressFromResponse(
   }
   const remoteStatus = (
     stringValue(response.data?.task_status) ??
+    stringValue(response.data?.status_name) ??
     stringValue(response.data?.status) ??
     ""
   ).toLowerCase()
@@ -900,14 +1258,27 @@ function klingAIVideosFromResponse(response: KlingAIParsedResponse): KlingAIVide
     ? resultRecord.videos
     : Array.isArray(response.data?.videos)
       ? response.data.videos
-      : []
+      : Array.isArray(response.data?.works)
+        ? response.data.works
+        : Array.isArray(response.data?.outputs)
+          ? response.data.outputs
+          : Array.isArray(response.data?.assets)
+            ? response.data.assets
+            : []
   return videos.flatMap((item, index) => {
     if (typeof item === "string" && item.trim()) return [{ id: `kling-video-${index + 1}`, url: item.trim() }]
     if (!isRecord(item)) return []
-    const url = stringValue(item.url) ?? stringValue(item.video_url) ?? stringValue(item.download_url)
+    const nested = [item, item.video, item.resource, item.asset, item.output, item.file].filter(isRecord)
+    const url = nested.map((candidate) =>
+      stringValue(candidate.url) ??
+      stringValue(candidate.video_url) ??
+      stringValue(candidate.videoUrl) ??
+      stringValue(candidate.download_url) ??
+      stringValue(candidate.downloadUrl)
+    ).find(Boolean)
     if (!url) return []
     return [{
-      id: stringValue(item.id),
+      id: stringValue(item.id) ?? stringValue(item.work_id) ?? stringValue(item.asset_id),
       url,
     }]
   })
@@ -1128,6 +1499,13 @@ async function downloadKlingAIVideoAssets(input: {
 function klingAIEndpointKindForTask(task: CinemaGenerationTask): KlingAIEndpointKind {
   const refKind = stringValue(task.providerTaskRef?.kind)
   if (refKind === "text2video" || refKind === "image2video" || refKind === "image-generation") return refKind
+  const refEndpointKind = stringValue(task.providerTaskRef?.endpoint)
+    ? klingAIEndpointKindFromPath(String(task.providerTaskRef?.endpoint))
+    : undefined
+  if (refEndpointKind) return refEndpointKind
+  const inputEndpointPath = stringValue(klingAITaskInputEndpoint(task)?.path) ?? stringValue(klingAITaskInputEndpoint(task)?.url)
+  const inputEndpointKind = inputEndpointPath ? klingAIEndpointKindFromPath(inputEndpointPath) : undefined
+  if (inputEndpointKind) return inputEndpointKind
   return klingAIEndpointKindForMode(task.mode)
 }
 
@@ -1145,14 +1523,14 @@ function klingAIEndpointKindForMode(mode: CinemaProviderModelMode): KlingAIEndpo
   }
 }
 
-function klingAITaskRefFor(task: CinemaGenerationTask, taskID: string, kind: KlingAIEndpointKind) {
+function klingAITaskRefFor(task: CinemaGenerationTask, taskID: string, kind: KlingAIEndpointKind, endpointPath: string) {
   const existingRef = isRecord(task.providerTaskRef) ? task.providerTaskRef : {}
   return {
     ...existingRef,
     providerID: task.providerID,
     taskID,
     kind,
-    endpoint: klingAIEndpointPath(kind),
+    endpoint: endpointPath,
   }
 }
 
@@ -1264,6 +1642,16 @@ function parameterString(parameters: Record<string, unknown>, ...keys: string[])
   return undefined
 }
 
+function parameterNumberOrString(parameters: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = parameters[key]
+    if (typeof value === "number" && Number.isFinite(value)) return value
+    const string = stringValue(value)
+    if (string) return string
+  }
+  return undefined
+}
+
 function promptWithStyle(prompt: string, parameters: Record<string, unknown>) {
   const style = parameterString(parameters, "style")
   return style ? `${prompt.trim()}\n\nStyle: ${style}` : prompt
@@ -1304,6 +1692,16 @@ function appendOptionalPayloadString(
 ) {
   const value = parameterString(parameters, ...inputKeys)
   if (value) target[outputKey] = value
+}
+
+function appendOptionalPayloadValue(
+  target: Record<string, unknown>,
+  outputKey: string,
+  parameters: Record<string, unknown>,
+  ...inputKeys: string[]
+) {
+  const value = parameterNumberOrString(parameters, ...inputKeys)
+  if (value !== undefined) target[outputKey] = value
 }
 
 function klingAIExternalTaskID(taskID: string) {
@@ -1412,7 +1810,89 @@ function hasKlingAIImageInput(parameters: Record<string, unknown>) {
   )
 }
 
-async function klingAITaskPayload(input: ProviderAdapterCreateInput, kind: KlingAIEndpointKind) {
+function hasKlingAIStartEndFrameInput(parameters: Record<string, unknown>) {
+  const hasStartFrame = Boolean(
+    stringValue(parameters.startFrameURL) ??
+    stringValue(parameters.startImageURL) ??
+    stringValue(parameters.startFramePath) ??
+    stringValue(parameters.startImagePath)
+  )
+  const hasEndFrame = Boolean(
+    stringValue(parameters.endFrameURL) ??
+    stringValue(parameters.endImageURL) ??
+    stringValue(parameters.imageTailURL) ??
+    stringValue(parameters.image_tail_url) ??
+    stringValue(parameters.endFramePath) ??
+    stringValue(parameters.endImagePath) ??
+    stringValue(parameters.imageTailPath) ??
+    stringValue(parameters.image_tail_path)
+  )
+  return hasStartFrame && hasEndFrame
+}
+
+function klingAITurboSettings(parameters: Record<string, unknown>, input: { includeAspectRatio: boolean }) {
+  const settings: Record<string, unknown> = {}
+  appendOptionalPayloadValue(settings, "resolution", parameters, "resolution")
+  appendOptionalPayloadValue(settings, "duration", parameters, "duration")
+  if (input.includeAspectRatio) appendOptionalPayloadValue(settings, "aspect_ratio", parameters, "aspectRatio", "aspect_ratio")
+  return settings
+}
+
+function klingAITurboOptions(task: CinemaGenerationTask) {
+  return {
+    external_task_id: klingAIExternalTaskID(task.id),
+  }
+}
+
+function klingAITurboImageContent(image: string) {
+  if (/^https?:\/\//i.test(image)) {
+    return {
+      type: "first_frame",
+      url: image,
+    }
+  }
+  return {
+    type: "first_frame",
+    image,
+  }
+}
+
+async function klingAITurboTaskPayload(input: ProviderAdapterCreateInput, kind: KlingAIEndpointKind) {
+  const parameters = input.task.input.parameters
+  if (kind === "text2video") {
+    return {
+      prompt: input.task.input.prompt,
+      settings: klingAITurboSettings(parameters, { includeAspectRatio: true }),
+      options: klingAITurboOptions(input.task),
+    }
+  }
+
+  if (kind === "image2video") {
+    const contents: Record<string, unknown>[] = []
+    if (input.task.input.prompt.trim()) {
+      contents.push({
+        type: "prompt",
+        text: input.task.input.prompt,
+      })
+    }
+    contents.push(klingAITurboImageContent(await klingAISourceImageInput(input.root, parameters)))
+    return {
+      contents,
+      settings: klingAITurboSettings(parameters, { includeAspectRatio: false }),
+      options: klingAITurboOptions(input.task),
+    }
+  }
+
+  return {
+    prompt: promptWithStyle(input.task.input.prompt, parameters),
+    settings: klingAITurboSettings(parameters, { includeAspectRatio: true }),
+    options: klingAITurboOptions(input.task),
+  }
+}
+
+async function klingAITaskPayload(input: ProviderAdapterCreateInput, kind: KlingAIEndpointKind, endpointPath?: string) {
+  if (endpointPath && isKlingAITurboEndpointPath(endpointPath)) return await klingAITurboTaskPayload(input, kind)
+
   const parameters = input.task.input.parameters
   const payload: Record<string, unknown> = {
     model_name: input.task.modelID,
@@ -1435,7 +1915,7 @@ async function klingAITaskPayload(input: ProviderAdapterCreateInput, kind: Kling
   if (Number.isInteger(count) && count > 0) payload.n = count
   if (kind !== "image-generation") payload.mode = klingAIQualityMode(parameters)
 
-  if (input.task.mode === "frames-to-video") {
+  if (hasKlingAIStartEndFrameInput(parameters)) {
     payload.image = await klingAIStartFrameInput(input.root, parameters)
     payload.image_tail = await klingAIEndFrameInput(input.root, parameters)
   } else if (kind === "image2video" || (kind === "image-generation" && hasKlingAIImageInput(parameters))) {
@@ -1447,12 +1927,21 @@ async function klingAITaskPayload(input: ProviderAdapterCreateInput, kind: Kling
 
 const KlingAIProviderAdapter: ProviderAdapter = {
   manifest: {} as CinemaVideoProviderManifest,
-  supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "text-to-image"],
+  supportsInputCombination: ({ combination }) => {
+    const endpointPath = stringValue(combination.endpoint?.path) ?? stringValue(combination.endpoint?.url)
+    if (endpointPath) return Boolean(klingAIEndpointKindFromPath(endpointPath))
+    try {
+      klingAIEndpointKindForMode(combination.mode)
+      return true
+    } catch {
+      return false
+    }
+  },
   createTask: async (input) => {
-    const kind = klingAIEndpointKindForMode(input.task.mode)
-    const payload = await klingAITaskPayload(input, kind)
-    const response = await requestKlingAI(input.task.providerID, klingAIEndpointPath(kind), {
-      method: "POST",
+    const endpoint = klingAICreateEndpointForTask(input.task)
+    const payload = await klingAITaskPayload(input, endpoint.kind, endpoint.path)
+    const response = await requestKlingAI(input.task.providerID, endpoint.path, {
+      method: endpoint.method,
       body: payload,
     })
     const providerTaskID = klingAITaskIDFromResponse(response)
@@ -1461,7 +1950,7 @@ const KlingAIProviderAdapter: ProviderAdapter = {
     }
 
     const task = taskUpdated(input.task, {
-      providerTaskRef: klingAITaskRefFor(input.task, providerTaskID, kind),
+      providerTaskRef: klingAITaskRefFor(input.task, providerTaskID, endpoint.kind, endpoint.path),
     })
     return await applyKlingAITaskResponse({
       root: input.root,
@@ -1484,7 +1973,7 @@ const KlingAIProviderAdapter: ProviderAdapter = {
     }
 
     const kind = klingAIEndpointKindForTask(input.task)
-    const response = await requestKlingAI(input.task.providerID, klingAIEndpointPath(kind, providerTaskID))
+    const response = await requestKlingAI(input.task.providerID, klingAIRefreshEndpointPathForTask(input.task, kind, providerTaskID))
     return await applyKlingAITaskResponse({
       root: input.root,
       task: input.task,
@@ -1520,11 +2009,27 @@ export function assertCinemaVideoProviderModelSupports(
     throw new ApiError(400, "CINEMA_PROVIDER_MODEL_NOT_FOUND", `Cinema provider '${manifest.id}' does not expose model '${input.modelID}'.`)
   }
   if (!model.modes.includes(input.mode)) {
-    throw new ApiError(400, "CINEMA_PROVIDER_MODE_UNSUPPORTED", `Model '${input.modelID}' does not support mode '${input.mode}'.`)
+    const hasCombinationMode = modelInputCombinationModes(model).includes(input.mode)
+    if (!hasCombinationMode) {
+      throw new ApiError(400, "CINEMA_PROVIDER_MODE_UNSUPPORTED", `Model '${input.modelID}' does not support mode '${input.mode}'.`)
+    }
   }
-  if (providerAdapters[manifest.id] && !cinemaVideoProviderAdapterSupportsMode(manifest.id, input.mode)) {
-    throw new ApiError(400, "CINEMA_PROVIDER_MODE_UNSUPPORTED", `Cinema provider '${manifest.id}' runtime does not support mode '${input.mode}'.`)
+  const combination = findCinemaVideoProviderInputCombinationForMode(
+    model,
+    input.mode,
+    typeof input.parameters.inputCombinationMode === "string" ? input.parameters.inputCombinationMode : undefined,
+  )
+  if ((model.inputCombinations ?? []).length > 0 && !combination) {
+    throw new ApiError(400, "CINEMA_PROVIDER_MODE_UNSUPPORTED", `Model '${input.modelID}' does not expose input combination '${input.mode}'.`)
   }
+  if (
+    providerAdapters[manifest.id] &&
+    combination &&
+    !cinemaVideoProviderAdapterSupportsInputCombination(manifest.id, model, combination)
+  ) {
+    throw new ApiError(400, "CINEMA_PROVIDER_MODE_UNSUPPORTED", `Cinema provider '${manifest.id}' runtime does not support input combination '${combination.mode}'.`)
+  }
+  return model
 }
 
 export function getCinemaVideoProviderAdapter(providerID: string): ProviderAdapter {
@@ -1588,7 +2093,7 @@ async function providerRuntimeFor(manifest: CinemaVideoProviderManifest): Promis
     ? {
         adapterAvailable,
         adapterID: manifest.id,
-        supportedModes: cinemaVideoProviderAdapterSupportedModes(manifest.id),
+        supportedModes: cinemaVideoProviderAdapterSupportedModes(manifest),
       }
     : { adapterAvailable, supportedModes: [] }
   const configuredBaseURL = normalizeBaseURL(settings.baseURL)

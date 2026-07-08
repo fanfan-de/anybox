@@ -14,7 +14,7 @@ import type {
   ThreadMessage,
   WorkspaceGroup,
 } from "../types"
-import { useComposerController } from "./composer-controller"
+import { useComposerController, type ComposerCommandStatus } from "./composer-controller"
 
 function createSession(id: string): SessionSummary {
   return {
@@ -91,6 +91,7 @@ function useComposerHarness(input?: {
   const [agentSessions, setAgentSessionsState] = useState<Record<string, string>>(input?.initialAgentSessions ?? {})
   const [cancellingSessionIDs, setCancellingSessionIDsState] = useState<Record<string, boolean>>({})
   const [attachmentsByTabKey, setAttachmentsByTabKeyState] = useState<Record<string, ComposerAttachment[]>>({})
+  const [composerCommandStatusByTabKey, setComposerCommandStatusByTabKeyState] = useState<Record<string, ComposerCommandStatus>>({})
   const [createSessionTabs, setCreateSessionTabsState] = useState<CreateSessionTab[]>([
     {
       id: "create-1",
@@ -114,6 +115,7 @@ function useComposerHarness(input?: {
   const messagesRef = useRef<Record<string, ThreadMessage[]>>({})
   const pendingStreamsRef = useRef<Record<string, PendingAgentStream>>({})
   const permissionRequestsRequestRef = useRef<Record<string, number>>({})
+  const reloadSessionHistoryForSession = useRef(vi.fn(async () => undefined)).current
   const updateAssistantConversationMessage = useRef(vi.fn((
     sessionID: string,
     assistantMessageID: string,
@@ -168,7 +170,7 @@ function useComposerHarness(input?: {
     platform: "win32",
     refreshWorkspaceForSession: vi.fn(),
     refreshWorkspaceFromDirectory: vi.fn(),
-    reloadSessionHistoryForSession: vi.fn(async () => undefined),
+    reloadSessionHistoryForSession,
     replaceConversationMessages: (sessionID, nextMessages) => {
       messagesRef.current[sessionID] = nextMessages
     },
@@ -176,6 +178,7 @@ function useComposerHarness(input?: {
     setAgentSessions: (update) => applyUpdate(setAgentSessionsState, agentSessions, update),
     setCancellingSessionIDs: (update) => applyUpdate(setCancellingSessionIDsState, cancellingSessionIDs, update),
     setComposerAttachmentsByTabKey: (update) => applyUpdate(setAttachmentsByTabKeyState, attachmentsByTabKey, update),
+    setComposerCommandStatusByTabKey: (update) => applyUpdate(setComposerCommandStatusByTabKeyState, composerCommandStatusByTabKey, update),
     setComposerDraftStateByTabKey: (update) => applyUpdate(setDraftsByTabKeyState, draftsByTabKey, update),
     setComposerParentMessageIDByTabKey: (update) =>
       applyUpdate(setComposerParentMessageIDByTabKeyState, composerParentMessageIDByTabKey, update),
@@ -196,11 +199,13 @@ function useComposerHarness(input?: {
   return {
     attachmentsByTabKey,
     cancellingSessionIDs,
+    composerCommandStatusByTabKey,
     controller,
     createSessionForWorkspace,
     createSessionTabs,
     pendingConversationInputsBySession,
     pendingStreamsRef,
+    reloadSessionHistoryForSession,
     messagesRef,
     updateAssistantConversationMessage,
     workspaces,
@@ -242,6 +247,102 @@ describe("composer controller", () => {
       kind: "user",
       text: "Existing prompt",
     })
+  })
+
+  it("runs manual compaction for /compact without sending a user prompt", async () => {
+    const previousDesktop = window.desktop
+    const compact = vi.fn(async () => ({
+      sessionID: "backend-session-1",
+      status: "compacted" as const,
+      compactedMessageID: "message-compaction",
+      sourceMessageCount: 4,
+    }))
+
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: {
+        agentSession: {
+          compact,
+        },
+      } as unknown as typeof window.desktop,
+    })
+
+    try {
+      const { result } = renderHook(() =>
+        useComposerHarness({
+          initialAgentSessions: {
+            "session-1": "backend-session-1",
+          },
+          sessionDraftText: "/compact",
+        }),
+      )
+
+      await act(async () => {
+        await result.current.controller.handleSend()
+      })
+
+      expect(compact).toHaveBeenCalledWith({ backendSessionID: "backend-session-1" })
+      expect(result.current.reloadSessionHistoryForSession).toHaveBeenCalledWith("session-1", "backend-session-1")
+      expect(result.current.messagesRef.current["session-1"]).toBeUndefined()
+      expect(result.current.composerCommandStatusByTabKey["session:session-1"]).toMatchObject({
+        tone: "success",
+        titleKey: "composer.compact.status.compacted.title",
+        detailKey: "composer.compact.status.compacted.detail",
+      })
+    } finally {
+      Object.defineProperty(window, "desktop", {
+        configurable: true,
+        value: previousDesktop,
+      })
+    }
+  })
+
+  it("runs manual compaction for ~compact", async () => {
+    const previousDesktop = window.desktop
+    const compact = vi.fn(async () => ({
+      sessionID: "backend-session-1",
+      status: "noop" as const,
+      reason: "not-enough-history" as const,
+      sourceMessageCount: 0,
+    }))
+
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: {
+        agentSession: {
+          compact,
+        },
+      } as unknown as typeof window.desktop,
+    })
+
+    try {
+      const { result } = renderHook(() =>
+        useComposerHarness({
+          initialAgentSessions: {
+            "session-1": "backend-session-1",
+          },
+          sessionDraftText: "~compact",
+        }),
+      )
+
+      await act(async () => {
+        await result.current.controller.handleSend()
+      })
+
+      expect(compact).toHaveBeenCalledWith({ backendSessionID: "backend-session-1" })
+      expect(result.current.reloadSessionHistoryForSession).not.toHaveBeenCalled()
+      expect(result.current.messagesRef.current["session-1"]).toBeUndefined()
+      expect(result.current.composerCommandStatusByTabKey["session:session-1"]).toMatchObject({
+        tone: "info",
+        titleKey: "composer.compact.status.noop.title",
+        detailKey: "composer.compact.status.noop.detail",
+      })
+    } finally {
+      Object.defineProperty(window, "desktop", {
+        configurable: true,
+        value: previousDesktop,
+      })
+    }
   })
 
   it("queues running text submissions without interrupting the active stream", async () => {

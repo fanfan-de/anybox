@@ -62,6 +62,7 @@ import {
   type CinemaTextModel,
   type CinemaTextModelsResult,
   type CinemaNodeType,
+  type CinemaProviderEndpoint,
   type CinemaProjectDirectoryEntry,
   type CinemaProjectDirectoryListing,
   type CinemaProjectSummary,
@@ -86,7 +87,6 @@ type ImageGenerationRequest = {
   sourceImagePath?: string
   sourceImagePaths?: string[]
 }
-
 type TextGenerationRequest = {
   prompt: string
   model: string | null
@@ -118,19 +118,37 @@ type VideoInputSlot =
   | "referenceImage"
   | "sourceVideo"
   | "mask"
-type VideoImageInputSlot = Extract<VideoInputSlot, "sourceImage" | "startFrame" | "endFrame" | "referenceImage">
+type VideoMediaInputSlot = Exclude<VideoInputSlot, "textParameter">
+type VideoImageInputSlot = Extract<VideoInputSlot, "sourceImage" | "startFrame" | "endFrame" | "referenceImage" | "mask">
 type VideoImageInputAssetValue = VideoSourceImageAsset | VideoSourceImageAsset[] | null
+type VideoInputAssetValue = VideoSourceImageAsset | VideoSourceImageAsset[] | null
 type VideoImageInputAssets = Partial<Record<VideoImageInputSlot, VideoImageInputAssetValue>>
+type VideoInputAssets = Partial<Record<VideoMediaInputSlot, VideoInputAssetValue>>
+type VideoInputAssetMap = Record<string, VideoInputAssetValue>
 
 type VideoModeInputContract = {
   mode: CinemaGenerationMode
   label: string
   promptPlaceholder: string
-  requiredSlots: VideoInputSlot[]
-  optionalSlots: VideoInputSlot[]
-  maxReferenceImages?: number
-  enabledInVideoNode: boolean
+  inputs: VideoInputControl[]
+  unsupportedRequiredInputs: VideoInputControl[]
 }
+
+type VideoInputControl = {
+  inputKey: string
+  role: string
+  modality: string
+  required: boolean
+  minCount: number
+  maxCount?: number
+  note?: string
+  slot: VideoInputSlot | null
+  label: string
+  emptyText: string
+}
+
+type VideoProviderModel = CinemaVideoProvider["manifest"]["models"][number]
+type VideoProviderInputCombination = VideoProviderModel["inputCombinations"][number]
 
 type CinemaFlowNodeData = {
   cinemaType: CinemaNodeType
@@ -162,6 +180,9 @@ type CinemaFlowNodeData = {
   generationTasks?: CinemaGenerationTask[]
   sourceImageAsset?: VideoSourceImageAsset | null
   videoInputImageAssets?: VideoImageInputAssets
+  videoInputAssets?: VideoInputAssets
+  videoInputAssetsByInputKey?: VideoInputAssetMap
+  videoInputAssetsByRole?: VideoInputAssetMap
   isCreatingVideoTask?: boolean
   videoGenerationError?: string | null
   onCreateVideoGenerationTask?: (nodeID: string, body: CreateCinemaGenerationTaskBody) => void
@@ -209,6 +230,7 @@ const DEFAULT_IMAGE_GENERATION_COUNT = 1
 const DEFAULT_VIDEO_ASPECT_RATIO = "16:9"
 const DEFAULT_VIDEO_DURATION_SECONDS = 5
 const DEFAULT_VIDEO_RESOLUTION = "720p"
+const FALLBACK_VIDEO_INPUT_COMBINATION_MODE: CinemaGenerationMode = "text-to-video"
 const LOCAL_IMAGE_FILE_ACCEPT = [
   "image/apng",
   "image/avif",
@@ -219,18 +241,6 @@ const LOCAL_IMAGE_FILE_ACCEPT = [
   "image/svg+xml",
   "image/webp",
 ].join(",")
-const VIDEO_GENERATION_MODES = [
-  "text-to-video",
-  "image-to-video",
-  "frames-to-video",
-  "reference-to-video",
-  "video-to-video",
-  "edit",
-  "extend",
-  "motion-control",
-] as const satisfies readonly CinemaGenerationMode[]
-const VIDEO_NODE_MODES = ["text-to-video", "image-to-video", "frames-to-video", "reference-to-video"] as const satisfies readonly CinemaGenerationMode[]
-const FALLBACK_VIDEO_NODE_MODES = ["text-to-video", "image-to-video"] as const satisfies readonly CinemaGenerationMode[]
 const VIDEO_INPUT_SLOTS = [
   "textParameter",
   "sourceImage",
@@ -245,7 +255,8 @@ const VIDEO_IMAGE_INPUT_SLOTS = [
   "startFrame",
   "endFrame",
   "referenceImage",
-] as const satisfies readonly VideoInputSlot[]
+  "mask",
+] as const satisfies readonly VideoImageInputSlot[]
 const VIDEO_INPUT_SLOT_LABELS: Record<VideoInputSlot, string> = {
   textParameter: "文本参数",
   sourceImage: "参考图",
@@ -253,84 +264,21 @@ const VIDEO_INPUT_SLOT_LABELS: Record<VideoInputSlot, string> = {
   endFrame: "尾帧",
   referenceImage: "参考图",
   sourceVideo: "源视频",
-  mask: "遮罩",
+  mask: "蒙版",
 }
 const VIDEO_INPUT_SLOT_EMPTY_TEXT: Record<VideoInputSlot, string> = {
   textParameter: "连接文本节点作为参数",
   sourceImage: "连接图片节点或图片生成节点",
-  startFrame: "连接首帧图片",
-  endFrame: "连接尾帧图片",
+  startFrame: "导入或连接首帧图片",
+  endFrame: "导入或连接尾帧图片",
   referenceImage: "连接参考图片",
   sourceVideo: "连接视频节点",
-  mask: "连接遮罩素材",
+  mask: "连接蒙版素材",
 }
-const VIDEO_MODE_INPUT_CONTRACTS: Record<CinemaGenerationMode, VideoModeInputContract> = {
-  "text-to-video": {
-    mode: "text-to-video",
-    label: "文生视频",
-    promptPlaceholder: "描述你想生成的视频片段...",
-    requiredSlots: [],
-    optionalSlots: ["textParameter"],
-    enabledInVideoNode: true,
-  },
-  "image-to-video": {
-    mode: "image-to-video",
-    label: "图生视频",
-    promptPlaceholder: "描述参考图要如何运动、镜头如何变化...",
-    requiredSlots: ["sourceImage"],
-    optionalSlots: ["textParameter"],
-    enabledInVideoNode: true,
-  },
-  "frames-to-video": {
-    mode: "frames-to-video",
-    label: "首尾帧",
-    promptPlaceholder: "描述首帧到尾帧之间的运动和镜头变化...",
-    requiredSlots: ["startFrame", "endFrame"],
-    optionalSlots: ["textParameter"],
-    enabledInVideoNode: true,
-  },
-  "reference-to-video": {
-    mode: "reference-to-video",
-    label: "全能参考",
-    promptPlaceholder: "描述视频内容，并连接人物、场景、风格或物体参考...",
-    requiredSlots: ["referenceImage"],
-    optionalSlots: ["textParameter"],
-    maxReferenceImages: 4,
-    enabledInVideoNode: true,
-  },
-  "video-to-video": {
-    mode: "video-to-video",
-    label: "视频生视频",
-    promptPlaceholder: "描述要基于原视频生成的变化...",
-    requiredSlots: ["sourceVideo"],
-    optionalSlots: ["textParameter", "referenceImage"],
-    enabledInVideoNode: false,
-  },
-  edit: {
-    mode: "edit",
-    label: "视频编辑",
-    promptPlaceholder: "描述你希望如何修改原视频...",
-    requiredSlots: ["sourceVideo"],
-    optionalSlots: ["textParameter", "referenceImage", "mask"],
-    enabledInVideoNode: false,
-  },
-  extend: {
-    mode: "extend",
-    label: "视频扩展",
-    promptPlaceholder: "描述要如何延展当前视频...",
-    requiredSlots: ["sourceVideo"],
-    optionalSlots: ["textParameter"],
-    enabledInVideoNode: false,
-  },
-  "motion-control": {
-    mode: "motion-control",
-    label: "运动控制",
-    promptPlaceholder: "描述主体运动、镜头调度和控制要求...",
-    requiredSlots: ["sourceImage"],
-    optionalSlots: ["textParameter", "referenceImage"],
-    enabledInVideoNode: false,
-  },
-}
+const VIDEO_LOCAL_IMAGE_INPUT_SLOTS = [
+  "startFrame",
+  "endFrame",
+] as const satisfies readonly VideoImageInputSlot[]
 
 const DEFAULT_NODE_SIZE: Record<CinemaNodeType, { width: number; height: number }> = {
   text: { width: 380, height: 240 },
@@ -645,7 +593,6 @@ function GenerationProgress({
     </div>
   )
 }
-
 function readImageResultAssets(rawData: Record<string, unknown>): CinemaGeneratedAsset[] {
   const value = rawData.resultAssets
   if (!Array.isArray(value)) return []
@@ -716,84 +663,213 @@ function filePathSegments(directoryPath: string) {
   return directoryPath.split("/").filter(Boolean)
 }
 
-function providerRuntimeSupportsMode(provider: CinemaVideoProvider, mode: CinemaGenerationMode) {
-  const supportedModes = provider.runtime?.supportedModes ?? []
-  if (supportedModes.length > 0) return supportedModes.includes(mode)
-  if (provider.runtime?.adapterAvailable === true) return mode === "text-to-video" || mode === "image-to-video"
-  return false
+function providerModelSelectionID(model: VideoProviderModel) {
+  return model.offeringID ?? model.catalogID ?? model.id
 }
 
-function providersForMode(providers: CinemaVideoProvider[], mode: CinemaGenerationMode) {
-  return providers.filter((provider) =>
-    providerRuntimeSupportsMode(provider, mode) &&
-    provider.manifest.models.some((model) => model.modes.includes(mode))
+function providerModelMatchesID(model: VideoProviderModel, modelID: string) {
+  return [
+    model.offeringID,
+    model.catalogID,
+    model.providerModelID,
+    model.id,
+  ].some((candidate) => candidate === modelID)
+}
+
+function providerAdapterAvailable(provider: CinemaVideoProvider) {
+  return provider.runtime?.adapterAvailable === true
+}
+
+function providerRuntimeSupportsCombination(provider: CinemaVideoProvider, combinationMode: string) {
+  const supportedModes = provider.runtime?.supportedModes ?? []
+  if (supportedModes.length === 0) return providerAdapterAvailable(provider)
+  return supportedModes.includes(combinationMode)
+}
+
+function modelInputCombinationsForProvider(provider: CinemaVideoProvider | null, model: VideoProviderModel | null) {
+  if (!provider || !model) return []
+  return (model.inputCombinations ?? []).filter((combination) =>
+    providerRuntimeSupportsCombination(provider, combination.mode)
   )
 }
 
-function providerForMode(providers: CinemaVideoProvider[], providerID: string, mode: CinemaGenerationMode) {
-  const availableProviders = providersForMode(providers, mode)
+function modelHasAvailableInputCombinations(provider: CinemaVideoProvider, model: VideoProviderModel) {
+  return modelInputCombinationsForProvider(provider, model).length > 0
+}
+
+function availableVideoProviders(providers: CinemaVideoProvider[]) {
+  return providers.filter((provider) =>
+    providerAdapterAvailable(provider) &&
+    provider.manifest.models.some((model) => modelHasAvailableInputCombinations(provider, model))
+  )
+}
+
+function providerForSelection(providers: CinemaVideoProvider[], providerID: string) {
+  const availableProviders = availableVideoProviders(providers)
   return availableProviders.find((provider) => provider.manifest.id === providerID) ?? availableProviders[0] ?? null
 }
 
-function modelForMode(provider: CinemaVideoProvider | null, modelID: string, mode: CinemaGenerationMode) {
-  const availableModels = provider?.manifest.models.filter((model) => model.modes.includes(mode)) ?? []
-  return availableModels.find((model) => model.id === modelID) ?? availableModels[0] ?? null
+function availableModelsForProvider(provider: CinemaVideoProvider | null) {
+  return provider?.manifest.models.filter((model) => modelHasAvailableInputCombinations(provider, model)) ?? []
 }
 
-function videoModeInputContract(mode: CinemaGenerationMode) {
-  return VIDEO_MODE_INPUT_CONTRACTS[mode]
+function modelForSelection(provider: CinemaVideoProvider | null, modelID: string) {
+  const availableModels = availableModelsForProvider(provider)
+  return availableModels.find((model) => providerModelMatchesID(model, modelID)) ?? availableModels[0] ?? null
 }
 
-function videoModeRequiresSlot(mode: CinemaGenerationMode, slot: VideoInputSlot) {
-  return videoModeInputContract(mode).requiredSlots.includes(slot)
+function inputCombinationsForModel(provider: CinemaVideoProvider | null, model: VideoProviderModel | null) {
+  return modelInputCombinationsForProvider(provider, model)
+}
+
+function inputCombinationForSelection(
+  provider: CinemaVideoProvider | null,
+  model: VideoProviderModel | null,
+  mode: CinemaGenerationMode,
+) {
+  const inputCombinations = inputCombinationsForModel(provider, model)
+  return inputCombinations.find((combination) => combination.mode === mode) ?? inputCombinations[0] ?? null
+}
+
+function slotForInputRole(role: string, modality: string): VideoInputSlot | null {
+  switch (role) {
+    case "prompt":
+      return "textParameter"
+    case "first_frame_image":
+      return "startFrame"
+    case "last_frame_image":
+      return "endFrame"
+    case "reference_image":
+    case "style_image":
+      return "referenceImage"
+    case "source_video":
+    case "reference_video":
+      return "sourceVideo"
+    case "mask_image":
+      return "mask"
+    case "source_image":
+    case "character_image":
+    case "control_image":
+    case "image":
+      return "sourceImage"
+    default:
+      if (modality === "text") return "textParameter"
+      if (modality === "image") return "sourceImage"
+      if (modality === "video") return "sourceVideo"
+      return null
+  }
+}
+
+function videoInputKey(role: string, index: number) {
+  const safeRole = role.trim().replace(/[^a-z0-9_-]+/gi, "-") || "input"
+  return `input:${index}:${safeRole}`
+}
+
+function formatInputCombinationLabel(mode: string) {
+  return mode
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+    .join(" ")
+}
+
+function labelForInputRole(role: string, modality: string) {
+  switch (role) {
+    case "prompt":
+      return "提示词"
+    case "first_frame_image":
+      return "首帧"
+    case "last_frame_image":
+      return "尾帧"
+    case "reference_image":
+      return "参考图"
+    case "style_image":
+      return "风格图"
+    case "source_video":
+    case "reference_video":
+      return "源视频"
+    case "mask_image":
+      return "蒙版"
+    case "source_image":
+    case "character_image":
+    case "control_image":
+    case "image":
+      return "参考图"
+    default:
+      return role ? formatInputCombinationLabel(role) : formatInputCombinationLabel(modality)
+  }
+}
+
+function emptyTextForInputRole(role: string, modality: string, slot: VideoInputSlot | null) {
+  if (slot) return VIDEO_INPUT_SLOT_EMPTY_TEXT[slot]
+  return `暂不支持 ${role || modality} 输入`
+}
+
+function videoInputControlForSpec(input: VideoProviderInputCombination["inputs"][number], index: number): VideoInputControl {
+  const role = input.role.trim()
+  const modality = input.modality.trim()
+  const slot = slotForInputRole(role, modality)
+  return {
+    inputKey: videoInputKey(role, index),
+    role,
+    modality,
+    required: input.required,
+    minCount: input.minCount,
+    maxCount: input.maxCount,
+    note: typeof input.note === "string" ? input.note : undefined,
+    slot,
+    label: labelForInputRole(role, modality),
+    emptyText: emptyTextForInputRole(role, modality, slot),
+  }
+}
+
+function videoModeInputContractForCombination(combination: VideoProviderInputCombination | null): VideoModeInputContract {
+  const inputs = combination?.inputs.map(videoInputControlForSpec) ?? []
+  const promptInput = inputs.find((input) => input.slot === "textParameter")
+  const unsupportedRequiredInputs = inputs.filter((input) => input.required && !input.slot)
+  return {
+    mode: combination?.mode ?? FALLBACK_VIDEO_INPUT_COMBINATION_MODE,
+    label: combination?.label ?? formatInputCombinationLabel(combination?.mode ?? FALLBACK_VIDEO_INPUT_COMBINATION_MODE),
+    promptPlaceholder: promptInput?.note ?? "描述视频内容、镜头运动和画面变化...",
+    inputs,
+    unsupportedRequiredInputs,
+  }
 }
 
 function isVideoImageInputSlot(slot: VideoInputSlot): slot is VideoImageInputSlot {
   return (VIDEO_IMAGE_INPUT_SLOTS as readonly VideoInputSlot[]).includes(slot)
 }
 
-function videoModeImageInputSlots(contract: VideoModeInputContract) {
-  const slots: VideoImageInputSlot[] = []
-  const seen = new Set<VideoImageInputSlot>()
-  for (const slot of [...contract.requiredSlots, ...contract.optionalSlots]) {
-    if (!isVideoImageInputSlot(slot) || seen.has(slot)) continue
-    seen.add(slot)
-    slots.push(slot)
-  }
-  return slots
+function isVideoMediaInputSlot(slot: VideoInputSlot): slot is VideoMediaInputSlot {
+  return slot !== "textParameter"
 }
 
-function videoImageInputAssetList(value: VideoImageInputAssetValue | undefined) {
+function canImportVideoInputLocalImage(slot: VideoInputSlot | null): slot is VideoImageInputSlot {
+  return Boolean(slot && (VIDEO_LOCAL_IMAGE_INPUT_SLOTS as readonly VideoInputSlot[]).includes(slot))
+}
+
+function isVideoMediaInputControl(input: VideoInputControl): input is VideoInputControl & { slot: VideoMediaInputSlot } {
+  return Boolean(input.slot && isVideoMediaInputSlot(input.slot))
+}
+
+function videoInputAssetList(value: VideoInputAssetValue | undefined) {
   if (Array.isArray(value)) return value
   return value ? [value] : []
 }
 
-function enabledVideoNodeModeContracts(providers: CinemaVideoProvider[]) {
-  const contracts = VIDEO_NODE_MODES
-    .map(videoModeInputContract)
-    .filter((contract) => contract.enabledInVideoNode && providersForMode(providers, contract.mode).length > 0)
-  return contracts.length > 0
-    ? contracts
-    : FALLBACK_VIDEO_NODE_MODES.map(videoModeInputContract)
-}
-
 function readVideoMode(rawData: Record<string, unknown>) {
-  const mode = readRawString(rawData, "mode", FALLBACK_GENERATION_MODE)
-  const parsedMode = (VIDEO_GENERATION_MODES as readonly string[]).includes(mode)
-    ? mode as CinemaGenerationMode
-    : FALLBACK_GENERATION_MODE
-  return videoModeInputContract(parsedMode).enabledInVideoNode ? parsedMode : FALLBACK_GENERATION_MODE
+  return readRawString(rawData, "mode", FALLBACK_VIDEO_INPUT_COMBINATION_MODE)
 }
 
-function defaultModelAspectRatio(model: ReturnType<typeof modelForMode>) {
+function defaultModelAspectRatio(model: VideoProviderModel | null) {
   return model?.aspectRatios[0] ?? DEFAULT_VIDEO_ASPECT_RATIO
 }
 
-function defaultModelDuration(model: ReturnType<typeof modelForMode>) {
+function defaultModelDuration(model: VideoProviderModel | null) {
   return model?.durations[0] ?? DEFAULT_VIDEO_DURATION_SECONDS
 }
 
-function defaultModelResolution(model: ReturnType<typeof modelForMode>) {
+function defaultModelResolution(model: VideoProviderModel | null) {
   return model?.resolutions[0] ?? DEFAULT_VIDEO_RESOLUTION
 }
 
@@ -887,6 +963,24 @@ function readImageGenerationSourceImageAssets(rawData: Record<string, unknown>, 
   return readEmbeddedSourceImageAssets(rawData, nodeID, "Image reference")
 }
 
+function readVideoLocalInputAssets(rawData: Record<string, unknown>, nodeID: string): VideoInputAssets {
+  const value = rawData.videoLocalInputAssets
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  const record = value as Record<string, unknown>
+  const assets: VideoInputAssets = {}
+  for (const slot of VIDEO_LOCAL_IMAGE_INPUT_SLOTS) {
+    const asset = readImageAsset(record[slot])
+    if (!asset) continue
+    assets[slot] = {
+      ...asset,
+      nodeID,
+      nodeTitle: `本地${VIDEO_INPUT_SLOT_LABELS[slot]}`,
+      slot,
+    }
+  }
+  return assets
+}
+
 function readLocalImageAsset(rawData: Record<string, unknown>) {
   return readImageAsset(rawData.asset)
 }
@@ -919,17 +1013,66 @@ function selectedSourceImageAssetForNode(node: CinemaFlowNode): VideoSourceImage
   return null
 }
 
+function selectedVideoAssetForNode(node: CinemaFlowNode): VideoSourceImageAsset | null {
+  const assets = readDisplayAssets(node.data.rawData)
+    .filter((asset): asset is CinemaGeneratedAsset & { kind: "video" } => asset.kind === "video")
+  const selectedAssetID = readRawString(node.data.rawData, "selectedAssetID")
+  const asset = assets.find((item) => item.id === selectedAssetID) ?? assets[0] ?? null
+  if (!asset) return null
+  return {
+    ...asset,
+    nodeID: node.id,
+    nodeTitle: node.data.title,
+  }
+}
+
+function selectedSourceAssetForVideoSlot(node: CinemaFlowNode, slot: VideoMediaInputSlot): VideoSourceImageAsset | null {
+  if (isVideoImageInputSlot(slot)) return selectedSourceImageAssetForNode(node)
+  if (slot === "sourceVideo") return selectedVideoAssetForNode(node)
+  return null
+}
+
 function isVideoInputSlot(value: unknown): value is VideoInputSlot {
   return typeof value === "string" && (VIDEO_INPUT_SLOTS as readonly string[]).includes(value)
 }
 
-function edgeTargetVideoSlot(edge: Edge): VideoInputSlot | null {
-  if (isVideoInputSlot(edge.targetHandle)) return edge.targetHandle
-  const data = edge.data
-  if (data && typeof data === "object" && !Array.isArray(data) && isVideoInputSlot((data as Record<string, unknown>).targetSlot)) {
-    return (data as Record<string, unknown>).targetSlot as VideoInputSlot
+type VideoEdgeTargetInput = {
+  inputKey?: string
+  role?: string
+  slot: VideoInputSlot | null
+}
+
+function videoInputHandleMetadata(handle: string | null | undefined): VideoEdgeTargetInput | null {
+  if (!handle) return null
+  if (isVideoInputSlot(handle)) return { slot: handle }
+  const match = /^input:(\d+):(.+)$/.exec(handle)
+  if (!match) return null
+  const role = match[2] ?? ""
+  return {
+    inputKey: handle,
+    role,
+    slot: slotForInputRole(role, ""),
   }
-  return null
+}
+
+function edgeTargetVideoInput(edge: Edge): VideoEdgeTargetInput | null {
+  const data = edge.data
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const record = data as Record<string, unknown>
+    const inputKey = typeof record.targetInputKey === "string" ? record.targetInputKey : undefined
+    const role = typeof record.targetRole === "string" ? record.targetRole : undefined
+    const slot = isVideoInputSlot(record.targetSlot)
+      ? record.targetSlot
+      : role
+        ? slotForInputRole(role, "")
+        : null
+    if (inputKey || role || slot) return { inputKey, role, slot }
+  }
+  return videoInputHandleMetadata(edge.targetHandle)
+}
+
+function edgeTargetVideoSlot(edge: Edge): VideoInputSlot | null {
+  return edgeTargetVideoInput(edge)?.slot ?? null
 }
 
 function edgeMatchesVideoSlot(edge: Edge, slot: VideoInputSlot, legacySlot: VideoInputSlot | null = null) {
@@ -938,19 +1081,28 @@ function edgeMatchesVideoSlot(edge: Edge, slot: VideoInputSlot, legacySlot: Vide
   return legacySlot === slot
 }
 
-function sourceImageAssetsForVideoSlot(
+function edgeMatchesVideoInput(edge: Edge, input: VideoInputControl & { slot: VideoMediaInputSlot }, legacySlot: VideoInputSlot | null = null) {
+  const targetInput = edgeTargetVideoInput(edge)
+  if (targetInput?.inputKey) return targetInput.inputKey === input.inputKey
+  if (targetInput?.role) return targetInput.role === input.role
+  if (targetInput?.slot) return targetInput.slot === input.slot
+  return legacySlot === input.slot
+}
+
+function sourceAssetsForVideoSlot(
   nodeID: string,
   nodes: CinemaFlowNode[],
   edges: Edge[],
-  slot: VideoImageInputSlot,
+  slot: VideoMediaInputSlot,
 ) {
   const assets: VideoSourceImageAsset[] = []
   const seen = new Set<string>()
+  const legacySlot = slot === "sourceImage" ? "sourceImage" : null
   for (const edge of edges) {
-    if (edge.target !== nodeID || !edgeMatchesVideoSlot(edge, slot, "sourceImage")) continue
+    if (edge.target !== nodeID || !edgeMatchesVideoSlot(edge, slot, legacySlot)) continue
     const sourceNode = nodes.find((node) => node.id === edge.source)
     if (!sourceNode) continue
-    const asset = selectedSourceImageAssetForNode(sourceNode)
+    const asset = selectedSourceAssetForVideoSlot(sourceNode, slot)
     if (!asset) continue
     const nextAsset = {
       ...asset,
@@ -964,6 +1116,15 @@ function sourceImageAssetsForVideoSlot(
     if (slot !== "referenceImage") break
   }
   return assets
+}
+
+function sourceImageAssetsForVideoSlot(
+  nodeID: string,
+  nodes: CinemaFlowNode[],
+  edges: Edge[],
+  slot: VideoImageInputSlot,
+) {
+  return sourceAssetsForVideoSlot(nodeID, nodes, edges, slot)
 }
 
 function sourceImageAssetForVideoSlot(
@@ -982,6 +1143,46 @@ function sourceImageAssetsForVideoNode(nodeID: string, nodes: CinemaFlowNode[], 
     assets[slot] = slot === "referenceImage" ? slotAssets : slotAssets[0] ?? null
   }
   return assets
+}
+
+function sourceInputAssetsForVideoNode(nodeID: string, nodes: CinemaFlowNode[], edges: Edge[]) {
+  const assets: VideoInputAssets = {}
+  for (const slot of VIDEO_INPUT_SLOTS) {
+    if (!isVideoMediaInputSlot(slot)) continue
+    const slotAssets = sourceAssetsForVideoSlot(nodeID, nodes, edges, slot)
+    assets[slot] = slot === "referenceImage" ? slotAssets : slotAssets[0] ?? null
+  }
+  return assets
+}
+
+function sourceInputAssetMapsForVideoNode(nodeID: string, nodes: CinemaFlowNode[], edges: Edge[]) {
+  const byInputKey: VideoInputAssetMap = {}
+  const byRole: VideoInputAssetMap = {}
+  const appendAsset = (map: VideoInputAssetMap, key: string, asset: VideoSourceImageAsset, allowMultiple: boolean) => {
+    const current = videoInputAssetList(map[key])
+    const next = allowMultiple ? [...current, asset] : [asset]
+    map[key] = allowMultiple ? mergeSourceImageAssets(next) : next[0] ?? null
+  }
+
+  for (const edge of edges) {
+    if (edge.target !== nodeID) continue
+    const targetInput = edgeTargetVideoInput(edge)
+    if (!targetInput?.slot || !isVideoMediaInputSlot(targetInput.slot)) continue
+    const sourceNode = nodes.find((node) => node.id === edge.source)
+    if (!sourceNode) continue
+    const asset = selectedSourceAssetForVideoSlot(sourceNode, targetInput.slot)
+    if (!asset) continue
+    const nextAsset = {
+      ...asset,
+      edgeID: edge.id,
+      slot: targetInput.slot,
+    }
+    const allowMultiple = targetInput.slot === "referenceImage"
+    if (targetInput.inputKey) appendAsset(byInputKey, targetInput.inputKey, nextAsset, allowMultiple)
+    if (targetInput.role) appendAsset(byRole, targetInput.role, nextAsset, allowMultiple)
+  }
+
+  return { byInputKey, byRole }
 }
 
 function sourceImageAssetForVideoNode(nodeID: string, nodes: CinemaFlowNode[], edges: Edge[]) {
@@ -1028,8 +1229,8 @@ function sourceTextParametersForNode(nodeID: string, nodes: CinemaFlowNode[], ed
   const seenNodeIDs = new Set<string>()
   for (const edge of edges) {
     if (edge.target !== nodeID) continue
-    const edgeSlot = edgeTargetVideoSlot(edge)
-    if (edgeSlot && edgeSlot !== "textParameter") continue
+    const targetInput = edgeTargetVideoInput(edge)
+    if (targetInput && targetInput.slot !== "textParameter") continue
     if (seenNodeIDs.has(edge.source)) continue
     const sourceNode = nodes.find((node) => node.id === edge.source)
     if (!sourceNode || sourceNode.data.cinemaType !== "text") continue
@@ -1744,7 +1945,7 @@ function TextCanvasNode({
               ) : (
                 <div className="cinema-text-source-image-empty">
                   <Image size={15} aria-hidden="true" />
-                  <span>连接图片节点，或在这里选择一张/多张图片</span>
+                  <span>连接图片节点，或在这里选择一张或多张图片</span>
                 </div>
               )}
               <div className="cinema-text-source-image-actions">
@@ -1825,7 +2026,7 @@ function TextCanvasNode({
                   disabled={textModels.length === 0 || data.isGeneratingText}
                   onClick={() => setIsModelMenuOpen((current) => !current)}
                 >
-                  <span>{selectedTextModel?.label ?? "无可用模型"}</span>
+                  <span>{selectedTextModel?.label ?? "No model"}</span>
                   <ChevronDown size={13} aria-hidden="true" />
                 </button>
                 {isModelMenuOpen ? (
@@ -2396,7 +2597,7 @@ function ImageGenerationCanvasNode({
               ) : (
                 <div className="cinema-text-source-image-empty">
                   <Image size={15} aria-hidden="true" />
-                  <span>连接图片节点，或在这里选择一张/多张图片</span>
+                  <span>连接图片节点，或在这里选择一张或多张图片</span>
                 </div>
               )}
               <div className="cinema-text-source-image-actions">
@@ -2514,6 +2715,8 @@ function VideoGenerationCanvasNode({
   accentStyle: CSSProperties
 }) {
   const promptRef = useRef<HTMLTextAreaElement>(null)
+  const videoInputImageInputRef = useRef<HTMLInputElement>(null)
+  const pendingVideoInputImageSlotRef = useRef<VideoImageInputSlot | null>(null)
   const rawDataRef = useRef(data.rawData)
   const onChangeRawDataRef = useRef(data.onChangeRawData)
   const promptCommitTimerRef = useRef<number | null>(null)
@@ -2534,6 +2737,8 @@ function VideoGenerationCanvasNode({
   const [aspectRatioDraft, setAspectRatioDraftState] = useState(() => readRawString(data.rawData, "aspectRatio", DEFAULT_VIDEO_ASPECT_RATIO))
   const [durationDraft, setDurationDraftState] = useState(() => String(readRawNumber(data.rawData, "duration", DEFAULT_VIDEO_DURATION_SECONDS)))
   const [resolutionDraft, setResolutionDraftState] = useState(() => readRawString(data.rawData, "resolution", DEFAULT_VIDEO_RESOLUTION))
+  const [videoInputImageImportError, setVideoInputImageImportError] = useState<string | null>(null)
+  const [importingVideoInputImageSlot, setImportingVideoInputImageSlot] = useState<VideoImageInputSlot | null>(null)
   const promptDraftRef = useRef(promptDraft)
   const modeRef = useRef(mode)
   const providerIDRef = useRef(providerID)
@@ -2545,15 +2750,16 @@ function VideoGenerationCanvasNode({
   rawDataRef.current = data.rawData
   onChangeRawDataRef.current = data.onChangeRawData
 
-  const selectedProvider = providerForMode(providers, providerID, mode)
-  const selectedModel = modelForMode(selectedProvider, modelID, mode)
-  const availableProviders = providersForMode(providers, mode)
-  const availableModels = selectedProvider?.manifest.models.filter((model) => model.modes.includes(mode)) ?? []
-  const modeContract = videoModeInputContract(mode)
-  const availableModeContracts = enabledVideoNodeModeContracts(providers)
-  const visibleModeContracts = availableModeContracts.some((contract) => contract.mode === mode)
-    ? availableModeContracts
-    : [modeContract, ...availableModeContracts]
+  const selectedProvider = providerForSelection(providers, providerID)
+  const selectedModel = modelForSelection(selectedProvider, modelID)
+  const selectedModelSelectionID = selectedModel ? providerModelSelectionID(selectedModel) : ""
+  const selectedInputCombination = inputCombinationForSelection(selectedProvider, selectedModel, mode)
+  const selectedEndpoint: CinemaProviderEndpoint | undefined = selectedInputCombination?.endpoint
+  const availableProviders = availableVideoProviders(providers)
+  const availableModels = availableModelsForProvider(selectedProvider)
+  const availableInputCombinations = inputCombinationsForModel(selectedProvider, selectedModel)
+  const visibleModeContracts = availableInputCombinations.map(videoModeInputContractForCombination)
+  const modeContract = videoModeInputContractForCombination(selectedInputCombination)
   const outputAssets = task?.outputAssets ?? readDisplayAssets(data.rawData)
   const outputAsset = outputAssets.find((asset) => asset.kind === "video") ?? outputAssets[0] ?? null
   const previewSrc = outputAsset && data.agentBaseURL && data.projectID
@@ -2567,29 +2773,43 @@ function VideoGenerationCanvasNode({
   const providerNeedsCredential = Boolean(selectedProvider?.auth.requiresCredential)
   const providerConnected = selectedProvider?.auth.connected !== false
   const providerAdapterUnavailable = Boolean(selectedProvider) && selectedProvider?.runtime?.adapterAvailable !== true
-  const videoImageSlots = videoModeImageInputSlots(modeContract)
-  const inputHandleStyle = videoImageSlots.length > 0 ? { ...accentStyle, top: "36%" } : accentStyle
-  const imageInputAssets = data.videoInputImageAssets ?? {}
-  const sourceImageAsset = videoImageInputAssetList(imageInputAssets.sourceImage)[0] ?? data.sourceImageAsset ?? null
-  const imageInputAssetsForSlot = (slot: VideoImageInputSlot) => {
-    const assets = slot === "sourceImage"
+  const videoMediaInputs = modeContract.inputs.filter(isVideoMediaInputControl)
+  const inputHandleStyle = videoMediaInputs.length > 0 ? { ...accentStyle, top: "36%" } : accentStyle
+  const inputAssets: VideoInputAssets = data.videoInputAssets ?? data.videoInputImageAssets ?? {}
+  const videoLocalInputAssets = readVideoLocalInputAssets(data.rawData, id)
+  const sourceImageAsset = videoInputAssetList(inputAssets.sourceImage)[0] ?? data.sourceImageAsset ?? null
+  const inputAssetsForControl = (input: VideoInputControl & { slot: VideoMediaInputSlot }) => {
+    const localAssets = canImportVideoInputLocalImage(input.slot)
+      ? videoInputAssetList(videoLocalInputAssets[input.slot])
+      : []
+    const keyedAssets = videoInputAssetList(data.videoInputAssetsByInputKey?.[input.inputKey])
+    const roleAssets = videoInputAssetList(data.videoInputAssetsByRole?.[input.role])
+    const slotAssets = input.slot === "sourceImage"
       ? (sourceImageAsset ? [sourceImageAsset] : [])
-      : videoImageInputAssetList(imageInputAssets[slot])
-    return slot === "referenceImage"
-      ? assets.slice(0, modeContract.maxReferenceImages ?? assets.length)
+      : videoInputAssetList(inputAssets[input.slot])
+    const assets = localAssets.length > 0 ? localAssets : keyedAssets.length > 0 ? keyedAssets : roleAssets.length > 0 ? roleAssets : slotAssets
+    return input.slot === "referenceImage"
+      ? assets.slice(0, input.maxCount ?? assets.length)
       : assets.slice(0, 1)
   }
-  const activeImageInputAssets = videoImageSlots.flatMap((slot) =>
-    imageInputAssetsForSlot(slot).map((asset) => ({ slot, asset }))
+  const activeInputAssets = videoMediaInputs.flatMap((input) =>
+    inputAssetsForControl(input).map((asset) => ({ input, asset }))
   )
-  const missingRequiredImageSlot = modeContract.requiredSlots.find((slot) =>
-    isVideoImageInputSlot(slot) && imageInputAssetsForSlot(slot).length === 0
+  const inputAssetsForLegacySlot = (slot: VideoMediaInputSlot) =>
+    videoMediaInputs
+      .filter((input) => input.slot === slot)
+      .flatMap((input) => inputAssetsForControl(input))
+  const missingRequiredInput = videoMediaInputs.find((input) =>
+    input.required && inputAssetsForControl(input).length < Math.max(input.minCount, 1)
   )
-  const missingRequiredImageSlotLabel = missingRequiredImageSlot ? VIDEO_INPUT_SLOT_LABELS[missingRequiredImageSlot] : ""
+  const missingRequiredInputLabel = missingRequiredInput?.label ?? ""
   const sourceTextParameters = data.sourceTextParameters ?? []
   const effectivePromptDraft = imagePromptWithSourceText(promptDraft, sourceTextParameters)
-  const needsSourceImage = videoModeRequiresSlot(mode, "sourceImage")
-  const sourceImageMissing = Boolean(missingRequiredImageSlot)
+  const promptRequired = modeContract.inputs.some((input) => input.slot === "textParameter" && input.required)
+  const unsupportedRequiredInput = modeContract.unsupportedRequiredInputs[0] ?? null
+  const requiredInputMissing = Boolean(missingRequiredInput)
+  const hasSourceImageInput = videoMediaInputs.some((input) => input.slot === "sourceImage")
+  const missingRequiredInputSlotLabel = missingRequiredInputLabel
   const nodeError = data.videoGenerationError ?? task?.error ?? readRawString(data.rawData, "error")
   const progress = effectiveGenerationProgress({
     task,
@@ -2598,21 +2818,27 @@ function VideoGenerationCanvasNode({
     message: nodeError,
     forceQueued: Boolean(data.isCreatingVideoTask),
   })
-  const submitDisabledReason = effectivePromptDraft.trim().length === 0
-    ? "先输入视频描述，或连接一个文本参数节点。"
-    : !selectedProvider
-      ? "没有可用的视频供应商。"
-      : !selectedModel
-        ? "没有可用的视频模型。"
-        : isBusy
-          ? "当前任务还在处理中。"
-          : providerNeedsCredential && !providerConnected
-            ? `${selectedProvider.manifest.name} 还没有连接。`
-            : providerAdapterUnavailable
-              ? `${selectedProvider.manifest.name} does not have a generation runtime adapter yet.`
-              : sourceImageMissing
-                ? `${missingRequiredImageSlotLabel}需要先连接图片节点或图片生成节点。`
-                : null
+  const submitDisabledReason = !selectedProvider
+    ? "No available video provider."
+    : !selectedModel
+      ? "No available video model."
+      : !selectedInputCombination
+        ? "The selected model has no available input combination."
+        : promptRequired && effectivePromptDraft.trim().length === 0
+          ? "Enter a video prompt or connect a text parameter node."
+          : isBusy
+            ? "The current task is still running."
+            : providerNeedsCredential && !providerConnected
+              ? `${selectedProvider.manifest.name} is not connected.`
+              : providerAdapterUnavailable
+                ? `${selectedProvider.manifest.name} does not have a generation runtime adapter yet.`
+                : unsupportedRequiredInput
+                  ? `Required input ${unsupportedRequiredInput.label} is not supported by this UI yet.`
+                  : requiredInputMissing
+                    ? canImportVideoInputLocalImage(missingRequiredInput?.slot ?? null)
+                      ? `${missingRequiredInputLabel} needs an imported or connected image.`
+                      : `${missingRequiredInputLabel} needs a connected input node.`
+                    : null
   const canGenerate =
     submitDisabledReason === null
 
@@ -2684,6 +2910,57 @@ function VideoGenerationCanvasNode({
     onChangeRawDataRef.current?.(id, nextRawData)
   }, [id, normalizedDuration])
 
+  const writeVideoLocalInputAsset = useCallback((slot: VideoImageInputSlot, asset: CinemaGeneratedAsset | null) => {
+    const previousValue = rawDataRef.current.videoLocalInputAssets
+    const nextLocalInputAssets = previousValue && typeof previousValue === "object" && !Array.isArray(previousValue)
+      ? { ...(previousValue as Record<string, unknown>) }
+      : {}
+    if (asset) {
+      nextLocalInputAssets[slot] = asset
+    } else {
+      delete nextLocalInputAssets[slot]
+    }
+    commitRawDataPatch({
+      videoLocalInputAssets: nextLocalInputAssets,
+    })
+  }, [commitRawDataPatch])
+
+  const importVideoInputImageMutation = useMutation({
+    mutationFn: async ({ slot, file }: { slot: VideoImageInputSlot; file: File }) => {
+      if (!data.agentBaseURL || !data.projectID) throw new Error("Project context is not ready")
+      const dataBase64 = await fileToDataBase64(file)
+      const result = await requestJson<CinemaImportedImageAssetResult>(
+        data.agentBaseURL,
+        `/api/cinema/projects/${encodeURIComponent(data.projectID)}/assets/imports`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fileName: file.name,
+            mimeType: file.type || undefined,
+            dataBase64,
+          }),
+        },
+      )
+      return { slot, asset: result.asset }
+    },
+    onMutate: ({ slot }) => {
+      setVideoInputImageImportError(null)
+      setImportingVideoInputImageSlot(slot)
+    },
+    onSuccess: ({ slot, asset }) => {
+      writeVideoLocalInputAsset(slot, asset)
+    },
+    onError: (error) => {
+      setVideoInputImageImportError(error instanceof Error ? error.message : "Image import failed")
+    },
+    onSettled: () => {
+      setImportingVideoInputImageSlot(null)
+    },
+  })
+
   const schedulePromptCommit = useCallback((value: string) => {
     clearPromptCommitTimer()
     promptCommitTimerRef.current = window.setTimeout(() => {
@@ -2693,12 +2970,14 @@ function VideoGenerationCanvasNode({
   }, [clearPromptCommitTimer, commitRawDataPatch])
 
   useEffect(() => {
-    const nextMode = readVideoMode(data.rawData)
-    const nextProvider = providerForMode(providers, readRawString(data.rawData, "providerID"), nextMode)
-    const nextModel = modelForMode(nextProvider, readRawString(data.rawData, "modelID"), nextMode)
+    const storedMode = readVideoMode(data.rawData)
+    const nextProvider = providerForSelection(providers, readRawString(data.rawData, "providerID"))
+    const nextModel = modelForSelection(nextProvider, readRawString(data.rawData, "modelID"))
+    const nextCombination = inputCombinationForSelection(nextProvider, nextModel, storedMode)
+    const nextMode = nextCombination?.mode ?? FALLBACK_VIDEO_INPUT_COMBINATION_MODE
     setMode(nextMode)
     setProviderID(nextProvider?.manifest.id ?? "")
-    setModelID(nextModel?.id ?? "")
+    setModelID(nextModel ? providerModelSelectionID(nextModel) : "")
     setAspectRatioDraft(readRawString(data.rawData, "aspectRatio", defaultModelAspectRatio(nextModel)))
     setDurationDraft(String(readRawNumber(data.rawData, "duration", defaultModelDuration(nextModel))))
     setResolutionDraft(readRawString(data.rawData, "resolution", defaultModelResolution(nextModel)))
@@ -2714,42 +2993,53 @@ function VideoGenerationCanvasNode({
 
   useEffect(() => () => clearPromptCommitTimer(), [clearPromptCommitTimer])
 
+  const openVideoInputImagePicker = (slot: VideoImageInputSlot) => {
+    if (!canImportVideoInputLocalImage(slot) || isBusy || importVideoInputImageMutation.isPending) return
+    pendingVideoInputImageSlotRef.current = slot
+    setVideoInputImageImportError(null)
+    videoInputImageInputRef.current?.click()
+  }
+
+  const handleVideoInputImageFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0] ?? null
+    event.currentTarget.value = ""
+    const slot = pendingVideoInputImageSlotRef.current
+    pendingVideoInputImageSlotRef.current = null
+    if (!file || !slot) return
+    importVideoInputImageMutation.mutate({ slot, file })
+  }
+
+  const clearVideoInputLocalImage = (slot: VideoImageInputSlot) => {
+    if (!canImportVideoInputLocalImage(slot) || isBusy || importVideoInputImageMutation.isPending) return
+    setVideoInputImageImportError(null)
+    writeVideoLocalInputAsset(slot, null)
+  }
+
   const chooseMode = (nextMode: CinemaGenerationMode) => {
-    const nextProvider = providerForMode(providers, providerIDRef.current, nextMode)
-    const nextModel = modelForMode(nextProvider, modelIDRef.current, nextMode)
+    setMode(nextMode)
+    commitRawDataPatch({
+      mode: nextMode,
+    })
+  }
+
+  const chooseProvider = (nextProviderID: string) => {
+    const nextProvider = providerForSelection(providers, nextProviderID)
+    const nextModel = modelForSelection(nextProvider, "")
+    const nextCombination = inputCombinationForSelection(nextProvider, nextModel, modeRef.current)
+    const nextMode = nextCombination?.mode ?? FALLBACK_VIDEO_INPUT_COMBINATION_MODE
     const nextAspectRatio = defaultModelAspectRatio(nextModel)
     const nextDuration = defaultModelDuration(nextModel)
     const nextResolution = defaultModelResolution(nextModel)
     setMode(nextMode)
     setProviderID(nextProvider?.manifest.id ?? "")
-    setModelID(nextModel?.id ?? "")
+    setModelID(nextModel ? providerModelSelectionID(nextModel) : "")
     setAspectRatioDraft(nextAspectRatio)
     setDurationDraft(String(nextDuration))
     setResolutionDraft(nextResolution)
     commitRawDataPatch({
       mode: nextMode,
       providerID: nextProvider?.manifest.id,
-      modelID: nextModel?.id,
-      aspectRatio: nextAspectRatio,
-      duration: nextDuration,
-      resolution: nextResolution,
-    })
-  }
-
-  const chooseProvider = (nextProviderID: string) => {
-    const nextProvider = providerForMode(providers, nextProviderID, modeRef.current)
-    const nextModel = modelForMode(nextProvider, "", modeRef.current)
-    const nextAspectRatio = defaultModelAspectRatio(nextModel)
-    const nextDuration = defaultModelDuration(nextModel)
-    const nextResolution = defaultModelResolution(nextModel)
-    setProviderID(nextProvider?.manifest.id ?? "")
-    setModelID(nextModel?.id ?? "")
-    setAspectRatioDraft(nextAspectRatio)
-    setDurationDraft(String(nextDuration))
-    setResolutionDraft(nextResolution)
-    commitRawDataPatch({
-      providerID: nextProvider?.manifest.id,
-      modelID: nextModel?.id,
+      modelID: nextModel ? providerModelSelectionID(nextModel) : undefined,
       aspectRatio: nextAspectRatio,
       duration: nextDuration,
       resolution: nextResolution,
@@ -2757,16 +3047,20 @@ function VideoGenerationCanvasNode({
   }
 
   const chooseModel = (nextModelID: string) => {
-    const nextModel = modelForMode(selectedProvider, nextModelID, modeRef.current)
+    const nextModel = modelForSelection(selectedProvider, nextModelID)
+    const nextCombination = inputCombinationForSelection(selectedProvider, nextModel, modeRef.current)
+    const nextMode = nextCombination?.mode ?? FALLBACK_VIDEO_INPUT_COMBINATION_MODE
     const nextAspectRatio = defaultModelAspectRatio(nextModel)
     const nextDuration = defaultModelDuration(nextModel)
     const nextResolution = defaultModelResolution(nextModel)
-    setModelID(nextModel?.id ?? "")
+    setMode(nextMode)
+    setModelID(nextModel ? providerModelSelectionID(nextModel) : "")
     setAspectRatioDraft(nextAspectRatio)
     setDurationDraft(String(nextDuration))
     setResolutionDraft(nextResolution)
     commitRawDataPatch({
-      modelID: nextModel?.id,
+      mode: nextMode,
+      modelID: nextModel ? providerModelSelectionID(nextModel) : undefined,
       aspectRatio: nextAspectRatio,
       duration: nextDuration,
       resolution: nextResolution,
@@ -2777,38 +3071,48 @@ function VideoGenerationCanvasNode({
     const userPrompt = promptDraftRef.current.trim()
     const sourceTextPrompts = sourceTextParameters.map((parameter) => parameter.text.trim()).filter(Boolean)
     const prompt = imagePromptWithSourceText(userPrompt, sourceTextParameters)
-    if (!prompt) {
+    if (promptRequired && !prompt) {
       promptRef.current?.focus()
       return
     }
-    if (!selectedProvider || !selectedModel || isBusy || sourceImageMissing) return
+    if (!selectedProvider || !selectedModel || !selectedInputCombination || isBusy || requiredInputMissing || unsupportedRequiredInput) return
     clearPromptCommitTimer()
     const duration = normalizedDuration()
     const aspectRatio = aspectRatioDraftRef.current.trim() || defaultModelAspectRatio(selectedModel)
     const resolution = resolutionDraftRef.current.trim() || defaultModelResolution(selectedModel)
     const sourceNodeIDs = uniqueSourceNodeIDs(
       sourceTextParameters.map((parameter) => parameter.nodeID),
-      activeImageInputAssets.map(({ asset }) => asset.nodeID),
+      activeInputAssets.filter(({ asset }) => asset.nodeID !== id).map(({ asset }) => asset.nodeID),
     )
     const inputSlots = [
       ...sourceTextParameters.map((parameter) => ({
         slot: "textParameter",
+        role: "prompt",
+        modality: "text",
+        inputKey: "textParameter",
         nodeID: parameter.nodeID,
         edgeID: parameter.edgeID,
       })),
-      ...activeImageInputAssets.map(({ slot, asset }) => ({
-        slot,
+      ...activeInputAssets.map(({ input, asset }) => ({
+        slot: input.slot,
+        role: input.role,
+        modality: input.modality,
+        inputKey: input.inputKey,
         nodeID: asset.nodeID,
         edgeID: asset.edgeID,
         assetID: asset.id,
         path: asset.path,
       })),
     ]
-    const referenceImageAssets = imageInputAssetsForSlot("referenceImage")
+    const sourceImageAssetForPayload = inputAssetsForLegacySlot("sourceImage")[0] ?? null
+    const referenceImageAssets = inputAssetsForLegacySlot("referenceImage")
     const referenceImageAssetIDs = referenceImageAssets.map((asset) => asset.id)
     const referenceImagePaths = referenceImageAssets.map((asset) => asset.path)
-    const startFrameAsset = imageInputAssetsForSlot("startFrame")[0] ?? null
-    const endFrameAsset = imageInputAssetsForSlot("endFrame")[0] ?? null
+    const startFrameAsset = inputAssetsForLegacySlot("startFrame")[0] ?? null
+    const endFrameAsset = inputAssetsForLegacySlot("endFrame")[0] ?? null
+    const sourceVideoAsset = inputAssetsForLegacySlot("sourceVideo")[0] ?? null
+    const maskAsset = inputAssetsForLegacySlot("mask")[0] ?? null
+    const inputCombinationMode = selectedInputCombination.mode
     const parameters = {
       ...(rawDataRef.current.parameters && typeof rawDataRef.current.parameters === "object" && !Array.isArray(rawDataRef.current.parameters)
         ? rawDataRef.current.parameters as Record<string, unknown>
@@ -2816,13 +3120,19 @@ function VideoGenerationCanvasNode({
       aspectRatio,
       duration,
       resolution,
+      inputCombinationMode,
+      selectedInputCombination: selectedInputCombination.mode,
+      modelSelectionID: selectedModelSelectionID,
+      ...(selectedEndpoint ? { endpoint: selectedEndpoint } : {}),
+      ...(selectedModel.offeringID ? { offeringID: selectedModel.offeringID } : {}),
+      ...(selectedModel.providerModelID ? { providerModelID: selectedModel.providerModelID } : {}),
       userPrompt,
       sourceTextPrompts,
       inputSlots,
-      ...(needsSourceImage && sourceImageAsset
+      ...(hasSourceImageInput && sourceImageAssetForPayload
         ? {
-            sourceImageAssetID: sourceImageAsset.id,
-            sourceImagePath: sourceImageAsset.path,
+            sourceImageAssetID: sourceImageAssetForPayload.id,
+            sourceImagePath: sourceImageAssetForPayload.path,
           }
         : {}),
       ...(startFrameAsset
@@ -2845,13 +3155,27 @@ function VideoGenerationCanvasNode({
             referenceImagePaths,
           }
         : {}),
+      ...(sourceVideoAsset
+        ? {
+            sourceVideoAssetID: sourceVideoAsset.id,
+            sourceVideoPath: sourceVideoAsset.path,
+          }
+        : {}),
+      ...(maskAsset
+        ? {
+            maskAssetID: maskAsset.id,
+            maskPath: maskAsset.path,
+          }
+        : {}),
     }
 
     commitRawDataPatch({
       text: userPrompt,
-      mode,
+      mode: inputCombinationMode,
       providerID: selectedProvider.manifest.id,
-      modelID: selectedModel.id,
+      modelID: selectedModelSelectionID,
+      inputCombinationMode,
+      endpoint: selectedEndpoint ?? null,
       aspectRatio,
       duration,
       resolution,
@@ -2864,8 +3188,8 @@ function VideoGenerationCanvasNode({
     data.onCreateVideoGenerationTask?.(id, {
       taskNodeID: id,
       providerID: selectedProvider.manifest.id,
-      modelID: selectedModel.id,
-      mode,
+      modelID: selectedModelSelectionID,
+      mode: inputCombinationMode,
       title: data.title,
       prompt,
       sourceNodeIDs,
@@ -2875,6 +3199,15 @@ function VideoGenerationCanvasNode({
 
   return (
     <>
+      <input
+        ref={videoInputImageInputRef}
+        className="cinema-local-image-input"
+        type="file"
+        accept={LOCAL_IMAGE_FILE_ACCEPT}
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={handleVideoInputImageFileChange}
+      />
       <Handle
         id="input"
         type="target"
@@ -2882,10 +3215,10 @@ function VideoGenerationCanvasNode({
         className="cinema-node-handle cinema-node-handle-input"
         style={inputHandleStyle}
       />
-      {videoImageSlots.map((slot, index) => (
+      {videoMediaInputs.map((input, index) => (
         <Handle
-          key={slot}
-          id={slot}
+          key={input.inputKey}
+          id={input.inputKey}
           type="target"
           position={Position.Left}
           className="cinema-node-handle cinema-node-handle-input cinema-node-handle-slot"
@@ -2997,33 +3330,40 @@ function VideoGenerationCanvasNode({
               commitRawDataPatch({ text: promptDraftRef.current })
             }}
           />
-          {videoImageSlots.length > 0 ? (
+          {videoMediaInputs.length > 0 ? (
             <section className="cinema-video-input-slots" aria-label="Video input slots">
-              {videoImageSlots.flatMap((slot) => {
-                const slotAssets = imageInputAssetsForSlot(slot)
-                const slotItems = slot === "referenceImage" && slotAssets.length > 0
+              {videoMediaInputs.flatMap((input) => {
+                const slotAssets = inputAssetsForControl(input)
+                const slotItems = input.slot === "referenceImage" && slotAssets.length > 0
                   ? slotAssets
                   : [slotAssets[0] ?? null]
                 return slotItems.map((asset, assetIndex) => {
-                const preview = asset && data.agentBaseURL && data.projectID
-                  ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, asset.path)
-                  : ""
-                const edgeID = asset?.edgeID ?? ""
-                const isRequired = modeContract.requiredSlots.includes(slot)
-                const slotLabel = slot === "referenceImage" && asset
-                  ? `${VIDEO_INPUT_SLOT_LABELS[slot]} ${assetIndex + 1}/${modeContract.maxReferenceImages ?? slotAssets.length}`
-                  : slot === "referenceImage" && modeContract.maxReferenceImages
-                    ? `${VIDEO_INPUT_SLOT_LABELS[slot]}（最多 ${modeContract.maxReferenceImages} 张）`
-                    : VIDEO_INPUT_SLOT_LABELS[slot]
-                return (
-                  <div
-                    key={asset ? `${slot}-${asset.edgeID ?? sourceImageAssetKey(asset)}` : slot}
-                    className={`cinema-video-input-slot ${asset ? "is-ready" : "is-missing"}`}
-                  >
-                    <div className="cinema-video-input-slot-main">
+                  const preview = asset && data.agentBaseURL && data.projectID
+                    ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, asset.path)
+                    : ""
+                  const isVideoAsset = asset?.kind === "video" || input.slot === "sourceVideo"
+                  const edgeID = asset?.edgeID ?? ""
+                  const isRequired = input.required
+                  const importSlot = canImportVideoInputLocalImage(input.slot) ? input.slot : null
+                  const canImportLocalImage = importSlot !== null
+                  const isImportingThisSlot = importSlot !== null && importingVideoInputImageSlot === importSlot
+                  const isLocalImportedAsset = Boolean(asset && !edgeID && importSlot !== null && asset.nodeID === id)
+                  const slotLabel = input.slot === "referenceImage" && asset
+                    ? `${input.label} ${assetIndex + 1}/${input.maxCount ?? slotAssets.length}`
+                    : input.slot === "referenceImage" && input.maxCount
+                      ? `${input.label}（最多 ${input.maxCount} 张）`
+                      : input.label
+                  const slotValueTitle = asset ? `${asset.nodeTitle} · ${asset.path}` : input.emptyText
+                  const slotActionLabel = asset ? `替换本地${input.label}图片` : `导入本地${input.label}图片`
+                  const slotMainContent = (
+                    <>
                       <div className="cinema-video-input-slot-thumb" aria-hidden="true">
-                        {preview ? (
+                        {isImportingThisSlot ? (
+                          <Loader2 size={14} aria-hidden="true" className="is-spinning" />
+                        ) : preview && !isVideoAsset ? (
                           <img src={preview} alt="" draggable={false} />
+                        ) : isVideoAsset ? (
+                          <Video size={14} aria-hidden="true" />
                         ) : (
                           <Image size={14} aria-hidden="true" />
                         )}
@@ -3034,25 +3374,55 @@ function VideoGenerationCanvasNode({
                         </span>
                         <span
                           className="cinema-video-input-slot-value"
-                          title={asset ? `${asset.nodeTitle} · ${asset.path}` : VIDEO_INPUT_SLOT_EMPTY_TEXT[slot]}
+                          title={slotValueTitle}
                         >
-                          {asset
-                            ? `${asset.nodeTitle} · ${asset.path}`
-                            : VIDEO_INPUT_SLOT_EMPTY_TEXT[slot]}
+                          {asset ? slotValueTitle : input.emptyText}
                         </span>
                       </div>
-                    </div>
-                    {edgeID ? (
+                    </>
+                  )
+                  return (
+                  <div
+                    key={asset ? `${input.inputKey}-${asset.edgeID ?? sourceImageAssetKey(asset)}` : input.inputKey}
+                    className={`cinema-video-input-slot ${asset ? "is-ready" : "is-missing"}`}
+                  >
+                    {canImportLocalImage ? (
                       <button
                         type="button"
-                        className="cinema-video-input-slot-remove"
-                        title={`移除${VIDEO_INPUT_SLOT_LABELS[slot]}`}
-                        aria-label={`移除${VIDEO_INPUT_SLOT_LABELS[slot]}`}
-                        disabled={isBusy}
+                        className="cinema-video-input-slot-main cinema-video-input-slot-import"
+                        title={slotActionLabel}
+                        aria-label={slotActionLabel}
+                        disabled={isBusy || importVideoInputImageMutation.isPending}
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
                           event.stopPropagation()
-                          data.onDisconnectEdge?.(edgeID)
+                          if (!importSlot) return
+                          openVideoInputImagePicker(importSlot)
+                        }}
+                      >
+                        {slotMainContent}
+                      </button>
+                    ) : (
+                      <div className="cinema-video-input-slot-main">
+                        {slotMainContent}
+                      </div>
+                    )}
+                    {edgeID || isLocalImportedAsset ? (
+                      <button
+                        type="button"
+                        className="cinema-video-input-slot-remove"
+                        title={edgeID ? `移除${input.label}` : `清除本地${input.label}图片`}
+                        aria-label={edgeID ? `移除${input.label}` : `清除本地${input.label}图片`}
+                        disabled={isBusy || importVideoInputImageMutation.isPending}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          if (edgeID) {
+                            data.onDisconnectEdge?.(edgeID)
+                            return
+                          }
+                          if (!importSlot) return
+                          clearVideoInputLocalImage(importSlot)
                         }}
                       >
                         <X size={12} aria-hidden="true" />
@@ -3082,13 +3452,13 @@ function VideoGenerationCanvasNode({
             </select>
             <select
               aria-label="Video model"
-              value={selectedModel?.id ?? ""}
+              value={selectedModelSelectionID}
               disabled={isBusy || !selectedProvider}
               onKeyDown={(event) => event.stopPropagation()}
               onChange={(event) => chooseModel(event.target.value)}
             >
               {availableModels.length > 0 ? availableModels.map((model) => (
-                <option key={model.id} value={model.id}>{model.label}</option>
+                <option key={providerModelSelectionID(model)} value={providerModelSelectionID(model)}>{model.label}</option>
               )) : (
                 <option value="">No model</option>
               )}
@@ -3150,14 +3520,18 @@ function VideoGenerationCanvasNode({
                 : <ArrowUp size={18} aria-hidden="true" />}
             </button>
           </div>
-          {nodeError || sourceImageMissing || providerNeedsCredential && !providerConnected || providerAdapterUnavailable ? (
-            <p className="cinema-video-gen-error" role="alert" title={nodeError ?? undefined}>
-              {nodeError ?? (
-                sourceImageMissing
-                  ? `${missingRequiredImageSlotLabel}需要先连接图片节点或图片生成节点。`
-                  : providerAdapterUnavailable
-                    ? `${selectedProvider?.manifest.name ?? "Provider"} 还没有接入视频生成运行时。`
-                    : `${selectedProvider?.manifest.name ?? "Provider"} is not connected.`
+          {videoInputImageImportError || nodeError || unsupportedRequiredInput || requiredInputMissing || providerNeedsCredential && !providerConnected || providerAdapterUnavailable ? (
+            <p className="cinema-video-gen-error" role="alert" title={videoInputImageImportError ?? nodeError ?? undefined}>
+              {videoInputImageImportError ?? nodeError ?? (
+                unsupportedRequiredInput
+                  ? `Required input ${unsupportedRequiredInput.label} is not supported by this UI yet.`
+                  : requiredInputMissing
+                    ? canImportVideoInputLocalImage(missingRequiredInput?.slot ?? null)
+                      ? `${missingRequiredInputLabel} needs an imported or connected image.`
+                      : `${missingRequiredInputLabel} needs a connected input node.`
+                    : providerAdapterUnavailable
+                      ? `${selectedProvider?.manifest.name ?? "Provider"} does not have a generation runtime adapter yet.`
+                      : `${selectedProvider?.manifest.name ?? "Provider"} is not connected.`
               )}
             </p>
           ) : null}
@@ -4202,14 +4576,22 @@ export function App() {
 
   const onConnect = useCallback((connection: Connection) => {
     if (!connection.source || !connection.target) return
-    const targetSlot = isVideoInputSlot(connection.targetHandle) ? connection.targetHandle : null
+    const targetInput = videoInputHandleMetadata(connection.targetHandle)
     const edge = {
       id: `edge-${connection.source}-${connection.target}-${Date.now().toString(36)}`,
       source: connection.source,
       target: connection.target,
       ...(connection.sourceHandle ? { sourceHandle: connection.sourceHandle } : {}),
       ...(connection.targetHandle ? { targetHandle: connection.targetHandle } : {}),
-      ...(targetSlot ? { data: { targetSlot } } : {}),
+      ...(targetInput
+        ? {
+            data: {
+              ...(targetInput.slot ? { targetSlot: targetInput.slot } : {}),
+              ...(targetInput.role ? { targetRole: targetInput.role } : {}),
+              ...(targetInput.inputKey ? { targetInputKey: targetInput.inputKey } : {}),
+            },
+          }
+        : {}),
     }
     commandMutation.mutate({
       id: makeCommandID("connect-nodes"),
@@ -4329,6 +4711,9 @@ export function App() {
         generationTasks: tasksQuery.data ?? [],
         sourceImageAsset: node.data.cinemaType === "video" ? sourceImageAssetForVideoNode(node.id, nodes, edges) : null,
         videoInputImageAssets: node.data.cinemaType === "video" ? sourceImageAssetsForVideoNode(node.id, nodes, edges) : {},
+        videoInputAssets: node.data.cinemaType === "video" ? sourceInputAssetsForVideoNode(node.id, nodes, edges) : {},
+        videoInputAssetsByInputKey: node.data.cinemaType === "video" ? sourceInputAssetMapsForVideoNode(node.id, nodes, edges).byInputKey : {},
+        videoInputAssetsByRole: node.data.cinemaType === "video" ? sourceInputAssetMapsForVideoNode(node.id, nodes, edges).byRole : {},
         isCreatingVideoTask: createGenerationTaskMutation.isPending && videoGenerationNodeID === node.id,
         videoGenerationError: videoGenerationError?.nodeID === node.id ? videoGenerationError.message : null,
         onCreateVideoGenerationTask: (nodeID: string, body: CreateCinemaGenerationTaskBody) =>

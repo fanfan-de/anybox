@@ -55,6 +55,7 @@ import type {
   AgentPtySessionInfo,
   AgentSessionArchiveResult,
   AgentSessionBridgeIPCEvent,
+  AgentSessionCompactResult,
   AgentSessionDeleteResult,
   AgentSessionDiffScope,
   AgentSessionDiffSummary,
@@ -183,6 +184,7 @@ export type {
   AgentPtySessionInfo,
   AgentSessionArchiveResult,
   AgentSessionBridgeIPCEvent,
+  AgentSessionCompactResult,
   AgentSessionDeleteResult,
   AgentSessionDiffSummary,
   AgentSessionHistoryMessage,
@@ -1890,6 +1892,10 @@ export interface DesktopIpcContract {
     input: { backendSessionID: string; view?: "active" | "all" }
     output: AgentSessionHistoryMessage[]
   }
+  "desktop:agent-session-compact": {
+    input: { backendSessionID: string }
+    output: AgentSessionCompactResult
+  }
   "desktop:update-session-active-message": {
     input: { sessionID: string; messageID: string }
     output: AgentWorkspaceSession
@@ -1960,6 +1966,7 @@ export type DesktopIpcEventPayload<Channel extends DesktopIpcEventChannel> = Des
 
 export interface DesktopAgentSessionApi {
   loadHistory(input: DesktopIpcInput<"desktop:agent-session-load-history">): Promise<DesktopIpcOutput<"desktop:agent-session-load-history">>
+  compact?(input: DesktopIpcInput<"desktop:agent-session-compact">): Promise<DesktopIpcOutput<"desktop:agent-session-compact">>
   sendTurn(input: DesktopIpcInput<"desktop:agent-session-send-turn">): Promise<DesktopIpcOutput<"desktop:agent-session-send-turn">>
   resumeTurn(input: DesktopIpcInput<"desktop:agent-session-resume-turn">): Promise<DesktopIpcOutput<"desktop:agent-session-resume-turn">>
   cancelTurn(input: DesktopIpcInput<"desktop:agent-session-cancel-turn">): Promise<DesktopIpcOutput<"desktop:agent-session-cancel-turn">>

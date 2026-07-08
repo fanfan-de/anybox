@@ -80,6 +80,18 @@ export interface AgentSessionAbortTurnResult {
   localRequestAborted: boolean
 }
 
+export interface AgentSessionCompactResult {
+  sessionID: string
+  status: "compacted" | "noop"
+  reason?: "not-enough-history"
+  compactedMessageID?: string
+  compactionID?: string
+  compactedFromMessageID?: string
+  compactedToMessageID?: string
+  sourceMessageCount: number
+  estimatedTokens?: number
+}
+
 export interface AgentSessionInterruptResult {
   backendSessionID: string
   clientTurnID?: string
@@ -94,6 +106,7 @@ export interface AgentSessionBridge {
   canStream: boolean
   canResumeStream: boolean
   loadHistory(input: { backendSessionID: string; view?: "active" | "all" }): Promise<LoadedSessionHistoryMessage[]>
+  compact?(input: { backendSessionID: string }): Promise<AgentSessionCompactResult>
   sendTurn(input: AgentSessionTurnInput): Promise<AgentSessionSendTurnResult>
   resumeTurn(input: { clientTurnID: string; backendSessionID: string }): Promise<AgentSessionSendTurnResult>
   cancelTurn(input: { clientTurnID: string; backendSessionID: string }): Promise<AgentSessionCancelTurnResult>
@@ -128,11 +141,13 @@ export interface AgentSessionBridge {
 function createModernAgentSessionBridge(desktop: NonNullable<Window["desktop"]>): AgentSessionBridge | null {
   const modern = desktop.agentSession
   if (!modern) return null
+  const compact = modern.compact
 
   return {
     canStream: true,
     canResumeStream: true,
     loadHistory: modern.loadHistory,
+    compact: compact ? (input) => compact(input) : undefined,
     sendTurn: modern.sendTurn,
     resumeTurn: modern.resumeTurn,
     cancelTurn: modern.cancelTurn,

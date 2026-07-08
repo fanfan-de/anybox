@@ -201,6 +201,141 @@ const TEST_VIDEO_PROVIDER_CATALOG = {
           output: ["video", "audio"],
         },
         modes: ["text-to-video", "image-to-video", "reference-to-video", "motion-control", "edit"],
+        input_combinations: [
+          {
+            mode: "text-to-video",
+            label: "Text to video",
+            endpoint: {
+              method: "POST",
+              path: "/v1/videos/text2video",
+            },
+            inputs: [
+              {
+                role: "prompt",
+                modality: "text",
+                required: true,
+                min_count: 1,
+                max_count: 1,
+              },
+            ],
+          },
+          {
+            mode: "text-to-video.multi-shot",
+            label: "Text to video multi-shot",
+            endpoint: {
+              method: "POST",
+              path: "/v1/videos/text2video",
+            },
+            inputs: [
+              {
+                role: "prompt",
+                modality: "text",
+                required: true,
+                min_count: 1,
+                max_count: 1,
+                note: "Use Shot n fixed format.",
+              },
+            ],
+          },
+          {
+            mode: "image-to-video",
+            label: "Image to video",
+            endpoint: {
+              method: "POST",
+              path: "/v1/videos/image2video",
+            },
+            inputs: [
+              {
+                role: "first_frame_image",
+                modality: "image",
+                required: true,
+                min_count: 1,
+                max_count: 1,
+              },
+              {
+                role: "prompt",
+                modality: "text",
+                required: false,
+                min_count: 0,
+                max_count: 1,
+              },
+            ],
+          },
+          {
+            mode: "image-to-video.multi-shot",
+            label: "Image to video multi-shot",
+            endpoint: {
+              method: "POST",
+              path: "/v1/videos/image2video",
+            },
+            inputs: [
+              {
+                role: "first_frame_image",
+                modality: "image",
+                required: true,
+                min_count: 1,
+                max_count: 1,
+              },
+              {
+                role: "prompt",
+                modality: "text",
+                required: true,
+                min_count: 1,
+                max_count: 1,
+                note: "Use Shot n fixed format.",
+              },
+            ],
+          },
+          {
+            mode: "reference-to-video",
+            label: "Reference to video",
+            endpoint: {
+              method: "POST",
+              path: "/v1/videos/image2video",
+            },
+            inputs: [
+              {
+                role: "reference_image",
+                modality: "image",
+                required: true,
+                min_count: 1,
+                max_count: 4,
+              },
+              {
+                role: "prompt",
+                modality: "text",
+                required: true,
+                min_count: 1,
+                max_count: 1,
+              },
+            ],
+          },
+          {
+            mode: "frames-to-video",
+            label: "First/last frame to video",
+            endpoint: {
+              method: "POST",
+              path: "/v1/videos/image2video",
+            },
+            inputs: [
+              {
+                role: "first_frame_image",
+                modality: "image",
+                required: true,
+                min_count: 1,
+                max_count: 1,
+              },
+              {
+                role: "last_frame_image",
+                modality: "image",
+                required: true,
+                min_count: 1,
+                max_count: 1,
+              },
+            ],
+          },
+        ],
+        supports_first_last_frame: true,
         audio_output: true,
         pricing: [{ unit: "unknown", note: "Pricing should be checked against current docs." }],
         limit: {
@@ -438,6 +573,8 @@ interface CinemaTextModel {
   value: string
   providerID: string
   modelID: string
+  offeringID?: string
+  providerModelID?: string
   label: string
   providerLabel: string
   available: boolean
@@ -464,6 +601,8 @@ interface CinemaImageModel {
   value: string
   providerID: string
   modelID: string
+  offeringID?: string
+  providerModelID?: string
   label: string
   providerLabel: string
   available: boolean
@@ -1309,6 +1448,8 @@ describe("cinema api", () => {
           value: "mockimage/mock-image",
           providerID: "mockimage",
           modelID: "mock-image",
+          offeringID: "mock-image",
+          providerModelID: "mock-image",
           label: "Mock Image",
           providerLabel: "Mock Image Provider",
           available: true,
@@ -1608,9 +1749,11 @@ describe("cinema api", () => {
       expect(modelsResponse.status).toBe(200)
       expect(modelsBody.data?.items).toEqual([
         {
-          value: "duplicate/shared-model",
+          value: "duplicate/duplicate/shared-image",
           providerID: "duplicate",
-          modelID: "shared-model",
+          modelID: "duplicate/shared-image",
+          offeringID: "duplicate/shared-image",
+          providerModelID: "shared-model",
           label: "Shared Image",
           providerLabel: "Duplicate ID Provider",
           available: true,
@@ -1624,13 +1767,13 @@ describe("cinema api", () => {
         body: JSON.stringify({
           nodeID: "image-gen",
           prompt: "A warm lantern at dusk.",
-          model: "duplicate/shared-model",
+          model: "duplicate/duplicate/shared-image",
         }),
       })
       const generateBody = await readJson<CinemaImageGenerationResult>(generateResponse)
 
       expect(generateResponse.status).toBe(200)
-      expect(generateBody.data?.model).toBe("duplicate/shared-model")
+      expect(generateBody.data?.model).toBe("duplicate/duplicate/shared-image")
       expect(generateBody.data?.status).toBe("queued")
       const task = JSON.parse(await readFile(join(root, ".anybox-cinema", "tasks", `${generateBody.data!.taskID}.json`), "utf8")) as CinemaGenerationTask
       expect(task).toMatchObject({
@@ -1638,6 +1781,11 @@ describe("cinema api", () => {
         modelID: "shared-model",
         mode: "text-to-image",
         taskNodeID: "image-gen",
+      })
+      expect(task.input.parameters).toMatchObject({
+        modelSelectionID: "duplicate/shared-image",
+        providerModelID: "shared-model",
+        offeringID: "duplicate/shared-image",
       })
     } finally {
       restoreImageAdapter()
@@ -2154,7 +2302,6 @@ describe("cinema api", () => {
     const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest(TEST_VIDEO_PROVIDER_CATALOG)
     const restoreVideoAdapter = setCinemaVideoProviderAdapterForTest("klingai", {
       manifest: {} as never,
-      supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "text-to-image"],
       createTask: async ({ task }) => task,
       refreshTask: async ({ task }) => task,
     })
@@ -2173,7 +2320,60 @@ describe("cinema api", () => {
         id: "kling-v3",
         label: "Kling 3.0",
         baseModel: "kuaishou/kling-3.0",
-        modes: ["text-to-video", "image-to-video", "frames-to-video", "reference-to-video", "motion-control", "edit"],
+        modes: [
+          "text-to-video",
+          "image-to-video",
+          "reference-to-video",
+          "motion-control",
+          "edit",
+          "text-to-video.multi-shot",
+          "image-to-video.multi-shot",
+          "frames-to-video",
+        ],
+        inputCombinations: [
+          {
+            mode: "text-to-video",
+            endpoint: {
+              method: "POST",
+              path: "/v1/videos/text2video",
+            },
+          },
+          {
+            mode: "text-to-video.multi-shot",
+            endpoint: {
+              method: "POST",
+              path: "/v1/videos/text2video",
+            },
+          },
+          {
+            mode: "image-to-video",
+            endpoint: {
+              method: "POST",
+              path: "/v1/videos/image2video",
+            },
+          },
+          {
+            mode: "image-to-video.multi-shot",
+            endpoint: {
+              method: "POST",
+              path: "/v1/videos/image2video",
+            },
+          },
+          {
+            mode: "reference-to-video",
+            endpoint: {
+              method: "POST",
+              path: "/v1/videos/image2video",
+            },
+          },
+          {
+            mode: "frames-to-video",
+            endpoint: {
+              method: "POST",
+              path: "/v1/videos/image2video",
+            },
+          },
+        ],
       })
       expect(globalProvidersBody.data?.find((provider) => provider.manifest.id === "klingai")?.manifest.models[1]).toMatchObject({
         id: "kling-image-v3",
@@ -2190,7 +2390,17 @@ describe("cinema api", () => {
         baseURLSource: "default",
         adapterAvailable: true,
         adapterID: "klingai",
-        supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "text-to-image"],
+        supportedModes: [
+          "text-to-video",
+          "text-to-video.multi-shot",
+          "image-to-video",
+          "image-to-video.multi-shot",
+          "reference-to-video",
+          "frames-to-video",
+          "text-to-image",
+          "image-to-image",
+          "image-edit",
+        ],
       })
       expect(globalProvidersBody.data?.find((provider) => provider.manifest.id === "fal")?.runtime?.adapterAvailable).toBe(false)
 
@@ -2217,7 +2427,17 @@ describe("cinema api", () => {
         baseURLSource: "settings",
         adapterAvailable: true,
         adapterID: "klingai",
-        supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "text-to-image"],
+        supportedModes: [
+          "text-to-video",
+          "text-to-video.multi-shot",
+          "image-to-video",
+          "image-to-video.multi-shot",
+          "reference-to-video",
+          "frames-to-video",
+          "text-to-image",
+          "image-to-image",
+          "image-edit",
+        ],
       })
 
       const invalidSettingsResponse = await app.request("http://localhost/api/cinema/video-providers/klingai/settings", {
@@ -2264,7 +2484,17 @@ describe("cinema api", () => {
         baseURLSource: "default",
         adapterAvailable: true,
         adapterID: "klingai",
-        supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "text-to-image"],
+        supportedModes: [
+          "text-to-video",
+          "text-to-video.multi-shot",
+          "image-to-video",
+          "image-to-video.multi-shot",
+          "reference-to-video",
+          "frames-to-video",
+          "text-to-image",
+          "image-to-image",
+          "image-edit",
+        ],
       })
 
       const klingAuthResponse = await app.request("http://localhost/api/cinema/video-providers/klingai/auth/api-key")
@@ -2316,14 +2546,34 @@ describe("cinema api", () => {
         baseURLSource: "default",
         adapterAvailable: true,
         adapterID: "klingai-cn",
-        supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "text-to-image"],
+        supportedModes: [
+          "text-to-video",
+          "text-to-video.multi-shot",
+          "image-to-video",
+          "image-to-video.multi-shot",
+          "reference-to-video",
+          "frames-to-video",
+          "text-to-image",
+          "image-to-image",
+          "image-edit",
+        ],
       })
       expect(body.data?.find((provider) => provider.manifest.id === "klingai-global")?.runtime).toMatchObject({
         baseURL: "https://api-singapore.klingai.com",
         baseURLSource: "default",
         adapterAvailable: true,
         adapterID: "klingai-global",
-        supportedModes: ["text-to-video", "image-to-video", "frames-to-video", "text-to-image"],
+        supportedModes: [
+          "text-to-video",
+          "text-to-video.multi-shot",
+          "image-to-video",
+          "image-to-video.multi-shot",
+          "reference-to-video",
+          "frames-to-video",
+          "text-to-image",
+          "image-to-image",
+          "image-edit",
+        ],
       })
     } finally {
       restoreVideoCatalog()
@@ -2532,8 +2782,8 @@ describe("cinema api", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           providerID: "klingai",
-          modelID: "kling-v3",
-          mode: "text-to-video",
+          modelID: "klingai/kling-3.0",
+          mode: "text-to-video.multi-shot",
           prompt: "A calm tracking shot.",
           taskNodeID: "video-gen",
           parameters: {
@@ -2548,6 +2798,17 @@ describe("cinema api", () => {
       expect(response.status).toBe(200)
       expect(body.data?.taskNodeID).toBe("video-gen")
       expect(body.data?.outputNodeID).toBeUndefined()
+      expect(body.data?.modelID).toBe("kling-v3")
+      expect(body.data?.input.parameters).toMatchObject({
+        inputCombinationMode: "text-to-video.multi-shot",
+        endpoint: {
+          method: "POST",
+          path: "/v1/videos/text2video",
+        },
+        modelSelectionID: "klingai/kling-3.0",
+        providerModelID: "kling-v3",
+        offeringID: "klingai/kling-3.0",
+      })
 
       const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
       const videoNode = persisted.nodes.find((node) => node.id === "video-gen")
@@ -2557,7 +2818,7 @@ describe("cinema api", () => {
         taskID: body.data?.id,
         providerID: "klingai",
         modelID: "kling-v3",
-        mode: "text-to-video",
+        mode: "text-to-video.multi-shot",
         status: "succeeded",
       })
       expect(videoNode?.data?.outputAssets).toEqual(body.data?.outputAssets)
@@ -2879,6 +3140,191 @@ describe("cinema api", () => {
     }
   })
 
+  test("runs KlingAI 3.0 Turbo through catalog endpoint and task query", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    const mp4Bytes = tinyMp4Bytes()
+    let createRequestBody: Record<string, unknown> | undefined
+    let refreshTaskIDs = ""
+    const providerID = "klingai-cn"
+    let server: ReturnType<typeof Bun.serve> | undefined
+    server = Bun.serve({
+      port: 0,
+      async fetch(request) {
+        const url = new URL(request.url)
+        if (url.pathname === "/text-to-video/kling-3.0-turbo" && request.method === "POST") {
+          createRequestBody = await request.json() as Record<string, unknown>
+          return Response.json({
+            code: 0,
+            data: {
+              id: "turbo-task-1",
+              status: "submitted",
+            },
+          })
+        }
+
+        if (url.pathname === "/tasks" && request.method === "GET") {
+          refreshTaskIDs = url.searchParams.get("task_ids") ?? ""
+          return Response.json({
+            code: 0,
+            data: [
+              {
+                id: "turbo-task-1",
+                status: "succeeded",
+                works: [
+                  {
+                    id: "turbo-output-1",
+                    url: `${server!.url.toString().replace(/\/$/, "")}/outputs/turbo.mp4`,
+                  },
+                ],
+              },
+            ],
+          })
+        }
+
+        if (url.pathname === "/outputs/turbo.mp4" && request.method === "GET") {
+          return new Response(mp4Bytes, {
+            headers: {
+              "content-length": String(mp4Bytes.byteLength),
+              "content-type": "video/mp4",
+            },
+          })
+        }
+
+        return new Response("Not found", { status: 404 })
+      },
+    })
+    const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest({
+      ...TEST_VIDEO_PROVIDER_CATALOG,
+      [providerID]: {
+        ...TEST_VIDEO_PROVIDER_CATALOG.klingai,
+        id: providerID,
+        name: "KlingAI China",
+        base_url: server.url.toString().replace(/\/$/, ""),
+        models: {
+          "klingai-cn/kling-3.0-turbo": {
+            id: "kling-3.0-turbo",
+            offering_id: "klingai-cn/kling-3.0-turbo",
+            provider_model_id: "kling-3.0-turbo",
+            catalog_id: "klingai-cn/kling-3.0-turbo",
+            name: "Kling 3.0 Turbo",
+            family: "Kling",
+            lab: "kuaishou",
+            base_model: "kuaishou/kling-3.0-turbo",
+            endpoint_type: "async_polling",
+            input_modalities: ["text", "image"],
+            output_modalities: ["video", "audio"],
+            modes: ["text-to-video", "text-to-video.multi-shot", "image-to-video", "image-to-video.multi-shot"],
+            input_combinations: [
+              {
+                mode: "text-to-video",
+                label: "Text to video",
+                endpoint: {
+                  method: "POST",
+                  path: "/text-to-video/kling-3.0-turbo",
+                },
+                inputs: [
+                  {
+                    role: "prompt",
+                    modality: "text",
+                    required: true,
+                    min_count: 1,
+                    max_count: 1,
+                  },
+                ],
+              },
+            ],
+            audio_output: true,
+            supports_audio_output: true,
+            limit: {
+              durations: [3, 4, 5],
+              resolutions: ["720p", "1080p"],
+              aspect_ratios: ["16:9", "9:16", "1:1"],
+            },
+          },
+        },
+      },
+    })
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root, createCanvasWithVideoNode())
+      const keyResponse = await app.request(`http://localhost/api/cinema/video-providers/${encodeURIComponent(providerID)}/auth/api-key`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          apiKey: "Access Key ID: unit-ak\nAccess Key Secret: unit-sk",
+        }),
+      })
+      expect(keyResponse.status).toBe(200)
+
+      const createResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerID,
+          modelID: "klingai-cn/kling-3.0-turbo",
+          mode: "text-to-video",
+          prompt: "A calm cinematic giant.",
+          taskNodeID: "video-gen",
+          parameters: {
+            aspectRatio: "16:9",
+            duration: 3,
+            resolution: "720p",
+          },
+        }),
+      })
+      const createBody = await readJson<CinemaGenerationTask>(createResponse)
+
+      expect(createResponse.status).toBe(200)
+      expect(createBody.data?.status).toBe("queued")
+      expect(createBody.data?.modelID).toBe("kling-3.0-turbo")
+      expect(createBody.data?.providerTaskRef).toMatchObject({
+        providerID,
+        taskID: "turbo-task-1",
+        kind: "text2video",
+        endpoint: "text-to-video/kling-3.0-turbo",
+      })
+      expect(createRequestBody).toMatchObject({
+        prompt: "A calm cinematic giant.",
+        settings: {
+          aspect_ratio: "16:9",
+          duration: 3,
+          resolution: "720p",
+        },
+        options: {
+          external_task_id: createBody.data?.id,
+        },
+      })
+      expect(createRequestBody?.model_name).toBeUndefined()
+      expect(createRequestBody?.mode).toBeUndefined()
+
+      const refreshResponse = await app.request(
+        `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks/${encodeURIComponent(createBody.data!.id)}/refresh`,
+        {
+          method: "POST",
+        },
+      )
+      const refreshBody = await readJson<CinemaGenerationTask>(refreshResponse)
+
+      expect(refreshResponse.status).toBe(200)
+      expect(refreshTaskIDs).toBe("turbo-task-1")
+      expect(refreshBody.data?.status).toBe("succeeded")
+      expect(refreshBody.data?.outputAssets[0]).toMatchObject({
+        id: "turbo-output-1",
+        kind: "video",
+        mimeType: "video/mp4",
+        sizeBytes: mp4Bytes.byteLength,
+      })
+      expect(Array.from(await readFile(join(root, refreshBody.data!.outputAssets[0]!.path)))).toEqual(Array.from(mp4Bytes))
+    } finally {
+      await clearKlingVideoApiKey(app, providerID)
+      restoreVideoCatalog()
+      server.stop(true)
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   test("runs KlingAI adapter for start and end frame video", async () => {
     const app = createServerApp()
     const root = await createTempProjectRoot()
@@ -3023,7 +3469,7 @@ describe("cinema api", () => {
       const body = await readJson(response)
 
       expect(response.status).toBe(400)
-      expect(body.error?.code).toBe("CINEMA_PROVIDER_MODE_UNSUPPORTED")
+      expect(body.error?.code).toBe("CINEMA_KLINGAI_SOURCE_IMAGE_REQUIRED")
       expect(requests).toEqual([])
     } finally {
       await clearKlingVideoApiKey(app, providerID)

@@ -304,6 +304,134 @@ test("preparePromptContext compacts early turns into an internal user message", 
   }
 })
 
+test("compactPromptContext records manual compaction with auto false", async () => {
+  const root = await mkdtemp(join(tmpdir(), "anybox-context-manual-"))
+  const databaseFile = join(root, "context-manual.db")
+
+  try {
+    Sqlite.setDatabaseFile(databaseFile)
+
+    await Instance.provide({
+      directory: root,
+      async fn() {
+        const session = await Session.createSession({
+          directory: Instance.directory,
+          projectID: Instance.project.id,
+        })
+
+        const allMessages: Message.WithParts[] = []
+        const baseTime = Date.now()
+        for (let index = 0; index < 8; index += 1) {
+          const user = Message.User.parse({
+            id: Identifier.ascending("message"),
+            sessionID: session.id,
+            role: "user",
+            created: baseTime + index * 2,
+            agent: "default",
+            model: {
+              providerID: baseModel.providerID,
+              modelID: baseModel.id,
+            },
+          })
+          const userText = Message.TextPart.parse({
+            id: Identifier.ascending("part"),
+            sessionID: session.id,
+            messageID: user.id,
+            type: "text",
+            text: `manual user-${index}`,
+          })
+          const assistant = Message.Assistant.parse({
+            id: Identifier.ascending("message"),
+            sessionID: session.id,
+            role: "assistant",
+            created: baseTime + index * 2 + 1,
+            parentID: user.id,
+            modelID: baseModel.id,
+            providerID: baseModel.providerID,
+            agent: "default",
+            finishReason: "stop",
+            path: {
+              cwd: Instance.directory,
+              root: Instance.worktree,
+            },
+            cost: 0,
+            tokens: {
+              input: 0,
+              output: 0,
+              reasoning: 0,
+              cache: {
+                read: 0,
+                write: 0,
+              },
+            },
+          })
+          const assistantText = Message.TextPart.parse({
+            id: Identifier.ascending("part"),
+            sessionID: session.id,
+            messageID: assistant.id,
+            type: "text",
+            text: `manual assistant-${index}`,
+          })
+
+          Session.upsertMessage(user)
+          Session.upsertPart(userText)
+          Session.upsertMessage(assistant)
+          Session.upsertPart(assistantText)
+          allMessages.push(
+            {
+              info: user,
+              parts: [userText],
+            },
+            {
+              info: assistant,
+              parts: [assistantText],
+            },
+          )
+        }
+
+        const result = await ContextWindow.compactPromptContext({
+          sessionID: session.id,
+          model: baseModel,
+          system: ["base-system"],
+          messages: allMessages,
+          generateSummary: async () => "Manual history summary.",
+          auto: false,
+        })
+
+        expect(result.status).toBe("compacted")
+        expect(result.sourceMessageCount).toBe(4)
+
+        const persistedMessages: Message.WithParts[] = []
+        for await (const message of Message.stream(session.id)) {
+          persistedMessages.push(message)
+        }
+
+        const compactedMessage = persistedMessages.find(
+          (message) => message.info.role === "user" && message.info.internal === true,
+        )
+        const compactionPart = compactedMessage?.parts.find(
+          (part): part is Message.CompactionPart => part.type === "compaction",
+        )
+
+        expect(compactionPart).toMatchObject({
+          auto: false,
+          compactedFromMessageID: allMessages[0]?.info.id,
+          compactedToMessageID: allMessages[3]?.info.id,
+          summaryVersion: ContextWindow.CURRENT_SUMMARY_VERSION,
+        })
+      },
+    })
+  } finally {
+    await Instance.disposeAll()
+    Sqlite.setDatabaseFile()
+    Sqlite.closeDatabase()
+    await rm(databaseFile, { force: true }).catch(() => undefined)
+    await rm(`${databaseFile}-wal`, { force: true }).catch(() => undefined)
+    await rm(`${databaseFile}-shm`, { force: true }).catch(() => undefined)
+    await rm(root, { recursive: true, force: true }).catch(() => undefined)
+  }
+})
+
 test("preparePromptContext prunes oversized tool outputs when compaction cannot help", async () => {
   const root = await mkdtemp(join(tmpdir(), "anybox-context-prune-"))
   const databaseFile = join(root, "context-prune.db")

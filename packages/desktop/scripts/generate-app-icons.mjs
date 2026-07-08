@@ -36,10 +36,12 @@ function parseArgs(argv) {
 
 function findDefaultSourceSvg() {
   const publicDir = path.join(projectDir, "src", "renderer", "public")
-  const whiteCharacter = "\u767d"
-  const fileName = readdirSync(publicDir)
-    .filter((entry) => entry.endsWith(".svg"))
-    .find((entry) => path.basename(entry, ".svg").includes(whiteCharacter))
+  const publicSvgs = readdirSync(publicDir).filter((entry) => entry.endsWith(".svg"))
+  const preferredMarkers = ["\u767d", "white"]
+  const fileName = publicSvgs.find((entry) => {
+    const baseName = path.basename(entry, ".svg").toLowerCase()
+    return preferredMarkers.some((marker) => baseName.includes(marker))
+  })
 
   if (!fileName) {
     throw new Error(`[desktop][icons] source SVG not found in ${publicDir}`)

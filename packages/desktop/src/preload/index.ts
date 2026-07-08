@@ -436,6 +436,8 @@ try {
     agentSession: {
       loadHistory: (input: { backendSessionID: string; view?: "active" | "all" }) =>
         invokeDesktop("desktop:agent-session-load-history", input) as Promise<AgentSessionHistoryMessage[]>,
+      compact: (input: DesktopIpcInput<"desktop:agent-session-compact">) =>
+        invokeDesktop("desktop:agent-session-compact", input) as Promise<DesktopIpcOutput<"desktop:agent-session-compact">>,
       sendTurn: (input: AgentSessionTurnRequestInput) =>
         invokeDesktop("desktop:agent-session-send-turn", input) as Promise<{
           clientTurnID: string

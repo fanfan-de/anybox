@@ -204,7 +204,7 @@ function shouldApplyRuntimePartRecordToAssistant(
   partRecord: Record<string, unknown> | null,
 ) {
   if (!partRecord) return false
-  if (readString(partRecord.type) === "compaction") return true
+  if (readString(partRecord.type) === "compaction") return false
 
   const partMessageID = readString(partRecord.messageID)
   return (
@@ -977,23 +977,6 @@ function buildToolAttachmentTraceItems(
     })
 }
 
-function createCompactionTraceItem(input: {
-  sourceID: string
-  auto?: boolean
-  debugEntries?: AssistantTraceDebugEntry[]
-}) {
-  return createTraceItem({
-    id: input.sourceID,
-    sourceID: input.sourceID,
-    kind: "compaction",
-    label: "Context",
-    title: input.auto ? "Context auto-compacted" : "Context compacted",
-    status: "completed",
-    section: "workflow",
-    debugEntries: input.debugEntries,
-  })
-}
-
 function createAssistantThreadMessageRuntime(input: {
   phase: AssistantThreadMessagePhase
   startedAt?: number
@@ -1762,18 +1745,7 @@ function buildTraceItemFromPart(
     })]
   }
 
-  if (type === "compaction") {
-    return [
-      applyTraceItemOwnership(
-        createCompactionTraceItem({
-          sourceID,
-          auto: readBoolean(part.auto),
-          debugEntries,
-        }),
-        ownership,
-      ),
-    ]
-  }
+  if (type === "compaction") return []
 
   return []
 }
@@ -2427,70 +2399,6 @@ function isCompactionHistoryMessage(message: LoadedSessionHistoryMessage) {
   return message.parts.some((part) => readString(readRecord(part)?.type) === "compaction")
 }
 
-function buildCompactionItemsFromHistory(message: LoadedSessionHistoryMessage) {
-  const compactionParts = message.parts.filter((part) => readString(readRecord(part)?.type) === "compaction")
-  const ownership = traceItemOwnershipFromHistoryMessage(message)
-  const items = mergeTraceParts([], compactionParts, ownership)
-  if (items.length > 0) return items
-
-  return [
-    applyTraceItemOwnership(
-      createCompactionTraceItem({
-        sourceID: `${message.info.id || createID("trace")}:compaction`,
-        auto: true,
-      }),
-      ownership,
-    ),
-  ]
-}
-
-function prependAssistantItems(assistantMessage: AssistantThreadMessage, items: AssistantTraceItem[]) {
-  if (items.length === 0) return assistantMessage
-  const nextItems = upsertTraceItems(items, assistantMessage.items)
-  return {
-    ...assistantMessage,
-    items: nextItems,
-    runtime: {
-      ...assistantMessage.runtime,
-      firstVisibleAt: assistantMessage.runtime.firstVisibleAt ?? assistantMessage.runtime.startedAt,
-    },
-  }
-}
-
-function buildCompactionMarkerMessage(message: LoadedSessionHistoryMessage, items: AssistantTraceItem[]) {
-  const createdAt = readNumber(message.info.created) || Date.now()
-  const ownership = traceItemOwnershipFromHistoryMessage(message)
-  const nextItems = items.length > 0
-    ? items
-    : [
-        applyTraceItemOwnership(
-          createCompactionTraceItem({
-            sourceID: `${message.info.id || createID("trace")}:compaction`,
-            auto: true,
-          }),
-          ownership,
-        ),
-      ]
-
-  return {
-    id: message.info.id || createID("assistant"),
-    messageID: message.info.id || undefined,
-    kind: "assistant",
-    backendTurnID: ownership.backendTurnID || message.info.id || createID("turn"),
-    segmentID: message.info.id || createID("segment"),
-    timestamp: createdAt,
-    runtime: createAssistantThreadMessageRuntime({
-      phase: "completed",
-      startedAt: createdAt,
-      updatedAt: createdAt,
-      items: nextItems,
-    }),
-    state: "Context compacted",
-    items: nextItems,
-    isStreaming: false,
-  } satisfies AssistantThreadMessage
-}
-
 function normalizeHistoryTurnStatus(value: unknown, fallback: ThreadTurnStatus): ThreadTurnStatus {
   const status = readString(value)
   if (
@@ -2584,7 +2492,6 @@ function appendHistoryThreadMessage(
 
 export function buildThreadTurnsFromHistory(messages: LoadedSessionHistoryMessage[]) {
   const threadTurns: ThreadTurn[] = []
-  let pendingCompactionItems: AssistantTraceItem[] = []
   const hasParentMetadata = messages.some((message) =>
     Object.prototype.hasOwnProperty.call(message.info, "parentMessageID"),
   )
@@ -2598,12 +2505,7 @@ export function buildThreadTurnsFromHistory(messages: LoadedSessionHistoryMessag
       })
 
   for (const message of orderedMessages) {
-    if (isCompactionHistoryMessage(message)) {
-      pendingCompactionItems = upsertTraceItems(pendingCompactionItems, buildCompactionItemsFromHistory(message))
-      continue
-    }
-
-    if (isInternalHistoryMessage(message)) continue
+    if (isCompactionHistoryMessage(message) || isInternalHistoryMessage(message)) continue
 
     if (message.info.role === "user") {
       appendHistoryThreadMessage(threadTurns, message, buildUserThreadMessageFromHistory(message))
@@ -2611,19 +2513,7 @@ export function buildThreadTurnsFromHistory(messages: LoadedSessionHistoryMessag
     }
 
     const assistantMessage = buildAssistantThreadMessageFromHistory(message)
-    appendHistoryThreadMessage(threadTurns, message, prependAssistantItems(assistantMessage, pendingCompactionItems))
-    pendingCompactionItems = []
-  }
-
-  if (pendingCompactionItems.length > 0) {
-    const lastHistoryMessage = messages[messages.length - 1]
-    if (lastHistoryMessage) {
-      appendHistoryThreadMessage(
-        threadTurns,
-        lastHistoryMessage,
-        buildCompactionMarkerMessage(lastHistoryMessage, pendingCompactionItems),
-      )
-    }
+    appendHistoryThreadMessage(threadTurns, message, assistantMessage)
   }
 
   return reconcileThreadTurns(threadTurns)

@@ -75,6 +75,7 @@ interface ComposerProps {
   canPasteImageAttachments?: boolean
   draftState: ComposerDraftState
   hasBagSubmit?: boolean
+  hasCompactCommand?: boolean
   hasPendingPermissionRequests: boolean
   isCancelling?: boolean
   isInterruptible?: boolean
@@ -111,7 +112,7 @@ interface ComposerProps {
 }
 
 type ComposerMenuKey = "model" | "reasoning" | null
-type ComposerCommandKey = "attach" | "bag" | "file" | "mcp" | "model" | "plan" | "plugin" | "reasoning" | "skill"
+type ComposerCommandKey = "attach" | "bag" | "compact" | "file" | "mcp" | "plan" | "plugin" | "skill"
 type ComposerCommandTriggerPrefix = "~" | "/"
 
 interface ComposerModelProviderGroup {
@@ -246,14 +247,9 @@ const COMPOSER_COMMANDS: Array<{
     description: "Toggle Plan Mode for this session.",
   },
   {
-    value: "model",
-    label: `${COMPOSER_COMMAND_TRIGGER_PREFIX}model`,
-    description: "Open the model picker.",
-  },
-  {
-    value: "reasoning",
-    label: `${COMPOSER_COMMAND_TRIGGER_PREFIX}reasoning`,
-    description: "Open the reasoning-effort picker.",
+    value: "compact",
+    label: `${COMPOSER_COMMAND_TRIGGER_PREFIX}compact`,
+    description: "Compact earlier session history into continuation context.",
   },
 ]
 
@@ -279,18 +275,16 @@ function hasComposerCommandQueryMatch(query: string) {
 
 export function getVisibleComposerCommandLabels({
   hasBagSubmit = false,
+  hasCompactCommand = false,
   hasPlanModeToggle = false,
   query = "",
-  reasoningEffortOptionCount = 0,
-  showModelSelector = false,
   showProjectTagCommands = false,
   triggerPrefix = COMPOSER_COMMAND_TRIGGER_PREFIX,
 }: {
   hasBagSubmit?: boolean
+  hasCompactCommand?: boolean
   hasPlanModeToggle?: boolean
   query?: string
-  reasoningEffortOptionCount?: number
-  showModelSelector?: boolean
   showProjectTagCommands?: boolean
   triggerPrefix?: ComposerCommandTriggerPrefix
 }) {
@@ -303,19 +297,15 @@ export function getVisibleComposerCommandLabels({
         return false
       }
 
-      if (command.value === "model" && !showModelSelector) {
-        return false
-      }
-
-      if (command.value === "reasoning" && (!showModelSelector || reasoningEffortOptionCount === 0)) {
-        return false
-      }
-
       if (command.value === "plan" && !hasPlanModeToggle) {
         return false
       }
 
       if (command.value === "bag" && !hasBagSubmit) {
+        return false
+      }
+
+      if (command.value === "compact" && !hasCompactCommand) {
         return false
       }
 
@@ -596,11 +586,13 @@ export function formatComposerAbsoluteFilePath(filePath: string) {
   return filePath.trim()
 }
 
-export function buildMenuStyle(anchorRect: DOMRect | null, containerRect: DOMRect | null): CSSProperties | undefined {
+export function buildMenuStyle(
+  anchorRect: DOMRect | null,
+  containerRect: DOMRect | null,
+): CSSProperties | undefined {
   if (!anchorRect || !containerRect) return undefined
 
   return {
-    left: `${String(Math.max(0, anchorRect.left - containerRect.left))}px`,
     bottom: `${String(Math.max(0, containerRect.bottom - anchorRect.top + 10))}px`,
   }
 }
@@ -1036,6 +1028,7 @@ export function Composer({
   canPasteImageAttachments = false,
   draftState,
   hasBagSubmit = false,
+  hasCompactCommand = false,
   hasPendingPermissionRequests,
   isCancelling = false,
   isInterruptible = false,
@@ -1190,10 +1183,9 @@ export function Composer({
   function buildComposerCommandItems(query: string, triggerPrefix: ComposerCommandTriggerPrefix = COMPOSER_COMMAND_TRIGGER_PREFIX) {
     const visibleLabels = new Set(getVisibleComposerCommandLabels({
       hasBagSubmit,
+      hasCompactCommand,
       hasPlanModeToggle: Boolean(onPlanModeToggle),
       query,
-      reasoningEffortOptionCount: reasoningEffortOptions.length,
-      showModelSelector: Boolean(showModelSelector),
       showProjectTagCommands: Boolean(showProjectTagCommands),
       triggerPrefix,
     }))
@@ -1624,11 +1616,9 @@ export function Composer({
     hasBagSubmit,
     onPlanModeToggle,
     pluginOptions,
-    reasoningEffortOptions.length,
     selectedMcpServerIDs,
     selectedPluginIDs,
     selectedSkillIDs,
-    showModelSelector,
     showProjectTagCommands,
     skillOptions,
     workspaceDirectory,
@@ -1746,18 +1736,13 @@ export function Composer({
       return
     }
 
-    if (command === "model") {
-      setOpenMenu("model")
-      return
-    }
-
-    if (command === "reasoning") {
-      setOpenMenu("reasoning")
-      return
-    }
-
     if (command === "plan") {
       void onPlanModeToggle?.()
+      return
+    }
+
+    if (command === "compact") {
+      void onSend(createComposerDraftStateFromPlainText(`${currentCommandMenuState.triggerPrefix}compact`))
       return
     }
 
@@ -1951,6 +1936,9 @@ export function Composer({
       : commandMenuState?.kind === "command-trigger"
         ? "No matching commands."
         : "No matching commands or tags."
+  const commandMenuStyle = commandMenuState
+    ? buildMenuStyle(commandMenuState.anchorRect, footerRef.current?.getBoundingClientRect() ?? null)
+    : undefined
   const longTextEditorStats = longTextEditorState ? readComposerLongTextStats(longTextEditorState.text) : null
 
   return (
@@ -2072,6 +2060,7 @@ export function Composer({
           className="composer-command-menu"
           data-kind={commandMenuState.kind}
           role="listbox"
+          style={commandMenuStyle}
           aria-label="Composer commands"
         >
           {commandMenuItems.length > 0 ? (
@@ -2095,8 +2084,15 @@ export function Composer({
                   }
                 >
                   <strong>{item.label}</strong>
-                  {item.type === "tag" && item.tagData.kind === "file" && item.description ? (
-                    <span className="composer-command-option-meta" title={item.description}>
+                  {item.description ? (
+                    <span
+                      className={
+                        item.type === "tag" && item.tagData.kind === "file"
+                          ? "composer-command-option-description is-path"
+                          : "composer-command-option-description"
+                      }
+                      title={item.description}
+                    >
                       {item.description}
                     </span>
                   ) : null}

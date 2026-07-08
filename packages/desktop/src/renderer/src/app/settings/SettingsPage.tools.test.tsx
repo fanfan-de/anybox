@@ -244,6 +244,28 @@ function createCinemaVideoProvider(
           id: `${id}-model`,
           label: `${name} Model`,
           modes: ["text-to-video"],
+          inputCombinations: [
+            {
+              mode: "text-to-video",
+              label: "Text to video",
+              requiredModalities: ["text"],
+              optionalModalities: [],
+              requirements: [],
+              endpoint: {
+                method: "POST",
+                path: "/text-to-video/test",
+              },
+              inputs: [
+                {
+                  role: "prompt",
+                  modality: "text",
+                  required: true,
+                  minCount: 1,
+                  maxCount: 1,
+                },
+              ],
+            },
+          ],
           durations: [],
           aspectRatios: [],
           resolutions: [],

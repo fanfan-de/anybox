@@ -1814,6 +1814,37 @@ button {
   min-width: 0;
 }
 
+button.cinema-video-input-slot-main {
+  width: 100%;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  border: 0;
+  background: transparent;
+}
+
+.cinema-video-input-slot-import {
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.cinema-video-input-slot-import:hover .cinema-video-input-slot-thumb,
+.cinema-video-input-slot-import:focus-visible .cinema-video-input-slot-thumb {
+  color: var(--cinema-text);
+  border-color: var(--cinema-border-strong);
+  background: var(--cinema-surface-2);
+}
+
+.cinema-video-input-slot-import:focus-visible {
+  outline: none;
+}
+
+.cinema-video-input-slot-import:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .cinema-video-input-slot-thumb {
   display: grid;
   place-items: center;

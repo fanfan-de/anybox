@@ -2,21 +2,26 @@ import { readFile } from "node:fs/promises"
 import { basename, extname } from "node:path"
 import { AgentRouteSchemas, SessionAttachmentBodySchema, isSshWorkspaceUri } from "@anybox/shared"
 import z from "zod"
+import * as Agent from "#agent/agent.ts"
 import * as Config from "#config/config.ts"
+import * as ModelRegistry from "#model/registry.ts"
 import * as ModelSelection from "#model/selection.ts"
 import type { PublicModel } from "#model/types.ts"
 import * as Project from "#project/project.ts"
 import type { PtyRegistry } from "#pty/registry.ts"
 import { Instance } from "#project/instance.ts"
 import { ApiError } from "#server/error.ts"
+import * as ContextWindow from "#session/core/context-window.ts"
 import * as Message from "#session/core/message.ts"
 import * as Prompt from "#session/core/prompt.ts"
 import * as RunningState from "#session/runtime/running-state.ts"
 import * as Session from "#session/core/session.ts"
 import * as SessionRollback from "#session/core/rollback.ts"
 import * as SessionDiff from "#session/diff/diff.ts"
+import * as SystemPrompt from "#session/core/system.ts"
 import * as Subtask from "#session/tasks/subtask.ts"
 import * as Task from "#session/tasks/task.ts"
+import * as Provider from "#provider/provider.ts"
 import * as Log from "#util/log.ts"
 import {
   createSessionEventStream,
@@ -678,6 +683,29 @@ async function resolveEffectiveModel(
   return findModelByReference(items, selection?.model) ?? resolveEffectiveModelWithFallback(projectID, items)
 }
 
+async function resolveSessionCompactionModel(session: Session.SessionInfo) {
+  const selection = Session.getSessionModelSelection(session.id)
+  const selectedReference = ModelSelection.parseModelReference(selection?.model)
+  if (selectedReference) {
+    try {
+      return await ModelRegistry.getAISDKModel(
+        selectedReference.providerID,
+        selectedReference.modelID,
+        session.projectID,
+      )
+    } catch {
+      // Fall through to the project default if the stored session model is no longer available.
+    }
+  }
+
+  const fallbackReference = await Provider.getDefaultModelRef(session.projectID)
+  return ModelRegistry.getAISDKModel(
+    fallbackReference.providerID,
+    fallbackReference.modelID,
+    session.projectID,
+  )
+}
+
 export async function listSessionModels(sessionID: string) {
   const session = requireSession(sessionID)
   const items = await listProjectModelsWithFallback(session.projectID)
@@ -710,6 +738,53 @@ export async function updateSessionModelSelection(
   }
 
   return toSessionModelSelectionPayload(Session.getSessionModelSelection(sessionID))
+}
+
+export async function compactSession(sessionID: string) {
+  const session = requireSession(sessionID)
+  if (Session.isSideChatSession(session)) {
+    throw new ApiError(409, "INVALID_COMPACTION_SESSION", "Side chat sessions do not support manual compaction")
+  }
+  if (RunningState.isRunning(sessionID)) {
+    throw new ApiError(409, "SESSION_RUNNING", `Session '${sessionID}' is currently running and cannot be compacted`)
+  }
+
+  return Instance.provide({
+    directory: session.directory,
+    async fn() {
+      const activeSession = requireSession(sessionID)
+      const model = await resolveSessionCompactionModel(activeSession)
+      const agent = await Agent.get("default")
+      const selection = Session.getSessionModelSelection(sessionID)
+      const messages: Message.WithParts[] = []
+      for await (const message of Message.stream(sessionID)) {
+        messages.push(message)
+      }
+
+      const system = [
+        ...await SystemPrompt.defaultPrompt({
+          agent,
+          session: activeSession,
+        }),
+        ...await SystemPrompt.environment(model),
+      ].filter((item): item is string => typeof item === "string")
+
+      const result = await ContextWindow.compactPromptContext({
+        sessionID,
+        model,
+        system,
+        messages,
+        reasoningEffort: selection?.reasoning_effort,
+        tools: {},
+        auto: false,
+      })
+
+      return {
+        sessionID,
+        ...result,
+      }
+    },
+  })
 }
 
 export function updateSessionTitle(

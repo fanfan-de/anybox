@@ -81,6 +81,18 @@ export type PreparedPromptContext = {
   budget: PromptBudget
 }
 
+export type ForcedCompactionResult = {
+  status: "compacted" | "noop"
+  reason?: "not-enough-history"
+  compactedMessageID?: string
+  compactionID?: string
+  compactedFromMessageID?: string
+  compactedToMessageID?: string
+  sourceMessageCount: number
+  estimatedTokens: number
+  budget: PromptBudget
+}
+
 export async function preparePromptContext(input: {
   sessionID: string
   model: Provider.Model
@@ -139,6 +151,7 @@ export async function preparePromptContext(input: {
       reasoningEffort: input.reasoningEffort,
       tools: input.tools,
       generateSummary: summaryGenerator,
+      auto: true,
     })
 
     await recordCompactedHistoryMessage(compactedHistory, input.recordCompactionMessage)
@@ -165,6 +178,76 @@ export async function preparePromptContext(input: {
     messages: window.messages,
     compactedHistory: window.compactedHistory,
     estimatedTokens: window.estimatedTokens,
+    budget: window.budget,
+  }
+}
+
+export async function compactPromptContext(input: {
+  sessionID: string
+  model: Provider.Model
+  system: string[]
+  messages: Message.WithParts[]
+  reasoningEffort?: Message.ReasoningEffort
+  tools?: ToolSet
+  generateSummary?: SummaryGenerator
+  recordCompactionMessage?: CompactionMessageRecorder
+  auto?: boolean
+}): Promise<ForcedCompactionResult> {
+  const summaryGenerator = input.generateSummary ?? generateCompactionSummary
+  const window = buildPromptWindow({
+    system: input.system,
+    messages: input.messages,
+    model: input.model,
+    allowTurnDropping: false,
+  })
+  const compactedBoundary = window.compactedHistory
+    ? readCompactionBoundary(window.compactedHistory)?.compactedToMessageID
+    : undefined
+  const rawMessages = filterRawConversationMessages(input.messages)
+  const turns = turnsAfterCompactionBoundary(rawMessages, compactedBoundary)
+  const selectedTurns = selectTurnsForCompaction(turns, window.budget)
+  if (selectedTurns.length === 0) {
+    return {
+      status: "noop",
+      reason: "not-enough-history",
+      sourceMessageCount: 0,
+      estimatedTokens: window.estimatedTokens,
+      budget: window.budget,
+    }
+  }
+
+  const compactedHistory = await compactTurns({
+    sessionID: input.sessionID,
+    existing: window.compactedHistory,
+    turns: selectedTurns,
+    system: input.system,
+    model: input.model,
+    reasoningEffort: input.reasoningEffort,
+    tools: input.tools,
+    generateSummary: summaryGenerator,
+    auto: input.auto ?? false,
+  })
+
+  await recordCompactedHistoryMessage(compactedHistory, input.recordCompactionMessage)
+  const boundary = readCompactionBoundary(compactedHistory)
+  const sourceMessageCount = selectedTurns.reduce((total, turn) => total + turn.messages.length, 0)
+  log.info("session history compacted", {
+    sessionID: input.sessionID,
+    compactionID: boundary?.compactionID,
+    compactedToMessageID: boundary?.compactedToMessageID,
+    sourceMessageCount,
+    estimatedTokens: estimateMessagesTokens([compactedHistory]),
+    auto: input.auto ?? false,
+  })
+
+  return {
+    status: "compacted",
+    compactedMessageID: compactedHistory.info.id,
+    compactionID: boundary?.compactionID,
+    compactedFromMessageID: boundary?.compactedFromMessageID,
+    compactedToMessageID: boundary?.compactedToMessageID,
+    sourceMessageCount,
+    estimatedTokens: estimateMessagesTokens([compactedHistory]),
     budget: window.budget,
   }
 }
@@ -333,6 +416,7 @@ async function compactTurns(input: {
   reasoningEffort?: Message.ReasoningEffort
   tools?: ToolSet
   generateSummary: SummaryGenerator
+  auto?: boolean
 }) {
   const sourceMessages = [
     ...(input.existing ? [input.existing] : []),
@@ -357,6 +441,7 @@ async function compactTurns(input: {
     summaryText,
     compactedFromMessageID,
     compactedToMessageID,
+    auto: input.auto ?? true,
   })
 }
 
@@ -366,6 +451,7 @@ function createCompactedHistoryMessage(input: {
   summaryText: string
   compactedFromMessageID: string
   compactedToMessageID: string
+  auto?: boolean
 }): Message.WithParts {
   const createdAt = Date.now()
   const compactionID = Identifier.ascending("compaction")
@@ -403,7 +489,7 @@ function createCompactedHistoryMessage(input: {
     sessionID: input.sessionID,
     messageID: message.id,
     type: "compaction",
-    auto: true,
+    auto: input.auto ?? true,
     compactionID,
     compactedFromMessageID: input.compactedFromMessageID,
     compactedToMessageID: input.compactedToMessageID,

@@ -1,4 +1,5 @@
 import faq from "./content/faq.md?raw"
+import coreConcept from "./content/core  concept.md?raw"
 import gettingStarted from "./content/下载安装.md?raw"
 import providers from "./content/providers.md?raw"
 import skills from "./content/skills.md?raw"
@@ -24,6 +25,12 @@ export const docsSections: DocsSection[] = [
         description: "下载、安装并完成第一次项目会话。",
         slug: "getting-started",
         title: "快速开始",
+      },
+      {
+        content: coreConcept,
+        description: "理解 Agent 会话、上下文窗口和自动压缩机制。",
+        slug: "core-concept",
+        title: "核心概念",
       },
     ],
   },

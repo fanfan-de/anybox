@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from "react"
-import { useComposerController } from "./agent-workspace/composer-controller"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { useComposerController, type ComposerCommandStatus } from "./agent-workspace/composer-controller"
 import { useComposerDraftState } from "./agent-workspace/composer-draft-state"
 import { useReviewPanelController } from "./agent-workspace/review-panel-controller"
 import { useReviewPreviewState } from "./agent-workspace/review-preview-state"
@@ -139,6 +139,7 @@ export function useAgentWorkspace({
   const focusSessionFromAgentEventRef = useRef<(sessionID: string) => void>(() => undefined)
   const threadScrollSnapshotsRef = useRef<Record<string, ThreadScrollSnapshot>>({})
   const workspaceStoreRef = useRef<WorkspaceStoreApi | null>(null)
+  const [composerCommandStatusByTabKey, setComposerCommandStatusByTabKey] = useState<Record<string, ComposerCommandStatus>>({})
   if (!workspaceStoreRef.current) {
     const hasFolderWorkspaceLoader = Boolean(window.desktop?.listFolderWorkspaces)
     const initialWorkspaceState = createInitialWorkspaceState(!hasFolderWorkspaceLoader)
@@ -749,6 +750,7 @@ export function useAgentWorkspace({
     setAgentSessions,
     setCancellingSessionIDs,
     setComposerAttachmentsByTabKey,
+    setComposerCommandStatusByTabKey,
     setComposerDraftStateByTabKey,
     setComposerParentMessageIDByTabKey,
     setCreateSessionTabs,
@@ -1002,6 +1004,7 @@ export function useAgentWorkspace({
     canInsertPreviewInteractionsIntoDraft,
     canInsertWorkspaceFileCommentsIntoDraft,
     composerAttachments,
+    composerCommandStatusByTabKey,
     composerRefreshVersion,
     createSessionTabs,
     createSessionTitle,
