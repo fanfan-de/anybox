@@ -26,6 +26,7 @@ import type {
   DesktopRunningSessionStatus,
   DesktopSessionRollbackInput,
   DesktopSessionRollbackResult,
+  DesktopStorageUsageSnapshot,
   McpServerInput,
 } from "../shared/desktop-ipc-contract"
 import {
@@ -513,6 +514,7 @@ function sanitizeScreenshotFileSegment(value: string) {
 type PreviewScreenshotCaptureInput = DesktopIpcInput<"desktop:capture-preview-screenshot">
 type SaveComposerPastedImagesInput = DesktopIpcInput<"desktop:save-composer-pasted-images">
 type CopyImageToClipboardInput = DesktopIpcInput<"desktop:copy-image-to-clipboard">
+type SaveImageToFolderInput = DesktopIpcInput<"desktop:save-image-to-folder">
 
 interface PreviewScreenshotCaptureOptions {
   makeDirectory?: (directory: string, options: { recursive: true }) => Promise<unknown>
@@ -532,6 +534,13 @@ interface SaveComposerPastedImagesOptions {
 interface CopyImageToClipboardOptions {
   createImageFromBuffer?: (buffer: Buffer) => NativeImage
   writeClipboardImage?: (image: NativeImage) => void
+}
+
+interface SaveImageToFolderOptions {
+  downloadsPath?: string
+  now?: Date
+  showOpenDialog?: (options: OpenDialogOptions) => Promise<OpenDialogReturnValue>
+  writeImageFile?: (filePath: string, data: Buffer) => Promise<unknown>
 }
 
 const COMPOSER_PASTED_IMAGE_EXTENSIONS = new Map([
@@ -648,6 +657,36 @@ function copyImageDataUrlToClipboard(
 
   const writeClipboardImage = options.writeClipboardImage ?? ((clipboardImage: NativeImage) => clipboard.writeImage(clipboardImage))
   writeClipboardImage(image)
+}
+
+async function saveImageDataUrlToFolder(
+  input: SaveImageToFolderInput,
+  options: SaveImageToFolderOptions = {},
+) {
+  const parsedImage = parseComposerPastedImageDataUrl(input.dataUrl, input.mimeType)
+  const showOpenDialog = options.showOpenDialog ?? ((dialogOptions: OpenDialogOptions) =>
+    dialog.showOpenDialog(dialogOptions))
+  const selection = await showOpenDialog({
+    buttonLabel: "Save Here",
+    defaultPath: options.downloadsPath ?? app.getPath("downloads"),
+    properties: ["openDirectory", "createDirectory"],
+    title: "Select folder to save image",
+  })
+  const selectedDirectory = selection.filePaths?.[0]
+  if (selection.canceled || !selectedDirectory) {
+    return { canceled: true as const }
+  }
+
+  const timestamp = (options.now ?? new Date()).toISOString().replace(/[:.]/g, "-")
+  const safeName = sanitizeComposerPastedImageName(input.name, "image")
+  const filePath = path.join(selectedDirectory, `${timestamp}-${safeName}.${parsedImage.extension}`)
+
+  await (options.writeImageFile ?? writeFile)(filePath, parsedImage.buffer)
+
+  return {
+    canceled: false as const,
+    path: filePath,
+  }
 }
 
 async function getToolPermissionMode() {
@@ -3202,6 +3241,11 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     return DesktopIpcSchemas.getStoragePaths.output.parse(paths)
   })
 
+  handleDesktopIpc("desktop:get-storage-usage", async () => {
+    const result = await requestAgentJSON<DesktopStorageUsageSnapshot>("/api/storage/usage")
+    return DesktopIpcSchemas.getStorageUsage.output.parse(result.data)
+  })
+
   handleDesktopIpc("desktop:get-window-state", (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
 
@@ -3750,6 +3794,14 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   handleDesktopIpc("desktop:save-composer-pasted-images", async (_event, input) => saveComposerPastedImages(input))
 
   handleDesktopIpc("desktop:copy-image-to-clipboard", async (_event, input) => copyImageDataUrlToClipboard(input))
+
+  handleDesktopIpc("desktop:save-image-to-folder", async (event, input) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    return saveImageDataUrlToFolder(input, {
+      showOpenDialog: (dialogOptions) =>
+        win ? dialog.showOpenDialog(win, dialogOptions) : dialog.showOpenDialog(dialogOptions),
+    })
+  })
 
   handleDesktopIpc("desktop:capture-preview-screenshot", async (event, input) => {
     const win = BrowserWindow.fromWebContents(event.sender)
@@ -6283,6 +6335,7 @@ export const internal = {
   readPreviewText,
   resolvePreviewTarget,
   saveComposerPastedImages,
+  saveImageDataUrlToFolder,
   saveSessionTraceExport,
   saveSessionTraceExportDirectory,
   saveSessionTraceExportToProject,

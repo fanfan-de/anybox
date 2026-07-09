@@ -93,6 +93,7 @@ import type {
   DesktopOpenCinemaProjectResult,
   DesktopOpenPathInput,
   DesktopOpenPathResult,
+  DesktopStorageUsageSnapshot,
   ReasoningEffort,
 } from "@anybox/shared"
 import type {
@@ -433,6 +434,8 @@ export interface DesktopStoragePaths {
   pluginInstallTemp: string
 }
 
+export type { DesktopStorageUsageSnapshot }
+
 export interface DesktopWindowState {
   isMaximized: boolean
 }
@@ -718,6 +721,16 @@ export interface DesktopCopyImageToClipboardInput {
   mimeType: string
 }
 
+export interface DesktopSaveImageToFolderInput {
+  dataUrl: string
+  mimeType: string
+  name?: string
+}
+
+export type DesktopSaveImageToFolderResult =
+  | { canceled: true }
+  | { canceled: false; path: string }
+
 export interface DesktopPreviewScreenshotCaptureInput {
   bounds: {
     height: number
@@ -1001,6 +1014,10 @@ export interface DesktopIpcContract {
     input: void
     output: DesktopStoragePaths
   }
+  "desktop:get-storage-usage": {
+    input: void
+    output: DesktopStorageUsageSnapshot
+  }
   "desktop:get-window-state": {
     input: void
     output: DesktopWindowState
@@ -1251,6 +1268,10 @@ export interface DesktopIpcContract {
   "desktop:copy-image-to-clipboard": {
     input: DesktopCopyImageToClipboardInput
     output: void
+  }
+  "desktop:save-image-to-folder": {
+    input: DesktopSaveImageToFolderInput
+    output: DesktopSaveImageToFolderResult
   }
   "desktop:capture-preview-screenshot": {
     input: DesktopPreviewScreenshotCaptureInput
@@ -2009,6 +2030,7 @@ export interface DesktopApiMethods {
     listener: (state: DesktopIpcEventPayload<typeof DESKTOP_APP_UPDATE_STATE_EVENT_CHANNEL>) => void,
   ): () => void
   getStoragePaths(): Promise<DesktopIpcOutput<"desktop:get-storage-paths">>
+  getStorageUsage(): Promise<DesktopIpcOutput<"desktop:get-storage-usage">>
   getWindowState(): Promise<DesktopIpcOutput<"desktop:get-window-state">>
   reportRendererError(input: DesktopIpcInput<"desktop:report-renderer-error">): Promise<DesktopIpcOutput<"desktop:report-renderer-error">>
   reportRendererMemoryDiagnostics(input: DesktopIpcInput<"desktop:report-renderer-memory-diagnostics">): Promise<DesktopIpcOutput<"desktop:report-renderer-memory-diagnostics">>
@@ -2062,6 +2084,7 @@ export interface DesktopApiMethods {
   pickComposerAttachments(input?: DesktopIpcInput<"desktop:pick-composer-attachments">): Promise<DesktopIpcOutput<"desktop:pick-composer-attachments">>
   saveComposerPastedImages(input: DesktopIpcInput<"desktop:save-composer-pasted-images">): Promise<DesktopIpcOutput<"desktop:save-composer-pasted-images">>
   copyImageToClipboard?(input: DesktopIpcInput<"desktop:copy-image-to-clipboard">): Promise<DesktopIpcOutput<"desktop:copy-image-to-clipboard">>
+  saveImageToFolder?(input: DesktopIpcInput<"desktop:save-image-to-folder">): Promise<DesktopIpcOutput<"desktop:save-image-to-folder">>
   capturePreviewScreenshot(input: DesktopIpcInput<"desktop:capture-preview-screenshot">): Promise<DesktopIpcOutput<"desktop:capture-preview-screenshot">>
   detectLocalPreviewServices(): Promise<DesktopIpcOutput<"desktop:detect-local-preview-services">>
   resolvePreviewTarget(input: DesktopIpcInput<"desktop:resolve-preview-target">): Promise<DesktopIpcOutput<"desktop:resolve-preview-target">>

@@ -42,3 +42,7 @@ export async function getRunningSessionStatus(): Promise<DesktopIpcOutput<"deskt
 export async function getStoragePaths(): Promise<DesktopIpcOutput<"desktop:get-storage-paths"> | null> {
   return window.desktop?.getStoragePaths?.() ?? null
 }
+
+export async function getStorageUsage(): Promise<DesktopIpcOutput<"desktop:get-storage-usage"> | null> {
+  return window.desktop?.getStorageUsage?.() ?? null
+}

@@ -22,13 +22,19 @@ import {
 } from "../../../../shared/appearance"
 import { getAppearanceTokenGroupCopy, getAppearanceTokenRowCopy } from "../../../../shared/appearance-token-copy"
 import type { AppearanceTheme } from "../../../../shared/appearance-themes"
-import type { DesktopAppUpdateState, DesktopProviderAuthPrompt, DesktopStoragePaths } from "../../../../shared/desktop-ipc-contract"
+import type {
+  DesktopAppUpdateState,
+  DesktopProviderAuthPrompt,
+  DesktopStoragePaths,
+  DesktopStorageUsageSnapshot,
+} from "../../../../shared/desktop-ipc-contract"
 import {
   AccountSettingsIcon,
   ArchiveRestoreIcon,
   CloseIcon,
   CodeModeIcon,
   ConnectedStatusIcon,
+  StorageSettingsIcon,
   DisconnectedStatusIcon,
   ChevronDownIcon,
   DeleteIcon,
@@ -92,6 +98,7 @@ import {
   openExternalUrl,
   openMonitorWindow,
 } from "./client"
+import { formatStorageBytes, sortArchivedSessionUsage, sortStorageTables } from "./storage-usage"
 import {
   shouldOpenUpdateCenterOnly,
   type AppUpdateStatus,
@@ -2634,7 +2641,16 @@ function doesMcpServerMatchSearch(
   return haystack.includes(query)
 }
 
-type SettingsSectionKey = "general" | "account" | "services" | "defaults" | "mcp" | "appearance" | "developer" | "archive"
+type SettingsSectionKey =
+  | "general"
+  | "account"
+  | "services"
+  | "defaults"
+  | "mcp"
+  | "appearance"
+  | "developer"
+  | "storage"
+  | "archive"
 type ProviderCapabilityFilterKey = "all" | "text" | "image" | "video" | "connected"
 type ProviderDetailKind = "model" | "cinema"
 
@@ -2720,6 +2736,30 @@ const storagePathItems: Array<{
     description: "Temporary plugin zip extraction directory.",
   },
 ]
+
+function getStorageCategoryLabel(t: (key: TranslationKey, params?: Record<string, string | number>) => string, id: DesktopStorageUsageSnapshot["categories"][number]["id"]) {
+  switch (id) {
+    case "archivedSessions":
+      return t("settings.storage.category.archivedSessions")
+    case "activeSessions":
+      return t("settings.storage.category.activeSessions")
+    case "otherDatabase":
+      return t("settings.storage.category.otherDatabase")
+    case "sqliteOverhead":
+      return t("settings.storage.category.sqliteOverhead")
+  }
+}
+
+function getStorageTableCategoryLabel(t: (key: TranslationKey, params?: Record<string, string | number>) => string, category: DesktopStorageUsageSnapshot["tables"][number]["category"]) {
+  switch (category) {
+    case "archivedSessions":
+      return t("settings.storage.category.archivedSessions")
+    case "activeSessions":
+      return t("settings.storage.category.activeSessions")
+    case "otherDatabase":
+      return t("settings.storage.category.otherDatabase")
+  }
+}
 
 const SETTINGS_PAGE_DRAG_MARGIN = 16
 
@@ -2836,6 +2876,8 @@ interface SettingsPageProps {
   assistantTraceVisibility: AssistantTraceVisibility
   archivedSessions: ArchivedSessionSummary[]
   archivedSessionsError: string | null
+  storageUsage: DesktopStorageUsageSnapshot | null
+  storageUsageError: string | null
   catalog: ProviderCatalogItem[]
   cinemaVideoProviders: CinemaVideoProvider[]
   deletingArchivedSessionID: string | null
@@ -2852,6 +2894,7 @@ interface SettingsPageProps {
   isDeletingAllArchivedSessions: boolean
   isLoading: boolean
   isLoadingArchivedSessions: boolean
+  isLoadingStorageUsage: boolean
   isOpen: boolean
   appUpdateState: DesktopAppUpdateState | null
   appUpdateStatus: AppUpdateStatus | null
@@ -2919,6 +2962,7 @@ interface SettingsPageProps {
   onRefreshProviderCatalog: () => boolean | Promise<boolean>
   onRefreshCinemaVideoProviderCatalog: () => boolean | Promise<boolean>
   onLoadArchivedSessions: () => void | Promise<void>
+  onLoadStorageUsage: () => void | Promise<void>
   onOpenUpdateCenter: () => void
   onRestoreArchivedSession: (sessionID: string) => boolean | Promise<boolean>
   onSaveMcpServer: () => boolean | Promise<boolean>
@@ -2960,6 +3004,8 @@ export function SettingsPage({
   assistantTraceVisibility,
   archivedSessions,
   archivedSessionsError,
+  storageUsage,
+  storageUsageError,
   catalog,
   cinemaVideoProviders,
   deletingArchivedSessionID,
@@ -2976,6 +3022,7 @@ export function SettingsPage({
   isDeletingAllArchivedSessions,
   isLoading,
   isLoadingArchivedSessions,
+  isLoadingStorageUsage,
   isOpen,
   appUpdateState,
   isCheckingAppUpdate,
@@ -3034,6 +3081,7 @@ export function SettingsPage({
   onRefreshProviderCatalog,
   onRefreshCinemaVideoProviderCatalog,
   onLoadArchivedSessions,
+  onLoadStorageUsage,
   onOpenUpdateCenter,
   onRestoreArchivedSession,
   onSaveMcpServer,
@@ -3142,6 +3190,54 @@ export function SettingsPage({
     const filteredArchivedSessions = archivedSessions.filter((session) =>
       doesArchivedSessionMatchSearch(session, normalizedArchivedSessionSearchQuery),
     )
+    const storageCategoryByID = new Map(storageUsage?.categories.map((category) => [category.id, category]) ?? [])
+    const largestArchivedSessionUsage = storageUsage ? sortArchivedSessionUsage(storageUsage.archivedSessions).slice(0, 8) : []
+    const storageTables = storageUsage ? sortStorageTables(storageUsage.tables) : []
+    const storageSummaryItems = storageUsage
+      ? [
+          {
+            key: "database",
+            label: t("settings.storage.summary.database"),
+            value: formatStorageBytes(storageUsage.database.totalBytes),
+            detail: t("settings.storage.summary.databaseCopy"),
+            approximate: false,
+          },
+          {
+            key: "archived",
+            label: t("settings.storage.summary.archived"),
+            value: formatStorageBytes(storageCategoryByID.get("archivedSessions")?.bytes ?? 0),
+            detail: t("settings.storage.summary.archivedCopy", {
+              count: storageCategoryByID.get("archivedSessions")?.count ?? 0,
+            }),
+            approximate: true,
+          },
+          {
+            key: "active",
+            label: t("settings.storage.summary.active"),
+            value: formatStorageBytes(storageCategoryByID.get("activeSessions")?.bytes ?? 0),
+            detail: t("settings.storage.summary.activeCopy", {
+              count: storageCategoryByID.get("activeSessions")?.count ?? 0,
+            }),
+            approximate: true,
+          },
+          {
+            key: "other",
+            label: t("settings.storage.summary.other"),
+            value: formatStorageBytes(storageCategoryByID.get("otherDatabase")?.bytes ?? 0),
+            detail: t("settings.storage.summary.otherCopy"),
+            approximate: true,
+          },
+          {
+            key: "free",
+            label: t("settings.storage.summary.reclaimable"),
+            value: storageUsage.database.freelistBytes === null
+              ? t("settings.storage.unknown")
+              : formatStorageBytes(storageUsage.database.freelistBytes),
+            detail: t("settings.storage.summary.reclaimableCopy"),
+            approximate: false,
+          },
+        ]
+      : []
     const activeProvider = selectedProviderKind === "model" && selectedProviderID
       ? catalog.find((item) => item.id === selectedProviderID) ?? null
       : null
@@ -3324,6 +3420,12 @@ export function SettingsPage({
 
       void onLoadArchivedSessions()
     }, [activeSection, isOpen, onLoadArchivedSessions])
+
+    useEffect(() => {
+      if (!isOpen || activeSection !== "storage" || storageUsage || isLoadingStorageUsage) return
+
+      void onLoadStorageUsage()
+    }, [activeSection, isLoadingStorageUsage, isOpen, onLoadStorageUsage, storageUsage])
 
     useLayoutEffect(() => {
       if (!isOpen) return
@@ -3745,6 +3847,7 @@ export function SettingsPage({
           { key: "defaults" as const, label: t("settings.nav.models"), Icon: ModelSettingsIcon },
           { key: "appearance" as const, label: t("settings.nav.appearance"), Icon: PaletteIcon },
           { key: "developer" as const, label: t("settings.nav.developer"), Icon: CodeModeIcon },
+          { key: "storage" as const, label: t("settings.nav.storage"), Icon: StorageSettingsIcon },
           { key: "archive" as const, label: t("settings.nav.archive"), Icon: ArchiveRestoreIcon },
         ],
       },
@@ -4018,6 +4121,10 @@ export function SettingsPage({
                 <div className="settings-banner is-error">{archivedSessionsError}</div>
               ) : null}
 
+              {storageUsageError && activeSection === "storage" ? (
+                <div className="settings-banner is-error">{storageUsageError}</div>
+              ) : null}
+
               {isLoading && showProviderSections ? (
                 <article className="settings-empty-state">
                   <span className="label">Loading</span>
@@ -4031,6 +4138,14 @@ export function SettingsPage({
                   <span className="label">Loading</span>
                   <h3>Fetching archived sessions</h3>
                   <p>Reading archived session snapshots so you can restore or permanently delete them.</p>
+                </article>
+              ) : null}
+
+              {isLoadingStorageUsage && activeSection === "storage" && !storageUsage ? (
+                <article className="settings-empty-state">
+                  <span className="label">{t("settings.storage.loadingLabel")}</span>
+                  <h3>{t("settings.storage.loadingTitle")}</h3>
+                  <p>{t("settings.storage.loadingCopy")}</p>
                 </article>
               ) : null}
 
@@ -4321,6 +4436,160 @@ export function SettingsPage({
                     </div>
                   </SettingsDisclosurePanel>
                 </div>
+              ) : activeSection === "storage" ? (
+                isLoadingStorageUsage && !storageUsage ? null : (
+                <div className="settings-storage-layout">
+                  <section className="settings-panel">
+                    <div className="settings-section-header settings-storage-header">
+                      <div>
+                        <span className="label">{t("settings.storage.label")}</span>
+                        <h3>{t("settings.storage.title")}</h3>
+                      </div>
+                      <p>{t("settings.storage.copy")}</p>
+                      <button
+                        className="secondary-button"
+                        disabled={isLoadingStorageUsage}
+                        type="button"
+                        onClick={() => void onLoadStorageUsage()}
+                      >
+                        {isLoadingStorageUsage ? t("settings.storage.refreshing") : t("settings.storage.refresh")}
+                      </button>
+                    </div>
+
+                    {storageUsage ? (
+                      <div className="settings-storage-content">
+                        <div className="settings-section-summary settings-storage-summary" aria-label={t("settings.storage.summaryAria")}>
+                          {storageSummaryItems.map((item) => (
+                            <article key={item.key} className="settings-summary-card settings-storage-summary-card">
+                              <span className="label">{item.label}</span>
+                              <strong>{item.approximate ? t("settings.storage.approximateValue", { value: item.value }) : item.value}</strong>
+                              <p>{item.detail}</p>
+                            </article>
+                          ))}
+                        </div>
+
+                        <section className="settings-storage-block">
+                          <div className="settings-storage-block-header">
+                            <h4>{t("settings.storage.databaseTitle")}</h4>
+                            <span>{t("settings.storage.generatedAt", { time: formatTime(storageUsage.generatedAt) })}</span>
+                          </div>
+                          <div className="settings-storage-detail-list">
+                            <div className="settings-storage-detail-row">
+                              <span>{t("settings.storage.databasePath")}</span>
+                              <code title={storageUsage.database.path}>{storageUsage.database.path}</code>
+                            </div>
+                            <div className="settings-storage-detail-row">
+                              <span>{t("settings.storage.mainFile")}</span>
+                              <strong>{formatStorageBytes(storageUsage.database.mainBytes)}</strong>
+                            </div>
+                            <div className="settings-storage-detail-row">
+                              <span>{t("settings.storage.walFile")}</span>
+                              <strong>{formatStorageBytes(storageUsage.database.walBytes)}</strong>
+                            </div>
+                            <div className="settings-storage-detail-row">
+                              <span>{t("settings.storage.shmFile")}</span>
+                              <strong>{formatStorageBytes(storageUsage.database.shmBytes)}</strong>
+                            </div>
+                            <div className="settings-storage-detail-row">
+                              <span>{t("settings.storage.pageStats")}</span>
+                              <strong>
+                                {storageUsage.database.pageSize && storageUsage.database.pageCount !== null
+                                  ? t("settings.storage.pageStatsValue", {
+                                      pageSize: formatStorageBytes(storageUsage.database.pageSize),
+                                      pageCount: storageUsage.database.pageCount,
+                                    })
+                                  : t("settings.storage.unknown")}
+                              </strong>
+                            </div>
+                          </div>
+                        </section>
+
+                        <section className="settings-storage-block">
+                          <div className="settings-storage-block-header">
+                            <h4>{t("settings.storage.categoriesTitle")}</h4>
+                            <span>{t("settings.storage.approximateHint")}</span>
+                          </div>
+                          <div className="settings-storage-category-list">
+                            {storageUsage.categories.map((category) => (
+                              <div key={category.id} className="settings-storage-category-row">
+                                <div>
+                                  <strong>{getStorageCategoryLabel(t, category.id)}</strong>
+                                  <span>
+                                    {category.count !== undefined
+                                      ? t("settings.storage.categoryCount", { count: category.count })
+                                      : t("settings.storage.categoryNoCount")}
+                                  </span>
+                                </div>
+                                <span>{t("settings.storage.approximateValue", { value: formatStorageBytes(category.bytes) })}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+
+                        <section className="settings-storage-block">
+                          <div className="settings-storage-block-header">
+                            <h4>{t("settings.storage.archivedSessionsTitle")}</h4>
+                            <span>{t("settings.storage.archivedSessionsCopy")}</span>
+                          </div>
+                          {largestArchivedSessionUsage.length > 0 ? (
+                            <div className="settings-storage-session-list">
+                              {largestArchivedSessionUsage.map((session) => (
+                                <article key={session.id} className="settings-storage-session-row">
+                                  <div>
+                                    <strong>{session.title || session.id}</strong>
+                                    <span>
+                                      {[session.projectName ?? session.projectID, session.directory].filter(Boolean).join(" - ")}
+                                    </span>
+                                    <small>
+                                      {t("settings.archive.messageCount", { count: session.messageCount })} - {t("settings.archive.eventCount", { count: session.eventCount })} - {t("settings.archive.archivedAt", { time: formatTime(session.archivedAt) })}
+                                    </small>
+                                  </div>
+                                  <span>{t("settings.storage.approximateValue", { value: formatStorageBytes(session.estimatedBytes) })}</span>
+                                </article>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="settings-helper-text">{t("settings.storage.noArchivedSessions")}</p>
+                          )}
+                        </section>
+
+                        <section className="settings-storage-block">
+                          <div className="settings-storage-block-header">
+                            <h4>{t("settings.storage.tablesTitle")}</h4>
+                            <span>{t("settings.storage.tablesCopy")}</span>
+                          </div>
+                          {storageTables.length > 0 ? (
+                            <div className="settings-storage-table-list" role="table" aria-label={t("settings.storage.tablesTitle")}>
+                              <div className="settings-storage-table-row is-header" role="row">
+                                <span role="columnheader">{t("settings.storage.tableName")}</span>
+                                <span role="columnheader">{t("settings.storage.tableCategory")}</span>
+                                <span role="columnheader">{t("settings.storage.tableRows")}</span>
+                                <span role="columnheader">{t("settings.storage.tableBytes")}</span>
+                              </div>
+                              {storageTables.map((table) => (
+                                <div key={table.name} className="settings-storage-table-row" role="row">
+                                  <code role="cell">{table.name}</code>
+                                  <span role="cell">{getStorageTableCategoryLabel(t, table.category)}</span>
+                                  <span role="cell">{table.rowCount}</span>
+                                  <span role="cell">{t("settings.storage.approximateValue", { value: formatStorageBytes(table.estimatedBytes) })}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="settings-helper-text">{t("settings.storage.noTables")}</p>
+                          )}
+                        </section>
+                      </div>
+                    ) : (
+                      <article className="settings-empty-state">
+                        <span className="label">{t("settings.storage.emptyLabel")}</span>
+                        <h3>{t("settings.storage.emptyTitle")}</h3>
+                        <p>{t("settings.storage.emptyCopy")}</p>
+                      </article>
+                    )}
+                  </section>
+                </div>
+                )
               ) : activeSection === "archive" ? (
                 isLoadingArchivedSessions ? null : (
                 <div className="settings-archive-layout">

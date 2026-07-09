@@ -37,7 +37,8 @@ import { parseMcpConfigJson } from "./mcp/mcp-config-import"
 import { arePluginCatalogsEqual, mergePluginCatalogWithInstalled } from "./plugin-catalog"
 import { useToast } from "./toast"
 import { useI18n } from "./i18n/I18nProvider"
-import type { DesktopProviderAuthPrompt } from "../../../shared/desktop-ipc-contract"
+import type { DesktopProviderAuthPrompt, DesktopStorageUsageSnapshot } from "../../../shared/desktop-ipc-contract"
+import { getStorageUsage } from "./settings/client"
 
 interface SettingsMessage {
   tone: "success" | "error"
@@ -619,15 +620,18 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   const [selectedPromptUrlInstallIDs, setSelectedPromptUrlInstallIDs] = useState<string[]>([])
   const [promptUrlInstallMessage, setPromptUrlInstallMessage] = useState<SettingsMessage | null>(null)
   const [archivedSessions, setArchivedSessions] = useState<ArchivedSessionSummary[]>([])
+  const [storageUsage, setStorageUsage] = useState<DesktopStorageUsageSnapshot | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingBuiltinTools, setIsLoadingBuiltinTools] = useState(false)
   const [isLoadingPrompts, setIsLoadingPrompts] = useState(false)
   const [isLoadingPromptPreset, setIsLoadingPromptPreset] = useState(false)
   const [isLoadingArchivedSessions, setIsLoadingArchivedSessions] = useState(false)
+  const [isLoadingStorageUsage, setIsLoadingStorageUsage] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [builtinToolsError, setBuiltinToolsError] = useState<string | null>(null)
   const [promptLoadError, setPromptLoadError] = useState<string | null>(null)
   const [archivedSessionsError, setArchivedSessionsError] = useState<string | null>(null)
+  const [storageUsageError, setStorageUsageError] = useState<string | null>(null)
   const [savingProviderID, setSavingProviderID] = useState<string | null>(null)
   const [savingCinemaVideoProviderID, setSavingCinemaVideoProviderID] = useState<string | null>(null)
   const [deletingProviderID, setDeletingProviderID] = useState<string | null>(null)
@@ -671,6 +675,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   const isPersistingSelectionRef = useRef(false)
   const builtinToolsRequestIDRef = useRef(0)
   const archivedSessionsRequestIDRef = useRef(0)
+  const storageUsageRequestIDRef = useRef(0)
   const mcpServersRequestIDRef = useRef(0)
   const mcpDiagnosticRequestIDRef = useRef<Record<string, number>>({})
   const connectorsRequestIDRef = useRef(0)
@@ -930,6 +935,33 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     } finally {
       if (archivedSessionsRequestIDRef.current === requestID) {
         setIsLoadingArchivedSessions(false)
+      }
+    }
+  }, [])
+
+  const loadStorageUsage = useCallback(async (optionsArg?: LoadSettingsOptions) => {
+    const requestID = ++storageUsageRequestIDRef.current
+    if (!optionsArg?.silent) {
+      setIsLoadingStorageUsage(true)
+    }
+    setStorageUsageError(null)
+
+    try {
+      const nextStorageUsage = await getStorageUsage()
+      if (storageUsageRequestIDRef.current !== requestID) return
+      if (!nextStorageUsage) {
+        setStorageUsage(null)
+        setStorageUsageError("Desktop storage usage APIs are unavailable.")
+        return
+      }
+      setStorageUsage(nextStorageUsage)
+    } catch (error) {
+      if (storageUsageRequestIDRef.current !== requestID) return
+      setStorageUsage(null)
+      setStorageUsageError(getErrorMessage(error))
+    } finally {
+      if (storageUsageRequestIDRef.current === requestID) {
+        setIsLoadingStorageUsage(false)
       }
     }
   }, [])
@@ -3561,6 +3593,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     try {
       const result = await restoreArchivedSessionApi({ sessionID })
       await loadArchivedSessions({ silent: true })
+      setStorageUsage(null)
       await notifyArchivedSessionRestored(result.session)
       showMessage({
         tone: "success",
@@ -3587,6 +3620,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     try {
       await deleteArchivedSessionApi({ sessionID })
       await loadArchivedSessions({ silent: true })
+      setStorageUsage(null)
       showMessage({
         tone: "success",
         text: "Archived session deleted.",
@@ -3614,6 +3648,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
         await deleteArchivedSessionApi({ sessionID })
       }
       await loadArchivedSessions({ silent: true })
+      setStorageUsage(null)
       showMessage({
         tone: "success",
         text: targetSessionIDs.length === 1
@@ -3623,6 +3658,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       return true
     } catch (error) {
       await loadArchivedSessions({ silent: true })
+      setStorageUsage(null)
       showMessage({
         tone: "error",
         text: getErrorMessage(error),
@@ -3823,6 +3859,10 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     startProviderAuthFlow,
     startNewMcpServer,
     restoreArchivedSession,
+    storageUsage,
+    storageUsageError,
     updatingPluginID,
+    loadStorageUsage,
+    isLoadingStorageUsage,
   }
 }

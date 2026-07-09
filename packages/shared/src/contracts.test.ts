@@ -49,6 +49,61 @@ describe("shared contracts", () => {
     expect(SessionEventSchema.parse({ event: "message", data: { text: "ok" }, id: "1" }).event).toBe("message")
   })
 
+  it("validates desktop storage usage snapshots", () => {
+    expect(
+      DesktopIpcSchemas.getStorageUsage.output.parse({
+        generatedAt: 1,
+        database: {
+          path: "/tmp/agent_local_data.db",
+          totalBytes: 4096,
+          mainBytes: 4096,
+          walBytes: 0,
+          shmBytes: 0,
+          pageSize: 4096,
+          pageCount: 1,
+          freelistBytes: 0,
+        },
+        categories: [
+          {
+            id: "archivedSessions",
+            label: "Archived sessions",
+            bytes: 128,
+            approximate: true,
+            count: 1,
+          },
+          {
+            id: "sqliteOverhead",
+            label: "SQLite overhead",
+            bytes: 3968,
+            approximate: true,
+          },
+        ],
+        archivedSessions: [
+          {
+            id: "session-1",
+            title: "Archived work",
+            projectID: "project-1",
+            projectName: null,
+            directory: "/tmp/project",
+            updated: 1,
+            archivedAt: 2,
+            messageCount: 3,
+            eventCount: 4,
+            estimatedBytes: 128,
+          },
+        ],
+        tables: [
+          {
+            name: "archived_sessions",
+            category: "archivedSessions",
+            rowCount: 1,
+            estimatedBytes: 128,
+          },
+        ],
+      }).database.pageSize,
+    ).toBe(4096)
+  })
+
   it("keeps provider reasoning effort differences explicit", () => {
     expect(getSupportedReasoningEfforts({
       providerID: "deepseek",

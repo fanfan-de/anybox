@@ -9324,6 +9324,7 @@ describe("App", () => {
       "Models",
       "Appearance",
       "Developer Mode",
+      "Storage",
       "Archived Sessions",
     ])
     expect(screen.getByText("Options")).toBeInTheDocument()

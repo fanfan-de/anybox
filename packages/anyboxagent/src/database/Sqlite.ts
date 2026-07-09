@@ -147,6 +147,10 @@ export function getDatabaseGeneration() {
   return activeDatabaseGeneration
 }
 
+export function getDatabaseFile() {
+  return path.resolve(resolveDatabaseFile())
+}
+
 export const db = new Proxy({} as Database, {
   get(_target, prop) {
     const database = getDatabase()

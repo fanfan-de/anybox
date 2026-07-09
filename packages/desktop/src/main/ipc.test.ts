@@ -1241,4 +1241,37 @@ describe("ipc composer pasted image helpers", () => {
     })
     expect(writeImageFile).toHaveBeenCalledWith(result[0], imageBuffer)
   })
+
+  it("saves image data URLs to a selected folder", async () => {
+    const imageBuffer = Buffer.from("downloaded-image")
+    const showOpenDialog = vi.fn().mockResolvedValue({
+      canceled: false,
+      filePaths: ["C:\\Pictures"],
+    })
+    const writeImageFile = vi.fn().mockResolvedValue(undefined)
+
+    const result = await internal.saveImageDataUrlToFolder(
+      {
+        dataUrl: `data:image/png;base64,${imageBuffer.toString("base64")}`,
+        mimeType: "image/png",
+        name: "cat photo.png",
+      },
+      {
+        downloadsPath: "C:\\Downloads",
+        now: new Date("2026-05-03T01:02:03.004Z"),
+        showOpenDialog,
+        writeImageFile,
+      },
+    )
+
+    expect(result).toEqual({
+      canceled: false,
+      path: expect.stringContaining("2026-05-03T01-02-03-004Z-cat-photo.png"),
+    })
+    expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({
+      buttonLabel: "Save Here",
+      properties: ["openDirectory", "createDirectory"],
+    }))
+    expect(writeImageFile).toHaveBeenCalledWith(result.canceled ? "" : result.path, imageBuffer)
+  })
 })

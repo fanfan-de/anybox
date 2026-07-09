@@ -1569,6 +1569,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     isLoadingPromptPreset,
     isLoadingPrompts,
     isLoadingArchivedSessions,
+    isLoadingStorageUsage,
     isOpen,
     isPromptDirty,
     isPromptUrlInstallDialogOpen,
@@ -1583,6 +1584,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     isSavingBuiltinTools,
     loadError,
     loadArchivedSessions,
+    loadStorageUsage,
     mcpServerDraft,
     mcpServers,
     models,
@@ -1617,6 +1619,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     resetPromptPreset,
     resettingPromptPresetID,
     restoringArchivedSessionID,
+    storageUsage,
+    storageUsageError,
     restoreArchivedSession,
     saveBuiltinTools,
     saveConnectorApiKey,
@@ -3135,6 +3139,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               isDeletingAllArchivedSessions={isDeletingAllArchivedSessions}
               isLoading={isLoading}
               isLoadingArchivedSessions={isLoadingArchivedSessions}
+              isLoadingStorageUsage={isLoadingStorageUsage}
               isOpen={isOpen}
               appUpdateState={appUpdateState}
               appUpdateStatus={appUpdateStatus}
@@ -3192,8 +3197,11 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onRefreshProviderCatalog={refreshProviderCatalog}
               onRefreshCinemaVideoProviderCatalog={refreshCinemaVideoProviderCatalog}
               onLoadArchivedSessions={loadArchivedSessions}
+              onLoadStorageUsage={loadStorageUsage}
               onOpenUpdateCenter={() => void handleOpenUpdateCenter()}
               onRestoreArchivedSession={restoreArchivedSession}
+              storageUsage={storageUsage}
+              storageUsageError={storageUsageError}
               onSaveMcpServer={saveMcpServer}
               onSaveProviderApiKey={saveProviderApiKey}
               onSaveCinemaVideoProviderApiKey={saveCinemaVideoProviderApiKey}

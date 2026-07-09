@@ -3,7 +3,7 @@ import type { ComponentProps } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { APPEARANCE_TOKEN_NAMES } from "../../../../shared/appearance"
 import type { AppearanceTheme } from "../../../../shared/appearance-themes"
-import type { DesktopAppUpdateState } from "../../../../shared/desktop-ipc-contract"
+import type { DesktopAppUpdateState, DesktopStorageUsageSnapshot } from "../../../../shared/desktop-ipc-contract"
 import { I18nProvider } from "../i18n/I18nProvider"
 import { DEFAULT_HTML_BACKGROUND_CONFIG } from "../html-background/html-background-config"
 import { DEFAULT_ASSISTANT_TRACE_VISIBILITY, type McpServerDraftState } from "../types"
@@ -100,6 +100,8 @@ function createSettingsPageProps(
     appearanceTokenValues: createAppearanceTokenValues(),
     archivedSessions: [],
     archivedSessionsError: null,
+    storageUsage: null,
+    storageUsageError: null,
     assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
     catalog: [],
     cinemaVideoProviders: [],
@@ -117,6 +119,7 @@ function createSettingsPageProps(
     isDeletingAllArchivedSessions: false,
     isLoading: false,
     isLoadingArchivedSessions: false,
+    isLoadingStorageUsage: false,
     isOpen: true,
     appUpdateState: createAppUpdateState(),
     appUpdateStatus: null,
@@ -163,6 +166,7 @@ function createSettingsPageProps(
     onMcpToolPolicyChange: vi.fn(),
     onMcpServerSelect: vi.fn(),
     onLoadArchivedSessions: vi.fn(),
+    onLoadStorageUsage: vi.fn(),
     onOpenUpdateCenter: vi.fn(),
     onRefreshProviderCatalog: vi.fn(),
     onRefreshCinemaVideoProviderCatalog: vi.fn(),
@@ -270,6 +274,7 @@ function createCinemaVideoProvider(
           aspectRatios: [],
           resolutions: [],
           pricing: [],
+          formSpecs: [],
           parameterSchema: {},
         },
       ],
@@ -427,6 +432,80 @@ function createArchivedSession(
     archivedAt: 3,
     messageCount: 4,
     eventCount: 5,
+    ...overrides,
+  }
+}
+
+function createStorageUsageSnapshot(overrides: Partial<DesktopStorageUsageSnapshot> = {}): DesktopStorageUsageSnapshot {
+  return {
+    generatedAt: 2,
+    database: {
+      path: "C:\\Users\\tester\\AppData\\Roaming\\Anybox\\agent\\data\\database\\agent_local_data.db",
+      totalBytes: 120 * 1024 * 1024,
+      mainBytes: 90 * 1024 * 1024,
+      walBytes: 28 * 1024 * 1024,
+      shmBytes: 2 * 1024 * 1024,
+      pageSize: 4096,
+      pageCount: 30720,
+      freelistBytes: 8 * 1024 * 1024,
+    },
+    categories: [
+      {
+        id: "archivedSessions",
+        label: "Archived sessions",
+        bytes: 12 * 1024 * 1024,
+        approximate: true,
+        count: 3,
+      },
+      {
+        id: "activeSessions",
+        label: "Active sessions",
+        bytes: 20 * 1024 * 1024,
+        approximate: true,
+        count: 2,
+      },
+      {
+        id: "otherDatabase",
+        label: "Other database",
+        bytes: 4 * 1024 * 1024,
+        approximate: true,
+        count: 12,
+      },
+      {
+        id: "sqliteOverhead",
+        label: "SQLite overhead",
+        bytes: 84 * 1024 * 1024,
+        approximate: true,
+      },
+    ],
+    archivedSessions: [
+      {
+        id: "session-archived-large",
+        title: "Large archived image thread",
+        projectID: "project-1",
+        projectName: "Project One",
+        directory: "C:\\Projects\\project-one",
+        updated: 1,
+        archivedAt: 2,
+        messageCount: 7,
+        eventCount: 80,
+        estimatedBytes: 10 * 1024 * 1024,
+      },
+    ],
+    tables: [
+      {
+        name: "archived_sessions",
+        category: "archivedSessions",
+        rowCount: 3,
+        estimatedBytes: 12 * 1024 * 1024,
+      },
+      {
+        name: "session_events",
+        category: "activeSessions",
+        rowCount: 40,
+        estimatedBytes: 8 * 1024 * 1024,
+      },
+    ],
     ...overrides,
   }
 }
@@ -1119,6 +1198,34 @@ describe("SettingsPage built-in tools", () => {
     expect(await screen.findByText("Application data")).toBeInTheDocument()
     expect(screen.getByText("Plugin install temp")).toBeInTheDocument()
     expect(screen.getByTitle("C:\\Users\\tester\\AppData\\Roaming\\anybox-desktop-agent")).toBeInTheDocument()
+  })
+
+  it("loads and renders the dedicated storage usage section", async () => {
+    const onLoadStorageUsage = vi.fn()
+
+    const { unmount } = render(<SettingsPage {...createSettingsPageProps({ onLoadStorageUsage })} />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Storage" }))
+
+    await waitFor(() => {
+      expect(onLoadStorageUsage).toHaveBeenCalledTimes(1)
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }))
+    expect(onLoadStorageUsage).toHaveBeenCalledTimes(2)
+    expect(screen.getByText("No storage snapshot yet")).toBeInTheDocument()
+    unmount()
+
+    const storageUsage = createStorageUsageSnapshot()
+    render(<SettingsPage {...createSettingsPageProps({ storageUsage, onLoadStorageUsage: vi.fn() })} />)
+    fireEvent.click(screen.getByRole("button", { name: "Storage" }))
+
+    expect(screen.getAllByText("Database file").length).toBeGreaterThan(0)
+    expect(screen.getByText("120 MB")).toBeInTheDocument()
+    expect(screen.getAllByText("About 12.0 MB").length).toBeGreaterThan(0)
+    expect(screen.getByText("Large archived image thread")).toBeInTheDocument()
+    expect(screen.getByText("archived_sessions")).toBeInTheDocument()
+    expect(screen.getByTitle(storageUsage.database.path)).toBeInTheDocument()
   })
 
   it("switches the display language from general settings", async () => {

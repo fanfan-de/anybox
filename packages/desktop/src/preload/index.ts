@@ -164,6 +164,8 @@ try {
       invokeDesktop("desktop:get-running-session-status") as Promise<DesktopRunningSessionStatus>,
     getStoragePaths: () =>
       invokeDesktop("desktop:get-storage-paths") as Promise<DesktopIpcOutput<"desktop:get-storage-paths">>,
+    getStorageUsage: () =>
+      invokeDesktop("desktop:get-storage-usage") as Promise<DesktopIpcOutput<"desktop:get-storage-usage">>,
     getWindowState: () =>
       invokeDesktop("desktop:get-window-state") as Promise<{
         isMaximized: boolean
@@ -283,6 +285,8 @@ try {
       invokeDesktop("desktop:save-composer-pasted-images", input) as Promise<string[]>,
     copyImageToClipboard: (input: DesktopIpcInput<"desktop:copy-image-to-clipboard">) =>
       invokeDesktop("desktop:copy-image-to-clipboard", input) as Promise<void>,
+    saveImageToFolder: (input: DesktopIpcInput<"desktop:save-image-to-folder">) =>
+      invokeDesktop("desktop:save-image-to-folder", input) as Promise<DesktopIpcOutput<"desktop:save-image-to-folder">>,
     capturePreviewScreenshot: (input: DesktopIpcInput<"desktop:capture-preview-screenshot">) =>
       invokeDesktop("desktop:capture-preview-screenshot", input) as Promise<DesktopIpcOutput<"desktop:capture-preview-screenshot">>,
     detectLocalPreviewServices: () =>

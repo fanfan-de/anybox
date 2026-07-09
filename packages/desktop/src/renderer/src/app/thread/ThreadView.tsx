@@ -12,6 +12,7 @@ import {
   CloseIcon,
   CopyIcon,
   DeleteIcon,
+  DownloadIcon,
   ExpandIcon,
   FileImageIcon,
   InfoIcon,
@@ -139,7 +140,8 @@ const TRACE_REASONING_PREVIEW_CHARACTER_LIMIT = 480
 const TRACE_PATCH_PREVIEW_CHARACTER_LIMIT = 20000
 const TRACE_PATCH_PREVIEW_LINE_LIMIT = 200
 const THREAD_COPY_CONTEXT_MENU_WIDTH = 184
-const THREAD_COPY_CONTEXT_MENU_HEIGHT = 82
+const THREAD_TEXT_CONTEXT_MENU_HEIGHT = 82
+const THREAD_IMAGE_CONTEXT_MENU_HEIGHT = 116
 
 interface LatestAssistantMessageState {
   id: string
@@ -174,7 +176,6 @@ interface ThreadTextCopyContextMenuState {
 interface ThreadImageCopyContextMenuState {
   target: "image"
   alt: string
-  address: string
   name: string
   src: string
   x: number
@@ -261,22 +262,22 @@ function isSidebarResizeInProgress() {
   return typeof document !== "undefined" && document.body.classList.contains("is-resizing-sidebar")
 }
 
-function clampThreadCopyContextMenuPosition(x: number, y: number) {
+function clampThreadCopyContextMenuPosition(x: number, y: number, height = THREAD_TEXT_CONTEXT_MENU_HEIGHT) {
   if (typeof window === "undefined") return { x, y }
 
   return {
     x: Math.min(Math.max(8, x), Math.max(8, window.innerWidth - THREAD_COPY_CONTEXT_MENU_WIDTH - 8)),
-    y: Math.min(Math.max(8, y), Math.max(8, window.innerHeight - THREAD_COPY_CONTEXT_MENU_HEIGHT - 8)),
+    y: Math.min(Math.max(8, y), Math.max(8, window.innerHeight - height - 8)),
   }
 }
 
-function getThreadCopyContextMenuCoordinates(event: ReactMouseEvent<HTMLElement>) {
+function getThreadCopyContextMenuCoordinates(event: ReactMouseEvent<HTMLElement>, height = THREAD_TEXT_CONTEXT_MENU_HEIGHT) {
   if (event.clientX || event.clientY) {
-    return clampThreadCopyContextMenuPosition(event.clientX, event.clientY)
+    return clampThreadCopyContextMenuPosition(event.clientX, event.clientY, height)
   }
 
   const rect = event.currentTarget.getBoundingClientRect()
-  return clampThreadCopyContextMenuPosition(rect.left + 12, rect.top + 12)
+  return clampThreadCopyContextMenuPosition(rect.left + 12, rect.top + 12, height)
 }
 
 function nodeIsInsideElement(node: Node | null, element: HTMLElement) {
@@ -361,20 +362,6 @@ function buildThreadImageAttachmentName(src: string, alt: string) {
   return altText || "thread-image"
 }
 
-function readThreadImageCopyAddress(src: string) {
-  try {
-    const parsed = new URL(src, typeof window === "undefined" ? undefined : window.location.href)
-    if (parsed.protocol === "anybox-local-image:") {
-      const source = parsed.searchParams.get("source")?.trim()
-      if (source) return source
-    }
-  } catch {
-    // Fall back to the browser image source below.
-  }
-
-  return src
-}
-
 function readThreadContextMenuImageTarget(
   event: ReactMouseEvent<HTMLElement>,
   threadColumn: HTMLDivElement,
@@ -389,11 +376,10 @@ function readThreadContextMenuImageTarget(
     if (!src) continue
 
     const alt = image.alt.trim() || image.getAttribute("aria-label")?.trim() || "Image"
-    const position = getThreadCopyContextMenuCoordinates(event)
+    const position = getThreadCopyContextMenuCoordinates(event, THREAD_IMAGE_CONTEXT_MENU_HEIGHT)
     return {
       target: "image",
       alt,
-      address: readThreadImageCopyAddress(src),
       name: buildThreadImageAttachmentName(src, alt),
       src,
       ...position,
@@ -410,6 +396,10 @@ function getThreadClipboardItemConstructor() {
 function canWriteThreadImageClipboard() {
   return Boolean(window.desktop?.copyImageToClipboard) ||
     (typeof navigator.clipboard?.write === "function" && typeof getThreadClipboardItemConstructor() === "function")
+}
+
+function canSaveThreadImageToFolder() {
+  return Boolean(window.desktop?.saveImageToFolder)
 }
 
 async function fetchThreadImageBlob(src: string) {
@@ -5074,13 +5064,21 @@ function VisibleThreadView({
     await onAddToComposer?.(menu.text)
   }
 
-  async function handleThreadCopyContextMenuCopyImageAddress(menu: ThreadImageCopyContextMenuState) {
+  async function handleThreadCopyContextMenuSaveImage(menu: ThreadImageCopyContextMenuState) {
     setThreadCopyContextMenu(null)
 
+    const saveImageToFolder = window.desktop?.saveImageToFolder
+    if (!saveImageToFolder) return
+
     try {
-      await writeTextToClipboard(menu.address)
+      const image = await createThreadImageComposerAttachment(menu)
+      await saveImageToFolder({
+        dataUrl: image.dataUrl,
+        mimeType: image.mimeType,
+        name: image.name,
+      })
     } catch (error) {
-      console.error("[desktop] Failed to copy thread image address:", error)
+      console.error("[desktop] Failed to save thread image:", error)
     }
   }
 
@@ -5349,17 +5347,17 @@ function VisibleThreadView({
                   {threadCopyContextMenu.target === "image" ? "复制图片" : "复制"}
                 </span>
               </button>
-              {threadCopyContextMenu.target === "image" ? (
+              {threadCopyContextMenu.target === "image" && canSaveThreadImageToFolder() ? (
                 <button
                   className="thread-copy-context-menu-item"
                   type="button"
                   role="menuitem"
-                  onClick={() => void handleThreadCopyContextMenuCopyImageAddress(threadCopyContextMenu)}
+                  onClick={() => void handleThreadCopyContextMenuSaveImage(threadCopyContextMenu)}
                 >
                   <span className="thread-copy-context-menu-icon" aria-hidden="true">
-                    <CopyIcon />
+                    <DownloadIcon />
                   </span>
-                  <span className="thread-copy-context-menu-label">复制图片地址</span>
+                  <span className="thread-copy-context-menu-label">保存图片</span>
                 </button>
               ) : null}
               {threadCopyContextMenu.target === "text" && onAddToComposer ? (

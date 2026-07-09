@@ -17,6 +17,7 @@ import {
   CloudCog,
   Code2,
   Copy,
+  Database,
   Download,
   Eye,
   EyeOff,
@@ -176,3 +177,4 @@ export const AccountSettingsIcon = createIcon(UserCircle)
 export const GeneralSettingsIcon = createIcon(SlidersHorizontal)
 export const ProviderSettingsIcon = createIcon(CloudCog)
 export const ModelSettingsIcon = createIcon(BrainCircuit)
+export const StorageSettingsIcon = createIcon(Database)

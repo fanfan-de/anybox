@@ -4929,27 +4929,39 @@ describe("ThreadView message actions", () => {
     }
   })
 
-  it("copies assistant response image addresses from the image context menu", async () => {
-    const previousClipboard = navigator.clipboard
-    const writeText = vi.fn().mockResolvedValue(undefined)
+  it("saves assistant response images to a selected folder from the image context menu", async () => {
+    const hadDesktop = "desktop" in window
+    const previousDesktop = window.desktop
+    const previousFetch = globalThis.fetch
+    const saveImageToFolder = vi.fn().mockResolvedValue({
+      canceled: false,
+      path: "C:\\Pictures\\cat.png",
+    })
+    const imageBlob = new Blob(["image-bytes"], { type: "image/png" })
+    const fetchMock = vi.fn(async () => new Response(imageBlob))
 
-    Object.defineProperty(navigator, "clipboard", {
+    Object.defineProperty(window, "desktop", {
       configurable: true,
-      value: { writeText },
+      value: {
+        saveImageToFolder,
+      },
+    })
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: fetchMock,
     })
 
     try {
-      const imagePath = "C:/Users/19128/AppData/Local/Temp/cat.png"
       const { getByAltText } = renderThread([
         assistantTraceMessage(
-          "assistant-image-address-copy",
+          "assistant-image-save",
           [
             {
-              id: "response-image-address-copy",
+              id: "response-image-save",
               kind: "text",
               timestamp: 1,
               label: "Assistant",
-              text: `Here is the image:\n\n![Local preview](${imagePath})`,
+              text: "Save this image:\n\n![Local preview](C:/Users/19128/AppData/Local/Temp/cat.png)",
               status: "completed",
             },
           ],
@@ -4960,15 +4972,29 @@ describe("ThreadView message actions", () => {
       fireEvent.contextMenu(getByAltText("Local preview"), { clientX: 120, clientY: 80 })
 
       const menu = screen.getByRole("menu", { name: "Thread image actions" })
-      fireEvent.click(within(menu).getByRole("menuitem", { name: "复制图片地址" }))
+      expect(within(menu).getAllByRole("menuitem")).toHaveLength(2)
+      fireEvent.click(within(menu).getByRole("menuitem", { name: "保存图片" }))
 
       await waitFor(() => {
-        expect(writeText).toHaveBeenCalledWith(imagePath)
+        expect(saveImageToFolder).toHaveBeenCalledWith({
+          dataUrl: expect.stringMatching(/^data:image\/png;base64,/),
+          mimeType: "image/png",
+          name: "cat.png",
+        })
       })
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("anybox-local-image://image?source="))
     } finally {
-      Object.defineProperty(navigator, "clipboard", {
+      if (hadDesktop) {
+        Object.defineProperty(window, "desktop", {
+          configurable: true,
+          value: previousDesktop,
+        })
+      } else {
+        Reflect.deleteProperty(window, "desktop")
+      }
+      Object.defineProperty(globalThis, "fetch", {
         configurable: true,
-        value: previousClipboard,
+        value: previousFetch,
       })
     }
   })
