@@ -566,6 +566,9 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   })
   const composerWorkflowBadge = !readOnlySideChat ? getSessionWorkflowBadge(pane.activeSession?.workflow) : null
   const composerCommandStatus = pane.tabKey ? composerCommandStatusByTabKey?.[pane.tabKey] ?? null : null
+  const addImageToComposerDisabledReason = composer.attachmentCapabilities.image
+    ? composer.attachmentDisabledReason
+    : composer.attachmentDisabledReason ?? "The current model does not support image input."
   const createSessionWorkflowBadge =
     pane.createSessionInitialWorkflowMode === "planning"
       ? getSessionWorkflowBadge({
@@ -886,6 +889,15 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                     })
                   }
                   onAddToComposer={handleAddTextToComposer}
+                  onAddImageToComposer={(images) =>
+                    onPasteComposerImageAttachments({
+                      allowImage: composer.attachmentCapabilities.image,
+                      disabledReason: composer.attachmentDisabledReason,
+                      images,
+                      tabKey: pane.tabKey,
+                    })
+                  }
+                  addImageToComposerDisabledReason={addImageToComposerDisabledReason}
                   onOpenSideChat={onOpenSideChat
                     ? (anchorMessageID) =>
                         void onOpenSideChat(anchorMessageID, {

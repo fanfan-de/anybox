@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -8,7 +9,9 @@ import {
   MiniMap,
   Position,
   ReactFlow,
+  useInternalNode,
   useReactFlow,
+  useViewport,
   type Connection,
   type Edge,
   type EdgeChange,
@@ -36,6 +39,7 @@ import {
   Loader2,
   MessageSquareText,
   Music,
+  Pause,
   PencilLine,
   Play,
   RefreshCw,
@@ -201,6 +205,7 @@ type CinemaFlowNodeData = {
   customApiError?: string | null
   onRunCustomApi?: (nodeID: string, request: CustomApiRunRequest) => Promise<CinemaCustomApiRunResult | undefined>
   onSaveCustomApiKey?: (nodeID: string, request: CustomApiAuthSaveRequest) => Promise<CinemaCustomApiAuthState | undefined>
+  nodeInputOverlayRoot?: HTMLElement | null
 }
 
 type CinemaFlowNode = Node<CinemaFlowNodeData, "cinemaNode">
@@ -275,17 +280,17 @@ const VIDEO_LOCAL_IMAGE_INPUT_SLOTS = [
 ] as const satisfies readonly VideoImageInputSlot[]
 
 const DEFAULT_NODE_SIZE: Record<CinemaNodeType, { width: number; height: number }> = {
-  text: { width: 380, height: 240 },
-  prompt: { width: 380, height: 240 },
-  image: { width: 420, height: 440 },
-  "local-image": { width: 340, height: 320 },
-  video: { width: 520, height: 560 },
-  audio: { width: 320, height: 180 },
-  shot: { width: 380, height: 250 },
-  agent: { width: 360, height: 220 },
-  "custom-api": { width: 540, height: 600 },
-  "generation-task": { width: 390, height: 240 },
-  output: { width: 360, height: 220 },
+  text: { width: 360, height: 188 },
+  prompt: { width: 340, height: 176 },
+  image: { width: 360, height: 320 },
+  "local-image": { width: 300, height: 280 },
+  video: { width: 420, height: 340 },
+  audio: { width: 300, height: 156 },
+  shot: { width: 340, height: 186 },
+  agent: { width: 320, height: 172 },
+  "custom-api": { width: 380, height: 210 },
+  "generation-task": { width: 340, height: 176 },
+  output: { width: 320, height: 172 },
 }
 
 const NODE_META: Record<CinemaNodeType, {
@@ -307,7 +312,7 @@ const NODE_META: Record<CinemaNodeType, {
     placeholder: "Prompt draft or reusable generation instruction.",
   },
   image: {
-    label: "Image Gen",
+    label: "Image",
     accent: "#f9a8d4",
     icon: Image,
     placeholder: "Describe the image you want to generate.",
@@ -444,6 +449,19 @@ function makeCommandID(type: CinemaCommand["type"]) {
 
 function titleForType(type: CinemaNodeType) {
   return `${NODE_META[type].label} ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function isDefaultGeneratedTitle(label: string, title: string) {
+  const normalizedTitle = title.trim()
+  const labels = label === "Image" ? [label, "Image Gen"] : [label]
+  return labels.some((candidate) => {
+    const pattern = new RegExp(`^${escapeRegExp(candidate)}\\s+\\d{1,2}:\\d{2}(?::\\d{2})?(?:\\s?[AP]M)?$`, "i")
+    return pattern.test(normalizedTitle)
+  })
 }
 
 function readRawString(rawData: Record<string, unknown>, key: string, fallback = "") {
@@ -1778,29 +1796,92 @@ function downloadTextFile(title: string, text: string) {
   URL.revokeObjectURL(url)
 }
 
+const NODE_INPUT_OVERLAY_GAP = 12
+
+function CinemaNodeInputOverlay({
+  nodeID,
+  selected,
+  overlayRoot,
+  width,
+  accentStyle,
+  children,
+}: {
+  nodeID: string
+  selected?: boolean
+  overlayRoot?: HTMLElement | null
+  width: number
+  accentStyle: CSSProperties
+  children: ReactNode
+}) {
+  const viewport = useViewport()
+  const internalNode = useInternalNode<CinemaFlowNode>(nodeID)
+
+  if (!selected || !overlayRoot || !internalNode) return null
+
+  const measuredWidth = internalNode.measured.width ?? internalNode.width ?? 0
+  const measuredHeight = internalNode.measured.height ?? internalNode.height ?? 0
+  if (measuredWidth <= 0 || measuredHeight <= 0) return null
+
+  const position = internalNode.internals.positionAbsolute
+  const left = viewport.x + (position.x + measuredWidth / 2) * viewport.zoom
+  const top = viewport.y + (position.y + measuredHeight) * viewport.zoom + NODE_INPUT_OVERLAY_GAP
+  const overlayStyle = {
+    ...accentStyle,
+    "--cinema-node-overlay-width": `${width}px`,
+    left,
+    top,
+  } as CSSProperties
+
+  return createPortal(
+    <div
+      className="cinema-node-overlay-panel"
+      style={overlayStyle}
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+      onWheel={(event) => event.stopPropagation()}
+    >
+      {children}
+    </div>,
+    overlayRoot,
+  )
+}
+
 function NodeTitleInput({
   nodeID,
   title,
   onChangeTitle,
+  autoFocus = false,
+  onFinishEditing,
 }: {
   nodeID: string
   title: string
   onChangeTitle?: (nodeID: string, title: string) => void
+  autoFocus?: boolean
+  onFinishEditing?: () => void
 }) {
+  const inputRef = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState(title)
 
   useEffect(() => {
     setDraft(title)
   }, [title])
 
+  useEffect(() => {
+    if (!autoFocus) return
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [autoFocus])
+
   const commitTitle = useCallback(() => {
     const nextTitle = draft.trim() || "Untitled Node"
     setDraft(nextTitle)
     if (nextTitle !== title) onChangeTitle?.(nodeID, nextTitle)
-  }, [draft, nodeID, onChangeTitle, title])
+    onFinishEditing?.()
+  }, [draft, nodeID, onChangeTitle, onFinishEditing, title])
 
   return (
     <input
+      ref={inputRef}
       className="cinema-node-title-input nodrag nowheel"
       aria-label="Node title"
       value={draft}
@@ -1814,8 +1895,9 @@ function NodeTitleInput({
           event.currentTarget.blur()
         }
         if (event.key === "Escape") {
+          event.preventDefault()
           setDraft(title)
-          event.currentTarget.blur()
+          onFinishEditing?.()
         }
       }}
       onChange={(event) => setDraft(event.target.value)}
@@ -1848,6 +1930,86 @@ function NodeDeleteButton({
     >
       <Trash2 size={13} aria-hidden="true" />
     </button>
+  )
+}
+
+function statusClassName(status: string) {
+  return status.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "unknown"
+}
+
+function NodeStatusDot({ status, label }: { status?: string | null; label?: string }) {
+  if (!status) return null
+  const normalizedStatus = statusClassName(status)
+  const statusLabel = label ?? status
+  return (
+    <span
+      className={`cinema-node-status-dot is-${normalizedStatus}`}
+      title={statusLabel}
+      aria-label={statusLabel}
+    >
+      <span>{statusLabel}</span>
+    </span>
+  )
+}
+
+function CinemaNodeTitle({
+  icon: Icon,
+  label,
+  nodeID,
+  title,
+  onChangeTitle,
+}: {
+  icon: typeof FileText
+  label: string
+  nodeID: string
+  title: string
+  onChangeTitle?: (nodeID: string, title: string) => void
+}) {
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const canEditTitle = Boolean(onChangeTitle)
+  const hasCustomTitle = !isDefaultGeneratedTitle(label, title)
+
+  const startEditingTitle = () => {
+    if (!canEditTitle) return
+    setIsEditingTitle(true)
+  }
+
+  return (
+    <span
+      className={`cinema-node-type ${canEditTitle ? "is-editable nodrag nowheel" : ""}`}
+      title={hasCustomTitle ? `${label} · ${title}` : `${label} · Double-click to rename`}
+      tabIndex={canEditTitle && !isEditingTitle ? 0 : undefined}
+      onDoubleClick={(event) => {
+        event.stopPropagation()
+        startEditingTitle()
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== "F2") return
+        event.preventDefault()
+        event.stopPropagation()
+        startEditingTitle()
+      }}
+    >
+      <Icon size={13} aria-hidden="true" />
+      <span className="cinema-node-kind">{label}</span>
+      {hasCustomTitle || isEditingTitle ? <span className="cinema-node-title-separator" aria-hidden="true">·</span> : null}
+      {isEditingTitle ? (
+        <NodeTitleInput
+          nodeID={nodeID}
+          title={title}
+          onChangeTitle={onChangeTitle}
+          autoFocus
+          onFinishEditing={() => setIsEditingTitle(false)}
+        />
+      ) : hasCustomTitle ? (
+        <span
+          className="cinema-node-title-text"
+          title={canEditTitle ? `${title} · Double-click to rename` : title}
+        >
+          {title}
+        </span>
+      ) : null}
+    </span>
   )
 }
 
@@ -2146,6 +2308,7 @@ function TextCanvasNode({
   }
   const hasPreviewText = textDraft.trim().length > 0
   const previewText = hasPreviewText ? textDraft : placeholder
+  const textStatus = data.isGeneratingText ? "generating" : data.textGenerationError ? "failed" : null
 
   return (
     <>
@@ -2161,11 +2324,15 @@ function TextCanvasNode({
         style={accentStyle}
       >
         <header className="cinema-node-header">
-          <span className="cinema-node-type">
-            <FileText size={14} aria-hidden="true" />
-            Text
-          </span>
+          <CinemaNodeTitle
+            icon={FileText}
+            label="Text"
+            nodeID={id}
+            title={data.title}
+            onChangeTitle={data.onChangeTitle}
+          />
           <div className="cinema-node-header-actions nodrag nowheel" role="toolbar" aria-label="Text node actions">
+            <NodeStatusDot status={textStatus} />
             {selected ? (
               <>
                 <button
@@ -2273,14 +2440,16 @@ function TextCanvasNode({
             </>
           )}
         </div>
-
-        <footer className="cinema-node-footer">
-          <NodeTitleInput nodeID={id} title={data.title} onChangeTitle={data.onChangeTitle} />
-          <span title={previewText}>{previewText}</span>
-        </footer>
       </article>
 
       {selected && isGeneratorOpen ? (
+        <CinemaNodeInputOverlay
+          nodeID={id}
+          selected={selected}
+          overlayRoot={data.nodeInputOverlayRoot}
+          width={560}
+          accentStyle={accentStyle}
+        >
         <section className="cinema-node-input-panel cinema-text-card-generator nodrag nowheel" aria-label="Text generation draft" style={accentStyle}>
           <header className="cinema-text-card-generator-header">
             <span>
@@ -2478,6 +2647,7 @@ function TextCanvasNode({
             </footer>
           </div>
         </section>
+        </CinemaNodeInputOverlay>
       ) : null}
 
       <Handle
@@ -2585,8 +2755,6 @@ function ImageGenerationCanvasNode({
   const selectedAsset = assets.find((asset) => asset.id === selectedAssetID) ?? assets[0] ?? null
   const status = data.isGeneratingImage ? "queued" : task?.status ?? readRawString(data.rawData, "status", "idle")
   const nodeError = data.imageGenerationError ?? task?.error ?? readRawString(data.rawData, "error")
-  const generatedAt = readRawString(data.rawData, "generatedAt") || task?.updatedAt || ""
-  const generatedLabel = formatTaskTimestamp(generatedAt)
   const progress = effectiveGenerationProgress({
     task,
     rawData: data.rawData,
@@ -2875,6 +3043,7 @@ function ImageGenerationCanvasNode({
       />
     )
   }
+  const imageStatus = data.isGeneratingImage ? "submitting" : isImageTaskActive ? "generating" : status
 
   return (
     <>
@@ -2890,14 +3059,15 @@ function ImageGenerationCanvasNode({
         style={accentStyle}
       >
         <header className="cinema-image-gen-header">
-          <span className="cinema-node-type">
-            <Image size={14} aria-hidden="true" />
-            <NodeTitleInput nodeID={id} title={data.title} onChangeTitle={data.onChangeTitle} />
-          </span>
+          <CinemaNodeTitle
+            icon={Image}
+            label="Image"
+            nodeID={id}
+            title={data.title}
+            onChangeTitle={data.onChangeTitle}
+          />
           <div className="cinema-node-header-actions">
-            <span className={`cinema-image-gen-status is-${isImageBusy ? "running" : status}`}>
-              {data.isGeneratingImage ? "submitting" : isImageTaskActive ? "generating" : status}
-            </span>
+            <NodeStatusDot status={imageStatus} />
             <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
           </div>
         </header>
@@ -2921,13 +3091,6 @@ function ImageGenerationCanvasNode({
 
         <GenerationProgress progress={progress} status={status} />
 
-        {selectedAsset || generatedLabel ? (
-          <div className="cinema-image-gen-meta">
-            {selectedAsset ? <span title={selectedAsset.path}>{selectedAsset.path}</span> : null}
-            {generatedLabel ? <time dateTime={generatedAt}>{generatedLabel}</time> : null}
-          </div>
-        ) : null}
-
         {assets.length > 1 ? (
           <div className="cinema-image-gen-thumbnails nodrag nowheel" aria-label="Generated image choices">
             {assets.map((asset) => {
@@ -2949,7 +3112,16 @@ function ImageGenerationCanvasNode({
           </div>
         ) : null}
 
-        {selected ? (
+      </article>
+
+      {selected ? (
+        <CinemaNodeInputOverlay
+          nodeID={id}
+          selected={selected}
+          overlayRoot={data.nodeInputOverlayRoot}
+          width={520}
+          accentStyle={accentStyle}
+        >
           <section className="cinema-node-input-panel cinema-image-gen-composer nodrag nowheel" aria-label="Image generation controls">
           {sourceTextParameters.length > 0 ? (
             <div className="cinema-image-gen-param-tags" aria-label="Connected text parameters">
@@ -3209,8 +3381,8 @@ function ImageGenerationCanvasNode({
             </p>
           ) : null}
           </section>
-        ) : null}
-      </article>
+        </CinemaNodeInputOverlay>
+      ) : null}
       <Handle
         id="output"
         type="source"
@@ -3234,6 +3406,7 @@ function VideoGenerationCanvasNode({
   accentStyle: CSSProperties
 }) {
   const promptRef = useRef<HTMLTextAreaElement>(null)
+  const videoPreviewRef = useRef<HTMLVideoElement>(null)
   const videoInputImageInputRef = useRef<HTMLInputElement>(null)
   const pendingVideoInputImageSlotRef = useRef<VideoImageInputSlot | null>(null)
   const rawDataRef = useRef(data.rawData)
@@ -3257,6 +3430,7 @@ function VideoGenerationCanvasNode({
   const [durationDraft, setDurationDraftState] = useState(() => String(readRawNumber(data.rawData, "duration", DEFAULT_VIDEO_DURATION_SECONDS)))
   const [resolutionDraft, setResolutionDraftState] = useState(() => readRawString(data.rawData, "resolution", DEFAULT_VIDEO_RESOLUTION))
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
+  const [isVideoPreviewPlaying, setIsVideoPreviewPlaying] = useState(false)
   const [videoInputImageImportError, setVideoInputImageImportError] = useState<string | null>(null)
   const [importingVideoInputImageSlot, setImportingVideoInputImageSlot] = useState<VideoImageInputSlot | null>(null)
   const promptDraftRef = useRef(promptDraft)
@@ -3362,6 +3536,7 @@ function VideoGenerationCanvasNode({
     message: nodeError,
     forceQueued: Boolean(data.isCreatingVideoTask),
   })
+  const shouldShowVideoProgress = Boolean(progress) && (isBusy || currentStatus === "failed" || currentStatus === "canceled")
   const submitDisabledReason = !selectedProvider
     ? "No available video provider."
     : !selectedModel
@@ -3566,6 +3741,24 @@ function VideoGenerationCanvasNode({
 
   useEffect(() => () => clearPromptCommitTimer(), [clearPromptCommitTimer])
 
+  useEffect(() => {
+    setIsVideoPreviewPlaying(false)
+  }, [previewSrc])
+
+  const toggleVideoPreviewPlayback = async () => {
+    const video = videoPreviewRef.current
+    if (!video) return
+    if (video.paused || video.ended) {
+      try {
+        await video.play()
+      } catch {
+        setIsVideoPreviewPlaying(false)
+      }
+      return
+    }
+    video.pause()
+  }
+
   const openVideoInputImagePicker = (slot: VideoImageInputSlot) => {
     if (!canImportVideoInputLocalImage(slot) || isBusy || importVideoInputImageMutation.isPending) return
     pendingVideoInputImageSlotRef.current = slot
@@ -3751,28 +3944,46 @@ function VideoGenerationCanvasNode({
       ))}
       <article className={`cinema-video-gen-node ${selected ? "is-selected" : ""}`} style={accentStyle}>
         <header className="cinema-video-gen-header">
-          <span className="cinema-node-type">
-            <Video size={14} aria-hidden="true" />
-            <NodeTitleInput nodeID={id} title={data.title} onChangeTitle={data.onChangeTitle} />
-          </span>
+          <CinemaNodeTitle
+            icon={Video}
+            label="Video"
+            nodeID={id}
+            title={data.title}
+            onChangeTitle={data.onChangeTitle}
+          />
           <div className="cinema-node-header-actions">
-            <span
-              className="cinema-video-gen-model-chip"
-              title={selectedProvider && selectedModel ? `${selectedProvider.manifest.name} / ${selectedModel.label}` : "No video model selected"}
-            >
-              {selectedModel?.label ?? "No model"}
-            </span>
-            <span className={`cinema-video-gen-status is-${currentStatus}`}>
-              {isBusy ? <Loader2 size={11} aria-hidden="true" className="is-spinning" /> : null}
-              {currentStatus}
-            </span>
+            <NodeStatusDot status={currentStatus} label={isBusy ? `${currentStatus} in progress` : currentStatus} />
             <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
           </div>
         </header>
 
         <section className={previewClassName} style={previewStyle} aria-label="Generated video preview">
           {previewSrc ? (
-            <video src={previewSrc} controls preload="metadata" />
+            <>
+              <video
+                ref={videoPreviewRef}
+                src={previewSrc}
+                controls
+                preload="metadata"
+                playsInline
+                onPlay={() => setIsVideoPreviewPlaying(true)}
+                onPause={() => setIsVideoPreviewPlaying(false)}
+                onEnded={() => setIsVideoPreviewPlaying(false)}
+              />
+              <button
+                type="button"
+                className={`cinema-video-preview-play nodrag nowheel ${isVideoPreviewPlaying ? "is-playing" : ""}`}
+                title={isVideoPreviewPlaying ? "Pause preview" : "Play preview"}
+                aria-label={isVideoPreviewPlaying ? "Pause preview" : "Play preview"}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  void toggleVideoPreviewPlayback()
+                }}
+              >
+                {isVideoPreviewPlaying ? <Pause size={18} aria-hidden="true" /> : <Play size={18} aria-hidden="true" />}
+              </button>
+            </>
           ) : (
             <div className="cinema-video-gen-empty">
               <Play size={26} aria-hidden="true" />
@@ -3787,9 +3998,18 @@ function VideoGenerationCanvasNode({
           ) : null}
         </section>
 
-        <GenerationProgress progress={progress} status={currentStatus} />
+        {shouldShowVideoProgress ? <GenerationProgress progress={progress} status={currentStatus} /> : null}
 
-        {selected ? (
+      </article>
+
+      {selected ? (
+        <CinemaNodeInputOverlay
+          nodeID={id}
+          selected={selected}
+          overlayRoot={data.nodeInputOverlayRoot}
+          width={640}
+          accentStyle={accentStyle}
+        >
           <section className="cinema-node-input-panel cinema-video-gen-composer nodrag nowheel" aria-label="Video generation controls">
           <div className="cinema-video-mode-tabs" role="tablist" aria-label="Video generation mode">
             {visibleModeContracts.map((contract) => (
@@ -4115,8 +4335,8 @@ function VideoGenerationCanvasNode({
           ) : null}
           </div>
           </section>
-        ) : null}
-      </article>
+        </CinemaNodeInputOverlay>
+      ) : null}
       <Handle
         id="output"
         type="source"
@@ -4149,12 +4369,6 @@ function LocalImageCanvasNode({
     ? { "--cinema-local-image-aspect-ratio": previewAspectRatio } as CSSProperties
     : undefined
   const fileName = readRawString(data.rawData, "sourceFileName", data.title)
-  const meta = asset
-    ? [
-      asset.width && asset.height ? `${asset.width}x${asset.height}` : "",
-      formatFileSize(asset.sizeBytes),
-    ].filter(Boolean).join(" · ")
-    : ""
 
   useEffect(() => {
     setHasPreviewError(false)
@@ -4174,10 +4388,13 @@ function LocalImageCanvasNode({
         style={accentStyle}
       >
         <header className="cinema-local-image-header">
-          <span className="cinema-node-type">
-            <Image size={14} aria-hidden="true" />
-            <NodeTitleInput nodeID={id} title={data.title} onChangeTitle={data.onChangeTitle} />
-          </span>
+          <CinemaNodeTitle
+            icon={Image}
+            label="Image"
+            nodeID={id}
+            title={data.title}
+            onChangeTitle={data.onChangeTitle}
+          />
           <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
         </header>
 
@@ -4196,13 +4413,6 @@ function LocalImageCanvasNode({
             </div>
           )}
         </section>
-
-        {asset ? (
-          <footer className="cinema-local-image-meta">
-            <span title={asset.path}>{asset.path}</span>
-            {meta ? <small>{meta}</small> : null}
-          </footer>
-        ) : null}
       </article>
       <Handle
         id="output"
@@ -4364,6 +4574,13 @@ function CustomApiCanvasNode({
       setLocalError(null)
     }
   }
+  const requestURL = urlDraft.trim()
+  const apiStatus = isBusy ? "running" : nodeError ? "failed" : status
+  const apiPreviewText = outputText
+    || outputImageUrl
+    || (outputJson !== undefined ? "JSON output ready" : "")
+    || requestURL
+    || "Configure a JSON POST endpoint."
 
   return (
     <>
@@ -4379,21 +4596,34 @@ function CustomApiCanvasNode({
         style={accentStyle}
       >
         <header className="cinema-node-header">
-          <span className="cinema-node-type">
-            <Server size={14} aria-hidden="true" />
-            <NodeTitleInput nodeID={id} title={data.title} onChangeTitle={data.onChangeTitle} />
-          </span>
+          <CinemaNodeTitle
+            icon={Server}
+            label="Custom API"
+            nodeID={id}
+            title={data.title}
+            onChangeTitle={data.onChangeTitle}
+          />
           <div className="cinema-node-header-actions">
-            <span className={`cinema-node-status is-${isBusy ? "running" : status}`}>
-              {isBusy ? "running" : status}
-            </span>
+            <NodeStatusDot status={apiStatus} />
             <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
           </div>
         </header>
 
+        <div className={`cinema-node-preview cinema-custom-api-preview ${outputText || outputImageUrl || outputJson !== undefined ? "has-output" : ""}`}>
+          <Code2 size={22} aria-hidden="true" />
+          <span title={apiPreviewText}>{apiPreviewText}</span>
+        </div>
+
         {selected ? (
-          <>
-            <section className="cinema-node-input-panel cinema-custom-api-inputs nodrag nowheel" aria-label={`${runtimeLabel} inputs`}>
+          <CinemaNodeInputOverlay
+            nodeID={id}
+            selected={selected}
+            overlayRoot={data.nodeInputOverlayRoot}
+            width={640}
+            accentStyle={accentStyle}
+          >
+            <section className="cinema-node-input-panel cinema-custom-api-editor nodrag nowheel" aria-label={`${runtimeLabel} editor`}>
+              <section className="cinema-custom-api-inputs" aria-label={`${runtimeLabel} inputs`}>
           <div className="cinema-custom-api-section-title">
             <Code2 size={13} aria-hidden="true" />
             <span>Inputs</span>
@@ -4451,9 +4681,9 @@ function CustomApiCanvasNode({
           }) : (
             <p className="cinema-custom-api-empty">No input fields.</p>
           )}
-            </section>
+              </section>
 
-        <section className="cinema-custom-api-config nodrag nowheel" aria-label={`${runtimeLabel} request configuration`}>
+        <section className="cinema-custom-api-config" aria-label={`${runtimeLabel} request configuration`}>
           <label className="cinema-custom-api-field">
             <span>URL</span>
             <input
@@ -4548,17 +4778,9 @@ function CustomApiCanvasNode({
             <span>Run</span>
           </button>
         </footer>
-          </>
-        ) : null}
-
-        {nodeError ? (
-          <p className="cinema-custom-api-error nodrag nowheel" role="alert" title={nodeError}>
-            {nodeError}
-          </p>
-        ) : null}
 
         {preview || outputText || outputImageUrl || outputJson !== undefined ? (
-          <section className="cinema-custom-api-output nodrag nowheel" aria-label={`${runtimeLabel} output`}>
+          <section className="cinema-custom-api-output" aria-label={`${runtimeLabel} output`}>
             {preview ? (
               <details>
                 <summary>Request preview</summary>
@@ -4574,6 +4796,15 @@ function CustomApiCanvasNode({
               </details>
             ) : null}
           </section>
+      ) : null}
+            </section>
+          </CinemaNodeInputOverlay>
+        ) : null}
+
+        {nodeError ? (
+          <p className="cinema-custom-api-error nodrag nowheel" role="alert" title={nodeError}>
+            {nodeError}
+          </p>
         ) : null}
       </article>
       <Handle
@@ -4632,22 +4863,21 @@ function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
         style={accentStyle}
       >
         <header className="cinema-node-header">
-          <span className="cinema-node-type">
-            <Icon size={14} aria-hidden="true" />
-            {meta.label}
-          </span>
+          <CinemaNodeTitle
+            icon={Icon}
+            label={meta.label}
+            nodeID={id}
+            title={data.title}
+            onChangeTitle={data.onChangeTitle}
+          />
           <div className="cinema-node-header-actions">
-            {status ? <span className="cinema-node-status">{status}</span> : null}
+            <NodeStatusDot status={status} />
             <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
           </div>
         </header>
-        <div className="cinema-node-preview">
-          <Icon size={28} aria-hidden="true" />
+        <div className="cinema-node-preview cinema-generic-node-preview">
+          <span title={text}>{text}</span>
         </div>
-        <footer className="cinema-node-footer">
-          <NodeTitleInput nodeID={id} title={data.title} onChangeTitle={data.onChangeTitle} />
-          <span>{text}</span>
-        </footer>
       </article>
       <Handle
         id="output"
@@ -4657,6 +4887,164 @@ function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
         style={accentStyle}
       />
     </>
+  )
+}
+
+type CinemaNodeInspectorRow = {
+  label: string
+  value: string
+  tone?: "danger" | "muted"
+  multiline?: boolean
+}
+
+function addInspectorRow(
+  rows: CinemaNodeInspectorRow[],
+  label: string,
+  value: string | number | null | undefined,
+  options: Pick<CinemaNodeInspectorRow, "tone" | "multiline"> = {},
+) {
+  const normalized = typeof value === "number" ? String(value) : value?.trim()
+  if (!normalized) return
+  rows.push({ label, value: normalized, ...options })
+}
+
+function nodeStyleNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+function formatAssetDimensions(asset: { width?: number; height?: number } | null | undefined) {
+  return asset?.width && asset.height ? `${asset.width} x ${asset.height}` : ""
+}
+
+function selectedAssetForInspector(node: CinemaFlowNode) {
+  if (node.data.cinemaType === "image") return selectedImageAssetForNode(node)
+  if (node.data.cinemaType === "local-image") return selectedLocalImageAssetForNode(node)
+  if (node.data.cinemaType === "video") return selectedVideoAssetForNode(node)
+  return null
+}
+
+function inspectorRowsForNode(node: CinemaFlowNode) {
+  const rows: CinemaNodeInspectorRow[] = []
+  const meta = NODE_META[node.data.cinemaType]
+  const rawData = node.data.rawData
+  const status = readRawString(rawData, "status")
+  const error = readRawString(rawData, "error")
+  const taskID = readRawString(rawData, "taskID")
+  const task = taskID ? node.data.generationTasks?.find((item) => item.id === taskID) ?? null : null
+  const nodeWidth = nodeStyleNumber(node.style?.width) ?? node.data.size?.width
+  const nodeHeight = nodeStyleNumber(node.style?.height) ?? node.data.size?.height
+  const selectedAsset = selectedAssetForInspector(node)
+
+  addInspectorRow(rows, "Type", meta.label)
+  addInspectorRow(rows, "Status", status)
+  addInspectorRow(rows, "Node ID", node.id)
+  addInspectorRow(rows, "Position", `${Math.round(node.position.x)}, ${Math.round(node.position.y)}`)
+  if (nodeWidth && nodeHeight) addInspectorRow(rows, "Node size", `${Math.round(nodeWidth)} x ${Math.round(nodeHeight)}`)
+
+  if (node.data.cinemaType === "text") {
+    const text = readRawString(rawData, "text")
+    const prompt = readRawString(rawData, "generationPrompt")
+    addInspectorRow(rows, "Text length", text ? `${text.length} chars` : "")
+    addInspectorRow(rows, "Prompt", prompt, { multiline: true })
+    addInspectorRow(rows, "Model", readRawString(rawData, "textModel"))
+  }
+
+  if (node.data.cinemaType === "image") {
+    addInspectorRow(rows, "Prompt", readRawString(rawData, "prompt"), { multiline: true })
+    addInspectorRow(rows, "Model", readRawString(rawData, "model"))
+    addInspectorRow(rows, "Requested size", readRawString(rawData, "size"))
+    addInspectorRow(rows, "Count", readRawNumber(rawData, "count", 0) || "")
+    addInspectorRow(rows, "Task ID", taskID)
+    addInspectorRow(rows, "Generated", formatTaskTimestamp(readRawString(rawData, "generatedAt") || task?.updatedAt))
+  }
+
+  if (node.data.cinemaType === "video") {
+    addInspectorRow(rows, "Prompt", readRawString(rawData, "text"), { multiline: true })
+    addInspectorRow(rows, "Provider", readRawString(rawData, "providerID"))
+    addInspectorRow(rows, "Model", readRawString(rawData, "modelID"))
+    addInspectorRow(rows, "Mode", readRawString(rawData, "mode") || readRawString(rawData, "inputCombinationMode"))
+    addInspectorRow(rows, "Aspect ratio", readRawString(rawData, "aspectRatio"))
+    addInspectorRow(rows, "Duration", readRawNumber(rawData, "duration", 0) ? `${readRawNumber(rawData, "duration", 0)}s` : "")
+    addInspectorRow(rows, "Resolution", readRawString(rawData, "resolution"))
+    addInspectorRow(rows, "Task ID", taskID)
+    addInspectorRow(rows, "Updated", formatTaskTimestamp(task?.updatedAt))
+  }
+
+  if (node.data.cinemaType === "local-image") {
+    addInspectorRow(rows, "Source file", readRawString(rawData, "sourceFileName"))
+  }
+
+  if (node.data.cinemaType === "custom-api") {
+    const request = readRawRecord(rawData, "request")
+    const auth = readRawRecord(rawData, "auth")
+    const inputSchema = readRawRecord(rawData, "inputSchema")
+    addInspectorRow(rows, "URL", readRawString(request, "url"), { multiline: true })
+    addInspectorRow(rows, "Auth", readRawString(auth, "type", "none"))
+    addInspectorRow(rows, "Timeout", readRawNumber(request, "timeoutMs", 30000) ? `${readRawNumber(request, "timeoutMs", 30000)}ms` : "")
+    addInspectorRow(rows, "Input fields", Object.keys(customApiSchemaProperties(inputSchema)).length)
+    addInspectorRow(rows, "Output text", readRawString(rawData, "outputText"), { multiline: true })
+    addInspectorRow(rows, "Output image", readRawString(rawData, "outputImageUrl"), { multiline: true })
+  }
+
+  if (selectedAsset) {
+    addInspectorRow(rows, "Asset path", selectedAsset.path, { multiline: true })
+    addInspectorRow(rows, "Dimensions", formatAssetDimensions(selectedAsset))
+    addInspectorRow(rows, "File size", formatFileSize(selectedAsset.sizeBytes))
+    addInspectorRow(rows, "MIME type", selectedAsset.mimeType)
+  }
+
+  addInspectorRow(rows, "Error", error, { tone: "danger", multiline: true })
+
+  return rows
+}
+
+function CinemaNodeInspectorPanel({
+  node,
+  onClose,
+}: {
+  node: CinemaFlowNode
+  onClose: () => void
+}) {
+  const meta = NODE_META[node.data.cinemaType]
+  const Icon = meta.icon
+  const rows = inspectorRowsForNode(node)
+
+  return (
+    <aside
+      className="cinema-node-inspector"
+      aria-label="Selected node details"
+      style={{ "--node-accent": meta.accent } as CSSProperties}
+    >
+      <header className="cinema-node-inspector-header">
+        <div>
+          <span>
+            <Icon size={13} aria-hidden="true" />
+            {meta.label}
+          </span>
+          <strong title={node.data.title}>{node.data.title}</strong>
+        </div>
+        <button
+          type="button"
+          className="cinema-file-icon-button"
+          title="Close details"
+          aria-label="Close details"
+          onClick={onClose}
+        >
+          <X size={15} aria-hidden="true" />
+        </button>
+      </header>
+      <dl className="cinema-node-inspector-list">
+        {rows.map((row) => (
+          <div
+            key={`${row.label}-${row.value}`}
+            className={`${row.multiline ? "is-multiline" : ""} ${row.tone === "danger" ? "is-danger" : ""}`}
+          >
+            <dt>{row.label}</dt>
+            <dd title={row.value}>{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </aside>
   )
 }
 
@@ -4935,6 +5323,7 @@ export function App() {
   const [edges, setEdges] = useState<Edge[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
   const [activeCanvasPanel, setActiveCanvasPanel] = useState<CanvasPanel | null>("files")
+  const [nodeInputOverlayRoot, setNodeInputOverlayRoot] = useState<HTMLDivElement | null>(null)
   const [saveState, setSaveState] = useState<SaveState>("idle")
   const [, setSaveError] = useState<string | null>(null)
   const [autoRefreshingTaskIDs, setAutoRefreshingTaskIDs] = useState<string[]>([])
@@ -5724,6 +6113,7 @@ export function App() {
   const renderedNodes = useMemo(
     () => nodes.map((node) => ({
       ...node,
+      selected: node.id === selectedNodeID,
       data: {
         ...node.data,
         onChangeRawData: (nodeID: string, rawData: Record<string, unknown>) => changeNode(nodeID, { rawData }),
@@ -5767,6 +6157,7 @@ export function App() {
           runCustomApiMutation.mutateAsync({ nodeID, request }),
         onSaveCustomApiKey: (nodeID: string, request: CustomApiAuthSaveRequest) =>
           saveCustomApiKeyMutation.mutateAsync({ nodeID, request }),
+        nodeInputOverlayRoot,
       },
     })),
     [
@@ -5786,6 +6177,7 @@ export function App() {
       imageGenerationNodeID,
       imageModels,
       nodes,
+      nodeInputOverlayRoot,
       projectID,
       providersQuery.data,
       runCustomApiMutation,
@@ -5794,9 +6186,14 @@ export function App() {
       textGenerationError,
       textGenerationNodeID,
       textModels,
+      selectedNodeID,
       videoGenerationError,
       videoGenerationNodeID,
     ],
+  )
+  const selectedNode = useMemo(
+    () => selectedNodeID ? renderedNodes.find((node) => node.id === selectedNodeID) ?? null : null,
+    [renderedNodes, selectedNodeID],
   )
 
   if (!projectID) {
@@ -5894,6 +6291,7 @@ export function App() {
               zoomable
             />
           </ReactFlow>
+          <div ref={setNodeInputOverlayRoot} className="cinema-node-overlay-root" />
           <ContextMenu
             menu={contextMenu}
             onAddNode={addNode}
@@ -5901,11 +6299,17 @@ export function App() {
             onClose={() => setContextMenu(null)}
             isImportingLocalImage={importLocalImageMutation.isPending}
           />
-          {activeCanvasPanel === "files" ? (
+          {activeCanvasPanel === "files" && !selectedNode ? (
             <ProjectFileBrowser
               projectID={projectID}
               agentBaseURL={agentBaseURL}
               onClose={() => setActiveCanvasPanel(null)}
+            />
+          ) : null}
+          {selectedNode ? (
+            <CinemaNodeInspectorPanel
+              node={selectedNode}
+              onClose={() => setSelectedNodeID(null)}
             />
           ) : null}
           <CanvasPanelNavigation

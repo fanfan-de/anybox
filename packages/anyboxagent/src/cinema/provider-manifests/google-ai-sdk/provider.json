@@ -1,0 +1,28 @@
+{
+  "id": "google-ai-sdk",
+  "name": "Google Gemini Image",
+  "description": "Google Nano Banana image generation models routed through a Cinema runtime adapter.",
+  "kind": "ai-sdk",
+  "baseURL": "https://generativelanguage.googleapis.com/v1beta",
+  "website": "https://ai.google.dev/",
+  "doc": "https://ai.google.dev/gemini-api/docs/image-generation?hl=zh-cn",
+  "regions": ["global"],
+  "authType": "api_key",
+  "catalogSource": "local-provider-manifest",
+  "credentialProviderID": "google",
+  "requiresCredential": true,
+  "connectionTest": {
+    "method": "GET",
+    "path": "/v1beta/models",
+    "auth": "query",
+    "apiKeyQueryParam": "key",
+    "expectedStatus": [200]
+  },
+  "models": {
+    "includes": [
+      "./models/gemini-3.1-flash-lite-image.json",
+      "./models/gemini-3.1-flash-image.json",
+      "./models/gemini-3-pro-image.json"
+    ]
+  }
+}

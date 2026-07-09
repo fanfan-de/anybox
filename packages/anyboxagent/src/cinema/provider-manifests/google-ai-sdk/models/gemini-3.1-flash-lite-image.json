@@ -1,0 +1,97 @@
+{
+  "id": "gemini-3.1-flash-lite-image",
+  "label": "Nano Banana 2 Lite",
+  "offeringID": "google-ai-sdk/nano-banana-2-lite",
+  "providerModelID": "gemini-3.1-flash-lite-image",
+  "catalogID": "google/gemini-3.1-flash-lite-image",
+  "family": "Nano Banana",
+  "lab": "google",
+  "baseModel": "google/gemini-3.1-flash-lite-image",
+  "endpointType": "google_interactions_image",
+  "modalities": {
+    "input": ["text", "image"],
+    "output": ["image", "text"]
+  },
+  "modes": ["omni-image"],
+  "aspectRatios": ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"],
+  "resolutions": ["1K"],
+  "maxReferenceImages": 14,
+  "requiresPublicInputURL": false,
+  "inputCombinations": [
+    {
+      "mode": "omni-image",
+      "label": "Generate or edit image",
+      "requiredModalities": ["text"],
+      "optionalModalities": ["image"],
+      "inputs": [
+        {
+          "role": "prompt",
+          "modality": "text",
+          "required": true,
+          "minCount": 1,
+          "maxCount": 1,
+          "maxLength": 32000,
+          "note": "Fast, low-cost image generation and lightweight image editing. Not recommended for multiple reference inputs or long multi-turn edits."
+        },
+        {
+          "role": "image_list",
+          "modality": "image",
+          "required": false,
+          "minCount": 0,
+          "maxCount": 14,
+          "apiField": "images",
+          "maxFileSizeMB": 10,
+          "supportedFormats": ["jpg", "jpeg", "png", "webp"],
+          "note": "Optional source or reference images. Google documents Lite as optimized for single-step, lower-resolution workflows."
+        },
+        {
+          "role": "aspect_ratio",
+          "modality": "parameter",
+          "required": false,
+          "minCount": 0,
+          "maxCount": 1,
+          "default": "1:1",
+          "options": ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"],
+          "apiField": "aspect_ratio"
+        },
+        {
+          "role": "image_size",
+          "modality": "parameter",
+          "required": false,
+          "minCount": 0,
+          "maxCount": 1,
+          "default": "1K",
+          "options": ["1K"],
+          "apiField": "image_size"
+        }
+      ]
+    }
+  ],
+  "pricing": [
+    {
+      "unit": "unknown",
+      "note": "Pricing should be checked against current Google Gemini API pricing before charging users."
+    }
+  ],
+  "sourceURL": "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite-image?hl=zh-cn",
+  "sourceCheckedAt": "2026-07-09",
+  "parameterSchema": {
+    "runtime": {
+      "adapter": "google-interactions-image",
+      "candidateAdapters": ["ai-sdk-language-image"],
+      "sdkPackage": "@ai-sdk/google",
+      "nativeSdkPackage": "@google/genai",
+      "invoke": "interactions.create",
+      "resultFiles": true,
+      "modelID": "gemini-3.1-flash-lite-image",
+      "providerModelRef": "google/gemini-3.1-flash-lite-image"
+    },
+    "responseFormat": {
+      "type": "image"
+    },
+    "references": [
+      "https://ai.google.dev/gemini-api/docs/image-generation?hl=zh-cn",
+      "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite-image?hl=zh-cn"
+    ]
+  }
+}

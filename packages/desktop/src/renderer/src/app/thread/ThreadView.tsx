@@ -13,6 +13,7 @@ import {
   CopyIcon,
   DeleteIcon,
   ExpandIcon,
+  FileImageIcon,
   InfoIcon,
   MinimizeIcon,
   PaperclipIcon,
@@ -109,6 +110,8 @@ interface ThreadViewProps {
   permissionRequestActionError: string | null
   permissionRequestActionRequestID: string | null
   onAddToComposer?: (text: string) => void | Promise<void>
+  onAddImageToComposer?: (images: ComposerPastedImageAttachment[]) => void | Promise<void>
+  addImageToComposerDisabledReason?: string | null
   sideChatCountsByAnchorMessageID: Record<string, number>
   sideChatSession?: SessionSummary | null
   scrollStateKey?: string | null
@@ -159,13 +162,27 @@ interface ActiveImagePreview extends ImagePreviewPayload {
   openedAt: number
 }
 
-interface ThreadCopyContextMenuState {
+interface ThreadTextCopyContextMenuState {
+  target: "text"
   kind: ThreadCopyContextMenuKind
   messageID: string | null
   text: string
   x: number
   y: number
 }
+
+interface ThreadImageCopyContextMenuState {
+  target: "image"
+  alt: string
+  name: string
+  src: string
+  x: number
+  y: number
+}
+
+type ThreadClipboardItemConstructor = new (items: Record<string, Blob>) => ClipboardItem
+
+type ThreadCopyContextMenuState = ThreadTextCopyContextMenuState | ThreadImageCopyContextMenuState
 
 function clampImageZoom(value: number) {
   return Math.min(IMAGE_LIGHTBOX_MAX_ZOOM, Math.max(IMAGE_LIGHTBOX_MIN_ZOOM, Math.round(value * 100) / 100))
@@ -297,6 +314,139 @@ function readSelectedThreadText(threadColumn: HTMLDivElement) {
   if (!selectionIntersectsThreadElement(selection, threadColumn)) return ""
 
   return selectedText
+}
+
+function getThreadContextMenuEventPath(event: ReactMouseEvent<HTMLElement>) {
+  return typeof event.nativeEvent.composedPath === "function"
+    ? event.nativeEvent.composedPath()
+    : [event.target]
+}
+
+function readThreadImageSourceName(src: string) {
+  try {
+    const parsed = new URL(src, typeof window === "undefined" ? undefined : window.location.href)
+    const source = parsed.searchParams.get("source") || parsed.pathname
+    const decodedSource = decodeURIComponent(source)
+    return decodedSource.split(/[\\/]/).filter(Boolean).pop()?.trim() || null
+  } catch {
+    return null
+  }
+}
+
+function guessImageMimeTypeFromSource(src: string) {
+  const dataUrlMatch = /^data:(image\/[a-z0-9.+-]+)[;,]/i.exec(src.trim())
+  if (dataUrlMatch) return dataUrlMatch[1].toLowerCase()
+
+  const sourceName = readThreadImageSourceName(src)?.toLowerCase() ?? src.toLowerCase()
+  if (sourceName.endsWith(".jpg") || sourceName.endsWith(".jpeg")) return "image/jpeg"
+  if (sourceName.endsWith(".png")) return "image/png"
+  if (sourceName.endsWith(".gif")) return "image/gif"
+  if (sourceName.endsWith(".webp")) return "image/webp"
+  if (sourceName.endsWith(".bmp")) return "image/bmp"
+  if (sourceName.endsWith(".svg")) return "image/svg+xml"
+  return null
+}
+
+function normalizeThreadImageMimeType(value: string | null | undefined) {
+  const mimeType = value?.trim().toLowerCase()
+  return mimeType?.startsWith("image/") ? mimeType : null
+}
+
+function buildThreadImageAttachmentName(src: string, alt: string) {
+  const sourceName = readThreadImageSourceName(src)
+  if (sourceName) return sourceName
+
+  const altText = alt.trim()
+  return altText || "thread-image"
+}
+
+function readThreadContextMenuImageTarget(
+  event: ReactMouseEvent<HTMLElement>,
+  threadColumn: HTMLDivElement,
+): ThreadImageCopyContextMenuState | null {
+  for (const target of getThreadContextMenuEventPath(event)) {
+    if (!(target instanceof Element)) continue
+
+    const image = target.closest<HTMLImageElement>("img")
+    if (!image || !threadColumn.contains(image)) continue
+
+    const src = (image.currentSrc || image.getAttribute("src") || image.src || "").trim()
+    if (!src) continue
+
+    const alt = image.alt.trim() || image.getAttribute("aria-label")?.trim() || "Image"
+    const position = getThreadCopyContextMenuCoordinates(event)
+    return {
+      target: "image",
+      alt,
+      name: buildThreadImageAttachmentName(src, alt),
+      src,
+      ...position,
+    }
+  }
+
+  return null
+}
+
+function getThreadClipboardItemConstructor() {
+  return (globalThis as typeof globalThis & { ClipboardItem?: ThreadClipboardItemConstructor }).ClipboardItem
+}
+
+function canWriteThreadImageClipboard() {
+  return typeof navigator.clipboard?.write === "function" && typeof getThreadClipboardItemConstructor() === "function"
+}
+
+async function fetchThreadImageBlob(src: string) {
+  const response = await fetch(src)
+  if (!response.ok) {
+    throw new Error(`Image request failed with status ${String(response.status)}.`)
+  }
+
+  const blob = await response.blob()
+  if (blob.size === 0) {
+    throw new Error("Image data is empty.")
+  }
+
+  const mimeType = normalizeThreadImageMimeType(blob.type) ?? guessImageMimeTypeFromSource(src) ?? "image/png"
+  return blob.type === mimeType ? blob : new Blob([blob], { type: mimeType })
+}
+
+function readThreadImageBlobAsDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read image data."))
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        reject(new Error("Image data could not be converted to a data URL."))
+        return
+      }
+
+      resolve(reader.result)
+    }
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function writeThreadImageToClipboard(menu: ThreadImageCopyContextMenuState) {
+  const ClipboardItemConstructor = getThreadClipboardItemConstructor()
+  if (typeof navigator.clipboard?.write !== "function" || !ClipboardItemConstructor) {
+    throw new Error("Image clipboard writes are not available.")
+  }
+
+  const blob = await fetchThreadImageBlob(menu.src)
+  await navigator.clipboard.write([
+    new ClipboardItemConstructor({
+      [blob.type]: blob,
+    }),
+  ])
+}
+
+async function createThreadImageComposerAttachment(menu: ThreadImageCopyContextMenuState): Promise<ComposerPastedImageAttachment> {
+  const blob = await fetchThreadImageBlob(menu.src)
+  return {
+    dataUrl: await readThreadImageBlobAsDataUrl(blob),
+    mimeType: normalizeThreadImageMimeType(blob.type) ?? "image/png",
+    name: menu.name,
+  }
 }
 
 function CollapsibleUserMessageText({
@@ -1568,6 +1718,9 @@ export function SideChatThread({
     () => [...pendingInputs].sort((left, right) => left.createdAt - right.createdAt),
     [pendingInputs],
   )
+  const addImageToComposerDisabledReason = composer.attachmentCapabilities.image
+    ? composer.attachmentDisabledReason
+    : composer.attachmentDisabledReason ?? "The current model does not support image input."
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -1679,6 +1832,14 @@ export function SideChatThread({
 
   function handleAddTextToComposer(text: string) {
     onDraftStateChange(appendTextToComposerDraftState(draftState, text))
+  }
+
+  async function handleAddImageToComposer(images: ComposerPastedImageAttachment[]) {
+    await onPasteImageAttachments?.({
+      allowImage: composer.attachmentCapabilities.image,
+      disabledReason: composer.attachmentDisabledReason,
+      images,
+    })
   }
 
   return (
@@ -1795,6 +1956,8 @@ export function SideChatThread({
             onArtifactLinkOpen={onArtifactLinkOpen}
             onLocalFileLinkOpen={onLocalFileLinkOpen}
             onAddToComposer={handleAddTextToComposer}
+            onAddImageToComposer={onPasteImageAttachments ? handleAddImageToComposer : undefined}
+            addImageToComposerDisabledReason={addImageToComposerDisabledReason}
             onPermissionRequestResponse={onPermissionRequestResponse}
           />
         ) : null}
@@ -4366,6 +4529,10 @@ function getThreadViewPropsChangeReason(left: ThreadViewProps, right: ThreadView
   if (!areArraysShallowEqual(left.pendingPermissionRequests, right.pendingPermissionRequests)) return "pendingPermissionRequests"
   if (left.permissionRequestActionError !== right.permissionRequestActionError) return "permissionRequestActionError"
   if (left.permissionRequestActionRequestID !== right.permissionRequestActionRequestID) return "permissionRequestActionRequestID"
+  if (Boolean(left.onAddImageToComposer) !== Boolean(right.onAddImageToComposer)) return "onAddImageToComposer"
+  if (left.addImageToComposerDisabledReason !== right.addImageToComposerDisabledReason) {
+    return "addImageToComposerDisabledReason"
+  }
   if (!areRecordValuesEqual(left.sideChatCountsByAnchorMessageID, right.sideChatCountsByAnchorMessageID, Object.is)) {
     return "sideChatCountsByAnchorMessageID"
   }
@@ -4412,6 +4579,8 @@ function VisibleThreadView({
   onMessageDiffRestore,
   onMessageDiffReview,
   onAddToComposer,
+  onAddImageToComposer,
+  addImageToComposerDisabledReason = null,
   onAskUserQuestionAnswer,
   pendingConversationInputs = [],
   pendingPermissionRequests,
@@ -4692,6 +4861,14 @@ function VisibleThreadView({
     const threadColumn = threadColumnRef.current
     if (!threadColumn) return
 
+    const imageTarget = readThreadContextMenuImageTarget(event, threadColumn)
+    if (imageTarget) {
+      event.preventDefault()
+      event.stopPropagation()
+      setThreadCopyContextMenu(imageTarget)
+      return
+    }
+
     const selectedText = readSelectedThreadText(threadColumn)
     const position = getThreadCopyContextMenuCoordinates(event)
 
@@ -4699,6 +4876,7 @@ function VisibleThreadView({
       event.preventDefault()
       event.stopPropagation()
       setThreadCopyContextMenu({
+        target: "text",
         kind: "selection",
         messageID: null,
         text: selectedText,
@@ -4708,10 +4886,7 @@ function VisibleThreadView({
     }
 
     let messageElement: HTMLElement | null = null
-    const eventPath = typeof event.nativeEvent.composedPath === "function"
-      ? event.nativeEvent.composedPath()
-      : [event.target]
-    for (const target of eventPath) {
+    for (const target of getThreadContextMenuEventPath(event)) {
       if (!(target instanceof Element)) continue
       const candidate = target.closest<HTMLElement>("[data-thread-message-id][data-thread-row-kind]")
       if (candidate && threadColumn.contains(candidate)) {
@@ -4729,6 +4904,7 @@ function VisibleThreadView({
       event.preventDefault()
       event.stopPropagation()
       setThreadCopyContextMenu({
+        target: "text",
         kind: "user",
         messageID,
         text: userText,
@@ -4742,6 +4918,7 @@ function VisibleThreadView({
       event.preventDefault()
       event.stopPropagation()
       setThreadCopyContextMenu({
+        target: "text",
         kind: "assistant",
         messageID,
         text: assistantText,
@@ -4752,6 +4929,15 @@ function VisibleThreadView({
 
   async function handleThreadCopyContextMenuCopy(menu: ThreadCopyContextMenuState) {
     setThreadCopyContextMenu(null)
+
+    if (menu.target === "image") {
+      try {
+        await writeThreadImageToClipboard(menu)
+      } catch (error) {
+        console.error("[desktop] Failed to copy thread image:", error)
+      }
+      return
+    }
 
     if (menu.kind === "selection") {
       await handleCopySelectedThreadText(menu.text)
@@ -4770,6 +4956,19 @@ function VisibleThreadView({
 
   async function handleThreadCopyContextMenuAddToComposer(menu: ThreadCopyContextMenuState) {
     setThreadCopyContextMenu(null)
+
+    if (menu.target === "image") {
+      if (!onAddImageToComposer || addImageToComposerDisabledReason) return
+
+      try {
+        const image = await createThreadImageComposerAttachment(menu)
+        await onAddImageToComposer([image])
+      } catch (error) {
+        console.error("[desktop] Failed to add thread image to composer:", error)
+      }
+      return
+    }
+
     await onAddToComposer?.(menu.text)
   }
 
@@ -5015,7 +5214,7 @@ function VisibleThreadView({
               ref={threadCopyContextMenuRef}
               className="thread-copy-context-menu"
               role="menu"
-              aria-label="Thread copy actions"
+              aria-label={threadCopyContextMenu.target === "image" ? "Thread image actions" : "Thread copy actions"}
               style={{ left: threadCopyContextMenu.x, top: threadCopyContextMenu.y }}
               onContextMenu={(event) => event.preventDefault()}
             >
@@ -5023,14 +5222,22 @@ function VisibleThreadView({
                 className="thread-copy-context-menu-item"
                 type="button"
                 role="menuitem"
+                disabled={threadCopyContextMenu.target === "image" && !canWriteThreadImageClipboard()}
+                title={
+                  threadCopyContextMenu.target === "image" && !canWriteThreadImageClipboard()
+                    ? "Image clipboard writes are not available."
+                    : undefined
+                }
                 onClick={() => void handleThreadCopyContextMenuCopy(threadCopyContextMenu)}
               >
                 <span className="thread-copy-context-menu-icon" aria-hidden="true">
                   <CopyIcon />
                 </span>
-                <span className="thread-copy-context-menu-label">复制</span>
+                <span className="thread-copy-context-menu-label">
+                  {threadCopyContextMenu.target === "image" ? "复制图片" : "复制"}
+                </span>
               </button>
-              {onAddToComposer ? (
+              {threadCopyContextMenu.target === "text" && onAddToComposer ? (
                 <button
                   className="thread-copy-context-menu-item"
                   type="button"
@@ -5039,6 +5246,21 @@ function VisibleThreadView({
                 >
                   <span className="thread-copy-context-menu-icon" aria-hidden="true">
                     <PlusIcon />
+                  </span>
+                  <span className="thread-copy-context-menu-label">加入 Composer</span>
+                </button>
+              ) : null}
+              {threadCopyContextMenu.target === "image" && onAddImageToComposer ? (
+                <button
+                  className="thread-copy-context-menu-item"
+                  type="button"
+                  role="menuitem"
+                  disabled={Boolean(addImageToComposerDisabledReason)}
+                  title={addImageToComposerDisabledReason ?? undefined}
+                  onClick={() => void handleThreadCopyContextMenuAddToComposer(threadCopyContextMenu)}
+                >
+                  <span className="thread-copy-context-menu-icon" aria-hidden="true">
+                    <FileImageIcon />
                   </span>
                   <span className="thread-copy-context-menu-label">加入 Composer</span>
                 </button>

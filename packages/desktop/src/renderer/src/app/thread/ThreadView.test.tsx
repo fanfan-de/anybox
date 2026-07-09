@@ -4728,6 +4728,140 @@ describe("ThreadView message actions", () => {
     })
   })
 
+  it("copies assistant response images from the image context menu", async () => {
+    const previousClipboard = navigator.clipboard
+    const previousClipboardItem = globalThis.ClipboardItem
+    const hadClipboardItem = "ClipboardItem" in globalThis
+    const previousFetch = globalThis.fetch
+    const write = vi.fn().mockResolvedValue(undefined)
+    const clipboardItems: Array<Record<string, Blob>> = []
+    const imageBlob = new Blob(["image-bytes"], { type: "image/png" })
+    const fetchMock = vi.fn(async () => new Response(imageBlob))
+
+    class TestClipboardItem {
+      constructor(items: Record<string, Blob>) {
+        clipboardItems.push(items)
+      }
+    }
+
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { write },
+    })
+    Object.defineProperty(globalThis, "ClipboardItem", {
+      configurable: true,
+      value: TestClipboardItem,
+    })
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: fetchMock,
+    })
+
+    try {
+      const { getByAltText } = renderThread([
+        assistantTraceMessage(
+          "assistant-image-context-copy",
+          [
+            {
+              id: "response-image-context-copy",
+              kind: "text",
+              timestamp: 1,
+              label: "Assistant",
+              text: "Here is the image:\n\n![Local preview](C:/Users/19128/AppData/Local/Temp/cat.png)",
+              status: "completed",
+            },
+          ],
+          false,
+        ),
+      ])
+
+      fireEvent.contextMenu(getByAltText("Local preview"), { clientX: 120, clientY: 80 })
+
+      const menu = screen.getByRole("menu", { name: "Thread image actions" })
+      expect(within(menu).queryByRole("menuitem", { name: "复制" })).not.toBeInTheDocument()
+      fireEvent.click(within(menu).getByRole("menuitem", { name: "复制图片" }))
+
+      await waitFor(() => {
+        expect(write).toHaveBeenCalledTimes(1)
+      })
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("anybox-local-image://image?source="))
+      const copiedBlob = clipboardItems[0]?.["image/png"]
+      expect(copiedBlob).toBeDefined()
+      expect(copiedBlob?.type).toBe("image/png")
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: previousClipboard,
+      })
+      if (hadClipboardItem) {
+        Object.defineProperty(globalThis, "ClipboardItem", {
+          configurable: true,
+          value: previousClipboardItem,
+        })
+      } else {
+        Reflect.deleteProperty(globalThis, "ClipboardItem")
+      }
+      Object.defineProperty(globalThis, "fetch", {
+        configurable: true,
+        value: previousFetch,
+      })
+    }
+  })
+
+  it("adds assistant response images to the composer from the image context menu", async () => {
+    const previousFetch = globalThis.fetch
+    const onAddImageToComposer = vi.fn().mockResolvedValue(undefined)
+    const imageBlob = new Blob(["image-bytes"], { type: "image/png" })
+    const fetchMock = vi.fn(async () => new Response(imageBlob))
+
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: fetchMock,
+    })
+
+    try {
+      const { getByAltText } = renderThread(
+        [
+          assistantTraceMessage(
+            "assistant-image-compose",
+            [
+              {
+                id: "response-image-compose",
+                kind: "text",
+                timestamp: 1,
+                label: "Assistant",
+                text: "Composer image:\n\n![Local preview](C:/Users/19128/AppData/Local/Temp/cat.png)",
+                status: "completed",
+              },
+            ],
+            false,
+          ),
+        ],
+        { onAddImageToComposer },
+      )
+
+      fireEvent.contextMenu(getByAltText("Local preview"), { clientX: 90, clientY: 50 })
+
+      const menu = screen.getByRole("menu", { name: "Thread image actions" })
+      fireEvent.click(within(menu).getByRole("menuitem", { name: "加入 Composer" }))
+
+      await waitFor(() => {
+        expect(onAddImageToComposer).toHaveBeenCalledWith([
+          expect.objectContaining({
+            dataUrl: expect.stringMatching(/^data:image\/png;base64,/),
+            mimeType: "image/png",
+            name: "cat.png",
+          }),
+        ])
+      })
+    } finally {
+      Object.defineProperty(globalThis, "fetch", {
+        configurable: true,
+        value: previousFetch,
+      })
+    }
+  })
+
   it("only exposes branch controls on the final assistant message in a user message", () => {
     const onBranchSelect = vi.fn()
     const onForkFromMessage = vi.fn()

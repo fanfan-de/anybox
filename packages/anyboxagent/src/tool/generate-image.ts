@@ -9,6 +9,22 @@ import * as Tool from "#tool/tool.ts"
 import * as ImageAssets from "#session/support/image-assets.ts"
 
 const ImageSize = z.string().regex(/^\d+x\d+$/, "size must use the format WIDTHxHEIGHT, for example 1024x1024")
+const GOOGLE_GEMINI_IMAGE_ASPECT_RATIOS = new Set([
+  "1:1",
+  "2:3",
+  "3:2",
+  "3:4",
+  "4:3",
+  "4:5",
+  "5:4",
+  "9:16",
+  "16:9",
+  "21:9",
+  "1:8",
+  "8:1",
+  "1:4",
+  "4:1",
+])
 
 const GenerateImageParameters = z.object({
   prompt: z.string().min(1).max(4000).describe("Text prompt describing the image to generate."),
@@ -30,6 +46,25 @@ function normalizePrompt(prompt: string, style?: string) {
 
 function imageModelLabel(ref: ModelReference) {
   return `${ref.providerID}/${ref.modelID}`
+}
+
+function isGoogleGeminiImageModel(ref: ModelReference) {
+  return ref.providerID === "google" && ref.modelID.startsWith("gemini-")
+}
+
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b)
+}
+
+function aspectRatioFromSize(size: `${number}x${number}` | undefined): `${number}:${number}` | undefined {
+  if (!size) return undefined
+  const [widthValue, heightValue] = size.split("x")
+  const width = Number(widthValue)
+  const height = Number(heightValue)
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return undefined
+  const divisor = gcd(width, height)
+  const aspectRatio = `${width / divisor}:${height / divisor}`
+  return GOOGLE_GEMINI_IMAGE_ASPECT_RATIOS.has(aspectRatio) ? (aspectRatio as `${number}:${number}`) : undefined
 }
 
 export const GenerateImageTool = Tool.define(
@@ -56,11 +91,14 @@ export const GenerateImageTool = Tool.define(
         const prompt = normalizePrompt(parameters.prompt, parameters.style)
         const count = parameters.count ?? defaults.default_count ?? 1
         const size = (parameters.size ?? defaults.default_size) as `${number}x${number}` | undefined
+        const useAspectRatio = isGoogleGeminiImageModel(imageModelRef)
+        const aspectRatio = useAspectRatio ? aspectRatioFromSize(size) : undefined
         const result = await generateImage({
           model: imageModel,
           prompt,
           n: count,
-          ...(size ? { size } : {}),
+          ...(size && !useAspectRatio ? { size } : {}),
+          ...(aspectRatio ? { aspectRatio } : {}),
           abortSignal: ctx.abort,
           maxRetries: 0,
         })
