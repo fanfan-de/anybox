@@ -1024,6 +1024,180 @@ describe("cinema api", () => {
     }
   })
 
+  test("normalizes legacy image nodes on read and persists canonical data on the next write", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    const uploadedAsset: CinemaGeneratedAsset = {
+      id: "upload-1",
+      kind: "image",
+      path: "assets/imported/upload.png",
+      mimeType: "image/png",
+      width: 640,
+      height: 480,
+    }
+    const generatedAssets: CinemaGeneratedAsset[] = [
+      {
+        id: "generated-1",
+        kind: "image",
+        path: "generated/images/image-gen/generated-1.png",
+        mimeType: "image/png",
+      },
+      {
+        id: "generated-2",
+        kind: "image",
+        path: "generated/images/image-gen/generated-2.png",
+        mimeType: "image/png",
+      },
+    ]
+    const canonicalAsset: CinemaGeneratedAsset = {
+      id: "canonical-image",
+      kind: "image",
+      path: "assets/imported/canonical.png",
+      mimeType: "image/png",
+    }
+
+    try {
+      const project = await createProject(app, root)
+      const legacyCanvas = createCanvas()
+      legacyCanvas.nodes.push(
+        {
+          id: "legacy-upload",
+          type: "local-image",
+          title: "Uploaded image",
+          position: { x: 760, y: 180 },
+          size: { width: 300, height: 240 },
+          data: {
+            asset: uploadedAsset,
+            sourceFileName: "upload.png",
+            importedAt: "2026-07-09T00:00:00.000Z",
+          },
+        },
+        {
+          id: "legacy-generated",
+          type: "image",
+          title: "Generated image",
+          position: { x: 1120, y: 180 },
+          size: { width: 300, height: 300 },
+          data: {
+            resultAssets: generatedAssets,
+            selectedAssetID: "generated-2",
+            taskID: "legacy-task",
+            status: "succeeded",
+          },
+        },
+        {
+          id: "canonical-with-legacy",
+          type: "image",
+          title: "Canonical image",
+          position: { x: 1480, y: 180 },
+          data: {
+            asset: canonicalAsset,
+            candidateAssets: generatedAssets,
+            selectedCandidateAssetID: "generated-2",
+            resultAssets: generatedAssets,
+            selectedAssetID: "generated-2",
+          },
+        },
+        {
+          id: "invalid-canonical-with-legacy",
+          type: "image",
+          title: "Invalid canonical image",
+          position: { x: 1840, y: 180 },
+          data: {
+            asset: {},
+            candidateAssets: [{}, { id: "not-image", kind: "video", path: "video.mp4" }],
+            selectedCandidateAssetID: "not-image",
+            resultAssets: generatedAssets,
+            selectedAssetID: "generated-2",
+          },
+        },
+      )
+      legacyCanvas.edges.push({
+        id: "edge-legacy-images",
+        source: "legacy-upload",
+        target: "legacy-generated",
+      })
+      legacyCanvas.nodeTypes = ["text", "agent", "local-image", "image", "local-image"]
+      await initializeCinemaProject(root, legacyCanvas)
+
+      const canvasURL = `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/canvas`
+      const firstResponse = await app.request(canvasURL)
+      const firstBody = await readJson<CinemaCanvasDocument>(firstResponse)
+      const secondResponse = await app.request(canvasURL)
+      const secondBody = await readJson<CinemaCanvasDocument>(secondResponse)
+
+      expect(firstResponse.status).toBe(200)
+      expect(secondBody.data).toEqual(firstBody.data)
+      expect(firstBody.data?.nodeTypes).toEqual(["text", "agent", "image"])
+      expect(firstBody.data?.edges).toContainEqual({
+        id: "edge-legacy-images",
+        source: "legacy-upload",
+        target: "legacy-generated",
+      })
+      expect(firstBody.data?.nodes.find((node) => node.id === "legacy-upload")).toMatchObject({
+        type: "image",
+        position: { x: 760, y: 180 },
+        data: {
+          asset: uploadedAsset,
+          sourceKind: "upload",
+          sourceFileName: "upload.png",
+        },
+      })
+      expect(firstBody.data?.nodes.find((node) => node.id === "legacy-generated")?.data).toMatchObject({
+        asset: generatedAssets[1],
+        sourceKind: "generation",
+        taskID: "legacy-task",
+      })
+      expect(firstBody.data?.nodes.find((node) => node.id === "legacy-generated")?.data?.resultAssets).toBeUndefined()
+      expect(firstBody.data?.nodes.find((node) => node.id === "legacy-generated")?.data?.selectedAssetID).toBeUndefined()
+      expect(firstBody.data?.nodes.find((node) => node.id === "canonical-with-legacy")?.data).toMatchObject({
+        asset: canonicalAsset,
+        sourceKind: "upload",
+      })
+      expect(firstBody.data?.nodes.find((node) => node.id === "canonical-with-legacy")?.data?.candidateAssets).toBeUndefined()
+      expect(firstBody.data?.nodes.find((node) => node.id === "canonical-with-legacy")?.data?.resultAssets).toBeUndefined()
+      expect(firstBody.data?.nodes.find((node) => node.id === "invalid-canonical-with-legacy")?.data).toMatchObject({
+        asset: generatedAssets[1],
+        sourceKind: "generation",
+      })
+      expect(firstBody.data?.nodes.find((node) => node.id === "invalid-canonical-with-legacy")?.data?.candidateAssets).toBeUndefined()
+
+      const rawAfterReads = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
+      expect(rawAfterReads.nodes.find((node) => node.id === "legacy-upload")?.type).toBe("local-image")
+      expect(rawAfterReads.nodes.find((node) => node.id === "legacy-generated")?.data?.resultAssets).toEqual(generatedAssets)
+
+      const commandResponse = await app.request(
+        `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            type: "update-viewport",
+            actor: "cinema-web",
+            viewport: { x: 10, y: 20, zoom: 1.1 },
+          }),
+        },
+      )
+      expect(commandResponse.status).toBe(200)
+
+      const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
+      expect(persisted.nodeTypes).toEqual(["text", "agent", "image"])
+      expect(persisted.nodes.find((node) => node.id === "legacy-upload")?.type).toBe("image")
+      expect(persisted.nodes.find((node) => node.id === "legacy-generated")?.data?.asset).toEqual(generatedAssets[1])
+      expect(persisted.nodes.find((node) => node.id === "legacy-generated")?.data?.resultAssets).toBeUndefined()
+      expect(persisted.nodes.find((node) => node.id === "canonical-with-legacy")?.data?.asset).toEqual(canonicalAsset)
+      expect(persisted.nodes.find((node) => node.id === "canonical-with-legacy")?.data?.candidateAssets).toBeUndefined()
+      expect(persisted.nodes.find((node) => node.id === "invalid-canonical-with-legacy")?.data?.asset).toEqual(generatedAssets[1])
+      expect(persisted.edges).toContainEqual({
+        id: "edge-legacy-images",
+        source: "legacy-upload",
+        target: "legacy-generated",
+      })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   test("does not initialize missing cinema projects while reading canvas", async () => {
     const app = createServerApp()
     const root = await createTempProjectRoot()
@@ -2253,10 +2427,13 @@ describe("cinema api", () => {
           phase: "succeeded",
           percent: 100,
         },
-        selectedAssetID: "mock-image-output-1",
+        asset: refreshBody.data?.outputAssets[0],
+        sourceKind: "generation",
         generatedAt: "2026-07-05T00:00:00.000Z",
       })
-      expect(imageNode?.data?.resultAssets).toEqual(refreshBody.data?.outputAssets)
+      expect(imageNode?.data?.candidateAssets).toBeUndefined()
+      expect(imageNode?.data?.selectedCandidateAssetID).toBeUndefined()
+      expect(imageNode?.data?.resultAssets).toBeUndefined()
       expect(persisted.nodes.some((node) => node.id.startsWith("node-video-"))).toBe(false)
 
       const assetResponse = await app.request(
@@ -2273,40 +2450,426 @@ describe("cinema api", () => {
     }
   })
 
-  test("image generation failures keep prior image results on the same node", async () => {
+  test("keeps multiple image generation outputs as persistent candidates until selection", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    const restoreCatalog = setCinemaVideoProviderCatalogForTest(TEST_IMAGE_PROVIDER_CATALOG)
+    const outputAssets: CinemaGeneratedAsset[] = [
+      {
+        id: "candidate-1",
+        kind: "image",
+        path: "generated/images/image-gen/candidate-1.png",
+        mimeType: "image/png",
+        width: 1,
+        height: 1,
+      },
+      {
+        id: "candidate-2",
+        kind: "image",
+        path: "generated/images/image-gen/candidate-2.png",
+        mimeType: "image/png",
+        width: 1,
+        height: 1,
+      },
+    ]
+    const replacementAssets: CinemaGeneratedAsset[] = [
+      {
+        id: "replacement-candidate",
+        kind: "image",
+        path: "generated/images/image-gen/replacement.png",
+        mimeType: "image/png",
+      },
+    ]
+    let refreshCount = 0
+    const restoreImageAdapter = setCinemaVideoProviderAdapterForTest("mockimage", {
+      manifest: {} as never,
+      supportedModes: ["text-to-image"],
+      createTask: async ({ task }) => ({
+        ...task,
+        status: "queued" as const,
+        providerTaskRef: {
+          providerID: "mockimage",
+          taskID: "mock-image-task-candidates",
+          kind: "image-generation",
+        },
+      }),
+      refreshTask: async ({ task }) => {
+        refreshCount += 1
+        return {
+          ...task,
+          status: "succeeded" as const,
+          updatedAt: "2026-07-05T01:00:00.000Z",
+          outputAssets: refreshCount === 1 ? outputAssets : replacementAssets,
+          progress: {
+            phase: "succeeded" as const,
+            percent: 100,
+            updatedAt: "2026-07-05T01:00:00.000Z",
+          },
+          error: null,
+        }
+      },
+    })
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root, createCanvasWithImageNode())
+
+      const createResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/image-generations`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          nodeID: "image-gen",
+          prompt: "Two quiet moonlit frames.",
+          model: "mockimage/mock-image",
+          count: 2,
+        }),
+      })
+      const createBody = await readJson<CinemaImageGenerationResult>(createResponse)
+      expect(createResponse.status).toBe(200)
+
+      const refreshResponse = await app.request(
+        `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks/${encodeURIComponent(createBody.data!.taskID!)}/refresh`,
+        { method: "POST" },
+      )
+      expect(refreshResponse.status).toBe(200)
+
+      const canvasResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/canvas`)
+      const canvasBody = await readJson<CinemaCanvasDocument>(canvasResponse)
+      const imageNode = canvasBody.data?.nodes.find((node) => node.id === "image-gen")
+      expect(imageNode?.data).toMatchObject({
+        candidateAssets: outputAssets,
+        selectedCandidateAssetID: "candidate-1",
+        sourceKind: "generation",
+        status: "succeeded",
+        generatedAt: "2026-07-05T01:00:00.000Z",
+      })
+      expect(imageNode?.data?.asset).toBeUndefined()
+      expect(imageNode?.data?.resultAssets).toBeUndefined()
+
+      const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
+      expect(persisted.nodes.find((node) => node.id === "image-gen")?.data?.candidateAssets).toEqual(outputAssets)
+
+      const repeatedRefreshResponse = await app.request(
+        `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks/${encodeURIComponent(createBody.data!.taskID!)}/refresh`,
+        { method: "POST" },
+      )
+      expect(repeatedRefreshResponse.status).toBe(200)
+      expect(refreshCount).toBe(2)
+      const persistedAfterRepeatedRefresh = JSON.parse(
+        await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8"),
+      ) as CinemaCanvasDocument
+      expect(persistedAfterRepeatedRefresh.nodes.find((node) => node.id === "image-gen")?.data?.candidateAssets).toEqual(outputAssets)
+    } finally {
+      restoreImageAdapter()
+      restoreCatalog()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("does not let completed or stale tasks overwrite protected image node content", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    const restoreCatalog = setCinemaVideoProviderCatalogForTest(TEST_IMAGE_PROVIDER_CATALOG)
+    const restoreImageAdapter = setCinemaVideoProviderAdapterForTest("mockimage", {
+      manifest: {} as never,
+      supportedModes: ["text-to-image"],
+      createTask: async ({ task }) => ({
+        ...task,
+        status: "queued" as const,
+      }),
+      refreshTask: async ({ task }) => ({
+        ...task,
+        status: "succeeded" as const,
+        updatedAt: "2026-07-05T02:00:00.000Z",
+        outputAssets: [
+          {
+            id: `output-${task.taskNodeID}`,
+            kind: "image" as const,
+            path: `generated/images/${task.taskNodeID}/out.png`,
+            mimeType: "image/png",
+          },
+        ],
+        progress: {
+          phase: "succeeded" as const,
+          percent: 100,
+          updatedAt: "2026-07-05T02:00:00.000Z",
+        },
+        error: null,
+      }),
+    })
+    const protectedAsset: CinemaGeneratedAsset = {
+      id: "protected-upload",
+      kind: "image",
+      path: "assets/imported/protected.png",
+      mimeType: "image/png",
+    }
+
+    try {
+      const project = await createProject(app, root)
+      const canvas = createCanvasWithImageNode()
+      canvas.nodes.push({
+        id: "image-stale",
+        type: "image",
+        title: "Stale task target",
+        position: { x: 1360, y: 260 },
+        data: { status: "idle" },
+      })
+      await initializeCinemaProject(root, canvas)
+
+      const createTask = async (nodeID: string) => {
+        const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/image-generations`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            nodeID,
+            prompt: `Generate for ${nodeID}.`,
+            model: "mockimage/mock-image",
+          }),
+        })
+        const body = await readJson<CinemaImageGenerationResult>(response)
+        expect(response.status).toBe(200)
+        return body.data!.taskID!
+      }
+
+      const protectedTaskID = await createTask("image-gen")
+      const staleTaskID = await createTask("image-stale")
+      const rawCanvas = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
+      const protectedNode = rawCanvas.nodes.find((node) => node.id === "image-gen")!
+      protectedNode.data = {
+        ...protectedNode.data,
+        asset: protectedAsset,
+        sourceKind: "upload",
+        status: "ready",
+      }
+      const staleNode = rawCanvas.nodes.find((node) => node.id === "image-stale")!
+      staleNode.data = {
+        ...staleNode.data,
+        taskID: "newer-task",
+        status: "queued",
+        progress: { phase: "queued" },
+      }
+      await writeFile(
+        join(root, ".anybox-cinema", "canvas.json"),
+        `${JSON.stringify(rawCanvas, null, 2)}\n`,
+        "utf8",
+      )
+
+      for (const taskID of [protectedTaskID, staleTaskID]) {
+        const refreshResponse = await app.request(
+          `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks/${encodeURIComponent(taskID)}/refresh`,
+          { method: "POST" },
+        )
+        const refreshBody = await readJson<CinemaGenerationTask>(refreshResponse)
+        expect(refreshResponse.status).toBe(200)
+        expect(refreshBody.data?.status).toBe("succeeded")
+        expect(refreshBody.data?.outputAssets).toHaveLength(1)
+      }
+
+      const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
+      expect(persisted.nodes.find((node) => node.id === "image-gen")?.data).toMatchObject({
+        asset: protectedAsset,
+        sourceKind: "upload",
+        status: "ready",
+      })
+      expect(persisted.nodes.find((node) => node.id === "image-stale")?.data).toMatchObject({
+        taskID: "newer-task",
+        status: "queued",
+        progress: { phase: "queued" },
+      })
+      expect(persisted.nodes.find((node) => node.id === "image-stale")?.data?.asset).toBeUndefined()
+      expect(persisted.nodes.find((node) => node.id === "image-stale")?.data?.candidateAssets).toBeUndefined()
+    } finally {
+      restoreImageAdapter()
+      restoreCatalog()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects image generation for finalized, candidate, and active image nodes", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    const restoreCatalog = setCinemaVideoProviderCatalogForTest(TEST_IMAGE_PROVIDER_CATALOG)
+    let createTaskCalls = 0
+    const restoreImageAdapter = setCinemaVideoProviderAdapterForTest("mockimage", {
+      manifest: {} as never,
+      supportedModes: ["text-to-image"],
+      createTask: async ({ task }) => {
+        createTaskCalls += 1
+        return task
+      },
+      refreshTask: async ({ task }) => task,
+    })
+    const finalAsset: CinemaGeneratedAsset = {
+      id: "final-image",
+      kind: "image",
+      path: "generated/images/image-gen/final.png",
+      mimeType: "image/png",
+    }
+    const candidateAsset: CinemaGeneratedAsset = {
+      id: "candidate-image",
+      kind: "image",
+      path: "generated/images/image-candidates/candidate.png",
+      mimeType: "image/png",
+    }
+
+    try {
+      const project = await createProject(app, root)
+      const canvas = createCanvasWithImageNode({
+        asset: finalAsset,
+        sourceKind: "generation",
+      })
+      canvas.nodes.push({
+        id: "image-candidates",
+        type: "image",
+        title: "Image candidates",
+        position: { x: 1280, y: 260 },
+        size: { width: 420, height: 440 },
+        data: {
+          candidateAssets: [candidateAsset],
+          selectedCandidateAssetID: candidateAsset.id,
+          sourceKind: "generation",
+          status: "succeeded",
+        },
+      })
+      canvas.nodes.push(
+        {
+          id: "image-queued",
+          type: "image",
+          title: "Queued image",
+          position: { x: 1640, y: 260 },
+          data: {
+            taskID: "queued-task",
+            status: "queued",
+            progress: { phase: "queued" },
+          },
+        },
+        {
+          id: "image-running",
+          type: "image",
+          title: "Running image",
+          position: { x: 2000, y: 260 },
+          data: {
+            taskID: "running-task",
+            status: "running",
+            progress: { phase: "running" },
+          },
+        },
+      )
+      await initializeCinemaProject(root, canvas)
+
+      for (const nodeID of ["image-gen", "image-candidates"]) {
+        const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/image-generations`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            nodeID,
+            prompt: "Try again.",
+            model: "mockimage/mock-image",
+          }),
+        })
+        const body = await readJson(response)
+
+        expect(response.status).toBe(409)
+        expect(body.error?.code).toBe("CINEMA_IMAGE_NODE_FINALIZED")
+      }
+
+      for (const nodeID of ["image-queued", "image-running"]) {
+        const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/image-generations`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            nodeID,
+            prompt: "Do not create a duplicate task.",
+            model: "mockimage/mock-image",
+          }),
+        })
+        const body = await readJson(response)
+
+        expect(response.status).toBe(409)
+        expect(body.error?.code).toBe("CINEMA_IMAGE_NODE_ACTIVE")
+      }
+
+      const genericResponse = await app.request(
+        `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            providerID: "mockimage",
+            modelID: "mock-image",
+            mode: "text-to-image",
+            prompt: "Try again through the generic task API.",
+            sourceNodeIDs: [],
+            parameters: {},
+            taskNodeID: "image-gen",
+          }),
+        },
+      )
+      const genericBody = await readJson(genericResponse)
+      expect(genericResponse.status).toBe(409)
+      expect(genericBody.error?.code).toBe("CINEMA_IMAGE_NODE_FINALIZED")
+
+      const genericActiveResponse = await app.request(
+        `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            providerID: "mockimage",
+            modelID: "mock-image",
+            mode: "text-to-image",
+            prompt: "Do not duplicate the active generic task.",
+            sourceNodeIDs: [],
+            parameters: {},
+            taskNodeID: "image-queued",
+          }),
+        },
+      )
+      const genericActiveBody = await readJson(genericActiveResponse)
+      expect(genericActiveResponse.status).toBe(409)
+      expect(genericActiveBody.error?.code).toBe("CINEMA_IMAGE_NODE_ACTIVE")
+      expect(createTaskCalls).toBe(0)
+
+      const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
+      expect(persisted.nodes.find((node) => node.id === "image-gen")?.data?.asset).toEqual(finalAsset)
+      expect(persisted.nodes.find((node) => node.id === "image-candidates")?.data?.candidateAssets).toEqual([candidateAsset])
+    } finally {
+      restoreImageAdapter()
+      restoreCatalog()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("allows an empty image node to retry after generation failure", async () => {
     const app = createServerApp()
     const root = await createTempProjectRoot()
     const restoreCatalog = setCinemaVideoProviderCatalogForTest(TEST_IMAGE_PROVIDER_CATALOG)
     const restoreImageRuntime = setCinemaImageRuntimeDependenciesForTest({
       getImageGenerationSettings: async () => ({}),
     })
+    let attempts = 0
     const restoreImageAdapter = setCinemaVideoProviderAdapterForTest("mockimage", {
       manifest: {} as never,
       supportedModes: ["text-to-image"],
-      createTask: async () => {
-        throw new Error("Provider rejected request with api_key: sk-test-secret")
+      createTask: async ({ task }) => {
+        attempts += 1
+        if (attempts === 1) throw new Error("Provider rejected request with api_key: sk-test-secret")
+        return {
+          ...task,
+          status: "queued" as const,
+        }
       },
       refreshTask: async ({ task }) => task,
     })
 
     try {
       const project = await createProject(app, root)
-      const oldAssets: CinemaGeneratedAsset[] = [
-        {
-          id: "old-image",
-          kind: "image",
-          path: "generated/images/image-gen/old.png",
-          mimeType: "image/png",
-          sizeBytes: 68,
-        },
-      ]
       await initializeCinemaProject(root, createCanvasWithImageNode({
-        status: "succeeded",
-        resultAssets: oldAssets,
-        selectedAssetID: "old-image",
+        asset: {},
+        candidateAssets: [{ id: "not-an-image", kind: "video", path: "video.mp4" }],
+        selectedCandidateAssetID: "not-an-image",
       }))
-
-      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/image-generations`, {
+      const request = () => app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/image-generations`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -2315,21 +2878,25 @@ describe("cinema api", () => {
           model: "mockimage/mock-image",
         }),
       })
-      const body = await readJson(response)
 
-      expect(response.status).toBe(502)
-      expect(body.error?.code).toBe("CINEMA_IMAGE_GENERATION_FAILED")
-      expect(body.error?.message).toContain("Provider rejected request")
-      expect(body.error?.message).not.toContain("sk-test-secret")
-      expect(body.error?.message).toContain("api_key: [redacted]")
+      const failedResponse = await request()
+      const failedBody = await readJson(failedResponse)
+      expect(failedResponse.status).toBe(502)
+      expect(failedBody.error?.code).toBe("CINEMA_IMAGE_GENERATION_FAILED")
+      expect(failedBody.error?.message).toContain("api_key: [redacted]")
+      expect(failedBody.error?.message).not.toContain("sk-test-secret")
 
-      const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
-      const imageNode = persisted.nodes.find((node) => node.id === "image-gen")
-      expect(imageNode?.data?.resultAssets).toEqual(oldAssets)
-      expect(imageNode?.data?.selectedAssetID).toBe("old-image")
-      expect(imageNode?.data?.status).toBe("failed")
-      expect(String(imageNode?.data?.error ?? "")).toContain("Provider rejected request")
-      expect(String(imageNode?.data?.error ?? "")).not.toContain("sk-test-secret")
+      const failedCanvas = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
+      const failedNode = failedCanvas.nodes.find((node) => node.id === "image-gen")
+      expect(failedNode?.data?.status).toBe("failed")
+      expect(failedNode?.data?.asset).toBeUndefined()
+      expect(failedNode?.data?.candidateAssets).toBeUndefined()
+
+      const retryResponse = await request()
+      const retryBody = await readJson<CinemaImageGenerationResult>(retryResponse)
+      expect(retryResponse.status).toBe(200)
+      expect(retryBody.data?.status).toBe("queued")
+      expect(attempts).toBe(2)
     } finally {
       restoreImageAdapter()
       restoreImageRuntime()

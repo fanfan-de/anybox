@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import {
   CinemaImageGenerationResultSchema,
+  CinemaImageNodeAssetSchema,
+  CinemaImageNodeDataSchema,
   CinemaImportedImageAssetResultSchema,
   CinemaImageModelsResultSchema,
   CinemaCommandSchema,
@@ -11,6 +13,7 @@ import {
   CinemaTextGenerationResultSchema,
   CinemaTextModelsResultSchema,
   CinemaGenerationTaskSchema,
+  CinemaNodeTypeSchema,
   CinemaVideoProviderSchema,
   CinemaVideoProviderManifestSchema,
   GenerationFormSpecSchema,
@@ -23,6 +26,55 @@ import {
 } from "./cinema"
 
 describe("cinema schemas", () => {
+  it("parses canonical image node data while retaining the legacy node type alias", () => {
+    expect(CinemaNodeTypeSchema.parse("image")).toBe("image")
+    expect(CinemaNodeTypeSchema.parse("local-image")).toBe("local-image")
+
+    const data = CinemaImageNodeDataSchema.parse({
+      candidateAssets: [
+        {
+          id: "candidate-1",
+          kind: "image",
+          path: "generated/images/image-1/candidate-1.png",
+          mimeType: "image/png",
+          width: 1024,
+          height: 1024,
+        },
+        {
+          id: "candidate-2",
+          kind: "image",
+          path: "generated/images/image-1/candidate-2.png",
+        },
+      ],
+      selectedCandidateAssetID: "candidate-1",
+      sourceKind: "generation",
+      prompt: "A quiet moonlit frame.",
+      providerID: "mockimage",
+      modelID: "mock-image",
+      taskID: "task-1",
+      status: "succeeded",
+      progress: {
+        phase: "succeeded",
+        percent: 100,
+      },
+      parameters: {
+        size: "1024x1024",
+      },
+      generatedAt: "2026-07-10T00:00:00.000Z",
+      error: null,
+      cropMetadata: {
+        x: 0.1,
+      },
+    })
+
+    expect(data.sourceKind).toBe("generation")
+    expect(data.candidateAssets).toHaveLength(2)
+    expect(data.cropMetadata).toEqual({ x: 0.1 })
+    expect(CinemaImageNodeAssetSchema.parse(data.candidateAssets?.[0]).kind).toBe("image")
+    expect(() => CinemaImageNodeAssetSchema.parse({ id: "video-1", kind: "video", path: "video.mp4" })).toThrow()
+    expect(() => CinemaImageNodeDataSchema.parse({ sourceKind: "replace" })).toThrow()
+  })
+
   it("parses custom API canvas nodes and run payloads", () => {
     const canvas = CinemaCanvasDocumentSchema.parse({
       schemaVersion: 1,

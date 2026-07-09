@@ -4,6 +4,7 @@ import path from "node:path"
 import {
   CinemaCanvasDocumentSchema,
   CinemaGenerationTaskSchema,
+  CinemaImageNodeAssetSchema,
   CinemaProjectDirectoryListingSchema,
   CinemaProjectEventSchema,
   type CinemaGeneratedAsset,
@@ -293,6 +294,99 @@ function stripLegacyCustomNodesFromCanvasInput(input: unknown) {
   }
 }
 
+function parseCinemaImageNodeAsset(input: unknown): CinemaGeneratedAsset | undefined {
+  const parsed = CinemaImageNodeAssetSchema.safeParse(input)
+  return parsed.success ? parsed.data : undefined
+}
+
+function parseCinemaImageNodeAssets(input: unknown): CinemaGeneratedAsset[] {
+  if (!Array.isArray(input)) return []
+  return input.flatMap((item) => {
+    const asset = parseCinemaImageNodeAsset(item)
+    return asset ? [asset] : []
+  })
+}
+
+function normalizeCinemaImageNodeData(input: unknown) {
+  if (!isRecord(input)) return input
+
+  const nextData: Record<string, unknown> = { ...input }
+  const directAsset = parseCinemaImageNodeAsset(input.asset)
+  const legacyResultAssets = parseCinemaImageNodeAssets(input.resultAssets)
+  const legacySelectedAssetID = stringValue(input.selectedAssetID)
+  const legacySelectedAsset = (
+    legacySelectedAssetID
+      ? legacyResultAssets.find((asset) => asset.id === legacySelectedAssetID)
+      : undefined
+  ) ?? legacyResultAssets[0]
+  const promotedLegacyAsset = directAsset ? undefined : legacySelectedAsset
+  const candidateAssets = parseCinemaImageNodeAssets(input.candidateAssets)
+  const finalAsset = directAsset ?? promotedLegacyAsset
+
+  if (finalAsset) nextData.asset = finalAsset
+  else delete nextData.asset
+
+  if (finalAsset) {
+    delete nextData.candidateAssets
+    delete nextData.selectedCandidateAssetID
+  } else if (candidateAssets.length > 0) {
+    nextData.candidateAssets = candidateAssets
+    const selectedCandidateAssetID = stringValue(input.selectedCandidateAssetID)
+    nextData.selectedCandidateAssetID = candidateAssets.some((asset) => asset.id === selectedCandidateAssetID)
+      ? selectedCandidateAssetID
+      : candidateAssets[0]!.id
+  } else {
+    delete nextData.candidateAssets
+    delete nextData.selectedCandidateAssetID
+  }
+
+  if (promotedLegacyAsset) {
+    nextData.sourceKind = "generation"
+  } else if (!["upload", "generation", "crop"].includes(String(nextData.sourceKind ?? ""))) {
+    if (directAsset) nextData.sourceKind = input.derivedOperation === "crop" ? "crop" : "upload"
+    else if (!finalAsset && candidateAssets.length > 0) nextData.sourceKind = "generation"
+    else delete nextData.sourceKind
+  }
+
+  delete nextData.resultAssets
+  delete nextData.selectedAssetID
+
+  return nextData
+}
+
+function normalizeCinemaCanvasInput(input: unknown) {
+  if (!isRecord(input)) return input
+
+  const nodes = Array.isArray(input.nodes)
+    ? input.nodes.map((node) => {
+        if (!isRecord(node)) return node
+        const type = node.type === "local-image" ? "image" : node.type
+        if (type !== "image") return node
+        return {
+          ...node,
+          type,
+          ...(node.data === undefined ? {} : { data: normalizeCinemaImageNodeData(node.data) }),
+        }
+      })
+    : input.nodes
+
+  const nodeTypes = new Set<unknown>()
+  if (Array.isArray(input.nodeTypes)) {
+    for (const type of input.nodeTypes) nodeTypes.add(type === "local-image" ? "image" : type)
+  }
+  if (Array.isArray(nodes)) {
+    for (const node of nodes) {
+      if (isRecord(node) && typeof node.type === "string") nodeTypes.add(node.type)
+    }
+  }
+
+  return {
+    ...input,
+    nodes,
+    nodeTypes: [...nodeTypes],
+  }
+}
+
 async function readCinemaCanvasFromRoot(cinemaRoot: string): Promise<CinemaCanvasDocument> {
   const canvasPath = path.join(cinemaRoot, CANVAS_FILE)
 
@@ -311,14 +405,14 @@ async function readCinemaCanvasFromRoot(cinemaRoot: string): Promise<CinemaCanva
   }
 
   try {
-    return CinemaCanvasDocumentSchema.parse(stripLegacyCustomNodesFromCanvasInput(JSON.parse(raw)))
+    return CinemaCanvasDocumentSchema.parse(normalizeCinemaCanvasInput(stripLegacyCustomNodesFromCanvasInput(JSON.parse(raw))))
   } catch (error) {
     throw createInvalidJsonError(CANVAS_FILE, error)
   }
 }
 
 async function writeCinemaCanvas(cinemaRoot: string, canvas: CinemaCanvasDocument): Promise<CinemaCanvasDocument> {
-  const parsed = CinemaCanvasDocumentSchema.parse(canvas)
+  const parsed = CinemaCanvasDocumentSchema.parse(normalizeCinemaCanvasInput(canvas))
   await mkdir(cinemaRoot, { recursive: true })
 
   const canvasPath = path.join(cinemaRoot, CANVAS_FILE)
@@ -1346,6 +1440,35 @@ function assertCanvasHasNode(canvas: CinemaCanvasDocument, nodeID: string) {
   }
 }
 
+function isActiveCinemaImageNodeData(data: Record<string, unknown> | undefined) {
+  const status = stringValue(data?.status)?.toLowerCase()
+  const progress = isRecord(data?.progress) ? data.progress : undefined
+  const progressPhase = stringValue(progress?.phase)?.toLowerCase()
+  return status === "queued" || status === "running" || progressPhase === "queued" || progressPhase === "running"
+}
+
+function cinemaImageNodeHasContent(data: Record<string, unknown> | undefined) {
+  return Boolean(parseCinemaImageNodeAsset(data?.asset)) || parseCinemaImageNodeAssets(data?.candidateAssets).length > 0
+}
+
+function assertImageNodeAcceptsGeneration(node: CinemaCanvasNode) {
+  if (node.type !== "image") return
+  if (cinemaImageNodeHasContent(node.data)) {
+    throw new ApiError(
+      409,
+      "CINEMA_IMAGE_NODE_FINALIZED",
+      `Cinema image node '${node.id}' already contains image content. Create a new image node to generate another image.`,
+    )
+  }
+  if (isActiveCinemaImageNodeData(node.data)) {
+    throw new ApiError(
+      409,
+      "CINEMA_IMAGE_NODE_ACTIVE",
+      `Cinema image node '${node.id}' already has an active generation task.`,
+    )
+  }
+}
+
 function withNodeTypes(canvas: CinemaCanvasDocument) {
   const nodeTypes = new Set<CinemaNodeType>(canvas.nodeTypes)
   for (const node of canvas.nodes) nodeTypes.add(node.type)
@@ -1630,9 +1753,20 @@ function imageTaskNodeDataFor(task: CinemaGenerationTask, currentData: Record<st
     nextData.sourceImagePaths = parameters.sourceImagePaths.filter((item): item is string => typeof item === "string")
   }
 
-  if (imageAssets.length > 0) {
-    nextData.resultAssets = imageAssets
-    nextData.selectedAssetID = imageAssets[0]!.id
+  delete nextData.resultAssets
+  delete nextData.selectedAssetID
+
+  if (imageAssets.length === 1) {
+    nextData.asset = imageAssets[0]
+    delete nextData.candidateAssets
+    delete nextData.selectedCandidateAssetID
+    nextData.sourceKind = "generation"
+    nextData.generatedAt = task.updatedAt
+  } else if (imageAssets.length > 1) {
+    delete nextData.asset
+    nextData.candidateAssets = imageAssets
+    nextData.selectedCandidateAssetID = imageAssets[0]!.id
+    nextData.sourceKind = "generation"
     nextData.generatedAt = task.updatedAt
   }
 
@@ -1677,10 +1811,29 @@ function outputNodeFor(task: CinemaGenerationTask): CinemaCanvasNode | null {
   }
 }
 
-function syncTaskToCanvasDocument(canvas: CinemaCanvasDocument, task: CinemaGenerationTask): CinemaCanvasDocument {
+type SyncTaskToCanvasOptions = {
+  claimImageTask?: boolean
+}
+
+function canSyncTaskToImageNode(
+  node: CinemaCanvasNode,
+  task: CinemaGenerationTask,
+  options: SyncTaskToCanvasOptions,
+) {
+  if (cinemaImageNodeHasContent(node.data)) return false
+  if (stringValue(node.data?.taskID) === task.id) return true
+  return Boolean(options.claimImageTask) && !isActiveCinemaImageNodeData(node.data)
+}
+
+function syncTaskToCanvasDocument(
+  canvas: CinemaCanvasDocument,
+  task: CinemaGenerationTask,
+  options: SyncTaskToCanvasOptions = {},
+): CinemaCanvasDocument {
   const taskNodeID = task.taskNodeID ?? `node-generation-task-${task.id}`
   const existingTaskNode = canvas.nodes.find((node) => node.id === taskNodeID)
   if (existingTaskNode?.type === "image") {
+    if (!canSyncTaskToImageNode(existingTaskNode, task, options)) return canvas
     return withNodeTypes({
       ...canvas,
       nodes: canvas.nodes.map((node) => node.id === taskNodeID
@@ -1749,9 +1902,14 @@ function syncTaskToCanvasDocument(canvas: CinemaCanvasDocument, task: CinemaGene
   })
 }
 
-async function syncTaskToCanvas(cinemaRoot: string, task: CinemaGenerationTask, message: string) {
+async function syncTaskToCanvas(
+  cinemaRoot: string,
+  task: CinemaGenerationTask,
+  message: string,
+  options: SyncTaskToCanvasOptions = {},
+) {
   const current = await readCinemaCanvasFromRoot(cinemaRoot)
-  const canvas = await writeCinemaCanvas(cinemaRoot, syncTaskToCanvasDocument(current, task))
+  const canvas = await writeCinemaCanvas(cinemaRoot, syncTaskToCanvasDocument(current, task, options))
   await appendCinemaEvent(cinemaRoot, {
     time: nowISO(),
     type: "generation-task.synced",
@@ -2201,13 +2359,21 @@ async function saveCinemaGeneratedImageAssets(input: {
 
 async function writeCinemaImageNodeFailure(input: {
   cinemaRoot: string
-  canvas: CinemaCanvasDocument
   nodeID: string
   error: string
 }) {
+  const current = await readCinemaCanvasFromRoot(input.cinemaRoot)
+  const currentNode = current.nodes.find((node) => node.id === input.nodeID)
+  if (
+    !currentNode ||
+    currentNode.type !== "image" ||
+    cinemaImageNodeHasContent(currentNode.data) ||
+    isActiveCinemaImageNodeData(currentNode.data)
+  ) return
+
   const nextCanvas = withNodeTypes({
-    ...input.canvas,
-    nodes: input.canvas.nodes.map((item) =>
+    ...current,
+    nodes: current.nodes.map((item) =>
       item.id === input.nodeID
         ? {
           ...item,
@@ -2244,6 +2410,7 @@ export async function createCinemaImageGeneration(
   if (node.type !== "image") {
     throw new ApiError(409, "CINEMA_IMAGE_NODE_INVALID", `Cinema node '${input.nodeID}' is not an image node.`)
   }
+  assertImageNodeAcceptsGeneration(node)
 
   try {
     const { provider, model, imageModel, mode } = await resolveCinemaImageGenerationModel(projectID, input.model)
@@ -2357,7 +2524,12 @@ export async function createCinemaImageGeneration(
       },
     }), { createOutputNode: false }))
     await writeGenerationTask(cinemaRoot, created)
-    const canvas = await syncTaskToCanvas(cinemaRoot, created, `Created image generation task '${created.title}'.`)
+    const canvas = await syncTaskToCanvas(
+      cinemaRoot,
+      created,
+      `Created image generation task '${created.title}'.`,
+      { claimImageTask: true },
+    )
     await appendTaskAuditEvent(cinemaRoot, {
       time: nowISO(),
       type: "generation-task.created",
@@ -2380,7 +2552,6 @@ export async function createCinemaImageGeneration(
     const message = compactImageGenerationError(error)
     await writeCinemaImageNodeFailure({
       cinemaRoot,
-      canvas: current,
       nodeID: node.id,
       error: message,
     }).catch(() => undefined)
@@ -2762,12 +2933,16 @@ export async function createCinemaGenerationTask(
   const createdAt = nowISO()
   const taskID = makeTaskID()
   const taskNodeID = resolveGenerationTaskNodeID(input, taskID, canvas)
+  const taskNode = canvas.nodes.find((node) => node.id === taskNodeID)
   assertGenerationTaskNodeModelOutput({
-    node: canvas.nodes.find((node) => node.id === taskNodeID),
+    node: taskNode,
     model: providerModel,
     mode: input.mode,
     modelID: input.modelID,
   })
+  if (taskNode?.type === "image" && isCinemaImageGenerationMode(input.mode)) {
+    assertImageNodeAcceptsGeneration(taskNode)
+  }
   const createOutputNode = !canvas.nodes.some((node) => node.id === taskNodeID && (node.type === "video" || node.type === "image"))
   const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(input.providerID)
   const task = taskWithCanvasIDs({
@@ -2793,7 +2968,12 @@ export async function createCinemaGenerationTask(
 
   const created = taskWithProgress(taskWithCanvasIDs(await adapter.createTask({ root, cinemaRoot, task, canvas }), { createOutputNode }))
   await writeGenerationTask(cinemaRoot, created)
-  await syncTaskToCanvas(cinemaRoot, created, `Created generation task '${created.title}'.`)
+  await syncTaskToCanvas(
+    cinemaRoot,
+    created,
+    `Created generation task '${created.title}'.`,
+    { claimImageTask: true },
+  )
   await appendTaskAuditEvent(cinemaRoot, {
     time: nowISO(),
     type: "generation-task.created",

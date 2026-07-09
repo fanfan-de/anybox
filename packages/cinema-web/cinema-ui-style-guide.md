@@ -1,6 +1,6 @@
 # Cinema Web UI Style Guide 草案
 
-日期：2026-07-06
+日期：2026-07-10
 
 适用范围：`packages/cinema-web` 的 React/Vite 前端界面，包括节点画布、生成节点、文件面板、右键菜单、画布导航，以及后续剪辑台界面。
 
@@ -21,11 +21,10 @@
 | 外层 shell 和画布 | `App` | `cinema-shell`、`cinema-workspace`、`cinema-canvas` | 全屏、无页面滚动、ReactFlow 画布承载主体验 |
 | 通用节点 | `CinemaNodeCard` | `cinema-node-*` | 普通 text/prompt/audio/shot/agent/output 类型的基础节点 |
 | 文本节点 | `TextCanvasNode` | `cinema-text-*` | 独立布局，包含文本编辑区、悬浮工具条、文本生成器 |
-| 图片生成节点 | `ImageGenerationCanvasNode` | `cinema-image-gen-*` | 图片预览、缩略图、prompt composer、模型/尺寸/数量控件 |
+| 图片节点 | `ImageCanvasNode` | `cinema-image-*` | 统一承载上传、AI 生成、候选确认、最终图片预览和裁剪 |
 | 视频生成节点 | `VideoGenerationCanvasNode` | `cinema-video-gen-*` | 视频预览、模式 tab、provider/model/参数控件 |
-| 本地图片节点 | `LocalImageCanvasNode` | `cinema-local-image-*` | 导入图片预览和 metadata |
 | 文件面板 | `ProjectFileBrowser` | `cinema-file-*` | 右侧浮层文件浏览器，包含面包屑、文件列表、预览区 |
-| 右键菜单 | `ContextMenu` | `cinema-context-menu` | 画布空白处新增节点和导入图片 |
+| 右键菜单 | `ContextMenu` | `cinema-context-menu` | 画布空白处新增节点；图片只有一个 `Add Image` 入口 |
 | 垂直导航 | `CanvasPanelNavigation` | `cinema-canvas-nav-*` | 目前只有项目文件入口，后续会承载剪辑入口 |
 | 第三方画布控件 | ReactFlow | `react-flow__*` | Controls、MiniMap、Handle 的局部覆盖 |
 
@@ -282,15 +281,14 @@ Cinema Web 的 UI 标准：
 4. ReactFlow overrides
 5. Shared node primitives
 6. Text node
-7. Image generation node
-8. Local image node
-9. Video generation node
-10. Canvas navigation
-11. File browser
-12. Empty/error states
-13. Context menu
-14. Motion
-15. Responsive
+7. Image node
+8. Video generation node
+9. Canvas navigation
+10. File browser
+11. Empty/error states
+12. Context menu
+13. Motion
+14. Responsive
 
 规则：
 
@@ -348,28 +346,42 @@ Cinema Web 的 UI 标准：
 - toolbar 上的 icon+短文字按钮只在文本节点中作为既有模式保留。新工具栏默认优先 icon-only。
 - text editor focus 需要迁移到 token 化 border/focus surface。
 
-### 5.4 Image 和 Video Generation Node
+### 5.4 Image Node
+
+标准：
+
+- 用户可见和新建的图片节点只有一种：`image`。上传、AI 生成和裁剪是资产来源，不是独立节点类型。
+- 节点宽度保持约 300px；Empty 使用稳定 1:1 frame，获得资产后按最终图片自然宽高比展示，状态切换不改变 header 和 handle 的锚点。
+- Empty 节点未选中时只显示标题和占位 frame；选中或键盘打开后，上方显示上传命令，下方显示生成 composer。点击画布空白或按 `Escape` 收起控制区并把焦点还给节点。
+- Uploading / Generating 状态隐藏上传和 composer，以稳定占位、spinner 或 progress 表达过程，并禁用重复提交。失败后回到可重试的 Empty UI，错误信息使用 `role="alert"`。
+- 单图生成结果直接成为最终 `asset`；多图结果进入 Choosing，当前候选显示在主预览，缩略图使用 `radiogroup` / `radio` 语义，并且只有一个主操作“使用此图片”。
+- Ready 状态只显示最终图片；选中后只出现裁剪工具，不再提供上传、替换、重新生成或版本切换。预览加载失败仍保持 Ready 的锁定语义，并禁用裁剪。
+- 裁剪 Apply 创建新的 Ready `image` 节点并保留来源边；Cancel / Reset 不改变源节点。
+- 图片来源、文件名、prompt、模型、任务和裁剪来源放在 Inspector 展示；画布节点不增加常驻来源 badge。路径和文件名使用单行 ellipsis，完整值通过 `title` 暴露。
+- Handle 默认隐藏，在 hover、selected、focus-within 时显示；已有来源边保持可见。只有 Empty 状态允许新增左侧连接，右侧可以连接，但下游只能消费最终 `asset`。
+- 上传按钮和 composer 是脱离 React Flow 节点测量的 overlay。节点靠近视口边缘时自动平移画布，使完整控制区落入至少 16px 安全区，并保持当前 zoom。
+- 图片节点的 `default`、`hover`、`focus`、`selected`、`loading`、`choosing`、`ready`、`error` 和 `disabled` 状态都必须消费运行时 semantic token；缺少 token 时先补成对 light/dark 映射。
+
+数据与状态约束：
+
+- `data.asset` 是唯一可被下游消费的最终资产；`data.candidateAssets` 仅用于确认前的候选集合，`selectedCandidateAssetID` 只表示当前预览。
+- `sourceKind` 只允许 `upload`、`generation`、`crop`。状态由 `asset`、`candidateAssets` 和任务状态推导，不额外持久化 UI 状态枚举。
+- 旧 `local-image`、`resultAssets` 和 `selectedAssetID` 只用于兼容读取，不得由前端重新写入。
+
+### 5.5 Video Generation Node
 
 标准：
 
 - 预览区必须有稳定 aspect ratio。
 - loading overlay 使用轻量半透明 surface，不遮挡节点基本结构。
 - 生成按钮使用 primary icon button token，禁用态保留尺寸。
-- provider/model/size/count/duration/resolution 控件高度统一为 32px。
+- provider/model/duration/resolution 控件高度统一为 32px。
 - 状态 chip 不应抢主视觉，running/succeeded/failed 使用 status token。
 
 后续迁移：
 
 - 原生 `select` 可以短期保留。若要与主 Anybox 体验对齐，迁移为统一 combobox/listbox。
-- 图片和视频节点 submit button 当前使用浅色填充，应迁移到 `--cinema-button-primary-*`。
-
-### 5.5 Local Image Node
-
-标准：
-
-- 图片 frame 使用稳定 aspect ratio。
-- 资产路径只显示一行 ellipsis，完整路径通过 `title` 暴露。
-- 加载失败状态使用 danger text，不改变 frame 尺寸。
+- 视频节点 submit button 当前使用浅色填充，应迁移到 `--cinema-button-primary-*`。
 
 ### 5.6 File Browser
 
@@ -487,6 +499,7 @@ Cinema Web 的 UI 标准：
 
 - Canvas 本身不做移动端页面化改造，只保证窄窗口可操作。
 - 浮层在窄窗口时必须避免被右侧导航挤出。
+- 图片节点的上传和 composer 控制区必须整体纳入视口边界计算；自动平移只调整 viewport 位置，不改变 zoom，且在 `prefers-reduced-motion` 下不播放过渡动画。
 - 节点内部使用 container query 优先于全局 media query。
 - 时间线界面必须允许横向滚动，不把 clip 压缩到不可编辑。
 - 按钮、row、tab、thumbnail 不因 viewport 改变而发生 hover/focus 尺寸跳动。
@@ -506,6 +519,7 @@ Cinema Web 的 UI 标准：
 - 自定义 listbox/menu 后续补键盘方向键、Enter、Escape 行为。
 - 打开浮层时，触发器使用 `aria-expanded`，可关联时使用 `aria-controls`。
 - active/toggled 使用 `aria-pressed` 或对应 tab/listbox 语义。
+- 图片候选缩略图使用 `radiogroup` / `radio` 语义，并支持 Tab、方向键、Enter 和 Space；图片节点本身可聚焦，`Enter` / `Space` 打开 Empty 创建 UI，`Escape` 关闭。
 - 禁用控件使用真实 `disabled`，不要只靠 class。
 
 ## 10. Timeline UI 预留标准
@@ -529,6 +543,7 @@ Cinema Web 的 UI 标准：
 - 不新增 hover/focus 会改变尺寸的控件。
 - 不新增卡片套卡片。
 - 不新增没有 `min-width: 0` 的可截断 flex/grid 文本区域。
+- 不再新增 `local-image` 节点、第二个图片入口或 `resultAssets` / `selectedAssetID` 写入路径。
 
 ### P1：下一轮样式整理
 
@@ -556,6 +571,7 @@ Cinema Web 的 UI 标准：
 - 长中文、长英文、路径、模型名是否 ellipsis 或可换行。
 - `min-width: 0`、`min-height: 0` 是否覆盖滚动和截断容器。
 - 窄窗口下浮层是否仍可操作。
+- 图片 Empty、Generating、Choosing、Ready、Preview error 五类表现是否遵守一次填充和最终资产锁定规则。
+- 图片候选在确认前是否不会被下游消费，Ready 后是否不再暴露上传或生成入口。
 - 动效是否遵守 `prefers-reduced-motion`。
 - 是否引入了不必要的卡片、阴影、渐变或大面积强调色。
-

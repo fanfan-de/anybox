@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import {
   applyEdgeChanges,
@@ -101,6 +101,15 @@ import {
   buildGenerationTaskParameters,
   generationLegacyAssetsBySlot,
 } from "./features/generation/generationPayload"
+import {
+  canonicalizeCinemaImageNodeData,
+  deriveCinemaImageNodeState,
+  finalizeCinemaImageCandidate,
+  parseCinemaImageAsset,
+  readCinemaImageCandidateAssets,
+  readCinemaImageFinalAsset,
+  readCinemaImageSelectedCandidate,
+} from "./features/image/imageNodeData"
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error"
 type CanvasPanel = "files"
@@ -199,6 +208,9 @@ type CinemaFlowNodeData = {
   }
   onChangeRawData?: (nodeID: string, rawData: Record<string, unknown>) => void
   onChangeTitle?: (nodeID: string, title: string) => void
+  onActivateNode?: (nodeID: string, pointerID: number) => void
+  onSelectNode?: (nodeID: string) => void
+  onNodeInputEditingChange?: (nodeID: string, isEditing: boolean) => void
   onDeleteNode?: (nodeID: string) => void
   textModels?: CinemaTextModel[]
   effectiveTextModel?: CinemaTextModel | null
@@ -210,6 +222,8 @@ type CinemaFlowNodeData = {
   effectiveImageModel?: CinemaImageModel | null
   isGeneratingImage?: boolean
   imageGenerationError?: string | null
+  isFinalizingImageCandidate?: boolean
+  imageFinalizeError?: string | null
   sourceTextParameters?: SourceTextParameter[]
   agentBaseURL?: string
   projectID?: string
@@ -229,9 +243,15 @@ type CinemaFlowNodeData = {
   customApiError?: string | null
   onRunCustomApi?: (nodeID: string, request: CustomApiRunRequest) => Promise<CinemaCustomApiRunResult | undefined>
   onSaveCustomApiKey?: (nodeID: string, request: CustomApiAuthSaveRequest) => Promise<CinemaCustomApiAuthState | undefined>
-  isCroppingLocalImage?: boolean
-  localImageCropError?: string | null
-  onCreateCroppedLocalImageNode?: (nodeID: string, crop: ImageCropRect) => Promise<void>
+  isImportingImage?: boolean
+  imageImportError?: string | null
+  onImportImage?: (nodeID: string, file: File) => void
+  onFinalizeImageCandidate?: (nodeID: string, candidateID: string) => void
+  isCroppingImage?: boolean
+  imageCropError?: string | null
+  onCreateCroppedImageNode?: (nodeID: string, crop: ImageCropRect) => Promise<void>
+  hasIncomingImageEdge?: boolean
+  onDismissNodeOverlay?: () => void
   nodeInputOverlayRoot?: HTMLElement | null
 }
 
@@ -285,11 +305,13 @@ const DEFAULT_VIDEO_ASPECT_RATIO = "16:9"
 const DEFAULT_VIDEO_DURATION_SECONDS = 5
 const DEFAULT_VIDEO_RESOLUTION = "std"
 const FALLBACK_VIDEO_INPUT_COMBINATION_MODE: CinemaGenerationMode = "text-to-video"
-const MIN_LOCAL_IMAGE_CROP_PIXELS = 32
-const LOCAL_IMAGE_CROP_NODE_OFFSET_X = 360
-const LOCAL_IMAGE_CROP_MAX_OUTPUT_SIDE = 2048
-const LOCAL_IMAGE_CROP_HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const satisfies readonly ImageCropDragMode[]
-const LOCAL_IMAGE_FILE_ACCEPT = [
+const MIN_IMAGE_CROP_PIXELS = 32
+const IMAGE_CROP_NODE_OFFSET_X = 360
+const IMAGE_CROP_MAX_OUTPUT_SIDE = 2048
+const NODE_POINTER_PANE_CLICK_GUARD_MS = 96
+const NODE_POINTER_PANE_CLICK_GUARD_DISTANCE_PX = 4
+const IMAGE_CROP_HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const satisfies readonly ImageCropDragMode[]
+const IMAGE_FILE_ACCEPT = [
   "image/apng",
   "image/avif",
   "image/bmp",
@@ -318,8 +340,8 @@ const VIDEO_LOCAL_IMAGE_INPUT_SLOTS = [
 const DEFAULT_NODE_SIZE: Record<CinemaNodeType, { width: number; height: number }> = {
   text: { width: 360, height: 188 },
   prompt: { width: 340, height: 176 },
-  image: { width: 360, height: 320 },
-  "local-image": { width: 300, height: 280 },
+  image: { width: 300, height: 300 },
+  "local-image": { width: 300, height: 300 },
   video: { width: 420, height: 340 },
   audio: { width: 300, height: 156 },
   shot: { width: 340, height: 186 },
@@ -441,16 +463,19 @@ function flowNodeStyle(type: CinemaNodeType, size: { width: number; height: numb
 
 function toFlowNodes(canvas: CinemaCanvasDocument): CinemaFlowNode[] {
   return canvas.nodes.map((node) => {
+    const cinemaType = node.type === "local-image" ? "image" : node.type
     const size = nodeSize(node)
     return {
       id: node.id,
       type: "cinemaNode",
       position: node.position,
-      style: flowNodeStyle(node.type, size),
+      style: flowNodeStyle(cinemaType, size),
       data: {
-        cinemaType: node.type,
+        cinemaType,
         title: node.title,
-        rawData: node.data ?? {},
+        rawData: cinemaType === "image"
+          ? canonicalizeCinemaImageNodeData(node.data ?? {})
+          : node.data ?? {},
         size,
       },
     }
@@ -458,20 +483,23 @@ function toFlowNodes(canvas: CinemaCanvasDocument): CinemaFlowNode[] {
 }
 
 function toCanvasNode(node: CinemaFlowNode): CinemaCanvasNode {
+  const cinemaType = node.data.cinemaType === "local-image" ? "image" : node.data.cinemaType
   const width = typeof node.style?.width === "number"
     ? node.style.width
-    : node.measured?.width ?? node.data.size?.width ?? DEFAULT_NODE_SIZE[node.data.cinemaType].width
+    : node.measured?.width ?? node.data.size?.width ?? DEFAULT_NODE_SIZE[cinemaType].width
   const height = typeof node.style?.height === "number"
     ? node.style.height
-    : node.measured?.height ?? node.data.size?.height ?? DEFAULT_NODE_SIZE[node.data.cinemaType].height
+    : node.measured?.height ?? node.data.size?.height ?? DEFAULT_NODE_SIZE[cinemaType].height
 
   return {
     id: node.id,
-    type: node.data.cinemaType,
+    type: cinemaType,
     title: node.data.title.trim() || "Untitled Node",
     position: node.position,
     size: { width, height },
-    data: node.data.rawData,
+    data: cinemaType === "image"
+      ? canonicalizeCinemaImageNodeData(node.data.rawData)
+      : node.data.rawData,
   }
 }
 
@@ -1331,19 +1359,7 @@ function readDisplayAssets(rawData: Record<string, unknown>): DisplayAsset[] {
 }
 
 function readImageAsset(value: unknown): CinemaGeneratedAsset | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null
-  const record = value as Record<string, unknown>
-  const path = typeof record.path === "string" ? record.path : ""
-  if (!path) return null
-  return {
-    id: typeof record.id === "string" ? record.id : `image-${path}`,
-    kind: "image",
-    path,
-    mimeType: typeof record.mimeType === "string" ? record.mimeType : undefined,
-    sizeBytes: typeof record.sizeBytes === "number" ? record.sizeBytes : undefined,
-    width: typeof record.width === "number" ? record.width : undefined,
-    height: typeof record.height === "number" ? record.height : undefined,
-  }
+  return parseCinemaImageAsset(value)
 }
 
 function readImageAssets(value: unknown): CinemaGeneratedAsset[] {
@@ -1417,24 +1433,12 @@ function readVideoLocalInputAssets(rawData: Record<string, unknown>, nodeID: str
   return assets
 }
 
-function readLocalImageAsset(rawData: Record<string, unknown>) {
-  return readImageAsset(rawData.asset)
+function readFinalImageAsset(rawData: Record<string, unknown>) {
+  return readCinemaImageFinalAsset(rawData)
 }
 
 function selectedImageAssetForNode(node: CinemaFlowNode): VideoSourceImageAsset | null {
-  const assets = readImageResultAssets(node.data.rawData)
-  const selectedAssetID = readRawString(node.data.rawData, "selectedAssetID")
-  const asset = assets.find((item) => item.id === selectedAssetID) ?? assets[0] ?? null
-  if (!asset) return null
-  return {
-    ...asset,
-    nodeID: node.id,
-    nodeTitle: node.data.title,
-  }
-}
-
-function selectedLocalImageAssetForNode(node: CinemaFlowNode): VideoSourceImageAsset | null {
-  const asset = readLocalImageAsset(node.data.rawData)
+  const asset = readCinemaImageFinalAsset(node.data.rawData)
   if (!asset) return null
   return {
     ...asset,
@@ -1444,8 +1448,9 @@ function selectedLocalImageAssetForNode(node: CinemaFlowNode): VideoSourceImageA
 }
 
 function selectedSourceImageAssetForNode(node: CinemaFlowNode): VideoSourceImageAsset | null {
-  if (node.data.cinemaType === "image") return selectedImageAssetForNode(node)
-  if (node.data.cinemaType === "local-image") return selectedLocalImageAssetForNode(node)
+  if (node.data.cinemaType === "image" || node.data.cinemaType === "local-image") {
+    return selectedImageAssetForNode(node)
+  }
   return null
 }
 
@@ -1767,8 +1772,8 @@ function defaultImageCropDraft(): ImageCropDraftRect {
 function imageCropMinimumRatio(size: { width: number; height: number } | null): { width: number; height: number } {
   if (!size || size.width <= 0 || size.height <= 0) return { width: 0.05, height: 0.05 }
   return {
-    width: Math.min(1, MIN_LOCAL_IMAGE_CROP_PIXELS / size.width),
-    height: Math.min(1, MIN_LOCAL_IMAGE_CROP_PIXELS / size.height),
+    width: Math.min(1, MIN_IMAGE_CROP_PIXELS / size.width),
+    height: Math.min(1, MIN_IMAGE_CROP_PIXELS / size.height),
   }
 }
 
@@ -1861,7 +1866,7 @@ async function canvasToPngBlob(canvas: HTMLCanvasElement) {
 function imageCropOutputSize(crop: ImageCropRect) {
   const sourceWidth = Math.max(1, crop.width)
   const sourceHeight = Math.max(1, crop.height)
-  const scale = Math.min(1, LOCAL_IMAGE_CROP_MAX_OUTPUT_SIDE / Math.max(sourceWidth, sourceHeight))
+  const scale = Math.min(1, IMAGE_CROP_MAX_OUTPUT_SIDE / Math.max(sourceWidth, sourceHeight))
   return {
     width: Math.max(1, Math.round(sourceWidth * scale)),
     height: Math.max(1, Math.round(sourceHeight * scale)),
@@ -1968,17 +1973,18 @@ function readImageCropRect(rawData: Record<string, unknown>): ImageCropRect | nu
 }
 
 function createNode(type: CinemaNodeType, position: { x: number; y: number }): CinemaFlowNode {
-  const id = makeNodeID(type)
-  const size = DEFAULT_NODE_SIZE[type]
-  const rawData = type === "image"
+  const cinemaType = type === "local-image" ? "image" : type
+  const id = makeNodeID(cinemaType)
+  const size = DEFAULT_NODE_SIZE[cinemaType]
+  const rawData = cinemaType === "image"
     ? {
       prompt: "",
       size: DEFAULT_IMAGE_GENERATION_SIZE,
       count: DEFAULT_IMAGE_GENERATION_COUNT,
       status: "idle",
-      placeholder: NODE_META[type].placeholder,
+      placeholder: NODE_META[cinemaType].placeholder,
     }
-    : type === "video"
+    : cinemaType === "video"
       ? {
         text: "",
         mode: FALLBACK_GENERATION_MODE,
@@ -1989,33 +1995,28 @@ function createNode(type: CinemaNodeType, position: { x: number; y: number }): C
         parameters: {},
         placeholder: "Describe the clip to generate.",
       }
-    : type === "local-image"
-      ? {
-        status: "missing",
-        placeholder: NODE_META[type].placeholder,
-      }
-    : type === "custom-api"
+    : cinemaType === "custom-api"
       ? defaultCustomApiRawData(id)
     : {
       text: "",
-      placeholder: NODE_META[type].placeholder,
+      placeholder: NODE_META[cinemaType].placeholder,
     }
 
   return {
     id,
     type: "cinemaNode",
     position,
-    style: flowNodeStyle(type, size),
+    style: flowNodeStyle(cinemaType, size),
     data: {
-      cinemaType: type,
-      title: titleForType(type),
+      cinemaType,
+      title: titleForType(cinemaType),
       rawData,
       size,
     },
   }
 }
 
-function createLocalImageNode(
+function createImageAssetNode(
   asset: CinemaGeneratedAsset,
   fileName: string,
   position: { x: number; y: number },
@@ -2024,7 +2025,7 @@ function createLocalImageNode(
     rawDataPatch?: Record<string, unknown>
   } = {},
 ): CinemaFlowNode {
-  const type = "local-image" satisfies CinemaNodeType
+  const type = "image" satisfies CinemaNodeType
   const size = DEFAULT_NODE_SIZE[type]
   return {
     id: makeNodeID(type),
@@ -2036,6 +2037,7 @@ function createLocalImageNode(
       title: options.title?.trim() || fileName.trim() || titleForType(type),
       rawData: {
         asset,
+        sourceKind: options.rawDataPatch?.derivedOperation === "crop" ? "crop" : "upload",
         sourceFileName: fileName,
         status: "ready",
         importedAt: new Date().toISOString(),
@@ -2067,7 +2069,124 @@ function downloadTextFile(title: string, text: string) {
   URL.revokeObjectURL(url)
 }
 
+function activateNodeOnPointerDown(
+  event: ReactPointerEvent<HTMLElement>,
+  nodeID: string,
+  onActivateNode?: (nodeID: string, pointerID: number) => void,
+) {
+  if (event.button !== 0 || !event.isPrimary) return
+  onActivateNode?.(nodeID, event.pointerId)
+}
+
+function isEditableElement(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']"))
+}
+
+function stopCanvasKeyboardEvent(event: ReactKeyboardEvent<HTMLElement>) {
+  event.stopPropagation()
+  event.nativeEvent.stopImmediatePropagation()
+}
+
 const NODE_INPUT_OVERLAY_GAP = 12
+
+function useCinemaImageViewportGuard(
+  nodeID: string,
+  active: boolean,
+  overlayRoot: HTMLElement | null | undefined,
+  layoutKey: unknown,
+) {
+  const viewport = useViewport()
+  const reactFlow = useReactFlow<CinemaFlowNode, Edge>()
+
+  useEffect(() => {
+    if (!active || !overlayRoot) return
+
+    let frameID = 0
+    let timeoutID = 0
+    let disposed = false
+    const resizeObserver = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(() => scheduleMeasure())
+
+    const measure = () => {
+      if (disposed) return
+      const canvasRoot = overlayRoot.parentElement
+      const nodeElement = canvasRoot?.querySelector<HTMLElement>(
+        `.react-flow__node[data-id="${CSS.escape(nodeID)}"]`,
+      )
+      if (!nodeElement) return
+
+      const visualElements: HTMLElement[] = [
+        nodeElement,
+        ...nodeElement.querySelectorAll<HTMLElement>(
+          ".cinema-image-upload-toolbar, .cinema-image-toolbar, .cinema-image-candidate-panel",
+        ),
+      ]
+      const overlayPanel = overlayRoot.querySelector<HTMLElement>(
+        `[data-cinema-node-overlay="${CSS.escape(nodeID)}"]`,
+      )
+      if (overlayPanel) visualElements.push(overlayPanel)
+
+      resizeObserver?.disconnect()
+      visualElements.forEach((element) => resizeObserver?.observe(element))
+      resizeObserver?.observe(overlayRoot)
+
+      const bounds = visualElements.map((element) => element.getBoundingClientRect())
+      const rootBounds = overlayRoot.getBoundingClientRect()
+      const visualBounds = {
+        left: Math.min(...bounds.map((bound) => bound.left)),
+        top: Math.min(...bounds.map((bound) => bound.top)),
+        right: Math.max(...bounds.map((bound) => bound.right)),
+        bottom: Math.max(...bounds.map((bound) => bound.bottom)),
+      }
+      const inset = 16
+      const availableWidth = rootBounds.width - inset * 2
+      const availableHeight = rootBounds.height - inset * 2
+      const visualWidth = visualBounds.right - visualBounds.left
+      const visualHeight = visualBounds.bottom - visualBounds.top
+      let offsetX = 0
+      let offsetY = 0
+
+      if (visualWidth > availableWidth) {
+        offsetX = rootBounds.left + inset - visualBounds.left
+      } else if (visualBounds.left < rootBounds.left + inset) {
+        offsetX = rootBounds.left + inset - visualBounds.left
+      } else if (visualBounds.right > rootBounds.right - inset) {
+        offsetX += rootBounds.right - inset - (visualBounds.right + offsetX)
+      }
+      if (visualHeight > availableHeight) {
+        offsetY = rootBounds.top + inset - visualBounds.top
+      } else if (visualBounds.top < rootBounds.top + inset) {
+        offsetY = rootBounds.top + inset - visualBounds.top
+      } else if (visualBounds.bottom > rootBounds.bottom - inset) {
+        offsetY += rootBounds.bottom - inset - (visualBounds.bottom + offsetY)
+      }
+      if (Math.abs(offsetX) < 1 && Math.abs(offsetY) < 1) return
+
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      void reactFlow.setViewport({
+        x: viewport.x + offsetX,
+        y: viewport.y + offsetY,
+        zoom: viewport.zoom,
+      }, { duration: reduceMotion ? 0 : 120 })
+    }
+
+    const scheduleMeasure = () => {
+      window.cancelAnimationFrame(frameID)
+      frameID = window.requestAnimationFrame(measure)
+    }
+
+    scheduleMeasure()
+    timeoutID = window.setTimeout(scheduleMeasure, 80)
+    return () => {
+      disposed = true
+      window.cancelAnimationFrame(frameID)
+      window.clearTimeout(timeoutID)
+      resizeObserver?.disconnect()
+    }
+  }, [active, layoutKey, nodeID, overlayRoot, reactFlow, viewport.x, viewport.y, viewport.zoom])
+}
 
 function CinemaNodeInputOverlay({
   nodeID,
@@ -2086,26 +2205,27 @@ function CinemaNodeInputOverlay({
 }) {
   const viewport = useViewport()
   const internalNode = useInternalNode<CinemaFlowNode>(nodeID)
-
-  if (!selected || !overlayRoot || !internalNode) return null
-
-  const measuredWidth = internalNode.measured.width ?? internalNode.width ?? 0
-  const measuredHeight = internalNode.measured.height ?? internalNode.height ?? 0
-  if (measuredWidth <= 0 || measuredHeight <= 0) return null
-
-  const position = internalNode.internals.positionAbsolute
+  const measuredWidth = internalNode?.measured.width ?? internalNode?.width ?? 0
+  const measuredHeight = internalNode?.measured.height ?? internalNode?.height ?? 0
+  const position = internalNode?.internals.positionAbsolute ?? { x: 0, y: 0 }
+  const canRender = Boolean(selected && overlayRoot && internalNode && measuredWidth > 0 && measuredHeight > 0)
   const left = viewport.x + (position.x + measuredWidth / 2) * viewport.zoom
   const top = viewport.y + (position.y + measuredHeight) * viewport.zoom + NODE_INPUT_OVERLAY_GAP
+
+  if (!canRender || !overlayRoot) return null
+
   const overlayStyle = {
     ...accentStyle,
     "--cinema-node-overlay-width": `${width}px`,
     left,
     top,
+    maxHeight: Math.max(96, overlayRoot.clientHeight - top - 16),
   } as CSSProperties
 
   return createPortal(
     <div
       className="cinema-node-overlay-panel"
+      data-cinema-node-overlay={nodeID}
       style={overlayStyle}
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
@@ -2593,6 +2713,7 @@ function TextCanvasNode({
       <article
         className={`cinema-node cinema-text-card-node ${selected ? "is-selected" : ""}`}
         style={accentStyle}
+        onPointerDown={(event) => activateNodeOnPointerDown(event, id, data.onActivateNode)}
       >
         <header className="cinema-node-header">
           <CinemaNodeTitle
@@ -2825,9 +2946,9 @@ function TextCanvasNode({
               ) : null}
               <input
                 ref={sourceImageInputRef}
-                className="cinema-local-image-input"
+                className="cinema-file-input"
                 type="file"
-                accept={LOCAL_IMAGE_FILE_ACCEPT}
+                accept={IMAGE_FILE_ACCEPT}
                 multiple
                 onChange={handleSourceImageFileInputChange}
               />
@@ -2932,7 +3053,7 @@ function TextCanvasNode({
   )
 }
 
-function ImageGenerationCanvasNode({
+function ImageCreationState({
   id,
   data,
   selected,
@@ -2943,7 +3064,9 @@ function ImageGenerationCanvasNode({
   selected?: boolean
   accentStyle: CSSProperties
 }) {
+  const nodeRef = useRef<HTMLElement>(null)
   const promptRef = useRef<HTMLTextAreaElement>(null)
+  const mainImageInputRef = useRef<HTMLInputElement>(null)
   const sourceImageInputRef = useRef<HTMLInputElement>(null)
   const [sourceImageImportError, setSourceImageImportError] = useState<string | null>(null)
   const prompt = readRawString(data.rawData, "prompt")
@@ -2961,8 +3084,11 @@ function ImageGenerationCanvasNode({
   const countDraftRef = useRef(count)
   const rawDataRef = useRef(data.rawData)
   const onChangeRawDataRef = useRef(data.onChangeRawData)
+  const onNodeInputEditingChangeRef = useRef(data.onNodeInputEditingChange)
   const promptCommitTimerRef = useRef<number | null>(null)
   const isPromptComposingRef = useRef(false)
+  const isPromptFocusedRef = useRef(false)
+  const acceptsSourceImageImportResultRef = useRef(true)
   const imageModels = data.imageModels ?? []
   const sourceTextParameters = data.sourceTextParameters ?? []
   const tasks = data.generationTasks ?? []
@@ -3020,12 +3146,15 @@ function ImageGenerationCanvasNode({
   const submitSourceImageAssets = sourceImageMaxCount === undefined
     ? selectedSourceImageAssets
     : selectedSourceImageAssets.slice(0, sourceImageMaxCount)
-  const taskImageAssets = task?.outputAssets.filter((asset): asset is CinemaGeneratedAsset & { kind: "image" } => asset.kind === "image") ?? []
-  const assets = taskImageAssets.length > 0 ? taskImageAssets : readImageResultAssets(data.rawData)
-  const selectedAssetID = readRawString(data.rawData, "selectedAssetID")
-  const selectedAsset = assets.find((asset) => asset.id === selectedAssetID) ?? assets[0] ?? null
   const status = data.isGeneratingImage ? "queued" : task?.status ?? readRawString(data.rawData, "status", "idle")
-  const nodeError = data.imageGenerationError ?? task?.error ?? readRawString(data.rawData, "error")
+  const nodeState = deriveCinemaImageNodeState(data.rawData, status)
+  const candidateAssets = readCinemaImageCandidateAssets(data.rawData)
+  const selectedCandidate = readCinemaImageSelectedCandidate(data.rawData)
+  const nodeError = data.imageImportError
+    ?? data.imageGenerationError
+    ?? data.imageFinalizeError
+    ?? task?.error
+    ?? readRawString(data.rawData, "error")
   const progress = effectiveGenerationProgress({
     task,
     rawData: data.rawData,
@@ -3033,24 +3162,32 @@ function ImageGenerationCanvasNode({
     message: nodeError,
     forceQueued: Boolean(data.isGeneratingImage),
   })
-  const previewSrc = selectedAsset && data.agentBaseURL && data.projectID
-    ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, selectedAsset.path)
+  const previewSrc = selectedCandidate && data.agentBaseURL && data.projectID
+    ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, selectedCandidate.path)
     : ""
-  const previewAspectRatio = selectedAsset ? imagePreviewAspectRatio(selectedAsset, sizeDraft) : null
+  const previewAspectRatio = selectedCandidate ? imagePreviewAspectRatio(selectedCandidate, sizeDraft) : null
   const previewStyle = previewAspectRatio
     ? { "--cinema-image-preview-aspect-ratio": previewAspectRatio } as CSSProperties
     : undefined
   const effectivePromptDraft = imagePromptWithSourceText(promptDraft, sourceTextParameters)
   const promptReady = effectivePromptDraft.trim().length > 0
   const isImageTaskActive = status === "queued" || status === "running"
-  const isImageBusy = Boolean(data.isGeneratingImage) || isImageTaskActive
+  const isImageFillBusy = Boolean(data.isGeneratingImage)
+    || Boolean(data.isImportingImage)
+    || Boolean(data.isFinalizingImageCandidate)
+    || isImageTaskActive
   const formParametersReady = parameterControls.every((control) => generationControlReady(control, imageFormParameters))
   const sourceImagesReady = !sourceImageControl?.required || submitSourceImageAssets.length >= (sourceImageControl.minCount ?? 1)
-  const canGenerate = promptReady && formParametersReady && sourceImagesReady && Boolean(selectedImageModel) && !isImageBusy
+  acceptsSourceImageImportResultRef.current = nodeState === "empty" && !isImageFillBusy
 
   rawDataRef.current = data.rawData
   onChangeRawDataRef.current = data.onChangeRawData
+  onNodeInputEditingChangeRef.current = data.onNodeInputEditingChange
   imageFormParametersRef.current = imageFormParameters
+
+  useEffect(() => () => {
+    onNodeInputEditingChangeRef.current?.(id, false)
+  }, [id])
 
   const normalizeCountDraft = useCallback(() => {
     const parsed = Number.parseInt(countDraftRef.current, 10)
@@ -3083,6 +3220,10 @@ function ImageGenerationCanvasNode({
     window.clearTimeout(promptCommitTimerRef.current)
     promptCommitTimerRef.current = null
   }, [])
+
+  const setPromptInputEditing = useCallback((isEditing: boolean) => {
+    onNodeInputEditingChangeRef.current?.(id, isEditing)
+  }, [id])
 
   const commitRawDataPatch = useCallback((patch: Record<string, unknown> = {}) => {
     const previous = rawDataRef.current
@@ -3145,6 +3286,7 @@ function ImageGenerationCanvasNode({
       setSourceImageImportError(null)
     },
     onSuccess: (assets) => {
+      if (!acceptsSourceImageImportResultRef.current) return
       const existingImageAssets = readImageGenerationSourceImageAssets(rawDataRef.current, id)
         .map(({ nodeID: _nodeID, nodeTitle: _nodeTitle, ...asset }) => asset)
       const nextImageAssets = mergeImageAssets([...existingImageAssets, ...assets])
@@ -3164,6 +3306,14 @@ function ImageGenerationCanvasNode({
     },
   })
 
+  const isImageBusy = isImageFillBusy || importImageSourceImageMutation.isPending
+  const canGenerate = nodeState === "empty"
+    && promptReady
+    && formParametersReady
+    && sourceImagesReady
+    && Boolean(selectedImageModel)
+    && !isImageBusy
+
   const schedulePromptCommit = useCallback((value: string) => {
     clearPromptCommitTimer()
     promptCommitTimerRef.current = window.setTimeout(() => {
@@ -3173,7 +3323,8 @@ function ImageGenerationCanvasNode({
   }, [clearPromptCommitTimer, commitRawDataPatch])
 
   useEffect(() => {
-    if (isPromptComposingRef.current || promptCommitTimerRef.current !== null) return
+    if (isPromptFocusedRef.current || isPromptComposingRef.current || promptCommitTimerRef.current !== null) return
+    if (promptDraftRef.current === prompt) return
     promptDraftRef.current = prompt
     setPromptDraftState(prompt)
   }, [prompt])
@@ -3195,7 +3346,21 @@ function ImageGenerationCanvasNode({
 
   useEffect(() => () => clearPromptCommitTimer(), [clearPromptCommitTimer])
 
+  useEffect(() => {
+    if (selected) return
+    const wasEditing = isPromptFocusedRef.current
+      || isPromptComposingRef.current
+      || promptCommitTimerRef.current !== null
+    const value = promptDraftRef.current
+    isPromptFocusedRef.current = false
+    isPromptComposingRef.current = false
+    clearPromptCommitTimer()
+    if (wasEditing) commitRawDataPatch({ prompt: value })
+    setPromptInputEditing(false)
+  }, [clearPromptCommitTimer, commitRawDataPatch, selected, setPromptInputEditing])
+
   const openSourceImagePicker = () => {
+    if (isImageBusy) return
     setSourceImageImportError(null)
     sourceImageInputRef.current?.click()
   }
@@ -3203,8 +3368,45 @@ function ImageGenerationCanvasNode({
   const handleSourceImageFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
     event.target.value = ""
-    if (files.length === 0) return
+    if (files.length === 0 || isImageBusy) return
     importImageSourceImageMutation.mutate(files)
+  }
+
+  const openMainImagePicker = () => {
+    if (nodeState !== "empty" || isImageBusy) return
+    setSourceImageImportError(null)
+    mainImageInputRef.current?.click()
+  }
+
+  const handleMainImageFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null
+    event.target.value = ""
+    if (!file || nodeState !== "empty" || isImageBusy) return
+    data.onImportImage?.(id, file)
+  }
+
+  const chooseCandidate = (assetID: string) => {
+    if (nodeState !== "choosing" || data.isFinalizingImageCandidate) return
+    commitRawDataPatch({ selectedCandidateAssetID: assetID })
+  }
+
+  const acceptCandidate = () => {
+    if (nodeState !== "choosing" || !selectedCandidate || data.isFinalizingImageCandidate) return
+    clearPromptCommitTimer()
+    data.onFinalizeImageCandidate?.(id, selectedCandidate.id)
+  }
+
+  const dismissNodeOverlay = () => {
+    const wasEditing = isPromptFocusedRef.current
+      || isPromptComposingRef.current
+      || promptCommitTimerRef.current !== null
+    isPromptFocusedRef.current = false
+    isPromptComposingRef.current = false
+    clearPromptCommitTimer()
+    if (wasEditing) commitRawDataPatch({ prompt: promptDraftRef.current })
+    setPromptInputEditing(false)
+    data.onDismissNodeOverlay?.()
+    window.requestAnimationFrame(() => nodeRef.current?.focus())
   }
 
   const removeSourceImageAsset = (asset: VideoSourceImageAsset) => {
@@ -3239,6 +3441,7 @@ function ImageGenerationCanvasNode({
       return
     }
     if (!selectedImageModel || isImageBusy) return
+    setSourceImageImportError(null)
     clearPromptCommitTimer()
     const nextSize = sizeDraftRef.current.trim() || DEFAULT_IMAGE_GENERATION_SIZE
     const nextCount = normalizeCountDraft()
@@ -3314,22 +3517,85 @@ function ImageGenerationCanvasNode({
       />
     )
   }
-  const imageStatus = data.isGeneratingImage ? "submitting" : isImageTaskActive ? "generating" : status
+  const imageStatus = data.isFinalizingImageCandidate
+    ? "finalizing"
+    : data.isImportingImage
+      ? "uploading"
+      : data.isGeneratingImage
+        ? "submitting"
+        : isImageTaskActive
+          ? "generating"
+          : nodeState === "choosing"
+            ? "choosing"
+            : status
 
   return (
     <>
-      <Handle
-        id="input"
-        type="target"
-        position={Position.Left}
-        className="cinema-node-handle cinema-node-handle-input"
-        style={accentStyle}
+      {nodeState === "empty" || data.hasIncomingImageEdge ? (
+        <Handle
+          id="input"
+          type="target"
+          position={Position.Left}
+          className={`cinema-node-handle cinema-node-handle-input ${nodeState === "empty" && !isImageBusy ? "" : "is-locked"}`}
+          style={accentStyle}
+          isConnectable={nodeState === "empty" && !isImageBusy}
+        />
+      ) : null}
+      {selected && nodeState === "empty" && !isImageBusy ? (
+        <div className="cinema-image-upload-toolbar nodrag nowheel" role="toolbar" aria-label="Image source">
+          <button
+            type="button"
+            className="cinema-image-upload-button"
+            title="上传图片"
+            aria-label="上传图片"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation()
+              openMainImagePicker()
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") return
+              event.preventDefault()
+              event.stopPropagation()
+              dismissNodeOverlay()
+            }}
+          >
+            <Upload size={15} aria-hidden="true" />
+            <span>上传</span>
+          </button>
+        </div>
+      ) : null}
+      <input
+        ref={mainImageInputRef}
+        className="cinema-file-input"
+        type="file"
+        accept={IMAGE_FILE_ACCEPT}
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={handleMainImageFileInputChange}
       />
       <article
-        className={`cinema-image-gen-node ${selected ? "is-selected" : ""}`}
+        ref={nodeRef}
+        className={`cinema-image-node is-creating ${selected ? "is-selected" : ""}`}
         style={accentStyle}
+        tabIndex={0}
+        onPointerDown={(event) => activateNodeOnPointerDown(event, id, data.onActivateNode)}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault()
+            event.stopPropagation()
+            data.onSelectNode?.(id)
+            return
+          }
+          if (event.key === "Escape") {
+            event.preventDefault()
+            event.stopPropagation()
+            dismissNodeOverlay()
+          }
+        }}
       >
-        <header className="cinema-image-gen-header">
+        <header className="cinema-image-header">
           <CinemaNodeTitle
             icon={Image}
             label="Image"
@@ -3343,28 +3609,35 @@ function ImageGenerationCanvasNode({
           </div>
         </header>
 
-        <section className="cinema-image-gen-preview" aria-label="Generated image preview" style={previewStyle}>
+        <section className="cinema-image-frame" aria-label="Image preview" style={previewStyle}>
           {previewSrc ? (
             <img src={previewSrc} alt={promptDraft || data.title} draggable={false} />
           ) : (
-            <div className="cinema-image-gen-empty">
+            <div className="cinema-image-empty">
               <Image size={28} aria-hidden="true" />
               <span>No image yet</span>
             </div>
           )}
-          {isImageBusy ? (
-            <div className="cinema-image-gen-overlay" aria-live="polite">
+          {isImageFillBusy ? (
+            <div className="cinema-generation-overlay" aria-live="polite">
               <Loader2 size={18} aria-hidden="true" className="is-spinning" />
-              <span>{data.isGeneratingImage ? "Submitting" : "Generating"}</span>
+              <span>{data.isFinalizingImageCandidate
+                ? "Saving"
+                : data.isImportingImage
+                  ? "Uploading"
+                  : data.isGeneratingImage
+                    ? "Submitting"
+                    : "Generating"}</span>
             </div>
           ) : null}
         </section>
 
-        <GenerationProgress progress={progress} status={status} />
+        {isImageTaskActive || data.isGeneratingImage ? <GenerationProgress progress={progress} status={status} /> : null}
 
-        {assets.length > 1 ? (
-          <div className="cinema-image-gen-thumbnails nodrag nowheel" aria-label="Generated image choices">
-            {assets.map((asset) => {
+        {nodeState === "choosing" ? (
+          <div className="cinema-image-candidate-panel nodrag nowheel">
+            <div className="cinema-image-thumbnails" role="radiogroup" aria-label="Generated image choices">
+            {candidateAssets.map((asset) => {
               const src = data.agentBaseURL && data.projectID
                 ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, asset.path)
                 : ""
@@ -3372,20 +3645,35 @@ function ImageGenerationCanvasNode({
                 <button
                   key={asset.id}
                   type="button"
-                  className={`cinema-image-gen-thumb ${asset.id === selectedAsset?.id ? "is-selected" : ""}`}
+                  role="radio"
+                  aria-checked={asset.id === selectedCandidate?.id}
+                  className={`cinema-image-thumb ${asset.id === selectedCandidate?.id ? "is-selected" : ""}`}
                   title={asset.path}
-                  onClick={() => commitRawDataPatch({ selectedAssetID: asset.id })}
+                  disabled={data.isFinalizingImageCandidate}
+                  onClick={() => chooseCandidate(asset.id)}
                 >
                   {src ? <img src={src} alt="" draggable={false} /> : <Image size={14} aria-hidden="true" />}
                 </button>
               )
             })}
+            </div>
+            <button
+              type="button"
+              className="cinema-image-candidate-accept"
+              disabled={!selectedCandidate || data.isFinalizingImageCandidate}
+              onClick={acceptCandidate}
+            >
+              {data.isFinalizingImageCandidate ? "Saving..." : "使用此图片"}
+            </button>
+            {nodeError ? (
+              <p className="cinema-image-error" role="alert" title={nodeError}>{nodeError}</p>
+            ) : null}
           </div>
         ) : null}
 
       </article>
 
-      {selected ? (
+      {selected && nodeState === "empty" && !isImageFillBusy ? (
         <CinemaNodeInputOverlay
           nodeID={id}
           selected={selected}
@@ -3393,13 +3681,23 @@ function ImageGenerationCanvasNode({
           width={520}
           accentStyle={accentStyle}
         >
-          <section className="cinema-node-input-panel cinema-image-gen-composer nodrag nowheel" aria-label="Image generation controls">
+          <section
+            className="cinema-node-input-panel cinema-image-composer nodrag nowheel"
+            aria-label="Image generation controls"
+            onKeyDownCapture={(event) => {
+              if (event.key !== "Escape") return
+              if (event.nativeEvent.isComposing || isPromptComposingRef.current) return
+              event.preventDefault()
+              event.stopPropagation()
+              dismissNodeOverlay()
+            }}
+          >
           {sourceTextParameters.length > 0 ? (
-            <div className="cinema-image-gen-param-tags" aria-label="Connected text parameters">
+            <div className="cinema-image-param-tags" aria-label="Connected text parameters">
               {sourceTextParameters.map((parameter) => (
                 <span
                   key={parameter.edgeID}
-                  className={`cinema-image-gen-param-tag ${parameter.text.trim() ? "" : "is-empty"}`}
+                  className={`cinema-image-param-tag ${parameter.text.trim() ? "" : "is-empty"}`}
                   title={parameter.text.trim() ? `${parameter.nodeTitle}: ${parameter.text.trim()}` : `${parameter.nodeTitle}: 空文本`}
                 >
                   <FileText size={12} aria-hidden="true" />
@@ -3427,14 +3725,22 @@ function ImageGenerationCanvasNode({
             placeholder="描述画面、主体、光线和镜头..."
             maxLength={promptControl?.maxLength}
             spellCheck={false}
-            onKeyDown={(event) => event.stopPropagation()}
+            onFocus={() => {
+              isPromptFocusedRef.current = true
+              setPromptInputEditing(true)
+            }}
+            onKeyDownCapture={stopCanvasKeyboardEvent}
+            onKeyDown={stopCanvasKeyboardEvent}
             onChange={(event) => {
               const value = event.target.value
+              setPromptInputEditing(true)
               setPromptDraft(value)
-              if (!isPromptComposingRef.current) schedulePromptCommit(value)
+              if (isPromptComposingRef.current) return
+              schedulePromptCommit(value)
             }}
             onCompositionStart={() => {
               isPromptComposingRef.current = true
+              setPromptInputEditing(true)
               clearPromptCommitTimer()
             }}
             onCompositionEnd={(event) => {
@@ -3442,11 +3748,20 @@ function ImageGenerationCanvasNode({
               const value = event.currentTarget.value
               setPromptDraft(value)
               commitRawDataPatch({ prompt: value })
+              if (!isPromptFocusedRef.current) setPromptInputEditing(false)
             }}
             onBlur={() => {
-              if (isPromptComposingRef.current) return
+              isPromptFocusedRef.current = false
+              const value = promptRef.current?.value ?? promptDraftRef.current
+              const wasComposing = isPromptComposingRef.current
+              promptDraftRef.current = value
+              if (wasComposing) {
+                isPromptComposingRef.current = false
+                setPromptDraft(value)
+              }
               clearPromptCommitTimer()
-              commitRawDataPatch({ prompt: promptDraftRef.current })
+              commitRawDataPatch({ prompt: value })
+              setPromptInputEditing(false)
             }}
           />
           {supportsSourceImage ? (
@@ -3534,21 +3849,21 @@ function ImageGenerationCanvasNode({
                 </button>
               </div>
               {sourceImageImportError ? (
-                <p className="cinema-image-gen-error" role="alert" title={sourceImageImportError}>
+                <p className="cinema-image-error" role="alert" title={sourceImageImportError}>
                   {sourceImageImportError}
                 </p>
               ) : null}
               <input
                 ref={sourceImageInputRef}
-                className="cinema-local-image-input"
+                className="cinema-file-input"
                 type="file"
-                accept={LOCAL_IMAGE_FILE_ACCEPT}
+                accept={IMAGE_FILE_ACCEPT}
                 multiple
                 onChange={handleSourceImageFileInputChange}
               />
             </section>
           ) : null}
-          <div className={`cinema-image-gen-quick-controls ${imageFormSpec ? "is-form-spec" : ""}`}>
+          <div className={`cinema-image-quick-controls ${imageFormSpec ? "is-form-spec" : ""}`}>
             {imageFormSpec ? primaryImageParameterControls.map(renderImageParameterControl) : (
               <>
                 <input
@@ -3589,7 +3904,7 @@ function ImageGenerationCanvasNode({
             </button>
             <button
               type="button"
-              className="cinema-image-gen-submit"
+              className="cinema-image-submit"
               title={selectedImageModel ? "Generate image with provider" : "No available generation image model"}
               aria-label="Generate image"
               disabled={!canGenerate}
@@ -3604,7 +3919,7 @@ function ImageGenerationCanvasNode({
             <section id={`${id}-image-advanced`} className="cinema-image-advanced-panel" aria-label="Advanced image generation inputs">
               {!imageFormSpec ? (
                 <input
-                  className="cinema-image-gen-style"
+                  className="cinema-image-style"
                   value={styleDraft}
                   placeholder="风格提示（可选）"
                   spellCheck={false}
@@ -3647,7 +3962,7 @@ function ImageGenerationCanvasNode({
             </section>
           ) : null}
           {nodeError ? (
-            <p className="cinema-image-gen-error" role="alert" title={nodeError}>
+            <p className="cinema-image-error" role="alert" title={nodeError}>
               {nodeError}
             </p>
           ) : null}
@@ -4189,9 +4504,9 @@ function VideoGenerationCanvasNode({
     <>
       <input
         ref={videoInputImageInputRef}
-        className="cinema-local-image-input"
+        className="cinema-file-input"
         type="file"
-        accept={LOCAL_IMAGE_FILE_ACCEPT}
+        accept={IMAGE_FILE_ACCEPT}
         tabIndex={-1}
         aria-hidden="true"
         onChange={handleVideoInputImageFileChange}
@@ -4213,7 +4528,11 @@ function VideoGenerationCanvasNode({
           style={{ ...accentStyle, top: `${58 + index * 14}%` }}
         />
       ))}
-      <article className={`cinema-video-gen-node ${selected ? "is-selected" : ""}`} style={accentStyle}>
+      <article
+        className={`cinema-video-gen-node ${selected ? "is-selected" : ""}`}
+        style={accentStyle}
+        onPointerDown={(event) => activateNodeOnPointerDown(event, id, data.onActivateNode)}
+      >
         <header className="cinema-video-gen-header">
           <CinemaNodeTitle
             icon={Video}
@@ -4262,7 +4581,7 @@ function VideoGenerationCanvasNode({
             </div>
           )}
           {data.isCreatingVideoTask ? (
-            <div className="cinema-image-gen-overlay" aria-live="polite">
+            <div className="cinema-generation-overlay" aria-live="polite">
               <Loader2 size={18} aria-hidden="true" className="is-spinning" />
               <span>Submitting</span>
             </div>
@@ -4619,7 +4938,7 @@ function VideoGenerationCanvasNode({
   )
 }
 
-function LocalImageCanvasNode({
+function ImageReadyState({
   id,
   data,
   selected,
@@ -4630,7 +4949,8 @@ function LocalImageCanvasNode({
   selected?: boolean
   accentStyle: CSSProperties
 }) {
-  const asset = readLocalImageAsset(data.rawData)
+  const asset = readFinalImageAsset(data.rawData)
+  const nodeRef = useRef<HTMLElement>(null)
   const cropFrameRef = useRef<HTMLElement | null>(null)
   const [hasPreviewError, setHasPreviewError] = useState(false)
   const [imagePixelSize, setImagePixelSize] = useState<{ width: number; height: number } | null>(
@@ -4647,11 +4967,11 @@ function LocalImageCanvasNode({
   const effectiveImageSize = imagePixelSize ?? (asset?.width && asset.height ? { width: asset.width, height: asset.height } : null)
   const previewAspectRatio = effectiveImageSize ? `${effectiveImageSize.width} / ${effectiveImageSize.height}` : null
   const previewStyle = previewAspectRatio
-    ? { "--cinema-local-image-aspect-ratio": previewAspectRatio } as CSSProperties
+    ? { "--cinema-image-preview-aspect-ratio": previewAspectRatio } as CSSProperties
     : undefined
-  const isCropping = Boolean(data.isCroppingLocalImage)
-  const cropError = localCropError ?? data.localImageCropError ?? null
-  const canCrop = Boolean(previewSrc && !hasPreviewError && effectiveImageSize && data.onCreateCroppedLocalImageNode)
+  const isCropping = Boolean(data.isCroppingImage)
+  const cropError = localCropError ?? data.imageCropError ?? null
+  const canCrop = Boolean(previewSrc && !hasPreviewError && effectiveImageSize && data.onCreateCroppedImageNode)
 
   useEffect(() => {
     setHasPreviewError(false)
@@ -4735,7 +5055,7 @@ function LocalImageCanvasNode({
       setLocalCropError("Image dimensions are unavailable.")
       return
     }
-    if (!data.onCreateCroppedLocalImageNode) {
+    if (!data.onCreateCroppedImageNode) {
       setLocalCropError("Crop action is unavailable.")
       return
     }
@@ -4744,7 +5064,7 @@ function LocalImageCanvasNode({
     setCropDrag(null)
     setIsCropEditorOpen(false)
     try {
-      await data.onCreateCroppedLocalImageNode(id, crop)
+      await data.onCreateCroppedImageNode(id, crop)
     } catch (error) {
       setLocalCropError(error instanceof Error ? error.message : "Image crop failed")
     }
@@ -4760,31 +5080,52 @@ function LocalImageCanvasNode({
     : undefined
   const cropLayerStyle = cropDraft
     ? {
-      "--cinema-local-image-crop-left": `${cropDraft.x * 100}%`,
-      "--cinema-local-image-crop-top": `${cropDraft.y * 100}%`,
-      "--cinema-local-image-crop-width": `${cropDraft.width * 100}%`,
-      "--cinema-local-image-crop-height": `${cropDraft.height * 100}%`,
+      "--cinema-image-crop-left": `${cropDraft.x * 100}%`,
+      "--cinema-image-crop-top": `${cropDraft.y * 100}%`,
+      "--cinema-image-crop-width": `${cropDraft.width * 100}%`,
+      "--cinema-image-crop-height": `${cropDraft.height * 100}%`,
     } as CSSProperties
     : undefined
 
   return (
     <>
-      <Handle
-        id="input"
-        type="target"
-        position={Position.Left}
-        className="cinema-node-handle cinema-node-handle-input"
-        style={accentStyle}
-      />
+      {data.hasIncomingImageEdge ? (
+        <Handle
+          id="input"
+          type="target"
+          position={Position.Left}
+          className="cinema-node-handle cinema-node-handle-input is-locked"
+          style={accentStyle}
+          isConnectable={false}
+        />
+      ) : null}
       <article
-        className={`cinema-local-image-node ${selected ? "is-selected" : ""}`}
+        ref={nodeRef}
+        className={`cinema-image-node is-ready ${selected ? "is-selected" : ""}`}
         style={accentStyle}
+        tabIndex={0}
+        onPointerDown={(event) => activateNodeOnPointerDown(event, id, data.onActivateNode)}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault()
+            event.stopPropagation()
+            data.onSelectNode?.(id)
+            return
+          }
+          if (event.key === "Escape") {
+            event.preventDefault()
+            event.stopPropagation()
+            data.onDismissNodeOverlay?.()
+            window.requestAnimationFrame(() => nodeRef.current?.focus())
+          }
+        }}
       >
         {selected ? (
-          <div className="cinema-local-image-toolbar nodrag nowheel" role="toolbar" aria-label="Image tools">
+          <div className="cinema-image-toolbar nodrag nowheel" role="toolbar" aria-label="Image tools">
             <button
               type="button"
-              className={`cinema-local-image-tool-button ${isCropEditorOpen ? "is-active" : ""}`}
+              className={`cinema-image-tool-button ${isCropEditorOpen ? "is-active" : ""}`}
               title="Crop image"
               aria-label="Crop image"
               aria-expanded={isCropEditorOpen}
@@ -4801,7 +5142,7 @@ function LocalImageCanvasNode({
             </button>
           </div>
         ) : null}
-        <header className="cinema-local-image-header">
+        <header className="cinema-image-header">
           <CinemaNodeTitle
             icon={Image}
             label="Image"
@@ -4816,7 +5157,7 @@ function LocalImageCanvasNode({
 
         <section
           ref={cropFrameRef}
-          className={`cinema-local-image-frame ${isCropEditorOpen ? "is-cropping" : ""}`}
+          className={`cinema-image-frame ${isCropEditorOpen ? "is-cropping" : ""}`}
           aria-label="Image preview"
           style={previewStyle}
         >
@@ -4836,34 +5177,34 @@ function LocalImageCanvasNode({
               />
               {isCropEditorOpen && cropDraft ? (
                 <div
-                  className="cinema-local-image-crop-layer nodrag nowheel"
+                  className="cinema-image-crop-layer nodrag nowheel"
                   role="group"
                   aria-label="Image crop editor"
                   style={cropLayerStyle}
                   onPointerDown={(event) => event.stopPropagation()}
                 >
-                  <div className="cinema-local-image-crop-scrim is-top" aria-hidden="true" />
-                  <div className="cinema-local-image-crop-scrim is-right" aria-hidden="true" />
-                  <div className="cinema-local-image-crop-scrim is-bottom" aria-hidden="true" />
-                  <div className="cinema-local-image-crop-scrim is-left" aria-hidden="true" />
+                  <div className="cinema-image-crop-scrim is-top" aria-hidden="true" />
+                  <div className="cinema-image-crop-scrim is-right" aria-hidden="true" />
+                  <div className="cinema-image-crop-scrim is-bottom" aria-hidden="true" />
+                  <div className="cinema-image-crop-scrim is-left" aria-hidden="true" />
                   <div
-                    className="cinema-local-image-crop-box"
+                    className="cinema-image-crop-box"
                     style={cropBoxStyle}
                     onPointerDown={(event) => startCropDrag("move", event)}
                   >
-                    {LOCAL_IMAGE_CROP_HANDLES.map((handle) => (
+                    {IMAGE_CROP_HANDLES.map((handle) => (
                       <span
                         key={handle}
-                        className={`cinema-local-image-crop-handle is-${handle}`}
+                        className={`cinema-image-crop-handle is-${handle}`}
                         aria-hidden="true"
                         onPointerDown={(event) => startCropDrag(handle, event)}
                       />
                     ))}
                   </div>
-                  <div className="cinema-local-image-crop-actions">
+                  <div className="cinema-image-crop-actions">
                     <button
                       type="button"
-                      className="cinema-local-image-crop-command"
+                      className="cinema-image-crop-command"
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
                         event.stopPropagation()
@@ -4875,7 +5216,7 @@ function LocalImageCanvasNode({
                     </button>
                     <button
                       type="button"
-                      className="cinema-local-image-crop-command"
+                      className="cinema-image-crop-command"
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
                         event.stopPropagation()
@@ -4887,7 +5228,7 @@ function LocalImageCanvasNode({
                     </button>
                     <button
                       type="button"
-                      className="cinema-local-image-crop-command is-primary"
+                      className="cinema-image-crop-command is-primary"
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
                         event.stopPropagation()
@@ -4902,14 +5243,14 @@ function LocalImageCanvasNode({
               ) : null}
             </>
           ) : (
-            <div className={`cinema-local-image-empty ${hasPreviewError ? "is-error" : ""}`}>
+            <div className={`cinema-image-empty ${hasPreviewError ? "is-error" : ""}`}>
               <Image size={28} aria-hidden="true" />
               <span>{hasPreviewError ? "Image unavailable" : "No image selected"}</span>
             </div>
           )}
         </section>
         {cropError ? (
-          <p className="cinema-local-image-crop-error" role="alert">{cropError}</p>
+          <p className="cinema-image-crop-error" role="alert">{cropError}</p>
         ) : null}
       </article>
       <Handle
@@ -5092,6 +5433,7 @@ function CustomApiCanvasNode({
       <article
         className={`cinema-custom-api-node ${selected ? "is-selected" : ""}`}
         style={accentStyle}
+        onPointerDown={(event) => activateNodeOnPointerDown(event, id, data.onActivateNode)}
       >
         <header className="cinema-node-header">
           <CinemaNodeTitle
@@ -5316,6 +5658,23 @@ function CustomApiCanvasNode({
   )
 }
 
+function ImageCanvasNode({
+  id,
+  data,
+  selected,
+  accentStyle,
+}: {
+  id: string
+  data: CinemaFlowNodeData
+  selected?: boolean
+  accentStyle: CSSProperties
+}) {
+  useCinemaImageViewportGuard(id, Boolean(selected), data.nodeInputOverlayRoot, data.rawData)
+  return readCinemaImageFinalAsset(data.rawData)
+    ? <ImageReadyState id={id} data={data} selected={selected} accentStyle={accentStyle} />
+    : <ImageCreationState id={id} data={data} selected={selected} accentStyle={accentStyle} />
+}
+
 function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
   const meta = NODE_META[data.cinemaType]
   const Icon = meta.icon
@@ -5331,12 +5690,8 @@ function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
     return <TextCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
   }
 
-  if (data.cinemaType === "image") {
-    return <ImageGenerationCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
-  }
-
-  if (data.cinemaType === "local-image") {
-    return <LocalImageCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
+  if (data.cinemaType === "image" || data.cinemaType === "local-image") {
+    return <ImageCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
   }
 
   if (data.cinemaType === "video") {
@@ -5359,6 +5714,7 @@ function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
       <article
         className={`cinema-node ${selected ? "is-selected" : ""}`}
         style={accentStyle}
+        onPointerDown={(event) => activateNodeOnPointerDown(event, id, data.onActivateNode)}
       >
         <header className="cinema-node-header">
           <CinemaNodeTitle
@@ -5415,8 +5771,7 @@ function formatAssetDimensions(asset: { width?: number; height?: number } | null
 }
 
 function selectedAssetForInspector(node: CinemaFlowNode) {
-  if (node.data.cinemaType === "image") return selectedImageAssetForNode(node)
-  if (node.data.cinemaType === "local-image") return selectedLocalImageAssetForNode(node)
+  if (node.data.cinemaType === "image" || node.data.cinemaType === "local-image") return selectedImageAssetForNode(node)
   if (node.data.cinemaType === "video") return selectedVideoAssetForNode(node)
   return null
 }
@@ -5447,13 +5802,26 @@ function inspectorRowsForNode(node: CinemaFlowNode) {
     addInspectorRow(rows, "Model", readRawString(rawData, "textModel"))
   }
 
-  if (node.data.cinemaType === "image") {
+  if (node.data.cinemaType === "image" || node.data.cinemaType === "local-image") {
+    addInspectorRow(rows, "Source", readRawString(rawData, "sourceKind"))
+    addInspectorRow(rows, "Source file", readRawString(rawData, "sourceFileName"))
     addInspectorRow(rows, "Prompt", readRawString(rawData, "prompt"), { multiline: true })
     addInspectorRow(rows, "Model", readRawString(rawData, "model"))
     addInspectorRow(rows, "Requested size", readRawString(rawData, "size"))
     addInspectorRow(rows, "Count", readRawNumber(rawData, "count", 0) || "")
+    addInspectorRow(rows, "Candidates", readCinemaImageCandidateAssets(rawData).length || "")
     addInspectorRow(rows, "Task ID", taskID)
     addInspectorRow(rows, "Generated", formatTaskTimestamp(readRawString(rawData, "generatedAt") || task?.updatedAt))
+    addInspectorRow(rows, "Derived from", readRawString(rawData, "derivedFromNodeID"))
+    addInspectorRow(rows, "Operation", readRawString(rawData, "derivedOperation"))
+    const crop = readImageCropRect(rawData)
+    if (crop) addInspectorRow(rows, "Crop", `${crop.width} x ${crop.height} at ${crop.x}, ${crop.y}`)
+    const cropOutputSize = readRawRecord(rawData, "cropOutputSize")
+    const cropOutputWidth = readRawNumber(cropOutputSize, "width", Number.NaN)
+    const cropOutputHeight = readRawNumber(cropOutputSize, "height", Number.NaN)
+    if (Number.isFinite(cropOutputWidth) && Number.isFinite(cropOutputHeight)) {
+      addInspectorRow(rows, "Crop output", `${cropOutputWidth} x ${cropOutputHeight}`)
+    }
   }
 
   if (node.data.cinemaType === "video") {
@@ -5466,20 +5834,6 @@ function inspectorRowsForNode(node: CinemaFlowNode) {
     addInspectorRow(rows, "Resolution", readRawString(rawData, "resolution"))
     addInspectorRow(rows, "Task ID", taskID)
     addInspectorRow(rows, "Updated", formatTaskTimestamp(task?.updatedAt))
-  }
-
-  if (node.data.cinemaType === "local-image") {
-    addInspectorRow(rows, "Source file", readRawString(rawData, "sourceFileName"))
-    addInspectorRow(rows, "Derived from", readRawString(rawData, "derivedFromNodeID"))
-    addInspectorRow(rows, "Operation", readRawString(rawData, "derivedOperation"))
-    const crop = readImageCropRect(rawData)
-    if (crop) addInspectorRow(rows, "Crop", `${crop.width} x ${crop.height} at ${crop.x}, ${crop.y}`)
-    const cropOutputSize = readRawRecord(rawData, "cropOutputSize")
-    const cropOutputWidth = readRawNumber(cropOutputSize, "width", Number.NaN)
-    const cropOutputHeight = readRawNumber(cropOutputSize, "height", Number.NaN)
-    if (Number.isFinite(cropOutputWidth) && Number.isFinite(cropOutputHeight)) {
-      addInspectorRow(rows, "Crop output", `${cropOutputWidth} x ${cropOutputHeight}`)
-    }
   }
 
   if (node.data.cinemaType === "custom-api") {
@@ -5740,34 +6094,16 @@ function ProjectFileBrowser({
 function ContextMenu({
   menu,
   onAddNode,
-  onImportLocalImageNode,
   onClose,
-  isImportingLocalImage,
 }: {
   menu: ContextMenuState
   onAddNode: (type: CinemaNodeType, position: { x: number; y: number }) => void
-  onImportLocalImageNode: (position: { x: number; y: number }) => void
   onClose: () => void
-  isImportingLocalImage: boolean
 }) {
   if (!menu) return null
 
   return (
     <div className="cinema-context-menu" style={{ left: menu.x, top: menu.y }} role="menu">
-      <button
-        type="button"
-        role="menuitem"
-        disabled={isImportingLocalImage}
-        onClick={() => {
-          onImportLocalImageNode({ x: menu.flowX, y: menu.flowY })
-          onClose()
-        }}
-      >
-        {isImportingLocalImage
-          ? <Loader2 size={15} aria-hidden="true" className="is-spinning" />
-          : <Upload size={15} aria-hidden="true" />}
-        <span>Add Image</span>
-      </button>
       {NODE_TYPES.map((type) => {
         const meta = NODE_META[type]
         const Icon = meta.icon
@@ -5860,28 +6196,40 @@ export function App() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
   const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState>(null)
   const [inspectorNodeID, setInspectorNodeID] = useState<string | null>(null)
-  const [activeCanvasPanel, setActiveCanvasPanel] = useState<CanvasPanel | null>("files")
+  const [activeCanvasPanel, setActiveCanvasPanel] = useState<CanvasPanel | null>(null)
   const [nodeInputOverlayRoot, setNodeInputOverlayRoot] = useState<HTMLDivElement | null>(null)
   const [saveState, setSaveState] = useState<SaveState>("idle")
   const [, setSaveError] = useState<string | null>(null)
   const [autoRefreshingTaskIDs, setAutoRefreshingTaskIDs] = useState<string[]>([])
   const [textGenerationNodeID, setTextGenerationNodeID] = useState<string | null>(null)
   const [textGenerationError, setTextGenerationError] = useState<{ nodeID: string; message: string } | null>(null)
-  const [imageGenerationNodeID, setImageGenerationNodeID] = useState<string | null>(null)
+  const [imageGenerationNodeIDs, setImageGenerationNodeIDs] = useState<Set<string>>(() => new Set())
   const [imageGenerationError, setImageGenerationError] = useState<{ nodeID: string; message: string } | null>(null)
   const [videoGenerationNodeID, setVideoGenerationNodeID] = useState<string | null>(null)
   const [videoGenerationError, setVideoGenerationError] = useState<{ nodeID: string; message: string } | null>(null)
   const [customApiNodeID, setCustomApiNodeID] = useState<string | null>(null)
   const [customApiError, setCustomApiError] = useState<{ nodeID: string; message: string } | null>(null)
-  const [localImageCropNodeID, setLocalImageCropNodeID] = useState<string | null>(null)
-  const [localImageCropError, setLocalImageCropError] = useState<{ nodeID: string; message: string } | null>(null)
+  const [imageImportNodeIDs, setImageImportNodeIDs] = useState<Set<string>>(() => new Set())
+  const [imageImportError, setImageImportError] = useState<{ nodeID: string; message: string } | null>(null)
+  const [imageFinalizeNodeIDs, setImageFinalizeNodeIDs] = useState<Set<string>>(() => new Set())
+  const [imageFinalizeError, setImageFinalizeError] = useState<{ nodeID: string; message: string } | null>(null)
+  const [imageCropNodeID, setImageCropNodeID] = useState<string | null>(null)
+  const [imageCropError, setImageCropError] = useState<{ nodeID: string; message: string } | null>(null)
   const saveStateRef = useRef<SaveState>("idle")
   const autoRefreshInFlightRef = useRef(false)
   const nodePatchTimersRef = useRef(new Map<string, number>())
   const nodePatchQueueRef = useRef(new Map<string, CinemaNodePatch>())
+  const editingNodeIDsRef = useRef(new Set<string>())
+  const deferredCanvasWhileEditingRef = useRef<CinemaCanvasDocument | null>(null)
   const eventCursorRef = useRef<number | null>(null)
-  const localImageInputRef = useRef<HTMLInputElement | null>(null)
-  const pendingLocalImagePositionRef = useRef<{ x: number; y: number } | null>(null)
+  const nodePointerPaneClickGuardRef = useRef<{ x: number; y: number; expiresAt: number } | null>(null)
+  const nodePointerPaneClickGuardTimerRef = useRef<number | null>(null)
+
+  useEffect(() => () => {
+    if (nodePointerPaneClickGuardTimerRef.current !== null) {
+      window.clearTimeout(nodePointerPaneClickGuardTimerRef.current)
+    }
+  }, [])
 
   const applyCanvas = useCallback((canvas: CinemaCanvasDocument) => {
     setNodes(toFlowNodes(canvas))
@@ -5952,6 +6300,14 @@ export function App() {
         setSaveState("dirty")
         return
       }
+      if (editingNodeIDsRef.current.size > 0) {
+        deferredCanvasWhileEditingRef.current = result.canvas
+        saveStateRef.current = "saved"
+        setSaveState("saved")
+        setSaveError(null)
+        return
+      }
+      deferredCanvasWhileEditingRef.current = null
       applyCanvas(result.canvas)
     },
     onError: (error) => {
@@ -6105,6 +6461,19 @@ export function App() {
 
   useEffect(() => {
     if (!canvasQuery.data) return
+    if (
+      editingNodeIDsRef.current.size > 0 ||
+      saveStateRef.current === "dirty" ||
+      saveStateRef.current === "saving" ||
+      nodePatchQueueRef.current.size > 0 ||
+      nodePatchTimersRef.current.size > 0
+    ) {
+      if (editingNodeIDsRef.current.size > 0) {
+        deferredCanvasWhileEditingRef.current = canvasQuery.data
+      }
+      return
+    }
+    deferredCanvasWhileEditingRef.current = null
     applyCanvas(canvasQuery.data)
   }, [applyCanvas, canvasQuery.data])
 
@@ -6248,8 +6617,10 @@ export function App() {
       )
     },
     onMutate: ({ nodeID }) => {
-      setImageGenerationNodeID(nodeID)
+      setImageGenerationNodeIDs((current) => new Set(current).add(nodeID))
       setImageGenerationError(null)
+      setImageImportError((current) => current?.nodeID === nodeID ? null : current)
+      setImageFinalizeError((current) => current?.nodeID === nodeID ? null : current)
       saveStateRef.current = "saving"
       setSaveState("saving")
       setSaveError(null)
@@ -6267,8 +6638,12 @@ export function App() {
         setSaveState(saveStateRef.current)
       }
     },
-    onSettled: () => {
-      setImageGenerationNodeID(null)
+    onSettled: (_data, _error, variables) => {
+      setImageGenerationNodeIDs((current) => {
+        const next = new Set(current)
+        next.delete(variables.nodeID)
+        return next
+      })
     },
   })
 
@@ -6357,8 +6732,16 @@ export function App() {
     },
   })
 
-  const importLocalImageMutation = useMutation({
-    mutationFn: async ({ file, position }: { file: File; position: { x: number; y: number } }) => {
+  const importImageMutation = useMutation({
+    mutationFn: async ({ nodeID, file }: { nodeID: string; file: File }) => {
+      const sourceNode = nodes.find((node) => node.id === nodeID)
+      if (!sourceNode || sourceNode.data.cinemaType !== "image") {
+        throw new Error("Image node is unavailable.")
+      }
+      if (deriveCinemaImageNodeState(sourceNode.data.rawData, readRawString(sourceNode.data.rawData, "status")) !== "empty") {
+        throw new Error("This image node already has content.")
+      }
+      await flushNodePatch(nodeID)
       const dataBase64 = await fileToDataBase64(file)
       const result = await requestJson<CinemaImportedImageAssetResult>(
         agentBaseURL,
@@ -6375,38 +6758,160 @@ export function App() {
           }),
         },
       )
-      return { result, file, position }
+      const nextRawData = canonicalizeCinemaImageNodeData(sourceNode.data.rawData)
+      for (const key of [
+        "candidateAssets",
+        "selectedCandidateAssetID",
+        "prompt",
+        "style",
+        "size",
+        "count",
+        "model",
+        "providerID",
+        "modelID",
+        "mode",
+        "taskID",
+        "progress",
+        "parameters",
+        "generatedAt",
+        "error",
+        "sourceImageAsset",
+        "sourceImageAssets",
+        "sourceImageAssetID",
+        "sourceImageAssetIDs",
+        "sourceImageAssetKey",
+        "sourceImageAssetKeys",
+        "sourceImagePath",
+        "sourceImagePaths",
+        "sourceImageSelectionMode",
+        "sourceNodeIDs",
+        "sourceTextPrompts",
+        "hiddenSourceImageAssetKeys",
+      ]) {
+        delete nextRawData[key]
+      }
+      Object.assign(nextRawData, {
+        asset: result.asset,
+        sourceKind: "upload",
+        sourceFileName: file.name,
+        importedAt: new Date().toISOString(),
+        status: "ready",
+      })
+      const updated = await requestJson<CinemaCommandResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: makeCommandID("update-node"),
+          type: "update-node",
+          actor: "cinema-web",
+          nodeID,
+          patch: { data: nextRawData },
+        } satisfies CinemaCommand),
+      })
+      return { canvas: updated.canvas, nodeID }
     },
-    onMutate: () => {
+    onMutate: ({ nodeID }) => {
+      setImageImportNodeIDs((current) => new Set(current).add(nodeID))
+      setImageImportError(null)
+      setImageGenerationError((current) => current?.nodeID === nodeID ? null : current)
+      setImageFinalizeError((current) => current?.nodeID === nodeID ? null : current)
       saveStateRef.current = "saving"
       setSaveState("saving")
       setSaveError(null)
     },
-    onSuccess: ({ result, file, position }) => {
-      const next = createLocalImageNode(result.asset, file.name, position)
-      commandMutation.mutate({
-        id: makeCommandID("create-node"),
-        type: "create-node",
-        actor: "cinema-web",
-        node: toCanvasNode(next),
-      }, {
-        onSuccess: () => setSelectedNodeID(next.id),
-      })
+    onSuccess: ({ canvas, nodeID }) => {
+      applyCanvas(canvas)
+      setSelectedNodeID(nodeID)
+      saveStateRef.current = "saved"
+      setSaveState("saved")
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      const message = error instanceof Error ? error.message : "Image import failed"
+      setImageImportError({ nodeID: variables.nodeID, message })
       saveStateRef.current = "error"
       setSaveState("error")
-      setSaveError(error instanceof Error ? error.message : "Image import failed")
+      setSaveError(message)
+    },
+    onSettled: (_data, _error, variables) => {
+      setImageImportNodeIDs((current) => {
+        const next = new Set(current)
+        next.delete(variables.nodeID)
+        return next
+      })
     },
   })
 
-  const createCroppedLocalImageMutation = useMutation({
+  const finalizeImageCandidateMutation = useMutation({
+    mutationFn: async ({ nodeID, candidateID }: { nodeID: string; candidateID: string }) => {
+      const sourceNode = nodes.find((node) => node.id === nodeID)
+      if (!sourceNode || sourceNode.data.cinemaType !== "image") {
+        throw new Error("Image node is unavailable.")
+      }
+      if (deriveCinemaImageNodeState(sourceNode.data.rawData) !== "choosing") {
+        throw new Error("This image node is no longer waiting for a choice.")
+      }
+      const nextRawData = finalizeCinemaImageCandidate(sourceNode.data.rawData, candidateID)
+      if (!readCinemaImageFinalAsset(nextRawData)) {
+        throw new Error("The selected image candidate is unavailable.")
+      }
+
+      await flushNodePatch(nodeID)
+      const updated = await requestJson<CinemaCommandResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: makeCommandID("update-node"),
+          type: "update-node",
+          actor: "cinema-web",
+          nodeID,
+          patch: { data: nextRawData },
+        } satisfies CinemaCommand),
+      })
+      return { canvas: updated.canvas, nodeID }
+    },
+    onMutate: ({ nodeID }) => {
+      setImageFinalizeNodeIDs((current) => new Set(current).add(nodeID))
+      setImageFinalizeError(null)
+      setImageGenerationError((current) => current?.nodeID === nodeID ? null : current)
+      setImageImportError((current) => current?.nodeID === nodeID ? null : current)
+      saveStateRef.current = "saving"
+      setSaveState("saving")
+      setSaveError(null)
+    },
+    onSuccess: ({ canvas, nodeID }) => {
+      applyCanvas(canvas)
+      setSelectedNodeID(nodeID)
+      saveStateRef.current = "saved"
+      setSaveState("saved")
+    },
+    onError: (error, variables) => {
+      const message = error instanceof Error ? error.message : "Image selection failed"
+      setImageFinalizeError({ nodeID: variables.nodeID, message })
+      saveStateRef.current = "error"
+      setSaveState("error")
+      setSaveError(message)
+      void refetchCanvas()
+    },
+    onSettled: (_data, _error, variables) => {
+      setImageFinalizeNodeIDs((current) => {
+        const next = new Set(current)
+        next.delete(variables.nodeID)
+        return next
+      })
+    },
+  })
+
+  const createCroppedImageMutation = useMutation({
     mutationFn: async ({ nodeID, crop }: { nodeID: string; crop: ImageCropRect }) => {
       const sourceNode = nodes.find((node) => node.id === nodeID)
-      if (!sourceNode || sourceNode.data.cinemaType !== "local-image") {
+      if (!sourceNode || sourceNode.data.cinemaType !== "image") {
         throw new Error("Source image node is unavailable.")
       }
-      const asset = readLocalImageAsset(sourceNode.data.rawData)
+      const asset = readFinalImageAsset(sourceNode.data.rawData)
       if (!asset) throw new Error("Source image asset is unavailable.")
       if (!agentBaseURL || !projectID) throw new Error("Cinema project is unavailable.")
 
@@ -6444,11 +6949,11 @@ export function App() {
           }),
         },
       )
-      const nextNode = createLocalImageNode(
+      const nextNode = createImageAssetNode(
         importResult.asset,
         nextFileName,
         {
-          x: sourceNode.position.x + LOCAL_IMAGE_CROP_NODE_OFFSET_X,
+          x: sourceNode.position.x + IMAGE_CROP_NODE_OFFSET_X,
           y: sourceNode.position.y,
         },
         {
@@ -6499,8 +7004,8 @@ export function App() {
       return { canvas: connected.canvas, nodeID: nextNode.id }
     },
     onMutate: ({ nodeID }) => {
-      setLocalImageCropNodeID(nodeID)
-      setLocalImageCropError(null)
+      setImageCropNodeID(nodeID)
+      setImageCropError(null)
       saveStateRef.current = "saving"
       setSaveState("saving")
       setSaveError(null)
@@ -6511,13 +7016,13 @@ export function App() {
     },
     onError: (error, variables) => {
       const message = error instanceof Error ? error.message : "Image crop failed"
-      setLocalImageCropError({ nodeID: variables.nodeID, message })
+      setImageCropError({ nodeID: variables.nodeID, message })
       saveStateRef.current = "error"
       setSaveState("error")
       setSaveError(message)
     },
     onSettled: () => {
-      setLocalImageCropNodeID(null)
+      setImageCropNodeID(null)
     },
   })
 
@@ -6527,7 +7032,14 @@ export function App() {
     let intervalID: number | null = null
 
     async function pollEvents() {
-      if (cancelled || saveStateRef.current === "dirty" || saveStateRef.current === "saving") return
+      if (
+        cancelled ||
+        editingNodeIDsRef.current.size > 0 ||
+        saveStateRef.current === "dirty" ||
+        saveStateRef.current === "saving"
+      ) {
+        return
+      }
 
       try {
         if (eventCursorRef.current === null) {
@@ -6576,6 +7088,7 @@ export function App() {
       if (
         cancelled ||
         autoRefreshInFlightRef.current ||
+        editingNodeIDsRef.current.size > 0 ||
         saveStateRef.current === "dirty" ||
         saveStateRef.current === "saving"
       ) {
@@ -6708,18 +7221,6 @@ export function App() {
     })
   }, [commandMutation, setSelectedNodeID])
 
-  const requestLocalImageImport = useCallback((position: { x: number; y: number }) => {
-    pendingLocalImagePositionRef.current = position
-    localImageInputRef.current?.click()
-  }, [])
-
-  const handleLocalImageFileChange = useCallback((file: File | null) => {
-    const position = pendingLocalImagePositionRef.current
-    pendingLocalImagePositionRef.current = null
-    if (!file || !position) return
-    importLocalImageMutation.mutate({ file, position })
-  }, [importLocalImageMutation])
-
   const toggleCanvasPanel = useCallback((panel: CanvasPanel) => {
     setActiveCanvasPanel((current) => current === panel ? null : panel)
   }, [])
@@ -6759,15 +7260,114 @@ export function App() {
     setInspectorNodeID((current) => current === nodeID ? current : null)
   }, [setSelectedNodeID])
 
+  const setNodeInputEditing = useCallback((nodeID: string, isEditing: boolean) => {
+    const editingNodeIDs = editingNodeIDsRef.current
+    const wasEditing = editingNodeIDs.has(nodeID)
+
+    if (isEditing) {
+      if (wasEditing) return
+      editingNodeIDs.add(nodeID)
+    } else {
+      if (!wasEditing) return
+      editingNodeIDs.delete(nodeID)
+    }
+
+    if (
+      !isEditing &&
+      editingNodeIDs.size === 0 &&
+      saveStateRef.current !== "dirty" &&
+      saveStateRef.current !== "saving" &&
+      nodePatchQueueRef.current.size === 0 &&
+      nodePatchTimersRef.current.size === 0
+    ) {
+      const deferredCanvas = deferredCanvasWhileEditingRef.current
+      if (deferredCanvas) {
+        deferredCanvasWhileEditingRef.current = null
+        applyCanvas(deferredCanvas)
+      }
+    }
+  }, [applyCanvas])
+
+  const clearNodePointerPaneClickGuard = useCallback(() => {
+    nodePointerPaneClickGuardRef.current = null
+    if (nodePointerPaneClickGuardTimerRef.current !== null) {
+      window.clearTimeout(nodePointerPaneClickGuardTimerRef.current)
+      nodePointerPaneClickGuardTimerRef.current = null
+    }
+  }, [])
+
+  const scheduleNodePointerPaneClickGuardClear = useCallback((event: PointerEvent) => {
+    clearNodePointerPaneClickGuard()
+    nodePointerPaneClickGuardRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      expiresAt: performance.now() + NODE_POINTER_PANE_CLICK_GUARD_MS,
+    }
+    nodePointerPaneClickGuardTimerRef.current = window.setTimeout(() => {
+      clearNodePointerPaneClickGuard()
+    }, NODE_POINTER_PANE_CLICK_GUARD_MS)
+  }, [clearNodePointerPaneClickGuard])
+
+  const activateNodeFromPointer = useCallback((nodeID: string, pointerID: number) => {
+    clearNodePointerPaneClickGuard()
+
+    const stopGuardAfterPointerEnd = (event: PointerEvent) => {
+      if (event.pointerId !== pointerID) return
+      window.removeEventListener("pointerup", stopGuardAfterPointerEnd)
+      window.removeEventListener("pointercancel", stopGuardAfterPointerEnd)
+      scheduleNodePointerPaneClickGuardClear(event)
+    }
+
+    window.addEventListener("pointerup", stopGuardAfterPointerEnd)
+    window.addEventListener("pointercancel", stopGuardAfterPointerEnd)
+    selectNodeOnly(nodeID)
+  }, [clearNodePointerPaneClickGuard, scheduleNodePointerPaneClickGuardClear, selectNodeOnly])
+
   const showNodeDetails = useCallback((nodeID: string) => {
     setSelectedNodeID(nodeID)
     setInspectorNodeID(nodeID)
   }, [setSelectedNodeID])
 
-  const clearCanvasSelection = useCallback(() => {
+  const clearCanvasSelection = useCallback((event?: ReactMouseEvent<Element>) => {
+    const guard = nodePointerPaneClickGuardRef.current
+    if (event && guard && performance.now() <= guard.expiresAt) {
+      const distance = Math.hypot(event.clientX - guard.x, event.clientY - guard.y)
+      if (distance <= NODE_POINTER_PANE_CLICK_GUARD_DISTANCE_PX) {
+        clearNodePointerPaneClickGuard()
+        return
+      }
+    }
+
+    clearNodePointerPaneClickGuard()
     setSelectedNodeID(null)
     setInspectorNodeID(null)
-  }, [setSelectedNodeID])
+  }, [clearNodePointerPaneClickGuard, setSelectedNodeID])
+
+  const clearCanvasSelectionOnPointerDown = useCallback((event: ReactPointerEvent<Element>) => {
+    if (event.button !== 0 || !event.isPrimary) return
+    const target = event.target
+    if (!(target instanceof Element)) return
+    if (
+      target.closest(
+        [
+          ".react-flow__node",
+          ".react-flow__handle",
+          ".react-flow__controls",
+          ".react-flow__minimap",
+          ".react-flow__attribution",
+          ".cinema-node-overlay-panel",
+          ".cinema-context-menu",
+          ".cinema-file-browser",
+          ".cinema-node-inspector",
+          ".cinema-canvas-nav",
+        ].join(", "),
+      )
+    ) {
+      return
+    }
+
+    clearCanvasSelection()
+  }, [clearCanvasSelection])
 
   const changeNode = useCallback((nodeID: string, update: Partial<CinemaFlowNodeData>) => {
     setNodes((current) =>
@@ -6804,6 +7404,20 @@ export function App() {
     })
   }, [commandMutation, setSelectedNodeID])
 
+  useEffect(() => {
+    const handleDeleteSelectedNode = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return
+      if (event.key !== "Backspace" && event.key !== "Delete") return
+      if (!selectedNodeID || editingNodeIDsRef.current.size > 0 || isEditableElement(event.target)) return
+
+      event.preventDefault()
+      deleteNode(selectedNodeID)
+    }
+
+    window.addEventListener("keydown", handleDeleteSelectedNode)
+    return () => window.removeEventListener("keydown", handleDeleteSelectedNode)
+  }, [deleteNode, selectedNodeID])
+
   const textModels = textModelsQuery.data?.items ?? []
   const effectiveTextModel = textModelsQuery.data?.effectiveModel ?? null
   const imageModels = imageModelsQuery.data?.items ?? []
@@ -6816,6 +7430,9 @@ export function App() {
         ...node.data,
         onChangeRawData: (nodeID: string, rawData: Record<string, unknown>) => changeNode(nodeID, { rawData }),
         onChangeTitle: (nodeID: string, title: string) => changeNode(nodeID, { title }),
+        onActivateNode: activateNodeFromPointer,
+        onSelectNode: selectNodeOnly,
+        onNodeInputEditingChange: setNodeInputEditing,
         onDeleteNode: deleteNode,
         textModels,
         effectiveTextModel,
@@ -6828,8 +7445,10 @@ export function App() {
           createTextGenerationMutation.mutate({ nodeID, request }),
         imageModels,
         effectiveImageModel,
-        isGeneratingImage: createImageGenerationMutation.isPending && imageGenerationNodeID === node.id,
+        isGeneratingImage: imageGenerationNodeIDs.has(node.id),
         imageGenerationError: imageGenerationError?.nodeID === node.id ? imageGenerationError.message : null,
+        isFinalizingImageCandidate: imageFinalizeNodeIDs.has(node.id),
+        imageFinalizeError: imageFinalizeError?.nodeID === node.id ? imageFinalizeError.message : null,
         sourceTextParameters: node.data.cinemaType === "image" || node.data.cinemaType === "video"
           ? sourceTextParametersForNode(node.id, nodes, edges)
           : [],
@@ -6855,17 +7474,26 @@ export function App() {
           runCustomApiMutation.mutateAsync({ nodeID, request }),
         onSaveCustomApiKey: (nodeID: string, request: CustomApiAuthSaveRequest) =>
           saveCustomApiKeyMutation.mutateAsync({ nodeID, request }),
-        isCroppingLocalImage: createCroppedLocalImageMutation.isPending && localImageCropNodeID === node.id,
-        localImageCropError: localImageCropError?.nodeID === node.id ? localImageCropError.message : null,
-        onCreateCroppedLocalImageNode: (nodeID: string, crop: ImageCropRect) =>
-          createCroppedLocalImageMutation.mutateAsync({ nodeID, crop }).then(() => undefined),
+        isImportingImage: imageImportNodeIDs.has(node.id),
+        imageImportError: imageImportError?.nodeID === node.id ? imageImportError.message : null,
+        onImportImage: (nodeID: string, file: File) =>
+          importImageMutation.mutate({ nodeID, file }),
+        onFinalizeImageCandidate: (nodeID: string, candidateID: string) =>
+          finalizeImageCandidateMutation.mutate({ nodeID, candidateID }),
+        isCroppingImage: createCroppedImageMutation.isPending && imageCropNodeID === node.id,
+        imageCropError: imageCropError?.nodeID === node.id ? imageCropError.message : null,
+        onCreateCroppedImageNode: (nodeID: string, crop: ImageCropRect) =>
+          createCroppedImageMutation.mutateAsync({ nodeID, crop }).then(() => undefined),
+        hasIncomingImageEdge: edges.some((edge) => edge.target === node.id),
+        onDismissNodeOverlay: clearCanvasSelection,
         nodeInputOverlayRoot,
       },
     })),
     [
       agentBaseURL,
+      activateNodeFromPointer,
       changeNode,
-      createCroppedLocalImageMutation,
+      createCroppedImageMutation,
       createGenerationTaskMutation,
       createImageGenerationMutation,
       createTextGenerationMutation,
@@ -6877,28 +7505,33 @@ export function App() {
       effectiveImageModel,
       effectiveTextModel,
       imageGenerationError,
-      imageGenerationNodeID,
+      imageGenerationNodeIDs,
       imageModels,
-      localImageCropError,
-      localImageCropNodeID,
+      imageCropError,
+      imageCropNodeID,
+      imageImportError,
+      imageImportNodeIDs,
+      imageFinalizeError,
+      imageFinalizeNodeIDs,
+      finalizeImageCandidateMutation,
+      importImageMutation,
       nodes,
       nodeInputOverlayRoot,
       projectID,
       providersQuery.data,
       runCustomApiMutation,
       saveCustomApiKeyMutation,
+      setNodeInputEditing,
+      selectNodeOnly,
       tasksQuery.data,
       textGenerationError,
       textGenerationNodeID,
       textModels,
       selectedNodeID,
+      clearCanvasSelection,
       videoGenerationError,
       videoGenerationNodeID,
     ],
-  )
-  const selectedNode = useMemo(
-    () => selectedNodeID ? renderedNodes.find((node) => node.id === selectedNodeID) ?? null : null,
-    [renderedNodes, selectedNodeID],
   )
   const inspectorNode = useMemo(
     () => inspectorNodeID ? renderedNodes.find((node) => node.id === inspectorNodeID) ?? null : null,
@@ -6960,19 +7593,6 @@ export function App() {
         setNodeContextMenu(null)
       }}
     >
-      <input
-        ref={localImageInputRef}
-        className="cinema-local-image-input"
-        type="file"
-        accept={LOCAL_IMAGE_FILE_ACCEPT}
-        tabIndex={-1}
-        aria-hidden="true"
-        onChange={(event) => {
-          const file = event.currentTarget.files?.[0] ?? null
-          event.currentTarget.value = ""
-          handleLocalImageFileChange(file)
-        }}
-      />
       <section className="cinema-workspace">
         <div className="cinema-canvas">
           <ReactFlow<CinemaFlowNode, Edge>
@@ -6990,19 +7610,21 @@ export function App() {
             onNodeContextMenu={onNodeContextMenu}
             onPaneClick={clearCanvasSelection}
             onPaneContextMenu={onPaneContextMenu}
+            onPointerDownCapture={clearCanvasSelectionOnPointerDown}
             fitView
             fitViewOptions={{ padding: 0.38 }}
             minZoom={0.2}
             maxZoom={2}
             panOnDrag={[1]}
+            deleteKeyCode={null}
             selectionOnDrag
           >
-            <Background gap={32} size={1.2} color="rgba(255,255,255,0.16)" />
+            <Background gap={32} size={1.2} color="var(--cinema-canvas-grid)" />
             <Controls position="bottom-center" orientation="horizontal" />
             <MiniMap
               position="bottom-left"
               nodeColor={(node) => NODE_META[(node as CinemaFlowNode).data.cinemaType].accent}
-              maskColor="rgba(0,0,0,0.55)"
+              maskColor="var(--cinema-minimap-mask)"
               pannable
               zoomable
             />
@@ -7011,16 +7633,14 @@ export function App() {
           <ContextMenu
             menu={contextMenu}
             onAddNode={addNode}
-            onImportLocalImageNode={requestLocalImageImport}
             onClose={() => setContextMenu(null)}
-            isImportingLocalImage={importLocalImageMutation.isPending}
           />
           <NodeContextMenu
             menu={nodeContextMenu}
             onShowDetails={showNodeDetails}
             onClose={() => setNodeContextMenu(null)}
           />
-          {activeCanvasPanel === "files" && !selectedNode ? (
+          {activeCanvasPanel === "files" ? (
             <ProjectFileBrowser
               projectID={projectID}
               agentBaseURL={agentBaseURL}

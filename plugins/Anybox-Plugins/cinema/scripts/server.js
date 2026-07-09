@@ -21,6 +21,15 @@ const NODE_TYPES = new Set([
   "generation-task",
   "output"
 ])
+// Accepted only at the file/tool boundary. All normalized canvases persist the
+// canonical `image` type so new commands cannot reintroduce this legacy alias.
+const LEGACY_NODE_TYPE_ALIASES = new Map([
+  ["local-image", "image"]
+])
+const ACCEPTED_NODE_TYPES = new Set([
+  ...NODE_TYPES,
+  ...LEGACY_NODE_TYPE_ALIASES.keys()
+])
 
 const projectRootSchema = {
   type: "string",
@@ -54,7 +63,7 @@ const canvasNodeSchema = {
     id: { type: "string", minLength: 1 },
     type: {
       type: "string",
-      enum: [...NODE_TYPES]
+      enum: [...ACCEPTED_NODE_TYPES]
     },
     title: { type: "string", minLength: 1 },
     position: positionSchema,
@@ -109,7 +118,7 @@ const commandSchema = {
     patch: {
       type: "object",
       properties: {
-        type: { type: "string", enum: [...NODE_TYPES] },
+        type: { type: "string", enum: [...ACCEPTED_NODE_TYPES] },
         title: { type: "string", minLength: 1 },
         position: positionSchema,
         size: sizeSchema,
@@ -409,12 +418,90 @@ function normalizeViewport(value, label) {
   }
 }
 
+function normalizeNodeType(value, label, options = {}) {
+  const type = assertString(value, label)
+  if (!ACCEPTED_NODE_TYPES.has(type)) {
+    throw pluginError(
+      options.code ?? "CINEMA_INVALID_INPUT",
+      `${label} '${type}' is not supported.`,
+      options.status ?? 400
+    )
+  }
+  return LEGACY_NODE_TYPE_ALIASES.get(type) ?? type
+}
+
+function normalizeImageNodeData(value, label, originalType) {
+  const data = cloneJson(assertDataObject(value, label))
+  const normalizeImageAsset = (asset) => (
+    isPlainObject(asset)
+      && typeof asset.id === "string"
+      && asset.id.trim().length > 0
+      && asset.kind === "image"
+      && typeof asset.path === "string"
+      && asset.path.trim().length > 0
+      ? cloneJson(asset)
+      : undefined
+  )
+  const directAsset = normalizeImageAsset(data.asset)
+  const legacyResultAssets = Array.isArray(data.resultAssets)
+    ? data.resultAssets.map(normalizeImageAsset).filter(Boolean)
+    : []
+  const selectedAssetID = typeof data.selectedAssetID === "string" ? data.selectedAssetID : undefined
+  const selectedLegacyAsset = legacyResultAssets.find((asset) => asset.id === selectedAssetID) ?? legacyResultAssets[0]
+  const finalAsset = directAsset ?? selectedLegacyAsset
+  const candidateAssets = Array.isArray(data.candidateAssets)
+    ? data.candidateAssets.map(normalizeImageAsset).filter(Boolean)
+    : []
+
+  if (finalAsset) {
+    data.asset = finalAsset
+    delete data.candidateAssets
+    delete data.selectedCandidateAssetID
+  } else {
+    delete data.asset
+    if (candidateAssets.length > 0) {
+      data.candidateAssets = candidateAssets
+      const selectedCandidateAssetID = typeof data.selectedCandidateAssetID === "string"
+        ? data.selectedCandidateAssetID
+        : undefined
+      data.selectedCandidateAssetID = candidateAssets.some((asset) => asset.id === selectedCandidateAssetID)
+        ? selectedCandidateAssetID
+        : candidateAssets[0].id
+    } else {
+      delete data.candidateAssets
+      delete data.selectedCandidateAssetID
+    }
+  }
+
+  if (!["upload", "generation", "crop"].includes(data.sourceKind)) {
+    if (!directAsset && selectedLegacyAsset) {
+      data.sourceKind = "generation"
+    } else if (directAsset) {
+      data.sourceKind = data.derivedOperation === "crop"
+        ? "crop"
+        : originalType === "local-image"
+          ? "upload"
+          : [data.taskID, data.providerID, data.modelID, data.generatedAt].some((entry) =>
+              typeof entry === "string" && entry.trim().length > 0
+            )
+            ? "generation"
+            : "upload"
+    } else if (candidateAssets.length > 0) {
+      data.sourceKind = "generation"
+    } else if (!finalAsset) {
+      delete data.sourceKind
+    }
+  }
+
+  delete data.resultAssets
+  delete data.selectedAssetID
+  return data
+}
+
 function normalizeNode(value, label) {
   assertPlainObject(value, label)
-  const type = assertString(value.type, `${label}.type`)
-  if (!NODE_TYPES.has(type)) {
-    throw pluginError("CINEMA_INVALID_INPUT", `${label}.type '${type}' is not supported.`, 400)
-  }
+  const originalType = assertString(value.type, `${label}.type`)
+  const type = normalizeNodeType(originalType, `${label}.type`)
 
   return compactObject({
     id: assertString(value.id, `${label}.id`),
@@ -422,7 +509,11 @@ function normalizeNode(value, label) {
     title: assertString(value.title, `${label}.title`),
     position: normalizePosition(value.position, `${label}.position`),
     size: value.size === undefined ? undefined : normalizeSize(value.size, `${label}.size`),
-    data: value.data === undefined ? undefined : cloneJson(assertDataObject(value.data, `${label}.data`))
+    data: value.data === undefined
+      ? undefined
+      : type === "image"
+        ? normalizeImageNodeData(value.data, `${label}.data`, originalType)
+        : cloneJson(assertDataObject(value.data, `${label}.data`))
   })
 }
 
@@ -448,11 +539,7 @@ function normalizeNodePatch(value) {
   assertPlainObject(value, "command.patch")
   const patch = {}
   if (value.type !== undefined) {
-    const type = assertString(value.type, "command.patch.type")
-    if (!NODE_TYPES.has(type)) {
-      throw pluginError("CINEMA_INVALID_INPUT", `command.patch.type '${type}' is not supported.`, 400)
-    }
-    patch.type = type
+    patch.type = normalizeNodeType(value.type, "command.patch.type")
   }
   if (value.title !== undefined) patch.title = assertString(value.title, "command.patch.title")
   if (value.position !== undefined) patch.position = normalizePosition(value.position, "command.patch.position")
@@ -477,19 +564,22 @@ function normalizeCanvas(value, fileLabel) {
     throw pluginError("CINEMA_METADATA_INVALID", `${fileLabel}.canvasType must be node-canvas.`, 409)
   }
 
+  const normalizedNodes = nodes.map((node, index) => normalizeNode(node, `${fileLabel}.nodes[${index}]`))
+  const normalizedNodeTypes = new Set(nodeTypes.map((type, index) =>
+    normalizeNodeType(type, `${fileLabel}.nodeTypes[${index}]`, {
+      code: "CINEMA_METADATA_INVALID",
+      status: 409
+    })
+  ))
+  for (const node of normalizedNodes) normalizedNodeTypes.add(node.type)
+
   return {
     schemaVersion: 1,
     canvasType: "node-canvas",
     viewport: normalizeViewport(value.viewport, `${fileLabel}.viewport`),
-    nodes: nodes.map((node, index) => normalizeNode(node, `${fileLabel}.nodes[${index}]`)),
+    nodes: normalizedNodes,
     edges: edges.map((edge, index) => normalizeEdge(edge, `${fileLabel}.edges[${index}]`)),
-    nodeTypes: nodeTypes.map((type, index) => {
-      const normalized = assertString(type, `${fileLabel}.nodeTypes[${index}]`)
-      if (!NODE_TYPES.has(normalized)) {
-        throw pluginError("CINEMA_METADATA_INVALID", `${fileLabel}.nodeTypes[${index}] '${normalized}' is not supported.`, 409)
-      }
-      return normalized
-    })
+    nodeTypes: [...normalizedNodeTypes]
   }
 }
 

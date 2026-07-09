@@ -140,12 +140,24 @@ data
 前端再根据 `cinemaType` 渲染不同节点：
 
 1. Text 节点有文本编辑器、复制、下载和文本生成输入框。
-2. Image 节点有 prompt、模型选择、尺寸、数量和图片结果预览。
+2. Image 节点统一承载上传、AI 生成和裁剪来源；空节点提供创建入口，获得最终资产后只保留预览和裁剪。
 3. Video 节点有生成模式、Provider、模型、比例、时长、分辨率、参数 JSON 和视频预览。
 4. 普通节点使用通用卡片样式展示标题、状态和内容。
 5. Inspector 面板根据选中节点展示更细的编辑和任务操作能力。
 
 换句话说，底层数据模型是统一的，UI 表现是按节点类型分化的。这是典型的“稳定内核 + 可扩展表现层”。
+
+图片节点进一步把“图片是什么”和“图片如何得到”分开。持久化类型始终是 `image`，来源写在开放的 `data` 中：
+
+```text
+asset                       最终资产，也是唯一可供下游消费的图片
+candidateAssets             多图生成后、确认前的候选资产
+selectedCandidateAssetID    当前预览的候选
+sourceKind                  upload | generation | crop
+prompt / model / taskID     生成审计信息
+```
+
+UI 状态不额外持久化，而是从这些字段推导：有 `asset` 就是 Ready；没有 `asset` 但有候选就是 Choosing；任务为 queued 或 running 就是 Generating；其余是 Empty 或可重试错误态。旧项目中的 `local-image` 只是读取边界上的兼容别名，会被规范化成 `image`；旧的 `resultAssets + selectedAssetID` 会选择已选结果或第一张结果，迁移为最终 `asset`。读取本身不写盘，下一次正常 command 或 canvas write 再惰性保存规范数据。
 
 ## 6. 状态管理：本地即时反馈，服务端最终确认
 
@@ -252,25 +264,35 @@ writeMode: "append"
 
 这个链路的关键点是：生成结果进入项目状态，而不是只存在浏览器内存里。因此刷新页面后，生成内容依然保留在 `canvas.json` 中。
 
-## 10. 图片生成链路：Image Node 也是生成任务节点
+## 10. 统一图片链路：上传和生成汇入同一个 Image Node
 
-图片生成和文本生成类似，但它更接近任务系统。
+用户在画布上只面对一种 Image 节点。节点刚创建时是 Empty：默认只显示标题和稳定的 1:1 占位区，选中后才在上方显示上传入口、下方显示图片生成 composer。上传与生成是填充同一个空节点的两条互斥路径，不再创建“本地图片节点”和“图片生成节点”两个概念。
 
-Image 节点负责输入 prompt、选择 image model、设置 size 和 count。前端调用：
+上传走已有资产导入接口：
+
+```text
+POST /api/cinema/projects/:projectID/assets/imports
+```
+
+导入成功后，前端通过 `update-node` 把返回资产写入当前节点的 `data.asset`，并设置 `sourceKind: "upload"`。节点 ID、位置和已有连线保持不变；取消选择文件或上传失败时，节点仍保持 Empty。
+
+图片生成仍然允许用户输入 prompt、选择 image model、设置 size 和 count，并调用：
 
 ```text
 POST /api/cinema/projects/:projectID/image-generations
 ```
 
-后端会把这次请求转换成一个 `text-to-image` 类型的 generation task，并绑定到当前 image 节点上。Provider Runtime 会创建任务，任务数据写入 `.anybox-cinema/tasks/:taskID.json`，同时通过 `syncTaskToCanvas` 把任务状态和输出资产同步回画布节点。
+后端会把这次请求转换成一个 `text-to-image` 类型的 generation task，并绑定到当前 image 节点上。Provider Runtime 会创建任务，任务数据写入 `.anybox-cinema/tasks/:taskID.json`，同时通过 `syncTaskToCanvas` 把任务状态和输出资产同步回画布节点。节点已经有最终 `asset` 或尚未确认的 `candidateAssets` 时，生成入口返回 `409 CINEMA_IMAGE_NODE_FINALIZED`，从服务端守住一次填充约束。
 
-如果生成成功，Image 节点的 `data.resultAssets` 会包含图片资产路径。前端再通过资产接口预览：
+生成只返回一张图片时，任务同步直接把它写入 `data.asset` 并设置 `sourceKind: "generation"`；返回多张时，结果先写入 `candidateAssets`，并用 `selectedCandidateAssetID` 记录当前预览。此时节点处于 Choosing，下游还读不到候选。用户点击唯一主操作“使用此图片”后，前端通过 `update-node` 把选中候选移到 `asset` 并清除候选字段。任务文件仍保留完整输出，画布节点只保留确定的最终图片。
+
+最终图片通过资产接口预览：
 
 ```text
 GET /api/cinema/projects/:projectID/assets/*
 ```
 
-也就是说，图片节点既是输入表单，也是任务状态展示器，还是结果资产预览器。
+因此 Image 节点是一个一次性填充的资产容器：Empty 时可以上传或生成，过程中显示任务状态，Choosing 时只负责候选确认，Ready 后只展示最终图片和裁剪工具。上传图、生成图和裁剪图在下游都遵守同一个 `data.asset` 契约；Ready 节点不再提供替换、重新生成或版本切换。
 
 ## 11. 视频生成链路：Provider、模型、模式和源节点
 
@@ -289,7 +311,7 @@ motion-control
 
 当前前端 Video 节点主要开放了 `text-to-video` 和 `image-to-video` 两类模式。它会根据所选模式过滤可用 Provider，再根据 Provider 过滤可用模型，同时读取模型支持的比例、时长和分辨率。
 
-图生视频还有一个很有意思的节点关系：Video 节点会检查入边。如果有一个 Image 节点连接到当前 Video 节点，并且 Image 节点有已生成资产，那么这个图片资产就会作为 `sourceImageAsset` 注入 Video 节点，用于图生视频。
+图生视频还有一个很有意思的节点关系：Video 节点会检查入边。如果有一个 Image 节点连接到当前 Video 节点，并且 Image 节点有最终 `asset`，那么无论它来自上传、生成还是裁剪，这个图片资产都会作为 `sourceImageAsset` 注入 Video 节点。未确认的 `candidateAssets` 不参与下游解析。
 
 这说明 CinemaWeb 的连线不只是视觉关系，它开始承载生成上下文。节点图未来可以进一步发展成真正的创作 DAG：上游节点提供素材，下游节点消费素材，生成任务记录每一步产物。
 
@@ -376,6 +398,8 @@ nodeTypes
 
 `CinemaCommandSchema` 则使用 discriminated union 定义所有命令。这个模式非常适合会长期演化的产品：新增节点类型、新增任务模式、新增 Provider 参数时，可以先从 contract 层扩展，再让前端和后端跟进。
 
+统一图片节点没有升级 `schemaVersion`。Shared contract 暂时继续接受 deprecated 的 `local-image`，Agent 和 Cinema 插件在解析边界把它转换为 canonical `image`，同时归一化 `nodeTypes` 并去重。这样旧画布可以无损打开，节点 ID、位置、尺寸、边、handle、资产路径和任务 metadata 都不会因为迁移丢失；新写入的数据则不会重新产生旧类型和旧结果字段。
+
 ## 15. UI 架构：画布主区域 + Inspector 侧栏
 
 页面结构上，CinemaWeb 是一个典型的创作工具布局：
@@ -396,8 +420,8 @@ cinema-shell
 
 1. Handle 负责连接能力。
 2. Header 负责节点类型、标题和状态。
-3. Preview 负责展示生成结果。
-4. Composer 负责输入 prompt 和参数。
+3. Preview 负责展示最终资产，或在 Choosing 状态展示当前候选。
+4. Composer 只在 Empty 图片节点中负责输入 prompt 和参数；Ready 后从节点界面移除。
 5. Footer 或 Inspector 负责补充操作。
 
 这种结构让每个节点都像一个小型工具，而不只是画布上的标签。

@@ -4,6 +4,7 @@ export const CinemaNodeTypeSchema = z.enum([
   "text",
   "prompt",
   "image",
+  // Deprecated compatibility alias. New canvases persist image nodes as "image".
   "local-image",
   "video",
   "audio",
@@ -344,6 +345,34 @@ export const CinemaGeneratedAssetSchema = z.object({
   url: z.string().url().optional(),
 })
 export type CinemaGeneratedAsset = z.infer<typeof CinemaGeneratedAssetSchema>
+
+export const CinemaImageNodeSourceKindSchema = z.enum(["upload", "generation", "crop"])
+export type CinemaImageNodeSourceKind = z.infer<typeof CinemaImageNodeSourceKindSchema>
+
+export const CinemaImageNodeAssetSchema = CinemaGeneratedAssetSchema.extend({
+  kind: z.literal("image"),
+})
+export type CinemaImageNodeAsset = z.infer<typeof CinemaImageNodeAssetSchema>
+
+export const CinemaImageNodeDataSchema = z.object({
+  asset: CinemaImageNodeAssetSchema.optional(),
+  candidateAssets: z.array(CinemaImageNodeAssetSchema).optional(),
+  selectedCandidateAssetID: z.string().min(1).optional(),
+  sourceKind: CinemaImageNodeSourceKindSchema.optional(),
+  sourceFileName: z.string().min(1).optional(),
+  importedAt: z.string().min(1).optional(),
+  prompt: z.string().optional(),
+  model: z.string().min(1).optional(),
+  providerID: z.string().min(1).optional(),
+  modelID: z.string().min(1).optional(),
+  taskID: z.string().min(1).optional(),
+  status: z.string().min(1).optional(),
+  progress: CinemaGenerationProgressSchema.optional(),
+  parameters: z.record(z.string(), z.unknown()).optional(),
+  generatedAt: z.string().min(1).optional(),
+  error: z.string().nullable().optional(),
+}).passthrough()
+export type CinemaImageNodeData = z.infer<typeof CinemaImageNodeDataSchema>
 
 export const CinemaVideoProviderManifestSchema = z.object({
   id: z.string().min(1),
