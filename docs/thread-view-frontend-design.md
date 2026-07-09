@@ -421,7 +421,7 @@ RightSidebar side-chat tab
 - `.user-message` 使用 `justify-items: end`。
 - `.user-bubble` 最大宽度为 `min(100%, 520px)`。
 - 背景使用 `--surface-user-bubble`，区别于 assistant 正文。
-- 附件以 chip strip 显示，长文件名省略。
+- 附件以 strip 显示：raster 图片在 composer 和 user message 中使用 56px 缩略图，PDF、SVG 和不支持的文件保留文件名 chip，长文件名省略。
 
 用户消息的设计意图是明确“这是输入”，但不占满整个阅读宽度。
 

@@ -705,6 +705,66 @@ describe("Composer", () => {
     expect(onSend).not.toHaveBeenCalled()
   })
 
+  it("renders raster image attachments as thumbnails and keeps the remove action", () => {
+    const onRemoveAttachment = vi.fn()
+    const imagePath = "C:\\Temp\\screenshot.png"
+
+    renderComposer({
+      attachments: [{ name: "screenshot.png", path: imagePath }],
+      onRemoveAttachment,
+    })
+
+    const image = screen.getByRole("img", { name: "screenshot.png" })
+
+    expect(image).toHaveClass("composer-attachment-thumbnail")
+    expect(image).toHaveAttribute(
+      "src",
+      `anybox-local-image://image?source=${encodeURIComponent(imagePath)}`,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove screenshot.png" }))
+
+    expect(onRemoveAttachment).toHaveBeenCalledWith(imagePath)
+  })
+
+  it("keeps PDF and SVG attachments as file chips", () => {
+    renderComposer({
+      attachments: [
+        { name: "brief.pdf", path: "C:\\Refs\\brief.pdf" },
+        { name: "icon.svg", path: "C:\\Refs\\icon.svg" },
+      ],
+    })
+
+    expect(screen.getByText("brief.pdf")).toHaveClass("composer-attachment-name")
+    expect(screen.getByText("icon.svg")).toHaveClass("composer-attachment-name")
+    expect(screen.queryByRole("img", { name: "brief.pdf" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("img", { name: "icon.svg" })).not.toBeInTheDocument()
+  })
+
+  it("falls back to a file chip when an image thumbnail fails to load", async () => {
+    renderComposer({
+      attachments: [{ name: "screenshot.png", path: "C:\\Temp\\screenshot.png" }],
+    })
+
+    fireEvent.error(screen.getByRole("img", { name: "screenshot.png" }))
+
+    expect(await screen.findByText("screenshot.png")).toHaveClass("composer-attachment-name")
+    expect(screen.queryByRole("img", { name: "screenshot.png" })).not.toBeInTheDocument()
+  })
+
+  it("keeps invalid state on image attachment thumbnails", () => {
+    const imagePath = "C:\\Temp\\screenshot.png"
+    const { container } = renderComposer({
+      attachments: [{ name: "screenshot.png", path: imagePath }],
+      unsupportedAttachmentPaths: [imagePath],
+    })
+
+    const chip = container.querySelector(".composer-attachment-chip.is-image-preview")
+
+    expect(chip).toHaveClass("is-invalid")
+    expect(chip).toContainElement(screen.getByRole("img", { name: "screenshot.png" }))
+  })
+
   it("uses Enter to stop while sending with an empty draft", () => {
     const onCancelSend = vi.fn()
     const onSend = vi.fn()

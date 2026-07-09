@@ -1,5 +1,6 @@
 ﻿import { Component, memo, useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ErrorInfo, type FormEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject, type WheelEvent as ReactWheelEvent } from "react"
 import { createPortal } from "react-dom"
+import { toLocalImageProtocolUrl } from "../../../../shared/local-image-protocol"
 import { getAgentSessionBridge } from "../agent-session/client"
 import { Composer } from "../composer/Composer"
 import { ComposerConcurrentInputDrawer } from "../composer/ComposerConcurrentInputDrawer"
@@ -56,7 +57,8 @@ import type {
   SessionDiffSummary,
   SessionSummary,
   ThreadMessage,
-  UserThreadMessage
+  UserThreadMessage,
+  UserThreadMessageAttachment
 } from "../types"
 import { useProjectComposer } from "../use-project-composer"
 import { mergeUserMessagePresentationState, readPersistedUserMessages } from "../user-message-presentation"
@@ -133,6 +135,7 @@ const IMAGE_LIGHTBOX_MAX_ZOOM = 4
 const PROPOSED_PLAN_OPEN_TAG = "<proposed_plan>"
 const PROPOSED_PLAN_CLOSE_TAG = "</proposed_plan>"
 const IMAGE_LIGHTBOX_ZOOM_STEP = 0.1
+const USER_MESSAGE_THUMBNAIL_IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp"])
 const IMAGE_TALL_RATIO_THRESHOLD = 1.8
 const THREAD_STREAMING_RESPONSE_SELECTOR = ".assistant-section.is-response .trace-item.is-streaming[data-kind=\"text\"]"
 const THREAD_AUTO_COLLAPSE_MOTION_MS = 240
@@ -529,6 +532,57 @@ function CollapsibleUserMessageText({
   )
 }
 
+function getUserMessageAttachmentExtension(attachment: UserThreadMessageAttachment) {
+  const source = attachment.path ?? attachment.name
+  return source.trim().toLowerCase().split(".").pop() ?? ""
+}
+
+function getUserMessageAttachmentThumbnailUrl(attachment: UserThreadMessageAttachment) {
+  if (!attachment.path) return null
+  if (!USER_MESSAGE_THUMBNAIL_IMAGE_EXTENSIONS.has(getUserMessageAttachmentExtension(attachment))) return null
+  return toLocalImageProtocolUrl(attachment.path)
+}
+
+function UserBubbleAttachmentFileChip({ attachment }: { attachment: UserThreadMessageAttachment }) {
+  return (
+    <div className="user-bubble-chip user-bubble-attachment-chip">
+      <PaperclipIcon />
+      <span className="user-bubble-chip-label" title={attachment.path ?? attachment.name}>
+        {attachment.name}
+      </span>
+    </div>
+  )
+}
+
+function UserBubbleAttachmentItem({ attachment }: { attachment: UserThreadMessageAttachment }) {
+  const previewUrl = getUserMessageAttachmentThumbnailUrl(attachment)
+  const [hasPreviewError, setHasPreviewError] = useState(false)
+
+  useEffect(() => {
+    setHasPreviewError(false)
+  }, [previewUrl])
+
+  if (!previewUrl || hasPreviewError) {
+    return <UserBubbleAttachmentFileChip attachment={attachment} />
+  }
+
+  return (
+    <div
+      className="user-bubble-chip user-bubble-attachment-chip is-image-preview"
+      title={attachment.path ?? attachment.name}
+    >
+      <img
+        alt={attachment.name}
+        className="user-bubble-attachment-thumbnail"
+        decoding="async"
+        loading="lazy"
+        onError={() => setHasPreviewError(true)}
+        src={previewUrl}
+      />
+    </div>
+  )
+}
+
 function UserThreadMessageBubble({ message }: { message: UserThreadMessage }) {
   const displayText = message.displayText?.trim() || ""
   const references = message.references ?? []
@@ -561,15 +615,10 @@ function UserThreadMessageBubble({ message }: { message: UserThreadMessage }) {
         {attachments.length > 0 ? (
           <div className="user-bubble-chip-strip" aria-label="Sent attachments">
             {attachments.map((attachment, index) => (
-              <div
+              <UserBubbleAttachmentItem
                 key={`${attachment.path ?? attachment.name}:${index}`}
-                className="user-bubble-chip user-bubble-attachment-chip"
-              >
-                <PaperclipIcon />
-                <span className="user-bubble-chip-label" title={attachment.path ?? attachment.name}>
-                  {attachment.name}
-                </span>
-              </div>
+                attachment={attachment}
+              />
             ))}
           </div>
         ) : null}

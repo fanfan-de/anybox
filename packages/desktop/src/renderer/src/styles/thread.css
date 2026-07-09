@@ -3569,6 +3569,26 @@ button.user-message-diff-file-row:focus-visible {
   color: #314353;
 }
 
+.user-bubble-attachment-chip.is-image-preview {
+  width: 56px;
+  min-width: 56px;
+  height: 56px;
+  min-height: 56px;
+  padding: 0;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--seg-radius-sm);
+  background: var(--mix-surface-user-bubble-68-seg-panel-32);
+}
+
+.user-bubble-attachment-thumbnail {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--mix-surface-user-bubble-68-seg-panel-32);
+}
+
 .user-bubble-reference-chip {
   border-color: var(--mix-seg-accent-28-seg-border-72);
   background: var(--mix-seg-accent-soft-78-seg-panel-22);

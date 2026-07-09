@@ -1190,15 +1190,37 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid rgba(166, 186, 208, 0.42);
-  background: #f5f8fb;
-  color: #314353;
+  border: 1px solid var(--mix-seg-border-96-transparent-4);
+  background: var(--mix-seg-panel-muted-88-seg-panel-12);
+  color: var(--seg-text-2);
 }
 
 .composer-attachment-chip.is-invalid {
-  border-color: rgba(187, 63, 63, 0.32);
-  background: #fff4f4;
-  color: #7d1f1f;
+  border-color: var(--seg-danger-border);
+  background: var(--seg-danger-surface);
+  color: var(--seg-danger-text);
+}
+
+.composer-attachment-chip.is-image-preview {
+  position: relative;
+  width: 56px;
+  min-width: 56px;
+  height: 56px;
+  min-height: 56px;
+  padding: 0;
+  align-items: stretch;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--seg-radius-sm);
+  background: var(--seg-panel-muted);
+}
+
+.composer-attachment-thumbnail {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--mix-seg-panel-muted-88-seg-panel-12);
 }
 
 .composer-inline-tag {
@@ -1271,12 +1293,14 @@
 .composer-attachment-remove {
   width: 24px;
   height: 24px;
+  min-width: 24px;
+  min-height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 0;
   background: transparent;
-  color: #5f7387;
+  color: var(--seg-text-3);
   cursor: pointer;
 }
 
@@ -1284,6 +1308,25 @@
 .composer-attachment-remove:focus-visible {
   background: var(--mix-seg-accent-soft-72-transparent-28);
   color: var(--seg-accent-strong);
+}
+
+.composer-attachment-chip.is-image-preview .composer-attachment-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  border-radius: var(--seg-radius-xs);
+  background: var(--mix-seg-panel-muted-88-seg-panel-12);
+  color: var(--seg-text-2);
+}
+
+.composer-attachment-chip.is-image-preview .composer-attachment-remove:hover,
+.composer-attachment-chip.is-image-preview .composer-attachment-remove:focus-visible {
+  background: var(--seg-composer-button-surface);
+  color: var(--seg-composer-button-text);
 }
 
 .composer-attachment-remove svg,

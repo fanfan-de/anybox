@@ -28,6 +28,7 @@ import {
   type KeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react"
+import { toLocalImageProtocolUrl } from "../../../../shared/local-image-protocol"
 import { ArrowUpIcon, ChevronDownIcon, CloseIcon, PaperclipIcon, StopIcon } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
 import { translateLiteral, type TranslationKey } from "../i18n/translations"
@@ -45,6 +46,7 @@ import type {
   ComposerLongTextTagData,
   ReasoningEffort,
 } from "../types"
+import { getComposerAttachmentKind } from "./attachment-utils"
 import { $createComposerTagNode, ComposerTagNode } from "./ComposerTagNode"
 import {
   createComposerDraftStateFromEditorState,
@@ -65,6 +67,7 @@ import {
   updateComposerLongTextTagInDraftState,
 } from "./draft-state"
 
+const COMPOSER_THUMBNAIL_IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp"])
 
 interface ComposerProps {
   attachments: ComposerAttachment[]
@@ -450,6 +453,98 @@ function hasComposerDraftText(draftState: ComposerDraftState) {
 
 function hasComposerSubmittableContent(draftState: ComposerDraftState, attachments: ComposerAttachment[]) {
   return hasComposerDraftText(draftState) || attachments.length > 0
+}
+
+function getComposerAttachmentExtension(path: string) {
+  return path.trim().toLowerCase().split(".").pop() ?? ""
+}
+
+function getComposerAttachmentThumbnailUrl(attachment: ComposerAttachment) {
+  if (getComposerAttachmentKind(attachment.path) !== "image") return null
+  if (!COMPOSER_THUMBNAIL_IMAGE_EXTENSIONS.has(getComposerAttachmentExtension(attachment.path))) return null
+  return toLocalImageProtocolUrl(attachment.path)
+}
+
+function ComposerAttachmentRemoveButton({
+  attachment,
+  onRemoveAttachment,
+}: {
+  attachment: ComposerAttachment
+  onRemoveAttachment: (path: string) => void
+}) {
+  return (
+    <button
+      aria-label={`Remove ${attachment.name}`}
+      className="composer-attachment-remove"
+      onClick={() => onRemoveAttachment(attachment.path)}
+      type="button"
+    >
+      <CloseIcon />
+    </button>
+  )
+}
+
+function ComposerAttachmentFileChip({
+  attachment,
+  isInvalid,
+  onRemoveAttachment,
+}: {
+  attachment: ComposerAttachment
+  isInvalid: boolean
+  onRemoveAttachment: (path: string) => void
+}) {
+  return (
+    <div className={joinClassNames("composer-attachment-chip", isInvalid && "is-invalid")}>
+      <span className="composer-attachment-name" title={attachment.path}>
+        {attachment.name}
+      </span>
+      <ComposerAttachmentRemoveButton attachment={attachment} onRemoveAttachment={onRemoveAttachment} />
+    </div>
+  )
+}
+
+function ComposerAttachmentItem({
+  attachment,
+  isInvalid,
+  onRemoveAttachment,
+}: {
+  attachment: ComposerAttachment
+  isInvalid: boolean
+  onRemoveAttachment: (path: string) => void
+}) {
+  const previewUrl = getComposerAttachmentThumbnailUrl(attachment)
+  const [hasPreviewError, setHasPreviewError] = useState(false)
+
+  useEffect(() => {
+    setHasPreviewError(false)
+  }, [previewUrl])
+
+  if (!previewUrl || hasPreviewError) {
+    return (
+      <ComposerAttachmentFileChip
+        attachment={attachment}
+        isInvalid={isInvalid}
+        onRemoveAttachment={onRemoveAttachment}
+      />
+    )
+  }
+
+  return (
+    <div
+      className={joinClassNames("composer-attachment-chip", "is-image-preview", isInvalid && "is-invalid")}
+      title={attachment.path}
+    >
+      <img
+        alt={attachment.name}
+        className="composer-attachment-thumbnail"
+        decoding="async"
+        loading="lazy"
+        onError={() => setHasPreviewError(true)}
+        src={previewUrl}
+      />
+      <ComposerAttachmentRemoveButton attachment={attachment} onRemoveAttachment={onRemoveAttachment} />
+    </div>
+  )
 }
 
 function getComposerSelectionRect() {
@@ -2108,26 +2203,12 @@ export function Composer({
       {attachments.length > 0 ? (
         <div className="composer-attachment-strip" aria-label="Selected attachments">
           {attachments.map((attachment) => (
-            <div
+            <ComposerAttachmentItem
               key={attachment.path}
-              className={
-                unsupportedAttachmentPathSet.has(attachment.path)
-                  ? "composer-attachment-chip is-invalid"
-                  : "composer-attachment-chip"
-              }
-            >
-              <span className="composer-attachment-name" title={attachment.path}>
-                {attachment.name}
-              </span>
-              <button
-                aria-label={`Remove ${attachment.name}`}
-                className="composer-attachment-remove"
-                onClick={() => onRemoveAttachment(attachment.path)}
-                type="button"
-              >
-                <CloseIcon />
-              </button>
-            </div>
+              attachment={attachment}
+              isInvalid={unsupportedAttachmentPathSet.has(attachment.path)}
+              onRemoveAttachment={onRemoveAttachment}
+            />
           ))}
         </div>
       ) : null}

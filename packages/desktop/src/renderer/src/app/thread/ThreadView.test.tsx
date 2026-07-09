@@ -3673,6 +3673,59 @@ describe("ThreadView message actions", () => {
     expect(queryByRole("button", { name: "Show full message" })).toBeNull()
   })
 
+  it("renders sent raster image attachments as thumbnails", () => {
+    const imagePath = "C:\\Temp\\screenshot.png"
+
+    renderThread([
+      {
+        ...userMessage("user-image-attachment", "Use this image"),
+        attachments: [{ name: "screenshot.png", path: imagePath }],
+      },
+    ])
+
+    const image = screen.getByRole("img", { name: "screenshot.png" })
+
+    expect(image).toHaveClass("user-bubble-attachment-thumbnail")
+    expect(image).toHaveAttribute(
+      "src",
+      `anybox-local-image://image?source=${encodeURIComponent(imagePath)}`,
+    )
+  })
+
+  it("keeps sent PDF, SVG, and pathless attachments as file chips", () => {
+    renderThread([
+      {
+        ...userMessage("user-file-attachments", "Use these files"),
+        attachments: [
+          { name: "brief.pdf", path: "C:\\Refs\\brief.pdf" },
+          { name: "icon.svg", path: "C:\\Refs\\icon.svg" },
+          { name: "missing-path.png" },
+        ],
+      },
+    ])
+
+    expect(screen.getByText("brief.pdf")).toHaveClass("user-bubble-chip-label")
+    expect(screen.getByText("icon.svg")).toHaveClass("user-bubble-chip-label")
+    expect(screen.getByText("missing-path.png")).toHaveClass("user-bubble-chip-label")
+    expect(screen.queryByRole("img", { name: "brief.pdf" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("img", { name: "icon.svg" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("img", { name: "missing-path.png" })).not.toBeInTheDocument()
+  })
+
+  it("falls back to a sent file chip when a user attachment thumbnail fails to load", async () => {
+    renderThread([
+      {
+        ...userMessage("user-broken-image-attachment", "Use this image"),
+        attachments: [{ name: "screenshot.png", path: "C:\\Temp\\screenshot.png" }],
+      },
+    ])
+
+    fireEvent.error(screen.getByRole("img", { name: "screenshot.png" }))
+
+    expect(await screen.findByText("screenshot.png")).toHaveClass("user-bubble-chip-label")
+    expect(screen.queryByRole("img", { name: "screenshot.png" })).not.toBeInTheDocument()
+  })
+
   it("collapses very long user messages by default and scrolls to the end when expanded", () => {
     const scrollIntoView = vi.fn()
     const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
