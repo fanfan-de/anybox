@@ -76,6 +76,16 @@ describe("shared contracts", () => {
       modelID: "gemini-3.1-pro-preview",
       reasoning: true,
     })).toBe("high")
+    expect(getSupportedReasoningEfforts({
+      providerID: "google",
+      modelID: "gemini-2.5-flash-image",
+      reasoning: true,
+    })).toEqual([])
+    expect(getDefaultReasoningEffort({
+      providerID: "google",
+      modelID: "gemini-2.5-flash-image",
+      reasoning: true,
+    })).toBeUndefined()
     expect(normalizeReasoningEffort({
       providerID: "google",
       modelID: "gemini-3.1-pro-preview",

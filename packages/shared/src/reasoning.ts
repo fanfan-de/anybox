@@ -21,8 +21,14 @@ export function isReasoningEffortProvider(providerID: string) {
   return providerID === OPENAI_PROVIDER_ID || providerID === DEEPSEEK_PROVIDER_ID || providerID === GOOGLE_PROVIDER_ID
 }
 
+function isGoogleImageGenerationModelID(modelID: string) {
+  return modelID.trim().toLowerCase().includes("-image")
+}
+
 export function supportsReasoningEffort(input: ReasoningModelProfile) {
-  return input.reasoning && isReasoningEffortProvider(input.providerID)
+  if (!input.reasoning || !isReasoningEffortProvider(input.providerID)) return false
+  if (input.providerID === GOOGLE_PROVIDER_ID && isGoogleImageGenerationModelID(input.modelID)) return false
+  return true
 }
 
 function getSupportedOpenAIReasoningEfforts(modelID: string): ReasoningEffort[] {
@@ -71,6 +77,7 @@ export function getSupportedReasoningEfforts(input: ReasoningModelProfile): Reas
 function getSupportedGoogleReasoningEfforts(modelID: string): ReasoningEffort[] {
   const normalized = modelID.trim().toLowerCase()
   if (!normalized) return DEFAULT_GOOGLE_REASONING_EFFORTS
+  if (isGoogleImageGenerationModelID(normalized)) return []
 
   if (normalized.startsWith("gemini-3.1-pro")) {
     return ["low", "medium", "high"]

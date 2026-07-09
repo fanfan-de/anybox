@@ -774,6 +774,10 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
                     reasoningEffort: lastUser.reasoningEffort,
                     messages: await Message.toModelMessages(promptContext.messages, model, {
                         agent,
+                        imageWindow: {
+                            maxHistoricalImageParts: 1,
+                            preserveAllImagePartsForMessageID: lastUser.id,
+                        },
                     }),
                     tools,
                 });

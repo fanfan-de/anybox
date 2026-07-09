@@ -174,6 +174,7 @@ interface ThreadTextCopyContextMenuState {
 interface ThreadImageCopyContextMenuState {
   target: "image"
   alt: string
+  address: string
   name: string
   src: string
   x: number
@@ -360,6 +361,20 @@ function buildThreadImageAttachmentName(src: string, alt: string) {
   return altText || "thread-image"
 }
 
+function readThreadImageCopyAddress(src: string) {
+  try {
+    const parsed = new URL(src, typeof window === "undefined" ? undefined : window.location.href)
+    if (parsed.protocol === "anybox-local-image:") {
+      const source = parsed.searchParams.get("source")?.trim()
+      if (source) return source
+    }
+  } catch {
+    // Fall back to the browser image source below.
+  }
+
+  return src
+}
+
 function readThreadContextMenuImageTarget(
   event: ReactMouseEvent<HTMLElement>,
   threadColumn: HTMLDivElement,
@@ -378,6 +393,7 @@ function readThreadContextMenuImageTarget(
     return {
       target: "image",
       alt,
+      address: readThreadImageCopyAddress(src),
       name: buildThreadImageAttachmentName(src, alt),
       src,
       ...position,
@@ -392,7 +408,8 @@ function getThreadClipboardItemConstructor() {
 }
 
 function canWriteThreadImageClipboard() {
-  return typeof navigator.clipboard?.write === "function" && typeof getThreadClipboardItemConstructor() === "function"
+  return Boolean(window.desktop?.copyImageToClipboard) ||
+    (typeof navigator.clipboard?.write === "function" && typeof getThreadClipboardItemConstructor() === "function")
 }
 
 async function fetchThreadImageBlob(src: string) {
@@ -427,12 +444,22 @@ function readThreadImageBlobAsDataUrl(blob: Blob) {
 }
 
 async function writeThreadImageToClipboard(menu: ThreadImageCopyContextMenuState) {
+  const blob = await fetchThreadImageBlob(menu.src)
+  const mimeType = normalizeThreadImageMimeType(blob.type) ?? "image/png"
+  const desktopCopyImageToClipboard = window.desktop?.copyImageToClipboard
+  if (desktopCopyImageToClipboard) {
+    await desktopCopyImageToClipboard({
+      dataUrl: await readThreadImageBlobAsDataUrl(blob),
+      mimeType,
+    })
+    return
+  }
+
   const ClipboardItemConstructor = getThreadClipboardItemConstructor()
   if (typeof navigator.clipboard?.write !== "function" || !ClipboardItemConstructor) {
     throw new Error("Image clipboard writes are not available.")
   }
 
-  const blob = await fetchThreadImageBlob(menu.src)
   await navigator.clipboard.write([
     new ClipboardItemConstructor({
       [blob.type]: blob,
@@ -1257,6 +1284,79 @@ function AssistantMessagePlaceholder({ message }: { message: string }) {
   )
 }
 
+const GENERIC_IMAGE_TRACE_TITLES = new Set(["attachment", "image", "image attachment", "thread-image", "图像", "附件"])
+
+function isImageMimeTypeText(value: string) {
+  return /^image\/[a-z0-9.+-]+$/i.test(value.trim())
+}
+
+function getMeaningfulImageTraceTitle(item: AssistantTraceItem) {
+  const title = item.title?.trim()
+  if (!title) return null
+
+  const normalizedTitle = title.replace(/\s+/g, " ")
+  const normalizedTitleLower = normalizedTitle.toLowerCase()
+  const normalizedMimeType = item.mimeType?.trim().toLowerCase()
+
+  if (GENERIC_IMAGE_TRACE_TITLES.has(normalizedTitleLower)) return null
+  if (isImageMimeTypeText(normalizedTitle)) return null
+  if (normalizedMimeType && normalizedTitleLower === normalizedMimeType) return null
+
+  return normalizedTitle
+}
+
+function getVisibleImageTraceStatus(status: AssistantTraceItem["status"]) {
+  if (!status || status === "completed") return null
+  return status
+}
+
+function hasImageDimensions(item: AssistantTraceItem) {
+  return (
+    typeof item.width === "number" &&
+    Number.isFinite(item.width) &&
+    item.width > 0 &&
+    typeof item.height === "number" &&
+    Number.isFinite(item.height) &&
+    item.height > 0
+  )
+}
+
+function getImageTraceMetaText(item: AssistantTraceItem) {
+  const mimeType = item.mimeType?.trim()
+  const sizeText = hasImageDimensions(item) ? `${item.width} x ${item.height}` : ""
+  return [mimeType, sizeText].filter(Boolean).join(" · ")
+}
+
+function isRedundantImageTraceBodyText(item: AssistantTraceItem, value: string | undefined) {
+  const text = value?.trim()
+  if (!text) return false
+
+  const normalizedText = text.replace(/\s+/g, " ")
+  const normalizedTextLower = normalizedText.toLowerCase()
+  const normalizedMimeType = item.mimeType?.trim().toLowerCase()
+  const normalizedMetaText = getImageTraceMetaText(item).toLowerCase()
+
+  return (
+    GENERIC_IMAGE_TRACE_TITLES.has(normalizedTextLower) ||
+    isImageMimeTypeText(normalizedText) ||
+    Boolean(normalizedMimeType && normalizedTextLower === normalizedMimeType) ||
+    Boolean(normalizedMetaText && normalizedTextLower === normalizedMetaText)
+  )
+}
+
+function ImageTraceItemHeader({ item }: { item: AssistantTraceItem }) {
+  const title = getMeaningfulImageTraceTitle(item)
+  const visibleStatus = getVisibleImageTraceStatus(item.status)
+
+  return (
+    <div className="trace-item-header trace-image-header">
+      <span className="trace-item-label">{item.label || "Image"}</span>
+      {title ? <strong className="trace-item-title">{title}</strong> : null}
+      {visibleStatus ? <span className={`trace-item-status is-${visibleStatus}`}>{visibleStatus}</span> : null}
+    </div>
+  )
+}
+
 function TraceImagePreview({
   item,
   onOpenImagePreview,
@@ -1268,9 +1368,8 @@ function TraceImagePreview({
   const alt = item.alt || item.title || "Image attachment"
   const [loadState, setLoadState] = useState<"loading" | "loaded" | "error">("loading")
   const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const thumbnailStyle = item.width && item.height ? { aspectRatio: `${item.width} / ${item.height}` } : undefined
-  const sizeText = item.width && item.height ? `${item.width} x ${item.height}` : ""
-  const metaText = [item.mimeType, sizeText].filter(Boolean).join(" | ")
+  const thumbnailStyle = hasImageDimensions(item) ? { aspectRatio: `${item.width} / ${item.height}` } : undefined
+  const metaText = getImageTraceMetaText(item)
 
   useEffect(() => {
     setLoadState("loading")
@@ -3338,12 +3437,15 @@ function ImageTraceItemView({
     )
   }
 
+  const text = isRedundantImageTraceBodyText(item, item.text) ? null : item.text
+  const detail = isRedundantImageTraceBodyText(item, item.detail) ? null : item.detail
+
   return (
     <article className={className} data-kind={item.kind}>
-      <TraceItemHeader item={item} />
+      <ImageTraceItemHeader item={item} />
       <TraceImagePreview item={item} onOpenImagePreview={onOpenImagePreview} />
-      {item.text ? <ThreadRichText className="trace-item-text" text={item.text} /> : null}
-      {item.detail ? <ThreadRichText className="trace-item-detail" text={item.detail} /> : null}
+      {text ? <ThreadRichText className="trace-item-text" text={text} /> : null}
+      {detail ? <ThreadRichText className="trace-item-detail" text={detail} /> : null}
       <TraceItemDebugEntries debugEntries={debugEntries} itemID={item.id} />
     </article>
   )
@@ -4972,6 +5074,16 @@ function VisibleThreadView({
     await onAddToComposer?.(menu.text)
   }
 
+  async function handleThreadCopyContextMenuCopyImageAddress(menu: ThreadImageCopyContextMenuState) {
+    setThreadCopyContextMenu(null)
+
+    try {
+      await writeTextToClipboard(menu.address)
+    } catch (error) {
+      console.error("[desktop] Failed to copy thread image address:", error)
+    }
+  }
+
   const handleOpenImagePreview = useEffectEvent((payload: ImagePreviewPayload) => {
     if (!payload.src) return
     setActiveImagePreview({
@@ -5237,6 +5349,19 @@ function VisibleThreadView({
                   {threadCopyContextMenu.target === "image" ? "复制图片" : "复制"}
                 </span>
               </button>
+              {threadCopyContextMenu.target === "image" ? (
+                <button
+                  className="thread-copy-context-menu-item"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => void handleThreadCopyContextMenuCopyImageAddress(threadCopyContextMenu)}
+                >
+                  <span className="thread-copy-context-menu-icon" aria-hidden="true">
+                    <CopyIcon />
+                  </span>
+                  <span className="thread-copy-context-menu-label">复制图片地址</span>
+                </button>
+              ) : null}
               {threadCopyContextMenu.target === "text" && onAddToComposer ? (
                 <button
                   className="thread-copy-context-menu-item"

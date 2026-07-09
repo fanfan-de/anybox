@@ -713,6 +713,11 @@ export interface DesktopSaveComposerPastedImagesInput {
   images: DesktopComposerPastedImageAttachment[]
 }
 
+export interface DesktopCopyImageToClipboardInput {
+  dataUrl: string
+  mimeType: string
+}
+
 export interface DesktopPreviewScreenshotCaptureInput {
   bounds: {
     height: number
@@ -1242,6 +1247,10 @@ export interface DesktopIpcContract {
   "desktop:save-composer-pasted-images": {
     input: DesktopSaveComposerPastedImagesInput
     output: string[]
+  }
+  "desktop:copy-image-to-clipboard": {
+    input: DesktopCopyImageToClipboardInput
+    output: void
   }
   "desktop:capture-preview-screenshot": {
     input: DesktopPreviewScreenshotCaptureInput
@@ -2052,6 +2061,7 @@ export interface DesktopApiMethods {
   pickProjectDirectory(): Promise<DesktopIpcOutput<"desktop:pick-project-directory">>
   pickComposerAttachments(input?: DesktopIpcInput<"desktop:pick-composer-attachments">): Promise<DesktopIpcOutput<"desktop:pick-composer-attachments">>
   saveComposerPastedImages(input: DesktopIpcInput<"desktop:save-composer-pasted-images">): Promise<DesktopIpcOutput<"desktop:save-composer-pasted-images">>
+  copyImageToClipboard?(input: DesktopIpcInput<"desktop:copy-image-to-clipboard">): Promise<DesktopIpcOutput<"desktop:copy-image-to-clipboard">>
   capturePreviewScreenshot(input: DesktopIpcInput<"desktop:capture-preview-screenshot">): Promise<DesktopIpcOutput<"desktop:capture-preview-screenshot">>
   detectLocalPreviewServices(): Promise<DesktopIpcOutput<"desktop:detect-local-preview-services">>
   resolvePreviewTarget(input: DesktopIpcInput<"desktop:resolve-preview-target">): Promise<DesktopIpcOutput<"desktop:resolve-preview-target">>

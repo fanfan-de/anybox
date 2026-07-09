@@ -129,6 +129,13 @@ function readGoogleModelIDs(model: Model) {
   return [model.api.id, model.id].filter((value, index, values) => value && values.indexOf(value) === index)
 }
 
+function isGoogleGeminiImageGenerationModel(model: Model) {
+  if (model.providerID !== GOOGLE_PROVIDER_ID) return false
+  if (model.capabilities.output?.image) return true
+
+  return readGoogleModelIDs(model).some((modelID) => modelID.trim().toLowerCase().includes("-image"))
+}
+
 function resolveGoogleThinkingModelID(model: Model) {
   return readGoogleModelIDs(model).find((modelID) => {
     const normalized = modelID.trim().toLowerCase()
@@ -174,6 +181,7 @@ function buildGoogleProviderOptions(input: {
   reasoningEffort?: ReasoningEffort
 }) {
   if (!isGoogleGeminiThinkingModel(input.model)) return undefined
+  if (isGoogleGeminiImageGenerationModel(input.model)) return undefined
 
   const thinkingModelID = resolveGoogleThinkingModelID(input.model)
   const normalized = thinkingModelID.trim().toLowerCase()

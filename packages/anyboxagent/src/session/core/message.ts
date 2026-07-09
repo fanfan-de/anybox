@@ -914,20 +914,63 @@ export async function* stream(sessionID: string): AsyncGenerator<WithParts> {
  * @param model 目标模型信息，包含模型能力配置，用于过滤不支持的内容类型
  * @returns 符合 AI SDK 格式的消息数组，可直接用于模型调用
  */
+export type ModelMessageImageWindowOptions = {
+    maxHistoricalImageParts: number
+    preserveAllImagePartsForMessageID?: string
+}
+
+function isImageAttachmentPart(part: Part): part is ImagePart | FilePart {
+    return part.type === "image" || (part.type === "file" && part.mime.trim().toLowerCase().startsWith("image/"))
+}
+
+function normalizeImageWindowLimit(value: number) {
+    if (!Number.isFinite(value)) return 0
+    return Math.max(0, Math.floor(value))
+}
+
+function omittedImageWindowText(part: ImagePart | FilePart) {
+    const filename = part.filename?.trim()
+    return `Earlier image omitted from model input due to the image history window: mime=${part.mime}${filename ? `, filename=${filename}` : ""}.`
+}
+
 // TODO: move model message conversion out of message.ts after the schema settles.
 export async function toModelMessages(
     input: WithParts[],
     model: Provider.Model,
     options?: {
         agent?: Agent.AgentInfo
+        imageWindow?: ModelMessageImageWindowOptions
     },
 ): Promise<ModelMessage[]> {
     const result: ModelMessage[] = []
     const toolRuntimeCache = new Map<string, Promise<any | undefined>>()
     const modelLabel = `${model.providerID}/${model.id}`
     const replayAssistantReasoning = shouldReplayAssistantReasoning(model)
+    const imageWindow = options?.imageWindow ?? (model.capabilities.output?.image
+        ? { maxHistoricalImageParts: 1 }
+        : undefined)
+    const omittedImagePartIDs = new Set<string>()
     const imageCount = input.reduce((count, item) => count + item.parts.filter((part) => part.type === "image").length, 0)
     const fileCount = input.reduce((count, item) => count + item.parts.filter((part) => part.type === "file").length, 0)
+
+    if (imageWindow) {
+        let remainingHistoricalImages = normalizeImageWindowLimit(imageWindow.maxHistoricalImageParts)
+        for (let itemIndex = input.length - 1; itemIndex >= 0; itemIndex -= 1) {
+            const item = input[itemIndex]
+            if (!item) continue
+            const preserveAllImagesInMessage = Boolean(imageWindow.preserveAllImagePartsForMessageID && item.info.id === imageWindow.preserveAllImagePartsForMessageID)
+            const orderedParts = [...item.parts].sort((a, b) => b.id.localeCompare(a.id))
+            for (const part of orderedParts) {
+                if (!isImageAttachmentPart(part)) continue
+                if (preserveAllImagesInMessage) continue
+                if (remainingHistoricalImages > 0) {
+                    remainingHistoricalImages -= 1
+                    continue
+                }
+                omittedImagePartIDs.add(part.id)
+            }
+        }
+    }
 
     if (imageCount > 0 || fileCount > 0) {
         log.info("preparing model messages with attachments", {
@@ -935,6 +978,11 @@ export async function toModelMessages(
             messageCount: input.length,
             imageCount,
             fileCount,
+            imageWindow: imageWindow ? {
+                maxHistoricalImageParts: normalizeImageWindowLimit(imageWindow.maxHistoricalImageParts),
+                preserveAllImagePartsForMessageID: imageWindow.preserveAllImagePartsForMessageID,
+                omittedImagePartCount: omittedImagePartIDs.size,
+            } : undefined,
             capabilities: summarizeModelCapabilitiesForLog(model),
         })
     }
@@ -986,7 +1034,7 @@ export async function toModelMessages(
         }
     }
 
-    function convertPartToAIPart(part: Part, model: Provider.Model): any | any[] | null {
+    function convertPartToAIPart(part: Part, model: Provider.Model, aiRole: "user" | "assistant"): any | any[] | null {
         switch (part.type) {
             case "text":
                 if (part.ignored) return null
@@ -1007,6 +1055,12 @@ export async function toModelMessages(
                     ...(reasoningProviderOptions ? { providerOptions: reasoningProviderOptions } : {}),
                 }
             case "file":
+                if (isImageAttachmentPart(part) && omittedImagePartIDs.has(part.id)) {
+                    return {
+                        type: "text" as const,
+                        text: omittedImageWindowText(part),
+                    }
+                }
                 {
                     const message = unsupportedAttachmentMessage(part, model)
                     if (message) throw new Error(message)
@@ -1023,6 +1077,12 @@ export async function toModelMessages(
                     filename: part.filename,
                 }
             case "image":
+                if (omittedImagePartIDs.has(part.id)) {
+                    return {
+                        type: "text" as const,
+                        text: omittedImageWindowText(part),
+                    }
+                }
                 {
                     const message = unsupportedAttachmentMessage(part, model)
                     if (message) throw new Error(message)
@@ -1030,8 +1090,17 @@ export async function toModelMessages(
                 log.info("converting image attachment for model input", {
                     model: modelLabel,
                     part: summarizeAttachmentPartForLog(part),
+                    aiRole,
                 })
                 const decodedImage = decodeDataUrlAttachment(part.url)
+                if (aiRole === "assistant") {
+                    return {
+                        type: "file" as const,
+                        data: decodedImage?.data ?? part.url,
+                        mediaType: decodedImage?.mediaType ?? part.mime,
+                        filename: part.filename,
+                    }
+                }
                 return {
                     type: "image" as const,
                     image: decodedImage?.data ?? part.url,
@@ -1211,7 +1280,7 @@ export async function toModelMessages(
                 }
             }
 
-            const aiPart = convertPartToAIPart(part, model)
+            const aiPart = convertPartToAIPart(part, model, aiRole)
             if (!aiPart) continue
 
             if (Array.isArray(aiPart)) {

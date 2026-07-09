@@ -50,6 +50,8 @@ export type RuntimeLlmCallSummary = {
   durationMs?: number
   messageCount: number
   toolCount?: number
+  requestedToolCount?: number
+  toolsDisabledReason?: "model_does_not_support_toolcall"
   hasAttachments?: boolean
   finishReason?: string
   usage?: {
@@ -353,6 +355,8 @@ function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): RuntimeEventSu
           iteration: event.payload.iteration,
           messageCount: event.payload.messageCount,
           toolCount: event.payload.toolCount,
+          requestedToolCount: event.payload.requestedToolCount,
+          toolsDisabledReason: event.payload.toolsDisabledReason,
           hasAttachments: event.payload.hasAttachments,
         },
       }
@@ -373,6 +377,8 @@ function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): RuntimeEventSu
           iteration: event.payload.iteration,
           messageCount: event.payload.messageCount,
           toolCount: event.payload.toolCount,
+          requestedToolCount: event.payload.requestedToolCount,
+          toolsDisabledReason: event.payload.toolsDisabledReason,
           hasAttachments: event.payload.hasAttachments,
           finishReason: event.payload.finishReason,
           usage: summarizeUsage(event.payload.usage),
@@ -392,6 +398,11 @@ function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): RuntimeEventSu
           iteration: event.payload.iteration,
           error: event.payload.error,
           retryable: event.payload.retryable,
+          messageCount: event.payload.messageCount,
+          toolCount: event.payload.toolCount,
+          requestedToolCount: event.payload.requestedToolCount,
+          toolsDisabledReason: event.payload.toolsDisabledReason,
+          hasAttachments: event.payload.hasAttachments,
         },
       }
     case "message.recorded": {
@@ -813,6 +824,8 @@ function updateTurnFromEvent(turn: MutableTurnSummary, event: RuntimeEvent.Runti
         startedAt: event.timestamp,
         messageCount: event.payload.messageCount,
         toolCount: event.payload.toolCount,
+        requestedToolCount: event.payload.requestedToolCount,
+        toolsDisabledReason: event.payload.toolsDisabledReason,
         hasAttachments: event.payload.hasAttachments,
       })
       return
@@ -840,6 +853,8 @@ function updateTurnFromEvent(turn: MutableTurnSummary, event: RuntimeEvent.Runti
         durationMs: 0,
         messageCount: event.payload.messageCount,
         toolCount: event.payload.toolCount,
+        requestedToolCount: event.payload.requestedToolCount,
+        toolsDisabledReason: event.payload.toolsDisabledReason,
         hasAttachments: event.payload.hasAttachments,
         finishReason: event.payload.finishReason,
         usage: summarizeUsage(event.payload.usage),
@@ -870,6 +885,8 @@ function updateTurnFromEvent(turn: MutableTurnSummary, event: RuntimeEvent.Runti
         durationMs: 0,
         messageCount: event.payload.messageCount,
         toolCount: event.payload.toolCount,
+        requestedToolCount: event.payload.requestedToolCount,
+        toolsDisabledReason: event.payload.toolsDisabledReason,
         hasAttachments: event.payload.hasAttachments,
         error: event.payload.error,
         retryable: event.payload.retryable,

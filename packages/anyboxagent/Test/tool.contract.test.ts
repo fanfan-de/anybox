@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import { $ } from "bun"
+import { assistantModelMessageSchema } from "ai"
 import { EventEmitter } from "node:events"
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -1772,6 +1773,534 @@ describe("tool contract", () => {
     expect(filePart.data).toBeInstanceOf(Uint8Array)
     expect(filePart.data).not.toBe("data:application/pdf;base64,aGVsbG8=")
     expect(Buffer.from(filePart.data as Uint8Array).toString("utf8")).toBe("hello")
+  })
+
+  it("maps assistant image parts to AI SDK file parts for replay", async () => {
+    const model = {
+      capabilities: {
+        reasoning: false,
+        attachment: true,
+        toolcall: true,
+        input: {
+          text: true,
+          audio: false,
+          image: true,
+          video: false,
+          pdf: false,
+        },
+      },
+    } as any
+
+    const messages = await Message.toModelMessages(
+      [
+        {
+          info: {
+            id: "assistant-image-output",
+            sessionID: "session-assistant-image",
+            role: "assistant",
+            created: Date.now(),
+            agent: "default",
+            model: {
+              providerID: "google",
+              modelID: "gemini-3-pro-image-preview",
+            },
+          } as unknown as Message.Assistant,
+          parts: [
+            {
+              id: "part-1",
+              sessionID: "session-assistant-image",
+              messageID: "assistant-image-output",
+              type: "text",
+              text: "Generated an image.",
+            } as Message.TextPart,
+            {
+              id: "part-2",
+              sessionID: "session-assistant-image",
+              messageID: "assistant-image-output",
+              type: "image",
+              mime: "image/jpeg",
+              filename: "kitten.jpg",
+              url: "data:image/jpeg;base64,aGVsbG8=",
+            } as Message.ImagePart,
+          ],
+        },
+      ],
+      model,
+    )
+
+    expect(messages).toHaveLength(1)
+    expect(messages[0]?.role).toBe("assistant")
+    const content = messages[0]?.content
+    expect(Array.isArray(content)).toBe(true)
+    if (!Array.isArray(content)) throw new Error("Expected assistant content array")
+
+    const filePart = content[1] as { data?: unknown; filename?: string; mediaType?: string; type?: string }
+    expect(filePart).toMatchObject({
+      type: "file",
+      filename: "kitten.jpg",
+      mediaType: "image/jpeg",
+    })
+    expect(filePart.data).toBeInstanceOf(Uint8Array)
+    expect(Buffer.from(filePart.data as Uint8Array).toString("utf8")).toBe("hello")
+    expect(assistantModelMessageSchema.safeParse(messages[0]).success).toBe(true)
+  })
+
+  it("keeps only the latest historical image for image-output models by default", async () => {
+    const model = {
+      capabilities: {
+        reasoning: false,
+        attachment: true,
+        toolcall: true,
+        input: {
+          text: true,
+          audio: false,
+          image: true,
+          video: false,
+          pdf: false,
+        },
+        output: {
+          image: true,
+        },
+      },
+    } as any
+
+    const messages = await Message.toModelMessages(
+      [
+        {
+          info: {
+            id: "old-user",
+            sessionID: "session-image-window",
+            role: "user",
+            created: Date.now(),
+            agent: "default",
+            model: { providerID: "google", modelID: "gemini-3-pro-image-preview" },
+          } as Message.User,
+          parts: [
+            {
+              id: "part-1",
+              sessionID: "session-image-window",
+              messageID: "old-user",
+              type: "image",
+              mime: "image/png",
+              filename: "old.png",
+              url: "data:image/png;base64,b2xk",
+            } as Message.ImagePart,
+          ],
+        },
+        {
+          info: {
+            id: "middle-assistant",
+            sessionID: "session-image-window",
+            role: "assistant",
+            created: Date.now(),
+            agent: "default",
+            modelID: "gemini-3-pro-image-preview",
+            providerID: "google",
+          } as unknown as Message.Assistant,
+          parts: [
+            {
+              id: "part-2",
+              sessionID: "session-image-window",
+              messageID: "middle-assistant",
+              type: "image",
+              mime: "image/jpeg",
+              filename: "middle.jpg",
+              url: "data:image/jpeg;base64,bWlk",
+            } as Message.ImagePart,
+          ],
+        },
+        {
+          info: {
+            id: "latest-user",
+            sessionID: "session-image-window",
+            role: "user",
+            created: Date.now(),
+            agent: "default",
+            model: { providerID: "google", modelID: "gemini-3-pro-image-preview" },
+          } as Message.User,
+          parts: [
+            {
+              id: "part-3",
+              sessionID: "session-image-window",
+              messageID: "latest-user",
+              type: "image",
+              mime: "image/png",
+              filename: "latest.png",
+              url: "data:image/png;base64,bGF0ZXN0",
+            } as Message.ImagePart,
+          ],
+        },
+      ],
+      model,
+    )
+
+    expect(messages).toHaveLength(3)
+    const oldContent = messages[0]?.content
+    const middleContent = messages[1]?.content
+    const latestContent = messages[2]?.content
+    if (!Array.isArray(oldContent) || !Array.isArray(middleContent) || !Array.isArray(latestContent)) {
+      throw new Error("Expected content arrays")
+    }
+
+    expect(oldContent[0]).toMatchObject({
+      type: "text",
+      text: "Earlier image omitted from model input due to the image history window: mime=image/png, filename=old.png.",
+    })
+    expect(middleContent[0]).toMatchObject({
+      type: "text",
+      text: "Earlier image omitted from model input due to the image history window: mime=image/jpeg, filename=middle.jpg.",
+    })
+
+    const latestImage = latestContent[0] as { image?: unknown; mediaType?: string; type?: string }
+    expect(latestImage).toMatchObject({
+      type: "image",
+      mediaType: "image/png",
+    })
+    expect(Buffer.from(latestImage.image as Uint8Array).toString("utf8")).toBe("latest")
+  })
+
+  it("preserves all current-turn images while keeping one historical image", async () => {
+    const model = {
+      capabilities: {
+        reasoning: false,
+        attachment: true,
+        toolcall: true,
+        input: {
+          text: true,
+          audio: false,
+          image: true,
+          video: false,
+          pdf: false,
+        },
+        output: {
+          image: true,
+        },
+      },
+    } as any
+
+    const messages = await Message.toModelMessages(
+      [
+        {
+          info: {
+            id: "old-user",
+            sessionID: "session-current-images",
+            role: "user",
+            created: Date.now(),
+            agent: "default",
+            model: { providerID: "google", modelID: "gemini-3-pro-image-preview" },
+          } as Message.User,
+          parts: [
+            {
+              id: "part-1",
+              sessionID: "session-current-images",
+              messageID: "old-user",
+              type: "image",
+              mime: "image/png",
+              filename: "old.png",
+              url: "data:image/png;base64,b2xk",
+            } as Message.ImagePart,
+          ],
+        },
+        {
+          info: {
+            id: "recent-assistant",
+            sessionID: "session-current-images",
+            role: "assistant",
+            created: Date.now(),
+            agent: "default",
+            modelID: "gemini-3-pro-image-preview",
+            providerID: "google",
+          } as unknown as Message.Assistant,
+          parts: [
+            {
+              id: "part-2",
+              sessionID: "session-current-images",
+              messageID: "recent-assistant",
+              type: "image",
+              mime: "image/jpeg",
+              filename: "recent.jpg",
+              url: "data:image/jpeg;base64,cmVjZW50",
+            } as Message.ImagePart,
+          ],
+        },
+        {
+          info: {
+            id: "current-user",
+            sessionID: "session-current-images",
+            role: "user",
+            created: Date.now(),
+            agent: "default",
+            model: { providerID: "google", modelID: "gemini-3-pro-image-preview" },
+          } as Message.User,
+          parts: [
+            {
+              id: "part-3",
+              sessionID: "session-current-images",
+              messageID: "current-user",
+              type: "image",
+              mime: "image/png",
+              filename: "reference-a.png",
+              url: "data:image/png;base64,cmVmLWE=",
+            } as Message.ImagePart,
+            {
+              id: "part-4",
+              sessionID: "session-current-images",
+              messageID: "current-user",
+              type: "image",
+              mime: "image/png",
+              filename: "reference-b.png",
+              url: "data:image/png;base64,cmVmLWI=",
+            } as Message.ImagePart,
+          ],
+        },
+      ],
+      model,
+      {
+        imageWindow: {
+          maxHistoricalImageParts: 1,
+          preserveAllImagePartsForMessageID: "current-user",
+        },
+      },
+    )
+
+    const oldContent = messages[0]?.content
+    const recentContent = messages[1]?.content
+    const currentContent = messages[2]?.content
+    if (!Array.isArray(oldContent) || !Array.isArray(recentContent) || !Array.isArray(currentContent)) {
+      throw new Error("Expected content arrays")
+    }
+
+    expect(oldContent[0]).toMatchObject({
+      type: "text",
+      text: "Earlier image omitted from model input due to the image history window: mime=image/png, filename=old.png.",
+    })
+    expect(recentContent[0]).toMatchObject({
+      type: "file",
+      filename: "recent.jpg",
+      mediaType: "image/jpeg",
+    })
+    expect(Buffer.from((recentContent[0] as { data?: Uint8Array }).data as Uint8Array).toString("utf8")).toBe("recent")
+    expect(currentContent[0]).toMatchObject({ type: "image", mediaType: "image/png" })
+    expect(currentContent[1]).toMatchObject({ type: "image", mediaType: "image/png" })
+    expect(Buffer.from((currentContent[0] as { image?: Uint8Array }).image as Uint8Array).toString("utf8")).toBe("ref-a")
+    expect(Buffer.from((currentContent[1] as { image?: Uint8Array }).image as Uint8Array).toString("utf8")).toBe("ref-b")
+  })
+
+  it("does not decode omitted images", async () => {
+    const model = {
+      capabilities: {
+        reasoning: false,
+        attachment: false,
+        toolcall: true,
+        input: {
+          text: true,
+          audio: false,
+          image: false,
+          video: false,
+          pdf: false,
+        },
+        output: {
+          image: true,
+        },
+      },
+    } as any
+
+    const messages = await Message.toModelMessages(
+      [
+        {
+          info: {
+            id: "old-user",
+            sessionID: "session-invalid-omitted-image",
+            role: "user",
+            created: Date.now(),
+            agent: "default",
+            model: { providerID: "google", modelID: "gemini-3-pro-image-preview" },
+          } as Message.User,
+          parts: [
+            {
+              id: "part-1",
+              sessionID: "session-invalid-omitted-image",
+              messageID: "old-user",
+              type: "image",
+              mime: "image/png",
+              filename: "invalid.png",
+              url: "data:image/png;base64,",
+            } as Message.ImagePart,
+          ],
+        },
+      ],
+      model,
+      {
+        imageWindow: {
+          maxHistoricalImageParts: 0,
+        },
+      },
+    )
+
+    const content = messages[0]?.content
+    expect(Array.isArray(content)).toBe(true)
+    if (!Array.isArray(content)) throw new Error("Expected content array")
+    expect(content[0]).toMatchObject({
+      type: "text",
+      text: "Earlier image omitted from model input due to the image history window: mime=image/png, filename=invalid.png.",
+    })
+  })
+
+  it("counts image files in the image window without affecting ordinary files", async () => {
+    const model = {
+      capabilities: {
+        reasoning: false,
+        attachment: true,
+        toolcall: true,
+        input: {
+          text: true,
+          audio: false,
+          image: true,
+          video: false,
+          pdf: false,
+        },
+        output: {
+          image: true,
+        },
+      },
+    } as any
+
+    const messages = await Message.toModelMessages(
+      [
+        {
+          info: {
+            id: "mixed-user",
+            sessionID: "session-image-file-window",
+            role: "user",
+            created: Date.now(),
+            agent: "default",
+            model: { providerID: "google", modelID: "gemini-3-pro-image-preview" },
+          } as Message.User,
+          parts: [
+            {
+              id: "part-1",
+              sessionID: "session-image-file-window",
+              messageID: "mixed-user",
+              type: "file",
+              mime: "image/webp",
+              filename: "old-reference.webp",
+              url: "data:image/webp;base64,",
+            } as Message.FilePart,
+            {
+              id: "part-2",
+              sessionID: "session-image-file-window",
+              messageID: "mixed-user",
+              type: "image",
+              mime: "image/png",
+              filename: "latest-reference.png",
+              url: "data:image/png;base64,bGF0ZXN0",
+            } as Message.ImagePart,
+            {
+              id: "part-3",
+              sessionID: "session-image-file-window",
+              messageID: "mixed-user",
+              type: "file",
+              mime: "text/plain",
+              filename: "note.txt",
+              url: "data:text/plain;base64,aGVsbG8=",
+            } as Message.FilePart,
+          ],
+        },
+      ],
+      model,
+    )
+
+    const content = messages[0]?.content
+    expect(Array.isArray(content)).toBe(true)
+    if (!Array.isArray(content)) throw new Error("Expected content array")
+    expect(content[0]).toMatchObject({
+      type: "text",
+      text: "Earlier image omitted from model input due to the image history window: mime=image/webp, filename=old-reference.webp.",
+    })
+    expect(content[1]).toMatchObject({ type: "image", mediaType: "image/png" })
+    expect(Buffer.from((content[1] as { image?: Uint8Array }).image as Uint8Array).toString("utf8")).toBe("latest")
+    expect(content[2]).toMatchObject({
+      type: "file",
+      filename: "note.txt",
+      mediaType: "text/plain",
+    })
+    expect(Buffer.from((content[2] as { data?: Uint8Array }).data as Uint8Array).toString("utf8")).toBe("hello")
+  })
+
+  it("does not enable the image window by default for non-image-output models", async () => {
+    const model = {
+      capabilities: {
+        reasoning: false,
+        attachment: true,
+        toolcall: true,
+        input: {
+          text: true,
+          audio: false,
+          image: true,
+          video: false,
+          pdf: false,
+        },
+        output: {
+          image: false,
+        },
+      },
+    } as any
+
+    const messages = await Message.toModelMessages(
+      [
+        {
+          info: {
+            id: "old-user",
+            sessionID: "session-no-default-window",
+            role: "user",
+            created: Date.now(),
+            agent: "default",
+            model: { providerID: "test-provider", modelID: "text-vision-model" },
+          } as Message.User,
+          parts: [
+            {
+              id: "part-1",
+              sessionID: "session-no-default-window",
+              messageID: "old-user",
+              type: "image",
+              mime: "image/png",
+              filename: "old.png",
+              url: "data:image/png;base64,b2xk",
+            } as Message.ImagePart,
+          ],
+        },
+        {
+          info: {
+            id: "latest-user",
+            sessionID: "session-no-default-window",
+            role: "user",
+            created: Date.now(),
+            agent: "default",
+            model: { providerID: "test-provider", modelID: "text-vision-model" },
+          } as Message.User,
+          parts: [
+            {
+              id: "part-2",
+              sessionID: "session-no-default-window",
+              messageID: "latest-user",
+              type: "image",
+              mime: "image/png",
+              filename: "latest.png",
+              url: "data:image/png;base64,bGF0ZXN0",
+            } as Message.ImagePart,
+          ],
+        },
+      ],
+      model,
+    )
+
+    const oldContent = messages[0]?.content
+    const latestContent = messages[1]?.content
+    if (!Array.isArray(oldContent) || !Array.isArray(latestContent)) throw new Error("Expected content arrays")
+    expect(oldContent[0]).toMatchObject({ type: "image", mediaType: "image/png" })
+    expect(latestContent[0]).toMatchObject({ type: "image", mediaType: "image/png" })
+    expect(Buffer.from((oldContent[0] as { image?: Uint8Array }).image as Uint8Array).toString("utf8")).toBe("old")
+    expect(Buffer.from((latestContent[0] as { image?: Uint8Array }).image as Uint8Array).toString("utf8")).toBe("latest")
   })
 
   it("replays assistant reasoning parts into subsequent model context by default", async () => {

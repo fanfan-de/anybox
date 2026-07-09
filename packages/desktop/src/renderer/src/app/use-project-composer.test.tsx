@@ -24,7 +24,7 @@ function createDeferred<T>(): Deferred<T> {
   }
 }
 
-function createModel(providerID: string, id: string, input?: { reasoning?: boolean }): ProviderModel {
+function createModel(providerID: string, id: string, input?: { outputImage?: boolean; reasoning?: boolean; toolcall?: boolean }): ProviderModel {
   return {
     id,
     providerID,
@@ -35,7 +35,7 @@ function createModel(providerID: string, id: string, input?: { reasoning?: boole
       temperature: true,
       reasoning: input?.reasoning ?? false,
       attachment: false,
-      toolcall: true,
+      toolcall: input?.toolcall ?? true,
       input: {
         text: true,
         audio: false,
@@ -46,7 +46,7 @@ function createModel(providerID: string, id: string, input?: { reasoning?: boole
       output: {
         text: true,
         audio: false,
-        image: false,
+        image: input?.outputImage ?? false,
         video: false,
         pdf: false,
       },
@@ -404,5 +404,40 @@ describe("useProjectComposer model selection", () => {
 
     expect(result.current.selectedReasoningEffortLabel).toBe("High")
     expect(result.current.reasoningEffortOptions.map((option) => option.value)).toEqual(["high", "max"])
+  })
+
+  it("hides reasoning effort controls for Gemini image generation models", async () => {
+    const imageModel = createModel("google", "gemini-2.5-flash-image", {
+      outputImage: true,
+      reasoning: true,
+      toolcall: false,
+    })
+
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: {
+        getProjectModels: vi.fn(async () => ({
+          effectiveModel: imageModel,
+          items: [imageModel],
+          selection: {
+            model: "google/gemini-2.5-flash-image",
+            reasoning_effort: "low" as const,
+          },
+        })),
+      } as unknown as typeof window.desktop,
+    })
+
+    const { result } = renderHook(() =>
+      useProjectComposer({
+        attachmentPaths: [],
+        projectID: "project-gemini-image",
+      }),
+    )
+
+    await waitFor(() => expect(result.current.selectedModel).toBe("google/gemini-2.5-flash-image"))
+
+    expect(result.current.reasoningEffortOptions).toEqual([])
+    expect(result.current.selectedReasoningEffort).toBeNull()
+    expect(result.current.selectedReasoningEffortLabel).toBe("")
   })
 })

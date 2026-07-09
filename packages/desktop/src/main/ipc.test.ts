@@ -3,6 +3,7 @@ import { createHash } from "node:crypto"
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import type { NativeImage } from "electron"
 
 const requestAgentJSONMock = vi.hoisted(() => vi.fn())
 
@@ -1188,6 +1189,27 @@ describe("ipc preview screenshot helpers", () => {
 })
 
 describe("ipc composer pasted image helpers", () => {
+  it("copies image data URLs to the native clipboard", () => {
+    const imageBuffer = Buffer.from("clipboard-image")
+    const nativeImageStub = { isEmpty: () => false } as NativeImage
+    const createImageFromBuffer = vi.fn(() => nativeImageStub)
+    const writeClipboardImage = vi.fn()
+
+    internal.copyImageDataUrlToClipboard(
+      {
+        dataUrl: `data:image/png;base64,${imageBuffer.toString("base64")}`,
+        mimeType: "image/png",
+      },
+      {
+        createImageFromBuffer,
+        writeClipboardImage,
+      },
+    )
+
+    expect(createImageFromBuffer).toHaveBeenCalledWith(imageBuffer)
+    expect(writeClipboardImage).toHaveBeenCalledWith(nativeImageStub)
+  })
+
   it("decodes and writes pasted composer images under user data", async () => {
     const imageBuffer = Buffer.from("clipboard-image")
     const makeDirectory = vi.fn().mockResolvedValue(undefined)

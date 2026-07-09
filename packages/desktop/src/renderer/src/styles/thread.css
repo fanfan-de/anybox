@@ -1772,9 +1772,9 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
   max-height: 320px;
   padding: 0;
   overflow: hidden;
-  border: 1px solid rgba(166, 186, 208, 0.54);
+  border: 1px solid var(--mix-seg-border-82-transparent-18);
   border-radius: 8px;
-  background: rgba(247, 250, 252, 0.88);
+  background: var(--semantic-thread-panel-surface-muted);
   cursor: zoom-in;
   contain: layout paint;
 }
@@ -1785,7 +1785,7 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
 
 .trace-image-thumbnail:hover,
 .trace-image-thumbnail:focus-visible {
-  border-color: rgba(95, 146, 194, 0.72);
+  border-color: var(--mix-seg-accent-24-seg-border-76);
   outline: none;
 }
 
@@ -1808,11 +1808,11 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
   display: grid;
   place-items: center;
   padding: 16px;
-  color: #607386;
+  color: var(--seg-text-3);
   font-size: 12px;
   line-height: 1.4;
   text-align: center;
-  background: rgba(247, 250, 252, 0.92);
+  background: var(--semantic-thread-panel-surface-muted);
 }
 
 .trace-image-state.is-error {
@@ -1821,7 +1821,7 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
 
 .trace-image-meta {
   margin: 0;
-  color: #607386;
+  color: var(--seg-text-3);
   font-size: 12px;
   line-height: 1.4;
 }

@@ -249,6 +249,23 @@ describe("llm codex request shaping", () => {
     })
   })
 
+  it("does not send Google thinking config for Gemini image generation models", async () => {
+    await stream({
+      ...createInput(
+        createModel({
+          providerID: "google",
+          url: "https://generativelanguage.googleapis.com/v1beta",
+          id: "gemini-2.5-flash-image",
+          reasoning: true,
+        }),
+      ),
+      reasoningEffort: "high",
+    })
+
+    expect(capturedRequests).toHaveLength(1)
+    expect(capturedRequests[0]?.providerOptions).toBeUndefined()
+  })
+
   it("does not send Google thinking config for Gemini models without thinking support", async () => {
     await stream(
       createInput(

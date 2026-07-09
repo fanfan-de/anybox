@@ -281,6 +281,8 @@ try {
       invokeDesktop("desktop:pick-composer-attachments", input) as Promise<string[]>,
     saveComposerPastedImages: (input: DesktopIpcInput<"desktop:save-composer-pasted-images">) =>
       invokeDesktop("desktop:save-composer-pasted-images", input) as Promise<string[]>,
+    copyImageToClipboard: (input: DesktopIpcInput<"desktop:copy-image-to-clipboard">) =>
+      invokeDesktop("desktop:copy-image-to-clipboard", input) as Promise<void>,
     capturePreviewScreenshot: (input: DesktopIpcInput<"desktop:capture-preview-screenshot">) =>
       invokeDesktop("desktop:capture-preview-screenshot", input) as Promise<DesktopIpcOutput<"desktop:capture-preview-screenshot">>,
     detectLocalPreviewServices: () =>

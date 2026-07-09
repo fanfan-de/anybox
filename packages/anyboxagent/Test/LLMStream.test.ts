@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, mock } from "bun:test"
 import z from "zod"
 import * as Agent from "#agent/agent.ts"
+import * as Identifier from "#id/id.ts"
+import * as RuntimeEvent from "#session/runtime/runtime-event.ts"
 import type * as Message from "#session/core/message.ts"
 import {
   setRuntimeDependenciesForTesting,
@@ -186,5 +188,91 @@ describe("LLM stream", () => {
     expect(options.onFinish).toBeTypeOf("function")
     expect(options.onAbort).toBeTypeOf("function")
     expect(options.onError).toBeTypeOf("function")
+  })
+
+  it("omits tool options when the model does not support tool calls", async () => {
+    const languageModel = {
+      specificationVersion: "v2",
+      provider: "test-provider",
+      modelId: "test-model",
+    }
+    const streamTextMock = mock((options: Record<string, unknown>) => ({
+      fullStream: (async function* () {
+        yield {
+          type: "finish",
+          finishReason: "stop",
+        }
+      })(),
+      textStream: (async function* () {})(),
+      response: Promise.resolve({ messages: [] }),
+      steps: Promise.resolve([]),
+      toolResults: Promise.resolve([]),
+      usage: Promise.resolve(undefined),
+      warnings: Promise.resolve([]),
+      request: Promise.resolve({}),
+    }))
+    const getLanguageMock = mock(async () => languageModel)
+    const noToolCallModel = {
+      ...testModel,
+      capabilities: {
+        ...testModel.capabilities,
+        toolcall: false,
+      },
+    } satisfies StreamInput["model"]
+
+    restoreRuntimeDependencies = setRuntimeDependenciesForTesting({
+      streamText: streamTextMock,
+      getLanguage: getLanguageMock,
+      outputText: () => ({
+        type: "text",
+      }),
+      stepCountIs: (count: number) => ({
+        type: "step-count",
+        count,
+      }),
+    } as never)
+
+    const input = createInput({
+      model: noToolCallModel,
+    })
+
+    const result = await stream(input)
+    for await (const _chunk of result.fullStream) {
+      // drain the stream
+    }
+
+    expect(getLanguageMock).toHaveBeenCalledWith(noToolCallModel)
+    expect(streamTextMock).toHaveBeenCalledTimes(1)
+
+    const options = streamTextMock.mock.calls[0]?.[0] as Record<string, unknown>
+    expect("tools" in options).toBe(false)
+    expect("activeTools" in options).toBe(false)
+  })
+
+  it("accepts tool downgrade metadata on LLM runtime events", () => {
+    const eventFactory = RuntimeEvent.createRuntimeEventFactory({
+      sessionID: Identifier.ascending("session"),
+      turnID: Identifier.ascending("turn"),
+    })
+
+    const event = eventFactory.next("llm.call.started", {
+      messageID: "assistant-message",
+      providerID: "google",
+      modelID: "gemini-2.5-flash-image",
+      agent: "default",
+      messageCount: 1,
+      toolCount: 0,
+      requestedToolCount: 22,
+      toolsDisabledReason: "model_does_not_support_toolcall",
+      hasAttachments: false,
+    })
+
+    if (event.type !== "llm.call.started") {
+      throw new Error(`Unexpected event type: ${event.type}`)
+    }
+
+    expect(event.payload.toolCount).toBe(0)
+    expect(event.payload.requestedToolCount).toBe(22)
+    expect(event.payload.toolsDisabledReason).toBe("model_does_not_support_toolcall")
   })
 })

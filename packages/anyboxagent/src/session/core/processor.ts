@@ -330,9 +330,17 @@ function summarizeLlmCallInput(streamInput: LLM.StreamInput) {
         }
     }
 
+    const requestedToolCount = Object.keys(streamInput.tools ?? {}).filter((toolName) => toolName !== "invalid").length
+    const toolsDisabledReason: "model_does_not_support_toolcall" | undefined =
+        !streamInput.model.capabilities.toolcall && requestedToolCount > 0
+            ? "model_does_not_support_toolcall"
+            : undefined
+
     return {
         messageCount: streamInput.messages.length,
-        toolCount: Object.keys(streamInput.tools ?? {}).filter((toolName) => toolName !== "invalid").length,
+        toolCount: toolsDisabledReason ? 0 : requestedToolCount,
+        requestedToolCount,
+        toolsDisabledReason,
         hasAttachments,
     }
 }
@@ -1326,6 +1334,8 @@ export function create(input: {
                         iteration: attempt,
                         messageCount: llmSummary.messageCount,
                         toolCount: llmSummary.toolCount,
+                        requestedToolCount: llmSummary.requestedToolCount,
+                        toolsDisabledReason: llmSummary.toolsDisabledReason,
                         hasAttachments: llmSummary.hasAttachments,
                     })
 
@@ -1878,6 +1888,8 @@ export function create(input: {
                                     iteration: attempt,
                                     messageCount: llmSummary.messageCount,
                                     toolCount: llmSummary.toolCount,
+                                    requestedToolCount: llmSummary.requestedToolCount,
+                                    toolsDisabledReason: llmSummary.toolsDisabledReason,
                                     hasAttachments: llmSummary.hasAttachments,
                                     finishReason: value.finishReason,
                                     usage: summarizeLlmUsage(value.totalUsage),
@@ -1908,6 +1920,8 @@ export function create(input: {
                                     iteration: attempt,
                                     messageCount: llmSummary.messageCount,
                                     toolCount: llmSummary.toolCount,
+                                    requestedToolCount: llmSummary.requestedToolCount,
+                                    toolsDisabledReason: llmSummary.toolsDisabledReason,
                                     hasAttachments: llmSummary.hasAttachments,
                                     error: streamErrorMessage,
                                     retryable: false,
@@ -2062,6 +2076,8 @@ export function create(input: {
                             iteration: attempt,
                             messageCount: llmSummary.messageCount,
                             toolCount: llmSummary.toolCount,
+                            requestedToolCount: llmSummary.requestedToolCount,
+                            toolsDisabledReason: llmSummary.toolsDisabledReason,
                             hasAttachments: llmSummary.hasAttachments,
                             error: streamAbortReason,
                             retryable: false,
@@ -2122,6 +2138,8 @@ export function create(input: {
                             iteration: attempt,
                             messageCount: llmSummary.messageCount,
                             toolCount: llmSummary.toolCount,
+                            requestedToolCount: llmSummary.requestedToolCount,
+                            toolsDisabledReason: llmSummary.toolsDisabledReason,
                             hasAttachments: llmSummary.hasAttachments,
                             error: errorMessage,
                             retryable: Boolean(e?.isRetryable === true),

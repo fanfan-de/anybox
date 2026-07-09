@@ -205,6 +205,8 @@ const LlmCallStartedPayload = z.object({
   iteration: z.number().int().positive().optional(),
   messageCount: z.number().int().nonnegative(),
   toolCount: z.number().int().nonnegative().optional(),
+  requestedToolCount: z.number().int().nonnegative().optional(),
+  toolsDisabledReason: z.literal("model_does_not_support_toolcall").optional(),
   hasAttachments: z.boolean().optional(),
 })
 

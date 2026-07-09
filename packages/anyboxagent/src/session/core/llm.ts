@@ -152,6 +152,13 @@ export async function stream(input: StreamInput): Promise<StreamOutput> {
 
   // 准备工具集，并解析最终使用的语言模型。
   const tools: ToolSet = input.tools ?? {}
+  const supportsToolCalls = input.model.capabilities.toolcall
+  const toolOptions = supportsToolCalls
+    ? {
+        tools,
+        activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
+      }
+    : {}
 
 
   //解析 Vercel AI  SDK 语言模型
@@ -204,7 +211,7 @@ export async function stream(input: StreamInput): Promise<StreamOutput> {
       await input.onAbort?.(event)
     },
     //上下文
-    tools,
+    ...toolOptions,
     system: isOpenAICodex ? undefined : systemPrompt || undefined,
     prompt: [
       ...input.messages,
@@ -229,8 +236,6 @@ export async function stream(input: StreamInput): Promise<StreamOutput> {
     // 如果后续需要细粒度控制，可以在这里按 provider 组装额外参数。
     // providerOptions 会原样透传给底层 SDK，用于覆盖各家模型的专有配置。
     providerOptions,
-    activeTools: Object.keys(tools).filter((x) => x !== "invalid"),// 过滤掉兜底的 invalid 工具
-
     ///stopSequences:, // string[]，自定义停止序列
     ///seed:123124,// 固定随机种子，便于结果复现
     includeRawChunks: false,// 不返回底层原始分块，减少流式噪声与兼容性问题

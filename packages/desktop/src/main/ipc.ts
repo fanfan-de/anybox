@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type NativeImage, type OpenDialogOptions, type OpenDialogReturnValue, type SaveDialogOptions, type SaveDialogReturnValue, type WebContents } from "electron"
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type NativeImage, type OpenDialogOptions, type OpenDialogReturnValue, type SaveDialogOptions, type SaveDialogReturnValue, type WebContents } from "electron"
 import { createPlatformAdapter } from "@anybox/platform"
 import { DesktopIpcSchemas, createSshWorkspaceUri, isSshWorkspaceUri } from "@anybox/shared"
 import { createHash, randomUUID } from "node:crypto"
@@ -512,6 +512,7 @@ function sanitizeScreenshotFileSegment(value: string) {
 
 type PreviewScreenshotCaptureInput = DesktopIpcInput<"desktop:capture-preview-screenshot">
 type SaveComposerPastedImagesInput = DesktopIpcInput<"desktop:save-composer-pasted-images">
+type CopyImageToClipboardInput = DesktopIpcInput<"desktop:copy-image-to-clipboard">
 
 interface PreviewScreenshotCaptureOptions {
   makeDirectory?: (directory: string, options: { recursive: true }) => Promise<unknown>
@@ -526,6 +527,11 @@ interface SaveComposerPastedImagesOptions {
   now?: Date
   userDataPath?: string
   writeImageFile?: (filePath: string, data: Buffer) => Promise<unknown>
+}
+
+interface CopyImageToClipboardOptions {
+  createImageFromBuffer?: (buffer: Buffer) => NativeImage
+  writeClipboardImage?: (image: NativeImage) => void
 }
 
 const COMPOSER_PASTED_IMAGE_EXTENSIONS = new Map([
@@ -628,6 +634,20 @@ async function saveComposerPastedImages(
   }
 
   return savedPaths
+}
+
+function copyImageDataUrlToClipboard(
+  input: CopyImageToClipboardInput,
+  options: CopyImageToClipboardOptions = {},
+) {
+  const parsedImage = parseComposerPastedImageDataUrl(input.dataUrl, input.mimeType)
+  const image = (options.createImageFromBuffer ?? nativeImage.createFromBuffer)(parsedImage.buffer)
+  if (image.isEmpty()) {
+    throw new Error("Image data could not be decoded for clipboard.")
+  }
+
+  const writeClipboardImage = options.writeClipboardImage ?? ((clipboardImage: NativeImage) => clipboard.writeImage(clipboardImage))
+  writeClipboardImage(image)
 }
 
 async function getToolPermissionMode() {
@@ -3729,6 +3749,8 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
 
   handleDesktopIpc("desktop:save-composer-pasted-images", async (_event, input) => saveComposerPastedImages(input))
 
+  handleDesktopIpc("desktop:copy-image-to-clipboard", async (_event, input) => copyImageDataUrlToClipboard(input))
+
   handleDesktopIpc("desktop:capture-preview-screenshot", async (event, input) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     if (!win) {
@@ -6250,6 +6272,7 @@ export const internal = {
   abortActiveAgentSessionRequestsInMap,
   cleanupSideChatLinksWithoutResponses,
   capturePreviewScreenshotFromWindow,
+  copyImageDataUrlToClipboard,
   discardSessionBagSubmission,
   disposeSessionStreamSubscriptionsForWebContents,
   getSessionTraceExport,

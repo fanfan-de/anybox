@@ -1147,6 +1147,63 @@ describe("ThreadView image trace items", () => {
     expect(container.contains(dialog)).toBe(false)
   })
 
+  it("hides generic image titles and completed status while keeping one metadata row", () => {
+    const items: AssistantTraceItem[] = [
+      {
+        id: "image-attachment",
+        kind: "image",
+        timestamp: 1,
+        label: "图像",
+        title: "Attachment",
+        src: "https://example.com/generated.jpg",
+        mimeType: "image/jpeg",
+        text: "image/jpeg",
+        alt: "Generated preview",
+        status: "completed",
+      },
+    ]
+
+    const { container } = renderThread([
+      assistantTraceMessage("assistant-image-attachment", items, false),
+    ])
+
+    const imageArticle = container.querySelector('[data-kind="image"]') as HTMLElement | null
+    expect(imageArticle).not.toBeNull()
+    expect(within(imageArticle!).queryByText("Attachment")).toBeNull()
+    expect(within(imageArticle!).queryByText(/completed/i)).toBeNull()
+    expect(within(imageArticle!).getByText("image/jpeg")).toBeInTheDocument()
+    expect(imageArticle!.textContent?.match(/image\/jpeg/g) ?? []).toHaveLength(1)
+  })
+
+  it("keeps meaningful image titles and combines mime type with dimensions", () => {
+    const items: AssistantTraceItem[] = [
+      {
+        id: "image-file",
+        kind: "image",
+        timestamp: 1,
+        label: "Image",
+        title: "first.png",
+        src: "https://example.com/first.png",
+        mimeType: "image/png",
+        width: 512,
+        height: 512,
+        alt: "First preview",
+        detail: "Generated image preview",
+        status: "completed",
+      },
+    ]
+
+    const { container } = renderThread([
+      assistantTraceMessage("assistant-image-file", items, false),
+    ])
+
+    const imageArticle = container.querySelector('[data-kind="image"]') as HTMLElement | null
+    expect(imageArticle).not.toBeNull()
+    expect(within(imageArticle!).getByText("first.png")).toBeInTheDocument()
+    expect(within(imageArticle!).getByText("image/png · 512 x 512")).toBeInTheDocument()
+    expect(within(imageArticle!).getByText("Generated image preview")).toBeInTheDocument()
+  })
+
   it("keeps patch file rows scoped to inline diff expansion", () => {
     const onFileChangeSelect = vi.fn()
     const patchItem: AssistantTraceItem = {
@@ -4804,6 +4861,114 @@ describe("ThreadView message actions", () => {
       Object.defineProperty(globalThis, "fetch", {
         configurable: true,
         value: previousFetch,
+      })
+    }
+  })
+
+  it("copies assistant response images through the desktop clipboard bridge when available", async () => {
+    const hadDesktop = "desktop" in window
+    const previousDesktop = window.desktop
+    const previousFetch = globalThis.fetch
+    const copyImageToClipboard = vi.fn().mockResolvedValue(undefined)
+    const imageBlob = new Blob(["image-bytes"], { type: "image/png" })
+    const fetchMock = vi.fn(async () => new Response(imageBlob))
+
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: {
+        copyImageToClipboard,
+      },
+    })
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: fetchMock,
+    })
+
+    try {
+      const { getByAltText } = renderThread([
+        assistantTraceMessage(
+          "assistant-image-desktop-copy",
+          [
+            {
+              id: "response-image-desktop-copy",
+              kind: "text",
+              timestamp: 1,
+              label: "Assistant",
+              text: "Here is the image:\n\n![Local preview](C:/Users/19128/AppData/Local/Temp/cat.png)",
+              status: "completed",
+            },
+          ],
+          false,
+        ),
+      ])
+
+      fireEvent.contextMenu(getByAltText("Local preview"), { clientX: 120, clientY: 80 })
+
+      const menu = screen.getByRole("menu", { name: "Thread image actions" })
+      fireEvent.click(within(menu).getAllByRole("menuitem")[0])
+
+      await waitFor(() => {
+        expect(copyImageToClipboard).toHaveBeenCalledWith({
+          dataUrl: expect.stringMatching(/^data:image\/png;base64,/),
+          mimeType: "image/png",
+        })
+      })
+    } finally {
+      if (hadDesktop) {
+        Object.defineProperty(window, "desktop", {
+          configurable: true,
+          value: previousDesktop,
+        })
+      } else {
+        Reflect.deleteProperty(window, "desktop")
+      }
+      Object.defineProperty(globalThis, "fetch", {
+        configurable: true,
+        value: previousFetch,
+      })
+    }
+  })
+
+  it("copies assistant response image addresses from the image context menu", async () => {
+    const previousClipboard = navigator.clipboard
+    const writeText = vi.fn().mockResolvedValue(undefined)
+
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+
+    try {
+      const imagePath = "C:/Users/19128/AppData/Local/Temp/cat.png"
+      const { getByAltText } = renderThread([
+        assistantTraceMessage(
+          "assistant-image-address-copy",
+          [
+            {
+              id: "response-image-address-copy",
+              kind: "text",
+              timestamp: 1,
+              label: "Assistant",
+              text: `Here is the image:\n\n![Local preview](${imagePath})`,
+              status: "completed",
+            },
+          ],
+          false,
+        ),
+      ])
+
+      fireEvent.contextMenu(getByAltText("Local preview"), { clientX: 120, clientY: 80 })
+
+      const menu = screen.getByRole("menu", { name: "Thread image actions" })
+      fireEvent.click(within(menu).getByRole("menuitem", { name: "复制图片地址" }))
+
+      await waitFor(() => {
+        expect(writeText).toHaveBeenCalledWith(imagePath)
+      })
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: previousClipboard,
       })
     }
   })
