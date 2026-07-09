@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import {
   applyEdgeChanges,
@@ -35,6 +35,7 @@ import {
   Film,
   Folder,
   Image,
+  Info,
   KeyRound,
   Loader2,
   MessageSquareText,
@@ -136,6 +137,29 @@ type CustomApiAuthSaveRequest = {
   apiKey: string | null
 }
 
+type ImageCropRect = {
+  x: number
+  y: number
+  width: number
+  height: number
+  unit: "pixel"
+}
+
+type ImageCropDraftRect = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+type ImageCropDragMode = "move" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw"
+
+type ImageCropDragState = {
+  mode: ImageCropDragMode
+  startPointer: { x: number; y: number }
+  startCrop: ImageCropDraftRect
+}
+
 type VideoInputSlot = GenerationInputSlot
 type VideoMediaInputSlot = GenerationMediaInputSlot
 type VideoImageInputSlot = GenerationImageInputSlot
@@ -205,6 +229,9 @@ type CinemaFlowNodeData = {
   customApiError?: string | null
   onRunCustomApi?: (nodeID: string, request: CustomApiRunRequest) => Promise<CinemaCustomApiRunResult | undefined>
   onSaveCustomApiKey?: (nodeID: string, request: CustomApiAuthSaveRequest) => Promise<CinemaCustomApiAuthState | undefined>
+  isCroppingLocalImage?: boolean
+  localImageCropError?: string | null
+  onCreateCroppedLocalImageNode?: (nodeID: string, crop: ImageCropRect) => Promise<void>
   nodeInputOverlayRoot?: HTMLElement | null
 }
 
@@ -215,6 +242,11 @@ type ContextMenuState = {
   y: number
   flowX: number
   flowY: number
+} | null
+type NodeContextMenuState = {
+  x: number
+  y: number
+  nodeID: string
 } | null
 type DisplayAsset = {
   id: string
@@ -253,6 +285,10 @@ const DEFAULT_VIDEO_ASPECT_RATIO = "16:9"
 const DEFAULT_VIDEO_DURATION_SECONDS = 5
 const DEFAULT_VIDEO_RESOLUTION = "std"
 const FALLBACK_VIDEO_INPUT_COMBINATION_MODE: CinemaGenerationMode = "text-to-video"
+const MIN_LOCAL_IMAGE_CROP_PIXELS = 32
+const LOCAL_IMAGE_CROP_NODE_OFFSET_X = 360
+const LOCAL_IMAGE_CROP_MAX_OUTPUT_SIDE = 2048
+const LOCAL_IMAGE_CROP_HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const satisfies readonly ImageCropDragMode[]
 const LOCAL_IMAGE_FILE_ACCEPT = [
   "image/apng",
   "image/avif",
@@ -1701,6 +1737,236 @@ function fileToDataBase64(file: File) {
   })
 }
 
+function blobToDataBase64(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read cropped image"))
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : ""
+      const commaIndex = result.indexOf(",")
+      resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result)
+    }
+    reader.readAsDataURL(blob)
+  })
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  if (max < min) return min
+  return Math.min(Math.max(value, min), max)
+}
+
+function defaultImageCropDraft(): ImageCropDraftRect {
+  return {
+    x: 0.15,
+    y: 0.15,
+    width: 0.7,
+    height: 0.7,
+  }
+}
+
+function imageCropMinimumRatio(size: { width: number; height: number } | null): { width: number; height: number } {
+  if (!size || size.width <= 0 || size.height <= 0) return { width: 0.05, height: 0.05 }
+  return {
+    width: Math.min(1, MIN_LOCAL_IMAGE_CROP_PIXELS / size.width),
+    height: Math.min(1, MIN_LOCAL_IMAGE_CROP_PIXELS / size.height),
+  }
+}
+
+function imageCropDraftFromDrag(
+  drag: ImageCropDragState,
+  pointer: { x: number; y: number },
+  minRatio: { width: number; height: number },
+): ImageCropDraftRect {
+  const dx = pointer.x - drag.startPointer.x
+  const dy = pointer.y - drag.startPointer.y
+  const start = drag.startCrop
+
+  if (drag.mode === "move") {
+    return {
+      ...start,
+      x: clampNumber(start.x + dx, 0, 1 - start.width),
+      y: clampNumber(start.y + dy, 0, 1 - start.height),
+    }
+  }
+
+  let left = start.x
+  let top = start.y
+  let right = start.x + start.width
+  let bottom = start.y + start.height
+
+  if (drag.mode.includes("w")) left = clampNumber(start.x + dx, 0, right - minRatio.width)
+  if (drag.mode.includes("e")) right = clampNumber(start.x + start.width + dx, left + minRatio.width, 1)
+  if (drag.mode.includes("n")) top = clampNumber(start.y + dy, 0, bottom - minRatio.height)
+  if (drag.mode.includes("s")) bottom = clampNumber(start.y + start.height + dy, top + minRatio.height, 1)
+
+  return {
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+  }
+}
+
+function imageCropRectFromDraft(draft: ImageCropDraftRect, size: { width: number; height: number }): ImageCropRect {
+  const x = Math.round(draft.x * size.width)
+  const y = Math.round(draft.y * size.height)
+  const right = Math.round((draft.x + draft.width) * size.width)
+  const bottom = Math.round((draft.y + draft.height) * size.height)
+  return normalizeImageCropRect({
+    x,
+    y,
+    width: right - x,
+    height: bottom - y,
+    unit: "pixel",
+  }, size.width, size.height)
+}
+
+function normalizeImageCropRect(crop: ImageCropRect, imageWidth: number, imageHeight: number): ImageCropRect {
+  const width = Math.max(1, Math.round(imageWidth))
+  const height = Math.max(1, Math.round(imageHeight))
+  const x = clampNumber(Math.round(crop.x), 0, width - 1)
+  const y = clampNumber(Math.round(crop.y), 0, height - 1)
+  return {
+    x,
+    y,
+    width: clampNumber(Math.round(crop.width), 1, width - x),
+    height: clampNumber(Math.round(crop.height), 1, height - y),
+    unit: "pixel",
+  }
+}
+
+function scaleImageCropRect(
+  crop: ImageCropRect,
+  fromSize: { width: number; height: number },
+  toSize: { width: number; height: number },
+): ImageCropRect {
+  return normalizeImageCropRect({
+    x: Math.round(crop.x * toSize.width / fromSize.width),
+    y: Math.round(crop.y * toSize.height / fromSize.height),
+    width: Math.round(crop.width * toSize.width / fromSize.width),
+    height: Math.round(crop.height * toSize.height / fromSize.height),
+    unit: "pixel",
+  }, toSize.width, toSize.height)
+}
+
+async function canvasToPngBlob(canvas: HTMLCanvasElement) {
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob)
+      else reject(new Error("Could not export cropped image"))
+    }, "image/png")
+  })
+}
+
+function imageCropOutputSize(crop: ImageCropRect) {
+  const sourceWidth = Math.max(1, crop.width)
+  const sourceHeight = Math.max(1, crop.height)
+  const scale = Math.min(1, LOCAL_IMAGE_CROP_MAX_OUTPUT_SIDE / Math.max(sourceWidth, sourceHeight))
+  return {
+    width: Math.max(1, Math.round(sourceWidth * scale)),
+    height: Math.max(1, Math.round(sourceHeight * scale)),
+  }
+}
+
+async function cropImageURLToPngDataBase64(
+  imageURL: string,
+  crop: ImageCropRect,
+  sourceSize: { width: number; height: number } | null,
+) {
+  const response = await fetch(imageURL)
+  if (!response.ok) throw new Error(`Could not load image for crop (${response.status})`)
+  const blob = await response.blob()
+  if (sourceSize && sourceSize.width > 0 && sourceSize.height > 0) {
+    const sourceCrop = normalizeImageCropRect(crop, sourceSize.width, sourceSize.height)
+    const outputSize = imageCropOutputSize(sourceCrop)
+    try {
+      const bitmap = await createImageBitmap(blob, sourceCrop.x, sourceCrop.y, sourceCrop.width, sourceCrop.height, {
+        resizeWidth: outputSize.width,
+        resizeHeight: outputSize.height,
+        resizeQuality: "high",
+      })
+      try {
+        const canvas = document.createElement("canvas")
+        canvas.width = outputSize.width
+        canvas.height = outputSize.height
+        const context = canvas.getContext("2d")
+        if (!context) throw new Error("Could not prepare image crop")
+        context.drawImage(bitmap, 0, 0, outputSize.width, outputSize.height)
+        return {
+          dataBase64: await blobToDataBase64(await canvasToPngBlob(canvas)),
+          outputSize,
+          bitmapCrop: sourceCrop,
+        }
+      } finally {
+        bitmap.close()
+      }
+    } catch {
+      // Some image formats cannot be decoded through the cropped ImageBitmap path.
+    }
+  }
+
+  const bitmap = await createImageBitmap(blob)
+  try {
+    const bitmapCrop = sourceSize && sourceSize.width > 0 && sourceSize.height > 0
+      ? scaleImageCropRect(crop, sourceSize, { width: bitmap.width, height: bitmap.height })
+      : normalizeImageCropRect(crop, bitmap.width, bitmap.height)
+    const outputSize = imageCropOutputSize(bitmapCrop)
+    const canvas = document.createElement("canvas")
+    canvas.width = outputSize.width
+    canvas.height = outputSize.height
+    const context = canvas.getContext("2d")
+    if (!context) throw new Error("Could not prepare image crop")
+    context.drawImage(
+      bitmap,
+      bitmapCrop.x,
+      bitmapCrop.y,
+      bitmapCrop.width,
+      bitmapCrop.height,
+      0,
+      0,
+      outputSize.width,
+      outputSize.height,
+    )
+    return {
+      dataBase64: await blobToDataBase64(await canvasToPngBlob(canvas)),
+      outputSize,
+      bitmapCrop,
+    }
+  } finally {
+    bitmap.close()
+  }
+}
+
+function stripImageFileExtension(fileName: string) {
+  return fileName.trim().replace(/\.(?:apng|avif|bmp|gif|jpe?g|png|svg|webp)$/i, "")
+}
+
+function croppedImageTitle(sourceTitle: string) {
+  const base = stripImageFileExtension(sourceTitle).trim() || "Image"
+  return `${base} - 编辑`.slice(0, 220)
+}
+
+function readImageCropRect(rawData: Record<string, unknown>): ImageCropRect | null {
+  const crop = readRawRecord(rawData, "crop")
+  const x = readRawNumber(crop, "x", Number.NaN)
+  const y = readRawNumber(crop, "y", Number.NaN)
+  const width = readRawNumber(crop, "width", Number.NaN)
+  const height = readRawNumber(crop, "height", Number.NaN)
+  const unit = readRawString(crop, "unit")
+  if (
+    unit !== "pixel" ||
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    return null
+  }
+  return { x, y, width, height, unit }
+}
+
 function createNode(type: CinemaNodeType, position: { x: number; y: number }): CinemaFlowNode {
   const id = makeNodeID(type)
   const size = DEFAULT_NODE_SIZE[type]
@@ -1753,6 +2019,10 @@ function createLocalImageNode(
   asset: CinemaGeneratedAsset,
   fileName: string,
   position: { x: number; y: number },
+  options: {
+    title?: string
+    rawDataPatch?: Record<string, unknown>
+  } = {},
 ): CinemaFlowNode {
   const type = "local-image" satisfies CinemaNodeType
   const size = DEFAULT_NODE_SIZE[type]
@@ -1763,12 +2033,13 @@ function createLocalImageNode(
     style: flowNodeStyle(type, size),
     data: {
       cinemaType: type,
-      title: fileName.trim() || titleForType(type),
+      title: options.title?.trim() || fileName.trim() || titleForType(type),
       rawData: {
         asset,
         sourceFileName: fileName,
         status: "ready",
         importedAt: new Date().toISOString(),
+        ...options.rawDataPatch,
       },
       size,
     },
@@ -4360,19 +4631,141 @@ function LocalImageCanvasNode({
   accentStyle: CSSProperties
 }) {
   const asset = readLocalImageAsset(data.rawData)
+  const cropFrameRef = useRef<HTMLElement | null>(null)
   const [hasPreviewError, setHasPreviewError] = useState(false)
+  const [imagePixelSize, setImagePixelSize] = useState<{ width: number; height: number } | null>(
+    () => asset?.width && asset.height ? { width: asset.width, height: asset.height } : null,
+  )
+  const [isCropEditorOpen, setIsCropEditorOpen] = useState(false)
+  const [cropDraft, setCropDraft] = useState<ImageCropDraftRect | null>(null)
+  const [cropDrag, setCropDrag] = useState<ImageCropDragState | null>(null)
+  const [localCropError, setLocalCropError] = useState<string | null>(null)
   const previewSrc = asset && data.agentBaseURL && data.projectID
     ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, asset.path)
     : ""
-  const previewAspectRatio = asset?.width && asset.height ? `${asset.width} / ${asset.height}` : null
+  const fileName = readRawString(data.rawData, "sourceFileName", data.title)
+  const effectiveImageSize = imagePixelSize ?? (asset?.width && asset.height ? { width: asset.width, height: asset.height } : null)
+  const previewAspectRatio = effectiveImageSize ? `${effectiveImageSize.width} / ${effectiveImageSize.height}` : null
   const previewStyle = previewAspectRatio
     ? { "--cinema-local-image-aspect-ratio": previewAspectRatio } as CSSProperties
     : undefined
-  const fileName = readRawString(data.rawData, "sourceFileName", data.title)
+  const isCropping = Boolean(data.isCroppingLocalImage)
+  const cropError = localCropError ?? data.localImageCropError ?? null
+  const canCrop = Boolean(previewSrc && !hasPreviewError && effectiveImageSize && data.onCreateCroppedLocalImageNode)
 
   useEffect(() => {
     setHasPreviewError(false)
-  }, [previewSrc])
+    setLocalCropError(null)
+    setImagePixelSize(asset?.width && asset.height ? { width: asset.width, height: asset.height } : null)
+  }, [asset?.height, asset?.width, previewSrc])
+
+  useEffect(() => {
+    if (selected) return
+    setIsCropEditorOpen(false)
+    setCropDrag(null)
+  }, [selected])
+
+  const framePointerPosition = useCallback((event: Pick<globalThis.PointerEvent, "clientX" | "clientY">) => {
+    const frame = cropFrameRef.current
+    if (!frame) return null
+    const bounds = frame.getBoundingClientRect()
+    if (bounds.width <= 0 || bounds.height <= 0) return null
+    return {
+      x: clampNumber((event.clientX - bounds.left) / bounds.width, 0, 1),
+      y: clampNumber((event.clientY - bounds.top) / bounds.height, 0, 1),
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!cropDrag) return
+
+    const moveCrop = (event: globalThis.PointerEvent) => {
+      event.preventDefault()
+      const pointer = framePointerPosition(event)
+      if (!pointer) return
+      const minimumRatio = imageCropMinimumRatio(effectiveImageSize)
+      setCropDraft(imageCropDraftFromDrag(cropDrag, pointer, minimumRatio))
+    }
+    const stopCrop = () => setCropDrag(null)
+
+    window.addEventListener("pointermove", moveCrop)
+    window.addEventListener("pointerup", stopCrop)
+    window.addEventListener("pointercancel", stopCrop)
+    return () => {
+      window.removeEventListener("pointermove", moveCrop)
+      window.removeEventListener("pointerup", stopCrop)
+      window.removeEventListener("pointercancel", stopCrop)
+    }
+  }, [cropDrag, effectiveImageSize, framePointerPosition])
+
+  const openCropEditor = useCallback(() => {
+    if (!canCrop) return
+    setLocalCropError(null)
+    setCropDraft(defaultImageCropDraft())
+    setIsCropEditorOpen(true)
+  }, [canCrop])
+
+  const resetCropDraft = useCallback(() => {
+    setLocalCropError(null)
+    setCropDraft(defaultImageCropDraft())
+  }, [])
+
+  const cancelCropEditor = useCallback(() => {
+    setIsCropEditorOpen(false)
+    setCropDrag(null)
+    setLocalCropError(null)
+  }, [])
+
+  const startCropDrag = useCallback((mode: ImageCropDragMode, event: ReactPointerEvent<HTMLElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (!cropDraft) return
+    const pointer = framePointerPosition(event)
+    if (!pointer) return
+    setLocalCropError(null)
+    setCropDrag({
+      mode,
+      startPointer: pointer,
+      startCrop: cropDraft,
+    })
+  }, [cropDraft, framePointerPosition])
+
+  const applyCrop = useCallback(async () => {
+    if (!cropDraft || !effectiveImageSize) {
+      setLocalCropError("Image dimensions are unavailable.")
+      return
+    }
+    if (!data.onCreateCroppedLocalImageNode) {
+      setLocalCropError("Crop action is unavailable.")
+      return
+    }
+    setLocalCropError(null)
+    const crop = imageCropRectFromDraft(cropDraft, effectiveImageSize)
+    setCropDrag(null)
+    setIsCropEditorOpen(false)
+    try {
+      await data.onCreateCroppedLocalImageNode(id, crop)
+    } catch (error) {
+      setLocalCropError(error instanceof Error ? error.message : "Image crop failed")
+    }
+  }, [cropDraft, data, effectiveImageSize, id])
+
+  const cropBoxStyle = cropDraft
+    ? {
+      left: `${cropDraft.x * 100}%`,
+      top: `${cropDraft.y * 100}%`,
+      width: `${cropDraft.width * 100}%`,
+      height: `${cropDraft.height * 100}%`,
+    } as CSSProperties
+    : undefined
+  const cropLayerStyle = cropDraft
+    ? {
+      "--cinema-local-image-crop-left": `${cropDraft.x * 100}%`,
+      "--cinema-local-image-crop-top": `${cropDraft.y * 100}%`,
+      "--cinema-local-image-crop-width": `${cropDraft.width * 100}%`,
+      "--cinema-local-image-crop-height": `${cropDraft.height * 100}%`,
+    } as CSSProperties
+    : undefined
 
   return (
     <>
@@ -4387,6 +4780,27 @@ function LocalImageCanvasNode({
         className={`cinema-local-image-node ${selected ? "is-selected" : ""}`}
         style={accentStyle}
       >
+        {selected ? (
+          <div className="cinema-local-image-toolbar nodrag nowheel" role="toolbar" aria-label="Image tools">
+            <button
+              type="button"
+              className={`cinema-local-image-tool-button ${isCropEditorOpen ? "is-active" : ""}`}
+              title="Crop image"
+              aria-label="Crop image"
+              aria-expanded={isCropEditorOpen}
+              disabled={!canCrop || isCropping}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                openCropEditor()
+              }}
+            >
+              {isCropping
+                ? <Loader2 size={15} aria-hidden="true" className="is-spinning" />
+                : <Scissors size={15} aria-hidden="true" />}
+            </button>
+          </div>
+        ) : null}
         <header className="cinema-local-image-header">
           <CinemaNodeTitle
             icon={Image}
@@ -4395,17 +4809,98 @@ function LocalImageCanvasNode({
             title={data.title}
             onChangeTitle={data.onChangeTitle}
           />
-          <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
+          <div className="cinema-node-header-actions nodrag nowheel" role="toolbar" aria-label="Image node actions">
+            <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
+          </div>
         </header>
 
-        <section className="cinema-local-image-frame" aria-label="Image preview" style={previewStyle}>
+        <section
+          ref={cropFrameRef}
+          className={`cinema-local-image-frame ${isCropEditorOpen ? "is-cropping" : ""}`}
+          aria-label="Image preview"
+          style={previewStyle}
+        >
           {previewSrc && !hasPreviewError ? (
-            <img
-              src={previewSrc}
-              alt={fileName}
-              draggable={false}
-              onError={() => setHasPreviewError(true)}
-            />
+            <>
+              <img
+                src={previewSrc}
+                alt={fileName}
+                draggable={false}
+                onLoad={(event) => {
+                  const image = event.currentTarget
+                  if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+                    setImagePixelSize({ width: image.naturalWidth, height: image.naturalHeight })
+                  }
+                }}
+                onError={() => setHasPreviewError(true)}
+              />
+              {isCropEditorOpen && cropDraft ? (
+                <div
+                  className="cinema-local-image-crop-layer nodrag nowheel"
+                  role="group"
+                  aria-label="Image crop editor"
+                  style={cropLayerStyle}
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  <div className="cinema-local-image-crop-scrim is-top" aria-hidden="true" />
+                  <div className="cinema-local-image-crop-scrim is-right" aria-hidden="true" />
+                  <div className="cinema-local-image-crop-scrim is-bottom" aria-hidden="true" />
+                  <div className="cinema-local-image-crop-scrim is-left" aria-hidden="true" />
+                  <div
+                    className="cinema-local-image-crop-box"
+                    style={cropBoxStyle}
+                    onPointerDown={(event) => startCropDrag("move", event)}
+                  >
+                    {LOCAL_IMAGE_CROP_HANDLES.map((handle) => (
+                      <span
+                        key={handle}
+                        className={`cinema-local-image-crop-handle is-${handle}`}
+                        aria-hidden="true"
+                        onPointerDown={(event) => startCropDrag(handle, event)}
+                      />
+                    ))}
+                  </div>
+                  <div className="cinema-local-image-crop-actions">
+                    <button
+                      type="button"
+                      className="cinema-local-image-crop-command"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        cancelCropEditor()
+                      }}
+                      disabled={isCropping}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="cinema-local-image-crop-command"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        resetCropDraft()
+                      }}
+                      disabled={isCropping}
+                    >
+                      Reset
+                    </button>
+                    <button
+                      type="button"
+                      className="cinema-local-image-crop-command is-primary"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void applyCrop()
+                      }}
+                      disabled={isCropping}
+                    >
+                      {isCropping ? "Applying" : "Apply"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </>
           ) : (
             <div className={`cinema-local-image-empty ${hasPreviewError ? "is-error" : ""}`}>
               <Image size={28} aria-hidden="true" />
@@ -4413,6 +4908,9 @@ function LocalImageCanvasNode({
             </div>
           )}
         </section>
+        {cropError ? (
+          <p className="cinema-local-image-crop-error" role="alert">{cropError}</p>
+        ) : null}
       </article>
       <Handle
         id="output"
@@ -4972,6 +5470,16 @@ function inspectorRowsForNode(node: CinemaFlowNode) {
 
   if (node.data.cinemaType === "local-image") {
     addInspectorRow(rows, "Source file", readRawString(rawData, "sourceFileName"))
+    addInspectorRow(rows, "Derived from", readRawString(rawData, "derivedFromNodeID"))
+    addInspectorRow(rows, "Operation", readRawString(rawData, "derivedOperation"))
+    const crop = readImageCropRect(rawData)
+    if (crop) addInspectorRow(rows, "Crop", `${crop.width} x ${crop.height} at ${crop.x}, ${crop.y}`)
+    const cropOutputSize = readRawRecord(rawData, "cropOutputSize")
+    const cropOutputWidth = readRawNumber(cropOutputSize, "width", Number.NaN)
+    const cropOutputHeight = readRawNumber(cropOutputSize, "height", Number.NaN)
+    if (Number.isFinite(cropOutputWidth) && Number.isFinite(cropOutputHeight)) {
+      addInspectorRow(rows, "Crop output", `${cropOutputWidth} x ${cropOutputHeight}`)
+    }
   }
 
   if (node.data.cinemaType === "custom-api") {
@@ -5282,6 +5790,34 @@ function ContextMenu({
   )
 }
 
+function NodeContextMenu({
+  menu,
+  onShowDetails,
+  onClose,
+}: {
+  menu: NodeContextMenuState
+  onShowDetails: (nodeID: string) => void
+  onClose: () => void
+}) {
+  if (!menu) return null
+
+  return (
+    <div className="cinema-context-menu" style={{ left: menu.x, top: menu.y }} role="menu">
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => {
+          onShowDetails(menu.nodeID)
+          onClose()
+        }}
+      >
+        <Info size={15} aria-hidden="true" />
+        <span>详细信息</span>
+      </button>
+    </div>
+  )
+}
+
 function CanvasPanelNavigation({
   activePanel,
   onTogglePanel,
@@ -5322,6 +5858,8 @@ export function App() {
   const [nodes, setNodes] = useState<CinemaFlowNode[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
+  const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState>(null)
+  const [inspectorNodeID, setInspectorNodeID] = useState<string | null>(null)
   const [activeCanvasPanel, setActiveCanvasPanel] = useState<CanvasPanel | null>("files")
   const [nodeInputOverlayRoot, setNodeInputOverlayRoot] = useState<HTMLDivElement | null>(null)
   const [saveState, setSaveState] = useState<SaveState>("idle")
@@ -5335,6 +5873,8 @@ export function App() {
   const [videoGenerationError, setVideoGenerationError] = useState<{ nodeID: string; message: string } | null>(null)
   const [customApiNodeID, setCustomApiNodeID] = useState<string | null>(null)
   const [customApiError, setCustomApiError] = useState<{ nodeID: string; message: string } | null>(null)
+  const [localImageCropNodeID, setLocalImageCropNodeID] = useState<string | null>(null)
+  const [localImageCropError, setLocalImageCropError] = useState<{ nodeID: string; message: string } | null>(null)
   const saveStateRef = useRef<SaveState>("idle")
   const autoRefreshInFlightRef = useRef(false)
   const nodePatchTimersRef = useRef(new Map<string, number>())
@@ -5860,6 +6400,127 @@ export function App() {
     },
   })
 
+  const createCroppedLocalImageMutation = useMutation({
+    mutationFn: async ({ nodeID, crop }: { nodeID: string; crop: ImageCropRect }) => {
+      const sourceNode = nodes.find((node) => node.id === nodeID)
+      if (!sourceNode || sourceNode.data.cinemaType !== "local-image") {
+        throw new Error("Source image node is unavailable.")
+      }
+      const asset = readLocalImageAsset(sourceNode.data.rawData)
+      if (!asset) throw new Error("Source image asset is unavailable.")
+      if (!agentBaseURL || !projectID) throw new Error("Cinema project is unavailable.")
+
+      const pendingNodeIDs = new Set([
+        ...nodePatchQueueRef.current.keys(),
+        ...nodePatchTimersRef.current.keys(),
+      ])
+      for (const pendingNodeID of pendingNodeIDs) {
+        await flushNodePatch(pendingNodeID)
+      }
+
+      const sourceSize = asset.width && asset.height
+        ? { width: asset.width, height: asset.height }
+        : null
+      const normalizedCrop = sourceSize
+        ? normalizeImageCropRect(crop, sourceSize.width, sourceSize.height)
+        : crop
+      const previewURL = projectAssetPreviewURL(agentBaseURL, projectID, asset.path)
+      const croppedImage = await cropImageURLToPngDataBase64(previewURL, normalizedCrop, sourceSize)
+      const sourceFileName = readRawString(sourceNode.data.rawData, "sourceFileName", sourceNode.data.title)
+      const nextTitle = croppedImageTitle(sourceFileName || sourceNode.data.title)
+      const nextFileName = `${nextTitle}.png`
+      const importResult = await requestJson<CinemaImportedImageAssetResult>(
+        agentBaseURL,
+        `/api/cinema/projects/${encodeURIComponent(projectID)}/assets/imports`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fileName: nextFileName,
+            mimeType: "image/png",
+            dataBase64: croppedImage.dataBase64,
+          }),
+        },
+      )
+      const nextNode = createLocalImageNode(
+        importResult.asset,
+        nextFileName,
+        {
+          x: sourceNode.position.x + LOCAL_IMAGE_CROP_NODE_OFFSET_X,
+          y: sourceNode.position.y,
+        },
+        {
+          title: nextTitle,
+          rawDataPatch: {
+            derivedFromNodeID: sourceNode.id,
+            derivedFromAssetID: asset.id,
+            derivedOperation: "crop",
+            crop: normalizedCrop,
+            cropOutputSize: croppedImage.outputSize,
+          },
+        },
+      )
+
+      await requestJson<CinemaCommandResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: makeCommandID("create-node"),
+          type: "create-node",
+          actor: "cinema-web",
+          node: toCanvasNode(nextNode),
+        } satisfies CinemaCommand),
+      })
+      const connected = await requestJson<CinemaCommandResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: makeCommandID("connect-nodes"),
+          type: "connect-nodes",
+          actor: "cinema-web",
+          edge: {
+            id: `edge-${sourceNode.id}-${nextNode.id}-${Date.now().toString(36)}`,
+            source: sourceNode.id,
+            target: nextNode.id,
+            sourceHandle: "output",
+            targetHandle: "input",
+            data: {
+              derivedOperation: "crop",
+            },
+          },
+        } satisfies CinemaCommand),
+      })
+      return { canvas: connected.canvas, nodeID: nextNode.id }
+    },
+    onMutate: ({ nodeID }) => {
+      setLocalImageCropNodeID(nodeID)
+      setLocalImageCropError(null)
+      saveStateRef.current = "saving"
+      setSaveState("saving")
+      setSaveError(null)
+    },
+    onSuccess: ({ canvas, nodeID }) => {
+      applyCanvas(canvas)
+      setSelectedNodeID(nodeID)
+    },
+    onError: (error, variables) => {
+      const message = error instanceof Error ? error.message : "Image crop failed"
+      setLocalImageCropError({ nodeID: variables.nodeID, message })
+      saveStateRef.current = "error"
+      setSaveState("error")
+      setSaveError(message)
+    },
+    onSettled: () => {
+      setLocalImageCropNodeID(null)
+    },
+  })
+
   useEffect(() => {
     if (!projectID || !canvasQuery.data || projectQuery.data?.initialized !== true) return
     let cancelled = false
@@ -5970,6 +6631,8 @@ export function App() {
       }, {
         onSuccess: () => {
           if (selectedNodeID === nodeID) setSelectedNodeID(null)
+          setInspectorNodeID((current) => current === nodeID ? null : current)
+          setNodeContextMenu((current) => current?.nodeID === nodeID ? null : current)
         },
       })
     }
@@ -6063,6 +6726,7 @@ export function App() {
 
   const onPaneContextMenu = useCallback((event: globalThis.MouseEvent | ReactMouseEvent<Element>) => {
     event.preventDefault()
+    setNodeContextMenu(null)
     const projected = (flowInstance ?? reactFlow).screenToFlowPosition({
       x: event.clientX,
       y: event.clientY,
@@ -6074,6 +6738,36 @@ export function App() {
       flowY: projected.y,
     })
   }, [flowInstance, reactFlow])
+
+  const onNodeContextMenu = useCallback((event: ReactMouseEvent<Element>, node: CinemaFlowNode) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setContextMenu(null)
+    setSelectedNodeID(node.id)
+    setInspectorNodeID((current) => current === node.id ? current : null)
+    setNodeContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      nodeID: node.id,
+    })
+  }, [setSelectedNodeID])
+
+  const selectNodeOnly = useCallback((nodeID: string) => {
+    setContextMenu(null)
+    setNodeContextMenu(null)
+    setSelectedNodeID(nodeID)
+    setInspectorNodeID((current) => current === nodeID ? current : null)
+  }, [setSelectedNodeID])
+
+  const showNodeDetails = useCallback((nodeID: string) => {
+    setSelectedNodeID(nodeID)
+    setInspectorNodeID(nodeID)
+  }, [setSelectedNodeID])
+
+  const clearCanvasSelection = useCallback(() => {
+    setSelectedNodeID(null)
+    setInspectorNodeID(null)
+  }, [setSelectedNodeID])
 
   const changeNode = useCallback((nodeID: string, update: Partial<CinemaFlowNodeData>) => {
     setNodes((current) =>
@@ -6102,7 +6796,11 @@ export function App() {
       actor: "cinema-web",
       nodeID,
     }, {
-      onSuccess: () => setSelectedNodeID(null),
+      onSuccess: () => {
+        setSelectedNodeID(null)
+        setInspectorNodeID((current) => current === nodeID ? null : current)
+        setNodeContextMenu((current) => current?.nodeID === nodeID ? null : current)
+      },
     })
   }, [commandMutation, setSelectedNodeID])
 
@@ -6157,12 +6855,17 @@ export function App() {
           runCustomApiMutation.mutateAsync({ nodeID, request }),
         onSaveCustomApiKey: (nodeID: string, request: CustomApiAuthSaveRequest) =>
           saveCustomApiKeyMutation.mutateAsync({ nodeID, request }),
+        isCroppingLocalImage: createCroppedLocalImageMutation.isPending && localImageCropNodeID === node.id,
+        localImageCropError: localImageCropError?.nodeID === node.id ? localImageCropError.message : null,
+        onCreateCroppedLocalImageNode: (nodeID: string, crop: ImageCropRect) =>
+          createCroppedLocalImageMutation.mutateAsync({ nodeID, crop }).then(() => undefined),
         nodeInputOverlayRoot,
       },
     })),
     [
       agentBaseURL,
       changeNode,
+      createCroppedLocalImageMutation,
       createGenerationTaskMutation,
       createImageGenerationMutation,
       createTextGenerationMutation,
@@ -6176,6 +6879,8 @@ export function App() {
       imageGenerationError,
       imageGenerationNodeID,
       imageModels,
+      localImageCropError,
+      localImageCropNodeID,
       nodes,
       nodeInputOverlayRoot,
       projectID,
@@ -6194,6 +6899,10 @@ export function App() {
   const selectedNode = useMemo(
     () => selectedNodeID ? renderedNodes.find((node) => node.id === selectedNodeID) ?? null : null,
     [renderedNodes, selectedNodeID],
+  )
+  const inspectorNode = useMemo(
+    () => inspectorNodeID ? renderedNodes.find((node) => node.id === inspectorNodeID) ?? null : null,
+    [inspectorNodeID, renderedNodes],
   )
 
   if (!projectID) {
@@ -6244,7 +6953,13 @@ export function App() {
   }
 
   return (
-    <main className="cinema-shell" onClick={() => setContextMenu(null)}>
+    <main
+      className="cinema-shell"
+      onClick={() => {
+        setContextMenu(null)
+        setNodeContextMenu(null)
+      }}
+    >
       <input
         ref={localImageInputRef}
         className="cinema-local-image-input"
@@ -6271,8 +6986,9 @@ export function App() {
             onNodeDragStop={(_, node) => {
               queueNodePatch(node.id, { position: node.position })
             }}
-            onNodeClick={(_, node) => setSelectedNodeID(node.id)}
-            onPaneClick={() => setSelectedNodeID(null)}
+            onNodeClick={(_, node) => selectNodeOnly(node.id)}
+            onNodeContextMenu={onNodeContextMenu}
+            onPaneClick={clearCanvasSelection}
             onPaneContextMenu={onPaneContextMenu}
             fitView
             fitViewOptions={{ padding: 0.38 }}
@@ -6299,6 +7015,11 @@ export function App() {
             onClose={() => setContextMenu(null)}
             isImportingLocalImage={importLocalImageMutation.isPending}
           />
+          <NodeContextMenu
+            menu={nodeContextMenu}
+            onShowDetails={showNodeDetails}
+            onClose={() => setNodeContextMenu(null)}
+          />
           {activeCanvasPanel === "files" && !selectedNode ? (
             <ProjectFileBrowser
               projectID={projectID}
@@ -6306,10 +7027,10 @@ export function App() {
               onClose={() => setActiveCanvasPanel(null)}
             />
           ) : null}
-          {selectedNode ? (
+          {inspectorNode ? (
             <CinemaNodeInspectorPanel
-              node={selectedNode}
-              onClose={() => setSelectedNodeID(null)}
+              node={inspectorNode}
+              onClose={() => setInspectorNodeID(null)}
             />
           ) : null}
           <CanvasPanelNavigation
