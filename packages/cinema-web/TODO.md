@@ -1,27 +1,26 @@
 # Cinema Web TODO
 
-## Reduce noisy viewport autosaves
+## Persist and restore the canvas viewport
 
 Status: open
 
-The canvas currently saves too aggressively when the user only pans or zooms the main view. React Flow `onMoveEnd` sends an `update-viewport` command immediately, which goes through the same save indicator and backend command pipeline as real canvas content edits.
+The Canvas schema still contains a viewport, but the current React Flow surface starts with `fitView` and does not restore or persist viewport changes.
 
 Observed behavior:
 
-- Zooming or panning the main canvas flips the top bar save indicator to `Saving` / `Saved`.
-- Each viewport command writes `canvas.json` and appends a command event.
-- This makes the app feel like it is constantly saving even when nodes, edges, and generation data have not changed.
+- Opening a project fits the full graph instead of restoring the last working position.
+- Zooming or panning does not write an `update-viewport` command.
+- The saved viewport therefore remains unused legacy state.
 
 Relevant code:
 
-- `src/App.tsx`: `onMoveEnd` sends `update-viewport`.
-- `src/App.tsx`: `commandMutation` drives the visible save indicator for all command types.
-- `packages/anyboxagent/src/server/usecases/cinema.ts`: `applyCinemaCommand` writes the canvas and appends an event for every command.
+- `src/App.tsx`: React Flow uses `fitView` without an `onMoveEnd` persistence handler.
+- `@anybox/shared/cinema`: `CinemaCanvasDocument` still contains `viewport`.
 
 Potential fixes:
 
-- Debounce viewport persistence, for example 1.5-3 seconds after the last move.
-- Skip saves for tiny viewport changes using x/y/zoom thresholds.
-- Treat viewport saves as background UI-state persistence so they do not show the primary `Saving` indicator.
-- Consider storing viewport locally if the view should be per-device rather than shared project state.
+- Decide whether viewport is shared project state or per-device UI state.
+- If shared, debounce `update-viewport` commands and ignore tiny x/y/zoom changes.
+- If per-device, move it out of the shared Canvas document and store it locally.
+- Keep viewport persistence out of the primary save indicator unless the project contract requires it.
 

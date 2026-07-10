@@ -20,7 +20,7 @@
 
 ## 2. 执行摘要
 
-Cinema Web 已经形成一个可运行的影视创作节点工作台。它能够把文本、图片、视频、素材和 AI 生成任务组织成可持久化节点图，并通过 Anybox Agent 将画布、任务、资产和事件写入本地项目目录。
+Cinema Web 已经形成一个可运行的影视创作节点工作台。顶层已建立 Create / Edit / Deliver 三工作台壳层，当前只开放承载节点画布的 Create；Edit 与 Deliver 可见但禁用。Create 能够把文本、图片、视频、素材和 AI 生成任务组织成可持久化节点图，并通过 Anybox Agent 将画布、任务、资产和事件写入本地项目目录。
 
 当前最有价值的部分不是单一 React 画布，而是已经打通的完整闭环：
 
@@ -41,11 +41,11 @@ Cinema Web 已经形成一个可运行的影视创作节点工作台。它能够
 - Provider 输入契约可以动态生成不同模型的参数控件和媒体输入槽位。
 - 生成任务、项目资产、事件日志和画布节点已经形成端到端链路。
 
-但当前还不适合按生产级编辑器标准交付。最高风险集中在保存一致性：自动保存失败会静默丢失补丁，多个命令可能并发覆盖整份 Canvas，关闭页面会清空防抖中的修改，而用户界面又不显示保存失败。
+本报告最初识别的保存一致性 P0 已在 2026-07-10 的可靠性改造中处理：Canvas Command 进入显式串行队列，全部命令使用 `id + baseRevision`，Agent 统一使用 Canvas 写锁并递增 revision，失败命令保留且提供重试，页面离开时也会对未保存状态进行保护。隔离临时项目的 Playwright 故障注入也已覆盖断网重试、409 换基重放、离页保护和多节点并发生成状态隔离。项目仍需继续处理模块化和跨重启队列恢复评估，才能按生产级编辑器标准交付。
 
 因此，本阶段的核心结论是：
 
-> 暂缓继续扩展 Timeline、更多节点类型或复杂编辑能力，先完成“保存不静默丢失”的可靠性里程碑。
+> “保存不静默丢失”的核心里程碑及浏览器故障注入已完成；在进入 Timeline 前，继续推进模块化、跨重启队列恢复评估和剩余 P1 稳定化工作。
 
 ## 3. 项目定位与当前边界
 
@@ -99,6 +99,8 @@ Cinema Web 不是独立站点，而是 Anybox Desktop 与 Anybox Agent 体系中
 ### 3.3 尚未实现的范围
 
 Timeline / 剪辑台目前只有 `cinema-timeline-editor-design.md` 中的设计，没有对应前端模块、Shared Schema、Agent 路由、渲染任务或 FFmpeg 流程。
+
+顶层 Edit 与 Deliver tab 只代表工作台信息架构已经确定，不代表 Timeline、渲染和交付能力已经实现；两者当前均为 disabled。
 
 设计文档中列出的五个阶段均应继续视为规划项：
 
@@ -191,7 +193,7 @@ React Flow 的 `nodes[].selected` 管理多选集合，Zustand 只管理 `active
 
 Agent 写 Canvas 时使用临时文件加 rename，可避免只写入一半 JSON；任务当前状态也采用类似的原子替换方式。事件和任务审计则追加到 JSONL。
 
-需要注意：文件写入是原子的，不代表多个 read-modify-write 命令在逻辑上是串行的。当前仍缺少项目级锁、revision 或乐观并发控制。
+Canvas 文件写入保持原子替换；Canvas Command、生成任务同步、文本生成和 Custom API 结果写入现在还共享同一把 Canvas 写锁。Canvas 带单调递增的 `revision`，每条 Command 必须携带 `baseRevision`，过期命令会返回 409，避免基于旧 Canvas 的逻辑覆盖。
 
 ## 5. 核心运行流程
 
@@ -213,13 +215,14 @@ Agent 写 Canvas 时使用临时文件加 rename，可避免只写入一半 JSON
   -> 节点内部防抖
   -> App nodes 本地更新
   -> 650ms node patch 队列
-  -> POST /commands
-  -> Agent read/apply/write
-  -> 返回整份 Canvas
-  -> 前端 applyCanvas 全量覆盖
+  -> 显式串行 Command Queue
+  -> POST /commands（id + baseRevision）
+  -> Agent Canvas 写锁 read/apply/write
+  -> revision ACK 后命令出队
+  -> 仅在没有本地草稿或后续命令时应用服务端 Canvas
 ```
 
-设计目标合理，但命令队列和整份 Canvas 回写之间缺少可靠的版本控制。
+网络错误会自动退避重试；最终失败的命令留在队首并显示重试入口。revision 冲突会先读取最新 Canvas，再使用相同命令 ID 重放。服务端按命令 ID 去重，因此响应丢失后的重试不会重复执行。
 
 ### 5.3 生成任务
 
@@ -277,19 +280,16 @@ Vite 已提示单一 JS chunk 超过 500 KB。当前没有动态 import 或手�
 
 ### 6.3 测试
 
-Cinema Web 包自身：
+Cinema Web 包自身现在具备 `test` 与 `test:e2e` 脚本；尚未配置独立的 `lint` 和 `format` 脚本。
 
-- 没有 `test` 脚本。
-- 没有 `lint` 脚本。
-- 没有 `format` 脚本。
-- 没有前端 `*.test.*` / `*.spec.*` 文件。
+现有自动化覆盖包括：
 
-直接依赖层的现有验证：
+- Shared Cinema Schema：27/27 通过。
+- Agent Cinema API + Migration：55/55 通过。
+- Cinema Web 前端单元/组件测试：75/75 通过。
+- Playwright 页面验收：5/5 通过，使用临时初始化项目与真实 Agent HTTP 链路，包含工作台壳层桌面/窄窗口覆盖。
 
-- Shared Cinema Schema：10/10 通过。
-- Agent Cinema API：45/45 通过。
-
-这说明后端和契约并非无测试，但最容易发生状态竞态的前端保存层没有自动化覆盖。
+前端保存层已经覆盖串行发送、revision 冲突重放、失败保留和手动重试；浏览器层进一步覆盖了断网、409 冲突和失败队列离页保护。
 
 ## 7. 已确认的优势
 
@@ -327,13 +327,13 @@ Cinema Web 包自身：
 
 ### 8.1 P0：进入下一阶段前必须处理
 
-| ID | 风险 | 证据位置 | 影响 |
+| ID | 原风险 | 当前状态 | 处理结果 |
 | --- | --- | --- | --- |
-| P0-01 | 正常自动保存失败后 patch 不重新入队 | `src/App.tsx:6222`、`src/App.tsx:6036` | 本地修改保留在 UI，但不会再自动落盘 |
-| P0-02 | 保存错误对用户不可见 | `src/App.tsx:5926`、正常页面 JSX | 用户无法判断是否保存成功，也没有重试入口 |
-| P0-03 | App 卸载直接清空 timer 和 patch queue | `src/App.tsx:6203` | 关闭、刷新或快速离开会丢失防抖中的修改 |
-| P0-04 | 并发命令返回整份 Canvas，可能乱序覆盖 | `src/App.tsx:6006`、`src/App.tsx:5957` | 较旧响应可能覆盖更新状态 |
-| P0-05 | Agent Command 是无 revision 的 read-modify-write | `packages/anyboxagent/src/server/usecases/cinema.ts:2869` | 两个并发命令可能基于同一旧 Canvas 写入，产生逻辑丢更新 |
+| P0-01 | 自动保存失败后 patch 丢出队列 | 已处理 | ACK 前命令始终保留；失败停在队首，可自动或手动重试 |
+| P0-02 | 保存错误不可见 | 已处理 | 左上角显示 dirty / saving / saved / error，并在错误态提供重试按钮 |
+| P0-03 | 卸载清空防抖修改 | 已缓解 | 草稿、发送中或失败状态会触发 `beforeunload`；强制退出后的跨重启恢复仍需后续评估 |
+| P0-04 | 并发响应乱序覆盖 Canvas | 已处理 | 前端命令串行，旧 revision 响应不会覆盖更新状态 |
+| P0-05 | Agent 无 revision 的 read-modify-write | 已处理 | Command 强制 `baseRevision`，服务端统一 Canvas 写锁并递增 revision |
 
 建议处理方式：
 
@@ -348,7 +348,7 @@ Cinema Web 包自身：
 
 | ID | 风险 | 影响 |
 | --- | --- | --- |
-| P1-01 | 每类生成只用一个 nodeID 表示 pending | 多节点并发生成时 busy 状态会互相覆盖或提前清除 |
+| P1-01 | 每类生成只用一个 nodeID 表示 pending | 已处理：文本、图片、视频和 Custom API 使用按节点引用计数与错误映射，浏览器 E2E 覆盖并发失败隔离 |
 | P1-02 | 图片裁剪和导入不是事务 | 上传、建节点、连线中途失败会留下孤立资源 |
 | P1-03 | `generation-task` 可通过普通节点菜单创建 | 会形成没有真实 task 文件的伪任务节点 |
 | P1-04 | Custom API 已完整实现但没有创建入口 | 产品入口与实际能力不一致 |
@@ -357,7 +357,7 @@ Cinema Web 包自身：
 | P1-07 | 画布主要依赖中键平移 | 触控板和普通鼠标用户导航困难 |
 | P1-08 | 裁剪是纯指针交互 | 键盘和辅助技术用户无法调整裁剪区域 |
 | P1-09 | 菜单缺少完整键盘与焦点管理 | 没有方向键、Escape、首项聚焦和关闭后的焦点恢复 |
-| P1-10 | 前端没有保存层测试 | 竞态、失败重试和卸载丢数据无法自动回归 |
+| P1-10 | 保存层浏览器故障注入 | 已处理：临时真实项目 E2E 覆盖断网自动/手动重试、409 换基重放和失败队列离页保护 |
 
 ### 8.3 P2：可在基础稳定后演进
 
@@ -444,10 +444,8 @@ Custom API 允许用户配置 URL、Header、Body 和认证信息。后端当前
 当前存在以下文档漂移：
 
 1. `TODO.md` 仍描述 `onMoveEnd` 自动保存 viewport，但当前代码没有该行为。
-2. `CinemaWeb-architecture-speech.md` 描述顶部 SaveIndicator，当前正常页面没有该组件。
-3. `cinema-ui-style-guide.md` 中记录的 CSS 行数、颜色统计和部分待办已过时。
-4. Timeline 设计文档没有明确的“尚未实现”状态标识。
-5. Canvas Schema 保留 viewport，但前端没有恢复或更新它。
+2. `cinema-ui-style-guide.md` 中记录的 CSS 行数、颜色统计和部分待办已过时。
+3. Canvas Schema 保留 viewport，但前端没有恢复或更新它。
 
 建议为主要设计文档增加：
 
@@ -462,6 +460,8 @@ Custom API 允许用户配置 URL、Header、Body 和认证信息。后端当前
 ### 阶段 A：保存可靠性稳定化
 
 目标：建立“任何失败都不会静默丢修改”的硬保证。
+
+状态：核心保存协议和真实 Agent 浏览器故障注入已完成；跨重启恢复仍待评估。
 
 建议交付：
 
@@ -563,11 +563,11 @@ src/
 
 ## 13. 下一里程碑建议
 
-建议将下一里程碑命名为：
+可靠性里程碑的核心保存协议已完成。下一里程碑建议命名为：
 
-> Cinema Canvas Reliability Milestone
+> Cinema Canvas Reliability Verification & Modularization
 
-进入该里程碑前不要求增加新产品功能，完成条件为：
+其中前四项已经完成，后续完成条件为：
 
 - 已知 P0 保存问题全部关闭。
 - Command 并发有服务端和前端双重保护。
@@ -585,17 +585,18 @@ src/
 | `npm run build` | 通过 |
 | TypeScript `tsc --noEmit` | 通过 |
 | Vite production build | 通过，有单 chunk 大于 500 KB 警告 |
-| Shared Cinema Schema | 10/10 通过 |
-| Agent Cinema API | 45/45 通过 |
+| Shared Cinema Schema | 27/27 通过，已覆盖 revision / baseRevision 强制约束 |
+| Agent Cinema API + Migration | 55/55 通过，已覆盖 revision 冲突、命令幂等重试和迁移 revision |
 | 本地无 projectID 页面 | 正常渲染，无控制台错误 |
-| Cinema Web 包内前端测试 | 不存在 |
+| Cinema Web 包内前端测试 | 75/75 通过，包含 Command Queue、保存状态 UI、按节点并发操作状态机与工作台壳层 |
+| Cinema Web Playwright 页面验收 | 5/5 通过，覆盖保存可靠性、双节点生成失败隔离及工作台桌面/窄窗口行为 |
 | Cinema Web lint / format | 未配置 |
 
 验证限制：
 
-- 没有使用真实已初始化 Cinema 项目执行完整浏览器 E2E。
+- 素材库 E2E 仍需通过 `CINEMA_E2E_URL` 连接含个人素材数据的外部项目；默认隔离夹具会跳过该用例，避免修改真实个人素材库。
 - 没有执行真实 Provider 计费请求。
-- 没有通过故障注入实际复现并发 Canvas 覆盖；该风险来自已确认的前后端并发代码路径。
+- 当前 Playwright 覆盖页面级断网与离页事件，但浏览器或桌面进程强制终止后的跨重启队列恢复仍未实现。
 - 本报告基于当前工作区，`src/App.tsx` 已存在用户未提交修改。
 
 ## 15. 最终阶段判断
@@ -604,14 +605,14 @@ src/
 | --- | --- |
 | 产品闭环 | 已形成节点编辑、生成、资产和持久化闭环 |
 | 架构方向 | 正确，Shared Contract 与本地文件真相源值得保留 |
-| 保存可靠性 | 不满足生产级编辑器要求 |
-| 可维护性 | 单体文件过大，应开始按垂直能力拆分 |
-| 测试成熟度 | 后端和 Shared 较好，前端明显不足 |
-| UI 完整度 | 深色高级原型较完整，双主题与键盘路径不足 |
+| 保存可靠性 | 核心协议和浏览器故障注入已完成；待跨重启恢复评估 |
+| 可维护性 | 已提取 Command Queue、保存状态组件与节点操作状态机，单体文件仍过大，应继续按垂直能力拆分 |
+| 测试成熟度 | 后端、Shared、前端保存层、多节点并发状态与真实 Agent 页面故障路径均已有自动化覆盖 |
+| UI 完整度 | Create / Edit / Deliver 壳层已完成亮暗和窄窗口验收；节点内部仍有键盘路径不足 |
 | 性能准备度 | 小画布可用，大画布和长期任务需要优化 |
 | 安全边界 | 可用于可信本机假设，需要会话鉴权和 Origin 收紧后再扩展 |
-| Timeline 准备度 | 设计充分，但不建议在保存稳定化前实施 |
+| Timeline 准备度 | 顶层 Edit 插槽、核心保存门槛和可靠性 E2E 已就绪；Edit 仍禁用，可在模块边界进一步收口后实施 |
 
 最终结论：
 
-> Cinema Web 已经证明了产品方向和核心技术链路，但下一阶段的成功标准不应是“新增更多功能”，而应是把它从可工作的高级原型提升为不会静默丢失用户创作内容的可靠编辑器。
+> Cinema Web 已经从“保存失败可能静默丢失”的高级原型进入经过真实 Agent 页面故障注入验证的可靠编辑阶段；下一步应以模块化收口和跨重启恢复决策为准入条件，再扩展 Timeline。

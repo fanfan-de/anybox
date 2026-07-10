@@ -20,6 +20,7 @@ interface JsonEnvelope<T = unknown> {
   error?: {
     code: string
     message: string
+    data?: unknown
   }
 }
 
@@ -40,6 +41,7 @@ interface CinemaProjectSummary {
 
 interface CinemaCanvasDocument {
   schemaVersion: 1
+  revision?: number
   canvasType: "node-canvas"
   viewport: {
     x: number
@@ -1172,8 +1174,10 @@ describe("cinema api", () => {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
+            id: "cmd-normalize-legacy-images",
             type: "update-viewport",
             actor: "cinema-web",
+            baseRevision: 0,
             viewport: { x: 10, y: 20, zoom: 1.1 },
           }),
         },
@@ -1279,6 +1283,7 @@ describe("cinema api", () => {
           id: "cmd-create-shot",
           type: "create-node",
           actor: "test-agent",
+          baseRevision: 0,
           node: {
             id: "shot-1",
             type: "shot",
@@ -1305,8 +1310,10 @@ describe("cinema api", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          id: "cmd-update-shot",
           type: "update-node",
           actor: "cinema-web",
+          baseRevision: 1,
           nodeID: "shot-1",
           patch: {
             title: "Shot 1 - revised",
@@ -1320,8 +1327,10 @@ describe("cinema api", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          id: "cmd-connect-story-shot",
           type: "connect-nodes",
           actor: "cinema-web",
+          baseRevision: 2,
           edge: {
             id: "edge-story-shot",
             source: "story-brief",
@@ -1335,8 +1344,10 @@ describe("cinema api", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          id: "cmd-update-viewport",
           type: "update-viewport",
           actor: "cinema-web",
+          baseRevision: 3,
           viewport: { x: 24, y: 48, zoom: 0.8 },
         }),
       })
@@ -1346,8 +1357,10 @@ describe("cinema api", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          id: "cmd-disconnect-story-shot",
           type: "disconnect-edge",
           actor: "cinema-web",
+          baseRevision: 4,
           edgeID: "edge-story-shot",
         }),
       })
@@ -1357,8 +1370,10 @@ describe("cinema api", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          id: "cmd-disconnect-story-shot-again",
           type: "disconnect-edge",
           actor: "cinema-web",
+          baseRevision: 5,
           edgeID: "edge-story-shot",
         }),
       })
@@ -1401,6 +1416,70 @@ describe("cinema api", () => {
       expect(summaryBody.data?.recentEvents).toHaveLength(6)
       expect(summaryBody.data?.directories.map((directory) => directory.path)).toContain("generated")
       expect(summaryBody.data?.gaps).toContain("no-provider-configured")
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects stale canvas revisions while making command retries idempotent", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root)
+      const commandURL = `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`
+      const createCommand = {
+        id: "cmd-idempotent-create",
+        type: "create-node",
+        actor: "cinema-web",
+        baseRevision: 0,
+        node: {
+          id: "idempotent-shot",
+          type: "shot",
+          title: "Idempotent shot",
+          position: { x: 420, y: 240 },
+        },
+      }
+
+      const firstResponse = await app.request(commandURL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(createCommand),
+      })
+      const firstBody = await readJson<CinemaCommandResult>(firstResponse)
+      expect(firstResponse.status).toBe(200)
+      expect(firstBody.data?.canvas.revision).toBe(1)
+
+      const retryResponse = await app.request(commandURL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(createCommand),
+      })
+      const retryBody = await readJson<CinemaCommandResult>(retryResponse)
+      expect(retryResponse.status).toBe(200)
+      expect(retryBody.data?.canvas.revision).toBe(1)
+      expect(retryBody.data?.canvas.nodes.filter((node) => node.id === "idempotent-shot")).toHaveLength(1)
+
+      const staleResponse = await app.request(commandURL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: "cmd-stale-viewport",
+          type: "update-viewport",
+          actor: "cinema-web",
+          baseRevision: 0,
+          viewport: { x: 99, y: 99, zoom: 0.5 },
+        }),
+      })
+      const staleBody = await readJson(staleResponse)
+      expect(staleResponse.status).toBe(409)
+      expect(staleBody.error?.code).toBe("CINEMA_CANVAS_REVISION_CONFLICT")
+      expect(staleBody.error?.data).toEqual({ latestRevision: 1 })
+
+      const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
+      expect(persisted.revision).toBe(1)
+      expect(persisted.viewport).toEqual({ x: 0, y: 0, zoom: 1 })
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -3195,7 +3274,9 @@ describe("cinema api", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          id: "cmd-connect-missing-node",
           type: "connect-nodes",
+          baseRevision: 0,
           edge: {
             id: "edge-missing-story",
             source: "missing-node",

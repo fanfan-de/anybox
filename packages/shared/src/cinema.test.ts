@@ -356,7 +356,25 @@ describe("cinema schemas", () => {
     expect(result.warnings).toEqual([])
   })
 
-  it("parses asset node commands with optimistic concurrency fields", () => {
+  it("requires idempotency and optimistic concurrency fields on every command", () => {
+    const viewport = CinemaCommandSchema.parse({
+      id: "command-viewport-1",
+      type: "update-viewport",
+      baseRevision: 4,
+      viewport: { x: 10, y: 20, zoom: 1.25 },
+    })
+    expect(viewport.baseRevision).toBe(4)
+    expect(() => CinemaCommandSchema.parse({
+      id: "command-viewport-2",
+      type: "update-viewport",
+      viewport: { x: 0, y: 0, zoom: 1 },
+    })).toThrow()
+    expect(() => CinemaCommandSchema.parse({
+      type: "update-viewport",
+      baseRevision: 4,
+      viewport: { x: 0, y: 0, zoom: 1 },
+    })).toThrow()
+
     const command = CinemaCommandSchema.parse({
       id: "command-asset-1",
       type: "create-node-from-asset",

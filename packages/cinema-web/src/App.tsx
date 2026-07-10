@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react"
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react"
 import { createPortal } from "react-dom"
 import {
   applyEdgeChanges,
@@ -122,6 +122,11 @@ import {
   toggleNodeSelection,
 } from "./features/canvas/nodeSelection"
 import { clampContextMenuPosition } from "./features/canvas/contextMenuPosition"
+import {
+  CinemaCommandQueue,
+  type CinemaCommandDraft,
+} from "./features/canvas/commandQueue"
+import { CanvasSaveStatus, type SaveState } from "./features/canvas/CanvasSaveStatus"
 import { AssetLibraryApiError, createAssetLibraryApi } from "./features/assets/assetLibraryApi"
 import type { AssetLibraryAddRequest } from "./features/assets/AssetLibraryPanel"
 import {
@@ -131,6 +136,16 @@ import {
   cinemaAssetURL,
   isPersonalCinemaAssetRef,
 } from "./features/media/assetNodeData"
+import {
+  createNodeOperationState,
+  isNodeOperationPending,
+  nodeOperationError,
+  nodeOperationReducer,
+} from "./features/generation/nodeOperationState"
+import {
+  CinemaWorkbenchShell,
+  type CinemaWorkspaceID,
+} from "./features/workbench/CinemaWorkbenchShell"
 import "./features/media/mediaNodes.css"
 
 const AssetLibraryPanel = lazy(async () => {
@@ -138,7 +153,6 @@ const AssetLibraryPanel = lazy(async () => {
   return { default: module.AssetLibraryPanel }
 })
 
-type SaveState = "idle" | "dirty" | "saving" | "saved" | "error"
 type CanvasPanel = "files" | "assets"
 
 type ImageGenerationRequest = {
@@ -475,14 +489,19 @@ async function requestJson<T>(baseURL: string, pathname: string, init?: RequestI
   const response = await fetch(new URL(pathname, baseURL), init)
   const envelope = await response.json().catch(() => null) as
     | { success: true; data: T }
-    | { success: false; error?: { message?: string; data?: unknown } }
+    | { success: false; error?: { code?: string; message?: string; data?: unknown } }
     | null
 
   if (!response.ok || !envelope || envelope.success !== true) {
     const message = envelope && envelope.success === false && envelope.error?.message
       ? envelope.error.message
       : `Request failed (${response.status})`
-    throw new CinemaRequestError(message, response.status, envelope?.success === false ? envelope.error?.data : undefined)
+    throw new CinemaRequestError(
+      message,
+      response.status,
+      envelope?.success === false ? envelope.error?.code : undefined,
+      envelope?.success === false ? envelope.error?.data : undefined,
+    )
   }
 
   return envelope.data
@@ -503,6 +522,7 @@ class CinemaRequestError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly code?: string,
     readonly data?: unknown,
   ) {
     super(message)
@@ -6608,6 +6628,7 @@ export function App() {
   const setActiveNodeID = useUiStore((state) => state.setActiveNodeID)
   const reactFlow = useReactFlow<CinemaFlowNode, Edge>()
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<CinemaFlowNode, Edge> | null>(null)
+  const [activeWorkspace, setActiveWorkspace] = useState<CinemaWorkspaceID>("create")
   const [nodes, setNodes] = useState<CinemaFlowNode[]>([])
   const pendingCanvasSelectionNodeIDRef = useRef<string | null>(null)
   const selectedNodeIDs = useMemo(
@@ -6635,16 +6656,13 @@ export function App() {
   const assetRailButtonRef = useRef<HTMLButtonElement>(null)
   const [nodeInputOverlayRoot, setNodeInputOverlayRoot] = useState<HTMLDivElement | null>(null)
   const [saveState, setSaveState] = useState<SaveState>("idle")
-  const [, setSaveError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [pendingSaveCount, setPendingSaveCount] = useState(0)
   const [autoRefreshingTaskIDs, setAutoRefreshingTaskIDs] = useState<string[]>([])
-  const [textGenerationNodeID, setTextGenerationNodeID] = useState<string | null>(null)
-  const [textGenerationError, setTextGenerationError] = useState<{ nodeID: string; message: string } | null>(null)
-  const [imageGenerationNodeIDs, setImageGenerationNodeIDs] = useState<Set<string>>(() => new Set())
-  const [imageGenerationError, setImageGenerationError] = useState<{ nodeID: string; message: string } | null>(null)
-  const [videoGenerationNodeID, setVideoGenerationNodeID] = useState<string | null>(null)
-  const [videoGenerationError, setVideoGenerationError] = useState<{ nodeID: string; message: string } | null>(null)
-  const [customApiNodeID, setCustomApiNodeID] = useState<string | null>(null)
-  const [customApiError, setCustomApiError] = useState<{ nodeID: string; message: string } | null>(null)
+  const [textGenerationOperations, dispatchTextGenerationOperation] = useReducer(nodeOperationReducer, createNodeOperationState())
+  const [imageGenerationOperations, dispatchImageGenerationOperation] = useReducer(nodeOperationReducer, createNodeOperationState())
+  const [videoGenerationOperations, dispatchVideoGenerationOperation] = useReducer(nodeOperationReducer, createNodeOperationState())
+  const [customApiOperations, dispatchCustomApiOperation] = useReducer(nodeOperationReducer, createNodeOperationState())
   const [imageImportNodeIDs, setImageImportNodeIDs] = useState<Set<string>>(() => new Set())
   const [imageImportError, setImageImportError] = useState<{ nodeID: string; message: string } | null>(null)
   const [imageFinalizeNodeIDs, setImageFinalizeNodeIDs] = useState<Set<string>>(() => new Set())
@@ -6653,6 +6671,7 @@ export function App() {
   const [imageCropError, setImageCropError] = useState<{ nodeID: string; message: string } | null>(null)
   const saveStateRef = useRef<SaveState>("idle")
   const canvasRevisionRef = useRef(0)
+  const commandQueueRef = useRef<CinemaCommandQueue | null>(null)
   const autoRefreshInFlightRef = useRef(false)
   const nodePatchTimersRef = useRef(new Map<string, number>())
   const nodePatchQueueRef = useRef(new Map<string, CinemaNodePatch>())
@@ -6673,6 +6692,7 @@ export function App() {
 
   const applyCanvas = useCallback((canvas: CinemaCanvasDocument) => {
     canvasRevisionRef.current = canvas.revision ?? 0
+    commandQueueRef.current?.syncRevision(canvasRevisionRef.current)
     setNodes((current) => {
       const pendingNodeID = pendingCanvasSelectionNodeIDRef.current
       const next = preserveNodeSelection(current, toFlowNodes(canvas), pendingNodeID)
@@ -6686,6 +6706,85 @@ export function App() {
     setSaveState("saved")
     setSaveError(null)
   }, [])
+
+  const commandQueue = useMemo(() => new CinemaCommandQueue({
+    initialRevision: canvasRevisionRef.current,
+    send: (command) => requestJson<CinemaCommandResult>(
+      agentBaseURL,
+      `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(command),
+      },
+    ),
+    fetchLatestCanvas: () => requestJson<CinemaCanvasDocument>(
+      agentBaseURL,
+      `/api/cinema/projects/${encodeURIComponent(projectID)}/canvas`,
+    ),
+    isRevisionConflict: (error) => (
+      error instanceof CinemaRequestError
+      && error.status === 409
+      && error.code === "CINEMA_CANVAS_REVISION_CONFLICT"
+    ),
+    onResult: (result, pendingCount) => {
+      canvasRevisionRef.current = result.canvas.revision ?? canvasRevisionRef.current
+      if (
+        pendingCount > 0
+        || nodePatchQueueRef.current.size > 0
+        || nodePatchTimersRef.current.size > 0
+      ) return
+
+      if (editingNodeIDsRef.current.size > 0) {
+        deferredCanvasWhileEditingRef.current = result.canvas
+        return
+      }
+
+      deferredCanvasWhileEditingRef.current = null
+      applyCanvas(result.canvas)
+    },
+    onSnapshot: (snapshot) => {
+      setPendingSaveCount(snapshot.pendingCount)
+      if (snapshot.status === "error") {
+        saveStateRef.current = "error"
+        setSaveState("error")
+        setSaveError(snapshot.error instanceof Error ? snapshot.error.message : "保存失败")
+        return
+      }
+
+      if (snapshot.status === "saving") {
+        saveStateRef.current = "saving"
+        setSaveState("saving")
+        setSaveError(null)
+        return
+      }
+
+      const hasDrafts = nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0
+      saveStateRef.current = hasDrafts ? "dirty" : "saved"
+      setSaveState(saveStateRef.current)
+      if (!hasDrafts) setSaveError(null)
+    },
+  }), [agentBaseURL, applyCanvas, projectID])
+  commandQueueRef.current = commandQueue
+
+  const applyCanvasWhenSafe = useCallback((canvas: CinemaCanvasDocument) => {
+    const incomingRevision = canvas.revision ?? 0
+    if (incomingRevision < canvasRevisionRef.current) return false
+    canvasRevisionRef.current = incomingRevision
+    commandQueue.syncRevision(canvasRevisionRef.current)
+    if (
+      commandQueue.hasPendingCommands()
+      || nodePatchQueueRef.current.size > 0
+      || nodePatchTimersRef.current.size > 0
+      || editingNodeIDsRef.current.size > 0
+    ) {
+      deferredCanvasWhileEditingRef.current = canvas
+      return false
+    }
+    deferredCanvasWhileEditingRef.current = null
+    applyCanvas(canvas)
+    return true
+  }, [applyCanvas, commandQueue])
 
   const projectQuery = useQuery({
     queryKey: ["cinema-project", agentBaseURL, projectID],
@@ -6729,40 +6828,7 @@ export function App() {
   const refetchTasks = tasksQuery.refetch
 
   const commandMutation = useMutation({
-    mutationFn: (command: CinemaCommand) =>
-      requestJson<CinemaCommandResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(command),
-    }),
-    onMutate: () => {
-      saveStateRef.current = "saving"
-      setSaveState("saving")
-      setSaveError(null)
-    },
-    onSuccess: (result) => {
-      if (saveStateRef.current === "dirty" || nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0) {
-        saveStateRef.current = "dirty"
-        setSaveState("dirty")
-        return
-      }
-      if (editingNodeIDsRef.current.size > 0) {
-        deferredCanvasWhileEditingRef.current = result.canvas
-        saveStateRef.current = "saved"
-        setSaveState("saved")
-        setSaveError(null)
-        return
-      }
-      deferredCanvasWhileEditingRef.current = null
-      applyCanvas(result.canvas)
-    },
-    onError: (error) => {
-      saveStateRef.current = "error"
-      setSaveState("error")
-      setSaveError(error instanceof Error ? error.message : "Command failed")
-    },
+    mutationFn: (command: CinemaCommandDraft) => commandQueue.enqueue(command),
   })
   const assetLibraryEnabled = projectQuery.data?.capabilities?.assetLibrary !== false
 
@@ -6777,53 +6843,23 @@ export function App() {
       position: { x: number; y: number }
       nodeID: string
     }) => {
-      const commandID = makeCommandID("create-node-from-asset")
-      const send = (baseRevision: number) => requestJson<CinemaCommandResult>(
-        agentBaseURL,
-        `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: commandID,
-            type: "create-node-from-asset",
-            actor: "cinema-web",
-            baseRevision,
-            nodeID,
-            assetRef,
-            position,
-          } satisfies CinemaCommand),
-        },
-      )
-      let result: CinemaCommandResult
-      try {
-        result = await send(canvasRevisionRef.current)
-      } catch (error) {
-        if (!(error instanceof CinemaRequestError) || error.status !== 409) throw error
-        const latestCanvas = await requestJson<CinemaCanvasDocument>(
-          agentBaseURL,
-          `/api/cinema/projects/${encodeURIComponent(projectID)}/canvas`,
-        )
-        canvasRevisionRef.current = latestCanvas.revision ?? 0
-        result = await send(canvasRevisionRef.current)
-      }
+      const result = await commandQueue.enqueue({
+        id: makeCommandID("create-node-from-asset"),
+        type: "create-node-from-asset",
+        actor: "cinema-web",
+        nodeID,
+        assetRef,
+        position,
+      })
       return { result, nodeID }
     },
-    onMutate: () => {
-      saveStateRef.current = "saving"
-      setSaveState("saving")
-      setSaveError(null)
-    },
-    onSuccess: ({ result, nodeID }) => {
-      deferredCanvasWhileEditingRef.current = null
-      applyCanvas(result.canvas)
+    onSuccess: ({ nodeID }) => {
       selectSingleNode(nodeID)
     },
     onError: (error) => {
       saveStateRef.current = "error"
       setSaveState("error")
       setSaveError(error instanceof Error ? error.message : "Could not add the asset to the Canvas")
-      void refetchCanvas()
     },
   })
 
@@ -6836,45 +6872,16 @@ export function App() {
       assetRef: CinemaAssetLocator
       nodeID: string
     }) => {
-      const commandID = makeCommandID("relink-node-asset")
-      const send = (baseRevision: number) => requestJson<CinemaCommandResult>(
-        agentBaseURL,
-        `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: commandID,
-            type: "relink-node-asset",
-            actor: "cinema-web",
-            baseRevision,
-            nodeID,
-            assetRef,
-          } satisfies CinemaCommand),
-        },
-      )
-      let result: CinemaCommandResult
-      try {
-        result = await send(canvasRevisionRef.current)
-      } catch (error) {
-        if (!(error instanceof CinemaRequestError) || error.status !== 409) throw error
-        const latestCanvas = await requestJson<CinemaCanvasDocument>(
-          agentBaseURL,
-          `/api/cinema/projects/${encodeURIComponent(projectID)}/canvas`,
-        )
-        canvasRevisionRef.current = latestCanvas.revision ?? 0
-        result = await send(canvasRevisionRef.current)
-      }
+      const result = await commandQueue.enqueue({
+        id: makeCommandID("relink-node-asset"),
+        type: "relink-node-asset",
+        actor: "cinema-web",
+        nodeID,
+        assetRef,
+      })
       return { result, nodeID }
     },
-    onMutate: () => {
-      saveStateRef.current = "saving"
-      setSaveState("saving")
-      setSaveError(null)
-    },
-    onSuccess: ({ result, nodeID }) => {
-      deferredCanvasWhileEditingRef.current = null
-      applyCanvas(result.canvas)
+    onSuccess: ({ nodeID }) => {
       selectSingleNode(nodeID)
       setRelinkNodeID(null)
     },
@@ -6882,7 +6889,6 @@ export function App() {
       saveStateRef.current = "error"
       setSaveState("error")
       setSaveError(error instanceof Error ? error.message : "Could not relink the asset")
-      void refetchCanvas()
     },
   })
 
@@ -6908,8 +6914,7 @@ export function App() {
       })
     },
     onMutate: ({ draftNodeID }) => {
-      setVideoGenerationNodeID(draftNodeID)
-      setVideoGenerationError(null)
+      dispatchVideoGenerationOperation({ type: "begin", nodeID: draftNodeID })
       saveStateRef.current = "saving"
       setSaveState("saving")
       setSaveError(null)
@@ -6956,13 +6961,13 @@ export function App() {
         )
         queueNodePatch(variables.draftNodeID, { data: failedRawData })
       }
-      setVideoGenerationError({ nodeID: variables.draftNodeID, message })
+      dispatchVideoGenerationOperation({ type: "fail", nodeID: variables.draftNodeID, message })
       saveStateRef.current = "error"
       setSaveState("error")
       setSaveError(message)
     },
-    onSettled: () => {
-      setVideoGenerationNodeID(null)
+    onSettled: (_data, _error, variables) => {
+      dispatchVideoGenerationOperation({ type: "settle", nodeID: variables.draftNodeID })
     },
   })
 
@@ -7029,6 +7034,10 @@ export function App() {
     setActiveCanvasPanel(null)
     setRelinkNodeID(null)
     setInspectorNodeID(null)
+    dispatchTextGenerationOperation({ type: "reset" })
+    dispatchImageGenerationOperation({ type: "reset" })
+    dispatchVideoGenerationOperation({ type: "reset" })
+    dispatchCustomApiOperation({ type: "reset" })
   }, [agentBaseURL, projectID])
 
   useEffect(() => {
@@ -7044,6 +7053,7 @@ export function App() {
       editingNodeIDsRef.current.size > 0 ||
       saveStateRef.current === "dirty" ||
       saveStateRef.current === "saving" ||
+      commandQueue.hasPendingCommands() ||
       nodePatchQueueRef.current.size > 0 ||
       nodePatchTimersRef.current.size > 0
     ) {
@@ -7054,13 +7064,31 @@ export function App() {
     }
     deferredCanvasWhileEditingRef.current = null
     applyCanvas(canvasQuery.data)
-  }, [applyCanvas, canvasQuery.data])
+  }, [applyCanvas, canvasQuery.data, commandQueue])
 
   useEffect(() => () => {
     for (const timer of nodePatchTimersRef.current.values()) window.clearTimeout(timer)
     nodePatchTimersRef.current.clear()
     nodePatchQueueRef.current.clear()
   }, [])
+
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (
+        !commandQueue.hasPendingCommands()
+        && nodePatchQueueRef.current.size === 0
+        && nodePatchTimersRef.current.size === 0
+        && saveStateRef.current !== "dirty"
+        && saveStateRef.current !== "saving"
+        && saveStateRef.current !== "error"
+      ) return
+
+      event.preventDefault()
+      event.returnValue = ""
+    }
+    window.addEventListener("beforeunload", warnBeforeUnload)
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload)
+  }, [commandQueue])
 
   const queueNodePatch = useCallback((nodeID: string, patch: CinemaNodePatch) => {
     const current = nodePatchQueueRef.current.get(nodeID)
@@ -7103,32 +7131,14 @@ export function App() {
     nodePatchQueueRef.current.delete(nodeID)
     if (!patch) return
 
-    saveStateRef.current = "saving"
-    setSaveState("saving")
-    setSaveError(null)
-
-    try {
-      await requestJson<CinemaCommandResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: makeCommandID("update-node"),
-          type: "update-node",
-          actor: "cinema-web",
-          nodeID,
-          patch,
-        }),
-      })
-    } catch (error) {
-      nodePatchQueueRef.current.set(nodeID, patch)
-      saveStateRef.current = "error"
-      setSaveState("error")
-      setSaveError(error instanceof Error ? error.message : "Command failed")
-      throw error
-    }
-  }, [agentBaseURL, projectID])
+    await commandQueue.enqueue({
+      id: makeCommandID("update-node"),
+      type: "update-node",
+      actor: "cinema-web",
+      nodeID,
+      patch,
+    })
+  }, [commandQueue])
 
   const createTextGenerationMutation = useMutation({
     mutationFn: async ({ nodeID, request }: {
@@ -7153,27 +7163,26 @@ export function App() {
       )
     },
     onMutate: ({ nodeID }) => {
-      setTextGenerationNodeID(nodeID)
-      setTextGenerationError(null)
+      dispatchTextGenerationOperation({ type: "begin", nodeID })
       saveStateRef.current = "saving"
       setSaveState("saving")
       setSaveError(null)
     },
     onSuccess: async (result) => {
-      applyCanvas(result.canvas)
+      applyCanvasWhenSafe(result.canvas)
       selectSingleNode(result.nodeID)
       await refetchRuntimeState()
     },
     onError: (error, variables) => {
       const message = error instanceof Error ? error.message : "Text generation failed"
-      setTextGenerationError({ nodeID: variables.nodeID, message })
+      dispatchTextGenerationOperation({ type: "fail", nodeID: variables.nodeID, message })
       if (saveStateRef.current !== "error") {
         saveStateRef.current = nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0 ? "dirty" : "saved"
         setSaveState(saveStateRef.current)
       }
     },
-    onSettled: () => {
-      setTextGenerationNodeID(null)
+    onSettled: (_data, _error, variables) => {
+      dispatchTextGenerationOperation({ type: "settle", nodeID: variables.nodeID })
     },
   })
 
@@ -7196,8 +7205,7 @@ export function App() {
       )
     },
     onMutate: ({ nodeID }) => {
-      setImageGenerationNodeIDs((current) => new Set(current).add(nodeID))
-      setImageGenerationError(null)
+      dispatchImageGenerationOperation({ type: "begin", nodeID })
       setImageImportError((current) => current?.nodeID === nodeID ? null : current)
       setImageFinalizeError((current) => current?.nodeID === nodeID ? null : current)
       saveStateRef.current = "saving"
@@ -7205,12 +7213,12 @@ export function App() {
       setSaveError(null)
     },
     onSuccess: (result) => {
-      applyCanvas(result.canvas)
+      applyCanvasWhenSafe(result.canvas)
       selectSingleNode(result.nodeID)
     },
     onError: (error, variables) => {
       const message = error instanceof Error ? error.message : "Image generation failed"
-      setImageGenerationError({ nodeID: variables.nodeID, message })
+      dispatchImageGenerationOperation({ type: "fail", nodeID: variables.nodeID, message })
       void refetchCanvas()
       if (saveStateRef.current !== "error") {
         saveStateRef.current = nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0 ? "dirty" : "saved"
@@ -7218,11 +7226,7 @@ export function App() {
       }
     },
     onSettled: (_data, _error, variables) => {
-      setImageGenerationNodeIDs((current) => {
-        const next = new Set(current)
-        next.delete(variables.nodeID)
-        return next
-      })
+      dispatchImageGenerationOperation({ type: "settle", nodeID: variables.nodeID })
     },
   })
 
@@ -7245,14 +7249,13 @@ export function App() {
       )
     },
     onMutate: ({ nodeID }) => {
-      setCustomApiNodeID(nodeID)
-      setCustomApiError(null)
+      dispatchCustomApiOperation({ type: "begin", nodeID })
       saveStateRef.current = "saving"
       setSaveState("saving")
       setSaveError(null)
     },
     onSuccess: (result) => {
-      if (result.canvas) applyCanvas(result.canvas)
+      if (result.canvas) applyCanvasWhenSafe(result.canvas)
       else {
         saveStateRef.current = "saved"
         setSaveState("saved")
@@ -7260,15 +7263,15 @@ export function App() {
     },
     onError: (error, variables) => {
       const message = error instanceof Error ? error.message : "Custom API run failed"
-      setCustomApiError({ nodeID: variables.nodeID, message })
+      dispatchCustomApiOperation({ type: "fail", nodeID: variables.nodeID, message })
       void refetchCanvas()
       if (saveStateRef.current !== "error") {
         saveStateRef.current = nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0 ? "dirty" : "saved"
         setSaveState(saveStateRef.current)
       }
     },
-    onSettled: () => {
-      setCustomApiNodeID(null)
+    onSettled: (_data, _error, variables) => {
+      dispatchCustomApiOperation({ type: "settle", nodeID: variables.nodeID })
     },
   })
 
@@ -7288,8 +7291,7 @@ export function App() {
       )
     },
     onMutate: ({ nodeID }) => {
-      setCustomApiNodeID(nodeID)
-      setCustomApiError(null)
+      dispatchCustomApiOperation({ type: "begin", nodeID })
       saveStateRef.current = "saving"
       setSaveState("saving")
       setSaveError(null)
@@ -7300,14 +7302,14 @@ export function App() {
     },
     onError: (error, variables) => {
       const message = error instanceof Error ? error.message : "Custom API key save failed"
-      setCustomApiError({ nodeID: variables.nodeID, message })
+      dispatchCustomApiOperation({ type: "fail", nodeID: variables.nodeID, message })
       if (saveStateRef.current !== "error") {
         saveStateRef.current = nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0 ? "dirty" : "saved"
         setSaveState(saveStateRef.current)
       }
     },
-    onSettled: () => {
-      setCustomApiNodeID(null)
+    onSettled: (_data, _error, variables) => {
+      dispatchCustomApiOperation({ type: "settle", nodeID: variables.nodeID })
     },
   })
 
@@ -7376,35 +7378,26 @@ export function App() {
         importedAt: new Date().toISOString(),
         status: "ready",
       })
-      const updated = await requestJson<CinemaCommandResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: makeCommandID("update-node"),
-          type: "update-node",
-          actor: "cinema-web",
-          nodeID,
-          patch: { data: nextRawData },
-        } satisfies CinemaCommand),
+      await commandQueue.enqueue({
+        id: makeCommandID("update-node"),
+        type: "update-node",
+        actor: "cinema-web",
+        nodeID,
+        patch: { data: nextRawData },
       })
-      return { canvas: updated.canvas, nodeID }
+      return { nodeID }
     },
     onMutate: ({ nodeID }) => {
       setImageImportNodeIDs((current) => new Set(current).add(nodeID))
       setImageImportError(null)
-      setImageGenerationError((current) => current?.nodeID === nodeID ? null : current)
+      dispatchImageGenerationOperation({ type: "clear-error", nodeID })
       setImageFinalizeError((current) => current?.nodeID === nodeID ? null : current)
       saveStateRef.current = "saving"
       setSaveState("saving")
       setSaveError(null)
     },
-    onSuccess: ({ canvas, nodeID }) => {
-      applyCanvas(canvas)
+    onSuccess: ({ nodeID }) => {
       selectSingleNode(nodeID)
-      saveStateRef.current = "saved"
-      setSaveState("saved")
     },
     onError: (error, variables) => {
       const message = error instanceof Error ? error.message : "Image import failed"
@@ -7437,35 +7430,26 @@ export function App() {
       }
 
       await flushNodePatch(nodeID)
-      const updated = await requestJson<CinemaCommandResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: makeCommandID("update-node"),
-          type: "update-node",
-          actor: "cinema-web",
-          nodeID,
-          patch: { data: nextRawData },
-        } satisfies CinemaCommand),
+      await commandQueue.enqueue({
+        id: makeCommandID("update-node"),
+        type: "update-node",
+        actor: "cinema-web",
+        nodeID,
+        patch: { data: nextRawData },
       })
-      return { canvas: updated.canvas, nodeID }
+      return { nodeID }
     },
     onMutate: ({ nodeID }) => {
       setImageFinalizeNodeIDs((current) => new Set(current).add(nodeID))
       setImageFinalizeError(null)
-      setImageGenerationError((current) => current?.nodeID === nodeID ? null : current)
+      dispatchImageGenerationOperation({ type: "clear-error", nodeID })
       setImageImportError((current) => current?.nodeID === nodeID ? null : current)
       saveStateRef.current = "saving"
       setSaveState("saving")
       setSaveError(null)
     },
-    onSuccess: ({ canvas, nodeID }) => {
-      applyCanvas(canvas)
+    onSuccess: ({ nodeID }) => {
       selectSingleNode(nodeID)
-      saveStateRef.current = "saved"
-      setSaveState("saved")
     },
     onError: (error, variables) => {
       const message = error instanceof Error ? error.message : "Image selection failed"
@@ -7473,7 +7457,6 @@ export function App() {
       saveStateRef.current = "error"
       setSaveState("error")
       setSaveError(message)
-      void refetchCanvas()
     },
     onSettled: (_data, _error, variables) => {
       setImageFinalizeNodeIDs((current) => {
@@ -7558,28 +7541,20 @@ export function App() {
           },
           nodeID: nextNodeID,
         })
-        const connected = await requestJson<CinemaCommandResult>(
-          agentBaseURL,
-          `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              id: makeCommandID("connect-nodes"),
-              type: "connect-nodes",
-              actor: "cinema-web",
-              edge: {
-                id: `edge-${sourceNode.id}-${nextNodeID}-${Date.now().toString(36)}`,
-                source: sourceNode.id,
-                target: nextNodeID,
-                sourceHandle: "output",
-                targetHandle: "input",
-                data: { derivedOperation: "crop" },
-              },
-            } satisfies CinemaCommand),
+        await commandQueue.enqueue({
+          id: makeCommandID("connect-nodes"),
+          type: "connect-nodes",
+          actor: "cinema-web",
+          edge: {
+            id: `edge-${sourceNode.id}-${nextNodeID}-${Date.now().toString(36)}`,
+            source: sourceNode.id,
+            target: nextNodeID,
+            sourceHandle: "output",
+            targetHandle: "input",
+            data: { derivedOperation: "crop" },
           },
-        )
-        return { canvas: connected.canvas, nodeID: created.nodeID }
+        })
+        return { nodeID: created.nodeID }
       }
 
       const importResult = await requestJson<CinemaImportedImageAssetResult>(
@@ -7616,40 +7591,28 @@ export function App() {
         },
       )
 
-      await requestJson<CinemaCommandResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: makeCommandID("create-node"),
-          type: "create-node",
-          actor: "cinema-web",
-          node: toCanvasNode(nextNode),
-        } satisfies CinemaCommand),
+      await commandQueue.enqueue({
+        id: makeCommandID("create-node"),
+        type: "create-node",
+        actor: "cinema-web",
+        node: toCanvasNode(nextNode),
       })
-      const connected = await requestJson<CinemaCommandResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: makeCommandID("connect-nodes"),
-          type: "connect-nodes",
-          actor: "cinema-web",
-          edge: {
-            id: `edge-${sourceNode.id}-${nextNode.id}-${Date.now().toString(36)}`,
-            source: sourceNode.id,
-            target: nextNode.id,
-            sourceHandle: "output",
-            targetHandle: "input",
-            data: {
-              derivedOperation: "crop",
-            },
+      await commandQueue.enqueue({
+        id: makeCommandID("connect-nodes"),
+        type: "connect-nodes",
+        actor: "cinema-web",
+        edge: {
+          id: `edge-${sourceNode.id}-${nextNode.id}-${Date.now().toString(36)}`,
+          source: sourceNode.id,
+          target: nextNode.id,
+          sourceHandle: "output",
+          targetHandle: "input",
+          data: {
+            derivedOperation: "crop",
           },
-        } satisfies CinemaCommand),
+        },
       })
-      return { canvas: connected.canvas, nodeID: nextNode.id }
+      return { nodeID: nextNode.id }
     },
     onMutate: ({ nodeID }) => {
       setImageCropNodeID(nodeID)
@@ -7658,8 +7621,7 @@ export function App() {
       setSaveState("saving")
       setSaveError(null)
     },
-    onSuccess: ({ canvas, nodeID }) => {
-      applyCanvas(canvas)
+    onSuccess: ({ nodeID }) => {
       selectSingleNode(nodeID)
     },
     onError: (error, variables) => {
@@ -7683,8 +7645,10 @@ export function App() {
       if (
         cancelled ||
         editingNodeIDsRef.current.size > 0 ||
+        commandQueue.hasPendingCommands() ||
         saveStateRef.current === "dirty" ||
-        saveStateRef.current === "saving"
+        saveStateRef.current === "saving" ||
+        saveStateRef.current === "error"
       ) {
         return
       }
@@ -7720,7 +7684,7 @@ export function App() {
       cancelled = true
       if (intervalID !== null) window.clearInterval(intervalID)
     }
-  }, [agentBaseURL, canvasQuery.data, projectID, projectQuery.data?.initialized, refetchCanvas, refetchTasks])
+  }, [agentBaseURL, canvasQuery.data, commandQueue, projectID, projectQuery.data?.initialized, refetchCanvas, refetchTasks])
 
   useEffect(() => {
     if (!projectID || projectQuery.data?.initialized !== true || activeGenerationTaskIDs.length === 0) {
@@ -7737,8 +7701,10 @@ export function App() {
         cancelled ||
         autoRefreshInFlightRef.current ||
         editingNodeIDsRef.current.size > 0 ||
+        commandQueue.hasPendingCommands() ||
         saveStateRef.current === "dirty" ||
-        saveStateRef.current === "saving"
+        saveStateRef.current === "saving" ||
+        saveStateRef.current === "error"
       ) {
         return
       }
@@ -7772,37 +7738,22 @@ export function App() {
       if (initialTimerID !== null) window.clearTimeout(initialTimerID)
       if (intervalID !== null) window.clearInterval(intervalID)
     }
-  }, [activeGenerationTaskIDs, activeGenerationTaskIDsKey, agentBaseURL, projectID, projectQuery.data?.initialized, refetchRuntimeState])
+  }, [activeGenerationTaskIDs, activeGenerationTaskIDsKey, agentBaseURL, commandQueue, projectID, projectQuery.data?.initialized, refetchRuntimeState])
 
   const deleteNodesMutation = useMutation({
     scope: { id: `cinema-node-deletions:${projectID}` },
     mutationFn: async ({ requestID, nodeIDs: requestedNodeIDs }: { requestID: number; nodeIDs: string[] }) => {
       const nodeIDs = [...new Set(requestedNodeIDs)]
-      let latestCanvas: CinemaCanvasDocument | null = null
-
-      // The command endpoint deletes one node at a time. Keep the requests ordered
-      // and only apply the final canvas so an older response cannot resurrect a node.
       for (const nodeID of nodeIDs) {
-        const result = await requestJson<CinemaCommandResult>(
-          agentBaseURL,
-          `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              id: makeCommandID("delete-node"),
-              type: "delete-node",
-              actor: "cinema-web",
-              nodeID,
-            } satisfies CinemaCommand),
-          },
-        )
-        latestCanvas = result.canvas
+        await commandQueue.enqueue({
+          id: makeCommandID("delete-node"),
+          type: "delete-node",
+          actor: "cinema-web",
+          nodeID,
+        })
       }
 
-      return { requestID, nodeIDs, canvas: latestCanvas }
+      return { requestID, nodeIDs }
     },
     onMutate: ({ nodeIDs }) => {
       for (const nodeID of nodeIDs) {
@@ -7815,40 +7766,9 @@ export function App() {
       setSaveState("saving")
       setSaveError(null)
     },
-    onSuccess: ({ requestID, canvas }) => {
+    onSuccess: ({ requestID }) => {
       if (requestID !== latestNodeDeletionRequestIDRef.current) return
-      const queuedError = queuedNodeDeletionErrorRef.current
       queuedNodeDeletionErrorRef.current = null
-      const restoreQueuedError = () => {
-        if (!queuedError) return false
-        saveStateRef.current = "error"
-        setSaveState("error")
-        setSaveError(queuedError)
-        return true
-      }
-      if (!canvas) {
-        restoreQueuedError()
-        return
-      }
-      if (nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0) {
-        if (!restoreQueuedError()) {
-          saveStateRef.current = "dirty"
-          setSaveState("dirty")
-        }
-        return
-      }
-      if (editingNodeIDsRef.current.size > 0) {
-        deferredCanvasWhileEditingRef.current = canvas
-        if (!restoreQueuedError()) {
-          saveStateRef.current = "saved"
-          setSaveState("saved")
-          setSaveError(null)
-        }
-        return
-      }
-      deferredCanvasWhileEditingRef.current = null
-      applyCanvas(canvas)
-      restoreQueuedError()
     },
     onError: (error, { requestID }) => {
       const message = error instanceof Error ? error.message : "Node deletion failed"
@@ -7860,7 +7780,6 @@ export function App() {
       saveStateRef.current = "error"
       setSaveState("error")
       setSaveError(message)
-      void refetchCanvas()
     },
   })
   const mutateNodeDeletions = deleteNodesMutation.mutate
@@ -8134,18 +8053,19 @@ export function App() {
     if (
       !isEditing &&
       editingNodeIDs.size === 0 &&
+      !commandQueue.hasPendingCommands() &&
       saveStateRef.current !== "dirty" &&
       saveStateRef.current !== "saving" &&
+      saveStateRef.current !== "error" &&
       nodePatchQueueRef.current.size === 0 &&
       nodePatchTimersRef.current.size === 0
     ) {
       const deferredCanvas = deferredCanvasWhileEditingRef.current
       if (deferredCanvas) {
-        deferredCanvasWhileEditingRef.current = null
-        applyCanvas(deferredCanvas)
+        applyCanvasWhenSafe(deferredCanvas)
       }
     }
-  }, [applyCanvas])
+  }, [applyCanvasWhenSafe, commandQueue])
 
   const clearNodePointerPaneClickGuard = useCallback(() => {
     nodePointerPaneClickGuardRef.current = null
@@ -8395,8 +8315,8 @@ export function App() {
         onRelinkAsset: beginRelinkAsset,
         textModels,
         effectiveTextModel,
-        isGeneratingText: createTextGenerationMutation.isPending && textGenerationNodeID === node.id,
-        textGenerationError: textGenerationError?.nodeID === node.id ? textGenerationError.message : null,
+        isGeneratingText: isNodeOperationPending(textGenerationOperations, node.id),
+        textGenerationError: nodeOperationError(textGenerationOperations, node.id),
         sourceImageAssets: node.data.cinemaType === "text" || node.data.cinemaType === "image"
           ? sourceImageAssetsForNode(node.id, nodes, edges)
           : [],
@@ -8404,8 +8324,8 @@ export function App() {
           createTextGenerationMutation.mutate({ nodeID, request }),
         imageModels,
         effectiveImageModel,
-        isGeneratingImage: imageGenerationNodeIDs.has(node.id),
-        imageGenerationError: imageGenerationError?.nodeID === node.id ? imageGenerationError.message : null,
+        isGeneratingImage: isNodeOperationPending(imageGenerationOperations, node.id),
+        imageGenerationError: nodeOperationError(imageGenerationOperations, node.id),
         isFinalizingImageCandidate: imageFinalizeNodeIDs.has(node.id),
         imageFinalizeError: imageFinalizeError?.nodeID === node.id ? imageFinalizeError.message : null,
         sourceTextParameters: node.data.cinemaType === "image" || node.data.cinemaType === "video"
@@ -8423,12 +8343,12 @@ export function App() {
         videoInputAssets: node.data.cinemaType === "video" ? sourceInputAssetsForVideoNode(node.id, nodes, edges) : {},
         videoInputAssetsByInputKey: node.data.cinemaType === "video" ? sourceInputAssetMapsForVideoNode(node.id, nodes, edges).byInputKey : {},
         videoInputAssetsByRole: node.data.cinemaType === "video" ? sourceInputAssetMapsForVideoNode(node.id, nodes, edges).byRole : {},
-        isCreatingVideoTask: createGenerationTaskMutation.isPending && videoGenerationNodeID === node.id,
-        videoGenerationError: videoGenerationError?.nodeID === node.id ? videoGenerationError.message : null,
+        isCreatingVideoTask: isNodeOperationPending(videoGenerationOperations, node.id),
+        videoGenerationError: nodeOperationError(videoGenerationOperations, node.id),
         onCreateVideoGenerationTask: (nodeID: string, body: CreateCinemaGenerationTaskBody) =>
           createGenerationTaskMutation.mutate({ body, draftNodeID: nodeID }),
-        isRunningCustomApi: runCustomApiMutation.isPending && customApiNodeID === node.id,
-        customApiError: customApiError?.nodeID === node.id ? customApiError.message : null,
+        isRunningCustomApi: isNodeOperationPending(customApiOperations, node.id),
+        customApiError: nodeOperationError(customApiOperations, node.id),
         onRunCustomApi: (nodeID: string, request: CustomApiRunRequest) =>
           runCustomApiMutation.mutateAsync({ nodeID, request }),
         onSaveCustomApiKey: (nodeID: string, request: CustomApiAuthSaveRequest) =>
@@ -8458,15 +8378,13 @@ export function App() {
       createGenerationTaskMutation,
       createImageGenerationMutation,
       createTextGenerationMutation,
-      customApiError,
-      customApiNodeID,
+      customApiOperations,
       deleteNode,
       disconnectEdge,
       edges,
       effectiveImageModel,
       effectiveTextModel,
-      imageGenerationError,
-      imageGenerationNodeIDs,
+      imageGenerationOperations,
       imageModels,
       imageCropError,
       imageCropNodeID,
@@ -8485,14 +8403,12 @@ export function App() {
       setNodeInputEditing,
       selectNodeOnly,
       tasksQuery.data,
-      textGenerationError,
-      textGenerationNodeID,
+      textGenerationOperations,
       textModels,
       activeNodeID,
       beginRelinkAsset,
       clearCanvasSelection,
-      videoGenerationError,
-      videoGenerationNodeID,
+      videoGenerationOperations,
     ],
   )
   const inspectorNode = useMemo(
@@ -8513,54 +8429,56 @@ export function App() {
 
   if (!projectID) {
     return (
-      <main className="cinema-shell">
+      <CinemaWorkbenchShell projectName="Cinema" activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace}>
         <div className="cinema-empty-state">
           <h1>Missing project</h1>
           <p>Open Cinema from an AnyBox project so the URL includes a projectID.</p>
         </div>
-      </main>
+      </CinemaWorkbenchShell>
     )
   }
 
   if (projectQuery.isLoading || (projectQuery.data?.initialized && canvasQuery.isLoading)) {
     return (
-      <main className="cinema-shell">
+      <CinemaWorkbenchShell projectName={projectQuery.data?.name ?? "Cinema"} activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace}>
         <div className="cinema-empty-state">
           <Loader2 className="is-spinning" aria-hidden="true" />
           <h1>Opening cinema project</h1>
           <p>Reading local project metadata through AnyBox.</p>
         </div>
-      </main>
+      </CinemaWorkbenchShell>
     )
   }
 
   if (projectQuery.error || canvasQuery.error || providersQuery.error || textModelsQuery.error || imageModelsQuery.error || tasksQuery.error) {
     const error = projectQuery.error ?? canvasQuery.error ?? providersQuery.error ?? textModelsQuery.error ?? imageModelsQuery.error ?? tasksQuery.error
     return (
-      <main className="cinema-shell">
+      <CinemaWorkbenchShell projectName={projectQuery.data?.name ?? "Cinema"} activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace}>
         <div className="cinema-empty-state is-error">
           <h1>Could not open Cinema</h1>
           <p>{error instanceof Error ? error.message : "Unknown error"}</p>
         </div>
-      </main>
+      </CinemaWorkbenchShell>
     )
   }
 
   if (projectQuery.data && !projectQuery.data.initialized) {
     return (
-      <main className="cinema-shell">
+      <CinemaWorkbenchShell projectName={projectQuery.data.name} activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace}>
         <div className="cinema-empty-state">
           <Film aria-hidden="true" />
           <h1>Initialize this project first</h1>
           <p>Run the Initialize Cinema Project skill in AnyBox, then open this canvas again.</p>
         </div>
-      </main>
+      </CinemaWorkbenchShell>
     )
   }
 
   return (
-    <main
-      className="cinema-shell"
+    <CinemaWorkbenchShell
+      projectName={projectQuery.data?.name ?? "Cinema"}
+      activeWorkspace={activeWorkspace}
+      onWorkspaceChange={setActiveWorkspace}
       onClick={() => {
         setContextMenu(null)
         setNodeContextMenu(null)
@@ -8602,6 +8520,12 @@ export function App() {
             />
           </ReactFlow>
           <div ref={setNodeInputOverlayRoot} className="cinema-node-overlay-root" />
+          <CanvasSaveStatus
+            state={saveState}
+            error={saveError}
+            pendingCount={pendingSaveCount}
+            onRetry={() => commandQueue.retry()}
+          />
           {hasPersonalAssetDependencies ? (
             <div className="cinema-personal-asset-notice" role="status">
               <Info size={14} aria-hidden="true" />
@@ -8652,6 +8576,6 @@ export function App() {
           />
         </div>
       </section>
-    </main>
+    </CinemaWorkbenchShell>
   )
 }

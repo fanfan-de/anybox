@@ -525,8 +525,9 @@ export const CinemaCanvasNodePatchSchema = z.object({
 export type CinemaCanvasNodePatch = z.infer<typeof CinemaCanvasNodePatchSchema>
 
 const CinemaCommandBaseSchema = z.object({
-  id: z.string().min(1).optional(),
+  id: z.string().min(1),
   actor: z.string().min(1).optional(),
+  baseRevision: z.number().int().nonnegative(),
 })
 
 export const CinemaCommandSchema = z.discriminatedUnion("type", [
@@ -535,17 +536,13 @@ export const CinemaCommandSchema = z.discriminatedUnion("type", [
     node: CinemaCanvasNodeSchema,
   }),
   CinemaCommandBaseSchema.extend({
-    id: z.string().min(1),
     type: z.literal("create-node-from-asset"),
-    baseRevision: z.number().int().nonnegative(),
     nodeID: z.string().min(1),
     assetRef: CinemaAssetLocatorSchema,
     position: CinemaPositionSchema,
   }),
   CinemaCommandBaseSchema.extend({
-    id: z.string().min(1),
     type: z.literal("relink-node-asset"),
-    baseRevision: z.number().int().nonnegative(),
     nodeID: z.string().min(1),
     assetRef: CinemaAssetLocatorSchema,
   }),

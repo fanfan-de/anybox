@@ -427,6 +427,24 @@ async function writeCinemaCanvas(cinemaRoot: string, canvas: CinemaCanvasDocumen
   return parsed
 }
 
+function cinemaCanvasLockKey(cinemaRoot: string) {
+  return `cinema-canvas:${cinemaRoot}`
+}
+
+async function mutateCinemaCanvasFromRoot(
+  cinemaRoot: string,
+  mutate: (current: CinemaCanvasDocument) => CinemaCanvasDocument | Promise<CinemaCanvasDocument>,
+): Promise<CinemaCanvasDocument> {
+  using _lock = await Lock.write(cinemaCanvasLockKey(cinemaRoot))
+  const current = await readCinemaCanvasFromRoot(cinemaRoot)
+  const next = await mutate(current)
+  if (next === current) return current
+  return await writeCinemaCanvas(cinemaRoot, {
+    ...next,
+    revision: (current.revision ?? 0) + 1,
+  })
+}
+
 async function writeJsonAtomic(filePath: string, value: unknown) {
   await mkdir(path.dirname(filePath), { recursive: true })
   const tempPath = path.join(path.dirname(filePath), `${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`)
@@ -1377,21 +1395,19 @@ function writeCustomApiNodeResult(input: {
 
 async function writeCustomApiNodeFailure(input: {
   cinemaRoot: string
-  canvas: CinemaCanvasDocument
   nodeID: string
   inputValues: Record<string, unknown>
   error: string
   statusCode?: number
 }) {
-  const nextCanvas = writeCustomApiNodeResult({
-    canvas: input.canvas,
+  await mutateCinemaCanvasFromRoot(input.cinemaRoot, (canvas) => writeCustomApiNodeResult({
+    canvas,
     nodeID: input.nodeID,
     inputValues: input.inputValues,
     status: "failed",
     error: input.error,
     statusCode: input.statusCode,
-  })
-  await writeCinemaCanvas(input.cinemaRoot, nextCanvas)
+  }))
 }
 
 function createCinemaTextGenerationRuntimeError(error: unknown, modelValue: string) {
@@ -2027,8 +2043,10 @@ async function syncTaskToCanvas(
   message: string,
   options: SyncTaskToCanvasOptions = {},
 ) {
-  const current = await readCinemaCanvasFromRoot(cinemaRoot)
-  const canvas = await writeCinemaCanvas(cinemaRoot, syncTaskToCanvasDocument(current, task, options))
+  const canvas = await mutateCinemaCanvasFromRoot(
+    cinemaRoot,
+    (current) => syncTaskToCanvasDocument(current, task, options),
+  )
   await appendCinemaEvent(cinemaRoot, {
     time: nowISO(),
     type: "generation-task.synced",
@@ -2334,32 +2352,38 @@ export async function createCinemaTextGeneration(
     throw new ApiError(502, "CINEMA_TEXT_GENERATION_EMPTY", "The selected model returned an empty text generation.")
   }
 
-  const nextText = appendGeneratedText(currentText, generatedText)
-  const nextCanvas = withNodeTypes({
-    ...current,
-    nodes: current.nodes.map((item) =>
-      item.id === node.id
-        ? {
-          ...item,
-          data: {
-            ...item.data,
-            text: nextText,
-            generationPrompt: "",
-            textModel: textModel.value,
-            ...(sourceImages.length > 0
-              ? {
-                sourceImageAssetID: sourceImageAssetIDs[0],
-                sourceImageAssetIDs,
-                sourceImagePath: sourceImages[0]?.path,
-                sourceImagePaths: sourceImages.map((sourceImage) => sourceImage.path),
-              }
-              : {}),
-          },
-        }
-        : item
-    ),
+  const canvas = await mutateCinemaCanvasFromRoot(cinemaRoot, (latest) => {
+    const latestNode = latest.nodes.find((item) => item.id === node.id)
+    if (!latestNode) {
+      throw new ApiError(404, "CINEMA_NODE_NOT_FOUND", `Cinema node '${node.id}' was not found.`)
+    }
+    const latestText = typeof latestNode.data?.text === "string" ? latestNode.data.text : currentText
+    const nextText = appendGeneratedText(latestText, generatedText)
+    return withNodeTypes({
+      ...latest,
+      nodes: latest.nodes.map((item) =>
+        item.id === node.id
+          ? {
+            ...item,
+            data: {
+              ...item.data,
+              text: nextText,
+              generationPrompt: "",
+              textModel: textModel.value,
+              ...(sourceImages.length > 0
+                ? {
+                  sourceImageAssetID: sourceImageAssetIDs[0],
+                  sourceImageAssetIDs,
+                  sourceImagePath: sourceImages[0]?.path,
+                  sourceImagePaths: sourceImages.map((sourceImage) => sourceImage.path),
+                }
+                : {}),
+            },
+          }
+          : item
+      ),
+    })
   })
-  const canvas = await writeCinemaCanvas(cinemaRoot, nextCanvas)
 
   await appendCinemaEvent(cinemaRoot, {
     time: nowISO(),
@@ -2379,10 +2403,12 @@ export async function createCinemaTextGeneration(
     },
   })
 
+  const savedText = canvas.nodes.find((item) => item.id === node.id)?.data?.text
+
   return {
     canvas,
     nodeID: node.id,
-    text: nextText,
+    text: typeof savedText === "string" ? savedText : generatedText,
     generatedText,
     model: textModel.value,
   }
@@ -2489,32 +2515,32 @@ async function writeCinemaImageNodeFailure(input: {
   nodeID: string
   error: string
 }) {
-  const current = await readCinemaCanvasFromRoot(input.cinemaRoot)
-  const currentNode = current.nodes.find((node) => node.id === input.nodeID)
-  if (
-    !currentNode ||
-    currentNode.type !== "image" ||
-    cinemaImageNodeHasContent(currentNode.data) ||
-    isActiveCinemaImageNodeData(currentNode.data)
-  ) return
+  await mutateCinemaCanvasFromRoot(input.cinemaRoot, (current) => {
+    const currentNode = current.nodes.find((node) => node.id === input.nodeID)
+    if (
+      !currentNode ||
+      currentNode.type !== "image" ||
+      cinemaImageNodeHasContent(currentNode.data) ||
+      isActiveCinemaImageNodeData(currentNode.data)
+    ) return current
 
-  const nextCanvas = withNodeTypes({
-    ...current,
-    nodes: current.nodes.map((item) =>
-      item.id === input.nodeID
-        ? {
-          ...item,
-          data: {
-            ...item.data,
-            status: "failed",
-            error: input.error,
-            progress: progressForTaskStatus("failed", nowISO(), input.error),
-          },
-        }
-        : item
-    ),
+    return withNodeTypes({
+      ...current,
+      nodes: current.nodes.map((item) =>
+        item.id === input.nodeID
+          ? {
+            ...item,
+            data: {
+              ...item.data,
+              status: "failed",
+              error: input.error,
+              progress: progressForTaskStatus("failed", nowISO(), input.error),
+            },
+          }
+          : item
+      ),
+    })
   })
-  await writeCinemaCanvas(input.cinemaRoot, nextCanvas)
 }
 
 export async function createCinemaImageGeneration(
@@ -2820,7 +2846,6 @@ export async function createCinemaCustomApiRun(
       const message = errorMessage(error)
       await writeCustomApiNodeFailure({
         cinemaRoot,
-        canvas,
         nodeID: node.id,
         inputValues: input.inputValues ?? {},
         error: message,
@@ -2859,15 +2884,14 @@ export async function createCinemaCustomApiRun(
       timeoutMs: rendered.timeoutMs,
     })
     const output = mapCustomApiResponse(result.responseJson, rendered.mapping)
-    const nextCanvas = writeCustomApiNodeResult({
-      canvas,
+    const writtenCanvas = await mutateCinemaCanvasFromRoot(cinemaRoot, (latest) => writeCustomApiNodeResult({
+      canvas: latest,
       nodeID: node.id,
       inputValues: rendered.inputValues,
       output,
       statusCode: result.statusCode,
       status: "succeeded",
-    })
-    const writtenCanvas = await writeCinemaCanvas(cinemaRoot, nextCanvas)
+    }))
     await appendCinemaEvent(cinemaRoot, {
       time: nowISO(),
       type: "custom-api.generated",
@@ -2895,7 +2919,6 @@ export async function createCinemaCustomApiRun(
     const message = errorMessage(error)
     await writeCustomApiNodeFailure({
       cinemaRoot,
-      canvas,
       nodeID: node.id,
       inputValues: rendered.inputValues,
       error: message,
@@ -2960,7 +2983,18 @@ export const readCinemaProjectImageAsset = readCinemaProjectAsset
 export async function updateCinemaCanvas(projectID: string, canvas: CinemaCanvasDocument): Promise<CinemaCanvasDocument> {
   const { cinemaRoot } = resolveCinemaRoot(projectID)
   await assertCinemaProjectInitialized(cinemaRoot)
-  const parsed = await writeCinemaCanvas(cinemaRoot, canvas)
+  const parsed = await mutateCinemaCanvasFromRoot(cinemaRoot, (current) => {
+    const currentRevision = current.revision ?? 0
+    if ((canvas.revision ?? 0) !== currentRevision) {
+      throw new ApiError(
+        409,
+        "CINEMA_CANVAS_REVISION_CONFLICT",
+        `Canvas revision conflict; latest revision is ${currentRevision}.`,
+        { latestRevision: currentRevision },
+      )
+    }
+    return canvas
+  })
   await appendCinemaEvent(cinemaRoot, {
     time: new Date().toISOString(),
     type: "canvas.updated",
@@ -3179,33 +3213,31 @@ export async function applyCinemaCommand(projectID: string, command: CinemaComma
   const { cinemaRoot } = resolveCinemaRoot(projectID)
   await assertCinemaProjectInitialized(cinemaRoot)
 
-  using _lock = await Lock.write(`cinema:${projectID}`)
+  using _lock = await Lock.write(cinemaCanvasLockKey(cinemaRoot))
 
-  if (command.id) {
-    const events = await readCinemaEventsFromRoot(cinemaRoot, { after: 0, limit: Number.MAX_SAFE_INTEGER })
-    const previousEvent = events.events.find((event) => event.commandID === command.id)
-    if (previousEvent) {
-      return {
-        canvas: await readCinemaCanvasFromRoot(cinemaRoot),
-        event: previousEvent,
-      }
+  const events = await readCinemaEventsFromRoot(cinemaRoot, { after: 0, limit: Number.MAX_SAFE_INTEGER })
+  const previousEvent = events.events.find((event) => event.commandID === command.id)
+  if (previousEvent) {
+    return {
+      canvas: await readCinemaCanvasFromRoot(cinemaRoot),
+      event: previousEvent,
     }
   }
 
   const current = await readCinemaCanvasFromRoot(cinemaRoot)
+  const currentRevision = current.revision ?? 0
+  if (command.baseRevision !== currentRevision) {
+    throw new ApiError(
+      409,
+      "CINEMA_CANVAS_REVISION_CONFLICT",
+      `Canvas revision conflict; latest revision is ${currentRevision}.`,
+      { latestRevision: currentRevision },
+    )
+  }
   let next: CinemaCanvasDocument
   let personalReferenceToAdd: { assetID: string; nodeID: string } | undefined
   let personalReferenceToRemove: { assetID: string; nodeID: string } | undefined
   if (command.type === "create-node-from-asset" || command.type === "relink-node-asset") {
-    const currentRevision = current.revision ?? 0
-    if (command.baseRevision !== currentRevision) {
-      throw new ApiError(
-        409,
-        "CINEMA_CANVAS_REVISION_CONFLICT",
-        `Canvas revision conflict; latest revision is ${currentRevision}.`,
-        { latestRevision: currentRevision },
-      )
-    }
     if (command.assetRef.scope.type === "project" && command.assetRef.scope.projectID !== projectID) {
       throw new ApiError(
         400,
@@ -3434,7 +3466,7 @@ export async function applyCinemaCommand(projectID: string, command: CinemaComma
     type: `command.${command.type}`,
     actor: command.actor ?? "cinema-runtime",
     message: describeCinemaCommand(command),
-    ...(command.id ? { commandID: command.id } : {}),
+    commandID: command.id,
     data: { command },
   })
 

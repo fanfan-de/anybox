@@ -37,6 +37,8 @@ CinemaWeb 不是一个普通的表单式 AI 生成页面，它更像是一个面
 3. `zustand` 管理轻量 UI 状态，比如当前打开编辑器或 Inspector 的活动节点。
 4. 自定义 React 组件和 CSS 负责 Cinema 风格的节点编辑器、生成器、检查面板和工具栏。
 
+应用最外层现在是 Create / Edit / Deliver 三工作台壳层。Create 对应现有节点创作画布并保持完整可用；Edit 为未来 Timeline 剪辑台预留；Deliver 为未来检查、渲染和交付流程预留。当前 Edit 与 Deliver 在 ARIA tablist 中可见但处于 disabled，并显示 `Soon`，因此不会制造尚无业务闭环的假入口。项目名称、工作台导航和活动 tabpanel 在加载、错误、未初始化和正常画布状态下保持同一层级结构。
+
 第三层是 `@anybox/shared/cinema`。这是整个系统的类型契约层。它使用 Zod 定义画布、节点、边、命令、事件、模型、Provider、生成任务和资产等 Schema，同时导出 TypeScript 类型。前端和后端都依赖这一层，因此它不是普通的类型文件，而是运行时校验和编译期类型的共同边界。
 
 第四层是 `packages/anyboxagent` 里的 Cinema API。这里使用 Hono 暴露 `/api/cinema/...` 路由，负责读取项目、更新画布、执行命令、创建生成任务、刷新任务、取消任务、读取资产和记录事件。
@@ -71,6 +73,8 @@ CinemaWeb 不是一个普通的表单式 AI 生成页面，它更像是一个面
 React Query 的默认配置关闭了 `refetchOnWindowFocus`，并设置了轻量 retry。这符合 CinemaWeb 的使用场景：用户在画布上操作时，我们不希望窗口聚焦造成频繁重新拉取，影响画布状态；但网络或本地 Agent 短暂失败时，也保留一次自动重试。
 
 React Flow Provider 则让 App 内部可以通过 `useReactFlow` 读取画布实例，例如把屏幕坐标转换成画布坐标，用于右键菜单添加节点。
+
+真正的 Canvas 被放在 Create 对应的 `tabpanel` 中。工作台顶栏采用无外框的紧凑 tabs，Create 使用当前 surface 表达选中状态；Edit 与 Deliver 保持固定尺寸的禁用状态。壳层同时覆盖亮色、暗色和 560px 窄窗口，不改变 Canvas 内部的保存、节点编辑、素材库和 Inspector 生命周期。
 
 ## 4. App 的核心职责：把服务端 Canvas 映射成 React Flow
 
@@ -181,6 +185,10 @@ idle -> dirty -> saving -> saved
 
 这个设计对演示和真实使用都很重要。它让用户感觉画布是实时的，同时又能明确知道哪些修改已经落盘。
 
+所有 Canvas Command 现在进入显式串行队列。每条命令都有稳定 `id` 和 `baseRevision`，只有服务端 ACK 后才出队；网络失败会退避重试，最终失败的命令保留在队首，并通过画布左上角状态和重试按钮暴露给用户。刷新或关闭页面时，如果仍有草稿、发送中命令或失败命令，浏览器会触发离开保护。
+
+服务端使用同一个 Canvas 写锁串行化 Command、生成任务同步、文本生成和 Custom API 结果写入。每次成功写入都会递增 `revision`；过期命令返回 409，前端拉取最新 revision 后使用原命令 ID 重放。因为重复命令 ID 会返回既有事件，所以“服务端已写入但响应丢失”不会造成重复执行。
+
 ## 7. 命令模型：所有画布变更都变成 Command
 
 CinemaWeb 没有直接把整个 canvas 一次次 PUT 到后端，而是大量使用命令接口：
@@ -239,6 +247,8 @@ generation tasks
 4. 错误边界更清晰，哪个子系统失败更容易定位。
 
 例如 `canvasQuery` 只有在项目已初始化后才启用；`tasksQuery` 只负责生成任务；`providersQuery` 只关心视频 Provider。前端在 `renderedNodes` 里把这些运行时数据注入每个节点，让节点组件可以拿到模型列表、Provider 列表、任务列表和生成状态。
+
+文本、图片、视频和 Custom API 的前端运行状态不再各自依赖单个全局 `nodeID`。统一的节点操作状态机为每个节点维护 pending 引用计数和错误映射：一个节点完成或失败只会更新自己，不会提前清除另一个仍在执行的节点；同一节点即使出现重叠请求，也要等所有请求 settle 后才解除 busy。项目切换时整个运行态注册表会重置。这使多个生成工序可以像真实影视流水线一样并行推进。
 
 这个模式很适合复杂工作台：App 负责聚合数据和行为，具体节点组件负责呈现和局部交互。
 
@@ -456,15 +466,17 @@ components/inspector/*
 utils/cinemaCanvas.ts
 ```
 
-第二是增强命令队列。现在节点 patch 有防抖和 flush，但如果要支持更强的离线或批量操作，可以引入显式 command queue、重试策略和冲突处理。
+第二是继续增强命令队列。当前已经具备显式串行队列、退避重试、revision 冲突重放和手动恢复；如果要支持跨重启恢复或离线编辑，下一步可以把待发送命令持久化到本地，并增加可检查的冲突解决界面。
 
 第三是把事件同步升级为推送式。当前轮询简单可靠，但任务状态很多时，SSE 或 WebSocket 会更实时，也能减少无效请求。
 
 第四是把节点图变成更明确的生成 DAG。现在 image-to-video 已经开始利用边关系传递 source image，未来可以让 prompt、shot、audio、agent 节点也成为可消费上下文，让整条生成流水线更自动化。
 
-第五是补充测试。Shared schema 和后端 usecase 已经适合做单元测试，前端则可以围绕节点编辑、命令提交、生成任务状态和错误展示做组件测试或 Playwright 测试。
+第五是继续补充测试。Shared schema、后端 usecase、前端 Command Queue、保存状态组件和节点并发操作状态机已有自动化覆盖；Playwright 也会同时挂起两个文本生成请求，验证其中一个失败时另一个仍保持 generating，且两条错误分别留在对应节点。下一步重点应放在跨重启恢复和更完整的节点编辑路径。
 
-素材库已增加 Testing Library + Axe 组件检查，以及 `e2e/asset-library.pw.ts` 的 Chromium 主路径检查。连接本地 Agent 和项目后，可设置 `CINEMA_E2E_URL`（需要时设置 `CINEMA_E2E_CHANNEL=chrome`）并执行 `pnpm --filter anybox-cinema-web test:e2e`；该用例覆盖 Rail/面板互斥、个人域、回收站、窄窗口、Escape 焦点恢复和真实颜色对比度。
+`pnpm --filter anybox-cinema-web test:e2e` 默认会先构建 Cinema Web，再启动一个绑定临时初始化项目的真实 Agent。可靠性用例会注入网络中断、外部 revision 更新和两个并发生成故障，验证自动/手动重试、同一命令 ID 的 409 换基重放、失败队列的离页保护，以及按节点隔离的 generating/error 状态。Windows 本地默认复用系统 Chrome，也可用 `CINEMA_E2E_CHANNEL` 覆盖浏览器通道。
+
+素材库另有 Testing Library + Axe 组件检查，以及 `e2e/asset-library.pw.ts` 的 Chromium 主路径检查。该用例涉及个人素材库，只有显式设置 `CINEMA_E2E_URL` 连接测试项目时才运行，覆盖 Rail/面板互斥、个人域、回收站、窄窗口、Escape 焦点恢复和真实颜色对比度；默认临时夹具会安全跳过它。
 
 ### 17.1 素材库运行时边界
 

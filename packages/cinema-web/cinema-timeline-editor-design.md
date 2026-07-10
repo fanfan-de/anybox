@@ -1,8 +1,12 @@
 # Cinema Timeline Editor Design
 
+> Status: planned。Create / Edit / Deliver 顶层壳层已经实现，但 Edit 与 Deliver 当前仍为 disabled；本文描述的 Timeline、渲染与导出能力尚未实现。
+
+> 本文保留为长期能力设计；Edit MVP 的实施顺序、范围收敛和发布门槛以 [cinema-edit-workbench-development-plan.md](./cinema-edit-workbench-development-plan.md) 为准。
+
 ## 目标
 
-在 CinemaWeb 画布右侧/左侧的垂直工具栏中增加一个剪辑入口。用户点击最下面的剪辑按钮后，从当前节点画布进入一个新的剪辑台界面。剪辑台用于把 Cinema 生成的视频、导入的视频、图片、音频和文本组织成时间线，完成基础剪切、拼接、预览和导出。
+在 CinemaWeb 顶层 Create / Edit / Deliver 工作台中启用 Edit。用户从 Create 节点创作画布切换到 Edit 剪辑台，把 Cinema 生成的视频、导入的视频、图片、音频和文本组织成时间线，完成基础剪切、拼接和预览；最终渲染与交付入口归入 Deliver。
 
 这个模块不替代现有节点画布。画布继续负责 AI 创作编排，剪辑台负责成片编辑，Agent 后端负责文件探测、缩略图、波形和最终渲染。
 
@@ -28,35 +32,36 @@
 
 ### 当前入口
 
-现有 [App.tsx](/C:/Projects/Anybox/packages/cinema-web/src/App.tsx) 里有 `CanvasPanelNavigation`，目前只控制 `files` 面板。剪辑入口应扩展为垂直工具栏中的 icon-only button，图标使用 `Scissors`，文案通过 `title` / `aria-label` / tooltip 暴露为 `剪辑`。
+现有 [CinemaWorkbenchShell.tsx](/C:/Projects/Anybox/packages/cinema-web/src/features/workbench/CinemaWorkbenchShell.tsx) 已展示 Create / Edit / Deliver 三个顶层 tab。Create 当前可用，Edit 与 Deliver 显示 `Soon` 并禁用。Timeline 第一阶段应直接启用 Edit，不再向 Canvas 垂直工具栏增加重复的剪辑入口。
 
 ### 点击行为
 
-点击剪辑按钮后：
+启用并点击 Edit 后：
 
 1. 如果项目没有 timeline：
-   - 创建默认 timeline。
-   - 打开剪辑台。
-   - 自动从当前画布中可用的最新视频资产创建一个初始 clip；如果没有视频资产，则显示空时间线。
+   - 打开 Edit 空状态。
+   - 用户显式点击“新建 Timeline”后创建默认 V1/A1。
+   - 不自动添加当前画布的最新视频，避免未经确认修改工程。
 2. 如果项目已有 timeline：
    - 打开最近编辑的 timeline。
    - 如果有多个 timeline，按钮可先打开剪辑台，再在左侧素材/工程区切换。
-3. 画布状态不销毁：
-   - `workspaceMode` 从 `"canvas"` 切换到 `"timeline"`;
-   - ReactFlow 画布保持内存状态，返回画布时不重新加载。
+3. Create 画布状态不销毁：
+   - `activeWorkspace` 从 `"create"` 切换到 `"edit"`;
+   - 切换前保存 ReactFlow 视口、选择和草稿；重型非活动工作台可以卸载。
+   - 返回 Create 时从 UI store 和 React Query cache 恢复，不重新初始化项目。
 4. URL 可同步：
-   - `?projectID=...&mode=timeline&timelineID=...`
+   - `?projectID=...&workspace=edit&timelineID=...`
    - 便于刷新后恢复剪辑台。
 
 ### 前端模式状态
 
 ```ts
-type CinemaWorkspaceMode = "canvas" | "timeline"
+type CinemaWorkspaceID = "create" | "edit" | "deliver"
 
 type CinemaNavigationPanel = "files" | "timeline-assets" | "history" | null
 
 type CinemaWorkspaceState = {
-  mode: CinemaWorkspaceMode
+  activeWorkspace: CinemaWorkspaceID
   activePanel: CinemaNavigationPanel
   activeTimelineID: string | null
   returnToCanvasViewport?: {
@@ -73,8 +78,11 @@ type CinemaWorkspaceState = {
 
 ```text
 cinema-shell
-  cinema-workspace
-    cinema-topbar
+  cinema-workbench-header
+    Create / Edit / Deliver
+  cinema-workbench-panel (Edit)
+    cinema-workspace
+      cinema-topbar
     cinema-editor
       cinema-editor-sidebar
         media bin
@@ -93,7 +101,8 @@ cinema-shell
 
 ### 主区域
 
-- 顶部：返回画布、timeline 名称、保存状态、导出按钮。
+- 全局顶部：Create / Edit / Deliver 工作台切换。
+- Edit 内部顶部：timeline 名称、保存状态，以及进入 Deliver 的交付动作。
 - 左侧：项目素材、生成结果、导出结果、timeline 列表。
 - 中间上方：预览舞台。
 - 中间下方：时间轴轨道。
@@ -582,14 +591,13 @@ type TimelinePlaybackState = {
 
 ## 点击功能列表
 
-### 垂直导航
+### 全局工作台导航
 
 | 控件 | 点击行为 |
 | --- | --- |
-| 剪辑按钮 | 进入剪辑台。没有 timeline 时创建默认 timeline；已有 timeline 时打开最近 timeline。 |
-| 剪辑按钮 hover | 显示 tooltip：`剪辑`。 |
-| 剪辑按钮 active | 保持选中态，表示当前处于剪辑台。 |
-| 返回画布按钮 | 从剪辑台返回节点画布，保留剪辑台内存状态并触发一次保存。 |
+| Edit tab | 启用后进入剪辑台。没有 timeline 时显示新建空状态；已有 timeline 时打开最近 timeline。 |
+| Create tab | 返回节点创作画布，保留 Edit 内存状态并先触发一次 timeline 保存。 |
+| Deliver tab | Timeline 和 render job 契约完成前保持 disabled；之后进入检查、渲染与交付工作台。 |
 
 ### 顶栏
 
@@ -598,9 +606,7 @@ type TimelinePlaybackState = {
 | Timeline 名称 | 进入重命名状态，回车保存，Esc 取消。 |
 | 保存状态 | 如果保存失败，点击展开错误详情和重试按钮。 |
 | 导入 | 打开文件选择器，支持视频、图片、音频。导入后加入素材库，不自动加入时间线。 |
-| 导出 | 打开导出弹窗。 |
-| 导出弹窗确认 | 创建 render job，关闭弹窗，显示导出进度。 |
-| 导出进度 | 点击打开 render job 详情。 |
+| 送往 Deliver | Deliver 实现前不显示；实现后切换工作台并传递当前 `timelineID`。 |
 
 ### 素材区
 
@@ -796,8 +802,8 @@ type CinemaTimelineCanvasNodeData = {
 
 ### Phase 1: 入口和静态剪辑台
 
-- 扩展垂直导航，加入剪辑按钮。
-- 增加 `workspaceMode`。
+- 已完成 Create / Edit / Deliver 顶层工作台壳层，当前只开放 Create。
+- 启用 Edit tab，并把 `activeWorkspace` 接入 URL 恢复。
 - 新建剪辑台 shell。
 - 加载/创建 timeline document。
 - 显示素材列表、预览区、空时间线。
@@ -844,8 +850,8 @@ type CinemaTimelineCanvasNodeData = {
 
 ## 推荐第一版验收标准
 
-- 点击剪辑按钮能进入剪辑台。
-- 没有 timeline 时自动创建一个 timeline。
+- 启用后的 Edit tab 能进入剪辑台，Create tab 能无重载返回节点画布。
+- 没有 timeline 时显示明确空状态，并可显式创建一个 timeline。
 - 能导入一个视频并加入时间线。
 - 能播放、暂停、拖动播放头。
 - 能裁剪头尾、分割、删除、拖动 clip。

@@ -462,6 +462,7 @@ async function rewriteJsonMetadataFile(
   filePath: string,
   root: string,
   migrationsByPath: Map<string, MigratedAsset>,
+  options: { bumpCanvasRevision?: boolean } = {},
 ) {
   const raw = await readFile(filePath, "utf8")
   let parsed: unknown
@@ -477,7 +478,23 @@ async function rewriteJsonMetadataFile(
   const idReplacements = new Map<string, string>()
   collectAssetIDReplacements(parsed, root, migrationsByPath, idReplacements)
   const rewritten = rewriteMetadataValue(parsed, root, migrationsByPath, idReplacements)
-  if (rewritten.rewrites > 0) await writeJsonAtomic(filePath, rewritten.value)
+  if (rewritten.rewrites > 0) {
+    const value = options.bumpCanvasRevision
+      && rewritten.value
+      && typeof rewritten.value === "object"
+      && !Array.isArray(rewritten.value)
+      ? {
+        ...rewritten.value,
+        revision: (
+          "revision" in rewritten.value
+          && typeof rewritten.value.revision === "number"
+          && Number.isInteger(rewritten.value.revision)
+          && rewritten.value.revision >= 0
+        ) ? rewritten.value.revision + 1 : 1,
+      }
+      : rewritten.value
+    await writeJsonAtomic(filePath, value)
+  }
   return rewritten.rewrites
 }
 
@@ -543,7 +560,7 @@ async function commitMetadataMigration(
   const canvasPath = path.join(cinemaRoot, CANVAS_FILE)
   const canvasInfo = await pathInfo(canvasPath)
   if (canvasInfo?.isFile() && !canvasInfo.isSymbolicLink()) {
-    await rewriteJsonMetadataFile(canvasPath, root, migrationsByPath)
+    await rewriteJsonMetadataFile(canvasPath, root, migrationsByPath, { bumpCanvasRevision: true })
   }
   for (const taskPath of await listTaskMetadataFiles(cinemaRoot)) {
     await rewriteJsonMetadataFile(taskPath, root, migrationsByPath)
@@ -744,6 +761,7 @@ export async function startCinemaAssetMigration(
     ? (await getCinemaAssetLibraryState({ type: "project", projectID })).revision
     : state.revision
 
+  using _canvasLock = await Lock.write(`cinema-canvas:${paths.cinemaRoot}`)
   try {
     if (journal.backupFiles.length === 0) {
       journal.backupFiles = await backupMetadata(paths.cinemaRoot, originalBackupRoot)
@@ -774,7 +792,6 @@ export async function startCinemaAssetMigration(
       await writeJournal(operationJournalPath, journal)
     }
 
-    using _canvasLock = await Lock.write(`cinema:${projectID}`)
     journal.backupFiles = await backupMetadata(paths.cinemaRoot, commitBackupRoot)
     journal.commitBackupReady = true
     await writeJournal(operationJournalPath, journal)
