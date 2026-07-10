@@ -202,7 +202,7 @@ export function CinemaRoutes() {
     if (asset.range) {
       headers["content-range"] = `bytes ${asset.range.start}-${asset.range.end}/${asset.range.total}`
     }
-    return new Response(asset.bytes, {
+    return new Response(asset.body, {
       status: asset.range ? 206 : 200,
       headers,
     })

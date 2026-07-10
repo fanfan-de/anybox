@@ -35,6 +35,452 @@ export const CinemaViewportSchema = z.object({
 })
 export type CinemaViewport = z.infer<typeof CinemaViewportSchema>
 
+export const CINEMA_ASSET_LIBRARY_SCHEMA_VERSION = 1 as const
+export const CINEMA_ASSET_MAX_FOLDER_DEPTH = 8
+export const CINEMA_ASSET_MAX_IMAGE_BYTES = 25 * 1024 * 1024
+export const CINEMA_ASSET_MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024
+export const CINEMA_ASSET_MAX_AUDIO_BYTES = 512 * 1024 * 1024
+
+const WINDOWS_RESERVED_NAME_PATTERN = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
+const INVALID_ASSET_NAME_CHARACTER_PATTERN = /[\u0000-\u001f<>:"/\\|?*]/
+
+function isValidCinemaAssetName(value: string) {
+  return (
+    !INVALID_ASSET_NAME_CHARACTER_PATTERN.test(value)
+    && !/[ .]$/.test(value)
+    && !WINDOWS_RESERVED_NAME_PATTERN.test(value)
+  )
+}
+
+function normalizedCinemaAssetNameSchema(maxLength: number, message: string) {
+  return z.string()
+    .min(1)
+    .transform((value) => value.normalize("NFC"))
+    .pipe(z.string().min(1).max(maxLength).refine(isValidCinemaAssetName, message))
+}
+
+export const CinemaAssetFolderNameSchema = normalizedCinemaAssetNameSchema(80, "Invalid asset folder name")
+export type CinemaAssetFolderName = z.infer<typeof CinemaAssetFolderNameSchema>
+
+export const CinemaAssetBaseNameSchema = normalizedCinemaAssetNameSchema(160, "Invalid asset name")
+export type CinemaAssetBaseName = z.infer<typeof CinemaAssetBaseNameSchema>
+
+export const CinemaAssetDisplayNameSchema = CinemaAssetBaseNameSchema
+export type CinemaAssetDisplayName = z.infer<typeof CinemaAssetDisplayNameSchema>
+
+export const CinemaAssetRelativePathSchema = z.string()
+  .max(2048)
+  .refine(
+    (value) => !value.startsWith("/") && !value.startsWith("\\") && !/^[A-Za-z]:/.test(value),
+    "Asset path must be relative",
+  )
+  .refine(
+    (value) => value.split(/[\\/]/).every((segment) => segment !== ".."),
+    "Asset path must not traverse outside the library",
+  )
+export type CinemaAssetRelativePath = z.infer<typeof CinemaAssetRelativePathSchema>
+
+export const CinemaAssetKindSchema = z.enum(["image", "video", "audio"])
+export type CinemaAssetKind = z.infer<typeof CinemaAssetKindSchema>
+
+export const CinemaAssetScopeSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("project"),
+    projectID: z.string().min(1),
+  }).strict(),
+  z.object({
+    type: z.literal("personal"),
+  }).strict(),
+])
+export type CinemaAssetScope = z.infer<typeof CinemaAssetScopeSchema>
+
+export const CinemaAssetLocatorSchema = z.object({
+  scope: CinemaAssetScopeSchema,
+  assetID: z.string().min(1),
+})
+export type CinemaAssetLocator = z.infer<typeof CinemaAssetLocatorSchema>
+
+export const CinemaAssetSnapshotSchema = z.object({
+  kind: CinemaAssetKindSchema,
+  displayName: CinemaAssetDisplayNameSchema,
+  mimeType: z.string().min(1),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  durationSeconds: z.number().nonnegative().optional(),
+})
+export type CinemaAssetSnapshot = z.infer<typeof CinemaAssetSnapshotSchema>
+
+export const CinemaAssetRefSchema = CinemaAssetLocatorSchema.extend({
+  contentRevision: z.number().int().nonnegative(),
+  snapshot: CinemaAssetSnapshotSchema,
+})
+export type CinemaAssetRef = z.infer<typeof CinemaAssetRefSchema>
+
+export const CinemaAssetStatusSchema = z.enum([
+  "uploading",
+  "processing",
+  "ready",
+  "failed",
+  "missing",
+  "trashed",
+])
+export type CinemaAssetStatus = z.infer<typeof CinemaAssetStatusSchema>
+
+export const CinemaAssetSourceSchema = z.enum([
+  "upload",
+  "generation",
+  "crop",
+  "render",
+  "migration",
+  "discovered",
+])
+export type CinemaAssetSource = z.infer<typeof CinemaAssetSourceSchema>
+
+export const CinemaAssetFolderStatusSchema = z.enum(["active", "trashed", "missing"])
+export type CinemaAssetFolderStatus = z.infer<typeof CinemaAssetFolderStatusSchema>
+
+export const CinemaAssetTrashLocationSchema = z.object({
+  operationID: z.string().min(1),
+  originalFolderID: z.string().min(1),
+  originalRelativePath: CinemaAssetRelativePathSchema,
+  trashedRelativePath: CinemaAssetRelativePathSchema.refine((value) => value.length > 0),
+  trashedAt: z.string().min(1),
+  previousStatus: z.enum(["ready", "failed", "missing"]).optional(),
+})
+export type CinemaAssetTrashLocation = z.infer<typeof CinemaAssetTrashLocationSchema>
+
+export const CinemaAssetFolderTrashLocationSchema = z.object({
+  operationID: z.string().min(1),
+  originalParentID: z.string().min(1),
+  originalRelativePath: CinemaAssetRelativePathSchema,
+  trashedRelativePath: CinemaAssetRelativePathSchema.refine((value) => value.length > 0),
+  trashedAt: z.string().min(1),
+})
+export type CinemaAssetFolderTrashLocation = z.infer<typeof CinemaAssetFolderTrashLocationSchema>
+
+export const CinemaAssetFolderSchema = z.object({
+  id: z.string().min(1),
+  parentID: z.string().min(1).nullable(),
+  name: CinemaAssetFolderNameSchema,
+  relativePath: CinemaAssetRelativePathSchema,
+  depth: z.number().int().min(0).max(CINEMA_ASSET_MAX_FOLDER_DEPTH),
+  system: z.boolean().default(false),
+  status: CinemaAssetFolderStatusSchema.default("active"),
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+  trash: CinemaAssetFolderTrashLocationSchema.optional(),
+})
+export type CinemaAssetFolder = z.infer<typeof CinemaAssetFolderSchema>
+
+export const CinemaAssetRecordSchema = z.object({
+  id: z.string().min(1),
+  folderID: z.string().min(1),
+  relativePath: CinemaAssetRelativePathSchema.refine((value) => value.length > 0, "Asset path is required"),
+  displayName: CinemaAssetDisplayNameSchema,
+  kind: CinemaAssetKindSchema,
+  source: CinemaAssetSourceSchema,
+  status: CinemaAssetStatusSchema,
+  mimeType: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative(),
+  checksum: z.string().min(1),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  durationSeconds: z.number().nonnegative().optional(),
+  fps: z.number().positive().optional(),
+  hasAudio: z.boolean().optional(),
+  thumbnailPath: CinemaAssetRelativePathSchema.refine((value) => value.length > 0).optional(),
+  previewPath: CinemaAssetRelativePathSchema.refine((value) => value.length > 0).optional(),
+  contentRevision: z.number().int().nonnegative(),
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+  failureReason: z.string().min(1).optional(),
+  trash: CinemaAssetTrashLocationSchema.optional(),
+})
+export type CinemaAssetRecord = z.infer<typeof CinemaAssetRecordSchema>
+
+export const CinemaAssetLibraryStatusSchema = z.enum(["ready", "recovery-required"])
+export type CinemaAssetLibraryStatus = z.infer<typeof CinemaAssetLibraryStatusSchema>
+
+export const CinemaAssetLibraryOperationSchema = z.object({
+  operationID: z.string().min(1),
+  type: z.string().min(1),
+  revision: z.number().int().nonnegative(),
+  completedAt: z.string().min(1),
+  result: z.unknown().optional(),
+})
+export type CinemaAssetLibraryOperation = z.infer<typeof CinemaAssetLibraryOperationSchema>
+
+export const CinemaAssetCatalogSchema = z.object({
+  schemaVersion: z.literal(CINEMA_ASSET_LIBRARY_SCHEMA_VERSION),
+  scope: CinemaAssetScopeSchema,
+  revision: z.number().int().nonnegative().default(0),
+  status: CinemaAssetLibraryStatusSchema.default("ready"),
+  rootFolderID: z.string().min(1),
+  folders: z.array(CinemaAssetFolderSchema).default([]),
+  assets: z.array(CinemaAssetRecordSchema).default([]),
+  completedOperationIDs: z.array(z.string().min(1)).default([]),
+  operations: z.record(z.string(), CinemaAssetLibraryOperationSchema).default({}),
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+})
+export type CinemaAssetCatalog = z.infer<typeof CinemaAssetCatalogSchema>
+
+export const CinemaAssetFolderEntrySchema = z.object({
+  entryType: z.literal("folder"),
+  folder: CinemaAssetFolderSchema,
+})
+export type CinemaAssetFolderEntry = z.infer<typeof CinemaAssetFolderEntrySchema>
+
+export const CinemaAssetEntrySchema = z.object({
+  entryType: z.literal("asset"),
+  asset: CinemaAssetRecordSchema,
+})
+export type CinemaAssetEntry = z.infer<typeof CinemaAssetEntrySchema>
+
+export const CinemaAssetLibraryEntrySchema = z.discriminatedUnion("entryType", [
+  CinemaAssetFolderEntrySchema,
+  CinemaAssetEntrySchema,
+])
+export type CinemaAssetLibraryEntry = z.infer<typeof CinemaAssetLibraryEntrySchema>
+
+export const CinemaAssetLibraryLimitsSchema = z.object({
+  maxFolderDepth: z.number().int().positive().default(CINEMA_ASSET_MAX_FOLDER_DEPTH),
+  maxImageBytes: z.number().int().positive().default(CINEMA_ASSET_MAX_IMAGE_BYTES),
+  maxVideoBytes: z.number().int().positive().default(CINEMA_ASSET_MAX_VIDEO_BYTES),
+  maxAudioBytes: z.number().int().positive().default(CINEMA_ASSET_MAX_AUDIO_BYTES),
+})
+export type CinemaAssetLibraryLimits = z.infer<typeof CinemaAssetLibraryLimitsSchema>
+
+export const CinemaAssetLibraryCountsSchema = z.object({
+  folders: z.number().int().nonnegative(),
+  assets: z.number().int().nonnegative(),
+  processing: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  missing: z.number().int().nonnegative(),
+  trashed: z.number().int().nonnegative(),
+})
+export type CinemaAssetLibraryCounts = z.infer<typeof CinemaAssetLibraryCountsSchema>
+
+export const CinemaAssetLibraryStateSchema = z.object({
+  scope: CinemaAssetScopeSchema,
+  revision: z.number().int().nonnegative(),
+  status: CinemaAssetLibraryStatusSchema,
+  readOnly: z.boolean(),
+  rootFolderID: z.string().min(1),
+  defaultFolderIDs: z.record(z.string(), z.string().min(1)),
+  limits: CinemaAssetLibraryLimitsSchema,
+  counts: CinemaAssetLibraryCountsSchema,
+  updatedAt: z.string().min(1),
+})
+export type CinemaAssetLibraryState = z.infer<typeof CinemaAssetLibraryStateSchema>
+
+export const CinemaAssetLibraryEntriesViewSchema = z.enum(["library", "trash"])
+export type CinemaAssetLibraryEntriesView = z.infer<typeof CinemaAssetLibraryEntriesViewSchema>
+
+export const CinemaAssetLibraryEntriesQuerySchema = z.object({
+  folderID: z.string().min(1).optional(),
+  q: z.string().max(500).optional(),
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  view: CinemaAssetLibraryEntriesViewSchema.default("library"),
+})
+export type CinemaAssetLibraryEntriesQuery = z.infer<typeof CinemaAssetLibraryEntriesQuerySchema>
+
+export const CinemaAssetLibraryEntriesResultSchema = z.object({
+  scope: CinemaAssetScopeSchema,
+  revision: z.number().int().nonnegative(),
+  view: CinemaAssetLibraryEntriesViewSchema.default("library"),
+  folder: CinemaAssetFolderSchema.nullable(),
+  breadcrumbs: z.array(CinemaAssetFolderSchema).default([]),
+  query: z.string().default(""),
+  entries: z.array(CinemaAssetLibraryEntrySchema),
+  nextCursor: z.string().min(1).nullable().default(null),
+  total: z.number().int().nonnegative().optional(),
+})
+export type CinemaAssetLibraryEntriesResult = z.infer<typeof CinemaAssetLibraryEntriesResultSchema>
+
+export const CinemaAssetEntryTargetSchema = z.discriminatedUnion("entryType", [
+  z.object({
+    entryType: z.literal("folder"),
+    folderID: z.string().min(1),
+  }),
+  z.object({
+    entryType: z.literal("asset"),
+    assetID: z.string().min(1),
+  }),
+])
+export type CinemaAssetEntryTarget = z.infer<typeof CinemaAssetEntryTargetSchema>
+
+export const CinemaAssetMutationBaseSchema = z.object({
+  operationID: z.string().min(1),
+  baseRevision: z.number().int().nonnegative(),
+})
+export type CinemaAssetMutationBase = z.infer<typeof CinemaAssetMutationBaseSchema>
+
+export const CreateCinemaAssetFolderBodySchema = CinemaAssetMutationBaseSchema.extend({
+  parentFolderID: z.string().min(1),
+  name: CinemaAssetFolderNameSchema,
+})
+export type CreateCinemaAssetFolderBody = z.infer<typeof CreateCinemaAssetFolderBodySchema>
+
+export const UpdateCinemaAssetFolderBodySchema = CinemaAssetMutationBaseSchema.extend({
+  name: CinemaAssetFolderNameSchema,
+})
+export type UpdateCinemaAssetFolderBody = z.infer<typeof UpdateCinemaAssetFolderBodySchema>
+
+export const MoveCinemaAssetEntriesBodySchema = CinemaAssetMutationBaseSchema.extend({
+  entries: z.array(CinemaAssetEntryTargetSchema).min(1),
+  destinationFolderID: z.string().min(1),
+}).refine(
+  (body) => !body.entries.some(
+    (entry) => entry.entryType === "folder" && entry.folderID === body.destinationFolderID,
+  ),
+  {
+    message: "A folder cannot be moved into itself",
+    path: ["destinationFolderID"],
+  },
+)
+export type MoveCinemaAssetEntriesBody = z.infer<typeof MoveCinemaAssetEntriesBodySchema>
+
+export const TrashCinemaAssetEntriesBodySchema = CinemaAssetMutationBaseSchema.extend({
+  entries: z.array(CinemaAssetEntryTargetSchema).min(1),
+})
+export type TrashCinemaAssetEntriesBody = z.infer<typeof TrashCinemaAssetEntriesBodySchema>
+
+export const RestoreCinemaAssetEntriesBodySchema = CinemaAssetMutationBaseSchema.extend({
+  entries: z.array(CinemaAssetEntryTargetSchema).min(1),
+})
+export type RestoreCinemaAssetEntriesBody = z.infer<typeof RestoreCinemaAssetEntriesBodySchema>
+
+export const PermanentlyDeleteCinemaAssetEntriesBodySchema = CinemaAssetMutationBaseSchema.extend({
+  entries: z.array(CinemaAssetEntryTargetSchema).min(1).optional(),
+  all: z.literal(true).optional(),
+}).refine(
+  (body) => body.all === true ? body.entries === undefined : body.entries !== undefined,
+  {
+    message: "Provide either entries or all: true, but not both",
+    path: ["entries"],
+  },
+)
+export type PermanentlyDeleteCinemaAssetEntriesBody = z.infer<typeof PermanentlyDeleteCinemaAssetEntriesBodySchema>
+
+export const UpdateCinemaAssetBodySchema = CinemaAssetMutationBaseSchema.extend({
+  baseName: CinemaAssetBaseNameSchema,
+})
+export type UpdateCinemaAssetBody = z.infer<typeof UpdateCinemaAssetBodySchema>
+
+export const RetryCinemaAssetProcessingBodySchema = CinemaAssetMutationBaseSchema
+export type RetryCinemaAssetProcessingBody = z.infer<typeof RetryCinemaAssetProcessingBodySchema>
+
+export const ReconcileCinemaAssetLibraryBodySchema = CinemaAssetMutationBaseSchema.extend({
+  full: z.boolean().default(true),
+})
+export type ReconcileCinemaAssetLibraryBody = z.infer<typeof ReconcileCinemaAssetLibraryBodySchema>
+
+export const CinemaAssetUploadRequestSchema = CinemaAssetMutationBaseSchema.extend({
+  folderID: z.string().min(1),
+  fileName: CinemaAssetDisplayNameSchema,
+})
+export type CinemaAssetUploadRequest = z.infer<typeof CinemaAssetUploadRequestSchema>
+
+export const CinemaAssetMutationResultSchema = z.object({
+  scope: CinemaAssetScopeSchema,
+  operationID: z.string().min(1),
+  revision: z.number().int().nonnegative(),
+  affected: z.array(CinemaAssetEntryTargetSchema).default([]),
+  warnings: z.array(z.string().min(1)).default([]),
+})
+export type CinemaAssetMutationResult = z.infer<typeof CinemaAssetMutationResultSchema>
+
+export const CinemaAssetFolderMutationResultSchema = CinemaAssetMutationResultSchema.extend({
+  folder: CinemaAssetFolderSchema,
+})
+export type CinemaAssetFolderMutationResult = z.infer<typeof CinemaAssetFolderMutationResultSchema>
+
+export const CinemaAssetRecordMutationResultSchema = CinemaAssetMutationResultSchema.extend({
+  asset: CinemaAssetRecordSchema,
+})
+export type CinemaAssetRecordMutationResult = z.infer<typeof CinemaAssetRecordMutationResultSchema>
+
+export const CinemaAssetUploadErrorSchema = z.object({
+  code: z.string().min(1),
+  message: z.string().min(1),
+})
+export type CinemaAssetUploadError = z.infer<typeof CinemaAssetUploadErrorSchema>
+
+export const CinemaAssetUploadItemResultSchema = z.discriminatedUnion("success", [
+  z.object({
+    fileName: CinemaAssetDisplayNameSchema,
+    success: z.literal(true),
+    asset: CinemaAssetRecordSchema,
+  }),
+  z.object({
+    fileName: CinemaAssetDisplayNameSchema,
+    success: z.literal(false),
+    error: CinemaAssetUploadErrorSchema,
+  }),
+])
+export type CinemaAssetUploadItemResult = z.infer<typeof CinemaAssetUploadItemResultSchema>
+
+export const CinemaAssetUploadResultSchema = z.object({
+  scope: CinemaAssetScopeSchema,
+  operationID: z.string().min(1),
+  revision: z.number().int().nonnegative(),
+  items: z.array(CinemaAssetUploadItemResultSchema).min(1),
+})
+export type CinemaAssetUploadResult = z.infer<typeof CinemaAssetUploadResultSchema>
+
+export const CinemaAssetMigrationPhaseSchema = z.enum([
+  "not-required",
+  "required",
+  "ready",
+  "running",
+  "rolling-back",
+  "completed",
+  "failed",
+  "recovery-required",
+])
+export type CinemaAssetMigrationPhase = z.infer<typeof CinemaAssetMigrationPhaseSchema>
+
+export const CinemaAssetMigrationCandidateSchema = z.object({
+  id: z.string().min(1),
+  sourcePath: CinemaAssetRelativePathSchema.refine((value) => value.length > 0),
+  destinationFolderID: z.string().min(1),
+  kind: CinemaAssetKindSchema,
+  sizeBytes: z.number().int().nonnegative(),
+  selected: z.boolean().default(true),
+  issue: z.string().min(1).optional(),
+})
+export type CinemaAssetMigrationCandidate = z.infer<typeof CinemaAssetMigrationCandidateSchema>
+
+export const CinemaAssetMigrationStatusResultSchema = z.object({
+  projectID: z.string().min(1),
+  phase: CinemaAssetMigrationPhaseSchema,
+  readOnly: z.boolean(),
+  candidateCount: z.number().int().nonnegative(),
+  totalBytes: z.number().int().nonnegative(),
+  unrecognizedCount: z.number().int().nonnegative(),
+  candidates: z.array(CinemaAssetMigrationCandidateSchema).default([]),
+  error: z.string().min(1).optional(),
+})
+export type CinemaAssetMigrationStatusResult = z.infer<typeof CinemaAssetMigrationStatusResultSchema>
+
+export const StartCinemaAssetMigrationBodySchema = CinemaAssetMutationBaseSchema.extend({
+  candidateIDs: z.array(z.string().min(1)).default([]),
+})
+export type StartCinemaAssetMigrationBody = z.infer<typeof StartCinemaAssetMigrationBodySchema>
+
+export const CinemaAssetMigrationResultSchema = z.object({
+  projectID: z.string().min(1),
+  operationID: z.string().min(1),
+  phase: CinemaAssetMigrationPhaseSchema,
+  revision: z.number().int().nonnegative(),
+  migratedAssetIDs: z.array(z.string().min(1)).default([]),
+  warnings: z.array(z.string().min(1)).default([]),
+  error: z.string().min(1).optional(),
+})
+export type CinemaAssetMigrationResult = z.infer<typeof CinemaAssetMigrationResultSchema>
+
 export const CinemaCanvasNodeSchema = z.object({
   id: z.string().min(1),
   type: CinemaNodeTypeSchema,
@@ -58,6 +504,9 @@ export type CinemaCanvasEdge = z.infer<typeof CinemaCanvasEdgeSchema>
 
 export const CinemaCanvasDocumentSchema = z.object({
   schemaVersion: z.literal(1),
+  // The outer optional preserves source compatibility for callers constructing legacy canvases,
+  // while Zod 4 still applies the nested default when parsing an omitted revision.
+  revision: z.number().int().nonnegative().default(0).optional(),
   canvasType: z.literal("node-canvas"),
   viewport: CinemaViewportSchema,
   nodes: z.array(CinemaCanvasNodeSchema),
@@ -84,6 +533,21 @@ export const CinemaCommandSchema = z.discriminatedUnion("type", [
   CinemaCommandBaseSchema.extend({
     type: z.literal("create-node"),
     node: CinemaCanvasNodeSchema,
+  }),
+  CinemaCommandBaseSchema.extend({
+    id: z.string().min(1),
+    type: z.literal("create-node-from-asset"),
+    baseRevision: z.number().int().nonnegative(),
+    nodeID: z.string().min(1),
+    assetRef: CinemaAssetLocatorSchema,
+    position: CinemaPositionSchema,
+  }),
+  CinemaCommandBaseSchema.extend({
+    id: z.string().min(1),
+    type: z.literal("relink-node-asset"),
+    baseRevision: z.number().int().nonnegative(),
+    nodeID: z.string().min(1),
+    assetRef: CinemaAssetLocatorSchema,
   }),
   CinemaCommandBaseSchema.extend({
     type: z.literal("update-node"),
@@ -343,6 +807,7 @@ export const CinemaGeneratedAssetSchema = z.object({
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
   url: z.string().url().optional(),
+  assetRef: CinemaAssetRefSchema.optional(),
 })
 export type CinemaGeneratedAsset = z.infer<typeof CinemaGeneratedAssetSchema>
 
@@ -671,6 +1136,10 @@ export const CinemaProjectSummarySchema = z.object({
   initialized: z.boolean(),
   metadataPath: z.string().optional(),
   project: z.record(z.string(), z.unknown()).optional(),
+  capabilities: z.object({
+    assetLibrary: z.boolean(),
+    personalAssetLibrary: z.boolean(),
+  }).optional(),
 })
 export type CinemaProjectSummary = z.infer<typeof CinemaProjectSummarySchema>
 

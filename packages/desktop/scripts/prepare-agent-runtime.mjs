@@ -4,6 +4,7 @@ import fsp from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { prepareWorkspaceDependencies } from "./prepare-workspace-dependencies.mjs"
+import { prepareMediaTools } from "./prepare-media-tools.mjs"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const desktopDir = path.resolve(scriptDir, "..")
@@ -36,6 +37,29 @@ async function pathExists(target) {
   } catch {
     return false
   }
+}
+
+async function resetRuntimeDirectory({ reuseActiveNativeHost }) {
+  if (!reuseActiveNativeHost) {
+    await fsp.rm(runtimeDir, { recursive: true, force: true })
+    return
+  }
+
+  await fsp.mkdir(runtimeDir, { recursive: true })
+  const nativeHostExecutable = path.join(runtimeDir, "native-host", nativeHostExecutableName)
+  if (!(await pathExists(nativeHostExecutable))) {
+    throw new Error(
+      "ANYBOX_REUSE_ACTIVE_NATIVE_HOST requires an existing packaged native host executable.",
+    )
+  }
+  for (const entry of await fsp.readdir(runtimeDir, { withFileTypes: true })) {
+    if (entry.name === "native-host") continue
+    await fsp.rm(path.join(runtimeDir, entry.name), { recursive: true, force: true })
+  }
+  console.warn(
+    "[desktop][build] reusing the active browser native host; close Chrome and rerun without " +
+    "ANYBOX_REUSE_ACTIVE_NATIVE_HOST before publishing a release.",
+  )
 }
 
 function run(command, args, options = {}) {
@@ -166,13 +190,14 @@ async function copyCinemaWebDist() {
   await fsp.cp(cinemaWebDistDir, targetDir, { recursive: true })
 }
 
-async function buildBrowserNativeHost(bunBinary) {
+async function buildBrowserNativeHost(bunBinary, { reuseActiveNativeHost = false } = {}) {
   const entrypoint = path.join(browserNativeHostDir, "src", "main.ts")
   if (!(await pathExists(entrypoint))) {
     throw new Error(`Missing Browser Native Messaging Host entrypoint at ${entrypoint}`)
   }
 
   const targetDir = path.join(runtimeDir, "native-host")
+  if (reuseActiveNativeHost) return
   await fsp.mkdir(targetDir, { recursive: true })
   run(
     bunBinary,
@@ -207,8 +232,9 @@ async function writeConnectorBuildConfig() {
 async function main() {
   const bunBinary = resolveBunBinary()
   const runtimeNodeModulesDir = path.join(runtimeDir, "node_modules")
+  const reuseActiveNativeHost = readEnv("ANYBOX_REUSE_ACTIVE_NATIVE_HOST") === "1"
 
-  await fsp.rm(runtimeDir, { recursive: true, force: true })
+  await resetRuntimeDirectory({ reuseActiveNativeHost })
   await fsp.mkdir(runtimeNodeModulesDir, { recursive: true })
 
   console.log(`[desktop][build] bundling agent server with ${bunBinary}`)
@@ -233,9 +259,13 @@ async function main() {
   await fixNodePtySpawnHelperPermissions(runtimeNodeModulesDir)
   await copyCinemaWebDist()
   await copyBundledConnectors()
-  await buildBrowserNativeHost(bunBinary)
+  await buildBrowserNativeHost(bunBinary, { reuseActiveNativeHost })
   await writeConnectorBuildConfig()
-  await prepareWorkspaceDependencies({ bunBinary })
+  await prepareWorkspaceDependencies({
+    bunBinary,
+    dependenciesDir: path.join(runtimeDir, "dependencies"),
+  })
+  await prepareMediaTools({ runtimeDir })
 
   console.log(`[desktop][build] prepared managed agent runtime at ${runtimeDir}`)
 }

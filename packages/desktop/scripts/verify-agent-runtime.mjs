@@ -13,6 +13,15 @@ const nativeHostExecutableName = process.platform === "win32"
 const pythonExecutable = process.platform === "win32"
   ? path.join(dependenciesDir, "python", "python.exe")
   : path.join(dependenciesDir, "python", "bin", "python3")
+const bundledMediaTools = process.platform === "win32" && process.arch === "x64"
+  ? [
+      path.join(runtimeDir, "media-tools", "ffmpeg.exe"),
+      path.join(runtimeDir, "media-tools", "ffprobe.exe"),
+      path.join(runtimeDir, "media-tools", "LICENSE.txt"),
+      path.join(runtimeDir, "media-tools", "THIRD-PARTY-NOTICES.txt"),
+      path.join(runtimeDir, "media-tools", "manifest.json"),
+    ]
+  : []
 
 const requiredFiles = [
   path.join(runtimeDir, "agent-server.js"),
@@ -27,6 +36,7 @@ const requiredFiles = [
   path.join(runtimeDir, "node_modules", "node-pty", "package.json"),
   path.join(dependenciesDir, "manifest.json"),
   pythonExecutable,
+  ...bundledMediaTools,
 ]
 
 const missing = requiredFiles.filter((filePath) => !fs.existsSync(filePath))

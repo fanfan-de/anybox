@@ -163,6 +163,36 @@ describe("managed agent workspace dependencies", () => {
     )
   })
 
+  it("passes verified bundled media tools to the managed agent without overriding explicit paths", async () => {
+    const runtimeDir = await createTempDirectory("anybox-managed-agent-media-")
+    const mediaToolsDir = path.join(runtimeDir, "media-tools")
+    const ffmpeg = path.join(mediaToolsDir, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg")
+    const ffprobe = path.join(mediaToolsDir, process.platform === "win32" ? "ffprobe.exe" : "ffprobe")
+    await mkdir(mediaToolsDir, { recursive: true })
+    await writeFile(ffmpeg, "")
+    await writeFile(ffprobe, "")
+
+    const spec = {
+      label: "media runtime",
+      command: "bun",
+      args: ["agent-server.js"],
+      runtimeDir,
+      sourceRuntime: false,
+    }
+    const bundledEnv = managedAgentInternals.buildManagedAgentStartEnv(spec, 4096)
+    expect(bundledEnv[managedAgentInternals.env.ffmpegBinary]).toBe(ffmpeg)
+    expect(bundledEnv[managedAgentInternals.env.ffprobeBinary]).toBe(ffprobe)
+
+    await withProcessEnv({
+      ANYBOX_FFMPEG_BINARY: "C:/custom/ffmpeg.exe",
+      ANYBOX_FFPROBE_BINARY: "C:/custom/ffprobe.exe",
+    }, () => {
+      const explicitEnv = managedAgentInternals.buildManagedAgentStartEnv(spec, 4096)
+      expect(explicitEnv[managedAgentInternals.env.ffmpegBinary]).toBe("C:/custom/ffmpeg.exe")
+      expect(explicitEnv[managedAgentInternals.env.ffprobeBinary]).toBe("C:/custom/ffprobe.exe")
+    })
+  })
+
   it("does not pass plugin install directory overrides to the managed agent", async () => {
     const runtimeDir = await createTempDirectory("anybox-managed-agent-runtime-")
     const agentDataDir = path.join(runtimeDir, "agent-data")

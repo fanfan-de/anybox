@@ -13,6 +13,7 @@ import { RemoteRoutes } from "#server/routes/remote.ts"
 import { WorkspaceFilesRoutes } from "#server/routes/workspace-files.ts"
 import { BrowserExtensionRoutes } from "#server/routes/browser-extension.ts"
 import { CinemaRoutes } from "#server/routes/cinema.ts"
+import { CinemaAssetLibraryRoutes } from "#server/routes/cinema-assets.ts"
 import { CinemaWebRoutes } from "#server/routes/cinema-web.ts"
 import { DebugRoutes } from "#server/routes/debug.ts"
 import { SettingsRoutes } from "#server/routes/settings.ts"
@@ -43,11 +44,17 @@ function getRequestId(c: Context<AppEnv>) {
   return c.get("requestId") ?? "unknown"
 }
 
-function jsonError(c: Context<AppEnv>, status: ContentfulStatusCode, code: string, message: string) {
+function jsonError(
+  c: Context<AppEnv>,
+  status: ContentfulStatusCode,
+  code: string,
+  message: string,
+  data?: unknown,
+) {
   return c.json(
     {
       success: false,
-      error: { code, message },
+      error: { code, message, ...(data === undefined ? {} : { data }) },
       requestId: getRequestId(c),
     },
     status,
@@ -136,6 +143,7 @@ export function createServerRuntime(options: Pick<ServerOptions, "corsWhitelist"
   app.route("/api/automation-runs", AutomationRunRoutes())
   app.route("/api/calendar", CalendarRoutes())
   app.route("/api/cinema", CinemaRoutes())
+  app.route("/api/cinema", CinemaAssetLibraryRoutes())
   app.route("/api/projects", ProjectRoutes({ ptyRegistry }))
   app.route("/api/sessions", SessionRoutes({ ptyRegistry }))
   app.route("/api/storage", StorageRoutes())
@@ -144,7 +152,7 @@ export function createServerRuntime(options: Pick<ServerOptions, "corsWhitelist"
   app.notFound((c) => jsonError(c, 404, "NOT_FOUND", "Route not found"))
 
   app.onError((error, c) => {
-    if (isApiError(error)) return jsonError(c, error.status, error.code, error.message)
+    if (isApiError(error)) return jsonError(c, error.status, error.code, error.message, error.data)
     if (isPtyRuntimeError(error)) {
       const status = error.code === "PTY_RUNTIME_UNAVAILABLE" ? 503 : 500
       return jsonError(c, status, error.code, error.message)

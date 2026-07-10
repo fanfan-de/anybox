@@ -34,7 +34,7 @@ CinemaWeb 不是一个普通的表单式 AI 生成页面，它更像是一个面
 
 1. `@xyflow/react` 负责节点画布、连线、视口、缩放、拖拽和 MiniMap。
 2. `@tanstack/react-query` 负责服务端数据查询和变更请求。
-3. `zustand` 管理轻量 UI 状态，比如当前选中的节点。
+3. `zustand` 管理轻量 UI 状态，比如当前打开编辑器或 Inspector 的活动节点。
 4. 自定义 React 组件和 CSS 负责 Cinema 风格的节点编辑器、生成器、检查面板和工具栏。
 
 第三层是 `@anybox/shared/cinema`。这是整个系统的类型契约层。它使用 Zod 定义画布、节点、边、命令、事件、模型、Provider、生成任务和资产等 Schema，同时导出 TypeScript 类型。前端和后端都依赖这一层，因此它不是普通的类型文件，而是运行时校验和编译期类型的共同边界。
@@ -90,14 +90,17 @@ agentBaseURL
 ```text
 nodes
 edges
-selectedNodeID
+nodes[].selected
+activeNodeID
 saveState
 contextMenu
 generation errors
 auto refresh state
 ```
 
-其中 `nodes` 和 `edges` 是 React Flow 需要的运行态数据；而服务端持久化的格式是 `CinemaCanvasDocument`。因此项目里有两组转换函数：
+其中 `nodes` 和 `edges` 是 React Flow 需要的运行态数据；`nodes[].selected` 是唯一的多选集合，`activeNodeID` 则只表示当前允许打开编辑器或 Inspector 的活动节点。普通点击选择一个节点，Ctrl/Cmd 点击追加或取消节点，空白区拖动执行框选；从组选框或任一已选节点拖动都会保持整组移动。多选时所有节点保留选中描边，但不会同时挂载多套编辑浮层；右键组选区或任一已选节点会打开组菜单，可一次删除打开菜单时捕获的完整节点集合。
+
+服务端持久化的格式是 `CinemaCanvasDocument`，不包含这些临时选择状态。因此项目里有两组转换函数：
 
 ```text
 toFlowNodes(canvas)
@@ -412,7 +415,7 @@ cinema-shell
   Inspector
 ```
 
-左侧是画布，右侧是 Inspector。画布负责空间组织和节点交互；Inspector 负责选中节点后的细节编辑、任务查看和操作。
+左侧是画布，右侧是 Inspector。画布负责空间组织和节点交互；Inspector 负责活动节点的细节编辑、任务查看和操作。多选集合与活动节点分离，批量移动、删除不会迫使多个节点同时进入编辑态。
 
 样式集中在 `src/styles.css`，使用 CSS 变量定义颜色、边框、表面色和文本色。整体视觉是深色工作台风格：低亮度背景、节点卡片、细边框、强调色和紧凑控件。这种视觉选择和影视创作工具比较匹配，因为它把注意力留给画面资产和创作内容。
 
@@ -430,7 +433,7 @@ cinema-shell
 
 这个项目有几个很明显的取舍。
 
-第一，前端没有引入大型全局状态库，而是 React state + React Query + Zustand。原因是大部分数据的真相源在 Agent 后端和项目文件中，前端全局状态主要是 UI 选择态和临时交互态。过重的状态管理反而会让同步边界不清晰。
+第一，前端没有引入大型全局状态库，而是 React state + React Query + Zustand。原因是大部分数据的真相源在 Agent 后端和项目文件中；React Flow 节点状态承载临时多选集合，Zustand 只保留活动节点这类轻量 UI 状态。过重的状态管理反而会让同步边界不清晰。
 
 第二，画布变更使用命令接口，而不是全量覆盖。命令模型比全量保存更适合事件审计、协作和自动化。
 
@@ -460,6 +463,18 @@ utils/cinemaCanvas.ts
 第四是把节点图变成更明确的生成 DAG。现在 image-to-video 已经开始利用边关系传递 source image，未来可以让 prompt、shot、audio、agent 节点也成为可消费上下文，让整条生成流水线更自动化。
 
 第五是补充测试。Shared schema 和后端 usecase 已经适合做单元测试，前端则可以围绕节点编辑、命令提交、生成任务状态和错误展示做组件测试或 Playwright 测试。
+
+素材库已增加 Testing Library + Axe 组件检查，以及 `e2e/asset-library.pw.ts` 的 Chromium 主路径检查。连接本地 Agent 和项目后，可设置 `CINEMA_E2E_URL`（需要时设置 `CINEMA_E2E_CHANNEL=chrome`）并执行 `pnpm --filter anybox-cinema-web test:e2e`；该用例覆盖 Rail/面板互斥、个人域、回收站、窄窗口、Escape 焦点恢复和真实颜色对比度。
+
+### 17.1 素材库运行时边界
+
+素材库不再把文件路径当作 Canvas 身份。项目库和个人库分别维护 JSON Catalog，Catalog 保存稳定 `assetID`、媒体 metadata、`contentRevision` 和当前物理相对路径；Canvas 只保存 canonical `assetRef`。因此文件改名、移动、回收和恢复时不需要批量改写节点。
+
+项目素材位于 `assets/library/`，Catalog、备份和 operation journal 位于 `.anybox-cinema/`；个人素材位于 Agent data 下的 `cinema-library/`。所有 mutation 带 `operationID + baseRevision`，Catalog 写入使用作用域锁、临时文件、fsync、rename 和最近两份备份。Canvas 的 `create-node-from-asset` 也在项目写锁中校验 revision 与 Ready 状态，由服务端决定节点 kind，前端不能伪造物理路径。
+
+上传按单文件 multipart 流入 `.staging`，同时计算大小和 SHA-256；媒体内容由签名与 ffprobe 校验。内容和 Range 响应使用带 backpressure 的文件流，避免大视频进入 JavaScript 内存。FFmpeg/ffprobe 作为固定 SHA 的 Windows x64 LGPL 运行时随桌面端打包，子进程只接收参数数组，限制输出、超时和全局并发，并为 Chromium 不兼容的媒体生成预览代理。
+
+前端的素材库是独立 Rail 面板，内部包含项目/个人域、物理文件夹、全域搜索、上传队列、多选操作和三媒体详情。拖入 Canvas 使用私有 MIME payload，只传 `{scope, assetID}`；服务端返回完整 Canvas 后才出现节点，所以命令失败不会留下幽灵节点。
 
 ## 18. 结尾：这个架构的核心价值
 

@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest"
 import {
+  type CinemaCanvasDocument,
+  CinemaAssetBaseNameSchema,
+  CinemaAssetCatalogSchema,
+  CinemaAssetFolderSchema,
+  CinemaAssetFolderMutationResultSchema,
+  CinemaAssetLibraryEntriesQuerySchema,
+  CinemaAssetLibraryEntriesResultSchema,
+  CinemaAssetLibraryStateSchema,
+  CinemaAssetMigrationResultSchema,
+  CinemaAssetMigrationStatusResultSchema,
+  CinemaAssetRecordSchema,
+  CinemaAssetRecordMutationResultSchema,
+  CinemaAssetRefSchema,
+  CinemaAssetScopeSchema,
+  CinemaAssetUploadResultSchema,
   CinemaImageGenerationResultSchema,
   CinemaImageNodeAssetSchema,
   CinemaImageNodeDataSchema,
@@ -23,9 +38,367 @@ import {
   CreateCinemaImageGenerationBodySchema,
   CreateCinemaImportedImageAssetBodySchema,
   CreateCinemaTextGenerationBodySchema,
+  CreateCinemaAssetFolderBodySchema,
+  MoveCinemaAssetEntriesBodySchema,
+  PermanentlyDeleteCinemaAssetEntriesBodySchema,
+  ReconcileCinemaAssetLibraryBodySchema,
+  RestoreCinemaAssetEntriesBodySchema,
+  StartCinemaAssetMigrationBodySchema,
+  TrashCinemaAssetEntriesBodySchema,
+  UpdateCinemaAssetBodySchema,
 } from "./cinema"
 
 describe("cinema schemas", () => {
+  const projectAssetScope = {
+    type: "project" as const,
+    projectID: "project-1",
+  }
+
+  const rootAssetFolder = {
+    id: "folder-root",
+    parentID: null,
+    name: "素材库",
+    relativePath: "",
+    depth: 0,
+    system: true,
+    status: "active" as const,
+    createdAt: "2026-07-10T00:00:00.000Z",
+    updatedAt: "2026-07-10T00:00:00.000Z",
+  }
+
+  const inboxAssetFolder = {
+    id: "folder-inbox",
+    parentID: "folder-root",
+    name: "收件箱",
+    relativePath: "收件箱",
+    depth: 1,
+    system: true,
+    status: "active" as const,
+    createdAt: "2026-07-10T00:00:00.000Z",
+    updatedAt: "2026-07-10T00:00:00.000Z",
+  }
+
+  const imageAsset = {
+    id: "asset-image-1",
+    folderID: "folder-inbox",
+    relativePath: "收件箱/reference.png",
+    displayName: "reference.png",
+    kind: "image" as const,
+    source: "upload" as const,
+    status: "ready" as const,
+    mimeType: "image/png",
+    sizeBytes: 128,
+    checksum: "sha256:abc123",
+    width: 1920,
+    height: 1080,
+    thumbnailPath: ".derived/asset-image-1/0/thumbnail.webp",
+    contentRevision: 0,
+    createdAt: "2026-07-10T00:00:00.000Z",
+    updatedAt: "2026-07-10T00:00:00.000Z",
+  }
+
+  it("defaults legacy canvas revisions while accepting explicit revisions", () => {
+    const legacyTypedCanvas: CinemaCanvasDocument = {
+      schemaVersion: 1,
+      canvasType: "node-canvas",
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [],
+      edges: [],
+      nodeTypes: [],
+    }
+    const legacyCanvas = CinemaCanvasDocumentSchema.parse(legacyTypedCanvas)
+
+    expect(legacyCanvas.revision).toBe(0)
+    expect(legacyCanvas.edges).toEqual([])
+    expect(legacyCanvas.nodeTypes).toEqual([])
+
+    const currentCanvas = CinemaCanvasDocumentSchema.parse({
+      ...legacyCanvas,
+      revision: 7,
+    })
+    expect(currentCanvas.revision).toBe(7)
+    expect(() => CinemaCanvasDocumentSchema.parse({ ...legacyCanvas, revision: -1 })).toThrow()
+  })
+
+  it("parses project and personal asset references", () => {
+    expect(CinemaAssetScopeSchema.parse(projectAssetScope)).toEqual(projectAssetScope)
+    expect(CinemaAssetScopeSchema.parse({ type: "personal" })).toEqual({ type: "personal" })
+    expect(() => CinemaAssetScopeSchema.parse({ type: "team", teamID: "team-1" })).toThrow()
+    expect(() => CinemaAssetScopeSchema.parse({ type: "personal", projectID: "project-1" })).toThrow()
+
+    const assetRef = CinemaAssetRefSchema.parse({
+      scope: projectAssetScope,
+      assetID: imageAsset.id,
+      contentRevision: 0,
+      snapshot: {
+        kind: "image",
+        displayName: imageAsset.displayName,
+        mimeType: imageAsset.mimeType,
+        width: imageAsset.width,
+        height: imageAsset.height,
+      },
+    })
+
+    expect(assetRef.snapshot.kind).toBe("image")
+    expect(assetRef.scope).toEqual(projectAssetScope)
+    expect(() => CinemaAssetRefSchema.parse({ ...assetRef, snapshot: { ...assetRef.snapshot, kind: "file" } })).toThrow()
+  })
+
+  it("parses asset folders, records, catalogs, list results, and state", () => {
+    const folder = CinemaAssetFolderSchema.parse(inboxAssetFolder)
+    const asset = CinemaAssetRecordSchema.parse(imageAsset)
+    expect(folder.depth).toBe(1)
+    expect(asset.kind).toBe("image")
+
+    const catalog = CinemaAssetCatalogSchema.parse({
+      schemaVersion: 1,
+      scope: projectAssetScope,
+      rootFolderID: rootAssetFolder.id,
+      folders: [rootAssetFolder, inboxAssetFolder],
+      assets: [imageAsset],
+      createdAt: "2026-07-10T00:00:00.000Z",
+      updatedAt: "2026-07-10T00:00:00.000Z",
+    })
+    expect(catalog.revision).toBe(0)
+    expect(catalog.status).toBe("ready")
+    expect(catalog.completedOperationIDs).toEqual([])
+    expect(catalog.operations).toEqual({})
+
+    const listing = CinemaAssetLibraryEntriesResultSchema.parse({
+      scope: projectAssetScope,
+      revision: 2,
+      folder: inboxAssetFolder,
+      breadcrumbs: [rootAssetFolder, inboxAssetFolder],
+      entries: [
+        { entryType: "folder", folder: { ...inboxAssetFolder, id: "folder-child", name: "角色", depth: 2 } },
+        { entryType: "asset", asset: imageAsset },
+      ],
+    })
+    expect(listing.query).toBe("")
+    expect(listing.view).toBe("library")
+    expect(listing.nextCursor).toBeNull()
+    expect(listing.entries[1]?.entryType).toBe("asset")
+
+    const trashQuery = CinemaAssetLibraryEntriesQuerySchema.parse({ view: "trash", limit: "25" })
+    expect(trashQuery).toEqual({ view: "trash", limit: 25 })
+    expect(() => CinemaAssetLibraryEntriesQuerySchema.parse({ view: "archive" })).toThrow()
+
+    const trashListing = CinemaAssetLibraryEntriesResultSchema.parse({
+      scope: projectAssetScope,
+      revision: 3,
+      view: "trash",
+      folder: null,
+      breadcrumbs: [],
+      entries: [{
+        entryType: "asset",
+        asset: {
+          ...imageAsset,
+          status: "trashed",
+          trash: {
+            operationID: "trash-image",
+            originalFolderID: inboxAssetFolder.id,
+            originalRelativePath: imageAsset.relativePath,
+            trashedRelativePath: `.trash/trash-image/${imageAsset.id}-frame.png`,
+            trashedAt: "2026-07-10T00:01:00.000Z",
+            previousStatus: "failed",
+          },
+        },
+      }],
+    })
+    expect(trashListing.view).toBe("trash")
+    expect(trashListing.entries[0]?.entryType === "asset" && trashListing.entries[0].asset.trash?.previousStatus)
+      .toBe("failed")
+
+    const state = CinemaAssetLibraryStateSchema.parse({
+      scope: projectAssetScope,
+      revision: 2,
+      status: "ready",
+      readOnly: false,
+      rootFolderID: rootAssetFolder.id,
+      defaultFolderIDs: {
+        inbox: inboxAssetFolder.id,
+      },
+      limits: {},
+      counts: {
+        folders: 2,
+        assets: 1,
+        processing: 0,
+        failed: 0,
+        missing: 0,
+        trashed: 0,
+      },
+      updatedAt: "2026-07-10T00:00:00.000Z",
+    })
+    expect(state.limits.maxFolderDepth).toBe(8)
+    expect(state.limits.maxVideoBytes).toBe(2 * 1024 * 1024 * 1024)
+  })
+
+  it("rejects invalid asset names, unsafe paths, and folders beyond depth eight", () => {
+    expect(() => CinemaAssetFolderSchema.parse({ ...inboxAssetFolder, name: "CON" })).toThrow()
+    expect(() => CinemaAssetFolderSchema.parse({ ...inboxAssetFolder, name: "bad/name" })).toThrow()
+    expect(() => CinemaAssetFolderSchema.parse({ ...inboxAssetFolder, name: "trailing. " })).toThrow()
+    expect(CinemaAssetFolderSchema.parse({ ...inboxAssetFolder, name: "e\u0301" }).name).toBe("é")
+    expect(CinemaAssetBaseNameSchema.parse("re\u0301fe\u0301rence")).toBe("référence")
+    expect(() => CinemaAssetFolderSchema.parse({ ...inboxAssetFolder, depth: 9 })).toThrow()
+    expect(() => CinemaAssetRecordSchema.parse({ ...imageAsset, relativePath: "../outside.png" })).toThrow()
+    expect(() => CinemaAssetRecordSchema.parse({ ...imageAsset, relativePath: "C:/outside.png" })).toThrow()
+  })
+
+  it("parses asset mutation bodies and rejects empty or self-cyclic moves", () => {
+    const createFolder = CreateCinemaAssetFolderBodySchema.parse({
+      operationID: "operation-create-folder",
+      baseRevision: 2,
+      parentFolderID: rootAssetFolder.id,
+      name: "角色",
+    })
+    expect(createFolder.name).toBe("角色")
+
+    const move = MoveCinemaAssetEntriesBodySchema.parse({
+      operationID: "operation-move",
+      baseRevision: 2,
+      entries: [{ entryType: "asset", assetID: imageAsset.id }],
+      destinationFolderID: "folder-characters",
+    })
+    expect(move.entries).toHaveLength(1)
+
+    expect(() => MoveCinemaAssetEntriesBodySchema.parse({
+      operationID: "operation-empty-move",
+      baseRevision: 2,
+      entries: [],
+      destinationFolderID: "folder-characters",
+    })).toThrow()
+    expect(() => MoveCinemaAssetEntriesBodySchema.parse({
+      operationID: "operation-cycle",
+      baseRevision: 2,
+      entries: [{ entryType: "folder", folderID: "folder-characters" }],
+      destinationFolderID: "folder-characters",
+    })).toThrow()
+
+    const target = [{ entryType: "asset" as const, assetID: imageAsset.id }]
+    expect(TrashCinemaAssetEntriesBodySchema.parse({ operationID: "trash", baseRevision: 2, entries: target }).entries).toEqual(target)
+    expect(RestoreCinemaAssetEntriesBodySchema.parse({ operationID: "restore", baseRevision: 3, entries: target }).entries).toEqual(target)
+    expect(PermanentlyDeleteCinemaAssetEntriesBodySchema.parse({ operationID: "delete", baseRevision: 4, entries: target }).entries).toEqual(target)
+    expect(PermanentlyDeleteCinemaAssetEntriesBodySchema.parse({ operationID: "clear", baseRevision: 4, all: true }).all).toBe(true)
+    expect(() => PermanentlyDeleteCinemaAssetEntriesBodySchema.parse({ operationID: "empty-delete", baseRevision: 4 })).toThrow()
+    expect(() => PermanentlyDeleteCinemaAssetEntriesBodySchema.parse({
+      operationID: "ambiguous-delete",
+      baseRevision: 4,
+      all: true,
+      entries: target,
+    })).toThrow()
+    expect(UpdateCinemaAssetBodySchema.parse({ operationID: "rename", baseRevision: 4, baseName: "renamed" }).baseName).toBe("renamed")
+    expect(ReconcileCinemaAssetLibraryBodySchema.parse({ operationID: "reconcile", baseRevision: 4 }).full).toBe(true)
+
+    const folderResult = CinemaAssetFolderMutationResultSchema.parse({
+      scope: projectAssetScope,
+      operationID: "operation-create-folder",
+      revision: 3,
+      folder: inboxAssetFolder,
+    })
+    expect(folderResult.affected).toEqual([])
+
+    const assetResult = CinemaAssetRecordMutationResultSchema.parse({
+      scope: projectAssetScope,
+      operationID: "rename",
+      revision: 5,
+      asset: imageAsset,
+    })
+    expect(assetResult.asset.id).toBe(imageAsset.id)
+  })
+
+  it("parses upload and migration results", () => {
+    const upload = CinemaAssetUploadResultSchema.parse({
+      scope: projectAssetScope,
+      operationID: "upload-1",
+      revision: 3,
+      items: [
+        { fileName: imageAsset.displayName, success: true, asset: imageAsset },
+        {
+          fileName: "broken.mp4",
+          success: false,
+          error: { code: "invalid-media", message: "The media container is invalid." },
+        },
+      ],
+    })
+    expect(upload.items[0]?.success).toBe(true)
+    expect(upload.items[1]?.success).toBe(false)
+
+    const status = CinemaAssetMigrationStatusResultSchema.parse({
+      projectID: "project-1",
+      phase: "required",
+      readOnly: true,
+      candidateCount: 1,
+      totalBytes: imageAsset.sizeBytes,
+      unrecognizedCount: 0,
+      candidates: [{
+        id: "candidate-1",
+        sourcePath: "assets/imported/reference.png",
+        destinationFolderID: inboxAssetFolder.id,
+        kind: "image",
+        sizeBytes: imageAsset.sizeBytes,
+      }],
+    })
+    expect(status.candidates[0]?.selected).toBe(true)
+
+    const start = StartCinemaAssetMigrationBodySchema.parse({
+      operationID: "migration-1",
+      baseRevision: 0,
+    })
+    expect(start.candidateIDs).toEqual([])
+
+    const result = CinemaAssetMigrationResultSchema.parse({
+      projectID: "project-1",
+      operationID: "migration-1",
+      phase: "completed",
+      revision: 1,
+      migratedAssetIDs: [imageAsset.id],
+    })
+    expect(result.warnings).toEqual([])
+  })
+
+  it("parses asset node commands with optimistic concurrency fields", () => {
+    const command = CinemaCommandSchema.parse({
+      id: "command-asset-1",
+      type: "create-node-from-asset",
+      baseRevision: 5,
+      nodeID: "image-node-1",
+      assetRef: {
+        scope: projectAssetScope,
+        assetID: imageAsset.id,
+      },
+      position: { x: 120, y: 240 },
+    })
+
+    expect(command.type).toBe("create-node-from-asset")
+    if (command.type === "create-node-from-asset") {
+      expect(command.assetRef.assetID).toBe(imageAsset.id)
+      expect(command.baseRevision).toBe(5)
+    }
+    expect(() => CinemaCommandSchema.parse({
+      id: "command-asset-2",
+      type: "create-node-from-asset",
+      nodeID: "image-node-2",
+      assetRef: { scope: projectAssetScope, assetID: imageAsset.id },
+      position: { x: 0, y: 0 },
+    })).toThrow()
+
+    const relink = CinemaCommandSchema.parse({
+      id: "command-relink-1",
+      type: "relink-node-asset",
+      baseRevision: 6,
+      nodeID: "image-node-1",
+      assetRef: {
+        scope: { type: "personal" },
+        assetID: "personal-image-1",
+      },
+    })
+    expect(relink.type).toBe("relink-node-asset")
+    if (relink.type === "relink-node-asset") {
+      expect(relink.baseRevision).toBe(6)
+      expect(relink.assetRef.scope.type).toBe("personal")
+    }
+  })
+
   it("parses canonical image node data while retaining the legacy node type alias", () => {
     expect(CinemaNodeTypeSchema.parse("image")).toBe("image")
     expect(CinemaNodeTypeSchema.parse("local-image")).toBe("local-image")

@@ -24,8 +24,10 @@
 | 图片节点 | `ImageCanvasNode` | `cinema-image-*` | 统一承载上传、AI 生成、候选确认、最终图片预览和裁剪 |
 | 视频生成节点 | `VideoGenerationCanvasNode` | `cinema-video-gen-*` | 视频预览、模式 tab、provider/model/参数控件 |
 | 文件面板 | `ProjectFileBrowser` | `cinema-file-*` | 右侧浮层文件浏览器，包含面包屑、文件列表、预览区 |
-| 右键菜单 | `ContextMenu` | `cinema-context-menu` | 画布空白处新增节点；图片只有一个 `Add Image` 入口 |
-| 垂直导航 | `CanvasPanelNavigation` | `cinema-canvas-nav-*` | 目前只有项目文件入口，后续会承载剪辑入口 |
+| 素材库面板 | `AssetLibraryPanel` | `cinema-asset-library-*` | 独立右侧浮层；项目/个人域、物理文件夹、搜索、上传、多选、预览和 Canvas 引用入口 |
+| 素材 Ready 节点 | `ImageReadyState`、`VideoReadyState`、`AudioReadyState` | `cinema-asset-ready-*` | 统一读取 canonical `assetRef`；只有输出 Handle，不出现生成 Composer |
+| 右键菜单 | `ContextMenu`、`NodeContextMenu` | `cinema-context-menu` | 空白处新增节点、单节点查看详情、多选组选区删除；图片只有一个 `Add Image` 入口 |
+| 垂直导航 | `CanvasPanelNavigation` | `cinema-canvas-nav-*` | 项目文件与素材库是两个互斥入口；任一入口打开时关闭 Inspector |
 | 第三方画布控件 | ReactFlow | `react-flow__*` | Controls、MiniMap、Handle 的局部覆盖 |
 
 ### 1.2 当前视觉基调
@@ -322,6 +324,10 @@ Cinema Web 的 UI 标准：
 
 - 节点是主要信息容器，允许使用 8px 圆角、细边框、中等阴影。
 - 节点 selected 状态使用 accent 边框和轻量 halo，不改变节点尺寸。
+- Ctrl/Cmd 点击用于追加或取消节点，空白区左键拖动用于框选，中键拖动用于平移；多选后可从组选框或任一已选节点直接拖动整组。
+- 多选节点全部保留 selected 视觉，但只有唯一 active 节点可以挂载编辑器、生成器或 Inspector；多选状态不同时打开多套浮层。
+- Delete / Backspace 删除整个选择集合；输入框、文本域或节点编辑态必须继续拦截删除快捷键。
+- 多选区域或任一已选节点的右键菜单提供危险操作“删除”，一次删除打开菜单时捕获的完整节点集合。
 - 节点 header 保持紧凑，主标题 ellipsis。
 - delete row action 默认隐藏，在 hover、selected、focus-visible 时显示。
 - 节点 body 的预览、编辑器、生成器都要设置稳定尺寸或 grid 轨道，避免 loading/错误文案导致布局跳动。
@@ -367,6 +373,15 @@ Cinema Web 的 UI 标准：
 - `data.asset` 是唯一可被下游消费的最终资产；`data.candidateAssets` 仅用于确认前的候选集合，`selectedCandidateAssetID` 只表示当前预览。
 - `sourceKind` 只允许 `upload`、`generation`、`crop`。状态由 `asset`、`candidateAssets` 和任务状态推导，不额外持久化 UI 状态枚举。
 - 旧 `local-image`、`resultAssets` 和 `selectedAssetID` 只用于兼容读取，不得由前端重新写入。
+
+### 6.4 素材库与稳定引用
+
+- `--cinema-library-*` 是素材库组件唯一允许直接消费的颜色、surface、边框、阴影和状态语义层；light/dark 只在 token 映射层切换。
+- “项目文件”和“素材库”保持两个独立 Rail 入口。素材库、项目文件、Inspector 三者互斥，`Escape` 关闭素材库后焦点回到原 Rail 按钮。
+- 素材库使用物理文件夹行和两列素材网格；文件夹永远排在素材前。搜索结果是当前域的扁平结果并显示原路径。
+- Canvas 新素材节点只持久化服务端返回的 canonical `assetRef`，不得由前端拼接或保存托管文件的绝对路径。
+- 项目和个人素材都以引用方式加入 Canvas。个人引用必须显示“个人素材”和可移植性提示；missing、trashed、processing 状态必须有非颜色文案。
+- 图片、视频、音频 Ready 节点默认只有右侧输出 Handle；Video Ready 与 Audio Ready 不显示生成 Composer，原生播放器必须阻止画布拖动手势。
 
 ### 5.5 Video Generation Node
 

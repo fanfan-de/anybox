@@ -562,7 +562,7 @@ interface CinemaGenerationTask {
 
 interface CinemaGeneratedAsset {
   id: string
-  kind: string
+  kind: "file" | "image" | "video" | "audio"
   path: string
   mimeType?: string
   sizeBytes?: number
@@ -1877,7 +1877,7 @@ describe("cinema api", () => {
 
       expect(response.status).toBe(200)
       expect(seenAuthorization).toBe("Bearer sk-custom-secret")
-      expect(seenRequestBody).toEqual({
+      expect(seenRequestBody as unknown as Record<string, unknown>).toEqual({
         prompt: "Run prompt",
         count: 2,
         enabled: true,
@@ -1904,11 +1904,15 @@ describe("cinema api", () => {
       expect(events).not.toContain("sk-custom-secret")
     } finally {
       if (projectID) {
-        await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(projectID)}/custom-api-nodes/custom-api/auth/api-key`, {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ apiKey: null }),
-        }).catch(() => undefined)
+        try {
+          await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(projectID)}/custom-api-nodes/custom-api/auth/api-key`, {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ apiKey: null }),
+          })
+        } catch {
+          // Best-effort credential cleanup for the test fixture.
+        }
       }
       server.stop(true)
       await rm(root, { recursive: true, force: true })
@@ -2412,10 +2416,17 @@ describe("cinema api", () => {
         percent: 100,
       })
       expect(refreshBody.data?.outputNodeID).toBeUndefined()
+      const registeredImagePath = refreshBody.data?.outputAssets[0]?.path
       expect(refreshBody.data?.outputAssets[0]).toMatchObject({
-        id: "mock-image-output-1",
+        id: expect.stringMatching(/^asset_/),
         kind: "image",
-        path: "generated/images/image-gen/out.png",
+        path: expect.stringMatching(/^assets\/library\/生成素材\/图片\/out(?: \(\d+\))?\.png$/),
+        assetRef: {
+          scope: { type: "project", projectID: project.id },
+          assetID: expect.stringMatching(/^asset_/),
+          contentRevision: 1,
+          snapshot: { kind: "image", mimeType: "image/png" },
+        },
       })
 
       const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
@@ -2437,7 +2448,7 @@ describe("cinema api", () => {
       expect(persisted.nodes.some((node) => node.id.startsWith("node-video-"))).toBe(false)
 
       const assetResponse = await app.request(
-        `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/assets/${encodeAssetPath("generated/images/image-gen/out.png")}`,
+        `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/assets/${encodeAssetPath(registeredImagePath!)}`,
       )
       const assetBytes = new Uint8Array(await assetResponse.arrayBuffer())
       expect(assetResponse.status).toBe(200)
@@ -4174,12 +4185,18 @@ describe("cinema api", () => {
       expect(refreshBody.data?.status).toBe("succeeded")
       expect(refreshBody.data?.outputNodeID).toBeUndefined()
       expect(refreshBody.data?.outputAssets[0]).toMatchObject({
-        id: "kling-output-1",
+        id: expect.stringMatching(/^asset_/),
         kind: "video",
         mimeType: "video/mp4",
         sizeBytes: mp4Bytes.byteLength,
+        assetRef: {
+          scope: { type: "project", projectID: project.id },
+          assetID: expect.stringMatching(/^asset_/),
+          contentRevision: 1,
+          snapshot: { kind: "video", mimeType: "video/mp4" },
+        },
       })
-      expect(refreshBody.data?.outputAssets[0]?.path).toStartWith("generated/videos/video-gen/")
+      expect(refreshBody.data?.outputAssets[0]?.path).toStartWith("assets/library/生成素材/视频/")
       expect(Array.from(await readFile(join(root, refreshBody.data!.outputAssets[0]!.path)))).toEqual(Array.from(mp4Bytes))
 
       const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
@@ -4369,10 +4386,16 @@ describe("cinema api", () => {
       expect(refreshTaskIDs).toBe("turbo-task-1")
       expect(refreshBody.data?.status).toBe("succeeded")
       expect(refreshBody.data?.outputAssets[0]).toMatchObject({
-        id: "turbo-output-1",
+        id: expect.stringMatching(/^asset_/),
         kind: "video",
         mimeType: "video/mp4",
         sizeBytes: mp4Bytes.byteLength,
+        assetRef: {
+          scope: { type: "project", projectID: project.id },
+          assetID: expect.stringMatching(/^asset_/),
+          contentRevision: 1,
+          snapshot: { kind: "video", mimeType: "video/mp4" },
+        },
       })
       expect(Array.from(await readFile(join(root, refreshBody.data!.outputAssets[0]!.path)))).toEqual(Array.from(mp4Bytes))
     } finally {

@@ -21,7 +21,9 @@
   --cinema-text-2: #aeb6c4;
   --cinema-text-3: #707987;
   --cinema-danger: #fb7185;
+  --cinema-danger-surface: rgba(251, 113, 133, 0.14);
   --cinema-floating-surface: rgba(24, 27, 32, 0.96);
+  --cinema-floating-shadow: 0 16px 44px rgba(0, 0, 0, 0.42);
   --cinema-control-hover: rgba(255, 255, 255, 0.1);
   --cinema-control-background: rgba(255, 255, 255, 0.06);
   --cinema-image-frame-background: rgba(255, 255, 255, 0.025);
@@ -51,7 +53,9 @@
   --cinema-text-2: #59616d;
   --cinema-text-3: #8a94a1;
   --cinema-danger: #cf222e;
+  --cinema-danger-surface: rgba(207, 34, 46, 0.1);
   --cinema-floating-surface: rgba(255, 255, 255, 0.96);
+  --cinema-floating-shadow: 0 16px 44px rgba(31, 35, 40, 0.18);
   --cinema-control-hover: rgba(31, 35, 40, 0.09);
   --cinema-control-background: rgba(31, 35, 40, 0.055);
   --cinema-image-frame-background: rgba(31, 35, 40, 0.025);
@@ -81,7 +85,9 @@
     --cinema-text-2: #59616d;
     --cinema-text-3: #8a94a1;
     --cinema-danger: #cf222e;
+    --cinema-danger-surface: rgba(207, 34, 46, 0.1);
     --cinema-floating-surface: rgba(255, 255, 255, 0.96);
+    --cinema-floating-shadow: 0 16px 44px rgba(31, 35, 40, 0.18);
     --cinema-control-hover: rgba(31, 35, 40, 0.09);
     --cinema-control-background: rgba(31, 35, 40, 0.055);
     --cinema-image-frame-background: rgba(31, 35, 40, 0.025);
@@ -141,6 +147,34 @@ button {
   position: relative;
   min-width: 0;
   min-height: 0;
+}
+
+.cinema-personal-asset-notice {
+  position: absolute;
+  z-index: 8;
+  top: 12px;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: min(520px, calc(100% - 120px));
+  padding: 7px 11px;
+  color: var(--cinema-text-2);
+  border: 1px solid var(--cinema-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cinema-floating-surface) 92%, transparent);
+  box-shadow: var(--cinema-floating-shadow);
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+  transform: translateX(-50%);
+  backdrop-filter: blur(12px);
+}
+
+.cinema-personal-asset-notice span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cinema-node-overlay-root {
@@ -3746,35 +3780,58 @@ button.cinema-video-input-slot-main {
 
 .cinema-context-menu {
   position: fixed;
-  z-index: 20;
+  z-index: 1000;
   display: grid;
+  gap: 2px;
   width: 210px;
+  max-width: calc(100vw - 16px);
+  max-height: min(360px, calc(100dvh - 16px));
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 6px;
   border: 1px solid var(--cinema-border);
   border-radius: 8px;
-  background: rgba(18, 20, 24, 0.98);
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.42);
+  background: var(--cinema-floating-surface);
+  color: var(--cinema-text-2);
+  box-shadow: var(--cinema-floating-shadow);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.cinema-context-menu::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.cinema-context-menu.is-compact {
+  width: max-content;
+  min-width: 148px;
+  max-width: min(260px, calc(100vw - 16px));
 }
 
 .cinema-context-menu button {
-  display: flex;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
   width: 100%;
   min-height: 32px;
   padding: 0 9px;
-  color: var(--cinema-text-2);
+  color: inherit;
   border: 0;
   border-radius: 6px;
   background: transparent;
   cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
   text-align: left;
 }
 
 .cinema-context-menu button:hover,
 .cinema-context-menu button:focus-visible {
   color: var(--cinema-text);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--cinema-control-hover);
   outline: none;
 }
 
@@ -3785,6 +3842,23 @@ button.cinema-video-input-slot-main {
   white-space: nowrap;
 }
 
+.cinema-context-menu button[data-variant="danger"] {
+  color: var(--cinema-danger);
+}
+
+.cinema-context-menu button[data-variant="danger"]:hover,
+.cinema-context-menu button[data-variant="danger"]:focus-visible {
+  color: var(--cinema-danger);
+  background: var(--cinema-danger-surface);
+}
+
+.cinema-context-menu-item-meta {
+  justify-self: end;
+  color: var(--cinema-text-3);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
 .cinema-context-menu button:disabled {
   cursor: not-allowed;
   opacity: 0.52;
@@ -3793,6 +3867,10 @@ button.cinema-video-input-slot-main {
 .cinema-context-menu button:disabled:hover {
   color: var(--cinema-text-2);
   background: transparent;
+}
+
+.cinema-context-menu button[data-variant="danger"]:disabled:hover {
+  color: var(--cinema-danger);
 }
 
 .is-spinning {

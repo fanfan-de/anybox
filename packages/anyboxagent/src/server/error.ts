@@ -5,6 +5,7 @@ export class ApiError extends Error {
     public readonly status: ContentfulStatusCode,
     public readonly code: string,
     message: string,
+    public readonly data?: unknown,
   ) {
     super(message)
     this.name = "ApiError"

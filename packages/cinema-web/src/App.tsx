@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react"
 import { createPortal } from "react-dom"
 import {
   applyEdgeChanges,
@@ -18,9 +18,10 @@ import {
   type Node,
   type NodeChange,
   type NodeProps,
+  type OnSelectionChangeParams,
   type ReactFlowInstance,
 } from "@xyflow/react"
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { useMutation, useQueries, useQuery } from "@tanstack/react-query"
 import { create } from "zustand"
 import {
   ArrowLeft,
@@ -35,6 +36,7 @@ import {
   Film,
   Folder,
   Image,
+  Images,
   Info,
   KeyRound,
   Loader2,
@@ -55,6 +57,9 @@ import {
 import {
   type CinemaCommand,
   type CinemaCommandResult,
+  type CinemaAssetKind,
+  type CinemaAssetLocator,
+  type CinemaAssetRecord,
   type CinemaCustomApiAuthState,
   type CinemaCustomApiRunResult,
   type CinemaEventsResult,
@@ -110,9 +115,31 @@ import {
   readCinemaImageFinalAsset,
   readCinemaImageSelectedCandidate,
 } from "./features/image/imageNodeData"
+import {
+  hasMultiSelectModifier,
+  preserveNodeSelection,
+  shouldDeferSingleSelection,
+  toggleNodeSelection,
+} from "./features/canvas/nodeSelection"
+import { clampContextMenuPosition } from "./features/canvas/contextMenuPosition"
+import { AssetLibraryApiError, createAssetLibraryApi } from "./features/assets/assetLibraryApi"
+import type { AssetLibraryAddRequest } from "./features/assets/AssetLibraryPanel"
+import {
+  CINEMA_ASSET_DRAG_MIME,
+  cinemaAssetLocatorFromDragPayload,
+  cinemaAssetRefFromNodeData,
+  cinemaAssetURL,
+  isPersonalCinemaAssetRef,
+} from "./features/media/assetNodeData"
+import "./features/media/mediaNodes.css"
+
+const AssetLibraryPanel = lazy(async () => {
+  const module = await import("./features/assets/AssetLibraryPanel")
+  return { default: module.AssetLibraryPanel }
+})
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error"
-type CanvasPanel = "files"
+type CanvasPanel = "files" | "assets"
 
 type ImageGenerationRequest = {
   prompt: string
@@ -208,7 +235,8 @@ type CinemaFlowNodeData = {
   }
   onChangeRawData?: (nodeID: string, rawData: Record<string, unknown>) => void
   onChangeTitle?: (nodeID: string, title: string) => void
-  onActivateNode?: (nodeID: string, pointerID: number) => void
+  isActiveNode?: boolean
+  onActivateNode?: (nodeID: string, pointerID: number, multiSelect: boolean) => void
   onSelectNode?: (nodeID: string) => void
   onNodeInputEditingChange?: (nodeID: string, isEditing: boolean) => void
   onDeleteNode?: (nodeID: string) => void
@@ -250,6 +278,7 @@ type CinemaFlowNodeData = {
   isCroppingImage?: boolean
   imageCropError?: string | null
   onCreateCroppedImageNode?: (nodeID: string, crop: ImageCropRect) => Promise<void>
+  onRelinkAsset?: (nodeID: string) => void
   hasIncomingImageEdge?: boolean
   onDismissNodeOverlay?: () => void
   nodeInputOverlayRoot?: HTMLElement | null
@@ -263,11 +292,20 @@ type ContextMenuState = {
   flowX: number
   flowY: number
 } | null
-type NodeContextMenuState = {
-  x: number
-  y: number
-  nodeID: string
-} | null
+type NodeContextMenuState =
+  | {
+      kind: "node"
+      x: number
+      y: number
+      nodeID: string
+    }
+  | {
+      kind: "selection"
+      x: number
+      y: number
+      nodeIDs: string[]
+    }
+  | null
 type DisplayAsset = {
   id: string
   kind: string
@@ -277,13 +315,13 @@ type DisplayAsset = {
 }
 
 type UiState = {
-  selectedNodeID: string | null
-  setSelectedNodeID: (nodeID: string | null) => void
+  activeNodeID: string | null
+  setActiveNodeID: (nodeID: string | null) => void
 }
 
 const useUiStore = create<UiState>((set) => ({
-  selectedNodeID: null,
-  setSelectedNodeID: (nodeID) => set({ selectedNodeID: nodeID }),
+  activeNodeID: null,
+  setActiveNodeID: (nodeID) => set({ activeNodeID: nodeID }),
 }))
 
 const NODE_TYPES = [
@@ -437,14 +475,14 @@ async function requestJson<T>(baseURL: string, pathname: string, init?: RequestI
   const response = await fetch(new URL(pathname, baseURL), init)
   const envelope = await response.json().catch(() => null) as
     | { success: true; data: T }
-    | { success: false; error?: { message?: string } }
+    | { success: false; error?: { message?: string; data?: unknown } }
     | null
 
   if (!response.ok || !envelope || envelope.success !== true) {
     const message = envelope && envelope.success === false && envelope.error?.message
       ? envelope.error.message
       : `Request failed (${response.status})`
-    throw new Error(message)
+    throw new CinemaRequestError(message, response.status, envelope?.success === false ? envelope.error?.data : undefined)
   }
 
   return envelope.data
@@ -459,6 +497,17 @@ function flowNodeStyle(type: CinemaNodeType, size: { width: number; height: numb
   return type === "image" || type === "local-image" || type === "video" || type === "custom-api"
     ? { width: size.width }
     : { width: size.width, height: size.height }
+}
+
+class CinemaRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly data?: unknown,
+  ) {
+    super(message)
+    this.name = "CinemaRequestError"
+  }
 }
 
 function toFlowNodes(canvas: CinemaCanvasDocument): CinemaFlowNode[] {
@@ -513,6 +562,28 @@ function makeCommandID(type: CinemaCommand["type"]) {
 
 function titleForType(type: CinemaNodeType) {
   return `${NODE_META[type].label} ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+}
+
+function makeAssetNodeID() {
+  return `node-asset-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+function cinemaAssetLocatorStatusKey(assetRef: CinemaAssetLocator) {
+  return JSON.stringify(assetRef.scope.type === "personal"
+    ? ["personal", assetRef.assetID]
+    : ["project", assetRef.scope.projectID, assetRef.assetID])
+}
+
+type CanvasAssetLiveState = {
+  status: string
+  asset?: CinemaAssetRecord
+}
+
+function makeAssetLibraryOperationID(type: string) {
+  const suffix = typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  return `${type}-${suffix}`
 }
 
 function escapeRegExp(value: string) {
@@ -1755,6 +1826,13 @@ function blobToDataBase64(blob: Blob) {
   })
 }
 
+function dataBase64ToFile(dataBase64: string, fileName: string, mimeType: string) {
+  const binary = window.atob(dataBase64)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+  return new globalThis.File([bytes], fileName, { type: mimeType })
+}
+
 function clampNumber(value: number, min: number, max: number) {
   if (max < min) return min
   return Math.min(Math.max(value, min), max)
@@ -2072,10 +2150,10 @@ function downloadTextFile(title: string, text: string) {
 function activateNodeOnPointerDown(
   event: ReactPointerEvent<HTMLElement>,
   nodeID: string,
-  onActivateNode?: (nodeID: string, pointerID: number) => void,
+  onActivateNode?: (nodeID: string, pointerID: number, multiSelect: boolean) => void,
 ) {
   if (event.button !== 0 || !event.isPrimary) return
-  onActivateNode?.(nodeID, event.pointerId)
+  onActivateNode?.(nodeID, event.pointerId, hasMultiSelectModifier(event))
 }
 
 function isEditableElement(target: EventTarget | null) {
@@ -2415,6 +2493,7 @@ function TextCanvasNode({
   selected?: boolean
   accentStyle: CSSProperties
 }) {
+  const active = data.isActiveNode ?? Boolean(selected)
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const generatorPromptRef = useRef<HTMLTextAreaElement>(null)
   const sourceImageInputRef = useRef<HTMLInputElement>(null)
@@ -2623,10 +2702,10 @@ function TextCanvasNode({
   }, [data.textGenerationError, generatorPrompt])
 
   useEffect(() => {
-    if (selected) return
+    if (active) return
     setIsTextEditorOpen(false)
     setIsModelMenuOpen(false)
-  }, [selected])
+  }, [active])
 
   const focusEditor = () => {
     setIsTextEditorOpen(true)
@@ -2725,7 +2804,7 @@ function TextCanvasNode({
           />
           <div className="cinema-node-header-actions nodrag nowheel" role="toolbar" aria-label="Text node actions">
             <NodeStatusDot status={textStatus} />
-            {selected ? (
+            {active ? (
               <>
                 <button
               type="button"
@@ -2789,7 +2868,7 @@ function TextCanvasNode({
         </header>
 
         <div className={`cinema-node-preview cinema-text-card-preview ${isTextEditorOpen ? "is-editing" : ""} ${hasPreviewText ? "has-text" : ""}`}>
-          {selected && isTextEditorOpen ? (
+          {active && isTextEditorOpen ? (
             <textarea
               ref={editorRef}
               className="cinema-text-card-editor nodrag nowheel"
@@ -2834,10 +2913,10 @@ function TextCanvasNode({
         </div>
       </article>
 
-      {selected && isGeneratorOpen ? (
+      {active && isGeneratorOpen ? (
         <CinemaNodeInputOverlay
           nodeID={id}
-          selected={selected}
+          selected={active}
           overlayRoot={data.nodeInputOverlayRoot}
           width={560}
           accentStyle={accentStyle}
@@ -3064,6 +3143,7 @@ function ImageCreationState({
   selected?: boolean
   accentStyle: CSSProperties
 }) {
+  const active = data.isActiveNode ?? Boolean(selected)
   const nodeRef = useRef<HTMLElement>(null)
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const mainImageInputRef = useRef<HTMLInputElement>(null)
@@ -3347,7 +3427,7 @@ function ImageCreationState({
   useEffect(() => () => clearPromptCommitTimer(), [clearPromptCommitTimer])
 
   useEffect(() => {
-    if (selected) return
+    if (active) return
     const wasEditing = isPromptFocusedRef.current
       || isPromptComposingRef.current
       || promptCommitTimerRef.current !== null
@@ -3357,7 +3437,7 @@ function ImageCreationState({
     clearPromptCommitTimer()
     if (wasEditing) commitRawDataPatch({ prompt: value })
     setPromptInputEditing(false)
-  }, [clearPromptCommitTimer, commitRawDataPatch, selected, setPromptInputEditing])
+  }, [active, clearPromptCommitTimer, commitRawDataPatch, setPromptInputEditing])
 
   const openSourceImagePicker = () => {
     if (isImageBusy) return
@@ -3541,7 +3621,7 @@ function ImageCreationState({
           isConnectable={nodeState === "empty" && !isImageBusy}
         />
       ) : null}
-      {selected && nodeState === "empty" && !isImageBusy ? (
+      {active && nodeState === "empty" && !isImageBusy ? (
         <div className="cinema-image-upload-toolbar nodrag nowheel" role="toolbar" aria-label="Image source">
           <button
             type="button"
@@ -3673,10 +3753,10 @@ function ImageCreationState({
 
       </article>
 
-      {selected && nodeState === "empty" && !isImageFillBusy ? (
+      {active && nodeState === "empty" && !isImageFillBusy ? (
         <CinemaNodeInputOverlay
           nodeID={id}
-          selected={selected}
+          selected={active}
           overlayRoot={data.nodeInputOverlayRoot}
           width={520}
           accentStyle={accentStyle}
@@ -3991,6 +4071,7 @@ function VideoGenerationCanvasNode({
   selected?: boolean
   accentStyle: CSSProperties
 }) {
+  const active = data.isActiveNode ?? Boolean(selected)
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const videoPreviewRef = useRef<HTMLVideoElement>(null)
   const videoInputImageInputRef = useRef<HTMLInputElement>(null)
@@ -4592,10 +4673,10 @@ function VideoGenerationCanvasNode({
 
       </article>
 
-      {selected ? (
+      {active ? (
         <CinemaNodeInputOverlay
           nodeID={id}
-          selected={selected}
+          selected={active}
           overlayRoot={data.nodeInputOverlayRoot}
           width={640}
           accentStyle={accentStyle}
@@ -4949,41 +5030,68 @@ function ImageReadyState({
   selected?: boolean
   accentStyle: CSSProperties
 }) {
+  const active = data.isActiveNode ?? Boolean(selected)
   const asset = readFinalImageAsset(data.rawData)
+  const libraryAssetRef = cinemaAssetRefFromNodeData(data.rawData)
+  const librarySnapshot = libraryAssetRef?.snapshot.kind === "image" ? libraryAssetRef.snapshot : null
+  const libraryAssetStatus = readRawString(data.rawData, "assetStatus", "ready")
   const nodeRef = useRef<HTMLElement>(null)
   const cropFrameRef = useRef<HTMLElement | null>(null)
   const [hasPreviewError, setHasPreviewError] = useState(false)
   const [imagePixelSize, setImagePixelSize] = useState<{ width: number; height: number } | null>(
-    () => asset?.width && asset.height ? { width: asset.width, height: asset.height } : null,
+    () => asset?.width && asset.height
+      ? { width: asset.width, height: asset.height }
+      : librarySnapshot?.width && librarySnapshot.height
+        ? { width: librarySnapshot.width, height: librarySnapshot.height }
+        : null,
   )
   const [isCropEditorOpen, setIsCropEditorOpen] = useState(false)
   const [cropDraft, setCropDraft] = useState<ImageCropDraftRect | null>(null)
   const [cropDrag, setCropDrag] = useState<ImageCropDragState | null>(null)
   const [localCropError, setLocalCropError] = useState<string | null>(null)
-  const previewSrc = asset && data.agentBaseURL && data.projectID
-    ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, asset.path)
-    : ""
+  const previewSrc = libraryAssetRef && data.agentBaseURL
+    ? cinemaAssetURL(data.agentBaseURL, libraryAssetRef, "preview")
+    : asset && data.agentBaseURL && data.projectID
+      ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, asset.path)
+      : ""
   const fileName = readRawString(data.rawData, "sourceFileName", data.title)
-  const effectiveImageSize = imagePixelSize ?? (asset?.width && asset.height ? { width: asset.width, height: asset.height } : null)
+  const effectiveImageSize = imagePixelSize
+    ?? (asset?.width && asset.height ? { width: asset.width, height: asset.height } : null)
+    ?? (librarySnapshot?.width && librarySnapshot.height
+      ? { width: librarySnapshot.width, height: librarySnapshot.height }
+      : null)
   const previewAspectRatio = effectiveImageSize ? `${effectiveImageSize.width} / ${effectiveImageSize.height}` : null
   const previewStyle = previewAspectRatio
     ? { "--cinema-image-preview-aspect-ratio": previewAspectRatio } as CSSProperties
     : undefined
   const isCropping = Boolean(data.isCroppingImage)
   const cropError = localCropError ?? data.imageCropError ?? null
-  const canCrop = Boolean(previewSrc && !hasPreviewError && effectiveImageSize && data.onCreateCroppedImageNode)
+  const isLibraryAssetUnavailable = Boolean(libraryAssetRef && (libraryAssetStatus === "missing" || hasPreviewError))
+  const canCrop = Boolean(
+    (asset || libraryAssetRef && libraryAssetStatus === "ready")
+    && previewSrc
+    && !hasPreviewError
+    && effectiveImageSize
+    && data.onCreateCroppedImageNode,
+  )
 
   useEffect(() => {
     setHasPreviewError(false)
     setLocalCropError(null)
-    setImagePixelSize(asset?.width && asset.height ? { width: asset.width, height: asset.height } : null)
-  }, [asset?.height, asset?.width, previewSrc])
+    setImagePixelSize(
+      asset?.width && asset.height
+        ? { width: asset.width, height: asset.height }
+        : librarySnapshot?.width && librarySnapshot.height
+          ? { width: librarySnapshot.width, height: librarySnapshot.height }
+          : null,
+    )
+  }, [asset?.height, asset?.width, librarySnapshot?.height, librarySnapshot?.width, previewSrc])
 
   useEffect(() => {
-    if (selected) return
+    if (active) return
     setIsCropEditorOpen(false)
     setCropDrag(null)
-  }, [selected])
+  }, [active])
 
   const framePointerPosition = useCallback((event: Pick<globalThis.PointerEvent, "clientX" | "clientY">) => {
     const frame = cropFrameRef.current
@@ -5121,7 +5229,7 @@ function ImageReadyState({
           }
         }}
       >
-        {selected ? (
+        {active ? (
           <div className="cinema-image-toolbar nodrag nowheel" role="toolbar" aria-label="Image tools">
             <button
               type="button"
@@ -5161,7 +5269,7 @@ function ImageReadyState({
           aria-label="Image preview"
           style={previewStyle}
         >
-          {previewSrc && !hasPreviewError ? (
+          {previewSrc && !isLibraryAssetUnavailable && !hasPreviewError ? (
             <>
               <img
                 src={previewSrc}
@@ -5243,9 +5351,12 @@ function ImageReadyState({
               ) : null}
             </>
           ) : (
-            <div className={`cinema-image-empty ${hasPreviewError ? "is-error" : ""}`}>
+            <div className={`cinema-image-empty ${hasPreviewError || libraryAssetStatus === "missing" ? "is-error" : ""}`}>
               <Image size={28} aria-hidden="true" />
-              <span>{hasPreviewError ? "Image unavailable" : "No image selected"}</span>
+              <span>{isLibraryAssetUnavailable ? "Asset reference unavailable" : hasPreviewError ? "Image unavailable" : "No image selected"}</span>
+              {isLibraryAssetUnavailable && data.onRelinkAsset ? (
+                <button type="button" onClick={() => data.onRelinkAsset?.(id)}>重新关联</button>
+              ) : null}
             </div>
           )}
         </section>
@@ -5275,6 +5386,7 @@ function CustomApiCanvasNode({
   selected: boolean
   accentStyle: CSSProperties
 }) {
+  const active = data.isActiveNode ?? selected
   const rawDataRef = useRef(data.rawData)
   const [inputValues, setInputValues] = useState<Record<string, unknown>>(() => readRawRecord(data.rawData, "inputValues"))
   const [schemaDraft, setSchemaDraft] = useState(() => stringifyJson(readRawRecord(data.rawData, "inputSchema")))
@@ -5454,10 +5566,10 @@ function CustomApiCanvasNode({
           <span title={apiPreviewText}>{apiPreviewText}</span>
         </div>
 
-        {selected ? (
+        {active ? (
           <CinemaNodeInputOverlay
             nodeID={id}
-            selected={selected}
+            selected={active}
             overlayRoot={data.nodeInputOverlayRoot}
             width={640}
             accentStyle={accentStyle}
@@ -5669,10 +5781,165 @@ function ImageCanvasNode({
   selected?: boolean
   accentStyle: CSSProperties
 }) {
-  useCinemaImageViewportGuard(id, Boolean(selected), data.nodeInputOverlayRoot, data.rawData)
-  return readCinemaImageFinalAsset(data.rawData)
+  const active = data.isActiveNode ?? Boolean(selected)
+  useCinemaImageViewportGuard(id, active, data.nodeInputOverlayRoot, data.rawData)
+  return readCinemaImageFinalAsset(data.rawData) || cinemaAssetRefFromNodeData(data.rawData)?.snapshot.kind === "image"
     ? <ImageReadyState id={id} data={data} selected={selected} accentStyle={accentStyle} />
     : <ImageCreationState id={id} data={data} selected={selected} accentStyle={accentStyle} />
+}
+
+function CinemaAssetReferenceBadge({ data }: { data: CinemaFlowNodeData }) {
+  const assetRef = cinemaAssetRefFromNodeData(data.rawData)
+  const assetStatus = readRawString(data.rawData, "assetStatus", "ready")
+  if (!assetRef) return null
+  return (
+    <div className="cinema-asset-node-badges" aria-label="Asset reference status">
+      {isPersonalCinemaAssetRef(assetRef) ? <span>个人素材</span> : null}
+      {assetStatus === "trashed" ? <span className="is-warning">素材位于回收站</span> : null}
+    </div>
+  )
+}
+
+function VideoReadyState({
+  id,
+  data,
+  selected,
+  accentStyle,
+}: {
+  id: string
+  data: CinemaFlowNodeData
+  selected?: boolean
+  accentStyle: CSSProperties
+}) {
+  const assetRef = cinemaAssetRefFromNodeData(data.rawData)
+  const [playbackError, setPlaybackError] = useState(false)
+  const status = readRawString(data.rawData, "assetStatus", "ready")
+  const unavailable = status === "missing" || playbackError || !assetRef
+  const previewSrc = assetRef && data.agentBaseURL ? cinemaAssetURL(data.agentBaseURL, assetRef, "preview") : ""
+  const posterSrc = assetRef && data.agentBaseURL ? cinemaAssetURL(data.agentBaseURL, assetRef, "thumbnail") : undefined
+
+  useEffect(() => setPlaybackError(false), [previewSrc])
+
+  return (
+    <>
+      <article
+        className={`cinema-asset-ready-node is-video ${selected ? "is-selected" : ""}`}
+        style={accentStyle}
+        onPointerDown={(event) => activateNodeOnPointerDown(event, id, data.onActivateNode)}
+      >
+        <header className="cinema-node-header">
+          <CinemaNodeTitle
+            icon={Video}
+            label="Video"
+            nodeID={id}
+            title={data.title}
+            onChangeTitle={data.onChangeTitle}
+          />
+          <div className="cinema-node-header-actions">
+            <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
+          </div>
+        </header>
+        <CinemaAssetReferenceBadge data={data} />
+        <div className="cinema-asset-ready-preview nodrag nowheel">
+          {unavailable ? (
+            <div className="cinema-asset-reference-unavailable" role="status">
+              <Video size={26} aria-hidden="true" />
+              <strong>引用不可用</strong>
+              {data.onRelinkAsset ? (
+                <button type="button" onClick={() => data.onRelinkAsset?.(id)}>重新关联</button>
+              ) : null}
+            </div>
+          ) : (
+            <video
+              src={previewSrc}
+              poster={posterSrc}
+              controls
+              preload="metadata"
+              aria-label={`${data.title} 视频预览`}
+              onError={() => setPlaybackError(true)}
+            />
+          )}
+        </div>
+      </article>
+      <Handle
+        id="output"
+        type="source"
+        position={Position.Right}
+        className="cinema-node-handle cinema-node-handle-output"
+        style={accentStyle}
+      />
+    </>
+  )
+}
+
+function AudioReadyState({
+  id,
+  data,
+  selected,
+  accentStyle,
+}: {
+  id: string
+  data: CinemaFlowNodeData
+  selected?: boolean
+  accentStyle: CSSProperties
+}) {
+  const assetRef = cinemaAssetRefFromNodeData(data.rawData)
+  const [playbackError, setPlaybackError] = useState(false)
+  const status = readRawString(data.rawData, "assetStatus", "ready")
+  const unavailable = status === "missing" || playbackError || !assetRef
+  const previewSrc = assetRef && data.agentBaseURL ? cinemaAssetURL(data.agentBaseURL, assetRef, "preview") : ""
+
+  useEffect(() => setPlaybackError(false), [previewSrc])
+
+  return (
+    <>
+      <article
+        className={`cinema-asset-ready-node is-audio ${selected ? "is-selected" : ""}`}
+        style={accentStyle}
+        onPointerDown={(event) => activateNodeOnPointerDown(event, id, data.onActivateNode)}
+      >
+        <header className="cinema-node-header">
+          <CinemaNodeTitle
+            icon={Music}
+            label="Audio"
+            nodeID={id}
+            title={data.title}
+            onChangeTitle={data.onChangeTitle}
+          />
+          <div className="cinema-node-header-actions">
+            <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
+          </div>
+        </header>
+        <CinemaAssetReferenceBadge data={data} />
+        <div className="cinema-asset-ready-preview nodrag nowheel">
+          {unavailable ? (
+            <div className="cinema-asset-reference-unavailable" role="status">
+              <Music size={24} aria-hidden="true" />
+              <strong>引用不可用</strong>
+              {data.onRelinkAsset ? (
+                <button type="button" onClick={() => data.onRelinkAsset?.(id)}>重新关联</button>
+              ) : null}
+            </div>
+          ) : (
+            <audio
+              src={previewSrc}
+              controls
+              preload="metadata"
+              aria-label={`${data.title} 音频预览`}
+              onError={() => setPlaybackError(true)}
+            />
+          )}
+        </div>
+      </article>
+      <Handle
+        id="output"
+        type="source"
+        position={Position.Right}
+        className="cinema-node-handle cinema-node-handle-output"
+        style={accentStyle}
+      />
+    </>
+  )
 }
 
 function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
@@ -5695,7 +5962,13 @@ function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
   }
 
   if (data.cinemaType === "video") {
-    return <VideoGenerationCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
+    return cinemaAssetRefFromNodeData(data.rawData)?.snapshot.kind === "video"
+      ? <VideoReadyState id={id} data={data} selected={selected} accentStyle={accentStyle} />
+      : <VideoGenerationCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
+  }
+
+  if (data.cinemaType === "audio" && cinemaAssetRefFromNodeData(data.rawData)?.snapshot.kind === "audio") {
+    return <AudioReadyState id={id} data={data} selected={selected} accentStyle={accentStyle} />
   }
 
   if (data.cinemaType === "custom-api") {
@@ -5787,6 +6060,7 @@ function inspectorRowsForNode(node: CinemaFlowNode) {
   const nodeWidth = nodeStyleNumber(node.style?.width) ?? node.data.size?.width
   const nodeHeight = nodeStyleNumber(node.style?.height) ?? node.data.size?.height
   const selectedAsset = selectedAssetForInspector(node)
+  const libraryAssetRef = cinemaAssetRefFromNodeData(rawData)
 
   addInspectorRow(rows, "Type", meta.label)
   addInspectorRow(rows, "Status", status)
@@ -5853,6 +6127,37 @@ function inspectorRowsForNode(node: CinemaFlowNode) {
     addInspectorRow(rows, "Dimensions", formatAssetDimensions(selectedAsset))
     addInspectorRow(rows, "File size", formatFileSize(selectedAsset.sizeBytes))
     addInspectorRow(rows, "MIME type", selectedAsset.mimeType)
+  }
+
+  if (libraryAssetRef) {
+    addInspectorRow(rows, "Asset ID", libraryAssetRef.assetID)
+    addInspectorRow(
+      rows,
+      "Asset scope",
+      libraryAssetRef.scope.type === "personal" ? "个人素材" : "项目素材",
+    )
+    addInspectorRow(rows, "Content revision", libraryAssetRef.contentRevision)
+    addInspectorRow(rows, "MIME type", libraryAssetRef.snapshot.mimeType)
+    addInspectorRow(rows, "Dimensions", formatAssetDimensions(libraryAssetRef.snapshot))
+    addInspectorRow(
+      rows,
+      "Duration",
+      libraryAssetRef.snapshot.durationSeconds !== undefined
+        ? `${libraryAssetRef.snapshot.durationSeconds.toFixed(2)}s`
+        : "",
+    )
+    const assetStatus = readRawString(rawData, "assetStatus", "ready")
+    if (assetStatus === "trashed") {
+      addInspectorRow(rows, "Reference", "素材位于回收站", { tone: "muted" })
+    } else if (assetStatus === "missing") {
+      addInspectorRow(rows, "Reference", "引用不可用，请重新关联", { tone: "danger" })
+    }
+    if (libraryAssetRef.scope.type === "personal") {
+      addInspectorRow(rows, "Portability", "此项目引用个人素材，移动到其他设备后可能不可用。", {
+        tone: "muted",
+        multiline: true,
+      })
+    }
   }
 
   addInspectorRow(rows, "Error", error, { tone: "danger", multiline: true })
@@ -6091,6 +6396,79 @@ function ProjectFileBrowser({
   )
 }
 
+function CinemaContextMenuSurface({
+  x,
+  y,
+  compact = false,
+  onClose,
+  children,
+}: {
+  x: number
+  y: number
+  compact?: boolean
+  onClose: () => void
+  children: ReactNode
+}) {
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState({ x, y })
+
+  useLayoutEffect(() => {
+    const menu = menuRef.current
+    if (!menu) return
+    const bounds = menu.getBoundingClientRect()
+    const nextPosition = clampContextMenuPosition(
+      x,
+      y,
+      bounds.width,
+      bounds.height,
+      window.innerWidth,
+      window.innerHeight,
+    )
+    setPosition((current) => current.x === nextPosition.x && current.y === nextPosition.y ? current : nextPosition)
+    menu.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true })
+  }, [x, y])
+
+  useEffect(() => {
+    window.addEventListener("resize", onClose)
+    return () => window.removeEventListener("resize", onClose)
+  }, [onClose])
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      className={`cinema-context-menu ${compact ? "is-compact" : ""}`}
+      style={{ left: position.x, top: position.y }}
+      role="menu"
+      onClick={(event) => event.stopPropagation()}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault()
+          event.stopPropagation()
+          onClose()
+          return
+        }
+        if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
+        const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])
+        if (items.length === 0) return
+        event.preventDefault()
+        const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement)
+        const offset = event.key === "ArrowDown" ? 1 : -1
+        const nextIndex = currentIndex < 0
+          ? 0
+          : (currentIndex + offset + items.length) % items.length
+        items[nextIndex]?.focus({ preventScroll: true })
+      }}
+    >
+      {children}
+    </div>,
+    document.body,
+  )
+}
+
 function ContextMenu({
   menu,
   onAddNode,
@@ -6103,7 +6481,7 @@ function ContextMenu({
   if (!menu) return null
 
   return (
-    <div className="cinema-context-menu" style={{ left: menu.x, top: menu.y }} role="menu">
+    <CinemaContextMenuSurface x={menu.x} y={menu.y} onClose={onClose}>
       {NODE_TYPES.map((type) => {
         const meta = NODE_META[type]
         const Icon = meta.icon
@@ -6122,46 +6500,72 @@ function ContextMenu({
           </button>
         )
       })}
-    </div>
+    </CinemaContextMenuSurface>
   )
 }
 
 function NodeContextMenu({
   menu,
   onShowDetails,
+  onDeleteNodes,
   onClose,
 }: {
   menu: NodeContextMenuState
   onShowDetails: (nodeID: string) => void
+  onDeleteNodes: (nodeIDs: string[]) => void
   onClose: () => void
 }) {
   if (!menu) return null
+  const selectionCountLabel = menu.kind === "selection" ? `${menu.nodeIDs.length} 个节点` : null
 
   return (
-    <div className="cinema-context-menu" style={{ left: menu.x, top: menu.y }} role="menu">
-      <button
-        type="button"
-        role="menuitem"
-        onClick={() => {
-          onShowDetails(menu.nodeID)
-          onClose()
-        }}
-      >
-        <Info size={15} aria-hidden="true" />
-        <span>详细信息</span>
-      </button>
-    </div>
+    <CinemaContextMenuSurface key={menu.kind} x={menu.x} y={menu.y} compact onClose={onClose}>
+      {menu.kind === "selection" ? (
+        <button
+          type="button"
+          role="menuitem"
+          data-variant="danger"
+          title={`删除选中的 ${selectionCountLabel}`}
+          aria-label={`删除选中的 ${selectionCountLabel}`}
+          onClick={() => {
+            onDeleteNodes(menu.nodeIDs)
+            onClose()
+          }}
+        >
+          <Trash2 size={15} aria-hidden="true" />
+          <span>删除</span>
+          <span className="cinema-context-menu-item-meta">{selectionCountLabel}</span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => {
+            onShowDetails(menu.nodeID)
+            onClose()
+          }}
+        >
+          <Info size={15} aria-hidden="true" />
+          <span>详细信息</span>
+        </button>
+      )}
+    </CinemaContextMenuSurface>
   )
 }
 
 function CanvasPanelNavigation({
   activePanel,
   onTogglePanel,
+  assetButtonRef,
+  assetLibraryEnabled,
 }: {
   activePanel: CanvasPanel | null
   onTogglePanel: (panel: CanvasPanel) => void
+  assetButtonRef: RefObject<HTMLButtonElement | null>
+  assetLibraryEnabled: boolean
 }) {
   const isFilesOpen = activePanel === "files"
+  const isAssetsOpen = activePanel === "assets"
 
   return (
     <nav
@@ -6181,22 +6585,54 @@ function CanvasPanelNavigation({
       >
         <Folder size={18} aria-hidden="true" />
       </button>
+      {assetLibraryEnabled ? <button
+        ref={assetButtonRef}
+        type="button"
+        className={`cinema-canvas-nav-button ${isAssetsOpen ? "is-active" : ""}`}
+        title={isAssetsOpen ? "关闭素材库" : "打开素材库"}
+        aria-label={isAssetsOpen ? "关闭素材库" : "打开素材库"}
+        aria-controls="cinema-asset-library"
+        aria-expanded={isAssetsOpen}
+        aria-pressed={isAssetsOpen}
+        onClick={() => onTogglePanel("assets")}
+      >
+        <Images size={18} aria-hidden="true" />
+      </button> : null}
     </nav>
   )
 }
 
 export function App() {
   const { projectID, agentBaseURL } = useMemo(readSearchParams, [])
-  const selectedNodeID = useUiStore((state) => state.selectedNodeID)
-  const setSelectedNodeID = useUiStore((state) => state.setSelectedNodeID)
+  const activeNodeID = useUiStore((state) => state.activeNodeID)
+  const setActiveNodeID = useUiStore((state) => state.setActiveNodeID)
   const reactFlow = useReactFlow<CinemaFlowNode, Edge>()
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<CinemaFlowNode, Edge> | null>(null)
   const [nodes, setNodes] = useState<CinemaFlowNode[]>([])
+  const pendingCanvasSelectionNodeIDRef = useRef<string | null>(null)
+  const selectedNodeIDs = useMemo(
+    () => nodes.filter((node) => node.selected).map((node) => node.id),
+    [nodes],
+  )
+  const selectSingleNode = useCallback((nodeID: string | null) => {
+    pendingCanvasSelectionNodeIDRef.current = null
+    setNodes((current) => current.map((node) => {
+      const selected = nodeID !== null && node.id === nodeID
+      return node.selected === selected ? node : { ...node, selected }
+    }))
+    setActiveNodeID(nodeID)
+  }, [setActiveNodeID])
+  const selectSingleNodeWhenAvailable = useCallback((nodeID: string) => {
+    selectSingleNode(nodeID)
+    pendingCanvasSelectionNodeIDRef.current = nodeID
+  }, [selectSingleNode])
   const [edges, setEdges] = useState<Edge[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
   const [nodeContextMenu, setNodeContextMenu] = useState<NodeContextMenuState>(null)
   const [inspectorNodeID, setInspectorNodeID] = useState<string | null>(null)
   const [activeCanvasPanel, setActiveCanvasPanel] = useState<CanvasPanel | null>(null)
+  const [relinkNodeID, setRelinkNodeID] = useState<string | null>(null)
+  const assetRailButtonRef = useRef<HTMLButtonElement>(null)
   const [nodeInputOverlayRoot, setNodeInputOverlayRoot] = useState<HTMLDivElement | null>(null)
   const [saveState, setSaveState] = useState<SaveState>("idle")
   const [, setSaveError] = useState<string | null>(null)
@@ -6216,6 +6652,7 @@ export function App() {
   const [imageCropNodeID, setImageCropNodeID] = useState<string | null>(null)
   const [imageCropError, setImageCropError] = useState<{ nodeID: string; message: string } | null>(null)
   const saveStateRef = useRef<SaveState>("idle")
+  const canvasRevisionRef = useRef(0)
   const autoRefreshInFlightRef = useRef(false)
   const nodePatchTimersRef = useRef(new Map<string, number>())
   const nodePatchQueueRef = useRef(new Map<string, CinemaNodePatch>())
@@ -6224,6 +6661,9 @@ export function App() {
   const eventCursorRef = useRef<number | null>(null)
   const nodePointerPaneClickGuardRef = useRef<{ x: number; y: number; expiresAt: number } | null>(null)
   const nodePointerPaneClickGuardTimerRef = useRef<number | null>(null)
+  const pendingPointerSelectionRef = useRef<{ nodeID: string; selectedNodeIDs: Set<string> } | null>(null)
+  const latestNodeDeletionRequestIDRef = useRef(0)
+  const queuedNodeDeletionErrorRef = useRef<string | null>(null)
 
   useEffect(() => () => {
     if (nodePointerPaneClickGuardTimerRef.current !== null) {
@@ -6232,7 +6672,15 @@ export function App() {
   }, [])
 
   const applyCanvas = useCallback((canvas: CinemaCanvasDocument) => {
-    setNodes(toFlowNodes(canvas))
+    canvasRevisionRef.current = canvas.revision ?? 0
+    setNodes((current) => {
+      const pendingNodeID = pendingCanvasSelectionNodeIDRef.current
+      const next = preserveNodeSelection(current, toFlowNodes(canvas), pendingNodeID)
+      if (!pendingNodeID || !next.some((node) => node.id === pendingNodeID)) return next
+
+      pendingCanvasSelectionNodeIDRef.current = null
+      return next
+    })
     setEdges(canvas.edges)
     saveStateRef.current = "saved"
     setSaveState("saved")
@@ -6316,6 +6764,127 @@ export function App() {
       setSaveError(error instanceof Error ? error.message : "Command failed")
     },
   })
+  const assetLibraryEnabled = projectQuery.data?.capabilities?.assetLibrary !== false
+
+  const createNodeFromAssetMutation = useMutation({
+    scope: { id: `cinema-create-node-from-asset:${projectID}` },
+    mutationFn: async ({
+      assetRef,
+      position,
+      nodeID,
+    }: {
+      assetRef: CinemaAssetLocator
+      position: { x: number; y: number }
+      nodeID: string
+    }) => {
+      const commandID = makeCommandID("create-node-from-asset")
+      const send = (baseRevision: number) => requestJson<CinemaCommandResult>(
+        agentBaseURL,
+        `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: commandID,
+            type: "create-node-from-asset",
+            actor: "cinema-web",
+            baseRevision,
+            nodeID,
+            assetRef,
+            position,
+          } satisfies CinemaCommand),
+        },
+      )
+      let result: CinemaCommandResult
+      try {
+        result = await send(canvasRevisionRef.current)
+      } catch (error) {
+        if (!(error instanceof CinemaRequestError) || error.status !== 409) throw error
+        const latestCanvas = await requestJson<CinemaCanvasDocument>(
+          agentBaseURL,
+          `/api/cinema/projects/${encodeURIComponent(projectID)}/canvas`,
+        )
+        canvasRevisionRef.current = latestCanvas.revision ?? 0
+        result = await send(canvasRevisionRef.current)
+      }
+      return { result, nodeID }
+    },
+    onMutate: () => {
+      saveStateRef.current = "saving"
+      setSaveState("saving")
+      setSaveError(null)
+    },
+    onSuccess: ({ result, nodeID }) => {
+      deferredCanvasWhileEditingRef.current = null
+      applyCanvas(result.canvas)
+      selectSingleNode(nodeID)
+    },
+    onError: (error) => {
+      saveStateRef.current = "error"
+      setSaveState("error")
+      setSaveError(error instanceof Error ? error.message : "Could not add the asset to the Canvas")
+      void refetchCanvas()
+    },
+  })
+
+  const relinkNodeAssetMutation = useMutation({
+    scope: { id: `cinema-relink-node-asset:${projectID}` },
+    mutationFn: async ({
+      assetRef,
+      nodeID,
+    }: {
+      assetRef: CinemaAssetLocator
+      nodeID: string
+    }) => {
+      const commandID = makeCommandID("relink-node-asset")
+      const send = (baseRevision: number) => requestJson<CinemaCommandResult>(
+        agentBaseURL,
+        `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: commandID,
+            type: "relink-node-asset",
+            actor: "cinema-web",
+            baseRevision,
+            nodeID,
+            assetRef,
+          } satisfies CinemaCommand),
+        },
+      )
+      let result: CinemaCommandResult
+      try {
+        result = await send(canvasRevisionRef.current)
+      } catch (error) {
+        if (!(error instanceof CinemaRequestError) || error.status !== 409) throw error
+        const latestCanvas = await requestJson<CinemaCanvasDocument>(
+          agentBaseURL,
+          `/api/cinema/projects/${encodeURIComponent(projectID)}/canvas`,
+        )
+        canvasRevisionRef.current = latestCanvas.revision ?? 0
+        result = await send(canvasRevisionRef.current)
+      }
+      return { result, nodeID }
+    },
+    onMutate: () => {
+      saveStateRef.current = "saving"
+      setSaveState("saving")
+      setSaveError(null)
+    },
+    onSuccess: ({ result, nodeID }) => {
+      deferredCanvasWhileEditingRef.current = null
+      applyCanvas(result.canvas)
+      selectSingleNode(nodeID)
+      setRelinkNodeID(null)
+    },
+    onError: (error) => {
+      saveStateRef.current = "error"
+      setSaveState("error")
+      setSaveError(error instanceof Error ? error.message : "Could not relink the asset")
+      void refetchCanvas()
+    },
+  })
 
   const refetchRuntimeState = useCallback(async () => {
     await Promise.all([
@@ -6354,7 +6923,7 @@ export function App() {
           nodeID: variables.draftNodeID,
         })
       }
-      if (task.taskNodeID) setSelectedNodeID(task.taskNodeID)
+      if (task.taskNodeID) selectSingleNodeWhenAvailable(task.taskNodeID)
       await refetchRuntimeState()
       saveStateRef.current = "saved"
       setSaveState("saved")
@@ -6408,7 +6977,7 @@ export function App() {
       setSaveError(null)
     },
     onSuccess: async (task) => {
-      if (task.taskNodeID) setSelectedNodeID(task.taskNodeID)
+      if (task.taskNodeID) selectSingleNode(task.taskNodeID)
       await refetchRuntimeState()
       saveStateRef.current = "saved"
       setSaveState("saved")
@@ -6431,7 +7000,7 @@ export function App() {
       setSaveError(null)
     },
     onSuccess: async (task) => {
-      if (task.taskNodeID) setSelectedNodeID(task.taskNodeID)
+      if (task.taskNodeID) selectSingleNode(task.taskNodeID)
       await refetchRuntimeState()
       saveStateRef.current = "saved"
       setSaveState("saved")
@@ -6457,7 +7026,17 @@ export function App() {
 
   useEffect(() => {
     eventCursorRef.current = null
+    setActiveCanvasPanel(null)
+    setRelinkNodeID(null)
+    setInspectorNodeID(null)
   }, [agentBaseURL, projectID])
+
+  useEffect(() => {
+    if (!assetLibraryEnabled) {
+      setActiveCanvasPanel((current) => current === "assets" ? null : current)
+      setRelinkNodeID(null)
+    }
+  }, [assetLibraryEnabled])
 
   useEffect(() => {
     if (!canvasQuery.data) return
@@ -6582,7 +7161,7 @@ export function App() {
     },
     onSuccess: async (result) => {
       applyCanvas(result.canvas)
-      setSelectedNodeID(result.nodeID)
+      selectSingleNode(result.nodeID)
       await refetchRuntimeState()
     },
     onError: (error, variables) => {
@@ -6627,7 +7206,7 @@ export function App() {
     },
     onSuccess: (result) => {
       applyCanvas(result.canvas)
-      setSelectedNodeID(result.nodeID)
+      selectSingleNode(result.nodeID)
     },
     onError: (error, variables) => {
       const message = error instanceof Error ? error.message : "Image generation failed"
@@ -6823,7 +7402,7 @@ export function App() {
     },
     onSuccess: ({ canvas, nodeID }) => {
       applyCanvas(canvas)
-      setSelectedNodeID(nodeID)
+      selectSingleNode(nodeID)
       saveStateRef.current = "saved"
       setSaveState("saved")
     },
@@ -6884,7 +7463,7 @@ export function App() {
     },
     onSuccess: ({ canvas, nodeID }) => {
       applyCanvas(canvas)
-      setSelectedNodeID(nodeID)
+      selectSingleNode(nodeID)
       saveStateRef.current = "saved"
       setSaveState("saved")
     },
@@ -6912,7 +7491,11 @@ export function App() {
         throw new Error("Source image node is unavailable.")
       }
       const asset = readFinalImageAsset(sourceNode.data.rawData)
-      if (!asset) throw new Error("Source image asset is unavailable.")
+      const sourceAssetRef = cinemaAssetRefFromNodeData(sourceNode.data.rawData)
+      const libraryAssetRef = sourceAssetRef?.snapshot.kind === "image" ? sourceAssetRef : null
+      if (!asset && !libraryAssetRef) {
+        throw new Error("Source image asset is unavailable.")
+      }
       if (!agentBaseURL || !projectID) throw new Error("Cinema project is unavailable.")
 
       const pendingNodeIDs = new Set([
@@ -6923,17 +7506,82 @@ export function App() {
         await flushNodePatch(pendingNodeID)
       }
 
-      const sourceSize = asset.width && asset.height
+      const sourceSize = asset?.width && asset.height
         ? { width: asset.width, height: asset.height }
-        : null
+        : libraryAssetRef?.snapshot.width && libraryAssetRef.snapshot.height
+          ? { width: libraryAssetRef.snapshot.width, height: libraryAssetRef.snapshot.height }
+          : null
       const normalizedCrop = sourceSize
         ? normalizeImageCropRect(crop, sourceSize.width, sourceSize.height)
         : crop
-      const previewURL = projectAssetPreviewURL(agentBaseURL, projectID, asset.path)
+      const previewURL = libraryAssetRef
+        ? cinemaAssetURL(agentBaseURL, libraryAssetRef, "preview")
+        : projectAssetPreviewURL(agentBaseURL, projectID, asset!.path)
       const croppedImage = await cropImageURLToPngDataBase64(previewURL, normalizedCrop, sourceSize)
       const sourceFileName = readRawString(sourceNode.data.rawData, "sourceFileName", sourceNode.data.title)
       const nextTitle = croppedImageTitle(sourceFileName || sourceNode.data.title)
       const nextFileName = `${nextTitle}.png`
+
+      if (libraryAssetRef) {
+        const api = createAssetLibraryApi(agentBaseURL, projectID, libraryAssetRef.scope)
+        let sourceDetail = await api.getAsset(libraryAssetRef.assetID)
+        if (sourceDetail.asset.kind !== "image" || sourceDetail.asset.status !== "ready") {
+          throw new Error("Restore or repair the source image before cropping it.")
+        }
+        const file = dataBase64ToFile(croppedImage.dataBase64, nextFileName, "image/png")
+        const operationID = makeAssetLibraryOperationID("crop")
+        const upload = (baseRevision: number) => api.upload({
+          file,
+          folderID: sourceDetail.asset.folderID,
+          operationID,
+          baseRevision,
+          source: "crop",
+        })
+        let uploaded
+        try {
+          uploaded = await upload(sourceDetail.revision)
+        } catch (error) {
+          if (!(error instanceof AssetLibraryApiError) || error.status !== 409) throw error
+          sourceDetail = await api.getAsset(libraryAssetRef.assetID)
+          if (sourceDetail.asset.kind !== "image" || sourceDetail.asset.status !== "ready") {
+            throw new Error("The source image changed while the crop was being prepared.")
+          }
+          uploaded = await upload(sourceDetail.revision)
+        }
+
+        const nextNodeID = makeAssetNodeID()
+        const created = await createNodeFromAssetMutation.mutateAsync({
+          assetRef: { scope: libraryAssetRef.scope, assetID: uploaded.asset.id },
+          position: {
+            x: sourceNode.position.x + IMAGE_CROP_NODE_OFFSET_X,
+            y: sourceNode.position.y,
+          },
+          nodeID: nextNodeID,
+        })
+        const connected = await requestJson<CinemaCommandResult>(
+          agentBaseURL,
+          `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: makeCommandID("connect-nodes"),
+              type: "connect-nodes",
+              actor: "cinema-web",
+              edge: {
+                id: `edge-${sourceNode.id}-${nextNodeID}-${Date.now().toString(36)}`,
+                source: sourceNode.id,
+                target: nextNodeID,
+                sourceHandle: "output",
+                targetHandle: "input",
+                data: { derivedOperation: "crop" },
+              },
+            } satisfies CinemaCommand),
+          },
+        )
+        return { canvas: connected.canvas, nodeID: created.nodeID }
+      }
+
       const importResult = await requestJson<CinemaImportedImageAssetResult>(
         agentBaseURL,
         `/api/cinema/projects/${encodeURIComponent(projectID)}/assets/imports`,
@@ -6960,7 +7608,7 @@ export function App() {
           title: nextTitle,
           rawDataPatch: {
             derivedFromNodeID: sourceNode.id,
-            derivedFromAssetID: asset.id,
+            derivedFromAssetID: asset!.id,
             derivedOperation: "crop",
             crop: normalizedCrop,
             cropOutputSize: croppedImage.outputSize,
@@ -7012,7 +7660,7 @@ export function App() {
     },
     onSuccess: ({ canvas, nodeID }) => {
       applyCanvas(canvas)
-      setSelectedNodeID(nodeID)
+      selectSingleNode(nodeID)
     },
     onError: (error, variables) => {
       const message = error instanceof Error ? error.message : "Image crop failed"
@@ -7126,30 +7774,131 @@ export function App() {
     }
   }, [activeGenerationTaskIDs, activeGenerationTaskIDsKey, agentBaseURL, projectID, projectQuery.data?.initialized, refetchRuntimeState])
 
+  const deleteNodesMutation = useMutation({
+    scope: { id: `cinema-node-deletions:${projectID}` },
+    mutationFn: async ({ requestID, nodeIDs: requestedNodeIDs }: { requestID: number; nodeIDs: string[] }) => {
+      const nodeIDs = [...new Set(requestedNodeIDs)]
+      let latestCanvas: CinemaCanvasDocument | null = null
+
+      // The command endpoint deletes one node at a time. Keep the requests ordered
+      // and only apply the final canvas so an older response cannot resurrect a node.
+      for (const nodeID of nodeIDs) {
+        const result = await requestJson<CinemaCommandResult>(
+          agentBaseURL,
+          `/api/cinema/projects/${encodeURIComponent(projectID)}/commands`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              id: makeCommandID("delete-node"),
+              type: "delete-node",
+              actor: "cinema-web",
+              nodeID,
+            } satisfies CinemaCommand),
+          },
+        )
+        latestCanvas = result.canvas
+      }
+
+      return { requestID, nodeIDs, canvas: latestCanvas }
+    },
+    onMutate: ({ nodeIDs }) => {
+      for (const nodeID of nodeIDs) {
+        const timerID = nodePatchTimersRef.current.get(nodeID)
+        if (timerID !== undefined) window.clearTimeout(timerID)
+        nodePatchTimersRef.current.delete(nodeID)
+        nodePatchQueueRef.current.delete(nodeID)
+      }
+      saveStateRef.current = "saving"
+      setSaveState("saving")
+      setSaveError(null)
+    },
+    onSuccess: ({ requestID, canvas }) => {
+      if (requestID !== latestNodeDeletionRequestIDRef.current) return
+      const queuedError = queuedNodeDeletionErrorRef.current
+      queuedNodeDeletionErrorRef.current = null
+      const restoreQueuedError = () => {
+        if (!queuedError) return false
+        saveStateRef.current = "error"
+        setSaveState("error")
+        setSaveError(queuedError)
+        return true
+      }
+      if (!canvas) {
+        restoreQueuedError()
+        return
+      }
+      if (nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0) {
+        if (!restoreQueuedError()) {
+          saveStateRef.current = "dirty"
+          setSaveState("dirty")
+        }
+        return
+      }
+      if (editingNodeIDsRef.current.size > 0) {
+        deferredCanvasWhileEditingRef.current = canvas
+        if (!restoreQueuedError()) {
+          saveStateRef.current = "saved"
+          setSaveState("saved")
+          setSaveError(null)
+        }
+        return
+      }
+      deferredCanvasWhileEditingRef.current = null
+      applyCanvas(canvas)
+      restoreQueuedError()
+    },
+    onError: (error, { requestID }) => {
+      const message = error instanceof Error ? error.message : "Node deletion failed"
+      if (requestID !== latestNodeDeletionRequestIDRef.current) {
+        queuedNodeDeletionErrorRef.current = message
+        return
+      }
+      queuedNodeDeletionErrorRef.current = null
+      saveStateRef.current = "error"
+      setSaveState("error")
+      setSaveError(message)
+      void refetchCanvas()
+    },
+  })
+  const mutateNodeDeletions = deleteNodesMutation.mutate
+  const submitNodeDeletions = useCallback((nodeIDs: string[]) => {
+    const requestID = latestNodeDeletionRequestIDRef.current + 1
+    latestNodeDeletionRequestIDRef.current = requestID
+    mutateNodeDeletions({ requestID, nodeIDs })
+  }, [mutateNodeDeletions])
+
   const onNodesChange = useCallback((changes: NodeChange<CinemaFlowNode>[]) => {
     const removedNodeIDs = changes
       .filter((change): change is Extract<NodeChange<CinemaFlowNode>, { type: "remove" }> => change.type === "remove")
       .map((change) => change.id)
+    const settledPositionChanges = changes.filter(
+      (change): change is Extract<NodeChange<CinemaFlowNode>, { type: "position" }> =>
+        change.type === "position" && change.dragging !== true && Boolean(change.position),
+    )
     if (isMutationChange(changes)) {
       saveStateRef.current = "dirty"
       setSaveState("dirty")
     }
     setNodes((current) => applyNodeChanges(changes, current))
-    for (const nodeID of removedNodeIDs) {
-      commandMutation.mutate({
-        id: makeCommandID("delete-node"),
-        type: "delete-node",
-        actor: "cinema-web",
-        nodeID,
-      }, {
-        onSuccess: () => {
-          if (selectedNodeID === nodeID) setSelectedNodeID(null)
-          setInspectorNodeID((current) => current === nodeID ? null : current)
-          setNodeContextMenu((current) => current?.nodeID === nodeID ? null : current)
-        },
-      })
+    for (const change of settledPositionChanges) {
+      if (change.position) queueNodePatch(change.id, { position: change.position })
     }
-  }, [commandMutation, selectedNodeID, setSelectedNodeID])
+    if (removedNodeIDs.length > 0) {
+      if (activeNodeID && removedNodeIDs.includes(activeNodeID)) setActiveNodeID(null)
+      setInspectorNodeID((current) => current && removedNodeIDs.includes(current) ? null : current)
+      setNodeContextMenu(null)
+      submitNodeDeletions(removedNodeIDs)
+    }
+  }, [activeNodeID, queueNodePatch, setActiveNodeID, submitNodeDeletions])
+
+  const deleteNodes = useCallback((nodeIDs: string[]) => {
+    const uniqueNodeIDs = [...new Set(nodeIDs)]
+    if (uniqueNodeIDs.length === 0) return
+    onNodesChange(uniqueNodeIDs.map((id) => ({ id, type: "remove" })))
+  }, [onNodesChange])
 
   const onEdgesChange = useCallback((changes: EdgeChange<Edge>[]) => {
     const removedEdgeIDs = changes
@@ -7217,15 +7966,89 @@ export function App() {
       actor: "cinema-web",
       node: toCanvasNode(next),
     }, {
-      onSuccess: () => setSelectedNodeID(next.id),
+      onSuccess: () => selectSingleNode(next.id),
     })
-  }, [commandMutation, setSelectedNodeID])
+  }, [commandMutation, selectSingleNode])
+
+  const addAssetToCanvas = useCallback(async (
+    assetRef: CinemaAssetLocator,
+    position?: { x: number; y: number },
+  ) => {
+    const pendingNodeIDs = new Set([
+      ...nodePatchQueueRef.current.keys(),
+      ...nodePatchTimersRef.current.keys(),
+    ])
+    for (const pendingNodeID of pendingNodeIDs) await flushNodePatch(pendingNodeID)
+
+    let targetPosition = position
+    if (!targetPosition) {
+      const canvasElement = document.querySelector<HTMLElement>(".cinema-canvas")
+      const bounds = canvasElement?.getBoundingClientRect()
+      targetPosition = (flowInstance ?? reactFlow).screenToFlowPosition({
+        x: bounds ? bounds.left + bounds.width / 2 : window.innerWidth / 2,
+        y: bounds ? bounds.top + bounds.height / 2 : window.innerHeight / 2,
+      })
+    }
+    const nodeID = makeAssetNodeID()
+    await createNodeFromAssetMutation.mutateAsync({ assetRef, position: targetPosition, nodeID })
+    return nodeID
+  }, [createNodeFromAssetMutation, flowInstance, flushNodePatch, reactFlow])
+
+  const handleAssetLibraryAdd = useCallback(async ({ scope, asset }: AssetLibraryAddRequest) => {
+    if (relinkNodeID) {
+      const targetNode = nodes.find((node) => node.id === relinkNodeID)
+      if (!targetNode) throw new Error("The node selected for relinking no longer exists.")
+      if (targetNode.data.cinemaType !== asset.kind) {
+        throw new Error(`Choose a ${targetNode.data.cinemaType} asset to relink this node.`)
+      }
+      await relinkNodeAssetMutation.mutateAsync({
+        nodeID: relinkNodeID,
+        assetRef: { scope, assetID: asset.id },
+      })
+      return
+    }
+    await addAssetToCanvas({ scope, assetID: asset.id })
+  }, [addAssetToCanvas, nodes, relinkNodeAssetMutation, relinkNodeID])
+
+  const beginRelinkAsset = useCallback((nodeID: string) => {
+    setRelinkNodeID(nodeID)
+    setInspectorNodeID(null)
+    setActiveCanvasPanel("assets")
+    selectSingleNode(nodeID)
+  }, [selectSingleNode])
+
+  const onCanvasAssetDragOver = useCallback((event: ReactDragEvent<HTMLElement>) => {
+    if (!event.dataTransfer.types.includes(CINEMA_ASSET_DRAG_MIME)) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "copy"
+  }, [])
+
+  const onCanvasAssetDrop = useCallback((event: ReactDragEvent<HTMLElement>) => {
+    const assetRef = cinemaAssetLocatorFromDragPayload(event.dataTransfer.getData(CINEMA_ASSET_DRAG_MIME))
+    if (!assetRef) return
+    event.preventDefault()
+    event.stopPropagation()
+    const position = (flowInstance ?? reactFlow).screenToFlowPosition({ x: event.clientX, y: event.clientY })
+    void addAssetToCanvas(assetRef, position)
+  }, [addAssetToCanvas, flowInstance, reactFlow])
 
   const toggleCanvasPanel = useCallback((panel: CanvasPanel) => {
-    setActiveCanvasPanel((current) => current === panel ? null : panel)
+    setActiveCanvasPanel((current) => {
+      const next = current === panel ? null : panel
+      if (next) setInspectorNodeID(null)
+      if (next !== "assets") setRelinkNodeID(null)
+      return next
+    })
+  }, [])
+
+  const closeAssetPanel = useCallback(() => {
+    setActiveCanvasPanel((current) => current === "assets" ? null : current)
+    setRelinkNodeID(null)
+    window.requestAnimationFrame(() => assetRailButtonRef.current?.focus({ preventScroll: true }))
   }, [])
 
   const onPaneContextMenu = useCallback((event: globalThis.MouseEvent | ReactMouseEvent<Element>) => {
+    if (isEditableElement(event.target)) return
     event.preventDefault()
     setNodeContextMenu(null)
     const projected = (flowInstance ?? reactFlow).screenToFlowPosition({
@@ -7241,24 +8064,60 @@ export function App() {
   }, [flowInstance, reactFlow])
 
   const onNodeContextMenu = useCallback((event: ReactMouseEvent<Element>, node: CinemaFlowNode) => {
+    if (isEditableElement(event.target)) return
     event.preventDefault()
     event.stopPropagation()
+    pendingCanvasSelectionNodeIDRef.current = null
     setContextMenu(null)
-    setSelectedNodeID(node.id)
+    if (node.selected && selectedNodeIDs.length > 1) {
+      setNodeContextMenu({
+        kind: "selection",
+        x: event.clientX,
+        y: event.clientY,
+        nodeIDs: selectedNodeIDs,
+      })
+      return
+    }
+    if (node.selected) setActiveNodeID(node.id)
+    else selectSingleNode(node.id)
     setInspectorNodeID((current) => current === node.id ? current : null)
     setNodeContextMenu({
+      kind: "node",
       x: event.clientX,
       y: event.clientY,
       nodeID: node.id,
     })
-  }, [setSelectedNodeID])
+  }, [selectSingleNode, selectedNodeIDs, setActiveNodeID])
+
+  const onSelectionContextMenu = useCallback((event: ReactMouseEvent<Element>, selectedNodes: CinemaFlowNode[]) => {
+    if (isEditableElement(event.target)) return
+    const nodeIDs = [...new Set(selectedNodes.map((node) => node.id))]
+    if (nodeIDs.length === 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    pendingCanvasSelectionNodeIDRef.current = null
+    setContextMenu(null)
+    setNodeContextMenu(nodeIDs.length === 1
+      ? {
+          kind: "node",
+          x: event.clientX,
+          y: event.clientY,
+          nodeID: nodeIDs[0]!,
+        }
+      : {
+          kind: "selection",
+          x: event.clientX,
+          y: event.clientY,
+          nodeIDs,
+        })
+  }, [])
 
   const selectNodeOnly = useCallback((nodeID: string) => {
     setContextMenu(null)
     setNodeContextMenu(null)
-    setSelectedNodeID(nodeID)
+    selectSingleNode(nodeID)
     setInspectorNodeID((current) => current === nodeID ? current : null)
-  }, [setSelectedNodeID])
+  }, [selectSingleNode])
 
   const setNodeInputEditing = useCallback((nodeID: string, isEditing: boolean) => {
     const editingNodeIDs = editingNodeIDsRef.current
@@ -7308,8 +8167,26 @@ export function App() {
     }, NODE_POINTER_PANE_CLICK_GUARD_MS)
   }, [clearNodePointerPaneClickGuard])
 
-  const activateNodeFromPointer = useCallback((nodeID: string, pointerID: number) => {
+  const activateNodeFromPointer = useCallback((nodeID: string, pointerID: number, multiSelect: boolean) => {
     clearNodePointerPaneClickGuard()
+    pendingCanvasSelectionNodeIDRef.current = null
+    setContextMenu(null)
+    setNodeContextMenu(null)
+    const currentSelectedNodeIDs = nodes.filter((node) => node.selected).map((node) => node.id)
+    if (multiSelect) {
+      pendingPointerSelectionRef.current = {
+        nodeID,
+        selectedNodeIDs: toggleNodeSelection(currentSelectedNodeIDs, nodeID),
+      }
+      setActiveNodeID(null)
+    } else if (shouldDeferSingleSelection(currentSelectedNodeIDs, nodeID)) {
+      // Keep the group selected while the pointer may become a drag. A plain click
+      // still collapses to this node in onNodeClick after React Flow confirms it was not a drag.
+      pendingPointerSelectionRef.current = { nodeID, selectedNodeIDs: new Set([nodeID]) }
+    } else {
+      pendingPointerSelectionRef.current = { nodeID, selectedNodeIDs: new Set([nodeID]) }
+      selectSingleNode(nodeID)
+    }
 
     const stopGuardAfterPointerEnd = (event: PointerEvent) => {
       if (event.pointerId !== pointerID) return
@@ -7320,13 +8197,27 @@ export function App() {
 
     window.addEventListener("pointerup", stopGuardAfterPointerEnd)
     window.addEventListener("pointercancel", stopGuardAfterPointerEnd)
-    selectNodeOnly(nodeID)
-  }, [clearNodePointerPaneClickGuard, scheduleNodePointerPaneClickGuardClear, selectNodeOnly])
+  }, [clearNodePointerPaneClickGuard, nodes, scheduleNodePointerPaneClickGuardClear, selectSingleNode, setActiveNodeID])
+
+  const onNodeClick = useCallback((_event: ReactMouseEvent<Element>, node: CinemaFlowNode) => {
+    const pendingSelection = pendingPointerSelectionRef.current
+    pendingPointerSelectionRef.current = null
+    if (!pendingSelection || pendingSelection.nodeID !== node.id) return
+
+    setNodes((current) => current.map((currentNode) => {
+      const selected = pendingSelection.selectedNodeIDs.has(currentNode.id)
+      return currentNode.selected === selected ? currentNode : { ...currentNode, selected }
+    }))
+  }, [])
 
   const showNodeDetails = useCallback((nodeID: string) => {
-    setSelectedNodeID(nodeID)
+    setNodes((current) => current.some((node) => node.id === nodeID && node.selected)
+      ? current
+      : current.map((node) => ({ ...node, selected: node.id === nodeID })))
+    setActiveNodeID(nodeID)
+    setActiveCanvasPanel(null)
     setInspectorNodeID(nodeID)
-  }, [setSelectedNodeID])
+  }, [setActiveNodeID])
 
   const clearCanvasSelection = useCallback((event?: ReactMouseEvent<Element>) => {
     const guard = nodePointerPaneClickGuardRef.current
@@ -7339,9 +8230,18 @@ export function App() {
     }
 
     clearNodePointerPaneClickGuard()
-    setSelectedNodeID(null)
+    pendingCanvasSelectionNodeIDRef.current = null
+    pendingPointerSelectionRef.current = null
+    setNodes((current) => current.map((node) => node.selected ? { ...node, selected: false } : node))
+    setActiveNodeID(null)
     setInspectorNodeID(null)
-  }, [clearNodePointerPaneClickGuard, setSelectedNodeID])
+  }, [clearNodePointerPaneClickGuard, setActiveNodeID])
+
+  const onSelectionChange = useCallback((selection: OnSelectionChangeParams<CinemaFlowNode, Edge>) => {
+    const nextActiveNodeID = selection.nodes.length === 1 ? selection.nodes[0]?.id ?? null : null
+    setActiveNodeID(nextActiveNodeID)
+    setInspectorNodeID((current) => current === nextActiveNodeID ? current : null)
+  }, [setActiveNodeID])
 
   const clearCanvasSelectionOnPointerDown = useCallback((event: ReactPointerEvent<Element>) => {
     if (event.button !== 0 || !event.isPrimary) return
@@ -7351,6 +8251,7 @@ export function App() {
       target.closest(
         [
           ".react-flow__node",
+          ".react-flow__nodesselection",
           ".react-flow__handle",
           ".react-flow__controls",
           ".react-flow__minimap",
@@ -7390,50 +8291,108 @@ export function App() {
   }, [queueNodePatch])
 
   const deleteNode = useCallback((nodeID: string) => {
-    commandMutation.mutate({
-      id: makeCommandID("delete-node"),
-      type: "delete-node",
-      actor: "cinema-web",
-      nodeID,
-    }, {
-      onSuccess: () => {
-        setSelectedNodeID(null)
-        setInspectorNodeID((current) => current === nodeID ? null : current)
-        setNodeContextMenu((current) => current?.nodeID === nodeID ? null : current)
-      },
-    })
-  }, [commandMutation, setSelectedNodeID])
+    deleteNodes([nodeID])
+  }, [deleteNodes])
 
   useEffect(() => {
-    const handleDeleteSelectedNode = (event: KeyboardEvent) => {
+    const handleDeleteSelectedNodes = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return
       if (event.key !== "Backspace" && event.key !== "Delete") return
-      if (!selectedNodeID || editingNodeIDsRef.current.size > 0 || isEditableElement(event.target)) return
+      if (selectedNodeIDs.length === 0 || editingNodeIDsRef.current.size > 0 || isEditableElement(event.target)) return
 
       event.preventDefault()
-      deleteNode(selectedNodeID)
+      deleteNodes(selectedNodeIDs)
     }
 
-    window.addEventListener("keydown", handleDeleteSelectedNode)
-    return () => window.removeEventListener("keydown", handleDeleteSelectedNode)
-  }, [deleteNode, selectedNodeID])
+    window.addEventListener("keydown", handleDeleteSelectedNodes)
+    return () => window.removeEventListener("keydown", handleDeleteSelectedNodes)
+  }, [deleteNodes, selectedNodeIDs])
+
+  const canvasAssetLocators = useMemo(() => {
+    const unique = new Map<string, CinemaAssetLocator>()
+    for (const node of nodes) {
+      const assetRef = cinemaAssetRefFromNodeData(node.data.rawData)
+      if (!assetRef) continue
+      unique.set(cinemaAssetLocatorStatusKey(assetRef), {
+        scope: assetRef.scope,
+        assetID: assetRef.assetID,
+      })
+    }
+    return [...unique.values()]
+  }, [nodes])
+  const canvasAssetStateQueries = useQueries({
+    queries: canvasAssetLocators.map((assetRef) => ({
+      queryKey: ["cinema-canvas-asset-state", agentBaseURL, cinemaAssetLocatorStatusKey(assetRef)],
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        createAssetLibraryApi(agentBaseURL, projectID, assetRef.scope).getAsset(assetRef.assetID, signal),
+      staleTime: 1_000,
+      refetchInterval: 30_000,
+      retry: false,
+    })),
+  })
+  const canvasAssetStateByKey = useMemo(() => {
+    const states = new Map<string, CanvasAssetLiveState>()
+    for (let index = 0; index < canvasAssetLocators.length; index += 1) {
+      const locator = canvasAssetLocators[index]!
+      const query = canvasAssetStateQueries[index]
+      if (query?.data?.asset.status) {
+        states.set(cinemaAssetLocatorStatusKey(locator), {
+          status: query.data.asset.status,
+          asset: query.data.asset,
+        })
+      } else if (query?.error instanceof AssetLibraryApiError && query.error.status === 404) {
+        states.set(cinemaAssetLocatorStatusKey(locator), { status: "missing" })
+      }
+    }
+    return states
+  }, [canvasAssetLocators, canvasAssetStateQueries])
 
   const textModels = textModelsQuery.data?.items ?? []
   const effectiveTextModel = textModelsQuery.data?.effectiveModel ?? null
   const imageModels = imageModelsQuery.data?.items ?? []
   const effectiveImageModel = imageModelsQuery.data?.effectiveModel ?? null
   const renderedNodes = useMemo(
-    () => nodes.map((node) => ({
-      ...node,
-      selected: node.id === selectedNodeID,
-      data: {
-        ...node.data,
+    () => nodes.map((node) => {
+      const assetRef = cinemaAssetRefFromNodeData(node.data.rawData)
+      const liveAssetState = assetRef
+        ? canvasAssetStateByKey.get(cinemaAssetLocatorStatusKey(assetRef))
+        : undefined
+      const liveAssetRef = assetRef && liveAssetState?.asset
+        ? {
+            ...assetRef,
+            contentRevision: liveAssetState.asset.contentRevision,
+            snapshot: {
+              kind: liveAssetState.asset.kind,
+              displayName: liveAssetState.asset.displayName,
+              mimeType: liveAssetState.asset.mimeType,
+              ...(liveAssetState.asset.width ? { width: liveAssetState.asset.width } : {}),
+              ...(liveAssetState.asset.height ? { height: liveAssetState.asset.height } : {}),
+              ...(liveAssetState.asset.durationSeconds !== undefined
+                ? { durationSeconds: liveAssetState.asset.durationSeconds }
+                : {}),
+            },
+          }
+        : assetRef
+      const liveRawData = liveAssetState || liveAssetRef !== assetRef
+        ? {
+            ...node.data.rawData,
+            ...(liveAssetState ? { assetStatus: liveAssetState.status } : {}),
+            ...(liveAssetRef ? { assetRef: liveAssetRef } : {}),
+          }
+        : node.data.rawData
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          rawData: liveRawData,
+        isActiveNode: node.id === activeNodeID,
         onChangeRawData: (nodeID: string, rawData: Record<string, unknown>) => changeNode(nodeID, { rawData }),
         onChangeTitle: (nodeID: string, title: string) => changeNode(nodeID, { title }),
         onActivateNode: activateNodeFromPointer,
         onSelectNode: selectNodeOnly,
         onNodeInputEditingChange: setNodeInputEditing,
         onDeleteNode: deleteNode,
+        onRelinkAsset: beginRelinkAsset,
         textModels,
         effectiveTextModel,
         isGeneratingText: createTextGenerationMutation.isPending && textGenerationNodeID === node.id,
@@ -7486,12 +8445,14 @@ export function App() {
           createCroppedImageMutation.mutateAsync({ nodeID, crop }).then(() => undefined),
         hasIncomingImageEdge: edges.some((edge) => edge.target === node.id),
         onDismissNodeOverlay: clearCanvasSelection,
-        nodeInputOverlayRoot,
-      },
-    })),
+          nodeInputOverlayRoot,
+        },
+      }
+    }),
     [
       agentBaseURL,
       activateNodeFromPointer,
+      canvasAssetStateByKey,
       changeNode,
       createCroppedImageMutation,
       createGenerationTaskMutation,
@@ -7527,7 +8488,8 @@ export function App() {
       textGenerationError,
       textGenerationNodeID,
       textModels,
-      selectedNodeID,
+      activeNodeID,
+      beginRelinkAsset,
       clearCanvasSelection,
       videoGenerationError,
       videoGenerationNodeID,
@@ -7537,6 +8499,17 @@ export function App() {
     () => inspectorNodeID ? renderedNodes.find((node) => node.id === inspectorNodeID) ?? null : null,
     [inspectorNodeID, renderedNodes],
   )
+  const hasPersonalAssetDependencies = useMemo(
+    () => nodes.some((node) => cinemaAssetRefFromNodeData(node.data.rawData)?.scope.type === "personal"),
+    [nodes],
+  )
+  const relinkAssetKind = useMemo<CinemaAssetKind | undefined>(() => {
+    if (!relinkNodeID) return undefined
+    const nodeType = nodes.find((node) => node.id === relinkNodeID)?.data.cinemaType
+    if (nodeType === "image" || nodeType === "local-image") return "image"
+    if (nodeType === "video" || nodeType === "audio") return nodeType
+    return undefined
+  }, [nodes, relinkNodeID])
 
   if (!projectID) {
     return (
@@ -7594,7 +8567,7 @@ export function App() {
       }}
     >
       <section className="cinema-workspace">
-        <div className="cinema-canvas">
+        <div className="cinema-canvas" onDragOver={onCanvasAssetDragOver} onDrop={onCanvasAssetDrop}>
           <ReactFlow<CinemaFlowNode, Edge>
             nodes={renderedNodes}
             edges={edges}
@@ -7603,10 +8576,9 @@ export function App() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
-            onNodeDragStop={(_, node) => {
-              queueNodePatch(node.id, { position: node.position })
-            }}
-            onNodeClick={(_, node) => selectNodeOnly(node.id)}
+            onSelectionChange={onSelectionChange}
+            onNodeClick={onNodeClick}
+            onSelectionContextMenu={onSelectionContextMenu}
             onNodeContextMenu={onNodeContextMenu}
             onPaneClick={clearCanvasSelection}
             onPaneContextMenu={onPaneContextMenu}
@@ -7630,6 +8602,12 @@ export function App() {
             />
           </ReactFlow>
           <div ref={setNodeInputOverlayRoot} className="cinema-node-overlay-root" />
+          {hasPersonalAssetDependencies ? (
+            <div className="cinema-personal-asset-notice" role="status">
+              <Info size={14} aria-hidden="true" />
+              <span>此项目引用个人素材，移动到其他设备后可能不可用。</span>
+            </div>
+          ) : null}
           <ContextMenu
             menu={contextMenu}
             onAddNode={addNode}
@@ -7638,6 +8616,7 @@ export function App() {
           <NodeContextMenu
             menu={nodeContextMenu}
             onShowDetails={showNodeDetails}
+            onDeleteNodes={deleteNodes}
             onClose={() => setNodeContextMenu(null)}
           />
           {activeCanvasPanel === "files" ? (
@@ -7646,6 +8625,18 @@ export function App() {
               agentBaseURL={agentBaseURL}
               onClose={() => setActiveCanvasPanel(null)}
             />
+          ) : null}
+          {activeCanvasPanel === "assets" ? (
+            <Suspense fallback={null}>
+              <AssetLibraryPanel
+                projectID={projectID}
+                agentBaseURL={agentBaseURL}
+                onClose={closeAssetPanel}
+                onAddToCanvas={handleAssetLibraryAdd}
+                mode={relinkNodeID ? "relink" : "add"}
+                acceptKind={relinkAssetKind}
+              />
+            </Suspense>
           ) : null}
           {inspectorNode ? (
             <CinemaNodeInspectorPanel
@@ -7656,6 +8647,8 @@ export function App() {
           <CanvasPanelNavigation
             activePanel={activeCanvasPanel}
             onTogglePanel={toggleCanvasPanel}
+            assetButtonRef={assetRailButtonRef}
+            assetLibraryEnabled={assetLibraryEnabled}
           />
         </div>
       </section>

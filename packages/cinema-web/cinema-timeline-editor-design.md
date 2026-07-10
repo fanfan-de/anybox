@@ -360,27 +360,13 @@ export type CinemaTimelineClip =
 
 ### 资产引用
 
+Timeline 与 Canvas 共用素材库的稳定引用，不能再把物理路径作为身份写入 clip。路径、预览代理和缩略图由 Agent 按 `assetID + contentRevision` 解析；素材移动、改名、回收与恢复不需要改写 timeline。
+
 ```ts
-export type CinemaTimelineAssetRef = {
-  id: string
-  kind: "video" | "audio" | "image"
-  path: string
-  mimeType: string
-  sizeBytes?: number
-  width?: number
-  height?: number
-  durationSeconds?: number
-  fps?: number
-  hasAudio?: boolean
-  thumbnailPath?: string
-  waveformPath?: string
-  source:
-    | { type: "import"; importedAt: string }
-    | { type: "generation-task"; taskID: string; nodeID?: string }
-    | { type: "canvas-node"; nodeID: string }
-    | { type: "export"; timelineID: string; renderJobID: string }
-}
+export type CinemaTimelineAssetRef = CinemaAssetRef
 ```
+
+Timeline 加载时批量读取素材详情获得 `fps / hasAudio / sizeBytes` 等易变 metadata。个人素材仍是本机依赖；缺失或位于回收站时，现有 clip 保留并显示修复状态，但不能创建新的 clip。替换素材只能选择相同媒体 kind。
 
 ### Transform / Crop
 
@@ -481,14 +467,18 @@ DELETE /api/cinema/projects/:projectID/timelines/:timelineID
 
 ### Asset API
 
-现有 asset preview 支持视频 range，但导入接口当前偏图片。剪辑模块需要新增视频导入和 metadata 探测：
+剪辑台直接复用 Cinema 素材库契约，不再新增一套 timeline 私有导入与探测接口：
 
 ```text
-POST /api/cinema/projects/:projectID/assets/imports/video
-POST /api/cinema/projects/:projectID/assets/:assetID/probe
-POST /api/cinema/projects/:projectID/assets/:assetID/thumbnails
-POST /api/cinema/projects/:projectID/assets/:assetID/waveform
+GET  /api/cinema/projects/:projectID/library/entries
+POST /api/cinema/projects/:projectID/library/uploads
+GET  /api/cinema/projects/:projectID/library/assets/:assetID
+GET  /api/cinema/projects/:projectID/library/assets/:assetID/content
+GET  /api/cinema/projects/:projectID/library/assets/:assetID/thumbnail
+GET  /api/cinema/projects/:projectID/library/assets/:assetID/preview
 ```
+
+`content` 与 `preview` 支持 Range。音频波形不属于素材库 v1；Timeline 后续需要时，以 timeline 派生缓存实现，不能写回素材身份。
 
 ### Render API
 
@@ -775,7 +765,7 @@ type CinemaTimelineCanvasNodeData = {
   title: string
   durationSeconds: number
   thumbnailPath?: string
-  latestOutputAssetPath?: string
+  latestOutputAsset?: CinemaAssetRef
   renderStatus?: "idle" | "queued" | "running" | "succeeded" | "failed" | "canceled"
 }
 ```
@@ -786,10 +776,12 @@ type CinemaTimelineCanvasNodeData = {
 
 剪辑台素材来源：
 
-- `generated/videos/*`：视频生成结果。
-- `assets/imported/*`：用户导入。
-- `exports/*`：已有导出结果。
-- canvas 中 video/output 节点的 `outputAssets`。
+- 项目素材库中的上传、生成、裁剪、渲染和迁移素材。
+- 个人素材库中的本机直接引用。
+- Canvas 中已经使用 `assetRef` 的 image/video/audio/output 节点。
+- Timeline render 成功后登记到项目素材库的输出素材。
+
+旧目录 `generated/*`、`assets/imported/*`、`exports/*` 和旧节点 `outputAssets` 只由素材库迁移器读取；新 Timeline 文档一律只写 `assetRef`。
 
 ### 事件
 
@@ -820,10 +812,10 @@ type CinemaTimelineCanvasNodeData = {
 
 ### Phase 3: 资产导入和 metadata
 
-- 新增视频导入 API。
-- ffprobe 读取 duration/fps/width/height/hasAudio。
-- 生成缩略图。
-- 生成音频波形缓存。
+- 接入项目 / 个人素材库选择器与 `assetRef`。
+- 复用素材库上传、ffprobe metadata、缩略图、预览代理和 Range 播放。
+- 对 missing / trashed / personal dependency 提供修复状态。
+- 音频波形作为 Timeline 独立派生缓存后续实现。
 
 ### Phase 4: 导出
 

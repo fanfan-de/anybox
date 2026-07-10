@@ -17,6 +17,8 @@ const MANAGED_AGENT_BASE_URL_ENV = "ANYBOX_AGENT_BASE_URL"
 const MANAGED_AGENT_DISABLE_ENV = "ANYBOX_DISABLE_MANAGED_AGENT"
 const MANAGED_AGENT_RUNTIME_ENV = "ANYBOX_AGENT_RUNTIME_DIR"
 const MANAGED_AGENT_BUN_BINARY_ENV = "ANYBOX_BUN_BINARY"
+const MANAGED_AGENT_FFMPEG_BINARY_ENV = "ANYBOX_FFMPEG_BINARY"
+const MANAGED_AGENT_FFPROBE_BINARY_ENV = "ANYBOX_FFPROBE_BINARY"
 const MANAGED_AGENT_DATA_DIR_ENV = "ANYBOX_AGENT_DATA_DIR"
 const CONNECTOR_BUILD_CONFIG_ENV = "ANYBOX_CONNECTOR_BUILD_CONFIG"
 const WORKSPACE_DEPENDENCIES_DIR_ENV = "ANYBOX_WORKSPACE_DEPENDENCIES_DIR"
@@ -303,6 +305,18 @@ function buildManagedAgentStartEnv(
     const connectorBuildConfigPath = path.join(spec.runtimeDir, "config", "connectors.json")
     if (fs.existsSync(connectorBuildConfigPath)) {
       startEnv[CONNECTOR_BUILD_CONFIG_ENV] = connectorBuildConfigPath
+    }
+  }
+
+  if (spec.runtimeDir) {
+    const mediaToolsDir = path.join(spec.runtimeDir, "media-tools")
+    const bundledFFmpeg = path.join(mediaToolsDir, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg")
+    const bundledFFprobe = path.join(mediaToolsDir, process.platform === "win32" ? "ffprobe.exe" : "ffprobe")
+    if (!startEnv[MANAGED_AGENT_FFMPEG_BINARY_ENV] && fs.existsSync(bundledFFmpeg)) {
+      startEnv[MANAGED_AGENT_FFMPEG_BINARY_ENV] = bundledFFmpeg
+    }
+    if (!startEnv[MANAGED_AGENT_FFPROBE_BINARY_ENV] && fs.existsSync(bundledFFprobe)) {
+      startEnv[MANAGED_AGENT_FFPROBE_BINARY_ENV] = bundledFFprobe
     }
   }
 
@@ -599,6 +613,8 @@ export const managedAgentInternals = {
     protectedProcessNames: MANAGED_AGENT_PROTECTED_PROCESS_NAMES_ENV,
     workspaceDependenciesDir: WORKSPACE_DEPENDENCIES_DIR_ENV,
     workspaceDependenciesVersion: WORKSPACE_DEPENDENCIES_VERSION_ENV,
+    ffmpegBinary: MANAGED_AGENT_FFMPEG_BINARY_ENV,
+    ffprobeBinary: MANAGED_AGENT_FFPROBE_BINARY_ENV,
   },
   resolveBundledRuntimeCandidates,
   resolveSourceAgentLaunchSpec,

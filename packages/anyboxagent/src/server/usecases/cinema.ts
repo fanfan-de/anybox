@@ -8,6 +8,7 @@ import {
   CinemaProjectDirectoryListingSchema,
   CinemaProjectEventSchema,
   type CinemaGeneratedAsset,
+  type CinemaAssetRef,
   type CinemaImageGenerationResult,
   type CinemaImportedImageAssetResult,
   type CinemaImageModel,
@@ -43,6 +44,8 @@ import {
 import { isSshWorkspaceUri } from "@anybox/shared"
 import * as ProviderAuth from "#auth/provider-auth.ts"
 import * as CinemaProviderRuntime from "#cinema/provider-runtime.ts"
+import * as CinemaAssetLibrary from "#cinema/asset-library.ts"
+import { streamCinemaFile } from "#cinema/file-range-stream.ts"
 import * as Config from "#config/config.ts"
 import * as ModelRegistry from "#model/registry.ts"
 import * as ModelRuntime from "#model/runtime.ts"
@@ -63,6 +66,7 @@ import {
   resolveProjectModelSelectionWithGlobalFallback,
 } from "#server/usecases/model-list-cache.ts"
 import * as Log from "#util/log.ts"
+import * as Lock from "#util/lock.ts"
 
 type GenerateTextFunction = typeof import("ai")["generateText"]
 type CinemaProjectAssetRange = {
@@ -1493,6 +1497,10 @@ function describeCinemaCommand(command: CinemaCommand) {
   switch (command.type) {
     case "create-node":
       return `Created ${command.node.type} node '${command.node.title}'.`
+    case "create-node-from-asset":
+      return `Created Cinema node '${command.nodeID}' from asset '${command.assetRef.assetID}'.`
+    case "relink-node-asset":
+      return `Relinked Cinema node '${command.nodeID}' to asset '${command.assetRef.assetID}'.`
     case "update-node":
       return `Updated Cinema node '${command.nodeID}'.`
     case "delete-node":
@@ -1513,9 +1521,44 @@ function describeCinemaCommand(command: CinemaCommand) {
 function applyCommandToCanvas(canvas: CinemaCanvasDocument, command: CinemaCommand): CinemaCanvasDocument {
   switch (command.type) {
     case "create-node":
+      if (command.node.data?.assetRef !== undefined) {
+        throw new ApiError(
+          409,
+          "CINEMA_ASSET_REF_SERVER_REQUIRED",
+          "Use create-node-from-asset so the server can resolve the canonical asset reference.",
+        )
+      }
       return appendNode(canvas, command.node)
+    case "create-node-from-asset":
+    case "relink-node-asset":
+      throw new ApiError(
+        500,
+        "CINEMA_COMMAND_DISPATCH_INVALID",
+        "Asset node commands must be resolved before applying the synchronous Canvas command.",
+      )
     case "update-node": {
       assertCanvasHasNode(canvas, command.nodeID)
+      const currentNode = canvas.nodes.find((node) => node.id === command.nodeID)!
+      const currentAssetRef = currentNode.data?.assetRef
+      const patchedAssetRef = command.patch.data?.assetRef
+      if (
+        command.patch.data
+        && (currentAssetRef !== undefined || patchedAssetRef !== undefined)
+        && JSON.stringify(currentAssetRef) !== JSON.stringify(patchedAssetRef)
+      ) {
+        throw new ApiError(
+          409,
+          "CINEMA_ASSET_REF_IMMUTABLE",
+          "Use the relink-node-asset command to change a node's asset reference.",
+        )
+      }
+      if (currentAssetRef !== undefined && command.patch.type && command.patch.type !== currentNode.type) {
+        throw new ApiError(
+          409,
+          "CINEMA_ASSET_KIND_MISMATCH",
+          "An asset-backed node cannot change media kind through update-node.",
+        )
+      }
       return withNodeTypes({
         ...canvas,
         nodes: canvas.nodes.map((node) =>
@@ -1807,8 +1850,84 @@ function outputNodeFor(task: CinemaGenerationTask): CinemaCanvasNode | null {
       status: "succeeded",
       mimeType: asset.mimeType,
       sizeBytes: asset.sizeBytes,
+      ...(asset.assetRef ? { assetRef: asset.assetRef, assetStatus: "ready" } : {}),
     },
   }
+}
+
+function generatedAssetCanonicalRef(
+  projectID: string,
+  asset: Awaited<ReturnType<typeof CinemaAssetLibrary.registerCinemaGeneratedAsset>>["asset"],
+): CinemaAssetRef {
+  return {
+    scope: { type: "project", projectID },
+    assetID: asset.id,
+    contentRevision: asset.contentRevision,
+    snapshot: {
+      kind: asset.kind,
+      displayName: asset.displayName,
+      mimeType: asset.mimeType,
+      ...(asset.width ? { width: asset.width } : {}),
+      ...(asset.height ? { height: asset.height } : {}),
+      ...(asset.durationSeconds !== undefined ? { durationSeconds: asset.durationSeconds } : {}),
+    },
+  }
+}
+
+async function registerCompletedGenerationAssets(
+  projectID: string,
+  projectRoot: string,
+  task: CinemaGenerationTask,
+): Promise<CinemaGenerationTask> {
+  if (task.status !== "succeeded") return task
+  const candidates = task.outputAssets.filter((asset) => (
+    !asset.assetRef && (asset.kind === "image" || asset.kind === "video" || asset.kind === "audio")
+  ))
+  if (candidates.length === 0) return task
+
+  let revision = (await CinemaAssetLibrary.getCinemaAssetLibraryState({ type: "project", projectID })).revision
+  let changed = false
+  const outputAssets: CinemaGeneratedAsset[] = []
+  for (let index = 0; index < task.outputAssets.length; index += 1) {
+    const output = task.outputAssets[index]!
+    if (output.assetRef || !["image", "video", "audio"].includes(output.kind) || /^[a-z][a-z0-9+.-]*:/i.test(output.path)) {
+      outputAssets.push(output)
+      continue
+    }
+    const sourcePath = path.isAbsolute(output.path) ? path.resolve(output.path) : path.resolve(projectRoot, output.path)
+    const relativeToProject = path.relative(projectRoot, sourcePath)
+    const sourceInfo = relativeToProject.startsWith("..") || path.isAbsolute(relativeToProject)
+      ? undefined
+      : await stat(sourcePath).catch(() => undefined)
+    if (!sourceInfo?.isFile()) {
+      outputAssets.push(output)
+      continue
+    }
+
+    const registered = await CinemaAssetLibrary.registerCinemaGeneratedAsset(projectID, {
+      operationID: `generation-${task.id}-${index}`.slice(0, 128),
+      baseRevision: revision,
+      sourcePath,
+      kind: output.kind as "image" | "video" | "audio",
+      mimeType: output.mimeType,
+      displayName: path.basename(sourcePath, path.extname(sourcePath)),
+      source: "generation",
+    })
+    revision = registered.revision
+    changed = true
+    outputAssets.push({
+      ...output,
+      id: registered.asset.id,
+      path: path.posix.join("assets/library", registered.asset.relativePath.replace(/\\/g, "/")),
+      mimeType: registered.asset.mimeType,
+      sizeBytes: registered.asset.sizeBytes,
+      width: registered.asset.width,
+      height: registered.asset.height,
+      assetRef: generatedAssetCanonicalRef(projectID, registered.asset),
+    })
+  }
+
+  return changed ? { ...task, outputAssets } : task
 }
 
 type SyncTaskToCanvasOptions = {
@@ -1941,6 +2060,14 @@ export async function getCinemaProject(projectID: string): Promise<CinemaProject
     initialized,
     metadataPath: path.join(CINEMA_DIRECTORY, PROJECT_FILE),
     ...(metadata ? { project: metadata } : {}),
+    capabilities: {
+      assetLibrary: !["0", "false", "off"].includes(
+        getProcessEnvValue("ANYBOX_CINEMA_ASSET_LIBRARY")?.trim().toLowerCase() ?? "",
+      ),
+      personalAssetLibrary: !["0", "false", "off"].includes(
+        getProcessEnvValue("ANYBOX_CINEMA_ASSET_LIBRARY")?.trim().toLowerCase() ?? "",
+      ),
+    },
   }
 }
 
@@ -2513,7 +2640,7 @@ export async function createCinemaImageGeneration(
       progress: progressForTaskStatus("queued", createdAt),
     }, { createOutputNode: false })
     const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(provider.manifest.id)
-    const created = taskWithProgress(taskWithCanvasIDs(await Instance.provide({
+    const createdResult = taskWithProgress(taskWithCanvasIDs(await Instance.provide({
       directory: root,
       fn: async () => {
         try {
@@ -2523,6 +2650,7 @@ export async function createCinemaImageGeneration(
         }
       },
     }), { createOutputNode: false }))
+    const created = await registerCompletedGenerationAssets(projectID, root, createdResult)
     await writeGenerationTask(cinemaRoot, created)
     const canvas = await syncTaskToCanvas(
       cinemaRoot,
@@ -2816,14 +2944,13 @@ export async function readCinemaProjectAsset(
   }
 
   const range = parseCinemaProjectAssetRange(options.rangeHeader, fileStat.size)
-  const bytes = await readFile(filePath)
-  const responseBytes = range ? bytes.subarray(range.start, range.end + 1) : bytes
+  const body = streamCinemaFile(filePath, range ?? undefined)
 
   return {
-    bytes: responseBytes,
+    body,
     mimeType,
     sizeBytes: fileStat.size,
-    contentLength: responseBytes.byteLength,
+    contentLength: range ? range.end - range.start + 1 : fileStat.size,
     range,
   }
 }
@@ -2966,7 +3093,8 @@ export async function createCinemaGenerationTask(
     progress: progressForTaskStatus("queued", createdAt),
   }, { createOutputNode })
 
-  const created = taskWithProgress(taskWithCanvasIDs(await adapter.createTask({ root, cinemaRoot, task, canvas }), { createOutputNode }))
+  const createdResult = taskWithProgress(taskWithCanvasIDs(await adapter.createTask({ root, cinemaRoot, task, canvas }), { createOutputNode }))
+  const created = await registerCompletedGenerationAssets(projectID, root, createdResult)
   await writeGenerationTask(cinemaRoot, created)
   await syncTaskToCanvas(
     cinemaRoot,
@@ -3003,9 +3131,10 @@ export async function refreshCinemaGenerationTask(projectID: string, taskID: str
   const task = await readGenerationTaskFromRoot(cinemaRoot, taskID)
   const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(task.providerID)
   const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
-  const refreshed = taskWithProgress(taskWithCanvasIDs(await adapter.refreshTask({ root, cinemaRoot, task, canvas }), {
+  const refreshedResult = taskWithProgress(taskWithCanvasIDs(await adapter.refreshTask({ root, cinemaRoot, task, canvas }), {
     createOutputNode: !isInlineGenerationTaskNode(canvas, task),
   }))
+  const refreshed = await registerCompletedGenerationAssets(projectID, root, refreshedResult)
   await writeGenerationTask(cinemaRoot, refreshed)
   await syncTaskToCanvas(cinemaRoot, refreshed, `Refreshed generation task '${refreshed.title}'.`)
   await appendTaskAuditEvent(cinemaRoot, {
@@ -3050,9 +3179,256 @@ export async function applyCinemaCommand(projectID: string, command: CinemaComma
   const { cinemaRoot } = resolveCinemaRoot(projectID)
   await assertCinemaProjectInitialized(cinemaRoot)
 
+  using _lock = await Lock.write(`cinema:${projectID}`)
+
+  if (command.id) {
+    const events = await readCinemaEventsFromRoot(cinemaRoot, { after: 0, limit: Number.MAX_SAFE_INTEGER })
+    const previousEvent = events.events.find((event) => event.commandID === command.id)
+    if (previousEvent) {
+      return {
+        canvas: await readCinemaCanvasFromRoot(cinemaRoot),
+        event: previousEvent,
+      }
+    }
+  }
+
   const current = await readCinemaCanvasFromRoot(cinemaRoot)
-  const next = applyCommandToCanvas(current, command)
-  const canvas = await writeCinemaCanvas(cinemaRoot, next)
+  let next: CinemaCanvasDocument
+  let personalReferenceToAdd: { assetID: string; nodeID: string } | undefined
+  let personalReferenceToRemove: { assetID: string; nodeID: string } | undefined
+  if (command.type === "create-node-from-asset" || command.type === "relink-node-asset") {
+    const currentRevision = current.revision ?? 0
+    if (command.baseRevision !== currentRevision) {
+      throw new ApiError(
+        409,
+        "CINEMA_CANVAS_REVISION_CONFLICT",
+        `Canvas revision conflict; latest revision is ${currentRevision}.`,
+        { latestRevision: currentRevision },
+      )
+    }
+    if (command.assetRef.scope.type === "project" && command.assetRef.scope.projectID !== projectID) {
+      throw new ApiError(
+        400,
+        "CINEMA_ASSET_SCOPE_INVALID",
+        "A project Canvas cannot reference an asset owned by another project.",
+      )
+    }
+
+    const existingNode = current.nodes.find((node) => node.id === command.nodeID)
+    if (command.type === "create-node-from-asset" && existingNode) {
+      const existingRef = existingNode.data?.assetRef
+      const sameAsset = Boolean(
+        existingRef
+        && typeof existingRef === "object"
+        && "assetID" in existingRef
+        && existingRef.assetID === command.assetRef.assetID
+        && "scope" in existingRef
+        && JSON.stringify(existingRef.scope) === JSON.stringify(command.assetRef.scope),
+      )
+      if (!sameAsset) {
+        throw new ApiError(409, "CINEMA_NODE_ID_CONFLICT", `Cinema node '${command.nodeID}' already exists.`)
+      }
+      next = current
+    } else if (command.type === "create-node-from-asset") {
+      const { asset } = await CinemaAssetLibrary.getCinemaAsset(command.assetRef.scope, command.assetRef.assetID)
+      if (asset.status !== "ready") {
+        throw new ApiError(
+          409,
+          "CINEMA_ASSET_NOT_READY",
+          asset.status === "trashed"
+            ? "Restore the asset before adding it to the Canvas."
+            : "The asset must finish processing before it can be added to the Canvas.",
+        )
+      }
+      const assetRef = {
+        scope: command.assetRef.scope,
+        assetID: asset.id,
+        contentRevision: asset.contentRevision,
+        snapshot: {
+          kind: asset.kind,
+          displayName: asset.displayName,
+          mimeType: asset.mimeType,
+          ...(asset.width ? { width: asset.width } : {}),
+          ...(asset.height ? { height: asset.height } : {}),
+          ...(asset.durationSeconds !== undefined ? { durationSeconds: asset.durationSeconds } : {}),
+        },
+      }
+      const size = asset.kind === "image"
+        ? { width: 300, height: 300 }
+        : asset.kind === "video"
+          ? { width: 420, height: 340 }
+          : { width: 300, height: 156 }
+      next = appendNode(current, {
+        id: command.nodeID,
+        type: asset.kind,
+        title: asset.displayName,
+        position: command.position,
+        size,
+        data: {
+          assetRef,
+          assetStatus: asset.status,
+          sourceKind: command.assetRef.scope.type === "personal" ? "personal-library" : "project-library",
+          sourceFileName: asset.displayName,
+          status: "ready",
+        },
+      })
+      if (command.assetRef.scope.type === "personal") {
+        personalReferenceToAdd = { assetID: asset.id, nodeID: command.nodeID }
+      }
+    } else {
+      if (!existingNode) {
+        throw new ApiError(404, "CINEMA_NODE_NOT_FOUND", `Cinema node '${command.nodeID}' does not exist.`)
+      }
+      const { asset } = await CinemaAssetLibrary.getCinemaAsset(command.assetRef.scope, command.assetRef.assetID)
+      if (asset.status !== "ready") {
+        throw new ApiError(
+          409,
+          "CINEMA_ASSET_NOT_READY",
+          asset.status === "trashed"
+            ? "Restore the asset before relinking it."
+            : "The asset must finish processing before it can be linked.",
+        )
+      }
+      const existingMediaKind = existingNode.type === "local-image" ? "image" : existingNode.type
+      if (existingMediaKind !== asset.kind) {
+        throw new ApiError(
+          409,
+          "CINEMA_ASSET_KIND_MISMATCH",
+          `A ${existingNode.type} node cannot be relinked to a ${asset.kind} asset.`,
+        )
+      }
+
+      const previousRef = existingNode.data?.assetRef
+      const previousPersonalAssetID = (
+        previousRef
+        && typeof previousRef === "object"
+        && "assetID" in previousRef
+        && typeof previousRef.assetID === "string"
+        && "scope" in previousRef
+        && previousRef.scope
+        && typeof previousRef.scope === "object"
+        && "type" in previousRef.scope
+        && previousRef.scope.type === "personal"
+      ) ? previousRef.assetID : undefined
+      const nextPersonalAssetID = command.assetRef.scope.type === "personal" ? asset.id : undefined
+      if (nextPersonalAssetID && nextPersonalAssetID !== previousPersonalAssetID) {
+        personalReferenceToAdd = { assetID: nextPersonalAssetID, nodeID: command.nodeID }
+      }
+      if (previousPersonalAssetID && previousPersonalAssetID !== nextPersonalAssetID) {
+        personalReferenceToRemove = { assetID: previousPersonalAssetID, nodeID: command.nodeID }
+      }
+
+      const assetRef: CinemaAssetRef = {
+        scope: command.assetRef.scope,
+        assetID: asset.id,
+        contentRevision: asset.contentRevision,
+        snapshot: {
+          kind: asset.kind,
+          displayName: asset.displayName,
+          mimeType: asset.mimeType,
+          ...(asset.width !== undefined ? { width: asset.width } : {}),
+          ...(asset.height !== undefined ? { height: asset.height } : {}),
+          ...(asset.durationSeconds !== undefined ? { durationSeconds: asset.durationSeconds } : {}),
+        },
+      }
+      const relinkedData: Record<string, unknown> = { ...existingNode.data }
+      for (const legacyIdentityKey of [
+        "asset",
+        "assetID",
+        "path",
+        "resultAssets",
+        "selectedAssetID",
+        "candidateAssets",
+        "selectedCandidateAssetID",
+        "outputAssets",
+      ]) {
+        delete relinkedData[legacyIdentityKey]
+      }
+      next = withNodeTypes({
+        ...current,
+        nodes: current.nodes.map((node) => node.id === command.nodeID
+          ? {
+              ...node,
+              type: asset.kind,
+              data: {
+                ...relinkedData,
+                assetRef,
+                assetStatus: "ready",
+                sourceKind: command.assetRef.scope.type === "personal" ? "personal-library" : "project-library",
+                sourceFileName: asset.displayName,
+                status: "ready",
+              },
+            }
+          : node),
+      })
+    }
+  } else {
+    if (command.type === "delete-node") {
+      const deletedNode = current.nodes.find((node) => node.id === command.nodeID)
+      const deletedAssetRef = deletedNode?.data?.assetRef
+      if (
+        deletedAssetRef
+        && typeof deletedAssetRef === "object"
+        && "assetID" in deletedAssetRef
+        && typeof deletedAssetRef.assetID === "string"
+        && "scope" in deletedAssetRef
+        && deletedAssetRef.scope
+        && typeof deletedAssetRef.scope === "object"
+        && "type" in deletedAssetRef.scope
+        && deletedAssetRef.scope.type === "personal"
+      ) {
+        personalReferenceToRemove = { assetID: deletedAssetRef.assetID, nodeID: command.nodeID }
+      }
+    }
+    next = applyCommandToCanvas(current, command)
+  }
+
+  const nextRevision = next === current && command.type === "create-node-from-asset"
+    ? current.revision ?? 0
+    : (current.revision ?? 0) + 1
+  if (personalReferenceToAdd) {
+    await CinemaAssetLibrary.addCinemaPersonalAssetReference(
+      personalReferenceToAdd.assetID,
+      projectID,
+      personalReferenceToAdd.nodeID,
+    )
+  }
+
+  let canvas: CinemaCanvasDocument
+  try {
+    canvas = next === current && command.type === "create-node-from-asset"
+      ? current
+      : await writeCinemaCanvas(cinemaRoot, { ...next, revision: nextRevision })
+  } catch (error) {
+    if (personalReferenceToAdd) {
+      await CinemaAssetLibrary.removeCinemaPersonalAssetReference(
+        personalReferenceToAdd.assetID,
+        projectID,
+        personalReferenceToAdd.nodeID,
+      ).catch(() => undefined)
+    }
+    throw error
+  }
+
+  if (personalReferenceToRemove) {
+    try {
+      await CinemaAssetLibrary.removeCinemaPersonalAssetReference(
+        personalReferenceToRemove.assetID,
+        projectID,
+        personalReferenceToRemove.nodeID,
+      )
+    } catch (error) {
+      await writeCinemaCanvas(cinemaRoot, current)
+      if (personalReferenceToAdd) {
+        await CinemaAssetLibrary.removeCinemaPersonalAssetReference(
+          personalReferenceToAdd.assetID,
+          projectID,
+          personalReferenceToAdd.nodeID,
+        ).catch(() => undefined)
+      }
+      throw error
+    }
+  }
   const event = await appendCinemaEvent(cinemaRoot, {
     time: new Date().toISOString(),
     type: `command.${command.type}`,

@@ -146,7 +146,7 @@ React Query 默认行为：
 2. App 内的 React Flow `nodes/edges`。
 3. React Query 中的 `canvasQuery.data`。
 
-Zustand 只管理 `selectedNodeID`，其他选择态、面板状态、保存状态、任务状态和错误仍保存在 App 本地。
+React Flow 的 `nodes[].selected` 管理多选集合，Zustand 只管理 `activeNodeID`；活动节点负责编辑器和 Inspector，多选节点负责批量移动与删除。面板状态、保存状态、任务状态和错误仍保存在 App 本地。
 
 ### 4.3 Shared Contract
 
@@ -615,4 +615,3 @@ src/
 最终结论：
 
 > Cinema Web 已经证明了产品方向和核心技术链路，但下一阶段的成功标准不应是“新增更多功能”，而应是把它从可工作的高级原型提升为不会静默丢失用户创作内容的可靠编辑器。
-
