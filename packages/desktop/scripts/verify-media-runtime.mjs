@@ -476,6 +476,8 @@ export async function verifyMediaRuntime({
     invariant(manifest.materials?.license === "archive", "Release runtime license must come from the locked archive")
     invariant(manifest.materials?.notices === "archive", "Release runtime notices must come from the locked archive")
     invariant(manifest.materials?.configure === "archive", "Release runtime configure evidence must come from the locked archive")
+    invariant(manifest.materials?.sourceMetadata === "archive", "Release runtime source metadata must come from the locked archive")
+    invariant(manifest.materials?.buildRecipe === "archive", "Release runtime build recipe must come from the locked archive")
   }
   await verifyBinaryDigests(mediaToolsDir, target, manifest)
   await verifyLicenseMaterials(mediaToolsDir, target)

@@ -4,14 +4,13 @@ import {
 } from "../composer/draft-state"
 import { getSessionMessageIDForMessage, type SessionMessageBranchOption, type SessionMessageTree } from "../session-message-tree"
 import {
-  getAssistantStreamInsertionUserMessages,
+  buildStreamInsertionIndex,
   hasStreamInsertionTarget,
   isPendingSteerUserMessage,
   resolveStreamInsertionItemIndex,
 } from "../stream-insertion"
 import { parseAssistantResponseFormat } from "../thread-response-format"
 import type {
-  AssistantTraceFileChange,
   AssistantTraceItem,
   AssistantTraceSectionKey,
   AssistantTraceVisibility,
@@ -26,6 +25,7 @@ import type {
 } from "../types"
 
 const COLLAPSED_USER_MESSAGE_ESTIMATED_CHARACTERS = 640
+const ASSISTANT_HAS_TEXT_RESPONSE_BY_MESSAGE = new WeakMap<AssistantThreadMessage, boolean>()
 
 export type ThreadDisplayRowKind =
   | "user-message"
@@ -161,13 +161,18 @@ export type ThreadDisplayRow =
   | AssistantDisplayRow
 
 export interface ThreadDisplayContext {
+  assistantMessageIDsWithDiffSummary: Set<string>
   finalOperableAssistantMessageIDs: Set<string>
+  foldedAssistantMessagesByFinalAssistantID: Map<string, AssistantThreadMessage[]>
   foldedAssistantMessageIDs: Set<string>
   latestRenderableAssistantMessageID: string | null
   messageIndexByID: Map<string, number>
   messages: ThreadMessage[]
   sideChatAnchorMessageIDByAssistantID: Map<string, string>
+  streamInsertionItemIndexByUserMessageID: Map<string, number>
+  streamInsertionTargetUserMessageIDs: Set<string>
   streamInsertedUserMessagesByAssistantID: Map<string, UserThreadMessage[]>
+  trailingUserDiffMessageByAssistantID: Map<string, UserThreadMessage>
 }
 
 export interface BuildThreadDisplayRowsInput {
@@ -206,11 +211,6 @@ interface MainTraceRowEntry {
   startRawItemIndex: number
 }
 
-interface MessageContentSignatureCacheEntry {
-  message: ThreadMessage
-  signature: string
-}
-
 interface BaseRowsCacheEntry {
   dependencyMessages: ThreadMessage[]
   key: string
@@ -228,7 +228,6 @@ interface DecorationRowsCacheEntry {
 export interface ThreadDisplayRowsCache {
   baseRowsByMessageID: Map<string, BaseRowsCacheEntry>
   decorationRowsByOwnerMessageID: Map<string, DecorationRowsCacheEntry>
-  messageSignaturesByID: Map<string, MessageContentSignatureCacheEntry>
   sessionID: string | null
   version: number
 }
@@ -245,7 +244,7 @@ export interface DecorateThreadDisplayRowsIncrementalResult {
   stats: ThreadDisplayRowsCacheStats
 }
 
-const THREAD_DISPLAY_ROWS_CACHE_VERSION = 1
+const THREAD_DISPLAY_ROWS_CACHE_VERSION = 2
 const CACHE_KEY_SEPARATOR = "\u0001"
 const EMPTY_BRANCH_OPTIONS: SessionMessageBranchOption[] = []
 const ASSISTANT_TRACE_VISIBILITY_SIGNATURE_KEYS: AssistantTraceVisibilityKey[] = [
@@ -265,7 +264,6 @@ export function createThreadDisplayRowsCache(sessionID: string | null = null): T
   return {
     baseRowsByMessageID: new Map(),
     decorationRowsByOwnerMessageID: new Map(),
-    messageSignaturesByID: new Map(),
     sessionID,
     version: THREAD_DISPLAY_ROWS_CACHE_VERSION,
   }
@@ -314,23 +312,16 @@ export function shouldCollapseUserMessageText(text: string) {
     countTextLines(text) >= COMPOSER_LONG_TEXT_LINE_THRESHOLD
 }
 
-function normalizeMessageDiffSummary(diffSummary: SessionDiffSummary | undefined): AssistantTraceFileChange[] {
-  return diffSummary?.diffs
-    .filter((change) => change.file.trim())
-    .map((change) => ({
-      file: change.file,
-      additions: change.additions,
-      deletions: change.deletions,
-      ...(change.patch?.trim() ? { patch: change.patch } : {}),
-    })) ?? []
+function hasMessageDiffSummary(diffSummary: SessionDiffSummary | undefined) {
+  return diffSummary?.diffs.some((change) => Boolean(change.file.trim())) ?? false
 }
 
 export function hasUserMessageDiffSummary(message: UserThreadMessage) {
-  return normalizeMessageDiffSummary(message.diffSummary).length > 0
+  return hasMessageDiffSummary(message.diffSummary)
 }
 
 function hasAssistantMessageDiffSummary(message: AssistantThreadMessage) {
-  return normalizeMessageDiffSummary(message.diffSummary).length > 0
+  return hasMessageDiffSummary(message.diffSummary)
 }
 
 function hasFollowingAssistantBeforeNextUser(messages: ThreadMessage[], startIndex: number) {
@@ -526,9 +517,14 @@ export function filterRenderedAssistantTraceItems(
 }
 
 function assistantMessageHasTextResponse(message: AssistantThreadMessage) {
-  return message.items.some(
-    (item) => traceSectionKeyForItem(item) === "response" && item.kind === "text" && Boolean(item.text?.trim()),
+  const cachedValue = ASSISTANT_HAS_TEXT_RESPONSE_BY_MESSAGE.get(message)
+  if (cachedValue !== undefined) return cachedValue
+
+  const hasTextResponse = message.items.some(
+    (item) => traceSectionKeyForItem(item) === "response" && item.kind === "text" && Boolean(item.text && /\S/.test(item.text)),
   )
+  ASSISTANT_HAS_TEXT_RESPONSE_BY_MESSAGE.set(message, hasTextResponse)
+  return hasTextResponse
 }
 
 function isTerminalAssistantMessagePhase(phase: AssistantThreadMessagePhase) {
@@ -544,14 +540,6 @@ function isRegularUserRunBoundary(messages: ThreadMessage[], messageIndex: numbe
   return message?.kind === "user" &&
     !hasStreamInsertionTarget(messages, message) &&
     !isPendingSteerUserMessage(messages, message)
-}
-
-function findAssistantRunStartIndex(messages: ThreadMessage[], assistantIndex: number) {
-  for (let index = assistantIndex - 1; index >= 0; index -= 1) {
-    if (isRegularUserRunBoundary(messages, index)) return index + 1
-  }
-
-  return 0
 }
 
 function findAssistantRunEndIndex(messages: ThreadMessage[], assistantIndex: number) {
@@ -630,55 +618,162 @@ export function isAssistantFinalMessageInUserMessage(
 }
 
 export function buildThreadDisplayContext(messages: ThreadMessage[]): ThreadDisplayContext {
+  const streamInsertionIndex = buildStreamInsertionIndex(messages)
   const messageIndexByID = new Map<string, number>()
+  const assistantMessageIDsWithDiffSummary = new Set<string>()
   const foldedAssistantMessageIDs = new Set<string>()
+  const foldedAssistantMessagesByFinalAssistantID = new Map<string, AssistantThreadMessage[]>()
   const finalOperableAssistantMessageIDs = new Set<string>()
-  const streamInsertedUserMessagesByAssistantID = new Map<string, UserThreadMessage[]>()
   const sideChatAnchorMessageIDByAssistantID = new Map<string, string>()
+  const trailingUserDiffMessageByAssistantID = new Map<string, UserThreadMessage>()
+  const segmentIDsByBackendTurnAndMessageID = new Map<string, Map<string, Set<string>>>()
   let latestRenderableAssistantMessageID: string | null = null
 
   messages.forEach((message, index) => {
     messageIndexByID.set(message.id, index)
     if (message.kind !== "assistant") return
 
-    if (shouldFoldAssistantMessageIntoFinalRunTrace(messages, index, message)) {
-      foldedAssistantMessageIDs.add(message.id)
-    }
-    if (isAssistantLatestRenderableMessage(messages, index, message)) {
-      latestRenderableAssistantMessageID = message.id
-    }
-    if (isAssistantFinalMessageInUserMessage(messages, index, message)) {
-      finalOperableAssistantMessageIDs.add(message.id)
+    if (hasAssistantMessageDiffSummary(message)) {
+      assistantMessageIDsWithDiffSummary.add(message.id)
     }
 
-    streamInsertedUserMessagesByAssistantID.set(
-      message.id,
-      getAssistantStreamInsertionUserMessages(messages, message),
-    )
-    sideChatAnchorMessageIDByAssistantID.set(
-      message.id,
-      resolveAssistantSideChatAnchorMessageID(messages, message),
-    )
+    if (!message.messageID) return
+    let segmentIDsByMessageID = segmentIDsByBackendTurnAndMessageID.get(message.backendTurnID)
+    if (!segmentIDsByMessageID) {
+      segmentIDsByMessageID = new Map()
+      segmentIDsByBackendTurnAndMessageID.set(message.backendTurnID, segmentIDsByMessageID)
+    }
+    let segmentIDs = segmentIDsByMessageID.get(message.messageID)
+    if (!segmentIDs) {
+      segmentIDs = new Set()
+      segmentIDsByMessageID.set(message.messageID, segmentIDs)
+    }
+    segmentIDs.add(message.segmentID)
   })
 
+  for (const message of messages) {
+    if (message.kind !== "assistant") continue
+
+    if (!message.messageID) {
+      sideChatAnchorMessageIDByAssistantID.set(message.id, message.id)
+      continue
+    }
+
+    const segmentIDs = segmentIDsByBackendTurnAndMessageID
+      .get(message.backendTurnID)
+      ?.get(message.messageID)
+    sideChatAnchorMessageIDByAssistantID.set(
+      message.id,
+      segmentIDs && segmentIDs.size > 1 ? message.segmentID : message.messageID,
+    )
+  }
+
+  const finalizeFoldableRun = (runAssistantMessages: AssistantThreadMessage[]) => {
+    if (runAssistantMessages.length <= 1) return
+
+    const finalMessage = runAssistantMessages[runAssistantMessages.length - 1]!
+    if (!isFoldableAssistantRunMessage(finalMessage) || !assistantMessageHasTextResponse(finalMessage)) return
+
+    const foldedMessages = runAssistantMessages
+      .slice(0, -1)
+      .filter((message) => isFoldableAssistantRunMessage(message) || Boolean(message.isStreaming))
+    if (foldedMessages.length === 0) return
+
+    foldedAssistantMessagesByFinalAssistantID.set(finalMessage.id, foldedMessages)
+    foldedMessages.forEach((message) => foldedAssistantMessageIDs.add(message.id))
+  }
+
+  let runAssistantMessages: AssistantThreadMessage[] = []
+  for (const message of messages) {
+    if (message.kind === "assistant") {
+      runAssistantMessages.push(message)
+      continue
+    }
+
+    const isRegularRunBoundary =
+      !streamInsertionIndex.targetAssistantMessageIDByUserMessageID.has(message.id) &&
+      !streamInsertionIndex.pendingSteerUserMessageIDs.has(message.id)
+    if (!isRegularRunBoundary) continue
+
+    finalizeFoldableRun(runAssistantMessages)
+    runAssistantMessages = []
+  }
+  finalizeFoldableRun(runAssistantMessages)
+
+  let previousAssistantMessage: AssistantThreadMessage | null = null
+  let previousAssistantHasBoundaryUser = false
+  let lastAssistantIndex = -1
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index]!
+    if (message.kind === "assistant") {
+      if (previousAssistantMessage && previousAssistantHasBoundaryUser) {
+        finalOperableAssistantMessageIDs.add(previousAssistantMessage.id)
+      }
+      previousAssistantMessage = message
+      previousAssistantHasBoundaryUser = false
+      lastAssistantIndex = index
+    } else if (
+      previousAssistantMessage &&
+      streamInsertionIndex.targetAssistantMessageIDByUserMessageID.get(message.id) !== previousAssistantMessage.id
+    ) {
+      previousAssistantHasBoundaryUser = true
+    }
+  }
+  if (previousAssistantMessage) finalOperableAssistantMessageIDs.add(previousAssistantMessage.id)
+
+  if (lastAssistantIndex >= 0) {
+    const lastAssistantMessage = messages[lastAssistantIndex]
+    let isLatestRenderableMessage = lastAssistantMessage?.kind === "assistant"
+    for (let index = lastAssistantIndex + 1; isLatestRenderableMessage && index < messages.length; index += 1) {
+      const message = messages[index]!
+      isLatestRenderableMessage =
+        message.kind === "user" &&
+        streamInsertionIndex.targetAssistantMessageIDByUserMessageID.get(message.id) === lastAssistantMessage.id
+    }
+    if (lastAssistantMessage?.kind === "assistant" && isLatestRenderableMessage) {
+      latestRenderableAssistantMessageID = lastAssistantMessage.id
+    }
+  }
+
+  let previousUserMessage: UserThreadMessage | null = null
+  let lastAssistantAfterPreviousUser: AssistantThreadMessage | null = null
+  const finalizeTrailingUserDiff = () => {
+    if (
+      lastAssistantAfterPreviousUser &&
+      !lastAssistantAfterPreviousUser.isStreaming &&
+      previousUserMessage &&
+      hasUserMessageDiffSummary(previousUserMessage)
+    ) {
+      trailingUserDiffMessageByAssistantID.set(lastAssistantAfterPreviousUser.id, previousUserMessage)
+    }
+    lastAssistantAfterPreviousUser = null
+  }
+
+  for (const message of messages) {
+    if (message.kind === "user") {
+      finalizeTrailingUserDiff()
+      previousUserMessage = message
+    } else {
+      lastAssistantAfterPreviousUser = message
+    }
+  }
+  finalizeTrailingUserDiff()
+
   return {
+    assistantMessageIDsWithDiffSummary,
     finalOperableAssistantMessageIDs,
+    foldedAssistantMessagesByFinalAssistantID,
     foldedAssistantMessageIDs,
     latestRenderableAssistantMessageID,
     messageIndexByID,
     messages,
     sideChatAnchorMessageIDByAssistantID,
-    streamInsertedUserMessagesByAssistantID,
-  }
-}
-
-function stringifyCacheValue(value: unknown) {
-  if (value === undefined) return ""
-
-  try {
-    return JSON.stringify(value) ?? ""
-  } catch {
-    return String(value)
+    streamInsertionItemIndexByUserMessageID: streamInsertionIndex.insertionItemIndexByUserMessageID,
+    streamInsertionTargetUserMessageIDs: new Set(
+      streamInsertionIndex.targetAssistantMessageIDByUserMessageID.keys(),
+    ),
+    streamInsertedUserMessagesByAssistantID: streamInsertionIndex.insertedUserMessagesByAssistantID,
+    trailingUserDiffMessageByAssistantID,
   }
 }
 
@@ -692,164 +787,28 @@ function assistantTraceVisibilitySignature(visibility: AssistantTraceVisibility)
     .join(",")
 }
 
-function sessionDiffSummarySignature(diffSummary: SessionDiffSummary | undefined) {
-  return stringifyCacheValue(normalizeMessageDiffSummary(diffSummary))
-}
-
-function assistantTraceItemSignatureValue(item: AssistantTraceItem) {
-  return {
-    alt: item.alt,
-    backendTurnID: item.backendTurnID,
-    debugEntries: item.debugEntries,
-    detail: item.detail,
-    draftPatch: item.draftPatch,
-    fileChanges: item.fileChanges,
-    filePaths: item.filePaths,
-    height: item.height,
-    id: item.id,
-    approvalID: item.approvalID,
-    isStreaming: item.isStreaming,
-    kind: item.kind,
-    label: item.label,
-    messageID: item.messageID,
-    mimeType: item.mimeType,
-    partID: item.partID,
-    progressItems: item.progressItems,
-    questionPrompt: item.questionPrompt,
-    section: item.section,
-    sourceID: item.sourceID,
-    src: item.src,
-    status: item.status,
-    text: item.text,
-    timestamp: item.timestamp,
-    title: item.title,
-    toolName: item.toolName,
-    toolCallID: item.toolCallID,
-    toolInputText: item.toolInputText,
-    toolOutputText: item.toolOutputText,
-    visibilityKey: item.visibilityKey,
-    width: item.width,
-  }
-}
-
-function createAssistantMessageContentSignature(message: AssistantThreadMessage) {
-  return stringifyCacheValue({
-    backendTurnID: message.backendTurnID,
-    diffSummary: sessionDiffSummarySignature(message.diffSummary),
-    id: message.id,
-    isStreaming: Boolean(message.isStreaming),
-    items: message.items.map(assistantTraceItemSignatureValue),
-    llmCallID: message.llmCallID,
-    messageID: message.messageID,
-    runtime: message.runtime,
-    segmentID: message.segmentID,
-    state: message.state,
-    timestamp: message.timestamp,
-  })
-}
-
-function createUserMessageContentSignature(message: UserThreadMessage) {
-  return stringifyCacheValue({
-    attachments: message.attachments,
-    diffSummary: sessionDiffSummarySignature(message.diffSummary),
-    displayText: message.displayText,
-    id: message.id,
-    questionAnswer: message.questionAnswer,
-    references: message.references,
-    streamInsertion: message.streamInsertion,
-    submissionMode: message.submissionMode,
-    text: message.text,
-    timestamp: message.timestamp,
-  })
-}
-
-function readMessageContentSignature(
-  message: ThreadMessage,
-  previousCache: ThreadDisplayRowsCache | null,
-  nextCache: ThreadDisplayRowsCache,
-) {
-  const previousSignature = previousCache?.messageSignaturesByID.get(message.id)
-  if (previousSignature?.message === message) {
-    nextCache.messageSignaturesByID.set(message.id, previousSignature)
-    return previousSignature.signature
-  }
-
-  const signature = message.kind === "assistant"
-    ? createAssistantMessageContentSignature(message)
-    : createUserMessageContentSignature(message)
-  nextCache.messageSignaturesByID.set(message.id, {
-    message,
-    signature,
-  })
-  return signature
-}
-
 function areSameReferences(left: readonly unknown[], right: readonly unknown[]) {
   if (left.length !== right.length) return false
 
+  // Conversation updates replace changed messages/items. Reference equality is
+  // therefore the cache revision signal and avoids walking payload-sized fields.
   return left.every((value, index) => value === right[index])
 }
 
-function getFoldedAssistantRunDependencies(
-  messages: ThreadMessage[],
-  finalAssistantIndex: number,
-) {
-  const dependencies: AssistantThreadMessage[] = []
-  const runStartIndex = findAssistantRunStartIndex(messages, finalAssistantIndex)
-
-  for (let index = runStartIndex; index < finalAssistantIndex; index += 1) {
-    const message = messages[index]
-    if (message?.kind !== "assistant") continue
-    if (!shouldFoldAssistantMessageIntoFinalRunTrace(messages, index, message)) continue
-    dependencies.push(message)
-  }
-
-  return dependencies
-}
-
-function getInsertedUserMessageCacheParts(
-  insertedMessages: UserThreadMessage[],
-  previousCache: ThreadDisplayRowsCache | null,
-  nextCache: ThreadDisplayRowsCache,
-) {
-  return insertedMessages.map((message) => joinCacheKeyParts([
-    message.id,
-    readMessageContentSignature(message, previousCache, nextCache),
-  ]))
-}
-
-function getFoldedAssistantRunCacheParts(
-  foldedMessages: AssistantThreadMessage[],
-  context: ThreadDisplayContext,
-  previousCache: ThreadDisplayRowsCache | null,
-  nextCache: ThreadDisplayRowsCache,
-) {
-  return foldedMessages.map((message) => joinCacheKeyParts([
-    context.messageIndexByID.get(message.id) ?? -1,
-    message.id,
-    readMessageContentSignature(message, previousCache, nextCache),
-  ]))
-}
-
 function createUserBaseRowsCacheKey({
-  activeMessages,
+  context,
   message,
   messageIndex,
-  previousCache,
-  nextCache,
 }: {
-  activeMessages: ThreadMessage[]
+  context: ThreadDisplayContext
   message: UserThreadMessage
   messageIndex: number
-  previousCache: ThreadDisplayRowsCache | null
-  nextCache: ThreadDisplayRowsCache
 }) {
   return joinCacheKeyParts([
     "base:user",
     message.id,
     messageIndex,
-    hasStreamInsertionTarget(activeMessages, message) ? 1 : 0,
-    readMessageContentSignature(message, previousCache, nextCache),
+    context.streamInsertionTargetUserMessageIDs.has(message.id) ? 1 : 0,
   ])
 }
 
@@ -858,30 +817,24 @@ function createAssistantBaseRowsCacheState({
   context,
   message,
   messageIndex,
-  previousCache,
-  nextCache,
 }: {
   assistantTraceVisibility: AssistantTraceVisibility
   context: ThreadDisplayContext
   message: AssistantThreadMessage
   messageIndex: number
-  previousCache: ThreadDisplayRowsCache | null
-  nextCache: ThreadDisplayRowsCache
 }) {
   const insertedUserMessages = context.streamInsertedUserMessagesByAssistantID.get(message.id) ?? []
-  const foldedRunMessages = getFoldedAssistantRunDependencies(context.messages, messageIndex)
+  const foldedRunMessages = context.foldedAssistantMessagesByFinalAssistantID.get(message.id) ?? []
   const key = joinCacheKeyParts([
     "base:assistant",
     message.id,
     messageIndex,
-    readMessageContentSignature(message, previousCache, nextCache),
     assistantTraceVisibilitySignature(assistantTraceVisibility),
     context.foldedAssistantMessageIDs.has(message.id) ? 1 : 0,
     context.finalOperableAssistantMessageIDs.has(message.id) ? 1 : 0,
     context.latestRenderableAssistantMessageID === message.id ? 1 : 0,
     context.sideChatAnchorMessageIDByAssistantID.get(message.id) ?? message.id,
-    getInsertedUserMessageCacheParts(insertedUserMessages, previousCache, nextCache).join("|"),
-    getFoldedAssistantRunCacheParts(foldedRunMessages, context, previousCache, nextCache).join("|"),
+    foldedRunMessages.map((foldedMessage) => context.messageIndexByID.get(foldedMessage.id) ?? -1).join(","),
   ])
 
   return {
@@ -924,18 +877,16 @@ function createTraceRowItems(message: AssistantThreadMessage, messageIndex: numb
 }
 
 function collectFoldedAssistantRunTraceRowItems(
-  messages: ThreadMessage[],
-  finalAssistantIndex: number,
+  context: ThreadDisplayContext,
+  finalAssistantMessageID: string,
   traceVisibility: AssistantTraceVisibility,
 ) {
-  const runStartIndex = findAssistantRunStartIndex(messages, finalAssistantIndex)
   const items: AssistantTraceRowItem[] = []
 
-  for (let index = runStartIndex; index < finalAssistantIndex; index += 1) {
-    const message = messages[index]
-    if (message?.kind !== "assistant") continue
-    if (!shouldFoldAssistantMessageIntoFinalRunTrace(messages, index, message)) continue
-    items.push(...filterRenderedTraceItems(createTraceRowItems(message, index), true, traceVisibility))
+  for (const message of context.foldedAssistantMessagesByFinalAssistantID.get(finalAssistantMessageID) ?? []) {
+    const messageIndex = context.messageIndexByID.get(message.id)
+    if (messageIndex === undefined) continue
+    items.push(...filterRenderedTraceItems(createTraceRowItems(message, messageIndex), true, traceVisibility))
   }
 
   return items
@@ -1214,7 +1165,8 @@ function pushMainEntriesWithStreamInsertions({
   let rawCursor = 0
 
   insertedUserMessages.forEach((insertedMessage) => {
-    const insertionIndex = resolveStreamInsertionItemIndex(message.items, insertedMessage, rawCursor)
+    const insertionIndex = context.streamInsertionItemIndexByUserMessageID.get(insertedMessage.id) ??
+      resolveStreamInsertionItemIndex(message.items, insertedMessage, rawCursor)
 
     while (entryCursor < entries.length && entries[entryCursor]!.startRawItemIndex < insertionIndex) {
       rows.push(entries[entryCursor]!.row)
@@ -1250,8 +1202,8 @@ function buildAssistantMessageRows({
   rows: ThreadDisplayRow[]
 }) {
   const foldedRunTraceItems = collectFoldedAssistantRunTraceRowItems(
-    context.messages,
-    messageIndex,
+    context,
+    message.id,
     assistantTraceVisibility,
   )
   const insertedUserMessages = context.streamInsertedUserMessagesByAssistantID.get(message.id) ?? []
@@ -1348,14 +1300,12 @@ export function buildThreadDisplayRowsIncremental(
   const rows: ThreadDisplayRow[] = []
   activeMessages.forEach((message, messageIndex) => {
     if (message.kind === "user") {
-      if (hasStreamInsertionTarget(activeMessages, message)) return
+      if (context.streamInsertionTargetUserMessageIDs.has(message.id)) return
 
       const key = createUserBaseRowsCacheKey({
-        activeMessages,
+        context,
         message,
         messageIndex,
-        nextCache: cache,
-        previousCache: compatiblePreviousCache,
       })
       const previousEntry = compatiblePreviousCache?.baseRowsByMessageID.get(message.id)
       const dependencyMessages = [message]
@@ -1393,8 +1343,6 @@ export function buildThreadDisplayRowsIncremental(
       context,
       message,
       messageIndex,
-      nextCache: cache,
-      previousCache: compatiblePreviousCache,
     })
     const previousEntry = compatiblePreviousCache?.baseRowsByMessageID.get(message.id)
     if (previousEntry?.key === key && areSameReferences(previousEntry.dependencyMessages, dependencyMessages)) {
@@ -1538,10 +1486,10 @@ function buildAssistantDiffRow({
   context: ThreadDisplayContext
 }): AssistantDiffCardRow | null {
   const message = baseRow.message
-  const hasAssistantDiffSummary = hasAssistantMessageDiffSummary(message)
+  const hasAssistantDiffSummary = context.assistantMessageIDsWithDiffSummary.has(message.id)
   const trailingUserDiffMessage = hasAssistantDiffSummary
     ? null
-    : getAssistantTrailingUserDiffMessage(context.messages, baseRow.ownerMessageIndex, message)
+    : context.trailingUserDiffMessageByAssistantID.get(message.id) ?? null
 
   if (!hasAssistantDiffSummary && !trailingUserDiffMessage) return null
 
@@ -1660,14 +1608,6 @@ function buildLastDecoratableBaseRowByOwnerID(rows: ThreadDisplayRow[]) {
   return lastBaseRowByOwnerID
 }
 
-function sessionSummarySignature(session: SessionSummary | null | undefined) {
-  return session ? stringifyCacheValue(session) : ""
-}
-
-function branchOptionsSignature(branchOptions: SessionMessageBranchOption[]) {
-  return branchOptions.map((option) => stringifyCacheValue(option)).join("|")
-}
-
 function readAssistantDecorationBranchOptions({
   baseRow,
   hasPendingPermissionRequests,
@@ -1693,23 +1633,15 @@ function createAssistantDecorationDiffState({
   context: ThreadDisplayContext
 }) {
   const message = baseRow.message
-  const assistantDiffSignature = hasAssistantMessageDiffSummary(message)
-    ? sessionDiffSummarySignature(message.diffSummary)
-    : ""
-  const trailingDiffMessage = assistantDiffSignature
+  const hasAssistantDiffSummary = context.assistantMessageIDsWithDiffSummary.has(message.id)
+  const trailingDiffMessage = hasAssistantDiffSummary
     ? null
-    : getAssistantTrailingUserDiffMessage(context.messages, baseRow.ownerMessageIndex, message)
-  const trailingDiffSignature = trailingDiffMessage
-    ? joinCacheKeyParts([
-      trailingDiffMessage.id,
-      sessionDiffSummarySignature(trailingDiffMessage.diffSummary),
-    ])
-    : ""
+    : context.trailingUserDiffMessageByAssistantID.get(message.id) ?? null
 
   return {
     signature: joinCacheKeyParts([
-      assistantDiffSignature,
-      trailingDiffSignature,
+      hasAssistantDiffSummary ? "assistant-diff" : "",
+      trailingDiffMessage?.id,
       baseRow.isLatestMessage ? 1 : 0,
     ]),
     trailingDiffMessage,
@@ -1730,7 +1662,7 @@ function createAssistantDecorationSideChatState({
   const signature = joinCacheKeyParts([
     sideChatAnchorMessageID,
     existingSideChatCount,
-    sessionSummarySignature(activeSideChatSession),
+    activeSideChatSession ? 1 : 0,
   ])
 
   return {
@@ -1775,7 +1707,6 @@ function createAssistantDecorationCacheState({
     baseRow.isFinalOperableMessage ? 1 : 0,
     baseRow.isLatestMessage ? 1 : 0,
     diffState.signature,
-    branchOptionsSignature(branchOptions),
     hasPendingPermissionRequests ? 1 : 0,
     isSessionRunning ? 1 : 0,
     readOnlySideChat ? 1 : 0,
@@ -1831,9 +1762,6 @@ export function decorateThreadDisplayRowsIncremental(
   if (compatiblePreviousCache) {
     compatiblePreviousCache.baseRowsByMessageID.forEach((entry, messageID) => {
       cache.baseRowsByMessageID.set(messageID, entry)
-    })
-    compatiblePreviousCache.messageSignaturesByID.forEach((entry, messageID) => {
-      cache.messageSignaturesByID.set(messageID, entry)
     })
   }
 

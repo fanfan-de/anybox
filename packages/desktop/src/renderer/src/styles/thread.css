@@ -2253,7 +2253,8 @@ body.is-image-lightbox-open {
 
 .permission-request-summary,
 .permission-request-note,
-.permission-request-error {
+.permission-request-error,
+.ask-user-question-error {
   margin: 0;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -2269,8 +2270,13 @@ body.is-image-lightbox-open {
   font-size: 13px;
 }
 
-.permission-request-error {
+.permission-request-error,
+.ask-user-question-error {
   color: var(--seg-danger-text, var(--semantic-error-text));
+}
+
+.ask-user-question-error {
+  font-size: 12px;
 }
 
 .permission-request-badges {

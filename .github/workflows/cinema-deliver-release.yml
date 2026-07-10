@@ -4,15 +4,38 @@ on:
   workflow_dispatch:
     inputs:
       candidate_run_id:
-        description: Workflow run containing both signed installers and both installed-restart evidence artifacts
+        description: Successful Cinema Deliver signed release candidates workflow run
         required: true
         type: string
+      rehearsal_run_id:
+        description: Successful publish=false run for the same candidate (required when publish=true)
+        required: false
+        type: string
+      internal_rc_run_id:
+        description: Successful internal-rc publish run for the same candidate (required for public publish)
+        required: false
+        type: string
+      windows_evidence_path:
+        description: Repository path to redacted win32/x64 installed-restart evidence
+        required: true
+        default: packages/cinema-web/cinema-deliver-installed-restart-evidence.win32-x64.json
+        type: string
+      macos_evidence_path:
+        description: Repository path to redacted darwin/arm64 installed-restart evidence
+        required: true
+        default: packages/cinema-web/cinema-deliver-installed-restart-evidence.darwin-arm64.json
+        type: string
+      approval_path:
+        description: Repository path to license/product/security release approval
+        required: true
+        default: packages/cinema-web/cinema-deliver-release-approval.json
+        type: string
       release_tag:
-        description: Release tag; must be v<desktopVersion> from the evidence
+        description: Public base tag; must be v<desktopVersion>
         required: true
         type: string
       channel:
-        description: Internal RC creates a prerelease; public creates the final release
+        description: Internal RC uses an isolated prerelease tag; public updates both download channels
         required: true
         default: internal-rc
         type: choice
@@ -20,109 +43,145 @@ on:
           - internal-rc
           - public
       publish:
-        description: Create the synchronized GitHub release after every gate passes
+        description: Publish only after a publish=false rehearsal succeeds
         required: true
         default: false
         type: boolean
 
 permissions:
   actions: read
-  contents: write
+  contents: read
 
 jobs:
+  verify-candidate-source:
+    runs-on: ubuntu-22.04
+    outputs:
+      candidate_sha: ${{ steps.provenance.outputs.candidate_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require protected default-branch producer and successful run
+        id: provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        run: |
+          default_branch="$(gh api "repos/$GH_REPO" --jq '.default_branch')"
+          run="$(gh api "repos/$GH_REPO/actions/runs/$CANDIDATE_RUN_ID")"
+          test "$(jq -r '.path' <<<"$run" | cut -d@ -f1)" = ".github/workflows/cinema-deliver-release-candidates.yml"
+          test "$(jq -r '.event' <<<"$run")" = "workflow_dispatch"
+          test "$(jq -r '.conclusion' <<<"$run")" = "success"
+          test "$(jq -r '.head_branch' <<<"$run")" = "$default_branch"
+          test "$GITHUB_REF_NAME" = "$default_branch"
+          candidate_sha="$(jq -r '.head_sha' <<<"$run")"
+          git merge-base --is-ancestor "$candidate_sha" "$GITHUB_SHA"
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+
   verify-windows-candidate:
+    needs: verify-candidate-source
     runs-on: windows-2022
+    env:
+      EVIDENCE_PATH: ${{ inputs.windows_evidence_path }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download signed Windows candidate
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: cinema-deliver-win32-x64
           path: candidate
           run-id: ${{ inputs.candidate_run_id }}
           github-token: ${{ github.token }}
 
-      - name: Download Windows installed restart evidence
-        uses: actions/download-artifact@v4
-        with:
-          name: cinema-deliver-evidence-win32-x64
-          path: evidence
-          run-id: ${{ inputs.candidate_run_id }}
-          github-token: ${{ github.token }}
-
-      - name: Verify approved Windows runtime and installed evidence
+      - name: Verify installed evidence and complete candidate artifact set
         shell: pwsh
         run: |
-          node packages/desktop/scripts/verify-media-runtime.mjs --release-strict
-          $evidence = @(Get-ChildItem evidence -Recurse -Filter *.json)
-          if ($evidence.Count -ne 1) { throw "Expected exactly one Windows evidence JSON, found $($evidence.Count)" }
-          node packages/desktop/scripts/verify-deliver-restart-evidence.mjs $evidence[0].FullName --release-strict
+          if (-not (Test-Path -LiteralPath $env:EVIDENCE_PATH -PathType Leaf)) { throw "Windows evidence file is missing" }
+          node packages/desktop/scripts/verify-deliver-restart-evidence.mjs $env:EVIDENCE_PATH --release-strict
+          node packages/desktop/scripts/verify-desktop-release-candidate.mjs --manifest candidate/candidate-manifest.json --directory candidate --evidence $env:EVIDENCE_PATH
 
-      - name: Verify Windows installer identity, digest, and Authenticode signature
+      - name: Verify Anybox Authenticode identity
         shell: pwsh
+        env:
+          EXPECTED_SUBJECT: ${{ vars.ANYBOX_WINDOWS_SIGNING_SUBJECT }}
+          EXPECTED_THUMBPRINT: ${{ vars.ANYBOX_WINDOWS_SIGNING_THUMBPRINT }}
         run: |
-          $installers = @(Get-ChildItem candidate -Recurse -Filter *.exe)
-          $evidenceFiles = @(Get-ChildItem evidence -Recurse -Filter *.json)
-          if ($installers.Count -ne 1) { throw "Expected exactly one Windows installer, found $($installers.Count)" }
-          $record = Get-Content -LiteralPath $evidenceFiles[0].FullName -Raw | ConvertFrom-Json
-          if ($installers[0].Name -ne $record.build.artifactFileName) { throw "Windows installer filename does not match evidence" }
-          $digest = (Get-FileHash -LiteralPath $installers[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($digest -ne $record.build.artifactSHA256) { throw "Windows installer SHA-256 does not match evidence" }
-          $signature = Get-AuthenticodeSignature -LiteralPath $installers[0].FullName
+          if (-not $env:EXPECTED_SUBJECT -or -not $env:EXPECTED_THUMBPRINT) { throw "Expected Anybox Windows signing identity is not configured" }
+          $manifest = Get-Content candidate/candidate-manifest.json -Raw | ConvertFrom-Json
+          $installer = Join-Path "candidate" $manifest.primaryInstaller
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer
           if ($signature.Status -ne "Valid") { throw "Windows installer signature is $($signature.Status): $($signature.StatusMessage)" }
+          if ($signature.SignerCertificate.Subject -ne $env:EXPECTED_SUBJECT) { throw "Windows signer subject is not the approved Anybox identity" }
+          if ($signature.SignerCertificate.Thumbprint -ne $env:EXPECTED_THUMBPRINT.ToUpperInvariant()) { throw "Windows signer thumbprint is not approved" }
 
   verify-macos-candidate:
+    needs: verify-candidate-source
     runs-on: macos-14
+    env:
+      EVIDENCE_PATH: ${{ inputs.macos_evidence_path }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Require native Apple Silicon runner
         run: test "$(uname -m)" = "arm64"
 
-      - name: Download signed and notarized macOS candidate
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: cinema-deliver-darwin-arm64
           path: candidate
           run-id: ${{ inputs.candidate_run_id }}
           github-token: ${{ github.token }}
 
-      - name: Download macOS installed restart evidence
-        uses: actions/download-artifact@v4
-        with:
-          name: cinema-deliver-evidence-darwin-arm64
-          path: evidence
-          run-id: ${{ inputs.candidate_run_id }}
-          github-token: ${{ github.token }}
-
-      - name: Verify approved macOS runtime and installed evidence
+      - name: Verify installed evidence and complete candidate artifact set
         run: |
-          node packages/desktop/scripts/verify-media-runtime.mjs --release-strict
-          evidence_file="$(find evidence -type f -name '*.json')"
-          test "$(find evidence -type f -name '*.json' | wc -l | tr -d ' ')" = "1"
-          node packages/desktop/scripts/verify-deliver-restart-evidence.mjs "$evidence_file" --release-strict
+          test -f "$EVIDENCE_PATH"
+          node packages/desktop/scripts/verify-deliver-restart-evidence.mjs "$EVIDENCE_PATH" --release-strict
+          node packages/desktop/scripts/verify-desktop-release-candidate.mjs --manifest candidate/candidate-manifest.json --directory candidate --evidence "$EVIDENCE_PATH"
 
-      - name: Verify macOS installer identity, digest, signature, notarization, and stapling
+      - name: Verify Anybox Developer ID, Gatekeeper, notarization, and stapling
+        env:
+          EXPECTED_TEAM_ID: ${{ vars.ANYBOX_APPLE_TEAM_ID }}
         run: |
-          installer="$(find candidate -type f -name '*.dmg')"
-          evidence_file="$(find evidence -type f -name '*.json')"
-          test "$(find candidate -type f -name '*.dmg' | wc -l | tr -d ' ')" = "1"
-          expected_name="$(jq -r '.build.artifactFileName' "$evidence_file")"
-          expected_sha="$(jq -r '.build.artifactSHA256' "$evidence_file")"
-          test "$(basename "$installer")" = "$expected_name"
-          test "$(shasum -a 256 "$installer" | awk '{print $1}')" = "$expected_sha"
-          codesign --verify --deep --strict --verbose=2 "$installer"
+          test -n "$EXPECTED_TEAM_ID"
+          installer="candidate/$(jq -r '.primaryInstaller' candidate/candidate-manifest.json)"
+          codesign --verify --strict --verbose=2 "$installer"
           spctl --assess --type open --context context:primary-signature --verbose=2 "$installer"
           xcrun stapler validate "$installer"
+          mountpoint="$(mktemp -d)"
+          zipdir=""
+          cleanup() { hdiutil detach "$mountpoint" -quiet || true; rmdir "$mountpoint" || true; test -z "$zipdir" || rm -rf "$zipdir"; }
+          trap cleanup EXIT
+          hdiutil attach "$installer" -nobrowse -readonly -mountpoint "$mountpoint" -quiet
+          app="$(find "$mountpoint" -maxdepth 1 -type d -name '*.app')"
+          test -d "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv --verbose=4 "$app" 2>&1 | grep -F "TeamIdentifier=$EXPECTED_TEAM_ID"
+          spctl --assess --type execute --verbose=2 "$app"
+          zip="candidate/${installer##*/}"
+          zip="${zip%.dmg}.zip"
+          zipdir="$(mktemp -d)"
+          unzip -q "$zip" -d "$zipdir"
+          zipapp="$(find "$zipdir" -maxdepth 1 -type d -name '*.app')"
+          test -d "$zipapp"
+          codesign --verify --deep --strict --verbose=2 "$zipapp"
+          codesign -dv --verbose=4 "$zipapp" 2>&1 | grep -F "TeamIdentifier=$EXPECTED_TEAM_ID"
 
   aggregate-release-gate:
     needs:
+      - verify-candidate-source
       - verify-windows-candidate
       - verify-macos-candidate
     runs-on: ubuntu-22.04
+    env:
+      WINDOWS_EVIDENCE_PATH: ${{ inputs.windows_evidence_path }}
+      MACOS_EVIDENCE_PATH: ${{ inputs.macos_evidence_path }}
+      APPROVAL_PATH: ${{ inputs.approval_path }}
+      CANDIDATE_SHA: ${{ needs.verify-candidate-source.outputs.candidate_sha }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
     outputs:
       commit_sha: ${{ steps.identity.outputs.commit_sha }}
+      desktop_version: ${{ steps.identity.outputs.desktop_version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -140,42 +199,53 @@ jobs:
           run-id: ${{ inputs.candidate_run_id }}
           github-token: ${{ github.token }}
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: cinema-deliver-evidence-win32-x64
-          path: release/evidence/windows
-          run-id: ${{ inputs.candidate_run_id }}
-          github-token: ${{ github.token }}
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: cinema-deliver-evidence-darwin-arm64
-          path: release/evidence/macos
-          run-id: ${{ inputs.candidate_run_id }}
-          github-token: ${{ github.token }}
-
-      - name: Verify synchronized matrix, installer digests, version, and commit
+      - name: Reverify exact artifact sets and synchronized release matrix
         id: identity
-        env:
-          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          windows_installer="$(find release/windows -type f -name '*.exe')"
-          macos_installer="$(find release/macos -type f -name '*.dmg')"
-          windows_evidence="$(find release/evidence/windows -type f -name '*.json')"
-          macos_evidence="$(find release/evidence/macos -type f -name '*.json')"
+          test -f "$WINDOWS_EVIDENCE_PATH" -a -f "$MACOS_EVIDENCE_PATH" -a -f "$APPROVAL_PATH"
+          node packages/desktop/scripts/verify-desktop-release-candidate.mjs --manifest release/windows/candidate-manifest.json --directory release/windows --evidence "$WINDOWS_EVIDENCE_PATH"
+          node packages/desktop/scripts/verify-desktop-release-candidate.mjs --manifest release/macos/candidate-manifest.json --directory release/macos --evidence "$MACOS_EVIDENCE_PATH"
+          windows_installer="release/windows/$(jq -r '.primaryInstaller' release/windows/candidate-manifest.json)"
+          macos_installer="release/macos/$(jq -r '.primaryInstaller' release/macos/candidate-manifest.json)"
           node packages/desktop/scripts/verify-deliver-release-matrix.mjs \
-            --windows "$windows_evidence" \
-            --macos "$macos_evidence" \
+            --windows "$WINDOWS_EVIDENCE_PATH" \
+            --macos "$MACOS_EVIDENCE_PATH" \
             --windowsArtifact "$windows_installer" \
-            --macosArtifact "$macos_installer"
-          version="$(jq -r '.build.desktopVersion' "$windows_evidence")"
-          commit_sha="$(jq -r '.build.commitSHA' "$windows_evidence")"
+            --macosArtifact "$macos_installer" \
+            --approval "$APPROVAL_PATH"
+          version="$(jq -r '.desktopVersion' release/windows/candidate-manifest.json)"
+          commit_sha="$(jq -r '.commitSHA' release/windows/candidate-manifest.json)"
           test "$RELEASE_TAG" = "v$version"
-          case "$GITHUB_SHA" in "$commit_sha"*) ;; *) echo "Evidence commit $commit_sha does not match workflow commit $GITHUB_SHA" >&2; exit 1;; esac
+          test "$commit_sha" = "$CANDIDATE_SHA"
+          test "$(jq -r '.commitSHA' release/macos/candidate-manifest.json)" = "$CANDIDATE_SHA"
+          echo "desktop_version=$version" >> "$GITHUB_OUTPUT"
           echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
 
-      - name: Preserve synchronized release candidate
-        uses: actions/upload-artifact@v4
+      - name: Record immutable gate identity for rehearsal and promotion
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CHANNEL: ${{ inputs.channel }}
+          PUBLISH_REQUESTED: ${{ inputs.publish }}
+        run: |
+          windows_manifest_sha="$(sha256sum release/windows/candidate-manifest.json | awk '{print $1}')"
+          macos_manifest_sha="$(sha256sum release/macos/candidate-manifest.json | awk '{print $1}')"
+          published_tag=""
+          if [ "$PUBLISH_REQUESTED" = "true" ]; then
+            if [ "$CHANNEL" = "internal-rc" ]; then published_tag="${RELEASE_TAG}-rc.${GITHUB_RUN_NUMBER}"; else published_tag="$RELEASE_TAG"; fi
+          fi
+          jq -n \
+            --arg candidateRunID "$CANDIDATE_RUN_ID" \
+            --arg candidateSHA "$CANDIDATE_SHA" \
+            --arg channel "$CHANNEL" \
+            --arg baseReleaseTag "$RELEASE_TAG" \
+            --arg publishedTag "$published_tag" \
+            --arg windowsManifestSHA256 "$windows_manifest_sha" \
+            --arg macosManifestSHA256 "$macos_manifest_sha" \
+            --argjson publishRequested "$PUBLISH_REQUESTED" \
+            '{schemaVersion:1,candidateRunID:$candidateRunID,candidateSHA:$candidateSHA,channel:$channel,baseReleaseTag:$baseReleaseTag,publishedTag:$publishedTag,publishRequested:$publishRequested,windowsManifestSHA256:$windowsManifestSHA256,macosManifestSHA256:$macosManifestSHA256}' \
+            > release/release-gate-record.json
+
+      - uses: actions/upload-artifact@v4
         with:
           name: cinema-deliver-synchronized-release-candidate
           path: release
@@ -187,20 +257,119 @@ jobs:
     needs: aggregate-release-gate
     runs-on: ubuntu-22.04
     environment: cinema-deliver-release
+    permissions:
+      actions: read
+      contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.aggregate-release-gate.outputs.commit_sha }}
+
       - uses: actions/download-artifact@v4
         with:
           name: cinema-deliver-synchronized-release-candidate
           path: release
 
+      - name: Require prior-stage run IDs
+        env:
+          REHEARSAL_RUN_ID: ${{ inputs.rehearsal_run_id }}
+          INTERNAL_RC_RUN_ID: ${{ inputs.internal_rc_run_id }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+        run: |
+          test -n "$REHEARSAL_RUN_ID"
+          test "$REHEARSAL_RUN_ID" != "$GITHUB_RUN_ID"
+          if [ "$RELEASE_CHANNEL" = "public" ]; then
+            test -n "$INTERNAL_RC_RUN_ID"
+            test "$INTERNAL_RC_RUN_ID" != "$GITHUB_RUN_ID"
+            test "$INTERNAL_RC_RUN_ID" != "$REHEARSAL_RUN_ID"
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cinema-deliver-synchronized-release-candidate
+          path: prior/rehearsal
+          run-id: ${{ inputs.rehearsal_run_id }}
+          github-token: ${{ github.token }}
+
+      - uses: actions/download-artifact@v4
+        if: inputs.channel == 'public'
+        with:
+          name: cinema-deliver-synchronized-release-candidate
+          path: prior/internal-rc
+          run-id: ${{ inputs.internal_rc_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify rehearsal and internal RC use the identical candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REHEARSAL_RUN_ID: ${{ inputs.rehearsal_run_id }}
+          INTERNAL_RC_RUN_ID: ${{ inputs.internal_rc_run_id }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+        run: |
+          verify_run() {
+            run_id="$1"
+            run="$(gh api "repos/$GH_REPO/actions/runs/$run_id")"
+            test "$(jq -r '.path' <<<"$run" | cut -d@ -f1)" = ".github/workflows/cinema-deliver-release.yml"
+            test "$(jq -r '.event' <<<"$run")" = "workflow_dispatch"
+            test "$(jq -r '.conclusion' <<<"$run")" = "success"
+          }
+          verify_identity() {
+            record="$1/release-gate-record.json"
+            test "$(jq -r '.candidateRunID' "$record")" = "$(jq -r '.candidateRunID' release/release-gate-record.json)"
+            test "$(jq -r '.candidateSHA' "$record")" = "$(jq -r '.candidateSHA' release/release-gate-record.json)"
+            test "$(jq -r '.windowsManifestSHA256' "$record")" = "$(jq -r '.windowsManifestSHA256' release/release-gate-record.json)"
+            test "$(jq -r '.macosManifestSHA256' "$record")" = "$(jq -r '.macosManifestSHA256' release/release-gate-record.json)"
+            cmp "$1/windows/candidate-manifest.json" release/windows/candidate-manifest.json
+            cmp "$1/macos/candidate-manifest.json" release/macos/candidate-manifest.json
+          }
+          verify_run "$REHEARSAL_RUN_ID"
+          verify_identity prior/rehearsal
+          test "$(jq -r '.publishRequested' prior/rehearsal/release-gate-record.json)" = "false"
+          if [ "$RELEASE_CHANNEL" = "public" ]; then
+            verify_run "$INTERNAL_RC_RUN_ID"
+            verify_identity prior/internal-rc
+            test "$(jq -r '.publishRequested' prior/internal-rc/release-gate-record.json)" = "true"
+            test "$(jq -r '.channel' prior/internal-rc/release-gate-record.json)" = "internal-rc"
+            rc_tag="$(jq -r '.publishedTag' prior/internal-rc/release-gate-record.json)"
+            test "$(gh release view "$rc_tag" --repo "$GH_REPO" --json isPrerelease --jq '.isPrerelease')" = "true"
+          fi
+
+      - name: Stage the public GitHub release as a draft
+        if: inputs.channel == 'public'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          TARGET_COMMIT: ${{ needs.aggregate-release-gate.outputs.commit_sha }}
+        run: |
+          mapfile -t assets < <(find release/windows release/macos -type f ! -name 'candidate-manifest.json')
+          gh release create "$RELEASE_TAG" "${assets[@]}" --repo "$GH_REPO" --target "$TARGET_COMMIT" --generate-notes --draft
+
+      - name: Update the Windows generic feed and synchronized download manifest
+        if: inputs.channel == 'public'
+        env:
+          TENCENT_COS_SECRET_ID: ${{ secrets.TENCENT_COS_SECRET_ID }}
+          TENCENT_COS_SECRET_KEY: ${{ secrets.TENCENT_COS_SECRET_KEY }}
+          TENCENT_COS_BUCKET: ${{ secrets.TENCENT_COS_BUCKET }}
+          TENCENT_COS_REGION: ${{ secrets.TENCENT_COS_REGION }}
+        run: |
+          windows="release/windows/$(jq -r '.primaryInstaller' release/windows/candidate-manifest.json)"
+          macos="release/macos/$(jq -r '.primaryInstaller' release/macos/candidate-manifest.json)"
+          node scripts/sync-downloads-to-cos.mjs --windows "$windows" --mac "$macos" --version "${{ needs.aggregate-release-gate.outputs.desktop_version }}" --require windows,mac --upload
+
       - name: Publish both platforms in one GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_REPO: ${{ github.repository }}
+          BASE_TAG: ${{ inputs.release_tag }}
           RELEASE_CHANNEL: ${{ inputs.channel }}
           TARGET_COMMIT: ${{ needs.aggregate-release-gate.outputs.commit_sha }}
         run: |
-          mapfile -t assets < <(find release/windows release/macos -type f)
-          options=(--target "$TARGET_COMMIT" --generate-notes)
-          if [ "$RELEASE_CHANNEL" = "internal-rc" ]; then options+=(--prerelease); else options+=(--latest); fi
-          gh release create "$RELEASE_TAG" "${assets[@]}" "${options[@]}"
+          if [ "$RELEASE_CHANNEL" = "internal-rc" ]; then
+            mapfile -t assets < <(find release/windows release/macos -type f ! -name 'candidate-manifest.json')
+            tag="${BASE_TAG}-rc.${GITHUB_RUN_NUMBER}"
+            gh release create "$tag" "${assets[@]}" --repo "$GH_REPO" --target "$TARGET_COMMIT" --generate-notes --prerelease --latest=false
+          else
+            gh release edit "$BASE_TAG" --repo "$GH_REPO" --draft=false --latest
+          fi

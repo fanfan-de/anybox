@@ -69,6 +69,12 @@ popd >/dev/null
 cp "${source_dir}/${ffmpeg_name}" "${stage_dir}/${ffmpeg_name}"
 cp "${source_dir}/${ffprobe_name}" "${stage_dir}/${ffprobe_name}"
 cp "${source_dir}/COPYING.LGPLv3" "${stage_dir}/LICENSE.txt"
+cp "${recipe_copy}" "${stage_dir}/BUILD-RECIPE.sh"
+cat > "${stage_dir}/SOURCE.txt" <<EOF
+FFmpeg revision: ${ffmpeg_revision}
+Source archive: $(basename "${source_archive}")
+Source origin: https://github.com/FFmpeg/FFmpeg/commit/${ffmpeg_revision}
+EOF
 "${stage_dir}/${ffmpeg_name}" -buildconf > "${stage_dir}/configure.txt" 2>&1
 cat > "${stage_dir}/THIRD-PARTY-NOTICES.txt" <<EOF
 FFmpeg media runtime candidate for Anybox

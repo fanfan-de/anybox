@@ -1,7 +1,9 @@
 import { useCallback, useMemo, type RefObject } from "react"
 import {
+  defaultRangeExtractor,
   measureElement as measureVirtualElement,
   useVirtualizer,
+  type Range,
   type ReactVirtualizer,
   type Rect,
   type VirtualItem,
@@ -20,6 +22,7 @@ export type ThreadRowVirtualizer = ReactVirtualizer<HTMLDivElement, HTMLDivEleme
 interface UseThreadVirtualListInput {
   displayRows: ThreadDisplayRow[]
   getInitialOffset?: () => number
+  pinnedRowIDs?: readonly string[]
   threadColumnRef: RefObject<HTMLDivElement | null>
   virtualListKey: string
 }
@@ -123,6 +126,7 @@ function observeThreadVirtualElementRect(
 export function useThreadVirtualList({
   displayRows,
   getInitialOffset,
+  pinnedRowIDs = [],
   threadColumnRef,
   virtualListKey,
 }: UseThreadVirtualListInput) {
@@ -138,6 +142,27 @@ export function useThreadVirtualList({
     () => normalizeThreadVirtualOffset(getInitialOffset?.()),
     [getInitialOffset],
   )
+  const pinnedRowIndexes = useMemo(() => {
+    if (pinnedRowIDs.length === 0) return []
+
+    const pinnedRowIDSet = new Set(pinnedRowIDs)
+    const indexes: number[] = []
+    for (let index = 0; index < displayRows.length; index += 1) {
+      if (pinnedRowIDSet.has(displayRows[index]?.rowID ?? "")) {
+        indexes.push(index)
+      }
+    }
+    return indexes
+  }, [displayRows, pinnedRowIDs])
+  const rangeExtractor = useCallback((range: Range) => {
+    if (pinnedRowIndexes.length === 0) return defaultRangeExtractor(range)
+
+    const indexes = new Set(defaultRangeExtractor(range))
+    for (const index of pinnedRowIndexes) {
+      indexes.add(index)
+    }
+    return Array.from(indexes).sort((left, right) => left - right)
+  }, [pinnedRowIndexes])
   const scrollToFn = useCallback((
     offset: number,
     options: { adjustments?: number; behavior?: "auto" | "smooth" | "instant" },
@@ -167,6 +192,7 @@ export function useThreadVirtualList({
     measureElement: measureThreadVirtualElement,
     observeElementRect: observeThreadVirtualElementRect,
     overscan: THREAD_VIRTUAL_OVERSCAN_ROWS,
+    rangeExtractor,
     scrollToFn,
   })
 

@@ -31,6 +31,12 @@ async function sha256(filePath) {
   return hash.digest("hex")
 }
 
+async function sha512Base64(filePath) {
+  const hash = createHash("sha512")
+  for await (const chunk of fs.createReadStream(filePath)) hash.update(chunk)
+  return hash.digest("base64")
+}
+
 export async function verifyDesktopReleaseCandidate({ manifestPath, directory, evidencePath }) {
   const [manifest, evidence] = await Promise.all([
     fsp.readFile(manifestPath, "utf8").then(JSON.parse),
@@ -59,6 +65,24 @@ export async function verifyDesktopReleaseCandidate({ manifestPath, directory, e
     lockedNames.add(file.fileName)
   }
   invariant(lockedNames.has(manifest.primaryInstaller), "Primary installer is not locked in the candidate manifest")
+  if (manifest.platform === "win32") {
+    invariant(manifest.primaryInstaller.endsWith("-x64.exe"), "Windows primary installer name is invalid")
+    for (const required of [manifest.primaryInstaller, `${manifest.primaryInstaller}.blockmap`, "latest.yml"]) {
+      invariant(lockedNames.has(required), `Windows candidate is missing required update asset ${required}`)
+    }
+  } else {
+    invariant(manifest.primaryInstaller.endsWith("-arm64.dmg"), "macOS primary installer name is invalid")
+    const zipName = `${manifest.primaryInstaller.slice(0, -4)}.zip`
+    for (const required of [
+      manifest.primaryInstaller,
+      `${manifest.primaryInstaller}.blockmap`,
+      zipName,
+      `${zipName}.blockmap`,
+      "latest-mac.yml",
+    ]) {
+      invariant(lockedNames.has(required), `macOS candidate is missing required update asset ${required}`)
+    }
+  }
 
   const actualEntries = await fsp.readdir(directory, { withFileTypes: true })
   const actualNames = actualEntries
@@ -75,6 +99,29 @@ export async function verifyDesktopReleaseCandidate({ manifestPath, directory, e
     invariant(locked, `Desktop candidate contains an unlocked file: ${entry.name}`)
     invariant(stat.size === locked.sizeBytes, `${entry.name} size does not match the candidate manifest`)
     invariant(await sha256(filePath) === locked.sha256, `${entry.name} SHA-256 does not match the candidate manifest`)
+  }
+
+  const metadataName = manifest.platform === "win32" ? "latest.yml" : "latest-mac.yml"
+  const metadata = await fsp.readFile(path.join(directory, metadataName), "utf8")
+  const escapedVersion = manifest.desktopVersion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  invariant(
+    new RegExp(`^version:\\s*['\"]?${escapedVersion}['\"]?\\s*$`, "m").test(metadata),
+    `${metadataName} does not declare the candidate version`,
+  )
+  const updaterPayloads = manifest.platform === "win32"
+    ? [manifest.primaryInstaller]
+    : [manifest.primaryInstaller, `${manifest.primaryInstaller.slice(0, -4)}.zip`]
+  for (const fileName of updaterPayloads) {
+    invariant(metadata.includes(fileName), `${metadataName} does not reference ${fileName}`)
+    const payloadSize = (await fsp.stat(path.join(directory, fileName))).size
+    invariant(
+      metadata.includes(await sha512Base64(path.join(directory, fileName))),
+      `${metadataName} has a stale SHA-512 for ${fileName}`,
+    )
+    invariant(
+      new RegExp(`(?:^|\\n)\\s*size:\\s*${payloadSize}\\s*(?:$|\\n)`).test(metadata),
+      `${metadataName} has a stale size for ${fileName}`,
+    )
   }
 
   const primary = manifest.files.find((file) => file.fileName === manifest.primaryInstaller)

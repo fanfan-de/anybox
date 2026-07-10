@@ -1,5 +1,6 @@
 ﻿import { Component, memo, useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ErrorInfo, type FormEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject, type WheelEvent as ReactWheelEvent } from "react"
 import { createPortal } from "react-dom"
+import { createContext, useContext, useSyncExternalStore, type FocusEvent as ReactFocusEvent } from "react"
 import { toLocalImageProtocolUrl } from "../../../../shared/local-image-protocol"
 import { getAgentSessionBridge } from "../agent-session/client"
 import { Composer } from "../composer/Composer"
@@ -82,6 +83,13 @@ import {
 } from "./ThreadRowRenderer"
 import { ThreadRows } from "./ThreadRows"
 import { ThreadTurnNavigator } from "./ThreadTurnNavigator"
+import { SizeAwareStreamingMarkdown } from "./SizeAwareStreamingMarkdown"
+import {
+  createThreadInteractionStore,
+  selectThreadInteractionEntry,
+  type ThreadInteractionRowRef,
+  type ThreadInteractionStoreApi,
+} from "./thread-interaction-store"
 import { useThreadContentObserver } from "./use-thread-content-observer"
 import { useThreadProjection } from "./use-thread-projection"
 import { useThreadScrollController, type ThreadFollowScrollTarget, type ThreadScrollSnapshot } from "./use-thread-scroll-controller"
@@ -121,6 +129,7 @@ interface ThreadViewProps {
   addImageToComposerDisabledReason?: string | null
   sideChatCountsByAnchorMessageID: Record<string, number>
   sideChatSession?: SessionSummary | null
+  interactionStore?: ThreadInteractionStoreApi
   scrollStateKey?: string | null
   threadColumnRef: RefObject<HTMLDivElement | null>
   isThreadVisible?: boolean
@@ -131,6 +140,138 @@ interface ThreadViewProps {
   onAskUserQuestionAnswer: QuestionAnswerHandler
   onProposedPlanConfirm?: ProposedPlanConfirmHandler
   onPermissionRequestResponse: PermissionRequestResponseHandler
+}
+
+type ThreadViewActionPropName =
+  | "onBranchSelect"
+  | "onFileChangeSelect"
+  | "onForkFromMessage"
+  | "onArtifactLinkOpen"
+  | "onLocalFileLinkOpen"
+  | "onOpenSideChat"
+  | "onMessageDiffSummaryHydrate"
+  | "onMessageDiffRestore"
+  | "onMessageDiffReview"
+  | "onAddToComposer"
+  | "onAddImageToComposer"
+  | "onAskUserQuestionAnswer"
+  | "onProposedPlanConfirm"
+  | "onPermissionRequestResponse"
+
+type ThreadViewActionSource = Pick<ThreadViewProps, ThreadViewActionPropName>
+
+interface ThreadViewActions {
+  onBranchSelect: NonNullable<ThreadViewProps["onBranchSelect"]>
+  onFileChangeSelect: NonNullable<ThreadViewProps["onFileChangeSelect"]>
+  onForkFromMessage: NonNullable<ThreadViewProps["onForkFromMessage"]>
+  onArtifactLinkOpen: NonNullable<ThreadViewProps["onArtifactLinkOpen"]>
+  onLocalFileLinkOpen: NonNullable<ThreadViewProps["onLocalFileLinkOpen"]>
+  onOpenSideChat: NonNullable<ThreadViewProps["onOpenSideChat"]>
+  onMessageDiffSummaryHydrate: NonNullable<ThreadViewProps["onMessageDiffSummaryHydrate"]>
+  onMessageDiffRestore: NonNullable<ThreadViewProps["onMessageDiffRestore"]>
+  onMessageDiffReview: NonNullable<ThreadViewProps["onMessageDiffReview"]>
+  onAddToComposer: NonNullable<ThreadViewProps["onAddToComposer"]>
+  onAddImageToComposer: NonNullable<ThreadViewProps["onAddImageToComposer"]>
+  onAskUserQuestionAnswer: QuestionAnswerHandler
+  onProposedPlanConfirm: ProposedPlanConfirmHandler
+  onPermissionRequestResponse: PermissionRequestResponseHandler
+}
+
+interface ThreadViewActionCapabilities {
+  canSelectBranch: boolean
+  canSelectFileChange: boolean
+  canForkFromMessage: boolean
+  canOpenArtifactLink: boolean
+  canOpenLocalFileLink: boolean
+  canOpenSideChat: boolean
+  canHydrateMessageDiffSummary: boolean
+  canRestoreMessageDiff: boolean
+  canReviewMessageDiff: boolean
+  canAddToComposer: boolean
+  canAddImageToComposer: boolean
+  canConfirmProposedPlan: boolean
+}
+
+type ThreadViewViewportProps = Omit<ThreadViewProps, ThreadViewActionPropName | "interactionStore"> & {
+  actions: ThreadViewActions
+  actionCapabilities: ThreadViewActionCapabilities
+  interactionStore: ThreadInteractionStoreApi
+}
+
+function useThreadViewActions(source: ThreadViewActionSource) {
+  const committedSourceRef = useRef(source)
+
+  useLayoutEffect(() => {
+    committedSourceRef.current = source
+  })
+
+  return useMemo<ThreadViewActions>(() => ({
+    onBranchSelect(messageID) {
+      return committedSourceRef.current.onBranchSelect?.(messageID)
+    },
+    onFileChangeSelect(file) {
+      return committedSourceRef.current.onFileChangeSelect?.(file)
+    },
+    onForkFromMessage(messageID) {
+      return committedSourceRef.current.onForkFromMessage?.(messageID)
+    },
+    onArtifactLinkOpen(target) {
+      return committedSourceRef.current.onArtifactLinkOpen?.(target)
+    },
+    onLocalFileLinkOpen(target) {
+      return committedSourceRef.current.onLocalFileLinkOpen?.(target)
+    },
+    onOpenSideChat(anchorMessageID) {
+      return committedSourceRef.current.onOpenSideChat?.(anchorMessageID)
+    },
+    onMessageDiffSummaryHydrate(messageID, diffSummary) {
+      return committedSourceRef.current.onMessageDiffSummaryHydrate?.(messageID, diffSummary)
+    },
+    onMessageDiffRestore(diffs) {
+      return committedSourceRef.current.onMessageDiffRestore?.(diffs)
+    },
+    onMessageDiffReview(files) {
+      return committedSourceRef.current.onMessageDiffReview?.(files)
+    },
+    onAddToComposer(text) {
+      return committedSourceRef.current.onAddToComposer?.(text)
+    },
+    onAddImageToComposer(images) {
+      return committedSourceRef.current.onAddImageToComposer?.(images)
+    },
+    onAskUserQuestionAnswer(input) {
+      return committedSourceRef.current.onAskUserQuestionAnswer(input)
+    },
+    onProposedPlanConfirm(input) {
+      return committedSourceRef.current.onProposedPlanConfirm?.(input)
+    },
+    onPermissionRequestResponse(input) {
+      return committedSourceRef.current.onPermissionRequestResponse(input)
+    },
+  }), [])
+}
+
+interface ThreadInteractionContextValue {
+  scopeID: string
+  store: ThreadInteractionStoreApi
+}
+
+const ThreadInteractionContext = createContext<ThreadInteractionContextValue | null>(null)
+
+function useThreadInteractionEntry(rowID: string) {
+  const context = useContext(ThreadInteractionContext)
+  if (!context) {
+    throw new Error("Thread interaction state is unavailable outside ThreadView.")
+  }
+
+  const { scopeID, store } = context
+  const getSnapshot = useCallback(
+    () => selectThreadInteractionEntry(store.getState(), scopeID, rowID),
+    [rowID, scopeID, store],
+  )
+  const entry = useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot)
+
+  return { entry, scopeID, store }
 }
 
 const IMAGE_LIGHTBOX_BODY_CLASS = "is-image-lightbox-open"
@@ -150,6 +291,15 @@ const TRACE_PATCH_PREVIEW_LINE_LIMIT = 200
 const THREAD_COPY_CONTEXT_MENU_WIDTH = 184
 const THREAD_TEXT_CONTEXT_MENU_HEIGHT = 82
 const THREAD_IMAGE_CONTEXT_MENU_HEIGHT = 116
+
+function buildThreadInteractionRevision(value: string) {
+  let hash = 2166136261
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `${value.length}:${(hash >>> 0).toString(36)}`
+}
 
 interface LatestAssistantMessageState {
   id: string
@@ -929,10 +1079,18 @@ function MessageDiffCard({
     () => fileChanges.map(buildFileChangeSignature).join("\u0001"),
     [fileChanges],
   )
+  const interactionRowID = `message-diff:${messageID}`
+  const interactionRevision = useMemo(
+    () => buildThreadInteractionRevision(fileChangeSignature),
+    [fileChangeSignature],
+  )
+  const { entry, scopeID, store } = useThreadInteractionEntry(interactionRowID)
+  const isRestoring = entry?.operation.status === "submitting" || entry?.operation.status === "submitted"
+  const isRestoreSubmitted = entry?.operation.status === "submitted"
+  const restoreErrorMessage = entry?.operation.status === "failed" ? entry.operation.error : null
   const [isListExpanded, setIsListExpanded] = useState(false)
   const [expandedFile, setExpandedFile] = useState<string | null>(null)
   const [fullHeightFile, setFullHeightFile] = useState<string | null>(null)
-  const [isRestoring, setIsRestoring] = useState(false)
   const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(null)
   const hydratedDiffSummary = useMemo(
     () => buildHydratedUserMessageDiffSummary(diffSummary, fileChanges),
@@ -968,10 +1126,13 @@ function MessageDiffCard({
   }, [])
 
   useEffect(() => {
+    store.getState().ensureRevision(scopeID, interactionRowID, interactionRevision)
+  }, [interactionRevision, interactionRowID, scopeID, store])
+
+  useEffect(() => {
     setIsListExpanded(false)
     setExpandedFile(null)
     setFullHeightFile(null)
-    setIsRestoring(false)
     setActionErrorMessage(null)
   }, [fileChangeSignature, messageID])
 
@@ -1003,14 +1164,20 @@ function MessageDiffCard({
     )
     if (!confirmed) return
 
-    setIsRestoring(true)
+    const operationToken = store.getState().beginOperation(scopeID, interactionRowID)
+    if (!operationToken) return
+
     setActionErrorMessage(null)
     try {
       await onMessageDiffRestore(fileChanges)
+      store.getState().completeOperation(scopeID, interactionRowID, operationToken)
     } catch (error) {
-      setActionErrorMessage(error instanceof Error ? error.message : String(error))
-    } finally {
-      setIsRestoring(false)
+      store.getState().failOperation(
+        scopeID,
+        interactionRowID,
+        operationToken,
+        error instanceof Error ? error.message : String(error),
+      )
     }
   }
 
@@ -1037,7 +1204,7 @@ function MessageDiffCard({
             disabled={!onMessageDiffRestore || isRestoring}
             onClick={() => void handleRestoreClick()}
           >
-            <span>{isRestoring ? "撤销中" : "撤销"}</span>
+            <span>{isRestoreSubmitted ? "已撤销" : isRestoring ? "撤销中" : "撤销"}</span>
             <ResetIcon />
           </button>
           <button
@@ -1078,8 +1245,8 @@ function MessageDiffCard({
           ))}
         </div>
       ) : null}
-      {actionErrorMessage ? (
-        <p className="user-message-diff-error" role="alert">{actionErrorMessage}</p>
+      {restoreErrorMessage || actionErrorMessage ? (
+        <p className="user-message-diff-error" role="alert">{restoreErrorMessage ?? actionErrorMessage}</p>
       ) : null}
     </div>
   )
@@ -2243,20 +2410,36 @@ function getProposedPlanStateText(status: ProposedPlanCardStatus) {
 }
 
 function ProposedPlanCard({
+  interactionRowID,
   planMarkdown,
   rawPlanMarkdown,
   isComplete,
   isLatestMessage,
   onConfirm,
 }: {
+  interactionRowID: string
   planMarkdown: string
   rawPlanMarkdown: string
   isComplete: boolean
   isLatestMessage: boolean
   onConfirm?: ProposedPlanConfirmHandler
 }) {
-  const [status, setStatus] = useState<ProposedPlanCardStatus>("idle")
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const { entry, scopeID, store } = useThreadInteractionEntry(interactionRowID)
+  const interactionRevision = useMemo(
+    () => buildThreadInteractionRevision(rawPlanMarkdown),
+    [rawPlanMarkdown],
+  )
+  useEffect(() => {
+    store.getState().ensureRevision(scopeID, interactionRowID, interactionRevision)
+  }, [interactionRevision, interactionRowID, scopeID, store])
+  const status: ProposedPlanCardStatus = entry?.planCancelled
+    ? "cancelled"
+    : entry?.operation.status === "submitting"
+      ? "confirming"
+      : entry?.operation.status === "submitted"
+        ? "confirmed"
+        : "idle"
+  const errorMessage = entry?.operation.status === "failed" ? entry.operation.error : null
   const stateText = getProposedPlanStateText(status)
   const showActions = isLatestMessage && status === "idle"
   const showState = isLatestMessage && Boolean(stateText)
@@ -2265,15 +2448,24 @@ function ProposedPlanCard({
   async function handleConfirm() {
     if (!isComplete || !onConfirm || status !== "idle") return
 
-    setStatus("confirming")
-    setErrorMessage(null)
+    const operationToken = store.getState().beginOperation(scopeID, interactionRowID)
+    if (!operationToken) return
+
     try {
       await onConfirm({ planMarkdown: rawPlanMarkdown })
-      setStatus("confirmed")
+      store.getState().completeOperation(scopeID, interactionRowID, operationToken)
     } catch (error) {
-      setStatus("idle")
-      setErrorMessage(error instanceof Error ? error.message : String(error))
+      store.getState().failOperation(
+        scopeID,
+        interactionRowID,
+        operationToken,
+        error instanceof Error ? error.message : String(error),
+      )
     }
+  }
+
+  function handleCancel() {
+    store.getState().setPlanCancelled(scopeID, interactionRowID, true)
   }
 
   return (
@@ -2290,7 +2482,7 @@ function ProposedPlanCard({
               className="secondary-button"
               disabled={isActionDisabled}
               type="button"
-              onClick={() => setStatus("cancelled")}
+              onClick={handleCancel}
             >
               取消
             </button>
@@ -2311,6 +2503,7 @@ function ProposedPlanCard({
 
 interface TraceItemViewProps {
   assistantMessagePhase?: AssistantThreadMessagePhase
+  interactionRowID?: string
   item: AssistantTraceItem
   isQuestionAnswered?: boolean
   isQuestionAnswerDisabled?: boolean
@@ -2336,6 +2529,7 @@ type TraceItemRendererProps = RequiredTraceItemRendererProps &
   Pick<
     TraceItemViewProps,
     | "assistantMessagePhase"
+    | "interactionRowID"
     | "item"
     | "isQuestionAnswered"
     | "onAskUserQuestionAnswer"
@@ -2449,8 +2643,9 @@ function StreamingResponseText({
   if (!markdownText) return null
 
   return (
-    <ThreadMarkdown
+    <SizeAwareStreamingMarkdown
       className={joinClassNames(className, "thread-markdown")}
+      isStreaming
       text={markdownText}
       onArtifactLinkOpen={onArtifactLinkOpen}
       onLocalFileLinkOpen={onLocalFileLinkOpen}
@@ -3617,18 +3812,40 @@ function QuestionTraceItemView({
   isQuestionAnswered,
   isQuestionAnswerDisabled,
   item,
+  interactionRowID = item.id,
   onAskUserQuestionAnswer,
   ...props
 }: TraceItemRendererProps) {
   const { t } = useI18n()
-  const [isSubmittingQuestionAnswer, setIsSubmittingQuestionAnswer] = useState(false)
-  const [freeformAnswer, setFreeformAnswer] = useState("")
-  const [selectedQuestionOptions, setSelectedQuestionOptions] = useState<string[]>([])
+  const { entry, scopeID, store } = useThreadInteractionEntry(interactionRowID)
+  const freeformAnswer = entry?.question.draft ?? ""
+  const selectedQuestionOptions = entry?.question.selectedOptions ?? []
+  const operationStatus = entry?.operation.status ?? "idle"
+  const isSubmittingQuestionAnswer = operationStatus === "submitting" || operationStatus === "submitted"
+  const questionAnswerError = operationStatus === "failed" ? entry?.operation.error ?? null : null
   const prompt = item.questionPrompt
+  const interactionRevision = useMemo(() => buildThreadInteractionRevision(
+    prompt
+      ? [
+          prompt.questionID,
+          prompt.question,
+          prompt.header ?? "",
+          prompt.placeholder ?? "",
+          String(prompt.multiple),
+          String(prompt.allowFreeform),
+          ...prompt.options.flatMap((option) => [option.value, option.label, option.description ?? ""]),
+        ].join("\u0001")
+      : item.id,
+  ), [item.id, prompt])
 
   useEffect(() => {
-    setIsSubmittingQuestionAnswer(false)
-  }, [item.id])
+    store.getState().ensureRevision(scopeID, interactionRowID, interactionRevision)
+  }, [interactionRevision, interactionRowID, scopeID, store])
+
+  useEffect(() => {
+    if (!isQuestionAnswered) return
+    store.getState().clearRow(scopeID, interactionRowID)
+  }, [interactionRowID, isQuestionAnswered, scopeID, store])
 
   if (!prompt) {
     return (
@@ -3669,11 +3886,23 @@ function QuestionTraceItemView({
         : null
 
   function handleQuestionOptionToggle(optionValue: string) {
-    setSelectedQuestionOptions((current) =>
-      current.includes(optionValue)
-        ? current.filter((value) => value !== optionValue)
-        : [...current, optionValue],
+    if (operationStatus === "failed") {
+      store.getState().resetOperation(scopeID, interactionRowID)
+    }
+    store.getState().setQuestionSelectedOptions(
+      scopeID,
+      interactionRowID,
+      selectedQuestionOptions.includes(optionValue)
+        ? selectedQuestionOptions.filter((value) => value !== optionValue)
+        : [...selectedQuestionOptions, optionValue],
     )
+  }
+
+  function handleQuestionDraftChange(draft: string) {
+    if (operationStatus === "failed") {
+      store.getState().resetOperation(scopeID, interactionRowID)
+    }
+    store.getState().setQuestionDraft(scopeID, interactionRowID, draft)
   }
 
   async function submitQuestionAnswer(input: {
@@ -3683,7 +3912,9 @@ function QuestionTraceItemView({
   }) {
     if (!onAskUserQuestionAnswer || isAnswerDisabled || !questionID) return
 
-    setIsSubmittingQuestionAnswer(true)
+    const operationToken = store.getState().beginOperation(scopeID, interactionRowID)
+    if (!operationToken) return
+
     try {
       await onAskUserQuestionAnswer({
         text: input.text,
@@ -3691,8 +3922,14 @@ function QuestionTraceItemView({
         ...(input.selectedOptions && input.selectedOptions.length > 0 ? { selectedOptions: input.selectedOptions } : {}),
         ...(input.freeformText ? { freeformText: input.freeformText } : {}),
       })
-    } finally {
-      setIsSubmittingQuestionAnswer(false)
+      store.getState().completeOperation(scopeID, interactionRowID, operationToken)
+    } catch (error) {
+      store.getState().failOperation(
+        scopeID,
+        interactionRowID,
+        operationToken,
+        error instanceof Error ? error.message : String(error),
+      )
     }
   }
 
@@ -3710,9 +3947,6 @@ function QuestionTraceItemView({
       ...(selectedOptions.length > 0 ? { selectedOptions } : {}),
       ...(nextFreeformAnswer ? { freeformText: nextFreeformAnswer } : {}),
     })
-
-    setFreeformAnswer("")
-    setSelectedQuestionOptions([])
   }
 
   return (
@@ -3781,7 +4015,7 @@ function QuestionTraceItemView({
                   aria-label={t("thread.question.customAnswerLabel")}
                   className="ask-user-question-freeform-input"
                   disabled={isAnswerDisabled}
-                  onChange={(event) => setFreeformAnswer(event.target.value)}
+                  onChange={(event) => handleQuestionDraftChange(event.target.value)}
                   placeholder={prompt.placeholder || t("thread.question.placeholder")}
                   type="text"
                   value={freeformAnswer}
@@ -3801,6 +4035,9 @@ function QuestionTraceItemView({
           </form>
         ) : null}
 
+        {questionAnswerError ? (
+          <p className="ask-user-question-error" role="alert">{questionAnswerError}</p>
+        ) : null}
         {note ? <p className="ask-user-question-note">{note}</p> : null}
       </div>
       <TraceItemDebugEntries debugEntries={debugEntries} itemID={item.id} />
@@ -4191,6 +4428,7 @@ function TextTraceItemView({
   isLatestMessage,
   isResponseItem,
   item,
+  interactionRowID = item.id,
   onProposedPlanConfirm,
   ...props
 }: TraceItemRendererProps) {
@@ -4199,6 +4437,7 @@ function TextTraceItemView({
   if (proposedPlan) {
     return (
       <ProposedPlanCard
+        interactionRowID={interactionRowID}
         planMarkdown={proposedPlan.markdown}
         rawPlanMarkdown={proposedPlan.raw}
         isComplete={proposedPlan.isComplete}
@@ -4294,6 +4533,7 @@ class TraceItemRenderBoundary extends Component<TraceItemRenderBoundaryProps, Tr
 
 const TraceItemView = memo(function TraceItemView({
   assistantMessagePhase,
+  interactionRowID,
   item,
   isQuestionAnswered = false,
   isQuestionAnswerDisabled = false,
@@ -4344,6 +4584,7 @@ const TraceItemView = memo(function TraceItemView({
       <Renderer
         className={className}
         debugEntries={debugEntries}
+        interactionRowID={interactionRowID ?? renderedItem.id}
         isQuestionAnswered={isQuestionAnswered}
         isLatestMessage={isLatestMessage}
         isQuestionAnswerDisabled={isQuestionAnswerDisabled}
@@ -4379,6 +4620,7 @@ function renderTraceItemForRow({
     <TraceItemView
       key={`${traceItem.sourceMessageID}:${traceItem.itemID}`}
       assistantMessagePhase={row.message.runtime.phase}
+      interactionRowID={row.rowID}
       item={traceItem.item}
       isQuestionAnswered={isQuestionAnswered}
       isQuestionAnswerDisabled={isQuestionAnswerDisabled}
@@ -4662,7 +4904,7 @@ function areSessionSummariesEqual(left: SessionSummary | null | undefined, right
   )
 }
 
-function getThreadViewPropsChangeReason(left: ThreadViewProps, right: ThreadViewProps) {
+function getThreadViewPropsChangeReason(left: ThreadViewViewportProps, right: ThreadViewViewportProps) {
   if (!areSessionSummariesEqual(left.activeSession, right.activeSession)) return "activeSession"
   if (buildDiffSummarySignature(left.activeSessionDiff ?? null) !== buildDiffSummarySignature(right.activeSessionDiff ?? null)) {
     return "activeSessionDiff"
@@ -4677,7 +4919,6 @@ function getThreadViewPropsChangeReason(left: ThreadViewProps, right: ThreadView
   if (!areArraysShallowEqual(left.pendingPermissionRequests, right.pendingPermissionRequests)) return "pendingPermissionRequests"
   if (left.permissionRequestActionError !== right.permissionRequestActionError) return "permissionRequestActionError"
   if (left.permissionRequestActionRequestID !== right.permissionRequestActionRequestID) return "permissionRequestActionRequestID"
-  if (Boolean(left.onAddImageToComposer) !== Boolean(right.onAddImageToComposer)) return "onAddImageToComposer"
   if (left.addImageToComposerDisabledReason !== right.addImageToComposerDisabledReason) {
     return "addImageToComposerDisabledReason"
   }
@@ -4692,25 +4933,85 @@ function getThreadViewPropsChangeReason(left: ThreadViewProps, right: ThreadView
   if (left.readScrollSnapshot !== right.readScrollSnapshot) return "readScrollSnapshot"
   if (left.saveScrollSnapshot !== right.saveScrollSnapshot) return "saveScrollSnapshot"
   if (left.showTurnNavigator !== right.showTurnNavigator) return "showTurnNavigator"
+  if (left.interactionStore !== right.interactionStore) return "interactionStore"
+  if (left.actions !== right.actions) return "actions"
+  if (left.actionCapabilities !== right.actionCapabilities) return "actionCapabilities"
   return null
 }
 
-function areThreadViewPropsEqual(left: ThreadViewProps, right: ThreadViewProps) {
+function areThreadViewPropsEqual(left: ThreadViewViewportProps, right: ThreadViewViewportProps) {
   const reason = getThreadViewPropsChangeReason(left, right)
   if (!reason) return true
 
   return false
 }
 
-export const ThreadView = memo(function ThreadView(props: ThreadViewProps) {
+const MemoVisibleThreadView = memo(VisibleThreadView, areThreadViewPropsEqual)
+
+export function ThreadView(props: ThreadViewProps) {
+  const actions = useThreadViewActions(props)
+  const localInteractionStoreRef = useRef<ThreadInteractionStoreApi | null>(null)
+  if (!localInteractionStoreRef.current) {
+    localInteractionStoreRef.current = createThreadInteractionStore()
+  }
+  const interactionStore = props.interactionStore ?? localInteractionStoreRef.current
+  const canSelectBranch = Boolean(props.onBranchSelect)
+  const canSelectFileChange = Boolean(props.onFileChangeSelect)
+  const canForkFromMessage = Boolean(props.onForkFromMessage)
+  const canOpenArtifactLink = Boolean(props.onArtifactLinkOpen)
+  const canOpenLocalFileLink = Boolean(props.onLocalFileLinkOpen)
+  const canOpenSideChat = Boolean(props.onOpenSideChat)
+  const canHydrateMessageDiffSummary = Boolean(props.onMessageDiffSummaryHydrate)
+  const canRestoreMessageDiff = Boolean(props.onMessageDiffRestore)
+  const canReviewMessageDiff = Boolean(props.onMessageDiffReview)
+  const canAddToComposer = Boolean(props.onAddToComposer)
+  const canAddImageToComposer = Boolean(props.onAddImageToComposer)
+  const canConfirmProposedPlan = Boolean(props.onProposedPlanConfirm)
+  const actionCapabilities = useMemo<ThreadViewActionCapabilities>(() => ({
+    canSelectBranch,
+    canSelectFileChange,
+    canForkFromMessage,
+    canOpenArtifactLink,
+    canOpenLocalFileLink,
+    canOpenSideChat,
+    canHydrateMessageDiffSummary,
+    canRestoreMessageDiff,
+    canReviewMessageDiff,
+    canAddToComposer,
+    canAddImageToComposer,
+    canConfirmProposedPlan,
+  }), [
+    canAddImageToComposer,
+    canAddToComposer,
+    canConfirmProposedPlan,
+    canForkFromMessage,
+    canHydrateMessageDiffSummary,
+    canOpenArtifactLink,
+    canOpenLocalFileLink,
+    canOpenSideChat,
+    canRestoreMessageDiff,
+    canReviewMessageDiff,
+    canSelectBranch,
+    canSelectFileChange,
+  ])
+
   if (props.isThreadVisible === false) {
     return <InactiveThreadView threadColumnRef={props.threadColumnRef} />
   }
 
-  return <VisibleThreadView {...props} />
-}, areThreadViewPropsEqual)
+  return (
+    <MemoVisibleThreadView
+      {...props}
+      actions={actions}
+      actionCapabilities={actionCapabilities}
+      interactionStore={interactionStore}
+    />
+  )
+}
 
 function VisibleThreadView({
+  actions,
+  actionCapabilities,
   activeSession,
   activeSessionDiff = null,
   activeMessages,
@@ -4718,20 +5019,9 @@ function VisibleThreadView({
   assistantTraceVisibility,
   isResolvingPermissionRequest,
   isSessionRunning = false,
+  interactionStore,
   messageTree = null,
-  onBranchSelect,
-  onFileChangeSelect,
-  onForkFromMessage,
-  onArtifactLinkOpen,
-  onLocalFileLinkOpen,
-  onOpenSideChat,
-  onMessageDiffSummaryHydrate,
-  onMessageDiffRestore,
-  onMessageDiffReview,
-  onAddToComposer,
-  onAddImageToComposer,
   addImageToComposerDisabledReason = null,
-  onAskUserQuestionAnswer,
   pendingConversationInputs = [],
   pendingPermissionRequests,
   permissionRequestActionError,
@@ -4745,9 +5035,23 @@ function VisibleThreadView({
   readScrollSnapshot,
   saveScrollSnapshot,
   showTurnNavigator = true,
-  onProposedPlanConfirm,
-  onPermissionRequestResponse,
-}: ThreadViewProps) {
+}: ThreadViewViewportProps) {
+  const onBranchSelect = actionCapabilities.canSelectBranch ? actions.onBranchSelect : undefined
+  const onFileChangeSelect = actionCapabilities.canSelectFileChange ? actions.onFileChangeSelect : undefined
+  const onForkFromMessage = actionCapabilities.canForkFromMessage ? actions.onForkFromMessage : undefined
+  const onArtifactLinkOpen = actionCapabilities.canOpenArtifactLink ? actions.onArtifactLinkOpen : undefined
+  const onLocalFileLinkOpen = actionCapabilities.canOpenLocalFileLink ? actions.onLocalFileLinkOpen : undefined
+  const onOpenSideChat = actionCapabilities.canOpenSideChat ? actions.onOpenSideChat : undefined
+  const onMessageDiffSummaryHydrate = actionCapabilities.canHydrateMessageDiffSummary
+    ? actions.onMessageDiffSummaryHydrate
+    : undefined
+  const onMessageDiffRestore = actionCapabilities.canRestoreMessageDiff ? actions.onMessageDiffRestore : undefined
+  const onMessageDiffReview = actionCapabilities.canReviewMessageDiff ? actions.onMessageDiffReview : undefined
+  const onAddToComposer = actionCapabilities.canAddToComposer ? actions.onAddToComposer : undefined
+  const onAddImageToComposer = actionCapabilities.canAddImageToComposer ? actions.onAddImageToComposer : undefined
+  const onAskUserQuestionAnswer = actions.onAskUserQuestionAnswer
+  const onProposedPlanConfirm = actionCapabilities.canConfirmProposedPlan ? actions.onProposedPlanConfirm : undefined
+  const onPermissionRequestResponse = actions.onPermissionRequestResponse
   const {
     answeredQuestionIDs,
     displayMessages,
@@ -4767,6 +5071,7 @@ function VisibleThreadView({
   })
   const [copiedResponseMessageID, setCopiedResponseMessageID] = useState<string | null>(null)
   const [copiedUserThreadMessageID, setCopiedUserThreadMessageID] = useState<string | null>(null)
+  const [focusedVirtualRow, setFocusedVirtualRow] = useState<ThreadInteractionRowRef | null>(null)
   const [threadCopyContextMenu, setThreadCopyContextMenu] = useState<ThreadCopyContextMenuState | null>(null)
   const [activeImagePreview, setActiveImagePreview] = useState<ActiveImagePreview | null>(null)
   const copiedResponseTimeoutRef = useRef<number | null>(null)
@@ -4785,6 +5090,17 @@ function VisibleThreadView({
   } | null>(null)
   const activeSessionID = activeSession?.id ?? null
   const effectiveScrollStateKey = scrollStateKey ?? activeSessionID ?? "thread:no-session"
+  const focusedVirtualRowID = focusedVirtualRow?.scopeID === effectiveScrollStateKey
+    ? focusedVirtualRow.rowID
+    : null
+  const threadInteractionContextValue = useMemo<ThreadInteractionContextValue>(() => ({
+    scopeID: effectiveScrollStateKey,
+    store: interactionStore,
+  }), [effectiveScrollStateKey, interactionStore])
+  const pinnedVirtualRowIDs = useMemo(
+    () => focusedVirtualRowID ? [focusedVirtualRowID] : [],
+    [focusedVirtualRowID],
+  )
   const {
     getThreadVirtualOffsetForRowIndex,
     getThreadVirtualScrollMaxTop,
@@ -4796,9 +5112,51 @@ function VisibleThreadView({
   } = useThreadVirtualList({
     displayRows,
     getInitialOffset: getInitialThreadVirtualOffset,
+    pinnedRowIDs: pinnedVirtualRowIDs,
     threadColumnRef,
     virtualListKey: effectiveScrollStateKey,
   })
+  const handleThreadFocusCapture = useCallback((event: ReactFocusEvent<HTMLDivElement>) => {
+    const target = event.target
+    if (!(target instanceof Element)) return
+
+    const row = target.closest<HTMLElement>("[data-thread-virtual-row-id]")
+    const rowID = row?.dataset.threadVirtualRowId ?? null
+    setFocusedVirtualRow(rowID ? { scopeID: effectiveScrollStateKey, rowID } : null)
+    if (rowID) {
+      interactionStore.getState().focusRow(effectiveScrollStateKey, rowID)
+    }
+  }, [effectiveScrollStateKey, interactionStore])
+  const handleThreadBlurCapture = useCallback((event: ReactFocusEvent<HTMLDivElement>) => {
+    const currentTarget = event.target
+    const currentRow = currentTarget instanceof Element
+      ? currentTarget.closest<HTMLElement>("[data-thread-virtual-row-id]")
+      : null
+    const nextTarget = event.relatedTarget
+    if (nextTarget instanceof Element && event.currentTarget.contains(nextTarget)) {
+      const nextRow = nextTarget.closest<HTMLElement>("[data-thread-virtual-row-id]")
+      const nextRowID = nextRow?.dataset.threadVirtualRowId ?? null
+      setFocusedVirtualRow(nextRowID ? { scopeID: effectiveScrollStateKey, rowID: nextRowID } : null)
+      if (nextRowID) {
+        interactionStore.getState().focusRow(effectiveScrollStateKey, nextRowID)
+      }
+      return
+    }
+
+    setFocusedVirtualRow(null)
+    const currentRowID = currentRow?.dataset.threadVirtualRowId
+    if (currentRowID) {
+      interactionStore.getState().blurRow(effectiveScrollStateKey, currentRowID)
+    }
+  }, [effectiveScrollStateKey, interactionStore])
+  useEffect(() => {
+    return () => {
+      const focusedRow = interactionStore.getState().focusedRow
+      if (focusedRow?.scopeID === effectiveScrollStateKey) {
+        interactionStore.getState().blurRow(focusedRow.scopeID, focusedRow.rowID)
+      }
+    }
+  }, [effectiveScrollStateKey, interactionStore])
   const renderedVirtualMessageIDsKey = useMemo(() => {
     const messageIDs = new Set<string>()
     for (const virtualItem of threadVirtualItems) {
@@ -5337,7 +5695,8 @@ function VisibleThreadView({
     )
   }
   return (
-    <section className="thread-shell">
+    <ThreadInteractionContext.Provider value={threadInteractionContextValue}>
+      <section className="thread-shell">
       {showTurnNavigator && activeSession && threadTurnNavigationItems.length > 0 ? (
         <ThreadTurnNavigator
           items={threadTurnNavigationItems}
@@ -5354,6 +5713,8 @@ function VisibleThreadView({
           "thread-column",
           activeSession && "is-virtualized",
         )}
+        onBlurCapture={handleThreadBlurCapture}
+        onFocusCapture={handleThreadFocusCapture}
         onKeyDownCapture={handleThreadKeyDownIntent}
         onPointerDownCapture={handleThreadScrollIntent}
         onPointerMoveCapture={handleThreadPointerMoveIntent}
@@ -5482,6 +5843,7 @@ function VisibleThreadView({
             document.body,
           )
         : null}
-    </section>
+      </section>
+    </ThreadInteractionContext.Provider>
   )
 }

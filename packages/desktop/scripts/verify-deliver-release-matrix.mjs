@@ -5,6 +5,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { validateDeliverRestartEvidence } from "./verify-deliver-restart-evidence.mjs"
+import { validateDeliverReleaseApproval } from "./verify-deliver-release-approval.mjs"
 import {
   assertMediaRuntimeReleaseApproved,
   resolveMediaRuntimeTarget,
@@ -21,17 +22,18 @@ function parseArguments(argv) {
     macos: path.resolve(workspaceRoot, "packages", "cinema-web", "cinema-deliver-installed-restart-evidence.darwin-arm64.json"),
     windowsArtifact: undefined,
     macosArtifact: undefined,
+    approval: undefined,
   }
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index]?.slice(2)
     const value = argv[index + 1]
     if (!key || !(key in values) || !value) {
-      throw new Error("Usage: verify-deliver-release-matrix [--lock file] [--windows file] [--macos file] [--windowsArtifact file] [--macosArtifact file]")
+      throw new Error("Usage: verify-deliver-release-matrix [--lock file] [--windows file] [--macos file] --windowsArtifact file --macosArtifact file --approval file")
     }
     values[key] = path.resolve(value)
   }
-  if (!values.windowsArtifact || !values.macosArtifact) {
-    throw new Error("Both --windowsArtifact and --macosArtifact are required")
+  if (!values.windowsArtifact || !values.macosArtifact || !values.approval) {
+    throw new Error("--windowsArtifact, --macosArtifact, and --approval are required")
   }
   return values
 }
@@ -75,6 +77,9 @@ for (const expectation of expectations) {
   ) {
     throw new Error(`${expectation.key} evidence encoder policy does not match the locked runtime`)
   }
+  if (!evidence.runtime.ffmpegVersion.includes(target.distribution.ffmpegRevision)) {
+    throw new Error(`${expectation.key} evidence FFmpeg version does not contain the locked revision`)
+  }
   const artifactPath = args[`${expectation.key}Artifact`]
   if (artifactPath) {
     const artifactName = path.basename(artifactPath)
@@ -90,6 +95,7 @@ for (const expectation of expectations) {
 }
 
 const [windows, macos] = accepted
+const approval = validateDeliverReleaseApproval(await readJson(args.approval))
 if (windows.evidence.build.desktopVersion !== macos.evidence.build.desktopVersion) {
   throw new Error("Windows and macOS evidence use different desktop versions")
 }
@@ -103,6 +109,18 @@ if (windowsTarget.releaseReadiness.releaseKind !== "initial" || macosTarget.rele
 }
 if (windowsTarget.distribution.ffmpegRevision !== macosTarget.distribution.ffmpegRevision) {
   throw new Error("Windows and macOS runtimes must use the same FFmpeg revision")
+}
+if (approval.desktopVersion !== windows.evidence.build.desktopVersion) {
+  throw new Error("Release approval uses a different desktop version")
+}
+if (approval.commitSHA !== windows.evidence.build.commitSHA) {
+  throw new Error("Release approval uses a different commit")
+}
+if (
+  approval.targets.win32X64.runtimeID !== windowsTarget.runtimeID
+  || approval.targets.darwinArm64.runtimeID !== macosTarget.runtimeID
+) {
+  throw new Error("Release approval runtime bindings do not match the approved lock")
 }
 console.log(
   `[desktop][deliver-release] accepted synchronized ${windows.evidence.build.desktopVersion} release evidence for win32/x64 and darwin/arm64`,

@@ -5,10 +5,16 @@ import {
   buildThreadDisplayRowsIncremental,
   decorateThreadDisplayRows,
   decorateThreadDisplayRowsIncremental,
+  getAssistantTrailingUserDiffMessage,
+  isAssistantFinalMessageInUserMessage,
+  isAssistantLatestRenderableMessage,
+  resolveAssistantSideChatAnchorMessageID,
+  shouldFoldAssistantMessageIntoFinalRunTrace,
   type DecorateThreadDisplayRowsInput,
   type ThreadDisplayRowsCache,
   type ThreadDisplayRow,
 } from "./thread-display-rows"
+import { getAssistantStreamInsertionUserMessages } from "../stream-insertion"
 import type {
   AssistantTraceItem,
   AssistantTraceVisibility,
@@ -486,6 +492,157 @@ describe("thread display rows", () => {
       "assistant-intermediate-2",
       "assistant-final",
     ])
+  })
+
+  it("keeps the linear display context equivalent to the legacy per-message facts", () => {
+    const duplicateOne: AssistantThreadMessage = {
+      ...assistantMessage("assistant-duplicate-1", [textItem("duplicate-response-1", "First segment.")]),
+      backendTurnID: "turn-duplicate",
+      messageID: "backend-message",
+      segmentID: "segment-1",
+    }
+    const duplicateTwo: AssistantThreadMessage = {
+      ...assistantMessage("assistant-duplicate-2", [textItem("duplicate-response-2", "Second segment.")]),
+      backendTurnID: "turn-duplicate",
+      messageID: "backend-message",
+      segmentID: "segment-2",
+    }
+    const diffUser: UserThreadMessage = {
+      ...userMessage("user-diff", "Continue"),
+      diffSummary: {
+        diffs: [{ file: "src/app.ts", additions: 1, deletions: 0 }],
+      },
+    }
+    const messages: ThreadMessage[] = [
+      userMessage("user-1", "Go"),
+      assistantMessage("assistant-intermediate", [reasoningItem("reasoning-1", "Working.")]),
+      duplicateOne,
+      userMessage("user-inserted", "Steer", {
+        assistantThreadMessageID: duplicateOne.id,
+        afterItemCount: 0,
+        status: "consumed",
+      }),
+      diffUser,
+      duplicateTwo,
+    ]
+    const context = buildThreadDisplayContext(messages)
+
+    messages.forEach((message, messageIndex) => {
+      if (message.kind !== "assistant") return
+
+      expect(context.foldedAssistantMessageIDs.has(message.id)).toBe(
+        shouldFoldAssistantMessageIntoFinalRunTrace(messages, messageIndex, message),
+      )
+      expect(context.finalOperableAssistantMessageIDs.has(message.id)).toBe(
+        isAssistantFinalMessageInUserMessage(messages, messageIndex, message),
+      )
+      expect(context.latestRenderableAssistantMessageID === message.id).toBe(
+        isAssistantLatestRenderableMessage(messages, messageIndex, message),
+      )
+      expect(context.sideChatAnchorMessageIDByAssistantID.get(message.id)).toBe(
+        resolveAssistantSideChatAnchorMessageID(messages, message),
+      )
+      expect(context.streamInsertedUserMessagesByAssistantID.get(message.id) ?? []).toEqual(
+        getAssistantStreamInsertionUserMessages(messages, message),
+      )
+      expect(context.trailingUserDiffMessageByAssistantID.get(message.id) ?? null).toBe(
+        getAssistantTrailingUserDiffMessage(messages, messageIndex, message),
+      )
+    })
+  })
+
+  it("does not serialize nested trace payloads while building incremental rows", () => {
+    let serializationCount = 0
+    const debugEntries = [] as unknown as NonNullable<AssistantTraceItem["debugEntries"]> & { toJSON: () => unknown[] }
+    debugEntries.toJSON = () => {
+      serializationCount += 1
+      return []
+    }
+    const assistant = assistantMessage("assistant-large-payload", [
+      textItem("response-large-payload", "Done.", { debugEntries }),
+    ])
+
+    const first = buildRowsIncremental([assistant])
+    const second = buildRowsIncremental([assistant], first.cache)
+
+    expect(serializationCount).toBe(0)
+    expect(second.rows[0]).toBe(first.rows[0])
+  })
+
+  it("matches legacy context helpers across varied message sequences", () => {
+    for (let seed = 1; seed <= 64; seed += 1) {
+      let state = seed
+      const messages: ThreadMessage[] = []
+      const assistants: AssistantThreadMessage[] = []
+
+      for (let position = 0; position < 8; position += 1) {
+        state = (state * 1_664_525 + 1_013_904_223) >>> 0
+        const choice = state % 5
+
+        if (choice === 0 || assistants.length === 0) {
+          const isStreaming = (state & 8) !== 0
+          const assistant = assistantMessage(
+            `assistant-${seed}-${position}`,
+            [textItem(`response-${seed}-${position}`, `Response ${position}.`)],
+            { isStreaming },
+          )
+          assistants.push(assistant)
+          messages.push(assistant)
+          continue
+        }
+
+        if (choice === 1) {
+          const user = userMessage(`user-${seed}-${position}`, `User ${position}`)
+          if ((state & 16) !== 0) {
+            user.diffSummary = {
+              diffs: [{ file: `src/${seed}-${position}.ts`, additions: 1, deletions: 0 }],
+            }
+          }
+          messages.push(user)
+          continue
+        }
+
+        if (choice === 2) {
+          messages.push({
+            ...userMessage(`user-${seed}-${position}`, `Pending ${position}`),
+            submissionMode: "steer",
+          })
+          continue
+        }
+
+        const target = assistants[state % assistants.length]!
+        messages.push(userMessage(
+          `user-${seed}-${position}`,
+          `Inserted ${position}`,
+          {
+            assistantThreadMessageID: target.id,
+            afterItemCount: 0,
+            status: choice === 3 ? "consumed" : "pending",
+          },
+        ))
+      }
+
+      const context = buildThreadDisplayContext(messages)
+      messages.forEach((message, messageIndex) => {
+        if (message.kind !== "assistant") return
+
+        expect(context.foldedAssistantMessageIDs.has(message.id)).toBe(
+          shouldFoldAssistantMessageIntoFinalRunTrace(messages, messageIndex, message),
+        )
+        expect(context.finalOperableAssistantMessageIDs.has(message.id)).toBe(
+          isAssistantFinalMessageInUserMessage(messages, messageIndex, message),
+        )
+        expect(context.latestRenderableAssistantMessageID === message.id).toBe(
+          isAssistantLatestRenderableMessage(messages, messageIndex, message),
+        )
+        expect(context.streamInsertedUserMessagesByAssistantID.get(message.id) ?? []).toEqual(
+          getAssistantStreamInsertionUserMessages(messages, message),
+        )
+        expect(context.trailingUserDiffMessageByAssistantID.get(message.id) ?? null).toBe(
+          getAssistantTrailingUserDiffMessage(messages, messageIndex, message),
+        )
+      })
+    }
   })
 
   it("reuses unchanged base rows while a streaming assistant row changes", () => {

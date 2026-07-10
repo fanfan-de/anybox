@@ -7,8 +7,41 @@ permissions:
   contents: read
 
 jobs:
-  windows-x64:
+  verify-release-regressions:
+    if: github.ref == 'refs/heads/master'
     runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: pnpm install --frozen-lockfile
+      - name: Cinema unit and Edit E2E regression
+        run: pnpm --filter anybox-cinema-web test && pnpm --filter anybox-cinema-web test:e2e -- --grep-invert "Cinema Deliver workbench"
+      - name: Cinema Deliver E2E regression
+        run: pnpm --filter anybox-cinema-web test:e2e:deliver
+      - name: Desktop capability and release-gate regression
+        run: pnpm --filter anybox-desktop-agent typecheck && pnpm --filter anybox-desktop-agent test:media-runtime-lock && pnpm --filter anybox-desktop-agent exec vitest run src/main/managed-agent.test.ts
+      - name: Agent Cinema regression
+        working-directory: packages/anyboxagent
+        run: >-
+          bun test Test/cinema.api.test.ts Test/cinema.render-assets.test.ts Test/cinema.render-graph.test.ts
+          Test/cinema.render-job-api.test.ts Test/cinema.render-preflight-api.test.ts Test/cinema.render-preflight.test.ts
+          Test/cinema.render-queue.test.ts Test/cinema.render-recovery.test.ts Test/cinema.render-retention-api.test.ts
+          Test/cinema.render-retention.test.ts Test/cinema.render-runner.test.ts Test/cinema.render-runtime.test.ts
+          Test/cinema.render-snapshot.test.ts Test/cinema.render-storage.test.ts
+
+  windows-x64:
+    if: github.ref == 'refs/heads/master'
+    needs: verify-release-regressions
+    runs-on: windows-2022
+    environment: cinema-deliver-signing
     steps:
       - uses: actions/checkout@v4
 
@@ -55,7 +88,10 @@ jobs:
           retention-days: 30
 
   macos-arm64:
+    if: github.ref == 'refs/heads/master'
+    needs: verify-release-regressions
     runs-on: macos-14
+    environment: cinema-deliver-signing
     steps:
       - uses: actions/checkout@v4
       - name: Require native Apple Silicon runner
@@ -100,6 +136,7 @@ jobs:
           xcrun notarytool submit "$dmg" --key "$RUNNER_TEMP/AuthKey.p8" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait
           xcrun stapler staple "$dmg"
           xcrun stapler validate "$dmg"
+          node packages/desktop/scripts/refresh-electron-update-metadata.mjs packages/desktop/dist/latest-mac.yml "$dmg"
 
       - name: Stage complete macOS release asset set
         id: stage

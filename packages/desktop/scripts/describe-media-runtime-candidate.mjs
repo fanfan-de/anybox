@@ -36,6 +36,7 @@ const artifactPaths = {
   configure: path.resolve(args.stage, "configure.txt"),
   source: path.resolve(args.source),
   buildRecipe: path.resolve(args.recipe),
+  sourceMetadata: path.resolve(args.stage, "SOURCE.txt"),
 }
 for (const [label, filePath] of Object.entries(artifactPaths)) {
   const stat = await fsp.stat(filePath).catch(() => undefined)
@@ -75,6 +76,7 @@ const candidate = {
       sizeBytes: recipeStat.size,
       sha256: await sha256(artifactPaths.buildRecipe),
     },
+    sourceMetadata: { fileName: "SOURCE.txt", sha256: await sha256(artifactPaths.sourceMetadata) },
   },
 }
 await fsp.mkdir(path.dirname(path.resolve(args.output)), { recursive: true })

@@ -118,12 +118,14 @@ async function extractPinnedTools(archive, extractionDir, executableNames, licen
   const license = await findFile(extractionDir, licensePolicy.licenseFile)
   const notices = await findFile(extractionDir, licensePolicy.noticesFile)
   const configure = await findFile(extractionDir, "configure.txt")
+  const sourceMetadata = await findFile(extractionDir, "SOURCE.txt")
+  const buildRecipe = await findFile(extractionDir, "BUILD-RECIPE.sh")
   if (!ffmpeg || !ffprobe || !license) {
     throw new Error(
       `Pinned FFmpeg archive does not contain ${executableNames.ffmpeg}, ${executableNames.ffprobe}, and LICENSE.txt`,
     )
   }
-  return { ffmpeg, ffprobe, license, notices, configure }
+  return { ffmpeg, ffprobe, license, notices, configure, sourceMetadata, buildRecipe }
 }
 
 async function verifyExecutable(binary, expectedName) {
@@ -234,10 +236,16 @@ async function prepareLockedArchiveMediaTools({ runtimeDir, lockedTarget, platfo
   }
 
   let origin = lockedTarget.origin
-  let materials = { license: "archive", notices: "archive", configure: "archive" }
+  let materials = { license: "archive", notices: "archive", configure: "archive", sourceMetadata: "archive", buildRecipe: "archive" }
   if (externalFFmpeg && externalFFprobe) {
     origin = "environment-override"
-    materials = { license: "generated-technical-preview", notices: "generated-technical-preview", configure: "runtime" }
+    materials = {
+      license: "generated-technical-preview",
+      notices: "generated-technical-preview",
+      configure: "runtime",
+      sourceMetadata: "missing-technical-preview",
+      buildRecipe: "missing-technical-preview",
+    }
     await copyExternalTools(externalFFmpeg, externalFFprobe, targetDir, executableNames)
   } else {
     const archive = path.join(cacheDir, lockedTarget.distribution.fileName)
@@ -251,6 +259,10 @@ async function prepareLockedArchiveMediaTools({ runtimeDir, lockedTarget, platfo
     else materials.notices = "generated-technical-preview"
     if (tools.configure) await fsp.copyFile(tools.configure, path.join(targetDir, "configure.txt"))
     else materials.configure = "runtime"
+    if (tools.sourceMetadata) await fsp.copyFile(tools.sourceMetadata, path.join(targetDir, "SOURCE.txt"))
+    else materials.sourceMetadata = "missing-technical-preview"
+    if (tools.buildRecipe) await fsp.copyFile(tools.buildRecipe, path.join(targetDir, "BUILD-RECIPE.sh"))
+    else materials.buildRecipe = "missing-technical-preview"
   }
 
   const ffmpegPath = path.join(targetDir, executableNames.ffmpeg)

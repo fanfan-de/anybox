@@ -1106,6 +1106,112 @@ describe("ThreadView question prompts", () => {
     expect(getByText("Needs your input")).toBeInTheDocument()
     expect(getByText("Pet preference")).toBeInTheDocument()
   })
+
+  it("keeps a freeform draft after submission fails and allows an explicit retry", async () => {
+    const onAskUserQuestionAnswer = vi.fn()
+      .mockRejectedValueOnce(new Error("Answer failed"))
+      .mockResolvedValueOnce(undefined)
+    const questionItem: AssistantTraceItem = {
+      id: "question-retry",
+      kind: "question",
+      timestamp: 1,
+      label: "Question",
+      status: "running",
+      section: "response",
+      visibilityKey: "response",
+      isStreaming: true,
+      questionPrompt: {
+        questionID: "que_retry",
+        question: "What should I keep?",
+        options: [],
+        allowFreeform: true,
+        multiple: false,
+        required: true,
+      },
+    }
+    renderThread(
+      [assistantTraceMessage("assistant-1", [questionItem], true)],
+      { onAskUserQuestionAnswer },
+    )
+
+    const input = screen.getByLabelText("Custom answer") as HTMLInputElement
+    fireEvent.change(input, { target: { value: "Keep this draft" } })
+    fireEvent.click(screen.getByRole("button", { name: "Send" }))
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Answer failed")
+    expect(input).toHaveValue("Keep this draft")
+    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole("button", { name: "Send" }))
+    await waitFor(() => expect(onAskUserQuestionAnswer).toHaveBeenCalledTimes(2))
+    expect(input).toHaveValue("Keep this draft")
+    expect(screen.getByRole("button", { name: "Sending..." })).toBeDisabled()
+  })
+
+  it("preserves a pending question through virtual unmount and prevents duplicate submission", async () => {
+    let resolveAnswer: (() => void) | null = null
+    const onAskUserQuestionAnswer = vi.fn(() => new Promise<void>((resolve) => {
+      resolveAnswer = resolve
+    }))
+    const questionItem: AssistantTraceItem = {
+      id: "question-virtual",
+      kind: "question",
+      timestamp: 1,
+      label: "Question",
+      status: "running",
+      section: "response",
+      visibilityKey: "response",
+      isStreaming: true,
+      questionPrompt: {
+        questionID: "que_virtual",
+        question: "Which value should survive?",
+        options: [],
+        allowFreeform: true,
+        multiple: false,
+        required: true,
+      },
+    }
+    const trailingMessages = Array.from({ length: 320 }, (_, index) =>
+      userMessage(`user-${index}`, `Prompt ${index}`),
+    )
+    const { container, threadColumn } = renderThread(
+      [assistantTraceMessage("assistant-1", [questionItem], true), ...trailingMessages],
+      {
+        onAskUserQuestionAnswer,
+        scrollStateKey: "question-virtual-session",
+      },
+    )
+    setScrollMetrics(threadColumn, {
+      clientHeight: 400,
+      scrollHeight: 24000,
+      scrollTop: 0,
+    })
+
+    const input = screen.getByLabelText("Custom answer") as HTMLInputElement
+    fireEvent.change(input, { target: { value: "Persistent answer" } })
+    fireEvent.click(screen.getByRole("button", { name: "Send" }))
+    expect(onAskUserQuestionAnswer).toHaveBeenCalledTimes(1)
+
+    threadColumn.scrollTop = 24_000
+    fireEvent.wheel(threadColumn, { deltaY: 120 })
+    fireEvent.scroll(threadColumn)
+    await waitFor(() => expect(screen.queryByLabelText("Custom answer")).toBeNull())
+
+    threadColumn.scrollTop = 0
+    fireEvent.wheel(threadColumn, { deltaY: -120 })
+    fireEvent.scroll(threadColumn)
+    const restoredInput = await screen.findByLabelText("Custom answer") as HTMLInputElement
+    expect(restoredInput).toHaveValue("Persistent answer")
+    expect(restoredInput).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Sending..." })).toBeDisabled()
+    expect(onAskUserQuestionAnswer).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveAnswer?.()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-thread-virtual-row-id]')).not.toBeNull()
+  })
 })
 
 describe("ThreadView image trace items", () => {
@@ -3610,6 +3716,35 @@ describe("ThreadView assistant response markdown", () => {
     expect(streamingResponse?.textContent).not.toContain("**Ready**")
   })
 
+  it("bounds very large streaming Markdown while keeping the latest tail visible", () => {
+    const text = `## Streaming\n\n${"middle ".repeat(4_000)}\n\nLatest live token`
+    const { container } = renderThread([
+      assistantTraceMessage(
+        "assistant-1",
+        [
+          {
+            id: "response-1",
+            kind: "text",
+            timestamp: 1,
+            label: "Assistant",
+            text,
+            status: "running",
+            isStreaming: true,
+          },
+        ],
+        true,
+      ),
+    ])
+
+    const preview = container.querySelector<HTMLElement>(
+      '[data-thread-streaming-render-mode="plain-preview"]',
+    )
+    expect(preview).not.toBeNull()
+    expect(preview).toHaveClass("thread-markdown")
+    expect(preview).toHaveTextContent("Latest live token")
+    expect(screen.queryByRole("heading", { name: "Streaming" })).toBeNull()
+  })
+
   it("renders streaming Markdown-marked responses as Markdown without showing the marker", () => {
     const { container, getByRole } = renderThread([
       assistantTraceMessage(
@@ -4365,6 +4500,64 @@ describe("ThreadView message actions", () => {
     expect(queryByText("Sidechat")).toBeNull()
 
     fireEvent.click(getByRole("button", { name: "Open side chat" }))
+
+    expect(onOpenSideChat).toHaveBeenCalledWith("assistant-1")
+  })
+
+  it("uses the latest action callback without rebuilding the memoized viewport", () => {
+    const firstOpenSideChat = vi.fn()
+    const latestOpenSideChat = vi.fn()
+    const message = assistantTraceMessage(
+      "assistant-1",
+      [
+        {
+          id: "response-1",
+          kind: "text",
+          timestamp: 1,
+          label: "Assistant",
+          text: "Done",
+          status: "completed",
+        },
+      ],
+      false,
+    )
+    const threadColumnRef = createRef<HTMLDivElement | null>()
+    const props = createThreadProps([message], threadColumnRef, {
+      onOpenSideChat: firstOpenSideChat,
+    })
+    const { rerender } = render(<ThreadView {...props} />)
+
+    rerender(<ThreadView {...props} onOpenSideChat={latestOpenSideChat} />)
+    fireEvent.click(screen.getByRole("button", { name: "Open side chat" }))
+
+    expect(firstOpenSideChat).not.toHaveBeenCalled()
+    expect(latestOpenSideChat).toHaveBeenCalledWith("assistant-1")
+  })
+
+  it("updates action capabilities when a callback becomes available", () => {
+    const onOpenSideChat = vi.fn()
+    const message = assistantTraceMessage(
+      "assistant-1",
+      [
+        {
+          id: "response-1",
+          kind: "text",
+          timestamp: 1,
+          label: "Assistant",
+          text: "Done",
+          status: "completed",
+        },
+      ],
+      false,
+    )
+    const threadColumnRef = createRef<HTMLDivElement | null>()
+    const props = createThreadProps([message], threadColumnRef)
+    const { rerender } = render(<ThreadView {...props} />)
+
+    expect(screen.queryByRole("button", { name: "Open side chat" })).toBeNull()
+
+    rerender(<ThreadView {...props} onOpenSideChat={onOpenSideChat} />)
+    fireEvent.click(screen.getByRole("button", { name: "Open side chat" }))
 
     expect(onOpenSideChat).toHaveBeenCalledWith("assistant-1")
   })
@@ -5512,6 +5705,37 @@ describe("ThreadView virtual list", () => {
 
     await waitFor(() => expect(Math.max(...readRenderedVirtualIndexes())).toBeGreaterThan(100))
     expect(screen.queryByText("Prompt 0")).not.toBeInTheDocument()
+  })
+
+  it("keeps the focused virtual row mounted while it is outside the visible range", async () => {
+    const activeMessages = Array.from({ length: 320 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+    const { container, threadColumn } = renderThread(activeMessages, {
+      scrollStateKey: "virtual-list-focused-row-session",
+    })
+    setScrollMetrics(threadColumn, {
+      clientHeight: 400,
+      scrollHeight: 12000,
+      scrollTop: 0,
+    })
+
+    const firstRow = container.querySelector<HTMLElement>('[data-thread-virtual-row-id="user:user-0"]')
+    expect(firstRow).not.toBeNull()
+    const copyButton = within(firstRow!).getByRole("button", { name: "Copy user message" })
+    copyButton.focus()
+    expect(document.activeElement).toBe(copyButton)
+
+    threadColumn.scrollTop = 12_000
+    fireEvent.wheel(threadColumn, { deltaY: 120 })
+    fireEvent.scroll(threadColumn)
+
+    await waitFor(() => {
+      const renderedIndexes = Array.from(container.querySelectorAll<HTMLElement>("[data-thread-virtual-row-id]"))
+        .map((row) => Number(row.dataset.index))
+        .filter(Number.isFinite)
+      expect(Math.max(...renderedIndexes)).toBeGreaterThan(100)
+    })
+    expect(container.querySelector('[data-thread-virtual-row-id="user:user-0"]')).not.toBeNull()
+    expect(document.activeElement).toBe(copyButton)
   })
 
   it("virtualizes dense task threads before resize layout becomes expensive", () => {

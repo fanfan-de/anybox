@@ -910,7 +910,7 @@ D5 发布加固推进记录：
 31. [x] `D5-10`：实现 Render retention 技术预览入口：每次显式输入正整数天数、可取消 dry-run、聚合结果、`CLEAN` 确认、fresh operationID、提交后不可取消；Execute 增加 loopback + 受信 Origin 防护并记录脱敏聚合 telemetry。正式策略审批仍保持未完成。
 32. [x] `D5-11`：新增 Anybox-controlled Windows x64 / macOS arm64 FFmpeg 候选构建、候选摘要、lock promotion、通用 locked-archive preparer 和 archive 材料来源门禁；macOS target 在真实产物产生前显式为 `artifactStatus: pending`。
 33. [x] `D5-12`：Agent 通过内部 `ANYBOX_CINEMA_TIMELINE_DELIVERY` 返回 capability；打包后的 Desktop 只在当前 win32/x64 或 darwin/arm64 manifest 同时为 release/license approved 时注入该开关，其他平台 fail closed。
-34. [x] `D5-13`：新增双平台 release evidence matrix 与同步发布工作流，要求 Windows/macOS 使用同一桌面版本和 commit，各自 runtimeID 与 approved lock 一致，安装包文件名/SHA-256 与 installed evidence 一致，并在平台 runner 上分别通过 Authenticode 与 codesign/Gatekeeper/notarization stapling 校验；任一 gate 失败时不会创建任一平台 release。
+34. [x] `D5-13`：新增双平台 signed candidate、完整制品清单、release evidence/approval matrix 与同步发布工作流。门禁要求同一桌面版本、commit 和 FFmpeg revision，两端均为 initial runtime，各自 encoder/runtimeID 与 approved lock 一致，所有安装/更新文件均受 SHA-256 manifest 约束，并在平台 runner 上绑定 Anybox Authenticode 证书与 Apple Team ID，验证 Gatekeeper/DMG notarization stapling；许可证、产品、安全和 rollback 记录缺一不可。Internal RC 使用独立 prerelease tag；公开发布同时更新 COS 下载清单、Windows generic updater feed 和 GitHub 双平台 Release。
 35. [ ] `D5-14`：生成并镜像两个真实候选，完成 Windows Client `h264_mf` 与 Apple Silicon `h264_videotoolbox` 安装包 smoke、签名/公证、kill/restart 证据及许可证/产品/安全审批。
 
 ## 23. Deliver V1 之后

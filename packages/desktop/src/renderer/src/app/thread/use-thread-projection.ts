@@ -39,17 +39,24 @@ interface ThreadProjection {
   displayMessages: ThreadMessage[]
   displayRows: ThreadDisplayRow[]
   threadDisplayContext: ThreadDisplayContext
-  visibleMessageIDs: string[]
-  visibleMessageIDsKey: string
 }
 
-function readAssistantMessageOrderTimestamp(message: AssistantThreadMessage) {
-  const traceTimestamps = message.items
-    .filter((item) => !item.sourceID?.endsWith(":stream-placeholder") && item.kind !== "system")
-    .map((item) => item.timestamp)
-    .filter((timestamp) => Number.isFinite(timestamp))
+const ASSISTANT_ORDER_TIMESTAMP_BY_MESSAGE = new WeakMap<AssistantThreadMessage, number>()
 
-  if (traceTimestamps.length > 0) return Math.min(...traceTimestamps)
+function readAssistantMessageOrderTimestamp(message: AssistantThreadMessage) {
+  const cachedTimestamp = ASSISTANT_ORDER_TIMESTAMP_BY_MESSAGE.get(message)
+  if (cachedTimestamp !== undefined) return cachedTimestamp
+
+  let earliestTraceTimestamp = Number.POSITIVE_INFINITY
+  for (const item of message.items) {
+    if (item.sourceID?.endsWith(":stream-placeholder") || item.kind === "system") continue
+    if (Number.isFinite(item.timestamp)) earliestTraceTimestamp = Math.min(earliestTraceTimestamp, item.timestamp)
+  }
+
+  if (Number.isFinite(earliestTraceTimestamp)) {
+    ASSISTANT_ORDER_TIMESTAMP_BY_MESSAGE.set(message, earliestTraceTimestamp)
+    return earliestTraceTimestamp
+  }
 
   const runtimeTimestamps = [
     message.runtime.firstVisibleAt,
@@ -57,7 +64,9 @@ function readAssistantMessageOrderTimestamp(message: AssistantThreadMessage) {
     message.timestamp,
   ].filter((timestamp): timestamp is number => Number.isFinite(timestamp))
 
-  return runtimeTimestamps.length > 0 ? Math.min(...runtimeTimestamps) : 0
+  const timestamp = runtimeTimestamps.length > 0 ? Math.min(...runtimeTimestamps) : 0
+  ASSISTANT_ORDER_TIMESTAMP_BY_MESSAGE.set(message, timestamp)
+  return timestamp
 }
 
 function isTerminalAssistantMessagePhase(phase: AssistantThreadMessagePhase) {
@@ -89,13 +98,17 @@ function orderAdjacentAssistantMessagesForDisplay(messages: ThreadMessage[]) {
     if (!shouldOrderByTraceTime) return
 
     const orderedAssistantBlock = assistantBlock
-      .map((message, index) => ({ message, index }))
+      .map((message, index) => ({
+        index,
+        message,
+        timestamp: message.kind === "assistant" ? readAssistantMessageOrderTimestamp(message) : 0,
+      }))
       .sort((left, right) => {
         const leftMessage = left.message
         const rightMessage = right.message
         if (leftMessage.kind !== "assistant" || rightMessage.kind !== "assistant") return left.index - right.index
 
-        const timestampDelta = readAssistantMessageOrderTimestamp(leftMessage) - readAssistantMessageOrderTimestamp(rightMessage)
+        const timestampDelta = left.timestamp - right.timestamp
         return timestampDelta || left.index - right.index
       })
       .map(({ message }) => message)
@@ -150,9 +163,6 @@ function mergeThreadDisplayRowsCachesForDecoration(
   baseCache.baseRowsByMessageID.forEach((entry, messageID) => {
     cache.baseRowsByMessageID.set(messageID, entry)
   })
-  baseCache.messageSignaturesByID.forEach((entry, messageID) => {
-    cache.messageSignaturesByID.set(messageID, entry)
-  })
   committedCache.decorationRowsByOwnerMessageID.forEach((entry, ownerMessageID) => {
     cache.decorationRowsByOwnerMessageID.set(ownerMessageID, entry)
   })
@@ -179,12 +189,6 @@ export function useThreadProjection({
   const answeredQuestionIDs = useMemo(() => collectAnsweredQuestionIDs(activeMessages), [activeMessages])
   const displayMessages = useMemo(() => orderAdjacentAssistantMessagesForDisplay(activeMessages), [activeMessages])
   const readOnlySideChat = isSideChatSession(activeSession)
-
-  const visibleMessageIDs = useMemo(() => {
-    const ids = displayMessages.map((message) => message.id)
-    return pendingPermissionRequestID ? [...ids, `permission-request:${pendingPermissionRequestID}`] : ids
-  }, [displayMessages, pendingPermissionRequestID])
-  const visibleMessageIDsKey = visibleMessageIDs.join("\u0000")
 
   const threadDisplayContext = useMemo(
     () => buildThreadDisplayContext(displayMessages),
@@ -269,7 +273,5 @@ export function useThreadProjection({
     displayMessages,
     displayRows,
     threadDisplayContext,
-    visibleMessageIDs,
-    visibleMessageIDsKey,
   }
 }

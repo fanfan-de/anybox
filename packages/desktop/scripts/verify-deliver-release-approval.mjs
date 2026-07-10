@@ -17,6 +17,11 @@ function invariant(condition, message) {
   if (!condition) throw new Error(message)
 }
 
+function reference(value, label) {
+  invariant(typeof value === "string" && value.trim().length > 0, `${label} is missing`)
+  invariant(!/[<>]|pending|placeholder|example\.invalid/i.test(value), `${label} contains placeholder evidence`)
+}
+
 function approvedRecord(value, label) {
   invariant(value && typeof value === "object", `${label} approval is missing`)
   invariant(value.status === "approved", `${label} status must be approved`)
@@ -44,20 +49,20 @@ export function validateDeliverReleaseApproval(record) {
   for (const scope of REQUIRED_LICENSE_SCOPES) invariant(licenseScopes.has(scope), `License approval does not cover ${scope}`)
 
   approvedRecord(record.product, "Product")
-  invariant(typeof record.product.retentionPolicyReference === "string", "Product retention decision is missing")
-  invariant(typeof record.product.cleanupAuthorizationReference === "string", "Product cleanup authorization is missing")
+  reference(record.product.retentionPolicyReference, "Product retention decision")
+  reference(record.product.cleanupAuthorizationReference, "Product cleanup authorization")
   invariant(record.product.confirmationWord === "CLEAN", "Product approval must bind the CLEAN confirmation word")
   invariant(record.product.noAutomaticScheduling === true, "Product approval must forbid automatic cleanup scheduling")
-  invariant(typeof record.product.telemetryReference === "string", "Product telemetry decision is missing")
+  reference(record.product.telemetryReference, "Product telemetry decision")
 
   approvedRecord(record.security, "Security")
-  invariant(typeof record.security.retentionAndCleanupReference === "string", "Security retention/cleanup review is missing")
-  invariant(typeof record.security.telemetryReference === "string", "Security telemetry review is missing")
-  invariant(typeof record.security.monitoringReference === "string", "Security monitoring review is missing")
+  reference(record.security.retentionAndCleanupReference, "Security retention/cleanup review")
+  reference(record.security.telemetryReference, "Security telemetry review")
+  reference(record.security.monitoringReference, "Security monitoring review")
 
   invariant(record.rollback?.strategy === "disable-deliver", "Initial release rollback must disable Deliver")
   invariant(record.rollback?.capability === "timelineDelivery", "Rollback must target timelineDelivery")
-  invariant(typeof record.rollback?.reference === "string" && record.rollback.reference.length > 0, "Rollback evidence is missing")
+  reference(record.rollback?.reference, "Rollback evidence")
   return record
 }
 

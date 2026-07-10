@@ -1,6 +1,6 @@
 # Thread View 前端设计说明
 
-更新日期：2026-07-10
+更新日期：2026-07-11
 
 ## 1. 文档定位
 
@@ -18,6 +18,8 @@
 - `packages/desktop/src/renderer/src/app/thread/ThreadRows.tsx`
 - `packages/desktop/src/renderer/src/app/thread/ThreadRowRenderer.tsx`
 - `packages/desktop/src/renderer/src/app/thread/ThreadTurnNavigator.tsx`
+- `packages/desktop/src/renderer/src/app/thread/SizeAwareStreamingMarkdown.tsx`
+- `packages/desktop/src/renderer/src/app/thread/thread-interaction-store.ts`
 - `packages/desktop/src/renderer/src/styles/thread.css`
 - `packages/desktop/src/renderer/src/app/workbench/WorkbenchPaneSurface.tsx`
 - `packages/desktop/src/renderer/src/styles/workbench.css`
@@ -28,6 +30,8 @@
 
 - `packages/desktop/src/renderer/src/app/thread/ThreadView.test.tsx`
 - `packages/desktop/src/renderer/src/app/thread/thread-display-rows.test.ts`
+- `packages/desktop/src/renderer/src/app/thread/SizeAwareStreamingMarkdown.test.tsx`
+- `packages/desktop/src/renderer/src/app/thread/thread-interaction-store.test.ts`
 - `packages/desktop/src/renderer/src/App.test.tsx`
 
 ### 命名边界
@@ -184,8 +188,12 @@ streaming 更新需要保持历史 trace 的 structural sharing：
 
 - stream merge 只替换真正变化的 live item；已完成且语义未变化的 `AssistantTraceItem` 必须复用旧对象引用。
 - `thread-display-rows.ts` 为每个 `AssistantTraceItem` 建立稳定 row metadata；streaming 文本变化只更新对应 live row，不改变 `rowID`。
+- `buildThreadDisplayContext()` 通过线性多遍索引一次预计算 folding、final/latest、side-chat anchor、trailing diff 和 stream insertion；row builder 不再为每条 assistant message 重扫完整 message 列表。
+- 增量 row cache 以不可变 message/item 引用作为 revision 信号，不序列化 tool output、图片、patch、diff 或 session payload。conversation store 若新增原地 mutation，必须同时引入显式 revision，不能在 projection 层恢复 payload `JSON.stringify`。
 - live 判定只覆盖 `isStreaming`、`draftPatch.isStreaming`、以及 pending/running/waiting-approval tool；如果 live item 出现在历史中间，则回退到原整段渲染，保证顺序优先。
 - question answered 状态在 trace item 边界降成 boolean；不要把整份 answered question Set 传给所有 trace item。
+
+`ThreadView` 自身使用非 memo 的轻量 action adapter 接收最新业务 callback；昂贵的 visible viewport 只消费稳定 action port 和 capability 数据。业务动作必须在点击时读取最新 draft/model/skills，不能依赖忽略 callback identity 的 memo comparator。
 
 ### 数据到渲染流程图
 
@@ -206,7 +214,7 @@ flowchart LR
     context["buildThreadDisplayContext()"]
     baseRows["buildThreadDisplayRowsIncremental()"]
     displayRows["decorateThreadDisplayRowsIncremental()"]
-    virtual["useThreadVirtualList()\n行数 / 估算高度 / response-heavy 时启用"]
+    virtual["useThreadVirtualList()\nactive session 行窗口 + focused-row pin"]
     scroll["useThreadScrollController()\n锁底 / 恢复 / 用户意图"]
   end
 
@@ -291,19 +299,16 @@ ThreadView
       ├─ div.thread-column  # 独立滚动列
       │  ├─ empty state: article.thread-row.assistant-empty-state-row
       │  │  └─ TraceItemView(system)
-      │  └─ ThreadRows  # 根据虚拟化状态渲染 row
-      │     ├─ direct rows: ThreadRowRenderer(row)[]  # 中等短内容，自然文档流 + content-visibility
-      │     └─ virtualized rows  # 长线程、估算高度过高或 response-heavy 时只渲染可见窗口
-      │        └─ div.thread-virtual-spacer
-      │           └─ div.thread-virtual-row[]
-      │              └─ ThreadRowRenderer(row)
+      │  └─ ThreadRows  # active session 统一使用虚拟 row 窗口
+      │     └─ div.thread-virtual-spacer
+      │        └─ div.thread-virtual-row[]  # visible + overscan + focused row
+      │           └─ ThreadRowRenderer(row)
       └─ ImageLightbox?  # 图片预览浮层
 ```
 
-默认渲染路径按 row 数量、估算总高度和 response-heavy 程度分层：
+当前 active session 统一使用 TanStack virtual path：`thread-column` 带 `is-virtualized`，`thread-virtual-spacer` 和 absolute positioned `thread-virtual-row` 由 `useThreadVirtualList` 维护 offset、真实高度缓存、total size 和可见窗口。这样 turn navigation、滚动 snapshot 与 row 测量只有一套坐标语义。
 
-- 中等短内容：`ThreadRows` 直接 map 所有 row，`thread-column` 带 `is-content-visibility`，由浏览器文档流负责换行后的高度计算，并通过 `content-visibility: auto` 跳过离屏 row 的布局和绘制。
-- 长线程、估算总高度过高、response row 数量过多或 response 估算高度过高：`thread-column` 带 `is-virtualized`，继续使用 `thread-virtual-spacer` 和 absolute positioned `thread-virtual-row`，由 `useThreadVirtualList` 维护 `top`、`height`、`totalHeight` 和可见窗口。这样 response-only 的长输出不会因为隐藏 trace 后低于行数阈值而退回自然文档流。
+虚拟 row 的重要交互状态不能依赖组件生命周期。question draft、selected options 和 submission operation 保存在 scope + row keyed interaction store 中；当前键盘焦点所在 row 通过 custom `rangeExtractor` 额外挂载，离开可见区时仍保留 DOM focus/selection，blur 后恢复正常卸载。纯动画、hover 和 copied 状态仍留在本地组件。
 
 `content-visibility` 不叠加到 `.thread-virtual-row` 上。虚拟列表依赖 JS 测量和缓存真实 row 高度；让浏览器延迟虚拟 row 的高度计算会干扰滚动布局。
 
@@ -416,6 +421,7 @@ RightSidebar side-chat tab
 - 外层 section 透明、无边框。
 - response trace item 隐藏 header。
 - 非 streaming 状态下使用 `ThreadMarkdown` 渲染 markdown。
+- streaming Markdown 在 16000 字符以内保持完整语义渲染；超过阈值后切换为最多 12000 字符的 bounded plain-text 首尾预览，始终保留最新 live tail，避免每个 delta 重建累计全文 Markdown tree。completion 后恢复完整 Markdown。
 - 文本颜色使用主文本色，行高适合长文阅读。
 
 这让最终回复接近文档正文，而不是一张卡片。
@@ -470,6 +476,7 @@ debug 信息由 developer mode 和 trace visibility 控制。默认不应该干�
 - 点击 `ThreadTurnNavigator` 的轮次节点时，`useThreadVirtualList` 通过目标 display row index 获取 TanStack virtualizer 的 start offset，并减去少量顶部阅读留白；即使目标 row 尚未挂载到 DOM，也不依赖 `scrollIntoView()`。
 - 轮次跳转通过 `useThreadScrollController.navigateThreadToOffset()` 明确切换为 `detached`，同时保存 `pinnedToBottom: false` 的 scroll snapshot。点击最后一轮也只定位到该轮 user message，不会滚到 thread 最底部；用户随后手动回到底部时仍由原有 scroll intent 规则恢复 follow。
 - 当前轮次由导航组件自己的 scroll/ResizeObserver + requestAnimationFrame 同步计算。它读取各 user row 的 virtual offset，只在 current index 变化时更新导航组件，避免每次正文 scroll 触发整个 `ThreadView` 重渲染。
+- 键盘焦点进入 virtual row 后，该 row ID 会加入 virtualizer range；用户滚动阅读其他位置时不会卸载正在输入或操作的控件，blur 后解除 pin。
 
 底部锁定阈值为 `THREAD_BOTTOM_LOCK_THRESHOLD_PX = 32`。
 
@@ -518,6 +525,8 @@ agent 提问通过 `question` trace item 渲染：
 - 多选用 checkbox，再提交。
 - freeform 使用输入框。
 - 已回答问题显示 answered note，避免重复提交。
+- draft、selected options 和 operation 状态存放在 thread interaction store；virtual row 卸载/重挂后仍可恢复。
+- 提交使用原子 operation token 防止重复；失败时保留草稿并显示错误，只有 canonical answered 状态到达后才清理本地交互状态。
 
 这类卡片在 response section 中使用轻量中性 surface，保留紧凑标题、问题正文和回答控件；只有权限审批类阻塞点使用 warning 语义色。具体规则：
 
