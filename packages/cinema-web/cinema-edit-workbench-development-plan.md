@@ -734,30 +734,41 @@ src/features/timeline/
 
 以下项目全部满足后才设置 `timelineEditing: true`：
 
-- [ ] Timeline Schema、CRUD、revision、写锁和幂等命令完成。
-- [ ] 新建 Timeline 不会自动修改工程内容。
-- [ ] 视频/音频添加、移动、裁剪、分割和删除可用。
-- [ ] 保存失败可见，本地修改保留并可重试。
-- [ ] 刷新和切换工作台不丢数据。
-- [ ] 播放、暂停、seek 和跨 Clip 播放可用。
-- [ ] missing asset 保留 Clip 并有修复路径。
-- [ ] 亮色、暗色、760px–桌面宽度通过验收。
-- [ ] 键盘主路径和 Axe 检查通过。
-- [ ] 500 Clip 性能目标通过。
-- [ ] Playwright 主路径和故障注入通过。
-- [ ] Deliver 仍保持 disabled，Edit 内没有伪导出按钮。
+- [x] Timeline Schema、CRUD、revision、写锁和幂等命令完成。
+- [x] 新建 Timeline 不会自动修改工程内容。
+- [x] 视频/音频添加、移动、裁剪、分割和删除可用。
+- [x] 保存失败可见，本地修改保留并可重试。
+- [x] 刷新和切换工作台不丢数据。
+- [x] 播放、暂停、seek 和跨 Clip 播放可用。
+- [x] missing asset 保留 Clip 并有修复路径。
+- [x] 亮色、暗色、760px–桌面宽度通过验收。
+- [x] 键盘主路径和 Axe 检查通过。
+- [x] 500 Clip 性能目标通过。
+- [x] Playwright 主路径和故障注入通过。
+- [x] Deliver 仍保持 disabled，Edit 内没有伪导出按钮。
 
 ## 18. 第一批可直接创建的任务
 
-1. `E0-01`：新增 Shared Timeline 时间、Track、Clip、Document Schema。
-2. `E0-02`：新增 Timeline Command Schema 和兼容矩阵校验。
-3. `E0-03`：新增 Agent Timeline path、read、atomic write 工具。
-4. `E0-04`：新增 Timeline list/create/get routes 和 API 测试。
-5. `E1-01`：实现 timeline write lock、revision conflict 和 idempotency。
-6. `E1-02`：提取可复用 Command Queue 核心，供 Canvas/Timeline 配置使用；若抽象导致耦合，则保持两个实现共享测试契约。
-7. `E2-01`：实现开发开关下的 `EditWorkbench` 四区 shell。
-8. `E2-02`：实现 Timeline Empty State 和新建流程。
-9. `E2-03`：复用 Asset Library API 实现 Media Bin 只读列表。
-10. `E2-04`：建立 Edit 亮暗主题、splitter 和窄窗口基线 E2E。
+1. [x] `E0-01`：新增 Shared Timeline 时间、Track、Clip、Document Schema。
+2. [x] `E0-02`：新增 Timeline Command Schema 和兼容矩阵校验。
+3. [x] `E0-03`：新增 Agent Timeline path、read、atomic write 工具。
+4. [x] `E0-04`：新增 Timeline list/create/get routes 和 API 测试。
+5. [x] `E1-01`：实现 timeline write lock、revision conflict 和 idempotency。
+6. [x] `E1-02`：提取可复用 Command Queue 核心，供 Canvas/Timeline 配置使用；若抽象导致耦合，则保持两个实现共享测试契约。
+7. [x] `E2-01`：实现开发开关下的 `EditWorkbench` 四区 shell。
+8. [x] `E2-02`：实现 Timeline Empty State 和新建流程。
+9. [x] `E2-03`：复用 Asset Library API 实现 Media Bin 只读列表。
+10. [x] `E2-04`：建立 Edit 亮暗主题、splitter 和窄窗口基线 E2E。
 
 建议从 `E0-01` 开始，不先画完整 Timeline UI。只有稳定的时间模型、素材引用和命令契约确定后，拖拽和裁剪交互才不会反复返工。
+
+## 19. 实施完成与迁移说明
+
+完成日期：2026-07-10。
+
+- E0–E5 已完成，项目摘要正式返回 `timelineEditing: true`；`timelineDelivery` 和 Deliver 工作台继续保持 disabled。
+- Timeline 文档继续使用 `schemaVersion: 1`，新增的音频 `fadeInUs` / `fadeOutUs` 为可选字段，旧 Timeline 无需迁移即可读取。
+- 未创建 Timeline 的旧 Cinema 项目不会被自动写入 Timeline 文件；用户首次点击“New Timeline”后才创建 `.anybox-cinema/timelines/timeline_<id>.json`。
+- Timeline UI 临时状态仍只保存在浏览器本地；项目真相源只包含 Timeline 文档、事件日志和可删除的波形缓存。
+- Edit 工作台采用按需加载，不增加 Create 工作台的常驻重型 DOM 和媒体资源。
+- 验收覆盖 Shared Schema、Agent 全套服务器测试、前端单元/组件测试、生产构建、Axe、真实 MP4/WAV 主路径、断网/409 故障注入、素材回收与替换，以及 500 Clip / 30 分钟 Timeline 虚拟化场景。

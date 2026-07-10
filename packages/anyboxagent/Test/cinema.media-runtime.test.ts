@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { parseFFprobeDocument, parseFrameRate } from "../src/cinema/media-runtime"
+import { normalizeWaveformPeaks, parseFFprobeDocument, parseFrameRate } from "../src/cinema/media-runtime"
 
 describe("cinema media runtime", () => {
+  test("normalizes PCM waveform samples into bounded peaks", () => {
+    expect(normalizeWaveformPeaks([0, -0.5, 1, -0.25], 2)).toEqual([0.5, 1])
+    expect(normalizeWaveformPeaks([], 3)).toEqual([0, 0, 0])
+  })
   test("parses rational frame rates", () => {
     expect(parseFrameRate("30000/1001")).toBeCloseTo(29.97, 2)
     expect(parseFrameRate("0/0")).toBeUndefined()

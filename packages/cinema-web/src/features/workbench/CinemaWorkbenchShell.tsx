@@ -5,23 +5,24 @@ export type CinemaWorkspaceID = "create" | "edit" | "deliver"
 const CINEMA_WORKSPACES: ReadonlyArray<{
   id: CinemaWorkspaceID
   label: string
-  available: boolean
 }> = [
-  { id: "create", label: "Create", available: true },
-  { id: "edit", label: "Edit", available: false },
-  { id: "deliver", label: "Deliver", available: false },
+  { id: "create", label: "Create" },
+  { id: "edit", label: "Edit" },
+  { id: "deliver", label: "Deliver" },
 ]
 
 export function CinemaWorkbenchShell({
   projectName,
   activeWorkspace,
   onWorkspaceChange,
+  availableWorkspaces,
   onClick,
   children,
 }: {
   projectName: string
   activeWorkspace: CinemaWorkspaceID
   onWorkspaceChange: (workspace: CinemaWorkspaceID) => void
+  availableWorkspaces?: Partial<Record<CinemaWorkspaceID, boolean>>
   onClick?: MouseEventHandler<HTMLElement>
   children: ReactNode
 }) {
@@ -37,6 +38,7 @@ export function CinemaWorkbenchShell({
         </div>
         <nav className="cinema-workbench-tabs" role="tablist" aria-label="Cinema 工作台">
           {CINEMA_WORKSPACES.map((workspace) => {
+            const available = workspace.id === "create" || availableWorkspaces?.[workspace.id] === true
             const selected = workspace.id === activeDefinition.id
             const tabID = `cinema-workbench-${workspace.id}-tab`
             const panelID = `cinema-workbench-${workspace.id}-panel`
@@ -49,16 +51,16 @@ export function CinemaWorkbenchShell({
                 className={`cinema-workbench-tab ${selected ? "is-active" : ""}`}
                 aria-controls={panelID}
                 aria-selected={selected}
-                aria-disabled={!workspace.available}
-                disabled={!workspace.available}
+                aria-disabled={!available}
+                disabled={!available}
                 tabIndex={selected ? 0 : -1}
-                title={workspace.available ? `${workspace.label} 工作台` : `${workspace.label} 工作台即将开放`}
+                title={available ? `${workspace.label} 工作台` : `${workspace.label} 工作台即将开放`}
                 onClick={() => {
-                  if (workspace.available && !selected) onWorkspaceChange(workspace.id)
+                  if (available && !selected) onWorkspaceChange(workspace.id)
                 }}
               >
                 <span>{workspace.label}</span>
-                {!workspace.available ? <small>Soon</small> : null}
+                {!available ? <small>Soon</small> : null}
               </button>
             )
           })}

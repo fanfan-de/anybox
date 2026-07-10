@@ -338,3 +338,69 @@ export async function createAudioPreviewProxy(
     outputPath,
   ], { ...options, timeoutMs: options.timeoutMs ?? 60 * 60 * 1000 }), options.signal)
 }
+
+export function normalizeWaveformPeaks(samples: readonly number[], sampleCount = 256) {
+  const count = Math.max(1, Math.min(2048, Math.floor(sampleCount)))
+  const peaks = Array.from({ length: count }, () => 0)
+  if (samples.length === 0) return peaks
+  for (let index = 0; index < samples.length; index += 1) {
+    const bucket = Math.min(count - 1, Math.floor(index / samples.length * count))
+    peaks[bucket] = Math.max(peaks[bucket]!, Math.abs(samples[index] ?? 0))
+  }
+  const maximum = Math.max(...peaks, 0)
+  if (maximum <= 0) return peaks
+  return peaks.map((peak) => Math.min(1, peak / maximum))
+}
+
+export async function extractAudioWaveformPeaks(
+  inputPath: string,
+  sampleCount = 256,
+  options: MediaToolRunOptions = {},
+) {
+  const tools = await resolveMediaToolPaths()
+  const outputLimitBytes = options.outputLimitBytes ?? 16 * 1024 * 1024
+  const timeoutMs = options.timeoutMs ?? 120_000
+  return await mediaProcessingQueue.run(() => new Promise<number[]>((resolve, reject) => {
+    const child = spawn(tools.ffmpeg, [
+      "-hide_banner", "-nostdin", "-loglevel", "error",
+      "-i", inputPath,
+      "-map", "0:a:0",
+      "-vn", "-ac", "1", "-ar", "200",
+      "-f", "f32le", "pipe:1",
+    ], { shell: false, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] })
+    const chunks: Buffer[] = []
+    let bytes = 0
+    let stderr = ""
+    let settled = false
+    const finish = (callback: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      options.signal?.removeEventListener("abort", abort)
+      callback()
+    }
+    const abort = () => child.kill("SIGKILL")
+    const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs)
+    timer.unref?.()
+    options.signal?.addEventListener("abort", abort, { once: true })
+    child.stdout.on("data", (chunk: Buffer) => {
+      bytes += chunk.length
+      if (bytes > outputLimitBytes) {
+        child.kill("SIGKILL")
+        return
+      }
+      chunks.push(chunk)
+    })
+    child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8") })
+    child.on("error", (error) => finish(() => reject(error)))
+    child.on("close", (code) => finish(() => {
+      if (options.signal?.aborted) return reject(new DOMException("Waveform extraction was canceled", "AbortError"))
+      if (bytes > outputLimitBytes) return reject(new Error("Waveform PCM output exceeded the safety limit"))
+      if (code !== 0) return reject(new Error(stderr.trim() || `FFmpeg waveform extraction exited with code ${code}`))
+      const buffer = Buffer.concat(chunks)
+      const samples: number[] = []
+      for (let offset = 0; offset + 4 <= buffer.length; offset += 4) samples.push(buffer.readFloatLE(offset))
+      resolve(normalizeWaveformPeaks(samples, sampleCount))
+    }))
+  }), options.signal)
+}

@@ -1012,6 +1012,21 @@ export async function getCinemaAsset(scope: CinemaAssetScope, assetID: string) {
   }
 }
 
+export async function getCinemaAssetFilePath(scope: CinemaAssetScope, assetID: string) {
+  const paths = resolveLibraryPaths(scope)
+  if (!(await pathExists(paths.catalogPath))) await initializeCinemaAssetLibrary(scope)
+  using _lock = await Lock.read(paths.scopeKey)
+  const index = await readCatalogAssetIndex(paths)
+  const asset = index.assetsByID.get(assetID)
+  if (!asset) throw new ApiError(404, "CINEMA_LIBRARY_ASSET_NOT_FOUND", `Asset '${assetID}' was not found.`)
+  if (asset.status !== "ready") {
+    throw new ApiError(409, "CINEMA_ASSET_NOT_READY", `Asset '${assetID}' is ${asset.status}.`)
+  }
+  const filePath = physicalPath(paths, asset.relativePath)
+  await assertNoSymlinkBelowRoot(paths.filesRoot, filePath)
+  return { asset, filePath }
+}
+
 function deduplicateEntryRefs(catalog: CinemaAssetCatalog, entries: CinemaAssetLibraryEntryRef[]) {
   const seen = new Set<string>()
   const unique = entries.filter((entry) => {

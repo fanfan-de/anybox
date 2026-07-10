@@ -42,9 +42,21 @@ import {
   type CreateCinemaTextGenerationBody,
 } from "@anybox/shared/cinema"
 import { isSshWorkspaceUri } from "@anybox/shared"
+import {
+  type CinemaTimelineCommand,
+  type CinemaTimelineCommandResult,
+  type CinemaTimelineDocument,
+  type CinemaTimelineEventsResult,
+  type CinemaTimelineListResult,
+  type DeleteCinemaTimelineResult,
+  type CreateCinemaTimelineBody,
+} from "@anybox/shared/cinema-timeline"
 import * as ProviderAuth from "#auth/provider-auth.ts"
 import * as CinemaProviderRuntime from "#cinema/provider-runtime.ts"
 import * as CinemaAssetLibrary from "#cinema/asset-library.ts"
+import * as CinemaTimelineStorage from "#cinema/timeline-storage.ts"
+import { applyCinemaTimelineCommandToDocument } from "#cinema/timeline-commands.ts"
+import * as CinemaTimelineWaveform from "#cinema/timeline-waveform.ts"
 import { streamCinemaFile } from "#cinema/file-range-stream.ts"
 import * as Config from "#config/config.ts"
 import * as ModelRegistry from "#model/registry.ts"
@@ -2085,8 +2097,198 @@ export async function getCinemaProject(projectID: string): Promise<CinemaProject
       personalAssetLibrary: !["0", "false", "off"].includes(
         getProcessEnvValue("ANYBOX_CINEMA_ASSET_LIBRARY")?.trim().toLowerCase() ?? "",
       ),
+      timelineEditing: true,
+      timelineDelivery: false,
     },
   }
+}
+
+export async function listCinemaTimelines(projectID: string): Promise<CinemaTimelineListResult> {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+  return {
+    timelines: await CinemaTimelineStorage.listCinemaTimelineDocuments(cinemaRoot),
+  }
+}
+
+export async function createCinemaTimeline(
+  projectID: string,
+  input: CreateCinemaTimelineBody,
+): Promise<CinemaTimelineDocument> {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+
+  const existing = await CinemaTimelineStorage.listCinemaTimelineDocuments(cinemaRoot)
+  const timestamp = nowISO()
+  const timeline: CinemaTimelineDocument = {
+    schemaVersion: 1,
+    id: randomUUID(),
+    projectID,
+    title: input.title ?? `Timeline ${existing.length + 1}`,
+    revision: 0,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    settings: input.settings ?? {
+      width: 1920,
+      height: 1080,
+      frameRate: { numerator: 24, denominator: 1 },
+      sampleRate: 48_000,
+      backgroundColor: "#000000",
+    },
+    tracks: [
+      {
+        id: randomUUID(),
+        kind: "video",
+        title: "V1",
+        order: 0,
+        locked: false,
+        muted: false,
+        hidden: false,
+      },
+      {
+        id: randomUUID(),
+        kind: "audio",
+        title: "A1",
+        order: 1,
+        locked: false,
+        muted: false,
+        hidden: false,
+      },
+    ],
+    clips: [],
+    markers: [],
+  }
+
+  await CinemaTimelineStorage.writeCinemaTimelineDocument(cinemaRoot, timeline)
+  return timeline
+}
+
+export async function getCinemaTimeline(
+  projectID: string,
+  timelineID: string,
+): Promise<CinemaTimelineDocument> {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+  const timeline = await CinemaTimelineStorage.readCinemaTimelineDocument(cinemaRoot, timelineID)
+  if (!timeline) {
+    throw new ApiError(404, "CINEMA_TIMELINE_NOT_FOUND", `Timeline '${timelineID}' was not found.`)
+  }
+  if (timeline.projectID !== projectID) {
+    throw new ApiError(409, "CINEMA_TIMELINE_PROJECT_MISMATCH", "Timeline belongs to another project.")
+  }
+  return timeline
+}
+
+function cinemaTimelineLockKey(cinemaRoot: string, timelineID: string) {
+  return `cinema-timeline:${cinemaRoot}:${timelineID}`
+}
+
+async function validateTimelineCommandAsset(projectID: string, command: CinemaTimelineCommand) {
+  const assetRef = command.type === "add-clip" && command.clip.kind !== "text"
+    ? command.clip.assetRef
+    : command.type === "update-clip"
+      ? command.patch.assetRef
+      : undefined
+  if (!assetRef) return
+  if (assetRef.scope.type === "project" && assetRef.scope.projectID !== projectID) {
+    throw new ApiError(400, "CINEMA_ASSET_SCOPE_INVALID", "Timeline cannot reference an asset owned by another project.")
+  }
+  const { asset } = await CinemaAssetLibrary.getCinemaAsset(assetRef.scope, assetRef.assetID)
+  if (asset.status !== "ready") {
+    throw new ApiError(409, "CINEMA_ASSET_NOT_READY", `Asset '${asset.id}' is ${asset.status}.`)
+  }
+  if (asset.contentRevision !== assetRef.contentRevision) {
+    throw new ApiError(409, "CINEMA_ASSET_REVISION_STALE", "Refresh the asset before adding it to the Timeline.")
+  }
+  if (asset.kind !== assetRef.snapshot.kind) {
+    throw new ApiError(409, "CINEMA_ASSET_KIND_MISMATCH", "Asset kind does not match the Timeline reference snapshot.")
+  }
+}
+
+export async function applyCinemaTimelineCommand(
+  projectID: string,
+  timelineID: string,
+  command: CinemaTimelineCommand,
+): Promise<CinemaTimelineCommandResult> {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+  if (timelineID !== command.timelineID) {
+    throw new ApiError(400, "CINEMA_TIMELINE_COMMAND_TARGET_MISMATCH", "Command targets a different Timeline.")
+  }
+
+  using _lock = await Lock.write(cinemaTimelineLockKey(cinemaRoot, timelineID))
+  const current = await getCinemaTimeline(projectID, timelineID)
+  const events = await CinemaTimelineStorage.readCinemaTimelineEvents(cinemaRoot, timelineID)
+  const previousEvent = events.find((event) => event.commandID === command.id)
+  if (previousEvent) {
+    return { timeline: current, event: previousEvent }
+  }
+
+  await validateTimelineCommandAsset(projectID, command)
+  const timestamp = nowISO()
+  const next = applyCinemaTimelineCommandToDocument(current, command, timestamp)
+  const event = {
+    time: timestamp,
+    timelineID,
+    type: `timeline.${command.type}`,
+    actor: command.actor,
+    commandID: command.id,
+    baseRevision: command.baseRevision,
+    revision: next.revision,
+    message: `Applied Timeline command '${command.type}'.`,
+    command,
+  }
+  await CinemaTimelineStorage.writeCinemaTimelineDocument(cinemaRoot, next)
+  try {
+    await CinemaTimelineStorage.appendCinemaTimelineEvent(cinemaRoot, event)
+  } catch (error) {
+    await CinemaTimelineStorage.writeCinemaTimelineDocument(cinemaRoot, current).catch(() => undefined)
+    throw error
+  }
+  return { timeline: next, event }
+}
+
+export async function getCinemaTimelineEvents(
+  projectID: string,
+  timelineID: string,
+  options: { after?: number; limit?: number } = {},
+): Promise<CinemaTimelineEventsResult> {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+  await getCinemaTimeline(projectID, timelineID)
+  const after = options.after ?? 0
+  const limit = options.limit ?? 100
+  const allEvents = await CinemaTimelineStorage.readCinemaTimelineEvents(cinemaRoot, timelineID)
+  const events = allEvents.slice(after, after + limit)
+  return { events, nextCursor: after + events.length }
+}
+
+export async function getCinemaTimelineWaveform(
+  projectID: string,
+  timelineID: string,
+  clipID: string,
+) {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+  const timeline = await getCinemaTimeline(projectID, timelineID)
+  return await CinemaTimelineWaveform.getCinemaTimelineClipWaveform({
+    projectID,
+    cinemaRoot,
+    timeline,
+    clipID,
+  })
+}
+
+export async function deleteCinemaTimeline(
+  projectID: string,
+  timelineID: string,
+): Promise<DeleteCinemaTimelineResult> {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+  using _lock = await Lock.write(cinemaTimelineLockKey(cinemaRoot, timelineID))
+  await getCinemaTimeline(projectID, timelineID)
+  await CinemaTimelineStorage.deleteCinemaTimelineStorage(cinemaRoot, timelineID)
+  return { timelineID, deleted: true }
 }
 
 export async function getCinemaCanvas(projectID: string): Promise<CinemaCanvasDocument> {

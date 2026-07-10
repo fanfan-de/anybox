@@ -1,6 +1,7 @@
 export * from "./api"
 export * from "./browser-extension"
 export * from "./cinema"
+export * from "./cinema-timeline"
 export * from "./desktop-ipc"
 export * from "./reasoning"
 export * from "./session"

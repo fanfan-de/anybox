@@ -16,6 +16,11 @@ import {
   TestCinemaVideoProviderConnectionBodySchema,
   UpdateCinemaVideoProviderSettingsBodySchema,
 } from "@anybox/shared/cinema"
+import {
+  CinemaTimelineCommandSchema,
+  CinemaTimelineIDSchema,
+  CreateCinemaTimelineBodySchema,
+} from "@anybox/shared/cinema-timeline"
 
 const CinemaEventsQuerySchema = z.object({
   after: z.coerce.number().int().min(0).optional(),
@@ -29,6 +34,19 @@ const CinemaDirectoryQuerySchema = z.object({
 const CinemaProviderApiKeyBodySchema = z.object({
   apiKey: z.string().nullable().optional(),
 })
+
+const CinemaTimelineEventsQuerySchema = z.object({
+  after: z.coerce.number().int().min(0).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+})
+
+function parseTimelineID(value: string) {
+  const result = CinemaTimelineIDSchema.safeParse(value)
+  if (!result.success) {
+    throw new ApiError(400, "CINEMA_TIMELINE_ID_INVALID", "Timeline id is invalid.")
+  }
+  return result.data
+}
 
 function decodeCinemaAssetPath(url: string) {
   const pathname = new URL(url).pathname
@@ -101,6 +119,69 @@ export function CinemaRoutes() {
 
   app.get("/projects/:projectID/summary", async (c) =>
     ok(c, await CinemaUseCase.getCinemaProjectStateSummary(c.req.param("projectID")))
+  )
+
+  app.get("/projects/:projectID/timelines", async (c) =>
+    ok(c, await CinemaUseCase.listCinemaTimelines(c.req.param("projectID")))
+  )
+
+  app.post("/projects/:projectID/timelines", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      CreateCinemaTimelineBodySchema,
+      "Body must be a valid Cinema timeline creation request",
+    )
+    return ok(c, await CinemaUseCase.createCinemaTimeline(c.req.param("projectID"), payload))
+  })
+
+  app.get("/projects/:projectID/timelines/:timelineID", async (c) =>
+    ok(c, await CinemaUseCase.getCinemaTimeline(
+      c.req.param("projectID"),
+      parseTimelineID(c.req.param("timelineID")),
+    ))
+  )
+
+  app.post("/projects/:projectID/timelines/:timelineID/commands", async (c) => {
+    const timelineID = parseTimelineID(c.req.param("timelineID"))
+    const payload = await parseJsonBody(
+      c,
+      CinemaTimelineCommandSchema,
+      "Body must be a valid Cinema timeline command",
+    )
+    return ok(c, await CinemaUseCase.applyCinemaTimelineCommand(
+      c.req.param("projectID"),
+      timelineID,
+      payload,
+    ))
+  })
+
+  app.get("/projects/:projectID/timelines/:timelineID/events", async (c) => {
+    const query = parseQuery(
+      c.req.query(),
+      CinemaTimelineEventsQuerySchema,
+      "INVALID_QUERY",
+      "Query must include a valid optional event cursor and limit",
+    )
+    return ok(c, await CinemaUseCase.getCinemaTimelineEvents(
+      c.req.param("projectID"),
+      parseTimelineID(c.req.param("timelineID")),
+      query,
+    ))
+  })
+
+  app.get("/projects/:projectID/timelines/:timelineID/clips/:clipID/waveform", async (c) =>
+    ok(c, await CinemaUseCase.getCinemaTimelineWaveform(
+      c.req.param("projectID"),
+      parseTimelineID(c.req.param("timelineID")),
+      c.req.param("clipID"),
+    ))
+  )
+
+  app.delete("/projects/:projectID/timelines/:timelineID", async (c) =>
+    ok(c, await CinemaUseCase.deleteCinemaTimeline(
+      c.req.param("projectID"),
+      parseTimelineID(c.req.param("timelineID")),
+    ))
   )
 
   app.get("/projects/:projectID/files", async (c) => {

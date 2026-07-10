@@ -1136,6 +1136,8 @@ export const CinemaProjectSummarySchema = z.object({
   capabilities: z.object({
     assetLibrary: z.boolean(),
     personalAssetLibrary: z.boolean(),
+    timelineEditing: z.boolean(),
+    timelineDelivery: z.boolean(),
   }).optional(),
 })
 export type CinemaProjectSummary = z.infer<typeof CinemaProjectSummarySchema>

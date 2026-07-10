@@ -153,6 +153,11 @@ const AssetLibraryPanel = lazy(async () => {
   return { default: module.AssetLibraryPanel }
 })
 
+const EditWorkbench = lazy(async () => {
+  const module = await import("./features/timeline/components/EditWorkbench")
+  return { default: module.EditWorkbench }
+})
+
 type CanvasPanel = "files" | "assets"
 
 type ImageGenerationRequest = {
@@ -6629,6 +6634,22 @@ export function App() {
   const reactFlow = useReactFlow<CinemaFlowNode, Edge>()
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<CinemaFlowNode, Edge> | null>(null)
   const [activeWorkspace, setActiveWorkspace] = useState<CinemaWorkspaceID>("create")
+  const editFlushRef = useRef<(() => Promise<void>) | null>(null)
+  const changeWorkspace = useCallback((workspace: CinemaWorkspaceID) => {
+    if (workspace === activeWorkspace) return
+    if (activeWorkspace !== "edit") {
+      setActiveWorkspace(workspace)
+      return
+    }
+    void (async () => {
+      try {
+        await editFlushRef.current?.()
+        setActiveWorkspace(workspace)
+      } catch {
+        // The Edit topbar retains the failed command and exposes Retry.
+      }
+    })()
+  }, [activeWorkspace])
   const [nodes, setNodes] = useState<CinemaFlowNode[]>([])
   const pendingCanvasSelectionNodeIDRef = useRef<string | null>(null)
   const selectedNodeIDs = useMemo(
@@ -6831,6 +6852,9 @@ export function App() {
     mutationFn: (command: CinemaCommandDraft) => commandQueue.enqueue(command),
   })
   const assetLibraryEnabled = projectQuery.data?.capabilities?.assetLibrary !== false
+  const timelineEditingAvailable = projectQuery.data?.capabilities?.timelineEditing === true
+    || import.meta.env.VITE_CINEMA_EDIT_DEV === "1"
+  const availableWorkspaces = { edit: timelineEditingAvailable, deliver: false } as const
 
   const createNodeFromAssetMutation = useMutation({
     scope: { id: `cinema-create-node-from-asset:${projectID}` },
@@ -8429,7 +8453,7 @@ export function App() {
 
   if (!projectID) {
     return (
-      <CinemaWorkbenchShell projectName="Cinema" activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace}>
+      <CinemaWorkbenchShell projectName="Cinema" activeWorkspace={activeWorkspace} onWorkspaceChange={changeWorkspace} availableWorkspaces={availableWorkspaces}>
         <div className="cinema-empty-state">
           <h1>Missing project</h1>
           <p>Open Cinema from an AnyBox project so the URL includes a projectID.</p>
@@ -8440,7 +8464,7 @@ export function App() {
 
   if (projectQuery.isLoading || (projectQuery.data?.initialized && canvasQuery.isLoading)) {
     return (
-      <CinemaWorkbenchShell projectName={projectQuery.data?.name ?? "Cinema"} activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace}>
+      <CinemaWorkbenchShell projectName={projectQuery.data?.name ?? "Cinema"} activeWorkspace={activeWorkspace} onWorkspaceChange={changeWorkspace} availableWorkspaces={availableWorkspaces}>
         <div className="cinema-empty-state">
           <Loader2 className="is-spinning" aria-hidden="true" />
           <h1>Opening cinema project</h1>
@@ -8453,7 +8477,7 @@ export function App() {
   if (projectQuery.error || canvasQuery.error || providersQuery.error || textModelsQuery.error || imageModelsQuery.error || tasksQuery.error) {
     const error = projectQuery.error ?? canvasQuery.error ?? providersQuery.error ?? textModelsQuery.error ?? imageModelsQuery.error ?? tasksQuery.error
     return (
-      <CinemaWorkbenchShell projectName={projectQuery.data?.name ?? "Cinema"} activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace}>
+      <CinemaWorkbenchShell projectName={projectQuery.data?.name ?? "Cinema"} activeWorkspace={activeWorkspace} onWorkspaceChange={changeWorkspace} availableWorkspaces={availableWorkspaces}>
         <div className="cinema-empty-state is-error">
           <h1>Could not open Cinema</h1>
           <p>{error instanceof Error ? error.message : "Unknown error"}</p>
@@ -8464,7 +8488,7 @@ export function App() {
 
   if (projectQuery.data && !projectQuery.data.initialized) {
     return (
-      <CinemaWorkbenchShell projectName={projectQuery.data.name} activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace}>
+      <CinemaWorkbenchShell projectName={projectQuery.data.name} activeWorkspace={activeWorkspace} onWorkspaceChange={changeWorkspace} availableWorkspaces={availableWorkspaces}>
         <div className="cinema-empty-state">
           <Film aria-hidden="true" />
           <h1>Initialize this project first</h1>
@@ -8474,11 +8498,27 @@ export function App() {
     )
   }
 
+  if (activeWorkspace === "edit") {
+    return (
+      <CinemaWorkbenchShell
+        projectName={projectQuery.data?.name ?? "Cinema"}
+        activeWorkspace={activeWorkspace}
+        onWorkspaceChange={changeWorkspace}
+        availableWorkspaces={availableWorkspaces}
+      >
+        <Suspense fallback={<div className="cinema-timeline-empty" role="status"><p>Loading Edit workbench…</p></div>}>
+          <EditWorkbench agentBaseURL={agentBaseURL} projectID={projectID} onRegisterFlush={(flush) => { editFlushRef.current = flush }} />
+        </Suspense>
+      </CinemaWorkbenchShell>
+    )
+  }
+
   return (
     <CinemaWorkbenchShell
       projectName={projectQuery.data?.name ?? "Cinema"}
       activeWorkspace={activeWorkspace}
-      onWorkspaceChange={setActiveWorkspace}
+      onWorkspaceChange={changeWorkspace}
+      availableWorkspaces={availableWorkspaces}
       onClick={() => {
         setContextMenu(null)
         setNodeContextMenu(null)

@@ -44,6 +44,94 @@
   --cinema-workbench-segment-text: var(--cinema-text-2);
   --cinema-workbench-segment-text-active: var(--cinema-text);
   --cinema-workbench-segment-text-disabled: var(--cinema-text-3);
+  --cinema-button-primary-surface-dark: #e7e9ee;
+  --cinema-button-primary-surface-hover-dark: #ffffff;
+  --cinema-button-primary-border-dark: #e7e9ee;
+  --cinema-button-primary-border-hover-dark: #ffffff;
+  --cinema-button-primary-text-dark: #111317;
+  --cinema-button-primary-text-hover-dark: #111317;
+  --cinema-button-primary-disabled-surface-dark: #343840;
+  --cinema-button-primary-disabled-border-dark: #343840;
+  --cinema-button-primary-disabled-text-dark: #777f8d;
+  --cinema-button-primary-surface-light: #1f2328;
+  --cinema-button-primary-surface-hover-light: #0f1114;
+  --cinema-button-primary-border-light: #1f2328;
+  --cinema-button-primary-border-hover-light: #0f1114;
+  --cinema-button-primary-text-light: #ffffff;
+  --cinema-button-primary-text-hover-light: #ffffff;
+  --cinema-button-primary-disabled-surface-light: #d7dbe1;
+  --cinema-button-primary-disabled-border-light: #d7dbe1;
+  --cinema-button-primary-disabled-text-light: #8a94a1;
+  --cinema-button-secondary-surface-dark: #181b20;
+  --cinema-button-secondary-surface-hover-dark: #22262d;
+  --cinema-button-secondary-border-dark: rgba(255, 255, 255, 0.12);
+  --cinema-button-secondary-border-hover-dark: rgba(255, 255, 255, 0.24);
+  --cinema-button-secondary-text-dark: #aeb6c4;
+  --cinema-button-secondary-text-hover-dark: #f5f7fb;
+  --cinema-button-secondary-disabled-surface-dark: #181b20;
+  --cinema-button-secondary-disabled-border-dark: rgba(255, 255, 255, 0.07);
+  --cinema-button-secondary-disabled-text-dark: #707987;
+  --cinema-button-secondary-surface-light: #ffffff;
+  --cinema-button-secondary-surface-hover-light: #e9ebef;
+  --cinema-button-secondary-border-light: rgba(31, 35, 40, 0.14);
+  --cinema-button-secondary-border-hover-light: rgba(31, 35, 40, 0.28);
+  --cinema-button-secondary-text-light: #59616d;
+  --cinema-button-secondary-text-hover-light: #1f2328;
+  --cinema-button-secondary-disabled-surface-light: #f4f5f7;
+  --cinema-button-secondary-disabled-border-light: rgba(31, 35, 40, 0.08);
+  --cinema-button-secondary-disabled-text-light: #8a94a1;
+  --cinema-button-toolbar-surface-dark: transparent;
+  --cinema-button-toolbar-surface-hover-dark: rgba(255, 255, 255, 0.1);
+  --cinema-button-toolbar-surface-active-dark: #22262d;
+  --cinema-button-toolbar-border-dark: transparent;
+  --cinema-button-toolbar-border-hover-dark: rgba(255, 255, 255, 0.24);
+  --cinema-button-toolbar-text-dark: #aeb6c4;
+  --cinema-button-toolbar-text-hover-dark: #f5f7fb;
+  --cinema-button-toolbar-disabled-surface-dark: transparent;
+  --cinema-button-toolbar-disabled-border-dark: transparent;
+  --cinema-button-toolbar-disabled-text-dark: #707987;
+  --cinema-button-toolbar-surface-light: transparent;
+  --cinema-button-toolbar-surface-hover-light: rgba(31, 35, 40, 0.09);
+  --cinema-button-toolbar-surface-active-light: #e9ebef;
+  --cinema-button-toolbar-border-light: transparent;
+  --cinema-button-toolbar-border-hover-light: rgba(31, 35, 40, 0.28);
+  --cinema-button-toolbar-text-light: #59616d;
+  --cinema-button-toolbar-text-hover-light: #1f2328;
+  --cinema-button-toolbar-disabled-surface-light: transparent;
+  --cinema-button-toolbar-disabled-border-light: transparent;
+  --cinema-button-toolbar-disabled-text-light: #8a94a1;
+  --cinema-button-primary-surface: var(--cinema-button-primary-surface-dark);
+  --cinema-button-primary-surface-hover: var(--cinema-button-primary-surface-hover-dark);
+  --cinema-button-primary-border: var(--cinema-button-primary-border-dark);
+  --cinema-button-primary-border-hover: var(--cinema-button-primary-border-hover-dark);
+  --cinema-button-primary-text: var(--cinema-button-primary-text-dark);
+  --cinema-button-primary-text-hover: var(--cinema-button-primary-text-hover-dark);
+  --cinema-button-primary-disabled-surface: var(--cinema-button-primary-disabled-surface-dark);
+  --cinema-button-primary-disabled-border: var(--cinema-button-primary-disabled-border-dark);
+  --cinema-button-primary-disabled-text: var(--cinema-button-primary-disabled-text-dark);
+  --cinema-button-secondary-surface: var(--cinema-button-secondary-surface-dark);
+  --cinema-button-secondary-surface-hover: var(--cinema-button-secondary-surface-hover-dark);
+  --cinema-button-secondary-border: var(--cinema-button-secondary-border-dark);
+  --cinema-button-secondary-border-hover: var(--cinema-button-secondary-border-hover-dark);
+  --cinema-button-secondary-text: var(--cinema-button-secondary-text-dark);
+  --cinema-button-secondary-text-hover: var(--cinema-button-secondary-text-hover-dark);
+  --cinema-button-secondary-disabled-surface: var(--cinema-button-secondary-disabled-surface-dark);
+  --cinema-button-secondary-disabled-border: var(--cinema-button-secondary-disabled-border-dark);
+  --cinema-button-secondary-disabled-text: var(--cinema-button-secondary-disabled-text-dark);
+  --cinema-button-toolbar-surface: var(--cinema-button-toolbar-surface-dark);
+  --cinema-button-toolbar-surface-hover: var(--cinema-button-toolbar-surface-hover-dark);
+  --cinema-button-toolbar-surface-active: var(--cinema-button-toolbar-surface-active-dark);
+  --cinema-button-toolbar-border: var(--cinema-button-toolbar-border-dark);
+  --cinema-button-toolbar-border-hover: var(--cinema-button-toolbar-border-hover-dark);
+  --cinema-button-toolbar-text: var(--cinema-button-toolbar-text-dark);
+  --cinema-button-toolbar-text-hover: var(--cinema-button-toolbar-text-hover-dark);
+  --cinema-button-toolbar-disabled-surface: var(--cinema-button-toolbar-disabled-surface-dark);
+  --cinema-button-toolbar-disabled-border: var(--cinema-button-toolbar-disabled-border-dark);
+  --cinema-button-toolbar-disabled-text: var(--cinema-button-toolbar-disabled-text-dark);
+  --cinema-edit-clip-video-surface: #355f8a;
+  --cinema-edit-clip-audio-surface: #376f55;
+  --cinema-edit-clip-image-surface: #6a5688;
+  --cinema-edit-clip-text-surface: #795767;
 }
 
 :root[data-theme="light"] {
@@ -75,6 +163,38 @@
   --cinema-primary-action-text: #1f2328;
   --cinema-image-empty-text: #59616d;
   --cinema-image-empty-icon: #a61e68;
+  --cinema-button-primary-surface: var(--cinema-button-primary-surface-light);
+  --cinema-button-primary-surface-hover: var(--cinema-button-primary-surface-hover-light);
+  --cinema-button-primary-border: var(--cinema-button-primary-border-light);
+  --cinema-button-primary-border-hover: var(--cinema-button-primary-border-hover-light);
+  --cinema-button-primary-text: var(--cinema-button-primary-text-light);
+  --cinema-button-primary-text-hover: var(--cinema-button-primary-text-hover-light);
+  --cinema-button-primary-disabled-surface: var(--cinema-button-primary-disabled-surface-light);
+  --cinema-button-primary-disabled-border: var(--cinema-button-primary-disabled-border-light);
+  --cinema-button-primary-disabled-text: var(--cinema-button-primary-disabled-text-light);
+  --cinema-button-secondary-surface: var(--cinema-button-secondary-surface-light);
+  --cinema-button-secondary-surface-hover: var(--cinema-button-secondary-surface-hover-light);
+  --cinema-button-secondary-border: var(--cinema-button-secondary-border-light);
+  --cinema-button-secondary-border-hover: var(--cinema-button-secondary-border-hover-light);
+  --cinema-button-secondary-text: var(--cinema-button-secondary-text-light);
+  --cinema-button-secondary-text-hover: var(--cinema-button-secondary-text-hover-light);
+  --cinema-button-secondary-disabled-surface: var(--cinema-button-secondary-disabled-surface-light);
+  --cinema-button-secondary-disabled-border: var(--cinema-button-secondary-disabled-border-light);
+  --cinema-button-secondary-disabled-text: var(--cinema-button-secondary-disabled-text-light);
+  --cinema-button-toolbar-surface: var(--cinema-button-toolbar-surface-light);
+  --cinema-button-toolbar-surface-hover: var(--cinema-button-toolbar-surface-hover-light);
+  --cinema-button-toolbar-surface-active: var(--cinema-button-toolbar-surface-active-light);
+  --cinema-button-toolbar-border: var(--cinema-button-toolbar-border-light);
+  --cinema-button-toolbar-border-hover: var(--cinema-button-toolbar-border-hover-light);
+  --cinema-button-toolbar-text: var(--cinema-button-toolbar-text-light);
+  --cinema-button-toolbar-text-hover: var(--cinema-button-toolbar-text-hover-light);
+  --cinema-button-toolbar-disabled-surface: var(--cinema-button-toolbar-disabled-surface-light);
+  --cinema-button-toolbar-disabled-border: var(--cinema-button-toolbar-disabled-border-light);
+  --cinema-button-toolbar-disabled-text: var(--cinema-button-toolbar-disabled-text-light);
+  --cinema-edit-clip-video-surface: #b9d8f4;
+  --cinema-edit-clip-audio-surface: #b9ddc8;
+  --cinema-edit-clip-image-surface: #d7c9e8;
+  --cinema-edit-clip-text-surface: #e4c8d4;
 }
 
 @media (prefers-color-scheme: light) {
@@ -107,6 +227,38 @@
     --cinema-primary-action-text: #1f2328;
     --cinema-image-empty-text: #59616d;
     --cinema-image-empty-icon: #a61e68;
+    --cinema-button-primary-surface: var(--cinema-button-primary-surface-light);
+    --cinema-button-primary-surface-hover: var(--cinema-button-primary-surface-hover-light);
+    --cinema-button-primary-border: var(--cinema-button-primary-border-light);
+    --cinema-button-primary-border-hover: var(--cinema-button-primary-border-hover-light);
+    --cinema-button-primary-text: var(--cinema-button-primary-text-light);
+    --cinema-button-primary-text-hover: var(--cinema-button-primary-text-hover-light);
+    --cinema-button-primary-disabled-surface: var(--cinema-button-primary-disabled-surface-light);
+    --cinema-button-primary-disabled-border: var(--cinema-button-primary-disabled-border-light);
+    --cinema-button-primary-disabled-text: var(--cinema-button-primary-disabled-text-light);
+    --cinema-button-secondary-surface: var(--cinema-button-secondary-surface-light);
+    --cinema-button-secondary-surface-hover: var(--cinema-button-secondary-surface-hover-light);
+    --cinema-button-secondary-border: var(--cinema-button-secondary-border-light);
+    --cinema-button-secondary-border-hover: var(--cinema-button-secondary-border-hover-light);
+    --cinema-button-secondary-text: var(--cinema-button-secondary-text-light);
+    --cinema-button-secondary-text-hover: var(--cinema-button-secondary-text-hover-light);
+    --cinema-button-secondary-disabled-surface: var(--cinema-button-secondary-disabled-surface-light);
+    --cinema-button-secondary-disabled-border: var(--cinema-button-secondary-disabled-border-light);
+    --cinema-button-secondary-disabled-text: var(--cinema-button-secondary-disabled-text-light);
+    --cinema-button-toolbar-surface: var(--cinema-button-toolbar-surface-light);
+    --cinema-button-toolbar-surface-hover: var(--cinema-button-toolbar-surface-hover-light);
+    --cinema-button-toolbar-surface-active: var(--cinema-button-toolbar-surface-active-light);
+    --cinema-button-toolbar-border: var(--cinema-button-toolbar-border-light);
+    --cinema-button-toolbar-border-hover: var(--cinema-button-toolbar-border-hover-light);
+    --cinema-button-toolbar-text: var(--cinema-button-toolbar-text-light);
+    --cinema-button-toolbar-text-hover: var(--cinema-button-toolbar-text-hover-light);
+    --cinema-button-toolbar-disabled-surface: var(--cinema-button-toolbar-disabled-surface-light);
+    --cinema-button-toolbar-disabled-border: var(--cinema-button-toolbar-disabled-border-light);
+    --cinema-button-toolbar-disabled-text: var(--cinema-button-toolbar-disabled-text-light);
+    --cinema-edit-clip-video-surface: #b9d8f4;
+    --cinema-edit-clip-audio-surface: #b9ddc8;
+    --cinema-edit-clip-image-surface: #d7c9e8;
+    --cinema-edit-clip-text-surface: #e4c8d4;
   }
 }
 
@@ -403,7 +555,8 @@ button {
 }
 
 .cinema-workbench-panel > .cinema-empty-state,
-.cinema-workbench-panel > .cinema-workspace {
+.cinema-workbench-panel > .cinema-workspace,
+.cinema-workbench-panel > .cinema-edit-workbench {
   width: 100%;
   height: 100%;
 }

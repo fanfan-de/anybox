@@ -17,7 +17,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   webServer: usesExternalProject ? undefined : {
-    command: "pnpm --filter anybox-cinema-web build && pnpm --filter anyboxagent exec bun Test/fixtures/cinema-e2e-server.ts",
+    command: "corepack pnpm@10.28.0 --filter anybox-cinema-web build && corepack pnpm@10.28.0 --filter anyboxagent exec bun Test/fixtures/cinema-e2e-server.ts",
     url: `http://127.0.0.1:${managedAgentPort}/healthz`,
     timeout: 120_000,
     reuseExistingServer: false,
