@@ -22,6 +22,9 @@ const OPENAI_PROVIDER_ID = "openai"
 const DEEPSEEK_PROVIDER_ID = "deepseek"
 const ANYBOX_PROVIDER_ID = "anybox"
 const OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
+const OPENAI_CODEX_MODELS_TIMEOUT_MS = 5_000
+const OPENAI_CODEX_CLIENT_VERSION =
+  firstNonEmptyString(process.env["ANYBOX_OPENAI_CODEX_CLIENT_VERSION"]) ?? "0.133.0"
 const ANYBOX_SDK_TYPE_TO_NPM: Record<string, string> = {
   anthropic: "@ai-sdk/anthropic",
   deepseek: DEEPSEEK_SDK_PACKAGE,
@@ -316,6 +319,7 @@ type ProviderRuntimeDependencies = {
   getModelsDev: typeof ModelsDev.get
   getConfig: typeof Config.get
   getEnvAll: typeof Env.all
+  fetch: typeof fetch
   importPackage: (pkg: string, version?: string, importSpecifier?: string) => Promise<{
     module: Record<string, unknown>
     version?: string
@@ -326,6 +330,7 @@ const defaultProviderRuntimeDependencies: ProviderRuntimeDependencies = {
   getModelsDev: ModelsDev.get,
   getConfig: Config.get,
   getEnvAll: Env.all,
+  fetch,
   importPackage: BunProc.importPackage,
 }
 let providerRuntimeDependencies = defaultProviderRuntimeDependencies
@@ -762,6 +767,137 @@ function openAICodexModels() {
       family: "gpt-5-codex",
     }),
   } satisfies Record<string, Model>
+}
+
+const OpenAICodexModelInfo = z.object({
+  slug: z.string().min(1),
+  display_name: z.string().optional(),
+  description: z.string().optional().nullable(),
+  default_reasoning_level: z.string().optional().nullable(),
+  supported_reasoning_levels: z
+    .array(
+      z.object({
+        effort: z.string(),
+        description: z.string().optional(),
+      }),
+    )
+    .default([]),
+  visibility: z.string().default("list"),
+  priority: z.number().default(Number.MAX_SAFE_INTEGER),
+  context_window: z.number().int().positive().optional().nullable(),
+  max_context_window: z.number().int().positive().optional().nullable(),
+  input_modalities: z.array(z.string()).default(["text", "image"]),
+})
+type OpenAICodexModelInfo = z.infer<typeof OpenAICodexModelInfo>
+
+function openAIModelFamily(modelID: string) {
+  const normalized = modelID.trim().toLowerCase()
+  if (normalized.includes("codex")) return normalized.startsWith("gpt-5") ? "gpt-5-codex" : "codex"
+  const generation = normalized.match(/^gpt-(\d+)/)?.[1]
+  return generation ? `gpt-${generation}` : normalized
+}
+
+export function openAICodexModelFromCatalog(item: OpenAICodexModelInfo): Model {
+  const inputModalities = new Set(item.input_modalities.map((modality) => modality.toLowerCase()))
+  const supportsImages = inputModalities.has("image")
+  const supportsPdf = inputModalities.has("pdf") || supportsImages
+  const reasoningEfforts = item.supported_reasoning_levels.map((preset) => preset.effort)
+  const supportsReasoning =
+    reasoningEfforts.some((effort) => effort !== "none") ||
+    Boolean(item.default_reasoning_level && item.default_reasoning_level !== "none")
+
+  return {
+    id: item.slug,
+    providerID: OPENAI_PROVIDER_ID,
+    api: {
+      id: item.slug,
+      url: OPENAI_CODEX_BASE_URL,
+      npm: OPENAI_SDK_PACKAGE,
+    },
+    name: firstNonEmptyString(item.display_name, item.slug) ?? item.slug,
+    family: openAIModelFamily(item.slug),
+    capabilities: {
+      temperature: true,
+      reasoning: supportsReasoning,
+      replayAssistantReasoning: true,
+      attachment: supportsImages || supportsPdf,
+      toolcall: true,
+      input: {
+        text: inputModalities.has("text"),
+        audio: inputModalities.has("audio"),
+        image: supportsImages,
+        video: inputModalities.has("video"),
+        pdf: supportsPdf,
+      },
+      output: {
+        text: true,
+        audio: false,
+        image: false,
+        video: false,
+        pdf: false,
+      },
+      interleaved: false,
+    },
+    cost: {
+      input: 0,
+      output: 0,
+      cache: {
+        read: 0,
+        write: 0,
+      },
+    },
+    limit: {
+      context: item.context_window ?? item.max_context_window ?? 200_000,
+      output: 32_768,
+    },
+    status: "active",
+    options: {
+      description: item.description ?? undefined,
+      defaultReasoningEffort: item.default_reasoning_level ?? undefined,
+      supportedReasoningEfforts: reasoningEfforts,
+      priority: item.priority,
+    },
+    headers: {},
+    release_date: "2026-01-01",
+    variants: {},
+  }
+}
+
+export async function fetchOpenAICodexModels(runtimeAuth: ProviderAuth.ProviderRuntimeAuth) {
+  if (!runtimeAuth.apiKey) throw new Error("OpenAI Codex model discovery requires an access token")
+
+  const baseURL = runtimeAuth.runtimeBaseURL ?? OPENAI_CODEX_BASE_URL
+  const modelsURL = new URL("models", normalizeBaseURL(baseURL))
+  modelsURL.searchParams.set("client_version", OPENAI_CODEX_CLIENT_VERSION)
+
+  const response = await providerRuntimeDependencies.fetch(modelsURL, {
+    method: "GET",
+    headers: {
+      accept: "application/json",
+      ...runtimeAuth.runtimeHeaders,
+      authorization: `Bearer ${runtimeAuth.apiKey}`,
+    },
+    signal: AbortSignal.timeout(OPENAI_CODEX_MODELS_TIMEOUT_MS),
+  })
+
+  if (!response.ok) {
+    throw new Error(`OpenAI Codex model discovery failed with HTTP ${response.status}`)
+  }
+
+  const payload = z.object({ models: z.array(z.unknown()) }).parse(await response.json())
+  const models = payload.models
+    .map((item) => OpenAICodexModelInfo.safeParse(item))
+    .filter((result): result is z.ZodSafeParseSuccess<OpenAICodexModelInfo> => result.success)
+    .map((result) => result.data)
+    .filter((item) => item.visibility === "list")
+    .sort((left, right) => left.priority - right.priority)
+    .map(openAICodexModelFromCatalog)
+
+  if (models.length === 0) {
+    throw new Error("OpenAI Codex model discovery returned no visible models")
+  }
+
+  return Object.fromEntries(models.map((model) => [model.id, model]))
 }
 
 // -----------------------------------------------------------------------------
@@ -1297,7 +1433,16 @@ async function applyProviderConfig(
   provider.authCapabilities = runtimeAuth.authCapabilities
   provider.authState = runtimeAuth.authState
 
-  let baseModels = runtimeAuth.authMode === "codex" && providerID === OPENAI_PROVIDER_ID ? openAICodexModels() : provider.models
+  let baseModels = provider.models
+  if (runtimeAuth.authMode === "codex" && providerID === OPENAI_PROVIDER_ID) {
+    baseModels = await fetchOpenAICodexModels(runtimeAuth).catch((error) => {
+      log.warn("openai-codex-model-list-failed", {
+        providerID,
+        message: error instanceof Error ? error.message : String(error),
+      })
+      return openAICodexModels()
+    })
+  }
   if (providerID === ANYBOX_PROVIDER_ID && runtimeAuth.apiKey) {
     baseModels = await fetchAnyboxModels(effectiveBaseURL, runtimeAuth.apiKey).catch((error) => {
       if (error instanceof AnyboxModelCatalogError) {

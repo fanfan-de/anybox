@@ -69,17 +69,31 @@ function sanitizedBuilderArgs(args) {
 }
 
 try {
-  const builderArgs = sanitizedBuilderArgs(process.argv.slice(2))
+  const rawArgs = process.argv.slice(2)
+  const betaBuild = rawArgs[0] === "--beta"
+  const builderArgs = sanitizedBuilderArgs(betaBuild ? rawArgs.slice(1) : rawArgs)
+  if (betaBuild && (
+    !process.env.ANYBOX_FFMPEG_BINARY
+    || !process.env.ANYBOX_FFPROBE_BINARY
+    || !process.env.ANYBOX_MEDIA_RUNTIME_MATERIALS_DIR
+  )) {
+    throw new Error(
+      "Deliver Beta requires FFmpeg, FFprobe, and ANYBOX_MEDIA_RUNTIME_MATERIALS_DIR from the platform runtime build.",
+    )
+  }
   const previewEnv = {
     ...process.env,
     VITE_CINEMA_DELIVER_DEV: "1",
     ANYBOX_DELIVER_PREVIEW_BUILD: "1",
+    ...(betaBuild ? { ANYBOX_DELIVER_BETA_BUILD: "1", ANYBOX_REQUIRE_MEDIA_RUNTIME: "1" } : {}),
   }
-  delete previewEnv.ANYBOX_REQUIRE_MEDIA_RUNTIME
+  if (!betaBuild) delete previewEnv.ANYBOX_REQUIRE_MEDIA_RUNTIME
   delete previewEnv.ANYBOX_MEDIA_RUNTIME_STRICT
 
   console.warn(
-    "[desktop][deliver-preview] NON-RELEASE technical preview; Deliver dev gate enabled; publishing is disabled.",
+    betaBuild
+      ? "[desktop][deliver-beta] NON-RELEASE Beta with bundled media runtime; publishing is disabled."
+      : "[desktop][deliver-preview] NON-RELEASE technical preview; Deliver dev gate enabled; publishing is disabled.",
   )
   run(corepackCommand, ["pnpm", "run", "build"], previewEnv)
   run(corepackCommand, ["pnpm", "run", "verify:agent-runtime"], previewEnv)
@@ -87,8 +101,8 @@ try {
   run(process.execPath, [
     electronBuilderCLI,
     ...builderArgs,
-    "--config.directories.output=dist/deliver-preview",
-    "--config.artifactName=Anybox-Deliver-Preview-${version}-${os}-${arch}.${ext}",
+    `--config.directories.output=dist/${betaBuild ? "deliver-beta" : "deliver-preview"}`,
+    `--config.artifactName=Anybox-Deliver-${betaBuild ? "Beta" : "Preview"}-\${version}-\${os}-\${arch}.\${ext}`,
     "--config.forceCodeSigning=false",
     "--config.mac.notarize=false",
     "--config.win.signAndEditExecutable=false",

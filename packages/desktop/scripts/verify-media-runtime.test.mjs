@@ -87,6 +87,14 @@ test("media preparation resolves locked targets through explicit preparers", () 
   assert.equal(darwin.reason, "artifact-pending")
   assert.equal(darwin.target, lock.platforms.darwin.targets.arm64)
 
+  const windowsBeta = resolveMediaToolsPreparation(lock, "win32", "x64", { externalTools: true })
+  assert.equal(windowsBeta.status, "ready")
+  assert.equal(windowsBeta.preparerID, "external-beta-win32-x64")
+
+  const darwinBeta = resolveMediaToolsPreparation(lock, "darwin", "arm64", { externalTools: true })
+  assert.equal(darwinBeta.status, "ready")
+  assert.equal(darwinBeta.preparerID, "external-beta-darwin-arm64")
+
   const linux = resolveMediaToolsPreparation(lock, "linux", "x64")
   assert.deepEqual(linux, {
     status: "skipped",
@@ -279,6 +287,7 @@ test("package commands keep preview verification separate and gate packaged rele
   const packageJson = JSON.parse(fs.readFileSync(path.resolve(scriptDir, "..", "package.json"), "utf8"))
   assert.equal(packageJson.scripts["verify:agent-runtime"], "node ./scripts/verify-agent-runtime.mjs")
   assert.match(packageJson.scripts["verify:agent-runtime:release"], /--release-strict/)
+  assert.match(packageJson.scripts["dist:deliver-beta"], /--beta/)
   for (const command of ["dist", "dist:publish", "dist:dir"]) {
     assert.match(packageJson.scripts[command], /verify:agent-runtime:release/)
   }

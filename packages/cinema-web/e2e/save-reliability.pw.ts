@@ -33,7 +33,7 @@ async function openManagedProject(page: Page, request: APIRequestContext) {
 async function editStoryBrief(page: Page, value: string) {
   const textNode = page.locator('.react-flow__node-cinemaNode[data-id="story-brief"]')
   await textNode.click()
-  await textNode.getByRole("button", { name: "编辑文本" }).click()
+  await textNode.getByRole("button", { name: /编辑文本|Edit text/ }).click()
   const editor = textNode.locator("textarea.cinema-text-card-editor")
   await editor.fill(value)
   return editor
@@ -42,7 +42,7 @@ async function editStoryBrief(page: Page, value: string) {
 async function startTextGeneration(page: Page, nodeID: string, prompt: string) {
   const textNode = page.locator(`.react-flow__node-cinemaNode[data-id="${nodeID}"]`)
   await textNode.click()
-  await textNode.getByRole("button", { name: "生成文本" }).click()
+  await textNode.getByRole("button", { name: /生成文本|Generate text/ }).click()
   await page.locator("textarea.cinema-text-card-generator-input").fill(prompt)
   await page.locator("button.cinema-text-card-submit").click()
   return textNode
@@ -186,5 +186,93 @@ test.describe("Cinema save reliability", () => {
     await expect(page.getByRole("alert")).toContainText("First provider failed")
     await secondBrief.click()
     await expect(page.getByRole("alert")).toContainText("Second provider failed")
+  })
+
+  test("keeps the text generation prompt focused while autosave snapshots return", async ({ page, request }) => {
+    const model = {
+      value: "e2e/mock-text",
+      providerID: "e2e",
+      modelID: "mock-text",
+      label: "E2E Mock Text",
+      providerLabel: "E2E",
+      available: true,
+      supportsImageInput: false,
+    }
+    await page.route(/\/api\/cinema\/projects\/[^/]+\/text-models$/, (route) => route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        data: { items: [model], selection: { model: model.value }, effectiveModel: model },
+      }),
+    }))
+    await page.route(/\/api\/cinema\/projects\/[^/]+\/commands$/, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 450))
+      await route.continue()
+    })
+
+    await openManagedProject(page, request)
+    const textNode = page.locator('.react-flow__node-cinemaNode[data-id="story-brief"]')
+    await textNode.click()
+    await textNode.getByRole("button", { name: /生成文本|Generate text/ }).click()
+    const prompt = page.locator("textarea.cinema-text-card-generator-input")
+    await prompt.fill("描述一望无际的草原")
+    await expect(page.locator(".cinema-save-status")).toHaveClass(/is-saving/)
+    await expect(prompt).toBeFocused()
+    await prompt.press("End")
+    await prompt.type("，远处有缓慢移动的云影")
+    await expect(prompt).toHaveValue("描述一望无际的草原，远处有缓慢移动的云影")
+    await expect(page.locator(".cinema-save-status")).toContainText("已保存")
+    await expect(prompt).toBeFocused()
+    await expect(prompt).toHaveValue("描述一望无际的草原，远处有缓慢移动的云影")
+  })
+
+  test("replaces generated text and restores the previous draft from the undo toast", async ({ page, request }) => {
+    const model = {
+      value: "e2e/mock-text",
+      providerID: "e2e",
+      modelID: "mock-text",
+      label: "E2E Mock Text",
+      providerLabel: "E2E",
+      available: true,
+      supportsImageInput: false,
+    }
+    await page.route(/\/api\/cinema\/projects\/[^/]+\/text-models$/, (route) => route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        data: { items: [model], selection: { model: model.value }, effectiveModel: model },
+      }),
+    }))
+    await page.route(/\/api\/cinema\/projects\/[^/]+\/text-generations$/, async (route) => {
+      const body = route.request().postDataJSON() as { nodeID: string }
+      const canvasResponse = await request.get(route.request().url().replace(/\/text-generations$/, "/canvas"))
+      const canvasEnvelope = await canvasResponse.json() as { data: { nodes: Array<{ id: string; data?: Record<string, unknown> }> } }
+      const generatedText = "Generated replacement."
+      const canvas = {
+        ...canvasEnvelope.data,
+        nodes: canvasEnvelope.data.nodes.map((node) => node.id === body.nodeID
+          ? { ...node, data: { ...node.data, text: `A test story brief.\n\n${generatedText}`, generationPrompt: "" } }
+          : node),
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: { canvas, nodeID: body.nodeID, text: `A test story brief.\n\n${generatedText}`, generatedText, model: model.value },
+        }),
+      })
+    })
+
+    await openManagedProject(page, request)
+    const storyBrief = await startTextGeneration(page, "story-brief", "Replace the brief.")
+    await expect(storyBrief.locator(".cinema-text-card-preview-text")).toHaveText("Generated replacement.")
+    const undo = page.getByRole("button", { name: /Undo|撤销/ })
+    await expect(undo).toBeVisible()
+    await undo.click()
+    await expect(storyBrief.locator(".cinema-text-card-preview-text")).toHaveText("A test story brief.")
+    await expect(page.locator(".cinema-save-status")).toContainText("已保存")
   })
 })

@@ -83,6 +83,7 @@ import {
 } from "./ThreadRowRenderer"
 import { ThreadRows } from "./ThreadRows"
 import { ThreadTurnNavigator } from "./ThreadTurnNavigator"
+import { CompletedThreadMarkdown } from "./CompletedThreadMarkdown"
 import { SizeAwareStreamingMarkdown } from "./SizeAwareStreamingMarkdown"
 import {
   createThreadInteractionStore,
@@ -272,6 +273,15 @@ function useThreadInteractionEntry(rowID: string) {
   const entry = useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot)
 
   return { entry, scopeID, store }
+}
+
+function useThreadInteractionScopeID() {
+  const context = useContext(ThreadInteractionContext)
+  if (!context) {
+    throw new Error("Thread interaction scope is unavailable outside ThreadView.")
+  }
+
+  return context.scopeID
 }
 
 const IMAGE_LIGHTBOX_BODY_CLASS = "is-image-lightbox-open"
@@ -2584,11 +2594,13 @@ function TraceItemHeader({
 
 function CompletedResponseText({
   className,
+  documentID,
   onArtifactLinkOpen,
   onLocalFileLinkOpen,
   text,
 }: {
   className: string
+  documentID: string
   onArtifactLinkOpen?: (target: MarkdownArtifactLinkTarget) => void
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
   text: string
@@ -2607,8 +2619,9 @@ function CompletedResponseText({
   }
 
   return (
-    <ThreadMarkdown
+    <CompletedThreadMarkdown
       className={joinClassNames(className, "thread-markdown")}
+      documentID={documentID}
       text={response.text}
       onArtifactLinkOpen={onArtifactLinkOpen}
       onLocalFileLinkOpen={onLocalFileLinkOpen}
@@ -2655,12 +2668,14 @@ function StreamingResponseText({
 
 function ResponseText({
   className,
+  documentID,
   isStreaming,
   onArtifactLinkOpen,
   onLocalFileLinkOpen,
   text,
 }: {
   className: string
+  documentID: string
   isStreaming?: boolean
   onArtifactLinkOpen?: (target: MarkdownArtifactLinkTarget) => void
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
@@ -2680,6 +2695,7 @@ function ResponseText({
   return (
     <CompletedResponseText
       className={className}
+      documentID={documentID}
       text={text}
       onArtifactLinkOpen={onArtifactLinkOpen}
       onLocalFileLinkOpen={onLocalFileLinkOpen}
@@ -2688,22 +2704,27 @@ function ResponseText({
 }
 
 function TraceItemTextBody({
+  interactionRowID,
   isResponseItem,
   item,
   onArtifactLinkOpen,
   onLocalFileLinkOpen,
 }: {
+  interactionRowID: string
   isResponseItem: boolean
   item: AssistantTraceItem
   onArtifactLinkOpen?: (target: MarkdownArtifactLinkTarget) => void
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
 }) {
+  const interactionScopeID = useThreadInteractionScopeID()
+
   return (
     <>
       {item.text ? (
         isResponseItem ? (
           <ResponseText
             className="trace-item-text"
+            documentID={`${interactionScopeID}\u0000${interactionRowID}\u0000${item.id}\u0000text`}
             text={item.text}
             isStreaming={item.isStreaming}
             onArtifactLinkOpen={onArtifactLinkOpen}
@@ -2720,6 +2741,7 @@ function TraceItemTextBody({
         isResponseItem ? (
           <ResponseText
             className="trace-item-detail"
+            documentID={`${interactionScopeID}\u0000${interactionRowID}\u0000${item.id}\u0000detail`}
             text={item.detail}
             isStreaming={item.isStreaming}
             onArtifactLinkOpen={onArtifactLinkOpen}
@@ -3332,6 +3354,7 @@ const PatchFileChangeSummaryButton = memo(function PatchFileChangeSummaryButton(
 function GenericTraceItemView({
   className,
   debugEntries,
+  interactionRowID,
   isResponseItem,
   item,
   onFileChangeSelect,
@@ -3341,12 +3364,14 @@ function GenericTraceItemView({
 }: TraceItemRendererProps & {
   showFileActions?: boolean
 }) {
+  const resolvedInteractionRowID = interactionRowID ?? item.id
   const selectableFilePaths = showFileActions ? item.filePaths?.filter(Boolean) ?? [] : []
 
   return (
     <article className={className} data-kind={item.kind} data-trace-item-id={item.id}>
       <TraceItemHeader item={item} />
       <TraceItemTextBody
+        interactionRowID={resolvedInteractionRowID}
         item={item}
         isResponseItem={isResponseItem}
         onArtifactLinkOpen={onArtifactLinkOpen}

@@ -72,7 +72,7 @@
     "docs": "typedoc",
     "eval": "bun run src/eval/cli.ts",
     "test:bun": "bun test Test/bun.runtime.test.ts",
-    "test:provider": "bun test Test/provider.openai-compatible.test.ts && bun test Test/provider.deepseek-runtime-adapter.test.ts && bun test Test/provider.openrouter-provider.test.ts && bun test Test/provider.modelsdev-sdk-adapter.test.ts && bun test Test/provider.anybox-provider.test.ts && bun test Test/bun.runtime.test.ts",
+    "test:provider": "bun test Test/provider.openai-compatible.test.ts && bun test Test/provider.openai-codex-models.test.ts && bun test Test/provider.deepseek-runtime-adapter.test.ts && bun test Test/provider.openrouter-provider.test.ts && bun test Test/provider.modelsdev-sdk-adapter.test.ts && bun test Test/provider.anybox-provider.test.ts && bun test Test/bun.runtime.test.ts",
     "test:prompt": "bun test Test/prompt.e2e.test.ts",
     "test:server": "bun Test/run-server-tests.ts",
     "test:server-prompt-e2e": "bun test Test/server.prompt.e2e.test.ts",

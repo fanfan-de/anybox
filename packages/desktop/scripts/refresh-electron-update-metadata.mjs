@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto"
+import { spawnSync } from "node:child_process"
+import { createRequire } from "node:module"
 import fs from "node:fs"
 import fsp from "node:fs/promises"
 import path from "node:path"
+
+const localRequire = createRequire(import.meta.url)
+const electronBuilderRequire = createRequire(localRequire.resolve("electron-builder/package.json"))
+const { appBuilderPath } = electronBuilderRequire("app-builder-bin")
 
 const [metadataArgument, payloadArgument] = process.argv.slice(2)
 if (!metadataArgument || !payloadArgument) {
@@ -10,6 +16,22 @@ if (!metadataArgument || !payloadArgument) {
 const metadataPath = path.resolve(metadataArgument)
 const payloadPath = path.resolve(payloadArgument)
 const payloadName = path.basename(payloadPath)
+const blockmapPath = `${payloadPath}.blockmap`
+const blockmap = spawnSync(appBuilderPath, [
+  "blockmap",
+  "--input",
+  payloadPath,
+  "--output",
+  blockmapPath,
+], { encoding: "utf8" })
+if (blockmap.error) throw blockmap.error
+if (blockmap.status !== 0) {
+  throw new Error(`Could not rebuild ${path.basename(blockmapPath)}: ${blockmap.stderr.trim() || blockmap.stdout.trim()}`)
+}
+const blockmapStat = await fsp.stat(blockmapPath)
+if (!blockmapStat.isFile() || blockmapStat.size === 0) {
+  throw new Error(`Rebuilt ${path.basename(blockmapPath)} is empty`)
+}
 const stat = await fsp.stat(payloadPath)
 const hash = createHash("sha512")
 for await (const chunk of fs.createReadStream(payloadPath)) hash.update(chunk)
@@ -37,4 +59,4 @@ for (let index = urlIndex + 1; index < lines.length; index += 1) {
 }
 if (!shaUpdated || !sizeUpdated) throw new Error(`${path.basename(metadataPath)} has no complete ${payloadName} hash/size entry`)
 await fsp.writeFile(metadataPath, `${lines.join("\n").replace(/\n+$/, "")}\n`)
-console.log(`[desktop][release] refreshed ${payloadName} updater metadata after notarization stapling`)
+console.log(`[desktop][release] rebuilt ${path.basename(blockmapPath)} and refreshed ${payloadName} updater metadata after notarization stapling`)

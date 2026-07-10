@@ -141,12 +141,20 @@ async function verifyExecutable(binary, expectedName) {
   return output.split(/\r?\n/, 1)[0]?.trim() || expectedName
 }
 
-async function copyExternalTools(ffmpeg, ffprobe, targetDir, executableNames) {
+async function copyExternalTools(ffmpeg, ffprobe, targetDir, executableNames, materialsDir) {
   if (!(await exists(ffmpeg)) || !(await exists(ffprobe))) {
     throw new Error("ANYBOX_FFMPEG_BINARY and ANYBOX_FFPROBE_BINARY must point to existing files")
   }
   await fsp.copyFile(ffmpeg, path.join(targetDir, executableNames.ffmpeg))
   await fsp.copyFile(ffprobe, path.join(targetDir, executableNames.ffprobe))
+  if (materialsDir) {
+    for (const name of ["LICENSE.txt", "THIRD-PARTY-NOTICES.txt", "configure.txt", "SOURCE.txt", "BUILD-RECIPE.sh"]) {
+      const source = path.join(materialsDir, name)
+      if (!(await exists(source))) throw new Error(`Deliver Beta media materials are missing ${name}`)
+      await fsp.copyFile(source, path.join(targetDir, name))
+    }
+    return
+  }
   await fsp.writeFile(
     path.join(targetDir, "LICENSE.txt"),
     "Externally supplied FFmpeg build. The release pipeline must provide its matching license and notices.\n",
@@ -168,7 +176,7 @@ const MEDIA_TOOL_PREPARERS = new Map([
   }],
 ])
 
-export function resolveMediaToolsPreparation(lock, platform, arch) {
+export function resolveMediaToolsPreparation(lock, platform, arch, { externalTools = false } = {}) {
   const platformEntry = lock?.platforms?.[platform]
   if (!platformEntry) {
     return {
@@ -193,7 +201,7 @@ export function resolveMediaToolsPreparation(lock, platform, arch) {
       message: `[desktop][media] skipping bundled media tools for unconfigured target ${platform}/${arch}: the supported platform has no matching lock target`,
     }
   }
-  if (!lockedTarget.distribution) {
+  if (!lockedTarget.distribution && !externalTools) {
     return {
       status: "skipped",
       reason: "artifact-pending",
@@ -214,7 +222,7 @@ export function resolveMediaToolsPreparation(lock, platform, arch) {
 
   return {
     status: "ready",
-    preparerID: preparer.id,
+    preparerID: externalTools ? `external-beta-${platform}-${arch}` : preparer.id,
     prepare: preparer.prepare,
     target: lockedTarget,
   }
@@ -231,6 +239,7 @@ async function prepareLockedArchiveMediaTools({ runtimeDir, lockedTarget, platfo
 
   const externalFFmpeg = readEnv("ANYBOX_FFMPEG_BINARY")
   const externalFFprobe = readEnv("ANYBOX_FFPROBE_BINARY")
+  const externalMaterialsDir = readEnv("ANYBOX_MEDIA_RUNTIME_MATERIALS_DIR")
   if (Boolean(externalFFmpeg) !== Boolean(externalFFprobe)) {
     throw new Error("Set both ANYBOX_FFMPEG_BINARY and ANYBOX_FFPROBE_BINARY, or neither")
   }
@@ -239,14 +248,22 @@ async function prepareLockedArchiveMediaTools({ runtimeDir, lockedTarget, platfo
   let materials = { license: "archive", notices: "archive", configure: "archive", sourceMetadata: "archive", buildRecipe: "archive" }
   if (externalFFmpeg && externalFFprobe) {
     origin = "environment-override"
-    materials = {
-      license: "generated-technical-preview",
-      notices: "generated-technical-preview",
-      configure: "runtime",
-      sourceMetadata: "missing-technical-preview",
-      buildRecipe: "missing-technical-preview",
-    }
-    await copyExternalTools(externalFFmpeg, externalFFprobe, targetDir, executableNames)
+    materials = externalMaterialsDir
+      ? {
+          license: "build-supplied-beta",
+          notices: "build-supplied-beta",
+          configure: "build-supplied-beta",
+          sourceMetadata: "build-supplied-beta",
+          buildRecipe: "build-supplied-beta",
+        }
+      : {
+          license: "generated-technical-preview",
+          notices: "generated-technical-preview",
+          configure: "runtime",
+          sourceMetadata: "missing-technical-preview",
+          buildRecipe: "missing-technical-preview",
+        }
+    await copyExternalTools(externalFFmpeg, externalFFprobe, targetDir, executableNames, externalMaterialsDir)
   } else {
     const archive = path.join(cacheDir, lockedTarget.distribution.fileName)
     const extractionDir = path.join(cacheDir, lockedTarget.distribution.sha256)
@@ -276,13 +293,16 @@ async function prepareLockedArchiveMediaTools({ runtimeDir, lockedTarget, platfo
     [executableNames.ffmpeg]: { sha256: await sha256(ffmpegPath) },
     [executableNames.ffprobe]: { sha256: await sha256(ffprobePath) },
   }
+  const runtimeID = externalFFmpeg
+    ? `${lockedTarget.runtimeID.replace(/-candidate-pending$/, "")}-beta-${binaries[executableNames.ffmpeg].sha256.slice(0, 12)}`
+    : lockedTarget.runtimeID
   await fsp.writeFile(
     path.join(targetDir, "manifest.json"),
     `${JSON.stringify({
       schemaVersion: 1,
       platform,
       arch,
-      runtimeID: lockedTarget.runtimeID,
+      runtimeID,
       origin,
       releaseReadiness: lockedTarget.releaseReadiness,
       licensePolicy: lockedTarget.licensePolicy,
@@ -297,16 +317,20 @@ async function prepareLockedArchiveMediaTools({ runtimeDir, lockedTarget, platfo
   )
   const noticesPath = path.join(targetDir, lockedTarget.licensePolicy.noticesFile)
   if (!(await exists(noticesPath))) {
+    const sourceRevision = lockedTarget.distribution?.ffmpegRevision ?? ffmpegVersion
+    const distributionReference = lockedTarget.distribution?.url ?? "Build-supplied FFmpeg/ffprobe pair"
+    const buildSourceReference = lockedTarget.distribution?.buildSourceURL ?? "packages/desktop/scripts/build-media-runtime.sh"
+    const sourceReference = lockedTarget.distribution?.sourceURL ?? "See the matching Beta build artifact source archive"
     await fsp.writeFile(
       noticesPath,
       [
         "FFmpeg media tools — technical preview notice",
         "",
-        `Runtime ID: ${lockedTarget.runtimeID}`,
-        `Build: ${lockedTarget.distribution.ffmpegRevision}`,
-        `Binary distribution: ${lockedTarget.distribution.url}`,
-        `Build scripts: ${lockedTarget.distribution.buildSourceURL}`,
-        `Corresponding FFmpeg source revision: ${lockedTarget.distribution.sourceURL}`,
+        `Runtime ID: ${runtimeID}`,
+        `Build: ${sourceRevision}`,
+        `Binary distribution: ${distributionReference}`,
+        `Build scripts: ${buildSourceReference}`,
+        `Corresponding FFmpeg source revision: ${sourceReference}`,
         `License: ${lockedTarget.licensePolicy.spdxExpression}; see ${lockedTarget.licensePolicy.licenseFile} in this directory.`,
         "This generated notice is acceptable only for technical preview. Release-strict requires archive-supplied reviewed notices.",
         "",
@@ -329,7 +353,14 @@ export async function prepareMediaTools({
   arch = process.arch,
 } = {}) {
   const runtimeLock = JSON.parse(await fsp.readFile(lockPath, "utf8"))
-  const resolution = resolveMediaToolsPreparation(runtimeLock, platform, arch)
+  const externalFFmpeg = readEnv("ANYBOX_FFMPEG_BINARY")
+  const externalFFprobe = readEnv("ANYBOX_FFPROBE_BINARY")
+  if (Boolean(externalFFmpeg) !== Boolean(externalFFprobe)) {
+    throw new Error("Set both ANYBOX_FFMPEG_BINARY and ANYBOX_FFPROBE_BINARY, or neither")
+  }
+  const resolution = resolveMediaToolsPreparation(runtimeLock, platform, arch, {
+    externalTools: Boolean(externalFFmpeg && externalFFprobe),
+  })
   if (resolution.status !== "ready") {
     await fsp.rm(path.join(runtimeDir, "media-tools"), { recursive: true, force: true })
     console.log(resolution.message)

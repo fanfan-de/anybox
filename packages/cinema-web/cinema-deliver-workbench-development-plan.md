@@ -912,6 +912,8 @@ D5 发布加固推进记录：
 33. [x] `D5-12`：Agent 通过内部 `ANYBOX_CINEMA_TIMELINE_DELIVERY` 返回 capability；打包后的 Desktop 只在当前 win32/x64 或 darwin/arm64 manifest 同时为 release/license approved 时注入该开关，其他平台 fail closed。
 34. [x] `D5-13`：新增双平台 signed candidate、完整制品清单、release evidence/approval matrix 与同步发布工作流。门禁要求同一桌面版本、commit 和 FFmpeg revision，两端均为 initial runtime，各自 encoder/runtimeID 与 approved lock 一致，所有安装/更新文件均受 SHA-256 manifest 约束，并在平台 runner 上绑定 Anybox Authenticode 证书与 Apple Team ID，验证 Gatekeeper/DMG notarization stapling；许可证、产品、安全和 rollback 记录缺一不可。Internal RC 使用独立 prerelease tag；公开发布同时更新 COS 下载清单、Windows generic updater feed 和 GitHub 双平台 Release。
 35. [ ] `D5-14`：生成并镜像两个真实候选，完成 Windows Client `h264_mf` 与 Apple Silicon `h264_videotoolbox` 安装包 smoke、签名/公证、kill/restart 证据及许可证/产品/安全审批。
+36. [x] `D5-15`：新增 Windows x64 与 Apple Silicon macOS 的非发布 Deliver Beta 通道。两个原生 runner 分别构建并 smoke 固定 FFmpeg revision，将二进制、许可证、notice、configure、源码元数据和构建配方一并装入 Beta 安装包；Beta runtime 使用二进制摘要身份、只允许 bundled strict discovery，界面明确显示 `Deliver Beta`，且工作流不签名、不公证、不写正式更新源。D5-14 仍只约束正式公开发布，不再阻止内部 Beta 使用。
+37. [x] `D5-16`：Deliver Beta 入口默认开放，不再因正式 `timelineDelivery` capability 尚未批准而显示 `Soon`；进入工作台后仍以 runtime query 和 preflight fail closed。`VITE_CINEMA_DELIVER_BETA=0` 保留为紧急隐藏入口的构建级 kill switch。
 
 ## 23. Deliver V1 之后
 

@@ -342,15 +342,21 @@ Cinema Web 的 UI 标准：
 
 标准：
 
-- 文本编辑区是主要内容，生成器是辅助区域。
-- 悬浮 toolbar 允许使用 pill 形态，但按钮尺寸必须稳定。
+- Text 节点同时承载手写与 AI 生成，但节点本体始终以正文阅读为主；单击选择，双击正文或按 Enter 进入编辑。
+- 节点宽度固定为 360px，高度按正文从 4 行增长到最多 12 行，超出后正文内部滚动；动态高度不写回 Canvas schema。
+- header 只保留编辑、生成、更多三个 icon-only 操作；复制、下载、重命名和删除放入可键盘导航的更多菜单。
+- 空节点显示轻量类型图标和“输入文本”提示；复制和下载在正文为空时禁用，不得复制 placeholder。
+- 生成器使用 screen-space 浮层并自动做视口钳制和上下翻转；760px 以下切换为底部抽屉。
+- 生成期间保留旧正文且禁止编辑；成功后以生成结果替换正文，并提供 8 秒的一次性恢复入口。
+- 左侧端口只接收 AI 生成用的图片参考素材；右侧文本输出允许一对多连接到兼容的图片和视频输入。
 - 输入和 textarea 保留原生编辑行为和原生右键菜单。
 - 文本生成器错误最多显示两行，长错误允许 `overflow-wrap: anywhere`。
+- Text 节点及生成器文案使用全局 i18n helper 跟随系统语言；当前资源覆盖 `zh-CN` 与 `en-US`。
 
 注意：
 
-- toolbar 上的 icon+短文字按钮只在文本节点中作为既有模式保留。新工具栏默认优先 icon-only。
-- text editor focus 需要迁移到 token 化 border/focus surface。
+- Text 节点 default、selected、focus、disabled、generating、failed、overlay 和 menu 状态只消费运行时 semantic token，light/dark 差异在 token 映射层表达。
+- 不为 Text 节点引入语义缩放；各缩放级别保持相同内容结构。
 
 ### 5.4 Image Node
 

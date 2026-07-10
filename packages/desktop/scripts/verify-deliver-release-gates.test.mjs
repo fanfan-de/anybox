@@ -123,12 +123,14 @@ test("desktop release manifest locks every published file and binds installed ev
   }
 })
 
-test("stapled DMG metadata refresh updates the matching sha512 and size", () => {
+test("stapled DMG refresh rebuilds its blockmap and updates the matching sha512 and size", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "anybox-update-metadata-test-"))
   try {
     const payload = path.join(root, "Anybox-1.2.3-arm64.dmg")
+    const blockmap = `${payload}.blockmap`
     const metadata = path.join(root, "latest-mac.yml")
     fs.writeFileSync(payload, "stapled-dmg")
+    fs.writeFileSync(blockmap, "stale-blockmap")
     fs.writeFileSync(metadata, [
       "version: 1.2.3",
       "files:",
@@ -143,6 +145,8 @@ test("stapled DMG metadata refresh updates the matching sha512 and size", () => 
       path.join(scriptDir, "refresh-electron-update-metadata.mjs"), metadata, payload,
     ], { encoding: "utf8" })
     assert.equal(result.status, 0, result.stderr)
+    assert.notEqual(fs.readFileSync(blockmap, "utf8"), "stale-blockmap")
+    assert.ok(fs.statSync(blockmap).size > 0)
     const refreshed = fs.readFileSync(metadata, "utf8")
     assert.match(refreshed, new RegExp(sha512Base64("stapled-dmg")))
     assert.match(refreshed, /size: 11/)

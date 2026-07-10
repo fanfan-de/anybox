@@ -27,7 +27,7 @@ export function DeliverTopbar({
   return (
     <header className="cinema-deliver-topbar">
       <div className="cinema-deliver-title-block">
-        <span className="cinema-deliver-eyebrow">{technicalPreview ? "Deliver technical preview" : "Deliver"}</span>
+        <span className="cinema-deliver-eyebrow">{technicalPreview ? "Deliver Beta" : "Deliver"}</span>
         <h1 title={timelineTitle ?? "No Timeline selected"}>{timelineTitle ?? "Select a Timeline"}</h1>
         <span className="cinema-deliver-status-text" role="status">{status}</span>
       </div>

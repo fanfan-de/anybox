@@ -11,6 +11,7 @@ import {
   ReactFlow,
   useInternalNode,
   useReactFlow,
+  useUpdateNodeInternals,
   useViewport,
   type Connection,
   type Edge,
@@ -18,6 +19,7 @@ import {
   type Node,
   type NodeChange,
   type NodeProps,
+  type OnConnectEnd,
   type OnSelectionChangeParams,
   type ReactFlowInstance,
 } from "@xyflow/react"
@@ -42,6 +44,7 @@ import {
   Loader2,
   MessageSquareText,
   Music,
+  MoreHorizontal,
   Pause,
   PencilLine,
   Play,
@@ -127,6 +130,10 @@ import {
   type CinemaCommandDraft,
 } from "./features/canvas/commandQueue"
 import { CanvasSaveStatus, type SaveState } from "./features/canvas/CanvasSaveStatus"
+import { validateCinemaConnection } from "./features/canvas/connectionRules"
+import { textNodeVisibleLineCount } from "./features/canvas/textNodeLayout"
+import { canRestoreGeneratedText, type TextGenerationUndoRecord } from "./features/canvas/textGenerationUndo"
+import { useI18n, type TranslationKey } from "./i18n"
 import { AssetLibraryApiError, createAssetLibraryApi } from "./features/assets/assetLibraryApi"
 import type {
   AssetLibraryAddRequest,
@@ -267,6 +274,7 @@ type CinemaFlowNodeData = {
   onSelectNode?: (nodeID: string) => void
   onNodeInputEditingChange?: (nodeID: string, isEditing: boolean) => void
   onDeleteNode?: (nodeID: string) => void
+  hasConnections?: boolean
   textModels?: CinemaTextModel[]
   effectiveTextModel?: CinemaTextModel | null
   isGeneratingText?: boolean
@@ -526,7 +534,7 @@ function nodeSize(node: CinemaCanvasNode) {
 }
 
 function flowNodeStyle(type: CinemaNodeType, size: { width: number; height: number }): CSSProperties {
-  return type === "image" || type === "local-image" || type === "video" || type === "custom-api"
+  return type === "text" || type === "image" || type === "local-image" || type === "video" || type === "custom-api"
     ? { width: size.width }
     : { width: size.width, height: size.height }
 }
@@ -2320,18 +2328,30 @@ function CinemaNodeInputOverlay({
   const measuredHeight = internalNode?.measured.height ?? internalNode?.height ?? 0
   const position = internalNode?.internals.positionAbsolute ?? { x: 0, y: 0 }
   const canRender = Boolean(selected && overlayRoot && internalNode && measuredWidth > 0 && measuredHeight > 0)
-  const left = viewport.x + (position.x + measuredWidth / 2) * viewport.zoom
-  const top = viewport.y + (position.y + measuredHeight) * viewport.zoom + NODE_INPUT_OVERLAY_GAP
 
   if (!canRender || !overlayRoot) return null
+
+  const rootWidth = overlayRoot.clientWidth
+  const rootHeight = overlayRoot.clientHeight
+  const overlayWidth = Math.min(width, Math.max(0, rootWidth - 32))
+  const rawCenter = viewport.x + (position.x + measuredWidth / 2) * viewport.zoom
+  const left = Math.min(rootWidth - 16 - overlayWidth / 2, Math.max(16 + overlayWidth / 2, rawCenter))
+  const nodeTop = viewport.y + position.y * viewport.zoom
+  const nodeBottom = viewport.y + (position.y + measuredHeight) * viewport.zoom
+  const belowTop = nodeBottom + NODE_INPUT_OVERLAY_GAP
+  const spaceBelow = rootHeight - belowTop - 16
+  const spaceAbove = nodeTop - NODE_INPUT_OVERLAY_GAP - 16
+  const placeAbove = spaceBelow < 220 && spaceAbove > spaceBelow
 
   const overlayStyle = {
     ...accentStyle,
     "--cinema-node-overlay-width": `${width}px`,
     left,
-    top,
-    maxHeight: Math.max(96, overlayRoot.clientHeight - top - 16),
-  } as CSSProperties
+    ...(placeAbove
+      ? { bottom: rootHeight - nodeTop + NODE_INPUT_OVERLAY_GAP }
+      : { top: belowTop }),
+    maxHeight: Math.max(96, placeAbove ? spaceAbove : spaceBelow),
+  } as unknown as CSSProperties
 
   return createPortal(
     <div
@@ -2361,6 +2381,7 @@ function NodeTitleInput({
   autoFocus?: boolean
   onFinishEditing?: () => void
 }) {
+  const { t } = useI18n()
   const inputRef = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState(title)
 
@@ -2385,7 +2406,7 @@ function NodeTitleInput({
     <input
       ref={inputRef}
       className="cinema-node-title-input nodrag nowheel"
-      aria-label="Node title"
+      aria-label={t("text.nodeTitle")}
       value={draft}
       spellCheck={false}
       onPointerDown={(event) => event.stopPropagation()}
@@ -2460,12 +2481,14 @@ function CinemaNodeTitle({
   nodeID,
   title,
   onChangeTitle,
+  editRequestKey = 0,
 }: {
   icon: typeof FileText
   label: string
   nodeID: string
   title: string
   onChangeTitle?: (nodeID: string, title: string) => void
+  editRequestKey?: number
 }) {
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const canEditTitle = Boolean(onChangeTitle)
@@ -2475,6 +2498,10 @@ function CinemaNodeTitle({
     if (!canEditTitle) return
     setIsEditingTitle(true)
   }
+
+  useEffect(() => {
+    if (editRequestKey > 0) startEditingTitle()
+  }, [editRequestKey])
 
   return (
     <span
@@ -2526,9 +2553,14 @@ function TextCanvasNode({
   selected?: boolean
   accentStyle: CSSProperties
 }) {
+  const { t } = useI18n()
   const active = data.isActiveNode ?? Boolean(selected)
+  const updateNodeInternals = useUpdateNodeInternals()
   const editorRef = useRef<HTMLTextAreaElement>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
   const generatorPromptRef = useRef<HTMLTextAreaElement>(null)
+  const generatorButtonRef = useRef<HTMLButtonElement>(null)
+  const moreButtonRef = useRef<HTMLButtonElement>(null)
   const sourceImageInputRef = useRef<HTMLInputElement>(null)
   const modelControlRef = useRef<HTMLDivElement>(null)
   const [isTextEditorOpen, setIsTextEditorOpen] = useState(false)
@@ -2536,20 +2568,25 @@ function TextCanvasNode({
     Boolean(readRawString(data.rawData, "generationPrompt") || data.textGenerationError)
   )
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
+  const [moreMenuPosition, setMoreMenuPosition] = useState<{ x: number; y: number } | null>(null)
+  const [titleEditRequestKey, setTitleEditRequestKey] = useState(0)
   const [sourceImageImportError, setSourceImageImportError] = useState<string | null>(null)
   const text = readRawString(data.rawData, "text")
   const generatorPrompt = readRawString(data.rawData, "generationPrompt")
-  const placeholder = readRawString(data.rawData, "placeholder", "双击编辑文本...")
+  const placeholder = t("text.placeholder")
   const [textDraft, setTextDraftState] = useState(text)
   const [generatorPromptDraft, setGeneratorPromptDraftState] = useState(generatorPrompt)
   const textDraftRef = useRef(text)
   const generatorPromptDraftRef = useRef(generatorPrompt)
   const rawDataRef = useRef(data.rawData)
   const onChangeRawDataRef = useRef(data.onChangeRawData)
+  const onNodeInputEditingChangeRef = useRef(data.onNodeInputEditingChange)
   const textCommitTimerRef = useRef<number | null>(null)
   const generatorPromptCommitTimerRef = useRef<number | null>(null)
   const isTextComposingRef = useRef(false)
   const isGeneratorPromptComposingRef = useRef(false)
+  const isTextFocusedRef = useRef(false)
+  const isGeneratorPromptFocusedRef = useRef(false)
   const textModels = data.textModels ?? []
   const selectedTextModelValue = readRawString(data.rawData, "textModel")
   const selectedTextModel =
@@ -2595,6 +2632,7 @@ function TextCanvasNode({
 
   rawDataRef.current = data.rawData
   onChangeRawDataRef.current = data.onChangeRawData
+  onNodeInputEditingChangeRef.current = data.onNodeInputEditingChange
 
   const setTextDraft = useCallback((value: string) => {
     textDraftRef.current = value
@@ -2617,6 +2655,15 @@ function TextCanvasNode({
     window.clearTimeout(generatorPromptCommitTimerRef.current)
     generatorPromptCommitTimerRef.current = null
   }, [])
+
+  const syncNodeInputEditing = useCallback(() => {
+    onNodeInputEditingChangeRef.current?.(id, (
+      isTextFocusedRef.current
+      || isGeneratorPromptFocusedRef.current
+      || isTextComposingRef.current
+      || isGeneratorPromptComposingRef.current
+    ))
+  }, [id])
 
   const commitRawDataPatch = useCallback((patch: Record<string, unknown> = {}) => {
     const previous = rawDataRef.current
@@ -2701,13 +2748,17 @@ function TextCanvasNode({
   }, [clearGeneratorPromptCommitTimer, commitRawDataPatch])
 
   useEffect(() => {
-    if (isTextComposingRef.current || textCommitTimerRef.current !== null) return
+    if (isTextFocusedRef.current || isTextComposingRef.current || textCommitTimerRef.current !== null) return
     textDraftRef.current = text
     setTextDraftState(text)
   }, [text])
 
   useEffect(() => {
-    if (isGeneratorPromptComposingRef.current || generatorPromptCommitTimerRef.current !== null) return
+    if (
+      isGeneratorPromptFocusedRef.current
+      || isGeneratorPromptComposingRef.current
+      || generatorPromptCommitTimerRef.current !== null
+    ) return
     generatorPromptDraftRef.current = generatorPrompt
     setGeneratorPromptDraftState(generatorPrompt)
   }, [generatorPrompt])
@@ -2715,7 +2766,8 @@ function TextCanvasNode({
   useEffect(() => () => {
     clearTextCommitTimer()
     clearGeneratorPromptCommitTimer()
-  }, [clearGeneratorPromptCommitTimer, clearTextCommitTimer])
+    onNodeInputEditingChangeRef.current?.(id, false)
+  }, [clearGeneratorPromptCommitTimer, clearTextCommitTimer, id])
 
   useEffect(() => {
     if (!isModelMenuOpen) return
@@ -2736,17 +2788,60 @@ function TextCanvasNode({
 
   useEffect(() => {
     if (active) return
+    isTextFocusedRef.current = false
+    isGeneratorPromptFocusedRef.current = false
+    isTextComposingRef.current = false
+    isGeneratorPromptComposingRef.current = false
+    onNodeInputEditingChangeRef.current?.(id, false)
     setIsTextEditorOpen(false)
     setIsModelMenuOpen(false)
-  }, [active])
+    setMoreMenuPosition(null)
+  }, [active, id])
+
+  useEffect(() => {
+    if (!data.isGeneratingText) return
+    isTextFocusedRef.current = false
+    isTextComposingRef.current = false
+    syncNodeInputEditing()
+    setIsTextEditorOpen(false)
+  }, [data.isGeneratingText, syncNodeInputEditing])
+
+  useEffect(() => {
+    if (!active || !isGeneratorOpen) return
+    const frameID = window.requestAnimationFrame(() => generatorPromptRef.current?.focus())
+    return () => window.cancelAnimationFrame(frameID)
+  }, [active, isGeneratorOpen])
+
+  useLayoutEffect(() => {
+    updateNodeInternals(id)
+  }, [id, isTextEditorOpen, textDraft, updateNodeInternals])
 
   const focusEditor = () => {
+    if (data.isGeneratingText) return
+    data.onSelectNode?.(id)
     setIsTextEditorOpen(true)
     window.requestAnimationFrame(() => editorRef.current?.focus())
   }
   const copyText = () => {
-    const value = textDraft || placeholder
-    void navigator.clipboard?.writeText(value)
+    if (!textDraft.trim()) return
+    void navigator.clipboard?.writeText(textDraft)
+  }
+  const closeGenerator = () => {
+    clearGeneratorPromptCommitTimer()
+    commitRawDataPatch({ generationPrompt: generatorPromptDraftRef.current })
+    isGeneratorPromptFocusedRef.current = false
+    isGeneratorPromptComposingRef.current = false
+    syncNodeInputEditing()
+    setIsGeneratorOpen(false)
+    window.requestAnimationFrame(() => generatorButtonRef.current?.focus())
+  }
+  const closeMoreMenu = (restoreFocus = true) => {
+    setMoreMenuPosition(null)
+    if (restoreFocus) window.requestAnimationFrame(() => moreButtonRef.current?.focus())
+  }
+  const requestDelete = () => {
+    if ((textDraft.trim() || data.hasConnections) && !window.confirm(t("text.deleteConfirm"))) return
+    data.onDeleteNode?.(id)
   }
   const openSourceImagePicker = () => {
     setSourceImageImportError(null)
@@ -2810,7 +2905,8 @@ function TextCanvasNode({
     })
   }
   const hasPreviewText = textDraft.trim().length > 0
-  const previewText = hasPreviewText ? textDraft : placeholder
+  const previewText = hasPreviewText ? textDraft : t("text.empty")
+  const visibleLineCount = textNodeVisibleLineCount(textDraft)
   const textStatus = data.isGeneratingText ? "generating" : data.textGenerationError ? "failed" : null
 
   return (
@@ -2821,10 +2917,12 @@ function TextCanvasNode({
         position={Position.Left}
         className="cinema-node-handle cinema-node-handle-input"
         style={accentStyle}
+        title={t("text.inputPort")}
+        aria-label={t("text.inputPort")}
       />
       <article
         className={`cinema-node cinema-text-card-node ${selected ? "is-selected" : ""}`}
-        style={accentStyle}
+        style={{ ...accentStyle, "--cinema-text-visible-lines": visibleLineCount } as CSSProperties}
         onPointerDown={(event) => activateNodeOnPointerDown(event, id, data.onActivateNode)}
       >
         <header className="cinema-node-header">
@@ -2834,16 +2932,17 @@ function TextCanvasNode({
             nodeID={id}
             title={data.title}
             onChangeTitle={data.onChangeTitle}
+            editRequestKey={titleEditRequestKey}
           />
-          <div className="cinema-node-header-actions nodrag nowheel" role="toolbar" aria-label="Text node actions">
-            <NodeStatusDot status={textStatus} />
-            {active ? (
-              <>
-                <button
+          <div className="cinema-node-header-actions nodrag nowheel" role="toolbar" aria-label={t("text.actions")}>
+            <NodeStatusDot status={textStatus} label={textStatus === "generating" ? t("text.generating") : textStatus === "failed" ? t("text.failed") : undefined} />
+            <button
               type="button"
               className={`cinema-node-action-button ${isTextEditorOpen ? "is-active" : ""}`}
-              title="编辑文本"
-              aria-label="编辑文本"
+              title={t("text.edit")}
+              aria-label={t("text.edit")}
+              disabled={data.isGeneratingText}
+              tabIndex={active ? 0 : -1}
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation()
@@ -2853,14 +2952,17 @@ function TextCanvasNode({
               <PencilLine size={13} aria-hidden="true" />
             </button>
             <button
+              ref={generatorButtonRef}
               type="button"
               className={`cinema-node-action-button ${isGeneratorOpen ? "is-active" : ""}`}
-              title="生成文本"
-              aria-label="生成文本"
+              title={data.isGeneratingText ? t("text.generating") : t("text.generate")}
+              aria-label={data.isGeneratingText ? t("text.generating") : t("text.generate")}
               aria-expanded={isGeneratorOpen}
+              tabIndex={active ? 0 : -1}
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation()
+                data.onSelectNode?.(id)
                 setIsGeneratorOpen((current) => !current)
               }}
             >
@@ -2868,54 +2970,63 @@ function TextCanvasNode({
                 ? <Loader2 size={13} aria-hidden="true" className="is-spinning" />
                 : <WandSparkles size={13} aria-hidden="true" />}
             </button>
-              </>
-            ) : null}
             <button
+              ref={moreButtonRef}
               type="button"
-              className="cinema-node-action-button"
-              title="复制文本"
-              aria-label="复制文本"
+              className={`cinema-node-action-button ${moreMenuPosition ? "is-active" : ""}`}
+              title={t("text.more")}
+              aria-label={t("text.more")}
+              aria-haspopup="menu"
+              aria-expanded={Boolean(moreMenuPosition)}
+              tabIndex={active ? 0 : -1}
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation()
-                copyText()
+                data.onSelectNode?.(id)
+                const bounds = event.currentTarget.getBoundingClientRect()
+                setMoreMenuPosition({ x: bounds.right, y: bounds.bottom + 4 })
               }}
             >
-              <Copy size={13} aria-hidden="true" />
+              <MoreHorizontal size={14} aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              className="cinema-node-action-button"
-              title="下载文本"
-              aria-label="下载文本"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation()
-                downloadTextFile(data.title, textDraft)
-              }}
-            >
-              <Download size={13} aria-hidden="true" />
-            </button>
-            <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
           </div>
         </header>
 
-        <div className={`cinema-node-preview cinema-text-card-preview ${isTextEditorOpen ? "is-editing" : ""} ${hasPreviewText ? "has-text" : ""}`}>
+        <div className={`cinema-node-preview cinema-text-card-preview ${isTextEditorOpen ? "is-editing" : ""} ${hasPreviewText ? "has-text" : "is-empty"}`}>
           {active && isTextEditorOpen ? (
             <textarea
               ref={editorRef}
               className="cinema-text-card-editor nodrag nowheel"
               value={textDraft}
               placeholder={placeholder}
+              rows={visibleLineCount}
               spellCheck={false}
-              onKeyDown={(event) => event.stopPropagation()}
+              onFocus={() => {
+                isTextFocusedRef.current = true
+                syncNodeInputEditing()
+              }}
+              onKeyDown={(event) => {
+                event.stopPropagation()
+                if (event.key !== "Escape") return
+                event.preventDefault()
+                clearTextCommitTimer()
+                commitRawDataPatch({ text: textDraftRef.current })
+                isTextFocusedRef.current = false
+                isTextComposingRef.current = false
+                syncNodeInputEditing()
+                setIsTextEditorOpen(false)
+                window.requestAnimationFrame(() => previewRef.current?.focus())
+              }}
               onChange={(event) => {
                 const value = event.target.value
+                isTextFocusedRef.current = true
+                syncNodeInputEditing()
                 setTextDraft(value)
                 if (!isTextComposingRef.current) scheduleTextCommit(value)
               }}
               onCompositionStart={() => {
                 isTextComposingRef.current = true
+                syncNodeInputEditing()
                 clearTextCommitTimer()
               }}
               onCompositionEnd={(event) => {
@@ -2923,21 +3034,37 @@ function TextCanvasNode({
                 const value = event.currentTarget.value
                 setTextDraft(value)
                 commitRawDataPatch({ text: value })
+                syncNodeInputEditing()
               }}
               onBlur={() => {
-                if (isTextComposingRef.current) return
+                isTextFocusedRef.current = false
+                if (isTextComposingRef.current) {
+                  syncNodeInputEditing()
+                  return
+                }
                 clearTextCommitTimer()
                 commitRawDataPatch({ text: textDraftRef.current })
+                syncNodeInputEditing()
               }}
             />
           ) : (
             <>
               {hasPreviewText ? null : <FileText size={28} aria-hidden="true" />}
               <div
+                ref={previewRef}
                 className="cinema-text-card-preview-text nodrag nowheel"
                 title={previewText}
                 tabIndex={0}
-                onKeyDown={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => {
+                  event.stopPropagation()
+                  focusEditor()
+                }}
+                onKeyDown={(event) => {
+                  event.stopPropagation()
+                  if (event.key !== "Enter") return
+                  event.preventDefault()
+                  focusEditor()
+                }}
               >
                 {previewText}
               </div>
@@ -2945,6 +3072,30 @@ function TextCanvasNode({
           )}
         </div>
       </article>
+
+      {moreMenuPosition ? (
+        <CinemaContextMenuSurface
+          x={moreMenuPosition.x}
+          y={moreMenuPosition.y}
+          compact
+          className="cinema-text-more-menu"
+          onClose={closeMoreMenu}
+        >
+          <button type="button" role="menuitem" disabled={!hasPreviewText} onClick={() => { copyText(); closeMoreMenu() }}>
+            <Copy size={15} aria-hidden="true" /><span>{t("text.copy")}</span>
+          </button>
+          <button type="button" role="menuitem" disabled={!hasPreviewText} onClick={() => { downloadTextFile(data.title, textDraft); closeMoreMenu() }}>
+            <Download size={15} aria-hidden="true" /><span>{t("text.download")}</span>
+          </button>
+          <button type="button" role="menuitem" onClick={() => { setTitleEditRequestKey((value) => value + 1); closeMoreMenu(false) }}>
+            <PencilLine size={15} aria-hidden="true" /><span>{t("text.rename")}</span>
+          </button>
+          <div className="cinema-context-menu-separator" role="separator" />
+          <button type="button" role="menuitem" data-variant="danger" onClick={() => { requestDelete(); closeMoreMenu(false) }}>
+            <Trash2 size={15} aria-hidden="true" /><span>{t("text.delete")}</span>
+          </button>
+        </CinemaContextMenuSurface>
+      ) : null}
 
       {active && isGeneratorOpen ? (
         <CinemaNodeInputOverlay
@@ -2954,32 +3105,34 @@ function TextCanvasNode({
           width={560}
           accentStyle={accentStyle}
         >
-        <section className="cinema-node-input-panel cinema-text-card-generator nodrag nowheel" aria-label="Text generation draft" style={accentStyle}>
+        <section className="cinema-node-input-panel cinema-text-card-generator nodrag nowheel" aria-label={t("text.generatorTitle")} style={accentStyle}>
           <header className="cinema-text-card-generator-header">
             <span>
               <WandSparkles size={13} aria-hidden="true" />
-              文本生成
+              {t("text.generatorTitle")}
             </span>
             <button
               type="button"
               className="cinema-node-action-button"
-              title="关闭生成面板"
-              aria-label="关闭生成面板"
+              title={t("text.generatorClose")}
+              aria-label={t("text.generatorClose")}
               onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => setIsGeneratorOpen(false)}
+              onClick={closeGenerator}
             >
               <X size={13} aria-hidden="true" />
             </button>
           </header>
           {supportsSourceImage ? (
-            <section className={`cinema-text-source-image ${selectedSourceImageAssets.length > 0 ? "is-ready" : "is-empty"}`} aria-label="Text generation source image">
+            <section className={`cinema-text-source-image ${selectedSourceImageAssets.length > 0 ? "is-ready" : "is-empty"}`} aria-label={t("text.availableReferenceImages")}>
               {sourceImageAssets.length > 0 ? (
                 <>
                   <div className="cinema-text-source-image-main">
                     <Image size={13} aria-hidden="true" />
-                    <span>{selectedSourceImageAssets.length > 0 ? `参考图：${selectedSourceImageAssets.length} 张` : "选择参考图"}</span>
+                    <span>{selectedSourceImageAssets.length > 0
+                      ? t("text.referenceImages", { count: selectedSourceImageAssets.length })
+                      : t("text.chooseReferenceImages")}</span>
                   </div>
-                  <div className="cinema-text-source-image-list" aria-label="可用参考图">
+                  <div className="cinema-text-source-image-list" aria-label={t("text.availableReferenceImages")}>
                     {sourceImageAssets.map((asset) => {
                       const src = data.agentBaseURL && data.projectID
                         ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, asset.path)
@@ -2996,7 +3149,7 @@ function TextCanvasNode({
                             type="button"
                             className={`cinema-text-source-image-thumb ${isSelected ? "is-selected" : ""}`}
                             title={`${asset.nodeTitle} · ${asset.path}`}
-                            aria-label={`选择参考图 ${asset.nodeTitle}`}
+                            aria-label={t("text.selectReferenceImage", { name: asset.nodeTitle })}
                             aria-pressed={isSelected}
                             onClick={() => {
                               const nextSelectedSourceImageAssets = isSelected
@@ -3012,8 +3165,8 @@ function TextCanvasNode({
                           <button
                             type="button"
                             className="cinema-text-source-image-remove"
-                            title={`移除参考图 ${asset.nodeTitle}`}
-                            aria-label={`移除参考图 ${asset.nodeTitle}`}
+                            title={t("text.removeReferenceImage", { name: asset.nodeTitle })}
+                            aria-label={t("text.removeReferenceImage", { name: asset.nodeTitle })}
                             onClick={(event) => {
                               event.stopPropagation()
                               removeSourceImageAsset(asset)
@@ -3029,15 +3182,15 @@ function TextCanvasNode({
               ) : (
                 <div className="cinema-text-source-image-empty">
                   <Image size={15} aria-hidden="true" />
-                  <span>连接图片节点，或在这里选择一张或多张图片</span>
+                  <span>{t("text.referenceEmpty")}</span>
                 </div>
               )}
               <div className="cinema-text-source-image-actions">
                 <button
                   type="button"
                   className="cinema-text-source-image-add"
-                  title="从本地选择参考图"
-                  aria-label="从本地选择参考图"
+                  title={t("text.localReferenceImage")}
+                  aria-label={t("text.localReferenceImage")}
                   disabled={importTextSourceImageMutation.isPending}
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
@@ -3048,7 +3201,7 @@ function TextCanvasNode({
                   {importTextSourceImageMutation.isPending
                     ? <Loader2 size={13} aria-hidden="true" className="is-spinning" />
                     : <Image size={13} aria-hidden="true" />}
-                  <span>添加 Text 参考图</span>
+                  <span>{t("text.addReferenceImage")}</span>
                 </button>
               </div>
               {sourceImageImportError ? (
@@ -3070,15 +3223,23 @@ function TextCanvasNode({
             ref={generatorPromptRef}
             className="cinema-text-card-generator-input"
             value={generatorPromptDraft}
-            placeholder="描述你想生成的文本内容..."
-            onKeyDown={(event) => event.stopPropagation()}
+            placeholder={t("text.generatorPrompt")}
+            onFocus={() => {
+              isGeneratorPromptFocusedRef.current = true
+              syncNodeInputEditing()
+            }}
+            onKeyDownCapture={stopCanvasKeyboardEvent}
+            onKeyDown={stopCanvasKeyboardEvent}
             onChange={(event) => {
               const value = event.target.value
+              isGeneratorPromptFocusedRef.current = true
+              syncNodeInputEditing()
               setGeneratorPromptDraft(value)
               if (!isGeneratorPromptComposingRef.current) scheduleGeneratorPromptCommit(value)
             }}
             onCompositionStart={() => {
               isGeneratorPromptComposingRef.current = true
+              syncNodeInputEditing()
               clearGeneratorPromptCommitTimer()
             }}
             onCompositionEnd={(event) => {
@@ -3086,11 +3247,17 @@ function TextCanvasNode({
               const value = event.currentTarget.value
               setGeneratorPromptDraft(value)
               commitRawDataPatch({ generationPrompt: value })
+              syncNodeInputEditing()
             }}
             onBlur={() => {
-              if (isGeneratorPromptComposingRef.current) return
+              isGeneratorPromptFocusedRef.current = false
+              if (isGeneratorPromptComposingRef.current) {
+                syncNodeInputEditing()
+                return
+              }
               clearGeneratorPromptCommitTimer()
               commitRawDataPatch({ generationPrompt: generatorPromptDraftRef.current })
+              syncNodeInputEditing()
             }}
           />
           <div className="cinema-text-card-generator-lower">
@@ -3104,13 +3271,13 @@ function TextCanvasNode({
                 <button
                   type="button"
                   className="cinema-text-card-model-button"
-                  title="模型"
+                  title={t("text.chooseModel")}
                   aria-haspopup="listbox"
                   aria-expanded={isModelMenuOpen}
                   disabled={textModels.length === 0 || data.isGeneratingText}
                   onClick={() => setIsModelMenuOpen((current) => !current)}
                 >
-                  <span>{selectedTextModel?.label ?? "No model"}</span>
+                  <span>{selectedTextModel?.label ?? t("text.noModel")}</span>
                   <ChevronDown size={13} aria-hidden="true" />
                 </button>
                 {isModelMenuOpen ? (
@@ -3131,7 +3298,7 @@ function TextCanvasNode({
                         <small>{model.providerLabel}</small>
                       </button>
                     )) : (
-                      <span className="cinema-text-model-empty">暂无可用文本模型</span>
+                      <span className="cinema-text-model-empty">{t("text.noModels")}</span>
                     )}
                   </div>
                 ) : null}
@@ -3139,8 +3306,8 @@ function TextCanvasNode({
               <button
                 type="button"
                 className="cinema-text-card-submit"
-                title={selectedTextModel ? "生成文本" : "没有可用文本模型"}
-                aria-label="生成文本"
+                title={selectedTextModel ? t("text.generate") : t("text.noModelTitle")}
+                aria-label={t("text.generate")}
                 disabled={!canGenerate}
                 onClick={generateText}
               >
@@ -3160,6 +3327,8 @@ function TextCanvasNode({
         position={Position.Right}
         className="cinema-node-handle cinema-node-handle-output"
         style={accentStyle}
+        title={t("text.outputPort")}
+        aria-label={t("text.outputPort")}
       />
     </>
   )
@@ -6433,12 +6602,14 @@ function CinemaContextMenuSurface({
   x,
   y,
   compact = false,
+  className = "",
   onClose,
   children,
 }: {
   x: number
   y: number
   compact?: boolean
+  className?: string
   onClose: () => void
   children: ReactNode
 }) {
@@ -6463,13 +6634,21 @@ function CinemaContextMenuSurface({
 
   useEffect(() => {
     window.addEventListener("resize", onClose)
-    return () => window.removeEventListener("resize", onClose)
+    const closeOnOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (target instanceof globalThis.Node && !menuRef.current?.contains(target)) onClose()
+    }
+    window.addEventListener("pointerdown", closeOnOutsidePointerDown)
+    return () => {
+      window.removeEventListener("resize", onClose)
+      window.removeEventListener("pointerdown", closeOnOutsidePointerDown)
+    }
   }, [onClose])
 
   return createPortal(
     <div
       ref={menuRef}
-      className={`cinema-context-menu ${compact ? "is-compact" : ""}`}
+      className={`cinema-context-menu ${compact ? "is-compact" : ""} ${className}`}
       style={{ left: position.x, top: position.y }}
       role="menu"
       onClick={(event) => event.stopPropagation()}
@@ -6484,9 +6663,14 @@ function CinemaContextMenuSurface({
           onClose()
           return
         }
-        if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
         const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])
         if (items.length === 0) return
+        if (event.key === "Home" || event.key === "End") {
+          event.preventDefault()
+          items[event.key === "Home" ? 0 : items.length - 1]?.focus({ preventScroll: true })
+          return
+        }
+        if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
         event.preventDefault()
         const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement)
         const offset = event.key === "ArrowDown" ? 1 : -1
@@ -6636,6 +6820,7 @@ function CanvasPanelNavigation({
 }
 
 export function App() {
+  const { t } = useI18n()
   const { projectID, agentBaseURL } = useMemo(readSearchParams, [])
   const activeNodeID = useUiStore((state) => state.activeNodeID)
   const setActiveNodeID = useUiStore((state) => state.setActiveNodeID)
@@ -6692,6 +6877,8 @@ export function App() {
   const [pendingSaveCount, setPendingSaveCount] = useState(0)
   const [autoRefreshingTaskIDs, setAutoRefreshingTaskIDs] = useState<string[]>([])
   const [textGenerationOperations, dispatchTextGenerationOperation] = useReducer(nodeOperationReducer, createNodeOperationState())
+  const [textGenerationUndo, setTextGenerationUndo] = useState<TextGenerationUndoRecord | null>(null)
+  const [connectionErrorKey, setConnectionErrorKey] = useState<TranslationKey | null>(null)
   const [imageGenerationOperations, dispatchImageGenerationOperation] = useReducer(nodeOperationReducer, createNodeOperationState())
   const [videoGenerationOperations, dispatchVideoGenerationOperation] = useReducer(nodeOperationReducer, createNodeOperationState())
   const [customApiOperations, dispatchCustomApiOperation] = useReducer(nodeOperationReducer, createNodeOperationState())
@@ -6721,6 +6908,21 @@ export function App() {
       window.clearTimeout(nodePointerPaneClickGuardTimerRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    if (!textGenerationUndo) return
+    const timeoutID = window.setTimeout(
+      () => setTextGenerationUndo((current) => current === textGenerationUndo ? null : current),
+      Math.max(0, textGenerationUndo.expiresAt - Date.now()),
+    )
+    return () => window.clearTimeout(timeoutID)
+  }, [textGenerationUndo])
+
+  useEffect(() => {
+    if (!connectionErrorKey) return
+    const timeoutID = window.setTimeout(() => setConnectionErrorKey(null), 4_000)
+    return () => window.clearTimeout(timeoutID)
+  }, [connectionErrorKey])
 
   const applyCanvas = useCallback((canvas: CinemaCanvasDocument) => {
     canvasRevisionRef.current = canvas.revision ?? 0
@@ -6867,8 +7069,10 @@ export function App() {
     || import.meta.env.VITE_CINEMA_EDIT_DEV === "1"
   const timelineDeliveryCapabilityAvailable = projectQuery.data?.capabilities?.timelineDelivery === true
   const timelineDeliveryDevelopmentOverride = import.meta.env.VITE_CINEMA_DELIVER_DEV === "1"
+  const timelineDeliveryBetaAvailable = import.meta.env.VITE_CINEMA_DELIVER_BETA !== "0"
   const timelineDeliveryAvailable = timelineDeliveryCapabilityAvailable
     || timelineDeliveryDevelopmentOverride
+    || timelineDeliveryBetaAvailable
   const availableWorkspaces = {
     edit: timelineEditingAvailable,
     deliver: timelineDeliveryAvailable,
@@ -7205,18 +7409,47 @@ export function App() {
       )
     },
     onMutate: ({ nodeID }) => {
+      const sourceNode = nodes.find((node) => node.id === nodeID)
+      const previousText = sourceNode ? readRawString(sourceNode.data.rawData, "text") : ""
       dispatchTextGenerationOperation({ type: "begin", nodeID })
+      setTextGenerationUndo(null)
       saveStateRef.current = "saving"
       setSaveState("saving")
       setSaveError(null)
+      return { previousText }
     },
-    onSuccess: async (result) => {
-      applyCanvasWhenSafe(result.canvas)
+    onSuccess: async (result, _variables, context) => {
+      const generatedNode = result.canvas.nodes.find((node) => node.id === result.nodeID)
+      const replacementData = {
+        ...(generatedNode?.data ?? {}),
+        text: result.generatedText,
+        generationPrompt: "",
+      }
+      const replacementCanvas: CinemaCanvasDocument = {
+        ...result.canvas,
+        nodes: result.canvas.nodes.map((node) => node.id === result.nodeID
+          ? { ...node, data: replacementData }
+          : node),
+      }
+      applyCanvasWhenSafe(replacementCanvas)
+      await commandQueue.enqueue({
+        id: makeCommandID("update-node"),
+        type: "update-node",
+        actor: "cinema-web",
+        nodeID: result.nodeID,
+        patch: { data: replacementData },
+      })
+      setTextGenerationUndo({
+        nodeID: result.nodeID,
+        previousText: context?.previousText ?? "",
+        generatedText: result.generatedText,
+        expiresAt: Date.now() + 8_000,
+      })
       selectSingleNode(result.nodeID)
       await refetchRuntimeState()
     },
     onError: (error, variables) => {
-      const message = error instanceof Error ? error.message : "Text generation failed"
+      const message = error instanceof Error ? error.message : t("text.generationFailed")
       dispatchTextGenerationOperation({ type: "fail", nodeID: variables.nodeID, message })
       if (saveStateRef.current !== "error") {
         saveStateRef.current = nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0 ? "dirty" : "saved"
@@ -7893,6 +8126,11 @@ export function App() {
   }, [commandMutation])
 
   const onConnect = useCallback((connection: Connection) => {
+    const validation = validateCinemaConnection(connection, nodes, edges)
+    if (!validation.valid) {
+      setConnectionErrorKey(validation.reason)
+      return
+    }
     if (!connection.source || !connection.target) return
     const targetInput = videoInputHandleMetadata(connection.targetHandle)
     const edge = {
@@ -7917,7 +8155,23 @@ export function App() {
       actor: "cinema-web",
       edge,
     })
-  }, [commandMutation])
+  }, [commandMutation, edges, nodes])
+
+  const isValidConnection = useCallback((connection: Connection | Edge) => (
+    validateCinemaConnection(connection, nodes, edges).valid
+  ), [edges, nodes])
+
+  const onConnectEnd: OnConnectEnd = useCallback((_event, state) => {
+    if (state.isValid !== false || !state.fromNode || !state.toNode) return
+    const startsAtSource = state.fromHandle?.type === "source"
+    const validation = validateCinemaConnection({
+      source: startsAtSource ? state.fromNode.id : state.toNode.id,
+      target: startsAtSource ? state.toNode.id : state.fromNode.id,
+      sourceHandle: startsAtSource ? state.fromHandle?.id ?? null : state.toHandle?.id ?? null,
+      targetHandle: startsAtSource ? state.toHandle?.id ?? null : state.fromHandle?.id ?? null,
+    }, nodes, edges)
+    if (!validation.valid) setConnectionErrorKey(validation.reason)
+  }, [edges, nodes])
 
   const addNode = useCallback((type: CinemaNodeType, position: { x: number; y: number }) => {
     const next = createNode(type, position)
@@ -8271,6 +8525,27 @@ export function App() {
     if (Object.keys(patch).length > 0) queueNodePatch(nodeID, patch)
   }, [queueNodePatch])
 
+  useEffect(() => {
+    if (!textGenerationUndo) return
+    const node = nodes.find((item) => item.id === textGenerationUndo.nodeID)
+    if (!node || !canRestoreGeneratedText(textGenerationUndo, readRawString(node.data.rawData, "text"))) {
+      setTextGenerationUndo(null)
+    }
+  }, [nodes, textGenerationUndo])
+
+  const undoTextGeneration = useCallback(() => {
+    if (!textGenerationUndo) return
+    const node = nodes.find((item) => item.id === textGenerationUndo.nodeID)
+    if (!node || !canRestoreGeneratedText(textGenerationUndo, readRawString(node.data.rawData, "text"))) {
+      setTextGenerationUndo(null)
+      return
+    }
+    changeNode(textGenerationUndo.nodeID, {
+      rawData: { ...node.data.rawData, text: textGenerationUndo.previousText },
+    })
+    setTextGenerationUndo(null)
+  }, [changeNode, nodes, textGenerationUndo])
+
   const deleteNode = useCallback((nodeID: string) => {
     deleteNodes([nodeID])
   }, [deleteNodes])
@@ -8373,6 +8648,7 @@ export function App() {
         onSelectNode: selectNodeOnly,
         onNodeInputEditingChange: setNodeInputEditing,
         onDeleteNode: deleteNode,
+        hasConnections: edges.some((edge) => edge.source === node.id || edge.target === node.id),
         onRelinkAsset: beginRelinkAsset,
         textModels,
         effectiveTextModel,
@@ -8568,7 +8844,7 @@ export function App() {
             agentBaseURL={agentBaseURL}
             projectID={projectID}
             initialTimelineID={deliverTimelineID}
-            technicalPreview={!timelineDeliveryCapabilityAvailable && timelineDeliveryDevelopmentOverride}
+            technicalPreview={!timelineDeliveryCapabilityAvailable && timelineDeliveryAvailable}
             onShowAssetInLibrary={assetLibraryEnabled ? revealAssetInLibrary : undefined}
           />
         </Suspense>
@@ -8597,6 +8873,8 @@ export function App() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onConnectEnd={onConnectEnd}
+            isValidConnection={isValidConnection}
             onSelectionChange={onSelectionChange}
             onNodeClick={onNodeClick}
             onSelectionContextMenu={onSelectionContextMenu}
@@ -8629,6 +8907,17 @@ export function App() {
             pendingCount={pendingSaveCount}
             onRetry={() => commandQueue.retry()}
           />
+          {textGenerationUndo ? (
+            <div className="cinema-canvas-toast" role="status" aria-live="polite">
+              <span>{t("text.generated")}</span>
+              <button type="button" onClick={undoTextGeneration}>{t("text.undo")}</button>
+            </div>
+          ) : null}
+          {connectionErrorKey ? (
+            <div className="cinema-canvas-toast is-error" role="alert">
+              <span>{t(connectionErrorKey)}</span>
+            </div>
+          ) : null}
           {hasPersonalAssetDependencies ? (
             <div className="cinema-personal-asset-notice" role="status">
               <Info size={14} aria-hidden="true" />

@@ -1,4 +1,5 @@
 import fs from "node:fs"
+import { createHash } from "node:crypto"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import {
@@ -38,6 +39,40 @@ const bundledMediaTools = mediaTarget && mediaExecutableNames
       path.join(runtimeDir, "media-tools", "manifest.json"),
     ]
   : []
+
+async function sha256(filePath) {
+  const hash = createHash("sha256")
+  for await (const chunk of fs.createReadStream(filePath)) hash.update(chunk)
+  return hash.digest("hex")
+}
+
+async function verifyBetaMediaRuntime(mediaToolsDir) {
+  if (!mediaTarget) throw new Error(`Deliver Beta has no runtime target for ${process.platform}/${process.arch}`)
+  const manifestPath = path.join(mediaToolsDir, "manifest.json")
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"))
+  if (manifest.platform !== process.platform || manifest.arch !== process.arch) {
+    throw new Error(`Deliver Beta media target mismatch: ${manifest.platform}/${manifest.arch}`)
+  }
+  if (manifest.origin !== "environment-override") {
+    throw new Error(`Deliver Beta requires a build-supplied media runtime, got ${manifest.origin ?? "unknown"}`)
+  }
+  if (manifest.releaseReadiness?.status !== "blocked") {
+    throw new Error("Deliver Beta must not masquerade as a release-approved runtime")
+  }
+  for (const name of [mediaTarget.executables.ffmpeg, mediaTarget.executables.ffprobe]) {
+    const binaryPath = path.join(mediaToolsDir, name)
+    if (!fs.existsSync(binaryPath)) throw new Error(`Deliver Beta media runtime is missing ${name}`)
+    const digest = await sha256(binaryPath)
+    if (manifest.binaries?.[name]?.sha256 !== digest) {
+      throw new Error(`Deliver Beta media runtime digest mismatch for ${name}`)
+    }
+  }
+  for (const name of [mediaTarget.licensePolicy.licenseFile, mediaTarget.licensePolicy.noticesFile]) {
+    if (!fs.existsSync(path.join(mediaToolsDir, name))) {
+      throw new Error(`Deliver Beta media runtime is missing ${name}`)
+    }
+  }
+}
 
 const requiredFiles = [
   path.join(runtimeDir, "agent-server.js"),
@@ -111,13 +146,17 @@ if (manifest.platform !== process.platform || manifest.arch !== process.arch) {
 try {
   const releaseStrict = process.argv.includes("--release-strict")
   const mediaToolsDir = path.join(runtimeDir, "media-tools")
+  const deliverBetaBuild = process.env.ANYBOX_DELIVER_BETA_BUILD === "1"
   if (mediaTargetReady) {
     await verifyMediaRuntime({ runtimeDir, releaseStrict })
+  } else if (deliverBetaBuild && fs.existsSync(mediaToolsDir)) {
+    await verifyBetaMediaRuntime(mediaToolsDir)
+    console.log(`[desktop][media] verified build-supplied Deliver Beta runtime for ${process.platform}/${process.arch}`)
   } else if (fs.existsSync(mediaToolsDir)) {
     throw new Error(
       `Media runtime files exist without a locked target for ${process.platform}/${process.arch}`,
     )
-  } else if (releaseStrict || process.env.ANYBOX_REQUIRE_MEDIA_RUNTIME === "1") {
+  } else if (releaseStrict || deliverBetaBuild || process.env.ANYBOX_REQUIRE_MEDIA_RUNTIME === "1") {
     throw new Error(
       `Media runtime is required but blocked for ${process.platform}/${process.arch}: ${mediaTarget?.releaseReadiness?.reasons?.join(" ") ?? mediaPlatform?.reason ?? "target is not locked"}`,
     )

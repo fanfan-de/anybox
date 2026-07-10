@@ -18,7 +18,11 @@
 - `packages/desktop/src/renderer/src/app/thread/ThreadRows.tsx`
 - `packages/desktop/src/renderer/src/app/thread/ThreadRowRenderer.tsx`
 - `packages/desktop/src/renderer/src/app/thread/ThreadTurnNavigator.tsx`
+- `packages/desktop/src/renderer/src/app/thread/CompletedThreadMarkdown.tsx`
 - `packages/desktop/src/renderer/src/app/thread/SizeAwareStreamingMarkdown.tsx`
+- `packages/desktop/src/renderer/src/app/thread/thread-markdown-worker-client.ts`
+- `packages/desktop/src/renderer/src/app/thread-markdown-parser.ts`
+- `packages/desktop/src/renderer/src/app/thread-markdown.worker.ts`
 - `packages/desktop/src/renderer/src/app/thread/thread-interaction-store.ts`
 - `packages/desktop/src/renderer/src/styles/thread.css`
 - `packages/desktop/src/renderer/src/app/workbench/WorkbenchPaneSurface.tsx`
@@ -31,6 +35,9 @@
 - `packages/desktop/src/renderer/src/app/thread/ThreadView.test.tsx`
 - `packages/desktop/src/renderer/src/app/thread/thread-display-rows.test.ts`
 - `packages/desktop/src/renderer/src/app/thread/SizeAwareStreamingMarkdown.test.tsx`
+- `packages/desktop/src/renderer/src/app/thread/CompletedThreadMarkdown.test.tsx`
+- `packages/desktop/src/renderer/src/app/thread/thread-markdown-worker-client.test.ts`
+- `packages/desktop/src/renderer/src/app/thread-markdown-parser.test.ts`
 - `packages/desktop/src/renderer/src/app/thread/thread-interaction-store.test.ts`
 - `packages/desktop/src/renderer/src/App.test.tsx`
 
@@ -420,11 +427,15 @@ RightSidebar side-chat tab
 
 - 外层 section 透明、无边框。
 - response trace item 隐藏 header。
-- 非 streaming 状态下使用 `ThreadMarkdown` 渲染 markdown。
-- streaming Markdown 在 16000 字符以内保持完整语义渲染；超过阈值后切换为最多 12000 字符的 bounded plain-text 首尾预览，始终保留最新 live tail，避免每个 delta 重建累计全文 Markdown tree。completion 后恢复完整 Markdown。
+- 非 streaming Markdown 在 16000 字符以内继续使用同步 `ThreadMarkdown`。16001–256000 字符由专用 Web Worker 完成全文 GFM 解析和 MDAST→HAST，再按约 8000 字符的 HAST 顶层 block 逐块返回；主线程先请求首尾 block，随后一次提交一个中间 block，避免一次长解析和大提交阻塞输入、滚动。
+- 超过 256000 字符的 completed response 默认保留最多 12000 字符的 plain-text 首尾预览，用户显式选择“渲染完整格式”后才启动 Worker。单一 table、list、blockquote、paragraph 或 code block 不拆分；节点数超过 8000 或文本超过 256000 字符的 atomic block 同样先显示安全预览，防止一次挂载巨量 DOM。
+- Worker 只处理 immutable completed Markdown；streaming Markdown 仍在 16000 字符以内保持完整语义渲染，超过阈值后切换为 bounded plain-text 首尾预览并保留最新 live tail。HTML response、proposed plan 和其他 Markdown surface 不进入 Worker 路径。
+- Worker 先返回 document manifest，主线程再按 index 请求 block HAST。缓存键包含 thread scope、semantic row、trace item field、完整 source text 和 pipeline version；缓存只持有 immutable HAST，不缓存 React element、handler 或 URL resolver，虚拟 row 重挂载时可以复用解析结果。
 - 文本颜色使用主文本色，行高适合长文阅读。
 
 这让最终回复接近文档正文，而不是一张卡片。
+
+Completed Markdown 的 block 仍是单个 semantic response row 内部的渐进内容，不提升为外层 virtual rows。这样 turn navigator、scroll snapshot、focused-row pin 和 side-chat scope 继续使用原有坐标模型；渐进 block 导致的高度变化仍由现有 `ResizeObserver` 与 bottom-lock 规则处理。
 
 ### 用户消息
 
