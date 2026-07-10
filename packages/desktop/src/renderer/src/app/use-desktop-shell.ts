@@ -13,7 +13,7 @@ import {
   type WindowAction,
 } from "./types"
 import { clamp, resolveRightSidebarWidthBounds, resolveSidebarWidthBounds } from "./utils"
-import { SIDEBAR_RESIZE_END_EVENT } from "./sidebar-resize-events"
+import { SIDEBAR_RESIZE_END_EVENT, SIDEBAR_RESIZE_START_EVENT } from "./sidebar-resize-events"
 import { useAppearanceState } from "./use-appearance-state"
 import {
   beginRendererInteractiveLayout,
@@ -529,6 +529,7 @@ export function useDesktopShell() {
     activeSidebarResizerPointerRef.current?.element.classList.add("is-active")
     beginRendererInteractiveLayout("sidebar-resize")
     document.body.classList.add("is-resizing-sidebar")
+    window.dispatchEvent(new Event(SIDEBAR_RESIZE_START_EVENT))
     window.addEventListener("pointermove", handlePointerMove)
     window.addEventListener("pointerup", handlePointerUp)
     window.addEventListener("pointercancel", handlePointerCancel)

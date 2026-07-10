@@ -491,7 +491,7 @@ debug 信息由 developer mode 和 trace visibility 控制。默认不应该干�
 
 底部锁定阈值为 `THREAD_BOTTOM_LOCK_THRESHOLD_PX = 32`。
 
-拖拽调整 sidebar 宽度时，`use-thread-content-observer` 会暂停逐帧滚动同步。非虚拟路径不测量虚拟 row；虚拟路径只记录 pending resize 状态，等 `anybox:sidebar-resize-end` 后统一重新观察当前内容、测量已渲染的 `.thread-virtual-row`，再执行一次 scroll sync。
+拖拽调整 sidebar 宽度时仍持续提交真实 grid 宽度，保留正文实时换行和重排。`use-thread-content-observer` 会暂停逐帧滚动同步，`ThreadRows` 的主动 DOM measurement 也会记录 pending resize 状态；virtualizer 直接监听 `anybox:sidebar-resize-start/end`，在不触发整个 ThreadView 重渲染的情况下暂停行高变化产生的 TanStack 自动 `scrollTop` 补偿。virtualizer 保持固定 overscan，避免拖拽开始、过程中和结束时因缩减/恢复 overscan 频繁挂载或卸载 row。TanStack virtualizer 仍按 animation frame 消费 row `ResizeObserverEntry.borderBoxSize`，实时更新因文本换行而改变的 row 高度和 offset，避免绝对定位的虚拟 row 在拖拽期间重叠；只有缺少 entry 的同步测量路径才返回已有尺寸。等 `anybox:sidebar-resize-end` 后，ThreadRows 先批量读取所有已渲染 `.thread-virtual-row` 的真实高度，再统一写回 virtualizer，恢复默认滚动补偿，由 scroll controller 执行一次 scroll sync。virtualizer 的 scroll-element `ResizeObserver` 同样优先直接消费 entry 尺寸，只有 entry 尺寸不可用时才读取 DOM rect。
 
 ### 消息动作
 

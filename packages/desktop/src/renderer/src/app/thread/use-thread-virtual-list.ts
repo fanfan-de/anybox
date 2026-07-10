@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type RefObject } from "react"
+import { useCallback, useEffect, useMemo, type RefObject } from "react"
 import {
   defaultRangeExtractor,
   measureElement as measureVirtualElement,
@@ -10,6 +10,7 @@ import {
   type Virtualizer,
 } from "@tanstack/react-virtual"
 import type { ThreadDisplayRow } from "./thread-display-rows"
+import { SIDEBAR_RESIZE_END_EVENT, SIDEBAR_RESIZE_START_EVENT } from "../sidebar-resize-events"
 
 const THREAD_VIRTUAL_OVERSCAN_ROWS = 8
 const THREAD_VIRTUAL_ROW_GAP_PX = 7
@@ -26,6 +27,8 @@ interface UseThreadVirtualListInput {
   threadColumnRef: RefObject<HTMLDivElement | null>
   virtualListKey: string
 }
+
+const NEVER_ADJUST_THREAD_SCROLL_POSITION = () => false
 
 function readThreadColumnPaddingTop(threadColumn: HTMLDivElement) {
   if (typeof window === "undefined") return 0
@@ -54,16 +57,26 @@ function estimateThreadRowSize(row: ThreadDisplayRow | undefined) {
   return Math.max(THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX, estimatedHeight)
 }
 
-function measureThreadVirtualElement(
+function isSidebarResizeInProgress() {
+  return typeof document !== "undefined" && document.body.classList.contains("is-resizing-sidebar")
+}
+
+export function measureThreadVirtualElement(
   element: HTMLDivElement,
   entry: ResizeObserverEntry | undefined,
   instance: Virtualizer<HTMLDivElement, HTMLDivElement>,
 ) {
+  const sidebarResizeInProgress = isSidebarResizeInProgress()
+
   if (entry) {
     const observedSize = measureVirtualElement(element, entry, instance)
     if (observedSize > 0) {
       return Math.max(THREAD_VIRTUAL_ROW_MIN_HEIGHT_PX, observedSize)
     }
+  }
+
+  if (sidebarResizeInProgress) {
+    return readCachedOrEstimatedThreadVirtualRowSize(element, instance)
   }
 
   const measuredSize = measureThreadVirtualRowElement(element)
@@ -101,6 +114,25 @@ function readThreadVirtualScrollRect(element: HTMLDivElement): Rect {
   return { width, height }
 }
 
+export function readThreadVirtualResizeObserverRect(
+  element: HTMLDivElement,
+  entry: ResizeObserverEntry | undefined,
+): Rect {
+  if (!entry) return readThreadVirtualScrollRect(element)
+
+  const borderBoxSize = Array.isArray(entry.borderBoxSize)
+    ? entry.borderBoxSize[0]
+    : entry.borderBoxSize
+  const width = borderBoxSize?.inlineSize ?? entry.contentRect.width
+  const height = borderBoxSize?.blockSize ?? entry.contentRect.height
+
+  if (width > 0 && height > 0) {
+    return { width, height }
+  }
+
+  return readThreadVirtualScrollRect(element)
+}
+
 function observeThreadVirtualElementRect(
   instance: Virtualizer<HTMLDivElement, HTMLDivElement>,
   callback: (rect: Rect) => void,
@@ -108,15 +140,15 @@ function observeThreadVirtualElementRect(
   const element = instance.scrollElement
   if (!element) return
 
-  const emitRect = () => {
-    callback(readThreadVirtualScrollRect(element))
+  const emitRect = (entry?: ResizeObserverEntry) => {
+    callback(readThreadVirtualResizeObserverRect(element, entry))
   }
 
   emitRect()
 
   if (typeof ResizeObserver === "undefined") return
 
-  const resizeObserver = new ResizeObserver(emitRect)
+  const resizeObserver = new ResizeObserver((entries) => emitRect(entries[0]))
   resizeObserver.observe(element)
   return () => {
     resizeObserver.disconnect()
@@ -194,7 +226,28 @@ export function useThreadVirtualList({
     overscan: THREAD_VIRTUAL_OVERSCAN_ROWS,
     rangeExtractor,
     scrollToFn,
+    useAnimationFrameWithResizeObserver: true,
   })
+  useEffect(() => {
+    function suppressScrollAdjustment() {
+      rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = NEVER_ADJUST_THREAD_SCROLL_POSITION
+    }
+
+    function restoreScrollAdjustment() {
+      if (rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange === NEVER_ADJUST_THREAD_SCROLL_POSITION) {
+        rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined
+      }
+    }
+
+    if (isSidebarResizeInProgress()) suppressScrollAdjustment()
+    window.addEventListener(SIDEBAR_RESIZE_START_EVENT, suppressScrollAdjustment)
+    window.addEventListener(SIDEBAR_RESIZE_END_EVENT, restoreScrollAdjustment)
+    return () => {
+      window.removeEventListener(SIDEBAR_RESIZE_START_EVENT, suppressScrollAdjustment)
+      window.removeEventListener(SIDEBAR_RESIZE_END_EVENT, restoreScrollAdjustment)
+      restoreScrollAdjustment()
+    }
+  }, [rowVirtualizer])
 
   const threadVirtualItems = rowVirtualizer.getVirtualItems()
   const threadVirtualTotalSize = rowVirtualizer.getTotalSize()

@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, type ReactNode } from "react"
 import type { VirtualItem } from "@tanstack/react-virtual"
+import { SIDEBAR_RESIZE_END_EVENT } from "../sidebar-resize-events"
 import type { ThreadDisplayRow } from "./thread-display-rows"
 import { measureThreadVirtualRowElement, type ThreadRowVirtualizer } from "./use-thread-virtual-list"
 
@@ -23,6 +24,7 @@ export function ThreadRows({
   const spacerRef = useRef<HTMLDivElement | null>(null)
   const pendingMeasurementFrameRef = useRef<number | null>(null)
   const pendingFollowupMeasurementFrameRef = useRef<number | null>(null)
+  const pendingSidebarResizeMeasurementRef = useRef(false)
 
   const setSpacerRef = useCallback((node: HTMLDivElement | null) => {
     spacerRef.current = node
@@ -30,22 +32,37 @@ export function ThreadRows({
   }, [virtualizer])
 
   const measureRenderedRows = useCallback(() => {
+    if (document.body.classList.contains("is-resizing-sidebar")) {
+      pendingSidebarResizeMeasurementRef.current = true
+      return
+    }
+
     const spacer = spacerRef.current
     if (!spacer) return
 
     const rowElements = spacer.querySelectorAll<HTMLDivElement>(".thread-virtual-row")
+    const measurements: Array<{ index: number; size: number }> = []
     for (const rowElement of Array.from(rowElements)) {
       const index = Number(rowElement.dataset.index)
       if (!Number.isInteger(index)) continue
 
       const measuredSize = measureThreadVirtualRowElement(rowElement)
       if (measuredSize === null) continue
+      measurements.push({ index, size: measuredSize })
+    }
 
-      virtualizer.resizeItem(index, measuredSize)
+    pendingSidebarResizeMeasurementRef.current = false
+    for (const measurement of measurements) {
+      virtualizer.resizeItem(measurement.index, measurement.size)
     }
   }, [virtualizer])
 
   const scheduleRenderedRowMeasurement = useCallback(() => {
+    if (document.body.classList.contains("is-resizing-sidebar")) {
+      pendingSidebarResizeMeasurementRef.current = true
+      return
+    }
+
     if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
       measureRenderedRows()
       return
@@ -104,6 +121,18 @@ export function ThreadRows({
 
     return () => {
       resizeObserver.disconnect()
+    }
+  }, [scheduleRenderedRowMeasurement])
+
+  useLayoutEffect(() => {
+    function handleSidebarResizeEnd() {
+      if (!pendingSidebarResizeMeasurementRef.current) return
+      scheduleRenderedRowMeasurement()
+    }
+
+    window.addEventListener(SIDEBAR_RESIZE_END_EVENT, handleSidebarResizeEnd)
+    return () => {
+      window.removeEventListener(SIDEBAR_RESIZE_END_EVENT, handleSidebarResizeEnd)
     }
   }, [scheduleRenderedRowMeasurement])
 
