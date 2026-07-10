@@ -58,7 +58,9 @@ describe("EditWorkbench", () => {
 
     expect(await screen.findByText("V1")).toBeVisible()
     expect(screen.getByText("A1")).toBeVisible()
-    expect(screen.getByText("Add the first asset to the Timeline")).toBeVisible()
+    expect(screen.getByRole("heading", { name: "Add media to start editing" })).toBeVisible()
+    fireEvent.click(screen.getByRole("button", { name: "Browse Project Assets" }))
+    expect(screen.getByRole("tab", { name: "Project Assets" })).toHaveAttribute("aria-selected", "true")
     expect(screen.getByRole("separator", { name: "Resize preview and Timeline" })).toHaveAttribute("aria-valuenow", "42")
     expect(fetchMock).toHaveBeenCalledWith(expect.any(URL), expect.objectContaining({ method: "POST" }))
   })

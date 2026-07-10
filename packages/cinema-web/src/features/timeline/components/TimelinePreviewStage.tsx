@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react"
-import { Maximize2, Pause, Play, SkipBack, StepBack, StepForward, Volume2, VolumeX } from "lucide-react"
+import { Pause, Play, SkipBack, StepBack, StepForward, Volume2, VolumeX } from "lucide-react"
 import type { CinemaTimelineClip, CinemaTimelineDocument } from "@anybox/shared/cinema-timeline"
 import { createAssetLibraryApi } from "../../assets/assetLibraryApi"
 import { formatTimelineTime } from "../model/timelineTime"
@@ -29,6 +29,7 @@ export function TimelinePreviewStage({
   onToggleMuted,
   onSeek,
   onStepFrame,
+  onBrowseAssets,
 }: {
   agentBaseURL: string
   projectID: string
@@ -40,6 +41,7 @@ export function TimelinePreviewStage({
   onToggleMuted: () => void
   onSeek: (timeUs: number) => void
   onStepFrame: (direction: -1 | 1) => void
+  onBrowseAssets: () => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -87,7 +89,13 @@ export function TimelinePreviewStage({
         ) : (
           <img key={clip.id} src={sourceURL(agentBaseURL, projectID, clip)} alt="" style={{ objectFit: clip.fit ?? "contain", opacity: clip.opacity }} />
         ))}
-        {!videoURL && active.overlays.length === 0 ? <p>{timeline.clips.length === 0 ? "Add the first asset to the Timeline" : "No active visual clip"}</p> : null}
+        {!videoURL && active.overlays.length === 0 ? timeline.clips.length === 0 ? (
+          <div className="cinema-timeline-preview-empty">
+            <h2>Add media to start editing</h2>
+            <p>Choose an asset from the media bin, then double-click it or drag it onto V1 or A1.</p>
+            <button type="button" className="cinema-edit-primary-button" onClick={onBrowseAssets}>Browse Project Assets</button>
+          </div>
+        ) : <p>No active visual clip</p> : null}
         {audioURL ? <audio ref={audioRef} key={audioURL} src={audioURL} preload="auto" /> : null}
         {nextVideoURL ? <video className="cinema-timeline-preload-video" src={nextVideoURL} muted preload="auto" aria-hidden="true" /> : null}
       </div>
@@ -101,7 +109,6 @@ export function TimelinePreviewStage({
         </div>
         <div className="cinema-timeline-transport-actions">
           <button type="button" aria-label={muted ? "Unmute preview" : "Mute preview"} title={muted ? "Unmute preview" : "Mute preview"} aria-pressed={muted} onClick={onToggleMuted}>{muted ? <VolumeX aria-hidden="true" /> : <Volume2 aria-hidden="true" />}</button>
-          <button type="button" aria-label="Fit preview" title="Fit preview"><Maximize2 aria-hidden="true" /></button>
         </div>
       </div>
     </section>

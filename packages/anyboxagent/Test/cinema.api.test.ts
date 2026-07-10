@@ -957,6 +957,18 @@ describe("cinema api", () => {
         initialized: true,
       })
       expect(projectBody.data?.project?.name).toBe("Cinema Fixture")
+      expect(projectBody.data?.capabilities.timelineDelivery).toBe(false)
+
+      const previousDelivery = process.env.ANYBOX_CINEMA_TIMELINE_DELIVERY
+      process.env.ANYBOX_CINEMA_TIMELINE_DELIVERY = "1"
+      try {
+        const enabledResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}`)
+        const enabledBody = await readJson<CinemaProjectSummary>(enabledResponse)
+        expect(enabledBody.data?.capabilities.timelineDelivery).toBe(true)
+      } finally {
+        if (previousDelivery === undefined) delete process.env.ANYBOX_CINEMA_TIMELINE_DELIVERY
+        else process.env.ANYBOX_CINEMA_TIMELINE_DELIVERY = previousDelivery
+      }
 
       const canvasResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/canvas`)
       const canvasBody = await readJson<CinemaCanvasDocument>(canvasResponse)

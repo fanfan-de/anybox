@@ -2,6 +2,7 @@ appId: com.anybox.app
 productName: Anybox
 artifactName: Anybox-${version}-${arch}.${ext}
 asar: true
+forceCodeSigning: true
 electronUpdaterCompatibility: ">=2.16"
 afterPack: ./scripts/after-pack-icon.cjs
 publish:
@@ -33,6 +34,15 @@ extraResources:
       - "**/*"
 mac:
   icon: build/icon.icns
+  hardenedRuntime: true
+  notarize: true
+  target:
+    - target: dmg
+      arch:
+        - arm64
+    - target: zip
+      arch:
+        - arm64
 win:
   icon: build/icon.ico
   publish:
@@ -41,8 +51,6 @@ win:
     - provider: github
       owner: fanfan-de
       repo: anybox
-  signAndEditExecutable: false
-  signExts: []
   target:
     - target: nsis
       arch:

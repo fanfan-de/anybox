@@ -7,20 +7,20 @@
 
 ## 1. 执行摘要
 
-Cinema Web 已经具备 Create / Edit / Deliver 顶层壳层，当前只有 Create 可用。Edit 的目标不是第一版复制完整的 DaVinci Resolve，也不是把 Create 节点画布改造成横向时间线，而是建立一个稳定的“素材装配与粗剪工作台”：
+Cinema Web 已经具备 Create / Edit / Deliver 顶层壳层；Create 与本计划定义的 Edit MVP 已可用，Deliver 已形成开发态闭环但尚未公开启用。本节保留 Edit 的既定边界：它不是第一版复制完整的 DaVinci Resolve，也不是把 Create 节点画布改造成横向时间线，而是一个稳定的“素材装配与粗剪工作台”：
 
 1. 从项目素材库和 Create 生成结果中选择素材。
 2. 把视频和音频装配成有顺序、有入出点的 Timeline。
 3. 完成选择、移动、裁剪、分割、删除、吸附、播放和保存恢复。
-4. 将已经可交付的 Timeline 交给未来的 Deliver 工作台。
+4. 将已经可交付的 Timeline 在保存队列 flush 后交给 Deliver 工作台。
 
 Edit 首次公开启用必须满足完整粗剪闭环。只有静态界面、空 Timeline 或不可持久化的拖拽 Demo 时，Edit tab 继续显示 `Soon` 并保持 disabled。
 
 单人开发的粗略估算为 26–38 个有效开发日，不包含 Deliver、FFmpeg 最终渲染、复杂多轨合成、调色、转场和关键帧系统。估算用于排序，不是发布日期承诺。
 
-## 2. 当前基础
+## 2. 计划启动时的基础（历史记录）
 
-### 2.1 已完成
+### 2.1 计划启动时已完成
 
 - Create / Edit / Deliver 顶层 ARIA tab 壳层。
 - Create 工作台 Canvas、节点生成与项目素材库。
@@ -30,7 +30,7 @@ Edit 首次公开启用必须满足完整粗剪闭环。只有静态界面、空
 - 多节点生成 pending/error 隔离。
 - 临时真实项目的 Playwright 故障注入环境。
 
-### 2.2 尚未实现
+### 2.2 计划启动时尚未实现（E0–E5 后均已完成）
 
 - Shared Timeline Schema。
 - Timeline 文件与事件存储。
@@ -130,8 +130,8 @@ Edit 首次公开启用必须满足完整粗剪闭环。只有静态界面、空
 
 1. Edit 运行本地预检：空 Timeline、素材缺失、轨道越界、无主视频等。
 2. 通过后显示“可交付”状态。
-3. Deliver 尚未实现时只显示状态，不提供伪导出入口。
-4. Deliver 实现后，切换工作台并传递 `timelineID`。
+3. 正常项目在 Deliver 公开发布门槛完成前仍只显示交付状态，不提供伪导出入口。
+4. 开发态 Deliver 启用时，切换工作台并传递 `timelineID`；切换前必须完成保存队列 flush。
 
 ## 6. Edit 信息架构
 
@@ -772,3 +772,13 @@ src/features/timeline/
 - Timeline UI 临时状态仍只保存在浏览器本地；项目真相源只包含 Timeline 文档、事件日志和可删除的波形缓存。
 - Edit 工作台采用按需加载，不增加 Create 工作台的常驻重型 DOM 和媒体资源。
 - 验收覆盖 Shared Schema、Agent 全套服务器测试、前端单元/组件测试、生产构建、Axe、真实 MP4/WAV 主路径、断网/409 故障注入、素材回收与替换，以及 500 Clip / 30 分钟 Timeline 虚拟化场景。
+
+## 20. Post-E5 P0 体验收口
+
+2026-07-11 的 P0 收口不改变 Timeline Schema 或命令契约：
+
+- 空 Timeline 预览提供唯一主操作 `Browse Project Assets`，并直接打开受控 Media Bin 的 Project Assets section。
+- 移除无行为的 Preview Fit 和伪 Select 工具；Timeline Fit 保持可用。
+- Inspector 对用户显示十进制秒并支持最多 6 位小数，提交时继续转换为整数微秒。
+- Transport 时间码显示到毫秒；内部持久化仍使用整数微秒。
+- 新增时间转换与空状态导航测试，继续要求 light/dark、760px 和 Axe 门槛。

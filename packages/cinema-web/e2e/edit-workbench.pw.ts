@@ -21,7 +21,7 @@ test.describe("Cinema Edit workbench", () => {
     await expect(page.getByRole("heading", { name: "No timelines yet" })).toBeVisible()
     await page.getByRole("button", { name: "New Timeline" }).first().click()
 
-    await expect(page.getByText("Add the first asset to the Timeline")).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Add media to start editing" })).toBeVisible()
     await expect(page.getByText("V1", { exact: true })).toBeVisible()
     await expect(page.getByText("A1", { exact: true })).toBeVisible()
     await expect(page.getByRole("separator", { name: "Resize preview and Timeline" })).toHaveAttribute("aria-valuenow", "42")
@@ -38,7 +38,7 @@ test.describe("Cinema Edit workbench", () => {
 
     for (const width of [1280, 900, 760]) {
       await page.setViewportSize({ width, height: 760 })
-      await expect(page.getByText("Add the first asset to the Timeline")).toBeVisible()
+      await expect(page.getByRole("heading", { name: "Add media to start editing" })).toBeVisible()
       await expect(page.getByText("Edit needs a wider desktop window")).toBeHidden()
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     }

@@ -1,4 +1,4 @@
-name: Desktop dual-platform verification
+name: Desktop technical-preview verification
 
 on:
   pull_request:
@@ -14,11 +14,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-2022]
+        include:
+          - os: macos-14
+            builder_flag: --mac
+            expected_arch: arm64
+          - os: windows-2022
+            builder_flag: --win
+            expected_arch: x64
+          - os: ubuntu-22.04
+            builder_flag: --linux
+            expected_arch: x64
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Verify native runner architecture
+        shell: bash
+        run: node -e "if (process.arch !== '${{ matrix.expected_arch }}') throw new Error('Expected ${{ matrix.expected_arch }}, got ' + process.arch)"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -56,6 +69,9 @@ jobs:
       - name: Test desktop
         run: pnpm --filter anybox-desktop-agent test
 
+      - name: Test media runtime lock and release gate contract
+        run: pnpm --filter anybox-desktop-agent test:media-runtime-lock
+
       - name: Test shared contracts
         run: pnpm --filter @anybox/shared test
 
@@ -66,10 +82,5 @@ jobs:
         working-directory: packages/anyboxagent
         run: bun test Test/server.api.test.ts
 
-      - name: Package macOS
-        if: runner.os == 'macOS'
-        run: pnpm --filter anybox-desktop-agent dist -- --mac --publish never
-
-      - name: Package Windows
-        if: runner.os == 'Windows'
-        run: pnpm --filter anybox-desktop-agent dist -- --win --publish never
+      - name: Package non-release Deliver technical preview directory
+        run: pnpm --filter anybox-desktop-agent dist:deliver-preview -- --dir ${{ matrix.builder_flag }}

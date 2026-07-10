@@ -422,6 +422,23 @@ export function useThreadScrollController({
     followScrollSyncSuppressedUntilRef.current = Date.now() + THREAD_COMPLETION_SCROLL_SYNC_SUPPRESS_MS
   }
 
+  function navigateThreadToOffset(scrollTop: number, key = scrollStateKey) {
+    const threadColumn = threadColumnRef.current
+    if (!threadColumn || currentScrollStateKeyRef.current !== key) return false
+
+    cancelSmoothFollowScroll()
+    scrollModeRef.current = "detached"
+    setThreadScrollTop(threadColumn, scrollTop, { clampToDomScrollRange: false })
+    const snapshot: ThreadScrollSnapshot = {
+      scrollTop: threadColumn.scrollTop,
+      pinnedToBottom: false,
+      updatedAt: Date.now(),
+    }
+    rememberThreadScrollSnapshot(key, snapshot)
+    saveThreadScrollSnapshotValue(key, snapshot)
+    return true
+  }
+
   function isSmoothFollowScrollActiveForKey(key: string) {
     return smoothFollowScrollRef.current?.key === key
   }
@@ -545,6 +562,7 @@ export function useThreadScrollController({
     handleThreadScrollIntent,
     handleThreadWheelIntent,
     isSmoothFollowScrollActiveForKey,
+    navigateThreadToOffset,
     restoreDetachedThreadPositionIfNeeded,
     suppressFollowScrollSync,
     syncThreadScrollAfterContentChange,

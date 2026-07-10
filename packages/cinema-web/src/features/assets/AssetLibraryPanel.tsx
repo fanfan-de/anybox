@@ -40,6 +40,7 @@ import {
 import type {
   CinemaAssetMigrationStatusResult,
   CinemaAssetKind,
+  CinemaAssetLocator,
   CinemaAssetRecord,
   CinemaAssetScope,
 } from "@anybox/shared"
@@ -88,6 +89,11 @@ export interface AssetLibraryAddRequest {
   asset: CinemaAssetRecord
 }
 
+export interface AssetLibraryRevealRequest {
+  requestID: string
+  assetRef: CinemaAssetLocator
+}
+
 export type AssetLibraryPanelMode = "add" | "relink"
 
 export interface AssetLibraryPanelProps {
@@ -98,6 +104,8 @@ export interface AssetLibraryPanelProps {
   initialScope?: AssetLibraryScopeType
   mode?: AssetLibraryPanelMode
   acceptKind?: CinemaAssetKind
+  revealRequest?: AssetLibraryRevealRequest | null
+  onRevealRequestHandled?(requestID: string): void
 }
 
 interface ScopeSession {
@@ -111,6 +119,19 @@ interface PanelSession {
   scopeType: AssetLibraryScopeType
   scopes: Record<AssetLibraryScopeType, ScopeSession>
   scrollTop: Record<AssetLibraryScopeType, Record<string, number>>
+}
+
+interface PendingAssetReveal {
+  requestID: string
+  scopeType: AssetLibraryScopeType
+  assetID: string
+  displayName: string
+  trash: boolean
+}
+
+interface AssetGridRevealRequest {
+  requestID: string
+  assetID: string
 }
 
 interface PendingPermanentDelete {
@@ -226,6 +247,8 @@ function AssetLibraryPanelContent({
   initialScope = "project",
   mode = "add",
   acceptKind,
+  revealRequest,
+  onRevealRequestHandled,
 }: AssetLibraryPanelProps) {
   const queryClient = useQueryClient()
   const initialSession = useMemo(() => loadPanelSession(projectID, initialScope), [initialScope, projectID])
@@ -244,6 +267,8 @@ function AssetLibraryPanelContent({
   const [isTrashView, setIsTrashView] = useState(false)
   const [pendingPermanentDelete, setPendingPermanentDelete] = useState<PendingPermanentDelete | null>(null)
   const [addingAssetID, setAddingAssetID] = useState<string | null>(null)
+  const [pendingAssetReveal, setPendingAssetReveal] = useState<PendingAssetReveal | null>(null)
+  const [gridRevealRequest, setGridRevealRequest] = useState<AssetGridRevealRequest | null>(null)
   const uploadInputRef = useRef<HTMLInputElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const lastStateRevisionRef = useRef<number | null>(null)
@@ -308,7 +333,71 @@ function AssetLibraryPanelContent({
     setUndoEntries(null)
     setPendingPermanentDelete(null)
     setAddingAssetID(null)
+    setPendingAssetReveal(null)
+    setGridRevealRequest(null)
   }, [initialScope, projectID])
+
+  useEffect(() => {
+    const request = revealRequest
+    if (!request) return
+    setPendingAssetReveal(null)
+    setGridRevealRequest(null)
+    setActionError(null)
+    setAnnouncement("正在定位素材")
+
+    if (request.assetRef.scope.type === "project" && request.assetRef.scope.projectID !== projectID) {
+      setActionError("无法定位不属于当前项目的素材")
+      setAnnouncement("")
+      onRevealRequestHandled?.(request.requestID)
+      return
+    }
+
+    const controller = new AbortController()
+    let active = true
+    const targetApi = createAssetLibraryApi(agentBaseURL, projectID, request.assetRef.scope)
+    void targetApi.getAsset(request.assetRef.assetID, controller.signal).then(({ asset }) => {
+      if (!active) return
+      const targetScopeType = request.assetRef.scope.type
+      const trash = asset.status === "trashed"
+      const folderID = trash ? ROOT_FOLDER_ID : asset.folderID
+      const selectedKey = `asset:${asset.id}`
+      const targetScrollKey = assetLibraryScrollPositionKey({ folderID, query: "", trash })
+      scrollTopRef.current[targetScopeType][targetScrollKey] = 0
+      setScopeSessions((current) => ({
+        ...current,
+        [targetScopeType]: {
+          ...current[targetScopeType],
+          folderID,
+          search: "",
+          selectedKeys: [selectedKey],
+          anchorKey: selectedKey,
+        },
+      }))
+      setScopeType(targetScopeType)
+      setIsTrashView(trash)
+      setPendingAssetReveal({
+        requestID: request.requestID,
+        scopeType: targetScopeType,
+        assetID: asset.id,
+        displayName: asset.displayName,
+        trash,
+      })
+      setAnnouncement(`正在定位 ${asset.displayName}`)
+      void queryClient.invalidateQueries({
+        queryKey: ["cinema-asset-library", agentBaseURL, assetLibraryScopeKey(request.assetRef.scope), "entries"],
+      })
+      onRevealRequestHandled?.(request.requestID)
+    }).catch((error) => {
+      if (!active) return
+      setActionError(errorMessage(error, "无法定位素材"))
+      setAnnouncement("")
+      onRevealRequestHandled?.(request.requestID)
+    })
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [agentBaseURL, onRevealRequestHandled, projectID, queryClient, revealRequest?.requestID])
 
   useEffect(() => {
     if (skipSessionSaveRef.current) {
@@ -396,6 +485,31 @@ function AssetLibraryPanelContent({
   const selectedFolder = selectedEntries.length === 1 && selectedEntries[0]?.entryType === "folder"
     ? selectedEntries[0].folder
     : null
+
+  useEffect(() => {
+    const target = pendingAssetReveal
+    if (!target || target.scopeType !== scopeType || target.trash !== isTrashView) return
+    if (assets.some((asset) => asset.id === target.assetID)) {
+      setGridRevealRequest({ requestID: target.requestID, assetID: target.assetID })
+      setPendingAssetReveal(null)
+      setAnnouncement(`${target.displayName} 已在素材库中选中`)
+      return
+    }
+    if (!listingQuery.isSuccess || listingQuery.isLoading || listingQuery.isFetchingNextPage) return
+    if (listingQuery.hasNextPage) {
+      void listingQuery.fetchNextPage().catch((error) => {
+        setPendingAssetReveal(null)
+        setActionError(errorMessage(error, "无法加载素材所在位置"))
+        setAnnouncement("")
+      })
+      return
+    }
+    setPendingAssetReveal(null)
+    setActionError(target.trash
+      ? "素材位于已移入回收站的文件夹中，当前回收站视图无法直接展开其子项"
+      : "已打开素材所在文件夹，但未找到该素材")
+    setAnnouncement("")
+  }, [assets, isTrashView, listingQuery, pendingAssetReveal, scopeType])
 
   const commitRevision = useCallback((nextRevision: number) => {
     if (!Number.isFinite(nextRevision)) return
@@ -1127,6 +1241,7 @@ function AssetLibraryPanelContent({
                 allowDragAndAdd={!isTrashView}
                 scrollElementRef={contentRef}
                 layoutVersion={`${isTrashView}:${folders.length}:${debouncedSearch}`}
+                revealRequest={gridRevealRequest}
                 onSelect={selectEntry}
                 onAdd={addAssetToCanvas}
               />
@@ -1452,6 +1567,7 @@ function AssetLibraryGrid({
   allowDragAndAdd,
   scrollElementRef,
   layoutVersion,
+  revealRequest,
   onSelect,
   onAdd,
 }: {
@@ -1465,12 +1581,14 @@ function AssetLibraryGrid({
   allowDragAndAdd: boolean
   scrollElementRef: RefObject<HTMLDivElement | null>
   layoutVersion: string
+  revealRequest?: AssetGridRevealRequest | null
   onSelect(entry: AssetLibraryEntry, event: ReactMouseEvent<HTMLButtonElement>): void
   onAdd(asset: CinemaAssetRecord): void | Promise<void>
 }) {
   const gridRef = useRef<HTMLElement>(null)
   const assetButtonRefs = useRef<Array<HTMLButtonElement | null>>([])
   const pendingFocusIndexRef = useRef<number | null>(null)
+  const lastFocusedRevealRequestIDRef = useRef<string | null>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
   const shouldVirtualize = shouldVirtualizeAssetLibraryGrid(assets.length)
   const rowCount = assetLibraryGridRowCount(assets.length)
@@ -1517,6 +1635,14 @@ function AssetLibraryGrid({
       element.focus({ preventScroll: true })
     })
   }, [assets.length, rowVirtualizer, shouldVirtualize])
+
+  useEffect(() => {
+    if (!revealRequest || lastFocusedRevealRequestIDRef.current === revealRequest.requestID) return
+    const targetIndex = assets.findIndex((asset) => asset.id === revealRequest.assetID)
+    if (targetIndex < 0) return
+    lastFocusedRevealRequestIDRef.current = revealRequest.requestID
+    focusAssetAtIndex(targetIndex)
+  }, [assets, focusAssetAtIndex, revealRequest])
 
   const renderAssetCard = (asset: CinemaAssetRecord, index: number) => {
     const entry: AssetLibraryEntry = { entryType: "asset", asset }

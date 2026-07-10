@@ -1,6 +1,11 @@
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import {
+  resolveMediaExecutableNames,
+  validateMediaRuntimeLock,
+  verifyMediaRuntime,
+} from "./verify-media-runtime.mjs"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const desktopDir = path.resolve(scriptDir, "..")
@@ -13,12 +18,23 @@ const nativeHostExecutableName = process.platform === "win32"
 const pythonExecutable = process.platform === "win32"
   ? path.join(dependenciesDir, "python", "python.exe")
   : path.join(dependenciesDir, "python", "bin", "python3")
-const bundledMediaTools = process.platform === "win32" && process.arch === "x64"
+const mediaLock = validateMediaRuntimeLock(JSON.parse(
+  fs.readFileSync(path.join(desktopDir, "media-runtime.lock.json"), "utf8"),
+))
+const mediaPlatform = mediaLock.platforms[process.platform]
+const mediaTarget = mediaPlatform?.status === "supported"
+  ? mediaPlatform.targets?.[process.arch]
+  : undefined
+const mediaTargetReady = mediaTarget?.artifactStatus !== "pending" && Boolean(mediaTarget?.distribution)
+const mediaExecutableNames = mediaTargetReady
+  ? resolveMediaExecutableNames(mediaTarget, process.platform, process.arch)
+  : undefined
+const bundledMediaTools = mediaTarget && mediaExecutableNames
   ? [
-      path.join(runtimeDir, "media-tools", "ffmpeg.exe"),
-      path.join(runtimeDir, "media-tools", "ffprobe.exe"),
-      path.join(runtimeDir, "media-tools", "LICENSE.txt"),
-      path.join(runtimeDir, "media-tools", "THIRD-PARTY-NOTICES.txt"),
+      path.join(runtimeDir, "media-tools", mediaExecutableNames.ffmpeg),
+      path.join(runtimeDir, "media-tools", mediaExecutableNames.ffprobe),
+      path.join(runtimeDir, "media-tools", mediaTarget.licensePolicy.licenseFile),
+      path.join(runtimeDir, "media-tools", mediaTarget.licensePolicy.noticesFile),
       path.join(runtimeDir, "media-tools", "manifest.json"),
     ]
   : []
@@ -89,6 +105,29 @@ if (manifest.platform !== process.platform || manifest.arch !== process.arch) {
   console.error(
     `[desktop][build] dependency manifest platform mismatch: got ${manifest.platform}/${manifest.arch}, expected ${process.platform}/${process.arch}`,
   )
+  process.exit(1)
+}
+
+try {
+  const releaseStrict = process.argv.includes("--release-strict")
+  const mediaToolsDir = path.join(runtimeDir, "media-tools")
+  if (mediaTargetReady) {
+    await verifyMediaRuntime({ runtimeDir, releaseStrict })
+  } else if (fs.existsSync(mediaToolsDir)) {
+    throw new Error(
+      `Media runtime files exist without a locked target for ${process.platform}/${process.arch}`,
+    )
+  } else if (releaseStrict || process.env.ANYBOX_REQUIRE_MEDIA_RUNTIME === "1") {
+    throw new Error(
+      `Media runtime is required but blocked for ${process.platform}/${process.arch}: ${mediaTarget?.releaseReadiness?.reasons?.join(" ") ?? mediaPlatform?.reason ?? "target is not locked"}`,
+    )
+  } else {
+    console.warn(
+      `[desktop][media] runtime remains blocked for ${process.platform}/${process.arch}; Deliver stays unavailable`,
+    )
+  }
+} catch (error) {
+  console.error(`[desktop][build] ${error instanceof Error ? error.message : error}`)
   process.exit(1)
 }
 

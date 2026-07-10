@@ -62,4 +62,21 @@ describe("CinemaWorkbenchShell", () => {
     expect(onWorkspaceChange).toHaveBeenCalledWith("edit")
     expect(screen.getByRole("tab", { name: /Deliver/ })).toBeDisabled()
   })
+
+  it("enables Deliver only when the project or development flag allows it", () => {
+    const onWorkspaceChange = vi.fn()
+    render(
+      <CinemaWorkbenchShell
+        projectName="Test Film"
+        activeWorkspace="create"
+        availableWorkspaces={{ edit: true, deliver: true }}
+        onWorkspaceChange={onWorkspaceChange}
+      >
+        <div>Canvas content</div>
+      </CinemaWorkbenchShell>,
+    )
+
+    fireEvent.click(screen.getByRole("tab", { name: "Deliver" }))
+    expect(onWorkspaceChange).toHaveBeenCalledWith("deliver")
+  })
 })

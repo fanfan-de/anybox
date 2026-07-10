@@ -128,7 +128,10 @@ import {
 } from "./features/canvas/commandQueue"
 import { CanvasSaveStatus, type SaveState } from "./features/canvas/CanvasSaveStatus"
 import { AssetLibraryApiError, createAssetLibraryApi } from "./features/assets/assetLibraryApi"
-import type { AssetLibraryAddRequest } from "./features/assets/AssetLibraryPanel"
+import type {
+  AssetLibraryAddRequest,
+  AssetLibraryRevealRequest,
+} from "./features/assets/AssetLibraryPanel"
 import {
   CINEMA_ASSET_DRAG_MIME,
   cinemaAssetLocatorFromDragPayload,
@@ -156,6 +159,11 @@ const AssetLibraryPanel = lazy(async () => {
 const EditWorkbench = lazy(async () => {
   const module = await import("./features/timeline/components/EditWorkbench")
   return { default: module.EditWorkbench }
+})
+
+const DeliverWorkbench = lazy(async () => {
+  const module = await import("./features/deliver/components/DeliverWorkbench")
+  return { default: module.DeliverWorkbench }
 })
 
 type CanvasPanel = "files" | "assets"
@@ -6634,6 +6642,7 @@ export function App() {
   const reactFlow = useReactFlow<CinemaFlowNode, Edge>()
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<CinemaFlowNode, Edge> | null>(null)
   const [activeWorkspace, setActiveWorkspace] = useState<CinemaWorkspaceID>("create")
+  const [deliverTimelineID, setDeliverTimelineID] = useState<string | null>(null)
   const editFlushRef = useRef<(() => Promise<void>) | null>(null)
   const changeWorkspace = useCallback((workspace: CinemaWorkspaceID) => {
     if (workspace === activeWorkspace) return
@@ -6674,6 +6683,8 @@ export function App() {
   const [inspectorNodeID, setInspectorNodeID] = useState<string | null>(null)
   const [activeCanvasPanel, setActiveCanvasPanel] = useState<CanvasPanel | null>(null)
   const [relinkNodeID, setRelinkNodeID] = useState<string | null>(null)
+  const [assetLibraryRevealRequest, setAssetLibraryRevealRequest] = useState<AssetLibraryRevealRequest | null>(null)
+  const assetLibraryRevealNonceRef = useRef(0)
   const assetRailButtonRef = useRef<HTMLButtonElement>(null)
   const [nodeInputOverlayRoot, setNodeInputOverlayRoot] = useState<HTMLDivElement | null>(null)
   const [saveState, setSaveState] = useState<SaveState>("idle")
@@ -6854,7 +6865,14 @@ export function App() {
   const assetLibraryEnabled = projectQuery.data?.capabilities?.assetLibrary !== false
   const timelineEditingAvailable = projectQuery.data?.capabilities?.timelineEditing === true
     || import.meta.env.VITE_CINEMA_EDIT_DEV === "1"
-  const availableWorkspaces = { edit: timelineEditingAvailable, deliver: false } as const
+  const timelineDeliveryCapabilityAvailable = projectQuery.data?.capabilities?.timelineDelivery === true
+  const timelineDeliveryDevelopmentOverride = import.meta.env.VITE_CINEMA_DELIVER_DEV === "1"
+  const timelineDeliveryAvailable = timelineDeliveryCapabilityAvailable
+    || timelineDeliveryDevelopmentOverride
+  const availableWorkspaces = {
+    edit: timelineEditingAvailable,
+    deliver: timelineDeliveryAvailable,
+  } as const
 
   const createNodeFromAssetMutation = useMutation({
     scope: { id: `cinema-create-node-from-asset:${projectID}` },
@@ -7960,6 +7978,24 @@ export function App() {
     selectSingleNode(nodeID)
   }, [selectSingleNode])
 
+  const revealAssetInLibrary = useCallback((assetRef: CinemaAssetLocator) => {
+    assetLibraryRevealNonceRef.current += 1
+    setAssetLibraryRevealRequest({
+      requestID: `deliver-output-${assetLibraryRevealNonceRef.current}`,
+      assetRef: { scope: assetRef.scope, assetID: assetRef.assetID },
+    })
+    setRelinkNodeID(null)
+    setInspectorNodeID(null)
+    setContextMenu(null)
+    setNodeContextMenu(null)
+    setActiveCanvasPanel("assets")
+    setActiveWorkspace("create")
+  }, [])
+
+  const handleAssetLibraryRevealRequest = useCallback((requestID: string) => {
+    setAssetLibraryRevealRequest((current) => current?.requestID === requestID ? null : current)
+  }, [])
+
   const onCanvasAssetDragOver = useCallback((event: ReactDragEvent<HTMLElement>) => {
     if (!event.dataTransfer.types.includes(CINEMA_ASSET_DRAG_MIME)) return
     event.preventDefault()
@@ -7987,6 +8023,7 @@ export function App() {
   const closeAssetPanel = useCallback(() => {
     setActiveCanvasPanel((current) => current === "assets" ? null : current)
     setRelinkNodeID(null)
+    setAssetLibraryRevealRequest(null)
     window.requestAnimationFrame(() => assetRailButtonRef.current?.focus({ preventScroll: true }))
   }, [])
 
@@ -8507,7 +8544,33 @@ export function App() {
         availableWorkspaces={availableWorkspaces}
       >
         <Suspense fallback={<div className="cinema-timeline-empty" role="status"><p>Loading Edit workbench…</p></div>}>
-          <EditWorkbench agentBaseURL={agentBaseURL} projectID={projectID} onRegisterFlush={(flush) => { editFlushRef.current = flush }} />
+          <EditWorkbench
+            agentBaseURL={agentBaseURL}
+            projectID={projectID}
+            onRegisterFlush={(flush) => { editFlushRef.current = flush }}
+            onTimelineSelected={setDeliverTimelineID}
+          />
+        </Suspense>
+      </CinemaWorkbenchShell>
+    )
+  }
+
+  if (activeWorkspace === "deliver") {
+    return (
+      <CinemaWorkbenchShell
+        projectName={projectQuery.data?.name ?? "Cinema"}
+        activeWorkspace={activeWorkspace}
+        onWorkspaceChange={changeWorkspace}
+        availableWorkspaces={availableWorkspaces}
+      >
+        <Suspense fallback={<div className="cinema-empty-state" role="status"><p>Loading Deliver workbench…</p></div>}>
+          <DeliverWorkbench
+            agentBaseURL={agentBaseURL}
+            projectID={projectID}
+            initialTimelineID={deliverTimelineID}
+            technicalPreview={!timelineDeliveryCapabilityAvailable && timelineDeliveryDevelopmentOverride}
+            onShowAssetInLibrary={assetLibraryEnabled ? revealAssetInLibrary : undefined}
+          />
         </Suspense>
       </CinemaWorkbenchShell>
     )
@@ -8599,6 +8662,9 @@ export function App() {
                 onAddToCanvas={handleAssetLibraryAdd}
                 mode={relinkNodeID ? "relink" : "add"}
                 acceptKind={relinkAssetKind}
+                initialScope={assetLibraryRevealRequest?.assetRef.scope.type}
+                revealRequest={assetLibraryRevealRequest}
+                onRevealRequestHandled={handleAssetLibraryRevealRequest}
               />
             </Suspense>
           ) : null}

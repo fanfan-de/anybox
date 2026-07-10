@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "platforms": {
+    "win32": {
+      "status": "supported",
+      "targets": {
+        "x64": {
+          "runtimeID": "ffmpeg-anybox-win32-x64-lgpl-candidate-pending",
+          "manifestSchemaVersion": 1,
+          "origin": "anybox-controlled-lgpl",
+          "artifactStatus": "pending",
+          "releaseReadiness": {
+            "status": "blocked",
+            "releaseKind": "initial",
+            "reasons": [
+              "The Anybox-controlled Windows x64 archive has not been built and mirrored yet.",
+              "FFmpeg redistribution and Media Foundation/H.264 use have not received recorded approval.",
+              "The signed installed-app kill/restart smoke has not been recorded."
+            ]
+          },
+          "licensePolicy": {
+            "spdxExpression": "LGPL-3.0-or-later",
+            "licenseFile": "LICENSE.txt",
+            "noticesFile": "THIRD-PARTY-NOTICES.txt",
+            "reviewStatus": "pending"
+          },
+          "executables": {
+            "ffmpeg": "ffmpeg.exe",
+            "ffprobe": "ffprobe.exe"
+          },
+          "buildConfigurationPolicy": {
+            "requiredFlags": [
+              "--arch=x86_64",
+              "--target-os=mingw32",
+              "--enable-version3",
+              "--enable-mediafoundation",
+              "--disable-libopenh264",
+              "--disable-libx264",
+              "--disable-libx265",
+              "--disable-libfdk-aac",
+              "--disable-gpl",
+              "--disable-nonfree"
+            ],
+            "forbiddenFlags": [
+              "--enable-gpl",
+              "--enable-nonfree",
+              "--enable-libopenh264",
+              "--enable-libx264",
+              "--enable-libx265",
+              "--enable-libfdk-aac"
+            ]
+          },
+          "requiredEncoders": [
+            "h264_mf",
+            "aac"
+          ],
+          "smokeTest": {
+            "durationSeconds": 1,
+            "videoEncoder": "h264_mf",
+            "audioEncoder": "aac",
+            "expectedVideoCodec": "h264",
+            "expectedAudioCodec": "aac"
+          }
+        }
+      }
+    },
+    "darwin": {
+      "status": "supported",
+      "targets": {
+        "arm64": {
+          "runtimeID": "ffmpeg-anybox-darwin-arm64-lgpl-candidate-pending",
+          "manifestSchemaVersion": 1,
+          "origin": "anybox-controlled-lgpl",
+          "artifactStatus": "pending",
+          "releaseReadiness": {
+            "status": "blocked",
+            "releaseKind": "initial",
+            "reasons": [
+              "The Anybox-controlled macOS arm64 archive has not been built and mirrored yet.",
+              "FFmpeg redistribution and VideoToolbox/H.264 use have not received recorded approval.",
+              "The signed and notarized installed-app kill/restart smoke has not been recorded."
+            ]
+          },
+          "licensePolicy": {
+            "spdxExpression": "LGPL-3.0-or-later",
+            "licenseFile": "LICENSE.txt",
+            "noticesFile": "THIRD-PARTY-NOTICES.txt",
+            "reviewStatus": "pending"
+          },
+          "executables": {
+            "ffmpeg": "ffmpeg",
+            "ffprobe": "ffprobe"
+          },
+          "buildConfigurationPolicy": {
+            "requiredFlags": [
+              "--arch=arm64",
+              "--target-os=darwin",
+              "--enable-version3",
+              "--enable-videotoolbox",
+              "--disable-libopenh264",
+              "--disable-libx264",
+              "--disable-libx265",
+              "--disable-libfdk-aac",
+              "--disable-gpl",
+              "--disable-nonfree"
+            ],
+            "forbiddenFlags": [
+              "--enable-gpl",
+              "--enable-nonfree",
+              "--enable-libopenh264",
+              "--enable-libx264",
+              "--enable-libx265",
+              "--enable-libfdk-aac"
+            ]
+          },
+          "requiredEncoders": [
+            "h264_videotoolbox",
+            "aac"
+          ],
+          "smokeTest": {
+            "durationSeconds": 1,
+            "videoEncoder": "h264_videotoolbox",
+            "audioEncoder": "aac",
+            "expectedVideoCodec": "h264",
+            "expectedAudioCodec": "aac"
+          }
+        }
+      }
+    },
+    "linux": {
+      "status": "blocked",
+      "reason": "No reviewed, checksum-pinned LGPL FFmpeg/ffprobe distribution is configured for Linux yet."
+    }
+  }
+}

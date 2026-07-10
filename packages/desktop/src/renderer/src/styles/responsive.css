@@ -114,6 +114,29 @@
   }
 }
 
+@container thread-shell (max-width: 620px) {
+  .thread-turn-navigator {
+    inset-block: 10px auto;
+    left: 10px;
+    align-items: flex-start;
+  }
+
+  .thread-turn-navigator-markers,
+  .thread-turn-navigator-label {
+    display: none;
+  }
+
+  .thread-turn-navigator-compact {
+    display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thread-turn-navigator-marker-line {
+    transition: none;
+  }
+}
+
 @media (max-width: 720px) {
   body {
     overflow: auto;

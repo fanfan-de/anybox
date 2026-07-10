@@ -1,6 +1,6 @@
 # Cinema Timeline Editor Design
 
-> Status: planned。Create / Edit / Deliver 顶层壳层已经实现，但 Edit 与 Deliver 当前仍为 disabled；本文描述的 Timeline、渲染与导出能力尚未实现。
+> Status: Edit implemented；Deliver V1 frontend implemented behind the release gate。Create / Edit / Deliver 顶层壳层已经实现，Edit 已公开启用；Deliver 已接入真实 Agent preflight/job/output 链路，但 D5 发布门槛完成前对正常项目仍为 disabled，可通过开发开关进入真实工作台进行验收。
 
 > 本文保留为长期能力设计；Edit MVP 的实施顺序、范围收敛和发布门槛以 [cinema-edit-workbench-development-plan.md](./cinema-edit-workbench-development-plan.md) 为准。
 
@@ -32,7 +32,7 @@
 
 ### 当前入口
 
-现有 [CinemaWorkbenchShell.tsx](/C:/Projects/Anybox/packages/cinema-web/src/features/workbench/CinemaWorkbenchShell.tsx) 已展示 Create / Edit / Deliver 三个顶层 tab。Create 当前可用，Edit 与 Deliver 显示 `Soon` 并禁用。Timeline 第一阶段应直接启用 Edit，不再向 Canvas 垂直工具栏增加重复的剪辑入口。
+现有 [CinemaWorkbenchShell.tsx](/C:/Projects/Anybox/packages/cinema-web/src/features/workbench/CinemaWorkbenchShell.tsx) 已展示 Create / Edit / Deliver 三个顶层 tab。Create 与 Edit 当前可用；Deliver 由 `timelineDelivery` capability 控制，开发期间可通过 `VITE_CINEMA_DELIVER_DEV=1` 进入真实 preflight/job 工作台。不要向 Canvas 垂直工具栏增加重复的剪辑或交付入口。
 
 ### 点击行为
 
@@ -206,17 +206,17 @@ export type CinemaTimelineDocument = {
   id: string
   projectID: string
   title: string
+  revision: number
   createdAt: string
   updatedAt: string
   settings: CinemaTimelineSettings
-  viewport: CinemaTimelineViewport
   tracks: CinemaTimelineTrack[]
   clips: CinemaTimelineClip[]
   markers: CinemaTimelineMarker[]
-  selection: CinemaTimelineSelection
-  renderState?: CinemaTimelineRenderState
 }
 ```
+
+`selection`、`playhead`、`viewport` 和 render job 状态都是 UI 或 Deliver 域状态，不写入 Timeline 文档。持久化事实来源为 `@anybox/shared/cinema-timeline`。
 
 ### Timeline 设置
 
@@ -224,35 +224,28 @@ export type CinemaTimelineDocument = {
 export type CinemaTimelineSettings = {
   width: number
   height: number
-  fps: 24 | 25 | 30 | 50 | 60
-  sampleRate: 44100 | 48000
-  durationSeconds: number
-  background: {
-    type: "color" | "transparent"
-    color?: string
-  }
-  exportDefaults: {
-    format: "mp4"
-    videoCodec: "h264"
-    audioCodec: "aac"
-    bitrateMode: "auto" | "target"
-    targetVideoBitrateKbps?: number
-  }
+  frameRate: { numerator: number; denominator: number }
+  sampleRate: 48000
+  backgroundColor: string
 }
 ```
+
+输出编码设置属于 Deliver 的 `CinemaRenderSettings`，不写入 Timeline settings；Timeline duration 从 Clip 计算，不重复持久化。
 
 ### Timeline 视口
 
 ```ts
 export type CinemaTimelineViewport = {
-  scrollXSeconds: number
+  scrollLeftPx: number
   scrollYTracks: number
   pixelsPerSecond: number
-  playheadSeconds: number
+  playheadUs: number
   snapEnabled: boolean
   snapThresholdPixels: number
 }
 ```
+
+Viewport 只保存在前端 UI store。时间值仍使用整数微秒，像素值只用于视图投影。
 
 ### 轨道
 
@@ -273,7 +266,7 @@ export type CinemaTimelineTrack = {
 
 ### Clip 基类
 
-时间线统一使用秒作为业务单位，避免帧率变化导致持久化数据迁移困难。渲染时再换算为帧。
+时间线持久化和命令统一使用整数微秒；帧率使用有理数。浮点秒只允许出现在媒体元素边界的临时换算中，不进入 Shared Schema 或 JSON 文档。
 
 ```ts
 export type CinemaTimelineClipBase = {
@@ -281,13 +274,11 @@ export type CinemaTimelineClipBase = {
   trackID: string
   kind: "video" | "audio" | "image" | "text"
   title: string
-  timelineStartSeconds: number
-  durationSeconds: number
-  selected?: boolean
-  locked?: boolean
-  muted?: boolean
-  opacity?: number
-  tags?: string[]
+  timelineStartUs: number
+  durationUs: number
+  playbackRate: number
+  volume: number
+  opacity: number
   createdAt: string
   updatedAt: string
 }
@@ -299,15 +290,15 @@ export type CinemaTimelineClipBase = {
 export type CinemaTimelineVideoClip = CinemaTimelineClipBase & {
   kind: "video"
   asset: CinemaTimelineAssetRef
-  sourceInSeconds: number
-  sourceOutSeconds: number
+  sourceInUs: number
+  sourceDurationUs: number
   playbackRate: number
   fit: "contain" | "cover" | "stretch"
   transform: CinemaTimelineTransform
   crop?: CinemaTimelineCrop
   volume: number
-  fadeInSeconds?: number
-  fadeOutSeconds?: number
+  fadeInUs?: number
+  fadeOutUs?: number
 }
 ```
 
@@ -317,13 +308,13 @@ export type CinemaTimelineVideoClip = CinemaTimelineClipBase & {
 export type CinemaTimelineAudioClip = CinemaTimelineClipBase & {
   kind: "audio"
   asset: CinemaTimelineAssetRef
-  sourceInSeconds: number
-  sourceOutSeconds: number
+  sourceInUs: number
+  sourceDurationUs: number
   playbackRate: number
   volume: number
   pan: number
-  fadeInSeconds?: number
-  fadeOutSeconds?: number
+  fadeInUs?: number
+  fadeOutUs?: number
 }
 ```
 
@@ -402,7 +393,7 @@ export type CinemaTimelineCrop = {
 ```ts
 export type CinemaTimelineMarker = {
   id: string
-  timeSeconds: number
+  timeUs: number
   title: string
   color: "default" | "warning" | "success" | "danger"
 }
@@ -420,16 +411,7 @@ export type CinemaTimelineSelection = {
 
 ### Render State
 
-```ts
-export type CinemaTimelineRenderState = {
-  latestJobID?: string
-  latestOutputAsset?: CinemaTimelineAssetRef
-  status: "idle" | "queued" | "running" | "succeeded" | "failed" | "canceled"
-  progressPercent?: number
-  message?: string
-  updatedAt?: string
-}
-```
+Render 状态不属于 Timeline 文档。Deliver 使用独立的 `CinemaRenderJob` 和 append-only job events，并显式保存 `timelineID` 与 `timelineRevision`；Timeline 后续编辑不会改写既有 job 的输入身份。
 
 ## Timeline 命令模型
 
@@ -442,13 +424,10 @@ export type CinemaTimelineCommand =
   | { type: "delete-track"; trackID: string }
   | { type: "add-clip"; clip: CinemaTimelineClip }
   | { type: "update-clip"; clipID: string; patch: Partial<CinemaTimelineClip> }
-  | { type: "move-clip"; clipID: string; trackID: string; timelineStartSeconds: number }
-  | { type: "trim-clip"; clipID: string; edge: "start" | "end"; timeSeconds: number }
-  | { type: "split-clip"; clipID: string; atSeconds: number; newClipID: string }
+  | { type: "move-clip"; clipID: string; trackID: string; timelineStartUs: number }
+  | { type: "trim-clip"; clipID: string; edge: "start" | "end"; timeUs: number }
+  | { type: "split-clip"; clipID: string; atUs: number; newClipID: string }
   | { type: "delete-clips"; clipIDs: string[] }
-  | { type: "set-playhead"; timeSeconds: number }
-  | { type: "set-viewport"; patch: Partial<CinemaTimelineViewport> }
-  | { type: "set-selection"; selection: CinemaTimelineSelection }
   | { type: "update-settings"; patch: Partial<CinemaTimelineSettings> }
 ```
 
@@ -456,7 +435,7 @@ export type CinemaTimelineCommand =
 
 - 拖动、裁剪、缩放时间线时，本地实时更新。
 - 停止拖动后 300-600ms 保存。
-- 播放头移动只本地保存，不写事件日志，除非用户关闭页面时需要恢复。
+- 播放头、viewport 和 selection 只进入本地 UI snapshot，不写 Timeline 文档或事件日志。
 - `add/split/delete/render` 这类结构变化写事件日志。
 - 支持 undo/redo 时优先基于 command inverse，而不是全量 snapshot。
 
@@ -501,44 +480,34 @@ POST /api/cinema/projects/:projectID/render-jobs/:jobID/cancel
 Render job body:
 
 ```ts
-export type CreateCinemaTimelineRenderJobBody = {
-  timelineID: string
-  title?: string
-  range?: {
-    startSeconds: number
-    endSeconds: number
-  }
-  settings?: {
-    width?: number
-    height?: number
-    fps?: number
-    videoBitrateKbps?: number
-    audioBitrateKbps?: number
-  }
+export type CreateCinemaRenderJobBody = {
+  operationID: string
+  expectedTimelineRevision: number
+  settings: CinemaRenderSettings
 }
 ```
 
 Render job:
 
 ```ts
-export type CinemaTimelineRenderJob = {
+export type CinemaRenderJob = {
+  schemaVersion: 1
   id: string
+  projectID: string
   timelineID: string
-  title: string
-  status: "queued" | "running" | "succeeded" | "failed" | "canceled"
-  progress: {
-    phase: "queued" | "probing" | "rendering" | "finalizing" | "succeeded" | "failed" | "canceled"
-    percent?: number
-    message?: string
-  }
-  inputTimelinePath: string
-  outputAsset?: CinemaTimelineAssetRef
-  ffmpegCommandPreview?: string
-  error?: string
+  timelineRevision: number
+  operationID: string
+  status: CinemaRenderJobStatus
+  settings: CinemaRenderSettings
+  progress: CinemaRenderJobProgress
+  outputAssetRef?: CinemaAssetRef
+  error?: CinemaRenderJobError
   createdAt: string
   updatedAt: string
 }
 ```
+
+完整严格契约以 `@anybox/shared/cinema-render` 为准。Job/API 不返回绝对输入路径、输出路径或完整 FFmpeg 命令。
 
 ## 渲染方案
 
@@ -551,7 +520,7 @@ export type CinemaTimelineRenderJob = {
 5. 渲染到 `exports/` 临时文件。
 6. 成功后 rename 为最终 MP4。
 7. 写入 render job JSON。
-8. 更新 timeline renderState。
+8. 将输出登记为 `source: "render"` 的项目资产，并把稳定 `CinemaAssetRef` 写入 job。
 9. 追加 Cinema event。
 
 基础映射：
@@ -570,7 +539,7 @@ export type CinemaTimelineRenderJob = {
 
 第一版预览不做浏览器实时合成编码。预览只需要交互准确、反馈快：
 
-- 播放头落在某个视频 clip 上时，使用 HTMLVideoElement seek 到 `sourceInSeconds + localOffset`。
+- 播放头落在某个视频 clip 上时，把 `sourceInUs + localOffsetUs` 临时换算为 HTMLVideoElement 所需的秒值。
 - 图片和文本 clip 使用 DOM/CSS overlay。
 - Transform 使用 CSS transform。
 - 多视频轨第一版可以只预览最高可见轨；第二版再用 canvas compositor 叠加。
@@ -581,9 +550,9 @@ export type CinemaTimelineRenderJob = {
 ```ts
 type TimelinePlaybackState = {
   status: "paused" | "playing" | "seeking"
-  playheadSeconds: number
+  playheadUs: number
   startedAtPerformanceMs?: number
-  startedAtTimelineSeconds?: number
+  startedAtTimelineUs?: number
   activeVideoClipID?: string
   activeAudioClipIDs: string[]
 }
@@ -627,7 +596,7 @@ type TimelinePlaybackState = {
 | 上一帧 | 按 timeline fps 将播放头后退一帧。 |
 | 下一帧 | 按 timeline fps 将播放头前进一帧。 |
 | 回到开头 | 播放头跳到 0。 |
-| 适应画布 | 预览 stage zoom 恢复到 fit。 |
+| 适应画布 | 当前不展示；Preview zoom 尚未实现前不提供无行为控件。 |
 | 预览画面单击 | 如果画面上有可选 clip overlay，选中最上层 clip。 |
 | 预览画面拖动 | 修改选中 clip 的 transform x/y。 |
 | 预览缩放控件 | 调整 preview stage zoom，不影响导出尺寸。 |
@@ -676,8 +645,8 @@ type TimelinePlaybackState = {
 | clip 单击 | 选中 clip，右侧 inspector 显示属性。 |
 | clip 双击 | 打开源素材预览/精修裁剪弹窗。 |
 | clip 拖动 | 移动到新时间或新轨道。 |
-| clip 左边缘拖动 | 裁剪开头，改变 `sourceInSeconds` 和 `timelineStartSeconds`。 |
-| clip 右边缘拖动 | 裁剪结尾，改变 `durationSeconds` 和 `sourceOutSeconds`。 |
+| clip 左边缘拖动 | 裁剪开头，改变 `sourceInUs` 和 `timelineStartUs`。 |
+| clip 右边缘拖动 | 裁剪结尾，改变 `durationUs` 和 `sourceDurationUs`。 |
 | clip 右键 | 打开菜单：分割、复制、删除、静音、在素材库中显示、替换素材。 |
 | clip 上方缩略图 | 仅展示，不单独点击。 |
 | clip 内标题 | 长标题 ellipsis，hover 显示完整路径或标题。 |
@@ -686,10 +655,10 @@ type TimelinePlaybackState = {
 
 | 控件 | 点击行为 |
 | --- | --- |
-| 开始时间输入 | 修改 clip `timelineStartSeconds`。 |
-| 时长输入 | 修改 clip `durationSeconds`。 |
-| 源入点输入 | 修改 `sourceInSeconds`。 |
-| 源出点输入 | 修改 `sourceOutSeconds`。 |
+| 开始时间输入 | 修改 clip `timelineStartUs`。 |
+| 时长输入 | 修改 clip `durationUs`。 |
+| 源入点输入 | 修改 `sourceInUs`。 |
+| 源时长输入 | 修改 `sourceDurationUs`。 |
 | 音量 slider | 修改 clip volume。 |
 | 透明度 slider | 修改 clip opacity。 |
 | 位置 X/Y 输入 | 修改 transform x/y。 |
@@ -802,8 +771,8 @@ type CinemaTimelineCanvasNodeData = {
 
 ### Phase 1: 入口和静态剪辑台
 
-- 已完成 Create / Edit / Deliver 顶层工作台壳层，当前只开放 Create。
-- 启用 Edit tab，并把 `activeWorkspace` 接入 URL 恢复。
+- 已完成 Create / Edit / Deliver 顶层工作台壳层，Create 与 Edit 已开放。
+- Edit tab 已由服务端 `timelineEditing` capability 启用。
 - 新建剪辑台 shell。
 - 加载/创建 timeline document。
 - 显示素材列表、预览区、空时间线。
@@ -828,7 +797,7 @@ type CinemaTimelineCanvasNodeData = {
 - 新增 render job API。
 - FFmpeg 渲染单轨/基础多轨。
 - 导出进度展示。
-- 导出资产写回 timeline renderState。
+- 导出资产登记到 Asset Library，并把 `CinemaAssetRef` 写入独立 render job。
 - 在素材库中展示导出结果。
 
 ### Phase 5: 体验完善
@@ -839,6 +808,7 @@ type CinemaTimelineCanvasNodeData = {
 - 音频轨。
 - marker 和 range selection。
 - 更完整的属性面板。
+- 已完成 P0 空 Timeline 引导、受控 Project Assets 跳转、毫秒时间显示和十进制秒 Inspector；多选、多轨管理与 Preview zoom 仍属后续能力。
 
 ## 风险与取舍
 

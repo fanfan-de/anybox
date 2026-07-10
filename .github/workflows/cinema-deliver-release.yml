@@ -1,0 +1,206 @@
+name: Cinema Deliver synchronized release
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Workflow run containing both signed installers and both installed-restart evidence artifacts
+        required: true
+        type: string
+      release_tag:
+        description: Release tag; must be v<desktopVersion> from the evidence
+        required: true
+        type: string
+      channel:
+        description: Internal RC creates a prerelease; public creates the final release
+        required: true
+        default: internal-rc
+        type: choice
+        options:
+          - internal-rc
+          - public
+      publish:
+        description: Create the synchronized GitHub release after every gate passes
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  verify-windows-candidate:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download signed Windows candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: cinema-deliver-win32-x64
+          path: candidate
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Download Windows installed restart evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: cinema-deliver-evidence-win32-x64
+          path: evidence
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify approved Windows runtime and installed evidence
+        shell: pwsh
+        run: |
+          node packages/desktop/scripts/verify-media-runtime.mjs --release-strict
+          $evidence = @(Get-ChildItem evidence -Recurse -Filter *.json)
+          if ($evidence.Count -ne 1) { throw "Expected exactly one Windows evidence JSON, found $($evidence.Count)" }
+          node packages/desktop/scripts/verify-deliver-restart-evidence.mjs $evidence[0].FullName --release-strict
+
+      - name: Verify Windows installer identity, digest, and Authenticode signature
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem candidate -Recurse -Filter *.exe)
+          $evidenceFiles = @(Get-ChildItem evidence -Recurse -Filter *.json)
+          if ($installers.Count -ne 1) { throw "Expected exactly one Windows installer, found $($installers.Count)" }
+          $record = Get-Content -LiteralPath $evidenceFiles[0].FullName -Raw | ConvertFrom-Json
+          if ($installers[0].Name -ne $record.build.artifactFileName) { throw "Windows installer filename does not match evidence" }
+          $digest = (Get-FileHash -LiteralPath $installers[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($digest -ne $record.build.artifactSHA256) { throw "Windows installer SHA-256 does not match evidence" }
+          $signature = Get-AuthenticodeSignature -LiteralPath $installers[0].FullName
+          if ($signature.Status -ne "Valid") { throw "Windows installer signature is $($signature.Status): $($signature.StatusMessage)" }
+
+  verify-macos-candidate:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require native Apple Silicon runner
+        run: test "$(uname -m)" = "arm64"
+
+      - name: Download signed and notarized macOS candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: cinema-deliver-darwin-arm64
+          path: candidate
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Download macOS installed restart evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: cinema-deliver-evidence-darwin-arm64
+          path: evidence
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify approved macOS runtime and installed evidence
+        run: |
+          node packages/desktop/scripts/verify-media-runtime.mjs --release-strict
+          evidence_file="$(find evidence -type f -name '*.json')"
+          test "$(find evidence -type f -name '*.json' | wc -l | tr -d ' ')" = "1"
+          node packages/desktop/scripts/verify-deliver-restart-evidence.mjs "$evidence_file" --release-strict
+
+      - name: Verify macOS installer identity, digest, signature, notarization, and stapling
+        run: |
+          installer="$(find candidate -type f -name '*.dmg')"
+          evidence_file="$(find evidence -type f -name '*.json')"
+          test "$(find candidate -type f -name '*.dmg' | wc -l | tr -d ' ')" = "1"
+          expected_name="$(jq -r '.build.artifactFileName' "$evidence_file")"
+          expected_sha="$(jq -r '.build.artifactSHA256' "$evidence_file")"
+          test "$(basename "$installer")" = "$expected_name"
+          test "$(shasum -a 256 "$installer" | awk '{print $1}')" = "$expected_sha"
+          codesign --verify --deep --strict --verbose=2 "$installer"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$installer"
+          xcrun stapler validate "$installer"
+
+  aggregate-release-gate:
+    needs:
+      - verify-windows-candidate
+      - verify-macos-candidate
+    runs-on: ubuntu-22.04
+    outputs:
+      commit_sha: ${{ steps.identity.outputs.commit_sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cinema-deliver-win32-x64
+          path: release/windows
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cinema-deliver-darwin-arm64
+          path: release/macos
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cinema-deliver-evidence-win32-x64
+          path: release/evidence/windows
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cinema-deliver-evidence-darwin-arm64
+          path: release/evidence/macos
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify synchronized matrix, installer digests, version, and commit
+        id: identity
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          windows_installer="$(find release/windows -type f -name '*.exe')"
+          macos_installer="$(find release/macos -type f -name '*.dmg')"
+          windows_evidence="$(find release/evidence/windows -type f -name '*.json')"
+          macos_evidence="$(find release/evidence/macos -type f -name '*.json')"
+          node packages/desktop/scripts/verify-deliver-release-matrix.mjs \
+            --windows "$windows_evidence" \
+            --macos "$macos_evidence" \
+            --windowsArtifact "$windows_installer" \
+            --macosArtifact "$macos_installer"
+          version="$(jq -r '.build.desktopVersion' "$windows_evidence")"
+          commit_sha="$(jq -r '.build.commitSHA' "$windows_evidence")"
+          test "$RELEASE_TAG" = "v$version"
+          case "$GITHUB_SHA" in "$commit_sha"*) ;; *) echo "Evidence commit $commit_sha does not match workflow commit $GITHUB_SHA" >&2; exit 1;; esac
+          echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve synchronized release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: cinema-deliver-synchronized-release-candidate
+          path: release
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-synchronized-release:
+    if: inputs.publish
+    needs: aggregate-release-gate
+    runs-on: ubuntu-22.04
+    environment: cinema-deliver-release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: cinema-deliver-synchronized-release-candidate
+          path: release
+
+      - name: Publish both platforms in one GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+          TARGET_COMMIT: ${{ needs.aggregate-release-gate.outputs.commit_sha }}
+        run: |
+          mapfile -t assets < <(find release/windows release/macos -type f)
+          options=(--target "$TARGET_COMMIT" --generate-notes)
+          if [ "$RELEASE_CHANNEL" = "internal-rc" ]; then options+=(--prerelease); else options+=(--latest); fi
+          gh release create "$RELEASE_TAG" "${assets[@]}" "${options[@]}"

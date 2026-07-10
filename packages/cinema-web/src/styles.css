@@ -132,6 +132,46 @@
   --cinema-edit-clip-audio-surface: #376f55;
   --cinema-edit-clip-image-surface: #6a5688;
   --cinema-edit-clip-text-surface: #795767;
+  --cinema-deliver-surface: var(--cinema-canvas-bg);
+  --cinema-deliver-chrome: var(--cinema-surface);
+  --cinema-deliver-panel: var(--cinema-surface-2);
+  --cinema-deliver-overlay: var(--cinema-floating-surface);
+  --cinema-deliver-border: var(--cinema-border);
+  --cinema-deliver-border-strong: var(--cinema-border-strong);
+  --cinema-deliver-control: var(--cinema-control-background);
+  --cinema-deliver-control-hover: var(--cinema-control-hover);
+  --cinema-deliver-muted: var(--cinema-text-2);
+  --cinema-deliver-accent-dark: #f9a8d4;
+  --cinema-deliver-accent-light: #a61e68;
+  --cinema-deliver-accent: var(--cinema-deliver-accent-dark);
+  --cinema-deliver-primary: var(--cinema-button-primary-surface);
+  --cinema-deliver-primary-hover: var(--cinema-button-primary-surface-hover);
+  --cinema-deliver-primary-text: var(--cinema-button-primary-text);
+  --cinema-deliver-disabled: var(--cinema-button-primary-disabled-surface);
+  --cinema-deliver-disabled-text: var(--cinema-button-primary-disabled-text);
+  --cinema-deliver-success-dark: #64d6a0;
+  --cinema-deliver-success-light: #147d4f;
+  --cinema-deliver-success: var(--cinema-deliver-success-dark);
+  --cinema-deliver-warning-dark: #e2bd68;
+  --cinema-deliver-warning-light: #8a5a00;
+  --cinema-deliver-warning: var(--cinema-deliver-warning-dark);
+  --cinema-deliver-danger-dark: #fb7185;
+  --cinema-deliver-danger-light: #b4232c;
+  --cinema-deliver-danger-hover-dark: #fda4af;
+  --cinema-deliver-danger-hover-light: #8f1720;
+  --cinema-deliver-danger-surface-dark: rgba(251, 113, 133, 0.14);
+  --cinema-deliver-danger-surface-light: rgba(180, 35, 44, 0.1);
+  --cinema-deliver-danger: var(--cinema-deliver-danger-dark);
+  --cinema-deliver-danger-hover: var(--cinema-deliver-danger-hover-dark);
+  --cinema-deliver-danger-surface: var(--cinema-deliver-danger-surface-dark);
+  --cinema-deliver-progress-dark: #8bb9ff;
+  --cinema-deliver-progress-light: #356ac3;
+  --cinema-deliver-progress: var(--cinema-deliver-progress-dark);
+  --cinema-deliver-progress-track: var(--cinema-control-hover);
+  --cinema-deliver-media-bg: var(--cinema-canvas-bg);
+  --cinema-deliver-link-dark: #8bb9ff;
+  --cinema-deliver-link-light: #356ac3;
+  --cinema-deliver-link: var(--cinema-deliver-link-dark);
 }
 
 :root[data-theme="light"] {
@@ -4326,5 +4366,29 @@ button.cinema-video-input-slot-main {
   .cinema-file-preview,
   .cinema-file-browser-note {
     display: none;
+  }
+}
+
+:root[data-theme="light"] {
+  --cinema-deliver-accent: var(--cinema-deliver-accent-light);
+  --cinema-deliver-success: var(--cinema-deliver-success-light);
+  --cinema-deliver-warning: var(--cinema-deliver-warning-light);
+  --cinema-deliver-danger: var(--cinema-deliver-danger-light);
+  --cinema-deliver-danger-hover: var(--cinema-deliver-danger-hover-light);
+  --cinema-deliver-danger-surface: var(--cinema-deliver-danger-surface-light);
+  --cinema-deliver-progress: var(--cinema-deliver-progress-light);
+  --cinema-deliver-link: var(--cinema-deliver-link-light);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --cinema-deliver-accent: var(--cinema-deliver-accent-light);
+    --cinema-deliver-success: var(--cinema-deliver-success-light);
+    --cinema-deliver-warning: var(--cinema-deliver-warning-light);
+    --cinema-deliver-danger: var(--cinema-deliver-danger-light);
+    --cinema-deliver-danger-hover: var(--cinema-deliver-danger-hover-light);
+    --cinema-deliver-danger-surface: var(--cinema-deliver-danger-surface-light);
+    --cinema-deliver-progress: var(--cinema-deliver-progress-light);
+    --cinema-deliver-link: var(--cinema-deliver-link-light);
   }
 }

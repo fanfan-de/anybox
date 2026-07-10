@@ -30,7 +30,7 @@ import { readCinemaTimelineUiSnapshot, writeCinemaTimelineUiSnapshot } from "../
 import { EditTopbar } from "./EditTopbar"
 import { TimelineEmptyState } from "./TimelineEmptyState"
 import { TimelineInspector } from "./TimelineInspector"
-import { TimelineMediaBin } from "./TimelineMediaBin"
+import { TimelineMediaBin, type TimelineMediaSection } from "./TimelineMediaBin"
 import { TimelinePreviewStage } from "./TimelinePreviewStage"
 import { TimelineToolbar } from "./TimelineToolbar"
 import { TimelineTrackArea } from "./TimelineTrackArea"
@@ -78,10 +78,12 @@ export function EditWorkbench({
   agentBaseURL,
   projectID,
   onRegisterFlush,
+  onTimelineSelected,
 }: {
   agentBaseURL: string
   projectID: string
   onRegisterFlush?: (flush: (() => Promise<void>) | null) => void
+  onTimelineSelected?: (timelineID: string | null) => void
 }) {
   const queryClient = useQueryClient()
   const api = useMemo(() => createTimelineApi(agentBaseURL, projectID), [agentBaseURL, projectID])
@@ -91,6 +93,7 @@ export function EditWorkbench({
   const [selectedTimelineID, setSelectedTimelineID] = useState<string | null>(null)
   const [selectedClip, setSelectedClip] = useState<CinemaTimelineClip | null>(null)
   const [mediaOpen, setMediaOpen] = useState(true)
+  const [mediaSection, setMediaSection] = useState<TimelineMediaSection>("timelines")
   const [inspectorOpen, setInspectorOpen] = useState(true)
   const [previewPercent, setPreviewPercent] = useState(42)
   const [playheadUs, setPlayheadUs] = useState(0)
@@ -111,6 +114,10 @@ export function EditWorkbench({
     if (selectedTimelineID && timelines.some((timeline) => timeline.id === selectedTimelineID)) return
     setSelectedTimelineID(timelines[0]?.id ?? null)
   }, [selectedTimelineID, timelines])
+
+  useEffect(() => {
+    onTimelineSelected?.(selectedTimelineID)
+  }, [onTimelineSelected, selectedTimelineID])
 
   const serverTimeline = timelines.find((candidate) => candidate.id === selectedTimelineID) ?? null
   useEffect(() => {
@@ -591,6 +598,8 @@ export function EditWorkbench({
             }}
             onActivateAsset={addAsset}
             replacementClipTitle={replacementClipID ? timeline?.clips.find((clip) => clip.id === replacementClipID)?.title : undefined}
+            section={mediaSection}
+            onSectionChange={setMediaSection}
           />
         ) : null}
         <div className="cinema-edit-main" style={{ "--cinema-edit-preview-size": `${previewPercent}%` } as CSSProperties}>
@@ -612,6 +621,10 @@ export function EditWorkbench({
                 onToggleMuted={() => setPreviewMuted((value) => !value)}
                 onSeek={(timeUs) => setPlayheadUs(Math.min(timelineDurationUs, Math.max(0, timeUs)))}
                 onStepFrame={(direction) => setPlayheadUs((value) => Math.min(timelineDurationUs, Math.max(0, value + direction * timelineFrameDurationUs(timeline.settings.frameRate))))}
+                onBrowseAssets={() => {
+                  setMediaOpen(true)
+                  setMediaSection("project")
+                }}
               />
               <div
                 className="cinema-edit-horizontal-splitter"

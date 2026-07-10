@@ -553,6 +553,31 @@
   font-size: 12px;
 }
 
+.cinema-timeline-preview-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  max-width: 360px;
+  padding: 20px;
+  text-align: center;
+}
+
+.cinema-timeline-preview-empty h2,
+.cinema-timeline-preview-empty p {
+  margin: 0;
+}
+
+.cinema-timeline-preview-empty h2 {
+  color: var(--cinema-text);
+  font-size: 15px;
+}
+
+.cinema-timeline-preview-empty p {
+  color: var(--cinema-text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .cinema-timeline-preview-stage > video:not(.cinema-timeline-preload-video),
 .cinema-timeline-preview-stage > img {
   position: absolute;

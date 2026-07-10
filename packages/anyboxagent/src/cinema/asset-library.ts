@@ -15,6 +15,7 @@ import {
 import path from "node:path"
 import fuzzysort from "fuzzysort"
 import { isSshWorkspaceUri } from "@anybox/shared"
+import type { CinemaAssetRecordMutationResult } from "@anybox/shared/cinema"
 import * as Global from "#global/global.ts"
 import * as Project from "#project/project.ts"
 import { ApiError } from "#server/error.ts"
@@ -201,8 +202,32 @@ function defaultFolderDefinitions(scope: CinemaAssetScope): DefaultFolderDefinit
     { id: "generated-images", parentID: "generated", name: "图片", relativePath: "生成素材/图片", system: true },
     { id: "generated-videos", parentID: "generated", name: "视频", relativePath: "生成素材/视频", system: true },
     { id: "generated-audio", parentID: "generated", name: "音频", relativePath: "生成素材/音频", system: true },
+    { id: "exports", parentID: CINEMA_ASSET_LIBRARY_ROOT_FOLDER_ID, name: "导出", relativePath: "导出", system: true },
     ...common.slice(1),
   ]
+}
+
+async function ensureDefaultFolders(
+  paths: CinemaAssetLibraryPaths,
+  catalog: CinemaAssetCatalog,
+) {
+  const existingIDs = new Set(catalog.folders.map((folder) => folder.id))
+  const missing = defaultFolderDefinitions(paths.scope).filter((folder) => !existingIDs.has(folder.id))
+  if (missing.length === 0) return catalog
+  const timestamp = nowISO()
+  for (const folder of missing) {
+    catalog.folders.push({
+      ...folder,
+      depth: folderDepth(folder.relativePath),
+      status: "active",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })
+    await mkdir(physicalPath(paths, folder.relativePath), { recursive: true })
+  }
+  catalog.updatedAt = timestamp
+  await atomicWriteJson(paths.catalogPath, catalog, false)
+  return catalog
 }
 
 function createCatalog(scope: CinemaAssetScope): CinemaAssetCatalog {
@@ -396,7 +421,8 @@ async function ensureInitializedUnlocked(paths: CinemaAssetLibraryPaths) {
 
   if (catalogInfo) {
     await cleanupAbandonedStaging(paths)
-    return await catalogWithJournalHealth(paths, await readCatalog(paths))
+    const catalog = await catalogWithJournalHealth(paths, await readCatalog(paths))
+    return await ensureDefaultFolders(paths, catalog)
   }
 
   const catalog = createCatalog(paths.scope)
@@ -1956,6 +1982,17 @@ export interface RegisterCinemaGeneratedAssetInput extends CinemaAssetLibraryMut
   destinationFolderID?: string
 }
 
+export async function getCinemaAssetLibraryOperationResult(
+  scope: CinemaAssetScope,
+  operationID: string,
+) {
+  const paths = resolveLibraryPaths(scope)
+  if (!(await pathExists(paths.catalogPath))) await initializeCinemaAssetLibrary(scope)
+  using _lock = await Lock.read(paths.scopeKey)
+  const catalog = await readCatalog(paths)
+  return catalog.operations[operationID]?.result
+}
+
 async function checksumFile(filePath: string) {
   const hash = createHash("sha256")
   for await (const chunk of createReadStream(filePath)) hash.update(chunk as Buffer)
@@ -1978,8 +2015,10 @@ function fileIdentityFromStats(info: Pick<Stats, "dev" | "ino">) {
 export async function registerCinemaGeneratedAsset(
   projectID: string,
   input: RegisterCinemaGeneratedAssetInput,
-) {
+): Promise<CinemaAssetRecordMutationResult> {
   const scope: CinemaAssetScope = { type: "project", projectID }
+  const previous = await getCinemaAssetLibraryOperationResult(scope, input.operationID)
+  if (previous) return previous as CinemaAssetRecordMutationResult
   const { paths } = await initializeCinemaAssetLibrary(scope)
   const projectRoot = path.dirname(paths.managedRoot)
   const sourcePath = path.isAbsolute(input.sourcePath)

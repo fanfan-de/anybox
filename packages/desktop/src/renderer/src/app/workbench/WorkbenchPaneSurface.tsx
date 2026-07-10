@@ -523,6 +523,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   const [bagDialogState, setBagDialogState] = useState<SessionBagDialogState | null>(null)
   const [bagDescription, setBagDescription] = useState("")
   const activeMessages = useConversationMessages(conversationStore, pane.sessionID)
+  const activeTurns = conversationStore.getSessionTurns(pane.sessionID)
   const composerParentMessagePreview = pane.composerParentMessageID
     ? pane.messageTree?.nodesByID[pane.composerParentMessageID]?.preview
     : undefined
@@ -845,6 +846,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   permissionRequestActionError={permissionRequestActionError}
                   permissionRequestActionRequestID={permissionRequestActionRequestID}
                   activeMessages={activeMessages}
+                  activeTurns={activeTurns}
                   messageTree={pane.messageTree}
                   sideChatCountsByAnchorMessageID={pane.sideChatCountsByAnchorMessageID}
                   sideChatSession={pane.activeSideChatSession}

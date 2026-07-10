@@ -1,6 +1,7 @@
-import { randomUUID } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { appendFile, mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
+import { isDeepStrictEqual } from "node:util"
 import {
   CinemaCanvasDocumentSchema,
   CinemaGenerationTaskSchema,
@@ -51,10 +52,40 @@ import {
   type DeleteCinemaTimelineResult,
   type CreateCinemaTimelineBody,
 } from "@anybox/shared/cinema-timeline"
+import {
+  isCinemaRenderTerminalStatus,
+  type CinemaRenderJob,
+  type CinemaRenderSettings,
+  type CreateCinemaRenderJobBody,
+  type RetryCinemaRenderJobBody,
+} from "@anybox/shared/cinema-render"
 import * as ProviderAuth from "#auth/provider-auth.ts"
 import * as CinemaProviderRuntime from "#cinema/provider-runtime.ts"
 import * as CinemaAssetLibrary from "#cinema/asset-library.ts"
 import * as CinemaTimelineStorage from "#cinema/timeline-storage.ts"
+import {
+  defaultCinemaRenderSettings,
+  preflightCinemaRender,
+} from "#cinema/render-preflight.ts"
+import {
+  cleanupCinemaRenderJobRetention,
+  type CinemaRenderRetentionResult,
+} from "#cinema/render-retention.ts"
+import { recoverCinemaRenderJobsOnce } from "#cinema/render-recovery.ts"
+import { cinemaRenderQueue } from "#cinema/render-queue.ts"
+import { selectCinemaRenderExecutionRuntime } from "#cinema/render-runtime.ts"
+import {
+  cloneCinemaRenderInputs,
+  readCinemaRenderTimelineSnapshot,
+  writeCinemaRenderTimelineSnapshot,
+} from "#cinema/render-snapshot.ts"
+import {
+  appendCinemaRenderJobEvent,
+  listCinemaRenderJobs as listStoredCinemaRenderJobs,
+  readCinemaRenderJob,
+  readCinemaRenderJobEvents,
+  writeCinemaRenderJob,
+} from "#cinema/render-storage.ts"
 import { applyCinemaTimelineCommandToDocument } from "#cinema/timeline-commands.ts"
 import * as CinemaTimelineWaveform from "#cinema/timeline-waveform.ts"
 import { streamCinemaFile } from "#cinema/file-range-stream.ts"
@@ -2076,6 +2107,8 @@ export async function getCinemaProject(projectID: string): Promise<CinemaProject
   let metadata: Record<string, unknown> | undefined
 
   if (initialized) {
+    const recovery = await recoverCinemaRenderJobsOnce(cinemaRoot)
+    await cinemaRenderQueue.resume(cinemaRoot, projectID, recovery.queuedJobIDs)
     try {
       metadata = await readOptionalJson(projectPath)
     } catch (error) {
@@ -2098,7 +2131,9 @@ export async function getCinemaProject(projectID: string): Promise<CinemaProject
         getProcessEnvValue("ANYBOX_CINEMA_ASSET_LIBRARY")?.trim().toLowerCase() ?? "",
       ),
       timelineEditing: true,
-      timelineDelivery: false,
+      timelineDelivery: ["1", "true", "on"].includes(
+        getProcessEnvValue("ANYBOX_CINEMA_TIMELINE_DELIVERY")?.trim().toLowerCase() ?? "",
+      ),
     },
   }
 }
@@ -2177,6 +2212,418 @@ export async function getCinemaTimeline(
     throw new ApiError(409, "CINEMA_TIMELINE_PROJECT_MISMATCH", "Timeline belongs to another project.")
   }
   return timeline
+}
+
+export async function preflightCinemaTimelineDelivery(
+  projectID: string,
+  timelineID: string,
+  settings?: CinemaRenderSettings,
+) {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+  const timeline = await getCinemaTimeline(projectID, timelineID)
+  return await preflightCinemaRender({
+    cinemaRoot,
+    projectID,
+    timeline,
+    settings: settings ?? defaultCinemaRenderSettings(timeline),
+  })
+}
+
+async function findCinemaRenderJobByOperationID(cinemaRoot: string, operationID: string) {
+  return (await listStoredCinemaRenderJobs(cinemaRoot)).find((job) => job.operationID === operationID)
+}
+
+function cinemaRenderProjectLockKey(cinemaRoot: string) {
+  return `cinema-render-project:${cinemaRoot}`
+}
+
+function assertCinemaRenderOperationMatches(
+  previous: CinemaRenderJob,
+  request:
+    | { kind: "create"; timelineID: string; input: CreateCinemaRenderJobBody }
+    | { kind: "retry"; originalJobID: string },
+) {
+  const matches = request.kind === "create"
+    ? previous.retryOfJobID === undefined
+      && previous.timelineID === request.timelineID
+      && previous.timelineRevision === request.input.expectedTimelineRevision
+      && isDeepStrictEqual(previous.settings, request.input.settings)
+    : previous.retryOfJobID === request.originalJobID
+  if (!matches) {
+    throw new ApiError(
+      409,
+      "CINEMA_RENDER_OPERATION_CONFLICT",
+      "Operation ID has already been used for a different render request.",
+    )
+  }
+}
+
+async function requireCinemaRenderJob(projectID: string, jobID: string) {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+  const job = await readCinemaRenderJob(cinemaRoot, jobID)
+  if (!job || job.projectID !== projectID) {
+    throw new ApiError(404, "CINEMA_RENDER_JOB_NOT_FOUND", `Render job '${jobID}' was not found.`)
+  }
+  return { cinemaRoot, job }
+}
+
+export async function createCinemaRenderJob(
+  projectID: string,
+  timelineID: string,
+  input: CreateCinemaRenderJobBody,
+) {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+  const result = await (async () => {
+    using _operationLock = await Lock.write(cinemaRenderProjectLockKey(cinemaRoot))
+    const previous = await findCinemaRenderJobByOperationID(cinemaRoot, input.operationID)
+    if (previous) {
+      assertCinemaRenderOperationMatches(previous, { kind: "create", timelineID, input })
+      return { job: previous, shouldEnqueue: previous.status === "queued" }
+    }
+
+    const timeline = await getCinemaTimeline(projectID, timelineID)
+    if (timeline.revision !== input.expectedTimelineRevision) {
+      throw new ApiError(
+        409,
+        "CINEMA_TIMELINE_REVISION_CONFLICT",
+        "Timeline revision changed before the render job was created.",
+        { latestRevision: timeline.revision },
+      )
+    }
+    const preflight = await preflightCinemaRender({
+      cinemaRoot,
+      projectID,
+      timeline,
+      settings: input.settings,
+    })
+    if (!preflight.ready) {
+      throw new ApiError(
+        409,
+        "CINEMA_RENDER_PREFLIGHT_BLOCKED",
+        "Timeline delivery preflight is blocked.",
+        preflight,
+      )
+    }
+
+    let executionRuntime
+    try {
+      executionRuntime = (await selectCinemaRenderExecutionRuntime()).executionRuntime
+    } catch {
+      throw new ApiError(
+        503,
+        "CINEMA_RENDER_RUNTIME_UNAVAILABLE",
+        "The render runtime or required encoder is unavailable.",
+      )
+    }
+
+    const timestamp = nowISO()
+    const job: CinemaRenderJob = {
+      schemaVersion: 1,
+      id: `render-${randomUUID()}`,
+      projectID,
+      timelineID,
+      timelineRevision: timeline.revision,
+      operationID: input.operationID,
+      status: "queued",
+      settings: input.settings,
+      progress: { phase: "queued", message: "Waiting for the render queue" },
+      executionRuntime,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }
+    await writeCinemaRenderJob(cinemaRoot, job)
+    try {
+      await writeCinemaRenderTimelineSnapshot(cinemaRoot, job.id, timeline)
+      await appendCinemaRenderJobEvent(cinemaRoot, {
+        schemaVersion: 1,
+        id: `render-event-${randomUUID()}`,
+        jobID: job.id,
+        type: "job-created",
+        createdAt: timestamp,
+        executionRuntime,
+        message: "Render job was created.",
+      })
+    } catch {
+      const failed: CinemaRenderJob = {
+        ...job,
+        status: "failed",
+        progress: { phase: "failed", message: "Timeline snapshot could not be created." },
+        error: {
+          code: "snapshot-failed",
+          message: "Timeline snapshot could not be created.",
+          retryable: true,
+          diagnosticSummary: { phase: "queued" },
+        },
+        finishedAt: nowISO(),
+        updatedAt: nowISO(),
+      }
+      await writeCinemaRenderJob(cinemaRoot, failed).catch(() => undefined)
+      throw new ApiError(500, "CINEMA_RENDER_JOB_CREATE_FAILED", "Render job could not be persisted.")
+    }
+    return { job, shouldEnqueue: true }
+  })()
+  if (result.shouldEnqueue) {
+    await cinemaRenderQueue.enqueue({ cinemaRoot, projectID, jobID: result.job.id })
+  }
+  return result.job
+}
+
+export async function listCinemaRenderJobs(projectID: string, timelineID: string) {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+  await getCinemaTimeline(projectID, timelineID)
+  return {
+    items: (await listStoredCinemaRenderJobs(cinemaRoot))
+      .filter((job) => job.projectID === projectID && job.timelineID === timelineID),
+  }
+}
+
+export async function getCinemaRenderJob(projectID: string, jobID: string) {
+  return (await requireCinemaRenderJob(projectID, jobID)).job
+}
+
+export async function getCinemaRenderJobEvents(projectID: string, jobID: string) {
+  const { cinemaRoot } = await requireCinemaRenderJob(projectID, jobID)
+  return { items: await readCinemaRenderJobEvents(cinemaRoot, jobID) }
+}
+
+export async function cancelCinemaRenderJob(projectID: string, jobID: string) {
+  const { cinemaRoot, job } = await requireCinemaRenderJob(projectID, jobID)
+  if (isCinemaRenderTerminalStatus(job.status)) return job
+  return await cinemaRenderQueue.cancel(cinemaRoot, jobID) ?? job
+}
+
+export async function retryCinemaRenderJob(
+  projectID: string,
+  jobID: string,
+  input: RetryCinemaRenderJobBody,
+) {
+  const { cinemaRoot, job: original } = await requireCinemaRenderJob(projectID, jobID)
+  const result = await (async () => {
+    using _operationLock = await Lock.write(cinemaRenderProjectLockKey(cinemaRoot))
+    const previous = await findCinemaRenderJobByOperationID(cinemaRoot, input.operationID)
+    if (previous) {
+      assertCinemaRenderOperationMatches(previous, { kind: "retry", originalJobID: original.id })
+      return { job: previous, shouldEnqueue: previous.status === "queued" }
+    }
+    if (original.status !== "failed" && original.status !== "canceled" && original.status !== "interrupted") {
+      throw new ApiError(409, "CINEMA_RENDER_JOB_NOT_RETRYABLE", "Only failed, canceled, or interrupted jobs can be retried.")
+    }
+    const timeline = await readCinemaRenderTimelineSnapshot(cinemaRoot, original.id)
+    if (!timeline) {
+      throw new ApiError(409, "CINEMA_RENDER_SNAPSHOT_MISSING", "The original Timeline snapshot is unavailable.")
+    }
+    let executionRuntime
+    try {
+      executionRuntime = (await selectCinemaRenderExecutionRuntime()).executionRuntime
+    } catch {
+      throw new ApiError(
+        503,
+        "CINEMA_RENDER_RUNTIME_UNAVAILABLE",
+        "The render runtime or required encoder is unavailable.",
+      )
+    }
+    const timestamp = nowISO()
+    const retry: CinemaRenderJob = {
+      schemaVersion: 1,
+      id: `render-${randomUUID()}`,
+      projectID,
+      timelineID: original.timelineID,
+      timelineRevision: original.timelineRevision,
+      operationID: input.operationID,
+      retryOfJobID: original.id,
+      status: "queued",
+      settings: original.settings,
+      progress: { phase: "queued", message: "Waiting for the render queue" },
+      executionRuntime,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }
+    await writeCinemaRenderJob(cinemaRoot, retry)
+    await writeCinemaRenderTimelineSnapshot(cinemaRoot, retry.id, timeline)
+    await cloneCinemaRenderInputs(cinemaRoot, original.id, retry.id).catch((error) => {
+      if (error instanceof Error && error.message === "Render job input snapshot must be a physical directory") return []
+      throw error
+    })
+    await appendCinemaRenderJobEvent(cinemaRoot, {
+      schemaVersion: 1,
+      id: `render-event-${randomUUID()}`,
+      jobID: retry.id,
+      type: "job-created",
+      createdAt: timestamp,
+      executionRuntime,
+      message: `Retry of render job '${original.id}'.`,
+    })
+    return { job: retry, shouldEnqueue: true }
+  })()
+  if (result.shouldEnqueue) {
+    await cinemaRenderQueue.enqueue({ cinemaRoot, projectID, jobID: result.job.id })
+  }
+  return result.job
+}
+
+export type RunCinemaRenderRetentionInput = {
+  operationID: string
+  retentionDurationMs: number
+  dryRun: boolean
+}
+
+export type RunCinemaRenderRetentionResult = CinemaRenderRetentionResult & {
+  operationID: string
+  retentionDurationMs: number
+}
+
+const CINEMA_RENDER_RETENTION_OPERATION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/
+
+function cinemaRenderRetentionJournalPath(cinemaRoot: string, operationID: string) {
+  const digest = createHash("sha256").update(operationID).digest("hex").slice(0, 32)
+  return path.join(cinemaRoot, `.render-retention-operation-${digest}.json`)
+}
+
+function parseCinemaRenderRetentionJournal(value: Record<string, unknown> | undefined) {
+  if (!value) return undefined
+  if (
+    value.schemaVersion !== 1
+    || typeof value.operationID !== "string"
+    || typeof value.retentionDurationMs !== "number"
+    || !Number.isSafeInteger(value.retentionDurationMs)
+    || typeof value.dryRun !== "boolean"
+    || !["running", "completed", "failed"].includes(String(value.phase))
+  ) {
+    throw new ApiError(
+      500,
+      "CINEMA_RENDER_RETENTION_JOURNAL_INVALID",
+      "The render retention operation journal is invalid.",
+    )
+  }
+  return value as {
+    schemaVersion: 1
+    operationID: string
+    retentionDurationMs: number
+    dryRun: boolean
+    phase: "running" | "completed" | "failed"
+  }
+}
+
+export async function runCinemaRenderRetention(
+  projectID: string,
+  input: RunCinemaRenderRetentionInput,
+  signal?: AbortSignal,
+): Promise<RunCinemaRenderRetentionResult> {
+  const { cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+  if (!CINEMA_RENDER_RETENTION_OPERATION_PATTERN.test(input.operationID)) {
+    throw new ApiError(
+      400,
+      "CINEMA_RENDER_RETENTION_OPERATION_ID_INVALID",
+      "operationID must be a safe 1-128 character identifier.",
+    )
+  }
+  if (!Number.isSafeInteger(input.retentionDurationMs) || input.retentionDurationMs <= 0) {
+    throw new ApiError(
+      400,
+      "CINEMA_RENDER_RETENTION_DURATION_INVALID",
+      "retentionDurationMs must be an explicit positive integer.",
+    )
+  }
+
+  using _renderProjectLock = await Lock.write(cinemaRenderProjectLockKey(cinemaRoot))
+  const journalPath = cinemaRenderRetentionJournalPath(cinemaRoot, input.operationID)
+  const previous = parseCinemaRenderRetentionJournal(await readOptionalJson(journalPath))
+  if (previous) {
+    if (
+      previous.operationID !== input.operationID
+      || previous.retentionDurationMs !== input.retentionDurationMs
+      || previous.dryRun !== input.dryRun
+    ) {
+      throw new ApiError(
+        409,
+        "CINEMA_RENDER_RETENTION_OPERATION_CONFLICT",
+        "The render retention operationID was already used for a different request.",
+      )
+    }
+    throw new ApiError(
+      409,
+      previous.phase === "completed"
+        ? "CINEMA_RENDER_RETENTION_OPERATION_REPLAYED"
+        : "CINEMA_RENDER_RETENTION_OPERATION_INCOMPLETE",
+      previous.phase === "completed"
+        ? "The render retention operationID has already completed; use a new operationID to rescan."
+        : "The render retention operation did not complete cleanly; inspect the project and use a new operationID.",
+    )
+  }
+
+  const startedAt = nowISO()
+  await writeJsonAtomic(journalPath, {
+    schemaVersion: 1,
+    operationID: input.operationID,
+    retentionDurationMs: input.retentionDurationMs,
+    dryRun: input.dryRun,
+    phase: "running",
+    startedAt,
+  })
+  log.info("render-retention-started", {
+    projectID,
+    operationID: input.operationID,
+    retentionDurationMs: input.retentionDurationMs,
+    dryRun: input.dryRun,
+  })
+  let result: CinemaRenderRetentionResult
+  try {
+    result = await cleanupCinemaRenderJobRetention(cinemaRoot, {
+      retentionDurationMs: input.retentionDurationMs,
+      dryRun: input.dryRun,
+      ...(input.dryRun && signal ? { signal } : {}),
+    })
+  } catch (error) {
+    await writeJsonAtomic(journalPath, {
+      schemaVersion: 1,
+      operationID: input.operationID,
+      retentionDurationMs: input.retentionDurationMs,
+      dryRun: input.dryRun,
+      phase: "failed",
+      startedAt,
+      failedAt: nowISO(),
+    }).catch(() => undefined)
+    log.warn("render-retention-failed", {
+      projectID,
+      operationID: input.operationID,
+      retentionDurationMs: input.retentionDurationMs,
+      dryRun: input.dryRun,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    })
+    throw error
+  }
+  await writeJsonAtomic(journalPath, {
+    schemaVersion: 1,
+    operationID: input.operationID,
+    retentionDurationMs: input.retentionDurationMs,
+    dryRun: input.dryRun,
+    phase: "completed",
+    startedAt,
+    completedAt: nowISO(),
+  })
+  log.info("render-retention-completed", {
+    projectID,
+    operationID: input.operationID,
+    retentionDurationMs: input.retentionDurationMs,
+    dryRun: input.dryRun,
+    discoveredJobCount: result.discoveredJobCount,
+    eligibleJobCount: result.eligibleJobCount,
+    candidateJobCount: result.candidateJobs.length,
+    cleanedJobCount: result.cleanedJobs.length,
+    estimatedReclaimableBytes: result.estimatedReclaimableBytes,
+    reclaimedBytes: result.reclaimedBytes,
+    errorCount: result.errors.length,
+  })
+  return {
+    operationID: input.operationID,
+    retentionDurationMs: input.retentionDurationMs,
+    ...result,
+  }
 }
 
 function cinemaTimelineLockKey(cinemaRoot: string, timelineID: string) {

@@ -20,7 +20,7 @@
 
 ## 2. 执行摘要
 
-Cinema Web 已经形成一个可运行的影视创作节点工作台。顶层已建立 Create / Edit / Deliver 三工作台壳层，当前只开放承载节点画布的 Create；Edit 与 Deliver 可见但禁用。Create 能够把文本、图片、视频、素材和 AI 生成任务组织成可持久化节点图，并通过 Anybox Agent 将画布、任务、资产和事件写入本地项目目录。
+Cinema Web 已经形成一个可运行的影视创作节点工作台。顶层 Create 与 Edit 已开放：Create 承载节点画布，Edit 提供可持久化 Timeline 粗剪；Deliver 已具备开发态预检、真实 render job、进度、历史和输出预览，但仍由开发开关隔离，正常项目继续返回 `timelineDelivery: false`，尚未通过 D5 公开发布门槛。Create 能够把文本、图片、视频、素材和 AI 生成任务组织成可持久化节点图，并通过 Anybox Agent 将画布、任务、资产和事件写入本地项目目录。
 
 当前最有价值的部分不是单一 React 画布，而是已经打通的完整闭环：
 
@@ -98,17 +98,17 @@ Cinema Web 不是独立站点，而是 Anybox Desktop 与 Anybox Agent 体系中
 
 ### 3.3 尚未实现的范围
 
-Timeline / 剪辑台目前只有 `cinema-timeline-editor-design.md` 中的设计，没有对应前端模块、Shared Schema、Agent 路由、渲染任务或 FFmpeg 流程。
+Timeline / 剪辑台已经具备前端模块、Shared Schema、Agent 路由和持久化编辑闭环。Deliver 的 Shared Render 契约、Agent render job 存储、预检、队列、快照、真实输出和 V1 工作台已经落地；生产 runtime 跨平台分发、故障注入和公开启用门槛仍待 D5 完成。
 
-顶层 Edit 与 Deliver tab 只代表工作台信息架构已经确定，不代表 Timeline、渲染和交付能力已经实现；两者当前均为 disabled。
+顶层 Edit 已公开启用。Deliver 对正常项目仍为 disabled，开发开关用于验收真实交付实现，不代表生产 runtime 和完整故障矩阵已经达到公开启用门槛。
 
-设计文档中列出的五个阶段均应继续视为规划项：
+当前剩余规划应聚焦 D5 发布加固以及 Deliver V1 之后的能力，不再把已经落地的导出链路描述为纯规划项：
 
-1. 入口和静态剪辑台。
-2. Timeline 编辑 MVP。
-3. 资产导入和 metadata。
-4. 导出。
-5. 多轨、文本、图片、音频和 marker 等体验完善。
+1. 生产 runtime 分发、跨平台 smoke 和故障注入。
+2. Deliver P0 性能、诊断、迁移与保留期文档。
+3. O1 video / text 的正式渲染支持。
+4. Edit marker、range handoff、Timeline 重命名和轨道管理。
+5. 多轨、字幕、封面和平台模板等交付体验。
 
 ## 4. 系统架构
 
@@ -407,7 +407,7 @@ Custom API 允许用户配置 URL、Header、Body 和认证信息。后端当前
 
 ### 10.1 主题与 Token
 
-当前只有一组 Cinema 暗色变量，并存在较多硬编码 hex、rgba、节点 accent、React Flow 背景色和 MiniMap mask。
+Cinema 工作台已具备成对 light/dark 运行时 token，Edit/Deliver 也已通过双主题 Axe 基线；Create 节点、React Flow 背景、MiniMap 与少量历史 surface 仍存在硬编码 hex/rgba，需要继续迁移。
 
 建议迁移为：
 
@@ -438,6 +438,8 @@ Custom API 允许用户配置 URL、Header、Body 和认证信息。后端当前
 - 图片结果的 `aria-selected` 或 `aria-pressed`。
 - 文件面板按钮状态与实际挂载状态一致。
 - 正确的页面语言或明确的多语言策略。
+
+Edit P0 已移除无行为的 Select/Preview Fit 控件，空 Timeline 增加可聚焦的单一主操作，并把 Inspector 的裸微秒输入改为十进制秒。多选、轨道管理和 Preview zoom 不在本轮范围内。
 
 ## 11. 文档一致性
 
@@ -611,8 +613,8 @@ src/
 | UI 完整度 | Create / Edit / Deliver 壳层已完成亮暗和窄窗口验收；节点内部仍有键盘路径不足 |
 | 性能准备度 | 小画布可用，大画布和长期任务需要优化 |
 | 安全边界 | 可用于可信本机假设，需要会话鉴权和 Origin 收紧后再扩展 |
-| Timeline 准备度 | 顶层 Edit 插槽、核心保存门槛和可靠性 E2E 已就绪；Edit 仍禁用，可在模块边界进一步收口后实施 |
+| Timeline / Deliver 准备度 | Edit 已实现并通过保存与交付 handoff；Deliver 开发态链路已实现，仍待跨平台 runtime、完整 P0/故障注入、保留期清理与发布验收 |
 
 最终结论：
 
-> Cinema Web 已经从“保存失败可能静默丢失”的高级原型进入经过真实 Agent 页面故障注入验证的可靠编辑阶段；下一步应以模块化收口和跨重启恢复决策为准入条件，再扩展 Timeline。
+> Cinema Web 已经从“保存失败可能静默丢失”的高级原型进入 Create / Edit 可用、Deliver 开发态闭环已成形的阶段；下一步应完成 Deliver D5 的跨平台 runtime、性能、故障注入和运维门槛，再评估公开启用。

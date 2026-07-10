@@ -37,7 +37,7 @@ CinemaWeb 不是一个普通的表单式 AI 生成页面，它更像是一个面
 3. `zustand` 管理轻量 UI 状态，比如当前打开编辑器或 Inspector 的活动节点。
 4. 自定义 React 组件和 CSS 负责 Cinema 风格的节点编辑器、生成器、检查面板和工具栏。
 
-应用最外层现在是 Create / Edit / Deliver 三工作台壳层。Create 对应现有节点创作画布并保持完整可用；Edit 为未来 Timeline 剪辑台预留；Deliver 为未来检查、渲染和交付流程预留。当前 Edit 与 Deliver 在 ARIA tablist 中可见但处于 disabled，并显示 `Soon`，因此不会制造尚无业务闭环的假入口。项目名称、工作台导航和活动 tabpanel 在加载、错误、未初始化和正常画布状态下保持同一层级结构。
+应用最外层现在是 Create / Edit / Deliver 三工作台壳层。Create 对应节点创作画布，Edit 已实现 Timeline 粗剪闭环并由 `timelineEditing` capability 启用；Deliver V1 前端已接入真实 preflight、render job、进度、历史和输出预览，但正常项目在 D5 发布门槛满足前仍 disabled，开发开关只用于进入真实交付工作台而不是伪造结果。项目名称、工作台导航和活动 tabpanel 在加载、错误、未初始化和正常状态下保持同一层级结构。
 
 第三层是 `@anybox/shared/cinema`。这是整个系统的类型契约层。它使用 Zod 定义画布、节点、边、命令、事件、模型、Provider、生成任务和资产等 Schema，同时导出 TypeScript 类型。前端和后端都依赖这一层，因此它不是普通的类型文件，而是运行时校验和编译期类型的共同边界。
 
@@ -74,7 +74,7 @@ React Query 的默认配置关闭了 `refetchOnWindowFocus`，并设置了轻量
 
 React Flow Provider 则让 App 内部可以通过 `useReactFlow` 读取画布实例，例如把屏幕坐标转换成画布坐标，用于右键菜单添加节点。
 
-真正的 Canvas 被放在 Create 对应的 `tabpanel` 中。工作台顶栏采用无外框的紧凑 tabs，Create 使用当前 surface 表达选中状态；Edit 与 Deliver 保持固定尺寸的禁用状态。壳层同时覆盖亮色、暗色和 560px 窄窗口，不改变 Canvas 内部的保存、节点编辑、素材库和 Inspector 生命周期。
+真正的 Canvas 被放在 Create 对应的 `tabpanel` 中。工作台顶栏采用无外框的紧凑 tabs：Create 与 Edit 已可用，Deliver 工作台已完成开发态链路但仍受 `VITE_CINEMA_DELIVER_DEV=1` 和服务端 `timelineDelivery: false` 双重发布闸门保护。壳层同时覆盖亮色、暗色和窄窗口，不改变各工作台内部的保存、节点编辑、素材库、Timeline 与 Inspector 生命周期。
 
 ## 4. App 的核心职责：把服务端 Canvas 映射成 React Flow
 

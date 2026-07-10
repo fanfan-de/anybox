@@ -1,0 +1,51 @@
+{
+  "$comment": "Template only. Copy to a reviewed evidence path, replace every placeholder, and set templateOnly=false only after all three approvals are recorded.",
+  "schemaVersion": 1,
+  "templateOnly": true,
+  "result": "pending",
+  "desktopVersion": "0.0.0",
+  "commitSHA": "0000000",
+  "targets": {
+    "win32X64": { "runtimeID": "<approved-runtime-id>" },
+    "darwinArm64": { "runtimeID": "<approved-runtime-id>" }
+  },
+  "license": {
+    "status": "pending",
+    "approver": "<approver>",
+    "approvedAt": "<ISO-8601>",
+    "references": ["<license-review-reference>"],
+    "scopes": [
+      "ffmpeg-redistribution",
+      "h264-use",
+      "windows-media-foundation",
+      "macos-videotoolbox",
+      "source-and-notice-offer",
+      "supported-os-scope"
+    ]
+  },
+  "product": {
+    "status": "pending",
+    "approver": "<approver>",
+    "approvedAt": "<ISO-8601>",
+    "references": ["<product-approval-reference>"],
+    "retentionPolicyReference": "<retention-decision-reference>",
+    "cleanupAuthorizationReference": "<cleanup-authorization-reference>",
+    "confirmationWord": "CLEAN",
+    "noAutomaticScheduling": true,
+    "telemetryReference": "<telemetry-decision-reference>"
+  },
+  "security": {
+    "status": "pending",
+    "approver": "<approver>",
+    "approvedAt": "<ISO-8601>",
+    "references": ["<security-approval-reference>"],
+    "retentionAndCleanupReference": "<retention-security-reference>",
+    "telemetryReference": "<telemetry-security-reference>",
+    "monitoringReference": "<monitoring-reference>"
+  },
+  "rollback": {
+    "strategy": "disable-deliver",
+    "capability": "timelineDelivery",
+    "reference": "<approved-rollback-reference>"
+  }
+}

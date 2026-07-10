@@ -1,0 +1,198 @@
+# Cinema Deliver V1 operations, migration, and support
+
+> Status: D5 working document, 2026-07-10. This document is not a production enablement approval. `timelineDelivery` must remain disabled until every item in the Deliver public-enable checklist is proven.
+
+## 1. Scope and sources of truth
+
+Deliver creates a persistent render job for one saved Timeline revision, snapshots that Timeline and its media inputs, renders into a job-local temporary MP4, verifies the result with ffprobe, and only then registers the output as a project Asset with `source: "render"`.
+
+The sources of truth are:
+
+- `@anybox/shared/cinema-render` for settings, preflight, job, event, and runtime response contracts;
+- `.anybox-cinema/render-jobs/job_<jobID>/job.json` for current job state;
+- the job's `timeline.json`, `inputs/`, and `events.jsonl` for reproducibility and audit;
+- the project Asset Library for a successfully registered output.
+
+Browser state is not authoritative. Refreshing Deliver must reconstruct history and the selected output from the Agent APIs.
+
+## 2. V1 support matrix
+
+| Timeline content | V1 behavior |
+| --- | --- |
+| Ordered V1 video Clips | Supported: source trim, source range, gaps, fit, opacity, playback rate, Clip volume, and Track mute |
+| A1 audio Clips | Supported: trim, volume, fade in/out, playback rate, and Track mute |
+| O1 image Clips | Supported: contain/cover, opacity, and Timeline range |
+| O1 video Clips | Blocked by preflight with `clip-unsupported` |
+| O1 text Clips | Blocked by preflight with `clip-unsupported` |
+| Hidden Tracks | Excluded from output |
+| Muted Tracks | Audio excluded; visual inclusion still follows `hidden` |
+| Timeline gaps | Filled with the Timeline background and silence |
+| Transition, LUT, and keyframe features | Not persisted by the current Timeline contract and not inferred by Deliver |
+
+Deliver must never silently omit unsupported visible content. A preflight error keeps **Start render** disabled.
+
+## 3. Project migration and rollback
+
+No Timeline document migration is required for Deliver V1. Existing `schemaVersion: 1` Timelines remain readable, and Deliver does not add render state to a Timeline.
+
+On first use, the Agent creates new render storage underneath `.anybox-cinema/`. Existing Canvas, Timeline, and Asset Library records are not rewritten merely by opening Deliver. A successful render adds a normal project Asset in the exports system folder; failed, canceled, or interrupted jobs do not add an output Asset.
+
+Migration rules:
+
+1. Back up the project before enabling a preview build on irreplaceable media.
+2. Do not rename or manually merge `job_<jobID>` directories. Job IDs, operation IDs, and snapshots are audit identities.
+3. Unknown render schema versions must fail closed rather than be guessed.
+4. Rolling the application back means disabling Deliver and opening the project normally. Existing render directories and registered output Assets remain data; older builds may ignore the render-job directories.
+5. Never delete an exports Asset solely because its originating job is old. Asset lifecycle and job-sandbox cleanup are separate operations.
+
+## 4. Retention and cleanup
+
+### Current implementation
+
+The current D5 implementation is conservative:
+
+- job state, Timeline snapshots, and event logs are retained;
+- verified output Assets follow the normal Asset Library lifecycle;
+- temporary render output is removed after cancellation/failure and during interrupted-job recovery;
+- abandoned staging files are cleaned by the relevant storage workflow;
+- an opt-in retention core can remove only `inputs/`, `.inputs.<id>.tmp/`, and `output.tmp.mp4` from terminal jobs older than a caller-supplied duration;
+- `POST /api/cinema/projects/:projectID/render-retention/cleanup` exposes that core as an explicit project-level API;
+- requests must supply a positive integer `retentionDurationMs` and a safe, unique `operationID`; the API supplies no retention-duration default;
+- omitted `dryRun` defaults to `true`. A preview returns candidate job IDs, allowlisted targets, and conservative estimated reclaimable bytes without deleting render data;
+- execution requires both `dryRun: false` and `confirm: "DELETE_REBUILDABLE_RENDER_FILES"`;
+- operation journals are persisted in the project. Reusing a completed operation ID is rejected with `409 CINEMA_RENDER_RETENTION_OPERATION_REPLAYED`; using it with a different payload is rejected as a conflict. Use distinct IDs for preview and execution;
+- retention rejects linked/traversing candidates. After restart, a new operation ID may safely rescan, while an incomplete old ID remains blocked for inspection;
+- Deliver's collapsed **Advanced · Project storage** technical-preview surface requires an explicit positive whole-day duration, performs a cancelable dry-run, summarizes path-free results, and displays at most eight safe job IDs;
+- execute requires a matching preview, a fresh operation ID, the user-entered phrase `CLEAN`, and the fixed API confirmation. It is intentionally non-cancelable after submission;
+- execute is rejected unless the Agent base URL is loopback. Browser execution must originate from the Agent itself or the explicitly configured `ANYBOX_CINEMA_WEB_DEV_URL`; arbitrary web origins are rejected. Processes running as the same local OS user remain inside the stated trust boundary;
+- start/completion/failure telemetry records only safe operation identity, duration, mode, aggregate counts/bytes, outcome, and stable error name;
+- there is no product retention default, user-facing schedule, or automatic cleanup.
+
+This means render-job storage can grow with the number and size of renders. Users and support staff must not manually delete individual files inside an active job directory.
+
+### Public-release requirement
+
+The technical-preview implementation proposes an operator-chosen duration for every run, with no default and no schedule. Its authorization boundary, confirmation flow, cancellation behavior, and telemetry are recorded in the [retention policy decision](./cinema-render-retention-policy-decision.md). Product and security owners must approve or replace that proposal before public enablement. Cleanup may remove only rebuildable job inputs and temporary files after the supplied retention period. It preserves:
+
+- `job.json` and the stable job ID;
+- `events.jsonl`;
+- enough redacted snapshot metadata to explain which Timeline revision was rendered;
+- registered output Assets and their catalog records.
+
+The core and API already skip active/recent jobs, use path/symlink protections, serialize cleanup against render creation/retry, report estimated and actual reclaimed bytes without absolute paths, and have focused automated coverage. The technical-preview UI, cancelable indeterminate dry-run state, loopback/Origin guard, explicit confirmation, and aggregate telemetry are implemented. Formal product/security approval remains the release blocker; scheduling remains intentionally absent.
+
+## 5. Diagnostics safe to collect
+
+For a support case, collect:
+
+- application version, OS, architecture, and whether the app is packaged;
+- project ID, Timeline ID/revision, job ID, job status, and timestamps;
+- render settings excluding any user-entered secrets (the current contract has none);
+- stable preflight issue codes and the job's stable error code/message;
+- failed jobs' and newly recovered interrupted jobs' optional `diagnosticSummary`: the pre-terminal phase plus the same path-free runtime identity, version, platform, and encoders;
+- the redacted job event sequence;
+- `/api/cinema/render-runtime` fields: availability, FFmpeg version, platform, ffprobe availability, and reported encoders;
+- whether retry created a distinct job with `retryOfJobID`.
+
+Each newly created job records a redacted `executionRuntime` before it enters the queue. The binding contains only `runtimeID`, `ffmpegVersion`, `platform`, `videoEncoder`, and `audioEncoder`; the `job-created`, `runtime-bound`, and `render-started` events carry the same path-free identity. Retry probes the current runtime and writes a new binding on the new job. It never mutates the original job's binding.
+
+At execution time the queue probes the runtime again and requires the locked runtime ID, version, platform, and encoders to remain available. It then passes those exact locked encoders to the render graph. Identity drift or encoder loss fails with `render-runtime-unavailable`; the queue must not silently select a replacement encoder. Older schema-version-1 jobs without `executionRuntime` remain readable and bind once on their first execution, persisting a `runtime-bound` event before rendering. Existing terminal jobs are not retroactively rewritten.
+
+Do not copy raw stderr, absolute project paths, environment variables, full FFmpeg commands/filter graphs, access tokens, or raw process environments into tickets. API responses and UI diagnostics must remain path-redacted. Legacy schema-version-1 interrupted jobs can lack an error summary; newly recovered jobs use `render-interrupted` and persist the same summary on the job and interruption event.
+
+Common job errors:
+
+| Code | Meaning | Operator action |
+| --- | --- | --- |
+| `snapshot-failed` | Timeline or media inputs could not be frozen | Check media availability, permissions, free space, then retry |
+| `probe-failed` | A snapshotted input could not be read by ffprobe | Replace/repair the source asset and create a new render, or retry if the failure was transient |
+| `render-runtime-unavailable` | The runtime identity/version changed or a locked encoder is no longer available | Repair/restore the expected runtime, or retry into a new job that records a fresh binding; never edit the old job |
+| `render-failed` | FFmpeg exited unsuccessfully or output verification failed | Preserve the old job, inspect redacted events/runtime capability, then retry into a new job |
+| `output-registration-failed` | Rendered media could not be committed to the Asset Library | Check project write access/free space; retry must not create a false succeeded Asset |
+| `canceled` | User cancellation completed | Start a new render when wanted |
+| `render-interrupted` | Agent stopped while the job was active | Confirm temporary output cleanup, inspect the recorded phase/runtime facts, then retry into a new job |
+
+## 6. Preflight support procedure
+
+Preflight errors are actionable product states, not generic network failures:
+
+- `asset-missing`, `asset-trashed`, `asset-not-ready`, `asset-kind-mismatch`, and `asset-revision-stale`: repair or replace the referenced Clip asset in Edit;
+- `asset-source-range-invalid`: adjust the Clip source range;
+- `clip-unsupported`: remove/replace unsupported visible content for V1;
+- `timeline-empty`, `main-video-missing`, `custom-range-empty`, and `render-settings-invalid`: fix Timeline content or output range;
+- `render-runtime-unavailable`, `video-encoder-unavailable`, and `audio-encoder-unavailable`: repair the packaged media runtime; do not use browser-side simulated success;
+- `working-space-insufficient`: free project-volume space or choose a project location with enough capacity.
+
+Warnings such as `personal-asset-copy-required` do not block rendering but explain additional snapshot cost.
+
+## 7. Fault and regression matrix
+
+Public enablement requires reproducible automated evidence for all of the following:
+
+| Fault or regression | Required result |
+| --- | --- |
+| FFmpeg exits non-zero | Old job becomes retryable `failed`; no output Asset; retry creates a new job and can succeed |
+| Agent restarts during an active job | Job becomes `interrupted`; temporary output is removed; retry is explicit |
+| Insufficient disk space | Preflight blocks with `working-space-insufficient` |
+| Project/input/output permission failure | Stable failed state, no fake output Asset, safe retry path |
+| Queued cancellation | Prompt terminal `canceled`, queue entry removed, no FFmpeg process |
+| Running cancellation | FFmpeg exits within the cancellation timeout, temporary output removed, no output Asset |
+| Output registration failure | Job never claims `succeeded`, no orphan catalog record |
+| Duplicate operation ID | Same create request resolves to the same job |
+| Timeline changes after create | Existing job keeps its original revision and immutable snapshot |
+| Runtime or encoder changes while queued | Existing job fails with its original `executionRuntime`; it does not switch runtime or encoder silently |
+| 1,000-job history | API and first usable UI stay below the release threshold; DOM rows are virtualized |
+
+## 8. Runtime and release boundary
+
+Development may resolve FFmpeg/ffprobe from explicit environment variables or `PATH`. A packaged production build must use a verified, platform-specific bundled runtime with pinned artifact/source provenance, binary hashes, license materials, encoder policy, and a real encode/ffprobe smoke test.
+
+At the time of this document, Windows x64 and macOS arm64 are both explicit Anybox-controlled artifact-pending targets; the lock contains no third-party production archive or invented future digest. The repository contains the pinned-source candidate build workflow, candidate digest generator, lock-promotion command, generic locked-archive preparer, release evidence matrix, and synchronized release workflow. The Windows production policy requires `h264_mf + aac`; macOS arm64 requires `h264_videotoolbox + aac`; GPL, nonfree, x264, x265, FDK-AAC, and OpenH264 are forbidden. Neither target can package a production runtime until its real candidate is built and mirrored. Linux, macOS x64, and Windows arm64 remain unsupported. Production `timelineDelivery` therefore remains false until both approved manifests and both installed restart records exist.
+
+Changing status strings alone cannot approve a media target. A target with `releaseReadiness.status: "approved"` must also have an approved license review and a complete machine-readable `approvalEvidence` object:
+
+```json
+{
+  "approver": "<stable approver identity>",
+  "approvedAt": "<ISO-8601 timestamp with timezone>",
+  "references": ["<license/release evidence reference>"],
+  "immutableMirror": {
+    "reference": "<immutable artifact/source manifest reference>",
+    "sha256": "<the locked distribution SHA-256>"
+  },
+  "rollbackPlan": {
+    "strategy": "disable-deliver",
+    "capability": "timelineDelivery",
+    "reference": "<approved initial-release rollback runbook/reference>"
+  }
+}
+```
+
+The first approved runtime uses `releaseKind: "initial"` and must carry the approved `disable-deliver` rollback shown above, because no previous approved runtime can exist yet. A later runtime uses `releaseKind: "successor"`, declares `previousRuntimeID` in `releaseReadiness`, and replaces `rollbackPlan` with `{ "strategy": "previous-approved-runtime", "runtimeID": "<the same previousRuntimeID>", "reference": "<rollback evidence/reference>" }`. The verifier rejects missing/partial evidence, a mirror digest that differs from the locked distribution, an initial release without an approved capability-disable plan, or a successor whose rollback runtime does not match its declared predecessor. Blocked targets may omit `approvalEvidence`; the current lock intentionally does so and remains blocked. Placeholder values in this documentation are a template only, never approval evidence.
+
+## 9. Human acceptance handoff
+
+The remaining checks are deliberately left for a real installed-app session instead of more fixture simulation:
+
+Use `pnpm --filter anybox-desktop-agent dist:deliver-preview -- --dir --win` (or `--mac` / `--linux`) for an unpacked CI/local rehearsal. Omitting `--dir` can create a clearly named, non-publishing preview installer when a human installed-path exercise is needed. The wrapper enables `VITE_CINEMA_DELIVER_DEV=1`, runs the non-strict technical verifier, places electron-builder artifacts under `packages/desktop/dist/deliver-preview`, forces `--publish never`, and rejects other publish policies. It never replaces release-strict `dist`, `dist:dir`, or `dist:publish`, and its output is not production approval evidence.
+
+Copy [cinema-deliver-installed-restart-evidence.template.json](./cinema-deliver-installed-restart-evidence.template.json) for the kill/restart run. Record only the build/runtime/job/process facts requested by the template; do not add absolute install/project paths, environment values, commands, raw stderr, or secrets. A preview run may rehearse the procedure, but the public-enable gate still requires a real approved release candidate and human result.
+
+After filling the copy, validate it without rerunning the scenario:
+
+```powershell
+pnpm --filter anybox-desktop-agent verify:deliver-restart-evidence -- ../cinema-web/<evidence-file>.json
+```
+
+Technical-preview evidence is accepted only as rehearsal evidence and is reported that way. The eventual public-enable record must also pass `--release-strict`; that mode rejects the development gate, preview artifacts, failed runtime verification, missing/contradictory timestamps, a retry that does not point to the interrupted job, unsafe output leftovers, and incomplete redaction assertions. The validator reads the evidence file only and never kills a process, starts a render, or edits the record.
+
+1. Install a packaged Windows build into a path containing spaces, open a real project, and confirm runtime discovery does not use a custom `PATH` FFmpeg.
+2. Exercise Full and Custom range, the Timeline-native/common frame-rate choices, and Target bitrate. Confirm Custom initially spans the full Timeline and invalid values block Start render with a useful preflight issue.
+3. Create a job, then change the Timeline revision. On a retryable failure or interruption, confirm `Retry revision <old>` uses the frozen snapshot while `Render revision <new>` creates from the current Timeline.
+4. Render a representative long Timeline and judge preview/output fidelity, real progress cadence, CPU use, memory use, fan noise, and final file size. Preparing/probing/registering must not show invented percentages.
+5. Cancel once while queued and once during a sustained render; confirm the UI settles promptly and no FFmpeg process or partial Asset remains.
+6. After success, use `Show in Assets` twice and confirm both requests open the real output folder, select it, and focus it. Move the output to Trash and return to Deliver; within one status refresh it must stop claiming the output is ready, and the same action must reveal the Trash entry.
+7. Terminate and restart the real Agent/Desktop process during rendering; confirm the old job becomes interrupted, shows `render-interrupted` with path-free phase/runtime facts, removes partial output, and Retry creates a new job.
+8. Expand **Advanced · Project storage**. Verify the duration starts blank, cancel one preview, then preview again and confirm only safe job IDs/aggregate bytes appear. On the packaged same-origin UI, type `CLEAN`, execute once, and verify actual reclaimed bytes while jobs/events/snapshots/output Assets remain. Confirm a foreign browser Origin is rejected, then complete the approval record in the [retention policy decision](./cinema-render-retention-policy-decision.md); do not add a default or schedule without that approval.
+9. On Linux and macOS x64, confirm Deliver remains unavailable. On Windows x64 and macOS arm64, confirm packaged builds never use a developer-machine `PATH` fallback and only an approved bundled manifest can enable the production capability.
+10. Before publishing, upload exactly four artifacts to one candidate workflow run: `cinema-deliver-win32-x64`, `cinema-deliver-darwin-arm64`, `cinema-deliver-evidence-win32-x64`, and `cinema-deliver-evidence-darwin-arm64`. Dispatch `.github/workflows/cinema-deliver-release.yml` with that run ID and `publish: false` first. Its platform jobs validate release-strict runtime/evidence, installer filename and SHA-256, Windows Authenticode, and macOS codesign/Gatekeeper/notarization stapling. Its aggregate job also requires the same desktop version/commit and matching approved runtime IDs. Only after that rehearsal passes should an approved operator rerun with `publish: true`; the protected `cinema-deliver-release` environment creates one release containing both platforms, so a missing platform cannot publish independently.

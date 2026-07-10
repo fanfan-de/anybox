@@ -1,7 +1,7 @@
 import { createRef, type ComponentProps } from "react"
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
-import { DEFAULT_ASSISTANT_TRACE_VISIBILITY, type AssistantTraceItem, type AssistantTraceItemKind, type AssistantThreadMessage, type PermissionRequest, type SessionSummary, type ThreadMessage, type UserThreadMessage } from "../types"
+import { DEFAULT_ASSISTANT_TRACE_VISIBILITY, type AssistantTraceItem, type AssistantTraceItemKind, type AssistantThreadMessage, type PermissionRequest, type SessionSummary, type ThreadMessage, type ThreadTurn, type UserThreadMessage } from "../types"
 import type { SessionMessageTree } from "../session-message-tree"
 import { SIDEBAR_RESIZE_END_EVENT } from "../sidebar-resize-events"
 import { I18nProvider } from "../i18n/I18nProvider"
@@ -74,6 +74,23 @@ function userMessage(id: string, text: string): UserThreadMessage {
     kind: "user",
     text,
     timestamp: 1,
+  }
+}
+
+function threadTurn(
+  turnID: string,
+  user: UserThreadMessage,
+  messages: ThreadMessage[] = [user],
+  overrides: Partial<ThreadTurn> = {},
+): ThreadTurn {
+  return {
+    turnID,
+    status: "completed",
+    startedAt: user.timestamp,
+    updatedAt: user.timestamp,
+    userMessageID: user.id,
+    messages,
+    ...overrides,
   }
 }
 
@@ -5276,6 +5293,173 @@ describe("ThreadView message motion", () => {
     )
 
     expect(container.querySelector('[data-thread-message-id="user-1"]')?.getAttribute("data-thread-message-motion")).toBe("history")
+  })
+})
+
+describe("ThreadView turn navigator", () => {
+  it("projects canonical turns without counting assistant or stream-inserted user rows", () => {
+    const firstUser = {
+      ...userMessage("user-1", "  按照文档，\n推进完成 edit   界面的开发  "),
+      displayText: "按照文档，\n推进完成 edit   界面的开发",
+    }
+    const assistant = assistantMessage("assistant-1", "Working")
+    const insertedUser: UserThreadMessage = {
+      ...userMessage("user-inserted", "Temporary steering note"),
+      submissionMode: "steer",
+      streamInsertion: {
+        assistantThreadMessageID: assistant.id,
+        afterItemCount: 0,
+        status: "consumed",
+      },
+    }
+    const secondUser = userMessage("user-2", "Ship the final result")
+    const activeMessages = [firstUser, assistant, insertedUser, secondUser]
+    const activeTurns = [
+      threadTurn("turn-1", firstUser, [firstUser, assistant, insertedUser]),
+      threadTurn("turn-2", secondUser),
+    ]
+
+    renderThread(activeMessages, { activeTurns })
+
+    const navigator = screen.getByRole("navigation", { name: "对话轮次导航" })
+    const turnButtons = within(navigator).getAllByRole("button", { name: /跳转到第/ })
+    expect(turnButtons).toHaveLength(2)
+    expect(turnButtons[0]).toHaveAccessibleName("跳转到第 1 / 2 轮：按照文档， 推进完成 edit 界面的开发")
+    expect(turnButtons[1]).toHaveAccessibleName("跳转到第 2 / 2 轮：Ship the final result")
+
+    fireEvent.mouseEnter(turnButtons[0]!)
+    expect(screen.getByRole("tooltip")).toHaveTextContent("第 1 / 2 轮 · 按照文档， 推进完成 edit 界面的开发")
+  })
+
+  it("uses virtual row offsets for unmounted turns and records a detached scroll snapshot", async () => {
+    const activeMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+    const activeTurns = activeMessages.map((message, index) => threadTurn(`turn-${index}`, message))
+    const saveScrollSnapshot = vi.fn()
+    const { threadColumn } = renderThread(activeMessages, {
+      activeTurns,
+      saveScrollSnapshot,
+      scrollStateKey: "session:turn-navigation-unmounted",
+    })
+    setScrollMetrics(threadColumn, {
+      clientHeight: 400,
+      scrollHeight: 20_000,
+      scrollTop: 0,
+    })
+
+    expect(screen.queryByText("Prompt 99")).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "跳转到第 100 / 120 轮：Prompt 99" }))
+
+    await waitFor(() => expect(screen.getByText("Prompt 99")).toBeInTheDocument())
+    expect(threadColumn.scrollTop).toBeGreaterThan(0)
+    expect(saveScrollSnapshot).toHaveBeenLastCalledWith(
+      "session:turn-navigation-unmounted",
+      expect.objectContaining({ pinnedToBottom: false }),
+    )
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "跳转到第 100 / 120 轮：Prompt 99" })).toHaveAttribute("aria-current", "step")
+    })
+  })
+
+  it("supports arrow, Home, End, Enter, Space and Escape keyboard behavior", () => {
+    const activeMessages = [
+      userMessage("user-1", "First"),
+      userMessage("user-2", "Second"),
+      userMessage("user-3", "Third"),
+    ]
+    const activeTurns = activeMessages.map((message, index) => threadTurn(`turn-${index}`, message))
+    const { threadColumn } = renderThread(activeMessages, {
+      activeTurns,
+      scrollStateKey: "session:turn-navigation-keyboard",
+    })
+    setScrollMetrics(threadColumn, { clientHeight: 200, scrollHeight: 1_000, scrollTop: 0 })
+
+    const first = screen.getByRole("button", { name: "跳转到第 1 / 3 轮：First" })
+    const second = screen.getByRole("button", { name: "跳转到第 2 / 3 轮：Second" })
+    const third = screen.getByRole("button", { name: "跳转到第 3 / 3 轮：Third" })
+    first.focus()
+    fireEvent.keyDown(first, { key: "ArrowDown" })
+    expect(second).toHaveFocus()
+    fireEvent.keyDown(second, { key: "End" })
+    expect(third).toHaveFocus()
+    fireEvent.keyDown(third, { key: "Home" })
+    expect(first).toHaveFocus()
+    fireEvent.keyDown(first, { key: " " })
+    fireEvent.keyDown(second, { key: "Enter" })
+    expect(threadColumn.scrollTop).toBeGreaterThan(0)
+    fireEvent.keyDown(second, { key: "Escape" })
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument()
+  })
+
+  it("resets with the session and can be explicitly disabled for nested side chat", () => {
+    const firstUser = userMessage("user-1", "First session")
+    const secondUser = userMessage("user-2", "Second session")
+    const { props, rerender } = renderThread([firstUser], {
+      activeTurns: [threadTurn("turn-1", firstUser)],
+    })
+
+    rerender(
+      <ThreadView
+        {...props}
+        activeSession={sessionB}
+        activeMessages={[secondUser]}
+        activeTurns={[threadTurn("turn-2", secondUser)]}
+      />,
+    )
+    expect(screen.getByRole("button", { name: "跳转到第 1 / 1 轮：Second session" })).toHaveAttribute("aria-current", "step")
+    expect(screen.queryByRole("button", { name: /First session/ })).not.toBeInTheDocument()
+
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={[firstUser]}
+        activeTurns={[threadTurn("turn-1", firstUser)]}
+        showTurnNavigator={false}
+      />,
+    )
+    expect(screen.queryByRole("navigation", { name: "对话轮次导航" })).not.toBeInTheDocument()
+  })
+
+  it("keeps a turn-navigation jump detached while streaming content changes", async () => {
+    const users = Array.from({ length: 20 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+    const activeTurns = users.map((message, index) => threadTurn(`turn-${index}`, message))
+    const snapshots: Array<{ pinnedToBottom: boolean; scrollTop: number }> = []
+    const { props, rerender, threadColumn } = renderThread(users, {
+      activeTurns,
+      saveScrollSnapshot: (_key, snapshot) => snapshots.push(snapshot),
+      scrollStateKey: "session:turn-navigation-streaming",
+    })
+    setScrollMetrics(threadColumn, { clientHeight: 300, scrollHeight: 5_000, scrollTop: 0 })
+
+    fireEvent.click(screen.getByRole("button", { name: "跳转到第 6 / 20 轮：Prompt 5" }))
+    const navigatedScrollTop = threadColumn.scrollTop
+    expect(navigatedScrollTop).toBeGreaterThan(0)
+
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={[...users, assistantMessage("assistant-streaming", "More streamed output") ]}
+        activeTurns={activeTurns}
+      />,
+    )
+
+    await waitFor(() => expect(snapshots.at(-1)?.pinnedToBottom).toBe(false))
+    expect(threadColumn.scrollTop).toBe(navigatedScrollTop)
+  })
+
+  it("truncates very long labels and exposes every turn through the compact popover", () => {
+    const longWord = "x".repeat(260)
+    const users = Array.from({ length: 28 }, (_, index) => userMessage(`user-${index}`, index === 0 ? longWord : `Prompt ${index}`))
+    const activeTurns = users.map((message, index) => threadTurn(`turn-${index}`, message))
+    renderThread(users, { activeTurns })
+
+    const first = screen.getByRole("button", { name: `跳转到第 1 / 28 轮：${longWord}` })
+    fireEvent.mouseEnter(first)
+    expect(screen.getByRole("tooltip").textContent?.endsWith("…")).toBe(true)
+
+    fireEvent.click(screen.getByRole("button", { name: "当前第 1 / 28 轮，打开对话轮次导航" }))
+    const compactDialog = screen.getByRole("dialog", { name: "选择对话轮次" })
+    expect(within(compactDialog).getAllByRole("button")).toHaveLength(28)
+    expect(within(compactDialog).getByRole("button", { name: "跳转到第 28 / 28 轮：Prompt 27" })).toBeInTheDocument()
   })
 })
 

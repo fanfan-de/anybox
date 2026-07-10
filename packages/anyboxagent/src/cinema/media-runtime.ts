@@ -142,9 +142,19 @@ async function existingExecutable(explicit: string | undefined, names: string[])
 }
 
 export async function resolveMediaToolPaths(env: NodeJS.ProcessEnv = process.env): Promise<MediaToolPaths> {
+  const strictBundledRuntime = env.ANYBOX_MEDIA_RUNTIME_STRICT === "1"
+  if (strictBundledRuntime && (!env.ANYBOX_FFMPEG_BINARY?.trim() || !env.ANYBOX_FFPROBE_BINARY?.trim())) {
+    throw new Error("The verified bundled FFmpeg runtime is incomplete.")
+  }
   const [ffmpeg, ffprobe] = await Promise.all([
-    existingExecutable(env.ANYBOX_FFMPEG_BINARY, process.platform === "win32" ? ["ffmpeg.exe", "ffmpeg"] : ["ffmpeg"]),
-    existingExecutable(env.ANYBOX_FFPROBE_BINARY, process.platform === "win32" ? ["ffprobe.exe", "ffprobe"] : ["ffprobe"]),
+    existingExecutable(
+      env.ANYBOX_FFMPEG_BINARY,
+      strictBundledRuntime ? [] : process.platform === "win32" ? ["ffmpeg.exe", "ffmpeg"] : ["ffmpeg"],
+    ),
+    existingExecutable(
+      env.ANYBOX_FFPROBE_BINARY,
+      strictBundledRuntime ? [] : process.platform === "win32" ? ["ffprobe.exe", "ffprobe"] : ["ffprobe"],
+    ),
   ])
   if (!ffmpeg || !ffprobe) {
     throw new Error(

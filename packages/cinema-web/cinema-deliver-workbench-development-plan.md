@@ -1,6 +1,6 @@
 # Cinema Deliver 工作台开发计划
 
-> Status: planned  
+> Status: in progress（D0–D4 completed；D5 application-level hardening completed；双平台候选构建与 fail-closed capability 已实现，生产产物和审批仍 blocked）
 > Date: 2026-07-10  
 > Scope: Cinema Web `Deliver` 工作台、Shared Render 契约、Agent 本地渲染任务与输出资产闭环  
 > Depends on: [Cinema Edit 工作台开发计划](./cinema-edit-workbench-development-plan.md) E0–E5 已完成
@@ -189,8 +189,8 @@ Deliver 必须显式覆盖：
 | V1 视频原音 | 支持 | clip volume、track mute；与 A1 混音 |
 | A1 独立音频 | 支持 | trim、volume、fade in/out、playbackRate、track mute |
 | O1 图片 | 支持 | contain/cover、opacity、timeline range |
-| O1 视频 | D3 评估后启用 | 未完成时预检返回 blocking issue |
-| O1 文本 | D3 评估后启用 | 必须锁定字体和 drawtext 行为；未完成时阻塞 |
+| O1 视频 | V1 不支持 | 预检返回 `clip-unsupported`；留到 Deliver V1 公开启用后实现 |
+| O1 文本 | V1 不支持 | 预检返回 `clip-unsupported`；字体打包与 drawtext 行为未锁定前不渲染 |
 | hidden Track | 支持 | 不进入输出 |
 | muted Track | 支持 | 音频不进入混音；视觉仍按 hidden 决定 |
 | Timeline gap | 支持 | 使用 `backgroundColor` 和静音填充 |
@@ -302,6 +302,13 @@ type CinemaRenderJob = {
   retryOfJobID?: string
   status: CinemaRenderJobStatus
   settings: CinemaRenderSettings
+  executionRuntime?: {
+    runtimeID: string
+    ffmpegVersion: string
+    platform: "win32" | "darwin" | "linux"
+    videoEncoder: "libx264" | "h264_mf" | "h264_videotoolbox"
+    audioEncoder: "aac"
+  }
   progress: {
     phase: CinemaRenderJobStatus
     percent?: number
@@ -313,6 +320,16 @@ type CinemaRenderJob = {
     code: string
     message: string
     retryable: boolean
+    diagnosticSummary?: {
+      phase: "queued" | "snapshotting" | "probing" | "rendering" | "registering" | "unknown"
+      runtime?: {
+        runtimeID: string
+        ffmpegVersion: string
+        platform: "win32" | "darwin" | "linux"
+        videoEncoder: "libx264" | "h264_mf" | "h264_videotoolbox"
+        audioEncoder: "aac"
+      }
+    }
   }
   createdAt: string
   startedAt?: string
@@ -321,7 +338,7 @@ type CinemaRenderJob = {
 }
 ```
 
-Job 不保存绝对 `inputTimelinePath`，也不向前端返回 `ffmpegCommandPreview`。需要诊断时输出脱敏后的 filter graph 摘要和稳定错误码。
+Job 不保存绝对 `inputTimelinePath`，也不向前端返回 `ffmpegCommandPreview`。`executionRuntime` 只保存脱敏 runtime identity、版本、平台和实际 encoder，不保存二进制路径或命令。该字段在 schemaVersion 1 中保持 optional，以读取旧 job；旧 queued job 仅在第一次执行时兼容绑定并写 `runtime-bound` 事件。failed job 必须带 error；旧 schemaVersion 1 interrupted job 可无 error，但新的重启恢复写入专用 `render-interrupted` error；其他状态禁止 error，且 `render-interrupted` 不得用于 failed。`diagnosticSummary` 只保存失败/中断前阶段和同一份脱敏 runtime facts，不保存 stderr、路径、命令、filter graph、环境变量或 secrets。
 
 ### 8.5 Job Event
 
@@ -371,7 +388,7 @@ assets/library/
 - Asset Library 增加 `exports` 系统目录，登记时使用 `source: "render"`。
 - 注册成功后 job 保存稳定 `CinemaAssetRef`，不保存最终物理路径作为身份。
 - canceled / failed job 不创建资产记录。
-- 成功 job 的输入 sandbox 设置保留期；到期只删除可重建输入和临时文件，不删除 job、事件或输出资产。
+- 成功 job 的输入 sandbox 只按调用方显式提供的保留期清理；`dryRun` 先返回候选与预计回收量，确认执行后也只删除可重建输入和临时文件，不删除 job、事件、Timeline 快照或输出资产。当前不提供默认保留期和自动调度。
 
 ## 10. Agent API
 
@@ -386,6 +403,7 @@ GET  /api/cinema/projects/:projectID/render-jobs/:jobID
 GET  /api/cinema/projects/:projectID/render-jobs/:jobID/events
 POST /api/cinema/projects/:projectID/render-jobs/:jobID/cancel
 POST /api/cinema/projects/:projectID/render-jobs/:jobID/retry
+POST /api/cinema/projects/:projectID/render-retention/cleanup
 ```
 
 ### 10.1 Create body
@@ -416,6 +434,17 @@ type CreateCinemaRenderJobBody = {
 - 生成新 job ID 和 operationID。
 - 默认使用原 job 的 Timeline snapshot 与 settings。
 - 用户选择最新 Timeline 时走新的 create API，不复用 Retry。
+
+### 10.4 Retention cleanup
+
+- body 使用 strict Schema，必须显式提供安全唯一的 `operationID` 和正整数 `retentionDurationMs`；不存在默认保留期。
+- `dryRun` 缺省为 `true`，只返回候选 job、允许清理的 target 和保守的预计回收字节数，不删除数据。
+- 执行必须同时提供 `dryRun: false` 与 `confirm: "DELETE_REBUILDABLE_RENDER_FILES"`。
+- operation journal 持久化防止误重放：相同 ID 重放返回稳定 409，不同 payload 复用同一 ID 返回 conflict；预览与执行使用不同 ID。
+- cleanup 与 render create/retry 共用项目级锁，且只删除旧 terminal job 的 `inputs/`、`.inputs.<id>.tmp/` 和 `output.tmp.mp4`。响应不包含绝对路径。
+- 技术预览 UI 不提供默认值，要求每次输入正整数天数，先执行可取消的 dry-run，再输入 `CLEAN` 明确确认；执行提交后不可取消。
+- Execute 仅允许 loopback Agent；浏览器必须来自 Agent 自身 Origin 或显式配置的 `ANYBOX_CINEMA_WEB_DEV_URL` Origin。该边界阻断任意网页/CSRF，但明确不声称隔离同一 OS 用户的本地进程。
+- 不自动调度；[V1 保留策略与授权决策](./cinema-render-retention-policy-decision.md)仍须产品和安全负责人批准后才能用于公开发布。
 
 ## 11. Agent 模块拆分
 
@@ -487,10 +516,19 @@ Deliver 公开启用不能假设用户机器的 `PATH` 已安装 FFmpeg。D0–D
 - 开发环境继续支持 `ANYBOX_FFMPEG_BINARY`、`ANYBOX_FFPROBE_BINARY` 和 PATH fallback。
 - 桌面发行环境优先解析应用随附或 Anybox 管理的固定版本 runtime。
 - Agent 暴露脱敏的 runtime status：available、version、platform、支持的 H.264/AAC encoder；不返回二进制绝对路径。
-- 创建 job 前锁定实际 encoder 能力，不因为某台机器缺少 `libx264` 而在运行中才失败。
+- 创建和 Retry job 在持久化 queued 状态前探测并锁定 `executionRuntime`；`job-created` 记录该绑定，Retry 创建新绑定且不改写旧 job。
+- queue 执行前重新核对 runtimeID、FFmpeg 版本、平台和已锁定 H.264/AAC encoder，写 `runtime-bound` 审计事件，并把同一 encoder 交给 render graph；漂移时稳定失败，禁止静默切换 runtime/encoder。
 - Windows、macOS 和 Linux 分别做带空格安装路径的启动与真实编码 smoke test。
 - 打包 FFmpeg 前完成构建选项、许可证、notice、更新和安全响应方案确认；不能直接把开发机上的 GPL full build 复制进发行包。
 - runtime 缺失时 Deliver 工作台仍可解释原因和修复路径，但 Start render 必须 disabled。
+
+#### D0 分发与许可证决策
+
+- 开发环境保留 `ANYBOX_FFMPEG_BINARY`、`ANYBOX_FFPROBE_BINARY` 和 PATH fallback；`GET /api/cinema/render-runtime` 只返回版本、平台与受支持 encoder，不返回二进制路径或原始启动错误。
+- 桌面发行采用 Anybox 管理的、按平台固定版本 runtime；下载地址、版本、SHA-256、构建配置和许可证材料进入发布 manifest。D5 完成该解析顺序前，不能以开发机 PATH 通过作为公开启用依据。
+- 禁止直接分发开发机上的 GPL/full build。默认候选必须完成 LGPL/GPL 构建选项、动态链接要求、第三方 notice、源码/修改提供义务、H.264 专利与各平台 encoder 条款审查。
+- Windows 生产候选仅评估 runtime-probed `h264_mf`，并按[媒体 runtime 许可证审查简报](./cinema-media-runtime-license-review.md)使用 Anybox-controlled `--disable-libopenh264` 构建；macOS 优先评估 `h264_videotoolbox`。`libx264` 只有在 GPL 分发方案明确批准后才可进入生产 runtime。Linux 在合规 H.264 encoder 与分发来源获批前保持 `timelineDelivery: false`。
+- runtime 更新必须可回滚且记录来源；安全响应时可替换 manifest 指向的固定版本，不静默采用系统中未知版本。
 
 ## 13. 队列、并发和可靠性
 
@@ -609,7 +647,7 @@ packages/cinema-web/src/features/deliver/
 
 ## 17. 开发阶段
 
-### Phase D0：契约与文档校准（2–3 日）
+### Phase D0：契约与文档校准（已完成）
 
 交付：
 
@@ -625,7 +663,7 @@ packages/cinema-web/src/features/deliver/
 - 旧 Timeline 无需迁移。
 - Deliver 正常项目仍 disabled。
 
-### Phase D1：存储、快照与预检（3–5 日）
+### Phase D1：存储、快照与预检（已完成）
 
 交付：
 
@@ -643,7 +681,7 @@ packages/cinema-web/src/features/deliver/
 - missing、trashed、stale revision、personal asset 和磁盘不足有结构化结果。
 - 路径穿越、symlink 和绝对路径泄漏测试通过。
 
-### Phase D2：FFmpeg Render Core（6–9 日）
+### Phase D2：FFmpeg Render Core（已完成）
 
 交付：
 
@@ -659,7 +697,7 @@ packages/cinema-web/src/features/deliver/
 - 连续视频边界、gap、range 和淡入淡出通过自动测试。
 - 取消后无 FFmpeg 子进程和半成品资产。
 
-### Phase D3：Job 生命周期与输出资产（4–6 日）
+### Phase D3：Job 生命周期与输出资产（已完成）
 
 交付：
 
@@ -721,7 +759,7 @@ packages/cinema-web/src/features/deliver/
 - Render settings 正反例。
 - 整数微秒 range 和 rational frame rate。
 - Job 状态、progress、error、assetRef。
-- operationID、timelineRevision、retryOfJobID。
+- operationID、timelineRevision、retryOfJobID、executionRuntime 及 legacy optional 兼容。
 - API body/result strict schema。
 
 ### 18.2 Agent 单元
@@ -809,38 +847,71 @@ packages/cinema-web/src/features/deliver/
 
 以下全部满足后才设置 `timelineDelivery: true`：
 
-- [ ] Shared Render Schema、状态机和 strict tests 完成。
-- [ ] Job storage、atomic write、events、queue 和 restart recovery 完成。
-- [ ] Timeline revision 与输入素材 snapshot 可复现。
-- [ ] 服务端 preflight 覆盖素材、能力、runtime 和磁盘。
+- [x] Shared Render Schema、状态机和 strict tests 完成。
+- [x] Job storage、atomic write、events、queue 和 restart recovery 完成。
+- [x] Timeline revision 与输入素材 snapshot 可复现。
+- [x] 服务端 preflight 覆盖素材、能力、runtime 和磁盘。
 - [ ] 生产 FFmpeg runtime 分发、能力探测、许可证和跨平台 smoke test 完成。
-- [ ] V1 视频、视频原音、A1 和图片 overlay 真实 FFmpeg 渲染通过。
-- [ ] Create / cancel / retry 幂等与失败恢复通过。
-- [ ] 成功输出只在验证后注册为 `source: "render"` 资产。
-- [ ] 失败和取消不留下半成品资产或孤儿进程。
-- [ ] Deliver UI 没有模拟进度、伪成功或任意 FFmpeg 参数入口。
-- [ ] Edit → Deliver flush、timelineID 和 revision handoff 通过。
-- [ ] 亮色、暗色、760px–桌面宽度和 Axe 通过。
-- [ ] 键盘主路径和 live region 通过。
-- [ ] 500 Clip preflight 与 job 历史性能通过。
-- [ ] Playwright P0 和故障注入通过。
-- [ ] 旧文档、迁移说明、支持矩阵和保留期文档已同步。
+- [x] V1 视频、视频原音、A1 和图片 overlay 真实 FFmpeg 渲染通过。
+- [x] Create / cancel / retry 幂等与失败恢复通过。
+- [x] Create / Retry 在入队前绑定脱敏 executionRuntime；queue 漂移校验与 `runtime-bound` 审计事件完成，不静默替换 encoder。
+- [x] 成功输出只在验证后注册为 `source: "render"` 资产。
+- [x] 失败和取消不留下半成品资产或孤儿进程。
+- [x] Deliver UI 没有模拟进度、伪成功或任意 FFmpeg 参数入口。
+- [x] Edit → Deliver flush、timelineID 和 revision handoff 通过。
+- [x] 亮色、暗色、760px–桌面宽度和 Axe 通过。
+- [x] 键盘主路径和 live region 通过。
+- [x] 500 Clip preflight 与 job 历史性能通过（1000 jobs：API + JSON 214.9ms，首个虚拟行 668.6ms，DOM 仅 11 个 option）。
+- [x] Playwright 应用层 P0 和确定性故障注入通过（14 个 Deliver 场景）。
+- [ ] 随安装包执行真实 Agent 进程 kill/restart 与恢复 smoke。
+- [x] 旧文档、迁移说明、支持矩阵和保留期文档已同步。
+- [x] 为安全 cleanup core 提供默认 dry-run、显式确认、operationID 防重放的项目级 API。
+- [x] 提供不设默认值的技术预览运维入口、可取消 dry-run、明确确认、loopback/Origin 执行边界与脱敏聚合 telemetry。
+- [ ] 产品和安全负责人批准或替换保留期、授权、确认、取消/进度、telemetry 与无调度策略。
 
 ## 22. 第一批可直接创建的任务
 
-1. [ ] `D0-01`：新增 Shared Render settings、preflight、job、event Schema。
-2. [ ] `D0-02`：定义 job 状态机、错误码和 V1 支持矩阵测试。
-3. [ ] `D0-03`：新增 `timelineDelivery` 开发开关和 Deliver shell 空状态。
-4. [ ] `D0-04`：定义 FFmpeg runtime status、编码器探测和发行/许可证方案。
-5. [ ] `D0-05`：修正旧文档中的 Edit disabled、浮点秒和 renderState 描述。
-6. [ ] `D1-01`：实现 render job path、atomic read/write/list/events。
-7. [ ] `D1-02`：实现 Timeline revision snapshot 和 asset input hardlink/copy。
-8. [ ] `D1-03`：实现服务端 preflight 和结构化 issues。
-9. [ ] `D1-04`：实现 restart recovery 和 interrupted 状态。
-10. [ ] `D2-01`：实现纯函数 FFmpeg render plan / filter graph builder。
-11. [ ] `D2-02`：实现 V1 视频链、gap、fit、trim 和 range。
-12. [ ] `D2-03`：实现视频原音、A1 混音、volume、mute 和 fades。
-13. [ ] `D2-04`：实现真实 progress、cancel、timeout 和输出 ffprobe 验证。
+1. [x] `D0-01`：新增 Shared Render settings、preflight、job、event Schema。
+2. [x] `D0-02`：定义 job 状态机、错误码和 V1 支持矩阵测试。
+3. [x] `D0-03`：新增 `timelineDelivery` 开发开关和 Deliver shell 空状态。
+4. [x] `D0-04`：定义 FFmpeg runtime status、编码器探测和发行/许可证方案。
+5. [x] `D0-05`：修正旧文档中的 Edit disabled、浮点秒和 renderState 描述。
+6. [x] `D1-01`：实现 render job path、atomic read/write/list/events。
+7. [x] `D1-02`：实现 Timeline revision snapshot 和 asset input hardlink/copy。
+8. [x] `D1-03`：实现服务端 preflight 和结构化 issues。
+9. [x] `D1-04`：实现 restart recovery 和 interrupted 状态。
+10. [x] `D2-01`：实现纯函数 FFmpeg render plan / filter graph builder。
+11. [x] `D2-02`：实现 V1 视频链、gap、fit、trim 和 range。
+12. [x] `D2-03`：实现视频原音、A1 混音、volume、mute 和 fades。
+13. [x] `D2-04`：实现真实 progress、cancel、timeout 和输出 ffprobe 验证。
+
+Deliver 前端推进记录：
+
+14. [x] `D4-01`：实现 `renderApi`，接入 Timeline、runtime、preflight 与 render job API，并对响应执行 Shared Schema 校验。
+15. [x] `D4-02`：实现 Deliver Timeline 选择、revision/settings 预检和结构化 issue 展示。
+16. [x] `D4-03`：实现 preset、输出设置、真实 job 创建幂等、active job 轮询、cancel、retry 和历史 rows。
+17. [x] `D4-04`：实现成功输出 Asset preview、运行时不可用提示和失败/取消/中断的下一步操作。
+18. [x] `D4-05`：实现 Edit → Deliver 的 Timeline handoff；切换前复用 Edit flush，Deliver 按需 lazy-load。
+19. [x] `D4-06`：补齐 Deliver 明暗主题 token、900px 设置折叠和 760px 宽度保护。
+20. [x] `D4-07`：补充 Deliver 单元测试，并通过现有 Cinema 单测、构建和 Playwright 回归。
+21. [x] `D4-08`：补充真实 fixture 的 Deliver Playwright P0、Axe 0 violation 和真实输出预览验收。
+
+D5 发布加固推进记录：
+
+22. [x] `D5-01`：真实 fixture 验证 Deliver 的 preflight、Ctrl/Cmd+Enter 创建 job、Escape 关闭设置、输出预览和 900/760/759px gate。
+23. [x] `D5-02`：增加 500 Clip 服务端 preflight 性能证据（唯一素材去重、结构化 support 计数、1 秒门槛）。
+24. [ ] `D5-03`：完成 Windows x64 与 macOS arm64 生产 runtime manifest、许可证材料和跨平台编码 smoke。仓库已提交两个 Anybox-controlled artifact-pending 目标、固定源码 revision 的 LGPL 构建配方、候选摘要与 promotion、[许可证技术审查简报](./cinema-media-runtime-license-review.md)以及 release-strict 打包门禁；lock 不再引用第三方 BtbN/OpenH264 产物，也不写入虚构的未来摘要。approved target 还必须提供机器可读的 approver、approvedAt、证据引用和不可变镜像摘要。首个 approved runtime 必须有获批的 `timelineDelivery` 关闭回滚方案。Linux、macOS x64 和 Windows arm64 不进入生产 runtime matrix，保持 unsupported/disabled。
+25. [ ] `D5-04`：补充 Agent crash、FFmpeg failure、磁盘/权限和 UI cancel 的 fixture 故障注入。真实 FFmpeg failure→Retry、queued/running UI cancel、interrupted recovery→Retry、ENOSPC、snapshot EACCES 和 registration rollback 均已通过；已提供强制 `publish=never` 的 Deliver preview wrapper、脱敏证据模板和只读证据验证器，仅保留随批准候选安装包真实 kill/restart 的人工/平台 smoke。
+26. [x] `D5-05`：键盘主路径、live region、1000-job 性能与虚拟化、旧文档同步、[运维/迁移/支持 runbook](./cinema-deliver-operations.md) 和安全保留期 cleanup core 已完成。
+27. [x] `D5-06`：提供项目级 retention cleanup API；默认 dry-run，执行要求固定确认词，operationID 持久化防重放，不设置默认保留期或自动调度。产品保留期策略、授权与用户/运维入口仍是生产发布门槛。
+28. [x] `D5-07`：Create / Retry 在持久化 queued job 前绑定 runtimeID、版本、平台和实际 H.264/AAC encoder；queue 执行前复核并写 `runtime-bound`，漂移时稳定失败且不静默换 encoder。schemaVersion 1 旧 job 保持 optional，并在首次执行时兼容绑定。
+29. [x] `D5-08`：收口 Deliver 参数与 revision 语义：非 rendering 阶段仅显示不定进度，不伪造百分比；Custom range 默认整条 Timeline；开放常用/原始帧率与 target bitrate；旧 revision 的 Retry 与最新 Timeline 新建渲染明确分流。
+30. [x] `D5-09`：成功输出先实时核对 Asset 状态，missing/trashed/404/加载失败不再声称 ready；`Show in Assets` 通过跨工作区 reveal request 定位真实 scope、folder/Trash、分页条目并选中聚焦。failed 与新 interrupted job 同时展示稳定错误码和脱敏诊断摘要。
+31. [x] `D5-10`：实现 Render retention 技术预览入口：每次显式输入正整数天数、可取消 dry-run、聚合结果、`CLEAN` 确认、fresh operationID、提交后不可取消；Execute 增加 loopback + 受信 Origin 防护并记录脱敏聚合 telemetry。正式策略审批仍保持未完成。
+32. [x] `D5-11`：新增 Anybox-controlled Windows x64 / macOS arm64 FFmpeg 候选构建、候选摘要、lock promotion、通用 locked-archive preparer 和 archive 材料来源门禁；macOS target 在真实产物产生前显式为 `artifactStatus: pending`。
+33. [x] `D5-12`：Agent 通过内部 `ANYBOX_CINEMA_TIMELINE_DELIVERY` 返回 capability；打包后的 Desktop 只在当前 win32/x64 或 darwin/arm64 manifest 同时为 release/license approved 时注入该开关，其他平台 fail closed。
+34. [x] `D5-13`：新增双平台 release evidence matrix 与同步发布工作流，要求 Windows/macOS 使用同一桌面版本和 commit，各自 runtimeID 与 approved lock 一致，安装包文件名/SHA-256 与 installed evidence 一致，并在平台 runner 上分别通过 Authenticode 与 codesign/Gatekeeper/notarization stapling 校验；任一 gate 失败时不会创建任一平台 release。
+35. [ ] `D5-14`：生成并镜像两个真实候选，完成 Windows Client `h264_mf` 与 Apple Silicon `h264_videotoolbox` 安装包 smoke、签名/公证、kill/restart 证据及许可证/产品/安全审批。
 
 ## 23. Deliver V1 之后
 

@@ -200,7 +200,17 @@ export function useThreadVirtualList({
     }
   }
 
+  function getThreadVirtualOffsetForRowIndex(rowIndex: number, topInset = 0) {
+    if (displayRows.length === 0 || !Number.isFinite(rowIndex)) return null
+
+    const boundedRowIndex = Math.min(displayRows.length - 1, Math.max(0, Math.trunc(rowIndex)))
+    const offset = rowVirtualizer.getOffsetForIndex(boundedRowIndex, "start")?.[0]
+    if (offset === undefined) return null
+    return Math.max(0, offset - Math.max(0, topInset))
+  }
+
   return {
+    getThreadVirtualOffsetForRowIndex,
     getThreadVirtualScrollMaxTop,
     rowVirtualizer,
     scrollToThreadVirtualOffset,

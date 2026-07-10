@@ -57,6 +57,7 @@ import type {
   SessionDiffSummary,
   SessionSummary,
   ThreadMessage,
+  ThreadTurn,
   UserThreadMessage,
   UserThreadMessageAttachment
 } from "../types"
@@ -80,9 +81,11 @@ import {
   type TraceRowItemRenderInput,
 } from "./ThreadRowRenderer"
 import { ThreadRows } from "./ThreadRows"
+import { ThreadTurnNavigator } from "./ThreadTurnNavigator"
 import { useThreadContentObserver } from "./use-thread-content-observer"
 import { useThreadProjection } from "./use-thread-projection"
 import { useThreadScrollController, type ThreadFollowScrollTarget, type ThreadScrollSnapshot } from "./use-thread-scroll-controller"
+import { buildThreadTurnNavigationItems, type ThreadTurnNavigationItem } from "./use-thread-turn-navigation"
 import { useThreadVirtualList } from "./use-thread-virtual-list"
 
 export type { ThreadScrollSnapshot } from "./use-thread-scroll-controller"
@@ -95,6 +98,7 @@ interface ThreadViewProps {
   activeSession: SessionSummary | null
   activeSessionDiff?: SessionDiffSummary | null
   activeMessages: ThreadMessage[]
+  activeTurns?: ThreadTurn[]
   assistantTraceVisibility: AssistantTraceVisibility
   isResolvingPermissionRequest: boolean
   isSessionRunning?: boolean
@@ -123,6 +127,7 @@ interface ThreadViewProps {
   virtualMeasurementKey?: string | null
   readScrollSnapshot?: (key: string) => ThreadScrollSnapshot | null
   saveScrollSnapshot?: (key: string, snapshot: ThreadScrollSnapshot) => void
+  showTurnNavigator?: boolean
   onAskUserQuestionAnswer: QuestionAnswerHandler
   onProposedPlanConfirm?: ProposedPlanConfirmHandler
   onPermissionRequestResponse: PermissionRequestResponseHandler
@@ -2085,6 +2090,7 @@ export function SideChatThread({
             isThreadVisible={isThreadVisible}
             readScrollSnapshot={readScrollSnapshot}
             saveScrollSnapshot={saveScrollSnapshot}
+            showTurnNavigator={false}
             onAskUserQuestionAnswer={(answer) =>
               onAskUserQuestionAnswer({
                 ...answer,
@@ -4662,6 +4668,7 @@ function getThreadViewPropsChangeReason(left: ThreadViewProps, right: ThreadView
     return "activeSessionDiff"
   }
   if (!areArraysShallowEqual(left.activeMessages, right.activeMessages)) return "activeMessages"
+  if (!areArraysShallowEqual(left.activeTurns, right.activeTurns)) return "activeTurns"
   if (left.assistantTraceVisibility !== right.assistantTraceVisibility) return "assistantTraceVisibility"
   if (left.isResolvingPermissionRequest !== right.isResolvingPermissionRequest) return "isResolvingPermissionRequest"
   if (left.isSessionRunning !== right.isSessionRunning) return "isSessionRunning"
@@ -4684,6 +4691,7 @@ function getThreadViewPropsChangeReason(left: ThreadViewProps, right: ThreadView
   if (left.virtualMeasurementKey !== right.virtualMeasurementKey) return "virtualMeasurementKey"
   if (left.readScrollSnapshot !== right.readScrollSnapshot) return "readScrollSnapshot"
   if (left.saveScrollSnapshot !== right.saveScrollSnapshot) return "saveScrollSnapshot"
+  if (left.showTurnNavigator !== right.showTurnNavigator) return "showTurnNavigator"
   return null
 }
 
@@ -4706,6 +4714,7 @@ function VisibleThreadView({
   activeSession,
   activeSessionDiff = null,
   activeMessages,
+  activeTurns = [],
   assistantTraceVisibility,
   isResolvingPermissionRequest,
   isSessionRunning = false,
@@ -4735,6 +4744,7 @@ function VisibleThreadView({
   virtualMeasurementKey,
   readScrollSnapshot,
   saveScrollSnapshot,
+  showTurnNavigator = true,
   onProposedPlanConfirm,
   onPermissionRequestResponse,
 }: ThreadViewProps) {
@@ -4776,6 +4786,7 @@ function VisibleThreadView({
   const activeSessionID = activeSession?.id ?? null
   const effectiveScrollStateKey = scrollStateKey ?? activeSessionID ?? "thread:no-session"
   const {
+    getThreadVirtualOffsetForRowIndex,
     getThreadVirtualScrollMaxTop,
     rowVirtualizer,
     scrollToThreadVirtualOffset,
@@ -4832,6 +4843,7 @@ function VisibleThreadView({
     handleThreadScrollIntent,
     handleThreadWheelIntent,
     isSmoothFollowScrollActiveForKey,
+    navigateThreadToOffset,
     restoreDetachedThreadPositionIfNeeded,
     suppressFollowScrollSync,
     syncThreadScrollAfterContentChange,
@@ -4844,6 +4856,15 @@ function VisibleThreadView({
     scrollStateKey: effectiveScrollStateKey,
     threadColumnRef,
   })
+  const threadTurnNavigationItems = useMemo(
+    () => buildThreadTurnNavigationItems(activeTurns, displayRows),
+    [activeTurns, displayRows],
+  )
+  const handleNavigateThreadTurn = useCallback((item: ThreadTurnNavigationItem) => {
+    const offset = getThreadVirtualOffsetForRowIndex(item.rowIndex, 16)
+    if (offset === null) return
+    navigateThreadToOffset(offset, effectiveScrollStateKey)
+  }, [effectiveScrollStateKey, getThreadVirtualOffsetForRowIndex, navigateThreadToOffset])
 
   function getInitialThreadVirtualOffset() {
     const snapshot = readScrollSnapshot?.(effectiveScrollStateKey)
@@ -5317,6 +5338,16 @@ function VisibleThreadView({
   }
   return (
     <section className="thread-shell">
+      {showTurnNavigator && activeSession && threadTurnNavigationItems.length > 0 ? (
+        <ThreadTurnNavigator
+          items={threadTurnNavigationItems}
+          measurementKey={`${effectiveScrollStateKey}:${virtualMeasurementKey ?? "default"}:${threadVirtualRenderedRangeKey}`}
+          onNavigate={handleNavigateThreadTurn}
+          resetKey={effectiveScrollStateKey}
+          threadColumnRef={threadColumnRef}
+          virtualizer={rowVirtualizer}
+        />
+      ) : null}
       <div
         ref={threadColumnRef}
         className={joinClassNames(

@@ -193,6 +193,68 @@ describe("managed agent workspace dependencies", () => {
     })
   })
 
+  it("forces the bundled media pair and only enables Deliver for an approved packaged release target", async () => {
+    const isReleaseTarget = (process.platform === "win32" && process.arch === "x64")
+      || (process.platform === "darwin" && process.arch === "arm64")
+    if (!isReleaseTarget) return
+    const runtimeDir = await createTempDirectory("anybox-managed-agent-packaged-media-")
+    const mediaToolsDir = path.join(runtimeDir, "media-tools")
+    const ffmpeg = path.join(mediaToolsDir, "ffmpeg.exe")
+    const ffprobe = path.join(mediaToolsDir, "ffprobe.exe")
+    await mkdir(mediaToolsDir, { recursive: true })
+    await writeFile(ffmpeg, "")
+    await writeFile(ffprobe, "")
+    await writeFile(path.join(mediaToolsDir, "manifest.json"), JSON.stringify({
+      runtimeID: "ffmpeg-anybox-approved-test",
+      platform: process.platform,
+      arch: process.arch,
+      releaseReadiness: { status: "approved" },
+      licensePolicy: { reviewStatus: "approved" },
+      executables: {
+        ffmpeg: path.basename(ffmpeg),
+        ffprobe: path.basename(ffprobe),
+      },
+    }))
+    electronAppMock.isPackaged = true
+
+    await withProcessEnv({
+      ANYBOX_FFMPEG_BINARY: "C:/unverified/ffmpeg.exe",
+      ANYBOX_FFPROBE_BINARY: "C:/unverified/ffprobe.exe",
+    }, () => {
+      const env = managedAgentInternals.buildManagedAgentStartEnv({
+        label: "packaged media runtime",
+        command: "bun",
+        args: ["agent-server.js"],
+        runtimeDir,
+        sourceRuntime: false,
+      }, 4096)
+      expect(env[managedAgentInternals.env.ffmpegBinary]).toBe(ffmpeg)
+      expect(env[managedAgentInternals.env.ffprobeBinary]).toBe(ffprobe)
+      expect(env[managedAgentInternals.env.mediaRuntimeStrict]).toBe("1")
+      expect(env[managedAgentInternals.env.timelineDelivery]).toBe("1")
+    })
+
+    await writeFile(path.join(mediaToolsDir, "manifest.json"), JSON.stringify({
+      runtimeID: "ffmpeg-anybox-blocked-test",
+      platform: process.platform,
+      arch: process.arch,
+      releaseReadiness: { status: "blocked" },
+      licensePolicy: { reviewStatus: "pending" },
+      executables: {
+        ffmpeg: path.basename(ffmpeg),
+        ffprobe: path.basename(ffprobe),
+      },
+    }))
+    const blockedEnv = managedAgentInternals.buildManagedAgentStartEnv({
+      label: "blocked packaged media runtime",
+      command: "bun",
+      args: ["agent-server.js"],
+      runtimeDir,
+      sourceRuntime: false,
+    }, 4096)
+    expect(blockedEnv[managedAgentInternals.env.timelineDelivery]).toBeUndefined()
+  })
+
   it("does not pass plugin install directory overrides to the managed agent", async () => {
     const runtimeDir = await createTempDirectory("anybox-managed-agent-runtime-")
     const agentDataDir = path.join(runtimeDir, "agent-data")

@@ -19,6 +19,9 @@ const MANAGED_AGENT_RUNTIME_ENV = "ANYBOX_AGENT_RUNTIME_DIR"
 const MANAGED_AGENT_BUN_BINARY_ENV = "ANYBOX_BUN_BINARY"
 const MANAGED_AGENT_FFMPEG_BINARY_ENV = "ANYBOX_FFMPEG_BINARY"
 const MANAGED_AGENT_FFPROBE_BINARY_ENV = "ANYBOX_FFPROBE_BINARY"
+const MANAGED_AGENT_MEDIA_RUNTIME_ID_ENV = "ANYBOX_MEDIA_RUNTIME_ID"
+const MANAGED_AGENT_MEDIA_RUNTIME_STRICT_ENV = "ANYBOX_MEDIA_RUNTIME_STRICT"
+const MANAGED_AGENT_TIMELINE_DELIVERY_ENV = "ANYBOX_CINEMA_TIMELINE_DELIVERY"
 const MANAGED_AGENT_DATA_DIR_ENV = "ANYBOX_AGENT_DATA_DIR"
 const CONNECTOR_BUILD_CONFIG_ENV = "ANYBOX_CONNECTOR_BUILD_CONFIG"
 const WORKSPACE_DEPENDENCIES_DIR_ENV = "ANYBOX_WORKSPACE_DEPENDENCIES_DIR"
@@ -263,6 +266,47 @@ async function resolveManagedAgentProxyEnv(targetURL = "https://anybox.com.cn"):
   }
 }
 
+function readBundledMediaRuntimeManifest(mediaToolsDir: string) {
+  try {
+    const value = JSON.parse(fs.readFileSync(path.join(mediaToolsDir, "manifest.json"), "utf8")) as {
+      runtimeID?: unknown
+      platform?: unknown
+      arch?: unknown
+      releaseReadiness?: { status?: unknown }
+      licensePolicy?: { reviewStatus?: unknown }
+      executables?: { ffmpeg?: unknown; ffprobe?: unknown }
+    }
+    const runtimeID = typeof value.runtimeID === "string" && /^[A-Za-z0-9][A-Za-z0-9._:+-]{0,255}$/.test(value.runtimeID)
+      ? value.runtimeID
+      : undefined
+    const ffmpeg = typeof value.executables?.ffmpeg === "string"
+      && value.executables.ffmpeg.length > 0
+      && value.executables.ffmpeg !== "."
+      && value.executables.ffmpeg !== ".."
+      && !/[\\/]/.test(value.executables.ffmpeg)
+      ? value.executables.ffmpeg
+      : undefined
+    const ffprobe = typeof value.executables?.ffprobe === "string"
+      && value.executables.ffprobe.length > 0
+      && value.executables.ffprobe !== "."
+      && value.executables.ffprobe !== ".."
+      && !/[\\/]/.test(value.executables.ffprobe)
+      ? value.executables.ffprobe
+      : undefined
+    return {
+      runtimeID,
+      ffmpeg,
+      ffprobe,
+      platform: typeof value.platform === "string" ? value.platform : undefined,
+      arch: typeof value.arch === "string" ? value.arch : undefined,
+      releaseApproved: value.releaseReadiness?.status === "approved"
+        && value.licensePolicy?.reviewStatus === "approved",
+    }
+  } catch {
+    return undefined
+  }
+}
+
 function buildManagedAgentStartEnv(
   spec: ManagedAgentLaunchSpec,
   port: number,
@@ -279,6 +323,7 @@ function buildManagedAgentStartEnv(
     [MANAGED_AGENT_DESKTOP_PROCESS_ID_ENV]: String(process.pid),
     [MANAGED_AGENT_PROTECTED_PROCESS_NAMES_ENV]: resolveManagedAgentProtectedProcessNames(),
   }
+  if (app.isPackaged) delete startEnv[MANAGED_AGENT_TIMELINE_DELIVERY_ENV]
 
   for (const key of MANAGED_AGENT_PLUGIN_INSTALL_DIR_ENV_KEYS) {
     delete startEnv[key]
@@ -310,13 +355,46 @@ function buildManagedAgentStartEnv(
 
   if (spec.runtimeDir) {
     const mediaToolsDir = path.join(spec.runtimeDir, "media-tools")
-    const bundledFFmpeg = path.join(mediaToolsDir, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg")
-    const bundledFFprobe = path.join(mediaToolsDir, process.platform === "win32" ? "ffprobe.exe" : "ffprobe")
-    if (!startEnv[MANAGED_AGENT_FFMPEG_BINARY_ENV] && fs.existsSync(bundledFFmpeg)) {
+    const mediaManifest = readBundledMediaRuntimeManifest(mediaToolsDir)
+    const bundledFFmpeg = path.join(
+      mediaToolsDir,
+      mediaManifest?.ffmpeg ?? (process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg"),
+    )
+    const bundledFFprobe = path.join(
+      mediaToolsDir,
+      mediaManifest?.ffprobe ?? (process.platform === "win32" ? "ffprobe.exe" : "ffprobe"),
+    )
+    const hasBundledPair = fs.existsSync(bundledFFmpeg) && fs.existsSync(bundledFFprobe)
+    const isReleaseTarget = (process.platform === "win32" && process.arch === "x64")
+      || (process.platform === "darwin" && process.arch === "arm64")
+    const requireVerifiedBundle = app.isPackaged && isReleaseTarget
+    if (requireVerifiedBundle) {
+      delete startEnv[MANAGED_AGENT_FFMPEG_BINARY_ENV]
+      delete startEnv[MANAGED_AGENT_FFPROBE_BINARY_ENV]
+      delete startEnv[MANAGED_AGENT_MEDIA_RUNTIME_ID_ENV]
+      startEnv[MANAGED_AGENT_MEDIA_RUNTIME_STRICT_ENV] = "1"
+    }
+    if ((requireVerifiedBundle || !startEnv[MANAGED_AGENT_FFMPEG_BINARY_ENV]) && hasBundledPair) {
       startEnv[MANAGED_AGENT_FFMPEG_BINARY_ENV] = bundledFFmpeg
     }
-    if (!startEnv[MANAGED_AGENT_FFPROBE_BINARY_ENV] && fs.existsSync(bundledFFprobe)) {
+    if ((requireVerifiedBundle || !startEnv[MANAGED_AGENT_FFPROBE_BINARY_ENV]) && hasBundledPair) {
       startEnv[MANAGED_AGENT_FFPROBE_BINARY_ENV] = bundledFFprobe
+    }
+    if (
+      mediaManifest?.runtimeID
+      && startEnv[MANAGED_AGENT_FFMPEG_BINARY_ENV] === bundledFFmpeg
+      && startEnv[MANAGED_AGENT_FFPROBE_BINARY_ENV] === bundledFFprobe
+    ) {
+      startEnv[MANAGED_AGENT_MEDIA_RUNTIME_ID_ENV] = mediaManifest.runtimeID
+    }
+    if (
+      requireVerifiedBundle
+      && hasBundledPair
+      && mediaManifest?.releaseApproved
+      && mediaManifest.platform === process.platform
+      && mediaManifest.arch === process.arch
+    ) {
+      startEnv[MANAGED_AGENT_TIMELINE_DELIVERY_ENV] = "1"
     }
   }
 
@@ -615,6 +693,9 @@ export const managedAgentInternals = {
     workspaceDependenciesVersion: WORKSPACE_DEPENDENCIES_VERSION_ENV,
     ffmpegBinary: MANAGED_AGENT_FFMPEG_BINARY_ENV,
     ffprobeBinary: MANAGED_AGENT_FFPROBE_BINARY_ENV,
+    mediaRuntimeID: MANAGED_AGENT_MEDIA_RUNTIME_ID_ENV,
+    mediaRuntimeStrict: MANAGED_AGENT_MEDIA_RUNTIME_STRICT_ENV,
+    timelineDelivery: MANAGED_AGENT_TIMELINE_DELIVERY_ENV,
   },
   resolveBundledRuntimeCandidates,
   resolveSourceAgentLaunchSpec,

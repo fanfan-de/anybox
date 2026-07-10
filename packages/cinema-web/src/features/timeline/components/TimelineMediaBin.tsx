@@ -5,7 +5,7 @@ import type { CinemaAssetKind, CinemaAssetRecord } from "@anybox/shared"
 import type { CinemaTimelineDocument } from "@anybox/shared/cinema-timeline"
 import { createAssetLibraryApi } from "../../assets/assetLibraryApi"
 
-type MediaSection = "timelines" | "project" | "generated" | "imported"
+export type TimelineMediaSection = "timelines" | "project" | "generated" | "imported"
 type MediaKind = "all" | CinemaAssetKind
 
 export function TimelineMediaBin({
@@ -19,6 +19,8 @@ export function TimelineMediaBin({
   onDeleteTimeline,
   onActivateAsset,
   replacementClipTitle,
+  section,
+  onSectionChange,
 }: {
   agentBaseURL: string
   projectID: string
@@ -30,18 +32,19 @@ export function TimelineMediaBin({
   onDeleteTimeline: (timeline: CinemaTimelineDocument) => void
   onActivateAsset: (asset: CinemaAssetRecord) => void
   replacementClipTitle?: string
+  section: TimelineMediaSection
+  onSectionChange: (section: TimelineMediaSection) => void
 }) {
-  const [section, setSection] = useState<MediaSection>("timelines")
   const [query, setQuery] = useState("")
   const [kind, setKind] = useState<MediaKind>("all")
   const [compact, setCompact] = useState(true)
   const [folderID, setFolderID] = useState<string | null>(null)
   useEffect(() => {
     if (!replacementClipTitle) return
-    setSection("project")
+    onSectionChange("project")
     setFolderID(null)
     setQuery("")
-  }, [replacementClipTitle])
+  }, [onSectionChange, replacementClipTitle])
   const assetApi = useMemo(
     () => createAssetLibraryApi(agentBaseURL, projectID, { type: "project", projectID }),
     [agentBaseURL, projectID],
@@ -71,8 +74,8 @@ export function TimelineMediaBin({
     entry.entryType === "folder" || kind === "all" || entry.asset.kind === kind
   ))
 
-  const selectSection = (next: MediaSection) => {
-    setSection(next)
+  const selectSection = (next: TimelineMediaSection) => {
+    onSectionChange(next)
     setFolderID(null)
     setQuery("")
   }

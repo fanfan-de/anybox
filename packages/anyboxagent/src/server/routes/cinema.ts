@@ -4,6 +4,9 @@ import { ApiError } from "#server/error.ts"
 import { ok, parseJsonBody, parseQuery } from "#server/http.ts"
 import type { AppEnv } from "#server/types.ts"
 import * as CinemaUseCase from "#server/usecases/cinema.ts"
+import { getServerBaseURL } from "#server/base-url.ts"
+import { getProcessEnvValue } from "#env/compat.ts"
+import { getCinemaRenderRuntimeStatus } from "#cinema/render-runtime.ts"
 import {
   CinemaCanvasDocumentSchema,
   CinemaCommandSchema,
@@ -21,6 +24,12 @@ import {
   CinemaTimelineIDSchema,
   CreateCinemaTimelineBodySchema,
 } from "@anybox/shared/cinema-timeline"
+import {
+  CinemaRenderJobIDSchema,
+  CinemaRenderSettingsSchema,
+  CreateCinemaRenderJobBodySchema,
+  RetryCinemaRenderJobBodySchema,
+} from "@anybox/shared/cinema-render"
 
 const CinemaEventsQuerySchema = z.object({
   after: z.coerce.number().int().min(0).optional(),
@@ -40,10 +49,106 @@ const CinemaTimelineEventsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional(),
 })
 
+const CinemaDeliveryPreflightQuerySchema = z.object({
+  settings: z.string().optional(),
+}).strict()
+
+const CINEMA_RENDER_RETENTION_CONFIRMATION = "DELETE_REBUILDABLE_RENDER_FILES"
+const CinemaRenderRetentionBodySchema = z.object({
+  operationID: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/),
+  retentionDurationMs: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  dryRun: z.boolean().default(true),
+  confirm: z.literal(CINEMA_RENDER_RETENTION_CONFIRMATION).optional(),
+}).strict().superRefine((value, context) => {
+  if (!value.dryRun && value.confirm !== CINEMA_RENDER_RETENTION_CONFIRMATION) {
+    context.addIssue({
+      code: "custom",
+      path: ["confirm"],
+      message: `Execute mode requires confirm='${CINEMA_RENDER_RETENTION_CONFIRMATION}'.`,
+    })
+  }
+})
+
+function isLoopbackHostname(hostname: string) {
+  const normalized = hostname.trim().toLowerCase()
+  return normalized === "127.0.0.1"
+    || normalized === "localhost"
+    || normalized === "::1"
+    || normalized === "[::1]"
+}
+
+function cinemaRetentionTrustedBrowserOrigins() {
+  const origins = new Set([getServerBaseURL().origin])
+  const devURL = getProcessEnvValue("ANYBOX_CINEMA_WEB_DEV_URL")?.trim()
+  if (devURL) {
+    try {
+      origins.add(new URL(devURL).origin)
+    } catch {
+      // An invalid dev URL is not an authorization grant.
+    }
+  }
+  return origins
+}
+
+function assertCinemaRetentionExecutionAuthorized(request: {
+  header(name: string): string | undefined
+}) {
+  const serverURL = getServerBaseURL()
+  if (!isLoopbackHostname(serverURL.hostname)) {
+    throw new ApiError(
+      403,
+      "CINEMA_RENDER_RETENTION_EXECUTION_FORBIDDEN",
+      "Render retention execution is available only on a loopback Agent.",
+    )
+  }
+
+  const origin = request.header("origin")?.trim()
+  const fetchSite = request.header("sec-fetch-site")?.trim().toLowerCase()
+  const browserRequest = Boolean(origin || fetchSite)
+  if (!browserRequest) return
+
+  let normalizedOrigin: string | undefined
+  try {
+    normalizedOrigin = origin ? new URL(origin).origin : undefined
+  } catch {
+    normalizedOrigin = undefined
+  }
+  if (!normalizedOrigin || !cinemaRetentionTrustedBrowserOrigins().has(normalizedOrigin)) {
+    throw new ApiError(
+      403,
+      "CINEMA_RENDER_RETENTION_EXECUTION_FORBIDDEN",
+      "Render retention execution requires the trusted local Cinema origin.",
+    )
+  }
+}
+
+function parseCinemaRenderSettings(value: string | undefined) {
+  if (value === undefined) return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw new ApiError(400, "CINEMA_RENDER_SETTINGS_INVALID", "Render settings must be valid JSON.")
+  }
+  const result = CinemaRenderSettingsSchema.safeParse(parsed)
+  if (!result.success) {
+    throw new ApiError(400, "CINEMA_RENDER_SETTINGS_INVALID", "Render settings are invalid.")
+  }
+  return result.data
+}
+
 function parseTimelineID(value: string) {
   const result = CinemaTimelineIDSchema.safeParse(value)
   if (!result.success) {
     throw new ApiError(400, "CINEMA_TIMELINE_ID_INVALID", "Timeline id is invalid.")
+  }
+  return result.data
+}
+
+function parseRenderJobID(value: string) {
+  const result = CinemaRenderJobIDSchema.safeParse(value)
+  if (!result.success) {
+    throw new ApiError(400, "CINEMA_RENDER_JOB_ID_INVALID", "Render job id is invalid.")
   }
   return result.data
 }
@@ -69,6 +174,28 @@ function decodeCinemaAssetPath(url: string) {
 
 export function CinemaRoutes() {
   const app = new Hono<AppEnv>()
+
+  app.get("/render-runtime", async (c) =>
+    ok(c, await getCinemaRenderRuntimeStatus())
+  )
+
+  app.post("/projects/:projectID/render-retention/cleanup", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      CinemaRenderRetentionBodySchema,
+      "Body must include a valid operationID, explicit retentionDurationMs, and execute confirmation when dryRun is false.",
+    )
+    if (!payload.dryRun) assertCinemaRetentionExecutionAuthorized(c.req)
+    return ok(c, await CinemaUseCase.runCinemaRenderRetention(
+      c.req.param("projectID"),
+      {
+        operationID: payload.operationID,
+        retentionDurationMs: payload.retentionDurationMs,
+        dryRun: payload.dryRun,
+      },
+      payload.dryRun ? c.req.raw.signal : undefined,
+    ))
+  })
 
   app.get("/video-providers", async (c) =>
     ok(c, await CinemaUseCase.listCinemaVideoProviders())
@@ -140,6 +267,74 @@ export function CinemaRoutes() {
       parseTimelineID(c.req.param("timelineID")),
     ))
   )
+
+  app.get("/projects/:projectID/timelines/:timelineID/delivery-preflight", async (c) => {
+    const query = parseQuery(
+      c.req.query(),
+      CinemaDeliveryPreflightQuerySchema,
+      "INVALID_QUERY",
+      "Query must include optional JSON render settings",
+    )
+    return ok(c, await CinemaUseCase.preflightCinemaTimelineDelivery(
+      c.req.param("projectID"),
+      parseTimelineID(c.req.param("timelineID")),
+      parseCinemaRenderSettings(query.settings),
+    ))
+  })
+
+  app.post("/projects/:projectID/timelines/:timelineID/render-jobs", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      CreateCinemaRenderJobBodySchema,
+      "Body must be a valid Cinema render job request",
+    )
+    return ok(c, await CinemaUseCase.createCinemaRenderJob(
+      c.req.param("projectID"),
+      parseTimelineID(c.req.param("timelineID")),
+      payload,
+    ), 202)
+  })
+
+  app.get("/projects/:projectID/timelines/:timelineID/render-jobs", async (c) =>
+    ok(c, await CinemaUseCase.listCinemaRenderJobs(
+      c.req.param("projectID"),
+      parseTimelineID(c.req.param("timelineID")),
+    ))
+  )
+
+  app.get("/projects/:projectID/render-jobs/:jobID", async (c) =>
+    ok(c, await CinemaUseCase.getCinemaRenderJob(
+      c.req.param("projectID"),
+      parseRenderJobID(c.req.param("jobID")),
+    ))
+  )
+
+  app.get("/projects/:projectID/render-jobs/:jobID/events", async (c) =>
+    ok(c, await CinemaUseCase.getCinemaRenderJobEvents(
+      c.req.param("projectID"),
+      parseRenderJobID(c.req.param("jobID")),
+    ))
+  )
+
+  app.post("/projects/:projectID/render-jobs/:jobID/cancel", async (c) =>
+    ok(c, await CinemaUseCase.cancelCinemaRenderJob(
+      c.req.param("projectID"),
+      parseRenderJobID(c.req.param("jobID")),
+    ))
+  )
+
+  app.post("/projects/:projectID/render-jobs/:jobID/retry", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      RetryCinemaRenderJobBodySchema,
+      "Body must be a valid Cinema render retry request",
+    )
+    return ok(c, await CinemaUseCase.retryCinemaRenderJob(
+      c.req.param("projectID"),
+      parseRenderJobID(c.req.param("jobID")),
+      payload,
+    ), 202)
+  })
 
   app.post("/projects/:projectID/timelines/:timelineID/commands", async (c) => {
     const timelineID = parseTimelineID(c.req.param("timelineID"))

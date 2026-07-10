@@ -1,6 +1,6 @@
 # Thread View 前端设计说明
 
-更新日期：2026-06-29
+更新日期：2026-07-10
 
 ## 1. 文档定位
 
@@ -14,8 +14,10 @@
 - `packages/desktop/src/renderer/src/app/thread/use-thread-virtual-list.ts`
 - `packages/desktop/src/renderer/src/app/thread/use-thread-scroll-controller.ts`
 - `packages/desktop/src/renderer/src/app/thread/use-thread-content-observer.ts`
+- `packages/desktop/src/renderer/src/app/thread/use-thread-turn-navigation.ts`
 - `packages/desktop/src/renderer/src/app/thread/ThreadRows.tsx`
 - `packages/desktop/src/renderer/src/app/thread/ThreadRowRenderer.tsx`
+- `packages/desktop/src/renderer/src/app/thread/ThreadTurnNavigator.tsx`
 - `packages/desktop/src/renderer/src/styles/thread.css`
 - `packages/desktop/src/renderer/src/app/workbench/WorkbenchPaneSurface.tsx`
 - `packages/desktop/src/renderer/src/styles/workbench.css`
@@ -103,13 +105,13 @@ ComposerUtilityBar
 
 Canonical conversation state is `ConversationTurnMap = Record<string, ThreadTurn[]>`.
 `ThreadTurn` represents one backend execution lifecycle. `ThreadMessage` records user or assistant messages inside that lifecycle.
-`ThreadView` still receives `activeMessages: ThreadMessage[]`, but that array is a derived render view:
+`ThreadView` still receives `activeMessages: ThreadMessage[]` as its render view. The main workbench also passes the canonical `activeTurns: ThreadTurn[]` for semantic turn navigation:
 
 ```ts
 const activeMessages = turns.flatMap((turn) => turn.messages)
 ```
 
-Do not treat `activeMessages` as the source of truth. New stream/history state should update `ThreadTurn[]` first, then derive flat messages for `ThreadView`, side chat, and legacy selectors.
+Do not treat `activeMessages` as the source of truth. New stream/history state should update `ThreadTurn[]` first, then derive flat messages for `ThreadView`, side chat, and legacy selectors. `ThreadTurnNavigator` creates a read-only projection from each turn's `userMessageID` to the corresponding `user-message` display row; assistant rows, trace rows, permission rows, workflow/debug rows, and stream-inserted user rows never create navigation turns.
 
 数据层级可以按下面的树理解：
 
@@ -282,6 +284,10 @@ ThreadView
 │     └─ div.thread-column
 └─ VisibleThreadView  # 正常可见状态
    └─ section.thread-shell  # thread 区域外壳
+      ├─ ThreadTurnNavigator?  # 主 pane 的固定语义轮次导航，不参与正文滚动
+      │  ├─ button.thread-turn-navigator-marker[]
+      │  ├─ hover/focus label
+      │  └─ narrow-pane compact trigger + popover
       ├─ div.thread-column  # 独立滚动列
       │  ├─ empty state: article.thread-row.assistant-empty-state-row
       │  │  └─ TraceItemView(system)
@@ -461,6 +467,9 @@ debug 信息由 developer mode 和 trace visibility 控制。默认不应该干�
 - 切换 session 时强制滚动到底部。
 - 如果用户当前接近底部，新的 message 或权限请求到来时继续锁底。
 - 如果用户向上阅读历史，后续更新不会强行打断阅读位置。
+- 点击 `ThreadTurnNavigator` 的轮次节点时，`useThreadVirtualList` 通过目标 display row index 获取 TanStack virtualizer 的 start offset，并减去少量顶部阅读留白；即使目标 row 尚未挂载到 DOM，也不依赖 `scrollIntoView()`。
+- 轮次跳转通过 `useThreadScrollController.navigateThreadToOffset()` 明确切换为 `detached`，同时保存 `pinnedToBottom: false` 的 scroll snapshot。点击最后一轮也只定位到该轮 user message，不会滚到 thread 最底部；用户随后手动回到底部时仍由原有 scroll intent 规则恢复 follow。
+- 当前轮次由导航组件自己的 scroll/ResizeObserver + requestAnimationFrame 同步计算。它读取各 user row 的 virtual offset，只在 current index 变化时更新导航组件，避免每次正文 scroll 触发整个 `ThreadView` 重渲染。
 
 底部锁定阈值为 `THREAD_BOTTOM_LOCK_THRESHOLD_PX = 32`。
 
@@ -485,6 +494,7 @@ side chat 是挂在某条 assistant response 下的右侧栏讨论：
 - side chat 锚点为 `message.messageID ?? message.id`。
 - 打开后在 right sidebar 的 side-chat tab 中渲染 `SideChatThread`。
 - `SideChatThread` 内部再次渲染一个 `ThreadView`，并在下方放置专用 `Composer`。
+- nested `ThreadView` 显式设置 `showTurnNavigator={false}`，避免右侧窄栏出现重复轮次导航。
 - side chat composer 隐藏 model selector 和项目 tag command，placeholder 为 `Ask a follow-up about this reply.`。
 - side chat session banner 在右侧栏嵌套视图中关闭，避免重复说明。
 
@@ -536,6 +546,7 @@ agent 提问通过 `question` trace item 渲染：
 - 小屏下 pane content gutter 降低到 10px。
 - composer、utility bar、菜单 panel 会全宽显示。
 - permission request grid 在窄屏变成单列。
+- `thread-shell` 使用 inline-size container query：pane 宽度小于 620px 时，隐藏横线导航并显示“第 n/m 轮”紧凑按钮；popover 保留全部轮次并可独立滚动。普通宽度下横线列表固定在 thread 左侧，可滚动承载长会话，不挤压正文宽度。
 
 桌面端仍是主要目标；响应式规则保证窄窗口可用，但没有把 thread view 设计成移动优先体验。
 
@@ -559,6 +570,7 @@ Thread view 使用项目的语义 token：
 - `--semantic-thread-user-message-diff-row-surface-hover`
 - `--semantic-thread-user-message-diff-row-surface-focus`
 - `--semantic-thread-user-message-diff-preview-surface`
+- 轮次导航复用 `--semantic-thread-divider`、`--seg-text-*`、`--semantic-icon-button-*`、`--semantic-popup-panel-surface` 和 secondary button border token，没有新增硬编码主题颜色。
 - `--semantic-markdown-text`
 - `--semantic-question-card-surface`
 - `--semantic-proposed-plan-card-surface`
@@ -613,7 +625,7 @@ User-message 文件变更卡片使用一组专用 semantic token：
 3. side chat 入口在无 hover 环境和首次发现时不够明显。
 4. reasoning/tools/file-change 的视觉差异在最终 override 后偏弱，扫描执行状态时不够直观。
 5. side chat 是完整嵌套 thread，但由右侧栏承载；需要关注右侧栏宽度和长会话滚动体验。
-6. `thread-column` 隐藏滚动条，界面更干净，但长 thread 中位置感较弱。
+6. `thread-column` 的原生滚动位置仍较弱；主 pane 的语义轮次导航只表达 canonical user turns，不表达单条 trace 或 assistant 输出内部的精确滚动比例。
 7. README 中提到的若干前端规格文档当前不存在，本文暂时作为 thread view 设计记录入口。
 
 ## 10. 维护约定
