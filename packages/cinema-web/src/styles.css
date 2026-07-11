@@ -1806,7 +1806,75 @@ button {
   overflow-wrap: anywhere;
   scrollbar-gutter: stable;
   text-align: left;
+  white-space: normal;
+}
+
+.cinema-text-markdown,
+.cinema-text-markdown > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cinema-text-markdown > :first-child {
+  margin-block-start: 0;
+}
+
+.cinema-text-markdown > :last-child {
+  margin-block-end: 0;
+}
+
+.cinema-text-markdown :is(p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, hr) {
+  margin-block: 0 6px;
+}
+
+.cinema-text-markdown :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--cinema-text);
+  font-size: 1em;
+  line-height: 1.4;
+  font-weight: 650;
+}
+
+.cinema-text-markdown :is(ul, ol) {
+  padding-inline-start: 18px;
+}
+
+.cinema-text-markdown li + li {
+  margin-block-start: 2px;
+}
+
+.cinema-text-markdown blockquote {
+  padding-inline-start: 8px;
+  color: var(--cinema-text-2);
+  border-inline-start: 2px solid var(--cinema-text-card-border);
+}
+
+.cinema-text-markdown hr {
+  border: 0;
+  border-block-start: 1px solid var(--cinema-text-card-border);
+}
+
+.cinema-text-markdown :is(pre, code) {
+  max-width: 100%;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.cinema-text-markdown pre {
+  overflow: hidden;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--cinema-text-card-surface-focus);
+}
+
+.cinema-text-markdown-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.cinema-text-markdown-image-alt {
+  color: var(--cinema-text-3);
+  font-style: italic;
 }
 
 .cinema-text-card-preview.has-text .cinema-text-card-preview-text {

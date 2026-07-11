@@ -26,7 +26,7 @@ async function openManagedProject(page: Page, request: APIRequestContext) {
   const initialEvents = page.waitForResponse((response) => response.url().includes("/events?limit=1"))
   await page.goto(project.cinemaURL)
   await initialEvents
-  await expect(page.locator(".cinema-save-status")).toContainText("已保存")
+  await expect(page.locator(".cinema-save-status")).toHaveClass(/is-saved/)
   return project
 }
 
@@ -86,6 +86,39 @@ test.describe("Cinema save reliability", () => {
 
     await preview.dblclick()
     await expect(textNode.locator("textarea.cinema-text-card-editor")).toBeFocused()
+  })
+
+  test("renders Markdown for reading and preserves its source when editing", async ({ page, request }) => {
+    await openManagedProject(page, request)
+    const markdown = "**分镜脚本**\n\n---\n\n## 镜头 1\n第一行\n第二行"
+    const editor = await editStoryBrief(page, markdown)
+    await editor.press("Escape")
+    await expect(page.locator(".cinema-save-status")).toHaveClass(/is-saved/)
+
+    const textNode = page.locator('.react-flow__node-cinemaNode[data-id="story-brief"]')
+    const preview = textNode.locator(".cinema-text-card-preview-text")
+    await expect(preview.locator("strong")).toHaveText("分镜脚本")
+    await expect(preview.getByRole("heading", { name: "镜头 1" })).toBeVisible()
+    await expect(preview.locator("hr")).toHaveCount(1)
+    await expect(preview.locator("br")).toHaveCount(1)
+    await expect(preview).not.toContainText("**")
+
+    await preview.dblclick()
+    const reopenedEditor = textNode.locator("textarea.cinema-text-card-editor")
+    await expect(reopenedEditor).toHaveValue(markdown)
+
+    const longMarkdown = `## 长内容\n${Array.from({ length: 18 }, (_, index) => `镜头 ${index + 1}`).join("\n")}\n\n\`${"x".repeat(240)}\``
+    await reopenedEditor.fill(longMarkdown)
+    await reopenedEditor.press("Escape")
+    await expect(page.locator(".cinema-save-status")).toHaveClass(/is-saved/)
+    const previewMetrics = await preview.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      clientWidth: element.clientWidth,
+      scrollHeight: element.scrollHeight,
+      scrollWidth: element.scrollWidth,
+    }))
+    expect(previewMetrics.scrollHeight).toBeGreaterThan(previewMetrics.clientHeight)
+    expect(previewMetrics.scrollWidth).toBeLessThanOrEqual(previewMetrics.clientWidth + 1)
   })
 
   test("keeps an offline edit visible and persists it after manual retry", async ({ page, request }) => {
@@ -308,7 +341,7 @@ test.describe("Cinema save reliability", () => {
       const body = route.request().postDataJSON() as { nodeID: string }
       const canvasResponse = await request.get(route.request().url().replace(/\/text-generations$/, "/canvas"))
       const canvasEnvelope = await canvasResponse.json() as { data: { nodes: Array<{ id: string; data?: Record<string, unknown> }> } }
-      const generatedText = "Generated replacement."
+      const generatedText = "**Generated replacement.**"
       const canvas = {
         ...canvasEnvelope.data,
         nodes: canvasEnvelope.data.nodes.map((node) => node.id === body.nodeID
@@ -328,10 +361,11 @@ test.describe("Cinema save reliability", () => {
     await openManagedProject(page, request)
     const storyBrief = await startTextGeneration(page, "story-brief", "Replace the brief.")
     await expect(storyBrief.locator(".cinema-text-card-preview-text")).toHaveText("Generated replacement.")
+    await expect(storyBrief.locator(".cinema-text-card-preview-text strong")).toHaveText("Generated replacement.")
     const undo = page.getByRole("button", { name: /Undo|撤销/ })
     await expect(undo).toBeVisible()
     await undo.click()
     await expect(storyBrief.locator(".cinema-text-card-preview-text")).toHaveText("A test story brief.")
-    await expect(page.locator(".cinema-save-status")).toContainText("已保存")
+    await expect(page.locator(".cinema-save-status")).toHaveClass(/is-saved/)
   })
 })

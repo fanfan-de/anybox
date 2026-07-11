@@ -130,6 +130,7 @@ import {
 } from "./features/canvas/commandQueue"
 import { CanvasSaveStatus, type SaveState } from "./features/canvas/CanvasSaveStatus"
 import { validateCinemaConnection } from "./features/canvas/connectionRules"
+import { TextNodeMarkdownPreview } from "./features/canvas/TextNodeMarkdownPreview"
 import { textNodeVisibleLineCount } from "./features/canvas/textNodeLayout"
 import { canRestoreGeneratedText, type TextGenerationUndoRecord } from "./features/canvas/textGenerationUndo"
 import {
@@ -3298,7 +3299,7 @@ function TextCanvasNode({
                   focusEditor()
                 }}
               >
-                {previewText}
+                {hasPreviewText ? <TextNodeMarkdownPreview text={textDraft} /> : previewText}
               </div>
             </>
           )}

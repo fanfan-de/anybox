@@ -3460,9 +3460,12 @@ describe("server api", () => {
           ]),
         )
         expect(await readFile(join(promptRoot, "bundled", "system-codex.md"), "utf8")).toContain("# SYSTEM INSTRUCTIONS")
-        expect(await readFile(join(promptRoot, "bundled", "cinema-text-generation.md"), "utf8")).toContain(
+        const cinemaTextGenerationPrompt = await readFile(join(promptRoot, "bundled", "cinema-text-generation.md"), "utf8")
+        expect(cinemaTextGenerationPrompt).toContain(
           "You are helping write text for an AI film project.",
         )
+        expect(cinemaTextGenerationPrompt).toContain("You may use simple Markdown")
+        expect(cinemaTextGenerationPrompt).toContain("Do not use raw HTML or wrap the response in a code fence.")
 
         const selectionResponse = await app.request("http://localhost/api/prompts/selection")
         const selectionBody = (await selectionResponse.json()) as PromptPresetSelectionEnvelope

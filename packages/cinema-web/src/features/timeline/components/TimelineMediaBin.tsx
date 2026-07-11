@@ -114,15 +114,29 @@ export function TimelineMediaBin({
   return (
     <aside ref={rootRef} className="cinema-timeline-media-bin" aria-label={t("timeline.mediaBin")}>
       <div className="cinema-timeline-media-sections" role="tablist" aria-label={t("timeline.mediaSections")}>
-        {([
-          ["timelines", "deliver.timelines"],
-          ["subtitles", "timeline.subtitles"],
-          ["project", "timeline.projectAssets"],
-          ["generated", "timeline.generated"],
-          ["imported", "timeline.imported"],
-        ] as const satisfies ReadonlyArray<readonly [TimelineMediaSection, TranslationKey]>).map(([id, labelKey]) => (
-          <button key={id} type="button" role="tab" aria-selected={section === id} className={section === id ? "is-active" : ""} onClick={() => selectSection(id)}>{t(labelKey)}</button>
-        ))}
+        <div className="cinema-timeline-media-section-group is-editing">
+          <span className="cinema-timeline-media-section-label" aria-hidden="true">{t("timeline.editingGroup")}</span>
+          <div className="cinema-timeline-media-section-options">
+            {([
+              ["timelines", "deliver.timelines"],
+              ["subtitles", "timeline.subtitles"],
+            ] as const satisfies ReadonlyArray<readonly [TimelineMediaSection, TranslationKey]>).map(([id, labelKey]) => (
+              <button key={id} type="button" role="tab" aria-selected={section === id} className={section === id ? "is-active" : ""} onClick={() => selectSection(id)}>{t(labelKey)}</button>
+            ))}
+          </div>
+        </div>
+        <div className="cinema-timeline-media-section-group is-assets">
+          <span className="cinema-timeline-media-section-label" aria-hidden="true">{t("timeline.assetSources")}</span>
+          <div className="cinema-timeline-media-section-options">
+            {([
+              ["project", "timeline.projectAssets", "timeline.source.project"],
+              ["generated", "timeline.generated", "timeline.source.generated"],
+              ["imported", "timeline.imported", "timeline.source.imported"],
+            ] as const satisfies ReadonlyArray<readonly [TimelineMediaSection, TranslationKey, TranslationKey]>).map(([id, labelKey, shortLabelKey]) => (
+              <button key={id} type="button" role="tab" aria-label={t(labelKey)} title={t(labelKey)} aria-selected={section === id} className={section === id ? "is-active" : ""} onClick={() => selectSection(id)}>{t(shortLabelKey)}</button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {section === "timelines" ? (
