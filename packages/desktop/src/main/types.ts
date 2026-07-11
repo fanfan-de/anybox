@@ -1316,6 +1316,7 @@ export interface AgentPromptPresetSelection {
   planModePromptPresetID: string
   sideChatPromptPresetID: string
   gitCommitPromptPresetID: string
+  cinemaTextGenerationPromptPresetID: string
 }
 
 export interface AgentPromptPresetSummary {

@@ -1971,6 +1971,8 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       planModePromptPresetID: field === "planModePromptPresetID" ? value : selectedPromptPresetID ?? value,
       sideChatPromptPresetID: field === "sideChatPromptPresetID" ? value : selectedPromptPresetID ?? value,
       gitCommitPromptPresetID: field === "gitCommitPromptPresetID" ? value : selectedPromptPresetID ?? value,
+      cinemaTextGenerationPromptPresetID:
+        field === "cinemaTextGenerationPromptPresetID" ? value : selectedPromptPresetID ?? value,
     }
   }
 
@@ -2003,7 +2005,9 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
                 ? t("prompts.message.sideChatUpdated")
                 : field === "gitCommitPromptPresetID"
                   ? t("prompts.message.gitCommitUpdated")
-                  : t("prompts.message.assignmentsUpdated"),
+                  : field === "cinemaTextGenerationPromptPresetID"
+                    ? t("prompts.message.cinemaTextGenerationUpdated")
+                    : t("prompts.message.assignmentsUpdated"),
       })
       return true
     } catch (error) {
@@ -2053,6 +2057,10 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
               field === "gitCommitPromptPresetID"
                 ? promptPresetSelection.gitCommitPromptPresetID
                 : savedPromptPresetSelection.gitCommitPromptPresetID,
+            cinemaTextGenerationPromptPresetID:
+              field === "cinemaTextGenerationPromptPresetID"
+                ? promptPresetSelection.cinemaTextGenerationPromptPresetID
+                : savedPromptPresetSelection.cinemaTextGenerationPromptPresetID,
           }
         : promptPresetSelection
 
@@ -2450,6 +2458,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
         remainingPromptPresets.find((preset) => preset.id === nextSelection.planModePromptPresetID)?.id ??
         remainingPromptPresets.find((preset) => preset.id === nextSelection.sideChatPromptPresetID)?.id ??
         remainingPromptPresets.find((preset) => preset.id === nextSelection.gitCommitPromptPresetID)?.id ??
+        remainingPromptPresets.find((preset) => preset.id === nextSelection.cinemaTextGenerationPromptPresetID)?.id ??
         remainingPromptPresets[0]?.id ??
         null
 
@@ -3688,6 +3697,11 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     promptPresetSelection !== null &&
     savedPromptPresetSelection !== null &&
     promptPresetSelection.gitCommitPromptPresetID !== savedPromptPresetSelection.gitCommitPromptPresetID
+  const isCinemaTextGenerationPromptPresetDirty =
+    promptPresetSelection !== null &&
+    savedPromptPresetSelection !== null &&
+    promptPresetSelection.cinemaTextGenerationPromptPresetID !==
+      savedPromptPresetSelection.cinemaTextGenerationPromptPresetID
   const isBuiltinToolSelectionDirty =
     stableSelectionKey(builtinToolSelection) !== stableSelectionKey(savedBuiltinToolSelection)
 
@@ -3758,6 +3772,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     isPlanModePromptPresetDirty,
     isSideChatPromptPresetDirty,
     isGitCommitPromptPresetDirty,
+    isCinemaTextGenerationPromptPresetDirty,
     isRefreshingProviderCatalog,
     isRefreshingCinemaVideoProviderCatalog,
     isInstallingPromptUrlPrompts,

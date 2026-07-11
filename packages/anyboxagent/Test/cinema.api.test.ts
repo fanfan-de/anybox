@@ -13,6 +13,7 @@ import {
 } from "#server/usecases/cinema.ts"
 import { testDeepSeekModel, type Model, type PublicModel } from "#provider/provider.ts"
 import { Instance } from "#project/instance.ts"
+import * as PromptPresets from "#session/support/prompt-presets.ts"
 
 interface JsonEnvelope<T = unknown> {
   success: boolean
@@ -1162,11 +1163,22 @@ describe("cinema api", () => {
     }
   })
 
-  test("lists text models and appends generated text to text nodes", async () => {
+  test("uses the managed Cinema prompt and appends generated text to text nodes", async () => {
     const app = createServerApp()
     const root = await createTempProjectRoot()
     const publicTextModel = createPublicTextModel()
     const generationPrompts: string[] = []
+    const generationSystemPrompts: string[] = []
+    const previousPromptSelection = await PromptPresets.getPromptPresetSelection()
+    const managedCinemaPrompt = "Use the managed Cinema text generation instructions."
+    const managedCinemaPreset = await PromptPresets.createPromptPreset({
+      label: "Managed Cinema test prompt",
+      content: managedCinemaPrompt,
+    })
+    await PromptPresets.updatePromptPresetSelection({
+      ...previousPromptSelection,
+      cinemaTextGenerationPromptPresetID: managedCinemaPreset.id,
+    })
     const restoreTextRuntime = setCinemaTextRuntimeDependenciesForTest({
       listModels: async () => [publicTextModel],
       resolveSelection: async () => ({
@@ -1180,6 +1192,7 @@ describe("cinema api", () => {
       getLanguage: async (model) => model as never,
       getGenerateText: async () => (async (input: any) => {
         generationPrompts.push(String(input.prompt ?? ""))
+        generationSystemPrompts.push(String(input.system ?? ""))
         return { text: "Generated beat." } as any
       }) as never,
     })
@@ -1239,6 +1252,7 @@ describe("cinema api", () => {
       })
       expect(generationPrompts[0]).toContain("Existing text:\nA test story brief.")
       expect(generationPrompts[0]).toContain("Generation request:\nExpand this story beat.")
+      expect(generationSystemPrompts[0]).toBe(managedCinemaPrompt)
 
       const generatedNode = generateBody.data?.canvas.nodes.find((node) => node.id === "story-brief")
       expect(generatedNode?.data?.text).toBe("A test story brief.\n\nGenerated beat.")
@@ -1446,6 +1460,8 @@ describe("cinema api", () => {
       expect(seenInput?.messages?.[0]?.content?.[2]?.type).toBe("image")
       expect(seenInput?.messages?.[0]?.content?.[2]?.mediaType).toBe("image/png")
     } finally {
+      await PromptPresets.updatePromptPresetSelection(previousPromptSelection)
+      await PromptPresets.deletePromptPreset(managedCinemaPreset.id)
       restoreTextRuntime()
       await rm(root, { recursive: true, force: true })
     }

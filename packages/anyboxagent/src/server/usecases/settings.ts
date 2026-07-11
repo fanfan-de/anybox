@@ -181,6 +181,7 @@ export const PromptPresetSelectionBody = z.object({
   planModePromptPresetID: z.string().min(1),
   sideChatPromptPresetID: z.string().min(1),
   gitCommitPromptPresetID: z.string().min(1),
+  cinemaTextGenerationPromptPresetID: z.string().min(1),
 })
 
 export const PromptTranslationLanguageID = z.enum([

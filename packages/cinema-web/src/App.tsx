@@ -2349,14 +2349,10 @@ function TextCanvasNode({
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const generatorPromptRef = useRef<HTMLTextAreaElement>(null)
-  const generatorButtonRef = useRef<HTMLButtonElement>(null)
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const sourceImageInputRef = useRef<HTMLInputElement>(null)
   const modelControlRef = useRef<HTMLDivElement>(null)
   const [isTextEditorOpen, setIsTextEditorOpen] = useState(false)
-  const [isGeneratorOpen, setIsGeneratorOpen] = useState(() =>
-    Boolean(readRawString(data.rawData, "generationPrompt") || data.textGenerationError)
-  )
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
   const [moreMenuPosition, setMoreMenuPosition] = useState<{ x: number; y: number } | null>(null)
   const [titleEditRequestKey, setTitleEditRequestKey] = useState(0)
@@ -2573,10 +2569,6 @@ function TextCanvasNode({
   }, [isModelMenuOpen])
 
   useEffect(() => {
-    if (generatorPrompt || data.textGenerationError) setIsGeneratorOpen(true)
-  }, [data.textGenerationError, generatorPrompt])
-
-  useEffect(() => {
     if (active) return
     isTextFocusedRef.current = false
     isGeneratorPromptFocusedRef.current = false
@@ -2596,12 +2588,6 @@ function TextCanvasNode({
     setIsTextEditorOpen(false)
   }, [data.isGeneratingText, syncNodeInputEditing])
 
-  useEffect(() => {
-    if (!active || !isGeneratorOpen) return
-    const frameID = window.requestAnimationFrame(() => generatorPromptRef.current?.focus())
-    return () => window.cancelAnimationFrame(frameID)
-  }, [active, isGeneratorOpen])
-
   useLayoutEffect(() => {
     updateNodeInternals(id)
   }, [id, isTextEditorOpen, textDraft, updateNodeInternals])
@@ -2615,15 +2601,6 @@ function TextCanvasNode({
   const copyText = () => {
     if (!textDraft.trim()) return
     void navigator.clipboard?.writeText(textDraft)
-  }
-  const closeGenerator = () => {
-    clearGeneratorPromptCommitTimer()
-    commitRawDataPatch({ generationPrompt: generatorPromptDraftRef.current })
-    isGeneratorPromptFocusedRef.current = false
-    isGeneratorPromptComposingRef.current = false
-    syncNodeInputEditing()
-    setIsGeneratorOpen(false)
-    window.requestAnimationFrame(() => generatorButtonRef.current?.focus())
   }
   const closeMoreMenu = (restoreFocus = true) => {
     setMoreMenuPosition(null)
@@ -2668,7 +2645,6 @@ function TextCanvasNode({
   const generateText = () => {
     const prompt = generatorPromptDraft.trim()
     if (!prompt) {
-      setIsGeneratorOpen(true)
       window.requestAnimationFrame(() => generatorPromptRef.current?.focus())
       return
     }
@@ -2726,40 +2702,6 @@ function TextCanvasNode({
           />
           <div className="cinema-node-header-actions nodrag nowheel" role="toolbar" aria-label={t("text.actions")}>
             <NodeStatusDot status={textStatus} label={textStatus === "generating" ? t("text.generating") : textStatus === "failed" ? t("text.failed") : undefined} />
-            <button
-              type="button"
-              className={`cinema-node-action-button ${isTextEditorOpen ? "is-active" : ""}`}
-              title={t("text.edit")}
-              aria-label={t("text.edit")}
-              disabled={data.isGeneratingText}
-              tabIndex={active ? 0 : -1}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation()
-                focusEditor()
-              }}
-            >
-              <PencilLine size={13} aria-hidden="true" />
-            </button>
-            <button
-              ref={generatorButtonRef}
-              type="button"
-              className={`cinema-node-action-button ${isGeneratorOpen ? "is-active" : ""}`}
-              title={data.isGeneratingText ? t("text.generating") : t("text.generate")}
-              aria-label={data.isGeneratingText ? t("text.generating") : t("text.generate")}
-              aria-expanded={isGeneratorOpen}
-              tabIndex={active ? 0 : -1}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation()
-                data.onSelectNode?.(id)
-                setIsGeneratorOpen((current) => !current)
-              }}
-            >
-              {data.isGeneratingText
-                ? <Loader2 size={13} aria-hidden="true" className="is-spinning" />
-                : <WandSparkles size={13} aria-hidden="true" />}
-            </button>
             <button
               ref={moreButtonRef}
               type="button"
@@ -2842,7 +2784,7 @@ function TextCanvasNode({
               {hasPreviewText ? null : <FileText size={28} aria-hidden="true" />}
               <div
                 ref={previewRef}
-                className="cinema-text-card-preview-text nodrag nowheel"
+                className="cinema-text-card-preview-text nowheel"
                 title={previewText}
                 tabIndex={0}
                 onDoubleClick={(event) => {
@@ -2887,7 +2829,7 @@ function TextCanvasNode({
         </CinemaContextMenuSurface>
       ) : null}
 
-      {active && isGeneratorOpen ? (
+      {active ? (
         <CinemaNodeInputOverlay
           nodeID={id}
           selected={active}
@@ -2901,16 +2843,6 @@ function TextCanvasNode({
               <WandSparkles size={13} aria-hidden="true" />
               {t("text.generatorTitle")}
             </span>
-            <button
-              type="button"
-              className="cinema-node-action-button"
-              title={t("text.generatorClose")}
-              aria-label={t("text.generatorClose")}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={closeGenerator}
-            >
-              <X size={13} aria-hidden="true" />
-            </button>
           </header>
           {supportsSourceImage ? (
             <section className={`cinema-text-source-image ${selectedSourceImageAssets.length > 0 ? "is-ready" : "is-empty"}`} aria-label={t("text.availableReferenceImages")}>

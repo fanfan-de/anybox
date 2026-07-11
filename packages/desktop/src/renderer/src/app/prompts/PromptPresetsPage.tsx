@@ -51,6 +51,7 @@ const BUILTIN_PROMPT_LABEL_KEYS = {
   "Plan mode prompt": "prompts.builtin.planModePrompt",
   "Side chat prompt": "prompts.builtin.sideChatPrompt",
   "Git commit message prompt": "prompts.builtin.gitCommitMessagePrompt",
+  "Cinema text generation prompt": "prompts.builtin.cinemaTextGenerationPrompt",
   "Anthropic Provider Prompt": "prompts.builtin.anthropicProviderPrompt",
   "Beast Provider Prompt": "prompts.builtin.beastProviderPrompt",
   "Gemini Provider Prompt": "prompts.builtin.geminiProviderPrompt",
@@ -184,6 +185,9 @@ function getPromptPresetUsageLabels(
   }
   if (selection.gitCommitPromptPresetID === presetID) {
     labels.push(t("prompts.usage.gitCommit"))
+  }
+  if (selection.cinemaTextGenerationPromptPresetID === presetID) {
+    labels.push(t("prompts.usage.cinemaTextGeneration"))
   }
 
   return labels
@@ -1022,6 +1026,27 @@ export function PromptPresetsPage({
                         disabled={!promptPresetSelection || isSavingPromptPresetSelection}
                         onChange={(value) =>
                           void onPromptPresetSelectionChange("gitCommitPromptPresetID", value)
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="settings-prompt-assignment-row" role="listitem">
+                  <div className="settings-prompt-assignment-copy">
+                    <span className="settings-prompt-assignment-title">{t("prompts.slot.cinemaTextGeneration")}</span>
+                  </div>
+
+                  <div className="settings-prompt-assignment-control">
+                    <div className="settings-prompt-assignment-actions">
+                      <SettingsSelect
+                        ariaLabel={t("prompts.slot.cinemaTextGenerationSelectAria")}
+                        className="settings-prompt-assignment-select"
+                        options={promptPresetSelectOptions}
+                        value={promptPresetSelection?.cinemaTextGenerationPromptPresetID ?? ""}
+                        disabled={!promptPresetSelection || isSavingPromptPresetSelection}
+                        onChange={(value) =>
+                          void onPromptPresetSelectionChange("cinemaTextGenerationPromptPresetID", value)
                         }
                       />
                     </div>

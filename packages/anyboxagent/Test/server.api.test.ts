@@ -442,6 +442,7 @@ type PromptPresetSelectionEnvelope = JsonEnvelope<{
   planModePromptPresetID: string
   sideChatPromptPresetID: string
   gitCommitPromptPresetID: string
+  cinemaTextGenerationPromptPresetID: string
 }>
 
 function createPromptTranslationTestModel(input?: {
@@ -3422,6 +3423,7 @@ describe("server api", () => {
           planModePromptPresetID: null,
           sideChatPromptPresetID: null,
           gitCommitPromptPresetID: null,
+          cinemaTextGenerationPromptPresetID: null,
         })
 
         const listResponse = await app.request("http://localhost/api/prompts")
@@ -3447,9 +3449,20 @@ describe("server api", () => {
               root: promptRoot,
               filePath: join(promptRoot, "bundled", "system-codex-zh-hans.md"),
             }),
+            expect.objectContaining({
+              id: "cinema-text-generation",
+              label: "Cinema text generation prompt",
+              source: "bundled",
+              hasOverride: false,
+              root: promptRoot,
+              filePath: join(promptRoot, "bundled", "cinema-text-generation.md"),
+            }),
           ]),
         )
         expect(await readFile(join(promptRoot, "bundled", "system-codex.md"), "utf8")).toContain("# SYSTEM INSTRUCTIONS")
+        expect(await readFile(join(promptRoot, "bundled", "cinema-text-generation.md"), "utf8")).toContain(
+          "You are helping write text for an AI film project.",
+        )
 
         const selectionResponse = await app.request("http://localhost/api/prompts/selection")
         const selectionBody = (await selectionResponse.json()) as PromptPresetSelectionEnvelope
@@ -3461,6 +3474,7 @@ describe("server api", () => {
           planModePromptPresetID: "plan-mode",
           sideChatPromptPresetID: "side-chat",
           gitCommitPromptPresetID: "git-commit-message",
+          cinemaTextGenerationPromptPresetID: "cinema-text-generation",
         })
       } finally {
         await Config.setSelectedPromptPresetIDs(Config.GLOBAL_CONFIG_ID, {
@@ -3546,6 +3560,7 @@ describe("server api", () => {
           planModePromptPresetID: "plan-mode",
           sideChatPromptPresetID: "side-chat",
           gitCommitPromptPresetID: "git-commit-message",
+          cinemaTextGenerationPromptPresetID: "cinema-text-generation",
         })
       } finally {
         restoreSettings()
@@ -3800,6 +3815,7 @@ describe("server api", () => {
         planModePromptPresetID: "plan-mode",
         sideChatPromptPresetID: "side-chat",
         gitCommitPromptPresetID: "git-commit-message",
+        cinemaTextGenerationPromptPresetID: "cinema-text-generation",
       })
 
       const createResponse = await app.request("http://localhost/api/prompts", {
@@ -3833,6 +3849,7 @@ describe("server api", () => {
           planModePromptPresetID: "plan-mode",
           sideChatPromptPresetID: "side-chat",
           gitCommitPromptPresetID: customPresetIDValue,
+          cinemaTextGenerationPromptPresetID: customPresetIDValue,
         }),
       })
       const updateSelectionBody = (await updateSelectionResponse.json()) as PromptPresetSelectionEnvelope
@@ -3844,6 +3861,7 @@ describe("server api", () => {
         planModePromptPresetID: "plan-mode",
         sideChatPromptPresetID: "side-chat",
         gitCommitPromptPresetID: customPresetIDValue,
+        cinemaTextGenerationPromptPresetID: customPresetIDValue,
       })
 
       const runtimeWithCustomSystemPrompt = await SystemPrompt.defaultPrompt()
@@ -3960,6 +3978,7 @@ describe("server api", () => {
         planModePromptPresetID: "plan-mode",
         sideChatPromptPresetID: "side-chat",
         gitCommitPromptPresetID: "git-commit-message",
+        cinemaTextGenerationPromptPresetID: "cinema-text-generation",
       })
 
       const runtimeAfterDelete = await SystemPrompt.defaultPrompt()
@@ -4819,6 +4838,7 @@ describe("server api", () => {
           planModePromptPresetID: "plan-mode",
           sideChatPromptPresetID: "side-chat",
           gitCommitPromptPresetID: customCommitPromptPreset.id,
+          cinemaTextGenerationPromptPresetID: "cinema-text-generation",
         }, Config.GLOBAL_CONFIG_ID)
 
         await createGitRepo(repositoryRoot, "git-commit-message-project")

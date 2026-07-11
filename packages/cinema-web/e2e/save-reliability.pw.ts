@@ -32,8 +32,7 @@ async function openManagedProject(page: Page, request: APIRequestContext) {
 
 async function editStoryBrief(page: Page, value: string) {
   const textNode = page.locator('.react-flow__node-cinemaNode[data-id="story-brief"]')
-  await textNode.click()
-  await textNode.getByRole("button", { name: /编辑文本|Edit text/ }).click()
+  await textNode.locator(".cinema-text-card-preview-text").dblclick()
   const editor = textNode.locator("textarea.cinema-text-card-editor")
   await editor.fill(value)
   return editor
@@ -42,7 +41,6 @@ async function editStoryBrief(page: Page, value: string) {
 async function startTextGeneration(page: Page, nodeID: string, prompt: string) {
   const textNode = page.locator(`.react-flow__node-cinemaNode[data-id="${nodeID}"]`)
   await textNode.click()
-  await textNode.getByRole("button", { name: /生成文本|Generate text/ }).click()
   await page.locator("textarea.cinema-text-card-generator-input").fill(prompt)
   await page.locator("button.cinema-text-card-submit").click()
   return textNode
@@ -60,6 +58,34 @@ test.describe("Cinema save reliability", () => {
       "Add Video",
       "Add Audio",
     ])
+  })
+
+  test("opens the composer on selection and keeps the text preview draggable until double-click edit", async ({ page, request }) => {
+    await openManagedProject(page, request)
+    const textNode = page.locator('.react-flow__node-cinemaNode[data-id="story-brief"]')
+    const preview = textNode.locator(".cinema-text-card-preview-text")
+    const composer = page.locator(".cinema-text-card-generator")
+
+    await expect(composer).toBeHidden()
+    await preview.click()
+    await expect(composer).toBeVisible()
+    await expect(textNode.locator("textarea.cinema-text-card-editor")).toHaveCount(0)
+
+    const before = await textNode.boundingBox()
+    const previewBox = await preview.boundingBox()
+    expect(before).not.toBeNull()
+    expect(previewBox).not.toBeNull()
+    await page.mouse.move(previewBox!.x + previewBox!.width / 2, previewBox!.y + previewBox!.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(previewBox!.x + previewBox!.width / 2 + 80, previewBox!.y + previewBox!.height / 2 + 32, { steps: 8 })
+    await page.mouse.up()
+    const after = await textNode.boundingBox()
+    expect(after).not.toBeNull()
+    expect(after!.x - before!.x).toBeGreaterThan(60)
+    expect(after!.y - before!.y).toBeGreaterThan(20)
+
+    await preview.dblclick()
+    await expect(textNode.locator("textarea.cinema-text-card-editor")).toBeFocused()
   })
 
   test("keeps an offline edit visible and persists it after manual retry", async ({ page, request }) => {
@@ -225,7 +251,6 @@ test.describe("Cinema save reliability", () => {
     await openManagedProject(page, request)
     const textNode = page.locator('.react-flow__node-cinemaNode[data-id="story-brief"]')
     await textNode.click()
-    await textNode.getByRole("button", { name: /生成文本|Generate text/ }).click()
     const prompt = page.locator("textarea.cinema-text-card-generator-input")
     await prompt.fill("描述一望无际的草原")
     await expect(page.locator(".cinema-save-status")).toHaveClass(/is-saving/)

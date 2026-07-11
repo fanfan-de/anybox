@@ -270,6 +270,7 @@ describe("ipc prompt helpers", () => {
       planModePromptPresetID: "plan-mode",
       sideChatPromptPresetID: "side-chat",
       gitCommitPromptPresetID: "git-commit-message",
+      cinemaTextGenerationPromptPresetID: "cinema-text-generation",
     }
     requestAgentJSONMock.mockResolvedValueOnce({
       data: selection,

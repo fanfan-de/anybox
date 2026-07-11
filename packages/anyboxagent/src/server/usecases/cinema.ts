@@ -99,6 +99,7 @@ import {
   isSupportedImageMime,
   readImageDimensions,
 } from "#session/support/image-assets.ts"
+import * as PromptPresets from "#session/support/prompt-presets.ts"
 import {
   listProjectModelsWithFallback,
   resolveEffectiveModelWithFallback,
@@ -901,13 +902,6 @@ function parseCinemaProjectAssetRange(rangeHeader: string | null | undefined, si
     total: sizeBytes,
   }
 }
-
-const CINEMA_TEXT_GENERATION_SYSTEM_PROMPT = [
-  "You are helping write text for an AI film project.",
-  "Follow the user's generation request.",
-  "Use the existing node text only as context.",
-  "Return only the generated text, with no explanations or commentary.",
-].join("\n")
 
 function buildCinemaTextGenerationPrompt(input: {
   currentText: string
@@ -2354,6 +2348,11 @@ export async function createCinemaTextGeneration(
 
   const currentText = typeof node.data?.text === "string" ? node.data.text : ""
   const { model, textModel } = await resolveCinemaTextGenerationModel(projectID, input.model)
+  const promptPresetSelection = await PromptPresets.getPromptPresetSelection(Config.GLOBAL_CONFIG_ID)
+  const systemPrompt = (await PromptPresets.getResolvedPromptPresetContent(
+    promptPresetSelection.cinemaTextGenerationPromptPresetID,
+    Config.GLOBAL_CONFIG_ID,
+  )).trim()
   const sourceImagePaths = uniqueNonEmptyStrings([
     ...(input.sourceImagePaths ?? []),
     input.sourceImagePath,
@@ -2386,7 +2385,7 @@ export async function createCinemaTextGeneration(
         const request = sourceImages.length > 0
           ? {
             model: languageModel,
-            system: CINEMA_TEXT_GENERATION_SYSTEM_PROMPT,
+            system: systemPrompt,
             messages: [
               {
                 role: "user" as const,
@@ -2403,7 +2402,7 @@ export async function createCinemaTextGeneration(
           }
           : {
             model: languageModel,
-            system: CINEMA_TEXT_GENERATION_SYSTEM_PROMPT,
+            system: systemPrompt,
             prompt: generationPrompt,
           }
         return await generateText(request as Parameters<GenerateTextFunction>[0])
