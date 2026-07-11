@@ -1,6 +1,6 @@
 {
   "name": "anybox-desktop-agent",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "private": true,
   "description": "Anybox desktop AI agent workspace",
   "type": "module",

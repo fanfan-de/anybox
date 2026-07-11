@@ -12461,7 +12461,13 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add attachments" }))
 
-    expect(await screen.findByText("hero.png")).toBeInTheDocument()
+    await waitFor(() => {
+      expect(window.desktop!.pickComposerAttachments).toHaveBeenCalledWith({
+        allowImage: true,
+        allowPdf: true,
+      })
+    })
+    expect(await screen.findByRole("img", { name: "hero.png" })).toBeInTheDocument()
     expect(screen.getByText("brief.pdf")).toBeInTheDocument()
 
     setComposerDraftValue(screen.getByRole("textbox", { name: "Task draft" }), "Use the references to refine the layout")

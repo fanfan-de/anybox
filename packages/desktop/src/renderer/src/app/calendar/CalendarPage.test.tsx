@@ -429,7 +429,7 @@ describe("CalendarPage", () => {
     const sidebar = screen.getByRole("complementary", { name: "日历侧边栏" })
     expect(within(sidebar).getByPlaceholderText("搜索 Todos...")).toBeInTheDocument()
     expect(within(sidebar).getByRole("button", { name: "项目筛选：所有项目" })).toBeInTheDocument()
-    expect(within(sidebar).getByRole("heading", { name: "Todos" })).toBeInTheDocument()
+    expect(within(sidebar).getByRole("heading", { name: "全部" })).toBeInTheDocument()
     expect(screen.getByRole("main", { name: "周 日历视图" })).toBeInTheDocument()
   })
 

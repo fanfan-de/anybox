@@ -158,7 +158,7 @@ describe("cinema asset library api", () => {
     const state = await json<{ revision: number; status: string; counts: { folders: number } }>(stateResponse)
     expect(stateResponse.status).toBe(200)
     expect(state.data).toMatchObject({ revision: 0, status: "ready" })
-    expect(state.data!.counts.folders).toBe(11)
+    expect(state.data!.counts.folders).toBe(12)
 
     const entriesResponse = await app.request(projectLibraryURL(projectID, "/entries?folderID=root"))
     const entries = await json<{ entries: Array<{ entryType: string; folder?: { name: string } }> }>(entriesResponse)
