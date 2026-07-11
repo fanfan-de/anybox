@@ -43,6 +43,7 @@ const enUS = {
   "connection.duplicate": "This connection already exists.",
   "connection.textInput": "Text reference input only accepts image nodes.",
   "connection.textOutput": "Text output can only connect to image or video inputs.",
+  "connection.videoImageLimit": "A video node accepts at most two image inputs: first frame and last frame.",
   "connection.invalid": "These ports are not compatible.",
 } as const
 
@@ -87,6 +88,7 @@ const zhCN: Record<keyof typeof enUS, string> = {
   "connection.duplicate": "这条连接已经存在。",
   "connection.textInput": "文本节点的参考素材输入只接受图片节点。",
   "connection.textOutput": "文本输出只能连接到图片或视频输入。",
+  "connection.videoImageLimit": "视频节点最多接受两张图片：首帧和尾帧。",
   "connection.invalid": "这两个端口不兼容。",
 }
 

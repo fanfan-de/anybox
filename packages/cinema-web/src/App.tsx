@@ -28,7 +28,6 @@ import { create } from "zustand"
 import {
   ArrowLeft,
   ArrowUp,
-  Bot,
   ChevronDown,
   Code2,
   Copy,
@@ -40,16 +39,13 @@ import {
   Image,
   Images,
   Info,
-  KeyRound,
   Loader2,
-  MessageSquareText,
   Music,
   MoreHorizontal,
   Pause,
   PencilLine,
   Play,
   RefreshCw,
-  Server,
   Scissors,
   Trash2,
   Upload,
@@ -63,8 +59,6 @@ import {
   type CinemaAssetKind,
   type CinemaAssetLocator,
   type CinemaAssetRecord,
-  type CinemaCustomApiAuthState,
-  type CinemaCustomApiRunResult,
   type CinemaEventsResult,
   type CinemaCanvasDocument,
   type CinemaCanvasNode,
@@ -98,7 +92,6 @@ import {
   isGenerationImageInputSlot,
   isGenerationMediaInputControl,
   isGenerationMediaInputSlot,
-  slotForInputRole as generationSlotForInputRole,
   type GenerationImageInputSlot,
   type GenerationInputControl,
   type GenerationInputSlot,
@@ -109,6 +102,12 @@ import {
   buildGenerationTaskParameters,
   generationLegacyAssetsBySlot,
 } from "./features/generation/generationPayload"
+import {
+  edgeTargetVideoInput,
+  nextVideoImageInputIndex,
+  normalizeVideoTargetEdgeHandle,
+  videoInputHandleMetadata,
+} from "./features/generation/videoInputRouting"
 import {
   canonicalizeCinemaImageNodeData,
   deriveCinemaImageNodeState,
@@ -198,15 +197,6 @@ type TextGenerationRequest = {
   sourceImagePath?: string
   sourceImagePaths?: string[]
 }
-type CustomApiRunMode = "preview" | "run"
-type CustomApiRunRequest = {
-  inputValues?: Record<string, unknown>
-  mode?: CustomApiRunMode
-}
-type CustomApiAuthSaveRequest = {
-  apiKey: string | null
-}
-
 type ImageCropRect = {
   x: number
   y: number
@@ -302,10 +292,6 @@ type CinemaFlowNodeData = {
   isCreatingVideoTask?: boolean
   videoGenerationError?: string | null
   onCreateVideoGenerationTask?: (nodeID: string, body: CreateCinemaGenerationTaskBody) => void
-  isRunningCustomApi?: boolean
-  customApiError?: string | null
-  onRunCustomApi?: (nodeID: string, request: CustomApiRunRequest) => Promise<CinemaCustomApiRunResult | undefined>
-  onSaveCustomApiKey?: (nodeID: string, request: CustomApiAuthSaveRequest) => Promise<CinemaCustomApiAuthState | undefined>
   isImportingImage?: boolean
   imageImportError?: string | null
   onImportImage?: (nodeID: string, file: File) => void
@@ -359,16 +345,11 @@ const useUiStore = create<UiState>((set) => ({
   setActiveNodeID: (nodeID) => set({ activeNodeID: nodeID }),
 }))
 
-const NODE_TYPES = [
+const CREATABLE_NODE_TYPES = [
   "text",
-  "prompt",
   "image",
   "video",
   "audio",
-  "shot",
-  "agent",
-  "generation-task",
-  "output",
 ] as const satisfies readonly CinemaNodeType[]
 
 const FALLBACK_GENERATION_MODE: CinemaGenerationMode = "text-to-video"
@@ -412,16 +393,9 @@ const VIDEO_LOCAL_IMAGE_INPUT_SLOTS = [
 
 const DEFAULT_NODE_SIZE: Record<CinemaNodeType, { width: number; height: number }> = {
   text: { width: 360, height: 188 },
-  prompt: { width: 340, height: 176 },
   image: { width: 300, height: 300 },
-  "local-image": { width: 300, height: 300 },
   video: { width: 420, height: 340 },
   audio: { width: 300, height: 156 },
-  shot: { width: 340, height: 186 },
-  agent: { width: 320, height: 172 },
-  "custom-api": { width: 380, height: 210 },
-  "generation-task": { width: 340, height: 176 },
-  output: { width: 320, height: 172 },
 }
 
 const NODE_META: Record<CinemaNodeType, {
@@ -436,23 +410,11 @@ const NODE_META: Record<CinemaNodeType, {
     icon: FileText,
     placeholder: "Story note, idea, or narration text.",
   },
-  prompt: {
-    label: "Prompt",
-    accent: "#a7f3d0",
-    icon: MessageSquareText,
-    placeholder: "Prompt draft or reusable generation instruction.",
-  },
   image: {
     label: "Image",
     accent: "#f9a8d4",
     icon: Image,
     placeholder: "Describe the image you want to generate.",
-  },
-  "local-image": {
-    label: "Image",
-    accent: "#fde68a",
-    icon: Image,
-    placeholder: "Imported local image.",
   },
   video: {
     label: "Video",
@@ -465,36 +427,6 @@ const NODE_META: Record<CinemaNodeType, {
     accent: "#c4b5fd",
     icon: Music,
     placeholder: "Voice, music, or sound design placeholder.",
-  },
-  shot: {
-    label: "Shot",
-    accent: "#fcd34d",
-    icon: Film,
-    placeholder: "Shot description, duration, and visual intent.",
-  },
-  agent: {
-    label: "Agent",
-    accent: "#fdba74",
-    icon: Bot,
-    placeholder: "AnyBox Agent task placeholder.",
-  },
-  "custom-api": {
-    label: "Custom API",
-    accent: "#5eead4",
-    icon: Server,
-    placeholder: "Configure a JSON POST endpoint.",
-  },
-  "generation-task": {
-    label: "Generation",
-    accent: "#86efac",
-    icon: WandSparkles,
-    placeholder: "Provider/model task placeholder. No API call in V1.",
-  },
-  output: {
-    label: "Output",
-    accent: "#fca5a5",
-    icon: Scissors,
-    placeholder: "Preview render, selected clip, or final export.",
   },
 }
 
@@ -534,7 +466,7 @@ function nodeSize(node: CinemaCanvasNode) {
 }
 
 function flowNodeStyle(type: CinemaNodeType, size: { width: number; height: number }): CSSProperties {
-  return type === "text" || type === "image" || type === "local-image" || type === "video" || type === "custom-api"
+  return type === "text" || type === "image" || type === "video"
     ? { width: size.width }
     : { width: size.width, height: size.height }
 }
@@ -553,7 +485,7 @@ class CinemaRequestError extends Error {
 
 function toFlowNodes(canvas: CinemaCanvasDocument): CinemaFlowNode[] {
   return canvas.nodes.map((node) => {
-    const cinemaType = node.type === "local-image" ? "image" : node.type
+    const cinemaType = node.type
     const size = nodeSize(node)
     return {
       id: node.id,
@@ -573,7 +505,7 @@ function toFlowNodes(canvas: CinemaCanvasDocument): CinemaFlowNode[] {
 }
 
 function toCanvasNode(node: CinemaFlowNode): CinemaCanvasNode {
-  const cinemaType = node.data.cinemaType === "local-image" ? "image" : node.data.cinemaType
+  const cinemaType = node.data.cinemaType
   const width = typeof node.style?.width === "number"
     ? node.style.width
     : node.measured?.width ?? node.data.size?.width ?? DEFAULT_NODE_SIZE[cinemaType].width
@@ -860,91 +792,6 @@ function GenerationParameterControlField({
       />
     </label>
   )
-}
-
-function customApiCredentialProviderID(nodeID: string) {
-  return `cinema-custom-api-${nodeID}`
-}
-
-function defaultCustomApiRawData(nodeID: string): Record<string, unknown> {
-  return {
-    status: "idle",
-    inputSchema: {
-      type: "object",
-      properties: {
-        prompt: {
-          type: "string",
-          title: "Prompt",
-          default: "",
-        },
-        model: {
-          type: "string",
-          title: "Model",
-          default: "",
-        },
-      },
-      required: ["prompt"],
-    },
-    inputValues: {
-      prompt: "",
-      model: "",
-    },
-    request: {
-      method: "POST",
-      url: "https://api.example.com/v1/chat/completions",
-      headersTemplate: {
-        "Content-Type": "application/json",
-      },
-      bodyTemplate: {
-        model: "{{inputs.model}}",
-        messages: [
-          {
-            role: "user",
-            content: "{{inputs.prompt}}",
-          },
-        ],
-      },
-      timeoutMs: 30000,
-    },
-    auth: {
-      type: "none",
-      credentialProviderID: customApiCredentialProviderID(nodeID),
-      headerName: "X-API-Key",
-    },
-    outputMapping: {
-      text: "$.choices[0].message.content",
-      json: "$",
-    },
-  }
-}
-
-function customApiSchemaProperties(schema: Record<string, unknown>) {
-  const properties = schema.properties
-  return properties && typeof properties === "object" && !Array.isArray(properties)
-    ? properties as Record<string, unknown>
-    : {}
-}
-
-function customApiFieldLabel(key: string, spec: unknown) {
-  if (spec && typeof spec === "object" && !Array.isArray(spec)) {
-    const title = (spec as Record<string, unknown>).title
-    if (typeof title === "string" && title.trim()) return title.trim()
-  }
-  return key
-}
-
-function customApiFieldType(spec: unknown) {
-  if (spec && typeof spec === "object" && !Array.isArray(spec)) {
-    const type = (spec as Record<string, unknown>).type
-    if (type === "number" || type === "integer" || type === "boolean" || type === "string") return type
-  }
-  return "string"
-}
-
-function customApiFieldEnum(spec: unknown) {
-  if (!spec || typeof spec !== "object" || Array.isArray(spec)) return []
-  const value = (spec as Record<string, unknown>).enum
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
 }
 
 const GENERATION_PROGRESS_PHASES = [
@@ -1277,10 +1124,6 @@ function inputCombinationForSelection(
   return inputCombinations.find((combination) => combination.mode === mode) ?? inputCombinations[0] ?? null
 }
 
-function slotForInputRole(role: string, modality: string): VideoInputSlot | null {
-  return generationSlotForInputRole(role, modality)
-}
-
 function hiddenDefaultParametersForCombination(combination: VideoProviderInputCombination | null) {
   return generationHiddenDefaultParametersForCombination(combination)
 }
@@ -1560,7 +1403,7 @@ function selectedImageAssetForNode(node: CinemaFlowNode): VideoSourceImageAsset 
 }
 
 function selectedSourceImageAssetForNode(node: CinemaFlowNode): VideoSourceImageAsset | null {
-  if (node.data.cinemaType === "image" || node.data.cinemaType === "local-image") {
+  if (node.data.cinemaType === "image") {
     return selectedImageAssetForNode(node)
   }
   return null
@@ -1585,61 +1428,16 @@ function selectedSourceAssetForVideoSlot(node: CinemaFlowNode, slot: VideoMediaI
   return null
 }
 
-function isVideoInputSlot(value: unknown): value is VideoInputSlot {
-  return typeof value === "string" && (VIDEO_INPUT_SLOTS as readonly string[]).includes(value)
-}
-
-type VideoEdgeTargetInput = {
-  inputKey?: string
-  role?: string
-  slot: VideoInputSlot | null
-}
-
-function videoInputHandleMetadata(handle: string | null | undefined): VideoEdgeTargetInput | null {
-  if (!handle) return null
-  if (isVideoInputSlot(handle)) return { slot: handle }
-  const match = /^input:(\d+):(.+)$/.exec(handle)
-  if (!match) return null
-  const role = match[2] ?? ""
-  return {
-    inputKey: handle,
-    role,
-    slot: slotForInputRole(role, ""),
-  }
-}
-
-function edgeTargetVideoInput(edge: Edge): VideoEdgeTargetInput | null {
-  const data = edge.data
-  if (data && typeof data === "object" && !Array.isArray(data)) {
-    const record = data as Record<string, unknown>
-    const inputKey = typeof record.targetInputKey === "string" ? record.targetInputKey : undefined
-    const role = typeof record.targetRole === "string" ? record.targetRole : undefined
-    const slot = isVideoInputSlot(record.targetSlot)
-      ? record.targetSlot
-      : role
-        ? slotForInputRole(role, "")
-        : null
-    if (inputKey || role || slot) return { inputKey, role, slot }
-  }
-  return videoInputHandleMetadata(edge.targetHandle)
-}
-
-function edgeTargetVideoSlot(edge: Edge): VideoInputSlot | null {
-  return edgeTargetVideoInput(edge)?.slot ?? null
-}
-
-function edgeMatchesVideoSlot(edge: Edge, slot: VideoInputSlot, legacySlot: VideoInputSlot | null = null) {
-  const edgeSlot = edgeTargetVideoSlot(edge)
+function edgeMatchesVideoSlot(
+  edge: Edge,
+  slot: VideoInputSlot,
+  nodes: CinemaFlowNode[],
+  edges: Edge[],
+  legacySlot: VideoInputSlot | null = null,
+) {
+  const edgeSlot = edgeTargetVideoInput(edge, nodes, edges)?.slot ?? null
   if (edgeSlot) return edgeSlot === slot
   return legacySlot === slot
-}
-
-function edgeMatchesVideoInput(edge: Edge, input: VideoInputControl & { slot: VideoMediaInputSlot }, legacySlot: VideoInputSlot | null = null) {
-  const targetInput = edgeTargetVideoInput(edge)
-  if (targetInput?.inputKey) return targetInput.inputKey === input.inputKey
-  if (targetInput?.role) return targetInput.role === input.role
-  if (targetInput?.slot) return targetInput.slot === input.slot
-  return legacySlot === input.slot
 }
 
 function sourceAssetsForVideoSlot(
@@ -1652,7 +1450,7 @@ function sourceAssetsForVideoSlot(
   const seen = new Set<string>()
   const legacySlot = slot === "sourceImage" ? "sourceImage" : null
   for (const edge of edges) {
-    if (edge.target !== nodeID || !edgeMatchesVideoSlot(edge, slot, legacySlot)) continue
+    if (edge.target !== nodeID || !edgeMatchesVideoSlot(edge, slot, nodes, edges, legacySlot)) continue
     const sourceNode = nodes.find((node) => node.id === edge.source)
     if (!sourceNode) continue
     const asset = selectedSourceAssetForVideoSlot(sourceNode, slot)
@@ -1719,7 +1517,7 @@ function sourceInputAssetMapsForVideoNode(nodeID: string, nodes: CinemaFlowNode[
 
   for (const edge of edges) {
     if (edge.target !== nodeID) continue
-    const targetInput = edgeTargetVideoInput(edge)
+    const targetInput = edgeTargetVideoInput(edge, nodes, edges)
     if (!targetInput?.slot || !isVideoMediaInputSlot(targetInput.slot)) continue
     const sourceNode = nodes.find((node) => node.id === edge.source)
     if (!sourceNode) continue
@@ -1782,18 +1580,12 @@ function sourceTextParametersForNode(nodeID: string, nodes: CinemaFlowNode[], ed
   const seenNodeIDs = new Set<string>()
   for (const edge of edges) {
     if (edge.target !== nodeID) continue
-    const targetInput = edgeTargetVideoInput(edge)
+    const targetInput = edgeTargetVideoInput(edge, nodes, edges)
     if (targetInput && targetInput.slot !== "textParameter") continue
     if (seenNodeIDs.has(edge.source)) continue
     const sourceNode = nodes.find((node) => node.id === edge.source)
-    if (
-      !sourceNode ||
-      (sourceNode.data.cinemaType !== "text" &&
-        sourceNode.data.cinemaType !== "custom-api")
-    ) continue
-    const text = sourceNode.data.cinemaType === "custom-api"
-      ? readRawString(sourceNode.data.rawData, "outputText")
-      : readRawString(sourceNode.data.rawData, "text")
+    if (!sourceNode || sourceNode.data.cinemaType !== "text") continue
+    const text = readRawString(sourceNode.data.rawData, "text")
     seenNodeIDs.add(edge.source)
     parameters.push({
       edgeID: edge.id,
@@ -2092,7 +1884,7 @@ function readImageCropRect(rawData: Record<string, unknown>): ImageCropRect | nu
 }
 
 function createNode(type: CinemaNodeType, position: { x: number; y: number }): CinemaFlowNode {
-  const cinemaType = type === "local-image" ? "image" : type
+  const cinemaType = type
   const id = makeNodeID(cinemaType)
   const size = DEFAULT_NODE_SIZE[cinemaType]
   const rawData = cinemaType === "image"
@@ -2114,8 +1906,6 @@ function createNode(type: CinemaNodeType, position: { x: number; y: number }): C
         parameters: {},
         placeholder: "Describe the clip to generate.",
       }
-    : cinemaType === "custom-api"
-      ? defaultCustomApiRawData(id)
     : {
       text: "",
       placeholder: NODE_META[cinemaType].placeholder,
@@ -4280,8 +4070,10 @@ function VideoGenerationCanvasNode({
   const pendingVideoInputImageSlotRef = useRef<VideoImageInputSlot | null>(null)
   const rawDataRef = useRef(data.rawData)
   const onChangeRawDataRef = useRef(data.onChangeRawData)
+  const onNodeInputEditingChangeRef = useRef(data.onNodeInputEditingChange)
   const promptCommitTimerRef = useRef<number | null>(null)
   const isPromptComposingRef = useRef(false)
+  const isPromptFocusedRef = useRef(false)
   const providers = data.videoProviders ?? []
   const tasks = data.generationTasks ?? []
   const taskID = readRawString(data.rawData, "taskID")
@@ -4313,6 +4105,7 @@ function VideoGenerationCanvasNode({
 
   rawDataRef.current = data.rawData
   onChangeRawDataRef.current = data.onChangeRawData
+  onNodeInputEditingChangeRef.current = data.onNodeInputEditingChange
 
   const selectedProvider = providerForSelection(providers, providerID)
   const selectedModel = modelForSelection(selectedProvider, modelID)
@@ -4362,7 +4155,6 @@ function VideoGenerationCanvasNode({
   const providerConnected = selectedProvider?.auth.connected !== false
   const providerAdapterUnavailable = Boolean(selectedProvider) && selectedProvider?.runtime?.adapterAvailable !== true
   const videoMediaInputs = modeContract.inputs.filter(isVideoMediaInputControl)
-  const inputHandleStyle = videoMediaInputs.length > 0 ? { ...accentStyle, top: "36%" } : accentStyle
   const inputAssets: VideoInputAssets = data.videoInputAssets ?? data.videoInputImageAssets ?? {}
   const videoLocalInputAssets = readVideoLocalInputAssets(data.rawData, id)
   const sourceImageAsset = videoInputAssetList(inputAssets.sourceImage)[0] ?? data.sourceImageAsset ?? null
@@ -4478,6 +4270,10 @@ function VideoGenerationCanvasNode({
     window.clearTimeout(promptCommitTimerRef.current)
     promptCommitTimerRef.current = null
   }, [])
+
+  const setPromptInputEditing = useCallback((isEditing: boolean) => {
+    onNodeInputEditingChangeRef.current?.(id, isEditing)
+  }, [id])
 
   const commitRawDataPatch = useCallback((patch: Record<string, unknown> = {}) => {
     const previous = rawDataRef.current
@@ -4601,14 +4397,31 @@ function VideoGenerationCanvasNode({
   }, [data.rawData, providers, setAspectRatioDraft, setDurationDraft, setMode, setModelID, setProviderID, setResolutionDraft])
 
   useEffect(() => {
-    if (isPromptComposingRef.current || promptCommitTimerRef.current !== null) return
+    if (isPromptFocusedRef.current || isPromptComposingRef.current || promptCommitTimerRef.current !== null) return
     const rawPrompt = readOptionalRawString(data.rawData, "text")
     const nextPrompt = rawPrompt ?? taskUserPrompt ?? task?.input.prompt ?? ""
+    if (promptDraftRef.current === nextPrompt) return
     promptDraftRef.current = nextPrompt
     setPromptDraftState(nextPrompt)
   }, [data.rawData, task?.input.prompt, taskUserPrompt])
 
-  useEffect(() => () => clearPromptCommitTimer(), [clearPromptCommitTimer])
+  useEffect(() => () => {
+    clearPromptCommitTimer()
+    onNodeInputEditingChangeRef.current?.(id, false)
+  }, [clearPromptCommitTimer, id])
+
+  useEffect(() => {
+    if (active) return
+    const wasEditing = isPromptFocusedRef.current
+      || isPromptComposingRef.current
+      || promptCommitTimerRef.current !== null
+    const value = promptDraftRef.current
+    isPromptFocusedRef.current = false
+    isPromptComposingRef.current = false
+    clearPromptCommitTimer()
+    if (wasEditing) commitRawDataPatch({ text: value })
+    setPromptInputEditing(false)
+  }, [active, clearPromptCommitTimer, commitRawDataPatch, setPromptInputEditing])
 
   useEffect(() => {
     setIsVideoPreviewPlaying(false)
@@ -4799,18 +4612,8 @@ function VideoGenerationCanvasNode({
         type="target"
         position={Position.Left}
         className="cinema-node-handle cinema-node-handle-input"
-        style={inputHandleStyle}
+        style={accentStyle}
       />
-      {videoMediaInputs.map((input, index) => (
-        <Handle
-          key={input.inputKey}
-          id={input.inputKey}
-          type="target"
-          position={Position.Left}
-          className="cinema-node-handle cinema-node-handle-input cinema-node-handle-slot"
-          style={{ ...accentStyle, top: `${58 + index * 14}%` }}
-        />
-      ))}
       <article
         className={`cinema-video-gen-node ${selected ? "is-selected" : ""}`}
         style={accentStyle}
@@ -4934,14 +4737,20 @@ function VideoGenerationCanvasNode({
             placeholder={modeContract.promptPlaceholder}
             spellCheck={false}
             disabled={isBusy}
+            onFocus={() => {
+              isPromptFocusedRef.current = true
+              setPromptInputEditing(true)
+            }}
             onKeyDown={(event) => event.stopPropagation()}
             onChange={(event) => {
               const value = event.target.value
+              setPromptInputEditing(true)
               setPromptDraft(value)
               if (!isPromptComposingRef.current) schedulePromptCommit(value)
             }}
             onCompositionStart={() => {
               isPromptComposingRef.current = true
+              setPromptInputEditing(true)
               clearPromptCommitTimer()
             }}
             onCompositionEnd={(event) => {
@@ -4949,11 +4758,20 @@ function VideoGenerationCanvasNode({
               const value = event.currentTarget.value
               setPromptDraft(value)
               commitRawDataPatch({ text: value })
+              if (!isPromptFocusedRef.current) setPromptInputEditing(false)
             }}
             onBlur={() => {
-              if (isPromptComposingRef.current) return
+              isPromptFocusedRef.current = false
+              const value = promptRef.current?.value ?? promptDraftRef.current
+              const wasComposing = isPromptComposingRef.current
+              promptDraftRef.current = value
+              if (wasComposing) {
+                isPromptComposingRef.current = false
+                setPromptDraft(value)
+              }
               clearPromptCommitTimer()
-              commitRawDataPatch({ text: promptDraftRef.current })
+              commitRawDataPatch({ text: value })
+              setPromptInputEditing(false)
             }}
           />
           {videoMediaInputs.length > 0 ? (
@@ -5577,401 +5395,6 @@ function ImageReadyState({
   )
 }
 
-function CustomApiCanvasNode({
-  id,
-  data,
-  selected,
-  accentStyle,
-}: {
-  id: string
-  data: CinemaFlowNodeData
-  selected: boolean
-  accentStyle: CSSProperties
-}) {
-  const active = data.isActiveNode ?? selected
-  const rawDataRef = useRef(data.rawData)
-  const [inputValues, setInputValues] = useState<Record<string, unknown>>(() => readRawRecord(data.rawData, "inputValues"))
-  const [schemaDraft, setSchemaDraft] = useState(() => stringifyJson(readRawRecord(data.rawData, "inputSchema")))
-  const [urlDraft, setUrlDraft] = useState(() => readRawString(readRawRecord(data.rawData, "request"), "url"))
-  const [timeoutDraft, setTimeoutDraft] = useState(() => String(readRawNumber(readRawRecord(data.rawData, "request"), "timeoutMs", 30000)))
-  const [headersDraft, setHeadersDraft] = useState(() => stringifyJson(readRawRecord(readRawRecord(data.rawData, "request"), "headersTemplate")))
-  const [bodyDraft, setBodyDraft] = useState(() => stringifyJson(readRawRecord(data.rawData, "request").bodyTemplate ?? {}))
-  const [mappingDraft, setMappingDraft] = useState(() => stringifyJson(readRawRecord(data.rawData, "outputMapping")))
-  const [authType, setAuthType] = useState(() => readRawString(readRawRecord(data.rawData, "auth"), "type", "none"))
-  const [authHeaderName, setAuthHeaderName] = useState(() => readRawString(readRawRecord(data.rawData, "auth"), "headerName", "X-API-Key"))
-  const [apiKeyDraft, setApiKeyDraft] = useState("")
-  const [credentialState, setCredentialState] = useState<CinemaCustomApiAuthState | null>(null)
-  const [preview, setPreview] = useState<CinemaCustomApiRunResult | null>(null)
-  const [localError, setLocalError] = useState<string | null>(null)
-  const runtimeLabel = "Custom API"
-  const status = readRawString(data.rawData, "status", "idle")
-  const outputText = readRawString(data.rawData, "outputText")
-  const outputImageUrl = readRawString(data.rawData, "outputImageUrl")
-  const outputJson = data.rawData.outputJson
-  const nodeError = data.customApiError ?? localError ?? readRawString(data.rawData, "error")
-  const isBusy = Boolean(data.isRunningCustomApi)
-
-  useEffect(() => {
-    rawDataRef.current = data.rawData
-    setInputValues(readRawRecord(data.rawData, "inputValues"))
-    setSchemaDraft(stringifyJson(readRawRecord(data.rawData, "inputSchema")))
-    setUrlDraft(readRawString(readRawRecord(data.rawData, "request"), "url"))
-    setTimeoutDraft(String(readRawNumber(readRawRecord(data.rawData, "request"), "timeoutMs", 30000)))
-    setHeadersDraft(stringifyJson(readRawRecord(readRawRecord(data.rawData, "request"), "headersTemplate")))
-    setBodyDraft(stringifyJson(readRawRecord(data.rawData, "request").bodyTemplate ?? {}))
-    setMappingDraft(stringifyJson(readRawRecord(data.rawData, "outputMapping")))
-    setAuthType(readRawString(readRawRecord(data.rawData, "auth"), "type", "none"))
-    setAuthHeaderName(readRawString(readRawRecord(data.rawData, "auth"), "headerName", "X-API-Key"))
-  }, [data.rawData])
-
-  const commitRawDataPatch = useCallback((patch: Record<string, unknown>) => {
-    const next = {
-      ...rawDataRef.current,
-      ...patch,
-    }
-    rawDataRef.current = next
-    data.onChangeRawData?.(id, next)
-  }, [data, id])
-
-  const parseDraft = useCallback((label: string, draft: string) => {
-    try {
-      return JSON.parse(draft)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Invalid JSON"
-      setLocalError(`${label} JSON is invalid: ${message}`)
-      return undefined
-    }
-  }, [])
-
-  const commitConfigDrafts = useCallback(() => {
-    const inputSchema = parseDraft("Input schema", schemaDraft)
-    const headersTemplate = parseDraft("Headers", headersDraft)
-    const bodyTemplate = parseDraft("Body template", bodyDraft)
-    const outputMapping = parseDraft("Output mapping", mappingDraft)
-    if (
-      inputSchema === undefined ||
-      headersTemplate === undefined ||
-      bodyTemplate === undefined ||
-      outputMapping === undefined
-    ) {
-      return false
-    }
-    if (!inputSchema || typeof inputSchema !== "object" || Array.isArray(inputSchema)) {
-      setLocalError("Input schema must be a JSON object.")
-      return false
-    }
-    if (!headersTemplate || typeof headersTemplate !== "object" || Array.isArray(headersTemplate)) {
-      setLocalError("Headers must be a JSON object.")
-      return false
-    }
-    if (!outputMapping || typeof outputMapping !== "object" || Array.isArray(outputMapping)) {
-      setLocalError("Output mapping must be a JSON object.")
-      return false
-    }
-
-    const currentRequest = readRawRecord(rawDataRef.current, "request")
-    const currentAuth = readRawRecord(rawDataRef.current, "auth")
-    const timeoutMs = Number(timeoutDraft)
-    commitRawDataPatch({
-      inputSchema,
-      request: {
-        ...currentRequest,
-        method: "POST",
-        url: urlDraft.trim(),
-        headersTemplate,
-        bodyTemplate,
-        timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : 30000,
-      },
-      auth: {
-        ...currentAuth,
-        type: authType,
-        credentialProviderID: readRawString(currentAuth, "credentialProviderID", customApiCredentialProviderID(id)),
-        headerName: authHeaderName.trim() || "X-API-Key",
-      },
-      outputMapping,
-    })
-    setLocalError(null)
-    return true
-  }, [authHeaderName, authType, bodyDraft, commitRawDataPatch, headersDraft, id, mappingDraft, parseDraft, schemaDraft, timeoutDraft, urlDraft])
-
-  const updateInputValue = (key: string, value: unknown) => {
-    const next = {
-      ...inputValues,
-      [key]: value,
-    }
-    setInputValues(next)
-    commitRawDataPatch({ inputValues: next })
-  }
-
-  const inputSchema = parseJsonObjectDraft(schemaDraft, readRawRecord(data.rawData, "inputSchema"))
-  const schemaProperties = customApiSchemaProperties(inputSchema)
-  const fieldEntries = Object.entries(schemaProperties)
-
-  const run = async (mode: CustomApiRunMode) => {
-    if (!commitConfigDrafts()) return
-    const result = await data.onRunCustomApi?.(id, {
-      mode,
-      inputValues,
-    })
-    if (result) setPreview(result)
-  }
-
-  const saveApiKey = async () => {
-    if (!commitConfigDrafts()) return
-    const result = await data.onSaveCustomApiKey?.(id, {
-      apiKey: apiKeyDraft.trim() || null,
-    })
-    if (result) {
-      setCredentialState(result)
-      setApiKeyDraft("")
-      setLocalError(null)
-    }
-  }
-  const requestURL = urlDraft.trim()
-  const apiStatus = isBusy ? "running" : nodeError ? "failed" : status
-  const apiPreviewText = outputText
-    || outputImageUrl
-    || (outputJson !== undefined ? "JSON output ready" : "")
-    || requestURL
-    || "Configure a JSON POST endpoint."
-
-  return (
-    <>
-      <Handle
-        id="input"
-        type="target"
-        position={Position.Left}
-        className="cinema-node-handle cinema-node-handle-input"
-        style={accentStyle}
-      />
-      <article
-        className={`cinema-custom-api-node ${selected ? "is-selected" : ""}`}
-        style={accentStyle}
-        onPointerDown={(event) => activateNodeOnPointerDown(event, id, data.onActivateNode)}
-      >
-        <header className="cinema-node-header">
-          <CinemaNodeTitle
-            icon={Server}
-            label="Custom API"
-            nodeID={id}
-            title={data.title}
-            onChangeTitle={data.onChangeTitle}
-          />
-          <div className="cinema-node-header-actions">
-            <NodeStatusDot status={apiStatus} />
-            <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
-          </div>
-        </header>
-
-        <div className={`cinema-node-preview cinema-custom-api-preview ${outputText || outputImageUrl || outputJson !== undefined ? "has-output" : ""}`}>
-          <Code2 size={22} aria-hidden="true" />
-          <span title={apiPreviewText}>{apiPreviewText}</span>
-        </div>
-
-        {active ? (
-          <CinemaNodeInputOverlay
-            nodeID={id}
-            selected={active}
-            overlayRoot={data.nodeInputOverlayRoot}
-            width={640}
-            accentStyle={accentStyle}
-          >
-            <section className="cinema-node-input-panel cinema-custom-api-editor nodrag nowheel" aria-label={`${runtimeLabel} editor`}>
-              <section className="cinema-custom-api-inputs" aria-label={`${runtimeLabel} inputs`}>
-          <div className="cinema-custom-api-section-title">
-            <Code2 size={13} aria-hidden="true" />
-            <span>Inputs</span>
-          </div>
-          {fieldEntries.length > 0 ? fieldEntries.map(([key, spec]) => {
-            const label = customApiFieldLabel(key, spec)
-            const fieldType = customApiFieldType(spec)
-            const enumValues = customApiFieldEnum(spec)
-            const value = inputValues[key]
-            if (enumValues.length > 0) {
-              return (
-                <label key={key} className="cinema-custom-api-field">
-                  <span>{label}</span>
-                  <select
-                    value={typeof value === "string" ? value : ""}
-                    disabled={isBusy}
-                    onChange={(event) => updateInputValue(key, event.target.value)}
-                  >
-                    <option value="">Select</option>
-                    {enumValues.map((item) => <option key={item} value={item}>{item}</option>)}
-                  </select>
-                </label>
-              )
-            }
-            if (fieldType === "boolean") {
-              return (
-                <label key={key} className="cinema-custom-api-check-field">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(value)}
-                    disabled={isBusy}
-                    onChange={(event) => updateInputValue(key, event.target.checked)}
-                  />
-                  <span>{label}</span>
-                </label>
-              )
-            }
-            return (
-              <label key={key} className="cinema-custom-api-field">
-                <span>{label}</span>
-                <input
-                  type={fieldType === "number" || fieldType === "integer" ? "number" : "text"}
-                  value={value === undefined || value === null ? "" : String(value)}
-                  disabled={isBusy}
-                  onKeyDown={(event) => event.stopPropagation()}
-                  onChange={(event) => {
-                    const nextValue = fieldType === "number" || fieldType === "integer"
-                      ? Number(event.target.value)
-                      : event.target.value
-                    updateInputValue(key, nextValue)
-                  }}
-                />
-              </label>
-            )
-          }) : (
-            <p className="cinema-custom-api-empty">No input fields.</p>
-          )}
-              </section>
-
-        <section className="cinema-custom-api-config" aria-label={`${runtimeLabel} request configuration`}>
-          <label className="cinema-custom-api-field">
-            <span>URL</span>
-            <input
-              value={urlDraft}
-              disabled={isBusy}
-              spellCheck={false}
-              onKeyDown={(event) => event.stopPropagation()}
-              onChange={(event) => setUrlDraft(event.target.value)}
-              onBlur={commitConfigDrafts}
-            />
-          </label>
-          <div className="cinema-custom-api-grid">
-            <label className="cinema-custom-api-field">
-              <span>Auth</span>
-              <select
-                value={authType}
-                disabled={isBusy}
-                onChange={(event) => setAuthType(event.target.value)}
-                onBlur={commitConfigDrafts}
-              >
-                <option value="none">None</option>
-                <option value="bearer">Bearer</option>
-                <option value="api-key-header">API key header</option>
-              </select>
-            </label>
-            <label className="cinema-custom-api-field">
-              <span>Header</span>
-              <input
-                value={authHeaderName}
-                disabled={isBusy || authType !== "api-key-header"}
-                spellCheck={false}
-                onKeyDown={(event) => event.stopPropagation()}
-                onChange={(event) => setAuthHeaderName(event.target.value)}
-                onBlur={commitConfigDrafts}
-              />
-            </label>
-            <label className="cinema-custom-api-field">
-              <span>Timeout</span>
-              <input
-                value={timeoutDraft}
-                disabled={isBusy}
-                inputMode="numeric"
-                onKeyDown={(event) => event.stopPropagation()}
-                onChange={(event) => setTimeoutDraft(event.target.value)}
-                onBlur={commitConfigDrafts}
-              />
-            </label>
-          </div>
-          {authType !== "none" ? (
-            <div className="cinema-custom-api-key-row">
-              <KeyRound size={13} aria-hidden="true" />
-              <input
-                type="password"
-                value={apiKeyDraft}
-                disabled={isBusy}
-                placeholder={credentialState?.connected ? "API key saved" : "API key"}
-                onKeyDown={(event) => event.stopPropagation()}
-                onChange={(event) => setApiKeyDraft(event.target.value)}
-              />
-              <button type="button" disabled={isBusy} onClick={() => void saveApiKey()}>
-                Save
-              </button>
-            </div>
-          ) : null}
-          <div className="cinema-custom-api-json-grid">
-            <label>
-              <span>Input schema</span>
-              <textarea value={schemaDraft} disabled={isBusy} spellCheck={false} onKeyDown={(event) => event.stopPropagation()} onChange={(event) => setSchemaDraft(event.target.value)} onBlur={commitConfigDrafts} />
-            </label>
-            <label>
-              <span>Headers</span>
-              <textarea value={headersDraft} disabled={isBusy} spellCheck={false} onKeyDown={(event) => event.stopPropagation()} onChange={(event) => setHeadersDraft(event.target.value)} onBlur={commitConfigDrafts} />
-            </label>
-            <label>
-              <span>Body template</span>
-              <textarea value={bodyDraft} disabled={isBusy} spellCheck={false} onKeyDown={(event) => event.stopPropagation()} onChange={(event) => setBodyDraft(event.target.value)} onBlur={commitConfigDrafts} />
-            </label>
-            <label>
-              <span>Output mapping</span>
-              <textarea value={mappingDraft} disabled={isBusy} spellCheck={false} onKeyDown={(event) => event.stopPropagation()} onChange={(event) => setMappingDraft(event.target.value)} onBlur={commitConfigDrafts} />
-            </label>
-          </div>
-        </section>
-
-        <footer className="cinema-custom-api-footer nodrag nowheel">
-          <button type="button" disabled={isBusy} onClick={() => void run("preview")}>
-            <Code2 size={14} aria-hidden="true" />
-            <span>Preview</span>
-          </button>
-          <button type="button" className="is-primary" disabled={isBusy || !urlDraft.trim()} onClick={() => void run("run")}>
-            {isBusy ? <Loader2 size={14} aria-hidden="true" className="is-spinning" /> : <Play size={14} aria-hidden="true" />}
-            <span>Run</span>
-          </button>
-        </footer>
-
-        {preview || outputText || outputImageUrl || outputJson !== undefined ? (
-          <section className="cinema-custom-api-output" aria-label={`${runtimeLabel} output`}>
-            {preview ? (
-              <details>
-                <summary>Request preview</summary>
-                <pre>{stringifyJson(preview.requestPreview)}</pre>
-              </details>
-            ) : null}
-            {outputText ? <p>{outputText}</p> : null}
-            {outputImageUrl ? <span title={outputImageUrl}>{outputImageUrl}</span> : null}
-            {outputJson !== undefined ? (
-              <details>
-                <summary>JSON output</summary>
-                <pre>{stringifyJson(outputJson)}</pre>
-              </details>
-            ) : null}
-          </section>
-      ) : null}
-            </section>
-          </CinemaNodeInputOverlay>
-        ) : null}
-
-        {nodeError ? (
-          <p className="cinema-custom-api-error nodrag nowheel" role="alert" title={nodeError}>
-            {nodeError}
-          </p>
-        ) : null}
-      </article>
-      <Handle
-        id="output"
-        type="source"
-        position={Position.Right}
-        className="cinema-node-handle cinema-node-handle-output"
-        style={accentStyle}
-      />
-    </>
-  )
-}
-
 function ImageCanvasNode({
   id,
   data,
@@ -6074,7 +5497,7 @@ function VideoReadyState({
   )
 }
 
-function AudioReadyState({
+function AudioCanvasNode({
   id,
   data,
   selected,
@@ -6088,7 +5511,7 @@ function AudioReadyState({
   const assetRef = cinemaAssetRefFromNodeData(data.rawData)
   const [playbackError, setPlaybackError] = useState(false)
   const status = readRawString(data.rawData, "assetStatus", "ready")
-  const unavailable = status === "missing" || playbackError || !assetRef
+  const unavailable = Boolean(assetRef) && (status === "missing" || playbackError)
   const previewSrc = assetRef && data.agentBaseURL ? cinemaAssetURL(data.agentBaseURL, assetRef, "preview") : ""
 
   useEffect(() => setPlaybackError(false), [previewSrc])
@@ -6114,7 +5537,12 @@ function AudioReadyState({
         </header>
         <CinemaAssetReferenceBadge data={data} />
         <div className="cinema-asset-ready-preview nodrag nowheel">
-          {unavailable ? (
+          {!assetRef ? (
+            <div className="cinema-asset-reference-unavailable" role="status">
+              <Music size={24} aria-hidden="true" />
+              <strong>No audio selected</strong>
+            </div>
+          ) : unavailable ? (
             <div className="cinema-asset-reference-unavailable" role="status">
               <Music size={24} aria-hidden="true" />
               <strong>引用不可用</strong>
@@ -6146,20 +5574,13 @@ function AudioReadyState({
 
 function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
   const meta = NODE_META[data.cinemaType]
-  const Icon = meta.icon
-  const text = typeof data.rawData.text === "string" && data.rawData.text.trim()
-    ? data.rawData.text.trim()
-    : typeof data.rawData.placeholder === "string"
-      ? data.rawData.placeholder
-      : meta.placeholder
-  const status = typeof data.rawData.status === "string" ? data.rawData.status : null
   const accentStyle = { "--node-accent": meta.accent } as CSSProperties
 
   if (data.cinemaType === "text") {
     return <TextCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
   }
 
-  if (data.cinemaType === "image" || data.cinemaType === "local-image") {
+  if (data.cinemaType === "image") {
     return <ImageCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
   }
 
@@ -6169,54 +5590,11 @@ function CinemaNodeCard({ id, data, selected }: NodeProps<CinemaFlowNode>) {
       : <VideoGenerationCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
   }
 
-  if (data.cinemaType === "audio" && cinemaAssetRefFromNodeData(data.rawData)?.snapshot.kind === "audio") {
-    return <AudioReadyState id={id} data={data} selected={selected} accentStyle={accentStyle} />
+  if (data.cinemaType === "audio") {
+    return <AudioCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
   }
 
-  if (data.cinemaType === "custom-api") {
-    return <CustomApiCanvasNode id={id} data={data} selected={selected} accentStyle={accentStyle} />
-  }
-
-  return (
-    <>
-      <Handle
-        id="input"
-        type="target"
-        position={Position.Left}
-        className="cinema-node-handle cinema-node-handle-input"
-        style={accentStyle}
-      />
-      <article
-        className={`cinema-node ${selected ? "is-selected" : ""}`}
-        style={accentStyle}
-        onPointerDown={(event) => activateNodeOnPointerDown(event, id, data.onActivateNode)}
-      >
-        <header className="cinema-node-header">
-          <CinemaNodeTitle
-            icon={Icon}
-            label={meta.label}
-            nodeID={id}
-            title={data.title}
-            onChangeTitle={data.onChangeTitle}
-          />
-          <div className="cinema-node-header-actions">
-            <NodeStatusDot status={status} />
-            <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
-          </div>
-        </header>
-        <div className="cinema-node-preview cinema-generic-node-preview">
-          <span title={text}>{text}</span>
-        </div>
-      </article>
-      <Handle
-        id="output"
-        type="source"
-        position={Position.Right}
-        className="cinema-node-handle cinema-node-handle-output"
-        style={accentStyle}
-      />
-    </>
-  )
+  return null
 }
 
 type CinemaNodeInspectorRow = {
@@ -6246,7 +5624,7 @@ function formatAssetDimensions(asset: { width?: number; height?: number } | null
 }
 
 function selectedAssetForInspector(node: CinemaFlowNode) {
-  if (node.data.cinemaType === "image" || node.data.cinemaType === "local-image") return selectedImageAssetForNode(node)
+  if (node.data.cinemaType === "image") return selectedImageAssetForNode(node)
   if (node.data.cinemaType === "video") return selectedVideoAssetForNode(node)
   return null
 }
@@ -6278,7 +5656,7 @@ function inspectorRowsForNode(node: CinemaFlowNode) {
     addInspectorRow(rows, "Model", readRawString(rawData, "textModel"))
   }
 
-  if (node.data.cinemaType === "image" || node.data.cinemaType === "local-image") {
+  if (node.data.cinemaType === "image") {
     addInspectorRow(rows, "Source", readRawString(rawData, "sourceKind"))
     addInspectorRow(rows, "Source file", readRawString(rawData, "sourceFileName"))
     addInspectorRow(rows, "Prompt", readRawString(rawData, "prompt"), { multiline: true })
@@ -6310,18 +5688,6 @@ function inspectorRowsForNode(node: CinemaFlowNode) {
     addInspectorRow(rows, "Resolution", readRawString(rawData, "resolution"))
     addInspectorRow(rows, "Task ID", taskID)
     addInspectorRow(rows, "Updated", formatTaskTimestamp(task?.updatedAt))
-  }
-
-  if (node.data.cinemaType === "custom-api") {
-    const request = readRawRecord(rawData, "request")
-    const auth = readRawRecord(rawData, "auth")
-    const inputSchema = readRawRecord(rawData, "inputSchema")
-    addInspectorRow(rows, "URL", readRawString(request, "url"), { multiline: true })
-    addInspectorRow(rows, "Auth", readRawString(auth, "type", "none"))
-    addInspectorRow(rows, "Timeout", readRawNumber(request, "timeoutMs", 30000) ? `${readRawNumber(request, "timeoutMs", 30000)}ms` : "")
-    addInspectorRow(rows, "Input fields", Object.keys(customApiSchemaProperties(inputSchema)).length)
-    addInspectorRow(rows, "Output text", readRawString(rawData, "outputText"), { multiline: true })
-    addInspectorRow(rows, "Output image", readRawString(rawData, "outputImageUrl"), { multiline: true })
   }
 
   if (selectedAsset) {
@@ -6699,7 +6065,7 @@ function ContextMenu({
 
   return (
     <CinemaContextMenuSurface x={menu.x} y={menu.y} onClose={onClose}>
-      {NODE_TYPES.map((type) => {
+      {CREATABLE_NODE_TYPES.map((type) => {
         const meta = NODE_META[type]
         const Icon = meta.icon
         return (
@@ -6881,7 +6247,6 @@ export function App() {
   const [connectionErrorKey, setConnectionErrorKey] = useState<TranslationKey | null>(null)
   const [imageGenerationOperations, dispatchImageGenerationOperation] = useReducer(nodeOperationReducer, createNodeOperationState())
   const [videoGenerationOperations, dispatchVideoGenerationOperation] = useReducer(nodeOperationReducer, createNodeOperationState())
-  const [customApiOperations, dispatchCustomApiOperation] = useReducer(nodeOperationReducer, createNodeOperationState())
   const [imageImportNodeIDs, setImageImportNodeIDs] = useState<Set<string>>(() => new Set())
   const [imageImportError, setImageImportError] = useState<{ nodeID: string; message: string } | null>(null)
   const [imageFinalizeNodeIDs, setImageFinalizeNodeIDs] = useState<Set<string>>(() => new Set())
@@ -6935,7 +6300,11 @@ export function App() {
       pendingCanvasSelectionNodeIDRef.current = null
       return next
     })
-    setEdges(canvas.edges)
+    const videoNodeIDs = new Set(canvas.nodes.filter((node) => node.type === "video").map((node) => node.id))
+    setEdges(canvas.edges.map((edge) => videoNodeIDs.has(edge.target)
+      ? normalizeVideoTargetEdgeHandle(edge)
+      : edge
+    ))
     saveStateRef.current = "saved"
     setSaveState("saved")
     setSaveError(null)
@@ -7283,7 +6652,6 @@ export function App() {
     dispatchTextGenerationOperation({ type: "reset" })
     dispatchImageGenerationOperation({ type: "reset" })
     dispatchVideoGenerationOperation({ type: "reset" })
-    dispatchCustomApiOperation({ type: "reset" })
   }, [agentBaseURL, projectID])
 
   useEffect(() => {
@@ -7502,89 +6870,6 @@ export function App() {
     },
     onSettled: (_data, _error, variables) => {
       dispatchImageGenerationOperation({ type: "settle", nodeID: variables.nodeID })
-    },
-  })
-
-  const runCustomApiMutation = useMutation({
-    mutationFn: async ({ nodeID, request }: { nodeID: string; request: CustomApiRunRequest }) => {
-      await flushNodePatch(nodeID)
-      return await requestJson<CinemaCustomApiRunResult>(
-        agentBaseURL,
-        `/api/cinema/projects/${encodeURIComponent(projectID)}/custom-api-runs`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            nodeID,
-            ...request,
-          }),
-        },
-      )
-    },
-    onMutate: ({ nodeID }) => {
-      dispatchCustomApiOperation({ type: "begin", nodeID })
-      saveStateRef.current = "saving"
-      setSaveState("saving")
-      setSaveError(null)
-    },
-    onSuccess: (result) => {
-      if (result.canvas) applyCanvasWhenSafe(result.canvas)
-      else {
-        saveStateRef.current = "saved"
-        setSaveState("saved")
-      }
-    },
-    onError: (error, variables) => {
-      const message = error instanceof Error ? error.message : "Custom API run failed"
-      dispatchCustomApiOperation({ type: "fail", nodeID: variables.nodeID, message })
-      void refetchCanvas()
-      if (saveStateRef.current !== "error") {
-        saveStateRef.current = nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0 ? "dirty" : "saved"
-        setSaveState(saveStateRef.current)
-      }
-    },
-    onSettled: (_data, _error, variables) => {
-      dispatchCustomApiOperation({ type: "settle", nodeID: variables.nodeID })
-    },
-  })
-
-  const saveCustomApiKeyMutation = useMutation({
-    mutationFn: async ({ nodeID, request }: { nodeID: string; request: CustomApiAuthSaveRequest }) => {
-      await flushNodePatch(nodeID)
-      return await requestJson<CinemaCustomApiAuthState>(
-        agentBaseURL,
-        `/api/cinema/projects/${encodeURIComponent(projectID)}/custom-api-nodes/${encodeURIComponent(nodeID)}/auth/api-key`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(request),
-        },
-      )
-    },
-    onMutate: ({ nodeID }) => {
-      dispatchCustomApiOperation({ type: "begin", nodeID })
-      saveStateRef.current = "saving"
-      setSaveState("saving")
-      setSaveError(null)
-    },
-    onSuccess: () => {
-      saveStateRef.current = "saved"
-      setSaveState("saved")
-    },
-    onError: (error, variables) => {
-      const message = error instanceof Error ? error.message : "Custom API key save failed"
-      dispatchCustomApiOperation({ type: "fail", nodeID: variables.nodeID, message })
-      if (saveStateRef.current !== "error") {
-        saveStateRef.current = nodePatchQueueRef.current.size > 0 || nodePatchTimersRef.current.size > 0 ? "dirty" : "saved"
-        setSaveState(saveStateRef.current)
-      }
-    },
-    onSettled: (_data, _error, variables) => {
-      dispatchCustomApiOperation({ type: "settle", nodeID: variables.nodeID })
     },
   })
 
@@ -8133,21 +7418,24 @@ export function App() {
     }
     if (!connection.source || !connection.target) return
     const targetInput = videoInputHandleMetadata(connection.targetHandle)
+    const sourceType = nodes.find((node) => node.id === connection.source)?.data.cinemaType
+    const targetType = nodes.find((node) => node.id === connection.target)?.data.cinemaType
+    const targetImageIndex = targetType === "video" && sourceType === "image"
+      ? nextVideoImageInputIndex(connection.target, nodes, edges)
+      : null
+    const edgeData = {
+      ...(targetInput?.slot ? { targetSlot: targetInput.slot } : {}),
+      ...(targetInput?.role ? { targetRole: targetInput.role } : {}),
+      ...(targetInput?.inputKey ? { targetInputKey: targetInput.inputKey } : {}),
+      ...(targetImageIndex !== null ? { targetImageIndex } : {}),
+    }
     const edge = {
       id: `edge-${connection.source}-${connection.target}-${Date.now().toString(36)}`,
       source: connection.source,
       target: connection.target,
       ...(connection.sourceHandle ? { sourceHandle: connection.sourceHandle } : {}),
       ...(connection.targetHandle ? { targetHandle: connection.targetHandle } : {}),
-      ...(targetInput
-        ? {
-            data: {
-              ...(targetInput.slot ? { targetSlot: targetInput.slot } : {}),
-              ...(targetInput.role ? { targetRole: targetInput.role } : {}),
-              ...(targetInput.inputKey ? { targetInputKey: targetInput.inputKey } : {}),
-            },
-          }
-        : {}),
+      ...(Object.keys(edgeData).length > 0 ? { data: edgeData } : {}),
     }
     commandMutation.mutate({
       id: makeCommandID("connect-nodes"),
@@ -8684,12 +7972,6 @@ export function App() {
         videoGenerationError: nodeOperationError(videoGenerationOperations, node.id),
         onCreateVideoGenerationTask: (nodeID: string, body: CreateCinemaGenerationTaskBody) =>
           createGenerationTaskMutation.mutate({ body, draftNodeID: nodeID }),
-        isRunningCustomApi: isNodeOperationPending(customApiOperations, node.id),
-        customApiError: nodeOperationError(customApiOperations, node.id),
-        onRunCustomApi: (nodeID: string, request: CustomApiRunRequest) =>
-          runCustomApiMutation.mutateAsync({ nodeID, request }),
-        onSaveCustomApiKey: (nodeID: string, request: CustomApiAuthSaveRequest) =>
-          saveCustomApiKeyMutation.mutateAsync({ nodeID, request }),
         isImportingImage: imageImportNodeIDs.has(node.id),
         imageImportError: imageImportError?.nodeID === node.id ? imageImportError.message : null,
         onImportImage: (nodeID: string, file: File) =>
@@ -8715,7 +7997,6 @@ export function App() {
       createGenerationTaskMutation,
       createImageGenerationMutation,
       createTextGenerationMutation,
-      customApiOperations,
       deleteNode,
       disconnectEdge,
       edges,
@@ -8735,8 +8016,6 @@ export function App() {
       nodeInputOverlayRoot,
       projectID,
       providersQuery.data,
-      runCustomApiMutation,
-      saveCustomApiKeyMutation,
       setNodeInputEditing,
       selectNodeOnly,
       tasksQuery.data,
@@ -8759,7 +8038,7 @@ export function App() {
   const relinkAssetKind = useMemo<CinemaAssetKind | undefined>(() => {
     if (!relinkNodeID) return undefined
     const nodeType = nodes.find((node) => node.id === relinkNodeID)?.data.cinemaType
-    if (nodeType === "image" || nodeType === "local-image") return "image"
+    if (nodeType === "image") return "image"
     if (nodeType === "video" || nodeType === "audio") return nodeType
     return undefined
   }, [nodes, relinkNodeID])

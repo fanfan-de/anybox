@@ -51,6 +51,17 @@ async function startTextGeneration(page: Page, nodeID: string, prompt: string) {
 test.describe("Cinema save reliability", () => {
   test.skip(Boolean(externalCinemaURL), "Reliability fault injection uses the isolated managed Agent fixture.")
 
+  test("offers exactly the four core canvas node types", async ({ page, request }) => {
+    await openManagedProject(page, request)
+    await page.locator(".react-flow__pane").click({ button: "right", position: { x: 180, y: 160 } })
+    await expect(page.getByRole("menuitem")).toHaveText([
+      "Add Text",
+      "Add Image",
+      "Add Video",
+      "Add Audio",
+    ])
+  })
+
   test("keeps an offline edit visible and persists it after manual retry", async ({ page, request }) => {
     const project = await openManagedProject(page, request)
     let offline = true
@@ -225,6 +236,29 @@ test.describe("Cinema save reliability", () => {
     await expect(page.locator(".cinema-save-status")).toContainText("已保存")
     await expect(prompt).toBeFocused()
     await expect(prompt).toHaveValue("描述一望无际的草原，远处有缓慢移动的云影")
+  })
+
+  test("keeps the video prompt focused while autosave snapshots return", async ({ page, request }) => {
+    await openManagedProject(page, request)
+    await page.route(/\/api\/cinema\/projects\/[^/]+\/commands$/, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 450))
+      await route.continue()
+    })
+
+    await page.locator(".react-flow__pane").click({ button: "right", position: { x: 180, y: 160 } })
+    await page.getByRole("menuitem", { name: "Add Video" }).click()
+    const prompt = page.locator("textarea.cinema-video-prompt-input").last()
+    await expect(prompt).toBeVisible()
+
+    await prompt.fill("将第一张图变成缓慢推进的电影镜头")
+    await expect(page.locator(".cinema-save-status")).toHaveClass(/is-saving/)
+    await expect(prompt).toBeFocused()
+    await prompt.press("End")
+    await prompt.type("，保留人物面部细节")
+    await expect(prompt).toHaveValue("将第一张图变成缓慢推进的电影镜头，保留人物面部细节")
+    await expect(page.locator(".cinema-save-status")).toContainText("已保存")
+    await expect(prompt).toBeFocused()
+    await expect(prompt).toHaveValue("将第一张图变成缓慢推进的电影镜头，保留人物面部细节")
   })
 
   test("replaces generated text and restores the previous draft from the undo toast", async ({ page, request }) => {

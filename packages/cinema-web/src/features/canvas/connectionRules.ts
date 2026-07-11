@@ -32,11 +32,25 @@ export function validateCinemaConnection(
   const targetType = nodes.find((node) => node.id === connection.target)?.data.cinemaType
   if (!sourceType || !targetType) return { valid: false, reason: "connection.invalid" }
 
-  if (targetType === "text" && sourceType !== "image" && sourceType !== "local-image") {
+  if (targetType === "text" && sourceType !== "image") {
     return { valid: false, reason: "connection.textInput" }
   }
   if (sourceType === "text" && targetType !== "image" && targetType !== "video") {
     return { valid: false, reason: "connection.textOutput" }
+  }
+  const allowed = (
+    (sourceType === "text" && (targetType === "image" || targetType === "video"))
+    || (sourceType === "image" && (targetType === "text" || targetType === "video"))
+    || (sourceType === "video" && targetType === "video")
+  )
+  if (!allowed) return { valid: false, reason: "connection.invalid" }
+  if (targetType === "video" && sourceType === "image") {
+    const incomingImageCount = edges.filter((edge) => {
+      if (edge.target !== connection.target) return false
+      const edgeSourceType = nodes.find((node) => node.id === edge.source)?.data.cinemaType
+      return edgeSourceType === "image"
+    }).length
+    if (incomingImageCount >= 2) return { valid: false, reason: "connection.videoImageLimit" }
   }
   return { valid: true }
 }

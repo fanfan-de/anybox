@@ -19,14 +19,14 @@
 | 区域 | 代码入口 | 现有样式前缀 | 说明 |
 | --- | --- | --- | --- |
 | 外层 shell 和画布 | `App` | `cinema-shell`、`cinema-workspace`、`cinema-canvas` | 全屏、无页面滚动、ReactFlow 画布承载主体验 |
-| 通用节点 | `CinemaNodeCard` | `cinema-node-*` | 普通 text/prompt/audio/shot/agent/output 类型的基础节点 |
 | 文本节点 | `TextCanvasNode` | `cinema-text-*` | 独立布局，包含文本编辑区、悬浮工具条、文本生成器 |
 | 图片节点 | `ImageCanvasNode` | `cinema-image-*` | 统一承载上传、AI 生成、候选确认、最终图片预览和裁剪 |
 | 视频生成节点 | `VideoGenerationCanvasNode` | `cinema-video-gen-*` | 视频预览、模式 tab、provider/model/参数控件 |
+| 音频节点 | `AudioCanvasNode` | `cinema-asset-ready-*` | 音频空状态、素材引用和播放预览 |
 | 文件面板 | `ProjectFileBrowser` | `cinema-file-*` | 右侧浮层文件浏览器，包含面包屑、文件列表、预览区 |
 | 素材库面板 | `AssetLibraryPanel` | `cinema-asset-library-*` | 独立右侧浮层；项目/个人域、物理文件夹、搜索、上传、多选、预览和 Canvas 引用入口 |
-| 素材 Ready 节点 | `ImageReadyState`、`VideoReadyState`、`AudioReadyState` | `cinema-asset-ready-*` | 统一读取 canonical `assetRef`；只有输出 Handle，不出现生成 Composer |
-| 右键菜单 | `ContextMenu`、`NodeContextMenu` | `cinema-context-menu` | 空白处新增节点、单节点查看详情、多选组选区删除；图片只有一个 `Add Image` 入口 |
+| 素材 Ready 节点 | `ImageReadyState`、`VideoReadyState`、`AudioCanvasNode` | `cinema-asset-ready-*` | 统一读取 canonical `assetRef`；只有输出 Handle，不出现生成 Composer |
+| 右键菜单 | `ContextMenu`、`NodeContextMenu` | `cinema-context-menu` | 空白处只新增 Text、Image、Video、Audio；单节点查看详情，多选组选区删除 |
 | 垂直导航 | `CanvasPanelNavigation` | `cinema-canvas-nav-*` | 项目文件与素材库是两个互斥入口；任一入口打开时关闭 Inspector |
 | 第三方画布控件 | ReactFlow | `react-flow__*` | Controls、MiniMap、Handle 的局部覆盖 |
 
@@ -564,7 +564,7 @@ Cinema Web 的 UI 标准：
 - 不新增 hover/focus 会改变尺寸的控件。
 - 不新增卡片套卡片。
 - 不新增没有 `min-width: 0` 的可截断 flex/grid 文本区域。
-- 不再新增 `local-image` 节点、第二个图片入口或 `resultAssets` / `selectedAssetID` 写入路径。
+- Canvas 节点类型固定为 `text`、`image`、`video`、`audio`；不新增兼容别名或占位节点。
 
 ### P1：下一轮样式整理
 

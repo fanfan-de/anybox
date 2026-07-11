@@ -753,7 +753,7 @@ type CinemaTimelineCanvasNodeData = {
 
 - 项目素材库中的上传、生成、裁剪、渲染和迁移素材。
 - 个人素材库中的本机直接引用。
-- Canvas 中已经使用 `assetRef` 的 image/video/audio/output 节点。
+- Canvas 中已经使用 `assetRef` 的 image/video/audio 节点；最终输出由 Deliver 工作区管理，不再建模为 Canvas 节点。
 - Timeline render 成功后登记到项目素材库的输出素材。
 
 旧目录 `generated/*`、`assets/imported/*`、`exports/*` 和旧节点 `outputAssets` 只由素材库迁移器读取；新 Timeline 文档一律只写 `assetRef`。

@@ -22,8 +22,6 @@ import {
   CinemaImageModelsResultSchema,
   CinemaCommandSchema,
   CinemaProjectDirectoryListingSchema,
-  CinemaCustomApiAuthStateSchema,
-  CinemaCustomApiRunResultSchema,
   CinemaCanvasDocumentSchema,
   CinemaTextGenerationResultSchema,
   CinemaTextModelsResultSchema,
@@ -32,8 +30,6 @@ import {
   CinemaVideoProviderSchema,
   CinemaVideoProviderManifestSchema,
   GenerationFormSpecSchema,
-  CreateCinemaCustomApiNodeApiKeyBodySchema,
-  CreateCinemaCustomApiRunBodySchema,
   CreateCinemaGenerationTaskBodySchema,
   CreateCinemaImageGenerationBodySchema,
   CreateCinemaImportedImageAssetBodySchema,
@@ -417,9 +413,10 @@ describe("cinema schemas", () => {
     }
   })
 
-  it("parses canonical image node data while retaining the legacy node type alias", () => {
+  it("parses canonical image node data", () => {
+    expect(CinemaNodeTypeSchema.options).toEqual(["text", "image", "video", "audio"])
     expect(CinemaNodeTypeSchema.parse("image")).toBe("image")
-    expect(CinemaNodeTypeSchema.parse("local-image")).toBe("local-image")
+    expect(() => CinemaNodeTypeSchema.parse("local-image")).toThrow()
 
     const data = CinemaImageNodeDataSchema.parse({
       candidateAssets: [
@@ -464,112 +461,6 @@ describe("cinema schemas", () => {
     expect(CinemaImageNodeAssetSchema.parse(data.candidateAssets?.[0]).kind).toBe("image")
     expect(() => CinemaImageNodeAssetSchema.parse({ id: "video-1", kind: "video", path: "video.mp4" })).toThrow()
     expect(() => CinemaImageNodeDataSchema.parse({ sourceKind: "replace" })).toThrow()
-  })
-
-  it("parses custom API canvas nodes and run payloads", () => {
-    const canvas = CinemaCanvasDocumentSchema.parse({
-      schemaVersion: 1,
-      canvasType: "node-canvas",
-      viewport: { x: 0, y: 0, zoom: 1 },
-      nodes: [
-        {
-          id: "custom-api-1",
-          type: "custom-api",
-          title: "Custom API",
-          position: { x: 100, y: 100 },
-          data: {
-            status: "idle",
-            inputSchema: {
-              type: "object",
-              properties: {
-                prompt: { type: "string" },
-              },
-              required: ["prompt"],
-            },
-            inputValues: {
-              prompt: "Rainy street.",
-            },
-            request: {
-              method: "POST",
-              url: "https://api.example.com/v1/chat/completions",
-              headersTemplate: {
-                "Content-Type": "application/json",
-              },
-              bodyTemplate: {
-                prompt: "{{inputs.prompt}}",
-              },
-            },
-            auth: {
-              type: "bearer",
-              credentialProviderID: "cinema-custom-api-1",
-            },
-            outputMapping: {
-              text: "$.choices[0].message.content",
-            },
-          },
-        },
-      ],
-      edges: [],
-      nodeTypes: ["custom-api"],
-    })
-
-    expect(canvas.nodes[0]?.type).toBe("custom-api")
-
-    const runBody = CreateCinemaCustomApiRunBodySchema.parse({
-      nodeID: "custom-api-1",
-      inputValues: {
-        prompt: "Rainy street.",
-      },
-    })
-    expect(runBody.mode).toBe("run")
-
-    const previewBody = CreateCinemaCustomApiRunBodySchema.parse({
-      nodeID: "custom-api-1",
-      mode: "preview",
-    })
-    expect(previewBody.mode).toBe("preview")
-
-    const authBody = CreateCinemaCustomApiNodeApiKeyBodySchema.parse({
-      apiKey: "sk-test",
-    })
-    expect(authBody.apiKey).toBe("sk-test")
-
-    const authState = CinemaCustomApiAuthStateSchema.parse({
-      nodeID: "custom-api-1",
-      credentialProviderID: "cinema-custom-api-1",
-      connected: true,
-      status: "connected",
-    })
-    expect(authState.connected).toBe(true)
-
-    const result = CinemaCustomApiRunResultSchema.parse({
-      nodeID: "custom-api-1",
-      requestPreview: {
-        method: "POST",
-        url: "https://api.example.com/v1/chat/completions",
-        headers: {
-          authorization: "Bearer [redacted]",
-        },
-        body: {
-          prompt: "Rainy street.",
-        },
-      },
-      statusCode: 200,
-      output: {
-        text: "Generated response.",
-        imageUrl: "https://example.com/image.png",
-        json: { ok: true },
-      },
-      elapsedMs: 20,
-    })
-    expect(result.output?.text).toBe("Generated response.")
-
-    expect(() =>
-      CreateCinemaCustomApiRunBodySchema.parse({
-        nodeID: "custom-api-1",
-        mode: "stream",
-      })
-    ).toThrow()
   })
 
   it("parses provider manifests and generation tasks", () => {
@@ -696,6 +587,7 @@ describe("cinema schemas", () => {
       status: "running",
       createdAt: "2026-07-04T00:00:00.000Z",
       updatedAt: "2026-07-04T00:00:00.000Z",
+      taskNodeID: "video-node-1",
       input: {
         prompt: "A test prompt",
       },
@@ -778,6 +670,7 @@ describe("cinema schemas", () => {
       providerID: "kling",
       modelID: "kling-3.0-turbo",
       mode: "text-to-video.multi-shot",
+      taskNodeID: "video-node-1",
     })
 
     expect(customModeBody.mode).toBe("text-to-video.multi-shot")
@@ -786,6 +679,7 @@ describe("cinema schemas", () => {
       providerID: "kling",
       modelID: "kling-image-3.0",
       mode: "text-to-image",
+      taskNodeID: "image-node-1",
     })
 
     expect(imageBody.mode).toBe("text-to-image")
@@ -794,6 +688,7 @@ describe("cinema schemas", () => {
       providerID: "kling",
       modelID: "kling-3.0-turbo",
       mode: "reference-to-video",
+      taskNodeID: "video-node-1",
       parameters: {
         inputSlots: [
           {

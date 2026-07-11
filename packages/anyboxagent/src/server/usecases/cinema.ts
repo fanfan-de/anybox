@@ -26,9 +26,6 @@ import {
   type CinemaCanvasDocument,
   type CinemaCommand,
   type CinemaCommandResult,
-  type CinemaCustomApiAuthState,
-  type CinemaCustomApiOutput,
-  type CinemaCustomApiRunResult,
   type CinemaEventsResult,
   type GenerationFormSpec,
   type CinemaNodeType,
@@ -36,7 +33,6 @@ import {
   type CinemaProjectEvent,
   type CinemaProjectSummary,
   type CinemaProjectStateSummary,
-  type CreateCinemaCustomApiRunBody,
   type CreateCinemaGenerationTaskBody,
   type CreateCinemaImageGenerationBody,
   type CreateCinemaImportedImageAssetBody,
@@ -407,7 +403,7 @@ function normalizeCinemaCanvasInput(input: unknown) {
   const nodes = Array.isArray(input.nodes)
     ? input.nodes.map((node) => {
         if (!isRecord(node)) return node
-        const type = node.type === "local-image" ? "image" : node.type
+        const type = node.type
         if (type !== "image") return node
         return {
           ...node,
@@ -419,7 +415,7 @@ function normalizeCinemaCanvasInput(input: unknown) {
 
   const nodeTypes = new Set<unknown>()
   if (Array.isArray(input.nodeTypes)) {
-    for (const type of input.nodeTypes) nodeTypes.add(type === "local-image" ? "image" : type)
+    for (const type of input.nodeTypes) nodeTypes.add(type)
   }
   if (Array.isArray(nodes)) {
     for (const node of nodes) {
@@ -1021,438 +1017,6 @@ function errorMessage(error: unknown): string {
   return redactSensitiveErrorText(String(error))
 }
 
-function customApiCredentialProviderIDFor(node: CinemaCanvasNode) {
-  const auth = isRecord(node.data?.auth) ? node.data.auth : {}
-  return stringValue(auth.credentialProviderID) ?? `cinema-custom-api-${node.id}`
-}
-
-function isCustomApiRuntimeNode(node: CinemaCanvasNode) {
-  return node.type === "custom-api"
-}
-
-async function customApiAuthStateFor(node: CinemaCanvasNode): Promise<CinemaCustomApiAuthState> {
-  const credentialProviderID = customApiCredentialProviderIDFor(node)
-  const runtimeAuth = await ProviderAuth.resolveProviderRuntimeAuth(credentialProviderID, {}, {
-    method: "api-key",
-  })
-  const connected = Boolean(runtimeAuth.apiKey)
-  return {
-    nodeID: node.id,
-    credentialProviderID,
-    connected,
-    status: connected ? "connected" : "not_connected",
-  }
-}
-
-function sanitizeHeaders(headers: Record<string, string>) {
-  const result: Record<string, string> = {}
-  for (const [key, value] of Object.entries(headers)) {
-    result[key] = /authorization|api[-_]?key|token|secret|cookie/i.test(key)
-      ? redactSensitiveErrorText(value)
-      : value
-  }
-  return result
-}
-
-function validateCustomApiURL(value: string) {
-  let url: URL
-  try {
-    url = new URL(value)
-  } catch {
-    throw new ApiError(400, "CINEMA_CUSTOM_API_URL_INVALID", "Custom API URL must be a valid absolute http(s) URL.")
-  }
-
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new ApiError(400, "CINEMA_CUSTOM_API_URL_INVALID", "Custom API URL must use http or https.")
-  }
-  if (url.username || url.password) {
-    throw new ApiError(400, "CINEMA_CUSTOM_API_URL_INVALID", "Custom API URL must not contain embedded credentials.")
-  }
-
-  const hostname = url.hostname.toLowerCase()
-  if (
-    hostname === "169.254.169.254" ||
-    hostname.startsWith("169.254.") ||
-    hostname === "metadata.google.internal" ||
-    hostname === "metadata"
-  ) {
-    throw new ApiError(400, "CINEMA_CUSTOM_API_URL_FORBIDDEN", "Custom API URL points to a blocked metadata host.")
-  }
-
-  return url.toString()
-}
-
-function normalizeCustomApiTimeout(value: unknown) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return CINEMA_CUSTOM_API_DEFAULT_TIMEOUT_MS
-  return Math.min(CINEMA_CUSTOM_API_MAX_TIMEOUT_MS, Math.max(1, Math.round(value)))
-}
-
-function customApiMissingConfigError(field: string) {
-  return new ApiError(400, "CINEMA_CUSTOM_API_CONFIG_INVALID", `Custom API node is missing a valid ${field}.`)
-}
-
-function getObjectField(value: unknown, field: string) {
-  if (!isRecord(value)) throw customApiMissingConfigError(field)
-  return value
-}
-
-function readCustomApiNodeConfig(node: CinemaCanvasNode) {
-  const data = node.data ?? {}
-  const request = getObjectField(data.request, "request")
-  const auth = isRecord(data.auth) ? data.auth : {}
-  const outputMapping = isRecord(data.outputMapping) ? data.outputMapping : {}
-  const headersTemplateValue = request.headersTemplate
-  const headersTemplate: Record<string, string> = {}
-  if (isRecord(headersTemplateValue)) {
-    for (const [key, value] of Object.entries(headersTemplateValue)) {
-      if (typeof value === "string") headersTemplate[key] = value
-    }
-  }
-
-  const method = typeof request.method === "string" ? request.method.trim().toUpperCase() : "POST"
-  if (method !== "POST") {
-    throw new ApiError(400, "CINEMA_CUSTOM_API_METHOD_UNSUPPORTED", "Custom API V1 only supports POST requests.")
-  }
-
-  const url = stringValue(request.url)
-  if (!url) throw customApiMissingConfigError("request.url")
-
-  const authType = typeof auth.type === "string" ? auth.type.trim() : "none"
-  if (authType !== "none" && authType !== "bearer" && authType !== "api-key-header") {
-    throw new ApiError(400, "CINEMA_CUSTOM_API_AUTH_UNSUPPORTED", "Custom API auth type is not supported.")
-  }
-
-  return {
-    inputValues: isRecord(data.inputValues) ? data.inputValues : {},
-    request: {
-      method: "POST" as const,
-      url,
-      headersTemplate,
-      bodyTemplate: "bodyTemplate" in request ? request.bodyTemplate : {},
-      timeoutMs: normalizeCustomApiTimeout(request.timeoutMs),
-    },
-    auth: {
-      type: authType as "none" | "bearer" | "api-key-header",
-      credentialProviderID: stringValue(auth.credentialProviderID) ?? customApiCredentialProviderIDFor(node),
-      headerName: stringValue(auth.headerName),
-    },
-    outputMapping: {
-      text: stringValue(outputMapping.text),
-      json: stringValue(outputMapping.json),
-      imageUrl: stringValue(outputMapping.imageUrl),
-    },
-  }
-}
-
-function customApiNodeText(node: CinemaCanvasNode) {
-  const data = node.data ?? {}
-  const candidates = [
-    data.outputText,
-    data.text,
-    data.prompt,
-  ]
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) return candidate.trim()
-  }
-  return ""
-}
-
-function buildCustomApiTemplateContext(input: {
-  projectID: string
-  runID: string
-  node: CinemaCanvasNode
-  canvas: CinemaCanvasDocument
-  inputValues: Record<string, unknown>
-}) {
-  const upstreamItems = input.canvas.edges
-    .filter((edge) => edge.target === input.node.id)
-    .flatMap((edge) => {
-      const source = input.canvas.nodes.find((node) => node.id === edge.source)
-      if (!source) return []
-      const data = source.data ?? {}
-      const item = {
-        nodeID: source.id,
-        nodeTitle: source.title,
-        type: source.type,
-        text: customApiNodeText(source),
-        outputText: typeof data.outputText === "string" ? data.outputText : undefined,
-        outputJson: data.outputJson,
-        outputImageUrl: typeof data.outputImageUrl === "string" ? data.outputImageUrl : undefined,
-      }
-      return [item]
-    })
-
-  return {
-    inputs: input.inputValues,
-    upstream: {
-      text: upstreamItems.map((item) => item.text).filter(Boolean).join("\n\n"),
-      items: upstreamItems,
-    },
-    node: {
-      id: input.node.id,
-      title: input.node.title,
-    },
-    system: {
-      projectID: input.projectID,
-      runID: input.runID,
-    },
-  }
-}
-
-function readPathValue(root: unknown, pathExpression: string) {
-  const segments = pathExpression.split(".").filter(Boolean)
-  let current = root
-  for (const segment of segments) {
-    if (!isRecord(current) && !Array.isArray(current)) return undefined
-    if (Array.isArray(current)) {
-      const index = Number(segment)
-      if (!Number.isInteger(index) || index < 0) return undefined
-      current = current[index]
-    } else {
-      current = current[segment]
-    }
-  }
-  return current
-}
-
-function formatTemplateValue(value: unknown) {
-  if (value === null || value === undefined) return ""
-  if (typeof value === "string") return value
-  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value)
-  return JSON.stringify(value)
-}
-
-function renderCustomApiTemplate(value: unknown, context: Record<string, unknown>): unknown {
-  if (typeof value === "string") {
-    const exact = /^\s*\{\{\s*([A-Za-z0-9_.]+)\s*\}\}\s*$/.exec(value)
-    if (exact) {
-      const resolved = readPathValue(context, exact[1]!)
-      if (resolved === undefined) {
-        throw new ApiError(400, "CINEMA_CUSTOM_API_TEMPLATE_MISSING", `Template variable '${exact[1]}' was not found.`)
-      }
-      return resolved
-    }
-
-    return value.replace(/\{\{\s*([A-Za-z0-9_.]+)\s*\}\}/g, (_match, key: string) => {
-      const resolved = readPathValue(context, key)
-      if (resolved === undefined) {
-        throw new ApiError(400, "CINEMA_CUSTOM_API_TEMPLATE_MISSING", `Template variable '${key}' was not found.`)
-      }
-      return formatTemplateValue(resolved)
-    })
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item) => renderCustomApiTemplate(item, context))
-  }
-
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, renderCustomApiTemplate(item, context)])
-    )
-  }
-
-  return value
-}
-
-function parseJsonPath(pathExpression: string) {
-  const pathValue = pathExpression.trim()
-  if (pathValue === "$") return [] as Array<string | number>
-  if (!pathValue.startsWith("$")) {
-    throw new ApiError(400, "CINEMA_CUSTOM_API_JSONPATH_INVALID", `Output mapping '${pathExpression}' must start with $.`)
-  }
-
-  const segments: Array<string | number> = []
-  let index = 1
-  while (index < pathValue.length) {
-    const char = pathValue[index]
-    if (char === ".") {
-      index += 1
-      const start = index
-      while (index < pathValue.length && pathValue[index] !== "." && pathValue[index] !== "[") index += 1
-      const segment = pathValue.slice(start, index)
-      if (!segment) throw new ApiError(400, "CINEMA_CUSTOM_API_JSONPATH_INVALID", `Output mapping '${pathExpression}' is invalid.`)
-      segments.push(segment)
-      continue
-    }
-
-    if (char === "[") {
-      const end = pathValue.indexOf("]", index)
-      if (end < 0) throw new ApiError(400, "CINEMA_CUSTOM_API_JSONPATH_INVALID", `Output mapping '${pathExpression}' is invalid.`)
-      const raw = pathValue.slice(index + 1, end).trim()
-      if (/^\d+$/.test(raw)) {
-        segments.push(Number(raw))
-      } else {
-        const quoted = /^["'](.+)["']$/.exec(raw)
-        if (!quoted) throw new ApiError(400, "CINEMA_CUSTOM_API_JSONPATH_INVALID", `Output mapping '${pathExpression}' is invalid.`)
-        segments.push(quoted[1]!)
-      }
-      index = end + 1
-      continue
-    }
-
-    throw new ApiError(400, "CINEMA_CUSTOM_API_JSONPATH_INVALID", `Output mapping '${pathExpression}' is invalid.`)
-  }
-
-  return segments
-}
-
-function readJsonPathValue(root: unknown, pathExpression: string) {
-  let current = root
-  for (const segment of parseJsonPath(pathExpression)) {
-    if (typeof segment === "number") {
-      if (!Array.isArray(current)) return undefined
-      current = current[segment]
-    } else {
-      if (!isRecord(current)) return undefined
-      current = current[segment]
-    }
-  }
-  return current
-}
-
-function mapCustomApiResponse(responseJson: unknown, mapping: { text?: string; json?: string; imageUrl?: string }): CinemaCustomApiOutput {
-  const output: CinemaCustomApiOutput = {}
-  if (mapping.text) {
-    const value = readJsonPathValue(responseJson, mapping.text)
-    if (value !== undefined) output.text = typeof value === "string" ? value : JSON.stringify(value)
-  }
-  if (mapping.json) {
-    const value = readJsonPathValue(responseJson, mapping.json)
-    if (value !== undefined) output.json = value
-  }
-  if (mapping.imageUrl) {
-    const value = readJsonPathValue(responseJson, mapping.imageUrl)
-    if (value !== undefined) output.imageUrl = typeof value === "string" ? value : String(value)
-  }
-  return output
-}
-
-async function readResponseTextWithLimit(response: Response) {
-  if (!response.body) return ""
-  const reader = response.body.getReader()
-  const chunks: Uint8Array[] = []
-  let total = 0
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-    if (!value) continue
-    total += value.byteLength
-    if (total > CINEMA_CUSTOM_API_MAX_RESPONSE_BYTES) {
-      await reader.cancel().catch(() => undefined)
-      throw new ApiError(413, "CINEMA_CUSTOM_API_RESPONSE_TOO_LARGE", "Custom API response body is too large.")
-    }
-    chunks.push(value)
-  }
-  const bytes = new Uint8Array(total)
-  let offset = 0
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-  return new TextDecoder().decode(bytes)
-}
-
-async function executeCustomApiJsonRequest(input: {
-  url: string
-  headers: Record<string, string>
-  body: unknown
-  timeoutMs: number
-}) {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), input.timeoutMs)
-  const startedAt = Date.now()
-  try {
-    const response = await fetch(input.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...input.headers,
-      },
-      body: JSON.stringify(input.body),
-      signal: controller.signal,
-      redirect: "follow",
-    })
-    const text = await readResponseTextWithLimit(response)
-    let responseJson: unknown
-    try {
-      responseJson = text ? JSON.parse(text) : null
-    } catch {
-      throw new ApiError(502, "CINEMA_CUSTOM_API_RESPONSE_INVALID_JSON", "Custom API response must be valid JSON.")
-    }
-    if (!response.ok) {
-      throw new ApiError(
-        502,
-        "CINEMA_CUSTOM_API_HTTP_ERROR",
-        `Custom API request failed with HTTP ${response.status}.`,
-      )
-    }
-    return {
-      statusCode: response.status,
-      responseJson,
-      elapsedMs: Date.now() - startedAt,
-    }
-  } catch (error) {
-    if (error instanceof ApiError) throw error
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new ApiError(504, "CINEMA_CUSTOM_API_TIMEOUT", "Custom API request timed out.")
-    }
-    throw new ApiError(502, "CINEMA_CUSTOM_API_REQUEST_FAILED", `Custom API request failed: ${errorMessage(error)}`)
-  } finally {
-    clearTimeout(timeout)
-  }
-}
-
-function writeCustomApiNodeResult(input: {
-  canvas: CinemaCanvasDocument
-  nodeID: string
-  inputValues: Record<string, unknown>
-  output?: CinemaCustomApiOutput
-  statusCode?: number
-  status: "succeeded" | "failed"
-  error?: string | null
-}) {
-  const timestamp = nowISO()
-  return withNodeTypes({
-    ...input.canvas,
-    nodes: input.canvas.nodes.map((node) =>
-      node.id === input.nodeID
-        ? {
-          ...node,
-          data: {
-            ...node.data,
-            inputValues: input.inputValues,
-            status: input.status,
-            outputText: input.output?.text,
-            outputJson: input.output?.json,
-            outputImageUrl: input.output?.imageUrl,
-            lastRunAt: timestamp,
-            ...(input.statusCode ? { lastStatusCode: input.statusCode } : {}),
-            error: input.error ?? null,
-          },
-        }
-        : node
-    ),
-  })
-}
-
-async function writeCustomApiNodeFailure(input: {
-  cinemaRoot: string
-  nodeID: string
-  inputValues: Record<string, unknown>
-  error: string
-  statusCode?: number
-}) {
-  await mutateCinemaCanvasFromRoot(input.cinemaRoot, (canvas) => writeCustomApiNodeResult({
-    canvas,
-    nodeID: input.nodeID,
-    inputValues: input.inputValues,
-    status: "failed",
-    error: input.error,
-    statusCode: input.statusCode,
-  }))
-}
-
 function createCinemaTextGenerationRuntimeError(error: unknown, modelValue: string) {
   if (InitError.isInstance(error)) {
     const detail = errorMessage(error)
@@ -1570,10 +1134,6 @@ function describeCinemaCommand(command: CinemaCommand) {
       return `Disconnected Cinema edge '${command.edgeID}'.`
     case "update-viewport":
       return "Updated Cinema canvas viewport."
-    case "create-generation-task":
-      return `Created generation task '${command.node.title}'.`
-    case "complete-generation-task":
-      return `Completed generation task '${command.taskNodeID}'.`
   }
 }
 
@@ -1661,58 +1221,6 @@ function applyCommandToCanvas(canvas: CinemaCanvasDocument, command: CinemaComma
         ...canvas,
         viewport: command.viewport,
       }
-    case "create-generation-task":
-      return appendNode(canvas, {
-        ...command.node,
-        data: {
-          status: "queued",
-          ...command.node.data,
-        },
-      })
-    case "complete-generation-task": {
-      const taskNode = canvas.nodes.find((node) => node.id === command.taskNodeID)
-      if (!taskNode) {
-        throw new ApiError(404, "CINEMA_NODE_NOT_FOUND", `Cinema node '${command.taskNodeID}' was not found.`)
-      }
-      if (taskNode.type !== "generation-task") {
-        throw new ApiError(409, "CINEMA_COMMAND_INVALID", `Cinema node '${command.taskNodeID}' is not a generation task.`)
-      }
-
-      let next = withNodeTypes({
-        ...canvas,
-        nodes: canvas.nodes.map((node) =>
-          node.id === command.taskNodeID
-            ? {
-              ...node,
-              data: {
-                ...node.data,
-                status: "completed",
-              },
-            }
-            : node
-        ),
-      })
-
-      if (command.outputNode) {
-        next = appendNode(next, command.outputNode)
-        const edgeID = `edge-${command.taskNodeID}-${command.outputNode.id}`
-        if (!next.edges.some((edge) => edge.id === edgeID)) {
-          next = {
-            ...next,
-            edges: [
-              ...next.edges,
-              {
-                id: edgeID,
-                source: command.taskNodeID,
-                target: command.outputNode.id,
-              },
-            ],
-          }
-        }
-      }
-
-      return next
-    }
   }
 }
 
@@ -1793,12 +1301,11 @@ function summarizeNodeData(node: CinemaCanvasNode) {
 
 function findProjectGaps(canvas: CinemaCanvasDocument, providerConfigured: boolean) {
   const types = new Set(canvas.nodes.map((node) => node.type))
-  const hasGenerationTask = types.has("generation-task") || canvas.nodes.some((node) =>
-    node.type === "video" && typeof node.data?.taskID === "string" && node.data.taskID.trim().length > 0
+  const hasGenerationTask = canvas.nodes.some((node) =>
+    (node.type === "video" || node.type === "image") && typeof node.data?.taskID === "string" && node.data.taskID.trim().length > 0
   )
   const gaps: string[] = []
-  if (!types.has("shot")) gaps.push("no-shot-nodes")
-  if (!types.has("prompt")) gaps.push("no-prompt-nodes")
+  if (!types.has("text")) gaps.push("no-text-nodes")
   if (!hasGenerationTask) gaps.push("no-generation-tasks")
   if (!providerConfigured) gaps.push("no-provider-configured")
   return gaps
@@ -1873,45 +1380,6 @@ function imageTaskNodeDataFor(task: CinemaGenerationTask, currentData: Record<st
   }
 
   return nextData
-}
-
-function taskNodeFor(
-  task: CinemaGenerationTask,
-  position = { x: 240, y: 220 },
-  type: "generation-task" | "video" = "generation-task",
-  size = type === "video" ? { width: 520, height: 430 } : { width: 390, height: 240 },
-): CinemaCanvasNode {
-  return {
-    id: task.taskNodeID ?? `node-generation-task-${task.id}`,
-    type,
-    title: task.title,
-    position,
-    size,
-    data: taskNodeDataFor(task),
-  }
-}
-
-function outputNodeFor(task: CinemaGenerationTask): CinemaCanvasNode | null {
-  const asset = task.outputAssets[0]
-  if (!asset) return null
-  return {
-    id: task.outputNodeID ?? `node-video-${task.id}`,
-    type: asset.kind === "audio" ? "audio" : asset.kind === "image" ? "image" : "video",
-    title: `${task.title} Result`,
-    position: { x: 720, y: 240 },
-    size: { width: 360, height: 220 },
-    data: {
-      text: asset.path,
-      taskID: task.id,
-      assetID: asset.id,
-      path: asset.path,
-      kind: asset.kind,
-      status: "succeeded",
-      mimeType: asset.mimeType,
-      sizeBytes: asset.sizeBytes,
-      ...(asset.assetRef ? { assetRef: asset.assetRef, assetStatus: "ready" } : {}),
-    },
-  }
 }
 
 function generatedAssetCanonicalRef(
@@ -2008,75 +1476,24 @@ function syncTaskToCanvasDocument(
   task: CinemaGenerationTask,
   options: SyncTaskToCanvasOptions = {},
 ): CinemaCanvasDocument {
-  const taskNodeID = task.taskNodeID ?? `node-generation-task-${task.id}`
-  const existingTaskNode = canvas.nodes.find((node) => node.id === taskNodeID)
-  if (existingTaskNode?.type === "image") {
-    if (!canSyncTaskToImageNode(existingTaskNode, task, options)) return canvas
-    return withNodeTypes({
-      ...canvas,
-      nodes: canvas.nodes.map((node) => node.id === taskNodeID
-        ? {
-          ...node,
-          data: imageTaskNodeDataFor(task, node.data),
-        }
-        : node),
-    })
+  const existingTaskNode = canvas.nodes.find((node) => node.id === task.taskNodeID)
+  if (!existingTaskNode || (existingTaskNode.type !== "image" && existingTaskNode.type !== "video")) {
+    return canvas
   }
-
-  const taskNodeType = existingTaskNode?.type === "video" ? "video" : "generation-task"
-  const nextTaskNode = taskNodeFor(
-    task,
-    existingTaskNode?.position,
-    taskNodeType,
-    existingTaskNode?.size,
-  )
-  let nodes = existingTaskNode
-    ? canvas.nodes.map((node) => node.id === taskNodeID
-      ? {
-        ...node,
-        title: taskNodeType === "video" ? node.title : nextTaskNode.title,
-        data: {
-          ...node.data,
-          ...taskNodeDataFor(task),
-        },
-      }
-      : node)
-    : [...canvas.nodes, nextTaskNode]
-
-  let edges = canvas.edges
-  const outputNode = taskNodeType === "video" ? null : task.status === "succeeded" ? outputNodeFor(task) : null
-  if (outputNode) {
-    const existingOutputNode = nodes.find((node) => node.id === outputNode.id)
-    nodes = existingOutputNode
-      ? nodes.map((node) => node.id === outputNode.id
-        ? {
-          ...node,
-          title: outputNode.title,
-          data: {
-            ...node.data,
-            ...outputNode.data,
-          },
-        }
-        : node)
-      : [...nodes, outputNode]
-
-    const edgeID = `edge-${taskNodeID}-${outputNode.id}`
-    if (!edges.some((edge) => edge.id === edgeID)) {
-      edges = [
-        ...edges,
-        {
-          id: edgeID,
-          source: taskNodeID,
-          target: outputNode.id,
-        },
-      ]
-    }
+  if (existingTaskNode.type === "image" && !canSyncTaskToImageNode(existingTaskNode, task, options)) {
+    return canvas
   }
 
   return withNodeTypes({
     ...canvas,
-    nodes,
-    edges,
+    nodes: canvas.nodes.map((node) => node.id === task.taskNodeID
+      ? {
+        ...node,
+        data: existingTaskNode.type === "image"
+          ? imageTaskNodeDataFor(task, node.data)
+          : { ...node.data, ...taskNodeDataFor(task) },
+      }
+      : node),
   })
 }
 
@@ -3294,7 +2711,7 @@ export async function createCinemaImageGeneration(
       providerModelID: taskModelID,
       ...(providerModel.offeringID ? { offeringID: providerModel.offeringID } : {}),
     }
-    const task = taskWithCanvasIDs({
+    const task: CinemaGenerationTask = {
       id: taskID,
       projectID,
       providerID: imageModel.providerID,
@@ -3313,9 +2730,9 @@ export async function createCinemaImageGeneration(
       outputAssets: [],
       error: null,
       progress: progressForTaskStatus("queued", createdAt),
-    }, { createOutputNode: false })
+    }
     const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(provider.manifest.id)
-    const createdResult = taskWithProgress(taskWithCanvasIDs(await Instance.provide({
+    const createdResult = taskWithProgress(bindGenerationTaskToNode(await Instance.provide({
       directory: root,
       fn: async () => {
         try {
@@ -3324,7 +2741,7 @@ export async function createCinemaImageGeneration(
           throw createCinemaImageGenerationRuntimeError(error, imageModel.value)
         }
       },
-    }), { createOutputNode: false }))
+    }), node.id))
     const created = await registerCompletedGenerationAssets(projectID, root, createdResult)
     await writeGenerationTask(cinemaRoot, created)
     const canvas = await syncTaskToCanvas(
@@ -3371,220 +2788,6 @@ export async function createCinemaImageGeneration(
 
     if (error instanceof ApiError) throw error
     throw createCinemaImageGenerationRuntimeError(error, input.model ?? "selected image model")
-  }
-}
-
-async function renderCustomApiRequest(input: {
-  projectID: string
-  runID: string
-  node: CinemaCanvasNode
-  canvas: CinemaCanvasDocument
-  inputValues: Record<string, unknown>
-  includeSecret: boolean
-}) {
-  const config = readCustomApiNodeConfig(input.node)
-  const mergedInputValues = {
-    ...config.inputValues,
-    ...input.inputValues,
-  }
-  const context = buildCustomApiTemplateContext({
-    projectID: input.projectID,
-    runID: input.runID,
-    node: input.node,
-    canvas: input.canvas,
-    inputValues: mergedInputValues,
-  })
-  const url = validateCustomApiURL(String(renderCustomApiTemplate(config.request.url, context)))
-  const headers: Record<string, string> = {}
-  for (const [key, value] of Object.entries(config.request.headersTemplate)) {
-    const headerName = key.trim()
-    if (!headerName) continue
-    headers[headerName] = String(renderCustomApiTemplate(value, context))
-  }
-  const body = renderCustomApiTemplate(config.request.bodyTemplate, context)
-
-  if (config.auth.type !== "none") {
-    if (!input.includeSecret) {
-      const headerName = config.auth.type === "bearer" ? "Authorization" : config.auth.headerName ?? "X-API-Key"
-      headers[headerName] = config.auth.type === "bearer" ? "Bearer [redacted]" : "[redacted]"
-    } else {
-      const runtimeAuth = await ProviderAuth.resolveProviderRuntimeAuth(config.auth.credentialProviderID, {}, {
-        method: "api-key",
-      })
-      if (!runtimeAuth.apiKey) {
-        throw new ApiError(
-          400,
-          "CINEMA_CUSTOM_API_AUTH_NOT_CONNECTED",
-          "Custom API node requires an API key before it can run.",
-        )
-      }
-      if (config.auth.type === "bearer") {
-        headers.Authorization = `Bearer ${runtimeAuth.apiKey}`
-      } else {
-        headers[config.auth.headerName ?? "X-API-Key"] = runtimeAuth.apiKey
-      }
-    }
-  }
-
-  return {
-    inputValues: mergedInputValues,
-    timeoutMs: config.request.timeoutMs,
-    mapping: config.outputMapping,
-    request: {
-      method: "POST" as const,
-      url,
-      headers,
-      body,
-    },
-  }
-}
-
-export async function saveCinemaCustomApiNodeApiKey(
-  projectID: string,
-  nodeID: string,
-  apiKey: string | null | undefined,
-): Promise<CinemaCustomApiAuthState> {
-  const { cinemaRoot } = resolveCinemaRoot(projectID)
-  await assertCinemaProjectInitialized(cinemaRoot)
-
-  const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
-  const node = canvas.nodes.find((item) => item.id === nodeID)
-  if (!node) {
-    throw new ApiError(404, "CINEMA_NODE_NOT_FOUND", `Cinema node '${nodeID}' was not found.`)
-  }
-  if (!isCustomApiRuntimeNode(node)) {
-    throw new ApiError(409, "CINEMA_CUSTOM_API_NODE_INVALID", `Cinema node '${nodeID}' is not a Custom API node.`)
-  }
-
-  const credentialProviderID = customApiCredentialProviderIDFor(node)
-  await ProviderAuth.saveProviderApiKey(credentialProviderID, apiKey)
-  return await customApiAuthStateFor(node)
-}
-
-export async function createCinemaCustomApiRun(
-  projectID: string,
-  input: CreateCinemaCustomApiRunBody,
-): Promise<CinemaCustomApiRunResult> {
-  const { cinemaRoot } = resolveCinemaRoot(projectID)
-  await assertCinemaProjectInitialized(cinemaRoot)
-
-  const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
-  const node = canvas.nodes.find((item) => item.id === input.nodeID)
-  if (!node) {
-    throw new ApiError(404, "CINEMA_NODE_NOT_FOUND", `Cinema node '${input.nodeID}' was not found.`)
-  }
-  if (!isCustomApiRuntimeNode(node)) {
-    throw new ApiError(409, "CINEMA_CUSTOM_API_NODE_INVALID", `Cinema node '${input.nodeID}' is not a Custom API node.`)
-  }
-
-  const runID = `custom-api-run-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`
-  const mode = input.mode ?? "run"
-
-  let rendered: Awaited<ReturnType<typeof renderCustomApiRequest>>
-  try {
-    rendered = await renderCustomApiRequest({
-      projectID,
-      runID,
-      node,
-      canvas,
-      inputValues: input.inputValues ?? {},
-      includeSecret: mode === "run",
-    })
-  } catch (error) {
-    if (mode === "run") {
-      const message = errorMessage(error)
-      await writeCustomApiNodeFailure({
-        cinemaRoot,
-        nodeID: node.id,
-        inputValues: input.inputValues ?? {},
-        error: message,
-      }).catch(() => undefined)
-      await appendCinemaEvent(cinemaRoot, {
-        time: nowISO(),
-        type: "custom-api.failed",
-        actor: "cinema-runtime",
-        message: `Custom API run failed for node '${node.title}'.`,
-        data: {
-          nodeID: node.id,
-          error: message,
-        },
-      }).catch(() => undefined)
-    }
-    throw error
-  }
-
-  const requestPreview = {
-    ...rendered.request,
-    headers: sanitizeHeaders(rendered.request.headers),
-  }
-
-  if (mode === "preview") {
-    return {
-      nodeID: node.id,
-      requestPreview,
-    }
-  }
-
-  try {
-    const result = await executeCustomApiJsonRequest({
-      url: rendered.request.url,
-      headers: rendered.request.headers,
-      body: rendered.request.body,
-      timeoutMs: rendered.timeoutMs,
-    })
-    const output = mapCustomApiResponse(result.responseJson, rendered.mapping)
-    const writtenCanvas = await mutateCinemaCanvasFromRoot(cinemaRoot, (latest) => writeCustomApiNodeResult({
-      canvas: latest,
-      nodeID: node.id,
-      inputValues: rendered.inputValues,
-      output,
-      statusCode: result.statusCode,
-      status: "succeeded",
-    }))
-    await appendCinemaEvent(cinemaRoot, {
-      time: nowISO(),
-      type: "custom-api.generated",
-      actor: "cinema-runtime",
-      message: `Ran Custom API node '${node.title}'.`,
-      data: {
-        nodeID: node.id,
-        statusCode: result.statusCode,
-        outputTextLength: output.text?.length ?? 0,
-        hasJsonOutput: output.json !== undefined,
-        hasImageUrlOutput: Boolean(output.imageUrl),
-      },
-    })
-
-    return {
-      nodeID: node.id,
-      requestPreview,
-      statusCode: result.statusCode,
-      responsePreview: result.responseJson,
-      output,
-      canvas: writtenCanvas,
-      elapsedMs: result.elapsedMs,
-    }
-  } catch (error) {
-    const message = errorMessage(error)
-    await writeCustomApiNodeFailure({
-      cinemaRoot,
-      nodeID: node.id,
-      inputValues: rendered.inputValues,
-      error: message,
-    }).catch(() => undefined)
-    await appendCinemaEvent(cinemaRoot, {
-      time: nowISO(),
-      type: "custom-api.failed",
-      actor: "cinema-runtime",
-      message: `Custom API run failed for node '${node.title}'.`,
-      data: {
-        nodeID: node.id,
-        error: message,
-      },
-    }).catch(() => undefined)
-
-    if (error instanceof ApiError) throw error
-    throw new ApiError(502, "CINEMA_CUSTOM_API_REQUEST_FAILED", `Custom API request failed: ${message}`)
   }
 }
 
@@ -3654,40 +2857,18 @@ export async function updateCinemaCanvas(projectID: string, canvas: CinemaCanvas
   return parsed
 }
 
-function taskWithCanvasIDs(task: CinemaGenerationTask, options: { createOutputNode?: boolean } = {}): CinemaGenerationTask {
-  const { outputNodeID: currentOutputNodeID, ...taskWithoutOutputNodeID } = task
-  const createOutputNode = options.createOutputNode ?? true
-  const taskNodeID = task.taskNodeID ?? `node-generation-task-${task.id}`
-  const outputNodeID = createOutputNode
-    ? currentOutputNodeID ?? (task.outputAssets.length > 0 ? `node-video-${task.id}` : undefined)
-    : undefined
-  return {
-    ...taskWithoutOutputNodeID,
-    taskNodeID,
-    ...(outputNodeID ? { outputNodeID } : {}),
-  }
+function bindGenerationTaskToNode(task: CinemaGenerationTask, taskNodeID: string): CinemaGenerationTask {
+  return { ...task, taskNodeID }
 }
 
-function isVideoTaskNode(canvas: CinemaCanvasDocument, task: CinemaGenerationTask) {
-  if (!task.taskNodeID) return false
-  return canvas.nodes.some((node) => node.id === task.taskNodeID && node.type === "video")
-}
-
-function isInlineGenerationTaskNode(canvas: CinemaCanvasDocument, task: CinemaGenerationTask) {
-  if (!task.taskNodeID) return false
-  return canvas.nodes.some((node) => node.id === task.taskNodeID && (node.type === "video" || node.type === "image"))
-}
-
-function resolveGenerationTaskNodeID(input: CreateCinemaGenerationTaskBody, taskID: string, canvas: CinemaCanvasDocument) {
-  const requestedTaskNodeID = input.taskNodeID?.trim()
-  if (!requestedTaskNodeID) return `node-generation-task-${taskID}`
-
+function resolveGenerationTaskNodeID(input: CreateCinemaGenerationTaskBody, canvas: CinemaCanvasDocument) {
+  const requestedTaskNodeID = input.taskNodeID.trim()
   const existingNode = canvas.nodes.find((node) => node.id === requestedTaskNodeID)
   if (!existingNode) {
     throw new ApiError(404, "CINEMA_NODE_NOT_FOUND", `Cinema node '${requestedTaskNodeID}' was not found.`)
   }
-  if (existingNode.type !== "video" && existingNode.type !== "image" && existingNode.type !== "generation-task") {
-    throw new ApiError(409, "CINEMA_TASK_NODE_INVALID", "Generation tasks can only bind to video, image, or generation task nodes.")
+  if (existingNode.type !== "video" && existingNode.type !== "image") {
+    throw new ApiError(409, "CINEMA_TASK_NODE_INVALID", "Generation tasks can only bind to video or image nodes.")
   }
   if (existingNode.type === "image" && !isCinemaImageGenerationMode(input.mode)) {
     throw new ApiError(409, "CINEMA_TASK_NODE_INVALID", "Image nodes can only bind to image generation tasks.")
@@ -3742,7 +2923,7 @@ export async function createCinemaGenerationTask(
   const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
   const createdAt = nowISO()
   const taskID = makeTaskID()
-  const taskNodeID = resolveGenerationTaskNodeID(input, taskID, canvas)
+  const taskNodeID = resolveGenerationTaskNodeID(input, canvas)
   const taskNode = canvas.nodes.find((node) => node.id === taskNodeID)
   assertGenerationTaskNodeModelOutput({
     node: taskNode,
@@ -3753,9 +2934,8 @@ export async function createCinemaGenerationTask(
   if (taskNode?.type === "image" && isCinemaImageGenerationMode(input.mode)) {
     assertImageNodeAcceptsGeneration(taskNode)
   }
-  const createOutputNode = !canvas.nodes.some((node) => node.id === taskNodeID && (node.type === "video" || node.type === "image"))
   const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(input.providerID)
-  const task = taskWithCanvasIDs({
+  const task: CinemaGenerationTask = {
     id: taskID,
     projectID,
     providerID: input.providerID,
@@ -3774,9 +2954,12 @@ export async function createCinemaGenerationTask(
     outputAssets: [],
     error: null,
     progress: progressForTaskStatus("queued", createdAt),
-  }, { createOutputNode })
+  }
 
-  const createdResult = taskWithProgress(taskWithCanvasIDs(await adapter.createTask({ root, cinemaRoot, task, canvas }), { createOutputNode }))
+  const createdResult = taskWithProgress(bindGenerationTaskToNode(
+    await adapter.createTask({ root, cinemaRoot, task, canvas }),
+    taskNodeID,
+  ))
   const created = await registerCompletedGenerationAssets(projectID, root, createdResult)
   await writeGenerationTask(cinemaRoot, created)
   await syncTaskToCanvas(
@@ -3814,9 +2997,10 @@ export async function refreshCinemaGenerationTask(projectID: string, taskID: str
   const task = await readGenerationTaskFromRoot(cinemaRoot, taskID)
   const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(task.providerID)
   const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
-  const refreshedResult = taskWithProgress(taskWithCanvasIDs(await adapter.refreshTask({ root, cinemaRoot, task, canvas }), {
-    createOutputNode: !isInlineGenerationTaskNode(canvas, task),
-  }))
+  const refreshedResult = taskWithProgress(bindGenerationTaskToNode(
+    await adapter.refreshTask({ root, cinemaRoot, task, canvas }),
+    task.taskNodeID,
+  ))
   const refreshed = await registerCompletedGenerationAssets(projectID, root, refreshedResult)
   await writeGenerationTask(cinemaRoot, refreshed)
   await syncTaskToCanvas(cinemaRoot, refreshed, `Refreshed generation task '${refreshed.title}'.`)
@@ -3837,14 +3021,12 @@ export async function cancelCinemaGenerationTask(projectID: string, taskID: stri
   const task = await readGenerationTaskFromRoot(cinemaRoot, taskID)
   const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(task.providerID)
   const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
-  const canceled = taskWithProgress(taskWithCanvasIDs(await (adapter.cancelTask ?? (async ({ task: current }) => ({
+  const canceled = taskWithProgress(bindGenerationTaskToNode(await (adapter.cancelTask ?? (async ({ task: current }) => ({
     ...current,
     status: "canceled" as const,
     updatedAt: nowISO(),
     progress: progressForTaskStatus("canceled", nowISO()),
-  })))({ root, cinemaRoot, task, canvas }), {
-    createOutputNode: !isInlineGenerationTaskNode(canvas, task),
-  }))
+  })))({ root, cinemaRoot, task, canvas }), task.taskNodeID))
   await writeGenerationTask(cinemaRoot, canceled)
   await syncTaskToCanvas(cinemaRoot, canceled, `Canceled generation task '${canceled.title}'.`)
   await appendTaskAuditEvent(cinemaRoot, {
@@ -3970,7 +3152,7 @@ export async function applyCinemaCommand(projectID: string, command: CinemaComma
             : "The asset must finish processing before it can be linked.",
         )
       }
-      const existingMediaKind = existingNode.type === "local-image" ? "image" : existingNode.type
+      const existingMediaKind = existingNode.type
       if (existingMediaKind !== asset.kind) {
         throw new ApiError(
           409,

@@ -539,8 +539,7 @@ interface CinemaGenerationTask {
   mode: string
   title: string
   status: string
-  taskNodeID?: string
-  outputNodeID?: string
+  taskNodeID: string
   providerTaskRef?: Record<string, unknown>
   progress?: {
     phase: string
@@ -629,32 +628,6 @@ interface CinemaImageGenerationResult {
   assets: CinemaGeneratedAsset[]
 }
 
-interface CinemaCustomApiRunResult {
-  nodeID: string
-  requestPreview: {
-    method: "POST"
-    url: string
-    headers: Record<string, string>
-    body: unknown
-  }
-  statusCode?: number
-  responsePreview?: unknown
-  output?: {
-    text?: string
-    json?: unknown
-    imageUrl?: string
-  }
-  canvas?: CinemaCanvasDocument
-  elapsedMs?: number
-}
-
-interface CinemaCustomApiAuthState {
-  nodeID: string
-  credentialProviderID: string
-  connected: boolean
-  status: string
-}
-
 async function readJson<T>(response: Response) {
   return await response.json() as JsonEnvelope<T>
 }
@@ -704,25 +677,9 @@ function createCanvas(): CinemaCanvasDocument {
           text: "A test story brief.",
         },
       },
-      {
-        id: "director-agent",
-        type: "agent",
-        title: "Director Agent",
-        position: { x: 560, y: 180 },
-        size: { width: 360, height: 220 },
-        data: {
-          text: "Coordinate shots.",
-        },
-      },
     ],
-    edges: [
-      {
-        id: "edge-story-director",
-        source: "story-brief",
-        target: "director-agent",
-      },
-    ],
-    nodeTypes: ["text", "agent"],
+    edges: [],
+    nodeTypes: ["text"],
   }
 }
 
@@ -811,7 +768,7 @@ function createCanvasWithImageNode(overrides: Record<string, unknown> = {}): Cin
       ...overrides,
     },
   })
-  canvas.nodeTypes = ["text", "agent", "image"]
+  canvas.nodeTypes = ["text", "image"]
   return canvas
 }
 
@@ -831,67 +788,7 @@ function createCanvasWithVideoNode(overrides: Record<string, unknown> = {}): Cin
       ...overrides,
     },
   })
-  canvas.nodeTypes = ["text", "agent", "video"]
-  return canvas
-}
-
-function createCanvasWithCustomApiNode(overrides: Record<string, unknown> = {}): CinemaCanvasDocument {
-  const canvas = createCanvas()
-  canvas.nodes.push({
-    id: "custom-api",
-    type: "custom-api",
-    title: "Custom API",
-    position: { x: 920, y: 260 },
-    size: { width: 520, height: 520 },
-    data: {
-      status: "idle",
-      inputSchema: {
-        type: "object",
-        properties: {
-          prompt: { type: "string" },
-          count: { type: "number" },
-          enabled: { type: "boolean" },
-        },
-        required: ["prompt"],
-      },
-      inputValues: {
-        prompt: "Default prompt",
-        count: 1,
-        enabled: true,
-      },
-      request: {
-        method: "POST",
-        url: "http://127.0.0.1:1/generate",
-        headersTemplate: {
-          "Content-Type": "application/json",
-          "X-Prompt": "{{inputs.prompt}}",
-        },
-        bodyTemplate: {
-          prompt: "{{inputs.prompt}}",
-          count: "{{inputs.count}}",
-          enabled: "{{inputs.enabled}}",
-          upstreamText: "{{upstream.text}}",
-          projectID: "{{system.projectID}}",
-        },
-        timeoutMs: 30000,
-      },
-      auth: {
-        type: "none",
-      },
-      outputMapping: {
-        text: "$.choices[0].message.content",
-        json: "$.usage",
-        imageUrl: "$.data[0].url",
-      },
-      ...overrides,
-    },
-  })
-  canvas.edges.push({
-    id: "edge-story-custom-api",
-    source: "story-brief",
-    target: "custom-api",
-  })
-  canvas.nodeTypes = ["text", "agent", "custom-api"]
+  canvas.nodeTypes = ["text", "video"]
   return canvas
 }
 
@@ -975,240 +872,8 @@ describe("cinema api", () => {
 
       expect(canvasResponse.status).toBe(200)
       expect(canvasBody.success).toBe(true)
-      expect(canvasBody.data?.nodes.map((node) => node.id)).toEqual(["story-brief", "director-agent"])
-      expect(canvasBody.data?.edges).toHaveLength(1)
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  test("drops legacy custom node data while reading canvas", async () => {
-    const app = createServerApp()
-    const root = await createTempProjectRoot()
-
-    try {
-      const project = await createProject(app, root)
-      const baseCanvas = createCanvas()
-      await initializeCinemaProject(root, baseCanvas)
-      await writeFile(
-        join(root, ".anybox-cinema", "canvas.json"),
-        `${JSON.stringify({
-          ...baseCanvas,
-          nodes: [
-            ...baseCanvas.nodes,
-            {
-              id: "legacy-custom-node",
-              type: "custom-node",
-              title: "Legacy Custom Node",
-              position: { x: 400, y: 320 },
-              data: {
-                status: "idle",
-              },
-            },
-          ],
-          edges: [
-            ...baseCanvas.edges,
-            {
-              id: "edge-story-legacy-custom-node",
-              source: "story-brief",
-              target: "legacy-custom-node",
-            },
-          ],
-          nodeTypes: [...baseCanvas.nodeTypes, "custom-node"],
-          customNodeDefinitions: [
-            {
-              id: "legacy-definition",
-              title: "Legacy Definition",
-            },
-          ],
-        }, null, 2)}\n`,
-        "utf8",
-      )
-
-      const canvasResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/canvas`)
-      const canvasBody = await readJson<CinemaCanvasDocument>(canvasResponse)
-
-      expect(canvasResponse.status).toBe(200)
-      expect(canvasBody.data?.nodes.map((node) => node.id)).not.toContain("legacy-custom-node")
-      expect(canvasBody.data?.edges.map((edge) => edge.id)).not.toContain("edge-story-legacy-custom-node")
-      expect(canvasBody.data?.nodeTypes).not.toContain("custom-node")
-      expect((canvasBody.data as Record<string, unknown> | undefined)?.customNodeDefinitions).toBeUndefined()
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  test("normalizes legacy image nodes on read and persists canonical data on the next write", async () => {
-    const app = createServerApp()
-    const root = await createTempProjectRoot()
-    const uploadedAsset: CinemaGeneratedAsset = {
-      id: "upload-1",
-      kind: "image",
-      path: "assets/imported/upload.png",
-      mimeType: "image/png",
-      width: 640,
-      height: 480,
-    }
-    const generatedAssets: CinemaGeneratedAsset[] = [
-      {
-        id: "generated-1",
-        kind: "image",
-        path: "generated/images/image-gen/generated-1.png",
-        mimeType: "image/png",
-      },
-      {
-        id: "generated-2",
-        kind: "image",
-        path: "generated/images/image-gen/generated-2.png",
-        mimeType: "image/png",
-      },
-    ]
-    const canonicalAsset: CinemaGeneratedAsset = {
-      id: "canonical-image",
-      kind: "image",
-      path: "assets/imported/canonical.png",
-      mimeType: "image/png",
-    }
-
-    try {
-      const project = await createProject(app, root)
-      const legacyCanvas = createCanvas()
-      legacyCanvas.nodes.push(
-        {
-          id: "legacy-upload",
-          type: "local-image",
-          title: "Uploaded image",
-          position: { x: 760, y: 180 },
-          size: { width: 300, height: 240 },
-          data: {
-            asset: uploadedAsset,
-            sourceFileName: "upload.png",
-            importedAt: "2026-07-09T00:00:00.000Z",
-          },
-        },
-        {
-          id: "legacy-generated",
-          type: "image",
-          title: "Generated image",
-          position: { x: 1120, y: 180 },
-          size: { width: 300, height: 300 },
-          data: {
-            resultAssets: generatedAssets,
-            selectedAssetID: "generated-2",
-            taskID: "legacy-task",
-            status: "succeeded",
-          },
-        },
-        {
-          id: "canonical-with-legacy",
-          type: "image",
-          title: "Canonical image",
-          position: { x: 1480, y: 180 },
-          data: {
-            asset: canonicalAsset,
-            candidateAssets: generatedAssets,
-            selectedCandidateAssetID: "generated-2",
-            resultAssets: generatedAssets,
-            selectedAssetID: "generated-2",
-          },
-        },
-        {
-          id: "invalid-canonical-with-legacy",
-          type: "image",
-          title: "Invalid canonical image",
-          position: { x: 1840, y: 180 },
-          data: {
-            asset: {},
-            candidateAssets: [{}, { id: "not-image", kind: "video", path: "video.mp4" }],
-            selectedCandidateAssetID: "not-image",
-            resultAssets: generatedAssets,
-            selectedAssetID: "generated-2",
-          },
-        },
-      )
-      legacyCanvas.edges.push({
-        id: "edge-legacy-images",
-        source: "legacy-upload",
-        target: "legacy-generated",
-      })
-      legacyCanvas.nodeTypes = ["text", "agent", "local-image", "image", "local-image"]
-      await initializeCinemaProject(root, legacyCanvas)
-
-      const canvasURL = `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/canvas`
-      const firstResponse = await app.request(canvasURL)
-      const firstBody = await readJson<CinemaCanvasDocument>(firstResponse)
-      const secondResponse = await app.request(canvasURL)
-      const secondBody = await readJson<CinemaCanvasDocument>(secondResponse)
-
-      expect(firstResponse.status).toBe(200)
-      expect(secondBody.data).toEqual(firstBody.data)
-      expect(firstBody.data?.nodeTypes).toEqual(["text", "agent", "image"])
-      expect(firstBody.data?.edges).toContainEqual({
-        id: "edge-legacy-images",
-        source: "legacy-upload",
-        target: "legacy-generated",
-      })
-      expect(firstBody.data?.nodes.find((node) => node.id === "legacy-upload")).toMatchObject({
-        type: "image",
-        position: { x: 760, y: 180 },
-        data: {
-          asset: uploadedAsset,
-          sourceKind: "upload",
-          sourceFileName: "upload.png",
-        },
-      })
-      expect(firstBody.data?.nodes.find((node) => node.id === "legacy-generated")?.data).toMatchObject({
-        asset: generatedAssets[1],
-        sourceKind: "generation",
-        taskID: "legacy-task",
-      })
-      expect(firstBody.data?.nodes.find((node) => node.id === "legacy-generated")?.data?.resultAssets).toBeUndefined()
-      expect(firstBody.data?.nodes.find((node) => node.id === "legacy-generated")?.data?.selectedAssetID).toBeUndefined()
-      expect(firstBody.data?.nodes.find((node) => node.id === "canonical-with-legacy")?.data).toMatchObject({
-        asset: canonicalAsset,
-        sourceKind: "upload",
-      })
-      expect(firstBody.data?.nodes.find((node) => node.id === "canonical-with-legacy")?.data?.candidateAssets).toBeUndefined()
-      expect(firstBody.data?.nodes.find((node) => node.id === "canonical-with-legacy")?.data?.resultAssets).toBeUndefined()
-      expect(firstBody.data?.nodes.find((node) => node.id === "invalid-canonical-with-legacy")?.data).toMatchObject({
-        asset: generatedAssets[1],
-        sourceKind: "generation",
-      })
-      expect(firstBody.data?.nodes.find((node) => node.id === "invalid-canonical-with-legacy")?.data?.candidateAssets).toBeUndefined()
-
-      const rawAfterReads = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
-      expect(rawAfterReads.nodes.find((node) => node.id === "legacy-upload")?.type).toBe("local-image")
-      expect(rawAfterReads.nodes.find((node) => node.id === "legacy-generated")?.data?.resultAssets).toEqual(generatedAssets)
-
-      const commandResponse = await app.request(
-        `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            id: "cmd-normalize-legacy-images",
-            type: "update-viewport",
-            actor: "cinema-web",
-            baseRevision: 0,
-            viewport: { x: 10, y: 20, zoom: 1.1 },
-          }),
-        },
-      )
-      expect(commandResponse.status).toBe(200)
-
-      const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
-      expect(persisted.nodeTypes).toEqual(["text", "agent", "image"])
-      expect(persisted.nodes.find((node) => node.id === "legacy-upload")?.type).toBe("image")
-      expect(persisted.nodes.find((node) => node.id === "legacy-generated")?.data?.asset).toEqual(generatedAssets[1])
-      expect(persisted.nodes.find((node) => node.id === "legacy-generated")?.data?.resultAssets).toBeUndefined()
-      expect(persisted.nodes.find((node) => node.id === "canonical-with-legacy")?.data?.asset).toEqual(canonicalAsset)
-      expect(persisted.nodes.find((node) => node.id === "canonical-with-legacy")?.data?.candidateAssets).toBeUndefined()
-      expect(persisted.nodes.find((node) => node.id === "invalid-canonical-with-legacy")?.data?.asset).toEqual(generatedAssets[1])
-      expect(persisted.edges).toContainEqual({
-        id: "edge-legacy-images",
-        source: "legacy-upload",
-        target: "legacy-generated",
-      })
+      expect(canvasBody.data?.nodes.map((node) => node.id)).toEqual(["story-brief"])
+      expect(canvasBody.data?.edges).toHaveLength(0)
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -1246,16 +911,16 @@ describe("cinema api", () => {
       const nextCanvas = createCanvas()
       nextCanvas.nodes[0]!.position = { x: 220, y: 260 }
       nextCanvas.nodes.push({
-        id: "shot-1",
-        type: "shot",
-        title: "Shot 1",
+        id: "image-1",
+        type: "image",
+        title: "Image 1",
         position: { x: 920, y: 320 },
         size: { width: 380, height: 250 },
         data: {
           text: "Opening shot.",
         },
       })
-      nextCanvas.nodeTypes = ["text", "agent", "shot"]
+      nextCanvas.nodeTypes = ["text", "image"]
 
       await initializeCinemaProject(root)
 
@@ -1268,7 +933,7 @@ describe("cinema api", () => {
 
       expect(updateResponse.status).toBe(200)
       expect(updateBody.success).toBe(true)
-      expect(updateBody.data?.nodes.map((node) => node.id)).toContain("shot-1")
+      expect(updateBody.data?.nodes.map((node) => node.id)).toContain("image-1")
 
       const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
       expect(persisted.nodes.find((node) => node.id === "story-brief")?.position).toEqual({ x: 220, y: 260 })
@@ -1292,17 +957,17 @@ describe("cinema api", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          id: "cmd-create-shot",
+          id: "cmd-create-image",
           type: "create-node",
           actor: "test-agent",
           baseRevision: 0,
           node: {
-            id: "shot-1",
-            type: "shot",
-            title: "Shot 1",
+            id: "image-1",
+            type: "image",
+            title: "Image 1",
             position: { x: 880, y: 260 },
             size: { width: 380, height: 250 },
-            data: { text: "Opening shot." },
+            data: { text: "Opening image." },
           },
         }),
       })
@@ -1313,23 +978,23 @@ describe("cinema api", () => {
       expect(createBody.data?.event).toMatchObject({
         type: "command.create-node",
         actor: "test-agent",
-        commandID: "cmd-create-shot",
+        commandID: "cmd-create-image",
       })
-      expect(createBody.data?.canvas.nodes.map((node) => node.id)).toContain("shot-1")
-      expect(createBody.data?.canvas.nodeTypes).toContain("shot")
+      expect(createBody.data?.canvas.nodes.map((node) => node.id)).toContain("image-1")
+      expect(createBody.data?.canvas.nodeTypes).toContain("image")
 
       const updateResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/commands`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          id: "cmd-update-shot",
+          id: "cmd-update-image",
           type: "update-node",
           actor: "cinema-web",
           baseRevision: 1,
-          nodeID: "shot-1",
+          nodeID: "image-1",
           patch: {
-            title: "Shot 1 - revised",
-            data: { text: "A revised opening shot." },
+            title: "Image 1 - revised",
+            data: { text: "A revised opening image." },
           },
         }),
       })
@@ -1339,14 +1004,14 @@ describe("cinema api", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          id: "cmd-connect-story-shot",
+          id: "cmd-connect-story-image",
           type: "connect-nodes",
           actor: "cinema-web",
           baseRevision: 2,
           edge: {
-            id: "edge-story-shot",
+            id: "edge-story-image",
             source: "story-brief",
-            target: "shot-1",
+            target: "image-1",
           },
         }),
       })
@@ -1369,11 +1034,11 @@ describe("cinema api", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          id: "cmd-disconnect-story-shot",
+          id: "cmd-disconnect-story-image",
           type: "disconnect-edge",
           actor: "cinema-web",
           baseRevision: 4,
-          edgeID: "edge-story-shot",
+          edgeID: "edge-story-image",
         }),
       })
       expect(disconnectResponse.status).toBe(200)
@@ -1382,18 +1047,18 @@ describe("cinema api", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          id: "cmd-disconnect-story-shot-again",
+          id: "cmd-disconnect-story-image-again",
           type: "disconnect-edge",
           actor: "cinema-web",
           baseRevision: 5,
-          edgeID: "edge-story-shot",
+          edgeID: "edge-story-image",
         }),
       })
       expect(duplicateDisconnectResponse.status).toBe(200)
 
       const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
-      expect(persisted.nodes.find((node) => node.id === "shot-1")?.title).toBe("Shot 1 - revised")
-      expect(persisted.edges.map((edge) => edge.id)).not.toContain("edge-story-shot")
+      expect(persisted.nodes.find((node) => node.id === "image-1")?.title).toBe("Image 1 - revised")
+      expect(persisted.edges.map((edge) => edge.id)).not.toContain("edge-story-image")
       expect(persisted.viewport).toEqual({ x: 24, y: 48, zoom: 0.8 })
 
       const eventsResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/events?after=0&limit=10`)
@@ -1417,13 +1082,13 @@ describe("cinema api", () => {
       expect(summaryBody.data).toMatchObject({
         projectID: project.id,
         initialized: true,
-        nodeCount: 3,
-        edgeCount: 1,
+        nodeCount: 2,
+        edgeCount: 0,
       })
-      expect(summaryBody.data?.nodeTypeCounts.shot).toBe(1)
-      expect(summaryBody.data?.nodes.find((node) => node.id === "shot-1")).toMatchObject({
-        title: "Shot 1 - revised",
-        text: "A revised opening shot.",
+      expect(summaryBody.data?.nodeTypeCounts.image).toBe(1)
+      expect(summaryBody.data?.nodes.find((node) => node.id === "image-1")).toMatchObject({
+        title: "Image 1 - revised",
+        text: "A revised opening image.",
       })
       expect(summaryBody.data?.recentEvents).toHaveLength(6)
       expect(summaryBody.data?.directories.map((directory) => directory.path)).toContain("generated")
@@ -1447,9 +1112,9 @@ describe("cinema api", () => {
         actor: "cinema-web",
         baseRevision: 0,
         node: {
-          id: "idempotent-shot",
-          type: "shot",
-          title: "Idempotent shot",
+          id: "idempotent-image",
+          type: "image",
+          title: "Idempotent image",
           position: { x: 420, y: 240 },
         },
       }
@@ -1471,7 +1136,7 @@ describe("cinema api", () => {
       const retryBody = await readJson<CinemaCommandResult>(retryResponse)
       expect(retryResponse.status).toBe(200)
       expect(retryBody.data?.canvas.revision).toBe(1)
-      expect(retryBody.data?.canvas.nodes.filter((node) => node.id === "idempotent-shot")).toHaveLength(1)
+      expect(retryBody.data?.canvas.nodes.filter((node) => node.id === "idempotent-image")).toHaveLength(1)
 
       const staleResponse = await app.request(commandURL, {
         method: "POST",
@@ -1591,15 +1256,15 @@ describe("cinema api", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          nodeID: "director-agent",
+          nodeID: "missing-node",
           prompt: "Try to generate.",
           writeMode: "append",
         }),
       })
       const invalidNodeBody = await readJson(invalidNodeResponse)
 
-      expect(invalidNodeResponse.status).toBe(409)
-      expect(invalidNodeBody.error?.code).toBe("CINEMA_TEXT_NODE_INVALID")
+      expect(invalidNodeResponse.status).toBe(404)
+      expect(invalidNodeBody.error?.code).toBe("CINEMA_NODE_NOT_FOUND")
 
       const emptyPromptResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/text-generations`, {
         method: "POST",
@@ -1819,243 +1484,6 @@ describe("cinema api", () => {
       expect(body.error?.code).toBe("CINEMA_TEXT_MODEL_NOT_AVAILABLE")
     } finally {
       restoreTextRuntime()
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  test("previews custom API nodes without sending the external request", async () => {
-    const app = createServerApp()
-    const root = await createTempProjectRoot()
-    let requestCount = 0
-    const server = Bun.serve({
-      port: 0,
-      fetch: () => {
-        requestCount += 1
-        return Response.json({ ok: true })
-      },
-    })
-
-    try {
-      const project = await createProject(app, root)
-      await initializeCinemaProject(root, createCanvasWithCustomApiNode({
-        request: {
-          method: "POST",
-          url: `http://127.0.0.1:${server.port}/generate`,
-          headersTemplate: {
-            "Content-Type": "application/json",
-            "X-Prompt": "{{inputs.prompt}}",
-          },
-          bodyTemplate: {
-            prompt: "{{inputs.prompt}}",
-            count: "{{inputs.count}}",
-            enabled: "{{inputs.enabled}}",
-            upstreamText: "{{upstream.text}}",
-          },
-        },
-      }))
-
-      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/custom-api-runs`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          nodeID: "custom-api",
-          mode: "preview",
-          inputValues: {
-            prompt: "Preview prompt",
-            count: 3,
-            enabled: false,
-          },
-        }),
-      })
-      const body = await readJson<CinemaCustomApiRunResult>(response)
-
-      expect(response.status).toBe(200)
-      expect(requestCount).toBe(0)
-      expect(body.data?.requestPreview.url).toBe(`http://127.0.0.1:${server.port}/generate`)
-      expect(body.data?.requestPreview.headers["X-Prompt"]).toBe("Preview prompt")
-      expect(body.data?.requestPreview.body).toEqual({
-        prompt: "Preview prompt",
-        count: 3,
-        enabled: false,
-        upstreamText: "A test story brief.",
-      })
-    } finally {
-      server.stop(true)
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  test("runs custom API nodes and persists mapped outputs without leaking API keys", async () => {
-    const app = createServerApp()
-    const root = await createTempProjectRoot()
-    const credentialProviderID = "cinema-custom-api-test-run"
-    let seenAuthorization = ""
-    let seenRequestBody: Record<string, unknown> | null = null
-    let projectID = ""
-    const server = Bun.serve({
-      port: 0,
-      async fetch(request) {
-        seenAuthorization = request.headers.get("authorization") ?? ""
-        seenRequestBody = await request.json() as Record<string, unknown>
-        return Response.json({
-          choices: [
-            {
-              message: {
-                content: "Generated custom text.",
-              },
-            },
-          ],
-          usage: {
-            tokens: 7,
-          },
-          data: [
-            {
-              url: "https://example.com/generated.png",
-            },
-          ],
-        })
-      },
-    })
-
-    try {
-      const project = await createProject(app, root)
-      projectID = project.id
-      await initializeCinemaProject(root, createCanvasWithCustomApiNode({
-        request: {
-          method: "POST",
-          url: `http://127.0.0.1:${server.port}/generate`,
-          headersTemplate: {
-            "Content-Type": "application/json",
-          },
-          bodyTemplate: {
-            prompt: "{{inputs.prompt}}",
-            count: "{{inputs.count}}",
-            enabled: "{{inputs.enabled}}",
-            upstream: "{{upstream.text}}",
-            nodeID: "{{node.id}}",
-          },
-        },
-        auth: {
-          type: "bearer",
-          credentialProviderID,
-        },
-      }))
-
-      const authResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/custom-api-nodes/custom-api/auth/api-key`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          apiKey: "sk-custom-secret",
-        }),
-      })
-      const authBody = await readJson<CinemaCustomApiAuthState>(authResponse)
-      expect(authResponse.status).toBe(200)
-      expect(authBody.data?.connected).toBe(true)
-
-      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/custom-api-runs`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          nodeID: "custom-api",
-          inputValues: {
-            prompt: "Run prompt",
-            count: 2,
-            enabled: true,
-          },
-        }),
-      })
-      const body = await readJson<CinemaCustomApiRunResult>(response)
-
-      expect(response.status).toBe(200)
-      expect(seenAuthorization).toBe("Bearer sk-custom-secret")
-      expect(seenRequestBody as unknown as Record<string, unknown>).toEqual({
-        prompt: "Run prompt",
-        count: 2,
-        enabled: true,
-        upstream: "A test story brief.",
-        nodeID: "custom-api",
-      })
-      expect(body.data?.requestPreview.headers.Authorization).toBe("Bearer [redacted]")
-      expect(body.data?.output?.text).toBe("Generated custom text.")
-      expect(body.data?.output?.json).toEqual({ tokens: 7 })
-      expect(body.data?.output?.imageUrl).toBe("https://example.com/generated.png")
-
-      const generatedNode = body.data?.canvas?.nodes.find((node) => node.id === "custom-api")
-      expect(generatedNode?.data?.status).toBe("succeeded")
-      expect(generatedNode?.data?.outputText).toBe("Generated custom text.")
-      expect(generatedNode?.data?.outputJson).toEqual({ tokens: 7 })
-      expect(generatedNode?.data?.outputImageUrl).toBe("https://example.com/generated.png")
-
-      const persisted = await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")
-      expect(persisted).toContain("Generated custom text.")
-      expect(persisted).not.toContain("sk-custom-secret")
-
-      const events = await readFile(join(root, ".anybox-cinema", "events.jsonl"), "utf8")
-      expect(events).toContain("\"type\":\"custom-api.generated\"")
-      expect(events).not.toContain("sk-custom-secret")
-    } finally {
-      if (projectID) {
-        try {
-          await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(projectID)}/custom-api-nodes/custom-api/auth/api-key`, {
-            method: "PUT",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ apiKey: null }),
-          })
-        } catch {
-          // Best-effort credential cleanup for the test fixture.
-        }
-      }
-      server.stop(true)
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  test("rejects invalid custom API runs and writes failed state for run attempts", async () => {
-    const app = createServerApp()
-    const root = await createTempProjectRoot()
-
-    try {
-      const project = await createProject(app, root)
-      await initializeCinemaProject(root, createCanvasWithCustomApiNode({
-        request: {
-          method: "POST",
-          url: "https://api.example.com/generate",
-          headersTemplate: {},
-          bodyTemplate: {
-            missing: "{{inputs.missing}}",
-          },
-        },
-      }))
-
-      const wrongNodeResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/custom-api-runs`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          nodeID: "story-brief",
-        }),
-      })
-      const wrongNodeBody = await readJson(wrongNodeResponse)
-
-      expect(wrongNodeResponse.status).toBe(409)
-      expect(wrongNodeBody.error?.code).toBe("CINEMA_CUSTOM_API_NODE_INVALID")
-
-      const missingVariableResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/custom-api-runs`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          nodeID: "custom-api",
-        }),
-      })
-      const missingVariableBody = await readJson(missingVariableResponse)
-
-      expect(missingVariableResponse.status).toBe(400)
-      expect(missingVariableBody.error?.code).toBe("CINEMA_CUSTOM_API_TEMPLATE_MISSING")
-
-      const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
-      const failedNode = persisted.nodes.find((node) => node.id === "custom-api")
-      expect(failedNode?.data?.status).toBe("failed")
-      expect(String(failedNode?.data?.error)).toContain("Template variable")
-    } finally {
       await rm(root, { recursive: true, force: true })
     }
   })
@@ -2506,7 +1934,6 @@ describe("cinema api", () => {
         phase: "succeeded",
         percent: 100,
       })
-      expect(refreshBody.data?.outputNodeID).toBeUndefined()
       const registeredImagePath = refreshBody.data?.outputAssets[0]?.path
       expect(refreshBody.data?.outputAssets[0]).toMatchObject({
         id: expect.stringMatching(/^asset_/),
@@ -3911,7 +3338,6 @@ describe("cinema api", () => {
 
       expect(response.status).toBe(200)
       expect(body.data?.taskNodeID).toBe("video-gen")
-      expect(body.data?.outputNodeID).toBeUndefined()
       expect(body.data?.modelID).toBe("kling-v3")
       expect(body.data?.input.parameters).toMatchObject({
         inputCombinationMode: "text-to-video.multi-shot",
@@ -4031,60 +3457,6 @@ describe("cinema api", () => {
         },
       ])
       expect(body.data?.input.parameters).toEqual(capturedParameters)
-    } finally {
-      restoreVideoAdapter()
-      restoreVideoCatalog()
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  test("keeps legacy generation task output node behavior when no task node is provided", async () => {
-    const app = createServerApp()
-    const root = await createTempProjectRoot()
-    const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest(TEST_VIDEO_PROVIDER_CATALOG)
-    const restoreVideoAdapter = setCinemaVideoProviderAdapterForTest("klingai", {
-      manifest: {} as never,
-      createTask: async ({ task }) => ({
-        ...task,
-        status: "succeeded" as const,
-        updatedAt: "2026-07-05T00:00:00.000Z",
-        outputAssets: [
-          {
-            id: "video-asset-1",
-            kind: "video" as const,
-            path: "generated/videos/task/out.mp4",
-            mimeType: "video/mp4",
-            sizeBytes: tinyMp4Bytes().byteLength,
-          },
-        ],
-      }),
-      refreshTask: async ({ task }) => task,
-    })
-
-    try {
-      const project = await createProject(app, root)
-      await initializeCinemaProject(root)
-
-      const response = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          providerID: "klingai",
-          modelID: "kling-v3",
-          mode: "text-to-video",
-          prompt: "Legacy task node.",
-        }),
-      })
-      const body = await readJson<CinemaGenerationTask>(response)
-
-      expect(response.status).toBe(200)
-      expect(body.data?.taskNodeID?.startsWith("node-generation-task-")).toBe(true)
-      expect(body.data?.outputNodeID?.startsWith("node-video-")).toBe(true)
-
-      const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument
-      expect(persisted.nodes.find((node) => node.id === body.data?.taskNodeID)?.type).toBe("generation-task")
-      expect(persisted.nodes.find((node) => node.id === body.data?.outputNodeID)?.type).toBe("video")
-      expect(persisted.edges.some((edge) => edge.source === body.data?.taskNodeID && edge.target === body.data?.outputNodeID)).toBe(true)
     } finally {
       restoreVideoAdapter()
       restoreVideoCatalog()
@@ -4276,7 +3648,6 @@ describe("cinema api", () => {
 
       expect(refreshResponse.status).toBe(200)
       expect(refreshBody.data?.status).toBe("succeeded")
-      expect(refreshBody.data?.outputNodeID).toBeUndefined()
       expect(refreshBody.data?.outputAssets[0]).toMatchObject({
         id: expect.stringMatching(/^asset_/),
         kind: "video",
@@ -4751,7 +4122,7 @@ describe("cinema api", () => {
 
     try {
       const project = await createProject(app, root)
-      await initializeCinemaProject(root)
+      await initializeCinemaProject(root, createCanvasWithVideoNode())
 
       const missingAuthResponse = await app.request("http://localhost/api/cinema/video-providers/mock/auth/api-key")
       const missingAuthBody = await readJson(missingAuthResponse)
@@ -4767,6 +4138,7 @@ describe("cinema api", () => {
           modelID: "mock-video",
           mode: "text-to-video",
           prompt: "Missing provider.",
+          taskNodeID: "video-gen",
         }),
       })
       const missingCreateBody = await readJson(missingCreateResponse)
@@ -4814,6 +4186,7 @@ describe("cinema api", () => {
           modelID: "xai/grok-imagine-video/image-to-video",
           mode: "image-to-video",
           prompt: "Catalog provider without runtime adapter.",
+          taskNodeID: "video-gen",
         }),
       })
       const catalogOnlyCreateBody = await readJson(catalogOnlyCreateResponse)
@@ -4885,7 +4258,7 @@ describe("cinema api", () => {
       const canvas = createCanvasWithVideoNode()
       const imageNode = createCanvasWithImageNode().nodes.find((node) => node.id === "image-gen")
       if (imageNode) canvas.nodes.push(imageNode)
-      canvas.nodeTypes = ["text", "agent", "video", "image"]
+      canvas.nodeTypes = ["text", "video", "image"]
       await initializeCinemaProject(root, canvas)
 
       const videoNodeImageModelResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`, {
@@ -4940,6 +4313,7 @@ describe("cinema api", () => {
           modelID: "kling-v3",
           mode: "text-to-video",
           prompt: "A test prompt.",
+          taskNodeID: "video-gen",
         }),
       })
       const body = await readJson(response)

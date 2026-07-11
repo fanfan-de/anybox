@@ -2,17 +2,9 @@ import { z } from "zod"
 
 export const CinemaNodeTypeSchema = z.enum([
   "text",
-  "prompt",
   "image",
-  // Deprecated compatibility alias. New canvases persist image nodes as "image".
-  "local-image",
   "video",
   "audio",
-  "shot",
-  "agent",
-  "custom-api",
-  "generation-task",
-  "output",
 ])
 export type CinemaNodeType = z.infer<typeof CinemaNodeTypeSchema>
 
@@ -567,17 +559,6 @@ export const CinemaCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("update-viewport"),
     viewport: CinemaViewportSchema,
   }),
-  CinemaCommandBaseSchema.extend({
-    type: z.literal("create-generation-task"),
-    node: CinemaCanvasNodeSchema.extend({
-      type: z.literal("generation-task"),
-    }),
-  }),
-  CinemaCommandBaseSchema.extend({
-    type: z.literal("complete-generation-task"),
-    taskNodeID: z.string().min(1),
-    outputNode: CinemaCanvasNodeSchema.optional(),
-  }),
 ])
 export type CinemaCommand = z.infer<typeof CinemaCommandSchema>
 
@@ -949,8 +930,7 @@ export const CinemaGenerationTaskSchema = z.object({
   status: CinemaGenerationTaskStatusSchema,
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
-  taskNodeID: z.string().min(1).optional(),
-  outputNodeID: z.string().min(1).optional(),
+  taskNodeID: z.string().min(1),
   providerTaskRef: z.record(z.string(), z.unknown()).optional(),
   progress: CinemaGenerationProgressSchema.optional(),
   input: z.object({
@@ -971,8 +951,7 @@ export const CreateCinemaGenerationTaskBodySchema = z.object({
   prompt: z.string().default(""),
   sourceNodeIDs: z.array(z.string().min(1)).default([]),
   parameters: z.record(z.string(), z.unknown()).default({}),
-  position: CinemaPositionSchema.optional(),
-  taskNodeID: z.string().min(1).optional(),
+  taskNodeID: z.string().min(1),
 })
 export type CreateCinemaGenerationTaskBody = z.infer<typeof CreateCinemaGenerationTaskBodySchema>
 
@@ -1050,55 +1029,6 @@ export const CreateCinemaImageGenerationBodySchema = z.object({
   sourceImagePaths: z.array(z.string().min(1)).optional(),
 })
 export type CreateCinemaImageGenerationBody = z.infer<typeof CreateCinemaImageGenerationBodySchema>
-
-export const CinemaCustomApiRunModeSchema = z.enum(["preview", "run"])
-export type CinemaCustomApiRunMode = z.infer<typeof CinemaCustomApiRunModeSchema>
-
-export const CinemaCustomApiAuthStateSchema = z.object({
-  nodeID: z.string().min(1),
-  credentialProviderID: z.string().min(1),
-  connected: z.boolean(),
-  status: z.enum(["connected", "not_connected"]),
-})
-export type CinemaCustomApiAuthState = z.infer<typeof CinemaCustomApiAuthStateSchema>
-
-export const CreateCinemaCustomApiNodeApiKeyBodySchema = z.object({
-  apiKey: z.string().nullable().optional(),
-})
-export type CreateCinemaCustomApiNodeApiKeyBody = z.infer<typeof CreateCinemaCustomApiNodeApiKeyBodySchema>
-
-export const CreateCinemaCustomApiRunBodySchema = z.object({
-  nodeID: z.string().min(1),
-  inputValues: z.record(z.string(), z.unknown()).optional(),
-  mode: CinemaCustomApiRunModeSchema.default("run"),
-})
-export type CreateCinemaCustomApiRunBody = z.infer<typeof CreateCinemaCustomApiRunBodySchema>
-
-export const CinemaCustomApiRequestPreviewSchema = z.object({
-  method: z.literal("POST"),
-  url: z.string().min(1),
-  headers: z.record(z.string(), z.string()),
-  body: z.unknown(),
-})
-export type CinemaCustomApiRequestPreview = z.infer<typeof CinemaCustomApiRequestPreviewSchema>
-
-export const CinemaCustomApiOutputSchema = z.object({
-  text: z.string().optional(),
-  json: z.unknown().optional(),
-  imageUrl: z.string().optional(),
-})
-export type CinemaCustomApiOutput = z.infer<typeof CinemaCustomApiOutputSchema>
-
-export const CinemaCustomApiRunResultSchema = z.object({
-  nodeID: z.string().min(1),
-  requestPreview: CinemaCustomApiRequestPreviewSchema,
-  statusCode: z.number().int().min(100).max(599).optional(),
-  responsePreview: z.unknown().optional(),
-  output: CinemaCustomApiOutputSchema.optional(),
-  canvas: CinemaCanvasDocumentSchema.optional(),
-  elapsedMs: z.number().nonnegative().optional(),
-})
-export type CinemaCustomApiRunResult = z.infer<typeof CinemaCustomApiRunResultSchema>
 
 export const CinemaImageGenerationResultSchema = z.object({
   canvas: CinemaCanvasDocumentSchema,

@@ -411,7 +411,7 @@ nodeTypes
 
 `CinemaCommandSchema` 则使用 discriminated union 定义所有命令。这个模式非常适合会长期演化的产品：新增节点类型、新增任务模式、新增 Provider 参数时，可以先从 contract 层扩展，再让前端和后端跟进。
 
-统一图片节点没有升级 `schemaVersion`。Shared contract 暂时继续接受 deprecated 的 `local-image`，Agent 和 Cinema 插件在解析边界把它转换为 canonical `image`，同时归一化 `nodeTypes` 并去重。这样旧画布可以无损打开，节点 ID、位置、尺寸、边、handle、资产路径和任务 metadata 都不会因为迁移丢失；新写入的数据则不会重新产生旧类型和旧结果字段。
+开发期已经完成节点模型断代。Shared contract 只接受 `text`、`image`、`video`、`audio`，不再解析 `local-image` 或其他旧占位类型；旧画布需要重建。生成任务保存在独立任务记录中，并且必须绑定已有的 Image 或 Video 节点。
 
 ## 15. UI 架构：画布主区域 + Inspector 侧栏
 
@@ -470,7 +470,7 @@ utils/cinemaCanvas.ts
 
 第三是把事件同步升级为推送式。当前轮询简单可靠，但任务状态很多时，SSE 或 WebSocket 会更实时，也能减少无效请求。
 
-第四是把节点图变成更明确的生成 DAG。现在 image-to-video 已经开始利用边关系传递 source image，未来可以让 prompt、shot、audio、agent 节点也成为可消费上下文，让整条生成流水线更自动化。
+第四是把四种节点组成更明确的生成 DAG。Text 为 Image/Video 提供文本参数，Image 为 Text/Video 提供视觉参考，Video 可连接到后续 Video；Audio 作为独立素材进入时间线，不承担生成控制节点职责。
 
 第五是继续补充测试。Shared schema、后端 usecase、前端 Command Queue、保存状态组件和节点并发操作状态机已有自动化覆盖；Playwright 也会同时挂起两个文本生成请求，验证其中一个失败时另一个仍保持 generating，且两条错误分别留在对应节点。下一步重点应放在跨重启恢复和更完整的节点编辑路径。
 

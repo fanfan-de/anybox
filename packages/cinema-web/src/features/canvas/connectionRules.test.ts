@@ -20,4 +20,33 @@ describe("cinema connection rules", () => {
     expect(validateCinemaConnection(connection("text", "audio"), nodes, [])).toMatchObject({ valid: false, reason: "connection.textOutput" })
     expect(validateCinemaConnection(connection("text", "image"), nodes, [{ id: "edge", ...connection("text", "image") }])).toMatchObject({ valid: false, reason: "connection.duplicate" })
   })
+
+  it("allows only the four-node media graph", () => {
+    const videoNodes = [...nodes, node("video-2", "video")]
+    expect(validateCinemaConnection(connection("video", "video-2"), videoNodes, [])).toEqual({ valid: true })
+    expect(validateCinemaConnection(connection("image", "image"), nodes, [])).toMatchObject({ valid: false })
+    expect(validateCinemaConnection(connection("video", "image"), nodes, [])).toEqual({ valid: false, reason: "connection.invalid" })
+    expect(validateCinemaConnection(connection("audio", "video"), nodes, [])).toEqual({ valid: false, reason: "connection.invalid" })
+    expect(validateCinemaConnection(connection("video", "audio"), nodes, [])).toEqual({ valid: false, reason: "connection.invalid" })
+  })
+
+  it("accepts two video image inputs and rejects a third", () => {
+    const secondImageNode = node("image-2", "image")
+    const thirdImageNode = node("image-3", "image")
+    const videoNodes = [...nodes, secondImageNode, thirdImageNode]
+    const existingEdges = [
+      { id: "edge-1", ...connection("image", "video") },
+      { id: "edge-2", ...connection("image-2", "video") },
+    ]
+
+    expect(validateCinemaConnection(connection("image-2", "video"), videoNodes, [
+      { id: "text-edge", ...connection("text", "video") },
+      existingEdges[0]!,
+    ])).toEqual({ valid: true })
+    expect(validateCinemaConnection(connection("image-2", "video"), videoNodes, existingEdges.slice(0, 1))).toEqual({ valid: true })
+    expect(validateCinemaConnection(connection("image-3", "video"), videoNodes, existingEdges)).toEqual({
+      valid: false,
+      reason: "connection.videoImageLimit",
+    })
+  })
 })

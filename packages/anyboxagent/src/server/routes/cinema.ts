@@ -10,8 +10,6 @@ import { getCinemaRenderRuntimeStatus } from "#cinema/render-runtime.ts"
 import {
   CinemaCanvasDocumentSchema,
   CinemaCommandSchema,
-  CreateCinemaCustomApiNodeApiKeyBodySchema,
-  CreateCinemaCustomApiRunBodySchema,
   CreateCinemaImageGenerationBodySchema,
   CreateCinemaImportedImageAssetBodySchema,
   CreateCinemaTextGenerationBodySchema,
@@ -431,27 +429,6 @@ export function CinemaRoutes() {
       "Body must be a valid Cinema image generation request",
     )
     return ok(c, await CinemaUseCase.createCinemaImageGeneration(c.req.param("projectID"), payload))
-  })
-
-  app.post("/projects/:projectID/custom-api-runs", async (c) => {
-    const payload = await parseJsonBody(
-      c,
-      CreateCinemaCustomApiRunBodySchema,
-      "Body must be a valid Cinema Custom API run request",
-    )
-    return ok(c, await CinemaUseCase.createCinemaCustomApiRun(c.req.param("projectID"), payload))
-  })
-
-  app.put("/projects/:projectID/custom-api-nodes/:nodeID/auth/api-key", async (c) => {
-    const payload = await parseJsonBody(
-      c,
-      CreateCinemaCustomApiNodeApiKeyBodySchema,
-      "Body must contain an optional nullable 'apiKey' field.",
-    )
-    return ok(
-      c,
-      await CinemaUseCase.saveCinemaCustomApiNodeApiKey(c.req.param("projectID"), c.req.param("nodeID"), payload.apiKey),
-    )
   })
 
   app.post("/projects/:projectID/assets/imports", async (c) => {

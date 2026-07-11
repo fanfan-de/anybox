@@ -90,14 +90,6 @@ function fixtureCanvas() {
         data: { text: "A test story brief." },
       },
       {
-        id: "director-agent",
-        type: "agent",
-        title: "Director Agent",
-        position: { x: 660, y: 220 },
-        size: { width: 360, height: 220 },
-        data: { text: "Coordinate shots." },
-      },
-      {
         id: "second-brief",
         type: "text",
         title: "Second Brief",
@@ -106,14 +98,8 @@ function fixtureCanvas() {
         data: { text: "A second test story brief." },
       },
     ],
-    edges: [
-      {
-        id: "edge-story-director",
-        source: "story-brief",
-        target: "director-agent",
-      },
-    ],
-    nodeTypes: ["text", "agent"],
+    edges: [],
+    nodeTypes: ["text"],
   }
 }
 

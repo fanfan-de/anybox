@@ -1,6 +1,6 @@
 ---
 name: Initialize Cinema Project
-description: Initialize, inspect, repair, or migrate an anybox for cinema local film project using only generic shell and file editing tools. Use when the user asks to create, prepare, open, initialize, repair, convert, or migrate a local folder into an anybox for cinema project. Do not use cinema-specific runtime APIs or custom project tools.
+description: Initialize, inspect, or repair an anybox for cinema local film project using only generic shell and file editing tools. Use when the user asks to create, prepare, open, initialize, or repair a local folder as an anybox for cinema project. Do not use cinema-specific runtime APIs or custom project tools.
 ---
 
 # Initialize Cinema Project
@@ -13,6 +13,8 @@ This skill turns an ordinary local folder into an `anybox for cinema` project. T
 - Do not call any custom `cinema_*`, `video_workspace_*`, or provider-specific project initialization tools.
 - Do not require model deployment. This product assumes users bring their own provider API keys later.
 - Do not store API keys inside the project folder during initialization.
+- Canvas nodes must use exactly four types: `text`, `image`, `video`, and `audio`.
+- Do not add aliases, migrations, or compatibility branches for removed node types.
 - Do not overwrite existing user files. If a file already exists, inspect it and repair only clearly missing Cinema metadata when it is safe.
 - Keep the process idempotent: running this skill again should not duplicate folders, duplicate manifest sections, or destroy project data.
 
@@ -182,35 +184,11 @@ The canvas is node-first and should be compatible with an Updream-like workspace
         "text": "",
         "placeholder": "Write the film idea, theme, references, and constraints here."
       }
-    },
-    {
-      "id": "node-agent-director",
-      "type": "agent",
-      "title": "Director Agent",
-      "position": {
-        "x": 520,
-        "y": 120
-      },
-      "size": {
-        "width": 360,
-        "height": 220
-      },
-      "data": {
-        "role": "director",
-        "placeholder": "Use AnyBox Agent to plan shots, prompts, and generation tasks."
-      }
     }
   ],
   "edges": [],
   "nodeTypes": [
-    "text",
-    "image",
-    "video",
-    "audio",
-    "shot",
-    "agent",
-    "generation-task",
-    "output"
+    "text"
   ]
 }
 ```
@@ -259,9 +237,10 @@ If `.anybox-cinema/project.json` exists:
    ```
 
 3. If JSON is invalid, do not overwrite it automatically. Report the invalid file and ask before replacing or rewriting it.
-4. If metadata files are missing, recreate only the missing files.
-5. If directories are missing, recreate them with `mkdir -p`.
-6. Append a `project.repaired` event only when files or directories changed.
+4. Treat any canvas node type outside `text`, `image`, `video`, and `audio` as invalid. Do not migrate or preserve it automatically; report that the canvas must be rebuilt.
+5. If metadata files are missing, recreate only the missing files.
+6. If directories are missing, recreate them with `mkdir -p`.
+7. Append a `project.repaired` event only when files or directories changed.
 
 ## Completion Response
 
@@ -276,4 +255,4 @@ After initialization or repair, tell the user:
   - add source media to `assets/`;
   - open the Cinema Web Canvas through AnyBox;
   - configure the `cinema-fal` API key in AnyBox when real fal.ai generation is needed;
-  - create a Generation Task node and test the Mock provider first.
+  - create an Image or Video node and test generation with the Mock provider first.

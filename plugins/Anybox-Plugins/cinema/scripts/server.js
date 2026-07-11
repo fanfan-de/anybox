@@ -10,26 +10,7 @@ const PROJECT_FILE = "project.json"
 const EVENTS_FILE = "events.jsonl"
 const PROVIDERS_FILE = "providers.json"
 const PROJECT_DIRECTORIES = ["assets", "references", "prompts", "generated", "renders", "exports"]
-const NODE_TYPES = new Set([
-  "text",
-  "prompt",
-  "image",
-  "video",
-  "audio",
-  "shot",
-  "agent",
-  "generation-task",
-  "output"
-])
-// Accepted only at the file/tool boundary. All normalized canvases persist the
-// canonical `image` type so new commands cannot reintroduce this legacy alias.
-const LEGACY_NODE_TYPE_ALIASES = new Map([
-  ["local-image", "image"]
-])
-const ACCEPTED_NODE_TYPES = new Set([
-  ...NODE_TYPES,
-  ...LEGACY_NODE_TYPE_ALIASES.keys()
-])
+const NODE_TYPES = new Set(["text", "image", "video", "audio"])
 
 const projectRootSchema = {
   type: "string",
@@ -63,7 +44,7 @@ const canvasNodeSchema = {
     id: { type: "string", minLength: 1 },
     type: {
       type: "string",
-      enum: [...ACCEPTED_NODE_TYPES]
+      enum: [...NODE_TYPES]
     },
     title: { type: "string", minLength: 1 },
     position: positionSchema,
@@ -108,9 +89,7 @@ const commandSchema = {
         "delete-node",
         "connect-nodes",
         "disconnect-edge",
-        "update-viewport",
-        "create-generation-task",
-        "complete-generation-task"
+        "update-viewport"
       ]
     },
     node: canvasNodeSchema,
@@ -118,7 +97,7 @@ const commandSchema = {
     patch: {
       type: "object",
       properties: {
-        type: { type: "string", enum: [...ACCEPTED_NODE_TYPES] },
+        type: { type: "string", enum: [...NODE_TYPES] },
         title: { type: "string", minLength: 1 },
         position: positionSchema,
         size: sizeSchema,
@@ -140,9 +119,7 @@ const commandSchema = {
       },
       required: ["x", "y", "zoom"],
       additionalProperties: false
-    },
-    taskNodeID: { type: "string", minLength: 1 },
-    outputNode: canvasNodeSchema
+    }
   },
   required: ["type"],
   additionalProperties: false
@@ -156,12 +133,7 @@ const tools = [
     inputSchema: {
       type: "object",
       properties: {
-        projectRoot: projectRootSchema,
-        projectID: {
-          type: "string",
-          minLength: 1,
-          description: "Optional legacy label used only in returned metadata. This tool reads projectRoot directly."
-        }
+        projectRoot: projectRootSchema
       },
       required: ["projectRoot"],
       additionalProperties: false
@@ -180,11 +152,6 @@ const tools = [
       type: "object",
       properties: {
         projectRoot: projectRootSchema,
-        projectID: {
-          type: "string",
-          minLength: 1,
-          description: "Optional legacy label used only in returned metadata. This tool reads projectRoot directly."
-        },
         command: commandSchema
       },
       required: ["projectRoot", "command"],
@@ -197,23 +164,13 @@ const tools = [
     }
   },
   {
-    name: "cinema_create_shot_plan",
-    title: "Create Cinema Shot Plan",
-    description: "Create Shot and Prompt nodes in local .anybox-cinema/canvas.json and append command events.",
+    name: "cinema_create_storyboard",
+    title: "Create Cinema Storyboard",
+    description: "Create storyboard Text nodes with optional connected Image nodes in local .anybox-cinema/canvas.json.",
     inputSchema: {
       type: "object",
       properties: {
         projectRoot: projectRootSchema,
-        projectID: {
-          type: "string",
-          minLength: 1,
-          description: "Optional legacy label used only in returned metadata. This tool reads projectRoot directly."
-        },
-        storyNodeID: {
-          type: "string",
-          minLength: 1,
-          description: "Optional source Text node id to connect into each Shot. Defaults to the first text node in the summary when available."
-        },
         origin: {
           type: "object",
           properties: {
@@ -223,6 +180,10 @@ const tools = [
           additionalProperties: false,
           description: "Optional starting canvas position. Defaults to x=160, y=160."
         },
+        includeImageNodes: {
+          type: "boolean",
+          description: "Create one Image node for every storyboard Text node. Defaults to true."
+        },
         shots: {
           type: "array",
           minItems: 1,
@@ -230,8 +191,8 @@ const tools = [
             type: "object",
             properties: {
               title: { type: "string", minLength: 1 },
-              text: { type: "string", description: "Shot description, duration, and visual intent." },
-              prompt: { type: "string", description: "Optional generation prompt for this shot." }
+              text: { type: "string", description: "Storyboard description, duration, and visual intent." },
+              prompt: { type: "string", description: "Optional image generation prompt." }
             },
             required: ["title"],
             additionalProperties: false
@@ -420,88 +381,19 @@ function normalizeViewport(value, label) {
 
 function normalizeNodeType(value, label, options = {}) {
   const type = assertString(value, label)
-  if (!ACCEPTED_NODE_TYPES.has(type)) {
+  if (!NODE_TYPES.has(type)) {
     throw pluginError(
       options.code ?? "CINEMA_INVALID_INPUT",
       `${label} '${type}' is not supported.`,
       options.status ?? 400
     )
   }
-  return LEGACY_NODE_TYPE_ALIASES.get(type) ?? type
-}
-
-function normalizeImageNodeData(value, label, originalType) {
-  const data = cloneJson(assertDataObject(value, label))
-  const normalizeImageAsset = (asset) => (
-    isPlainObject(asset)
-      && typeof asset.id === "string"
-      && asset.id.trim().length > 0
-      && asset.kind === "image"
-      && typeof asset.path === "string"
-      && asset.path.trim().length > 0
-      ? cloneJson(asset)
-      : undefined
-  )
-  const directAsset = normalizeImageAsset(data.asset)
-  const legacyResultAssets = Array.isArray(data.resultAssets)
-    ? data.resultAssets.map(normalizeImageAsset).filter(Boolean)
-    : []
-  const selectedAssetID = typeof data.selectedAssetID === "string" ? data.selectedAssetID : undefined
-  const selectedLegacyAsset = legacyResultAssets.find((asset) => asset.id === selectedAssetID) ?? legacyResultAssets[0]
-  const finalAsset = directAsset ?? selectedLegacyAsset
-  const candidateAssets = Array.isArray(data.candidateAssets)
-    ? data.candidateAssets.map(normalizeImageAsset).filter(Boolean)
-    : []
-
-  if (finalAsset) {
-    data.asset = finalAsset
-    delete data.candidateAssets
-    delete data.selectedCandidateAssetID
-  } else {
-    delete data.asset
-    if (candidateAssets.length > 0) {
-      data.candidateAssets = candidateAssets
-      const selectedCandidateAssetID = typeof data.selectedCandidateAssetID === "string"
-        ? data.selectedCandidateAssetID
-        : undefined
-      data.selectedCandidateAssetID = candidateAssets.some((asset) => asset.id === selectedCandidateAssetID)
-        ? selectedCandidateAssetID
-        : candidateAssets[0].id
-    } else {
-      delete data.candidateAssets
-      delete data.selectedCandidateAssetID
-    }
-  }
-
-  if (!["upload", "generation", "crop"].includes(data.sourceKind)) {
-    if (!directAsset && selectedLegacyAsset) {
-      data.sourceKind = "generation"
-    } else if (directAsset) {
-      data.sourceKind = data.derivedOperation === "crop"
-        ? "crop"
-        : originalType === "local-image"
-          ? "upload"
-          : [data.taskID, data.providerID, data.modelID, data.generatedAt].some((entry) =>
-              typeof entry === "string" && entry.trim().length > 0
-            )
-            ? "generation"
-            : "upload"
-    } else if (candidateAssets.length > 0) {
-      data.sourceKind = "generation"
-    } else if (!finalAsset) {
-      delete data.sourceKind
-    }
-  }
-
-  delete data.resultAssets
-  delete data.selectedAssetID
-  return data
+  return type
 }
 
 function normalizeNode(value, label) {
   assertPlainObject(value, label)
-  const originalType = assertString(value.type, `${label}.type`)
-  const type = normalizeNodeType(originalType, `${label}.type`)
+  const type = normalizeNodeType(value.type, `${label}.type`)
 
   return compactObject({
     id: assertString(value.id, `${label}.id`),
@@ -509,11 +401,7 @@ function normalizeNode(value, label) {
     title: assertString(value.title, `${label}.title`),
     position: normalizePosition(value.position, `${label}.position`),
     size: value.size === undefined ? undefined : normalizeSize(value.size, `${label}.size`),
-    data: value.data === undefined
-      ? undefined
-      : type === "image"
-        ? normalizeImageNodeData(value.data, `${label}.data`, originalType)
-        : cloneJson(assertDataObject(value.data, `${label}.data`))
+    data: value.data === undefined ? undefined : cloneJson(assertDataObject(value.data, `${label}.data`))
   })
 }
 
@@ -565,6 +453,18 @@ function normalizeCanvas(value, fileLabel) {
   }
 
   const normalizedNodes = nodes.map((node, index) => normalizeNode(node, `${fileLabel}.nodes[${index}]`))
+  if (new Set(normalizedNodes.map((node) => node.id)).size !== normalizedNodes.length) {
+    throw pluginError("CINEMA_METADATA_INVALID", `${fileLabel} contains duplicate node ids.`, 409)
+  }
+  const normalizedEdges = edges.map((edge, index) => normalizeEdge(edge, `${fileLabel}.edges[${index}]`))
+  const validatedEdges = []
+  for (const edge of normalizedEdges) {
+    if (validatedEdges.some((current) => current.id === edge.id)) {
+      throw pluginError("CINEMA_METADATA_INVALID", `${fileLabel} contains duplicate edge ids.`, 409)
+    }
+    assertConnectionAllowed({ nodes: normalizedNodes, edges: validatedEdges }, edge)
+    validatedEdges.push(edge)
+  }
   const normalizedNodeTypes = new Set(nodeTypes.map((type, index) =>
     normalizeNodeType(type, `${fileLabel}.nodeTypes[${index}]`, {
       code: "CINEMA_METADATA_INVALID",
@@ -578,7 +478,7 @@ function normalizeCanvas(value, fileLabel) {
     canvasType: "node-canvas",
     viewport: normalizeViewport(value.viewport, `${fileLabel}.viewport`),
     nodes: normalizedNodes,
-    edges: edges.map((edge, index) => normalizeEdge(edge, `${fileLabel}.edges[${index}]`)),
+    edges: validatedEdges,
     nodeTypes: [...normalizedNodeTypes]
   }
 }
@@ -609,19 +509,6 @@ function normalizeCommand(value) {
       return { ...base, edgeID: assertString(value.edgeID, "command.edgeID") }
     case "update-viewport":
       return { ...base, viewport: normalizeViewport(value.viewport, "command.viewport") }
-    case "create-generation-task": {
-      const node = normalizeNode(value.node, "command.node")
-      if (node.type !== "generation-task") {
-        throw pluginError("CINEMA_INVALID_INPUT", "command.node.type must be generation-task.", 400)
-      }
-      return { ...base, node }
-    }
-    case "complete-generation-task":
-      return compactObject({
-        ...base,
-        taskNodeID: assertString(value.taskNodeID, "command.taskNodeID"),
-        outputNode: value.outputNode === undefined ? undefined : normalizeNode(value.outputNode, "command.outputNode")
-      })
     default:
       throw pluginError("CINEMA_INVALID_INPUT", `Unsupported Cinema command type '${type}'.`, 400)
   }
@@ -677,6 +564,48 @@ function assertCanvasHasNode(canvas, nodeID) {
   }
 }
 
+function assertConnectionAllowed(canvas, edge) {
+  const source = canvas.nodes.find((node) => node.id === edge.source)
+  const target = canvas.nodes.find((node) => node.id === edge.target)
+  if (!source || !target) {
+    throw pluginError("CINEMA_COMMAND_INVALID", `Cinema edge '${edge.id}' references a missing node.`, 409)
+  }
+  if (source.id === target.id) {
+    throw pluginError("CINEMA_COMMAND_INVALID", "Cinema nodes cannot connect to themselves.", 409)
+  }
+  if (canvas.edges.some((current) => (
+    current.source === edge.source
+    && current.target === edge.target
+    && (current.sourceHandle ?? null) === (edge.sourceHandle ?? null)
+    && (current.targetHandle ?? null) === (edge.targetHandle ?? null)
+  ))) {
+    throw pluginError("CINEMA_COMMAND_INVALID", "This Cinema connection already exists.", 409)
+  }
+
+  const allowed = (
+    (source.type === "text" && (target.type === "image" || target.type === "video"))
+    || (source.type === "image" && (target.type === "text" || target.type === "video"))
+    || (source.type === "video" && target.type === "video")
+  )
+  if (!allowed) {
+    throw pluginError(
+      "CINEMA_COMMAND_INVALID",
+      `Cinema does not allow ${source.type} nodes to connect to ${target.type} nodes.`,
+      409
+    )
+  }
+
+  if (source.type === "image" && target.type === "video") {
+    const incomingImages = canvas.edges.filter((current) => (
+      current.target === target.id
+      && canvas.nodes.find((node) => node.id === current.source)?.type === "image"
+    )).length
+    if (incomingImages >= 2) {
+      throw pluginError("CINEMA_COMMAND_INVALID", "Video nodes accept at most two Image inputs.", 409)
+    }
+  }
+}
+
 function withNodeTypes(canvas) {
   const nodeTypes = new Set(canvas.nodeTypes)
   for (const node of canvas.nodes) nodeTypes.add(node.type)
@@ -711,10 +640,6 @@ function describeCinemaCommand(command) {
       return `Disconnected Cinema edge '${command.edgeID}'.`
     case "update-viewport":
       return "Updated Cinema canvas viewport."
-    case "create-generation-task":
-      return `Created generation task '${command.node.title}'.`
-    case "complete-generation-task":
-      return `Completed generation task '${command.taskNodeID}'.`
     default:
       return `Applied Cinema command '${command.type}'.`
   }
@@ -748,11 +673,10 @@ function applyCommandToCanvas(canvas, command) {
       }
     }
     case "connect-nodes": {
-      assertCanvasHasNode(canvas, command.edge.source)
-      assertCanvasHasNode(canvas, command.edge.target)
       if (canvas.edges.some((edge) => edge.id === command.edge.id)) {
         throw pluginError("CINEMA_COMMAND_INVALID", `Cinema edge '${command.edge.id}' already exists.`, 409)
       }
+      assertConnectionAllowed(canvas, command.edge)
       return {
         ...canvas,
         edges: [...canvas.edges, command.edge]
@@ -768,58 +692,6 @@ function applyCommandToCanvas(canvas, command) {
         ...canvas,
         viewport: command.viewport
       }
-    case "create-generation-task":
-      return appendNode(canvas, {
-        ...command.node,
-        data: {
-          status: "queued",
-          ...command.node.data
-        }
-      })
-    case "complete-generation-task": {
-      const taskNode = canvas.nodes.find((node) => node.id === command.taskNodeID)
-      if (!taskNode) {
-        throw pluginError("CINEMA_NODE_NOT_FOUND", `Cinema node '${command.taskNodeID}' was not found.`, 404)
-      }
-      if (taskNode.type !== "generation-task") {
-        throw pluginError("CINEMA_COMMAND_INVALID", `Cinema node '${command.taskNodeID}' is not a generation task.`, 409)
-      }
-
-      let next = withNodeTypes({
-        ...canvas,
-        nodes: canvas.nodes.map((node) =>
-          node.id === command.taskNodeID
-            ? {
-              ...node,
-              data: {
-                ...node.data,
-                status: "completed"
-              }
-            }
-            : node
-        )
-      })
-
-      if (command.outputNode) {
-        next = appendNode(next, command.outputNode)
-        const edgeID = `edge-${command.taskNodeID}-${command.outputNode.id}`
-        if (!next.edges.some((edge) => edge.id === edgeID)) {
-          next = {
-            ...next,
-            edges: [
-              ...next.edges,
-              {
-                id: edgeID,
-                source: command.taskNodeID,
-                target: command.outputNode.id
-              }
-            ]
-          }
-        }
-      }
-
-      return next
-    }
     default:
       throw pluginError("CINEMA_INVALID_INPUT", `Unsupported Cinema command type '${command.type}'.`, 400)
   }
@@ -920,19 +792,15 @@ function summarizeNodeData(node) {
 function findProjectGaps(canvas, providerConfigured) {
   const types = new Set(canvas.nodes.map((node) => node.type))
   const gaps = []
-  if (!types.has("shot")) gaps.push("no-shot-nodes")
-  if (!types.has("prompt")) gaps.push("no-prompt-nodes")
-  if (!types.has("generation-task")) gaps.push("no-generation-tasks")
+  if (!types.has("text")) gaps.push("no-text-nodes")
   if (!providerConfigured) gaps.push("no-provider-configured")
   return gaps
 }
 
-function projectIdentity(root, project, legacyProjectID) {
+function projectIdentity(root, project) {
   const projectID = typeof (project && project.id) === "string" && project.id.trim()
     ? project.id.trim()
-    : typeof legacyProjectID === "string" && legacyProjectID.trim()
-      ? legacyProjectID.trim()
-      : path.basename(root)
+    : path.basename(root)
   const name = typeof (project && project.name) === "string" && project.name.trim()
     ? project.name.trim()
     : path.basename(root) || projectID
@@ -946,7 +814,7 @@ async function buildProjectSummary(args) {
   const directories = await Promise.all(PROJECT_DIRECTORIES.map((directory) => summarizeProjectDirectory(root, directory)))
   const project = await readOptionalJson(path.join(cinemaRoot, PROJECT_FILE), PROJECT_FILE)
   const initialized = Boolean(project)
-  const identity = projectIdentity(root, project, args && args.projectID)
+  const identity = projectIdentity(root, project)
 
   if (!initialized) {
     return {
@@ -1004,14 +872,6 @@ async function buildProjectSummary(args) {
   }
 }
 
-function defaultStoryNodeID(summary, explicitStoryNodeID) {
-  if (explicitStoryNodeID) return explicitStoryNodeID
-  const storyNode = Array.isArray(summary.nodes)
-    ? summary.nodes.find((node) => node && node.type === "text")
-    : undefined
-  return storyNode && storyNode.id
-}
-
 function nodeText(node) {
   const text = node && node.text
   return typeof text === "string" && text.trim() ? text.trim() : undefined
@@ -1045,7 +905,7 @@ async function applyCommand(args) {
   })
 }
 
-async function createShotPlan(args) {
+async function createStoryboard(args) {
   const root = projectRootFromArgs(args || {})
   const shots = Array.isArray(args && args.shots) ? args.shots : []
   if (shots.length === 0) {
@@ -1054,99 +914,81 @@ async function createShotPlan(args) {
   const origin = args && args.origin ? args.origin : {}
   const startX = Number.isFinite(origin.x) ? origin.x : 160
   const startY = Number.isFinite(origin.y) ? origin.y : 160
+  const includeImageNodes = !args || args.includeImageNodes !== false
   const summary = await buildProjectSummary({ ...(args || {}), projectRoot: root })
   if (!summary.initialized) {
     throw pluginError("CINEMA_PROJECT_NOT_INITIALIZED", "This folder has not been initialized for anybox for cinema yet.", 404)
   }
 
-  const sourceNodeID = defaultStoryNodeID(summary, args && args.storyNodeID)
   const results = []
   const created = []
 
   for (let index = 0; index < shots.length; index += 1) {
     const shot = shots[index] || {}
-    const shotID = makeID("node-shot", index + 1)
-    const promptID = shot.prompt ? makeID("node-prompt", index + 1) : undefined
-    const x = startX + (index % 2) * 460
-    const y = startY + Math.floor(index / 2) * 360
+    const textID = makeID("node-storyboard-text", index + 1)
+    const imageID = includeImageNodes ? makeID("node-storyboard-image", index + 1) : undefined
+    const y = startY + index * 320
     const title = String(shot.title || `Shot ${index + 1}`).trim() || `Shot ${index + 1}`
 
-    const shotNode = {
-      id: shotID,
-      type: "shot",
+    const textNode = {
+      id: textID,
+      type: "text",
       title,
-      position: { x, y },
-      size: { width: 380, height: 250 },
-      data: compactObject({
+      position: { x: startX, y },
+      size: { width: 360, height: 240 },
+      data: {
         text: typeof shot.text === "string" ? shot.text : "",
-        placeholder: "Shot description, duration, and visual intent.",
-        status: "planned"
-      })
+        placeholder: "Storyboard description, duration, and visual intent."
+      }
     }
 
     results.push(await applyProjectCommand(root, {
-      id: makeID("cmd-create-shot", index + 1),
+      id: makeID("cmd-create-storyboard-text", index + 1),
       type: "create-node",
-      node: shotNode
+      node: textNode
     }))
-    created.push({ shotNode })
+    created.push({ textNode })
 
-    if (sourceNodeID) {
-      results.push(await applyProjectCommand(root, {
-        id: makeID("cmd-connect-story-shot", index + 1),
-        type: "connect-nodes",
-        edge: {
-          id: makeID(`edge-${sourceNodeID}-${shotID}`, index + 1),
-          source: sourceNodeID,
-          target: shotID
-        }
-      }))
-    }
-
-    if (promptID) {
-      const promptNode = {
-        id: promptID,
-        type: "prompt",
-        title: `${title} Prompt`,
-        position: { x: x + 460, y },
-        size: { width: 380, height: 240 },
+    if (imageID) {
+      const imageNode = {
+        id: imageID,
+        type: "image",
+        title: `${title} Image`,
+        position: { x: startX + 440, y },
+        size: { width: 360, height: 260 },
         data: {
-          text: shot.prompt,
-          placeholder: "Prompt draft or reusable generation instruction."
+          prompt: typeof shot.prompt === "string" ? shot.prompt : "",
+          placeholder: "Generate or add an image for this storyboard beat."
         }
       }
 
       results.push(await applyProjectCommand(root, {
-        id: makeID("cmd-create-prompt", index + 1),
+        id: makeID("cmd-create-storyboard-image", index + 1),
         type: "create-node",
-        node: promptNode
+        node: imageNode
       }))
       results.push(await applyProjectCommand(root, {
-        id: makeID("cmd-connect-shot-prompt", index + 1),
+        id: makeID("cmd-connect-storyboard", index + 1),
         type: "connect-nodes",
         edge: {
-          id: makeID(`edge-${shotID}-${promptID}`, index + 1),
-          source: shotID,
-          target: promptID
+          id: makeID(`edge-${textID}-${imageID}`, index + 1),
+          source: textID,
+          target: imageID
         }
       }))
-      created[created.length - 1].promptNode = promptNode
+      created[created.length - 1].imageNode = imageNode
     }
   }
 
   const latestCanvas = results.length > 0 ? results[results.length - 1].canvas : undefined
   const summaryText = created
-    .map((entry, index) => {
-      const promptText = entry.promptNode ? " with prompt" : ""
-      return `${index + 1}. ${entry.shotNode.title}${promptText}${nodeText(entry.shotNode.data) ? ` - ${nodeText(entry.shotNode.data)}` : ""}`
-    })
+    .map((entry, index) => `${index + 1}. ${entry.textNode.title}${entry.imageNode ? " with image" : ""}${nodeText(entry.textNode.data) ? ` - ${nodeText(entry.textNode.data)}` : ""}`)
     .join("\n")
 
-  return textResult(`Created ${created.length} Cinema shot node(s).\n${summaryText}`, {
-    kind: "cinema_create_shot_plan_result",
+  return textResult(`Created ${created.length} Cinema storyboard item(s).\n${summaryText}`, {
+    kind: "cinema_create_storyboard_result",
     projectRoot: root,
     projectID: summary.projectID,
-    sourceNodeID,
     created,
     eventCount: results.length,
     events: results.map((result) => result.event),
@@ -1157,7 +999,7 @@ async function createShotPlan(args) {
 async function callTool(name, args) {
   if (name === "cinema_get_project_summary") return await getProjectSummary(args || {})
   if (name === "cinema_apply_command") return await applyCommand(args || {})
-  if (name === "cinema_create_shot_plan") return await createShotPlan(args || {})
+  if (name === "cinema_create_storyboard") return await createStoryboard(args || {})
   throw pluginError("CINEMA_UNKNOWN_TOOL", `Unknown tool: ${name}`, 404)
 }
 
@@ -1176,7 +1018,7 @@ rl.on("line", (line) => {
         result: {
           protocolVersion: "2025-06-18",
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "anybox-cinema", version: "0.1.0" }
+          serverInfo: { name: "anybox-cinema", version: "0.2.0" }
         }
       })
       return
