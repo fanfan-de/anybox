@@ -94,7 +94,7 @@ import {
 import { useThreadContentObserver } from "./use-thread-content-observer"
 import { useThreadProjection } from "./use-thread-projection"
 import { useThreadScrollController, type ThreadFollowScrollTarget, type ThreadScrollSnapshot } from "./use-thread-scroll-controller"
-import { buildThreadTurnNavigationItems, type ThreadTurnNavigationItem } from "./use-thread-turn-navigation"
+import { buildThreadTurnNavigationItems, useThreadTurnNavigation, type ThreadTurnNavigationItem } from "./use-thread-turn-navigation"
 import { useThreadVirtualList } from "./use-thread-virtual-list"
 
 export type { ThreadScrollSnapshot } from "./use-thread-scroll-controller"
@@ -5243,11 +5243,26 @@ function VisibleThreadView({
     () => buildThreadTurnNavigationItems(activeTurns, displayRows),
     [activeTurns, displayRows],
   )
+  const {
+    currentIndex: currentThreadTurnNavigationIndex,
+    updateCurrentIndex: updateThreadTurnNavigationIndex,
+    visibleIndexes: visibleThreadTurnNavigationIndexes,
+  } = useThreadTurnNavigation({
+    items: threadTurnNavigationItems,
+    measurementKey: `${effectiveScrollStateKey}:${virtualMeasurementKey ?? "default"}:${threadVirtualRenderedRangeKey}`,
+    resetKey: effectiveScrollStateKey,
+    threadColumnRef,
+    virtualizer: rowVirtualizer,
+  })
   const handleNavigateThreadTurn = useCallback((item: ThreadTurnNavigationItem) => {
     const offset = getThreadVirtualOffsetForRowIndex(item.rowIndex, 16)
     if (offset === null) return
     navigateThreadToOffset(offset, effectiveScrollStateKey)
   }, [effectiveScrollStateKey, getThreadVirtualOffsetForRowIndex, navigateThreadToOffset])
+  const handleThreadColumnScroll = useCallback(() => {
+    handleThreadScroll()
+    updateThreadTurnNavigationIndex()
+  }, [handleThreadScroll, updateThreadTurnNavigationIndex])
 
   function getInitialThreadVirtualOffset() {
     const snapshot = readScrollSnapshot?.(effectiveScrollStateKey)
@@ -5724,12 +5739,10 @@ function VisibleThreadView({
       <section className="thread-shell">
       {showTurnNavigator && activeSession && threadTurnNavigationItems.length > 0 ? (
         <ThreadTurnNavigator
+          currentIndex={currentThreadTurnNavigationIndex}
           items={threadTurnNavigationItems}
-          measurementKey={`${effectiveScrollStateKey}:${virtualMeasurementKey ?? "default"}:${threadVirtualRenderedRangeKey}`}
           onNavigate={handleNavigateThreadTurn}
-          resetKey={effectiveScrollStateKey}
-          threadColumnRef={threadColumnRef}
-          virtualizer={rowVirtualizer}
+          visibleIndexes={visibleThreadTurnNavigationIndexes}
         />
       ) : null}
       <div
@@ -5744,7 +5757,7 @@ function VisibleThreadView({
         onPointerDownCapture={handleThreadScrollIntent}
         onPointerMoveCapture={handleThreadPointerMoveIntent}
         onContextMenu={handleThreadContextMenu}
-        onScroll={handleThreadScroll}
+        onScroll={handleThreadColumnScroll}
         onWheelCapture={handleThreadWheelIntent}
       >
         {!activeSession ? (

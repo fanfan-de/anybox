@@ -114,6 +114,12 @@
   }
 }
 
+@container thread-shell (min-width: 1000px) {
+  .thread-turn-navigator {
+    left: 16px;
+  }
+}
+
 @container thread-shell (max-width: 620px) {
   .thread-turn-navigator {
     inset-block: 10px auto;

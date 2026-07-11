@@ -63,6 +63,33 @@ describe("I18nProvider", () => {
     expect(screen.getByRole("textbox", { name: "搜索文件" })).toHaveAttribute("placeholder", "搜索文件")
   })
 
+  it.each([
+    ["zh-TW", "開啟設定", "搜尋檔案"],
+    ["ja-JP", "設定を開く", "ファイルを検索"],
+    ["ko-KR", "설정 열기", "파일 검색"],
+    ["pt-BR", "Abrir configurações", "Pesquisar arquivos"],
+    ["es-419", "Abrir configuración", "Buscar archivos"],
+    ["de-DE", "Einstellungen öffnen", "Dateien durchsuchen"],
+    ["fr-FR", "Ouvrir les paramètres", "Rechercher des fichiers"],
+    ["id-ID", "Buka pengaturan", "Cari file"],
+    ["it-IT", "Apri impostazioni", "Cerca file"],
+    ["pl-PL", "Otwórz ustawienia", "Szukaj plików"],
+    ["tr-TR", "Ayarları aç", "Dosya ara"],
+    ["vi-VN", "Mở cài đặt", "Tìm kiếm tệp"],
+  ] as const)("loads and localizes the %s interface", async (locale, openSettings, searchFiles) => {
+    window.localStorage.setItem("desktop.locale", locale)
+
+    render(
+      <I18nProvider>
+        <Fixture />
+      </I18nProvider>,
+    )
+
+    expect(await screen.findByText(openSettings)).toBeInTheDocument()
+    expect(screen.getByRole("textbox", { name: searchFiles })).toHaveAttribute("placeholder", searchFiles)
+    expect(document.documentElement.lang).toBe(locale)
+  })
+
   it("loads and saves English through the desktop locale API", async () => {
     const saveLocaleConfig = vi.fn().mockResolvedValue({
       path: "locale-settings.json",

@@ -1920,12 +1920,12 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
   background: var(--seg-text-2);
 }
 
-.thread-turn-navigator-marker[data-current="true"] .thread-turn-navigator-marker-line {
+.thread-turn-navigator-marker[data-visible="true"] .thread-turn-navigator-marker-line {
   width: 18px;
   background: var(--seg-text-1);
 }
 
-.thread-turn-navigator-marker[data-running="true"]:not([data-current="true"]) .thread-turn-navigator-marker-line {
+.thread-turn-navigator-marker[data-running="true"]:not([data-visible="true"]) .thread-turn-navigator-marker-line {
   background: var(--semantic-info-text);
 }
 

@@ -1,4 +1,17 @@
 import type { AppLocale } from "../../../../shared/locale"
+import { deDE } from "./locales/de-DE"
+import { es419 } from "./locales/es-419"
+import { frFR } from "./locales/fr-FR"
+import { idID } from "./locales/id-ID"
+import { itIT } from "./locales/it-IT"
+import { jaJP } from "./locales/ja-JP"
+import { koKR } from "./locales/ko-KR"
+import { plPL } from "./locales/pl-PL"
+import { ptBR } from "./locales/pt-BR"
+import { trTR } from "./locales/tr-TR"
+import { viVN } from "./locales/vi-VN"
+import { zhTW } from "./locales/zh-TW"
+import { literalPatternTemplates } from "./literal-pattern-locales"
 
 export const zhCN = {
   "app.loading": "加载中",
@@ -2738,12 +2751,26 @@ export const enUS = {
 
 const translations = {
   "zh-CN": zhCN,
+  "zh-TW": zhTW,
   "en-US": enUS,
+  "ja-JP": jaJP,
+  "ko-KR": koKR,
+  "pt-BR": ptBR,
+  "es-419": es419,
+  "de-DE": deDE,
+  "fr-FR": frFR,
+  "id-ID": idID,
+  "it-IT": itIT,
+  "pl-PL": plPL,
+  "tr-TR": trTR,
+  "vi-VN": viVN,
 } satisfies Record<AppLocale, Record<TranslationKey, string>>
 
 type LiteralPattern = {
   match: RegExp
-  format: Record<AppLocale, (match: RegExpMatchArray) => string>
+  format: Partial<Record<AppLocale, (match: RegExpMatchArray) => string>> & {
+    "en-US": (match: RegExpMatchArray) => string
+  }
 }
 
 const literalPatterns: LiteralPattern[] = [
@@ -2751,161 +2778,230 @@ const literalPatterns: LiteralPattern[] = [
     match: /^Run MCP tool (.+) from (.+)\.$/i,
     format: {
       "zh-CN": (match) => `运行 ${match[2]} 的 MCP 工具 ${match[1]}。`,
+      "zh-TW": (match) => `執行來自 ${match[2]} 的 MCP 工具 ${match[1]}。`,
       "en-US": (match) => `Run MCP tool ${match[1]} from ${match[2]}.`,
+      "ja-JP": (match) => `${match[2]} の MCP ツール ${match[1]} を実行します。`,
+      "ko-KR": (match) => `${match[2]}의 MCP 도구 ${match[1]}을 실행합니다.`,
     },
   },
   {
     match: /^MCP tool '(.+)' from '(.+)' requires approval by configuration\.$/i,
     format: {
       "zh-CN": (match) => `${match[2]} 的 MCP 工具 ${match[1]} 按配置需要批准。`,
+      "zh-TW": (match) => `${match[2]} 的 MCP 工具 ${match[1]} 依設定需要核准。`,
       "en-US": (match) => `MCP tool '${match[1]}' from '${match[2]}' requires approval by configuration.`,
+      "ja-JP": (match) => `${match[2]} の MCP ツール ${match[1]} は設定により承認が必要です。`,
+      "ko-KR": (match) => `${match[2]}의 MCP 도구 ${match[1]}은 설정에 따라 승인이 필요합니다.`,
     },
   },
   {
     match: /^Tool requires approval before it can continue\. Original approval rationale: MCP tool '(.+)' from '(.+)' requires approval by configuration\.$/i,
     format: {
       "zh-CN": (match) => `工具需要批准后才能继续。原始原因：${match[2]} 的 MCP 工具 ${match[1]} 按配置需要批准。`,
+      "zh-TW": (match) => `工具需要核准後才能繼續。原始原因：${match[2]} 的 MCP 工具 ${match[1]} 依設定需要核准。`,
       "en-US": (match) => `Tool requires approval before it can continue. Original approval rationale: MCP tool '${match[1]}' from '${match[2]}' requires approval by configuration.`,
+      "ja-JP": (match) => `ツールを続行するには承認が必要です。元の理由：${match[2]} の MCP ツール ${match[1]} は設定により承認が必要です。`,
+      "ko-KR": (match) => `도구를 계속하려면 승인이 필요합니다. 원래 사유: ${match[2]}의 MCP 도구 ${match[1]}은 설정에 따라 승인이 필요합니다.`,
     },
   },
   {
     match: /^(.+) · Tool requires approval before it can continue\. Original approval rationale: MCP tool '(.+)' from '(.+)' requires approval by configuration\.$/i,
     format: {
       "zh-CN": (match) => `${match[1]} · 工具需要批准后才能继续。原始原因：${match[3]} 的 MCP 工具 ${match[2]} 按配置需要批准。`,
+      "zh-TW": (match) => `${match[1]} · 工具需要核准後才能繼續。原始原因：${match[3]} 的 MCP 工具 ${match[2]} 依設定需要核准。`,
       "en-US": (match) => `${match[1]} · Tool requires approval before it can continue. Original approval rationale: MCP tool '${match[2]}' from '${match[3]}' requires approval by configuration.`,
+      "ja-JP": (match) => `${match[1]} · ツールを続行するには承認が必要です。元の理由：${match[3]} の MCP ツール ${match[2]} は設定により承認が必要です。`,
+      "ko-KR": (match) => `${match[1]} · 도구를 계속하려면 승인이 필요합니다. 원래 사유: ${match[3]}의 MCP 도구 ${match[2]}은 설정에 따라 승인이 필요합니다.`,
     },
   },
   {
     match: /^Tool requires approval before it can continue\. Original approval rationale: (.+)$/i,
     format: {
       "zh-CN": (match) => `工具需要批准后才能继续。原始原因：${match[1]}`,
+      "zh-TW": (match) => `工具需要核准後才能繼續。原始原因：${match[1]}`,
       "en-US": (match) => `Tool requires approval before it can continue. Original approval rationale: ${match[1]}`,
+      "ja-JP": (match) => `ツールを続行するには承認が必要です。元の理由：${match[1]}`,
+      "ko-KR": (match) => `도구를 계속하려면 승인이 필요합니다. 원래 사유: ${match[1]}`,
     },
   },
   {
     match: /^Tool requires approval before it can continue\.$/i,
     format: {
       "zh-CN": () => "工具需要批准后才能继续。",
+      "zh-TW": () => "工具需要核准後才能繼續。",
       "en-US": () => "Tool requires approval before it can continue.",
+      "ja-JP": () => "ツールを続行するには承認が必要です。",
+      "ko-KR": () => "도구를 계속하려면 승인이 필요합니다.",
     },
   },
   {
     match: /^Current branch: (.+)$/i,
     format: {
       "zh-CN": (match) => `当前分支：${match[1]}`,
+      "zh-TW": (match) => `目前分支：${match[1]}`,
       "en-US": (match) => `Current branch: ${match[1]}`,
+      "ja-JP": (match) => `現在のブランチ：${match[1]}`,
+      "ko-KR": (match) => `현재 브랜치: ${match[1]}`,
     },
   },
   {
     match: /^Committed to (.+)\.$/i,
     format: {
       "zh-CN": (match) => `已提交到 ${match[1]}。`,
+      "zh-TW": (match) => `已提交至 ${match[1]}。`,
       "en-US": (match) => `Committed to ${match[1]}.`,
+      "ja-JP": (match) => `${match[1]} にコミットしました。`,
+      "ko-KR": (match) => `${match[1]}에 커밋했습니다.`,
     },
   },
   {
     match: /^Pushed (.+)\.$/i,
     format: {
       "zh-CN": (match) => `已推送 ${match[1]}。`,
+      "zh-TW": (match) => `已推送 ${match[1]}。`,
       "en-US": (match) => `Pushed ${match[1]}.`,
+      "ja-JP": (match) => `${match[1]} をプッシュしました。`,
+      "ko-KR": (match) => `${match[1]}을 푸시했습니다.`,
     },
   },
   {
     match: /^Created and switched to (.+)\.$/i,
     format: {
       "zh-CN": (match) => `已创建并切换到 ${match[1]}。`,
+      "zh-TW": (match) => `已建立並切換至 ${match[1]}。`,
       "en-US": (match) => `Created and switched to ${match[1]}.`,
+      "ja-JP": (match) => `${match[1]} を作成して切り替えました。`,
+      "ko-KR": (match) => `${match[1]}을 만들고 전환했습니다.`,
     },
   },
   {
     match: /^Switched to (.+)\.$/i,
     format: {
       "zh-CN": (match) => `已切换到 ${match[1]}。`,
+      "zh-TW": (match) => `已切換至 ${match[1]}。`,
       "en-US": (match) => `Switched to ${match[1]}.`,
+      "ja-JP": (match) => `${match[1]} に切り替えました。`,
+      "ko-KR": (match) => `${match[1]}으로 전환했습니다.`,
     },
   },
   {
     match: /^Already on (.+)\.$/i,
     format: {
       "zh-CN": (match) => `已经在 ${match[1]}。`,
+      "zh-TW": (match) => `目前已在 ${match[1]}。`,
       "en-US": (match) => `Already on ${match[1]}.`,
+      "ja-JP": (match) => `すでに ${match[1]} です。`,
+      "ko-KR": (match) => `이미 ${match[1]}에 있습니다.`,
     },
   },
   {
     match: /^Created pull request (.+)\.$/i,
     format: {
       "zh-CN": (match) => `已创建 Pull Request ${match[1]}。`,
+      "zh-TW": (match) => `已建立 Pull Request ${match[1]}。`,
       "en-US": (match) => `Created pull request ${match[1]}.`,
+      "ja-JP": (match) => `Pull Request ${match[1]} を作成しました。`,
+      "ko-KR": (match) => `Pull Request ${match[1]}을 만들었습니다.`,
     },
   },
   {
     match: /^Version (.+)$/i,
     format: {
       "zh-CN": (match) => `版本 ${match[1]}`,
+      "zh-TW": (match) => `版本 ${match[1]}`,
       "en-US": (match) => `Version ${match[1]}`,
+      "ja-JP": (match) => `バージョン ${match[1]}`,
+      "ko-KR": (match) => `버전 ${match[1]}`,
     },
   },
   {
     match: /^(.+) does not support image or PDF input\.$/i,
     format: {
       "zh-CN": (match) => `${match[1]} 不支持图片或 PDF 输入。`,
+      "zh-TW": (match) => `${match[1]} 不支援圖片或 PDF 輸入。`,
       "en-US": (match) => `${match[1]} does not support image or PDF input.`,
+      "ja-JP": (match) => `${match[1]} は画像または PDF の入力に対応していません。`,
+      "ko-KR": (match) => `${match[1]}은 이미지 또는 PDF 입력을 지원하지 않습니다.`,
     },
   },
   {
     match: /^(\d+) of (\d+) enabled$/i,
     format: {
       "zh-CN": (match) => `已启用 ${match[1]} / ${match[2]}`,
+      "zh-TW": (match) => `已啟用 ${match[1]} / ${match[2]}`,
       "en-US": (match) => `${match[1]} of ${match[2]} enabled`,
+      "ja-JP": (match) => `${match[2]} 件中 ${match[1]} 件を有効化`,
+      "ko-KR": (match) => `${match[2]}개 중 ${match[1]}개 활성화`,
     },
   },
   {
     match: /^(\d+)\/(\d+) enabled$/i,
     format: {
       "zh-CN": (match) => `已启用 ${match[1]} / ${match[2]}`,
+      "zh-TW": (match) => `已啟用 ${match[1]} / ${match[2]}`,
       "en-US": (match) => `${match[1]}/${match[2]} enabled`,
+      "ja-JP": (match) => `${match[1]}/${match[2]} 件を有効化`,
+      "ko-KR": (match) => `${match[1]}/${match[2]}개 활성화`,
     },
   },
   {
     match: /^(\d+)\/(\d+) total enabled$/i,
     format: {
       "zh-CN": (match) => `总计已启用 ${match[1]} / ${match[2]}`,
+      "zh-TW": (match) => `總計已啟用 ${match[1]} / ${match[2]}`,
       "en-US": (match) => `${match[1]}/${match[2]} total enabled`,
+      "ja-JP": (match) => `合計 ${match[1]}/${match[2]} 件を有効化`,
+      "ko-KR": (match) => `총 ${match[1]}/${match[2]}개 활성화`,
     },
   },
   {
     match: /^(\d+) aliases$/i,
     format: {
       "zh-CN": (match) => `${match[1]} 个别名`,
+      "zh-TW": (match) => `${match[1]} 個別名`,
       "en-US": (match) => `${match[1]} aliases`,
+      "ja-JP": (match) => `${match[1]} 個のエイリアス`,
+      "ko-KR": (match) => `별칭 ${match[1]}개`,
     },
   },
   {
     match: /^(\d+) models$/i,
     format: {
       "zh-CN": (match) => `${match[1]} 个模型`,
+      "zh-TW": (match) => `${match[1]} 個模型`,
       "en-US": (match) => `${match[1]} models`,
+      "ja-JP": (match) => `${match[1]} 個のモデル`,
+      "ko-KR": (match) => `모델 ${match[1]}개`,
     },
   },
   {
     match: /^(\d+) messages$/i,
     format: {
       "zh-CN": (match) => `${match[1]} 条消息`,
+      "zh-TW": (match) => `${match[1]} 則訊息`,
       "en-US": (match) => `${match[1]} messages`,
+      "ja-JP": (match) => `${match[1]} 件のメッセージ`,
+      "ko-KR": (match) => `메시지 ${match[1]}개`,
     },
   },
   {
     match: /^(\d+) events$/i,
     format: {
       "zh-CN": (match) => `${match[1]} 个事件`,
+      "zh-TW": (match) => `${match[1]} 個事件`,
       "en-US": (match) => `${match[1]} events`,
+      "ja-JP": (match) => `${match[1]} 件のイベント`,
+      "ko-KR": (match) => `이벤트 ${match[1]}개`,
     },
   },
   {
     match: /^Archived (.+)$/i,
     format: {
       "zh-CN": (match) => `归档于 ${match[1]}`,
+      "zh-TW": (match) => `封存於 ${match[1]}`,
       "en-US": (match) => `Archived ${match[1]}`,
+      "ja-JP": (match) => `${match[1]} にアーカイブ`,
+      "ko-KR": (match) => `${match[1]}에 보관됨`,
     },
   },
 ]
@@ -2925,8 +3021,9 @@ const extraSources: Partial<Record<TranslationKey, readonly string[]>> = {
 const sourceToKey = new Map<string, TranslationKey>()
 
 for (const key of Object.keys(zhCN) as TranslationKey[]) {
-  sourceToKey.set(zhCN[key], key)
-  sourceToKey.set(enUS[key], key)
+  for (const dictionary of Object.values(translations)) {
+    sourceToKey.set(dictionary[key], key)
+  }
   for (const source of extraSources[key] ?? []) {
     sourceToKey.set(source, key)
   }
@@ -2952,10 +3049,22 @@ export function translateLiteral(locale: AppLocale, literal: string) {
     return literal.replace(trimmed, translations[locale][key])
   }
 
-  for (const pattern of literalPatterns) {
+  for (const [patternIndex, pattern] of literalPatterns.entries()) {
     const match = trimmed.match(pattern.match)
     if (match) {
-      return literal.replace(trimmed, pattern.format[locale](match))
+      const formatter = pattern.format[locale]
+      if (formatter) return literal.replace(trimmed, formatter(match))
+
+      if (locale in literalPatternTemplates) {
+        const templates = literalPatternTemplates[locale as keyof typeof literalPatternTemplates]
+        const template = templates[patternIndex]
+        if (template) {
+          const translated = template.replace(/\{(\d+)\}/g, (placeholder, index: string) => match[Number(index)] ?? placeholder)
+          return literal.replace(trimmed, translated)
+        }
+      }
+
+      return literal.replace(trimmed, pattern.format["en-US"](match))
     }
   }
 
@@ -2966,7 +3075,11 @@ export function getLiteralVariants(literal: string) {
   const trimmed = literal.trim()
   const key = sourceToKey.get(trimmed)
   if (key) {
-    return new Set([trimmed, zhCN[key], enUS[key], ...(extraSources[key] ?? [])])
+    return new Set([
+      trimmed,
+      ...Object.values(translations).map((dictionary) => dictionary[key]),
+      ...(extraSources[key] ?? []),
+    ])
   }
 
   return new Set([trimmed])

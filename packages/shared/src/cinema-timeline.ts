@@ -57,6 +57,19 @@ export const CinemaTimelineTrackSchema = z.object({
 }).strict()
 export type CinemaTimelineTrack = z.infer<typeof CinemaTimelineTrackSchema>
 
+export const CinemaTimelineFitSchema = z.enum(["contain", "cover", "stretch"])
+export type CinemaTimelineFit = z.infer<typeof CinemaTimelineFitSchema>
+
+export const CinemaTimelineTransformSchema = z.object({
+  x: z.number().finite(),
+  y: z.number().finite(),
+  scale: z.number().positive().finite(),
+  rotationDegrees: z.number().finite(),
+  anchorX: z.number().min(0).max(1).finite(),
+  anchorY: z.number().min(0).max(1).finite(),
+}).strict()
+export type CinemaTimelineTransform = z.infer<typeof CinemaTimelineTransformSchema>
+
 const CinemaTimelineClipBaseShape = {
   id: z.string().min(1),
   trackID: z.string().min(1),
@@ -66,7 +79,7 @@ const CinemaTimelineClipBaseShape = {
   playbackRate: z.number().positive().finite(),
   volume: z.number().nonnegative().finite(),
   opacity: z.number().min(0).max(1).finite(),
-  fit: z.enum(["contain", "cover"]).optional(),
+  fit: CinemaTimelineFitSchema.optional(),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
 } as const
@@ -112,6 +125,7 @@ const timelineRangeMessage = {
 export const CinemaTimelineVideoClipSchema = z.object({
   ...CinemaTimelineAssetClipBaseShape,
   kind: z.literal("video"),
+  transform: CinemaTimelineTransformSchema.optional(),
 }).strict()
   .refine((clip) => clip.assetRef.snapshot.kind === "video", {
     message: "Video clips must reference video assets",
@@ -145,6 +159,7 @@ export type CinemaTimelineAudioClip = z.infer<typeof CinemaTimelineAudioClipSche
 export const CinemaTimelineImageClipSchema = z.object({
   ...CinemaTimelineAssetClipBaseShape,
   kind: z.literal("image"),
+  transform: CinemaTimelineTransformSchema.optional(),
 }).strict()
   .refine((clip) => clip.assetRef.snapshot.kind === "image", {
     message: "Image clips must reference image assets",
@@ -161,6 +176,7 @@ export const CinemaTimelineTextClipSchema = z.object({
     value: z.string().min(1),
     stylePresetID: z.string().min(1),
   }).strict(),
+  transform: CinemaTimelineTransformSchema.optional(),
 }).strict()
   .refine(timelineRangeFitsSafeInteger, timelineRangeMessage)
 export type CinemaTimelineTextClip = z.infer<typeof CinemaTimelineTextClipSchema>
@@ -235,6 +251,17 @@ export const CinemaTimelineDocumentSchema = z.object({
     })
   }
 
+  const duplicateTrackOrder = document.tracks.find((track, index) => (
+    document.tracks.findIndex((candidate) => candidate.order === track.order) !== index
+  ))?.order
+  if (duplicateTrackOrder !== undefined) {
+    context.addIssue({
+      code: "custom",
+      message: `Duplicate track order '${duplicateTrackOrder}'`,
+      path: ["tracks"],
+    })
+  }
+
   const duplicateClipID = findDuplicateID(document.clips)
   if (duplicateClipID) {
     context.addIssue({
@@ -302,7 +329,6 @@ const CinemaTimelineCommandBaseShape = {
 
 export const CinemaTimelineTrackPatchSchema = z.object({
   title: z.string().min(1).optional(),
-  order: z.number().int().nonnegative().optional(),
   locked: z.boolean().optional(),
   muted: z.boolean().optional(),
   hidden: z.boolean().optional(),
@@ -314,12 +340,19 @@ export const CinemaTimelineClipPatchSchema = z.object({
   playbackRate: z.number().positive().finite().optional(),
   volume: z.number().nonnegative().finite().optional(),
   opacity: z.number().min(0).max(1).finite().optional(),
-  fit: z.enum(["contain", "cover"]).nullable().optional(),
+  fit: CinemaTimelineFitSchema.nullable().optional(),
+  transform: CinemaTimelineTransformSchema.nullable().optional(),
   fadeInUs: CinemaTimelineTimeSchema.nullable().optional(),
   fadeOutUs: CinemaTimelineTimeSchema.nullable().optional(),
   assetRef: CinemaAssetRefSchema.optional(),
 }).strict().refine((patch) => Object.keys(patch).length > 0, "Clip patch must include at least one field")
 export type CinemaTimelineClipPatch = z.infer<typeof CinemaTimelineClipPatchSchema>
+
+export const CinemaTimelineClipUpdateSchema = z.object({
+  clipID: z.string().min(1),
+  patch: CinemaTimelineClipPatchSchema,
+}).strict()
+export type CinemaTimelineClipUpdate = z.infer<typeof CinemaTimelineClipUpdateSchema>
 
 export const CinemaTimelineSettingsPatchSchema = z.object({
   width: z.number().int().positive().optional(),
@@ -328,6 +361,13 @@ export const CinemaTimelineSettingsPatchSchema = z.object({
   backgroundColor: z.string().trim().min(1).optional(),
 }).strict().refine((patch) => Object.keys(patch).length > 0, "Settings patch must include at least one field")
 export type CinemaTimelineSettingsPatch = z.infer<typeof CinemaTimelineSettingsPatchSchema>
+
+export const CinemaTimelineClipPlacementSchema = z.object({
+  clipID: z.string().min(1),
+  trackID: z.string().min(1),
+  timelineStartUs: CinemaTimelineTimeSchema,
+}).strict()
+export type CinemaTimelineClipPlacement = z.infer<typeof CinemaTimelineClipPlacementSchema>
 
 export const CinemaTimelineCommandSchema = z.discriminatedUnion("type", [
   z.object({
@@ -343,9 +383,33 @@ export const CinemaTimelineCommandSchema = z.discriminatedUnion("type", [
   }).strict(),
   z.object({
     ...CinemaTimelineCommandBaseShape,
+    type: z.literal("delete-track"),
+    trackID: z.string().min(1),
+    deleteClips: z.boolean(),
+  }).strict(),
+  z.object({
+    ...CinemaTimelineCommandBaseShape,
+    type: z.literal("reorder-tracks"),
+    trackIDs: z.array(z.string().min(1)).min(1),
+  }).strict().refine((command) => new Set(command.trackIDs).size === command.trackIDs.length, {
+    message: "Track ids must be unique",
+    path: ["trackIDs"],
+  }),
+  z.object({
+    ...CinemaTimelineCommandBaseShape,
     type: z.literal("add-clip"),
     clip: CinemaTimelineClipSchema,
   }).strict(),
+  z.object({
+    ...CinemaTimelineCommandBaseShape,
+    type: z.literal("add-clips"),
+    clips: z.array(CinemaTimelineClipSchema).min(1),
+  }).strict().refine((command) => (
+    new Set(command.clips.map((clip) => clip.id)).size === command.clips.length
+  ), {
+    message: "Clip ids must be unique",
+    path: ["clips"],
+  }),
   z.object({
     ...CinemaTimelineCommandBaseShape,
     type: z.literal("move-clip"),
@@ -353,6 +417,16 @@ export const CinemaTimelineCommandSchema = z.discriminatedUnion("type", [
     trackID: z.string().min(1),
     timelineStartUs: CinemaTimelineTimeSchema,
   }).strict(),
+  z.object({
+    ...CinemaTimelineCommandBaseShape,
+    type: z.literal("move-clips"),
+    placements: z.array(CinemaTimelineClipPlacementSchema).min(1),
+  }).strict().refine((command) => (
+    new Set(command.placements.map((placement) => placement.clipID)).size === command.placements.length
+  ), {
+    message: "Clip placement ids must be unique",
+    path: ["placements"],
+  }),
   z.object({
     ...CinemaTimelineCommandBaseShape,
     type: z.literal("trim-clip"),
@@ -382,10 +456,28 @@ export const CinemaTimelineCommandSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     ...CinemaTimelineCommandBaseShape,
+    type: z.literal("ripple-delete-clips"),
+    clipIDs: z.array(z.string().min(1)).min(1),
+  }).strict().refine((command) => new Set(command.clipIDs).size === command.clipIDs.length, {
+    message: "Clip ids must be unique",
+    path: ["clipIDs"],
+  }),
+  z.object({
+    ...CinemaTimelineCommandBaseShape,
     type: z.literal("update-clip"),
     clipID: z.string().min(1),
     patch: CinemaTimelineClipPatchSchema,
   }).strict(),
+  z.object({
+    ...CinemaTimelineCommandBaseShape,
+    type: z.literal("update-clips"),
+    updates: z.array(CinemaTimelineClipUpdateSchema).min(1),
+  }).strict().refine((command) => (
+    new Set(command.updates.map((update) => update.clipID)).size === command.updates.length
+  ), {
+    message: "Clip update ids must be unique",
+    path: ["updates"],
+  }),
   z.object({
     ...CinemaTimelineCommandBaseShape,
     type: z.literal("add-marker"),

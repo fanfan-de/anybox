@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { CheckCircle2, CircleAlert, CircleStop, Clock3 } from "lucide-react"
 import type { CinemaRenderJob } from "@anybox/shared/cinema-render"
-import { renderStatusLabel } from "../model/renderStatus"
+import { useI18n, type TranslationKey } from "../../../i18n"
 
 export const RENDER_HISTORY_VIRTUALIZATION_THRESHOLD = 100
 
@@ -26,6 +26,7 @@ export function RenderHistory({
   selectedJobID?: string
   onSelect: (job: CinemaRenderJob) => void
 }) {
+  const { t } = useI18n()
   const listRef = useRef<HTMLDivElement>(null)
   const buttonRefs = useRef(new Map<string, HTMLButtonElement>())
   const pendingFocusIndexRef = useRef<number | null>(null)
@@ -104,19 +105,19 @@ export function RenderHistory({
     >
       <span className={`cinema-deliver-history-icon is-${job.status}`}><JobIcon status={job.status} /></span>
       <span className="cinema-deliver-history-copy"><strong>{job.settings.outputName}.mp4</strong></span>
-      <small className="cinema-deliver-history-meta">{renderStatusLabel(job.status)} · rev {job.timelineRevision}</small>
+      <small className="cinema-deliver-history-meta">{t(`render.status.${job.status}` as TranslationKey)} · {t("render.revisionShort", { revision: job.timelineRevision })}</small>
     </button>
   )
 
   return (
-    <section className="cinema-deliver-history" aria-label="Render history">
-      <div className="cinema-deliver-section-heading"><span>Render history</span><small>{jobs.length}</small></div>
-      {jobs.length === 0 ? <p className="cinema-deliver-history-empty">No renders for this Timeline yet.</p> : (
+    <section className="cinema-deliver-history" aria-label={t("render.history")}>
+      <div className="cinema-deliver-section-heading"><span>{t("render.history")}</span><small>{jobs.length}</small></div>
+      {jobs.length === 0 ? <p className="cinema-deliver-history-empty">{t("render.historyEmpty")}</p> : (
         <div
           ref={listRef}
           className={`cinema-deliver-history-list ${shouldVirtualize ? "is-virtualized" : ""}`}
           role="listbox"
-          aria-label="Render history jobs"
+          aria-label={t("render.historyJobs")}
         >
           {shouldVirtualize ? (
             <div

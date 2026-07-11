@@ -1266,7 +1266,15 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.queryByRole("combobox", { name: "Display Language" })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: "General" }))
 
-    selectSettingsOption("Display Language", "中文")
+    fireEvent.click(screen.getByRole("combobox", { name: "Display Language" }))
+    const languageListbox = screen.getByRole("listbox", { name: "Display Language" })
+    for (const language of [
+      "简体中文", "繁體中文", "English", "日本語", "한국어", "Português (Brasil)",
+      "Español (Latinoamérica)", "Deutsch", "Français", "Bahasa Indonesia", "Italiano", "Polski", "Türkçe", "Tiếng Việt",
+    ]) {
+      expect(within(languageListbox).getByRole("option", { name: language })).toBeInTheDocument()
+    }
+    fireEvent.click(within(languageListbox).getByRole("option", { name: "简体中文" }))
 
     await waitFor(() => {
       expect(saveLocaleConfig).toHaveBeenCalledWith({

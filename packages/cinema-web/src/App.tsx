@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react"
+import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react"
 import { createPortal } from "react-dom"
 import {
   applyEdgeChanges,
@@ -132,7 +132,18 @@ import { CanvasSaveStatus, type SaveState } from "./features/canvas/CanvasSaveSt
 import { validateCinemaConnection } from "./features/canvas/connectionRules"
 import { textNodeVisibleLineCount } from "./features/canvas/textNodeLayout"
 import { canRestoreGeneratedText, type TextGenerationUndoRecord } from "./features/canvas/textGenerationUndo"
-import { useI18n, type TranslationKey } from "./i18n"
+import {
+  translateGenerationOptionLabel,
+  translateGenerationParameterLabel,
+  translateGenerationProgress,
+  translateGenerationStatus,
+  translateVideoInputEmptyText,
+  translateVideoInputLabel,
+  translateVideoModeLabel,
+  translateVideoPromptPlaceholder,
+  useI18n,
+  type TranslationKey,
+} from "./i18n"
 import { AssetLibraryApiError, createAssetLibraryApi } from "./features/assets/assetLibraryApi"
 import type {
   AssetLibraryAddRequest,
@@ -265,6 +276,8 @@ type CinemaFlowNodeData = {
   onNodeInputEditingChange?: (nodeID: string, isEditing: boolean) => void
   onDeleteNode?: (nodeID: string) => void
   hasConnections?: boolean
+  hasIncomingConnection?: boolean
+  hasOutgoingConnection?: boolean
   textModels?: CinemaTextModel[]
   effectiveTextModel?: CinemaTextModel | null
   isGeneratingText?: boolean
@@ -635,6 +648,17 @@ function isPrimaryImageGenerationControl(control: GenerationControl) {
     label === "size"
 }
 
+function primaryImageGenerationControlRank(control: GenerationControl) {
+  const roles = [
+    normalizedProviderInputRole(control.key),
+    normalizedProviderInputRole(control.label),
+  ]
+  if (roles.some((role) => role === "resolution" || role === "size")) return 0
+  if (roles.includes("aspectratio")) return 1
+  if (roles.includes("count")) return 2
+  return 3
+}
+
 function generationControlReady(control: GenerationControl, parameters: Record<string, unknown>) {
   if (!control.required) return true
   const value = parameters[control.key]
@@ -675,6 +699,504 @@ function parseJsonDraft(value: string, fallback: unknown = {}) {
   }
 }
 
+type CinemaComposerSelectOption = {
+  value: string
+  label: string
+  triggerLabel?: string
+  disabled?: boolean
+}
+
+type CinemaComposerSelectProps = {
+  id?: string
+  ariaLabel: string
+  value: string
+  options: CinemaComposerSelectOption[]
+  disabled?: boolean
+  placeholder?: string
+  className?: string
+  menuMinWidth?: number
+  onChange: (value: string) => void
+}
+
+function CinemaComposerSelect({
+  id,
+  ariaLabel,
+  value,
+  options,
+  disabled = false,
+  placeholder = "未选择",
+  className = "",
+  menuMinWidth = 176,
+  onChange,
+}: CinemaComposerSelectProps) {
+  const generatedID = useId().replace(/:/g, "")
+  const controlID = id ?? `cinema-composer-select-${generatedID}`
+  const menuID = `${controlID}-menu`
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const optionRefs = useRef(new Map<string, HTMLButtonElement>())
+  const didFocusMenuRef = useRef(false)
+  const [isOpen, setIsOpen] = useState(false)
+  const [menuPosition, setMenuPosition] = useState<{
+    left: number
+    top: number
+    width: number
+    maxHeight: number
+  } | null>(null)
+  const selectedOption = options.find((option) => option.value === value) ?? null
+  const enabledOptions = options.filter((option) => !option.disabled)
+  const focusTargetValue = selectedOption && !selectedOption.disabled
+    ? selectedOption.value
+    : enabledOptions[0]?.value ?? ""
+
+  useEffect(() => {
+    if (!isOpen) return
+    const closeOnOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof globalThis.Node)) return
+      if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) setIsOpen(false)
+    }
+    window.addEventListener("pointerdown", closeOnOutsidePointerDown)
+    return () => window.removeEventListener("pointerdown", closeOnOutsidePointerDown)
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!disabled) return
+    setIsOpen(false)
+  }, [disabled])
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      didFocusMenuRef.current = false
+      setMenuPosition(null)
+      return
+    }
+
+    const updatePosition = () => {
+      const trigger = triggerRef.current
+      if (!trigger) return
+      const bounds = trigger.getBoundingClientRect()
+      const viewportInset = 12
+      const menuGap = 6
+      const preferredHeight = Math.min(256, Math.max(42, options.length * 34 + 8))
+      const spaceBelow = window.innerHeight - bounds.bottom - viewportInset - menuGap
+      const spaceAbove = bounds.top - viewportInset - menuGap
+      const placeBelow = spaceBelow >= Math.min(preferredHeight, spaceAbove)
+      const availableHeight = Math.max(96, placeBelow ? spaceBelow : spaceAbove)
+      const maxHeight = Math.min(preferredHeight, availableHeight)
+      const width = Math.min(
+        Math.max(bounds.width, menuMinWidth),
+        Math.max(menuMinWidth, window.innerWidth - viewportInset * 2),
+      )
+      const left = Math.min(
+        window.innerWidth - viewportInset - width,
+        Math.max(viewportInset, bounds.left),
+      )
+      const nextPosition = {
+        left,
+        top: placeBelow ? bounds.bottom + menuGap : Math.max(viewportInset, bounds.top - menuGap - maxHeight),
+        width,
+        maxHeight,
+      }
+      setMenuPosition((current) => current
+        && current.left === nextPosition.left
+        && current.top === nextPosition.top
+        && current.width === nextPosition.width
+        && current.maxHeight === nextPosition.maxHeight
+        ? current
+        : nextPosition)
+    }
+
+    updatePosition()
+    let animationFrameID = 0
+    const trackAnchorPosition = () => {
+      updatePosition()
+      animationFrameID = window.requestAnimationFrame(trackAnchorPosition)
+    }
+    animationFrameID = window.requestAnimationFrame(trackAnchorPosition)
+    window.addEventListener("resize", updatePosition)
+    window.addEventListener("scroll", updatePosition, true)
+    return () => {
+      window.cancelAnimationFrame(animationFrameID)
+      window.removeEventListener("resize", updatePosition)
+      window.removeEventListener("scroll", updatePosition, true)
+    }
+  }, [isOpen, menuMinWidth, options.length])
+
+  useEffect(() => {
+    if (!isOpen || !menuPosition || didFocusMenuRef.current || !focusTargetValue) return
+    const frameID = window.requestAnimationFrame(() => {
+      const target = optionRefs.current.get(focusTargetValue)
+      if (!target) return
+      target.focus()
+      didFocusMenuRef.current = true
+    })
+    return () => window.cancelAnimationFrame(frameID)
+  }, [focusTargetValue, isOpen, menuPosition])
+
+  const closeAndRestoreFocus = () => {
+    setIsOpen(false)
+    window.requestAnimationFrame(() => triggerRef.current?.focus())
+  }
+
+  const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    stopCanvasKeyboardEvent(event)
+    if (event.key === "Escape") {
+      event.preventDefault()
+      closeAndRestoreFocus()
+      return
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return
+    event.preventDefault()
+    if (enabledOptions.length === 0) return
+    const focusedValue = [...optionRefs.current.entries()]
+      .find(([, element]) => element === document.activeElement)?.[0]
+    const focusedIndex = focusedValue ? enabledOptions.findIndex((option) => option.value === focusedValue) : -1
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? enabledOptions.length - 1
+        : event.key === "ArrowUp"
+          ? (focusedIndex <= 0 ? enabledOptions.length - 1 : focusedIndex - 1)
+          : (focusedIndex + 1) % enabledOptions.length
+    optionRefs.current.get(enabledOptions[nextIndex]!.value)?.focus()
+  }
+
+  return (
+    <div className={`cinema-composer-select ${className}`.trim()}>
+      <button
+        ref={triggerRef}
+        id={controlID}
+        type="button"
+        className="cinema-composer-select-trigger"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-controls={menuID}
+        title={selectedOption?.label ?? placeholder}
+        disabled={disabled || enabledOptions.length === 0}
+        onKeyDown={(event) => {
+          stopCanvasKeyboardEvent(event)
+          if (event.key === "Escape" && isOpen) {
+            event.preventDefault()
+            setIsOpen(false)
+            return
+          }
+          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
+          event.preventDefault()
+          setIsOpen(true)
+        }}
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        <span>{selectedOption?.triggerLabel ?? selectedOption?.label ?? placeholder}</span>
+      </button>
+      {isOpen && menuPosition ? createPortal(
+        <div
+          ref={menuRef}
+          id={menuID}
+          className="cinema-composer-select-menu nodrag nowheel"
+          role="listbox"
+          aria-label={ariaLabel}
+          style={menuPosition}
+          onKeyDown={handleMenuKeyDown}
+          onBlur={(event) => {
+            const nextTarget = event.relatedTarget
+            if (nextTarget instanceof globalThis.Node && event.currentTarget.contains(nextTarget)) return
+            setIsOpen(false)
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onWheel={(event) => event.stopPropagation()}
+        >
+          {options.map((option) => (
+            <button
+              ref={(element) => {
+                if (element) optionRefs.current.set(option.value, element)
+                else optionRefs.current.delete(option.value)
+              }}
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              tabIndex={option.value === value ? 0 : -1}
+              className={`cinema-composer-select-option ${option.value === value ? "is-selected" : ""}`}
+              disabled={option.disabled}
+              title={option.label}
+              onClick={() => {
+                if (option.value !== value) onChange(option.value)
+                closeAndRestoreFocus()
+              }}
+            >
+              <span>{option.label}</span>
+            </button>
+          ))}
+        </div>,
+        document.body,
+      ) : null}
+    </div>
+  )
+}
+
+type GenerationSpecPopoverProps = {
+  id: string
+  ariaLabel: string
+  summary: string
+  disabled?: boolean
+  onKeepActive?: () => void
+  children: ReactNode
+}
+
+function GenerationSpecPopover({
+  id,
+  ariaLabel,
+  summary,
+  disabled = false,
+  onKeepActive,
+  children,
+}: GenerationSpecPopoverProps) {
+  const panelID = `${id}-panel`
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const didFocusPanelRef = useRef(false)
+  const [isOpen, setIsOpen] = useState(false)
+  const [panelPosition, setPanelPosition] = useState<{
+    left: number
+    top: number
+    width: number
+    maxHeight: number
+  } | null>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    const closeOnOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof globalThis.Node)) return
+      if (!triggerRef.current?.contains(target) && !panelRef.current?.contains(target)) setIsOpen(false)
+    }
+    window.addEventListener("pointerdown", closeOnOutsidePointerDown)
+    return () => window.removeEventListener("pointerdown", closeOnOutsidePointerDown)
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!disabled) return
+    setIsOpen(false)
+  }, [disabled])
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      didFocusPanelRef.current = false
+      setPanelPosition(null)
+      return
+    }
+
+    const updatePosition = () => {
+      const trigger = triggerRef.current
+      if (!trigger) return
+      const bounds = trigger.getBoundingClientRect()
+      const viewportInset = 12
+      const panelGap = 6
+      const preferredWidth = 320
+      const preferredHeight = 220
+      const viewportWidth = Math.max(0, window.innerWidth - viewportInset * 2)
+      const width = Math.min(Math.max(bounds.width, preferredWidth), viewportWidth)
+      const spaceBelow = window.innerHeight - bounds.bottom - viewportInset - panelGap
+      const spaceAbove = bounds.top - viewportInset - panelGap
+      const placeBelow = spaceBelow >= Math.min(preferredHeight, spaceAbove)
+      const availableHeight = Math.max(96, placeBelow ? spaceBelow : spaceAbove)
+      const maxHeight = Math.min(preferredHeight, availableHeight)
+      const measuredHeight = panelRef.current?.getBoundingClientRect().height ?? 0
+      const placementHeight = measuredHeight > 0 ? Math.min(measuredHeight, maxHeight) : maxHeight
+      const preferredTop = placeBelow ? bounds.bottom + panelGap : bounds.top - panelGap - placementHeight
+      const maximumTop = Math.max(viewportInset, window.innerHeight - viewportInset - placementHeight)
+      const left = Math.min(
+        window.innerWidth - viewportInset - width,
+        Math.max(viewportInset, bounds.right - width),
+      )
+      const nextPosition = {
+        left,
+        top: Math.min(maximumTop, Math.max(viewportInset, preferredTop)),
+        width,
+        maxHeight,
+      }
+      setPanelPosition((current) => current
+        && current.left === nextPosition.left
+        && current.top === nextPosition.top
+        && current.width === nextPosition.width
+        && current.maxHeight === nextPosition.maxHeight
+        ? current
+        : nextPosition)
+    }
+
+    updatePosition()
+    let animationFrameID = 0
+    const trackAnchorPosition = () => {
+      updatePosition()
+      animationFrameID = window.requestAnimationFrame(trackAnchorPosition)
+    }
+    animationFrameID = window.requestAnimationFrame(trackAnchorPosition)
+    window.addEventListener("resize", updatePosition)
+    window.addEventListener("scroll", updatePosition, true)
+    return () => {
+      window.cancelAnimationFrame(animationFrameID)
+      window.removeEventListener("resize", updatePosition)
+      window.removeEventListener("scroll", updatePosition, true)
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen || !panelPosition || didFocusPanelRef.current) return
+    const frameID = window.requestAnimationFrame(() => {
+      const focusTarget = panelRef.current?.querySelector<HTMLElement>(
+        '[role="radio"][aria-checked="true"], input:not(:disabled), button:not(:disabled)',
+      )
+      if (!focusTarget) return
+      focusTarget.focus()
+      didFocusPanelRef.current = true
+    })
+    return () => window.cancelAnimationFrame(frameID)
+  }, [isOpen, panelPosition])
+
+  const closeAndRestoreFocus = () => {
+    onKeepActive?.()
+    setIsOpen(false)
+    window.requestAnimationFrame(() => triggerRef.current?.focus())
+  }
+
+  return (
+    <div className="cinema-generation-spec">
+      <button
+        ref={triggerRef}
+        id={id}
+        type="button"
+        className="cinema-generation-spec-trigger"
+        aria-label={ariaLabel}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        aria-controls={panelID}
+        title={`${ariaLabel}: ${summary}`}
+        disabled={disabled}
+        onKeyDown={(event) => {
+          stopCanvasKeyboardEvent(event)
+          if (event.key === "Escape" && isOpen) {
+            event.preventDefault()
+            closeAndRestoreFocus()
+            return
+          }
+          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
+          event.preventDefault()
+          setIsOpen(true)
+        }}
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        <span>{summary}</span>
+        <ChevronDown size={12} aria-hidden="true" />
+      </button>
+      {isOpen && panelPosition ? createPortal(
+        <div
+          ref={panelRef}
+          id={panelID}
+          className="cinema-generation-spec-panel nodrag nowheel"
+          role="dialog"
+          aria-label={ariaLabel}
+          style={panelPosition}
+          onKeyDown={(event) => {
+            stopCanvasKeyboardEvent(event)
+            if (event.key !== "Escape") return
+            event.preventDefault()
+            closeAndRestoreFocus()
+          }}
+          onBlur={(event) => {
+            const nextTarget = event.relatedTarget
+            if (nextTarget instanceof globalThis.Node && event.currentTarget.contains(nextTarget)) return
+            setIsOpen(false)
+          }}
+          onPointerDown={(event) => {
+            event.stopPropagation()
+            onKeepActive?.()
+          }}
+          onClick={(event) => {
+            event.stopPropagation()
+            onKeepActive?.()
+          }}
+          onWheel={(event) => event.stopPropagation()}
+        >
+          {children}
+        </div>,
+        document.body,
+      ) : null}
+    </div>
+  )
+}
+
+type GenerationSpecOption = {
+  value: string
+  label: string
+}
+
+function GenerationSpecOptionGroup({
+  label,
+  value,
+  options,
+  disabled,
+  onChange,
+}: {
+  label: string
+  value: string
+  options: GenerationSpecOption[]
+  disabled: boolean
+  onChange: (value: string) => void
+}) {
+  const selectedIndex = options.findIndex((option) => option.value === value)
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return
+    event.preventDefault()
+    if (disabled || options.length === 0) return
+    const focusedIndex = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'))
+      .findIndex((button) => button === document.activeElement)
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? options.length - 1
+        : event.key === "ArrowLeft" || event.key === "ArrowUp"
+          ? (focusedIndex <= 0 ? options.length - 1 : focusedIndex - 1)
+          : (focusedIndex + 1) % options.length
+    const nextOption = options[nextIndex]
+    if (!nextOption) return
+    const nextButton = event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[nextIndex]
+    nextButton?.focus()
+    onChange(nextOption.value)
+  }
+
+  return (
+    <section className="cinema-generation-spec-section">
+      <h3>{label}</h3>
+      <div
+        className="cinema-generation-spec-options"
+        role="radiogroup"
+        aria-label={label}
+        onKeyDown={handleKeyDown}
+      >
+        {options.map((option, index) => {
+          const selected = option.value === value
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              tabIndex={selected || (selectedIndex < 0 && index === 0) ? 0 : -1}
+              className={selected ? "is-selected" : ""}
+              disabled={disabled}
+              onClick={() => onChange(option.value)}
+            >
+              {option.label}
+            </button>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 function GenerationParameterControlField({
   control,
   parameters,
@@ -686,30 +1208,33 @@ function GenerationParameterControlField({
   disabled: boolean
   onChange: (patch: Record<string, unknown>) => void
 }) {
+  const { locale, t } = useI18n()
   if (control.type === "image-list") return null
+  const controlLabel = translateGenerationParameterLabel(locale, control.key, control.label)
 
   if (control.type === "select") {
     const selectedIndex = generationSelectOptionIndex(control, parameters[control.key])
     return (
-      <label key={control.key} className="cinema-image-form-control">
-        <span>{control.label}</span>
-        <select
-          aria-label={control.label}
+      <div key={control.key} className="cinema-image-form-control">
+        <span>{controlLabel}</span>
+        <CinemaComposerSelect
+          ariaLabel={controlLabel}
           value={selectedIndex >= 0 ? String(selectedIndex) : ""}
           disabled={disabled}
-          onKeyDown={(event) => event.stopPropagation()}
-          onChange={(event) => {
-            const option = control.options[Number(event.target.value)]
+          options={control.options.map((option, index) => ({
+            value: String(index),
+            label: translateGenerationOptionLabel(
+              locale,
+              option,
+              generationControlValueLabel(control, option),
+            ),
+          }))}
+          onChange={(nextValue) => {
+            const option = control.options[Number(nextValue)]
             onChange({ [control.key]: option })
           }}
-        >
-          {control.options.map((option, index) => (
-            <option key={`${control.key}-${index}`} value={String(index)}>
-              {generationControlValueLabel(control, option)}
-            </option>
-          ))}
-        </select>
-      </label>
+        />
+      </div>
     )
   }
 
@@ -717,9 +1242,9 @@ function GenerationParameterControlField({
     const value = parameters[control.key]
     return (
       <label key={control.key} className="cinema-image-form-control">
-        <span>{control.label}</span>
+        <span>{controlLabel}</span>
         <input
-          aria-label={control.label}
+          aria-label={controlLabel}
           type="number"
           min={control.min}
           max={control.max}
@@ -742,7 +1267,7 @@ function GenerationParameterControlField({
     const checked = parameters[control.key] === true
     return (
       <div key={control.key} className="cinema-image-form-control">
-        <span>{control.label}</span>
+        <span>{controlLabel}</span>
         <button
           type="button"
           role="switch"
@@ -752,7 +1277,7 @@ function GenerationParameterControlField({
           onClick={() => onChange({ [control.key]: !checked })}
         >
           <span aria-hidden="true" />
-          <strong>{checked ? "On" : "Off"}</strong>
+          <strong>{t(checked ? "common.on" : "common.off")}</strong>
         </button>
       </div>
     )
@@ -762,9 +1287,9 @@ function GenerationParameterControlField({
     const value = parameters[control.key]
     return (
       <label key={control.key} className="cinema-image-form-control is-json">
-        <span>{control.label}</span>
+        <span>{controlLabel}</span>
         <textarea
-          aria-label={control.label}
+          aria-label={controlLabel}
           defaultValue={typeof value === "string" ? value : ""}
           disabled={disabled}
           maxLength={control.maxLength}
@@ -778,9 +1303,9 @@ function GenerationParameterControlField({
 
   return (
     <label key={control.key} className="cinema-image-form-control is-json">
-      <span>{control.label}</span>
+      <span>{controlLabel}</span>
       <textarea
-        aria-label={control.label}
+        aria-label={controlLabel}
         defaultValue={stringifyJson(parameters[control.key])}
         disabled={disabled}
         spellCheck={false}
@@ -897,13 +1422,14 @@ function GenerationProgress({
   status: string
   className?: string
 }) {
+  const { locale, t } = useI18n()
   if (!progress) return null
   const percent = typeof progress.percent === "number" && Number.isFinite(progress.percent)
     ? Math.min(100, Math.max(0, progress.percent))
     : null
   const isActive = isActiveProgress(progress)
   const isIndeterminate = isActive && percent === null
-  const label = progressLabel(progress, status)
+  const label = translateGenerationProgress(locale, progress.phase, progressLabel(progress, status))
   return (
     <div className={`cinema-generation-progress is-${progress.phase} ${isIndeterminate ? "is-indeterminate" : ""} ${className}`}>
       <div className="cinema-generation-progress-meta">
@@ -913,7 +1439,7 @@ function GenerationProgress({
       <div
         className="cinema-generation-progress-track"
         role="progressbar"
-        aria-label="Generation progress"
+        aria-label={t("generation.progress")}
         aria-valuemin={0}
         aria-valuemax={100}
         {...(percent !== null ? { "aria-valuenow": Math.round(percent) } : {})}
@@ -1999,104 +2525,6 @@ function stopCanvasKeyboardEvent(event: ReactKeyboardEvent<HTMLElement>) {
 
 const NODE_INPUT_OVERLAY_GAP = 12
 
-function useCinemaImageViewportGuard(
-  nodeID: string,
-  active: boolean,
-  overlayRoot: HTMLElement | null | undefined,
-  layoutKey: unknown,
-) {
-  const viewport = useViewport()
-  const reactFlow = useReactFlow<CinemaFlowNode, Edge>()
-
-  useEffect(() => {
-    if (!active || !overlayRoot) return
-
-    let frameID = 0
-    let timeoutID = 0
-    let disposed = false
-    const resizeObserver = typeof ResizeObserver === "undefined"
-      ? null
-      : new ResizeObserver(() => scheduleMeasure())
-
-    const measure = () => {
-      if (disposed) return
-      const canvasRoot = overlayRoot.parentElement
-      const nodeElement = canvasRoot?.querySelector<HTMLElement>(
-        `.react-flow__node[data-id="${CSS.escape(nodeID)}"]`,
-      )
-      if (!nodeElement) return
-
-      const visualElements: HTMLElement[] = [
-        nodeElement,
-        ...nodeElement.querySelectorAll<HTMLElement>(
-          ".cinema-image-upload-toolbar, .cinema-image-toolbar, .cinema-image-candidate-panel",
-        ),
-      ]
-      const overlayPanel = overlayRoot.querySelector<HTMLElement>(
-        `[data-cinema-node-overlay="${CSS.escape(nodeID)}"]`,
-      )
-      if (overlayPanel) visualElements.push(overlayPanel)
-
-      resizeObserver?.disconnect()
-      visualElements.forEach((element) => resizeObserver?.observe(element))
-      resizeObserver?.observe(overlayRoot)
-
-      const bounds = visualElements.map((element) => element.getBoundingClientRect())
-      const rootBounds = overlayRoot.getBoundingClientRect()
-      const visualBounds = {
-        left: Math.min(...bounds.map((bound) => bound.left)),
-        top: Math.min(...bounds.map((bound) => bound.top)),
-        right: Math.max(...bounds.map((bound) => bound.right)),
-        bottom: Math.max(...bounds.map((bound) => bound.bottom)),
-      }
-      const inset = 16
-      const availableWidth = rootBounds.width - inset * 2
-      const availableHeight = rootBounds.height - inset * 2
-      const visualWidth = visualBounds.right - visualBounds.left
-      const visualHeight = visualBounds.bottom - visualBounds.top
-      let offsetX = 0
-      let offsetY = 0
-
-      if (visualWidth > availableWidth) {
-        offsetX = rootBounds.left + inset - visualBounds.left
-      } else if (visualBounds.left < rootBounds.left + inset) {
-        offsetX = rootBounds.left + inset - visualBounds.left
-      } else if (visualBounds.right > rootBounds.right - inset) {
-        offsetX += rootBounds.right - inset - (visualBounds.right + offsetX)
-      }
-      if (visualHeight > availableHeight) {
-        offsetY = rootBounds.top + inset - visualBounds.top
-      } else if (visualBounds.top < rootBounds.top + inset) {
-        offsetY = rootBounds.top + inset - visualBounds.top
-      } else if (visualBounds.bottom > rootBounds.bottom - inset) {
-        offsetY += rootBounds.bottom - inset - (visualBounds.bottom + offsetY)
-      }
-      if (Math.abs(offsetX) < 1 && Math.abs(offsetY) < 1) return
-
-      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      void reactFlow.setViewport({
-        x: viewport.x + offsetX,
-        y: viewport.y + offsetY,
-        zoom: viewport.zoom,
-      }, { duration: reduceMotion ? 0 : 120 })
-    }
-
-    const scheduleMeasure = () => {
-      window.cancelAnimationFrame(frameID)
-      frameID = window.requestAnimationFrame(measure)
-    }
-
-    scheduleMeasure()
-    timeoutID = window.setTimeout(scheduleMeasure, 80)
-    return () => {
-      disposed = true
-      window.cancelAnimationFrame(frameID)
-      window.clearTimeout(timeoutID)
-      resizeObserver?.disconnect()
-    }
-  }, [active, layoutKey, nodeID, overlayRoot, reactFlow, viewport.x, viewport.y, viewport.zoom])
-}
-
 function CinemaNodeInputOverlay({
   nodeID,
   selected,
@@ -2121,26 +2549,14 @@ function CinemaNodeInputOverlay({
 
   if (!canRender || !overlayRoot) return null
 
-  const rootWidth = overlayRoot.clientWidth
-  const rootHeight = overlayRoot.clientHeight
-  const overlayWidth = Math.min(width, Math.max(0, rootWidth - 32))
-  const rawCenter = viewport.x + (position.x + measuredWidth / 2) * viewport.zoom
-  const left = Math.min(rootWidth - 16 - overlayWidth / 2, Math.max(16 + overlayWidth / 2, rawCenter))
-  const nodeTop = viewport.y + position.y * viewport.zoom
-  const nodeBottom = viewport.y + (position.y + measuredHeight) * viewport.zoom
-  const belowTop = nodeBottom + NODE_INPUT_OVERLAY_GAP
-  const spaceBelow = rootHeight - belowTop - 16
-  const spaceAbove = nodeTop - NODE_INPUT_OVERLAY_GAP - 16
-  const placeAbove = spaceBelow < 220 && spaceAbove > spaceBelow
+  const left = viewport.x + (position.x + measuredWidth / 2) * viewport.zoom
+  const top = viewport.y + (position.y + measuredHeight) * viewport.zoom + NODE_INPUT_OVERLAY_GAP
 
   const overlayStyle = {
     ...accentStyle,
     "--cinema-node-overlay-width": `${width}px`,
     left,
-    ...(placeAbove
-      ? { bottom: rootHeight - nodeTop + NODE_INPUT_OVERLAY_GAP }
-      : { top: belowTop }),
-    maxHeight: Math.max(96, placeAbove ? spaceAbove : spaceBelow),
+    top,
   } as unknown as CSSProperties
 
   return createPortal(
@@ -2228,13 +2644,14 @@ function NodeDeleteButton({
   onDeleteNode?: (nodeID: string) => void
   className?: string
 }) {
+  const { t } = useI18n()
   if (!onDeleteNode) return null
   return (
     <button
       type="button"
       className={`${className} nodrag nowheel`}
-      title="Delete node"
-      aria-label="Delete node"
+      title={t("node.delete")}
+      aria-label={t("node.delete")}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation()
@@ -2272,6 +2689,7 @@ function CinemaNodeTitle({
   title,
   onChangeTitle,
   editRequestKey = 0,
+  isDragHandle = false,
 }: {
   icon: typeof FileText
   label: string
@@ -2279,7 +2697,9 @@ function CinemaNodeTitle({
   title: string
   onChangeTitle?: (nodeID: string, title: string) => void
   editRequestKey?: number
+  isDragHandle?: boolean
 }) {
+  const { t } = useI18n()
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const canEditTitle = Boolean(onChangeTitle)
   const hasCustomTitle = !isDefaultGeneratedTitle(label, title)
@@ -2295,8 +2715,8 @@ function CinemaNodeTitle({
 
   return (
     <span
-      className={`cinema-node-type ${canEditTitle ? "is-editable nodrag nowheel" : ""}`}
-      title={hasCustomTitle ? `${label} · ${title}` : `${label} · Double-click to rename`}
+      className={`cinema-node-type ${canEditTitle ? `is-editable nowheel ${isDragHandle ? "is-drag-handle" : "nodrag"}` : ""}`}
+      title={hasCustomTitle ? `${label} · ${title}` : `${label} · ${t("node.renameHint")}`}
       tabIndex={canEditTitle && !isEditingTitle ? 0 : undefined}
       onDoubleClick={(event) => {
         event.stopPropagation()
@@ -2323,7 +2743,7 @@ function CinemaNodeTitle({
       ) : hasCustomTitle ? (
         <span
           className="cinema-node-title-text"
-          title={canEditTitle ? `${title} · Double-click to rename` : title}
+          title={canEditTitle ? `${title} · ${t("node.renameHint")}` : title}
         >
           {title}
         </span>
@@ -2352,8 +2772,13 @@ function TextCanvasNode({
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const sourceImageInputRef = useRef<HTMLInputElement>(null)
   const modelControlRef = useRef<HTMLDivElement>(null)
+  const modelButtonRef = useRef<HTMLButtonElement>(null)
+  const modelMenuRef = useRef<HTMLDivElement>(null)
+  const modelOptionRefs = useRef(new Map<string, HTMLButtonElement>())
+  const didFocusModelMenuRef = useRef(false)
   const [isTextEditorOpen, setIsTextEditorOpen] = useState(false)
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
+  const [modelMenuPosition, setModelMenuPosition] = useState<{ left: number; top: number; maxHeight: number } | null>(null)
   const [moreMenuPosition, setMoreMenuPosition] = useState<{ x: number; y: number } | null>(null)
   const [titleEditRequestKey, setTitleEditRequestKey] = useState(0)
   const [sourceImageImportError, setSourceImageImportError] = useState<string | null>(null)
@@ -2380,6 +2805,7 @@ function TextCanvasNode({
     data.effectiveTextModel ??
     textModels[0] ??
     null
+  const modelMenuID = `${id}-text-model-menu`
   const supportsSourceImage = Boolean(selectedTextModel?.supportsImageInput)
   const connectedSourceImageAssets = data.sourceImageAssets ?? []
   const connectedSourceImageAssetPaths = new Set(connectedSourceImageAssets.map((asset) => asset.path))
@@ -2561,12 +2987,61 @@ function TextCanvasNode({
     const closeOnOutsidePointerDown = (event: PointerEvent) => {
       const target = event.target
       if (!(target instanceof globalThis.Node)) return
-      if (!modelControlRef.current?.contains(target)) setIsModelMenuOpen(false)
+      if (!modelControlRef.current?.contains(target) && !modelMenuRef.current?.contains(target)) {
+        setIsModelMenuOpen(false)
+      }
     }
 
     window.addEventListener("pointerdown", closeOnOutsidePointerDown)
     return () => window.removeEventListener("pointerdown", closeOnOutsidePointerDown)
   }, [isModelMenuOpen])
+
+  useLayoutEffect(() => {
+    if (!isModelMenuOpen) {
+      didFocusModelMenuRef.current = false
+      setModelMenuPosition(null)
+      return
+    }
+
+    const updatePosition = () => {
+      const control = modelControlRef.current
+      if (!control) return
+
+      const bounds = control.getBoundingClientRect()
+      const viewportInset = 12
+      const menuGap = 6
+      const preferredHeight = 220
+      const spaceBelow = window.innerHeight - bounds.bottom - viewportInset - menuGap
+      const spaceAbove = bounds.top - viewportInset - menuGap
+      const placeBelow = spaceBelow >= Math.min(preferredHeight, spaceAbove)
+      const availableHeight = Math.max(96, placeBelow ? spaceBelow : spaceAbove)
+      const maxHeight = Math.min(preferredHeight, availableHeight)
+
+      setModelMenuPosition({
+        left: Math.min(window.innerWidth - viewportInset - 220, Math.max(viewportInset, bounds.left)),
+        top: placeBelow ? bounds.bottom + menuGap : bounds.top - menuGap - maxHeight,
+        maxHeight,
+      })
+    }
+
+    updatePosition()
+    window.addEventListener("resize", updatePosition)
+    window.addEventListener("scroll", updatePosition, true)
+    return () => {
+      window.removeEventListener("resize", updatePosition)
+      window.removeEventListener("scroll", updatePosition, true)
+    }
+  }, [isModelMenuOpen])
+
+  useEffect(() => {
+    if (!isModelMenuOpen || !modelMenuPosition || didFocusModelMenuRef.current) return
+    didFocusModelMenuRef.current = true
+    const frameID = window.requestAnimationFrame(() => {
+      const targetValue = selectedTextModel?.value ?? textModels[0]?.value
+      if (targetValue) modelOptionRefs.current.get(targetValue)?.focus()
+    })
+    return () => window.cancelAnimationFrame(frameID)
+  }, [isModelMenuOpen, modelMenuPosition, selectedTextModel?.value, textModels])
 
   useEffect(() => {
     if (active) return
@@ -2642,6 +3117,31 @@ function TextCanvasNode({
 
     commitRawDataPatch(patch)
   }
+  const handleModelMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    stopCanvasKeyboardEvent(event)
+    if (event.key === "Escape") {
+      event.preventDefault()
+      setIsModelMenuOpen(false)
+      window.requestAnimationFrame(() => modelButtonRef.current?.focus())
+      return
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return
+
+    event.preventDefault()
+    const values = textModels.map((model) => model.value)
+    if (values.length === 0) return
+    const focusedValue = [...modelOptionRefs.current.entries()]
+      .find(([, element]) => element === document.activeElement)?.[0]
+    const focusedIndex = focusedValue ? values.indexOf(focusedValue) : -1
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? values.length - 1
+        : event.key === "ArrowUp"
+          ? (focusedIndex <= 0 ? values.length - 1 : focusedIndex - 1)
+          : (focusedIndex + 1) % values.length
+    modelOptionRefs.current.get(values[nextIndex]!)?.focus()
+  }
   const generateText = () => {
     const prompt = generatorPromptDraft.trim()
     if (!prompt) {
@@ -2681,7 +3181,7 @@ function TextCanvasNode({
         id="input"
         type="target"
         position={Position.Left}
-        className="cinema-node-handle cinema-node-handle-input"
+        className={`cinema-node-handle cinema-node-handle-input ${data.hasIncomingConnection ? "is-connected" : ""}`}
         style={accentStyle}
         title={t("text.inputPort")}
         aria-label={t("text.inputPort")}
@@ -2834,16 +3334,11 @@ function TextCanvasNode({
           nodeID={id}
           selected={active}
           overlayRoot={data.nodeInputOverlayRoot}
-          width={560}
+          width={520}
           accentStyle={accentStyle}
         >
         <section className="cinema-node-input-panel cinema-text-card-generator nodrag nowheel" aria-label={t("text.generatorTitle")} style={accentStyle}>
-          <header className="cinema-text-card-generator-header">
-            <span>
-              <WandSparkles size={13} aria-hidden="true" />
-              {t("text.generatorTitle")}
-            </span>
-          </header>
+          <div className="cinema-text-card-prompt-shell">
           {supportsSourceImage ? (
             <section className={`cinema-text-source-image ${selectedSourceImageAssets.length > 0 ? "is-ready" : "is-empty"}`} aria-label={t("text.availableReferenceImages")}>
               {sourceImageAssets.length > 0 ? (
@@ -2920,9 +3415,11 @@ function TextCanvasNode({
                     openSourceImagePicker()
                   }}
                 >
-                  {importTextSourceImageMutation.isPending
-                    ? <Loader2 size={13} aria-hidden="true" className="is-spinning" />
-                    : <Image size={13} aria-hidden="true" />}
+                  <div className="cinema-video-input-slot-thumb" aria-hidden="true">
+                    {importTextSourceImageMutation.isPending
+                      ? <Loader2 size={14} className="is-spinning" />
+                      : <Image size={14} />}
+                  </div>
                   <span>{t("text.addReferenceImage")}</span>
                 </button>
               </div>
@@ -2982,6 +3479,7 @@ function TextCanvasNode({
               syncNodeInputEditing()
             }}
           />
+          </div>
           <div className="cinema-text-card-generator-lower">
             {data.textGenerationError ? (
               <p className="cinema-text-generator-error" role="alert" title={data.textGenerationError}>
@@ -2991,38 +3489,74 @@ function TextCanvasNode({
             <footer className="cinema-text-card-generator-footer">
               <div className="cinema-text-model-control" ref={modelControlRef}>
                 <button
+                  ref={modelButtonRef}
                   type="button"
                   className="cinema-text-card-model-button"
                   title={t("text.chooseModel")}
                   aria-haspopup="listbox"
                   aria-expanded={isModelMenuOpen}
+                  aria-controls={modelMenuID}
                   disabled={textModels.length === 0 || data.isGeneratingText}
+                  onKeyDown={(event) => {
+                    stopCanvasKeyboardEvent(event)
+                    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
+                    event.preventDefault()
+                    setIsModelMenuOpen(true)
+                  }}
                   onClick={() => setIsModelMenuOpen((current) => !current)}
                 >
                   <span>{selectedTextModel?.label ?? t("text.noModel")}</span>
                   <ChevronDown size={13} aria-hidden="true" />
                 </button>
-                {isModelMenuOpen ? (
-                  <div className="cinema-text-model-menu" role="listbox" aria-label="选择文本模型">
+                {isModelMenuOpen && modelMenuPosition ? createPortal(
+                  <div
+                    ref={modelMenuRef}
+                    id={modelMenuID}
+                    className="cinema-text-model-menu nodrag nowheel"
+                    role="listbox"
+                    aria-label={t("text.chooseModel")}
+                    style={modelMenuPosition}
+                    onKeyDown={handleModelMenuKeyDown}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onWheel={(event) => event.stopPropagation()}
+                  >
                     {textModels.length > 0 ? textModels.map((model) => (
                       <button
+                        ref={(element) => {
+                          if (element) modelOptionRefs.current.set(model.value, element)
+                          else modelOptionRefs.current.delete(model.value)
+                        }}
                         key={model.value}
                         type="button"
                         role="option"
                         aria-selected={model.value === selectedTextModel?.value}
+                        tabIndex={model.value === selectedTextModel?.value ? 0 : -1}
                         className={`cinema-text-model-option ${model.value === selectedTextModel?.value ? "is-selected" : ""}`}
                         onClick={() => {
                           commitRawDataPatch({ textModel: model.value })
                           setIsModelMenuOpen(false)
+                          window.requestAnimationFrame(() => modelButtonRef.current?.focus())
                         }}
                       >
-                        <span>{model.label}</span>
+                        <span className="cinema-text-model-option-title">
+                          <span>{model.label}</span>
+                          {model.supportsImageInput ? (
+                            <span
+                              className="cinema-text-model-capability"
+                              title={t("text.supportsImageInput")}
+                              aria-label={t("text.supportsImageInput")}
+                            >
+                              <Image size={11} aria-hidden="true" />
+                            </span>
+                          ) : null}
+                        </span>
                         <small>{model.providerLabel}</small>
                       </button>
                     )) : (
                       <span className="cinema-text-model-empty">{t("text.noModels")}</span>
                     )}
-                  </div>
+                  </div>,
+                  document.body,
                 ) : null}
               </div>
               <button
@@ -3047,7 +3581,7 @@ function TextCanvasNode({
         id="output"
         type="source"
         position={Position.Right}
-        className="cinema-node-handle cinema-node-handle-output"
+        className={`cinema-node-handle cinema-node-handle-output ${data.hasOutgoingConnection ? "is-connected" : ""}`}
         style={accentStyle}
         title={t("text.outputPort")}
         aria-label={t("text.outputPort")}
@@ -3067,6 +3601,7 @@ function ImageCreationState({
   selected?: boolean
   accentStyle: CSSProperties
 }) {
+  const { locale, t } = useI18n()
   const active = data.isActiveNode ?? Boolean(selected)
   const nodeRef = useRef<HTMLElement>(null)
   const promptRef = useRef<HTMLTextAreaElement>(null)
@@ -3111,8 +3646,14 @@ function ImageCreationState({
   const promptControl = visibleImageFormControls.find((control): control is Extract<GenerationControl, { type: "prompt" }> => control.type === "prompt") ?? null
   const sourceImageControl = visibleImageFormControls.find((control): control is Extract<GenerationControl, { type: "image-list" }> => control.type === "image-list") ?? null
   const parameterControls = visibleImageFormControls.filter((control) => control.type !== "prompt" && control.type !== "image-list")
-  const primaryImageParameterControls = parameterControls.filter(isPrimaryImageGenerationControl)
+  const primaryImageParameterControls = parameterControls
+    .filter(isPrimaryImageGenerationControl)
+    .sort((left, right) => primaryImageGenerationControlRank(left) - primaryImageGenerationControlRank(right))
+  const imageResolutionControl = primaryImageParameterControls.find((control) => primaryImageGenerationControlRank(control) === 0) ?? null
+  const imageAspectRatioControl = primaryImageParameterControls.find((control) => primaryImageGenerationControlRank(control) === 1) ?? null
+  const imageCountControls = primaryImageParameterControls.filter((control) => primaryImageGenerationControlRank(control) === 2)
   const advancedImageParameterControls = parameterControls.filter((control) => !isPrimaryImageGenerationControl(control))
+  const hasImageAdvancedInputs = !imageFormSpec || advancedImageParameterControls.length > 0
   const sourceImageMaxCount = sourceImageControl?.maxCount
   const supportsSourceImage = Boolean(selectedImageModel?.supportsImageInput) && (!imageFormSpec || Boolean(sourceImageControl))
   const connectedSourceImageAssets = data.sourceImageAssets ?? []
@@ -3513,13 +4054,123 @@ function ImageCreationState({
     if (control.type === "prompt" || control.type === "image-list") return null
     return (
       <GenerationParameterControlField
-        key={control.key}
+        key={`${selectedImageModel?.value ?? "none"}-${control.key}`}
         control={control}
         parameters={imageFormParameters}
         disabled={isImageBusy}
         onChange={commitFormParameterPatch}
       />
     )
+  }
+  const imageControlSummary = (control: GenerationControl | null) => {
+    if (!control) return ""
+    const value = imageFormParameters[control.key]
+    if (control.type === "select") {
+      const index = generationSelectOptionIndex(control, value)
+      if (index < 0) return ""
+      const option = control.options[index]
+      return translateGenerationOptionLabel(
+        locale,
+        option,
+        generationControlValueLabel(control, option),
+      )
+    }
+    if (control.type === "number" && typeof value === "number" && Number.isFinite(value)) return String(value)
+    if (control.type === "boolean" && typeof value === "boolean") return t(value ? "common.on" : "common.off")
+    return typeof value === "string" || typeof value === "number" ? String(value) : ""
+  }
+  const imageCanvasSpecSummary = imageFormSpec
+    ? [imageControlSummary(imageAspectRatioControl), imageControlSummary(imageResolutionControl)].filter(Boolean).join(" · ")
+    : sizeDraft
+  const hasImageCanvasSpec = !imageFormSpec || Boolean(imageAspectRatioControl || imageResolutionControl)
+  const renderImageCanvasSpecControl = (control: GenerationControl) => {
+    const controlLabel = translateGenerationParameterLabel(locale, control.key, control.label)
+    if (control.type === "select") {
+      const selectedIndex = generationSelectOptionIndex(control, imageFormParameters[control.key])
+      return (
+        <GenerationSpecOptionGroup
+          key={`${selectedImageModel?.value ?? "none"}-${control.key}`}
+          label={controlLabel}
+          value={selectedIndex >= 0 ? String(selectedIndex) : ""}
+          disabled={isImageBusy}
+          options={control.options.map((option, index) => ({
+            value: String(index),
+            label: translateGenerationOptionLabel(
+              locale,
+              option,
+              generationControlValueLabel(control, option),
+            ),
+          }))}
+          onChange={(nextValue) => {
+            const option = control.options[Number(nextValue)]
+            commitFormParameterPatch({ [control.key]: option })
+          }}
+        />
+      )
+    }
+    return (
+      <section key={`${selectedImageModel?.value ?? "none"}-${control.key}`} className="cinema-generation-spec-section">
+        <GenerationParameterControlField
+          control={control}
+          parameters={imageFormParameters}
+          disabled={isImageBusy}
+          onChange={commitFormParameterPatch}
+        />
+      </section>
+    )
+  }
+  const renderImageCountControl = (control: GenerationControl) => {
+    const controlLabel = translateGenerationParameterLabel(locale, control.key, control.label)
+    if (control.type === "select") {
+      const selectedIndex = generationSelectOptionIndex(control, imageFormParameters[control.key])
+      return (
+        <CinemaComposerSelect
+          key={`${selectedImageModel?.value ?? "none"}-${control.key}`}
+          id={`${id}-image-${control.key}`}
+          ariaLabel={controlLabel}
+          className="cinema-image-count-select"
+          menuMinWidth={52}
+          value={selectedIndex >= 0 ? String(selectedIndex) : ""}
+          disabled={isImageBusy}
+          options={control.options.map((option, index) => {
+            const label = translateGenerationOptionLabel(
+              locale,
+              option,
+              generationControlValueLabel(control, option),
+            )
+            return { value: String(index), label, triggerLabel: `×${label}` }
+          })}
+          onChange={(nextValue) => {
+            const option = control.options[Number(nextValue)]
+            commitFormParameterPatch({ [control.key]: option })
+          }}
+        />
+      )
+    }
+    if (control.type === "number") {
+      const minimum = Number.isFinite(control.min) ? Math.ceil(control.min!) : 1
+      const maximum = Number.isFinite(control.max) ? Math.floor(control.max!) : minimum - 1
+      if (maximum >= minimum && maximum - minimum <= 8) {
+        const value = imageFormParameters[control.key]
+        return (
+          <CinemaComposerSelect
+            key={`${selectedImageModel?.value ?? "none"}-${control.key}`}
+            id={`${id}-image-${control.key}`}
+            ariaLabel={controlLabel}
+            className="cinema-image-count-select"
+            menuMinWidth={52}
+            value={typeof value === "number" && Number.isFinite(value) ? String(value) : ""}
+            disabled={isImageBusy}
+            options={Array.from({ length: maximum - minimum + 1 }, (_, index) => {
+              const option = String(minimum + index)
+              return { value: option, label: option, triggerLabel: `×${option}` }
+            })}
+            onChange={(nextValue) => commitFormParameterPatch({ [control.key]: Number(nextValue) })}
+          />
+        )
+      }
+    }
+    return renderImageParameterControl(control)
   }
   const imageStatus = data.isFinalizingImageCandidate
     ? "finalizing"
@@ -3540,18 +4191,18 @@ function ImageCreationState({
           id="input"
           type="target"
           position={Position.Left}
-          className={`cinema-node-handle cinema-node-handle-input ${nodeState === "empty" && !isImageBusy ? "" : "is-locked"}`}
+          className={`cinema-node-handle cinema-node-handle-input ${data.hasIncomingConnection ? "is-connected" : ""} ${nodeState === "empty" && !isImageBusy ? "" : "is-locked"}`}
           style={accentStyle}
           isConnectable={nodeState === "empty" && !isImageBusy}
         />
       ) : null}
       {active && nodeState === "empty" && !isImageBusy ? (
-        <div className="cinema-image-upload-toolbar nodrag nowheel" role="toolbar" aria-label="Image source">
+        <div className="cinema-image-upload-toolbar nodrag nowheel" role="toolbar" aria-label={t("image.source")}>
           <button
             type="button"
             className="cinema-image-upload-button"
-            title="上传图片"
-            aria-label="上传图片"
+            title={t("image.upload")}
+            aria-label={t("image.upload")}
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation()
@@ -3565,7 +4216,7 @@ function ImageCreationState({
             }}
           >
             <Upload size={15} aria-hidden="true" />
-            <span>上传</span>
+            <span>{t("common.upload")}</span>
           </button>
         </div>
       ) : null}
@@ -3613,13 +4264,13 @@ function ImageCreationState({
           </div>
         </header>
 
-        <section className="cinema-image-frame" aria-label="Image preview" style={previewStyle}>
+        <section className="cinema-image-frame" aria-label={t("image.preview")} style={previewStyle}>
           {previewSrc ? (
             <img src={previewSrc} alt={promptDraft || data.title} draggable={false} />
           ) : (
             <div className="cinema-image-empty">
               <Image size={28} aria-hidden="true" />
-              <span>No image yet</span>
+              <span>{t("image.empty")}</span>
             </div>
           )}
           {isImageFillBusy ? (
@@ -3640,7 +4291,7 @@ function ImageCreationState({
 
         {nodeState === "choosing" ? (
           <div className="cinema-image-candidate-panel nodrag nowheel">
-            <div className="cinema-image-thumbnails" role="radiogroup" aria-label="Generated image choices">
+            <div className="cinema-image-thumbnails" role="radiogroup" aria-label={t("image.choices")}>
             {candidateAssets.map((asset) => {
               const src = data.agentBaseURL && data.projectID
                 ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, asset.path)
@@ -3686,10 +4337,15 @@ function ImageCreationState({
           accentStyle={accentStyle}
         >
           <section
-            className="cinema-node-input-panel cinema-image-composer nodrag nowheel"
-            aria-label="Image generation controls"
+            className="cinema-node-input-panel cinema-generation-composer cinema-image-composer nodrag nowheel"
+            aria-label={t("image.controls")}
             onKeyDownCapture={(event) => {
               if (event.key !== "Escape") return
+              const target = event.target
+              if (
+                target instanceof globalThis.Element
+                && target.closest(".cinema-composer-select-menu, .cinema-generation-spec-panel")
+              ) return
               if (event.nativeEvent.isComposing || isPromptComposingRef.current) return
               event.preventDefault()
               event.stopPropagation()
@@ -3697,19 +4353,19 @@ function ImageCreationState({
             }}
           >
           {sourceTextParameters.length > 0 ? (
-            <div className="cinema-image-param-tags" aria-label="Connected text parameters">
+            <div className="cinema-image-param-tags" aria-label={t("generation.connectedText")}>
               {sourceTextParameters.map((parameter) => (
                 <span
                   key={parameter.edgeID}
                   className={`cinema-image-param-tag ${parameter.text.trim() ? "" : "is-empty"}`}
-                  title={parameter.text.trim() ? `${parameter.nodeTitle}: ${parameter.text.trim()}` : `${parameter.nodeTitle}: 空文本`}
+                  title={parameter.text.trim() ? `${parameter.nodeTitle}: ${parameter.text.trim()}` : `${parameter.nodeTitle}: ${t("generation.emptyText")}`}
                 >
                   <FileText size={12} aria-hidden="true" />
                   <span>{parameter.nodeTitle}</span>
                   <button
                     type="button"
-                    title={`移除文本参数 ${parameter.nodeTitle}`}
-                    aria-label={`移除文本参数 ${parameter.nodeTitle}`}
+                    title={t("generation.removeText", { name: parameter.nodeTitle })}
+                    aria-label={t("generation.removeText", { name: parameter.nodeTitle })}
                     disabled={isImageBusy}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => {
@@ -3723,10 +4379,110 @@ function ImageCreationState({
               ))}
             </div>
           ) : null}
+          {supportsSourceImage ? (
+            <section className={`cinema-text-source-image ${selectedSourceImageAssets.length > 0 ? "is-ready" : "is-empty"}`} aria-label={t("image.sourceImage")}>
+              {sourceImageAssets.length > 0 ? (
+                <>
+                  <div className="cinema-text-source-image-main">
+                    <Image size={13} aria-hidden="true" />
+                    <span>{selectedSourceImageAssets.length > 0 ? t("text.referenceImages", { count: selectedSourceImageAssets.length }) : t("text.chooseReferenceImages")}</span>
+                  </div>
+                  <div className="cinema-text-source-image-list" aria-label={t("text.availableReferenceImages")}>
+                    {sourceImageAssets.map((asset) => {
+                      const src = data.agentBaseURL && data.projectID
+                        ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, asset.path)
+                        : ""
+                      const isSelected = selectedSourceImageAssets.some((selectedAsset) =>
+                        sourceImageAssetKey(selectedAsset) === sourceImageAssetKey(asset)
+                      )
+                      return (
+                        <div
+                          key={`${asset.nodeID}-${asset.id}-${asset.path}`}
+                          className="cinema-text-source-image-item"
+                        >
+                          <button
+                            type="button"
+                            className={`cinema-text-source-image-thumb ${isSelected ? "is-selected" : ""}`}
+                            title={`${asset.nodeTitle} · ${asset.path}`}
+                            aria-label={t("text.selectReferenceImage", { name: asset.nodeTitle })}
+                            aria-pressed={isSelected}
+                            disabled={isImageBusy}
+                            onClick={() => {
+                              const nextSelectedSourceImageAssets = isSelected
+                                ? selectedSourceImageAssets.filter((selectedAsset) =>
+                                  sourceImageAssetKey(selectedAsset) !== sourceImageAssetKey(asset)
+                                )
+                                : [...selectedSourceImageAssets, asset]
+                              commitRawDataPatch(sourceImageSelectionPatch(nextSelectedSourceImageAssets))
+                            }}
+                          >
+                            {src ? <img src={src} alt="" draggable={false} /> : <Image size={14} aria-hidden="true" />}
+                          </button>
+                          <button
+                            type="button"
+                            className="cinema-text-source-image-remove"
+                            title={t("text.removeReferenceImage", { name: asset.nodeTitle })}
+                            aria-label={t("text.removeReferenceImage", { name: asset.nodeTitle })}
+                            disabled={isImageBusy}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              removeSourceImageAsset(asset)
+                            }}
+                          >
+                            <X size={11} aria-hidden="true" />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="cinema-text-source-image-empty">
+                  <Image size={15} aria-hidden="true" />
+                  <span>{t("text.referenceEmpty")}</span>
+                </div>
+              )}
+              <div className="cinema-text-source-image-actions">
+                <button
+                  type="button"
+                  className="cinema-text-source-image-add"
+                  title={t("text.localReferenceImage")}
+                  aria-label={t("text.localReferenceImage")}
+                  disabled={isImageBusy || importImageSourceImageMutation.isPending}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    openSourceImagePicker()
+                  }}
+                >
+                  <div className="cinema-video-input-slot-thumb" aria-hidden="true">
+                    {importImageSourceImageMutation.isPending
+                      ? <Loader2 size={14} className="is-spinning" />
+                      : <Image size={14} />}
+                  </div>
+                  <span>{t("text.addReferenceImage")}</span>
+                </button>
+              </div>
+              {sourceImageImportError ? (
+                <p className="cinema-image-error" role="alert" title={sourceImageImportError}>
+                  {sourceImageImportError}
+                </p>
+              ) : null}
+              <input
+                ref={sourceImageInputRef}
+                className="cinema-file-input"
+                type="file"
+                accept={IMAGE_FILE_ACCEPT}
+                multiple
+                onChange={handleSourceImageFileInputChange}
+              />
+            </section>
+          ) : null}
           <textarea
             ref={promptRef}
+            aria-label={t("image.prompt")}
             value={promptDraft}
-            placeholder="描述画面、主体、光线和镜头..."
+            placeholder={t("image.promptPlaceholder")}
             maxLength={promptControl?.maxLength}
             spellCheck={false}
             onFocus={() => {
@@ -3768,164 +4524,13 @@ function ImageCreationState({
               setPromptInputEditing(false)
             }}
           />
-          {supportsSourceImage ? (
-            <section className={`cinema-text-source-image ${selectedSourceImageAssets.length > 0 ? "is-ready" : "is-empty"}`} aria-label="Image generation source image">
-              {sourceImageAssets.length > 0 ? (
-                <>
-                  <div className="cinema-text-source-image-main">
-                    <Image size={13} aria-hidden="true" />
-                    <span>{selectedSourceImageAssets.length > 0 ? `参考图：${selectedSourceImageAssets.length} 张` : "选择参考图"}</span>
-                  </div>
-                  <div className="cinema-text-source-image-list" aria-label="可用参考图">
-                    {sourceImageAssets.map((asset) => {
-                      const src = data.agentBaseURL && data.projectID
-                        ? projectAssetPreviewURL(data.agentBaseURL, data.projectID, asset.path)
-                        : ""
-                      const isSelected = selectedSourceImageAssets.some((selectedAsset) =>
-                        sourceImageAssetKey(selectedAsset) === sourceImageAssetKey(asset)
-                      )
-                      return (
-                        <div
-                          key={`${asset.nodeID}-${asset.id}-${asset.path}`}
-                          className="cinema-text-source-image-item"
-                        >
-                          <button
-                            type="button"
-                            className={`cinema-text-source-image-thumb ${isSelected ? "is-selected" : ""}`}
-                            title={`${asset.nodeTitle} · ${asset.path}`}
-                            aria-label={`选择参考图 ${asset.nodeTitle}`}
-                            aria-pressed={isSelected}
-                            disabled={isImageBusy}
-                            onClick={() => {
-                              const nextSelectedSourceImageAssets = isSelected
-                                ? selectedSourceImageAssets.filter((selectedAsset) =>
-                                  sourceImageAssetKey(selectedAsset) !== sourceImageAssetKey(asset)
-                                )
-                                : [...selectedSourceImageAssets, asset]
-                              commitRawDataPatch(sourceImageSelectionPatch(nextSelectedSourceImageAssets))
-                            }}
-                          >
-                            {src ? <img src={src} alt="" draggable={false} /> : <Image size={14} aria-hidden="true" />}
-                          </button>
-                          <button
-                            type="button"
-                            className="cinema-text-source-image-remove"
-                            title={`移除参考图 ${asset.nodeTitle}`}
-                            aria-label={`移除参考图 ${asset.nodeTitle}`}
-                            disabled={isImageBusy}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              removeSourceImageAsset(asset)
-                            }}
-                          >
-                            <X size={11} aria-hidden="true" />
-                          </button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </>
-              ) : (
-                <div className="cinema-text-source-image-empty">
-                  <Image size={15} aria-hidden="true" />
-                  <span>连接图片节点，或在这里选择一张或多张图片</span>
-                </div>
-              )}
-              <div className="cinema-text-source-image-actions">
-                <button
-                  type="button"
-                  className="cinema-text-source-image-add"
-                  title="从本地选择参考图"
-                  aria-label="从本地选择参考图"
-                  disabled={isImageBusy || importImageSourceImageMutation.isPending}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    openSourceImagePicker()
-                  }}
-                >
-                  <div className="cinema-video-input-slot-thumb" aria-hidden="true">
-                    {importImageSourceImageMutation.isPending
-                      ? <Loader2 size={14} className="is-spinning" />
-                      : <Image size={14} />}
-                  </div>
-                  <span>添加参考图</span>
-                </button>
-              </div>
-              {sourceImageImportError ? (
-                <p className="cinema-image-error" role="alert" title={sourceImageImportError}>
-                  {sourceImageImportError}
-                </p>
-              ) : null}
-              <input
-                ref={sourceImageInputRef}
-                className="cinema-file-input"
-                type="file"
-                accept={IMAGE_FILE_ACCEPT}
-                multiple
-                onChange={handleSourceImageFileInputChange}
-              />
-            </section>
-          ) : null}
-          <div className={`cinema-image-quick-controls ${imageFormSpec ? "is-form-spec" : ""}`}>
-            {imageFormSpec ? primaryImageParameterControls.map(renderImageParameterControl) : (
-              <>
-                <input
-                  aria-label="Image size"
-                  value={sizeDraft}
-                  disabled={isImageBusy}
-                  inputMode="numeric"
-                  onKeyDown={(event) => event.stopPropagation()}
-                  onChange={(event) => setSizeDraft(event.target.value)}
-                  onBlur={() => commitRawDataPatch({ size: sizeDraftRef.current.trim() || DEFAULT_IMAGE_GENERATION_SIZE })}
-                />
-                <input
-                  aria-label="Image count"
-                  type="number"
-                  min={1}
-                  max={4}
-                  value={countDraft}
-                  disabled={isImageBusy}
-                  onKeyDown={(event) => event.stopPropagation()}
-                  onChange={(event) => setCountDraft(event.target.value)}
-                  onBlur={() => {
-                    const normalized = normalizeCountDraft()
-                    setCountDraft(String(normalized))
-                    commitRawDataPatch({ count: normalized })
-                  }}
-                />
-              </>
-            )}
-            <button
-              type="button"
-              className={`cinema-image-advanced-toggle ${isImageAdvancedOpen ? "is-open" : ""}`}
-              aria-expanded={isImageAdvancedOpen}
-              aria-controls={`${id}-image-advanced`}
-              onClick={() => setIsImageAdvancedOpen((value) => !value)}
-            >
-              <span>Advanced</span>
-              <ChevronDown size={14} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="cinema-image-submit"
-              title={selectedImageModel ? "Generate image with provider" : "No available generation image model"}
-              aria-label="Generate image"
-              disabled={!canGenerate}
-              onClick={generateImage}
-            >
-              {isImageBusy
-                ? <Loader2 size={18} aria-hidden="true" className="is-spinning" />
-                : <ArrowUp size={18} aria-hidden="true" />}
-            </button>
-          </div>
-          {isImageAdvancedOpen ? (
-            <section id={`${id}-image-advanced`} className="cinema-image-advanced-panel" aria-label="Advanced image generation inputs">
+          {hasImageAdvancedInputs && isImageAdvancedOpen ? (
+            <section id={`${id}-image-advanced`} className="cinema-image-advanced-panel" aria-label={t("image.advancedInputs")}>
               {!imageFormSpec ? (
                 <input
                   className="cinema-image-style"
                   value={styleDraft}
-                  placeholder="风格提示（可选）"
+                  placeholder={t("image.stylePlaceholder")}
                   spellCheck={false}
                   disabled={isImageBusy}
                   onKeyDown={(event) => event.stopPropagation()}
@@ -3934,35 +4539,10 @@ function ImageCreationState({
                 />
               ) : null}
               {imageFormSpec && advancedImageParameterControls.length > 0 ? (
-                <section className="cinema-image-form-controls" aria-label="Image generation parameters">
+                <section className="cinema-image-form-controls" aria-label={t("image.parameters")}>
                   {advancedImageParameterControls.map(renderImageParameterControl)}
                 </section>
               ) : null}
-              <section className="cinema-image-model-controls" aria-label="Image generation model">
-                <label className="cinema-image-form-control">
-                  <span>Model</span>
-                  <select
-                    aria-label="Image model"
-                    value={selectedImageModel?.value ?? ""}
-                    disabled={imageModels.length === 0 || isImageBusy}
-                    onKeyDown={(event) => event.stopPropagation()}
-                    onChange={(event) => {
-                      const nextValue = event.target.value || undefined
-                      const nextModel = imageModels.find((model) => model.value === nextValue) ?? null
-                      commitRawDataPatch({
-                        model: nextValue,
-                        parameters: generationFormDefaultParameters(nextModel?.formSpec ?? null),
-                      })
-                    }}
-                  >
-                    {imageModels.length > 0 ? imageModels.map((model) => (
-                      <option key={model.value} value={model.value}>{model.providerLabel} 路 {model.label}</option>
-                    )) : (
-                      <option value="">No generation image model</option>
-                    )}
-                  </select>
-                </label>
-              </section>
             </section>
           ) : null}
           {nodeError ? (
@@ -3970,6 +4550,106 @@ function ImageCreationState({
               {nodeError}
             </p>
           ) : null}
+          <footer className="cinema-generation-footer cinema-image-composer-footer">
+            <CinemaComposerSelect
+              id={`${id}-image-model`}
+              ariaLabel="Image model"
+              className="cinema-generation-model-select"
+              menuMinWidth={236}
+              value={selectedImageModel?.value ?? ""}
+              disabled={imageModels.length === 0 || isImageBusy}
+              placeholder={t("generation.noModel")}
+              options={imageModels.map((model) => ({
+                value: model.value,
+                label: `${model.providerLabel} · ${model.label}`,
+                triggerLabel: model.label,
+              }))}
+              onChange={(nextValue) => {
+                if (nextValue === selectedImageModel?.value) return
+                const nextModel = imageModels.find((model) => model.value === nextValue) ?? null
+                commitRawDataPatch({
+                  model: nextValue || undefined,
+                  parameters: generationFormDefaultParameters(nextModel?.formSpec ?? null),
+                })
+              }}
+            />
+            <div className={`cinema-image-quick-controls cinema-image-parameter-rail ${imageFormSpec ? "is-form-spec" : ""}`}>
+              {hasImageCanvasSpec ? (
+                <GenerationSpecPopover
+                  id={`${id}-image-canvas-spec`}
+                  ariaLabel={t("image.canvasSpec")}
+                  summary={imageCanvasSpecSummary || t("generation.option.auto")}
+                  disabled={isImageBusy}
+                  onKeepActive={() => data.onSelectNode?.(id)}
+                >
+                  {imageFormSpec ? (
+                    <>
+                      {imageAspectRatioControl ? renderImageCanvasSpecControl(imageAspectRatioControl) : null}
+                      {imageResolutionControl ? renderImageCanvasSpecControl(imageResolutionControl) : null}
+                    </>
+                  ) : (
+                    <section className="cinema-generation-spec-section">
+                      <h3>{t("image.size")}</h3>
+                      <input
+                        className="cinema-generation-spec-input"
+                        aria-label={t("image.size")}
+                        value={sizeDraft}
+                        disabled={isImageBusy}
+                        inputMode="numeric"
+                        onKeyDown={(event) => event.stopPropagation()}
+                        onChange={(event) => setSizeDraft(event.target.value)}
+                        onBlur={() => commitRawDataPatch({ size: sizeDraftRef.current.trim() || DEFAULT_IMAGE_GENERATION_SIZE })}
+                      />
+                    </section>
+                  )}
+                </GenerationSpecPopover>
+              ) : null}
+              {imageFormSpec ? imageCountControls.map(renderImageCountControl) : (
+                <CinemaComposerSelect
+                  id={`${id}-image-count`}
+                  ariaLabel={t("image.count")}
+                  className="cinema-image-count-select"
+                  menuMinWidth={52}
+                  value={String(normalizeCountDraft())}
+                  disabled={isImageBusy}
+                  options={[1, 2, 3, 4].map((value) => ({
+                    value: String(value),
+                    label: String(value),
+                    triggerLabel: `×${value}`,
+                  }))}
+                  onChange={(nextValue) => {
+                    const normalized = Number(nextValue)
+                    setCountDraft(String(normalized))
+                    commitRawDataPatch({ count: normalized })
+                  }}
+                />
+              )}
+              {hasImageAdvancedInputs ? (
+                <button
+                  type="button"
+                  className={`cinema-image-advanced-toggle ${isImageAdvancedOpen ? "is-open" : ""}`}
+                  aria-label={t("common.advanced")}
+                  aria-expanded={isImageAdvancedOpen}
+                  aria-controls={`${id}-image-advanced`}
+                  onClick={() => setIsImageAdvancedOpen((value) => !value)}
+                >
+                  <span>{t("common.advanced")}</span>
+                </button>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="cinema-image-submit"
+              title={selectedImageModel ? t("image.generateWithProvider") : t("image.noGenerationModel")}
+              aria-label={t("image.generate")}
+              disabled={!canGenerate}
+              onClick={generateImage}
+            >
+              {isImageBusy
+                ? <Loader2 size={18} aria-hidden="true" className="is-spinning" />
+                : <ArrowUp size={18} aria-hidden="true" />}
+            </button>
+          </footer>
           </section>
         </CinemaNodeInputOverlay>
       ) : null}
@@ -3977,7 +4657,7 @@ function ImageCreationState({
         id="output"
         type="source"
         position={Position.Right}
-        className="cinema-node-handle cinema-node-handle-output"
+        className={`cinema-node-handle cinema-node-handle-output ${data.hasOutgoingConnection ? "is-connected" : ""}`}
         style={accentStyle}
       />
     </>
@@ -3995,6 +4675,7 @@ function VideoGenerationCanvasNode({
   selected?: boolean
   accentStyle: CSSProperties
 }) {
+  const { locale, t } = useI18n()
   const active = data.isActiveNode ?? Boolean(selected)
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const videoPreviewRef = useRef<HTMLVideoElement>(null)
@@ -4055,8 +4736,29 @@ function VideoGenerationCanvasNode({
   const durationSelectOptions = [...new Set([...durationOptions, Number.parseFloat(durationDraft) || DEFAULT_VIDEO_DURATION_SECONDS])]
     .filter((value) => Number.isFinite(value) && value > 0)
   const resolutionSelectOptions = [...new Set([...resolutionOptions, resolutionDraft, DEFAULT_VIDEO_RESOLUTION].filter(Boolean))]
+  const videoAspectRatioSpecOptions = aspectRatioSelectOptions.map((item) => ({
+    value: item,
+    label: translateGenerationOptionLabel(locale, item, item),
+  }))
+  const videoResolutionSpecOptions = resolutionSelectOptions.map((item) => ({
+    value: item,
+    label: resolutionOptionLabels[item] ?? item,
+  }))
+  const videoSpecSummary = [
+    videoAspectRatioSpecOptions.find((option) => option.value === aspectRatioDraft)?.label ?? aspectRatioDraft,
+    videoResolutionSpecOptions.find((option) => option.value === resolutionDraft)?.label ?? resolutionDraft,
+  ].filter(Boolean).join(" · ")
   const availableProviders = availableVideoProviders(providers)
-  const availableModels = availableModelsForProvider(selectedProvider)
+  const videoModelChoices = availableProviders.flatMap((provider) =>
+    availableModelsForProvider(provider).map((model) => ({
+      provider,
+      model,
+      value: JSON.stringify([provider.manifest.id, providerModelSelectionID(model)]),
+      label: `${provider.manifest.name} · ${model.label}`,
+    })))
+  const selectedVideoModelChoiceValue = selectedProvider && selectedModel
+    ? JSON.stringify([selectedProvider.manifest.id, providerModelSelectionID(selectedModel)])
+    : ""
   const availableInputCombinations = inputCombinationsForModel(selectedProvider, selectedModel)
   const visibleModeContracts = availableInputCombinations.map(videoModeInputContractForCombination)
   const modeContract = videoModeInputContractForCombination(selectedInputCombination)
@@ -4067,6 +4769,7 @@ function VideoGenerationCanvasNode({
   const visibleVideoParameterControls = modeContract.parameterControls.filter((control) =>
     generationControlVisible(control, videoFormParameters)
   )
+  const hasVideoAdvancedInputs = visibleVideoParameterControls.length > 0
   videoFormParametersRef.current = videoFormParameters
   const outputAssets = task?.outputAssets ?? readDisplayAssets(data.rawData)
   const outputAsset = outputAssets.find((asset) => asset.kind === "video") ?? outputAssets[0] ?? null
@@ -4087,6 +4790,12 @@ function VideoGenerationCanvasNode({
   const providerConnected = selectedProvider?.auth.connected !== false
   const providerAdapterUnavailable = Boolean(selectedProvider) && selectedProvider?.runtime?.adapterAvailable !== true
   const videoMediaInputs = modeContract.inputs.filter(isVideoMediaInputControl)
+  const localizedVideoInputLabel = (input: VideoInputControl) => (
+    translateVideoInputLabel(locale, input.slot, input.role, input.label)
+  )
+  const localizedVideoInputEmptyText = (input: VideoInputControl) => (
+    translateVideoInputEmptyText(locale, input.slot, input.emptyText)
+  )
   const inputAssets: VideoInputAssets = data.videoInputAssets ?? data.videoInputImageAssets ?? {}
   const videoLocalInputAssets = readVideoLocalInputAssets(data.rawData, id)
   const sourceImageAsset = videoInputAssetList(inputAssets.sourceImage)[0] ?? data.sourceImageAsset ?? null
@@ -4109,7 +4818,7 @@ function VideoGenerationCanvasNode({
   const missingRequiredInput = videoMediaInputs.find((input) =>
     input.required && inputAssetsForControl(input).length < Math.max(input.minCount, 1)
   )
-  const missingRequiredInputLabel = missingRequiredInput?.label ?? ""
+  const missingRequiredInputLabel = missingRequiredInput ? localizedVideoInputLabel(missingRequiredInput) : ""
   const sourceTextParameters = data.sourceTextParameters ?? []
   const effectivePromptDraft = imagePromptWithSourceText(promptDraft, sourceTextParameters)
   const promptRequired = modeContract.inputs.some((input) => input.slot === "textParameter" && input.required)
@@ -4118,6 +4827,10 @@ function VideoGenerationCanvasNode({
   ) ?? null
   const videoFormParametersReady = missingRequiredParameterControl === null
   const unsupportedRequiredInput = modeContract.unsupportedRequiredInputs[0] ?? null
+  const unsupportedRequiredInputLabel = unsupportedRequiredInput ? localizedVideoInputLabel(unsupportedRequiredInput) : ""
+  const missingRequiredParameterLabel = missingRequiredParameterControl
+    ? translateGenerationParameterLabel(locale, missingRequiredParameterControl.key, missingRequiredParameterControl.label)
+    : ""
   const requiredInputMissing = Boolean(missingRequiredInput)
   const hasSourceImageInput = videoMediaInputs.some((input) => input.slot === "sourceImage")
   const missingRequiredInputSlotLabel = missingRequiredInputLabel
@@ -4130,29 +4843,39 @@ function VideoGenerationCanvasNode({
     forceQueued: Boolean(data.isCreatingVideoTask),
   })
   const shouldShowVideoProgress = Boolean(progress) && (isBusy || currentStatus === "failed" || currentStatus === "canceled")
+  const providerLabel = selectedProvider?.manifest.name ?? t("video.provider")
+  const providerConnectionReason = providerNeedsCredential && !providerConnected
+    ? t("video.error.providerDisconnected", { provider: providerLabel })
+    : null
+  const providerAdapterReason = providerAdapterUnavailable
+    ? t("video.error.adapterUnavailable", { provider: providerLabel })
+    : null
+  const unsupportedInputReason = unsupportedRequiredInput
+    ? t("video.error.unsupportedInput", { input: unsupportedRequiredInputLabel })
+    : null
+  const requiredParameterReason = !videoFormParametersReady
+    ? t("video.error.parameterRequired", { parameter: missingRequiredParameterLabel })
+    : null
+  const requiredInputReason = requiredInputMissing
+    ? canImportVideoInputLocalImage(missingRequiredInput?.slot ?? null)
+      ? t("video.error.importOrConnectImage", { input: missingRequiredInputLabel })
+      : t("video.error.connectInput", { input: missingRequiredInputLabel })
+    : null
   const submitDisabledReason = !selectedProvider
-    ? "No available video provider."
+    ? t("video.error.noProvider")
     : !selectedModel
-      ? "No available video model."
+      ? t("video.error.noModel")
       : !selectedInputCombination
-        ? "The selected model has no available input combination."
+        ? t("video.error.noInputCombination")
         : promptRequired && effectivePromptDraft.trim().length === 0
-          ? "Enter a video prompt or connect a text parameter node."
+          ? t("video.error.promptRequired")
           : isBusy
-            ? "The current task is still running."
-            : providerNeedsCredential && !providerConnected
-              ? `${selectedProvider.manifest.name} is not connected.`
-              : providerAdapterUnavailable
-                ? `${selectedProvider.manifest.name} does not have a generation runtime adapter yet.`
-                : unsupportedRequiredInput
-                  ? `Required input ${unsupportedRequiredInput.label} is not supported by this UI yet.`
-                  : !videoFormParametersReady
-                    ? `${missingRequiredParameterControl?.label ?? "Parameter"} is required.`
-                    : requiredInputMissing
-                      ? canImportVideoInputLocalImage(missingRequiredInput?.slot ?? null)
-                        ? `${missingRequiredInputLabel} needs an imported or connected image.`
-                        : `${missingRequiredInputLabel} needs a connected input node.`
-                      : null
+            ? t("video.error.taskRunning")
+            : providerConnectionReason
+              ?? providerAdapterReason
+              ?? unsupportedInputReason
+              ?? requiredParameterReason
+              ?? requiredInputReason
   const canGenerate =
     submitDisabledReason === null
 
@@ -4257,7 +4980,7 @@ function VideoGenerationCanvasNode({
 
   const importVideoInputImageMutation = useMutation({
     mutationFn: async ({ slot, file }: { slot: VideoImageInputSlot; file: File }) => {
-      if (!data.agentBaseURL || !data.projectID) throw new Error("Project context is not ready")
+      if (!data.agentBaseURL || !data.projectID) throw new Error(t("video.error.projectUnavailable"))
       const dataBase64 = await fileToDataBase64(file)
       const result = await requestJson<CinemaImportedImageAssetResult>(
         data.agentBaseURL,
@@ -4284,7 +5007,7 @@ function VideoGenerationCanvasNode({
       writeVideoLocalInputAsset(slot, asset)
     },
     onError: (error) => {
-      setVideoInputImageImportError(error instanceof Error ? error.message : "Image import failed")
+      setVideoInputImageImportError(error instanceof Error ? error.message : t("video.error.imageImportFailed"))
     },
     onSettled: () => {
       setImportingVideoInputImageSlot(null)
@@ -4396,10 +5119,15 @@ function VideoGenerationCanvasNode({
   }
 
   const chooseMode = (nextMode: CinemaGenerationMode) => {
+    if (nextMode === modeRef.current) return
     const nextCombination = inputCombinationForSelection(selectedProvider, selectedModel, nextMode)
     const nextAspectRatio = validAspectRatioForSelection(aspectRatioDraftRef.current, selectedModel, nextCombination)
     const nextDuration = validDurationForSelection(durationDraftRef.current, selectedModel, nextCombination)
     const nextResolution = validResolutionForSelection(resolutionDraftRef.current, selectedModel, nextCombination)
+    const nextParameters = generationControlDefaultParameters(
+      videoModeInputContractForCombination(nextCombination).parameterControls,
+    )
+    videoFormParametersRef.current = nextParameters
     setMode(nextMode)
     setAspectRatioDraft(nextAspectRatio)
     setDurationDraft(String(nextDuration))
@@ -4409,51 +5137,62 @@ function VideoGenerationCanvasNode({
       aspectRatio: nextAspectRatio,
       duration: nextDuration,
       resolution: nextResolution,
+      parameters: nextParameters,
     })
   }
 
-  const chooseProvider = (nextProviderID: string) => {
-    const nextProvider = providerForSelection(providers, nextProviderID)
-    const nextModel = modelForSelection(nextProvider, "")
+  const chooseVideoModel = (nextChoiceValue: string) => {
+    if (nextChoiceValue === selectedVideoModelChoiceValue) return
+    const nextChoice = videoModelChoices.find((choice) => choice.value === nextChoiceValue)
+    if (!nextChoice) return
+    const nextProvider = nextChoice.provider
+    const nextModel = nextChoice.model
     const nextCombination = inputCombinationForSelection(nextProvider, nextModel, modeRef.current)
     const nextMode = nextCombination?.mode ?? FALLBACK_VIDEO_INPUT_COMBINATION_MODE
     const nextAspectRatio = defaultModelAspectRatio(nextModel, nextCombination)
     const nextDuration = defaultModelDuration(nextModel, nextCombination)
     const nextResolution = defaultModelResolution(nextModel, nextCombination)
+    const nextParameters = generationControlDefaultParameters(
+      videoModeInputContractForCombination(nextCombination).parameterControls,
+    )
+    videoFormParametersRef.current = nextParameters
     setMode(nextMode)
-    setProviderID(nextProvider?.manifest.id ?? "")
-    setModelID(nextModel ? providerModelSelectionID(nextModel) : "")
+    setProviderID(nextProvider.manifest.id)
+    setModelID(providerModelSelectionID(nextModel))
     setAspectRatioDraft(nextAspectRatio)
     setDurationDraft(String(nextDuration))
     setResolutionDraft(nextResolution)
     commitRawDataPatch({
       mode: nextMode,
-      providerID: nextProvider?.manifest.id,
-      modelID: nextModel ? providerModelSelectionID(nextModel) : undefined,
+      providerID: nextProvider.manifest.id,
+      modelID: providerModelSelectionID(nextModel),
       aspectRatio: nextAspectRatio,
       duration: nextDuration,
       resolution: nextResolution,
+      parameters: nextParameters,
     })
   }
 
-  const chooseModel = (nextModelID: string) => {
-    const nextModel = modelForSelection(selectedProvider, nextModelID)
-    const nextCombination = inputCombinationForSelection(selectedProvider, nextModel, modeRef.current)
-    const nextMode = nextCombination?.mode ?? FALLBACK_VIDEO_INPUT_COMBINATION_MODE
-    const nextAspectRatio = defaultModelAspectRatio(nextModel, nextCombination)
-    const nextDuration = defaultModelDuration(nextModel, nextCombination)
-    const nextResolution = defaultModelResolution(nextModel, nextCombination)
-    setMode(nextMode)
-    setModelID(nextModel ? providerModelSelectionID(nextModel) : "")
-    setAspectRatioDraft(nextAspectRatio)
-    setDurationDraft(String(nextDuration))
-    setResolutionDraft(nextResolution)
-    commitRawDataPatch({
-      mode: nextMode,
-      modelID: nextModel ? providerModelSelectionID(nextModel) : undefined,
-      aspectRatio: nextAspectRatio,
-      duration: nextDuration,
-      resolution: nextResolution,
+  const handleVideoModeKeyDown = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    currentIndex: number,
+  ) => {
+    stopCanvasKeyboardEvent(event)
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return
+    event.preventDefault()
+    if (visibleModeContracts.length === 0) return
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? visibleModeContracts.length - 1
+        : event.key === "ArrowLeft" || event.key === "ArrowUp"
+          ? (currentIndex <= 0 ? visibleModeContracts.length - 1 : currentIndex - 1)
+          : (currentIndex + 1) % visibleModeContracts.length
+    const nextMode = visibleModeContracts[nextIndex]?.mode
+    if (!nextMode) return
+    chooseMode(nextMode)
+    window.requestAnimationFrame(() => {
+      document.getElementById(`${id}-video-mode-${nextMode}`)?.focus()
     })
   }
 
@@ -4543,7 +5282,7 @@ function VideoGenerationCanvasNode({
         id="input"
         type="target"
         position={Position.Left}
-        className="cinema-node-handle cinema-node-handle-input"
+        className={`cinema-node-handle cinema-node-handle-input ${data.hasIncomingConnection ? "is-connected" : ""}`}
         style={accentStyle}
       />
       <article
@@ -4554,18 +5293,23 @@ function VideoGenerationCanvasNode({
         <header className="cinema-video-gen-header">
           <CinemaNodeTitle
             icon={Video}
-            label="Video"
+            label={t("video.type")}
             nodeID={id}
             title={data.title}
             onChangeTitle={data.onChangeTitle}
           />
           <div className="cinema-node-header-actions">
-            <NodeStatusDot status={currentStatus} label={isBusy ? `${currentStatus} in progress` : currentStatus} />
+            <NodeStatusDot
+              status={currentStatus}
+              label={isBusy
+                ? t("generation.status.inProgress", { status: translateGenerationStatus(locale, currentStatus) })
+                : translateGenerationStatus(locale, currentStatus)}
+            />
             <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
           </div>
         </header>
 
-        <section className={previewClassName} style={previewStyle} aria-label="Generated video preview">
+        <section className={previewClassName} style={previewStyle} aria-label={t("video.preview")}>
           {previewSrc ? (
             <>
               <video
@@ -4581,8 +5325,8 @@ function VideoGenerationCanvasNode({
               <button
                 type="button"
                 className={`cinema-video-preview-play nodrag nowheel ${isVideoPreviewPlaying ? "is-playing" : ""}`}
-                title={isVideoPreviewPlaying ? "Pause preview" : "Play preview"}
-                aria-label={isVideoPreviewPlaying ? "Pause preview" : "Play preview"}
+                title={t(isVideoPreviewPlaying ? "video.pausePreview" : "video.playPreview")}
+                aria-label={t(isVideoPreviewPlaying ? "video.pausePreview" : "video.playPreview")}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.stopPropagation()
@@ -4595,13 +5339,13 @@ function VideoGenerationCanvasNode({
           ) : (
             <div className="cinema-video-gen-empty">
               <Play size={26} aria-hidden="true" />
-              <span>{isWaiting ? "Waiting for output" : "No video yet"}</span>
+              <span>{t(isWaiting ? "video.waiting" : "video.empty")}</span>
             </div>
           )}
           {data.isCreatingVideoTask ? (
             <div className="cinema-generation-overlay" aria-live="polite">
               <Loader2 size={18} aria-hidden="true" className="is-spinning" />
-              <span>Submitting</span>
+              <span>{t("video.submitting")}</span>
             </div>
           ) : null}
         </section>
@@ -4618,37 +5362,50 @@ function VideoGenerationCanvasNode({
           width={640}
           accentStyle={accentStyle}
         >
-          <section className="cinema-node-input-panel cinema-video-gen-composer nodrag nowheel" aria-label="Video generation controls">
-          <div className="cinema-video-mode-tabs" role="tablist" aria-label="Video generation mode">
-            {visibleModeContracts.map((contract) => (
-              <button
-                key={contract.mode}
-                type="button"
-                role="tab"
-                aria-selected={mode === contract.mode}
-                className={mode === contract.mode ? "is-active" : ""}
-                disabled={isBusy}
-                onClick={() => chooseMode(contract.mode)}
-              >
-                {contract.label}
-              </button>
-            ))}
-          </div>
-          <div key={mode} className="cinema-video-gen-scroll">
+          <section className="cinema-node-input-panel cinema-generation-composer cinema-video-gen-composer nodrag nowheel" aria-label={t("video.controls")}>
+          {visibleModeContracts.length > 1 ? (
+            <div className="cinema-video-mode-tabs" role="tablist" aria-label={t("video.mode")}>
+              {visibleModeContracts.map((contract, contractIndex) => (
+                <button
+                  id={`${id}-video-mode-${contract.mode}`}
+                  key={contract.mode}
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === contract.mode}
+                  aria-controls={`${id}-video-mode-panel`}
+                  tabIndex={mode === contract.mode ? 0 : -1}
+                  className={mode === contract.mode ? "is-active" : ""}
+                  disabled={isBusy}
+                  onKeyDown={(event) => handleVideoModeKeyDown(event, contractIndex)}
+                  onClick={() => chooseMode(contract.mode)}
+                >
+                  {translateVideoModeLabel(locale, contract.mode, contract.label)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <div
+            key={mode}
+            id={`${id}-video-mode-panel`}
+            className="cinema-video-gen-scroll"
+            role="tabpanel"
+            aria-label={visibleModeContracts.length === 1 ? visibleModeContracts[0]?.label : undefined}
+            aria-labelledby={visibleModeContracts.length > 1 ? `${id}-video-mode-${mode}` : undefined}
+          >
           {sourceTextParameters.length > 0 ? (
-            <div className="cinema-video-gen-param-tags" aria-label="Connected text parameters">
+            <div className="cinema-video-gen-param-tags" aria-label={t("generation.connectedText")}>
               {sourceTextParameters.map((parameter) => (
                 <span
                   key={parameter.edgeID}
                   className={`cinema-video-gen-param-tag ${parameter.text.trim() ? "" : "is-empty"}`}
-                  title={parameter.text.trim() ? `${parameter.nodeTitle}: ${parameter.text.trim()}` : `${parameter.nodeTitle}: 空文本`}
+                  title={parameter.text.trim() ? `${parameter.nodeTitle}: ${parameter.text.trim()}` : `${parameter.nodeTitle}: ${t("generation.emptyText")}`}
                 >
                   <FileText size={12} aria-hidden="true" />
                   <span>{parameter.nodeTitle}</span>
                   <button
                     type="button"
-                    title={`移除文本参数 ${parameter.nodeTitle}`}
-                    aria-label={`移除文本参数 ${parameter.nodeTitle}`}
+                    title={t("generation.removeText", { name: parameter.nodeTitle })}
+                    aria-label={t("generation.removeText", { name: parameter.nodeTitle })}
                     disabled={isBusy}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => {
@@ -4662,54 +5419,10 @@ function VideoGenerationCanvasNode({
               ))}
             </div>
           ) : null}
-          <textarea
-            ref={promptRef}
-            className="cinema-video-prompt-input"
-            value={promptDraft}
-            placeholder={modeContract.promptPlaceholder}
-            spellCheck={false}
-            disabled={isBusy}
-            onFocus={() => {
-              isPromptFocusedRef.current = true
-              setPromptInputEditing(true)
-            }}
-            onKeyDown={(event) => event.stopPropagation()}
-            onChange={(event) => {
-              const value = event.target.value
-              setPromptInputEditing(true)
-              setPromptDraft(value)
-              if (!isPromptComposingRef.current) schedulePromptCommit(value)
-            }}
-            onCompositionStart={() => {
-              isPromptComposingRef.current = true
-              setPromptInputEditing(true)
-              clearPromptCommitTimer()
-            }}
-            onCompositionEnd={(event) => {
-              isPromptComposingRef.current = false
-              const value = event.currentTarget.value
-              setPromptDraft(value)
-              commitRawDataPatch({ text: value })
-              if (!isPromptFocusedRef.current) setPromptInputEditing(false)
-            }}
-            onBlur={() => {
-              isPromptFocusedRef.current = false
-              const value = promptRef.current?.value ?? promptDraftRef.current
-              const wasComposing = isPromptComposingRef.current
-              promptDraftRef.current = value
-              if (wasComposing) {
-                isPromptComposingRef.current = false
-                setPromptDraft(value)
-              }
-              clearPromptCommitTimer()
-              commitRawDataPatch({ text: value })
-              setPromptInputEditing(false)
-            }}
-          />
           {videoMediaInputs.length > 0 ? (
             <section
               className={`cinema-video-input-slots ${videoMediaInputs.some((input) => input.slot === "startFrame") && videoMediaInputs.some((input) => input.slot === "endFrame") ? "is-frame-pair" : ""}`}
-              aria-label="Video input slots"
+              aria-label={t("video.inputSlots")}
             >
               {videoMediaInputs.flatMap((input, inputIndex) => {
                 const slotAssets = inputAssetsForControl(input)
@@ -4728,13 +5441,20 @@ function VideoGenerationCanvasNode({
                   const canOpenLocalImagePicker = canImportLocalImage && !asset
                   const isImportingThisSlot = importSlot !== null && importingVideoInputImageSlot === importSlot
                   const isLocalImportedAsset = Boolean(asset && !edgeID && importSlot !== null && asset.nodeID === id)
+                  const inputLabel = localizedVideoInputLabel(input)
+                  const inputEmptyText = localizedVideoInputEmptyText(input)
                   const slotLabel = input.slot === "referenceImage" && asset
-                    ? `${input.label} ${assetIndex + 1}/${input.maxCount ?? slotAssets.length}`
+                    ? `${inputLabel} ${assetIndex + 1}/${input.maxCount ?? slotAssets.length}`
                     : input.slot === "referenceImage" && input.maxCount
-                      ? `${input.label}（最多 ${input.maxCount} 张）`
-                      : input.label
-                  const slotValueTitle = asset ? `${asset.nodeTitle} · ${asset.path}` : input.emptyText
-                  const slotActionLabel = asset ? `替换本地${input.label}图片` : `导入本地${input.label}图片`
+                      ? t("video.input.maxCount", { input: inputLabel, count: input.maxCount })
+                      : inputLabel
+                  const assetDisplayTitle = isLocalImportedAsset
+                    ? t("video.input.localAsset", { input: inputLabel })
+                    : asset?.nodeTitle ?? ""
+                  const slotValueTitle = asset ? `${assetDisplayTitle} · ${asset.path}` : inputEmptyText
+                  const slotActionLabel = asset
+                    ? t("video.input.replaceLocal", { input: inputLabel })
+                    : t("video.input.importLocal", { input: inputLabel })
                   const slotIndexLabel = input.slot === "startFrame"
                     ? "1"
                     : input.slot === "endFrame"
@@ -4761,7 +5481,7 @@ function VideoGenerationCanvasNode({
                           className="cinema-video-input-slot-value"
                           title={slotValueTitle}
                         >
-                          {asset ? slotValueTitle : input.emptyText}
+                          {asset ? slotValueTitle : inputEmptyText}
                         </span>
                       </div>
                     </>
@@ -4799,8 +5519,12 @@ function VideoGenerationCanvasNode({
                       <button
                         type="button"
                         className="cinema-video-input-slot-remove"
-                        title={edgeID ? `移除${input.label}` : `清除本地${input.label}图片`}
-                        aria-label={edgeID ? `移除${input.label}` : `清除本地${input.label}图片`}
+                        title={edgeID
+                          ? t("video.input.remove", { input: inputLabel })
+                          : t("video.input.clearLocal", { input: inputLabel })}
+                        aria-label={edgeID
+                          ? t("video.input.remove", { input: inputLabel })
+                          : t("video.input.clearLocal", { input: inputLabel })}
                         disabled={isBusy || importVideoInputImageMutation.isPending}
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
@@ -4816,7 +5540,7 @@ function VideoGenerationCanvasNode({
                         <X size={12} aria-hidden="true" />
                       </button>
                     ) : isRequired ? (
-                      <span className="cinema-video-input-slot-required">必填</span>
+                      <span className="cinema-video-input-slot-required">{t("video.input.required")}</span>
                     ) : null}
                   </div>
                 )
@@ -4824,79 +5548,58 @@ function VideoGenerationCanvasNode({
               })}
             </section>
           ) : null}
-          <div className="cinema-video-quick-controls">
-            <select
-              aria-label="Aspect ratio"
-              value={aspectRatioDraft}
-              disabled={isBusy}
-              onKeyDown={(event) => event.stopPropagation()}
-              onChange={(event) => {
-                setAspectRatioDraft(event.target.value)
-                commitRawDataPatch({ aspectRatio: event.target.value })
-              }}
-            >
-              {aspectRatioSelectOptions.map((item) => (
-                <option key={item} value={item}>{item}</option>
-              ))}
-            </select>
-            <select
-              aria-label="Duration"
-              value={durationDraft}
-              disabled={isBusy}
-              onKeyDown={(event) => event.stopPropagation()}
-              onChange={(event) => {
-                setDurationDraft(event.target.value)
-                commitRawDataPatch({ duration: Number.parseFloat(event.target.value) || DEFAULT_VIDEO_DURATION_SECONDS })
-              }}
-            >
-              {durationSelectOptions.map((value) => (
-                <option key={value} value={String(value)}>{value}s</option>
-              ))}
-            </select>
-            <select
-              aria-label="Quality mode"
-              value={resolutionDraft}
-              disabled={isBusy}
-              onKeyDown={(event) => event.stopPropagation()}
-              onChange={(event) => {
-                setResolutionDraft(event.target.value)
-                commitRawDataPatch({ resolution: event.target.value })
-              }}
-            >
-              {resolutionSelectOptions.map((item) => (
-                <option key={item} value={item}>{resolutionOptionLabels[item] ?? item}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className={`cinema-video-advanced-toggle ${isAdvancedOpen ? "is-open" : ""}`}
-              aria-expanded={isAdvancedOpen}
-              aria-controls={`${id}-video-advanced`}
-              onClick={() => setIsAdvancedOpen((value) => !value)}
-            >
-              <span>Advanced</span>
-              <ChevronDown size={14} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="cinema-video-gen-submit"
-              title={submitDisabledReason ?? "Generate video"}
-              aria-label="Generate video"
-              disabled={!canGenerate}
-              onClick={createTask}
-            >
-              {data.isCreatingVideoTask
-                ? <Loader2 size={18} aria-hidden="true" className="is-spinning" />
-                : <ArrowUp size={18} aria-hidden="true" />}
-            </button>
-          </div>
-          {isAdvancedOpen ? (
-            <section id={`${id}-video-advanced`} className="cinema-video-advanced-panel" aria-label="Advanced video generation inputs">
+          <textarea
+            ref={promptRef}
+            className="cinema-video-prompt-input"
+            aria-label={t("video.prompt")}
+            value={promptDraft}
+            placeholder={translateVideoPromptPlaceholder(locale, modeContract.promptPlaceholder)}
+            spellCheck={false}
+            disabled={isBusy}
+            onFocus={() => {
+              isPromptFocusedRef.current = true
+              setPromptInputEditing(true)
+            }}
+            onKeyDown={stopCanvasKeyboardEvent}
+            onChange={(event) => {
+              const value = event.target.value
+              setPromptInputEditing(true)
+              setPromptDraft(value)
+              if (!isPromptComposingRef.current) schedulePromptCommit(value)
+            }}
+            onCompositionStart={() => {
+              isPromptComposingRef.current = true
+              setPromptInputEditing(true)
+              clearPromptCommitTimer()
+            }}
+            onCompositionEnd={(event) => {
+              isPromptComposingRef.current = false
+              const value = event.currentTarget.value
+              setPromptDraft(value)
+              commitRawDataPatch({ text: value })
+              if (!isPromptFocusedRef.current) setPromptInputEditing(false)
+            }}
+            onBlur={() => {
+              isPromptFocusedRef.current = false
+              const value = promptRef.current?.value ?? promptDraftRef.current
+              const wasComposing = isPromptComposingRef.current
+              promptDraftRef.current = value
+              if (wasComposing) {
+                isPromptComposingRef.current = false
+                setPromptDraft(value)
+              }
+              clearPromptCommitTimer()
+              commitRawDataPatch({ text: value })
+              setPromptInputEditing(false)
+            }}
+          />
+          {hasVideoAdvancedInputs && isAdvancedOpen ? (
+            <section id={`${id}-video-advanced`} className="cinema-video-advanced-panel" aria-label={t("video.advancedInputs")}>
               {visibleVideoParameterControls.length > 0 ? (
-                <section className="cinema-video-form-controls" aria-label="Video generation parameters">
+                <section className="cinema-video-form-controls" aria-label={t("video.parameters")}>
                   {visibleVideoParameterControls.map((control) => (
                     <GenerationParameterControlField
-                      key={control.key}
+                      key={`${selectedVideoModelChoiceValue}-${mode}-${control.key}`}
                       control={control}
                       parameters={videoFormParameters}
                       disabled={isBusy}
@@ -4905,58 +5608,112 @@ function VideoGenerationCanvasNode({
                   ))}
                 </section>
               ) : null}
-              <section className="cinema-video-model-controls" aria-label="Video provider and model">
-                <label className="cinema-image-form-control">
-                  <span>Provider</span>
-                  <select
-                    aria-label="Video provider"
-                    value={selectedProvider?.manifest.id ?? ""}
-                    disabled={isBusy || availableProviders.length === 0}
-                    onKeyDown={(event) => event.stopPropagation()}
-                    onChange={(event) => chooseProvider(event.target.value)}
-                  >
-                    {availableProviders.length > 0 ? availableProviders.map((provider) => (
-                      <option key={provider.manifest.id} value={provider.manifest.id}>{provider.manifest.name}</option>
-                    )) : (
-                      <option value="">No provider</option>
-                    )}
-                  </select>
-                </label>
-                <label className="cinema-image-form-control">
-                  <span>Model</span>
-                  <select
-                    aria-label="Video model"
-                    value={selectedModelSelectionID}
-                    disabled={isBusy || !selectedProvider}
-                    onKeyDown={(event) => event.stopPropagation()}
-                    onChange={(event) => chooseModel(event.target.value)}
-                  >
-                    {availableModels.length > 0 ? availableModels.map((model) => (
-                      <option key={providerModelSelectionID(model)} value={providerModelSelectionID(model)}>{model.label}</option>
-                    )) : (
-                      <option value="">No model</option>
-                    )}
-                  </select>
-                </label>
-              </section>
             </section>
           ) : null}
-          {videoInputImageImportError || nodeError || unsupportedRequiredInput || requiredInputMissing || providerNeedsCredential && !providerConnected || providerAdapterUnavailable ? (
+          {videoInputImageImportError || nodeError ? (
             <p className="cinema-video-gen-error" role="alert" title={videoInputImageImportError ?? nodeError ?? undefined}>
-              {videoInputImageImportError ?? nodeError ?? (
-                unsupportedRequiredInput
-                  ? `Required input ${unsupportedRequiredInput.label} is not supported by this UI yet.`
-                  : requiredInputMissing
-                    ? canImportVideoInputLocalImage(missingRequiredInput?.slot ?? null)
-                      ? `${missingRequiredInputLabel} needs an imported or connected image.`
-                      : `${missingRequiredInputLabel} needs a connected input node.`
-                    : providerAdapterUnavailable
-                      ? `${selectedProvider?.manifest.name ?? "Provider"} does not have a generation runtime adapter yet.`
-                      : `${selectedProvider?.manifest.name ?? "Provider"} is not connected.`
-              )}
+              {videoInputImageImportError ?? nodeError}
+            </p>
+          ) : unsupportedRequiredInput || requiredInputMissing || providerNeedsCredential && !providerConnected || providerAdapterUnavailable ? (
+            <p className="cinema-video-gen-error" role="status">
+              {unsupportedInputReason ?? requiredInputReason ?? providerAdapterReason ?? providerConnectionReason}
             </p>
           ) : null}
           </div>
+          {submitDisabledReason ? (
+            <span id={`${id}-video-submit-reason`} className="cinema-visually-hidden">
+              {submitDisabledReason}
+            </span>
+          ) : null}
+          <footer className="cinema-generation-footer cinema-video-composer-footer">
+            <CinemaComposerSelect
+              id={`${id}-video-model`}
+              ariaLabel={t("video.model")}
+              className="cinema-generation-model-select"
+              menuMinWidth={236}
+              value={selectedVideoModelChoiceValue}
+              disabled={isBusy || videoModelChoices.length === 0}
+              placeholder={t("generation.noModel")}
+              options={videoModelChoices.map((choice) => ({
+                value: choice.value,
+                label: choice.label,
+                triggerLabel: choice.model.label,
+              }))}
+              onChange={chooseVideoModel}
+            />
+            <div className="cinema-video-quick-controls cinema-video-parameter-rail">
+              <GenerationSpecPopover
+                id={`${id}-video-spec`}
+                ariaLabel={t("video.canvasSpec")}
+                summary={videoSpecSummary}
+                disabled={isBusy}
+                onKeepActive={() => data.onSelectNode?.(id)}
+              >
+                <GenerationSpecOptionGroup
+                  label={t("video.ratio")}
+                  value={aspectRatioDraft}
+                  options={videoAspectRatioSpecOptions}
+                  disabled={isBusy}
+                  onChange={(nextValue) => {
+                    setAspectRatioDraft(nextValue)
+                    commitRawDataPatch({ aspectRatio: nextValue })
+                  }}
+                />
+                <GenerationSpecOptionGroup
+                  label={t("video.quality")}
+                  value={resolutionDraft}
+                  options={videoResolutionSpecOptions}
+                  disabled={isBusy}
+                  onChange={(nextValue) => {
+                    setResolutionDraft(nextValue)
+                    commitRawDataPatch({ resolution: nextValue })
+                  }}
+                />
+              </GenerationSpecPopover>
+              <CinemaComposerSelect
+                id={`${id}-video-duration`}
+                ariaLabel={t("video.duration")}
+                className="cinema-video-duration-select"
+                menuMinWidth={60}
+                value={durationDraft}
+                disabled={isBusy}
+                options={durationSelectOptions.map((value) => ({
+                  value: String(value),
+                  label: `${value}s`,
+                  triggerLabel: `${value}s`,
+                }))}
+                onChange={(nextValue) => {
+                  setDurationDraft(nextValue)
+                  commitRawDataPatch({ duration: Number.parseFloat(nextValue) || DEFAULT_VIDEO_DURATION_SECONDS })
+                }}
+              />
+              {hasVideoAdvancedInputs ? (
+                <button
+                  type="button"
+                  className={`cinema-video-advanced-toggle ${isAdvancedOpen ? "is-open" : ""}`}
+                  aria-label={t("common.advanced")}
+                  aria-expanded={isAdvancedOpen}
+                  aria-controls={`${id}-video-advanced`}
+                  onClick={() => setIsAdvancedOpen((value) => !value)}
+                >
+                  <span>{t("common.advanced")}</span>
+                </button>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="cinema-video-gen-submit"
+              title={submitDisabledReason ?? t("video.generate")}
+              aria-label={t("video.generate")}
+              aria-describedby={submitDisabledReason ? `${id}-video-submit-reason` : undefined}
+              disabled={!canGenerate}
+              onClick={createTask}
+            >
+              {data.isCreatingVideoTask
+                ? <Loader2 size={18} aria-hidden="true" className="is-spinning" />
+                : <ArrowUp size={18} aria-hidden="true" />}
+            </button>
+          </footer>
           </section>
         </CinemaNodeInputOverlay>
       ) : null}
@@ -4964,7 +5721,7 @@ function VideoGenerationCanvasNode({
         id="output"
         type="source"
         position={Position.Right}
-        className="cinema-node-handle cinema-node-handle-output"
+        className={`cinema-node-handle cinema-node-handle-output ${data.hasOutgoingConnection ? "is-connected" : ""}`}
         style={accentStyle}
       />
     </>
@@ -4982,6 +5739,7 @@ function ImageReadyState({
   selected?: boolean
   accentStyle: CSSProperties
 }) {
+  const { t } = useI18n()
   const active = data.isActiveNode ?? Boolean(selected)
   const asset = readFinalImageAsset(data.rawData)
   const libraryAssetRef = cinemaAssetRefFromNodeData(data.rawData)
@@ -5154,7 +5912,7 @@ function ImageReadyState({
           id="input"
           type="target"
           position={Position.Left}
-          className="cinema-node-handle cinema-node-handle-input is-locked"
+          className="cinema-node-handle cinema-node-handle-input is-connected is-locked"
           style={accentStyle}
           isConnectable={false}
         />
@@ -5182,12 +5940,12 @@ function ImageReadyState({
         }}
       >
         {active ? (
-          <div className="cinema-image-toolbar nodrag nowheel" role="toolbar" aria-label="Image tools">
+          <div className="cinema-image-toolbar nodrag nowheel" role="toolbar" aria-label={t("image.tools")}>
             <button
               type="button"
               className={`cinema-image-tool-button ${isCropEditorOpen ? "is-active" : ""}`}
-              title="Crop image"
-              aria-label="Crop image"
+              title={t("image.crop")}
+              aria-label={t("image.crop")}
               aria-expanded={isCropEditorOpen}
               disabled={!canCrop || isCropping}
               onPointerDown={(event) => event.stopPropagation()}
@@ -5210,7 +5968,7 @@ function ImageReadyState({
             title={data.title}
             onChangeTitle={data.onChangeTitle}
           />
-          <div className="cinema-node-header-actions nodrag nowheel" role="toolbar" aria-label="Image node actions">
+          <div className="cinema-node-header-actions nodrag nowheel" role="toolbar" aria-label={t("image.actions")}>
             <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
           </div>
         </header>
@@ -5218,7 +5976,7 @@ function ImageReadyState({
         <section
           ref={cropFrameRef}
           className={`cinema-image-frame ${isCropEditorOpen ? "is-cropping" : ""}`}
-          aria-label="Image preview"
+          aria-label={t("image.preview")}
           style={previewStyle}
         >
           {previewSrc && !isLibraryAssetUnavailable && !hasPreviewError ? (
@@ -5239,7 +5997,7 @@ function ImageReadyState({
                 <div
                   className="cinema-image-crop-layer nodrag nowheel"
                   role="group"
-                  aria-label="Image crop editor"
+                  aria-label={t("image.cropEditor")}
                   style={cropLayerStyle}
                   onPointerDown={(event) => event.stopPropagation()}
                 >
@@ -5305,7 +6063,7 @@ function ImageReadyState({
           ) : (
             <div className={`cinema-image-empty ${hasPreviewError || libraryAssetStatus === "missing" ? "is-error" : ""}`}>
               <Image size={28} aria-hidden="true" />
-              <span>{isLibraryAssetUnavailable ? "Asset reference unavailable" : hasPreviewError ? "Image unavailable" : "No image selected"}</span>
+              <span>{t(isLibraryAssetUnavailable ? "image.assetUnavailable" : hasPreviewError ? "image.unavailable" : "image.noneSelected")}</span>
               {isLibraryAssetUnavailable && data.onRelinkAsset ? (
                 <button type="button" onClick={() => data.onRelinkAsset?.(id)}>重新关联</button>
               ) : null}
@@ -5320,7 +6078,7 @@ function ImageReadyState({
         id="output"
         type="source"
         position={Position.Right}
-        className="cinema-node-handle cinema-node-handle-output"
+        className={`cinema-node-handle cinema-node-handle-output ${data.hasOutgoingConnection ? "is-connected" : ""}`}
         style={accentStyle}
       />
     </>
@@ -5339,20 +6097,23 @@ function ImageCanvasNode({
   accentStyle: CSSProperties
 }) {
   const active = data.isActiveNode ?? Boolean(selected)
-  useCinemaImageViewportGuard(id, active, data.nodeInputOverlayRoot, data.rawData)
   return readCinemaImageFinalAsset(data.rawData) || cinemaAssetRefFromNodeData(data.rawData)?.snapshot.kind === "image"
     ? <ImageReadyState id={id} data={data} selected={selected} accentStyle={accentStyle} />
     : <ImageCreationState id={id} data={data} selected={selected} accentStyle={accentStyle} />
 }
 
 function CinemaAssetReferenceBadge({ data }: { data: CinemaFlowNodeData }) {
+  const { t } = useI18n()
   const assetRef = cinemaAssetRefFromNodeData(data.rawData)
   const assetStatus = readRawString(data.rawData, "assetStatus", "ready")
   if (!assetRef) return null
+  const isPersonal = isPersonalCinemaAssetRef(assetRef)
+  const isTrashed = assetStatus === "trashed"
+  if (!isPersonal && !isTrashed) return null
   return (
-    <div className="cinema-asset-node-badges" aria-label="Asset reference status">
-      {isPersonalCinemaAssetRef(assetRef) ? <span>个人素材</span> : null}
-      {assetStatus === "trashed" ? <span className="is-warning">素材位于回收站</span> : null}
+    <div className="cinema-asset-node-badges" aria-label={t("asset.referenceStatus")}>
+      {isPersonal ? <span>{t("asset.personal")}</span> : null}
+      {isTrashed ? <span className="is-warning">{t("asset.inTrash")}</span> : null}
     </div>
   )
 }
@@ -5368,53 +6129,116 @@ function VideoReadyState({
   selected?: boolean
   accentStyle: CSSProperties
 }) {
+  const { t } = useI18n()
   const assetRef = cinemaAssetRefFromNodeData(data.rawData)
+  const videoPreviewRef = useRef<HTMLVideoElement>(null)
   const [playbackError, setPlaybackError] = useState(false)
+  const [isVideoPreviewPlaying, setIsVideoPreviewPlaying] = useState(false)
   const status = readRawString(data.rawData, "assetStatus", "ready")
   const unavailable = status === "missing" || playbackError || !assetRef
   const previewSrc = assetRef && data.agentBaseURL ? cinemaAssetURL(data.agentBaseURL, assetRef, "preview") : ""
   const posterSrc = assetRef && data.agentBaseURL ? cinemaAssetURL(data.agentBaseURL, assetRef, "thumbnail") : undefined
+  const previewAspectRatio = videoPreviewAspectRatio(assetRef?.snapshot ?? null, DEFAULT_VIDEO_ASPECT_RATIO)
+  const previewStyle = {
+    "--cinema-video-preview-aspect-ratio": previewAspectRatio.value,
+  } as CSSProperties
 
-  useEffect(() => setPlaybackError(false), [previewSrc])
+  useEffect(() => {
+    setPlaybackError(false)
+    setIsVideoPreviewPlaying(false)
+  }, [previewSrc])
+
+  const toggleVideoPreviewPlayback = async () => {
+    const video = videoPreviewRef.current
+    if (!video) return
+    if (video.paused || video.ended) {
+      try {
+        await video.play()
+      } catch {
+        setIsVideoPreviewPlaying(false)
+      }
+      return
+    }
+    video.pause()
+  }
 
   return (
     <>
+      {data.hasIncomingConnection ? (
+        <Handle
+          id="input"
+          type="target"
+          position={Position.Left}
+          className="cinema-node-handle cinema-node-handle-input is-connected is-locked"
+          style={accentStyle}
+          isConnectable={false}
+        />
+      ) : null}
       <article
-        className={`cinema-asset-ready-node is-video ${selected ? "is-selected" : ""}`}
+        className={`cinema-video-gen-node cinema-asset-ready-node is-video ${selected ? "is-selected" : ""}`}
         style={accentStyle}
         onPointerDown={(event) => activateNodeOnPointerDown(event, id, data.onActivateNode)}
       >
-        <header className="cinema-node-header">
+        <header className="cinema-video-gen-header">
           <CinemaNodeTitle
             icon={Video}
-            label="Video"
+            label={t("video.type")}
             nodeID={id}
             title={data.title}
             onChangeTitle={data.onChangeTitle}
+            isDragHandle
           />
           <div className="cinema-node-header-actions">
+            <NodeStatusDot
+              status={unavailable ? "failed" : "ready"}
+              label={t(unavailable ? "asset.referenceUnavailable" : "asset.referenceStatus")}
+            />
             <NodeDeleteButton nodeID={id} onDeleteNode={data.onDeleteNode} />
           </div>
         </header>
         <CinemaAssetReferenceBadge data={data} />
-        <div className="cinema-asset-ready-preview nodrag nowheel">
+        <div
+          className={`cinema-video-gen-preview cinema-asset-ready-preview nodrag nowheel ${unavailable ? "is-empty" : "has-video"} is-${previewAspectRatio.shape}`}
+          style={previewStyle}
+          aria-label={t("video.preview")}
+        >
           {unavailable ? (
-            <div className="cinema-asset-reference-unavailable" role="status">
+            <div className="cinema-video-gen-empty cinema-asset-reference-unavailable" role="status">
               <Video size={26} aria-hidden="true" />
-              <strong>引用不可用</strong>
+              <strong>{t("asset.referenceUnavailable")}</strong>
               {data.onRelinkAsset ? (
-                <button type="button" onClick={() => data.onRelinkAsset?.(id)}>重新关联</button>
+                <button type="button" onClick={() => data.onRelinkAsset?.(id)}>{t("asset.relink")}</button>
               ) : null}
             </div>
           ) : (
-            <video
-              src={previewSrc}
-              poster={posterSrc}
-              controls
-              preload="metadata"
-              aria-label={`${data.title} 视频预览`}
-              onError={() => setPlaybackError(true)}
-            />
+            <>
+              <video
+                ref={videoPreviewRef}
+                src={previewSrc}
+                poster={posterSrc}
+                controls
+                preload="metadata"
+                playsInline
+                aria-label={t("asset.videoPreview", { name: data.title })}
+                onPlay={() => setIsVideoPreviewPlaying(true)}
+                onPause={() => setIsVideoPreviewPlaying(false)}
+                onEnded={() => setIsVideoPreviewPlaying(false)}
+                onError={() => setPlaybackError(true)}
+              />
+              <button
+                type="button"
+                className={`cinema-video-preview-play nodrag nowheel ${isVideoPreviewPlaying ? "is-playing" : ""}`}
+                title={t(isVideoPreviewPlaying ? "video.pausePreview" : "video.playPreview")}
+                aria-label={t(isVideoPreviewPlaying ? "video.pausePreview" : "video.playPreview")}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  void toggleVideoPreviewPlayback()
+                }}
+              >
+                {isVideoPreviewPlaying ? <Pause size={18} aria-hidden="true" /> : <Play size={18} aria-hidden="true" />}
+              </button>
+            </>
           )}
         </div>
       </article>
@@ -5422,7 +6246,7 @@ function VideoReadyState({
         id="output"
         type="source"
         position={Position.Right}
-        className="cinema-node-handle cinema-node-handle-output"
+        className={`cinema-node-handle cinema-node-handle-output ${data.hasOutgoingConnection ? "is-connected" : ""}`}
         style={accentStyle}
       />
     </>
@@ -5440,6 +6264,7 @@ function AudioCanvasNode({
   selected?: boolean
   accentStyle: CSSProperties
 }) {
+  const { t } = useI18n()
   const assetRef = cinemaAssetRefFromNodeData(data.rawData)
   const [playbackError, setPlaybackError] = useState(false)
   const status = readRawString(data.rawData, "assetStatus", "ready")
@@ -5472,14 +6297,14 @@ function AudioCanvasNode({
           {!assetRef ? (
             <div className="cinema-asset-reference-unavailable" role="status">
               <Music size={24} aria-hidden="true" />
-              <strong>No audio selected</strong>
+              <strong>{t("audio.noneSelected")}</strong>
             </div>
           ) : unavailable ? (
             <div className="cinema-asset-reference-unavailable" role="status">
               <Music size={24} aria-hidden="true" />
-              <strong>引用不可用</strong>
+              <strong>{t("asset.referenceUnavailable")}</strong>
               {data.onRelinkAsset ? (
-                <button type="button" onClick={() => data.onRelinkAsset?.(id)}>重新关联</button>
+                <button type="button" onClick={() => data.onRelinkAsset?.(id)}>{t("asset.relink")}</button>
               ) : null}
             </div>
           ) : (
@@ -5487,7 +6312,7 @@ function AudioCanvasNode({
               src={previewSrc}
               controls
               preload="metadata"
-              aria-label={`${data.title} 音频预览`}
+              aria-label={t("asset.audioPreview", { name: data.title })}
               onError={() => setPlaybackError(true)}
             />
           )}
@@ -5497,7 +6322,7 @@ function AudioCanvasNode({
         id="output"
         type="source"
         position={Position.Right}
-        className="cinema-node-handle cinema-node-handle-output"
+        className={`cinema-node-handle cinema-node-handle-output ${data.hasOutgoingConnection ? "is-connected" : ""}`}
         style={accentStyle}
       />
     </>
@@ -5672,6 +6497,7 @@ function CinemaNodeInspectorPanel({
   node: CinemaFlowNode
   onClose: () => void
 }) {
+  const { t } = useI18n()
   const meta = NODE_META[node.data.cinemaType]
   const Icon = meta.icon
   const rows = inspectorRowsForNode(node)
@@ -5679,7 +6505,7 @@ function CinemaNodeInspectorPanel({
   return (
     <aside
       className="cinema-node-inspector"
-      aria-label="Selected node details"
+      aria-label={t("node.selectedDetails")}
       style={{ "--node-accent": meta.accent } as CSSProperties}
     >
       <header className="cinema-node-inspector-header">
@@ -5693,8 +6519,8 @@ function CinemaNodeInspectorPanel({
         <button
           type="button"
           className="cinema-file-icon-button"
-          title="Close details"
-          aria-label="Close details"
+          title={t("node.closeDetails")}
+          aria-label={t("node.closeDetails")}
           onClick={onClose}
         >
           <X size={15} aria-hidden="true" />
@@ -5728,6 +6554,7 @@ function ProjectFileBrowser({
   agentBaseURL: string
   onClose: () => void
 }) {
+  const { t } = useI18n()
   const [currentPath, setCurrentPath] = useState("")
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const listingQuery = useQuery({
@@ -5769,20 +6596,20 @@ function ProjectFileBrowser({
     <aside
       id="cinema-file-browser"
       className="cinema-file-browser"
-      aria-label="项目文件"
+      aria-label={t("files.title")}
       onClick={(event) => event.stopPropagation()}
     >
       <header className="cinema-file-browser-header">
         <div>
-          <span>本项目</span>
-          <strong>项目文件</strong>
+          <span>{t("files.thisProject")}</span>
+          <strong>{t("files.title")}</strong>
         </div>
         <div className="cinema-file-browser-actions">
           <button
             type="button"
             className="cinema-file-icon-button"
-            title="Back"
-            aria-label="Back"
+            title={t("files.back")}
+            aria-label={t("files.back")}
             disabled={!canGoUp}
             onClick={() => listing?.parentPath !== undefined && setCurrentPath(listing.parentPath ?? "")}
           >
@@ -5791,8 +6618,8 @@ function ProjectFileBrowser({
           <button
             type="button"
             className="cinema-file-icon-button"
-            title="Refresh"
-            aria-label="Refresh"
+            title={t("files.refresh")}
+            aria-label={t("files.refresh")}
             disabled={listingQuery.isFetching}
             onClick={() => void listingQuery.refetch()}
           >
@@ -5803,8 +6630,8 @@ function ProjectFileBrowser({
           <button
             type="button"
             className="cinema-file-icon-button"
-            title="Close"
-            aria-label="Close file browser"
+            title={t("settings.close")}
+            aria-label={t("files.close")}
             onClick={onClose}
           >
             <X size={15} aria-hidden="true" />
@@ -5812,7 +6639,7 @@ function ProjectFileBrowser({
         </div>
       </header>
 
-      <nav className="cinema-file-breadcrumbs" aria-label="Folder path">
+      <nav className="cinema-file-breadcrumbs" aria-label={t("files.folderPath")}>
         <button type="button" onClick={() => openBreadcrumb(-1)}>root</button>
         {segments.map((segment, index) => (
           <button key={`${segment}-${index}`} type="button" onClick={() => openBreadcrumb(index)}>
@@ -5825,16 +6652,16 @@ function ProjectFileBrowser({
         {listingQuery.isLoading ? (
           <div className="cinema-file-browser-state">
             <Loader2 size={16} aria-hidden="true" className="is-spinning" />
-            <span>Loading files</span>
+            <span>{t("files.loading")}</span>
           </div>
         ) : listingQuery.error ? (
           <div className="cinema-file-browser-state is-error" role="alert">
-            <span>{listingQuery.error instanceof Error ? listingQuery.error.message : "Could not load files"}</span>
+            <span>{listingQuery.error instanceof Error ? listingQuery.error.message : t("files.loadFailed")}</span>
           </div>
         ) : listing && listing.entries.length === 0 ? (
           <div className="cinema-file-browser-state">
             <Folder size={16} aria-hidden="true" />
-            <span>Empty folder</span>
+            <span>{t("files.empty")}</span>
           </div>
         ) : (
           <>
@@ -5867,7 +6694,7 @@ function ProjectFileBrowser({
         )}
       </div>
 
-      <section className="cinema-file-preview" aria-label="Selected file">
+      <section className="cinema-file-preview" aria-label={t("files.selected")}>
         {selectedEntry ? (
           <>
             <div className="cinema-file-preview-meta">
@@ -5888,7 +6715,7 @@ function ProjectFileBrowser({
         ) : (
           <div className="cinema-file-preview-empty">
             <File size={18} aria-hidden="true" />
-            <span>No file selected</span>
+            <span>{t("files.noneSelected")}</span>
           </div>
         )}
       </section>
@@ -6079,20 +6906,21 @@ function CanvasPanelNavigation({
   assetButtonRef: RefObject<HTMLButtonElement | null>
   assetLibraryEnabled: boolean
 }) {
+  const { t } = useI18n()
   const isFilesOpen = activePanel === "files"
   const isAssetsOpen = activePanel === "assets"
 
   return (
     <nav
       className="cinema-canvas-nav"
-      aria-label="Canvas panels"
+      aria-label={t("canvas.panels")}
       onClick={(event) => event.stopPropagation()}
     >
       <button
         type="button"
         className={`cinema-canvas-nav-button ${isFilesOpen ? "is-active" : ""}`}
-        title={isFilesOpen ? "关闭项目文件" : "打开项目文件"}
-        aria-label={isFilesOpen ? "关闭项目文件" : "打开项目文件"}
+        title={t(isFilesOpen ? "canvas.closeFiles" : "canvas.openFiles")}
+        aria-label={t(isFilesOpen ? "canvas.closeFiles" : "canvas.openFiles")}
         aria-controls="cinema-file-browser"
         aria-expanded={isFilesOpen}
         aria-pressed={isFilesOpen}
@@ -6104,8 +6932,8 @@ function CanvasPanelNavigation({
         ref={assetButtonRef}
         type="button"
         className={`cinema-canvas-nav-button ${isAssetsOpen ? "is-active" : ""}`}
-        title={isAssetsOpen ? "关闭素材库" : "打开素材库"}
-        aria-label={isAssetsOpen ? "关闭素材库" : "打开素材库"}
+        title={t(isAssetsOpen ? "canvas.closeAssets" : "canvas.openAssets")}
+        aria-label={t(isAssetsOpen ? "canvas.closeAssets" : "canvas.openAssets")}
         aria-controls="cinema-asset-library"
         aria-expanded={isAssetsOpen}
         aria-pressed={isAssetsOpen}
@@ -7713,7 +8541,10 @@ export function App() {
           ".react-flow__attribution",
           ".cinema-node-overlay-panel",
           ".cinema-context-menu",
-          ".cinema-file-browser",
+           ".cinema-text-model-menu",
+           ".cinema-composer-select-menu",
+           ".cinema-generation-spec-panel",
+           ".cinema-file-browser",
           ".cinema-node-inspector",
           ".cinema-canvas-nav",
         ].join(", "),
@@ -7829,6 +8660,8 @@ export function App() {
   const effectiveImageModel = imageModelsQuery.data?.effectiveModel ?? null
   const renderedNodes = useMemo(
     () => nodes.map((node) => {
+      const hasIncomingConnection = edges.some((edge) => edge.target === node.id)
+      const hasOutgoingConnection = edges.some((edge) => edge.source === node.id)
       const assetRef = cinemaAssetRefFromNodeData(node.data.rawData)
       const liveAssetState = assetRef
         ? canvasAssetStateByKey.get(cinemaAssetLocatorStatusKey(assetRef))
@@ -7868,7 +8701,9 @@ export function App() {
         onSelectNode: selectNodeOnly,
         onNodeInputEditingChange: setNodeInputEditing,
         onDeleteNode: deleteNode,
-        hasConnections: edges.some((edge) => edge.source === node.id || edge.target === node.id),
+        hasConnections: hasIncomingConnection || hasOutgoingConnection,
+        hasIncomingConnection,
+        hasOutgoingConnection,
         onRelinkAsset: beginRelinkAsset,
         textModels,
         effectiveTextModel,
@@ -7914,7 +8749,7 @@ export function App() {
         imageCropError: imageCropError?.nodeID === node.id ? imageCropError.message : null,
         onCreateCroppedImageNode: (nodeID: string, crop: ImageCropRect) =>
           createCroppedImageMutation.mutateAsync({ nodeID, crop }).then(() => undefined),
-        hasIncomingImageEdge: edges.some((edge) => edge.target === node.id),
+        hasIncomingImageEdge: hasIncomingConnection,
         onDismissNodeOverlay: clearCanvasSelection,
           nodeInputOverlayRoot,
         },
@@ -7979,8 +8814,8 @@ export function App() {
     return (
       <CinemaWorkbenchShell projectName="Cinema" activeWorkspace={activeWorkspace} onWorkspaceChange={changeWorkspace} availableWorkspaces={availableWorkspaces}>
         <div className="cinema-empty-state">
-          <h1>Missing project</h1>
-          <p>Open Cinema from an AnyBox project so the URL includes a projectID.</p>
+          <h1>{t("app.missingProject")}</h1>
+          <p>{t("app.missingProjectDescription")}</p>
         </div>
       </CinemaWorkbenchShell>
     )
@@ -7991,8 +8826,8 @@ export function App() {
       <CinemaWorkbenchShell projectName={projectQuery.data?.name ?? "Cinema"} activeWorkspace={activeWorkspace} onWorkspaceChange={changeWorkspace} availableWorkspaces={availableWorkspaces}>
         <div className="cinema-empty-state">
           <Loader2 className="is-spinning" aria-hidden="true" />
-          <h1>Opening cinema project</h1>
-          <p>Reading local project metadata through AnyBox.</p>
+          <h1>{t("app.opening")}</h1>
+          <p>{t("app.openingDescription")}</p>
         </div>
       </CinemaWorkbenchShell>
     )
@@ -8003,8 +8838,8 @@ export function App() {
     return (
       <CinemaWorkbenchShell projectName={projectQuery.data?.name ?? "Cinema"} activeWorkspace={activeWorkspace} onWorkspaceChange={changeWorkspace} availableWorkspaces={availableWorkspaces}>
         <div className="cinema-empty-state is-error">
-          <h1>Could not open Cinema</h1>
-          <p>{error instanceof Error ? error.message : "Unknown error"}</p>
+          <h1>{t("app.openFailed")}</h1>
+          <p>{error instanceof Error ? error.message : t("app.unknownError")}</p>
         </div>
       </CinemaWorkbenchShell>
     )
@@ -8015,8 +8850,8 @@ export function App() {
       <CinemaWorkbenchShell projectName={projectQuery.data.name} activeWorkspace={activeWorkspace} onWorkspaceChange={changeWorkspace} availableWorkspaces={availableWorkspaces}>
         <div className="cinema-empty-state">
           <Film aria-hidden="true" />
-          <h1>Initialize this project first</h1>
-          <p>Run the Initialize Cinema Project skill in AnyBox, then open this canvas again.</p>
+          <h1>{t("app.initialize")}</h1>
+          <p>{t("app.initializeDescription")}</p>
         </div>
       </CinemaWorkbenchShell>
     )
@@ -8030,7 +8865,7 @@ export function App() {
         onWorkspaceChange={changeWorkspace}
         availableWorkspaces={availableWorkspaces}
       >
-        <Suspense fallback={<div className="cinema-timeline-empty" role="status"><p>Loading Edit workbench…</p></div>}>
+        <Suspense fallback={<div className="cinema-timeline-empty" role="status"><p>{t("app.loadingEdit")}</p></div>}>
           <EditWorkbench
             agentBaseURL={agentBaseURL}
             projectID={projectID}
@@ -8050,7 +8885,7 @@ export function App() {
         onWorkspaceChange={changeWorkspace}
         availableWorkspaces={availableWorkspaces}
       >
-        <Suspense fallback={<div className="cinema-empty-state" role="status"><p>Loading Deliver workbench…</p></div>}>
+        <Suspense fallback={<div className="cinema-empty-state" role="status"><p>{t("app.loadingDeliver")}</p></div>}>
           <DeliverWorkbench
             agentBaseURL={agentBaseURL}
             projectID={projectID}
@@ -8097,6 +8932,7 @@ export function App() {
             fitViewOptions={{ padding: 0.38 }}
             minZoom={0.2}
             maxZoom={2}
+            autoPanOnNodeDrag={false}
             panOnDrag={[1]}
             deleteKeyCode={null}
             selectionOnDrag
@@ -8132,7 +8968,7 @@ export function App() {
           {hasPersonalAssetDependencies ? (
             <div className="cinema-personal-asset-notice" role="status">
               <Info size={14} aria-hidden="true" />
-              <span>此项目引用个人素材，移动到其他设备后可能不可用。</span>
+              <span>{t("app.personalAssetWarning")}</span>
             </div>
           ) : null}
           <ContextMenu

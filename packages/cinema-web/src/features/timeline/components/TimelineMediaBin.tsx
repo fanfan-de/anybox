@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { ChevronLeft, Film, Folder, Grid2X2, Image, LayoutList, ListVideo, Music, Plus, Search, Trash2 } from "lucide-react"
 import type { CinemaAssetKind, CinemaAssetRecord } from "@anybox/shared"
 import type { CinemaTimelineDocument } from "@anybox/shared/cinema-timeline"
 import { createAssetLibraryApi } from "../../assets/assetLibraryApi"
+import { useI18n, type TranslationKey } from "../../../i18n"
 
 export type TimelineMediaSection = "timelines" | "project" | "generated" | "imported"
 type MediaKind = "all" | CinemaAssetKind
@@ -19,6 +20,7 @@ export function TimelineMediaBin({
   onDeleteTimeline,
   onActivateAsset,
   replacementClipTitle,
+  revealedAsset,
   section,
   onSectionChange,
 }: {
@@ -32,19 +34,31 @@ export function TimelineMediaBin({
   onDeleteTimeline: (timeline: CinemaTimelineDocument) => void
   onActivateAsset: (asset: CinemaAssetRecord) => void
   replacementClipTitle?: string
+  revealedAsset?: { id: string; displayName: string; requestID: string; section: TimelineMediaSection } | null
   section: TimelineMediaSection
   onSectionChange: (section: TimelineMediaSection) => void
 }) {
+  const { t } = useI18n()
   const [query, setQuery] = useState("")
   const [kind, setKind] = useState<MediaKind>("all")
   const [compact, setCompact] = useState(true)
   const [folderID, setFolderID] = useState<string | null>(null)
+  const rootRef = useRef<HTMLElement>(null)
+  const focusedRevealRequestRef = useRef<string | null>(null)
+  const focusedRevealElementRef = useRef<HTMLElement | null>(null)
   useEffect(() => {
     if (!replacementClipTitle) return
     onSectionChange("project")
     setFolderID(null)
     setQuery("")
   }, [onSectionChange, replacementClipTitle])
+  useEffect(() => {
+    if (!revealedAsset) return
+    onSectionChange(revealedAsset.section)
+    setFolderID(null)
+    setQuery(revealedAsset.displayName)
+    setKind("all")
+  }, [onSectionChange, revealedAsset])
   const assetApi = useMemo(
     () => createAssetLibraryApi(agentBaseURL, projectID, { type: "project", projectID }),
     [agentBaseURL, projectID],
@@ -73,6 +87,21 @@ export function TimelineMediaBin({
   const entries = (entriesQuery.data?.entries ?? []).filter((entry) => (
     entry.entryType === "folder" || kind === "all" || entry.asset.kind === kind
   ))
+  useEffect(() => {
+    if (!revealedAsset) return
+    const row = [...(rootRef.current?.querySelectorAll<HTMLElement>("[data-asset-id]") ?? [])]
+      .find((element) => element.dataset.assetId === revealedAsset.id)
+    if (!row) return
+    if (
+      focusedRevealRequestRef.current === revealedAsset.requestID
+      && focusedRevealElementRef.current === row
+      && document.activeElement === row
+    ) return
+    focusedRevealRequestRef.current = revealedAsset.requestID
+    focusedRevealElementRef.current = row
+    row.focus()
+    row.scrollIntoView({ block: "nearest" })
+  }, [entriesQuery.data?.entries, revealedAsset])
 
   const selectSection = (next: TimelineMediaSection) => {
     onSectionChange(next)
@@ -81,52 +110,52 @@ export function TimelineMediaBin({
   }
 
   return (
-    <aside className="cinema-timeline-media-bin" aria-label="Media bin">
-      <div className="cinema-timeline-media-sections" role="tablist" aria-label="Media sections">
+    <aside ref={rootRef} className="cinema-timeline-media-bin" aria-label={t("timeline.mediaBin")}>
+      <div className="cinema-timeline-media-sections" role="tablist" aria-label={t("timeline.mediaSections")}>
         {([
-          ["timelines", "Timelines"],
-          ["project", "Project Assets"],
-          ["generated", "Generated"],
-          ["imported", "Imported"],
-        ] as const).map(([id, label]) => (
-          <button key={id} type="button" role="tab" aria-selected={section === id} className={section === id ? "is-active" : ""} onClick={() => selectSection(id)}>{label}</button>
+          ["timelines", "deliver.timelines"],
+          ["project", "timeline.projectAssets"],
+          ["generated", "timeline.generated"],
+          ["imported", "timeline.imported"],
+        ] as const satisfies ReadonlyArray<readonly [TimelineMediaSection, TranslationKey]>).map(([id, labelKey]) => (
+          <button key={id} type="button" role="tab" aria-selected={section === id} className={section === id ? "is-active" : ""} onClick={() => selectSection(id)}>{t(labelKey)}</button>
         ))}
       </div>
 
       {section === "timelines" ? (
         <div className="cinema-timeline-list">
           <div className="cinema-timeline-bin-heading">
-            <strong>Timelines</strong>
-            <button type="button" aria-label="New Timeline" title="New Timeline" disabled={creating} onClick={onCreate}><Plus aria-hidden="true" /></button>
+            <strong>{t("deliver.timelines")}</strong>
+            <button type="button" aria-label={t("timeline.new")} title={t("timeline.new")} disabled={creating} onClick={onCreate}><Plus aria-hidden="true" /></button>
           </div>
           <div className="cinema-timeline-bin-scroll">
             {timelines.map((timeline) => (
               <div key={timeline.id} className={`cinema-timeline-list-item ${selectedTimelineID === timeline.id ? "is-current" : ""}`}>
                 <button type="button" className="cinema-timeline-list-row" aria-current={selectedTimelineID === timeline.id ? "page" : undefined} onClick={() => onSelectTimeline(timeline.id)}>
                   <Film aria-hidden="true" />
-                  <span><strong>{timeline.title}</strong><small>{timeline.clips.length} clips · r{timeline.revision}</small></span>
+                  <span><strong>{timeline.title}</strong><small>{t("timeline.clipCount", { count: timeline.clips.length, revision: timeline.revision })}</small></span>
                 </button>
-                <button type="button" className="cinema-timeline-list-delete" aria-label={`Delete ${timeline.title}`} title="Delete Timeline" onClick={() => onDeleteTimeline(timeline)}><Trash2 aria-hidden="true" /></button>
+                <button type="button" className="cinema-timeline-list-delete" aria-label={t("timeline.deleteNamed", { name: timeline.title })} title={t("timeline.delete")} onClick={() => onDeleteTimeline(timeline)}><Trash2 aria-hidden="true" /></button>
               </div>
             ))}
-            {timelines.length === 0 ? <p className="cinema-timeline-bin-empty">No timelines</p> : null}
+            {timelines.length === 0 ? <p className="cinema-timeline-bin-empty">{t("timeline.none")}</p> : null}
           </div>
         </div>
       ) : (
         <div className="cinema-timeline-assets">
-          {replacementClipTitle ? <p className="cinema-timeline-replacement-hint">Choose a compatible asset to replace “{replacementClipTitle}”.</p> : null}
+          {replacementClipTitle ? <p className="cinema-timeline-replacement-hint">{t("timeline.replaceHint", { name: replacementClipTitle })}</p> : null}
           <div className="cinema-timeline-bin-heading">
-            <button type="button" aria-label="Back to parent folder" title="Back" disabled={!entriesQuery.data?.folder?.parentID} onClick={() => setFolderID(entriesQuery.data?.folder?.parentID ?? null)}><ChevronLeft aria-hidden="true" /></button>
-            <strong title={entriesQuery.data?.folder?.name}>{entriesQuery.data?.folder?.name ?? "Assets"}</strong>
-            <button type="button" aria-label={compact ? "Thumbnail view" : "Compact list view"} title={compact ? "Thumbnail view" : "Compact list view"} onClick={() => setCompact((value) => !value)}>{compact ? <Grid2X2 aria-hidden="true" /> : <LayoutList aria-hidden="true" />}</button>
+            <button type="button" aria-label={t("timeline.backToParent")} title={t("timeline.back")} disabled={!entriesQuery.data?.folder?.parentID} onClick={() => setFolderID(entriesQuery.data?.folder?.parentID ?? null)}><ChevronLeft aria-hidden="true" /></button>
+            <strong title={entriesQuery.data?.folder?.name}>{entriesQuery.data?.folder?.name ?? t("timeline.assets")}</strong>
+            <button type="button" aria-label={t(compact ? "timeline.thumbnailView" : "timeline.compactView")} title={t(compact ? "timeline.thumbnailView" : "timeline.compactView")} onClick={() => setCompact((value) => !value)}>{compact ? <Grid2X2 aria-hidden="true" /> : <LayoutList aria-hidden="true" />}</button>
           </div>
           <label className="cinema-timeline-media-search">
             <Search aria-hidden="true" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search assets" aria-label="Search assets" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("timeline.searchAssets")} aria-label={t("timeline.searchAssets")} />
           </label>
-          <div className="cinema-timeline-kind-filter" role="group" aria-label="Media type">
+          <div className="cinema-timeline-kind-filter" role="group" aria-label={t("timeline.mediaType")}>
             {(["all", "video", "audio", "image"] as const).map((value) => (
-              <button key={value} type="button" className={kind === value ? "is-active" : ""} aria-pressed={kind === value} onClick={() => setKind(value)}>{value}</button>
+              <button key={value} type="button" className={kind === value ? "is-active" : ""} aria-pressed={kind === value} onClick={() => setKind(value)}>{t(`timeline.kind.${value}` as TranslationKey)}</button>
             ))}
           </div>
           <div className={`cinema-timeline-bin-scroll cinema-timeline-asset-list ${compact ? "is-compact" : "is-grid"}`}>
@@ -139,7 +168,9 @@ export function TimelineMediaBin({
                 <button
                   key={`asset-${entry.asset.id}`}
                   type="button"
-                  className="cinema-timeline-asset-row"
+                  className={`cinema-timeline-asset-row ${revealedAsset?.id === entry.asset.id ? "is-revealed" : ""}`}
+                  data-asset-id={entry.asset.id}
+                  aria-current={revealedAsset?.id === entry.asset.id ? "true" : undefined}
                   draggable={entry.asset.status === "ready"}
                   title={entry.asset.displayName}
                   onDoubleClick={() => onActivateAsset(entry.asset)}
@@ -154,9 +185,9 @@ export function TimelineMediaBin({
                 </button>
               )
             })}
-            {entriesQuery.isLoading ? <p className="cinema-timeline-bin-empty">Loading assets…</p> : null}
-            {entriesQuery.error ? <p className="cinema-timeline-bin-empty is-error">Could not load assets</p> : null}
-            {!entriesQuery.isLoading && entries.length === 0 ? <p className="cinema-timeline-bin-empty">No matching assets</p> : null}
+            {entriesQuery.isLoading ? <p className="cinema-timeline-bin-empty">{t("timeline.loadingAssets")}</p> : null}
+            {entriesQuery.error ? <p className="cinema-timeline-bin-empty is-error">{t("timeline.loadAssetsFailed")}</p> : null}
+            {!entriesQuery.isLoading && entries.length === 0 ? <p className="cinema-timeline-bin-empty">{t("timeline.noMatchingAssets")}</p> : null}
           </div>
         </div>
       )}

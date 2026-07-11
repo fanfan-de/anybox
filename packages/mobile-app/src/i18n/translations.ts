@@ -1,4 +1,20 @@
-export const MOBILE_LOCALES = ["zh-CN", "en-US"] as const
+import { deDE } from "./locales/de-DE"
+import { es419 } from "./locales/es-419"
+import { frFR } from "./locales/fr-FR"
+import { idID } from "./locales/id-ID"
+import { itIT } from "./locales/it-IT"
+import { jaJP } from "./locales/ja-JP"
+import { koKR } from "./locales/ko-KR"
+import { plPL } from "./locales/pl-PL"
+import { ptBR } from "./locales/pt-BR"
+import { trTR } from "./locales/tr-TR"
+import { viVN } from "./locales/vi-VN"
+import { zhTW } from "./locales/zh-TW"
+
+export const MOBILE_LOCALES = [
+  "zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "pt-BR", "es-419", "de-DE", "fr-FR",
+  "id-ID", "it-IT", "pl-PL", "tr-TR", "vi-VN",
+] as const
 
 export type MobileLocale = (typeof MOBILE_LOCALES)[number]
 
@@ -6,7 +22,19 @@ export const DEFAULT_MOBILE_LOCALE: MobileLocale = "en-US"
 
 export const localeNames: Record<MobileLocale, string> = {
   "zh-CN": "简体中文",
+  "zh-TW": "繁體中文",
   "en-US": "English",
+  "ja-JP": "日本語",
+  "ko-KR": "한국어",
+  "pt-BR": "Português (Brasil)",
+  "es-419": "Español (Latinoamérica)",
+  "de-DE": "Deutsch",
+  "fr-FR": "Français",
+  "id-ID": "Bahasa Indonesia",
+  "it-IT": "Italiano",
+  "pl-PL": "Polski",
+  "tr-TR": "Türkçe",
+  "vi-VN": "Tiếng Việt",
 }
 
 export const zhCN = {
@@ -473,7 +501,19 @@ export type MobileTranslationKey = keyof typeof zhCN
 
 export const translations: Record<MobileLocale, Record<MobileTranslationKey, string>> = {
   "zh-CN": zhCN,
+  "zh-TW": zhTW,
   "en-US": enUS,
+  "ja-JP": jaJP,
+  "ko-KR": koKR,
+  "pt-BR": ptBR,
+  "es-419": es419,
+  "de-DE": deDE,
+  "fr-FR": frFR,
+  "id-ID": idID,
+  "it-IT": itIT,
+  "pl-PL": plPL,
+  "tr-TR": trTR,
+  "vi-VN": viVN,
 }
 
 export function isMobileLocale(value: string): value is MobileLocale {

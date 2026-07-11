@@ -57,14 +57,24 @@ type PluginCatalogEnvelope = JsonEnvelope<
       name?: {
         "en-US"?: string
         "zh-CN"?: string
+        "zh-TW"?: string
+        "ja-JP"?: string
+        "ko-KR"?: string
+        "pt-BR"?: string
       }
       description?: {
         "en-US"?: string
         "zh-CN"?: string
+        "zh-TW"?: string
+        "ja-JP"?: string
+        "ko-KR"?: string
       }
       longDescription?: {
         "en-US"?: string
         "zh-CN"?: string
+        "zh-TW"?: string
+        "ja-JP"?: string
+        "ko-KR"?: string
       }
     }
     thumbnailUrl?: string
@@ -477,6 +487,10 @@ async function writeManifestPluginPackage(packageSourceRoot = pluginInstallRoot(
       displayName: {
         "en-US": "Manifest Lab",
         "zh-CN": "清单实验",
+        "zh-TW": "資訊清單實驗室",
+        "ja-JP": "マニフェストラボ",
+        "ko-KR": "매니페스트 랩",
+        "pt-BR": "Laboratório de Manifesto",
       },
       shortDescription: {
         "en-US": "Fixture plugin package.",
@@ -3047,6 +3061,10 @@ describe("plugin marketplace API", () => {
     expect(manifestPlugin?.description).toBe("Fixture plugin package.")
     expect(manifestPlugin?.longDescription).toBe("Fixture plugin package with MCP, skills, and API-key backed app connector.")
     expect(manifestPlugin?.localized?.name?.["zh-CN"]).toBe("清单实验")
+    expect(manifestPlugin?.localized?.name?.["zh-TW"]).toBe("資訊清單實驗室")
+    expect(manifestPlugin?.localized?.name?.["ja-JP"]).toBe("マニフェストラボ")
+    expect(manifestPlugin?.localized?.name?.["ko-KR"]).toBe("매니페스트 랩")
+    expect(manifestPlugin?.localized?.name?.["pt-BR"]).toBe("Laboratório de Manifesto")
     expect(manifestPlugin?.localized?.description?.["zh-CN"]).toBe("用于测试的插件包。")
     expect(manifestPlugin?.localized?.longDescription?.["zh-CN"]).toBe("包含 MCP、技能和 API key 连接器的测试插件包。")
     expect(manifestPlugin?.mcpServers.map((server) => server.id)).toEqual(["notes"])

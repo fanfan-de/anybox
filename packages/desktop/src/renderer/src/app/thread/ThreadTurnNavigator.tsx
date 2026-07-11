@@ -1,14 +1,11 @@
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type RefObject } from "react"
-import type { ThreadRowVirtualizer } from "./use-thread-virtual-list"
-import { useThreadTurnNavigation, type ThreadTurnNavigationItem } from "./use-thread-turn-navigation"
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react"
+import type { ThreadTurnNavigationItem } from "./use-thread-turn-navigation"
 
 interface ThreadTurnNavigatorProps {
+  currentIndex: number
   items: ThreadTurnNavigationItem[]
-  measurementKey: string
   onNavigate: (item: ThreadTurnNavigationItem) => void
-  resetKey: string
-  threadColumnRef: RefObject<HTMLDivElement | null>
-  virtualizer: ThreadRowVirtualizer
+  visibleIndexes: readonly number[]
 }
 
 function getTurnButtonLabel(item: ThreadTurnNavigationItem, index: number, total: number) {
@@ -16,14 +13,11 @@ function getTurnButtonLabel(item: ThreadTurnNavigationItem, index: number, total
 }
 
 export function ThreadTurnNavigator({
+  currentIndex,
   items,
-  measurementKey,
   onNavigate,
-  resetKey,
-  threadColumnRef,
-  virtualizer,
+  visibleIndexes,
 }: ThreadTurnNavigatorProps) {
-  const currentIndex = useThreadTurnNavigation({ items, measurementKey, resetKey, threadColumnRef, virtualizer })
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
   const [isLabelDismissed, setIsLabelDismissed] = useState(false)
@@ -35,6 +29,7 @@ export function ThreadTurnNavigator({
   const compactButtonRefs = useRef<Array<HTMLButtonElement | null>>([])
   const labelIndex = isLabelDismissed ? null : (focusedIndex ?? hoveredIndex)
   const currentItem = items[currentIndex] ?? items[0]
+  const visibleIndexSet = useMemo(() => new Set(visibleIndexes), [visibleIndexes])
 
   const labelText = useMemo(() => {
     if (labelIndex === null) return ""
@@ -130,7 +125,7 @@ export function ThreadTurnNavigator({
             type="button"
             aria-current={index === currentIndex ? "step" : undefined}
             aria-label={getTurnButtonLabel(item, index, items.length)}
-            data-current={index === currentIndex ? "true" : undefined}
+            data-visible={visibleIndexSet.has(index) ? "true" : undefined}
             data-running={item.isRunning ? "true" : undefined}
             onBlur={() => setFocusedIndex((current) => (current === index ? null : current))}
             onClick={() => onNavigate(item)}

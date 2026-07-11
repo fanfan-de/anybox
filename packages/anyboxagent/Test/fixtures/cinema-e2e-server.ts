@@ -297,7 +297,7 @@ runtime.app.post("/e2e/seed-large-timeline", async (context) => {
   const cinemaRoot = path.join(projectRoot, ".anybox-cinema")
   const timelinesRoot = path.join(cinemaRoot, "timelines")
   await mkdir(timelinesRoot, { recursive: true })
-  const durationUs = 3_600_000
+  const durationUs = 1_500_000
   const timeline = {
     schemaVersion: 1,
     id: "large-timeline",
@@ -315,7 +315,7 @@ runtime.app.post("/e2e/seed-large-timeline", async (context) => {
     clips: Array.from({ length: 500 }, (_, index) => ({
       id: `large-clip-${index}`,
       trackID: "o1",
-      kind: "image",
+      kind: "video",
       title: `Clip ${index + 1}`,
       timelineStartUs: index * durationUs,
       durationUs,
@@ -327,9 +327,9 @@ runtime.app.post("/e2e/seed-large-timeline", async (context) => {
       updatedAt: timestamp,
       assetRef: {
         scope: { type: "project", projectID },
-        assetID: "fixture-image-1",
+        assetID: "fixture-video-1",
         contentRevision: 0,
-        snapshot: { kind: "image", displayName: "Fixture image 1", mimeType: "image/png", width: 1, height: 1 },
+        snapshot: { kind: "video", displayName: "Fixture video 1", mimeType: "video/mp4", width: 320, height: 180, durationSeconds: 2 },
       },
       sourceInUs: 0,
       sourceDurationUs: durationUs,

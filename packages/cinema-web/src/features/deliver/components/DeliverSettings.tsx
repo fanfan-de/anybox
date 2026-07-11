@@ -5,6 +5,7 @@ import {
 import type { RenderApi } from "../api/renderApi"
 import { RENDER_PRESETS, type RenderPresetID } from "../model/renderPresets"
 import { RenderRetentionPanel } from "./RenderRetentionPanel"
+import { useI18n } from "../../../i18n"
 
 const COMMON_FRAME_RATES: readonly CinemaRenderSettings["frameRate"][] = [
   { numerator: 24_000, denominator: 1_001 },
@@ -45,10 +46,11 @@ export function DeliverSettings({
   executionAuthorized: boolean
   disabled?: boolean
 }) {
+  const { t } = useI18n()
   if (!settings) {
     return (
-      <aside className="cinema-deliver-settings" aria-label="Render settings">
-        <p>Select a Timeline to edit render settings.</p>
+      <aside className="cinema-deliver-settings" aria-label={t("deliver.renderSettings")}>
+        <p>{t("deliver.selectForSettings")}</p>
         <RenderRetentionPanel api={renderApi} executionAuthorized={executionAuthorized} />
       </aside>
     )
@@ -62,11 +64,11 @@ export function DeliverSettings({
     ? COMMON_FRAME_RATES
     : [settings.frameRate, ...COMMON_FRAME_RATES]
   return (
-    <aside className="cinema-deliver-settings" aria-label="Render settings">
-      <div className="cinema-deliver-section-heading"><span>Render settings</span></div>
+    <aside className="cinema-deliver-settings" aria-label={t("deliver.renderSettings")}>
+      <div className="cinema-deliver-section-heading"><span>{t("deliver.renderSettings")}</span></div>
       <fieldset disabled={disabled}>
-        <legend className="cinema-deliver-field-label">Preset</legend>
-        <div className="cinema-deliver-preset-list" role="listbox" aria-label="Render preset">
+        <legend className="cinema-deliver-field-label">{t("deliver.preset")}</legend>
+        <div className="cinema-deliver-preset-list" role="listbox" aria-label={t("deliver.renderPreset")}>
           {RENDER_PRESETS.map((preset) => (
             <button
               key={preset.id}
@@ -83,17 +85,17 @@ export function DeliverSettings({
         </div>
         <div className="cinema-deliver-form-grid">
           <label>
-            <span>Width</span>
+            <span>{t("deliver.width")}</span>
             <input type="number" min={2} max={7680} step={2} value={settings.width} onChange={(event) => onSettingsChange({ width: Number(event.target.value) })} />
           </label>
           <label>
-            <span>Height</span>
+            <span>{t("deliver.height")}</span>
             <input type="number" min={2} max={7680} step={2} value={settings.height} onChange={(event) => onSettingsChange({ height: Number(event.target.value) })} />
           </label>
         </div>
         <div className="cinema-deliver-setting-row is-block">
-          <span className="cinema-deliver-field-label">Frame rate</span>
-          <div className="cinema-deliver-segmented" role="listbox" aria-label="Frame rate">
+          <span className="cinema-deliver-field-label">{t("deliver.frameRate")}</span>
+          <div className="cinema-deliver-segmented" role="listbox" aria-label={t("deliver.frameRate")}>
             {frameRates.map((frameRate) => {
               const key = frameRateKey(frameRate)
               const label = frameRateLabel(frameRate)
@@ -102,7 +104,7 @@ export function DeliverSettings({
                   key={key}
                   type="button"
                   role="option"
-                  aria-label={`${label} frames per second`}
+                  aria-label={t("deliver.framesPerSecond", { rate: label })}
                   aria-selected={key === currentFrameRateKey}
                   className={key === currentFrameRateKey ? "is-selected" : ""}
                   onClick={() => onSettingsChange({ frameRate })}
@@ -115,7 +117,7 @@ export function DeliverSettings({
         </div>
         {settings.quality.mode === "target-bitrate" ? (
           <label className="cinema-deliver-output-name">
-            <span>Video bitrate (kbps)</span>
+            <span>{t("deliver.videoBitrate")}</span>
             <input
               type="number"
               min={100}
@@ -132,8 +134,8 @@ export function DeliverSettings({
           </label>
         ) : null}
         <div className="cinema-deliver-setting-row is-block">
-          <span className="cinema-deliver-field-label">Audio bitrate</span>
-          <div className="cinema-deliver-segmented" role="listbox" aria-label="Audio bitrate">
+          <span className="cinema-deliver-field-label">{t("deliver.audioBitrate")}</span>
+          <div className="cinema-deliver-segmented" role="listbox" aria-label={t("deliver.audioBitrate")}>
             {[128, 192, 256, 320].map((bitrate) => (
               <button
                 key={bitrate}
@@ -149,22 +151,22 @@ export function DeliverSettings({
           </div>
         </div>
         <div className="cinema-deliver-range-block">
-          <span className="cinema-deliver-field-label">Range</span>
-          <div className="cinema-deliver-segmented" role="listbox" aria-label="Render range">
-            <button type="button" role="option" aria-selected={settings.range.type === "full"} className={settings.range.type === "full" ? "is-selected" : ""} onClick={() => onSettingsChange({ range: { type: "full" } })}>Full timeline</button>
-            <button type="button" role="option" aria-selected={settings.range.type === "custom"} className={settings.range.type === "custom" ? "is-selected" : ""} onClick={() => onSettingsChange({ range: settings.range.type === "custom" ? settings.range : { type: "custom", startUs: 0, endUs: fullDurationUs } })}>Custom</button>
+          <span className="cinema-deliver-field-label">{t("deliver.range")}</span>
+          <div className="cinema-deliver-segmented" role="listbox" aria-label={t("deliver.renderRange")}>
+            <button type="button" role="option" aria-selected={settings.range.type === "full"} className={settings.range.type === "full" ? "is-selected" : ""} onClick={() => onSettingsChange({ range: { type: "full" } })}>{t("deliver.fullTimeline")}</button>
+            <button type="button" role="option" aria-selected={settings.range.type === "custom"} className={settings.range.type === "custom" ? "is-selected" : ""} onClick={() => onSettingsChange({ range: settings.range.type === "custom" ? settings.range : { type: "custom", startUs: 0, endUs: fullDurationUs } })}>{t("deliver.custom")}</button>
           </div>
           {settings.range.type === "custom" ? (
             <div className="cinema-deliver-form-grid">
-              <label><span>Start (s)</span><input type="number" min={0} max={fullDurationUs / 1_000_000} step={0.001} value={customRange.startUs / 1_000_000} onChange={(event) => onSettingsChange({ range: { ...customRange, startUs: Math.max(0, Math.round(Number(event.target.value) * 1_000_000)) } })} /></label>
-              <label><span>End (s)</span><input type="number" min={0} max={fullDurationUs / 1_000_000} step={0.001} value={customRange.endUs / 1_000_000} onChange={(event) => onSettingsChange({ range: { ...customRange, endUs: Math.max(0, Math.round(Number(event.target.value) * 1_000_000)) } })} /></label>
+              <label><span>{t("deliver.startSeconds")}</span><input type="number" min={0} max={fullDurationUs / 1_000_000} step={0.001} value={customRange.startUs / 1_000_000} onChange={(event) => onSettingsChange({ range: { ...customRange, startUs: Math.max(0, Math.round(Number(event.target.value) * 1_000_000)) } })} /></label>
+              <label><span>{t("deliver.endSeconds")}</span><input type="number" min={0} max={fullDurationUs / 1_000_000} step={0.001} value={customRange.endUs / 1_000_000} onChange={(event) => onSettingsChange({ range: { ...customRange, endUs: Math.max(0, Math.round(Number(event.target.value) * 1_000_000)) } })} /></label>
             </div>
           ) : null}
         </div>
         <label className="cinema-deliver-output-name">
-          <span>Output name</span>
+          <span>{t("deliver.outputName")}</span>
           <input type="text" maxLength={160} value={settings.outputName} onChange={(event) => onSettingsChange({ outputName: event.target.value })} />
-          <small>.mp4 will be added automatically.</small>
+          <small>{t("deliver.mp4Suffix")}</small>
         </label>
       </fieldset>
       <RenderRetentionPanel api={renderApi} executionAuthorized={executionAuthorized} />

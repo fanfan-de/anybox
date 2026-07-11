@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { CinemaTimelineDocument } from "@anybox/shared/cinema-timeline"
-import { timelineActiveClips, timelineNextVideoClip } from "./timelineActiveClips"
+import { timelineActiveClips, timelineNextVideoClip, timelinePreviousVideoClip } from "./timelineActiveClips"
 
 const baseClip = {
   trackID: "v1",
@@ -43,5 +43,36 @@ describe("timeline active clips", () => {
 
   it("finds the adjacent video for preloading", () => {
     expect(timelineNextVideoClip(document, 0)?.id).toBe("two")
+    expect(timelinePreviousVideoClip(document, 1_000_000)?.id).toBe("one")
+  })
+
+  it("returns overlays bottom-to-top according to track order", () => {
+    const textClip = {
+      id: "top",
+      trackID: "overlay-top",
+      kind: "text" as const,
+      title: "Top",
+      timelineStartUs: 0,
+      durationUs: 1_000_000,
+      playbackRate: 1,
+      volume: 1,
+      opacity: 1,
+      createdAt: document.createdAt,
+      updatedAt: document.updatedAt,
+      text: { value: "Top", stylePresetID: "default" },
+    }
+    const layered: CinemaTimelineDocument = {
+      ...document,
+      tracks: [
+        { id: "overlay-top", kind: "overlay", title: "Top", order: 0, locked: false, muted: false, hidden: false },
+        { id: "overlay-bottom", kind: "overlay", title: "Bottom", order: 1, locked: false, muted: false, hidden: false },
+      ],
+      clips: [textClip, { ...textClip, id: "bottom", trackID: "overlay-bottom", title: "Bottom", text: { ...textClip.text, value: "Bottom" } }],
+    }
+    expect(timelineActiveClips(layered, 0).overlays.map((clip) => clip.id)).toEqual(["bottom", "top"])
+    expect(timelineActiveClips({
+      ...layered,
+      tracks: layered.tracks.map((track) => ({ ...track, order: 1 - track.order })),
+    }, 0).overlays.map((clip) => clip.id)).toEqual(["top", "bottom"])
   })
 })

@@ -412,9 +412,21 @@ const PluginLocalizedText = z
   .object({
     "en-US": z.string().min(1).optional(),
     "zh-CN": z.string().min(1).optional(),
+    "zh-TW": z.string().min(1).optional(),
+    "ja-JP": z.string().min(1).optional(),
+    "ko-KR": z.string().min(1).optional(),
+    "pt-BR": z.string().min(1).optional(),
+    "es-419": z.string().min(1).optional(),
+    "de-DE": z.string().min(1).optional(),
+    "fr-FR": z.string().min(1).optional(),
+    "id-ID": z.string().min(1).optional(),
+    "it-IT": z.string().min(1).optional(),
+    "pl-PL": z.string().min(1).optional(),
+    "tr-TR": z.string().min(1).optional(),
+    "vi-VN": z.string().min(1).optional(),
   })
   .strict()
-  .refine((value) => Boolean(value["en-US"] || value["zh-CN"]), {
+  .refine((value) => Object.values(value).some(Boolean), {
     message: "Localized text requires at least one supported locale.",
   })
 export type PluginLocalizedText = z.infer<typeof PluginLocalizedText>
@@ -1822,15 +1834,12 @@ function mergeLocalizableText(
   if (!fallback || typeof fallback === "string") return value
   if (!value) return fallback
   if (typeof value === "string") {
-    return fallback["zh-CN"] ? {
-      "en-US": value,
-      "zh-CN": fallback["zh-CN"],
-    } : value
+    return { ...fallback, "en-US": value }
   }
 
   return {
-    "en-US": value["en-US"] ?? fallback["en-US"],
-    "zh-CN": value["zh-CN"] ?? fallback["zh-CN"],
+    ...fallback,
+    ...value,
   }
 }
 
@@ -2013,8 +2022,12 @@ function localizableTextMap(value: PluginLocalizableText | undefined) {
   if (!value || typeof value === "string") return undefined
 
   const localized: Partial<Record<keyof PluginLocalizedText, string>> = {}
-  if (value["en-US"]) localized["en-US"] = value["en-US"]
-  if (value["zh-CN"]) localized["zh-CN"] = value["zh-CN"]
+  for (const locale of [
+    "en-US", "zh-CN", "zh-TW", "ja-JP", "ko-KR", "pt-BR", "es-419", "de-DE", "fr-FR",
+    "id-ID", "it-IT", "pl-PL", "tr-TR", "vi-VN",
+  ] as const) {
+    if (value[locale]) localized[locale] = value[locale]
+  }
 
   return Object.keys(localized).length > 0 ? localized : undefined
 }

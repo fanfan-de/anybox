@@ -369,12 +369,18 @@ describe("cinema timeline contracts", () => {
     const commands = [
       { ...base, type: "create-track", track: { id: "track-a1", kind: "audio", title: "A1", order: 1, locked: false, muted: false, hidden: false } },
       { ...base, type: "update-track", trackID: "track-a1", patch: { muted: true } },
+      { ...base, type: "delete-track", trackID: "track-a1", deleteClips: false },
+      { ...base, type: "reorder-tracks", trackIDs: ["track-a1", "track-v1"] },
       { ...base, type: "add-clip", clip: { ...clipBase, kind: "video", assetRef: assetRef("video", 5), sourceInUs: 0, sourceDurationUs: 2_000_000 } },
+      { ...base, type: "add-clips", clips: [{ ...clipBase, kind: "video", assetRef: assetRef("video", 5), sourceInUs: 0, sourceDurationUs: 2_000_000 }] },
       { ...base, type: "move-clip", clipID: "clip-1", trackID: "track-v1", timelineStartUs: 1_000_000 },
+      { ...base, type: "move-clips", placements: [{ clipID: "clip-1", trackID: "track-v1", timelineStartUs: 1_000_000 }] },
       { ...base, type: "trim-clip", clipID: "clip-1", timelineStartUs: 0, durationUs: 1_000_000, sourceInUs: 500_000, sourceDurationUs: 1_000_000 },
       { ...base, type: "split-clip", clipID: "clip-1", rightClipID: "clip-2", splitTimeUs: 1_000_000 },
       { ...base, type: "delete-clips", clipIDs: ["clip-1"] },
-      { ...base, type: "update-clip", clipID: "clip-1", patch: { volume: 0.5 } },
+      { ...base, type: "ripple-delete-clips", clipIDs: ["clip-1"] },
+      { ...base, type: "update-clip", clipID: "clip-1", patch: { volume: 0.5, fit: "stretch", transform: { x: 10, y: -5, scale: 1.2, rotationDegrees: 15, anchorX: 0.5, anchorY: 0.5 } } },
+      { ...base, type: "update-clips", updates: [{ clipID: "clip-1", patch: { volume: 0.5 } }] },
       { ...base, type: "add-marker", marker: { id: "marker-1", timeUs: 0, title: "Start", color: "default" } },
       { ...base, type: "move-marker", markerID: "marker-1", timeUs: 1_000_000 },
       { ...base, type: "delete-marker", markerID: "marker-1" },
@@ -396,5 +402,51 @@ describe("cinema timeline contracts", () => {
       clipID: "clip-1",
       patch: {},
     })).toThrow()
+    expect(() => CinemaTimelineCommandSchema.parse({
+      ...base,
+      type: "update-track",
+      trackID: "track-v1",
+      patch: { order: 1 },
+    })).toThrow()
+    expect(() => CinemaTimelineCommandSchema.parse({
+      ...base,
+      type: "move-clips",
+      placements: [
+        { clipID: "clip-1", trackID: "track-v1", timelineStartUs: 0 },
+        { clipID: "clip-1", trackID: "track-v1", timelineStartUs: 1_000_000 },
+      ],
+    })).toThrow(/unique/)
+    expect(() => CinemaTimelineCommandSchema.parse({
+      ...base,
+      type: "update-clip",
+      clipID: "clip-1",
+      patch: { transform: { x: 0, y: 0, scale: 0, rotationDegrees: 0, anchorX: 0.5, anchorY: 0.5 } },
+    })).toThrow()
+    expect(() => CinemaTimelineCommandSchema.parse({
+      ...base,
+      type: "reorder-tracks",
+      trackIDs: ["track-v1", "track-v1"],
+    })).toThrow(/unique/)
+    expect(() => CinemaTimelineCommandSchema.parse({
+      ...base,
+      type: "add-clips",
+      clips: [
+        { ...clipBase, kind: "video", assetRef: assetRef("video", 5), sourceInUs: 0, sourceDurationUs: 2_000_000 },
+        { ...clipBase, kind: "video", assetRef: assetRef("video", 5), sourceInUs: 0, sourceDurationUs: 2_000_000 },
+      ],
+    })).toThrow(/unique/)
+    expect(() => CinemaTimelineCommandSchema.parse({
+      ...base,
+      type: "ripple-delete-clips",
+      clipIDs: ["clip-1", "clip-1"],
+    })).toThrow(/unique/)
+    expect(() => CinemaTimelineCommandSchema.parse({
+      ...base,
+      type: "update-clips",
+      updates: [
+        { clipID: "clip-1", patch: { volume: 0.5 } },
+        { clipID: "clip-1", patch: { opacity: 0.5 } },
+      ],
+    })).toThrow(/unique/)
   })
 })

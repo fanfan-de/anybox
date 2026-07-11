@@ -9,11 +9,83 @@ const trayLabels = {
     open: "\u6253\u5f00 Anybox",
     quit: "\u9000\u51fa Anybox",
   },
+  "zh-TW": {
+    checkForUpdates: "檢查更新...",
+    hide: "隱藏視窗",
+    open: "開啟 Anybox",
+    quit: "結束 Anybox",
+  },
   "en-US": {
     checkForUpdates: "Check for Updates...",
     hide: "Hide Window",
     open: "Open Anybox",
     quit: "Quit Anybox",
+  },
+  "ja-JP": {
+    checkForUpdates: "アップデートを確認...",
+    hide: "ウインドウを隠す",
+    open: "Anybox を開く",
+    quit: "Anybox を終了",
+  },
+  "ko-KR": {
+    checkForUpdates: "업데이트 확인...",
+    hide: "창 숨기기",
+    open: "Anybox 열기",
+    quit: "Anybox 종료",
+  },
+  "pt-BR": {
+    checkForUpdates: "Verificar atualizações...",
+    hide: "Ocultar janela",
+    open: "Abrir Anybox",
+    quit: "Sair do Anybox",
+  },
+  "es-419": {
+    checkForUpdates: "Buscar actualizaciones...",
+    hide: "Ocultar ventana",
+    open: "Abrir Anybox",
+    quit: "Salir de Anybox",
+  },
+  "de-DE": {
+    checkForUpdates: "Nach Updates suchen...",
+    hide: "Fenster ausblenden",
+    open: "Anybox öffnen",
+    quit: "Anybox beenden",
+  },
+  "fr-FR": {
+    checkForUpdates: "Rechercher des mises à jour...",
+    hide: "Masquer la fenêtre",
+    open: "Ouvrir Anybox",
+    quit: "Quitter Anybox",
+  },
+  "id-ID": {
+    checkForUpdates: "Periksa pembaruan...",
+    hide: "Sembunyikan jendela",
+    open: "Buka Anybox",
+    quit: "Keluar dari Anybox",
+  },
+  "it-IT": {
+    checkForUpdates: "Controlla aggiornamenti...",
+    hide: "Nascondi finestra",
+    open: "Apri Anybox",
+    quit: "Esci da Anybox",
+  },
+  "pl-PL": {
+    checkForUpdates: "Sprawdź aktualizacje...",
+    hide: "Ukryj okno",
+    open: "Otwórz Anybox",
+    quit: "Zakończ Anybox",
+  },
+  "tr-TR": {
+    checkForUpdates: "Güncellemeleri denetle...",
+    hide: "Pencereyi gizle",
+    open: "Anybox'ı aç",
+    quit: "Anybox'tan çık",
+  },
+  "vi-VN": {
+    checkForUpdates: "Kiểm tra bản cập nhật...",
+    hide: "Ẩn cửa sổ",
+    open: "Mở Anybox",
+    quit: "Thoát Anybox",
   },
 } as const satisfies Record<AppLocale, Record<string, string>>
 

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEventHandler, type ReactNode } from "react"
 import { Moon, Settings2, Sun, X } from "lucide-react"
+import { SUPPORTED_LOCALES, useI18n, type TranslationKey } from "../../i18n"
 
 export type CinemaWorkspaceID = "create" | "edit" | "deliver"
 type CinemaThemePreference = "light" | "dark"
@@ -8,20 +9,20 @@ const CINEMA_THEME_STORAGE_KEY = "cinema-theme"
 
 const CINEMA_THEME_OPTIONS: ReadonlyArray<{
   id: CinemaThemePreference
-  label: string
+  labelKey: TranslationKey
   icon: typeof Sun
 }> = [
-  { id: "light", label: "Light", icon: Sun },
-  { id: "dark", label: "Dark", icon: Moon },
+  { id: "light", labelKey: "settings.theme.light", icon: Sun },
+  { id: "dark", labelKey: "settings.theme.dark", icon: Moon },
 ]
 
 const CINEMA_WORKSPACES: ReadonlyArray<{
   id: CinemaWorkspaceID
-  label: string
+  labelKey: TranslationKey
 }> = [
-  { id: "create", label: "Create" },
-  { id: "edit", label: "Edit" },
-  { id: "deliver", label: "Deliver" },
+  { id: "create", labelKey: "workspace.create" },
+  { id: "edit", labelKey: "workspace.edit" },
+  { id: "deliver", labelKey: "workspace.deliver" },
 ]
 
 function readThemePreference(): CinemaThemePreference {
@@ -34,6 +35,7 @@ function readThemePreference(): CinemaThemePreference {
 }
 
 function CinemaSettingsControl() {
+  const { locale, setLocale, t } = useI18n()
   const [theme, setTheme] = useState<CinemaThemePreference>(readThemePreference)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const controlRef = useRef<HTMLDivElement | null>(null)
@@ -77,11 +79,11 @@ function CinemaSettingsControl() {
         ref={triggerRef}
         type="button"
         className={`cinema-settings-trigger ${settingsOpen ? "is-active" : ""}`}
-        aria-label="Open settings"
+        aria-label={t("settings.open")}
         aria-haspopup="dialog"
         aria-expanded={settingsOpen}
         aria-controls="cinema-settings-panel"
-        title="Settings"
+        title={t("settings.title")}
         onClick={() => setSettingsOpen((open) => !open)}
       >
         <Settings2 size={16} aria-hidden="true" />
@@ -91,15 +93,15 @@ function CinemaSettingsControl() {
           id="cinema-settings-panel"
           className="cinema-settings-panel"
           role="dialog"
-          aria-label="Cinema settings"
+          aria-label={t("settings.dialog")}
         >
           <header className="cinema-settings-panel-header">
-            <strong>Settings</strong>
+            <strong>{t("settings.title")}</strong>
             <button
               type="button"
               className="cinema-settings-close"
-              aria-label="Close settings"
-              title="Close settings"
+              aria-label={t("settings.close")}
+              title={t("settings.close")}
               onClick={() => {
                 setSettingsOpen(false)
                 triggerRef.current?.focus()
@@ -110,10 +112,10 @@ function CinemaSettingsControl() {
           </header>
           <div className="cinema-settings-row">
             <div className="cinema-settings-row-copy">
-              <strong>Appearance</strong>
-              <span>Choose the Cinema interface theme.</span>
+              <strong>{t("settings.appearance")}</strong>
+              <span>{t("settings.appearanceDescription")}</span>
             </div>
-            <div className="cinema-settings-theme-options" role="radiogroup" aria-label="Interface theme">
+            <div className="cinema-settings-choice-options" role="radiogroup" aria-label={t("settings.theme")}>
               {CINEMA_THEME_OPTIONS.map((option) => {
                 const Icon = option.icon
                 return (
@@ -121,15 +123,35 @@ function CinemaSettingsControl() {
                     key={option.id}
                     type="button"
                     role="radio"
-                    className={`cinema-settings-theme-option ${theme === option.id ? "is-active" : ""}`}
+                    className={`cinema-settings-choice-option ${theme === option.id ? "is-active" : ""}`}
                     aria-checked={theme === option.id}
                     onClick={() => setTheme(option.id)}
                   >
                     <Icon size={15} aria-hidden="true" />
-                    <span>{option.label}</span>
+                    <span>{t(option.labelKey)}</span>
                   </button>
                 )
               })}
+            </div>
+          </div>
+          <div className="cinema-settings-row">
+            <div className="cinema-settings-row-copy">
+              <strong>{t("settings.language")}</strong>
+              <span>{t("settings.languageDescription")}</span>
+            </div>
+            <div className="cinema-settings-choice-options" role="radiogroup" aria-label={t("settings.languageOptions")}>
+              {SUPPORTED_LOCALES.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  className={`cinema-settings-choice-option ${locale === option.id ? "is-active" : ""}`}
+                  aria-checked={locale === option.id}
+                  onClick={() => setLocale(option.id)}
+                >
+                  <span>{option.nativeLabel}</span>
+                </button>
+              ))}
             </div>
           </div>
         </section>
@@ -153,6 +175,7 @@ export function CinemaWorkbenchShell({
   onClick?: MouseEventHandler<HTMLElement>
   children: ReactNode
 }) {
+  const { t } = useI18n()
   const activeDefinition = CINEMA_WORKSPACES.find((workspace) => workspace.id === activeWorkspace)
     ?? CINEMA_WORKSPACES[0]
 
@@ -160,12 +183,13 @@ export function CinemaWorkbenchShell({
     <main className="cinema-shell is-workbench" onClick={onClick}>
       <header className="cinema-workbench-header">
         <CinemaSettingsControl />
-        <nav className="cinema-workbench-tabs" role="tablist" aria-label="Cinema 工作台">
+        <nav className="cinema-workbench-tabs" role="tablist" aria-label={t("workspace.navigation")}>
           {CINEMA_WORKSPACES.map((workspace) => {
             const available = workspace.id === "create" || availableWorkspaces?.[workspace.id] === true
             const selected = workspace.id === activeDefinition.id
             const tabID = `cinema-workbench-${workspace.id}-tab`
             const panelID = `cinema-workbench-${workspace.id}-panel`
+            const workspaceLabel = t(workspace.labelKey)
             return (
               <button
                 key={workspace.id}
@@ -178,13 +202,13 @@ export function CinemaWorkbenchShell({
                 aria-disabled={!available}
                 disabled={!available}
                 tabIndex={selected ? 0 : -1}
-                title={available ? `${workspace.label} 工作台` : `${workspace.label} 工作台即将开放`}
+                title={t(available ? "workspace.availableTitle" : "workspace.unavailableTitle", { workspace: workspaceLabel })}
                 onClick={() => {
                   if (available && !selected) onWorkspaceChange(workspace.id)
                 }}
               >
-                <span>{workspace.label}</span>
-                {!available ? <small>Soon</small> : null}
+                <span>{workspaceLabel}</span>
+                {!available ? <small>{t("workspace.soon")}</small> : null}
               </button>
             )
           })}

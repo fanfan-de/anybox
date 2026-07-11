@@ -1292,6 +1292,8 @@ describe("cinema api", () => {
 
       expect(emptyPromptResponse.status).toBe(400)
     } finally {
+      await PromptPresets.updatePromptPresetSelection(previousPromptSelection)
+      await PromptPresets.deletePromptPreset(managedCinemaPreset.id)
       restoreTextRuntime()
       await rm(root, { recursive: true, force: true })
     }
@@ -1460,8 +1462,6 @@ describe("cinema api", () => {
       expect(seenInput?.messages?.[0]?.content?.[2]?.type).toBe("image")
       expect(seenInput?.messages?.[0]?.content?.[2]?.mediaType).toBe("image/png")
     } finally {
-      await PromptPresets.updatePromptPresetSelection(previousPromptSelection)
-      await PromptPresets.deletePromptPreset(managedCinemaPreset.id)
       restoreTextRuntime()
       await rm(root, { recursive: true, force: true })
     }

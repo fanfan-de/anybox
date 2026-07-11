@@ -23,8 +23,22 @@ const I18nContext = createContext<I18nContextValue | undefined>(undefined)
 
 function resolveDeviceLocale(): MobileLocale {
   try {
-    const resolved = Intl.DateTimeFormat().resolvedOptions().locale
-    return resolved.toLocaleLowerCase().startsWith("zh") ? "zh-CN" : DEFAULT_MOBILE_LOCALE
+    const resolved = Intl.DateTimeFormat().resolvedOptions().locale.toLocaleLowerCase()
+    if (resolved.startsWith("ja")) return "ja-JP"
+    if (resolved.startsWith("ko")) return "ko-KR"
+    if (resolved.startsWith("pt")) return "pt-BR"
+    if (resolved.startsWith("es")) return "es-419"
+    if (resolved.startsWith("de")) return "de-DE"
+    if (resolved.startsWith("fr")) return "fr-FR"
+    if (resolved.startsWith("id")) return "id-ID"
+    if (resolved.startsWith("it")) return "it-IT"
+    if (resolved.startsWith("pl")) return "pl-PL"
+    if (resolved.startsWith("tr")) return "tr-TR"
+    if (resolved.startsWith("vi")) return "vi-VN"
+    if (resolved.startsWith("zh")) {
+      return /(?:hant|tw|hk|mo)/.test(resolved) ? "zh-TW" : "zh-CN"
+    }
+    return DEFAULT_MOBILE_LOCALE
   } catch {
     return DEFAULT_MOBILE_LOCALE
   }

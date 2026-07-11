@@ -34,7 +34,7 @@ test.describe("Cinema Edit rough cut", () => {
     expect(trimBox).not.toBeNull()
     await page.mouse.move(trimBox!.x + trimBox!.width / 2, trimBox!.y + trimBox!.height / 2)
     await page.mouse.down()
-    await page.mouse.move(trimBox!.x - 4, trimBox!.y + trimBox!.height / 2, { steps: 8 })
+    await page.mouse.move(trimBox!.x - 12, trimBox!.y + trimBox!.height / 2, { steps: 8 })
     await page.mouse.up()
     await expect.poll(() => observedCommands.filter((type) => type === "trim-clip").length).toBe(1)
 

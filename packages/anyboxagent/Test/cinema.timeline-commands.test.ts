@@ -155,4 +155,249 @@ describe("Cinema timeline command projection", () => {
       clipIDs: ["clip-1"],
     }, 1))).toThrow("locked")
   })
+
+  test("moves multiple clips atomically in one revision", () => {
+    const base: CinemaTimelineDocument = {
+      ...document(),
+      clips: [
+        { ...videoClip(), durationUs: 2_000_000, sourceDurationUs: 2_000_000 },
+        {
+          ...videoClip(),
+          id: "clip-2",
+          title: "Shot 2",
+          timelineStartUs: 3_000_000,
+          durationUs: 2_000_000,
+          sourceDurationUs: 2_000_000,
+        },
+      ],
+    }
+    const moved = applyCinemaTimelineCommandToDocument(base, command({
+      type: "move-clips",
+      placements: [
+        { clipID: "clip-1", trackID: "track-v1", timelineStartUs: 4_000_000 },
+        { clipID: "clip-2", trackID: "track-v1", timelineStartUs: 0 },
+      ],
+    }), "2026-07-10T00:05:00.000Z")
+
+    expect(moved.revision).toBe(1)
+    expect(moved.clips.map((clip) => [clip.id, clip.timelineStartUs])).toEqual([
+      ["clip-1", 4_000_000],
+      ["clip-2", 0],
+    ])
+    expect(base.clips.map((clip) => clip.timelineStartUs)).toEqual([0, 3_000_000])
+
+    expect(() => applyCinemaTimelineCommandToDocument(base, command({
+      type: "move-clips",
+      placements: [
+        { clipID: "clip-1", trackID: "track-v1", timelineStartUs: 1_000_000 },
+        { clipID: "clip-2", trackID: "track-v1", timelineStartUs: 2_000_000 },
+      ],
+    }))).toThrow("invalid document")
+    expect(base.revision).toBe(0)
+  })
+
+  test("adds multiple clips atomically in one revision", () => {
+    const base = document()
+    const added = applyCinemaTimelineCommandToDocument(base, command({
+      type: "add-clips",
+      clips: [
+        { ...videoClip(), durationUs: 2_000_000, sourceDurationUs: 2_000_000 },
+        {
+          ...videoClip(),
+          id: "clip-2",
+          title: "Shot 2",
+          timelineStartUs: 3_000_000,
+          durationUs: 2_000_000,
+          sourceDurationUs: 2_000_000,
+        },
+      ],
+    }), "2026-07-10T00:06:00.000Z")
+
+    expect(added.revision).toBe(1)
+    expect(added.clips.map((clip) => clip.id)).toEqual(["clip-1", "clip-2"])
+    expect(base.clips).toEqual([])
+
+    expect(() => applyCinemaTimelineCommandToDocument(base, command({
+      type: "add-clips",
+      clips: [
+        { ...videoClip(), durationUs: 2_000_000, sourceDurationUs: 2_000_000 },
+        {
+          ...videoClip(),
+          id: "clip-2",
+          title: "Overlapping shot",
+          timelineStartUs: 1_000_000,
+          durationUs: 2_000_000,
+          sourceDurationUs: 2_000_000,
+        },
+      ],
+    }))).toThrow("invalid document")
+    expect(base.clips).toEqual([])
+  })
+
+  test("ripple deletes one track atomically and preserves gaps", () => {
+    const clip = { ...videoClip(), durationUs: 2_000_000, sourceDurationUs: 2_000_000 }
+    const base: CinemaTimelineDocument = {
+      ...document(),
+      clips: [
+        clip,
+        { ...clip, id: "clip-2", timelineStartUs: 3_000_000 },
+        { ...clip, id: "clip-3", timelineStartUs: 6_000_000 },
+        { ...clip, id: "clip-4", timelineStartUs: 9_000_000 },
+      ],
+    }
+    const rippled = applyCinemaTimelineCommandToDocument(base, command({
+      type: "ripple-delete-clips",
+      clipIDs: ["clip-1", "clip-3"],
+    }), "2026-07-10T00:07:00.000Z")
+    expect(rippled.revision).toBe(1)
+    expect(rippled.clips.map((candidate) => [candidate.id, candidate.timelineStartUs])).toEqual([
+      ["clip-2", 1_000_000],
+      ["clip-4", 5_000_000],
+    ])
+    expect(base.clips).toHaveLength(4)
+
+    const crossTrack: CinemaTimelineDocument = {
+      ...base,
+      clips: [
+        clip,
+        {
+          ...clip,
+          id: "audio-1",
+          trackID: "track-a1",
+          kind: "audio",
+          timelineStartUs: 0,
+          assetRef: {
+            ...clip.assetRef,
+            assetID: "audio-asset",
+            snapshot: { ...clip.assetRef.snapshot, kind: "audio", mimeType: "audio/wav" },
+          },
+          fadeInUs: 0,
+          fadeOutUs: 0,
+        },
+      ],
+    }
+    expect(() => applyCinemaTimelineCommandToDocument(crossTrack, command({
+      type: "ripple-delete-clips",
+      clipIDs: ["clip-1", "audio-1"],
+    }))).toThrow("one track")
+  })
+
+  test("updates multiple clips atomically in one revision", () => {
+    const clip = { ...videoClip(), durationUs: 2_000_000, sourceDurationUs: 2_000_000 }
+    const base: CinemaTimelineDocument = {
+      ...document(),
+      clips: [clip, { ...clip, id: "clip-2", timelineStartUs: 3_000_000 }],
+    }
+    const updated = applyCinemaTimelineCommandToDocument(base, command({
+      type: "update-clips",
+      updates: [
+        { clipID: "clip-1", patch: { volume: 0.4, opacity: 0.8 } },
+        { clipID: "clip-2", patch: { volume: 0.4, opacity: 0.8 } },
+      ],
+    }), "2026-07-10T00:08:00.000Z")
+    expect(updated.revision).toBe(1)
+    expect(updated.clips.map((candidate) => [candidate.volume, candidate.opacity])).toEqual([[0.4, 0.8], [0.4, 0.8]])
+    expect(base.clips.map((candidate) => [candidate.volume, candidate.opacity])).toEqual([[1, 1], [1, 1]])
+  })
+
+  test("updates visual transform atomically and rejects transform on audio", () => {
+    const base: CinemaTimelineDocument = { ...document(), clips: [videoClip()] }
+    const transformed = applyCinemaTimelineCommandToDocument(base, command({
+      type: "update-clip",
+      clipID: "clip-1",
+      patch: {
+        fit: "stretch",
+        transform: { x: 120, y: -40, scale: 1.25, rotationDegrees: 15, anchorX: 0.5, anchorY: 0.5 },
+      },
+    }))
+    expect(transformed.clips[0]).toMatchObject({
+      fit: "stretch",
+      transform: { x: 120, y: -40, scale: 1.25, rotationDegrees: 15, anchorX: 0.5, anchorY: 0.5 },
+    })
+
+    const audioClip = {
+      ...videoClip(),
+      id: "audio-1",
+      trackID: "track-a1",
+      kind: "audio" as const,
+      assetRef: {
+        ...videoClip().assetRef,
+        assetID: "audio-asset",
+        snapshot: { ...videoClip().assetRef.snapshot, kind: "audio" as const, mimeType: "audio/wav" },
+      },
+      fadeInUs: 0,
+      fadeOutUs: 0,
+    }
+    expect(() => applyCinemaTimelineCommandToDocument({ ...document(), clips: [audioClip] }, command({
+      type: "update-clip",
+      clipID: "audio-1",
+      patch: { transform: { x: 0, y: 0, scale: 1, rotationDegrees: 0, anchorX: 0.5, anchorY: 0.5 } },
+    }))).toThrow("Audio clips cannot have visual transforms")
+  })
+
+  test("creates, reorders, and deletes tracks atomically", () => {
+    const created = applyCinemaTimelineCommandToDocument(document(), command({
+      type: "create-track",
+      track: { id: "track-o1", kind: "overlay", title: "O1", order: 1, locked: false, muted: false, hidden: false },
+    }))
+    expect(created.tracks.map((track) => [track.id, track.order])).toEqual([
+      ["track-v1", 0],
+      ["track-o1", 1],
+      ["track-a1", 2],
+    ])
+
+    const reordered = applyCinemaTimelineCommandToDocument(created, command({
+      type: "reorder-tracks",
+      trackIDs: ["track-o1", "track-v1", "track-a1"],
+    }, 1))
+    expect(reordered.revision).toBe(2)
+    expect(reordered.tracks.map((track) => [track.id, track.order])).toEqual([
+      ["track-o1", 0],
+      ["track-v1", 1],
+      ["track-a1", 2],
+    ])
+
+    const deleted = applyCinemaTimelineCommandToDocument(reordered, command({
+      type: "delete-track",
+      trackID: "track-o1",
+      deleteClips: false,
+    }, 2))
+    expect(deleted.revision).toBe(3)
+    expect(deleted.tracks.map((track) => [track.id, track.order])).toEqual([
+      ["track-v1", 0],
+      ["track-a1", 1],
+    ])
+
+    expect(() => applyCinemaTimelineCommandToDocument(document(), command({
+      type: "reorder-tracks",
+      trackIDs: ["track-v1"],
+    }))).toThrow("every current track")
+  })
+
+  test("requires explicit deletion of clips on a non-empty unlocked track", () => {
+    const base: CinemaTimelineDocument = { ...document(), clips: [videoClip()] }
+    expect(() => applyCinemaTimelineCommandToDocument(base, command({
+      type: "delete-track",
+      trackID: "track-v1",
+      deleteClips: false,
+    }))).toThrow("contains 1 clip")
+
+    const deleted = applyCinemaTimelineCommandToDocument(base, command({
+      type: "delete-track",
+      trackID: "track-v1",
+      deleteClips: true,
+    }))
+    expect(deleted.clips).toEqual([])
+    expect(deleted.tracks.map((track) => [track.id, track.order])).toEqual([["track-a1", 0]])
+
+    const locked: CinemaTimelineDocument = {
+      ...base,
+      tracks: base.tracks.map((track) => track.id === "track-v1" ? { ...track, locked: true } : track),
+    }
+    expect(() => applyCinemaTimelineCommandToDocument(locked, command({
+      type: "delete-track",
+      trackID: "track-v1",
+      deleteClips: true,
+    }))).toThrow("locked")
+  })
 })

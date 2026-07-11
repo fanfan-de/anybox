@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  APP_LOCALES,
   createDefaultLocaleConfigDocument,
   normalizeAppLocale,
   normalizeLocaleConfigDocument,
@@ -15,9 +16,8 @@ describe("locale settings", () => {
   })
 
   it("normalizes supported and unsupported locale values", () => {
-    expect(normalizeAppLocale("en-US")).toBe("en-US")
-    expect(normalizeAppLocale("zh-CN")).toBe("zh-CN")
-    expect(normalizeAppLocale("fr-FR")).toBe("zh-CN")
+    for (const locale of APP_LOCALES) expect(normalizeAppLocale(locale)).toBe(locale)
+    expect(normalizeAppLocale("ar-SA")).toBe("zh-CN")
   })
 
   it("normalizes persisted locale documents", () => {
@@ -32,7 +32,7 @@ describe("locale settings", () => {
     })
 
     expect(normalizeLocaleConfigDocument({
-      locale: "de-DE",
+      locale: "ar-SA",
       updatedAt: Number.NaN,
     })).toEqual({
       version: 1,

@@ -22,11 +22,20 @@ test.describe("Cinema Edit performance", () => {
 
     const clips = page.locator(".cinema-timeline-clip")
     expect(await clips.count()).toBeLessThan(30)
+    expect(await page.locator("[data-filmstrip-cell]").count()).toBeLessThan(40)
     await expect(clips.first()).toHaveAttribute("data-clip-id", "large-clip-0")
 
     const scrollRegion = page.locator(".cinema-timeline-scroll-region")
     await scrollRegion.evaluate((element) => { element.scrollLeft = element.scrollWidth - element.clientWidth })
     await expect.poll(() => clips.count()).toBeLessThan(30)
+    await expect.poll(() => page.locator("[data-filmstrip-cell]").count()).toBeLessThan(40)
     await expect(page.locator('[data-clip-id="large-clip-499"]')).toBeVisible()
+
+    const session = await page.context().newCDPSession(page)
+    await session.send("Performance.enable")
+    const metrics = await session.send("Performance.getMetrics")
+    const metric = (name: string) => metrics.metrics.find((candidate) => candidate.name === name)?.value ?? Number.POSITIVE_INFINITY
+    expect(metric("Nodes")).toBeLessThan(5_000)
+    expect(metric("JSHeapUsedSize")).toBeLessThan(128 * 1024 * 1024)
   })
 })

@@ -103,7 +103,7 @@ import {
   shouldOpenUpdateCenterOnly,
   type AppUpdateStatus,
 } from "../update/UpdateDialog"
-import type { AppLocale } from "../../../../shared/locale"
+import { APP_LOCALES, APP_LOCALE_METADATA, type AppLocale } from "../../../../shared/locale"
 import {
   DEFAULT_HTML_BACKGROUND_CONFIG,
   type HtmlBackgroundConfig,
@@ -3824,18 +3824,10 @@ export function SettingsPage({
       void onTestCustomProviderConnection(editingCustomProviderID ?? undefined)
     }
 
-    const languageOptions: Array<{ value: AppLocale; label: string; description: string }> = [
-      {
-        value: "zh-CN",
-        label: t("settings.appearance.localeZh"),
-        description: t("settings.appearance.localeZhDescription"),
-      },
-      {
-        value: "en-US",
-        label: t("settings.appearance.localeEn"),
-        description: t("settings.appearance.localeEnDescription"),
-      },
-    ]
+    const languageOptions: Array<{ value: AppLocale; label: string; description: string }> = APP_LOCALES.map((value) => ({
+      value,
+      ...APP_LOCALE_METADATA[value],
+    }))
 
     const primarySectionGroups = [
       {

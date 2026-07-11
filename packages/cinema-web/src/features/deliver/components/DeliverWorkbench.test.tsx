@@ -5,6 +5,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { DeliverWorkbench } from "./DeliverWorkbench"
+import { I18nProvider } from "../../../i18n"
 
 afterEach(() => {
   cleanup()
@@ -15,7 +16,9 @@ function renderWorkbench() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <DeliverWorkbench agentBaseURL="http://agent.test" projectID="project-1" />
+      <I18nProvider locale="en-US">
+        <DeliverWorkbench agentBaseURL="http://agent.test" projectID="project-1" />
+      </I18nProvider>
     </QueryClientProvider>,
   )
 }

@@ -81,6 +81,7 @@ function atempoFilters(playbackRate: number) {
 }
 
 function visualFitFilters(clip: CinemaRenderVisualClip, width: number, height: number) {
+  if (clip.fit === "stretch") return [`scale=${width}:${height}`]
   if (clip.fit === "cover") {
     return [
       `scale=${width}:${height}:force_original_aspect_ratio=increase`,
@@ -193,7 +194,9 @@ export function buildCinemaRenderPlan(options: CinemaRenderGraphOptions): Cinema
     const rightTrack = trackByID.get(right.clip.trackID)
     const leftLayer = leftTrack?.kind === "video" ? 0 : 1
     const rightLayer = rightTrack?.kind === "video" ? 0 : 1
-    return leftLayer - rightLayer || left.clip.timelineStartUs - right.clip.timelineStartUs
+    return leftLayer - rightLayer
+      || (rightTrack?.order ?? 0) - (leftTrack?.order ?? 0)
+      || left.clip.timelineStartUs - right.clip.timelineStartUs
   })
 
   filters.push(`[0:v]format=rgba[base0]`)
@@ -215,6 +218,20 @@ export function buildCinemaRenderPlan(options: CinemaRenderGraphOptions): Cinema
       ...visualFitFilters(clip, settings.width, settings.height),
       "format=rgba",
     )
+    const transform = clip.transform ?? {
+      x: 0,
+      y: 0,
+      scale: 1,
+      rotationDegrees: 0,
+      anchorX: 0.5,
+      anchorY: 0.5,
+    }
+    if (transform.scale !== 1) {
+      visualFilters.push(`scale=iw*${transform.scale}:ih*${transform.scale}`)
+    }
+    if (transform.rotationDegrees !== 0) {
+      visualFilters.push(`rotate=${transform.rotationDegrees}*PI/180:ow=rotw(iw):oh=roth(ih):c=black@0`)
+    }
     if (clip.opacity < 1) visualFilters.push(`colorchannelmixer=aa=${clip.opacity}`)
     visualFilters.push(
       `trim=duration=${formatSeconds(clip.durationUs)}`,
@@ -223,7 +240,7 @@ export function buildCinemaRenderPlan(options: CinemaRenderGraphOptions): Cinema
     filters.push(`[${inputIndex}:v]${visualFilters.join(",")}[${preparedLabel}]`)
     const nextLabel = `base${index + 1}`
     filters.push(
-      `[${currentVideoLabel}][${preparedLabel}]overlay=eof_action=pass:shortest=0:enable='between(t,${start},${end})'[${nextLabel}]`,
+      `[${currentVideoLabel}][${preparedLabel}]overlay=x='${settings.width * transform.anchorX + transform.x}-overlay_w*${transform.anchorX}':y='${settings.height * transform.anchorY + transform.y}-overlay_h*${transform.anchorY}':eof_action=pass:shortest=0:enable='between(t,${start},${end})'[${nextLabel}]`,
     )
     currentVideoLabel = nextLabel
   })

@@ -1,5 +1,6 @@
 import { Film, ListVideo } from "lucide-react"
 import type { CinemaTimelineDocument } from "@anybox/shared/cinema-timeline"
+import { useI18n } from "../../../i18n"
 
 export function DeliverSidebar({
   timelines,
@@ -10,19 +11,20 @@ export function DeliverSidebar({
   selectedTimelineID: string | null
   onSelectTimeline: (timelineID: string) => void
 }) {
+  const { t } = useI18n()
   return (
-    <aside className="cinema-deliver-sidebar" aria-label="Delivery timelines">
+    <aside className="cinema-deliver-sidebar" aria-label={t("deliver.timelinesLabel")}>
       <div className="cinema-deliver-section-heading">
-        <span><ListVideo size={15} aria-hidden="true" /> Timelines</span>
+        <span><ListVideo size={15} aria-hidden="true" /> {t("deliver.timelines")}</span>
         <small>{timelines.length}</small>
       </div>
       {timelines.length === 0 ? (
         <div className="cinema-deliver-sidebar-empty" role="status">
           <Film size={18} aria-hidden="true" />
-          <span>Create a Timeline in Edit first.</span>
+          <span>{t("deliver.createTimelineFirst")}</span>
         </div>
       ) : (
-        <div className="cinema-deliver-timeline-list" role="listbox" aria-label="Choose a Timeline">
+        <div className="cinema-deliver-timeline-list" role="listbox" aria-label={t("deliver.chooseTimeline")}>
           {timelines.map((timeline) => (
             <button
               key={timeline.id}
@@ -52,7 +54,7 @@ export function DeliverSidebar({
               <span className="cinema-deliver-timeline-copy">
                 <strong title={timeline.title}>{timeline.title}</strong>
               </span>
-              <small className="cinema-deliver-timeline-meta">Rev {timeline.revision}</small>
+              <small className="cinema-deliver-timeline-meta">{t("deliver.revision", { revision: timeline.revision })}</small>
             </button>
           ))}
         </div>

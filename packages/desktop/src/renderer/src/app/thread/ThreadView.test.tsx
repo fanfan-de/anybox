@@ -5553,6 +5553,42 @@ describe("ThreadView turn navigator", () => {
     })
   })
 
+  it("updates the current turn while the user scrolls the thread", async () => {
+    const activeMessages = Array.from({ length: 20 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+    const activeTurns = activeMessages.map((message, index) => threadTurn(`turn-${index}`, message))
+    const { threadColumn } = renderThread(activeMessages, {
+      activeTurns,
+      scrollStateKey: "session:turn-navigation-manual-scroll",
+    })
+    setScrollMetrics(threadColumn, {
+      clientHeight: 400,
+      scrollHeight: 20_000,
+      scrollTop: 0,
+    })
+
+    const first = screen.getByRole("button", { name: "跳转到第 1 / 20 轮：Prompt 0" })
+    const navigator = screen.getByRole("navigation", { name: "对话轮次导航" })
+    fireEvent.scroll(threadColumn)
+    expect(first).toHaveAttribute("aria-current", "step")
+    await waitFor(() => {
+      expect(navigator.querySelectorAll('[data-visible="true"]').length).toBeGreaterThan(1)
+    })
+
+    setScrollMetrics(threadColumn, {
+      clientHeight: 400,
+      scrollHeight: 20_000,
+      scrollTop: 1_200,
+    })
+    fireEvent.scroll(threadColumn)
+
+    await waitFor(() => expect(first).not.toHaveAttribute("aria-current"))
+    expect(first).not.toHaveAttribute("data-visible")
+    expect(navigator.querySelectorAll('[data-visible="true"]').length).toBeGreaterThan(0)
+    expect(
+      screen.getAllByRole("button", { name: /跳转到第/ }).some((button) => button.getAttribute("aria-current") === "step"),
+    ).toBe(true)
+  })
+
   it("supports arrow, Home, End, Enter, Space and Escape keyboard behavior", () => {
     const activeMessages = [
       userMessage("user-1", "First"),

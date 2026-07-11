@@ -33,9 +33,21 @@ export function createTimelineHistoryEntry(
   switch (command.type) {
     case "add-clip":
       return { undo: [{ type: "delete-clips", clipIDs: [command.clip.id] }], redo }
+    case "add-clips":
+      return { undo: [{ type: "delete-clips", clipIDs: command.clips.map((clip) => clip.id) }], redo }
     case "move-clip": {
       const clip = document.clips.find((candidate) => candidate.id === command.clipID)
       return clip ? { undo: [{ type: "move-clip", clipID: clip.id, trackID: clip.trackID, timelineStartUs: clip.timelineStartUs }], redo } : null
+    }
+    case "move-clips": {
+      const clips = new Map(document.clips.map((clip) => [clip.id, clip]))
+      const placements = command.placements.flatMap((placement) => {
+        const clip = clips.get(placement.clipID)
+        return clip ? [{ clipID: clip.id, trackID: clip.trackID, timelineStartUs: clip.timelineStartUs }] : []
+      })
+      return placements.length === command.placements.length
+        ? { undo: [{ type: "move-clips", placements }], redo }
+        : null
     }
     case "trim-clip": {
       const clip = document.clips.find((candidate) => candidate.id === command.clipID)
@@ -74,17 +86,58 @@ export function createTimelineHistoryEntry(
         .filter((clip) => clip !== undefined)
       return deleted.length > 0 ? { undo: deleted.map((clip) => ({ type: "add-clip", clip })), redo } : null
     }
+    case "ripple-delete-clips": {
+      const ids = new Set(command.clipIDs)
+      const deleted = command.clipIDs
+        .map((clipID) => document.clips.find((clip) => clip.id === clipID))
+        .filter((clip) => clip !== undefined)
+      if (deleted.length !== command.clipIDs.length) return null
+      const trackIDs = new Set(deleted.map((clip) => clip.trackID))
+      if (trackIDs.size !== 1) return null
+      const trackID = deleted[0]!.trackID
+      const earliestEndUs = Math.min(...deleted.map((clip) => clip.timelineStartUs + clip.durationUs))
+      const moved = document.clips
+        .filter((clip) => !ids.has(clip.id) && clip.trackID === trackID && clip.timelineStartUs >= earliestEndUs)
+        .map((clip) => ({ clipID: clip.id, trackID: clip.trackID, timelineStartUs: clip.timelineStartUs }))
+      return {
+        undo: [
+          ...(moved.length > 0 ? [{ type: "move-clips" as const, placements: moved }] : []),
+          { type: "add-clips", clips: deleted },
+        ],
+        redo,
+      }
+    }
     case "update-clip": {
       const clip = document.clips.find((candidate) => candidate.id === command.clipID)
       if (!clip) return null
       const patch: Record<string, unknown> = {}
       for (const key of Object.keys(command.patch) as Array<keyof typeof command.patch>) {
         if (key === "fit") patch.fit = clip.fit ?? null
+        else if (key === "transform") patch.transform = "transform" in clip ? clip.transform ?? null : null
         else if (key === "fadeInUs" && clip.kind === "audio") patch.fadeInUs = clip.fadeInUs ?? null
         else if (key === "fadeOutUs" && clip.kind === "audio") patch.fadeOutUs = clip.fadeOutUs ?? null
         else patch[key] = clip[key as keyof typeof clip]
       }
       return { undo: [{ type: "update-clip", clipID: clip.id, patch: patch as typeof command.patch }], redo }
+    }
+    case "update-clips": {
+      const clips = new Map(document.clips.map((clip) => [clip.id, clip]))
+      const updates = command.updates.flatMap((update) => {
+        const clip = clips.get(update.clipID)
+        if (!clip) return []
+        const patch: Record<string, unknown> = {}
+        for (const key of Object.keys(update.patch) as Array<keyof typeof update.patch>) {
+          if (key === "fit") patch.fit = clip.fit ?? null
+          else if (key === "transform") patch.transform = "transform" in clip ? clip.transform ?? null : null
+          else if (key === "fadeInUs" && clip.kind === "audio") patch.fadeInUs = clip.fadeInUs ?? null
+          else if (key === "fadeOutUs" && clip.kind === "audio") patch.fadeOutUs = clip.fadeOutUs ?? null
+          else patch[key] = clip[key as keyof typeof clip]
+        }
+        return [{ clipID: clip.id, patch: patch as typeof update.patch }]
+      })
+      return updates.length === command.updates.length
+        ? { undo: [{ type: "update-clips", updates }], redo }
+        : null
     }
     case "add-marker":
       return { undo: [{ type: "delete-marker", markerID: command.marker.id }], redo }
@@ -103,12 +156,34 @@ export function createTimelineHistoryEntry(
       for (const key of Object.keys(command.patch) as Array<keyof typeof command.patch>) patch[key] = track[key]
       return { undo: [{ type: "update-track", trackID: track.id, patch: patch as typeof command.patch }], redo }
     }
+    case "delete-track": {
+      const track = document.tracks.find((candidate) => candidate.id === command.trackID)
+      if (!track) return null
+      const clips = document.clips.filter((clip) => clip.trackID === track.id)
+      return {
+        undo: [
+          { type: "create-track", track },
+          ...(clips.length > 0 ? [{ type: "add-clips" as const, clips }] : []),
+        ],
+        redo,
+      }
+    }
+    case "reorder-tracks":
+      return {
+        undo: [{
+          type: "reorder-tracks",
+          trackIDs: [...document.tracks]
+            .sort((left, right) => left.order - right.order)
+            .map((track) => track.id),
+        }],
+        redo,
+      }
     case "update-settings": {
       const patch: Record<string, unknown> = {}
       for (const key of Object.keys(command.patch) as Array<keyof typeof command.patch>) patch[key] = document.settings[key]
       return { undo: [{ type: "update-settings", patch: patch as typeof command.patch }], redo }
     }
     case "create-track":
-      return null
+      return { undo: [{ type: "delete-track", trackID: command.track.id, deleteClips: false }], redo }
   }
 }

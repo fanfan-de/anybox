@@ -238,6 +238,48 @@ describe("Cinema FFmpeg render graph", () => {
     expect(plan.filterComplex).toContain("enable='between(t,0,2)'")
   })
 
+  test("applies lower-order overlay tracks last so Preview and Deliver share stacking semantics", () => {
+    const source = timeline()
+    source.tracks.push({ id: "o2", kind: "overlay", title: "O2", order: 3, locked: false, muted: false, hidden: false })
+    source.clips.push({
+      ...source.clips[0]!,
+      id: "logo-bottom-clip",
+      trackID: "o2",
+      title: "Logo bottom",
+    })
+    const plan = buildCinemaRenderPlan({
+      timeline: source,
+      settings: settings(),
+      inputs: inputs(),
+      outputPath: "output.mp4",
+      videoEncoder: "libx264",
+      audioEncoder: "aac",
+    })
+    expect(plan.filterComplex.indexOf("[5:v]")).toBeLessThan(plan.filterComplex.indexOf("[1:v]"))
+  })
+
+  test("applies stretch, opacity, scale, rotation, position, and anchor transforms", () => {
+    const source = timeline()
+    source.clips = source.clips.map((clip) => clip.id === "logo-clip" ? {
+      ...clip,
+      fit: "stretch" as const,
+      transform: { x: 120, y: -60, scale: 1.25, rotationDegrees: 15, anchorX: 0.25, anchorY: 0.75 },
+    } : clip)
+    const plan = buildCinemaRenderPlan({
+      timeline: source,
+      settings: settings(),
+      inputs: inputs(),
+      outputPath: "output.mp4",
+      videoEncoder: "libx264",
+      audioEncoder: "aac",
+    })
+    expect(plan.filterComplex).toContain("scale=1280:720,format=rgba,scale=iw*1.25:ih*1.25")
+    expect(plan.filterComplex).toContain("rotate=15*PI/180")
+    expect(plan.filterComplex).toContain("x='440-overlay_w*0.25'")
+    expect(plan.filterComplex).toContain("y='480-overlay_h*0.75'")
+    expect(plan.filterComplex).toContain("colorchannelmixer=aa=0.75")
+  })
+
   test("rejects filter injection, missing inputs, unsupported text, and out-of-range output", () => {
     const unsafe = timeline()
     unsafe.settings.backgroundColor = "black;movie=secret"

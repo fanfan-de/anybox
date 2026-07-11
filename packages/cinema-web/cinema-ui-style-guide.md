@@ -347,12 +347,12 @@ Cinema Web 的 UI 标准：
 - 节点宽度固定为 360px，高度按正文从 4 行增长到最多 12 行，超出后正文内部滚动；动态高度不写回 Canvas schema。
 - header 只保留状态与更多操作；复制、下载、重命名和删除放入可键盘导航的更多菜单。手动编辑由正文双击或键盘 Enter 触发，AI 生成入口由选中态 Composer 承载。
 - 空节点显示轻量类型图标和“输入文本”提示；复制和下载在正文为空时禁用，不得复制 placeholder。
-- 生成器使用 screen-space 浮层并自动做视口钳制和上下翻转；760px 以下切换为底部抽屉。
+- 生成器使用 screen-space 浮层，始终水平居中固定在节点下方；不得根据视口做左右钳制、上下翻转或切换为底部抽屉，允许随节点一起离开可视区域。
 - 生成期间保留旧正文且禁止编辑；成功后以生成结果替换正文，并提供 8 秒的一次性恢复入口。
 - 左侧端口只接收 AI 生成用的图片参考素材；右侧文本输出允许一对多连接到兼容的图片和视频输入。
 - 输入和 textarea 保留原生编辑行为和原生右键菜单。
 - 文本生成器错误最多显示两行，长错误允许 `overflow-wrap: anywhere`。
-- Text 节点及生成器文案使用全局 i18n helper 跟随系统语言；当前资源覆盖 `zh-CN` 与 `en-US`。
+- Text 节点及生成器文案使用全局 i18n helper；界面语言由左上角 Settings 中的语言选项控制，首次使用跟随系统语言，当前资源覆盖 `zh-CN` 与 `en-US`。
 
 注意：
 
@@ -372,7 +372,8 @@ Cinema Web 的 UI 标准：
 - 裁剪 Apply 创建新的 Ready `image` 节点并保留来源边；Cancel / Reset 不改变源节点。
 - 图片来源、文件名、prompt、模型、任务和裁剪来源放在 Inspector 展示；画布节点不增加常驻来源 badge。路径和文件名使用单行 ellipsis，完整值通过 `title` 暴露。
 - Handle 默认隐藏，在 hover、selected、focus-within 时显示；已有来源边保持可见。只有 Empty 状态允许新增左侧连接，右侧可以连接，但下游只能消费最终 `asset`。
-- 上传按钮和 composer 是脱离 React Flow 节点测量的 overlay。节点靠近视口边缘时自动平移画布，使完整控制区落入至少 16px 安全区，并保持当前 zoom。
+- 上传按钮和 composer 是脱离 React Flow 节点测量的 overlay。Composer 始终水平居中固定在节点下方，不因节点靠近视口边缘而改变位置或自动平移画布。
+- 图片生成 Composer 未展开高级设置时，底部配置固定为单行，顺序为模型、画布规格摘要、数量、高级入口和生成操作。画布规格摘要始终显示当前宽高比与分辨率，点击后通过 portal/fixed 锚定二级面板编辑；面板支持视口边缘避让、`Escape` 关闭和焦点恢复。高级面板展开在该固定配置行上方。
 - 图片节点的 `default`、`hover`、`focus`、`selected`、`loading`、`choosing`、`ready`、`error` 和 `disabled` 状态都必须消费运行时 semantic token；缺少 token 时先补成对 light/dark 映射。
 
 数据与状态约束：
@@ -398,6 +399,7 @@ Cinema Web 的 UI 标准：
 - loading overlay 使用轻量半透明 surface，不遮挡节点基本结构。
 - 生成按钮使用 primary icon button token，禁用态保留尺寸。
 - provider/model/duration/resolution 控件高度统一为 32px。
+- 视频生成 Composer 的底部配置固定为单行，顺序为模型、视频规格摘要、时长、高级入口和生成操作。视频规格摘要显示当前宽高比与质量/分辨率，并复用图片生成器的 portal/fixed 二级规格面板进行编辑。
 - 状态 chip 不应抢主视觉，running/succeeded/failed 使用 status token。
 
 后续迁移：
@@ -498,12 +500,15 @@ Cinema Web 的 UI 标准：
 
 ## 7. 文本和语言
 
-当前界面中英文混用。后续需要选择一种产品语言策略：
+Cinema Web 使用全局 i18n Context 管理 `zh-CN` 与 `en-US`：
 
-- 如果 Cinema Web 面向 Anybox 中文用户，新增 UI 文案用中文，已有英文文案逐步本地化。
-- 如果面向插件/内部工具，文案可继续英文，但同一 surface 内不要中英混排。
+- 左上角 Settings 是界面语言的唯一切换入口，语言选择即时生效并写入 `cinema-locale` 本地偏好。
+- 用户没有保存偏好时，根据 `navigator.language` 选择中文或英文；非中文系统默认英文。
+- 切换语言时必须同步更新 `document.documentElement.lang`。
+- 设置、工作区导航、Canvas 核心节点与生成器、项目文件、Timeline 主要编辑控件和 Deliver 渲染设置使用统一翻译资源。
+- 新增用户可见文案必须同时补充中文和英文资源，不得在组件内新增仅支持单一语言的硬编码文案。
 
-无论语言选择如何：
+其他规则：
 
 - 错误信息保留后端原文时，可以显示英文。
 - `aria-label` 和 `title` 应与可见文案同语言。
@@ -521,7 +526,7 @@ Cinema Web 的 UI 标准：
 
 - Canvas 本身不做移动端页面化改造，只保证窄窗口可操作。
 - 浮层在窄窗口时必须避免被右侧导航挤出。
-- 图片节点的上传和 composer 控制区必须整体纳入视口边界计算；自动平移只调整 viewport 位置，不改变 zoom，且在 `prefers-reduced-motion` 下不播放过渡动画。
+- 图片节点的上传和 composer 控制区随节点保持固定锚定关系；画布平移或缩放时只更新附着位置，不执行视口边界校正。
 - 节点内部使用 container query 优先于全局 media query。
 - 时间线界面必须允许横向滚动，不把 clip 压缩到不可编辑。
 - 按钮、row、tab、thumbnail 不因 viewport 改变而发生 hover/focus 尺寸跳动。

@@ -92,6 +92,19 @@ interface UseThreadTurnNavigationInput {
   virtualizer: ThreadRowVirtualizer
 }
 
+function getThreadTurnReadingRowIndex(virtualizer: ThreadRowVirtualizer, readingLine: number) {
+  let readingRowIndex: number | null = null
+  for (const virtualItem of virtualizer.getVirtualItems()) {
+    if (virtualItem.start > readingLine) break
+    readingRowIndex = virtualItem.index
+  }
+  return readingRowIndex
+}
+
+function areIndexListsEqual(left: readonly number[], right: readonly number[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
 export function useThreadTurnNavigation({
   items,
   measurementKey,
@@ -100,26 +113,62 @@ export function useThreadTurnNavigation({
   virtualizer,
 }: UseThreadTurnNavigationInput) {
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [visibleIndexes, setVisibleIndexes] = useState<number[]>([0])
   const currentIndexRef = useRef(0)
+  const visibleIndexesRef = useRef<number[]>([0])
   const pendingFrameRef = useRef<number | null>(null)
 
   const updateCurrentIndex = useCallback(() => {
-    pendingFrameRef.current = null
     const threadColumn = threadColumnRef.current
     if (!threadColumn || items.length === 0) return
 
     const readingLine = threadColumn.scrollTop + THREAD_TURN_READING_LINE_OFFSET_PX
     let nextIndex = 0
-    for (let index = 0; index < items.length; index += 1) {
-      const offset = virtualizer.getOffsetForIndex(items[index]!.rowIndex, "start")?.[0]
-      if (offset === undefined || offset > readingLine) break
-      nextIndex = index
+    const readingRowIndex = getThreadTurnReadingRowIndex(virtualizer, readingLine)
+    if (readingRowIndex !== null) {
+      for (let index = 0; index < items.length; index += 1) {
+        if (items[index]!.rowIndex > readingRowIndex) break
+        nextIndex = index
+      }
+    } else {
+      for (let index = 0; index < items.length; index += 1) {
+        const offset = virtualizer.getOffsetForIndex(items[index]!.rowIndex, "start")?.[0]
+        if (offset === undefined || offset > readingLine) break
+        nextIndex = index
+      }
     }
 
-    if (nextIndex === currentIndexRef.current) return
-    currentIndexRef.current = nextIndex
-    setCurrentIndex(nextIndex)
+    const viewportTop = threadColumn.scrollTop
+    const viewportBottom = viewportTop + threadColumn.clientHeight
+    const turnOffsets = items.map(
+      (item) => virtualizer.getOffsetForIndex(item.rowIndex, "start")?.[0],
+    )
+    const nextVisibleIndexes: number[] = []
+    for (let index = 0; index < items.length; index += 1) {
+      const turnStart = turnOffsets[index]
+      if (turnStart === undefined) continue
+
+      const nextTurnStart = turnOffsets[index + 1] ?? Number.POSITIVE_INFINITY
+      if (turnStart < viewportBottom && nextTurnStart > viewportTop) {
+        nextVisibleIndexes.push(index)
+      }
+    }
+    if (nextVisibleIndexes.length === 0) nextVisibleIndexes.push(nextIndex)
+
+    if (nextIndex !== currentIndexRef.current) {
+      currentIndexRef.current = nextIndex
+      setCurrentIndex(nextIndex)
+    }
+    if (!areIndexListsEqual(nextVisibleIndexes, visibleIndexesRef.current)) {
+      visibleIndexesRef.current = nextVisibleIndexes
+      setVisibleIndexes(nextVisibleIndexes)
+    }
   }, [items, threadColumnRef, virtualizer])
+
+  const runScheduledCurrentIndexUpdate = useCallback(() => {
+    pendingFrameRef.current = null
+    updateCurrentIndex()
+  }, [updateCurrentIndex])
 
   const scheduleCurrentIndexUpdate = useCallback(() => {
     if (pendingFrameRef.current !== null) return
@@ -128,13 +177,17 @@ export function useThreadTurnNavigation({
       return
     }
 
-    pendingFrameRef.current = window.requestAnimationFrame(updateCurrentIndex)
-  }, [updateCurrentIndex])
+    pendingFrameRef.current = window.requestAnimationFrame(runScheduledCurrentIndexUpdate)
+  }, [runScheduledCurrentIndexUpdate, updateCurrentIndex])
 
   useEffect(() => {
     if (currentIndexRef.current !== 0) {
       currentIndexRef.current = 0
       setCurrentIndex(0)
+    }
+    if (!areIndexListsEqual(visibleIndexesRef.current, [0])) {
+      visibleIndexesRef.current = [0]
+      setVisibleIndexes([0])
     }
   }, [resetKey])
 
@@ -142,27 +195,16 @@ export function useThreadTurnNavigation({
     scheduleCurrentIndexUpdate()
   }, [items, measurementKey, scheduleCurrentIndexUpdate])
 
-  useEffect(() => {
-    const threadColumn = threadColumnRef.current
-    if (!threadColumn) return
-
-    threadColumn.addEventListener("scroll", scheduleCurrentIndexUpdate, { passive: true })
-    const resizeObserver = typeof ResizeObserver === "undefined"
-      ? null
-      : new ResizeObserver(scheduleCurrentIndexUpdate)
-    resizeObserver?.observe(threadColumn)
-
-    return () => {
-      threadColumn.removeEventListener("scroll", scheduleCurrentIndexUpdate)
-      resizeObserver?.disconnect()
-    }
-  }, [scheduleCurrentIndexUpdate, threadColumnRef])
-
   useEffect(() => () => {
     if (pendingFrameRef.current !== null && typeof window !== "undefined") {
       window.cancelAnimationFrame(pendingFrameRef.current)
     }
   }, [])
 
-  return currentIndex
+  return {
+    currentIndex,
+    scheduleCurrentIndexUpdate,
+    updateCurrentIndex,
+    visibleIndexes,
+  }
 }

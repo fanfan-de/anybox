@@ -2039,6 +2039,18 @@ export type PluginPackageDownload =
 export interface PluginLocalizedText {
   "en-US"?: string
   "zh-CN"?: string
+  "zh-TW"?: string
+  "ja-JP"?: string
+  "ko-KR"?: string
+  "pt-BR"?: string
+  "es-419"?: string
+  "de-DE"?: string
+  "fr-FR"?: string
+  "id-ID"?: string
+  "it-IT"?: string
+  "pl-PL"?: string
+  "tr-TR"?: string
+  "vi-VN"?: string
 }
 
 export interface PluginCatalogLocalization {

@@ -1,19 +1,27 @@
 /** @vitest-environment jsdom */
 
 import "@testing-library/jest-dom/vitest"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, type RenderResult } from "@testing-library/react"
+import type { ReactElement } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { CINEMA_LOCALE_STORAGE_KEY, I18nProvider } from "../../i18n"
 import { CinemaWorkbenchShell } from "./CinemaWorkbenchShell"
+
+function renderShell(element: ReactElement): RenderResult {
+  return render(<I18nProvider>{element}</I18nProvider>)
+}
 
 afterEach(() => {
   cleanup()
   document.documentElement.removeAttribute("data-theme")
+  document.documentElement.lang = ""
   window.localStorage.removeItem("cinema-theme")
+  window.localStorage.removeItem(CINEMA_LOCALE_STORAGE_KEY)
 })
 
 describe("CinemaWorkbenchShell", () => {
   it("keeps Create active while Edit and Deliver remain visible but unavailable", () => {
-    render(
+    renderShell(
       <CinemaWorkbenchShell
         projectName="Test Film"
         activeWorkspace="create"
@@ -35,7 +43,7 @@ describe("CinemaWorkbenchShell", () => {
   })
 
   it("opens settings and switches the independent Cinema theme", () => {
-    render(
+    renderShell(
       <CinemaWorkbenchShell
         projectName="Test Film"
         activeWorkspace="create"
@@ -57,8 +65,33 @@ describe("CinemaWorkbenchShell", () => {
     expect(window.localStorage.getItem("cinema-theme")).toBe("dark")
   })
 
+  it("switches the interface language and persists the preference", () => {
+    renderShell(
+      <CinemaWorkbenchShell
+        projectName="Test Film"
+        activeWorkspace="create"
+        onWorkspaceChange={() => undefined}
+      >
+        <div>Canvas content</div>
+      </CinemaWorkbenchShell>,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Open settings" }))
+    fireEvent.click(screen.getByRole("radio", { name: "简体中文" }))
+
+    expect(screen.getByRole("dialog", { name: "Cinema 设置" })).toBeVisible()
+    expect(screen.getByRole("tab", { name: "创作" })).toHaveAttribute("aria-selected", "true")
+    expect(document.documentElement).toHaveAttribute("lang", "zh-CN")
+    expect(window.localStorage.getItem(CINEMA_LOCALE_STORAGE_KEY)).toBe("zh-CN")
+
+    fireEvent.click(screen.getByRole("radio", { name: "English" }))
+    expect(screen.getByRole("dialog", { name: "Cinema settings" })).toBeVisible()
+    expect(document.documentElement).toHaveAttribute("lang", "en-US")
+    expect(window.localStorage.getItem(CINEMA_LOCALE_STORAGE_KEY)).toBe("en-US")
+  })
+
   it("closes settings with Escape and returns focus to the trigger", () => {
-    render(
+    renderShell(
       <CinemaWorkbenchShell
         projectName="Test Film"
         activeWorkspace="create"
@@ -77,7 +110,7 @@ describe("CinemaWorkbenchShell", () => {
 
   it("does not emit workspace changes from the active or unavailable tabs", () => {
     const onWorkspaceChange = vi.fn()
-    render(
+    renderShell(
       <CinemaWorkbenchShell
         projectName="Test Film"
         activeWorkspace="create"
@@ -95,7 +128,7 @@ describe("CinemaWorkbenchShell", () => {
 
   it("enables Edit only when the project or development flag allows it", () => {
     const onWorkspaceChange = vi.fn()
-    render(
+    renderShell(
       <CinemaWorkbenchShell
         projectName="Test Film"
         activeWorkspace="create"
@@ -113,7 +146,7 @@ describe("CinemaWorkbenchShell", () => {
 
   it("enables Deliver only when the project or development flag allows it", () => {
     const onWorkspaceChange = vi.fn()
-    render(
+    renderShell(
       <CinemaWorkbenchShell
         projectName="Test Film"
         activeWorkspace="create"

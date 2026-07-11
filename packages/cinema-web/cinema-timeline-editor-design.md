@@ -710,23 +710,42 @@ Track 菜单：
 
 ## 键盘快捷键
 
-第一版建议：
+当前实现：
 
 | 快捷键 | 行为 |
 | --- | --- |
 | Space | 播放/暂停 |
 | Delete / Backspace | 删除选中 clips |
-| Ctrl+Z | 撤销 |
-| Ctrl+Shift+Z / Ctrl+Y | 重做 |
+| Ctrl/Cmd+C | 复制选中 clips |
+| Ctrl/Cmd+V | 在播放头粘贴并保持相对时间/轨道关系 |
+| Ctrl/Cmd+D | Duplicate 选中 clips |
+| Ctrl/Cmd+Z | 撤销 |
+| Ctrl/Cmd+Shift+Z | 重做 |
 | S | 在播放头分割选中 clip |
-| M | 添加 marker |
+| I | 将选中 clip 的 Source In 裁到播放头 |
+| O | 将选中 clip 的 Source Out 裁到播放头 |
+| J / K / L | 反向播放 / 暂停 / 正向播放 |
+| Home | 播放头回到起点 |
 | ArrowLeft | 后退一帧 |
 | ArrowRight | 前进一帧 |
 | Shift+ArrowLeft | 后退 1 秒 |
 | Shift+ArrowRight | 前进 1 秒 |
-| Ctrl++ | 放大时间线 |
-| Ctrl+- | 缩小时间线 |
-| Esc | 清空选择或关闭弹窗 |
+| Esc | 先取消 Pointer 手势；无手势时清空选择或关闭浮层 |
+
+输入框、Textarea 和 ContentEditable 获得焦点时，上述 Timeline 快捷键不接管输入。工具栏和 Transport 的原生 `title` Tooltip 会显示已实现的对应快捷键；Context Menu 同时显示 Split、Duplicate 和 Delete 快捷键。
+
+## Post-MVP 粗剪实现基线（2026-07）
+
+当前 Edit 工作区已经从最初单 Clip MVP 收敛为可持续粗剪的 Post-MVP 基线：
+
+- Move、Trim、Playhead Scrub 共用 Pointer `begin / update / commit / cancel` 状态机；保留 Grab Offset，支持 Snap Guide、边缘自动滚动以及 Escape、`pointercancel`、窗口失焦和卸载取消。一次手势只提交一个原子命令。
+- Selection 使用有序 `selectedClipIDs`，支持 Shift 增减、跨虚拟化 Clip 的 Marquee、多 Clip 原子移动、Copy/Paste、Duplicate、Ripple Delete 与单步 Undo/Redo。
+- Viewport 以鼠标时间为锚点缩放，使用可视区 Clip、Ruler Tick 和 Filmstrip Cell 虚拟化。UI Snapshot 持久化播放头、缩放、水平/垂直滚动、多选、面板开关、轨道高度/折叠和 Playhead Follow。
+- Track 支持受控创建 Video、Audio、Overlay，支持重命名、锁定、静音、隐藏、原子重排、显式非空删除和 72–240 px 高度调整。Preview 与 Deliver 共用轨道顺序语义。
+- 视频 Clip 复用素材库缓存缩略图形成胶片条；音频波形是 Timeline 派生缓存，并按 `sourceInUs / sourceDurationUs` 映射 Trim 后区间。Ready、Missing、Trashed 和 Error 都有稳定占位状态。
+- Preview 对 Seek 做每帧合并，最多预加载相邻两个视频；Gap 和缺失素材会清除上一帧。视频、图片和文本使用与 Deliver 一致的 `fit / opacity / transform / anchor` 语义。
+- 可靠性基线包括 Command ID 幂等、Revision Conflict Rebase、离线队列、刷新恢复、素材修复以及 Agent 原子投影验证。500 Clip / 30 分钟场景保持有限 Clip、Tick 和 Filmstrip DOM。
+- 发布验收覆盖 10 Clip 键盘粗剪主路径、Light/Dark、760–1700 px、Axe、键盘冲突保护和 500 Clip 首屏性能。
 
 ## 与现有 Cinema 的关系
 

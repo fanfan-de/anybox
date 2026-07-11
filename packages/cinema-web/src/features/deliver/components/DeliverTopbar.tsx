@@ -1,6 +1,7 @@
 import { RefreshCw, Settings2 } from "lucide-react"
 import type { CinemaRenderJob } from "@anybox/shared/cinema-render"
 import { renderStatusLabel } from "../model/renderStatus"
+import { useI18n } from "../../../i18n"
 
 export function DeliverTopbar({
   timelineTitle,
@@ -23,20 +24,21 @@ export function DeliverTopbar({
   onToggleSettings: () => void
   onRefresh: () => void
 }) {
-  const status = job ? renderStatusLabel(job.status) : preflightReady ? "Ready to render" : "Preflight required"
+  const { t } = useI18n()
+  const status = job ? renderStatusLabel(job.status) : t(preflightReady ? "deliver.ready" : "deliver.preflightRequired")
   return (
     <header className="cinema-deliver-topbar">
       <div className="cinema-deliver-title-block">
-        <span className="cinema-deliver-eyebrow">{technicalPreview ? "Deliver Beta" : "Deliver"}</span>
-        <h1 title={timelineTitle ?? "No Timeline selected"}>{timelineTitle ?? "Select a Timeline"}</h1>
+        <span className="cinema-deliver-eyebrow">{t(technicalPreview ? "deliver.beta" : "deliver.title")}</span>
+        <h1 title={timelineTitle ?? t("deliver.noTimeline")}>{timelineTitle ?? t("deliver.selectTimeline")}</h1>
         <span className="cinema-deliver-status-text" role="status">{status}</span>
       </div>
       <div className="cinema-deliver-topbar-actions">
         <button
           type="button"
           className="cinema-deliver-icon-button"
-          aria-label="Refresh delivery data"
-          title="Refresh delivery data"
+          aria-label={t("deliver.refresh")}
+          title={t("deliver.refresh")}
           onClick={onRefresh}
         >
           <RefreshCw size={16} aria-hidden="true" />
@@ -44,9 +46,9 @@ export function DeliverTopbar({
         <button
           type="button"
           className={`cinema-deliver-icon-button ${settingsOpen ? "is-active" : ""}`}
-          aria-label="Toggle render settings"
+          aria-label={t("deliver.toggleSettings")}
           aria-expanded={settingsOpen}
-          title="Render settings"
+          title={t("deliver.renderSettings")}
           onClick={onToggleSettings}
         >
           <Settings2 size={16} aria-hidden="true" />
@@ -58,7 +60,7 @@ export function DeliverTopbar({
           aria-busy={createPending}
           onClick={onStart}
         >
-          Start render
+          {t("deliver.start")}
         </button>
       </div>
     </header>

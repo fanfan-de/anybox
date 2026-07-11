@@ -31,6 +31,14 @@ function assertTrackUnlocked(track: CinemaTimelineTrack) {
   }
 }
 
+function orderedTracks(tracks: readonly CinemaTimelineTrack[]) {
+  return [...tracks].sort((left, right) => left.order - right.order)
+}
+
+function indexTracks(tracks: readonly CinemaTimelineTrack[]) {
+  return tracks.map((track, order) => ({ ...track, order }))
+}
+
 function replaceClip(
   document: CinemaTimelineDocument,
   clipID: string,
@@ -46,6 +54,20 @@ function replaceClip(
   return clips
 }
 
+function applyClipPatch(
+  clip: CinemaTimelineClip,
+  patch: Extract<CinemaTimelineCommand, { type: "update-clip" }>["patch"],
+  timestamp: string,
+) {
+  const next = { ...clip, ...patch, updatedAt: timestamp } as CinemaTimelineClip
+  if (patch.fit === null) delete next.fit
+  const mutable = next as CinemaTimelineClip & { fadeInUs?: number; fadeOutUs?: number; transform?: unknown }
+  if (patch.transform === null) delete mutable.transform
+  if (patch.fadeInUs === null) delete mutable.fadeInUs
+  if (patch.fadeOutUs === null) delete mutable.fadeOutUs
+  return next
+}
+
 function applyCommandPayload(
   document: CinemaTimelineDocument,
   command: CinemaTimelineCommand,
@@ -56,7 +78,12 @@ function applyCommandPayload(
       if (document.tracks.some((track) => track.id === command.track.id)) {
         throw new ApiError(409, "CINEMA_TIMELINE_TRACK_ID_CONFLICT", `Track '${command.track.id}' already exists.`)
       }
-      return { ...document, tracks: [...document.tracks, command.track] }
+      if (command.track.order > document.tracks.length) {
+        throw new ApiError(409, "CINEMA_TIMELINE_TRACK_ORDER_INVALID", "Track insertion order is outside the current track range.")
+      }
+      const tracks = orderedTracks(document.tracks)
+      tracks.splice(command.track.order, 0, command.track)
+      return { ...document, tracks: indexTracks(tracks) }
     }
     case "update-track": {
       findTrack(document, command.trackID)
@@ -67,12 +94,59 @@ function applyCommandPayload(
           : track),
       }
     }
+    case "delete-track": {
+      const track = findTrack(document, command.trackID)
+      assertTrackUnlocked(track)
+      const trackClips = document.clips.filter((clip) => clip.trackID === track.id)
+      if (trackClips.length > 0 && !command.deleteClips) {
+        throw new ApiError(
+          409,
+          "CINEMA_TIMELINE_TRACK_NOT_EMPTY",
+          `Track '${track.id}' contains ${trackClips.length} clip(s).`,
+          { clipCount: trackClips.length },
+        )
+      }
+      return {
+        ...document,
+        tracks: indexTracks(orderedTracks(document.tracks).filter((candidate) => candidate.id !== track.id)),
+        clips: command.deleteClips
+          ? document.clips.filter((clip) => clip.trackID !== track.id)
+          : document.clips,
+      }
+    }
+    case "reorder-tracks": {
+      const tracksByID = new Map(document.tracks.map((track) => [track.id, track]))
+      if (
+        command.trackIDs.length !== document.tracks.length
+        || command.trackIDs.some((trackID) => !tracksByID.has(trackID))
+      ) {
+        throw new ApiError(
+          409,
+          "CINEMA_TIMELINE_TRACK_ORDER_INVALID",
+          "Track ordering must contain every current track exactly once.",
+        )
+      }
+      return {
+        ...document,
+        tracks: command.trackIDs.map((trackID, order) => ({ ...tracksByID.get(trackID)!, order })),
+      }
+    }
     case "add-clip": {
       if (document.clips.some((clip) => clip.id === command.clip.id)) {
         throw new ApiError(409, "CINEMA_TIMELINE_CLIP_ID_CONFLICT", `Clip '${command.clip.id}' already exists.`)
       }
       assertTrackUnlocked(findTrack(document, command.clip.trackID))
       return { ...document, clips: [...document.clips, command.clip] }
+    }
+    case "add-clips": {
+      const existingIDs = new Set(document.clips.map((clip) => clip.id))
+      for (const clip of command.clips) {
+        if (existingIDs.has(clip.id)) {
+          throw new ApiError(409, "CINEMA_TIMELINE_CLIP_ID_CONFLICT", `Clip '${clip.id}' already exists.`)
+        }
+        assertTrackUnlocked(findTrack(document, clip.trackID))
+      }
+      return { ...document, clips: [...document.clips, ...command.clips] }
     }
     case "move-clip": {
       const clip = findClip(document, command.clipID)
@@ -86,6 +160,26 @@ function applyCommandPayload(
           timelineStartUs: command.timelineStartUs,
           updatedAt: timestamp,
         })),
+      }
+    }
+    case "move-clips": {
+      for (const placement of command.placements) {
+        const clip = findClip(document, placement.clipID)
+        assertTrackUnlocked(findTrack(document, clip.trackID))
+        assertTrackUnlocked(findTrack(document, placement.trackID))
+      }
+      const placements = new Map(command.placements.map((placement) => [placement.clipID, placement]))
+      return {
+        ...document,
+        clips: document.clips.map((clip) => {
+          const placement = placements.get(clip.id)
+          return placement ? {
+            ...clip,
+            trackID: placement.trackID,
+            timelineStartUs: placement.timelineStartUs,
+            updatedAt: timestamp,
+          } : clip
+        }),
       }
     }
     case "trim-clip": {
@@ -167,21 +261,65 @@ function applyCommandPayload(
       }
       return { ...document, clips: document.clips.filter((clip) => !ids.has(clip.id)) }
     }
+    case "ripple-delete-clips": {
+      const ids = new Set(command.clipIDs)
+      const deleted = command.clipIDs.map((clipID) => findClip(document, clipID))
+      const trackIDs = new Set(deleted.map((clip) => clip.trackID))
+      if (trackIDs.size !== 1) {
+        throw new ApiError(409, "CINEMA_TIMELINE_RIPPLE_MULTI_TRACK_UNSUPPORTED", "Ripple Delete currently requires clips from one track.")
+      }
+      const trackID = deleted[0]!.trackID
+      assertTrackUnlocked(findTrack(document, trackID))
+      const intervals = deleted
+        .map((clip) => ({ endUs: clip.timelineStartUs + clip.durationUs, durationUs: clip.durationUs }))
+        .sort((left, right) => left.endUs - right.endUs)
+      return {
+        ...document,
+        clips: document.clips.flatMap((clip) => {
+          if (ids.has(clip.id)) return []
+          if (clip.trackID !== trackID) return [clip]
+          const shiftUs = intervals.reduce((total, interval) => (
+            interval.endUs <= clip.timelineStartUs ? total + interval.durationUs : total
+          ), 0)
+          return [{
+            ...clip,
+            timelineStartUs: clip.timelineStartUs - shiftUs,
+            ...(shiftUs > 0 ? { updatedAt: timestamp } : {}),
+          }]
+        }),
+      }
+    }
     case "update-clip": {
       const clip = findClip(document, command.clipID)
       assertTrackUnlocked(findTrack(document, clip.trackID))
       if (clip.kind === "text" && command.patch.assetRef) {
         throw new ApiError(409, "CINEMA_TIMELINE_ASSET_REF_UNSUPPORTED", "Text clips cannot reference physical assets.")
       }
+      if (clip.kind === "audio" && command.patch.transform !== undefined) {
+        throw new ApiError(409, "CINEMA_TIMELINE_TRANSFORM_UNSUPPORTED", "Audio clips cannot have visual transforms.")
+      }
       return {
         ...document,
-        clips: replaceClip(document, command.clipID, (current) => {
-          const next = { ...current, ...command.patch, updatedAt: timestamp } as CinemaTimelineClip
-          if (command.patch.fit === null) delete next.fit
-          const mutable = next as CinemaTimelineClip & { fadeInUs?: number; fadeOutUs?: number }
-          if (command.patch.fadeInUs === null) delete mutable.fadeInUs
-          if (command.patch.fadeOutUs === null) delete mutable.fadeOutUs
-          return next
+        clips: replaceClip(document, command.clipID, (current) => applyClipPatch(current, command.patch, timestamp)),
+      }
+    }
+    case "update-clips": {
+      for (const update of command.updates) {
+        const clip = findClip(document, update.clipID)
+        assertTrackUnlocked(findTrack(document, clip.trackID))
+        if (clip.kind === "text" && update.patch.assetRef) {
+          throw new ApiError(409, "CINEMA_TIMELINE_ASSET_REF_UNSUPPORTED", "Text clips cannot reference physical assets.")
+        }
+        if (clip.kind === "audio" && update.patch.transform !== undefined) {
+          throw new ApiError(409, "CINEMA_TIMELINE_TRANSFORM_UNSUPPORTED", "Audio clips cannot have visual transforms.")
+        }
+      }
+      const updates = new Map(command.updates.map((update) => [update.clipID, update.patch]))
+      return {
+        ...document,
+        clips: document.clips.map((clip) => {
+          const patch = updates.get(clip.id)
+          return patch ? applyClipPatch(clip, patch, timestamp) : clip
         }),
       }
     }

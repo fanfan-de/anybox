@@ -1,5 +1,17 @@
 import type { AppLocale } from "./locale"
 import type { APPEARANCE_TOKEN_GROUPS, AppearanceTokenGroup } from "./appearance"
+import { appearanceTokenCopy as deDEAppearanceTokenCopy } from "./appearance-token-copy.locales/de-DE"
+import { appearanceTokenCopy as es419AppearanceTokenCopy } from "./appearance-token-copy.locales/es-419"
+import { appearanceTokenCopy as frFRAppearanceTokenCopy } from "./appearance-token-copy.locales/fr-FR"
+import { appearanceTokenCopy as idIDAppearanceTokenCopy } from "./appearance-token-copy.locales/id-ID"
+import { appearanceTokenCopy as itITAppearanceTokenCopy } from "./appearance-token-copy.locales/it-IT"
+import { appearanceTokenCopy as jaJPAppearanceTokenCopy } from "./appearance-token-copy.locales/ja-JP"
+import { appearanceTokenCopy as koKRAppearanceTokenCopy } from "./appearance-token-copy.locales/ko-KR"
+import { appearanceTokenCopy as plPLAppearanceTokenCopy } from "./appearance-token-copy.locales/pl-PL"
+import { appearanceTokenCopy as ptBRAppearanceTokenCopy } from "./appearance-token-copy.locales/pt-BR"
+import { appearanceTokenCopy as trTRAppearanceTokenCopy } from "./appearance-token-copy.locales/tr-TR"
+import { appearanceTokenCopy as viVNAppearanceTokenCopy } from "./appearance-token-copy.locales/vi-VN"
+import { appearanceTokenCopy as zhTWAppearanceTokenCopy } from "./appearance-token-copy.locales/zh-TW"
 
 type AppearanceTokenGroupID = (typeof APPEARANCE_TOKEN_GROUPS)[number]["id"]
 type AppearanceTokenRowID = (typeof APPEARANCE_TOKEN_GROUPS)[number]["rows"][number]["id"]
@@ -736,6 +748,25 @@ const zhCNTokenRowCopy = {
   },
 } satisfies Record<AppearanceTokenRowID, AppearanceTokenCopy>
 
+const localizedAppearanceTokenCopy = {
+  "zh-CN": { groups: zhCNTokenGroupCopy, rows: zhCNTokenRowCopy },
+  "zh-TW": zhTWAppearanceTokenCopy,
+  "ja-JP": jaJPAppearanceTokenCopy,
+  "ko-KR": koKRAppearanceTokenCopy,
+  "pt-BR": ptBRAppearanceTokenCopy,
+  "es-419": es419AppearanceTokenCopy,
+  "de-DE": deDEAppearanceTokenCopy,
+  "fr-FR": frFRAppearanceTokenCopy,
+  "id-ID": idIDAppearanceTokenCopy,
+  "it-IT": itITAppearanceTokenCopy,
+  "pl-PL": plPLAppearanceTokenCopy,
+  "tr-TR": trTRAppearanceTokenCopy,
+  "vi-VN": viVNAppearanceTokenCopy,
+} satisfies Record<Exclude<AppLocale, "en-US">, {
+  groups: Record<AppearanceTokenGroupID, AppearanceTokenCopy>
+  rows: Record<AppearanceTokenRowID, AppearanceTokenCopy>
+}>
+
 function mergeAppearanceTokenCopy(fallback: AppearanceTokenCopy, copy?: AppearanceTokenCopy): AppearanceTokenCopy {
   return {
     label: copy?.label ?? fallback.label,
@@ -744,17 +775,11 @@ function mergeAppearanceTokenCopy(fallback: AppearanceTokenCopy, copy?: Appearan
 }
 
 export function getAppearanceTokenGroupCopy(locale: AppLocale, group: AppearanceTokenGroup): AppearanceTokenCopy {
-  if (locale === "zh-CN") {
-    return mergeAppearanceTokenCopy(group, zhCNTokenGroupCopy[group.id as AppearanceTokenGroupID])
-  }
-
-  return group
+  if (locale === "en-US") return group
+  return mergeAppearanceTokenCopy(group, localizedAppearanceTokenCopy[locale].groups[group.id as AppearanceTokenGroupID])
 }
 
 export function getAppearanceTokenRowCopy(locale: AppLocale, row: AppearanceTokenRow): AppearanceTokenCopy {
-  if (locale === "zh-CN") {
-    return mergeAppearanceTokenCopy(row, zhCNTokenRowCopy[row.id as AppearanceTokenRowID])
-  }
-
-  return row
+  if (locale === "en-US") return row
+  return mergeAppearanceTokenCopy(row, localizedAppearanceTokenCopy[locale].rows[row.id as AppearanceTokenRowID])
 }

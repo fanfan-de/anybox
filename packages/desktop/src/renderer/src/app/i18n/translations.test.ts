@@ -1,9 +1,30 @@
 import { describe, expect, it } from "vitest"
+import { APP_LOCALES } from "../../../../shared/locale"
 import { enUS, getTranslationDictionary, t, translateLiteral, zhCN } from "./translations"
 
 describe("i18n translations", () => {
-  it("keeps English and Chinese dictionaries aligned", () => {
-    expect(Object.keys(enUS).sort()).toEqual(Object.keys(zhCN).sort())
+  it("keeps every locale dictionary aligned", () => {
+    const expectedKeys = Object.keys(zhCN).sort()
+    for (const locale of APP_LOCALES) {
+      expect(Object.keys(getTranslationDictionary(locale)).sort()).toEqual(expectedKeys)
+    }
+    expect(Object.keys(enUS).sort()).toEqual(expectedKeys)
+  })
+
+  it("preserves interpolation placeholders in every locale", () => {
+    const placeholderNames = (value: string) => [...value.matchAll(/\{[\w.-]+\}/g)].map((match) => match[0]).sort()
+
+    for (const locale of APP_LOCALES.filter((value) => value !== "zh-CN" && value !== "en-US")) {
+      const dictionary = getTranslationDictionary(locale)
+      const source = locale === "zh-TW" ? zhCN : enUS
+      for (const key of Object.keys(source) as Array<keyof typeof source>) {
+        const expected = placeholderNames(source[key]).filter((placeholder) =>
+          locale === "zh-TW" || placeholder !== "{plural}",
+        )
+        expect(placeholderNames(dictionary[key]), `${locale}:${key}`).toEqual(expected)
+        expect(dictionary[key].trim(), `${locale}:${key}`).not.toBe("")
+      }
+    }
   })
 
   it("translates known literals in both directions", () => {
@@ -14,6 +35,15 @@ describe("i18n translations", () => {
   it("formats common count literals", () => {
     expect(translateLiteral("zh-CN", "3 of 10 enabled")).toBe("已启用 3 / 10")
     expect(translateLiteral("en-US", "3 of 10 enabled")).toBe("3 of 10 enabled")
+    expect(translateLiteral("zh-TW", "3 of 10 enabled")).toBe("已啟用 3 / 10")
+    expect(translateLiteral("ja-JP", "3 of 10 enabled")).toBe("10 件中 3 件を有効化")
+    expect(translateLiteral("ko-KR", "3 of 10 enabled")).toBe("10개 중 3개 활성화")
+    for (const locale of ["pt-BR", "es-419", "de-DE", "fr-FR", "id-ID", "it-IT", "pl-PL", "tr-TR", "vi-VN"] as const) {
+      const translated = translateLiteral(locale, "3 of 10 enabled")
+      expect(translated, locale).not.toBe("3 of 10 enabled")
+      expect(translated, locale).toContain("3")
+      expect(translated, locale).toContain("10")
+    }
   })
 
   it("translates Git quick menu literals", () => {
@@ -75,6 +105,9 @@ describe("i18n translations", () => {
   it("exposes dictionaries by locale", () => {
     expect(getTranslationDictionary("zh-CN")["settings.appearance.languageTitle"]).toBe("显示语言")
     expect(getTranslationDictionary("en-US")["settings.appearance.languageTitle"]).toBe("Display Language")
+    expect(getTranslationDictionary("zh-TW")["settings.appearance.languageTitle"]).toBe("顯示語言")
+    expect(getTranslationDictionary("ja-JP")["settings.appearance.languageTitle"]).toBe("表示言語")
+    expect(getTranslationDictionary("ko-KR")["settings.appearance.languageTitle"]).toBe("표시 언어")
   })
 
   it("exposes thread trace translations", () => {

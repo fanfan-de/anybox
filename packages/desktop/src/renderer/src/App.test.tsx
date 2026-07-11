@@ -598,6 +598,15 @@ const PROMPT_PRESET_FIXTURES: PromptPresetFixture[] = [
     sourcePath: "src/session/prompt/git-commit-message.md",
   },
   {
+    id: "cinema-text-generation",
+    label: "Cinema text generation prompt",
+    description: "System instructions used when generating content for Cinema text nodes.",
+    source: "bundled" as const,
+    hasOverride: false,
+    editable: true,
+    sourcePath: "src/session/prompt/cinema-text-generation.md",
+  },
+  {
     id: "provider-gpt",
     label: "GPT Provider Prompt",
     description: "Reserved provider-specific prompt for GPT-family models.",
@@ -613,6 +622,7 @@ const PROMPT_PRESET_SELECTION_FIXTURE = {
   planModePromptPresetID: "plan-mode",
   sideChatPromptPresetID: "side-chat",
   gitCommitPromptPresetID: "git-commit-message",
+  cinemaTextGenerationPromptPresetID: "cinema-text-generation",
 }
 
 function createPromptPresetSummary(
@@ -9581,6 +9591,7 @@ describe("App", () => {
       createPromptPresetDocument("plan-mode"),
       createPromptPresetDocument("side-chat"),
       createPromptPresetDocument("git-commit-message"),
+      createPromptPresetDocument("cinema-text-generation"),
       createPromptPresetDocument("provider-gpt"),
     ]
 
@@ -9659,6 +9670,10 @@ describe("App", () => {
           promptPresetSelection.gitCommitPromptPresetID === presetID
             ? "git-commit-message"
             : promptPresetSelection.gitCommitPromptPresetID,
+        cinemaTextGenerationPromptPresetID:
+          promptPresetSelection.cinemaTextGenerationPromptPresetID === presetID
+            ? "cinema-text-generation"
+            : promptPresetSelection.cinemaTextGenerationPromptPresetID,
       }
       return Promise.resolve(promptPresetSelection)
     })
@@ -9712,7 +9727,13 @@ describe("App", () => {
     expect(within(promptTree.lastElementChild as HTMLElement).getByRole("button", { name: "New" })).toBeInTheDocument()
     expect(
       Array.from(document.querySelectorAll(".settings-prompt-assignment-title"), (node) => node.textContent),
-    ).toEqual(["System prompt", "Plan mode prompt", "Side chat prompt", "Git commit message prompt"])
+    ).toEqual([
+      "System prompt",
+      "Plan mode prompt",
+      "Side chat prompt",
+      "Git commit message prompt",
+      "Cinema text generation prompt",
+    ])
     expect(screen.queryByText("Every execution")).not.toBeInTheDocument()
     expect(screen.queryByText("Plan only")).not.toBeInTheDocument()
     expect(screen.queryByText("Side chat only")).not.toBeInTheDocument()
@@ -9720,6 +9741,7 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Plan mode prompt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Side chat prompt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Git commit message prompt" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Cinema text generation prompt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "GPT Provider Prompt" })).toBeInTheDocument()
     expect(getPromptPresetCombobox("System prompt preset")).toHaveTextContent("System prompt")
     expect(getPromptPresetCombobox("Plan mode prompt preset")).toHaveTextContent("Plan mode prompt")
@@ -9754,6 +9776,7 @@ describe("App", () => {
         planModePromptPresetID: "plan-mode",
         sideChatPromptPresetID: "side-chat",
         gitCommitPromptPresetID: "git-commit-message",
+        cinemaTextGenerationPromptPresetID: "cinema-text-generation",
       })
     })
 
@@ -9791,6 +9814,7 @@ describe("App", () => {
         planModePromptPresetID: "plan-mode",
         sideChatPromptPresetID: "side-chat",
         gitCommitPromptPresetID: "git-commit-message",
+        cinemaTextGenerationPromptPresetID: "cinema-text-generation",
       })
     })
 
@@ -9802,6 +9826,7 @@ describe("App", () => {
         planModePromptPresetID: "plan-mode",
         sideChatPromptPresetID: "side-chat",
         gitCommitPromptPresetID: "custom-untitled-preset",
+        cinemaTextGenerationPromptPresetID: "cinema-text-generation",
       })
     })
 
@@ -9896,6 +9921,7 @@ describe("App", () => {
       createPromptPresetDocument("plan-mode"),
       createPromptPresetDocument("side-chat"),
       createPromptPresetDocument("git-commit-message"),
+      createPromptPresetDocument("cinema-text-generation"),
       createPromptPresetDocument("provider-gpt"),
     ]
 

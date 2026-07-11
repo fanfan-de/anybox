@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { CinemaTimelineDocument } from "@anybox/shared/cinema-timeline"
 import { EditWorkbench } from "./EditWorkbench"
+import { I18nProvider } from "../../../i18n"
 
 const timeline: CinemaTimelineDocument = {
   schemaVersion: 1,
@@ -34,7 +35,9 @@ function renderWorkbench() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <EditWorkbench agentBaseURL="http://localhost" projectID="project-1" />
+      <I18nProvider locale="en-US">
+        <EditWorkbench agentBaseURL="http://localhost" projectID="project-1" />
+      </I18nProvider>
     </QueryClientProvider>,
   )
 }

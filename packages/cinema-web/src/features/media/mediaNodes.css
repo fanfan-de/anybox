@@ -22,6 +22,17 @@
   box-shadow: 0 0 0 1px var(--node-accent), var(--cinema-node-shadow, 0 10px 28px rgb(0 0 0 / 28%));
 }
 
+.cinema-asset-ready-node.is-video,
+.cinema-asset-ready-node.is-video.is-selected {
+  height: auto;
+  overflow: visible;
+  color: inherit;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .cinema-asset-node-badges {
   display: flex;
   min-height: 22px;
@@ -53,20 +64,12 @@
 }
 
 .cinema-asset-ready-node.is-video .cinema-asset-ready-preview {
-  height: calc(100% - 66px);
+  height: auto;
+  padding: 0;
 }
 
 .cinema-asset-ready-node.is-audio .cinema-asset-ready-preview {
   height: calc(100% - 62px);
-}
-
-.cinema-asset-ready-preview video {
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  border-radius: 6px;
-  background: #080808;
-  object-fit: contain;
 }
 
 .cinema-asset-ready-preview audio {

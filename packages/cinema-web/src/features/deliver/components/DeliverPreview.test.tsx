@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import type { CinemaRenderJob } from "@anybox/shared/cinema-render"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { DeliverPreview } from "./DeliverPreview"
+import { I18nProvider } from "../../../i18n"
 
 afterEach(() => {
   cleanup()
@@ -71,7 +72,9 @@ describe("DeliverPreview output availability", () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const view = render(
       <QueryClientProvider client={queryClient}>
-        <DeliverPreview agentBaseURL="http://agent.test" timeline={null} job={succeededJob} />
+        <I18nProvider locale="en-US">
+          <DeliverPreview agentBaseURL="http://agent.test" timeline={null} job={succeededJob} />
+        </I18nProvider>
       </QueryClientProvider>,
     )
 

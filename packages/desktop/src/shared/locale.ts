@@ -1,6 +1,38 @@
-export const APP_LOCALES = ["zh-CN", "en-US"] as const
+export const APP_LOCALES = [
+  "zh-CN",
+  "zh-TW",
+  "en-US",
+  "ja-JP",
+  "ko-KR",
+  "pt-BR",
+  "es-419",
+  "de-DE",
+  "fr-FR",
+  "id-ID",
+  "it-IT",
+  "pl-PL",
+  "tr-TR",
+  "vi-VN",
+] as const
 
 export type AppLocale = (typeof APP_LOCALES)[number]
+
+export const APP_LOCALE_METADATA: Record<AppLocale, { label: string; description: string }> = {
+  "zh-CN": { label: "简体中文", description: "简体中文界面" },
+  "zh-TW": { label: "繁體中文", description: "繁體中文介面" },
+  "en-US": { label: "English", description: "English interface" },
+  "ja-JP": { label: "日本語", description: "日本語インターフェース" },
+  "ko-KR": { label: "한국어", description: "한국어 인터페이스" },
+  "pt-BR": { label: "Português (Brasil)", description: "Interface em português do Brasil" },
+  "es-419": { label: "Español (Latinoamérica)", description: "Interfaz en español latinoamericano" },
+  "de-DE": { label: "Deutsch", description: "Deutsche Benutzeroberfläche" },
+  "fr-FR": { label: "Français", description: "Interface en français" },
+  "id-ID": { label: "Bahasa Indonesia", description: "Antarmuka Bahasa Indonesia" },
+  "it-IT": { label: "Italiano", description: "Interfaccia in italiano" },
+  "pl-PL": { label: "Polski", description: "Interfejs w języku polskim" },
+  "tr-TR": { label: "Türkçe", description: "Türkçe arayüz" },
+  "vi-VN": { label: "Tiếng Việt", description: "Giao diện tiếng Việt" },
+}
 
 export interface LocaleConfigDocument {
   version: 1

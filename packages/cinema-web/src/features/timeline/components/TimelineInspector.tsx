@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react"
 import { X } from "lucide-react"
 import type { CinemaAssetStatus } from "@anybox/shared"
-import type { CinemaTimelineClip, CinemaTimelineClipPatch } from "@anybox/shared/cinema-timeline"
+import type { CinemaTimelineClip, CinemaTimelineClipPatch, CinemaTimelineFit, CinemaTimelineTransform } from "@anybox/shared/cinema-timeline"
 import { timelineSecondsInputFromUs, timelineSecondsInputToUs } from "../model/timelineTime"
+import { useI18n } from "../../../i18n"
 
 type InspectorDraft = {
   title: string
@@ -14,9 +15,32 @@ type InspectorDraft = {
   opacity: string
   fadeInUs: string
   fadeOutUs: string
+  fit: CinemaTimelineFit
+  transformX: string
+  transformY: string
+  transformScale: string
+  transformRotation: string
+  transformAnchorX: string
+  transformAnchorY: string
 }
 
+const defaultTransform: CinemaTimelineTransform = {
+  x: 0,
+  y: 0,
+  scale: 1,
+  rotationDegrees: 0,
+  anchorX: 0.5,
+  anchorY: 0.5,
+}
+
+const fitLabelKeys = {
+  contain: "inspector.fit.contain",
+  cover: "inspector.fit.cover",
+  stretch: "inspector.fit.stretch",
+} as const
+
 function draftFromClip(clip: CinemaTimelineClip): InspectorDraft {
+  const transform = clip.kind === "audio" ? defaultTransform : clip.transform ?? defaultTransform
   return {
     title: clip.title,
     timelineStartUs: timelineSecondsInputFromUs(clip.timelineStartUs),
@@ -27,6 +51,13 @@ function draftFromClip(clip: CinemaTimelineClip): InspectorDraft {
     opacity: String(clip.opacity),
     fadeInUs: clip.kind === "audio" ? timelineSecondsInputFromUs(clip.fadeInUs ?? 0) : "0",
     fadeOutUs: clip.kind === "audio" ? timelineSecondsInputFromUs(clip.fadeOutUs ?? 0) : "0",
+    fit: clip.fit ?? "contain",
+    transformX: String(transform.x),
+    transformY: String(transform.y),
+    transformScale: String(transform.scale),
+    transformRotation: String(transform.rotationDegrees),
+    transformAnchorX: String(transform.anchorX),
+    transformAnchorY: String(transform.anchorY),
   }
 }
 
@@ -47,6 +78,7 @@ export function TimelineInspector({
   assetStatus?: CinemaAssetStatus | "unresolved"
   onRequestReplacement: () => void
 }) {
+  const { t } = useI18n()
   const [draft, setDraft] = useState(() => draftFromClip(clip))
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -54,7 +86,7 @@ export function TimelineInspector({
     setError(null)
   }, [clip.id, clip.updatedAt])
 
-  const setField = (field: keyof InspectorDraft, value: string) => setDraft((current) => ({ ...current, [field]: value }))
+  const setField = <Key extends keyof InspectorDraft,>(field: Key, value: InspectorDraft[Key]) => setDraft((current) => ({ ...current, [field]: value }))
   const reset = () => {
     setDraft(draftFromClip(clip))
     setError(null)
@@ -68,12 +100,28 @@ export function TimelineInspector({
     const opacity = Number(draft.opacity)
     const fadeInUs = timelineSecondsInputToUs(draft.fadeInUs)
     const fadeOutUs = timelineSecondsInputToUs(draft.fadeOutUs)
-    if (!draft.title.trim()) return setError("Name is required.")
-    if (timelineStartUs === null || durationUs === null || ![volume, opacity].every(Number.isFinite)) return setError("Enter seconds with up to 6 decimal places.")
-    if (durationUs <= 0) return setError("Duration must be greater than 0 seconds.")
-    if (volume < 0 || opacity < 0 || opacity > 1) return setError("Volume must be positive and opacity must be between 0 and 1.")
-    if (clip.kind !== "text" && (sourceInUs === null || sourceDurationUs === null || sourceDurationUs <= 0)) return setError("Source range must use valid non-negative seconds.")
-    if (clip.kind === "audio" && (fadeInUs === null || fadeOutUs === null || fadeInUs + fadeOutUs > durationUs)) return setError("Audio fades must be non-negative seconds and fit within the clip.")
+    const transform: CinemaTimelineTransform = {
+      x: Number(draft.transformX),
+      y: Number(draft.transformY),
+      scale: Number(draft.transformScale),
+      rotationDegrees: Number(draft.transformRotation),
+      anchorX: Number(draft.transformAnchorX),
+      anchorY: Number(draft.transformAnchorY),
+    }
+    if (!draft.title.trim()) return setError(t("inspector.error.name"))
+    if (timelineStartUs === null || durationUs === null || ![volume, opacity].every(Number.isFinite)) return setError(t("inspector.error.seconds"))
+    if (durationUs <= 0) return setError(t("inspector.error.duration"))
+    if (volume < 0 || opacity < 0 || opacity > 1) return setError(t("inspector.error.volumeOpacity"))
+    if (clip.kind !== "text" && (sourceInUs === null || sourceDurationUs === null || sourceDurationUs <= 0)) return setError(t("inspector.error.sourceRange"))
+    if (clip.kind === "audio" && (fadeInUs === null || fadeOutUs === null || fadeInUs + fadeOutUs > durationUs)) return setError(t("inspector.error.fades"))
+    if (clip.kind !== "audio" && (
+      !Object.values(transform).every(Number.isFinite)
+      || transform.scale <= 0
+      || transform.anchorX < 0
+      || transform.anchorX > 1
+      || transform.anchorY < 0
+      || transform.anchorY > 1
+    )) return setError(t("inspector.error.transform"))
 
     if (timelineStartUs !== clip.timelineStartUs && durationUs === clip.durationUs) onMove(timelineStartUs)
     if (clip.kind !== "text" && sourceInUs !== null && sourceDurationUs !== null && (
@@ -88,15 +136,22 @@ export function TimelineInspector({
     if (opacity !== clip.opacity) patch.opacity = opacity
     if (clip.kind === "audio" && fadeInUs !== (clip.fadeInUs ?? 0)) patch.fadeInUs = fadeInUs
     if (clip.kind === "audio" && fadeOutUs !== (clip.fadeOutUs ?? 0)) patch.fadeOutUs = fadeOutUs
+    if (clip.kind !== "audio") {
+      if (draft.fit !== (clip.fit ?? "contain")) patch.fit = draft.fit
+      const currentTransform = clip.transform ?? defaultTransform
+      if ((Object.keys(transform) as Array<keyof CinemaTimelineTransform>).some((key) => transform[key] !== currentTransform[key])) {
+        patch.transform = transform
+      }
+    }
     if (Object.keys(patch).length > 0) onUpdate(patch)
     setError(null)
   }
 
   return (
-    <aside className="cinema-timeline-inspector" aria-label="Timeline inspector">
+    <aside className="cinema-timeline-inspector" aria-label={t("inspector.label")}>
       <header>
-        <strong>Inspector</strong>
-        <button type="button" aria-label="Close inspector" title="Close inspector" onClick={onClose}><X aria-hidden="true" /></button>
+        <strong>{t("inspector.title")}</strong>
+        <button type="button" aria-label={t("inspector.close")} title={t("inspector.close")} onClick={onClose}><X aria-hidden="true" /></button>
       </header>
       <form
         className="cinema-timeline-inspector-body"
@@ -108,25 +163,48 @@ export function TimelineInspector({
           }
         }}
       >
-        <label><span>Name</span><input type="text" value={draft.title} onChange={(event) => setField("title", event.target.value)} /></label>
-        <label><span>Position (seconds)</span><input type="text" inputMode="decimal" value={draft.timelineStartUs} onChange={(event) => setField("timelineStartUs", event.target.value)} /></label>
-        <label><span>Duration (seconds)</span><input type="text" inputMode="decimal" value={draft.durationUs} onChange={(event) => setField("durationUs", event.target.value)} /></label>
-        {clip.kind !== "text" ? <label><span>Source in (seconds)</span><input type="text" inputMode="decimal" value={draft.sourceInUs} onChange={(event) => setField("sourceInUs", event.target.value)} /></label> : null}
-        {clip.kind !== "text" ? <label><span>Source duration (seconds)</span><input type="text" inputMode="decimal" value={draft.sourceDurationUs} onChange={(event) => setField("sourceDurationUs", event.target.value)} /></label> : null}
-        <label><span>Volume</span><input type="number" min={0} step="0.05" value={draft.volume} onChange={(event) => setField("volume", event.target.value)} /></label>
-        {clip.kind === "audio" ? <label><span>Fade in (seconds)</span><input type="text" inputMode="decimal" value={draft.fadeInUs} onChange={(event) => setField("fadeInUs", event.target.value)} /></label> : null}
-        {clip.kind === "audio" ? <label><span>Fade out (seconds)</span><input type="text" inputMode="decimal" value={draft.fadeOutUs} onChange={(event) => setField("fadeOutUs", event.target.value)} /></label> : null}
-        <label><span>Opacity</span><input type="number" min={0} max={1} step="0.05" value={draft.opacity} onChange={(event) => setField("opacity", event.target.value)} /></label>
+        <label><span>{t("inspector.name")}</span><input type="text" value={draft.title} onChange={(event) => setField("title", event.target.value)} /></label>
+        <label><span>{t("inspector.position")}</span><input type="text" inputMode="decimal" value={draft.timelineStartUs} onChange={(event) => setField("timelineStartUs", event.target.value)} /></label>
+        <label><span>{t("inspector.duration")}</span><input type="text" inputMode="decimal" value={draft.durationUs} onChange={(event) => setField("durationUs", event.target.value)} /></label>
+        {clip.kind !== "text" ? <label><span>{t("inspector.sourceIn")}</span><input type="text" inputMode="decimal" value={draft.sourceInUs} onChange={(event) => setField("sourceInUs", event.target.value)} /></label> : null}
+        {clip.kind !== "text" ? <label><span>{t("inspector.sourceDuration")}</span><input type="text" inputMode="decimal" value={draft.sourceDurationUs} onChange={(event) => setField("sourceDurationUs", event.target.value)} /></label> : null}
+        <label><span>{t("inspector.volume")}</span><input type="number" min={0} step="0.05" value={draft.volume} onChange={(event) => setField("volume", event.target.value)} /></label>
+        {clip.kind === "audio" ? <label><span>{t("inspector.fadeIn")}</span><input type="text" inputMode="decimal" value={draft.fadeInUs} onChange={(event) => setField("fadeInUs", event.target.value)} /></label> : null}
+        {clip.kind === "audio" ? <label><span>{t("inspector.fadeOut")}</span><input type="text" inputMode="decimal" value={draft.fadeOutUs} onChange={(event) => setField("fadeOutUs", event.target.value)} /></label> : null}
+        <label><span>{t("inspector.opacity")}</span><input type="number" min={0} max={1} step="0.05" value={draft.opacity} onChange={(event) => setField("opacity", event.target.value)} /></label>
+        {clip.kind !== "audio" ? (
+          <fieldset className="cinema-timeline-inspector-transform">
+            <legend>{t("inspector.transform")}</legend>
+            {clip.kind !== "text" ? (
+              <div className="cinema-timeline-inspector-fit" role="group" aria-label={t("inspector.fit")}>
+                {(["contain", "cover", "stretch"] as const).map((fit) => (
+                  <button
+                    key={fit}
+                    type="button"
+                    aria-pressed={draft.fit === fit}
+                    onClick={() => setField("fit", fit)}
+                  >{t(fitLabelKeys[fit])}</button>
+                ))}
+              </div>
+            ) : null}
+            <label><span>{t("inspector.transformX")}</span><input type="number" step="1" value={draft.transformX} onChange={(event) => setField("transformX", event.target.value)} /></label>
+            <label><span>{t("inspector.transformY")}</span><input type="number" step="1" value={draft.transformY} onChange={(event) => setField("transformY", event.target.value)} /></label>
+            <label><span>{t("inspector.transformScale")}</span><input type="number" min="0.01" step="0.01" value={draft.transformScale} onChange={(event) => setField("transformScale", event.target.value)} /></label>
+            <label><span>{t("inspector.transformRotation")}</span><input type="number" step="1" value={draft.transformRotation} onChange={(event) => setField("transformRotation", event.target.value)} /></label>
+            <label><span>{t("inspector.transformAnchorX")}</span><input type="number" min="0" max="1" step="0.05" value={draft.transformAnchorX} onChange={(event) => setField("transformAnchorX", event.target.value)} /></label>
+            <label><span>{t("inspector.transformAnchorY")}</span><input type="number" min="0" max="1" step="0.05" value={draft.transformAnchorY} onChange={(event) => setField("transformAnchorY", event.target.value)} /></label>
+          </fieldset>
+        ) : null}
         {clip.kind !== "text" ? (
           <div className={`cinema-timeline-inspector-asset ${assetStatus && assetStatus !== "ready" && assetStatus !== "unresolved" ? "is-unavailable" : ""}`}>
-            <span>Asset: {assetStatus ?? "unresolved"}</span>
-            <button type="button" className="cinema-edit-secondary-button" onClick={onRequestReplacement}>Replace asset</button>
+            <span>{t("inspector.asset", { status: assetStatus ?? "unresolved" })}</span>
+            <button type="button" className="cinema-edit-secondary-button" onClick={onRequestReplacement}>{t("inspector.replaceAsset")}</button>
           </div>
         ) : null}
         {error ? <p className="cinema-timeline-inspector-error" role="alert">{error}</p> : null}
         <div className="cinema-timeline-inspector-actions">
-          <button type="button" className="cinema-edit-secondary-button" onClick={reset}>Cancel</button>
-          <button type="submit" className="cinema-edit-primary-button">Apply</button>
+          <button type="button" className="cinema-edit-secondary-button" onClick={reset}>{t("inspector.cancel")}</button>
+          <button type="submit" className="cinema-edit-primary-button">{t("inspector.apply")}</button>
         </div>
       </form>
     </aside>

@@ -18,6 +18,12 @@ function clipByID(document: CinemaTimelineDocument, clipID: string) {
   return clip
 }
 
+function trackByID(document: CinemaTimelineDocument, trackID: string) {
+  const track = document.tracks.find((candidate) => candidate.id === trackID)
+  if (!track) throw new TimelineProjectionError(`Track '${trackID}' was not found.`)
+  return track
+}
+
 export function projectTimelineCommand(
   document: CinemaTimelineDocument,
   command: CinemaTimelineCommandDraft,
@@ -25,14 +31,57 @@ export function projectTimelineCommand(
 ) {
   let next: CinemaTimelineDocument
   switch (command.type) {
-    case "create-track":
-      next = { ...document, tracks: [...document.tracks, command.track] }
+    case "create-track": {
+      if (document.tracks.some((track) => track.id === command.track.id)) {
+        throw new TimelineProjectionError(`Track '${command.track.id}' already exists.`)
+      }
+      if (command.track.order > document.tracks.length) {
+        throw new TimelineProjectionError("Track insertion order is outside the current track range.")
+      }
+      const tracks = [...document.tracks].sort((left, right) => left.order - right.order)
+      tracks.splice(command.track.order, 0, command.track)
+      next = { ...document, tracks: tracks.map((track, order) => ({ ...track, order })) }
       break
+    }
     case "update-track":
+      trackByID(document, command.trackID)
       next = { ...document, tracks: document.tracks.map((track) => track.id === command.trackID ? { ...track, ...command.patch } : track) }
       break
+    case "delete-track": {
+      const track = trackByID(document, command.trackID)
+      if (track.locked) throw new TimelineProjectionError(`Track '${track.id}' is locked.`)
+      if (document.clips.some((clip) => clip.trackID === command.trackID) && !command.deleteClips) {
+        throw new TimelineProjectionError("Track is not empty.")
+      }
+      next = {
+        ...document,
+        tracks: document.tracks
+          .filter((track) => track.id !== command.trackID)
+          .sort((left, right) => left.order - right.order)
+          .map((track, order) => ({ ...track, order })),
+        clips: command.deleteClips
+          ? document.clips.filter((clip) => clip.trackID !== command.trackID)
+          : document.clips,
+      }
+      break
+    }
+    case "reorder-tracks": {
+      const tracksByID = new Map(document.tracks.map((track) => [track.id, track]))
+      if (
+        command.trackIDs.length !== document.tracks.length
+        || command.trackIDs.some((trackID) => !tracksByID.has(trackID))
+      ) throw new TimelineProjectionError("Track ordering must contain every track exactly once.")
+      next = {
+        ...document,
+        tracks: command.trackIDs.map((trackID, order) => ({ ...tracksByID.get(trackID)!, order })),
+      }
+      break
+    }
     case "add-clip":
       next = { ...document, clips: [...document.clips, command.clip] }
+      break
+    case "add-clips":
+      next = { ...document, clips: [...document.clips, ...command.clips] }
       break
     case "move-clip":
       next = {
@@ -45,6 +94,22 @@ export function projectTimelineCommand(
         } : clip),
       }
       break
+    case "move-clips": {
+      const placements = new Map(command.placements.map((placement) => [placement.clipID, placement]))
+      next = {
+        ...document,
+        clips: document.clips.map((clip) => {
+          const placement = placements.get(clip.id)
+          return placement ? {
+            ...clip,
+            trackID: placement.trackID,
+            timelineStartUs: placement.timelineStartUs,
+            updatedAt: timestamp,
+          } : clip
+        }),
+      }
+      break
+    }
     case "trim-clip":
       next = {
         ...document,
@@ -100,6 +165,32 @@ export function projectTimelineCommand(
       next = { ...document, clips: document.clips.filter((clip) => !ids.has(clip.id)) }
       break
     }
+    case "ripple-delete-clips": {
+      const ids = new Set(command.clipIDs)
+      const deleted = command.clipIDs.map((clipID) => clipByID(document, clipID))
+      const trackIDs = new Set(deleted.map((clip) => clip.trackID))
+      if (trackIDs.size !== 1) throw new TimelineProjectionError("Ripple Delete currently requires clips from one track.")
+      const trackID = deleted[0]!.trackID
+      const intervals = deleted
+        .map((clip) => ({ endUs: clip.timelineStartUs + clip.durationUs, durationUs: clip.durationUs }))
+        .sort((left, right) => left.endUs - right.endUs)
+      next = {
+        ...document,
+        clips: document.clips.flatMap((clip) => {
+          if (ids.has(clip.id)) return []
+          if (clip.trackID !== trackID) return [clip]
+          const shiftUs = intervals.reduce((total, interval) => (
+            interval.endUs <= clip.timelineStartUs ? total + interval.durationUs : total
+          ), 0)
+          return [{
+            ...clip,
+            timelineStartUs: clip.timelineStartUs - shiftUs,
+            ...(shiftUs > 0 ? { updatedAt: timestamp } : {}),
+          }]
+        }),
+      }
+      break
+    }
     case "update-clip":
       next = {
         ...document,
@@ -107,13 +198,32 @@ export function projectTimelineCommand(
           if (clip.id !== command.clipID) return clip
           const updated = { ...clip, ...command.patch, updatedAt: timestamp } as CinemaTimelineClip
           if (command.patch.fit === null) delete updated.fit
-          const mutable = updated as CinemaTimelineClip & { fadeInUs?: number; fadeOutUs?: number }
+          const mutable = updated as CinemaTimelineClip & { fadeInUs?: number; fadeOutUs?: number; transform?: unknown }
+          if (command.patch.transform === null) delete mutable.transform
           if (command.patch.fadeInUs === null) delete mutable.fadeInUs
           if (command.patch.fadeOutUs === null) delete mutable.fadeOutUs
           return updated
         }),
       }
       break
+    case "update-clips": {
+      const updates = new Map(command.updates.map((update) => [update.clipID, update.patch]))
+      next = {
+        ...document,
+        clips: document.clips.map((clip) => {
+          const patch = updates.get(clip.id)
+          if (!patch) return clip
+          const updated = { ...clip, ...patch, updatedAt: timestamp } as CinemaTimelineClip
+          if (patch.fit === null) delete updated.fit
+          const mutable = updated as CinemaTimelineClip & { fadeInUs?: number; fadeOutUs?: number; transform?: unknown }
+          if (patch.transform === null) delete mutable.transform
+          if (patch.fadeInUs === null) delete mutable.fadeInUs
+          if (patch.fadeOutUs === null) delete mutable.fadeOutUs
+          return updated
+        }),
+      }
+      break
+    }
     case "add-marker":
       next = { ...document, markers: [...document.markers, command.marker] }
       break

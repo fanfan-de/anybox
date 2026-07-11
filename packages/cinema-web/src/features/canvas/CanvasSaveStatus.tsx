@@ -1,4 +1,5 @@
 import { Check, CloudOff, Loader2, RefreshCw } from "lucide-react"
+import { useI18n } from "../../i18n"
 
 export type SaveState = "idle" | "dirty" | "saving" | "saved" | "error"
 
@@ -13,15 +14,16 @@ export function CanvasSaveStatus({
   pendingCount: number
   onRetry: () => void
 }) {
+  const { t } = useI18n()
   const label = state === "dirty"
-    ? "未保存"
+    ? t("save.dirty")
     : state === "saving"
-      ? pendingCount > 1 ? `正在保存 ${pendingCount} 项` : "正在保存"
+      ? pendingCount > 1 ? t("save.savingCount", { count: pendingCount }) : t("save.saving")
       : state === "error"
-        ? "保存失败"
+        ? t("save.error")
         : state === "saved"
-          ? "已保存"
-          : "准备就绪"
+          ? t("save.saved")
+          : t("save.ready")
 
   return (
     <div
@@ -45,8 +47,8 @@ export function CanvasSaveStatus({
         <button
           type="button"
           className="cinema-save-status-retry"
-          title="重试保存"
-          aria-label="重试保存"
+          title={t("save.retry")}
+          aria-label={t("save.retry")}
           onClick={onRetry}
         >
           <RefreshCw size={14} aria-hidden="true" />

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react"
 import {
+  APP_LOCALES,
   DEFAULT_APP_LOCALE,
   normalizeAppLocale,
   type AppLocale,
@@ -73,7 +74,7 @@ function isRenderedVariant(source: string, rendered: string) {
   if (!trimmed) return true
 
   if (getLiteralVariants(source).has(trimmed)) return true
-  return translateLiteral("zh-CN", source).trim() === trimmed || translateLiteral("en-US", source).trim() === trimmed
+  return APP_LOCALES.some((locale) => translateLiteral(locale, source).trim() === trimmed)
 }
 
 function localizeTextNode(node: Text, locale: AppLocale, textSources: WeakMap<Text, string>) {

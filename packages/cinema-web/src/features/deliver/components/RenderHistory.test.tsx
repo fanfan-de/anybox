@@ -9,6 +9,7 @@ import {
   RenderHistory,
   shouldVirtualizeRenderHistory,
 } from "./RenderHistory"
+import { I18nProvider } from "../../../i18n"
 
 afterEach(cleanup)
 
@@ -50,7 +51,7 @@ describe("RenderHistory", () => {
   it("supports Arrow, Home, and End navigation for a non-virtualized history", () => {
     const jobs = [job(0), job(1), job(2)]
     const onSelect = vi.fn()
-    render(<RenderHistory jobs={jobs} selectedJobID={jobs[0]!.id} onSelect={onSelect} />)
+    render(<I18nProvider locale="en-US"><RenderHistory jobs={jobs} selectedJobID={jobs[0]!.id} onSelect={onSelect} /></I18nProvider>)
 
     const first = screen.getByRole("option", { name: /output-0/ })
     expect(screen.getAllByRole("option").filter((option) => option.tabIndex === 0)).toEqual([first])

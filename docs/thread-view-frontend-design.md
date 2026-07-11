@@ -486,7 +486,7 @@ debug 信息由 developer mode 和 trace visibility 控制。默认不应该干�
 - 如果用户向上阅读历史，后续更新不会强行打断阅读位置。
 - 点击 `ThreadTurnNavigator` 的轮次节点时，`useThreadVirtualList` 通过目标 display row index 获取 TanStack virtualizer 的 start offset，并减去少量顶部阅读留白；即使目标 row 尚未挂载到 DOM，也不依赖 `scrollIntoView()`。
 - 轮次跳转通过 `useThreadScrollController.navigateThreadToOffset()` 明确切换为 `detached`，同时保存 `pinnedToBottom: false` 的 scroll snapshot。点击最后一轮也只定位到该轮 user message，不会滚到 thread 最底部；用户随后手动回到底部时仍由原有 scroll intent 规则恢复 follow。
-- 当前轮次由导航组件自己的 scroll/ResizeObserver + requestAnimationFrame 同步计算。它读取各 user row 的 virtual offset，只在 current index 变化时更新导航组件，避免每次正文 scroll 触发整个 `ThreadView` 重渲染。
+- 轮次可见状态由 `.thread-column` 自身的 React `onScroll` 直接触发；virtualizer 的 measurement key 变化通过 requestAnimationFrame 合并更新。每轮范围从该轮 user row 开始，到下一轮 user row 之前结束；范围与当前 viewport 相交的所有轮次标记会同时高亮。导航组件同时接收一个主 current index，供紧凑模式文案、`aria-current` 和标记列表自动滚动使用，不再自行监听或观察 sibling 滚动节点。这样 Dockview 重挂载不会留下旧滚动监听，且只有可见集合或主索引变化时才更新导航状态。
 - 键盘焦点进入 virtual row 后，该 row ID 会加入 virtualizer range；用户滚动阅读其他位置时不会卸载正在输入或操作的控件，blur 后解除 pin。
 
 底部锁定阈值为 `THREAD_BOTTOM_LOCK_THRESHOLD_PX = 32`。
@@ -566,7 +566,7 @@ agent 提问通过 `question` trace item 渲染：
 - 小屏下 pane content gutter 降低到 10px。
 - composer、utility bar、菜单 panel 会全宽显示。
 - permission request grid 在窄屏变成单列。
-- `thread-shell` 使用 inline-size container query：pane 宽度小于 620px 时，隐藏横线导航并显示“第 n/m 轮”紧凑按钮；popover 保留全部轮次并可独立滚动。普通宽度下横线列表固定在 thread 左侧，可滚动承载长会话，不挤压正文宽度。
+- `thread-shell` 使用 inline-size container query：pane 宽度达到 1000px 时，横线导航固定在当前 pane 左侧 16px 的留白轨道；621–999px 时仍邻近居中正文左侧；小于等于 620px 时隐藏横线导航并显示“第 n/m 轮”紧凑按钮。popover 保留全部轮次并可独立滚动，三种布局都不参与正文排版或改变正文宽度。
 
 桌面端仍是主要目标；响应式规则保证窄窗口可用，但没有把 thread view 设计成移动优先体验。
 

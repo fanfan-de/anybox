@@ -7,41 +7,42 @@ import type { CinemaTimelineDocument } from "@anybox/shared/cinema-timeline"
 import { AssetLibraryApiError, createAssetLibraryApi } from "../../assets/assetLibraryApi"
 import { cinemaAssetURL } from "../../media/assetNodeData"
 import { formatBytes, formatRenderDuration } from "../model/renderStatus"
+import { useI18n } from "../../../i18n"
 
 function outputUnavailableCopy(input: {
   status?: "uploading" | "processing" | "ready" | "failed" | "missing" | "trashed"
   notFound: boolean
   statusCheckFailed: boolean
   previewFailed: boolean
-}) {
+}, t: ReturnType<typeof useI18n>["t"]) {
   if (input.status === "trashed") {
     return {
-      title: "Output is in Trash",
-      message: "Restore this render in Assets before previewing it.",
+      title: t("deliver.outputTrashTitle"),
+      message: t("deliver.outputTrashMessage"),
     }
   }
   if (input.status === "missing" || input.notFound) {
     return {
-      title: "Output is missing",
-      message: "The registered output is no longer available. Reconcile or restore it from Assets.",
+      title: t("deliver.outputMissingTitle"),
+      message: t("deliver.outputMissingMessage"),
     }
   }
   if (input.status && input.status !== "ready") {
     return {
-      title: "Output is not ready",
-      message: `The registered output is currently ${input.status}. Check its status in Assets.`,
+      title: t("deliver.outputNotReadyTitle"),
+      message: t("deliver.outputNotReadyMessage", { status: input.status }),
     }
   }
   if (input.statusCheckFailed) {
     return {
-      title: "Output status unavailable",
-      message: "The current Assets status could not be checked. Try again before opening the preview.",
+      title: t("deliver.outputStatusUnavailableTitle"),
+      message: t("deliver.outputStatusUnavailableMessage"),
     }
   }
   if (input.previewFailed) {
     return {
-      title: "Preview unavailable",
-      message: "The registered output could not be loaded. It may have moved or become unavailable.",
+      title: t("deliver.previewUnavailableTitle"),
+      message: t("deliver.previewUnavailableMessage"),
     }
   }
   return null
@@ -60,6 +61,7 @@ export function DeliverPreview({
   job?: CinemaRenderJob
   onShowInAssets?: (assetRef: CinemaAssetRef) => void
 }) {
+  const { t } = useI18n()
   const outputAsset = job?.status === "succeeded" ? job.outputAssetRef : undefined
   const previewURL = outputAsset ? cinemaAssetURL(agentBaseURL, outputAsset, "preview") : null
   const outputJob = job?.status === "succeeded" ? job : undefined
@@ -91,19 +93,20 @@ export function DeliverPreview({
     notFound: outputNotFound,
     statusCheckFailed: Boolean(outputAssetQuery.error && !outputNotFound),
     previewFailed: Boolean(previewURL && failedPreviewURL === previewURL),
-  })
+  }, t)
+  const outputName = outputJob?.settings.outputName ?? t("deliver.renderFallbackName")
   const recheckOutput = () => {
     setFailedPreviewURL(null)
     void outputAssetQuery.refetch()
   }
   return (
-    <section className="cinema-deliver-main" aria-label="Delivery preview">
+    <section className="cinema-deliver-main" aria-label={t("deliver.preview")}>
       <div className="cinema-deliver-preview-surface">
         {checkingOutput ? (
           <div className="cinema-deliver-preview-empty" role="status">
             <Video size={30} aria-hidden="true" />
-            <strong>Checking output</strong>
-            <span>Verifying the current render status in Assets…</span>
+            <strong>{t("deliver.checkingOutput")}</strong>
+            <span>{t("deliver.verifyingOutput")}</span>
           </div>
         ) : previewURL && unavailable ? (
           <div className="cinema-deliver-preview-empty is-error" role="alert">
@@ -117,11 +120,11 @@ export function DeliverPreview({
                 disabled={outputAssetQuery.isFetching}
                 onClick={recheckOutput}
               >
-                Check again
+                {t("deliver.checkAgain")}
               </button>
               {outputAsset && onShowInAssets ? (
                 <button type="button" className="cinema-deliver-secondary-button" onClick={() => onShowInAssets(outputAsset)}>
-                  Show in Assets
+                  {t("deliver.showInAssets")}
                 </button>
               ) : null}
             </div>
@@ -132,38 +135,38 @@ export function DeliverPreview({
               controls
               preload="metadata"
               src={previewURL}
-              aria-label={`${outputJob?.settings.outputName ?? "Render"} output preview`}
+              aria-label={t("deliver.outputPreview", { name: outputName })}
               onError={() => setFailedPreviewURL(previewURL)}
             />
             <div className="cinema-deliver-output-caption">
               <CheckCircle2 size={16} aria-hidden="true" />
-              <span><strong>{outputJob?.settings.outputName ?? "Render"}.mp4</strong> is ready in Assets.</span>
+              <span>{t("deliver.outputReady", { name: outputName })}</span>
               {outputAsset && onShowInAssets ? (
                 <button type="button" className="cinema-deliver-secondary-button" onClick={() => onShowInAssets(outputAsset)}>
-                  Show in Assets
+                  {t("deliver.showInAssets")}
                 </button>
               ) : null}
-              <a href={previewURL} target="_blank" rel="noreferrer">Open preview</a>
+              <a href={previewURL} target="_blank" rel="noreferrer">{t("deliver.openPreview")}</a>
             </div>
           </div>
         ) : (
           <div className="cinema-deliver-preview-empty" role="status">
             <Video size={30} aria-hidden="true" />
-            <strong>{timeline ? timeline.title : "Select a Timeline"}</strong>
-            <span>{job ? "Your output will appear here when rendering finishes." : "Review the preflight summary, then start a real FFmpeg render."}</span>
+            <strong>{timeline ? timeline.title : t("deliver.selectTimeline")}</strong>
+            <span>{t(job ? "deliver.outputPending" : "deliver.preflightPrompt")}</span>
           </div>
         )}
       </div>
-      <div className="cinema-deliver-summary" aria-label="Timeline delivery summary">
+      <div className="cinema-deliver-summary" aria-label={t("deliver.summaryLabel")}>
         <div className="cinema-deliver-summary-heading">
-          <span>Delivery summary</span>
-          {preflight?.ready ? <span className="cinema-deliver-ready"><CheckCircle2 size={14} aria-hidden="true" /> Ready</span> : null}
+          <span>{t("deliver.summary")}</span>
+          {preflight?.ready ? <span className="cinema-deliver-ready"><CheckCircle2 size={14} aria-hidden="true" /> {t("deliver.readyShort")}</span> : null}
         </div>
         <div className="cinema-deliver-summary-grid">
-          <span><Film size={14} aria-hidden="true" /> Duration <strong>{preflight ? formatRenderDuration(preflight.durationUs) : "—"}</strong></span>
-          <span><Image size={14} aria-hidden="true" /> Video <strong>{preflight?.support.videoClips ?? "—"}</strong></span>
-          <span>Audio <strong>{preflight?.support.audioClips ?? "—"}</strong></span>
-          <span>Input size <strong>{preflight ? formatBytes(preflight.estimatedInputBytes) : "—"}</strong></span>
+          <span><Film size={14} aria-hidden="true" /> {t("deliver.summaryDuration")} <strong>{preflight ? formatRenderDuration(preflight.durationUs) : "—"}</strong></span>
+          <span><Image size={14} aria-hidden="true" /> {t("deliver.summaryVideo")} <strong>{preflight?.support.videoClips ?? "—"}</strong></span>
+          <span>{t("deliver.summaryAudio")} <strong>{preflight?.support.audioClips ?? "—"}</strong></span>
+          <span>{t("deliver.summaryInputSize")} <strong>{preflight ? formatBytes(preflight.estimatedInputBytes) : "—"}</strong></span>
         </div>
       </div>
     </section>
