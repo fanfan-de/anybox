@@ -60,12 +60,28 @@ function applyClipPatch(
   timestamp: string,
 ) {
   const next = { ...clip, ...patch, updatedAt: timestamp } as CinemaTimelineClip
-  if (patch.fit === null) delete next.fit
-  const mutable = next as CinemaTimelineClip & { fadeInUs?: number; fadeOutUs?: number; transform?: unknown }
+  if (patch.fit === null && "fit" in next) delete next.fit
+  const mutable = next as CinemaTimelineClip & { fadeInUs?: number; fadeOutUs?: number; transform?: unknown; speaker?: string }
   if (patch.transform === null) delete mutable.transform
   if (patch.fadeInUs === null) delete mutable.fadeInUs
   if (patch.fadeOutUs === null) delete mutable.fadeOutUs
+  if (patch.speaker === null) delete mutable.speaker
   return next
+}
+
+function assertClipPatchCompatible(
+  clip: CinemaTimelineClip,
+  patch: Extract<CinemaTimelineCommand, { type: "update-clip" }>["patch"],
+) {
+  if ((clip.kind === "text" || clip.kind === "subtitle") && patch.assetRef) {
+    throw new ApiError(409, "CINEMA_TIMELINE_ASSET_REF_UNSUPPORTED", `${clip.kind} clips cannot reference physical assets.`)
+  }
+  if (clip.kind === "audio" && patch.transform !== undefined) {
+    throw new ApiError(409, "CINEMA_TIMELINE_TRANSFORM_UNSUPPORTED", "Audio clips cannot have visual transforms.")
+  }
+  if (clip.kind !== "subtitle" && (patch.cueText !== undefined || patch.speaker !== undefined)) {
+    throw new ApiError(409, "CINEMA_TIMELINE_SUBTITLE_PATCH_UNSUPPORTED", "Subtitle fields can only update subtitle cues.")
+  }
 }
 
 function applyCommandPayload(
@@ -84,6 +100,27 @@ function applyCommandPayload(
       const tracks = orderedTracks(document.tracks)
       tracks.splice(command.track.order, 0, command.track)
       return { ...document, tracks: indexTracks(tracks) }
+    }
+    case "create-track-with-clips": {
+      if (document.tracks.some((track) => track.id === command.track.id)) {
+        throw new ApiError(409, "CINEMA_TIMELINE_TRACK_ID_CONFLICT", `Track '${command.track.id}' already exists.`)
+      }
+      if (command.track.order > document.tracks.length) {
+        throw new ApiError(409, "CINEMA_TIMELINE_TRACK_ORDER_INVALID", "Track insertion order is outside the current track range.")
+      }
+      const existingClipIDs = new Set(document.clips.map((clip) => clip.id))
+      for (const clip of command.clips) {
+        if (existingClipIDs.has(clip.id)) {
+          throw new ApiError(409, "CINEMA_TIMELINE_CLIP_ID_CONFLICT", `Clip '${clip.id}' already exists.`)
+        }
+      }
+      const tracks = orderedTracks(document.tracks)
+      tracks.splice(command.track.order, 0, command.track)
+      return {
+        ...document,
+        tracks: indexTracks(tracks),
+        clips: [...document.clips, ...command.clips],
+      }
     }
     case "update-track": {
       findTrack(document, command.trackID)
@@ -185,13 +222,13 @@ function applyCommandPayload(
     case "trim-clip": {
       const clip = findClip(document, command.clipID)
       assertTrackUnlocked(findTrack(document, clip.trackID))
-      if (clip.kind === "text") {
-        throw new ApiError(409, "CINEMA_TIMELINE_TRIM_UNSUPPORTED", "Text clips do not have a physical source range.")
+      if (clip.kind === "text" || clip.kind === "subtitle") {
+        throw new ApiError(409, "CINEMA_TIMELINE_TRIM_UNSUPPORTED", `${clip.kind} clips do not have a physical source range.`)
       }
       return {
         ...document,
         clips: replaceClip(document, command.clipID, (current) => {
-          if (current.kind === "text") return current
+          if (current.kind === "text" || current.kind === "subtitle") return current
           return {
             ...current,
             timelineStartUs: command.timelineStartUs,
@@ -201,6 +238,22 @@ function applyCommandPayload(
             updatedAt: timestamp,
           }
         }),
+      }
+    }
+    case "trim-timed-clip": {
+      const clip = findClip(document, command.clipID)
+      assertTrackUnlocked(findTrack(document, clip.trackID))
+      if (clip.kind !== "text" && clip.kind !== "subtitle") {
+        throw new ApiError(409, "CINEMA_TIMELINE_TIMED_TRIM_UNSUPPORTED", "Only text and subtitle clips support timed trimming.")
+      }
+      return {
+        ...document,
+        clips: replaceClip(document, command.clipID, (current) => ({
+          ...current,
+          timelineStartUs: command.timelineStartUs,
+          durationUs: command.durationUs,
+          updatedAt: timestamp,
+        })),
       }
     }
     case "split-clip": {
@@ -217,7 +270,7 @@ function applyCommandPayload(
       const rightDurationUs = clip.durationUs - splitOffsetUs
       let left: CinemaTimelineClip
       let right: CinemaTimelineClip
-      if (clip.kind === "text") {
+      if (clip.kind === "text" || clip.kind === "subtitle") {
         left = { ...clip, durationUs: splitOffsetUs, updatedAt: timestamp }
         right = {
           ...clip,
@@ -292,12 +345,7 @@ function applyCommandPayload(
     case "update-clip": {
       const clip = findClip(document, command.clipID)
       assertTrackUnlocked(findTrack(document, clip.trackID))
-      if (clip.kind === "text" && command.patch.assetRef) {
-        throw new ApiError(409, "CINEMA_TIMELINE_ASSET_REF_UNSUPPORTED", "Text clips cannot reference physical assets.")
-      }
-      if (clip.kind === "audio" && command.patch.transform !== undefined) {
-        throw new ApiError(409, "CINEMA_TIMELINE_TRANSFORM_UNSUPPORTED", "Audio clips cannot have visual transforms.")
-      }
+      assertClipPatchCompatible(clip, command.patch)
       return {
         ...document,
         clips: replaceClip(document, command.clipID, (current) => applyClipPatch(current, command.patch, timestamp)),
@@ -307,12 +355,7 @@ function applyCommandPayload(
       for (const update of command.updates) {
         const clip = findClip(document, update.clipID)
         assertTrackUnlocked(findTrack(document, clip.trackID))
-        if (clip.kind === "text" && update.patch.assetRef) {
-          throw new ApiError(409, "CINEMA_TIMELINE_ASSET_REF_UNSUPPORTED", "Text clips cannot reference physical assets.")
-        }
-        if (clip.kind === "audio" && update.patch.transform !== undefined) {
-          throw new ApiError(409, "CINEMA_TIMELINE_TRANSFORM_UNSUPPORTED", "Audio clips cannot have visual transforms.")
-        }
+        assertClipPatchCompatible(clip, update.patch)
       }
       const updates = new Map(command.updates.map((update) => [update.clipID, update.patch]))
       return {

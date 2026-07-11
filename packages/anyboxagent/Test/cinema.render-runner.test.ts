@@ -119,7 +119,7 @@ describe("Cinema render runner", () => {
     const audio = ref("audio", "audio")
     const image = ref("image", "image")
     const timeline: CinemaTimelineDocument = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: "timeline-1",
       projectID: "project-1",
       title: "Runner fixture",

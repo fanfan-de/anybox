@@ -403,6 +403,94 @@ runtime.app.post("/e2e/seed-deliver-timeline", async (context) => {
   })
 })
 
+runtime.app.post("/e2e/seed-subtitle-deliver-timeline", async (context) => {
+  const timestamp = "2026-07-12T00:00:00.000Z"
+  const cinemaRoot = path.join(projectRoot, ".anybox-cinema")
+  const timelinesRoot = path.join(cinemaRoot, "timelines")
+  await mkdir(timelinesRoot, { recursive: true })
+  const timeline = {
+    schemaVersion: 2,
+    id: "subtitle-deliver-timeline",
+    projectID,
+    title: "Subtitle delivery fixture",
+    revision: 0,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    settings: { width: 320, height: 180, frameRate: { numerator: 25, denominator: 1 }, sampleRate: 48_000, backgroundColor: "#000000" },
+    tracks: [
+      { id: "subtitle-v1", kind: "video", title: "V1", order: 0, locked: false, muted: false, hidden: false },
+      {
+        id: "subtitle-s1",
+        kind: "subtitle",
+        title: "S1",
+        order: 1,
+        locked: false,
+        hidden: false,
+        language: "zh-CN",
+        role: "subtitle",
+        style: {
+          fontFamilyID: "anybox-subtitle-sans-v1",
+          fontSizePx: 24,
+          textColor: "#FFFFFFFF",
+          outlineColor: "#000000FF",
+          outlineWidthPx: 2,
+          backgroundColor: "#00000000",
+          alignment: "bottom-center",
+          marginBottomPx: 18,
+        },
+      },
+    ],
+    clips: [
+      {
+        id: "subtitle-video",
+        trackID: "subtitle-v1",
+        kind: "video",
+        title: "Fixture video",
+        timelineStartUs: 0,
+        durationUs: 2_000_000,
+        playbackRate: 1,
+        volume: 1,
+        opacity: 1,
+        fit: "contain",
+        assetRef: {
+          scope: { type: "project", projectID },
+          assetID: "fixture-video-1",
+          contentRevision: 0,
+          snapshot: { kind: "video", displayName: "Fixture video 1", mimeType: "video/mp4", width: 320, height: 180, durationSeconds: 2 },
+        },
+        sourceInUs: 0,
+        sourceDurationUs: 2_000_000,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      {
+        id: "subtitle-cue-1",
+        trackID: "subtitle-s1",
+        kind: "subtitle",
+        timelineStartUs: 250_000,
+        durationUs: 750_000,
+        cueText: "Cinema 字幕 smoke",
+        speaker: "旁白",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      {
+        id: "subtitle-cue-2",
+        trackID: "subtitle-s1",
+        kind: "subtitle",
+        timelineStartUs: 1_000_000,
+        durationUs: 750_000,
+        cueText: "安全区检查\nSecond line",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ],
+    markers: [],
+  }
+  await writeFile(path.join(timelinesRoot, "timeline_subtitle-deliver-timeline.json"), `${JSON.stringify(timeline)}\n`, "utf8")
+  return context.json({ success: true, data: { timelineID: timeline.id, subtitleCues: 2 } })
+})
+
 runtime.app.post("/e2e/seed-blocked-timeline", async (context) => {
   const timestamp = "2026-07-11T00:00:00.000Z"
   const cinemaRoot = path.join(projectRoot, ".anybox-cinema")

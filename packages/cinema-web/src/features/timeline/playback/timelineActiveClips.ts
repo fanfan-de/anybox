@@ -3,6 +3,7 @@ import type {
   CinemaTimelineClip,
   CinemaTimelineDocument,
   CinemaTimelineImageClip,
+  CinemaTimelineSubtitleCue,
   CinemaTimelineTextClip,
   CinemaTimelineVideoClip,
 } from "@anybox/shared/cinema-timeline"
@@ -25,6 +26,7 @@ export function timelineActiveClips(document: CinemaTimelineDocument, timeUs: nu
     overlays: topFirst.filter((clip): clip is CinemaTimelineImageClip | CinemaTimelineTextClip | CinemaTimelineVideoClip => clip.kind === "image" || clip.kind === "text" || (
       clip.kind === "video" && document.tracks.find((track) => track.id === clip.trackID)?.kind === "overlay"
     )).reverse(),
+    subtitles: topFirst.filter((clip): clip is CinemaTimelineSubtitleCue => clip.kind === "subtitle"),
   }
 }
 

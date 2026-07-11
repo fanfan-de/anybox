@@ -15,7 +15,7 @@ import { validateTimelineForDelivery } from "./timelineValidation"
 import { visibleTimelineClips } from "./timelineVirtualization"
 
 const document: CinemaTimelineDocument = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   id: "timeline-1",
   projectID: "project-1",
   title: "Test",
@@ -216,7 +216,7 @@ describe("timeline model", () => {
       ],
     }
     const updated = projectTimelineCommand(multiDocument, draft)
-    expect(updated.clips.map((clip) => [clip.volume, clip.opacity])).toEqual([[0.4, 0.8], [0.4, 0.8]])
+    expect(updated.clips.map((clip) => ["volume" in clip ? clip.volume : undefined, "opacity" in clip ? clip.opacity : undefined])).toEqual([[0.4, 0.8], [0.4, 0.8]])
     expect(createTimelineHistoryEntry(multiDocument, draft)?.undo).toEqual([{
       type: "update-clips",
       updates: [

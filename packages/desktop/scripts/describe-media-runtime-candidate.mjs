@@ -23,6 +23,31 @@ async function sha256(filePath) {
   return hash.digest("hex")
 }
 
+function probeSummary(document, label) {
+  const streams = Array.isArray(document.streams) ? document.streams : []
+  const video = streams.find((stream) => stream?.codec_type === "video")
+  const audio = streams.find((stream) => stream?.codec_type === "audio")
+  const durationSeconds = Number.parseFloat(document.format?.duration ?? "")
+  if (video?.codec_name !== "h264") throw new Error(`${label} evidence has no H.264 video stream`)
+  if (!Number.isFinite(durationSeconds) || Math.abs(durationSeconds - 1) > 0.25) {
+    throw new Error(`${label} evidence duration does not match the required one-second smoke`)
+  }
+  return {
+    durationSeconds,
+    videoCodec: video.codec_name,
+    ...(audio?.codec_name ? { audioCodec: audio.codec_name } : {}),
+  }
+}
+
+async function describedFile(filePath, relativeTo) {
+  const stat = await fsp.stat(filePath)
+  return {
+    fileName: path.relative(relativeTo, filePath).split(path.sep).join("/"),
+    sizeBytes: stat.size,
+    sha256: await sha256(filePath),
+  }
+}
+
 const args = parseArguments(process.argv.slice(2))
 const executableNames = args.platform === "win32"
   ? { ffmpeg: "ffmpeg.exe", ffprobe: "ffprobe.exe" }
@@ -37,6 +62,14 @@ const artifactPaths = {
   source: path.resolve(args.source),
   buildRecipe: path.resolve(args.recipe),
   sourceMetadata: path.resolve(args.stage, "SOURCE.txt"),
+  subtitleFont: path.resolve(args.stage, "fonts", "NotoSansCJKsc-Regular.otf"),
+  subtitleFontLicense: path.resolve(args.stage, "fonts", "OFL-1.1.txt"),
+  smokeVideo: path.resolve(args.stage, "evidence", "smoke.mp4"),
+  smokeProbe: path.resolve(args.stage, "evidence", "smoke.ffprobe.json"),
+  subtitleSmokeVideo: path.resolve(args.stage, "evidence", "subtitle-smoke.mp4"),
+  subtitleSmokeProbe: path.resolve(args.stage, "evidence", "subtitle-smoke.ffprobe.json"),
+  subtitleSmokeScript: path.resolve(args.stage, "evidence", "subtitle-smoke.ass"),
+  subtitleSmokeFrame: path.resolve(args.stage, "evidence", "subtitle-smoke.png"),
 }
 for (const [label, filePath] of Object.entries(artifactPaths)) {
   const stat = await fsp.stat(filePath).catch(() => undefined)
@@ -46,6 +79,10 @@ for (const [label, filePath] of Object.entries(artifactPaths)) {
 const archiveStat = await fsp.stat(artifactPaths.archive)
 const sourceStat = await fsp.stat(artifactPaths.source)
 const recipeStat = await fsp.stat(artifactPaths.buildRecipe)
+const smokeProbe = probeSummary(JSON.parse(await fsp.readFile(artifactPaths.smokeProbe, "utf8")), "Render smoke")
+if (smokeProbe.audioCodec !== "aac") throw new Error("Render smoke evidence has no AAC audio stream")
+const subtitleSmokeProbe = probeSummary(JSON.parse(await fsp.readFile(artifactPaths.subtitleSmokeProbe, "utf8")), "Subtitle smoke")
+if (subtitleSmokeProbe.audioCodec !== undefined) throw new Error("Subtitle smoke evidence unexpectedly contains audio")
 const candidate = {
   schemaVersion: 1,
   classification: "unapproved-candidate",
@@ -77,6 +114,36 @@ const candidate = {
       sha256: await sha256(artifactPaths.buildRecipe),
     },
     sourceMetadata: { fileName: "SOURCE.txt", sha256: await sha256(artifactPaths.sourceMetadata) },
+    subtitleFont: { fileName: "fonts/NotoSansCJKsc-Regular.otf", sha256: await sha256(artifactPaths.subtitleFont) },
+    subtitleFontLicense: { fileName: "fonts/OFL-1.1.txt", sha256: await sha256(artifactPaths.subtitleFontLicense) },
+  },
+  subtitleRuntime: {
+    renderer: "libass",
+    requiredFilter: "ass",
+    fontFamilyID: "anybox-subtitle-sans-v1",
+    dependencies: {
+      libass: { version: "0.17.4", sha256: "78f1179b838d025e9c26e8fef33f8092f65611444ffa1bfc0cfac6a33511a05a" },
+      freetype: { version: "2.14.3", sha256: "36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f" },
+      fribidi: { version: "1.0.16", sha256: "1b1cde5b235d40479e91be2f0e88a309e3214c8ab470ec8a2744d82a5a9ea05c" },
+      harfbuzz: { version: "14.2.1", sha256: "a54a5d8e9380a41fbb762ce367bcbf7704792dfca0d93f1bbca86c5a57902e0e" },
+      notoSansCjkSc: { version: "2.004", sha256: await sha256(artifactPaths.subtitleFont), license: "OFL-1.1" },
+    },
+  },
+  smokeEvidence: {
+    render: {
+      ...smokeProbe,
+      output: await describedFile(artifactPaths.smokeVideo, path.resolve(args.stage)),
+      probe: await describedFile(artifactPaths.smokeProbe, path.resolve(args.stage)),
+    },
+    subtitle: {
+      ...subtitleSmokeProbe,
+      renderer: "libass",
+      fontSha256: await sha256(artifactPaths.subtitleFont),
+      output: await describedFile(artifactPaths.subtitleSmokeVideo, path.resolve(args.stage)),
+      probe: await describedFile(artifactPaths.subtitleSmokeProbe, path.resolve(args.stage)),
+      script: await describedFile(artifactPaths.subtitleSmokeScript, path.resolve(args.stage)),
+      frame: await describedFile(artifactPaths.subtitleSmokeFrame, path.resolve(args.stage)),
+    },
   },
 }
 await fsp.mkdir(path.dirname(path.resolve(args.output)), { recursive: true })

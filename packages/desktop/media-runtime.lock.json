@@ -1,5 +1,12 @@
 {
   "schemaVersion": 1,
+  "subtitleRuntimeSources": {
+    "libass": { "version": "0.17.4", "url": "https://github.com/libass/libass/releases/download/0.17.4/libass-0.17.4.tar.xz", "sha256": "78f1179b838d025e9c26e8fef33f8092f65611444ffa1bfc0cfac6a33511a05a" },
+    "freetype": { "version": "2.14.3", "url": "https://download.savannah.gnu.org/releases/freetype/freetype-2.14.3.tar.xz", "sha256": "36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f" },
+    "fribidi": { "version": "1.0.16", "url": "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz", "sha256": "1b1cde5b235d40479e91be2f0e88a309e3214c8ab470ec8a2744d82a5a9ea05c" },
+    "harfbuzz": { "version": "14.2.1", "url": "https://github.com/harfbuzz/harfbuzz/releases/download/14.2.1/harfbuzz-14.2.1.tar.xz", "sha256": "a54a5d8e9380a41fbb762ce367bcbf7704792dfca0d93f1bbca86c5a57902e0e" },
+    "font": { "familyID": "anybox-subtitle-sans-v1", "name": "Noto Sans CJK SC Regular", "version": "2.004", "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b", "license": "OFL-1.1" }
+  },
   "platforms": {
     "win32": {
       "status": "supported",
@@ -34,6 +41,7 @@
               "--target-os=mingw32",
               "--enable-version3",
               "--enable-mediafoundation",
+              "--enable-libass",
               "--disable-libopenh264",
               "--disable-libx264",
               "--disable-libx265",
@@ -54,6 +62,8 @@
             "h264_mf",
             "aac"
           ],
+          "requiredFilters": ["ass"],
+          "requiredFonts": [{ "fileName": "fonts/NotoSansCJKsc-Regular.otf", "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b" }],
           "smokeTest": {
             "durationSeconds": 1,
             "videoEncoder": "h264_mf",
@@ -97,6 +107,7 @@
               "--target-os=darwin",
               "--enable-version3",
               "--enable-videotoolbox",
+              "--enable-libass",
               "--disable-libopenh264",
               "--disable-libx264",
               "--disable-libx265",
@@ -117,6 +128,8 @@
             "h264_videotoolbox",
             "aac"
           ],
+          "requiredFilters": ["ass"],
+          "requiredFonts": [{ "fileName": "fonts/NotoSansCJKsc-Regular.otf", "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b" }],
           "smokeTest": {
             "durationSeconds": 1,
             "videoEncoder": "h264_videotoolbox",

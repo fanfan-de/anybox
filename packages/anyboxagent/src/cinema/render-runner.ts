@@ -164,6 +164,7 @@ export async function runCinemaRenderPlan(input: {
   timeoutMs?: number
   stderrLimitBytes?: number
   onProgress?: (progress: CinemaRenderProgressUpdate) => void
+  workingDirectory?: string
 }): Promise<CinemaRenderOutputProbe> {
   if (input.signal?.aborted) {
     throw new CinemaRenderRunnerError("render-canceled", "Render was canceled.", true)
@@ -177,6 +178,7 @@ export async function runCinemaRenderPlan(input: {
       const child = spawn(input.ffmpegPath, input.plan.args, {
         shell: false,
         windowsHide: true,
+        ...(input.workingDirectory ? { cwd: input.workingDirectory } : {}),
         stdio: ["ignore", "pipe", "pipe"],
       })
       let stderr: Buffer<ArrayBufferLike> = Buffer.alloc(0)

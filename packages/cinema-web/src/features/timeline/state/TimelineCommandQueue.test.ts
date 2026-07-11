@@ -11,7 +11,7 @@ import {
 
 function timeline(revision: number): CinemaTimelineDocument {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: "timeline-1",
     projectID: "project-1",
     title: "Rough cut",

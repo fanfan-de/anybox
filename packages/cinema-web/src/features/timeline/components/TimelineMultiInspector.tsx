@@ -10,8 +10,13 @@ type MultiInspectorDraft = {
 }
 
 function commonNumber(clips: readonly CinemaTimelineClip[], field: "playbackRate" | "volume" | "opacity") {
-  const value = clips[0]?.[field]
-  return value !== undefined && clips.every((clip) => clip[field] === value) ? String(value) : ""
+  const read = (clip: CinemaTimelineClip) => {
+    if (field === "playbackRate") return "playbackRate" in clip ? clip.playbackRate : undefined
+    if (field === "volume") return "volume" in clip ? clip.volume : undefined
+    return "opacity" in clip ? clip.opacity : undefined
+  }
+  const value = clips[0] ? read(clips[0]) : undefined
+  return value !== undefined && clips.every((clip) => read(clip) === value) ? String(value) : ""
 }
 
 function draftFromClips(clips: readonly CinemaTimelineClip[]): MultiInspectorDraft {
@@ -61,9 +66,9 @@ export function TimelineMultiInspector({
       setError(t("inspector.error.volumeOpacity"))
       return
     }
-    if (supportsPlaybackRate && playbackRate !== null && clips.some((clip) => clip.playbackRate !== playbackRate)) patch.playbackRate = playbackRate
-    if (supportsVolume && volume !== null && clips.some((clip) => clip.volume !== volume)) patch.volume = volume
-    if (supportsOpacity && opacity !== null && clips.some((clip) => clip.opacity !== opacity)) patch.opacity = opacity
+    if (supportsPlaybackRate && playbackRate !== null && clips.some((clip) => "playbackRate" in clip && clip.playbackRate !== playbackRate)) patch.playbackRate = playbackRate
+    if (supportsVolume && volume !== null && clips.some((clip) => "volume" in clip && clip.volume !== volume)) patch.volume = volume
+    if (supportsOpacity && opacity !== null && clips.some((clip) => "opacity" in clip && clip.opacity !== opacity)) patch.opacity = opacity
     if (Object.keys(patch).length > 0) onUpdate(patch)
     setError(null)
   }

@@ -34,6 +34,12 @@ jobs:
             git
             make
             nasm
+            curl
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-libass
+            mingw-w64-x86_64-freetype
+            mingw-w64-x86_64-fribidi
+            mingw-w64-x86_64-harfbuzz
             mingw-w64-x86_64-gcc
       - run: pnpm install --frozen-lockfile
       - name: Build and smoke Windows media runtime
@@ -76,7 +82,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - run: brew install nasm
+      - run: brew install nasm pkg-config libass freetype fribidi harfbuzz
       - run: pnpm install --frozen-lockfile
       - name: Build and smoke Apple Silicon media runtime
         env:

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
 import { X } from "lucide-react"
 import type { CinemaAssetStatus } from "@anybox/shared"
-import type { CinemaTimelineClip, CinemaTimelineClipPatch, CinemaTimelineFit, CinemaTimelineTransform } from "@anybox/shared/cinema-timeline"
+import type { CinemaTimelineClipPatch, CinemaTimelineFit, CinemaTimelineTransform } from "@anybox/shared/cinema-timeline"
+import type { CinemaTimelineMediaClip } from "../model/timelineClip"
 import { timelineSecondsInputFromUs, timelineSecondsInputToUs } from "../model/timelineTime"
 import { useI18n } from "../../../i18n"
 
@@ -39,7 +40,7 @@ const fitLabelKeys = {
   stretch: "inspector.fit.stretch",
 } as const
 
-function draftFromClip(clip: CinemaTimelineClip): InspectorDraft {
+function draftFromClip(clip: CinemaTimelineMediaClip): InspectorDraft {
   const transform = clip.kind === "audio" ? defaultTransform : clip.transform ?? defaultTransform
   return {
     title: clip.title,
@@ -70,7 +71,7 @@ export function TimelineInspector({
   assetStatus,
   onRequestReplacement,
 }: {
-  clip: CinemaTimelineClip
+  clip: CinemaTimelineMediaClip
   onClose: () => void
   onUpdate: (patch: CinemaTimelineClipPatch) => void
   onMove: (timelineStartUs: number) => void

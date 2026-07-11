@@ -21,7 +21,7 @@ export function validateTimelineForDelivery(
     issues.push({ code: "no-main-video", severity: "error", message: "Add a main video clip before delivery." })
   }
   for (const clip of document.clips) {
-    if (clip.kind === "text") continue
+    if (clip.kind === "text" || clip.kind === "subtitle") continue
     const status = assetStatuses.get(clip.assetRef.assetID)
     if (status && status !== "ready" && status !== "unresolved") {
       issues.push({

@@ -37,6 +37,35 @@ function isISODateTime(value) {
     && Number.isFinite(Date.parse(value))
 }
 
+function assertSmokeEvidenceFile(value, expectedFileName, prefix) {
+  invariant(value?.fileName === expectedFileName, `${prefix} has an invalid filename`)
+  invariant(Number.isSafeInteger(value.sizeBytes) && value.sizeBytes > 0, `${prefix} has an invalid size`)
+  invariant(SHA256_PATTERN.test(value.sha256), `${prefix} has an invalid SHA-256`)
+}
+
+function assertCandidateSmokeEvidence(target, lockedFontSha256, platform, arch) {
+  const prefix = `${platform}/${arch} candidate smoke evidence`
+  const render = target.buildEvidence?.candidateSmoke?.render
+  invariant(render?.videoCodec === "h264" && render.audioCodec === "aac", `${prefix} has invalid render codecs`)
+  invariant(Number.isFinite(render.durationSeconds) && Math.abs(render.durationSeconds - 1) <= 0.25, `${prefix} has invalid render duration`)
+  assertSmokeEvidenceFile(render.output, "evidence/smoke.mp4", `${prefix} render output`)
+  assertSmokeEvidenceFile(render.probe, "evidence/smoke.ffprobe.json", `${prefix} render probe`)
+
+  const subtitle = target.buildEvidence?.candidateSmoke?.subtitle
+  invariant(
+    subtitle?.renderer === "libass"
+      && subtitle.videoCodec === "h264"
+      && subtitle.audioCodec === undefined
+      && subtitle.fontSha256 === lockedFontSha256,
+    `${prefix} has invalid subtitle runtime facts`,
+  )
+  invariant(Number.isFinite(subtitle.durationSeconds) && Math.abs(subtitle.durationSeconds - 1) <= 0.25, `${prefix} has invalid subtitle duration`)
+  assertSmokeEvidenceFile(subtitle.output, "evidence/subtitle-smoke.mp4", `${prefix} subtitle output`)
+  assertSmokeEvidenceFile(subtitle.probe, "evidence/subtitle-smoke.ffprobe.json", `${prefix} subtitle probe`)
+  assertSmokeEvidenceFile(subtitle.script, "evidence/subtitle-smoke.ass", `${prefix} subtitle script`)
+  assertSmokeEvidenceFile(subtitle.frame, "evidence/subtitle-smoke.png", `${prefix} subtitle frame`)
+}
+
 export function assertMediaRuntimeApprovalEvidence(target, platform, arch) {
   const prefix = `${platform}/${arch} approved media runtime`
   const evidence = target.approvalEvidence
@@ -119,6 +148,11 @@ export function validateMediaRuntimeLock(lock) {
   invariant(lock && typeof lock === "object", "Media runtime lock must be a JSON object")
   invariant(lock.schemaVersion === 1, `Unsupported media runtime lock schema ${lock.schemaVersion}`)
   invariant(lock.platforms && typeof lock.platforms === "object", "Media runtime lock is missing platforms")
+  for (const dependency of ["libass", "freetype", "fribidi", "harfbuzz", "font"]) {
+    const source = lock.subtitleRuntimeSources?.[dependency]
+    invariant(source && typeof source.version === "string" && source.version, `Subtitle runtime is missing ${dependency} version`)
+    invariant(SHA256_PATTERN.test(source.sha256), `Subtitle runtime has invalid ${dependency} SHA-256`)
+  }
 
   for (const platform of LOCKED_PLATFORMS) {
     const entry = lock.platforms[platform]
@@ -217,6 +251,7 @@ export function validateMediaRuntimeLock(lock) {
             `${platform}/${arch} has no valid ${binaryName} digest`,
           )
         }
+        assertCandidateSmokeEvidence(target, lock.subtitleRuntimeSources.font.sha256, platform, arch)
       }
       invariant(
         Array.isArray(target.buildConfigurationPolicy?.requiredFlags),
@@ -227,6 +262,9 @@ export function validateMediaRuntimeLock(lock) {
         `${platform}/${arch} has no forbidden build flags`,
       )
       invariant(Array.isArray(target.requiredEncoders), `${platform}/${arch} has no encoder policy`)
+      invariant(target.buildConfigurationPolicy.requiredFlags.includes("--enable-libass"), `${platform}/${arch} does not enable libass`)
+      invariant(Array.isArray(target.requiredFilters) && target.requiredFilters.includes("ass"), `${platform}/${arch} has no ASS filter policy`)
+      invariant(Array.isArray(target.requiredFonts) && target.requiredFonts.some((font) => font.fileName === "fonts/NotoSansCJKsc-Regular.otf" && SHA256_PATTERN.test(font.sha256)), `${platform}/${arch} has no locked subtitle font`)
       invariant(target.smokeTest && typeof target.smokeTest === "object", `${platform}/${arch} has no smoke policy`)
       if (target.releaseReadiness.status === "approved") {
         invariant(
@@ -304,12 +342,13 @@ async function sha256(target) {
   return hash.digest("hex")
 }
 
-function runBinary(binary, args, label) {
+function runBinary(binary, args, label, options = {}) {
   const result = spawnSync(binary, args, {
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
     timeout: 30_000,
     windowsHide: true,
+    ...options,
   })
   if (result.error) throw new Error(`${label} could not start: ${result.error.message}`)
   if (result.status !== 0) {
@@ -364,6 +403,18 @@ async function verifyLicenseMaterials(mediaToolsDir, target) {
   )
 }
 
+async function verifySubtitleMaterials(mediaToolsDir, target) {
+  for (const font of target.requiredFonts) {
+    const fontPath = path.join(mediaToolsDir, ...font.fileName.split("/"))
+    invariant(fs.existsSync(fontPath), `Media runtime is missing ${font.fileName}`)
+    invariant(await sha256(fontPath) === font.sha256, `Media runtime subtitle font digest mismatch for ${font.fileName}`)
+  }
+  const fontLicensePath = path.join(mediaToolsDir, "fonts", "OFL-1.1.txt")
+  invariant(fs.existsSync(fontLicensePath), "Media runtime is missing fonts/OFL-1.1.txt")
+  const fontLicense = await fsp.readFile(fontLicensePath, "utf8")
+  invariant(/SIL OPEN FONT LICENSE/i.test(fontLicense), "Media runtime subtitle font license is invalid")
+}
+
 function verifyBuildAndEncoderPolicy(ffmpegPath, target) {
   const buildOutput = runBinary(ffmpegPath, ["-hide_banner", "-buildconf"], "FFmpeg build policy check")
   assertBuildConfigurationPolicy(parseBuildFlags(buildOutput), target.buildConfigurationPolicy)
@@ -372,6 +423,60 @@ function verifyBuildAndEncoderPolicy(ffmpegPath, target) {
   const encoderNames = parseEncoderNames(encoderOutput)
   for (const requiredEncoder of target.requiredEncoders) {
     invariant(encoderNames.has(requiredEncoder), `FFmpeg is missing required encoder ${requiredEncoder}`)
+  }
+  const filterOutput = runBinary(ffmpegPath, ["-hide_banner", "-filters"], "FFmpeg filter policy check")
+  invariant(/^\s*[TSC.]{2,3}\s+ass\s+.*\blibass\b/im.test(filterOutput), "FFmpeg is missing the required libass subtitle renderer")
+}
+
+async function subtitleSmokeEncode(mediaToolsDir, target) {
+  const smokeDir = await fsp.mkdtemp(path.join(os.tmpdir(), "Anybox subtitle runtime smoke "))
+  const executableNames = resolveMediaExecutableNames(target)
+  const executableDir = path.join(smokeDir, "installed tools with spaces")
+  const workingDirectory = path.join(smokeDir, "subtitle output with spaces")
+  const ffmpegPath = path.join(executableDir, executableNames.ffmpeg)
+  const ffprobePath = path.join(executableDir, executableNames.ffprobe)
+  try {
+    await fsp.mkdir(executableDir, { recursive: true })
+    await fsp.mkdir(path.join(workingDirectory, "fonts"), { recursive: true })
+    await Promise.all([
+      fsp.copyFile(path.join(mediaToolsDir, executableNames.ffmpeg), ffmpegPath),
+      fsp.copyFile(path.join(mediaToolsDir, executableNames.ffprobe), ffprobePath),
+      fsp.copyFile(path.join(mediaToolsDir, ...target.requiredFonts[0].fileName.split("/")), path.join(workingDirectory, "fonts", "NotoSansCJKsc-Regular.otf")),
+    ])
+    await fsp.writeFile(path.join(workingDirectory, "subtitle.ass"), [
+      "[Script Info]",
+      "ScriptType: v4.00+",
+      "PlayResX: 320",
+      "PlayResY: 180",
+      "[V4+ Styles]",
+      "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+      "Style: Default,Noto Sans CJK SC,24,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,20,20,20,1",
+      "[Events]",
+      "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+      "Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,Cinema 字幕 smoke",
+      "",
+    ].join("\n"), "utf8")
+    runBinary(ffmpegPath, [
+      "-y", "-hide_banner", "-loglevel", "error",
+      "-f", "lavfi", "-i", "color=c=black:s=320x180:r=24:d=1",
+      "-vf", "ass=subtitle.ass:fontsdir=fonts",
+      "-c:v", target.smokeTest.videoEncoder, "-an", "subtitle-smoke.mp4",
+    ], "FFmpeg subtitle smoke encode", { cwd: workingDirectory })
+    const probe = JSON.parse(runBinary(
+      ffprobePath,
+      ["-v", "error", "-show_entries", "format=duration:stream=codec_name,codec_type", "-of", "json", "subtitle-smoke.mp4"],
+      "FFprobe subtitle smoke validation",
+      { cwd: workingDirectory },
+    ))
+    invariant(
+      probe.streams?.some((stream) => stream.codec_type === "video" && stream.codec_name === target.smokeTest.expectedVideoCodec),
+      `Subtitle smoke output has no ${target.smokeTest.expectedVideoCodec} video stream`,
+    )
+    invariant(!probe.streams?.some((stream) => stream.codec_type === "audio"), "Subtitle smoke output unexpectedly contains audio")
+    const duration = Number(probe.format?.duration)
+    invariant(Number.isFinite(duration) && Math.abs(duration - 1) <= 0.25, `Subtitle smoke output duration ${probe.format?.duration} does not match 1s`)
+  } finally {
+    await fsp.rm(smokeDir, { recursive: true, force: true })
   }
 }
 
@@ -472,17 +577,25 @@ export async function verifyMediaRuntime({
   const manifest = await readJson(manifestPath)
 
   assertManifestMatchesTarget(manifest, target, platform, arch)
+  const subtitleMaterialsReady = manifest.materials?.subtitleFont === "archive"
+    || manifest.materials?.subtitleFont === "build-supplied-beta"
   if (releaseStrict) {
     invariant(manifest.materials?.license === "archive", "Release runtime license must come from the locked archive")
     invariant(manifest.materials?.notices === "archive", "Release runtime notices must come from the locked archive")
     invariant(manifest.materials?.configure === "archive", "Release runtime configure evidence must come from the locked archive")
     invariant(manifest.materials?.sourceMetadata === "archive", "Release runtime source metadata must come from the locked archive")
     invariant(manifest.materials?.buildRecipe === "archive", "Release runtime build recipe must come from the locked archive")
+    invariant(manifest.materials?.subtitleFont === "archive", "Release runtime subtitle font must come from the locked archive")
+    invariant(manifest.materials?.subtitleFontLicense === "archive", "Release runtime subtitle font license must come from the locked archive")
   }
   await verifyBinaryDigests(mediaToolsDir, target, manifest)
   await verifyLicenseMaterials(mediaToolsDir, target)
+  if (subtitleMaterialsReady) await verifySubtitleMaterials(mediaToolsDir, target)
   verifyBuildAndEncoderPolicy(path.join(mediaToolsDir, executableNames.ffmpeg), target)
-  if (runSmoke) await smokeEncode(mediaToolsDir, target)
+  if (runSmoke) {
+    await smokeEncode(mediaToolsDir, target)
+    if (subtitleMaterialsReady) await subtitleSmokeEncode(mediaToolsDir, target)
+  }
 
   console.log(
     `[desktop][media] verified locked runtime and H.264/AAC smoke for ${platform}/${arch}; mode=${releaseStrict ? "release-strict" : "technical-preview"}; release=${target.releaseReadiness.status}`,

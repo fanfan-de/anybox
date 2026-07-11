@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  CINEMA_TIMELINE_DEFAULT_SUBTITLE_STYLE,
   CINEMA_TIMELINE_SAMPLE_RATE,
   CinemaTimelineClipSchema,
   CinemaTimelineCommandSchema,
@@ -127,9 +128,46 @@ describe("cinema timeline contracts", () => {
       ],
     })
 
+    expect(document.schemaVersion).toBe(2)
     expect(document.clips).toHaveLength(2)
     expect(document.markers[0]?.timeUs).toBe(1_000_000)
     expect("playhead" in document).toBe(false)
+  })
+
+  it("accepts overlapping subtitle cues", () => {
+    const document = CinemaTimelineDocumentSchema.parse({
+      schemaVersion: 2,
+      id: "timeline-subtitles",
+      projectID: "project-1",
+      title: "Subtitles",
+      revision: 0,
+      createdAt: now,
+      updatedAt: now,
+      settings: {
+        width: 1920,
+        height: 1080,
+        frameRate: { numerator: 24, denominator: 1 },
+        sampleRate: CINEMA_TIMELINE_SAMPLE_RATE,
+        backgroundColor: "black",
+      },
+      tracks: [{
+        id: "track-s1",
+        kind: "subtitle",
+        title: "S1",
+        order: 0,
+        locked: false,
+        hidden: false,
+        language: "zh-CN",
+        role: "subtitle",
+        style: CINEMA_TIMELINE_DEFAULT_SUBTITLE_STYLE,
+      }],
+      clips: [
+        { id: "cue-1", trackID: "track-s1", kind: "subtitle", timelineStartUs: 0, durationUs: 2_000_000, cueText: "第一句", createdAt: now, updatedAt: now },
+        { id: "cue-2", trackID: "track-s1", kind: "subtitle", timelineStartUs: 1_000_000, durationUs: 2_000_000, cueText: "第二句", createdAt: now, updatedAt: now },
+      ],
+      markers: [],
+    })
+    expect(document.clips).toHaveLength(2)
   })
 
   it("rejects document-level UI state", () => {

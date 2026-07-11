@@ -19,7 +19,8 @@ describe("timeline UI snapshots", () => {
       scrollTopPx: 48,
       trackHeightsPx: { "track-v1": 128 },
       collapsedTrackIDs: ["track-a1"],
-      followPlayhead: false,
+    followPlayhead: false,
+    activeSubtitleTrackID: "subtitle-track",
     })
     expect(readCinemaTimelineUiSnapshot("p1", "t1")).toMatchObject({
       playheadUs: 2_000_000,

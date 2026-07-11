@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:e2e:deliver": "node ./e2e/run-deliver-e2e.mjs"
+    "test:e2e:deliver": "node ./e2e/run-deliver-e2e.mjs",
+    "test:e2e:subtitle-render": "node ./e2e/run-subtitle-render-e2e.mjs"
   },
   "dependencies": {
     "@anybox/shared": "workspace:*",

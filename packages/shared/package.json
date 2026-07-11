@@ -9,6 +9,7 @@
     "./browser-extension": "./src/browser-extension.ts",
     "./cinema": "./src/cinema.ts",
     "./cinema-render": "./src/cinema-render.ts",
+    "./cinema-subtitles": "./src/cinema-subtitles.ts",
     "./cinema-timeline": "./src/cinema-timeline.ts",
     "./desktop-ipc": "./src/desktop-ipc.ts",
     "./reasoning": "./src/reasoning.ts",

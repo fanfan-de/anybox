@@ -1567,7 +1567,7 @@ export async function createCinemaTimeline(
   const existing = await CinemaTimelineStorage.listCinemaTimelineDocuments(cinemaRoot)
   const timestamp = nowISO()
   const timeline: CinemaTimelineDocument = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: randomUUID(),
     projectID,
     title: input.title ?? `Timeline ${existing.length + 1}`,
@@ -2042,24 +2042,29 @@ function cinemaTimelineLockKey(cinemaRoot: string, timelineID: string) {
 }
 
 async function validateTimelineCommandAsset(projectID: string, command: CinemaTimelineCommand) {
-  const assetRef = command.type === "add-clip" && command.clip.kind !== "text"
-    ? command.clip.assetRef
-    : command.type === "update-clip"
-      ? command.patch.assetRef
-      : undefined
-  if (!assetRef) return
-  if (assetRef.scope.type === "project" && assetRef.scope.projectID !== projectID) {
-    throw new ApiError(400, "CINEMA_ASSET_SCOPE_INVALID", "Timeline cannot reference an asset owned by another project.")
-  }
-  const { asset } = await CinemaAssetLibrary.getCinemaAsset(assetRef.scope, assetRef.assetID)
-  if (asset.status !== "ready") {
-    throw new ApiError(409, "CINEMA_ASSET_NOT_READY", `Asset '${asset.id}' is ${asset.status}.`)
-  }
-  if (asset.contentRevision !== assetRef.contentRevision) {
-    throw new ApiError(409, "CINEMA_ASSET_REVISION_STALE", "Refresh the asset before adding it to the Timeline.")
-  }
-  if (asset.kind !== assetRef.snapshot.kind) {
-    throw new ApiError(409, "CINEMA_ASSET_KIND_MISMATCH", "Asset kind does not match the Timeline reference snapshot.")
+  const assetRefs = command.type === "add-clip" && command.clip.kind !== "text" && command.clip.kind !== "subtitle"
+    ? [command.clip.assetRef]
+    : command.type === "add-clips"
+      ? command.clips.flatMap((clip) => clip.kind === "text" || clip.kind === "subtitle" ? [] : [clip.assetRef])
+      : command.type === "create-track-with-clips"
+        ? command.clips.flatMap((clip) => clip.kind === "text" || clip.kind === "subtitle" ? [] : [clip.assetRef])
+        : command.type === "update-clip" && command.patch.assetRef
+          ? [command.patch.assetRef]
+          : []
+  for (const assetRef of assetRefs) {
+    if (assetRef.scope.type === "project" && assetRef.scope.projectID !== projectID) {
+      throw new ApiError(400, "CINEMA_ASSET_SCOPE_INVALID", "Timeline cannot reference an asset owned by another project.")
+    }
+    const { asset } = await CinemaAssetLibrary.getCinemaAsset(assetRef.scope, assetRef.assetID)
+    if (asset.status !== "ready") {
+      throw new ApiError(409, "CINEMA_ASSET_NOT_READY", `Asset '${asset.id}' is ${asset.status}.`)
+    }
+    if (asset.contentRevision !== assetRef.contentRevision) {
+      throw new ApiError(409, "CINEMA_ASSET_REVISION_STALE", "Refresh the asset before adding it to the Timeline.")
+    }
+    if (asset.kind !== assetRef.snapshot.kind) {
+      throw new ApiError(409, "CINEMA_ASSET_KIND_MISMATCH", "Asset kind does not match the Timeline reference snapshot.")
+    }
   }
 }
 

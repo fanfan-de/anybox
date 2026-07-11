@@ -14,6 +14,7 @@ import {
 import {
   CinemaTimelineDocumentSchema,
   type CinemaTimelineDocument,
+  type CinemaTimelineSubtitleCue,
 } from "@anybox/shared/cinema-timeline"
 
 import { getCinemaAsset } from "#cinema/asset-library.ts"
@@ -188,6 +189,7 @@ export function defaultCinemaRenderSettings(timeline: CinemaTimelineDocument): C
     audioBitrateKbps: 192,
     range: { type: "full" },
     outputName,
+    subtitles: { mode: "none" },
   })
 }
 
@@ -298,6 +300,30 @@ export async function preflightCinemaRender(input: {
 
   const runtime = await dependencies.getCinemaRenderRuntimeStatus()
   issues.push(...runtimeIssues(runtime))
+  const subtitleSettings = settings.subtitles
+  if (subtitleSettings?.mode === "burn-in") {
+    const subtitleTrack = timeline.tracks.find((track) => track.id === subtitleSettings.trackID)
+    if (!subtitleTrack || subtitleTrack.kind !== "subtitle" || subtitleTrack.hidden) {
+      issues.push(issue("subtitle-track-invalid", "error", "The selected subtitle track is unavailable, hidden, or not a subtitle track."))
+    } else {
+      const cues = timeline.clips.filter((clip): clip is CinemaTimelineSubtitleCue => clip.kind === "subtitle" && clip.trackID === subtitleTrack.id)
+        .sort((left, right) => left.timelineStartUs - right.timelineStartUs || left.id.localeCompare(right.id))
+      if (cues.length === 0) issues.push(issue("subtitle-track-empty", "error", "The selected subtitle track has no cues."))
+      cues.forEach((cue, index) => {
+        const previous = cues[index - 1]
+        if (
+          cue.durationUs < 500_000
+          || cue.cueText.split(/\r?\n/).length > 2
+          || cue.cueText.split(/\r?\n/).some((line) => line.length > 42)
+          || Boolean(previous && cue.timelineStartUs < previous.timelineStartUs + previous.durationUs)
+          || Boolean(previous && cue.timelineStartUs - (previous.timelineStartUs + previous.durationUs) < 80_000)
+        ) issues.push(issue("subtitle-quality-warning", "warning", "The selected subtitle track contains timing or readability warnings.", { clipID: cue.id }))
+      })
+    }
+    if (runtime.subtitleRenderer !== "libass") {
+      issues.push(issue("subtitle-runtime-unavailable", "error", "Subtitle burn-in requires the reviewed libass render runtime."))
+    }
+  }
   const outputDurationUs = Math.max(0, rangeEndUs - rangeStartUs)
   const frameRate = settings.frameRate.numerator / settings.frameRate.denominator
   const estimatedFrameCount = Math.ceil(outputDurationUs / 1_000_000 * frameRate)

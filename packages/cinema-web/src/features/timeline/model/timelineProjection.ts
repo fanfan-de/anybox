@@ -43,6 +43,22 @@ export function projectTimelineCommand(
       next = { ...document, tracks: tracks.map((track, order) => ({ ...track, order })) }
       break
     }
+    case "create-track-with-clips": {
+      if (document.tracks.some((track) => track.id === command.track.id)) {
+        throw new TimelineProjectionError(`Track '${command.track.id}' already exists.`)
+      }
+      if (command.track.order > document.tracks.length) {
+        throw new TimelineProjectionError("Track insertion order is outside the current track range.")
+      }
+      const tracks = [...document.tracks].sort((left, right) => left.order - right.order)
+      tracks.splice(command.track.order, 0, command.track)
+      next = {
+        ...document,
+        tracks: tracks.map((track, order) => ({ ...track, order })),
+        clips: [...document.clips, ...command.clips],
+      }
+      break
+    }
     case "update-track":
       trackByID(document, command.trackID)
       next = { ...document, tracks: document.tracks.map((track) => track.id === command.trackID ? { ...track, ...command.patch } : track) }
@@ -115,7 +131,7 @@ export function projectTimelineCommand(
         ...document,
         clips: document.clips.map((clip) => {
           if (clip.id !== command.clipID) return clip
-          if (clip.kind === "text") throw new TimelineProjectionError("Text clips do not have a source range.")
+          if (clip.kind === "text" || clip.kind === "subtitle") throw new TimelineProjectionError(`${clip.kind} clips do not have a source range.`)
           return {
             ...clip,
             timelineStartUs: command.timelineStartUs,
@@ -127,13 +143,30 @@ export function projectTimelineCommand(
         }),
       }
       break
+    case "trim-timed-clip":
+      next = {
+        ...document,
+        clips: document.clips.map((clip) => {
+          if (clip.id !== command.clipID) return clip
+          if (clip.kind !== "text" && clip.kind !== "subtitle") {
+            throw new TimelineProjectionError("Only text and subtitle clips support timed trimming.")
+          }
+          return {
+            ...clip,
+            timelineStartUs: command.timelineStartUs,
+            durationUs: command.durationUs,
+            updatedAt: timestamp,
+          }
+        }),
+      }
+      break
     case "split-clip": {
       const clip = clipByID(document, command.clipID)
       const offsetUs = command.splitTimeUs - clip.timelineStartUs
       if (offsetUs <= 0 || offsetUs >= clip.durationUs) throw new TimelineProjectionError("Split time must be inside the clip.")
       let left: CinemaTimelineClip
       let right: CinemaTimelineClip
-      if (clip.kind === "text") {
+      if (clip.kind === "text" || clip.kind === "subtitle") {
         left = { ...clip, durationUs: offsetUs, updatedAt: timestamp }
         right = { ...clip, id: command.rightClipID, timelineStartUs: command.splitTimeUs, durationUs: clip.durationUs - offsetUs, createdAt: timestamp, updatedAt: timestamp }
       } else {
@@ -197,11 +230,12 @@ export function projectTimelineCommand(
         clips: document.clips.map((clip) => {
           if (clip.id !== command.clipID) return clip
           const updated = { ...clip, ...command.patch, updatedAt: timestamp } as CinemaTimelineClip
-          if (command.patch.fit === null) delete updated.fit
-          const mutable = updated as CinemaTimelineClip & { fadeInUs?: number; fadeOutUs?: number; transform?: unknown }
+          if (command.patch.fit === null && "fit" in updated) delete updated.fit
+          const mutable = updated as CinemaTimelineClip & { fadeInUs?: number; fadeOutUs?: number; transform?: unknown; speaker?: string }
           if (command.patch.transform === null) delete mutable.transform
           if (command.patch.fadeInUs === null) delete mutable.fadeInUs
           if (command.patch.fadeOutUs === null) delete mutable.fadeOutUs
+          if (command.patch.speaker === null) delete mutable.speaker
           return updated
         }),
       }
@@ -214,11 +248,12 @@ export function projectTimelineCommand(
           const patch = updates.get(clip.id)
           if (!patch) return clip
           const updated = { ...clip, ...patch, updatedAt: timestamp } as CinemaTimelineClip
-          if (patch.fit === null) delete updated.fit
-          const mutable = updated as CinemaTimelineClip & { fadeInUs?: number; fadeOutUs?: number; transform?: unknown }
+          if (patch.fit === null && "fit" in updated) delete updated.fit
+          const mutable = updated as CinemaTimelineClip & { fadeInUs?: number; fadeOutUs?: number; transform?: unknown; speaker?: string }
           if (patch.transform === null) delete mutable.transform
           if (patch.fadeInUs === null) delete mutable.fadeInUs
           if (patch.fadeOutUs === null) delete mutable.fadeOutUs
+          if (patch.speaker === null) delete mutable.speaker
           return updated
         }),
       }

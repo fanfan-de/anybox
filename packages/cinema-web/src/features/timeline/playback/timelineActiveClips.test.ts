@@ -18,7 +18,7 @@ const baseClip = {
 }
 
 const document: CinemaTimelineDocument = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   id: "t",
   projectID: "p",
   title: "T",

@@ -8,7 +8,7 @@ import {
 
 const timestamp = "2026-07-12T00:00:00.000Z"
 const document: CinemaTimelineDocument = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   id: "timeline-1",
   projectID: "project-1",
   title: "Clipboard",

@@ -74,6 +74,7 @@ export function defaultRenderSettings(timeline: CinemaTimelineDocument): CinemaR
     audioBitrateKbps: 192,
     range: { type: "full" },
     outputName: safeOutputName(timeline.title),
+    subtitles: { mode: "none" },
   })
 }
 

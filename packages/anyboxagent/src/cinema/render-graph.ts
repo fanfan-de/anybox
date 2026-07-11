@@ -24,6 +24,7 @@ export type CinemaRenderGraphOptions = {
   outputPath: string
   videoEncoder: CinemaRenderVideoEncoder
   audioEncoder: CinemaRenderAudioEncoder
+  subtitleAssFilename?: "subtitle.ass"
 }
 
 export type CinemaRenderPlan = {
@@ -174,6 +175,7 @@ export function buildCinemaRenderPlan(options: CinemaRenderGraphOptions): Cinema
       throw new Error(support.reason ?? `Unsupported ${clip.kind} Clip`)
     }
     if (clip.kind === "text") throw new Error("Text rendering is not supported in Deliver V1")
+    if (clip.kind === "subtitle") continue
     const input = resolvedInputFor(inputsByAsset, clip.assetRef)
     const inputIndex = nextInputIndex
     nextInputIndex += 1
@@ -184,7 +186,7 @@ export function buildCinemaRenderPlan(options: CinemaRenderGraphOptions): Cinema
     }
     args.push("-noautorotate", "-i", input.filePath)
     if (clip.kind === "video") visualClips.push({ clip, inputIndex })
-    if (!track.muted && (clip.kind === "audio" || (clip.kind === "video" && input.hasAudio))) {
+    if (track.kind !== "subtitle" && !track.muted && (clip.kind === "audio" || (clip.kind === "video" && input.hasAudio))) {
       audioClips.push({ clip, inputIndex })
     }
   }
@@ -244,9 +246,12 @@ export function buildCinemaRenderPlan(options: CinemaRenderGraphOptions): Cinema
     )
     currentVideoLabel = nextLabel
   })
-  filters.push(
-    `[${currentVideoLabel}]trim=start=${formatSeconds(range.startUs)}:end=${formatSeconds(range.endUs)},setpts=PTS-STARTPTS,fps=${fps},format=yuv420p[vout]`,
-  )
+  if (settings.subtitles?.mode === "burn-in") {
+    if (options.subtitleAssFilename !== "subtitle.ass") throw new Error("Subtitle ASS input is missing")
+    filters.push(`[${currentVideoLabel}]ass=subtitle.ass:fontsdir=fonts[subtitled]`)
+    currentVideoLabel = "subtitled"
+  }
+  filters.push(`[${currentVideoLabel}]trim=start=${formatSeconds(range.startUs)}:end=${formatSeconds(range.endUs)},setpts=PTS-STARTPTS,fps=${fps},format=yuv420p[vout]`)
 
   filters.push(`anullsrc=r=48000:cl=stereo,atrim=duration=${formatSeconds(durationUs)},asetpts=PTS-STARTPTS[silence]`)
   const audioLabels = ["silence"]

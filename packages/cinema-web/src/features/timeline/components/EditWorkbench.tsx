@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerE
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
 import type { CinemaAssetRecord, CinemaAssetStatus } from "@anybox/shared"
 import {
+  CINEMA_TIMELINE_DEFAULT_SUBTITLE_STYLE,
   isCinemaTimelineClipCompatibleWithTrack,
   type CinemaTimelineClip,
   type CinemaTimelineClipPatch,
@@ -9,7 +10,10 @@ import {
   type CinemaTimelineTrack,
   type CinemaTimelineTrackKind,
   type CinemaTimelineTrackPatch,
+  type CinemaTimelineSubtitleCue,
+  type CinemaTimelineSubtitleTrack,
 } from "@anybox/shared/cinema-timeline"
+import type { CinemaSubtitleCueInput } from "@anybox/shared/cinema-subtitles"
 import { CinemaTimelineApiError, createTimelineApi } from "../api/timelineApi"
 import { createAssetLibraryApi } from "../../assets/assetLibraryApi"
 import { projectTimelineCommand } from "../model/timelineProjection"
@@ -38,7 +42,11 @@ import {
   type CinemaTimelineCommandDraft,
   type CinemaTimelineCommandQueueSnapshot,
 } from "../state/TimelineCommandQueue"
-import { readCinemaTimelineUiSnapshot, writeCinemaTimelineUiSnapshot } from "../state/timelineUiStore"
+import {
+  readCinemaTimelineUiSnapshot,
+  writeCinemaTimelineUiSnapshot,
+  type CinemaTimelineUiSnapshot,
+} from "../state/timelineUiStore"
 import { EditTopbar } from "./EditTopbar"
 import { TimelineEmptyState } from "./TimelineEmptyState"
 import { TimelineInspector } from "./TimelineInspector"
@@ -48,12 +56,25 @@ import { TimelinePreviewStage } from "./TimelinePreviewStage"
 import { TimelineToolbar } from "./TimelineToolbar"
 import { useI18n } from "../../../i18n"
 import { TimelineTrackArea } from "./TimelineTrackArea"
+import { TimelineSubtitleInspector } from "./TimelineSubtitleInspector"
+import { TimelineSubtitleTrackInspector } from "./TimelineSubtitleTrackInspector"
+import { TimelineSubtitlesPanel } from "./TimelineSubtitlesPanel"
+import { timelineSubtitleQualityIssues } from "../model/timelineSubtitleQuality"
+import { isTimelineAssetClip, timelineClipDisplayName } from "../model/timelineClip"
 import "../timeline.css"
 
 const idleSaveState: CinemaTimelineCommandQueueSnapshot = {
   status: "idle",
   pendingCount: 0,
   error: null,
+}
+
+const EDIT_AUXILIARY_PANES_EXCLUSIVE_QUERY = "(max-width: 1099px)"
+
+function readAuxiliaryPanesExclusive() {
+  return typeof window !== "undefined"
+    && typeof window.matchMedia === "function"
+    && window.matchMedia(EDIT_AUXILIARY_PANES_EXCLUSIVE_QUERY).matches
 }
 
 function commandID(type: string) {
@@ -89,7 +110,7 @@ function assetRefFromRecord(projectID: string, asset: CinemaAssetRecord) {
 }
 
 function nextTrackTitle(document: CinemaTimelineDocument, kind: CinemaTimelineTrackKind) {
-  const prefix = kind === "video" ? "V" : kind === "audio" ? "A" : "O"
+  const prefix = kind === "video" ? "V" : kind === "audio" ? "A" : kind === "subtitle" ? "S" : "O"
   const used = new Set(document.tracks.map((track) => track.title.toLocaleUpperCase()))
   let index = 1
   while (used.has(`${prefix}${index}`)) index += 1
@@ -107,7 +128,7 @@ export function EditWorkbench({
   onRegisterFlush?: (flush: (() => Promise<void>) | null) => void
   onTimelineSelected?: (timelineID: string | null) => void
 }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const queryClient = useQueryClient()
   const api = useMemo(() => createTimelineApi(agentBaseURL, projectID), [agentBaseURL, projectID])
   const queryKey = ["cinema-timelines", agentBaseURL, projectID] as const
@@ -139,6 +160,21 @@ export function EditWorkbench({
   const [historyCounts, setHistoryCounts] = useState({ undo: 0, redo: 0 })
   const [replacementClipID, setReplacementClipID] = useState<string | null>(null)
   const [revealedAsset, setRevealedAsset] = useState<{ id: string; displayName: string; requestID: string; section: TimelineMediaSection } | null>(null)
+  const [activeSubtitleTrackID, setActiveSubtitleTrackID] = useState<string | null>(null)
+  const [selectedSubtitleTrackID, setSelectedSubtitleTrackID] = useState<string | null>(null)
+  const [subtitleComposerOpen, setSubtitleComposerOpen] = useState(false)
+  const [subtitleFocusRequest, setSubtitleFocusRequest] = useState(0)
+  const [auxiliaryPanesExclusive, setAuxiliaryPanesExclusive] = useState(readAuxiliaryPanesExclusive)
+  const timelineUiSnapshotRef = useRef<{ projectID: string; timelineID: string; snapshot: CinemaTimelineUiSnapshot } | null>(null)
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return
+    const query = window.matchMedia(EDIT_AUXILIARY_PANES_EXCLUSIVE_QUERY)
+    const update = () => setAuxiliaryPanesExclusive(query.matches)
+    update()
+    query.addEventListener("change", update)
+    return () => query.removeEventListener("change", update)
+  }, [])
 
   useEffect(() => {
     if (selectedTimelineID && timelines.some((timeline) => timeline.id === selectedTimelineID)) return
@@ -164,6 +200,9 @@ export function EditWorkbench({
     setTrackHeightsPx(ui?.trackHeightsPx ?? {})
     setCollapsedTrackIDs(ui?.collapsedTrackIDs ?? [])
     setFollowPlayhead(ui?.followPlayhead ?? true)
+    setActiveSubtitleTrackID(ui?.activeSubtitleTrackID ?? null)
+    setSelectedSubtitleTrackID(null)
+    setSubtitleComposerOpen(false)
     setPreviewPercent(ui?.previewPercent ?? 42)
     setMediaOpen(ui?.mediaOpen ?? true)
     setInspectorOpen(ui?.inspectorOpen ?? true)
@@ -181,9 +220,23 @@ export function EditWorkbench({
     })
   }, [selectedClipIDs, timeline])
   const selectedClip = selectedClips.length === 1 ? selectedClips[0]! : null
+  const selectedSubtitleCue = selectedClip?.kind === "subtitle" ? selectedClip : null
+  const selectedMediaClip = selectedClip && selectedClip.kind !== "subtitle" ? selectedClip : null
+  const selectedSubtitleTrack = timeline?.tracks.find((track): track is CinemaTimelineSubtitleTrack => track.kind === "subtitle" && track.id === selectedSubtitleTrackID) ?? null
+  const hasInspectorTarget = Boolean(selectedSubtitleCue || selectedSubtitleTrack || selectedMediaClip || selectedClips.length > 1)
+  const subtitleQualityIssues = useMemo(() => timeline ? timelineSubtitleQualityIssues(timeline, activeSubtitleTrackID ?? undefined) : [], [activeSubtitleTrackID, timeline])
+  useEffect(() => {
+    const visibleTracks = (timeline?.tracks ?? []).filter((track): track is CinemaTimelineSubtitleTrack => track.kind === "subtitle" && !track.hidden)
+    if (activeSubtitleTrackID && visibleTracks.some((track) => track.id === activeSubtitleTrackID)) return
+    setActiveSubtitleTrackID(visibleTracks[0]?.id ?? null)
+  }, [activeSubtitleTrackID, timeline?.tracks])
+  useEffect(() => {
+    if (!auxiliaryPanesExclusive || !mediaOpen || !inspectorOpen || !hasInspectorTarget) return
+    setMediaOpen(false)
+  }, [auxiliaryPanesExclusive, hasInspectorTarget, inspectorOpen, mediaOpen])
   useEffect(() => {
     if (!timeline) return
-    const timer = window.setTimeout(() => writeCinemaTimelineUiSnapshot(projectID, timeline.id, {
+    const snapshot: CinemaTimelineUiSnapshot = {
       playheadUs: Math.round(playheadUs),
       pixelsPerSecond,
       previewPercent,
@@ -196,9 +249,23 @@ export function EditWorkbench({
       trackHeightsPx,
       collapsedTrackIDs,
       followPlayhead,
-    }), 250)
+      activeSubtitleTrackID,
+    }
+    timelineUiSnapshotRef.current = { projectID, timelineID: timeline.id, snapshot }
+    const timer = window.setTimeout(() => writeCinemaTimelineUiSnapshot(projectID, timeline.id, snapshot), 250)
     return () => window.clearTimeout(timer)
-  }, [collapsedTrackIDs, followPlayhead, inspectorOpen, mediaOpen, pixelsPerSecond, playheadUs, previewPercent, projectID, selectedClipIDs, snapEnabled, timeline?.id, timelineScrollPosition, trackHeightsPx])
+  }, [activeSubtitleTrackID, collapsedTrackIDs, followPlayhead, inspectorOpen, mediaOpen, pixelsPerSecond, playheadUs, previewPercent, projectID, selectedClipIDs, snapEnabled, timeline?.id, timelineScrollPosition, trackHeightsPx])
+  useEffect(() => {
+    const persistLatestSnapshot = () => {
+      const latest = timelineUiSnapshotRef.current
+      if (latest) writeCinemaTimelineUiSnapshot(latest.projectID, latest.timelineID, latest.snapshot)
+    }
+    window.addEventListener("pagehide", persistLatestSnapshot)
+    return () => {
+      window.removeEventListener("pagehide", persistLatestSnapshot)
+      persistLatestSnapshot()
+    }
+  }, [])
 
   const queue = useMemo(() => {
     if (!selectedTimelineID || !serverTimeline) return null
@@ -235,8 +302,8 @@ export function EditWorkbench({
   }, [queue, saveState.pendingCount, saveState.status])
 
   const assetRefs = useMemo(() => {
-    const refs = new Map<string, Exclude<CinemaTimelineClip, { kind: "text" }>["assetRef"]>()
-    for (const clip of timeline?.clips ?? []) if (clip.kind !== "text") refs.set(clip.assetRef.assetID, clip.assetRef)
+    const refs = new Map<string, Extract<CinemaTimelineClip, { kind: "video" | "audio" | "image" }>["assetRef"]>()
+    for (const clip of timeline?.clips ?? []) if (isTimelineAssetClip(clip)) refs.set(clip.assetRef.assetID, clip.assetRef)
     return [...refs.values()]
   }, [timeline?.clips])
   const assetQueries = useQueries({
@@ -358,6 +425,32 @@ export function EditWorkbench({
       setInteractionError(error instanceof Error ? error.message : "Timeline command is invalid.")
       return false
     }
+  }
+
+  const openInspectorPane = () => {
+    setInspectorOpen(true)
+    if (auxiliaryPanesExclusive) setMediaOpen(false)
+  }
+
+  const openMediaPane = () => {
+    setMediaOpen(true)
+    if (auxiliaryPanesExclusive) setInspectorOpen(false)
+  }
+
+  const toggleInspectorPane = () => {
+    setInspectorOpen((open) => {
+      const next = !open
+      if (next && auxiliaryPanesExclusive && hasInspectorTarget) setMediaOpen(false)
+      return next
+    })
+  }
+
+  const toggleMediaPane = () => {
+    setMediaOpen((open) => {
+      const next = !open
+      if (next && auxiliaryPanesExclusive) setInspectorOpen(false)
+      return next
+    })
   }
 
   const executeTemplates = (templates: readonly CinemaTimelineCommandTemplate[]) => {
@@ -538,7 +631,7 @@ export function EditWorkbench({
     })
     if (committed) {
       setSelectedClipIDs(clips.map((clip) => clip.id))
-      setInspectorOpen(true)
+      openInspectorPane()
     }
     return committed
   }
@@ -591,6 +684,18 @@ export function EditWorkbench({
     const current = timelineDocumentRef.current
     if (!current || clip.kind === "text") return
     if (current.tracks.find((track) => track.id === clip.trackID)?.locked) return setInteractionError("Unlock the track before trimming this clip.")
+    if (clip.kind === "subtitle") {
+      executeCommand({
+        id: commandID("trim-timed-clip"),
+        timelineID: current.id,
+        actor: "cinema-web",
+        type: "trim-timed-clip",
+        clipID: clip.id,
+        timelineStartUs: next.timelineStartUs,
+        durationUs: next.durationUs,
+      })
+      return
+    }
     executeCommand({
       id: commandID("trim-clip"),
       timelineID: current.id,
@@ -623,6 +728,15 @@ export function EditWorkbench({
     if (!current || !clip || clip.kind === "text") return
     const clipEndUs = clip.timelineStartUs + clip.durationUs
     if (playheadUs <= clip.timelineStartUs || playheadUs >= clipEndUs) return
+    if (clip.kind === "subtitle") {
+      trimClip(clip, {
+        timelineStartUs: edge === "start" ? playheadUs : clip.timelineStartUs,
+        durationUs: edge === "start" ? clipEndUs - playheadUs : playheadUs - clip.timelineStartUs,
+        sourceInUs: 0,
+        sourceDurationUs: edge === "start" ? clipEndUs - playheadUs : playheadUs - clip.timelineStartUs,
+      })
+      return
+    }
     const sourceRatio = clip.sourceDurationUs / clip.durationUs
     if (edge === "start") {
       const deltaUs = playheadUs - clip.timelineStartUs
@@ -689,7 +803,7 @@ export function EditWorkbench({
   }
 
   const showClipInAssets = (clip: CinemaTimelineClip) => {
-    if (clip.kind === "text") return
+    if (!isTimelineAssetClip(clip)) return
     const source = assetRecords.get(clip.assetRef.assetID)?.source
     const section: TimelineMediaSection = source === "generation" || source === "render"
       ? "generated"
@@ -697,7 +811,7 @@ export function EditWorkbench({
         ? "imported"
         : "project"
     setReplacementClipID(null)
-    setMediaOpen(true)
+    openMediaPane()
     setMediaSection(section)
     setRevealedAsset({
       id: clip.assetRef.assetID,
@@ -758,21 +872,112 @@ export function EditWorkbench({
   const createTrack = (kind: CinemaTimelineTrackKind) => {
     const current = timelineDocumentRef.current
     if (!current) return
+    const trackID = commandID("track")
+    const track: CinemaTimelineTrack = kind === "subtitle" ? {
+      id: trackID,
+      kind,
+      title: nextTrackTitle(current, kind),
+      order: current.tracks.length,
+      locked: false,
+      hidden: false,
+      language: locale,
+      role: "subtitle",
+      style: { ...CINEMA_TIMELINE_DEFAULT_SUBTITLE_STYLE },
+    } : {
+      id: trackID,
+      kind,
+      title: nextTrackTitle(current, kind),
+      order: current.tracks.length,
+      locked: false,
+      muted: false,
+      hidden: false,
+    }
     executeCommand({
       id: commandID("create-track"),
       timelineID: current.id,
       actor: "cinema-web",
       type: "create-track",
+      track,
+    })
+    if (kind === "subtitle") {
+      setActiveSubtitleTrackID(trackID)
+      setSelectedSubtitleTrackID(trackID)
+      setSelectedClipIDs([])
+      openInspectorPane()
+    }
+  }
+
+  const createSubtitleCue = (cueText: string) => {
+    const current = timelineDocumentRef.current
+    if (!current || !cueText.trim()) return
+    const existingTrack = current.tracks.find((track): track is CinemaTimelineSubtitleTrack => track.kind === "subtitle" && track.id === activeSubtitleTrackID)
+      ?? current.tracks.find((track): track is CinemaTimelineSubtitleTrack => track.kind === "subtitle" && !track.hidden)
+      ?? null
+    const trackID = existingTrack?.id ?? commandID("track")
+    const now = new Date().toISOString()
+    const cue: CinemaTimelineSubtitleCue = {
+      id: commandID("cue"),
+      kind: "subtitle",
+      trackID,
+      timelineStartUs: Math.round(playheadUs),
+      durationUs: 3_000_000,
+      cueText: cueText.trim(),
+      createdAt: now,
+      updatedAt: now,
+    }
+    const committed = existingTrack ? executeCommand({
+      id: commandID("add-clip"), timelineID: current.id, actor: "cinema-web", type: "add-clip", clip: cue,
+    }) : executeCommand({
+      id: commandID("create-track-with-clips"),
+      timelineID: current.id,
+      actor: "cinema-web",
+      type: "create-track-with-clips",
       track: {
-        id: commandID("track"),
-        kind,
-        title: nextTrackTitle(current, kind),
+        id: trackID,
+        kind: "subtitle",
+        title: nextTrackTitle(current, "subtitle"),
         order: current.tracks.length,
         locked: false,
-        muted: false,
         hidden: false,
+        language: locale,
+        role: "subtitle",
+        style: { ...CINEMA_TIMELINE_DEFAULT_SUBTITLE_STYLE },
       },
+      clips: [cue],
     })
+    if (!committed) return
+    setActiveSubtitleTrackID(trackID)
+    setSelectedSubtitleTrackID(null)
+    setSelectedClipIDs([cue.id])
+    setSubtitleComposerOpen(false)
+    openInspectorPane()
+  }
+
+  const importSubtitleCues = (inputs: readonly CinemaSubtitleCueInput[], _filename: string) => {
+    const current = timelineDocumentRef.current
+    if (!current || inputs.length === 0) return
+    const trackID = commandID("track")
+    const now = new Date().toISOString()
+    const track: CinemaTimelineSubtitleTrack = {
+      id: trackID,
+      kind: "subtitle",
+      title: nextTrackTitle(current, "subtitle"),
+      order: current.tracks.length,
+      locked: false,
+      hidden: false,
+      language: locale,
+      role: "subtitle",
+      style: { ...CINEMA_TIMELINE_DEFAULT_SUBTITLE_STYLE },
+    }
+    const clips: CinemaTimelineSubtitleCue[] = inputs.map((input) => ({
+      id: commandID("cue"), kind: "subtitle", trackID, timelineStartUs: input.startUs, durationUs: input.durationUs,
+      cueText: input.text, ...(input.speaker ? { speaker: input.speaker } : {}), createdAt: now, updatedAt: now,
+    }))
+    if (!executeCommand({ id: commandID("create-track-with-clips"), timelineID: current.id, actor: "cinema-web", type: "create-track-with-clips", track, clips })) return
+    setActiveSubtitleTrackID(trackID)
+    setSelectedSubtitleTrackID(trackID)
+    setSelectedClipIDs([])
+    openInspectorPane()
   }
 
   const deleteTrack = (track: CinemaTimelineTrack, deleteClips: boolean) => {
@@ -910,12 +1115,12 @@ export function EditWorkbench({
   }
 
   return (
-    <section className={`cinema-edit-workbench ${mediaOpen ? "is-media-open" : ""} ${selectedClips.length > 0 && inspectorOpen ? "is-inspector-open" : ""}`}>
+    <section className={`cinema-edit-workbench ${mediaOpen ? "is-media-open" : ""} ${hasInspectorTarget && inspectorOpen ? "is-inspector-open" : ""}`}>
       <EditTopbar
         timeline={timeline}
         save={saveState}
-        onToggleMedia={() => setMediaOpen((value) => !value)}
-        onToggleInspector={() => setInspectorOpen((value) => !value)}
+        onToggleMedia={toggleMediaPane}
+        onToggleInspector={toggleInspectorPane}
         onRetry={() => queue?.retry()}
         deliveryReady={deliveryValidation.ready}
         deliveryMessage={deliveryValidation.issues[0]?.message ?? "Checking delivery readiness"}
@@ -934,10 +1139,25 @@ export function EditWorkbench({
               if (window.confirm(`Delete “${target.title}”? This cannot be undone.`)) deleteMutation.mutate(target)
             }}
             onActivateAsset={addAsset}
-            replacementClipTitle={replacementClipID ? timeline?.clips.find((clip) => clip.id === replacementClipID)?.title : undefined}
+            replacementClipTitle={replacementClipID ? (() => { const clip = timeline?.clips.find((candidate) => candidate.id === replacementClipID); return clip ? timelineClipDisplayName(clip) : undefined })() : undefined}
             revealedAsset={revealedAsset}
             section={mediaSection}
             onSectionChange={setMediaSection}
+            subtitlePanel={<TimelineSubtitlesPanel
+              timeline={timeline}
+              activeTrackID={activeSubtitleTrackID}
+              selectedCueID={selectedSubtitleCue?.id ?? null}
+              composerOpen={subtitleComposerOpen}
+              qualityIssues={subtitleQualityIssues}
+              onSetActiveTrack={(trackID) => { setActiveSubtitleTrackID(trackID); setSelectedSubtitleTrackID(trackID); setSelectedClipIDs([]) }}
+              onAddTrack={() => createTrack("subtitle")}
+              onOpenComposer={() => setSubtitleComposerOpen(true)}
+              onCloseComposer={() => setSubtitleComposerOpen(false)}
+              onCreateCue={createSubtitleCue}
+              onImport={importSubtitleCues}
+              onSelectCue={(cue) => { setSelectedClipIDs([cue.id]); setSelectedSubtitleTrackID(null); setPlayheadUs(cue.timelineStartUs); openInspectorPane() }}
+              onEditTrack={(track) => { setSelectedSubtitleTrackID(track.id); setSelectedClipIDs([]); openInspectorPane() }}
+            />}
           />
         ) : null}
         <div className="cinema-edit-main" style={{ "--cinema-edit-preview-size": `${previewPercent}%` } as CSSProperties}>
@@ -957,6 +1177,7 @@ export function EditWorkbench({
                 playbackDirection={playbackDirection}
                 muted={previewMuted}
                 assetStatuses={assetStatuses}
+                activeSubtitleTrackID={activeSubtitleTrackID}
                 onTogglePlaying={() => {
                   setPlaybackDirection(1)
                   setPlaying((value) => !value)
@@ -965,7 +1186,7 @@ export function EditWorkbench({
                 onSeek={(timeUs) => setPlayheadUs(Math.min(timelineDurationUs, Math.max(0, timeUs)))}
                 onStepFrame={(direction) => setPlayheadUs((value) => Math.min(timelineDurationUs, Math.max(0, value + direction * timelineFrameDurationUs(timeline.settings.frameRate))))}
                 onBrowseAssets={() => {
-                  setMediaOpen(true)
+                  openMediaPane()
                   setMediaSection("project")
                 }}
               />
@@ -999,6 +1220,7 @@ export function EditWorkbench({
                   onZoomIn={() => setPixelsPerSecond((value) => Math.min(TIMELINE_MAX_PIXELS_PER_SECOND, value * 1.5))}
                   onFit={fitTimeline}
                   onAddTrack={createTrack}
+                  onAddSubtitle={() => { openMediaPane(); setMediaSection("subtitles"); setSubtitleComposerOpen(true) }}
                   followPlayhead={followPlayhead}
                   onToggleFollowPlayhead={() => setFollowPlayhead((value) => !value)}
                 />
@@ -1046,7 +1268,14 @@ export function EditWorkbench({
                     setSelectedClipIDs((current) => toggle
                       ? toggleTimelineClipSelection(current, clip.id)
                       : [clip.id])
-                    setInspectorOpen(true)
+                    openInspectorPane()
+                    setSelectedSubtitleTrackID(null)
+                  }}
+                  onEditClip={(clip) => {
+                    setSelectedClipIDs([clip.id])
+                    setSelectedSubtitleTrackID(null)
+                    openInspectorPane()
+                    if (clip.kind === "subtitle") setSubtitleFocusRequest((value) => value + 1)
                   }}
                   onSelectionChange={setSelectedClipIDs}
                 />
@@ -1054,27 +1283,36 @@ export function EditWorkbench({
             </>
           ) : null}
         </div>
-        {selectedClip && inspectorOpen ? (
-          <TimelineInspector
-            clip={selectedClip}
+        {inspectorOpen ? selectedSubtitleCue ? (
+          <TimelineSubtitleInspector
+            cue={selectedSubtitleCue}
+            focusTextRequest={subtitleFocusRequest}
             onClose={() => setInspectorOpen(false)}
             onUpdate={updateSelectedClip}
-            onMove={(timelineStartUs) => moveClip(selectedClip, selectedClip.trackID, timelineStartUs)}
-            onTrim={(next) => trimClip(selectedClip, next)}
-            assetStatus={selectedClip.kind === "text" ? undefined : assetStatuses.get(selectedClip.assetRef.assetID)}
-            onRequestReplacement={() => {
-              setReplacementClipID(selectedClip.id)
-              setMediaOpen(true)
-            }}
+            onTrim={(timelineStartUs, durationUs) => trimClip(selectedSubtitleCue, { timelineStartUs, durationUs, sourceInUs: 0, sourceDurationUs: durationUs })}
           />
-        ) : null}
-        {selectedClips.length > 1 && inspectorOpen ? (
+        ) : selectedSubtitleTrack ? (
+          <TimelineSubtitleTrackInspector track={selectedSubtitleTrack} onClose={() => setInspectorOpen(false)} onUpdate={(patch) => updateTrack(selectedSubtitleTrack, patch)} />
+        ) : selectedClips.length > 1 ? (
           <TimelineMultiInspector
             clips={selectedClips}
             onClose={() => setInspectorOpen(false)}
             onUpdate={updateSelectedClips}
           />
-        ) : null}
+        ) : selectedMediaClip ? (
+          <TimelineInspector
+            clip={selectedMediaClip}
+            onClose={() => setInspectorOpen(false)}
+            onUpdate={updateSelectedClip}
+            onMove={(timelineStartUs) => moveClip(selectedMediaClip, selectedMediaClip.trackID, timelineStartUs)}
+            onTrim={(next) => trimClip(selectedMediaClip, next)}
+            assetStatus={isTimelineAssetClip(selectedMediaClip) ? assetStatuses.get(selectedMediaClip.assetRef.assetID) : undefined}
+            onRequestReplacement={() => {
+              setReplacementClipID(selectedMediaClip.id)
+              openMediaPane()
+            }}
+          />
+        ) : null : null}
       </div>
       {interactionError ? <div className="cinema-edit-interaction-error" role="alert">{interactionError}</div> : null}
       <div className="cinema-edit-narrow-guard" role="status">

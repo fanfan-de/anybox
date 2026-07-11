@@ -11,7 +11,7 @@ const timestamp = "2026-07-10T00:00:00.000Z"
 
 function document(): CinemaTimelineDocument {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: "timeline-1",
     projectID: "project-1",
     title: "Rough cut",
@@ -296,8 +296,8 @@ describe("Cinema timeline command projection", () => {
       ],
     }), "2026-07-10T00:08:00.000Z")
     expect(updated.revision).toBe(1)
-    expect(updated.clips.map((candidate) => [candidate.volume, candidate.opacity])).toEqual([[0.4, 0.8], [0.4, 0.8]])
-    expect(base.clips.map((candidate) => [candidate.volume, candidate.opacity])).toEqual([[1, 1], [1, 1]])
+    expect(updated.clips.map((candidate) => ["volume" in candidate ? candidate.volume : undefined, "opacity" in candidate ? candidate.opacity : undefined])).toEqual([[0.4, 0.8], [0.4, 0.8]])
+    expect(base.clips.map((candidate) => ["volume" in candidate ? candidate.volume : undefined, "opacity" in candidate ? candidate.opacity : undefined])).toEqual([[1, 1], [1, 1]])
   })
 
   test("updates visual transform atomically and rejects transform on audio", () => {
@@ -399,5 +399,30 @@ describe("Cinema timeline command projection", () => {
       trackID: "track-v1",
       deleteClips: true,
     }))).toThrow("locked")
+  })
+
+  test("creates overlapping subtitle cues atomically and edits timed fields", () => {
+    const track = {
+      id: "track-s1", kind: "subtitle" as const, title: "S1", order: 2, locked: false, hidden: false,
+      language: "zh-CN", role: "subtitle" as const,
+      style: { fontFamilyID: "anybox-subtitle-sans-v1" as const, fontSizePx: 52, textColor: "#FFFFFFFF", outlineColor: "#000000FF", outlineWidthPx: 2, backgroundColor: "#00000000", alignment: "bottom-center" as const, marginBottomPx: 64 },
+    }
+    const cue = (id: string, start: number) => ({ id, trackID: track.id, kind: "subtitle" as const, timelineStartUs: start, durationUs: 2_000_000, cueText: "第一行", speaker: "旁白", createdAt: timestamp, updatedAt: timestamp })
+    let current = applyCinemaTimelineCommandToDocument(document(), command({
+      type: "create-track-with-clips", track, clips: [cue("cue-1", 0), cue("cue-2", 1_000_000)],
+    }))
+    expect(current.tracks.at(-1)?.kind).toBe("subtitle")
+    expect(current.clips).toHaveLength(2)
+
+    current = applyCinemaTimelineCommandToDocument(current, command({
+      type: "update-clip", clipID: "cue-1", patch: { cueText: "更新", speaker: null },
+    }, 1))
+    expect(current.clips[0]).toMatchObject({ cueText: "更新" })
+    expect("speaker" in current.clips[0]!).toBe(false)
+
+    current = applyCinemaTimelineCommandToDocument(current, command({
+      type: "trim-timed-clip", clipID: "cue-2", timelineStartUs: 1_500_000, durationUs: 750_000,
+    }, 2))
+    expect(current.clips[1]).toMatchObject({ timelineStartUs: 1_500_000, durationUs: 750_000 })
   })
 })

@@ -449,7 +449,8 @@
   min-width: 0;
 }
 
-.cinema-deliver-settings input {
+.cinema-deliver-settings input,
+.cinema-deliver-settings select {
   width: 100%;
   min-width: 0;
   height: 30px;
@@ -462,7 +463,9 @@
 }
 
 .cinema-deliver-settings input:hover,
-.cinema-deliver-settings input:focus {
+.cinema-deliver-settings input:focus,
+.cinema-deliver-settings select:hover,
+.cinema-deliver-settings select:focus {
   border-color: var(--cinema-deliver-border-strong);
   background: var(--cinema-deliver-control-hover);
   outline: none;

@@ -6,6 +6,7 @@ import type { RenderApi } from "../api/renderApi"
 import { RENDER_PRESETS, type RenderPresetID } from "../model/renderPresets"
 import { RenderRetentionPanel } from "./RenderRetentionPanel"
 import { useI18n } from "../../../i18n"
+import type { CinemaTimelineDocument, CinemaTimelineSubtitleTrack } from "@anybox/shared/cinema-timeline"
 
 const COMMON_FRAME_RATES: readonly CinemaRenderSettings["frameRate"][] = [
   { numerator: 24_000, denominator: 1_001 },
@@ -33,6 +34,7 @@ export function DeliverSettings({
   onSettingsChange,
   onPresetChange,
   timelineDurationUs,
+  timeline,
   renderApi,
   executionAuthorized,
   disabled,
@@ -42,6 +44,7 @@ export function DeliverSettings({
   onSettingsChange: (patch: Partial<CinemaRenderSettings>) => void
   onPresetChange: (presetID: RenderPresetID) => void
   timelineDurationUs: number
+  timeline: CinemaTimelineDocument | null
   renderApi: RenderApi
   executionAuthorized: boolean
   disabled?: boolean
@@ -63,6 +66,7 @@ export function DeliverSettings({
   const frameRates = COMMON_FRAME_RATES.some((frameRate) => frameRateKey(frameRate) === currentFrameRateKey)
     ? COMMON_FRAME_RATES
     : [settings.frameRate, ...COMMON_FRAME_RATES]
+  const subtitleTracks = (timeline?.tracks ?? []).filter((track): track is CinemaTimelineSubtitleTrack => track.kind === "subtitle" && !track.hidden)
   return (
     <aside className="cinema-deliver-settings" aria-label={t("deliver.renderSettings")}>
       <div className="cinema-deliver-section-heading"><span>{t("deliver.renderSettings")}</span></div>
@@ -163,6 +167,16 @@ export function DeliverSettings({
             </div>
           ) : null}
         </div>
+        <label className="cinema-deliver-output-name">
+          <span>{t("deliver.subtitles")}</span>
+          <select
+            value={settings.subtitles?.mode === "burn-in" ? settings.subtitles.trackID : "none"}
+            onChange={(event) => onSettingsChange({ subtitles: event.target.value === "none" ? { mode: "none" } : { mode: "burn-in", trackID: event.target.value } })}
+          >
+            <option value="none">{t("deliver.subtitles.none")}</option>
+            {subtitleTracks.map((track) => <option key={track.id} value={track.id}>{track.title} · {track.language}</option>)}
+          </select>
+        </label>
         <label className="cinema-deliver-output-name">
           <span>{t("deliver.outputName")}</span>
           <input type="text" maxLength={160} value={settings.outputName} onChange={(event) => onSettingsChange({ outputName: event.target.value })} />

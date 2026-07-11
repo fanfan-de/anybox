@@ -160,7 +160,7 @@ async function createFixture() {
   const audioRef = assetRef(projectID, audio.asset)
   const imageRef = assetRef(projectID, image.asset)
   const timeline: CinemaTimelineDocument = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: "delivery-timeline",
     projectID,
     title: "Delivery timeline",

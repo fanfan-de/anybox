@@ -86,4 +86,41 @@ test.describe("Cinema Edit workbench", () => {
     await expect(page.getByText("Edit needs a wider desktop window")).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   })
+
+  test("keeps subtitle and media inspectors exclusive across compact pane transitions", async ({ page, request }, testInfo) => {
+    const fixture = await request.get(`${agentBaseURL}/e2e/project`)
+    const envelope = await fixture.json() as { data?: { cinemaURL?: string } }
+    expect((await request.post(`${agentBaseURL}/e2e/reset`)).ok()).toBe(true)
+
+    await page.goto(envelope.data!.cinemaURL!)
+    await page.getByRole("tab", { name: "Edit" }).click()
+    await page.getByRole("button", { name: "New Timeline" }).first().click()
+    await page.getByRole("tab", { name: "Generated" }).click()
+    await page.getByRole("button", { name: "视频" }).click()
+    await page.locator(".cinema-timeline-asset-row").filter({ hasText: "Fixture video 1" }).dblclick()
+
+    const clip = page.locator(".cinema-timeline-clip").filter({ hasText: "Fixture video 1" })
+    await expect(clip).toHaveCount(1)
+    await clip.click()
+    await expect(page.getByRole("complementary", { name: "Timeline inspector" })).toBeVisible()
+
+    await page.getByRole("tab", { name: "Subtitles" }).click()
+    await page.getByRole("button", { name: "Add subtitle track" }).click()
+    await expect(page.getByRole("complementary", { name: "Subtitle track" })).toBeVisible()
+    await expect(page.getByRole("complementary", { name: "Timeline inspector" })).toHaveCount(0)
+
+    await page.setViewportSize({ width: 1000, height: 760 })
+    await expect(page.getByRole("complementary", { name: "Media bin" })).toHaveCount(0)
+    await expect(page.getByRole("complementary", { name: "Subtitle track" })).toBeVisible()
+    if (process.env.CINEMA_E2E_CAPTURE === "1") {
+      await page.screenshot({ path: testInfo.outputPath("cinema-edit-compact-inspector.png") })
+    }
+
+    await page.getByRole("button", { name: "Toggle media bin" }).click()
+    await expect(page.getByRole("complementary", { name: "Media bin" })).toBeVisible()
+    await expect(page.getByRole("complementary", { name: "Subtitle track" })).toHaveCount(0)
+    if (process.env.CINEMA_E2E_CAPTURE === "1") {
+      await page.screenshot({ path: testInfo.outputPath("cinema-edit-compact-media.png") })
+    }
+  })
 })

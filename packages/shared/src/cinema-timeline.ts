@@ -2,8 +2,11 @@ import { z } from "zod"
 
 import { CinemaAssetRefSchema } from "./cinema"
 
-export const CINEMA_TIMELINE_SCHEMA_VERSION = 1 as const
+export const CINEMA_TIMELINE_SCHEMA_VERSION = 2 as const
+export const CINEMA_TIMELINE_LEGACY_SCHEMA_VERSION = 1 as const
 export const CINEMA_TIMELINE_SAMPLE_RATE = 48_000 as const
+export const CINEMA_TIMELINE_MAX_SUBTITLE_CUES = 10_000 as const
+export const CINEMA_TIMELINE_MAX_SUBTITLE_TEXT_LENGTH = 4_000 as const
 
 export const CinemaTimelineIDSchema = z.string()
   .min(1)
@@ -40,21 +43,81 @@ export const CinemaTimelineSettingsSchema = z.object({
 }).strict()
 export type CinemaTimelineSettings = z.infer<typeof CinemaTimelineSettingsSchema>
 
-export const CinemaTimelineTrackKindSchema = z.enum(["video", "audio", "overlay"])
+export const CinemaTimelineTrackKindSchema = z.enum(["video", "audio", "overlay", "subtitle"])
 export type CinemaTimelineTrackKind = z.infer<typeof CinemaTimelineTrackKindSchema>
 
-export const CinemaTimelineClipKindSchema = z.enum(["video", "audio", "image", "text"])
+export const CinemaTimelineClipKindSchema = z.enum(["video", "audio", "image", "text", "subtitle"])
 export type CinemaTimelineClipKind = z.infer<typeof CinemaTimelineClipKindSchema>
 
-export const CinemaTimelineTrackSchema = z.object({
+const CinemaTimelineTrackBaseShape = {
   id: z.string().min(1),
-  kind: CinemaTimelineTrackKindSchema,
   title: z.string().min(1),
   order: z.number().int().nonnegative(),
   locked: z.boolean(),
-  muted: z.boolean(),
   hidden: z.boolean(),
+} as const
+
+export const CinemaTimelineSubtitleRoleSchema = z.enum(["subtitle", "caption", "forced"])
+export type CinemaTimelineSubtitleRole = z.infer<typeof CinemaTimelineSubtitleRoleSchema>
+
+export const CinemaTimelineSubtitleAlignmentSchema = z.enum([
+  "bottom-left",
+  "bottom-center",
+  "bottom-right",
+])
+export type CinemaTimelineSubtitleAlignment = z.infer<typeof CinemaTimelineSubtitleAlignmentSchema>
+
+const CinemaTimelineSubtitleColorSchema = z.string().regex(/^#[0-9A-Fa-f]{8}$/, "Subtitle colors must use #RRGGBBAA")
+
+export const CinemaTimelineSubtitleStyleSchema = z.object({
+  fontFamilyID: z.literal("anybox-subtitle-sans-v1"),
+  fontSizePx: z.number().int().min(12).max(240),
+  textColor: CinemaTimelineSubtitleColorSchema,
+  outlineColor: CinemaTimelineSubtitleColorSchema,
+  outlineWidthPx: z.number().min(0).max(12).finite(),
+  backgroundColor: CinemaTimelineSubtitleColorSchema,
+  alignment: CinemaTimelineSubtitleAlignmentSchema,
+  marginBottomPx: z.number().int().min(0).max(540),
 }).strict()
+export type CinemaTimelineSubtitleStyle = z.infer<typeof CinemaTimelineSubtitleStyleSchema>
+
+export const CINEMA_TIMELINE_DEFAULT_SUBTITLE_STYLE: CinemaTimelineSubtitleStyle = {
+  fontFamilyID: "anybox-subtitle-sans-v1",
+  fontSizePx: 52,
+  textColor: "#FFFFFFFF",
+  outlineColor: "#000000FF",
+  outlineWidthPx: 2,
+  backgroundColor: "#00000000",
+  alignment: "bottom-center",
+  marginBottomPx: 64,
+}
+
+const CinemaTimelineMediaTrackSchema = z.object({
+  ...CinemaTimelineTrackBaseShape,
+  kind: z.enum(["video", "audio", "overlay"]),
+  muted: z.boolean(),
+}).strict()
+
+export const CinemaTimelineSubtitleTrackSchema = z.object({
+  ...CinemaTimelineTrackBaseShape,
+  kind: z.literal("subtitle"),
+  language: z.string().trim().min(1).max(64).refine((language) => {
+    try {
+      new Intl.Locale(language)
+      return true
+    } catch {
+      return false
+    }
+  }, "Subtitle language must be a valid BCP 47 tag"),
+  role: CinemaTimelineSubtitleRoleSchema,
+  style: CinemaTimelineSubtitleStyleSchema,
+}).strict()
+export type CinemaTimelineSubtitleTrack = z.infer<typeof CinemaTimelineSubtitleTrackSchema>
+
+export const CinemaTimelineTrackSchema = z.discriminatedUnion("kind", [
+  CinemaTimelineMediaTrackSchema,
+  CinemaTimelineSubtitleTrackSchema,
+])
 export type CinemaTimelineTrack = z.infer<typeof CinemaTimelineTrackSchema>
 
 export const CinemaTimelineFitSchema = z.enum(["contain", "cover", "stretch"])
@@ -181,11 +244,26 @@ export const CinemaTimelineTextClipSchema = z.object({
   .refine(timelineRangeFitsSafeInteger, timelineRangeMessage)
 export type CinemaTimelineTextClip = z.infer<typeof CinemaTimelineTextClipSchema>
 
+export const CinemaTimelineSubtitleCueSchema = z.object({
+  id: z.string().min(1),
+  trackID: z.string().min(1),
+  kind: z.literal("subtitle"),
+  timelineStartUs: CinemaTimelineTimeSchema,
+  durationUs: PositiveCinemaTimelineTimeSchema,
+  cueText: z.string().trim().min(1).max(CINEMA_TIMELINE_MAX_SUBTITLE_TEXT_LENGTH),
+  speaker: z.string().trim().min(1).max(160).optional(),
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+}).strict()
+  .refine(timelineRangeFitsSafeInteger, timelineRangeMessage)
+export type CinemaTimelineSubtitleCue = z.infer<typeof CinemaTimelineSubtitleCueSchema>
+
 export const CinemaTimelineClipSchema = z.union([
   CinemaTimelineVideoClipSchema,
   CinemaTimelineAudioClipSchema,
   CinemaTimelineImageClipSchema,
   CinemaTimelineTextClipSchema,
+  CinemaTimelineSubtitleCueSchema,
 ])
 export type CinemaTimelineClip = z.infer<typeof CinemaTimelineClipSchema>
 
@@ -211,6 +289,7 @@ const CINEMA_TIMELINE_TRACK_CLIP_COMPATIBILITY: Readonly<
   video: new Set(["video"]),
   audio: new Set(["audio"]),
   overlay: new Set(["video", "image", "text"]),
+  subtitle: new Set(["subtitle"]),
 }
 
 export function isCinemaTimelineClipCompatibleWithTrack(
@@ -229,8 +308,20 @@ function findDuplicateID<T extends { id: string }>(items: readonly T[]) {
   })?.id
 }
 
-export const CinemaTimelineDocumentSchema = z.object({
-  schemaVersion: z.literal(CINEMA_TIMELINE_SCHEMA_VERSION),
+const CinemaTimelineLegacyTrackSchema = z.object({
+  ...CinemaTimelineTrackBaseShape,
+  kind: z.enum(["video", "audio", "overlay"]),
+  muted: z.boolean(),
+}).strict()
+
+const CinemaTimelineLegacyClipSchema = z.union([
+  CinemaTimelineVideoClipSchema,
+  CinemaTimelineAudioClipSchema,
+  CinemaTimelineImageClipSchema,
+  CinemaTimelineTextClipSchema,
+])
+
+const CinemaTimelineDocumentShape = {
   id: CinemaTimelineIDSchema,
   projectID: z.string().min(1),
   title: z.string().min(1),
@@ -238,10 +329,17 @@ export const CinemaTimelineDocumentSchema = z.object({
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
   settings: CinemaTimelineSettingsSchema,
-  tracks: z.array(CinemaTimelineTrackSchema),
-  clips: z.array(CinemaTimelineClipSchema),
   markers: z.array(CinemaTimelineMarkerSchema),
-}).strict().superRefine((document, context) => {
+} as const
+
+function validateCinemaTimelineDocument(
+  document: {
+    tracks: CinemaTimelineTrack[]
+    clips: CinemaTimelineClip[]
+    markers: Array<{ id: string }>
+  },
+  context: z.RefinementCtx,
+) {
   const duplicateTrackID = findDuplicateID(document.tracks)
   if (duplicateTrackID) {
     context.addIssue({
@@ -302,6 +400,7 @@ export const CinemaTimelineDocumentSchema = z.object({
   })
 
   for (const track of document.tracks) {
+    if (track.kind === "subtitle") continue
     const orderedClips = document.clips
       .filter((clip) => clip.trackID === track.id)
       .sort((left, right) => left.timelineStartUs - right.timelineStartUs)
@@ -317,7 +416,30 @@ export const CinemaTimelineDocumentSchema = z.object({
       }
     }
   }
-})
+}
+
+export const CinemaTimelineDocumentV2Schema = z.object({
+  schemaVersion: z.literal(CINEMA_TIMELINE_SCHEMA_VERSION),
+  ...CinemaTimelineDocumentShape,
+  tracks: z.array(CinemaTimelineTrackSchema),
+  clips: z.array(CinemaTimelineClipSchema),
+}).strict().superRefine(validateCinemaTimelineDocument)
+
+export const CinemaTimelineDocumentV1Schema = z.object({
+  schemaVersion: z.literal(CINEMA_TIMELINE_LEGACY_SCHEMA_VERSION),
+  ...CinemaTimelineDocumentShape,
+  tracks: z.array(CinemaTimelineLegacyTrackSchema),
+  clips: z.array(CinemaTimelineLegacyClipSchema),
+}).strict()
+
+export const CinemaTimelineDocumentSchema = z.union([
+  CinemaTimelineDocumentV2Schema,
+  CinemaTimelineDocumentV1Schema,
+]).transform((document) => (
+  document.schemaVersion === CINEMA_TIMELINE_LEGACY_SCHEMA_VERSION
+    ? { ...document, schemaVersion: CINEMA_TIMELINE_SCHEMA_VERSION }
+    : document
+)).pipe(CinemaTimelineDocumentV2Schema)
 export type CinemaTimelineDocument = z.infer<typeof CinemaTimelineDocumentSchema>
 
 const CinemaTimelineCommandBaseShape = {
@@ -332,6 +454,9 @@ export const CinemaTimelineTrackPatchSchema = z.object({
   locked: z.boolean().optional(),
   muted: z.boolean().optional(),
   hidden: z.boolean().optional(),
+  language: CinemaTimelineSubtitleTrackSchema.shape.language.optional(),
+  role: CinemaTimelineSubtitleRoleSchema.optional(),
+  style: CinemaTimelineSubtitleStyleSchema.optional(),
 }).strict().refine((patch) => Object.keys(patch).length > 0, "Track patch must include at least one field")
 export type CinemaTimelineTrackPatch = z.infer<typeof CinemaTimelineTrackPatchSchema>
 
@@ -345,6 +470,8 @@ export const CinemaTimelineClipPatchSchema = z.object({
   fadeInUs: CinemaTimelineTimeSchema.nullable().optional(),
   fadeOutUs: CinemaTimelineTimeSchema.nullable().optional(),
   assetRef: CinemaAssetRefSchema.optional(),
+  cueText: z.string().trim().min(1).max(CINEMA_TIMELINE_MAX_SUBTITLE_TEXT_LENGTH).optional(),
+  speaker: z.string().trim().min(1).max(160).nullable().optional(),
 }).strict().refine((patch) => Object.keys(patch).length > 0, "Clip patch must include at least one field")
 export type CinemaTimelineClipPatch = z.infer<typeof CinemaTimelineClipPatchSchema>
 
@@ -375,6 +502,23 @@ export const CinemaTimelineCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("create-track"),
     track: CinemaTimelineTrackSchema,
   }).strict(),
+  z.object({
+    ...CinemaTimelineCommandBaseShape,
+    type: z.literal("create-track-with-clips"),
+    track: CinemaTimelineTrackSchema,
+    clips: z.array(CinemaTimelineClipSchema).min(1).max(CINEMA_TIMELINE_MAX_SUBTITLE_CUES),
+  }).strict().superRefine((command, context) => {
+    const clipIDs = new Set<string>()
+    command.clips.forEach((clip, index) => {
+      if (clip.trackID !== command.track.id) {
+        context.addIssue({ code: "custom", message: "Imported clips must target the created track", path: ["clips", index, "trackID"] })
+      }
+      if (clipIDs.has(clip.id)) {
+        context.addIssue({ code: "custom", message: "Clip ids must be unique", path: ["clips", index, "id"] })
+      }
+      clipIDs.add(clip.id)
+    })
+  }),
   z.object({
     ...CinemaTimelineCommandBaseShape,
     type: z.literal("update-track"),
@@ -435,6 +579,13 @@ export const CinemaTimelineCommandSchema = z.discriminatedUnion("type", [
     durationUs: PositiveCinemaTimelineTimeSchema,
     sourceInUs: CinemaTimelineTimeSchema,
     sourceDurationUs: PositiveCinemaTimelineTimeSchema,
+  }).strict(),
+  z.object({
+    ...CinemaTimelineCommandBaseShape,
+    type: z.literal("trim-timed-clip"),
+    clipID: z.string().min(1),
+    timelineStartUs: CinemaTimelineTimeSchema,
+    durationUs: PositiveCinemaTimelineTimeSchema,
   }).strict(),
   z.object({
     ...CinemaTimelineCommandBaseShape,

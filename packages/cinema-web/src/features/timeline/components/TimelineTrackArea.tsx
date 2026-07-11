@@ -36,6 +36,7 @@ import {
 } from "../model/timelineSelection"
 import { TimelineWaveform } from "./TimelineWaveform"
 import { TimelineFilmstrip } from "./TimelineFilmstrip"
+import { isTimelineAssetClip, timelineClipDisplayName } from "../model/timelineClip"
 import {
   TimelineClipContextMenu,
   type TimelineClipContextMenuState,
@@ -59,6 +60,7 @@ const CLIP_KIND_LABEL_KEYS = {
   audio: "timeline.kind.audio",
   image: "timeline.kind.image",
   text: "timeline.kind.text",
+  subtitle: "timeline.kind.subtitle",
 } as const
 
 function timelineMoveTargetAtPoint(
@@ -121,6 +123,7 @@ export function TimelineTrackArea({
   pixelsPerSecond,
   snapEnabled,
   onSelectClip,
+  onEditClip,
   onSelectionChange,
   onSetPlayhead,
   onMoveClip,
@@ -156,6 +159,7 @@ export function TimelineTrackArea({
   pixelsPerSecond: number
   snapEnabled: boolean
   onSelectClip: (clip: CinemaTimelineClip, toggle: boolean) => void
+  onEditClip: (clip: CinemaTimelineClip) => void
   onSelectionChange: (clipIDs: string[]) => void
   onSetPlayhead: (timeUs: number) => void
   onMoveClip: (clip: CinemaTimelineClip, trackID: string, startUs: number) => void
@@ -461,11 +465,11 @@ export function TimelineTrackArea({
       originalClip: {
         timelineStartUs: clip.timelineStartUs,
         durationUs: clip.durationUs,
-        sourceInUs: clip.sourceInUs,
-        sourceDurationUs: clip.sourceDurationUs,
+        sourceInUs: isTimelineAssetClip(clip) ? clip.sourceInUs : 0,
+        sourceDurationUs: isTimelineAssetClip(clip) ? clip.sourceDurationUs : clip.durationUs,
       },
       minimumDurationUs,
-      assetDurationUs: clip.assetRef.snapshot.durationSeconds === undefined
+      assetDurationUs: !isTimelineAssetClip(clip) || clip.assetRef.snapshot.durationSeconds === undefined
         ? null
         : Math.round(clip.assetRef.snapshot.durationSeconds * 1_000_000),
       snapCandidates: snapEnabled
@@ -602,7 +606,7 @@ export function TimelineTrackArea({
             id: "show-in-assets",
             label: t("timeline.showInAssets"),
             icon: <Search />,
-            disabled: !contextClip || contextClip.kind === "text",
+            disabled: !contextClip || !isTimelineAssetClip(contextClip),
             onSelect: () => {
               if (contextClip) onShowClipInAssets(contextClip)
             },
@@ -774,7 +778,7 @@ export function TimelineTrackArea({
               ) : <strong title={track.title}>{track.title}</strong>}
               <div>
                 <button type="button" aria-label={t("timeline.trackLock", { name: track.title })} title={t(track.locked ? "timeline.unlockTrack" : "timeline.lockTrack")} aria-pressed={track.locked} onClick={() => onUpdateTrack(track, { locked: !track.locked })}><Lock aria-hidden="true" /></button>
-                <button type="button" aria-label={t("timeline.trackMute", { name: track.title })} title={t(track.muted ? "timeline.unmuteTrack" : "timeline.muteTrack")} aria-pressed={track.muted} onClick={() => onUpdateTrack(track, { muted: !track.muted })}><Volume2 aria-hidden="true" /></button>
+                {track.kind !== "subtitle" ? <button type="button" aria-label={t("timeline.trackMute", { name: track.title })} title={t(track.muted ? "timeline.unmuteTrack" : "timeline.muteTrack")} aria-pressed={track.muted} onClick={() => onUpdateTrack(track, { muted: !track.muted })}><Volume2 aria-hidden="true" /></button> : null}
                 <button type="button" aria-label={t("timeline.trackVisibility", { name: track.title })} title={t(track.hidden ? "timeline.showTrack" : "timeline.hideTrack")} aria-pressed={!track.hidden} onClick={() => onUpdateTrack(track, { hidden: !track.hidden })}><Eye aria-hidden="true" /></button>
                 <button
                   type="button"
@@ -859,7 +863,7 @@ export function TimelineTrackArea({
                 const renderedLeftPx = timelineTimeToPixels(renderedTimelineStartUs, pixelsPerSecond)
                 const renderedWidthPx = Math.max(32, timelineTimeToPixels(renderedDurationUs, pixelsPerSecond))
                 const selected = selectedClipIDSet.has(clip.id)
-                const assetStatus = clip.kind === "text" ? undefined : assetStatuses.get(clip.assetRef.assetID)
+                const assetStatus = isTimelineAssetClip(clip) ? assetStatuses.get(clip.assetRef.assetID) : undefined
                 const assetUnavailable = assetStatus !== undefined && assetStatus !== "ready" && assetStatus !== "unresolved"
                 const clipMeta = assetUnavailable
                   ? t("timeline.assetUnavailable", { status: assetStatus })
@@ -871,13 +875,13 @@ export function TimelineTrackArea({
                     data-pointer-state={moving ? "moving" : activeTrim ? "trimming" : "idle"}
                     role="button"
                     tabIndex={0}
-                    className={`cinema-timeline-clip is-${clip.kind} ${selected ? "is-selected" : ""} ${moving ? "is-moving" : ""} ${activeTrim ? "is-trimming" : ""} ${activeMove && !activeMove.validTarget ? "is-invalid-drop" : ""} ${clip.kind !== "text" && assetStatuses.get(clip.assetRef.assetID) !== undefined && assetStatuses.get(clip.assetRef.assetID) !== "ready" && assetStatuses.get(clip.assetRef.assetID) !== "unresolved" ? "is-asset-unavailable" : ""}`}
+                    className={`cinema-timeline-clip is-${clip.kind} ${selected ? "is-selected" : ""} ${moving ? "is-moving" : ""} ${activeTrim ? "is-trimming" : ""} ${activeMove && !activeMove.validTarget ? "is-invalid-drop" : ""} ${isTimelineAssetClip(clip) && assetStatuses.get(clip.assetRef.assetID) !== undefined && assetStatuses.get(clip.assetRef.assetID) !== "ready" && assetStatuses.get(clip.assetRef.assetID) !== "unresolved" ? "is-asset-unavailable" : ""}`}
                     style={{
                       left: renderedLeftPx,
                       width: renderedWidthPx,
                     }}
                     aria-pressed={selected}
-                    aria-label={t("timeline.clipLabel", { name: clip.title, meta: clipMeta })}
+                    aria-label={t("timeline.clipLabel", { name: timelineClipDisplayName(clip), meta: clipMeta })}
                     onContextMenu={(event) => {
                       event.preventDefault()
                       event.stopPropagation()
@@ -887,7 +891,7 @@ export function TimelineTrackArea({
                         clipID: clip.id,
                         x: event.clientX,
                         y: event.clientY,
-                        label: t("timeline.clipActions", { name: clip.title }),
+                        label: t("timeline.clipActions", { name: timelineClipDisplayName(clip) }),
                         returnFocus: event.currentTarget,
                       })
                     }}
@@ -925,11 +929,13 @@ export function TimelineTrackArea({
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault()
                         onSelectClip(clip, false)
+                        if (event.key === "Enter") onEditClip(clip)
                       }
                     }}
-                    title={clip.title}
+                    onDoubleClick={() => onEditClip(clip)}
+                    title={timelineClipDisplayName(clip)}
                   >
-                    {clip.kind !== "text" ? <span className="cinema-timeline-trim-handle is-start" role="separator" aria-label={t("timeline.trimStart", { name: clip.title })} onPointerDown={(event) => beginClipTrim(event, clip, "start", track)} /> : null}
+                    {clip.kind !== "text" ? <span className="cinema-timeline-trim-handle is-start" role="separator" aria-label={t("timeline.trimStart", { name: timelineClipDisplayName(clip) })} onPointerDown={(event) => beginClipTrim(event, clip, "start", track)} /> : null}
                     {clip.kind === "video" ? (
                       <TimelineFilmstrip
                         agentBaseURL={agentBaseURL}
@@ -944,10 +950,10 @@ export function TimelineTrackArea({
                     ) : null}
                     {clip.kind === "audio" ? <TimelineWaveform agentBaseURL={agentBaseURL} projectID={projectID} timelineID={timeline.id} clip={clip} /> : null}
                     <span className="cinema-timeline-clip-label">
-                      <span>{clip.title}</span>
+                      <span>{timelineClipDisplayName(clip)}</span>
                       <small data-asset-status={assetStatus ?? "none"}>{clipMeta}</small>
                     </span>
-                    {clip.kind !== "text" ? <span className="cinema-timeline-trim-handle is-end" role="separator" aria-label={t("timeline.trimEnd", { name: clip.title })} onPointerDown={(event) => beginClipTrim(event, clip, "end", track)} /> : null}
+                    {clip.kind !== "text" ? <span className="cinema-timeline-trim-handle is-end" role="separator" aria-label={t("timeline.trimEnd", { name: timelineClipDisplayName(clip) })} onPointerDown={(event) => beginClipTrim(event, clip, "end", track)} /> : null}
                   </div>
                 )
               })}

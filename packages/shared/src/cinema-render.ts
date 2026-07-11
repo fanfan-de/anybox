@@ -91,6 +91,15 @@ export const CinemaRenderRangeSchema = z.discriminatedUnion("type", [
 ])
 export type CinemaRenderRange = z.infer<typeof CinemaRenderRangeSchema>
 
+export const CinemaRenderSubtitlesSchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("none") }).strict(),
+  z.object({
+    mode: z.literal("burn-in"),
+    trackID: z.string().min(1),
+  }).strict(),
+])
+export type CinemaRenderSubtitles = z.infer<typeof CinemaRenderSubtitlesSchema>
+
 export const CinemaRenderSettingsSchema = z.object({
   format: z.literal("mp4"),
   videoCodec: z.literal("h264"),
@@ -107,6 +116,7 @@ export const CinemaRenderSettingsSchema = z.object({
   ]),
   range: CinemaRenderRangeSchema,
   outputName: CinemaRenderOutputNameSchema,
+  subtitles: CinemaRenderSubtitlesSchema.optional(),
 }).strict()
 export type CinemaRenderSettings = z.infer<typeof CinemaRenderSettingsSchema>
 
@@ -139,6 +149,10 @@ export const CinemaRenderPreflightIssueCodeSchema = z.enum([
   "render-runtime-unavailable",
   "video-encoder-unavailable",
   "audio-encoder-unavailable",
+  "subtitle-track-invalid",
+  "subtitle-track-empty",
+  "subtitle-runtime-unavailable",
+  "subtitle-quality-warning",
   "render-settings-invalid",
   "working-space-insufficient",
   "output-name-unavailable",
@@ -481,6 +495,7 @@ export const CinemaRenderRuntimeStatusSchema = z.object({
   ffprobeAvailable: z.boolean(),
   videoEncoders: z.array(CinemaRenderVideoEncoderSchema),
   audioEncoders: z.array(CinemaRenderAudioEncoderSchema),
+  subtitleRenderer: z.literal("libass").nullable().optional(),
   issue: z.string().min(1).max(1_000).optional(),
 }).strict().superRefine((runtime, context) => {
   if (runtime.available && !runtime.ffprobeAvailable) {
@@ -515,18 +530,28 @@ export const CINEMA_RENDER_V1_SUPPORT_MATRIX: Readonly<
     audio: { level: "blocked", reason: "Audio clips must use an audio track" },
     image: { level: "blocked", reason: "Images must use the overlay track" },
     text: { level: "blocked", reason: "Text must use the overlay track" },
+    subtitle: { level: "blocked", reason: "Subtitles must use a subtitle track" },
   },
   audio: {
     video: { level: "blocked", reason: "Video clips must use the video track" },
     audio: { level: "supported" },
     image: { level: "blocked", reason: "Images must use the overlay track" },
     text: { level: "blocked", reason: "Text must use the overlay track" },
+    subtitle: { level: "blocked", reason: "Subtitles must use a subtitle track" },
   },
   overlay: {
     video: { level: "blocked", reason: "Overlay video is not supported in Deliver V1" },
     audio: { level: "blocked", reason: "Audio clips must use an audio track" },
     image: { level: "supported" },
     text: { level: "blocked", reason: "Text rendering is not supported in Deliver V1" },
+    subtitle: { level: "blocked", reason: "Subtitles must use a subtitle track" },
+  },
+  subtitle: {
+    video: { level: "blocked", reason: "Video clips must use a video track" },
+    audio: { level: "blocked", reason: "Audio clips must use an audio track" },
+    image: { level: "blocked", reason: "Images must use the overlay track" },
+    text: { level: "blocked", reason: "Text must use the overlay track" },
+    subtitle: { level: "supported" },
   },
 }
 

@@ -25,6 +25,12 @@ jobs:
             git
             make
             nasm
+            curl
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-libass
+            mingw-w64-x86_64-freetype
+            mingw-w64-x86_64-fribidi
+            mingw-w64-x86_64-harfbuzz
             mingw-w64-x86_64-gcc
       - name: Build locked-policy Windows candidate
         shell: msys2 {0}
@@ -46,8 +52,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Assert native Apple Silicon runner
         run: test "$(uname -m)" = "arm64"
-      - name: Install assembler
-        run: brew install nasm
+      - name: Install assembler and subtitle renderer dependencies
+        run: brew install nasm pkg-config libass freetype fribidi harfbuzz
       - name: Build and smoke macOS candidate
         env:
           ANYBOX_FFMPEG_REVISION: ${{ inputs.ffmpeg_revision }}

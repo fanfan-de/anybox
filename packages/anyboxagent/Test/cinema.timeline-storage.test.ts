@@ -23,7 +23,7 @@ async function temporaryCinemaRoot() {
 
 function timeline(id: string, updatedAt = now): CinemaTimelineDocument {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id,
     projectID: "project-1",
     title: `Timeline ${id}`,

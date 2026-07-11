@@ -14,8 +14,8 @@ import { ApiError } from "#server/error.ts"
 import * as Lock from "#util/lock.ts"
 
 function clipCacheKey(clip: CinemaTimelineClip) {
-  const assetScope = clip.kind === "text" ? "text" : JSON.stringify(clip.assetRef.scope)
-  const assetID = clip.kind === "text" ? "text" : clip.assetRef.assetID
+  const assetScope = clip.kind === "text" || clip.kind === "subtitle" ? clip.kind : JSON.stringify(clip.assetRef.scope)
+  const assetID = clip.kind === "text" || clip.kind === "subtitle" ? clip.kind : clip.assetRef.assetID
   return createHash("sha256").update(`${clip.id}\0${assetScope}\0${assetID}`).digest("hex").slice(0, 24)
 }
 

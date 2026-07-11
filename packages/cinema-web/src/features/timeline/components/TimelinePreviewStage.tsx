@@ -6,6 +6,7 @@ import type {
   CinemaTimelineDocument,
   CinemaTimelineImageClip,
   CinemaTimelineTextClip,
+  CinemaTimelineSubtitleTrack,
   CinemaTimelineVideoClip,
 } from "@anybox/shared/cinema-timeline"
 import { createAssetLibraryApi } from "../../assets/assetLibraryApi"
@@ -14,12 +15,12 @@ import { timelineActiveClips, timelineNextVideoClip, timelinePreviousVideoClip }
 import { useI18n } from "../../../i18n"
 
 function sourceURL(agentBaseURL: string, projectID: string, clip: CinemaTimelineClip | undefined) {
-  if (!clip || clip.kind === "text") return undefined
+  if (!clip || clip.kind === "text" || clip.kind === "subtitle") return undefined
   return createAssetLibraryApi(agentBaseURL, projectID, clip.assetRef.scope).assetPreviewURL(clip.assetRef.assetID)
 }
 
 function mediaKey(clip: CinemaTimelineClip | undefined) {
-  return !clip || clip.kind === "text"
+  return !clip || clip.kind === "text" || clip.kind === "subtitle"
     ? null
     : `${clip.assetRef.assetID}:${clip.assetRef.contentRevision}`
 }
@@ -135,6 +136,7 @@ export function TimelinePreviewStage({
   playing,
   playbackDirection,
   muted,
+  activeSubtitleTrackID,
   assetStatuses,
   onTogglePlaying,
   onToggleMuted,
@@ -149,6 +151,7 @@ export function TimelinePreviewStage({
   playing: boolean
   playbackDirection: -1 | 1
   muted: boolean
+  activeSubtitleTrackID: string | null
   assetStatuses: ReadonlyMap<string, CinemaAssetStatus | "unresolved">
   onTogglePlaying: () => void
   onToggleMuted: () => void
@@ -159,12 +162,14 @@ export function TimelinePreviewStage({
   const { t } = useI18n()
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const [stageHeight, setStageHeight] = useState(0)
   const [failedMediaKeys, setFailedMediaKeys] = useState<ReadonlySet<string>>(() => new Set())
   const active = useMemo(() => timelineActiveClips(timeline, playheadUs), [playheadUs, timeline])
   const nextVideo = useMemo(() => timelineNextVideoClip(timeline, playheadUs), [playheadUs, timeline])
   const previousVideo = useMemo(() => timelinePreviousVideoClip(timeline, playheadUs), [playheadUs, timeline])
   const availableClip = (clip: CinemaTimelineClip | undefined) => {
-    if (!clip || clip.kind === "text") return clip
+    if (!clip || clip.kind === "text" || clip.kind === "subtitle") return clip
     const key = mediaKey(clip)
     return unavailableAssetStatus(assetStatuses.get(clip.assetRef.assetID)) || (key !== null && failedMediaKeys.has(key))
       ? undefined
@@ -177,6 +182,10 @@ export function TimelinePreviewStage({
   const nextVideoURL = sourceURL(agentBaseURL, projectID, availableClip(nextVideo))
   const previousVideoURL = sourceURL(agentBaseURL, projectID, availableClip(previousVideo))
   const availableOverlays = active.overlays.filter((clip) => availableClip(clip) !== undefined)
+  const subtitleTrack = timeline.tracks.find((track): track is CinemaTimelineSubtitleTrack => track.kind === "subtitle" && track.id === activeSubtitleTrackID && !track.hidden)
+  const activeSubtitles = subtitleTrack
+    ? active.subtitles.filter((cue) => cue.trackID === subtitleTrack.id)
+    : []
   const unavailableVisual = Boolean(active.video && !videoClip)
     || active.overlays.some((clip) => availableClip(clip) === undefined)
   const durationUs = timeline.clips.reduce((duration, clip) => Math.max(duration, clip.timelineStartUs + clip.durationUs), 0)
@@ -185,6 +194,17 @@ export function TimelinePreviewStage({
     if (!key) return
     setFailedMediaKeys((current) => new Set(current).add(key))
   }
+
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage) return
+    const update = () => setStageHeight(stage.clientHeight)
+    update()
+    if (typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(update)
+    observer.observe(stage)
+    return () => observer.disconnect()
+  }, [])
 
   const videoDesiredSeconds = videoClip
     ? (videoClip.sourceInUs + (playheadUs - videoClip.timelineStartUs) * videoClip.playbackRate) / 1_000_000
@@ -201,7 +221,8 @@ export function TimelinePreviewStage({
     if (!video || !clip) return
     video.playbackRate = clip.playbackRate
     video.volume = Math.min(1, clip.volume)
-    video.muted = muted || timeline.tracks.find((track) => track.id === clip.trackID)?.muted === true
+    const track = timeline.tracks.find((candidate) => candidate.id === clip.trackID)
+    video.muted = muted || (track?.kind !== "subtitle" && track?.muted === true)
     if (playing && playbackDirection > 0) void video.play().catch(() => undefined)
     else video.pause()
   }, [muted, playbackDirection, playing, timeline.tracks, videoClip])
@@ -211,14 +232,15 @@ export function TimelinePreviewStage({
     if (!audio || !audioClip) return
     audio.playbackRate = audioClip.playbackRate
     audio.volume = Math.min(1, audioClip.volume * timelineAudioFadeGain(audioClip, playheadUs))
-    audio.muted = muted || timeline.tracks.find((track) => track.id === audioClip.trackID)?.muted === true
+    const track = timeline.tracks.find((candidate) => candidate.id === audioClip.trackID)
+    audio.muted = muted || (track?.kind !== "subtitle" && track?.muted === true)
     if (playing && playbackDirection > 0) void audio.play().catch(() => undefined)
     else audio.pause()
   }, [audioClip, muted, playbackDirection, playing, timeline.tracks])
 
   return (
     <section className="cinema-timeline-preview" aria-label={t("timeline.preview")}>
-      <div className="cinema-timeline-preview-stage">
+      <div ref={stageRef} className="cinema-timeline-preview-stage">
         {videoURL ? <video ref={videoRef} key={videoURL} src={videoURL} playsInline preload="auto" onError={() => failMedia(videoClip)} style={timelinePreviewVisualStyle(videoClip!, timeline.settings)} /> : null}
         {availableOverlays.map((clip) => clip.kind === "text" ? (
           <div key={clip.id} className="cinema-timeline-text-overlay" style={timelinePreviewVisualStyle(clip, timeline.settings)}><span>{clip.text.value}</span></div>
@@ -237,6 +259,26 @@ export function TimelinePreviewStage({
         ) : (
           <img key={clip.id} src={sourceURL(agentBaseURL, projectID, clip)} alt="" onError={() => failMedia(clip)} style={timelinePreviewVisualStyle(clip, timeline.settings)} />
         ))}
+        {subtitleTrack ? (
+          <div className={`cinema-timeline-subtitle-layer is-${subtitleTrack.style.alignment}`} aria-live="off">
+            {activeSubtitles.map((cue, index) => {
+              const scale = stageHeight / timeline.settings.height
+              const style = subtitleTrack.style
+              return <div
+                key={cue.id}
+                className="cinema-timeline-subtitle-cue"
+                style={{
+                  bottom: (style.marginBottomPx + index * style.fontSizePx * 1.35) * scale,
+                  color: style.textColor,
+                  background: style.backgroundColor,
+                  fontFamily: "'Noto Sans CJK SC', 'Microsoft YaHei', 'PingFang SC', sans-serif",
+                  fontSize: Math.max(10, style.fontSizePx * scale),
+                  WebkitTextStroke: `${style.outlineWidthPx * scale}px ${style.outlineColor}`,
+                }}
+              >{cue.speaker ? <span className="cinema-timeline-subtitle-speaker">{cue.speaker}: </span> : null}{cue.cueText}</div>
+            })}
+          </div>
+        ) : null}
         {unavailableVisual ? <p className="cinema-timeline-preview-status" role="status">{t("timeline.previewUnavailable")}</p> : null}
         {!videoURL && availableOverlays.length === 0 && !unavailableVisual ? timeline.clips.length === 0 ? (
           <div className="cinema-timeline-preview-empty">

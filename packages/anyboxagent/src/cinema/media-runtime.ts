@@ -39,6 +39,7 @@ type FFprobeDocument = {
 export type MediaToolPaths = {
   ffmpeg: string
   ffprobe: string
+  subtitleFontPath?: string
 }
 
 export type MediaToolRunOptions = {
@@ -161,7 +162,15 @@ export async function resolveMediaToolPaths(env: NodeJS.ProcessEnv = process.env
       "FFmpeg runtime is unavailable. Set ANYBOX_FFMPEG_BINARY and ANYBOX_FFPROBE_BINARY or install both tools on PATH.",
     )
   }
-  return { ffmpeg, ffprobe }
+  const configuredFont = env.ANYBOX_SUBTITLE_FONT?.trim()
+  const fontCandidate = configuredFont
+    ? path.resolve(configuredFont)
+    : path.join(path.dirname(ffmpeg), "fonts", "NotoSansCJKsc-Regular.otf")
+  return {
+    ffmpeg,
+    ffprobe,
+    ...(fs.existsSync(fontCandidate) ? { subtitleFontPath: fontCandidate } : {}),
+  }
 }
 
 function appendLimited(current: Buffer<ArrayBufferLike>, chunk: Buffer<ArrayBufferLike>, limit: number) {

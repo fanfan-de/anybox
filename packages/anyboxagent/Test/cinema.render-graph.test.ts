@@ -32,7 +32,7 @@ const logo = ref("logo", "image")
 
 function timeline(): CinemaTimelineDocument {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: "timeline-1",
     projectID: "project-1",
     title: "Render graph",
@@ -241,8 +241,10 @@ describe("Cinema FFmpeg render graph", () => {
   test("applies lower-order overlay tracks last so Preview and Deliver share stacking semantics", () => {
     const source = timeline()
     source.tracks.push({ id: "o2", kind: "overlay", title: "O2", order: 3, locked: false, muted: false, hidden: false })
+    const firstClip = source.clips[0]!
+    if (!("title" in firstClip)) throw new Error("Expected an asset clip fixture")
     source.clips.push({
-      ...source.clips[0]!,
+      ...firstClip,
       id: "logo-bottom-clip",
       trackID: "o2",
       title: "Logo bottom",
@@ -278,6 +280,24 @@ describe("Cinema FFmpeg render graph", () => {
     expect(plan.filterComplex).toContain("x='440-overlay_w*0.25'")
     expect(plan.filterComplex).toContain("y='480-overlay_h*0.75'")
     expect(plan.filterComplex).toContain("colorchannelmixer=aa=0.75")
+  })
+
+  test("burns subtitles after visual composition and before custom range trim", () => {
+    const source = timeline()
+    source.tracks.push({
+      id: "s1", kind: "subtitle", title: "S1", order: 3, locked: false, hidden: false,
+      language: "zh-CN", role: "subtitle",
+      style: { fontFamilyID: "anybox-subtitle-sans-v1", fontSizePx: 52, textColor: "#FFFFFFFF", outlineColor: "#000000FF", outlineWidthPx: 2, backgroundColor: "#00000000", alignment: "bottom-center", marginBottomPx: 64 },
+    })
+    source.clips.push({ id: "cue-1", trackID: "s1", kind: "subtitle", timelineStartUs: 500_000, durationUs: 2_000_000, cueText: "你好", createdAt: now, updatedAt: now })
+    const plan = buildCinemaRenderPlan({
+      timeline: source,
+      settings: { ...settings(), range: { type: "custom", startUs: 500_000, endUs: 4_500_000 }, subtitles: { mode: "burn-in", trackID: "s1" } },
+      inputs: inputs(), outputPath: "output.mp4", videoEncoder: "libx264", audioEncoder: "aac", subtitleAssFilename: "subtitle.ass",
+    })
+    const assIndex = plan.filterComplex.indexOf("ass=subtitle.ass:fontsdir=fonts")
+    expect(assIndex).toBeGreaterThan(plan.filterComplex.lastIndexOf("overlay="))
+    expect(assIndex).toBeLessThan(plan.filterComplex.indexOf("trim=start=0.5:end=4.5"))
   })
 
   test("rejects filter injection, missing inputs, unsupported text, and out-of-range output", () => {

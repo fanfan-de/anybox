@@ -106,7 +106,7 @@ function job(id = "snapshot-job"): CinemaRenderJob {
 
 function timeline(projectVideo: CinemaAssetRef, personalAudio?: CinemaAssetRef): CinemaTimelineDocument {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: "timeline-1",
     projectID: "project-1",
     title: "Snapshot timeline",

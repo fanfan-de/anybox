@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { readFile } from "node:fs/promises"
 
 import {
   CinemaRenderExecutionRuntimeSchema,
@@ -16,6 +17,7 @@ import {
 
 const RUNTIME_PROBE_TIMEOUT_MS = 10_000
 const RUNTIME_PROBE_OUTPUT_LIMIT_BYTES = 2 * 1024 * 1024
+const SUBTITLE_FONT_SHA256 = "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
 
 type SupportedPlatform = CinemaRenderRuntimeStatus["platform"]
 
@@ -52,6 +54,12 @@ export function parseCinemaRenderEncoders(output: string) {
   return { videoEncoders, audioEncoders }
 }
 
+export function parseCinemaSubtitleRenderer(output: string) {
+  return /^\s*[TSC.]{2,3}\s+ass\s+.*\blibass\b/im.test(output)
+    ? "libass" as const
+    : null
+}
+
 function stableRuntimeUnavailable(platform: SupportedPlatform) {
   return CinemaRenderRuntimeStatusSchema.parse({
     available: false,
@@ -59,6 +67,7 @@ function stableRuntimeUnavailable(platform: SupportedPlatform) {
     ffprobeAvailable: false,
     videoEncoders: [],
     audioEncoders: [],
+    subtitleRenderer: null,
     issue: "FFmpeg and ffprobe are unavailable or could not be started.",
   })
 }
@@ -72,20 +81,29 @@ async function probeCinemaRenderRuntime(
     timeoutMs: RUNTIME_PROBE_TIMEOUT_MS,
     outputLimitBytes: RUNTIME_PROBE_OUTPUT_LIMIT_BYTES,
   }
-  const [ffmpegVersion, ffprobeVersion, encoderList] = await Promise.all([
+  const [ffmpegVersion, ffprobeVersion, encoderList, filterList] = await Promise.all([
     dependencies.runMediaTool(tools.ffmpeg, ["-hide_banner", "-version"], options),
     dependencies.runMediaTool(tools.ffprobe, ["-hide_banner", "-version"], options),
     dependencies.runMediaTool(tools.ffmpeg, ["-hide_banner", "-encoders"], options),
+    dependencies.runMediaTool(tools.ffmpeg, ["-hide_banner", "-filters"], options),
   ])
   const encoderOutput = `${encoderList.stdout}\n${encoderList.stderr}`
   const encoders = parseCinemaRenderEncoders(encoderOutput)
   const version = parseCinemaFFmpegVersion(`${ffmpegVersion.stdout}\n${ffmpegVersion.stderr}`)
+  const fontDigest = tools.subtitleFontPath
+    ? createHash("sha256").update(await readFile(tools.subtitleFontPath)).digest("hex")
+    : null
+  const subtitleRenderer = parseCinemaSubtitleRenderer(`${filterList.stdout}\n${filterList.stderr}`) === "libass"
+    && fontDigest === SUBTITLE_FONT_SHA256
+    ? "libass" as const
+    : null
   const status = CinemaRenderRuntimeStatusSchema.parse({
     available: true,
     ...(version ? { version } : {}),
     platform: dependencies.platform,
     ffprobeAvailable: Boolean(ffprobeVersion.stdout || ffprobeVersion.stderr),
     ...encoders,
+    subtitleRenderer,
   })
   return { status, tools }
 }

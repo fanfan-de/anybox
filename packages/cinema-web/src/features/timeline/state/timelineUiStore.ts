@@ -11,6 +11,7 @@ export type CinemaTimelineUiSnapshot = {
   trackHeightsPx: Record<string, number>
   collapsedTrackIDs: string[]
   followPlayhead: boolean
+  activeSubtitleTrackID: string | null
 }
 
 const defaultSnapshot: CinemaTimelineUiSnapshot = {
@@ -26,6 +27,7 @@ const defaultSnapshot: CinemaTimelineUiSnapshot = {
   trackHeightsPx: {},
   collapsedTrackIDs: [],
   followPlayhead: true,
+  activeSubtitleTrackID: null,
 }
 
 function storageKey(projectID: string, timelineID: string) {
@@ -70,6 +72,9 @@ export function readCinemaTimelineUiSnapshot(projectID: string, timelineID: stri
         ? [...new Set(raw.collapsedTrackIDs.filter((trackID): trackID is string => typeof trackID === "string" && trackID.length > 0))]
         : [],
       followPlayhead: typeof raw.followPlayhead === "boolean" ? raw.followPlayhead : true,
+      activeSubtitleTrackID: typeof raw.activeSubtitleTrackID === "string" && raw.activeSubtitleTrackID.length > 0
+        ? raw.activeSubtitleTrackID
+        : null,
     }
   } catch {
     return defaultSnapshot

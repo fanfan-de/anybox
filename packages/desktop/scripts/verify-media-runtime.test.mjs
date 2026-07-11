@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { createHash } from "node:crypto"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
@@ -14,7 +15,7 @@ import {
   resolveMediaRuntimeTarget,
   validateMediaRuntimeLock,
 } from "./verify-media-runtime.mjs"
-import { prepareMediaTools, resolveMediaToolsPreparation } from "./prepare-media-tools.mjs"
+import { copyExternalTools, prepareMediaTools, resolveMediaToolsPreparation } from "./prepare-media-tools.mjs"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const lock = JSON.parse(fs.readFileSync(path.resolve(scriptDir, "..", "media-runtime.lock.json"), "utf8"))
@@ -46,6 +47,28 @@ function completedTarget(target, platform, arch) {
   result.binaries = {
     [result.executables.ffmpeg]: { sha256: "2".repeat(64) },
     [result.executables.ffprobe]: { sha256: "3".repeat(64) },
+  }
+  const evidenceFile = (fileName) => ({ fileName, sizeBytes: 1_024, sha256: "6".repeat(64) })
+  result.buildEvidence = {
+    candidateSmoke: {
+      render: {
+        durationSeconds: 1,
+        videoCodec: "h264",
+        audioCodec: "aac",
+        output: evidenceFile("evidence/smoke.mp4"),
+        probe: evidenceFile("evidence/smoke.ffprobe.json"),
+      },
+      subtitle: {
+        durationSeconds: 1,
+        videoCodec: "h264",
+        renderer: "libass",
+        fontSha256: lock.subtitleRuntimeSources.font.sha256,
+        output: evidenceFile("evidence/subtitle-smoke.mp4"),
+        probe: evidenceFile("evidence/subtitle-smoke.ffprobe.json"),
+        script: evidenceFile("evidence/subtitle-smoke.ass"),
+        frame: evidenceFile("evidence/subtitle-smoke.png"),
+      },
+    },
   }
   return result
 }
@@ -131,6 +154,51 @@ test("artifact-pending targets remove stale bundled media tools", async () => {
   }
 })
 
+test("beta media materials copy the reviewed subtitle font and OFL license", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "anybox-media-beta-materials-test-"))
+  const inputs = path.join(root, "inputs")
+  const materials = path.join(root, "materials")
+  const target = path.join(root, "target")
+  fs.mkdirSync(path.join(materials, "fonts"), { recursive: true })
+  fs.mkdirSync(inputs, { recursive: true })
+  fs.writeFileSync(path.join(inputs, "ffmpeg.exe"), "ffmpeg")
+  fs.writeFileSync(path.join(inputs, "ffprobe.exe"), "ffprobe")
+  for (const name of ["LICENSE.txt", "THIRD-PARTY-NOTICES.txt", "configure.txt", "SOURCE.txt", "BUILD-RECIPE.sh"]) {
+    fs.writeFileSync(path.join(materials, name), name)
+  }
+  const font = Buffer.from("reviewed font fixture")
+  const fontSha256 = createHash("sha256").update(font).digest("hex")
+  fs.writeFileSync(path.join(materials, "fonts", "NotoSansCJKsc-Regular.otf"), font)
+  fs.writeFileSync(path.join(materials, "fonts", "OFL-1.1.txt"), "SIL OPEN FONT LICENSE")
+  try {
+    await copyExternalTools(
+      path.join(inputs, "ffmpeg.exe"),
+      path.join(inputs, "ffprobe.exe"),
+      target,
+      { ffmpeg: "ffmpeg.exe", ffprobe: "ffprobe.exe" },
+      materials,
+      [{ fileName: "fonts/NotoSansCJKsc-Regular.otf", sha256: fontSha256 }],
+    )
+    assert.deepEqual(fs.readFileSync(path.join(target, "fonts", "NotoSansCJKsc-Regular.otf")), font)
+    assert.match(fs.readFileSync(path.join(target, "fonts", "OFL-1.1.txt"), "utf8"), /OPEN FONT LICENSE/)
+
+    fs.rmSync(path.join(materials, "fonts", "OFL-1.1.txt"))
+    await assert.rejects(
+      () => copyExternalTools(
+        path.join(inputs, "ffmpeg.exe"),
+        path.join(inputs, "ffprobe.exe"),
+        path.join(root, "missing-license-target"),
+        { ffmpeg: "ffmpeg.exe", ffprobe: "ffprobe.exe" },
+        materials,
+        [{ fileName: "fonts/NotoSansCJKsc-Regular.otf", sha256: fontSha256 }],
+      ),
+      /fonts\/OFL-1\.1\.txt/,
+    )
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test("media runtime lock represents both Anybox candidates as pending and blocks Linux", () => {
   validateMediaRuntimeLock(lock)
   const target = resolveMediaRuntimeTarget(lock, "win32", "x64")
@@ -148,6 +216,16 @@ test("media runtime lock represents both Anybox candidates as pending and blocks
   assert.deepEqual(darwin.requiredEncoders, ["h264_videotoolbox", "aac"])
   assert.throws(() => assertMediaRuntimeReleaseApproved(darwin, "darwin", "arm64"), /not approved/)
   assert.throws(() => resolveMediaRuntimeTarget(lock, "linux", "x64"), /packaging is blocked/)
+})
+
+test("completed runtime targets require archive-bound render and subtitle smoke evidence", () => {
+  const completedLock = structuredClone(lock)
+  const target = completedTarget(completedLock.platforms.win32.targets.x64, "win32", "x64")
+  completedLock.platforms.win32.targets.x64 = target
+  assert.doesNotThrow(() => validateMediaRuntimeLock(completedLock))
+
+  delete target.buildEvidence.candidateSmoke.subtitle.frame
+  assert.throws(() => validateMediaRuntimeLock(completedLock), /subtitle frame has an invalid filename/)
 })
 
 test("executable names come from each locked target", () => {

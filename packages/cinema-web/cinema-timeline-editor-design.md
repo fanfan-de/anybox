@@ -847,3 +847,10 @@ type CinemaTimelineCanvasNodeData = {
 - 刷新页面后 timeline 保留。
 - 能导出一个 MP4。
 - 导出 MP4 能通过现有 Cinema asset preview 播放。
+# Subtitle Track / Cue MVP (Schema V2)
+
+Cinema Timeline Schema V2 adds a dedicated `subtitle` Track and Cue type. Subtitle Cues remain in the document `clips` array so selection, move, split, clipboard, delete, Ripple, optimistic projection, revision history, Undo and Redo use the same atomic command path as other timed content. V1 documents are migrated in memory and are only persisted as V2 after the first successful edit.
+
+The editor exposes S1/S2 tracks, a subtitle Media Bin page, a compact 3-second Cue composer, separate Cue and track-style inspectors, SRT/WebVTT import/export, one active preview language, and non-blocking readability/timing warnings. Subtitle tracks allow overlaps; all media-track overlap rules remain unchanged.
+
+The fixed `anybox-subtitle-sans-v1` family maps to Noto Sans CJK SC Regular 2.004. Preview style values are authored against 1920×1080 and scaled by the actual canvas height, matching ASS delivery conversion.

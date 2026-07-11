@@ -322,6 +322,7 @@ export function DeliverWorkbench({
           onSettingsChange={updateSettings}
           onPresetChange={choosePreset}
           timelineDurationUs={timelineDurationUs}
+          timeline={timeline}
           renderApi={api}
           executionAuthorized={retentionExecutionAuthorized}
           disabled={createPending || Boolean(selectedJob && isRenderActive(selectedJob.status))}

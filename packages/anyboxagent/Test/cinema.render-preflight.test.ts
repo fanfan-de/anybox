@@ -58,7 +58,7 @@ function record(assetRef: CinemaAssetRef, overrides: Partial<CinemaAssetRecord> 
 function timeline(extraClips: CinemaTimelineDocument["clips"] = []): CinemaTimelineDocument {
   const videoRef = ref("video-1", "video")
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: "timeline-1",
     projectID: "project-1",
     title: "Rough cut",
@@ -347,5 +347,23 @@ describe("Cinema render preflight", () => {
       "timeline-empty",
       "main-video-missing",
     ]))
+  })
+
+  test("requires a valid non-empty subtitle track and reviewed libass runtime", async () => {
+    const source = timeline()
+    source.tracks.push({
+      id: "s1", kind: "subtitle", title: "S1", order: 3, locked: false, hidden: false,
+      language: "zh-CN", role: "subtitle",
+      style: { fontFamilyID: "anybox-subtitle-sans-v1", fontSizePx: 52, textColor: "#FFFFFFFF", outlineColor: "#000000FF", outlineWidthPx: 2, backgroundColor: "#00000000", alignment: "bottom-center", marginBottomPx: 64 },
+    })
+    source.clips.push({ id: "cue-1", trackID: "s1", kind: "subtitle", timelineStartUs: 0, durationUs: 300_000, cueText: "中文 subtitle", createdAt: now, updatedAt: now })
+    const settings = { ...defaultCinemaRenderSettings(source), subtitles: { mode: "burn-in" as const, trackID: "s1" } }
+    const blocked = await preflightCinemaRender({ cinemaRoot: "C:/cinema", projectID: "project-1", timeline: source, settings, dependencies: dependencies(recordsFor(source)) })
+    expect(blocked.issues.map((item) => item.code)).toEqual(expect.arrayContaining(["subtitle-runtime-unavailable", "subtitle-quality-warning"]))
+    const ready = await preflightCinemaRender({
+      cinemaRoot: "C:/cinema", projectID: "project-1", timeline: source, settings,
+      dependencies: dependencies(recordsFor(source), { getCinemaRenderRuntimeStatus: async () => ({ ...runtime, subtitleRenderer: "libass" }) }),
+    })
+    expect(ready.issues.some((item) => item.code === "subtitle-runtime-unavailable")).toBe(false)
   })
 })

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { ChevronLeft, Film, Folder, Grid2X2, Image, LayoutList, ListVideo, Music, Plus, Search, Trash2 } from "lucide-react"
 import type { CinemaAssetKind, CinemaAssetRecord } from "@anybox/shared"
@@ -6,7 +6,7 @@ import type { CinemaTimelineDocument } from "@anybox/shared/cinema-timeline"
 import { createAssetLibraryApi } from "../../assets/assetLibraryApi"
 import { useI18n, type TranslationKey } from "../../../i18n"
 
-export type TimelineMediaSection = "timelines" | "project" | "generated" | "imported"
+export type TimelineMediaSection = "timelines" | "subtitles" | "project" | "generated" | "imported"
 type MediaKind = "all" | CinemaAssetKind
 
 export function TimelineMediaBin({
@@ -23,6 +23,7 @@ export function TimelineMediaBin({
   revealedAsset,
   section,
   onSectionChange,
+  subtitlePanel,
 }: {
   agentBaseURL: string
   projectID: string
@@ -37,6 +38,7 @@ export function TimelineMediaBin({
   revealedAsset?: { id: string; displayName: string; requestID: string; section: TimelineMediaSection } | null
   section: TimelineMediaSection
   onSectionChange: (section: TimelineMediaSection) => void
+  subtitlePanel?: ReactNode
 }) {
   const { t } = useI18n()
   const [query, setQuery] = useState("")
@@ -65,7 +67,7 @@ export function TimelineMediaBin({
   )
   const stateQuery = useQuery({
     queryKey: ["cinema-timeline-media-state", agentBaseURL, projectID],
-    enabled: section !== "timelines",
+    enabled: section !== "timelines" && section !== "subtitles",
     queryFn: ({ signal }) => assetApi.getState(signal),
   })
   const sectionRoot = section === "generated"
@@ -76,7 +78,7 @@ export function TimelineMediaBin({
   const effectiveFolderID = folderID ?? sectionRoot ?? ""
   const entriesQuery = useQuery({
     queryKey: ["cinema-timeline-media", agentBaseURL, projectID, section, effectiveFolderID, query],
-    enabled: section !== "timelines" && Boolean(effectiveFolderID),
+    enabled: section !== "timelines" && section !== "subtitles" && Boolean(effectiveFolderID),
     queryFn: ({ signal }) => assetApi.listEntries({
       folderID: effectiveFolderID,
       query,
@@ -114,6 +116,7 @@ export function TimelineMediaBin({
       <div className="cinema-timeline-media-sections" role="tablist" aria-label={t("timeline.mediaSections")}>
         {([
           ["timelines", "deliver.timelines"],
+          ["subtitles", "timeline.subtitles"],
           ["project", "timeline.projectAssets"],
           ["generated", "timeline.generated"],
           ["imported", "timeline.imported"],
@@ -141,7 +144,7 @@ export function TimelineMediaBin({
             {timelines.length === 0 ? <p className="cinema-timeline-bin-empty">{t("timeline.none")}</p> : null}
           </div>
         </div>
-      ) : (
+      ) : section === "subtitles" ? subtitlePanel : (
         <div className="cinema-timeline-assets">
           {replacementClipTitle ? <p className="cinema-timeline-replacement-hint">{t("timeline.replaceHint", { name: replacementClipTitle })}</p> : null}
           <div className="cinema-timeline-bin-heading">

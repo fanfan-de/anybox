@@ -4,6 +4,7 @@ import {
   getCinemaRenderRuntimeStatus,
   parseCinemaFFmpegVersion,
   parseCinemaRenderEncoders,
+  parseCinemaSubtitleRenderer,
   resolveCinemaRenderRuntimeID,
   resolveLockedCinemaRenderExecutionRuntime,
   selectCinemaRenderExecutionRuntime,
@@ -30,6 +31,8 @@ describe("cinema render runtime", () => {
       videoEncoders: ["libx264", "h264_mf", "h264_videotoolbox"],
       audioEncoders: ["aac"],
     })
+    expect(parseCinemaSubtitleRenderer(" ... ass               V->V       Render ASS subtitles onto input video using the libass library.")).toBe("libass")
+    expect(parseCinemaSubtitleRenderer(" .. ass               V->V       Render ASS subtitles onto input video using the libass library.")).toBe("libass")
   })
 
   test("discovers tools and returns no executable paths", async () => {
@@ -62,6 +65,7 @@ describe("cinema render runtime", () => {
       ffprobeAvailable: true,
       videoEncoders: ["libx264"],
       audioEncoders: ["aac"],
+      subtitleRenderer: null,
     })
     expect(JSON.stringify(status)).not.toContain("Private Tools")
   })
@@ -81,6 +85,7 @@ describe("cinema render runtime", () => {
       ffprobeAvailable: false,
       videoEncoders: [],
       audioEncoders: [],
+      subtitleRenderer: null,
       issue: "FFmpeg and ffprobe are unavailable or could not be started.",
     })
     expect(JSON.stringify(status)).not.toContain("SECRET")

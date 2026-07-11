@@ -11,9 +11,46 @@ output_dir="${ANYBOX_MEDIA_RUNTIME_OUTPUT_DIR:-${desktop_dir}/build/media-runtim
 source_dir="${work_dir}/ffmpeg"
 prefix_dir="${work_dir}/prefix"
 stage_dir="${output_dir}/stage"
+sources_dir="${output_dir}/subtitle-sources"
+evidence_dir="${stage_dir}/evidence"
+
+if [[ "${ANYBOX_MEDIA_RUNTIME_RUN_SMOKE:-0}" != "1" ]]; then
+  echo "media runtime candidates require ANYBOX_MEDIA_RUNTIME_RUN_SMOKE=1 so render and subtitle evidence is archive-bound" >&2
+  exit 2
+fi
+
+libass_version="0.17.4"
+libass_sha256="78f1179b838d025e9c26e8fef33f8092f65611444ffa1bfc0cfac6a33511a05a"
+freetype_version="2.14.3"
+freetype_sha256="36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f"
+fribidi_version="1.0.16"
+fribidi_sha256="1b1cde5b235d40479e91be2f0e88a309e3214c8ab470ec8a2744d82a5a9ea05c"
+harfbuzz_version="14.2.1"
+harfbuzz_sha256="a54a5d8e9380a41fbb762ce367bcbf7704792dfca0d93f1bbca86c5a57902e0e"
+noto_version="2.004"
+noto_sha256="2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
 
 rm -rf "${work_dir}" "${output_dir}"
-mkdir -p "${work_dir}" "${output_dir}" "${stage_dir}"
+mkdir -p "${work_dir}" "${output_dir}" "${stage_dir}" "${sources_dir}" "${stage_dir}/fonts" "${evidence_dir}"
+
+fetch_verified() {
+  local url="$1"
+  local output="$2"
+  local expected="$3"
+  curl --fail --location --retry 3 --output "${output}" "${url}"
+  echo "${expected}  ${output}" | sha256sum --check --status
+}
+
+fetch_verified "https://github.com/libass/libass/releases/download/${libass_version}/libass-${libass_version}.tar.xz" "${sources_dir}/libass-${libass_version}.tar.xz" "${libass_sha256}"
+fetch_verified "https://download.savannah.gnu.org/releases/freetype/freetype-${freetype_version}.tar.xz" "${sources_dir}/freetype-${freetype_version}.tar.xz" "${freetype_sha256}"
+fetch_verified "https://github.com/fribidi/fribidi/releases/download/v${fribidi_version}/fribidi-${fribidi_version}.tar.xz" "${sources_dir}/fribidi-${fribidi_version}.tar.xz" "${fribidi_sha256}"
+fetch_verified "https://github.com/harfbuzz/harfbuzz/releases/download/${harfbuzz_version}/harfbuzz-${harfbuzz_version}.tar.xz" "${sources_dir}/harfbuzz-${harfbuzz_version}.tar.xz" "${harfbuzz_sha256}"
+fetch_verified "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf" "${stage_dir}/fonts/NotoSansCJKsc-Regular.otf" "${noto_sha256}"
+curl --fail --location --retry 3 --output "${stage_dir}/fonts/OFL-1.1.txt" "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/LICENSE"
+
+test "$(pkg-config --modversion libass)" = "${libass_version}"
+test "$(pkg-config --modversion fribidi)" = "${fribidi_version}"
+test "$(pkg-config --modversion harfbuzz)" = "${harfbuzz_version}"
 git clone --filter=blob:none https://github.com/FFmpeg/FFmpeg.git "${source_dir}"
 git -C "${source_dir}" checkout --detach "${ffmpeg_revision}"
 source_archive="${output_dir}/ffmpeg-source-${ffmpeg_revision}.tar.gz"
@@ -34,6 +71,7 @@ common_flags=(
   "--disable-libx264"
   "--disable-libx265"
   "--disable-libfdk-aac"
+  "--enable-libass"
 )
 
 case "${platform}/${arch}" in
@@ -72,6 +110,11 @@ cp "${source_dir}/COPYING.LGPLv3" "${stage_dir}/LICENSE.txt"
 cp "${recipe_copy}" "${stage_dir}/BUILD-RECIPE.sh"
 cat > "${stage_dir}/SOURCE.txt" <<EOF
 FFmpeg revision: ${ffmpeg_revision}
+libass: ${libass_version} sha256=${libass_sha256}
+FreeType: ${freetype_version} sha256=${freetype_sha256}
+FriBidi: ${fribidi_version} sha256=${fribidi_sha256}
+HarfBuzz: ${harfbuzz_version} sha256=${harfbuzz_sha256}
+Noto Sans CJK SC: ${noto_version} sha256=${noto_sha256}
 Source archive: $(basename "${source_archive}")
 Source origin: https://github.com/FFmpeg/FFmpeg/commit/${ffmpeg_revision}
 EOF
@@ -83,6 +126,8 @@ FFmpeg revision: ${ffmpeg_revision}
 Source: https://github.com/FFmpeg/FFmpeg/commit/${ffmpeg_revision}
 Build recipe: packages/desktop/scripts/build-media-runtime.sh
 License: LGPL-3.0-or-later; see LICENSE.txt.
+Subtitle renderer: libass ${libass_version} with FreeType ${freetype_version}, FriBidi ${fribidi_version}, and HarfBuzz ${harfbuzz_version}.
+Bundled font: Noto Sans CJK SC ${noto_version}; see fonts/OFL-1.1.txt.
 
 This is an unapproved candidate. It must not be published until immutable mirroring,
 license review, release approval, and installed-app evidence are complete.
@@ -90,14 +135,31 @@ EOF
 
 "${stage_dir}/${ffmpeg_name}" -hide_banner -encoders 2>&1 | grep -q "${video_encoder}"
 "${stage_dir}/${ffmpeg_name}" -hide_banner -encoders 2>&1 | grep -q " aac "
+"${stage_dir}/${ffmpeg_name}" -hide_banner -filters 2>&1 | grep -Eq "[[:space:]]ass[[:space:]].*libass"
 
 if [[ "${ANYBOX_MEDIA_RUNTIME_RUN_SMOKE:-0}" == "1" ]]; then
-  smoke_output="${output_dir}/smoke.mp4"
-  "${stage_dir}/${ffmpeg_name}" -hide_banner -loglevel error \
+  pushd "${evidence_dir}" >/dev/null
+  "../${ffmpeg_name}" -hide_banner -loglevel error \
     -f lavfi -i "testsrc2=size=320x180:rate=24" \
     -f lavfi -i "sine=frequency=1000:sample_rate=48000" \
-    -t 1 -c:v "${video_encoder}" -c:a aac -y "${smoke_output}"
-  "${stage_dir}/${ffprobe_name}" -v error -show_streams -show_format -of json "${smoke_output}" > "${output_dir}/smoke.ffprobe.json"
+    -t 1 -c:v "${video_encoder}" -c:a aac -y smoke.mp4
+  "../${ffprobe_name}" -v error -show_streams -show_format -of json smoke.mp4 > smoke.ffprobe.json
+  cat > subtitle-smoke.ass <<'EOF'
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 320
+PlayResY: 180
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Noto Sans CJK SC,24,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,20,20,20,1
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,Cinema 字幕 smoke
+EOF
+  "../${ffmpeg_name}" -hide_banner -loglevel error -f lavfi -i "color=c=black:s=320x180:r=24:d=1" -vf "ass=subtitle-smoke.ass:fontsdir=../fonts" -c:v "${video_encoder}" -an -y subtitle-smoke.mp4
+  "../${ffprobe_name}" -v error -show_streams -show_format -of json subtitle-smoke.mp4 > subtitle-smoke.ffprobe.json
+  "../${ffmpeg_name}" -hide_banner -loglevel error -ss 0.5 -i subtitle-smoke.mp4 -frames:v 1 -y subtitle-smoke.png
+  popd >/dev/null
 fi
 
 tar -czf "${output_dir}/${archive_name}" -C "${stage_dir}" .

@@ -20,7 +20,7 @@
     "icons:generate": "node ./scripts/generate-app-icons.mjs",
     "verify:media-runtime": "node ./scripts/verify-media-runtime.mjs",
     "verify:media-runtime:release": "node ./scripts/verify-media-runtime.mjs --release-strict",
-    "test:media-runtime-lock": "node --test ./scripts/verify-media-runtime.test.mjs ./scripts/verify-deliver-release-gates.test.mjs",
+    "test:media-runtime-lock": "node --test ./scripts/verify-media-runtime.test.mjs ./scripts/verify-deliver-release-gates.test.mjs ./scripts/media-runtime-candidate.test.mjs",
     "media-runtime:promote-candidate": "node ./scripts/promote-media-runtime-candidate.mjs",
     "verify:agent-runtime": "node ./scripts/verify-agent-runtime.mjs",
     "verify:agent-runtime:release": "node ./scripts/verify-agent-runtime.mjs --release-strict",

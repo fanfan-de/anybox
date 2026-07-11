@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
-import { rm } from "node:fs/promises"
+import { copyFile, mkdir, rm, writeFile } from "node:fs/promises"
+import path from "node:path"
 
 import type {
   CinemaRenderDiagnosticSummary,
@@ -10,6 +11,7 @@ import type {
 } from "@anybox/shared/cinema-render"
 
 import { buildCinemaRenderPlan, type CinemaRenderResolvedInput } from "#cinema/render-graph.ts"
+import { generateCinemaSubtitleAss } from "#cinema/render-subtitles.ts"
 import { probeMediaFile } from "#cinema/media-runtime.ts"
 import {
   findRegisteredCinemaRenderOutput,
@@ -338,6 +340,17 @@ export async function executeCinemaRenderJob(
     }
     const timeline = await readCinemaRenderTimelineSnapshot(entry.cinemaRoot, job.id)
     if (!timeline) throw new Error("Timeline snapshot is missing")
+    const burnIn = job.settings.subtitles?.mode === "burn-in" ? job.settings.subtitles : null
+    if (burnIn) {
+      if (!tools.subtitleFontPath) throw new Error("The reviewed subtitle font is unavailable")
+      await writeFile(
+        path.join(paths.jobDirectory, "subtitle.ass"),
+        generateCinemaSubtitleAss({ timeline, settings: job.settings, trackID: burnIn.trackID }),
+        "utf8",
+      )
+      await mkdir(path.join(paths.jobDirectory, "fonts"), { recursive: true })
+      await copyFile(tools.subtitleFontPath, path.join(paths.jobDirectory, "fonts", "NotoSansCJKsc-Regular.otf"))
+    }
     const plan = buildCinemaRenderPlan({
       timeline,
       settings: job.settings,
@@ -345,6 +358,7 @@ export async function executeCinemaRenderJob(
       outputPath: paths.temporaryOutputPath,
       videoEncoder: executionRuntime.videoEncoder,
       audioEncoder: executionRuntime.audioEncoder,
+      ...(burnIn ? { subtitleAssFilename: "subtitle.ass" as const } : {}),
     })
     await appendEvent(entry.cinemaRoot, job.id, "probe-completed")
     throwIfCanceled(signal)
@@ -366,6 +380,7 @@ export async function executeCinemaRenderJob(
         settings: job.settings,
         signal,
         onProgress: progressWriter.accept,
+        workingDirectory: paths.jobDirectory,
       })
     } finally {
       job = await progressWriter.close()
