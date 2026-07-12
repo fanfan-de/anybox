@@ -2,12 +2,17 @@ import { useEffect, useMemo, useState } from "react"
 import { marked, Renderer } from "marked"
 import { AtmosphereBackground } from "../AtmosphereBackground"
 import {
-  docsArticles,
-  docsSections,
+  docsSectionsByLanguage,
   getDocsArticle,
+  getDocsArticles,
   type DocsArticle,
 } from "./docsContent"
 import { InstallerDownloadButton } from "../InstallerDownloadButton"
+import {
+  LanguageSwitcher,
+  type SiteLanguage,
+  useSiteLanguage,
+} from "../language"
 import { repositoryUrl } from "../releaseDownloads"
 
 const brandLogoBlack = "/brand-logo-black.svg"
@@ -79,9 +84,10 @@ function renderMarkdown(markdown: string, headings: DocsHeading[]) {
   })
 }
 
-function useCurrentArticle() {
+function useCurrentArticle(language: SiteLanguage) {
   const [requestedSlug, setRequestedSlug] = useState(() => getSlugFromUrl())
-  const currentArticle = getDocsArticle(requestedSlug) ?? docsArticles[0]
+  const currentArticle =
+    getDocsArticle(requestedSlug, language) ?? getDocsArticles(language)[0]
 
   useEffect(() => {
     const handleLocationChange = () => setRequestedSlug(getSlugFromUrl())
@@ -110,14 +116,24 @@ function useCurrentArticle() {
 }
 
 function DocsHeader() {
+  const { language } = useSiteLanguage()
+  const isChinese = language === "zh"
+
   return (
     <header className="site-header docs-header">
-      <a className="brand-lockup" href="/" aria-label="返回 Anybox 首页">
+      <a
+        className="brand-lockup"
+        href="/"
+        aria-label={isChinese ? "返回 Anybox 首页" : "Back to Anybox home"}
+      >
         <img src={brandLogoBlack} alt="" />
         <span>Anybox</span>
       </a>
-      <nav className="docs-header-nav" aria-label="文档导航">
-        <a href="/">首页</a>
+      <nav
+        className="docs-header-nav"
+        aria-label={isChinese ? "文档导航" : "Documentation navigation"}
+      >
+        <a href="/">{isChinese ? "首页" : "Home"}</a>
         <a href={repositoryUrl} target="_blank" rel="noreferrer">
           GitHub
         </a>
@@ -125,37 +141,45 @@ function DocsHeader() {
           className="button button-primary docs-download-button"
           platform="windows"
         >
-          Windows 下载
+          {isChinese ? "Windows 下载" : "Download for Windows"}
         </InstallerDownloadButton>
         <InstallerDownloadButton
           className="button button-secondary docs-download-button"
           platform="mac"
         >
-          macOS 下载
+          {isChinese ? "macOS 下载" : "Download for macOS"}
         </InstallerDownloadButton>
         <InstallerDownloadButton
           className="button button-secondary docs-download-button"
           platform="mobile"
         >
-          Android 下载
+          {isChinese ? "Android 下载" : "Download for Android"}
         </InstallerDownloadButton>
       </nav>
+      <LanguageSwitcher />
     </header>
   )
 }
 
 function DocsSidebar({
   currentArticle,
+  language,
   onSelectArticle,
 }: {
   currentArticle: DocsArticle
+  language: SiteLanguage
   onSelectArticle: (article: DocsArticle) => void
 }) {
+  const sections = docsSectionsByLanguage[language]
+
   return (
-    <aside className="docs-sidebar" aria-label="文档目录">
+    <aside
+      className="docs-sidebar"
+      aria-label={language === "zh" ? "文档目录" : "Documentation index"}
+    >
       <div className="docs-sidebar-inner">
-        <p>文档</p>
-        {docsSections.map((section) => (
+        <p>{language === "zh" ? "文档" : "Docs"}</p>
+        {sections.map((section) => (
           <div className="docs-nav-section" key={section.title}>
             <span>{section.title}</span>
             {section.items.map((article) => (
@@ -181,22 +205,26 @@ function DocsSidebar({
 
 function DocsMobileNav({
   currentArticle,
+  language,
   onSelectArticle,
 }: {
   currentArticle: DocsArticle
+  language: SiteLanguage
   onSelectArticle: (article: DocsArticle) => void
 }) {
+  const articles = getDocsArticles(language)
+
   return (
     <label className="docs-mobile-nav">
-      <span>当前文档</span>
+      <span>{language === "zh" ? "当前文档" : "Current article"}</span>
       <select
         value={currentArticle.slug}
         onChange={(event) => {
-          const article = getDocsArticle(event.target.value)
+          const article = getDocsArticle(event.target.value, language)
           if (article) onSelectArticle(article)
         }}
       >
-        {docsArticles.map((article) => (
+        {articles.map((article) => (
           <option key={article.slug} value={article.slug}>
             {article.title}
           </option>
@@ -206,15 +234,24 @@ function DocsMobileNav({
   )
 }
 
-function DocsToc({ headings }: { headings: DocsHeading[] }) {
+function DocsToc({
+  headings,
+  language,
+}: {
+  headings: DocsHeading[]
+  language: SiteLanguage
+}) {
   const tocHeadings = headings.filter(
     (heading) => heading.level === 2 || heading.level === 3,
   )
 
   return (
-    <aside className="docs-toc" aria-label="本页目录">
+    <aside
+      className="docs-toc"
+      aria-label={language === "zh" ? "本页目录" : "On this page"}
+    >
       <div>
-        <p>本页目录</p>
+        <p>{language === "zh" ? "本页目录" : "On this page"}</p>
         {tocHeadings.length > 0 ? (
           <nav>
             {tocHeadings.map((heading) => (
@@ -228,7 +265,7 @@ function DocsToc({ headings }: { headings: DocsHeading[] }) {
             ))}
           </nav>
         ) : (
-          <span>暂无目录</span>
+          <span>{language === "zh" ? "暂无目录" : "No sections"}</span>
         )}
       </div>
     </aside>
@@ -236,7 +273,8 @@ function DocsToc({ headings }: { headings: DocsHeading[] }) {
 }
 
 export function DocsApp() {
-  const { currentArticle, navigateToArticle } = useCurrentArticle()
+  const { language } = useSiteLanguage()
+  const { currentArticle, navigateToArticle } = useCurrentArticle(language)
   const headings = useMemo(
     () => extractHeadings(currentArticle.content),
     [currentArticle.content],
@@ -247,8 +285,8 @@ export function DocsApp() {
   )
 
   useEffect(() => {
-    document.title = `${currentArticle.title} - Anybox 文档`
-  }, [currentArticle.title])
+    document.title = `${currentArticle.title} - ${language === "zh" ? "Anybox 文档" : "Anybox Docs"}`
+  }, [currentArticle.title, language])
 
   return (
     <main className="docs-page-shell" id="top">
@@ -257,11 +295,13 @@ export function DocsApp() {
       <div className="docs-layout">
         <DocsSidebar
           currentArticle={currentArticle}
+          language={language}
           onSelectArticle={navigateToArticle}
         />
         <div className="docs-main-column">
           <DocsMobileNav
             currentArticle={currentArticle}
+            language={language}
             onSelectArticle={navigateToArticle}
           />
           <article
@@ -269,7 +309,7 @@ export function DocsApp() {
             dangerouslySetInnerHTML={{ __html: articleHtml }}
           />
         </div>
-        <DocsToc headings={headings} />
+        <DocsToc headings={headings} language={language} />
       </div>
     </main>
   )

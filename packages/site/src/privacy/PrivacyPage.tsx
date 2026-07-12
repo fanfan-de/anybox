@@ -1,7 +1,129 @@
+import { useEffect } from "react"
+import { useSiteLanguage } from "../language"
 import { PolicyLayout } from "../policies/PolicyLayout"
 import { supportEmail, supportMailto } from "../siteLinks"
 
 export function PrivacyPage() {
+  const { language } = useSiteLanguage()
+
+  useEffect(() => {
+    document.title = language === "zh" ? "Anybox 隐私政策" : "Anybox Privacy Policy"
+  }, [language])
+
+  if (language === "zh") {
+    return (
+      <PolicyLayout
+        kicker="隐私政策"
+        title="Anybox 隐私政策"
+        titleId="privacy-title"
+        updated="2026 年 7 月 12 日"
+      >
+        <section>
+          <h2>1. 适用范围</h2>
+          <p>
+            本隐私政策说明 Anybox 如何通过官网、开源桌面应用、Chrome 扩展和
+            Anybox Managed AI Provider 处理信息。桌面应用以本地优先；托管服务为
+            可选功能，需要单独账户。
+          </p>
+        </section>
+        <section>
+          <h2>2. 我们处理的信息</h2>
+          <ul>
+            <li><strong>账户数据：</strong>姓名、邮箱、工作区和账户标识符、密码哈希、验证状态、登录会话及 OAuth 授权记录。</li>
+            <li><strong>托管 AI 请求数据：</strong>你选择通过 Anybox Managed AI 发送的提示词、消息、附件、模型选择和生成结果。</li>
+            <li><strong>用量和服务数据：</strong>模型名称、Token 或用量计数、请求状态、延迟、错误详情、服务成本、订阅权益和交易状态。</li>
+            <li><strong>安全数据：</strong>为保护和运营服务所需的 IP 地址、请求标识符、认证类型、速率限制事件和管理审计记录。</li>
+            <li><strong>支持数据：</strong>你在寻求帮助时选择发送的消息和诊断信息。</li>
+          </ul>
+        </section>
+        <section>
+          <h2>3. 托管 AI 请求</h2>
+          <p>
+            托管 AI 请求内容会传输给所选的上游 AI 供应商以执行请求。普通用量日志记录
+            元数据和计量信息，不记录完整请求正文。为支持安全的幂等重试，符合条件的响应
+            正文可能被加密并临时缓存，通常最长 24 小时，之后清除缓存内容。
+          </p>
+          <p>
+            除非确有必要且你有权提交，否则请勿发送密钥、受监管数据或敏感个人信息。
+            上游供应商会依其适用条款、隐私承诺和账户设置处理请求内容。
+          </p>
+        </section>
+        <section>
+          <h2>4. 桌面应用与 Chrome 扩展</h2>
+          <p>
+            Chrome 扩展用于连接 Chrome 和本地安装的 Anybox Desktop。使用浏览器自动化时，
+            它可能访问标签页、页面内容、截图、DOM 或无障碍信息，以及用户发起的浏览器操作。
+            这些信息通过 Chrome Native Messaging 或 localhost 连接发送给本地 Anybox Agent。
+          </p>
+          <p>
+            扩展只保存连接状态、扩展实例 ID 和传输偏好等有限本地状态。浏览器内容不会用于
+            广告或第三方画像。只有请求的功能需要远程服务时，例如上游模型或 Anybox Managed AI，
+            内容才会离开本地设备。
+          </p>
+        </section>
+        <section>
+          <h2>5. 付款</h2>
+          <p>
+            购买可能由 Paddle 等 Merchant of Record 或结账页显示的其他供应商处理。
+            Merchant of Record 按其自身隐私政策处理付款凭据、税费、收据、退款和交易欺诈检查。
+            Anybox 会接收激活和支持服务所需的交易与权益信息，但不会收到完整银行卡信息。
+          </p>
+        </section>
+        <section>
+          <h2>6. 信息用途</h2>
+          <ul>
+            <li>提供身份验证、模型路由、用量计量和支持。</li>
+            <li>防止欺诈、滥用、禁止内容和服务攻击。</li>
+            <li>维护可靠性、调查故障并改进功能。</li>
+            <li>管理订阅、权益、取消和退款。</li>
+            <li>履行法律、税务、支付网络和供应商义务。</li>
+          </ul>
+        </section>
+        <section>
+          <h2>7. 服务供应商与跨境处理</h2>
+          <p>
+            为提供和保护服务，我们可能在必要范围内与上游 AI 供应商、云和邮件基础设施
+            供应商、欺诈和审核服务及 Merchant of Record 共享信息。这些供应商可能在你
+            所在国家或地区之外处理信息。法律要求或为保护用户、Anybox 或公众时，我们也
+            可能披露信息。
+          </p>
+        </section>
+        <section>
+          <h2>8. 保存期限与安全</h2>
+          <p>
+            我们会在服务交付、欺诈预防、争议处理、法律合规和合理业务需要所必需的期限内
+            保存账户、交易、用量、安全和审计记录。临时加密响应缓存采用更短的运营保存期。
+            我们使用访问控制、敏感服务密钥和合格缓存响应加密、密码哈希、速率限制和审计
+            日志，但任何安全措施都不能保证绝对安全。
+          </p>
+        </section>
+        <section>
+          <h2>9. 你的选择与权利</h2>
+          <p>
+            你可以卸载扩展、停止使用 Managed AI、撤销已连接会话，或请求访问、更正、删除
+            个人数据。因税务、欺诈、付款、安全或法律要求，部分记录可能需要保留。请求需
+            经过身份验证并受适用法律约束。
+          </p>
+        </section>
+        <section>
+          <h2>10. 未成年人</h2>
+          <p>
+            Anybox Managed AI 不面向 18 周岁以下未成年人。在法律允许的情况下，未成年人
+            不应在没有父母或法定监护人参与和同意的情况下使用该服务。
+          </p>
+        </section>
+        <section>
+          <h2>11. 变更与联系</h2>
+          <p>
+            我们可能随产品、供应商或法律要求的变化更新本政策，重大更新会通过页面顶部日期
+            体现。如有隐私问题或请求，请发送邮件至
+            <a href={supportMailto}>{supportEmail}</a>。
+          </p>
+        </section>
+      </PolicyLayout>
+    )
+  }
+
   return (
     <PolicyLayout
       kicker="Privacy Policy"

@@ -435,6 +435,50 @@ a {
   object-position: center;
 }
 
+.language-switcher {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 104px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+}
+
+.language-switcher button {
+  min-width: 46px;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.language-switcher button:hover,
+.language-switcher button:focus-visible {
+  border-color: var(--line);
+  background: var(--bg-soft);
+  color: var(--text);
+  outline: none;
+}
+
+.language-switcher button.is-active {
+  border-color: var(--line-strong);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
 .scenario-card-copy {
   display: flex;
   flex: 1;
@@ -1214,7 +1258,7 @@ a.commit-row:focus-visible {
 }
 
 .pricing-header {
-  grid-template-columns: minmax(180px, 1fr) auto;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
 }
 
 .docs-header-nav a[aria-current="page"] {
@@ -1447,7 +1491,7 @@ a.commit-row:focus-visible {
 }
 
 .policy-header {
-  grid-template-columns: minmax(180px, 1fr) auto;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
 }
 
 .policy-content {
@@ -1544,8 +1588,13 @@ a.commit-row:focus-visible {
 
 @media (max-width: 980px) {
   .site-header {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
     padding: 0 24px;
+  }
+
+  .language-switcher {
+    grid-column: 2;
+    grid-row: 1;
   }
 
   .site-nav {
@@ -1822,7 +1871,7 @@ a.commit-row:focus-visible {
 }
 
 .docs-header {
-  grid-template-columns: minmax(180px, 1fr) auto;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
 }
 
 .docs-header-nav {
@@ -2094,7 +2143,7 @@ a.commit-row:focus-visible {
 
 @media (max-width: 980px) {
   .docs-header {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
     gap: 14px;
     padding-top: 12px;
@@ -2103,10 +2152,20 @@ a.commit-row:focus-visible {
 
   .docs-header-nav {
     display: inline-flex;
+    grid-column: 1 / -1;
+    grid-row: 2;
     justify-self: start;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 12px;
     width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+
+  .docs-header-nav::-webkit-scrollbar {
+    display: none;
   }
 
   .docs-layout {

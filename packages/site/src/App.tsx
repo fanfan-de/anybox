@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react"
 import { AtmosphereBackground } from "./AtmosphereBackground"
-import { navigationItems, proofPoints, scenarioCards } from "./content"
+import { siteContent } from "./content"
 import { GitActivitySection } from "./GitActivity"
 import { InstallerDownloadButton } from "./InstallerDownloadButton"
+import { LanguageSwitcher, useSiteLanguage } from "./language"
 import { repositoryUrl } from "./releaseDownloads"
 import { supportEmail, supportMailto } from "./siteLinks"
 
@@ -108,35 +109,41 @@ function NavigationLink({
   )
 }
 
-function BrandLockup() {
+function BrandLockup({ language }: { language: "zh" | "en" }) {
   return (
-    <a className="brand-lockup" href="#top" aria-label="Anybox 首页">
+    <a
+      className="brand-lockup"
+      href="#top"
+      aria-label={language === "zh" ? "Anybox 首页" : "Anybox home"}
+    >
       <img src={brandLogoBlack} alt="" />
       <span>Anybox</span>
     </a>
   )
 }
 
-function ProofList() {
+function ProofList({ items, label }: { items: string[]; label: string }) {
   return (
-    <ul className="proof-list" aria-label="产品关键信号">
-      {proofPoints.map((item) => (
+    <ul className="proof-list" aria-label={label}>
+      {items.map((item) => (
         <li key={item}>{item}</li>
       ))}
     </ul>
   )
 }
 
-function ScenarioSection() {
+function ScenarioSection({ language }: { language: "zh" | "en" }) {
+  const content = siteContent[language].scenarios
+
   return (
     <section className="scenario-section" aria-labelledby="scenario-heading">
       <div className="scenario-heading">
-        <h2 id="scenario-heading">AnyBox for anything。</h2>
-        <p>从代码到办公，再到创造，把 Anybox 放进你的真实工作现场。</p>
+        <h2 id="scenario-heading">{content.kicker}</h2>
+        <p>{content.description}</p>
       </div>
 
       <div className="scenario-grid">
-        {scenarioCards.map((card) => (
+        {content.cards.map((card) => (
           <article className="scenario-card" key={card.title}>
             <figure className="scenario-card-media">
               <div className="scenario-card-frame">
@@ -146,15 +153,15 @@ function ScenarioSection() {
             <div className="scenario-card-copy">
               <h3>{card.title}</h3>
               <p>
-                <strong>推荐用户：</strong>
+                <strong>{content.audienceLabel}</strong>
                 {card.audience}
               </p>
               <p>
-                <strong>能力描述：</strong>
+                <strong>{content.capabilityLabel}</strong>
                 {card.capability}
               </p>
               <div>
-                <strong>典型任务：</strong>
+                <strong>{content.tasksLabel}</strong>
                 <ul>
                   {card.tasks.map((task) => (
                     <li key={task}>{task}</li>
@@ -177,27 +184,34 @@ function ProductCommunityQr() {
   )
 }
 
-function CommunityBottomSection() {
+function CommunityBottomSection({ language }: { language: "zh" | "en" }) {
   return (
     <section className="community-section" id="product">
       <div className="community-layout">
-        <GitActivitySection />
+        <GitActivitySection language={language} />
         <ProductCommunityQr />
       </div>
     </section>
   )
 }
 
-function SiteFooter() {
+function SiteFooter({ language }: { language: "zh" | "en" }) {
+  const isChinese = language === "zh"
+
   return (
     <footer className="site-footer">
       <span>© 2026 Anybox</span>
-      <nav className="site-footer-links" aria-label="页脚导航">
-        <a href="/pricing/">定价</a>
-        <a href="/terms/">条款</a>
-        <a href="/privacy/">隐私</a>
-        <a href="/refunds/">退款</a>
-        <a href="/acceptable-use/">使用规范</a>
+      <nav
+        className="site-footer-links"
+        aria-label={isChinese ? "页脚导航" : "Footer navigation"}
+      >
+        <a href="/pricing/">{isChinese ? "定价" : "Pricing"}</a>
+        <a href="/terms/">{isChinese ? "条款" : "Terms"}</a>
+        <a href="/privacy/">{isChinese ? "隐私" : "Privacy"}</a>
+        <a href="/refunds/">{isChinese ? "退款" : "Refunds"}</a>
+        <a href="/acceptable-use/">
+          {isChinese ? "使用规范" : "Acceptable Use"}
+        </a>
         <a href={supportMailto}>{supportEmail}</a>
         <a href={icpRecordUrl} rel="noreferrer" target="_blank">
           {icpRecordNumber}
@@ -208,13 +222,26 @@ function SiteFooter() {
 }
 
 export function App() {
+  const { language } = useSiteLanguage()
+  const content = siteContent[language]
+  const isChinese = language === "zh"
+
+  useEffect(() => {
+    document.title = isChinese
+      ? "Anybox｜本地 AI Agent 工作台"
+      : "Anybox | Local AI agent workspace"
+  }, [isChinese])
+
   return (
     <main className="page-shell" id="top">
       <AtmosphereBackground />
       <header className="site-header">
-        <BrandLockup />
-        <nav className="site-nav" aria-label="页面导航">
-          {navigationItems.map((item) => (
+        <BrandLockup language={language} />
+        <nav
+          className="site-nav"
+          aria-label={isChinese ? "页面导航" : "Page navigation"}
+        >
+          {content.navigationItems.map((item) => (
             <NavigationLink
               key={item.href}
               href={item.href}
@@ -223,6 +250,7 @@ export function App() {
             />
           ))}
         </nav>
+        <LanguageSwitcher />
       </header>
 
       <section className="hero-section" aria-labelledby="hero-title">
@@ -231,40 +259,52 @@ export function App() {
             <img className="hero-mark" src={brandLogoBlack} alt="" />
             <h1 id="hero-title">Anybox</h1>
           </div>
-          <p>开源，灵活的通用agent</p>
+          <p>
+            {isChinese
+              ? "开源、灵活的通用 Agent"
+              : "An open-source, flexible general-purpose agent"}
+          </p>
           <div className="hero-actions">
             <InstallerDownloadButton
               className="button button-primary"
               platform="windows"
             >
-              Windows 下载
+              {isChinese ? "Windows 下载" : "Download for Windows"}
             </InstallerDownloadButton>
             <InstallerDownloadButton
               className="button button-secondary"
               platform="mac"
             >
-              macOS 下载
+              {isChinese ? "macOS 下载" : "Download for macOS"}
             </InstallerDownloadButton>
             <InstallerDownloadButton
               className="button button-secondary"
               platform="mobile"
             >
-              Android 下载
+              {isChinese ? "Android 下载" : "Download for Android"}
             </InstallerDownloadButton>
           </div>
           <p className="hero-platform-note">
-            当前提供 Windows x64、macOS Apple Silicon 与 Android；Linux 版本开发中
+            {isChinese
+              ? "当前提供 Windows x64、macOS Apple Silicon 与 Android；Linux 版本开发中"
+              : "Available for Windows x64, macOS Apple Silicon, and Android. Linux is in development."}
           </p>
         </div>
       </section>
 
-      <section className="proof-section" aria-label="Anybox 产品能力">
-        <ProofList />
+      <section
+        className="proof-section"
+        aria-label={isChinese ? "Anybox 产品能力" : "Anybox capabilities"}
+      >
+        <ProofList
+          items={content.proofPoints}
+          label={isChinese ? "产品关键信号" : "Product highlights"}
+        />
       </section>
 
-      <ScenarioSection />
-      <CommunityBottomSection />
-      <SiteFooter />
+      <ScenarioSection language={language} />
+      <CommunityBottomSection language={language} />
+      <SiteFooter language={language} />
     </main>
   )
 }
