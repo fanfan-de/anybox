@@ -101,8 +101,8 @@ function approvalEvidenceFor(target) {
 
 test("media preparation resolves locked targets through explicit preparers", () => {
   const windows = resolveMediaToolsPreparation(lock, "win32", "x64")
-  assert.equal(windows.status, "skipped")
-  assert.equal(windows.reason, "artifact-pending")
+  assert.equal(windows.status, "ready")
+  assert.equal(windows.preparerID, "locked-archive-win32-x64")
   assert.equal(windows.target, lock.platforms.win32.targets.x64)
 
   const darwin = resolveMediaToolsPreparation(lock, "darwin", "arm64")
@@ -137,20 +137,29 @@ test("media preparation resolves locked targets through explicit preparers", () 
 })
 
 test("artifact-pending targets remove stale bundled media tools", async () => {
-  const runtimeDir = fs.mkdtempSync(path.join(os.tmpdir(), "anybox-media-pending-test-"))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "anybox-media-pending-test-"))
+  const runtimeDir = path.join(root, "runtime")
+  const pendingLockPath = path.join(root, "media-runtime.lock.json")
+  const pendingLock = structuredClone(lock)
+  const pendingTarget = pendingLock.platforms.win32.targets.x64
+  pendingTarget.artifactStatus = "pending"
+  delete pendingTarget.distribution
+  delete pendingTarget.binaries
+  delete pendingTarget.buildEvidence
+  fs.writeFileSync(pendingLockPath, `${JSON.stringify(pendingLock, null, 2)}\n`)
   const staleDir = path.join(runtimeDir, "media-tools")
   fs.mkdirSync(staleDir, { recursive: true })
   fs.writeFileSync(path.join(staleDir, "manifest.json"), "{}")
   try {
     await prepareMediaTools({
       runtimeDir,
-      lockPath: path.resolve(scriptDir, "..", "media-runtime.lock.json"),
+      lockPath: pendingLockPath,
       platform: "win32",
       arch: "x64",
     })
     assert.equal(fs.existsSync(staleDir), false)
   } finally {
-    fs.rmSync(runtimeDir, { recursive: true, force: true })
+    fs.rmSync(root, { recursive: true, force: true })
   }
 })
 
@@ -199,11 +208,14 @@ test("beta media materials copy the reviewed subtitle font and OFL license", asy
   }
 })
 
-test("media runtime lock represents both Anybox candidates as pending and blocks Linux", () => {
+test("media runtime lock represents a built Windows candidate, pending macOS candidate, and blocked Linux", () => {
   validateMediaRuntimeLock(lock)
   const target = resolveMediaRuntimeTarget(lock, "win32", "x64")
   assert.equal(target.origin, "anybox-controlled-lgpl")
-  assert.equal(target.artifactStatus, "pending")
+  assert.equal(target.artifactStatus, undefined)
+  assert.equal(target.distribution.releaseTag, "media-runtime-ffmpeg-8ad6288553-unapproved")
+  assert.equal(target.distribution.ffmpegRevision, "8ad6288553")
+  assert.equal(target.distribution.sha256, "d86d40abde4dd878f3144855ffb7529ff8b554d214a80bc61ba55d242d332262")
   assert.equal(target.releaseReadiness.status, "blocked")
   assert.equal(target.releaseReadiness.releaseKind, "initial")
   assert.equal(target.licensePolicy.reviewStatus, "pending")

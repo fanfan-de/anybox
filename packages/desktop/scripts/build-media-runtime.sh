@@ -77,7 +77,13 @@ common_flags=(
 
 case "${platform}/${arch}" in
   win32/x64)
-    target_flags=("--arch=x86_64" "--target-os=mingw32" "--enable-mediafoundation")
+    target_flags=(
+      "--arch=x86_64"
+      "--target-os=mingw32"
+      "--enable-mediafoundation"
+      "--pkg-config-flags=--static"
+      "--extra-ldflags=-static"
+    )
     ffmpeg_name="ffmpeg.exe"
     ffprobe_name="ffprobe.exe"
     video_encoder="h264_mf"

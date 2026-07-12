@@ -1,28 +1,49 @@
 {
   "schemaVersion": 1,
   "subtitleRuntimeSources": {
-    "libass": { "version": "0.17.5", "url": "https://github.com/libass/libass/releases/download/0.17.5/libass-0.17.5.tar.xz", "sha256": "2dca25c0e0c837ddf00b52011b3f82cac1e4ddd3ad018227806b0c2288864acc" },
-    "freetype": { "version": "2.14.3", "url": "https://download.savannah.gnu.org/releases/freetype/freetype-2.14.3.tar.xz", "sha256": "36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f" },
-    "fribidi": { "version": "1.0.16", "url": "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz", "sha256": "1b1cde5b235d40479e91be2f0e88a309e3214c8ab470ec8a2744d82a5a9ea05c" },
-    "harfbuzz": { "version": "14.2.1", "url": "https://github.com/harfbuzz/harfbuzz/releases/download/14.2.1/harfbuzz-14.2.1.tar.xz", "sha256": "a54a5d8e9380a41fbb762ce367bcbf7704792dfca0d93f1bbca86c5a57902e0e" },
-    "font": { "familyID": "anybox-subtitle-sans-v1", "name": "Noto Sans CJK SC Regular", "version": "2.004", "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b", "license": "OFL-1.1" }
+    "libass": {
+      "version": "0.17.5",
+      "url": "https://github.com/libass/libass/releases/download/0.17.5/libass-0.17.5.tar.xz",
+      "sha256": "2dca25c0e0c837ddf00b52011b3f82cac1e4ddd3ad018227806b0c2288864acc"
+    },
+    "freetype": {
+      "version": "2.14.3",
+      "url": "https://download.savannah.gnu.org/releases/freetype/freetype-2.14.3.tar.xz",
+      "sha256": "36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f"
+    },
+    "fribidi": {
+      "version": "1.0.16",
+      "url": "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz",
+      "sha256": "1b1cde5b235d40479e91be2f0e88a309e3214c8ab470ec8a2744d82a5a9ea05c"
+    },
+    "harfbuzz": {
+      "version": "14.2.1",
+      "url": "https://github.com/harfbuzz/harfbuzz/releases/download/14.2.1/harfbuzz-14.2.1.tar.xz",
+      "sha256": "a54a5d8e9380a41fbb762ce367bcbf7704792dfca0d93f1bbca86c5a57902e0e"
+    },
+    "font": {
+      "familyID": "anybox-subtitle-sans-v1",
+      "name": "Noto Sans CJK SC Regular",
+      "version": "2.004",
+      "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+      "license": "OFL-1.1"
+    }
   },
   "platforms": {
     "win32": {
       "status": "supported",
       "targets": {
         "x64": {
-          "runtimeID": "ffmpeg-anybox-win32-x64-lgpl-candidate-pending",
+          "runtimeID": "ffmpeg-anybox-8ad6288553-win32-x64-lgpl",
           "manifestSchemaVersion": 1,
           "origin": "anybox-controlled-lgpl",
-          "artifactStatus": "pending",
           "releaseReadiness": {
             "status": "blocked",
             "releaseKind": "initial",
             "reasons": [
-              "The Anybox-controlled Windows x64 archive has not been built and mirrored yet.",
-              "FFmpeg redistribution and Media Foundation/H.264 use have not received recorded approval.",
-              "The signed installed-app kill/restart smoke has not been recorded."
+              "The candidate still requires recorded license and release approval.",
+              "The immutable mirror and source/build evidence still require approval binding.",
+              "The signed installed-app kill/restart smoke has not been accepted for both release targets."
             ]
           },
           "licensePolicy": {
@@ -31,9 +52,37 @@
             "noticesFile": "THIRD-PARTY-NOTICES.txt",
             "reviewStatus": "pending"
           },
+          "distribution": {
+            "releaseTag": "media-runtime-ffmpeg-8ad6288553-unapproved",
+            "ffmpegRevision": "8ad6288553",
+            "fileName": "ffmpeg-anybox-8ad6288553-win32-x64-lgpl.tar.gz",
+            "sha256": "d86d40abde4dd878f3144855ffb7529ff8b554d214a80bc61ba55d242d332262",
+            "sizeBytes": 45731249,
+            "url": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-unapproved/ffmpeg-anybox-8ad6288553-win32-x64-lgpl.tar.gz",
+            "sourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-unapproved/ffmpeg-source-8ad6288553.tar.gz",
+            "buildSourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-unapproved/build-media-runtime.sh",
+            "source": {
+              "fileName": "ffmpeg-source-8ad6288553.tar.gz",
+              "sizeBytes": 17382583,
+              "sha256": "b1c34a3697e7459de7536dbb208c9e8de19431c5d4b14b09cdfcc30d266e0b7d"
+            },
+            "buildSource": {
+              "fileName": "build-media-runtime.sh",
+              "sizeBytes": 8722,
+              "sha256": "9657878d4038c6cd1438e9e609221243d3641a8169461bbf10096637535f989b"
+            }
+          },
           "executables": {
             "ffmpeg": "ffmpeg.exe",
             "ffprobe": "ffprobe.exe"
+          },
+          "binaries": {
+            "ffmpeg.exe": {
+              "sha256": "02c37760d8feef034e7ee1fdb92ecc3e79a38d7be20a4cf08f1b1be5383004bd"
+            },
+            "ffprobe.exe": {
+              "sha256": "4a895f33f14ccd99adc645fc20471071fdeb7d55d407db92e6369bdf21493804"
+            }
           },
           "buildConfigurationPolicy": {
             "requiredFlags": [
@@ -41,6 +90,8 @@
               "--target-os=mingw32",
               "--enable-version3",
               "--enable-mediafoundation",
+              "--pkg-config-flags=--static",
+              "--extra-ldflags=-static",
               "--enable-libass",
               "--disable-libopenh264",
               "--disable-libx264",
@@ -62,14 +113,66 @@
             "h264_mf",
             "aac"
           ],
-          "requiredFilters": ["ass"],
-          "requiredFonts": [{ "fileName": "fonts/NotoSansCJKsc-Regular.otf", "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b" }],
+          "requiredFilters": [
+            "ass"
+          ],
+          "requiredFonts": [
+            {
+              "fileName": "fonts/NotoSansCJKsc-Regular.otf",
+              "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
+            }
+          ],
           "smokeTest": {
             "durationSeconds": 1,
             "videoEncoder": "h264_mf",
             "audioEncoder": "aac",
             "expectedVideoCodec": "h264",
             "expectedAudioCodec": "aac"
+          },
+          "buildEvidence": {
+            "candidateSmoke": {
+              "render": {
+                "durationSeconds": 1,
+                "videoCodec": "h264",
+                "audioCodec": "aac",
+                "output": {
+                  "fileName": "evidence/smoke.mp4",
+                  "sizeBytes": 59008,
+                  "sha256": "22b9401f90de3ea6f17b01ae608e9fdd2344f06c61921583ee4f58a75d2fc96e"
+                },
+                "probe": {
+                  "fileName": "evidence/smoke.ffprobe.json",
+                  "sizeBytes": 4471,
+                  "sha256": "825174a3ca84a89824e28d126365974b55593d4b9c0803f4900d9f6109fb6544"
+                }
+              },
+              "subtitle": {
+                "durationSeconds": 1,
+                "videoCodec": "h264",
+                "renderer": "libass",
+                "fontSha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+                "output": {
+                  "fileName": "evidence/subtitle-smoke.mp4",
+                  "sizeBytes": 3894,
+                  "sha256": "617a8dde9aa3a01158a6dc7989243dcae2420331167669b4cf96c2668c9d98b7"
+                },
+                "probe": {
+                  "fileName": "evidence/subtitle-smoke.ffprobe.json",
+                  "sizeBytes": 2740,
+                  "sha256": "c364479d4369f324d90b9ee1a014d1ebcdc7f91d31806fcf11f76dc3862958e9"
+                },
+                "script": {
+                  "fileName": "evidence/subtitle-smoke.ass",
+                  "sizeBytes": 589,
+                  "sha256": "593d4d8281db979aaaeba6ef32a02e9e8058649be21424149b090d501aebb5b5"
+                },
+                "frame": {
+                  "fileName": "evidence/subtitle-smoke.png",
+                  "sizeBytes": 4726,
+                  "sha256": "f0de5d632f9a7c78162f2bc03d2a29d20431c4e5e00f53e362d1519863774c95"
+                }
+              }
+            }
           }
         }
       }
@@ -128,8 +231,15 @@
             "h264_videotoolbox",
             "aac"
           ],
-          "requiredFilters": ["ass"],
-          "requiredFonts": [{ "fileName": "fonts/NotoSansCJKsc-Regular.otf", "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b" }],
+          "requiredFilters": [
+            "ass"
+          ],
+          "requiredFonts": [
+            {
+              "fileName": "fonts/NotoSansCJKsc-Regular.otf",
+              "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
+            }
+          ],
           "smokeTest": {
             "durationSeconds": 1,
             "videoEncoder": "h264_videotoolbox",

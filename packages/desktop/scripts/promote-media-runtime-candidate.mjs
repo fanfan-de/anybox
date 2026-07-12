@@ -116,6 +116,7 @@ function buildPolicy(platform, arch) {
     return {
       requiredFlags: [
         "--arch=x86_64", "--target-os=mingw32", "--enable-version3", "--enable-mediafoundation",
+        "--pkg-config-flags=--static", "--extra-ldflags=-static",
         "--enable-libass",
         "--disable-libopenh264", "--disable-libx264", "--disable-libx265", "--disable-libfdk-aac",
         "--disable-gpl", "--disable-nonfree",
