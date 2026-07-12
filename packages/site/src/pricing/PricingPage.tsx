@@ -1,8 +1,8 @@
 import { AtmosphereBackground } from "../AtmosphereBackground"
 import { repositoryUrl } from "../releaseDownloads"
+import { supportEmail, supportMailto } from "../siteLinks"
 
 const brandLogoBlack = "/brand-logo-black.svg"
-const supportUrl = "https://github.com/fanfan-de/anybox/issues"
 
 type PricingPlan = {
   name: string
@@ -111,9 +111,7 @@ function PricingHeader() {
         </a>
         <a href="/docs/">Docs</a>
         <a href="/privacy/">Privacy</a>
-        <a href={supportUrl} rel="noreferrer" target="_blank">
-          Support
-        </a>
+        <a href={supportMailto}>{supportEmail}</a>
       </nav>
     </header>
   )
@@ -147,10 +145,11 @@ function PricingFooter() {
       <nav className="site-footer-links" aria-label="Pricing footer navigation">
         <a href="/">Home</a>
         <a href="/docs/">Docs</a>
+        <a href="/terms/">Terms</a>
         <a href="/privacy/">Privacy</a>
-        <a href={supportUrl} rel="noreferrer" target="_blank">
-          Support
-        </a>
+        <a href="/refunds/">Refunds</a>
+        <a href="/acceptable-use/">Acceptable Use</a>
+        <a href={supportMailto}>{supportEmail}</a>
       </nav>
     </footer>
   )

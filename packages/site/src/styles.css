@@ -1434,75 +1434,94 @@ a.commit-row:focus-visible {
   border-top: 1px solid var(--line);
 }
 
-.privacy-page-shell {
+.policy-page-shell {
   position: relative;
   min-height: 100vh;
   overflow: clip;
   isolation: isolate;
-  padding-bottom: 82px;
 }
 
-.privacy-page-shell > :not(.atmosphere-background) {
+.policy-page-shell > :not(.atmosphere-background) {
   position: relative;
   z-index: 1;
 }
 
-.privacy-header {
+.policy-header {
   grid-template-columns: minmax(180px, 1fr) auto;
 }
 
-.privacy-content {
+.policy-content {
   width: min(860px, calc(100% - 96px));
   margin: 0 auto;
-  padding: 78px 0 0;
+  padding: 78px 0 88px;
   color: var(--muted-strong);
   font-size: 1.06rem;
   line-height: 1.78;
 }
 
-.privacy-content h1,
-.privacy-content h2 {
+.policy-content h1,
+.policy-content h2 {
   color: var(--text);
   font-family: var(--font-display);
   letter-spacing: 0;
 }
 
-.privacy-content h1 {
+.policy-content h1 {
   margin: 14px 0 10px;
   font-size: clamp(2.8rem, 7vw, 5.2rem);
   font-weight: 760;
   line-height: 0.98;
 }
 
-.privacy-updated {
+.policy-updated {
   margin: 0 0 54px;
   color: var(--muted);
   font-size: 0.96rem;
   font-weight: 650;
 }
 
-.privacy-content section {
+.policy-content section {
   padding: 30px 0;
   border-top: 1px solid var(--line);
 }
 
-.privacy-content h2 {
+.policy-content h2 {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 740;
   line-height: 1.18;
 }
 
-.privacy-content p {
+.policy-content p {
   margin: 16px 0 0;
 }
 
-.privacy-content a {
+.policy-content ul {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding-left: 22px;
+}
+
+.policy-content li {
+  padding-left: 4px;
+}
+
+.policy-content strong {
+  color: var(--text);
+}
+
+.policy-content a {
   color: var(--accent);
   font-weight: 740;
   text-decoration: underline;
   text-underline-offset: 3px;
   overflow-wrap: anywhere;
+}
+
+.policy-footer {
+  padding-top: 36px;
+  border-top: 1px solid var(--line);
 }
 
 @media (max-width: 1180px) {

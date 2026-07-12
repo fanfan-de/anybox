@@ -6,10 +6,13 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
+        acceptableUse: "acceptable-use/index.html",
         docs: "docs/index.html",
         main: "index.html",
         pricing: "pricing/index.html",
         privacy: "privacy/index.html",
+        refunds: "refunds/index.html",
+        terms: "terms/index.html",
       },
     },
   },

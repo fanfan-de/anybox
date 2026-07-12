@@ -4,12 +4,12 @@ import { navigationItems, proofPoints, scenarioCards } from "./content"
 import { GitActivitySection } from "./GitActivity"
 import { InstallerDownloadButton } from "./InstallerDownloadButton"
 import { repositoryUrl } from "./releaseDownloads"
+import { supportEmail, supportMailto } from "./siteLinks"
 
 const brandLogoBlack = "/brand-logo-black.svg"
 const wechatCommunityQrImage = "/wechat-community-qr-20260702.png"
 const icpRecordNumber = "苏ICP备2026030016号-1"
 const icpRecordUrl = "https://beian.miit.gov.cn/"
-const supportUrl = "https://github.com/fanfan-de/anybox/issues"
 
 function getGitHubRepoApiUrl(href: string) {
   const match = href.match(/^https:\/\/github\.com\/([^/]+)\/([^/#?]+)/)
@@ -194,10 +194,11 @@ function SiteFooter() {
       <span>© 2026 Anybox</span>
       <nav className="site-footer-links" aria-label="页脚导航">
         <a href="/pricing/">定价</a>
+        <a href="/terms/">条款</a>
         <a href="/privacy/">隐私</a>
-        <a href={supportUrl} rel="noreferrer" target="_blank">
-          支持
-        </a>
+        <a href="/refunds/">退款</a>
+        <a href="/acceptable-use/">使用规范</a>
+        <a href={supportMailto}>{supportEmail}</a>
         <a href={icpRecordUrl} rel="noreferrer" target="_blank">
           {icpRecordNumber}
         </a>
