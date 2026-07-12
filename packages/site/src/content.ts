@@ -1,9 +1,5 @@
 export const navigationItems = [
   {
-    href: "/pricing/",
-    label: "定价",
-  },
-  {
     href: "/docs/",
     label: "文档",
   },
