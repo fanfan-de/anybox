@@ -67,7 +67,9 @@ export function RefundsPage() {
           <p>
             请使用购买时的邮箱发送邮件至<a href={supportMailto}>{supportEmail}</a>，并提供
             交易或收据编号、购买日期和申请原因。你也可以使用 Merchant of Record 收据或
-            账单门户中的退款或订单支持链接。除非经过验证的支持渠道明确要求，请勿通过邮件
+            账单门户中的退款或订单支持链接。Paddle 订单可以直接访问
+            <a href="https://paddle.net/" rel="noreferrer" target="_blank">Paddle 买家支持</a>。
+            除非经过验证的支持渠道明确要求，请勿通过邮件
             发送完整银行卡信息、密码或身份证件。
           </p>
         </section>
@@ -181,7 +183,12 @@ export function RefundsPage() {
           for the purchase and include the transaction or receipt identifier,
           purchase date, and reason for the request. You may also use the refund
           or order-support link in the Merchant of Record receipt or billing
-          portal. Do not email full card details, passwords, or identity
+          portal. For Paddle orders, you can visit
+          {" "}
+          <a href="https://paddle.net/" rel="noreferrer" target="_blank">
+            Paddle Buyer Support
+          </a>.
+          Do not email full card details, passwords, or identity
           documents unless a verified support channel specifically requires
           them.
         </p>

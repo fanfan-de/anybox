@@ -26,6 +26,10 @@ export function TermsPage() {
             即表示你同意本条款及<a href="/acceptable-use/">可接受使用政策</a>。
             如不同意，请勿使用托管服务。
           </p>
+          <p>
+            Anybox 是由位于中国的个人经营者使用的产品与供应商品牌。账户验证、订单和
+            付款记录中的法定经营者信息将与适用 Merchant of Record 保存的资料一致。
+          </p>
         </section>
         <section>
           <h2>2. Anybox 产品</h2>
@@ -65,13 +69,19 @@ export function TermsPage() {
           <h2>5. 订单、计费与 Merchant of Record</h2>
           <p>
             价格、计费频率、续订条件和适用税费会在购买前展示。如果结账页显示 Paddle，
-            则 Paddle.com 作为我们的在线经销商和 Merchant of Record 处理订单、付款相关
-            的买家支持及退货退款。如使用其他 Merchant of Record，将在结账时标明。
+            则订单流程由我们的在线经销商 Paddle.com 执行。Paddle.com 是这些订单的
+            Merchant of Record，并负责付款相关的客户服务与退货退款。买家也可以通过
+            <a href="https://paddle.net/" rel="noreferrer" target="_blank">Paddle 买家支持</a>
+            查询订单。如使用其他 Merchant of Record，将在结账时标明。
           </p>
           <p>
             订阅会自动续订，直到取消。你授权 Merchant of Record 在每次续订时向所选
             付款方式收费。你可以在下一次续订前通过可用的账单门户或联系支持取消。
             取消和退款规则见<a href="/refunds/">退款与取消政策</a>。
+          </p>
+          <p>
+            在任何付费结账上线前，结账流程都会展示本服务条款、退款政策、订阅周期和
+            自动续订信息，并要求买家确认接受后才能完成购买。
           </p>
         </section>
         <section>
@@ -164,6 +174,12 @@ export function TermsPage() {
           <a href="/acceptable-use/">Acceptable Use Policy</a>. If you do not
           agree, do not use the hosted service.
         </p>
+        <p>
+          Anybox is the product and supplier brand used by an individual sole
+          proprietor operating from China. Legal operator details in account,
+          order, and payment records will match the information held by the
+          applicable Merchant of Record.
+        </p>
       </section>
 
       <section>
@@ -218,10 +234,15 @@ export function TermsPage() {
         <h2>5. Orders, Billing, and Merchant of Record</h2>
         <p>
           Prices, billing frequency, renewal terms, and applicable taxes are
-          shown before purchase. When Paddle is shown at checkout, Paddle.com
-          acts as our online reseller and Merchant of Record, processes the
-          order, and handles payment-related buyer support and returns. Another
-          Merchant of Record may be used if identified at checkout.
+          shown before purchase. For orders completed through Paddle, our online
+          reseller Paddle.com conducts the order process and is the Merchant of
+          Record. Paddle handles payment-related customer service inquiries and
+          returns. Buyers can also use
+          {" "}
+          <a href="https://paddle.net/" rel="noreferrer" target="_blank">
+            Paddle Buyer Support
+          </a>.
+          Another Merchant of Record may be used if identified at checkout.
         </p>
         <p>
           Subscriptions renew automatically until canceled. You authorize the
@@ -231,6 +252,12 @@ export function TermsPage() {
           are described in the
           {" "}
           <a href="/refunds/">Refund and Cancellation Policy</a>.
+        </p>
+        <p>
+          Before any paid checkout is launched, the checkout flow will display
+          these Terms, the refund policy, subscription period, and automatic
+          renewal information, and will require buyer acceptance before an order
+          can be completed.
         </p>
       </section>
 

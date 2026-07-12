@@ -1278,6 +1278,7 @@ a.commit-row:focus-visible {
 .pricing-hero h1,
 .pricing-plan h2,
 .pricing-service-note h2,
+.pricing-support-note h2,
 .pricing-faq h2,
 .pricing-faq h3 {
   color: var(--text);
@@ -1424,7 +1425,13 @@ a.commit-row:focus-visible {
   padding: 88px 0;
 }
 
+.pricing-support-note {
+  max-width: 820px;
+  padding: 0 0 88px;
+}
+
 .pricing-service-note h2,
+.pricing-support-note h2,
 .pricing-faq h2 {
   margin: 12px 0 0;
   font-size: clamp(2rem, 4vw, 3.2rem);
@@ -1437,6 +1444,27 @@ a.commit-row:focus-visible {
   color: var(--muted-strong);
   font-size: 1.08rem;
   line-height: 1.72;
+}
+
+.pricing-support-note > p {
+  margin: 24px 0 0;
+  color: var(--muted-strong);
+  font-size: 1.08rem;
+  line-height: 1.72;
+}
+
+.pricing-support-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-top: 24px;
+}
+
+.pricing-support-links a {
+  color: var(--accent);
+  font-weight: 740;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .pricing-faq {

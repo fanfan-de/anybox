@@ -1,4 +1,5 @@
 import type { SiteLanguage } from "./language"
+import { supportMailto } from "./siteLinks"
 
 const sharedNavigation = [
   {
@@ -17,6 +18,8 @@ export const siteContent = {
   zh: {
     navigationItems: [
       { href: "/docs/", label: "文档" },
+      { href: "/pricing/", label: "定价" },
+      { href: supportMailto, label: "支持" },
       ...sharedNavigation,
     ],
     proofPoints: ["本地项目工作区", "多模型供应商", "可审计工具调用"],
@@ -69,6 +72,8 @@ export const siteContent = {
   en: {
     navigationItems: [
       { href: "/docs/", label: "Docs" },
+      { href: "/pricing/", label: "Pricing" },
+      { href: supportMailto, label: "Support" },
       ...sharedNavigation,
     ],
     proofPoints: [

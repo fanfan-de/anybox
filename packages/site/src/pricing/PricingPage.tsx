@@ -33,7 +33,7 @@ const pricingCopy = {
       "The Anybox desktop workspace is free and open source. Paid monthly plans provide access to Anybox Managed AI, our hosted inference and orchestration service.",
     launchTitle: "Planned launch pricing",
     launchBody:
-      "Prices are shown in USD. Paid plans are not available for purchase yet and no payment information is collected on this page.",
+      "Prices are shown in USD. Paid plans are not available for purchase yet and no payment information is collected on this page. Final monthly allowances, model availability, concurrency, renewal terms, and taxes will be shown before checkout is enabled.",
     plansLabel: "Anybox plans",
     plans: [
       {
@@ -58,8 +58,8 @@ const pricingCopy = {
         emphasis: "Planned launch plan",
         features: [
           "Access to Anybox Managed AI Provider",
-          "Included monthly managed AI usage",
-          "Standard concurrency and model availability",
+          "An included monthly service allowance, published before launch",
+          "Published model availability and standard concurrency limits",
           "Monthly usage does not roll over",
         ],
         action: { disabled: true, label: "Coming soon" },
@@ -72,8 +72,8 @@ const pricingCopy = {
         cadence: "per month",
         features: [
           "Everything in Individual Monthly",
-          "Higher monthly managed AI usage",
-          "Higher concurrency and broader model access",
+          "A higher monthly allowance, published before launch",
+          "Published higher concurrency and broader model access",
           "Priority product support",
         ],
         action: { disabled: true, label: "Coming soon" },
@@ -83,6 +83,12 @@ const pricingCopy = {
     purchaseTitle: "A managed service, not stored value.",
     purchaseBody:
       "Anybox Managed AI is operated by Anybox. Customers purchase access to the managed service and its monthly usage allowance. Usage is non-transferable, has no cash value, and cannot be used to purchase third-party goods or services.",
+    supportKicker: "Buyer support",
+    supportTitle: "Clear support before and after purchase.",
+    supportBody:
+      "Anybox handles product questions and technical support. For orders processed by Paddle, Paddle is the Merchant of Record and provides payment, subscription, receipt, cancellation, and refund support through its buyer portal.",
+    anyboxSupportLabel: "Email Anybox support",
+    paddleSupportLabel: "Open Paddle Buyer Support",
     faqKicker: "FAQ",
     faqTitle: "Before paid plans launch",
     faq: [
@@ -122,7 +128,7 @@ const pricingCopy = {
       "Anybox 桌面工作台永久免费开源。付费月度方案提供 Anybox Managed AI——由我们运营的托管推理与编排服务。",
     launchTitle: "计划中的首发定价",
     launchBody:
-      "价格以美元显示。付费方案尚未开放购买，本页面目前不会收集任何付款信息。",
+      "价格以美元显示。付费方案尚未开放购买，本页面目前不会收集任何付款信息。正式启用结账前，我们会公布最终月度用量、模型范围、并发限制、续订条件和税费。",
     plansLabel: "Anybox 方案",
     plans: [
       {
@@ -146,8 +152,8 @@ const pricingCopy = {
         emphasis: "计划首发方案",
         features: [
           "访问 Anybox Managed AI Provider",
-          "包含每月托管 AI 用量",
-          "标准并发与模型可用范围",
+          "包含月度服务用量，正式上线前公布具体限额",
+          "正式公布的模型范围和标准并发限制",
           "月度用量不会结转",
         ],
         action: { disabled: true, label: "即将推出" },
@@ -159,8 +165,8 @@ const pricingCopy = {
         cadence: "每月",
         features: [
           "包含个人月度版全部功能",
-          "更高的月度托管 AI 用量",
-          "更高并发和更多模型选择",
+          "更高月度用量，正式上线前公布具体限额",
+          "正式公布的更高并发和更多模型选择",
           "优先产品支持",
         ],
         action: { disabled: true, label: "即将推出" },
@@ -170,6 +176,12 @@ const pricingCopy = {
     purchaseTitle: "购买的是托管服务，而不是储值。",
     purchaseBody:
       "Anybox Managed AI 由 Anybox 运营。客户购买的是托管服务访问权和对应的月度用量。用量不可转让、没有现金价值，也不能用于购买第三方商品或服务。",
+    supportKicker: "买家支持",
+    supportTitle: "购买前后都能获得清晰支持。",
+    supportBody:
+      "Anybox 负责产品问题和技术支持。对于通过 Paddle 处理的订单，Paddle 是 Merchant of Record，并通过其买家门户提供付款、订阅、收据、取消和退款支持。",
+    anyboxSupportLabel: "联系 Anybox 支持",
+    paddleSupportLabel: "打开 Paddle 买家支持",
     faqKicker: "常见问题",
     faqTitle: "付费方案上线之前",
     faq: [
@@ -311,6 +323,18 @@ export function PricingPage() {
           <p className="section-kicker">{copy.purchaseKicker}</p>
           <h2 id="service-note-title">{copy.purchaseTitle}</h2>
           <p>{copy.purchaseBody}</p>
+        </section>
+
+        <section className="pricing-support-note" aria-labelledby="support-note-title">
+          <p className="section-kicker">{copy.supportKicker}</p>
+          <h2 id="support-note-title">{copy.supportTitle}</h2>
+          <p>{copy.supportBody}</p>
+          <div className="pricing-support-links">
+            <a href={supportMailto}>{copy.anyboxSupportLabel}</a>
+            <a href="https://paddle.net/" rel="noreferrer" target="_blank">
+              {copy.paddleSupportLabel}
+            </a>
+          </div>
         </section>
 
         <section className="pricing-faq" aria-labelledby="pricing-faq-title">
