@@ -10,6 +10,7 @@ import {
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const desktopDir = path.resolve(scriptDir, "..")
+const agentDir = path.resolve(desktopDir, "..", "anyboxagent")
 const runtimeDir = path.join(desktopDir, "build", "agent-runtime")
 const dependenciesDir = path.join(runtimeDir, "dependencies")
 const bunExecutableName = process.platform === "win32" ? "bun.exe" : "bun"
@@ -39,6 +40,22 @@ const bundledMediaTools = mediaTarget && mediaExecutableNames
       path.join(runtimeDir, "media-tools", "manifest.json"),
     ]
   : []
+
+function listJsonFilesRecursively(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(directory, entry.name)
+    if (entry.isDirectory()) return listJsonFilesRecursively(entryPath)
+    return entry.isFile() && path.extname(entry.name).toLowerCase() === ".json" ? [entryPath] : []
+  })
+}
+
+const cinemaProviderManifestsSourceDir = path.join(agentDir, "src", "cinema", "provider-manifests")
+const bundledCinemaProviderManifests = [
+  path.join(runtimeDir, "provider-manifests.json"),
+  ...listJsonFilesRecursively(cinemaProviderManifestsSourceDir).map((sourcePath) =>
+    path.join(runtimeDir, "provider-manifests", path.relative(cinemaProviderManifestsSourceDir, sourcePath)),
+  ),
+]
 
 async function sha256(filePath) {
   const hash = createHash("sha256")
@@ -76,6 +93,7 @@ async function verifyBetaMediaRuntime(mediaToolsDir) {
 
 const requiredFiles = [
   path.join(runtimeDir, "agent-server.js"),
+  ...bundledCinemaProviderManifests,
   path.join(runtimeDir, "cinema-web", "index.html"),
   path.join(runtimeDir, "connectors", "browser", "server.js"),
   path.join(runtimeDir, "connectors", "node-repl", "server.js"),
@@ -147,11 +165,11 @@ try {
   const releaseStrict = process.argv.includes("--release-strict")
   const mediaToolsDir = path.join(runtimeDir, "media-tools")
   const deliverBetaBuild = process.env.ANYBOX_DELIVER_BETA_BUILD === "1"
-  if (mediaTargetReady) {
-    await verifyMediaRuntime({ runtimeDir, releaseStrict })
-  } else if (deliverBetaBuild && fs.existsSync(mediaToolsDir)) {
+  if (deliverBetaBuild && fs.existsSync(mediaToolsDir)) {
     await verifyBetaMediaRuntime(mediaToolsDir)
     console.log(`[desktop][media] verified build-supplied Deliver Beta runtime for ${process.platform}/${process.arch}`)
+  } else if (mediaTargetReady) {
+    await verifyMediaRuntime({ runtimeDir, releaseStrict })
   } else if (fs.existsSync(mediaToolsDir)) {
     throw new Error(
       `Media runtime files exist without a locked target for ${process.platform}/${process.arch}`,

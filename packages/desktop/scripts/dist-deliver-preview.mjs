@@ -4,7 +4,12 @@ import { fileURLToPath } from "node:url"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const desktopDir = path.resolve(scriptDir, "..")
-const corepackCommand = process.platform === "win32" ? "corepack.cmd" : "corepack"
+const corepackInvocation = process.platform === "win32"
+  ? {
+      command: process.execPath,
+      args: [path.join(path.dirname(process.execPath), "node_modules", "corepack", "dist", "corepack.js")],
+    }
+  : { command: "corepack", args: [] }
 const electronBuilderCLI = path.join(desktopDir, "node_modules", "electron-builder", "cli.js")
 
 function fail(message) {
@@ -95,9 +100,9 @@ try {
       ? "[desktop][deliver-beta] NON-RELEASE Beta with bundled media runtime; publishing is disabled."
       : "[desktop][deliver-preview] NON-RELEASE technical preview; Deliver dev gate enabled; publishing is disabled.",
   )
-  run(corepackCommand, ["pnpm", "run", "build"], previewEnv)
-  run(corepackCommand, ["pnpm", "run", "verify:agent-runtime"], previewEnv)
-  run(corepackCommand, ["pnpm", "run", "icons:generate"], previewEnv)
+  run(corepackInvocation.command, [...corepackInvocation.args, "pnpm", "run", "build"], previewEnv)
+  run(corepackInvocation.command, [...corepackInvocation.args, "pnpm", "run", "verify:agent-runtime"], previewEnv)
+  run(corepackInvocation.command, [...corepackInvocation.args, "pnpm", "run", "icons:generate"], previewEnv)
   run(process.execPath, [
     electronBuilderCLI,
     ...builderArgs,

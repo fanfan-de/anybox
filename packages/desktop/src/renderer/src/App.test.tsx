@@ -11199,6 +11199,64 @@ describe("App", () => {
     })
   })
 
+  it("keeps the Anybox account available when the Cinema provider catalog fails", async () => {
+    window.desktop!.getGlobalProviderCatalog = vi.fn().mockResolvedValue([
+      {
+        id: "anybox",
+        name: "Anybox",
+        source: "api",
+        env: [],
+        configured: false,
+        available: false,
+        apiKeyConfigured: false,
+        baseURL: "https://anybox.test/v1",
+        modelCount: 0,
+        authCapabilities: [
+          {
+            method: "anybox-browser",
+            label: "Anybox 账号（浏览器登录）",
+            kind: "browser_oauth",
+            supportsPolling: true,
+          },
+        ],
+        authState: {
+          providerID: "anybox",
+          scope: "global",
+          status: "not_connected",
+          capabilities: [],
+          credentials: [],
+        },
+      },
+    ])
+    window.desktop!.getGlobalModels = vi.fn().mockResolvedValue({
+      items: [],
+      selection: {},
+    })
+    window.desktop!.getCinemaVideoProviders = vi.fn().mockRejectedValue(
+      new Error("Missing provider-manifests.json"),
+    )
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    try {
+      render(<App />)
+
+      fireEvent.click(screen.getByRole("button", { name: "Open settings" }))
+      await screen.findByRole("dialog", { name: "Settings" })
+      fireEvent.click(screen.getByRole("button", { name: "Account" }))
+
+      const signInButton = await screen.findByRole("button", { name: "Log in to Anybox" })
+      expect(signInButton).toBeEnabled()
+      expect(screen.getByText("Not logged in")).toBeInTheDocument()
+      expect(screen.queryByText("Anybox unavailable")).not.toBeInTheDocument()
+      expect(consoleError).toHaveBeenCalledWith(
+        "[desktop] loading Cinema video provider catalog failed:",
+        expect.any(Error),
+      )
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
   it("tests provider connection from the provider detail page", async () => {
     window.desktop!.getGlobalProviderCatalog = vi.fn().mockResolvedValue([
       {

@@ -990,10 +990,16 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     setLoadError(null)
 
     try {
+      const cinemaVideoProvidersPromise = loadCinemaVideoProviders
+        ? loadCinemaVideoProviders().catch((error) => {
+            console.error("[desktop] loading Cinema video provider catalog failed:", error)
+            return []
+          })
+        : Promise.resolve([])
       const [nextCatalog, modelPayload, nextCinemaVideoProviders, nextModelCatalog] = await Promise.all([
         loadProviderCatalog(),
         loadModels(),
-        loadCinemaVideoProviders?.() ?? Promise.resolve([]),
+        cinemaVideoProvidersPromise,
         loadModelCatalog?.() ?? Promise.resolve({ items: [] }),
       ])
       const normalizedCatalog = nextCatalog.map((item) => normalizeProviderCatalogItem(item))

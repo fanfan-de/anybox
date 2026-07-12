@@ -13,6 +13,8 @@ const agentDir = path.join(repoRoot, "packages", "anyboxagent")
 const cinemaWebDistDir = path.join(repoRoot, "packages", "cinema-web", "dist")
 const browserNativeHostDir = path.join(repoRoot, "packages", "browser-native-host")
 const runtimeDir = path.join(desktopDir, "build", "agent-runtime")
+const cinemaProviderCatalogSource = path.join(agentDir, "src", "cinema", "provider-manifests.json")
+const cinemaProviderManifestsSourceDir = path.join(agentDir, "src", "cinema", "provider-manifests")
 const browserConnectorSourceDir = path.join(agentDir, "connectors", "browser")
 const nodeReplConnectorSourceDir = path.join(agentDir, "connectors", "node-repl")
 const gmailConnectorSourceDir = path.join(agentDir, "plugins", "builtin", "gmail", "0.1.0", "connectors", "gmail")
@@ -190,6 +192,21 @@ async function copyCinemaWebDist() {
   await fsp.cp(cinemaWebDistDir, targetDir, { recursive: true })
 }
 
+async function copyCinemaProviderManifests() {
+  if (!(await pathExists(cinemaProviderCatalogSource))) {
+    throw new Error(`Missing Cinema provider catalog at ${cinemaProviderCatalogSource}`)
+  }
+  if (!(await pathExists(cinemaProviderManifestsSourceDir))) {
+    throw new Error(`Missing Cinema provider manifests at ${cinemaProviderManifestsSourceDir}`)
+  }
+
+  const targetCatalog = path.join(runtimeDir, "provider-manifests.json")
+  const targetManifestsDir = path.join(runtimeDir, "provider-manifests")
+  await fsp.copyFile(cinemaProviderCatalogSource, targetCatalog)
+  await fsp.rm(targetManifestsDir, { recursive: true, force: true })
+  await fsp.cp(cinemaProviderManifestsSourceDir, targetManifestsDir, { recursive: true })
+}
+
 async function buildBrowserNativeHost(bunBinary, { reuseActiveNativeHost = false } = {}) {
   const entrypoint = path.join(browserNativeHostDir, "src", "main.ts")
   if (!(await pathExists(entrypoint))) {
@@ -257,6 +274,7 @@ async function main() {
   await fsp.copyFile(path.join(agentDir, "src", "pty", "node-pty-worker.mjs"), path.join(runtimeDir, "node-pty-worker.mjs"))
   await copyNodePtyRuntime(runtimeNodeModulesDir)
   await fixNodePtySpawnHelperPermissions(runtimeNodeModulesDir)
+  await copyCinemaProviderManifests()
   await copyCinemaWebDist()
   await copyBundledConnectors()
   await buildBrowserNativeHost(bunBinary, { reuseActiveNativeHost })
