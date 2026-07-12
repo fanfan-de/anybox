@@ -23,7 +23,14 @@ const lock = JSON.parse(fs.readFileSync(path.resolve(scriptDir, "..", "media-run
 function completedTarget(target, platform, arch) {
   const result = structuredClone(target)
   delete result.artifactStatus
+  delete result.approvalEvidence
   result.runtimeID = `ffmpeg-anybox-${platform}-${arch}-lgpl-test`
+  result.releaseReadiness = {
+    status: "blocked",
+    releaseKind: "initial",
+    reasons: ["Test target remains blocked until the test supplies approval evidence."],
+  }
+  result.licensePolicy.reviewStatus = "pending"
   result.distribution = {
     releaseTag: "test-candidate",
     ffmpegRevision: "8ad6288553",
@@ -208,18 +215,19 @@ test("beta media materials copy the reviewed subtitle font and OFL license", asy
   }
 })
 
-test("media runtime lock represents a built Windows candidate, pending macOS candidate, and blocked Linux", () => {
+test("media runtime lock represents an approved Windows target, pending macOS candidate, and blocked Linux", () => {
   validateMediaRuntimeLock(lock)
   const target = resolveMediaRuntimeTarget(lock, "win32", "x64")
   assert.equal(target.origin, "anybox-controlled-lgpl")
   assert.equal(target.artifactStatus, undefined)
-  assert.equal(target.distribution.releaseTag, "media-runtime-ffmpeg-8ad6288553-unapproved")
+  assert.equal(target.distribution.releaseTag, "media-runtime-ffmpeg-8ad6288553-win32-x64-r2")
   assert.equal(target.distribution.ffmpegRevision, "8ad6288553")
-  assert.equal(target.distribution.sha256, "d86d40abde4dd878f3144855ffb7529ff8b554d214a80bc61ba55d242d332262")
-  assert.equal(target.releaseReadiness.status, "blocked")
+  assert.equal(target.distribution.sha256, "b073f24a43f03ef2c180b64f7d223cf0b581be7122bc741669f959ceea431038")
+  assert.equal(target.releaseReadiness.status, "approved")
   assert.equal(target.releaseReadiness.releaseKind, "initial")
-  assert.equal(target.licensePolicy.reviewStatus, "pending")
-  assert.equal(target.approvalEvidence, undefined)
+  assert.equal(target.licensePolicy.reviewStatus, "approved")
+  assert.equal(target.approvalEvidence.approver, "Anybox project owner (GitHub: fanfan-de)")
+  assert.doesNotThrow(() => assertMediaRuntimeReleaseApproved(target, "win32", "x64"))
   const executableNames = resolveMediaExecutableNames(target, "win32", "x64")
   assert.deepEqual(executableNames, { ffmpeg: "ffmpeg.exe", ffprobe: "ffprobe.exe" })
   assert.deepEqual(target.requiredEncoders, ["h264_mf", "aac"])

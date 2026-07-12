@@ -34,33 +34,28 @@
       "status": "supported",
       "targets": {
         "x64": {
-          "runtimeID": "ffmpeg-anybox-8ad6288553-win32-x64-lgpl",
+          "runtimeID": "ffmpeg-anybox-8ad6288553-win32-x64-lgpl-r2",
           "manifestSchemaVersion": 1,
           "origin": "anybox-controlled-lgpl",
           "releaseReadiness": {
-            "status": "blocked",
-            "releaseKind": "initial",
-            "reasons": [
-              "The candidate still requires recorded license and release approval.",
-              "The immutable mirror and source/build evidence still require approval binding.",
-              "The signed installed-app kill/restart smoke has not been accepted for both release targets."
-            ]
+            "status": "approved",
+            "releaseKind": "initial"
           },
           "licensePolicy": {
             "spdxExpression": "LGPL-3.0-or-later",
             "licenseFile": "LICENSE.txt",
             "noticesFile": "THIRD-PARTY-NOTICES.txt",
-            "reviewStatus": "pending"
+            "reviewStatus": "approved"
           },
           "distribution": {
-            "releaseTag": "media-runtime-ffmpeg-8ad6288553-unapproved",
+            "releaseTag": "media-runtime-ffmpeg-8ad6288553-win32-x64-r2",
             "ffmpegRevision": "8ad6288553",
             "fileName": "ffmpeg-anybox-8ad6288553-win32-x64-lgpl.tar.gz",
-            "sha256": "d86d40abde4dd878f3144855ffb7529ff8b554d214a80bc61ba55d242d332262",
-            "sizeBytes": 45731249,
-            "url": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-unapproved/ffmpeg-anybox-8ad6288553-win32-x64-lgpl.tar.gz",
-            "sourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-unapproved/ffmpeg-source-8ad6288553.tar.gz",
-            "buildSourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-unapproved/build-media-runtime.sh",
+            "sha256": "b073f24a43f03ef2c180b64f7d223cf0b581be7122bc741669f959ceea431038",
+            "sizeBytes": 45731402,
+            "url": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-win32-x64-r2/ffmpeg-anybox-8ad6288553-win32-x64-lgpl.tar.gz",
+            "sourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-win32-x64-r2/ffmpeg-source-8ad6288553.tar.gz",
+            "buildSourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-win32-x64-r2/build-media-runtime.sh",
             "source": {
               "fileName": "ffmpeg-source-8ad6288553.tar.gz",
               "sizeBytes": 17382583,
@@ -68,8 +63,25 @@
             },
             "buildSource": {
               "fileName": "build-media-runtime.sh",
-              "sizeBytes": 8722,
-              "sha256": "9657878d4038c6cd1438e9e609221243d3641a8169461bbf10096637535f989b"
+              "sizeBytes": 8826,
+              "sha256": "503dd205ceb1368d56399d3be1beafa5789652cd4dd61b5567e3a3350e3260c3"
+            }
+          },
+          "approvalEvidence": {
+            "approver": "Anybox project owner (GitHub: fanfan-de)",
+            "approvedAt": "2026-07-12T15:57:46+08:00",
+            "references": [
+              "packages/cinema-web/cinema-media-runtime-owner-risk-acceptance.win32-x64.md",
+              "https://github.com/fanfan-de/anybox/releases/tag/media-runtime-ffmpeg-8ad6288553-win32-x64-r2"
+            ],
+            "immutableMirror": {
+              "reference": "https://github.com/fanfan-de/anybox/releases/tag/media-runtime-ffmpeg-8ad6288553-win32-x64-r2",
+              "sha256": "b073f24a43f03ef2c180b64f7d223cf0b581be7122bc741669f959ceea431038"
+            },
+            "rollbackPlan": {
+              "strategy": "disable-deliver",
+              "capability": "timelineDelivery",
+              "reference": "packages/cinema-web/cinema-media-runtime-owner-risk-acceptance.win32-x64.md#rollback"
             }
           },
           "executables": {
@@ -78,10 +90,10 @@
           },
           "binaries": {
             "ffmpeg.exe": {
-              "sha256": "02c37760d8feef034e7ee1fdb92ecc3e79a38d7be20a4cf08f1b1be5383004bd"
+              "sha256": "629ba84a0f28b619d117831ce04439f8a306243a326ac59499379235d1bc1470"
             },
             "ffprobe.exe": {
-              "sha256": "4a895f33f14ccd99adc645fc20471071fdeb7d55d407db92e6369bdf21493804"
+              "sha256": "dd31110eadadea6afb0bc8df161b73e47c2d9660511513fc8241efd53c454722"
             }
           },
           "buildConfigurationPolicy": {
