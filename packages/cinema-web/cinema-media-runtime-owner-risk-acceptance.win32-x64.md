@@ -10,13 +10,13 @@
 
 ## Owner decision
 
-The project owner authorizes this locked Windows x64 runtime for use in an Anybox signed release candidate and accepts the residual H.264 licensing risk of worldwide distribution. This is a project-owner risk decision, not third-party legal advice or a representation that every jurisdiction is patent-clear.
+The project owner authorizes this locked Windows x64 runtime for use in an Anybox release candidate and accepts the residual H.264 licensing risk of worldwide distribution. This is a project-owner risk decision, not third-party legal advice or a representation that every jurisdiction is patent-clear.
 
 The approved distribution is limited to the Anybox-controlled FFmpeg/FFprobe build described below. It uses the Windows Media Foundation `h264_mf` encoder and the native FFmpeg `aac` encoder. GPL and nonfree components, including libx264, libx265, OpenH264, and FDK-AAC, are disabled. Windows Server is excluded from the supported Deliver target because the required Media Foundation encoder is not treated as available there.
 
 Anybox must distribute the matching LGPL license and third-party notices, retain the exact corresponding FFmpeg source and build recipe, keep the source download available with the binary distribution, and preserve the locked hashes. This approval does not extend to a different FFmpeg revision, build recipe, runtime archive, platform, architecture, encoder, or commercial API service.
 
-Public desktop release remains conditional on valid Authenticode signing, release-strict packaging, installation from the exact signed installer, managed-Agent kill/restart/recovery/retry evidence, and successful GitHub/COS artifact verification.
+As of 2026-07-12, the project owner has temporarily made Windows Authenticode optional under the zero-budget open-source release policy. Public desktop release remains conditional on release-strict packaging, installation from the exact published installer, managed-Agent kill/restart/recovery/retry evidence, matching updater metadata and hashes, an explicit unsigned/SmartScreen warning when applicable, and successful GitHub/COS artifact verification. This exception does not relax the media-runtime requirements recorded here.
 
 ## Immutable evidence
 

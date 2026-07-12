@@ -2,7 +2,9 @@ appId: com.anybox.app
 productName: Anybox
 artifactName: Anybox-${version}-${arch}.${ext}
 asar: true
-forceCodeSigning: true
+# Authenticode is optional for the current zero-budget open-source Windows release.
+# When signing credentials are configured, electron-builder still signs normally.
+forceCodeSigning: false
 electronUpdaterCompatibility: ">=2.16"
 afterPack: ./scripts/after-pack-icon.cjs
 publish:
