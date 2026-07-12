@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const desktopDir = path.resolve(scriptDir, "..")
+const buildScript = path.join(scriptDir, "build-media-runtime.sh")
 const describeScript = path.join(scriptDir, "describe-media-runtime-candidate.mjs")
 const promoteScript = path.join(scriptDir, "promote-media-runtime-candidate.mjs")
 const runtimeLock = JSON.parse(fs.readFileSync(path.join(desktopDir, "media-runtime.lock.json"), "utf8"))
@@ -81,6 +82,17 @@ function promotionCandidate(root) {
     },
   }
 }
+
+test("candidate notices remain fail-closed without permanently forbidding an approved archive", () => {
+  const script = fs.readFileSync(buildScript, "utf8")
+  assert.match(script, /configure_prefix="\/opt\/anybox\/media-runtime\/\$\{platform\}-\$\{arch\}"/)
+  assert.doesNotMatch(script, /--prefix=\$\{prefix_dir\}/)
+  assert.match(script, /Release authorization is recorded outside this archive/)
+  assert.match(script, /releaseReadiness\.status/)
+  assert.match(script, /licensePolicy\.reviewStatus/)
+  assert.doesNotMatch(script, /This is an unapproved candidate\. It must not be published/)
+  assert.match(script, /Cinema 字幕 smoke/)
+})
 
 test("candidate descriptor binds render and subtitle smoke files", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "anybox-media-describe-test-"))

@@ -8,7 +8,7 @@
 
 This brief evaluates the Anybox-controlled Windows x64 and macOS arm64 artifact-pending targets represented in `packages/desktop/media-runtime.lock.json`. It narrows the two production candidates that should be built and submitted for license review. It does not approve H.264 patent use, FFmpeg redistribution, VideoToolbox or Media Foundation use, a binary mirror, or public Deliver enablement.
 
-The candidate policy now also pins libass 0.17.4, FreeType 2.14.3, FriBidi 1.0.16, HarfBuzz 14.2.1, and Noto Sans CJK SC Regular 2.004 by source URL and SHA-256. The font is distributed under OFL-1.1. Candidate metadata records the source versions/digests, configure output, font digest/license, and `ass` capability; Chinese/English burn-in smoke evidence is mandatory. Subtitle delivery remains fail-closed until the existing license, mirror, package-signing and installed-app restart evidence is approved.
+The candidate policy now also pins libass 0.17.5, FreeType 2.14.3, FriBidi 1.0.16, HarfBuzz 14.2.1, and Noto Sans CJK SC Regular 2.004 by source URL and SHA-256. The font is distributed under OFL-1.1. Candidate metadata records the source versions/digests, configure output, font digest/license, and `ass` capability; Chinese/English burn-in smoke evidence is mandatory. Subtitle delivery remains fail-closed until the existing license, mirror, package-signing and installed-app restart evidence is approved.
 
 ## Authoritative evidence
 

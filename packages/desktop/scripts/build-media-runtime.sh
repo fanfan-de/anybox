@@ -10,7 +10,7 @@ desktop_dir="$(cd "${script_dir}/.." && pwd)"
 work_dir="${ANYBOX_MEDIA_RUNTIME_WORK_DIR:-${desktop_dir}/build/media-runtime-source-${platform}-${arch}}"
 output_dir="${ANYBOX_MEDIA_RUNTIME_OUTPUT_DIR:-${desktop_dir}/build/media-runtime-candidates/${platform}-${arch}}"
 source_dir="${work_dir}/ffmpeg"
-prefix_dir="${work_dir}/prefix"
+configure_prefix="/opt/anybox/media-runtime/${platform}-${arch}"
 stage_dir="${output_dir}/stage"
 sources_dir="${output_dir}/subtitle-sources"
 evidence_dir="${stage_dir}/evidence"
@@ -60,7 +60,7 @@ git -C "${source_dir}" archive --format=tar.gz --prefix="ffmpeg-${ffmpeg_revisio
 cp "${script_dir}/build-media-runtime.sh" "${recipe_copy}"
 
 common_flags=(
-  "--prefix=${prefix_dir}"
+  "--prefix=${configure_prefix}"
   "--enable-version3"
   "--enable-static"
   "--disable-shared"
@@ -127,7 +127,7 @@ Source origin: https://github.com/FFmpeg/FFmpeg/commit/${ffmpeg_revision}
 EOF
 "${stage_dir}/${ffmpeg_name}" -buildconf > "${stage_dir}/configure.txt" 2>&1
 cat > "${stage_dir}/THIRD-PARTY-NOTICES.txt" <<EOF
-FFmpeg media runtime candidate for Anybox
+FFmpeg media runtime for Anybox
 
 FFmpeg revision: ${ffmpeg_revision}
 Source: https://github.com/FFmpeg/FFmpeg/commit/${ffmpeg_revision}
@@ -136,8 +136,9 @@ License: LGPL-3.0-or-later; see LICENSE.txt.
 Subtitle renderer: libass ${libass_version} with FreeType ${freetype_version}, FriBidi ${fribidi_version}, and HarfBuzz ${harfbuzz_version}.
 Bundled font: Noto Sans CJK SC ${noto_version}; see fonts/OFL-1.1.txt.
 
-This is an unapproved candidate. It must not be published until immutable mirroring,
-license review, release approval, and installed-app evidence are complete.
+Release authorization is recorded outside this archive in packages/desktop/media-runtime.lock.json.
+Distribute this archive only when the matching target has both releaseReadiness.status
+and licensePolicy.reviewStatus set to approved.
 EOF
 
 "${stage_dir}/${ffmpeg_name}" -hide_banner -encoders 2>&1 | grep -q "${video_encoder}"
