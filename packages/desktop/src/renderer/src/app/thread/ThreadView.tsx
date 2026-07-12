@@ -99,6 +99,11 @@ import { useThreadVirtualList } from "./use-thread-virtual-list"
 
 export type { ThreadScrollSnapshot } from "./use-thread-scroll-controller"
 
+export interface ThreadNavigationRequest {
+  requestID: number
+  turnID?: string
+}
+
 const EMPTY_FILE_CHANGES: AssistantTraceFileChange[] = []
 
 type ProposedPlanCardStatus = "idle" | "cancelled" | "confirming" | "confirmed"
@@ -134,6 +139,7 @@ interface ThreadViewProps {
   scrollStateKey?: string | null
   threadColumnRef: RefObject<HTMLDivElement | null>
   isThreadVisible?: boolean
+  navigationRequest?: ThreadNavigationRequest | null
   virtualMeasurementKey?: string | null
   readScrollSnapshot?: (key: string) => ThreadScrollSnapshot | null
   saveScrollSnapshot?: (key: string, snapshot: ThreadScrollSnapshot) => void
@@ -4954,6 +4960,8 @@ function getThreadViewPropsChangeReason(left: ThreadViewViewportProps, right: Th
   if (left.scrollStateKey !== right.scrollStateKey) return "scrollStateKey"
   if (left.threadColumnRef !== right.threadColumnRef) return "threadColumnRef"
   if (left.isThreadVisible !== right.isThreadVisible) return "isThreadVisible"
+  if (left.navigationRequest?.requestID !== right.navigationRequest?.requestID) return "navigationRequest"
+  if (left.navigationRequest?.turnID !== right.navigationRequest?.turnID) return "navigationRequest"
   if (left.virtualMeasurementKey !== right.virtualMeasurementKey) return "virtualMeasurementKey"
   if (left.readScrollSnapshot !== right.readScrollSnapshot) return "readScrollSnapshot"
   if (left.saveScrollSnapshot !== right.saveScrollSnapshot) return "saveScrollSnapshot"
@@ -5045,6 +5053,7 @@ function VisibleThreadView({
   isResolvingPermissionRequest,
   isSessionRunning = false,
   interactionStore,
+  navigationRequest = null,
   messageTree = null,
   addImageToComposerDisabledReason = null,
   pendingConversationInputs = [],
@@ -5113,6 +5122,7 @@ function VisibleThreadView({
     x: number
     y: number
   } | null>(null)
+  const handledNavigationRequestIDRef = useRef<number | null>(null)
   const activeSessionID = activeSession?.id ?? null
   const effectiveScrollStateKey = scrollStateKey ?? activeSessionID ?? "thread:no-session"
   const focusedVirtualRowID = focusedVirtualRow?.scopeID === effectiveScrollStateKey
@@ -5259,6 +5269,30 @@ function VisibleThreadView({
     if (offset === null) return
     navigateThreadToOffset(offset, effectiveScrollStateKey)
   }, [effectiveScrollStateKey, getThreadVirtualOffsetForRowIndex, navigateThreadToOffset])
+
+  useLayoutEffect(() => {
+    if (!navigationRequest || handledNavigationRequestIDRef.current === navigationRequest.requestID) return
+    if (!isThreadVisible || threadTurnNavigationItems.length === 0) return
+
+    const requestedItem = threadTurnNavigationItems.find((item) => item.turnID === navigationRequest.turnID)
+    const targetItem = requestedItem ?? threadTurnNavigationItems.at(-1)
+    if (!targetItem) return
+
+    const offset = getThreadVirtualOffsetForRowIndex(targetItem.rowIndex, 16)
+    if (offset === null) return
+
+    navigateThreadToOffset(offset, effectiveScrollStateKey)
+    if (requestedItem || !navigationRequest.turnID) {
+      handledNavigationRequestIDRef.current = navigationRequest.requestID
+    }
+  }, [
+    effectiveScrollStateKey,
+    getThreadVirtualOffsetForRowIndex,
+    isThreadVisible,
+    navigationRequest,
+    navigateThreadToOffset,
+    threadTurnNavigationItems,
+  ])
   const handleThreadColumnScroll = useCallback(() => {
     handleThreadScroll()
     updateThreadTurnNavigationIndex()

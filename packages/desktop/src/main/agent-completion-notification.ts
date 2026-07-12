@@ -31,7 +31,7 @@ export interface AgentCompletionNotificationManagerOptions {
   dedupLimit?: number
   isAppWindowFocused?: () => boolean
   notifyWhenFocused?: boolean
-  onNotificationClick?: (input: { sessionID?: string; target: WebContents }) => void
+  onNotificationClick?: (input: { sessionID?: string; target: WebContents; turnID?: string }) => void
   resolveSessionTitle?: (sessionID: string) => Promise<string | undefined> | string | undefined
   responsePreviewLength?: number
   title?: string
@@ -81,6 +81,14 @@ function readNotificationEventKey(input: Pick<AgentCompletionNotificationInput, 
 function readNotificationSessionID(input: Pick<AgentCompletionNotificationInput, "data" | "event">) {
   if (input.event === "runtime") {
     return readRuntimeEvent(input.data)?.sessionID
+  }
+
+  return undefined
+}
+
+function readNotificationTurnID(input: Pick<AgentCompletionNotificationInput, "data" | "event">) {
+  if (input.event === "runtime") {
+    return readRuntimeEvent(input.data)?.turnID
   }
 
   return undefined
@@ -152,7 +160,7 @@ export class AgentCompletionNotificationManager {
   private readonly dedupLimit: number
   private readonly isAppWindowFocused: () => boolean
   private readonly notifyWhenFocused: boolean
-  private readonly onNotificationClick?: (input: { sessionID?: string; target: WebContents }) => void
+  private readonly onNotificationClick?: (input: { sessionID?: string; target: WebContents; turnID?: string }) => void
   private readonly notifiedKeys = new Set<string>()
   private readonly notifiedKeyOrder: string[] = []
   private readonly resolveSessionTitle?: (sessionID: string) => Promise<string | undefined> | string | undefined
@@ -179,9 +187,10 @@ export class AgentCompletionNotificationManager {
     if (!this.notifyWhenFocused && this.isAppWindowFocused()) return false
 
     const sessionID = readNotificationSessionID(input)
+    const turnID = readNotificationTurnID(input)
     const title = await this.resolveNotificationTitle(sessionID)
     const body = readNotificationResponsePreview(input, this.responsePreviewLength) ?? this.body
-    return this.showNativeNotification(input.target, { body, sessionID, title })
+    return this.showNativeNotification(input.target, { body, sessionID, title, turnID })
   }
 
   private rememberNotificationKey(key: string) {
@@ -218,7 +227,10 @@ export class AgentCompletionNotificationManager {
     return this.title
   }
 
-  private showNativeNotification(target: WebContents, content: { body: string; sessionID?: string; title: string }) {
+  private showNativeNotification(
+    target: WebContents,
+    content: { body: string; sessionID?: string; title: string; turnID?: string },
+  ) {
     if (!Notification.isSupported()) return false
 
     try {
@@ -237,6 +249,7 @@ export class AgentCompletionNotificationManager {
           this.onNotificationClick?.({
             sessionID: content.sessionID,
             target,
+            turnID: content.turnID,
           })
         } catch (error) {
           safeError("[desktop] failed to handle agent completion notification click", error)
@@ -261,5 +274,6 @@ export const internal = {
   readNotificationResponsePreview,
   readNotificationSessionID,
   readNotificationEventKey,
+  readNotificationTurnID,
   truncatePreviewText,
 }

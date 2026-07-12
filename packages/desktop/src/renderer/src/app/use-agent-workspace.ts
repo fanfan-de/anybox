@@ -25,7 +25,7 @@ import {
   updateRendererCurrentSessionDiagnostics,
 } from "./renderer-memory-diagnostics"
 import type { LeftSidebarView, SessionDiffSummary, SessionModelSelection, ThreadMessage, WorkspaceGroup } from "./types"
-import type { ThreadScrollSnapshot } from "./thread/ThreadView"
+import type { ThreadNavigationRequest, ThreadScrollSnapshot } from "./thread/ThreadView"
 import { persistUserMessages } from "./user-message-presentation"
 import { findSession, updateSessionInWorkspaces, updateSessionModelSelectionInWorkspaces } from "./workspace"
 import {
@@ -136,8 +136,12 @@ export function useAgentWorkspace({
 }: UseAgentWorkspaceOptions) {
   const workbenchDockviewCommandsRef = useRef<WorkbenchDockviewCommands | null>(null)
   const dockviewPersistenceTimerRef = useRef<number | null>(null)
-  const focusSessionFromAgentEventRef = useRef<(sessionID: string) => void>(() => undefined)
+  const focusSessionFromAgentEventRef = useRef<(sessionID: string, turnID?: string) => void>(() => undefined)
+  const threadNavigationRequestIDRef = useRef(0)
   const threadScrollSnapshotsRef = useRef<Record<string, ThreadScrollSnapshot>>({})
+  const [threadNavigationRequestBySession, setThreadNavigationRequestBySession] = useState<
+    Record<string, ThreadNavigationRequest>
+  >({})
   const workspaceStoreRef = useRef<WorkspaceStoreApi | null>(null)
   const [composerCommandStatusByTabKey, setComposerCommandStatusByTabKey] = useState<Record<string, ComposerCommandStatus>>({})
   if (!workspaceStoreRef.current) {
@@ -469,8 +473,8 @@ export function useAgentWorkspace({
     isRuntimeDebugEnabled,
     openCanvasSessionIDs,
     visibleCanvasSessionIDs,
-    onFocusSession: (sessionID) => {
-      focusSessionFromAgentEventRef.current(sessionID)
+    onFocusSession: (sessionID, turnID) => {
+      focusSessionFromAgentEventRef.current(sessionID, turnID)
     },
     onSessionCanvasActivity: markSessionCanvasUnread,
     pendingStreamsRef,
@@ -601,7 +605,7 @@ export function useAgentWorkspace({
     workspaces,
   })
 
-  focusSessionFromAgentEventRef.current = (sessionID: string) => {
+  focusSessionFromAgentEventRef.current = (sessionID: string, turnID?: string) => {
     const selection = findSession(workspaces, sessionID)
     if (!selection.workspace || !selection.session) {
       console.warn("[desktop] Cannot focus notification session; session is not loaded.", {
@@ -610,6 +614,14 @@ export function useAgentWorkspace({
       return
     }
 
+    threadNavigationRequestIDRef.current += 1
+    setThreadNavigationRequestBySession((current) => ({
+      ...current,
+      [selection.session.id]: {
+        requestID: threadNavigationRequestIDRef.current,
+        turnID,
+      },
+    }))
     focusSession(selection.workspace.id, selection.session.id)
   }
 
@@ -1092,6 +1104,7 @@ export function useAgentWorkspace({
     handleMessageDiffSummaryHydrate,
     readThreadScrollSnapshot,
     saveThreadScrollSnapshot,
+    threadNavigationRequestBySession,
     focusedPaneID,
     hoveredFolderID,
     isCreateSessionTabActive,

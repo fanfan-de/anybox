@@ -3038,11 +3038,12 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     onCancel: cancelAgentSessionFromComputerUseOverlay,
   })
   const agentCompletionNotifications = new AgentCompletionNotificationManager({
-    onNotificationClick: ({ sessionID, target }) => {
+    onNotificationClick: ({ sessionID, target, turnID }) => {
       if (!sessionID || target.isDestroyed()) return
       sendDesktopIpcEvent(target, AGENT_SESSION_EVENT_CHANNEL, {
         kind: "focus-session",
         backendSessionID: sessionID,
+        turnID,
         receivedAt: Date.now(),
       } satisfies AgentSessionBridgeIPCEvent)
     },

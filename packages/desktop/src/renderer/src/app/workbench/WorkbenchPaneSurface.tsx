@@ -26,7 +26,7 @@ import type {
 } from "../types"
 import { useProjectComposer } from "../use-project-composer"
 import { isSideChatSession } from "../workspace"
-import { ThreadView, type ThreadScrollSnapshot } from "../thread/ThreadView"
+import { ThreadView, type ThreadNavigationRequest, type ThreadScrollSnapshot } from "../thread/ThreadView"
 import type { WorkbenchPaneState } from "../agent-workspace/workspace-derived-state"
 import { useConversationMessages, type ConversationStoreApi } from "../agent-workspace/conversation-store"
 import type { ComposerCommandStatus } from "../agent-workspace/composer-controller"
@@ -344,6 +344,7 @@ export interface WorkbenchPaneSurfaceProps {
   workspaces: WorkspaceGroup[]
   readThreadScrollSnapshot: (key: string) => ThreadScrollSnapshot | null
   saveThreadScrollSnapshot: (key: string, snapshot: ThreadScrollSnapshot) => void
+  threadNavigationRequestBySession?: Record<string, ThreadNavigationRequest>
   onCreateSessionSubmit: (createSessionTabID?: string | null, paneID?: string) => Promise<void>
   onCreateSessionWorkspaceChange: (workspaceID: string, createSessionTabID?: string | null) => void
   onOpenProjectFolder: () => void | Promise<void>
@@ -489,6 +490,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   workspaces,
   readThreadScrollSnapshot,
   saveThreadScrollSnapshot,
+  threadNavigationRequestBySession,
   onCreateSessionSubmit,
   onCreateSessionWorkspaceChange,
   onOpenProjectFolder,
@@ -853,6 +855,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   scrollStateKey={pane.tabKey}
                   threadColumnRef={threadColumnRef}
                   isThreadVisible={pane.isActivePanel}
+                  navigationRequest={pane.sessionID ? threadNavigationRequestBySession?.[pane.sessionID] ?? null : null}
                   virtualMeasurementKey={`${pane.tabKey ?? pane.sessionID ?? pane.id}:${String(threadActivationVersion)}`}
                   readScrollSnapshot={readThreadScrollSnapshot}
                   saveScrollSnapshot={saveThreadScrollSnapshot}

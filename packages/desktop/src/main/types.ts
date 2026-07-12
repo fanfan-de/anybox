@@ -578,6 +578,7 @@ export type AgentSessionBridgeIPCEvent =
   | {
       kind: "focus-session"
       backendSessionID: string
+      turnID?: string
       receivedAt: number
     }
 

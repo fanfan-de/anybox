@@ -1498,7 +1498,7 @@ interface UseSessionStreamControllerOptions {
   isRuntimeDebugEnabled: boolean
   openCanvasSessionIDs: string[]
   visibleCanvasSessionIDs: string[]
-  onFocusSession: (sessionID: string) => void
+  onFocusSession: (sessionID: string, turnID?: string) => void
   onSessionCanvasActivity: (sessionID: string) => void
   pendingConversationInputsBySession: Record<string, PendingConversationInput[]>
   pendingStreamsRef: MutableRefObject<Record<string, PendingAgentStream>>
@@ -3000,7 +3000,7 @@ export function useSessionStreamController({
     }
 
     if (sessionEvent.kind === "focus-session") {
-      onFocusSession(sessionEvent.backendSessionID)
+      onFocusSession(sessionEvent.backendSessionID, sessionEvent.turnID)
       return
     }
 

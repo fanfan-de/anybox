@@ -5553,6 +5553,36 @@ describe("ThreadView turn navigator", () => {
     })
   })
 
+  it("navigates notification requests to the completed turn's user submission", async () => {
+    const activeMessages = Array.from({ length: 120 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
+    const activeTurns = activeMessages.map((message, index) => threadTurn(`turn-${index}`, message))
+    const saveScrollSnapshot = vi.fn()
+    const { props, rerender, threadColumn } = renderThread(activeMessages, {
+      activeTurns,
+      saveScrollSnapshot,
+      scrollStateKey: "session:notification-navigation",
+    })
+    setScrollMetrics(threadColumn, {
+      clientHeight: 400,
+      scrollHeight: 20_000,
+      scrollTop: 0,
+    })
+
+    rerender(
+      <ThreadView
+        {...props}
+        navigationRequest={{ requestID: 1, turnID: "turn-99" }}
+      />,
+    )
+
+    await waitFor(() => expect(screen.getByText("Prompt 99")).toBeInTheDocument())
+    expect(threadColumn.scrollTop).toBeGreaterThan(0)
+    expect(saveScrollSnapshot).toHaveBeenLastCalledWith(
+      "session:notification-navigation",
+      expect.objectContaining({ pinnedToBottom: false }),
+    )
+  })
+
   it("updates the current turn while the user scrolls the thread", async () => {
     const activeMessages = Array.from({ length: 20 }, (_, index) => userMessage(`user-${index}`, `Prompt ${index}`))
     const activeTurns = activeMessages.map((message, index) => threadTurn(`turn-${index}`, message))

@@ -132,6 +132,17 @@ describe("agent completion notification parsing", () => {
     })).toBeUndefined()
   })
 
+  it("reads turn ids from runtime events", () => {
+    expect(internal.readNotificationTurnID({
+      event: "runtime",
+      data: createRuntimeEvent("turn.completed", { status: "completed" }),
+    })).toBe("turn_1")
+    expect(internal.readNotificationTurnID({
+      event: "done",
+      data: { turnID: "legacy_turn" },
+    })).toBeUndefined()
+  })
+
   it("reads and truncates response previews from text parts", () => {
     expect(internal.readNotificationResponsePreview({
       event: "runtime",
@@ -326,6 +337,7 @@ describe("AgentCompletionNotificationManager", () => {
     expect(onNotificationClick).toHaveBeenCalledWith({
       sessionID: "session_1",
       target,
+      turnID: "turn_1",
     })
   })
 

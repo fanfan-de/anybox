@@ -24,7 +24,7 @@ import {
 import { CloseIcon, PlusIcon } from "../icons"
 import { joinClassNames, SidebarToggleButton, SideChatBadge } from "../shared-ui"
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "../thread-markdown"
-import type { ThreadScrollSnapshot } from "../thread/ThreadView"
+import type { ThreadNavigationRequest, ThreadScrollSnapshot } from "../thread/ThreadView"
 import type { AssistantTraceVisibility, ComposerDraftState, SessionDiffFile, SessionDiffSummary, ToolPermissionMode } from "../types"
 import type { ComposerCommandStatus } from "../agent-workspace/composer-controller"
 import { createID } from "../utils"
@@ -582,6 +582,7 @@ export interface WorkbenchShellProps {
   conversationWorkspaceID?: string | null
   readThreadScrollSnapshot: (key: string) => ThreadScrollSnapshot | null
   saveThreadScrollSnapshot: (key: string, snapshot: ThreadScrollSnapshot) => void
+  threadNavigationRequestBySession?: Record<string, ThreadNavigationRequest>
   onCloseCreateSessionTab: (createSessionTabID: string, paneID?: string, options?: { force?: boolean }) => void
   onCloseSessionTab: (sessionID: string, paneID?: string) => void
   onCreateSessionSubmit: (createSessionTabID?: string | null, paneID?: string) => Promise<void>
@@ -1293,6 +1294,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
         workspaces={workspaces}
         readThreadScrollSnapshot={props.readThreadScrollSnapshot}
         saveThreadScrollSnapshot={props.saveThreadScrollSnapshot}
+        threadNavigationRequestBySession={props.threadNavigationRequestBySession}
         onCreateSessionSubmit={props.onCreateSessionSubmit}
         onCreateSessionWorkspaceChange={props.onCreateSessionWorkspaceChange}
         onOpenProjectFolder={props.onOpenProjectFolder}

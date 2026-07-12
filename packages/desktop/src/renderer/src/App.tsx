@@ -840,6 +840,7 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
     readThreadScrollSnapshot,
     setDraftForTab,
     saveThreadScrollSnapshot,
+    threadNavigationRequestBySession,
     handleWorkbenchDockviewCommandsReady,
     setDockviewLayout,
     dockviewLayout,
@@ -1038,6 +1039,7 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
             windowControls={windowControls}
             readThreadScrollSnapshot={readThreadScrollSnapshot}
             saveThreadScrollSnapshot={saveThreadScrollSnapshot}
+            threadNavigationRequestBySession={threadNavigationRequestBySession}
             permissionRequestActionError={permissionRequestActionError}
             permissionRequestActionRequestID={permissionRequestActionRequestID}
             toolPermissionMode={toolPermissionMode}
@@ -1330,6 +1332,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     sessionCanvasUnreadBySession,
     setDraftForTab,
     saveThreadScrollSnapshot,
+    threadNavigationRequestBySession,
     handleWorkbenchDockviewCommandsReady,
     setHoveredFolderID,
     setDockviewLayout,
@@ -2910,6 +2913,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 windowControls={isRightSidebarCollapsed ? workbenchWindowControls : null}
                 readThreadScrollSnapshot={readThreadScrollSnapshot}
                 saveThreadScrollSnapshot={saveThreadScrollSnapshot}
+                threadNavigationRequestBySession={threadNavigationRequestBySession}
                 permissionRequestActionError={permissionRequestActionError}
                 permissionRequestActionRequestID={permissionRequestActionRequestID}
                 toolPermissionMode={toolPermissionMode}

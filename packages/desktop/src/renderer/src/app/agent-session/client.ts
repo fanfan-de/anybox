@@ -34,6 +34,7 @@ export type AgentSessionBridgeEvent =
   | {
       kind: "focus-session"
       backendSessionID: string
+      turnID?: string
       receivedAt: number
     }
 

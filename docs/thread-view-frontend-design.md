@@ -486,6 +486,7 @@ debug 信息由 developer mode 和 trace visibility 控制。默认不应该干�
 - 如果用户向上阅读历史，后续更新不会强行打断阅读位置。
 - 点击 `ThreadTurnNavigator` 的轮次节点时，`useThreadVirtualList` 通过目标 display row index 获取 TanStack virtualizer 的 start offset，并减去少量顶部阅读留白；即使目标 row 尚未挂载到 DOM，也不依赖 `scrollIntoView()`。
 - 轮次跳转通过 `useThreadScrollController.navigateThreadToOffset()` 明确切换为 `detached`，同时保存 `pinnedToBottom: false` 的 scroll snapshot。点击最后一轮也只定位到该轮 user message，不会滚到 thread 最底部；用户随后手动回到底部时仍由原有 scroll intent 规则恢复 follow。
+- 点击任务完成系统通知时，主进程把完成事件的 `turnID` 随 `focus-session` 事件传到目标窗口。工作区聚焦对应 session 后发出一次性 thread navigation request，复用轮次导航的 virtual row offset 定位到该轮 user message；若历史刷新后仍没有对应 turn，则回退到当前最后一轮 user message。
 - 轮次可见状态由 `.thread-column` 自身的 React `onScroll` 直接触发；virtualizer 的 measurement key 变化通过 requestAnimationFrame 合并更新。每轮范围从该轮 user row 开始，到下一轮 user row 之前结束；范围与当前 viewport 相交的所有轮次标记会同时高亮。导航组件同时接收一个主 current index，供紧凑模式文案、`aria-current` 和标记列表自动滚动使用，不再自行监听或观察 sibling 滚动节点。这样 Dockview 重挂载不会留下旧滚动监听，且只有可见集合或主索引变化时才更新导航状态。
 - 键盘焦点进入 virtual row 后，该 row ID 会加入 virtualizer range；用户滚动阅读其他位置时不会卸载正在输入或操作的控件，blur 后解除 pin。
 
