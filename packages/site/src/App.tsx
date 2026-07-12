@@ -9,6 +9,7 @@ const brandLogoBlack = "/brand-logo-black.svg"
 const wechatCommunityQrImage = "/wechat-community-qr-20260702.png"
 const icpRecordNumber = "苏ICP备2026030016号-1"
 const icpRecordUrl = "https://beian.miit.gov.cn/"
+const supportUrl = "https://github.com/fanfan-de/anybox/issues"
 
 function getGitHubRepoApiUrl(href: string) {
   const match = href.match(/^https:\/\/github\.com\/([^/]+)\/([^/#?]+)/)
@@ -191,9 +192,16 @@ function SiteFooter() {
   return (
     <footer className="site-footer">
       <span>© 2026 Anybox</span>
-      <a href={icpRecordUrl} rel="noreferrer" target="_blank">
-        {icpRecordNumber}
-      </a>
+      <nav className="site-footer-links" aria-label="页脚导航">
+        <a href="/pricing/">定价</a>
+        <a href="/privacy/">隐私</a>
+        <a href={supportUrl} rel="noreferrer" target="_blank">
+          支持
+        </a>
+        <a href={icpRecordUrl} rel="noreferrer" target="_blank">
+          {icpRecordNumber}
+        </a>
+      </nav>
     </footer>
   )
 }
