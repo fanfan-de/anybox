@@ -4,6 +4,7 @@ set -euo pipefail
 platform="${1:?usage: build-media-runtime.sh <win32|darwin> <x64|arm64>}"
 arch="${2:?usage: build-media-runtime.sh <win32|darwin> <x64|arm64>}"
 ffmpeg_revision="${ANYBOX_FFMPEG_REVISION:-8ad6288553}"
+node_binary="${ANYBOX_NODE_BINARY:-node}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 desktop_dir="$(cd "${script_dir}/.." && pwd)"
 work_dir="${ANYBOX_MEDIA_RUNTIME_WORK_DIR:-${desktop_dir}/build/media-runtime-source-${platform}-${arch}}"
@@ -19,8 +20,8 @@ if [[ "${ANYBOX_MEDIA_RUNTIME_RUN_SMOKE:-0}" != "1" ]]; then
   exit 2
 fi
 
-libass_version="0.17.4"
-libass_sha256="78f1179b838d025e9c26e8fef33f8092f65611444ffa1bfc0cfac6a33511a05a"
+libass_version="0.17.5"
+libass_sha256="2dca25c0e0c837ddf00b52011b3f82cac1e4ddd3ad018227806b0c2288864acc"
 freetype_version="2.14.3"
 freetype_sha256="36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f"
 fribidi_version="1.0.16"
@@ -101,7 +102,7 @@ esac
 
 pushd "${source_dir}" >/dev/null
 ./configure "${common_flags[@]}" "${target_flags[@]}"
-make -j"${ANYBOX_MEDIA_RUNTIME_JOBS:-2}" ffmpeg ffprobe
+make -j"${ANYBOX_MEDIA_RUNTIME_JOBS:-2}" "${ffmpeg_name}" "${ffprobe_name}"
 popd >/dev/null
 
 cp "${source_dir}/${ffmpeg_name}" "${stage_dir}/${ffmpeg_name}"
@@ -163,7 +164,7 @@ EOF
 fi
 
 tar -czf "${output_dir}/${archive_name}" -C "${stage_dir}" .
-node "${script_dir}/describe-media-runtime-candidate.mjs" \
+"${node_binary}" "${script_dir}/describe-media-runtime-candidate.mjs" \
   --platform "${platform}" \
   --arch "${arch}" \
   --stage "${stage_dir}" \

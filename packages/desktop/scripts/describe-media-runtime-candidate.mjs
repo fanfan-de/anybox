@@ -122,7 +122,7 @@ const candidate = {
     requiredFilter: "ass",
     fontFamilyID: "anybox-subtitle-sans-v1",
     dependencies: {
-      libass: { version: "0.17.4", sha256: "78f1179b838d025e9c26e8fef33f8092f65611444ffa1bfc0cfac6a33511a05a" },
+      libass: { version: "0.17.5", sha256: "2dca25c0e0c837ddf00b52011b3f82cac1e4ddd3ad018227806b0c2288864acc" },
       freetype: { version: "2.14.3", sha256: "36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f" },
       fribidi: { version: "1.0.16", sha256: "1b1cde5b235d40479e91be2f0e88a309e3214c8ab470ec8a2744d82a5a9ea05c" },
       harfbuzz: { version: "14.2.1", sha256: "a54a5d8e9380a41fbb762ce367bcbf7704792dfca0d93f1bbca86c5a57902e0e" },
