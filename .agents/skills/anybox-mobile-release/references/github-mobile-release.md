@@ -48,7 +48,7 @@ corepack pnpm mobile:release:github:prepare -- --notes "Fix pairing reliability"
 The prepare command prints a command like:
 
 ```powershell
-gh release create mobile-v0.2.0 "packages/mobile-app/build/github-release/anybox-mobile.apk" "packages/mobile-app/build/github-release/anybox-mobile-release.json" --repo fanfan-de/anybox --title "Anybox Mobile 0.2.0" --notes "Anybox Mobile 0.2.0"
+gh release create mobile-v0.2.0 "packages/mobile-app/build/github-release/anybox-mobile.apk" "packages/mobile-app/build/github-release/anybox-mobile-release.json" --repo fanfan-de/anybox --title "Anybox Mobile 0.2.0" --notes "Anybox Mobile 0.2.0" --latest=false
 ```
 
 For large APKs, allow a long timeout. If `gh release create` times out, check whether it created a draft:

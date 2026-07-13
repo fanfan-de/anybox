@@ -12,6 +12,7 @@ Use the mobile-only GitHub Release flow:
 - Tags must start with `mobile-v`, for example `mobile-v0.2.0`.
 - Release assets must include `anybox-mobile.apk` and `anybox-mobile-release.json`.
 - Do not use `releases/latest` for mobile update checks; desktop releases can become latest.
+- Do not mark mobile releases as GitHub `latest`; pass `--latest=false` with `gh` or `make_latest: "false"` with the GitHub Releases API.
 - The mobile app checks GitHub Releases API and filters only `mobile-v*` tags.
 
 ## Workflow
@@ -95,7 +96,7 @@ Before rebuilding, use the fastest checks to avoid repeating slow work:
 - For JS/style/business logic only, prefer EAS Update if configured.
 - For Android permissions, native dependencies, Expo SDK changes, `android/`, or app metadata changes, publish a new mobile APK release.
 - If the user wants GitHub-only updates, keep EAS project ID unset; mobile APK checks still work through GitHub Releases.
-- If publishing is requested and GitHub CLI is available, use the `gh release create ...` command printed by the prepare script. If `gh` is unavailable but `GH_TOKEN` or `GITHUB_TOKEN` is available, use the GitHub Releases API to create the release and upload both assets. Otherwise report the exact files and tag to upload manually.
+- If publishing is requested and GitHub CLI is available, use the `gh release create ... --latest=false` command printed by the prepare script plus the latest flag. If `gh` is unavailable but `GH_TOKEN` or `GITHUB_TOKEN` is available, use the GitHub Releases API with `make_latest: "false"` to create the release and upload both assets. Otherwise report the exact files and tag to upload manually.
 
 ## Reference
 
