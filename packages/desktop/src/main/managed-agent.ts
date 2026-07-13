@@ -62,12 +62,71 @@ let sourceRuntimeRestartTimer: ReturnType<typeof setTimeout> | undefined
 let sourceRuntimeRestartPromise: Promise<void> | undefined
 let sourceRuntimeSnapshot: SourceRuntimeSnapshot | undefined
 
+interface ManagedAgentRestartControllerOptions {
+  readonly delayMs?: number
+  readonly restart: () => Promise<void>
+  readonly onRestart?: (reason: string) => void
+  readonly onError?: (reason: string, error: unknown) => void
+}
+
+function createManagedAgentRestartController({
+  delayMs = 500,
+  restart,
+  onRestart,
+  onError,
+}: ManagedAgentRestartControllerOptions) {
+  let enabled = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  return {
+    enable() {
+      enabled = true
+    },
+    disable() {
+      enabled = false
+      if (timer) {
+        clearTimeout(timer)
+        timer = undefined
+      }
+    },
+    schedule(reason: string) {
+      if (!enabled || timer) return
+
+      timer = setTimeout(() => {
+        timer = undefined
+        if (!enabled) return
+        onRestart?.(reason)
+        void restart().catch((error) => onError?.(reason, error))
+      }, delayMs)
+    },
+  }
+}
+
 function log(message: string, ...details: unknown[]) {
   safeLog("[desktop][agent]", message, ...details)
 }
 
 function logError(message: string, error: unknown) {
   safeError("[desktop][agent]", message, error)
+}
+
+const managedAgentRestartController = createManagedAgentRestartController({
+  restart: async () => {
+    await ensureManagedAgentRunning()
+  },
+  onRestart: (reason) => {
+    log(`restarting managed agent after unexpected exit: ${reason}`)
+  },
+  onError: (reason, error) => {
+    logError(`managed agent restart failed after unexpected exit: ${reason}`, error)
+  },
+})
+
+function clearManagedAgentRuntimeEnv() {
+  delete process.env[MANAGED_AGENT_BASE_URL_ENV]
+  delete process.env[MANAGED_AGENT_DATA_DIR_ENV]
+  delete process.env[WORKSPACE_DEPENDENCIES_DIR_ENV]
+  delete process.env[WORKSPACE_DEPENDENCIES_VERSION_ENV]
 }
 
 async function publishBrowserNativeAgentBaseURL(baseURL: string) {
@@ -565,6 +624,8 @@ async function restartManagedAgent(reason: string) {
 }
 
 export async function ensureManagedAgentRunning() {
+  managedAgentRestartController.enable()
+
   if (managedAgent) {
     await publishBrowserNativeAgentBaseURL(managedAgent.baseURL)
     return managedAgent.baseURL
@@ -621,6 +682,8 @@ export async function ensureManagedAgentRunning() {
       log(`managed agent exited (code=${code ?? "null"}, signal=${signal ?? "none"})`)
       if (managedAgent?.child === child) {
         managedAgent = undefined
+        clearManagedAgentRuntimeEnv()
+        managedAgentRestartController.schedule(`code=${code ?? "null"}, signal=${signal ?? "none"}`)
       }
     })
 
@@ -653,12 +716,10 @@ export async function ensureManagedAgentRunning() {
 }
 
 export async function stopManagedAgent() {
+  managedAgentRestartController.disable()
   const current = managedAgent
   managedAgent = undefined
-  delete process.env[MANAGED_AGENT_BASE_URL_ENV]
-  delete process.env[MANAGED_AGENT_DATA_DIR_ENV]
-  delete process.env[WORKSPACE_DEPENDENCIES_DIR_ENV]
-  delete process.env[WORKSPACE_DEPENDENCIES_VERSION_ENV]
+  clearManagedAgentRuntimeEnv()
   clearSourceRuntimeRestartTimer()
 
   if (!current || current.child.exitCode !== null) return
@@ -685,6 +746,7 @@ export async function stopManagedAgent() {
 }
 
 export const managedAgentInternals = {
+  createManagedAgentRestartController,
   env: {
     agentDataDir: MANAGED_AGENT_DATA_DIR_ENV,
     desktopProcessID: MANAGED_AGENT_DESKTOP_PROCESS_ID_ENV,

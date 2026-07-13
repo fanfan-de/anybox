@@ -83,7 +83,44 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
+  vi.useRealTimers()
   await Promise.all(tempDirectories.splice(0).map((directory) => rm(directory, { force: true, recursive: true })))
+})
+
+describe("managed agent unexpected-exit restart", () => {
+  it("restarts once after the delay when enabled", async () => {
+    vi.useFakeTimers()
+    const restart = vi.fn().mockResolvedValue(undefined)
+    const controller = managedAgentInternals.createManagedAgentRestartController({
+      delayMs: 250,
+      restart,
+    })
+
+    controller.enable()
+    controller.schedule("exit 1")
+    controller.schedule("duplicate exit")
+
+    await vi.advanceTimersByTimeAsync(249)
+    expect(restart).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(restart).toHaveBeenCalledTimes(1)
+  })
+
+  it("cancels a scheduled restart when shutdown disables the controller", async () => {
+    vi.useFakeTimers()
+    const restart = vi.fn().mockResolvedValue(undefined)
+    const controller = managedAgentInternals.createManagedAgentRestartController({
+      delayMs: 250,
+      restart,
+    })
+
+    controller.enable()
+    controller.schedule("exit 1")
+    controller.disable()
+    await vi.advanceTimersByTimeAsync(250)
+
+    expect(restart).not.toHaveBeenCalled()
+  })
 })
 
 describe("managed agent workspace dependencies", () => {
