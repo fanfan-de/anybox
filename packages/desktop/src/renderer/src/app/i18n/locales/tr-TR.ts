@@ -1,4 +1,5 @@
 import type { TranslationKey } from "../translations"
+import { subscriptionTranslations } from "../subscription-translations"
 
 export const trTR = {
   "app.loading": "Yükleniyor",
@@ -130,6 +131,7 @@ export const trTR = {
   "settings.nav.developer": "Geliştirici Modu",
   "settings.nav.storage": "Depolama",
   "settings.nav.archive": "Arşivlenen Oturumlar",
+  ...subscriptionTranslations["tr-TR"],
   "settings.about.version": "Sürüm",
   "settings.about.checkUpdates": "Güncellemeleri kontrol et",
   "settings.about.checkingUpdates": "Kontrol ediliyor...",

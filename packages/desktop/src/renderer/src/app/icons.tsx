@@ -17,6 +17,7 @@ import {
   CloudCog,
   Code2,
   Copy,
+  CreditCard,
   Database,
   Download,
   Eye,
@@ -174,6 +175,7 @@ export const MoonIcon = createIcon(Moon)
 export const MonitorIcon = createIcon(Monitor)
 export const SmartphoneIcon = createIcon(Smartphone)
 export const AccountSettingsIcon = createIcon(UserCircle)
+export const SubscriptionSettingsIcon = createIcon(CreditCard)
 export const GeneralSettingsIcon = createIcon(SlidersHorizontal)
 export const ProviderSettingsIcon = createIcon(CloudCog)
 export const ModelSettingsIcon = createIcon(BrainCircuit)

@@ -27,6 +27,11 @@ import type {
   DesktopSessionRollbackInput,
   DesktopSessionRollbackResult,
   DesktopStorageUsageSnapshot,
+  DesktopSubscriptionOrderResponse,
+  DesktopSubscriptionOverview,
+  DesktopSubscriptionPlan,
+  DesktopSubscriptionSummary,
+  DesktopSubscriptionLimit,
   McpServerInput,
 } from "../shared/desktop-ipc-contract"
 import {
@@ -763,6 +768,8 @@ interface AnyboxProviderRelaySession {
   baseURL?: string
   expiresAt?: number
   account?: {
+    balanceMicrocents?: number
+    currency?: string
     email?: string
     workspaceName?: string
     planLabel?: string
@@ -901,6 +908,74 @@ function assertConnectedAnyboxSession(session: AnyboxProviderRelaySession) {
     account: session.account,
     baseURL: normalizeAnyboxRootURL(session.baseURL),
   }
+}
+
+async function requestAnyboxSubscriptionJSON<T>(
+  pathname: string,
+  init: RequestInit = {},
+): Promise<{ data: T; session: AnyboxProviderRelaySession }> {
+  const session = await getAnyboxProviderRelaySessionForBag()
+  const connected = assertConnectedAnyboxSession(session)
+  const headers = new Headers(init.headers)
+  headers.set("authorization", `Bearer ${connected.accessToken}`)
+  headers.set("accept", "application/json")
+  const response = await fetch(anyboxBagURL(connected.baseURL, pathname), {
+    ...init,
+    headers,
+  })
+  const payload = await response.json().catch(() => null) as T | { error?: { message?: string } } | null
+  if (!response.ok) {
+    const message = payload && typeof payload === "object" && "error" in payload
+      ? payload.error?.message
+      : undefined
+    throw new Error(message || `Anybox subscription request failed (${response.status}).`)
+  }
+  return { data: payload as T, session }
+}
+
+async function getAnyboxSubscriptionOverview(): Promise<DesktopSubscriptionOverview> {
+  const session = await getAnyboxProviderRelaySessionForBag()
+  if (!session.connected || !session.accessToken) {
+    return {
+      connected: false,
+      plans: [],
+      subscription: null,
+      limits: [],
+      ...(session.error ? { error: session.error } : {}),
+    }
+  }
+
+  const [plansResult, subscriptionResult, limitsResult, pendingOrderResult] = await Promise.all([
+    requestAnyboxSubscriptionJSON<{ data: DesktopSubscriptionPlan[] }>("/api/plans"),
+    requestAnyboxSubscriptionJSON<{ subscription: DesktopSubscriptionSummary | null }>("/api/subscription"),
+    requestAnyboxSubscriptionJSON<{ limits: DesktopSubscriptionLimit[] }>("/api/usage-limits"),
+    requestAnyboxSubscriptionJSON<{
+      order: DesktopSubscriptionOrderResponse["order"] | null
+      planVersionId: string | null
+      upgrade: DesktopSubscriptionOrderResponse["upgrade"]
+    }>("/api/subscription/orders/pending"),
+  ])
+  return {
+    connected: true,
+    balanceMicrocents: session.account?.balanceMicrocents,
+    currency: session.account?.currency,
+    plans: plansResult.data.data,
+    subscription: subscriptionResult.data.subscription,
+    limits: limitsResult.data.limits,
+    pendingOrder: pendingOrderResult.data.order,
+    pendingOrderPlanVersionId: pendingOrderResult.data.planVersionId,
+    pendingUpgrade: pendingOrderResult.data.upgrade ?? null,
+  }
+}
+
+async function cancelAnyboxSubscriptionOrder(orderIdInput: string): Promise<DesktopSubscriptionOrderResponse> {
+  const orderId = orderIdInput.trim()
+  if (!orderId) throw new Error("Subscription order ID is required.")
+  const result = await requestAnyboxSubscriptionJSON<DesktopSubscriptionOrderResponse>(
+    `/api/subscription/orders/${encodeURIComponent(orderId)}/cancel`,
+    { method: "POST" },
+  )
+  return result.data
 }
 
 function buildCrc32Table() {
@@ -4303,6 +4378,56 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     return result.data
   })
 
+  handleDesktopIpc("desktop:get-anybox-subscription-overview", async () => {
+    return await getAnyboxSubscriptionOverview()
+  })
+
+  handleDesktopIpc("desktop:create-anybox-subscription-order", async (_event, input) => {
+    const result = await requestAnyboxSubscriptionJSON<DesktopSubscriptionOrderResponse>("/api/subscription/orders", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    })
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:create-anybox-subscription-upgrade-quote", async (_event, input) => {
+    const result = await requestAnyboxSubscriptionJSON<DesktopIpcOutput<"desktop:create-anybox-subscription-upgrade-quote">>(
+      "/api/subscription/upgrade-quotes",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      },
+    )
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:create-anybox-subscription-upgrade-order", async (_event, input) => {
+    const result = await requestAnyboxSubscriptionJSON<DesktopSubscriptionOrderResponse>(
+      "/api/subscription/upgrade-orders",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      },
+    )
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:get-anybox-subscription-order", async (_event, input) => {
+    const orderId = input.orderId.trim()
+    if (!orderId) throw new Error("Subscription order ID is required.")
+    const result = await requestAnyboxSubscriptionJSON<DesktopSubscriptionOrderResponse>(
+      `/api/subscription/orders/${encodeURIComponent(orderId)}?sync=1`,
+    )
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:cancel-anybox-subscription-order", async (_event, input) => {
+    return await cancelAnyboxSubscriptionOrder(input.orderId)
+  })
+
   handleDesktopIpc("desktop:refresh-global-provider-catalog", async () => {
     const result = await requestAgentJSON<AgentProviderCatalogItem[]>("/api/providers/catalog/refresh", {
       method: "POST",
@@ -6323,12 +6448,14 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
 
 export const internal = {
   abortActiveAgentSessionRequestsInMap,
+  cancelAnyboxSubscriptionOrder,
   cleanupSideChatLinksWithoutResponses,
   capturePreviewScreenshotFromWindow,
   copyImageDataUrlToClipboard,
   discardSessionBagSubmission,
   disposeSessionStreamSubscriptionsForWebContents,
   getSessionTraceExport,
+  getAnyboxSubscriptionOverview,
   getToolPermissionMode,
   interruptAgentSessionBackendFirst,
   isSessionStreamSubscriptionKeyForWebContents,

@@ -1,4 +1,5 @@
 import type { TranslationKey } from "../translations"
+import { subscriptionTranslations } from "../subscription-translations"
 
 export const viVN = {
   "app.loading": "Đang tải",
@@ -130,6 +131,7 @@ export const viVN = {
   "settings.nav.developer": "Chế độ nhà phát triển",
   "settings.nav.storage": "Bộ nhớ",
   "settings.nav.archive": "Phiên đã lưu trữ",
+  ...subscriptionTranslations["vi-VN"],
   "settings.about.version": "Phiên bản",
   "settings.about.checkUpdates": "Kiểm tra cập nhật",
   "settings.about.checkingUpdates": "Đang kiểm tra...",

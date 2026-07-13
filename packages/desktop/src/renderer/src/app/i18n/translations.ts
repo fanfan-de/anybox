@@ -12,6 +12,7 @@ import { trTR } from "./locales/tr-TR"
 import { viVN } from "./locales/vi-VN"
 import { zhTW } from "./locales/zh-TW"
 import { literalPatternTemplates } from "./literal-pattern-locales"
+import { subscriptionTranslations } from "./subscription-translations"
 
 export const zhCN = {
   "app.loading": "加载中",
@@ -143,6 +144,7 @@ export const zhCN = {
   "settings.nav.developer": "开发者模式",
   "settings.nav.storage": "存储",
   "settings.nav.archive": "归档会话",
+  ...subscriptionTranslations["zh-CN"],
   "settings.about.version": "版本",
   "settings.about.checkUpdates": "检查更新",
   "settings.about.checkingUpdates": "正在检查...",
@@ -1512,6 +1514,7 @@ export const enUS = {
   "settings.nav.developer": "Developer Mode",
   "settings.nav.storage": "Storage",
   "settings.nav.archive": "Archived Sessions",
+  ...subscriptionTranslations["en-US"],
   "settings.about.version": "Version",
   "settings.about.checkUpdates": "Check for updates",
   "settings.about.checkingUpdates": "Checking...",

@@ -1,4 +1,5 @@
 import type { TranslationKey } from "../translations"
+import { subscriptionTranslations } from "../subscription-translations"
 
 export const idID = {
   "app.loading": "Memuat",
@@ -130,6 +131,7 @@ export const idID = {
   "settings.nav.developer": "Mode Pengembang",
   "settings.nav.storage": "Penyimpanan",
   "settings.nav.archive": "Sesi yang Diarsipkan",
+  ...subscriptionTranslations["id-ID"],
   "settings.about.version": "Versi",
   "settings.about.checkUpdates": "Periksa pembaruan",
   "settings.about.checkingUpdates": "Memeriksa...",

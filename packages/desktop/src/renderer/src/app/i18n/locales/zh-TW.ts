@@ -1,4 +1,5 @@
 import type { TranslationKey } from "../translations"
+import { subscriptionTranslations } from "../subscription-translations"
 
 export const zhTW = {
   "app.loading": "載入中",
@@ -130,6 +131,7 @@ export const zhTW = {
   "settings.nav.developer": "開發者模式",
   "settings.nav.storage": "儲存",
   "settings.nav.archive": "歸檔工作階段",
+  ...subscriptionTranslations["zh-TW"],
   "settings.about.version": "版本",
   "settings.about.checkUpdates": "檢查更新",
   "settings.about.checkingUpdates": "正在檢查...",

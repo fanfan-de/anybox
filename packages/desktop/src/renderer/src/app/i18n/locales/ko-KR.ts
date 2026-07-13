@@ -1,4 +1,5 @@
 import type { TranslationKey } from "../translations"
+import { subscriptionTranslations } from "../subscription-translations"
 
 export const koKR = {
   "app.loading": "로딩 중",
@@ -130,6 +131,7 @@ export const koKR = {
   "settings.nav.developer": "개발자 모드",
   "settings.nav.storage": "저장소",
   "settings.nav.archive": "보관된 세션",
+  ...subscriptionTranslations["ko-KR"],
   "settings.about.version": "버전",
   "settings.about.checkUpdates": "업데이트 확인",
   "settings.about.checkingUpdates": "확인 중...",

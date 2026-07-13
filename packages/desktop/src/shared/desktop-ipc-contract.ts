@@ -434,6 +434,151 @@ export interface DesktopStoragePaths {
   pluginInstallTemp: string
 }
 
+export type DesktopSubscriptionPaymentProvider = "alipay" | "wechat_pay"
+
+export interface DesktopSubscriptionPlan {
+  planId: string
+  code: string
+  name: string
+  planVersionId: string
+  version: number
+  currency: string
+  priceCents: number
+  billingInterval: string
+  weeklyLimitMicrocents: number
+  terms: Record<string, unknown>
+}
+
+export type DesktopSubscriptionUpgradeStatus =
+  | "quoted"
+  | "pending"
+  | "applied"
+  | "credited_fallback"
+  | "expired"
+  | "failed"
+  | "canceled"
+
+export interface DesktopSubscriptionUpgradeQuote {
+  id: string
+  status: DesktopSubscriptionUpgradeStatus
+  sourceSubscriptionPeriodId: string
+  sourcePlanVersionId: string
+  targetPlanVersionId: string
+  scheduledSubscriptionPeriodId: string | null
+  sourcePlanCode: string
+  sourcePlanName: string
+  targetPlanCode: string
+  targetPlanName: string
+  sourceGrossPriceCents: number
+  targetGrossPriceCents: number
+  unusedCreditCents: number
+  amountCents: number
+  currency: string
+  targetWeeklyLimitMicrocents: number
+  quotedAt: string
+  quoteExpiresAt: string
+  sourcePeriodStartsAt: string
+  sourcePeriodEndsAt: string
+  scheduledPeriodStartsAt: string | null
+  scheduledPeriodEndsAt: string | null
+}
+
+export interface DesktopSubscriptionUpgradeDetail {
+  id: string
+  status: DesktopSubscriptionUpgradeStatus
+  sourcePlanVersionId: string
+  targetPlanVersionId: string
+  scheduledSubscriptionPeriodId: string | null
+  sourceGrossPriceCents: number
+  targetGrossPriceCents: number
+  unusedCreditCents: number
+  amountCents: number
+  currency: string
+  quotedAt: string
+  quoteExpiresAt: string
+  sourcePeriodStartsAt: string
+  sourcePeriodEndsAt: string
+  appliedAt?: string | null
+  fallbackCreditedAt?: string | null
+  sourcePlan?: { code: string; name: string } | null
+  targetPlan?: { code: string; name: string; weeklyLimitMicrocents: number } | null
+}
+
+export interface DesktopSubscriptionSummary {
+  id: string
+  status: string
+  planCode: string
+  planName: string
+  planVersion: number
+  priceCents: number
+  currency: string
+  overageMode: "blocked" | "prepaid_balance"
+  cancelAtPeriodEnd: boolean
+  currentPeriodStartsAt: string | null
+  currentPeriodEndsAt: string | null
+  upcomingPeriodStartsAt: string | null
+  upcomingPeriodEndsAt: string | null
+  upcomingPlanVersionId?: string | null
+  upcomingPlanCode?: string | null
+  upcomingPlanName?: string | null
+}
+
+export interface DesktopSubscriptionLimit {
+  type: "weekly"
+  limitMicrocents: number
+  adjustmentMicrocents: number
+  usedMicrocents: number
+  reservedMicrocents: number
+  remainingMicrocents: number
+  resetsAt: string | null
+}
+
+export interface DesktopSubscriptionOverview {
+  connected: boolean
+  balanceMicrocents?: number
+  currency?: string
+  plans: DesktopSubscriptionPlan[]
+  subscription: DesktopSubscriptionSummary | null
+  limits: DesktopSubscriptionLimit[]
+  pendingOrder?: DesktopSubscriptionPaymentOrder | null
+  pendingOrderPlanVersionId?: string | null
+  pendingUpgrade?: DesktopSubscriptionUpgradeDetail | null
+  error?: string
+}
+
+export type DesktopSubscriptionPaymentOrderStatus =
+  | "created"
+  | "pending"
+  | "paid"
+  | "failed"
+  | "expired"
+  | "canceled"
+
+export interface DesktopSubscriptionPaymentOrder {
+  id: string
+  provider: DesktopSubscriptionPaymentProvider
+  codeUrl: string | null
+  amountCents: number
+  currency?: string
+  purpose?: "subscription_purchase" | "subscription_renewal" | "subscription_upgrade"
+  status: DesktopSubscriptionPaymentOrderStatus
+  outTradeNo?: string
+  paidAt?: string | null
+  expiresAt?: string | null
+}
+
+export interface DesktopSubscriptionOrderResponse {
+  order: DesktopSubscriptionPaymentOrder
+  upgrade?: DesktopSubscriptionUpgradeDetail | null
+  paymentUrl?: string
+  reused?: boolean
+  sync?: {
+    checked: boolean
+    tradeState?: string
+    error?: string
+  }
+}
+
 export type { DesktopStorageUsageSnapshot }
 
 export interface DesktopWindowState {
@@ -1465,6 +1610,30 @@ export interface DesktopIpcContract {
     input: void
     output: AgentProviderCatalogItem[]
   }
+  "desktop:get-anybox-subscription-overview": {
+    input: void
+    output: DesktopSubscriptionOverview
+  }
+  "desktop:create-anybox-subscription-order": {
+    input: { planVersionId: string; provider: DesktopSubscriptionPaymentProvider; replaceOrderId?: string }
+    output: DesktopSubscriptionOrderResponse
+  }
+  "desktop:create-anybox-subscription-upgrade-quote": {
+    input: { planVersionId: string }
+    output: { quote: DesktopSubscriptionUpgradeQuote }
+  }
+  "desktop:create-anybox-subscription-upgrade-order": {
+    input: { quoteId: string; provider: DesktopSubscriptionPaymentProvider; replaceOrderId?: string }
+    output: DesktopSubscriptionOrderResponse
+  }
+  "desktop:get-anybox-subscription-order": {
+    input: { orderId: string }
+    output: DesktopSubscriptionOrderResponse
+  }
+  "desktop:cancel-anybox-subscription-order": {
+    input: { orderId: string }
+    output: DesktopSubscriptionOrderResponse
+  }
   "desktop:refresh-global-provider-catalog": {
     input: void
     output: AgentProviderCatalogItem[]
@@ -2143,6 +2312,12 @@ export interface DesktopApiMethods {
   discardSessionBagSubmission(input: DesktopIpcInput<"desktop:discard-session-bag-submission">): Promise<DesktopIpcOutput<"desktop:discard-session-bag-submission">>
   agentSession: DesktopAgentSessionApi
   getGlobalProviderCatalog(): Promise<DesktopIpcOutput<"desktop:get-global-provider-catalog">>
+  getAnyboxSubscriptionOverview(): Promise<DesktopIpcOutput<"desktop:get-anybox-subscription-overview">>
+  createAnyboxSubscriptionOrder(input: DesktopIpcInput<"desktop:create-anybox-subscription-order">): Promise<DesktopIpcOutput<"desktop:create-anybox-subscription-order">>
+  createAnyboxSubscriptionUpgradeQuote(input: DesktopIpcInput<"desktop:create-anybox-subscription-upgrade-quote">): Promise<DesktopIpcOutput<"desktop:create-anybox-subscription-upgrade-quote">>
+  createAnyboxSubscriptionUpgradeOrder(input: DesktopIpcInput<"desktop:create-anybox-subscription-upgrade-order">): Promise<DesktopIpcOutput<"desktop:create-anybox-subscription-upgrade-order">>
+  getAnyboxSubscriptionOrder(input: DesktopIpcInput<"desktop:get-anybox-subscription-order">): Promise<DesktopIpcOutput<"desktop:get-anybox-subscription-order">>
+  cancelAnyboxSubscriptionOrder(input: DesktopIpcInput<"desktop:cancel-anybox-subscription-order">): Promise<DesktopIpcOutput<"desktop:cancel-anybox-subscription-order">>
   refreshGlobalProviderCatalog(): Promise<DesktopIpcOutput<"desktop:refresh-global-provider-catalog">>
   getGlobalProviderAuth(input: DesktopIpcInput<"desktop:get-global-provider-auth">): Promise<DesktopIpcOutput<"desktop:get-global-provider-auth">>
   startGlobalProviderAuthFlow(input: DesktopIpcInput<"desktop:start-global-provider-auth-flow">): Promise<DesktopIpcOutput<"desktop:start-global-provider-auth-flow">>

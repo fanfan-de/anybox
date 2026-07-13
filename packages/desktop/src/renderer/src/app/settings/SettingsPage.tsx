@@ -51,6 +51,7 @@ import {
   ProviderSettingsIcon,
   ResetIcon,
   SearchIcon,
+  SubscriptionSettingsIcon,
 } from "../icons"
 import {
   type AppearanceColorChannels,
@@ -83,6 +84,7 @@ import type {
   ProviderModel,
 } from "../types"
 import { McpToolsPolicyPanel } from "../mcp/McpToolsPolicyPanel"
+import { SubscriptionSettingsPanel } from "./SubscriptionSettingsPanel"
 import {
   buildMcpServerPluginSourceMap,
   getMcpServerPluginSource,
@@ -2644,6 +2646,7 @@ function doesMcpServerMatchSearch(
 type SettingsSectionKey =
   | "general"
   | "account"
+  | "subscription"
   | "services"
   | "defaults"
   | "mcp"
@@ -3835,6 +3838,7 @@ export function SettingsPage({
         items: [
           { key: "general" as const, label: t("settings.nav.general"), Icon: GeneralSettingsIcon },
           { key: "account" as const, label: t("settings.nav.account"), Icon: AccountSettingsIcon },
+          { key: "subscription" as const, label: t("settings.nav.subscription"), Icon: SubscriptionSettingsIcon },
           { key: "services" as const, label: t("settings.nav.provider"), Icon: ProviderSettingsIcon },
           { key: "defaults" as const, label: t("settings.nav.models"), Icon: ModelSettingsIcon },
           { key: "appearance" as const, label: t("settings.nav.appearance"), Icon: PaletteIcon },
@@ -4149,6 +4153,12 @@ export function SettingsPage({
                 </div>
               ) : activeSection === "account" ? (
                 accountSection
+              ) : activeSection === "subscription" ? (
+                <SubscriptionSettingsPanel
+                  accountBusy={anyboxAccountBusy}
+                  connected={anyboxAccountView.status === "connected"}
+                  onSignIn={handleAnyboxAccountSignIn}
+                />
               ) : activeSection === "appearance" ? (
                 <AppearanceSettingsPanel
                   appearanceConfigError={appearanceConfigError}

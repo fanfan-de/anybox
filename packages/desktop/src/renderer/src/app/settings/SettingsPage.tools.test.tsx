@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
-import type { ComponentProps } from "react"
+import { fireEvent, render as testingLibraryRender, screen, waitFor, within } from "@testing-library/react"
+import type { ComponentProps, ReactElement } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { APPEARANCE_TOKEN_NAMES } from "../../../../shared/appearance"
 import type { AppearanceTheme } from "../../../../shared/appearance-themes"
@@ -7,7 +7,20 @@ import type { DesktopAppUpdateState, DesktopStorageUsageSnapshot } from "../../.
 import { I18nProvider } from "../i18n/I18nProvider"
 import { DEFAULT_HTML_BACKGROUND_CONFIG } from "../html-background/html-background-config"
 import { DEFAULT_ASSISTANT_TRACE_VISIBILITY, type McpServerDraftState } from "../types"
+import { ToastProvider } from "../toast"
 import { SettingsPage } from "./SettingsPage"
+
+vi.mock("qrcode", () => ({
+  default: {
+    toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,SUBSCRIPTION_QR"),
+  },
+}))
+
+function render(element: ReactElement) {
+  return testingLibraryRender(element, {
+    wrapper: ({ children }) => <ToastProvider>{children}</ToastProvider>,
+  })
+}
 
 function setDesktopMock(value: unknown) {
   Object.defineProperty(window, "desktop", {
@@ -612,7 +625,7 @@ describe("SettingsPage built-in tools", () => {
     const nav = screen.getByLabelText("Settings sections")
     const labels = within(nav).getAllByRole("button").map((button) => button.textContent)
 
-    expect(labels.slice(0, 4)).toEqual(["General", "Account", "Provider", "Models"])
+    expect(labels.slice(0, 5)).toEqual(["General", "Account", "Subscription & credits", "Provider", "Models"])
     expect(screen.queryByRole("button", { name: "Generation Providers" })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "Provider" }))
@@ -1198,6 +1211,593 @@ describe("SettingsPage built-in tools", () => {
     expect(await screen.findByText("Application data")).toBeInTheDocument()
     expect(screen.getByText("Plugin install temp")).toBeInTheDocument()
     expect(screen.getByTitle("C:\\Users\\tester\\AppData\\Roaming\\anybox-desktop-agent")).toBeInTheDocument()
+  })
+
+  it("shows native subscription plans and creates a WeChat payment order", async () => {
+    const getAnyboxSubscriptionOverview = vi.fn().mockResolvedValue({
+      connected: true,
+      balanceMicrocents: 250_000_000,
+      currency: "CNY",
+      subscription: null,
+      limits: [],
+      plans: [
+        {
+          planId: "plan-pro",
+          code: "pro",
+          name: "Pro",
+          planVersionId: "plan-version-pro",
+          version: 1,
+          currency: "CNY",
+          priceCents: 1_900,
+          billingInterval: "month",
+          weeklyLimitMicrocents: 900_000_000,
+          terms: {},
+        },
+      ],
+    })
+    const createAnyboxSubscriptionOrder = vi.fn().mockResolvedValue({
+      order: {
+        id: "order-1",
+        provider: "wechat_pay",
+        codeUrl: "weixin://wxpay/example",
+        amountCents: 1_900,
+        status: "pending",
+      },
+    })
+    setDesktopMock({
+      getAnyboxSubscriptionOverview,
+      createAnyboxSubscriptionOrder,
+      getAnyboxSubscriptionOrder: vi.fn().mockResolvedValue({
+        order: {
+          id: "order-1",
+          provider: "wechat_pay",
+          codeUrl: "weixin://wxpay/example",
+          amountCents: 1_900,
+          status: "pending",
+        },
+      }),
+    })
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          catalog: [createAnyboxProvider({ authState: { status: "connected" } })],
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+    expect(await screen.findByText("Subscription weekly credits")).toBeInTheDocument()
+    expect(screen.getByText("Pro")).toBeInTheDocument()
+    expect(screen.queryByRole("radio", { name: "WeChat Pay" })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Subscribe now" }))
+    const paymentDialog = screen.getByRole("dialog", { name: "Choose a payment method" })
+    fireEvent.click(within(paymentDialog).getByRole("radio", { name: "WeChat Pay" }))
+    fireEvent.click(within(paymentDialog).getByRole("button", { name: "Create payment order" }))
+
+    await waitFor(() => {
+      expect(createAnyboxSubscriptionOrder).toHaveBeenCalledWith({
+        planVersionId: "plan-version-pro",
+        provider: "wechat_pay",
+      })
+    })
+    expect(await screen.findByRole("img", { name: "WeChat Pay QR code" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Cancel order" })).toBeInTheDocument()
+  })
+
+  it("shows only the current weekly subscription credits", async () => {
+    const getAnyboxSubscriptionOverview = vi.fn().mockResolvedValue({
+      connected: true,
+      balanceMicrocents: 250_000_000,
+      currency: "CNY",
+      subscription: {
+        id: "subscription-pro",
+        status: "active",
+        planCode: "pro",
+        planName: "Pro",
+        planVersion: 2,
+        priceCents: 19_900,
+        currency: "CNY",
+        overageMode: "blocked",
+        cancelAtPeriodEnd: false,
+        currentPeriodStartsAt: "2026-07-13T00:00:00.000Z",
+        currentPeriodEndsAt: "2026-08-13T00:00:00.000Z",
+        upcomingPeriodStartsAt: null,
+        upcomingPeriodEndsAt: null,
+      },
+      limits: [
+        {
+          type: "weekly",
+          limitMicrocents: 10_000_000_000,
+          adjustmentMicrocents: 0,
+          usedMicrocents: 2_000_000_000,
+          reservedMicrocents: 0,
+          remainingMicrocents: 8_000_000_000,
+          resetsAt: "2026-07-20T00:00:00.000Z",
+        },
+      ],
+      plans: [],
+    })
+    setDesktopMock({ getAnyboxSubscriptionOverview })
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          catalog: [createAnyboxProvider({ authState: { status: "connected" } })],
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+
+    expect(await screen.findByText("Weekly remaining")).toBeInTheDocument()
+    expect(screen.queryByText(/Monthly remaining/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/5-hour remaining/)).not.toBeInTheDocument()
+    expect(screen.getByText(/80\.00/)).toBeInTheDocument()
+    expect(screen.getByText("80% remaining")).toBeInTheDocument()
+    expect(screen.getByText(/20\.00 used/)).toBeInTheDocument()
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument()
+    expect(screen.getAllByRole("progressbar")).toHaveLength(1)
+  })
+
+  it("quotes and creates an immediate upgrade order for a higher-priced plan", async () => {
+    const getAnyboxSubscriptionOverview = vi.fn().mockResolvedValue({
+      connected: true,
+      currency: "CNY",
+      subscription: {
+        id: "subscription-basic",
+        status: "active",
+        planCode: "basic",
+        planName: "Basic",
+        planVersion: 1,
+        priceCents: 1_900,
+        currency: "CNY",
+        overageMode: "blocked",
+        cancelAtPeriodEnd: false,
+        currentPeriodStartsAt: "2026-07-01T00:00:00.000Z",
+        currentPeriodEndsAt: "2026-08-01T00:00:00.000Z",
+        upcomingPeriodStartsAt: null,
+        upcomingPeriodEndsAt: null,
+      },
+      limits: [],
+      plans: [
+        {
+          planId: "plan-basic",
+          code: "basic",
+          name: "Basic",
+          planVersionId: "plan-version-basic",
+          version: 1,
+          currency: "CNY",
+          priceCents: 1_900,
+          billingInterval: "month",
+          weeklyLimitMicrocents: 900_000_000,
+          terms: {},
+        },
+        {
+          planId: "plan-pro",
+          code: "pro",
+          name: "Pro",
+          planVersionId: "plan-version-pro",
+          version: 1,
+          currency: "CNY",
+          priceCents: 3_900,
+          billingInterval: "month",
+          weeklyLimitMicrocents: 1_900_000_000,
+          terms: {},
+        },
+      ],
+    })
+    const quote = {
+      id: "upgrade-quote-1",
+      status: "quoted" as const,
+      sourceSubscriptionPeriodId: "period-basic",
+      sourcePlanVersionId: "plan-version-basic",
+      targetPlanVersionId: "plan-version-pro",
+      scheduledSubscriptionPeriodId: null,
+      sourcePlanCode: "basic",
+      sourcePlanName: "Basic",
+      targetPlanCode: "pro",
+      targetPlanName: "Pro",
+      sourceGrossPriceCents: 1_900,
+      targetGrossPriceCents: 3_900,
+      unusedCreditCents: 1_500,
+      amountCents: 2_400,
+      currency: "CNY",
+      targetWeeklyLimitMicrocents: 1_900_000_000,
+      quotedAt: "2026-07-13T00:00:00.000Z",
+      quoteExpiresAt: "2026-07-13T00:05:00.000Z",
+      sourcePeriodStartsAt: "2026-07-01T00:00:00.000Z",
+      sourcePeriodEndsAt: "2026-08-01T00:00:00.000Z",
+      scheduledPeriodStartsAt: null,
+      scheduledPeriodEndsAt: null,
+    }
+    const createAnyboxSubscriptionUpgradeQuote = vi.fn().mockResolvedValue({ quote })
+    const createAnyboxSubscriptionUpgradeOrder = vi.fn().mockResolvedValue({
+      order: {
+        id: "upgrade-order-1",
+        provider: "wechat_pay",
+        purpose: "subscription_upgrade",
+        codeUrl: "weixin://wxpay/upgrade-order-1",
+        amountCents: 2_400,
+        currency: "CNY",
+        status: "pending",
+      },
+      upgrade: {
+        ...quote,
+        status: "pending",
+        sourcePlan: { code: "basic", name: "Basic" },
+        targetPlan: { code: "pro", name: "Pro", weeklyLimitMicrocents: 1_900_000_000 },
+      },
+    })
+    setDesktopMock({
+      getAnyboxSubscriptionOverview,
+      createAnyboxSubscriptionUpgradeQuote,
+      createAnyboxSubscriptionUpgradeOrder,
+      getAnyboxSubscriptionOrder: vi.fn().mockResolvedValue({
+        order: {
+          id: "upgrade-order-1",
+          provider: "wechat_pay",
+          purpose: "subscription_upgrade",
+          codeUrl: "weixin://wxpay/upgrade-order-1",
+          amountCents: 2_400,
+          currency: "CNY",
+          status: "pending",
+        },
+      }),
+    })
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          catalog: [createAnyboxProvider({ authState: { status: "connected" } })],
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Upgrade now" }))
+
+    expect(await screen.findByRole("dialog", { name: "Confirm immediate upgrade" })).toBeInTheDocument()
+    expect(screen.getByText("Unused-time credit")).toBeInTheDocument()
+    expect(createAnyboxSubscriptionUpgradeQuote).toHaveBeenCalledWith({ planVersionId: "plan-version-pro" })
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay .* and upgrade/ }))
+    const paymentDialog = screen.getByRole("dialog", { name: "Choose a payment method" })
+    fireEvent.click(within(paymentDialog).getByRole("radio", { name: "WeChat Pay" }))
+    fireEvent.click(within(paymentDialog).getByRole("button", { name: "Create payment order" }))
+    await waitFor(() => {
+      expect(createAnyboxSubscriptionUpgradeOrder).toHaveBeenCalledWith({
+        quoteId: "upgrade-quote-1",
+        provider: "wechat_pay",
+      })
+    })
+    expect(await screen.findByRole("img", { name: "WeChat Pay QR code" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Cancel order" })).toBeInTheDocument()
+  })
+
+  it("does not offer manual renewal or next-period switching for an expired subscription", async () => {
+    const getAnyboxSubscriptionOverview = vi.fn().mockResolvedValue({
+      connected: true,
+      currency: "CNY",
+      subscription: {
+        id: "subscription-pro",
+        status: "expired",
+        planCode: "pro",
+        planName: "Pro",
+        planVersion: 2,
+        priceCents: 19_900,
+        currency: "CNY",
+        overageMode: "blocked",
+        cancelAtPeriodEnd: false,
+        currentPeriodStartsAt: "2026-06-13T00:00:00.000Z",
+        currentPeriodEndsAt: "2026-07-13T00:00:00.000Z",
+        upcomingPeriodStartsAt: null,
+        upcomingPeriodEndsAt: null,
+      },
+      limits: [],
+      plans: [
+        {
+          planId: "plan-pro",
+          code: "pro",
+          name: "Pro",
+          planVersionId: "plan-version-pro",
+          version: 2,
+          currency: "CNY",
+          priceCents: 19_900,
+          billingInterval: "month",
+          weeklyLimitMicrocents: 9_000_000_000,
+          terms: {},
+        },
+        {
+          planId: "plan-ultra",
+          code: "ultra",
+          name: "Ultra",
+          planVersionId: "plan-version-ultra",
+          version: 1,
+          currency: "CNY",
+          priceCents: 39_900,
+          billingInterval: "month",
+          weeklyLimitMicrocents: 19_000_000_000,
+          terms: {},
+        },
+      ],
+    })
+    setDesktopMock({ getAnyboxSubscriptionOverview })
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          catalog: [createAnyboxProvider({ authState: { status: "connected" } })],
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+    expect(await screen.findByText(/automatic renewal is not available yet/i)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Renew for one month" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Switch next month" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Subscribe now" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Upgrade now" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("dialog", { name: "Choose a payment method" })).not.toBeInTheDocument()
+  })
+
+  it("shows an existing paid-through date without offering another renewal", async () => {
+    setDesktopMock({
+      getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue({
+        connected: true,
+        currency: "CNY",
+        subscription: {
+          id: "subscription-pro",
+          status: "active",
+          planCode: "pro",
+          planName: "Pro",
+          planVersion: 2,
+          priceCents: 19_900,
+          currency: "CNY",
+          overageMode: "blocked",
+          cancelAtPeriodEnd: false,
+          currentPeriodStartsAt: "2026-07-13T00:00:00.000Z",
+          currentPeriodEndsAt: "2026-08-13T00:00:00.000Z",
+          upcomingPeriodStartsAt: "2026-08-13T00:00:00.000Z",
+          upcomingPeriodEndsAt: "2026-09-13T00:00:00.000Z",
+        },
+        limits: [
+          {
+            type: "weekly",
+            limitMicrocents: 9_000_000_000,
+            adjustmentMicrocents: 0,
+            usedMicrocents: 0,
+            reservedMicrocents: 0,
+            remainingMicrocents: 9_000_000_000,
+            resetsAt: "2026-07-20T00:00:00.000Z",
+          },
+        ],
+        plans: [
+          {
+            planId: "plan-pro",
+            code: "pro",
+            name: "Pro",
+            planVersionId: "plan-version-pro",
+            version: 2,
+            currency: "CNY",
+            priceCents: 19_900,
+            billingInterval: "month",
+            weeklyLimitMicrocents: 9_000_000_000,
+            terms: {},
+          },
+        ],
+      }),
+    })
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          catalog: [createAnyboxProvider({ authState: { status: "connected" } })],
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+    expect(await screen.findByText(/Renewed until/)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Renew for one month" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Switch next month" })).not.toBeInTheDocument()
+  })
+
+  it("keeps the pending order visible and explicitly replaces it after choosing a new payment method", async () => {
+    const pendingAlipayOrder = {
+      id: "order-alipay",
+      provider: "alipay" as const,
+      codeUrl: "https://openapi.alipay.test/pay/order-alipay",
+      amountCents: 1_900,
+      status: "pending",
+    }
+    const getAnyboxSubscriptionOverview = vi.fn().mockResolvedValue({
+      connected: true,
+      balanceMicrocents: 0,
+      currency: "CNY",
+      subscription: null,
+      limits: [],
+      pendingOrder: pendingAlipayOrder,
+      pendingOrderPlanVersionId: "plan-version-pro",
+      plans: [
+        {
+          planId: "plan-pro",
+          code: "pro",
+          name: "Pro",
+          planVersionId: "plan-version-pro",
+          version: 1,
+          currency: "CNY",
+          priceCents: 1_900,
+          billingInterval: "month",
+          weeklyLimitMicrocents: 900_000_000,
+          terms: {},
+        },
+      ],
+    })
+    const createAnyboxSubscriptionOrder = vi.fn().mockResolvedValue({
+      order: {
+        id: "order-wechat",
+        provider: "wechat_pay",
+        codeUrl: "weixin://wxpay/order-wechat",
+        amountCents: 1_900,
+        status: "pending",
+      },
+    })
+    setDesktopMock({
+      getAnyboxSubscriptionOverview,
+      createAnyboxSubscriptionOrder,
+      getAnyboxSubscriptionOrder: vi.fn().mockResolvedValue({ order: pendingAlipayOrder }),
+    })
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          catalog: [createAnyboxProvider({ authState: { status: "connected" } })],
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+    expect(await screen.findByRole("button", { name: "Open Alipay" })).toBeInTheDocument()
+    expect(screen.queryByRole("radio", { name: "Alipay" })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Change payment method" }))
+    const paymentDialog = screen.getByRole("dialog", { name: "Change payment method" })
+    expect(within(paymentDialog).getByRole("radio", { name: "Alipay" })).toBeDisabled()
+    const wechatRadio = within(paymentDialog).getByRole("radio", { name: "WeChat Pay" })
+    expect(wechatRadio).toHaveAttribute("aria-checked", "false")
+    expect(screen.getByRole("button", { name: "Open Alipay" })).toBeInTheDocument()
+    expect(within(paymentDialog).getByText(/current Alipay order/)).toBeInTheDocument()
+    fireEvent.click(wechatRadio)
+    fireEvent.click(within(paymentDialog).getByRole("button", { name: "Create payment order" }))
+
+    await waitFor(() => {
+      expect(createAnyboxSubscriptionOrder).toHaveBeenCalledWith({
+        planVersionId: "plan-version-pro",
+        provider: "wechat_pay",
+        replaceOrderId: "order-alipay",
+      })
+    })
+    expect(await screen.findByRole("img", { name: "WeChat Pay QR code" })).toBeInTheDocument()
+  })
+
+  it("cancels a pending order, locks payment actions while waiting, and unlocks the plan", async () => {
+    const pendingOrder = {
+      id: "order-alipay-cancel",
+      provider: "alipay" as const,
+      purpose: "subscription_purchase",
+      codeUrl: "https://openapi.alipay.test/pay/order-alipay-cancel",
+      amountCents: 1_900,
+      currency: "CNY",
+      status: "pending" as const,
+    }
+    const plan = {
+      planId: "plan-pro",
+      code: "pro",
+      name: "Pro",
+      planVersionId: "plan-version-pro",
+      version: 1,
+      currency: "CNY",
+      priceCents: 1_900,
+      billingInterval: "month",
+      weeklyLimitMicrocents: 900_000_000,
+      terms: {},
+    }
+    const getAnyboxSubscriptionOverview = vi.fn()
+      .mockResolvedValueOnce({
+        connected: true,
+        currency: "CNY",
+        subscription: null,
+        limits: [],
+        pendingOrder,
+        pendingOrderPlanVersionId: plan.planVersionId,
+        plans: [plan],
+      })
+      .mockResolvedValue({
+        connected: true,
+        currency: "CNY",
+        subscription: null,
+        limits: [],
+        pendingOrder: null,
+        pendingOrderPlanVersionId: null,
+        plans: [plan],
+      })
+    type CanceledOrder = Omit<typeof pendingOrder, "status"> & { status: "canceled" }
+    let resolveCancel!: (value: { order: CanceledOrder }) => void
+    const cancelAnyboxSubscriptionOrder = vi.fn(() => new Promise<{ order: CanceledOrder }>((resolve) => {
+      resolveCancel = resolve
+    }))
+    setDesktopMock({
+      getAnyboxSubscriptionOverview,
+      cancelAnyboxSubscriptionOrder,
+      getAnyboxSubscriptionOrder: vi.fn().mockResolvedValue({ order: pendingOrder }),
+    })
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          catalog: [createAnyboxProvider({ authState: { status: "connected" } })],
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+    const cancelButton = await screen.findByRole("button", { name: "Cancel order" })
+    fireEvent.click(cancelButton)
+
+    expect(cancelAnyboxSubscriptionOrder).toHaveBeenCalledWith({ orderId: pendingOrder.id })
+    expect(screen.getByRole("button", { name: "Canceling..." })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Open Alipay" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Change payment method" })).toBeDisabled()
+
+    resolveCancel({ order: { ...pendingOrder, status: "canceled" } })
+
+    expect(await screen.findByText("Payment order canceled.")).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Cancel order" })).not.toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "Subscribe now" })).toBeEnabled()
+    })
+  })
+
+  it("keeps a pending order visible with an actionable error when safe cancellation fails", async () => {
+    const pendingOrder = {
+      id: "order-wechat-close-failed",
+      provider: "wechat_pay" as const,
+      purpose: "subscription_purchase",
+      codeUrl: "weixin://wxpay/order-wechat-close-failed",
+      amountCents: 1_900,
+      currency: "CNY",
+      status: "pending" as const,
+    }
+    const cancelAnyboxSubscriptionOrder = vi.fn().mockRejectedValue(new Error("Payment provider could not close this order."))
+    setDesktopMock({
+      getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue({
+        connected: true,
+        currency: "CNY",
+        subscription: null,
+        limits: [],
+        pendingOrder,
+        pendingOrderPlanVersionId: "plan-version-pro",
+        plans: [],
+      }),
+      cancelAnyboxSubscriptionOrder,
+      getAnyboxSubscriptionOrder: vi.fn().mockResolvedValue({ order: pendingOrder }),
+    })
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          catalog: [createAnyboxProvider({ authState: { status: "connected" } })],
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel order" }))
+
+    expect(await screen.findByText("Payment provider could not close this order.")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Cancel order" })).toBeEnabled()
+    expect(screen.getByRole("img", { name: "WeChat Pay QR code" })).toBeInTheDocument()
   })
 
   it("loads and renders the dedicated storage usage section", async () => {

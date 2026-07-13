@@ -1,4 +1,5 @@
 import type { TranslationKey } from "../translations"
+import { subscriptionTranslations } from "../subscription-translations"
 
 export const plPL = {
   "app.loading": "Ładowanie",
@@ -130,6 +131,7 @@ export const plPL = {
   "settings.nav.developer": "Tryb deweloperski",
   "settings.nav.storage": "Pamięć",
   "settings.nav.archive": "Zarchiwizowane sesje",
+  ...subscriptionTranslations["pl-PL"],
   "settings.about.version": "Wersja",
   "settings.about.checkUpdates": "Sprawdź aktualizacje",
   "settings.about.checkingUpdates": "Sprawdzanie...",

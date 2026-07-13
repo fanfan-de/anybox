@@ -1,4 +1,5 @@
 import type { TranslationKey } from "../translations"
+import { subscriptionTranslations } from "../subscription-translations"
 
 export const jaJP = {
   "app.loading": "読み込み中",
@@ -130,6 +131,7 @@ export const jaJP = {
   "settings.nav.developer": "開発者モード",
   "settings.nav.storage": "ストレージ",
   "settings.nav.archive": "アーカイブ済みセッション",
+  ...subscriptionTranslations["ja-JP"],
   "settings.about.version": "バージョン",
   "settings.about.checkUpdates": "アップデートを確認",
   "settings.about.checkingUpdates": "確認中...",

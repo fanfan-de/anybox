@@ -503,6 +503,18 @@ try {
     },
     getGlobalProviderCatalog: () =>
       invokeDesktop("desktop:get-global-provider-catalog") as Promise<AgentProviderCatalogItem[]>,
+    getAnyboxSubscriptionOverview: () =>
+      invokeDesktop("desktop:get-anybox-subscription-overview"),
+    createAnyboxSubscriptionOrder: (input) =>
+      invokeDesktop("desktop:create-anybox-subscription-order", input),
+    createAnyboxSubscriptionUpgradeQuote: (input) =>
+      invokeDesktop("desktop:create-anybox-subscription-upgrade-quote", input),
+    createAnyboxSubscriptionUpgradeOrder: (input) =>
+      invokeDesktop("desktop:create-anybox-subscription-upgrade-order", input),
+    getAnyboxSubscriptionOrder: (input) =>
+      invokeDesktop("desktop:get-anybox-subscription-order", input),
+    cancelAnyboxSubscriptionOrder: (input) =>
+      invokeDesktop("desktop:cancel-anybox-subscription-order", input),
     refreshGlobalProviderCatalog: () =>
       invokeDesktop("desktop:refresh-global-provider-catalog") as Promise<AgentProviderCatalogItem[]>,
     getGlobalProviderAuth: (input: { providerID: string }) =>

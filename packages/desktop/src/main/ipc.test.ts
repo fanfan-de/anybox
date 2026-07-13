@@ -43,6 +43,108 @@ import { internal } from "./ipc"
 
 beforeEach(() => {
   requestAgentJSONMock.mockReset()
+  vi.unstubAllGlobals()
+})
+
+describe("Anybox subscription IPC helpers", () => {
+  it("loads subscription data with the desktop OAuth token kept in the main process", async () => {
+    requestAgentJSONMock.mockResolvedValue({
+      data: {
+        connected: true,
+        status: "connected",
+        accessToken: "desktop-oauth-token",
+        baseURL: "https://provider.anybox.test/v1",
+        account: {
+          balanceMicrocents: 250_000_000,
+          currency: "CNY",
+        },
+      },
+    })
+    const fetchMock = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = String(input)
+      const body = url.endsWith("/api/plans")
+        ? { data: [{ planId: "pro", planVersionId: "pro-v1", code: "pro", name: "Pro" }] }
+        : url.endsWith("/api/subscription")
+          ? { subscription: null }
+          : url.endsWith("/api/usage-limits")
+            ? {
+                limits: [
+                  {
+                    type: "weekly",
+                    limitMicrocents: 9_000_000_000,
+                    adjustmentMicrocents: 0,
+                    usedMicrocents: 1_000_000_000,
+                    reservedMicrocents: 0,
+                    remainingMicrocents: 8_000_000_000,
+                    resetsAt: "2026-07-20T00:00:00.000Z",
+                  },
+                ],
+              }
+          : url.endsWith("/api/subscription/orders/pending")
+            ? { order: null, planVersionId: null, upgrade: null }
+            : { limits: [] }
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer desktop-oauth-token")
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(internal.getAnyboxSubscriptionOverview()).resolves.toMatchObject({
+      connected: true,
+      balanceMicrocents: 250_000_000,
+      currency: "CNY",
+      plans: [{ code: "pro" }],
+      subscription: null,
+      limits: [{ type: "weekly", remainingMicrocents: 8_000_000_000 }],
+      pendingOrder: null,
+      pendingOrderPlanVersionId: null,
+      pendingUpgrade: null,
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(requestAgentJSONMock).toHaveBeenCalledWith("/api/providers/anybox/auth/relay-session")
+  })
+
+  it("cancels a subscription order through the authenticated POST endpoint", async () => {
+    requestAgentJSONMock.mockResolvedValue({
+      data: {
+        connected: true,
+        status: "connected",
+        accessToken: "desktop-oauth-token",
+        baseURL: "https://provider.anybox.test/v1",
+      },
+    })
+    const responseBody = {
+      order: {
+        id: "order / 1",
+        status: "canceled",
+      },
+      upgrade: null,
+    }
+    const fetchMock = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      expect(String(input)).toBe("https://provider.anybox.test/api/subscription/orders/order%20%2F%201/cancel")
+      expect(init?.method).toBe("POST")
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer desktop-oauth-token")
+      return new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(internal.cancelAnyboxSubscriptionOrder("  order / 1  ")).resolves.toEqual(responseBody)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("rejects an empty subscription order ID before making a request", async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(internal.cancelAnyboxSubscriptionOrder("   ")).rejects.toThrow("Subscription order ID is required")
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(requestAgentJSONMock).not.toHaveBeenCalled()
+  })
 })
 
 describe("ipc session stream cleanup helpers", () => {

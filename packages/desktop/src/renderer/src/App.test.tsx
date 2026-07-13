@@ -9330,6 +9330,7 @@ describe("App", () => {
     expect(Array.from(settingsDialog.querySelectorAll(".settings-primary-nav-label"), (node) => node.textContent)).toEqual([
       "General",
       "Account",
+      "Subscription & credits",
       "Provider",
       "Models",
       "Appearance",
