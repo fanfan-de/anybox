@@ -832,8 +832,8 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.getByText("Pro")).toBeInTheDocument()
     expect(screen.getByText(/2\.50/)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: "anybox.com.cn" }))
-    expect(openExternalUrl).toHaveBeenCalledWith({ url: "https://anybox.com.cn" })
+    fireEvent.click(screen.getByRole("button", { name: "www.anybox.com.cn" }))
+    expect(openExternalUrl).toHaveBeenCalledWith({ url: "https://www.anybox.com.cn" })
 
     fireEvent.click(screen.getByRole("button", { name: "Recharge" }))
     expect(openExternalUrl).toHaveBeenCalledWith({ url: "https://provider.example/billing" })

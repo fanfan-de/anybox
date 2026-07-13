@@ -1042,7 +1042,7 @@ function formatPlanCode(value: string | undefined) {
 }
 
 const ANYBOX_ACCOUNT_DASHBOARD_URL = "https://provider.anybox.com.cn/app/dashboard"
-const ANYBOX_PRODUCT_HOME_URL = "https://anybox.com.cn"
+const ANYBOX_PRODUCT_HOME_URL = "https://www.anybox.com.cn"
 const ANYBOX_COMMUNITY_QR_IMAGE_SRC = "/anybox-community-qr.png"
 
 function getAnyboxRechargeUrl(provider: ProviderCatalogItem) {
@@ -3988,7 +3988,7 @@ export function SettingsPage({
                 type="button"
                 onClick={() => void openExternalUrl(ANYBOX_PRODUCT_HOME_URL)}
               >
-                anybox.com.cn
+                www.anybox.com.cn
               </button>
             </div>
 
