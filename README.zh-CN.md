@@ -9,7 +9,7 @@
   <p>
     <a href="./README.md">English</a> |
     简体中文 |
-    <a href="https://fanfande-studio.pages.dev/">官网</a> |
+    <a href="https://anybox-ai.pages.dev/">官网</a> |
     <a href="https://github.com/fanfan-de/anybox/releases/latest">下载</a> |
     <a href="./packages/site/src/docs/content">文档</a> |
     <a href="./docs/anybox-third-party-plugin-development.md">开发</a> |
@@ -30,7 +30,7 @@
 
   <table>
     <tr>
-      <td align="center"><a href="https://fanfande-studio.pages.dev/"><strong>官网</strong></a><br /><sub>产品介绍与下载安装入口</sub></td>
+      <td align="center"><a href="https://anybox-ai.pages.dev/"><strong>官网</strong></a><br /><sub>产品介绍与下载安装入口</sub></td>
       <td align="center"><strong>社区</strong><br /><sub>占位：Discord、Telegram 或微信群</sub></td>
       <td align="center"><strong>展示</strong><br /><sub>占位：媒体推荐、奖项或发布卡片</sub></td>
     </tr>

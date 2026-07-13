@@ -9,11 +9,11 @@
 3. 在 DNS 中把 `download.anybox.com.cn` CNAME 到腾讯云 CDN 域名。
 4. 给 CDN 配置 HTTPS 证书。
 5. 如果 manifest 和官网不同源，给 `downloads.json` 配 CORS。官网当前可能从
-   `fanfande-studio.pages.dev` 预览域名或 `anybox.com.cn` 正式域名访问下载 manifest，
+   `anybox-ai.pages.dev` 海外域名或 `anybox.com.cn` 正式域名访问下载 manifest，
    两个来源都要允许：
 
 ```text
-Access-Control-Allow-Origin: https://fanfande-studio.pages.dev
+Access-Control-Allow-Origin: https://anybox-ai.pages.dev
 Access-Control-Allow-Origin: https://anybox.com.cn
 Access-Control-Allow-Methods: GET, HEAD, OPTIONS
 Access-Control-Allow-Headers: *
@@ -24,7 +24,7 @@ Access-Control-Allow-Headers: *
 `Access-Control-Allow-Origin`：
 
 ```powershell
-curl.exe -I -H "Origin: https://fanfande-studio.pages.dev" https://download.anybox.com.cn/downloads.json
+curl.exe -I -H "Origin: https://anybox-ai.pages.dev" https://download.anybox.com.cn/downloads.json
 curl.exe -I -H "Origin: https://anybox.com.cn" https://download.anybox.com.cn/downloads.json
 ```
 
