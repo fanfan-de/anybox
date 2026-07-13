@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
 import type { MouseEvent, ReactNode } from "react"
 import {
-  currentProductVersion,
   installerFallbackUrls,
   navigateToLatestInstaller,
   resolveLatestReleaseVersion,
@@ -17,7 +16,7 @@ async function downloadLatestInstaller(
 }
 
 function useLatestReleaseVersion(platform: InstallerPlatform) {
-  const [releaseVersion, setReleaseVersion] = useState(currentProductVersion)
+  const [releaseVersion, setReleaseVersion] = useState("")
 
   useEffect(() => {
     let ignoreResult = false
@@ -26,7 +25,9 @@ function useLatestReleaseVersion(platform: InstallerPlatform) {
       .then((version) => {
         if (!ignoreResult) setReleaseVersion(version)
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!ignoreResult) setReleaseVersion("")
+      })
 
     return () => {
       ignoreResult = true

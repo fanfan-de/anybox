@@ -95,6 +95,17 @@ corepack pnpm downloads:prepare -- `
 corepack pnpm downloads:publish -- --env-file .env.downloads
 ```
 
+注意：`downloads:publish` 上传时会默认读取线上 `downloads.json`，并保留本次没有更新的平台条目。
+如果只发布 Windows 安装包，本地没有 macOS DMG 或 Android APK，manifest 仍会保留线上已有的
+macOS 与 Android 入口。只有确认要删除缺失平台时，才添加 `--replace-manifest`。
+
+例如只更新 Windows，但继续保留已有 macOS 与 Android：
+
+```powershell
+corepack pnpm downloads:publish -- --env-file .env.downloads `
+  --windows packages\desktop\dist\Anybox-0.1.31-x64.exe
+```
+
 脚本会上传：
 
 ```text

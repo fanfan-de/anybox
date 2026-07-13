@@ -38,6 +38,7 @@ function usage() {
     "  --require <list>       Comma-separated required platforms, e.g. windows,mac,mobile.",
     "  --env-file <path>      Load simple KEY=VALUE environment file before running.",
     "  --upload              Upload release files and manifest to Tencent COS.",
+    "  --replace-manifest    Do not preserve existing platform entries when uploading.",
     "  --skip-update-feed     Do not generate or upload latest.yml for the desktop auto-updater.",
     "  --skip-cdn-purge      Skip CDN refresh after uploading short-cache metadata.",
     "  --help                Show this help.",
@@ -64,6 +65,7 @@ function parseArgs(argv) {
     mobileVersion: "",
     outDir: siteArtifactsDir,
     releasePrefix: defaultReleasePrefix,
+    replaceManifest: false,
     skipCdnPurge: false,
     skipUpdateFeed: false,
     require: [],
@@ -80,6 +82,8 @@ function parseArgs(argv) {
       args.help = true
     } else if (value === "--upload") {
       args.upload = true
+    } else if (value === "--replace-manifest") {
+      args.replaceManifest = true
     } else if (value === "--skip-cdn-purge") {
       args.skipCdnPurge = true
     } else if (value === "--skip-update-feed") {
@@ -160,6 +164,14 @@ function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, "utf8"))
 }
 
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0
+}
+
 function normalizeVersion(version) {
   const normalized = String(version ?? "").trim()
   if (!normalized) return ""
@@ -172,6 +184,28 @@ function trimSlashes(value) {
 
 function joinUrl(baseUrl, objectKey) {
   return `${String(baseUrl).replace(/\/+$/g, "")}/${trimSlashes(objectKey)}`
+}
+
+function httpsGetText(url) {
+  return new Promise((resolve, reject) => {
+    const request = https.get(url, (response) => {
+      const chunks = []
+
+      response.on("data", (chunk) => chunks.push(chunk))
+      response.on("end", () => {
+        const responseText = Buffer.concat(chunks).toString("utf8")
+
+        if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
+          resolve(responseText)
+          return
+        }
+
+        reject(new Error(`${response.statusCode} ${response.statusMessage}\n${responseText}`))
+      })
+    })
+
+    request.on("error", reject)
+  })
 }
 
 function contentTypeFor(filePath) {
@@ -263,6 +297,46 @@ function ensureRequiredAssets(assets, requiredPlatforms) {
   }
 }
 
+async function fetchExistingManifest(args) {
+  const manifestUrl = joinUrl(args.baseUrl, args.manifestKey)
+
+  try {
+    const parsed = JSON.parse(await httpsGetText(manifestUrl))
+    if (isRecord(parsed)) return parsed
+  } catch (error) {
+    console.warn(
+      `Could not read existing manifest for preservation: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+
+  return undefined
+}
+
+function getExistingManifestPlatform(existingManifest, platform) {
+  if (!isRecord(existingManifest)) return undefined
+
+  const manifestPlatforms = isRecord(existingManifest.platforms)
+    ? existingManifest.platforms
+    : undefined
+  const platformEntry = manifestPlatforms?.[platform] ?? existingManifest[platform]
+
+  if (!isRecord(platformEntry)) return undefined
+
+  const url = isNonEmptyString(platformEntry.url) ? platformEntry.url.trim() : ""
+  const version = normalizeVersion(platformEntry.version)
+
+  if (!url || !version) return undefined
+
+  return {
+    ...platformEntry,
+    fallbackUrl: isNonEmptyString(platformEntry.fallbackUrl)
+      ? platformEntry.fallbackUrl.trim()
+      : githubReleasesUrl,
+    url,
+    version,
+  }
+}
+
 function platformVersion(platform, args, desktopVersion, mobileVersion) {
   if (platform === "mobile") return normalizeVersion(args.mobileVersion || mobileVersion)
   return normalizeVersion(args.version || desktopVersion)
@@ -322,7 +396,7 @@ function buildWindowsUpdateFeedUploads(args, assets) {
   return uploads
 }
 
-function buildManifest(args, assets) {
+function buildManifest(args, assets, existingManifest) {
   const desktopPackage = readJson(path.join(scriptRoot, "packages", "desktop", "package.json"))
   const mobileConfig = readJson(path.join(scriptRoot, "packages", "mobile-app", "app.json")).expo
   const desktopVersion = normalizeVersion(args.version || desktopPackage.version)
@@ -354,6 +428,15 @@ function buildManifest(args, assets) {
       filePath: assetPath,
       key: objectKey,
     })
+  }
+
+  for (const platform of platforms) {
+    if (manifestPlatforms[platform]) continue
+
+    const existingEntry = getExistingManifestPlatform(existingManifest, platform)
+    if (!existingEntry) continue
+
+    manifestPlatforms[platform] = existingEntry
   }
 
   uploads.push(...buildWindowsUpdateFeedUploads(args, assets))
@@ -651,7 +734,10 @@ async function main() {
 
   mkdirSync(args.outDir, { recursive: true })
 
-  const { manifest, uploads } = buildManifest(args, assets)
+  const existingManifest = args.upload && !args.replaceManifest
+    ? await fetchExistingManifest(args)
+    : undefined
+  const { manifest, uploads } = buildManifest(args, assets, existingManifest)
   const manifestPath = path.join(args.outDir, "downloads.json")
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8")
 
@@ -659,7 +745,8 @@ async function main() {
   for (const platform of platforms) {
     const entry = manifest.platforms[platform]
     if (entry) {
-      console.log(`${platform}: ${entry.url}`)
+      const status = assets[platform] ? "updated" : "preserved"
+      console.log(`${platform}: ${entry.url} (${status})`)
     } else {
       console.warn(`${platform}: no asset found; site will fall back to GitHub`)
     }

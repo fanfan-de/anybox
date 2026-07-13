@@ -1,5 +1,3 @@
-import productPackage from "../../../package.json"
-
 export type InstallerPlatform = "windows" | "mac" | "mobile"
 
 export const repositoryUrl = "https://github.com/fanfan-de/anybox"
@@ -67,9 +65,6 @@ function normalizeVersionLabel(version: string) {
   return normalizedVersion
 }
 
-export const currentProductVersion =
-  normalizeVersionLabel(productPackage.version) ?? ""
-
 const installerMatchers: Record<
   InstallerPlatform,
   (normalizedName: string) => boolean
@@ -136,10 +131,6 @@ function getManifestVersion(
 
   if (isNonEmptyString(platformVersion)) {
     return normalizeVersionLabel(platformVersion)
-  }
-
-  if (isNonEmptyString(manifest?.version)) {
-    return normalizeVersionLabel(manifest.version)
   }
 
   return undefined
@@ -234,7 +225,7 @@ export async function resolveLatestReleaseVersion(platform: InstallerPlatform) {
       ? normalizeVersionLabel(release.tag_name)
       : undefined
 
-  return tagName ?? currentProductVersion
+  return tagName ?? ""
 }
 
 async function resolveLatestInstallerUrl(platform: InstallerPlatform) {
