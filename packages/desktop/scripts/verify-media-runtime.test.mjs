@@ -113,8 +113,8 @@ test("media preparation resolves locked targets through explicit preparers", () 
   assert.equal(windows.target, lock.platforms.win32.targets.x64)
 
   const darwin = resolveMediaToolsPreparation(lock, "darwin", "arm64")
-  assert.equal(darwin.status, "skipped")
-  assert.equal(darwin.reason, "artifact-pending")
+  assert.equal(darwin.status, "ready")
+  assert.equal(darwin.preparerID, "locked-archive-darwin-arm64")
   assert.equal(darwin.target, lock.platforms.darwin.targets.arm64)
 
   const windowsBeta = resolveMediaToolsPreparation(lock, "win32", "x64", { externalTools: true })
@@ -215,7 +215,7 @@ test("beta media materials copy the reviewed subtitle font and OFL license", asy
   }
 })
 
-test("media runtime lock represents an approved Windows target, pending macOS candidate, and blocked Linux", () => {
+test("media runtime lock represents approved Windows and macOS targets, and blocked Linux", () => {
   validateMediaRuntimeLock(lock)
   const target = resolveMediaRuntimeTarget(lock, "win32", "x64")
   assert.equal(target.origin, "anybox-controlled-lgpl")
@@ -232,9 +232,16 @@ test("media runtime lock represents an approved Windows target, pending macOS ca
   assert.deepEqual(executableNames, { ffmpeg: "ffmpeg.exe", ffprobe: "ffprobe.exe" })
   assert.deepEqual(target.requiredEncoders, ["h264_mf", "aac"])
   const darwin = resolveMediaRuntimeTarget(lock, "darwin", "arm64")
-  assert.equal(darwin.artifactStatus, "pending")
+  assert.equal(darwin.artifactStatus, undefined)
+  assert.equal(darwin.distribution.releaseTag, "media-runtime-ffmpeg-8ad6288553-darwin-arm64-r1")
+  assert.equal(darwin.distribution.ffmpegRevision, "8ad6288553")
+  assert.equal(darwin.distribution.sha256, "6270ee2960a0ad720377dd403525cd2e62b3a159cada3a7f9366550f830a3524")
+  assert.equal(darwin.releaseReadiness.status, "approved")
+  assert.equal(darwin.releaseReadiness.releaseKind, "initial")
+  assert.equal(darwin.licensePolicy.reviewStatus, "approved")
+  assert.equal(darwin.approvalEvidence.approver, "Anybox project owner (GitHub: fanfan-de)")
   assert.deepEqual(darwin.requiredEncoders, ["h264_videotoolbox", "aac"])
-  assert.throws(() => assertMediaRuntimeReleaseApproved(darwin, "darwin", "arm64"), /not approved/)
+  assert.doesNotThrow(() => assertMediaRuntimeReleaseApproved(darwin, "darwin", "arm64"))
   assert.throws(() => resolveMediaRuntimeTarget(lock, "linux", "x64"), /packaging is blocked/)
 })
 

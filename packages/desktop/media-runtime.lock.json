@@ -193,28 +193,67 @@
       "status": "supported",
       "targets": {
         "arm64": {
-          "runtimeID": "ffmpeg-anybox-darwin-arm64-lgpl-candidate-pending",
+          "runtimeID": "ffmpeg-anybox-8ad6288553-darwin-arm64-lgpl-r1",
           "manifestSchemaVersion": 1,
           "origin": "anybox-controlled-lgpl",
-          "artifactStatus": "pending",
           "releaseReadiness": {
-            "status": "blocked",
-            "releaseKind": "initial",
-            "reasons": [
-              "The Anybox-controlled macOS arm64 archive has not been built and mirrored yet.",
-              "FFmpeg redistribution and VideoToolbox/H.264 use have not received recorded approval.",
-              "The signed and notarized installed-app kill/restart smoke has not been recorded."
-            ]
+            "status": "approved",
+            "releaseKind": "initial"
           },
           "licensePolicy": {
             "spdxExpression": "LGPL-3.0-or-later",
             "licenseFile": "LICENSE.txt",
             "noticesFile": "THIRD-PARTY-NOTICES.txt",
-            "reviewStatus": "pending"
+            "reviewStatus": "approved"
+          },
+          "distribution": {
+            "releaseTag": "media-runtime-ffmpeg-8ad6288553-darwin-arm64-r1",
+            "ffmpegRevision": "8ad6288553",
+            "fileName": "ffmpeg-anybox-8ad6288553-darwin-arm64-lgpl.tar.gz",
+            "sha256": "6270ee2960a0ad720377dd403525cd2e62b3a159cada3a7f9366550f830a3524",
+            "sizeBytes": 36359665,
+            "url": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-darwin-arm64-r1/ffmpeg-anybox-8ad6288553-darwin-arm64-lgpl.tar.gz",
+            "sourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-darwin-arm64-r1/ffmpeg-source-8ad6288553.tar.gz",
+            "buildSourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-darwin-arm64-r1/build-media-runtime.sh",
+            "source": {
+              "fileName": "ffmpeg-source-8ad6288553.tar.gz",
+              "sizeBytes": 17382583,
+              "sha256": "b1c34a3697e7459de7536dbb208c9e8de19431c5d4b14b09cdfcc30d266e0b7d"
+            },
+            "buildSource": {
+              "fileName": "build-media-runtime.sh",
+              "sizeBytes": 8826,
+              "sha256": "503dd205ceb1368d56399d3be1beafa5789652cd4dd61b5567e3a3350e3260c3"
+            }
+          },
+          "approvalEvidence": {
+            "approver": "Anybox project owner (GitHub: fanfan-de)",
+            "approvedAt": "2026-07-13T16:00:13-07:00",
+            "references": [
+              "packages/cinema-web/cinema-media-runtime-owner-risk-acceptance.darwin-arm64.md",
+              "https://github.com/fanfan-de/anybox/releases/tag/media-runtime-ffmpeg-8ad6288553-darwin-arm64-r1"
+            ],
+            "immutableMirror": {
+              "reference": "https://github.com/fanfan-de/anybox/releases/tag/media-runtime-ffmpeg-8ad6288553-darwin-arm64-r1",
+              "sha256": "6270ee2960a0ad720377dd403525cd2e62b3a159cada3a7f9366550f830a3524"
+            },
+            "rollbackPlan": {
+              "strategy": "disable-deliver",
+              "capability": "timelineDelivery",
+              "reference": "packages/cinema-web/cinema-media-runtime-owner-risk-acceptance.darwin-arm64.md#rollback"
+            }
           },
           "executables": {
             "ffmpeg": "ffmpeg",
             "ffprobe": "ffprobe"
+          },
+          "binaries": {
+            "ffmpeg": {
+              "sha256": "fb85bf3524b5f39919a9a4d9f59cf3cd88015278298e9acfb1aeb51cd3cd703c"
+            },
+            "ffprobe": {
+              "sha256": "2155a636e8ec1182614658cac73958d3c02a2bfa313f0c3fae0e678740c28de1"
+            }
           },
           "buildConfigurationPolicy": {
             "requiredFlags": [
@@ -258,6 +297,51 @@
             "audioEncoder": "aac",
             "expectedVideoCodec": "h264",
             "expectedAudioCodec": "aac"
+          },
+          "buildEvidence": {
+            "candidateSmoke": {
+              "render": {
+                "durationSeconds": 1,
+                "videoCodec": "h264",
+                "audioCodec": "aac",
+                "output": {
+                  "fileName": "evidence/smoke.mp4",
+                  "sizeBytes": 66287,
+                  "sha256": "2a766ecd11201d9e7b6d1260aa2bf63747a5f73fd3fd4ac8e062b2d491f1fdca"
+                },
+                "probe": {
+                  "fileName": "evidence/smoke.ffprobe.json",
+                  "sizeBytes": 4290,
+                  "sha256": "d075d1ede6f7e219a8a43a56663ddf4fac8226cd13bd22aed333e19fb04a308a"
+                }
+              },
+              "subtitle": {
+                "durationSeconds": 1,
+                "videoCodec": "h264",
+                "renderer": "libass",
+                "fontSha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+                "output": {
+                  "fileName": "evidence/subtitle-smoke.mp4",
+                  "sizeBytes": 4187,
+                  "sha256": "91f935189147fc827da9a57dcd559b2fd3d3cfcb5df69e39beafb77cf3e7fce8"
+                },
+                "probe": {
+                  "fileName": "evidence/subtitle-smoke.ffprobe.json",
+                  "sizeBytes": 2611,
+                  "sha256": "5490385ac30586ccec49e4811a4e931bdec8161a81f77235217004810b323c15"
+                },
+                "script": {
+                  "fileName": "evidence/subtitle-smoke.ass",
+                  "sizeBytes": 589,
+                  "sha256": "593d4d8281db979aaaeba6ef32a02e9e8058649be21424149b090d501aebb5b5"
+                },
+                "frame": {
+                  "fileName": "evidence/subtitle-smoke.png",
+                  "sizeBytes": 4765,
+                  "sha256": "937d21a4c9e796dbbcf5c0754a15be96505a2232123eed5a80e425ce88594c50"
+                }
+              }
+            }
           }
         }
       }
