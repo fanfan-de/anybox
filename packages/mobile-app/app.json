@@ -3,7 +3,7 @@
     "name": "Anybox Mobile",
     "slug": "anybox-mobile",
     "scheme": "anybox-mobile",
-    "version": "0.2.3",
+    "version": "0.2.4",
     "icon": "./assets/icon.png",
     "runtimeVersion": {
       "policy": "appVersion"
@@ -22,7 +22,7 @@
     "newArchEnabled": false,
     "android": {
       "package": "com.anybox.mobile",
-      "versionCode": 5,
+      "versionCode": 6,
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -35,7 +35,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.anybox.mobile",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Allow Anybox Mobile to scan desktop pairing QR codes.",

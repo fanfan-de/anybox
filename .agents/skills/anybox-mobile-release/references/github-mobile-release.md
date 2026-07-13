@@ -2,7 +2,7 @@
 
 ## Repo Assumptions
 
-- Repository: `fanfan-de/fanfande_studio`
+- Repository: read from `packages/mobile-app/app.json` `expo.extra.anyboxMobileGitHubRepository` (currently `fanfan-de/anybox`)
 - Mobile package: `packages/mobile-app`
 - Default APK input: `packages/mobile-app/build/anybox-mobile-debug.apk`
 - Generated release asset directory: `packages/mobile-app/build/github-release`
@@ -19,7 +19,7 @@
   "version": "0.2.0",
   "versionCode": 2,
   "minimumVersionCode": 1,
-  "apkUrl": "https://github.com/fanfan-de/fanfande_studio/releases/download/mobile-v0.2.0/anybox-mobile.apk",
+  "apkUrl": "https://github.com/fanfan-de/anybox/releases/download/mobile-v0.2.0/anybox-mobile.apk",
   "sha256": "optional-sha256",
   "sizeBytes": 123456789,
   "notes": ["Fix pairing reliability"],
@@ -48,20 +48,20 @@ corepack pnpm mobile:release:github:prepare -- --notes "Fix pairing reliability"
 The prepare command prints a command like:
 
 ```powershell
-gh release create mobile-v0.2.0 "packages/mobile-app/build/github-release/anybox-mobile.apk" "packages/mobile-app/build/github-release/anybox-mobile-release.json" --repo fanfan-de/fanfande_studio --title "Anybox Mobile 0.2.0" --notes "Anybox Mobile 0.2.0"
+gh release create mobile-v0.2.0 "packages/mobile-app/build/github-release/anybox-mobile.apk" "packages/mobile-app/build/github-release/anybox-mobile-release.json" --repo fanfan-de/anybox --title "Anybox Mobile 0.2.0" --notes "Anybox Mobile 0.2.0"
 ```
 
 For large APKs, allow a long timeout. If `gh release create` times out, check whether it created a draft:
 
 ```powershell
-gh release view mobile-v0.2.0 --repo fanfan-de/fanfande_studio --json tagName,isDraft,assets,url
+gh release view mobile-v0.2.0 --repo fanfan-de/anybox --json tagName,isDraft,assets,url
 ```
 
 If the draft exists but an asset is missing, upload only the missing asset and then publish:
 
 ```powershell
-gh release upload mobile-v0.2.0 "packages/mobile-app/build/github-release/anybox-mobile.apk" --repo fanfan-de/fanfande_studio --clobber
-gh release edit mobile-v0.2.0 --repo fanfan-de/fanfande_studio --draft=false
+gh release upload mobile-v0.2.0 "packages/mobile-app/build/github-release/anybox-mobile.apk" --repo fanfan-de/anybox --clobber
+gh release edit mobile-v0.2.0 --repo fanfan-de/anybox --draft=false
 ```
 
 Use `--force` on the prepare command only when the mobile app should force users to update:
