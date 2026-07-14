@@ -8,6 +8,7 @@ import {
   CinemaRenderQueue,
   createCinemaRenderProgressWriter,
   executeCinemaRenderJob,
+  isCinemaRenderAgentShutdownSignal,
   type CinemaRenderQueueEntry,
 } from "../src/cinema/render-queue"
 import {
@@ -235,6 +236,32 @@ describe("Cinema persistent render queue", () => {
     expect(aborted).toEqual(["job-active"])
     expect(starts).toEqual(["job-active", "job-next"])
     nextGate.resolve()
+  })
+
+  test("stops the active executor on Agent shutdown without starting pending work", async () => {
+    const root = await temporaryCinemaRoot()
+    const starts: string[] = []
+    let shutdownSignal: AbortSignal | undefined
+    const queue = new CinemaRenderQueue(async (entry, signal) => {
+      starts.push(entry.jobID)
+      if (entry.jobID !== "job-active") return
+      await new Promise<void>((resolve) => signal.addEventListener("abort", () => {
+        shutdownSignal = signal
+        resolve()
+      }, { once: true }))
+    })
+    await queue.enqueue({ cinemaRoot: root, projectID: "project-1", jobID: "job-active" })
+    await queue.enqueue({ cinemaRoot: root, projectID: "project-1", jobID: "job-pending" })
+    await waitFor(() => queue.snapshot().activeJobID === "job-active")
+
+    await queue.shutdown()
+    await waitFor(() => queue.snapshot().activeJobID === undefined)
+
+    expect(starts).toEqual(["job-active"])
+    expect(shutdownSignal).toBeDefined()
+    expect(isCinemaRenderAgentShutdownSignal(shutdownSignal!)).toBe(true)
+    expect(queue.snapshot().pendingJobIDs).toEqual(["job-pending"])
+    expect((await readCinemaRenderQueueState(root)).pendingJobIDs).toEqual(["job-pending"])
   })
 
   test("restores persisted and recovered queued jobs without duplicates", async () => {

@@ -51,6 +51,12 @@ type CinemaRenderJobExecutor = (
   signal: AbortSignal,
 ) => Promise<void>
 
+const CINEMA_RENDER_AGENT_SHUTDOWN_REASON = Symbol("cinema-render-agent-shutdown")
+
+export function isCinemaRenderAgentShutdownSignal(signal: AbortSignal) {
+  return signal.aborted && signal.reason === CINEMA_RENDER_AGENT_SHUTDOWN_REASON
+}
+
 export type CinemaRenderExecutionPhase = "snapshotting" | "probing" | "rendering" | "registering"
 
 export type CinemaRenderExecutionTestHooks = {
@@ -428,6 +434,7 @@ export async function executeCinemaRenderJob(
       }
     }
     await rm(paths.temporaryOutputPath, { force: true }).catch(() => undefined)
+    if (isCinemaRenderAgentShutdownSignal(signal)) return
     await terminalFailure(
       entry.cinemaRoot,
       latest,
@@ -445,6 +452,7 @@ export class CinemaRenderQueue {
     completion: Promise<void>
   } | undefined
   private mutations: Promise<void> = Promise.resolve()
+  private shuttingDown = false
 
   constructor(private readonly executor: CinemaRenderJobExecutor = executeCinemaRenderJob) {}
 
@@ -466,7 +474,7 @@ export class CinemaRenderQueue {
 
   private schedule() {
     void this.serialize(async () => {
-      if (this.active || this.pending.length === 0) return
+      if (this.shuttingDown || this.active || this.pending.length === 0) return
       const entry = this.pending.shift()!
       const controller = new AbortController()
       await this.persist(entry.cinemaRoot)
@@ -528,6 +536,17 @@ export class CinemaRenderQueue {
     }
     this.schedule()
     return await readCinemaRenderJob(cinemaRoot, jobID)
+  }
+
+  async shutdown() {
+    let activeCompletion: Promise<void> | undefined
+    await this.serialize(async () => {
+      this.shuttingDown = true
+      if (!this.active) return
+      this.active.controller.abort(CINEMA_RENDER_AGENT_SHUTDOWN_REASON)
+      activeCompletion = this.active.completion
+    })
+    await activeCompletion?.catch(() => undefined)
   }
 
   snapshot() {

@@ -1,4 +1,5 @@
 import { startServer, stopServer, url } from "#server/server.ts"
+import { cinemaRenderQueue } from "#cinema/render-queue.ts"
 import * as Log from "#util/log.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
 
@@ -29,13 +30,18 @@ log.info("server-logging-ready", Log.status())
 startServer()
 log.info("server-ready", { url: url().toString() })
 
-const shutdown = (signal: "SIGINT" | "SIGTERM") => {
+let shutdownStarted = false
+
+const shutdown = async (signal: "SIGINT" | "SIGTERM") => {
+  if (shutdownStarted) return
+  shutdownStarted = true
   log.info("server-shutdown", { signal })
   stopServer()
+  await cinemaRenderQueue.shutdown()
   process.exit(0)
 }
 
-process.on("SIGINT", () => shutdown("SIGINT"))
-process.on("SIGTERM", () => shutdown("SIGTERM"))
+process.on("SIGINT", () => void shutdown("SIGINT"))
+process.on("SIGTERM", () => void shutdown("SIGTERM"))
 
 await new Promise(() => undefined)
