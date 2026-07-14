@@ -165,6 +165,7 @@ export async function runCinemaRenderPlan(input: {
   stderrLimitBytes?: number
   onProgress?: (progress: CinemaRenderProgressUpdate) => void
   workingDirectory?: string
+  shouldForceKillOnAbort?: () => boolean
 }): Promise<CinemaRenderOutputProbe> {
   if (input.signal?.aborted) {
     throw new CinemaRenderRunnerError("render-canceled", "Render was canceled.", true)
@@ -188,15 +189,19 @@ export async function runCinemaRenderPlan(input: {
       let timedOut = false
       let forceTimer: ReturnType<typeof setTimeout> | undefined
 
-      const stop = () => {
+      const stop = (force = false) => {
         if (settled) return
+        if (force) {
+          child.kill("SIGKILL")
+          return
+        }
         child.kill("SIGTERM")
         forceTimer = setTimeout(() => {
           if (!settled) child.kill("SIGKILL")
         }, CANCEL_FORCE_TIMEOUT_MS)
         forceTimer.unref?.()
       }
-      const onAbort = () => stop()
+      const onAbort = () => stop(input.shouldForceKillOnAbort?.() === true)
       const timer = setTimeout(() => {
         timedOut = true
         stop()

@@ -387,6 +387,7 @@ export async function executeCinemaRenderJob(
         signal,
         onProgress: progressWriter.accept,
         workingDirectory: paths.jobDirectory,
+        shouldForceKillOnAbort: () => isCinemaRenderAgentShutdownSignal(signal),
       })
     } finally {
       job = await progressWriter.close()

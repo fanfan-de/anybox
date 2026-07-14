@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
@@ -208,6 +208,47 @@ describe("Cinema render runner", () => {
 
     expect(error).toBeInstanceOf(CinemaRenderRunnerError)
     expect(error.code).toBe("render-canceled")
+    expect(access(outputPath)).rejects.toThrow()
+  }, 10_000)
+
+  test("force-kills a media child that ignores SIGTERM during Agent shutdown", async () => {
+    const root = await temporaryRoot()
+    const outputPath = path.join(root, "shutdown.tmp.mp4")
+    const pidPath = path.join(root, "media-child.pid")
+    const controller = new AbortController()
+    const childScript = [
+      `require("node:fs").writeFileSync(${JSON.stringify(pidPath)}, String(process.pid))`,
+      `process.on("SIGTERM", () => undefined)`,
+      `setInterval(() => undefined, 1_000)`,
+    ].join(";")
+    const running = runCinemaRenderPlan({
+      ffmpegPath: process.execPath,
+      ffprobePath: process.execPath,
+      outputPath,
+      plan: {
+        args: ["-e", childScript],
+        filterComplex: "",
+        outputDurationUs: 30_000_000,
+        mediaInputCount: 0,
+        videoOutputLabel: "vout",
+        audioOutputLabel: "aout",
+      },
+      settings,
+      signal: controller.signal,
+      shouldForceKillOnAbort: () => true,
+    }).catch((caught) => caught)
+
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      if (await access(pidPath).then(() => true, () => false)) break
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    const childPID = Number.parseInt(await readFile(pidPath, "utf8"), 10)
+    controller.abort()
+    const error = await running
+
+    expect(error).toBeInstanceOf(CinemaRenderRunnerError)
+    expect(error.code).toBe("render-canceled")
+    expect(() => process.kill(childPID, 0)).toThrow()
     expect(access(outputPath)).rejects.toThrow()
   }, 10_000)
 
