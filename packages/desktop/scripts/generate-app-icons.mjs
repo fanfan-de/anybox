@@ -3,7 +3,7 @@
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import { spawnSync } from "node:child_process"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
@@ -199,12 +199,44 @@ function generateTrayTemplateWithMacTools(sourceSvg, outputDir) {
 }
 
 function rasterizeSvgWithRsvg(sourceSvg, outputPath, size) {
-  run(getToolPath("rsvg-convert"), [
-    "--width", String(size),
-    "--height", String(size),
-    "--keep-aspect-ratio",
-    "--output", outputPath,
+  const rsvgCommand = getToolPath("rsvg-convert")
+  const rsvgProbe = spawnSync(rsvgCommand, ["--version"], { encoding: "utf8" })
+  if (!rsvgProbe.error && rsvgProbe.status === 0) {
+    run(rsvgCommand, [
+      "--width", String(size),
+      "--height", String(size),
+      "--keep-aspect-ratio",
+      "--output", outputPath,
+      sourceSvg,
+    ])
+    return
+  }
+
+  const sharpEntry = path.join(
+    projectDir,
+    "build",
+    "agent-runtime",
+    "dependencies",
+    "node",
+    "node_modules",
+    "sharp",
+    "lib",
+    "index.js",
+  )
+  if (!existsSync(sharpEntry)) {
+    throw new Error(
+      "[desktop][icons] Linux icon generation requires rsvg-convert (librsvg2-bin) " +
+      "or the prepared Agent runtime sharp dependency",
+    )
+  }
+  const sharpModuleURL = pathToFileURL(sharpEntry).href
+  run(process.execPath, [
+    "--input-type=module",
+    "--eval",
+    `import sharp from ${JSON.stringify(sharpModuleURL)}; await sharp(process.argv[1]).resize(Number(process.argv[3]), Number(process.argv[3]), { fit: "contain" }).png().toFile(process.argv[2])`,
     sourceSvg,
+    outputPath,
+    String(size),
   ])
 }
 

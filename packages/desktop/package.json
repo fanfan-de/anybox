@@ -35,7 +35,7 @@
     "verify:deliver-release-approval": "node ./scripts/verify-deliver-release-approval.mjs",
     "dist:deliver-preview": "node ./scripts/dist-deliver-preview.mjs",
     "dist:deliver-beta": "node ./scripts/dist-deliver-preview.mjs --beta",
-    "dist": "corepack pnpm run build && corepack pnpm run verify:agent-runtime:release && corepack pnpm run icons:generate && node ./node_modules/electron-builder/cli.js --publish never && node ./scripts/normalize-linux-update-metadata.mjs --directory dist",
+    "dist": "corepack pnpm run build && corepack pnpm run verify:agent-runtime:release && corepack pnpm run icons:generate && node ./scripts/dist-release.mjs",
     "dist:publish": "corepack pnpm run build && corepack pnpm run verify:agent-runtime:release && corepack pnpm run icons:generate && node ./node_modules/electron-builder/cli.js --publish always",
     "dist:dir": "corepack pnpm run build && corepack pnpm run verify:agent-runtime:release && corepack pnpm run icons:generate && node ./node_modules/electron-builder/cli.js --dir --publish never",
     "i18n:audit": "node ./scripts/i18n-audit.mjs",

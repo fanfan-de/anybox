@@ -405,7 +405,7 @@ test("package commands keep preview verification separate and gate packaged rele
   for (const command of ["dist", "dist:publish", "dist:dir"]) {
     assert.match(packageJson.scripts[command], /verify:agent-runtime:release/)
   }
-  assert.match(packageJson.scripts.dist, /normalize-linux-update-metadata/)
+  assert.match(packageJson.scripts.dist, /dist-release\.mjs/)
 
   assert.ok(packageJson.author?.email, "Linux deb packaging requires a maintainer email")
   assert.match(packageJson.homepage, /^https:\/\//)
@@ -415,4 +415,7 @@ test("package commands keep preview verification separate and gate packaged rele
   assert.match(previewScript, /config\.linux\.artifactName=Anybox-Deliver-/)
   assert.match(previewScript, /rmSync\(path\.join\(desktopDir, "dist", outputDirectoryName\)/)
   assert.match(previewScript, /normalize-linux-update-metadata/)
+  const releaseScript = fs.readFileSync(path.resolve(scriptDir, "dist-release.mjs"), "utf8")
+  assert.match(releaseScript, /electronBuilderCLI, \.\.\.builderArgs, "--publish", "never"/)
+  assert.match(releaseScript, /normalize-linux-update-metadata/)
 })
