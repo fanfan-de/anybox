@@ -1,6 +1,8 @@
 import QRCode from "qrcode"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type {
+  DesktopRechargeOrderResponse,
+  DesktopRechargePaymentOrder,
   DesktopSubscriptionLimit,
   DesktopSubscriptionOrderResponse,
   DesktopSubscriptionOverview,
@@ -21,6 +23,15 @@ interface SubscriptionSettingsPanelProps {
 }
 
 const terminalOrderStatuses = new Set(["paid", "failed", "expired", "canceled"])
+
+function readableDesktopError(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : typeof error === "string" ? error : fallback
+  const message = raw
+    .replace(/^Error invoking remote method '[^']+':\s*/i, "")
+    .replace(/^Error:\s*/i, "")
+    .trim()
+  return message || fallback
+}
 
 type SubscriptionOrderKind = "purchase" | "upgrade"
 
@@ -133,7 +144,7 @@ export function SubscriptionSettingsPanel({
         setOrderResponse((current) => current && terminalOrderStatuses.has(current.order.status) ? current : null)
       }
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : t("settings.subscription.loadFailed"))
+      setError(readableDesktopError(loadError, t("settings.subscription.loadFailed")))
     } finally {
       setIsLoading(false)
     }
@@ -209,7 +220,7 @@ export function SubscriptionSettingsPanel({
           void loadOverview()
         }
       }).catch((pollError) => {
-        setError(pollError instanceof Error ? pollError.message : t("settings.subscription.paymentStatusFailed"))
+        setError(readableDesktopError(pollError, t("settings.subscription.paymentStatusFailed")))
       })
     }, 2_000)
     return () => window.clearInterval(timer)
@@ -360,7 +371,7 @@ export function SubscriptionSettingsPanel({
       const result = await createQuote({ planVersionId: plan.planVersionId })
       setUpgradeQuote(result.quote)
     } catch (quoteError) {
-      setError(quoteError instanceof Error ? quoteError.message : t("settings.subscription.createUpgradeQuoteFailed"))
+      setError(readableDesktopError(quoteError, t("settings.subscription.createUpgradeQuoteFailed")))
     } finally {
       setQuotingPlanVersionId(null)
     }
@@ -392,7 +403,7 @@ export function SubscriptionSettingsPanel({
       setUpgradeQuote(null)
       setPaymentIntent(null)
       setProvider(null)
-      setError(createError instanceof Error ? createError.message : t("settings.subscription.createUpgradeOrderFailed"))
+      setError(readableDesktopError(createError, t("settings.subscription.createUpgradeOrderFailed")))
       void loadOverview()
     } finally {
       setCreatingOrder(null)
@@ -589,6 +600,13 @@ export function SubscriptionSettingsPanel({
         />
       ) : null}
 
+      <RechargeSettingsSection
+        balanceMicrocents={overview?.balanceMicrocents ?? 0}
+        currency={currency}
+        initialOrder={overview?.pendingRechargeOrder ?? null}
+        onPaid={loadOverview}
+      />
+
       {upgradeQuote && !paymentIntent ? (
         <div
           className="settings-subscription-upgrade-overlay"
@@ -690,6 +708,374 @@ export function SubscriptionSettingsPanel({
           }}
         />
       ) : null}
+    </div>
+  )
+}
+
+function RechargeSettingsSection({
+  balanceMicrocents,
+  currency,
+  initialOrder,
+  onPaid,
+}: {
+  balanceMicrocents: number
+  currency: string
+  initialOrder: DesktopRechargePaymentOrder | null
+  onPaid: () => Promise<void>
+}) {
+  const { t } = useI18n()
+  const toast = useToast()
+  const paidOrderRef = useRef<string | null>(null)
+  const [amountInput, setAmountInput] = useState("300")
+  const [selectedAmountCents, setSelectedAmountCents] = useState<number | null>(30_000)
+  const [provider, setProvider] = useState<DesktopSubscriptionPaymentProvider>("alipay")
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [cancelError, setCancelError] = useState<string | null>(null)
+  const [cancelingOrderId, setCancelingOrderId] = useState<string | null>(null)
+  const [orderResponse, setOrderResponse] = useState<DesktopRechargeOrderResponse | null>(null)
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const order = orderResponse?.order ?? null
+  const parsedAmountYuan = Number(amountInput)
+  const amountIsValid = Number.isFinite(parsedAmountYuan) && parsedAmountYuan >= 1 && parsedAmountYuan <= 10_000
+  const amountCents = amountIsValid ? Math.round(parsedAmountYuan * 100) : 0
+  const hasPendingOrder = Boolean(order && !terminalOrderStatuses.has(order.status))
+  const presets = [
+    {
+      amountCents: 5_000,
+      name: t("settings.subscription.rechargeStarter"),
+      description: t("settings.subscription.rechargeStarterDescription"),
+    },
+    {
+      amountCents: 10_000,
+      name: t("settings.subscription.rechargeEveryday"),
+      description: t("settings.subscription.rechargeEverydayDescription"),
+    },
+    {
+      amountCents: 30_000,
+      name: t("settings.subscription.rechargeRecommended"),
+      description: t("settings.subscription.rechargeRecommendedDescription"),
+    },
+    {
+      amountCents: 100_000,
+      name: t("settings.subscription.rechargeTeam"),
+      description: t("settings.subscription.rechargeTeamDescription"),
+    },
+  ]
+
+  useEffect(() => {
+    if (!initialOrder || terminalOrderStatuses.has(initialOrder.status)) return
+    paidOrderRef.current = null
+    setOrderResponse((current) => current?.order.id === initialOrder.id ? current : { order: initialOrder })
+  }, [initialOrder])
+
+  useEffect(() => {
+    if (order?.provider !== "wechat_pay" || !order.codeUrl || terminalOrderStatuses.has(order.status)) {
+      setQrDataUrl(null)
+      return
+    }
+    let disposed = false
+    void QRCode.toDataURL(order.codeUrl, {
+      scale: 8,
+      margin: 1,
+      errorCorrectionLevel: "M",
+    }).then((dataUrl) => {
+      if (!disposed) setQrDataUrl(dataUrl)
+    }).catch(() => {
+      if (!disposed) setQrDataUrl(null)
+    })
+    return () => {
+      disposed = true
+    }
+  }, [order?.codeUrl, order?.provider, order?.status])
+
+  useEffect(() => {
+    if (!order || terminalOrderStatuses.has(order.status) || cancelingOrderId === order.id) return
+    const getOrder = window.desktop?.getAnyboxRechargeOrder
+    if (!getOrder) return
+    let disposed = false
+    let timer: number | null = null
+    const poll = () => {
+      void getOrder({ orderId: order.id }).then((result) => {
+        if (disposed) return
+        if (result.order.status === "canceled") {
+          setOrderResponse(null)
+          setQrDataUrl(null)
+          setCancelError(null)
+        } else {
+          setOrderResponse(result)
+        }
+      }).catch((pollError) => {
+        if (disposed) return
+        setError(readableDesktopError(pollError, t("settings.subscription.rechargeOrderStatusFailed")))
+      }).finally(() => {
+        if (!disposed) timer = window.setTimeout(poll, 2_000)
+      })
+    }
+    timer = window.setTimeout(poll, 2_000)
+    return () => {
+      disposed = true
+      if (timer !== null) window.clearTimeout(timer)
+    }
+  }, [cancelingOrderId, order, t])
+
+  useEffect(() => {
+    if (order?.status !== "paid" || paidOrderRef.current === order.id) return
+    paidOrderRef.current = order.id
+    setError(null)
+    toast.success(t("settings.subscription.rechargeSuccess"))
+    void onPaid()
+  }, [onPaid, order, t, toast])
+
+  async function createRechargeOrder() {
+    if (!amountIsValid || creating || hasPendingOrder) return
+    const create = window.desktop?.createAnyboxRechargeOrder
+    if (!create) {
+      setError(t("settings.subscription.unavailable"))
+      return
+    }
+    setCreating(true)
+    setError(null)
+    setCancelError(null)
+    try {
+      const result = await create({ amountCents, provider })
+      paidOrderRef.current = null
+      setOrderResponse(result)
+      if (result.order.provider === "alipay" && result.order.codeUrl) {
+        await openExternalUrl(result.order.codeUrl)
+      }
+    } catch (createError) {
+      setError(readableDesktopError(createError, t("settings.subscription.createRechargeOrderFailed")))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function endRechargeOrder() {
+    if (!order || terminalOrderStatuses.has(order.status) || cancelingOrderId === order.id) return
+    const cancel = window.desktop?.cancelAnyboxRechargeOrder
+    if (!cancel) {
+      setCancelError(t("settings.subscription.endRechargeOrderUnavailable"))
+      return
+    }
+
+    setCancelingOrderId(order.id)
+    setCancelError(null)
+    setError(null)
+    try {
+      const result = await cancel({ orderId: order.id })
+      if (result.order.status === "paid") {
+        paidOrderRef.current = result.order.id
+        setOrderResponse(result)
+        setQrDataUrl(null)
+        await onPaid()
+        toast.info(t("settings.subscription.rechargeOrderAlreadyPaid"))
+      } else if (terminalOrderStatuses.has(result.order.status)) {
+        setOrderResponse(null)
+        setQrDataUrl(null)
+        toast.success(t(result.order.status === "canceled"
+          ? "settings.subscription.orderCanceled"
+          : "settings.subscription.orderEnded"))
+      } else {
+        setOrderResponse(result)
+        setCancelError(t("settings.subscription.endRechargeOrderFailed"))
+      }
+    } catch (endError) {
+      const fallback = readableDesktopError(endError, t("settings.subscription.endRechargeOrderFailed"))
+      const getOrder = window.desktop?.getAnyboxRechargeOrder
+      if (!getOrder) {
+        setCancelError(fallback)
+        return
+      }
+      try {
+        const latest = await getOrder({ orderId: order.id })
+        if (latest.order.status === "paid") {
+          paidOrderRef.current = latest.order.id
+          setOrderResponse(latest)
+          setQrDataUrl(null)
+          setCancelError(null)
+          await onPaid()
+          toast.info(t("settings.subscription.rechargeOrderAlreadyPaid"))
+        } else if (terminalOrderStatuses.has(latest.order.status)) {
+          setOrderResponse(null)
+          setQrDataUrl(null)
+          setCancelError(null)
+          toast.info(t("settings.subscription.orderEnded"))
+        } else {
+          setOrderResponse(latest)
+          setCancelError(fallback)
+        }
+      } catch {
+        setCancelError(fallback)
+      }
+    } finally {
+      setCancelingOrderId(null)
+    }
+  }
+
+  return (
+    <section className="settings-recharge" aria-labelledby="settings-recharge-title">
+      <header className="settings-recharge-header">
+        <div>
+          <h3 id="settings-recharge-title">{t("settings.subscription.rechargeTitle")}</h3>
+          <p>{t("settings.subscription.rechargeDescription")}</p>
+        </div>
+        <div className="settings-recharge-balance">
+          <span>{t("settings.subscription.currentBalance")}</span>
+          <strong>{formatMoneyFromMicrocents(balanceMicrocents, currency)}</strong>
+        </div>
+      </header>
+
+      <div className="settings-recharge-presets" role="group" aria-label={t("settings.subscription.rechargePresets")}>
+        {presets.map((preset) => (
+          <button
+            key={preset.amountCents}
+            className={selectedAmountCents === preset.amountCents ? "is-selected" : undefined}
+            type="button"
+            aria-pressed={selectedAmountCents === preset.amountCents}
+            disabled={creating || hasPendingOrder}
+            onClick={() => {
+              setSelectedAmountCents(preset.amountCents)
+              setAmountInput(String(preset.amountCents / 100))
+            }}
+          >
+            <span>{preset.name}</span>
+            <strong>{formatMoneyFromCents(preset.amountCents, currency)}</strong>
+            <small>{preset.description}</small>
+          </button>
+        ))}
+      </div>
+
+      <div className="settings-recharge-checkout">
+        <label className="settings-recharge-field">
+          <span>{t("settings.subscription.customAmount")}</span>
+          <span className="settings-recharge-amount-input">
+            <span aria-hidden="true">¥</span>
+            <input
+              type="number"
+              min="1"
+              max="10000"
+              step="0.01"
+              inputMode="decimal"
+              value={amountInput}
+              disabled={creating || hasPendingOrder}
+              aria-invalid={!amountIsValid}
+              onChange={(event) => {
+                setSelectedAmountCents(null)
+                setAmountInput(event.currentTarget.value)
+              }}
+            />
+          </span>
+        </label>
+
+        <fieldset className="settings-recharge-payment-field">
+          <legend>{t("settings.subscription.paymentMethod")}</legend>
+          <div className="settings-subscription-payment-methods" role="group" aria-label={t("settings.subscription.rechargePaymentMethod")}>
+            {(["alipay", "wechat_pay"] as const).map((value) => (
+              <button
+                key={value}
+                className={provider === value ? "is-active" : undefined}
+                type="button"
+                aria-pressed={provider === value}
+                disabled={creating || hasPendingOrder}
+                onClick={() => setProvider(value)}
+              >
+                {t(value === "alipay" ? "settings.subscription.alipay" : "settings.subscription.wechatPay")}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <button
+          className="primary-button settings-recharge-submit"
+          type="button"
+          disabled={!amountIsValid || creating || hasPendingOrder}
+          onClick={() => void createRechargeOrder()}
+        >
+          {creating
+            ? t("settings.subscription.creatingRechargeOrder")
+            : hasPendingOrder
+              ? t("settings.subscription.paymentPending")
+              : t("settings.subscription.createRechargeOrder", {
+                  amount: formatMoneyFromCents(amountCents, currency),
+                })}
+        </button>
+      </div>
+
+      {error ? <p className="settings-recharge-message is-error">{error}</p> : null}
+      {order ? (
+        <RechargePaymentPanel
+          order={order}
+          response={orderResponse}
+          qrDataUrl={qrDataUrl}
+          cancelError={cancelError}
+          canceling={cancelingOrderId === order.id}
+          onCancel={endRechargeOrder}
+        />
+      ) : null}
+    </section>
+  )
+}
+
+function RechargePaymentPanel({
+  order,
+  response,
+  qrDataUrl,
+  cancelError,
+  canceling,
+  onCancel,
+}: {
+  order: DesktopRechargePaymentOrder
+  response: DesktopRechargeOrderResponse | null
+  qrDataUrl: string | null
+  cancelError: string | null
+  canceling: boolean
+  onCancel: () => void
+}) {
+  const { t } = useI18n()
+  const isPaid = order.status === "paid"
+  const isFailed = terminalOrderStatuses.has(order.status) && !isPaid
+  return (
+    <div className="settings-recharge-payment" aria-live="polite">
+      <div className="settings-recharge-payment-header">
+        <div>
+          <span>{t("settings.subscription.rechargePaymentOrder")}</span>
+          <strong>
+            {t(order.provider === "alipay" ? "settings.subscription.alipay" : "settings.subscription.wechatPay")}
+            {" · "}
+            {formatMoneyFromCents(order.amountCents, order.currency)}
+          </strong>
+        </div>
+        <span className={`settings-subscription-payment-status is-${order.status}`}>
+          {isPaid
+            ? t("settings.subscription.paymentPaid")
+            : isFailed
+              ? t("settings.subscription.paymentFailed")
+              : t("settings.subscription.paymentPending")}
+        </span>
+      </div>
+      {!isPaid && !isFailed && order.provider === "wechat_pay" ? (
+        <div className="settings-subscription-qr">
+          {qrDataUrl ? <img src={qrDataUrl} alt={t("settings.subscription.wechatQrAlt")} /> : <span>{t("app.loadingData")}</span>}
+          <p>{t("settings.subscription.wechatQrCopy")}</p>
+        </div>
+      ) : null}
+      {!isPaid && !isFailed ? (
+        <div className="settings-subscription-payment-actions">
+          {order.provider === "alipay" && order.codeUrl ? (
+            <button className="primary-button" type="button" disabled={canceling} onClick={() => void openExternalUrl(order.codeUrl!)}>
+              {t("settings.subscription.openAlipay")}
+            </button>
+          ) : null}
+          <button className="secondary-button" type="button" disabled={canceling} onClick={onCancel}>
+            {canceling ? t("settings.subscription.endingRechargeOrder") : t("settings.subscription.endRechargeOrder")}
+          </button>
+        </div>
+      ) : null}
+      {cancelError ? <p className="settings-recharge-message is-error">{cancelError}</p> : null}
+      {isPaid ? <p className="settings-recharge-message is-success">{t("settings.subscription.rechargeSuccess")}</p> : null}
+      {isFailed ? <p className="settings-recharge-message is-error">{t("settings.subscription.rechargeRetry")}</p> : null}
+      {response?.sync?.error ? <p className="settings-recharge-message is-error">{response.sync.error}</p> : null}
     </div>
   )
 }

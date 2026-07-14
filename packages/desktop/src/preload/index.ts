@@ -515,6 +515,12 @@ try {
       invokeDesktop("desktop:get-anybox-subscription-order", input),
     cancelAnyboxSubscriptionOrder: (input) =>
       invokeDesktop("desktop:cancel-anybox-subscription-order", input),
+    createAnyboxRechargeOrder: (input) =>
+      invokeDesktop("desktop:create-anybox-recharge-order", input),
+    getAnyboxRechargeOrder: (input) =>
+      invokeDesktop("desktop:get-anybox-recharge-order", input),
+    cancelAnyboxRechargeOrder: (input) =>
+      invokeDesktop("desktop:cancel-anybox-recharge-order", input),
     refreshGlobalProviderCatalog: () =>
       invokeDesktop("desktop:refresh-global-provider-catalog") as Promise<AgentProviderCatalogItem[]>,
     getGlobalProviderAuth: (input: { providerID: string }) =>

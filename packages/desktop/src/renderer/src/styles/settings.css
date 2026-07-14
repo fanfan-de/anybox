@@ -7315,6 +7315,255 @@ body.is-dragging-settings-page {
   gap: 14px;
 }
 
+.settings-recharge {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--seg-radius-sm);
+  background: var(--seg-panel);
+  display: grid;
+  gap: 16px;
+}
+
+.settings-recharge-header {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.settings-recharge-header > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.settings-recharge-header h3,
+.settings-recharge-header p {
+  margin: 0;
+}
+
+.settings-recharge-header h3 {
+  color: var(--seg-text-1);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.settings-recharge-header p {
+  color: var(--seg-text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settings-recharge-balance {
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.settings-recharge-balance span {
+  color: var(--seg-text-3);
+  font-size: 12px;
+}
+
+.settings-recharge-balance strong {
+  color: var(--seg-text-1);
+  font-size: 18px;
+}
+
+.settings-recharge-presets {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.settings-recharge-presets button {
+  min-width: 0;
+  min-height: 112px;
+  padding: 12px;
+  border: 1px solid var(--semantic-button-secondary-border);
+  border-radius: var(--seg-radius-xs);
+  background: var(--seg-panel-muted);
+  color: var(--semantic-button-secondary-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+}
+
+.settings-recharge-presets button:hover,
+.settings-recharge-presets button:focus-visible {
+  outline: none;
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+}
+
+.settings-recharge-presets button.is-selected {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-segmented-control-item-surface-active);
+  color: var(--semantic-segmented-control-item-text-active);
+}
+
+.settings-recharge-presets button:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+  opacity: 0.72;
+  cursor: default;
+}
+
+.settings-recharge-presets button:disabled:hover,
+.settings-recharge-presets button:disabled:focus-visible {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+}
+
+.settings-recharge-presets button > span {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.settings-recharge-presets button > strong {
+  color: var(--seg-text-1);
+  font-size: 21px;
+  line-height: 1.1;
+}
+
+.settings-recharge-presets button > small {
+  color: var(--seg-text-2);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.settings-recharge-checkout {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(240px, 1fr) minmax(230px, auto);
+  align-items: end;
+  gap: 12px;
+}
+
+.settings-recharge-field,
+.settings-recharge-payment-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.settings-recharge-field > span:first-child,
+.settings-recharge-payment-field legend {
+  padding: 0;
+  color: var(--seg-text-2);
+  font-size: 12px;
+}
+
+.settings-recharge-amount-input {
+  min-width: 0;
+  min-height: 38px;
+  overflow: hidden;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--seg-radius-xs);
+  background: var(--seg-panel-muted);
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+}
+
+.settings-recharge-amount-input:focus-within {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--seg-panel);
+}
+
+.settings-recharge-amount-input > span {
+  border-right: 1px solid var(--seg-border);
+  color: var(--seg-text-2);
+  display: grid;
+  place-items: center;
+}
+
+.settings-recharge-amount-input input {
+  min-width: 0;
+  width: 100%;
+  padding: 0 10px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--seg-text-1);
+  font: inherit;
+  font-size: 13px;
+}
+
+.settings-recharge-amount-input input:disabled {
+  color: var(--semantic-button-secondary-disabled-text);
+  cursor: default;
+}
+
+.settings-recharge-submit {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+.settings-recharge-payment {
+  min-width: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--seg-border);
+  display: grid;
+  gap: 14px;
+}
+
+.settings-recharge-payment-header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-recharge-payment-header > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.settings-recharge-payment-header span {
+  color: var(--seg-text-3);
+  font-size: 12px;
+}
+
+.settings-recharge-payment-header strong {
+  color: var(--seg-text-1);
+  font-size: 16px;
+}
+
+.settings-recharge-payment > .primary-button {
+  min-height: 36px;
+}
+
+.settings-recharge-message {
+  margin: 0;
+  color: var(--seg-text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settings-recharge-message.is-success {
+  color: var(--semantic-success-text);
+}
+
+.settings-recharge-message.is-error {
+  color: var(--semantic-error-text);
+}
+
 .settings-subscription-toolbar {
   min-width: 0;
   min-height: 34px;
@@ -7742,6 +7991,26 @@ body.is-dragging-settings-page {
 }
 
 @media (max-width: 680px) {
+  .settings-recharge-header {
+    flex-direction: column;
+  }
+
+  .settings-recharge-balance {
+    justify-items: start;
+  }
+
+  .settings-recharge-presets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-recharge-checkout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-recharge-submit {
+    white-space: normal;
+  }
+
   .settings-subscription-summary-header {
     align-items: flex-start;
     flex-direction: column;
@@ -7831,6 +8100,10 @@ body.is-dragging-settings-page {
 }
 
 @media (max-width: 420px) {
+  .settings-recharge-presets {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .settings-subscription-plan-grid {
     grid-template-columns: minmax(0, 1fr);
   }

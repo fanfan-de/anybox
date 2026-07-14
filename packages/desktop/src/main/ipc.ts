@@ -23,6 +23,7 @@ import type {
   DesktopRendererErrorReport,
   DesktopRendererMemoryDiagnosticsRecord,
   DesktopRendererMemoryDiagnosticsSnapshot,
+  DesktopRechargePaymentOrder,
   DesktopRunningSessionStatus,
   DesktopSessionRollbackInput,
   DesktopSessionRollbackResult,
@@ -945,7 +946,7 @@ async function getAnyboxSubscriptionOverview(): Promise<DesktopSubscriptionOverv
     }
   }
 
-  const [plansResult, subscriptionResult, limitsResult, pendingOrderResult] = await Promise.all([
+  const [plansResult, subscriptionResult, limitsResult, pendingOrderResult, pendingRechargeOrderResult] = await Promise.all([
     requestAnyboxSubscriptionJSON<{ data: DesktopSubscriptionPlan[] }>("/api/plans"),
     requestAnyboxSubscriptionJSON<{ subscription: DesktopSubscriptionSummary | null }>("/api/subscription"),
     requestAnyboxSubscriptionJSON<{ limits: DesktopSubscriptionLimit[] }>("/api/usage-limits"),
@@ -954,6 +955,9 @@ async function getAnyboxSubscriptionOverview(): Promise<DesktopSubscriptionOverv
       planVersionId: string | null
       upgrade: DesktopSubscriptionOrderResponse["upgrade"]
     }>("/api/subscription/orders/pending"),
+    requestAnyboxSubscriptionJSON<{ order: DesktopRechargePaymentOrder | null }>(
+      "/api/billing/recharge-orders/pending",
+    ),
   ])
   return {
     connected: true,
@@ -965,6 +969,7 @@ async function getAnyboxSubscriptionOverview(): Promise<DesktopSubscriptionOverv
     pendingOrder: pendingOrderResult.data.order,
     pendingOrderPlanVersionId: pendingOrderResult.data.planVersionId,
     pendingUpgrade: pendingOrderResult.data.upgrade ?? null,
+    pendingRechargeOrder: pendingRechargeOrderResult.data.order,
   }
 }
 
@@ -973,6 +978,43 @@ async function cancelAnyboxSubscriptionOrder(orderIdInput: string): Promise<Desk
   if (!orderId) throw new Error("Subscription order ID is required.")
   const result = await requestAnyboxSubscriptionJSON<DesktopSubscriptionOrderResponse>(
     `/api/subscription/orders/${encodeURIComponent(orderId)}/cancel`,
+    { method: "POST" },
+  )
+  return result.data
+}
+
+async function createAnyboxRechargeOrder(
+  input: DesktopIpcInput<"desktop:create-anybox-recharge-order">,
+): Promise<DesktopIpcOutput<"desktop:create-anybox-recharge-order">> {
+  const result = await requestAnyboxSubscriptionJSON<DesktopIpcOutput<"desktop:create-anybox-recharge-order">>(
+    "/api/billing/recharge-orders",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  )
+  return result.data
+}
+
+async function getAnyboxRechargeOrder(
+  orderIdInput: string,
+): Promise<DesktopIpcOutput<"desktop:get-anybox-recharge-order">> {
+  const orderId = orderIdInput.trim()
+  if (!orderId) throw new Error("Recharge order ID is required.")
+  const result = await requestAnyboxSubscriptionJSON<DesktopIpcOutput<"desktop:get-anybox-recharge-order">>(
+    `/api/billing/recharge-orders/${encodeURIComponent(orderId)}?sync=1`,
+  )
+  return result.data
+}
+
+async function cancelAnyboxRechargeOrder(
+  orderIdInput: string,
+): Promise<DesktopIpcOutput<"desktop:cancel-anybox-recharge-order">> {
+  const orderId = orderIdInput.trim()
+  if (!orderId) throw new Error("Recharge order ID is required.")
+  const result = await requestAnyboxSubscriptionJSON<DesktopIpcOutput<"desktop:cancel-anybox-recharge-order">>(
+    `/api/billing/recharge-orders/${encodeURIComponent(orderId)}/cancel`,
     { method: "POST" },
   )
   return result.data
@@ -4428,6 +4470,18 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     return await cancelAnyboxSubscriptionOrder(input.orderId)
   })
 
+  handleDesktopIpc("desktop:create-anybox-recharge-order", async (_event, input) => {
+    return await createAnyboxRechargeOrder(input)
+  })
+
+  handleDesktopIpc("desktop:get-anybox-recharge-order", async (_event, input) => {
+    return await getAnyboxRechargeOrder(input.orderId)
+  })
+
+  handleDesktopIpc("desktop:cancel-anybox-recharge-order", async (_event, input) => {
+    return await cancelAnyboxRechargeOrder(input.orderId)
+  })
+
   handleDesktopIpc("desktop:refresh-global-provider-catalog", async () => {
     const result = await requestAgentJSON<AgentProviderCatalogItem[]>("/api/providers/catalog/refresh", {
       method: "POST",
@@ -6448,7 +6502,9 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
 
 export const internal = {
   abortActiveAgentSessionRequestsInMap,
+  cancelAnyboxRechargeOrder,
   cancelAnyboxSubscriptionOrder,
+  createAnyboxRechargeOrder,
   cleanupSideChatLinksWithoutResponses,
   capturePreviewScreenshotFromWindow,
   copyImageDataUrlToClipboard,
@@ -6456,6 +6512,7 @@ export const internal = {
   disposeSessionStreamSubscriptionsForWebContents,
   getSessionTraceExport,
   getAnyboxSubscriptionOverview,
+  getAnyboxRechargeOrder,
   getToolPermissionMode,
   interruptAgentSessionBackendFirst,
   isSessionStreamSubscriptionKeyForWebContents,

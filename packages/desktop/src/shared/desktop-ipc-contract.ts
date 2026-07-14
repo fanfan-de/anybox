@@ -543,6 +543,7 @@ export interface DesktopSubscriptionOverview {
   pendingOrder?: DesktopSubscriptionPaymentOrder | null
   pendingOrderPlanVersionId?: string | null
   pendingUpgrade?: DesktopSubscriptionUpgradeDetail | null
+  pendingRechargeOrder?: DesktopRechargePaymentOrder | null
   error?: string
 }
 
@@ -572,6 +573,28 @@ export interface DesktopSubscriptionOrderResponse {
   upgrade?: DesktopSubscriptionUpgradeDetail | null
   paymentUrl?: string
   reused?: boolean
+  sync?: {
+    checked: boolean
+    tradeState?: string
+    error?: string
+  }
+}
+
+export interface DesktopRechargePaymentOrder {
+  id: string
+  provider: DesktopSubscriptionPaymentProvider
+  codeUrl: string | null
+  amountCents: number
+  currency?: string
+  status: DesktopSubscriptionPaymentOrderStatus
+  outTradeNo?: string
+  paidAt?: string | null
+  expiresAt?: string | null
+}
+
+export interface DesktopRechargeOrderResponse {
+  order: DesktopRechargePaymentOrder
+  paymentUrl?: string
   sync?: {
     checked: boolean
     tradeState?: string
@@ -1634,6 +1657,18 @@ export interface DesktopIpcContract {
     input: { orderId: string }
     output: DesktopSubscriptionOrderResponse
   }
+  "desktop:create-anybox-recharge-order": {
+    input: { amountCents: number; provider: DesktopSubscriptionPaymentProvider }
+    output: DesktopRechargeOrderResponse
+  }
+  "desktop:get-anybox-recharge-order": {
+    input: { orderId: string }
+    output: DesktopRechargeOrderResponse
+  }
+  "desktop:cancel-anybox-recharge-order": {
+    input: { orderId: string }
+    output: DesktopRechargeOrderResponse
+  }
   "desktop:refresh-global-provider-catalog": {
     input: void
     output: AgentProviderCatalogItem[]
@@ -2318,6 +2353,9 @@ export interface DesktopApiMethods {
   createAnyboxSubscriptionUpgradeOrder(input: DesktopIpcInput<"desktop:create-anybox-subscription-upgrade-order">): Promise<DesktopIpcOutput<"desktop:create-anybox-subscription-upgrade-order">>
   getAnyboxSubscriptionOrder(input: DesktopIpcInput<"desktop:get-anybox-subscription-order">): Promise<DesktopIpcOutput<"desktop:get-anybox-subscription-order">>
   cancelAnyboxSubscriptionOrder(input: DesktopIpcInput<"desktop:cancel-anybox-subscription-order">): Promise<DesktopIpcOutput<"desktop:cancel-anybox-subscription-order">>
+  createAnyboxRechargeOrder(input: DesktopIpcInput<"desktop:create-anybox-recharge-order">): Promise<DesktopIpcOutput<"desktop:create-anybox-recharge-order">>
+  getAnyboxRechargeOrder(input: DesktopIpcInput<"desktop:get-anybox-recharge-order">): Promise<DesktopIpcOutput<"desktop:get-anybox-recharge-order">>
+  cancelAnyboxRechargeOrder(input: DesktopIpcInput<"desktop:cancel-anybox-recharge-order">): Promise<DesktopIpcOutput<"desktop:cancel-anybox-recharge-order">>
   refreshGlobalProviderCatalog(): Promise<DesktopIpcOutput<"desktop:refresh-global-provider-catalog">>
   getGlobalProviderAuth(input: DesktopIpcInput<"desktop:get-global-provider-auth">): Promise<DesktopIpcOutput<"desktop:get-global-provider-auth">>
   startGlobalProviderAuthFlow(input: DesktopIpcInput<"desktop:start-global-provider-auth-flow">): Promise<DesktopIpcOutput<"desktop:start-global-provider-auth-flow">>

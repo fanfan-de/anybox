@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type {
   DesktopSubscriptionOrderResponse,
@@ -30,6 +30,7 @@ const proPlan: DesktopSubscriptionPlan = {
 function createOverview(): DesktopSubscriptionOverview {
   return {
     connected: true,
+    balanceMicrocents: 14_497_000_000,
     currency: "CNY",
     plans: [proPlan],
     subscription: null,
@@ -157,5 +158,227 @@ describe("SubscriptionSettingsPanel payment flow", () => {
     expect(await screen.findByRole("img", { name: "WeChat Pay QR code" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Change payment method" })).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Cancel order" })).toBeInTheDocument()
+  })
+
+  it("creates a custom WeChat recharge order below the subscription plans", async () => {
+    const rechargeOrder = {
+      order: {
+        id: "recharge-1",
+        provider: "wechat_pay" as const,
+        codeUrl: "weixin://wxpay/recharge-1",
+        amountCents: 8_850,
+        currency: "CNY",
+        status: "pending" as const,
+      },
+    }
+    const createRechargeOrder = vi.fn().mockResolvedValue(rechargeOrder)
+    window.desktop = {
+      getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue(createOverview()),
+      createAnyboxRechargeOrder: createRechargeOrder,
+      getAnyboxRechargeOrder: vi.fn().mockResolvedValue(rechargeOrder),
+    } as unknown as Window["desktop"]
+
+    renderPanel()
+
+    await screen.findByRole("heading", { name: "Add prepaid balance" })
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Custom amount" }), { target: { value: "88.50" } })
+    fireEvent.click(screen.getByRole("button", { name: "WeChat Pay" }))
+    fireEvent.click(screen.getByRole("button", { name: "Pay ¥88.50" }))
+
+    await waitFor(() => {
+      expect(createRechargeOrder).toHaveBeenCalledWith({ amountCents: 8_850, provider: "wechat_pay" })
+    })
+    expect(await screen.findByRole("img", { name: "WeChat Pay QR code" })).toBeInTheDocument()
+  })
+
+  it("restores a pending recharge order from the account overview", async () => {
+    window.desktop = {
+      getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue({
+        ...createOverview(),
+        pendingRechargeOrder: {
+          id: "recharge-restored-1",
+          provider: "wechat_pay",
+          codeUrl: "weixin://wxpay/recharge-restored-1",
+          amountCents: 10_000,
+          currency: "CNY",
+          status: "pending",
+        },
+      }),
+      getAnyboxRechargeOrder: vi.fn().mockResolvedValue({
+        order: {
+          id: "recharge-restored-1",
+          provider: "wechat_pay",
+          codeUrl: "weixin://wxpay/recharge-restored-1",
+          amountCents: 10_000,
+          currency: "CNY",
+          status: "pending",
+        },
+      }),
+      cancelAnyboxRechargeOrder: vi.fn(),
+    } as unknown as Window["desktop"]
+
+    renderPanel()
+
+    expect(await screen.findByRole("img", { name: "WeChat Pay QR code" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "End order" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Awaiting payment" })).toBeDisabled()
+  })
+
+  it("removes the Electron IPC wrapper from recharge errors", async () => {
+    window.desktop = {
+      getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue(createOverview()),
+      createAnyboxRechargeOrder: vi.fn().mockRejectedValue(
+        new Error("Error invoking remote method 'desktop:create-anybox-recharge-order': Error: Please sign in"),
+      ),
+    } as unknown as Window["desktop"]
+
+    renderPanel()
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Pay / }))
+
+    expect(await screen.findByText("Please sign in")).toBeInTheDocument()
+    expect(screen.queryByText(/Error invoking remote method/)).not.toBeInTheDocument()
+  })
+
+  it("ends a pending recharge order and restores the recharge form", async () => {
+    const pendingOrder = {
+      order: {
+        id: "recharge-1",
+        provider: "wechat_pay" as const,
+        codeUrl: "weixin://wxpay/recharge-1",
+        amountCents: 3_000,
+        currency: "CNY",
+        status: "pending" as const,
+      },
+    }
+    const cancelRechargeOrder = vi.fn().mockResolvedValue({
+      order: { ...pendingOrder.order, status: "canceled" as const },
+    })
+    window.desktop = {
+      getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue(createOverview()),
+      createAnyboxRechargeOrder: vi.fn().mockResolvedValue(pendingOrder),
+      getAnyboxRechargeOrder: vi.fn().mockResolvedValue(pendingOrder),
+      cancelAnyboxRechargeOrder: cancelRechargeOrder,
+    } as unknown as Window["desktop"]
+
+    renderPanel()
+
+    fireEvent.click(await screen.findByRole("button", { name: "WeChat Pay" }))
+    fireEvent.click(screen.getByRole("button", { name: /^Pay / }))
+    expect(await screen.findByRole("img", { name: "WeChat Pay QR code" })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "End order" }))
+
+    await waitFor(() => expect(cancelRechargeOrder).toHaveBeenCalledWith({ orderId: "recharge-1" }))
+    await waitFor(() => {
+      expect(screen.queryByRole("img", { name: "WeChat Pay QR code" })).not.toBeInTheDocument()
+      expect(screen.queryByText("Recharge order")).not.toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /^Pay / })).toBeEnabled()
+    })
+  })
+
+  it("keeps a pending recharge order usable when it cannot be closed safely", async () => {
+    const pendingOrder = {
+      order: {
+        id: "recharge-close-failed",
+        provider: "wechat_pay" as const,
+        codeUrl: "weixin://wxpay/recharge-close-failed",
+        amountCents: 3_000,
+        currency: "CNY",
+        status: "pending" as const,
+      },
+    }
+    window.desktop = {
+      getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue(createOverview()),
+      createAnyboxRechargeOrder: vi.fn().mockResolvedValue(pendingOrder),
+      getAnyboxRechargeOrder: vi.fn().mockResolvedValue(pendingOrder),
+      cancelAnyboxRechargeOrder: vi.fn().mockRejectedValue(new Error("The recharge order could not be closed safely")),
+    } as unknown as Window["desktop"]
+
+    renderPanel()
+
+    fireEvent.click(await screen.findByRole("button", { name: "WeChat Pay" }))
+    fireEvent.click(screen.getByRole("button", { name: /^Pay / }))
+    fireEvent.click(await screen.findByRole("button", { name: "End order" }))
+
+    expect(await screen.findByText("The recharge order could not be closed safely")).toBeInTheDocument()
+    expect(screen.getByRole("img", { name: "WeChat Pay QR code" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "End order" })).toBeEnabled()
+  })
+
+  it("refreshes the balance when payment wins a recharge cancellation race", async () => {
+    const pendingOrder = {
+      order: {
+        id: "recharge-2",
+        provider: "wechat_pay" as const,
+        codeUrl: "weixin://wxpay/recharge-2",
+        amountCents: 5_000,
+        currency: "CNY",
+        status: "pending" as const,
+      },
+    }
+    const paidOrder = {
+      order: { ...pendingOrder.order, status: "paid" as const },
+    }
+    const loadOverview = vi.fn().mockResolvedValue(createOverview())
+    window.desktop = {
+      getAnyboxSubscriptionOverview: loadOverview,
+      createAnyboxRechargeOrder: vi.fn().mockResolvedValue(pendingOrder),
+      cancelAnyboxRechargeOrder: vi.fn().mockRejectedValue(new Error("The recharge order was already paid")),
+      getAnyboxRechargeOrder: vi.fn().mockResolvedValue(paidOrder),
+    } as unknown as Window["desktop"]
+
+    renderPanel()
+
+    fireEvent.click(await screen.findByRole("button", { name: "WeChat Pay" }))
+    fireEvent.click(screen.getByRole("button", { name: /^Pay / }))
+    fireEvent.click(await screen.findByRole("button", { name: "End order" }))
+
+    expect(await screen.findByText("The order was already paid. Your balance has been refreshed.")).toBeInTheDocument()
+    await waitFor(() => expect(loadOverview).toHaveBeenCalledTimes(2))
+    expect(screen.getByText("Paid")).toBeInTheDocument()
+  })
+
+  it("ignores an in-flight recharge poll after the order is ended", async () => {
+    const pendingOrder = {
+      order: {
+        id: "recharge-3",
+        provider: "wechat_pay" as const,
+        codeUrl: "weixin://wxpay/recharge-3",
+        amountCents: 5_000,
+        currency: "CNY",
+        status: "pending" as const,
+      },
+    }
+    let resolveStalePoll!: (value: typeof pendingOrder) => void
+    const stalePoll = new Promise<typeof pendingOrder>((resolve) => {
+      resolveStalePoll = resolve
+    })
+    const getRechargeOrder = vi.fn().mockReturnValue(stalePoll)
+    window.desktop = {
+      getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue(createOverview()),
+      createAnyboxRechargeOrder: vi.fn().mockResolvedValue(pendingOrder),
+      getAnyboxRechargeOrder: getRechargeOrder,
+      cancelAnyboxRechargeOrder: vi.fn().mockResolvedValue({
+        order: { ...pendingOrder.order, status: "canceled" as const },
+      }),
+    } as unknown as Window["desktop"]
+
+    renderPanel()
+
+    fireEvent.click(await screen.findByRole("button", { name: "WeChat Pay" }))
+    fireEvent.click(screen.getByRole("button", { name: /^Pay / }))
+    expect(await screen.findByRole("button", { name: "End order" })).toBeInTheDocument()
+    await waitFor(() => expect(getRechargeOrder).toHaveBeenCalledWith({ orderId: "recharge-3" }), { timeout: 3_000 })
+
+    fireEvent.click(screen.getByRole("button", { name: "End order" }))
+    await waitFor(() => expect(screen.queryByText("Recharge order")).not.toBeInTheDocument())
+
+    await act(async () => {
+      resolveStalePoll(pendingOrder)
+      await stalePoll
+    })
+
+    expect(screen.queryByText("Recharge order")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "End order" })).not.toBeInTheDocument()
   })
 })

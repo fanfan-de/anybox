@@ -82,6 +82,17 @@ describe("Anybox subscription IPC helpers", () => {
               }
           : url.endsWith("/api/subscription/orders/pending")
             ? { order: null, planVersionId: null, upgrade: null }
+            : url.endsWith("/api/billing/recharge-orders/pending")
+              ? {
+                  order: {
+                    id: "recharge-pending-1",
+                    provider: "wechat_pay",
+                    codeUrl: "weixin://wxpay/recharge-pending-1",
+                    amountCents: 5_000,
+                    currency: "CNY",
+                    status: "pending",
+                  },
+                }
             : { limits: [] }
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer desktop-oauth-token")
       return new Response(JSON.stringify(body), {
@@ -101,8 +112,9 @@ describe("Anybox subscription IPC helpers", () => {
       pendingOrder: null,
       pendingOrderPlanVersionId: null,
       pendingUpgrade: null,
+      pendingRechargeOrder: { id: "recharge-pending-1", status: "pending" },
     })
-    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(fetchMock).toHaveBeenCalledTimes(5)
     expect(requestAgentJSONMock).toHaveBeenCalledWith("/api/providers/anybox/auth/relay-session")
   })
 
@@ -142,6 +154,100 @@ describe("Anybox subscription IPC helpers", () => {
     vi.stubGlobal("fetch", fetchMock)
 
     await expect(internal.cancelAnyboxSubscriptionOrder("   ")).rejects.toThrow("Subscription order ID is required")
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(requestAgentJSONMock).not.toHaveBeenCalled()
+  })
+
+  it("creates a recharge order through the authenticated billing endpoint", async () => {
+    requestAgentJSONMock.mockResolvedValue({
+      data: {
+        connected: true,
+        status: "connected",
+        accessToken: "desktop-oauth-token",
+        baseURL: "https://provider.anybox.test/v1",
+      },
+    })
+    const responseBody = {
+      order: {
+        id: "recharge-1",
+        provider: "wechat_pay",
+        codeUrl: "weixin://wxpay/recharge-1",
+        amountCents: 8_850,
+        currency: "CNY",
+        status: "pending",
+      },
+    }
+    const fetchMock = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      expect(String(input)).toBe("https://provider.anybox.test/api/billing/recharge-orders")
+      expect(init?.method).toBe("POST")
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer desktop-oauth-token")
+      expect(JSON.parse(String(init?.body))).toEqual({ amountCents: 8_850, provider: "wechat_pay" })
+      return new Response(JSON.stringify(responseBody), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(internal.createAnyboxRechargeOrder({ amountCents: 8_850, provider: "wechat_pay" }))
+      .resolves.toEqual(responseBody)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("queries a recharge order with an encoded ID", async () => {
+    requestAgentJSONMock.mockResolvedValue({
+      data: {
+        connected: true,
+        status: "connected",
+        accessToken: "desktop-oauth-token",
+        baseURL: "https://provider.anybox.test/v1",
+      },
+    })
+    const responseBody = { order: { id: "recharge / 1", status: "paid" } }
+    const fetchMock = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      expect(String(input)).toBe("https://provider.anybox.test/api/billing/recharge-orders/recharge%20%2F%201?sync=1")
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer desktop-oauth-token")
+      return new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(internal.getAnyboxRechargeOrder("  recharge / 1  ")).resolves.toEqual(responseBody)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("cancels a recharge order through the authenticated billing endpoint", async () => {
+    requestAgentJSONMock.mockResolvedValue({
+      data: {
+        connected: true,
+        status: "connected",
+        accessToken: "desktop-oauth-token",
+        baseURL: "https://provider.anybox.test/v1",
+      },
+    })
+    const responseBody = { order: { id: "recharge / 1", status: "canceled" } }
+    const fetchMock = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      expect(String(input)).toBe("https://provider.anybox.test/api/billing/recharge-orders/recharge%20%2F%201/cancel")
+      expect(init?.method).toBe("POST")
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer desktop-oauth-token")
+      return new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(internal.cancelAnyboxRechargeOrder("  recharge / 1  ")).resolves.toEqual(responseBody)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("rejects an empty recharge order ID before making a cancellation request", async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(internal.cancelAnyboxRechargeOrder("   ")).rejects.toThrow("Recharge order ID is required")
     expect(fetchMock).not.toHaveBeenCalled()
     expect(requestAgentJSONMock).not.toHaveBeenCalled()
   })
