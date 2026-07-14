@@ -24,6 +24,7 @@ import {
   resolveRendererEntryUrl,
 } from "./window"
 import { WorkbenchWindowManager } from "./workbench-window-manager"
+import { resolveWindowsAppUserModelId } from "./windows-app-identity"
 
 const mainDir = path.dirname(fileURLToPath(import.meta.url))
 const PREVIEW_WEBVIEW_PARTITION = "persist:preview"
@@ -35,7 +36,8 @@ if (!app.isPackaged && remoteDebuggingPort && /^\d+$/.test(remoteDebuggingPort))
 
 registerLocalImageProtocolScheme(protocol)
 registerLocalPreviewProtocolScheme(protocol)
-app.setAppUserModelId("com.anybox.app")
+const windowsAppUserModelId = resolveWindowsAppUserModelId(app.isPackaged)
+if (windowsAppUserModelId) app.setAppUserModelId(windowsAppUserModelId)
 installProcessCrashDiagnostics()
 
 let isQuitting = false
