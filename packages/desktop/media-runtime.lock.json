@@ -360,15 +360,9 @@
           "runtimeID": "ffmpeg-anybox-8ad6288553-linux-x64-gpl-r1",
           "manifestSchemaVersion": 1,
           "origin": "anybox-controlled-gpl",
-          "artifactStatus": "pending",
           "releaseReadiness": {
-            "status": "blocked",
-            "releaseKind": "initial",
-            "reasons": [
-              "The pinned Linux x64 FFmpeg/libx264 candidate has not been promoted from protected CI or mirrored to immutable release storage yet.",
-              "GPL source, notice, H.264 distribution, and release approval are still pending.",
-              "The installed Linux application render and restart evidence has not been accepted."
-            ]
+            "status": "approved",
+            "releaseKind": "initial"
           },
           "licensePolicy": {
             "spdxExpression": "GPL-3.0-or-later",
@@ -377,18 +371,81 @@
             "componentLicenseFiles": {
               "x264": {
                 "fileName": "X264-LICENSE.txt",
+                "sizeBytes": 17992,
                 "sha256": "32b1062f7da84967e7019d01ab805935caa7ab7321a7ced0e30ebe75e5df1670"
               },
               "zlib": {
                 "fileName": "ZLIB-LICENSE.txt",
+                "sizeBytes": 1002,
                 "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
               }
             },
-            "reviewStatus": "pending"
+            "reviewStatus": "approved"
+          },
+          "approvalEvidence": {
+            "approver": "Anybox project owner (GitHub: fanfan-de)",
+            "approvedAt": "2026-07-15T04:10:24+08:00",
+            "references": [
+              "packages/cinema-web/cinema-media-runtime-owner-risk-acceptance.linux-x64.md",
+              "https://github.com/fanfan-de/anybox/releases/tag/media-runtime-ffmpeg-8ad6288553-linux-x64-r1"
+            ],
+            "immutableMirror": {
+              "reference": "https://github.com/fanfan-de/anybox/releases/tag/media-runtime-ffmpeg-8ad6288553-linux-x64-r1",
+              "sha256": "3a9d46852a6caa2a03d1607d96542e78f9ca6cac5cba7728d7f18c90a01a2111"
+            },
+            "rollbackPlan": {
+              "strategy": "disable-deliver",
+              "capability": "timelineDelivery",
+              "reference": "packages/cinema-web/cinema-media-runtime-owner-risk-acceptance.linux-x64.md#rollback"
+            }
+          },
+          "distribution": {
+            "releaseTag": "media-runtime-ffmpeg-8ad6288553-linux-x64-r1",
+            "ffmpegRevision": "8ad6288553",
+            "fileName": "ffmpeg-anybox-8ad6288553-linux-x64-gpl.tar.gz",
+            "sha256": "3a9d46852a6caa2a03d1607d96542e78f9ca6cac5cba7728d7f18c90a01a2111",
+            "sizeBytes": 44615225,
+            "url": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-linux-x64-r1/ffmpeg-anybox-8ad6288553-linux-x64-gpl.tar.gz",
+            "sourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-linux-x64-r1/ffmpeg-source-8ad6288553.tar.gz",
+            "buildSourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-linux-x64-r1/build-media-runtime.sh",
+            "source": {
+              "fileName": "ffmpeg-source-8ad6288553.tar.gz",
+              "sizeBytes": 17382583,
+              "sha256": "b1c34a3697e7459de7536dbb208c9e8de19431c5d4b14b09cdfcc30d266e0b7d"
+            },
+            "buildSource": {
+              "fileName": "build-media-runtime.sh",
+              "sizeBytes": 15555,
+              "sha256": "c426a8abdf0e1f681b2e03ae4a61c45988baf3ffe91a3514f474f68ea574b787"
+            },
+            "componentSources": {
+              "x264": {
+                "revision": "b35605ace3ddf7c1a5d67a2eb553f034aef41d55",
+                "fileName": "x264-source-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.gz",
+                "sizeBytes": 1039951,
+                "sha256": "4f1c35d11c7b09ca1a88affb914e1fc3daee888732786a66e51af4f786962c44",
+                "url": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-linux-x64-r1/x264-source-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.gz"
+              },
+              "zlib": {
+                "version": "1.3.1",
+                "fileName": "zlib-source-1.3.1.tar.gz",
+                "sizeBytes": 1512791,
+                "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23",
+                "url": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-linux-x64-r1/zlib-source-1.3.1.tar.gz"
+              }
+            }
           },
           "executables": {
             "ffmpeg": "ffmpeg",
             "ffprobe": "ffprobe"
+          },
+          "binaries": {
+            "ffmpeg": {
+              "sha256": "28e07743481886ef328560013cc65feff4a033d7716b6c41769ccdd5422ed766"
+            },
+            "ffprobe": {
+              "sha256": "b5951a625a717255e1d4baf943fc49dbf2fa78af43c38fb5b17b116a34e92c3e"
+            }
           },
           "buildConfigurationPolicy": {
             "requiredFlags": [
@@ -397,9 +454,9 @@
               "--enable-version3",
               "--enable-gpl",
               "--enable-libx264",
-              "--enable-zlib",
               "--pkg-config-flags=--static",
               "--enable-libass",
+              "--enable-zlib",
               "--disable-libopenh264",
               "--disable-libx265",
               "--disable-libfdk-aac",
@@ -434,6 +491,51 @@
             "audioEncoder": "aac",
             "expectedVideoCodec": "h264",
             "expectedAudioCodec": "aac"
+          },
+          "buildEvidence": {
+            "candidateSmoke": {
+              "render": {
+                "durationSeconds": 1,
+                "videoCodec": "h264",
+                "audioCodec": "aac",
+                "output": {
+                  "fileName": "evidence/smoke.mp4",
+                  "sizeBytes": 40402,
+                  "sha256": "f6f7b1ce3d89b9b0f45a4532d5987cbbf08b0b8458b43d6b0c42020e1c38e5a3"
+                },
+                "probe": {
+                  "fileName": "evidence/smoke.ffprobe.json",
+                  "sizeBytes": 4319,
+                  "sha256": "abd81be1994e23913f249f8e555c18a914fc6ab1cf4cdfc9b5df321ae4798fe5"
+                }
+              },
+              "subtitle": {
+                "durationSeconds": 1,
+                "videoCodec": "h264",
+                "renderer": "libass",
+                "fontSha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+                "output": {
+                  "fileName": "evidence/subtitle-smoke.mp4",
+                  "sizeBytes": 3433,
+                  "sha256": "d1ffead343f3caa9f587a27b613bda439fc3e1864b80136392c315dfc11cba24"
+                },
+                "probe": {
+                  "fileName": "evidence/subtitle-smoke.ffprobe.json",
+                  "sizeBytes": 2640,
+                  "sha256": "2ca63d9bd24fd12b89206922f161c9709649c1be89e26ef6ebef94dc1b8375a9"
+                },
+                "script": {
+                  "fileName": "evidence/subtitle-smoke.ass",
+                  "sizeBytes": 589,
+                  "sha256": "593d4d8281db979aaaeba6ef32a02e9e8058649be21424149b090d501aebb5b5"
+                },
+                "frame": {
+                  "fileName": "evidence/subtitle-smoke.png",
+                  "sizeBytes": 4487,
+                  "sha256": "de9873a9bccdf9f11fff2ef1fae755192d56174914a23fc381a6d2c6ee86da1d"
+                }
+              }
+            }
           }
         }
       }

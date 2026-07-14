@@ -126,8 +126,8 @@ test("media preparation resolves locked targets through explicit preparers", () 
   assert.equal(darwinBeta.preparerID, "external-beta-darwin-arm64")
 
   const linux = resolveMediaToolsPreparation(lock, "linux", "x64")
-  assert.equal(linux.status, "skipped")
-  assert.equal(linux.reason, "artifact-pending")
+  assert.equal(linux.status, "ready")
+  assert.equal(linux.preparerID, "locked-archive-linux-x64")
   assert.equal(linux.target, lock.platforms.linux.targets.x64)
 
   const futureLock = structuredClone(lock)
@@ -213,7 +213,7 @@ test("beta media materials copy the reviewed subtitle font and OFL license", asy
   }
 })
 
-test("media runtime lock represents approved Windows/macOS targets and a fail-closed Linux candidate", () => {
+test("media runtime lock represents approved Windows, macOS, and Linux targets", () => {
   validateMediaRuntimeLock(lock)
   const target = resolveMediaRuntimeTarget(lock, "win32", "x64")
   assert.equal(target.origin, "anybox-controlled-lgpl")
@@ -242,11 +242,16 @@ test("media runtime lock represents approved Windows/macOS targets and a fail-cl
   assert.doesNotThrow(() => assertMediaRuntimeReleaseApproved(darwin, "darwin", "arm64"))
   const linux = resolveMediaRuntimeTarget(lock, "linux", "x64")
   assert.equal(linux.origin, "anybox-controlled-gpl")
-  assert.equal(linux.artifactStatus, "pending")
-  assert.equal(linux.releaseReadiness.status, "blocked")
-  assert.equal(linux.licensePolicy.reviewStatus, "pending")
+  assert.equal(linux.artifactStatus, undefined)
+  assert.equal(linux.distribution.releaseTag, "media-runtime-ffmpeg-8ad6288553-linux-x64-r1")
+  assert.equal(linux.distribution.ffmpegRevision, "8ad6288553")
+  assert.equal(linux.distribution.sha256, "3a9d46852a6caa2a03d1607d96542e78f9ca6cac5cba7728d7f18c90a01a2111")
+  assert.equal(linux.releaseReadiness.status, "approved")
+  assert.equal(linux.releaseReadiness.releaseKind, "initial")
+  assert.equal(linux.licensePolicy.reviewStatus, "approved")
+  assert.equal(linux.approvalEvidence.approver, "Anybox project owner (GitHub: fanfan-de)")
   assert.deepEqual(linux.requiredEncoders, ["libx264", "aac"])
-  assert.throws(() => assertMediaRuntimeReleaseApproved(linux, "linux", "x64"), /releaseReadiness=blocked/)
+  assert.doesNotThrow(() => assertMediaRuntimeReleaseApproved(linux, "linux", "x64"))
 })
 
 test("completed runtime targets require archive-bound render and subtitle smoke evidence", () => {
