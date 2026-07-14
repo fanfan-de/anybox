@@ -28,6 +28,7 @@ export interface CinemaAssetTrashLocation {
   originalRelativePath: string
   trashedRelativePath: string
   trashedAt: string
+  expiresAt?: string
   previousStatus?: "ready" | "failed" | "missing"
 }
 
@@ -69,6 +70,7 @@ export interface CinemaAssetFolderTrashLocation {
   originalRelativePath: string
   trashedRelativePath: string
   trashedAt: string
+  expiresAt?: string
 }
 
 export interface CinemaAssetFolder {

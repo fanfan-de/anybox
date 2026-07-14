@@ -8,6 +8,7 @@ import {
   CinemaAssetLibraryEntriesQuerySchema,
   CinemaAssetLibraryEntriesResultSchema,
   CinemaAssetLibraryStateSchema,
+  CinemaAssetMutationResultSchema,
   CinemaAssetMigrationResultSchema,
   CinemaAssetMigrationStatusResultSchema,
   CinemaAssetRecordSchema,
@@ -292,6 +293,31 @@ describe("cinema schemas", () => {
       folder: inboxAssetFolder,
     })
     expect(folderResult.affected).toEqual([])
+
+    const pendingDeleteResult = CinemaAssetMutationResultSchema.parse({
+      scope: projectAssetScope,
+      operationID: "trash",
+      revision: 4,
+      affected: target,
+      undoUntil: "2026-07-10T00:00:10.000Z",
+    })
+    expect(pendingDeleteResult.undoUntil).toBe("2026-07-10T00:00:10.000Z")
+
+    const pendingDeleteAsset = CinemaAssetRecordSchema.parse({
+      ...imageAsset,
+      status: "trashed",
+      relativePath: ".trash/trash/asset-image-1-reference.png",
+      trash: {
+        operationID: "trash",
+        originalFolderID: imageAsset.folderID,
+        originalRelativePath: imageAsset.relativePath,
+        trashedRelativePath: ".trash/trash/asset-image-1-reference.png",
+        trashedAt: "2026-07-10T00:00:00.000Z",
+        expiresAt: "2026-07-10T00:00:10.000Z",
+        previousStatus: "ready",
+      },
+    })
+    expect(pendingDeleteAsset.trash?.expiresAt).toBe("2026-07-10T00:00:10.000Z")
 
     const assetResult = CinemaAssetRecordMutationResultSchema.parse({
       scope: projectAssetScope,

@@ -360,13 +360,13 @@ export type CinemaTimelineClip =
 
 ### 资产引用
 
-Timeline 与 Canvas 共用素材库的稳定引用，不能再把物理路径作为身份写入 clip。路径、预览代理和缩略图由 Agent 按 `assetID + contentRevision` 解析；素材移动、改名、回收与恢复不需要改写 timeline。
+Timeline 与 Canvas 共用素材库的稳定引用，不能再把物理路径作为身份写入 clip。路径、预览代理和缩略图由 Agent 按 `assetID + contentRevision` 解析；素材移动、改名和 10 秒内撤销删除不需要改写 timeline。仍被 Timeline 引用的素材应在删除前被服务端阻止。
 
 ```ts
 export type CinemaTimelineAssetRef = CinemaAssetRef
 ```
 
-Timeline 加载时批量读取素材详情获得 `fps / hasAudio / sizeBytes` 等易变 metadata。个人素材仍是本机依赖；缺失或位于回收站时，现有 clip 保留并显示修复状态，但不能创建新的 clip。替换素材只能选择相同媒体 kind。
+Timeline 加载时批量读取素材详情获得 `fps / hasAudio / sizeBytes` 等易变 metadata。个人素材仍是本机依赖；缺失或出现内部 `trashed` 降级状态时，现有 clip 保留并显示“素材不可用/已删除”的修复状态，但不能创建新的 clip，也不提供前往回收站的操作。替换素材只能选择相同媒体 kind。
 
 ### Transform / Crop
 
@@ -742,7 +742,7 @@ Track 菜单：
 - Selection 使用有序 `selectedClipIDs`，支持 Shift 增减、跨虚拟化 Clip 的 Marquee、多 Clip 原子移动、Copy/Paste、Duplicate、Ripple Delete 与单步 Undo/Redo。
 - Viewport 以鼠标时间为锚点缩放，使用可视区 Clip、Ruler Tick 和 Filmstrip Cell 虚拟化。UI Snapshot 持久化播放头、缩放、水平/垂直滚动、多选、面板开关、轨道高度/折叠和 Playhead Follow。
 - Track 支持受控创建 Video、Audio、Overlay，支持重命名、锁定、静音、隐藏、原子重排、显式非空删除和 72–240 px 高度调整。Preview 与 Deliver 共用轨道顺序语义。
-- 视频 Clip 复用素材库缓存缩略图形成胶片条；音频波形是 Timeline 派生缓存，并按 `sourceInUs / sourceDurationUs` 映射 Trim 后区间。Ready、Missing、Trashed 和 Error 都有稳定占位状态。
+- 视频 Clip 复用素材库缓存缩略图形成胶片条；音频波形是 Timeline 派生缓存，并按 `sourceInUs / sourceDurationUs` 映射 Trim 后区间。Ready、Missing、Deleted（内部 `trashed` 降级）和 Error 都有稳定占位状态。
 - Preview 对 Seek 做每帧合并，最多预加载相邻两个视频；Gap 和缺失素材会清除上一帧。视频、图片和文本使用与 Deliver 一致的 `fit / opacity / transform / anchor` 语义。
 - 可靠性基线包括 Command ID 幂等、Revision Conflict Rebase、离线队列、刷新恢复、素材修复以及 Agent 原子投影验证。500 Clip / 30 分钟场景保持有限 Clip、Tick 和 Filmstrip DOM。
 - 发布验收覆盖 10 Clip 键盘粗剪主路径、Light/Dark、760–1700 px、Axe、键盘冲突保护和 500 Clip 首屏性能。
@@ -808,7 +808,7 @@ type CinemaTimelineCanvasNodeData = {
 
 - 接入项目 / 个人素材库选择器与 `assetRef`。
 - 复用素材库上传、ffprobe metadata、缩略图、预览代理和 Range 播放。
-- 对 missing / trashed / personal dependency 提供修复状态。
+- 对 missing / deleted（含内部 `trashed` 降级）/ personal dependency 提供修复状态，不暴露回收站入口。
 - 音频波形作为 Timeline 独立派生缓存后续实现。
 
 ### Phase 4: 导出

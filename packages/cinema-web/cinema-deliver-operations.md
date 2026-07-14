@@ -116,7 +116,7 @@ Common job errors:
 
 Preflight errors are actionable product states, not generic network failures:
 
-- `asset-missing`, `asset-trashed`, `asset-not-ready`, `asset-kind-mismatch`, and `asset-revision-stale`: repair or replace the referenced Clip asset in Edit;
+- `asset-missing`, internal `asset-trashed`, `asset-not-ready`, `asset-kind-mismatch`, and `asset-revision-stale`: repair or replace the referenced Clip asset in Edit; the UI presents `asset-trashed` as deleted and never links to an application Trash;
 - `asset-source-range-invalid`: adjust the Clip source range;
 - `clip-unsupported`: remove/replace unsupported visible content for V1;
 - `timeline-empty`, `main-video-missing`, `custom-range-empty`, and `render-settings-invalid`: fix Timeline content or output range;
@@ -197,7 +197,7 @@ Technical-preview evidence is accepted only as rehearsal evidence and is reporte
 3. Create a job, then change the Timeline revision. On a retryable failure or interruption, confirm `Retry revision <old>` uses the frozen snapshot while `Render revision <new>` creates from the current Timeline.
 4. Render a representative long Timeline and judge preview/output fidelity, real progress cadence, CPU use, memory use, fan noise, and final file size. Preparing/probing/registering must not show invented percentages.
 5. Cancel once while queued and once during a sustained render; confirm the UI settles promptly and no FFmpeg process or partial Asset remains.
-6. After success, use `Show in Assets` twice and confirm both requests open the real output folder, select it, and focus it. Move the output to Trash and return to Deliver; within one status refresh it must stop claiming the output is ready, and the same action must reveal the Trash entry.
+6. After success, use `Show in Assets` twice and confirm both requests open the real output folder, select it, and focus it. Delete the output in Assets, confirm the 10-second Undo notice, then let a repeated deletion expire and return to Deliver. Within one status refresh Deliver must stop claiming the output is ready, present it as deleted, guide the user to render again, and omit `Show in Assets` rather than exposing the hidden transaction-isolation entry.
 7. Terminate and restart the real Agent/Desktop process during rendering; confirm the old job becomes interrupted, shows `render-interrupted` with path-free phase/runtime facts, removes partial output, and Retry creates a new job.
 8. Expand **Advanced · Project storage**. Verify the duration starts blank, cancel one preview, then preview again and confirm only safe job IDs/aggregate bytes appear. On the packaged same-origin UI, type `CLEAN`, execute once, and verify actual reclaimed bytes while jobs/events/snapshots/output Assets remain. Confirm a foreign browser Origin is rejected, then complete the approval record in the [retention policy decision](./cinema-render-retention-policy-decision.md); do not add a default or schedule without that approval.
 9. On Linux and macOS x64, confirm Deliver remains unavailable. On Windows x64 and macOS arm64, confirm packaged builds never use a developer-machine `PATH` fallback and only an approved bundled manifest can enable the production capability.

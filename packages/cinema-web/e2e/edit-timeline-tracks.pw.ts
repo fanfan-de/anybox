@@ -24,6 +24,20 @@ test.describe("Cinema Timeline tracks", () => {
 
     const tracks = page.locator(".cinema-timeline-track")
     await expect(tracks).toHaveCount(2)
+
+    const initialVideoTrack = tracks.filter({ has: page.locator("strong", { hasText: "V1" }) })
+    const playhead = page.locator(".cinema-timeline-playhead")
+    const playheadLeftBeforeContextMenu = await playhead.evaluate((element) => element.getAttribute("style"))
+    await initialVideoTrack.locator(".cinema-timeline-track-lane").click({
+      button: "right",
+      position: { x: 240, y: 20 },
+    })
+    await expect(page.getByRole("menu", { name: "V1 actions" })).toBeVisible()
+    await expect(page.getByRole("menuitem", { name: "Rename track" })).toBeFocused()
+    await expect(playhead).toHaveAttribute("style", playheadLeftBeforeContextMenu ?? "")
+    await page.keyboard.press("Escape")
+    await expect(page.getByRole("menu", { name: "V1 actions" })).toBeHidden()
+
     await page.getByRole("button", { name: "Add track" }).click()
     await expect(page.getByRole("menuitem", { name: "Add video track" })).toBeVisible()
     await expect(page.getByRole("menuitem", { name: "Add audio track" })).toBeVisible()

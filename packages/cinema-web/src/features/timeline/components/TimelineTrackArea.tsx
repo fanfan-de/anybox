@@ -365,6 +365,21 @@ export function TimelineTrackArea({
     setRenamingTrackID(null)
     if (title && title !== track.title) onUpdateTrack(track, { title })
   }
+  const openTrackMenu = (
+    track: CinemaTimelineTrack,
+    x: number,
+    y: number,
+    returnFocus: HTMLElement,
+  ) => {
+    setContextMenu(null)
+    setTrackMenu({
+      trackID: track.id,
+      x,
+      y,
+      label: t("timeline.trackActions", { name: track.title }),
+      returnFocus,
+    })
+  }
   const updatePointerAt = (pointer: {
     pointerID: number
     clientX: number
@@ -747,14 +762,7 @@ export function TimelineTrackArea({
               className="cinema-timeline-track-header"
               onContextMenu={(event) => {
                 event.preventDefault()
-                setContextMenu(null)
-                setTrackMenu({
-                  trackID: track.id,
-                  x: event.clientX,
-                  y: event.clientY,
-                  label: t("timeline.trackActions", { name: track.title }),
-                  returnFocus: event.currentTarget,
-                })
+                openTrackMenu(track, event.clientX, event.clientY, scrollRef.current ?? event.currentTarget)
               }}
             >
               {renamingTrackID === track.id ? (
@@ -789,14 +797,7 @@ export function TimelineTrackArea({
                   aria-expanded={trackMenu?.trackID === track.id}
                   onClick={(event) => {
                     const rect = event.currentTarget.getBoundingClientRect()
-                    setContextMenu(null)
-                    setTrackMenu({
-                      trackID: track.id,
-                      x: rect.left,
-                      y: rect.bottom + 4,
-                      label: t("timeline.trackActions", { name: track.title }),
-                      returnFocus: event.currentTarget,
-                    })
+                    openTrackMenu(track, rect.left, rect.bottom + 4, event.currentTarget)
                   }}
                 ><MoreHorizontal aria-hidden="true" /></button>
               </div>
@@ -804,12 +805,16 @@ export function TimelineTrackArea({
             <div
               className="cinema-timeline-track-lane"
               data-timeline-track-id={track.id}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                openTrackMenu(track, event.clientX, event.clientY, scrollRef.current ?? event.currentTarget)
+              }}
               onPointerDown={(event) => {
                 if (event.target !== event.currentTarget) return
-                const rect = event.currentTarget.getBoundingClientRect()
-                onSetPlayhead(timelinePixelsToTime(event.clientX - rect.left, pixelsPerSecond))
                 if (!event.isPrimary || event.button !== 0 || !scrollRef.current || !tracksRef.current) return
                 event.preventDefault()
+                const rect = event.currentTarget.getBoundingClientRect()
+                onSetPlayhead(timelinePixelsToTime(event.clientX - rect.left, pixelsPerSecond))
                 const tracksRect = tracksRef.current.getBoundingClientRect()
                 pointerInteraction.beginMarquee({
                   pointerID: event.pointerId,

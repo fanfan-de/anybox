@@ -118,7 +118,7 @@ describe("assetLibraryApi mutations", () => {
     )
   })
 
-  it("requests the top-level recycle-bin view without a search query", async () => {
+  it("lists library entries without exposing a recycle-bin view parameter", async () => {
     const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => jsonResponse({
       scope: { type: "project", projectID: "project-1" },
       revision: 6,
@@ -135,20 +135,55 @@ describe("assetLibraryApi mutations", () => {
       { type: "project", projectID: "project-1" },
     )
 
-    await api.listEntries({ folderID: "root", view: "trash", limit: 100 })
+    await api.listEntries({ folderID: "root", limit: 100 })
 
     const [requestURL] = fetchMock.mock.calls[0]!
     const url = new URL(String(requestURL))
     expect(url.pathname).toBe("/api/cinema/projects/project-1/library/entries")
-    expect(Object.fromEntries(url.searchParams)).toEqual({ folderID: "root", limit: "100", view: "trash" })
+    expect(Object.fromEntries(url.searchParams)).toEqual({ folderID: "root", limit: "100" })
   })
 
-  it("requests an atomic full recycle-bin deletion without paged entry ids", async () => {
+  it("begins a delete and normalizes the server-owned undo deadline", async () => {
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => jsonResponse({
+      scope: { type: "project", projectID: "project-1" },
+      operationID: "delete-1",
+      revision: 9,
+      affected: [{ entryType: "asset", assetID: "asset-1" }],
+      warnings: [],
+      undoUntil: "2026-07-14T04:00:10.000Z",
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+    const api = createAssetLibraryApi(
+      "http://127.0.0.1:4096",
+      "project-1",
+      { type: "project", projectID: "project-1" },
+    )
+
+    await expect(api.beginDelete({
+      entries: [{ entryType: "asset", assetID: "asset-1" }],
+      operationID: "delete-1",
+      baseRevision: 8,
+    })).resolves.toMatchObject({
+      operationID: "delete-1",
+      revision: 9,
+      undoUntil: "2026-07-14T04:00:10.000Z",
+    })
+
+    const [requestURL, requestInit] = fetchMock.mock.calls[0]!
+    expect(String(requestURL)).toBe("http://127.0.0.1:4096/api/cinema/projects/project-1/library/trash")
+    expect(JSON.parse(String(requestInit?.body))).toEqual({
+      entries: [{ entryType: "asset", assetID: "asset-1" }],
+      operationID: "delete-1",
+      baseRevision: 8,
+    })
+  })
+
+  it("rejects a delete response without a valid undo deadline", async () => {
     const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => jsonResponse({
       scope: { type: "personal" },
-      operationID: "empty-trash-1",
+      operationID: "delete-1",
       revision: 9,
-      affected: [],
+      affected: [{ entryType: "asset", assetID: "asset-1" }],
       warnings: [],
     }))
     vi.stubGlobal("fetch", fetchMock)
@@ -158,13 +193,99 @@ describe("assetLibraryApi mutations", () => {
       { type: "personal" },
     )
 
-    await api.permanentlyDelete({ all: true, operationID: "empty-trash-1", baseRevision: 8 })
+    await expect(api.beginDelete({
+      entries: [{ entryType: "asset", assetID: "asset-1" }],
+      operationID: "delete-1",
+      baseRevision: 8,
+    })).rejects.toMatchObject({ status: 500 })
+  })
+
+  it("preserves the server error code for referenced-asset messaging", async () => {
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify({
+      success: false,
+      error: {
+        code: "CINEMA_LIBRARY_ASSET_REFERENCED",
+        message: "Asset is still referenced.",
+        data: { latestRevision: 9 },
+      },
+    }), {
+      status: 409,
+      headers: { "content-type": "application/json" },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+    const api = createAssetLibraryApi(
+      "http://127.0.0.1:4096",
+      "project-1",
+      { type: "project", projectID: "project-1" },
+    )
+
+    await expect(api.beginDelete({
+      entries: [{ entryType: "asset", assetID: "asset-1" }],
+      operationID: "delete-1",
+      baseRevision: 8,
+    })).rejects.toMatchObject({
+      status: 409,
+      code: "CINEMA_LIBRARY_ASSET_REFERENCED",
+      latestRevision: 9,
+    })
+  })
+
+  it("undoes a pending delete through the restore route", async () => {
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => jsonResponse({
+      scope: { type: "personal" },
+      operationID: "undo-delete-1",
+      revision: 10,
+      affected: [{ entryType: "folder", folderID: "folder-1" }],
+      warnings: [],
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+    const api = createAssetLibraryApi(
+      "http://127.0.0.1:4096",
+      "project-1",
+      { type: "personal" },
+    )
+
+    await api.undoDelete({
+      entries: [{ entryType: "folder", folderID: "folder-1" }],
+      operationID: "undo-delete-1",
+      baseRevision: 9,
+    })
+
+    const [requestURL, requestInit] = fetchMock.mock.calls[0]!
+    expect(String(requestURL)).toBe("http://127.0.0.1:4096/api/cinema/personal-library/restore")
+    expect(JSON.parse(String(requestInit?.body))).toEqual({
+      entries: [{ entryType: "folder", folderID: "folder-1" }],
+      operationID: "undo-delete-1",
+      baseRevision: 9,
+    })
+  })
+
+  it("finalizes a pending delete through the permanent-delete route", async () => {
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => jsonResponse({
+      scope: { type: "personal" },
+      operationID: "finalize-delete-1",
+      revision: 9,
+      affected: [{ entryType: "asset", assetID: "asset-1" }],
+      warnings: [],
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+    const api = createAssetLibraryApi(
+      "http://127.0.0.1:4096",
+      "project-1",
+      { type: "personal" },
+    )
+
+    await api.finalizeDelete({
+      entries: [{ entryType: "asset", assetID: "asset-1" }],
+      operationID: "finalize-delete-1",
+      baseRevision: 8,
+    })
 
     const [requestURL, requestInit] = fetchMock.mock.calls[0]!
     expect(String(requestURL)).toBe("http://127.0.0.1:4096/api/cinema/personal-library/permanent-delete")
     expect(JSON.parse(String(requestInit?.body))).toEqual({
-      all: true,
-      operationID: "empty-trash-1",
+      entries: [{ entryType: "asset", assetID: "asset-1" }],
+      operationID: "finalize-delete-1",
       baseRevision: 8,
     })
   })

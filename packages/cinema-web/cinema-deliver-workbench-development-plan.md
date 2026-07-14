@@ -174,7 +174,7 @@ Deliver 必须显式覆盖：
 - preflight checking / blocked / ready / warning。
 - queued / snapshotting / probing / rendering / registering。
 - succeeded / failed / canceled / interrupted。
-- 输出资产 missing / trashed。
+- 输出资产 missing / deleted；服务端兼容的 `trashed` 状态在界面中统一表述为“已删除”。
 - FFmpeg runtime unavailable。
 
 不为这些状态创建嵌套装饰卡片；主区只展示当前最重要状态和下一步。
@@ -678,7 +678,7 @@ packages/cinema-web/src/features/deliver/
 
 - Timeline 在 job 创建后修改，不影响旧 job snapshot。
 - 素材移动/改名不影响已完成 snapshot。
-- missing、trashed、stale revision、personal asset 和磁盘不足有结构化结果。
+- missing、内部 `trashed`、stale revision、personal asset 和磁盘不足有结构化结果；前端不得把内部 `trashed` 暴露成可浏览的回收站。
 - 路径穿越、symlink 和绝对路径泄漏测试通过。
 
 ### Phase D2：FFmpeg Render Core（已完成）
@@ -777,7 +777,7 @@ packages/cinema-web/src/features/deliver/
 - 输出 duration、width、height、fps、codec 和 audio stream ffprobe 断言。
 - Unicode / 空格文件名和项目路径。
 - project / personal asset snapshot。
-- missing / trashed / stale contentRevision。
+- missing / 内部 `trashed` / stale contentRevision；`trashed` 的用户文案为“已删除”。
 - Timeline revision conflict。
 - 相同 operationID 幂等。
 - 单并发队列、queued cancel、running cancel。
@@ -906,7 +906,7 @@ D5 发布加固推进记录：
 27. [x] `D5-06`：提供项目级 retention cleanup API；默认 dry-run，执行要求固定确认词，operationID 持久化防重放，不设置默认保留期或自动调度。产品保留期策略、授权与用户/运维入口仍是生产发布门槛。
 28. [x] `D5-07`：Create / Retry 在持久化 queued job 前绑定 runtimeID、版本、平台和实际 H.264/AAC encoder；queue 执行前复核并写 `runtime-bound`，漂移时稳定失败且不静默换 encoder。schemaVersion 1 旧 job 保持 optional，并在首次执行时兼容绑定。
 29. [x] `D5-08`：收口 Deliver 参数与 revision 语义：非 rendering 阶段仅显示不定进度，不伪造百分比；Custom range 默认整条 Timeline；开放常用/原始帧率与 target bitrate；旧 revision 的 Retry 与最新 Timeline 新建渲染明确分流。
-30. [x] `D5-09`：成功输出先实时核对 Asset 状态，missing/trashed/404/加载失败不再声称 ready；`Show in Assets` 通过跨工作区 reveal request 定位真实 scope、folder/Trash、分页条目并选中聚焦。failed 与新 interrupted job 同时展示稳定错误码和脱敏诊断摘要。
+30. [x] `D5-09`：成功输出先实时核对 Asset 状态，missing/内部 `trashed`/404/加载失败不再声称 ready；`Show in Assets` 只定位仍可浏览的真实 scope、folder 和分页条目，已删除输出不暴露内部隔离目录，并引导重新渲染。failed 与新 interrupted job 同时展示稳定错误码和脱敏诊断摘要。
 31. [x] `D5-10`：实现 Render retention 技术预览入口：每次显式输入正整数天数、可取消 dry-run、聚合结果、`CLEAN` 确认、fresh operationID、提交后不可取消；Execute 增加 loopback + 受信 Origin 防护并记录脱敏聚合 telemetry。正式策略审批仍保持未完成。
 32. [x] `D5-11`：新增 Anybox-controlled Windows x64 / macOS arm64 FFmpeg 候选构建、候选摘要、lock promotion、通用 locked-archive preparer 和 archive 材料来源门禁；macOS target 在真实产物产生前显式为 `artifactStatus: pending`。
 33. [x] `D5-12`：Agent 通过内部 `ANYBOX_CINEMA_TIMELINE_DELIVERY` 返回 capability；打包后的 Desktop 只在当前 win32/x64 或 darwin/arm64 manifest 同时为 release/license approved 时注入该开关，其他平台 fail closed。

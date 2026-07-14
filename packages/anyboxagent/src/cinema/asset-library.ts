@@ -58,10 +58,15 @@ const INVALID_NAME_PATTERN = /[<>:"/\\|?*\x00-\x1F]/
 const WINDOWS_DEVICE_NAME_PATTERN = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/i
 const ROOT_FOLDER_NAME = "素材库"
 const MAX_OPERATION_HISTORY = 500
-const nowISO = () => new Date().toISOString()
+const DELETE_UNDO_WINDOW_MS = 10_000
+
+let nowForTest: (() => number) | undefined
+const nowMilliseconds = () => nowForTest?.() ?? Date.now()
+const nowISO = () => new Date(nowMilliseconds()).toISOString()
 
 let personalLibraryRootOverride: string | undefined
 let failNextCatalogWriteForTest = false
+const maintainedLibraryScopes = new Set<string>()
 const catalogAssetReadCache = new Map<string, {
   mtimeMs: number
   size: number
@@ -73,10 +78,30 @@ export function setCinemaAssetLibraryPersonalRootForTest(root: string | undefine
   const previous = personalLibraryRootOverride
   personalLibraryRootOverride = root
   catalogAssetReadCache.clear()
+  maintainedLibraryScopes.delete("cinema-library:personal")
   return () => {
     personalLibraryRootOverride = previous
     catalogAssetReadCache.clear()
+    maintainedLibraryScopes.delete("cinema-library:personal")
   }
+}
+
+export function setCinemaAssetLibraryNowForTest(now: (() => number) | undefined) {
+  const previous = nowForTest
+  nowForTest = now
+  return () => {
+    nowForTest = previous
+  }
+}
+
+export function resetCinemaAssetLibraryInitializationForTest(scope?: CinemaAssetScope) {
+  if (!scope) {
+    maintainedLibraryScopes.clear()
+    return
+  }
+  maintainedLibraryScopes.delete(
+    scope.type === "personal" ? "cinema-library:personal" : `cinema-library:project:${scope.projectID}`,
+  )
 }
 
 export function setCinemaAssetLibraryCatalogWriteFailureForTest(enabled = true) {
@@ -433,15 +458,35 @@ async function ensureInitializedUnlocked(paths: CinemaAssetLibraryPaths) {
   return catalog
 }
 
+async function ensureInitializedAndMaintainedUnlocked(paths: CinemaAssetLibraryPaths) {
+  const catalog = await ensureInitializedUnlocked(paths)
+  if (maintainedLibraryScopes.has(paths.scopeKey) || catalog.status !== "ready") return catalog
+  const maintained = await maintainPendingCinemaAssetDeletes(paths, catalog)
+  if (!hasUnexpiredPendingCinemaAssetDeletes(maintained)) maintainedLibraryScopes.add(paths.scopeKey)
+  return maintained
+}
+
 export async function initializeCinemaAssetLibrary(scope: CinemaAssetScope) {
+  const paths = resolveLibraryPaths(scope)
+  using _lock = await Lock.write(paths.scopeKey)
+  const catalog = await ensureInitializedAndMaintainedUnlocked(paths)
+  return { paths, catalog }
+}
+
+async function initializeCinemaAssetLibraryWithoutPendingDeleteMaintenance(scope: CinemaAssetScope) {
   const paths = resolveLibraryPaths(scope)
   using _lock = await Lock.write(paths.scopeKey)
   const catalog = await ensureInitializedUnlocked(paths)
   return { paths, catalog }
 }
 
-async function readLibrary(scope: CinemaAssetScope) {
-  const initialized = await initializeCinemaAssetLibrary(scope)
+async function readLibrary(
+  scope: CinemaAssetScope,
+  options: { maintainPendingDeletes?: boolean } = {},
+) {
+  const initialized = options.maintainPendingDeletes === false
+    ? await initializeCinemaAssetLibraryWithoutPendingDeleteMaintenance(scope)
+    : await initializeCinemaAssetLibrary(scope)
   using _lock = await Lock.read(initialized.paths.scopeKey)
   return { paths: initialized.paths, catalog: await readCatalog(initialized.paths) }
 }
@@ -596,8 +641,11 @@ function flattenAssetEntry(asset: CinemaAssetRecord): CinemaAssetLibraryEntry {
   return { entryType: "asset", asset }
 }
 
-export async function getCinemaAssetLibraryState(scope: CinemaAssetScope) {
-  const { catalog } = await readLibrary(scope)
+export async function getCinemaAssetLibraryState(
+  scope: CinemaAssetScope,
+  options: { maintainPendingDeletes?: boolean } = {},
+) {
+  const { catalog } = await readLibrary(scope, options)
   return {
     scope: catalog.scope,
     revision: catalog.revision,
@@ -729,7 +777,9 @@ async function mutateLibrary<T extends Record<string, unknown>>(
   assertOperationInput(input)
   const paths = resolveLibraryPaths(scope)
   using _lock = await Lock.write(paths.scopeKey)
-  const catalog = await ensureInitializedUnlocked(paths)
+  const catalog = type === "restore" || type === "permanent-delete"
+    ? await ensureInitializedUnlocked(paths)
+    : await ensureInitializedAndMaintainedUnlocked(paths)
   const previous = catalog.operations[input.operationID]
   if (previous) return previous.result as {
     scope: CinemaAssetScope
@@ -997,7 +1047,7 @@ export async function updateCinemaAsset(
     const asset = findAsset(catalog, assetID)
     assertAssetNotProcessing(asset, "renaming")
     if (asset.status === "trashed") {
-      throw new ApiError(409, "CINEMA_LIBRARY_ASSET_TRASHED", "Restore the asset before renaming it.")
+      throw new ApiError(409, "CINEMA_LIBRARY_ASSET_TRASHED", "Deleted assets cannot be renamed.")
     }
     if (asset.status === "missing") {
       throw new ApiError(409, "CINEMA_LIBRARY_ASSET_MISSING", "Relink the missing asset before renaming it.")
@@ -1027,7 +1077,9 @@ export async function updateCinemaAsset(
 
 export async function getCinemaAsset(scope: CinemaAssetScope, assetID: string) {
   const paths = resolveLibraryPaths(scope)
-  if (!(await pathExists(paths.catalogPath))) await initializeCinemaAssetLibrary(scope)
+  if (!maintainedLibraryScopes.has(paths.scopeKey) || !(await pathExists(paths.catalogPath))) {
+    await initializeCinemaAssetLibrary(scope)
+  }
   using _lock = await Lock.read(paths.scopeKey)
   const index = await readCatalogAssetIndex(paths)
   const asset = index.assetsByID.get(assetID)
@@ -1040,7 +1092,9 @@ export async function getCinemaAsset(scope: CinemaAssetScope, assetID: string) {
 
 export async function getCinemaAssetFilePath(scope: CinemaAssetScope, assetID: string) {
   const paths = resolveLibraryPaths(scope)
-  if (!(await pathExists(paths.catalogPath))) await initializeCinemaAssetLibrary(scope)
+  if (!maintainedLibraryScopes.has(paths.scopeKey) || !(await pathExists(paths.catalogPath))) {
+    await initializeCinemaAssetLibrary(scope)
+  }
   using _lock = await Lock.read(paths.scopeKey)
   const index = await readCatalogAssetIndex(paths)
   const asset = index.assetsByID.get(assetID)
@@ -1125,7 +1179,7 @@ export async function moveCinemaAssetEntries(scope: CinemaAssetScope, input: Mov
       } else {
         const asset = findAsset(catalog, entry.assetID)
         assertAssetNotProcessing(asset, "moving")
-        if (asset.status === "trashed") throw new ApiError(409, "CINEMA_LIBRARY_ASSET_TRASHED", "Restore the asset before moving it.")
+        if (asset.status === "trashed") throw new ApiError(409, "CINEMA_LIBRARY_ASSET_TRASHED", "Deleted assets cannot be moved.")
         await assertNoSymlinkBelowRoot(paths.filesRoot, physicalPath(paths, asset.relativePath))
         const filename = path.posix.basename(asset.relativePath)
         const nextRelativePath = toRelativePath(destination.relativePath, filename)
@@ -1158,11 +1212,11 @@ export async function moveCinemaAssetEntries(scope: CinemaAssetScope, input: Mov
           asset.relativePath.startsWith(`${folder.relativePath}/`)
           && (asset.status === "processing" || asset.status === "uploading")
         ))
-        if (processingChild) assertAssetNotProcessing(processingChild, "moving to trash")
+        if (processingChild) assertAssetNotProcessing(processingChild, "moving")
         updateFolderPathPrefix(catalog, folder, move.source, move.destination, destination.id)
       } else {
         const asset = findAsset(catalog, entry.assetID)
-        assertAssetNotProcessing(asset, "moving to trash")
+        assertAssetNotProcessing(asset, "moving")
         asset.folderID = destination.id
         asset.relativePath = move.destination
         asset.updatedAt = nowISO()
@@ -1202,8 +1256,37 @@ function entriesUnderFolders(catalog: CinemaAssetCatalog, folderPaths: string[])
   return { folderIDs, assetIDs }
 }
 
+function assetIDsForEntries(catalog: CinemaAssetCatalog, entries: CinemaAssetLibraryEntryRef[]) {
+  const folderPaths = entries
+    .filter((entry): entry is { entryType: "folder"; folderID: string } => entry.entryType === "folder")
+    .map((entry) => findFolder(catalog, entry.folderID, true).relativePath)
+  const assetIDs = new Set(
+    entries
+      .filter((entry): entry is { entryType: "asset"; assetID: string } => entry.entryType === "asset")
+      .map((entry) => entry.assetID),
+  )
+  for (const asset of catalog.assets) {
+    if (folderPaths.some((folderPath) => asset.relativePath.startsWith(`${folderPath}/`))) assetIDs.add(asset.id)
+  }
+  return assetIDs
+}
+
+function referencedAssetError(referenced: Set<string>) {
+  const referencedAssetIDs = [...referenced].sort()
+  return new ApiError(
+    409,
+    "CINEMA_LIBRARY_ASSET_REFERENCED",
+    `Deletion is blocked because ${referenced.size} selected asset(s) are still referenced.`,
+    {
+      referencedCount: referenced.size,
+      referencedAssetIDs,
+    },
+  )
+}
+
 export async function trashCinemaAssetEntries(scope: CinemaAssetScope, input: TrashCinemaAssetEntriesInput) {
   assertEntryRefs(input.entries)
+  const scopeKey = resolveLibraryPaths(scope).scopeKey
   return await mutateLibrary(scope, input, "trash", async (catalog, paths) => {
     const selected = deduplicateEntryRefs(catalog, input.entries).filter((entry) =>
       entry.entryType === "folder"
@@ -1221,8 +1304,8 @@ export async function trashCinemaAssetEntries(scope: CinemaAssetScope, input: Tr
           asset.relativePath.startsWith(`${folder.relativePath}/`)
           && (asset.status === "processing" || asset.status === "uploading")
         ))
-        if (processingChild) assertAssetNotProcessing(processingChild, "moving to trash")
-        if (folder.system) throw new ApiError(409, "CINEMA_LIBRARY_SYSTEM_FOLDER", "System folders cannot be moved to trash.")
+        if (processingChild) assertAssetNotProcessing(processingChild, "deleting")
+        if (folder.system) throw new ApiError(409, "CINEMA_LIBRARY_SYSTEM_FOLDER", "System folders cannot be deleted.")
         await assertNoSymlinkBelowRoot(paths.filesRoot, physicalPath(paths, folder.relativePath))
         moves.push({
           source: folder.relativePath,
@@ -1232,7 +1315,7 @@ export async function trashCinemaAssetEntries(scope: CinemaAssetScope, input: Tr
       } else {
         const asset = findAsset(catalog, entry.assetID)
         if (asset.status === "trashed") continue
-        assertAssetNotProcessing(asset, "moving to trash")
+        assertAssetNotProcessing(asset, "deleting")
         const source = physicalPath(paths, asset.relativePath)
         await assertNoSymlinkBelowRoot(paths.filesRoot, source)
         moves.push({
@@ -1242,6 +1325,9 @@ export async function trashCinemaAssetEntries(scope: CinemaAssetScope, input: Tr
         })
       }
     }
+
+    const referenced = await assetIDsReferenced(paths, assetIDsForEntries(catalog, selected))
+    if (referenced.size > 0) throw referencedAssetError(referenced)
 
     await assertNoSymlinkBelowRoot(paths.filesRoot, physicalPath(paths, ".trash"))
     await mkdir(trashOperationPath, { recursive: true })
@@ -1261,7 +1347,9 @@ export async function trashCinemaAssetEntries(scope: CinemaAssetScope, input: Tr
       throw error
     }
 
-    const timestamp = nowISO()
+    const deletedAt = nowMilliseconds()
+    const timestamp = new Date(deletedAt).toISOString()
+    const undoUntil = new Date(deletedAt + DELETE_UNDO_WINDOW_MS).toISOString()
     const trashedEntries: CinemaAssetLibraryEntryRef[] = []
     for (let index = 0; index < selected.length; index += 1) {
       const entry = selected[index]!
@@ -1283,6 +1371,7 @@ export async function trashCinemaAssetEntries(scope: CinemaAssetScope, input: Tr
             originalRelativePath,
             trashedRelativePath: child.relativePath,
             trashedAt: timestamp,
+            expiresAt: undoUntil,
           }
           child.updatedAt = timestamp
         }
@@ -1298,6 +1387,7 @@ export async function trashCinemaAssetEntries(scope: CinemaAssetScope, input: Tr
             originalRelativePath,
             trashedRelativePath: asset.relativePath,
             trashedAt: timestamp,
+            expiresAt: undoUntil,
             previousStatus,
           }
           asset.updatedAt = timestamp
@@ -1310,6 +1400,7 @@ export async function trashCinemaAssetEntries(scope: CinemaAssetScope, input: Tr
           originalRelativePath: asset.relativePath,
           trashedRelativePath: move.destination,
           trashedAt: timestamp,
+          expiresAt: undoUntil,
           previousStatus: restorableAssetStatus(asset.status),
         }
         asset.relativePath = move.destination
@@ -1320,13 +1411,15 @@ export async function trashCinemaAssetEntries(scope: CinemaAssetScope, input: Tr
     }
 
     return {
-      value: { affected: trashedEntries },
+      value: { affected: trashedEntries, undoUntil },
       rollback: async () => {
         for (const move of completed.slice().reverse()) {
           await rename(physicalPath(paths, move.destination), physicalPath(paths, move.source))
         }
       },
     }
+  }).finally(() => {
+    maintainedLibraryScopes.delete(scopeKey)
   })
 }
 
@@ -1345,10 +1438,12 @@ async function uniqueFolderName(directory: string, name: string) {
   }
 }
 
-export async function restoreCinemaAssetEntries(scope: CinemaAssetScope, input: TrashCinemaAssetEntriesInput) {
-  assertEntryRefs(input.entries)
-  return await mutateLibrary(scope, input, "restore", async (catalog, paths) => {
-    const selected = deduplicateEntryRefs(catalog, input.entries)
+async function restoreCinemaAssetEntriesAction(
+  catalog: CinemaAssetCatalog,
+  paths: CinemaAssetLibraryPaths,
+  entries: CinemaAssetLibraryEntryRef[],
+) {
+    const selected = deduplicateEntryRefs(catalog, entries)
     const moves: Array<{ source: string; destination: string; physical: boolean }> = []
     const restoredEntries: CinemaAssetLibraryEntryRef[] = []
 
@@ -1444,29 +1539,34 @@ export async function restoreCinemaAssetEntries(scope: CinemaAssetScope, input: 
         const parent = catalog.folders.find((item) => item.status === "active" && item.relativePath === parentRelativePath) ?? findInbox(catalog)
         asset.folderID = parent.id
         asset.relativePath = move.destination
-        asset.displayName = path.posix.basename(move.destination, path.posix.extname(move.destination))
         asset.status = asset.trash?.previousStatus ?? "ready"
         asset.trash = undefined
         asset.updatedAt = timestamp
       }
     }
-    return {
-      value: { affected: restoredEntries },
-      rollback: async () => {
-        for (const move of completed.slice().reverse()) {
-          await rename(physicalPath(paths, move.destination), physicalPath(paths, move.source))
-        }
-      },
-    }
-  })
+  return {
+    value: { affected: restoredEntries },
+    rollback: async () => {
+      for (const move of completed.slice().reverse()) {
+        await rename(physicalPath(paths, move.destination), physicalPath(paths, move.source))
+      }
+    },
+  }
+}
+
+export async function restoreCinemaAssetEntries(scope: CinemaAssetScope, input: TrashCinemaAssetEntriesInput) {
+  assertEntryRefs(input.entries)
+  return await mutateLibrary(scope, input, "restore", async (catalog, paths) =>
+    await restoreCinemaAssetEntriesAction(catalog, paths, input.entries))
 }
 
 async function assetIDsReferenced(paths: CinemaAssetLibraryPaths, assetIDs: Set<string>) {
   if (assetIDs.size === 0) return new Set<string>()
   const referenced = new Set<string>()
-  const files = paths.scope.type === "project"
+  const files: string[] = paths.scope.type === "project"
     ? [
         path.join(paths.managedRoot, "canvas.json"),
+        path.join(paths.managedRoot, "timelines"),
         path.join(paths.managedRoot, "tasks.jsonl"),
         path.join(paths.managedRoot, "tasks"),
       ]
@@ -1495,60 +1595,95 @@ export interface PermanentlyDeleteCinemaAssetEntriesInput extends CinemaAssetLib
   all?: true
 }
 
-export async function permanentlyDeleteCinemaAssetEntries(
-  scope: CinemaAssetScope,
-  input: PermanentlyDeleteCinemaAssetEntriesInput,
-) {
-  if (input.all !== true) assertEntryRefs(input.entries ?? [])
-  return await mutateLibrary(scope, input, "permanent-delete", async (catalog, paths) => {
-    const requestedEntries: CinemaAssetLibraryEntryRef[] = input.all === true
-      ? (() => {
-          const trash = topLevelTrashedEntries(catalog)
-          return [
-            ...trash.folders.map((folder) => ({ entryType: "folder" as const, folderID: folder.id })),
-            ...trash.assets.map((asset) => ({ entryType: "asset" as const, assetID: asset.id })),
-          ]
-        })()
-      : input.entries!
+type PermanentlyDeleteCinemaAssetEntriesActionValue = Record<string, unknown> & {
+  affected?: CinemaAssetLibraryEntryRef[]
+  deletedIDs: string[]
+  restored?: CinemaAssetLibraryEntryRef[]
+  referencedAssetIDs?: string[]
+  warnings?: string[]
+}
+
+async function permanentlyDeleteCinemaAssetEntriesAction(
+  catalog: CinemaAssetCatalog,
+  paths: CinemaAssetLibraryPaths,
+  requestedEntries: CinemaAssetLibraryEntryRef[],
+  operationID: string,
+  enforceDeadline = true,
+): Promise<{
+  value: PermanentlyDeleteCinemaAssetEntriesActionValue
+  rollback?: () => Promise<void>
+  afterCommit?: () => Promise<void>
+}> {
     const selected = deduplicateEntryRefs(catalog, requestedEntries)
-    const selectedFolderPaths: string[] = []
+    const expirationTimes: number[] = []
+    let hasLegacyTrashRecord = false
     for (const entry of selected) {
       if (entry.entryType === "folder") {
         const folder = findFolder(catalog, entry.folderID, true)
-        if (folder.status !== "trashed") {
+        if (folder.status !== "trashed" || !folder.trash) {
           throw new ApiError(409, "CINEMA_LIBRARY_ENTRY_NOT_TRASHED", "Only trashed entries can be permanently deleted.")
         }
-        selectedFolderPaths.push(folder.relativePath)
+        const expiresAt = folder.trash.expiresAt ? Date.parse(folder.trash.expiresAt) : Number.NaN
+        if (Number.isFinite(expiresAt)) expirationTimes.push(expiresAt)
+        else hasLegacyTrashRecord = true
       } else {
         const asset = findAsset(catalog, entry.assetID)
-        if (asset.status !== "trashed") {
+        if (asset.status !== "trashed" || !asset.trash) {
           throw new ApiError(409, "CINEMA_LIBRARY_ENTRY_NOT_TRASHED", "Only trashed entries can be permanently deleted.")
         }
+        const expiresAt = asset.trash.expiresAt ? Date.parse(asset.trash.expiresAt) : Number.NaN
+        if (Number.isFinite(expiresAt)) expirationTimes.push(expiresAt)
+        else hasLegacyTrashRecord = true
       }
     }
-    const assetIDs = new Set(selected.filter((entry) => entry.entryType === "asset").map((entry) => entry.assetID))
-    for (const asset of catalog.assets) {
-      if (selectedFolderPaths.some((folderPath) => asset.relativePath.startsWith(`${folderPath}/`))) assetIDs.add(asset.id)
+
+    if (hasLegacyTrashRecord) {
+      const restored = await restoreCinemaAssetEntriesAction(catalog, paths, selected)
+      return {
+        value: {
+          affected: restored.value.affected,
+          deletedIDs: [] as string[],
+          restored: restored.value.affected,
+          warnings: ["Legacy recycle-bin entries were restored instead of being permanently deleted."],
+        },
+        rollback: restored.rollback,
+      }
     }
-    const referenced = await assetIDsReferenced(paths, assetIDs)
+
+    if (enforceDeadline) {
+      const pendingUntil = expirationTimes.filter((expiresAt) => expiresAt > nowMilliseconds())
+      if (pendingUntil.length > 0) {
+        const undoUntil = new Date(Math.max(...pendingUntil)).toISOString()
+        throw new ApiError(
+          409,
+          "CINEMA_LIBRARY_DELETE_UNDO_ACTIVE",
+          "Permanent deletion is available after the undo window expires.",
+          { undoUntil },
+        )
+      }
+    }
+
+    const referenced = await assetIDsReferenced(paths, assetIDsForEntries(catalog, selected))
     if (referenced.size > 0) {
       const referencedAssetIDs = [...referenced].sort()
-      throw new ApiError(
-        409,
-        "CINEMA_LIBRARY_ASSET_REFERENCED",
-        `Permanent deletion is blocked because ${referenced.size} selected asset(s) are still referenced.`,
-        {
-          referencedCount: referenced.size,
+      const restored = await restoreCinemaAssetEntriesAction(catalog, paths, selected)
+      return {
+        value: {
+          affected: restored.value.affected,
+          deletedIDs: [] as string[],
+          restored: restored.value.affected,
           referencedAssetIDs,
+          warnings: ["The deleted entries were restored because one or more assets became referenced during the undo window."],
         },
-      )
+        rollback: restored.rollback,
+      }
     }
 
     const deleted = new Set<string>()
     const purgeRelativePath = toRelativePath(
       ".trash",
       ".purge",
-      Buffer.from(input.operationID, "utf8").toString("base64url"),
+      Buffer.from(operationID, "utf8").toString("base64url"),
     )
     const purgePath = physicalPath(paths, purgeRelativePath)
     const moves: Array<{ source: string; destination: string; physical: boolean }> = []
@@ -1619,7 +1754,242 @@ export async function permanentlyDeleteCinemaAssetEntries(
         await rm(purgePath, { recursive: true, force: true })
       },
     }
+}
+
+export async function permanentlyDeleteCinemaAssetEntries(
+  scope: CinemaAssetScope,
+  input: PermanentlyDeleteCinemaAssetEntriesInput,
+) {
+  if (input.all !== true) assertEntryRefs(input.entries ?? [])
+  return await mutateLibrary(scope, input, "permanent-delete", async (catalog, paths) => {
+    const requestedEntries: CinemaAssetLibraryEntryRef[] = input.all === true
+      ? (() => {
+          const trash = topLevelTrashedEntries(catalog)
+          return [
+            ...trash.folders.map((folder) => ({ entryType: "folder" as const, folderID: folder.id })),
+            ...trash.assets.map((asset) => ({ entryType: "asset" as const, assetID: asset.id })),
+          ]
+        })()
+      : input.entries!
+    return await permanentlyDeleteCinemaAssetEntriesAction(catalog, paths, requestedEntries, input.operationID)
   })
+}
+
+function pendingDeleteEntryGroups(catalog: CinemaAssetCatalog) {
+  const trash = topLevelTrashedEntries(catalog)
+  const groups = new Map<string, CinemaAssetLibraryEntryRef[]>()
+  for (const folder of trash.folders) {
+    const operationID = folder.trash!.operationID
+    const entries = groups.get(operationID) ?? []
+    entries.push({ entryType: "folder", folderID: folder.id })
+    groups.set(operationID, entries)
+  }
+  for (const asset of trash.assets) {
+    const operationID = asset.trash!.operationID
+    const entries = groups.get(operationID) ?? []
+    entries.push({ entryType: "asset", assetID: asset.id })
+    groups.set(operationID, entries)
+  }
+  return groups
+}
+
+function hasUnexpiredPendingCinemaAssetDeletes(catalog: CinemaAssetCatalog) {
+  return [...catalog.folders, ...catalog.assets].some((entry) => {
+    if (entry.status !== "trashed" || !entry.trash?.expiresAt) return false
+    const expiresAt = Date.parse(entry.trash.expiresAt)
+    return Number.isFinite(expiresAt) && expiresAt > nowMilliseconds()
+  })
+}
+
+function pendingDeleteExpirationTimes(catalog: CinemaAssetCatalog, operationID: string) {
+  return [
+    ...catalog.folders.filter((folder) => folder.status === "trashed" && folder.trash?.operationID === operationID)
+      .map((folder) => folder.trash!.expiresAt),
+    ...catalog.assets.filter((asset) => asset.status === "trashed" && asset.trash?.operationID === operationID)
+      .map((asset) => asset.trash!.expiresAt),
+  ].map((expiresAt) => expiresAt ? Date.parse(expiresAt) : Number.NaN)
+}
+
+async function maintainPendingCinemaAssetDeletes(
+  paths: CinemaAssetLibraryPaths,
+  catalog: CinemaAssetCatalog,
+) {
+  const groups = pendingDeleteEntryGroups(catalog)
+  const maintenanceGroups = [...groups].filter(([operationID]) => {
+    const expirationTimes = pendingDeleteExpirationTimes(catalog, operationID)
+    return expirationTimes.some((expiresAt) => !Number.isFinite(expiresAt))
+      || expirationTimes.length > 0 && expirationTimes.every((expiresAt) => expiresAt <= nowMilliseconds())
+  })
+  if (maintenanceGroups.length === 0) return catalog
+
+  const operationID = `pending-delete-maintenance-${randomUUID()}`
+  const baseRevision = catalog.revision
+  const journalPath = path.join(
+    paths.operationsRoot,
+    `${Buffer.from(operationID, "utf8").toString("base64url")}.json`,
+  )
+  assertInside(paths.operationsRoot, journalPath)
+  const startedAt = nowISO()
+  await atomicWriteJson(journalPath, {
+    operationID,
+    type: "pending-delete-maintenance",
+    status: "pending",
+    baseRevision,
+    startedAt,
+  }, false)
+
+  const outcomes: Array<{
+    rollback?: () => Promise<void>
+    afterCommit?: () => Promise<void>
+    value: Record<string, unknown>
+  }> = []
+  let keepExistingJournalStatus = false
+  try {
+    const restored: CinemaAssetLibraryEntryRef[] = []
+    const deletedIDs: string[] = []
+    const affected: CinemaAssetLibraryEntryRef[] = []
+    const warnings: string[] = []
+    for (const [trashOperationID, entries] of maintenanceGroups) {
+      affected.push(...entries)
+      const expirationTimes = pendingDeleteExpirationTimes(catalog, trashOperationID)
+      const legacy = expirationTimes.some((expiresAt) => !Number.isFinite(expiresAt))
+      const outcome = legacy
+        ? await restoreCinemaAssetEntriesAction(catalog, paths, entries)
+        : await permanentlyDeleteCinemaAssetEntriesAction(
+            catalog,
+            paths,
+            entries,
+            `${operationID}-${outcomes.length}`,
+            false,
+          )
+      outcomes.push(outcome)
+      const outcomeValue = outcome.value as {
+        affected?: unknown
+        deletedIDs?: unknown
+        restored?: unknown
+        warnings?: unknown
+      }
+      if (Array.isArray(outcomeValue.deletedIDs)) {
+        deletedIDs.push(...outcomeValue.deletedIDs.filter((id: unknown): id is string => typeof id === "string"))
+      }
+      if (legacy) {
+        restored.push(...outcomeValue.affected as CinemaAssetLibraryEntryRef[])
+      } else if (Array.isArray(outcomeValue.restored)) {
+        restored.push(...outcomeValue.restored as CinemaAssetLibraryEntryRef[])
+      }
+      if (Array.isArray(outcomeValue.warnings)) {
+        warnings.push(...outcomeValue.warnings.filter((warning: unknown): warning is string => typeof warning === "string"))
+      }
+    }
+
+    const timestamp = nowISO()
+    catalog.revision += 1
+    catalog.updatedAt = timestamp
+    const response = {
+      scope: catalog.scope,
+      operationID,
+      revision: catalog.revision,
+      affected,
+      restored,
+      deletedIDs,
+      warnings,
+    }
+    catalog.operations[operationID] = {
+      operationID,
+      type: "pending-delete-maintenance",
+      revision: catalog.revision,
+      completedAt: timestamp,
+      result: response,
+    }
+    catalog.completedOperationIDs = [...catalog.completedOperationIDs.filter((item) => item !== operationID), operationID]
+      .slice(-MAX_OPERATION_HISTORY)
+    const operationIDs = Object.keys(catalog.operations)
+    for (const staleOperationID of operationIDs.slice(0, Math.max(0, operationIDs.length - MAX_OPERATION_HISTORY))) {
+      delete catalog.operations[staleOperationID]
+    }
+
+    try {
+      await atomicWriteJson(paths.catalogPath, catalog)
+    } catch (error) {
+      try {
+        for (const outcome of outcomes.slice().reverse()) await outcome.rollback?.()
+        keepExistingJournalStatus = true
+        await atomicWriteJson(journalPath, {
+          operationID,
+          type: "pending-delete-maintenance",
+          status: "rolled-back",
+          baseRevision,
+          startedAt,
+          failedAt: nowISO(),
+        }, false)
+      } catch (rollbackError) {
+        keepExistingJournalStatus = true
+        await atomicWriteJson(journalPath, {
+          operationID,
+          type: "pending-delete-maintenance",
+          status: "recovery-required",
+          baseRevision,
+          startedAt,
+          failedAt: nowISO(),
+          error: rollbackError instanceof Error ? rollbackError.message.slice(0, 1000) : "Filesystem rollback failed.",
+        }, false).catch(() => undefined)
+        throw new ApiError(
+          409,
+          "CINEMA_LIBRARY_RECOVERY_REQUIRED",
+          "Pending-delete maintenance could not be rolled back completely; the library requires recovery.",
+        )
+      }
+      throw error
+    }
+
+    for (const outcome of outcomes) {
+      try {
+        await outcome.afterCommit?.()
+      } catch {
+        warnings.push("The catalog was committed, but deferred filesystem cleanup could not be completed.")
+      }
+    }
+    await atomicWriteJson(journalPath, {
+      operationID,
+      type: "pending-delete-maintenance",
+      status: "committed",
+      baseRevision,
+      revision: catalog.revision,
+      startedAt,
+      completedAt: timestamp,
+    }, false).catch(() => undefined)
+    return catalog
+  } catch (error) {
+    if (!keepExistingJournalStatus) {
+      try {
+        for (const outcome of outcomes.slice().reverse()) await outcome.rollback?.()
+      } catch (rollbackError) {
+        await atomicWriteJson(journalPath, {
+          operationID,
+          type: "pending-delete-maintenance",
+          status: "recovery-required",
+          baseRevision,
+          startedAt,
+          failedAt: nowISO(),
+          error: rollbackError instanceof Error ? rollbackError.message.slice(0, 1000) : "Filesystem rollback failed.",
+        }, false).catch(() => undefined)
+        throw new ApiError(
+          409,
+          "CINEMA_LIBRARY_RECOVERY_REQUIRED",
+          "Pending-delete maintenance could not be rolled back completely; the library requires recovery.",
+        )
+      }
+      await atomicWriteJson(journalPath, {
+        operationID,
+        type: "pending-delete-maintenance",
+        status: "failed",
+        baseRevision,
+        startedAt,
+        failedAt: nowISO(),
+      }, false).catch(() => undefined)
+    }
+    throw error
+  }
 }
 
 const IMAGE_EXTENSIONS = new Set([".png", ".apng", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".bmp", ".svg"])
@@ -1987,7 +2357,9 @@ export async function getCinemaAssetLibraryOperationResult(
   operationID: string,
 ) {
   const paths = resolveLibraryPaths(scope)
-  if (!(await pathExists(paths.catalogPath))) await initializeCinemaAssetLibrary(scope)
+  if (!maintainedLibraryScopes.has(paths.scopeKey) || !(await pathExists(paths.catalogPath))) {
+    await initializeCinemaAssetLibrary(scope)
+  }
   using _lock = await Lock.read(paths.scopeKey)
   const catalog = await readCatalog(paths)
   return catalog.operations[operationID]?.result
@@ -2146,7 +2518,9 @@ export async function readCinemaAssetBinary(
   rangeHeader?: string | null,
 ) {
   const paths = resolveLibraryPaths(scope)
-  if (!(await pathExists(paths.catalogPath))) await initializeCinemaAssetLibrary(scope)
+  if (!maintainedLibraryScopes.has(paths.scopeKey) || !(await pathExists(paths.catalogPath))) {
+    await initializeCinemaAssetLibrary(scope)
+  }
   using _lock = await Lock.read(paths.scopeKey)
   const index = await readCatalogAssetIndex(paths)
   const asset = index.assetsByID.get(assetID)
@@ -2216,7 +2590,7 @@ export async function retryCinemaAssetProcessing(
   const result = await mutateLibrary(scope, input, "retry-processing", async (catalog, paths) => {
     const asset = findAsset(catalog, assetID)
     if (asset.status === "trashed") {
-      throw new ApiError(409, "CINEMA_LIBRARY_ASSET_TRASHED", "Restore the asset before retrying processing.")
+      throw new ApiError(409, "CINEMA_LIBRARY_ASSET_TRASHED", "Deleted assets cannot be processed again.")
     }
     const filePath = physicalPath(paths, asset.relativePath)
     await assertNoSymlinkBelowRoot(paths.filesRoot, filePath)
@@ -2710,7 +3084,7 @@ export async function addCinemaPersonalAssetReference(assetID: string, projectID
   const scope: CinemaAssetScope = { type: "personal" }
   const paths = resolveLibraryPaths(scope)
   using _lock = await Lock.write(paths.scopeKey)
-  const catalog = await ensureInitializedUnlocked(paths)
+  const catalog = await ensureInitializedAndMaintainedUnlocked(paths)
   const asset = findAsset(catalog, assetID)
   if (asset.status !== "ready") {
     throw new ApiError(409, "CINEMA_LIBRARY_ASSET_NOT_READY", "Only ready personal assets can be referenced.")
@@ -2731,7 +3105,7 @@ export async function removeCinemaPersonalAssetReference(assetID: string, projec
   const scope: CinemaAssetScope = { type: "personal" }
   const paths = resolveLibraryPaths(scope)
   using _lock = await Lock.write(paths.scopeKey)
-  await ensureInitializedUnlocked(paths)
+  await ensureInitializedAndMaintainedUnlocked(paths)
   const references = await readPersonalAssetReferences(paths)
   const next = (references.assets[assetID] ?? []).filter((item) => item.projectID !== projectID || item.nodeID !== nodeID)
   if (next.length > 0) references.assets[assetID] = next

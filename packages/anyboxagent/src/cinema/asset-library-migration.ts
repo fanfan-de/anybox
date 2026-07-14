@@ -582,7 +582,10 @@ export async function getCinemaAssetMigrationStatus(
   projectID: string,
 ): Promise<CinemaAssetMigrationStatusResult> {
   const paths = projectPaths(projectID)
-  const state = await getCinemaAssetLibraryState({ type: "project", projectID })
+  const state = await getCinemaAssetLibraryState(
+    { type: "project", projectID },
+    { maintainPendingDeletes: false },
+  )
   const metadata = await readProjectMetadata(paths.projectMetadataPath)
   const incomplete = await latestIncompleteJournal(paths.operationsRoot, projectID)
   if (incomplete) {

@@ -3103,7 +3103,7 @@ export async function applyCinemaCommand(projectID: string, command: CinemaComma
           409,
           "CINEMA_ASSET_NOT_READY",
           asset.status === "trashed"
-            ? "Restore the asset before adding it to the Canvas."
+            ? "This asset was deleted. Choose another asset before adding it to the Canvas."
             : "The asset must finish processing before it can be added to the Canvas.",
         )
       }
@@ -3152,7 +3152,7 @@ export async function applyCinemaCommand(projectID: string, command: CinemaComma
           409,
           "CINEMA_ASSET_NOT_READY",
           asset.status === "trashed"
-            ? "Restore the asset before relinking it."
+            ? "This asset was deleted. Choose another asset to relink."
             : "The asset must finish processing before it can be linked.",
         )
       }

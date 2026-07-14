@@ -17,8 +17,8 @@ function outputUnavailableCopy(input: {
 }, t: ReturnType<typeof useI18n>["t"]) {
   if (input.status === "trashed") {
     return {
-      title: t("deliver.outputTrashTitle"),
-      message: t("deliver.outputTrashMessage"),
+      title: t("deliver.outputDeletedTitle"),
+      message: t("deliver.outputDeletedMessage"),
     }
   }
   if (input.status === "missing" || input.notFound) {
@@ -122,7 +122,7 @@ export function DeliverPreview({
               >
                 {t("deliver.checkAgain")}
               </button>
-              {outputAsset && onShowInAssets ? (
+              {outputAsset && onShowInAssets && currentAssetStatus !== "trashed" && !outputNotFound ? (
                 <button type="button" className="cinema-deliver-secondary-button" onClick={() => onShowInAssets(outputAsset)}>
                   {t("deliver.showInAssets")}
                 </button>

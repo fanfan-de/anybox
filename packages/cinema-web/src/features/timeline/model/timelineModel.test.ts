@@ -343,8 +343,12 @@ describe("timeline model", () => {
 
   it("reports empty, missing, and no-main-video delivery issues", () => {
     expect(validateTimelineForDelivery({ ...document, clips: [] }).ready).toBe(false)
-    expect(validateTimelineForDelivery(document, new Map([["a", "missing"]])).issues.map((issue) => issue.code))
-      .toContain("asset-unavailable")
+    const unavailableIssue = validateTimelineForDelivery(document, new Map([["a", "missing"]])).issues
+      .find((issue) => issue.code === "asset-unavailable")
+    expect(unavailableIssue).toMatchObject({
+      code: "asset-unavailable",
+      message: "One is missing. Replace its asset.",
+    })
   })
 
   it("only projects clips inside the visible timeline window plus overscan", () => {

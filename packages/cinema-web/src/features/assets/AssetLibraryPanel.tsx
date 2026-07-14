@@ -14,6 +14,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react"
+import { createPortal } from "react-dom"
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import {
@@ -78,6 +79,7 @@ import {
   type AssetLibraryEntry,
   type AssetLibraryScopeType,
 } from "./assetLibraryModel"
+import { clampContextMenuPosition } from "../canvas/contextMenuPosition"
 import { useAssetUploadQueue, type AssetUploadQueueItem } from "./useAssetUploadQueue"
 import "./asset-library.css"
 
@@ -126,7 +128,6 @@ interface PendingAssetReveal {
   scopeType: AssetLibraryScopeType
   assetID: string
   displayName: string
-  trash: boolean
 }
 
 interface AssetGridRevealRequest {
@@ -134,11 +135,34 @@ interface AssetGridRevealRequest {
   assetID: string
 }
 
-interface PendingPermanentDelete {
-  targets?: AssetLibraryEntryRef[]
+interface PendingDeleteConfirmation {
+  targets: AssetLibraryEntryRef[]
   entries: AssetLibraryEntry[]
-  all: boolean
-  totalCount?: number
+}
+
+interface PendingDeleteToast {
+  operationID: string
+  finalizeOperationID: string
+  undoOperationID: string
+  scope: CinemaAssetScope
+  scopeKey: string
+  baseRevision: number
+  targets: AssetLibraryEntryRef[]
+  count: number
+  undoUntil: string
+}
+
+interface PendingUploadDestination {
+  files: File[] | null
+  initialFolderID: string
+}
+
+interface AssetLibraryContextMenuState {
+  x: number
+  y: number
+  entries: AssetLibraryEntry[]
+  targets: AssetLibraryEntryRef[]
+  returnFocus: HTMLElement | null
 }
 
 const panelSessions = new Map<string, PanelSession>()
@@ -178,6 +202,13 @@ function createOperationID(prefix: string): string {
 
 function errorMessage(error: unknown, fallback = "操作失败"): string {
   return error instanceof Error && error.message ? error.message : fallback
+}
+
+function assetLibraryErrorMessage(error: unknown, fallback = "操作失败"): string {
+  if (error instanceof AssetLibraryApiError && error.code === "CINEMA_LIBRARY_ASSET_REFERENCED") {
+    return "仍被画布、时间线或任务引用，无法删除"
+  }
+  return errorMessage(error, fallback)
 }
 
 function useDebouncedValue<T>(value: T, delay: number): T {
@@ -260,12 +291,16 @@ function AssetLibraryPanelContent({
   const revisionRef = useRef(revision)
   const [actionError, setActionError] = useState<string | null>(null)
   const [announcement, setAnnouncement] = useState("")
-  const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false)
+  const [createFolderParentID, setCreateFolderParentID] = useState<string | null>(null)
   const [renameTarget, setRenameTarget] = useState<AssetLibraryEntry | null>(null)
   const [moveEntries, setMoveEntries] = useState<AssetLibraryEntryRef[] | null>(null)
-  const [undoEntries, setUndoEntries] = useState<AssetLibraryEntryRef[] | null>(null)
-  const [isTrashView, setIsTrashView] = useState(false)
-  const [pendingPermanentDelete, setPendingPermanentDelete] = useState<PendingPermanentDelete | null>(null)
+  const [pendingDeleteConfirmation, setPendingDeleteConfirmation] = useState<PendingDeleteConfirmation | null>(null)
+  const [pendingDeletes, setPendingDeletes] = useState<PendingDeleteToast[]>([])
+  const [pendingDeleteActionIDs, setPendingDeleteActionIDs] = useState<Set<string>>(() => new Set())
+  const pendingDeleteActionIDsRef = useRef(new Set<string>())
+  const [pendingUploadDestination, setPendingUploadDestination] = useState<PendingUploadDestination | null>(null)
+  const uploadTargetFolderIDRef = useRef<string | null>(null)
+  const [contextMenu, setContextMenu] = useState<AssetLibraryContextMenuState | null>(null)
   const [addingAssetID, setAddingAssetID] = useState<string | null>(null)
   const [pendingAssetReveal, setPendingAssetReveal] = useState<PendingAssetReveal | null>(null)
   const [gridRevealRequest, setGridRevealRequest] = useState<AssetGridRevealRequest | null>(null)
@@ -284,6 +319,7 @@ function AssetLibraryPanelContent({
     [agentBaseURL, projectID, scope],
   )
   const debouncedSearch = useDebouncedValue(currentSession.search.trim(), 250)
+  const isSearching = Boolean(currentSession.search.trim())
   const libraryQueryPrefix = useMemo(
     () => ["cinema-asset-library", agentBaseURL, scopeKey] as const,
     [agentBaseURL, scopeKey],
@@ -291,8 +327,7 @@ function AssetLibraryPanelContent({
   const scrollPositionKey = useMemo(() => assetLibraryScrollPositionKey({
     folderID: currentSession.folderID,
     query: debouncedSearch,
-    trash: isTrashView,
-  }), [currentSession.folderID, debouncedSearch, isTrashView])
+  }), [currentSession.folderID, debouncedSearch])
 
   const updateCurrentSession = useCallback((patch: Partial<ScopeSession>) => {
     setScopeSessions((current) => ({
@@ -324,14 +359,15 @@ function AssetLibraryPanelContent({
     setRevision(0)
     revisionRef.current = 0
     lastStateRevisionRef.current = null
-    setIsTrashView(false)
     setActionError(null)
     setAnnouncement("")
-    setIsCreateFolderOpen(false)
+    setCreateFolderParentID(null)
     setRenameTarget(null)
     setMoveEntries(null)
-    setUndoEntries(null)
-    setPendingPermanentDelete(null)
+    setPendingDeleteConfirmation(null)
+    setPendingDeletes([])
+    setPendingUploadDestination(null)
+    setContextMenu(null)
     setAddingAssetID(null)
     setPendingAssetReveal(null)
     setGridRevealRequest(null)
@@ -358,10 +394,15 @@ function AssetLibraryPanelContent({
     void targetApi.getAsset(request.assetRef.assetID, controller.signal).then(({ asset }) => {
       if (!active) return
       const targetScopeType = request.assetRef.scope.type
-      const trash = asset.status === "trashed"
-      const folderID = trash ? ROOT_FOLDER_ID : asset.folderID
+      if (asset.status === "trashed") {
+        setActionError("素材正在删除，当前无法在素材库中定位")
+        setAnnouncement("")
+        onRevealRequestHandled?.(request.requestID)
+        return
+      }
+      const folderID = asset.folderID
       const selectedKey = `asset:${asset.id}`
-      const targetScrollKey = assetLibraryScrollPositionKey({ folderID, query: "", trash })
+      const targetScrollKey = assetLibraryScrollPositionKey({ folderID, query: "" })
       scrollTopRef.current[targetScopeType][targetScrollKey] = 0
       setScopeSessions((current) => ({
         ...current,
@@ -374,13 +415,11 @@ function AssetLibraryPanelContent({
         },
       }))
       setScopeType(targetScopeType)
-      setIsTrashView(trash)
       setPendingAssetReveal({
         requestID: request.requestID,
         scopeType: targetScopeType,
         assetID: asset.id,
         displayName: asset.displayName,
-        trash,
       })
       setAnnouncement(`正在定位 ${asset.displayName}`)
       void queryClient.invalidateQueries({
@@ -443,16 +482,14 @@ function AssetLibraryPanelContent({
     queryKey: [
       ...libraryQueryPrefix,
       "entries",
-      isTrashView ? "trash" : "library",
-      isTrashView ? ROOT_FOLDER_ID : currentSession.folderID,
-      isTrashView ? "" : debouncedSearch,
+      currentSession.folderID,
+      debouncedSearch,
     ],
     queryFn: ({ pageParam, signal }) => api.listEntries({
-      folderID: isTrashView ? ROOT_FOLDER_ID : currentSession.folderID,
-      query: isTrashView ? "" : debouncedSearch,
+      folderID: currentSession.folderID,
+      query: debouncedSearch,
       cursor: typeof pageParam === "string" ? pageParam : undefined,
       limit: 50,
-      view: isTrashView ? "trash" : "library",
       signal,
     }),
     initialPageParam: undefined as string | undefined,
@@ -488,7 +525,7 @@ function AssetLibraryPanelContent({
 
   useEffect(() => {
     const target = pendingAssetReveal
-    if (!target || target.scopeType !== scopeType || target.trash !== isTrashView) return
+    if (!target || target.scopeType !== scopeType) return
     if (assets.some((asset) => asset.id === target.assetID)) {
       setGridRevealRequest({ requestID: target.requestID, assetID: target.assetID })
       setPendingAssetReveal(null)
@@ -505,11 +542,9 @@ function AssetLibraryPanelContent({
       return
     }
     setPendingAssetReveal(null)
-    setActionError(target.trash
-      ? "素材位于已移入回收站的文件夹中，当前回收站视图无法直接展开其子项"
-      : "已打开素材所在文件夹，但未找到该素材")
+    setActionError("已打开素材所在文件夹，但未找到该素材")
     setAnnouncement("")
-  }, [assets, isTrashView, listingQuery, pendingAssetReveal, scopeType])
+  }, [assets, listingQuery, pendingAssetReveal, scopeType])
 
   const commitRevision = useCallback((nextRevision: number) => {
     if (!Number.isFinite(nextRevision)) return
@@ -544,26 +579,12 @@ function AssetLibraryPanelContent({
     return () => window.cancelAnimationFrame(frame)
   }, [scopeType, scrollPositionKey])
 
-  useEffect(() => {
-    if (!undoEntries) return
-    const timer = window.setTimeout(() => setUndoEntries(null), 10_000)
-    return () => window.clearTimeout(timer)
-  }, [undoEntries])
-
   const refreshLibrary = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: libraryQueryPrefix }),
       queryClient.invalidateQueries({ queryKey: ["cinema-canvas-asset-state"] }),
     ])
   }, [libraryQueryPrefix, queryClient])
-
-  const uploadFolderID = useMemo(() => {
-    const rootFolderID = stateQuery.data?.rootFolderID ?? ROOT_FOLDER_ID
-    const inboxFolderID = stateQuery.data?.defaultFolderIDs.inbox
-      ?? stateQuery.data?.defaultFolderIDs["收件箱"]
-      ?? rootFolderID
-    return debouncedSearch || currentSession.folderID === rootFolderID ? inboxFolderID : currentSession.folderID
-  }, [currentSession.folderID, debouncedSearch, stateQuery.data])
 
   const uploadQueue = useAssetUploadQueue({
     api,
@@ -579,20 +600,20 @@ function AssetLibraryPanelContent({
     if (error instanceof AssetLibraryApiError && error.latestRevision !== undefined) {
       commitRevision(error.latestRevision)
     }
-    setActionError(errorMessage(error))
+    setActionError(assetLibraryErrorMessage(error))
     if (error instanceof AssetLibraryApiError && error.status === 409) void refreshLibrary()
   }, [commitRevision, refreshLibrary])
 
   const createFolderMutation = useMutation({
-    mutationFn: (name: string) => api.createFolder({
+    mutationFn: ({ name, parentFolderID }: { name: string; parentFolderID: string }) => api.createFolder({
       name,
-      parentFolderID: currentSession.folderID,
+      parentFolderID,
       operationID: createOperationID("create-folder"),
       baseRevision: revisionRef.current,
     }),
     onSuccess: (result) => {
       commitRevision(result.revision)
-      setIsCreateFolderOpen(false)
+      setCreateFolderParentID(null)
       setAnnouncement(`已创建文件夹 ${result.folder.name}`)
       void refreshLibrary()
     },
@@ -644,52 +665,130 @@ function AssetLibraryPanelContent({
     },
   })
 
-  const trashMutation = useMutation({
-    mutationFn: (targets: AssetLibraryEntryRef[]) => api.trash({
+  const beginDeleteMutation = useMutation({
+    mutationFn: ({
+      targets,
+      deleteApi,
+      baseRevision,
+    }: {
+      targets: AssetLibraryEntryRef[]
+      entries: AssetLibraryEntry[]
+      deleteApi: AssetLibraryApi
+      deleteScope: CinemaAssetScope
+      deleteScopeKey: string
+      baseRevision: number
+    }) => deleteApi.beginDelete({
       entries: targets,
-      operationID: createOperationID("trash-assets"),
-      baseRevision: revisionRef.current,
+      operationID: createOperationID("delete-assets"),
+      baseRevision,
     }),
-    onSuccess: (result, targets) => {
-      commitRevision(result.revision)
-      updateCurrentSession({ selectedKeys: [], anchorKey: null })
-      setUndoEntries(targets)
-      setAnnouncement("已移入回收站，可在 10 秒内撤销")
-      void refreshLibrary()
-    },
-  })
-
-  const restoreMutation = useMutation({
-    mutationFn: (targets: AssetLibraryEntryRef[]) => api.restore({
-      entries: targets,
-      operationID: createOperationID("restore-assets"),
-      baseRevision: revisionRef.current,
-    }),
-    onSuccess: (result) => {
-      commitRevision(result.revision)
-      setUndoEntries(null)
-      updateCurrentSession({ selectedKeys: [], anchorKey: null })
-      setAnnouncement("已恢复素材")
-      void refreshLibrary()
-    },
-  })
-
-  const permanentDeleteMutation = useMutation({
-    mutationFn: ({ targets, all }: { targets?: AssetLibraryEntryRef[]; all: boolean }) => {
-      const operationID = createOperationID("permanent-delete-assets")
-      const baseRevision = revisionRef.current
-      return all
-        ? api.permanentlyDelete({ all: true, operationID, baseRevision })
-        : api.permanentlyDelete({ entries: targets ?? [], operationID, baseRevision })
-    },
     onSuccess: (result, request) => {
-      commitRevision(result.revision)
-      updateCurrentSession({ selectedKeys: [], anchorKey: null })
-      setPendingPermanentDelete(null)
-      setAnnouncement(request.all ? "已清空回收站" : `已永久删除 ${request.targets?.length ?? 0} 项`)
-      void refreshLibrary()
+      if (request.deleteScopeKey === api.scopeKey) commitRevision(result.revision)
+      setScopeSessions((current) => ({
+        ...current,
+        [request.deleteScope.type]: {
+          ...current[request.deleteScope.type],
+          selectedKeys: [],
+          anchorKey: null,
+        },
+      }))
+      setPendingDeleteConfirmation(null)
+      setPendingDeletes((current) => [...current, {
+        operationID: result.operationID,
+        finalizeOperationID: createOperationID("finalize-delete"),
+        undoOperationID: createOperationID("undo-delete"),
+        scope: request.deleteScope,
+        scopeKey: request.deleteScopeKey,
+        baseRevision: result.revision,
+        targets: request.targets,
+        count: request.entries.length,
+        undoUntil: result.undoUntil,
+      }])
+      setAnnouncement(`已删除 ${request.entries.length} 项，可在 10 秒内撤销`)
+      void queryClient.invalidateQueries({
+        queryKey: ["cinema-asset-library", agentBaseURL, request.deleteScopeKey],
+      })
     },
   })
+
+  const runWithRevisionRetry = useCallback(async <T,>(
+    baseRevision: number,
+    request: (revision: number) => Promise<T>,
+  ) => {
+    try {
+      return await request(baseRevision)
+    } catch (error) {
+      if (!(error instanceof AssetLibraryApiError) || error.latestRevision === undefined) throw error
+      return await request(error.latestRevision)
+    }
+  }, [])
+
+  const setPendingDeleteAction = useCallback((operationID: string, pending: boolean) => {
+    if (pending) pendingDeleteActionIDsRef.current.add(operationID)
+    else pendingDeleteActionIDsRef.current.delete(operationID)
+    setPendingDeleteActionIDs(new Set(pendingDeleteActionIDsRef.current))
+  }, [])
+
+  const finalizePendingDelete = useCallback(async (pendingDelete: PendingDeleteToast) => {
+    if (pendingDeleteActionIDsRef.current.has(pendingDelete.operationID)) return
+    setPendingDeleteAction(pendingDelete.operationID, true)
+    try {
+      const pendingApi = createAssetLibraryApi(agentBaseURL, projectID, pendingDelete.scope)
+      const result = await runWithRevisionRetry(pendingDelete.baseRevision, (baseRevision) => pendingApi.finalizeDelete({
+        entries: pendingDelete.targets,
+        operationID: pendingDelete.finalizeOperationID,
+        baseRevision,
+      }))
+      if (pendingDelete.scopeKey === api.scopeKey) commitRevision(result.revision)
+      setPendingDeletes((current) => current.filter((item) => item.operationID !== pendingDelete.operationID))
+      if (result.warnings.length > 0) setActionError(result.warnings.join(" "))
+      await queryClient.invalidateQueries({
+        queryKey: ["cinema-asset-library", agentBaseURL, pendingDelete.scopeKey],
+      })
+    } catch (error) {
+      if (error instanceof AssetLibraryApiError && error.code === "CINEMA_LIBRARY_DELETE_UNDO_ACTIVE") {
+        setPendingDeletes((current) => current.map((item) => item.operationID === pendingDelete.operationID
+          ? { ...item, undoUntil: new Date(Date.now() + 500).toISOString() }
+          : item))
+        return
+      }
+      setPendingDeletes((current) => current.filter((item) => item.operationID !== pendingDelete.operationID))
+      handleActionError(error)
+    } finally {
+      setPendingDeleteAction(pendingDelete.operationID, false)
+    }
+  }, [agentBaseURL, api.scopeKey, commitRevision, handleActionError, projectID, queryClient, runWithRevisionRetry, setPendingDeleteAction])
+
+  const undoPendingDelete = useCallback(async (pendingDelete: PendingDeleteToast) => {
+    if (pendingDeleteActionIDsRef.current.has(pendingDelete.operationID)) return
+    setPendingDeleteAction(pendingDelete.operationID, true)
+    try {
+      const pendingApi = createAssetLibraryApi(agentBaseURL, projectID, pendingDelete.scope)
+      const result = await runWithRevisionRetry(pendingDelete.baseRevision, (baseRevision) => pendingApi.undoDelete({
+        entries: pendingDelete.targets,
+        operationID: pendingDelete.undoOperationID,
+        baseRevision,
+      }))
+      if (pendingDelete.scopeKey === api.scopeKey) commitRevision(result.revision)
+      setPendingDeletes((current) => current.filter((item) => item.operationID !== pendingDelete.operationID))
+      setAnnouncement(`已撤销删除 ${pendingDelete.count} 项`)
+      await queryClient.invalidateQueries({
+        queryKey: ["cinema-asset-library", agentBaseURL, pendingDelete.scopeKey],
+      })
+    } catch (error) {
+      handleActionError(error)
+    } finally {
+      setPendingDeleteAction(pendingDelete.operationID, false)
+    }
+  }, [agentBaseURL, api.scopeKey, commitRevision, handleActionError, projectID, queryClient, runWithRevisionRetry, setPendingDeleteAction])
+
+  useEffect(() => {
+    const timers = pendingDeletes.map((pendingDelete) => window.setTimeout(
+      () => void finalizePendingDelete(pendingDelete),
+      Math.max(0, Date.parse(pendingDelete.undoUntil) - Date.now()),
+    ))
+    return () => timers.forEach((timer) => window.clearTimeout(timer))
+  }, [finalizePendingDelete, pendingDeletes])
 
   const retryMutation = useMutation({
     mutationFn: (assetID: string) => api.retryProcessing({
@@ -737,21 +836,13 @@ function AssetLibraryPanelContent({
     setActionError(null)
   }, [updateCurrentSession])
 
+  const rootFolderID = stateQuery.data?.rootFolderID ?? ROOT_FOLDER_ID
+
   const goUp = useCallback(() => {
     const rootFolderID = stateQuery.data?.rootFolderID ?? ROOT_FOLDER_ID
     if (currentSession.folderID === rootFolderID) return
     openFolder(listing?.folder?.parentID ?? rootFolderID)
   }, [currentSession.folderID, listing?.folder?.parentID, openFolder, stateQuery.data?.rootFolderID])
-
-  const toggleTrashView = useCallback(() => {
-    setIsTrashView((current) => !current)
-    updateCurrentSession({ selectedKeys: [], anchorKey: null })
-    setActionError(null)
-    setMoveEntries(null)
-    setRenameTarget(null)
-    setIsCreateFolderOpen(false)
-    setPendingPermanentDelete(null)
-  }, [updateCurrentSession])
 
   const switchScope = useCallback((nextScope: AssetLibraryScopeType) => {
     if (nextScope === scopeType) return
@@ -766,8 +857,10 @@ function AssetLibraryPanelContent({
     setActionError(null)
     setMoveEntries(null)
     setRenameTarget(null)
-    setIsCreateFolderOpen(false)
-    setPendingPermanentDelete(null)
+    setCreateFolderParentID(null)
+    setPendingDeleteConfirmation(null)
+    setPendingUploadDestination(null)
+    setContextMenu(null)
   }, [scopeType])
 
   const selectEntry = useCallback((
@@ -775,7 +868,7 @@ function AssetLibraryPanelContent({
     event: ReactMouseEvent<HTMLButtonElement>,
   ) => {
     const key = assetLibraryEntryKey(entry)
-    if (!isTrashView && entry.entryType === "folder" && (entry.folder.system || (!event.metaKey && !event.ctrlKey && !event.shiftKey))) {
+    if (entry.entryType === "folder" && (entry.folder.system || (!event.metaKey && !event.ctrlKey && !event.shiftKey))) {
       openFolder(entry.folder.id)
       return
     }
@@ -787,7 +880,7 @@ function AssetLibraryPanelContent({
       { toggle: event.metaKey || event.ctrlKey, range: event.shiftKey },
     )
     updateCurrentSession({ selectedKeys: [...selection.selectedKeys], anchorKey: selection.anchorKey })
-  }, [currentSession.anchorKey, isTrashView, openFolder, orderedKeys, selectedKeySet, updateCurrentSession])
+  }, [currentSession.anchorKey, openFolder, orderedKeys, selectedKeySet, updateCurrentSession])
 
   const addAssetToCanvas = useCallback(async (asset: CinemaAssetRecord) => {
     if (asset.status !== "ready" || addingAssetID || (acceptKind && asset.kind !== acceptKind)) return
@@ -812,52 +905,51 @@ function AssetLibraryPanelContent({
     [selectedEntries],
   )
 
-  const requestTrash = useCallback((targets: AssetLibraryEntryRef[], sourceEntries = selectedEntries) => {
+  const requestDelete = useCallback((targets: AssetLibraryEntryRef[], sourceEntries = selectedEntries) => {
     if (targets.length === 0 || isReadOnly) return
     const requiresConfirmation = targets.length > 1 || sourceEntries.some((entry) => entry.entryType === "folder")
-    if (requiresConfirmation && !window.confirm(`将 ${targets.length} 项移入回收站？`)) return
     setActionError(null)
-    void trashMutation.mutateAsync(targets).catch(handleActionError)
-  }, [handleActionError, isReadOnly, selectedEntries, trashMutation])
+    if (requiresConfirmation) {
+      setPendingDeleteConfirmation({ targets, entries: sourceEntries })
+      return
+    }
+    void beginDeleteMutation.mutateAsync({
+      targets,
+      entries: sourceEntries,
+      deleteApi: api,
+      deleteScope: scope,
+      deleteScopeKey: scopeKey,
+      baseRevision: revisionRef.current,
+    }).catch(handleActionError)
+  }, [api, beginDeleteMutation, handleActionError, isReadOnly, scope, scopeKey, selectedEntries])
 
-  const requestRestore = useCallback((targets: AssetLibraryEntryRef[]) => {
-    if (targets.length === 0 || isReadOnly) return
-    setActionError(null)
-    void restoreMutation.mutateAsync(targets).catch(handleActionError)
-  }, [handleActionError, isReadOnly, restoreMutation])
-
-  const requestPermanentDelete = useCallback((
-    targets: AssetLibraryEntryRef[],
-    sourceEntries = selectedEntries,
-  ) => {
-    if (targets.length === 0 || isReadOnly) return
-    setActionError(null)
-    setPendingPermanentDelete({ targets, entries: sourceEntries, all: false })
-  }, [isReadOnly, selectedEntries])
-
-  const requestEmptyTrash = useCallback(() => {
-    const trashedCount = stateQuery.data?.counts.trashed ?? 0
-    if (trashedCount === 0 || isReadOnly) return
-    setActionError(null)
-    setPendingPermanentDelete({ entries: [], all: true, totalCount: trashedCount })
-  }, [isReadOnly, stateQuery.data?.counts.trashed])
-
-  const handleFiles = useCallback((files: Iterable<File>) => {
+  const handleFiles = useCallback((files: Iterable<File>, folderID: string) => {
     if (isReadOnly) return
     const list = Array.from(files)
     if (list.length === 0) return
-    uploadQueue.enqueue(list, uploadFolderID)
+    uploadQueue.enqueue(list, folderID)
     setAnnouncement(`已加入 ${list.length} 个上传任务`)
-  }, [isReadOnly, uploadFolderID, uploadQueue])
+  }, [isReadOnly, uploadQueue])
+
+  const requestUpload = useCallback((folderID?: string) => {
+    if (isReadOnly) return
+    if (folderID) {
+      uploadTargetFolderIDRef.current = folderID
+      uploadInputRef.current?.click()
+      return
+    }
+    if (!isSearching && currentSession.folderID !== rootFolderID) {
+      uploadTargetFolderIDRef.current = currentSession.folderID
+      uploadInputRef.current?.click()
+      return
+    }
+    setPendingUploadDestination({ files: null, initialFolderID: currentSession.folderID })
+  }, [currentSession.folderID, isReadOnly, isSearching, rootFolderID])
 
   const handlePanelDrop = useCallback((event: ReactDragEvent<HTMLElement>) => {
     if (!event.dataTransfer.types.includes("Files")) return
     event.preventDefault()
     event.stopPropagation()
-    if (isTrashView) {
-      setActionError("请先返回素材库再上传文件")
-      return
-    }
     const hasDirectory = Array.from(event.dataTransfer.items).some((item) => {
       const entry = (item as DataTransferItem & { webkitGetAsEntry?: () => { isDirectory?: boolean } | null }).webkitGetAsEntry?.()
       return entry?.isDirectory === true
@@ -866,8 +958,13 @@ function AssetLibraryPanelContent({
       setActionError("暂不支持导入整个文件夹，请选择文件")
       return
     }
-    handleFiles(event.dataTransfer.files)
-  }, [handleFiles, isTrashView])
+    const files = Array.from(event.dataTransfer.files)
+    if (!isSearching && currentSession.folderID !== rootFolderID) {
+      handleFiles(files, currentSession.folderID)
+    } else {
+      setPendingUploadDestination({ files, initialFolderID: currentSession.folderID })
+    }
+  }, [currentSession.folderID, handleFiles, isSearching, rootFolderID])
 
   const moveEntriesToFolder = useCallback((targets: AssetLibraryEntryRef[], destinationFolderID: string) => {
     if (isReadOnly || targets.length === 0) return
@@ -875,9 +972,58 @@ function AssetLibraryPanelContent({
     void moveMutation.mutateAsync({ entries: targets, destinationFolderID }).catch(handleActionError)
   }, [handleActionError, isReadOnly, moveMutation])
 
+  const closeContextMenu = useCallback((restoreFocus = true) => {
+    setContextMenu((current) => {
+      if (restoreFocus) window.requestAnimationFrame(() => current?.returnFocus?.focus({ preventScroll: true }))
+      return null
+    })
+  }, [])
+
+  const openEntryContextMenuAt = useCallback((
+    entry: AssetLibraryEntry,
+    x: number,
+    y: number,
+    returnFocus: HTMLElement | null,
+  ) => {
+    const key = assetLibraryEntryKey(entry)
+    const preserveSelection = selectedKeySet.has(key) && selectedEntries.length > 0
+    const menuEntries = preserveSelection ? selectedEntries : [entry]
+    const menuTargets = menuEntries
+      .filter((candidate) => candidate.entryType === "asset" || !candidate.folder.system)
+      .map(assetLibraryEntryRef)
+    if (!preserveSelection) updateCurrentSession({ selectedKeys: [key], anchorKey: key })
+    setContextMenu({
+      x,
+      y,
+      entries: menuEntries,
+      targets: menuTargets,
+      returnFocus,
+    })
+  }, [selectedEntries, selectedKeySet, updateCurrentSession])
+
+  const openEntryContextMenu = useCallback((entry: AssetLibraryEntry, event: ReactMouseEvent<HTMLElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    openEntryContextMenuAt(entry, event.clientX, event.clientY, event.currentTarget)
+  }, [openEntryContextMenuAt])
+
+  const openBackgroundContextMenu = useCallback((event: ReactMouseEvent<HTMLElement>) => {
+    if (event.target instanceof HTMLElement && event.target.closest(".cinema-asset-library-folder-row, .cinema-asset-library-card, input, textarea, [contenteditable='true']")) return
+    event.preventDefault()
+    event.stopPropagation()
+    updateCurrentSession({ selectedKeys: [], anchorKey: null })
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      entries: [],
+      targets: [],
+      returnFocus: event.currentTarget,
+    })
+  }, [updateCurrentSession])
+
   const handlePanelKeyDown = useCallback((event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.key === "Escape") {
-      if (moveEntries || renameTarget || isCreateFolderOpen || pendingPermanentDelete) return
+      if (moveEntries || renameTarget || createFolderParentID || pendingDeleteConfirmation || pendingUploadDestination || contextMenu) return
       event.preventDefault()
       event.stopPropagation()
       onClose()
@@ -892,21 +1038,13 @@ function AssetLibraryPanelContent({
       updateCurrentSession({ selectedKeys: selectableKeys, anchorKey: selectableKeys.at(-1) ?? null })
       return
     }
-    if (isTrashView && (event.key === "Backspace" || (event.altKey && event.key === "ArrowLeft"))) {
-      event.preventDefault()
-      setIsTrashView(false)
-      updateCurrentSession({ selectedKeys: [], anchorKey: null })
-      return
-    }
     if (event.key === "Backspace" || (event.altKey && event.key === "ArrowLeft")) {
       event.preventDefault()
       goUp()
     }
-  }, [entries, goUp, isCreateFolderOpen, isTrashView, moveEntries, onClose, pendingPermanentDelete, renameTarget, updateCurrentSession])
+  }, [contextMenu, createFolderParentID, entries, goUp, moveEntries, onClose, pendingDeleteConfirmation, pendingUploadDestination, renameTarget, updateCurrentSession])
 
   const queryError = stateQuery.error ?? migrationQuery.error ?? listingQuery.error
-  const rootFolderID = stateQuery.data?.rootFolderID ?? ROOT_FOLDER_ID
-
   return (
     <aside
       id={PANEL_ID}
@@ -922,7 +1060,7 @@ function AssetLibraryPanelContent({
       <header className="cinema-asset-library-header">
         <div className="cinema-asset-library-title">
           <span>{scopeType === "project" ? "当前项目" : "本机"}</span>
-          <strong>{isTrashView ? "回收站" : "素材库"}</strong>
+          <strong>素材库</strong>
         </div>
         <div className="cinema-asset-library-header-actions">
           <input
@@ -934,48 +1072,25 @@ function AssetLibraryPanelContent({
             multiple
             tabIndex={-1}
             onChange={(event) => {
-              if (event.target.files) handleFiles(event.target.files)
+              const folderID = uploadTargetFolderIDRef.current
+              if (event.target.files && folderID) handleFiles(event.target.files, folderID)
+              uploadTargetFolderIDRef.current = null
               event.target.value = ""
             }}
           />
-          {!isTrashView ? (
-            <>
-              <LibraryIconButton
-                label="上传素材"
-                disabled={isReadOnly || stateQuery.isLoading}
-                onClick={() => uploadInputRef.current?.click()}
-              >
-                <Upload size={15} aria-hidden="true" />
-              </LibraryIconButton>
-              <LibraryIconButton
-                label="新建文件夹"
-                disabled={isReadOnly || stateQuery.isLoading || Boolean(debouncedSearch)}
-                onClick={() => setIsCreateFolderOpen(true)}
-              >
-                <FolderPlus size={15} aria-hidden="true" />
-              </LibraryIconButton>
-            </>
-          ) : null}
           <LibraryIconButton
-            label={isTrashView
-              ? "返回素材库"
-              : `打开回收站，${stateQuery.data?.counts.trashed ?? 0} 项`}
-            pressed={isTrashView}
-            badge={stateQuery.data?.counts.trashed ?? 0}
-            disabled={stateQuery.isLoading || migrationBlocksLibrary}
-            onClick={toggleTrashView}
+            label="上传素材"
+            disabled={isReadOnly || stateQuery.isLoading}
+            onClick={() => requestUpload()}
           >
-            {isTrashView
-              ? <ArrowLeft size={15} aria-hidden="true" />
-              : <Trash2 size={15} aria-hidden="true" />}
+            <Upload size={15} aria-hidden="true" />
           </LibraryIconButton>
           <LibraryIconButton
-            label={isTrashView ? "刷新回收站" : "刷新素材库"}
+            label="刷新素材库"
             disabled={stateQuery.isLoading || migrationBlocksLibrary || reconcileMutation.isPending}
             onClick={() => {
               setActionError(null)
-              if (isTrashView) void refreshLibrary().catch(handleActionError)
-              else void reconcileMutation.mutateAsync().catch(handleActionError)
+              void reconcileMutation.mutateAsync().catch(handleActionError)
             }}
           >
             {reconcileMutation.isPending
@@ -1015,7 +1130,7 @@ function AssetLibraryPanelContent({
         ))}
       </div>
 
-      {!isTrashView ? <label className="cinema-asset-library-search">
+      <label className="cinema-asset-library-search">
         <Search size={14} aria-hidden="true" />
         <span className="cinema-library-visually-hidden">搜索当前素材库</span>
         <input
@@ -1036,21 +1151,9 @@ function AssetLibraryPanelContent({
             <X size={13} aria-hidden="true" />
           </button>
         ) : null}
-      </label> : null}
+      </label>
 
-      {isTrashView ? (
-        <div className="cinema-asset-library-trash-toolbar">
-          <span>仅显示每次回收操作的最上层项目</span>
-          <button
-            type="button"
-            className="cinema-library-danger-button cinema-asset-library-trash-empty-button"
-            disabled={isReadOnly || permanentDeleteMutation.isPending || (stateQuery.data?.counts.trashed ?? 0) === 0}
-            onClick={requestEmptyTrash}
-          >
-            清空回收站
-          </button>
-        </div>
-      ) : <nav className="cinema-asset-library-breadcrumbs" aria-label="素材文件夹路径">
+      <nav className="cinema-asset-library-breadcrumbs" aria-label="素材文件夹路径">
         <button
           type="button"
           title="素材库根目录"
@@ -1074,7 +1177,7 @@ function AssetLibraryPanelContent({
               {breadcrumb.name}
             </button>
           ))}
-      </nav>}
+      </nav>
 
       {stateQuery.data?.status === "recovery-required" ? (
         <div className="cinema-asset-library-banner is-error" role="alert">
@@ -1090,7 +1193,7 @@ function AssetLibraryPanelContent({
         </div>
       ) : null}
 
-      {!isTrashView && uploadQueue.items.length > 0 ? (
+      {uploadQueue.items.length > 0 ? (
         <AssetUploadQueue
           items={uploadQueue.items}
           onCancel={uploadQueue.cancel}
@@ -1102,12 +1205,24 @@ function AssetLibraryPanelContent({
       <div
         id="cinema-asset-library-panel"
         ref={contentRef}
-        className={`cinema-asset-library-content ${isTrashView ? "is-trash" : ""}`}
+        className="cinema-asset-library-content"
         role="tabpanel"
+        tabIndex={0}
         aria-labelledby={`cinema-asset-library-tab-${scopeType}`}
         aria-busy={stateQuery.isLoading || migrationQuery.isLoading || listingQuery.isLoading || migrationMutation.isPending}
         onScroll={(event) => {
           scrollTopRef.current[scopeType][scrollPositionKey] = event.currentTarget.scrollTop
+          if (contextMenu) closeContextMenu(false)
+        }}
+        onContextMenu={openBackgroundContextMenu}
+        onKeyDown={(event) => {
+          if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return
+          if (event.target !== event.currentTarget) return
+          event.preventDefault()
+          event.stopPropagation()
+          const bounds = event.currentTarget.getBoundingClientRect()
+          updateCurrentSession({ selectedKeys: [], anchorKey: null })
+          setContextMenu({ x: bounds.left + 16, y: bounds.top + 16, entries: [], targets: [], returnFocus: event.currentTarget })
         }}
       >
         {stateQuery.isLoading || (scopeType === "project" && migrationQuery.isLoading) || listingQuery.isLoading ? (
@@ -1115,7 +1230,7 @@ function AssetLibraryPanelContent({
             icon={<Loader2 size={18} aria-hidden="true" className="is-spinning" />}
             label={scopeType === "project" && migrationQuery.isLoading
               ? "正在检查旧项目素材"
-              : isTrashView ? "正在加载回收站" : "正在加载素材库"}
+              : "正在加载素材库"}
           />
         ) : queryError ? (
           <LibraryState
@@ -1136,15 +1251,11 @@ function AssetLibraryPanelContent({
           />
         ) : entries.length === 0 ? (
           <LibraryState
-            icon={isTrashView
-              ? <Trash2 size={18} aria-hidden="true" />
-              : debouncedSearch ? <Search size={18} aria-hidden="true" /> : <Folder size={18} aria-hidden="true" />}
-            label={isTrashView ? "回收站为空" : debouncedSearch ? "没有匹配的素材" : "此文件夹为空"}
-            detail={isTrashView
-              ? "移入回收站的素材和文件夹会显示在这里"
-              : debouncedSearch ? "尝试其他关键词" : "上传图片、视频或音频开始使用"}
-            action={!isTrashView && !debouncedSearch && !isReadOnly
-              ? <button type="button" className="cinema-library-secondary-button" onClick={() => uploadInputRef.current?.click()}>上传素材</button>
+            icon={debouncedSearch ? <Search size={18} aria-hidden="true" /> : <Folder size={18} aria-hidden="true" />}
+            label={debouncedSearch ? "没有匹配的素材" : "此文件夹为空"}
+            detail={debouncedSearch ? "尝试其他关键词" : "上传图片、视频或音频开始使用"}
+            action={!debouncedSearch && !isReadOnly
+              ? <button type="button" className="cinema-library-secondary-button" onClick={() => requestUpload()}>上传素材</button>
               : undefined}
           />
         ) : (
@@ -1160,10 +1271,18 @@ function AssetLibraryPanelContent({
                       type="button"
                       className={`cinema-asset-library-folder-row ${selectedKeySet.has(key) ? "is-selected" : ""}`}
                       title={assetLibraryEntryPath(entry) || entry.folder.name}
-                      draggable={!isTrashView && !entry.folder.system && !isReadOnly}
+                      draggable={!entry.folder.system && !isReadOnly}
                       onClick={(event) => selectEntry(entry, event)}
+                      onContextMenu={(event) => openEntryContextMenu(entry, event)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return
+                        event.preventDefault()
+                        event.stopPropagation()
+                        const bounds = event.currentTarget.getBoundingClientRect()
+                        openEntryContextMenuAt(entry, bounds.left + 16, bounds.top + 16, event.currentTarget)
+                      }}
                       onDragStart={(event) => {
-                        if (isTrashView || entry.folder.system || isReadOnly) {
+                        if (entry.folder.system || isReadOnly) {
                           event.preventDefault()
                           return
                         }
@@ -1178,14 +1297,28 @@ function AssetLibraryPanelContent({
                         }))
                       }}
                       onDragOver={(event) => {
-                        if (isTrashView) return
                         if (
+                          event.dataTransfer.types.includes("Files")
+                          ||
                           event.dataTransfer.types.includes(CINEMA_ASSET_LIBRARY_ENTRY_DRAG_TYPE)
                           || event.dataTransfer.types.includes(CINEMA_ASSET_LIBRARY_DRAG_TYPE)
                         ) event.preventDefault()
                       }}
                       onDrop={(event) => {
-                        if (isTrashView) return
+                        if (event.dataTransfer.types.includes("Files")) {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          const hasDirectory = Array.from(event.dataTransfer.items).some((item) => {
+                            const droppedEntry = (item as DataTransferItem & { webkitGetAsEntry?: () => { isDirectory?: boolean } | null }).webkitGetAsEntry?.()
+                            return droppedEntry?.isDirectory === true
+                          })
+                          if (hasDirectory) {
+                            setActionError("暂不支持导入整个文件夹，请选择文件")
+                            return
+                          }
+                          handleFiles(event.dataTransfer.files, entry.folder.id)
+                          return
+                        }
                         const internalPayload = parseAssetLibraryEntryDragPayload(
                           event.dataTransfer.getData(CINEMA_ASSET_LIBRARY_ENTRY_DRAG_TYPE),
                         )
@@ -1217,10 +1350,8 @@ function AssetLibraryPanelContent({
                     >
                       <Folder size={15} aria-hidden="true" />
                       <span>{entry.folder.name}</span>
-                      {isTrashView
-                        ? <small title={assetLibraryEntryPath(entry)}>{assetLibraryEntryPath(entry)}</small>
-                        : debouncedSearch
-                          ? <small title={entry.folder.relativePath}>{entry.folder.relativePath}</small>
+                      {debouncedSearch
+                        ? <small title={entry.folder.relativePath}>{entry.folder.relativePath}</small>
                         : entry.folder.system ? <small>系统</small> : null}
                       {selectedKeySet.has(key) ? <Check size={14} aria-label="已选择" /> : null}
                     </button>
@@ -1237,12 +1368,14 @@ function AssetLibraryPanelContent({
                 acceptKind={acceptKind}
                 selectedKeys={selectedKeySet}
                 dragEntries={selectedTargets}
-                searching={isTrashView || Boolean(debouncedSearch)}
-                allowDragAndAdd={!isTrashView}
+                searching={Boolean(debouncedSearch)}
+                allowDragAndAdd
                 scrollElementRef={contentRef}
-                layoutVersion={`${isTrashView}:${folders.length}:${debouncedSearch}`}
+                layoutVersion={`${folders.length}:${debouncedSearch}`}
                 revealRequest={gridRevealRequest}
                 onSelect={selectEntry}
+                onContextMenu={openEntryContextMenu}
+                onOpenContextMenuAt={openEntryContextMenuAt}
                 onAdd={addAssetToCanvas}
               />
             ) : null}
@@ -1261,43 +1394,7 @@ function AssetLibraryPanelContent({
         )}
       </div>
 
-      {migrationBlocksLibrary ? null : isTrashView ? (
-        selectedEntries.length > 1 ? (
-          <div className="cinema-asset-library-batch-bar" aria-label="回收站批量操作">
-            <strong>已选择 {selectedEntries.length} 项</strong>
-            <div>
-              <button
-                type="button"
-                className="cinema-library-secondary-button"
-                disabled={isReadOnly || restoreMutation.isPending}
-                onClick={() => requestRestore(selectedTargets)}
-              >
-                <RotateCcw size={14} aria-hidden="true" />
-                恢复
-              </button>
-              <button
-                type="button"
-                className="cinema-library-danger-button"
-                disabled={isReadOnly || permanentDeleteMutation.isPending}
-                onClick={() => requestPermanentDelete(selectedTargets)}
-              >
-                <Trash2 size={14} aria-hidden="true" />
-                永久删除
-              </button>
-            </div>
-          </div>
-        ) : (
-          <TrashEntryDetail
-            api={api}
-            entry={selectedEntries[0] ?? null}
-            isReadOnly={isReadOnly}
-            restorePending={restoreMutation.isPending}
-            deletePending={permanentDeleteMutation.isPending}
-            onRestore={(entry) => requestRestore([assetLibraryEntryRef(entry)])}
-            onPermanentDelete={(entry) => requestPermanentDelete([assetLibraryEntryRef(entry)], [entry])}
-          />
-        )
-      ) : selectedEntries.length > 1 ? (
+      {migrationBlocksLibrary ? null : selectedEntries.length > 1 ? (
         <div className="cinema-asset-library-batch-bar" aria-label="批量操作">
           <strong>已选择 {selectedEntries.length} 项</strong>
           <div>
@@ -1313,11 +1410,11 @@ function AssetLibraryPanelContent({
             <button
               type="button"
               className="cinema-library-danger-button"
-              disabled={isReadOnly || trashMutation.isPending}
-              onClick={() => requestTrash(selectedTargets)}
+              disabled={isReadOnly || beginDeleteMutation.isPending}
+              onClick={() => requestDelete(selectedTargets)}
             >
               <Trash2 size={14} aria-hidden="true" />
-              移入回收站
+              删除
             </button>
           </div>
         </div>
@@ -1327,7 +1424,7 @@ function AssetLibraryPanelContent({
           isReadOnly={isReadOnly}
           onRename={(folder) => setRenameTarget({ entryType: "folder", folder })}
           onMove={(folder) => setMoveEntries([{ entryType: "folder", folderID: folder.id }])}
-          onTrash={(folder) => requestTrash(
+          onDelete={(folder) => requestDelete(
             [{ entryType: "folder", folderID: folder.id }],
             [{ entryType: "folder", folder }],
           )}
@@ -1345,7 +1442,7 @@ function AssetLibraryPanelContent({
           onRetry={(assetID) => void retryMutation.mutateAsync(assetID).catch(handleActionError)}
           onRename={(asset) => setRenameTarget({ entryType: "asset", asset })}
           onMove={(asset) => setMoveEntries([{ entryType: "asset", assetID: asset.id }])}
-          onTrash={(asset) => requestTrash([{ entryType: "asset", assetID: asset.id }], [{ entryType: "asset", asset }])}
+          onDelete={(asset) => requestDelete([{ entryType: "asset", assetID: asset.id }], [{ entryType: "asset", asset }])}
         />
       )}
 
@@ -1359,31 +1456,37 @@ function AssetLibraryPanelContent({
         </div>
       ) : null}
 
-      {undoEntries ? (
-        <div className="cinema-asset-library-toast" role="status">
-          <span>已移入回收站</span>
-          <button
-            type="button"
-            disabled={restoreMutation.isPending}
-            onClick={() => void restoreMutation.mutateAsync(undoEntries).catch(handleActionError)}
-          >
-            <RotateCcw size={13} aria-hidden="true" />
-            撤销
-          </button>
+      {pendingDeletes.length > 0 ? (
+        <div className={`cinema-asset-library-toast-stack ${actionError ? "has-action-error" : ""}`} aria-label="待完成的删除">
+          {pendingDeletes.map((pendingDelete) => (
+            <div key={pendingDelete.operationID} className="cinema-asset-library-toast" role="status">
+              <span>已删除 {pendingDelete.count} 项</span>
+              <button
+                type="button"
+                disabled={pendingDeleteActionIDs.has(pendingDelete.operationID)}
+                onClick={() => void undoPendingDelete(pendingDelete)}
+              >
+                {pendingDeleteActionIDs.has(pendingDelete.operationID)
+                  ? <Loader2 size={13} aria-hidden="true" className="is-spinning" />
+                  : <RotateCcw size={13} aria-hidden="true" />}
+                撤销
+              </button>
+            </div>
+          ))}
         </div>
       ) : null}
 
-      {isCreateFolderOpen ? (
+      {createFolderParentID ? (
         <NameDialog
           title="新建文件夹"
           confirmLabel="创建"
           pending={createFolderMutation.isPending}
           maxLength={80}
-          onClose={() => setIsCreateFolderOpen(false)}
+          onClose={() => setCreateFolderParentID(null)}
           onSubmit={async (name) => {
             setActionError(null)
             try {
-              await createFolderMutation.mutateAsync(name)
+              await createFolderMutation.mutateAsync({ name, parentFolderID: createFolderParentID })
             } catch (error) {
               handleActionError(error)
               throw error
@@ -1426,6 +1529,9 @@ function AssetLibraryPanelContent({
         <FolderPickerDialog
           api={api}
           rootFolderID={rootFolderID}
+          initialFolderID={rootFolderID}
+          title="移动到文件夹"
+          confirmLabel="移动到这里"
           pending={moveMutation.isPending}
           onClose={() => setMoveEntries(null)}
           onChoose={(destinationFolderID) => {
@@ -1435,26 +1541,67 @@ function AssetLibraryPanelContent({
         />
       ) : null}
 
-      {pendingPermanentDelete ? (
-        <PermanentDeleteDialog
-          entries={pendingPermanentDelete.entries}
-          all={pendingPermanentDelete.all}
-          totalCount={pendingPermanentDelete.totalCount}
-          pending={permanentDeleteMutation.isPending}
+      {pendingUploadDestination ? (
+        <FolderPickerDialog
+          key={`upload:${scopeKey}:${pendingUploadDestination.initialFolderID}`}
+          api={api}
+          rootFolderID={rootFolderID}
+          initialFolderID={pendingUploadDestination.initialFolderID}
+          title="选择上传位置"
+          confirmLabel="上传到这里"
+          pending={false}
+          onClose={() => setPendingUploadDestination(null)}
+          onChoose={(destinationFolderID) => {
+            const request = pendingUploadDestination
+            setPendingUploadDestination(null)
+            if (request.files) {
+              handleFiles(request.files, destinationFolderID)
+              return
+            }
+            uploadTargetFolderIDRef.current = destinationFolderID
+            uploadInputRef.current?.click()
+          }}
+        />
+      ) : null}
+
+      {pendingDeleteConfirmation ? (
+        <DeleteConfirmationDialog
+          entries={pendingDeleteConfirmation.entries}
+          pending={beginDeleteMutation.isPending}
           onClose={() => {
-            if (!permanentDeleteMutation.isPending) setPendingPermanentDelete(null)
+            if (!beginDeleteMutation.isPending) setPendingDeleteConfirmation(null)
           }}
           onConfirm={async () => {
             try {
-              await permanentDeleteMutation.mutateAsync({
-                targets: pendingPermanentDelete.targets,
-                all: pendingPermanentDelete.all,
+              await beginDeleteMutation.mutateAsync({
+                targets: pendingDeleteConfirmation.targets,
+                entries: pendingDeleteConfirmation.entries,
+                deleteApi: api,
+                deleteScope: scope,
+                deleteScopeKey: scopeKey,
+                baseRevision: revisionRef.current,
               })
             } catch (error) {
               handleActionError(error)
               throw error
             }
           }}
+        />
+      ) : null}
+
+      {contextMenu ? (
+        <AssetLibraryContextMenu
+          menu={contextMenu}
+          searching={isSearching}
+          currentFolderID={currentSession.folderID}
+          isReadOnly={isReadOnly}
+          onClose={closeContextMenu}
+          onOpenFolder={openFolder}
+          onUpload={requestUpload}
+          onCreateFolder={setCreateFolderParentID}
+          onRename={setRenameTarget}
+          onMove={setMoveEntries}
+          onDelete={requestDelete}
         />
       ) : null}
 
@@ -1569,6 +1716,8 @@ function AssetLibraryGrid({
   layoutVersion,
   revealRequest,
   onSelect,
+  onContextMenu,
+  onOpenContextMenuAt,
   onAdd,
 }: {
   api: AssetLibraryApi
@@ -1583,6 +1732,8 @@ function AssetLibraryGrid({
   layoutVersion: string
   revealRequest?: AssetGridRevealRequest | null
   onSelect(entry: AssetLibraryEntry, event: ReactMouseEvent<HTMLButtonElement>): void
+  onContextMenu(entry: AssetLibraryEntry, event: ReactMouseEvent<HTMLElement>): void
+  onOpenContextMenuAt(entry: AssetLibraryEntry, x: number, y: number, returnFocus: HTMLElement | null): void
   onAdd(asset: CinemaAssetRecord): void | Promise<void>
 }) {
   const gridRef = useRef<HTMLElement>(null)
@@ -1663,6 +1814,7 @@ function AssetLibraryGrid({
         title={`${asset.displayName}\n${assetLibraryEntryPath(entry)}${kindAccepted ? "" : "\n类型不匹配"}`}
         draggable={allowDragAndAdd}
         onClick={(event) => onSelect(entry, event)}
+        onContextMenu={(event) => onContextMenu(entry, event)}
         onDoubleClick={() => {
           if (allowDragAndAdd) void onAdd(asset)
         }}
@@ -1687,6 +1839,13 @@ function AssetLibraryGrid({
           event.dataTransfer.setData("text/plain", asset.displayName)
         }}
         onKeyDown={(event) => {
+          if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+            event.preventDefault()
+            event.stopPropagation()
+            const bounds = event.currentTarget.getBoundingClientRect()
+            onOpenContextMenuAt(entry, bounds.left + 16, bounds.top + 16, event.currentTarget)
+            return
+          }
           const offsets: Record<string, number> = {
             ArrowLeft: -1,
             ArrowRight: 1,
@@ -1836,7 +1995,7 @@ function assetStatusLabel(status: CinemaAssetRecord["status"]): string {
     case "processing": return "处理中"
     case "failed": return "处理失败"
     case "missing": return "文件缺失"
-    case "trashed": return "回收站"
+    case "trashed": return "正在删除"
     default: return "可用"
   }
 }
@@ -1911,7 +2070,7 @@ function AssetDetail({
   onRetry,
   onRename,
   onMove,
-  onTrash,
+  onDelete,
 }: {
   api: AssetLibraryApi
   asset: CinemaAssetRecord | null
@@ -1924,7 +2083,7 @@ function AssetDetail({
   onRetry(assetID: string): void
   onRename(asset: CinemaAssetRecord): void
   onMove(asset: CinemaAssetRecord): void
-  onTrash(asset: CinemaAssetRecord): void
+  onDelete(asset: CinemaAssetRecord): void
 }) {
   if (!asset) {
     return (
@@ -2000,99 +2159,7 @@ function AssetDetail({
         <DetailActionButton label={`移动 ${asset.displayName}`} disabled={isReadOnly} onClick={() => onMove(asset)}>
           <Move size={14} aria-hidden="true" />
         </DetailActionButton>
-        <DetailActionButton danger label={`将 ${asset.displayName} 移入回收站`} disabled={isReadOnly} onClick={() => onTrash(asset)}>
-          <Trash2 size={14} aria-hidden="true" />
-        </DetailActionButton>
-      </div>
-    </section>
-  )
-}
-
-function TrashEntryDetail({
-  api,
-  entry,
-  isReadOnly,
-  restorePending,
-  deletePending,
-  onRestore,
-  onPermanentDelete,
-}: {
-  api: AssetLibraryApi
-  entry: AssetLibraryEntry | null
-  isReadOnly: boolean
-  restorePending: boolean
-  deletePending: boolean
-  onRestore(entry: AssetLibraryEntry): void
-  onPermanentDelete(entry: AssetLibraryEntry): void
-}) {
-  if (!entry) {
-    return (
-      <section className="cinema-asset-library-detail is-empty" aria-label="回收站详情">
-        <Trash2 size={18} aria-hidden="true" />
-        <span>选择项目以恢复或永久删除</span>
-      </section>
-    )
-  }
-
-  const isFolder = entry.entryType === "folder"
-  const name = assetLibraryEntryName(entry)
-  const originalPath = assetLibraryEntryPath(entry)
-  const trashedAt = isFolder ? entry.folder.trash?.trashedAt : entry.asset.trash?.trashedAt
-  const metadata = [
-    ["原路径", originalPath],
-    ["类型", isFolder
-      ? "文件夹"
-      : entry.asset.kind === "image" ? "图片" : entry.asset.kind === "video" ? "视频" : "音频"],
-    ["大小", isFolder ? "" : formatAssetLibrarySize(entry.asset.sizeBytes)],
-    ["移入时间", formatAssetLibraryTimestamp(trashedAt)],
-  ].filter((row): row is [string, string] => Boolean(row[1]))
-
-  return (
-    <section className={`cinema-asset-library-detail is-trash ${isFolder ? "is-folder" : ""}`} aria-label="回收站详情">
-      <div className="cinema-asset-library-detail-preview">
-        {isFolder ? (
-          <Folder size={28} aria-hidden="true" />
-        ) : entry.asset.kind === "image" ? (
-          <img src={api.assetPreviewURL(entry.asset.id)} alt={entry.asset.displayName} draggable={false} />
-        ) : entry.asset.kind === "video" ? (
-          <video src={api.assetPreviewURL(entry.asset.id)} controls preload="metadata" aria-label={entry.asset.displayName} />
-        ) : (
-          <div className="cinema-asset-library-audio-preview">
-            <Music size={20} aria-hidden="true" />
-            <audio src={api.assetPreviewURL(entry.asset.id)} controls preload="metadata" aria-label={entry.asset.displayName} />
-          </div>
-        )}
-      </div>
-      <div className="cinema-asset-library-detail-heading">
-        <strong title={name}>{name}</strong>
-        <span>回收站</span>
-      </div>
-      <dl>
-        {metadata.map(([label, value]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd title={value}>{value}</dd>
-          </div>
-        ))}
-      </dl>
-      <div className="cinema-asset-library-detail-actions">
-        <button
-          type="button"
-          className="cinema-library-secondary-button is-main"
-          disabled={isReadOnly || restorePending || deletePending}
-          onClick={() => onRestore(entry)}
-        >
-          {restorePending
-            ? <Loader2 size={14} aria-hidden="true" className="is-spinning" />
-            : <RotateCcw size={14} aria-hidden="true" />}
-          {restorePending ? "正在恢复" : "恢复"}
-        </button>
-        <DetailActionButton
-          danger
-          label={`永久删除 ${name}`}
-          disabled={isReadOnly || restorePending || deletePending}
-          onClick={() => onPermanentDelete(entry)}
-        >
+        <DetailActionButton danger label={`删除 ${asset.displayName}`} disabled={isReadOnly} onClick={() => onDelete(asset)}>
           <Trash2 size={14} aria-hidden="true" />
         </DetailActionButton>
       </div>
@@ -2105,13 +2172,13 @@ function FolderDetail({
   isReadOnly,
   onRename,
   onMove,
-  onTrash,
+  onDelete,
 }: {
   folder: Extract<AssetLibraryEntry, { entryType: "folder" }>["folder"]
   isReadOnly: boolean
   onRename(folder: Extract<AssetLibraryEntry, { entryType: "folder" }>["folder"]): void
   onMove(folder: Extract<AssetLibraryEntry, { entryType: "folder" }>["folder"]): void
-  onTrash(folder: Extract<AssetLibraryEntry, { entryType: "folder" }>["folder"]): void
+  onDelete(folder: Extract<AssetLibraryEntry, { entryType: "folder" }>["folder"]): void
 }) {
   const actionsDisabled = isReadOnly || folder.system
   return (
@@ -2141,7 +2208,7 @@ function FolderDetail({
         <DetailActionButton label={`移动文件夹 ${folder.name}`} disabled={actionsDisabled} onClick={() => onMove(folder)}>
           <Move size={14} aria-hidden="true" />
         </DetailActionButton>
-        <DetailActionButton danger label={`将文件夹 ${folder.name} 移入回收站`} disabled={actionsDisabled} onClick={() => onTrash(folder)}>
+        <DetailActionButton danger label={`删除文件夹 ${folder.name}`} disabled={actionsDisabled} onClick={() => onDelete(folder)}>
           <Trash2 size={14} aria-hidden="true" />
         </DetailActionButton>
       </div>
@@ -2176,40 +2243,279 @@ function DetailActionButton({
   )
 }
 
-function PermanentDeleteDialog({
+interface AssetLibraryContextMenuItem {
+  id: string
+  label: string
+  icon: ReactNode
+  disabled?: boolean
+  danger?: boolean
+  separatorBefore?: boolean
+  action(): void
+}
+
+function AssetLibraryContextMenu({
+  menu,
+  searching,
+  currentFolderID,
+  isReadOnly,
+  onClose,
+  onOpenFolder,
+  onUpload,
+  onCreateFolder,
+  onRename,
+  onMove,
+  onDelete,
+}: {
+  menu: AssetLibraryContextMenuState
+  searching: boolean
+  currentFolderID: string
+  isReadOnly: boolean
+  onClose(restoreFocus?: boolean): void
+  onOpenFolder(folderID: string): void
+  onUpload(folderID?: string): void
+  onCreateFolder(parentFolderID: string): void
+  onRename(entry: AssetLibraryEntry): void
+  onMove(entries: AssetLibraryEntryRef[]): void
+  onDelete(entries: AssetLibraryEntryRef[], sourceEntries: AssetLibraryEntry[]): void
+}) {
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState({ x: menu.x, y: menu.y })
+  const items = useMemo<AssetLibraryContextMenuItem[]>(() => {
+    const mutate = (item: Omit<AssetLibraryContextMenuItem, "disabled">): AssetLibraryContextMenuItem => ({
+      ...item,
+      disabled: isReadOnly,
+    })
+
+    if (menu.entries.length === 0) {
+      const backgroundItems: AssetLibraryContextMenuItem[] = [mutate({
+        id: "upload",
+        label: "上传到这里",
+        icon: <Upload size={14} aria-hidden="true" />,
+        action: () => onUpload(),
+      })]
+      if (!searching) {
+        backgroundItems.push(mutate({
+          id: "create-folder",
+          label: "新建文件夹",
+          icon: <FolderPlus size={14} aria-hidden="true" />,
+          action: () => onCreateFolder(currentFolderID),
+        }))
+      }
+      return backgroundItems
+    }
+
+    if (menu.entries.length > 1) {
+      return [
+        {
+          ...mutate({
+            id: "move",
+            label: "移动",
+            icon: <Move size={14} aria-hidden="true" />,
+            action: () => onMove(menu.targets),
+          }),
+          disabled: isReadOnly || menu.targets.length === 0,
+        },
+        {
+          ...mutate({
+            id: "delete",
+            label: "删除",
+            icon: <Trash2 size={14} aria-hidden="true" />,
+            danger: true,
+            action: () => onDelete(menu.targets, menu.entries),
+          }),
+          disabled: isReadOnly || menu.targets.length === 0,
+        },
+      ]
+    }
+
+    const entry = menu.entries[0]
+    if (entry.entryType === "folder") {
+      const folderItems: AssetLibraryContextMenuItem[] = [
+        {
+          id: "open",
+          label: "打开",
+          icon: <Folder size={14} aria-hidden="true" />,
+          action: () => onOpenFolder(entry.folder.id),
+        },
+        mutate({
+          id: "upload",
+          label: "上传到这里",
+          icon: <Upload size={14} aria-hidden="true" />,
+          action: () => onUpload(entry.folder.id),
+        }),
+        mutate({
+          id: "create-subfolder",
+          label: "新建子文件夹",
+          icon: <FolderPlus size={14} aria-hidden="true" />,
+          action: () => onCreateFolder(entry.folder.id),
+        }),
+      ]
+      if (!entry.folder.system) {
+        folderItems.push(
+          mutate({
+            id: "rename",
+            label: "重命名",
+            icon: <PencilLine size={14} aria-hidden="true" />,
+            separatorBefore: true,
+            action: () => onRename(entry),
+          }),
+          mutate({
+            id: "move",
+            label: "移动",
+            icon: <Move size={14} aria-hidden="true" />,
+            action: () => onMove(menu.targets),
+          }),
+          mutate({
+            id: "delete",
+            label: "删除",
+            icon: <Trash2 size={14} aria-hidden="true" />,
+            danger: true,
+            action: () => onDelete(menu.targets, menu.entries),
+          }),
+        )
+      }
+      return folderItems
+    }
+
+    return [
+      mutate({
+        id: "rename",
+        label: "重命名",
+        icon: <PencilLine size={14} aria-hidden="true" />,
+        action: () => onRename(entry),
+      }),
+      mutate({
+        id: "move",
+        label: "移动",
+        icon: <Move size={14} aria-hidden="true" />,
+        action: () => onMove(menu.targets),
+      }),
+      mutate({
+        id: "delete",
+        label: "删除",
+        icon: <Trash2 size={14} aria-hidden="true" />,
+        danger: true,
+        action: () => onDelete(menu.targets, menu.entries),
+      }),
+    ]
+  }, [currentFolderID, isReadOnly, menu.entries, menu.targets, onCreateFolder, onDelete, onMove, onOpenFolder, onRename, onUpload, searching])
+
+  useLayoutEffect(() => {
+    const element = menuRef.current
+    if (!element) return
+    const bounds = element.getBoundingClientRect()
+    const next = clampContextMenuPosition(
+      menu.x,
+      menu.y,
+      bounds.width,
+      bounds.height,
+      window.innerWidth,
+      window.innerHeight,
+    )
+    setPosition((current) => current.x === next.x && current.y === next.y ? current : next)
+    const firstItem = element.querySelector<HTMLButtonElement>("[role='menuitem']:not(:disabled)")
+    firstItem?.focus({ preventScroll: true })
+  }, [items, menu.x, menu.y])
+
+  useEffect(() => {
+    const closeForExternalPointer = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) onClose(false)
+    }
+    const closeForViewportChange = () => onClose(false)
+    document.addEventListener("pointerdown", closeForExternalPointer, true)
+    window.addEventListener("resize", closeForViewportChange)
+    window.addEventListener("scroll", closeForViewportChange, true)
+    return () => {
+      document.removeEventListener("pointerdown", closeForExternalPointer, true)
+      window.removeEventListener("resize", closeForViewportChange)
+      window.removeEventListener("scroll", closeForViewportChange, true)
+    }
+  }, [onClose])
+
+  const moveFocus = (direction: 1 | -1) => {
+    const enabledItems = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']:not(:disabled)") ?? [])
+    if (enabledItems.length === 0) return
+    const currentIndex = enabledItems.indexOf(document.activeElement as HTMLButtonElement)
+    const nextIndex = currentIndex < 0
+      ? direction > 0 ? 0 : enabledItems.length - 1
+      : (currentIndex + direction + enabledItems.length) % enabledItems.length
+    enabledItems[nextIndex]?.focus({ preventScroll: true })
+  }
+
+  const portalTarget = typeof document === "undefined" ? null : document.body
+  if (!portalTarget) return null
+  return createPortal(
+    <div
+      ref={menuRef}
+      className="cinema-asset-library-context-menu"
+      role="menu"
+      aria-label="素材库操作"
+      style={{ left: position.x, top: position.y }}
+      onContextMenu={(event) => event.preventDefault()}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" || event.key === "Tab") {
+          event.preventDefault()
+          onClose(true)
+          return
+        }
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault()
+          moveFocus(event.key === "ArrowDown" ? 1 : -1)
+          return
+        }
+        if (event.key === "Home" || event.key === "End") {
+          event.preventDefault()
+          const enabledItems = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']:not(:disabled)") ?? [])
+          enabledItems[event.key === "Home" ? 0 : enabledItems.length - 1]?.focus({ preventScroll: true })
+        }
+      }}
+    >
+      {items.map((item) => (
+        <div key={item.id} className="cinema-asset-library-context-menu-row">
+          {item.separatorBefore ? <div className="cinema-asset-library-context-menu-separator" role="separator" /> : null}
+          <button
+            type="button"
+            role="menuitem"
+            className={item.danger ? "is-danger" : undefined}
+            disabled={item.disabled}
+            onClick={() => {
+              onClose(false)
+              item.action()
+            }}
+          >
+            {item.icon}
+            <span>{item.label}</span>
+          </button>
+        </div>
+      ))}
+    </div>,
+    portalTarget,
+  )
+}
+
+function DeleteConfirmationDialog({
   entries,
-  all,
-  totalCount,
   pending,
   onClose,
   onConfirm,
 }: {
   entries: AssetLibraryEntry[]
-  all: boolean
-  totalCount?: number
   pending: boolean
   onClose(): void
   onConfirm(): Promise<void>
 }) {
-  const [stage, setStage] = useState<1 | 2>(1)
   const [error, setError] = useState<string | null>(null)
   const dialogRef = useRef<HTMLElement>(null)
   const summary = useMemo(() => summarizeAssetLibrarySelection(entries), [entries])
-  const affectedCount = all ? totalCount ?? 0 : summary.count
 
-  useEffect(() => dialogRef.current?.focus(), [stage])
+  useEffect(() => dialogRef.current?.focus(), [])
 
   const submit = async () => {
-    if (stage === 1) {
-      setStage(2)
-      setError(null)
-      return
-    }
     setError(null)
     try {
       await onConfirm()
     } catch (confirmError) {
-      setError(errorMessage(confirmError, "永久删除失败"))
+      setError(assetLibraryErrorMessage(confirmError, "删除失败"))
     }
   }
 
@@ -2234,9 +2540,7 @@ function PermanentDeleteDialog({
       >
         <header>
           <strong id="cinema-asset-library-delete-dialog-title">
-            {stage === 1
-              ? all ? "清空回收站" : "永久删除"
-              : all ? "再次确认清空回收站" : "再次确认永久删除"}
+            删除所选内容
           </strong>
           <LibraryIconButton label="关闭" disabled={pending} onClick={onClose}>
             <X size={14} aria-hidden="true" />
@@ -2246,17 +2550,11 @@ function PermanentDeleteDialog({
           <AlertCircle size={18} aria-hidden="true" />
           <div>
             <strong>
-              {all
-                ? `清空回收站中的全部 ${affectedCount} 项`
-                : `${summary.count} 项（${summary.folderCount} 个文件夹，${summary.assetCount} 个素材）`}
+              {`${summary.count} 项（${summary.folderCount} 个文件夹，${summary.assetCount} 个素材）`}
             </strong>
             <span>
-              {!all && summary.knownSizeBytes > 0 ? `已知素材大小 ${formatAssetLibrarySize(summary.knownSizeBytes)}。` : ""}
-              {stage === 1
-                ? "永久删除后无法恢复。"
-                : all
-                  ? "这是最后一次确认。系统会检查整个回收站；任一素材仍被引用时，本次清空不会删除任何内容。"
-                  : "这是最后一次确认。被 Canvas 或生成任务引用的素材会由服务端拒绝删除。"}
+              {summary.knownSizeBytes > 0 ? `已知素材大小 ${formatAssetLibrarySize(summary.knownSizeBytes)}。` : ""}
+              删除后可在 10 秒内撤销。仍被画布、时间线或任务引用的素材不会被删除。
             </span>
           </div>
         </div>
@@ -2272,7 +2570,7 @@ function PermanentDeleteDialog({
           </button>
           <button type="button" className="cinema-library-danger-button" disabled={pending} onClick={() => void submit()}>
             {pending ? <Loader2 size={14} aria-hidden="true" className="is-spinning" /> : <Trash2 size={14} aria-hidden="true" />}
-            {pending ? "正在删除" : stage === 1 ? "继续" : all ? "确认清空回收站" : "确认永久删除"}
+            {pending ? "正在删除" : "删除"}
           </button>
         </footer>
       </section>
@@ -2363,17 +2661,23 @@ function NameDialog({
 function FolderPickerDialog({
   api,
   rootFolderID,
+  initialFolderID,
+  title,
+  confirmLabel,
   pending,
   onClose,
   onChoose,
 }: {
   api: AssetLibraryApi
   rootFolderID: string
+  initialFolderID: string
+  title: string
+  confirmLabel: string
   pending: boolean
   onClose(): void
   onChoose(folderID: string): void
 }) {
-  const [folderID, setFolderID] = useState(rootFolderID)
+  const [folderID, setFolderID] = useState(initialFolderID)
   const dialogRef = useRef<HTMLElement>(null)
   const folderQuery = useQuery({
     queryKey: ["cinema-asset-library-folder-picker", api.scopeKey, folderID],
@@ -2402,7 +2706,7 @@ function FolderPickerDialog({
         }}
       >
         <header>
-          <strong id="cinema-asset-library-folder-picker-title">移动到文件夹</strong>
+          <strong id="cinema-asset-library-folder-picker-title">{title}</strong>
           <LibraryIconButton label="关闭" onClick={onClose}><X size={14} aria-hidden="true" /></LibraryIconButton>
         </header>
         <nav className="cinema-asset-library-breadcrumbs" aria-label="目标文件夹路径">
@@ -2428,7 +2732,7 @@ function FolderPickerDialog({
         <footer>
           <button type="button" className="cinema-library-secondary-button" onClick={onClose}>取消</button>
           <button type="button" className="cinema-library-primary-button" disabled={pending} onClick={() => onChoose(folderID)}>
-            {pending ? "正在移动" : "移动到这里"}
+            {pending ? "正在处理" : confirmLabel}
           </button>
         </footer>
       </section>

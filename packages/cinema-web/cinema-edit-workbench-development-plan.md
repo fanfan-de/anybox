@@ -182,7 +182,7 @@ CinemaWorkbenchHeader: Create | Edit | Deliver
 明确不做：
 
 - 在 Edit 内重新实现 Create 的文字生成、图片生成、调色和 Prompt 面板。
-- 在 Edit 内直接永久删除项目素材。
+- 在 Edit 内直接删除项目素材；删除统一由素材库执行引用检查和 10 秒撤销。
 - 第一版提供复杂素材文件夹管理；高级操作跳转或打开现有素材库。
 
 ### 6.3 Preview
@@ -598,7 +598,7 @@ src/features/timeline/
 - A1 音频同步和音量。
 - Agent 波形缓存。
 - image overlay 基础预览。
-- missing/personal/trash asset 状态和替换素材流程。
+- missing/personal/deleted asset 状态和替换素材流程；内部 `trashed` 只作为删除撤销期的降级状态。
 - Timeline 校验与“可交付”状态。
 
 验收门槛：
@@ -642,7 +642,7 @@ src/features/timeline/
 - 同 Timeline 写锁。
 - 不同 Timeline 可并行。
 - 路径穿越、非法 projectID/timelineID。
-- 缺失、回收站和 personal asset 引用。
+- 缺失、已删除（内部 `trashed` 降级）和 personal asset 引用。
 - 事件日志不泄漏绝对路径或密钥。
 
 ### 13.3 前端单元与组件
@@ -666,7 +666,7 @@ src/features/timeline/
 6. 切到 Create 再返回 Edit，状态恢复。
 7. 命令断网失败后本地位置保留并可重试。
 8. 外部 revision 更新触发原 ID 换基重放。
-9. 删除或回收素材后 Clip 进入 missing 状态。
+9. 素材异常缺失或出现内部 `trashed` 降级状态后，Clip 保留并进入不可用修复状态；正常删除会因 Timeline 引用而被阻止。
 10. 亮色、暗色、1280px、900px 和 760px 布局。
 
 ## 14. 可访问性与键盘门槛

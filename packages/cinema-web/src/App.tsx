@@ -6114,7 +6114,7 @@ function CinemaAssetReferenceBadge({ data }: { data: CinemaFlowNodeData }) {
   return (
     <div className="cinema-asset-node-badges" aria-label={t("asset.referenceStatus")}>
       {isPersonal ? <span>{t("asset.personal")}</span> : null}
-      {isTrashed ? <span className="is-warning">{t("asset.inTrash")}</span> : null}
+      {isTrashed ? <span className="is-warning">{t("asset.deleted")}</span> : null}
     </div>
   )
 }
@@ -6474,7 +6474,7 @@ function inspectorRowsForNode(node: CinemaFlowNode) {
     )
     const assetStatus = readRawString(rawData, "assetStatus", "ready")
     if (assetStatus === "trashed") {
-      addInspectorRow(rows, "Reference", "素材位于回收站", { tone: "muted" })
+      addInspectorRow(rows, "Reference", "素材已删除，请重新关联", { tone: "danger" })
     } else if (assetStatus === "missing") {
       addInspectorRow(rows, "Reference", "引用不可用，请重新关联", { tone: "danger" })
     }
@@ -7830,7 +7830,7 @@ export function App() {
         const api = createAssetLibraryApi(agentBaseURL, projectID, libraryAssetRef.scope)
         let sourceDetail = await api.getAsset(libraryAssetRef.assetID)
         if (sourceDetail.asset.kind !== "image" || sourceDetail.asset.status !== "ready") {
-          throw new Error("Restore or repair the source image before cropping it.")
+          throw new Error("The source image is unavailable. Relink or repair it before cropping.")
         }
         const file = dataBase64ToFile(croppedImage.dataBase64, nextFileName, "image/png")
         const operationID = makeAssetLibraryOperationID("crop")

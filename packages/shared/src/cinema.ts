@@ -137,6 +137,7 @@ export const CinemaAssetTrashLocationSchema = z.object({
   originalRelativePath: CinemaAssetRelativePathSchema,
   trashedRelativePath: CinemaAssetRelativePathSchema.refine((value) => value.length > 0),
   trashedAt: z.string().min(1),
+  expiresAt: z.string().min(1).optional(),
   previousStatus: z.enum(["ready", "failed", "missing"]).optional(),
 })
 export type CinemaAssetTrashLocation = z.infer<typeof CinemaAssetTrashLocationSchema>
@@ -147,6 +148,7 @@ export const CinemaAssetFolderTrashLocationSchema = z.object({
   originalRelativePath: CinemaAssetRelativePathSchema,
   trashedRelativePath: CinemaAssetRelativePathSchema.refine((value) => value.length > 0),
   trashedAt: z.string().min(1),
+  expiresAt: z.string().min(1).optional(),
 })
 export type CinemaAssetFolderTrashLocation = z.infer<typeof CinemaAssetFolderTrashLocationSchema>
 
@@ -381,6 +383,7 @@ export const CinemaAssetMutationResultSchema = z.object({
   revision: z.number().int().nonnegative(),
   affected: z.array(CinemaAssetEntryTargetSchema).default([]),
   warnings: z.array(z.string().min(1)).default([]),
+  undoUntil: z.string().min(1).optional(),
 })
 export type CinemaAssetMutationResult = z.infer<typeof CinemaAssetMutationResultSchema>
 

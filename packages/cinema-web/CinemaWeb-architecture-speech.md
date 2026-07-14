@@ -476,17 +476,17 @@ utils/cinemaCanvas.ts
 
 `pnpm --filter anybox-cinema-web test:e2e` 默认会先构建 Cinema Web，再启动一个绑定临时初始化项目的真实 Agent。可靠性用例会注入网络中断、外部 revision 更新和两个并发生成故障，验证自动/手动重试、同一命令 ID 的 409 换基重放、失败队列的离页保护，以及按节点隔离的 generating/error 状态。Windows 本地默认复用系统 Chrome，也可用 `CINEMA_E2E_CHANNEL` 覆盖浏览器通道。
 
-素材库另有 Testing Library + Axe 组件检查，以及 `e2e/asset-library.pw.ts` 的 Chromium 主路径检查。该用例涉及个人素材库，只有显式设置 `CINEMA_E2E_URL` 连接测试项目时才运行，覆盖 Rail/面板互斥、个人域、回收站、窄窗口、Escape 焦点恢复和真实颜色对比度；默认临时夹具会安全跳过它。
+素材库另有 Testing Library + Axe 组件检查，以及 `e2e/asset-library.pw.ts` 的 Chromium 主路径检查。该用例默认使用隔离的临时 Agent 项目运行，覆盖 Rail/面板互斥、项目/个人域、右键新建文件夹、上传位置选择、删除与 10 秒撤销、窄窗口、Escape 焦点恢复和真实颜色对比度；显式设置 `CINEMA_E2E_URL` 时只执行不会修改外部项目内容的安全子路径。
 
 ### 17.1 素材库运行时边界
 
-素材库不再把文件路径当作 Canvas 身份。项目库和个人库分别维护 JSON Catalog，Catalog 保存稳定 `assetID`、媒体 metadata、`contentRevision` 和当前物理相对路径；Canvas 只保存 canonical `assetRef`。因此文件改名、移动、回收和恢复时不需要批量改写节点。
+素材库不再把文件路径当作 Canvas 身份。项目库和个人库分别维护 JSON Catalog，Catalog 保存稳定 `assetID`、媒体 metadata、`contentRevision` 和当前物理相对路径；Canvas 只保存 canonical `assetRef`。因此文件改名、移动以及删除撤销时不需要批量改写节点；仍被 Canvas、Timeline 或任务引用的素材会在删除前被服务端阻止。
 
-项目素材位于 `assets/library/`，Catalog、备份和 operation journal 位于 `.anybox-cinema/`；个人素材位于 Agent data 下的 `cinema-library/`。所有 mutation 带 `operationID + baseRevision`，Catalog 写入使用作用域锁、临时文件、fsync、rename 和最近两份备份。Canvas 的 `create-node-from-asset` 也在项目写锁中校验 revision 与 Ready 状态，由服务端决定节点 kind，前端不能伪造物理路径。
+项目素材位于 `assets/library/`，Catalog、备份和 operation journal 位于 `.anybox-cinema/`；个人素材位于 Agent data 下的 `cinema-library/`。所有 mutation 带 `operationID + baseRevision`，Catalog 写入使用作用域锁、临时文件、fsync、rename 和最近两份备份。删除先移动到不可见的 `.trash/<operationID>` 事务隔离目录并记录 `expiresAt`，前端只提供 10 秒撤销；到期清理或下次初始化懒清理前会再次核对引用，异常新增引用时整批恢复。没有 `expiresAt` 的旧回收站记录在升级时恢复到原目录或收件箱。Canvas 的 `create-node-from-asset` 也在项目写锁中校验 revision 与 Ready 状态，由服务端决定节点 kind，前端不能伪造物理路径。
 
 上传按单文件 multipart 流入 `.staging`，同时计算大小和 SHA-256；媒体内容由签名与 ffprobe 校验。内容和 Range 响应使用带 backpressure 的文件流，避免大视频进入 JavaScript 内存。FFmpeg/ffprobe 作为固定 SHA 的 Windows x64 LGPL 运行时随桌面端打包，子进程只接收参数数组，限制输出、超时和全局并发，并为 Chromium 不兼容的媒体生成预览代理。
 
-前端的素材库是独立 Rail 面板，内部包含项目/个人域、物理文件夹、全域搜索、上传队列、多选操作和三媒体详情。拖入 Canvas 使用私有 MIME payload，只传 `{scope, assetID}`；服务端返回完整 Canvas 后才出现节点，所以命令失败不会留下幽灵节点。
+前端的素材库是独立 Rail 面板，内部包含项目/个人域、物理文件夹、全域搜索、上传队列、多选操作和三媒体详情。顶栏只保留上传、刷新和关闭；具体目录直接上传，根目录或搜索页先选择目标目录；文件夹创建、移动、重命名和删除收敛到键盘可访问的右键菜单。产品不展示回收站，删除后的独立提示只在 10 秒内提供撤销。拖入 Canvas 使用私有 MIME payload，只传 `{scope, assetID}`；服务端返回完整 Canvas 后才出现节点，所以命令失败不会留下幽灵节点。
 
 ## 18. 结尾：这个架构的核心价值
 

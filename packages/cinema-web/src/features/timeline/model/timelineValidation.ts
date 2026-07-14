@@ -28,7 +28,7 @@ export function validateTimelineForDelivery(
         code: "asset-unavailable",
         severity: "error",
         clipID: clip.id,
-        message: `${clip.title} is ${status}. Replace or restore its asset.`,
+        message: `${clip.title} is ${status}. Replace its asset.`,
       })
     }
   }

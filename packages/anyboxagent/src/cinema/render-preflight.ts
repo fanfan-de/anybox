@@ -114,7 +114,7 @@ function validateResolvedAsset(
   if (asset.status === "missing") {
     issues.push(issue("asset-missing", "error", "A referenced asset file is missing.", details))
   } else if (asset.status === "trashed") {
-    issues.push(issue("asset-trashed", "error", "A referenced asset is in the recycle bin.", details))
+    issues.push(issue("asset-trashed", "error", "A referenced asset was deleted.", details))
   } else if (asset.status !== "ready") {
     issues.push(issue("asset-not-ready", "error", `A referenced asset is ${asset.status}.`, details))
   }

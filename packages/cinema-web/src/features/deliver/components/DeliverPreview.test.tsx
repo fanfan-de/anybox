@@ -52,7 +52,7 @@ const succeededJob: CinemaRenderJob = {
 }
 
 describe("DeliverPreview output availability", () => {
-  it("replaces a succeeded preview with an actionable state when its asset is trashed", async () => {
+  it("presents an internally trashed output as deleted without revealing the hidden isolation entry", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({
       ok: true,
       status: 200,
@@ -70,16 +70,25 @@ describe("DeliverPreview output availability", () => {
       }),
     } as Response)))
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const onShowInAssets = vi.fn()
     const view = render(
       <QueryClientProvider client={queryClient}>
         <I18nProvider locale="en-US">
-          <DeliverPreview agentBaseURL="http://agent.test" timeline={null} job={succeededJob} />
+          <DeliverPreview
+            agentBaseURL="http://agent.test"
+            timeline={null}
+            job={succeededJob}
+            onShowInAssets={onShowInAssets}
+          />
         </I18nProvider>
       </QueryClientProvider>,
     )
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Output is in Trash"))
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Output was deleted"))
+    expect(screen.getByRole("alert")).toHaveTextContent("Render the Timeline again")
     expect(screen.getByRole("button", { name: "Check again" })).toBeEnabled()
+    expect(screen.queryByRole("button", { name: "Show in Assets" })).not.toBeInTheDocument()
+    expect(onShowInAssets).not.toHaveBeenCalled()
     expect(view.container.querySelector("video")).toBeNull()
   })
 })

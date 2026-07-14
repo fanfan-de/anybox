@@ -85,10 +85,9 @@ describe("assetLibraryModel", () => {
     expect(ranged.anchorKey).toBe("asset:4")
   })
 
-  it("keeps directory, search, and recycle-bin scroll positions in separate session slots", () => {
-    expect(assetLibraryScrollPositionKey({ folderID: "folder-1", query: "", trash: false })).toBe("folder:folder-1")
-    expect(assetLibraryScrollPositionKey({ folderID: "folder-1", query: "  角色  ", trash: false })).toBe("search:角色")
-    expect(assetLibraryScrollPositionKey({ folderID: "folder-2", query: "角色", trash: true })).toBe("trash")
+  it("keeps directory and normalized search scroll positions in separate session slots", () => {
+    expect(assetLibraryScrollPositionKey({ folderID: "folder-1", query: "" })).toBe("folder:folder-1")
+    expect(assetLibraryScrollPositionKey({ folderID: "folder-1", query: "  角色  " })).toBe("search:角色")
   })
 
   it("formats compact media metadata", () => {
@@ -126,30 +125,23 @@ describe("assetLibraryModel", () => {
     expect(assetRenameParts(asset)).toEqual({ baseName: "my.asset", extension: ".png" })
   })
 
-  it("uses original paths and summarizes mixed recycle-bin selections", () => {
+  it("uses catalog paths and summarizes mixed selections", () => {
     const entries = [{
       entryType: "asset" as const,
       asset: {
         id: "asset-1",
         folderID: "folder-1",
-        relativePath: ".trash/op/asset-1-image.png",
+        relativePath: "角色/image.png",
         displayName: "image",
         kind: "image" as const,
         source: "upload" as const,
-        status: "trashed" as const,
+        status: "ready" as const,
         mimeType: "image/png",
         sizeBytes: 2048,
         checksum: "checksum",
         contentRevision: 1,
         createdAt: "2026-07-10T00:00:00.000Z",
         updatedAt: "2026-07-10T00:00:00.000Z",
-        trash: {
-          operationID: "op",
-          originalFolderID: "folder-1",
-          originalRelativePath: "角色/image.png",
-          trashedRelativePath: ".trash/op/asset-1-image.png",
-          trashedAt: "2026-07-10T01:00:00.000Z",
-        },
       },
     }, {
       entryType: "folder" as const,
@@ -157,19 +149,12 @@ describe("assetLibraryModel", () => {
         id: "folder-2",
         parentID: "root",
         name: "场景",
-        relativePath: ".trash/op/folder-2-场景",
+        relativePath: "场景",
         depth: 1,
         system: false,
-        status: "trashed" as const,
+        status: "active" as const,
         createdAt: "2026-07-10T00:00:00.000Z",
         updatedAt: "2026-07-10T00:00:00.000Z",
-        trash: {
-          operationID: "op",
-          originalParentID: "root",
-          originalRelativePath: "场景",
-          trashedRelativePath: ".trash/op/folder-2-场景",
-          trashedAt: "2026-07-10T01:00:00.000Z",
-        },
       },
     }]
 

@@ -60,11 +60,13 @@ export interface AssetLibraryListing {
 
 export type AssetLibraryEntryRef = CinemaAssetEntryTarget
 
-export type AssetLibraryEntriesView = "library" | "trash"
-
 export type AssetLibraryMutationResult = CinemaAssetMutationResult
 
-export type AssetLibraryPermanentDeleteOptions = {
+export type AssetLibraryPendingDeleteResult = AssetLibraryMutationResult & {
+  undoUntil: string
+}
+
+export type AssetLibraryFinalizeDeleteOptions = {
   operationID: string
   baseRevision: number
 } & (
@@ -90,12 +92,14 @@ export interface AssetLibraryUploadOptions {
 export class AssetLibraryApiError extends Error {
   readonly status: number
   readonly latestRevision?: number
+  readonly code?: string
 
-  constructor(message: string, status: number, latestRevision?: number) {
+  constructor(message: string, status: number, latestRevision?: number, code?: string) {
     super(message)
     this.name = "AssetLibraryApiError"
     this.status = status
     this.latestRevision = latestRevision
+    this.code = code
   }
 }
 
@@ -130,6 +134,7 @@ function errorFromEnvelope(response: Response, body: unknown): AssetLibraryApiEr
     stringValue(error?.message, `Request failed (${response.status})`),
     response.status,
     Number.isFinite(latestRevision) ? latestRevision : undefined,
+    stringValue(error?.code) || undefined,
   )
 }
 
@@ -281,6 +286,15 @@ function normalizeMutation(raw: unknown, fallbackScope: CinemaAssetScope): Asset
   }
 }
 
+function normalizePendingDelete(raw: unknown, fallbackScope: CinemaAssetScope): AssetLibraryPendingDeleteResult {
+  const mutation = normalizeMutation(raw, fallbackScope)
+  const undoUntil = isRecord(raw) ? stringValue(raw.undoUntil) : ""
+  if (!undoUntil || Number.isNaN(Date.parse(undoUntil))) {
+    throw new AssetLibraryApiError("删除响应缺少有效的撤销截止时间", 500)
+  }
+  return { ...mutation, undoUntil }
+}
+
 function normalizeMigrationStatus(raw: unknown): CinemaAssetMigrationStatusResult {
   const parsed = CinemaAssetMigrationStatusResultSchema.safeParse(raw)
   if (!parsed.success) throw new AssetLibraryApiError("素材迁移状态响应无效", 500)
@@ -320,7 +334,6 @@ export interface AssetLibraryApi {
     query?: string
     cursor?: string
     limit?: number
-    view?: AssetLibraryEntriesView
     signal?: AbortSignal
   }): Promise<AssetLibraryListing>
   getAsset(assetID: string, signal?: AbortSignal): Promise<{ revision: number; asset: CinemaAssetRecord }>
@@ -328,9 +341,9 @@ export interface AssetLibraryApi {
   renameFolder(options: { folderID: string; name: string; operationID: string; baseRevision: number }): Promise<{ revision: number; folder: CinemaAssetFolder }>
   renameAsset(options: { assetID: string; baseName: string; operationID: string; baseRevision: number }): Promise<{ revision: number; asset: CinemaAssetRecord }>
   move(options: { entries: AssetLibraryEntryRef[]; destinationFolderID: string; operationID: string; baseRevision: number }): Promise<AssetLibraryMutationResult>
-  trash(options: { entries: AssetLibraryEntryRef[]; operationID: string; baseRevision: number }): Promise<AssetLibraryMutationResult>
-  restore(options: { entries: AssetLibraryEntryRef[]; operationID: string; baseRevision: number }): Promise<AssetLibraryMutationResult>
-  permanentlyDelete(options: AssetLibraryPermanentDeleteOptions): Promise<AssetLibraryMutationResult>
+  beginDelete(options: { entries: AssetLibraryEntryRef[]; operationID: string; baseRevision: number }): Promise<AssetLibraryPendingDeleteResult>
+  undoDelete(options: { entries: AssetLibraryEntryRef[]; operationID: string; baseRevision: number }): Promise<AssetLibraryMutationResult>
+  finalizeDelete(options: AssetLibraryFinalizeDeleteOptions): Promise<AssetLibraryMutationResult>
   retryProcessing(options: { assetID: string; operationID: string; baseRevision: number }): Promise<{ revision: number; asset: CinemaAssetRecord }>
   reconcile(options: { full: boolean; operationID: string; baseRevision: number }): Promise<AssetLibraryMutationResult>
   upload(options: AssetLibraryUploadOptions): Promise<AssetLibraryUploadResult>
@@ -367,11 +380,10 @@ export function createAssetLibraryApi(
         jsonRequest("POST", mutationBody(baseRevision, operationID, { candidateIDs })),
       ))
     },
-    listEntries: async ({ folderID, query = "", cursor, limit = 50, view = "library", signal }) => {
+    listEntries: async ({ folderID, query = "", cursor, limit = 50, signal }) => {
       const params = new URLSearchParams({ folderID, limit: String(Math.min(100, Math.max(1, limit))) })
       if (query) params.set("q", query)
       if (cursor) params.set("cursor", cursor)
-      if (view === "trash") params.set("view", "trash")
       return normalizeListing(await data<unknown>(`/entries?${params}`, { signal }), scope, folderID, query)
     },
     getAsset: async (assetID, signal) => {
@@ -406,15 +418,15 @@ export function createAssetLibraryApi(
       "/moves",
       jsonRequest("POST", mutationBody(baseRevision, operationID, { entries, destinationFolderID })),
     ), scope),
-    trash: async ({ entries, operationID, baseRevision }) => normalizeMutation(await data<unknown>(
+    beginDelete: async ({ entries, operationID, baseRevision }) => normalizePendingDelete(await data<unknown>(
       "/trash",
       jsonRequest("POST", mutationBody(baseRevision, operationID, { entries })),
     ), scope),
-    restore: async ({ entries, operationID, baseRevision }) => normalizeMutation(await data<unknown>(
+    undoDelete: async ({ entries, operationID, baseRevision }) => normalizeMutation(await data<unknown>(
       "/restore",
       jsonRequest("POST", mutationBody(baseRevision, operationID, { entries })),
     ), scope),
-    permanentlyDelete: async (options) => normalizeMutation(await data<unknown>(
+    finalizeDelete: async (options) => normalizeMutation(await data<unknown>(
       "/permanent-delete",
       jsonRequest(
         "POST",
@@ -476,6 +488,7 @@ function uploadAsset(url: string, options: AssetLibraryUploadOptions): Promise<A
           stringValue(error?.message, `Upload failed (${xhr.status})`),
           xhr.status,
           Number.isFinite(revision) ? revision : undefined,
+          stringValue(error?.code) || undefined,
         ))
         return
       }
@@ -489,7 +502,12 @@ function uploadAsset(url: string, options: AssetLibraryUploadOptions): Promise<A
         ?? uploadItems[0]
       if (isRecord(firstItem) && firstItem.success === false) {
         const uploadError = isRecord(firstItem.error) ? firstItem.error : null
-        reject(new AssetLibraryApiError(stringValue(uploadError?.message, "上传失败"), xhr.status))
+        reject(new AssetLibraryApiError(
+          stringValue(uploadError?.message, "上传失败"),
+          xhr.status,
+          undefined,
+          stringValue(uploadError?.code) || undefined,
+        ))
         return
       }
       const asset = normalizeAsset(isRecord(firstItem) ? firstItem.asset : raw.asset ?? raw)

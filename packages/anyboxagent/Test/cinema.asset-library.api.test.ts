@@ -3,8 +3,11 @@ import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
+  initializeCinemaAssetLibrary,
   registerCinemaGeneratedAsset,
+  resetCinemaAssetLibraryInitializationForTest,
   setCinemaAssetLibraryCatalogWriteFailureForTest,
+  setCinemaAssetLibraryNowForTest,
   setCinemaAssetLibraryPersonalRootForTest,
 } from "#cinema/asset-library.ts"
 import { createServerApp } from "#server/server.ts"
@@ -17,6 +20,7 @@ const restores: Array<() => void> = []
 
 afterEach(async () => {
   while (restores.length) restores.pop()?.()
+  resetCinemaAssetLibraryInitializationForTest()
   while (cleanup.length) await rm(cleanup.pop()!, { recursive: true, force: true })
 })
 
@@ -297,6 +301,13 @@ describe("cinema asset library api", () => {
     })
     expect(moveResponse.status).toBe(200)
 
+    const catalogPath = join(root, ".anybox-cinema", "asset-library.json")
+    const catalog = JSON.parse(await readFile(catalogPath, "utf8")) as {
+      assets: Array<{ id: string; displayName: string }>
+    }
+    catalog.assets.find((item) => item.id === asset.id)!.displayName = "Fixture image 1"
+    await writeFile(catalogPath, JSON.stringify(catalog, null, 2), "utf8")
+
     const trashResponse = await app.request(projectLibraryURL(projectID, "/trash"), {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -319,10 +330,10 @@ describe("cinema asset library api", () => {
       }),
     })
     expect(restoreResponse.status).toBe(200)
-    const metadata = await json<{ asset: { id: string; status: string } }>(
+    const metadata = await json<{ asset: { id: string; displayName: string; status: string } }>(
       await app.request(projectLibraryURL(projectID, `/assets/${asset.id}`)),
     )
-    expect(metadata.data!.asset).toMatchObject({ id: asset.id, status: "ready" })
+    expect(metadata.data!.asset).toMatchObject({ id: asset.id, displayName: "Fixture image 1", status: "ready" })
     expect(await readFile(join(root, "assets", "library", "收件箱", "主画面.png"))).toBeTruthy()
 
     const command = {
@@ -370,21 +381,11 @@ describe("cinema asset library api", () => {
         entries: [{ entryType: "asset", assetID: asset.id }],
       }),
     })
-    expect(trashReferenced.status).toBe(200)
-    const deleteReferenced = await app.request(projectLibraryURL(projectID, "/permanent-delete"), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        operationID: "delete-referenced-frame",
-        baseRevision: 7,
-        entries: [{ entryType: "asset", assetID: asset.id }],
-      }),
-    })
-    expect(deleteReferenced.status).toBe(409)
-    const deleteReferencedError = await json(deleteReferenced)
-    expect(deleteReferencedError.error?.code).toBe("CINEMA_LIBRARY_ASSET_REFERENCED")
-    expect(deleteReferencedError.error?.message).toContain("Permanent deletion is blocked")
-    expect(deleteReferencedError.error?.data).toEqual({
+    expect(trashReferenced.status).toBe(409)
+    const trashReferencedError = await json(trashReferenced)
+    expect(trashReferencedError.error?.code).toBe("CINEMA_LIBRARY_ASSET_REFERENCED")
+    expect(trashReferencedError.error?.message).toContain("Deletion is blocked")
+    expect(trashReferencedError.error?.data).toEqual({
       referencedCount: 1,
       referencedAssetIDs: [asset.id],
     })
@@ -393,7 +394,7 @@ describe("cinema asset library api", () => {
       app,
       projectID,
       operationID: "upload-unreferenced-for-clear",
-      baseRevision: 7,
+      baseRevision: 6,
       folderID: inboxFolderID,
       name: "unreferenced.png",
     })
@@ -406,31 +407,19 @@ describe("cinema asset library api", () => {
         entries: [{ entryType: "asset", assetID: unreferenced.asset.id }],
       }),
     })).status).toBe(200)
-    const rejectedClearResponse = await app.request(projectLibraryURL(projectID, "/permanent-delete"), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        operationID: "clear-trash-with-reference",
-        baseRevision: 9,
-        all: true,
-      }),
-    })
-    expect(rejectedClearResponse.status).toBe(409)
-    expect((await json(rejectedClearResponse)).error).toMatchObject({
-      code: "CINEMA_LIBRARY_ASSET_REFERENCED",
-      data: { referencedCount: 1, referencedAssetIDs: [asset.id] },
-    })
     const untouchedUnreferenced = await json<{ asset: { status: string } }>(
       await app.request(projectLibraryURL(projectID, `/assets/${unreferenced.asset.id}`)),
     )
     expect(untouchedUnreferenced.data?.asset.status).toBe("trashed")
-    const healthyAfterRejectedDelete = await json<{ revision: number; status: string }>(
+    const healthyAfterRejectedTrash = await json<{ revision: number; status: string }>(
       await app.request(projectLibraryURL(projectID, "/state")),
     )
-    expect(healthyAfterRejectedDelete.data).toMatchObject({ revision: 9, status: "ready" })
+    expect(healthyAfterRejectedTrash.data).toMatchObject({ revision: 8, status: "ready" })
   }, 20_000)
 
   test("lists only top-level recycle-bin entries and exposes restore and permanent-delete operations", async () => {
+    let clock = Date.now()
+    restores.push(setCinemaAssetLibraryNowForTest(() => clock))
     const { app, projectID } = await createCinemaProject()
     const state = await json<{ defaultFolderIDs: Record<string, string> }>(
       await app.request(projectLibraryURL(projectID, "/state")),
@@ -576,6 +565,7 @@ describe("cinema asset library api", () => {
     expect(singleTrashPage.data).toMatchObject({ total: 2 })
     expect(singleTrashPage.data?.entries).toHaveLength(1)
 
+    clock += 10_000
     const permanentDeleteResponse = await app.request(projectLibraryURL(projectID, "/permanent-delete"), {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -598,6 +588,283 @@ describe("cinema asset library api", () => {
       await app.request(projectLibraryURL(projectID, "/entries?view=trash")),
     )).data?.total).toBe(0)
     expect((await app.request(projectLibraryURL(projectID, `/assets/${direct.asset.id}`))).status).toBe(404)
+  }, 30_000)
+
+  test("returns a ten-second undo deadline and restores a batch if it becomes referenced before finalization", async () => {
+    let clock = Date.now()
+    restores.push(setCinemaAssetLibraryNowForTest(() => clock))
+    const { app, root, projectID } = await createCinemaProject()
+    const uploaded = await uploadProjectAsset({
+      app,
+      projectID,
+      operationID: "upload-pending-delete",
+      baseRevision: 0,
+      folderID: "inbox",
+      name: "pending-delete.png",
+    })
+    const expectedUndoUntil = new Date(clock + 10_000).toISOString()
+    const trashResponse = await app.request(projectLibraryURL(projectID, "/trash"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operationID: "start-pending-delete",
+        baseRevision: uploaded.revision,
+        entries: [{ entryType: "asset", assetID: uploaded.asset.id }],
+      }),
+    })
+    const trashed = await json<{ undoUntil: string }>(trashResponse)
+    expect(trashResponse.status).toBe(200)
+    expect(trashed.data?.undoUntil).toBe(expectedUndoUntil)
+    const metadata = await json<{ asset: { trash?: { expiresAt?: string } } }>(
+      await app.request(projectLibraryURL(projectID, `/assets/${uploaded.asset.id}`)),
+    )
+    expect(metadata.data?.asset.trash?.expiresAt).toBe(expectedUndoUntil)
+
+    const premature = await app.request(projectLibraryURL(projectID, "/permanent-delete"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operationID: "premature-pending-delete",
+        baseRevision: 2,
+        entries: [{ entryType: "asset", assetID: uploaded.asset.id }],
+      }),
+    })
+    expect(premature.status).toBe(409)
+    expect((await json(premature)).error).toMatchObject({
+      code: "CINEMA_LIBRARY_DELETE_UNDO_ACTIVE",
+      data: { undoUntil: expectedUndoUntil },
+    })
+
+    await writeFile(
+      join(root, ".anybox-cinema", "canvas.json"),
+      JSON.stringify({ assetID: uploaded.asset.id }),
+      "utf8",
+    )
+    clock += 10_000
+    const finalize = await app.request(projectLibraryURL(projectID, "/permanent-delete"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operationID: "finalize-referenced-pending-delete",
+        baseRevision: 2,
+        entries: [{ entryType: "asset", assetID: uploaded.asset.id }],
+      }),
+    })
+    const finalized = await json<{
+      deletedIDs: string[]
+      restored: Array<{ entryType: string; assetID: string }>
+      referencedAssetIDs: string[]
+      warnings: string[]
+    }>(finalize)
+    expect(finalize.status).toBe(200)
+    expect(finalized.data).toMatchObject({
+      deletedIDs: [],
+      restored: [{ entryType: "asset", assetID: uploaded.asset.id }],
+      referencedAssetIDs: [uploaded.asset.id],
+    })
+    expect(finalized.data?.warnings[0]).toContain("restored")
+    const restored = await json<{ asset: { status: string; relativePath: string; trash?: unknown } }>(
+      await app.request(projectLibraryURL(projectID, `/assets/${uploaded.asset.id}`)),
+    )
+    expect(restored.data?.asset).toMatchObject({ status: "ready", relativePath: "收件箱/pending-delete.png" })
+    expect(restored.data?.asset).not.toHaveProperty("trash")
+  }, 30_000)
+
+  test("blocks a referenced descendant before atomically deleting a folder", async () => {
+    const { app, root, projectID } = await createCinemaProject()
+    const parentResponse = await app.request(projectLibraryURL(projectID, "/folders"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operationID: "create-reference-parent",
+        baseRevision: 0,
+        parentFolderID: "root",
+        name: "Referenced folder",
+      }),
+    })
+    const parent = (await json<{ folder: { id: string } }>(parentResponse)).data!.folder
+    const first = await uploadProjectAsset({
+      app,
+      projectID,
+      operationID: "upload-reference-descendant",
+      baseRevision: 1,
+      folderID: parent.id,
+      name: "referenced.png",
+    })
+    const second = await uploadProjectAsset({
+      app,
+      projectID,
+      operationID: "upload-unreferenced-descendant",
+      baseRevision: first.revision,
+      folderID: parent.id,
+      name: "unreferenced.png",
+    })
+    const timelinesDirectory = join(root, ".anybox-cinema", "timelines")
+    await mkdir(timelinesDirectory, { recursive: true })
+    await writeFile(
+      join(timelinesDirectory, "timeline_reference-test.json"),
+      JSON.stringify({ assetRef: { assetID: first.asset.id } }),
+      "utf8",
+    )
+
+    const response = await app.request(projectLibraryURL(projectID, "/trash"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operationID: "reject-referenced-folder-delete",
+        baseRevision: second.revision,
+        entries: [{ entryType: "folder", folderID: parent.id }],
+      }),
+    })
+    expect(response.status).toBe(409)
+    expect((await json(response)).error).toMatchObject({
+      code: "CINEMA_LIBRARY_ASSET_REFERENCED",
+      data: { referencedCount: 1, referencedAssetIDs: [first.asset.id] },
+    })
+    const state = await json<{ revision: number; counts: { trashed: number } }>(
+      await app.request(projectLibraryURL(projectID, "/state")),
+    )
+    expect(state.data).toMatchObject({ revision: second.revision, counts: { trashed: 0 } })
+    expect((await app.request(projectLibraryURL(projectID, `/assets/${first.asset.id}/content`))).status).toBe(200)
+    expect((await app.request(projectLibraryURL(projectID, `/assets/${second.asset.id}/content`))).status).toBe(200)
+  }, 30_000)
+
+  test("finalizes expired deletes on initialization and restores expired batches that gained references", async () => {
+    let clock = Date.now()
+    restores.push(setCinemaAssetLibraryNowForTest(() => clock))
+    const { app, root, projectID } = await createCinemaProject()
+    const deleted = await uploadProjectAsset({
+      app,
+      projectID,
+      operationID: "upload-expired-delete",
+      baseRevision: 0,
+      folderID: "inbox",
+      name: "expired-delete.png",
+    })
+    const restored = await uploadProjectAsset({
+      app,
+      projectID,
+      operationID: "upload-expired-restore",
+      baseRevision: deleted.revision,
+      folderID: "inbox",
+      name: "expired-restore.png",
+    })
+    expect((await app.request(projectLibraryURL(projectID, "/trash"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operationID: "trash-expired-delete",
+        baseRevision: restored.revision,
+        entries: [{ entryType: "asset", assetID: deleted.asset.id }],
+      }),
+    })).status).toBe(200)
+    expect((await app.request(projectLibraryURL(projectID, "/trash"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operationID: "trash-expired-restore",
+        baseRevision: 3,
+        entries: [{ entryType: "asset", assetID: restored.asset.id }],
+      }),
+    })).status).toBe(200)
+    await writeFile(
+      join(root, ".anybox-cinema", "canvas.json"),
+      JSON.stringify({ assetID: restored.asset.id }),
+      "utf8",
+    )
+
+    resetCinemaAssetLibraryInitializationForTest({ type: "project", projectID })
+    const withinGrace = await json<{ revision: number; counts: { trashed: number } }>(
+      await app.request(projectLibraryURL(projectID, "/state")),
+    )
+    expect(withinGrace.data).toMatchObject({ revision: 4, counts: { trashed: 2 } })
+    clock += 10_000
+    const state = await json<{ revision: number; counts: { trashed: number } }>(
+      await app.request(projectLibraryURL(projectID, "/state")),
+    )
+    expect(state.data).toMatchObject({ revision: 5, counts: { trashed: 0 } })
+    expect((await app.request(projectLibraryURL(projectID, `/assets/${deleted.asset.id}`))).status).toBe(404)
+    const restoredMetadata = await json<{ asset: { status: string; trash?: unknown } }>(
+      await app.request(projectLibraryURL(projectID, `/assets/${restored.asset.id}`)),
+    )
+    expect(restoredMetadata.data?.asset.status).toBe("ready")
+    expect(restoredMetadata.data?.asset).not.toHaveProperty("trash")
+  }, 30_000)
+
+  test("invalidates the initialized maintenance cache when a pending delete is created", async () => {
+    let clock = Date.now()
+    restores.push(setCinemaAssetLibraryNowForTest(() => clock))
+    const { app, projectID } = await createCinemaProject()
+    const scope = { type: "project" as const, projectID }
+
+    const initial = await initializeCinemaAssetLibrary(scope)
+    expect(initial.catalog.revision).toBe(0)
+
+    const uploaded = await uploadProjectAsset({
+      app,
+      projectID,
+      operationID: "upload-after-initialization-cache",
+      baseRevision: initial.catalog.revision,
+      folderID: "inbox",
+      name: "cache-invalidation.png",
+    })
+    const trashResponse = await app.request(projectLibraryURL(projectID, "/trash"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operationID: "trash-after-initialization-cache",
+        baseRevision: uploaded.revision,
+        entries: [{ entryType: "asset", assetID: uploaded.asset.id }],
+      }),
+    })
+    expect(trashResponse.status).toBe(200)
+
+    clock += 10_000
+    const maintained = await initializeCinemaAssetLibrary(scope)
+    expect(maintained.catalog.revision).toBe(3)
+    expect(maintained.catalog.assets.some((asset) => asset.id === uploaded.asset.id)).toBe(false)
+    expect((await app.request(projectLibraryURL(projectID, `/assets/${uploaded.asset.id}`))).status).toBe(404)
+  }, 30_000)
+
+  test("restores legacy recycle-bin records on initialization with collision-safe naming", async () => {
+    const { app, root, projectID } = await createCinemaProject()
+    const uploaded = await uploadProjectAsset({
+      app,
+      projectID,
+      operationID: "upload-legacy-trash",
+      baseRevision: 0,
+      folderID: "inbox",
+      name: "legacy.png",
+    })
+    expect((await app.request(projectLibraryURL(projectID, "/trash"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operationID: "trash-legacy-record",
+        baseRevision: uploaded.revision,
+        entries: [{ entryType: "asset", assetID: uploaded.asset.id }],
+      }),
+    })).status).toBe(200)
+
+    const catalogPath = join(root, ".anybox-cinema", "asset-library.json")
+    const catalog = JSON.parse(await readFile(catalogPath, "utf8")) as {
+      assets: Array<{ id: string; trash?: { expiresAt?: string } }>
+    }
+    delete catalog.assets.find((asset) => asset.id === uploaded.asset.id)!.trash!.expiresAt
+    await writeFile(catalogPath, JSON.stringify(catalog, null, 2), "utf8")
+    await writeFile(join(root, "assets", "library", "收件箱", "legacy.png"), "collision", "utf8")
+
+    resetCinemaAssetLibraryInitializationForTest({ type: "project", projectID })
+    const state = await json<{ revision: number; counts: { trashed: number } }>(
+      await app.request(projectLibraryURL(projectID, "/state")),
+    )
+    expect(state.data).toMatchObject({ revision: 3, counts: { trashed: 0 } })
+    const restoredMetadata = await json<{ asset: { status: string; relativePath: string; trash?: unknown } }>(
+      await app.request(projectLibraryURL(projectID, `/assets/${uploaded.asset.id}`)),
+    )
+    expect(restoredMetadata.data?.asset).toMatchObject({ status: "ready", relativePath: "收件箱/legacy (2).png" })
+    expect(restoredMetadata.data?.asset).not.toHaveProperty("trash")
+    expect(await readFile(join(root, "assets", "library", "收件箱", "legacy.png"), "utf8")).toBe("collision")
   }, 30_000)
 
   test("restores failed and missing assets to their pre-trash status", async () => {
@@ -699,6 +966,8 @@ describe("cinema asset library api", () => {
   }, 30_000)
 
   test("rolls purged files back when the catalog commit fails", async () => {
+    let clock = Date.now()
+    restores.push(setCinemaAssetLibraryNowForTest(() => clock))
     const { app, root, projectID } = await createCinemaProject()
     const state = await json<{ defaultFolderIDs: Record<string, string> }>(
       await app.request(projectLibraryURL(projectID, "/state")),
@@ -726,6 +995,7 @@ describe("cinema asset library api", () => {
     const trashedPath = join(root, "assets", "library", ...trashed.data!.asset.relativePath.split("/"))
     expect(new Uint8Array(await readFile(trashedPath))).toEqual(pngBytes())
 
+    clock += 10_000
     restores.push(setCinemaAssetLibraryCatalogWriteFailureForTest())
     const deleteResponse = await app.request(projectLibraryURL(projectID, "/permanent-delete"), {
       method: "POST",
@@ -738,10 +1008,13 @@ describe("cinema asset library api", () => {
     })
     expect(deleteResponse.status).toBe(500)
 
-    const afterFailure = await json<{ revision: number; asset: { status: string; relativePath: string } }>(
-      await app.request(projectLibraryURL(projectID, `/assets/${upload.asset.id}`)),
-    )
-    expect(afterFailure.data).toMatchObject({
+    const afterFailure = JSON.parse(
+      await readFile(join(root, ".anybox-cinema", "asset-library.json"), "utf8"),
+    ) as { revision: number; assets: Array<{ id: string; status: string; relativePath: string }> }
+    expect({
+      revision: afterFailure.revision,
+      asset: afterFailure.assets.find((asset) => asset.id === upload.asset.id),
+    }).toMatchObject({
       revision: 2,
       asset: { status: "trashed", relativePath: trashed.data!.asset.relativePath },
     })
@@ -749,7 +1022,8 @@ describe("cinema asset library api", () => {
     const stateAfterFailure = await json<{ revision: number; status: string }>(
       await app.request(projectLibraryURL(projectID, "/state")),
     )
-    expect(stateAfterFailure.data).toMatchObject({ revision: 2, status: "ready" })
+    expect(stateAfterFailure.data).toMatchObject({ revision: 3, status: "ready" })
+    expect((await app.request(projectLibraryURL(projectID, `/assets/${upload.asset.id}`))).status).toBe(404)
   }, 30_000)
 
   test("rejects junctions before move or trash filesystem operations", async () => {
@@ -965,6 +1239,22 @@ describe("cinema asset library api", () => {
     expect(dependenciesAfterMismatch.data).toEqual([
       { assetID: replacementImage.asset.id, nodeIDs: [nodeID] },
     ])
+
+    const personalState = await json<{ revision: number }>(await app.request(personalLibraryURL("/state")))
+    const deleteReferencedPersonalAsset = await app.request(personalLibraryURL("/trash"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        operationID: "reject-referenced-personal-delete",
+        baseRevision: personalState.data!.revision,
+        entries: [{ entryType: "asset", assetID: replacementImage.asset.id }],
+      }),
+    })
+    expect(deleteReferencedPersonalAsset.status).toBe(409)
+    expect((await json(deleteReferencedPersonalAsset)).error).toMatchObject({
+      code: "CINEMA_LIBRARY_ASSET_REFERENCED",
+      data: { referencedCount: 1, referencedAssetIDs: [replacementImage.asset.id] },
+    })
   }, 20_000)
 
   test("keeps crop derivatives in their source folder and processes media in the background", async () => {

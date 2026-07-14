@@ -8,10 +8,10 @@ export {
 export type {
   AssetLibraryApi,
   AssetLibraryEntryRef,
-  AssetLibraryEntriesView,
+  AssetLibraryFinalizeDeleteOptions,
   AssetLibraryListing,
   AssetLibraryMutationResult,
-  AssetLibraryPermanentDeleteOptions,
+  AssetLibraryPendingDeleteResult,
   AssetLibraryState,
   AssetLibraryUploadOptions,
   AssetLibraryUploadResult,

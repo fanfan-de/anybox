@@ -52,9 +52,7 @@ export interface AssetLibrarySelectionSummary {
 export function assetLibraryScrollPositionKey(options: {
   folderID: string
   query: string
-  trash: boolean
 }): string {
-  if (options.trash) return "trash"
   const query = options.query.normalize("NFC").trim()
   return query ? `search:${query}` : `folder:${options.folderID}`
 }
@@ -81,10 +79,7 @@ export function assetLibraryEntryName(entry: AssetLibraryEntry): string {
 }
 
 export function assetLibraryEntryPath(entry: AssetLibraryEntry): string {
-  if (entry.entryType === "folder") {
-    return entry.folder.trash?.originalRelativePath ?? entry.folder.relativePath
-  }
-  return entry.asset.trash?.originalRelativePath ?? entry.asset.relativePath
+  return entry.entryType === "folder" ? entry.folder.relativePath : entry.asset.relativePath
 }
 
 export function assetLibraryEntryRef(entry: AssetLibraryEntry): CinemaAssetEntryTarget {
@@ -234,8 +229,7 @@ export function parseAssetLibraryDragPayload(value: string): AssetLibraryDragPay
  * name instead of splitting displayName at its final dot.
  */
 export function assetRenameParts(asset: CinemaAssetRecord): { baseName: string; extension: string } {
-  const relativePath = asset.trash?.originalRelativePath ?? asset.relativePath
-  const filename = relativePath.split(/[\\/]/).at(-1) ?? ""
+  const filename = asset.relativePath.split(/[\\/]/).at(-1) ?? ""
   const suffix = filename.startsWith(asset.displayName)
     ? filename.slice(asset.displayName.length)
     : ""
