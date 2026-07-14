@@ -911,6 +911,8 @@ function assertConnectedAnyboxSession(session: AnyboxProviderRelaySession) {
   }
 }
 
+const ANYBOX_PROVIDER_ERROR_PREFIX = "ANYBOX_PROVIDER_ERROR:"
+
 async function requestAnyboxSubscriptionJSON<T>(
   pathname: string,
   init: RequestInit = {},
@@ -924,12 +926,14 @@ async function requestAnyboxSubscriptionJSON<T>(
     ...init,
     headers,
   })
-  const payload = await response.json().catch(() => null) as T | { error?: { message?: string } } | null
+  const payload = await response.json().catch(() => null) as T | { error?: { code?: string; message?: string } } | null
   if (!response.ok) {
-    const message = payload && typeof payload === "object" && "error" in payload
-      ? payload.error?.message
+    const providerError = payload && typeof payload === "object" && "error" in payload
+      ? payload.error
       : undefined
-    throw new Error(message || `Anybox subscription request failed (${response.status}).`)
+    const message = providerError?.message || `Anybox subscription request failed (${response.status}).`
+    const code = providerError?.code?.trim()
+    throw new Error(code ? `${ANYBOX_PROVIDER_ERROR_PREFIX}${code}:${message}` : message)
   }
   return { data: payload as T, session }
 }

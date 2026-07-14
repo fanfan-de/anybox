@@ -23,12 +23,58 @@ interface SubscriptionSettingsPanelProps {
 }
 
 const terminalOrderStatuses = new Set(["paid", "failed", "expired", "canceled"])
+const rechargePresetAmountCents = [5_000, 10_000, 30_000, 100_000] as const
+const serializedProviderErrorPrefix = "ANYBOX_PROVIDER_ERROR:"
+
+function rechargeAmountInputFromCents(amountCents: number) {
+  return String(amountCents / 100)
+}
+
+function typedProviderErrorCode(error: unknown, seen = new Set<object>()): string | null {
+  if (!error || typeof error !== "object" || seen.has(error)) return null
+  seen.add(error)
+  const candidate = error as Record<string, unknown>
+  if (typeof candidate.code === "string" && candidate.code.trim()) return candidate.code.trim()
+  return typedProviderErrorCode(candidate.error, seen) ?? typedProviderErrorCode(candidate.cause, seen)
+}
+
+function rechargeCancelErrorCode(error: unknown) {
+  const typedCode = typedProviderErrorCode(error)
+  if (typedCode) return typedCode
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : ""
+  const serializedCode = message.match(new RegExp(`${serializedProviderErrorPrefix}([a-z][a-z0-9_]*)`, "i"))?.[1]
+  return serializedCode?.toLowerCase() ?? null
+}
+
+function rechargeCancelErrorKey(error: unknown) {
+  switch (rechargeCancelErrorCode(error)) {
+    case "recharge_order_close_failed":
+      return "settings.subscription.endRechargeOrderCloseFailed" as const
+    case "recharge_order_initializing":
+      return "settings.subscription.endRechargeOrderInitializing" as const
+    case "recharge_order_not_cancelable":
+      return "settings.subscription.endRechargeOrderNotCancelable" as const
+    case "recharge_order_not_found":
+      return "settings.subscription.endRechargeOrderNotFound" as const
+    case "recharge_order_already_paid":
+      return "settings.subscription.endRechargeOrderPaymentMayBeComplete" as const
+    case "invalid_token":
+      return "settings.subscription.endRechargeOrderSignInRequired" as const
+    case "email_not_verified":
+      return "settings.subscription.endRechargeOrderEmailVerificationRequired" as const
+    case "rate_limit_exceeded":
+      return "settings.subscription.endRechargeOrderRateLimited" as const
+    default:
+      return "settings.subscription.endRechargeOrderFailed" as const
+  }
+}
 
 function readableDesktopError(error: unknown, fallback: string) {
   const raw = error instanceof Error ? error.message : typeof error === "string" ? error : fallback
   const message = raw
     .replace(/^Error invoking remote method '[^']+':\s*/i, "")
     .replace(/^Error:\s*/i, "")
+    .replace(/^ANYBOX_PROVIDER_ERROR:[a-z][a-z0-9_]*:\s*/i, "")
     .trim()
   return message || fallback
 }
@@ -763,11 +809,20 @@ function RechargeSettingsSection({
     },
   ]
 
+  const syncControlsWithOrder = useCallback((nextOrder: DesktopRechargePaymentOrder) => {
+    setAmountInput(rechargeAmountInputFromCents(nextOrder.amountCents))
+    setSelectedAmountCents(rechargePresetAmountCents.some(
+      (presetAmountCents) => presetAmountCents === nextOrder.amountCents,
+    ) ? nextOrder.amountCents : null)
+    setProvider(nextOrder.provider)
+  }, [])
+
   useEffect(() => {
     if (!initialOrder || terminalOrderStatuses.has(initialOrder.status)) return
     paidOrderRef.current = null
+    syncControlsWithOrder(initialOrder)
     setOrderResponse((current) => current?.order.id === initialOrder.id ? current : { order: initialOrder })
-  }, [initialOrder])
+  }, [initialOrder, syncControlsWithOrder])
 
   useEffect(() => {
     if (order?.provider !== "wechat_pay" || !order.codeUrl || terminalOrderStatuses.has(order.status)) {
@@ -802,12 +857,19 @@ function RechargeSettingsSection({
           setOrderResponse(null)
           setQrDataUrl(null)
           setCancelError(null)
+          setError(null)
         } else {
+          syncControlsWithOrder(result.order)
           setOrderResponse(result)
+          if (!cancelError) {
+            setError(result.sync?.error ? t("settings.subscription.rechargeOrderStatusFailed") : null)
+          }
         }
-      }).catch((pollError) => {
+      }).catch(() => {
         if (disposed) return
-        setError(readableDesktopError(pollError, t("settings.subscription.rechargeOrderStatusFailed")))
+        if (!cancelError) {
+          setError(t("settings.subscription.rechargeOrderStatusFailed"))
+        }
       }).finally(() => {
         if (!disposed) timer = window.setTimeout(poll, 2_000)
       })
@@ -817,7 +879,7 @@ function RechargeSettingsSection({
       disposed = true
       if (timer !== null) window.clearTimeout(timer)
     }
-  }, [cancelingOrderId, order, t])
+  }, [cancelError, cancelingOrderId, order, syncControlsWithOrder, t])
 
   useEffect(() => {
     if (order?.status !== "paid" || paidOrderRef.current === order.id) return
@@ -840,7 +902,9 @@ function RechargeSettingsSection({
     try {
       const result = await create({ amountCents, provider })
       paidOrderRef.current = null
+      syncControlsWithOrder(result.order)
       setOrderResponse(result)
+      setError(result.sync?.error ? t("settings.subscription.rechargeOrderStatusFailed") : null)
       if (result.order.provider === "alipay" && result.order.codeUrl) {
         await openExternalUrl(result.order.codeUrl)
       }
@@ -881,10 +945,10 @@ function RechargeSettingsSection({
         setCancelError(t("settings.subscription.endRechargeOrderFailed"))
       }
     } catch (endError) {
-      const fallback = readableDesktopError(endError, t("settings.subscription.endRechargeOrderFailed"))
+      const localizedError = t(rechargeCancelErrorKey(endError))
       const getOrder = window.desktop?.getAnyboxRechargeOrder
       if (!getOrder) {
-        setCancelError(fallback)
+        setCancelError(localizedError)
         return
       }
       try {
@@ -902,11 +966,12 @@ function RechargeSettingsSection({
           setCancelError(null)
           toast.info(t("settings.subscription.orderEnded"))
         } else {
+          syncControlsWithOrder(latest.order)
           setOrderResponse(latest)
-          setCancelError(fallback)
+          setCancelError(localizedError)
         }
       } catch {
-        setCancelError(fallback)
+        setCancelError(localizedError)
       }
     } finally {
       setCancelingOrderId(null)
@@ -1006,7 +1071,6 @@ function RechargeSettingsSection({
       {order ? (
         <RechargePaymentPanel
           order={order}
-          response={orderResponse}
           qrDataUrl={qrDataUrl}
           cancelError={cancelError}
           canceling={cancelingOrderId === order.id}
@@ -1019,14 +1083,12 @@ function RechargeSettingsSection({
 
 function RechargePaymentPanel({
   order,
-  response,
   qrDataUrl,
   cancelError,
   canceling,
   onCancel,
 }: {
   order: DesktopRechargePaymentOrder
-  response: DesktopRechargeOrderResponse | null
   qrDataUrl: string | null
   cancelError: string | null
   canceling: boolean
@@ -1075,7 +1137,6 @@ function RechargePaymentPanel({
       {cancelError ? <p className="settings-recharge-message is-error">{cancelError}</p> : null}
       {isPaid ? <p className="settings-recharge-message is-success">{t("settings.subscription.rechargeSuccess")}</p> : null}
       {isFailed ? <p className="settings-recharge-message is-error">{t("settings.subscription.rechargeRetry")}</p> : null}
-      {response?.sync?.error ? <p className="settings-recharge-message is-error">{response.sync.error}</p> : null}
     </div>
   )
 }

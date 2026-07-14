@@ -99,7 +99,15 @@ const enUS = {
   "settings.subscription.endRechargeOrder": "End order",
   "settings.subscription.endingRechargeOrder": "Ending order...",
   "settings.subscription.endRechargeOrderUnavailable": "This build cannot end recharge orders.",
-  "settings.subscription.endRechargeOrderFailed": "Unable to end the recharge order safely. Try again shortly.",
+  "settings.subscription.endRechargeOrderFailed": "We couldn't end this order. Check its payment status, then try again.",
+  "settings.subscription.endRechargeOrderCloseFailed": "The payment provider did not confirm that this order was closed. Check whether payment completed, then try again.",
+  "settings.subscription.endRechargeOrderInitializing": "This order is still being created. Wait a moment, then try again.",
+  "settings.subscription.endRechargeOrderNotCancelable": "This order can no longer be ended. Wait for its payment status to refresh.",
+  "settings.subscription.endRechargeOrderNotFound": "This order is no longer available. Refresh this page before creating another order.",
+  "settings.subscription.endRechargeOrderPaymentMayBeComplete": "Payment may already be complete. Wait for the balance and order status to refresh.",
+  "settings.subscription.endRechargeOrderSignInRequired": "Your Anybox session expired. Sign in again, then retry.",
+  "settings.subscription.endRechargeOrderEmailVerificationRequired": "Verify your email address, then try ending the order again.",
+  "settings.subscription.endRechargeOrderRateLimited": "Too many attempts were made. Wait a moment, then try again.",
   "settings.subscription.rechargeOrderAlreadyPaid": "The order was already paid. Your balance has been refreshed.",
 } as const
 
@@ -204,7 +212,15 @@ const zhCN = {
   "settings.subscription.endRechargeOrder": "结束订单",
   "settings.subscription.endingRechargeOrder": "正在结束...",
   "settings.subscription.endRechargeOrderUnavailable": "当前版本无法结束充值订单。",
-  "settings.subscription.endRechargeOrderFailed": "无法安全结束充值订单，请稍后重试。",
+  "settings.subscription.endRechargeOrderFailed": "暂时无法结束此订单。请先确认支付状态，然后重试。",
+  "settings.subscription.endRechargeOrderCloseFailed": "支付渠道尚未确认订单已关闭。请先确认是否已经支付，然后重试。",
+  "settings.subscription.endRechargeOrderInitializing": "订单仍在创建中，请稍等片刻后再结束。",
+  "settings.subscription.endRechargeOrderNotCancelable": "订单当前无法结束，请等待支付状态刷新。",
+  "settings.subscription.endRechargeOrderNotFound": "订单已不存在，请刷新页面后再创建新订单。",
+  "settings.subscription.endRechargeOrderPaymentMayBeComplete": "订单可能已经支付，请等待余额和订单状态刷新。",
+  "settings.subscription.endRechargeOrderSignInRequired": "Anybox 登录状态已过期，请重新登录后再试。",
+  "settings.subscription.endRechargeOrderEmailVerificationRequired": "请先验证邮箱，然后再次尝试结束订单。",
+  "settings.subscription.endRechargeOrderRateLimited": "操作过于频繁，请稍等片刻后再试。",
   "settings.subscription.rechargeOrderAlreadyPaid": "订单已经支付，余额已刷新。",
 } as const
 

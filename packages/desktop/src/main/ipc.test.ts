@@ -243,6 +243,32 @@ describe("Anybox subscription IPC helpers", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it("preserves a typed provider error code across the recharge cancellation IPC boundary", async () => {
+    requestAgentJSONMock.mockResolvedValue({
+      data: {
+        connected: true,
+        status: "connected",
+        accessToken: "desktop-oauth-token",
+        baseURL: "https://provider.anybox.test/v1",
+      },
+    })
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      error: {
+        code: "recharge_order_close_failed",
+        message: "The recharge order could not be closed safely",
+      },
+    }), {
+      status: 409,
+      headers: { "content-type": "application/json" },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(internal.cancelAnyboxRechargeOrder("recharge-1")).rejects.toThrow(
+      "ANYBOX_PROVIDER_ERROR:recharge_order_close_failed:The recharge order could not be closed safely",
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it("rejects an empty recharge order ID before making a cancellation request", async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)

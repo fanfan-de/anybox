@@ -222,13 +222,95 @@ describe("SubscriptionSettingsPanel payment flow", () => {
     expect(await screen.findByRole("img", { name: "WeChat Pay QR code" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "End order" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Awaiting payment" })).toBeDisabled()
+    expect(screen.getByRole("spinbutton", { name: "Custom amount" })).toHaveValue(100)
+    const rechargeMethods = screen.getByRole("group", { name: "Recharge payment method" })
+    expect(within(rechargeMethods).getByRole("button", { name: "Alipay" })).toHaveAttribute("aria-pressed", "false")
+    expect(within(rechargeMethods).getByRole("button", { name: "WeChat Pay" })).toHaveAttribute("aria-pressed", "true")
+    const rechargePresets = screen.getByRole("group", { name: "Recharge amounts" })
+    expect(within(rechargePresets).getByRole("button", { name: /Everyday/ })).toHaveAttribute("aria-pressed", "true")
+    expect(within(rechargePresets).getByRole("button", { name: /Recommended/ })).toHaveAttribute("aria-pressed", "false")
+  })
+
+  it("aligns recharge controls with the order returned after creation", async () => {
+    const normalizedOrder = {
+      order: {
+        id: "recharge-normalized-1",
+        provider: "wechat_pay" as const,
+        codeUrl: "weixin://wxpay/recharge-normalized-1",
+        amountCents: 10_000,
+        currency: "CNY",
+        status: "pending" as const,
+      },
+      sync: {
+        checked: true,
+        error: "ECONNRESET from upstream payment query",
+      },
+    }
+    const createRechargeOrder = vi.fn().mockResolvedValue(normalizedOrder)
+    window.desktop = {
+      getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue(createOverview()),
+      createAnyboxRechargeOrder: createRechargeOrder,
+      getAnyboxRechargeOrder: vi.fn().mockResolvedValue(normalizedOrder),
+    } as unknown as Window["desktop"]
+
+    renderPanel()
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Pay / }))
+
+    await waitFor(() => {
+      expect(createRechargeOrder).toHaveBeenCalledWith({ amountCents: 30_000, provider: "alipay" })
+    })
+    expect(await screen.findByRole("img", { name: "WeChat Pay QR code" })).toBeInTheDocument()
+    expect(screen.getByRole("spinbutton", { name: "Custom amount" })).toHaveValue(100)
+    const rechargeMethods = screen.getByRole("group", { name: "Recharge payment method" })
+    expect(within(rechargeMethods).getByRole("button", { name: "Alipay" })).toHaveAttribute("aria-pressed", "false")
+    expect(within(rechargeMethods).getByRole("button", { name: "WeChat Pay" })).toHaveAttribute("aria-pressed", "true")
+    const rechargePresets = screen.getByRole("group", { name: "Recharge amounts" })
+    expect(within(rechargePresets).getByRole("button", { name: /Everyday/ })).toHaveAttribute("aria-pressed", "true")
+    expect(screen.getAllByText("Unable to refresh the recharge status.")).toHaveLength(1)
+    expect(screen.queryByText("ECONNRESET from upstream payment query")).not.toBeInTheDocument()
+  })
+
+  it("shows a localized sync error once and clears it after a successful refresh", async () => {
+    const pendingOrder = {
+      id: "recharge-sync-1",
+      provider: "wechat_pay" as const,
+      codeUrl: "weixin://wxpay/recharge-sync-1",
+      amountCents: 5_000,
+      currency: "CNY",
+      status: "pending" as const,
+    }
+    const getRechargeOrder = vi.fn()
+      .mockResolvedValueOnce({
+        order: pendingOrder,
+        sync: { checked: true, error: "payment gateway ECONNRESET" },
+      })
+      .mockResolvedValue({ order: pendingOrder, sync: { checked: true } })
+    window.desktop = {
+      getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue({
+        ...createOverview(),
+        pendingRechargeOrder: pendingOrder,
+      }),
+      getAnyboxRechargeOrder: getRechargeOrder,
+      cancelAnyboxRechargeOrder: vi.fn(),
+    } as unknown as Window["desktop"]
+
+    renderPanel()
+
+    expect(await screen.findByText("Unable to refresh the recharge status.", {}, { timeout: 3_500 })).toBeInTheDocument()
+    expect(screen.getAllByText("Unable to refresh the recharge status.")).toHaveLength(1)
+    expect(screen.queryByText("payment gateway ECONNRESET")).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText("Unable to refresh the recharge status.")).not.toBeInTheDocument()
+      expect(getRechargeOrder).toHaveBeenCalledTimes(2)
+    }, { timeout: 5_000 })
   })
 
   it("removes the Electron IPC wrapper from recharge errors", async () => {
     window.desktop = {
       getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue(createOverview()),
       createAnyboxRechargeOrder: vi.fn().mockRejectedValue(
-        new Error("Error invoking remote method 'desktop:create-anybox-recharge-order': Error: Please sign in"),
+        new Error("Error invoking remote method 'desktop:create-anybox-recharge-order': Error: ANYBOX_PROVIDER_ERROR:invalid_token:Please sign in"),
       ),
     } as unknown as Window["desktop"]
 
@@ -238,6 +320,7 @@ describe("SubscriptionSettingsPanel payment flow", () => {
 
     expect(await screen.findByText("Please sign in")).toBeInTheDocument()
     expect(screen.queryByText(/Error invoking remote method/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/ANYBOX_PROVIDER_ERROR/)).not.toBeInTheDocument()
   })
 
   it("ends a pending recharge order and restores the recharge form", async () => {
@@ -287,11 +370,18 @@ describe("SubscriptionSettingsPanel payment flow", () => {
         status: "pending" as const,
       },
     }
+    const typedProviderError = Object.assign(
+      new Error("ANYBOX_PROVIDER_ERROR:recharge_order_initializing upstream socket failed"),
+      { code: "recharge_order_close_failed" },
+    )
     window.desktop = {
       getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue(createOverview()),
       createAnyboxRechargeOrder: vi.fn().mockResolvedValue(pendingOrder),
-      getAnyboxRechargeOrder: vi.fn().mockResolvedValue(pendingOrder),
-      cancelAnyboxRechargeOrder: vi.fn().mockRejectedValue(new Error("The recharge order could not be closed safely")),
+      getAnyboxRechargeOrder: vi.fn().mockResolvedValue({
+        ...pendingOrder,
+        sync: { checked: true, error: "raw provider reconciliation failure" },
+      }),
+      cancelAnyboxRechargeOrder: vi.fn().mockRejectedValue(typedProviderError),
     } as unknown as Window["desktop"]
 
     renderPanel()
@@ -300,9 +390,43 @@ describe("SubscriptionSettingsPanel payment flow", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Pay / }))
     fireEvent.click(await screen.findByRole("button", { name: "End order" }))
 
-    expect(await screen.findByText("The recharge order could not be closed safely")).toBeInTheDocument()
+    const localizedMessage = "The payment provider did not confirm that this order was closed. Check whether payment completed, then try again."
+    expect(await screen.findByText(localizedMessage)).toBeInTheDocument()
+    expect(screen.getAllByText(localizedMessage)).toHaveLength(1)
+    expect(screen.queryByText(/upstream socket failed/i)).not.toBeInTheDocument()
+    expect(screen.queryByText("raw provider reconciliation failure")).not.toBeInTheDocument()
     expect(screen.getByRole("img", { name: "WeChat Pay QR code" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "End order" })).toBeEnabled()
+  })
+
+  it("localizes a serialized provider error without showing technical details", async () => {
+    const pendingOrder = {
+      order: {
+        id: "recharge-initializing",
+        provider: "wechat_pay" as const,
+        codeUrl: "weixin://wxpay/recharge-initializing",
+        amountCents: 3_000,
+        currency: "CNY",
+        status: "pending" as const,
+      },
+    }
+    window.desktop = {
+      getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue(createOverview()),
+      createAnyboxRechargeOrder: vi.fn().mockResolvedValue(pendingOrder),
+      getAnyboxRechargeOrder: vi.fn().mockResolvedValue(pendingOrder),
+      cancelAnyboxRechargeOrder: vi.fn().mockRejectedValue(
+        new Error("Error invoking remote method 'desktop:cancel-anybox-recharge-order': Error: ANYBOX_PROVIDER_ERROR:recharge_order_initializing"),
+      ),
+    } as unknown as Window["desktop"]
+
+    renderPanel()
+
+    fireEvent.click(await screen.findByRole("button", { name: "WeChat Pay" }))
+    fireEvent.click(screen.getByRole("button", { name: /^Pay / }))
+    fireEvent.click(await screen.findByRole("button", { name: "End order" }))
+
+    expect(await screen.findByText("This order is still being created. Wait a moment, then try again.")).toBeInTheDocument()
+    expect(screen.queryByText(/ANYBOX_PROVIDER_ERROR/)).not.toBeInTheDocument()
   })
 
   it("refreshes the balance when payment wins a recharge cancellation race", async () => {
