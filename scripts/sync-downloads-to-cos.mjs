@@ -28,6 +28,7 @@ function usage() {
     "  --windows <path>       Windows installer path. Auto-detected from packages/desktop/dist when omitted.",
     "  --mac <path>           macOS installer path. Auto-detected from packages/desktop/dist when omitted.",
     "  --linux <path>         Linux AppImage path. Auto-detected from packages/desktop/dist when omitted.",
+    "                         Its sibling .deb is mirrored when present and is required for the update feed.",
     "  --mobile <path>        Android APK path. Auto-detected from packages/mobile-app/build when omitted.",
     "  --version <version>    Desktop/site version. Defaults to packages/desktop/package.json.",
     "  --mobile-version <v>   Android version. Defaults to packages/mobile-app/app.json.",
@@ -417,11 +418,19 @@ function buildWindowsUpdateFeedUploads(args, assets) {
   return uploads
 }
 
-function buildLinuxUpdateFeedUploads(args, assets) {
+function linuxDebianPath(installer) {
+  return installer.toLowerCase().endsWith(".appimage")
+    ? `${installer.slice(0, -9)}.deb`
+    : ""
+}
+
+export function buildLinuxUpdateFeedUploads(args, assets) {
   if (args.skipUpdateFeed || !assets.linux) return []
 
   const installer = assets.linux
   const installerName = path.basename(installer)
+  const debianPackage = linuxDebianPath(installer)
+  const debianPackageName = path.basename(debianPackage)
   const distDir = path.dirname(installer)
   const latestYml = path.join(distDir, "latest-linux.yml")
   const updatePrefix = trimSlashes(args.linuxUpdateFeedPrefix)
@@ -432,6 +441,9 @@ function buildLinuxUpdateFeedUploads(args, assets) {
   if (!existsSync(latestYml)) {
     throw new Error(`Missing Linux updater metadata: ${latestYml}. Rebuild the AppImage or pass --skip-update-feed.`)
   }
+  if (!debianPackage || !existsSync(debianPackage)) {
+    throw new Error(`Missing Linux Debian package: ${debianPackage || "unknown"}. Rebuild the Linux release or pass --skip-update-feed.`)
+  }
 
   const latestYmlText = readFileSync(latestYml, "utf8")
   const updateUrls = Array.from(
@@ -440,6 +452,9 @@ function buildLinuxUpdateFeedUploads(args, assets) {
   )
   if (updateUrls.filter((url) => url === installerName).length !== 1) {
     throw new Error(`latest-linux.yml does not reference ${installerName}. Rebuild the AppImage or pass --skip-update-feed.`)
+  }
+  if (updateUrls.filter((url) => url === debianPackageName).length !== 1) {
+    throw new Error(`latest-linux.yml does not reference ${debianPackageName}. Rebuild the Linux release or pass --skip-update-feed.`)
   }
   if (updateUrls.length !== new Set(updateUrls).size) {
     throw new Error("latest-linux.yml contains duplicate file URLs. Rebuild the Linux release before publishing.")
@@ -456,6 +471,12 @@ function buildLinuxUpdateFeedUploads(args, assets) {
       key: `${updatePrefix}/${installerName}`,
     },
     {
+      cacheControl: "public, max-age=31536000, immutable",
+      contentType: contentTypeFor(debianPackage),
+      filePath: debianPackage,
+      key: `${updatePrefix}/${debianPackageName}`,
+    },
+    {
       cacheControl: "public, max-age=60",
       contentType: contentTypeFor(latestYml),
       filePath: latestYml,
@@ -467,7 +488,7 @@ function buildLinuxUpdateFeedUploads(args, assets) {
   return uploads
 }
 
-function buildManifest(args, assets, existingManifest) {
+export function buildManifest(args, assets, existingManifest) {
   const desktopPackage = readJson(path.join(scriptRoot, "packages", "desktop", "package.json"))
   const mobileConfig = readJson(path.join(scriptRoot, "packages", "mobile-app", "app.json")).expo
   const desktopVersion = normalizeVersion(args.version || desktopPackage.version)
@@ -499,6 +520,19 @@ function buildManifest(args, assets, existingManifest) {
       filePath: assetPath,
       key: objectKey,
     })
+  }
+
+  if (assets.linux) {
+    const debianPackage = linuxDebianPath(assets.linux)
+    if (debianPackage && existsSync(debianPackage)) {
+      const linuxVersion = platformVersion("linux", args, desktopVersion, mobileVersion)
+      uploads.push({
+        cacheControl: "public, max-age=31536000, immutable",
+        contentType: contentTypeFor(debianPackage),
+        filePath: debianPackage,
+        key: `${trimSlashes(args.releasePrefix)}/${linuxVersion}/${path.basename(debianPackage)}`,
+      })
+    }
   }
 
   for (const platform of platforms) {
@@ -836,7 +870,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error))
-  process.exit(1)
-})
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exit(1)
+  })
+}

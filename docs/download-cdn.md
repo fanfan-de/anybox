@@ -64,6 +64,7 @@ VITE_DOWNLOAD_MANIFEST_URL=https://download.anybox.com.cn/downloads.json
 - `packages/desktop/dist/latest.yml`
 - `packages/desktop/dist/Anybox-*-arm64.dmg`
 - `packages/desktop/dist/Anybox-*-x64.AppImage`
+- `packages/desktop/dist/Anybox-*-x64.deb`
 - `packages/desktop/dist/latest-linux.yml`
 - `packages/mobile-app/build/github-release/anybox-mobile.apk`
 - `packages/mobile-app/build/anybox-mobile.apk`
@@ -116,7 +117,8 @@ updates/windows/x64/latest.yml
 updates/windows/x64/<installer>
 updates/windows/x64/<installer>.blockmap
 updates/linux/x64/latest-linux.yml
-updates/linux/x64/<installer>
+updates/linux/x64/<AppImage>
+updates/linux/x64/<Debian package>
 downloads.json
 ```
 
@@ -132,7 +134,7 @@ Cache-Control: public, max-age=31536000, immutable
 Cache-Control: public, max-age=60
 ```
 
-`updates/windows/x64/latest.yml` 和 `updates/linux/x64/latest-linux.yml` 使用短缓存，并在上传后刷新 CDN。Windows 的独立 `.blockmap` 和所有版本化安装包使用长期 immutable 缓存；Linux AppImage 的 blockmap 已内嵌在 AppImage 中，不会产生或上传独立文件。
+`updates/windows/x64/latest.yml` 和 `updates/linux/x64/latest-linux.yml` 使用短缓存，并在上传后刷新 CDN。Windows 的独立 `.blockmap`、Linux AppImage、Linux Debian package 和所有版本化安装包使用长期 immutable 缓存；Linux AppImage 的 blockmap 已内嵌在 AppImage 中，不会产生或上传独立文件。
 
 ## 发布顺序
 
