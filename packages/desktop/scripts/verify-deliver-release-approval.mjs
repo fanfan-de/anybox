@@ -7,6 +7,8 @@ const REQUIRED_LICENSE_SCOPES = new Set([
   "h264-use",
   "windows-media-foundation",
   "macos-videotoolbox",
+  "linux-libx264-gpl",
+  "linux-gpl-corresponding-source",
   "source-and-notice-offer",
   "supported-os-scope",
 ])
@@ -42,6 +44,7 @@ export function validateDeliverReleaseApproval(record) {
   invariant(SHA_PATTERN.test(record.commitSHA), "Approval commitSHA is invalid")
   invariant(record.targets?.win32X64?.runtimeID, "Windows runtime approval binding is missing")
   invariant(record.targets?.darwinArm64?.runtimeID, "macOS runtime approval binding is missing")
+  invariant(record.targets?.linuxX64?.runtimeID, "Linux runtime approval binding is missing")
 
   approvedRecord(record.license, "License")
   invariant(Array.isArray(record.license.scopes), "License scopes are missing")

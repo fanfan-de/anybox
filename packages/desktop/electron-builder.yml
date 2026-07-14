@@ -57,6 +57,25 @@ win:
     - target: nsis
       arch:
         - x64
+linux:
+  icon: build/icon.png
+  category: Utility
+  artifactName: Anybox-${version}-x64.${ext}
+  maintainer: fanfan-de <fanfan-de@users.noreply.github.com>
+  vendor: Anybox contributors
+  publish:
+    - provider: generic
+      url: https://download.anybox.com.cn/updates/linux/x64
+    - provider: github
+      owner: fanfan-de
+      repo: anybox
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

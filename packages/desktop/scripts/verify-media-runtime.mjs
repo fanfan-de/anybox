@@ -153,6 +153,13 @@ export function validateMediaRuntimeLock(lock) {
     invariant(source && typeof source.version === "string" && source.version, `Subtitle runtime is missing ${dependency} version`)
     invariant(SHA256_PATTERN.test(source.sha256), `Subtitle runtime has invalid ${dependency} SHA-256`)
   }
+  const lockedZlib = lock.mediaRuntimeSources?.zlib
+  invariant(lockedZlib?.version === "1.3.1", "Media runtime has no pinned zlib version")
+  invariant(
+    typeof lockedZlib.url === "string" && lockedZlib.url.startsWith("https://"),
+    "Media runtime has no pinned zlib source URL",
+  )
+  invariant(SHA256_PATTERN.test(lockedZlib.sha256), "Media runtime has invalid zlib SHA-256")
 
   for (const platform of LOCKED_PLATFORMS) {
     const entry = lock.platforms[platform]
@@ -222,6 +229,22 @@ export function validateMediaRuntimeLock(lock) {
         target.licensePolicy?.reviewStatus === "approved" || target.licensePolicy?.reviewStatus === "pending",
         `${platform}/${arch} has no license review status`,
       )
+      if (target.origin === "anybox-controlled-gpl") {
+        invariant(
+          target.licensePolicy.spdxExpression === "GPL-3.0-or-later",
+          `${platform}/${arch} GPL runtime has an invalid license expression`,
+        )
+        const x264License = target.licensePolicy.componentLicenseFiles?.x264
+        const zlibLicense = target.licensePolicy.componentLicenseFiles?.zlib
+        invariant(
+          x264License?.fileName === "X264-LICENSE.txt" && SHA256_PATTERN.test(x264License.sha256),
+          `${platform}/${arch} GPL runtime has no locked x264 license`,
+        )
+        invariant(
+          zlibLicense?.fileName === "ZLIB-LICENSE.txt" && SHA256_PATTERN.test(zlibLicense.sha256),
+          `${platform}/${arch} GPL runtime has no locked zlib license`,
+        )
+      }
       const executableNames = resolveMediaExecutableNames(target, platform, arch)
       const artifactPending = target.artifactStatus === "pending"
       invariant(target.artifactStatus === undefined || artifactPending, `${platform}/${arch} has invalid artifact status`)
@@ -243,6 +266,28 @@ export function validateMediaRuntimeLock(lock) {
           invariant(typeof material.fileName === "string" && material.fileName, `${platform}/${arch} has no ${materialName} filename`)
           invariant(SHA256_PATTERN.test(material.sha256), `${platform}/${arch} has an invalid ${materialName} digest`)
           invariant(Number.isSafeInteger(material.sizeBytes) && material.sizeBytes > 0, `${platform}/${arch} has an invalid ${materialName} size`)
+        }
+        if (target.origin === "anybox-controlled-gpl") {
+          const x264Source = target.distribution.componentSources?.x264
+          invariant(x264Source && typeof x264Source === "object", `${platform}/${arch} has no x264 source material`)
+          invariant(/^[a-f0-9]{40}$/.test(x264Source.revision), `${platform}/${arch} has an invalid x264 revision`)
+          invariant(
+            x264Source.fileName === `x264-source-${x264Source.revision}.tar.gz`,
+            `${platform}/${arch} has an invalid x264 source filename`,
+          )
+          invariant(SHA256_PATTERN.test(x264Source.sha256), `${platform}/${arch} has an invalid x264 source digest`)
+          invariant(Number.isSafeInteger(x264Source.sizeBytes) && x264Source.sizeBytes > 0, `${platform}/${arch} has an invalid x264 source size`)
+          invariant(typeof x264Source.url === "string" && x264Source.url.startsWith("https://"), `${platform}/${arch} has no x264 source URL`)
+          const zlibSource = target.distribution.componentSources?.zlib
+          invariant(zlibSource && typeof zlibSource === "object", `${platform}/${arch} has no zlib source material`)
+          invariant(zlibSource.version === lockedZlib.version, `${platform}/${arch} has an invalid zlib version`)
+          invariant(
+            zlibSource.fileName === `zlib-source-${zlibSource.version}.tar.gz`,
+            `${platform}/${arch} has an invalid zlib source filename`,
+          )
+          invariant(zlibSource.sha256 === lockedZlib.sha256, `${platform}/${arch} has an invalid zlib source digest`)
+          invariant(Number.isSafeInteger(zlibSource.sizeBytes) && zlibSource.sizeBytes > 0, `${platform}/${arch} has an invalid zlib source size`)
+          invariant(typeof zlibSource.url === "string" && zlibSource.url.startsWith("https://"), `${platform}/${arch} has no zlib source URL`)
         }
         invariant(target.binaries && typeof target.binaries === "object", `${platform}/${arch} has no binary locks`)
         for (const binaryName of Object.values(executableNames)) {
@@ -401,6 +446,13 @@ async function verifyLicenseMaterials(mediaToolsDir, target) {
       && notices.includes("packages/desktop/scripts/build-media-runtime.sh"),
     "Media runtime notices do not identify the locked source revision and build recipe",
   )
+  for (const [component, descriptor] of Object.entries(target.licensePolicy.componentLicenseFiles ?? {})) {
+    const componentLicensePath = path.join(mediaToolsDir, descriptor.fileName)
+    invariant(fs.existsSync(componentLicensePath), `Media runtime is missing ${component} license material`)
+    invariant(await sha256(componentLicensePath) === descriptor.sha256, `Media runtime ${component} license digest mismatch`)
+    const componentLicense = await fsp.readFile(componentLicensePath, "utf8")
+    invariant(componentLicense.trim().length > 100, `Media runtime ${component} license material is empty or a placeholder`)
+  }
 }
 
 async function verifySubtitleMaterials(mediaToolsDir, target) {

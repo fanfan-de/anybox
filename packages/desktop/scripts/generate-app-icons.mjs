@@ -198,6 +198,44 @@ function generateTrayTemplateWithMacTools(sourceSvg, outputDir) {
   console.log(`[desktop][icons] generated tray template icons from ${sourceSvg}`)
 }
 
+function rasterizeSvgWithRsvg(sourceSvg, outputPath, size) {
+  run(getToolPath("rsvg-convert"), [
+    "--width", String(size),
+    "--height", String(size),
+    "--keep-aspect-ratio",
+    "--output", outputPath,
+    sourceSvg,
+  ])
+}
+
+function generateWithLinuxTools(sourceSvg, trayTemplateSvg, outputDir, pngSize) {
+  mkdirSync(outputDir, { recursive: true })
+  const tempDir = mkdtempSync(path.join(tmpdir(), "anybox-linux-icons-"))
+
+  try {
+    copyFileSync(sourceSvg, path.join(outputDir, "icon.svg"))
+    rasterizeSvgWithRsvg(sourceSvg, path.join(outputDir, "icon.png"), pngSize)
+    rasterizeSvgWithRsvg(sourceSvg, path.join(outputDir, "icon-master.png"), 1024)
+
+    const icoFrames = []
+    for (const size of [16, 24, 32, 48, 64, 128, 256]) {
+      const framePath = path.join(tempDir, `icon-${size}.png`)
+      rasterizeSvgWithRsvg(sourceSvg, framePath, size)
+      icoFrames.push({ size, bytes: readFileSync(framePath) })
+    }
+    const iconIcoPath = path.join(outputDir, "icon.ico")
+    writeIco(iconIcoPath, icoFrames)
+    copyFileSync(iconIcoPath, path.join(outputDir, "installerIcon.ico"))
+
+    rasterizeSvgWithRsvg(trayTemplateSvg, path.join(outputDir, "trayTemplate.png"), 18)
+    rasterizeSvgWithRsvg(trayTemplateSvg, path.join(outputDir, "trayTemplate@2x.png"), 36)
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true })
+  }
+
+  console.log(`[desktop][icons] generated Linux app and tray icons from ${sourceSvg}`)
+}
+
 function generateWithPowerShell(sourceSvg, outputDir, pngSize) {
   const powerShell = process.platform === "win32" ? "powershell" : "pwsh"
   run(powerShell, [
@@ -238,5 +276,8 @@ if (process.platform === "win32") {
   generateWithMacTools(sourceSvg, outputDir, pngSize)
   generateTrayTemplateWithMacTools(trayTemplateSvg, outputDir)
 } else {
-  generateWithPowerShell(sourceSvg, outputDir, pngSize)
+  if (!existsSync(trayTemplateSvg)) {
+    throw new Error(`[desktop][icons] tray template SVG not found: ${trayTemplateSvg}`)
+  }
+  generateWithLinuxTools(sourceSvg, trayTemplateSvg, outputDir, pngSize)
 }

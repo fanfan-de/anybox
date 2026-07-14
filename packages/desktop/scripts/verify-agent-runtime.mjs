@@ -1,4 +1,5 @@
 import fs from "node:fs"
+import { spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -7,6 +8,7 @@ import {
   validateMediaRuntimeLock,
   verifyMediaRuntime,
 } from "./verify-media-runtime.mjs"
+import { LINUX_PYTHON_DISTRIBUTION } from "./prepare-workspace-dependencies.mjs"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const desktopDir = path.resolve(scriptDir, "..")
@@ -89,6 +91,13 @@ async function verifyBetaMediaRuntime(mediaToolsDir) {
       throw new Error(`Deliver Beta media runtime is missing ${name}`)
     }
   }
+  for (const [component, descriptor] of Object.entries(mediaTarget.licensePolicy.componentLicenseFiles ?? {})) {
+    const licensePath = path.join(mediaToolsDir, descriptor.fileName)
+    if (!fs.existsSync(licensePath)) throw new Error(`Deliver Beta media runtime is missing ${component} license ${descriptor.fileName}`)
+    if (await sha256(licensePath) !== descriptor.sha256) {
+      throw new Error(`Deliver Beta media runtime ${component} license digest mismatch`)
+    }
+  }
 }
 
 const requiredFiles = [
@@ -158,6 +167,65 @@ if (manifest.platform !== process.platform || manifest.arch !== process.arch) {
   console.error(
     `[desktop][build] dependency manifest platform mismatch: got ${manifest.platform}/${manifest.arch}, expected ${process.platform}/${process.arch}`,
   )
+  process.exit(1)
+}
+
+if (manifest.pythonVersion !== LINUX_PYTHON_DISTRIBUTION.version) {
+  console.error(
+    `[desktop][build] dependency manifest Python version mismatch: got ${manifest.pythonVersion ?? "missing"}, expected ${LINUX_PYTHON_DISTRIBUTION.version}`,
+  )
+  process.exit(1)
+}
+
+if (process.platform === "linux") {
+  const distribution = manifest.pythonDistribution
+  for (const [key, expected] of Object.entries(LINUX_PYTHON_DISTRIBUTION)) {
+    if (distribution?.[key] !== expected) {
+      console.error(
+        `[desktop][build] Linux Python distribution ${key} mismatch: got ${distribution?.[key] ?? "missing"}, expected ${expected}`,
+      )
+      process.exit(1)
+    }
+  }
+}
+
+const pythonSmoke = spawnSync(
+  pythonExecutable,
+  [
+    "-c",
+    [
+      "import sys",
+      `assert sys.version_info[:3] == (${LINUX_PYTHON_DISTRIBUTION.version.split(".").join(", ")})`,
+      "import docx, openpyxl, pandas, PIL, pypdf, reportlab, lxml, numpy, pydantic, dateutil, pdf2image",
+    ].join("; "),
+  ],
+  { encoding: "utf8", windowsHide: true },
+)
+if (pythonSmoke.status !== 0) {
+  console.error("[desktop][build] bundled workspace Python failed its import smoke test:")
+  console.error((pythonSmoke.stderr || pythonSmoke.stdout || "unknown Python error").trim())
+  process.exit(1)
+}
+
+const workspaceNodeDir = path.join(dependenciesDir, "node")
+const nodeSmoke = spawnSync(
+  path.join(runtimeDir, bunExecutableName),
+  [
+    "-e",
+    [
+      "for (const name of ['docx','pptxgenjs','pdf-lib','sharp','image-size','pngjs','jpeg-js','pixelmatch','tesseract.js','jszip','marked']) await import(name)",
+      "const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')",
+      "if (typeof pdfjs.getDocument !== 'function') throw new Error('pdfjs-dist did not expose getDocument')",
+      "const sharp = (await import('sharp')).default",
+      "const png = await sharp({create:{width:2,height:2,channels:4,background:'#ff0000'}}).png().toBuffer()",
+      "if (png.length === 0) throw new Error('sharp image smoke produced no output')",
+    ].join("; "),
+  ],
+  { cwd: workspaceNodeDir, encoding: "utf8", windowsHide: true },
+)
+if (nodeSmoke.status !== 0) {
+  console.error("[desktop][build] bundled workspace Node dependencies failed their import smoke test:")
+  console.error((nodeSmoke.stderr || nodeSmoke.stdout || "unknown Bun error").trim())
   process.exit(1)
 }
 

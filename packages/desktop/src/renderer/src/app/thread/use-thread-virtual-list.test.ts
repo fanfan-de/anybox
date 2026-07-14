@@ -4,6 +4,7 @@ import type { Virtualizer } from "@tanstack/react-virtual"
 import { SIDEBAR_RESIZE_END_EVENT, SIDEBAR_RESIZE_START_EVENT } from "../sidebar-resize-events"
 import {
   measureThreadVirtualElement,
+  observeThreadVirtualElementOffset,
   readThreadVirtualResizeObserverRect,
   useThreadVirtualList,
 } from "./use-thread-virtual-list"
@@ -108,5 +109,37 @@ describe("readThreadVirtualResizeObserverRect", () => {
 
     unmount()
     threadColumn.remove()
+  })
+})
+
+describe("observeThreadVirtualElementOffset", () => {
+  it("cancels the pending scroll-end callback when the virtualizer unmounts", () => {
+    vi.useFakeTimers()
+    const threadColumn = document.createElement("div")
+    document.body.append(threadColumn)
+    const callback = vi.fn()
+    const virtualizer = {
+      options: {
+        horizontal: false,
+        isRtl: false,
+        isScrollingResetDelay: 150,
+      },
+      scrollElement: threadColumn,
+      targetWindow: window,
+    } as unknown as Virtualizer<HTMLDivElement, HTMLDivElement>
+
+    try {
+      const cleanup = observeThreadVirtualElementOffset(virtualizer, callback)
+      threadColumn.scrollTop = 120
+      threadColumn.dispatchEvent(new Event("scroll"))
+
+      expect(callback).toHaveBeenCalledWith(120, true)
+      cleanup?.()
+      vi.advanceTimersByTime(150)
+      expect(callback).toHaveBeenCalledTimes(1)
+    } finally {
+      threadColumn.remove()
+      vi.useRealTimers()
+    }
   })
 })

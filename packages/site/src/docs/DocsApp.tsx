@@ -151,6 +151,12 @@ function DocsHeader() {
         </InstallerDownloadButton>
         <InstallerDownloadButton
           className="button button-secondary docs-download-button"
+          platform="linux"
+        >
+          {isChinese ? "Linux 下载" : "Download for Linux"}
+        </InstallerDownloadButton>
+        <InstallerDownloadButton
+          className="button button-secondary docs-download-button"
           platform="mobile"
         >
           {isChinese ? "Android 下载" : "Download for Android"}

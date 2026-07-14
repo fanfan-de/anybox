@@ -426,6 +426,7 @@ function buildManagedAgentStartEnv(
     const hasBundledPair = fs.existsSync(bundledFFmpeg) && fs.existsSync(bundledFFprobe)
     const isReleaseTarget = (process.platform === "win32" && process.arch === "x64")
       || (process.platform === "darwin" && process.arch === "arm64")
+      || (process.platform === "linux" && process.arch === "x64")
     const requireVerifiedBundle = app.isPackaged && isReleaseTarget
     if (requireVerifiedBundle) {
       delete startEnv[MANAGED_AGENT_FFMPEG_BINARY_ENV]

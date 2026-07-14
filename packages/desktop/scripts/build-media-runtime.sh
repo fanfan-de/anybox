@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-platform="${1:?usage: build-media-runtime.sh <win32|darwin> <x64|arm64>}"
-arch="${2:?usage: build-media-runtime.sh <win32|darwin> <x64|arm64>}"
+platform="${1:?usage: build-media-runtime.sh <win32|darwin|linux> <x64|arm64>}"
+arch="${2:?usage: build-media-runtime.sh <win32|darwin|linux> <x64|arm64>}"
 ffmpeg_revision="${ANYBOX_FFMPEG_REVISION:-8ad6288553}"
+x264_revision="${ANYBOX_X264_REVISION:-b35605ace3ddf7c1a5d67a2eb553f034aef41d55}"
+zlib_version="1.3.1"
+zlib_sha256="9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"
 node_binary="${ANYBOX_NODE_BINARY:-node}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 desktop_dir="$(cd "${script_dir}/.." && pwd)"
@@ -14,6 +17,7 @@ configure_prefix="/opt/anybox/media-runtime/${platform}-${arch}"
 stage_dir="${output_dir}/stage"
 sources_dir="${output_dir}/subtitle-sources"
 evidence_dir="${stage_dir}/evidence"
+dependencies_dir="${work_dir}/dependencies"
 
 if [[ "${ANYBOX_MEDIA_RUNTIME_RUN_SMOKE:-0}" != "1" ]]; then
   echo "media runtime candidates require ANYBOX_MEDIA_RUNTIME_RUN_SMOKE=1 so render and subtitle evidence is archive-bound" >&2
@@ -38,7 +42,14 @@ fetch_verified() {
   local url="$1"
   local output="$2"
   local expected="$3"
-  curl --fail --location --retry 3 --output "${output}" "${url}"
+  if command -v curl >/dev/null; then
+    curl --fail --location --retry 3 --output "${output}" "${url}"
+  elif command -v wget >/dev/null; then
+    wget --quiet --tries=3 --output-document="${output}" "${url}"
+  else
+    echo "media runtime build requires curl or wget" >&2
+    exit 1
+  fi
   echo "${expected}  ${output}" | sha256sum --check --status
 }
 
@@ -47,17 +58,107 @@ fetch_verified "https://download.savannah.gnu.org/releases/freetype/freetype-${f
 fetch_verified "https://github.com/fribidi/fribidi/releases/download/v${fribidi_version}/fribidi-${fribidi_version}.tar.xz" "${sources_dir}/fribidi-${fribidi_version}.tar.xz" "${fribidi_sha256}"
 fetch_verified "https://github.com/harfbuzz/harfbuzz/releases/download/${harfbuzz_version}/harfbuzz-${harfbuzz_version}.tar.xz" "${sources_dir}/harfbuzz-${harfbuzz_version}.tar.xz" "${harfbuzz_sha256}"
 fetch_verified "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf" "${stage_dir}/fonts/NotoSansCJKsc-Regular.otf" "${noto_sha256}"
-curl --fail --location --retry 3 --output "${stage_dir}/fonts/OFL-1.1.txt" "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/LICENSE"
+zlib_source_archive=""
+if [[ "${platform}" == "linux" ]]; then
+  zlib_source_archive="${output_dir}/zlib-source-${zlib_version}.tar.gz"
+  fetch_verified "https://zlib.net/fossils/zlib-${zlib_version}.tar.gz" "${zlib_source_archive}" "${zlib_sha256}"
+fi
+if command -v curl >/dev/null; then
+  curl --fail --location --retry 3 --output "${stage_dir}/fonts/OFL-1.1.txt" "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/LICENSE"
+else
+  wget --quiet --tries=3 --output-document="${stage_dir}/fonts/OFL-1.1.txt" "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/LICENSE"
+fi
 
-test "$(pkg-config --modversion libass)" = "${libass_version}"
-test "$(pkg-config --modversion fribidi)" = "${fribidi_version}"
-test "$(pkg-config --modversion harfbuzz)" = "${harfbuzz_version}"
 git clone --filter=blob:none https://github.com/FFmpeg/FFmpeg.git "${source_dir}"
 git -C "${source_dir}" checkout --detach "${ffmpeg_revision}"
 source_archive="${output_dir}/ffmpeg-source-${ffmpeg_revision}.tar.gz"
 recipe_copy="${output_dir}/build-media-runtime.sh"
 git -C "${source_dir}" archive --format=tar.gz --prefix="ffmpeg-${ffmpeg_revision}/" --output="${source_archive}" "${ffmpeg_revision}"
 cp "${script_dir}/build-media-runtime.sh" "${recipe_copy}"
+
+x264_source_archive=""
+
+build_linux_dependencies() {
+  local dependency_source_dir="${work_dir}/dependency-sources"
+  local freetype_source="${dependency_source_dir}/freetype-${freetype_version}"
+  local fribidi_source="${dependency_source_dir}/fribidi-${fribidi_version}"
+  local harfbuzz_source="${dependency_source_dir}/harfbuzz-${harfbuzz_version}"
+  local libass_source="${dependency_source_dir}/libass-${libass_version}"
+  local zlib_source="${dependency_source_dir}/zlib-${zlib_version}"
+  local x264_source="${dependency_source_dir}/x264"
+  local jobs="${ANYBOX_MEDIA_RUNTIME_JOBS:-2}"
+
+  for command in meson ninja pkg-config nasm; do
+    command -v "${command}" >/dev/null || {
+      echo "Linux media runtime build requires ${command}" >&2
+      exit 1
+    }
+  done
+
+  mkdir -p "${dependency_source_dir}" "${dependencies_dir}"
+  tar -xf "${sources_dir}/freetype-${freetype_version}.tar.xz" -C "${dependency_source_dir}"
+  tar -xf "${sources_dir}/fribidi-${fribidi_version}.tar.xz" -C "${dependency_source_dir}"
+  tar -xf "${sources_dir}/harfbuzz-${harfbuzz_version}.tar.xz" -C "${dependency_source_dir}"
+  tar -xf "${sources_dir}/libass-${libass_version}.tar.xz" -C "${dependency_source_dir}"
+  tar -xf "${zlib_source_archive}" -C "${dependency_source_dir}"
+
+  (
+    cd "${zlib_source}"
+    ./configure --prefix="${dependencies_dir}" --static
+    make -j"${jobs}"
+    make install
+  )
+
+  meson setup "${freetype_source}/build-anybox" "${freetype_source}" \
+    --prefix="${dependencies_dir}" --libdir=lib --default-library=static --buildtype=release \
+    -Dbrotli=disabled -Dbzip2=disabled -Dharfbuzz=disabled -Dpng=disabled -Dzlib=disabled
+  meson compile -C "${freetype_source}/build-anybox" -j "${jobs}"
+  meson install -C "${freetype_source}/build-anybox"
+
+  PKG_CONFIG_PATH="${dependencies_dir}/lib/pkgconfig:${dependencies_dir}/share/pkgconfig" \
+    meson setup "${fribidi_source}/build-anybox" "${fribidi_source}" \
+      --prefix="${dependencies_dir}" --default-library=static --buildtype=release \
+      --libdir=lib \
+      -Ddocs=false -Dbin=false -Dtests=false
+  meson compile -C "${fribidi_source}/build-anybox" -j "${jobs}"
+  meson install -C "${fribidi_source}/build-anybox"
+
+  PKG_CONFIG_PATH="${dependencies_dir}/lib/pkgconfig:${dependencies_dir}/share/pkgconfig" \
+    meson setup "${harfbuzz_source}/build-anybox" "${harfbuzz_source}" \
+      --prefix="${dependencies_dir}" --default-library=static --buildtype=release \
+      --libdir=lib \
+      -Dglib=disabled -Dgobject=disabled -Dcairo=disabled -Dchafa=disabled -Dicu=disabled \
+      -Dfreetype=enabled -Dtests=disabled -Ddocs=disabled -Dutilities=disabled
+  meson compile -C "${harfbuzz_source}/build-anybox" -j "${jobs}"
+  meson install -C "${harfbuzz_source}/build-anybox"
+
+  PKG_CONFIG_PATH="${dependencies_dir}/lib/pkgconfig:${dependencies_dir}/share/pkgconfig" \
+    meson setup "${libass_source}/build-anybox" "${libass_source}" \
+      --prefix="${dependencies_dir}" --default-library=static --buildtype=release \
+      --libdir=lib \
+      -Dfontconfig=disabled -Drequire-system-font-provider=false \
+      -Dtest=disabled -Dcompare=disabled -Dprofile=disabled
+  meson compile -C "${libass_source}/build-anybox" -j "${jobs}"
+  meson install -C "${libass_source}/build-anybox"
+
+  git clone --filter=blob:none https://code.videolan.org/videolan/x264.git "${x264_source}"
+  git -C "${x264_source}" checkout --detach "${x264_revision}"
+  x264_source_archive="${output_dir}/x264-source-${x264_revision}.tar.gz"
+  git -C "${x264_source}" archive --format=tar.gz --prefix="x264-${x264_revision}/" \
+    --output="${x264_source_archive}" "${x264_revision}"
+  (
+    cd "${x264_source}"
+    ./configure --prefix="${dependencies_dir}" --enable-static --enable-pic --disable-cli --disable-opencl
+    make -j"${jobs}"
+    make install
+  )
+
+  export PKG_CONFIG_PATH="${dependencies_dir}/lib/pkgconfig:${dependencies_dir}/share/pkgconfig"
+  test "$(pkg-config --modversion libass)" = "${libass_version}"
+  test "$(pkg-config --modversion fribidi)" = "${fribidi_version}"
+  test "$(pkg-config --modversion harfbuzz)" = "${harfbuzz_version}"
+  pkg-config --exists x264
+}
 
 common_flags=(
   "--prefix=${configure_prefix}"
@@ -66,10 +167,8 @@ common_flags=(
   "--disable-shared"
   "--disable-doc"
   "--disable-debug"
-  "--disable-gpl"
   "--disable-nonfree"
   "--disable-libopenh264"
-  "--disable-libx264"
   "--disable-libx265"
   "--disable-libfdk-aac"
   "--enable-libass"
@@ -83,6 +182,8 @@ case "${platform}/${arch}" in
       "--enable-mediafoundation"
       "--pkg-config-flags=--static"
       "--extra-ldflags=-static"
+      "--disable-gpl"
+      "--disable-libx264"
     )
     ffmpeg_name="ffmpeg.exe"
     ffprobe_name="ffprobe.exe"
@@ -94,11 +195,38 @@ case "${platform}/${arch}" in
       echo "macOS candidate must be built on native arm64 hardware" >&2
       exit 1
     fi
-    target_flags=("--arch=arm64" "--target-os=darwin" "--enable-videotoolbox")
+    target_flags=(
+      "--arch=arm64"
+      "--target-os=darwin"
+      "--enable-videotoolbox"
+      "--disable-gpl"
+      "--disable-libx264"
+    )
     ffmpeg_name="ffmpeg"
     ffprobe_name="ffprobe"
     video_encoder="h264_videotoolbox"
     archive_name="ffmpeg-anybox-${ffmpeg_revision}-darwin-arm64-lgpl.tar.gz"
+    ;;
+  linux/x64)
+    if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "x86_64" ]]; then
+      echo "Linux x64 candidate must be built on native x86_64 Linux" >&2
+      exit 1
+    fi
+    build_linux_dependencies
+    target_flags=(
+      "--arch=x86_64"
+      "--target-os=linux"
+      "--enable-gpl"
+      "--enable-libx264"
+      "--enable-zlib"
+      "--pkg-config-flags=--static"
+      "--extra-cflags=-I${dependencies_dir}/include"
+      "--extra-ldflags=-L${dependencies_dir}/lib -static"
+    )
+    ffmpeg_name="ffmpeg"
+    ffprobe_name="ffprobe"
+    video_encoder="libx264"
+    archive_name="ffmpeg-anybox-${ffmpeg_revision}-linux-x64-gpl.tar.gz"
     ;;
   *)
     echo "unsupported candidate target ${platform}/${arch}" >&2
@@ -113,10 +241,18 @@ popd >/dev/null
 
 cp "${source_dir}/${ffmpeg_name}" "${stage_dir}/${ffmpeg_name}"
 cp "${source_dir}/${ffprobe_name}" "${stage_dir}/${ffprobe_name}"
-cp "${source_dir}/COPYING.LGPLv3" "${stage_dir}/LICENSE.txt"
+if [[ "${platform}" == "linux" ]]; then
+  cp "${source_dir}/COPYING.GPLv3" "${stage_dir}/LICENSE.txt"
+  cp "${work_dir}/dependency-sources/x264/COPYING" "${stage_dir}/X264-LICENSE.txt"
+  cp "${work_dir}/dependency-sources/zlib-${zlib_version}/LICENSE" "${stage_dir}/ZLIB-LICENSE.txt"
+else
+  cp "${source_dir}/COPYING.LGPLv3" "${stage_dir}/LICENSE.txt"
+fi
 cp "${recipe_copy}" "${stage_dir}/BUILD-RECIPE.sh"
 cat > "${stage_dir}/SOURCE.txt" <<EOF
 FFmpeg revision: ${ffmpeg_revision}
+$(if [[ -n "${x264_source_archive}" ]]; then printf 'x264 revision: %s\nx264 source archive: %s\n' "${x264_revision}" "$(basename "${x264_source_archive}")"; fi)
+$(if [[ "${platform}" == "linux" ]]; then printf 'zlib: %s sha256=%s\nzlib source archive: %s\n' "${zlib_version}" "${zlib_sha256}" "$(basename "${zlib_source_archive}")"; fi)
 libass: ${libass_version} sha256=${libass_sha256}
 FreeType: ${freetype_version} sha256=${freetype_sha256}
 FriBidi: ${fribidi_version} sha256=${fribidi_sha256}
@@ -132,7 +268,7 @@ FFmpeg media runtime for Anybox
 FFmpeg revision: ${ffmpeg_revision}
 Source: https://github.com/FFmpeg/FFmpeg/commit/${ffmpeg_revision}
 Build recipe: packages/desktop/scripts/build-media-runtime.sh
-License: LGPL-3.0-or-later; see LICENSE.txt.
+License: $(if [[ "${platform}" == "linux" ]]; then printf 'GPL-3.0-or-later with x264 GPL-2.0-or-later and zlib; see LICENSE.txt, X264-LICENSE.txt, and ZLIB-LICENSE.txt.'; else printf 'LGPL-3.0-or-later; see LICENSE.txt.'; fi)
 Subtitle renderer: libass ${libass_version} with FreeType ${freetype_version}, FriBidi ${fribidi_version}, and HarfBuzz ${harfbuzz_version}.
 Bundled font: Noto Sans CJK SC ${noto_version}; see fonts/OFL-1.1.txt.
 
@@ -141,9 +277,11 @@ Distribute this archive only when the matching target has both releaseReadiness.
 and licensePolicy.reviewStatus set to approved.
 EOF
 
-"${stage_dir}/${ffmpeg_name}" -hide_banner -encoders 2>&1 | grep -q "${video_encoder}"
-"${stage_dir}/${ffmpeg_name}" -hide_banner -encoders 2>&1 | grep -q " aac "
-"${stage_dir}/${ffmpeg_name}" -hide_banner -filters 2>&1 | grep -Eq "[[:space:]]ass[[:space:]].*libass"
+encoder_listing="$("${stage_dir}/${ffmpeg_name}" -hide_banner -encoders 2>&1)"
+filter_listing="$("${stage_dir}/${ffmpeg_name}" -hide_banner -filters 2>&1)"
+grep -q "${video_encoder}" <<<"${encoder_listing}"
+grep -q " aac " <<<"${encoder_listing}"
+grep -Eq "[[:space:]]ass[[:space:]].*libass" <<<"${filter_listing}"
 
 if [[ "${ANYBOX_MEDIA_RUNTIME_RUN_SMOKE:-0}" == "1" ]]; then
   pushd "${evidence_dir}" >/dev/null
@@ -171,7 +309,7 @@ EOF
 fi
 
 tar -czf "${output_dir}/${archive_name}" -C "${stage_dir}" .
-"${node_binary}" "${script_dir}/describe-media-runtime-candidate.mjs" \
+describe_args=(
   --platform "${platform}" \
   --arch "${arch}" \
   --stage "${stage_dir}" \
@@ -180,5 +318,13 @@ tar -czf "${output_dir}/${archive_name}" -C "${stage_dir}" .
   --recipe "${recipe_copy}" \
   --output "${output_dir}/candidate.json" \
   --revision "${ffmpeg_revision}"
+)
+if [[ -n "${x264_source_archive}" ]]; then
+  describe_args+=(
+    --x264-source "${x264_source_archive}" --x264-revision "${x264_revision}"
+    --zlib-source "${zlib_source_archive}" --zlib-version "${zlib_version}"
+  )
+fi
+"${node_binary}" "${script_dir}/describe-media-runtime-candidate.mjs" "${describe_args[@]}"
 
 echo "[desktop][media] built unapproved ${platform}/${arch} candidate at ${output_dir}"

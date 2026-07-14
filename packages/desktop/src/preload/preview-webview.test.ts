@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const electronMock = vi.hoisted(() => ({
   markerListener: null as null | ((_event: unknown, payload?: { markers?: Array<Record<string, unknown>> }) => void),
@@ -49,6 +49,22 @@ describe("preview webview preload", () => {
     document.head.innerHTML = ""
     document.body.innerHTML = ""
     initializePreviewGuest()
+  })
+
+  afterEach(() => {
+    window.dispatchEvent(new Event("pagehide"))
+    vi.useRealTimers()
+  })
+
+  it("cancels delayed auto-fit work when the preview page is hidden", () => {
+    vi.useFakeTimers()
+    window.dispatchEvent(new Event("DOMContentLoaded"))
+    electronMock.sendToHost.mockClear()
+
+    window.dispatchEvent(new Event("pagehide"))
+    vi.advanceTimersByTime(500)
+
+    expect(electronMock.sendToHost).not.toHaveBeenCalled()
   })
 
   it("falls back to a coordinate comment target when no element can be resolved", () => {

@@ -20,20 +20,22 @@ function parseArguments(argv) {
     lock: path.resolve(scriptDir, "..", "media-runtime.lock.json"),
     windows: path.resolve(workspaceRoot, "packages", "cinema-web", "cinema-deliver-installed-restart-evidence.win32-x64.json"),
     macos: path.resolve(workspaceRoot, "packages", "cinema-web", "cinema-deliver-installed-restart-evidence.darwin-arm64.json"),
+    linux: path.resolve(workspaceRoot, "packages", "cinema-web", "cinema-deliver-installed-restart-evidence.linux-x64.json"),
     windowsArtifact: undefined,
     macosArtifact: undefined,
+    linuxArtifact: undefined,
     approval: undefined,
   }
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index]?.slice(2)
     const value = argv[index + 1]
     if (!key || !(key in values) || !value) {
-      throw new Error("Usage: verify-deliver-release-matrix [--lock file] [--windows file] [--macos file] --windowsArtifact file --macosArtifact file --approval file")
+      throw new Error("Usage: verify-deliver-release-matrix [--lock file] [--windows file] [--macos file] [--linux file] --windowsArtifact file --macosArtifact file --linuxArtifact file --approval file")
     }
     values[key] = path.resolve(value)
   }
-  if (!values.windowsArtifact || !values.macosArtifact || !values.approval) {
-    throw new Error("--windowsArtifact, --macosArtifact, and --approval are required")
+  if (!values.windowsArtifact || !values.macosArtifact || !values.linuxArtifact || !values.approval) {
+    throw new Error("--windowsArtifact, --macosArtifact, --linuxArtifact, and --approval are required")
   }
   return values
 }
@@ -58,6 +60,7 @@ const lock = validateMediaRuntimeLock(await readJson(args.lock))
 const expectations = [
   { key: "windows", platform: "win32", arch: "x64" },
   { key: "macos", platform: "darwin", arch: "arm64" },
+  { key: "linux", platform: "linux", arch: "x64" },
 ]
 const accepted = []
 for (const expectation of expectations) {
@@ -94,21 +97,24 @@ for (const expectation of expectations) {
   accepted.push({ expectation, evidence })
 }
 
-const [windows, macos] = accepted
+const [windows, macos, linux] = accepted
 const approval = validateDeliverReleaseApproval(await readJson(args.approval))
-if (windows.evidence.build.desktopVersion !== macos.evidence.build.desktopVersion) {
-  throw new Error("Windows and macOS evidence use different desktop versions")
-}
-if (windows.evidence.build.commitSHA !== macos.evidence.build.commitSHA) {
-  throw new Error("Windows and macOS evidence use different commits")
+for (const candidate of [macos, linux]) {
+  if (windows.evidence.build.desktopVersion !== candidate.evidence.build.desktopVersion) {
+    throw new Error("Windows, macOS, and Linux evidence use different desktop versions")
+  }
+  if (windows.evidence.build.commitSHA !== candidate.evidence.build.commitSHA) {
+    throw new Error("Windows, macOS, and Linux evidence use different commits")
+  }
 }
 const windowsTarget = resolveMediaRuntimeTarget(lock, "win32", "x64")
 const macosTarget = resolveMediaRuntimeTarget(lock, "darwin", "arm64")
-if (windowsTarget.releaseReadiness.releaseKind !== "initial" || macosTarget.releaseReadiness.releaseKind !== "initial") {
-  throw new Error("The first synchronized Deliver release requires releaseKind=initial for both runtimes")
+const linuxTarget = resolveMediaRuntimeTarget(lock, "linux", "x64")
+if ([windowsTarget, macosTarget, linuxTarget].some((target) => target.releaseReadiness.releaseKind !== "initial")) {
+  throw new Error("The first synchronized Deliver release requires releaseKind=initial for all runtimes")
 }
-if (windowsTarget.distribution.ffmpegRevision !== macosTarget.distribution.ffmpegRevision) {
-  throw new Error("Windows and macOS runtimes must use the same FFmpeg revision")
+if (new Set([windowsTarget, macosTarget, linuxTarget].map((target) => target.distribution.ffmpegRevision)).size !== 1) {
+  throw new Error("Windows, macOS, and Linux runtimes must use the same FFmpeg revision")
 }
 if (approval.desktopVersion !== windows.evidence.build.desktopVersion) {
   throw new Error("Release approval uses a different desktop version")
@@ -119,9 +125,10 @@ if (approval.commitSHA !== windows.evidence.build.commitSHA) {
 if (
   approval.targets.win32X64.runtimeID !== windowsTarget.runtimeID
   || approval.targets.darwinArm64.runtimeID !== macosTarget.runtimeID
+  || approval.targets.linuxX64.runtimeID !== linuxTarget.runtimeID
 ) {
   throw new Error("Release approval runtime bindings do not match the approved lock")
 }
 console.log(
-  `[desktop][deliver-release] accepted synchronized ${windows.evidence.build.desktopVersion} release evidence for win32/x64 and darwin/arm64`,
+  `[desktop][deliver-release] accepted synchronized ${windows.evidence.build.desktopVersion} release evidence for win32/x64, darwin/arm64, and linux/x64`,
 )

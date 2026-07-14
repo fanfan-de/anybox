@@ -4,14 +4,14 @@ Anybox is a desktop AI agent workspace for local projects. Open a project folder
 
 ## Install
 
-The website currently provides installers for Windows x64, macOS Apple Silicon, and Android. Select `Download for Windows`, `Download for macOS`, or `Download for Android` on the home or documentation page to open the latest installer for that platform.
+The website provides installers for Windows x64, macOS Apple Silicon, Linux x64, and Android. Select the matching download button on the home or documentation page to open the latest installer for that platform. The Linux release provides an AppImage, with a Debian package also available from GitHub Releases.
 
 ```text
 Platform status
 Windows x64: Early Access
 macOS Apple Silicon: Early Access
 Android: Early Access
-Linux: In development
+Linux x64: Early Access (full Cinema/Deliver)
 ```
 
 Launch Anybox after installation. If your operating system displays a security prompt, confirm that the installer came from the project's GitHub Releases page.

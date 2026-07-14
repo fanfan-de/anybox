@@ -44,10 +44,14 @@ export async function verifyDesktopReleaseCandidate({ manifestPath, directory, e
   ])
   invariant(manifest.schemaVersion === 1, "Unsupported desktop candidate manifest schema")
   invariant(manifest.classification === "signed-release-candidate", "Desktop candidate classification is invalid")
-  invariant(manifest.platform === "win32" || manifest.platform === "darwin", "Desktop candidate platform is invalid")
+  invariant(
+    manifest.platform === "win32" || manifest.platform === "darwin" || manifest.platform === "linux",
+    "Desktop candidate platform is invalid",
+  )
   invariant(
     (manifest.platform === "win32" && manifest.arch === "x64")
-      || (manifest.platform === "darwin" && manifest.arch === "arm64"),
+      || (manifest.platform === "darwin" && manifest.arch === "arm64")
+      || (manifest.platform === "linux" && manifest.arch === "x64"),
     "Desktop candidate target is unsupported",
   )
   invariant(typeof manifest.desktopVersion === "string" && manifest.desktopVersion.length > 0, "Desktop candidate version is missing")
@@ -70,7 +74,7 @@ export async function verifyDesktopReleaseCandidate({ manifestPath, directory, e
     for (const required of [manifest.primaryInstaller, `${manifest.primaryInstaller}.blockmap`, "latest.yml"]) {
       invariant(lockedNames.has(required), `Windows candidate is missing required update asset ${required}`)
     }
-  } else {
+  } else if (manifest.platform === "darwin") {
     invariant(manifest.primaryInstaller.endsWith("-arm64.dmg"), "macOS primary installer name is invalid")
     const zipName = `${manifest.primaryInstaller.slice(0, -4)}.zip`
     for (const required of [
@@ -81,6 +85,16 @@ export async function verifyDesktopReleaseCandidate({ manifestPath, directory, e
       "latest-mac.yml",
     ]) {
       invariant(lockedNames.has(required), `macOS candidate is missing required update asset ${required}`)
+    }
+  } else {
+    invariant(manifest.primaryInstaller.endsWith("-x64.AppImage"), "Linux primary installer name is invalid")
+    const debName = `${manifest.primaryInstaller.slice(0, -9)}.deb`
+    for (const required of [
+      manifest.primaryInstaller,
+      debName,
+      "latest-linux.yml",
+    ]) {
+      invariant(lockedNames.has(required), `Linux candidate is missing required release asset ${required}`)
     }
   }
 
@@ -101,16 +115,22 @@ export async function verifyDesktopReleaseCandidate({ manifestPath, directory, e
     invariant(await sha256(filePath) === locked.sha256, `${entry.name} SHA-256 does not match the candidate manifest`)
   }
 
-  const metadataName = manifest.platform === "win32" ? "latest.yml" : "latest-mac.yml"
+  const metadataName = manifest.platform === "win32"
+    ? "latest.yml"
+    : manifest.platform === "darwin"
+      ? "latest-mac.yml"
+      : "latest-linux.yml"
   const metadata = await fsp.readFile(path.join(directory, metadataName), "utf8")
   const escapedVersion = manifest.desktopVersion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   invariant(
     new RegExp(`^version:\\s*['\"]?${escapedVersion}['\"]?\\s*$`, "m").test(metadata),
     `${metadataName} does not declare the candidate version`,
   )
-  const updaterPayloads = manifest.platform === "win32"
-    ? [manifest.primaryInstaller]
-    : [manifest.primaryInstaller, `${manifest.primaryInstaller.slice(0, -4)}.zip`]
+  const updaterPayloads = manifest.platform === "darwin"
+    ? [manifest.primaryInstaller, `${manifest.primaryInstaller.slice(0, -4)}.zip`]
+    : manifest.platform === "linux"
+      ? [manifest.primaryInstaller, `${manifest.primaryInstaller.slice(0, -9)}.deb`]
+      : [manifest.primaryInstaller]
   for (const fileName of updaterPayloads) {
     invariant(metadata.includes(fileName), `${metadataName} does not reference ${fileName}`)
     const payloadSize = (await fsp.stat(path.join(directory, fileName))).size
@@ -121,6 +141,27 @@ export async function verifyDesktopReleaseCandidate({ manifestPath, directory, e
     invariant(
       new RegExp(`(?:^|\\n)\\s*size:\\s*${payloadSize}\\s*(?:$|\\n)`).test(metadata),
       `${metadataName} has a stale size for ${fileName}`,
+    )
+  }
+  if (manifest.platform === "linux") {
+    const updateUrls = Array.from(metadata.matchAll(/^\s*-\s+url:\s*['"]?([^'"\r\n]+)['"]?\s*$/gm), (match) => match[1])
+    invariant(updateUrls.length === new Set(updateUrls).size, "latest-linux.yml contains duplicate file URLs")
+    invariant(
+      updateUrls.filter((url) => url === manifest.primaryInstaller).length === 1,
+      "latest-linux.yml must contain the AppImage exactly once",
+    )
+    invariant(
+      updateUrls.filter((url) => url === `${manifest.primaryInstaller.slice(0, -9)}.deb`).length === 1,
+      "latest-linux.yml must contain the Debian package exactly once",
+    )
+    const escapedInstaller = manifest.primaryInstaller.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    const primaryEntry = metadata.match(
+      new RegExp(`(?:^|\\n)\\s*-\\s+url:\\s*['\"]?${escapedInstaller}['\"]?\\s*\\n((?:\\s{4,}[^\\n]*(?:\\n|$))*)`),
+    )
+    invariant(primaryEntry, "latest-linux.yml does not contain an AppImage file entry")
+    invariant(
+      /^\s*blockMapSize:\s*[1-9]\d*\s*$/m.test(primaryEntry[1]),
+      "latest-linux.yml does not declare a positive embedded AppImage blockMapSize",
     )
   }
 

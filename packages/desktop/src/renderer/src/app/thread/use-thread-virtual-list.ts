@@ -155,6 +155,40 @@ function observeThreadVirtualElementRect(
   }
 }
 
+export function observeThreadVirtualElementOffset(
+  instance: Virtualizer<HTMLDivElement, HTMLDivElement>,
+  callback: (offset: number, isScrolling: boolean) => void,
+) {
+  const element = instance.scrollElement
+  const targetWindow = instance.targetWindow ?? element?.ownerDocument.defaultView
+  if (!element || !targetWindow) return
+
+  let scrollEndTimerID: number | undefined
+  const handleScroll = () => {
+    const offset = instance.options.horizontal
+      ? element.scrollLeft * (instance.options.isRtl ? -1 : 1)
+      : element.scrollTop
+
+    if (scrollEndTimerID !== undefined) {
+      targetWindow.clearTimeout(scrollEndTimerID)
+    }
+    scrollEndTimerID = targetWindow.setTimeout(() => {
+      scrollEndTimerID = undefined
+      callback(offset, false)
+    }, instance.options.isScrollingResetDelay)
+    callback(offset, true)
+  }
+
+  element.addEventListener("scroll", handleScroll, { passive: true })
+  return () => {
+    element.removeEventListener("scroll", handleScroll)
+    if (scrollEndTimerID !== undefined) {
+      targetWindow.clearTimeout(scrollEndTimerID)
+      scrollEndTimerID = undefined
+    }
+  }
+}
+
 export function useThreadVirtualList({
   displayRows,
   getInitialOffset,
@@ -223,6 +257,7 @@ export function useThreadVirtualList({
     initialOffset,
     measureElement: measureThreadVirtualElement,
     observeElementRect: observeThreadVirtualElementRect,
+    observeElementOffset: observeThreadVirtualElementOffset,
     overscan: THREAD_VIRTUAL_OVERSCAN_ROWS,
     rangeExtractor,
     scrollToFn,

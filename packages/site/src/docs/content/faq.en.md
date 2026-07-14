@@ -6,7 +6,7 @@ Anybox is a desktop AI agent workspace for local projects. The repository also c
 
 ## Which platforms are supported?
 
-The website currently provides Early Access installers for Windows x64, macOS Apple Silicon, and Android. Linux is still in development.
+The website provides Early Access installers for Windows x64, macOS Apple Silicon, Linux x64, and Android. The Linux build includes the full Cinema/Deliver feature set and is available as an AppImage and Debian package.
 
 ## Must I connect a cloud model?
 
@@ -18,7 +18,7 @@ Anybox works with local projects. Review file changes, terminal commands, and to
 
 ## What if a download link does not work?
 
-Open GitHub Releases directly and select the latest installer for Windows x64, macOS Apple Silicon, or Android.
+Open GitHub Releases directly and select the latest installer for your platform.
 
 ## What documentation is coming next?
 

@@ -63,6 +63,12 @@ async function assertCandidateFiles(candidatePath, candidate) {
     ["Candidate subtitle smoke script", smoke.subtitle.script],
     ["Candidate subtitle smoke frame", smoke.subtitle.frame],
   ]) await assertLocalFile(stage, descriptor, label)
+  for (const [component, descriptor] of Object.entries(candidate.materials?.componentSources ?? {})) {
+    await assertLocalFile(root, descriptor, `Candidate ${component} source`)
+  }
+  for (const [component, descriptor] of Object.entries(candidate.materials?.componentLicenses ?? {})) {
+    await assertLocalFile(stage, descriptor, `Candidate ${component} license`)
+  }
 }
 
 function assertCandidateEvidence(candidate, lock) {
@@ -109,6 +115,40 @@ function assertCandidateEvidence(candidate, lock) {
   assertDescribedFile(subtitle.probe, "evidence/subtitle-smoke.ffprobe.json", "Candidate subtitle smoke probe")
   assertDescribedFile(subtitle.script, "evidence/subtitle-smoke.ass", "Candidate subtitle smoke script")
   assertDescribedFile(subtitle.frame, "evidence/subtitle-smoke.png", "Candidate subtitle smoke frame")
+  if (candidate.platform === "linux") {
+    const x264Source = candidate.materials?.componentSources?.x264
+    const x264License = candidate.materials?.componentLicenses?.x264
+    const zlibSource = candidate.materials?.componentSources?.zlib
+    const zlibLicense = candidate.materials?.componentLicenses?.zlib
+    if (!/^[a-f0-9]{40}$/.test(x264Source?.revision ?? "")) {
+      throw new Error("Linux candidate has no pinned x264 revision")
+    }
+    assertDescribedFile(x264Source, `x264-source-${x264Source.revision}.tar.gz`, "Candidate x264 source")
+    if (
+      x264License?.fileName !== "X264-LICENSE.txt"
+      || !Number.isSafeInteger(x264License.sizeBytes)
+      || x264License.sizeBytes <= 0
+      || !SHA256_PATTERN.test(x264License.sha256)
+    ) {
+      throw new Error("Linux candidate has no valid x264 license material")
+    }
+    const lockedZlib = lock.mediaRuntimeSources?.zlib
+    if (
+      zlibSource?.version !== lockedZlib?.version
+      || zlibSource?.sha256 !== lockedZlib?.sha256
+    ) {
+      throw new Error("Linux candidate zlib source does not match the runtime lock")
+    }
+    assertDescribedFile(zlibSource, `zlib-source-${zlibSource.version}.tar.gz`, "Candidate zlib source")
+    if (
+      zlibLicense?.fileName !== "ZLIB-LICENSE.txt"
+      || !Number.isSafeInteger(zlibLicense.sizeBytes)
+      || zlibLicense.sizeBytes <= 0
+      || !SHA256_PATTERN.test(zlibLicense.sha256)
+    ) {
+      throw new Error("Linux candidate has no valid zlib license material")
+    }
+  }
 }
 
 function buildPolicy(platform, arch) {
@@ -159,6 +199,29 @@ function buildPolicy(platform, arch) {
       },
     }
   }
+  if (platform === "linux" && arch === "x64") {
+    return {
+      requiredFlags: [
+        "--arch=x86_64", "--target-os=linux", "--enable-version3", "--enable-gpl",
+        "--enable-libx264", "--pkg-config-flags=--static", "--enable-libass",
+        "--enable-zlib",
+        "--disable-libopenh264", "--disable-libx265", "--disable-libfdk-aac", "--disable-nonfree",
+      ],
+      forbiddenFlags: [
+        "--disable-gpl", "--enable-nonfree", "--enable-libopenh264", "--disable-libx264",
+        "--enable-libx265", "--enable-libfdk-aac", "--disable-zlib",
+      ],
+      requiredEncoders: ["libx264", "aac"],
+      requiredFilters: ["ass"],
+      smokeTest: {
+        durationSeconds: 1,
+        videoEncoder: "libx264",
+        audioEncoder: "aac",
+        expectedVideoCodec: "h264",
+        expectedAudioCodec: "aac",
+      },
+    }
+  }
   throw new Error(`Unsupported release target ${platform}/${arch}`)
 }
 
@@ -167,6 +230,9 @@ const lockPath = path.resolve(args.lock ?? defaultLockPath)
 const candidatePath = path.resolve(args.candidate)
 const candidate = JSON.parse(await fsp.readFile(candidatePath, "utf8"))
 if (candidate.classification !== "unapproved-candidate") throw new Error("Candidate classification is invalid")
+if (candidate.platform === "linux" && (!args["x264-source-url"] || !args["zlib-source-url"])) {
+  throw new Error("Linux candidate promotion requires x264 and zlib source URLs")
+}
 const policy = buildPolicy(candidate.platform, candidate.arch)
 const lock = JSON.parse(await fsp.readFile(lockPath, "utf8"))
 assertCandidateEvidence(candidate, lock)
@@ -178,20 +244,21 @@ platformEntry.targets ??= {}
 platformEntry.targets[candidate.arch] = {
   runtimeID: args["runtime-id"],
   manifestSchemaVersion: 1,
-  origin: "anybox-controlled-lgpl",
+  origin: candidate.platform === "linux" ? "anybox-controlled-gpl" : "anybox-controlled-lgpl",
   releaseReadiness: {
     status: "blocked",
     releaseKind: "initial",
     reasons: [
       "The candidate still requires recorded license and release approval.",
       "The immutable mirror and source/build evidence still require approval binding.",
-      "The signed installed-app kill/restart smoke has not been accepted for both release targets.",
+      "The installed-app kill/restart smoke has not been accepted for all synchronized release targets.",
     ],
   },
   licensePolicy: {
-    spdxExpression: "LGPL-3.0-or-later",
+    spdxExpression: candidate.platform === "linux" ? "GPL-3.0-or-later" : "LGPL-3.0-or-later",
     licenseFile: candidate.materials.license.fileName,
     noticesFile: candidate.materials.notices.fileName,
+    ...(candidate.materials.componentLicenses ? { componentLicenseFiles: candidate.materials.componentLicenses } : {}),
     reviewStatus: "pending",
   },
   distribution: {
@@ -205,6 +272,15 @@ platformEntry.targets[candidate.arch] = {
     buildSourceURL: assertHttpsURL(args["build-source-url"], "build-source-url"),
     source: candidate.materials.source,
     buildSource: candidate.materials.buildRecipe,
+    ...(candidate.materials.componentSources ? {
+      componentSources: Object.fromEntries(Object.entries(candidate.materials.componentSources).map(([name, source]) => [
+        name,
+        {
+          ...source,
+          url: assertHttpsURL(args[`${name}-source-url`], `${name}-source-url`),
+        },
+      ])),
+    } : {}),
   },
   executables: candidate.executables,
   binaries: candidate.binaries,

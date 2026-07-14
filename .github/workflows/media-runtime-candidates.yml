@@ -65,3 +65,41 @@ jobs:
           name: anybox-media-runtime-darwin-arm64-unapproved
           path: ${{ runner.temp }}/anybox-media-runtime-darwin-arm64
           if-no-files-found: error
+
+  linux-x64:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert native Linux x64 runner
+        run: test "$(uname -s)/$(uname -m)" = "Linux/x86_64"
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup Python for pinned Meson
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            build-essential \
+            curl \
+            git \
+            nasm \
+            ninja-build \
+            pkg-config
+          python -m pip install --disable-pip-version-check meson==1.8.3
+      - name: Build pinned GPL Linux candidate
+        env:
+          ANYBOX_FFMPEG_REVISION: ${{ inputs.ffmpeg_revision }}
+          ANYBOX_X264_REVISION: b35605ace3ddf7c1a5d67a2eb553f034aef41d55
+          ANYBOX_MEDIA_RUNTIME_OUTPUT_DIR: ${{ runner.temp }}/anybox-media-runtime-linux-x64
+          ANYBOX_MEDIA_RUNTIME_RUN_SMOKE: "1"
+        run: bash packages/desktop/scripts/build-media-runtime.sh linux x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: anybox-media-runtime-linux-x64-unapproved
+          path: ${{ runner.temp }}/anybox-media-runtime-linux-x64
+          if-no-files-found: error

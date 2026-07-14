@@ -7,7 +7,8 @@
   "commitSHA": "0000000",
   "targets": {
     "win32X64": { "runtimeID": "<approved-runtime-id>" },
-    "darwinArm64": { "runtimeID": "<approved-runtime-id>" }
+    "darwinArm64": { "runtimeID": "<approved-runtime-id>" },
+    "linuxX64": { "runtimeID": "<approved-runtime-id>" }
   },
   "license": {
     "status": "pending",
@@ -19,6 +20,8 @@
       "h264-use",
       "windows-media-foundation",
       "macos-videotoolbox",
+      "linux-libx264-gpl",
+      "linux-gpl-corresponding-source",
       "source-and-notice-offer",
       "supported-os-scope"
     ]

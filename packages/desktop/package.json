@@ -3,6 +3,12 @@
   "version": "0.1.33",
   "private": true,
   "description": "Anybox desktop AI agent workspace",
+  "author": {
+    "name": "fanfan-de",
+    "email": "fanfan-de@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/fanfan-de/anybox",
+  "license": "MIT",
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
@@ -29,7 +35,7 @@
     "verify:deliver-release-approval": "node ./scripts/verify-deliver-release-approval.mjs",
     "dist:deliver-preview": "node ./scripts/dist-deliver-preview.mjs",
     "dist:deliver-beta": "node ./scripts/dist-deliver-preview.mjs --beta",
-    "dist": "corepack pnpm run build && corepack pnpm run verify:agent-runtime:release && corepack pnpm run icons:generate && node ./node_modules/electron-builder/cli.js --publish never",
+    "dist": "corepack pnpm run build && corepack pnpm run verify:agent-runtime:release && corepack pnpm run icons:generate && node ./node_modules/electron-builder/cli.js --publish never && node ./scripts/normalize-linux-update-metadata.mjs --directory dist",
     "dist:publish": "corepack pnpm run build && corepack pnpm run verify:agent-runtime:release && corepack pnpm run icons:generate && node ./node_modules/electron-builder/cli.js --publish always",
     "dist:dir": "corepack pnpm run build && corepack pnpm run verify:agent-runtime:release && corepack pnpm run icons:generate && node ./node_modules/electron-builder/cli.js --dir --publish never",
     "i18n:audit": "node ./scripts/i18n-audit.mjs",

@@ -10,9 +10,10 @@ const defaultBaseUrl = "https://download.anybox.com.cn"
 const defaultManifestKey = "downloads.json"
 const defaultReleasePrefix = "releases"
 const defaultUpdateFeedPrefix = "updates/windows/x64"
+const defaultLinuxUpdateFeedPrefix = "updates/linux/x64"
 const githubReleasesUrl = "https://github.com/fanfan-de/anybox/releases/latest"
 
-const platforms = ["windows", "mac", "mobile"]
+const platforms = ["windows", "mac", "linux", "mobile"]
 
 function usage() {
   return [
@@ -26,6 +27,7 @@ function usage() {
     "Options:",
     "  --windows <path>       Windows installer path. Auto-detected from packages/desktop/dist when omitted.",
     "  --mac <path>           macOS installer path. Auto-detected from packages/desktop/dist when omitted.",
+    "  --linux <path>         Linux AppImage path. Auto-detected from packages/desktop/dist when omitted.",
     "  --mobile <path>        Android APK path. Auto-detected from packages/mobile-app/build when omitted.",
     "  --version <version>    Desktop/site version. Defaults to packages/desktop/package.json.",
     "  --mobile-version <v>   Android version. Defaults to packages/mobile-app/app.json.",
@@ -35,7 +37,9 @@ function usage() {
     "  --release-prefix <key> COS prefix for versioned release files. Defaults to releases.",
     "  --update-feed-prefix <key>",
     "                         COS prefix for the desktop auto-update feed. Defaults to updates/windows/x64.",
-    "  --require <list>       Comma-separated required platforms, e.g. windows,mac,mobile.",
+    "  --linux-update-feed-prefix <key>",
+    "                         COS prefix for the Linux auto-update feed. Defaults to updates/linux/x64.",
+    "  --require <list>       Comma-separated required platforms, e.g. windows,mac,linux,mobile.",
     "  --env-file <path>      Load simple KEY=VALUE environment file before running.",
     "  --upload              Upload release files and manifest to Tencent COS.",
     "  --replace-manifest    Do not preserve existing platform entries when uploading.",
@@ -60,6 +64,8 @@ function parseArgs(argv) {
     envFile: "",
     help: false,
     mac: "",
+    linux: "",
+    linuxUpdateFeedPrefix: process.env.ANYBOX_LINUX_UPDATE_FEED_PREFIX || defaultLinuxUpdateFeedPrefix,
     manifestKey: defaultManifestKey,
     mobile: "",
     mobileVersion: "",
@@ -94,6 +100,9 @@ function parseArgs(argv) {
     } else if (value === "--mac") {
       args.mac = path.resolve(argv[index + 1] ?? "")
       index += 1
+    } else if (value === "--linux") {
+      args.linux = path.resolve(argv[index + 1] ?? "")
+      index += 1
     } else if (value === "--mobile") {
       args.mobile = path.resolve(argv[index + 1] ?? "")
       index += 1
@@ -117,6 +126,9 @@ function parseArgs(argv) {
       index += 1
     } else if (value === "--update-feed-prefix") {
       args.updateFeedPrefix = argv[index + 1] ?? args.updateFeedPrefix
+      index += 1
+    } else if (value === "--linux-update-feed-prefix") {
+      args.linuxUpdateFeedPrefix = argv[index + 1] ?? args.linuxUpdateFeedPrefix
       index += 1
     } else if (value === "--require") {
       args.require = (argv[index + 1] ?? "")
@@ -213,6 +225,8 @@ function contentTypeFor(filePath) {
 
   if (extension === ".apk") return "application/vnd.android.package-archive"
   if (extension === ".dmg") return "application/x-apple-diskimage"
+  if (extension === ".appimage") return "application/vnd.appimage"
+  if (extension === ".deb") return "application/vnd.debian.binary-package"
   if (extension === ".exe") return "application/vnd.microsoft.portable-executable"
   if (extension === ".json") return "application/json; charset=utf-8"
   if (extension === ".yaml" || extension === ".yml") return "text/yaml; charset=utf-8"
@@ -266,6 +280,13 @@ function detectAssets(args) {
         /^Anybox-.*arm64.*\.dmg$/i,
         /^anybox.*arm64.*\.dmg$/i,
       ]),
+    linux:
+      args.linux ||
+      newestMatchingFile([desktopDist], [
+        /^Anybox-[^-]+-x64\.AppImage$/i,
+        /^Anybox-.*x64.*\.AppImage$/i,
+        /^anybox.*x64.*\.AppImage$/i,
+      ]),
     mobile:
       args.mobile ||
       newestMatchingFile([mobileGitHubRelease, mobileBuild], [
@@ -287,7 +308,7 @@ function ensureRequiredAssets(assets, requiredPlatforms) {
   }
 
   if (!platforms.some((platform) => assets[platform])) {
-    throw new Error("No release assets found. Pass --windows, --mac, or --mobile.")
+    throw new Error("No release assets found. Pass --windows, --mac, --linux, or --mobile.")
   }
 
   for (const platform of platforms) {
@@ -396,6 +417,56 @@ function buildWindowsUpdateFeedUploads(args, assets) {
   return uploads
 }
 
+function buildLinuxUpdateFeedUploads(args, assets) {
+  if (args.skipUpdateFeed || !assets.linux) return []
+
+  const installer = assets.linux
+  const installerName = path.basename(installer)
+  const distDir = path.dirname(installer)
+  const latestYml = path.join(distDir, "latest-linux.yml")
+  const updatePrefix = trimSlashes(args.linuxUpdateFeedPrefix)
+
+  if (!updatePrefix) {
+    throw new Error("Linux update feed prefix cannot be empty. Pass --skip-update-feed to publish only downloads.json.")
+  }
+  if (!existsSync(latestYml)) {
+    throw new Error(`Missing Linux updater metadata: ${latestYml}. Rebuild the AppImage or pass --skip-update-feed.`)
+  }
+
+  const latestYmlText = readFileSync(latestYml, "utf8")
+  const updateUrls = Array.from(
+    latestYmlText.matchAll(/^\s*-\s+url:\s*['"]?([^'"\r\n]+)['"]?\s*$/gm),
+    (match) => match[1],
+  )
+  if (updateUrls.filter((url) => url === installerName).length !== 1) {
+    throw new Error(`latest-linux.yml does not reference ${installerName}. Rebuild the AppImage or pass --skip-update-feed.`)
+  }
+  if (updateUrls.length !== new Set(updateUrls).size) {
+    throw new Error("latest-linux.yml contains duplicate file URLs. Rebuild the Linux release before publishing.")
+  }
+  if (!/^\s*blockMapSize:\s*[1-9]\d*\s*$/m.test(latestYmlText)) {
+    throw new Error(`latest-linux.yml does not declare an embedded AppImage blockmap. Rebuild the AppImage or pass --skip-update-feed.`)
+  }
+
+  const uploads = [
+    {
+      cacheControl: "public, max-age=31536000, immutable",
+      contentType: contentTypeFor(installer),
+      filePath: installer,
+      key: `${updatePrefix}/${installerName}`,
+    },
+    {
+      cacheControl: "public, max-age=60",
+      contentType: contentTypeFor(latestYml),
+      filePath: latestYml,
+      key: `${updatePrefix}/latest-linux.yml`,
+      purge: true,
+    },
+  ]
+
+  return uploads
+}
+
 function buildManifest(args, assets, existingManifest) {
   const desktopPackage = readJson(path.join(scriptRoot, "packages", "desktop", "package.json"))
   const mobileConfig = readJson(path.join(scriptRoot, "packages", "mobile-app", "app.json")).expo
@@ -440,6 +511,7 @@ function buildManifest(args, assets, existingManifest) {
   }
 
   uploads.push(...buildWindowsUpdateFeedUploads(args, assets))
+  uploads.push(...buildLinuxUpdateFeedUploads(args, assets))
 
   const manifest = {
     generatedAt: new Date().toISOString(),
@@ -752,7 +824,10 @@ async function main() {
     }
   }
   if (!args.skipUpdateFeed && assets.windows) {
-    console.log(`desktop updater: ${joinUrl(args.baseUrl, `${trimSlashes(args.updateFeedPrefix)}/latest.yml`)}`)
+    console.log(`Windows updater: ${joinUrl(args.baseUrl, `${trimSlashes(args.updateFeedPrefix)}/latest.yml`)}`)
+  }
+  if (!args.skipUpdateFeed && assets.linux) {
+    console.log(`Linux updater: ${joinUrl(args.baseUrl, `${trimSlashes(args.linuxUpdateFeedPrefix)}/latest-linux.yml`)}`)
   }
 
   if (args.upload) {

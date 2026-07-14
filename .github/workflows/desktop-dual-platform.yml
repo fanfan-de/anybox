@@ -48,6 +48,12 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Install Linux desktop build dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes librsvg2-bin
+
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
@@ -83,4 +89,4 @@ jobs:
         run: bun test Test/server.api.test.ts
 
       - name: Package non-release Deliver technical preview directory
-        run: pnpm --filter anybox-desktop-agent dist:deliver-preview -- --dir ${{ matrix.builder_flag }}
+        run: pnpm --filter anybox-desktop-agent run dist:deliver-preview --dir ${{ matrix.builder_flag }}

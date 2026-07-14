@@ -233,11 +233,12 @@ describe("managed agent workspace dependencies", () => {
   it("forces the bundled media pair and only enables Deliver for an approved packaged release target", async () => {
     const isReleaseTarget = (process.platform === "win32" && process.arch === "x64")
       || (process.platform === "darwin" && process.arch === "arm64")
+      || (process.platform === "linux" && process.arch === "x64")
     if (!isReleaseTarget) return
     const runtimeDir = await createTempDirectory("anybox-managed-agent-packaged-media-")
     const mediaToolsDir = path.join(runtimeDir, "media-tools")
-    const ffmpeg = path.join(mediaToolsDir, "ffmpeg.exe")
-    const ffprobe = path.join(mediaToolsDir, "ffprobe.exe")
+    const ffmpeg = path.join(mediaToolsDir, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg")
+    const ffprobe = path.join(mediaToolsDir, process.platform === "win32" ? "ffprobe.exe" : "ffprobe")
     await mkdir(mediaToolsDir, { recursive: true })
     await writeFile(ffmpeg, "")
     await writeFile(ffprobe, "")

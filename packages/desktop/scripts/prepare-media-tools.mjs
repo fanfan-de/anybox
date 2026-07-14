@@ -53,7 +53,7 @@ async function downloadPinnedArchive(target, distribution) {
   const temporary = `${target}.${process.pid}.download`
   await fsp.rm(temporary, { force: true })
 
-  console.log(`[desktop][media] downloading locked LGPL FFmpeg ${distribution.ffmpegRevision}`)
+  console.log(`[desktop][media] downloading locked FFmpeg ${distribution.ffmpegRevision}`)
   const response = await fetch(distribution.url, { redirect: "follow" })
   if (!response.ok || !response.body) {
     throw new Error(`Could not download media tools (${response.status} ${response.statusText})`)
@@ -142,6 +142,13 @@ async function extractPinnedTools(archive, extractionDir, executableNames, locke
   }
   const subtitleFontLicense = path.join(extractionDir, "fonts", "OFL-1.1.txt")
   if (!(await exists(subtitleFontLicense))) throw new Error("Pinned FFmpeg archive is missing the subtitle font OFL-1.1 license")
+  const componentLicenses = []
+  for (const [component, descriptor] of Object.entries(lockedTarget.licensePolicy.componentLicenseFiles ?? {})) {
+    componentLicenses.push({
+      source: await assertArchivedFile(extractionDir, descriptor, `${component} license`),
+      fileName: descriptor.fileName,
+    })
+  }
   const smoke = lockedTarget.buildEvidence.candidateSmoke
   for (const [label, descriptor] of [
     ["render smoke output", smoke.render.output],
@@ -151,7 +158,18 @@ async function extractPinnedTools(archive, extractionDir, executableNames, locke
     ["subtitle smoke script", smoke.subtitle.script],
     ["subtitle smoke frame", smoke.subtitle.frame],
   ]) await assertArchivedFile(extractionDir, descriptor, label)
-  return { ffmpeg, ffprobe, license, notices, configure, sourceMetadata, buildRecipe, subtitleFonts, subtitleFontLicense }
+  return {
+    ffmpeg,
+    ffprobe,
+    license,
+    notices,
+    configure,
+    sourceMetadata,
+    buildRecipe,
+    subtitleFonts,
+    subtitleFontLicense,
+    componentLicenses,
+  }
 }
 
 async function verifyExecutable(binary, expectedName) {
@@ -167,7 +185,15 @@ async function verifyExecutable(binary, expectedName) {
   return output.split(/\r?\n/, 1)[0]?.trim() || expectedName
 }
 
-export async function copyExternalTools(ffmpeg, ffprobe, targetDir, executableNames, materialsDir, requiredFonts) {
+export async function copyExternalTools(
+  ffmpeg,
+  ffprobe,
+  targetDir,
+  executableNames,
+  materialsDir,
+  requiredFonts,
+  componentLicenseFiles = {},
+) {
   if (!(await exists(ffmpeg)) || !(await exists(ffprobe))) {
     throw new Error("ANYBOX_FFMPEG_BINARY and ANYBOX_FFPROBE_BINARY must point to existing files")
   }
@@ -191,6 +217,12 @@ export async function copyExternalTools(ffmpeg, ffprobe, targetDir, executableNa
     const fontLicenseSource = path.join(materialsDir, "fonts", "OFL-1.1.txt")
     if (!(await exists(fontLicenseSource))) throw new Error("Deliver Beta media materials are missing fonts/OFL-1.1.txt")
     await fsp.copyFile(fontLicenseSource, path.join(targetDir, "fonts", "OFL-1.1.txt"))
+    for (const [component, descriptor] of Object.entries(componentLicenseFiles)) {
+      const source = path.join(materialsDir, descriptor.fileName)
+      if (!(await exists(source))) throw new Error(`Deliver Beta media materials are missing ${component} license ${descriptor.fileName}`)
+      await assertDigest(source, descriptor.sha256)
+      await fsp.copyFile(source, path.join(targetDir, descriptor.fileName))
+    }
     return
   }
   await fsp.writeFile(
@@ -210,6 +242,10 @@ const MEDIA_TOOL_PREPARERS = new Map([
   }],
   [preparerKey("darwin", "arm64"), {
     id: "locked-archive-darwin-arm64",
+    prepare: prepareLockedArchiveMediaTools,
+  }],
+  [preparerKey("linux", "x64"), {
+    id: "locked-archive-linux-x64",
     prepare: prepareLockedArchiveMediaTools,
   }],
 ])
@@ -305,7 +341,15 @@ async function prepareLockedArchiveMediaTools({ runtimeDir, lockedTarget, platfo
           subtitleFont: "missing-technical-preview",
           subtitleFontLicense: "missing-technical-preview",
         }
-    await copyExternalTools(externalFFmpeg, externalFFprobe, targetDir, executableNames, externalMaterialsDir, lockedTarget.requiredFonts)
+    await copyExternalTools(
+      externalFFmpeg,
+      externalFFprobe,
+      targetDir,
+      executableNames,
+      externalMaterialsDir,
+      lockedTarget.requiredFonts,
+      lockedTarget.licensePolicy.componentLicenseFiles,
+    )
   } else {
     const archive = path.join(cacheDir, lockedTarget.distribution.fileName)
     const extractionDir = path.join(cacheDir, lockedTarget.distribution.sha256)
@@ -330,6 +374,9 @@ async function prepareLockedArchiveMediaTools({ runtimeDir, lockedTarget, platfo
     const subtitleFontLicense = path.join(targetDir, "fonts", "OFL-1.1.txt")
     await fsp.mkdir(path.dirname(subtitleFontLicense), { recursive: true })
     await fsp.copyFile(tools.subtitleFontLicense, subtitleFontLicense)
+    for (const componentLicense of tools.componentLicenses) {
+      await fsp.copyFile(componentLicense.source, path.join(targetDir, componentLicense.fileName))
+    }
   }
 
   const ffmpegPath = path.join(targetDir, executableNames.ffmpeg)

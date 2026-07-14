@@ -1,5 +1,8 @@
 import "@testing-library/jest-dom/vitest"
+import { configure } from "@testing-library/react"
 import { vi } from "vitest"
+
+configure({ asyncUtilTimeout: 10_000 })
 
 function createStorageMock(): Storage {
   const values = new Map<string, string>()

@@ -126,11 +126,9 @@ test("media preparation resolves locked targets through explicit preparers", () 
   assert.equal(darwinBeta.preparerID, "external-beta-darwin-arm64")
 
   const linux = resolveMediaToolsPreparation(lock, "linux", "x64")
-  assert.deepEqual(linux, {
-    status: "skipped",
-    reason: "blocked-platform",
-    message: `[desktop][media] skipping bundled media tools for blocked target linux/x64: ${lock.platforms.linux.reason}`,
-  })
+  assert.equal(linux.status, "skipped")
+  assert.equal(linux.reason, "artifact-pending")
+  assert.equal(linux.target, lock.platforms.linux.targets.x64)
 
   const futureLock = structuredClone(lock)
   futureLock.platforms.darwin.targets.arm64 = completedTarget(
@@ -215,7 +213,7 @@ test("beta media materials copy the reviewed subtitle font and OFL license", asy
   }
 })
 
-test("media runtime lock represents approved Windows and macOS targets, and blocked Linux", () => {
+test("media runtime lock represents approved Windows/macOS targets and a fail-closed Linux candidate", () => {
   validateMediaRuntimeLock(lock)
   const target = resolveMediaRuntimeTarget(lock, "win32", "x64")
   assert.equal(target.origin, "anybox-controlled-lgpl")
@@ -242,7 +240,13 @@ test("media runtime lock represents approved Windows and macOS targets, and bloc
   assert.equal(darwin.approvalEvidence.approver, "Anybox project owner (GitHub: fanfan-de)")
   assert.deepEqual(darwin.requiredEncoders, ["h264_videotoolbox", "aac"])
   assert.doesNotThrow(() => assertMediaRuntimeReleaseApproved(darwin, "darwin", "arm64"))
-  assert.throws(() => resolveMediaRuntimeTarget(lock, "linux", "x64"), /packaging is blocked/)
+  const linux = resolveMediaRuntimeTarget(lock, "linux", "x64")
+  assert.equal(linux.origin, "anybox-controlled-gpl")
+  assert.equal(linux.artifactStatus, "pending")
+  assert.equal(linux.releaseReadiness.status, "blocked")
+  assert.equal(linux.licensePolicy.reviewStatus, "pending")
+  assert.deepEqual(linux.requiredEncoders, ["libx264", "aac"])
+  assert.throws(() => assertMediaRuntimeReleaseApproved(linux, "linux", "x64"), /releaseReadiness=blocked/)
 })
 
 test("completed runtime targets require archive-bound render and subtitle smoke evidence", () => {
@@ -396,4 +400,14 @@ test("package commands keep preview verification separate and gate packaged rele
   for (const command of ["dist", "dist:publish", "dist:dir"]) {
     assert.match(packageJson.scripts[command], /verify:agent-runtime:release/)
   }
+  assert.match(packageJson.scripts.dist, /normalize-linux-update-metadata/)
+
+  assert.ok(packageJson.author?.email, "Linux deb packaging requires a maintainer email")
+  assert.match(packageJson.homepage, /^https:\/\//)
+  const builderConfig = fs.readFileSync(path.resolve(scriptDir, "..", "electron-builder.yml"), "utf8")
+  assert.match(builderConfig, /linux:[\s\S]*artifactName: Anybox-\$\{version\}-x64\.\$\{ext\}/)
+  const previewScript = fs.readFileSync(path.resolve(scriptDir, "dist-deliver-preview.mjs"), "utf8")
+  assert.match(previewScript, /config\.linux\.artifactName=Anybox-Deliver-/)
+  assert.match(previewScript, /rmSync\(path\.join\(desktopDir, "dist", outputDirectoryName\)/)
+  assert.match(previewScript, /normalize-linux-update-metadata/)
 })

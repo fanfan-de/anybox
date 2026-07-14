@@ -25,6 +25,11 @@ on:
         required: true
         default: packages/cinema-web/cinema-deliver-installed-restart-evidence.darwin-arm64.json
         type: string
+      linux_evidence_path:
+        description: Repository path to redacted linux/x64 installed-restart evidence
+        required: true
+        default: packages/cinema-web/cinema-deliver-installed-restart-evidence.linux-x64.json
+        type: string
       approval_path:
         description: Repository path to license/product/security release approval
         required: true
@@ -167,15 +172,48 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$zipapp"
           codesign -dv --verbose=4 "$zipapp" 2>&1 | grep -F "TeamIdentifier=$EXPECTED_TEAM_ID"
 
+  verify-linux-candidate:
+    needs: verify-candidate-source
+    runs-on: ubuntu-22.04
+    env:
+      EVIDENCE_PATH: ${{ inputs.linux_evidence_path }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cinema-deliver-linux-x64
+          path: candidate
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify installed evidence and complete candidate artifact set
+        run: |
+          test -f "$EVIDENCE_PATH"
+          node packages/desktop/scripts/verify-deliver-restart-evidence.mjs "$EVIDENCE_PATH" --release-strict
+          node packages/desktop/scripts/verify-desktop-release-candidate.mjs --manifest candidate/candidate-manifest.json --directory candidate --evidence "$EVIDENCE_PATH"
+
+      - name: Verify Linux AppImage and deb package structure
+        run: |
+          installer="candidate/$(jq -r '.primaryInstaller' candidate/candidate-manifest.json)"
+          chmod +x "$installer"
+          file "$installer" | grep -F 'ELF 64-bit LSB'
+          "$installer" --appimage-offset >/dev/null
+          deb="${installer%.AppImage}.deb"
+          dpkg-deb --info "$deb" >/dev/null
+          test "$(dpkg-deb --field "$deb" Architecture)" = "amd64"
+
   aggregate-release-gate:
     needs:
       - verify-candidate-source
       - verify-windows-candidate
       - verify-macos-candidate
+      - verify-linux-candidate
     runs-on: ubuntu-22.04
     env:
       WINDOWS_EVIDENCE_PATH: ${{ inputs.windows_evidence_path }}
       MACOS_EVIDENCE_PATH: ${{ inputs.macos_evidence_path }}
+      LINUX_EVIDENCE_PATH: ${{ inputs.linux_evidence_path }}
       APPROVAL_PATH: ${{ inputs.approval_path }}
       CANDIDATE_SHA: ${{ needs.verify-candidate-source.outputs.candidate_sha }}
       RELEASE_TAG: ${{ inputs.release_tag }}
@@ -199,25 +237,37 @@ jobs:
           run-id: ${{ inputs.candidate_run_id }}
           github-token: ${{ github.token }}
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: cinema-deliver-linux-x64
+          path: release/linux
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+
       - name: Reverify exact artifact sets and synchronized release matrix
         id: identity
         run: |
-          test -f "$WINDOWS_EVIDENCE_PATH" -a -f "$MACOS_EVIDENCE_PATH" -a -f "$APPROVAL_PATH"
+          test -f "$WINDOWS_EVIDENCE_PATH" -a -f "$MACOS_EVIDENCE_PATH" -a -f "$LINUX_EVIDENCE_PATH" -a -f "$APPROVAL_PATH"
           node packages/desktop/scripts/verify-desktop-release-candidate.mjs --manifest release/windows/candidate-manifest.json --directory release/windows --evidence "$WINDOWS_EVIDENCE_PATH"
           node packages/desktop/scripts/verify-desktop-release-candidate.mjs --manifest release/macos/candidate-manifest.json --directory release/macos --evidence "$MACOS_EVIDENCE_PATH"
+          node packages/desktop/scripts/verify-desktop-release-candidate.mjs --manifest release/linux/candidate-manifest.json --directory release/linux --evidence "$LINUX_EVIDENCE_PATH"
           windows_installer="release/windows/$(jq -r '.primaryInstaller' release/windows/candidate-manifest.json)"
           macos_installer="release/macos/$(jq -r '.primaryInstaller' release/macos/candidate-manifest.json)"
+          linux_installer="release/linux/$(jq -r '.primaryInstaller' release/linux/candidate-manifest.json)"
           node packages/desktop/scripts/verify-deliver-release-matrix.mjs \
             --windows "$WINDOWS_EVIDENCE_PATH" \
             --macos "$MACOS_EVIDENCE_PATH" \
+            --linux "$LINUX_EVIDENCE_PATH" \
             --windowsArtifact "$windows_installer" \
             --macosArtifact "$macos_installer" \
+            --linuxArtifact "$linux_installer" \
             --approval "$APPROVAL_PATH"
           version="$(jq -r '.desktopVersion' release/windows/candidate-manifest.json)"
           commit_sha="$(jq -r '.commitSHA' release/windows/candidate-manifest.json)"
           test "$RELEASE_TAG" = "v$version"
           test "$commit_sha" = "$CANDIDATE_SHA"
           test "$(jq -r '.commitSHA' release/macos/candidate-manifest.json)" = "$CANDIDATE_SHA"
+          test "$(jq -r '.commitSHA' release/linux/candidate-manifest.json)" = "$CANDIDATE_SHA"
           echo "desktop_version=$version" >> "$GITHUB_OUTPUT"
           echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
 
@@ -229,6 +279,7 @@ jobs:
         run: |
           windows_manifest_sha="$(sha256sum release/windows/candidate-manifest.json | awk '{print $1}')"
           macos_manifest_sha="$(sha256sum release/macos/candidate-manifest.json | awk '{print $1}')"
+          linux_manifest_sha="$(sha256sum release/linux/candidate-manifest.json | awk '{print $1}')"
           published_tag=""
           if [ "$PUBLISH_REQUESTED" = "true" ]; then
             if [ "$CHANNEL" = "internal-rc" ]; then published_tag="${RELEASE_TAG}-rc.${GITHUB_RUN_NUMBER}"; else published_tag="$RELEASE_TAG"; fi
@@ -241,8 +292,9 @@ jobs:
             --arg publishedTag "$published_tag" \
             --arg windowsManifestSHA256 "$windows_manifest_sha" \
             --arg macosManifestSHA256 "$macos_manifest_sha" \
+            --arg linuxManifestSHA256 "$linux_manifest_sha" \
             --argjson publishRequested "$PUBLISH_REQUESTED" \
-            '{schemaVersion:1,candidateRunID:$candidateRunID,candidateSHA:$candidateSHA,channel:$channel,baseReleaseTag:$baseReleaseTag,publishedTag:$publishedTag,publishRequested:$publishRequested,windowsManifestSHA256:$windowsManifestSHA256,macosManifestSHA256:$macosManifestSHA256}' \
+            '{schemaVersion:1,candidateRunID:$candidateRunID,candidateSHA:$candidateSHA,channel:$channel,baseReleaseTag:$baseReleaseTag,publishedTag:$publishedTag,publishRequested:$publishRequested,windowsManifestSHA256:$windowsManifestSHA256,macosManifestSHA256:$macosManifestSHA256,linuxManifestSHA256:$linuxManifestSHA256}' \
             > release/release-gate-record.json
 
       - uses: actions/upload-artifact@v4
@@ -320,8 +372,10 @@ jobs:
             test "$(jq -r '.candidateSHA' "$record")" = "$(jq -r '.candidateSHA' release/release-gate-record.json)"
             test "$(jq -r '.windowsManifestSHA256' "$record")" = "$(jq -r '.windowsManifestSHA256' release/release-gate-record.json)"
             test "$(jq -r '.macosManifestSHA256' "$record")" = "$(jq -r '.macosManifestSHA256' release/release-gate-record.json)"
+            test "$(jq -r '.linuxManifestSHA256' "$record")" = "$(jq -r '.linuxManifestSHA256' release/release-gate-record.json)"
             cmp "$1/windows/candidate-manifest.json" release/windows/candidate-manifest.json
             cmp "$1/macos/candidate-manifest.json" release/macos/candidate-manifest.json
+            cmp "$1/linux/candidate-manifest.json" release/linux/candidate-manifest.json
           }
           verify_run "$REHEARSAL_RUN_ID"
           verify_identity prior/rehearsal
@@ -343,10 +397,10 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag }}
           TARGET_COMMIT: ${{ needs.aggregate-release-gate.outputs.commit_sha }}
         run: |
-          mapfile -t assets < <(find release/windows release/macos -type f ! -name 'candidate-manifest.json')
+          mapfile -t assets < <(find release/windows release/macos release/linux -type f ! -name 'candidate-manifest.json')
           gh release create "$RELEASE_TAG" "${assets[@]}" --repo "$GH_REPO" --target "$TARGET_COMMIT" --generate-notes --draft
 
-      - name: Update the Windows generic feed and synchronized download manifest
+      - name: Update desktop generic feeds and synchronized download manifest
         if: inputs.channel == 'public'
         env:
           TENCENT_COS_SECRET_ID: ${{ secrets.TENCENT_COS_SECRET_ID }}
@@ -356,9 +410,10 @@ jobs:
         run: |
           windows="release/windows/$(jq -r '.primaryInstaller' release/windows/candidate-manifest.json)"
           macos="release/macos/$(jq -r '.primaryInstaller' release/macos/candidate-manifest.json)"
-          node scripts/sync-downloads-to-cos.mjs --windows "$windows" --mac "$macos" --version "${{ needs.aggregate-release-gate.outputs.desktop_version }}" --require windows,mac --upload
+          linux="release/linux/$(jq -r '.primaryInstaller' release/linux/candidate-manifest.json)"
+          node scripts/sync-downloads-to-cos.mjs --windows "$windows" --mac "$macos" --linux "$linux" --version "${{ needs.aggregate-release-gate.outputs.desktop_version }}" --require windows,mac,linux --upload
 
-      - name: Publish both platforms in one GitHub release
+      - name: Publish all desktop platforms in one GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -367,7 +422,7 @@ jobs:
           TARGET_COMMIT: ${{ needs.aggregate-release-gate.outputs.commit_sha }}
         run: |
           if [ "$RELEASE_CHANNEL" = "internal-rc" ]; then
-            mapfile -t assets < <(find release/windows release/macos -type f ! -name 'candidate-manifest.json')
+            mapfile -t assets < <(find release/windows release/macos release/linux -type f ! -name 'candidate-manifest.json')
             tag="${BASE_TAG}-rc.${GITHUB_RUN_NUMBER}"
             gh release create "$tag" "${assets[@]}" --repo "$GH_REPO" --target "$TARGET_COMMIT" --generate-notes --prerelease --latest=false
           else

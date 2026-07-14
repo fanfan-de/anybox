@@ -63,6 +63,8 @@ VITE_DOWNLOAD_MANIFEST_URL=https://download.anybox.com.cn/downloads.json
 - `packages/desktop/dist/Anybox-*-x64.exe.blockmap`
 - `packages/desktop/dist/latest.yml`
 - `packages/desktop/dist/Anybox-*-arm64.dmg`
+- `packages/desktop/dist/Anybox-*-x64.AppImage`
+- `packages/desktop/dist/latest-linux.yml`
 - `packages/mobile-app/build/github-release/anybox-mobile.apk`
 - `packages/mobile-app/build/anybox-mobile.apk`
 
@@ -86,6 +88,7 @@ packages/site/artifacts/downloads/downloads.json
 corepack pnpm downloads:prepare -- `
   --windows packages\desktop\dist\Anybox-0.1.17-x64.exe `
   --mac packages\desktop\dist\Anybox-0.1.17-arm64.dmg `
+  --linux packages\desktop\dist\Anybox-0.1.17-x64.AppImage `
   --mobile packages\mobile-app\build\github-release\anybox-mobile.apk
 ```
 
@@ -96,8 +99,7 @@ corepack pnpm downloads:publish -- --env-file .env.downloads
 ```
 
 注意：`downloads:publish` 上传时会默认读取线上 `downloads.json`，并保留本次没有更新的平台条目。
-如果只发布 Windows 安装包，本地没有 macOS DMG 或 Android APK，manifest 仍会保留线上已有的
-macOS 与 Android 入口。只有确认要删除缺失平台时，才添加 `--replace-manifest`。
+如果只发布 Windows 安装包，本地没有 macOS DMG、Linux AppImage 或 Android APK，manifest 仍会保留线上已有的平台入口。只有确认要删除缺失平台时，才添加 `--replace-manifest`。
 
 例如只更新 Windows，但继续保留已有 macOS 与 Android：
 
@@ -113,6 +115,8 @@ releases/<version>/<installer>
 updates/windows/x64/latest.yml
 updates/windows/x64/<installer>
 updates/windows/x64/<installer>.blockmap
+updates/linux/x64/latest-linux.yml
+updates/linux/x64/<installer>
 downloads.json
 ```
 
@@ -128,7 +132,7 @@ Cache-Control: public, max-age=31536000, immutable
 Cache-Control: public, max-age=60
 ```
 
-`updates/windows/x64/latest.yml` also uses short caching and is purged after upload. Installer and `.blockmap` files keep long immutable caching because their names include the version.
+`updates/windows/x64/latest.yml` 和 `updates/linux/x64/latest-linux.yml` 使用短缓存，并在上传后刷新 CDN。Windows 的独立 `.blockmap` 和所有版本化安装包使用长期 immutable 缓存；Linux AppImage 的 blockmap 已内嵌在 AppImage 中，不会产生或上传独立文件。
 
 ## 发布顺序
 
@@ -138,4 +142,4 @@ Cache-Control: public, max-age=60
 2. 发布 GitHub Releases，保留国外和开源入口。
 3. 执行 `corepack pnpm downloads:publish -- --env-file .env.downloads`。
 4. 执行 `corepack pnpm site:build` 并部署官网。
-5. 打开 `https://download.anybox.com.cn/downloads.json`、`https://download.anybox.com.cn/updates/windows/x64/latest.yml` 和官网下载按钮验证。
+5. 打开 `https://download.anybox.com.cn/downloads.json`、Windows/Linux 更新元数据和官网下载按钮验证。

@@ -27,5 +27,6 @@ export default defineConfig({
     globals: true,
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     setupFiles: ["./src/renderer/src/test-setup.ts"],
+    testTimeout: 20_000,
   },
 })

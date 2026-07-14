@@ -6,7 +6,7 @@ Anybox 是面向本地项目工作的 AI Agent 桌面工作台。仓库里还包
 
 ## 当前支持哪些平台？
 
-当前网站提供 Windows x64 EA 安装包和 macOS Apple Silicon 安装包。Linux 版本还在开发中。
+当前网站提供 Windows x64、macOS Apple Silicon、Linux x64 和 Android 安装包。Linux 版包含完整 Cinema/Deliver，提供 AppImage 和 Debian 包。
 
 ## 是否必须连接云端模型？
 
@@ -18,7 +18,7 @@ Anybox 围绕本地项目工作。涉及文件修改、终端命令和工具调�
 
 ## 下载链接失效怎么办？
 
-如果首页或文档页下载失败，可以直接打开 GitHub Releases，选择最新 Windows x64 或 macOS Apple Silicon 安装包。
+如果首页或文档页下载失败，可以直接打开 GitHub Releases，选择对应平台的最新安装包。
 
 ## 文档还会补充哪些内容？
 

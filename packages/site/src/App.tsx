@@ -279,6 +279,12 @@ export function App() {
             </InstallerDownloadButton>
             <InstallerDownloadButton
               className="button button-secondary"
+              platform="linux"
+            >
+              {isChinese ? "Linux 下载" : "Download for Linux"}
+            </InstallerDownloadButton>
+            <InstallerDownloadButton
+              className="button button-secondary"
               platform="mobile"
             >
               {isChinese ? "Android 下载" : "Download for Android"}
@@ -286,8 +292,8 @@ export function App() {
           </div>
           <p className="hero-platform-note">
             {isChinese
-              ? "当前提供 Windows x64、macOS Apple Silicon 与 Android；Linux 版本开发中"
-              : "Available for Windows x64, macOS Apple Silicon, and Android. Linux is in development."}
+              ? "当前提供 Windows x64、macOS Apple Silicon、Linux x64 与 Android"
+              : "Available for Windows x64, macOS Apple Silicon, Linux x64, and Android."}
           </p>
         </div>
       </section>

@@ -20,7 +20,7 @@
     <a href="https://github.com/fanfan-de/anybox/releases/latest"><img src="https://img.shields.io/github/v/release/fanfan-de/anybox?style=flat-square&logo=github&label=release" alt="Release" /></a>
     <a href="https://github.com/fanfan-de/anybox/actions"><img src="https://img.shields.io/github/actions/workflow/status/fanfan-de/anybox/desktop-dual-platform.yml?style=flat-square&logo=githubactions&label=desktop%20build" alt="Desktop build status" /></a>
     <a href="./LICENSE"><img src="https://img.shields.io/github/license/fanfan-de/anybox?style=flat-square" alt="License" /></a>
-    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-2563eb?style=flat-square" alt="Supported desktop platforms" />
+    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2563eb?style=flat-square" alt="Supported desktop platforms" />
     <img src="https://img.shields.io/badge/mobile-in%20development-f59e0b?style=flat-square" alt="Mobile app status" />
   </p>
 
@@ -59,7 +59,7 @@ The core idea behind Anybox is to make building software enjoyable while followi
 Installers are published from GitHub Releases:
 
 - [Latest release](https://github.com/fanfan-de/anybox/releases/latest)
-- Current primary desktop targets: Windows x64 and macOS Apple Silicon.
+- Current primary desktop targets: Windows x64, macOS Apple Silicon, and Linux x64.
 
 ## Platform Status
 
@@ -67,8 +67,8 @@ Installers are published from GitHub Releases:
 | --- | --- | --- |
 | Windows x64 | Early access | Primary desktop target |
 | macOS Apple Silicon | Early access | Primary macOS target |
+| Linux x64 | Early access | AppImage and Debian package; Cinema/Deliver included |
 | Android | In development | Companion app package lives in `packages/mobile-app` |
-| Linux | Planned | Desktop packaging is not a primary target yet |
 
 ## Quick Start
 

@@ -56,7 +56,7 @@ jobs:
           ANYBOX_FFMPEG_BINARY: ${{ runner.temp }}\anybox-deliver-beta-runtime\stage\ffmpeg.exe
           ANYBOX_FFPROBE_BINARY: ${{ runner.temp }}\anybox-deliver-beta-runtime\stage\ffprobe.exe
           ANYBOX_MEDIA_RUNTIME_MATERIALS_DIR: ${{ runner.temp }}\anybox-deliver-beta-runtime\stage
-        run: pnpm --filter anybox-desktop-agent dist:deliver-beta -- --win --x64
+        run: pnpm --filter anybox-desktop-agent run dist:deliver-beta --win --x64
       - uses: actions/upload-artifact@v4
         with:
           name: anybox-deliver-beta-win32-x64
@@ -95,7 +95,7 @@ jobs:
           ANYBOX_FFMPEG_BINARY: ${{ runner.temp }}/anybox-deliver-beta-runtime/stage/ffmpeg
           ANYBOX_FFPROBE_BINARY: ${{ runner.temp }}/anybox-deliver-beta-runtime/stage/ffprobe
           ANYBOX_MEDIA_RUNTIME_MATERIALS_DIR: ${{ runner.temp }}/anybox-deliver-beta-runtime/stage
-        run: pnpm --filter anybox-desktop-agent dist:deliver-beta -- --mac --arm64
+        run: pnpm --filter anybox-desktop-agent run dist:deliver-beta --mac --arm64
       - uses: actions/upload-artifact@v4
         with:
           name: anybox-deliver-beta-darwin-arm64
@@ -104,5 +104,60 @@ jobs:
             packages/desktop/dist/deliver-beta/*.zip
             packages/desktop/dist/deliver-beta/*.blockmap
             packages/desktop/dist/deliver-beta/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 30
+
+  linux-x64:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require native Linux x64 runner
+        run: test "$(uname -s)/$(uname -m)" = "Linux/x86_64"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install Linux build and packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            build-essential \
+            curl \
+            fakeroot \
+            git \
+            librsvg2-bin \
+            nasm \
+            ninja-build \
+            pkg-config
+          python -m pip install --disable-pip-version-check meson==1.8.3
+      - run: pnpm install --frozen-lockfile
+      - name: Build and smoke Linux GPL media runtime
+        env:
+          ANYBOX_FFMPEG_REVISION: ${{ inputs.ffmpeg_revision }}
+          ANYBOX_X264_REVISION: b35605ace3ddf7c1a5d67a2eb553f034aef41d55
+          ANYBOX_MEDIA_RUNTIME_OUTPUT_DIR: ${{ runner.temp }}/anybox-deliver-beta-runtime
+          ANYBOX_MEDIA_RUNTIME_RUN_SMOKE: "1"
+        run: bash packages/desktop/scripts/build-media-runtime.sh linux x64
+      - name: Package Linux Deliver Beta
+        env:
+          ANYBOX_FFMPEG_BINARY: ${{ runner.temp }}/anybox-deliver-beta-runtime/stage/ffmpeg
+          ANYBOX_FFPROBE_BINARY: ${{ runner.temp }}/anybox-deliver-beta-runtime/stage/ffprobe
+          ANYBOX_MEDIA_RUNTIME_MATERIALS_DIR: ${{ runner.temp }}/anybox-deliver-beta-runtime/stage
+        run: pnpm --filter anybox-desktop-agent run dist:deliver-beta --linux --x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: anybox-deliver-beta-linux-x64
+          path: |
+            packages/desktop/dist/deliver-beta/*.AppImage
+            packages/desktop/dist/deliver-beta/*.deb
+            packages/desktop/dist/deliver-beta/latest-linux.yml
           if-no-files-found: error
           retention-days: 30

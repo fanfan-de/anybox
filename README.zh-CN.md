@@ -20,7 +20,7 @@
     <a href="https://github.com/fanfan-de/anybox/releases/latest"><img src="https://img.shields.io/github/v/release/fanfan-de/anybox?style=flat-square&logo=github&label=release" alt="Release" /></a>
     <a href="https://github.com/fanfan-de/anybox/actions"><img src="https://img.shields.io/github/actions/workflow/status/fanfan-de/anybox/desktop-dual-platform.yml?style=flat-square&logo=githubactions&label=desktop%20build" alt="Desktop build status" /></a>
     <a href="./LICENSE"><img src="https://img.shields.io/github/license/fanfan-de/anybox?style=flat-square" alt="License" /></a>
-    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-2563eb?style=flat-square" alt="Supported desktop platforms" />
+    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2563eb?style=flat-square" alt="Supported desktop platforms" />
     <img src="https://img.shields.io/badge/mobile-in%20development-f59e0b?style=flat-square" alt="Mobile app status" />
   </p>
 
@@ -59,7 +59,7 @@ anybox的核心理念是让build成为一种乐趣，遵循无黑盒，用户自
 安装包发布在 GitHub Releases：
 
 - [Latest release](https://github.com/fanfan-de/anybox/releases/latest)
-- 当前主要桌面目标平台：Windows x64 和 macOS Apple Silicon。
+- 当前主要桌面目标平台：Windows x64、macOS Apple Silicon 和 Linux x64。
 
 ## 平台状态
 
@@ -67,8 +67,8 @@ anybox的核心理念是让build成为一种乐趣，遵循无黑盒，用户自
 | --- | --- | --- |
 | Windows x64 | 早期访问 | 主要桌面目标平台 |
 | macOS Apple Silicon | 早期访问 | 主要 macOS 目标平台 |
+| Linux x64 | 早期访问 | 提供 AppImage 和 Debian 包，包含完整 Cinema/Deliver |
 | Android | 开发中 | 配套移动端包位于 `packages/mobile-app` |
-| Linux | 计划中 | 当前不是主要桌面打包目标 |
 
 ## 快速开始
 

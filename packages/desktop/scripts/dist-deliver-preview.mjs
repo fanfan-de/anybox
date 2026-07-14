@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process"
+import { rmSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -11,6 +12,7 @@ const corepackInvocation = process.platform === "win32"
     }
   : { command: "corepack", args: [] }
 const electronBuilderCLI = path.join(desktopDir, "node_modules", "electron-builder", "cli.js")
+const normalizeLinuxUpdateMetadataScript = path.join(scriptDir, "normalize-linux-update-metadata.mjs")
 
 function fail(message) {
   console.error(`[desktop][deliver-preview] ${message}`)
@@ -103,17 +105,25 @@ try {
   run(corepackInvocation.command, [...corepackInvocation.args, "pnpm", "run", "build"], previewEnv)
   run(corepackInvocation.command, [...corepackInvocation.args, "pnpm", "run", "verify:agent-runtime"], previewEnv)
   run(corepackInvocation.command, [...corepackInvocation.args, "pnpm", "run", "icons:generate"], previewEnv)
+  const previewLabel = betaBuild ? "Beta" : "Preview"
+  const outputDirectoryName = betaBuild ? "deliver-beta" : "deliver-preview"
+  rmSync(path.join(desktopDir, "dist", outputDirectoryName), { recursive: true, force: true })
+  const linuxBuild = builderArgs.some((argument) => ["--linux", "-l", "linux"].includes(argument))
+  const artifactNameConfig = linuxBuild
+    ? `--config.linux.artifactName=Anybox-Deliver-${previewLabel}-\${version}-linux-x64.\${ext}`
+    : `--config.artifactName=Anybox-Deliver-${previewLabel}-\${version}-\${os}-\${arch}.\${ext}`
   run(process.execPath, [
     electronBuilderCLI,
     ...builderArgs,
-    `--config.directories.output=dist/${betaBuild ? "deliver-beta" : "deliver-preview"}`,
-    `--config.artifactName=Anybox-Deliver-${betaBuild ? "Beta" : "Preview"}-\${version}-\${os}-\${arch}.\${ext}`,
+    `--config.directories.output=dist/${outputDirectoryName}`,
+    artifactNameConfig,
     "--config.forceCodeSigning=false",
     "--config.mac.notarize=false",
     "--config.win.signAndEditExecutable=false",
     "--publish",
     "never",
   ], previewEnv)
+  run(process.execPath, [normalizeLinuxUpdateMetadataScript, "--directory", path.join("dist", outputDirectoryName)], previewEnv)
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error))
 }

@@ -33,6 +33,7 @@ let currentScale = 1
 let fitFrame = 0
 let isApplyingFit = false
 let fitResizeObserver: ResizeObserver | null = null
+const fitTimeoutIDs = new Set<number>()
 let currentMarkers: PreviewMarker[] = []
 
 function clamp(value: number, minimum: number, maximum: number) {
@@ -332,6 +333,31 @@ function scheduleAutoFit() {
     fitFrame = 0
     applyAutoFit()
   })
+}
+
+function scheduleDelayedAutoFit(delay: number) {
+  const timeoutID = window.setTimeout(() => {
+    fitTimeoutIDs.delete(timeoutID)
+    scheduleAutoFit()
+  }, delay)
+  fitTimeoutIDs.add(timeoutID)
+}
+
+function cleanupPreviewGuest() {
+  if (fitFrame) {
+    window.cancelAnimationFrame(fitFrame)
+    fitFrame = 0
+  }
+  for (const timeoutID of fitTimeoutIDs) {
+    window.clearTimeout(timeoutID)
+  }
+  fitTimeoutIDs.clear()
+  fitResizeObserver?.disconnect()
+  fitResizeObserver = null
+  document.removeEventListener("click", handleDocumentClick, true)
+  document.removeEventListener("submit", handleDocumentSubmit, true)
+  document.removeEventListener("keydown", handleDocumentKeyDown, true)
+  document.removeEventListener("mousemove", handleDocumentMouseMove, true)
 }
 
 function isInteractiveElement(element: Element) {
@@ -641,6 +667,7 @@ function handleDocumentMouseMove(event: MouseEvent) {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
+  cleanupPreviewGuest()
   getHighlightElement()
   ensureFitStyle()
   document.addEventListener("click", handleDocumentClick, true)
@@ -656,8 +683,8 @@ window.addEventListener("DOMContentLoaded", () => {
     fitResizeObserver.observe(document.body)
   }
   scheduleAutoFit()
-  window.setTimeout(scheduleAutoFit, 120)
-  window.setTimeout(scheduleAutoFit, 360)
+  scheduleDelayedAutoFit(120)
+  scheduleDelayedAutoFit(360)
   renderPreviewMarkers()
   sendPageMeta()
   ipcRenderer.sendToHost("preview:ready")
@@ -673,6 +700,7 @@ window.addEventListener("resize", () => {
   scheduleAutoFit()
   renderPreviewMarkers()
 })
+window.addEventListener("pagehide", cleanupPreviewGuest)
 document.addEventListener("scroll", renderPreviewMarkers, true)
 
 ipcRenderer.on("preview:set-mode", (_event, payload: { mode?: PreviewMode } | undefined) => {

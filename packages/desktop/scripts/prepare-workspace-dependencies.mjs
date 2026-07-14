@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process"
+import { createHash } from "node:crypto"
 import fs from "node:fs"
 import fsp from "node:fs/promises"
 import path from "node:path"
@@ -17,7 +18,20 @@ const pythonEmbeddedZip = `python-${pythonVersion}-embed-amd64.zip`
 const pythonEmbeddedUrl = `https://www.python.org/ftp/python/${pythonVersion}/${pythonEmbeddedZip}`
 const pythonMacPkg = `python-${pythonVersion}-macos11.pkg`
 const pythonMacPkgUrl = `https://www.python.org/ftp/python/${pythonVersion}/${pythonMacPkg}`
+const linuxPythonRelease = "20250517"
+const linuxPythonArchive = `cpython-${pythonVersion}+${linuxPythonRelease}-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz`
+const linuxPythonUrl = `https://github.com/astral-sh/python-build-standalone/releases/download/${linuxPythonRelease}/${linuxPythonArchive.replace("+", "%2B")}`
+const linuxPythonSha256 = "0356bd1db292781a20e011d789f0c41ea5ec04731c8236c8185b53a54faf2871"
 const getPipUrl = "https://bootstrap.pypa.io/get-pip.py"
+
+export const LINUX_PYTHON_DISTRIBUTION = Object.freeze({
+  project: "astral-sh/python-build-standalone",
+  release: linuxPythonRelease,
+  version: pythonVersion,
+  archive: linuxPythonArchive,
+  url: linuxPythonUrl,
+  sha256: linuxPythonSha256,
+})
 
 function readEnv(key) {
   const value = process.env[key]?.trim()
@@ -123,6 +137,31 @@ async function downloadFile(url, target) {
   await fsp.writeFile(target, bytes)
 }
 
+async function sha256File(filePath) {
+  const hash = createHash("sha256")
+  for await (const chunk of fs.createReadStream(filePath)) hash.update(chunk)
+  return hash.digest("hex")
+}
+
+async function downloadVerifiedFile(url, target, expectedSha256) {
+  if (await pathExists(target)) {
+    const cachedSha256 = await sha256File(target)
+    if (cachedSha256 === expectedSha256) return
+
+    console.warn(`[desktop][build] replacing cached file with unexpected SHA-256: ${target}`)
+    await fsp.rm(target, { force: true })
+  }
+
+  await downloadFile(url, target)
+  const actualSha256 = await sha256File(target)
+  if (actualSha256 !== expectedSha256) {
+    await fsp.rm(target, { force: true })
+    throw new Error(
+      `Downloaded file SHA-256 mismatch for ${path.basename(target)}: expected ${expectedSha256}, got ${actualSha256}`,
+    )
+  }
+}
+
 function expandArchive(zipPath, targetDir) {
   run("powershell.exe", [
     "-NoLogo",
@@ -202,8 +241,12 @@ async function preparePythonDependencies(input) {
     return prepareMacPythonDependencies(input)
   }
 
+  if (process.platform === "linux") {
+    return prepareLinuxPythonDependencies(input)
+  }
+
   if (process.platform !== "win32" || process.arch !== "x64") {
-    throw new Error("Workspace Python dependencies are currently supported only on Windows x64 and macOS.")
+    throw new Error("Workspace Python dependencies are currently supported only on Windows x64, macOS, and Linux x64.")
   }
 
   const pythonDir = path.join(input.dependenciesDir, "python")
@@ -261,6 +304,36 @@ function installPythonPackages(pythonExe, requirementsPath, cwd) {
     ],
     { cwd },
   )
+}
+
+async function prepareLinuxPythonDependencies(input) {
+  if (process.arch !== "x64") {
+    throw new Error(`Workspace Python dependencies are not supported on Linux ${process.arch}.`)
+  }
+
+  const pythonDir = path.join(input.dependenciesDir, "python")
+  const pythonExe = path.join(pythonDir, "bin", "python3")
+  const archivePath = path.join(cacheDir, linuxPythonArchive)
+  const requirementsPath = path.join(input.dependenciesDir, "python-requirements.txt")
+  const requirements = Object.entries(PYTHON_PACKAGES)
+    .map(([name, version]) => `${name}==${version}`)
+    .join("\n")
+
+  await fsp.rm(pythonDir, { recursive: true, force: true })
+  await fsp.mkdir(input.dependenciesDir, { recursive: true })
+  await downloadVerifiedFile(linuxPythonUrl, archivePath, linuxPythonSha256)
+  run("tar", ["-xzf", archivePath, "-C", input.dependenciesDir])
+
+  if (!(await pathExists(pythonExe))) {
+    throw new Error(`Linux Python archive did not contain the expected executable: ${pythonExe}`)
+  }
+
+  await fsp.chmod(pythonExe, 0o755)
+  await fsp.writeFile(requirementsPath, `${requirements}\n`, "utf8")
+  await ensurePip(pythonExe, pythonDir)
+
+  console.log(`[desktop][build] installing workspace Python dependencies into ${pythonDir}`)
+  installPythonPackages(pythonExe, requirementsPath, pythonDir)
 }
 
 function codesignMacBinary(filePath) {
@@ -425,6 +498,8 @@ async function writeManifest(input) {
     platform: process.platform,
     arch: process.arch,
     generatedAt: new Date().toISOString(),
+    pythonVersion,
+    pythonDistribution: process.platform === "linux" ? LINUX_PYTHON_DISTRIBUTION : undefined,
     nodePackages: NODE_PACKAGES,
     pythonPackages: PYTHON_PACKAGES,
   })

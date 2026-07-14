@@ -29,6 +29,13 @@
       "license": "OFL-1.1"
     }
   },
+  "mediaRuntimeSources": {
+    "zlib": {
+      "version": "1.3.1",
+      "url": "https://zlib.net/fossils/zlib-1.3.1.tar.gz",
+      "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"
+    }
+  },
   "platforms": {
     "win32": {
       "status": "supported",
@@ -347,8 +354,89 @@
       }
     },
     "linux": {
-      "status": "blocked",
-      "reason": "No reviewed, checksum-pinned LGPL FFmpeg/ffprobe distribution is configured for Linux yet."
+      "status": "supported",
+      "targets": {
+        "x64": {
+          "runtimeID": "ffmpeg-anybox-8ad6288553-linux-x64-gpl-r1",
+          "manifestSchemaVersion": 1,
+          "origin": "anybox-controlled-gpl",
+          "artifactStatus": "pending",
+          "releaseReadiness": {
+            "status": "blocked",
+            "releaseKind": "initial",
+            "reasons": [
+              "The pinned Linux x64 FFmpeg/libx264 candidate has not been promoted from protected CI or mirrored to immutable release storage yet.",
+              "GPL source, notice, H.264 distribution, and release approval are still pending.",
+              "The installed Linux application render and restart evidence has not been accepted."
+            ]
+          },
+          "licensePolicy": {
+            "spdxExpression": "GPL-3.0-or-later",
+            "licenseFile": "LICENSE.txt",
+            "noticesFile": "THIRD-PARTY-NOTICES.txt",
+            "componentLicenseFiles": {
+              "x264": {
+                "fileName": "X264-LICENSE.txt",
+                "sha256": "32b1062f7da84967e7019d01ab805935caa7ab7321a7ced0e30ebe75e5df1670"
+              },
+              "zlib": {
+                "fileName": "ZLIB-LICENSE.txt",
+                "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
+              }
+            },
+            "reviewStatus": "pending"
+          },
+          "executables": {
+            "ffmpeg": "ffmpeg",
+            "ffprobe": "ffprobe"
+          },
+          "buildConfigurationPolicy": {
+            "requiredFlags": [
+              "--arch=x86_64",
+              "--target-os=linux",
+              "--enable-version3",
+              "--enable-gpl",
+              "--enable-libx264",
+              "--enable-zlib",
+              "--pkg-config-flags=--static",
+              "--enable-libass",
+              "--disable-libopenh264",
+              "--disable-libx265",
+              "--disable-libfdk-aac",
+              "--disable-nonfree"
+            ],
+            "forbiddenFlags": [
+              "--disable-gpl",
+              "--enable-nonfree",
+              "--enable-libopenh264",
+              "--disable-libx264",
+              "--enable-libx265",
+              "--enable-libfdk-aac",
+              "--disable-zlib"
+            ]
+          },
+          "requiredEncoders": [
+            "libx264",
+            "aac"
+          ],
+          "requiredFilters": [
+            "ass"
+          ],
+          "requiredFonts": [
+            {
+              "fileName": "fonts/NotoSansCJKsc-Regular.otf",
+              "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
+            }
+          ],
+          "smokeTest": {
+            "durationSeconds": 1,
+            "videoEncoder": "libx264",
+            "audioEncoder": "aac",
+            "expectedVideoCodec": "h264",
+            "expectedAudioCodec": "aac"
+          }
+        }
+      }
     }
   }
 }

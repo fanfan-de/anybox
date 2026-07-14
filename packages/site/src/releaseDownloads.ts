@@ -1,4 +1,4 @@
-export type InstallerPlatform = "windows" | "mac" | "mobile"
+export type InstallerPlatform = "windows" | "mac" | "linux" | "mobile"
 
 export const repositoryUrl = "https://github.com/fanfan-de/anybox"
 
@@ -10,6 +10,7 @@ const downloadManifestUrl =
 export const installerFallbackUrls: Record<InstallerPlatform, string> = {
   windows: `${repositoryUrl}/releases`,
   mac: `${repositoryUrl}/releases`,
+  linux: `${repositoryUrl}/releases`,
   mobile: `${repositoryUrl}/releases`,
 }
 
@@ -77,6 +78,10 @@ const installerMatchers: Record<
     normalizedName.endsWith(".dmg") &&
     normalizedName.includes("anybox") &&
     normalizedName.includes("arm64"),
+  linux: (normalizedName) =>
+    normalizedName.endsWith(".appimage") &&
+    normalizedName.includes("anybox") &&
+    normalizedName.includes("x64"),
   mobile: (normalizedName) =>
     normalizedName.endsWith(".apk") && normalizedName.includes("anybox"),
 }

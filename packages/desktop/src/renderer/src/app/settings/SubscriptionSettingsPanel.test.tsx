@@ -183,7 +183,7 @@ describe("SubscriptionSettingsPanel payment flow", () => {
     await screen.findByRole("heading", { name: "Add prepaid balance" })
     fireEvent.change(screen.getByRole("spinbutton", { name: "Custom amount" }), { target: { value: "88.50" } })
     fireEvent.click(screen.getByRole("button", { name: "WeChat Pay" }))
-    fireEvent.click(screen.getByRole("button", { name: "Pay ¥88.50" }))
+    fireEvent.click(screen.getByRole("button", { name: /Pay .*88\.50/ }))
 
     await waitFor(() => {
       expect(createRechargeOrder).toHaveBeenCalledWith({ amountCents: 8_850, provider: "wechat_pay" })

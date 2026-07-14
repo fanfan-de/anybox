@@ -14,7 +14,14 @@ function parseArguments(argv) {
   for (const key of ["platform", "arch", "stage", "archive", "source", "recipe", "output", "revision"]) {
     if (!values.get(key)) throw new Error(`Missing --${key}`)
   }
-  return Object.fromEntries(values)
+  const args = Object.fromEntries(values)
+  if (
+    args.platform === "linux"
+    && (!args["x264-source"] || !args["x264-revision"] || !args["zlib-source"] || !args["zlib-version"])
+  ) {
+    throw new Error("Linux candidates require pinned x264 and zlib source arguments")
+  }
+  return args
 }
 
 async function sha256(filePath) {
@@ -71,6 +78,12 @@ const artifactPaths = {
   subtitleSmokeScript: path.resolve(args.stage, "evidence", "subtitle-smoke.ass"),
   subtitleSmokeFrame: path.resolve(args.stage, "evidence", "subtitle-smoke.png"),
 }
+if (args.platform === "linux") {
+  artifactPaths.x264Source = path.resolve(args["x264-source"])
+  artifactPaths.x264License = path.resolve(args.stage, "X264-LICENSE.txt")
+  artifactPaths.zlibSource = path.resolve(args["zlib-source"])
+  artifactPaths.zlibLicense = path.resolve(args.stage, "ZLIB-LICENSE.txt")
+}
 for (const [label, filePath] of Object.entries(artifactPaths)) {
   const stat = await fsp.stat(filePath).catch(() => undefined)
   if (!stat?.isFile()) throw new Error(`Candidate is missing ${label}: ${filePath}`)
@@ -79,6 +92,8 @@ for (const [label, filePath] of Object.entries(artifactPaths)) {
 const archiveStat = await fsp.stat(artifactPaths.archive)
 const sourceStat = await fsp.stat(artifactPaths.source)
 const recipeStat = await fsp.stat(artifactPaths.buildRecipe)
+const x264SourceStat = artifactPaths.x264Source ? await fsp.stat(artifactPaths.x264Source) : undefined
+const zlibSourceStat = artifactPaths.zlibSource ? await fsp.stat(artifactPaths.zlibSource) : undefined
 const smokeProbe = probeSummary(JSON.parse(await fsp.readFile(artifactPaths.smokeProbe, "utf8")), "Render smoke")
 if (smokeProbe.audioCodec !== "aac") throw new Error("Render smoke evidence has no AAC audio stream")
 const subtitleSmokeProbe = probeSummary(JSON.parse(await fsp.readFile(artifactPaths.subtitleSmokeProbe, "utf8")), "Subtitle smoke")
@@ -116,6 +131,34 @@ const candidate = {
     sourceMetadata: { fileName: "SOURCE.txt", sha256: await sha256(artifactPaths.sourceMetadata) },
     subtitleFont: { fileName: "fonts/NotoSansCJKsc-Regular.otf", sha256: await sha256(artifactPaths.subtitleFont) },
     subtitleFontLicense: { fileName: "fonts/OFL-1.1.txt", sha256: await sha256(artifactPaths.subtitleFontLicense) },
+    ...(artifactPaths.x264Source ? {
+      componentSources: {
+        x264: {
+          revision: args["x264-revision"],
+          fileName: path.basename(artifactPaths.x264Source),
+          sizeBytes: x264SourceStat.size,
+          sha256: await sha256(artifactPaths.x264Source),
+        },
+        zlib: {
+          version: args["zlib-version"],
+          fileName: path.basename(artifactPaths.zlibSource),
+          sizeBytes: zlibSourceStat.size,
+          sha256: await sha256(artifactPaths.zlibSource),
+        },
+      },
+      componentLicenses: {
+        x264: {
+          fileName: "X264-LICENSE.txt",
+          sizeBytes: (await fsp.stat(artifactPaths.x264License)).size,
+          sha256: await sha256(artifactPaths.x264License),
+        },
+        zlib: {
+          fileName: "ZLIB-LICENSE.txt",
+          sizeBytes: (await fsp.stat(artifactPaths.zlibLicense)).size,
+          sha256: await sha256(artifactPaths.zlibLicense),
+        },
+      },
+    } : {}),
   },
   subtitleRuntime: {
     renderer: "libass",
