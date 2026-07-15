@@ -358,6 +358,10 @@ try {
         session: AgentSessionSummary
         requestId?: string
       }>,
+    updateSessionTitle: (input: DesktopIpcInput<"desktop:update-session-title">) =>
+      invokeDesktop("desktop:update-session-title", input) as Promise<DesktopIpcOutput<"desktop:update-session-title">>,
+    updateSessionPinned: (input: DesktopIpcInput<"desktop:update-session-pinned">) =>
+      invokeDesktop("desktop:update-session-pinned", input) as Promise<DesktopIpcOutput<"desktop:update-session-pinned">>,
     createSideChat: (input: { parentSessionID: string; anchorMessageID: string }) =>
       invokeDesktop("desktop:create-side-chat", input) as Promise<{
         session: AgentSessionSummary

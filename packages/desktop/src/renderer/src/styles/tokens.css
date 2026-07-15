@@ -330,6 +330,18 @@
   --semantic-sidebar-tree-row-surface-active-dark: var(--mix-seg-accent-soft-84-transparent-16-dark);
   --semantic-sidebar-tree-row-leading-active-light: var(--brand-primary);
   --semantic-sidebar-tree-row-leading-active-dark: var(--brand-primary-dark);
+  --semantic-sidebar-inline-edit-surface-light: var(--surface-panel-light);
+  --semantic-sidebar-inline-edit-surface-dark: var(--surface-panel-dark);
+  --semantic-sidebar-inline-edit-border-light: var(--border-default-light);
+  --semantic-sidebar-inline-edit-border-dark: var(--border-default-dark);
+  --semantic-sidebar-inline-edit-border-focus-light: var(--brand-primary);
+  --semantic-sidebar-inline-edit-border-focus-dark: var(--brand-primary-dark);
+  --semantic-sidebar-inline-edit-border-invalid-light: var(--semantic-error-border-light);
+  --semantic-sidebar-inline-edit-border-invalid-dark: var(--semantic-error-border-dark);
+  --semantic-sidebar-inline-edit-text-light: var(--text-primary-light);
+  --semantic-sidebar-inline-edit-text-dark: var(--text-primary-dark);
+  --semantic-sidebar-inline-edit-text-disabled-light: var(--text-tertiary-light);
+  --semantic-sidebar-inline-edit-text-disabled-dark: var(--text-tertiary-dark);
   --semantic-settings-slot-card-list-item-surface-default-light: var(--mix-seg-panel-muted-72-seg-panel-28-light);
   --semantic-settings-slot-card-list-item-surface-default-dark: var(--mix-seg-panel-muted-72-seg-panel-28-dark);
   --semantic-settings-slot-card-list-item-surface-hover-light: var(--mix-seg-panel-muted-86-transparent-14-light);
@@ -517,6 +529,12 @@
   --semantic-sidebar-tree-row-surface-hover: var(--semantic-sidebar-tree-row-surface-hover-light);
   --semantic-sidebar-tree-row-surface-active: var(--semantic-sidebar-tree-row-surface-active-light);
   --semantic-sidebar-tree-row-leading-active: var(--semantic-sidebar-tree-row-leading-active-light);
+  --semantic-sidebar-inline-edit-surface: var(--semantic-sidebar-inline-edit-surface-light);
+  --semantic-sidebar-inline-edit-border: var(--semantic-sidebar-inline-edit-border-light);
+  --semantic-sidebar-inline-edit-border-focus: var(--semantic-sidebar-inline-edit-border-focus-light);
+  --semantic-sidebar-inline-edit-border-invalid: var(--semantic-sidebar-inline-edit-border-invalid-light);
+  --semantic-sidebar-inline-edit-text: var(--semantic-sidebar-inline-edit-text-light);
+  --semantic-sidebar-inline-edit-text-disabled: var(--semantic-sidebar-inline-edit-text-disabled-light);
   --semantic-settings-slot-card-list-item-surface-default: var(--semantic-settings-slot-card-list-item-surface-default-light);
   --semantic-settings-slot-card-list-item-surface-hover: var(--semantic-settings-slot-card-list-item-surface-hover-light);
   --semantic-settings-slot-card-list-item-surface-focus: var(--semantic-settings-slot-card-list-item-surface-focus-light);
@@ -1123,6 +1141,11 @@
 
 :root[data-font-family="system"] {
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+:root:lang(zh-CN):not([data-font-family]),
+:root:lang(zh-CN)[data-font-family="default"] {
+  --font-sans: "IBM Plex Sans", "IBM Plex Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 :root[data-font-family="segoe"] {
@@ -1901,6 +1924,12 @@
   --semantic-sidebar-tree-row-surface-hover: var(--semantic-sidebar-tree-row-surface-hover-dark);
   --semantic-sidebar-tree-row-surface-active: var(--semantic-sidebar-tree-row-surface-active-dark);
   --semantic-sidebar-tree-row-leading-active: var(--semantic-sidebar-tree-row-leading-active-dark);
+  --semantic-sidebar-inline-edit-surface: var(--semantic-sidebar-inline-edit-surface-dark);
+  --semantic-sidebar-inline-edit-border: var(--semantic-sidebar-inline-edit-border-dark);
+  --semantic-sidebar-inline-edit-border-focus: var(--semantic-sidebar-inline-edit-border-focus-dark);
+  --semantic-sidebar-inline-edit-border-invalid: var(--semantic-sidebar-inline-edit-border-invalid-dark);
+  --semantic-sidebar-inline-edit-text: var(--semantic-sidebar-inline-edit-text-dark);
+  --semantic-sidebar-inline-edit-text-disabled: var(--semantic-sidebar-inline-edit-text-disabled-dark);
   --semantic-icon-button-text: var(--semantic-icon-button-text-dark);
   --semantic-icon-button-text-hover: var(--semantic-icon-button-text-hover-dark);
   --semantic-icon-button-text-active: var(--semantic-icon-button-text-active-dark);

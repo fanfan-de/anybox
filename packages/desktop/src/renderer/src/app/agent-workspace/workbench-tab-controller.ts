@@ -366,6 +366,79 @@ export function useWorkbenchTabController({
     setExpandedFolderIDs((current) => ensureExpandedFolderID(current, nextWorkspaceID))
   }
 
+  async function handleSessionSplitRight(workspaceID: string, sessionID: string) {
+    const reference = createSessionWorkbenchTab(sessionID)
+    const targetGroupID = resolveTargetGroupID()
+    const title = resolvePanelTitle(reference)
+    const remoteOwnership = getRemotePanelOwnership(reference)
+
+    if (remoteOwnership) {
+      const moveWorkbenchPanel = window.desktop?.moveWorkbenchPanel
+      if (!moveWorkbenchPanel) {
+        throw new Error("Workbench panel move is unavailable.")
+      }
+      const result = await moveWorkbenchPanel({
+        panelID: getWorkbenchDockPanelId(reference),
+        placement: "right",
+        sourceSurfaceID: remoteOwnership.ownerSurfaceID ?? remoteOwnership.ownerWindowID,
+        targetGroupID,
+        targetSurfaceID: surfaceID,
+      })
+      if (!result.ok) {
+        throw new Error(result.reason || "Unable to move the session into the current window.")
+      }
+    } else {
+      const didSplit = workbenchDockviewCommandsRef.current?.splitPanel(reference, {
+        direction: "right",
+        targetGroupID,
+        title,
+      })
+      if (!didSplit) {
+        throw new Error("Workbench split view is unavailable.")
+      }
+      setActiveDockviewReference(reference, targetGroupID)
+    }
+
+    lastFocusedSessionIDRef.current = sessionID
+    setSelectedFolderID(workspaceID)
+    setExpandedFolderIDs((current) => ensureExpandedFolderID(current, workspaceID))
+  }
+
+  async function handleSessionPopout(sessionID: string) {
+    const reference = createSessionWorkbenchTab(sessionID)
+    const panelID = getWorkbenchDockPanelId(reference)
+    const remoteOwnership = getRemotePanelOwnership(reference)
+
+    if (remoteOwnership) {
+      const focusWorkbenchPanel = window.desktop?.focusWorkbenchPanel
+      if (!focusWorkbenchPanel) {
+        throw new Error("Workbench window focus is unavailable.")
+      }
+      const result = await focusWorkbenchPanel({ panelID })
+      if (!result.ok) {
+        throw new Error(result.reason || "Unable to focus the session window.")
+      }
+      return
+    }
+
+    if (await workbenchDockviewCommandsRef.current?.popoutPanel(reference)) return
+
+    const detachSessionPanel = window.desktop?.detachSessionPanel
+    if (!detachSessionPanel) {
+      throw new Error("Session popout is unavailable.")
+    }
+    const result = await detachSessionPanel({
+      lastMainGroupID: resolveTargetGroupID(),
+      panelID,
+      sessionID,
+      sourceSurfaceID: surfaceID,
+      title: resolvePanelTitle(reference),
+    })
+    if (!result.ok) {
+      throw new Error(result.reason || "Unable to open the session in a new window.")
+    }
+  }
+
   function handleMovePanelIntoSurface(input: {
     panelID: string
     placement?: "within" | "left" | "right" | "top" | "bottom"
@@ -487,6 +560,8 @@ export function useWorkbenchTabController({
     handleMovePanelIntoSurface,
     handleMovePanelOutOfSurface,
     handlePaneSplit,
+    handleSessionPopout,
+    handleSessionSplitRight,
     handlePaneTabDrop,
     handleSplitResize,
     isCreateSessionTabActive,

@@ -652,6 +652,11 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   background: var(--context-menu-border);
 }
 
+.session-context-menu {
+  width: 224px;
+  min-width: 224px;
+}
+
 .project-worktree-create-overlay {
   position: fixed;
   inset: 0;
@@ -786,6 +791,53 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   gap: 8px;
 }
 
+.session-row.is-editing {
+  cursor: text;
+}
+
+.session-row-rename-input {
+  width: 100%;
+  min-width: 0;
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid var(--semantic-sidebar-inline-edit-border);
+  border-radius: 6px;
+  background: var(--semantic-sidebar-inline-edit-surface);
+  color: var(--semantic-sidebar-inline-edit-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.session-row-rename-input:focus {
+  border-color: var(--semantic-sidebar-inline-edit-border-focus);
+  outline: none;
+}
+
+.session-row-rename-input[aria-invalid="true"] {
+  border-color: var(--semantic-sidebar-inline-edit-border-invalid);
+}
+
+.session-row-rename-input:disabled {
+  color: var(--semantic-sidebar-inline-edit-text-disabled);
+  cursor: default;
+}
+
+.session-row-rename-status {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--seg-text-3);
+  animation: session-row-status-spin 900ms linear infinite;
+}
+
+.session-row-rename-status svg {
+  width: 14px;
+  height: 14px;
+}
+
 .session-row.is-subagent {
   min-height: 30px;
   color: var(--seg-text-2);
@@ -857,7 +909,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
     animation: none;
   }
 
-  .session-row-status-icon.is-running {
+  .session-row-status-icon.is-running,
+  .session-row-rename-status {
     animation: none;
   }
 }

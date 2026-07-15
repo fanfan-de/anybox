@@ -101,7 +101,7 @@ function useWorkbenchHarness(options: { surfaceID?: string; workbenchState?: Wor
       focusPanel: vi.fn(() => false),
       getSnapshot: vi.fn(() => null),
       openPanel: vi.fn(() => true),
-      popoutPanel: vi.fn(() => true),
+      popoutPanel: vi.fn(async () => true),
       replacePanel: vi.fn(() => true),
       splitPanel: vi.fn(() => true),
     }
@@ -209,6 +209,60 @@ describe("workbench tab controller", () => {
     )
   })
 
+  it("opens a selected session in the right split", async () => {
+    const { result } = renderHook(() => useWorkbenchHarness())
+
+    await act(async () => {
+      await result.current.handleSessionSplitRight("workspace-2", "session-2")
+    })
+
+    expect(result.current.commands.splitPanel).toHaveBeenCalledWith(
+      createSessionWorkbenchTab("session-2"),
+      expect.objectContaining({ direction: "right", title: "session-2" }),
+    )
+    expect(result.current.selectedFolderID).toBe("workspace-2")
+    expect(result.current.expandedFolderIDs).toContain("workspace-2")
+  })
+
+  it("opens an existing session panel in a popout window", async () => {
+    const { result } = renderHook(() => useWorkbenchHarness())
+
+    await act(async () => {
+      await result.current.handleSessionPopout("session-1")
+    })
+
+    expect(result.current.commands.popoutPanel).toHaveBeenCalledWith(createSessionWorkbenchTab("session-1"))
+  })
+
+  it("detaches an unopened session directly into a new window", async () => {
+    const previousDesktop = window.desktop
+    const detachSessionPanel = vi.fn().mockResolvedValue({
+      ok: true,
+      panelID: "session:session-2",
+      state: { version: 1, windows: [], ownership: [], panels: {} },
+      windowID: "session-popout:session-2",
+    })
+    window.desktop = { ...(previousDesktop ?? {}), detachSessionPanel } as typeof window.desktop
+
+    try {
+      const { result } = renderHook(() => useWorkbenchHarness())
+      vi.mocked(result.current.commands.popoutPanel).mockResolvedValueOnce(false)
+
+      await act(async () => {
+        await result.current.handleSessionPopout("session-2")
+      })
+
+      expect(detachSessionPanel).toHaveBeenCalledWith(expect.objectContaining({
+        panelID: "session:session-2",
+        sessionID: "session-2",
+        sourceSurfaceID: "main",
+        title: "session-2",
+      }))
+    } finally {
+      window.desktop = previousDesktop
+    }
+  })
+
   it("selects a session through Dockview focus or open commands", () => {
     const { result } = renderHook(() => useWorkbenchHarness())
 
@@ -292,6 +346,53 @@ describe("workbench tab controller", () => {
       )
       expect(result.current.selectedFolderID).toBe("workspace-2")
       expect(result.current.expandedFolderIDs).toContain("workspace-2")
+    } finally {
+      window.desktop = previousDesktop
+    }
+  })
+
+  it("moves a remotely owned session into the right split", async () => {
+    const remoteState: WorkbenchSharedState = {
+      version: 1,
+      windows: [
+        { id: "main", kind: "main", ownedPanelIDs: [], surfaceID: "main" },
+        { id: "popout-1", kind: "session-popout", ownedPanelIDs: ["session:session-2"], surfaceID: "popout-1" },
+      ],
+      surfaces: [
+        { surfaceID: "main", kind: "main", windowID: "main", ownedPanelIDs: [] },
+        { surfaceID: "popout-1", kind: "session-popout", windowID: "popout-1", ownedPanelIDs: ["session:session-2"] },
+      ],
+      ownership: [
+        {
+          panelID: "session:session-2",
+          ownerSurfaceID: "popout-1",
+          ownerWindowID: "popout-1",
+          reference: { kind: "session", sessionID: "session-2" },
+        },
+      ],
+      panels: {},
+    }
+    const previousDesktop = window.desktop
+    const moveWorkbenchPanel = vi.fn().mockResolvedValue({ ok: true, state: remoteState })
+    window.desktop = { ...(previousDesktop ?? {}), moveWorkbenchPanel } as typeof window.desktop
+
+    try {
+      const { result } = renderHook(() => useWorkbenchHarness({ workbenchState: remoteState }))
+
+      await act(async () => {
+        await result.current.handleSessionSplitRight("workspace-2", "session-2")
+      })
+
+      expect(moveWorkbenchPanel).toHaveBeenCalledWith(expect.objectContaining({
+        panelID: "session:session-2",
+        placement: "right",
+        sourceSurfaceID: "popout-1",
+        targetSurfaceID: "main",
+      }))
+      expect(result.current.commands.splitPanel).not.toHaveBeenCalledWith(
+        createSessionWorkbenchTab("session-2"),
+        expect.anything(),
+      )
     } finally {
       window.desktop = previousDesktop
     }

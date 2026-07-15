@@ -9102,12 +9102,14 @@ describe("App", () => {
     expect(screen.queryByRole("combobox", { name: "Session project" })).not.toBeInTheDocument()
   })
 
-  it("does not show prompt examples on the create session canvas", async () => {
+  it("shows one usage tip without prompt examples on the create session canvas", async () => {
     render(<App />)
 
     fireEvent.click(getAddSessionTabButton())
     await screen.findByRole("combobox", { name: "Session project" })
 
+    expect(screen.queryByText("What should we build in Anybox?")).not.toBeInTheDocument()
+    expect(screen.getAllByTitle("Click to show another tip")).toHaveLength(1)
     expect(screen.queryByRole("heading", { name: "Start with a concrete task" })).not.toBeInTheDocument()
     expect(screen.queryByLabelText("Prompt examples")).not.toBeInTheDocument()
   })
@@ -14583,6 +14585,12 @@ describe("App", () => {
     )
     expect(styles).toMatch(
       /\.create-session-layout\s+\.create-session-shell:has\(\.create-session-select-panel\)\s*\{[^}]*z-index:\s*7;/s,
+    )
+    expect(styles).toMatch(
+      /\.create-session-layout\s+\.create-session-shell\s*\{[^}]*overflow:\s*visible;[^}]*contain:\s*layout;/s,
+    )
+    expect(styles).toMatch(
+      /\.create-session-card:has\(\.create-session-select-panel\)\s+\.create-session-tip\s*\{[^}]*visibility:\s*hidden;/s,
     )
     expect(styles).toMatch(
       /\.canvas-top-menu-selector-panel\s*\{[^}]*top:\s*calc\(100%\s*\+\s*8px\);[^}]*background:\s*var\(--seg-dropdown-menu-surface\);/s,

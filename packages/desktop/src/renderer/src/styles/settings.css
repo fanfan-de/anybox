@@ -4607,7 +4607,7 @@ body.is-dragging-settings-page {
 }
 
 .settings-font-family-sample.is-default {
-  --settings-font-preview: "IBM Plex Sans", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --settings-font-preview: "IBM Plex Sans", "IBM Plex Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 .settings-font-family-sample.is-system {

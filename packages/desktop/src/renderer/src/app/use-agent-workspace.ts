@@ -27,7 +27,13 @@ import {
 import type { LeftSidebarView, SessionDiffSummary, SessionModelSelection, ThreadMessage, WorkspaceGroup } from "./types"
 import type { ThreadNavigationRequest, ThreadScrollSnapshot } from "./thread/ThreadView"
 import { persistUserMessages } from "./user-message-presentation"
-import { findSession, updateSessionInWorkspaces, updateSessionModelSelectionInWorkspaces } from "./workspace"
+import { useToast } from "./toast"
+import {
+  findSession,
+  sortWorkspaceSessions,
+  updateSessionInWorkspaces,
+  updateSessionModelSelectionInWorkspaces,
+} from "./workspace"
 import {
   createInitialDockviewLayout,
   writePersistedDockviewLayout,
@@ -134,6 +140,7 @@ export function useAgentWorkspace({
   surfaceID = "main",
   workbenchState = null,
 }: UseAgentWorkspaceOptions) {
+  const toast = useToast()
   const workbenchDockviewCommandsRef = useRef<WorkbenchDockviewCommands | null>(null)
   const dockviewPersistenceTimerRef = useRef<number | null>(null)
   const focusSessionFromAgentEventRef = useRef<(sessionID: string, turnID?: string) => void>(() => undefined)
@@ -578,6 +585,8 @@ export function useAgentWorkspace({
     handlePaneFocus,
     handlePaneSplit,
     handlePaneTabDrop,
+    handleSessionPopout: popoutSession,
+    handleSessionSplitRight: splitSessionRight,
     handleSplitResize,
     openCreateSessionTab,
   } = useWorkbenchTabController({
@@ -604,6 +613,86 @@ export function useAgentWorkspace({
     workbenchState,
     workspaces,
   })
+
+  function updateSessionFromMutation(
+    workspaceID: string,
+    sessionID: string,
+    mutation: { pinned?: boolean; title: string; updated: number },
+  ) {
+    setWorkspaces((current) => current.map((workspace) => {
+      if (workspace.id !== workspaceID) return workspace
+      return {
+        ...workspace,
+        updated: Math.max(workspace.updated, mutation.updated),
+        sessions: sortWorkspaceSessions(workspace.sessions.map((session) => (
+          session.id === sessionID
+            ? {
+                ...session,
+                pinned: mutation.pinned,
+                title: mutation.title,
+                updated: mutation.updated,
+              }
+            : session
+        ))),
+      }
+    }))
+  }
+
+  async function handleSessionRename(workspaceID: string, sessionID: string, title: string) {
+    const updateSessionTitle = window.desktop?.updateSessionTitle
+    if (!updateSessionTitle) {
+      const error = new Error("Session title update is unavailable.")
+      toast.error(`重命名会话失败：${error.message}`)
+      throw error
+    }
+
+    try {
+      const result = await updateSessionTitle({ sessionID, title: title.trim() })
+      updateSessionFromMutation(workspaceID, sessionID, result.session)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      toast.error(`重命名会话失败：${message}`)
+      throw error
+    }
+  }
+
+  async function handleSessionPin(workspaceID: string, sessionID: string, pinned: boolean) {
+    const updateSessionPinned = window.desktop?.updateSessionPinned
+    if (!updateSessionPinned) {
+      const error = new Error("Session pin update is unavailable.")
+      toast.error(`更新会话置顶状态失败：${error.message}`)
+      throw error
+    }
+
+    try {
+      const result = await updateSessionPinned({ sessionID, pinned })
+      updateSessionFromMutation(workspaceID, sessionID, result.session)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      toast.error(`更新会话置顶状态失败：${message}`)
+      throw error
+    }
+  }
+
+  async function handleSessionSplitRight(workspaceID: string, sessionID: string) {
+    try {
+      await splitSessionRight(workspaceID, sessionID)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      toast.error(`无法在右侧窗格打开会话：${message}`)
+      throw error
+    }
+  }
+
+  async function handleSessionPopout(sessionID: string) {
+    try {
+      await popoutSession(sessionID)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      toast.error(`无法在新窗口打开会话：${message}`)
+      throw error
+    }
+  }
 
   focusSessionFromAgentEventRef.current = (sessionID: string, turnID?: string) => {
     const selection = findSession(workspaces, sessionID)
@@ -707,6 +796,7 @@ export function useAgentWorkspace({
     setDockviewLayout,
     setWorkspaces,
     refreshWorkspaceFromDirectory,
+    reportSessionActionError: (message) => toast.error(message),
     updateRightSidebarTab,
     clearRuntimeDebugRefreshTimer,
     clearSessionDiffRefreshTimer,
@@ -1095,6 +1185,10 @@ export function useAgentWorkspace({
     handleSend,
     handlePlanModeToggle,
     handleSessionDelete,
+    handleSessionPin,
+    handleSessionPopout,
+    handleSessionRename,
+    handleSessionSplitRight,
     handleSessionBranchSelect,
     handleSessionRollbackToCheckpoint,
     handleSessionSelect,

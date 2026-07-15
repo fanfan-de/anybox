@@ -1533,6 +1533,14 @@ export interface DesktopIpcContract {
     input: { projectID: string; title?: string; directory?: string }
     output: DesktopSessionMutationResult
   }
+  "desktop:update-session-title": {
+    input: { sessionID: string; title: string }
+    output: DesktopSessionMutationResult
+  }
+  "desktop:update-session-pinned": {
+    input: { sessionID: string; pinned: boolean }
+    output: DesktopSessionMutationResult
+  }
   "desktop:create-side-chat": {
     input: { parentSessionID: string; anchorMessageID: string }
     output: DesktopSessionMutationResult
@@ -2319,6 +2327,8 @@ export interface DesktopApiMethods {
   createAgentSession(input?: DesktopIpcInput<"desktop:agent-create-session">): Promise<DesktopIpcOutput<"desktop:agent-create-session">>
   createFolderSession(input: DesktopIpcInput<"desktop:create-folder-session">): Promise<DesktopIpcOutput<"desktop:create-folder-session">>
   createProjectSession(input: DesktopIpcInput<"desktop:create-project-session">): Promise<DesktopIpcOutput<"desktop:create-project-session">>
+  updateSessionTitle(input: DesktopIpcInput<"desktop:update-session-title">): Promise<DesktopIpcOutput<"desktop:update-session-title">>
+  updateSessionPinned(input: DesktopIpcInput<"desktop:update-session-pinned">): Promise<DesktopIpcOutput<"desktop:update-session-pinned">>
   createSideChat(input: DesktopIpcInput<"desktop:create-side-chat">): Promise<DesktopIpcOutput<"desktop:create-side-chat">>
   updateSessionWorkflow(input: DesktopIpcInput<"desktop:update-session-workflow">): Promise<DesktopIpcOutput<"desktop:update-session-workflow">>
   updateSessionActiveMessage(input: DesktopIpcInput<"desktop:update-session-active-message">): Promise<DesktopIpcOutput<"desktop:update-session-active-message">>

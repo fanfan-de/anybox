@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import type { ComponentProps } from "react"
 import { describe, expect, it, vi } from "vitest"
 import type { SessionSummary, WorkspaceGroup } from "../types"
@@ -124,7 +124,11 @@ function renderSidebar(overrides: Partial<ComponentProps<typeof Sidebar>> = {}) 
     onProjectRemove: vi.fn(),
     onConversationClick: vi.fn(),
     onSessionDelete: vi.fn(),
+    onSessionPin: vi.fn(),
+    onSessionPopout: vi.fn(),
+    onSessionRename: vi.fn(),
     onSessionSelect: vi.fn(),
+    onSessionSplitRight: vi.fn(),
     onSidebarAction: vi.fn(),
     onToggleSidebar: vi.fn(),
     ...overrides,
@@ -396,6 +400,203 @@ describe("Sidebar", () => {
     expect(workspaceRow.querySelector(".project-row-meta-label")).toHaveTextContent("C:/work/workspace-1")
   })
 
+  it("adds a project folder from the workspace background context menu", () => {
+    const onSidebarAction = vi.fn()
+    renderSidebar({ onSidebarAction })
+
+    fireEvent.contextMenu(screen.getByLabelText("Workspace sidebar view"), {
+      clientX: window.innerWidth,
+      clientY: window.innerHeight,
+    })
+
+    const menu = screen.getByRole("menu", { name: "Workspace sidebar actions" })
+    const menuItems = within(menu).getAllByRole("menuitem")
+    const addProjectFolderItem = within(menu).getByRole("menuitem", { name: "添加项目文件夹…" })
+
+    expect(menuItems).toHaveLength(1)
+    expect(addProjectFolderItem.querySelector(".lucide-folder-plus")).toBeInTheDocument()
+    expect(menu).toHaveStyle({
+      left: `${window.innerWidth - 184 - 8}px`,
+      top: `${window.innerHeight - 46 - 8}px`,
+    })
+
+    fireEvent.click(addProjectFolderItem)
+
+    expect(onSidebarAction).toHaveBeenCalledTimes(1)
+    expect(onSidebarAction).toHaveBeenCalledWith("project")
+    expect(screen.queryByRole("menu", { name: "Workspace sidebar actions" })).not.toBeInTheDocument()
+  })
+
+  it("disables the background folder action while a project is being created", () => {
+    const onSidebarAction = vi.fn()
+    renderSidebar({ isCreatingProject: true, onSidebarAction })
+
+    fireEvent.contextMenu(screen.getByLabelText("Workspace sidebar view"), {
+      clientX: 120,
+      clientY: 140,
+    })
+
+    const addProjectFolderItem = screen.getByRole("menuitem", { name: "添加项目文件夹…" })
+    expect(addProjectFolderItem).toBeDisabled()
+
+    fireEvent.click(addProjectFolderItem)
+    expect(onSidebarAction).not.toHaveBeenCalled()
+  })
+
+  it("opens the background menu only from non-interactive workspace space", () => {
+    renderSidebar()
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "\u5bf9\u8bdd" }), {
+      clientX: 120,
+      clientY: 140,
+    })
+    expect(screen.queryByRole("menu", { name: "Workspace sidebar actions" })).not.toBeInTheDocument()
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Unread" }), {
+      clientX: 120,
+      clientY: 140,
+    })
+    expect(screen.queryByRole("menu", { name: "Workspace sidebar actions" })).not.toBeInTheDocument()
+
+    const workspaceView = screen.getByLabelText("Workspace sidebar view")
+    fireEvent.contextMenu(workspaceView, { clientX: 120, clientY: 140 })
+    expect(screen.getByRole("menu", { name: "Workspace sidebar actions" })).toBeInTheDocument()
+
+    fireEvent.keyDown(document, { key: "Escape" })
+    expect(screen.queryByRole("menu", { name: "Workspace sidebar actions" })).not.toBeInTheDocument()
+
+    fireEvent.contextMenu(workspaceView, { clientX: 120, clientY: 140 })
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole("menu", { name: "Workspace sidebar actions" })).not.toBeInTheDocument()
+  })
+
+  it("opens session actions without selecting the session or opening project actions", () => {
+    const onSessionSelect = vi.fn()
+    renderSidebar({ onSessionSelect })
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Unread" }), {
+      clientX: window.innerWidth,
+      clientY: window.innerHeight,
+    })
+
+    const menu = screen.getByRole("menu", { name: "Unread 会话操作" })
+    expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "重命名",
+      "置顶会话",
+      "在右侧窗格中打开",
+      "在新窗口中打开",
+      "归档会话",
+    ])
+    expect(menu).toHaveStyle({
+      left: `${window.innerWidth - 224 - 8}px`,
+      top: `${window.innerHeight - 204 - 8}px`,
+    })
+    expect(screen.queryByRole("menuitem", { name: "置顶项目" })).not.toBeInTheDocument()
+    expect(onSessionSelect).not.toHaveBeenCalled()
+  })
+
+  it("runs pin, split, and popout session actions", async () => {
+    const onSessionPin = vi.fn()
+    const onSessionPopout = vi.fn()
+    const onSessionSplitRight = vi.fn()
+    renderSidebar({ onSessionPin, onSessionPopout, onSessionSplitRight })
+    const row = screen.getByRole("button", { name: "Unread" })
+
+    fireEvent.contextMenu(row)
+    fireEvent.click(screen.getByRole("menuitem", { name: "置顶会话" }))
+    expect(onSessionPin).toHaveBeenCalledWith("workspace-1", "workspace-1-session-unread", true)
+
+    await waitFor(() => expect(screen.queryByRole("menu", { name: "Unread 会话操作" })).not.toBeInTheDocument())
+    fireEvent.contextMenu(row)
+    fireEvent.click(screen.getByRole("menuitem", { name: "在右侧窗格中打开" }))
+    expect(onSessionSplitRight).toHaveBeenCalledWith("workspace-1", "workspace-1-session-unread")
+
+    await waitFor(() => expect(screen.queryByRole("menu", { name: "Unread 会话操作" })).not.toBeInTheDocument())
+    fireEvent.contextMenu(row)
+    fireEvent.click(screen.getByRole("menuitem", { name: "在新窗口中打开" }))
+    expect(onSessionPopout).toHaveBeenCalledWith("workspace-1-session-unread")
+  })
+
+  it("supports keyboard session menus and inline rename validation", async () => {
+    const onSessionRename = vi.fn()
+    renderSidebar({ onSessionRename })
+    const row = screen.getByRole("button", { name: "Unread" })
+
+    row.focus()
+    fireEvent.keyDown(row, { key: "F10", shiftKey: true })
+    expect(screen.getByRole("menuitem", { name: "重命名" })).toHaveFocus()
+    fireEvent.keyDown(screen.getByRole("menu", { name: "Unread 会话操作" }), { key: "ArrowDown" })
+    expect(screen.getByRole("menuitem", { name: "置顶会话" })).toHaveFocus()
+    fireEvent.keyDown(document, { key: "Escape" })
+    await waitFor(() => expect(row).toHaveFocus())
+
+    fireEvent.contextMenu(row)
+    fireEvent.click(screen.getByRole("menuitem", { name: "重命名" }))
+    const input = screen.getByRole("textbox", { name: "重命名会话 Unread" })
+    expect(input).toHaveValue("Unread")
+    fireEvent.change(input, { target: { value: "  " } })
+    fireEvent.blur(input)
+    expect(input).toHaveAttribute("aria-invalid", "true")
+    expect(onSessionRename).not.toHaveBeenCalled()
+
+    fireEvent.change(input, { target: { value: "Renamed session" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    expect(onSessionRename).toHaveBeenCalledWith(
+      "workspace-1",
+      "workspace-1-session-unread",
+      "Renamed session",
+    )
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "重命名会话 Unread" })).not.toBeInTheDocument())
+  })
+
+  it("keeps inline rename active when saving fails", async () => {
+    const onSessionRename = vi.fn().mockRejectedValue(new Error("offline"))
+    renderSidebar({ onSessionRename })
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Unread" }))
+    fireEvent.click(screen.getByRole("menuitem", { name: "重命名" }))
+    const input = screen.getByRole("textbox", { name: "重命名会话 Unread" })
+    fireEvent.change(input, { target: { value: "Failed rename" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+
+    await waitFor(() => expect(input).toHaveAttribute("aria-invalid", "true"))
+    expect(input).toBeInTheDocument()
+  })
+
+  it("disables archive actions while the session is running", () => {
+    renderSidebar({ runningSessionIDs: ["workspace-1-session-unread"] })
+
+    const row = screen.getByRole("button", { name: "Unread" })
+    fireEvent.contextMenu(row)
+
+    expect(screen.getByRole("menuitem", { name: "归档会话" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Archive session Unread" })).toBeDisabled()
+  })
+
+  it("disables parent archive while a hidden subagent session is running", () => {
+    const workspace = createWorkspace()
+    const parent = createSession("parent-session", "Parent session")
+    workspace.sessions = [
+      parent,
+      {
+        ...createSession("child-session", "Hidden child"),
+        subagent: {
+          taskID: "task-1",
+          parentSessionID: parent.id,
+          parentMessageID: "message-1",
+          agent: "worker",
+          status: "running",
+          active: true,
+          updatedAt: 2,
+        },
+      },
+    ]
+    renderSidebar({ runningSessionIDs: ["child-session"], workspaces: [workspace] })
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Parent session" }))
+    expect(screen.getByRole("menuitem", { name: "归档会话" })).toBeDisabled()
+  })
+
   it("opens workspace row actions from the context menu", () => {
     const onProjectArchiveSessions = vi.fn()
     const onProjectOpenCinema = vi.fn()
@@ -416,6 +617,7 @@ describe("Sidebar", () => {
       clientX: 120,
       clientY: 140,
     })
+    expect(screen.queryByRole("menuitem", { name: "添加项目文件夹…" })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole("menuitem", { name: "置顶项目" }))
     expect(onProjectPin).toHaveBeenCalledWith(expect.objectContaining({ id: "workspace-1" }))
 

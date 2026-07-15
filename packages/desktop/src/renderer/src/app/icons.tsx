@@ -31,6 +31,7 @@ import {
   Film,
   Folder,
   FolderOpen,
+  FolderPlus,
   GitCommitHorizontal,
   GitFork,
   GitPullRequest,
@@ -88,6 +89,7 @@ export const BackIcon = createIcon(ArrowLeft)
 export const ForwardIcon = createIcon(ArrowRight)
 export const ScreenshotIcon = createIcon(Camera)
 export const FolderOpenIcon = createIcon(FolderOpen)
+export const FolderPlusIcon = createIcon(FolderPlus)
 export const PaperclipIcon = createIcon(Paperclip)
 export const PauseIcon = createIcon(Pause)
 export const PinIcon = createIcon(Pin)

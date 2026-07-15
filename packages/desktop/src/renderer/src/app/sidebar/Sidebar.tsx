@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type Dispatch, type FocusEvent, type FormEvent, type KeyboardEvent, type MouseEvent, type MutableRefObject, type ReactNode, type SetStateAction } from "react"
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type Dispatch, type FocusEvent, type FormEvent, type KeyboardEvent, type MouseEvent, type MutableRefObject, type ReactNode, type SetStateAction } from "react"
 import { createPortal } from "react-dom"
 import { sidebarActions } from "../constants"
 import {
@@ -8,13 +8,17 @@ import {
   ChevronRightIcon,
   CloseIcon,
   DeleteIcon,
+  EditIcon,
   FileTextIcon,
   ForkIcon,
   FolderIcon,
   FolderOpenIcon,
+  FolderPlusIcon,
   NewItemIcon,
+  OpenExternalIcon,
   PinIcon,
   ProviderSettingsIcon,
+  RightSidebarIcon,
   SessionRunningIcon,
   SettingsIcon
 } from "../icons"
@@ -105,7 +109,11 @@ interface SidebarProps {
   onProjectRemove: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void
   onConversationClick: () => void | Promise<void>
   onSessionDelete: (workspace: WorkspaceGroup, session: SessionSummary, event: MouseEvent<HTMLButtonElement>) => void
+  onSessionPin: (workspaceID: string, sessionID: string, pinned: boolean) => void | Promise<void>
+  onSessionPopout: (sessionID: string) => void | Promise<void>
+  onSessionRename: (workspaceID: string, sessionID: string, title: string) => void | Promise<void>
   onSessionSelect: (workspaceID: string, sessionID: string) => void
+  onSessionSplitRight: (workspaceID: string, sessionID: string) => void | Promise<void>
   onSidebarAction: (action: SidebarActionKey) => void | Promise<void>
   onToggleSidebar: () => void
 }
@@ -185,6 +193,7 @@ interface FolderWorkspaceViewProps {
   deletingSessionID: string | null
   expandedFolderIDs: string[]
   hoveredFolderID: string | null
+  isCreatingProject: boolean
   isCreatingSession: boolean
   creatingWorktreeProjectID: string | null
   projectRowRefs: MutableRefObject<Record<string, HTMLButtonElement | null>>
@@ -196,6 +205,7 @@ interface FolderWorkspaceViewProps {
   visibleCanvasSessionIDs: string[]
   workspaces: WorkspaceGroup[]
   pinnedWorkspaceIDs: string[]
+  onAddProjectFolder: () => void | Promise<void>
   onHoveredFolderChange: Dispatch<SetStateAction<string | null>>
   onProjectArchiveSessions: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectClick: (workspace: WorkspaceGroup) => void
@@ -207,14 +217,35 @@ interface FolderWorkspaceViewProps {
   onProjectRemove: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void
   onConversationClick: () => void | Promise<void>
   onSessionDelete: (workspace: WorkspaceGroup, session: SessionSummary, event: MouseEvent<HTMLButtonElement>) => void
+  onSessionPin: (workspaceID: string, sessionID: string, pinned: boolean) => void | Promise<void>
+  onSessionPopout: (sessionID: string) => void | Promise<void>
+  onSessionRename: (workspaceID: string, sessionID: string, title: string) => void | Promise<void>
   onSessionSelect: (workspaceID: string, sessionID: string) => void
+  onSessionSplitRight: (workspaceID: string, sessionID: string) => void | Promise<void>
 }
 
-type ProjectContextMenuState = {
+type WorkspaceContextMenuState =
+  | {
+      kind: "project"
+      workspace: WorkspaceGroup
+      x: number
+      y: number
+    }
+  | {
+      kind: "background"
+      x: number
+      y: number
+    }
+  | null
+
+interface SessionContextMenuState {
+  hasRunningActivity: boolean
+  session: SessionSummary
+  trigger: HTMLButtonElement
   workspace: WorkspaceGroup
   x: number
   y: number
-} | null
+}
 
 function getWorkspaceBaseName(workspace: WorkspaceGroup) {
   const root = workspace.project.repositoryRoot ?? workspace.project.worktree ?? workspace.directory
@@ -278,6 +309,10 @@ function createWorktreeBranchName(workspace: WorkspaceGroup, workspaces: Workspa
 
 const PROJECT_CONTEXT_MENU_WIDTH = 240
 const PROJECT_CONTEXT_MENU_HEIGHT = 228
+const WORKSPACE_BACKGROUND_CONTEXT_MENU_WIDTH = 184
+const WORKSPACE_BACKGROUND_CONTEXT_MENU_HEIGHT = 46
+const SESSION_CONTEXT_MENU_WIDTH = 224
+const SESSION_CONTEXT_MENU_HEIGHT = 204
 
 interface WorkspaceSessionTreeNode {
   children: WorkspaceSessionTreeNode[]
@@ -327,24 +362,26 @@ function buildWorkspaceSessionTree(sessions: SessionSummary[]): WorkspaceSession
   return tree
 }
 
-function clampProjectContextMenuPosition(x: number, y: number) {
+function clampContextMenuPosition(x: number, y: number, width: number, height: number) {
   const margin = 8
   if (typeof window === "undefined") {
     return { x, y }
   }
 
   return {
-    x: Math.max(margin, Math.min(x, window.innerWidth - PROJECT_CONTEXT_MENU_WIDTH - margin)),
-    y: Math.max(margin, Math.min(y, window.innerHeight - PROJECT_CONTEXT_MENU_HEIGHT - margin)),
+    x: Math.max(margin, Math.min(x, window.innerWidth - width - margin)),
+    y: Math.max(margin, Math.min(y, window.innerHeight - height - margin)),
   }
 }
 
-interface ProjectContextMenuProps {
+interface WorkspaceContextMenuProps {
   deletingSessionID: string | null
   creatingWorktreeProjectID: string | null
-  menu: ProjectContextMenuState
+  isCreatingProject: boolean
+  menu: WorkspaceContextMenuState
   pinnedWorkspaceIDs: string[]
   protectedWorkspaceIDs: string[]
+  onAddProjectFolder: () => void | Promise<void>
   onClose: () => void
   onProjectArchiveSessions: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectCreateWorktree: (workspace: WorkspaceGroup) => void | Promise<void>
@@ -354,12 +391,14 @@ interface ProjectContextMenuProps {
   onProjectRemove: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void
 }
 
-function ProjectContextMenu({
+function WorkspaceContextMenu({
   deletingSessionID,
   creatingWorktreeProjectID,
+  isCreatingProject,
   menu,
   pinnedWorkspaceIDs,
   protectedWorkspaceIDs,
+  onAddProjectFolder,
   onClose,
   onProjectArchiveSessions,
   onProjectCreateWorktree,
@@ -367,7 +406,7 @@ function ProjectContextMenu({
   onProjectOpenInExplorer,
   onProjectPin,
   onProjectRemove,
-}: ProjectContextMenuProps) {
+}: WorkspaceContextMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -401,8 +440,43 @@ function ProjectContextMenu({
 
   if (!menu) return null
 
+  const isBackgroundMenu = menu.kind === "background"
+  const position = clampContextMenuPosition(
+    menu.x,
+    menu.y,
+    isBackgroundMenu ? WORKSPACE_BACKGROUND_CONTEXT_MENU_WIDTH : PROJECT_CONTEXT_MENU_WIDTH,
+    isBackgroundMenu ? WORKSPACE_BACKGROUND_CONTEXT_MENU_HEIGHT : PROJECT_CONTEXT_MENU_HEIGHT,
+  )
+
+  if (isBackgroundMenu) {
+    return createPortal(
+      <div
+        ref={menuRef}
+        className="ui-context-menu workspace-background-context-menu"
+        role="menu"
+        aria-label="Workspace sidebar actions"
+        style={{ left: position.x, top: position.y }}
+      >
+        <button
+          className="ui-context-menu__item"
+          role="menuitem"
+          type="button"
+          disabled={isCreatingProject}
+          onClick={(event) => {
+            event.stopPropagation()
+            onClose()
+            void onAddProjectFolder()
+          }}
+        >
+          <span className="ui-context-menu__icon" aria-hidden="true"><FolderPlusIcon /></span>
+          <span className="ui-context-menu__label">添加项目文件夹…</span>
+        </button>
+      </div>,
+      document.body,
+    )
+  }
+
   const { workspace } = menu
-  const position = clampProjectContextMenuPosition(menu.x, menu.y)
   const isMissingWorkspace = workspace.exists === false
   const hasArchivableSessions = workspace.sessions.some((session) => !isSideChatSession(session)) || workspace.sessions.length > 0
   const isArchiveDisabled = deletingSessionID !== null || !hasArchivableSessions
@@ -509,6 +583,143 @@ function ProjectContextMenu({
           </button>
         </>
       ) : null}
+    </div>,
+    document.body,
+  )
+}
+
+interface SessionContextMenuProps {
+  deletingSessionID: string | null
+  isBusy: boolean
+  menu: SessionContextMenuState | null
+  onArchive: (event: MouseEvent<HTMLButtonElement>) => void
+  onClose: (restoreFocus?: boolean) => void
+  onPin: () => void
+  onPopout: () => void
+  onRename: () => void
+  onSplitRight: () => void
+}
+
+function SessionContextMenu({
+  deletingSessionID,
+  isBusy,
+  menu,
+  onArchive,
+  onClose,
+  onPin,
+  onPopout,
+  onRename,
+  onSplitRight,
+}: SessionContextMenuProps) {
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!menu) return
+
+    menuRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']:not(:disabled)")?.focus()
+
+    function handlePointerDown(event: globalThis.PointerEvent) {
+      const target = event.target as Node | null
+      if (!target || menuRef.current?.contains(target)) return
+      onClose(true)
+    }
+
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault()
+        onClose(true)
+      }
+    }
+
+    function handleViewportChange() {
+      onClose(true)
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
+    window.addEventListener("resize", handleViewportChange)
+    window.addEventListener("scroll", handleViewportChange, true)
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
+      window.removeEventListener("resize", handleViewportChange)
+      window.removeEventListener("scroll", handleViewportChange, true)
+    }
+  }, [menu, onClose])
+
+  if (!menu) return null
+
+  const position = clampContextMenuPosition(
+    menu.x,
+    menu.y,
+    SESSION_CONTEXT_MENU_WIDTH,
+    SESSION_CONTEXT_MENU_HEIGHT,
+  )
+  const archiveDisabled = isBusy || deletingSessionID !== null || menu.hasRunningActivity
+
+  function handleMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return
+    const items = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']:not(:disabled)") ?? [])]
+    if (items.length === 0) return
+
+    event.preventDefault()
+    const activeIndex = items.indexOf(document.activeElement as HTMLButtonElement)
+    if (event.key === "Home") {
+      items[0]?.focus()
+      return
+    }
+    if (event.key === "End") {
+      items[items.length - 1]?.focus()
+      return
+    }
+
+    const direction = event.key === "ArrowDown" ? 1 : -1
+    const nextIndex = activeIndex < 0
+      ? (direction > 0 ? 0 : items.length - 1)
+      : (activeIndex + direction + items.length) % items.length
+    items[nextIndex]?.focus()
+  }
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      className="ui-context-menu session-context-menu"
+      role="menu"
+      aria-label={`${menu.session.title} 会话操作`}
+      style={{ left: position.x, top: position.y }}
+      onContextMenu={(event) => event.preventDefault()}
+      onKeyDown={handleMenuKeyDown}
+    >
+      <button className="ui-context-menu__item" role="menuitem" type="button" disabled={isBusy} onClick={onRename}>
+        <span className="ui-context-menu__icon" aria-hidden="true"><EditIcon /></span>
+        <span className="ui-context-menu__label">重命名</span>
+      </button>
+      <button className="ui-context-menu__item" role="menuitem" type="button" disabled={isBusy} onClick={onPin}>
+        <span className="ui-context-menu__icon" aria-hidden="true"><PinIcon /></span>
+        <span className="ui-context-menu__label">{menu.session.pinned ? "取消置顶" : "置顶会话"}</span>
+      </button>
+      <div className="ui-context-menu__divider" role="separator" />
+      <button className="ui-context-menu__item" role="menuitem" type="button" disabled={isBusy} onClick={onSplitRight}>
+        <span className="ui-context-menu__icon" aria-hidden="true"><RightSidebarIcon /></span>
+        <span className="ui-context-menu__label">在右侧窗格中打开</span>
+      </button>
+      <button className="ui-context-menu__item" role="menuitem" type="button" disabled={isBusy} onClick={onPopout}>
+        <span className="ui-context-menu__icon" aria-hidden="true"><OpenExternalIcon /></span>
+        <span className="ui-context-menu__label">在新窗口中打开</span>
+      </button>
+      <div className="ui-context-menu__divider" role="separator" />
+      <button
+        className="ui-context-menu__item"
+        role="menuitem"
+        type="button"
+        disabled={archiveDisabled}
+        title={menu.hasRunningActivity ? "请先停止任务后再归档" : "归档会话"}
+        onClick={onArchive}
+      >
+        <span className="ui-context-menu__icon" aria-hidden="true"><ArchiveIcon /></span>
+        <span className="ui-context-menu__label">归档会话</span>
+      </button>
     </div>,
     document.body,
   )
@@ -648,6 +859,7 @@ function FolderWorkspaceView({
   deletingSessionID,
   expandedFolderIDs,
   hoveredFolderID,
+  isCreatingProject,
   isCreatingSession,
   creatingWorktreeProjectID,
   projectRowRefs,
@@ -659,6 +871,7 @@ function FolderWorkspaceView({
   visibleCanvasSessionIDs,
   workspaces,
   pinnedWorkspaceIDs,
+  onAddProjectFolder,
   onHoveredFolderChange,
   onProjectArchiveSessions,
   onProjectClick,
@@ -670,21 +883,149 @@ function FolderWorkspaceView({
   onProjectRemove,
   onConversationClick,
   onSessionDelete,
+  onSessionPin,
+  onSessionPopout,
+  onSessionRename,
   onSessionSelect,
+  onSessionSplitRight,
 }: FolderWorkspaceViewProps) {
   const runningSessionIDSet = new Set(runningSessionIDs)
   const visibleSessionIDSet = new Set(visibleCanvasSessionIDs)
-  const [projectContextMenu, setProjectContextMenu] = useState<ProjectContextMenuState>(null)
+  const [workspaceContextMenu, setWorkspaceContextMenu] = useState<WorkspaceContextMenuState>(null)
+  const [sessionContextMenu, setSessionContextMenu] = useState<SessionContextMenuState | null>(null)
+  const [sessionActionBusyID, setSessionActionBusyID] = useState<string | null>(null)
+  const [renamingSession, setRenamingSession] = useState<{ sessionID: string; workspaceID: string } | null>(null)
+  const [renameDraft, setRenameDraft] = useState("")
+  const [renameInvalid, setRenameInvalid] = useState(false)
+  const [isRenameSaving, setIsRenameSaving] = useState(false)
   const [worktreeCreateWorkspace, setWorktreeCreateWorkspace] = useState<WorkspaceGroup | null>(null)
+  const renameInputRef = useRef<HTMLInputElement | null>(null)
+  const renameRequestPendingRef = useRef(false)
+  const renameCancelRef = useRef(false)
   const sessionTimeNow = useSessionTimeNow()
 
-  function closeProjectContextMenu() {
-    setProjectContextMenu(null)
+  function closeWorkspaceContextMenu() {
+    setWorkspaceContextMenu(null)
+  }
+
+  const closeSessionContextMenu = useCallback((restoreFocus = true) => {
+    const trigger = sessionContextMenu?.trigger
+    setSessionContextMenu(null)
+    if (restoreFocus && trigger) {
+      window.setTimeout(() => trigger.focus(), 0)
+    }
+  }, [sessionContextMenu])
+
+  useEffect(() => {
+    if (!renamingSession) return
+    renameInputRef.current?.focus()
+    renameInputRef.current?.select()
+  }, [renamingSession])
+
+  function startSessionRename() {
+    const target = sessionContextMenu
+    if (!target) return
+    closeSessionContextMenu(false)
+    renameCancelRef.current = false
+    renameRequestPendingRef.current = false
+    setRenameDraft(target.session.title)
+    setRenameInvalid(false)
+    setIsRenameSaving(false)
+    setRenamingSession({
+      sessionID: target.session.id,
+      workspaceID: target.workspace.id,
+    })
+  }
+
+  async function commitSessionRename(workspace: WorkspaceGroup, session: SessionSummary) {
+    if (renameRequestPendingRef.current) return
+    const title = renameDraft.trim()
+    if (!title) {
+      setRenameInvalid(true)
+      window.setTimeout(() => renameInputRef.current?.focus(), 0)
+      return
+    }
+    if (title === session.title) {
+      setRenamingSession(null)
+      setRenameInvalid(false)
+      return
+    }
+
+    renameRequestPendingRef.current = true
+    setIsRenameSaving(true)
+    setRenameInvalid(false)
+    try {
+      await onSessionRename(workspace.id, session.id, title)
+      setRenamingSession(null)
+    } catch {
+      setRenameInvalid(true)
+      window.setTimeout(() => renameInputRef.current?.focus(), 0)
+    } finally {
+      renameRequestPendingRef.current = false
+      setIsRenameSaving(false)
+    }
+  }
+
+  function cancelSessionRename() {
+    renameCancelRef.current = true
+    setRenamingSession(null)
+    setRenameInvalid(false)
+  }
+
+  async function runSessionAction(action: (target: SessionContextMenuState) => void | Promise<void>) {
+    const target = sessionContextMenu
+    if (!target || sessionActionBusyID) return
+    closeSessionContextMenu(false)
+    setSessionActionBusyID(target.session.id)
+    try {
+      await action(target)
+    } catch {
+      // Action handlers surface errors through the shared toast system.
+    } finally {
+      setSessionActionBusyID(null)
+    }
   }
 
   function openWorktreeCreateDialog(workspace: WorkspaceGroup) {
-    closeProjectContextMenu()
+    closeWorkspaceContextMenu()
     setWorktreeCreateWorkspace(workspace)
+  }
+
+  function handleWorkspaceContextMenu(event: MouseEvent<HTMLElement>) {
+    const target = event.target
+    if (!(target instanceof Element)) return
+
+    const interactiveTarget = target.closest(
+      ".project-block, a, button, input, textarea, select, [contenteditable='true'], webview",
+    )
+    if (interactiveTarget) return
+
+    event.preventDefault()
+    event.stopPropagation()
+    closeSessionContextMenu(false)
+    setWorkspaceContextMenu({
+      kind: "background",
+      x: event.clientX,
+      y: event.clientY,
+    })
+  }
+
+  function sessionTreeHasRunningActivity(workspace: WorkspaceGroup, node: WorkspaceSessionTreeNode): boolean {
+    const pendingSessionIDs = [node.session.id]
+    const visitedSessionIDs = new Set<string>()
+    while (pendingSessionIDs.length > 0) {
+      const sessionID = pendingSessionIDs.pop()
+      if (!sessionID || visitedSessionIDs.has(sessionID)) continue
+      visitedSessionIDs.add(sessionID)
+      if (runningSessionIDSet.has(sessionID)) return true
+
+      for (const candidate of workspace.sessions) {
+        if (candidate.subagent?.parentSessionID === sessionID) {
+          pendingSessionIDs.push(candidate.id)
+        }
+      }
+    }
+    return false
   }
 
   function renderSessionNode(workspace: WorkspaceGroup, node: WorkspaceSessionTreeNode, depth = 0): ReactNode {
@@ -695,9 +1036,37 @@ function FolderWorkspaceView({
       Boolean(sessionCanvasUnreadBySession[session.id]) && !visibleSessionIDSet.has(session.id)
     const sessionCreatedAt = session.created ?? session.updated
     const isSubagent = depth > 0
+    const hasRunningActivity = sessionTreeHasRunningActivity(workspace, node)
+    const isRenaming = renamingSession?.sessionID === session.id && renamingSession.workspaceID === workspace.id
     const shellStyle: CSSProperties | undefined = isSubagent
       ? { paddingLeft: `${Math.min(depth, 4) * 18}px` }
       : undefined
+
+    function openSessionContextMenu(trigger: HTMLButtonElement, x: number, y: number) {
+      closeWorkspaceContextMenu()
+      setSessionContextMenu({
+        hasRunningActivity,
+        session,
+        trigger,
+        workspace,
+        x,
+        y,
+      })
+    }
+
+    function handleSessionContextMenu(event: MouseEvent<HTMLButtonElement>) {
+      event.preventDefault()
+      event.stopPropagation()
+      openSessionContextMenu(event.currentTarget, event.clientX, event.clientY)
+    }
+
+    function handleSessionRowKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+      if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return
+      event.preventDefault()
+      event.stopPropagation()
+      const rect = event.currentTarget.getBoundingClientRect()
+      openSessionContextMenu(event.currentTarget, rect.left + 12, rect.top + 12)
+    }
 
     return (
       <div key={session.id} className="session-tree-node">
@@ -705,39 +1074,88 @@ function FolderWorkspaceView({
           className={joinClassNames("session-row-shell", isSubagent && "is-subagent")}
           style={shellStyle}
         >
-          <button
-            className={joinClassNames("session-row", active && "is-active", isSubagent && "is-subagent")}
-            onClick={() => onSessionSelect(workspace.id, session.id)}
-          >
-            <span className="session-row-copy">
-              <span className="session-row-label">{session.title}</span>
-            </span>
-            {isRunning || hasUnreadCanvas || session.automation ? (
-              <span className="session-row-icons">
-                {isRunning || hasUnreadCanvas ? (
-                  <span
-                    className={isRunning ? "session-row-status-icon is-running" : "session-row-status-icon is-unread"}
-                    aria-hidden="true"
-                  >
-                    {isRunning ? (
-                      <SessionRunningIcon />
-                    ) : (
-                      <span className="session-row-status-dot" />
-                    )}
-                  </span>
-                ) : null}
-                {session.automation ? (
-                  <span
-                    className="session-row-source-badge is-automation"
-                    title={`Automation: ${session.automation.name}`}
-                    aria-label={`Automation: ${session.automation.name}`}
-                  >
-                    <AutomationIcon />
-                  </span>
-                ) : null}
+          {isRenaming ? (
+            <div className={joinClassNames("session-row", "is-editing", active && "is-active", isSubagent && "is-subagent")}>
+              <input
+                ref={renameInputRef}
+                className="session-row-rename-input"
+                aria-label={`重命名会话 ${session.title}`}
+                aria-invalid={renameInvalid}
+                disabled={isRenameSaving}
+                maxLength={160}
+                value={renameDraft}
+                onBlur={() => {
+                  if (renameCancelRef.current) {
+                    renameCancelRef.current = false
+                    return
+                  }
+                  void commitSessionRename(workspace, session)
+                }}
+                onChange={(event) => {
+                  setRenameDraft(event.target.value)
+                  setRenameInvalid(false)
+                }}
+                onContextMenu={(event) => event.stopPropagation()}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault()
+                    cancelSessionRename()
+                    return
+                  }
+                  if (event.key === "Enter") {
+                    event.preventDefault()
+                    void commitSessionRename(workspace, session)
+                  }
+                }}
+              />
+              {isRenameSaving ? (
+                <span className="session-row-rename-status" aria-label="正在保存">
+                  <SessionRunningIcon />
+                </span>
+              ) : null}
+            </div>
+          ) : (
+            <button
+              className={joinClassNames("session-row", active && "is-active", isSubagent && "is-subagent")}
+              onClick={() => onSessionSelect(workspace.id, session.id)}
+              onContextMenu={handleSessionContextMenu}
+              onKeyDown={handleSessionRowKeyDown}
+            >
+              <span className="session-row-copy">
+                <span className="session-row-label">{session.title}</span>
               </span>
-            ) : null}
-          </button>
+              {isRunning || hasUnreadCanvas || session.automation || session.pinned ? (
+                <span className="session-row-icons">
+                  {isRunning || hasUnreadCanvas ? (
+                    <span
+                      className={isRunning ? "session-row-status-icon is-running" : "session-row-status-icon is-unread"}
+                      aria-hidden="true"
+                    >
+                      {isRunning ? (
+                        <SessionRunningIcon />
+                      ) : (
+                        <span className="session-row-status-dot" />
+                      )}
+                    </span>
+                  ) : null}
+                  {session.pinned ? (
+                    <span className="session-row-source-badge is-pinned" title="已置顶" aria-label="已置顶">
+                      <PinIcon />
+                    </span>
+                  ) : null}
+                  {session.automation ? (
+                    <span
+                      className="session-row-source-badge is-automation"
+                      title={`Automation: ${session.automation.name}`}
+                      aria-label={`Automation: ${session.automation.name}`}
+                    >
+                      <AutomationIcon />
+                    </span>
+                  ) : null}
+                </span>
+              ) : null}
+            </button>
+          )}
           <span className="session-row-trailing">
             <time
               className="session-row-created-at"
@@ -749,8 +1167,8 @@ function FolderWorkspaceView({
             <button
               className="row-action"
               aria-label={`Archive session ${session.title}`}
-              title={`Archive session ${session.title}`}
-              disabled={deletingSessionID === session.id}
+              title={hasRunningActivity ? "请先停止任务后再归档" : `Archive session ${session.title}`}
+              disabled={deletingSessionID !== null || hasRunningActivity}
               onClick={(event) => onSessionDelete(workspace, session, event)}
             >
               <ArchiveIcon />
@@ -775,7 +1193,11 @@ function FolderWorkspaceView({
     : workspaces
 
   return (
-    <section className="sidebar-view sidebar-view-workspace" aria-label="Workspace sidebar view">
+    <section
+      className="sidebar-view sidebar-view-workspace"
+      aria-label="Workspace sidebar view"
+      onContextMenu={handleWorkspaceContextMenu}
+    >
       <div className="sidebar-projects">
         {!conversationWorkspace ? (
           <section className="project-block conversation-entry-block">
@@ -834,8 +1256,10 @@ function FolderWorkspaceView({
 
             event.preventDefault()
             event.stopPropagation()
+            closeSessionContextMenu(false)
             onHoveredFolderChange(workspace.id)
-            setProjectContextMenu({
+            setWorkspaceContextMenu({
+              kind: "project",
               workspace,
               x: event.clientX,
               y: event.clientY,
@@ -924,19 +1348,41 @@ function FolderWorkspaceView({
           )
         })}
       </div>
-      <ProjectContextMenu
+      <WorkspaceContextMenu
         deletingSessionID={deletingSessionID}
         creatingWorktreeProjectID={creatingWorktreeProjectID}
-        menu={projectContextMenu}
+        isCreatingProject={isCreatingProject}
+        menu={workspaceContextMenu}
         pinnedWorkspaceIDs={pinnedWorkspaceIDs}
         protectedWorkspaceIDs={protectedWorkspaceIDs}
-        onClose={closeProjectContextMenu}
+        onAddProjectFolder={onAddProjectFolder}
+        onClose={closeWorkspaceContextMenu}
         onProjectArchiveSessions={onProjectArchiveSessions}
         onProjectCreateWorktree={openWorktreeCreateDialog}
         onProjectOpenCinema={onProjectOpenCinema}
         onProjectOpenInExplorer={onProjectOpenInExplorer}
         onProjectPin={onProjectPin}
         onProjectRemove={onProjectRemove}
+      />
+      <SessionContextMenu
+        deletingSessionID={deletingSessionID}
+        isBusy={sessionActionBusyID === sessionContextMenu?.session.id}
+        menu={sessionContextMenu}
+        onArchive={(event) => {
+          const target = sessionContextMenu
+          if (!target) return
+          closeSessionContextMenu(false)
+          onSessionDelete(target.workspace, target.session, event)
+        }}
+        onClose={closeSessionContextMenu}
+        onPin={() => void runSessionAction((target) => (
+          onSessionPin(target.workspace.id, target.session.id, !target.session.pinned)
+        ))}
+        onPopout={() => void runSessionAction((target) => onSessionPopout(target.session.id))}
+        onRename={startSessionRename}
+        onSplitRight={() => void runSessionAction((target) => (
+          onSessionSplitRight(target.workspace.id, target.session.id)
+        ))}
       />
       {worktreeCreateWorkspace ? (
         <ProjectWorktreeCreateDialog
@@ -1298,7 +1744,11 @@ export function Sidebar({
   onProjectRemove,
   onConversationClick,
   onSessionDelete,
+  onSessionPin,
+  onSessionPopout,
+  onSessionRename,
   onSessionSelect,
+  onSessionSplitRight,
   onSidebarAction,
   onToggleSidebar,
 }: SidebarProps) {
@@ -1322,6 +1772,7 @@ export function Sidebar({
             deletingSessionID={deletingSessionID}
             expandedFolderIDs={expandedFolderIDs}
             hoveredFolderID={hoveredFolderID}
+            isCreatingProject={isCreatingProject}
             isCreatingSession={isCreatingSession}
             creatingWorktreeProjectID={creatingWorktreeProjectID}
             projectRowRefs={projectRowRefs}
@@ -1333,6 +1784,7 @@ export function Sidebar({
             visibleCanvasSessionIDs={visibleCanvasSessionIDs}
             workspaces={workspaces}
             pinnedWorkspaceIDs={pinnedWorkspaceIDs}
+            onAddProjectFolder={() => onSidebarAction("project")}
             onHoveredFolderChange={onHoveredFolderChange}
             onProjectArchiveSessions={onProjectArchiveSessions}
             onProjectClick={onProjectClick}
@@ -1344,7 +1796,11 @@ export function Sidebar({
             onProjectRemove={onProjectRemove}
             onConversationClick={onConversationClick}
             onSessionDelete={onSessionDelete}
+            onSessionPin={onSessionPin}
+            onSessionPopout={onSessionPopout}
+            onSessionRename={onSessionRename}
             onSessionSelect={onSessionSelect}
+            onSessionSplitRight={onSessionSplitRight}
           />
         ) : null}
         {activeView === "resources" ? (

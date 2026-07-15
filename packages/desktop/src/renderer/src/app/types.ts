@@ -208,6 +208,7 @@ export interface SideChatLink {
 export interface SessionSummary {
   id: string
   title: string
+  pinned?: boolean
   worktreeID?: string
   branch: string
   status: SessionStatus
@@ -273,6 +274,7 @@ export interface LoadedSessionSnapshot {
   worktreeID?: string
   directory: string
   title: string
+  pinned?: boolean
   kind?: SessionKind
   policy?: SessionPolicy
   automation?: SessionAutomationMetadata

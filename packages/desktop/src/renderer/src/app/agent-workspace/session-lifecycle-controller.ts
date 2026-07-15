@@ -195,6 +195,7 @@ interface UseSessionLifecycleControllerOptions {
   setDockviewLayout: StateSetter<SerializedDockview | null>
   setWorkspaces: StateSetter<WorkspaceGroup[]>
   refreshWorkspaceFromDirectory: (directory: string) => Promise<WorkspaceGroup | null>
+  reportSessionActionError: (message: string) => void
   updateRightSidebarTab: (tabID: string, update: RightSidebarTabUpdate) => void
   clearRuntimeDebugRefreshTimer: (sessionID: string) => void
   clearSessionDiffRefreshTimer: (sessionID: string) => void
@@ -272,6 +273,7 @@ export function useSessionLifecycleController({
   setDockviewLayout,
   setWorkspaces,
   refreshWorkspaceFromDirectory,
+  reportSessionActionError,
   updateRightSidebarTab,
   clearRuntimeDebugRefreshTimer,
   clearSessionDiffRefreshTimer,
@@ -1182,6 +1184,8 @@ export function useSessionLifecycleController({
       applyArchivedSessions(archivedSessionIDs, workspace.id)
     } catch (error) {
       console.error("[desktop] archiveAgentSession failed:", error)
+      const message = error instanceof Error ? error.message : String(error)
+      reportSessionActionError(`归档会话失败：${message}`)
     } finally {
       setDeletingSessionID(null)
     }

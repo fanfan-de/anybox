@@ -1,8 +1,10 @@
-import { type KeyboardEvent, type PointerEvent, useEffect, useId, useRef, useState } from "react"
+import { type KeyboardEvent, type PointerEvent, useCallback, useEffect, useId, useRef, useState } from "react"
 import { FolderIcon } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
 import { joinClassNames } from "../shared-ui"
 import { ThreadMarkdown } from "../thread-markdown"
 import type { WorkspaceGroup } from "../types"
+import { CREATE_SESSION_USAGE_TIPS, pickCreateSessionUsageTipIndex } from "./create-session-tips"
 
 interface SkillMetadataField {
   key: string
@@ -310,8 +312,80 @@ function CreateSessionLogo() {
   return <span className="create-session-logo" role="img" aria-label="Anybox logo" />
 }
 
+const CREATE_SESSION_TIP_ROTATION_MS = 8_000
+const CREATE_SESSION_TIP_EXIT_MS = 120
+const CREATE_SESSION_TIP_ENTER_MS = 180
+
+type CreateSessionTipTransitionPhase = "idle" | "exiting" | "entering"
+
+function CreateSessionUsageTipView() {
+  const { t } = useI18n()
+  const [tipIndex, setTipIndex] = useState(() =>
+    pickCreateSessionUsageTipIndex(-1, CREATE_SESSION_USAGE_TIPS.length),
+  )
+  const [transitionPhase, setTransitionPhase] = useState<CreateSessionTipTransitionPhase>("idle")
+  const tip = CREATE_SESSION_USAGE_TIPS[tipIndex] ?? CREATE_SESSION_USAGE_TIPS[0]
+
+  const showNextTip = useCallback(() => {
+    if (CREATE_SESSION_USAGE_TIPS.length <= 1) return
+
+    setTransitionPhase((currentPhase) =>
+      currentPhase === "idle" ? "exiting" : currentPhase,
+    )
+  }, [])
+
+  useEffect(() => {
+    if (transitionPhase === "idle") return
+
+    const timeoutID = window.setTimeout(() => {
+      if (transitionPhase === "exiting") {
+        setTipIndex((currentIndex) =>
+          pickCreateSessionUsageTipIndex(currentIndex, CREATE_SESSION_USAGE_TIPS.length),
+        )
+        setTransitionPhase("entering")
+        return
+      }
+
+      setTransitionPhase("idle")
+    }, transitionPhase === "exiting" ? CREATE_SESSION_TIP_EXIT_MS : CREATE_SESSION_TIP_ENTER_MS)
+
+    return () => window.clearTimeout(timeoutID)
+  }, [transitionPhase])
+
+  useEffect(() => {
+    if (CREATE_SESSION_USAGE_TIPS.length <= 1 || transitionPhase !== "idle") return
+
+    const timeoutID = window.setTimeout(showNextTip, CREATE_SESSION_TIP_ROTATION_MS)
+    return () => window.clearTimeout(timeoutID)
+  }, [showNextTip, tipIndex, transitionPhase])
+
+  if (!tip) return null
+
+  const tipText = t(tip.messageKey)
+
+  return (
+    <button
+      className={joinClassNames("create-session-tip", `is-${transitionPhase}`)}
+      type="button"
+      aria-label={t("createSession.tip.nextAria", { tip: tipText })}
+      title={t("createSession.tip.nextTitle")}
+      onClick={showNextTip}
+    >
+      <span key={tip.id} className="create-session-tip-text">
+        {tipText}
+      </span>
+    </button>
+  )
+}
+
 function getWorkspaceLabel(workspace: WorkspaceGroup) {
-  return `${workspace.project.name} / ${workspace.name}`
+  const projectName = workspace.project.name.trim()
+  const workspaceName = workspace.name.trim()
+
+  if (!projectName || projectName === workspaceName) return workspaceName
+  if (!workspaceName) return projectName
+
+  return `${projectName} / ${workspaceName}`
 }
 
 function getSelectedCreateSessionWorkspace(workspaces: WorkspaceGroup[], selectedWorkspaceID: string | null) {
@@ -609,6 +683,7 @@ export function CreateSessionCanvas({
           workspaces={projectWorkspaces}
           onWorkspaceChange={onWorkspaceChange}
         />
+        {selectedWorkspace ? <CreateSessionUsageTipView /> : null}
         <CreateSessionGuide
           selectedWorkspace={selectedWorkspace}
           workspaces={projectWorkspaces}

@@ -178,7 +178,7 @@ const fontFamilyOptions: Array<{
   {
     value: "default",
     label: "IBM Plex Sans",
-    description: "Default app stack with balanced Latin and CJK fallbacks.",
+    description: "Bundled Latin and Simplified Chinese app fonts.",
     previewClassName: "is-default",
   },
   {

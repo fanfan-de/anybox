@@ -46,6 +46,52 @@ beforeEach(() => {
   vi.unstubAllGlobals()
 })
 
+describe("session metadata IPC helpers", () => {
+  const session = {
+    id: "session-1",
+    projectID: "project-1",
+    directory: "C:/work/project-1",
+    title: "Renamed session",
+    pinned: true,
+    time: {
+      created: 1,
+      updated: 2,
+    },
+  }
+
+  it("updates a trimmed session title and preserves pinned state", async () => {
+    requestAgentJSONMock.mockResolvedValueOnce({ data: session, requestId: "request-title" })
+
+    const result = await internal.updateAgentSessionTitle({
+      sessionID: " session-1 ",
+      title: " Renamed session ",
+    })
+
+    expect(requestAgentJSONMock).toHaveBeenCalledWith("/api/sessions/session-1/title", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Renamed session" }),
+    })
+    expect(result).toEqual({
+      session: expect.objectContaining({ id: "session-1", pinned: true, title: "Renamed session", updated: 2 }),
+      requestId: "request-title",
+    })
+  })
+
+  it("updates session pinned state", async () => {
+    requestAgentJSONMock.mockResolvedValueOnce({ data: session, requestId: "request-pin" })
+
+    const result = await internal.updateAgentSessionPinned({ sessionID: "session-1", pinned: true })
+
+    expect(requestAgentJSONMock).toHaveBeenCalledWith("/api/sessions/session-1/pinned", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pinned: true }),
+    })
+    expect(result.session.pinned).toBe(true)
+  })
+})
+
 describe("Anybox subscription IPC helpers", () => {
   it("loads subscription data with the desktop OAuth token kept in the main process", async () => {
     requestAgentJSONMock.mockResolvedValue({

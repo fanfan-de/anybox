@@ -1146,12 +1146,11 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
       emitSnapshot()
       return true
     }
-    const popoutPanel: WorkbenchDockviewCommands["popoutPanel"] = (reference) => {
+    const popoutPanel: WorkbenchDockviewCommands["popoutPanel"] = async (reference) => {
       const id = getWorkbenchDockPanelId(reference)
       const panel = api.getPanel(id)
       if (!panel) return false
-      void detachSessionPanel(api, panel)
-      return true
+      return detachSessionPanel(api, panel)
     }
     const commands: WorkbenchDockviewCommands = {
       openPanel,

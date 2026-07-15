@@ -2759,6 +2759,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   flex: 0 0 auto;
   padding: 0;
   overflow: visible;
+  contain: layout;
 }
 
 .create-session-layout .create-session-shell:has(.create-session-select-panel) {
@@ -2776,17 +2777,163 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   gap: 14px;
 }
 
+.create-session-card:has(.create-session-select-panel) .create-session-tip {
+  visibility: hidden;
+}
+
 .create-session-logo {
   --create-session-logo-image: url("/anybox-logo-black.svg");
 
   display: block;
-  width: min(132px, 36vw);
+  width: min(64px, 18vw);
   aspect-ratio: 1888 / 1884;
   background-image: var(--create-session-logo-image);
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;
   filter: none;
+}
+
+.create-session-tip {
+  width: fit-content;
+  max-width: min(100%, 560px);
+  min-height: 46px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--seg-radius-sm);
+  background: transparent;
+  color: var(--semantic-button-secondary-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.55;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  box-shadow: none;
+  box-sizing: border-box;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.create-session-tip::before,
+.create-session-tip::after {
+  content: "";
+  width: 10px;
+  height: 28px;
+  flex: 0 0 10px;
+  border-top: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  opacity: 0.42;
+  box-sizing: border-box;
+  transition:
+    transform 180ms ease-out,
+    opacity 160ms ease-out;
+}
+
+.create-session-tip::before {
+  border-left: 1px solid currentColor;
+  border-radius: 3px 0 0 3px;
+}
+
+.create-session-tip::after {
+  border-right: 1px solid currentColor;
+  border-radius: 0 3px 3px 0;
+}
+
+.create-session-tip:hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--semantic-button-secondary-text-hover);
+}
+
+.create-session-tip:hover::before,
+.create-session-tip:hover::after,
+.create-session-tip:focus-visible::before,
+.create-session-tip:focus-visible::after {
+  opacity: 0.72;
+}
+
+.create-session-tip:focus-visible {
+  outline: none;
+  border-color: var(--focus-outline-color);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+}
+
+.create-session-tip-text {
+  min-width: 0;
+}
+
+.create-session-tip.is-exiting::before {
+  transform: translateX(4px);
+  transition-duration: 120ms;
+}
+
+.create-session-tip.is-exiting::after {
+  transform: translateX(-4px);
+  transition-duration: 120ms;
+}
+
+.create-session-tip.is-exiting .create-session-tip-text {
+  animation: create-session-tip-text-out 120ms ease-in forwards;
+}
+
+.create-session-tip.is-entering .create-session-tip-text {
+  animation: create-session-tip-text-in 180ms ease-out both;
+}
+
+@keyframes create-session-tip-text-out {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    filter: blur(2px);
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes create-session-tip-text-in {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .create-session-tip::before,
+  .create-session-tip::after,
+  .create-session-tip-text {
+    animation: none;
+    transition: none;
+  }
+
+  .create-session-tip.is-exiting::before,
+  .create-session-tip.is-exiting::after {
+    transform: none;
+  }
+
+  .create-session-tip.is-exiting .create-session-tip-text,
+  .create-session-tip.is-entering .create-session-tip-text {
+    opacity: 1;
+    filter: none;
+    transform: none;
+    animation: none;
+  }
 }
 
 :root[data-theme="dark"] .create-session-logo {
@@ -2816,7 +2963,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   border: 0;
   border-radius: var(--seg-radius-xs);
   background: transparent;
-  color: #182532;
+  color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 600;
@@ -2839,8 +2986,8 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .create-session-select-trigger:hover,
 .create-session-select-trigger:focus-visible,
 .create-session-select-trigger.is-active {
-  background: var(--semantic-sidebar-tree-row-surface-hover, rgba(17, 24, 39, 0.06));
-  color: #123a5a;
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+  color: var(--semantic-sidebar-tree-row-text-hover);
   outline: none;
   box-shadow: none;
 }
@@ -2913,7 +3060,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .create-session-select-option:focus-visible,
 .create-session-select-option.is-active,
 .create-session-select-option.is-selected {
-  background: var(--semantic-sidebar-tree-row-surface-hover, rgba(17, 24, 39, 0.06));
+  background: var(--semantic-sidebar-tree-row-surface-hover);
   color: var(--semantic-sidebar-tree-row-text-hover, var(--seg-text-1));
   outline: none;
   box-shadow: none;
@@ -3000,10 +3147,10 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .create-session-guide-primary {
-  border-color: #4b5563;
-  background: #4b5563;
-  color: #ffffff;
-  box-shadow: 0 4px 10px rgba(31, 41, 55, 0.12);
+  border-color: var(--semantic-button-primary-border);
+  background: var(--semantic-button-primary-surface);
+  color: var(--semantic-button-primary-text);
+  box-shadow: var(--shadow-sm);
 }
 
 .create-session-guide-secondary {
@@ -3020,36 +3167,34 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 
 .create-session-guide-primary:hover {
   outline: none;
-  background: #374151;
-  border-color: #374151;
-  color: #ffffff;
-  box-shadow: 0 6px 14px rgba(31, 41, 55, 0.16);
+  background: var(--semantic-button-primary-surface-hover);
+  border-color: var(--semantic-button-primary-border-hover);
+  color: var(--semantic-button-primary-text-hover);
+  box-shadow: var(--shadow-sm);
 }
 
 .create-session-guide-primary:focus-visible {
   outline: none;
-  background: #374151;
-  border-color: #374151;
-  color: #ffffff;
-  box-shadow:
-    0 0 0 1px var(--focus-outline-color),
-    0 6px 14px rgba(31, 41, 55, 0.16);
+  background: var(--semantic-button-primary-surface-hover);
+  border-color: var(--focus-outline-color);
+  color: var(--semantic-button-primary-text-hover);
+  box-shadow: var(--shadow-sm);
 }
 
 .create-session-guide-secondary:hover {
   outline: none;
-  background: var(--semantic-sidebar-tree-row-surface-hover, var(--seg-panel-muted));
-  color: var(--seg-text-1);
-  box-shadow: 0 4px 12px rgba(46, 81, 118, 0.08);
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  box-shadow: var(--shadow-sm);
 }
 
 .create-session-guide-secondary:focus-visible {
   outline: none;
-  background: var(--semantic-sidebar-tree-row-surface-hover, var(--seg-panel-muted));
-  color: var(--seg-text-1);
-  box-shadow:
-    0 0 0 1px var(--focus-outline-color),
-    0 4px 12px rgba(46, 81, 118, 0.08);
+  border-color: var(--focus-outline-color);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  box-shadow: var(--shadow-sm);
 }
 
 .create-session-guide-note {

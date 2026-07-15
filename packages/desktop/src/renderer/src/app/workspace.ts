@@ -103,11 +103,19 @@ export function sortWorkspaceGroups(input: WorkspaceGroup[], pinnedWorkspaceIDs:
   })
 }
 
+export function sortWorkspaceSessions<T extends Pick<SessionSummary, "pinned" | "updated">>(sessions: T[]) {
+  return [...sessions].sort((left, right) => {
+    const pinnedDelta = Number(Boolean(right.pinned)) - Number(Boolean(left.pinned))
+    return pinnedDelta || right.updated - left.updated
+  })
+}
+
 export function mapLoadedSession(session: LoadedSessionSnapshot, sessionIndex: number): SessionSummary {
   const sideChat = isSideChatSession(session)
   return {
     id: session.id,
     title: session.title.trim() || `Session ${sessionIndex + 1}`,
+    pinned: session.pinned,
     worktreeID: session.worktreeID,
     branch: session.directory,
     status: "Ready",
@@ -136,7 +144,7 @@ export function mapLoadedWorkspace(workspace: LoadedFolderWorkspace): WorkspaceG
     created: workspace.created,
     updated: workspace.updated,
     project: workspace.project,
-    sessions: [...workspace.sessions].sort((left, right) => right.updated - left.updated).map(mapLoadedSession),
+    sessions: sortWorkspaceSessions(workspace.sessions).map(mapLoadedSession),
   }
 }
 
@@ -164,9 +172,10 @@ export function upsertSessionInWorkspace(existing: WorkspaceGroup[], workspaceID
         ? {
             ...workspace,
             updated: Math.max(workspace.updated, nextSession.updated),
-            sessions: [nextSession, ...workspace.sessions.filter((session) => session.id !== nextSession.id)].sort(
-              (left, right) => right.updated - left.updated,
-            ),
+            sessions: sortWorkspaceSessions([
+              nextSession,
+              ...workspace.sessions.filter((session) => session.id !== nextSession.id),
+            ]),
           }
         : workspace,
     ),

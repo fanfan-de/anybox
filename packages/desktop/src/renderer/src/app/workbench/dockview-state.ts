@@ -21,7 +21,7 @@ export interface WorkbenchDockviewCommands {
   ) => boolean
   focusPanel: (reference: WorkbenchDockPanelReference) => boolean
   closePanel: (reference: WorkbenchDockPanelReference) => boolean
-  popoutPanel: (reference: WorkbenchDockPanelReference) => boolean
+  popoutPanel: (reference: WorkbenchDockPanelReference) => Promise<boolean>
   replacePanel: (
     currentReference: WorkbenchDockPanelReference,
     nextReference: WorkbenchDockPanelReference,

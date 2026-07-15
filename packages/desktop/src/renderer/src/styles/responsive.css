@@ -256,6 +256,16 @@
     gap: 12px;
   }
 
+  .create-session-logo {
+    width: min(52px, 18vw);
+  }
+
+  .create-session-tip {
+    min-height: 48px;
+    padding: 5px 8px;
+    font-size: 13px;
+  }
+
   .create-session-guide {
     padding: 14px;
   }

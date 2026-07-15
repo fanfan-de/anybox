@@ -92,6 +92,7 @@ function useProjectClickHarness(
     pendingStreamsRef: useRef({}),
     permissionRequestsRequestRef: useRef({}),
     preserveLocalWorkspaceStateOnInitialLoadRef: useRef(false),
+    reportSessionActionError: noop,
     runtimeDebugRequestRef: useRef({}),
     sessionDiffRequestRef: useRef({}),
     sessionDataLoadCacheRef: useRef(createSessionDataLoadCache()),

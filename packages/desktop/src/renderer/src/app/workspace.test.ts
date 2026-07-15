@@ -6,6 +6,7 @@ import {
   mapLoadedWorkspaces,
   selectAfterSessionDelete,
   sortWorkspaceGroups,
+  sortWorkspaceSessions,
   updateSessionModelSelectionInWorkspaces,
 } from "./workspace"
 
@@ -40,6 +41,22 @@ function buildWorkspace(id: string, sessions: SessionSummary[], updated = 1): Wo
 }
 
 describe("workspace primary session selection", () => {
+  it("sorts pinned sessions first and keeps each group ordered by update time", () => {
+    const sessions = [
+      buildSession("regular-new", "main", 40),
+      { ...buildSession("pinned-old", "main", 10), pinned: true },
+      { ...buildSession("pinned-new", "main", 30), pinned: true },
+      buildSession("regular-old", "main", 20),
+    ]
+
+    expect(sortWorkspaceSessions(sessions).map((session) => session.id)).toEqual([
+      "pinned-new",
+      "pinned-old",
+      "regular-new",
+      "regular-old",
+    ])
+  })
+
   it("preserves loaded session creation timestamps", () => {
     const [workspace] = mapLoadedWorkspaces([
       {

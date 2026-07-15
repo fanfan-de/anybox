@@ -383,6 +383,7 @@ function mapSessionInfo(session: AgentSessionInfo) {
     worktreeID: session.worktreeID,
     directory: session.directory,
     title: session.title,
+    pinned: session.pinned,
     kind: session.kind,
     policy: session.policy,
     automation: session.automation,
@@ -692,6 +693,39 @@ async function saveImageDataUrlToFolder(
   return {
     canceled: false as const,
     path: filePath,
+  }
+}
+
+async function updateAgentSessionTitle(input: { sessionID: string; title: string }) {
+  const sessionID = input.sessionID.trim()
+  const title = input.title.trim()
+  const result = await requestAgentJSON<AgentSessionInfo>(`/api/sessions/${encodeURIComponent(sessionID)}/title`, {
+    method: "PATCH",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ title }),
+  })
+
+  return {
+    session: mapSessionInfo(result.data),
+    requestId: result.requestId,
+  }
+}
+
+async function updateAgentSessionPinned(input: { sessionID: string; pinned: boolean }) {
+  const sessionID = input.sessionID.trim()
+  const result = await requestAgentJSON<AgentSessionInfo>(`/api/sessions/${encodeURIComponent(sessionID)}/pinned`, {
+    method: "PATCH",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ pinned: input.pinned }),
+  })
+
+  return {
+    session: mapSessionInfo(result.data),
+    requestId: result.requestId,
   }
 }
 
@@ -4161,6 +4195,16 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   )
 
   handleDesktopIpc(
+    "desktop:update-session-title",
+    async (_event, input: { sessionID: string; title: string }) => updateAgentSessionTitle(input),
+  )
+
+  handleDesktopIpc(
+    "desktop:update-session-pinned",
+    async (_event, input: { sessionID: string; pinned: boolean }) => updateAgentSessionPinned(input),
+  )
+
+  handleDesktopIpc(
     "desktop:create-side-chat",
     async (_event, input: { parentSessionID: string; anchorMessageID: string }) => {
       const parentSessionID = input.parentSessionID.trim()
@@ -6529,6 +6573,8 @@ export const internal = {
   saveSessionTraceExportDirectory,
   saveSessionTraceExportToProject,
   translatePromptPreset,
+  updateAgentSessionPinned,
+  updateAgentSessionTitle,
   updatePromptPresetSelection,
   updateToolPermissionMode,
   uploadSessionBagSubmission,

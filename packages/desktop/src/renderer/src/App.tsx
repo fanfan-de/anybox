@@ -1302,7 +1302,11 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     handlePlanModeToggle,
     handleSessionBranchSelect,
     handleSessionDelete,
+    handleSessionPin,
+    handleSessionPopout,
+    handleSessionRename,
     handleSessionSelect,
+    handleSessionSplitRight,
     handleSelectSideChatTab,
     handleSessionModelSelectionChange,
     handleMessageDiffSummaryHydrate,
@@ -2592,7 +2596,11 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onProjectRemove={handleProjectRemove}
               onConversationClick={() => handleSidebarAction("conversation")}
               onSessionDelete={handleSessionDelete}
+              onSessionPin={handleSessionPin}
+              onSessionPopout={handleSessionPopout}
+              onSessionRename={handleSessionRename}
               onSessionSelect={handleSessionSelect}
+              onSessionSplitRight={handleSessionSplitRight}
               onSidebarAction={handleSidebarAction}
               onToggleSidebar={handleSidebarToggle}
             />
