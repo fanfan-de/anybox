@@ -1,21 +1,18 @@
 import { useEffect, useMemo, useState } from "react"
 import { marked, Renderer } from "marked"
 import { AtmosphereBackground } from "../AtmosphereBackground"
+import { SiteHeader } from "../SiteChrome"
+import { SiteFooter } from "../SiteChrome"
 import {
   docsSectionsByLanguage,
   getDocsArticle,
   getDocsArticles,
   type DocsArticle,
 } from "./docsContent"
-import { InstallerDownloadButton } from "../InstallerDownloadButton"
 import {
-  LanguageSwitcher,
   type SiteLanguage,
   useSiteLanguage,
 } from "../language"
-import { repositoryUrl } from "../releaseDownloads"
-
-const brandLogoBlack = "/brand-logo-black.svg"
 
 type DocsHeading = {
   id: string
@@ -113,58 +110,6 @@ function useCurrentArticle(language: SiteLanguage) {
     currentArticle,
     navigateToArticle,
   }
-}
-
-function DocsHeader() {
-  const { language } = useSiteLanguage()
-  const isChinese = language === "zh"
-
-  return (
-    <header className="site-header docs-header">
-      <a
-        className="brand-lockup"
-        href="/"
-        aria-label={isChinese ? "返回 Anybox 首页" : "Back to Anybox home"}
-      >
-        <img src={brandLogoBlack} alt="" />
-        <span>Anybox</span>
-      </a>
-      <nav
-        className="docs-header-nav"
-        aria-label={isChinese ? "文档导航" : "Documentation navigation"}
-      >
-        <a href="/">{isChinese ? "首页" : "Home"}</a>
-        <a href={repositoryUrl} target="_blank" rel="noreferrer">
-          GitHub
-        </a>
-        <InstallerDownloadButton
-          className="button button-primary docs-download-button"
-          platform="windows"
-        >
-          {isChinese ? "Windows 下载" : "Download for Windows"}
-        </InstallerDownloadButton>
-        <InstallerDownloadButton
-          className="button button-secondary docs-download-button"
-          platform="mac"
-        >
-          {isChinese ? "macOS 下载" : "Download for macOS"}
-        </InstallerDownloadButton>
-        <InstallerDownloadButton
-          className="button button-secondary docs-download-button"
-          platform="linux"
-        >
-          {isChinese ? "Linux 下载" : "Download for Linux"}
-        </InstallerDownloadButton>
-        <InstallerDownloadButton
-          className="button button-secondary docs-download-button"
-          platform="mobile"
-        >
-          {isChinese ? "Android 下载" : "Download for Android"}
-        </InstallerDownloadButton>
-      </nav>
-      <LanguageSwitcher />
-    </header>
-  )
 }
 
 function DocsSidebar({
@@ -297,7 +242,7 @@ export function DocsApp() {
   return (
     <main className="docs-page-shell" id="top">
       <AtmosphereBackground />
-      <DocsHeader />
+      <SiteHeader currentPage="docs" />
       <div className="docs-layout">
         <DocsSidebar
           currentArticle={currentArticle}
@@ -317,6 +262,7 @@ export function DocsApp() {
         </div>
         <DocsToc headings={headings} language={language} />
       </div>
+      <SiteFooter />
     </main>
   )
 }

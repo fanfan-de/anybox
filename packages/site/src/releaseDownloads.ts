@@ -1,6 +1,15 @@
 export type InstallerPlatform = "windows" | "mac" | "linux" | "mobile"
+export type InstallerSource = "manifest" | "github" | "fallback"
+
+export type ResolvedInstaller = {
+  platform: InstallerPlatform
+  source: InstallerSource
+  url: string
+  version?: string
+}
 
 export const repositoryUrl = "https://github.com/fanfan-de/anybox"
+export const releasesUrl = `${repositoryUrl}/releases`
 
 const releasesApiUrl =
   "https://api.github.com/repos/fanfan-de/anybox/releases?per_page=100"
@@ -8,10 +17,10 @@ const downloadManifestUrl =
   import.meta.env.VITE_DOWNLOAD_MANIFEST_URL?.trim() || ""
 
 export const installerFallbackUrls: Record<InstallerPlatform, string> = {
-  windows: `${repositoryUrl}/releases`,
-  mac: `${repositoryUrl}/releases`,
-  linux: `${repositoryUrl}/releases`,
-  mobile: `${repositoryUrl}/releases`,
+  windows: releasesUrl,
+  mac: releasesUrl,
+  linux: releasesUrl,
+  mobile: releasesUrl,
 }
 
 type GitHubReleaseAsset = {
@@ -21,6 +30,7 @@ type GitHubReleaseAsset = {
 
 type GitHubRelease = {
   assets?: unknown
+  published_at?: unknown
   tag_name?: unknown
 }
 
@@ -32,7 +42,6 @@ type DownloadManifestPlatform = {
 
 type DownloadManifest = {
   platforms?: unknown
-  version?: unknown
 }
 
 type DownloadManifestPlatformMap = Partial<
@@ -50,7 +59,7 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0
 }
 
-function normalizeVersionLabel(version: string) {
+export function normalizeVersionLabel(version: string) {
   const normalizedVersion = version.trim()
 
   if (!normalizedVersion) return undefined
@@ -59,223 +68,145 @@ function normalizeVersionLabel(version: string) {
     /(?:^|-)v?(\d+(?:\.\d+){1,3}(?:[-+][0-9a-z.-]+)?)$/i,
   )
 
-  if (versionMatch?.[1]) {
-    return `v${versionMatch[1]}`
-  }
+  return versionMatch?.[1] ? `v${versionMatch[1]}` : normalizedVersion
+}
 
-  return normalizedVersion
+export function detectInstallerPlatform(userAgent = navigator.userAgent) {
+  const normalizedUserAgent = userAgent.toLowerCase()
+
+  if (normalizedUserAgent.includes("android")) return "mobile" as const
+  if (normalizedUserAgent.includes("windows")) return "windows" as const
+  if (normalizedUserAgent.includes("macintosh") || normalizedUserAgent.includes("mac os")) {
+    return "mac" as const
+  }
+  if (normalizedUserAgent.includes("linux")) return "linux" as const
+
+  return undefined
 }
 
 const installerMatchers: Record<
   InstallerPlatform,
   (normalizedName: string) => boolean
 > = {
-  windows: (normalizedName) =>
-    normalizedName.endsWith(".exe") &&
-    normalizedName.includes("anybox") &&
-    normalizedName.includes("x64"),
-  mac: (normalizedName) =>
-    normalizedName.endsWith(".dmg") &&
-    normalizedName.includes("anybox") &&
-    normalizedName.includes("arm64"),
-  linux: (normalizedName) =>
-    normalizedName.endsWith(".appimage") &&
-    normalizedName.includes("anybox") &&
-    normalizedName.includes("x64"),
-  mobile: (normalizedName) =>
-    normalizedName.endsWith(".apk") && normalizedName.includes("anybox"),
+  windows: (name) =>
+    name.endsWith(".exe") && name.includes("anybox") && name.includes("x64"),
+  mac: (name) =>
+    name.endsWith(".dmg") && name.includes("anybox") && name.includes("arm64"),
+  linux: (name) =>
+    name.endsWith(".appimage") && name.includes("anybox") && name.includes("x64"),
+  mobile: (name) => name.endsWith(".apk") && name.includes("anybox"),
 }
 
 function getInstallerAsset(release: GitHubRelease, platform: InstallerPlatform) {
   if (!Array.isArray(release.assets)) return undefined
 
   return release.assets.find((asset): asset is GitHubReleaseAsset => {
-    if (!asset || typeof asset !== "object") return false
-
-    const { browser_download_url: downloadUrl, name } =
-      asset as GitHubReleaseAsset
-
-    if (typeof downloadUrl !== "string" || typeof name !== "string") {
-      return false
-    }
-
-    return installerMatchers[platform](name.toLowerCase())
+    if (!isRecord(asset)) return false
+    return (
+      isNonEmptyString(asset.browser_download_url) &&
+      isNonEmptyString(asset.name) &&
+      installerMatchers[platform](asset.name.toLowerCase())
+    )
   })
-}
-
-function getInstallerUrl(release: GitHubRelease, platform: InstallerPlatform) {
-  const installer = getInstallerAsset(release, platform)
-
-  return typeof installer?.browser_download_url === "string"
-    ? installer.browser_download_url
-    : undefined
 }
 
 function getManifestPlatform(
   manifest: DownloadManifest | undefined,
   platform: InstallerPlatform,
 ) {
-  if (!manifest || !isRecord(manifest)) return undefined
-
-  const platforms = isRecord(manifest.platforms)
-    ? (manifest.platforms as DownloadManifestPlatformMap)
-    : undefined
-  const manifestRecord = manifest as Record<string, unknown>
-  const platformEntry = platforms?.[platform] ?? manifestRecord[platform]
-
-  return isRecord(platformEntry)
-    ? (platformEntry as DownloadManifestPlatform)
-    : undefined
-}
-
-function getManifestVersion(
-  manifest: DownloadManifest | undefined,
-  platform: InstallerPlatform,
-) {
-  const platformVersion = getManifestPlatform(manifest, platform)?.version
-
-  if (isNonEmptyString(platformVersion)) {
-    return normalizeVersionLabel(platformVersion)
-  }
-
-  return undefined
-}
-
-function getManifestInstallerUrl(
-  manifest: DownloadManifest | undefined,
-  platform: InstallerPlatform,
-) {
-  const url = getManifestPlatform(manifest, platform)?.url
-
-  return isNonEmptyString(url) ? url.trim() : undefined
-}
-
-function getManifestFallbackUrl(
-  manifest: DownloadManifest | undefined,
-  platform: InstallerPlatform,
-) {
-  const url = getManifestPlatform(manifest, platform)?.fallbackUrl
-
-  return isNonEmptyString(url) ? url.trim() : undefined
+  if (!manifest || !isRecord(manifest.platforms)) return undefined
+  const entry = (manifest.platforms as DownloadManifestPlatformMap)[platform]
+  return isRecord(entry) ? entry : undefined
 }
 
 function fetchDownloadManifest() {
   if (!downloadManifestUrl) return Promise.resolve(undefined)
 
-  if (!downloadManifestPromise) {
-    downloadManifestPromise = fetch(downloadManifestUrl, {
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
+  downloadManifestPromise ??= fetch(downloadManifestUrl, {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  })
+    .then((response) => {
+      if (!response.ok) throw new Error(`Manifest request failed: ${response.status}`)
+      return response.json() as Promise<DownloadManifest>
     })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Download manifest request failed: ${response.status}`)
-        }
-
-        return response.json() as Promise<DownloadManifest>
-      })
-      .catch((error: unknown) => {
-        downloadManifestPromise = undefined
-        throw error
-      })
-  }
+    .catch((error: unknown) => {
+      downloadManifestPromise = undefined
+      throw error
+    })
 
   return downloadManifestPromise
 }
 
 function fetchReleases() {
-  if (!releasesPromise) {
-    releasesPromise = fetch(releasesApiUrl, {
-      cache: "no-store",
-      headers: {
-        Accept: "application/vnd.github+json",
-      },
+  releasesPromise ??= fetch(releasesApiUrl, {
+    cache: "no-store",
+    headers: { Accept: "application/vnd.github+json" },
+  })
+    .then((response) => {
+      if (!response.ok) throw new Error(`GitHub releases request failed: ${response.status}`)
+      return response.json() as Promise<GitHubRelease[]>
     })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`GitHub releases request failed: ${response.status}`)
-        }
-
-        return response.json() as Promise<GitHubRelease[]>
-      })
-      .catch((error: unknown) => {
-        releasesPromise = undefined
-        throw error
-      })
-  }
+    .catch((error: unknown) => {
+      releasesPromise = undefined
+      throw error
+    })
 
   return releasesPromise
 }
 
-async function resolveLatestReleaseForPlatform(platform: InstallerPlatform) {
-  const releases = await fetchReleases()
-  return releases.find((release) => getInstallerAsset(release, platform))
+export async function resolveInstaller(
+  platform: InstallerPlatform,
+): Promise<ResolvedInstaller> {
+  let manifest: DownloadManifest | undefined
+
+  try {
+    manifest = await fetchDownloadManifest()
+    const manifestPlatform = getManifestPlatform(manifest, platform)
+
+    if (isNonEmptyString(manifestPlatform?.url)) {
+      const version = isNonEmptyString(manifestPlatform.version)
+        ? normalizeVersionLabel(manifestPlatform.version)
+        : undefined
+
+      return {
+        platform,
+        source: "manifest",
+        url: manifestPlatform.url.trim(),
+        version,
+      }
+    }
+  } catch {}
+
+  try {
+    const release = (await fetchReleases()).find((item) =>
+      Boolean(getInstallerAsset(item, platform)),
+    )
+    const asset = release ? getInstallerAsset(release, platform) : undefined
+
+    if (asset && isNonEmptyString(asset.browser_download_url)) {
+      return {
+        platform,
+        source: "github",
+        url: asset.browser_download_url,
+        version: isNonEmptyString(release?.tag_name)
+          ? normalizeVersionLabel(release.tag_name)
+          : undefined,
+      }
+    }
+  } catch {}
+
+  const manifestFallback = getManifestPlatform(manifest, platform)?.fallbackUrl
+
+  return {
+    platform,
+    source: "fallback",
+    url: isNonEmptyString(manifestFallback)
+      ? manifestFallback.trim()
+      : installerFallbackUrls[platform],
+  }
 }
 
 export async function resolveLatestReleaseVersion(platform: InstallerPlatform) {
-  try {
-    const manifestVersion = getManifestVersion(
-      await fetchDownloadManifest(),
-      platform,
-    )
-
-    if (manifestVersion) return manifestVersion
-  } catch {}
-
-  const release = await resolveLatestReleaseForPlatform(platform)
-  const tagName =
-    typeof release?.tag_name === "string"
-      ? normalizeVersionLabel(release.tag_name)
-      : undefined
-
-  return tagName ?? ""
-}
-
-async function resolveLatestInstallerUrl(platform: InstallerPlatform) {
-  try {
-    const manifestInstallerUrl = getManifestInstallerUrl(
-      await fetchDownloadManifest(),
-      platform,
-    )
-
-    if (manifestInstallerUrl) return manifestInstallerUrl
-  } catch {}
-
-  const release = await resolveLatestReleaseForPlatform(platform)
-
-  if (!release) {
-    throw new Error(`No ${platform} installer release found`)
-  }
-
-  const downloadUrl = getInstallerUrl(
-    release,
-    platform,
-  )
-
-  if (!downloadUrl) {
-    throw new Error(`No ${platform} installer asset found in latest release`)
-  }
-
-  return downloadUrl
-}
-
-async function resolveFallbackUrl(platform: InstallerPlatform) {
-  try {
-    return (
-      getManifestFallbackUrl(await fetchDownloadManifest(), platform) ??
-      installerFallbackUrls[platform]
-    )
-  } catch {
-    return installerFallbackUrls[platform]
-  }
-}
-
-export async function navigateToLatestInstaller(platform: InstallerPlatform) {
-  try {
-    window.location.assign(await resolveLatestInstallerUrl(platform))
-  } catch {
-    window.location.assign(await resolveFallbackUrl(platform))
-  }
+  return (await resolveInstaller(platform)).version ?? ""
 }

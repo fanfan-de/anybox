@@ -1,0 +1,66 @@
+:root {
+  --site-width: 1160px;
+  --site-reading-width: 760px;
+  --radius-control: 8px;
+  --radius-panel: 8px;
+  --radius-overlay: 10px;
+  --surface-page: #f7f9f7;
+  --surface-primary: #ffffff;
+  --surface-secondary: #f1f4f1;
+  --surface-inverse: #151817;
+  --text-primary: #141714;
+  --text-secondary: #505850;
+  --text-tertiary: #747c74;
+  --text-inverse: #f8faf8;
+  --border-subtle: #e1e6e1;
+  --border-strong: #b9c1b9;
+  --brand-primary: #2f6f68;
+  --brand-soft: #e3f0ec;
+  --shadow-overlay: 0 18px 48px rgba(25, 31, 27, 0.12);
+
+  --semantic-button-primary-surface: var(--text-primary);
+  --semantic-button-primary-surface-hover: var(--brand-primary);
+  --semantic-button-primary-border: var(--text-primary);
+  --semantic-button-primary-border-hover: var(--brand-primary);
+  --semantic-button-primary-text: var(--text-inverse);
+  --semantic-button-primary-text-hover: var(--text-inverse);
+  --semantic-button-primary-surface-disabled: var(--surface-secondary);
+  --semantic-button-primary-border-disabled: var(--border-subtle);
+  --semantic-button-primary-text-disabled: var(--text-tertiary);
+
+  --semantic-button-secondary-surface: var(--surface-primary);
+  --semantic-button-secondary-surface-hover: var(--surface-secondary);
+  --semantic-button-secondary-border: var(--border-strong);
+  --semantic-button-secondary-border-hover: var(--text-secondary);
+  --semantic-button-secondary-text: var(--text-primary);
+  --semantic-button-secondary-text-hover: var(--text-primary);
+  --semantic-button-secondary-surface-disabled: var(--surface-secondary);
+  --semantic-button-secondary-border-disabled: var(--border-subtle);
+  --semantic-button-secondary-text-disabled: var(--text-tertiary);
+
+  --semantic-button-ghost-surface: transparent;
+  --semantic-button-ghost-surface-hover: var(--surface-secondary);
+  --semantic-button-ghost-border: transparent;
+  --semantic-button-ghost-border-hover: var(--border-subtle);
+  --semantic-button-ghost-text: var(--text-secondary);
+  --semantic-button-ghost-text-hover: var(--text-primary);
+  --semantic-button-ghost-surface-disabled: transparent;
+  --semantic-button-ghost-border-disabled: transparent;
+  --semantic-button-ghost-text-disabled: var(--text-tertiary);
+}
+
+:root[data-theme="dark"] {
+  --surface-page: #101312;
+  --surface-primary: #171b19;
+  --surface-secondary: #202522;
+  --surface-inverse: #f4f7f4;
+  --text-primary: #edf2ed;
+  --text-secondary: #b6c0b7;
+  --text-tertiary: #879087;
+  --text-inverse: #131614;
+  --border-subtle: #2b322e;
+  --border-strong: #4a554e;
+  --brand-primary: #76b8ad;
+  --brand-soft: #203a35;
+  --shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.28);
+}

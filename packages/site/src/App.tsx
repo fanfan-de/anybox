@@ -1,316 +1,275 @@
 import { useEffect, useState } from "react"
 import { AtmosphereBackground } from "./AtmosphereBackground"
+import { DownloadCta } from "./DownloadCta"
+import { ProductMedia } from "./ProductMedia"
+import { SiteFooter, SiteHeader } from "./SiteChrome"
 import { siteContent } from "./content"
-import { GitActivitySection } from "./GitActivity"
-import { InstallerDownloadButton } from "./InstallerDownloadButton"
-import { LanguageSwitcher, useSiteLanguage } from "./language"
-import { repositoryUrl } from "./releaseDownloads"
-import { supportEmail, supportMailto } from "./siteLinks"
+import { useSiteLanguage } from "./language"
+import { repositoryUrl, releasesUrl } from "./releaseDownloads"
+import { trackSiteEvent } from "./siteAnalytics"
 
-const brandLogoBlack = "/brand-logo-black.svg"
-const wechatCommunityQrImage = "/wechat-community-qr-20260702.png"
-const icpRecordNumber = "苏ICP备2026030016号-1"
-const icpRecordUrl = "https://beian.miit.gov.cn/"
-
-function getGitHubRepoApiUrl(href: string) {
-  const match = href.match(/^https:\/\/github\.com\/([^/]+)\/([^/#?]+)/)
-
-  if (!match) return undefined
-
-  return `https://api.github.com/repos/${match[1]}/${match[2]}`
+type RepositorySummary = {
+  latestRelease?: string
+  publishedAt?: string
+  stars?: number
 }
 
-function formatStarCount(count: number) {
-  if (count < 1000) return String(count)
-  if (count < 10000) return `${(count / 1000).toFixed(1)}K`
-
-  return `${Math.round(count / 1000)}K`
+function formatStars(stars: number | undefined) {
+  if (stars === undefined) return "—"
+  if (stars < 1000) return String(stars)
+  return `${(stars / 1000).toFixed(stars < 10000 ? 1 : 0)}K`
 }
 
-function StarIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      className="nav-star-icon"
-      focusable="false"
-      viewBox="0 0 24 24"
-    >
-      <path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z" />
-    </svg>
-  )
-}
-
-function GitHubStarCount({ href }: { href: string }) {
-  const [starCount, setStarCount] = useState<number | undefined>()
+function useRepositorySummary() {
+  const [summary, setSummary] = useState<RepositorySummary>({})
 
   useEffect(() => {
-    const apiUrl = getGitHubRepoApiUrl(href)
-
-    if (!apiUrl) return
-
     const controller = new AbortController()
 
-    fetch(apiUrl, {
-      cache: "no-store",
-      headers: {
-        Accept: "application/vnd.github+json",
-      },
-      signal: controller.signal,
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`GitHub star request failed: ${response.status}`)
-        }
+    Promise.all([
+      fetch("https://api.github.com/repos/fanfan-de/anybox", {
+        headers: { Accept: "application/vnd.github+json" },
+        signal: controller.signal,
+      }),
+      fetch("https://api.github.com/repos/fanfan-de/anybox/releases/latest", {
+        headers: { Accept: "application/vnd.github+json" },
+        signal: controller.signal,
+      }),
+    ])
+      .then(async ([repositoryResponse, releaseResponse]) => {
+        const repository = repositoryResponse.ok
+          ? ((await repositoryResponse.json()) as { stargazers_count?: unknown })
+          : undefined
+        const release = releaseResponse.ok
+          ? ((await releaseResponse.json()) as { published_at?: unknown; tag_name?: unknown })
+          : undefined
 
-        return response.json()
-      })
-      .then((data: { stargazers_count?: unknown }) => {
-        if (typeof data.stargazers_count === "number") {
-          setStarCount(data.stargazers_count)
-        }
+        setSummary({
+          latestRelease: typeof release?.tag_name === "string" ? release.tag_name : undefined,
+          publishedAt: typeof release?.published_at === "string" ? release.published_at : undefined,
+          stars: typeof repository?.stargazers_count === "number" ? repository.stargazers_count : undefined,
+        })
       })
       .catch(() => {})
 
-    return () => {
-      controller.abort()
+    return () => controller.abort()
+  }, [])
+
+  return summary
+}
+
+function useHomeMetadata(language: "zh" | "en") {
+  const content = siteContent[language]
+
+  useEffect(() => {
+    const title = language === "zh"
+      ? "Anybox｜开源的本地 AI Agent 工作台"
+      : "Anybox | Open-source local AI agent workspace"
+    const description = content.hero.description
+    const setMeta = (selector: string, value: string) => {
+      document.querySelector<HTMLMetaElement>(selector)?.setAttribute("content", value)
     }
-  }, [href])
 
-  if (starCount === undefined) return null
+    document.title = title
+    setMeta('meta[name="description"]', description)
+    setMeta('meta[property="og:title"]', title)
+    setMeta('meta[property="og:description"]', description)
+    setMeta('meta[name="twitter:title"]', title)
+    setMeta('meta[name="twitter:description"]', description)
 
-  return (
-    <span className="nav-star-count" aria-label={`${starCount} GitHub stars`}>
-      <span>[{formatStarCount(starCount)}</span>
-      <StarIcon />
-      <span>]</span>
-    </span>
-  )
-}
+    const scriptId = "anybox-software-schema"
+    document.getElementById(scriptId)?.remove()
+    const schema = document.createElement("script")
+    schema.id = scriptId
+    schema.type = "application/ld+json"
+    schema.text = JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      applicationCategory: "DeveloperApplication",
+      description,
+      name: "Anybox",
+      operatingSystem: "Windows, macOS, Linux, Android",
+      url: "https://anybox.com.cn/",
+    })
+    document.head.appendChild(schema)
 
-function NavigationLink({
-  href,
-  label,
-  external,
-}: {
-  href: string
-  label: string
-  external?: boolean
-}) {
-  return (
-    <a
-      className="nav-link"
-      href={href}
-      rel={external ? "noreferrer" : undefined}
-      target={external ? "_blank" : undefined}
-    >
-      <span>{label}</span>
-      {label === "GitHub" ? <GitHubStarCount href={href} /> : null}
-    </a>
-  )
-}
-
-function BrandLockup({ language }: { language: "zh" | "en" }) {
-  return (
-    <a
-      className="brand-lockup"
-      href="#top"
-      aria-label={language === "zh" ? "Anybox 首页" : "Anybox home"}
-    >
-      <img src={brandLogoBlack} alt="" />
-      <span>Anybox</span>
-    </a>
-  )
-}
-
-function ProofList({ items, label }: { items: string[]; label: string }) {
-  return (
-    <ul className="proof-list" aria-label={label}>
-      {items.map((item) => (
-        <li key={item}>{item}</li>
-      ))}
-    </ul>
-  )
-}
-
-function ScenarioSection({ language }: { language: "zh" | "en" }) {
-  const content = siteContent[language].scenarios
-
-  return (
-    <section className="scenario-section" aria-labelledby="scenario-heading">
-      <div className="scenario-heading">
-        <h2 id="scenario-heading">{content.kicker}</h2>
-        <p>{content.description}</p>
-      </div>
-
-      <div className="scenario-grid">
-        {content.cards.map((card) => (
-          <article className="scenario-card" key={card.title}>
-            <figure className="scenario-card-media">
-              <div className="scenario-card-frame">
-                <img src={card.image} alt={card.imageAlt} />
-              </div>
-            </figure>
-            <div className="scenario-card-copy">
-              <h3>{card.title}</h3>
-              <p>
-                <strong>{content.audienceLabel}</strong>
-                {card.audience}
-              </p>
-              <p>
-                <strong>{content.capabilityLabel}</strong>
-                {card.capability}
-              </p>
-              <div>
-                <strong>{content.tasksLabel}</strong>
-                <ul>
-                  {card.tasks.map((task) => (
-                    <li key={task}>{task}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function ProductCommunityQr() {
-  return (
-    <div className="community-qr-block">
-      <img className="community-qr-image" src={wechatCommunityQrImage} alt="" />
-    </div>
-  )
-}
-
-function CommunityBottomSection({ language }: { language: "zh" | "en" }) {
-  return (
-    <section className="community-section" id="product">
-      <div className="community-layout">
-        <GitActivitySection language={language} />
-        <ProductCommunityQr />
-      </div>
-    </section>
-  )
-}
-
-function SiteFooter({ language }: { language: "zh" | "en" }) {
-  const isChinese = language === "zh"
-
-  return (
-    <footer className="site-footer">
-      <span>© 2026 Anybox</span>
-      <nav
-        className="site-footer-links"
-        aria-label={isChinese ? "页脚导航" : "Footer navigation"}
-      >
-        <a href="/pricing/">{isChinese ? "定价" : "Pricing"}</a>
-        <a href="/terms/">{isChinese ? "条款" : "Terms"}</a>
-        <a href="/privacy/">{isChinese ? "隐私" : "Privacy"}</a>
-        <a href="/refunds/">{isChinese ? "退款" : "Refunds"}</a>
-        <a href="/acceptable-use/">
-          {isChinese ? "使用规范" : "Acceptable Use"}
-        </a>
-        <a href={supportMailto}>{supportEmail}</a>
-        <a href={icpRecordUrl} rel="noreferrer" target="_blank">
-          {icpRecordNumber}
-        </a>
-      </nav>
-    </footer>
-  )
+    return () => schema.remove()
+  }, [content.hero.description, language])
 }
 
 export function App() {
   const { language } = useSiteLanguage()
   const content = siteContent[language]
-  const isChinese = language === "zh"
+  const repository = useRepositorySummary()
+  const releaseDate = repository.publishedAt
+    ? new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en", {
+        dateStyle: "medium",
+      }).format(new Date(repository.publishedAt))
+    : "—"
 
-  useEffect(() => {
-    document.title = isChinese
-      ? "Anybox｜本地 AI Agent 工作台"
-      : "Anybox | Local AI agent workspace"
-  }, [isChinese])
+  useHomeMetadata(language)
 
   return (
-    <main className="page-shell" id="top">
-      <AtmosphereBackground />
-      <header className="site-header">
-        <BrandLockup language={language} />
-        <nav
-          className="site-nav"
-          aria-label={isChinese ? "页面导航" : "Page navigation"}
-        >
-          {content.navigationItems.map((item) => (
-            <NavigationLink
-              key={item.href}
-              href={item.href}
-              label={item.label}
-              external={"external" in item ? item.external : undefined}
-            />
-          ))}
-        </nav>
-        <LanguageSwitcher />
-      </header>
+    <main className="page-shell home-page-shell" id="top">
+      <SiteHeader currentPage="home" />
 
-      <section className="hero-section" aria-labelledby="hero-title">
-        <div className="hero-copy">
-          <div className="hero-brand">
-            <img className="hero-mark" src={brandLogoBlack} alt="" />
-            <h1 id="hero-title">Anybox</h1>
+      <section className="home-hero" aria-labelledby="hero-title">
+        <AtmosphereBackground />
+        <div className="home-hero-inner">
+          <div className="home-hero-copy">
+            <p className="home-eyebrow">{content.hero.eyebrow}</p>
+            <h1 id="hero-title">{content.hero.title}</h1>
+            <p className="home-hero-description">{content.hero.description}</p>
+            <div className="home-hero-actions">
+              <DownloadCta placement="hero" />
+              <a
+                className="button button-ghost"
+                href={repositoryUrl}
+                rel="noreferrer"
+                target="_blank"
+                onClick={() => trackSiteEvent({
+                  destination: "github",
+                  language,
+                  name: "navigation_click",
+                  placement: "hero",
+                })}
+              >
+                {content.hero.githubLabel}
+              </a>
+            </div>
+            <p className="home-hero-note">{content.hero.note}</p>
           </div>
-          <p>
-            {isChinese
-              ? "开源、灵活的通用 Agent"
-              : "An open-source, flexible general-purpose agent"}
-          </p>
-          <div className="hero-actions">
-            <InstallerDownloadButton
-              className="button button-primary"
-              platform="windows"
-            >
-              {isChinese ? "Windows 下载" : "Download for Windows"}
-            </InstallerDownloadButton>
-            <InstallerDownloadButton
-              className="button button-secondary"
-              platform="mac"
-            >
-              {isChinese ? "macOS 下载" : "Download for macOS"}
-            </InstallerDownloadButton>
-            <InstallerDownloadButton
-              className="button button-secondary"
-              platform="linux"
-            >
-              {isChinese ? "Linux 下载" : "Download for Linux"}
-            </InstallerDownloadButton>
-            <InstallerDownloadButton
-              className="button button-secondary"
-              platform="mobile"
-            >
-              {isChinese ? "Android 下载" : "Download for Android"}
-            </InstallerDownloadButton>
-          </div>
-          <p className="hero-platform-note">
-            {isChinese
-              ? "当前提供 Windows x64、macOS Apple Silicon、Linux x64 与 Android"
-              : "Available for Windows x64, macOS Apple Silicon, Linux x64, and Android."}
-          </p>
+
+          <ProductMedia
+            alt={content.hero.previewAlt}
+            caption={content.hero.previewCaption}
+            variant="desktop"
+          />
         </div>
       </section>
 
-      <section
-        className="proof-section"
-        aria-label={isChinese ? "Anybox 产品能力" : "Anybox capabilities"}
-      >
-        <ProofList
-          items={content.proofPoints}
-          label={isChinese ? "产品关键信号" : "Product highlights"}
-        />
+      <section className="signal-section" id="product" aria-label={language === "zh" ? "产品关键信号" : "Product highlights"}>
+        <ul>
+          {content.signals.map((signal) => <li key={signal}>{signal}</li>)}
+        </ul>
       </section>
 
-      <ScenarioSection language={language} />
-      <CommunityBottomSection language={language} />
-      <SiteFooter language={language} />
+      <section className="home-section workflow-section-new" id="workflow" aria-labelledby="workflow-title">
+        <div className="home-section-heading">
+          <p className="section-kicker">{content.workflow.eyebrow}</p>
+          <h2 id="workflow-title">{content.workflow.title}</h2>
+          <p>{content.workflow.description}</p>
+        </div>
+        <ol className="workflow-list">
+          {content.workflow.steps.map((step, index) => (
+            <li key={step.title}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <div><h3>{step.title}</h3><p>{step.description}</p></div>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="home-section capability-section" aria-labelledby="capability-title">
+        <div className="home-section-heading capability-heading">
+          <p className="section-kicker">{content.capabilities.eyebrow}</p>
+          <h2 id="capability-title">{content.capabilities.title}</h2>
+          <p>{content.capabilities.description}</p>
+        </div>
+        <div className="capability-list">
+          {content.capabilities.items.map((item, index) => (
+            <article className={index % 2 === 1 ? "capability-story is-reversed" : "capability-story"} key={item.title}>
+              <div className="capability-copy">
+                <p className="home-eyebrow">{item.eyebrow}</p>
+                <h3>{item.title}</h3>
+                <p>{item.description}</p>
+              </div>
+              <ProductMedia
+                alt={item.mediaAlt}
+                caption={item.mediaCaption}
+                variant={item.mediaVariant}
+              />
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="home-section use-case-section" aria-labelledby="use-case-title">
+        <div className="home-section-heading">
+          <p className="section-kicker">{content.useCases.eyebrow}</p>
+          <h2 id="use-case-title">{content.useCases.title}</h2>
+          <p>{content.useCases.description}</p>
+        </div>
+        <div className="use-case-list">
+          {content.useCases.items.map((item) => (
+            <article key={item.title}><h3>{item.title}</h3><p>{item.description}</p></article>
+          ))}
+        </div>
+      </section>
+
+      <section className="home-section trust-section" aria-labelledby="trust-title">
+        <div className="trust-copy">
+          <p className="section-kicker">{content.trust.eyebrow}</p>
+          <h2 id="trust-title">{content.trust.title}</h2>
+          <p>{content.trust.description}</p>
+          <div className="trust-links">
+            <a
+              href={repositoryUrl}
+              rel="noreferrer"
+              target="_blank"
+              onClick={() => trackSiteEvent({
+                destination: "github",
+                language,
+                name: "navigation_click",
+                placement: "trust",
+              })}
+            >
+              {content.trust.githubLabel}
+            </a>
+            <a
+              href={releasesUrl}
+              rel="noreferrer"
+              target="_blank"
+              onClick={() => trackSiteEvent({
+                destination: "releases",
+                language,
+                name: "navigation_click",
+                placement: "trust",
+              })}
+            >
+              {content.trust.releasesLabel}
+            </a>
+          </div>
+        </div>
+        <dl className="trust-stats">
+          <div><dt>{content.trust.starsLabel}</dt><dd>{formatStars(repository.stars)}</dd></div>
+          <div><dt>{content.trust.versionLabel}</dt><dd>{repository.latestRelease ?? "—"}</dd></div>
+          <div><dt>{content.trust.updatedLabel}</dt><dd>{releaseDate}</dd></div>
+        </dl>
+      </section>
+
+      <section className="home-final-cta" aria-labelledby="final-cta-title">
+        <p className="section-kicker">{content.finalCta.eyebrow}</p>
+        <h2 id="final-cta-title">{content.finalCta.title}</h2>
+        <p>{content.finalCta.description}</p>
+        <div className="home-final-actions">
+          <DownloadCta placement="final" />
+          <a
+            className="button button-ghost"
+            href="/docs/?doc=getting-started"
+            onClick={() => trackSiteEvent({
+              destination: "docs",
+              language,
+              name: "navigation_click",
+              placement: "final",
+            })}
+          >
+            {content.finalCta.docsLabel}
+          </a>
+        </div>
+      </section>
+
+      <SiteFooter showCommunity />
     </main>
   )
 }

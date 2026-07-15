@@ -1,10 +1,9 @@
 import { useEffect } from "react"
 import { AtmosphereBackground } from "../AtmosphereBackground"
-import { LanguageSwitcher, useSiteLanguage } from "../language"
+import { SiteFooter, SiteHeader } from "../SiteChrome"
+import { useSiteLanguage } from "../language"
 import { repositoryUrl } from "../releaseDownloads"
-import { supportEmail, supportMailto } from "../siteLinks"
-
-const brandLogoBlack = "/brand-logo-black.svg"
+import { supportMailto } from "../siteLinks"
 
 type PricingPlan = {
   name: string
@@ -209,28 +208,6 @@ const pricingCopy = {
   },
 }
 
-function PricingHeader() {
-  const { language } = useSiteLanguage()
-  const copy = pricingCopy[language]
-
-  return (
-    <header className="site-header pricing-header">
-      <a className="brand-lockup" href="/" aria-label={`${copy.home} Anybox`}>
-        <img src={brandLogoBlack} alt="" />
-        <span>Anybox</span>
-      </a>
-      <nav className="docs-header-nav" aria-label={copy.pricing}>
-        <a href="/">{copy.home}</a>
-        <a href="/pricing/" aria-current="page">{copy.pricing}</a>
-        <a href="/docs/">{copy.docs}</a>
-        <a href="/privacy/">{copy.privacy}</a>
-        <a href={supportMailto}>{supportEmail}</a>
-      </nav>
-      <LanguageSwitcher />
-    </header>
-  )
-}
-
 function PlanAction({ action }: { action: PricingPlan["action"] }) {
   if ("disabled" in action) {
     return (
@@ -252,26 +229,6 @@ function PlanAction({ action }: { action: PricingPlan["action"] }) {
   )
 }
 
-function PricingFooter() {
-  const { language } = useSiteLanguage()
-  const copy = pricingCopy[language]
-
-  return (
-    <footer className="site-footer pricing-footer">
-      <span>© 2026 Anybox</span>
-      <nav className="site-footer-links" aria-label={copy.pricing}>
-        <a href="/">{copy.home}</a>
-        <a href="/docs/">{copy.docs}</a>
-        <a href="/terms/">{copy.terms}</a>
-        <a href="/privacy/">{copy.privacy}</a>
-        <a href="/refunds/">{copy.refunds}</a>
-        <a href="/acceptable-use/">{copy.acceptableUse}</a>
-        <a href={supportMailto}>{supportEmail}</a>
-      </nav>
-    </footer>
-  )
-}
-
 export function PricingPage() {
   const { language } = useSiteLanguage()
   const copy = pricingCopy[language]
@@ -283,7 +240,7 @@ export function PricingPage() {
   return (
     <main className="pricing-page-shell">
       <AtmosphereBackground />
-      <PricingHeader />
+      <SiteHeader currentPage="pricing" />
 
       <div className="pricing-content">
         <header className="pricing-hero">
@@ -353,7 +310,7 @@ export function PricingPage() {
         </section>
       </div>
 
-      <PricingFooter />
+      <SiteFooter />
     </main>
   )
 }

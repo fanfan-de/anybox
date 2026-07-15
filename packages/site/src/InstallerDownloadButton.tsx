@@ -1,22 +1,32 @@
 import { useEffect, useState } from "react"
-import type { MouseEvent, ReactNode } from "react"
+import type { AriaRole, MouseEvent, ReactNode } from "react"
+import { useSiteLanguage } from "./language"
 import {
   installerFallbackUrls,
-  navigateToLatestInstaller,
+  resolveInstaller,
   resolveLatestReleaseVersion,
   type InstallerPlatform,
 } from "./releaseDownloads"
+import { trackSiteEvent } from "./siteAnalytics"
 
-async function downloadLatestInstaller(
-  event: MouseEvent<HTMLAnchorElement>,
-  platform: InstallerPlatform,
-) {
-  event.preventDefault()
-  await navigateToLatestInstaller(platform)
-}
+type DownloadPlacement = "hero" | "final" | "docs" | "platform-menu"
 
-function useLatestReleaseVersion(platform: InstallerPlatform) {
+export function InstallerDownloadButton({
+  children,
+  className,
+  placement = "docs",
+  platform,
+  role,
+}: {
+  children: ReactNode
+  className: string
+  placement?: DownloadPlacement
+  platform: InstallerPlatform
+  role?: AriaRole
+}) {
+  const { language } = useSiteLanguage()
   const [releaseVersion, setReleaseVersion] = useState("")
+  const [isResolving, setIsResolving] = useState(false)
 
   useEffect(() => {
     let ignoreResult = false
@@ -25,39 +35,41 @@ function useLatestReleaseVersion(platform: InstallerPlatform) {
       .then((version) => {
         if (!ignoreResult) setReleaseVersion(version)
       })
-      .catch(() => {
-        if (!ignoreResult) setReleaseVersion("")
-      })
+      .catch(() => {})
 
     return () => {
       ignoreResult = true
     }
   }, [platform])
 
-  return releaseVersion
-}
+  async function handleDownload(event: MouseEvent<HTMLAnchorElement>) {
+    event.preventDefault()
+    if (isResolving) return
 
-export function InstallerDownloadButton({
-  children,
-  className,
-  platform,
-}: {
-  children: ReactNode
-  className: string
-  platform: InstallerPlatform
-}) {
-  const releaseVersion = useLatestReleaseVersion(platform)
+    setIsResolving(true)
+    const resolved = await resolveInstaller(platform)
+
+    trackSiteEvent({
+      language,
+      name: "download_click",
+      placement,
+      platform,
+      source: resolved.source,
+      version: resolved.version,
+    })
+    window.location.assign(resolved.url)
+  }
 
   return (
     <a
+      aria-busy={isResolving || undefined}
       className={className}
       href={installerFallbackUrls[platform]}
-      onClick={(event) => void downloadLatestInstaller(event, platform)}
+      onClick={(event) => void handleDownload(event)}
+      role={role}
     >
       <span>{children}</span>
-      {releaseVersion ? (
-        <span className="button-version">{releaseVersion}</span>
-      ) : null}
+      {releaseVersion ? <span className="button-version">{releaseVersion}</span> : null}
     </a>
   )
 }
