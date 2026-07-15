@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { DownloadCta } from "./DownloadCta"
 import { ProductMedia } from "./ProductMedia"
 import { RibbonBackground } from "./RibbonBackground"
@@ -100,7 +100,6 @@ function useHomeMetadata(language: "zh" | "en") {
 export function App() {
   const { language } = useSiteLanguage()
   const content = siteContent[language]
-  const pageRef = useRef<HTMLElement>(null)
   const repository = useRepositorySummary()
   const releaseDate = repository.publishedAt
     ? new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en", {
@@ -110,62 +109,8 @@ export function App() {
 
   useHomeMetadata(language)
 
-  useEffect(() => {
-    const container = pageRef.current
-    if (!container) return
-
-    let gestureHandled = false
-    let gestureResetTimer = 0
-
-    const resetGesture = () => {
-      gestureHandled = false
-    }
-
-    const handleWheel = (event: WheelEvent) => {
-      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || Math.abs(event.deltaY) < 0.5) return
-
-      window.clearTimeout(gestureResetTimer)
-      gestureResetTimer = window.setTimeout(resetGesture, 360)
-      event.preventDefault()
-
-      if (gestureHandled) return
-      gestureHandled = true
-
-      const headerHeight = Number.parseFloat(
-        window.getComputedStyle(container).getPropertyValue("--home-header-height"),
-      ) || 0
-      const containerTop = container.getBoundingClientRect().top
-      const currentScroll = container.scrollTop
-      const snapTargets = Array.from(container.querySelectorAll<HTMLElement>(
-        ".home-hero-stage, .home-hero-preview, .home-section, .capability-story, .home-final-cta, .site-footer",
-      ))
-      const snapPositions = snapTargets.map((target) => (
-        target.getBoundingClientRect().top - containerTop + currentScroll - headerHeight
-      ))
-      const nextPosition = event.deltaY > 0
-        ? snapPositions.find((position) => position > currentScroll + 2)
-        : snapPositions.slice().reverse().find((position) => position < currentScroll - 2)
-
-      if (nextPosition === undefined) return
-
-      const targetPosition = Math.max(0, nextPosition)
-      container.style.scrollSnapType = "none"
-      window.requestAnimationFrame(() => {
-        container.scrollTop = targetPosition
-      })
-    }
-
-    container.addEventListener("wheel", handleWheel, { passive: false })
-
-    return () => {
-      window.clearTimeout(gestureResetTimer)
-      container.style.scrollSnapType = ""
-      container.removeEventListener("wheel", handleWheel)
-    }
-  }, [])
-
   return (
-    <main className="page-shell home-page-shell" id="top" ref={pageRef}>
+    <main className="page-shell home-page-shell" id="top">
       <SiteHeader currentPage="home" />
 
       <section className="home-hero" aria-labelledby="hero-title">
