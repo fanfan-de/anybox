@@ -18,6 +18,45 @@
   --brand-soft: #e3f0ec;
   --shadow-overlay: 0 18px 48px rgba(25, 31, 27, 0.12);
 
+  --hero-stage-background: #020304;
+  --hero-stage-surface: rgba(2, 5, 7, 0.74);
+  --hero-stage-surface-strong: rgba(2, 5, 7, 0.94);
+  --hero-stage-text: #f8fafc;
+  --hero-stage-muted: #afbecd;
+  --hero-stage-border: rgba(255, 255, 255, 0.18);
+  --hero-stage-border-soft: rgba(255, 255, 255, 0.1);
+  --hero-ribbon-lime: #b7ff37;
+  --hero-ribbon-cyan: #35e7ff;
+  --hero-ribbon-blue: #6f88ff;
+  --hero-ribbon-pink: #ff4fd8;
+  --hero-ribbon-coral: #ff6b4a;
+  --hero-ribbon-glow-lime: rgba(183, 255, 55, 0.105);
+  --hero-ribbon-glow-cyan: rgba(53, 231, 255, 0.065);
+  --hero-ribbon-glow-blue: rgba(111, 136, 255, 0.045);
+  --hero-ribbon-glow-pink: rgba(255, 79, 216, 0.034);
+  --hero-ribbon-glow-clear: rgba(0, 0, 0, 0);
+  --hero-shadow-glow: 0 0 42px rgba(53, 231, 255, 0.28), 0 0 110px rgba(255, 79, 216, 0.16);
+
+  --semantic-button-hero-primary-surface: var(--hero-ribbon-lime);
+  --semantic-button-hero-primary-surface-hover: var(--hero-ribbon-cyan);
+  --semantic-button-hero-primary-border: var(--hero-ribbon-lime);
+  --semantic-button-hero-primary-border-hover: var(--hero-ribbon-cyan);
+  --semantic-button-hero-primary-text: var(--hero-stage-background);
+  --semantic-button-hero-primary-text-hover: var(--hero-stage-background);
+  --semantic-button-hero-primary-surface-disabled: var(--hero-stage-surface);
+  --semantic-button-hero-primary-border-disabled: var(--hero-stage-border-soft);
+  --semantic-button-hero-primary-text-disabled: var(--hero-stage-muted);
+
+  --semantic-button-hero-secondary-surface: rgba(255, 255, 255, 0.04);
+  --semantic-button-hero-secondary-surface-hover: rgba(255, 255, 255, 0.12);
+  --semantic-button-hero-secondary-border: var(--hero-stage-border);
+  --semantic-button-hero-secondary-border-hover: rgba(255, 255, 255, 0.38);
+  --semantic-button-hero-secondary-text: var(--hero-stage-text);
+  --semantic-button-hero-secondary-text-hover: var(--hero-stage-text);
+  --semantic-button-hero-secondary-surface-disabled: var(--hero-stage-surface);
+  --semantic-button-hero-secondary-border-disabled: var(--hero-stage-border-soft);
+  --semantic-button-hero-secondary-text-disabled: var(--hero-stage-muted);
+
   --semantic-button-primary-surface: var(--text-primary);
   --semantic-button-primary-surface-hover: var(--brand-primary);
   --semantic-button-primary-border: var(--text-primary);
