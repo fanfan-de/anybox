@@ -1,4 +1,8 @@
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+const shutdownDiagnosticsMock = vi.hoisted(() => ({
+  recordShutdownDiagnostic: vi.fn(),
+}))
 
 const electronMock = vi.hoisted(() => {
   const { EventEmitter } = require("node:events") as typeof import("node:events")
@@ -89,7 +93,59 @@ vi.mock("electron", () => ({
   BrowserWindow: electronMock.BrowserWindow,
 }))
 
+vi.mock("./shutdown-diagnostics", () => shutdownDiagnosticsMock)
+
+import type { DesktopRendererMemoryDiagnosticsRecord } from "../shared/desktop-ipc-contract"
+import {
+  resetRendererMemoryDiagnosticsStoreForTest,
+  setRendererMemoryDiagnosticsRecord,
+} from "./renderer-memory-diagnostics-store"
 import { WorkbenchWindowManager } from "./workbench-window-manager"
+
+beforeEach(() => {
+  shutdownDiagnosticsMock.recordShutdownDiagnostic.mockReset()
+  resetRendererMemoryDiagnosticsStoreForTest()
+})
+
+function createRendererMemoryDiagnosticsRecord(
+  webContentsID: number,
+): DesktopRendererMemoryDiagnosticsRecord {
+  return {
+    currentSession: {
+      assistantMessageCount: 1,
+      currentSessionID: "session-1",
+      diffChars: 2,
+      draftPatchChars: 3,
+      maxTraceItemChars: 4,
+      messageCount: 5,
+      messageTreeContentChars: 6,
+      messageTreeNodeCount: 7,
+      streamingAssistantMessageCount: 1,
+      toolInputChars: 8,
+      toolOutputChars: 9,
+      traceItemCount: 10,
+      traceTextChars: 11,
+      updatedAt: 100,
+    },
+    heap: {
+      jsHeapSizeLimit: 4_000,
+      totalJSHeapSize: 2_000,
+      usedJSHeapSize: 1_000,
+    },
+    performanceEntries: {
+      mark: 12,
+      measure: 13,
+      navigation: 1,
+      paint: 2,
+      resource: 14,
+      total: 42,
+    },
+    senderURL: "http://127.0.0.1:5173/index.html",
+    source: "renderer",
+    timestamp: 100,
+    webContentsID,
+  }
+}
 
 describe("WorkbenchWindowManager", () => {
   it("does not rebroadcast identical renderer snapshots", () => {
@@ -313,6 +369,48 @@ describe("WorkbenchWindowManager", () => {
       panelID: "session:session-1",
       reason: "focus",
     }))
+  })
+
+  it("logs the last renderer memory snapshot when a session popout renderer exits", async () => {
+    electronMock.createdWindows.length = 0
+    const mainWindow = new electronMock.BrowserWindow()
+    const manager = new WorkbenchWindowManager({
+      rendererEntryUrl: "http://127.0.0.1:5173/index.html",
+      createPopoutWindowOptions: () => ({
+        width: 1000,
+        height: 700,
+      }),
+    })
+    manager.registerMainWindow(mainWindow as any)
+
+    const pendingDetach = manager.detachSessionPanel({
+      panelID: "session:session-1",
+      sessionID: "session-1",
+      title: "Session 1",
+      lastMainGroupID: "group-1",
+    })
+    const popoutWindow = electronMock.createdWindows[1]
+    const popoutContext = manager.getWindowContext(popoutWindow.webContents as any)
+    manager.markPanelMounted({
+      panelID: "session:session-1",
+      windowID: popoutContext.windowID,
+    })
+    await pendingDetach
+
+    const webContentsID = popoutWindow.webContents.id
+    const snapshot = createRendererMemoryDiagnosticsRecord(webContentsID)
+    setRendererMemoryDiagnosticsRecord(snapshot)
+    popoutWindow.webContents.emit("render-process-gone", {}, { exitCode: -1, reason: "oom" })
+
+    expect(shutdownDiagnosticsMock.recordShutdownDiagnostic).toHaveBeenCalledWith(
+      "render-process-gone",
+      expect.objectContaining({
+        lastRendererMemoryDiagnostics: snapshot,
+        reason: "oom",
+        webContentsID,
+      }),
+    )
+    expect(popoutWindow.isDestroyed()).toBe(true)
   })
 
   it("keeps a popout window alive when moving one of multiple panels out", async () => {

@@ -1,4 +1,4 @@
-import { memo, useMemo, type MouseEvent, type ReactNode } from "react"
+import { memo, useMemo, type ReactNode } from "react"
 import ReactMarkdown, { type Components, type UrlTransform } from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { toLocalImageProtocolUrl } from "../../../shared/local-image-protocol"
@@ -7,9 +7,11 @@ import {
   normalizeLocalFileLinkTarget,
   normalizeLooseLocalFileMarkdownLinks,
 } from "./thread-markdown-normalize"
+import { ThreadExternalLink } from "./thread-link-routing"
 import type { WorkspaceFileLineRange } from "./types"
 
 export { normalizeLooseLocalFileMarkdownLinks } from "./thread-markdown-normalize"
+export { openExternalThreadLink } from "./thread-link-routing"
 
 export interface ThreadMarkdownProps {
   className?: string
@@ -120,25 +122,6 @@ function normalizeMarkdownImageSrc(value: string) {
   return toLocalImageProtocolUrl(value)
 }
 
-export function openExternalThreadLink(href: string) {
-  const openExternalUrl = window.desktop?.openExternalUrl
-  if (openExternalUrl) {
-    void openExternalUrl({ url: href }).catch((error) => {
-      console.error("[desktop] Failed to open external URL.", error)
-      window.open(href, "_blank", "noopener,noreferrer")
-    })
-    return
-  }
-
-  window.open(href, "_blank", "noopener,noreferrer")
-}
-
-function handleExternalLinkClick(event: MouseEvent<HTMLAnchorElement>, href: string) {
-  if (event.defaultPrevented) return
-  event.preventDefault()
-  openExternalThreadLink(href)
-}
-
 function MarkdownLink({
   children,
   href,
@@ -192,15 +175,9 @@ function MarkdownLink({
   }
 
   return (
-    <a
-      className="thread-inline-link"
-      href={linkTarget.href}
-      onClick={(event) => handleExternalLinkClick(event, linkTarget.href)}
-      rel="noreferrer noopener"
-      target="_blank"
-    >
+    <ThreadExternalLink className="thread-inline-link" href={linkTarget.href}>
       {children}
-    </a>
+    </ThreadExternalLink>
   )
 }
 

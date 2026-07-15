@@ -24,6 +24,7 @@ import type {
 import { DESKTOP_WORKBENCH_STATE_EVENT_CHANNEL } from "../shared/desktop-ipc-contract"
 import { safeWarn } from "./safe-console"
 import { getWebContentsForWindowSafely, sendWebContentsSafely } from "./safe-web-contents-send"
+import { attachRendererMemoryDiagnostics } from "./renderer-memory-diagnostics-store"
 import { recordShutdownDiagnostic } from "./shutdown-diagnostics"
 
 const MAIN_WORKBENCH_WINDOW_ID = "main"
@@ -508,14 +509,17 @@ export class WorkbenchWindowManager {
 
     record.browserWindow.webContents.once("render-process-gone", (_event, details) => {
       if (record.kind !== "session-popout") return
-      recordShutdownDiagnostic("render-process-gone", {
-        ...details,
-        kind: record.kind,
-        panelID: record.panelID,
-        surfaceID: record.surfaceID,
-        webContentsID,
-        windowID: record.id,
-      })
+      recordShutdownDiagnostic(
+        "render-process-gone",
+        attachRendererMemoryDiagnostics(webContentsID, {
+          ...details,
+          kind: record.kind,
+          panelID: record.panelID,
+          surfaceID: record.surfaceID,
+          webContentsID,
+          windowID: record.id,
+        }),
+      )
       safeWarn("[desktop] session popout renderer exited; restoring panel to main window.", details)
       this.restoreSurfacePanelsToMain(record.surfaceID, "restored")
       this.closeWindowForFailedDetach(record.id)

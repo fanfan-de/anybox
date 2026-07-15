@@ -1,13 +1,16 @@
 import { expect, test } from "@playwright/test"
 
 const TARGET_MESSAGE_ID = "assistant-e2e"
+const SECOND_TARGET_MESSAGE_ID = "assistant-e2e-second"
 const TARGET_GROUP_ID = "turn:turn-e2e"
+const PENDING_GROUP_ID = "turn:pending:user-e2e"
 
 test("real ThreadView preserves its semantic anchor when a completed turn collapses", async ({ page }) => {
   const pageErrors: string[] = []
   page.on("pageerror", (error) => pageErrors.push(error.message))
 
   await page.goto("/e2e/thread-execution-harness.html")
+  await page.locator("#canonicalize-turn").click()
 
   const thread = page.locator(".thread-column.is-virtualized")
   const spacer = thread.locator(":scope > .thread-virtual-spacer")
@@ -94,5 +97,112 @@ test("real ThreadView preserves its semantic anchor when a completed turn collap
 
   expect(browserBehavior.overflowAnchor).toBe("none")
   expect(Math.abs(browserBehavior.clampedScrollTop - browserBehavior.maxScrollTop)).toBeLessThanOrEqual(1)
+  expect(pageErrors).toEqual([])
+})
+
+test("pending turn canonicalization never exposes duplicate processing summaries", async ({ page }) => {
+  const pageErrors: string[] = []
+  page.on("pageerror", (error) => pageErrors.push(error.message))
+
+  await page.goto("/e2e/thread-execution-harness.html")
+
+  const thread = page.locator(".thread-column.is-virtualized")
+  const pendingSummary = thread.locator(
+    `.assistant-execution-summary-button[data-thread-execution-group-id="${PENDING_GROUP_ID}"]`,
+  )
+  const canonicalSummary = thread.locator(
+    `.assistant-execution-summary-button[data-thread-execution-group-id="${TARGET_GROUP_ID}"]`,
+  )
+  await expect(pendingSummary).toHaveCount(1)
+  await expect(pendingSummary).toHaveAttribute("aria-expanded", "true")
+
+  await pendingSummary.click()
+  await expect(pendingSummary).toHaveAttribute("aria-expanded", "false")
+
+  await thread.evaluate((column, groupIDs) => {
+    const readSummaries = () => Array.from(
+      column.querySelectorAll<HTMLElement>(".assistant-execution-summary-button"),
+    ).filter((element) => groupIDs.includes(element.dataset.threadExecutionGroupId ?? ""))
+    const state = {
+      expandedObservationCount: 0,
+      expandedGroupIDs: [] as string[],
+      maxCount: 0,
+    }
+    const sample = () => {
+      const summaries = readSummaries()
+      state.maxCount = Math.max(state.maxCount, summaries.length)
+      const expandedGroupIDs = summaries.flatMap((element) => (
+        element.getAttribute("aria-expanded") === "true"
+          ? [element.dataset.threadExecutionGroupId ?? "unknown"]
+          : []
+      ))
+      if (expandedGroupIDs.length > 0) {
+        state.expandedObservationCount += 1
+        state.expandedGroupIDs.push(...expandedGroupIDs)
+      }
+    }
+    sample()
+    ;(window as typeof window & { __threadSummaryObservation?: typeof state }).__threadSummaryObservation = state
+    const observer = new MutationObserver(() => {
+      sample()
+    })
+    observer.observe(column, {
+      attributeFilter: ["aria-expanded"],
+      attributes: true,
+      childList: true,
+      subtree: true,
+    })
+    const sampleFrame = () => {
+      sample()
+      const frameID = requestAnimationFrame(sampleFrame)
+      ;(window as typeof window & { __threadSummaryFrameID?: number }).__threadSummaryFrameID = frameID
+    }
+    const frameID = requestAnimationFrame(sampleFrame)
+    const typedWindow = window as typeof window & {
+      __threadSummaryFrameID?: number
+      __threadSummaryObserver?: MutationObserver
+    }
+    typedWindow.__threadSummaryFrameID = frameID
+    typedWindow.__threadSummaryObserver = observer
+  }, [PENDING_GROUP_ID, TARGET_GROUP_ID])
+
+  await page.locator("#canonicalize-turn").click()
+
+  await expect(pendingSummary).toHaveCount(0)
+  await expect(canonicalSummary).toHaveCount(1)
+  await expect(canonicalSummary).toHaveAttribute("aria-expanded", "false")
+  await expect(page.locator(".thread-e2e-harness")).toHaveAttribute("data-target-turn-count", "1")
+  await expect(page.locator(".thread-e2e-harness")).toHaveAttribute("data-target-assistant-count", "2")
+  await expect(
+    thread.locator(`[data-thread-message-id="${SECOND_TARGET_MESSAGE_ID}"]`).filter({
+      hasText: "E2E final response remains visible.",
+    }),
+  ).toHaveCount(1)
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  }))
+  const observation = await page.evaluate(() => {
+    const typedWindow = window as typeof window & {
+      __threadSummaryFrameID?: number
+      __threadSummaryObservation?: {
+        expandedGroupIDs: string[]
+        expandedObservationCount: number
+        maxCount: number
+      }
+      __threadSummaryObserver?: MutationObserver
+    }
+    typedWindow.__threadSummaryObserver?.disconnect()
+    if (typedWindow.__threadSummaryFrameID !== undefined) {
+      cancelAnimationFrame(typedWindow.__threadSummaryFrameID)
+    }
+    return typedWindow.__threadSummaryObservation ?? {
+      expandedGroupIDs: ["missing-observer"],
+      expandedObservationCount: Number.POSITIVE_INFINITY,
+      maxCount: Number.POSITIVE_INFINITY,
+    }
+  })
+
+  expect(observation.maxCount).toBeLessThanOrEqual(1)
+  expect(observation.expandedObservationCount, observation.expandedGroupIDs.join(", ")).toBe(0)
   expect(pageErrors).toEqual([])
 })

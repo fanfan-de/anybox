@@ -23,6 +23,11 @@ export interface ThreadPresentationStoreActions {
     scopeID: ThreadPresentationScopeID,
     groupID: ThreadPresentationGroupID,
   ) => ProcessDisclosurePreference
+  migrateProcessDisclosurePreference: (
+    scopeID: ThreadPresentationScopeID,
+    fromGroupID: ThreadPresentationGroupID,
+    toGroupID: ThreadPresentationGroupID,
+  ) => void
   setProcessDisclosurePreference: (
     scopeID: ThreadPresentationScopeID,
     groupID: ThreadPresentationGroupID,
@@ -91,6 +96,29 @@ export function createThreadPresentationStore(): ThreadPresentationStoreApi {
 
     getProcessDisclosurePreference(scopeID, groupID) {
       return selectProcessDisclosurePreference(get(), scopeID, groupID)
+    },
+
+    migrateProcessDisclosurePreference(scopeID, fromGroupID, toGroupID) {
+      if (fromGroupID === toGroupID) return
+
+      set((state) => {
+        const sourceKey = entryKey(scopeID, fromGroupID)
+        const source = state.entries.get(sourceKey)
+        if (!source) return state
+
+        const targetKey = entryKey(scopeID, toGroupID)
+        const target = state.entries.get(targetKey)
+        const preference = source.preference === "expanded" || target?.preference === "expanded"
+          ? "expanded"
+          : "collapsed"
+        const entries = new Map(state.entries)
+        entries.delete(sourceKey)
+        if (!target || target.preference !== preference) {
+          entries.set(targetKey, { groupID: toGroupID, preference, scopeID })
+        }
+
+        return { ...state, entries }
+      })
     },
 
     setProcessDisclosurePreference(scopeID, groupID, preference) {

@@ -1,9 +1,14 @@
 import { useState } from "react"
-import { fireEvent, render, screen, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, within } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { DesktopIpcOutput } from "../../../../shared/desktop-ipc-contract"
+import { createConversationStore, type ConversationStoreApi } from "../agent-workspace/conversation-store"
 import { I18nProvider } from "../i18n/I18nProvider"
-import { SessionBagSubmissionDialog } from "./WorkbenchPaneSurface"
+import type { AssistantThreadMessage, ThreadTurn, UserThreadMessage } from "../types"
+import {
+  SessionBagSubmissionDialog,
+  useWorkbenchPaneConversationSnapshot,
+} from "./WorkbenchPaneSurface"
 
 type SessionBagPrepareResult = DesktopIpcOutput<"desktop:prepare-session-bag-submission">
 
@@ -58,6 +63,98 @@ function renderSessionBagDialog({
 
   return render(<Harness />)
 }
+
+function userMessage(id: string): UserThreadMessage {
+  return {
+    id,
+    kind: "user",
+    text: "Prompt",
+    timestamp: 1,
+  }
+}
+
+function assistantMessage(id: string): AssistantThreadMessage {
+  return {
+    backendTurnID: "turn-canonical",
+    id,
+    items: [],
+    kind: "assistant",
+    runtime: {
+      phase: "responding",
+      startedAt: 2,
+      updatedAt: 3,
+    },
+    segmentID: "segment-canonical",
+    state: "responding",
+    timestamp: 2,
+  }
+}
+
+function ConversationSnapshotProbe({
+  store,
+}: {
+  store: ConversationStoreApi
+}) {
+  const { activeMessages, activeTurns } = useWorkbenchPaneConversationSnapshot(store, "session-1")
+  const flattenedMessages = activeTurns.flatMap((turn) => turn.messages)
+  const sharesTurnMessages = activeMessages.length === flattenedMessages.length &&
+    activeMessages.every((message, index) => Object.is(message, flattenedMessages[index]))
+
+  return (
+    <output
+      data-testid="conversation-snapshot"
+      data-message-ids={activeMessages.map((message) => message.id).join(",")}
+      data-shares-turn-messages={String(sharesTurnMessages)}
+      data-turn-ids={activeTurns.map((turn) => turn.turnID).join(",")}
+    />
+  )
+}
+
+describe("WorkbenchPaneSurface conversation snapshot", () => {
+  it("reacts to canonical turn updates and derives messages from the same turns snapshot", () => {
+    const user = userMessage("user-1")
+    const baseStore = createConversationStore({ "session-1": [user] })
+    const staleMessagesGetter = vi.fn(() => [user])
+    const store: ConversationStoreApi = {
+      ...baseStore,
+      getSessionMessages: staleMessagesGetter,
+    }
+
+    render(<ConversationSnapshotProbe store={store} />)
+
+    expect(screen.getByTestId("conversation-snapshot")).toHaveAttribute(
+      "data-message-ids",
+      "user-1",
+    )
+
+    const assistant = assistantMessage("assistant-1")
+    const canonicalTurn: ThreadTurn = {
+      messages: [user, assistant],
+      startedAt: 1,
+      status: "running",
+      turnID: "turn-canonical",
+      updatedAt: 3,
+      userMessageID: user.id,
+    }
+    act(() => {
+      baseStore.replaceTurns({ "session-1": [canonicalTurn] })
+    })
+
+    expect(screen.getByTestId("conversation-snapshot")).toHaveAttribute(
+      "data-turn-ids",
+      "turn-canonical",
+    )
+    expect(screen.getByTestId("conversation-snapshot")).toHaveAttribute(
+      "data-message-ids",
+      "user-1,assistant-1",
+    )
+    expect(screen.getByTestId("conversation-snapshot")).toHaveAttribute(
+      "data-shares-turn-messages",
+      "true",
+    )
+    expect(staleMessagesGetter).not.toHaveBeenCalled()
+  })
+})
 
 describe("SessionBagSubmissionDialog", () => {
   beforeEach(() => {

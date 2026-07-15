@@ -473,7 +473,7 @@
                   </div>
                   <div class="io">
                     <b>处理</b>
-                    <p>调用 <code>updateConversationTurns</code> 或 <code>setConversations</code>。</p>
+                    <p>调用 <code>updateConversationTurns</code> 或 <code>setConversations</code>；runtime turn identity 到达时在同一 transaction 内把 <code>pending:*</code> 原子绑定/合并到 canonical turn。</p>
                   </div>
                   <div class="io">
                     <b>输出</b>
@@ -517,11 +517,11 @@
                 <div class="io-grid">
                   <div class="io">
                     <b>输入</b>
-                    <p><code>useConversationMessages(conversationStore, pane.sessionID)</code>。</p>
+                    <p><code>useConversationTurns(conversationStore, pane.sessionID)</code>。</p>
                   </div>
                   <div class="io">
                     <b>处理</b>
-                    <p>合并 activeSession、messageTree、diff、permission、side chat、handlers。</p>
+                    <p>从同一 turns snapshot 派生 messages，再合并 activeSession、messageTree、diff、permission、side chat、handlers。</p>
                   </div>
                   <div class="io">
                     <b>输出</b>
@@ -675,7 +675,7 @@
             </article>
             <article class="card" data-tone="green">
               <h3>Turn execution disclosure</h3>
-              <p>Canonical <code>ThreadTurn</code> 先派生 <code>ThreadExecutionGroup</code>，再由 <code>ThreadPresentationStore</code> 决定是否从 <code>displayRows</code> 移除 process prefix。自动折叠使用 semantic scroll-anchor transaction，不使用 CSS 隐藏 row。</p>
+              <p>Canonical <code>ThreadTurn</code> 先派生 <code>ThreadExecutionGroup</code>；同 backend execution 在任一帧最多一个 summary。投影只对有 backend/segment 强身份的重复 canonical wrappers 做保守归并，随后由 <code>ThreadPresentationStore</code> 决定是否从 <code>displayRows</code> 移除 process prefix。<code>completed</code> 且 final response 已解析时，response 前的失败 trace 仍属于 process prefix；非 <code>completed</code> 终态或 <code>completed</code> 无最终 response 时，最后一条失败/终态 trace 才作为 protected outcome 留在折叠区外。自动折叠使用 semantic scroll-anchor transaction，不使用 CSS 隐藏 row。</p>
             </article>
             <article class="card" data-tone="violet">
               <h3>Right sidebar side chat</h3>

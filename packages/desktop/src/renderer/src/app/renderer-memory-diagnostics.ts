@@ -52,10 +52,12 @@ const EMPTY_SESSION_DIAGNOSTICS: DesktopRendererSessionMemoryDiagnostics = {
 
 const DIAGNOSTIC_REPORT_INTERVAL_MS = 30_000
 const DIAGNOSTIC_REPORT_THROTTLE_MS = 5_000
+const PERFORMANCE_ENTRY_CLEANUP_INTERVAL_MS = 1_000
 
 let currentSessionDiagnostics = EMPTY_SESSION_DIAGNOSTICS
 let diagnosticsInstalled = false
 let diagnosticsReportTimerID: number | null = null
+let performanceEntryCleanupTimerID: number | null = null
 let lastDiagnosticsReportAt = 0
 
 function stringLength(value: string | null | undefined) {
@@ -265,9 +267,32 @@ export function reportRendererMemoryDiagnostics(reason?: string, options: { forc
   })
 }
 
+export function clearRendererPerformanceEntries() {
+  if (typeof performance === "undefined") return
+
+  try {
+    performance.clearMeasures?.()
+  } catch {
+    // Performance cleanup is best-effort and must never break the renderer.
+  }
+
+  try {
+    performance.clearMarks?.()
+  } catch {
+    // Performance cleanup is best-effort and must never break the renderer.
+  }
+}
+
 export function installRendererMemoryDiagnostics() {
   if (typeof window === "undefined" || diagnosticsInstalled) return
   diagnosticsInstalled = true
+
+  if (import.meta.env.DEV) {
+    clearRendererPerformanceEntries()
+    performanceEntryCleanupTimerID = window.setInterval(() => {
+      clearRendererPerformanceEntries()
+    }, PERFORMANCE_ENTRY_CLEANUP_INTERVAL_MS)
+  }
 
   window.__ANYBOX_RENDERER_DIAGNOSTICS__ = {
     getSnapshot: getRendererMemoryDiagnosticsSnapshot,
@@ -286,6 +311,10 @@ export function uninstallRendererMemoryDiagnostics() {
   if (diagnosticsReportTimerID !== null) {
     window.clearInterval(diagnosticsReportTimerID)
     diagnosticsReportTimerID = null
+  }
+  if (performanceEntryCleanupTimerID !== null) {
+    window.clearInterval(performanceEntryCleanupTimerID)
+    performanceEntryCleanupTimerID = null
   }
   diagnosticsInstalled = false
   delete window.__ANYBOX_RENDERER_DIAGNOSTICS__

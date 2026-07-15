@@ -1,11 +1,11 @@
-import { Fragment, useMemo, type MouseEvent, type ReactNode } from "react"
+import { Fragment, useMemo, type ReactNode } from "react"
 import {
   normalizeLooseLocalFileMarkdownLinks,
   normalizeMarkdownLinkTarget,
-  openExternalThreadLink,
   type MarkdownArtifactLinkTarget,
   type MarkdownLocalFileLinkTarget,
 } from "./thread-markdown"
+import { ThreadExternalLink } from "./thread-link-routing"
 import type { UserThreadMessageReference } from "./types"
 
 type ThreadRichTextElement = "div" | "p" | "span"
@@ -415,23 +415,14 @@ function renderSegment(
     )
   }
 
-  function handleClick(event: MouseEvent<HTMLAnchorElement>) {
-    if (event.defaultPrevented) return
-    event.preventDefault()
-    openExternalThreadLink(href)
-  }
-
   return (
-    <a
+    <ThreadExternalLink
       key={`link-${index}-${href}`}
       className="thread-inline-link"
       href={href}
-      onClick={handleClick}
-      rel="noreferrer noopener"
-      target="_blank"
     >
       {segment.text}
-    </a>
+    </ThreadExternalLink>
   )
 }
 

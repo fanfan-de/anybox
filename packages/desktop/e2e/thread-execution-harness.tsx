@@ -3,6 +3,11 @@ import { createRoot } from "react-dom/client"
 import { I18nProvider } from "../src/renderer/src/app/i18n/I18nProvider"
 import { ThreadView, type ThreadScrollSnapshot } from "../src/renderer/src/app/thread/ThreadView"
 import {
+  bindPendingThreadTurnToCanonical,
+  deriveActiveMessages,
+  reconcileThreadTurns,
+} from "../src/renderer/src/app/thread-turn-state"
+import {
   DEFAULT_ASSISTANT_TRACE_VISIBILITY,
   type AssistantThreadMessage,
   type SessionSummary,
@@ -15,6 +20,8 @@ import "./thread-execution-harness.css"
 
 const TARGET_TURN_ID = "turn-e2e"
 const TARGET_MESSAGE_ID = "assistant-e2e"
+const SECOND_TARGET_MESSAGE_ID = "assistant-e2e-second"
+const PENDING_TURN_ID = "pending:user-e2e"
 
 const session: SessionSummary = {
   id: "session-e2e",
@@ -56,11 +63,11 @@ function targetAssistantMessage(completed: boolean): AssistantThreadMessage {
       status: terminalStatus,
     })),
     {
-      id: "target-final-response",
+      id: "target-intermediate-response",
       kind: "text",
       timestamp: 2_000,
       label: "Assistant",
-      text: "E2E final response remains visible.",
+      text: "The first execution segment has finished; continuing with the canonical segment.",
       status: terminalStatus,
       isStreaming: !completed,
     },
@@ -69,7 +76,7 @@ function targetAssistantMessage(completed: boolean): AssistantThreadMessage {
   return {
     id: TARGET_MESSAGE_ID,
     kind: "assistant",
-    backendTurnID: TARGET_TURN_ID,
+    backendTurnID: PENDING_TURN_ID,
     segmentID: "segment-e2e",
     timestamp: 1_000,
     runtime: {
@@ -83,9 +90,56 @@ function targetAssistantMessage(completed: boolean): AssistantThreadMessage {
   }
 }
 
+function targetSecondAssistantMessage(completed: boolean): AssistantThreadMessage {
+  const terminalStatus = completed ? "completed" : "running"
+
+  return {
+    id: SECOND_TARGET_MESSAGE_ID,
+    kind: "assistant",
+    backendTurnID: TARGET_TURN_ID,
+    segmentID: "segment-e2e-second",
+    timestamp: 2_100,
+    runtime: {
+      phase: completed ? "completed" : "responding",
+      startedAt: 2_100,
+      updatedAt: completed ? 845_000 : 3_000,
+    },
+    state: completed ? "completed" : "responding",
+    items: [
+      {
+        id: "process-second-reasoning",
+        kind: "reasoning",
+        timestamp: 2_110,
+        label: "Reasoning",
+        text: "The canonical reservation continues the same backend turn in a second assistant segment.",
+        status: terminalStatus,
+      },
+      {
+        id: "process-second-tool",
+        kind: "tool",
+        timestamp: 2_120,
+        label: "Tool",
+        title: "process-second-tool",
+        detail: "Second-segment tool output",
+        status: terminalStatus,
+      },
+      {
+        id: "target-final-response",
+        kind: "text",
+        timestamp: 3_000,
+        label: "Assistant",
+        text: "E2E final response remains visible.",
+        status: terminalStatus,
+        isStreaming: !completed,
+      },
+    ],
+    isStreaming: !completed,
+  }
+}
+
 function targetTurn(user: UserThreadMessage, assistant: AssistantThreadMessage, completed: boolean): ThreadTurn {
   return {
-    turnID: TARGET_TURN_ID,
+    turnID: PENDING_TURN_ID,
     status: completed ? "completed" : "running",
     startedAt: 1_000,
     updatedAt: completed ? 845_000 : 2_000,
@@ -94,6 +148,19 @@ function targetTurn(user: UserThreadMessage, assistant: AssistantThreadMessage, 
     lastMessageID: assistant.id,
     finalSegmentID: assistant.segmentID,
     messages: [user, assistant],
+  }
+}
+
+function canonicalTargetTurn(assistant: AssistantThreadMessage, completed: boolean): ThreadTurn {
+  return {
+    turnID: TARGET_TURN_ID,
+    status: completed ? "completed" : "running",
+    startedAt: 2_100,
+    updatedAt: completed ? 845_000 : 3_000,
+    completedAt: completed ? 845_000 : undefined,
+    lastMessageID: assistant.id,
+    finalSegmentID: assistant.segmentID,
+    messages: [assistant],
   }
 }
 
@@ -140,6 +207,7 @@ function trailingTurn(index: number) {
 }
 
 function Harness() {
+  const [canonicalized, setCanonicalized] = useState(false)
   const [completed, setCompleted] = useState(false)
   const threadColumnRef = useRef<HTMLDivElement | null>(null)
   const scrollSnapshotRef = useRef<ThreadScrollSnapshot>({
@@ -157,18 +225,47 @@ function Harness() {
   )
   const tails = useMemo(() => Array.from({ length: 36 }, (_, index) => trailingTurn(index + 1)), [])
   const targetAssistant = useMemo(() => targetAssistantMessage(completed), [completed])
-  const activeMessages = useMemo(
-    () => [targetUser, targetAssistant, ...tails.flatMap((tail) => tail.messages)],
-    [tails, targetAssistant, targetUser],
-  )
+  const secondTargetAssistant = useMemo(() => targetSecondAssistantMessage(completed), [completed])
+  const targetTurns = useMemo(() => {
+    const pendingTurn = targetTurn(targetUser, targetAssistant, completed)
+    if (!canonicalized) return [pendingTurn]
+
+    const splitTurns = [
+      pendingTurn,
+      canonicalTargetTurn(secondTargetAssistant, completed),
+    ]
+    return reconcileThreadTurns(bindPendingThreadTurnToCanonical(splitTurns, {
+      turnID: TARGET_TURN_ID,
+      assistantThreadMessageID: targetAssistant.id,
+      optimisticUserMessageID: targetUser.id,
+    }))
+  }, [canonicalized, completed, secondTargetAssistant, targetAssistant, targetUser])
   const activeTurns = useMemo(
-    () => [targetTurn(targetUser, targetAssistant, completed), ...tails.map((tail) => tail.turn)],
-    [completed, tails, targetAssistant, targetUser],
+    () => [...targetTurns, ...tails.map((tail) => tail.turn)],
+    [tails, targetTurns],
+  )
+  const activeMessages = useMemo(() => deriveActiveMessages(activeTurns), [activeTurns])
+  const targetAssistantCount = targetTurns.reduce(
+    (count, turn) => count + turn.messages.filter((message) => message.kind === "assistant").length,
+    0,
   )
 
   return (
-    <main className="thread-e2e-harness" data-completed={completed ? "true" : "false"}>
+    <main
+      className="thread-e2e-harness"
+      data-completed={completed ? "true" : "false"}
+      data-target-assistant-count={targetAssistantCount}
+      data-target-turn-count={targetTurns.length}
+    >
       <div className="thread-e2e-controls">
+        <button
+          id="canonicalize-turn"
+          type="button"
+          disabled={canonicalized}
+          onClick={() => setCanonicalized(true)}
+        >
+          Canonicalize target turn
+        </button>
         <button id="complete-turn" type="button" disabled={completed} onClick={() => setCompleted(true)}>
           Complete target turn
         </button>

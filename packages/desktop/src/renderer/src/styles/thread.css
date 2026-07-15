@@ -3378,6 +3378,18 @@ body.is-image-lightbox-open {
   outline: none;
 }
 
+.thread-link-context-menu {
+  z-index: 1200;
+  width: max-content;
+  min-width: 0;
+  max-width: min(280px, calc(100vw - 16px));
+}
+
+.thread-link-context-menu .ui-context-menu__item {
+  max-width: calc(100vw - 28px);
+  cursor: pointer;
+}
+
 .thread-copy-context-menu-item:disabled {
   cursor: default;
   opacity: 0.48;

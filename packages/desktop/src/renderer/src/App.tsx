@@ -19,6 +19,7 @@ import { useConversationMessages, useConversationTurns } from "./app/agent-works
 import { WorkspaceStoreProvider } from "./app/agent-workspace/workspace-store-context"
 import { resolveWorkspaceRelativePath } from "./app/agent-workspace/workspace-loading-hooks"
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "./app/thread-markdown"
+import { ThreadLinkRoutingProvider } from "./app/thread-link-routing"
 import type {
   ComposerAttachment,
   ComposerDraftState,
@@ -2275,6 +2276,17 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     void handlePreviewOpenTarget(target.href, workspaceID, workspaceDirectory)
   }
 
+  function handleOpenThreadLinkInAnybox(href: string) {
+    if (isRightSidebarCollapsed) {
+      handleRightSidebarToggle()
+    }
+    void handlePreviewOpenTarget(
+      href,
+      selectedWorkspace?.id ?? null,
+      selectedWorkspace?.directory ?? activeSessionDirectory ?? null,
+    )
+  }
+
   async function handleDetachSessionPanel(input: {
     bounds: { height: number; width: number; x: number; y: number }
     groupID: string
@@ -2500,10 +2512,11 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     : appShellStyle
   return (
     <WorkspaceStoreProvider store={workspaceStore}>
-      <div
-        className={windowShellClassName}
-        data-background-mode={htmlBackgroundAppearance.backgroundMode}
-      >
+      <ThreadLinkRoutingProvider openInAnybox={handleOpenThreadLinkInAnybox}>
+        <div
+          className={windowShellClassName}
+          data-background-mode={htmlBackgroundAppearance.backgroundMode}
+        >
         <HtmlBackgroundLayer config={htmlBackgroundConfig} />
         <main ref={appShellRef} className={appShellClassName} style={effectiveAppShellStyle}>
         {isActivityRailVisible ? (
@@ -3258,7 +3271,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
           />
         ) : null}
         </main>
-      </div>
+        </div>
+      </ThreadLinkRoutingProvider>
     </WorkspaceStoreProvider>
   )
 }

@@ -2,10 +2,15 @@ import DOMPurify, { type Config } from "dompurify"
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 import {
   normalizeMarkdownLinkTarget,
-  openExternalThreadLink,
   type MarkdownArtifactLinkTarget,
   type MarkdownLocalFileLinkTarget,
 } from "./thread-markdown"
+import {
+  openExternalThreadLink,
+  ThreadFrameLinkContextMenu,
+  useThreadLinkRouting,
+  type LinkContextMenuState,
+} from "./thread-link-routing"
 import { SIDEBAR_RESIZE_END_EVENT } from "./sidebar-resize-events"
 
 interface ThreadHtmlProps {
@@ -142,10 +147,14 @@ export const ThreadHtml = memo(function ThreadHtml({
   onLocalFileLinkOpen,
   text,
 }: ThreadHtmlProps) {
+  const threadLinkRouting = useThreadLinkRouting()
+  const threadLinkRoutingRef = useRef(threadLinkRouting)
+  threadLinkRoutingRef.current = threadLinkRouting
   const frameRef = useRef<HTMLIFrameElement | null>(null)
   const cleanupFrameRef = useRef<(() => void) | null>(null)
   const pendingResizeHeightUpdateRef = useRef(false)
   const [frameHeight, setFrameHeight] = useState(MIN_FRAME_HEIGHT)
+  const [linkContextMenu, setLinkContextMenu] = useState<LinkContextMenuState | null>(null)
   const html = useMemo(() => sanitizeThreadHtml(text), [text])
 
   useEffect(() => {
@@ -161,7 +170,8 @@ export const ThreadHtml = memo(function ThreadHtml({
 
     const frame = frameRef.current
     const frameDocument = frame?.contentDocument
-    if (!frameDocument) return
+    if (!frame || !frameDocument) return
+    const loadedFrame = frame
     const loadedDocument: Document = frameDocument
 
     function updateHeight() {
@@ -205,10 +215,29 @@ export const ThreadHtml = memo(function ThreadHtml({
         return
       }
 
-      openExternalThreadLink(linkTarget.href)
+      if (threadLinkRoutingRef.current) threadLinkRoutingRef.current.openInAnybox(linkTarget.href)
+      else openExternalThreadLink(linkTarget.href)
+    }
+
+    function handleContextMenu(event: globalThis.MouseEvent) {
+      const target = event.target as { closest?: (selector: string) => Element | null } | null
+      const anchor = target?.closest?.("a[href]")
+      if (!anchor) return
+
+      const linkTarget = normalizeMarkdownLinkTarget(anchor.getAttribute("href") ?? "")
+      if (!linkTarget || linkTarget.kind !== "external") return
+
+      event.preventDefault()
+      const frameRect = loadedFrame.getBoundingClientRect()
+      setLinkContextMenu({
+        href: linkTarget.href,
+        x: frameRect.left + event.clientX,
+        y: frameRect.top + event.clientY,
+      })
     }
 
     loadedDocument.addEventListener("click", handleClick)
+    loadedDocument.addEventListener("contextmenu", handleContextMenu)
     window.addEventListener(SIDEBAR_RESIZE_END_EVENT, handleSidebarResizeEnd)
     const resizeObserver = "ResizeObserver" in window ? new ResizeObserver(updateHeight) : null
     if (resizeObserver) {
@@ -219,22 +248,26 @@ export const ThreadHtml = memo(function ThreadHtml({
 
     cleanupFrameRef.current = () => {
       loadedDocument.removeEventListener("click", handleClick)
+      loadedDocument.removeEventListener("contextmenu", handleContextMenu)
       window.removeEventListener(SIDEBAR_RESIZE_END_EVENT, handleSidebarResizeEnd)
       resizeObserver?.disconnect()
     }
   }
 
   return (
-    <div className={className}>
-      <iframe
-        ref={frameRef}
-        className="thread-html-frame"
-        sandbox="allow-same-origin"
-        srcDoc={html}
-        style={{ height: frameHeight }}
-        title="Assistant HTML response"
-        onLoad={handleFrameLoad}
-      />
-    </div>
+    <>
+      <div className={className}>
+        <iframe
+          ref={frameRef}
+          className="thread-html-frame"
+          sandbox="allow-same-origin"
+          srcDoc={html}
+          style={{ height: frameHeight }}
+          title="Assistant HTML response"
+          onLoad={handleFrameLoad}
+        />
+      </div>
+      <ThreadFrameLinkContextMenu menu={linkContextMenu} onClose={() => setLinkContextMenu(null)} />
+    </>
   )
 })

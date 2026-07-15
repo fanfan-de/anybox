@@ -260,6 +260,53 @@ function executionGroupReferenceSignature(group: ThreadExecutionGroup) {
   ].join("|")
 }
 
+function deriveExecutionGroupIDAliases(
+  previousGroupIDByAssistantMessageID: ReadonlyMap<string, string>,
+  groups: readonly ThreadExecutionGroup[],
+) {
+  const currentGroupByID = new Map(groups.map((group) => [group.groupID, group] as const))
+  const currentGroupIDByAssistantMessageID = new Map<string, string>()
+  groups.forEach((group) => {
+    group.assistantMessageIDs.forEach((messageID) => {
+      currentGroupIDByAssistantMessageID.set(messageID, group.groupID)
+    })
+  })
+
+  const previousAssistantMessageIDsByGroupID = new Map<string, string[]>()
+  previousGroupIDByAssistantMessageID.forEach((previousGroupID, messageID) => {
+    const messageIDs = previousAssistantMessageIDsByGroupID.get(previousGroupID) ?? []
+    messageIDs.push(messageID)
+    previousAssistantMessageIDsByGroupID.set(previousGroupID, messageIDs)
+  })
+
+  const aliasesByGroupID = new Map<string, string[]>()
+  previousAssistantMessageIDsByGroupID.forEach((messageIDs, previousGroupID) => {
+    const destinationGroupIDs = new Set<string>()
+    for (const messageID of messageIDs) {
+      const destinationGroupID = currentGroupIDByAssistantMessageID.get(messageID)
+      if (!destinationGroupID) return
+      destinationGroupIDs.add(destinationGroupID)
+    }
+    if (destinationGroupIDs.size !== 1) return
+
+    const destinationGroupID = [...destinationGroupIDs][0]!
+    const destinationGroup = currentGroupByID.get(destinationGroupID)
+    if (
+      destinationGroupID === previousGroupID ||
+      currentGroupByID.has(previousGroupID) ||
+      !destinationGroup?.canonical ||
+      !destinationGroupID.startsWith("turn:") ||
+      destinationGroupID.startsWith("turn:pending:")
+    ) {
+      return
+    }
+    const aliases = aliasesByGroupID.get(destinationGroupID) ?? []
+    aliases.push(previousGroupID)
+    aliasesByGroupID.set(destinationGroupID, aliases)
+  })
+  return aliasesByGroupID
+}
+
 export function useThreadProjection({
   activeMessages,
   activeSession,
@@ -282,6 +329,7 @@ export function useThreadProjection({
     string,
     Map<string, { group: ThreadExecutionGroup; signature: string }>
   >>(new Map())
+  const executionGroupIDByAssistantMessageIDRef = useRef<Map<string, Map<string, string>>>(new Map())
   const presentationEntries = useSyncExternalStore(
     presentationStore.subscribe,
     () => presentationStore.getState().entries,
@@ -339,12 +387,32 @@ export function useThreadProjection({
 
   const executionGroupsResult = useMemo(() => {
     const eligibilityLocks = executionGroupEligibilityLocksRef.current.get(presentationScopeID) ?? new Set<string>()
-    const result = deriveThreadExecutionGroups({
+    let result = deriveThreadExecutionGroups({
       eligibilityLocks,
       messages: displayMessages,
       rows: baseDisplayRows,
       turns: activeTurns,
     })
+    const previousGroupIDByAssistantMessageID =
+      executionGroupIDByAssistantMessageIDRef.current.get(presentationScopeID) ?? new Map<string, string>()
+    let groupIDAliases = deriveExecutionGroupIDAliases(previousGroupIDByAssistantMessageID, result.groups)
+    const migratedEligibilityLocks = new Set(result.eligibilityLocks)
+    let didMigrateEligibilityLock = false
+    groupIDAliases.forEach((aliases, groupID) => {
+      if (aliases.some((alias) => eligibilityLocks.has(alias)) && !migratedEligibilityLocks.has(groupID)) {
+        migratedEligibilityLocks.add(groupID)
+        didMigrateEligibilityLock = true
+      }
+    })
+    if (didMigrateEligibilityLock) {
+      result = deriveThreadExecutionGroups({
+        eligibilityLocks: migratedEligibilityLocks,
+        messages: displayMessages,
+        rows: baseDisplayRows,
+        turns: activeTurns,
+      })
+      groupIDAliases = deriveExecutionGroupIDAliases(previousGroupIDByAssistantMessageID, result.groups)
+    }
     executionGroupEligibilityLocksRef.current.set(presentationScopeID, result.eligibilityLocks)
     const scopeCache = executionGroupReferenceCacheRef.current.get(presentationScopeID) ?? new Map()
     const nextScopeCache = new Map<string, { group: ThreadExecutionGroup; signature: string }>()
@@ -356,9 +424,10 @@ export function useThreadProjection({
       return stableGroup
     })
     executionGroupReferenceCacheRef.current.set(presentationScopeID, nextScopeCache)
-    return { ...result, groups }
+    return { ...result, groupIDAliases, groups }
   }, [activeTurns, baseDisplayRows, displayMessages, presentationScopeID])
   const executionGroups = executionGroupsResult.groups
+  const executionGroupIDAliases = executionGroupsResult.groupIDAliases
   const canonicalFinalOwnerProjection = useMemo(
     () => applyCanonicalFinalAssistantOwners(
       threadDisplayContext,
@@ -380,17 +449,42 @@ export function useThreadProjection({
     ? committedAutoCollapseReadinessRef.current.values
     : new Map<string, boolean>()
   const deferredAutoCollapseGroupIDs = deferredAutoCollapseGroupIDsRef.current.values
-  const preferenceForGroup = (groupID: string) => selectProcessDisclosurePreference(
-    { entries: presentationEntries },
-    presentationScopeID,
-    groupID,
-  )
+  executionGroupIDAliases.forEach((aliases, groupID) => {
+    let didMigrate = false
+    aliases.forEach((alias) => {
+      didMigrate = deferredAutoCollapseGroupIDs.delete(alias) || didMigrate
+    })
+    if (didMigrate) deferredAutoCollapseGroupIDs.add(groupID)
+  })
+  const preferenceForGroup = (groupID: string) => {
+    const groupIDs = [groupID, ...(executionGroupIDAliases.get(groupID) ?? [])]
+    let preference = "auto" as ReturnType<typeof selectProcessDisclosurePreference>
+    for (const candidateGroupID of groupIDs) {
+      const candidatePreference = selectProcessDisclosurePreference(
+        { entries: presentationEntries },
+        presentationScopeID,
+        candidateGroupID,
+      )
+      if (candidatePreference === "expanded") return "expanded"
+      if (candidatePreference === "collapsed") preference = "collapsed"
+    }
+    return preference
+  }
+  const previousAutoCollapseReadinessForGroup = (groupID: string) => {
+    const groupIDs = [groupID, ...(executionGroupIDAliases.get(groupID) ?? [])]
+    const values = groupIDs.flatMap((candidateGroupID) => {
+      const value = previousAutoCollapseReadiness.get(candidateGroupID)
+      return value === undefined ? [] : [value]
+    })
+    if (values.includes(false)) return false
+    return values.includes(true) ? true : undefined
+  }
   executionGroups.forEach((group) => {
     if (
       group.eligible &&
       group.hasVisiblePrefix &&
       group.autoCollapseReady &&
-      previousAutoCollapseReadiness.get(group.groupID) === false &&
+      previousAutoCollapseReadinessForGroup(group.groupID) === false &&
       preferenceForGroup(group.groupID) === "auto"
     ) {
       deferredAutoCollapseGroupIDs.add(group.groupID)
@@ -408,11 +502,23 @@ export function useThreadProjection({
   }, [])
 
   useLayoutEffect(() => {
+    const groupIDByAssistantMessageID = new Map<string, string>()
+    executionGroups.forEach((group) => {
+      group.assistantMessageIDs.forEach((messageID: string) => {
+        groupIDByAssistantMessageID.set(messageID, group.groupID)
+      })
+    })
+    executionGroupIDByAssistantMessageIDRef.current.set(presentationScopeID, groupIDByAssistantMessageID)
+    executionGroupIDAliases.forEach((aliases, groupID) => {
+      aliases.forEach((alias) => {
+        presentationStore.getState().migrateProcessDisclosurePreference(presentationScopeID, alias, groupID)
+      })
+    })
     committedAutoCollapseReadinessRef.current = {
       scopeID: presentationScopeID,
       values: new Map(executionGroups.map((group) => [group.groupID, group.autoCollapseReady])),
     }
-  }, [executionGroups, presentationScopeID])
+  }, [executionGroupIDAliases, executionGroups, presentationScopeID, presentationStore])
 
   const displayRowsResult = useMemo(
     () => {

@@ -10,14 +10,18 @@ import type {
   PendingAgentStream,
   SessionTaskListView,
   ThreadMessage,
+  ThreadTurn,
   UserThreadMessage,
 } from "../types"
 import {
   applyExecutionModeToUserMessagePresentation,
+  bindExactPendingRequestTurnToCanonical,
+  bindPendingAssistantSegmentToCanonicalTurn,
   compactHighFrequencyDeltaStreamEvent,
   conversationMessagesAreEquivalent,
   clearSessionStreamReconnectReplayWindow,
   ensureAssistantThreadMessagePresentation,
+  findPendingAssistantPlaceholderForCanonicalSegment,
   findPendingStreamForBackendTurn,
   isBackendUserMessageRecordedStreamEvent,
   isCompletedStreamEvent,
@@ -917,6 +921,237 @@ describe("session stream controller helpers", () => {
       backendSessionID: "backend-1",
       turnID: "turn-2",
     })).toBeUndefined()
+  })
+
+  it("binds terminal-first canonical turns to their exact pending requests without crossing users", () => {
+    const pendingTurn = (suffix: string): ThreadTurn => {
+      const user = createUserThreadMessage(`user-${suffix}`, `Prompt ${suffix}`)
+      const assistant = {
+        ...createAssistantThreadMessage(
+          `assistant-${suffix}`,
+          `trace-placeholder-${suffix}`,
+          "Preparing",
+          `assistant-${suffix}:stream-placeholder`,
+        ),
+        backendTurnID: `pending:assistant-${suffix}`,
+        segmentID: `pending:assistant-${suffix}`,
+      }
+      return {
+        turnID: `pending:user-${suffix}`,
+        status: "running",
+        startedAt: 1,
+        updatedAt: 2,
+        userMessageID: user.id,
+        messages: [user, assistant],
+      }
+    }
+    const canonicalTurn = (suffix: string, status: "failed" | "cancelled"): ThreadTurn => {
+      const assistant = {
+        ...createAssistantThreadMessage(
+          `assistant-canonical-${suffix}`,
+          `trace-terminal-${suffix}`,
+          `Terminal ${suffix}`,
+          `part-terminal-${suffix}`,
+          `message-${suffix}`,
+        ),
+        backendTurnID: `turn-${suffix}`,
+        segmentID: `message-${suffix}:1`,
+      }
+      return {
+        turnID: `turn-${suffix}`,
+        backendSessionID: "backend-shared",
+        status,
+        phase: status,
+        startedAt: 3,
+        updatedAt: 4,
+        completedAt: 4,
+        lastMessageID: `message-${suffix}`,
+        finalSegmentID: `message-${suffix}:1`,
+        messages: [assistant],
+      }
+    }
+    const turns = [
+      pendingTurn("a"),
+      pendingTurn("b"),
+      canonicalTurn("a", "failed"),
+      canonicalTurn("b", "cancelled"),
+    ]
+
+    const afterFirstMode = bindExactPendingRequestTurnToCanonical(turns, {
+      turnID: "turn-a",
+      assistantThreadMessageID: "assistant-a",
+      optimisticUserMessageID: "user-a",
+    })
+    expect(afterFirstMode.map((turn) => turn.turnID)).toEqual([
+      "turn-a",
+      "pending:user-b",
+      "turn-b",
+    ])
+
+    const afterSecondMode = bindExactPendingRequestTurnToCanonical(afterFirstMode, {
+      turnID: "turn-b",
+      assistantThreadMessageID: "assistant-b",
+      optimisticUserMessageID: "user-b",
+    })
+
+    expect(afterSecondMode.map((turn) => turn.turnID)).toEqual(["turn-a", "turn-b"])
+    expect(afterSecondMode.map((turn) => turn.status)).toEqual(["failed", "cancelled"])
+    expect(afterSecondMode[0]?.messages.some((message) => message.id === "user-a")).toBe(true)
+    expect(afterSecondMode[0]?.messages.some((message) => message.id === "user-b")).toBe(false)
+    expect(afterSecondMode[1]?.messages.some((message) => message.id === "user-b")).toBe(true)
+    expect(afterSecondMode[1]?.messages.some((message) => message.id === "user-a")).toBe(false)
+    expect(afterSecondMode.some((turn) => turn.turnID.startsWith("pending:"))).toBe(false)
+  })
+
+  it("binds an optimistic placeholder when hydration already contains its canonical segment", () => {
+    const identity = {
+      backendTurnID: "turn-canonical",
+      llmCallID: "event-llm-started",
+      messageID: "message-canonical",
+      segmentID: "message-canonical:1",
+    }
+    const canonicalAssistant = {
+      ...createAssistantThreadMessage(
+        "assistant-canonical",
+        "trace-canonical",
+        "Hydrated canonical trace",
+        "part-canonical",
+        identity.messageID,
+      ),
+      backendTurnID: identity.backendTurnID,
+      segmentID: identity.segmentID,
+    }
+    const pendingAssistant = {
+      ...createAssistantThreadMessage(
+        "assistant-local",
+        "trace-local-placeholder",
+        "Optimistic placeholder",
+        "assistant-local:stream-placeholder",
+      ),
+      backendTurnID: "pending:assistant-local",
+      segmentID: "pending:assistant-local",
+    }
+    const turns: ThreadTurn[] = [
+      {
+        turnID: identity.backendTurnID,
+        backendSessionID: "session-canonical",
+        status: "running",
+        startedAt: 1,
+        updatedAt: 4,
+        userMessageID: "message-user-backend",
+        messages: [
+          createUserThreadMessage("message-user-backend", "Create the app"),
+          canonicalAssistant,
+        ],
+      },
+      {
+        turnID: "pending:user-local",
+        status: "running",
+        startedAt: 1,
+        updatedAt: 2,
+        userMessageID: "user-local",
+        messages: [
+          createUserThreadMessage("user-local", "Create the app"),
+          pendingAssistant,
+        ],
+      },
+    ]
+
+    const pendingAssistantThreadMessageID = findPendingAssistantPlaceholderForCanonicalSegment(turns, {
+      assistantThreadMessageIDs: [canonicalAssistant.id, pendingAssistant.id],
+      canonicalAssistantThreadMessageID: canonicalAssistant.id,
+      identity,
+    })
+    expect(pendingAssistantThreadMessageID).toBe(pendingAssistant.id)
+
+    const result = bindPendingAssistantSegmentToCanonicalTurn(turns, {
+      assistantThreadMessageID: pendingAssistantThreadMessageID!,
+      identity,
+    })
+
+    expect(result.turns).toHaveLength(1)
+    expect(result.turns[0]?.turnID).toBe(identity.backendTurnID)
+    expect(result.turns[0]?.messages.filter((message) => message.kind === "user")).toHaveLength(1)
+    const retainedAssistants = result.turns[0]?.messages.filter(
+      (message): message is AssistantThreadMessage => message.kind === "assistant",
+    ) ?? []
+    expect(retainedAssistants).toHaveLength(1)
+    expect(retainedAssistants[0]).toMatchObject({
+      id: "assistant-local",
+      backendTurnID: identity.backendTurnID,
+      llmCallID: identity.llmCallID,
+      messageID: identity.messageID,
+      segmentID: identity.segmentID,
+    })
+    expect(result.assistantThreadMessageID).toBe(retainedAssistants[0]?.id)
+  })
+
+  it("reconciles a pending placeholder already re-homed under the canonical turn", () => {
+    const identity = {
+      backendTurnID: "turn-canonical",
+      llmCallID: "event-llm-started",
+      messageID: "message-canonical",
+      segmentID: "message-canonical:1",
+    }
+    const pendingAssistant = {
+      ...createAssistantThreadMessage(
+        "assistant-local",
+        "trace-local-placeholder",
+        "Optimistic placeholder",
+        "assistant-local:stream-placeholder",
+      ),
+      backendTurnID: identity.backendTurnID,
+      segmentID: "pending:assistant-local",
+    }
+    const canonicalAssistant = {
+      ...createAssistantThreadMessage(
+        "assistant-canonical",
+        "trace-canonical",
+        "Hydrated canonical trace",
+        "part-canonical",
+        identity.messageID,
+      ),
+      backendTurnID: identity.backendTurnID,
+      segmentID: identity.segmentID,
+    }
+    const turns: ThreadTurn[] = [{
+      turnID: identity.backendTurnID,
+      backendSessionID: "session-canonical",
+      status: "running",
+      startedAt: 1,
+      updatedAt: 4,
+      userMessageID: "user-local",
+      messages: [
+        createUserThreadMessage("user-local", "Create the app"),
+        pendingAssistant,
+        canonicalAssistant,
+      ],
+    }]
+
+    const pendingAssistantThreadMessageID = findPendingAssistantPlaceholderForCanonicalSegment(turns, {
+      assistantThreadMessageIDs: [canonicalAssistant.id, pendingAssistant.id],
+      canonicalAssistantThreadMessageID: canonicalAssistant.id,
+      identity,
+    })
+    expect(pendingAssistantThreadMessageID).toBe(pendingAssistant.id)
+
+    const result = bindPendingAssistantSegmentToCanonicalTurn(turns, {
+      assistantThreadMessageID: pendingAssistantThreadMessageID!,
+      identity,
+    })
+    const retainedAssistants = result.turns[0]?.messages.filter(
+      (message): message is AssistantThreadMessage => message.kind === "assistant",
+    ) ?? []
+
+    expect(retainedAssistants).toHaveLength(1)
+    expect(retainedAssistants[0]).toMatchObject({
+      id: pendingAssistant.id,
+      backendTurnID: identity.backendTurnID,
+      llmCallID: identity.llmCallID,
+      messageID: identity.messageID,
+      segmentID: identity.segmentID,
+    })
+    expect(result.assistantThreadMessageID).toBe(pendingAssistant.id)
   })
 
   it("reads task snapshots directly from runtime and tool part events", () => {

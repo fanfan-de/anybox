@@ -3164,6 +3164,52 @@ describe("ThreadView execution disclosure", () => {
     return { activeMessages: [user, assistant], assistant, turn, user }
   }
 
+  function cloneExecutionAssistant(
+    source: AssistantThreadMessage,
+    id: string,
+    backendTurnID = source.backendTurnID,
+  ): AssistantThreadMessage {
+    return {
+      ...source,
+      backendTurnID,
+      id,
+      messageID: `${id}:message`,
+      segmentID: `${id}:segment`,
+      items: source.items.map((item, index) => ({
+        ...item,
+        id: `${id}:item:${index}`,
+      })),
+    }
+  }
+
+  function pendingExecutionPairFixture() {
+    const running = executionFixture("running")
+    const pendingTurnID = `pending:${running.user.id}`
+    const firstAssistant = {
+      ...running.assistant,
+      backendTurnID: pendingTurnID,
+    }
+    const secondAssistant = cloneExecutionAssistant(
+      firstAssistant,
+      "assistant-execution-second",
+      pendingTurnID,
+    )
+    const pendingTurn = {
+      ...running.turn,
+      finalSegmentID: secondAssistant.segmentID,
+      lastMessageID: secondAssistant.id,
+      messages: [running.user, firstAssistant, secondAssistant],
+      turnID: pendingTurnID,
+    }
+    return {
+      ...running,
+      firstAssistant,
+      pendingTurn,
+      pendingTurnID,
+      secondAssistant,
+    }
+  }
+
   it("renders a completed long turn collapsed with its final response outside the disclosure", () => {
     const fixture = executionFixture()
     const { queryByText } = renderThread(fixture.activeMessages, { activeTurns: [fixture.turn] })
@@ -3183,6 +3229,40 @@ describe("ThreadView execution disclosure", () => {
     expect(screen.getByText("read-thread-view")).toBeInTheDocument()
   })
 
+  it("keeps a recovered failed tool inside the completed process disclosure", () => {
+    const fixture = executionFixture()
+    const assistant = {
+      ...fixture.assistant,
+      items: fixture.assistant.items.map((item) => (
+        item.id === "tool-execution"
+          ? {
+              ...item,
+              status: "error" as const,
+              title: "apply-patch-recovered",
+              toolOutputText: "The first patch attempt did not match",
+            }
+          : item
+      )),
+    }
+    const turn = {
+      ...fixture.turn,
+      messages: [fixture.user, assistant],
+    }
+    const { queryByText } = renderThread([fixture.user, assistant], { activeTurns: [turn] })
+
+    const summary = screen.getByRole("button", {
+      name: "Expand processing details: Processed 14m 4s",
+    })
+    expect(summary).toHaveAttribute("aria-expanded", "false")
+    expect(queryByText("apply-patch-recovered")).toBeNull()
+    expect(screen.getByText("The implementation is ready.")).toBeInTheDocument()
+
+    fireEvent.click(summary)
+
+    expect(summary).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByText("apply-patch-recovered")).toBeInTheDocument()
+  })
+
   it("keeps an explicit disclosure preference across inactive ThreadView mounts", () => {
     const fixture = executionFixture()
     const { props, rerender } = renderThread(fixture.activeMessages, { activeTurns: [fixture.turn] })
@@ -3197,6 +3277,270 @@ describe("ThreadView execution disclosure", () => {
       "true",
     )
     expect(screen.getByText("read-thread-view")).toBeInTheDocument()
+  })
+
+  it("migrates an explicit pending-turn disclosure preference to the canonical group", () => {
+    const running = executionFixture("running")
+    const pendingTurnID = `pending:${running.user.id}`
+    const pendingAssistant = {
+      ...running.assistant,
+      backendTurnID: pendingTurnID,
+    }
+    const pendingTurn = {
+      ...running.turn,
+      turnID: pendingTurnID,
+      messages: [running.user, pendingAssistant],
+    }
+    const presentationStore = createThreadPresentationStore()
+    const { props, rerender } = renderThread([running.user, pendingAssistant], {
+      activeTurns: [pendingTurn],
+      presentationStore,
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: /Collapse processing details: Processing/ }))
+    expect(screen.getByRole("button", { name: /Expand processing details: Processing/ })).toHaveAttribute(
+      "data-thread-execution-group-id",
+      `turn:${pendingTurnID}`,
+    )
+    expect(screen.queryByText("read-thread-view")).toBeNull()
+
+    const canonicalAssistant = {
+      ...pendingAssistant,
+      backendTurnID: "turn-execution",
+    }
+    const canonicalTurn = {
+      ...pendingTurn,
+      turnID: "turn-execution",
+      messages: [running.user, canonicalAssistant],
+    }
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={[running.user, canonicalAssistant]}
+        activeTurns={[canonicalTurn]}
+      />,
+    )
+
+    expect(screen.getByRole("button", { name: /Expand processing details: Processing/ })).toHaveAttribute(
+      "data-thread-execution-group-id",
+      "turn:turn-execution",
+    )
+    expect(screen.queryByText("read-thread-view")).toBeNull()
+    const presentationScopeID = props.scrollStateKey ?? props.activeSession?.id ?? "thread:no-session"
+    expect(presentationStore.getState().getProcessDisclosurePreference(
+      presentationScopeID,
+      `turn:${pendingTurnID}`,
+    )).toBe("auto")
+    expect(presentationStore.getState().getProcessDisclosurePreference(
+      presentationScopeID,
+      "turn:turn-execution",
+    )).toBe("collapsed")
+  })
+
+  it("migrates an explicit real-wrapper preference when complete membership coalesces into another real group", () => {
+    const running = executionFixture("running")
+    const sharedBackendTurnID = "shared-backend-turn"
+    const firstAssistant = {
+      ...running.assistant,
+      backendTurnID: sharedBackendTurnID,
+    }
+    const firstTurn = {
+      ...running.turn,
+      messages: [running.user, firstAssistant],
+      turnID: "wrapper-turn-1",
+    }
+    const presentationStore = createThreadPresentationStore()
+    const { props, rerender } = renderThread([running.user, firstAssistant], {
+      activeTurns: [firstTurn],
+      presentationStore,
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: /Collapse processing details: Processing/ }))
+    const finalAssistant = cloneExecutionAssistant(
+      firstAssistant,
+      "assistant-execution-final",
+      sharedBackendTurnID,
+    )
+    const finalTurn = {
+      ...running.turn,
+      finalSegmentID: finalAssistant.segmentID,
+      lastMessageID: finalAssistant.id,
+      messages: [finalAssistant],
+      turnID: "wrapper-turn-2",
+    }
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={[running.user, firstAssistant, finalAssistant]}
+        activeTurns={[firstTurn, finalTurn]}
+      />,
+    )
+
+    expect(screen.getByRole("button", { name: /Expand processing details: Processing/ })).toHaveAttribute(
+      "data-thread-execution-group-id",
+      "turn:wrapper-turn-2",
+    )
+    const presentationScopeID = props.scrollStateKey ?? props.activeSession?.id ?? "thread:no-session"
+    expect(presentationStore.getState().getProcessDisclosurePreference(
+      presentationScopeID,
+      "turn:wrapper-turn-1",
+    )).toBe("auto")
+    expect(presentationStore.getState().getProcessDisclosurePreference(
+      presentationScopeID,
+      "turn:wrapper-turn-2",
+    )).toBe("collapsed")
+  })
+
+  it("does not migrate a pending preference when its complete membership splits across pending and real groups", () => {
+    const fixture = pendingExecutionPairFixture()
+    const presentationStore = createThreadPresentationStore()
+    const { props, rerender } = renderThread(
+      [fixture.user, fixture.firstAssistant, fixture.secondAssistant],
+      {
+        activeTurns: [fixture.pendingTurn],
+        presentationStore,
+      },
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /Collapse processing details: Processing/ }))
+    const insertedUser = userMessage("user-execution-steer", "Change direction")
+    const canonicalTurnID = "turn-execution-canonical"
+    const canonicalAssistant = {
+      ...fixture.secondAssistant,
+      backendTurnID: canonicalTurnID,
+    }
+    const remainingPendingTurn = {
+      ...fixture.pendingTurn,
+      finalSegmentID: fixture.firstAssistant.segmentID,
+      lastMessageID: fixture.firstAssistant.id,
+      messages: [fixture.user, fixture.firstAssistant],
+    }
+    const canonicalTurn = {
+      ...fixture.turn,
+      finalSegmentID: canonicalAssistant.segmentID,
+      lastMessageID: canonicalAssistant.id,
+      messages: [insertedUser, canonicalAssistant],
+      turnID: canonicalTurnID,
+      userMessageID: insertedUser.id,
+    }
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={[fixture.user, fixture.firstAssistant, insertedUser, canonicalAssistant]}
+        activeTurns={[remainingPendingTurn, canonicalTurn]}
+      />,
+    )
+
+    const presentationScopeID = props.scrollStateKey ?? props.activeSession?.id ?? "thread:no-session"
+    expect(presentationStore.getState().getProcessDisclosurePreference(
+      presentationScopeID,
+      `turn:${fixture.pendingTurnID}`,
+    )).toBe("collapsed")
+    expect(presentationStore.getState().getProcessDisclosurePreference(
+      presentationScopeID,
+      `turn:${canonicalTurnID}`,
+    )).toBe("auto")
+  })
+
+  it("does not migrate a preference when any previous group member is missing", () => {
+    const fixture = pendingExecutionPairFixture()
+    const presentationStore = createThreadPresentationStore()
+    const { props, rerender } = renderThread(
+      [fixture.user, fixture.firstAssistant, fixture.secondAssistant],
+      {
+        activeTurns: [fixture.pendingTurn],
+        presentationStore,
+      },
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /Collapse processing details: Processing/ }))
+    const canonicalTurnID = "turn-execution-canonical"
+    const canonicalAssistant = {
+      ...fixture.secondAssistant,
+      backendTurnID: canonicalTurnID,
+    }
+    const canonicalTurn = {
+      ...fixture.turn,
+      finalSegmentID: canonicalAssistant.segmentID,
+      lastMessageID: canonicalAssistant.id,
+      messages: [fixture.user, canonicalAssistant],
+      turnID: canonicalTurnID,
+    }
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={[fixture.user, canonicalAssistant]}
+        activeTurns={[canonicalTurn]}
+      />,
+    )
+
+    const presentationScopeID = props.scrollStateKey ?? props.activeSession?.id ?? "thread:no-session"
+    expect(presentationStore.getState().getProcessDisclosurePreference(
+      presentationScopeID,
+      `turn:${fixture.pendingTurnID}`,
+    )).toBe("collapsed")
+    expect(presentationStore.getState().getProcessDisclosurePreference(
+      presentationScopeID,
+      `turn:${canonicalTurnID}`,
+    )).toBe("auto")
+  })
+
+  it("does not migrate a preference when the previous group id is reused by new members", () => {
+    const running = executionFixture("running")
+    const reusedTurnID = "reused-real-turn"
+    const destinationTurnID = "destination-real-turn"
+    const originalAssistant = {
+      ...running.assistant,
+      backendTurnID: "original-backend-turn",
+    }
+    const originalTurn = {
+      ...running.turn,
+      messages: [running.user, originalAssistant],
+      turnID: reusedTurnID,
+    }
+    const presentationStore = createThreadPresentationStore()
+    const { props, rerender } = renderThread([running.user, originalAssistant], {
+      activeTurns: [originalTurn],
+      presentationStore,
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: /Collapse processing details: Processing/ }))
+    const newUser = userMessage("user-reused-turn", "Start another task")
+    const newAssistant = cloneExecutionAssistant(
+      originalAssistant,
+      "assistant-reused-turn",
+      "new-backend-turn",
+    )
+    const destinationTurn = {
+      ...running.turn,
+      messages: [running.user, originalAssistant],
+      turnID: destinationTurnID,
+    }
+    const reusedTurn = {
+      ...running.turn,
+      finalSegmentID: newAssistant.segmentID,
+      lastMessageID: newAssistant.id,
+      messages: [newUser, newAssistant],
+      turnID: reusedTurnID,
+      userMessageID: newUser.id,
+    }
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={[running.user, originalAssistant, newUser, newAssistant]}
+        activeTurns={[destinationTurn, reusedTurn]}
+      />,
+    )
+
+    const presentationScopeID = props.scrollStateKey ?? props.activeSession?.id ?? "thread:no-session"
+    expect(presentationStore.getState().getProcessDisclosurePreference(
+      presentationScopeID,
+      `turn:${reusedTurnID}`,
+    )).toBe("collapsed")
+    expect(presentationStore.getState().getProcessDisclosurePreference(
+      presentationScopeID,
+      `turn:${destinationTurnID}`,
+    )).toBe("auto")
   })
 
   it("shows a running long turn expanded and atomically collapses it at completion", async () => {

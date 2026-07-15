@@ -11,7 +11,6 @@ export type SiteContent = {
   }
   hero: {
     description: string
-    eyebrow: string
     githubLabel: string
     note: string
     previewAlt: string
@@ -59,7 +58,6 @@ export type SiteContent = {
 export const siteContent = {
   zh: {
     hero: {
-      eyebrow: "开源 · 本地优先 · 执行过程可检查",
       title: "面向 AI builder 的通用 Agent 工作台",
       description:
         "Anybox 是开源的本地 AI Agent 工作台。让 Agent 读取项目、调用工具、执行命令，并把每一步留在你可检查的工作空间里。",
@@ -139,7 +137,6 @@ export const siteContent = {
   },
   en: {
     hero: {
-      eyebrow: "Open source · Local first · Inspectable by design",
       title: "Bring AI agents into your local workflow",
       description:
         "Anybox is an open-source workspace for local AI agents. Let agents read projects, call tools, run commands, and keep every step visible in a workspace you control.",

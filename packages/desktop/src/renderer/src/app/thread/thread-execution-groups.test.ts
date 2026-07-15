@@ -106,10 +106,14 @@ function threadTurn(
     finalSegmentID,
     lastMessageID,
     status = "completed",
+    updatedAt = 7_000,
+    userMessageID,
   }: {
     finalSegmentID?: string
     lastMessageID?: string
     status?: ThreadTurnStatus
+    updatedAt?: number
+    userMessageID?: string
   } = {},
 ): TestThreadTurn {
   return {
@@ -120,7 +124,8 @@ function threadTurn(
     startedAt: 1_000,
     status,
     turnID,
-    updatedAt: 7_000,
+    updatedAt,
+    ...(userMessageID ? { userMessageID } : {}),
   }
 }
 
@@ -315,6 +320,193 @@ describe("thread execution groups", () => {
     ])
   })
 
+  it("coalesces pending and real canonical aliases before deriving the final response boundary", () => {
+    const user = userMessage("user-1", "Run the task")
+    const progress = assistantMessage("assistant-progress", [
+      reasoningItem("reasoning-progress", "A".repeat(161)),
+      textItem("progress-response", "Still working"),
+    ], {
+      backendTurnID: "pending:user-1",
+      phase: "responding",
+      segmentID: "pending-segment",
+    })
+    const final = assistantMessage("assistant-final", [
+      reasoningItem("reasoning-final", "Final checks"),
+      textItem("final-response", "Done"),
+    ], {
+      backendTurnID: "real-turn-1",
+      segmentID: "real-segment",
+    })
+    const messages = [user, progress, final]
+    const rows = buildRows(messages)
+    const result = derive(messages, [
+      threadTurn("pending:user-1", [user, progress], {
+        status: "running",
+        updatedAt: 9_000,
+        userMessageID: user.id,
+      }),
+      threadTurn("real-turn-1", [user, final], {
+        finalSegmentID: final.segmentID,
+        userMessageID: user.id,
+      }),
+    ], rows)
+
+    expect(result.groups).toHaveLength(1)
+    expect(result.groups[0]).toMatchObject({
+      assistantMessageIDs: [progress.id, final.id],
+      finalMessageID: final.id,
+      groupID: "turn:real-turn-1",
+      status: "completed",
+      summaryRowID: "turn:real-turn-1:execution-summary",
+      turnID: "real-turn-1",
+    })
+    expect(result.groups[0]!.prefixRowIDs).toContain(rowIDForItem(rows, "progress-response"))
+    expect(result.groups[0]!.outcomeRowIDs).toContain(rowIDForItem(rows, "final-response"))
+    expect(result.groups[0]!.prefixRowIDs).not.toContain(rowIDForItem(rows, "final-response"))
+  })
+
+  it("coalesces adjacent canonical wrappers that share a backend turn identity", () => {
+    const progress = assistantMessage("assistant-progress", [
+      reasoningItem("reasoning-progress", "A".repeat(161)),
+      textItem("progress-response", "Still working"),
+    ], {
+      backendTurnID: "shared-backend-turn",
+      segmentID: "segment-progress",
+    })
+    const final = assistantMessage("assistant-final", [
+      textItem("final-response", "Done"),
+    ], {
+      backendTurnID: "shared-backend-turn",
+      segmentID: "segment-final",
+    })
+    const messages = [progress, final]
+    const rows = buildRows(messages)
+    const result = derive(messages, [
+      threadTurn("wrapper-turn-1", [progress]),
+      threadTurn("wrapper-turn-2", [final], { finalSegmentID: final.segmentID }),
+    ], rows)
+
+    expect(result.groups).toHaveLength(1)
+    expect(result.groups[0]).toMatchObject({
+      assistantMessageIDs: [progress.id, final.id],
+      finalMessageID: final.id,
+      groupID: "turn:wrapper-turn-2",
+      summaryRowID: "turn:wrapper-turn-2:execution-summary",
+      turnID: "wrapper-turn-2",
+    })
+    expect(result.groups[0]!.prefixRowIDs).toContain(rowIDForItem(rows, "progress-response"))
+  })
+
+  it("does not coalesce distinct real turns from the same user message without stronger identity", () => {
+    const user = userMessage("user-1", "Run the task")
+    const first = assistantMessage("assistant-1", [
+      reasoningItem("reasoning-1", "A".repeat(161)),
+      textItem("response-1", "First result"),
+    ], {
+      backendTurnID: "backend-turn-1",
+      segmentID: "segment-1",
+    })
+    const second = assistantMessage("assistant-2", [
+      reasoningItem("reasoning-2", "B".repeat(161)),
+      textItem("response-2", "Second result"),
+    ], {
+      backendTurnID: "backend-turn-2",
+      segmentID: "segment-2",
+    })
+    const messages = [user, first, second]
+    const result = derive(messages, [
+      threadTurn("real-turn-1", [user, first], {
+        finalSegmentID: first.segmentID,
+        userMessageID: user.id,
+      }),
+      threadTurn("real-turn-2", [user, second], {
+        finalSegmentID: second.segmentID,
+        userMessageID: user.id,
+      }),
+    ])
+
+    expect(result.groups).toHaveLength(2)
+    expect(result.groups.map((group) => group.groupID)).toEqual([
+      "turn:real-turn-1",
+      "turn:real-turn-2",
+    ])
+  })
+
+  it("does not coalesce canonical wrappers across a regular user boundary", () => {
+    const first = assistantMessage("assistant-1", [
+      reasoningItem("reasoning-1", "A".repeat(161)),
+      textItem("response-1", "First result"),
+    ], { backendTurnID: "shared-backend-turn" })
+    const insertedUser = userMessage("user-between", "Change direction")
+    const final = assistantMessage("assistant-2", [
+      reasoningItem("reasoning-2", "B".repeat(161)),
+      textItem("response-2", "Final result"),
+    ], { backendTurnID: "shared-backend-turn" })
+    const messages = [first, insertedUser, final]
+    const result = derive(messages, [
+      threadTurn("wrapper-turn-1", [first]),
+      threadTurn("wrapper-turn-2", [final], { finalSegmentID: final.segmentID }),
+    ])
+
+    expect(result.groups).toHaveLength(2)
+    expect(result.groups.every((group) => group.assistantMessageIDs.length === 1)).toBe(true)
+  })
+
+  it("disables disclosure when duplicate wrappers for the same raw turn cross a user boundary", () => {
+    const first = assistantMessage("assistant-1", [
+      reasoningItem("reasoning-1", "A".repeat(161)),
+      textItem("response-1", "First result"),
+    ], { backendTurnID: "segment-backend-1" })
+    const insertedUser = userMessage("user-between", "Change direction")
+    const final = assistantMessage("assistant-2", [
+      reasoningItem("reasoning-2", "B".repeat(161)),
+      textItem("response-2", "Final result"),
+    ], { backendTurnID: "segment-backend-2" })
+    const messages = [first, insertedUser, final]
+    const rows = buildRows(messages)
+    const result = derive(messages, [
+      threadTurn("shared-raw-turn", [first]),
+      threadTurn("shared-raw-turn", [final], { finalSegmentID: final.segmentID }),
+    ], rows)
+
+    expect(result.groups).toHaveLength(1)
+    expect(result.groups[0]).toMatchObject({
+      assistantMessageIDs: [first.id, final.id],
+      eligible: false,
+      groupID: "turn:shared-raw-turn",
+      hasInsertedUserBoundary: true,
+    })
+    expect(projectThreadDisplayRowsWithExecutionGroups({
+      expandedByGroupID: { [result.groups[0]!.groupID]: false },
+      groups: result.groups,
+      rows,
+    })).toBe(rows)
+  })
+
+  it("does not coalesce canonical wrappers when a targeted stream insertion is stored after them", () => {
+    const first = assistantMessage("assistant-1", [
+      reasoningItem("reasoning-1", "A".repeat(161)),
+      textItem("response-1", "First result"),
+    ], { backendTurnID: "shared-backend-turn" })
+    const final = assistantMessage("assistant-2", [
+      reasoningItem("reasoning-2", "B".repeat(161)),
+      textItem("response-2", "Final result"),
+    ], { backendTurnID: "shared-backend-turn" })
+    const inserted = userMessage("inserted-user", "Change direction", {
+      afterItemCount: 1,
+      assistantThreadMessageID: first.id,
+      status: "consumed",
+    })
+    const messages = [first, final, inserted]
+    const result = derive(messages, [
+      threadTurn("wrapper-turn-1", [first]),
+      threadTurn("wrapper-turn-2", [final], { finalSegmentID: final.segmentID }),
+    ])
+
+    expect(result.groups).toHaveLength(2)
+    expect(result.groups.every((group) => group.assistantMessageIDs.length === 1)).toBe(true)
+  })
+
   it("does not create a disclosure across an inserted user boundary", () => {
     const message = assistantMessage("assistant-1", [
       reasoningItem("reasoning-1", "Before steer"),
@@ -444,6 +636,119 @@ describe("thread execution groups", () => {
       groups: hidden.groups,
       rows: hiddenRows,
     })).toBe(hiddenRows)
+  })
+
+  it("folds a recovered tool failure into a completed process when the final response is resolved", () => {
+    const message = assistantMessage("assistant-recovered", [
+      reasoningItem("reasoning-before-failure", "Inspecting the target file."),
+      traceItem("recovered-tool-failure", "tool", {
+        status: "error",
+        toolOutputText: "Patch context did not match",
+      }),
+      reasoningItem("reasoning-after-failure", "Retrying with the current file contents."),
+      textItem("recovered-final-response", "The implementation is ready."),
+      traceItem("post-response-error", "error", {
+        detail: "Artifact publication failed after the response",
+        status: "error",
+      }),
+    ])
+    const rows = buildRows([message])
+    const group = derive(
+      [message],
+      [threadTurn("turn-recovered", [message], { finalSegmentID: message.segmentID })],
+      rows,
+    ).groups[0]!
+    const failureRowID = rowIDForItem(rows, "recovered-tool-failure")
+    const responseRowID = rowIDForItem(rows, "recovered-final-response")
+    const postResponseErrorRowID = rowIDForItem(rows, "post-response-error")
+
+    expect(group.prefixRowIDs).toContain(failureRowID)
+    expect(group.outcomeRowIDs).not.toContain(failureRowID)
+    expect(group.outcomeRowIDs).toContain(responseRowID)
+    expect(group.outcomeRowIDs).toContain(postResponseErrorRowID)
+    expect(group.autoCollapseReady).toBe(true)
+    expect(resolveExecutionGroupExpanded(group, "auto")).toBe(false)
+    expect(projectThreadDisplayRowsWithExecutionGroups({
+      expandedByGroupID: { [group.groupID]: false },
+      groups: [group],
+      rows,
+    }).some((row) => row.rowID === failureRowID)).toBe(false)
+  })
+
+  it("keeps a running failure in the process prefix instead of promoting it to an outcome", () => {
+    const message = assistantMessage("assistant-running-failure", [
+      reasoningItem("reasoning-running-1", "Trying the first approach."),
+      traceItem("running-tool-failure", "tool", {
+        status: "error",
+        toolOutputText: "The first approach failed",
+      }),
+      reasoningItem("reasoning-running-2", "Recovering with another approach."),
+    ], { phase: "responding" })
+    const rows = buildRows([message])
+    const group = derive(
+      [message],
+      [threadTurn("turn-running-failure", [message], { status: "running" })],
+      rows,
+    ).groups[0]!
+    const failureRowID = rowIDForItem(rows, "running-tool-failure")
+
+    expect(group.prefixRowIDs).toContain(failureRowID)
+    expect(group.outcomeRowIDs).not.toContain(failureRowID)
+    expect(group.autoCollapseReady).toBe(false)
+    expect(resolveExecutionGroupExpanded(group, "auto")).toBe(true)
+    expect(projectThreadDisplayRowsWithExecutionGroups({
+      expandedByGroupID: { [group.groupID]: false },
+      groups: [group],
+      rows,
+    }).some((row) => row.rowID === failureRowID)).toBe(false)
+  })
+
+  it("keeps the last failure outside when a completed turn has no resolved final response", () => {
+    const message = assistantMessage("assistant-completed-without-response", [
+      reasoningItem("reasoning-no-response-1", "Trying the operation."),
+      traceItem("completed-tool-failure", "tool", {
+        status: "error",
+        toolOutputText: "The operation failed",
+      }),
+      reasoningItem("reasoning-no-response-2", "No final response was produced."),
+    ])
+    const rows = buildRows([message])
+    const group = derive(
+      [message],
+      [threadTurn("turn-completed-without-response", [message])],
+      rows,
+    ).groups[0]!
+    const failureRowID = rowIDForItem(rows, "completed-tool-failure")
+
+    expect(group.outcomeRowIDs).toContain(failureRowID)
+    expect(group.prefixRowIDs).not.toContain(failureRowID)
+    expect(group.autoCollapseReady).toBe(false)
+    expect(resolveExecutionGroupExpanded(group, "auto")).toBe(true)
+  })
+
+  it("keeps the terminal failure outside an abnormal turn even when a final response exists", () => {
+    const message = assistantMessage("assistant-failed-with-response", [
+      reasoningItem("reasoning-failed-with-response", "Trying the operation."),
+      traceItem("terminal-failure-before-response", "tool", {
+        status: "error",
+        toolOutputText: "The operation failed",
+      }),
+      textItem("failed-turn-final-response", "The task could not be completed."),
+    ], { phase: "failed" })
+    const rows = buildRows([message])
+    const group = derive(
+      [message],
+      [threadTurn("turn-failed-with-response", [message], {
+        finalSegmentID: message.segmentID,
+        status: "failed",
+      })],
+      rows,
+    ).groups[0]!
+    const failureRowID = rowIDForItem(rows, "terminal-failure-before-response")
+
+    expect(group.outcomeRowIDs).toContain(failureRowID)
+    expect(group.prefixRowIDs).not.toContain(failureRowID)
+    expect(group.autoCollapseReady).toBe(true)
   })
 
   it.each<ThreadTurnStatus>([

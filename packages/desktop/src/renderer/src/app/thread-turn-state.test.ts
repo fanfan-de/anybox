@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest"
-import type { AssistantThreadMessage, UserThreadMessage } from "./types"
+import type { AssistantThreadMessage, ThreadMessage, ThreadTurn, UserThreadMessage } from "./types"
 import {
   appendMessagesToThreadTurns,
+  bindPendingThreadTurnToCanonical,
   buildThreadTurnsFromMessages,
   ensureThreadTurn,
   insertUserMessageIntoTurns,
+  reconcileThreadTurns,
   removeMessageFromTurns,
+  updateAssistantMessageInTurn,
 } from "./thread-turn-state"
 
 function userMessage(id: string, timestamp = 1): UserThreadMessage {
@@ -48,6 +51,34 @@ function assistantMessage(input: {
         timestamp: timestamp + 1,
       },
     ],
+  }
+}
+
+function threadTurn(input: {
+  turnID: string
+  messages: ThreadMessage[]
+  status?: ThreadTurn["status"]
+  phase?: ThreadTurn["phase"]
+  startedAt?: number
+  updatedAt?: number
+  completedAt?: number
+  backendSessionID?: string
+  userMessageID?: string
+  lastMessageID?: string
+  finalSegmentID?: string
+}): ThreadTurn {
+  return {
+    turnID: input.turnID,
+    ...(input.backendSessionID ? { backendSessionID: input.backendSessionID } : {}),
+    ...(input.lastMessageID ? { lastMessageID: input.lastMessageID } : {}),
+    ...(input.finalSegmentID ? { finalSegmentID: input.finalSegmentID } : {}),
+    status: input.status ?? "running",
+    ...(input.phase ? { phase: input.phase } : {}),
+    startedAt: input.startedAt ?? 1,
+    updatedAt: input.updatedAt ?? 2,
+    ...(input.completedAt !== undefined ? { completedAt: input.completedAt } : {}),
+    ...(input.userMessageID ? { userMessageID: input.userMessageID } : {}),
+    messages: input.messages,
   }
 }
 
@@ -170,6 +201,274 @@ describe("thread turn state helpers", () => {
       lastMessageID: "message-a",
     })
     expect(rebuilt[0]?.messages.map((message) => message.id)).toEqual(["assistant-a", "assistant-b"])
+  })
+
+  it("atomically renames a correlated pending turn and remains idempotent", () => {
+    const prompt = {
+      ...userMessage("user-local"),
+      displayText: "Local presentation",
+      attachments: [{ name: "prompt.txt" }],
+    }
+    const placeholder = assistantMessage({
+      id: "assistant-local",
+      text: "Working",
+      backendTurnID: "pending:assistant-local",
+      segmentID: "pending:assistant-local",
+    })
+    const unaffected = threadTurn({
+      turnID: "turn-unaffected",
+      messages: [assistantMessage({
+        id: "assistant-unaffected",
+        text: "Earlier response",
+        backendTurnID: "turn-unaffected",
+      })],
+    })
+    const turns = [
+      threadTurn({
+        turnID: "pending:user-local",
+        userMessageID: "user-local",
+        messages: [prompt, placeholder],
+      }),
+      unaffected,
+    ]
+    const binding = {
+      turnID: "turn-canonical",
+      assistantThreadMessageID: "assistant-local",
+      optimisticUserMessageID: "user-local",
+      backendUserMessageID: "message-user-backend",
+    }
+
+    const bound = bindPendingThreadTurnToCanonical(turns, binding)
+
+    expect(bound).toHaveLength(2)
+    expect(bound[0]).toMatchObject({
+      turnID: "turn-canonical",
+      userMessageID: "user-local",
+    })
+    expect(bound[0]?.messages.map((message) => message.id)).toEqual(["user-local", "assistant-local"])
+    expect(bound[0]?.messages[0]).toMatchObject({
+      displayText: "Local presentation",
+      attachments: [{ name: "prompt.txt" }],
+    })
+    expect(bound[0]?.messages[1]).toMatchObject({ backendTurnID: "turn-canonical" })
+    expect(bound[1]).toBe(unaffected)
+    expect(bindPendingThreadTurnToCanonical(bound, binding)).toBe(bound)
+  })
+
+  it("merges an existing canonical turn without duplicating aliased users and keeps canonical runtime metadata", () => {
+    const localUser = {
+      ...userMessage("user-local", 1),
+      displayText: "Local presentation",
+    }
+    const backendUser = {
+      ...userMessage("message-user-backend", 3),
+      text: "Backend prompt",
+    }
+    const pendingAssistant = assistantMessage({
+      id: "assistant-first",
+      text: "First phase",
+      backendTurnID: "turn-canonical",
+      segmentID: "segment-first",
+      timestamp: 2,
+    })
+    const canonicalAssistant = assistantMessage({
+      id: "assistant-second",
+      text: "Second phase",
+      backendTurnID: "turn-canonical",
+      segmentID: "segment-second",
+      timestamp: 5,
+    })
+    const turns = [
+      threadTurn({
+        turnID: "pending:user-local",
+        status: "completed",
+        phase: "completed",
+        startedAt: 1,
+        updatedAt: 10,
+        completedAt: 10,
+        userMessageID: "user-local",
+        lastMessageID: "stale-message",
+        finalSegmentID: "stale-segment",
+        messages: [localUser, pendingAssistant],
+      }),
+      threadTurn({
+        turnID: "turn-canonical",
+        status: "running",
+        phase: "waiting_llm",
+        startedAt: 3,
+        updatedAt: 20,
+        backendSessionID: "session-canonical",
+        userMessageID: "message-user-backend",
+        messages: [backendUser, canonicalAssistant],
+      }),
+    ]
+
+    const bound = bindPendingThreadTurnToCanonical(turns, {
+      turnID: "turn-canonical",
+      assistantThreadMessageID: "assistant-first",
+      optimisticUserMessageID: "user-local",
+      backendUserMessageID: "message-user-backend",
+    })
+
+    expect(bound).toHaveLength(1)
+    expect(bound[0]).toMatchObject({
+      turnID: "turn-canonical",
+      backendSessionID: "session-canonical",
+      status: "running",
+      phase: "waiting_llm",
+      startedAt: 1,
+      updatedAt: 20,
+      userMessageID: "user-local",
+    })
+    expect(bound[0]?.completedAt).toBeUndefined()
+    expect(bound[0]?.lastMessageID).toBeUndefined()
+    expect(bound[0]?.finalSegmentID).toBeUndefined()
+    expect(bound[0]?.messages.map((message) => message.id)).toEqual([
+      "user-local",
+      "assistant-first",
+      "assistant-second",
+    ])
+    expect(bound[0]?.messages[0]).toMatchObject({
+      id: "user-local",
+      displayText: "Local presentation",
+    })
+  })
+
+  it("uses canonical assistant identity when the same placeholder exists in both turns", () => {
+    const pendingAssistant = assistantMessage({
+      id: "assistant-shared",
+      text: "Pending trace",
+      backendTurnID: "pending:assistant-shared",
+      segmentID: "pending:assistant-shared",
+    })
+    const canonicalAssistant = assistantMessage({
+      id: "assistant-shared",
+      text: "Canonical trace",
+      backendTurnID: "turn-canonical",
+      messageID: "message-canonical",
+      segmentID: "segment-canonical",
+      timestamp: 4,
+    })
+    const turns = [
+      threadTurn({
+        turnID: "pending:assistant-shared",
+        messages: [pendingAssistant],
+      }),
+      threadTurn({
+        turnID: "turn-canonical",
+        messages: [canonicalAssistant],
+      }),
+    ]
+
+    const bound = bindPendingThreadTurnToCanonical(turns, {
+      turnID: "turn-canonical",
+      assistantThreadMessageID: "assistant-shared",
+    })
+
+    expect(bound).toHaveLength(1)
+    expect(bound[0]?.messages).toHaveLength(1)
+    expect(bound[0]?.messages[0]).toMatchObject({
+      id: "assistant-shared",
+      backendTurnID: "turn-canonical",
+      messageID: "message-canonical",
+      segmentID: "segment-canonical",
+      state: "completed",
+    })
+    expect(bound[0]?.messages[0]).toMatchObject({
+      items: [expect.objectContaining({ text: "Canonical trace" })],
+    })
+  })
+
+  it("reconciles a pending placeholder after it is assigned a canonical segment that already exists", () => {
+    const pendingAssistant = assistantMessage({
+      id: "assistant-local",
+      text: "Pending trace",
+      backendTurnID: "pending:assistant-local",
+      segmentID: "pending:assistant-local",
+    })
+    const canonicalAssistant = assistantMessage({
+      id: "assistant-canonical",
+      text: "Canonical trace",
+      backendTurnID: "turn-canonical",
+      messageID: "message-canonical",
+      segmentID: "segment-canonical",
+      timestamp: 4,
+    })
+    const bound = bindPendingThreadTurnToCanonical([
+      threadTurn({ turnID: "pending:assistant-local", messages: [pendingAssistant] }),
+      threadTurn({ turnID: "turn-canonical", messages: [canonicalAssistant] }),
+    ], {
+      turnID: "turn-canonical",
+      assistantThreadMessageID: "assistant-local",
+    })
+
+    expect(bound[0]?.messages).toHaveLength(2)
+
+    const assigned = updateAssistantMessageInTurn(bound, {
+      turnID: "turn-canonical",
+      id: "assistant-local",
+      updater: (message) => ({
+        ...message,
+        backendTurnID: "turn-canonical",
+        messageID: "message-canonical",
+        segmentID: "segment-canonical",
+      }),
+    })
+    const reconciled = reconcileThreadTurns(assigned)
+
+    expect(reconciled[0]?.messages).toHaveLength(1)
+    expect(reconciled[0]?.messages[0]).toMatchObject({
+      backendTurnID: "turn-canonical",
+      messageID: "message-canonical",
+      segmentID: "segment-canonical",
+    })
+  })
+
+  it("refuses ambiguous or conflicting pending-turn correlations", () => {
+    const conflictingBackend = [threadTurn({
+      turnID: "pending:assistant-local",
+      messages: [assistantMessage({
+        id: "assistant-local",
+        text: "Wrong turn",
+        backendTurnID: "turn-other",
+      })],
+    })]
+    expect(bindPendingThreadTurnToCanonical(conflictingBackend, {
+      turnID: "turn-canonical",
+      assistantThreadMessageID: "assistant-local",
+    })).toBe(conflictingBackend)
+
+    const ambiguous = [
+      threadTurn({
+        turnID: "pending:user-a",
+        userMessageID: "user-a",
+        messages: [
+          userMessage("user-a"),
+          assistantMessage({
+            id: "assistant-shared",
+            text: "A",
+            backendTurnID: "pending:user-a",
+          }),
+        ],
+      }),
+      threadTurn({
+        turnID: "pending:user-b",
+        userMessageID: "user-b",
+        messages: [
+          userMessage("user-b"),
+          assistantMessage({
+            id: "assistant-shared",
+            text: "B",
+            backendTurnID: "pending:user-b",
+          }),
+        ],
+      }),
+    ]
+    expect(bindPendingThreadTurnToCanonical(ambiguous, {
+      turnID: "turn-canonical",
+      assistantThreadMessageID: "assistant-shared",
+      optimisticUserMessageID: "user-a",
+    })).toBe(ambiguous)
   })
 
   it("removes empty turns while preserving non-empty turns", () => {

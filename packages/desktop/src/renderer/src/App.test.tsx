@@ -2550,6 +2550,57 @@ describe("App", () => {
     expect(within(inspector).getByText("Artifact body.")).toBeInTheDocument()
   })
 
+  it("opens web links in the Anybox browser by default and offers the system browser from the context menu", async () => {
+    window.desktop!.listFolderWorkspaces = vi.fn().mockResolvedValue(createWorkspaceFileReviewWorkspaces())
+    window.desktop!.agentSession!.loadHistory = vi.fn().mockResolvedValue([
+      {
+        info: {
+          id: "msg-assistant-web-link-1",
+          sessionID: "session-frontend-review",
+          role: "assistant",
+          created: 2,
+          completed: 3,
+        },
+        parts: [
+          {
+            id: "web-link-text",
+            type: "text",
+            text: "Open [Docs](https://example.com/docs).",
+          },
+        ],
+      },
+    ])
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(window.desktop!.agentSession!.loadHistory).toHaveBeenCalledWith({
+        backendSessionID: "session-frontend-review",
+      })
+    })
+    const link = await screen.findByRole("link", { name: "Docs" })
+    vi.mocked(window.desktop!.openExternalUrl!).mockClear()
+    fireEvent.click(link)
+
+    const inspector = screen.getByRole("complementary", { name: "Inspector sidebar" })
+    await waitFor(() => {
+      expect(window.desktop!.resolvePreviewTarget).toHaveBeenCalledWith({
+        value: "https://example.com/docs",
+        workspaceRoot: FRONTEND_WORKSPACE_DIRECTORY,
+      })
+    })
+    expect(await within(inspector).findByTitle("Preview of example.com")).toBeInTheDocument()
+    expect(window.desktop!.openExternalUrl).not.toHaveBeenCalled()
+
+    fireEvent.contextMenu(link, { clientX: 120, clientY: 80 })
+    fireEvent.click(screen.getByRole("menuitem", { name: "在系统浏览器中打开" }))
+    await waitFor(() => {
+      expect(window.desktop!.openExternalUrl).toHaveBeenCalledWith({
+        url: "https://example.com/docs",
+      })
+    })
+  })
+
   it("uses Electron webview for URL previews when available", async () => {
     const userAgentSpy = vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue(
       "Mozilla/5.0 Electron/39.0.0",
@@ -13089,6 +13140,167 @@ describe("App", () => {
     })
 
     expect(screen.queryByText("Preparing...")).not.toBeInTheDocument()
+  })
+
+  it("keeps a subscription-first multi-segment turn under one processing summary", async () => {
+    let streamListener: DesktopAgentSessionEventListener | undefined
+    let releaseStream: (() => void) | undefined
+    let activeStreamID = ""
+    let activeSessionID = ""
+    const firstReasoning = "First segment reasoning stays inside the canonical execution group. ".repeat(5)
+    const secondReasoning = "Second segment reasoning continues the same backend turn after a tool boundary. ".repeat(5)
+
+    window.desktop!.getAgentHealth = vi.fn().mockResolvedValue({
+      ok: true,
+      baseURL: "http://127.0.0.1:4096",
+    })
+    window.desktop!.agentSession!.onEvent = vi.fn((listener) => {
+      streamListener = listener
+      return vi.fn()
+    })
+    window.desktop!.agentSession!.sendTurn = vi.fn().mockImplementation(
+      async (input: {
+        clientTurnID: string
+        backendSessionID: string
+        text: string
+      }) => {
+        activeStreamID = input.clientTurnID
+        activeSessionID = input.backendSessionID
+        await new Promise<void>((resolve) => {
+          releaseStream = resolve
+        })
+        return { clientTurnID: input.clientTurnID }
+      },
+    )
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(window.desktop!.agentSession!.onEvent).toHaveBeenCalledTimes(1)
+    })
+
+    setComposerDraftValue(screen.getByRole("textbox", { name: "Task draft" }), "Run one multi-step turn")
+    await act(async () => {
+      fireEvent.click(getComposerSendButton())
+      await Promise.resolve()
+    })
+    const submittedUserRow = (await screen.findByText("Run one multi-step turn")).closest<HTMLElement>(
+      '[data-thread-message-id]',
+    )
+    expect(submittedUserRow).not.toBeNull()
+    const pendingGroupID = `turn:pending:${submittedUserRow!.dataset.threadMessageId}`
+    const executionSummaries = () => Array.from(
+      document.querySelectorAll<HTMLElement>(".assistant-execution-summary-button"),
+    ).filter((summary) => (
+      summary.dataset.threadExecutionGroupId === pendingGroupID ||
+      summary.dataset.threadExecutionGroupId === "turn:turn-one"
+    ))
+
+    act(() => {
+      streamListener?.(createSubscriptionStreamEvent({
+        backendSessionID: activeSessionID,
+        id: "100:turn-one:1",
+        event: "runtime",
+        data: {
+          eventID: "event-turn-started",
+          sessionID: activeSessionID,
+          turnID: "turn-one",
+          seq: 1,
+          timestamp: 100,
+          type: "turn.started",
+          payload: {
+            userMessageID: "msg-user-backend",
+          },
+        },
+      }))
+    })
+
+    act(() => {
+      streamListener?.(createRequestStreamEvent({
+        backendSessionID: activeSessionID,
+        clientTurnID: activeStreamID,
+        id: "101:turn-one:2",
+        event: "runtime",
+        data: {
+          eventID: "event-llm-first",
+          sessionID: activeSessionID,
+          turnID: "turn-one",
+          seq: 2,
+          timestamp: 101,
+          type: "llm.call.started",
+          payload: {
+            iteration: 1,
+            messageID: "msg-assistant-first",
+          },
+        },
+      }))
+      streamListener?.(createRequestStreamEvent({
+        backendSessionID: activeSessionID,
+        clientTurnID: activeStreamID,
+        id: "102:turn-one:3",
+        event: "delta",
+        data: {
+          turnID: "turn-one",
+          messageID: "msg-assistant-first",
+          partID: "reasoning-first",
+          kind: "reasoning",
+          delta: firstReasoning,
+          text: firstReasoning,
+        },
+      }))
+    })
+
+    await waitFor(() => {
+      const summaries = executionSummaries()
+      expect(summaries).toHaveLength(1)
+      expect(summaries[0]).toHaveAttribute("data-thread-execution-group-id", "turn:turn-one")
+    })
+
+    act(() => {
+      streamListener?.(createRequestStreamEvent({
+        backendSessionID: activeSessionID,
+        clientTurnID: activeStreamID,
+        id: "103:turn-one:4",
+        event: "runtime",
+        data: {
+          eventID: "event-llm-second",
+          sessionID: activeSessionID,
+          turnID: "turn-one",
+          seq: 4,
+          timestamp: 103,
+          type: "llm.call.started",
+          payload: {
+            iteration: 1,
+            messageID: "msg-assistant-second",
+          },
+        },
+      }))
+      streamListener?.(createRequestStreamEvent({
+        backendSessionID: activeSessionID,
+        clientTurnID: activeStreamID,
+        id: "104:turn-one:5",
+        event: "delta",
+        data: {
+          turnID: "turn-one",
+          messageID: "msg-assistant-second",
+          partID: "reasoning-second",
+          kind: "reasoning",
+          delta: secondReasoning,
+          text: secondReasoning,
+        },
+      }))
+    })
+
+    await waitFor(() => {
+      expect(executionSummaries()).toHaveLength(1)
+      expect(screen.getByText(firstReasoning.trim())).toBeInTheDocument()
+      expect(screen.getByText(secondReasoning.trim())).toBeInTheDocument()
+    })
+
+    await act(async () => {
+      releaseStream?.()
+      await Promise.resolve()
+    })
   })
 
   it("renders streamed reasoning and response before completion", async () => {

@@ -117,6 +117,10 @@ ComposerUtilityBar
 - `thread-column` 居中，最大宽度等于 pane 内容宽度。
 - 多 pane 模式下仍保持 `width: 100%`，避免 split pane 中出现额外横向压缩。
 
+### 链接导航
+
+ThreadView 中规范化后的 `http` / `https` 链接默认交给右侧 Anybox 内置浏览器，并在右侧栏折叠时自动展开。链接右键菜单提供“在 Anybox 内置浏览器中打开”和“在系统浏览器中打开”两个显式动作；系统浏览器动作继续通过 Electron `openExternalUrl` 执行。本地文件和 `agent://artifact/*` 链接保持原有文件预览与 Artifact 路由，不进入网页链接菜单。
+
 ## 4. 内容模型
 
 Canonical conversation state is `ConversationTurnMap = Record<string, ThreadTurn[]>`.
@@ -129,13 +133,17 @@ const activeMessages = turns.flatMap((turn) => turn.messages)
 
 Do not treat `activeMessages` as the source of truth. New stream/history state should update `ThreadTurn[]` first, then derive flat messages for `ThreadView`, side chat, and legacy selectors. `ThreadTurnNavigator` creates a read-only projection from each turn's `userMessageID` to the corresponding `user-message` display row; assistant rows, trace rows, permission rows, workflow/debug rows, and stream-inserted user rows never create navigation turns.
 
+Live composer sends initially create a `pending:*` turn. When an authoritative runtime turn ID arrives, `bindPendingThreadTurnToCanonical()` must rename or merge that pending turn in the same conversation-store transaction that applies `turn.started` metadata. Matching is limited to explicit optimistic user IDs, assistant placeholder IDs, or an assistant already carrying the backend turn ID; adjacency, text equality, and timestamps are never identity evidence. Placeholder-to-segment binding performs the same re-homing before updating the assistant identity, so React never observes two assistant-bearing `ThreadTurn` objects for one backend execution.
+
 ### Turn execution disclosure
 
-桌面端长 turn 会在 semantic rows 生成后派生 `ThreadExecutionGroup`。分组边界来自 canonical `ThreadTurn`、`lastMessageID` 和 `finalSegmentID`，而不是相邻 DOM 或 user row。最终 response block 的边界在 trace visibility 过滤前计算；最终 response、response 后置内容、未解决 permission/question、最后一条失败结果和用户插入内容不会进入可折叠前缀。
+桌面端长 turn 会在 semantic rows 生成后派生 `ThreadExecutionGroup`。分组边界来自 canonical `ThreadTurn`、`lastMessageID` 和 `finalSegmentID`，而不是相邻 DOM 或 user row。最终 response block 的边界在 trace visibility 过滤前计算；最终 response、response 后置内容、未解决 permission/question 和用户插入内容始终不会进入可折叠前缀。`completed` 且最终 response 已解析时，response 之前的 error、失败 tool/workflow 属于可恢复执行过程，随 process prefix 折叠；仅非 `completed` 终态，或 `completed` 但仍无可解析最终 response 时，才保护最后一条失败/终态 trace 作为 outcome。
+
+一个 backend execution 在任一投影帧最多产生一个 execution summary。状态层负责保证唯一 canonical turn；投影层只对具有相同 backend/segment/raw-turn 强身份的相邻 canonical wrappers 做保守合并，并在普通 user、steer、stream insertion 或 `continued_by_user` 边界处拒绝跨界 disclosure。Legacy candidates 和仅共享 user ID 的两个真实 turn 不自动合并。
 
 投影顺序固定为：完整 base rows → execution group 派生 → diff/actions decoration → disclosure 裁剪。展开时输出 summary 与原 process rows；折叠时 process rows 从 `displayRows` 中真正移除，只保留 `assistant-execution-summary`、最终结果与后置 rows。summary 不持有隐藏 DOM，因此仍保持逐行虚拟化和 lazy mount。
 
-`ThreadPresentationStore` 以 `scrollStateKey + groupID` 保存 `auto | expanded | collapsed` 语义。`auto` 在 running 时展开，在终态且 final outcome 可解析时折叠；显式用户选择覆盖后续 stream patch、late hydration 和虚拟卸载。store 只属于当前应用生命周期，不写回 conversation、IPC 或磁盘。
+`ThreadPresentationStore` 以 `scrollStateKey + groupID` 保存 `auto | expanded | collapsed` 语义。`auto` 在 running 时展开；`completed` 等最终 response 可解析后折叠，其他终态可立即折叠并在存在时保留受保护 outcome。显式用户选择覆盖后续 stream patch、late hydration 和虚拟卸载。pending group 被 canonical group 认领时，显式 preference 和 eligibility/auto-collapse 状态迁移到 canonical group，冲突时以 expanded 为安全优先级。store 只属于当前应用生命周期，不写回 conversation、IPC 或磁盘。
 
 自动折叠和手动 toggle 都使用 projection layout transaction。事务记录 surviving `rowID + viewportOffset + turnID`，临时 pin summary/outcome row，暂停普通 follow sync 与 TanStack size compensation，并在新投影提交后最多用两个 animation frame 做 DOM rect 校正。虚拟 thread column 使用 `overflow-anchor: none`，避免浏览器原生 anchoring 与应用语义锚竞争；事务期间若收到用户滚动意图，保留 disclosure 结果但取消余下校正。
 

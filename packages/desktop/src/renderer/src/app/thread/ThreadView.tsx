@@ -30,10 +30,10 @@ import { deriveActiveMessages } from "../thread-turn-state"
 import {
   ThreadMarkdown,
   normalizeMarkdownLinkTarget,
-  openExternalThreadLink,
   type MarkdownArtifactLinkTarget,
   type MarkdownLocalFileLinkTarget,
 } from "../thread-markdown"
+import { openExternalThreadLink, useThreadLinkRouting } from "../thread-link-routing"
 import { ThreadHtml } from "../thread-html"
 import { parseAssistantResponseFormat, stripStreamingResponseFormatMarker } from "../thread-response-format"
 import { ThreadRichText } from "../thread-rich-text"
@@ -5258,6 +5258,7 @@ function VisibleThreadView({
   saveScrollSnapshot,
   showTurnNavigator = true,
 }: ThreadViewViewportProps) {
+  const threadLinkRouting = useThreadLinkRouting()
   const activeSessionID = activeSession?.id ?? null
   const effectiveScrollStateKey = scrollStateKey ?? activeSessionID ?? "thread:no-session"
   const onBranchSelect = actionCapabilities.canSelectBranch ? actions.onBranchSelect : undefined
@@ -6092,7 +6093,11 @@ function VisibleThreadView({
         return
       }
 
-      openExternalThreadLink(linkTarget.href)
+      if (threadLinkRouting) {
+        threadLinkRouting.openInAnybox(linkTarget.href)
+      } else {
+        openExternalThreadLink(linkTarget.href)
+      }
     }
 
     document.addEventListener("pointerup", handleInlineThreadLinkActivation, { capture: true })
@@ -6101,7 +6106,7 @@ function VisibleThreadView({
       document.removeEventListener("pointerup", handleInlineThreadLinkActivation, { capture: true })
       document.removeEventListener("click", handleInlineThreadLinkActivation, { capture: true })
     }
-  }, [onArtifactLinkOpen, onLocalFileLinkOpen, threadColumnRef])
+  }, [onArtifactLinkOpen, onLocalFileLinkOpen, threadColumnRef, threadLinkRouting])
 
   useLayoutEffect(() => {
     const threadColumn = threadColumnRef.current

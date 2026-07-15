@@ -3,13 +3,16 @@ import { getAgentSessionBridge, type AgentSessionBridgeEvent } from "../agent-se
 import { AgentSessionEventRouter } from "../agent-session/event-router"
 import {
   appendMessagesToThreadTurns,
+  bindPendingThreadTurnToCanonical,
   buildThreadTurnsFromMessages,
   deriveActiveMessages,
   ensureConversationTurnSessions,
   ensureThreadTurn,
   insertUserMessageIntoTurns,
   mapMessageInTurns,
+  reconcileThreadTurns,
   removeMessageFromTurns,
+  updateAssistantMessageInTurn,
 } from "../thread-turn-state"
 import {
   applyAgentStreamEventToThreadMessage,
@@ -453,7 +456,7 @@ function readRuntimeStreamType(streamEvent: { event: string; data: unknown }) {
   return readString(readRuntimeStreamEvent(streamEvent.data)?.type)
 }
 
-type LlmCallSegmentIdentity = {
+export type LlmCallSegmentIdentity = {
   backendTurnID: string
   llmCallID: string
   messageID?: string
@@ -481,6 +484,146 @@ function resolveLlmCallSegmentIdentity(
     llmCallID: eventID,
     ...(messageID ? { messageID } : {}),
     segmentID: messageID ? `${messageID}:${iteration}` : `llm:${eventID}`,
+  }
+}
+
+function canBindAssistantPlaceholderToSegment(
+  message: AssistantThreadMessage | null,
+  identity: LlmCallSegmentIdentity,
+  currentSegmentID: string | undefined,
+) {
+  if (!message || currentSegmentID) return false
+  if (message.messageID && identity.messageID && message.messageID !== identity.messageID) return false
+  if (message.messageID && !identity.messageID) return false
+  return (
+    message.segmentID === message.id ||
+    message.segmentID.startsWith("pending:") ||
+    message.segmentID === identity.segmentID
+  )
+}
+
+export function findPendingAssistantPlaceholderForCanonicalSegment(
+  turns: ThreadTurn[],
+  input: {
+    assistantThreadMessageIDs: Array<string | undefined>
+    canonicalAssistantThreadMessageID: string
+    identity: LlmCallSegmentIdentity
+  },
+) {
+  const candidateIDs = [...new Set(input.assistantThreadMessageIDs.filter(
+    (value): value is string => Boolean(value && value !== input.canonicalAssistantThreadMessageID),
+  ))]
+
+  for (const candidateID of candidateIDs) {
+    for (const turn of turns) {
+      if (!turn.turnID.startsWith("pending:") && turn.turnID !== input.identity.backendTurnID) continue
+      const message = turn.messages.find(
+        (candidate): candidate is AssistantThreadMessage => (
+          candidate.kind === "assistant" && candidate.id === candidateID
+        ),
+      ) ?? null
+      if (canBindAssistantPlaceholderToSegment(message, input.identity, undefined)) {
+        return candidateID
+      }
+    }
+  }
+
+  return undefined
+}
+
+export function bindExactPendingRequestTurnToCanonical(
+  turns: ThreadTurn[],
+  input: {
+    assistantThreadMessageID: string
+    optimisticUserMessageID?: string
+    turnID: string
+  },
+) {
+  const assistantMatches = turns.flatMap((turn, index) => (
+    turn.turnID.startsWith("pending:") && turn.messages.some(
+      (message) => message.kind === "assistant" && message.id === input.assistantThreadMessageID,
+    )
+      ? [index]
+      : []
+  ))
+  const userMatches = input.optimisticUserMessageID
+    ? turns.flatMap((turn, index) => (
+      turn.turnID.startsWith("pending:") && (
+        turn.userMessageID === input.optimisticUserMessageID ||
+        turn.messages.some(
+          (message) => message.kind === "user" && message.id === input.optimisticUserMessageID,
+        )
+      )
+        ? [index]
+        : []
+    ))
+    : []
+  if (assistantMatches.length > 1 || userMatches.length > 1) return turns
+
+  const pendingTurnIndexes = new Set([...assistantMatches, ...userMatches])
+  if (pendingTurnIndexes.size !== 1) return turns
+  const pendingTurnIndex = [...pendingTurnIndexes][0]!
+
+  const canonicalTurnMatches = turns.flatMap((turn, index) => (
+    turn.turnID === input.turnID ? [index] : []
+  ))
+  if (canonicalTurnMatches.length > 1) return turns
+  const canonicalTurnIndex = canonicalTurnMatches[0]
+  const pendingTurn = turns[pendingTurnIndex]!
+  const canonicalTurn = canonicalTurnIndex === undefined ? undefined : turns[canonicalTurnIndex]
+  const boundPair = bindPendingThreadTurnToCanonical(
+    canonicalTurn ? [pendingTurn, canonicalTurn] : [pendingTurn],
+    input,
+  )
+  if (boundPair.length !== 1 || boundPair[0]?.turnID !== input.turnID) return turns
+
+  const nextTurns: ThreadTurn[] = []
+  turns.forEach((turn, index) => {
+    if (index === pendingTurnIndex) nextTurns.push(boundPair[0]!)
+    if (index !== pendingTurnIndex && index !== canonicalTurnIndex) nextTurns.push(turn)
+  })
+  return nextTurns
+}
+
+export function bindPendingAssistantSegmentToCanonicalTurn(
+  turns: ThreadTurn[],
+  input: {
+    assistantThreadMessageID: string
+    identity: LlmCallSegmentIdentity
+  },
+) {
+  const boundTurns = bindExactPendingRequestTurnToCanonical(turns, {
+    turnID: input.identity.backendTurnID,
+    assistantThreadMessageID: input.assistantThreadMessageID,
+  })
+  const updatedTurns = updateAssistantMessageInTurn(boundTurns, {
+    turnID: input.identity.backendTurnID,
+    id: input.assistantThreadMessageID,
+    updater: (message) => ({
+      ...message,
+      backendTurnID: input.identity.backendTurnID,
+      segmentID: input.identity.segmentID,
+      llmCallID: input.identity.llmCallID,
+      ...(input.identity.messageID ? { messageID: input.identity.messageID } : {}),
+    }),
+  })
+  const reconciledTurns = updatedTurns === boundTurns ? boundTurns : reconcileThreadTurns(updatedTurns)
+  const canonicalTurn = reconciledTurns.find((turn) => turn.turnID === input.identity.backendTurnID)
+  const retainedAssistant = canonicalTurn?.messages.find(
+    (message): message is AssistantThreadMessage => (
+      message.kind === "assistant" &&
+      message.id === input.assistantThreadMessageID &&
+      message.segmentID === input.identity.segmentID
+    ),
+  ) ?? canonicalTurn?.messages.find(
+    (message): message is AssistantThreadMessage => (
+      message.kind === "assistant" && message.segmentID === input.identity.segmentID
+    ),
+  )
+
+  return {
+    turns: reconciledTurns,
+    assistantThreadMessageID: retainedAssistant?.id ?? input.assistantThreadMessageID,
   }
 }
 
@@ -1724,6 +1867,7 @@ export function useSessionStreamController({
 
   function applyRuntimeTurnEventToConversationTurns(input: {
     backendSessionID: string
+    fallbackAssistantThreadMessageID?: string
     fallbackUserMessageID?: string
     streamEvent: { event: string; data: unknown }
     uiSessionID: string
@@ -1746,7 +1890,8 @@ export function useSessionStreamController({
       readString(payloadMessage?.id) ||
       undefined
     const explicitFinalSegmentID = readString(payload?.segmentID) || readString(payloadMessage?.segmentID) || undefined
-    const userMessageID = readString(payload?.userMessageID) ?? input.fallbackUserMessageID
+    const backendUserMessageID = readString(payload?.userMessageID) || undefined
+    const userMessageID = input.fallbackUserMessageID ?? backendUserMessageID
     const status = resolveRuntimeThreadTurnStatus({
       eventType: readString(runtimeEvent.type) ?? "",
       payloadPhase,
@@ -1764,7 +1909,13 @@ export function useSessionStreamController({
 
     const didUpdate = updateConversationTurns((current) => {
       const currentTurns = current[input.uiSessionID] ?? []
-      const currentTurn = currentTurns.find((turn) => turn.turnID === turnID)
+      const boundTurns = bindPendingThreadTurnToCanonical(currentTurns, {
+        turnID,
+        assistantThreadMessageID: input.fallbackAssistantThreadMessageID,
+        backendUserMessageID,
+        optimisticUserMessageID: input.fallbackUserMessageID,
+      })
+      const currentTurn = boundTurns.find((turn) => turn.turnID === turnID)
       const currentAssistant = isTerminalTurnEvent
         ? [...(currentTurn?.messages ?? [])].reverse().find(
             (message): message is AssistantThreadMessage => message.kind === "assistant",
@@ -1777,7 +1928,7 @@ export function useSessionStreamController({
         fallbackSegmentID ? currentAssistant?.id : undefined
       )
       const finalSegmentID = explicitFinalSegmentID ?? fallbackSegmentID
-      const ensuredTurns = ensureThreadTurn(currentTurns, {
+      const ensuredTurns = ensureThreadTurn(boundTurns, {
         turnID,
         backendSessionID: input.backendSessionID,
         lastMessageID,
@@ -2462,33 +2613,21 @@ export function useSessionStreamController({
     ) ?? null
   }
 
-  function canBindAssistantPlaceholderToSegment(
-    message: AssistantThreadMessage | null,
-    identity: LlmCallSegmentIdentity,
-    currentSegmentID: string | undefined,
-  ) {
-    if (!message || currentSegmentID) return false
-    if (message.messageID && identity.messageID && message.messageID !== identity.messageID) return false
-    if (message.messageID && !identity.messageID) return false
-    return (
-      message.segmentID === message.id ||
-      message.segmentID.startsWith("pending:") ||
-      message.segmentID === identity.segmentID
-    )
-  }
-
   function bindAssistantMessageToSegment(
     sessionID: string,
     assistantThreadMessageID: string,
     identity: LlmCallSegmentIdentity,
   ) {
-    updateAssistantConversationMessage(sessionID, assistantThreadMessageID, (message) => ({
-      ...message,
-      backendTurnID: identity.backendTurnID,
-      segmentID: identity.segmentID,
-      llmCallID: identity.llmCallID,
-      ...(identity.messageID ? { messageID: identity.messageID } : {}),
-    }))
+    let retainedAssistantThreadMessageID = assistantThreadMessageID
+    commitSessionTurnUpdate(sessionID, (currentTurns) => {
+      const result = bindPendingAssistantSegmentToCanonicalTurn(currentTurns, {
+        assistantThreadMessageID,
+        identity,
+      })
+      retainedAssistantThreadMessageID = result.assistantThreadMessageID
+      return result.turns
+    })
+    return retainedAssistantThreadMessageID
   }
 
   function ensureAssistantSegmentForLlmCall(input: {
@@ -2502,23 +2641,47 @@ export function useSessionStreamController({
       input.uiSessionID,
       input.identity.segmentID,
     )
-    if (existingSegmentAssistantThreadMessageID) return existingSegmentAssistantThreadMessageID
-
     const existingTarget = sessionEventRouterRef.current.getTurnTarget(input.backendSessionID, input.turnID)
-    const targetAssistant = getAssistantConversationMessage(input.uiSessionID, existingTarget?.assistantThreadMessageID)
-    if (
-      existingTarget?.assistantThreadMessageID &&
-      canBindAssistantPlaceholderToSegment(targetAssistant, input.identity, existingTarget.currentSegmentID)
-    ) {
-      bindAssistantMessageToSegment(input.uiSessionID, existingTarget.assistantThreadMessageID, input.identity)
-      return existingTarget.assistantThreadMessageID
-    }
-
     const pending = findPendingStreamForBackendTurn(pendingStreamsRef.current, {
       sessionID: input.uiSessionID,
       backendSessionID: input.backendSessionID,
       turnID: input.turnID,
     })
+    if (existingSegmentAssistantThreadMessageID) {
+      const pendingAssistantThreadMessageID = findPendingAssistantPlaceholderForCanonicalSegment(
+        conversationStore.getSessionTurns(input.uiSessionID),
+        {
+          assistantThreadMessageIDs: [
+            existingTarget?.assistantThreadMessageID,
+            pending?.assistantThreadMessageID,
+          ],
+          canonicalAssistantThreadMessageID: existingSegmentAssistantThreadMessageID,
+          identity: input.identity,
+        },
+      )
+      if (!pendingAssistantThreadMessageID) return existingSegmentAssistantThreadMessageID
+      if (pending?.assistantThreadMessageID === pendingAssistantThreadMessageID && !pending.backendTurnID) {
+        pending.backendTurnID = input.turnID
+      }
+      return bindAssistantMessageToSegment(
+        input.uiSessionID,
+        pendingAssistantThreadMessageID,
+        input.identity,
+      )
+    }
+
+    const targetAssistant = getAssistantConversationMessage(input.uiSessionID, existingTarget?.assistantThreadMessageID)
+    if (
+      existingTarget?.assistantThreadMessageID &&
+      canBindAssistantPlaceholderToSegment(targetAssistant, input.identity, existingTarget.currentSegmentID)
+    ) {
+      return bindAssistantMessageToSegment(
+        input.uiSessionID,
+        existingTarget.assistantThreadMessageID,
+        input.identity,
+      )
+    }
+
     const pendingAssistant = getAssistantConversationMessage(input.uiSessionID, pending?.assistantThreadMessageID)
     if (
       pending?.assistantThreadMessageID &&
@@ -2527,8 +2690,11 @@ export function useSessionStreamController({
       if (!pending.backendTurnID) {
         pending.backendTurnID = input.turnID
       }
-      bindAssistantMessageToSegment(input.uiSessionID, pending.assistantThreadMessageID, input.identity)
-      return pending.assistantThreadMessageID
+      return bindAssistantMessageToSegment(
+        input.uiSessionID,
+        pending.assistantThreadMessageID,
+        input.identity,
+      )
     }
 
     const streamingMessage = buildSessionStreamingAssistantThreadMessage(input.presentation, input.identity)
@@ -2601,6 +2767,17 @@ export function useSessionStreamController({
 
     const backendSessionID = executionMode.sessionID || target.backendSessionID || resolveBackendSessionID(target.sessionID)
     const backendTurnID = executionMode.turnID
+    target.backendSessionID = backendSessionID
+    target.backendTurnID = backendTurnID
+    target.executionMode = executionMode.mode
+    commitSessionTurnUpdate(target.sessionID, (currentTurns) => (
+      bindExactPendingRequestTurnToCanonical(currentTurns, {
+        turnID: backendTurnID,
+        assistantThreadMessageID: target.assistantThreadMessageID,
+        optimisticUserMessageID: target.userThreadMessageID,
+      })
+    ))
+
     if (sessionEventRouterRef.current.hasBackendTurnSettled(backendSessionID, backendTurnID)) {
       delete pendingStreamsRef.current[streamID]
       if (target.pendingInputID) {
@@ -2611,9 +2788,6 @@ export function useSessionStreamController({
     }
 
     const previousAssistantThreadMessageID = target.assistantThreadMessageID
-    target.backendSessionID = backendSessionID
-    target.backendTurnID = backendTurnID
-    target.executionMode = executionMode.mode
 
     const existingTarget = sessionEventRouterRef.current.getTurnTarget(backendSessionID, backendTurnID)
 
@@ -2737,6 +2911,7 @@ export function useSessionStreamController({
         uiSessionID: target.sessionID,
         backendSessionID,
         streamEvent,
+        fallbackAssistantThreadMessageID: target.assistantThreadMessageID,
         fallbackUserMessageID: target.userThreadMessageID,
       })
     }
@@ -2914,15 +3089,28 @@ export function useSessionStreamController({
 
     const runtimeType = readRuntimeStreamType(streamEvent)
     const existingTurnTarget = sessionEventRouterRef.current.getTurnTarget(streamEvent.sessionID, backendTurnID)
+    const pendingTurnTarget = findPendingStreamForBackendTurn(pendingStreamsRef.current, {
+      sessionID: uiSessionID,
+      backendSessionID: streamEvent.sessionID,
+      turnID: backendTurnID,
+    })
+    const fallbackAssistantThreadMessageID =
+      existingTurnTarget?.assistantThreadMessageID ?? pendingTurnTarget?.assistantThreadMessageID
+    if (pendingTurnTarget && !pendingTurnTarget.backendTurnID) {
+      pendingTurnTarget.backendTurnID = backendTurnID
+    }
     applyRuntimeTurnEventToConversationTurns({
       uiSessionID,
       backendSessionID: streamEvent.sessionID,
       streamEvent,
+      fallbackAssistantThreadMessageID,
+      fallbackUserMessageID: pendingTurnTarget?.userThreadMessageID,
     })
     if (runtimeType === "turn.started" && !existingTurnTarget?.assistantThreadMessageID) {
       sessionEventRouterRef.current.setTurnTarget(streamEvent.sessionID, backendTurnID, {
         sessionID: uiSessionID,
         turnID: backendTurnID,
+        assistantThreadMessageID: fallbackAssistantThreadMessageID,
       })
       if (shouldRefreshRuntimeDebugForStreamEvent(streamEvent)) {
         scheduleRuntimeDebugRefresh(uiSessionID, streamEvent.sessionID)

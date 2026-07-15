@@ -31,6 +31,7 @@ interface ExecutionGroupCandidate {
   durationMs?: number
   groupID: string
   hasUserBoundary: boolean
+  sourceTurns: ThreadTurnWithFinalMetadata[]
   status: ThreadTurnStatus
   summaryRowID: string
   turnID: string
@@ -360,6 +361,277 @@ function normalizedAssistantMessages(
     })
 }
 
+function hasUserBoundaryBetweenAssistants(
+  orderedMessages: ThreadMessage[],
+  assistantMessageIDs: ReadonlySet<string>,
+) {
+  const assistantIndexes = orderedMessages.flatMap((message, index) => (
+    message.kind === "assistant" && assistantMessageIDs.has(message.id) ? [index] : []
+  ))
+  if (assistantIndexes.length < 2) return false
+  const firstIndex = assistantIndexes[0]!
+  const lastIndex = assistantIndexes[assistantIndexes.length - 1]!
+  return orderedMessages.slice(firstIndex + 1, lastIndex).some((message) => message.kind === "user")
+}
+
+function isPendingTurnID(turnID: string) {
+  return turnID.startsWith("pending:")
+}
+
+function candidateActiveSpan(
+  candidate: ExecutionGroupCandidate,
+  activeMessageIndexByID: ReadonlyMap<string, number>,
+) {
+  const indexes = candidate.assistantMessages.flatMap((message) => {
+    const index = activeMessageIndexByID.get(message.id)
+    return index === undefined ? [] : [index]
+  })
+  if (indexes.length === 0) return null
+  return {
+    first: Math.min(...indexes),
+    last: Math.max(...indexes),
+  }
+}
+
+function setsOverlap(left: ReadonlySet<string>, right: ReadonlySet<string>) {
+  for (const value of left) {
+    if (right.has(value)) return true
+  }
+  return false
+}
+
+function assistantIdentitySet(
+  candidate: ExecutionGroupCandidate,
+  select: (message: AssistantThreadMessage) => string | undefined,
+) {
+  const values = new Set<string>()
+  candidate.assistantMessages.forEach((message) => {
+    const value = select(message)?.trim()
+    if (value) values.add(value)
+  })
+  return values
+}
+
+function sourceTurnIdentitySet(
+  candidate: ExecutionGroupCandidate,
+  select: (turn: ThreadTurnWithFinalMetadata) => string | undefined,
+) {
+  const values = new Set<string>()
+  candidate.sourceTurns.forEach((turn) => {
+    const value = select(turn)?.trim()
+    if (value) values.add(value)
+  })
+  return values
+}
+
+function hasPendingRealUserAlias(
+  left: ExecutionGroupCandidate,
+  right: ExecutionGroupCandidate,
+) {
+  return left.sourceTurns.some((leftTurn) => right.sourceTurns.some((rightTurn) => {
+    const leftUserMessageID = leftTurn.userMessageID?.trim()
+    const rightUserMessageID = rightTurn.userMessageID?.trim()
+    return Boolean(
+      leftUserMessageID &&
+      leftUserMessageID === rightUserMessageID &&
+      isPendingTurnID(leftTurn.turnID) !== isPendingTurnID(rightTurn.turnID),
+    )
+  }))
+}
+
+function canonicalCandidatesShareStrongIdentity(
+  left: ExecutionGroupCandidate,
+  right: ExecutionGroupCandidate,
+) {
+  if (setsOverlap(
+    sourceTurnIdentitySet(left, (turn) => turn.turnID),
+    sourceTurnIdentitySet(right, (turn) => turn.turnID),
+  )) {
+    return true
+  }
+  if (hasPendingRealUserAlias(left, right)) return true
+  if (setsOverlap(
+    assistantIdentitySet(left, (message) => message.backendTurnID),
+    assistantIdentitySet(right, (message) => message.backendTurnID),
+  )) {
+    return true
+  }
+  return setsOverlap(
+    assistantIdentitySet(left, (message) => message.segmentID),
+    assistantIdentitySet(right, (message) => message.segmentID),
+  )
+}
+
+function streamInsertionTargetsAssistant(
+  orderedMessages: ThreadMessage[],
+  assistantMessageIDs: ReadonlySet<string>,
+) {
+  return orderedMessages.some((message) => (
+    message.kind === "user" &&
+    Boolean(
+      message.streamInsertion?.assistantThreadMessageID &&
+      assistantMessageIDs.has(message.streamInsertion.assistantThreadMessageID),
+    )
+  ))
+}
+
+function hasTrailingUserMessage(
+  turn: ThreadTurnWithFinalMetadata,
+  assistantMessageIDs: ReadonlySet<string>,
+) {
+  let lastAssistantIndex = -1
+  turn.messages.forEach((message, index) => {
+    if (message.kind === "assistant" && assistantMessageIDs.has(message.id)) lastAssistantIndex = index
+  })
+  return lastAssistantIndex >= 0 &&
+    turn.messages.slice(lastAssistantIndex + 1).some((message) => message.kind === "user")
+}
+
+function hasCrossCandidateUserBoundary(
+  left: ExecutionGroupCandidate,
+  right: ExecutionGroupCandidate,
+  messages: ThreadMessage[],
+  activeMessageIndexByID: ReadonlyMap<string, number>,
+) {
+  if (left.hasUserBoundary || right.hasUserBoundary) return true
+  if ([...left.sourceTurns, ...right.sourceTurns].some((turn) => turn.status === "continued_by_user")) {
+    return true
+  }
+
+  const leftSpan = candidateActiveSpan(left, activeMessageIndexByID)
+  const rightSpan = candidateActiveSpan(right, activeMessageIndexByID)
+  if (!leftSpan || !rightSpan || leftSpan.last >= rightSpan.first) return true
+  if (messages.slice(leftSpan.last + 1, rightSpan.first).some((message) => message.kind === "user")) {
+    return true
+  }
+
+  const assistantMessageIDs = new Set(
+    [...left.assistantMessages, ...right.assistantMessages].map((message) => message.id),
+  )
+  const sourceTurns = [...left.sourceTurns, ...right.sourceTurns]
+  if (
+    streamInsertionTargetsAssistant(messages, assistantMessageIDs) ||
+    sourceTurns.some((turn) => (
+      hasUserBoundaryBetweenAssistants(turn.messages, assistantMessageIDs) ||
+      streamInsertionTargetsAssistant(turn.messages, assistantMessageIDs) ||
+      turn.messages.some((message) => message.kind === "user" && message.submissionMode === "steer")
+    ))
+  ) {
+    return true
+  }
+
+  const leftUserMessageIDs = sourceTurnIdentitySet(left, (turn) => turn.userMessageID)
+  const rightUserMessageIDs = sourceTurnIdentitySet(right, (turn) => turn.userMessageID)
+  if (
+    leftUserMessageIDs.size > 0 &&
+    rightUserMessageIDs.size > 0 &&
+    !setsOverlap(leftUserMessageIDs, rightUserMessageIDs)
+  ) {
+    return true
+  }
+
+  const leftAssistantMessageIDs = new Set(left.assistantMessages.map((message) => message.id))
+  return left.sourceTurns.some((turn) => hasTrailingUserMessage(turn, leftAssistantMessageIDs))
+}
+
+function selectAuthoritativeTurn(turns: ThreadTurnWithFinalMetadata[]) {
+  const realTurns = turns.filter((turn) => !isPendingTurnID(turn.turnID))
+  const candidates = realTurns.length > 0 ? realTurns : turns
+  return candidates.reduce((selected, candidate) => {
+    if (candidate.updatedAt !== selected.updatedAt) {
+      return candidate.updatedAt > selected.updatedAt ? candidate : selected
+    }
+    return candidate
+  })
+}
+
+function mergeCanonicalCandidates(
+  left: ExecutionGroupCandidate,
+  right: ExecutionGroupCandidate,
+  activeMessageIndexByID: ReadonlyMap<string, number>,
+  hasUserBoundary = false,
+) {
+  const sourceTurns = [...left.sourceTurns, ...right.sourceTurns]
+  const authoritativeTurn = selectAuthoritativeTurn(sourceTurns)
+  const assistantMessageFallbackOrder = new Map<string, number>()
+  const assistantMessages = [...left.assistantMessages, ...right.assistantMessages]
+    .filter((message) => {
+      if (assistantMessageFallbackOrder.has(message.id)) return false
+      assistantMessageFallbackOrder.set(message.id, assistantMessageFallbackOrder.size)
+      return true
+    })
+    .sort((leftMessage, rightMessage) => {
+      const leftIndex = activeMessageIndexByID.get(leftMessage.id)
+      const rightIndex = activeMessageIndexByID.get(rightMessage.id)
+      if (leftIndex !== undefined || rightIndex !== undefined) {
+        if (leftIndex === undefined) return 1
+        if (rightIndex === undefined) return -1
+        if (leftIndex !== rightIndex) return leftIndex - rightIndex
+      }
+      return assistantMessageFallbackOrder.get(leftMessage.id)! - assistantMessageFallbackOrder.get(rightMessage.id)!
+    })
+  const startedAtValues = sourceTurns
+    .map((turn) => turn.startedAt)
+    .filter((value) => Number.isFinite(value))
+  const mergedTurn: ThreadTurnWithFinalMetadata = {
+    ...authoritativeTurn,
+    messages: assistantMessages,
+    startedAt: startedAtValues.length > 0 ? Math.min(...startedAtValues) : authoritativeTurn.startedAt,
+  }
+  if (mergedTurn.status === "running") {
+    delete mergedTurn.completedAt
+    delete mergedTurn.finalSegmentID
+    delete mergedTurn.lastMessageID
+  }
+
+  return {
+    assistantMessages,
+    canonical: true,
+    durationMs: mergedTurn.status === "running"
+      ? undefined
+      : durationForTurn(mergedTurn) ?? durationFromAssistantTrace(assistantMessages),
+    groupID: `turn:${authoritativeTurn.turnID}`,
+    hasUserBoundary,
+    sourceTurns,
+    status: mergedTurn.status,
+    summaryRowID: `turn:${authoritativeTurn.turnID}:execution-summary`,
+    turn: mergedTurn,
+    turnID: authoritativeTurn.turnID,
+  } satisfies ExecutionGroupCandidate
+}
+
+function coalesceCanonicalExecutionGroupCandidates(
+  candidates: ExecutionGroupCandidate[],
+  messages: ThreadMessage[],
+  activeMessageIndexByID: ReadonlyMap<string, number>,
+) {
+  const coalesced: ExecutionGroupCandidate[] = []
+  candidates.forEach((candidate) => {
+    const previous = coalesced.at(-1)
+    if (!previous || !previous.canonical || !candidate.canonical) {
+      coalesced.push(candidate)
+      return
+    }
+    const sharesStrongIdentity = canonicalCandidatesShareStrongIdentity(previous, candidate)
+    if (!sharesStrongIdentity) {
+      coalesced.push(candidate)
+      return
+    }
+    const hasUserBoundary = hasCrossCandidateUserBoundary(previous, candidate, messages, activeMessageIndexByID)
+    if (hasUserBoundary && previous.groupID !== candidate.groupID) {
+      coalesced.push(candidate)
+      return
+    }
+    coalesced[coalesced.length - 1] = mergeCanonicalCandidates(
+      previous,
+      candidate,
+      activeMessageIndexByID,
+      hasUserBoundary,
+    )
+  })
+  return coalesced
+}
+
 function createExecutionGroupCandidates(
   messages: ThreadMessage[],
   turns: ThreadTurn[] | null | undefined,
@@ -368,19 +640,6 @@ function createExecutionGroupCandidates(
   const activeMessageIndexByID = new Map(messages.map((message, index) => [message.id, index] as const))
   const claimedAssistantMessageIDs = new Set<string>()
   const candidates: ExecutionGroupCandidate[] = []
-
-  const hasUserBoundaryBetweenAssistants = (
-    orderedMessages: ThreadMessage[],
-    assistantMessageIDs: ReadonlySet<string>,
-  ) => {
-    const assistantIndexes = orderedMessages.flatMap((message, index) => (
-      message.kind === "assistant" && assistantMessageIDs.has(message.id) ? [index] : []
-    ))
-    if (assistantIndexes.length < 2) return false
-    const firstIndex = assistantIndexes[0]!
-    const lastIndex = assistantIndexes[assistantIndexes.length - 1]!
-    return orderedMessages.slice(firstIndex + 1, lastIndex).some((message) => message.kind === "user")
-  }
 
   turns?.forEach((plainTurn) => {
     const turn = plainTurn as ThreadTurnWithFinalMetadata
@@ -423,6 +682,7 @@ function createExecutionGroupCandidates(
       hasUserBoundary:
         hasUserBoundaryBetweenAssistants(messages, uniqueAssistantMessageIDs) ||
         hasUserBoundaryBetweenAssistants(turn.messages, uniqueAssistantMessageIDs),
+      sourceTurns: [turn],
       status: turn.status,
       summaryRowID: `turn:${turn.turnID}:execution-summary`,
       turn,
@@ -440,6 +700,7 @@ function createExecutionGroupCandidates(
         : durationForLegacyMessage(message),
       groupID: `legacy:${message.backendTurnID}:${message.id}`,
       hasUserBoundary: false,
+      sourceTurns: [],
       status: statusForLegacyMessage(message),
       summaryRowID: `legacy:${message.backendTurnID}:${message.id}:execution-summary`,
       turnID: message.backendTurnID,
@@ -477,10 +738,17 @@ function deriveGroup(
   const protectedRowIDs = new Set(
     groupRows.filter(isAlwaysOutcomeRow).map((row) => row.rowID),
   )
-  const lastFailureRow = [...groupRows].reverse().find((row) =>
-    isFailureOutcomeRow(row) || isTerminalizedTraceOutcomeRow(row, candidate.status),
+  const hasResolvedFinalResponse =
+    !finalResolution.authoritativeMetadataPending && Boolean(finalResolution.responseBlock)
+  const shouldProtectTerminalTraceOutcome = isTerminalTurnStatus(candidate.status) && (
+    candidate.status !== "completed" || !hasResolvedFinalResponse
   )
-  if (lastFailureRow) protectedRowIDs.add(lastFailureRow.rowID)
+  if (shouldProtectTerminalTraceOutcome) {
+    const lastFailureRow = [...groupRows].reverse().find((row) =>
+      isFailureOutcomeRow(row) || isTerminalizedTraceOutcomeRow(row, candidate.status),
+    )
+    if (lastFailureRow) protectedRowIDs.add(lastFailureRow.rowID)
+  }
 
   const isAtOrAfterFinalResponse = (row: AtomicAssistantDisplayRow) => {
     if (finalMessageOrdinal === undefined || responseStartRawItemIndex === undefined) return false
@@ -542,7 +810,12 @@ export function deriveThreadExecutionGroups({
 }: DeriveThreadExecutionGroupsInput): DeriveThreadExecutionGroupsResult {
   const messageIndexByID = new Map(messages.map((message, index) => [message.id, index] as const))
   const nextEligibilityLocks = new Set(eligibilityLocks)
-  const groups = createExecutionGroupCandidates(messages, turns).map((candidate) => {
+  const candidates = coalesceCanonicalExecutionGroupCandidates(
+    createExecutionGroupCandidates(messages, turns),
+    messages,
+    messageIndexByID,
+  )
+  const groups = candidates.map((candidate) => {
     const group = deriveGroup(candidate, rows, messageIndexByID, eligibilityLocks)
     if (group.thresholdReached && !group.hasInsertedUserBoundary) nextEligibilityLocks.add(group.groupID)
     const { thresholdReached: _thresholdReached, ...publicGroup } = group

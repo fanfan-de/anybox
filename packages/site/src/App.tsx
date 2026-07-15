@@ -117,7 +117,6 @@ export function App() {
         <AtmosphereBackground />
         <div className="home-hero-inner">
           <div className="home-hero-copy">
-            <p className="home-eyebrow">{content.hero.eyebrow}</p>
             <h1 id="hero-title">{content.hero.title}</h1>
             <p className="home-hero-description">{content.hero.description}</p>
             <div className="home-hero-actions">

@@ -74,6 +74,11 @@ import { getMobileBridgeStatus, refreshMobilePairingCode, revokeMobileDevice, ro
 import { openMonitorWindow } from "./monitor-window"
 import { readPreviewText, resolvePreviewTarget } from "./preview-targets"
 import { PtyProxyManager } from "./pty-proxy"
+import {
+  deleteRendererMemoryDiagnosticsRecord,
+  listRendererMemoryDiagnosticsRecords,
+  setRendererMemoryDiagnosticsRecord,
+} from "./renderer-memory-diagnostics-store"
 import { safeError, safeWarn } from "./safe-console"
 import { sendWebContentsSafely } from "./safe-web-contents-send"
 import {
@@ -362,7 +367,6 @@ async function appendRendererErrorLog(report: DesktopRendererErrorReport & { sen
   await appendFile(logPath, line, "utf8")
 }
 
-const rendererMemoryDiagnosticsByWebContentsID = new Map<number, DesktopRendererMemoryDiagnosticsRecord>()
 const rendererMemoryDiagnosticsCleanupTargets = new Set<number>()
 
 function normalizeRendererMemoryDiagnostics(
@@ -3427,12 +3431,13 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
 
   handleDesktopIpc("desktop:report-renderer-memory-diagnostics", (event, input) => {
     const report = normalizeRendererMemoryDiagnostics(input, event)
-    rendererMemoryDiagnosticsByWebContentsID.set(event.sender.id, report)
-    if (!rendererMemoryDiagnosticsCleanupTargets.has(event.sender.id)) {
-      rendererMemoryDiagnosticsCleanupTargets.add(event.sender.id)
+    const webContentsID = event.sender.id
+    setRendererMemoryDiagnosticsRecord(report)
+    if (!rendererMemoryDiagnosticsCleanupTargets.has(webContentsID)) {
+      rendererMemoryDiagnosticsCleanupTargets.add(webContentsID)
       event.sender.once("destroyed", () => {
-        rendererMemoryDiagnosticsCleanupTargets.delete(event.sender.id)
-        rendererMemoryDiagnosticsByWebContentsID.delete(event.sender.id)
+        rendererMemoryDiagnosticsCleanupTargets.delete(webContentsID)
+        deleteRendererMemoryDiagnosticsRecord(webContentsID)
       })
     }
 
@@ -3440,9 +3445,7 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   })
 
   handleDesktopIpc("desktop:get-renderer-memory-diagnostics", () => ({
-    records: [...rendererMemoryDiagnosticsByWebContentsID.values()].sort(
-      (left, right) => right.timestamp - left.timestamp,
-    ),
+    records: listRendererMemoryDiagnosticsRecords(),
   }))
 
   handleDesktopIpc("desktop:get-workbench-window-context", (event) => {

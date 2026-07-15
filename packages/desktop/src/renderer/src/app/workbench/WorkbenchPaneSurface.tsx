@@ -27,8 +27,9 @@ import type {
 import { useProjectComposer } from "../use-project-composer"
 import { isSideChatSession } from "../workspace"
 import { ThreadView, type ThreadNavigationRequest, type ThreadScrollSnapshot } from "../thread/ThreadView"
+import { deriveActiveMessages } from "../thread-turn-state"
 import type { WorkbenchPaneState } from "../agent-workspace/workspace-derived-state"
-import { useConversationMessages, type ConversationStoreApi } from "../agent-workspace/conversation-store"
+import { useConversationTurns, type ConversationStoreApi } from "../agent-workspace/conversation-store"
 import type { ComposerCommandStatus } from "../agent-workspace/composer-controller"
 
 const THREAD_TOP_RESET_THRESHOLD_PX = 2
@@ -473,6 +474,16 @@ interface ActiveWorkbenchPaneSurfaceProps extends WorkbenchPaneSurfaceProps {
   threadActivationVersion: number
 }
 
+export function useWorkbenchPaneConversationSnapshot(
+  conversationStore: ConversationStoreApi,
+  sessionID: string | null | undefined,
+) {
+  const activeTurns = useConversationTurns(conversationStore, sessionID)
+  const activeMessages = useMemo(() => deriveActiveMessages(activeTurns), [activeTurns])
+
+  return { activeMessages, activeTurns }
+}
+
 const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   assistantTraceVisibility,
   composerCommandStatusByTabKey,
@@ -524,8 +535,10 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   const bagOperationVersionRef = useRef(0)
   const [bagDialogState, setBagDialogState] = useState<SessionBagDialogState | null>(null)
   const [bagDescription, setBagDescription] = useState("")
-  const activeMessages = useConversationMessages(conversationStore, pane.sessionID)
-  const activeTurns = conversationStore.getSessionTurns(pane.sessionID)
+  const { activeMessages, activeTurns } = useWorkbenchPaneConversationSnapshot(
+    conversationStore,
+    pane.sessionID,
+  )
   const composerParentMessagePreview = pane.composerParentMessageID
     ? pane.messageTree?.nodesByID[pane.composerParentMessageID]?.preview
     : undefined

@@ -2,6 +2,7 @@ import { BrowserWindow, app, type BrowserWindowConstructorOptions } from "electr
 import fs from "node:fs"
 import path from "node:path"
 import { resolveAppIconPath } from "./app-icon"
+import { attachRendererMemoryDiagnostics } from "./renderer-memory-diagnostics-store"
 import { ensureRendererHttpServer } from "./renderer-http-server"
 import { safeError, safeWarn } from "./safe-console"
 import { recordShutdownDiagnostic } from "./shutdown-diagnostics"
@@ -239,12 +240,13 @@ function installWindowDiagnostics(win: BrowserWindow, input: { label: string; ur
   })
 
   win.webContents.on("render-process-gone", (_event, details) => {
-    const payload = {
+    const webContentsID = win.webContents.id
+    const payload = attachRendererMemoryDiagnostics(webContentsID, {
       ...details,
       label: input.label,
       url: win.webContents.getURL() || input.url,
-      webContentsID: win.webContents.id,
-    }
+      webContentsID,
+    })
     recordShutdownDiagnostic("render-process-gone", payload)
     safeError(prefix, "render-process-gone", payload)
   })

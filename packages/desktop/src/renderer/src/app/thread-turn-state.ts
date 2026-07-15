@@ -506,6 +506,343 @@ export function reconcileThreadTurns(turns: ThreadTurn[]): ThreadTurn[] {
   })
 }
 
+type PendingTurnMatch =
+  | { kind: "none" }
+  | { kind: "unique"; index: number }
+  | { kind: "ambiguous" }
+
+function resolvePendingTurnMatch(indexes: number[]): PendingTurnMatch {
+  if (indexes.length === 0) return { kind: "none" }
+  if (indexes.length === 1) return { kind: "unique", index: indexes[0]! }
+  return { kind: "ambiguous" }
+}
+
+function pendingTurnMatchesCanonicalBackendTurn(turn: ThreadTurn, turnID: string) {
+  const assistantMessages = turn.messages.filter(
+    (message): message is AssistantThreadMessage => message.kind === "assistant",
+  )
+  return assistantMessages.some((message) => message.backendTurnID === turnID) &&
+    assistantMessages.every((message) => (
+      isPendingTurnID(message.backendTurnID) || message.backendTurnID === turnID
+    ))
+}
+
+function findPendingTurnIndexForCanonicalBinding(
+  turns: ThreadTurn[],
+  input: {
+    assistantThreadMessageID?: string
+    optimisticUserMessageID?: string
+    turnID: string
+  },
+) {
+  const pendingTurnIndexes = turns.flatMap((turn, index) => (
+    isPendingTurnID(turn.turnID) ? [index] : []
+  ))
+  const matches: PendingTurnMatch[] = []
+
+  if (input.assistantThreadMessageID) {
+    matches.push(resolvePendingTurnMatch(pendingTurnIndexes.filter((index) => {
+      const turn = turns[index]!
+      return turn.turnID === `${PENDING_TURN_PREFIX}${input.assistantThreadMessageID}` ||
+        turn.messages.some(
+          (message) => message.kind === "assistant" && message.id === input.assistantThreadMessageID,
+        )
+    })))
+  }
+
+  if (input.optimisticUserMessageID) {
+    matches.push(resolvePendingTurnMatch(pendingTurnIndexes.filter((index) => {
+      const turn = turns[index]!
+      return turn.userMessageID === input.optimisticUserMessageID ||
+        turn.messages.some(
+          (message) => message.kind === "user" && message.id === input.optimisticUserMessageID,
+        )
+    })))
+  }
+
+  matches.push(resolvePendingTurnMatch(pendingTurnIndexes.filter((index) =>
+    pendingTurnMatchesCanonicalBackendTurn(turns[index]!, input.turnID),
+  )))
+  if (matches.some((match) => match.kind === "ambiguous")) return -1
+
+  const uniqueIndexes = new Set(matches.flatMap((match) => (
+    match.kind === "unique" ? [match.index] : []
+  )))
+  return uniqueIndexes.size === 1 ? [...uniqueIndexes][0]! : -1
+}
+
+function pendingTurnCanBindToCanonicalTurn(turn: ThreadTurn, turnID: string) {
+  return turn.messages.every((message) => (
+    message.kind !== "assistant" ||
+    isPendingTurnID(message.backendTurnID) ||
+    message.backendTurnID === turnID
+  ))
+}
+
+function mergeBoundUserMessages(
+  current: UserThreadMessage,
+  incoming: UserThreadMessage,
+  preferredUserMessageID: string | undefined,
+): UserThreadMessage {
+  const preferred = incoming.id === preferredUserMessageID && current.id !== preferredUserMessageID
+    ? incoming
+    : current
+  const fallback = preferred === current ? incoming : current
+  return {
+    ...fallback,
+    ...preferred,
+    id: preferred.id,
+    text: preferred.text || fallback.text,
+    timestamp: Math.min(current.timestamp, incoming.timestamp),
+  }
+}
+
+function mergeBoundAssistantMessages(
+  current: AssistantThreadMessage,
+  incoming: AssistantThreadMessage,
+  input: {
+    currentWasPending: boolean
+    incomingWasPending: boolean
+    preferredAssistantThreadMessageID?: string
+    turnID: string
+  },
+) {
+  const identity = input.currentWasPending && !input.incomingWasPending
+    ? incoming
+    : !input.currentWasPending && input.incomingWasPending
+      ? current
+      : incoming
+  const withCanonicalIdentity = (message: AssistantThreadMessage): AssistantThreadMessage => {
+    const {
+      messageID: _messageID,
+      llmCallID: _llmCallID,
+      ...messageWithoutOptionalIdentity
+    } = message
+    return {
+      ...messageWithoutOptionalIdentity,
+      backendTurnID: input.turnID,
+      segmentID: identity.segmentID,
+      ...(identity.messageID ? { messageID: identity.messageID } : {}),
+      ...(identity.llmCallID ? { llmCallID: identity.llmCallID } : {}),
+    }
+  }
+  const currentWithCanonicalIdentity = withCanonicalIdentity(current)
+  const incomingWithCanonicalIdentity = withCanonicalIdentity(incoming)
+  const merged = !input.currentWasPending && input.incomingWasPending
+    ? mergeAssistantMessages(incomingWithCanonicalIdentity, currentWithCanonicalIdentity)
+    : mergeAssistantMessages(currentWithCanonicalIdentity, incomingWithCanonicalIdentity)
+  const preferredID = current.id === input.preferredAssistantThreadMessageID
+    ? current.id
+    : incoming.id === input.preferredAssistantThreadMessageID
+      ? incoming.id
+      : current.id
+  return withCanonicalIdentity({
+    ...merged,
+    id: preferredID,
+  })
+}
+
+function mergeBoundTurnMessages(
+  turns: ThreadTurn[],
+  turnIndexes: ReadonlySet<number>,
+  input: {
+    assistantThreadMessageID?: string
+    backendUserMessageID?: string
+    optimisticUserMessageID?: string
+    preferredUserMessageID?: string
+    turnID: string
+    userMessageAliases?: readonly string[]
+  },
+) {
+  const messages: ThreadMessage[] = []
+  const assistantWasPendingByIndex = new Map<number, boolean>()
+  const explicitUserAliases = new Set(
+    [
+      input.optimisticUserMessageID,
+      input.backendUserMessageID,
+      ...(input.userMessageAliases ?? []),
+    ].filter(
+      (value): value is string => Boolean(value),
+    ),
+  )
+  let explicitUserAliasIndex = -1
+
+  turns.forEach((turn, turnIndex) => {
+    if (!turnIndexes.has(turnIndex)) return
+
+    turn.messages.forEach((sourceMessage) => {
+      if (sourceMessage.kind === "user") {
+        const exactIndex = messages.findIndex(
+          (message) => message.kind === "user" && message.id === sourceMessage.id,
+        )
+        const aliasIndex = explicitUserAliases.has(sourceMessage.id) ? explicitUserAliasIndex : -1
+        const existingIndex = exactIndex >= 0 ? exactIndex : aliasIndex
+        if (existingIndex < 0) {
+          if (explicitUserAliases.has(sourceMessage.id)) explicitUserAliasIndex = messages.length
+          messages.push(sourceMessage)
+          return
+        }
+
+        const existing = messages[existingIndex]
+        if (existing?.kind === "user") {
+          messages[existingIndex] = mergeBoundUserMessages(
+            existing,
+            sourceMessage,
+            input.preferredUserMessageID,
+          )
+        }
+        return
+      }
+
+      const sourceWasPending = isPendingTurnID(turn.turnID) || isPendingTurnID(sourceMessage.backendTurnID)
+      const message = isPendingTurnID(sourceMessage.backendTurnID)
+        ? { ...sourceMessage, backendTurnID: input.turnID }
+        : sourceMessage
+      const existingIndex = messages.findIndex((candidate) =>
+        candidate.kind === "assistant" && (
+          candidate.id === message.id || candidate.segmentID === message.segmentID
+        ),
+      )
+      if (existingIndex < 0) {
+        assistantWasPendingByIndex.set(messages.length, sourceWasPending)
+        messages.push(message)
+        return
+      }
+
+      const existing = messages[existingIndex]
+      if (existing?.kind !== "assistant") return
+      const currentWasPending = assistantWasPendingByIndex.get(existingIndex) ?? false
+      messages[existingIndex] = mergeBoundAssistantMessages(existing, message, {
+        currentWasPending,
+        incomingWasPending: sourceWasPending,
+        preferredAssistantThreadMessageID: input.assistantThreadMessageID,
+        turnID: input.turnID,
+      })
+      assistantWasPendingByIndex.set(existingIndex, currentWasPending && sourceWasPending)
+    })
+  })
+
+  return messages
+}
+
+function resolveBoundTurnUserMessageID(
+  messages: ThreadMessage[],
+  pendingTurn: ThreadTurn,
+  canonicalTurn: ThreadTurn | undefined,
+  input: {
+    backendUserMessageID?: string
+    optimisticUserMessageID?: string
+  },
+) {
+  const userMessageIDs = new Set(
+    messages.flatMap((message) => message.kind === "user" ? [message.id] : []),
+  )
+  const candidates = [
+    input.optimisticUserMessageID,
+    pendingTurn.userMessageID,
+    input.backendUserMessageID,
+    canonicalTurn?.userMessageID,
+  ]
+  const matchingCandidate = candidates.find(
+    (candidate): candidate is string => Boolean(candidate && userMessageIDs.has(candidate)),
+  )
+  if (matchingCandidate) return matchingCandidate
+  return canonicalTurn?.userMessageID ?? pendingTurn.userMessageID
+}
+
+/**
+ * Atomically re-homes a renderer-created pending turn under its authoritative backend turn id.
+ * Only explicit user/assistant identities or an already-bound assistant backend turn may match;
+ * positional or text-based inference is intentionally forbidden.
+ */
+export function bindPendingThreadTurnToCanonical(
+  turns: ThreadTurn[],
+  input: {
+    assistantThreadMessageID?: string
+    backendUserMessageID?: string
+    optimisticUserMessageID?: string
+    turnID: string
+  },
+): ThreadTurn[] {
+  if (!input.turnID || isPendingTurnID(input.turnID)) return turns
+
+  const canonicalTurnIndexes = turns.flatMap((turn, index) => (
+    turn.turnID === input.turnID ? [index] : []
+  ))
+  if (canonicalTurnIndexes.length > 1) return turns
+
+  const pendingTurnIndex = findPendingTurnIndexForCanonicalBinding(turns, input)
+  if (pendingTurnIndex < 0) return turns
+  const pendingTurn = turns[pendingTurnIndex]!
+  if (!pendingTurnCanBindToCanonicalTurn(pendingTurn, input.turnID)) return turns
+
+  const canonicalTurnIndex = canonicalTurnIndexes[0]
+  if (canonicalTurnIndex !== undefined) {
+    const firstIndex = Math.min(pendingTurnIndex, canonicalTurnIndex)
+    const lastIndex = Math.max(pendingTurnIndex, canonicalTurnIndex)
+    const crossesUserTurn = turns.slice(firstIndex + 1, lastIndex).some((turn) =>
+      turn.messages.some((message) => message.kind === "user"),
+    )
+    if (crossesUserTurn) return turns
+  }
+
+  const canonicalTurn = canonicalTurnIndex === undefined ? undefined : turns[canonicalTurnIndex]
+  const turnIndexes = new Set([
+    pendingTurnIndex,
+    ...(canonicalTurnIndex === undefined ? [] : [canonicalTurnIndex]),
+  ])
+  const messages = mergeBoundTurnMessages(turns, turnIndexes, {
+    ...input,
+    preferredUserMessageID: input.optimisticUserMessageID ?? pendingTurn.userMessageID,
+    userMessageAliases: [
+      ...(pendingTurn.userMessageID ? [pendingTurn.userMessageID] : []),
+      ...(canonicalTurn?.userMessageID ? [canonicalTurn.userMessageID] : []),
+    ],
+  })
+  const userMessageID = resolveBoundTurnUserMessageID(messages, pendingTurn, canonicalTurn, input)
+  const sourceForCanonicalMetadata = canonicalTurn ?? pendingTurn
+  const mergedTurn: ThreadTurn = {
+    turnID: input.turnID,
+    ...(canonicalTurn?.backendSessionID ?? pendingTurn.backendSessionID
+      ? { backendSessionID: canonicalTurn?.backendSessionID ?? pendingTurn.backendSessionID }
+      : {}),
+    status: sourceForCanonicalMetadata.status,
+    ...(canonicalTurn?.phase ?? pendingTurn.phase
+      ? { phase: canonicalTurn?.phase ?? pendingTurn.phase }
+      : {}),
+    startedAt: canonicalTurn
+      ? Math.min(pendingTurn.startedAt, canonicalTurn.startedAt)
+      : pendingTurn.startedAt,
+    updatedAt: canonicalTurn
+      ? Math.max(pendingTurn.updatedAt, canonicalTurn.updatedAt)
+      : pendingTurn.updatedAt,
+    ...(canonicalTurn
+      ? canonicalTurn.completedAt !== undefined ? { completedAt: canonicalTurn.completedAt } : {}
+      : pendingTurn.completedAt !== undefined ? { completedAt: pendingTurn.completedAt } : {}),
+    ...(canonicalTurn
+      ? canonicalTurn.lastMessageID ? { lastMessageID: canonicalTurn.lastMessageID } : {}
+      : pendingTurn.lastMessageID ? { lastMessageID: pendingTurn.lastMessageID } : {}),
+    ...(canonicalTurn
+      ? canonicalTurn.finalSegmentID ? { finalSegmentID: canonicalTurn.finalSegmentID } : {}
+      : pendingTurn.finalSegmentID ? { finalSegmentID: pendingTurn.finalSegmentID } : {}),
+    ...(userMessageID ? { userMessageID } : {}),
+    messages,
+  }
+  const reconciledTurn = reconcileThreadTurns([mergedTurn])[0] ?? mergedTurn
+
+  if (canonicalTurnIndex === undefined) {
+    return turns.map((turn, index) => index === pendingTurnIndex ? reconciledTurn : turn)
+  }
+
+  const insertIndex = Math.min(pendingTurnIndex, canonicalTurnIndex)
+  const nextTurns: ThreadTurn[] = []
+  turns.forEach((turn, index) => {
+    if (index === insertIndex) nextTurns.push(reconciledTurn)
+    if (index !== pendingTurnIndex && index !== canonicalTurnIndex) nextTurns.push(turn)
+  })
+  return nextTurns
+}
+
 export function ensureThreadTurn(
   turns: ThreadTurn[],
   input: {

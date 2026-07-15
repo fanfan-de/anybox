@@ -75,6 +75,75 @@ describe("thread presentation store", () => {
     expect(selectProcessDisclosurePreference(store.getState(), "main", "turn-1")).toBe("expanded")
   })
 
+  it("atomically moves a pending preference to an empty canonical group", () => {
+    const store = createThreadPresentationStore()
+    store.getState().setProcessDisclosurePreference("main", "pending:turn-1", "collapsed")
+    const observedPreferences: Array<[string, string]> = []
+    const listener = vi.fn((state: ReturnType<typeof store.getState>) => {
+      observedPreferences.push([
+        state.getProcessDisclosurePreference("main", "pending:turn-1"),
+        state.getProcessDisclosurePreference("main", "turn:turn-1"),
+      ])
+    })
+    store.subscribe(listener)
+
+    store.getState().migrateProcessDisclosurePreference(
+      "main",
+      "pending:turn-1",
+      "turn:turn-1",
+    )
+
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(observedPreferences).toEqual([["auto", "collapsed"]])
+    expect(selectThreadPresentationEntry(store.getState(), "main", "pending:turn-1")).toBeNull()
+    expect(selectThreadPresentationEntry(store.getState(), "main", "turn:turn-1")).toEqual({
+      groupID: "turn:turn-1",
+      preference: "collapsed",
+      scopeID: "main",
+    })
+  })
+
+  it.each([
+    ["expanded", "collapsed", "expanded"],
+    ["collapsed", "expanded", "expanded"],
+    ["collapsed", "collapsed", "collapsed"],
+    ["expanded", "expanded", "expanded"],
+  ] as const)(
+    "resolves source %s and target %s to %s while deleting the source",
+    (sourcePreference, targetPreference, expectedPreference) => {
+      const store = createThreadPresentationStore()
+      store.getState().setProcessDisclosurePreference("main", "pending:turn-1", sourcePreference)
+      store.getState().setProcessDisclosurePreference("main", "turn:turn-1", targetPreference)
+
+      store.getState().migrateProcessDisclosurePreference(
+        "main",
+        "pending:turn-1",
+        "turn:turn-1",
+      )
+
+      expect(store.getState().getProcessDisclosurePreference("main", "pending:turn-1")).toBe("auto")
+      expect(store.getState().getProcessDisclosurePreference("main", "turn:turn-1")).toBe(expectedPreference)
+      expect(store.getState().entries.size).toBe(1)
+    },
+  )
+
+  it("preserves state references and skips notifications for migration no-ops", () => {
+    const store = createThreadPresentationStore()
+    store.getState().setProcessDisclosurePreference("main", "pending:turn-1", "expanded")
+    const initialState = store.getState()
+    const initialEntries = initialState.entries
+    const listener = vi.fn()
+    store.subscribe(listener)
+
+    store.getState().migrateProcessDisclosurePreference("main", "missing", "turn:turn-1")
+    store.getState().migrateProcessDisclosurePreference("main", "pending:turn-1", "pending:turn-1")
+
+    expect(store.getState()).toBe(initialState)
+    expect(store.getState().entries).toBe(initialEntries)
+    expect(store.getState().getProcessDisclosurePreference("main", "pending:turn-1")).toBe("expanded")
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it("does not notify subscribers for no-op updates", () => {
     const store = createThreadPresentationStore()
     const listener = vi.fn()
