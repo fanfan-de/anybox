@@ -122,20 +122,6 @@ export function App() {
             <p className="home-hero-description">{content.hero.description}</p>
             <div className="home-hero-actions">
               <DownloadCta placement="hero" />
-              <a
-                className="button button-ghost"
-                href={repositoryUrl}
-                rel="noreferrer"
-                target="_blank"
-                onClick={() => trackSiteEvent({
-                  destination: "github",
-                  language,
-                  name: "navigation_click",
-                  placement: "hero",
-                })}
-              >
-                {content.hero.githubLabel}
-              </a>
             </div>
             <p className="home-hero-note">{content.hero.note}</p>
           </div>

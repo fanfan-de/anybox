@@ -80,6 +80,11 @@
   gap: 8px;
 }
 
+.download-cta.is-expanded {
+  display: inline-flex;
+  flex-wrap: nowrap;
+}
+
 .download-primary {
   min-width: 190px;
 }
@@ -572,6 +577,16 @@
   .download-cta {
     grid-template-columns: minmax(0, 1fr) auto;
     width: 100%;
+  }
+
+  .download-cta.is-expanded {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .download-cta.is-expanded .button {
+    width: 100%;
+    min-width: 0;
   }
 
   .download-primary {

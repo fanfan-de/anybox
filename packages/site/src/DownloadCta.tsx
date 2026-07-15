@@ -16,6 +16,8 @@ const platformLabels: Record<InstallerPlatform, { en: string; zh: string }> = {
   mobile: { en: "Android", zh: "Android" },
 }
 
+const platforms = Object.keys(platformLabels) as InstallerPlatform[]
+
 export function DownloadCta({ placement }: { placement: DownloadPlacement }) {
   const { language } = useSiteLanguage()
   const menuId = useId()
@@ -31,6 +33,25 @@ export function DownloadCta({ placement }: { placement: DownloadPlacement }) {
     const platform = platformLabels[primaryPlatform][language]
     return language === "zh" ? `下载 ${platform} 版` : `Download for ${platform}`
   }, [language, primaryPlatform])
+
+  if (placement === "hero") {
+    return (
+      <div className="download-cta is-expanded">
+        {platforms.map((platform) => (
+          <InstallerDownloadButton
+            className={`button ${platform === primaryPlatform ? "button-primary" : "button-secondary"}`}
+            key={platform}
+            placement={placement}
+            platform={platform}
+          >
+            {language === "zh"
+              ? `下载 ${platformLabels[platform].zh} 版`
+              : `Download for ${platformLabels[platform].en}`}
+          </InstallerDownloadButton>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div
@@ -70,7 +91,7 @@ export function DownloadCta({ placement }: { placement: DownloadPlacement }) {
       </button>
       {isMenuOpen ? (
         <div className="download-platform-menu" id={menuId} role="menu">
-          {(Object.keys(platformLabels) as InstallerPlatform[]).map((platform) => (
+          {platforms.map((platform) => (
             <InstallerDownloadButton
               className={platform === primaryPlatform ? "is-current" : ""}
               key={platform}
