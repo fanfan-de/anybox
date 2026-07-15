@@ -60,7 +60,7 @@ export const siteContent = {
     hero: {
       title: "面向 AI builder 的通用 Agent 工作台",
       description:
-        "Anybox 是开源的本地 AI Agent 工作台。让 Agent 读取项目、调用工具、执行命令，并把每一步留在你可检查的工作空间里。",
+        "通用Agent加领域化插件架构，让anybox可以适用于任何任务场景。",
       githubLabel: "查看 GitHub",
       note: "支持 Windows x64、macOS Apple Silicon、Linux x64 与 Android。",
       previewAlt: "Anybox 桌面端中的本地项目、会话和 AI Agent 工作区",

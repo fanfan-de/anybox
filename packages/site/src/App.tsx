@@ -118,13 +118,7 @@ export function App() {
         <div className="home-hero-inner">
           <div className="home-hero-copy">
             <div className="home-hero-prism" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3Z" />
-                <path d="m4 7.5 8 4.5 8-4.5" />
-                <path d="M12 12v9" />
-                <path d="M8 5.5 16 10" />
-                <path d="M16 5.5 8 10" />
-              </svg>
+              <img src="/anybox-box-cat-logo.png" alt="" width="86" height="86" />
             </div>
             <p className="home-hero-wordmark" aria-hidden="true">Anybox</p>
             <h1 id="hero-title">{content.hero.title}</h1>
