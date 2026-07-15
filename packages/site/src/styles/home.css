@@ -1,6 +1,8 @@
 .home-page-shell {
   --home-header-height: 64px;
   --home-hero-stage-padding: clamp(64px, 9svh, 112px);
+  --home-hero-heading-gap: clamp(36px, 4svh, 46px);
+  --home-hero-actions-gap: clamp(38px, 4.2svh, 48px);
 
   background: var(--surface-page);
 }
@@ -207,12 +209,12 @@
 
 .home-hero h1 {
   max-width: 1060px;
-  margin: 30px auto 0;
+  margin: var(--home-hero-heading-gap) auto 0;
   color: var(--hero-stage-text);
   font-family: var(--font-display);
   font-size: clamp(2rem, 3.45vw, 3.1rem);
   font-weight: 730;
-  line-height: 1.08;
+  line-height: 1.12;
   letter-spacing: -0.025em;
 }
 
@@ -223,7 +225,7 @@
 
 .home-hero-title-kicker {
   display: block;
-  margin-bottom: 0.42em;
+  margin-bottom: 0.62em;
   color: var(--hero-stage-text);
   font-size: 0.56em;
   font-weight: 680;
@@ -237,7 +239,7 @@
 }
 
 .home-hero-title-rest {
-  margin-top: 0.18em;
+  margin-top: 0.28em;
   font-weight: 680;
 }
 
@@ -283,6 +285,7 @@
   max-width: 100%;
   margin-right: auto;
   margin-left: auto;
+  margin-top: var(--home-hero-actions-gap);
   padding: 7px;
   border: 1px solid var(--hero-stage-border);
   border-radius: 14px;
@@ -840,6 +843,8 @@
   .home-page-shell {
     --home-header-height: 60px;
     --home-hero-stage-padding: clamp(40px, 7svh, 64px);
+    --home-hero-heading-gap: clamp(28px, 4svh, 36px);
+    --home-hero-actions-gap: clamp(30px, 4svh, 38px);
   }
 
   .home-hero {
@@ -872,8 +877,13 @@
   }
 
   .home-hero-title-kicker {
+    margin-bottom: 0.5em;
     font-size: clamp(0.88rem, 3.8vw, 1rem);
     white-space: nowrap;
+  }
+
+  .home-hero-title-rest {
+    margin-top: 0.22em;
   }
 
   .home-hero-actions,
