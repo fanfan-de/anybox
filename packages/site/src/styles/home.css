@@ -219,22 +219,67 @@
 }
 
 .home-hero h1 {
-  max-width: 980px;
+  max-width: 1060px;
   margin: 30px auto 0;
   color: var(--hero-stage-text);
   font-family: var(--font-display);
-  font-size: clamp(2.05rem, 3.6vw, 3.25rem);
+  font-size: clamp(2rem, 3.45vw, 3.1rem);
   font-weight: 730;
   line-height: 1.08;
   letter-spacing: -0.025em;
 }
 
-.home-hero-description {
-  max-width: 720px;
-  margin: 20px auto 0;
-  color: var(--hero-stage-muted);
-  font-size: 1.08rem;
-  line-height: 1.68;
+.home-hero-title-formula,
+.home-hero-title-rest {
+  display: block;
+}
+
+.home-hero-title-kicker {
+  display: block;
+  margin-bottom: 0.42em;
+  color: var(--hero-stage-text);
+  font-size: 0.56em;
+  font-weight: 680;
+  line-height: 1.3;
+  letter-spacing: 0;
+  text-wrap: balance;
+}
+
+.home-hero-title-formula {
+  text-wrap: balance;
+}
+
+.home-hero-title-rest {
+  margin-top: 0.18em;
+  font-weight: 680;
+}
+
+.home-hero-title-term {
+  position: relative;
+  display: inline-block;
+  font-weight: 840;
+  white-space: nowrap;
+}
+
+.home-hero-title-term::after {
+  position: absolute;
+  right: 0.03em;
+  bottom: -0.08em;
+  left: 0.03em;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--hero-ribbon-cyan), var(--hero-ribbon-blue));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--hero-ribbon-cyan) 34%, transparent);
+  content: "";
+}
+
+.home-hero-title-plus {
+  display: inline-block;
+  margin: 0 0.2em;
+  color: var(--hero-ribbon-cyan);
+  font-size: 0.84em;
+  font-weight: 560;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--hero-ribbon-cyan) 38%, transparent);
 }
 
 .home-hero-actions,
@@ -838,14 +883,13 @@
 
   .home-hero h1 {
     margin-top: 24px;
-    font-size: clamp(1.9rem, 9.2vw, 2.85rem);
+    font-size: clamp(1.82rem, 8.8vw, 2.72rem);
     letter-spacing: -0.03em;
   }
 
-  .home-hero-description {
-    margin-top: 22px;
-    font-size: 1rem;
-    line-height: 1.7;
+  .home-hero-title-kicker {
+    font-size: clamp(0.88rem, 3.8vw, 1rem);
+    white-space: nowrap;
   }
 
   .home-hero-actions,

@@ -121,8 +121,20 @@ export function App() {
               <img src="/anybox-box-cat-logo.png" alt="" width="86" height="86" />
             </div>
             <p className="home-hero-wordmark" aria-hidden="true">Anybox</p>
-            <h1 id="hero-title">{content.hero.title}</h1>
-            <p className="home-hero-description">{content.hero.description}</p>
+            <h1 id="hero-title">
+              {language === "zh" ? (
+                <>
+                  <span className="home-hero-title-kicker">面向 AI builder 的通用 Agent 工作台</span>
+                  <span className="home-hero-title-formula">
+                    <span className="home-hero-title-term">通用 Agent</span>
+                    <span className="home-hero-title-plus">+</span>
+                    <span className="home-hero-title-term">领域化插件</span>
+                    <span>架构，</span>
+                  </span>
+                  <span className="home-hero-title-rest">让 Anybox 可以适用于任何任务场景。</span>
+                </>
+              ) : content.hero.title}
+            </h1>
             <div className="home-hero-actions">
               <DownloadCta placement="hero" />
             </div>
