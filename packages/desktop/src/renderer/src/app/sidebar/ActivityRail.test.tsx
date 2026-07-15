@@ -20,6 +20,28 @@ function renderActivityRail() {
 }
 
 describe("ActivityRail", () => {
+  it("uses the square chart Gantt icon for the workspace entry", () => {
+    renderActivityRail()
+
+    const workspaceButton = screen.getByRole("button", { name: "Open workspace" })
+    expect(workspaceButton.querySelector(".lucide-square-chart-gantt")).not.toBeNull()
+  })
+
+  it("uses the plug icon for the connections and extensions entry", () => {
+    renderActivityRail()
+
+    const connectionsButton = screen.getByRole("button", { name: "Open connections and extensions" })
+    expect(connectionsButton.querySelector(".lucide-plug")).not.toBeNull()
+  })
+
+  it("uses the calendar icon for the calendar entry", () => {
+    renderActivityRail()
+
+    const calendarButton = screen.getByRole("button", { name: "Open calendar" })
+    expect(calendarButton.querySelector(".lucide-calendar")).not.toBeNull()
+    expect(calendarButton.querySelector(".lucide-calendar-days")).toBeNull()
+  })
+
   it("places mobile as a primary rail entry after connections", () => {
     const { props } = renderActivityRail()
     const rail = screen.getByLabelText("Primary navigation rail")

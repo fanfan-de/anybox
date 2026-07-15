@@ -6,6 +6,7 @@ import {
   ArrowUp,
   ArrowUpRight,
   BrainCircuit,
+  Calendar,
   CalendarDays,
   Camera,
   Check,
@@ -58,6 +59,7 @@ import {
   Pause,
   Pin,
   Play,
+  Plug,
   Plus,
   Puzzle,
   RotateCcw,
@@ -67,6 +69,7 @@ import {
   Smartphone,
   SortAsc,
   Square,
+  SquareChartGantt,
   Sun,
   Terminal,
   Trash2,
@@ -117,7 +120,9 @@ export const PlusIcon = createIcon(Plus)
 export const ForkIcon = createIcon(GitFork)
 export const SettingsIcon = createIcon(Settings)
 export const PluginIcon = createIcon(Puzzle)
+export const ConnectionsIcon = createIcon(Plug)
 export const SegmentedControlIcon = createIcon(SlidersHorizontal)
+export const WorkspaceIcon = createIcon(SquareChartGantt)
 export const LayoutSidebarLeftIcon = createIcon(LayoutPanelLeft)
 export const LayoutSidebarRightIcon = createIcon(PanelRight)
 export const LeftSidebarIcon = createIcon(PanelLeft)
@@ -167,6 +172,7 @@ export const TerminalIcon = createIcon(Terminal)
 export const ToolsIcon = createIcon(Wrench)
 export const AutomationIcon = createIcon(Clock)
 export const CalendarIcon = createIcon(CalendarDays)
+export const CalendarNavigationIcon = createIcon(Calendar)
 export const ArrowUpIcon = createIcon(ArrowUp)
 export const StopIcon = createIcon(Square, { fill: "currentColor", strokeWidth: 0 })
 export const PaletteIcon = createIcon(Palette)

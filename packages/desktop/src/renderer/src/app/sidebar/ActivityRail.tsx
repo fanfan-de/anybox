@@ -3,13 +3,14 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   AutomationIcon,
-  CalendarIcon,
+  CalendarNavigationIcon,
+  ConnectionsIcon,
   FileTextIcon,
   LayoutSidebarLeftIcon,
-  PluginIcon,
   SettingsIcon,
   SmartphoneIcon,
   ToolsIcon,
+  WorkspaceIcon,
 } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
 import type { TranslationKey } from "../i18n/translations"
@@ -28,10 +29,10 @@ interface ActivityRailProps {
 }
 
 const primaryLeftRailViews = [
-  { view: "workspace" as const, labelKey: "shell.openWorkspace", Icon: LayoutSidebarLeftIcon },
-  { view: "connections" as const, labelKey: "shell.openConnectionsAndExtensions", Icon: PluginIcon },
+  { view: "workspace" as const, labelKey: "shell.openWorkspace", Icon: WorkspaceIcon },
+  { view: "connections" as const, labelKey: "shell.openConnectionsAndExtensions", Icon: ConnectionsIcon },
   { view: "mobile" as const, labelKey: "shell.openMobile", Icon: SmartphoneIcon },
-  { view: "calendar" as const, labelKey: "shell.openCalendar", Icon: CalendarIcon },
+  { view: "calendar" as const, labelKey: "shell.openCalendar", Icon: CalendarNavigationIcon },
   { view: "automations" as const, labelKey: "shell.openAutomations", Icon: AutomationIcon },
 ]
 
