@@ -538,6 +538,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
 
     const snapshot = readThreadScrollSnapshot(scrollStateKey)
     if (!snapshot || snapshot.pinnedToBottom || snapshot.scrollTop <= THREAD_TOP_RESET_THRESHOLD_PX) return
+    if (snapshot.anchor) return
 
     const maxScrollTop = Math.max(0, threadColumn.scrollHeight - threadColumn.clientHeight)
     if (maxScrollTop <= THREAD_TOP_RESET_THRESHOLD_PX) return

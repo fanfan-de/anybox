@@ -583,7 +583,7 @@
               <div class="step-number">6</div>
               <div class="step-body">
                 <div class="step-title">
-                  <h3>ThreadRows 决定直接渲染还是虚拟化</h3>
+                  <h3>ThreadRows 渲染统一虚拟 row 窗口</h3>
                   <span class="tag" data-tone="render">list</span>
                 </div>
                 <div class="io-grid">
@@ -593,7 +593,7 @@
                   </div>
                   <div class="io">
                     <b>处理</b>
-                    <p><code>&lt; 300</code> rows 直接 map，并依赖自然文档流与 <code>content-visibility</code>；达到 300 rows 后只渲染 <code>virtualRange.items</code>。</p>
+                    <p>Active session 始终只渲染 TanStack virtual range、overscan rows 与临时 pinned rows；折叠的 process rows 不进入 <code>displayRows</code>。</p>
                   </div>
                   <div class="io">
                     <b>输出</b>
@@ -617,7 +617,7 @@
                   </div>
                   <div class="io">
                     <b>处理</b>
-                    <p>根据 <code>row.kind</code> 选择 user、permission、trace、diff 或 actions 外壳。</p>
+                    <p><code>assistant-execution-summary</code> 由 VisibleThreadView 渲染真实 button；其余 row 根据 <code>row.kind</code> 选择 user、permission、trace、diff 或 actions 外壳。</p>
                   </div>
                   <div class="io">
                     <b>输出</b>
@@ -645,6 +645,10 @@
             <span class="arrow">→</span>
             <span class="pill">useThreadProjection()</span>
             <span class="arrow">→</span>
+            <span class="pill">deriveThreadExecutionGroups()</span>
+            <span class="arrow">→</span>
+            <span class="pill">ThreadPresentationStore</span>
+            <span class="arrow">→</span>
             <span class="pill">ThreadRows</span>
             <span class="arrow">→</span>
             <span class="pill">ThreadRowRenderer</span>
@@ -667,7 +671,11 @@
             </article>
             <article class="card" data-tone="orange">
               <h3>虚拟列表</h3>
-              <p><code>displayRows.length >= 300</code> 时启用，先用 estimated height 布局，再通过 ResizeObserver 更新实测高度；中小线程默认走自然文档流。</p>
+              <p>Active session 始终启用，先用 estimated height 布局，再通过 ResizeObserver 更新实测高度；焦点 row 与 projection transaction anchor 会临时 pin。</p>
+            </article>
+            <article class="card" data-tone="green">
+              <h3>Turn execution disclosure</h3>
+              <p>Canonical <code>ThreadTurn</code> 先派生 <code>ThreadExecutionGroup</code>，再由 <code>ThreadPresentationStore</code> 决定是否从 <code>displayRows</code> 移除 process prefix。自动折叠使用 semantic scroll-anchor transaction，不使用 CSS 隐藏 row。</p>
             </article>
             <article class="card" data-tone="violet">
               <h3>Right sidebar side chat</h3>
@@ -700,6 +708,11 @@
                   <td><code>permission-request</code></td>
                   <td><code>PermissionRequestInlinePrompt</code></td>
                   <td>工具权限确认、拒绝、自定义回答。</td>
+                </tr>
+                <tr>
+                  <td><code>assistant-execution-summary</code></td>
+                  <td><code>AssistantExecutionSummary</code></td>
+                  <td>Turn 级处理状态、时长和 process prefix 展开/收起按钮。</td>
                 </tr>
                 <tr>
                   <td><code>assistant-response-row</code> / <code>assistant-question-row</code> / <code>assistant-file-change-row</code></td>

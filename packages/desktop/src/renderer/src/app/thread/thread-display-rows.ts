@@ -23,6 +23,8 @@ import type {
   ThreadMessage,
   UserThreadMessage,
 } from "../types"
+import type { AssistantExecutionSummaryRow } from "./thread-execution-groups"
+import { findLastNonemptyAssistantResponseBlock } from "./thread-final-response"
 
 const COLLAPSED_USER_MESSAGE_ESTIMATED_CHARACTERS = 640
 const ASSISTANT_HAS_TEXT_RESPONSE_BY_MESSAGE = new WeakMap<AssistantThreadMessage, boolean>()
@@ -30,6 +32,7 @@ const ASSISTANT_HAS_TEXT_RESPONSE_BY_MESSAGE = new WeakMap<AssistantThreadMessag
 export type ThreadDisplayRowKind =
   | "user-message"
   | "permission-request"
+  | "assistant-execution-summary"
   | "assistant-response-row"
   | "assistant-reasoning-row"
   | "assistant-tool-row"
@@ -85,6 +88,7 @@ export interface PermissionRequestRow extends BaseThreadDisplayRow {
 interface AssistantDisplayRowBase extends BaseThreadDisplayRow {
   isFinalOperableMessage: boolean
   isLatestMessage: boolean
+  suppressReasoningMessageCompletionCollapse?: boolean
   message: AssistantThreadMessage
   motionKey: string
   ownerMessageID: string
@@ -94,6 +98,8 @@ interface AssistantDisplayRowBase extends BaseThreadDisplayRow {
   sourceMessage: AssistantThreadMessage
   sourceMessageID: string
   sourceMessageIndex: number
+  sourceSegmentID: string
+  sourceTurnID: string
   visualGroupID: string
 }
 
@@ -158,6 +164,7 @@ export type AssistantDisplayRow =
 export type ThreadDisplayRow =
   | UserMessageRow
   | PermissionRequestRow
+  | AssistantExecutionSummaryRow
   | AssistantDisplayRow
 
 export interface ThreadDisplayContext {
@@ -542,16 +549,26 @@ function isRegularUserRunBoundary(messages: ThreadMessage[], messageIndex: numbe
     !isPendingSteerUserMessage(messages, message)
 }
 
-function findAssistantRunEndIndex(messages: ThreadMessage[], assistantIndex: number) {
+function findAssistantRunEndIndex(
+  messages: ThreadMessage[],
+  assistantIndex: number,
+  backendTurnID: string,
+) {
   for (let index = assistantIndex + 1; index < messages.length; index += 1) {
     if (isRegularUserRunBoundary(messages, index)) return index
+    const message = messages[index]
+    if (message?.kind === "assistant" && message.backendTurnID !== backendTurnID) return index
   }
 
   return messages.length
 }
 
-function findAssistantRunFinalMessageIndex(messages: ThreadMessage[], assistantIndex: number) {
-  const runEndIndex = findAssistantRunEndIndex(messages, assistantIndex)
+function findAssistantRunFinalMessageIndex(
+  messages: ThreadMessage[],
+  assistantIndex: number,
+  backendTurnID: string,
+) {
+  const runEndIndex = findAssistantRunEndIndex(messages, assistantIndex, backendTurnID)
   for (let index = runEndIndex - 1; index >= assistantIndex; index -= 1) {
     if (messages[index]?.kind === "assistant") return index
   }
@@ -564,7 +581,7 @@ export function shouldFoldAssistantMessageIntoFinalRunTrace(
   assistantIndex: number,
   message: AssistantThreadMessage,
 ) {
-  const finalAssistantIndex = findAssistantRunFinalMessageIndex(messages, assistantIndex)
+  const finalAssistantIndex = findAssistantRunFinalMessageIndex(messages, assistantIndex, message.backendTurnID)
   if (finalAssistantIndex <= assistantIndex) return false
 
   const finalMessage = messages[finalAssistantIndex]
@@ -611,13 +628,16 @@ export function isAssistantFinalMessageInUserMessage(
   for (let index = assistantIndex + 1; index < messages.length; index += 1) {
     const candidate = messages[index]
     if (candidate.kind === "user" && candidate.streamInsertion?.assistantThreadMessageID !== assistantMessage.id) return true
-    if (candidate.kind === "assistant") return false
+    if (candidate.kind === "assistant") return candidate.backendTurnID !== assistantMessage.backendTurnID
   }
 
   return true
 }
 
-export function buildThreadDisplayContext(messages: ThreadMessage[]): ThreadDisplayContext {
+export function buildThreadDisplayContext(
+  messages: ThreadMessage[],
+  options: { disableAssistantRunFolding?: boolean } = {},
+): ThreadDisplayContext {
   const streamInsertionIndex = buildStreamInsertionIndex(messages)
   const messageIndexByID = new Map<string, number>()
   const assistantMessageIDsWithDiffSummary = new Set<string>()
@@ -669,7 +689,11 @@ export function buildThreadDisplayContext(messages: ThreadMessage[]): ThreadDisp
   }
 
   const finalizeFoldableRun = (runAssistantMessages: AssistantThreadMessage[]) => {
+    if (options.disableAssistantRunFolding) return
     if (runAssistantMessages.length <= 1) return
+    if (runAssistantMessages.some(
+      (message) => (streamInsertionIndex.insertedUserMessagesByAssistantID.get(message.id)?.length ?? 0) > 0,
+    )) return
 
     const finalMessage = runAssistantMessages[runAssistantMessages.length - 1]!
     if (!isFoldableAssistantRunMessage(finalMessage) || !assistantMessageHasTextResponse(finalMessage)) return
@@ -686,6 +710,13 @@ export function buildThreadDisplayContext(messages: ThreadMessage[]): ThreadDisp
   let runAssistantMessages: AssistantThreadMessage[] = []
   for (const message of messages) {
     if (message.kind === "assistant") {
+      if (
+        runAssistantMessages.length > 0 &&
+        runAssistantMessages[0]!.backendTurnID !== message.backendTurnID
+      ) {
+        finalizeFoldableRun(runAssistantMessages)
+        runAssistantMessages = []
+      }
       runAssistantMessages.push(message)
       continue
     }
@@ -706,7 +737,10 @@ export function buildThreadDisplayContext(messages: ThreadMessage[]): ThreadDisp
   for (let index = 0; index < messages.length; index += 1) {
     const message = messages[index]!
     if (message.kind === "assistant") {
-      if (previousAssistantMessage && previousAssistantHasBoundaryUser) {
+      if (
+        previousAssistantMessage &&
+        (previousAssistantHasBoundaryUser || previousAssistantMessage.backendTurnID !== message.backendTurnID)
+      ) {
         finalOperableAssistantMessageIDs.add(previousAssistantMessage.id)
       }
       previousAssistantMessage = message
@@ -955,6 +989,8 @@ function buildAssistantRowBase<TKind extends ThreadDisplayRowKind>({
     sourceMessage,
     sourceMessageID: sourceMessage.id,
     sourceMessageIndex,
+    sourceSegmentID: sourceMessage.segmentID,
+    sourceTurnID: sourceMessage.backendTurnID,
     visualGroupID: `assistant:${ownerMessage.id}`,
   }
 }
@@ -1411,27 +1447,13 @@ export function getLastAssistantResponseSectionItems(
   items: AssistantTraceItem[],
   traceVisibility: AssistantTraceVisibility,
 ) {
-  const visibleItems = filterRenderedAssistantTraceItems(items, true, traceVisibility)
-  let latestResponseItems: AssistantTraceItem[] = []
-  let currentResponseItems: AssistantTraceItem[] = []
-
-  visibleItems.forEach((item) => {
-    if (traceSectionKeyForItem(item) !== "response") {
-      if (currentResponseItems.some((responseItem) => responseItem.kind === "text" && Boolean(responseItem.text?.trim()))) {
-        latestResponseItems = currentResponseItems
-      }
-      currentResponseItems = []
-      return
-    }
-
-    currentResponseItems.push(item)
-  })
-
-  if (currentResponseItems.some((item) => item.kind === "text" && Boolean(item.text?.trim()))) {
-    latestResponseItems = currentResponseItems
-  }
-
-  return latestResponseItems
+  const boundary = findLastNonemptyAssistantResponseBlock(items)
+  if (!boundary) return []
+  return filterRenderedAssistantTraceItems(
+    items.slice(boundary.startRawItemIndex, boundary.endRawItemIndex),
+    true,
+    traceVisibility,
+  )
 }
 
 export function buildAssistantResponseCopyText(items: AssistantTraceItem[]) {
@@ -1474,6 +1496,8 @@ function buildAssistantDecorationBase<TKind extends ThreadDisplayRowKind>(
     sourceMessage: baseRow.message,
     sourceMessageID: baseRow.ownerMessageID,
     sourceMessageIndex: baseRow.ownerMessageIndex,
+    sourceSegmentID: baseRow.message.segmentID,
+    sourceTurnID: baseRow.message.backendTurnID,
     visualGroupID: baseRow.visualGroupID,
   }
 }
@@ -1536,10 +1560,13 @@ function buildAssistantActionsRow({
 }): AssistantActionsRow | null {
   const message = baseRow.message
   const threadMessageID = getSessionMessageIDForMessage(message)
-  const canExposeResponseActions = !isSessionRunning && !hasPendingPermissionRequests && baseRow.isFinalOperableMessage
+  const ownsFinalResponse = !isSessionRunning && !hasPendingPermissionRequests && baseRow.isFinalOperableMessage
+  const responseItems = ownsFinalResponse
+    ? getLastAssistantResponseSectionItems(message.items, assistantTraceVisibility)
+    : []
+  const canExposeResponseActions = ownsFinalResponse && responseItems.length > 0
   const branchOptions = canExposeResponseActions ? messageTree?.branchOptionsByParentID[threadMessageID] ?? [] : []
   const existingSideChatCount = sideChatCountsByAnchorMessageID[sideChatAnchorMessageID] ?? 0
-  const responseItems = canExposeResponseActions ? getLastAssistantResponseSectionItems(message.items, assistantTraceVisibility) : []
   const responseCopyText = canExposeResponseActions ? buildAssistantResponseCopyText(responseItems) : ""
   const activeSideChatSession = sideChatSession?.origin?.anchorMessageID === sideChatAnchorMessageID ? sideChatSession : null
   const marksSideChatButtonActive = Boolean(activeSideChatSession)
@@ -1555,7 +1582,6 @@ function buildAssistantActionsRow({
     !readOnlySideChat &&
     !message.isStreaming &&
     canExposeResponseActions &&
-    responseItems.length > 0 &&
     canOpenSideChat
   const rowCanForkFromMessage =
     !readOnlySideChat &&

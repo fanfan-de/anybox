@@ -15,6 +15,7 @@ import {
   applyAgentStreamEventToThreadMessage,
   buildSessionStreamingAssistantThreadMessage,
   buildThreadMessagesFromHistory,
+  buildThreadTurnsFromHistory,
   LIVE_SESSION_ACTIVITY_PRESENTATION,
   RECONNECTING_SESSION_STREAM_PRESENTATION,
   type SessionStreamingPresentation,
@@ -37,6 +38,8 @@ import type {
   SessionRuntimeDebugState,
   SessionTaskListView,
   ThreadMessage,
+  ThreadTurn,
+  ThreadTurnStatus,
   UserThreadMessage,
   WorkspaceGroup,
 } from "../types"
@@ -84,6 +87,44 @@ const STREAM_DELTA_BACKPRESSURE_LOG_INTERVAL_MS = 5_000
 export const SESSION_STREAM_RECONNECT_REPLAY_WINDOW_MS = 30_000
 const EXTERNAL_TURN_HISTORY_REFRESH_RETRY_MS = 500
 export const STEER_INPUT_CONSUMED_STATE_REASON = "Steer input consumed."
+
+function normalizeRuntimeThreadTurnStatus(value: string): ThreadTurnStatus | null {
+  if (
+    value === "running" ||
+    value === "completed" ||
+    value === "blocked" ||
+    value === "stopped" ||
+    value === "continued_by_user" ||
+    value === "failed" ||
+    value === "cancelled"
+  ) {
+    return value
+  }
+  return null
+}
+
+export function resolveRuntimeThreadTurnStatus(input: {
+  eventType: string
+  payloadPhase?: string
+  payloadStatus?: string
+}): ThreadTurnStatus {
+  if (input.eventType === "turn.failed") return "failed"
+  if (input.eventType === "turn.cancelled") return "cancelled"
+
+  if (input.eventType === "turn.completed") {
+    const explicitStatus = normalizeRuntimeThreadTurnStatus(input.payloadStatus ?? "") ??
+      normalizeRuntimeThreadTurnStatus(input.payloadPhase ?? "")
+    return explicitStatus && explicitStatus !== "running" ? explicitStatus : "completed"
+  }
+
+  if (input.eventType === "turn.state.changed") {
+    return normalizeRuntimeThreadTurnStatus(input.payloadStatus ?? "") ??
+      normalizeRuntimeThreadTurnStatus(input.payloadPhase ?? "") ??
+      "running"
+  }
+
+  return "running"
+}
 
 type StreamEventUpdateTarget = {
   assistantThreadMessageID: string
@@ -1697,19 +1738,21 @@ export function useSessionStreamController({
     const payload = readRecord(runtimeEvent.payload)
     const payloadPhase = readString(payload?.phase)
     const payloadStatus = readString(payload?.status)
+    const payloadMessage = readRecord(payload?.message)
+    const payloadMessageInfo = readRecord(payloadMessage?.info)
+    const explicitLastMessageID =
+      readString(payload?.lastMessageID) ||
+      readString(payloadMessageInfo?.id) ||
+      readString(payloadMessage?.id) ||
+      undefined
+    const explicitFinalSegmentID = readString(payload?.segmentID) || readString(payloadMessage?.segmentID) || undefined
     const userMessageID = readString(payload?.userMessageID) ?? input.fallbackUserMessageID
-    const isTerminalTurnEvent =
-      runtimeEvent.type === "turn.completed" ||
-      runtimeEvent.type === "turn.failed" ||
-      runtimeEvent.type === "turn.cancelled"
-    const status =
-      runtimeEvent.type === "turn.failed"
-        ? "failed"
-        : runtimeEvent.type === "turn.cancelled"
-          ? "cancelled"
-          : isTerminalTurnEvent
-            ? payloadStatus || "completed"
-            : "running"
+    const status = resolveRuntimeThreadTurnStatus({
+      eventType: readString(runtimeEvent.type) ?? "",
+      payloadPhase,
+      payloadStatus,
+    })
+    const isTerminalTurnEvent = status !== "running"
 
     if (
       runtimeEvent.type !== "turn.started" &&
@@ -1721,10 +1764,25 @@ export function useSessionStreamController({
 
     const didUpdate = updateConversationTurns((current) => {
       const currentTurns = current[input.uiSessionID] ?? []
+      const currentTurn = currentTurns.find((turn) => turn.turnID === turnID)
+      const currentAssistant = isTerminalTurnEvent
+        ? [...(currentTurn?.messages ?? [])].reverse().find(
+            (message): message is AssistantThreadMessage => message.kind === "assistant",
+          )
+        : undefined
+      const fallbackSegmentID = currentAssistant?.segmentID && !currentAssistant.segmentID.startsWith("pending:")
+        ? currentAssistant.segmentID
+        : undefined
+      const lastMessageID = explicitLastMessageID ?? currentAssistant?.messageID ?? (
+        fallbackSegmentID ? currentAssistant?.id : undefined
+      )
+      const finalSegmentID = explicitFinalSegmentID ?? fallbackSegmentID
       const ensuredTurns = ensureThreadTurn(currentTurns, {
         turnID,
         backendSessionID: input.backendSessionID,
-        status: status as Parameters<typeof ensureThreadTurn>[1]["status"],
+        lastMessageID,
+        finalSegmentID,
+        status,
         phase: payloadPhase as Parameters<typeof ensureThreadTurn>[1]["phase"],
         userMessageID,
         timestamp,
@@ -2331,21 +2389,24 @@ export function useSessionStreamController({
   function replaceConversationMessagesFromHistory(
     sessionID: string,
     nextMessages: ThreadMessage[],
-    options?: { preserveUserPresentation?: boolean },
+    options?: { canonicalTurns?: ThreadTurn[]; preserveUserPresentation?: boolean },
   ) {
     bumpConversationVersion(sessionID)
-    setConversations((prev) => {
-      const currentMessages = prev[sessionID] ?? []
+    updateConversationTurns((currentTurnsBySession) => {
+      const currentTurns = currentTurnsBySession[sessionID] ?? []
+      const currentMessages = deriveActiveMessages(currentTurns)
       const previousMessages = currentMessages.length ? currentMessages : readPersistedUserMessages(sessionID)
       const mergedMessages = reconcileConversationMessages(mergeConversationMessagesFromHistory(previousMessages, nextMessages, {
         preserveUserPresentation: options?.preserveUserPresentation,
       }))
-      if (conversationMessagesAreEquivalent(currentMessages, mergedMessages)) return prev
 
       persistUserMessages(sessionID, mergedMessages)
       return {
-        ...prev,
-        [sessionID]: mergedMessages,
+        ...currentTurnsBySession,
+        [sessionID]: buildThreadTurnsFromMessages(
+          mergedMessages,
+          options?.canonicalTurns ?? currentTurns,
+        ),
       }
     })
   }
@@ -3049,6 +3110,7 @@ export function useSessionStreamController({
       const nextMessageTree = buildSessionMessageTree(allMessages, activeMessageID)
       startTransition(() => {
         replaceConversationMessagesFromHistory(sessionID, buildThreadMessagesFromHistory(messages), {
+          canonicalTurns: buildThreadTurnsFromHistory(messages),
           preserveUserPresentation: options.preserveUserPresentation,
         })
         setMessageTreeBySession((current) => {

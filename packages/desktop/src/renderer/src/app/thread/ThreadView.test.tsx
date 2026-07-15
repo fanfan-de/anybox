@@ -5,7 +5,8 @@ import { DEFAULT_ASSISTANT_TRACE_VISIBILITY, type AssistantTraceItem, type Assis
 import type { SessionMessageTree } from "../session-message-tree"
 import { SIDEBAR_RESIZE_END_EVENT } from "../sidebar-resize-events"
 import { I18nProvider } from "../i18n/I18nProvider"
-import { ThreadView } from "./ThreadView"
+import { formatThreadExecutionDuration, ThreadView } from "./ThreadView"
+import { createThreadPresentationStore } from "./thread-presentation-store"
 
 const session: SessionSummary = {
   id: "session-1",
@@ -50,11 +51,16 @@ function assistantMessage(id: string, text: string): AssistantThreadMessage {
   }
 }
 
-function assistantTraceMessage(id: string, items: AssistantTraceItem[], isStreaming: boolean): AssistantThreadMessage {
+function assistantTraceMessage(
+  id: string,
+  items: AssistantTraceItem[],
+  isStreaming: boolean,
+  backendTurnID = `turn-${id}`,
+): AssistantThreadMessage {
   return {
     id,
     kind: "assistant",
-    backendTurnID: `turn-${id}`,
+    backendTurnID,
     segmentID: id,
     timestamp: 1,
     runtime: {
@@ -154,6 +160,19 @@ function createThreadProps(
   threadColumnRef = createRef<HTMLDivElement | null>(),
   overrides: Partial<ComponentProps<typeof ThreadView>> = {},
 ) {
+  const presentationStore = overrides.presentationStore ?? createThreadPresentationStore()
+  if (overrides.presentationStore === undefined && overrides.activeTurns === undefined) {
+    const scopeID = overrides.scrollStateKey ?? overrides.activeSession?.id ?? session.id
+    for (const message of activeMessages) {
+      if (message.kind !== "assistant") continue
+      presentationStore.getState().setProcessDisclosurePreference(
+        scopeID,
+        `legacy:${message.backendTurnID}:${message.id}`,
+        "expanded",
+      )
+    }
+  }
+
   return {
     activeSession: session,
     activeMessages,
@@ -164,6 +183,7 @@ function createThreadProps(
     permissionRequestActionRequestID: null,
     sideChatCountsByAnchorMessageID: {},
     threadColumnRef,
+    presentationStore,
     onAskUserQuestionAnswer: vi.fn(),
     onPermissionRequestResponse: vi.fn(),
     ...overrides,
@@ -1802,7 +1822,7 @@ describe("ThreadView image trace items", () => {
       status: "completed",
     }
 
-    const { getByRole } = renderThread(
+    const { container } = renderThread(
       [
         assistantTraceMessage("assistant-patch-debug", [patchItem], false),
       ],
@@ -1816,7 +1836,7 @@ describe("ThreadView image trace items", () => {
 
     expect(screen.queryByText("Hidden patch debug")).toBeNull()
 
-    fireEvent.click(getByRole("button"))
+    fireEvent.click(container.querySelector(".trace-file-change-summary")!)
 
     expect(screen.getByText("Hidden patch debug")).toBeInTheDocument()
   })
@@ -2134,7 +2154,7 @@ describe("ThreadView trace collapse", () => {
     expect(queryByRole("region", { name: "Reasoning content" })).toBeNull()
   })
 
-  it("keeps streaming reasoning open, then animates reasoning and tool content closed when the assistant message completes", () => {
+  it("keeps grouped reasoning open while independently closing tool content when the message completes", () => {
     vi.useFakeTimers()
     const streamingItems: AssistantTraceItem[] = [
       {
@@ -2185,7 +2205,7 @@ describe("ThreadView trace collapse", () => {
 
       expect(container.textContent).toContain("Inspect files first")
       expect(container.textContent).toContain("Then compare the rendering states")
-      expect(container.querySelector(".trace-item-reasoning-body.is-collapsing")).not.toBeNull()
+      expect(container.querySelector(".trace-item-reasoning-body.is-collapsing")).toBeNull()
       expect(container.querySelector(".trace-log-detail.is-collapsing")).not.toBeNull()
 
       act(() => {
@@ -2193,7 +2213,7 @@ describe("ThreadView trace collapse", () => {
       })
 
       expect(container.textContent).toContain("Inspect files first")
-      expect(container.textContent).not.toContain("Then compare the rendering states")
+      expect(container.textContent).toContain("Then compare the rendering states")
       expect(container.textContent).not.toContain("Input")
       expect(container.textContent).not.toContain("Output")
     } finally {
@@ -2535,6 +2555,7 @@ describe("ThreadView trace collapse", () => {
         },
       ],
       true,
+      "turn-live-ordering",
     )
     const taskMessage = assistantTraceMessage(
       "assistant-task",
@@ -2557,6 +2578,7 @@ describe("ThreadView trace collapse", () => {
         },
       ],
       true,
+      "turn-live-ordering",
     )
 
     const { getByText } = renderThread([
@@ -2679,6 +2701,7 @@ describe("ThreadView trace collapse", () => {
       startedAt: 100_000,
       updatedAt: 220_000,
     }
+    processMessage.backendTurnID = "turn-folded-assistant"
     const finalMessage = assistantTraceMessage(
       "assistant-final",
       [
@@ -2698,6 +2721,7 @@ describe("ThreadView trace collapse", () => {
       startedAt: 220_000,
       updatedAt: 228_000,
     }
+    finalMessage.backendTurnID = "turn-folded-assistant"
 
     const { getByText } = renderThread([userMessage("user-1", "Prompt"), processMessage, finalMessage])
 
@@ -3085,6 +3109,406 @@ describe("ThreadView trace collapse", () => {
     expect(getByText("lsp_workspace_symbols").closest('[data-thread-row-kind="assistant-tool-row"]')).not.toBeNull()
     expect(getByText("所有工具测试结果：")).toBeInTheDocument()
 
+  })
+})
+
+describe("ThreadView execution disclosure", () => {
+  function executionFixture(status: ThreadTurn["status"] = "completed") {
+    const user = userMessage("user-execution", "Inspect the project")
+    const assistant = assistantTraceMessage(
+      "assistant-execution",
+      [
+        {
+          id: "reasoning-execution",
+          kind: "reasoning",
+          timestamp: 1_000,
+          label: "Reasoning",
+          text: "Inspect the existing renderer structure.",
+          status: status === "running" ? "running" : "completed",
+        },
+        {
+          id: "tool-execution",
+          kind: "tool",
+          timestamp: 2_000,
+          label: "Tool",
+          title: "read-thread-view",
+          status: status === "running" ? "running" : "completed",
+        },
+        {
+          id: "response-execution",
+          kind: "text",
+          timestamp: 845_000,
+          label: "Assistant",
+          text: "The implementation is ready.",
+          status: status === "running" ? "running" : "completed",
+          isStreaming: status === "running",
+        },
+      ],
+      status === "running",
+    )
+    assistant.runtime = {
+      phase: status === "running" ? "responding" : "completed",
+      startedAt: 1_000,
+      updatedAt: 845_000,
+    }
+    assistant.state = status === "running" ? "responding" : "completed"
+
+    const turn = threadTurn("turn-execution", user, [user, assistant], {
+      completedAt: status === "running" ? undefined : 845_000,
+      finalSegmentID: assistant.segmentID,
+      lastMessageID: assistant.id,
+      startedAt: 1_000,
+      status,
+      updatedAt: 845_000,
+    })
+    return { activeMessages: [user, assistant], assistant, turn, user }
+  }
+
+  it("renders a completed long turn collapsed with its final response outside the disclosure", () => {
+    const fixture = executionFixture()
+    const { queryByText } = renderThread(fixture.activeMessages, { activeTurns: [fixture.turn] })
+
+    const summary = screen.getByRole("button", {
+      name: "Expand processing details: Processed 14m 4s",
+    })
+    expect(summary).toHaveAttribute("aria-expanded", "false")
+    expect(queryByText("Inspect the existing renderer structure.")).toBeNull()
+    expect(queryByText("read-thread-view")).toBeNull()
+    expect(screen.getByText("The implementation is ready.")).toBeInTheDocument()
+
+    fireEvent.click(summary)
+
+    expect(summary).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByText("Inspect the existing renderer structure.")).toBeInTheDocument()
+    expect(screen.getByText("read-thread-view")).toBeInTheDocument()
+  })
+
+  it("keeps an explicit disclosure preference across inactive ThreadView mounts", () => {
+    const fixture = executionFixture()
+    const { props, rerender } = renderThread(fixture.activeMessages, { activeTurns: [fixture.turn] })
+    fireEvent.click(screen.getByRole("button", { name: /Expand processing details/ }))
+    expect(screen.getByText("read-thread-view")).toBeInTheDocument()
+
+    rerender(<ThreadView {...props} activeTurns={[fixture.turn]} isThreadVisible={false} />)
+    rerender(<ThreadView {...props} activeTurns={[fixture.turn]} isThreadVisible />)
+
+    expect(screen.getByRole("button", { name: /Collapse processing details/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    )
+    expect(screen.getByText("read-thread-view")).toBeInTheDocument()
+  })
+
+  it("shows a running long turn expanded and atomically collapses it at completion", async () => {
+    const running = executionFixture("running")
+    const { props, rerender } = renderThread(running.activeMessages, { activeTurns: [running.turn] })
+
+    const runningSummary = screen.getByRole("button", { name: /Collapse processing details: Processing/ })
+    expect(runningSummary).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    )
+    expect(runningSummary.querySelector(".assistant-execution-summary-duration")).toBeNull()
+    expect(screen.getByText("read-thread-view")).toBeInTheDocument()
+
+    const completed = executionFixture("completed")
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={completed.activeMessages}
+        activeTurns={[completed.turn]}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Expand processing details: Processed/ })).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      )
+    })
+    expect(screen.queryByText("read-thread-view")).toBeNull()
+    expect(screen.getByText("The implementation is ready.")).toBeInTheDocument()
+  })
+
+  it("uses the conservative single-message legacy fallback when canonical turns are unavailable", () => {
+    const assistant = assistantTraceMessage(
+      "assistant-legacy-execution",
+      [
+        {
+          id: "reasoning-legacy-execution",
+          kind: "reasoning",
+          timestamp: 1,
+          label: "Reasoning",
+          text: "Inspect the legacy trace.",
+          status: "completed",
+        },
+        {
+          id: "tool-legacy-execution",
+          kind: "tool",
+          timestamp: 2,
+          label: "Tool",
+          title: "read-legacy-trace",
+          status: "completed",
+        },
+        {
+          id: "response-legacy-execution",
+          kind: "text",
+          timestamp: 3,
+          label: "Assistant",
+          text: "Legacy fallback complete.",
+          status: "completed",
+        },
+      ],
+      false,
+    )
+
+    renderThread([assistant], { presentationStore: createThreadPresentationStore() })
+
+    expect(screen.getByRole("button", { name: /Expand processing details: Processed/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    )
+    expect(screen.queryByText("read-legacy-trace")).toBeNull()
+    expect(screen.getByText("Legacy fallback complete.")).toBeInTheDocument()
+  })
+
+  it("waits for authoritative final-message hydration before collapsing", async () => {
+    const user = userMessage("user-late-final", "Inspect late metadata")
+    const process = assistantTraceMessage(
+      "assistant-late-process",
+      [
+        {
+          id: "reasoning-late-process",
+          kind: "reasoning",
+          timestamp: 1,
+          label: "Reasoning",
+          text: "Waiting for final metadata.",
+          status: "completed",
+        },
+        {
+          id: "tool-late-process",
+          kind: "tool",
+          timestamp: 2,
+          label: "Tool",
+          title: "late-hydration-tool",
+          status: "completed",
+        },
+      ],
+      false,
+      "turn-late-final",
+    )
+    const initialTurn = threadTurn("turn-late-final", user, [user, process], {
+      lastMessageID: "assistant-late-final",
+      status: "completed",
+      updatedAt: 3,
+    })
+    const { props, rerender } = renderThread([user, process], { activeTurns: [initialTurn] })
+
+    expect(screen.getByRole("button", { name: /Collapse processing details: Processed/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    )
+    expect(screen.getByText("late-hydration-tool")).toBeInTheDocument()
+
+    const final = assistantTraceMessage(
+      "assistant-late-final",
+      [{
+        id: "response-late-final",
+        kind: "text",
+        timestamp: 4,
+        label: "Assistant",
+        text: "Late final response.",
+        status: "completed",
+      }],
+      false,
+      "turn-late-final",
+    )
+    const hydratedTurn = { ...initialTurn, messages: [user, process, final], updatedAt: 4 }
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={[user, process, final]}
+        activeTurns={[hydratedTurn]}
+      />,
+    )
+
+    await waitFor(() => expect(
+      screen.getByRole("button", { name: /Expand processing details: Processed/ }),
+    ).toHaveAttribute("aria-expanded", "false"))
+    expect(screen.queryByText("late-hydration-tool")).toBeNull()
+    expect(screen.getByText("Late final response.")).toBeInTheDocument()
+  })
+
+  it("moves focus from a disappearing process row to the execution summary", async () => {
+    const running = executionFixture("running")
+    const { props, rerender } = renderThread(running.activeMessages, { activeTurns: [running.turn] })
+    const reasoningToggle = screen.getByText("Inspect the existing renderer structure.").closest<HTMLElement>(
+      '[role="button"]',
+    )
+    expect(reasoningToggle).not.toBeNull()
+    reasoningToggle!.focus()
+    expect(document.activeElement).toBe(reasoningToggle)
+
+    const completed = executionFixture("completed")
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={completed.activeMessages}
+        activeTurns={[completed.turn]}
+      />,
+    )
+
+    const summary = await screen.findByRole("button", { name: /Expand processing details: Processed/ })
+    await waitFor(() => expect(summary).toHaveFocus())
+    expect(screen.queryByText("Inspect the existing renderer structure.")).toBeNull()
+  })
+
+  it("clears a text selection only when it intersects disappearing process rows", async () => {
+    const running = executionFixture("running")
+    const { props, rerender } = renderThread(running.activeMessages, { activeTurns: [running.turn] })
+    const processText = screen.getByText("Inspect the existing renderer structure.")
+    const selection = window.getSelection()
+    const processRange = document.createRange()
+    processRange.selectNodeContents(processText)
+    selection?.removeAllRanges()
+    selection?.addRange(processRange)
+    expect(selection?.rangeCount).toBe(1)
+
+    const completed = executionFixture("completed")
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={completed.activeMessages}
+        activeTurns={[completed.turn]}
+      />,
+    )
+
+    await waitFor(() => expect(selection?.rangeCount).toBe(0))
+
+    fireEvent.click(screen.getByRole("button", { name: /Expand processing details: Processed/ }))
+    const survivingResponse = screen.getByText("The implementation is ready.")
+    const responseRange = document.createRange()
+    responseRange.selectNodeContents(survivingResponse)
+    selection?.addRange(responseRange)
+    expect(selection?.rangeCount).toBe(1)
+
+    fireEvent.click(screen.getByRole("button", { name: /Collapse processing details: Processed/ }))
+    await waitFor(() => expect(
+      screen.getByRole("button", { name: /Expand processing details: Processed/ }),
+    ).toBeInTheDocument())
+    expect(selection?.rangeCount).toBe(1)
+    expect(selection?.toString()).toBe("The implementation is ready.")
+    selection?.removeAllRanges()
+  })
+
+  it("binds response actions to an explicit canonical final segment even when later segments exist", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+    const user = userMessage("user-canonical-owner", "Choose the canonical final")
+    const finalOwner = assistantTraceMessage(
+      "assistant-canonical-final",
+      [
+        {
+          id: "reasoning-canonical-final",
+          kind: "reasoning",
+          timestamp: 1,
+          label: "Reasoning",
+          text: "Determine the canonical response.",
+          status: "completed",
+        },
+        {
+          id: "tool-canonical-final",
+          kind: "tool",
+          timestamp: 2,
+          label: "Tool",
+          title: "resolve-final-owner",
+          status: "completed",
+        },
+        {
+          id: "response-canonical-final",
+          kind: "text",
+          timestamp: 3,
+          label: "Assistant",
+          text: "Canonical final response.",
+          status: "completed",
+        },
+      ],
+      false,
+      "turn-canonical-owner",
+    )
+    const laterSegment = assistantTraceMessage(
+      "assistant-canonical-later",
+      [{
+        id: "response-canonical-later",
+        kind: "text",
+        timestamp: 4,
+        label: "Assistant",
+        text: "Later metadata segment.",
+        status: "completed",
+      }],
+      false,
+      "turn-canonical-owner",
+    )
+    const turn = threadTurn("turn-canonical-owner", user, [user, finalOwner], {
+      finalSegmentID: finalOwner.segmentID,
+      lastMessageID: laterSegment.id,
+      status: "completed",
+      updatedAt: 4,
+    })
+
+    renderThread([user, finalOwner, laterSegment], { activeTurns: [turn] })
+
+    const copyButtons = screen.getAllByRole("button", { name: "Copy assistant response" })
+    expect(copyButtons).toHaveLength(1)
+    fireEvent.click(copyButtons[0]!)
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Canonical final response."))
+    expect(screen.getByText("Later metadata segment.")).toBeInTheDocument()
+  })
+
+  it("does not create a disclosure for one short reasoning row", () => {
+    const user = userMessage("user-short-execution", "Say hello")
+    const assistant = assistantTraceMessage(
+      "assistant-short-execution",
+      [
+        {
+          id: "reasoning-short-execution",
+          kind: "reasoning",
+          timestamp: 1,
+          label: "Reasoning",
+          text: "Respond briefly.",
+          status: "completed",
+        },
+        {
+          id: "response-short-execution",
+          kind: "text",
+          timestamp: 2,
+          label: "Assistant",
+          text: "Hello!",
+          status: "completed",
+        },
+      ],
+      false,
+    )
+    const turn = threadTurn("turn-short-execution", user, [user, assistant], {
+      finalSegmentID: assistant.segmentID,
+      lastMessageID: assistant.id,
+    })
+
+    renderThread([user, assistant], { activeTurns: [turn] })
+
+    expect(screen.queryByRole("button", { name: /processing details/i })).toBeNull()
+    expect(screen.getByText("Respond briefly.")).toBeInTheDocument()
+    expect(screen.getByText("Hello!")).toBeInTheDocument()
+  })
+
+  it("formats execution durations at the supported boundaries", () => {
+    expect(formatThreadExecutionDuration(undefined)).toBe("")
+    expect(formatThreadExecutionDuration(999)).toBe("<1s")
+    expect(formatThreadExecutionDuration(844_000)).toBe("14m 4s")
+    expect(formatThreadExecutionDuration(7_680_000)).toBe("2h 8m")
   })
 })
 
@@ -4786,37 +5210,42 @@ describe("ThreadView message actions", () => {
     })
     const onOpenSideChat = vi.fn()
 
+    const intermediateMessage = assistantTraceMessage(
+      "assistant-intermediate",
+      [
+        {
+          id: "response-1",
+          kind: "text",
+          timestamp: 1,
+          label: "Assistant",
+          text: "I will inspect the plugin first.",
+          status: "completed",
+        },
+      ],
+      false,
+    )
+    const finalMessage = assistantTraceMessage(
+      "assistant-final",
+      [
+        {
+          id: "response-2",
+          kind: "text",
+          timestamp: 2,
+          label: "Assistant",
+          text: "The plugin is available.",
+          status: "completed",
+        },
+      ],
+      false,
+    )
+    intermediateMessage.backendTurnID = "turn-folded-assistant"
+    finalMessage.backendTurnID = "turn-folded-assistant"
+
     const { getAllByRole, getByText } = renderThread(
       [
         userMessage("user-1", "Check the setup."),
-        assistantTraceMessage(
-          "assistant-intermediate",
-          [
-            {
-              id: "response-1",
-              kind: "text",
-              timestamp: 1,
-              label: "Assistant",
-              text: "I will inspect the plugin first.",
-              status: "completed",
-            },
-          ],
-          false,
-        ),
-        assistantTraceMessage(
-          "assistant-final",
-          [
-            {
-              id: "response-2",
-              kind: "text",
-              timestamp: 2,
-              label: "Assistant",
-              text: "The plugin is available.",
-              status: "completed",
-            },
-          ],
-          false,
-        ),
+        intermediateMessage,
+        finalMessage,
       ],
       { onOpenSideChat },
     )
@@ -4863,6 +5292,7 @@ describe("ThreadView message actions", () => {
           },
         ],
         true,
+        "turn-folded-assistant",
       ),
       assistantTraceMessage(
         "assistant-final",
@@ -4877,6 +5307,7 @@ describe("ThreadView message actions", () => {
           },
         ],
         false,
+        "turn-folded-assistant",
       ),
     ])
 
@@ -5407,6 +5838,8 @@ describe("ThreadView message actions", () => {
       ),
       messageID: "message-final",
     }
+    reasoningMessage.backendTurnID = "turn-branch-controls"
+    finalMessage.backendTurnID = "turn-branch-controls"
 
     const { container } = renderThread([userMessage("user-1", "Prompt"), reasoningMessage, finalMessage], {
       messageTree,
@@ -6324,31 +6757,31 @@ describe("ThreadView virtual list", () => {
         })
       }
 
-      await waitFor(() => expect(readNextRowOffset()).toBe(87))
+      await waitFor(() => expect(readNextRowOffset()).toBe(142))
 
       toolRowHeight = 220
       fireEvent.click(screen.getByRole("button", { name: /^Tool completed/ }))
       flushScheduledMeasurements()
 
-      await waitFor(() => expect(readNextRowOffset()).toBe(227))
+      await waitFor(() => expect(readNextRowOffset()).toBe(282))
 
       toolRowHeight = 360
       fireEvent.click(screen.getByRole("button", { name: "Expand Tool completed output content" }))
       flushScheduledMeasurements()
 
-      await waitFor(() => expect(readNextRowOffset()).toBe(367))
+      await waitFor(() => expect(readNextRowOffset()).toBe(422))
 
       toolRowHeight = 220
       fireEvent.click(screen.getByRole("button", { name: "Collapse Tool completed output content" }))
       flushScheduledMeasurements()
 
-      await waitFor(() => expect(readNextRowOffset()).toBe(227))
+      await waitFor(() => expect(readNextRowOffset()).toBe(282))
 
       toolRowHeight = 80
       fireEvent.click(screen.getByRole("button", { name: /^Tool completed/ }))
       flushScheduledMeasurements()
 
-      await waitFor(() => expect(readNextRowOffset()).toBe(87))
+      await waitFor(() => expect(readNextRowOffset()).toBe(142))
     } finally {
       layoutSpy.mockRestore()
       animationFrame.restore()

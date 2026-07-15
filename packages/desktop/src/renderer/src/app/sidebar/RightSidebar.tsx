@@ -16,7 +16,7 @@ import { UnifiedPreviewPanel } from "../preview/UnifiedPreviewPanel"
 import { ShellTopMenu } from "../shared-ui"
 import type { CodeHighlightTheme } from "../code-theme"
 import type { SessionMessageTree } from "../session-message-tree"
-import { SideChatThread } from "../thread/ThreadView"
+import { SideChatThread, type ThreadScrollSnapshot } from "../thread/ThreadView"
 import type {
   AssistantTraceVisibility,
   ComposerAttachment,
@@ -35,6 +35,7 @@ import type {
   SessionDiffSummary,
   SessionSummary,
   ThreadMessage,
+  ThreadTurn,
   UserThreadMessage,
   WorkspaceGroup,
 } from "../types"
@@ -57,6 +58,7 @@ interface RightSidebarSideChatPanelState {
   sideChatSessions: SessionSummary[]
   tabKey: string
   messages: ThreadMessage[]
+  turns: ThreadTurn[]
 }
 
 interface RightSidebarProps {
@@ -74,7 +76,9 @@ interface RightSidebarProps {
   isResolvingPermissionRequest: boolean
   permissionRequestActionError: string | null
   permissionRequestActionRequestID: string | null
+  readThreadScrollSnapshot: (key: string) => ThreadScrollSnapshot | null
   rightSidebar: RightSidebarState
+  saveThreadScrollSnapshot: (key: string, snapshot: ThreadScrollSnapshot) => void
   selectedDiffFileBySession: Record<string, string | null>
   sessionDiffBySession: Record<string, SessionDiffSummary>
   sessionDiffStateBySession: Record<string, SessionDiffState>
@@ -245,7 +249,9 @@ export function RightSidebar({
   isResolvingPermissionRequest,
   permissionRequestActionError,
   permissionRequestActionRequestID,
+  readThreadScrollSnapshot,
   rightSidebar,
+  saveThreadScrollSnapshot,
   selectedDiffFileBySession,
   sessionDiffBySession,
   sessionDiffStateBySession,
@@ -511,9 +517,12 @@ export function RightSidebar({
               pendingPermissionRequests={sideChatPanelState.pendingPermissionRequests}
               permissionRequestActionError={permissionRequestActionError}
               permissionRequestActionRequestID={permissionRequestActionRequestID}
+              readScrollSnapshot={readThreadScrollSnapshot}
               session={sideChatPanelState.session}
+              saveScrollSnapshot={saveThreadScrollSnapshot}
               sideChatSessions={sideChatPanelState.sideChatSessions}
               messages={sideChatPanelState.messages}
+              turns={sideChatPanelState.turns}
               onAskUserQuestionAnswer={(answer) =>
                 onAskUserQuestionAnswer({
                   freeformText: answer.freeformText,

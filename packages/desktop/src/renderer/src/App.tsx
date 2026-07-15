@@ -15,7 +15,7 @@ import { TerminalAreaHost } from "./app/terminal/TerminalAreaHost"
 import {
   useWorkspaceStoreSelector,
 } from "./app/agent-workspace/workspace-store"
-import { useConversationMessages } from "./app/agent-workspace/conversation-store"
+import { useConversationMessages, useConversationTurns } from "./app/agent-workspace/conversation-store"
 import { WorkspaceStoreProvider } from "./app/agent-workspace/workspace-store-context"
 import { resolveWorkspaceRelativePath } from "./app/agent-workspace/workspace-loading-hooks"
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "./app/thread-markdown"
@@ -32,6 +32,7 @@ import type {
   SessionSummary,
   ToolPermissionMode,
   ThreadMessage,
+  ThreadTurn,
   WindowAction,
   WorkspaceGroup,
 } from "./app/types"
@@ -111,6 +112,7 @@ const EMPTY_SIDE_CHAT_ATTACHMENTS: ComposerAttachment[] = []
 const EMPTY_SIDE_CHAT_PENDING_INPUTS: PendingConversationInput[] = []
 const EMPTY_SIDE_CHAT_PERMISSION_REQUESTS: PermissionRequest[] = []
 const EMPTY_SIDE_CHAT_MESSAGES: ThreadMessage[] = []
+const EMPTY_SIDE_CHAT_TURNS: ThreadTurn[] = []
 const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/
 const WINDOWS_UNC_PATH_PATTERN = /^(?:\\\\|\/\/)[^\\/]+[\\/][^\\/]+/
 const URI_SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:/i
@@ -157,6 +159,7 @@ interface RightSidebarSideChatPanelState {
   sideChatSessions: SessionSummary[]
   tabKey: string
   messages: ThreadMessage[]
+  turns: ThreadTurn[]
   workspaceDirectory: string | null
   workspaceID: string | null
 }
@@ -191,6 +194,7 @@ function rightSidebarSideChatPanelStatesAreEqual(
     left.sideChatSessions.every((session, index) => session === right.sideChatSessions[index]) &&
     left.tabKey === right.tabKey &&
     left.messages === right.messages &&
+    left.turns === right.turns &&
     left.workspaceDirectory === right.workspaceDirectory &&
     left.workspaceID === right.workspaceID
   )
@@ -2012,6 +2016,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
           : [...sideChatSessions, session],
         tabKey,
         messages,
+        turns: EMPTY_SIDE_CHAT_TURNS,
         workspaceDirectory: sessionSelection.workspace?.directory ?? null,
         workspaceID: sessionSelection.workspace?.id ?? null,
       }
@@ -2023,6 +2028,10 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     conversationStore,
     rightSidebarSideChatPanelState?.session.id ?? null,
   )
+  const liveRightSidebarSideChatTurns = useConversationTurns(
+    conversationStore,
+    rightSidebarSideChatPanelState?.session.id ?? null,
+  )
   const liveRightSidebarSideChatPanelState = useMemo(() => {
     if (!rightSidebarSideChatPanelState) return null
     return {
@@ -2030,8 +2039,11 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
       messages: liveRightSidebarSideChatMessages.length > 0
         ? liveRightSidebarSideChatMessages
         : rightSidebarSideChatPanelState.messages,
+      turns: liveRightSidebarSideChatTurns.length > 0
+        ? liveRightSidebarSideChatTurns
+        : rightSidebarSideChatPanelState.turns,
     }
-  }, [liveRightSidebarSideChatMessages, rightSidebarSideChatPanelState])
+  }, [liveRightSidebarSideChatMessages, liveRightSidebarSideChatTurns, rightSidebarSideChatPanelState])
   const rightSidebarThreadLinkContext = liveRightSidebarSideChatPanelState
 
   function handleOpenRightSidebarFilesTab() {
@@ -2999,7 +3011,9 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               isResolvingPermissionRequest={isResolvingPermissionRequest}
               permissionRequestActionError={permissionRequestActionError}
               permissionRequestActionRequestID={permissionRequestActionRequestID}
+              readThreadScrollSnapshot={readThreadScrollSnapshot}
               rightSidebar={rightSidebar}
+              saveThreadScrollSnapshot={saveThreadScrollSnapshot}
               selectedDiffFileBySession={selectedDiffFileBySession}
               sessionDiffBySession={sessionDiffBySession}
               sessionDiffStateBySession={sessionDiffStateBySession}

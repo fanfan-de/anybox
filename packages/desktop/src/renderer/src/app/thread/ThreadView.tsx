@@ -25,7 +25,8 @@ import {
 } from "../icons"
 import { joinClassNames, writeTextToClipboard } from "../shared-ui"
 import { type SessionMessageBranchOption, type SessionMessageTree } from "../session-message-tree"
-import { buildThreadMessagesFromHistory } from "../stream"
+import { buildThreadTurnsFromHistory } from "../stream"
+import { deriveActiveMessages } from "../thread-turn-state"
 import {
   ThreadMarkdown,
   normalizeMarkdownLinkTarget,
@@ -91,9 +92,19 @@ import {
   type ThreadInteractionRowRef,
   type ThreadInteractionStoreApi,
 } from "./thread-interaction-store"
+import {
+  createThreadPresentationStore,
+  type ThreadPresentationStoreApi,
+} from "./thread-presentation-store"
 import { useThreadContentObserver } from "./use-thread-content-observer"
+import type { AssistantExecutionSummaryRow, ThreadExecutionGroup } from "./thread-execution-groups"
 import { useThreadProjection } from "./use-thread-projection"
-import { useThreadScrollController, type ThreadFollowScrollTarget, type ThreadScrollSnapshot } from "./use-thread-scroll-controller"
+import {
+  useThreadScrollController,
+  type ThreadFollowScrollTarget,
+  type ThreadProjectionLayoutTransaction,
+  type ThreadScrollSnapshot,
+} from "./use-thread-scroll-controller"
 import { buildThreadTurnNavigationItems, useThreadTurnNavigation, type ThreadTurnNavigationItem } from "./use-thread-turn-navigation"
 import { useThreadVirtualList } from "./use-thread-virtual-list"
 
@@ -105,6 +116,132 @@ export interface ThreadNavigationRequest {
 }
 
 const EMPTY_FILE_CHANGES: AssistantTraceFileChange[] = []
+
+const EXECUTION_STATUS_TRANSLATION_KEYS: Record<ThreadTurn["status"], TranslationKey> = {
+  blocked: "thread.execution.blocked",
+  cancelled: "thread.execution.cancelled",
+  completed: "thread.execution.completed",
+  continued_by_user: "thread.execution.continued",
+  failed: "thread.execution.failed",
+  running: "thread.execution.processing",
+  stopped: "thread.execution.stopped",
+}
+
+export function formatThreadExecutionDuration(durationMs: number | undefined) {
+  if (durationMs === undefined || !Number.isFinite(durationMs) || durationMs < 0) return ""
+  if (durationMs < 1_000) return "<1s"
+
+  const totalSeconds = Math.floor(durationMs / 1_000)
+  const hours = Math.floor(totalSeconds / 3_600)
+  const minutes = Math.floor((totalSeconds % 3_600) / 60)
+  const seconds = totalSeconds % 60
+  if (hours > 0) return `${hours}h ${minutes}m`
+  if (minutes > 0) return `${minutes}m ${seconds}s`
+  return `${seconds}s`
+}
+
+function AssistantExecutionSummary({
+  onToggle,
+  row,
+}: {
+  onToggle: (row: AssistantExecutionSummaryRow) => void
+  row: AssistantExecutionSummaryRow
+}) {
+  const { t } = useI18n()
+  const statusLabel = t(EXECUTION_STATUS_TRANSLATION_KEYS[row.status])
+  const duration = row.status === "running" ? "" : formatThreadExecutionDuration(row.durationMs)
+  const actionLabel = t(row.expanded ? "thread.execution.collapse" : "thread.execution.expand")
+  const accessibleName = `${actionLabel}: ${statusLabel}${duration ? ` ${duration}` : ""}`
+
+  return (
+    <button
+      type="button"
+      className="assistant-execution-summary-button"
+      aria-expanded={row.expanded}
+      aria-label={accessibleName}
+      data-thread-execution-group-id={row.groupID}
+      onClick={() => onToggle(row)}
+    >
+      <span className="assistant-execution-summary-copy">
+        <span className="assistant-execution-summary-label">{statusLabel}</span>
+        {duration ? <span className="assistant-execution-summary-duration">{duration}</span> : null}
+      </span>
+      <span className="assistant-execution-summary-chevron" aria-hidden="true">
+        {row.expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+      </span>
+    </button>
+  )
+}
+
+function readOwnedThreadVirtualRows(threadColumn: HTMLDivElement) {
+  return Array.from(
+    threadColumn.querySelectorAll<HTMLElement>("[data-thread-virtual-row-id]"),
+  ).filter((element) => element.closest(".thread-column") === threadColumn)
+}
+
+function findOwnedThreadVirtualRow(threadColumn: HTMLDivElement, rowID: string) {
+  return readOwnedThreadVirtualRows(threadColumn).find(
+    (element) => element.dataset.threadVirtualRowId === rowID,
+  ) ?? null
+}
+
+function readOwnedThreadRowIDForNode(threadColumn: HTMLDivElement, node: Node | null) {
+  const element = node instanceof Element ? node : node?.parentElement
+  const row = element?.closest<HTMLElement>("[data-thread-virtual-row-id]") ?? null
+  if (!row || row.closest(".thread-column") !== threadColumn) return null
+  return row.dataset.threadVirtualRowId ?? null
+}
+
+function clearSelectionInsideThreadRows(
+  threadColumn: HTMLDivElement,
+  rowIDs: ReadonlySet<string>,
+) {
+  const selection = threadColumn.ownerDocument.defaultView?.getSelection()
+  if (!selection || selection.rangeCount === 0) return
+  const anchorRowID = readOwnedThreadRowIDForNode(threadColumn, selection.anchorNode)
+  const focusRowID = readOwnedThreadRowIDForNode(threadColumn, selection.focusNode)
+  if (rowIDs.has(anchorRowID ?? "") || rowIDs.has(focusRowID ?? "")) {
+    selection.removeAllRanges()
+    return
+  }
+
+  const removedRows = readOwnedThreadVirtualRows(threadColumn).filter(
+    (row) => rowIDs.has(row.dataset.threadVirtualRowId ?? ""),
+  )
+  for (let rangeIndex = 0; rangeIndex < selection.rangeCount; rangeIndex += 1) {
+    const range = selection.getRangeAt(rangeIndex)
+    if (removedRows.some((row) => {
+      try {
+        return range.intersectsNode(row)
+      } catch {
+        return false
+      }
+    })) {
+      selection.removeAllRanges()
+      return
+    }
+  }
+}
+
+function projectThreadScrollSnapshotToExecutionGroups(
+  snapshot: ThreadScrollSnapshot,
+  groups: readonly ThreadExecutionGroup[],
+  rows: readonly ThreadDisplayRow[],
+) {
+  const anchor = snapshot.anchor
+  if (!anchor || rows.some((row) => row.rowID === anchor.rowID)) return snapshot
+
+  const group = groups.find((candidate) => candidate.prefixRowIDs.includes(anchor.rowID))
+  if (!group || !rows.some((row) => row.rowID === group.summaryRowID)) return snapshot
+  return {
+    ...snapshot,
+    anchor: {
+      ...anchor,
+      rowID: group.summaryRowID,
+      turnID: group.turnID,
+    },
+  }
+}
 
 type ProposedPlanCardStatus = "idle" | "cancelled" | "confirming" | "confirmed"
 
@@ -136,6 +273,7 @@ interface ThreadViewProps {
   sideChatCountsByAnchorMessageID: Record<string, number>
   sideChatSession?: SessionSummary | null
   interactionStore?: ThreadInteractionStoreApi
+  presentationStore?: ThreadPresentationStoreApi
   scrollStateKey?: string | null
   threadColumnRef: RefObject<HTMLDivElement | null>
   isThreadVisible?: boolean
@@ -199,10 +337,11 @@ interface ThreadViewActionCapabilities {
   canConfirmProposedPlan: boolean
 }
 
-type ThreadViewViewportProps = Omit<ThreadViewProps, ThreadViewActionPropName | "interactionStore"> & {
+type ThreadViewViewportProps = Omit<ThreadViewProps, ThreadViewActionPropName | "interactionStore" | "presentationStore"> & {
   actions: ThreadViewActions
   actionCapabilities: ThreadViewActionCapabilities
   interactionStore: ThreadInteractionStoreApi
+  presentationStore: ThreadPresentationStoreApi
 }
 
 function useThreadViewActions(source: ThreadViewActionSource) {
@@ -1933,6 +2072,7 @@ export interface SideChatThreadProps {
   session: SessionSummary
   sideChatSessions: SessionSummary[]
   messages: ThreadMessage[]
+  turns: ThreadTurn[]
   isThreadVisible?: boolean
   readScrollSnapshot?: (key: string) => ThreadScrollSnapshot | null
   saveScrollSnapshot?: (key: string, snapshot: ThreadScrollSnapshot) => void
@@ -1995,6 +2135,7 @@ export function SideChatThread({
   session,
   sideChatSessions,
   messages,
+  turns,
   isThreadVisible = true,
   readScrollSnapshot,
   saveScrollSnapshot,
@@ -2016,6 +2157,10 @@ export function SideChatThread({
   ariaLabel = "Nested side chat",
   variant = "inline",
 }: SideChatThreadProps) {
+  const presentationStoreRef = useRef<ThreadPresentationStoreApi | null>(null)
+  if (!presentationStoreRef.current) {
+    presentationStoreRef.current = createThreadPresentationStore()
+  }
   const composer = useProjectComposer({
     attachmentPaths: attachments.map((attachment) => attachment.path),
     onSessionModelSelectionChange,
@@ -2024,14 +2169,17 @@ export function SideChatThread({
     sessionModelSelection: session.modelSelection,
     sessionID: session.id,
   })
-  const [hydratedMessagesBySessionID, setHydratedMessagesBySessionID] = useState<Record<string, ThreadMessage[]>>({})
+  const [hydratedTurnsBySessionID, setHydratedTurnsBySessionID] = useState<Record<string, ThreadTurn[]>>({})
   const [isCreatingSideChatTab, setIsCreatingSideChatTab] = useState(false)
   const [deletingSideChatTabID, setDeletingSideChatTabID] = useState<string | null>(null)
   const [sideChatTabMenu, setSideChatTabMenu] = useState<{ sessionID: string; x: number; y: number } | null>(null)
   const sideChatTabMenuRef = useRef<HTMLDivElement | null>(null)
   const threadColumnRef = useRef<HTMLDivElement | null>(null)
-  const hydratedMessages = hydratedMessagesBySessionID[session.id] ?? []
+  const historyHydrationSessionIDsRef = useRef(new Set<string>())
+  const hydratedTurns = hydratedTurnsBySessionID[session.id] ?? []
+  const hydratedMessages = useMemo(() => deriveActiveMessages(hydratedTurns), [hydratedTurns])
   const effectiveMessages = messages.length > 0 ? messages : hydratedMessages
+  const effectiveTurns = turns.length > 0 ? turns : hydratedTurns
   const sideChatTabs = sideChatSessions.some((sideChat) => sideChat.id === session.id)
     ? sideChatSessions
     : [...sideChatSessions, session]
@@ -2049,13 +2197,15 @@ export function SideChatThread({
     : composer.attachmentDisabledReason ?? "The current model does not support image input."
 
   useEffect(() => {
-    if (messages.length > 0) {
-      setHydratedMessagesBySessionID((current) => ({
+    if (turns.length > 0) {
+      setHydratedTurnsBySessionID((current) => ({
         ...current,
-        [session.id]: messages,
+        [session.id]: turns,
       }))
       return
     }
+
+    if (hydratedTurns.length > 0 || historyHydrationSessionIDsRef.current.has(session.id)) return
 
     const agentSession = getAgentSessionBridge()
     if (!agentSession) {
@@ -2063,26 +2213,35 @@ export function SideChatThread({
     }
 
     let isCancelled = false
+    historyHydrationSessionIDsRef.current.add(session.id)
 
     void agentSession.loadHistory({ backendSessionID: session.id })
       .then((messages) => {
         if (isCancelled) return
-        const nextMessages = buildThreadMessagesFromHistory(messages)
+        const nextTurns = buildThreadTurnsFromHistory(messages)
+        const nextMessages = deriveActiveMessages(nextTurns)
         const nextHydratedMessages = mergeUserMessagePresentationState(readPersistedUserMessages(session.id), nextMessages)
-        setHydratedMessagesBySessionID((current) => ({
+        const hydratedMessageByID = new Map(nextHydratedMessages.map((message) => [message.id, message]))
+        const nextHydratedTurns = nextTurns.map((turn) => ({
+          ...turn,
+          messages: turn.messages.map((message) => hydratedMessageByID.get(message.id) ?? message),
+        }))
+        setHydratedTurnsBySessionID((current) => ({
           ...current,
-          [session.id]: nextHydratedMessages,
+          [session.id]: nextHydratedTurns,
         }))
       })
       .catch((error) => {
         if (isCancelled) return
+        historyHydrationSessionIDsRef.current.delete(session.id)
         console.error("[desktop] agentSession.loadHistory failed for side chat:", error)
       })
 
     return () => {
       isCancelled = true
+      historyHydrationSessionIDsRef.current.delete(session.id)
     }
-  }, [session.id, messages])
+  }, [hydratedTurns.length, session.id, turns])
 
   useEffect(() => {
     if (!sideChatTabMenu) return
@@ -2147,10 +2306,16 @@ export function SideChatThread({
   async function handleDeleteSideChatTab(sessionID: string) {
     if (deletingSideChatTabID) return
 
+    const deletedSession = sideChatTabs.find((sideChat) => sideChat.id === sessionID)
     setDeletingSideChatTabID(sessionID)
     setSideChatTabMenu(null)
     try {
       await onDeleteSideChat(sessionID)
+      if (deletedSession) {
+        presentationStoreRef.current?.getState().clearScope(
+          `side-chat:${deletedSession.origin?.parentSessionID ?? "unknown"}:${deletedSession.id}`,
+        )
+      }
     } finally {
       setDeletingSideChatTabID(null)
     }
@@ -2260,6 +2425,7 @@ export function SideChatThread({
           <ThreadView
             activeSession={session}
             activeMessages={effectiveMessages}
+            activeTurns={effectiveTurns}
             assistantTraceVisibility={assistantTraceVisibility}
             isResolvingPermissionRequest={isResolvingPermissionRequest}
             isSessionRunning={isSending || isInterruptible}
@@ -2269,6 +2435,7 @@ export function SideChatThread({
             permissionRequestActionRequestID={permissionRequestActionRequestID}
             sideChatCountsByAnchorMessageID={{}}
             scrollStateKey={`side-chat:${session.origin?.parentSessionID ?? "unknown"}:${session.id}`}
+            presentationStore={presentationStoreRef.current}
             threadColumnRef={threadColumnRef}
             isThreadVisible={isThreadVisible}
             readScrollSnapshot={readScrollSnapshot}
@@ -2531,13 +2698,14 @@ interface TraceItemViewProps {
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
   onProposedPlanConfirm?: ProposedPlanConfirmHandler
   shouldCollapseAfterMessageCompletion?: boolean
+  suppressReasoningMessageCompletionCollapse?: boolean
   traceVisibility: AssistantTraceVisibility
 }
 
 type RequiredTraceItemRendererProps = Required<
   Pick<
     TraceItemViewProps,
-    "isQuestionAnswerDisabled" | "isLatestMessage" | "shouldCollapseAfterMessageCompletion"
+    "isQuestionAnswerDisabled" | "isLatestMessage" | "shouldCollapseAfterMessageCompletion" | "suppressReasoningMessageCompletionCollapse"
   >
 >
 
@@ -3727,6 +3895,7 @@ function ReasoningTraceItemView({
   debugEntries,
   item,
   shouldCollapseAfterMessageCompletion,
+  suppressReasoningMessageCompletionCollapse,
 }: TraceItemRendererProps) {
   const shouldCollapseTraceItem = shouldCollapseReasoningTraceItem(item, shouldCollapseAfterMessageCompletion)
   const [isExpanded, setIsExpanded] = useState(() => !shouldCollapseTraceItem)
@@ -3754,6 +3923,14 @@ function ReasoningTraceItemView({
   useLayoutEffect(() => {
     clearReasoningCollapseTimer()
 
+    if (
+      suppressReasoningMessageCompletionCollapse &&
+      isExpanded
+    ) {
+      setIsCollapsing(false)
+      return
+    }
+
     if (!shouldCollapseTraceItem) {
       setIsCollapsing(false)
       setIsExpanded(true)
@@ -3778,7 +3955,7 @@ function ReasoningTraceItemView({
     }, THREAD_AUTO_COLLAPSE_MOTION_MS)
 
     return clearReasoningCollapseTimer
-  }, [item.id, shouldCollapseTraceItem])
+  }, [item.id, shouldCollapseTraceItem, suppressReasoningMessageCompletionCollapse])
 
   useEffect(() => clearReasoningCollapseTimer, [])
 
@@ -4576,6 +4753,7 @@ const TraceItemView = memo(function TraceItemView({
   onLocalFileLinkOpen,
   onProposedPlanConfirm,
   shouldCollapseAfterMessageCompletion = false,
+  suppressReasoningMessageCompletionCollapse = false,
   traceVisibility,
 }: TraceItemViewProps) {
   const renderedItem =
@@ -4628,6 +4806,7 @@ const TraceItemView = memo(function TraceItemView({
         onOpenImagePreview={onOpenImagePreview}
         onProposedPlanConfirm={onProposedPlanConfirm}
         shouldCollapseAfterMessageCompletion={shouldCollapseAfterMessageCompletion}
+        suppressReasoningMessageCompletionCollapse={suppressReasoningMessageCompletionCollapse}
         traceVisibility={traceVisibility}
       />
     </TraceItemRenderBoundary>
@@ -4663,6 +4842,7 @@ function renderTraceItemForRow({
       isLatestMessage={row.isLatestMessage}
       onProposedPlanConfirm={onProposedPlanConfirm}
       shouldCollapseAfterMessageCompletion={row.shouldCollapseTraceItemAfterMessageCompletion}
+      suppressReasoningMessageCompletionCollapse={row.suppressReasoningMessageCompletionCollapse}
       traceVisibility={traceVisibility}
     />
   )
@@ -4967,6 +5147,7 @@ function getThreadViewPropsChangeReason(left: ThreadViewViewportProps, right: Th
   if (left.saveScrollSnapshot !== right.saveScrollSnapshot) return "saveScrollSnapshot"
   if (left.showTurnNavigator !== right.showTurnNavigator) return "showTurnNavigator"
   if (left.interactionStore !== right.interactionStore) return "interactionStore"
+  if (left.presentationStore !== right.presentationStore) return "presentationStore"
   if (left.actions !== right.actions) return "actions"
   if (left.actionCapabilities !== right.actionCapabilities) return "actionCapabilities"
   return null
@@ -4988,6 +5169,11 @@ export function ThreadView(props: ThreadViewProps) {
     localInteractionStoreRef.current = createThreadInteractionStore()
   }
   const interactionStore = props.interactionStore ?? localInteractionStoreRef.current
+  const localPresentationStoreRef = useRef<ThreadPresentationStoreApi | null>(null)
+  if (!localPresentationStoreRef.current) {
+    localPresentationStoreRef.current = createThreadPresentationStore()
+  }
+  const presentationStore = props.presentationStore ?? localPresentationStoreRef.current
   const canSelectBranch = Boolean(props.onBranchSelect)
   const canSelectFileChange = Boolean(props.onFileChangeSelect)
   const canForkFromMessage = Boolean(props.onForkFromMessage)
@@ -5038,6 +5224,7 @@ export function ThreadView(props: ThreadViewProps) {
       actions={actions}
       actionCapabilities={actionCapabilities}
       interactionStore={interactionStore}
+      presentationStore={presentationStore}
     />
   )
 }
@@ -5048,11 +5235,12 @@ function VisibleThreadView({
   activeSession,
   activeSessionDiff = null,
   activeMessages,
-  activeTurns = [],
+  activeTurns,
   assistantTraceVisibility,
   isResolvingPermissionRequest,
   isSessionRunning = false,
   interactionStore,
+  presentationStore,
   navigationRequest = null,
   messageTree = null,
   addImageToComposerDisabledReason = null,
@@ -5070,6 +5258,8 @@ function VisibleThreadView({
   saveScrollSnapshot,
   showTurnNavigator = true,
 }: ThreadViewViewportProps) {
+  const activeSessionID = activeSession?.id ?? null
+  const effectiveScrollStateKey = scrollStateKey ?? activeSessionID ?? "thread:no-session"
   const onBranchSelect = actionCapabilities.canSelectBranch ? actions.onBranchSelect : undefined
   const onFileChangeSelect = actionCapabilities.canSelectFileChange ? actions.onFileChangeSelect : undefined
   const onForkFromMessage = actionCapabilities.canForkFromMessage ? actions.onForkFromMessage : undefined
@@ -5088,11 +5278,15 @@ function VisibleThreadView({
   const onPermissionRequestResponse = actions.onPermissionRequestResponse
   const {
     answeredQuestionIDs,
+    commitPendingAutoCollapse,
     displayMessages,
     displayRows,
+    executionGroups,
+    pendingAutoCollapseGroups,
   } = useThreadProjection({
     activeMessages,
     activeSession,
+    activeTurns,
     assistantTraceVisibility,
     canForkFromMessage: Boolean(onForkFromMessage),
     canOpenSideChat: Boolean(onOpenSideChat),
@@ -5102,15 +5296,22 @@ function VisibleThreadView({
     pendingPermissionRequests,
     sideChatCountsByAnchorMessageID,
     sideChatSession,
+    presentationScopeID: effectiveScrollStateKey,
+    presentationStore,
   })
   const [copiedResponseMessageID, setCopiedResponseMessageID] = useState<string | null>(null)
   const [copiedUserThreadMessageID, setCopiedUserThreadMessageID] = useState<string | null>(null)
   const [focusedVirtualRow, setFocusedVirtualRow] = useState<ThreadInteractionRowRef | null>(null)
+  const [projectionPinnedRowIDs, setProjectionPinnedRowIDs] = useState<string[]>([])
+  const [releasedRestorationPinIdentity, setReleasedRestorationPinIdentity] = useState<string | null>(null)
   const [threadCopyContextMenu, setThreadCopyContextMenu] = useState<ThreadCopyContextMenuState | null>(null)
   const [activeImagePreview, setActiveImagePreview] = useState<ActiveImagePreview | null>(null)
   const copiedResponseTimeoutRef = useRef<number | null>(null)
   const copiedUserTimeoutRef = useRef<number | null>(null)
   const threadCopyContextMenuRef = useRef<HTMLDivElement | null>(null)
+  const activeProjectionTransactionRef = useRef<ThreadProjectionLayoutTransaction | null>(null)
+  const pendingExecutionSummaryFocusRowIDRef = useRef<string | null>(null)
+  const projectionPinReleaseFrameRef = useRef<number | null>(null)
   const observedContentScrollSyncRef = useRef<((key?: string) => void) | null>(null)
   const latestAssistantMessageStateRef = useRef<LatestAssistantMessageState | null>(null)
   const previousActiveMessageCountRef = useRef(activeMessages.length)
@@ -5123,8 +5324,27 @@ function VisibleThreadView({
     y: number
   } | null>(null)
   const handledNavigationRequestIDRef = useRef<number | null>(null)
-  const activeSessionID = activeSession?.id ?? null
-  const effectiveScrollStateKey = scrollStateKey ?? activeSessionID ?? "thread:no-session"
+  const projectScrollSnapshotForCurrentProjection = useCallback(
+    (snapshot: ThreadScrollSnapshot) => projectThreadScrollSnapshotToExecutionGroups(
+      snapshot,
+      executionGroups,
+      displayRows,
+    ),
+    [displayRows, executionGroups],
+  )
+  const initialRestorationSnapshot = useMemo(() => {
+    const snapshot = readScrollSnapshot?.(effectiveScrollStateKey)
+    return snapshot ? projectScrollSnapshotForCurrentProjection(snapshot) : null
+  }, [effectiveScrollStateKey, projectScrollSnapshotForCurrentProjection, readScrollSnapshot])
+  const restorationAnchorRowID = initialRestorationSnapshot && !initialRestorationSnapshot.pinnedToBottom
+    ? initialRestorationSnapshot.anchor?.rowID ?? null
+    : null
+  const restorationPinIdentity = restorationAnchorRowID
+    ? `${effectiveScrollStateKey}\u0000${restorationAnchorRowID}`
+    : null
+  const restorationPinnedRowID = restorationPinIdentity !== releasedRestorationPinIdentity
+    ? restorationAnchorRowID
+    : null
   const focusedVirtualRowID = focusedVirtualRow?.scopeID === effectiveScrollStateKey
     ? focusedVirtualRow.rowID
     : null
@@ -5133,8 +5353,12 @@ function VisibleThreadView({
     store: interactionStore,
   }), [effectiveScrollStateKey, interactionStore])
   const pinnedVirtualRowIDs = useMemo(
-    () => focusedVirtualRowID ? [focusedVirtualRowID] : [],
-    [focusedVirtualRowID],
+    () => Array.from(new Set([
+      ...(focusedVirtualRowID ? [focusedVirtualRowID] : []),
+      ...(restorationPinnedRowID ? [restorationPinnedRowID] : []),
+      ...projectionPinnedRowIDs,
+    ])),
+    [focusedVirtualRowID, projectionPinnedRowIDs, restorationPinnedRowID],
   )
   const {
     getThreadVirtualOffsetForRowIndex,
@@ -5148,6 +5372,7 @@ function VisibleThreadView({
     displayRows,
     getInitialOffset: getInitialThreadVirtualOffset,
     pinnedRowIDs: pinnedVirtualRowIDs,
+    suppressScrollCompensation: projectionPinnedRowIDs.length > 0,
     threadColumnRef,
     virtualListKey: effectiveScrollStateKey,
   })
@@ -5230,12 +5455,16 @@ function VisibleThreadView({
     return new Set(displayMessageIDs.filter((messageID) => !previousMessageIDs.has(messageID)))
   }, [displayMessageIDs, effectiveScrollStateKey])
   const {
+    beginThreadProjectionLayoutTransaction,
+    cancelThreadProjectionLayoutTransaction,
+    completeThreadProjectionLayoutTransaction,
     handleThreadKeyDownIntent,
     handleThreadPointerMoveIntent,
     handleThreadScroll,
     handleThreadScrollIntent,
     handleThreadWheelIntent,
     isSmoothFollowScrollActiveForKey,
+    isThreadScrollFollowing,
     navigateThreadToOffset,
     restoreDetachedThreadPositionIfNeeded,
     suppressFollowScrollSync,
@@ -5243,14 +5472,218 @@ function VisibleThreadView({
   } = useThreadScrollController({
     getLatestThreadContentScrollTarget,
     isSidebarResizeInProgress,
+    projectScrollSnapshot: projectScrollSnapshotForCurrentProjection,
     readScrollSnapshot,
     saveScrollSnapshot,
     scrollToThreadOffset: scrollToThreadVirtualOffset,
     scrollStateKey: effectiveScrollStateKey,
     threadColumnRef,
   })
+  const cancelProjectionTransactionRef = useRef(cancelThreadProjectionLayoutTransaction)
+  cancelProjectionTransactionRef.current = cancelThreadProjectionLayoutTransaction
+  const pinProjectionRows = useCallback((rowIDs: readonly string[]) => {
+    if (projectionPinReleaseFrameRef.current !== null && typeof window !== "undefined") {
+      window.cancelAnimationFrame(projectionPinReleaseFrameRef.current)
+      projectionPinReleaseFrameRef.current = null
+    }
+    setProjectionPinnedRowIDs((current) => Array.from(new Set([...current, ...rowIDs])))
+  }, [])
+  const releaseProjectionPinsAfterCorrection = useCallback((transaction?: ThreadProjectionLayoutTransaction) => {
+    const finish = () => {
+      if (!transaction || activeProjectionTransactionRef.current?.id === transaction.id) {
+        activeProjectionTransactionRef.current = null
+      }
+      setProjectionPinnedRowIDs([])
+    }
+    if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+      finish()
+      return
+    }
+    if (projectionPinReleaseFrameRef.current !== null) {
+      window.cancelAnimationFrame(projectionPinReleaseFrameRef.current)
+    }
+    projectionPinReleaseFrameRef.current = window.requestAnimationFrame(() => {
+      projectionPinReleaseFrameRef.current = window.requestAnimationFrame(() => {
+        projectionPinReleaseFrameRef.current = window.requestAnimationFrame(() => {
+          projectionPinReleaseFrameRef.current = null
+          finish()
+        })
+      })
+    })
+  }, [])
+  const handleExecutionSummaryToggle = useCallback((row: AssistantExecutionSummaryRow) => {
+    const transaction = beginThreadProjectionLayoutTransaction({
+      anchorRowID: row.rowID,
+      sourceRowID: row.rowID,
+      turnID: row.turnID,
+    })
+    if (transaction) {
+      activeProjectionTransactionRef.current = transaction
+      pinProjectionRows([row.rowID])
+    }
+    presentationStore.getState().toggleProcessDisclosure(
+      effectiveScrollStateKey,
+      row.groupID,
+      row.expanded,
+    )
+  }, [
+    beginThreadProjectionLayoutTransaction,
+    effectiveScrollStateKey,
+    pinProjectionRows,
+    presentationStore,
+  ])
+
+  useLayoutEffect(() => {
+    const transaction = activeProjectionTransactionRef.current
+    if (!transaction) return
+    if (!displayRows.some((row) => row.rowID === transaction.anchor.rowID)) return
+
+    completeThreadProjectionLayoutTransaction(transaction)
+    releaseProjectionPinsAfterCorrection(transaction)
+  }, [completeThreadProjectionLayoutTransaction, displayRows, releaseProjectionPinsAfterCorrection])
+
+  useLayoutEffect(() => {
+    const rowID = pendingExecutionSummaryFocusRowIDRef.current
+    const threadColumn = threadColumnRef.current
+    if (!rowID || !threadColumn) return
+    const row = findOwnedThreadVirtualRow(threadColumn, rowID)
+    const button = row?.querySelector<HTMLButtonElement>(".assistant-execution-summary-button")
+    if (!button) return
+    pendingExecutionSummaryFocusRowIDRef.current = null
+    button.focus({ preventScroll: true })
+  }, [displayRows, threadColumnRef])
+
+  useLayoutEffect(() => {
+    const groups = pendingAutoCollapseGroups
+    const threadColumn = threadColumnRef.current
+    if (groups.length === 0 || !threadColumn || activeProjectionTransactionRef.current) return
+
+    const prefixGroupByRowID = new Map<string, (typeof groups)[number]>()
+    const outcomeGroupByRowID = new Map<string, (typeof groups)[number]>()
+    groups.forEach((group) => {
+      group.prefixRowIDs.forEach((rowID) => prefixGroupByRowID.set(rowID, group))
+      group.outcomeRowIDs.forEach((rowID) => outcomeGroupByRowID.set(rowID, group))
+    })
+    const prefixRowIDSet = new Set(prefixGroupByRowID.keys())
+    const activeElementRowID = readOwnedThreadRowIDForNode(
+      threadColumn,
+      threadColumn.ownerDocument.activeElement,
+    )
+    const focusedGroup = activeElementRowID ? prefixGroupByRowID.get(activeElementRowID) : undefined
+    if (focusedGroup) {
+      pendingExecutionSummaryFocusRowIDRef.current = focusedGroup.summaryRowID
+    }
+    clearSelectionInsideThreadRows(threadColumn, prefixRowIDSet)
+
+    const ownedRows = readOwnedThreadVirtualRows(threadColumn)
+    const columnRect = threadColumn.getBoundingClientRect()
+    const prefixRows = ownedRows
+      .filter((row) => prefixRowIDSet.has(row.dataset.threadVirtualRowId ?? ""))
+      .map((row) => ({ row, rect: row.getBoundingClientRect() }))
+      .sort((left, right) => left.rect.top - right.rect.top)
+    const isFollowingBottom = isThreadScrollFollowing(effectiveScrollStateKey)
+    let anchorRowID: string | null = null
+    let sourceRowID: string | undefined
+    let viewportOffset: number | undefined
+    let anchorTurnID = groups.at(-1)?.turnID
+
+    if (isFollowingBottom) {
+      const outcomeRow = [...displayRows]
+        .reverse()
+        .filter((row) => outcomeGroupByRowID.has(row.rowID))
+        .map((row) => findOwnedThreadVirtualRow(threadColumn, row.rowID))
+        .find((row): row is HTMLElement => Boolean(row))
+      const fallbackGroup = groups.at(-1)!
+      const fallbackSource = prefixRows.at(-1)?.row ??
+        findOwnedThreadVirtualRow(threadColumn, fallbackGroup.summaryRowID)
+      const source = outcomeRow ?? fallbackSource
+      if (source) {
+        anchorRowID = outcomeRow?.dataset.threadVirtualRowId ?? fallbackGroup.summaryRowID
+        sourceRowID = source.dataset.threadVirtualRowId
+        viewportOffset = source.getBoundingClientRect().top - columnRect.top
+        anchorTurnID = outcomeGroupByRowID.get(anchorRowID)?.turnID ?? fallbackGroup.turnID
+      }
+    } else if (prefixRows.length > 0 && prefixRows.every(({ rect }) => rect.bottom <= columnRect.top)) {
+      const survivingRow = ownedRows
+        .filter((row) => !prefixRowIDSet.has(row.dataset.threadVirtualRowId ?? ""))
+        .map((row) => ({ row, rect: row.getBoundingClientRect() }))
+        .filter(({ rect }) => rect.bottom > columnRect.top)
+        .sort((left, right) => left.rect.top - right.rect.top)[0]
+      if (survivingRow) {
+        anchorRowID = survivingRow.row.dataset.threadVirtualRowId ?? null
+        sourceRowID = anchorRowID ?? undefined
+        viewportOffset = survivingRow.rect.top - columnRect.top
+      }
+    } else if (prefixRows.length > 0 && prefixRows.every(({ rect }) => rect.top >= columnRect.bottom)) {
+      // Removing rows entirely below the viewport cannot move the current visual position.
+    } else {
+      const firstPrefixIndex = displayRows.findIndex((row) => prefixRowIDSet.has(row.rowID))
+      let lastPrefixIndex = -1
+      for (let index = displayRows.length - 1; index >= 0; index -= 1) {
+        if (!prefixRowIDSet.has(displayRows[index]!.rowID)) continue
+        lastPrefixIndex = index
+        break
+      }
+      const firstRenderedIndex = threadVirtualItems[0]?.index ?? 0
+      const isEntirePrefixBelowViewport = firstPrefixIndex >= 0 && firstPrefixIndex > (threadVirtualItems.at(-1)?.index ?? -1)
+      const isEntirePrefixAboveViewport = lastPrefixIndex >= 0 && lastPrefixIndex < firstRenderedIndex
+
+      if (!isEntirePrefixBelowViewport) {
+        const source = prefixRows.find(({ rect }) => rect.bottom > columnRect.top)?.row
+        if (source) {
+          const sourceGroup = prefixGroupByRowID.get(source.dataset.threadVirtualRowId ?? "")
+          anchorRowID = sourceGroup?.summaryRowID ?? groups[0]!.summaryRowID
+          sourceRowID = source.dataset.threadVirtualRowId
+          viewportOffset = source.getBoundingClientRect().top - columnRect.top
+          anchorTurnID = sourceGroup?.turnID ?? groups[0]!.turnID
+        } else if (isEntirePrefixAboveViewport) {
+          const survivingRow = ownedRows
+            .filter((row) => !prefixRowIDSet.has(row.dataset.threadVirtualRowId ?? ""))
+            .sort((left, right) => left.getBoundingClientRect().top - right.getBoundingClientRect().top)[0]
+          if (survivingRow) {
+            anchorRowID = survivingRow.dataset.threadVirtualRowId ?? null
+            sourceRowID = anchorRowID ?? undefined
+            viewportOffset = survivingRow.getBoundingClientRect().top - columnRect.top
+          }
+        }
+      }
+    }
+
+    if (anchorRowID && sourceRowID && viewportOffset !== undefined) {
+      const transaction = beginThreadProjectionLayoutTransaction({
+        anchorRowID,
+        sourceRowID,
+        viewportOffset,
+        turnID: anchorTurnID,
+      })
+      if (transaction) {
+        activeProjectionTransactionRef.current = transaction
+        pinProjectionRows([anchorRowID, ...groups.map((group) => group.summaryRowID)])
+      }
+    }
+    commitPendingAutoCollapse(groups.map((group) => group.groupID))
+  }, [
+    beginThreadProjectionLayoutTransaction,
+    commitPendingAutoCollapse,
+    displayRows,
+    effectiveScrollStateKey,
+    isThreadScrollFollowing,
+    pendingAutoCollapseGroups,
+    pinProjectionRows,
+    projectionPinnedRowIDs.length,
+    threadColumnRef,
+    threadVirtualItems,
+  ])
+
+  useEffect(() => () => {
+    if (projectionPinReleaseFrameRef.current !== null && typeof window !== "undefined") {
+      window.cancelAnimationFrame(projectionPinReleaseFrameRef.current)
+    }
+    const transaction = activeProjectionTransactionRef.current
+    if (transaction) cancelProjectionTransactionRef.current(transaction)
+  }, [])
   const threadTurnNavigationItems = useMemo(
-    () => buildThreadTurnNavigationItems(activeTurns, displayRows),
+    () => buildThreadTurnNavigationItems(activeTurns ?? [], displayRows),
     [activeTurns, displayRows],
   )
   const {
@@ -5299,7 +5732,8 @@ function VisibleThreadView({
   }, [handleThreadScroll, updateThreadTurnNavigationIndex])
 
   function getInitialThreadVirtualOffset() {
-    const snapshot = readScrollSnapshot?.(effectiveScrollStateKey)
+    const rawSnapshot = readScrollSnapshot?.(effectiveScrollStateKey)
+    const snapshot = rawSnapshot ? projectScrollSnapshotForCurrentProjection(rawSnapshot) : null
     if (!snapshot || snapshot.pinnedToBottom) return 0
     return snapshot.scrollTop
   }
@@ -5712,7 +6146,14 @@ function VisibleThreadView({
   ])
 
   useLayoutEffect(() => {
-    restoreDetachedThreadPositionIfNeeded(effectiveScrollStateKey)
+    const didRestore = restoreDetachedThreadPositionIfNeeded(effectiveScrollStateKey)
+    if (
+      didRestore &&
+      restorationPinIdentity &&
+      releasedRestorationPinIdentity !== restorationPinIdentity
+    ) {
+      setReleasedRestorationPinIdentity(restorationPinIdentity)
+    }
   })
 
   useEffect(() => {
@@ -5733,6 +6174,17 @@ function VisibleThreadView({
   }
 
   function renderDisplayRow(row: ThreadDisplayRow) {
+    if (row.kind === "assistant-execution-summary") {
+      return (
+        <div
+          className="assistant-execution-summary-row"
+          data-thread-row-kind="assistant-execution-summary"
+        >
+          <AssistantExecutionSummary row={row} onToggle={handleExecutionSummaryToggle} />
+        </div>
+      )
+    }
+
     return (
       <ThreadRowRenderer
         key={row.rowID}

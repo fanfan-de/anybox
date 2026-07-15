@@ -126,6 +126,7 @@ describe("stream trace reducer", () => {
           createdAt: 100,
           updatedAt: 400,
           completedAt: 400,
+          lastMessageID: "assistant-b",
         },
         parts: [{ id: "user-text", type: "text", text: "Prompt" }],
       },
@@ -146,6 +147,7 @@ describe("stream trace reducer", () => {
           createdAt: 100,
           updatedAt: 400,
           completedAt: 400,
+          lastMessageID: "assistant-b",
         },
         parts: [{ id: "assistant-a-text", type: "text", text: "Answer A" }],
       },
@@ -174,6 +176,7 @@ describe("stream trace reducer", () => {
     const turns = buildThreadTurnsFromHistory(historyMessages)
     expect(turns).toHaveLength(1)
     expect(turns[0]?.turnID).toBe("turn-history")
+    expect(turns[0]?.lastMessageID).toBe("assistant-b")
     expect(turns[0]?.messages.map((message) => message.id)).toEqual(["user-turn-1", "assistant-a", "assistant-b"])
 
     const derivedMessages = deriveActiveMessages(turns)

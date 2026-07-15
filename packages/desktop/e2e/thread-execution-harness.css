@@ -1,0 +1,51 @@
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  background: var(--seg-app);
+}
+
+.thread-e2e-harness {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 640px;
+  height: 420px;
+  margin: 24px;
+  border: 1px solid var(--seg-border);
+  background: var(--seg-panel);
+}
+
+.thread-e2e-controls {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--seg-border);
+}
+
+.thread-e2e-host,
+.thread-e2e-host .thread-shell {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.thread-e2e-host .thread-shell {
+  display: flex;
+}
+
+.thread-e2e-host .thread-column {
+  box-sizing: border-box;
+  height: 100%;
+}

@@ -338,7 +338,9 @@ function renderRightSidebar(input: {
         isResolvingPermissionRequest={false}
         permissionRequestActionError={null}
         permissionRequestActionRequestID={null}
+        readThreadScrollSnapshot={() => null}
         rightSidebar={input.rightSidebar}
+        saveThreadScrollSnapshot={vi.fn()}
         selectedDiffFileBySession={{}}
         sessionDiffBySession={{}}
         sessionDiffStateBySession={{}}

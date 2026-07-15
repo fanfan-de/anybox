@@ -116,6 +116,8 @@ function createBaseTurn(input: {
   return {
     turnID: input.turnID,
     ...(input.previous?.backendSessionID ? { backendSessionID: input.previous.backendSessionID } : {}),
+    ...(input.previous?.lastMessageID ? { lastMessageID: input.previous.lastMessageID } : {}),
+    ...(input.previous?.finalSegmentID ? { finalSegmentID: input.previous.finalSegmentID } : {}),
     status: input.previous?.status ?? input.status ?? "running",
     ...(input.previous?.phase ? { phase: input.previous.phase } : {}),
     startedAt: input.previous?.startedAt ?? input.startedAt,
@@ -142,6 +144,12 @@ function appendMessageToTurn(turn: ThreadTurn, message: ThreadMessage): ThreadTu
     const status = turn.status === "running" ? turnStatusFromAssistant(message) : turn.status
     return {
       ...turn,
+      ...(status === "completed" || status === "blocked" || status === "continued_by_user" || status === "failed" || status === "cancelled"
+        ? {
+            lastMessageID: message.messageID ?? message.id,
+            ...(message.segmentID ? { finalSegmentID: message.segmentID } : {}),
+          }
+        : {}),
       status,
       phase: message.runtime.phase,
       updatedAt,
@@ -400,7 +408,27 @@ export function buildThreadTurnsFromMessages(
     currentTurnIndex = turnIndex
   }
 
-  return reconcileThreadTurns(turns)
+  return reconcileThreadTurns(turns).map((turn) => {
+    const previous = byTurnID.get(turn.turnID) ?? (
+      turn.userMessageID ? byUserMessageID.get(turn.userMessageID) : undefined
+    )
+    if (!previous || previous.status === "running") return turn
+
+    if (previous.finalSegmentID) {
+      return {
+        ...turn,
+        finalSegmentID: previous.finalSegmentID,
+        ...(previous.lastMessageID ? { lastMessageID: previous.lastMessageID } : {}),
+      }
+    }
+    if (!previous.lastMessageID) return turn
+
+    const { finalSegmentID: _inferredFinalSegmentID, ...withoutInferredSegment } = turn
+    return {
+      ...withoutInferredSegment,
+      lastMessageID: previous.lastMessageID,
+    }
+  })
 }
 
 export function buildConversationTurnsFromMessagesMap(
@@ -483,6 +511,8 @@ export function ensureThreadTurn(
   input: {
     turnID: string
     backendSessionID?: string
+    lastMessageID?: string
+    finalSegmentID?: string
     status?: ThreadTurnStatus
     phase?: ThreadTurn["phase"]
     userMessageID?: string
@@ -490,18 +520,39 @@ export function ensureThreadTurn(
   },
 ): ThreadTurn[] {
   const now = input.timestamp ?? Date.now()
+  const mergeRuntimeState = (turn: ThreadTurn, nextTurnID = turn.turnID): ThreadTurn => {
+    const nextStatus = input.status ?? turn.status
+    const next: ThreadTurn = {
+      ...turn,
+      turnID: nextTurnID,
+      ...(input.backendSessionID ? { backendSessionID: input.backendSessionID } : {}),
+      status: nextStatus,
+      phase: input.phase ?? turn.phase,
+      userMessageID: input.userMessageID ?? turn.userMessageID,
+      updatedAt: Math.max(turn.updatedAt, now),
+    }
+
+    if (input.status === "running") {
+      delete next.completedAt
+      delete next.lastMessageID
+      delete next.finalSegmentID
+      return next
+    }
+
+    if (input.lastMessageID) {
+      next.lastMessageID = input.lastMessageID
+      if (turn.lastMessageID && turn.lastMessageID !== input.lastMessageID && !input.finalSegmentID) {
+        delete next.finalSegmentID
+      }
+    }
+    if (input.finalSegmentID) next.finalSegmentID = input.finalSegmentID
+    return next
+  }
   const existingIndex = turns.findIndex((turn) => turn.turnID === input.turnID)
   if (existingIndex >= 0) {
     return turns.map((turn, index) => (
       index === existingIndex
-        ? {
-            ...turn,
-            ...(input.backendSessionID ? { backendSessionID: input.backendSessionID } : {}),
-            status: input.status ?? turn.status,
-            phase: input.phase ?? turn.phase,
-            userMessageID: input.userMessageID ?? turn.userMessageID,
-            updatedAt: Math.max(turn.updatedAt, now),
-          }
+        ? mergeRuntimeState(turn)
         : turn
     ))
   }
@@ -512,15 +563,7 @@ export function ensureThreadTurn(
   if (pendingUserTurnIndex >= 0) {
     return turns.map((turn, index) => (
       index === pendingUserTurnIndex
-        ? {
-            ...turn,
-            turnID: input.turnID,
-            ...(input.backendSessionID ? { backendSessionID: input.backendSessionID } : {}),
-            status: input.status ?? turn.status,
-            phase: input.phase ?? turn.phase,
-            userMessageID: input.userMessageID ?? turn.userMessageID,
-            updatedAt: Math.max(turn.updatedAt, now),
-          }
+        ? mergeRuntimeState(turn, input.turnID)
         : turn
     ))
   }
@@ -530,6 +573,8 @@ export function ensureThreadTurn(
     {
       turnID: input.turnID,
       ...(input.backendSessionID ? { backendSessionID: input.backendSessionID } : {}),
+      ...(input.lastMessageID ? { lastMessageID: input.lastMessageID } : {}),
+      ...(input.finalSegmentID ? { finalSegmentID: input.finalSegmentID } : {}),
       status: input.status ?? "running",
       ...(input.phase ? { phase: input.phase } : {}),
       startedAt: now,

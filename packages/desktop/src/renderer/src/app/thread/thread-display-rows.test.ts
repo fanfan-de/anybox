@@ -31,16 +31,18 @@ function assistantMessage(
   id: string,
   items: AssistantTraceItem[],
   {
+    backendTurnID = id,
     isStreaming = false,
     phase = isStreaming ? "responding" : "completed",
   }: {
+    backendTurnID?: string
     isStreaming?: boolean
     phase?: AssistantThreadMessage["runtime"]["phase"]
   } = {},
 ): AssistantThreadMessage {
   return {
     id,
-    backendTurnID: id,
+    backendTurnID,
     segmentID: `${id}:segment`,
     kind: "assistant",
     timestamp: 1,
@@ -459,8 +461,8 @@ describe("thread display rows", () => {
   it("attaches folded assistant items to the final owner while preserving source metadata", () => {
     const rows = buildRows([
       userMessage("user-1", "Go"),
-      assistantMessage("assistant-intermediate", [textItem("intermediate-response", "Working.")]),
-      assistantMessage("assistant-final", [textItem("final-response", "Done.")]),
+      assistantMessage("assistant-intermediate", [textItem("intermediate-response", "Working.")], { backendTurnID: "turn-folded" }),
+      assistantMessage("assistant-final", [textItem("final-response", "Done.")], { backendTurnID: "turn-folded" }),
     ])
 
     const foldedItemRow = rows.find((row) => "sourceMessageID" in row && row.sourceMessageID === "assistant-intermediate")
@@ -476,9 +478,9 @@ describe("thread display rows", () => {
   it("orders folded assistant items by source message before raw item index", () => {
     const rows = buildRows([
       userMessage("user-1", "Go"),
-      assistantMessage("assistant-intermediate-1", [patchItem("patch-1", "src/first.ts")]),
-      assistantMessage("assistant-intermediate-2", [reasoningItem("reasoning-1", "Still working.")]),
-      assistantMessage("assistant-final", [textItem("final-response", "Done.")]),
+      assistantMessage("assistant-intermediate-1", [patchItem("patch-1", "src/first.ts")], { backendTurnID: "turn-folded" }),
+      assistantMessage("assistant-intermediate-2", [reasoningItem("reasoning-1", "Still working.")], { backendTurnID: "turn-folded" }),
+      assistantMessage("assistant-final", [textItem("final-response", "Done.")], { backendTurnID: "turn-folded" }),
     ])
 
     const finalOwnerRows = rows.filter((row) => "ownerMessageID" in row && row.ownerMessageID === "assistant-final")
@@ -491,6 +493,35 @@ describe("thread display rows", () => {
       "assistant-intermediate-1",
       "assistant-intermediate-2",
       "assistant-final",
+    ])
+  })
+
+  it("keeps adjacent backend turns separate when no user row exists between them", () => {
+    const firstAssistant = assistantMessage(
+      "assistant-turn-one",
+      [textItem("response-turn-one", "First turn result.")],
+      { backendTurnID: "turn-one" },
+    )
+    const secondAssistant = assistantMessage(
+      "assistant-turn-two",
+      [textItem("response-turn-two", "Second turn result.")],
+      { backendTurnID: "turn-two" },
+    )
+    const messages = [userMessage("user-1", "Go"), firstAssistant, secondAssistant]
+    const baseRows = buildRows(messages)
+    const decoratedRows = decorateRows(messages, baseRows)
+
+    expect(baseRows.find((row) => row.rowID.includes("response-turn-one"))).toMatchObject({
+      ownerMessageID: "assistant-turn-one",
+      sourceTurnID: "turn-one",
+    })
+    expect(baseRows.find((row) => row.rowID.includes("response-turn-two"))).toMatchObject({
+      ownerMessageID: "assistant-turn-two",
+      sourceTurnID: "turn-two",
+    })
+    expect(decoratedRows.filter((row) => row.kind === "assistant-actions").map((row) => row.ownerMessageID)).toEqual([
+      "assistant-turn-one",
+      "assistant-turn-two",
     ])
   })
 
@@ -697,8 +728,8 @@ describe("thread display rows", () => {
     const userOne = userMessage("user-1", "Go")
     const intermediateAssistant = assistantMessage("assistant-intermediate", [
       textItem("intermediate-response", "Working."),
-    ])
-    const finalAssistant = assistantMessage("assistant-final", [textItem("final-response", "Done.")])
+    ], { backendTurnID: "turn-folded" })
+    const finalAssistant = assistantMessage("assistant-final", [textItem("final-response", "Done.")], { backendTurnID: "turn-folded" })
     const userTwo = userMessage("user-2", "Next")
     const unrelatedAssistant = assistantMessage("assistant-unrelated", [textItem("unrelated-response", "Ready.")])
     const first = buildRowsIncremental([
@@ -710,7 +741,7 @@ describe("thread display rows", () => {
     ])
     const nextIntermediateAssistant = assistantMessage("assistant-intermediate", [
       textItem("intermediate-response", "Still working."),
-    ])
+    ], { backendTurnID: "turn-folded" })
     const next = buildRowsIncremental([
       userOne,
       nextIntermediateAssistant,
@@ -736,14 +767,14 @@ describe("thread display rows", () => {
     const userOne = userMessage("user-1", "Start")
     const stableAssistant = assistantMessage("assistant-stable", [textItem("stable-response", "Done.")])
     const userTwo = userMessage("user-2", "Continue")
-    const oldFinalAssistant = assistantMessage("assistant-old-final", [textItem("old-response", "First.")])
+    const oldFinalAssistant = assistantMessage("assistant-old-final", [textItem("old-response", "First.")], { backendTurnID: "turn-changing-final" })
     const firstMessages = [userOne, stableAssistant, userTwo, oldFinalAssistant]
     const firstBase = buildRowsIncremental(firstMessages)
     const firstDecorated = decorateRowsIncremental(firstMessages, firstBase.rows, firstBase.cache)
     const newFinalAssistant = assistantMessage(
       "assistant-new-final",
       [textItem("new-response", "Second.", { isStreaming: true, status: "running" })],
-      { isStreaming: true },
+      { backendTurnID: "turn-changing-final", isStreaming: true },
     )
     const nextMessages = [userOne, stableAssistant, userTwo, oldFinalAssistant, newFinalAssistant]
     const nextBase = buildRowsIncremental(nextMessages, firstDecorated.cache)
@@ -824,6 +855,41 @@ describe("thread display rows", () => {
     if (actionsRow?.kind !== "assistant-actions") return
     expect(actionsRow.responseItems.map((item) => item.id)).toEqual(["response-2"])
     expect(actionsRow.responseCopyText).toBe("Second response.")
+  })
+
+  it("does not merge a progress response into the final response when their workflow separator is hidden", () => {
+    const messages = [
+      assistantMessage("assistant-1", [
+        textItem("progress-response", "Still working."),
+        {
+          id: "workflow-separator",
+          kind: "step" as const,
+          timestamp: 1,
+          label: "Workflow",
+          detail: "Verification started",
+          status: "completed" as const,
+        },
+        textItem("final-response", "Finished."),
+      ]),
+    ]
+    const baseRows = buildRows(messages, {
+      traceVisibility: {
+        ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+        workflow: false,
+      },
+    })
+    const decoratedRows = decorateRows(messages, baseRows, {
+      assistantTraceVisibility: {
+        ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+        workflow: false,
+      },
+    })
+    const actionsRow = rowByID(decoratedRows, "assistant:assistant-1:actions")
+
+    expect(actionsRow.kind).toBe("assistant-actions")
+    if (actionsRow.kind !== "assistant-actions") return
+    expect(actionsRow.responseItems.map((item) => item.id)).toEqual(["final-response"])
+    expect(actionsRow.responseCopyText).toBe("Finished.")
   })
 
   it("suppresses assistant response actions while a permission request is pending", () => {

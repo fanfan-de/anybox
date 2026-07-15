@@ -41,6 +41,7 @@ import {
   revealBackendRecordedUserMessagePresentation,
   revealPendingSteerUserMessagesAtHandoffPresentation,
   resolveExecutionModeRoute,
+  resolveRuntimeThreadTurnStatus,
   resolveSessionStreamPlaceholderPresentation,
   resolveStreamMessageID,
   resolveStreamCursor,
@@ -60,6 +61,23 @@ function createUserThreadMessage(id: string, text: string): UserThreadMessage {
     timestamp: 1,
   }
 }
+
+describe("resolveRuntimeThreadTurnStatus", () => {
+  it("maps every terminal state carried by runtime state changes", () => {
+    expect(resolveRuntimeThreadTurnStatus({ eventType: "turn.state.changed", payloadPhase: "blocked" })).toBe("blocked")
+    expect(resolveRuntimeThreadTurnStatus({ eventType: "turn.state.changed", payloadStatus: "stopped" })).toBe("stopped")
+    expect(resolveRuntimeThreadTurnStatus({ eventType: "turn.state.changed", payloadPhase: "continued_by_user" })).toBe(
+      "continued_by_user",
+    )
+  })
+
+  it("returns to running and gives explicit terminal events precedence", () => {
+    expect(resolveRuntimeThreadTurnStatus({ eventType: "turn.state.changed", payloadPhase: "waiting_llm" })).toBe("running")
+    expect(resolveRuntimeThreadTurnStatus({ eventType: "turn.failed", payloadStatus: "completed" })).toBe("failed")
+    expect(resolveRuntimeThreadTurnStatus({ eventType: "turn.cancelled", payloadStatus: "completed" })).toBe("cancelled")
+    expect(resolveRuntimeThreadTurnStatus({ eventType: "turn.completed" })).toBe("completed")
+  })
+})
 
 function createAssistantThreadMessage(id: string, itemID: string, text: string, sourceID = "source-1", messageID?: string): AssistantThreadMessage {
   return {

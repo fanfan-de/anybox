@@ -310,6 +310,7 @@ function areAssistantTraceRowBasesEqual(left: AssistantTraceRenderableRow, right
     left.motionKey === right.motionKey &&
     left.section === right.section &&
     left.isLatestMessage === right.isLatestMessage &&
+    left.suppressReasoningMessageCompletionCollapse === right.suppressReasoningMessageCompletionCollapse &&
     left.shouldCollapseTraceItemAfterMessageCompletion === right.shouldCollapseTraceItemAfterMessageCompletion
   )
 }

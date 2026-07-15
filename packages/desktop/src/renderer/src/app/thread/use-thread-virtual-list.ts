@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, type RefObject } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type RefObject } from "react"
 import {
   defaultRangeExtractor,
   measureElement as measureVirtualElement,
@@ -24,6 +24,7 @@ interface UseThreadVirtualListInput {
   displayRows: ThreadDisplayRow[]
   getInitialOffset?: () => number
   pinnedRowIDs?: readonly string[]
+  suppressScrollCompensation?: boolean
   threadColumnRef: RefObject<HTMLDivElement | null>
   virtualListKey: string
 }
@@ -193,9 +194,12 @@ export function useThreadVirtualList({
   displayRows,
   getInitialOffset,
   pinnedRowIDs = [],
+  suppressScrollCompensation = false,
   threadColumnRef,
   virtualListKey,
 }: UseThreadVirtualListInput) {
+  const suppressScrollCompensationRef = useRef(suppressScrollCompensation)
+  suppressScrollCompensationRef.current = suppressScrollCompensation
   const estimateSize = useCallback(
     (index: number) => estimateThreadRowSize(displayRows[index]),
     [displayRows],
@@ -261,20 +265,38 @@ export function useThreadVirtualList({
     overscan: THREAD_VIRTUAL_OVERSCAN_ROWS,
     rangeExtractor,
     scrollToFn,
+    useFlushSync: false,
     useAnimationFrameWithResizeObserver: true,
   })
+  useLayoutEffect(() => {
+    if (!suppressScrollCompensation) return
+
+    rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = NEVER_ADJUST_THREAD_SCROLL_POSITION
+    return () => {
+      if (
+        !suppressScrollCompensationRef.current &&
+        rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange === NEVER_ADJUST_THREAD_SCROLL_POSITION
+      ) {
+        rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined
+      }
+    }
+  }, [rowVirtualizer, suppressScrollCompensation])
   useEffect(() => {
     function suppressScrollAdjustment() {
       rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = NEVER_ADJUST_THREAD_SCROLL_POSITION
     }
 
     function restoreScrollAdjustment() {
+      if (suppressScrollCompensationRef.current) {
+        suppressScrollAdjustment()
+        return
+      }
       if (rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange === NEVER_ADJUST_THREAD_SCROLL_POSITION) {
         rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = undefined
       }
     }
 
-    if (isSidebarResizeInProgress()) suppressScrollAdjustment()
+    if (suppressScrollCompensation || isSidebarResizeInProgress()) suppressScrollAdjustment()
     window.addEventListener(SIDEBAR_RESIZE_START_EVENT, suppressScrollAdjustment)
     window.addEventListener(SIDEBAR_RESIZE_END_EVENT, restoreScrollAdjustment)
     return () => {
@@ -282,7 +304,7 @@ export function useThreadVirtualList({
       window.removeEventListener(SIDEBAR_RESIZE_END_EVENT, restoreScrollAdjustment)
       restoreScrollAdjustment()
     }
-  }, [rowVirtualizer])
+  }, [rowVirtualizer, suppressScrollCompensation])
 
   const threadVirtualItems = rowVirtualizer.getVirtualItems()
   const threadVirtualTotalSize = rowVirtualizer.getTotalSize()

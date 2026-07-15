@@ -523,4 +523,21 @@ export function useConversationMessages(
   )
 }
 
+export function useConversationTurns(
+  store: ConversationStoreApi,
+  sessionID: string | null | undefined,
+) {
+  const storeRef = useRef(store)
+  const sessionIDRef = useRef(sessionID)
+
+  storeRef.current = store
+  sessionIDRef.current = sessionID
+
+  return useSyncExternalStore(
+    (listener) => storeRef.current.subscribeSession(sessionIDRef.current, listener),
+    () => storeRef.current.getSessionTurns(sessionIDRef.current),
+    () => storeRef.current.getSessionTurns(sessionIDRef.current),
+  )
+}
+
 export { conversationActivityMapsAreEqual }

@@ -10,6 +10,8 @@
 
 - `packages/desktop/src/renderer/src/app/thread/ThreadView.tsx`
 - `packages/desktop/src/renderer/src/app/thread/use-thread-projection.ts`
+- `packages/desktop/src/renderer/src/app/thread/thread-execution-groups.ts`
+- `packages/desktop/src/renderer/src/app/thread/thread-presentation-store.ts`
 - `packages/desktop/src/renderer/src/app/thread/thread-display-rows.ts`
 - `packages/desktop/src/renderer/src/app/thread/use-thread-virtual-list.ts`
 - `packages/desktop/src/renderer/src/app/thread/use-thread-scroll-controller.ts`
@@ -24,6 +26,9 @@
 - `packages/desktop/src/renderer/src/app/thread-markdown-parser.ts`
 - `packages/desktop/src/renderer/src/app/thread-markdown.worker.ts`
 - `packages/desktop/src/renderer/src/app/thread/thread-interaction-store.ts`
+- `packages/desktop/src/renderer/src/app/thread/thread-execution-groups.test.ts`
+- `packages/desktop/src/renderer/src/app/thread/thread-presentation-store.test.ts`
+- `packages/desktop/src/renderer/src/app/thread/use-thread-scroll-controller.test.ts`
 - `packages/desktop/src/renderer/src/styles/thread.css`
 - `packages/desktop/src/renderer/src/app/workbench/WorkbenchPaneSurface.tsx`
 - `packages/desktop/src/renderer/src/styles/workbench.css`
@@ -123,6 +128,18 @@ const activeMessages = turns.flatMap((turn) => turn.messages)
 ```
 
 Do not treat `activeMessages` as the source of truth. New stream/history state should update `ThreadTurn[]` first, then derive flat messages for `ThreadView`, side chat, and legacy selectors. `ThreadTurnNavigator` creates a read-only projection from each turn's `userMessageID` to the corresponding `user-message` display row; assistant rows, trace rows, permission rows, workflow/debug rows, and stream-inserted user rows never create navigation turns.
+
+### Turn execution disclosure
+
+桌面端长 turn 会在 semantic rows 生成后派生 `ThreadExecutionGroup`。分组边界来自 canonical `ThreadTurn`、`lastMessageID` 和 `finalSegmentID`，而不是相邻 DOM 或 user row。最终 response block 的边界在 trace visibility 过滤前计算；最终 response、response 后置内容、未解决 permission/question、最后一条失败结果和用户插入内容不会进入可折叠前缀。
+
+投影顺序固定为：完整 base rows → execution group 派生 → diff/actions decoration → disclosure 裁剪。展开时输出 summary 与原 process rows；折叠时 process rows 从 `displayRows` 中真正移除，只保留 `assistant-execution-summary`、最终结果与后置 rows。summary 不持有隐藏 DOM，因此仍保持逐行虚拟化和 lazy mount。
+
+`ThreadPresentationStore` 以 `scrollStateKey + groupID` 保存 `auto | expanded | collapsed` 语义。`auto` 在 running 时展开，在终态且 final outcome 可解析时折叠；显式用户选择覆盖后续 stream patch、late hydration 和虚拟卸载。store 只属于当前应用生命周期，不写回 conversation、IPC 或磁盘。
+
+自动折叠和手动 toggle 都使用 projection layout transaction。事务记录 surviving `rowID + viewportOffset + turnID`，临时 pin summary/outcome row，暂停普通 follow sync 与 TanStack size compensation，并在新投影提交后最多用两个 animation frame 做 DOM rect 校正。虚拟 thread column 使用 `overflow-anchor: none`，避免浏览器原生 anchoring 与应用语义锚竞争；事务期间若收到用户滚动意图，保留 disclosure 结果但取消余下校正。
+
+存在 execution group 时，`ThreadTurnNavigator` 始终把 summary row 作为该 turn 的稳定导航锚点。copy、fork、side-chat 和 response actions 仍归属于最终 response owner，不归属于 summary。
 
 数据层级可以按下面的树理解：
 

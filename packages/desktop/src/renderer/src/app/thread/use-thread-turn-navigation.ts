@@ -54,9 +54,12 @@ export function buildThreadTurnNavigationItems(
   displayRows: ThreadDisplayRow[],
 ) {
   const userRowIndexByMessageID = new Map<string, number>()
+  const executionSummaryRowIndexByTurnID = new Map<string, number>()
   displayRows.forEach((row, rowIndex) => {
     if (row.kind === "user-message") {
       userRowIndexByMessageID.set(row.message.id, rowIndex)
+    } else if (row.kind === "assistant-execution-summary") {
+      executionSummaryRowIndexByTurnID.set(row.turnID, rowIndex)
     }
   })
 
@@ -66,7 +69,7 @@ export function buildThreadTurnNavigationItems(
     const userMessage = getThreadTurnUserMessage(turn)
     if (!userMessage || seenUserMessageIDs.has(userMessage.id)) continue
 
-    const rowIndex = userRowIndexByMessageID.get(userMessage.id)
+    const rowIndex = executionSummaryRowIndexByTurnID.get(turn.turnID) ?? userRowIndexByMessageID.get(userMessage.id)
     if (rowIndex === undefined) continue
 
     const accessibleTitle = getThreadTurnUserMessageTitle(userMessage)

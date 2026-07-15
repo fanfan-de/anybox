@@ -2129,6 +2129,31 @@ describe("App", () => {
           updated: 2,
         },
       })
+    window.desktop!.agentSession!.loadHistory = vi.fn().mockImplementation(
+      async ({ backendSessionID }: { backendSessionID: string }) => backendSessionID === "session-side-chat-1"
+        ? [
+            {
+              info: {
+                id: "msg-assistant-side-chat-tab-1",
+                sessionID: backendSessionID,
+                role: "assistant",
+                created: 100,
+                completed: 103,
+              },
+              parts: [
+                { id: "reasoning-side-chat-tab-1", type: "reasoning", text: "Inspecting the first side chat." },
+                {
+                  id: "tool-side-chat-tab-1",
+                  type: "tool",
+                  tool: "read-file",
+                  state: { status: "completed", output: "ok" },
+                },
+                { id: "text-side-chat-tab-1", type: "text", text: "First side chat result." },
+              ],
+            },
+          ]
+        : [],
+    )
 
     render(<App />)
 
@@ -2137,6 +2162,14 @@ describe("App", () => {
     const nestedSideChat = await screen.findByRole("region", { name: "Side chat" })
     const getNestedSideChat = () => screen.getByRole("region", { name: "Side chat" })
     expect(await within(nestedSideChat).findByRole("tab", { name: "Chat 1" })).toHaveAttribute("aria-selected", "true")
+    const firstSideChatSummary = await within(nestedSideChat).findByRole("button", {
+      name: /Expand processing details/,
+    })
+    fireEvent.click(firstSideChatSummary)
+    expect(within(nestedSideChat).getByRole("button", { name: /Collapse processing details/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    )
 
     setComposerDraftValue(within(nestedSideChat).getByRole("textbox", { name: "Task draft" }), "First side chat draft")
     fireEvent.click(within(nestedSideChat).getByRole("button", { name: "Create side chat tab" }))
@@ -2154,6 +2187,10 @@ describe("App", () => {
     await waitFor(() => {
       expect(within(getNestedSideChat()).getByRole("tab", { name: "Chat 1" })).toHaveAttribute("aria-selected", "true")
       expectComposerDraftValue(within(getNestedSideChat()).getByRole("textbox", { name: "Task draft" }), "First side chat draft")
+      expect(within(getNestedSideChat()).getByRole("button", { name: /Collapse processing details/ })).toHaveAttribute(
+        "aria-expanded",
+        "true",
+      )
     })
 
     fireEvent.click(within(getNestedSideChat()).getByRole("tab", { name: "Chat 2" }))
@@ -2343,6 +2380,9 @@ describe("App", () => {
       within(nestedSideChat).queryByText("Focused on this reply only. Messages here stay outside the main thread context."),
     ).not.toBeInTheDocument()
     expect(within(nestedSideChat).getByRole("button", { name: "Hide side chat" })).toBeInTheDocument()
+    const executionSummary = within(nestedSideChat).getByRole("button", { name: /Expand processing details/ })
+    expect(executionSummary).toHaveAttribute("aria-expanded", "false")
+    fireEvent.click(executionSummary)
     expect(within(nestedSideChat).getByRole("region", { name: "Reasoning" })).toBeInTheDocument()
     expect(within(nestedSideChat).getByRole("button", { name: /read-file/i })).toBeInTheDocument()
     expect(within(nestedSideChat).getByRole("region", { name: "File Changes" })).toBeInTheDocument()
@@ -6691,6 +6731,9 @@ describe("App", () => {
 
     const threadColumn = (finalResponseRow as HTMLElement).closest(".thread-column") as HTMLElement
     const ownerMessageID = (finalResponseRow as HTMLElement).dataset.threadMessageId
+    const executionSummary = within(threadColumn).getByRole("button", { name: /Expand processing details/ })
+    expect(executionSummary).toHaveAttribute("aria-expanded", "false")
+    fireEvent.click(executionSummary)
     const traceRegions = Array.from(threadColumn.querySelectorAll(
       `.assistant-reasoning-row[data-thread-message-id="${ownerMessageID}"] .assistant-trace-lite, ` +
       `.assistant-tool-row[data-thread-message-id="${ownerMessageID}"] .assistant-trace-lite, ` +
@@ -6809,7 +6852,18 @@ describe("App", () => {
       expect(renderedVirtualRows.length).toBeLessThan(80)
     })
 
-    expect(screen.queryByText("Final answer.")).not.toBeInTheDocument()
+    const executionSummary = screen.getByRole("button", { name: /Expand processing details/ })
+    expect(executionSummary).toHaveAttribute("aria-expanded", "false")
+    expect(screen.getByText("Final answer.")).toBeInTheDocument()
+    expect(screen.queryByText("Trace reasoning 0")).not.toBeInTheDocument()
+
+    fireEvent.click(executionSummary)
+
+    await waitFor(() => {
+      expect(screen.getByText("Trace reasoning 0")).toBeInTheDocument()
+      expect(screen.queryByText("Final answer.")).not.toBeInTheDocument()
+      expect(threadColumn.querySelectorAll(".thread-virtual-row").length).toBeLessThan(80)
+    })
   })
 
   it("keeps folded file-change summaries scoped to their source assistant message", async () => {
@@ -6924,9 +6978,14 @@ describe("App", () => {
     const threadColumn = (finalResponseRow as HTMLElement).closest(".thread-column") as HTMLElement
     const ownerMessageID = (finalResponseRow as HTMLElement).dataset.threadMessageId
 
-    const fileChangeSections = Array.from(threadColumn.querySelectorAll(
-      `.assistant-file-change-row[data-thread-message-id="${ownerMessageID}"] .assistant-section.is-file-change`,
-    ))
+    const fileChangeRows = Array.from(threadColumn.querySelectorAll<HTMLElement>(".assistant-file-change-row"))
+    expect(fileChangeRows.map((row) => row.dataset.threadMessageId)).toEqual([
+      "msg-assistant-1",
+      ownerMessageID,
+    ])
+    const fileChangeSections = fileChangeRows.map((row) =>
+      row.querySelector<HTMLElement>(".assistant-section.is-file-change"),
+    ).filter((section): section is HTMLElement => Boolean(section))
     expect(fileChangeSections).toHaveLength(2)
 
     const firstFileChangeSection = fileChangeSections[0] as HTMLElement
@@ -10952,6 +11011,9 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("switch", { name: "Show trace workflow events" }))
     fireEvent.click(screen.getByRole("switch", { name: "Show trace debug metadata" }))
 
+    const executionSummary = screen.getByRole("button", { name: /Expand processing details/ })
+    expect(executionSummary).toHaveAttribute("aria-expanded", "false")
+    fireEvent.click(executionSummary)
     expect(screen.getByText("Model step started")).toBeInTheDocument()
     expect(screen.getByText("approval.id")).toBeInTheDocument()
     expect(screen.getAllByText("part.id").length).toBeGreaterThan(0)
@@ -14727,7 +14789,7 @@ describe("App", () => {
     expect(styles).toMatch(/\.thread-shell\s*>\s*\.thread-column\s*\{[^}]*padding-bottom:\s*var\(--thread-composer-clearance\);/s)
     expect(styles).toMatch(/\.thread-shell\s*\+\s*\.composer-stack\s*\{[^}]*padding-top:\s*12px;/s)
     expect(styles).not.toMatch(/\.thread-column\.is-content-visibility/)
-    expect(styles).toMatch(/\.thread-column\.is-virtualized\s*\{[^}]*gap:\s*0;/s)
+    expect(styles).toMatch(/\.thread-column\.is-virtualized\s*\{[^}]*gap:\s*0;[^}]*overflow-anchor:\s*none;/s)
     expect(styles).toMatch(/\.thread-virtual-spacer\s*\{[^}]*box-sizing:\s*border-box;[^}]*position:\s*relative;[^}]*flex:\s*0 0 auto;[^}]*width:\s*100%;/s)
     expect(styles).toMatch(/\.thread-virtual-row\s*\{[^}]*position:\s*absolute;[^}]*top:\s*0;[^}]*left:\s*0;[^}]*box-sizing:\s*border-box;[^}]*width:\s*100%;/s)
     expect(styles).not.toMatch(/\.thread-virtual-row\s*\{[^}]*content-visibility:/s)

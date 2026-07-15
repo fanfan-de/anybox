@@ -8,10 +8,36 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react"
 
+export interface ThreadScrollAnchor {
+  rowID: string
+  viewportOffset: number
+  turnID?: string
+  affinity?: "before" | "after"
+}
+
 export interface ThreadScrollSnapshot {
   scrollTop: number
   pinnedToBottom: boolean
   updatedAt: number
+  anchor?: ThreadScrollAnchor
+}
+
+export interface ThreadProjectionLayoutTransactionOptions {
+  /** Row that must survive the projection change and will be used for correction afterwards. */
+  anchorRowID: string
+  /** Row whose current viewport position should be transferred to `anchorRowID`. */
+  sourceRowID?: string
+  /** Explicitly supplied when the source row is not mounted by the virtualizer. */
+  viewportOffset?: number
+  turnID?: string
+  affinity?: ThreadScrollAnchor["affinity"]
+  key?: string
+}
+
+export interface ThreadProjectionLayoutTransaction {
+  readonly id: number
+  readonly key: string
+  readonly anchor: ThreadScrollAnchor
 }
 
 export interface ThreadFollowScrollTarget {
@@ -30,12 +56,21 @@ interface ThreadSmoothFollowScroll {
   targetScrollTop: number
 }
 
+interface ActiveThreadProjectionLayoutTransaction extends ThreadProjectionLayoutTransaction {
+  fallbackScrollTop: number
+  frameID: number | null
+  hasResolvedAnchor: boolean
+  mode: ThreadScrollMode
+  remainingCorrectionFrames: number
+}
+
 interface UseThreadScrollControllerInput {
   getLatestThreadContentScrollTarget: (
     threadColumn: HTMLDivElement,
     options?: { skipStreamingResponseMeasurement?: boolean },
   ) => ThreadFollowScrollTarget
   isSidebarResizeInProgress: () => boolean
+  projectScrollSnapshot?: (snapshot: ThreadScrollSnapshot) => ThreadScrollSnapshot
   readScrollSnapshot?: (key: string) => ThreadScrollSnapshot | null
   saveScrollSnapshot?: (key: string, snapshot: ThreadScrollSnapshot) => void
   scrollToThreadOffset?: (scrollTop: number) => void
@@ -52,6 +87,8 @@ const THREAD_FOLLOW_SMOOTH_SCROLL_MAX_DELTA_PX = 420
 const THREAD_FOLLOW_SMOOTH_SCROLL_MIN_DURATION_MS = 90
 const THREAD_FOLLOW_SMOOTH_SCROLL_MAX_DURATION_MS = 220
 const THREAD_FOLLOW_SMOOTH_SCROLL_PX_PER_MS = 2.4
+const THREAD_PROJECTION_LAYOUT_CORRECTION_FRAMES = 2
+const THREAD_PROJECTION_LAYOUT_EPSILON_PX = 0.5
 
 const threadScrollSnapshots = new Map<string, ThreadScrollSnapshot>()
 
@@ -88,11 +125,61 @@ function canRepresentThreadScrollTop(threadColumn: HTMLDivElement, scrollTop: nu
   return getThreadScrollMaxTop(threadColumn) >= scrollTop - THREAD_TOP_RESET_THRESHOLD_PX
 }
 
+function isThreadVirtualRowOwnedByColumn(row: HTMLElement, threadColumn: HTMLDivElement) {
+  const owningThreadColumn = row.closest<HTMLElement>(".thread-column")
+  return owningThreadColumn ? owningThreadColumn === threadColumn : threadColumn.contains(row)
+}
+
+function findThreadVirtualRow(threadColumn: HTMLDivElement, rowID: string) {
+  const rows = threadColumn.querySelectorAll<HTMLElement>("[data-thread-virtual-row-id]")
+  for (const row of Array.from(rows)) {
+    if (!isThreadVirtualRowOwnedByColumn(row, threadColumn)) continue
+    if (row.getAttribute("data-thread-virtual-row-id") === rowID) return row
+  }
+  return null
+}
+
+function readThreadRowViewportOffset(threadColumn: HTMLDivElement, rowID: string) {
+  const row = findThreadVirtualRow(threadColumn, rowID)
+  if (!row) return null
+
+  const viewportOffset = row.getBoundingClientRect().top - threadColumn.getBoundingClientRect().top
+  return Number.isFinite(viewportOffset) ? viewportOffset : null
+}
+
+function readTopmostVisibleThreadScrollAnchor(threadColumn: HTMLDivElement): ThreadScrollAnchor | undefined {
+  const columnRect = threadColumn.getBoundingClientRect()
+  const rows = threadColumn.querySelectorAll<HTMLElement>("[data-thread-virtual-row-id]")
+  let bestRow: HTMLElement | null = null
+  let bestRowTop = Number.POSITIVE_INFINITY
+
+  for (const row of Array.from(rows)) {
+    if (!isThreadVirtualRowOwnedByColumn(row, threadColumn)) continue
+    const rowID = row.getAttribute("data-thread-virtual-row-id")
+    if (!rowID) continue
+
+    const rowRect = row.getBoundingClientRect()
+    if (rowRect.bottom < columnRect.top || rowRect.top > columnRect.bottom) continue
+    if (rowRect.top >= bestRowTop) continue
+    bestRow = row
+    bestRowTop = rowRect.top
+  }
+
+  const rowID = bestRow?.getAttribute("data-thread-virtual-row-id")
+  if (!bestRow || !rowID) return undefined
+
+  const viewportOffset = bestRow.getBoundingClientRect().top - columnRect.top
+  if (!Number.isFinite(viewportOffset)) return undefined
+  return { rowID, viewportOffset }
+}
+
 function readThreadScrollSnapshot(threadColumn: HTMLDivElement): ThreadScrollSnapshot {
+  const anchor = readTopmostVisibleThreadScrollAnchor(threadColumn)
   return {
     scrollTop: threadColumn.scrollTop,
     pinnedToBottom: isThreadColumnPinnedToBottom(threadColumn),
     updatedAt: Date.now(),
+    ...(anchor ? { anchor } : {}),
   }
 }
 
@@ -105,6 +192,7 @@ function getRestorableThreadScrollSnapshot(snapshot: ThreadScrollSnapshot | null
 export function useThreadScrollController({
   getLatestThreadContentScrollTarget,
   isSidebarResizeInProgress,
+  projectScrollSnapshot,
   readScrollSnapshot,
   saveScrollSnapshot,
   scrollToThreadOffset,
@@ -121,6 +209,8 @@ export function useThreadScrollController({
   const userScrollIntentConsumedRef = useRef(false)
   const lastKnownScrollTopRef = useRef(0)
   const currentScrollStateKeyRef = useRef<string | null>(null)
+  const activeProjectionLayoutTransactionRef = useRef<ActiveThreadProjectionLayoutTransaction | null>(null)
+  const nextProjectionLayoutTransactionIDRef = useRef(1)
 
   function captureThreadScrollSnapshot(
     threadColumn: HTMLDivElement,
@@ -144,11 +234,13 @@ export function useThreadScrollController({
   }
 
   function readLatestThreadScrollSnapshotForKey(key = scrollStateKey) {
-    return latestScrollSnapshotKeyRef.current === key ? latestScrollSnapshotRef.current : null
+    const snapshot = latestScrollSnapshotKeyRef.current === key ? latestScrollSnapshotRef.current : null
+    return snapshot && projectScrollSnapshot ? projectScrollSnapshot(snapshot) : snapshot
   }
 
   function readStoredThreadScrollSnapshot(key = scrollStateKey) {
-    return readScrollSnapshot?.(key) ?? threadScrollSnapshots.get(key) ?? null
+    const snapshot = readScrollSnapshot?.(key) ?? threadScrollSnapshots.get(key) ?? null
+    return snapshot && projectScrollSnapshot ? projectScrollSnapshot(snapshot) : snapshot
   }
 
   function persistThreadScrollSnapshot(
@@ -236,6 +328,157 @@ export function useThreadScrollController({
       threadColumn.scrollTop = nextScrollTop
     }
     lastKnownScrollTopRef.current = threadColumn.scrollTop
+  }
+
+  function persistThreadScrollSnapshotWithAnchor(
+    threadColumn: HTMLDivElement,
+    key: string,
+    mode: ThreadScrollMode,
+    anchor: ThreadScrollAnchor,
+  ) {
+    const snapshot: ThreadScrollSnapshot = {
+      ...readThreadScrollSnapshot(threadColumn),
+      anchor,
+      pinnedToBottom: mode === "follow",
+    }
+    rememberThreadScrollSnapshot(key, snapshot)
+    saveThreadScrollSnapshotValue(key, snapshot)
+  }
+
+  function correctThreadScrollToAnchor(
+    threadColumn: HTMLDivElement,
+    anchor: ThreadScrollAnchor,
+  ) {
+    const currentViewportOffset = readThreadRowViewportOffset(threadColumn, anchor.rowID)
+    if (currentViewportOffset === null) return false
+
+    const delta = currentViewportOffset - anchor.viewportOffset
+    if (Math.abs(delta) > THREAD_PROJECTION_LAYOUT_EPSILON_PX) {
+      setThreadScrollTop(threadColumn, threadColumn.scrollTop + delta)
+    }
+    return true
+  }
+
+  function cancelActiveThreadProjectionLayoutTransaction(options: { persist?: boolean } = {}) {
+    const transaction = activeProjectionLayoutTransactionRef.current
+    if (!transaction) return false
+
+    activeProjectionLayoutTransactionRef.current = null
+    if (
+      transaction.frameID !== null &&
+      typeof window !== "undefined" &&
+      typeof window.cancelAnimationFrame === "function"
+    ) {
+      window.cancelAnimationFrame(transaction.frameID)
+    }
+
+    if (options.persist !== false) {
+      const threadColumn = threadColumnRef.current
+      if (threadColumn && currentScrollStateKeyRef.current === transaction.key) {
+        persistThreadScrollSnapshot(transaction.key, scrollModeRef.current)
+      }
+    }
+    return true
+  }
+
+  function beginThreadProjectionLayoutTransaction({
+    anchorRowID,
+    sourceRowID = anchorRowID,
+    viewportOffset: explicitViewportOffset,
+    turnID,
+    affinity,
+    key = scrollStateKey,
+  }: ThreadProjectionLayoutTransactionOptions): ThreadProjectionLayoutTransaction | null {
+    const threadColumn = threadColumnRef.current
+    if (
+      !threadColumn ||
+      !key ||
+      !anchorRowID ||
+      currentScrollStateKeyRef.current !== key
+    ) {
+      return null
+    }
+
+    const viewportOffset = explicitViewportOffset ?? readThreadRowViewportOffset(threadColumn, sourceRowID)
+    if (viewportOffset === null || !Number.isFinite(viewportOffset)) return null
+
+    cancelActiveThreadProjectionLayoutTransaction({ persist: false })
+    cancelSmoothFollowScroll()
+
+    const anchor: ThreadScrollAnchor = {
+      rowID: anchorRowID,
+      viewportOffset,
+      ...(turnID ? { turnID } : {}),
+      ...(affinity ? { affinity } : {}),
+    }
+    const transaction: ActiveThreadProjectionLayoutTransaction = {
+      id: nextProjectionLayoutTransactionIDRef.current,
+      key,
+      anchor,
+      fallbackScrollTop: threadColumn.scrollTop,
+      frameID: null,
+      hasResolvedAnchor: false,
+      mode: scrollModeRef.current,
+      remainingCorrectionFrames: THREAD_PROJECTION_LAYOUT_CORRECTION_FRAMES,
+    }
+    nextProjectionLayoutTransactionIDRef.current += 1
+    activeProjectionLayoutTransactionRef.current = transaction
+    persistThreadScrollSnapshotWithAnchor(threadColumn, key, transaction.mode, anchor)
+    return transaction
+  }
+
+  function completeThreadProjectionLayoutTransaction(transaction: ThreadProjectionLayoutTransaction) {
+    const activeTransaction = activeProjectionLayoutTransactionRef.current
+    if (!activeTransaction || activeTransaction.id !== transaction.id) return false
+    if (activeTransaction.frameID !== null) return true
+
+    const runCorrectionFrame = (): void => {
+      if (activeProjectionLayoutTransactionRef.current !== activeTransaction) return
+
+      activeTransaction.frameID = null
+      const threadColumn = threadColumnRef.current
+      if (!threadColumn || currentScrollStateKeyRef.current !== activeTransaction.key) {
+        cancelActiveThreadProjectionLayoutTransaction({ persist: false })
+        return
+      }
+
+      const foundAnchor = correctThreadScrollToAnchor(threadColumn, activeTransaction.anchor)
+      activeTransaction.hasResolvedAnchor ||= foundAnchor
+      activeTransaction.remainingCorrectionFrames -= 1
+      if (activeTransaction.remainingCorrectionFrames > 0) {
+        if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+          activeTransaction.frameID = window.requestAnimationFrame(runCorrectionFrame)
+          return
+        }
+        runCorrectionFrame()
+        return
+      }
+
+      if (!activeTransaction.hasResolvedAnchor && canRepresentThreadScrollTop(threadColumn, activeTransaction.fallbackScrollTop)) {
+        setThreadScrollTop(threadColumn, activeTransaction.fallbackScrollTop)
+      }
+      scrollModeRef.current = activeTransaction.mode
+      persistThreadScrollSnapshotWithAnchor(
+        threadColumn,
+        activeTransaction.key,
+        activeTransaction.mode,
+        activeTransaction.anchor,
+      )
+      activeProjectionLayoutTransactionRef.current = null
+    }
+
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      activeTransaction.frameID = window.requestAnimationFrame(runCorrectionFrame)
+    } else {
+      runCorrectionFrame()
+    }
+    return true
+  }
+
+  function cancelThreadProjectionLayoutTransaction(transaction?: ThreadProjectionLayoutTransaction) {
+    const activeTransaction = activeProjectionLayoutTransactionRef.current
+    if (!activeTransaction || (transaction && transaction.id !== activeTransaction.id)) return false
+    return cancelActiveThreadProjectionLayoutTransaction()
   }
 
   function scrollThreadColumnToLatestThreadContent(
@@ -361,13 +604,24 @@ export function useThreadScrollController({
   ) {
     cancelSmoothFollowScroll()
     scrollModeRef.current = "detached"
-    if (!canRepresentThreadScrollTop(threadColumn, snapshot.scrollTop)) {
+    const hasMountedAnchor = snapshot.anchor
+      ? readThreadRowViewportOffset(threadColumn, snapshot.anchor.rowID) !== null
+      : false
+    const canRestoreFallbackScrollTop = canRepresentThreadScrollTop(threadColumn, snapshot.scrollTop)
+    if (!canRestoreFallbackScrollTop && !hasMountedAnchor) {
       rememberThreadScrollSnapshot(key, snapshot)
       return false
     }
 
-    setThreadScrollTop(threadColumn, snapshot.scrollTop)
-    persistThreadScrollSnapshot(key, "detached")
+    if (canRestoreFallbackScrollTop) {
+      setThreadScrollTop(threadColumn, snapshot.scrollTop)
+    }
+    if (snapshot.anchor) {
+      correctThreadScrollToAnchor(threadColumn, snapshot.anchor)
+      persistThreadScrollSnapshotWithAnchor(threadColumn, key, "detached", snapshot.anchor)
+    } else {
+      persistThreadScrollSnapshot(key, "detached")
+    }
     return true
   }
 
@@ -404,6 +658,7 @@ export function useThreadScrollController({
   ) {
     const threadColumn = threadColumnRef.current
     if (!threadColumn || currentScrollStateKeyRef.current !== key) return
+    if (activeProjectionLayoutTransactionRef.current?.key === key) return
 
     if (scrollModeRef.current === "follow") {
       if (options.preserveFollowPosition || Date.now() <= followScrollSyncSuppressedUntilRef.current) {
@@ -443,8 +698,13 @@ export function useThreadScrollController({
     return smoothFollowScrollRef.current?.key === key
   }
 
+  function isThreadScrollFollowing(key = scrollStateKey) {
+    return currentScrollStateKeyRef.current === key && scrollModeRef.current === "follow"
+  }
+
   function handleThreadScrollIntent(event?: { currentTarget: HTMLDivElement }) {
     cancelSmoothFollowScroll()
+    cancelActiveThreadProjectionLayoutTransaction()
     lastUserScrollIntentAtRef.current = Date.now()
     userScrollIntentConsumedRef.current = false
     if (event?.currentTarget) {
@@ -537,6 +797,7 @@ export function useThreadScrollController({
 
     const previousScrollStateKey = currentScrollStateKeyRef.current
     if (previousScrollStateKey && previousScrollStateKey !== scrollStateKey) {
+      cancelActiveThreadProjectionLayoutTransaction({ persist: false })
       persistLatestThreadScrollSnapshot(previousScrollStateKey)
     }
 
@@ -547,6 +808,7 @@ export function useThreadScrollController({
   useEffect(() => {
     return () => {
       cancelSmoothFollowScroll()
+      cancelActiveThreadProjectionLayoutTransaction({ persist: false })
       const latestSnapshotKey = latestScrollSnapshotKeyRef.current
       if (latestSnapshotKey) {
         persistLatestThreadScrollSnapshot(latestSnapshotKey)
@@ -555,13 +817,17 @@ export function useThreadScrollController({
   }, [])
 
   return {
+    beginThreadProjectionLayoutTransaction,
     cancelSmoothFollowScroll,
+    cancelThreadProjectionLayoutTransaction,
+    completeThreadProjectionLayoutTransaction,
     handleThreadKeyDownIntent,
     handleThreadPointerMoveIntent,
     handleThreadScroll,
     handleThreadScrollIntent,
     handleThreadWheelIntent,
     isSmoothFollowScrollActiveForKey,
+    isThreadScrollFollowing,
     navigateThreadToOffset,
     restoreDetachedThreadPositionIfNeeded,
     suppressFollowScrollSync,
