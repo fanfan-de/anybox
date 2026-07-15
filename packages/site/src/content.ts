@@ -60,7 +60,7 @@ export const siteContent = {
   zh: {
     hero: {
       eyebrow: "开源 · 本地优先 · 执行过程可检查",
-      title: "把 AI Agent 放进你的本地工作流",
+      title: "面向 AI builder 的通用 Agent 工作台",
       description:
         "Anybox 是开源的本地 AI Agent 工作台。让 Agent 读取项目、调用工具、执行命令，并把每一步留在你可检查的工作空间里。",
       githubLabel: "查看 GitHub",
