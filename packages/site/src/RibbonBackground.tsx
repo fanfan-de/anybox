@@ -43,7 +43,6 @@ export function RibbonBackground() {
     const context = canvasContext
 
     const mediaQuery = window.matchMedia(reduceMotionQuery)
-    const pointer = { x: 0, y: 0 }
     let glowStops = ["transparent", "transparent", "transparent", "transparent"]
     let animationFrame = 0
     let height = 1
@@ -82,8 +81,8 @@ export function RibbonBackground() {
     function ribbonPoint(strand: RibbonStrand, step: number, time: number) {
       const progress = step / 90
       const x = -width * 0.08 + progress * width * 1.16
-      const centerX = width * 0.5 + pointer.x * 34
-      const centerY = height * 0.48 + pointer.y * 30
+      const centerX = width * 0.5
+      const centerY = height * 0.48
       const pull = 1 - Math.min(1, Math.abs(progress - 0.5) * 2)
       const wave = Math.sin(progress * Math.PI * 3 + time * strand.speed + strand.phase) * (24 + pull * 24)
       const orbit = Math.sin(progress * Math.PI + strand.phase) * 38 * pull
@@ -169,12 +168,6 @@ export function RibbonBackground() {
       queueFrame()
     }
 
-    function handlePointerMove(event: PointerEvent) {
-      const bounds = container.getBoundingClientRect()
-      pointer.x = ((event.clientX - bounds.left) / Math.max(1, bounds.width) - 0.5) * 2
-      pointer.y = ((event.clientY - bounds.top) / Math.max(1, bounds.height) - 0.5) * 2
-    }
-
     function handleVisibilityChange() {
       if (document.hidden && animationFrame) {
         window.cancelAnimationFrame(animationFrame)
@@ -202,7 +195,6 @@ export function RibbonBackground() {
     })
 
     resizeObserver.observe(container)
-    container.addEventListener("pointermove", handlePointerMove, { passive: true })
     document.addEventListener("visibilitychange", handleVisibilityChange)
     mediaQuery.addEventListener("change", handleMotionPreferenceChange)
     resizeCanvas()
@@ -211,7 +203,6 @@ export function RibbonBackground() {
     return () => {
       if (animationFrame) window.cancelAnimationFrame(animationFrame)
       resizeObserver.disconnect()
-      container.removeEventListener("pointermove", handlePointerMove)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       mediaQuery.removeEventListener("change", handleMotionPreferenceChange)
     }

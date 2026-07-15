@@ -117,9 +117,6 @@ export function App() {
         <RibbonBackground />
         <div className="home-hero-inner">
           <div className="home-hero-copy">
-            <div className="home-hero-prism" aria-hidden="true">
-              <img src="/anybox-box-cat-logo.png" alt="" width="86" height="86" />
-            </div>
             <p className="home-hero-wordmark" aria-hidden="true">Anybox</p>
             <h1 id="hero-title">
               {language === "zh" ? (

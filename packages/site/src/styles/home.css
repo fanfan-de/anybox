@@ -162,31 +162,9 @@
   pointer-events: none;
 }
 
-.home-hero-prism {
-  display: grid;
-  place-items: center;
-  width: 92px;
-  height: 92px;
-  margin: 0 auto 28px;
-  border-radius: 18px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--hero-stage-text) 74%, transparent), color-mix(in srgb, var(--hero-stage-text) 8%, transparent) 32%, color-mix(in srgb, var(--hero-stage-text) 34%, transparent) 58%, color-mix(in srgb, var(--hero-stage-text) 8%, transparent)),
-    conic-gradient(from 120deg, var(--hero-ribbon-lime), var(--hero-ribbon-cyan), var(--hero-ribbon-pink), var(--hero-ribbon-coral), var(--hero-ribbon-lime));
-  box-shadow: var(--hero-shadow-glow), inset 0 0 0 1px color-mix(in srgb, var(--hero-stage-text) 38%, transparent);
-  color: var(--hero-stage-background);
-  transform: rotate(45deg);
-  animation: ribbon-prism-pulse 3.2s ease-in-out infinite;
-}
-
-.home-hero-prism img {
-  width: 86px;
-  height: 86px;
-  filter: drop-shadow(0 3px 7px color-mix(in srgb, var(--hero-stage-background) 38%, transparent));
-  transform: rotate(-45deg);
-}
-
 .home-hero-wordmark {
   margin: 0;
+  padding-bottom: 0.08em;
   background: linear-gradient(90deg, var(--hero-stage-text) 0%, var(--hero-ribbon-lime) 28%, var(--hero-ribbon-cyan) 58%, var(--hero-ribbon-pink) 88%);
   background-clip: text;
   color: var(--hero-ribbon-lime);
@@ -194,7 +172,7 @@
   font-family: var(--font-display);
   font-size: clamp(5.4rem, 14vw, 11rem);
   font-weight: 820;
-  line-height: 0.78;
+  line-height: 0.92;
   text-shadow:
     0 0 26px color-mix(in srgb, var(--hero-ribbon-lime) 28%, transparent),
     0 0 82px color-mix(in srgb, var(--hero-ribbon-cyan) 22%, transparent),
@@ -202,11 +180,6 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   -webkit-text-stroke: clamp(1px, 0.14vw, 2px) color-mix(in srgb, var(--hero-stage-background) 86%, transparent);
-}
-
-@keyframes ribbon-prism-pulse {
-  0%, 100% { filter: saturate(1); transform: rotate(45deg) scale(1); }
-  50% { filter: saturate(1.3); transform: rotate(45deg) scale(1.07); }
 }
 
 .home-eyebrow,
@@ -865,18 +838,6 @@
     opacity: 0.18;
   }
 
-  .home-hero-prism {
-    width: 72px;
-    height: 72px;
-    margin-bottom: 24px;
-    border-radius: 14px;
-  }
-
-  .home-hero-prism img {
-    width: 68px;
-    height: 68px;
-  }
-
   .home-hero-wordmark {
     font-size: clamp(4.35rem, 24vw, 7rem);
   }
@@ -1022,8 +983,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ribbon-glass-ring,
-  .home-hero-prism {
+  .ribbon-glass-ring {
     animation: none;
   }
 }
