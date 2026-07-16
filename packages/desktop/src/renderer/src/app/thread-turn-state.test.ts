@@ -57,6 +57,7 @@ function assistantMessage(input: {
 function threadTurn(input: {
   turnID: string
   messages: ThreadMessage[]
+  resume?: boolean
   status?: ThreadTurn["status"]
   phase?: ThreadTurn["phase"]
   startedAt?: number
@@ -69,6 +70,7 @@ function threadTurn(input: {
 }): ThreadTurn {
   return {
     turnID: input.turnID,
+    ...(input.resume ? { resume: true } : {}),
     ...(input.backendSessionID ? { backendSessionID: input.backendSessionID } : {}),
     ...(input.lastMessageID ? { lastMessageID: input.lastMessageID } : {}),
     ...(input.finalSegmentID ? { finalSegmentID: input.finalSegmentID } : {}),
@@ -201,6 +203,47 @@ describe("thread turn state helpers", () => {
       lastMessageID: "message-a",
     })
     expect(rebuilt[0]?.messages.map((message) => message.id)).toEqual(["assistant-a", "assistant-b"])
+  })
+
+  it("keeps the original turn before a resumed permission continuation when rebuilding shared-user history", () => {
+    const user = userMessage("user-permission", 1)
+    const blockedAssistant = assistantMessage({
+      id: "assistant-blocked",
+      text: "Waiting for approval",
+      backendTurnID: "turn-blocked",
+      timestamp: 2,
+    })
+    const resumedAssistant = assistantMessage({
+      id: "assistant-resumed",
+      text: "Final result",
+      backendTurnID: "turn-resumed",
+      timestamp: 4,
+    })
+    const previous = [
+      threadTurn({
+        turnID: "turn-blocked",
+        status: "blocked",
+        userMessageID: user.id,
+        messages: [user, blockedAssistant],
+      }),
+      threadTurn({
+        turnID: "turn-resumed",
+        resume: true,
+        status: "completed",
+        userMessageID: user.id,
+        messages: [resumedAssistant],
+      }),
+    ]
+
+    const rebuilt = buildThreadTurnsFromMessages(
+      [user, blockedAssistant, resumedAssistant],
+      previous,
+    )
+
+    expect(rebuilt.map((turn) => turn.turnID)).toEqual(["turn-blocked", "turn-resumed"])
+    expect(rebuilt[0]?.messages.map((message) => message.id)).toEqual([user.id, blockedAssistant.id])
+    expect(rebuilt[1]?.messages.map((message) => message.id)).toEqual([resumedAssistant.id])
+    expect(rebuilt[1]?.resume).toBe(true)
   })
 
   it("atomically renames a correlated pending turn and remains idempotent", () => {

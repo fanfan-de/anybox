@@ -4,7 +4,8 @@
   min-height: 0;
 }
 
-.automations-page {
+.automations-page,
+.automations-create-host {
   --automations-bg: var(--surface-app, var(--surface-panel));
   --automations-top-surface: var(--seg-shell-chrome-surface, var(--surface-shell));
   --automations-surface: var(--surface-panel);
@@ -30,12 +31,30 @@
   --automations-list-row-height: 46px;
   --automations-detail-sidebar-width: 288px;
   --automations-detail-gap: 20px;
+  color: var(--automations-text);
+}
+
+.automations-page {
   height: 100%;
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   background: var(--automations-bg);
-  color: var(--automations-text);
+}
+
+.automations-create-host {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  height: auto;
+  display: block;
+  background: transparent;
+  pointer-events: none;
+}
+
+.automations-create-host > .automations-create-overlay {
+  position: absolute;
+  pointer-events: auto;
 }
 
 .automations-top-menu {
@@ -1230,6 +1249,16 @@
   font: inherit;
   font-size: 14px;
   line-height: 1.52;
+}
+
+.automations-create-error {
+  margin: 0;
+  padding: 8px 20px;
+  border-top: 1px solid var(--automations-border-subtle);
+  background: var(--automations-elevated);
+  color: var(--automations-danger);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .automations-create-footer {

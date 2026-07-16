@@ -116,6 +116,7 @@ function createBaseTurn(input: {
   return {
     turnID: input.turnID,
     ...(input.previous?.backendSessionID ? { backendSessionID: input.previous.backendSessionID } : {}),
+    ...(input.previous?.resume ? { resume: true } : {}),
     ...(input.previous?.lastMessageID ? { lastMessageID: input.previous.lastMessageID } : {}),
     ...(input.previous?.finalSegmentID ? { finalSegmentID: input.previous.finalSegmentID } : {}),
     status: input.previous?.status ?? input.status ?? "running",
@@ -133,7 +134,20 @@ function indexPreviousTurns(previousTurns?: ThreadTurn[]) {
   const byUserMessageID = new Map<string, ThreadTurn>()
   for (const turn of previousTurns ?? []) {
     byTurnID.set(turn.turnID, turn)
-    if (turn.userMessageID) byUserMessageID.set(turn.userMessageID, turn)
+    if (!turn.userMessageID) continue
+
+    const current = byUserMessageID.get(turn.userMessageID)
+    if (!current) {
+      byUserMessageID.set(turn.userMessageID, turn)
+      continue
+    }
+
+    const currentIsPending = isPendingTurnID(current.turnID)
+    const candidateIsPending = isPendingTurnID(turn.turnID)
+    const shouldReplace = current.resume === true
+      ? turn.resume !== true || (currentIsPending && !candidateIsPending)
+      : turn.resume !== true && (currentIsPending || !candidateIsPending)
+    if (shouldReplace) byUserMessageID.set(turn.userMessageID, turn)
   }
   return { byTurnID, byUserMessageID }
 }
@@ -806,6 +820,7 @@ export function bindPendingThreadTurnToCanonical(
     ...(canonicalTurn?.backendSessionID ?? pendingTurn.backendSessionID
       ? { backendSessionID: canonicalTurn?.backendSessionID ?? pendingTurn.backendSessionID }
       : {}),
+    ...(canonicalTurn?.resume === true || pendingTurn.resume === true ? { resume: true } : {}),
     status: sourceForCanonicalMetadata.status,
     ...(canonicalTurn?.phase ?? pendingTurn.phase
       ? { phase: canonicalTurn?.phase ?? pendingTurn.phase }
@@ -848,6 +863,7 @@ export function ensureThreadTurn(
   input: {
     turnID: string
     backendSessionID?: string
+    resume?: boolean
     lastMessageID?: string
     finalSegmentID?: string
     status?: ThreadTurnStatus
@@ -863,6 +879,7 @@ export function ensureThreadTurn(
       ...turn,
       turnID: nextTurnID,
       ...(input.backendSessionID ? { backendSessionID: input.backendSessionID } : {}),
+      ...(input.resume ? { resume: true } : {}),
       status: nextStatus,
       phase: input.phase ?? turn.phase,
       userMessageID: input.userMessageID ?? turn.userMessageID,
@@ -910,6 +927,7 @@ export function ensureThreadTurn(
     {
       turnID: input.turnID,
       ...(input.backendSessionID ? { backendSessionID: input.backendSessionID } : {}),
+      ...(input.resume ? { resume: true } : {}),
       ...(input.lastMessageID ? { lastMessageID: input.lastMessageID } : {}),
       ...(input.finalSegmentID ? { finalSegmentID: input.finalSegmentID } : {}),
       status: input.status ?? "running",

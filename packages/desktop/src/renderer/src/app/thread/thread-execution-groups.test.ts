@@ -105,12 +105,14 @@ function threadTurn(
   {
     finalSegmentID,
     lastMessageID,
+    resume = false,
     status = "completed",
     updatedAt = 7_000,
     userMessageID,
   }: {
     finalSegmentID?: string
     lastMessageID?: string
+    resume?: boolean
     status?: ThreadTurnStatus
     updatedAt?: number
     userMessageID?: string
@@ -121,6 +123,7 @@ function threadTurn(
     finalSegmentID,
     lastMessageID,
     messages,
+    ...(resume ? { resume: true } : {}),
     startedAt: 1_000,
     status,
     turnID,
@@ -430,6 +433,75 @@ describe("thread execution groups", () => {
       "turn:real-turn-1",
       "turn:real-turn-2",
     ])
+  })
+
+  it("coalesces a blocked permission turn with its resumed completion and keeps the final response last", () => {
+    const user = userMessage("user-permission", "Run the approved tool")
+    const blocked = assistantMessage("assistant-blocked", [
+      reasoningItem("reasoning-before-approval", "A".repeat(161)),
+      traceItem("tool-before-approval", "tool", { title: "activate-window" }),
+      traceItem("permission-approved", "tool", {
+        section: "approvals",
+        status: "completed",
+        title: "activate-window",
+      }),
+    ], {
+      backendTurnID: "turn-blocked",
+      segmentID: "segment-blocked",
+    })
+    const resumed = assistantMessage("assistant-resumed", [
+      reasoningItem("reasoning-after-approval", "Verify the approved action."),
+      textItem("final-response", "The plugin is ready."),
+    ], {
+      backendTurnID: "turn-resumed",
+      segmentID: "segment-resumed",
+    })
+    const messages = [user, blocked, resumed]
+    const rows = buildRows(messages)
+    const result = derive(messages, [
+      threadTurn("turn-blocked", [user, blocked], {
+        finalSegmentID: blocked.segmentID,
+        status: "blocked",
+        updatedAt: 5_000,
+        userMessageID: user.id,
+      }),
+      threadTurn("turn-resumed", [resumed], {
+        finalSegmentID: resumed.segmentID,
+        resume: true,
+        status: "completed",
+        updatedAt: 9_000,
+        userMessageID: user.id,
+      }),
+    ], rows)
+
+    expect(result.groups).toHaveLength(1)
+    expect(result.groups[0]).toMatchObject({
+      assistantMessageIDs: [blocked.id, resumed.id],
+      finalMessageID: resumed.id,
+      groupID: "turn:turn-resumed",
+      status: "completed",
+      turnID: "turn-resumed",
+    })
+
+    const projected = projectThreadDisplayRowsWithExecutionGroups({
+      expandedByGroupID: { "turn:turn-resumed": false },
+      groups: result.groups,
+      rows,
+    })
+    expect(projected.filter((row) => row.kind === "assistant-execution-summary")).toHaveLength(1)
+    expect(projected.at(-1)?.rowID).toBe(rowIDForItem(rows, "final-response"))
+    expect(projected.some((row) => row.rowID === rowIDForItem(rows, "tool-before-approval"))).toBe(false)
+
+    const expandedProjected = projectThreadDisplayRowsWithExecutionGroups({
+      expandedByGroupID: { "turn:turn-resumed": true },
+      groups: result.groups,
+      rows,
+    })
+    const expandedRowIDs = expandedProjected.map((row) => row.rowID)
+    expect(expandedRowIDs.indexOf(rowIDForItem(rows, "tool-before-approval"))).toBeLessThan(
+      expandedRowIDs.indexOf(rowIDForItem(rows, "final-response")),
+    )
+    expect(expandedProjected.at(-1)?.rowID).toBe(rowIDForItem(rows, "final-response"))
   })
 
   it("does not coalesce canonical wrappers across a regular user boundary", () => {

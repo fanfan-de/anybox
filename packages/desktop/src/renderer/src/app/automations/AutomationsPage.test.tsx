@@ -7,7 +7,7 @@ import type {
   AgentAutomationUpdateInput,
 } from "../../../../shared/desktop-ipc-contract"
 import { I18nProvider } from "../i18n/I18nProvider"
-import { AutomationsPage } from "./AutomationsPage"
+import { AutomationCreatePanel, AutomationsPage } from "./AutomationsPage"
 
 function setDesktopMock(value: unknown) {
   Object.defineProperty(window, "desktop", {
@@ -176,6 +176,52 @@ describe("AutomationsPage", () => {
         type: "rrule",
       }),
     }))
+  })
+
+  it("creates from the standalone panel with the requested project preselected", async () => {
+    const createAutomationMock = vi.fn(async (input: AgentAutomationCreateInput) => createAutomation({
+      id: "aut_from_workspace",
+      name: input.name,
+      prompt: input.prompt,
+      scope: input.scope,
+    }))
+    const onClose = vi.fn()
+    const onCreated = vi.fn()
+    setDesktopMock({
+      cancelAutomationRun: vi.fn(),
+      createAutomation: createAutomationMock,
+      deleteAutomation: vi.fn(),
+      listAutomationRuns: vi.fn(),
+      listAutomations: vi.fn(),
+      runAutomation: vi.fn(),
+      updateAutomation: vi.fn(),
+      updateAutomationRunTriage: vi.fn(),
+    })
+
+    render(
+      <AutomationCreatePanel
+        initialProjectID="proj_2"
+        isOpen
+        portal
+        projects={[
+          { directory: "C:/Projects/one", id: "proj_1", name: "One" },
+          { directory: "C:/Projects/two", id: "proj_2", name: "Two" },
+        ]}
+        onClose={onClose}
+        onCreated={onCreated}
+      />,
+    )
+
+    expect(screen.getByRole("dialog", { name: "Create automation" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Two" })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Create automation" }))
+
+    await waitFor(() => expect(createAutomationMock).toHaveBeenCalledWith(expect.objectContaining({
+      scope: { projectIDs: ["proj_2"] },
+    })))
+    expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: "aut_from_workspace" }))
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   it("filters linked worktree targets in local mode and scopes linked worktrees by directory", async () => {

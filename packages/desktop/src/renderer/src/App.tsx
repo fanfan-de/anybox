@@ -84,6 +84,7 @@ const ConnectorsPage = lazy(() => import("./app/connectors/ConnectorsPage").then
 const PluginsPage = lazy(() => import("./app/plugins/PluginsPage").then((module) => ({ default: module.PluginsPage })))
 const PromptPresetsPage = lazy(() => import("./app/prompts/PromptPresetsPage").then((module) => ({ default: module.PromptPresetsPage })))
 const AutomationsPage = lazy(() => import("./app/automations/AutomationsPage").then((module) => ({ default: module.AutomationsPage })))
+const AutomationCreatePanel = lazy(() => import("./app/automations/AutomationsPage").then((module) => ({ default: module.AutomationCreatePanel })))
 const CalendarPage = lazy(() => import("./app/calendar/CalendarPage").then((module) => ({ default: module.CalendarPage })))
 
 function importSettingsPage() {
@@ -1117,6 +1118,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   const [promptSkillMode, setPromptSkillMode] = useState<PromptSkillMode>("prompts")
   const [skillLibraryMode, setSkillLibraryMode] = useState<SkillLibraryMode>("all")
   const [isSkillMarketplaceOpen, setIsSkillMarketplaceOpen] = useState(false)
+  const [automationCreateProjectID, setAutomationCreateProjectID] = useState<string | null>(null)
   const autoPromptedDownloadingUpdateRef = useRef<string | null>(null)
   const autoPromptedDownloadedUpdateRef = useRef<string | null>(null)
   const updatePromptRetryTimerRef = useRef<number | null>(null)
@@ -2524,6 +2526,17 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     }
     return Array.from(projectsByID.values()).sort((left, right) => left.name.localeCompare(right.name))
   }, [loadedCalendarProjects, openCalendarProjects])
+  const automationProjects = useMemo(() => workspaces.map((workspace) => ({
+    directory: workspace.directory,
+    id: workspace.id,
+    name: workspace.name,
+    projectID: workspace.project.id,
+    projectKind: workspace.project.kind,
+    repositoryRoot: workspace.project.repositoryRoot,
+    vcs: workspace.project.vcs,
+    worktree: workspace.project.worktree,
+    workspaceRoots: workspace.project.workspaceRoots,
+  })), [workspaces])
   const workbenchWindowControls = useMemo(
     () => (
       isMacOS
@@ -2646,6 +2659,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onOpenSettings={handleOpenSettings}
               onOpenRemoteFolderConfig={handleOpenRemoteFolderConfig}
               onProjectArchiveSessions={handleProjectArchiveSessions}
+              onProjectCreateAutomation={(workspace) => setAutomationCreateProjectID(workspace.id)}
               onProjectCreateSession={handleProjectCreateSession}
               onProjectCreateWorktree={handleProjectCreateWorktree}
               onProjectClick={handleProjectClick}
@@ -2887,17 +2901,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
           ) : isAutomationsView ? (
             <Suspense fallback={null}>
               <AutomationsPage
-                projects={workspaces.map((workspace) => ({
-                  directory: workspace.directory,
-                  id: workspace.id,
-                  name: workspace.name,
-                  projectID: workspace.project.id,
-                  projectKind: workspace.project.kind,
-                  repositoryRoot: workspace.project.repositoryRoot,
-                  vcs: workspace.project.vcs,
-                  worktree: workspace.project.worktree,
-                  workspaceRoots: workspace.project.workspaceRoots,
-                }))}
+                projects={automationProjects}
                 windowControls={windowControls}
                 onOpenSession={(sessionID) => handleCanvasSessionTabSelect(sessionID)}
               />
@@ -3235,6 +3239,18 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               windowControls={windowControls}
             />
           </>
+        ) : null}
+
+        {automationCreateProjectID ? (
+          <Suspense fallback={null}>
+            <AutomationCreatePanel
+              initialProjectID={automationCreateProjectID}
+              isOpen
+              portal
+              projects={automationProjects}
+              onClose={() => setAutomationCreateProjectID(null)}
+            />
+          </Suspense>
         ) : null}
 
         {isOpen ? (

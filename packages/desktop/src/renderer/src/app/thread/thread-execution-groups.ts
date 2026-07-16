@@ -439,6 +439,19 @@ function hasPendingRealUserAlias(
   }))
 }
 
+function hasResumedUserMessageIdentity(
+  left: ExecutionGroupCandidate,
+  right: ExecutionGroupCandidate,
+) {
+  const hasResumeTurn = [...left.sourceTurns, ...right.sourceTurns].some((turn) => turn.resume === true)
+  if (!hasResumeTurn) return false
+
+  return setsOverlap(
+    sourceTurnIdentitySet(left, (turn) => turn.userMessageID),
+    sourceTurnIdentitySet(right, (turn) => turn.userMessageID),
+  )
+}
+
 function canonicalCandidatesShareStrongIdentity(
   left: ExecutionGroupCandidate,
   right: ExecutionGroupCandidate,
@@ -450,6 +463,7 @@ function canonicalCandidatesShareStrongIdentity(
     return true
   }
   if (hasPendingRealUserAlias(left, right)) return true
+  if (hasResumedUserMessageIdentity(left, right)) return true
   if (setsOverlap(
     assistantIdentitySet(left, (message) => message.backendTurnID),
     assistantIdentitySet(right, (message) => message.backendTurnID),

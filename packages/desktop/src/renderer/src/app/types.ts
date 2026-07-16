@@ -1151,6 +1151,7 @@ export type ThreadTurnStatus =
 export interface ThreadTurn {
   turnID: string
   backendSessionID?: string
+  resume?: boolean
   lastMessageID?: string
   finalSegmentID?: string
   status: ThreadTurnStatus

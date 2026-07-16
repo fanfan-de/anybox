@@ -1892,6 +1892,7 @@ export function useSessionStreamController({
     const explicitFinalSegmentID = readString(payload?.segmentID) || readString(payloadMessage?.segmentID) || undefined
     const backendUserMessageID = readString(payload?.userMessageID) || undefined
     const userMessageID = input.fallbackUserMessageID ?? backendUserMessageID
+    const resume = payload?.resume === true
     const status = resolveRuntimeThreadTurnStatus({
       eventType: readString(runtimeEvent.type) ?? "",
       payloadPhase,
@@ -1931,6 +1932,7 @@ export function useSessionStreamController({
       const ensuredTurns = ensureThreadTurn(boundTurns, {
         turnID,
         backendSessionID: input.backendSessionID,
+        resume: resume || undefined,
         lastMessageID,
         finalSegmentID,
         status,

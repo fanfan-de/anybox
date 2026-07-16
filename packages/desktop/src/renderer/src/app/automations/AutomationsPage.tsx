@@ -61,7 +61,7 @@ type AutomationDesktopApi = Required<
   >
 >
 
-interface AutomationProjectOption {
+export interface AutomationProjectOption {
   directory: string
   id: string
   name: string
@@ -77,6 +77,15 @@ interface AutomationsPageProps {
   projects: AutomationProjectOption[]
   windowControls?: ReactNode
   onOpenSession?: (sessionID: string) => void
+}
+
+export interface AutomationCreatePanelProps {
+  initialProjectID?: string | null
+  isOpen: boolean
+  portal?: boolean
+  projects: AutomationProjectOption[]
+  onClose: () => void
+  onCreated?: (automation: AgentAutomationDefinition) => void | Promise<void>
 }
 
 type CadenceKey = "one-minute" | "five-minutes" | "fifteen-minutes" | "hourly" | "daily" | "weekdays" | "weekly"
@@ -593,37 +602,31 @@ function createAutomationScopeForTarget(project: AutomationProjectOption): Agent
   return projectID ? { projectIDs: [projectID] } : { directories: [project.directory] }
 }
 
-export function AutomationsPage({ projects, windowControls, onOpenSession }: AutomationsPageProps) {
-  const { locale, t } = useI18n()
+export function AutomationCreatePanel({
+  initialProjectID = null,
+  isOpen,
+  portal = false,
+  projects,
+  onClose,
+  onCreated,
+}: AutomationCreatePanelProps) {
+  const { t } = useI18n()
   const defaultTemplate = AUTOMATION_TEMPLATES[0]
   const defaultTemplateDraft = defaultTemplate
     ? getTemplateDraft(defaultTemplate, t)
     : { name: "", prompt: "" }
-  const [automations, setAutomations] = useState<AgentAutomationDefinition[]>([])
-  const [runs, setRuns] = useState<AgentAutomationRun[]>([])
-  const [selectedAutomationID, setSelectedAutomationID] = useState<string | null>(null)
-  const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false)
-  const [selectedProjectID, setSelectedProjectID] = useState("")
+  const [selectedProjectID, setSelectedProjectID] = useState(initialProjectID ?? "")
   const [draftTemplateID, setDraftTemplateID] = useState<string | null>(defaultTemplate?.id ?? null)
   const [draftName, setDraftName] = useState(defaultTemplateDraft.name)
   const [draftPrompt, setDraftPrompt] = useState(defaultTemplateDraft.prompt)
-  const [detailDraft, setDetailDraft] = useState<AutomationDetailDraft | null>(null)
-  const [cadence, setCadence] = useState<CadenceKey>(AUTOMATION_TEMPLATES[0]?.cadence ?? "daily")
+  const [cadence, setCadence] = useState<CadenceKey>(defaultTemplate?.cadence ?? "daily")
   const [targetMode, setTargetMode] = useState<CreateTargetMode>("worktree")
   const [createPanelMode, setCreatePanelMode] = useState<CreatePanelMode>("manual")
   const [openCreateMenu, setOpenCreateMenu] = useState<CreateMenuKey | null>(null)
-  const [openDetailMenu, setOpenDetailMenu] = useState<DetailMenuKey | null>(null)
-  const [detailCadenceMenuPosition, setDetailCadenceMenuPosition] = useState<DetailCadenceMenuPosition | null>(null)
-  const [detailCadenceMenuView, setDetailCadenceMenuView] = useState<DetailCadenceMenuView>({ step: "frequency" })
-  const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [savingDetailKey, setSavingDetailKey] = useState<DetailMenuKey | null>(null)
-  const [runningAutomationID, setRunningAutomationID] = useState<string | null>(null)
-  const [mutatingRunID, setMutatingRunID] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const detailCadenceTriggerRef = useRef<HTMLButtonElement | null>(null)
-  const detailSaveTimeoutRef = useRef<number | null>(null)
-  const pendingDetailSaveRef = useRef<{ automationID: string; patch: AutomationTextPatch } | null>(null)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const wasOpenRef = useRef(false)
+  const titleInputRef = useRef<HTMLInputElement | null>(null)
 
   const selectableProjects = useMemo(
     () => targetMode === "worktree"
@@ -635,6 +638,429 @@ export function AutomationsPage({ projects, windowControls, onOpenSession }: Aut
     () => new Map(selectableProjects.map((project) => [project.id, project])),
     [selectableProjects],
   )
+  const selectedScheduleOption = SCHEDULE_OPTIONS.find((option) => option.key === cadence) ?? SCHEDULE_OPTIONS[0]
+  const selectedScheduleLabel = selectedScheduleOption
+    ? t(selectedScheduleOption.labelKey)
+    : t("automations.schedule.label")
+  const selectedTargetModeLabel = getTargetModeLabel(targetMode, t)
+  const selectedProject = selectedProjectID ? selectableProjectsByID.get(selectedProjectID) : undefined
+
+  useEffect(() => {
+    const justOpened = isOpen && !wasOpenRef.current
+    wasOpenRef.current = isOpen
+    if (!justOpened) return
+
+    setCreateError(null)
+    const initialProject = initialProjectID
+      ? projects.find((project) => project.id === initialProjectID)
+      : null
+    if (!initialProject) return
+    if (isLinkedWorktreeAutomationTarget(initialProject)) {
+      setTargetMode("worktree")
+    }
+    setSelectedProjectID(initialProject.id)
+  }, [initialProjectID, isOpen, projects])
+
+  useEffect(() => {
+    if (selectableProjects.length === 0) {
+      if (selectedProjectID) setSelectedProjectID("")
+      return
+    }
+
+    if (!selectedProjectID || !selectableProjectsByID.has(selectedProjectID)) {
+      setSelectedProjectID(selectableProjects[0]?.id ?? "")
+    }
+  }, [selectableProjects, selectableProjectsByID, selectedProjectID])
+
+  useEffect(() => {
+    if (!draftTemplateID) return
+    const template = AUTOMATION_TEMPLATES.find((item) => item.id === draftTemplateID)
+    if (!template) return
+    const templateDraft = getTemplateDraft(template, t)
+    setDraftName(templateDraft.name)
+    setDraftPrompt(templateDraft.prompt)
+    setCadence(template.cadence)
+  }, [draftTemplateID, t])
+
+  useEffect(() => {
+    if (!openCreateMenu) return
+
+    function closeCreateMenu(event: MouseEvent) {
+      const target = event.target
+      if (target instanceof Element && target.closest(".automations-create-menu-anchor")) return
+      setOpenCreateMenu(null)
+    }
+
+    document.addEventListener("mousedown", closeCreateMenu)
+    return () => document.removeEventListener("mousedown", closeCreateMenu)
+  }, [openCreateMenu])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return
+      if (openCreateMenu) {
+        setOpenCreateMenu(null)
+        return
+      }
+      handleClose()
+    }
+
+    document.addEventListener("keydown", closeOnEscape)
+    return () => document.removeEventListener("keydown", closeOnEscape)
+  }, [isOpen, openCreateMenu, onClose])
+
+  useEffect(() => {
+    if (!isOpen || createPanelMode !== "manual") return
+    const timeoutID = window.setTimeout(() => titleInputRef.current?.focus(), 0)
+    return () => window.clearTimeout(timeoutID)
+  }, [createPanelMode, isOpen])
+
+  function applyTemplate(templateID: string) {
+    const template = AUTOMATION_TEMPLATES.find((item) => item.id === templateID)
+    if (!template) return
+    const templateDraft = getTemplateDraft(template, t)
+    setDraftName(templateDraft.name)
+    setDraftPrompt(templateDraft.prompt)
+    setCadence(template.cadence)
+    setDraftTemplateID(template.id)
+    setOpenCreateMenu(null)
+    setCreatePanelMode("manual")
+    setCreateError(null)
+  }
+
+  function handleClose() {
+    setOpenCreateMenu(null)
+    setCreatePanelMode("manual")
+    setCreateError(null)
+    onClose()
+  }
+
+  async function handleCreateAutomation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const project = selectableProjectsByID.get(selectedProjectID)
+    const name = draftName.trim()
+    const prompt = draftPrompt.trim()
+    if (!project) {
+      setCreateError(t("automations.error.selectProject"))
+      return
+    }
+    if (!name || !prompt) {
+      setCreateError(t("automations.error.namePromptRequired"))
+      return
+    }
+
+    const scheduleOption = SCHEDULE_OPTIONS.find((option) => option.key === cadence) ?? SCHEDULE_OPTIONS[0]
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+    const input: AgentAutomationCreateInput = {
+      name,
+      kind: "project",
+      status: "active",
+      schedule: {
+        type: scheduleOption.type,
+        expression: scheduleOption.expression,
+        timezone,
+      },
+      scope: createAutomationScopeForTarget(project),
+      execution: {
+        environment: "local",
+        permissionMode: "default",
+      },
+      prompt,
+      outputPolicy: {
+        triage: "findings-only",
+        autoArchiveNoFindings: true,
+      },
+    }
+
+    setIsSaving(true)
+    try {
+      const createdAutomation = await requireDesktopApi(t).createAutomation(input)
+      setCreateError(null)
+      await onCreated?.(createdAutomation)
+      handleClose()
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  if (!isOpen) return null
+
+  const panel = (
+    <div className="automations-create-overlay">
+      <section className="automations-create-panel" role="dialog" aria-modal="true" aria-label={t("automations.create.dialogLabel")}>
+        {createPanelMode === "templates" ? (
+          <div className="automations-template-browser">
+            <header className="automations-template-browser-header">
+              <h2>{t("automations.templates.title")}</h2>
+              <div className="automations-create-header-actions">
+                <button
+                  className="automations-create-control-button automations-template-manual-button"
+                  type="button"
+                  onClick={() => {
+                    setOpenCreateMenu(null)
+                    setCreatePanelMode("manual")
+                  }}
+                >
+                  {t("automations.templates.manualSetup")}
+                </button>
+                <button
+                  className="icon-button automations-create-close"
+                  type="button"
+                  aria-label={t("app.cancel")}
+                  title={t("app.cancel")}
+                  onClick={handleClose}
+                >
+                  <CloseIcon />
+                </button>
+              </div>
+            </header>
+
+            <div className="automations-template-browser-grid" aria-label={t("automations.templates.title")}>
+              {AUTOMATION_TEMPLATES.map((template) => {
+                const templateDraft = getTemplateDraft(template, t)
+                const templateSchedule = SCHEDULE_OPTIONS.find((option) => option.key === template.cadence)
+                return (
+                  <button
+                    key={template.id}
+                    className={joinClassNames("automations-template-card", draftTemplateID === template.id && "is-selected")}
+                    type="button"
+                    onClick={() => applyTemplate(template.id)}
+                  >
+                    <span className="automations-template-card-title">{templateDraft.name}</span>
+                    <span className="automations-template-card-copy">{templateDraft.prompt}</span>
+                    {templateSchedule ? (
+                      <span className="automations-template-card-meta">{t(templateSchedule.labelKey)}</span>
+                    ) : null}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ) : (
+          <form className="automations-create-composer" onSubmit={handleCreateAutomation}>
+            <header className="automations-create-header">
+              <input
+                ref={titleInputRef}
+                aria-label={t("automations.create.titleLabel")}
+                className="automations-create-title-input"
+                type="text"
+                placeholder={t("automations.create.titlePlaceholder")}
+                value={draftName}
+                onChange={(event) => {
+                  setDraftName(event.target.value)
+                  setDraftTemplateID(null)
+                  setCreateError(null)
+                }}
+              />
+
+              <div className="automations-create-header-actions">
+                <div className="automations-create-menu-anchor">
+                  <button
+                    className="automations-create-control-button"
+                    type="button"
+                    onClick={() => {
+                      setOpenCreateMenu(null)
+                      setCreatePanelMode("templates")
+                    }}
+                  >
+                    <span>{t("automations.create.useTemplate")}</span>
+                  </button>
+                </div>
+
+                <button
+                  className="icon-button automations-create-close"
+                  type="button"
+                  aria-label={t("app.cancel")}
+                  title={t("app.cancel")}
+                  onClick={handleClose}
+                >
+                  <CloseIcon />
+                </button>
+              </div>
+            </header>
+
+            <textarea
+              className="automations-create-prompt-input"
+              aria-label={t("automations.create.promptLabel")}
+              placeholder={t("automations.create.promptPlaceholder")}
+              value={draftPrompt}
+              onChange={(event) => {
+                setDraftPrompt(event.target.value)
+                setDraftTemplateID(null)
+                setCreateError(null)
+              }}
+            />
+
+            {createError ? (
+              <p className="automations-create-error" role="alert">{createError}</p>
+            ) : null}
+
+            <div className="automations-create-footer">
+              <div className="automations-create-controls" aria-label={t("automations.create.configurationLabel")}>
+                <div className="automations-create-menu-anchor">
+                  <button
+                    className={joinClassNames("automations-create-control-button", openCreateMenu === "environment" && "is-active")}
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={openCreateMenu === "environment"}
+                    title={t("automations.environment.menuLabel")}
+                    onClick={() => setOpenCreateMenu((current) => current === "environment" ? null : "environment")}
+                  >
+                    {targetMode === "local" ? <FolderIcon /> : <ForkIcon />}
+                    <span>{selectedTargetModeLabel}</span>
+                  </button>
+
+                  {openCreateMenu === "environment" ? (
+                    <div className="automations-create-menu automations-environment-menu" role="menu" aria-label={t("automations.environment.menuLabel")}>
+                      {(["local", "worktree"] satisfies CreateTargetMode[]).map((mode) => (
+                        <button
+                          key={mode}
+                          className={joinClassNames("automations-create-menu-option", targetMode === mode && "is-selected")}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={targetMode === mode}
+                          onClick={() => {
+                            setTargetMode(mode)
+                            setOpenCreateMenu(null)
+                            setCreateError(null)
+                          }}
+                        >
+                          <span className="automations-create-menu-copy">
+                            <strong>{getTargetModeLabel(mode, t)}</strong>
+                          </span>
+                          {targetMode === mode ? <CheckIcon /> : null}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="automations-create-menu-anchor">
+                  <button
+                    className={joinClassNames("automations-create-control-button", openCreateMenu === "project" && "is-active")}
+                    type="button"
+                    disabled={selectableProjects.length === 0}
+                    aria-haspopup="menu"
+                    aria-expanded={openCreateMenu === "project"}
+                    onClick={() => setOpenCreateMenu((current) => current === "project" ? null : "project")}
+                  >
+                    <span>{selectedProject?.name ?? t("automations.project.select")}</span>
+                  </button>
+
+                  {openCreateMenu === "project" ? (
+                    <div className="automations-create-menu automations-project-menu" role="menu" aria-label={t("automations.project.menuLabel")}>
+                      {selectableProjects.map((project) => (
+                        <button
+                          key={project.id}
+                          className={joinClassNames("automations-create-menu-option", selectedProjectID === project.id && "is-selected")}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={selectedProjectID === project.id}
+                          onClick={() => {
+                            setSelectedProjectID(project.id)
+                            setOpenCreateMenu(null)
+                            setCreateError(null)
+                          }}
+                        >
+                          <span className="automations-create-menu-copy">
+                            <strong>{project.name}</strong>
+                          </span>
+                          {selectedProjectID === project.id ? <CheckIcon /> : null}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="automations-create-menu-anchor">
+                  <button
+                    className={joinClassNames("automations-create-control-button", openCreateMenu === "cadence" && "is-active")}
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={openCreateMenu === "cadence"}
+                    onClick={() => setOpenCreateMenu((current) => current === "cadence" ? null : "cadence")}
+                  >
+                    <span>{selectedScheduleLabel}</span>
+                  </button>
+
+                  {openCreateMenu === "cadence" ? (
+                    <div className="automations-create-menu automations-cadence-menu" role="menu" aria-label={t("automations.cadence.menuLabel")}>
+                      {SCHEDULE_OPTIONS.map((option) => (
+                        <button
+                          key={option.key}
+                          className={joinClassNames("automations-create-menu-option", cadence === option.key && "is-selected")}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={cadence === option.key}
+                          onClick={() => {
+                            setCadence(option.key)
+                            setDraftTemplateID(null)
+                            setOpenCreateMenu(null)
+                            setCreateError(null)
+                          }}
+                        >
+                          <span className="automations-create-menu-copy">
+                            <strong>{t(option.labelKey)}</strong>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="automations-create-actions">
+                <button
+                  className="secondary-button automations-create-cancel"
+                  type="button"
+                  onClick={handleClose}
+                >
+                  {t("app.cancel")}
+                </button>
+                <button
+                  className="primary-button automations-create-button"
+                  type="submit"
+                  aria-label={t("automations.create.submit")}
+                  disabled={isSaving || selectableProjects.length === 0}
+                >
+                  {isSaving ? t("automations.create.creating") : t("automations.create.create")}
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+      </section>
+    </div>
+  )
+
+  return portal
+    ? createPortal(<div className="automations-create-host automations-page">{panel}</div>, document.body)
+    : panel
+}
+
+export function AutomationsPage({ projects, windowControls, onOpenSession }: AutomationsPageProps) {
+  const { locale, t } = useI18n()
+  const [automations, setAutomations] = useState<AgentAutomationDefinition[]>([])
+  const [runs, setRuns] = useState<AgentAutomationRun[]>([])
+  const [selectedAutomationID, setSelectedAutomationID] = useState<string | null>(null)
+  const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false)
+  const [detailDraft, setDetailDraft] = useState<AutomationDetailDraft | null>(null)
+  const [openDetailMenu, setOpenDetailMenu] = useState<DetailMenuKey | null>(null)
+  const [detailCadenceMenuPosition, setDetailCadenceMenuPosition] = useState<DetailCadenceMenuPosition | null>(null)
+  const [detailCadenceMenuView, setDetailCadenceMenuView] = useState<DetailCadenceMenuView>({ step: "frequency" })
+  const [isLoading, setIsLoading] = useState(true)
+  const [savingDetailKey, setSavingDetailKey] = useState<DetailMenuKey | null>(null)
+  const [runningAutomationID, setRunningAutomationID] = useState<string | null>(null)
+  const [mutatingRunID, setMutatingRunID] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const detailCadenceTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const detailSaveTimeoutRef = useRef<number | null>(null)
+  const pendingDetailSaveRef = useRef<{ automationID: string; patch: AutomationTextPatch } | null>(null)
+
   const projectsByID = useMemo(() => {
     const nextProjectsByID = new Map<string, AutomationProjectOption>()
     for (const project of projects) {
@@ -665,25 +1091,6 @@ export function AutomationsPage({ projects, windowControls, onOpenSession }: Aut
           prompt: selectedAutomation.prompt,
         }
       : null
-  const selectedScheduleOption = SCHEDULE_OPTIONS.find((option) => option.key === cadence) ?? SCHEDULE_OPTIONS[0]
-  const selectedScheduleLabel = selectedScheduleOption
-    ? t(selectedScheduleOption.labelKey)
-    : t("automations.schedule.label")
-  const selectedTargetModeLabel = getTargetModeLabel(targetMode, t)
-  const selectedProject = selectedProjectID ? selectableProjectsByID.get(selectedProjectID) : undefined
-  const selectedTemplateID = draftTemplateID
-
-  useEffect(() => {
-    if (selectableProjects.length === 0) {
-      if (selectedProjectID) setSelectedProjectID("")
-      return
-    }
-
-    if (!selectedProjectID || !selectableProjectsByID.has(selectedProjectID)) {
-      setSelectedProjectID(selectableProjects[0]?.id ?? "")
-    }
-  }, [selectableProjects, selectableProjectsByID, selectedProjectID])
-
   useEffect(() => {
     if (selectedAutomationID && !automationsByID.has(selectedAutomationID)) {
       setSelectedAutomationID(null)
@@ -713,39 +1120,6 @@ export function AutomationsPage({ projects, windowControls, onOpenSession }: Aut
       }
     }
   }, [])
-
-  useEffect(() => {
-    if (!draftTemplateID) return
-    const template = AUTOMATION_TEMPLATES.find((item) => item.id === draftTemplateID)
-    if (!template) return
-    const templateDraft = getTemplateDraft(template, t)
-    setDraftName(templateDraft.name)
-    setDraftPrompt(templateDraft.prompt)
-    setCadence(template.cadence)
-  }, [draftTemplateID, t])
-
-  useEffect(() => {
-    if (!openCreateMenu) return
-
-    function closeCreateMenu(event: MouseEvent) {
-      const target = event.target
-      if (target instanceof Element && target.closest(".automations-create-menu-anchor")) return
-      setOpenCreateMenu(null)
-    }
-
-    function closeCreateMenuOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setOpenCreateMenu(null)
-      }
-    }
-
-    document.addEventListener("mousedown", closeCreateMenu)
-    document.addEventListener("keydown", closeCreateMenuOnEscape)
-    return () => {
-      document.removeEventListener("mousedown", closeCreateMenu)
-      document.removeEventListener("keydown", closeCreateMenuOnEscape)
-    }
-  }, [openCreateMenu])
 
   useEffect(() => {
     if (!openDetailMenu) return
@@ -827,24 +1201,6 @@ export function AutomationsPage({ projects, windowControls, onOpenSession }: Aut
       window.clearInterval(intervalID)
     }
   }, [])
-
-  function applyTemplate(templateID: string) {
-    const template = AUTOMATION_TEMPLATES.find((item) => item.id === templateID)
-    if (!template) return
-    const templateDraft = getTemplateDraft(template, t)
-    setDraftName(templateDraft.name)
-    setDraftPrompt(templateDraft.prompt)
-    setCadence(template.cadence)
-    setDraftTemplateID(template.id)
-    setOpenCreateMenu(null)
-    setCreatePanelMode("manual")
-  }
-
-  function closeCreatePanel() {
-    setOpenCreateMenu(null)
-    setCreatePanelMode("manual")
-    setIsCreatePanelOpen(false)
-  }
 
   function normalizeAutomationTextPatch(patch: AutomationTextPatch): AutomationTextPatch {
     const normalized: AutomationTextPatch = {}
@@ -1014,57 +1370,6 @@ export function AutomationsPage({ projects, windowControls, onOpenSession }: Aut
       { execution: nextExecution },
       "environment",
     )
-  }
-
-  async function handleCreateAutomation(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const project = selectableProjectsByID.get(selectedProjectID)
-    const name = draftName.trim()
-    const prompt = draftPrompt.trim()
-    if (!project) {
-      setError(t("automations.error.selectProject"))
-      return
-    }
-    if (!name || !prompt) {
-      setError(t("automations.error.namePromptRequired"))
-      return
-    }
-
-    const scheduleOption = SCHEDULE_OPTIONS.find((option) => option.key === cadence) ?? SCHEDULE_OPTIONS[0]
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
-    const input: AgentAutomationCreateInput = {
-      name,
-      kind: "project",
-      status: "active",
-      schedule: {
-        type: scheduleOption.type,
-        expression: scheduleOption.expression,
-        timezone,
-      },
-      scope: createAutomationScopeForTarget(project),
-      execution: {
-        environment: "local",
-        permissionMode: "default",
-      },
-      prompt,
-      outputPolicy: {
-        triage: "findings-only",
-        autoArchiveNoFindings: true,
-      },
-    }
-
-    setIsSaving(true)
-    try {
-      const createdAutomation = await requireDesktopApi(t).createAutomation(input)
-      setError(null)
-      closeCreatePanel()
-      setSelectedAutomationID(createdAutomation.id)
-      await refreshAutomations({ silent: true })
-    } catch (createError) {
-      setError(createError instanceof Error ? createError.message : String(createError))
-    } finally {
-      setIsSaving(false)
-    }
   }
 
   async function updateAutomationStatus(automation: AgentAutomationDefinition, status: AgentAutomationStatus) {
@@ -1285,243 +1590,17 @@ export function AutomationsPage({ projects, windowControls, onOpenSession }: Aut
     return createPortal(cadenceMenu, document.body)
   }
 
-  const createPanel = isCreatePanelOpen ? (
-    <div className="automations-create-overlay">
-      <section className="automations-create-panel" role="dialog" aria-modal="true" aria-label={t("automations.create.dialogLabel")}>
-        {createPanelMode === "templates" ? (
-          <div className="automations-template-browser">
-            <header className="automations-template-browser-header">
-              <h2>{t("automations.templates.title")}</h2>
-              <div className="automations-create-header-actions">
-                <button
-                  className="automations-create-control-button automations-template-manual-button"
-                  type="button"
-                  onClick={() => {
-                    setOpenCreateMenu(null)
-                    setCreatePanelMode("manual")
-                  }}
-                >
-                  {t("automations.templates.manualSetup")}
-                </button>
-                <button
-                  className="icon-button automations-create-close"
-                  type="button"
-                  aria-label={t("app.cancel")}
-                  title={t("app.cancel")}
-                  onClick={closeCreatePanel}
-                >
-                  <CloseIcon />
-                </button>
-              </div>
-            </header>
-
-            <div className="automations-template-browser-grid" aria-label={t("automations.templates.title")}>
-              {AUTOMATION_TEMPLATES.map((template) => {
-                const templateDraft = getTemplateDraft(template, t)
-                const templateSchedule = SCHEDULE_OPTIONS.find((option) => option.key === template.cadence)
-                return (
-                  <button
-                    key={template.id}
-                    className={joinClassNames("automations-template-card", selectedTemplateID === template.id && "is-selected")}
-                    type="button"
-                    onClick={() => applyTemplate(template.id)}
-                  >
-                    <span className="automations-template-card-title">{templateDraft.name}</span>
-                    <span className="automations-template-card-copy">{templateDraft.prompt}</span>
-                    {templateSchedule ? (
-                      <span className="automations-template-card-meta">{t(templateSchedule.labelKey)}</span>
-                    ) : null}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        ) : (
-          <form className="automations-create-composer" onSubmit={handleCreateAutomation}>
-          <header className="automations-create-header">
-            <input
-              aria-label={t("automations.create.titleLabel")}
-              className="automations-create-title-input"
-              type="text"
-              placeholder={t("automations.create.titlePlaceholder")}
-              value={draftName}
-              onChange={(event) => {
-                setDraftName(event.target.value)
-                setDraftTemplateID(null)
-              }}
-            />
-
-            <div className="automations-create-header-actions">
-              <div className="automations-create-menu-anchor">
-                <button
-                  className="automations-create-control-button"
-                  type="button"
-                  onClick={() => {
-                    setOpenCreateMenu(null)
-                    setCreatePanelMode("templates")
-                  }}
-                >
-                  <span>{t("automations.create.useTemplate")}</span>
-                </button>
-              </div>
-
-              <button
-                className="icon-button automations-create-close"
-                type="button"
-                aria-label={t("app.cancel")}
-                title={t("app.cancel")}
-                onClick={closeCreatePanel}
-              >
-                <CloseIcon />
-              </button>
-            </div>
-          </header>
-
-          <textarea
-            className="automations-create-prompt-input"
-            aria-label={t("automations.create.promptLabel")}
-            placeholder={t("automations.create.promptPlaceholder")}
-            value={draftPrompt}
-            onChange={(event) => {
-              setDraftPrompt(event.target.value)
-              setDraftTemplateID(null)
-            }}
-          />
-
-          <div className="automations-create-footer">
-            <div className="automations-create-controls" aria-label={t("automations.create.configurationLabel")}>
-              <div className="automations-create-menu-anchor">
-                <button
-                  className={joinClassNames("automations-create-control-button", openCreateMenu === "environment" && "is-active")}
-                  type="button"
-                  aria-haspopup="menu"
-                  aria-expanded={openCreateMenu === "environment"}
-                  title={t("automations.environment.menuLabel")}
-                  onClick={() => setOpenCreateMenu((current) => current === "environment" ? null : "environment")}
-                >
-                  {targetMode === "local" ? <FolderIcon /> : <ForkIcon />}
-                  <span>{selectedTargetModeLabel}</span>
-                </button>
-
-                {openCreateMenu === "environment" ? (
-                  <div className="automations-create-menu automations-environment-menu" role="menu" aria-label={t("automations.environment.menuLabel")}>
-                    {(["local", "worktree"] satisfies CreateTargetMode[]).map((mode) => (
-                      <button
-                        key={mode}
-                        className={joinClassNames("automations-create-menu-option", targetMode === mode && "is-selected")}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={targetMode === mode}
-                        onClick={() => {
-                          setTargetMode(mode)
-                          setOpenCreateMenu(null)
-                        }}
-                      >
-                        <span className="automations-create-menu-copy">
-                          <strong>{getTargetModeLabel(mode, t)}</strong>
-                        </span>
-                        {targetMode === mode ? <CheckIcon /> : null}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="automations-create-menu-anchor">
-                <button
-                  className={joinClassNames("automations-create-control-button", openCreateMenu === "project" && "is-active")}
-                  type="button"
-                  disabled={selectableProjects.length === 0}
-                  aria-haspopup="menu"
-                  aria-expanded={openCreateMenu === "project"}
-                  onClick={() => setOpenCreateMenu((current) => current === "project" ? null : "project")}
-                >
-                  <span>{selectedProject?.name ?? t("automations.project.select")}</span>
-                </button>
-
-                {openCreateMenu === "project" ? (
-                  <div className="automations-create-menu automations-project-menu" role="menu" aria-label={t("automations.project.menuLabel")}>
-                    {selectableProjects.map((project) => (
-                      <button
-                        key={project.id}
-                        className={joinClassNames("automations-create-menu-option", selectedProjectID === project.id && "is-selected")}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={selectedProjectID === project.id}
-                        onClick={() => {
-                          setSelectedProjectID(project.id)
-                          setOpenCreateMenu(null)
-                        }}
-                      >
-                        <span className="automations-create-menu-copy">
-                          <strong>{project.name}</strong>
-                        </span>
-                        {selectedProjectID === project.id ? <CheckIcon /> : null}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="automations-create-menu-anchor">
-                <button
-                  className={joinClassNames("automations-create-control-button", openCreateMenu === "cadence" && "is-active")}
-                  type="button"
-                  aria-haspopup="menu"
-                  aria-expanded={openCreateMenu === "cadence"}
-                  onClick={() => setOpenCreateMenu((current) => current === "cadence" ? null : "cadence")}
-                >
-                  <span>{selectedScheduleLabel}</span>
-                </button>
-
-                {openCreateMenu === "cadence" ? (
-                  <div className="automations-create-menu automations-cadence-menu" role="menu" aria-label={t("automations.cadence.menuLabel")}>
-                    {SCHEDULE_OPTIONS.map((option) => (
-                      <button
-                        key={option.key}
-                        className={joinClassNames("automations-create-menu-option", cadence === option.key && "is-selected")}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={cadence === option.key}
-                        onClick={() => {
-                          setCadence(option.key)
-                          setDraftTemplateID(null)
-                          setOpenCreateMenu(null)
-                        }}
-                      >
-                        <span className="automations-create-menu-copy">
-                          <strong>{t(option.labelKey)}</strong>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="automations-create-actions">
-              <button
-                className="secondary-button automations-create-cancel"
-                type="button"
-                onClick={closeCreatePanel}
-              >
-                {t("app.cancel")}
-              </button>
-              <button
-                className="primary-button automations-create-button"
-                type="submit"
-                aria-label={t("automations.create.submit")}
-                disabled={isSaving || selectableProjects.length === 0}
-              >
-                {isSaving ? t("automations.create.creating") : t("automations.create.create")}
-              </button>
-            </div>
-          </div>
-          </form>
-        )}
-      </section>
-    </div>
-  ) : null
+  const createPanel = (
+    <AutomationCreatePanel
+      isOpen={isCreatePanelOpen}
+      projects={projects}
+      onClose={() => setIsCreatePanelOpen(false)}
+      onCreated={async (createdAutomation) => {
+        setSelectedAutomationID(createdAutomation.id)
+        await refreshAutomations({ silent: true })
+      }}
+    />
+  )
 
   return (
     <section className="automations-page" aria-label={t("automations.title")}>

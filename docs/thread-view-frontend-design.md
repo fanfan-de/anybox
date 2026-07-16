@@ -1,6 +1,6 @@
 # Thread View 前端设计说明
 
-更新日期：2026-07-11
+更新日期：2026-07-16
 
 ## 1. 文档定位
 
@@ -124,7 +124,7 @@ ThreadView 中规范化后的 `http` / `https` 链接默认交给右侧 Anybox �
 ## 4. 内容模型
 
 Canonical conversation state is `ConversationTurnMap = Record<string, ThreadTurn[]>`.
-`ThreadTurn` represents one backend execution lifecycle. `ThreadMessage` records user or assistant messages inside that lifecycle.
+`ThreadTurn` represents one backend execution lifecycle. `ThreadMessage` records user or assistant messages inside that lifecycle. Permission approval can continue the same user request in a new backend turn; that continuation carries `resume: true` and retains the original `userMessageID`.
 `ThreadView` still receives `activeMessages: ThreadMessage[]` as its render view. The main workbench also passes the canonical `activeTurns: ThreadTurn[]` for semantic turn navigation:
 
 ```ts
@@ -139,7 +139,7 @@ Live composer sends initially create a `pending:*` turn. When an authoritative r
 
 桌面端长 turn 会在 semantic rows 生成后派生 `ThreadExecutionGroup`。分组边界来自 canonical `ThreadTurn`、`lastMessageID` 和 `finalSegmentID`，而不是相邻 DOM 或 user row。最终 response block 的边界在 trace visibility 过滤前计算；最终 response、response 后置内容、未解决 permission/question 和用户插入内容始终不会进入可折叠前缀。`completed` 且最终 response 已解析时，response 之前的 error、失败 tool/workflow 属于可恢复执行过程，随 process prefix 折叠；仅非 `completed` 终态，或 `completed` 但仍无可解析最终 response 时，才保护最后一条失败/终态 trace 作为 outcome。
 
-一个 backend execution 在任一投影帧最多产生一个 execution summary。状态层负责保证唯一 canonical turn；投影层只对具有相同 backend/segment/raw-turn 强身份的相邻 canonical wrappers 做保守合并，并在普通 user、steer、stream insertion 或 `continued_by_user` 边界处拒绝跨界 disclosure。Legacy candidates 和仅共享 user ID 的两个真实 turn 不自动合并。
+一个用户可见的连续执行在任一投影帧最多产生一个 execution summary。状态层重建历史时必须把共享 `userMessageID` 的 user row 保留在原始非 resume turn，不能移动到后创建的续跑 turn。投影层只对具有相同 backend/segment/raw-turn 强身份的相邻 canonical wrappers，或“共享 `userMessageID` 且至少一侧明确带有 `resume: true`”的审批续跑链做保守合并；合并后的状态和最终 response 取最新 authoritative turn，过程 rows 仍按原始消息顺序排列，因此最终回复位于整个审批前后 trace 之后。普通 user、steer、stream insertion 或 `continued_by_user` 边界会阻止跨界 disclosure。Legacy candidates 和仅共享 user ID、但没有明确 resume 元数据的两个真实 turn 不自动合并。
 
 投影顺序固定为：完整 base rows → execution group 派生 → diff/actions decoration → disclosure 裁剪。展开时输出 summary 与原 process rows；折叠时 process rows 从 `displayRows` 中真正移除，只保留 `assistant-execution-summary`、最终结果与后置 rows。summary 不持有隐藏 DOM，因此仍保持逐行虚拟化和 lazy mount。
 
@@ -156,7 +156,7 @@ ConversationTurnMap
 └─ sessionID: ThreadTurn[]
    └─ ThreadTurn
       ├─ turnID  # backend RuntimeEvent.turnID; local pending may use pending:*
-      ├─ status / phase / timestamps
+      ├─ status / phase / timestamps / resume?
       ├─ userMessageID?
       └─ messages: ThreadMessage[]
          ├─ UserThreadMessage

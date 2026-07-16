@@ -2459,6 +2459,7 @@ function appendHistoryThreadMessage(
   const completedAt = readNumber(backendTurn?.completedAt) || undefined
   const lastMessageID = readString(backendTurn?.lastMessageID) || undefined
   const userMessageID = readString(backendTurn?.userMessageID) || (message.kind === "user" ? message.id : undefined)
+  const resume = readBoolean(backendTurn?.resume)
   const phase = readString(backendTurn?.phase) as ThreadTurn["phase"] | ""
   const status = turnStatusFromHistoryMessage(message, historyMessage)
 
@@ -2466,6 +2467,7 @@ function appendHistoryThreadMessage(
     turns.push({
       turnID,
       ...(readString(backendTurn?.sessionID) ? { backendSessionID: readString(backendTurn?.sessionID) } : {}),
+      ...(resume ? { resume: true } : {}),
       status,
       ...(phase ? { phase } : message.kind === "assistant" ? { phase: message.runtime.phase } : {}),
       startedAt,
@@ -2482,6 +2484,7 @@ function appendHistoryThreadMessage(
   turns[turnIndex] = {
     ...current,
     ...(readString(backendTurn?.sessionID) ? { backendSessionID: readString(backendTurn?.sessionID) } : {}),
+    ...(resume ? { resume: true } : {}),
     status: current.status === "running" ? status : current.status,
     ...(phase ? { phase } : {}),
     startedAt: Math.min(current.startedAt, startedAt),

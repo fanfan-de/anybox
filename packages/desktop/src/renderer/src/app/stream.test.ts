@@ -190,6 +190,77 @@ describe("stream trace reducer", () => {
     ).toEqual(["assistant-a", "assistant-b"])
   })
 
+  it("preserves permission-resume metadata across history turns that share a user message", () => {
+    const userMessageID = "user-permission-resume"
+    const originalTurn = {
+      id: "turn-permission-blocked",
+      sessionID: "session-history",
+      projectID: "project-history",
+      userMessageID,
+      status: "blocked" as const,
+      createdAt: 100,
+      updatedAt: 300,
+      completedAt: 300,
+      lastMessageID: "assistant-permission-blocked",
+    }
+    const resumedTurn = {
+      id: "turn-permission-resumed",
+      sessionID: "session-history",
+      projectID: "project-history",
+      userMessageID,
+      resume: true,
+      status: "completed" as const,
+      createdAt: 400,
+      updatedAt: 600,
+      completedAt: 600,
+      lastMessageID: "assistant-permission-final",
+    }
+
+    const turns = buildThreadTurnsFromHistory([
+      {
+        info: {
+          id: userMessageID,
+          sessionID: "session-history",
+          role: "user",
+          created: 100,
+        },
+        turn: originalTurn,
+        parts: [{ id: "user-permission-text", type: "text", text: "Run the approved tool" }],
+      },
+      {
+        info: {
+          id: "assistant-permission-blocked",
+          sessionID: "session-history",
+          role: "assistant",
+          created: 200,
+          completed: 300,
+        },
+        turn: originalTurn,
+        parts: [{ id: "assistant-permission-waiting", type: "text", text: "Waiting for approval" }],
+      },
+      {
+        info: {
+          id: "assistant-permission-final",
+          sessionID: "session-history",
+          role: "assistant",
+          created: 500,
+          completed: 600,
+        },
+        turn: resumedTurn,
+        parts: [{ id: "assistant-permission-result", type: "text", text: "Final result" }],
+      },
+    ])
+
+    expect(turns.map((turn) => turn.turnID)).toEqual([originalTurn.id, resumedTurn.id])
+    expect(turns[0]?.resume).toBeUndefined()
+    expect(turns[1]?.resume).toBe(true)
+    expect(turns[0]?.messages.map((message) => message.id)).toEqual([
+      userMessageID,
+      "assistant-permission-blocked",
+    ])
+    expect(turns[1]?.messages.map((message) => message.id)).toEqual(["assistant-permission-final"])
+  })
+
   it("treats completed history as completed even when it includes model step events", () => {
     const [message] = buildThreadMessagesFromHistory([
       {

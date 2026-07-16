@@ -101,6 +101,7 @@ interface SidebarProps {
   onOpenRemoteFolderConfig?: () => void
   onProjectArchiveSessions: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectClick: (workspace: WorkspaceGroup) => void
+  onProjectCreateAutomation: (workspace: WorkspaceGroup) => void
   onProjectCreateSession: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void | Promise<void>
   onProjectCreateWorktree: (workspace: WorkspaceGroup, input: ProjectWorktreeCreateRequest) => boolean | void | Promise<boolean | void>
   onProjectOpenCinema: (workspace: WorkspaceGroup) => void | Promise<void>
@@ -209,6 +210,7 @@ interface FolderWorkspaceViewProps {
   onHoveredFolderChange: Dispatch<SetStateAction<string | null>>
   onProjectArchiveSessions: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectClick: (workspace: WorkspaceGroup) => void
+  onProjectCreateAutomation: (workspace: WorkspaceGroup) => void
   onProjectCreateSession: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void | Promise<void>
   onProjectCreateWorktree: (workspace: WorkspaceGroup, input: ProjectWorktreeCreateRequest) => boolean | void | Promise<boolean | void>
   onProjectOpenCinema: (workspace: WorkspaceGroup) => void | Promise<void>
@@ -308,7 +310,7 @@ function createWorktreeBranchName(workspace: WorkspaceGroup, workspaces: Workspa
 }
 
 const PROJECT_CONTEXT_MENU_WIDTH = 240
-const PROJECT_CONTEXT_MENU_HEIGHT = 228
+const PROJECT_CONTEXT_MENU_HEIGHT = 262
 const WORKSPACE_BACKGROUND_CONTEXT_MENU_WIDTH = 184
 const WORKSPACE_BACKGROUND_CONTEXT_MENU_HEIGHT = 46
 const SESSION_CONTEXT_MENU_WIDTH = 224
@@ -384,6 +386,7 @@ interface WorkspaceContextMenuProps {
   onAddProjectFolder: () => void | Promise<void>
   onClose: () => void
   onProjectArchiveSessions: (workspace: WorkspaceGroup) => void | Promise<void>
+  onProjectCreateAutomation: (workspace: WorkspaceGroup) => void
   onProjectCreateWorktree: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectOpenCinema: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectOpenInExplorer: (workspace: WorkspaceGroup) => void | Promise<void>
@@ -401,6 +404,7 @@ function WorkspaceContextMenu({
   onAddProjectFolder,
   onClose,
   onProjectArchiveSessions,
+  onProjectCreateAutomation,
   onProjectCreateWorktree,
   onProjectOpenCinema,
   onProjectOpenInExplorer,
@@ -534,6 +538,20 @@ function WorkspaceContextMenu({
       >
         <span className="ui-context-menu__icon" aria-hidden="true"><FileTextIcon /></span>
         <span className="ui-context-menu__label">Open Cinema</span>
+      </button>
+      <button
+        className="ui-context-menu__item"
+        role="menuitem"
+        type="button"
+        disabled={isMissingWorkspace}
+        onClick={(event) => {
+          event.stopPropagation()
+          onClose()
+          onProjectCreateAutomation(workspace)
+        }}
+      >
+        <span className="ui-context-menu__icon" aria-hidden="true"><AutomationIcon /></span>
+        <span className="ui-context-menu__label">创建自动化</span>
       </button>
       {isGitProject ? (
         <button
@@ -875,6 +893,7 @@ function FolderWorkspaceView({
   onHoveredFolderChange,
   onProjectArchiveSessions,
   onProjectClick,
+  onProjectCreateAutomation,
   onProjectCreateSession,
   onProjectCreateWorktree,
   onProjectOpenCinema,
@@ -1358,6 +1377,7 @@ function FolderWorkspaceView({
         onAddProjectFolder={onAddProjectFolder}
         onClose={closeWorkspaceContextMenu}
         onProjectArchiveSessions={onProjectArchiveSessions}
+        onProjectCreateAutomation={onProjectCreateAutomation}
         onProjectCreateWorktree={openWorktreeCreateDialog}
         onProjectOpenCinema={onProjectOpenCinema}
         onProjectOpenInExplorer={onProjectOpenInExplorer}
@@ -1736,6 +1756,7 @@ export function Sidebar({
   onOpenSettings,
   onProjectArchiveSessions,
   onProjectClick,
+  onProjectCreateAutomation,
   onProjectCreateSession,
   onProjectCreateWorktree,
   onProjectOpenCinema,
@@ -1788,6 +1809,7 @@ export function Sidebar({
             onHoveredFolderChange={onHoveredFolderChange}
             onProjectArchiveSessions={onProjectArchiveSessions}
             onProjectClick={onProjectClick}
+            onProjectCreateAutomation={onProjectCreateAutomation}
             onProjectCreateSession={onProjectCreateSession}
             onProjectCreateWorktree={onProjectCreateWorktree}
             onProjectOpenCinema={onProjectOpenCinema}
