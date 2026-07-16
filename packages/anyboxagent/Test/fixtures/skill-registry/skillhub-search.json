@@ -1,0 +1,38 @@
+{
+  "code": 0,
+  "data": {
+    "skills": [
+      {
+        "category": "professional",
+        "created_at": 1776279835553,
+        "description": "Generate engineering CAD drawings from natural language.",
+        "description_zh": "CAD制图编辑器",
+        "downloads": 2331,
+        "iconUrl": "https://cdn.skillhub.cn/icons/cad-editor.webp",
+        "installs": 0,
+        "labels": { "requires_api_key": true },
+        "name": "CAD Editor",
+        "ownerName": "user_e02e04b8",
+        "score": 100000,
+        "slug": "cad-editor",
+        "source": "community",
+        "stars": 9,
+        "subCategories": [
+          { "key": "pro-industry-research", "name": "行业研究" }
+        ],
+        "tags": null,
+        "updated_at": 1784139701029,
+        "upstream_url": null,
+        "verified": true,
+        "version": "1.0.6"
+      },
+      {
+        "name": "Malformed entry without a slug",
+        "ownerName": "broken",
+        "version": "1.0.0"
+      }
+    ],
+    "total": 41
+  },
+  "message": "success"
+}

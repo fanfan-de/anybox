@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
+import { skillLibraryTranslations } from "../skill-library-translations"
 
 export const viVN = {
   "app.loading": "Đang tải",
@@ -141,6 +142,7 @@ export const viVN = {
   "settings.nav.storage": "Bộ nhớ",
   "settings.nav.archive": "Phiên đã lưu trữ",
   ...subscriptionTranslations["vi-VN"],
+  ...skillLibraryTranslations["vi-VN"],
   "settings.about.version": "Phiên bản",
   "settings.about.checkUpdates": "Kiểm tra cập nhật",
   "settings.about.checkingUpdates": "Đang kiểm tra...",
@@ -564,7 +566,7 @@ export const viVN = {
   "tools.readOnly": "Chỉ đọc",
   "tools.moderate": "Vừa phải",
   "composer.taskDraft": "Bản nháp tác vụ",
-  "composer.placeholder": "Hỏi bất cứ điều gì",
+  "composer.placeholder": "Hỏi bất cứ điều gì · @ tham chiếu plugin · / và ~ tham chiếu lệnh",
   "composer.send": "Gửi",
   "composer.stop": "Dừng",
   "composer.attach": "Đính kèm",

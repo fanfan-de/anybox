@@ -32,3 +32,32 @@
 ## Result
 
 Passed. The native subscription entry matches the requested flow and Anybox's established desktop design language.
+
+## Third-party Skill catalog productization — 2026-07-16
+
+### Evidence
+
+- Reference: `C:\Users\19128\AppData\Local\Temp\codex-clipboard-0ddceb1f-4e30-47c2-9c01-24aa65494f80.png`
+- Implementation: native `com.anybox.app.dev` Electron window, visually captured with Windows Graphics Capture while the third-party Skill dialog was open.
+- Comparison: the reference and implementation captures were reviewed together in one comparison input.
+- State compared: Tencent SkillHub results loaded, remote icons settled, product metadata visible, one catalog row selected, and the detail/download flow available.
+
+### Visual and interaction review
+
+- The catalog now preserves the reference hierarchy: 40px product icon, name, category, verification/API-key state, one-line summary, muted metadata, star/download metrics, and source.
+- Anybox's settings-like modal and list/detail structure remain intact; the catalog pane is widened to 460px and shows stable truncation rather than horizontal overflow.
+- Real SkillHub icons render with fixed dimensions; local skills plus missing or failed remote images use the same custom Skill brand mark without layout shift.
+- Hover and selected surfaces retain Anybox tokens and do not change row geometry. The selected row remains visibly distinct after the pointer leaves.
+- The API-key and verification marks are visually separate from security-scan state, avoiding a misleading trust equivalence.
+- No clipped icons, overlapping controls, broken alignment, unreadable labels, or P0–P2 visual defects were found in the inspected state.
+
+### Functional, security, and accessibility checks
+
+- Marketplace images allow HTTPS/data sources only and use lazy loading, async decoding, and a no-referrer policy.
+- Downloaded rows reject remote image URLs and use only validated locally cached PNG/JPEG/WebP data URLs, so closing the marketplace does not create a new external image request.
+- Search, provider filters, row selection, detail tabs, source navigation, and local download controls remain operable.
+- Product icons, verification badges, API-key badges, and metrics expose accessible names; image failures are covered by a fallback test.
+- Focused renderer tests: 18 passed. Shared contract tests: 7 passed. Registry provider/managed tests: 57 passed. Desktop and shared typechecks passed.
+- A full desktop Vitest run reported 136 test files passed and 1662 tests passed with 1 skipped before the wrapper timeout.
+
+final result: passed

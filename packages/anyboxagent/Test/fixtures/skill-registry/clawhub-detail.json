@@ -1,0 +1,25 @@
+{
+  "skill": {
+    "slug": "pdf",
+    "displayName": "PDF Toolkit",
+    "summary": "Read and create PDF files.",
+    "description": "---\nname: pdf\ndescription: Read and create PDF files.\n---\n\n# PDF Toolkit\n",
+    "topics": ["PDF"],
+    "tags": { "latest": "0.1.0" },
+    "stats": { "downloads": 45042, "stars": 64, "versions": 1 },
+    "createdAt": 1769847855729,
+    "updatedAt": 1778987458350
+  },
+  "latestVersion": {
+    "version": "0.1.0",
+    "createdAt": 1769847855729,
+    "changelog": "Initial release"
+  },
+  "metadata": { "os": ["linux"], "systems": ["x86_64-linux"] },
+  "owner": {
+    "handle": "awspace",
+    "displayName": "AW Space",
+    "image": "https://avatars.githubusercontent.com/u/1?v=4"
+  },
+  "moderation": null
+}

@@ -6,6 +6,7 @@ import z from "zod"
 import * as Config from "#config/config.ts"
 import * as Plugin from "#plugin/plugin.ts"
 import { Instance } from "#project/instance.ts"
+import { listEnabledManagedRegistrySkillRoots } from "#skill/registry/managed-store.ts"
 import * as Filesystem from "#util/filesystem.ts"
 import * as Log from "#util/log.ts"
 
@@ -16,7 +17,7 @@ const skillSessionState = Instance.state(() => new Map<string, {
   loadedSkillIDs: Set<string>
 }>())
 
-export const SkillScope = z.enum(["project", "user", "plugin"]).meta({
+export const SkillScope = z.enum(["project", "user", "plugin", "registry"]).meta({
   ref: "SkillScope",
 })
 export type SkillScope = z.infer<typeof SkillScope>
@@ -159,6 +160,7 @@ async function readSkillDocument(
   options?: {
     pluginID?: string
     root?: string
+    skillID?: string
   },
 ): Promise<SkillDocument | undefined> {
   const path = join(directoryPath, SKILL_FILENAME)
@@ -173,9 +175,9 @@ async function readSkillDocument(
   const description = (frontmatter.description?.trim() || firstParagraph(body) || directoryName).trim()
 
   return {
-    id: scope === "plugin" && options?.pluginID
+    id: options?.skillID ?? (scope === "plugin" && options?.pluginID
       ? buildPluginSkillID(options.pluginID, skillPathID)
-      : buildSkillID(scope, skillPathID),
+      : buildSkillID(scope, skillPathID)),
     name: (frontmatter.name?.trim() || directoryName).trim(),
     description,
     path,
@@ -227,11 +229,28 @@ async function discoverPluginDocuments(options?: SkillDiscoveryOptions): Promise
   return items.flat()
 }
 
+async function discoverRegistryDocuments(): Promise<SkillDocument[]> {
+  const roots = await listEnabledManagedRegistrySkillRoots()
+  const documents = await Promise.all(roots.map(async (root) => {
+    try {
+      return await readSkillDocument("registry", root.packageRoot, { skillID: root.id })
+    } catch (error) {
+      log.warn("managed registry skill could not be read", {
+        skillID: root.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return undefined
+    }
+  }))
+  return documents.filter((item): item is SkillDocument => Boolean(item))
+}
+
 async function discoverDocuments(projectRoot: string, options?: SkillDiscoveryOptions): Promise<SkillDocument[]> {
   const roots = skillRoots(projectRoot)
   const items = await Promise.all([
     ...roots.map((item) => discoverInRoot(item.scope, item.root)),
     discoverPluginDocuments(options),
+    discoverRegistryDocuments(),
   ])
 
   return items

@@ -991,6 +991,49 @@ export async function setSelectedSkillIDs(configID: string, skillIDs: string[]) 
   return writeConfig(normalizedConfigID, Info.parse(next))
 }
 
+export async function removeSelectedSkillIDFromAllProjects(skillID: string): Promise<{
+  affectedProjectIDs: string[]
+  affectedCount: number
+}> {
+  const transaction = db.db.transaction(() => removeSelectedSkillIDFromAllProjectsInCurrentTransaction(skillID))
+  return transaction()
+}
+
+export function removeSelectedSkillIDFromAllProjectsInCurrentTransaction(skillID: string): {
+  affectedProjectIDs: string[]
+  affectedCount: number
+} {
+  const normalizedSkillID = skillID.trim()
+  if (!normalizedSkillID) return { affectedProjectIDs: [], affectedCount: 0 }
+
+  ensureProjectConfigTable()
+  const rows = db.findMany("project_configs", ProjectConfigRecord)
+  const affected = rows.flatMap((row) => {
+    const current = normalizeSkillIDs(row.config.selected_skills ?? [])
+    if (!current.includes(normalizedSkillID)) return []
+    const next = Info.parse({
+      ...row.config,
+      selected_skills: current.filter((id) => id !== normalizedSkillID),
+    })
+    return [{ projectID: row.projectID, config: next }]
+  })
+
+  if (process.env.ANYBOX_TEST_FAIL_SKILL_SELECTION_CLEANUP === "1") {
+    throw new Error("Injected selected-skill cleanup failure.")
+  }
+  for (const row of affected) {
+    db.upsert("project_configs", row, ["projectID"])
+  }
+
+  const affectedProjectIDs = affected
+    .map((row) => row.projectID)
+    .filter((projectID) => projectID !== GLOBAL_CONFIG_ID)
+  return {
+    affectedProjectIDs,
+    affectedCount: affectedProjectIDs.length,
+  }
+}
+
 function readSelectedPluginIDs(configID: string) {
   const selected = readConfig(configID).selected_plugins
   return selected ? normalizePluginIDs(selected) : null

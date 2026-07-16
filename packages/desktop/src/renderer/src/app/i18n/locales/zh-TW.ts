@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
+import { skillLibraryTranslations } from "../skill-library-translations"
 
 export const zhTW = {
   "app.loading": "載入中",
@@ -141,6 +142,7 @@ export const zhTW = {
   "settings.nav.storage": "儲存",
   "settings.nav.archive": "歸檔工作階段",
   ...subscriptionTranslations["zh-TW"],
+  ...skillLibraryTranslations["zh-TW"],
   "settings.about.version": "版本",
   "settings.about.checkUpdates": "檢查更新",
   "settings.about.checkingUpdates": "正在檢查...",
@@ -561,7 +563,7 @@ export const zhTW = {
   "tools.readOnly": "唯讀",
   "tools.moderate": "中等",
   "composer.taskDraft": "任務草稿",
-  "composer.placeholder": "隨心輸入",
+  "composer.placeholder": "隨心輸入 · @引用外掛 · /和~引用指令",
   "composer.send": "傳送",
   "composer.stop": "停止",
   "composer.attach": "新增附件",

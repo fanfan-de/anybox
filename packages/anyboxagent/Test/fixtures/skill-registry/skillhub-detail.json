@@ -1,0 +1,52 @@
+{
+  "contentZhAvailable": false,
+  "latestVersion": {
+    "changelog": "CAD制图编辑器",
+    "createdAt": 1779880654609,
+    "version": "1.0.6"
+  },
+  "owner": {
+    "displayName": "波动几何",
+    "handle": "user_e02e04b8",
+    "image": null
+  },
+  "securityReports": {
+    "keen": {
+      "reportUrl": "https://tix.qq.com/search/skill?keyword=fixture",
+      "status": "benign",
+      "statusText": "安全，无风险"
+    },
+    "sanbu": {
+      "reportUrl": "https://static.cloudsec.tencent.com/reports/fixture.html",
+      "status": "benign",
+      "statusText": "安全，无风险"
+    }
+  },
+  "skill": {
+    "category": "professional",
+    "createdAt": 1776279835553,
+    "displayName": "CAD Editor",
+    "iconUrl": "https://cdn.skillhub.cn/icons/cad-editor.webp",
+    "isAuthorVerified": false,
+    "labels": { "requires_api_key": "true" },
+    "slug": "cad-editor",
+    "source": "community",
+    "sourceUrl": null,
+    "stats": {
+      "comments": 0,
+      "downloads": 2331,
+      "installs": 0,
+      "stars": 9,
+      "versions": 7
+    },
+    "subCategories": [
+      { "key": "pro-industry-research", "name": "行业研究" }
+    ],
+    "summary": "Generate engineering CAD drawings from natural language.",
+    "summary_zh": "CAD制图编辑器",
+    "tags": { "latest": "1.0.6" },
+    "updatedAt": 1784139701029,
+    "upstream_url": null,
+    "verified": true
+  }
+}

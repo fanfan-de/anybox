@@ -77,6 +77,7 @@ import { UpdateDialog, type AppUpdateStatus } from "./app/update/UpdateDialog"
 import { useI18n } from "./app/i18n/I18nProvider"
 import type { TranslationKey } from "./app/i18n/translations"
 import { PromptSkillsPage, type PromptSkillMode } from "./app/prompts/PromptSkillsPage"
+import { SkillsWorkspacePage, type SkillLibraryMode } from "./app/skills/SkillsWorkspacePage"
 
 const GlobalSkillsPage = lazy(() => import("./app/skills/GlobalSkillsPage").then((module) => ({ default: module.GlobalSkillsPage })))
 const ConnectorsPage = lazy(() => import("./app/connectors/ConnectorsPage").then((module) => ({ default: module.ConnectorsPage })))
@@ -1114,6 +1115,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   const [isSavingAutomaticUpdates, setIsSavingAutomaticUpdates] = useState(false)
   const [isPreparingSettingsPage, setIsPreparingSettingsPage] = useState(false)
   const [promptSkillMode, setPromptSkillMode] = useState<PromptSkillMode>("prompts")
+  const [skillLibraryMode, setSkillLibraryMode] = useState<SkillLibraryMode>("all")
+  const [isSkillMarketplaceOpen, setIsSkillMarketplaceOpen] = useState(false)
   const autoPromptedDownloadingUpdateRef = useRef<string | null>(null)
   const autoPromptedDownloadedUpdateRef = useRef<string | null>(null)
   const updatePromptRetryTimerRef = useRef<number | null>(null)
@@ -1515,6 +1518,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     renamingGlobalSkillDirectory,
     renamingGlobalSkillDraftDirectory,
     renamingGlobalSkillName,
+    refreshGlobalSkillsTree,
     selectedGlobalSkillDirectory,
     selectedGlobalSkillFileContent,
     selectedGlobalSkillFilePath,
@@ -1734,6 +1738,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   function handleOpenSettings() {
     if (isOpen || isPreparingSettingsPage) return
 
+    setIsSkillMarketplaceOpen(false)
     setIsPreparingSettingsPage(true)
     void loadSettingsPage()
       .then(() => {
@@ -2431,6 +2436,26 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     setPromptSkillMode(nextMode)
   }
 
+  function handleSkillLibraryModeChange(nextMode: SkillLibraryMode) {
+    if (nextMode === skillLibraryMode) return true
+    if (
+      nextMode === "downloaded" &&
+      isDirtyGlobalSkillFile &&
+      typeof window.confirm === "function" &&
+      !window.confirm(t("skillLibrary.confirm.leaveLocal"))
+    ) {
+      return false
+    }
+    setSkillLibraryMode(nextMode)
+    return true
+  }
+
+  function handleOpenSkillMarketplace() {
+    if (isPreparingSettingsPage) return
+    if (isOpen) closeSettings()
+    setIsSkillMarketplaceOpen(true)
+  }
+
   const isMacOS = platform === "darwin"
   const isWindows = platform === "win32"
   const htmlBackgroundAppearance = resolveHtmlBackgroundAppearance(htmlBackgroundConfig)
@@ -2453,7 +2478,12 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   const isMobileView = leftSidebarView === "mobile"
   const isBuiltinToolsView = leftSidebarView === "tools"
   const isShellSidebarManagedView = isResourcesView || isBuiltinToolsView
-  const isFullSurfaceView = isConnectionsView || isMobileView || isAutomationsView || isCalendarView
+  const isRegistrySkillLibraryView = isResourcesView && promptSkillMode === "skills"
+  const isFullSurfaceView = isConnectionsView || isMobileView || isAutomationsView || isCalendarView || isRegistrySkillLibraryView
+  useEffect(() => {
+    if (isResourcesView && promptSkillMode === "skills") return
+    setIsSkillMarketplaceOpen(false)
+  }, [isResourcesView, promptSkillMode])
   const windowControls = useMemo(
     () => (
       isMacOS
@@ -2502,7 +2532,11 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     ),
     [handleWindowAction, isMacOS, isWindowMaximized],
   )
-  const appShellClassName = isOpen ? "app-shell is-settings-open" : "app-shell"
+  const appShellClassName = [
+    "app-shell",
+    isOpen ? "is-settings-open" : "",
+    isSkillMarketplaceOpen ? "is-skill-marketplace-open" : "",
+  ].filter(Boolean).join(" ")
   const effectiveAppShellStyle = isShellSidebarManagedView
     ? {
         ...appShellStyle,
@@ -2702,7 +2736,63 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                     onTranslatePromptPreset={translatePromptPreset}
                   />
                 ) : (
-                  <GlobalSkillsPage
+                  <SkillsWorkspacePage
+                    isMarketplaceOpen={isSkillMarketplaceOpen}
+                    localNavigatorProps={{
+                      creatingGlobalSkillName,
+                      creatingGlobalSkillDraftKind,
+                      creatingGlobalSkillParentDirectory,
+                      deletingGlobalSkillDirectory,
+                      expandedSkillPaths,
+                      globalSkillsRoot,
+                      globalSkillsTree,
+                      isCreateGlobalSkillDraftVisible,
+                      isCreatingGlobalSkill,
+                      isInstallingLocalSkill,
+                      isLoadingSkillsTree: isLoadingGlobalSkillsTree,
+                      renamingGlobalSkillDirectory,
+                      renamingGlobalSkillDraftDirectory,
+                      renamingGlobalSkillName,
+                      selectedGlobalSkillFilePath,
+                      onCreateGlobalSkill: handleCreateGlobalSkill,
+                      onCreateGlobalSkillDraftCancel: handleCreateGlobalSkillDraftCancel,
+                      onCreateGlobalSkillDraftChange: handleCreateGlobalSkillDraftChange,
+                      onCreateGlobalSkillDraftStart: handleCreateGlobalSkillDraftStart,
+                      onDeleteGlobalSkill: handleDeleteGlobalSkill,
+                      onGitInstallDialogOpen: handleGitInstallDialogOpen,
+                      onGlobalSkillDirectoryToggle: handleGlobalSkillDirectoryToggle,
+                      onGlobalSkillFileSelect: handleGlobalSkillFileSelect,
+                      onLocalInstallDialogOpen: handleLocalInstallDialogOpen,
+                      onMoveGlobalSkillDirectoryStart: handleMoveGlobalSkillDirectoryStart,
+                      onOpenGlobalSkillsFolder: handleOpenGlobalSkillsFolder,
+                      onRenameGlobalSkill: handleRenameGlobalSkill,
+                      onRenameGlobalSkillDraftCancel: handleRenameGlobalSkillDraftCancel,
+                      onRenameGlobalSkillDraftChange: handleRenameGlobalSkillDraftChange,
+                      onRenameGlobalSkillDraftStart: handleRenameGlobalSkillDraftStart,
+                    }}
+                    mode={skillLibraryMode}
+                    onMarketplaceClose={() => setIsSkillMarketplaceOpen(false)}
+                    onMarketplaceOpen={handleOpenSkillMarketplace}
+                    onModeChange={handleSkillLibraryModeChange}
+                    onBeforeForkToLocal={() => {
+                      if (!isDirtyGlobalSkillFile) return true
+                      return typeof window.confirm === "function"
+                        ? window.confirm(t("skillLibrary.forkDirtyConfirm"))
+                        : false
+                    }}
+                    onBeforeSelectDownloaded={() => {
+                      if (!isDirtyGlobalSkillFile) return true
+                      return typeof window.confirm === "function"
+                        ? window.confirm(t("skillLibrary.confirm.leaveLocal"))
+                        : false
+                    }}
+                    onForkedToLocal={async (result) => {
+                      await refreshGlobalSkillsTree(result.filePath)
+                      await refreshComposerSkills()
+                      setSkillLibraryMode("local")
+                    }}
+                  >
+                    <GlobalSkillsPage
                     creatingGlobalSkillName={creatingGlobalSkillName}
                     creatingGlobalSkillDraftKind={creatingGlobalSkillDraftKind}
                     creatingGlobalSkillParentDirectory={creatingGlobalSkillParentDirectory}
@@ -2770,8 +2860,9 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                     onRenameGlobalSkillDraftCancel={handleRenameGlobalSkillDraftCancel}
                     onRenameGlobalSkillDraftChange={handleRenameGlobalSkillDraftChange}
                     onRenameGlobalSkillDraftStart={handleRenameGlobalSkillDraftStart}
-                    onSave={handleSaveGlobalSkillFile}
-                  />
+                      onSave={handleSaveGlobalSkillFile}
+                    />
+                  </SkillsWorkspacePage>
                 )}
               </Suspense>
             </PromptSkillsPage>

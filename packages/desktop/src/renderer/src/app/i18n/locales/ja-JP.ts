@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
+import { skillLibraryTranslations } from "../skill-library-translations"
 
 export const jaJP = {
   "app.loading": "読み込み中",
@@ -141,6 +142,7 @@ export const jaJP = {
   "settings.nav.storage": "ストレージ",
   "settings.nav.archive": "アーカイブ済みセッション",
   ...subscriptionTranslations["ja-JP"],
+  ...skillLibraryTranslations["ja-JP"],
   "settings.about.version": "バージョン",
   "settings.about.checkUpdates": "アップデートを確認",
   "settings.about.checkingUpdates": "確認中...",
@@ -564,7 +566,7 @@ export const jaJP = {
   "tools.readOnly": "読み取り専用",
   "tools.moderate": "中程度",
   "composer.taskDraft": "タスクドラフト",
-  "composer.placeholder": "何でも質問",
+  "composer.placeholder": "何でも質問 · @でプラグインを参照 · /と~でコマンドを参照",
   "composer.send": "送信",
   "composer.stop": "停止",
   "composer.attach": "添付",

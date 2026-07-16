@@ -1,6 +1,16 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type NativeImage, type OpenDialogOptions, type OpenDialogReturnValue, type SaveDialogOptions, type SaveDialogReturnValue, type WebContents } from "electron"
 import { createPlatformAdapter } from "@anybox/platform"
 import { DesktopIpcSchemas, createSshWorkspaceUri, isSshWorkspaceUri } from "@anybox/shared"
+import type {
+  DownloadedRegistrySkill,
+  RegistryFile,
+  RegistryFileContent,
+  RegistryProviderDescriptor,
+  RegistrySearchPage,
+  RegistrySecuritySnapshot,
+  RegistrySkillDetail,
+  RegistryVersion,
+} from "@anybox/shared"
 import { createHash, randomUUID } from "node:crypto"
 import { appendFile, mkdir, open, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
@@ -24,6 +34,10 @@ import type {
   DesktopRendererMemoryDiagnosticsRecord,
   DesktopRendererMemoryDiagnosticsSnapshot,
   DesktopRechargePaymentOrder,
+  DesktopRegistrySkillDeleteResult,
+  DesktopRegistrySkillForkResult,
+  DesktopRegistrySkillMutationResult,
+  DesktopRegistrySkillUpdatePreview,
   DesktopRunningSessionStatus,
   DesktopSessionRollbackInput,
   DesktopSessionRollbackResult,
@@ -3040,6 +3054,59 @@ function createAutomationEventBridge(): AutomationEventBridge {
   }
 }
 
+async function downloadSkillRegistrySkill(
+  input: DesktopIpcInput<"desktop:download-skill-registry-skill">,
+): Promise<DesktopIpcOutput<"desktop:download-skill-registry-skill">> {
+  const result = await requestAgentJSON<DownloadedRegistrySkill>("/api/skill-registry/download", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  })
+  return result.data
+}
+
+async function setDownloadedRegistrySkillEnabled(
+  input: DesktopIpcInput<"desktop:set-downloaded-registry-skill-enabled">,
+): Promise<DesktopIpcOutput<"desktop:set-downloaded-registry-skill-enabled">> {
+  const result = await requestAgentJSON<DesktopRegistrySkillMutationResult>(
+    `/api/skill-registry/downloads/${encodeURIComponent(input.id)}`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled: input.enabled }),
+    },
+  )
+  return result.data
+}
+
+async function forkDownloadedRegistrySkill(
+  input: DesktopIpcInput<"desktop:fork-downloaded-registry-skill">,
+): Promise<DesktopIpcOutput<"desktop:fork-downloaded-registry-skill">> {
+  const result = await requestAgentJSON<DesktopRegistrySkillForkResult>(
+    `/api/skill-registry/downloads/${encodeURIComponent(input.id)}/fork`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: input.name }),
+    },
+  )
+  return result.data
+}
+
+async function previewDownloadedRegistrySkillUpdate(
+  input: DesktopIpcInput<"desktop:preview-downloaded-registry-skill-update">,
+): Promise<DesktopIpcOutput<"desktop:preview-downloaded-registry-skill-update">> {
+  const result = await requestAgentJSON<DesktopRegistrySkillUpdatePreview>(
+    `/api/skill-registry/downloads/${encodeURIComponent(input.id)}/update-preview`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: input.version }),
+    },
+  )
+  return result.data
+}
+
 export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandlerOptions = {}) {
   const platformAdapter = createPlatformAdapter({
     platform: process.platform,
@@ -5469,6 +5536,142 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     return result.data
   })
 
+  handleDesktopIpc("desktop:get-skill-registry-providers", async () => {
+    const result = await requestAgentJSON<RegistryProviderDescriptor[]>("/api/skill-registry/providers")
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:search-skill-registry", async (_event, input) => {
+    const result = await requestAgentJSON<RegistrySearchPage>("/api/skill-registry/search", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    })
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:get-skill-registry-detail", async (_event, input) => {
+    const result = await requestAgentJSON<RegistrySkillDetail>("/api/skill-registry/detail", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    })
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:get-skill-registry-versions", async (_event, input) => {
+    const result = await requestAgentJSON<RegistryVersion[]>("/api/skill-registry/versions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    })
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:get-skill-registry-files", async (_event, input) => {
+    const result = await requestAgentJSON<RegistryFile[]>("/api/skill-registry/files", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    })
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:read-skill-registry-file", async (_event, input) => {
+    const result = await requestAgentJSON<RegistryFileContent>("/api/skill-registry/file", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    })
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:get-skill-registry-security", async (_event, input) => {
+    const result = await requestAgentJSON<RegistrySecuritySnapshot>("/api/skill-registry/security", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    })
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:download-skill-registry-skill", async (_event, input) => {
+    return await downloadSkillRegistrySkill(input)
+  })
+
+  handleDesktopIpc("desktop:list-downloaded-registry-skills", async () => {
+    const result = await requestAgentJSON<DownloadedRegistrySkill[]>("/api/skill-registry/downloads")
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:set-downloaded-registry-skill-enabled", async (_event, input) => {
+    return await setDownloadedRegistrySkillEnabled(input)
+  })
+
+  handleDesktopIpc("desktop:delete-downloaded-registry-skill", async (_event, input) => {
+    const result = await requestAgentJSON<DesktopRegistrySkillDeleteResult>(
+      `/api/skill-registry/downloads/${encodeURIComponent(input.id)}`,
+      { method: "DELETE" },
+    )
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:read-downloaded-registry-skill-file", async (_event, input) => {
+    const result = await requestAgentJSON<RegistryFileContent>(
+      `/api/skill-registry/downloads/${encodeURIComponent(input.id)}/file`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: input.path, version: input.version }),
+      },
+    )
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:list-downloaded-registry-skill-files", async (_event, input) => {
+    const result = await requestAgentJSON<RegistryFile[]>(
+      `/api/skill-registry/downloads/${encodeURIComponent(input.id)}/files`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ version: input.version }),
+      },
+    )
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:fork-downloaded-registry-skill", async (_event, input) => {
+    return await forkDownloadedRegistrySkill(input)
+  })
+
+  handleDesktopIpc("desktop:preview-downloaded-registry-skill-update", async (_event, input) => {
+    return await previewDownloadedRegistrySkillUpdate(input)
+  })
+
+  handleDesktopIpc("desktop:update-downloaded-registry-skill", async (_event, input) => {
+    const result = await requestAgentJSON<DownloadedRegistrySkill>(
+      `/api/skill-registry/downloads/${encodeURIComponent(input.id)}/update`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ version: input.version }),
+      },
+    )
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:rollback-downloaded-registry-skill", async (_event, input) => {
+    const result = await requestAgentJSON<DesktopRegistrySkillMutationResult>(
+      `/api/skill-registry/downloads/${encodeURIComponent(input.id)}/rollback`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ version: input.version }),
+      },
+    )
+    return result.data
+  })
+
   handleDesktopIpc("desktop:get-prompt-presets", async () => {
     const result = await requestAgentJSON<AgentPromptPresetSummary[]>("/api/prompts")
 
@@ -6560,6 +6763,7 @@ export const internal = {
   capturePreviewScreenshotFromWindow,
   copyImageDataUrlToClipboard,
   discardSessionBagSubmission,
+  downloadSkillRegistrySkill,
   disposeSessionStreamSubscriptionsForWebContents,
   getSessionTraceExport,
   getAnyboxSubscriptionOverview,
@@ -6568,6 +6772,7 @@ export const internal = {
   interruptAgentSessionBackendFirst,
   isSessionStreamSubscriptionKeyForWebContents,
   prepareSessionBagSubmission,
+  previewDownloadedRegistrySkillUpdate,
   readPreviewText,
   resolvePreviewTarget,
   saveComposerPastedImages,
@@ -6575,10 +6780,12 @@ export const internal = {
   saveSessionTraceExport,
   saveSessionTraceExportDirectory,
   saveSessionTraceExportToProject,
+  setDownloadedRegistrySkillEnabled,
   translatePromptPreset,
   updateAgentSessionPinned,
   updateAgentSessionTitle,
   updatePromptPresetSelection,
   updateToolPermissionMode,
   uploadSessionBagSubmission,
+  forkDownloadedRegistrySkill,
 }

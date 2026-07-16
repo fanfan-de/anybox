@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
+import { skillLibraryTranslations } from "../skill-library-translations"
 
 export const frFR = {
   "app.loading": "Chargement",
@@ -141,6 +142,7 @@ export const frFR = {
   "settings.nav.storage": "Stockage",
   "settings.nav.archive": "Sessions archivées",
   ...subscriptionTranslations["fr-FR"],
+  ...skillLibraryTranslations["fr-FR"],
   "settings.about.version": "Version",
   "settings.about.checkUpdates": "Rechercher des mises à jour",
   "settings.about.checkingUpdates": "Vérification...",
@@ -564,7 +566,7 @@ export const frFR = {
   "tools.readOnly": "Lecture seule",
   "tools.moderate": "Modéré",
   "composer.taskDraft": "Brouillon de tâche",
-  "composer.placeholder": "Demander n'importe quoi",
+  "composer.placeholder": "Demandez ce que vous voulez · @ référence des plugins · / et ~ des commandes",
   "composer.send": "Envoyer",
   "composer.stop": "Arrêter",
   "composer.attach": "Joindre",

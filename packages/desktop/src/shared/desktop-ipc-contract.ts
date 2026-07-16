@@ -93,7 +93,22 @@ import type {
   DesktopOpenCinemaProjectResult,
   DesktopOpenPathInput,
   DesktopOpenPathResult,
+  DeletedRegistrySkillResult,
+  DownloadedRegistrySkill,
+  DownloadedRegistrySkillSelectionResult,
   DesktopStorageUsageSnapshot,
+  RegistryFile,
+  RegistryFileContent,
+  RegistryFileRef,
+  RegistryProviderDescriptor,
+  RegistrySearchInput,
+  RegistrySearchPage,
+  RegistrySecuritySnapshot,
+  RegistrySkillDetail,
+  RegistrySkillRef,
+  RegistryUpdatePreview,
+  RegistryVersion,
+  RegistryVersionRef,
   ReasoningEffort,
 } from "@anybox/shared"
 import type {
@@ -127,6 +142,19 @@ export const DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL = "desktop:appearance-state-
 
 export interface DesktopPluginCatalogInput {
   freshness?: "cached" | "fresh"
+}
+
+export type DesktopRegistrySkillUpdatePreview = RegistryUpdatePreview
+
+export type DesktopRegistrySkillMutationResult = DownloadedRegistrySkillSelectionResult
+
+export type DesktopRegistrySkillDeleteResult = DeletedRegistrySkillResult
+
+export interface DesktopRegistrySkillForkResult {
+  id: string
+  sourceSkillID: string
+  directory: string
+  filePath: string
 }
 
 export type {
@@ -1938,6 +1966,74 @@ export interface DesktopIpcContract {
     input: void
     output: AgentSkillInfo[]
   }
+  "desktop:get-skill-registry-providers": {
+    input: void
+    output: RegistryProviderDescriptor[]
+  }
+  "desktop:search-skill-registry": {
+    input: RegistrySearchInput
+    output: RegistrySearchPage
+  }
+  "desktop:get-skill-registry-detail": {
+    input: RegistrySkillRef
+    output: RegistrySkillDetail
+  }
+  "desktop:get-skill-registry-versions": {
+    input: RegistryVersionRef
+    output: RegistryVersion[]
+  }
+  "desktop:get-skill-registry-files": {
+    input: RegistryVersionRef
+    output: RegistryFile[]
+  }
+  "desktop:read-skill-registry-file": {
+    input: RegistryFileRef
+    output: RegistryFileContent
+  }
+  "desktop:get-skill-registry-security": {
+    input: RegistryVersionRef
+    output: RegistrySecuritySnapshot
+  }
+  "desktop:download-skill-registry-skill": {
+    input: RegistryVersionRef
+    output: DownloadedRegistrySkill
+  }
+  "desktop:list-downloaded-registry-skills": {
+    input: void
+    output: DownloadedRegistrySkill[]
+  }
+  "desktop:set-downloaded-registry-skill-enabled": {
+    input: { id: string; enabled: boolean }
+    output: DesktopRegistrySkillMutationResult
+  }
+  "desktop:delete-downloaded-registry-skill": {
+    input: { id: string }
+    output: DesktopRegistrySkillDeleteResult
+  }
+  "desktop:read-downloaded-registry-skill-file": {
+    input: { id: string; path: string; version?: string }
+    output: RegistryFileContent
+  }
+  "desktop:list-downloaded-registry-skill-files": {
+    input: { id: string; version?: string }
+    output: RegistryFile[]
+  }
+  "desktop:fork-downloaded-registry-skill": {
+    input: { id: string; name?: string }
+    output: DesktopRegistrySkillForkResult
+  }
+  "desktop:preview-downloaded-registry-skill-update": {
+    input: { id: string; version?: string }
+    output: DesktopRegistrySkillUpdatePreview
+  }
+  "desktop:update-downloaded-registry-skill": {
+    input: { id: string; version?: string }
+    output: DownloadedRegistrySkill
+  }
+  "desktop:rollback-downloaded-registry-skill": {
+    input: { id: string; version?: string }
+    output: DesktopRegistrySkillMutationResult
+  }
   "desktop:get-prompt-presets": {
     input: void
     output: AgentPromptPresetSummary[]
@@ -2431,6 +2527,23 @@ export interface DesktopApiMethods {
   cancelAutomationRun(input: DesktopIpcInput<"desktop:cancel-automation-run">): Promise<DesktopIpcOutput<"desktop:cancel-automation-run">>
   onAutomationEvent(listener: (event: DesktopIpcEventPayload<typeof DESKTOP_AUTOMATION_EVENT_CHANNEL>) => void): () => void
   getGlobalSkills(): Promise<DesktopIpcOutput<"desktop:get-global-skills">>
+  getSkillRegistryProviders(): Promise<DesktopIpcOutput<"desktop:get-skill-registry-providers">>
+  searchSkillRegistry(input: DesktopIpcInput<"desktop:search-skill-registry">): Promise<DesktopIpcOutput<"desktop:search-skill-registry">>
+  getSkillRegistryDetail(input: DesktopIpcInput<"desktop:get-skill-registry-detail">): Promise<DesktopIpcOutput<"desktop:get-skill-registry-detail">>
+  getSkillRegistryVersions(input: DesktopIpcInput<"desktop:get-skill-registry-versions">): Promise<DesktopIpcOutput<"desktop:get-skill-registry-versions">>
+  getSkillRegistryFiles(input: DesktopIpcInput<"desktop:get-skill-registry-files">): Promise<DesktopIpcOutput<"desktop:get-skill-registry-files">>
+  readSkillRegistryFile(input: DesktopIpcInput<"desktop:read-skill-registry-file">): Promise<DesktopIpcOutput<"desktop:read-skill-registry-file">>
+  getSkillRegistrySecurity(input: DesktopIpcInput<"desktop:get-skill-registry-security">): Promise<DesktopIpcOutput<"desktop:get-skill-registry-security">>
+  downloadSkillRegistrySkill(input: DesktopIpcInput<"desktop:download-skill-registry-skill">): Promise<DesktopIpcOutput<"desktop:download-skill-registry-skill">>
+  listDownloadedRegistrySkills(): Promise<DesktopIpcOutput<"desktop:list-downloaded-registry-skills">>
+  setDownloadedRegistrySkillEnabled(input: DesktopIpcInput<"desktop:set-downloaded-registry-skill-enabled">): Promise<DesktopIpcOutput<"desktop:set-downloaded-registry-skill-enabled">>
+  deleteDownloadedRegistrySkill(input: DesktopIpcInput<"desktop:delete-downloaded-registry-skill">): Promise<DesktopIpcOutput<"desktop:delete-downloaded-registry-skill">>
+  readDownloadedRegistrySkillFile(input: DesktopIpcInput<"desktop:read-downloaded-registry-skill-file">): Promise<DesktopIpcOutput<"desktop:read-downloaded-registry-skill-file">>
+  listDownloadedRegistrySkillFiles(input: DesktopIpcInput<"desktop:list-downloaded-registry-skill-files">): Promise<DesktopIpcOutput<"desktop:list-downloaded-registry-skill-files">>
+  forkDownloadedRegistrySkill(input: DesktopIpcInput<"desktop:fork-downloaded-registry-skill">): Promise<DesktopIpcOutput<"desktop:fork-downloaded-registry-skill">>
+  previewDownloadedRegistrySkillUpdate(input: DesktopIpcInput<"desktop:preview-downloaded-registry-skill-update">): Promise<DesktopIpcOutput<"desktop:preview-downloaded-registry-skill-update">>
+  updateDownloadedRegistrySkill(input: DesktopIpcInput<"desktop:update-downloaded-registry-skill">): Promise<DesktopIpcOutput<"desktop:update-downloaded-registry-skill">>
+  rollbackDownloadedRegistrySkill(input: DesktopIpcInput<"desktop:rollback-downloaded-registry-skill">): Promise<DesktopIpcOutput<"desktop:rollback-downloaded-registry-skill">>
   getPromptPresets(): Promise<DesktopIpcOutput<"desktop:get-prompt-presets">>
   getPromptPresetSelection(): Promise<DesktopIpcOutput<"desktop:get-prompt-preset-selection">>
   readPromptPreset(input: DesktopIpcInput<"desktop:read-prompt-preset">): Promise<DesktopIpcOutput<"desktop:read-prompt-preset">>

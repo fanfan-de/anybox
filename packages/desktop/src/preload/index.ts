@@ -740,6 +740,40 @@ try {
       invokeDesktop("desktop:cancel-automation-run", input) as Promise<DesktopIpcOutput<"desktop:cancel-automation-run">>,
     getGlobalSkills: () =>
       invokeDesktop("desktop:get-global-skills") as Promise<SkillInfo[]>,
+    getSkillRegistryProviders: () =>
+      invokeDesktop("desktop:get-skill-registry-providers"),
+    searchSkillRegistry: (input: DesktopIpcInput<"desktop:search-skill-registry">) =>
+      invokeDesktop("desktop:search-skill-registry", input),
+    getSkillRegistryDetail: (input: DesktopIpcInput<"desktop:get-skill-registry-detail">) =>
+      invokeDesktop("desktop:get-skill-registry-detail", input),
+    getSkillRegistryVersions: (input: DesktopIpcInput<"desktop:get-skill-registry-versions">) =>
+      invokeDesktop("desktop:get-skill-registry-versions", input),
+    getSkillRegistryFiles: (input: DesktopIpcInput<"desktop:get-skill-registry-files">) =>
+      invokeDesktop("desktop:get-skill-registry-files", input),
+    readSkillRegistryFile: (input: DesktopIpcInput<"desktop:read-skill-registry-file">) =>
+      invokeDesktop("desktop:read-skill-registry-file", input),
+    getSkillRegistrySecurity: (input: DesktopIpcInput<"desktop:get-skill-registry-security">) =>
+      invokeDesktop("desktop:get-skill-registry-security", input),
+    downloadSkillRegistrySkill: (input: DesktopIpcInput<"desktop:download-skill-registry-skill">) =>
+      invokeDesktop("desktop:download-skill-registry-skill", input),
+    listDownloadedRegistrySkills: () =>
+      invokeDesktop("desktop:list-downloaded-registry-skills"),
+    setDownloadedRegistrySkillEnabled: (input: DesktopIpcInput<"desktop:set-downloaded-registry-skill-enabled">) =>
+      invokeDesktop("desktop:set-downloaded-registry-skill-enabled", input),
+    deleteDownloadedRegistrySkill: (input: DesktopIpcInput<"desktop:delete-downloaded-registry-skill">) =>
+      invokeDesktop("desktop:delete-downloaded-registry-skill", input),
+    readDownloadedRegistrySkillFile: (input: DesktopIpcInput<"desktop:read-downloaded-registry-skill-file">) =>
+      invokeDesktop("desktop:read-downloaded-registry-skill-file", input),
+    listDownloadedRegistrySkillFiles: (input: DesktopIpcInput<"desktop:list-downloaded-registry-skill-files">) =>
+      invokeDesktop("desktop:list-downloaded-registry-skill-files", input),
+    forkDownloadedRegistrySkill: (input: DesktopIpcInput<"desktop:fork-downloaded-registry-skill">) =>
+      invokeDesktop("desktop:fork-downloaded-registry-skill", input),
+    previewDownloadedRegistrySkillUpdate: (input: DesktopIpcInput<"desktop:preview-downloaded-registry-skill-update">) =>
+      invokeDesktop("desktop:preview-downloaded-registry-skill-update", input),
+    updateDownloadedRegistrySkill: (input: DesktopIpcInput<"desktop:update-downloaded-registry-skill">) =>
+      invokeDesktop("desktop:update-downloaded-registry-skill", input),
+    rollbackDownloadedRegistrySkill: (input: DesktopIpcInput<"desktop:rollback-downloaded-registry-skill">) =>
+      invokeDesktop("desktop:rollback-downloaded-registry-skill", input),
     getPromptPresets: () =>
       invokeDesktop("desktop:get-prompt-presets") as Promise<PromptPresetSummary[]>,
     getPromptPresetSelection: () =>

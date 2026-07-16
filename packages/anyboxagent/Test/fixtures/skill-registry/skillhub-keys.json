@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "key_id": "skillhub-platform-v1",
+      "algorithm": "Ed25519",
+      "public_key_raw_b64": "Wrh8O72FAuN+qwuYh6l7+c1yKPAHjdUNNij+nb9c9Ok=",
+      "status": "active",
+      "issuer": "skillhub.cn",
+      "activated_at": 1784108201100
+    }
+  ]
+}

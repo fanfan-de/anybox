@@ -901,9 +901,10 @@ export function useGlobalSkills({ onSkillsUpdated }: UseGlobalSkillsOptions = {}
     }
   }
 
-  async function handleOpenGlobalSkillsFolder() {
+  async function handleOpenGlobalSkillsFolder(targetPath?: string) {
     const openPath = window.desktop?.openPath
-    if (!globalSkillsRoot.trim()) return
+    const resolvedTargetPath = targetPath?.trim() || globalSkillsRoot.trim()
+    if (!resolvedTargetPath) return
 
 
     if (!openPath) {
@@ -916,7 +917,7 @@ export function useGlobalSkills({ onSkillsUpdated }: UseGlobalSkillsOptions = {}
 
     try {
       await openPath({
-        targetPath: globalSkillsRoot,
+        targetPath: resolvedTargetPath,
       })
     } catch (error) {
       showGlobalSkillsMessage({

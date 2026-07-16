@@ -667,6 +667,54 @@ describe("review panel controller", () => {
     expect(nextState?.treeEntriesByDirectoryPath.src).toBeUndefined()
   })
 
+  it("keeps visible file tree caches when git internal files change at any depth", () => {
+    const workspace = createWorkspace()
+    const fileState: WorkspaceFileReviewState = {
+      ...DEFAULT_WORKSPACE_FILE_REVIEW_STATE,
+      scopeDirectory: workspace.directory,
+      treeEntriesByDirectoryPath: {
+        "": [
+          {
+            path: "repo",
+            name: "repo",
+            kind: "directory",
+            extension: null,
+            hasChildren: true,
+          },
+        ],
+        repo: [
+          {
+            path: "repo/README.md",
+            name: "README.md",
+            kind: "file",
+            extension: "md",
+            hasChildren: false,
+          },
+        ],
+      },
+      treeExpandedDirectoryPaths: ["repo"],
+    }
+
+    const { result } = renderHook(() => useControllerHarness({
+      activeTabID: "files-tab",
+      initialTabs: [createFilesTab(fileState, workspace)],
+      workspace,
+    }))
+
+    act(() => {
+      result.current.controller.handleWorkspaceFileTreeInvalidate([
+        "C:\\work\\workspace-1\\.git",
+        "C:\\work\\workspace-1\\.git\\index.lock",
+        "C:\\work\\workspace-1\\repo\\.git",
+        "C:\\work\\workspace-1\\repo\\.git\\index.lock",
+      ])
+    })
+
+    const filesTab = result.current.rightSidebarTabs.find((tab) => tab.id === "files-tab")
+    const nextState = filesTab?.kind === "files" ? filesTab.state : null
+    expect(nextState?.treeEntriesByDirectoryPath).toEqual(fileState.treeEntriesByDirectoryPath)
+  })
+
   it("invalidates the root file tree cache when a top-level workspace entry changes", () => {
     const workspace = createWorkspace()
     const fileState: WorkspaceFileReviewState = {

@@ -1,0 +1,42 @@
+{
+  "slug": "cad-editor",
+  "source": "community",
+  "versions": [
+    {
+      "changelog": "CAD制图编辑器",
+      "createdAt": 1779880654609,
+      "securityReports": {
+        "keen": {
+          "status": "benign",
+          "statusText": "安全，无风险",
+          "reportUrl": "https://tix.qq.com/search/skill?keyword=fixture"
+        },
+        "sanbu": {
+          "status": "benign",
+          "statusText": "安全，无风险",
+          "reportUrl": "https://static.cloudsec.tencent.com/reports/fixture.html"
+        }
+      },
+      "version": "1.0.6",
+      "versionId": 95642
+    },
+    {
+      "changelog": "Previous release",
+      "createdAt": 1779000000000,
+      "securityReports": {
+        "keen": {
+          "status": "benign",
+          "statusText": "安全，无风险",
+          "reportUrl": "https://tix.qq.com/search/skill?keyword=fixture-old"
+        },
+        "sanbu": {
+          "status": "pending",
+          "statusText": "扫描中",
+          "reportUrl": null
+        }
+      },
+      "version": "1.0.5",
+      "versionId": 95000
+    }
+  ]
+}

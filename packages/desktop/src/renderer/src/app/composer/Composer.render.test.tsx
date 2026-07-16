@@ -89,7 +89,7 @@ describe("Composer", () => {
     expect(editorShell).not.toBeNull()
     expect(editorShell?.querySelector(".composer-editor-input")).not.toBeNull()
     expect(editorShell?.querySelector(".composer-editor-placeholder")).not.toBeNull()
-    expect(screen.getByText("Ask anything")).toBeInTheDocument()
+    expect(screen.getByText("Ask anything · @ reference plugins · / and ~ reference commands")).toBeInTheDocument()
   })
 
   it("localizes the default placeholder through i18n", () => {
@@ -97,7 +97,7 @@ describe("Composer", () => {
 
     renderComposer({ withI18n: true })
 
-    expect(screen.getByText("随心输入")).toBeInTheDocument()
+    expect(screen.getByText("随心输入 · @引用插件 · /和~引用指令")).toBeInTheDocument()
   })
 
   it("renders a custom placeholder when provided", () => {

@@ -74,13 +74,35 @@ function shouldReloadWorkspaceFromRelativePath(relativePath: string) {
   return relativePath === ".git" || relativePath === ".git/config"
 }
 
-function isGitInternalRelativePath(relativePath: string) {
-  return relativePath === ".git" || relativePath.startsWith(".git/")
+function getGitInternalPathSegments(relativePath: string) {
+  const segments = relativePath
+    .trim()
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter(Boolean)
+  const gitSegmentIndex = segments.findIndex((segment) => segment.toLowerCase() === ".git")
+  return gitSegmentIndex < 0 ? null : segments.slice(gitSegmentIndex + 1)
+}
+
+export function isGitInternalRelativePath(relativePath: string) {
+  return getGitInternalPathSegments(relativePath) !== null
+}
+
+function isTransientGitInternalRelativePath(relativePath: string) {
+  const gitInternalSegments = getGitInternalPathSegments(relativePath)
+  if (!gitInternalSegments) return false
+  if (gitInternalSegments.length === 0) return true
+  return gitInternalSegments[gitInternalSegments.length - 1]?.toLowerCase().endsWith(".lock") === true
 }
 
 export function shouldRefreshWorkspaceDiffFromRelativePaths(relativePaths: string[]) {
   if (relativePaths.length === 0) return true
   return relativePaths.some((relativePath) => !isGitInternalRelativePath(relativePath))
+}
+
+export function shouldRefreshGitStateFromRelativePaths(relativePaths: string[]) {
+  if (relativePaths.length === 0) return true
+  return relativePaths.some((relativePath) => !isTransientGitInternalRelativePath(relativePath))
 }
 
 interface RefreshWorkspaceFromDirectoryInput {
@@ -198,8 +220,9 @@ export function handleWorkspaceFileChange({
     .map((changedPath) => resolveWorkspaceRelativePath(matchingWorkspace.directory, changedPath, platform))
     .filter((value): value is string => value !== null)
   const requiresWorkspaceReload = relativePaths.some(shouldReloadWorkspaceFromRelativePath)
+  const shouldRefreshGitState = shouldRefreshGitStateFromRelativePaths(relativePaths)
 
-  if (now >= (gitRefreshSuppressedUntilRef.current[normalizedEventDirectory] ?? 0)) {
+  if (shouldRefreshGitState && now >= (gitRefreshSuppressedUntilRef.current[normalizedEventDirectory] ?? 0)) {
     gitRefreshSuppressedUntilRef.current[normalizedEventDirectory] = now + GIT_REFRESH_SUPPRESSION_MS
     notifyGitStateChanged({
       directory: matchingWorkspace.directory,

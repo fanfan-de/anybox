@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
+import { skillLibraryTranslations } from "../skill-library-translations"
 
 export const deDE = {
   "app.loading": "Laden",
@@ -141,6 +142,7 @@ export const deDE = {
   "settings.nav.storage": "Speicher",
   "settings.nav.archive": "Archivierte Sitzungen",
   ...subscriptionTranslations["de-DE"],
+  ...skillLibraryTranslations["de-DE"],
   "settings.about.version": "Version",
   "settings.about.checkUpdates": "Nach Updates suchen",
   "settings.about.checkingUpdates": "Suche läuft...",
@@ -564,7 +566,7 @@ export const deDE = {
   "tools.readOnly": "Schreibgeschützt",
   "tools.moderate": "Moderat",
   "composer.taskDraft": "Aufgabenentwurf",
-  "composer.placeholder": "Alles fragen",
+  "composer.placeholder": "Alles fragen · @ Plugins referenzieren · / und ~ Befehle referenzieren",
   "composer.send": "Senden",
   "composer.stop": "Stopp",
   "composer.attach": "Anhängen",

@@ -14,6 +14,7 @@
     "./desktop-ipc": "./src/desktop-ipc.ts",
     "./reasoning": "./src/reasoning.ts",
     "./session": "./src/session.ts",
+    "./skill-registry": "./src/skill-registry.ts",
     "./workspace-location": "./src/workspace-location.ts"
   },
   "dependencies": {

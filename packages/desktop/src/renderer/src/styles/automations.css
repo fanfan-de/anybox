@@ -1157,7 +1157,6 @@
 .automations-create-header {
   min-width: 0;
   padding: 14px 14px 12px 18px;
-  border-bottom: 1px solid var(--automations-border-subtle);
   background: var(--automations-elevated);
   border-radius: var(--automations-radius-panel) var(--automations-radius-panel) 0 0;
   align-items: center;
@@ -1237,8 +1236,7 @@
   min-width: 0;
   min-height: 56px;
   padding: 10px 14px;
-  border-top: 1px solid var(--automations-border-subtle);
-  background: var(--automations-panel-surface);
+  background: var(--automations-elevated);
   border-radius: 0 0 var(--automations-radius-panel) var(--automations-radius-panel);
   display: flex;
   align-items: center;

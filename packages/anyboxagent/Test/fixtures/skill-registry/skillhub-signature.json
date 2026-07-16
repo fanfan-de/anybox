@@ -1,0 +1,9 @@
+{
+  "content_hash": "ddd4073da7b243ccca45d5fd0de89e6d1aa2c526e9bbcc66589767f5da6dae18",
+  "hash_version": 1,
+  "key_id": "skillhub-platform-v1",
+  "payload": "{\"content_hash\":\"ddd4073da7b243ccca45d5fd0de89e6d1aa2c526e9bbcc66589767f5da6dae18\",\"file_count\":50,\"issued_at\":1781806442431,\"issuer\":\"skillhub.cn\",\"package_md5\":\"604f55aab0842368fa32875358384dde\",\"publisher_id\":423864,\"publisher_real_name_verified\":true,\"publisher_user_name\":\"user_e02e04b8\",\"skill_slug\":\"cad-editor\",\"skill_version\":\"1.0.6\",\"v\":1,\"version_id\":95642}",
+  "signature": "bCFh9s96uA7C4u92DNQFcZryTiouKhuQCQMdVPaMgs71ljmKtpn9iAsBXJxT9XZmSUnZyc/WzYIaRSnidw03DA==",
+  "signed": true,
+  "signed_at": 1781806442431
+}

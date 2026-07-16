@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ArrowUp,
   ArrowUpRight,
+  BadgeCheck,
   BrainCircuit,
   Calendar,
   CalendarDays,
@@ -38,6 +39,7 @@ import {
   GitPullRequest,
   Globe,
   Info,
+  KeyRound,
   LayoutPanelLeft,
   ListTree,
   LoaderCircle,
@@ -70,6 +72,7 @@ import {
   SortAsc,
   Square,
   SquareChartGantt,
+  Star,
   Sun,
   Terminal,
   Trash2,
@@ -99,6 +102,40 @@ export const PinIcon = createIcon(Pin)
 export const PlayIcon = createIcon(Play)
 export const CopyIcon = createIcon(Copy)
 export const DownloadIcon = createIcon(Download)
+export const StarIcon = createIcon(Star)
+export const VerifiedIcon = createIcon(BadgeCheck)
+export const KeyIcon = createIcon(KeyRound)
+export function SkillDefaultLogo() {
+  return (
+    <svg
+      className="skill-default-logo-mark"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M12 2.5 15.7 6.2 12 9.9 8.3 6.2 12 2.5Z"
+        fill="currentColor"
+      />
+      <path
+        d="m21.5 12-3.7 3.7-3.7-3.7 3.7-3.7 3.7 3.7Z"
+        fill="currentColor"
+        opacity="0.82"
+      />
+      <path
+        d="M12 21.5 8.3 17.8l3.7-3.7 3.7 3.7-3.7 3.7Z"
+        fill="currentColor"
+        opacity="0.64"
+      />
+      <path
+        d="M2.5 12 6.2 8.3 9.9 12l-3.7 3.7L2.5 12Z"
+        fill="currentColor"
+        opacity="0.72"
+      />
+      <rect x="9.4" y="9.4" width="5.2" height="5.2" rx="1.25" fill="currentColor" />
+    </svg>
+  )
+}
 export const CheckIcon = createIcon(Check)
 export const ChevronDownIcon = createIcon(ChevronDown)
 export const ChevronRightIcon = createIcon(ChevronRight)

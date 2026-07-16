@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
+import { skillLibraryTranslations } from "../skill-library-translations"
 
 export const idID = {
   "app.loading": "Memuat",
@@ -141,6 +142,7 @@ export const idID = {
   "settings.nav.storage": "Penyimpanan",
   "settings.nav.archive": "Sesi yang Diarsipkan",
   ...subscriptionTranslations["id-ID"],
+  ...skillLibraryTranslations["id-ID"],
   "settings.about.version": "Versi",
   "settings.about.checkUpdates": "Periksa pembaruan",
   "settings.about.checkingUpdates": "Memeriksa...",
@@ -564,7 +566,7 @@ export const idID = {
   "tools.readOnly": "Hanya baca",
   "tools.moderate": "Sedang",
   "composer.taskDraft": "Draf tugas",
-  "composer.placeholder": "Tanya apa pun",
+  "composer.placeholder": "Tanya apa pun · @ rujuk plugin · / dan ~ rujuk perintah",
   "composer.send": "Kirim",
   "composer.stop": "Berhenti",
   "composer.attach": "Lampirkan",

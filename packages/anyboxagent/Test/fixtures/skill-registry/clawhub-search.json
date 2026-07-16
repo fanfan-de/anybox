@@ -1,0 +1,22 @@
+{
+  "results": [
+    {
+      "score": 4.09,
+      "slug": "pdf",
+      "displayName": "PDF Toolkit",
+      "summary": "Read and create PDF files.",
+      "version": "0.1.0",
+      "downloads": 45042,
+      "updatedAt": 1778987458350,
+      "ownerHandle": "awspace",
+      "owner": {
+        "handle": "awspace",
+        "displayName": "AW Space",
+        "image": "https://avatars.githubusercontent.com/u/1?v=4"
+      }
+    },
+    {
+      "displayName": "Missing identity"
+    }
+  ]
+}

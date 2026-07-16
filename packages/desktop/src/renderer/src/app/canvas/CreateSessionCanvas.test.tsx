@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { I18nProvider } from "../i18n/I18nProvider"
 import type { WorkspaceGroup } from "../types"
-import { CreateSessionCanvas } from "./CreateSessionCanvas"
+import { CreateSessionCanvas, GlobalSkillsCanvas } from "./CreateSessionCanvas"
 
 function createWorkspace(overrides: Partial<WorkspaceGroup> = {}): WorkspaceGroup {
   return {
@@ -174,5 +175,68 @@ describe("CreateSessionCanvas", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open project folder" }))
 
     expect(props.onOpenProjectFolder).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("GlobalSkillsCanvas", () => {
+  it("shows local skill details first and keeps internal files in the Files tab", () => {
+    window.localStorage.setItem("desktop.locale", "en-US")
+    const onFileSelect = vi.fn()
+
+    render(
+      <I18nProvider>
+        <GlobalSkillsCanvas
+          deletingGlobalSkillDirectory={null}
+          globalSkillsRoot="C:/Anybox/skills"
+          isDirty={false}
+          isLoadingFile={false}
+          isSavingFile={false}
+          selectedFileContent={'---\nname: brand-guidelines\ndescription: Keep the product voice consistent.\n---\n\n# Brand guide'}
+          selectedFilePath="C:/Anybox/skills/Design/brand-guidelines/SKILL.md"
+          selectedFileReadOnly={false}
+          selectedSkillDirectoryPath="C:/Anybox/skills/Design/brand-guidelines"
+          selectedSkillDirectoryName="brand-guidelines"
+          selectedSkillFiles={[
+            {
+              name: "SKILL.md",
+              path: "C:/Anybox/skills/Design/brand-guidelines/SKILL.md",
+              kind: "file",
+            },
+            {
+              name: "LICENSE.txt",
+              path: "C:/Anybox/skills/Design/brand-guidelines/LICENSE.txt",
+              kind: "file",
+            },
+            {
+              name: "references",
+              path: "C:/Anybox/skills/Design/brand-guidelines/references",
+              kind: "directory",
+              children: [{
+                name: "voice.md",
+                path: "C:/Anybox/skills/Design/brand-guidelines/references/voice.md",
+                kind: "file",
+              }],
+            },
+          ]}
+          onChange={vi.fn()}
+          onDelete={vi.fn()}
+          onFileSelect={onFileSelect}
+          onSave={vi.fn()}
+        />
+      </I18nProvider>,
+    )
+
+    expect(screen.getByRole("heading", { name: "brand-guidelines", level: 2 })).toBeInTheDocument()
+    expect(screen.getByText("Keep the product voice consistent.")).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true")
+    expect(screen.queryByRole("button", { name: "LICENSE.txt" })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("tab", { name: "Files" }))
+
+    expect(screen.getByRole("button", { name: "SKILL.md" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "LICENSE.txt" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "references/voice.md" })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "LICENSE.txt" }))
+    expect(onFileSelect).toHaveBeenCalledWith("C:/Anybox/skills/Design/brand-guidelines/LICENSE.txt")
   })
 })

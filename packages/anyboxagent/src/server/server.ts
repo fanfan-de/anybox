@@ -19,6 +19,7 @@ import { DebugRoutes } from "#server/routes/debug.ts"
 import { SettingsRoutes } from "#server/routes/settings.ts"
 import { SessionRoutes } from "#server/routes/session.ts"
 import { StorageRoutes } from "#server/routes/storage.ts"
+import { SkillRegistryRoutes } from "#server/routes/skill-registry.ts"
 import { isApiError } from "#server/error.ts"
 import { isSessionLimitError } from "#session/runtime/session-limits.ts"
 import type { AppEnv } from "#server/types.ts"
@@ -147,6 +148,7 @@ export function createServerRuntime(options: Pick<ServerOptions, "corsWhitelist"
   app.route("/api/projects", ProjectRoutes({ ptyRegistry }))
   app.route("/api/sessions", SessionRoutes({ ptyRegistry }))
   app.route("/api/storage", StorageRoutes())
+  app.route("/api/skill-registry", SkillRegistryRoutes())
   app.route("/", CinemaWebRoutes())
 
   app.notFound((c) => jsonError(c, 404, "NOT_FOUND", "Route not found"))

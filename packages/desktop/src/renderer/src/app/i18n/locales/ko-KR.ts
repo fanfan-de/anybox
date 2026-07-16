@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
+import { skillLibraryTranslations } from "../skill-library-translations"
 
 export const koKR = {
   "app.loading": "로딩 중",
@@ -141,6 +142,7 @@ export const koKR = {
   "settings.nav.storage": "저장소",
   "settings.nav.archive": "보관된 세션",
   ...subscriptionTranslations["ko-KR"],
+  ...skillLibraryTranslations["ko-KR"],
   "settings.about.version": "버전",
   "settings.about.checkUpdates": "업데이트 확인",
   "settings.about.checkingUpdates": "확인 중...",
@@ -564,7 +566,7 @@ export const koKR = {
   "tools.readOnly": "읽기 전용",
   "tools.moderate": "보통",
   "composer.taskDraft": "작업 초안",
-  "composer.placeholder": "무엇이든 물어보세요",
+  "composer.placeholder": "무엇이든 물어보세요 · @로 플러그인 참조 · /와 ~로 명령 참조",
   "composer.send": "전송",
   "composer.stop": "중지",
   "composer.attach": "첨부",

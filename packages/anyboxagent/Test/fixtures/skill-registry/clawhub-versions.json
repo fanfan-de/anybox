@@ -1,0 +1,10 @@
+{
+  "items": [
+    {
+      "version": "0.1.0",
+      "createdAt": 1769847855729,
+      "changelog": "Initial release"
+    }
+  ],
+  "nextCursor": null
+}

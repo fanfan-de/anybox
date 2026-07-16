@@ -1,0 +1,19 @@
+{
+  "skill": { "slug": "pdf", "displayName": "PDF Toolkit" },
+  "version": { "version": "0.1.0", "createdAt": 1769847855729 },
+  "moderation": null,
+  "security": {
+    "status": "clean",
+    "hasWarnings": true,
+    "checkedAt": 1783653145037,
+    "sha256hash": "4991fa905d1b4d6d2995d44812f6859297d385965b4078be001c2bfd0908017c",
+    "scanners": {
+      "llm": {
+        "status": "clean",
+        "normalizedStatus": "clean",
+        "summary": "No malicious behavior found.",
+        "checkedAt": 1783653145037
+      }
+    }
+  }
+}

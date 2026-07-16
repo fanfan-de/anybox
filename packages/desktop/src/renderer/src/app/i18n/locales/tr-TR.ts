@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
+import { skillLibraryTranslations } from "../skill-library-translations"
 
 export const trTR = {
   "app.loading": "Yükleniyor",
@@ -141,6 +142,7 @@ export const trTR = {
   "settings.nav.storage": "Depolama",
   "settings.nav.archive": "Arşivlenen Oturumlar",
   ...subscriptionTranslations["tr-TR"],
+  ...skillLibraryTranslations["tr-TR"],
   "settings.about.version": "Sürüm",
   "settings.about.checkUpdates": "Güncellemeleri kontrol et",
   "settings.about.checkingUpdates": "Kontrol ediliyor...",
@@ -564,7 +566,7 @@ export const trTR = {
   "tools.readOnly": "Salt okunur",
   "tools.moderate": "Orta",
   "composer.taskDraft": "Görev taslağı",
-  "composer.placeholder": "Her şeyi sor",
+  "composer.placeholder": "Her şeyi sor · @ eklentilere başvurur · / ve ~ komutlara başvurur",
   "composer.send": "Gönder",
   "composer.stop": "Durdur",
   "composer.attach": "Ekle",

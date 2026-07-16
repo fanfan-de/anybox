@@ -92,6 +92,52 @@ describe("session metadata IPC helpers", () => {
   })
 })
 
+describe("skill registry IPC helpers", () => {
+  it("downloads by stable registry reference without accepting a client descriptor", async () => {
+    requestAgentJSONMock.mockResolvedValue({ data: { id: "registry:clawhub:demo/docs" } })
+    const input = { provider: "clawhub", remoteId: "demo/docs", version: "1.0.0" }
+
+    await internal.downloadSkillRegistrySkill(input)
+
+    expect(requestAgentJSONMock).toHaveBeenCalledWith("/api/skill-registry/download", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    })
+  })
+
+  it("never forwards client developer-mode overrides when enabling a managed skill", async () => {
+    requestAgentJSONMock.mockResolvedValue({ data: { id: "registry:clawhub:demo/docs", enabled: true } })
+
+    await internal.setDownloadedRegistrySkillEnabled({ id: "registry:clawhub:demo/docs", enabled: true })
+
+    expect(requestAgentJSONMock).toHaveBeenCalledWith("/api/skill-registry/downloads/registry%3Aclawhub%3Ademo%2Fdocs", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled: true }),
+    })
+  })
+
+  it("forwards fork and update-preview requests to encoded managed-skill routes", async () => {
+    requestAgentJSONMock.mockResolvedValue({ data: {} })
+    const id = "registry:clawhub:demo/docs"
+
+    await internal.forkDownloadedRegistrySkill({ id, name: "Editable docs" })
+    expect(requestAgentJSONMock).toHaveBeenLastCalledWith("/api/skill-registry/downloads/registry%3Aclawhub%3Ademo%2Fdocs/fork", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Editable docs" }),
+    })
+
+    await internal.previewDownloadedRegistrySkillUpdate({ id, version: "2.0.0" })
+    expect(requestAgentJSONMock).toHaveBeenLastCalledWith("/api/skill-registry/downloads/registry%3Aclawhub%3Ademo%2Fdocs/update-preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: "2.0.0" }),
+    })
+  })
+})
+
 describe("Anybox subscription IPC helpers", () => {
   it("loads subscription data with the desktop OAuth token kept in the main process", async () => {
     requestAgentJSONMock.mockResolvedValue({

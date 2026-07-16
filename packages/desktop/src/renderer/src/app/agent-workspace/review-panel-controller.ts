@@ -42,7 +42,7 @@ import {
   DEFAULT_WORKSPACE_PREVIEW_STATE,
   getWorkspaceFileCommentKey,
 } from "./review-preview-state"
-import { normalizeWorkspacePath } from "./workspace-loading-hooks"
+import { isGitInternalRelativePath, normalizeWorkspacePath } from "./workspace-loading-hooks"
 import type { WorkspaceStateUpdater } from "./workspace-store"
 
 type StateSetter<T> = (update: WorkspaceStateUpdater<T>) => void
@@ -191,6 +191,7 @@ export function useReviewPanelController({
         keys.add("")
         continue
       }
+      if (isGitInternalRelativePath(relativePath)) continue
 
       const segments = relativePath.split("/").filter(Boolean)
       if (segments.length === 0) continue

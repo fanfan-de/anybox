@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
+import { skillLibraryTranslations } from "../skill-library-translations"
 
 export const es419 = {
   "app.loading": "Cargando",
@@ -141,6 +142,7 @@ export const es419 = {
   "settings.nav.storage": "Almacenamiento",
   "settings.nav.archive": "Sesiones archivadas",
   ...subscriptionTranslations["es-419"],
+  ...skillLibraryTranslations["es-419"],
   "settings.about.version": "Versión",
   "settings.about.checkUpdates": "Buscar actualizaciones",
   "settings.about.checkingUpdates": "Buscando...",
@@ -564,7 +566,7 @@ export const es419 = {
   "tools.readOnly": "Solo lectura",
   "tools.moderate": "Moderado",
   "composer.taskDraft": "Borrador de tarea",
-  "composer.placeholder": "Pregunta lo que sea",
+  "composer.placeholder": "Pregunta lo que sea · @ referencia plugins · / y ~ referencia comandos",
   "composer.send": "Enviar",
   "composer.stop": "Detener",
   "composer.attach": "Adjuntar",

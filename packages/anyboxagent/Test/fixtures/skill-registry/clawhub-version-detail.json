@@ -1,0 +1,22 @@
+{
+  "skill": { "slug": "pdf", "displayName": "PDF Toolkit" },
+  "version": {
+    "version": "0.1.0",
+    "createdAt": 1769847855729,
+    "changelog": "Initial release",
+    "files": [
+      {
+        "path": "SKILL.md",
+        "size": 33,
+        "sha256": "22aed96866d0df9ab72952c467a9c62f417bc37bb572841aee30bfb306ba789a",
+        "contentType": "text/markdown"
+      }
+    ],
+    "security": {
+      "status": "clean",
+      "hasWarnings": false,
+      "checkedAt": 1783653145037,
+      "sha256hash": "4991fa905d1b4d6d2995d44812f6859297d385965b4078be001c2bfd0908017c"
+    }
+  }
+}

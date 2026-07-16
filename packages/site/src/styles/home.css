@@ -189,6 +189,7 @@
   font-size: clamp(5.4rem, 14vw, 11rem);
   font-weight: 820;
   line-height: 0.92;
+  transform: translateY(-18px);
   text-shadow:
     0 0 26px color-mix(in srgb, var(--hero-ribbon-lime) 28%, transparent),
     0 0 82px color-mix(in srgb, var(--hero-ribbon-cyan) 22%, transparent),
@@ -868,6 +869,7 @@
 
   .home-hero-wordmark {
     font-size: clamp(4.35rem, 24vw, 7rem);
+    transform: translateY(-10px);
   }
 
   .home-hero h1 {
