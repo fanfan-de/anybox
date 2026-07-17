@@ -3,6 +3,7 @@ import * as Tool from "#tool/tool.ts"
 import { AskUserQuestionTool } from "#tool/ask-user-question.ts"
 import { ApplyPatchTool } from "#tool/apply-patch.ts"
 import { CancelSubagentTool } from "#tool/cancel-subagent.ts"
+import { ExecTool } from "#tool/exec.ts"
 import {
   CmdCommandTool,
   GitBashCommandTool,
@@ -30,6 +31,7 @@ import { StopBackgroundTaskTool } from "#tool/stop-background-task.ts"
 import { SshShellCommandTool } from "#tool/ssh-shell-command.ts"
 import { TerminalReadTool, TerminalRunCommandTool, TerminalWriteInputTool } from "#tool/terminal-tools.ts"
 import { TaskCreateTool, TaskGetTool, TaskListTool, TaskUpdateTool } from "#tool/task-tools.ts"
+import { ToolSearchTool } from "#tool/tool-search.ts"
 import { ViewImageTool } from "#tool/view-image.ts"
 import { WaitSubagentTool } from "#tool/wait-subagent.ts"
 import { WebFetchTool } from "#tool/web-fetch.ts"
@@ -114,6 +116,7 @@ export async function builtinTools(): Promise<Tool.ToolInfo[]> {
     ListMcpResourceTemplatesTool,
     ReadMcpResourceTool,
     ParallelTool,
+    ExecTool,
     LoadWorkspaceDependenciesTool,
     ListRollbackCheckpointsTool,
     RollbackToCheckpointTool,
@@ -121,6 +124,7 @@ export async function builtinTools(): Promise<Tool.ToolInfo[]> {
     ApplyPatchTool,
     GlobTool,
     GrepTool,
+    ToolSearchTool,
     ListDirectoryTool,
     GenerateImageTool,
     ViewImageTool,

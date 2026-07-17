@@ -24,6 +24,13 @@ export interface ToolCapabilities {
   needsShell?: boolean
 }
 
+export interface ToolSource {
+  kind: "mcp"
+  id: string
+  name: string
+  description?: string
+}
+
 export interface InitContext {
   agent?: Agent.AgentInfo
 }
@@ -137,6 +144,8 @@ export interface ToolInfo<
   title?: string
   aliases?: string[]
   capabilities?: ToolCapabilities
+  source?: ToolSource
+  inputSchema?: Record<string, unknown>
   maxResultSizeChars?: number
   init: (ctx?: InitContext) => Promise<NormalizedToolRuntime<Parameters, M, D>>
 }

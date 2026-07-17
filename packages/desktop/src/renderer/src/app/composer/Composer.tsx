@@ -60,7 +60,6 @@ import {
   readComposerLongTextStats,
   readComposerTagIdentity,
   readComposerTagsFromDraftState,
-  readTaggedMcpServerIDsFromDraftState,
   readTaggedPluginIDsFromDraftState,
   removeComposerTagFromDraftState,
   shouldCreateComposerLongTextTag,
@@ -86,7 +85,6 @@ interface ComposerProps {
   mcpOptions: ComposerMcpOption[]
   modelOptions: ComposerModelOption[]
   onDraftStateChange: (value: ComposerDraftState) => void
-  onMcpToggle?: (value: string) => void | Promise<void>
   onModelChange: (value: string | null) => void | Promise<void>
   onPickAttachments: () => void | Promise<void>
   onPasteImageAttachments?: (images: ComposerPastedImageAttachment[]) => void | Promise<void>
@@ -1131,7 +1129,6 @@ export function Composer({
   mcpOptions,
   modelOptions,
   onDraftStateChange,
-  onMcpToggle,
   onModelChange,
   onPickAttachments,
   onPasteImageAttachments,
@@ -1172,10 +1169,6 @@ export function Composer({
   const selectedModelOptionRef = useRef<HTMLButtonElement | null>(null)
   const isComposingRef = useRef(false)
   const fileSearchRequestRef = useRef(0)
-  const pendingMcpDiffRef = useRef<{
-    added: Set<string>
-    removed: Set<string>
-  } | null>(null)
   const pendingPluginDiffRef = useRef<{
     added: Set<string>
     removed: Set<string>
@@ -1750,22 +1743,6 @@ export function Composer({
     editorRef.current = editor
   }
 
-  function syncMcpDiff(nextDraftState: ComposerDraftState) {
-    if (!showProjectTagCommands || !onMcpToggle) return
-
-    const previousMcpIDs = new Set(readTaggedMcpServerIDsFromDraftState(draftStateRef.current))
-    const nextMcpIDs = new Set(readTaggedMcpServerIDsFromDraftState(nextDraftState))
-    const pendingDiff = pendingMcpDiffRef.current
-    pendingMcpDiffRef.current = null
-
-    const added = difference(nextMcpIDs, previousMcpIDs).filter((value) => !pendingDiff?.added.has(value))
-    const removed = difference(previousMcpIDs, nextMcpIDs).filter((value) => !pendingDiff?.removed.has(value))
-
-    for (const serverID of [...added, ...removed]) {
-      void onMcpToggle(serverID)
-    }
-  }
-
   function syncPluginDiff(nextDraftState: ComposerDraftState) {
     if (!showProjectTagCommands || !onPluginToggle) return
 
@@ -1798,7 +1775,6 @@ export function Composer({
       return
     }
 
-    syncMcpDiff(nextDraftState)
     syncPluginDiff(nextDraftState)
     draftStateRef.current = nextDraftState
     localEditorLexicalJSONRef.current = nextDraftState.lexicalJSON
@@ -1858,17 +1834,6 @@ export function Composer({
 
     const editor = editorRef.current
     if (!editor || !currentCommandMenuState) return
-
-    if (item.tagData.kind === "mcp") {
-      pendingMcpDiffRef.current = {
-        added: new Set([item.tagData.serverID]),
-        removed: new Set(),
-      }
-
-      if (!selectedMcpServerIDs.includes(item.tagData.serverID)) {
-        void onMcpToggle?.(item.tagData.serverID)
-      }
-    }
 
     if (item.tagData.kind === "plugin") {
       pendingPluginDiffRef.current = {

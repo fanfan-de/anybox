@@ -894,6 +894,213 @@ describe("ThreadView trace item renderers", () => {
     expect(within(outputPane).getByRole("button", { name: "Collapse Tool completed output content" })).toHaveAttribute("aria-expanded", "true")
   })
 
+  it("formats JSON tool input and output while expanding multiline and serialized JSON strings", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+    const rawInput = JSON.stringify({
+      code: "{\n  // Deep pattern analysis\n  const patterns = {}\n}",
+      options: '{"caseSensitive":true}',
+    })
+    const rawOutput = '{"result":{"hits":2}}'
+    const toolItem: AssistantTraceItem = {
+      ...toolStatusTraceItem("completed"),
+      detail: undefined,
+      toolInputText: rawInput,
+      toolOutputText: rawOutput,
+    }
+
+    renderThread(
+      [assistantTraceMessage("assistant-json-tool-input", [toolItem], false)],
+      {
+        assistantTraceVisibility: {
+          ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+          toolInputs: true,
+          toolOutputs: true,
+        },
+      },
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /Tool completed/ }))
+
+    const inputPane = screen.getByRole("region", { name: "Tool completed input content" })
+    const outputPane = screen.getByRole("region", { name: "Tool completed output content" })
+    const formattedInput = inputPane.querySelector(".trace-tool-io-json")
+    const formattedOutput = outputPane.querySelector(".trace-tool-io-json")
+    expect(formattedInput?.textContent).toBe([
+      "{",
+      '  "code": """',
+      "    {",
+      "      // Deep pattern analysis",
+      "      const patterns = {}",
+      "    }",
+      '  """,',
+      '  "options": json"""',
+      "    {",
+      '      "caseSensitive": true',
+      "    }",
+      '  """',
+      "}",
+    ].join("\n"))
+    expect(formattedInput).toHaveAttribute("data-expanded-json-string", "true")
+    expect(formattedInput).toHaveAttribute("data-expanded-multiline-string", "true")
+    expect(formattedOutput?.textContent).toBe([
+      "{",
+      '  "result": {',
+      '    "hits": 2',
+      "  }",
+      "}",
+    ].join("\n"))
+
+    fireEvent.click(within(inputPane).getByRole("button", { name: "Copy Tool completed input content" }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(rawInput))
+
+    fireEvent.click(within(outputPane).getByRole("button", { name: "Copy Tool completed output content" }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(rawOutput))
+  })
+
+  it("renders valid exec input as read-only JavaScript while keeping output and copy behavior generic", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+    const executionMarker = "__anyboxExecTraceRendererExecuted"
+    Reflect.deleteProperty(window, executionMarker)
+    const code = [
+      `window.${executionMarker} = true`,
+      'const hits = await tools.grep({ pattern: "ThreadView" })',
+      "return { count: hits.length }",
+    ].join("\n")
+    const rawInput = JSON.stringify({ code })
+    const rawOutput = JSON.stringify({
+      result: { count: 2 },
+      toolCalls: [],
+      durationMs: 12,
+    })
+    const toolItem: AssistantTraceItem = {
+      ...toolStatusTraceItem("completed"),
+      detail: undefined,
+      title: "exec",
+      toolName: "exec",
+      toolInputText: rawInput,
+      toolOutputText: rawOutput,
+    }
+
+    const { container } = renderThread(
+      [assistantTraceMessage("assistant-exec-tool-input", [toolItem], false)],
+      {
+        assistantTraceVisibility: {
+          ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+          toolInputs: true,
+          toolOutputs: true,
+        },
+        codeTheme: "dracula",
+      },
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /exec/i }))
+
+    const inputPane = screen.getByRole("region", { name: "exec input content" })
+    const outputPane = screen.getByRole("region", { name: "exec output content" })
+    const codeBlock = inputPane.querySelector(".trace-tool-exec-code")
+    expect(within(inputPane).getByText("JavaScript · async body")).toBeInTheDocument()
+    expect(codeBlock).toHaveAttribute("data-language", "javascript")
+    expect(codeBlock).toHaveAttribute("data-theme", "dracula")
+    expect(codeBlock?.querySelectorAll(".code-highlight-row")).toHaveLength(3)
+    expect(codeBlock?.querySelectorAll(".code-highlight-raw-line")[1]?.textContent).toBe(
+      'const hits = await tools.grep({ pattern: "ThreadView" })',
+    )
+    expect(inputPane.querySelector(".trace-tool-io-json")).toBeNull()
+    expect(outputPane.querySelector(".trace-tool-io-json")).not.toBeNull()
+    expect(container.querySelectorAll(".trace-tool-exec-code")).toHaveLength(1)
+    expect(Reflect.get(window, executionMarker)).toBeUndefined()
+
+    fireEvent.click(within(inputPane).getByRole("button", { name: "Copy exec input content" }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(rawInput))
+  })
+
+  it("falls back to raw text for incomplete exec input", () => {
+    const toolItem: AssistantTraceItem = {
+      ...toolStatusTraceItem("running"),
+      title: "exec",
+      toolName: "exec",
+      toolInputText: '{"code":"const pending = true"',
+    }
+
+    renderThread(
+      [assistantTraceMessage("assistant-partial-exec-tool-input", [toolItem], true)],
+      {
+        assistantTraceVisibility: {
+          ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+          toolInputs: true,
+        },
+      },
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /exec/i }))
+
+    const inputPane = screen.getByRole("region", { name: "exec input content" })
+    expect(inputPane.querySelector(".trace-tool-exec-code")).toBeNull()
+    expect(within(inputPane).getByText('{"code":"const pending = true"')).toBeInTheDocument()
+  })
+
+  it("falls back to generic JSON when an exec input has fields outside the known schema", () => {
+    const rawInput = JSON.stringify({
+      code: "return 1",
+      timeoutMs: 5000,
+    })
+    const toolItem: AssistantTraceItem = {
+      ...toolStatusTraceItem("completed"),
+      detail: undefined,
+      title: "exec",
+      toolName: "exec",
+      toolInputText: rawInput,
+    }
+
+    renderThread(
+      [assistantTraceMessage("assistant-unknown-exec-input", [toolItem], false)],
+      {
+        assistantTraceVisibility: {
+          ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+          toolInputs: true,
+        },
+      },
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /exec/i }))
+
+    const inputPane = screen.getByRole("region", { name: "exec input content" })
+    expect(inputPane.querySelector(".trace-tool-exec-code")).toBeNull()
+    expect(inputPane.querySelector(".trace-tool-io-json")).not.toBeNull()
+    expect(inputPane).toHaveTextContent('"timeoutMs": 5000')
+  })
+
+  it("keeps incomplete JSON tool inputs as raw text while streaming", () => {
+    const toolItem: AssistantTraceItem = {
+      ...toolStatusTraceItem("running"),
+      toolInputText: '{"command":"rg ThreadView"',
+    }
+
+    renderThread(
+      [assistantTraceMessage("assistant-partial-json-tool-input", [toolItem], true)],
+      {
+        assistantTraceVisibility: {
+          ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+          toolInputs: true,
+        },
+      },
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /Tool running/ }))
+
+    const inputPane = screen.getByRole("region", { name: "Tool running input content" })
+    expect(inputPane.querySelector(".trace-tool-io-json")).toBeNull()
+    expect(within(inputPane).getByText('{"command":"rg ThreadView"')).toBeInTheDocument()
+  })
+
   it("localizes tool input and output content regions in Chinese mode", async () => {
     const previousDesktop = window.desktop
     window.desktop = undefined

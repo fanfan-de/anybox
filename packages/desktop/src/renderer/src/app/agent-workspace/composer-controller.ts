@@ -243,6 +243,7 @@ export function useComposerController({
     selectedModel?: string | null
     session: SessionSummary
     selectedSkillIDs: string[]
+    turnMcpServerIDs: string[]
     submissionMode?: UserThreadMessage["submissionMode"]
     tabKey: string
     text: string
@@ -427,6 +428,7 @@ export function useComposerController({
     attachmentsOverride?: ComposerAttachment[]
     createSessionTabID?: string | null
     draftStateOverride?: ComposerDraftState
+    displayTextOverride?: string
     paneID?: string | null
     preserveComposerState?: boolean
     questionAnswer?: {
@@ -437,10 +439,12 @@ export function useComposerController({
     selectedReasoningEffort?: ReasoningEffort | null
     selectedModel?: string | null
     selectedSkillIDs?: string[]
+    turnMcpServerIDsOverride?: string[]
     sessionID?: string | null
     steerQueuedMessageID?: string
     submissionMode?: UserThreadMessage["submissionMode"]
     tabKey?: string | null
+    transportTextOverride?: string
     waitForPendingModelSelection?: (() => Promise<void>) | null
   }) {
     const targetTabKey = input?.tabKey ?? activeTabKey
@@ -455,8 +459,12 @@ export function useComposerController({
       draftState,
       selectedSkillIDs: input?.selectedSkillIDs ?? [],
     })
+    const turnMcpServerIDs = input?.turnMcpServerIDsOverride ?? compiledSubmission.taggedMcpServerIDs
     const normalizedQuestionAnswerText = normalizeQuestionAnswerText(input?.questionAnswer)
-    const effectiveText = compiledSubmission.transportText || normalizedQuestionAnswerText
+    const effectiveText =
+      input?.transportTextOverride ??
+      (compiledSubmission.transportText || normalizedQuestionAnswerText)
+    const displayText = input?.displayTextOverride ?? compiledSubmission.displayText
     const pendingPermissionRequests = targetSessionID ? pendingPermissionRequestsBySession[targetSessionID] ?? [] : []
     const isSending = Boolean(targetTabKey && isSendingByTabKey[targetTabKey])
     const isConcurrentSessionInput = isSending || hasPendingStreamForSession(targetSessionID)
@@ -507,7 +515,7 @@ export function useComposerController({
       await sendPromptToSession({
         attachments,
         commentReferences: compiledSubmission.commentReferences,
-        displayText: compiledSubmission.displayText,
+        displayText,
         preserveComposerState: input?.preserveComposerState,
         parentMessageID,
         questionAnswer: input?.questionAnswer,
@@ -515,6 +523,7 @@ export function useComposerController({
         references: compiledSubmission.userReferences,
         selectedModel: input?.selectedModel,
         selectedSkillIDs: compiledSubmission.selectedSkillIDs,
+        turnMcpServerIDs,
         session: nextSelection.session,
         submissionMode,
         tabKey: targetTabKey,
@@ -605,13 +614,14 @@ export function useComposerController({
       attachments,
       backendSessionID: created.backendSessionID,
       commentReferences: compiledSubmission.commentReferences,
-      displayText: compiledSubmission.displayText,
+      displayText,
       preserveComposerState: input?.preserveComposerState,
       questionAnswer: input?.questionAnswer,
       reasoningEffort: input?.selectedReasoningEffort,
       references: compiledSubmission.userReferences,
       selectedModel: input?.selectedModel,
       selectedSkillIDs: compiledSubmission.selectedSkillIDs,
+      turnMcpServerIDs,
       session: createdSession,
       submissionMode,
       tabKey: targetTabKey,
@@ -692,14 +702,17 @@ export function useComposerController({
     await handleSend({
       attachmentsOverride: queuedInput.attachments
         ?.flatMap((attachment) => attachment.path ? [{ name: attachment.name, path: attachment.path }] : []) ?? [],
-      draftStateOverride: createComposerDraftStateFromPlainText(queuedInput.displayText ?? queuedInput.text),
+      displayTextOverride: queuedInput.displayText,
+      draftStateOverride: createComposerDraftStateFromPlainText(queuedInput.transportText ?? queuedInput.text),
       preserveComposerState: true,
       selectedReasoningEffort: input.selectedReasoningEffort,
       selectedModel: input.selectedModel,
       selectedSkillIDs: input.selectedSkillIDs,
+      turnMcpServerIDsOverride: queuedInput.turnMcpServerIDs ?? [],
       sessionID,
       submissionMode: "steer",
       tabKey,
+      transportTextOverride: queuedInput.transportText ?? queuedInput.text,
       waitForPendingModelSelection: input.waitForPendingModelSelection,
     })
   }

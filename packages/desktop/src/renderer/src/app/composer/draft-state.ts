@@ -539,35 +539,6 @@ export function createComposerPluginTagData(option: ComposerPluginOption): Compo
   }
 }
 
-export function syncComposerMcpTagsWithSelection(
-  draftState: ComposerDraftState,
-  selectedServerIDs: string[],
-  options: ComposerMcpOption[],
-) {
-  const selectedIDSet = new Set(selectedServerIDs)
-  const optionsByID = new Map(options.map((option) => [option.value, option]))
-  let nextDraftState = normalizeComposerDraftState(draftState)
-
-  const existingTags = readComposerTagsFromDraftState(nextDraftState).filter((tag) => tag.kind === "mcp")
-  for (const tag of existingTags) {
-    if (!selectedIDSet.has(tag.serverID)) {
-      nextDraftState = removeComposerTagFromDraftState(nextDraftState, (candidate) =>
-        candidate.kind === "mcp" && candidate.serverID === tag.serverID,
-      )
-    }
-  }
-
-  for (const serverID of selectedServerIDs) {
-    const option = optionsByID.get(serverID)
-    nextDraftState = appendComposerTagToDraftState(
-      nextDraftState,
-      createComposerMcpTagData(option ?? { value: serverID, label: serverID, description: "Project MCP server" }),
-    )
-  }
-
-  return nextDraftState
-}
-
 export function compileComposerSubmission(input: {
   draftState: ComposerDraftState
   selectedSkillIDs?: string[]

@@ -557,6 +557,10 @@ export const Info = z
           .positive()
           .optional()
           .describe("Timeout in milliseconds for model context protocol (MCP) requests"),
+        toolSearch: z
+          .boolean()
+          .optional()
+          .describe("Enable deferred MCP tool discovery through tool_search (default: true)"),
       })
       .optional(),
   })
@@ -1285,6 +1289,29 @@ export async function resolveProjectMcpServers(projectID: string): Promise<McpSe
     ...projectServers,
     ...globalServers.filter((server) => selectedPluginServerIDs.has(server.id) && !projectServerIDs.has(server.id)),
   ]
+}
+
+export async function resolveDiscoverableProjectMcpServers(projectID: string): Promise<McpServerSummary[]> {
+  const normalizedProjectID = normalizeConfigID(projectID)
+  const [globalServers, projectServers] = await Promise.all([
+    listMcpServers(GLOBAL_CONFIG_ID),
+    normalizedProjectID === GLOBAL_CONFIG_ID
+      ? Promise.resolve([] as McpServerSummary[])
+      : listMcpServers(normalizedProjectID),
+  ])
+  const serversByID = new Map<string, McpServerSummary>()
+
+  for (const server of projectServers) {
+    serversByID.set(server.id, server)
+  }
+  for (const server of globalServers) {
+    // Match getProjectMcpServer(): global definitions win duplicate ids.
+    serversByID.set(server.id, server)
+  }
+
+  return [...serversByID.values()]
+    .filter((server) => server.enabled)
+    .toSorted((left, right) => left.id.localeCompare(right.id))
 }
 
 export async function getProjectMcpServer(projectID: string, serverID: string): Promise<McpServerSummary | undefined> {

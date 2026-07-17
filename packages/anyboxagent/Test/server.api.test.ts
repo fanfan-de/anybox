@@ -879,6 +879,19 @@ describe("server api", () => {
       expect(listBody.success).toBe(true)
       expect(listBody.data?.selection.tools).toEqual({})
       expect(listBody.data?.items.some((tool) => tool.id === "ask_user_question")).toBe(true)
+      expect(listBody.data?.items.find((tool) => tool.id === "tool_search")).toMatchObject({
+        title: "Tool Search",
+        enabled: true,
+        inputSchema: {
+          type: "object",
+        },
+        capabilities: {
+          kind: "search",
+          readOnly: true,
+          destructive: false,
+        },
+      })
+      expect(JSON.stringify(listBody.data?.items.find((tool) => tool.id === "tool_search")?.inputSchema)).toContain("query")
       expect(listBody.data?.items.find((tool) => tool.id === "load_workspace_dependencies")).toMatchObject({
         enabled: true,
         aliases: ["load-workspace-dependencies"],
@@ -930,6 +943,7 @@ describe("server api", () => {
         body: JSON.stringify({
           tools: {
             git_bash_command: false,
+            tool_search: false,
           },
         }),
       })
@@ -939,12 +953,14 @@ describe("server api", () => {
       expect(updateBody.data).toEqual({
         tools: {
           git_bash_command: false,
+          tool_search: false,
         },
       })
 
       const disabledListResponse = await app.request("http://localhost/api/tools/builtins")
       const disabledListBody = (await disabledListResponse.json()) as BuiltinToolListEnvelope
       expect(disabledListBody.data?.items.find((tool) => tool.id === "git_bash_command")?.enabled).toBe(false)
+      expect(disabledListBody.data?.items.find((tool) => tool.id === "tool_search")?.enabled).toBe(false)
 
       const resetResponse = await app.request("http://localhost/api/tools/builtins/selection", {
         method: "PUT",

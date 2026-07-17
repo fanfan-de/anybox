@@ -6,6 +6,7 @@ import { Composer } from "../composer/Composer"
 import { ComposerConcurrentInputDrawer } from "../composer/ComposerConcurrentInputDrawer"
 import { appendTextToComposerDraftState } from "../composer/draft-state"
 import { useDeferredComposerDraftSync } from "../composer/use-deferred-composer-draft-sync"
+import type { CodeHighlightTheme } from "../code-theme"
 import { ComposerUtilityBar } from "../ComposerUtilityBar"
 import { getSessionWorkflowBadge, type SessionWorkflowBadge as SessionWorkflowBadgeInfo } from "../session-workflow"
 import { useI18n } from "../i18n/I18nProvider"
@@ -330,6 +331,7 @@ export function SessionBagSubmissionDialog({
 
 export interface WorkbenchPaneSurfaceProps {
   assistantTraceVisibility: AssistantTraceVisibility
+  codeTheme: CodeHighlightTheme
   composerCommandStatusByTabKey?: Record<string, ComposerCommandStatus>
   composerRefreshVersion: number
   conversationStore: ConversationStoreApi
@@ -486,6 +488,7 @@ export function useWorkbenchPaneConversationSnapshot(
 
 const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   assistantTraceVisibility,
+  codeTheme,
   composerCommandStatusByTabKey,
   composerRefreshVersion,
   conversationStore,
@@ -781,7 +784,6 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                     mcpOptions={composer.mcpOptions}
                     modelOptions={composer.modelOptions}
                     onDraftStateChange={scheduleDraftSync}
-                    onMcpToggle={composer.handleMcpToggle}
                     onPluginToggle={composer.handlePluginToggle}
                     pluginOptions={composer.pluginOptions}
                     reasoningEffortOptions={composer.reasoningEffortOptions}
@@ -855,6 +857,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   activeSession={pane.activeSession}
                   activeSessionDiff={pane.activeSessionDiff}
                   assistantTraceVisibility={assistantTraceVisibility}
+                  codeTheme={codeTheme}
                   isResolvingPermissionRequest={isResolvingPermissionRequest}
                   isSessionRunning={pane.isSending || pane.isInterruptible}
                   pendingPermissionRequests={pane.pendingPermissionRequests}
@@ -973,7 +976,6 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                     mcpOptions={composer.mcpOptions}
                     modelOptions={composer.modelOptions}
                     onDraftStateChange={scheduleDraftSync}
-                    onMcpToggle={readOnlySideChat ? undefined : composer.handleMcpToggle}
                     onPluginToggle={readOnlySideChat ? undefined : composer.handlePluginToggle}
                     pluginOptions={composer.pluginOptions}
                     reasoningEffortOptions={composer.reasoningEffortOptions}

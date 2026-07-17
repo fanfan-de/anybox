@@ -336,6 +336,7 @@ function createDragEvent(type: string, init: Partial<DragEvent>) {
 function createProps(overrides: Partial<WorkbenchShellProps> = {}): WorkbenchShellProps {
   return {
     assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+    codeTheme: "github-light",
     composerRefreshVersion: 0,
     isActivityRailVisible: false,
     isDetachedWindow: false,

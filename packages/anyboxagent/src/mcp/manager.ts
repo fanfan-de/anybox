@@ -277,7 +277,7 @@ export class McpManager {
   }
 
   async tools(): Promise<Tool.ToolInfo[]> {
-    const servers = await Config.resolveProjectMcpServers(this.projectID)
+    const servers = await Config.resolveDiscoverableProjectMcpServers(this.projectID)
     await this.reconcile(servers)
     const result: Tool.ToolInfo[] = []
     const seen = new Map<string, string>()
@@ -386,7 +386,7 @@ export class McpManager {
   }
 
   async diagnose(serverID: string): Promise<McpServerDiagnostic> {
-    const activeServers = await Config.resolveProjectMcpServers(this.projectID)
+    const activeServers = await Config.resolveDiscoverableProjectMcpServers(this.projectID)
     const server = await Config.getProjectMcpServer(this.projectID, serverID)
     if (!server) {
       throw new Error(`MCP server '${serverID}' is not available for project '${this.projectID}'.`)
@@ -472,8 +472,11 @@ export class McpManager {
   }
 
   private async activeResourceServers(serverID?: string) {
-    const servers = await Config.resolveProjectMcpServers(this.projectID)
-    await this.reconcile(servers)
+    const [servers, discoverableServers] = await Promise.all([
+      Config.resolveProjectMcpServers(this.projectID),
+      Config.resolveDiscoverableProjectMcpServers(this.projectID),
+    ])
+    await this.reconcile(discoverableServers)
 
     const requestedServerID = serverID?.trim()
     const scopedServers = requestedServerID
@@ -607,6 +610,21 @@ export class McpManager {
       {
         title: getMcpToolDisplayName(server, definition),
         capabilities: toolCapabilities(definition),
+        source: {
+          kind: "mcp",
+          id: server.id,
+          name: server.name ?? server.id,
+          description:
+            server.transport === "remote" || server.transport === "connector"
+              ? server.serverDescription
+              : undefined,
+        },
+        inputSchema: isRecord(definition.inputSchema)
+          ? definition.inputSchema
+          : {
+              type: "object",
+              additionalProperties: true,
+            },
       },
     )
   }
@@ -773,23 +791,22 @@ function mcpToolDiagnostic(server: Config.McpServerSummary, tool: McpToolDefinit
 
 function filterMcpTools(server: Config.McpServerSummary, tools: McpToolDefinition[]) {
   const policies = configuredToolPolicies(server)
-  if (policies) {
-    return tools.filter((tool) => policies[tool.name]?.policy !== "disabled")
-  }
-
-  if ((server.transport !== "remote" && server.transport !== "connector") || !server.allowedTools) {
-    return tools
-  }
-
-  const allowedTools = server.allowedTools
+  const allowedTools =
+    server.transport === "remote" || server.transport === "connector"
+      ? server.allowedTools
+      : undefined
   const namedTools = new Set(
     Array.isArray(allowedTools)
       ? allowedTools
-      : allowedTools.toolNames ?? [],
+      : allowedTools?.toolNames ?? [],
   )
-  const requireReadOnly = !Array.isArray(allowedTools) && allowedTools.readOnly === true
+  const requireReadOnly = !Array.isArray(allowedTools) && allowedTools?.readOnly === true
 
   return tools.filter((tool) => {
+    if (policies?.[tool.name]?.policy === "disabled") {
+      return false
+    }
+
     if (requireReadOnly && tool.annotations?.readOnlyHint !== true) {
       return false
     }

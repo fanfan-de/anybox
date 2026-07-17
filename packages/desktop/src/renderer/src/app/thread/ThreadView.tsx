@@ -6,6 +6,11 @@ import { getAgentSessionBridge } from "../agent-session/client"
 import { Composer } from "../composer/Composer"
 import { ComposerConcurrentInputDrawer } from "../composer/ComposerConcurrentInputDrawer"
 import { appendTextToComposerDraftState } from "../composer/draft-state"
+import { CodeBlockPreview } from "../code-highlight"
+import {
+  DEFAULT_LIGHT_CODE_THEME,
+  type CodeHighlightTheme,
+} from "../code-theme"
 import { DiffPreview } from "../diff/DiffPreview"
 import {
   ChangesIcon,
@@ -116,6 +121,7 @@ export interface ThreadNavigationRequest {
 }
 
 const EMPTY_FILE_CHANGES: AssistantTraceFileChange[] = []
+const ThreadCodeThemeContext = createContext<CodeHighlightTheme>(DEFAULT_LIGHT_CODE_THEME)
 
 const EXECUTION_STATUS_TRANSLATION_KEYS: Record<ThreadTurn["status"], TranslationKey> = {
   blocked: "thread.execution.blocked",
@@ -251,6 +257,7 @@ interface ThreadViewProps {
   activeMessages: ThreadMessage[]
   activeTurns?: ThreadTurn[]
   assistantTraceVisibility: AssistantTraceVisibility
+  codeTheme?: CodeHighlightTheme
   isResolvingPermissionRequest: boolean
   isSessionRunning?: boolean
   messageTree?: SessionMessageTree | null
@@ -4261,6 +4268,8 @@ type ToolTraceDisplayTone = "preparing" | "running" | "waiting-approval" | "succ
 type ToolTraceDisplayIconType = "dot" | "success" | "error" | "tool"
 type ToolTraceIoPaneKind = "input" | "output"
 
+const TOOL_TRACE_JSON_STRING_PARSE_MAX_DEPTH = 6
+
 function getToolTraceDisplayState(item: AssistantTraceItem): {
   iconType: ToolTraceDisplayIconType
   isBreathing: boolean
@@ -4340,7 +4349,199 @@ function joinToolTracePaneText(text: string | undefined, detail: string | undefi
   return [text, detail].filter((value): value is string => Boolean(value)).join("\n\n")
 }
 
+function parseToolTraceJsonObject(text: string) {
+  const trimmedText = text.trim()
+  if (!trimmedText || (!trimmedText.startsWith("{") && !trimmedText.startsWith("["))) return null
+
+  try {
+    const parsed = JSON.parse(text) as unknown
+    return parsed && typeof parsed === "object" ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+interface FormattedToolTraceJson {
+  containsEmbeddedJson: boolean
+  containsMultilineString: boolean
+  lines: string[]
+}
+
+function appendToolTraceJsonComma(lines: string[]) {
+  if (lines.length === 0) return lines
+  return lines.map((line, index) => index === lines.length - 1 ? `${line},` : line)
+}
+
+function formatToolTraceJsonValue(
+  value: unknown,
+  indentationLevel = 0,
+  embeddedJsonDepth = 0,
+): FormattedToolTraceJson {
+  const indentation = "  ".repeat(indentationLevel)
+  const childIndentation = "  ".repeat(indentationLevel + 1)
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return {
+        containsEmbeddedJson: false,
+        containsMultilineString: false,
+        lines: ["[]"],
+      }
+    }
+
+    let containsEmbeddedJson = false
+    let containsMultilineString = false
+    const lines = ["["]
+
+    value.forEach((item, index) => {
+      const formattedItem = formatToolTraceJsonValue(item, indentationLevel + 1, embeddedJsonDepth)
+      containsEmbeddedJson ||= formattedItem.containsEmbeddedJson
+      containsMultilineString ||= formattedItem.containsMultilineString
+      const itemLines = [
+        `${childIndentation}${formattedItem.lines[0]}`,
+        ...formattedItem.lines.slice(1),
+      ]
+      lines.push(...(index < value.length - 1 ? appendToolTraceJsonComma(itemLines) : itemLines))
+    })
+    lines.push(`${indentation}]`)
+
+    return {
+      containsEmbeddedJson,
+      containsMultilineString,
+      lines,
+    }
+  }
+
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value)
+    if (entries.length === 0) {
+      return {
+        containsEmbeddedJson: false,
+        containsMultilineString: false,
+        lines: ["{}"],
+      }
+    }
+
+    let containsEmbeddedJson = false
+    let containsMultilineString = false
+    const lines = ["{"]
+
+    entries.forEach(([key, nestedValue], index) => {
+      const formattedValue = formatToolTraceJsonValue(nestedValue, indentationLevel + 1, embeddedJsonDepth)
+      containsEmbeddedJson ||= formattedValue.containsEmbeddedJson
+      containsMultilineString ||= formattedValue.containsMultilineString
+      const propertyLines = [
+        `${childIndentation}${JSON.stringify(key)}: ${formattedValue.lines[0]}`,
+        ...formattedValue.lines.slice(1),
+      ]
+      lines.push(...(index < entries.length - 1 ? appendToolTraceJsonComma(propertyLines) : propertyLines))
+    })
+    lines.push(`${indentation}}`)
+
+    return {
+      containsEmbeddedJson,
+      containsMultilineString,
+      lines,
+    }
+  }
+
+  if (typeof value !== "string") {
+    return {
+      containsEmbeddedJson: false,
+      containsMultilineString: false,
+      lines: [JSON.stringify(value) ?? "null"],
+    }
+  }
+
+  const embeddedJson = embeddedJsonDepth < TOOL_TRACE_JSON_STRING_PARSE_MAX_DEPTH
+    ? parseToolTraceJsonObject(value)
+    : null
+  if (embeddedJson) {
+    const formattedEmbeddedJson = formatToolTraceJsonValue(
+      embeddedJson,
+      indentationLevel + 1,
+      embeddedJsonDepth + 1,
+    )
+    return {
+      containsEmbeddedJson: true,
+      containsMultilineString: formattedEmbeddedJson.containsMultilineString,
+      lines: [
+        'json"""',
+        `${childIndentation}${formattedEmbeddedJson.lines[0]}`,
+        ...formattedEmbeddedJson.lines.slice(1),
+        `${indentation}"""`,
+      ],
+    }
+  }
+
+  if (value.includes("\n") || value.includes("\r")) {
+    const normalizedLines = value.replace(/\r\n?/g, "\n").split("\n")
+    return {
+      containsEmbeddedJson: false,
+      containsMultilineString: true,
+      lines: [
+        '"""',
+        ...normalizedLines.map((line) => `${childIndentation}${line}`),
+        `${indentation}"""`,
+      ],
+    }
+  }
+
+  return {
+    containsEmbeddedJson: false,
+    containsMultilineString: false,
+    lines: [JSON.stringify(value)],
+  }
+}
+
+function formatToolTraceJson(text: string) {
+  const parsedJson = parseToolTraceJsonObject(text)
+  if (!parsedJson) return null
+
+  const formattedJson = formatToolTraceJsonValue(parsedJson)
+  return {
+    containsEmbeddedJson: formattedJson.containsEmbeddedJson,
+    containsMultilineString: formattedJson.containsMultilineString,
+    text: formattedJson.lines.join("\n"),
+  }
+}
+
+function parseExecToolInputCode(text: string | undefined) {
+  if (!text) return null
+
+  try {
+    const parsed = JSON.parse(text) as unknown
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null
+
+    const input = parsed as Record<string, unknown>
+    const inputKeys = Object.keys(input)
+    if (inputKeys.length !== 1 || inputKeys[0] !== "code") return null
+
+    const code = input.code
+    return typeof code === "string" && code.trim().length > 0 ? code : null
+  } catch {
+    return null
+  }
+}
+
+function ExecToolInputCode({ code }: { code: string }) {
+  const codeTheme = useContext(ThreadCodeThemeContext)
+
+  return (
+    <div className="trace-tool-exec-input">
+      <div className="trace-tool-exec-language">JavaScript · async body</div>
+      <CodeBlockPreview
+        className="trace-tool-exec-code"
+        content={code}
+        language="javascript"
+        theme={codeTheme}
+      />
+    </div>
+  )
+}
+
 function ToolTraceIoPane({
+  content,
   contentLabel,
   detail,
   id,
@@ -4348,6 +4549,7 @@ function ToolTraceIoPane({
   summaryTitle,
   text,
 }: {
+  content?: ReactNode
   contentLabel: string
   detail?: string
   id: string
@@ -4367,6 +4569,10 @@ function ToolTraceIoPane({
   const expandLabel = t("thread.toolTrace.expandContent", labelParams)
   const collapseLabel = t("thread.toolTrace.collapseContent", labelParams)
   const contentID = `${id}-content`
+  const formattedJson = useMemo(
+    () => content === undefined && text ? formatToolTraceJson(text) : null,
+    [content, text],
+  )
 
   function clearCopiedTimeout() {
     if (copiedTimeoutRef.current === null) return
@@ -4424,7 +4630,20 @@ function ToolTraceIoPane({
         </button>
       </div>
       <div id={contentID} className="trace-tool-io-content">
-        {text ? <ThreadRichText className="trace-item-text" text={text} /> : null}
+        {content ?? (formattedJson ? (
+          <pre
+            className="trace-tool-io-json"
+            data-expanded-json-string={formattedJson.containsEmbeddedJson || undefined}
+            data-expanded-multiline-string={formattedJson.containsMultilineString || undefined}
+            title={
+              formattedJson.containsEmbeddedJson || formattedJson.containsMultilineString
+                ? "String values are expanded for reading. Copy keeps the original content."
+                : undefined
+            }
+          >
+            {formattedJson.text}
+          </pre>
+        ) : text ? <ThreadRichText className="trace-item-text" text={text} /> : null)}
         {detail ? <ThreadRichText className="trace-item-detail" text={detail} /> : null}
       </div>
     </div>
@@ -4468,6 +4687,7 @@ function ToolTraceItemView({
   const showsToolInputs = item.status === "pending" || item.status === "running" || item.status === "waiting-approval" || item.status === "cancelled"
   const visibleToolInputText = traceVisibility.toolInputs ? item.toolInputText : undefined
   const visibleToolOutputText = traceVisibility.toolOutputs ? item.toolOutputText : undefined
+  const execInputCode = item.toolName === "exec" ? parseExecToolInputCode(visibleToolInputText) : null
   const inputSectionDetail = showsToolInputs ? item.detail : undefined
   const outputSectionDetail = !showsToolInputs && traceVisibility.toolOutputs ? item.detail : undefined
   const hasInputDisclosureContent = Boolean(visibleToolInputText || inputSectionDetail)
@@ -4609,6 +4829,7 @@ function ToolTraceItemView({
                   kind="input"
                   summaryTitle={summaryTitle}
                   contentLabel={inputContentLabel}
+                  content={execInputCode !== null ? <ExecToolInputCode code={execInputCode} /> : undefined}
                   text={visibleToolInputText}
                   detail={inputSectionDetail}
                 />
@@ -5123,6 +5344,7 @@ function getThreadViewPropsChangeReason(left: ThreadViewViewportProps, right: Th
   if (!areArraysShallowEqual(left.activeMessages, right.activeMessages)) return "activeMessages"
   if (!areArraysShallowEqual(left.activeTurns, right.activeTurns)) return "activeTurns"
   if (left.assistantTraceVisibility !== right.assistantTraceVisibility) return "assistantTraceVisibility"
+  if (left.codeTheme !== right.codeTheme) return "codeTheme"
   if (left.isResolvingPermissionRequest !== right.isResolvingPermissionRequest) return "isResolvingPermissionRequest"
   if (left.isSessionRunning !== right.isSessionRunning) return "isSessionRunning"
   if (left.messageTree !== right.messageTree) return "messageTree"
@@ -5163,6 +5385,8 @@ function areThreadViewPropsEqual(left: ThreadViewViewportProps, right: ThreadVie
 const MemoVisibleThreadView = memo(VisibleThreadView, areThreadViewPropsEqual)
 
 export function ThreadView(props: ThreadViewProps) {
+  const inheritedCodeTheme = useContext(ThreadCodeThemeContext)
+  const codeTheme = props.codeTheme ?? inheritedCodeTheme
   const actions = useThreadViewActions(props)
   const localInteractionStoreRef = useRef<ThreadInteractionStoreApi | null>(null)
   if (!localInteractionStoreRef.current) {
@@ -5214,18 +5438,22 @@ export function ThreadView(props: ThreadViewProps) {
     canSelectFileChange,
   ])
 
-  if (props.isThreadVisible === false) {
-    return <InactiveThreadView threadColumnRef={props.threadColumnRef} />
-  }
+  const view = props.isThreadVisible === false
+    ? <InactiveThreadView threadColumnRef={props.threadColumnRef} />
+    : (
+      <MemoVisibleThreadView
+        {...props}
+        actions={actions}
+        actionCapabilities={actionCapabilities}
+        interactionStore={interactionStore}
+        presentationStore={presentationStore}
+      />
+    )
 
   return (
-    <MemoVisibleThreadView
-      {...props}
-      actions={actions}
-      actionCapabilities={actionCapabilities}
-      interactionStore={interactionStore}
-      presentationStore={presentationStore}
-    />
+    <ThreadCodeThemeContext.Provider value={codeTheme}>
+      {view}
+    </ThreadCodeThemeContext.Provider>
   )
 }
 

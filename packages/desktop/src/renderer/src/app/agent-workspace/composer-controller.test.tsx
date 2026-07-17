@@ -1,7 +1,11 @@
 import { act, renderHook } from "@testing-library/react"
 import { useRef, useState, type Dispatch, type SetStateAction } from "react"
 import { describe, expect, it, vi } from "vitest"
-import { createComposerDraftStateFromPlainText } from "../composer/draft-state"
+import {
+  appendComposerTagToDraftState,
+  createComposerDraftStateFromPlainText,
+  createComposerMcpTagData,
+} from "../composer/draft-state"
 import type {
   AssistantThreadMessage,
   ComposerAttachment,
@@ -84,6 +88,7 @@ function useComposerHarness(input?: {
   initialAgentSessions?: Record<string, string>
   initialIsSendingByTabKey?: Record<string, boolean>
   initialPendingPermissionRequestsBySession?: Record<string, PermissionRequest[]>
+  sessionDraftState?: ComposerDraftState
   sessionDraftText?: string
 }) {
   const session = createSession("session-1")
@@ -101,7 +106,9 @@ function useComposerHarness(input?: {
     },
   ])
   const [draftsByTabKey, setDraftsByTabKeyState] = useState<Record<string, ComposerDraftState>>({
-    "session:session-1": createComposerDraftStateFromPlainText(input?.sessionDraftText ?? "Existing prompt"),
+    "session:session-1":
+      input?.sessionDraftState ??
+      createComposerDraftStateFromPlainText(input?.sessionDraftText ?? "Existing prompt"),
     "create-session:create-1": createComposerDraftStateFromPlainText("New prompt"),
   })
   const [composerParentMessageIDByTabKey, setComposerParentMessageIDByTabKeyState] = useState<Record<string, string>>({})
@@ -511,6 +518,14 @@ describe("composer controller", () => {
     })
 
     try {
+      const taggedDraft = appendComposerTagToDraftState(
+        createComposerDraftStateFromPlainText("Existing prompt"),
+        createComposerMcpTagData({
+          value: "gmail",
+          label: "Gmail",
+          description: "Email",
+        }),
+      )
       const { result } = renderHook(() =>
         useComposerHarness({
           agentConnected: true,
@@ -520,6 +535,7 @@ describe("composer controller", () => {
           initialIsSendingByTabKey: {
             "session:session-1": true,
           },
+          sessionDraftState: taggedDraft,
         }),
       )
 
@@ -566,8 +582,11 @@ describe("composer controller", () => {
       expect(sendTurn.mock.calls[1]?.[0]).toEqual(expect.objectContaining({
         backendSessionID: "backend-session-1",
         concurrentInputMode: "steer",
-        text: "Existing prompt",
+        text: "Existing prompt @Gmail",
+        turnMcpServerIDs: ["gmail"],
       }))
+      expect(queuedInput.turnMcpServerIDs).toEqual(["gmail"])
+      expect(queuedInput.transportText).toBe("Existing prompt @Gmail")
 
       const steerStreamEntry = Object.entries(result.current.pendingStreamsRef.current).find(
         ([, stream]) => stream.requestedMode === "steer",
@@ -591,7 +610,7 @@ describe("composer controller", () => {
       expect(steerInput).toMatchObject({
         mode: "steer",
         status: "pending",
-        text: "Existing prompt",
+        text: "Existing prompt @Gmail",
       })
       expect(result.current.pendingStreamsRef.current[queuedStreamEntry[0]]).toBeUndefined()
       expect(Object.values(result.current.pendingStreamsRef.current)).toContainEqual(

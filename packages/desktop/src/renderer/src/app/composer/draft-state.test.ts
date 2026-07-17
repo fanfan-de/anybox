@@ -15,7 +15,6 @@ import {
   readTaggedPluginIDsFromDraftState,
   readComposerTagsFromDraftState,
   removeComposerTagFromDraftState,
-  syncComposerMcpTagsWithSelection,
   updateComposerLongTextTagInDraftState,
 } from "./draft-state"
 
@@ -266,17 +265,4 @@ describe("composer draft-state", () => {
     expect(nextDraftState.plainText).toBe("Need feedback.")
   })
 
-  it("keeps MCP tags aligned with the selected project MCP list", () => {
-    let draftState = createComposerDraftStateFromPlainText("Check integrations.")
-    draftState = appendComposerTagToDraftState(draftState, createComposerMcpTagData(MCP_OPTIONS[0]!))
-
-    const nextDraftState = syncComposerMcpTagsWithSelection(draftState, ["browser"], MCP_OPTIONS)
-    const tagServerIDs = readComposerTagsFromDraftState(nextDraftState)
-      .filter((tag) => tag.kind === "mcp")
-      .map((tag) => tag.serverID)
-
-    expect(tagServerIDs).toEqual(["browser"])
-    expect(nextDraftState.plainText).toContain("@Browser")
-    expect(nextDraftState.plainText).not.toContain("@Filesystem")
-  })
 })

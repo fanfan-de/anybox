@@ -702,7 +702,7 @@ export function useProjectComposer({
     description: skill.description,
   }))
   const mcpOptions: ComposerMcpOption[] = mcpServers
-    .filter((server) => !isPluginGeneratedMcpServerID(server.id))
+    .filter((server) => server.enabled && !isPluginGeneratedMcpServerID(server.id))
     .map((server) => ({
       value: server.id,
       label: server.name ?? server.id,

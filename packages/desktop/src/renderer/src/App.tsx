@@ -815,6 +815,7 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
     isAgentDebugTraceEnabled,
     isWindowMaximized,
     platform,
+    resolvedCodeTheme,
   } = useDesktopShell()
   const {
     composerCommandStatusByTabKey,
@@ -1033,6 +1034,7 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
         <main ref={appShellRef} className="session-popout-app" style={appShellStyle}>
           <WorkbenchShell
             assistantTraceVisibility={assistantTraceVisibility}
+            codeTheme={resolvedCodeTheme}
             composerCommandStatusByTabKey={composerCommandStatusByTabKey}
             composerRefreshVersion={composerRefreshVersion}
             isActivityRailVisible={false}
@@ -3031,6 +3033,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 composerCommandStatusByTabKey={composerCommandStatusByTabKey}
                 composerRefreshVersion={composerRefreshVersion}
                 assistantTraceVisibility={assistantTraceVisibility}
+                codeTheme={resolvedCodeTheme}
                 isActivityRailVisible={isActivityRailVisible}
                 isResolvingPermissionRequest={isResolvingPermissionRequest}
                 isSavingToolPermissionMode={isSavingToolPermissionMode}

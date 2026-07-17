@@ -483,7 +483,7 @@ reasoning 和 tools 默认弱化：
 - streaming 时用轻微 pulse 和 caret 表达运行中。
 - 折叠状态必须是真 lazy mount：完整 reasoning、tool input/output、patch diff 在对应 row 展开前不进入 DOM，也不交给 Markdown/RichText/DiffPreview 渲染。
 - 超大内容先显示 bounded preview：reasoning 首行最多 480 字符；patch preview 最多 200 行或 20000 字符，用户显式展开对应 row 后才挂完整内容。
-- 展开的 tool input/output 在视觉上合并为一个受控高度整体面板；每个 region 短内容自然高度，长内容默认在 180px 内部滚动；命令、路径、JSON、patch 和 shell 输出按终端式 `pre` 文本保留原始行，并通过横向滚动查看长行。每个 input/output region 右上角都有浮层式 icon-only 复制和展开按钮：复制写入该 region 的原始文本，展开取消当前 region 的垂直高度限制；展开态只保留横向滚动，不建立纵向内部滚动容器，鼠标 hover 在内容区域时纵向滚轮应继续驱动外层 thread view。按钮不参与内容布局，只在右侧保留避让空间，默认隐藏，仅在对应 region hover 或键盘 focus 进入时显示；默认/hover/focus/active 状态消费 icon button semantic token。面板背景由 `--semantic-thread-tool-io-panel-surface` 单独控制。
+- 展开的 tool input/output 在视觉上合并为一个受控高度整体面板；每个 region 短内容自然高度，长内容默认在 180px 内部滚动；命令、路径、patch 和 shell 输出按终端式 `pre` 文本保留原始行，并通过横向滚动查看长行。有效的 JSON input/output 都会在展示层以两空格缩进；含换行的字符串使用 `"""` 边界还原为多行内容，字段字符串若完整地包含 JSON object/array，则使用 `json"""` 边界递归缩进，明确保留其字符串语义。`exec` 是首个工具专用 renderer：仅当 `toolName === "exec"` 且 input 能完整解析为只含一个非空 `code` 字符串字段的 object 时，把该字符串作为 JavaScript async body 交给共享 Shiki 只读代码视图，显示行号并跟随当前代码主题；output 仍走通用 JSON renderer。流式半截 JSON、历史异常参数或 schema 不匹配时自动退回通用 renderer，避免工具 schema 演进后静默隐藏新字段。代码只作为 React text node 展示，不执行、不注入 HTML；复制仍写入该 region 的原始文本。每个 input/output region 右上角都有浮层式 icon-only 复制和展开按钮：展开取消当前 region 的垂直高度限制；展开态只保留横向滚动，不建立纵向内部滚动容器，鼠标 hover 在内容区域时纵向滚轮应继续驱动外层 thread view。按钮不参与内容布局，只在右侧保留避让空间，默认隐藏，仅在对应 region hover 或键盘 focus 进入时显示；默认/hover/focus/active 状态消费 icon button semantic token。面板背景由 `--semantic-thread-tool-io-panel-surface` 单独控制。
 
 当前实现末尾有较多 CSS override，会把早期卡片样式改成更轻的透明形态。后续调整时应优先收敛这些 override，避免同一类元素在文件前后出现冲突规则。
 

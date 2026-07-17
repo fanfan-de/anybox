@@ -660,6 +660,7 @@ export const User = Base.extend({
     system: z.string().optional(),
     displayText: z.string().optional(),
     skills: z.array(z.string()).optional(),
+    turnMcpServerIDs: z.array(z.string()).optional(),
     tools: z.record(z.string(), z.boolean()).optional(),
     internal: z.boolean().optional(),
     variant: z.string().optional(),

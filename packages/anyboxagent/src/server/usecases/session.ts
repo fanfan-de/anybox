@@ -1001,6 +1001,7 @@ export async function createMessageStreamResponse(input: {
           system: input.payload.system,
           agent: input.payload.agent,
           skills: input.payload.skills,
+          turnMcpServerIDs: input.payload.turnMcpServerIDs,
           concurrentInputMode: input.payload.concurrentInputMode,
           reasoningEffort: input.payload.reasoningEffort,
           model: input.payload.model,

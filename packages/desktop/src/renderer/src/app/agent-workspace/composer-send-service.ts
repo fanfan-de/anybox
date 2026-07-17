@@ -86,6 +86,7 @@ interface SendPromptToSessionInput {
   references?: UserThreadMessage["references"]
   selectedModel?: string | null
   selectedSkillIDs: string[]
+  turnMcpServerIDs: string[]
   session: SessionSummary
   submissionMode?: UserThreadMessage["submissionMode"]
   tabKey: string
@@ -161,6 +162,7 @@ export async function sendPromptToSession(
     selectedModel,
     session,
     selectedSkillIDs,
+    turnMcpServerIDs,
     submissionMode,
     tabKey,
     text,
@@ -188,16 +190,19 @@ export async function sendPromptToSession(
     fallbackText: normalizedText,
     questionAnswer,
     references,
+    turnMcpServerIDs,
   })
   const pendingInput: PendingConversationInput | null = pendingInputMode
     ? {
         id: userMessage.id,
         sessionID: uiSessionID,
         text: userMessage.text,
+        ...(normalizedText ? { transportText: normalizedText } : {}),
         ...(userMessage.displayText ? { displayText: userMessage.displayText } : {}),
         ...(userMessage.attachments?.length ? { attachments: userMessage.attachments } : {}),
         ...(userMessage.references?.length ? { references: userMessage.references } : {}),
         ...(userMessage.questionAnswer ? { questionAnswer: userMessage.questionAnswer } : {}),
+        ...(userMessage.turnMcpServerIDs?.length ? { turnMcpServerIDs: userMessage.turnMcpServerIDs } : {}),
         mode: pendingInputMode,
         status: "pending",
         createdAt: userMessage.timestamp,
@@ -320,6 +325,7 @@ export async function sendPromptToSession(
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(model ? { model } : {}),
         skills: effectiveSelectedSkillIDs,
+        turnMcpServerIDs,
       })
 
       return
@@ -337,6 +343,7 @@ export async function sendPromptToSession(
       ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(model ? { model } : {}),
       skills: effectiveSelectedSkillIDs,
+      turnMcpServerIDs,
     })
 
     if (!result.events) {

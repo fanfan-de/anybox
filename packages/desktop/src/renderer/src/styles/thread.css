@@ -743,17 +743,91 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
 
 .assistant-trace-lite.is-tools .trace-tool-io-pane .trace-item-text,
 .assistant-trace-lite.is-tools .trace-tool-io-pane .trace-item-detail,
+.assistant-trace-lite.is-tools .trace-tool-io-pane .trace-tool-io-json,
 .trace-kind-tool .trace-tool-io-pane .trace-item-text,
-.trace-kind-tool .trace-tool-io-pane .trace-item-detail {
+.trace-kind-tool .trace-tool-io-pane .trace-item-detail,
+.trace-kind-tool .trace-tool-io-pane .trace-tool-io-json {
   width: max-content;
   min-width: 100%;
   max-width: none;
+  margin: 0;
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.65;
   white-space: pre;
   overflow-wrap: normal;
   word-break: normal;
+}
+
+.trace-tool-exec-input {
+  width: max-content;
+  min-width: 100%;
+}
+
+.trace-tool-exec-language {
+  margin: 0 0 5px;
+  color: var(--seg-text-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+.trace-tool-exec-code.code-highlight {
+  box-sizing: border-box;
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  padding: 4px 0;
+  overflow: visible;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+  tab-size: 2;
+  white-space: pre;
+}
+
+.trace-tool-exec-code code {
+  display: block;
+  min-width: max-content;
+}
+
+.trace-tool-exec-code .code-highlight-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  min-height: 20px;
+}
+
+.trace-tool-exec-code .code-highlight-line-number {
+  padding: 0 8px 0 4px;
+  border-right: 1px solid currentColor;
+  color: currentColor;
+  opacity: 0.42;
+  text-align: right;
+  user-select: none;
+}
+
+.trace-tool-exec-code .code-highlight-line-text {
+  position: relative;
+  display: block;
+  min-width: 0;
+  padding: 0 10px;
+  white-space: pre;
+}
+
+.trace-tool-exec-code .code-highlight-raw-line {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: pre;
 }
 
 .trace-tool-io-content::-webkit-scrollbar {

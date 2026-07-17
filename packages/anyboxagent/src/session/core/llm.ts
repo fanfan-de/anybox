@@ -76,6 +76,7 @@ export type StreamInput = {
   reasoningEffort?: Message.ReasoningEffort,
   small?: boolean,
   tools?: ToolSet,
+  activeTools?: string[],
   retries?: number,
   onFinish?: StreamLifecycleCallback<OnFinishEvent<ToolSet>>,
   onAbort?: StreamLifecycleCallback<{ readonly steps: unknown[] }>,
@@ -153,10 +154,12 @@ export async function stream(input: StreamInput): Promise<StreamOutput> {
   // 准备工具集，并解析最终使用的语言模型。
   const tools: ToolSet = input.tools ?? {}
   const supportsToolCalls = input.model.capabilities.toolcall
+  const activeTools = (input.activeTools ?? Object.keys(tools))
+    .filter((name) => name !== "invalid" && Boolean(tools[name]))
   const toolOptions = supportsToolCalls
     ? {
         tools,
-        activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
+        activeTools,
       }
     : {}
 

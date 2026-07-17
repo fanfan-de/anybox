@@ -32,8 +32,15 @@ describe("shared contracts", () => {
       AgentRouteSchemas.sessions.streamMessage.body.safeParse({
         text: "hello",
         concurrentInputMode: "steer",
+        turnMcpServerIDs: ["gmail", "feishu"],
       }).success,
     ).toBe(true)
+    expect(
+      AgentRouteSchemas.sessions.streamMessage.body.safeParse({
+        text: "hello",
+        turnMcpServerIDs: "gmail",
+      }).success,
+    ).toBe(false)
     expect(
       AgentRouteSchemas.sessions.streamMessage.body.safeParse({
         text: "hello",

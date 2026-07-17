@@ -22,6 +22,7 @@ import {
   type SerializedDockview,
 } from "dockview-react"
 import { CloseIcon, PlusIcon } from "../icons"
+import type { CodeHighlightTheme } from "../code-theme"
 import { joinClassNames, SidebarToggleButton, SideChatBadge } from "../shared-ui"
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "../thread-markdown"
 import type { ThreadNavigationRequest, ThreadScrollSnapshot } from "../thread/ThreadView"
@@ -564,6 +565,7 @@ function activateDockviewPanel(panel: IDockviewPanel) {
 
 export interface WorkbenchShellProps {
   assistantTraceVisibility: AssistantTraceVisibility
+  codeTheme: CodeHighlightTheme
   composerCommandStatusByTabKey?: Record<string, ComposerCommandStatus>
   composerRefreshVersion: number
   isActivityRailVisible: boolean
@@ -1278,6 +1280,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
     return (
       <WorkbenchPaneSurface
         assistantTraceVisibility={props.assistantTraceVisibility}
+        codeTheme={props.codeTheme}
         composerCommandStatusByTabKey={props.composerCommandStatusByTabKey}
         composerRefreshVersion={props.composerRefreshVersion}
         conversationStore={conversationStore}

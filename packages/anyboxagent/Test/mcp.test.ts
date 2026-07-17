@@ -463,6 +463,28 @@ describe("mcp integration", () => {
               echoed: "hello",
             },
           })
+
+          const agent = await Agent.get("default")
+          if (!agent) throw new Error("Expected default agent")
+          const toolPlan = await ResolveTools.resolveToolPlan({
+            agent,
+            sessionID: "session_test",
+            messageID: "message_tool_plan",
+            abort: new AbortController().signal,
+            toolSearchEnabled: true,
+          })
+          expect(toolPlan.activeToolNames).toContain("mcp_mock_echo")
+          expect(toolPlan.entries.find((entry) => entry.modelName === "mcp_mock_echo")).toMatchObject({
+            exposure: "direct",
+            discovered: false,
+            item: {
+              source: {
+                id: "mock",
+                kind: "mcp",
+                name: "Mock",
+              },
+            },
+          })
         },
       })
     } finally {
@@ -796,6 +818,14 @@ describe("mcp integration", () => {
         },
         allowedTools: {
           readOnly: true,
+        },
+        toolPolicies: {
+          echo: {
+            policy: "auto",
+          },
+          write: {
+            policy: "auto",
+          },
         },
         enabled: true,
       })

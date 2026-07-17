@@ -884,6 +884,7 @@ export interface UserThreadMessage {
     selectedOptions?: string[]
     freeformText?: string
   }
+  turnMcpServerIDs?: string[]
   diffSummary?: SessionDiffSummary
   submissionMode?: "steer" | "queued"
   streamInsertion?: {
@@ -898,10 +899,12 @@ export interface PendingConversationInput {
   id: string
   sessionID: string
   text: string
+  transportText?: string
   displayText?: string
   attachments?: UserThreadMessageAttachment[]
   references?: UserThreadMessageReference[]
   questionAnswer?: UserThreadMessage["questionAnswer"]
+  turnMcpServerIDs?: string[]
   mode: "queued" | "steer"
   status: "pending" | "accepted" | "consumed" | "cancelled" | "failed"
   targetAssistantThreadMessageID?: string

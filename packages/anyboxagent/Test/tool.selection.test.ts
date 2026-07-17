@@ -40,6 +40,7 @@ describe("global built-in tool selection", () => {
         const toolNames = await resolveAgentToolNames("default")
         expect(toolNames.every((name) => /^[a-z0-9_]+$/.test(name))).toBe(true)
         expect(toolNames).toContain("multi_tool_use_parallel")
+        expect(toolNames).toContain("exec")
         expect(toolNames).not.toContain("multi_tool_use.parallel")
         expect(toolNames).not.toContain("read-file")
         expect(toolNames).not.toContain("AskUserQuestion")
@@ -57,6 +58,7 @@ describe("global built-in tool selection", () => {
         const shellToolIDs = activeOneTimeShellToolIDs()
         expect(toolNames).toContain("read_file")
         expect(toolNames).toContain("multi_tool_use_parallel")
+        expect(toolNames).toContain("exec")
         expect(toolNames).not.toContain("calendar_create_todo")
         expect(toolNames).not.toContain("calendar_create_event")
         expect(toolNames).not.toContain("calendar_list_items")
@@ -124,6 +126,7 @@ describe("global built-in tool selection", () => {
         const toolNames = await resolveAgentToolNames("plan")
         expect(toolNames).toContain("read_file")
         expect(toolNames).toContain("multi_tool_use_parallel")
+        expect(toolNames).toContain("exec")
         expect(toolNames).not.toContain("replace_text")
       },
     })
@@ -141,6 +144,67 @@ describe("global built-in tool selection", () => {
         const planToolNames = await resolveAgentToolNames("plan")
         expect(defaultToolNames).not.toContain("multi_tool_use_parallel")
         expect(planToolNames).not.toContain("multi_tool_use_parallel")
+      },
+    })
+  })
+
+  it("catalogs tool_search as a read-only search tool without activating it unconditionally", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const builtinTools = await ToolRegistry.builtinTools()
+        const catalogTool = builtinTools.find((tool) => tool.id === "tool_search")
+        expect(catalogTool).toMatchObject({
+          id: "tool_search",
+          title: "Tool Search",
+          capabilities: {
+            kind: "search",
+            readOnly: true,
+            destructive: false,
+          },
+        })
+
+        const runtime = await catalogTool?.init()
+        expect(runtime?.title).toBe("Tool Search")
+        expect(runtime?.parameters.safeParse({ query: "email", limit: 8 }).success).toBe(true)
+        expect(runtime?.parameters.safeParse({ query: "", limit: 33 }).success).toBe(false)
+        await expect(runtime?.execute(
+          { query: "email" },
+          {} as Tool.Context,
+        )).rejects.toThrow("must be bound to the current Turn tool plan")
+
+        const toolNames = await resolveAgentToolNames("default")
+        expect(toolNames).not.toContain("tool_search")
+      },
+    })
+  })
+
+  it("filters exec through global selection", async () => {
+    await Config.setToolSelection(Config.GLOBAL_CONFIG_ID, {
+      exec: false,
+    })
+
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const defaultToolNames = await resolveAgentToolNames("default")
+        const planToolNames = await resolveAgentToolNames("plan")
+        const sideChatToolNames = await resolveAgentToolNames("sidechat")
+        expect(defaultToolNames).not.toContain("exec")
+        expect(planToolNames).not.toContain("exec")
+        expect(sideChatToolNames).not.toContain("exec")
+      },
+    })
+  })
+
+  it("exposes exec to default, plan, and side chat but not compaction", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        expect(await resolveAgentToolNames("default")).toContain("exec")
+        expect(await resolveAgentToolNames("plan")).toContain("exec")
+        expect(await resolveAgentToolNames("sidechat")).toContain("exec")
+        expect(await resolveAgentToolNames("compaction")).not.toContain("exec")
       },
     })
   })

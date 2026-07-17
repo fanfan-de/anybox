@@ -53,6 +53,31 @@ const builtinTools: BuiltinToolSummary[] = [
     },
     enabled: false,
   },
+  {
+    id: "tool_search",
+    title: "Tool Search",
+    description:
+      "Search currently registered deferred MCP tools. The runtime activates this tool only for turns that have eligible deferred candidates.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+        },
+        limit: {
+          type: "number",
+        },
+      },
+      required: ["query"],
+    },
+    aliases: [],
+    capabilities: {
+      kind: "search",
+      readOnly: true,
+      destructive: false,
+    },
+    enabled: true,
+  },
 ]
 
 function renderBuiltinToolsPage(overrides: Partial<Parameters<typeof BuiltinToolsPage>[0]> = {}) {
@@ -78,13 +103,14 @@ describe("BuiltinToolsPage", () => {
 
     expect(screen.getByLabelText("Tools top menu")).toBeInTheDocument()
     expect(screen.getByText("Global tool availability")).toBeInTheDocument()
-    expect(screen.getByText("1 of 3 built-in tools enabled.")).toBeInTheDocument()
+    expect(screen.getByText("2 of 4 built-in tools enabled.")).toBeInTheDocument()
     expect(screen.getByRole("list", { name: "Tool categories" })).toBeInTheDocument()
 
     const shellCategory = screen.getByRole("button", { name: "Shell tools, 1 of 1 enabled" })
     expect(shellCategory).toHaveAttribute("aria-pressed", "true")
     expect(screen.getByRole("button", { name: "Write tools, 0 of 1 enabled" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Read tools, 0 of 1 enabled" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Search tools, 1 of 1 enabled" })).toBeInTheDocument()
     expect(screen.getByText("Git Bash")).toBeInTheDocument()
     expect(screen.getByText("Shell access")).toBeInTheDocument()
     expect(props.container.querySelector("[class*='settings-']")).toBeNull()
@@ -111,6 +137,15 @@ describe("BuiltinToolsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Read tools, 0 of 1 enabled" }))
     expect(screen.getByText("Read File")).toBeInTheDocument()
     expect(screen.getByText("Read-only")).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Search tools, 1 of 1 enabled" }))
+    expect(screen.getByText("Tool Search")).toBeInTheDocument()
+    expect(screen.getByText("Read-only")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Show details for Tool Search" }))
+    expect(props.container.querySelector(".tools-card-input-schema pre")?.textContent).toContain('"query"')
+
+    fireEvent.click(screen.getByRole("button", { name: "Disable Tool Search" }))
+    expect(props.onBuiltinToolToggle).toHaveBeenCalledWith("tool_search", false)
 
     fireEvent.click(shellCategory)
     fireEvent.click(screen.getByRole("button", { name: "Disable Git Bash" }))

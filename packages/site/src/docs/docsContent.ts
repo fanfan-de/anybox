@@ -9,6 +9,8 @@ import providersEn from "./content/providers.en.md?raw"
 import providersZh from "./content/providers.md?raw"
 import skillsEn from "./content/skills.en.md?raw"
 import skillsZh from "./content/skills.md?raw"
+import toolsEn from "./content/tools.en.md?raw"
+import toolsZh from "./content/tools.md?raw"
 
 export type DocsArticle = {
   content: string
@@ -49,6 +51,12 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
           description: "连接模型供应商，选择会话模型。",
           slug: "providers",
           title: "模型供应商",
+        },
+        {
+          content: toolsZh,
+          description: "理解工具分类、全局可用性、权限、渐进式发现与 JavaScript 编排。",
+          slug: "tools",
+          title: "工具系统",
         },
         {
           content: skillsZh,
@@ -96,6 +104,12 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
           description: "Connect a model provider and select a session model.",
           slug: "providers",
           title: "Model Providers",
+        },
+        {
+          content: toolsEn,
+          description: "Understand tool categories, global availability, permissions, discovery, and JavaScript orchestration.",
+          slug: "tools",
+          title: "Tool System",
         },
         {
           content: skillsEn,

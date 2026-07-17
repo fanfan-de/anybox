@@ -330,9 +330,13 @@ function summarizeLlmCallInput(streamInput: LLM.StreamInput) {
         }
     }
 
-    const requestedToolCount = Object.keys(streamInput.tools ?? {}).filter((toolName) => toolName !== "invalid").length
+    const requestedToolCount = (
+        streamInput.activeTools ??
+        Object.keys(streamInput.tools ?? {})
+    ).filter((toolName) => toolName !== "invalid" && Boolean(streamInput.tools?.[toolName])).length
+    const supportsToolCalls = streamInput.model.capabilities?.toolcall !== false
     const toolsDisabledReason: "model_does_not_support_toolcall" | undefined =
-        !streamInput.model.capabilities.toolcall && requestedToolCount > 0
+        !supportsToolCalls && requestedToolCount > 0
             ? "model_does_not_support_toolcall"
             : undefined
 

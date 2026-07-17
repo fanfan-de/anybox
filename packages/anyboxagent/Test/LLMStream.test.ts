@@ -158,7 +158,17 @@ describe("LLM stream", () => {
     const onFinish = mock(async () => {})
     const onAbort = mock(async () => {})
     const onError = mock(async () => {})
+    const defaultInput = createInput()
     const input = createInput({
+      tools: {
+        ...defaultInput.tools,
+        hidden_deferred_tool: {
+          description: "Registered but not initially visible",
+          inputSchema: z.object({}),
+          execute: async () => "ok",
+        },
+      },
+      activeTools: ["get_weather"],
       onFinish,
       onAbort,
       onError,

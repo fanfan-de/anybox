@@ -26,7 +26,7 @@ import * as PromptPresets from "#session/support/prompt-presets.ts"
 import * as TurnError from "#session/core/turn-error.ts"
 
 import * as Message from "./message";
-import { resolveTools } from "./resolve-tools.ts";
+import { resolveToolPlan } from "./resolve-tools.ts";
 
 /**
  * Agent prompt 编排层。
@@ -73,6 +73,7 @@ export const PromptInput = z.object({
     system: z.string().optional(),
     displayText: z.string().optional(),
     skills: z.array(z.string()).optional(),
+    turnMcpServerIDs: z.array(z.string()).optional(),
     concurrentInputMode: z.enum(["queue", "steer"]).optional(),
     variant: z.string().optional(),
     reasoningEffort: Message.ReasoningEffort.optional(),
@@ -684,11 +685,14 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
 
             const assistantMessageID = Identifier.ascending("message")
 
-            const tools = await resolveTools({
+            const toolPlan = await resolveToolPlan({
                 agent,
                 sessionID,
                 messageID: assistantMessageID,
                 abort,
+                messages,
+                turnUserMessageID: lastUser.id,
+                turnMcpServerIDs: lastUser.turnMcpServerIDs,
             });
             throwIfAborted(abort)
 
@@ -698,7 +702,7 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
                     agent,
                     session: activeSession,
                 }),
-                ...SystemPrompt.tools(Object.keys(tools)),
+                ...SystemPrompt.tools(toolPlan.activeToolNames),
                 ...(sideChatLink ? [buildSideChatSystemPrompt(sideChatLink)] : []),
                 ...await SystemPrompt.environment(model),
                 ...await SystemPrompt.skills(sessionID, lastUser.skills ?? []),
@@ -712,7 +716,7 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
                 system,
                 messages,
                 reasoningEffort: lastUser.reasoningEffort,
-                tools,
+                tools: toolPlan.visibleTools,
                 recordCompactionMessage: async ({ message, parts }) => {
                     await persistMessageRecord(message, turn)
                     for (const part of parts) {
@@ -779,7 +783,8 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
                             preserveAllImagePartsForMessageID: lastUser.id,
                         },
                     }),
-                    tools,
+                    tools: toolPlan.registryTools,
+                    activeTools: toolPlan.activeToolNames,
                 });
             } catch (error) {
                 assistantMessage.error = TurnError.toAssistantError(error);
@@ -1772,6 +1777,11 @@ async function createUserMessage(input: PromptInput, options?: { snapshot?: stri
     const workflow = Session.normalizeWorkflowState(session?.workflow)
     const pendingWorkflowInstruction = await buildPendingWorkflowInstruction(workflow)
     const inputParts = injectWorkflowInstructionIntoParts(input.parts, pendingWorkflowInstruction)
+    const turnMcpServerIDs = [...new Set(
+        (input.turnMcpServerIDs ?? [])
+            .map((serverID) => serverID.trim())
+            .filter(Boolean),
+    )]
     const messageinfo: Message.User = {
         id: Identifier.ascending("message"),
         sessionID: input.sessionID,
@@ -1783,6 +1793,7 @@ async function createUserMessage(input: PromptInput, options?: { snapshot?: stri
         system: input.system,
         displayText: input.displayText?.trim() || undefined,
         skills: input.skills,
+        turnMcpServerIDs: turnMcpServerIDs.length > 0 ? turnMcpServerIDs : undefined,
         internal: input.internal,
         reasoningEffort: input.reasoningEffort,
     };

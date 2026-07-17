@@ -56,6 +56,7 @@ export const StreamSessionMessageBodySchema = z
     system: z.string().optional(),
     agent: z.string().optional(),
     skills: z.array(z.string()).optional(),
+    turnMcpServerIDs: z.array(z.string()).optional(),
     reasoningEffort: ReasoningEffortSchema.optional(),
     model: AgentModelReferenceSchema.optional(),
   })

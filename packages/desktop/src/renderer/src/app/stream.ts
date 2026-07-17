@@ -2009,6 +2009,7 @@ export function buildUserThreadMessage(input: {
   references?: UserThreadMessageReference[]
   submissionMode?: UserThreadMessage["submissionMode"]
   streamInsertion?: UserThreadMessage["streamInsertion"]
+  turnMcpServerIDs?: string[]
   timestamp?: number
 }) {
   const displayText = readString(input.displayText).trim()
@@ -2029,6 +2030,7 @@ export function buildUserThreadMessage(input: {
     ...(attachments.length > 0 ? { attachments } : {}),
     ...(references.length > 0 ? { references } : {}),
     ...(input.questionAnswer ? { questionAnswer: input.questionAnswer } : {}),
+    ...(input.turnMcpServerIDs?.length ? { turnMcpServerIDs: [...new Set(input.turnMcpServerIDs)] } : {}),
     ...(input.diffSummary?.diffs.length ? { diffSummary: input.diffSummary } : {}),
     ...(input.submissionMode ? { submissionMode: input.submissionMode } : {}),
     ...(input.streamInsertion ? { streamInsertion: input.streamInsertion } : {}),
@@ -2285,6 +2287,9 @@ function buildUserThreadMessageFromHistory(message: LoadedSessionHistoryMessage)
     displayText: presentation.displayText,
     questionAnswer,
     references: presentation.references,
+    turnMcpServerIDs: Array.isArray(message.info.turnMcpServerIDs)
+      ? message.info.turnMcpServerIDs.filter((value): value is string => typeof value === "string")
+      : undefined,
     timestamp: readNumber(message.info.created) || Date.now(),
   }) satisfies ThreadMessage
 }
