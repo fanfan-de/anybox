@@ -2,7 +2,10 @@ node_modules/
 browser-extension/node_modules/
 browser-extension/dist/
 browser-extension/.vite-temp/
+browser-runtime/node_modules/
+browser-runtime/dist/
 browser-native-host/node_modules/
 browser-native-host/dist/
+browser-native-host/target/
 artifacts/
 *.log

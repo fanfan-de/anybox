@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
 const readline = require("node:readline")
+const { ensureNativeMessagingHost } = require("./native-host-bootstrap")
+
+const nativeMessagingHostReady = ensureNativeMessagingHost()
 
 const DEFAULT_AGENT_BASE_URL = defaultAgentBaseURL()
 const AGENT_BASE_URL = normalizeBaseURL(
@@ -509,6 +512,7 @@ rl.on("line", (line) => {
     const message = JSON.parse(line)
 
     if (message.method === "initialize") {
+      await nativeMessagingHostReady
       send({
         jsonrpc: "2.0",
         id: message.id,

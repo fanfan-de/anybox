@@ -4,7 +4,9 @@ import os from "node:os"
 import path from "node:path"
 import test from "node:test"
 import {
+  chromeExtensionIDFromManifestKey,
   compareChromePluginPackages,
+  nativeHostBuildTarget,
   packageChromePlugin,
   validateChromePluginPackage,
 } from "./package-chrome-plugin.mjs"
@@ -16,6 +18,8 @@ async function write(root, relativePath, content = relativePath) {
 }
 
 async function createFixture(projectRoot) {
+  const extensionKey = Buffer.from("fixture Chrome extension public key").toString("base64")
+  const extensionId = chromeExtensionIDFromManifestKey(extensionKey)
   await write(projectRoot, path.join("runtime", ".anybox-plugin", "plugin.json"), `${JSON.stringify({
     name: "chrome",
     version: "1.2.3",
@@ -29,17 +33,37 @@ async function createFixture(projectRoot) {
       },
     ],
   }, null, 2)}\n`)
-  await write(projectRoot, path.join("runtime", "scripts", "browser-client.mjs"))
   await write(projectRoot, path.join("runtime", "scripts", "browser-server.js"))
+  await write(
+    projectRoot,
+    path.join("runtime", "scripts", "extension-id.json"),
+    `${JSON.stringify({
+      extensionHostName: "com.anybox.browser",
+      extensionId,
+    }, null, 2)}\n`,
+  )
+  await write(projectRoot, path.join("runtime", "scripts", "installManifest.mjs"))
+  await write(projectRoot, path.join("runtime", "scripts", "native-host-bootstrap.js"))
   await write(projectRoot, path.join("runtime", "scripts", "node-repl-server.js"))
   await write(projectRoot, path.join("runtime", "assets", "chrome.svg"), "<svg />\n")
   await write(projectRoot, path.join("runtime", "skills", "chrome", "SKILL.md"))
   await write(projectRoot, "LICENSE", "MIT License\n")
 
+  await write(projectRoot, path.join("browser-runtime", "package.json"), "{}\n")
+  await write(projectRoot, path.join("browser-runtime", "src", "browser-client.ts"))
+  await write(
+    projectRoot,
+    path.join("browser-runtime", "dist", "browser-client.mjs"),
+    "// generated browser runtime\n",
+  )
   await write(projectRoot, path.join("browser-extension", "package.json"), "{}\n")
   await write(projectRoot, path.join("browser-extension", "src", "background.ts"))
   await write(projectRoot, path.join("browser-extension", "tsconfig.json"), "{}\n")
-  await write(projectRoot, path.join("browser-extension", "dist", "manifest.json"), "{}\n")
+  await write(
+    projectRoot,
+    path.join("browser-extension", "dist", "manifest.json"),
+    `${JSON.stringify({ key: extensionKey })}\n`,
+  )
   await write(projectRoot, path.join("browser-extension", "dist", "background.js"))
   await write(projectRoot, path.join("browser-extension", "dist", "background.js.map"))
   await write(projectRoot, path.join("browser-extension", "dist", "content.js"))
@@ -49,11 +73,38 @@ async function createFixture(projectRoot) {
   await write(projectRoot, path.join("browser-extension", "dist", "chunks", "shared.js.map"))
 
   await write(projectRoot, path.join("browser-native-host", "package.json"), "{}\n")
-  await write(projectRoot, path.join("browser-native-host", "src", "main.ts"))
-  await write(projectRoot, path.join("browser-native-host", "dist", "native-host.exe"))
+  await write(projectRoot, path.join("browser-native-host", "src", "main.rs"))
+  const nativeHostTarget = nativeHostBuildTarget()
+  await write(
+    projectRoot,
+    path.join(
+      "browser-native-host",
+      "dist",
+      nativeHostTarget.platformDirectory,
+      nativeHostTarget.architectureDirectory,
+      nativeHostTarget.executableName,
+    ),
+  )
   await write(projectRoot, path.join("tools", "package-chrome-plugin.mjs"))
   await write(projectRoot, "README.md")
 }
+
+test("derives the stable Anybox extension ID from its manifest key", async () => {
+  const manifest = JSON.parse(await fsp.readFile(
+    path.join(
+      import.meta.dirname,
+      "..",
+      "browser-extension",
+      "public",
+      "manifest.json",
+    ),
+    "utf8",
+  ))
+  assert.equal(
+    chromeExtensionIDFromManifestKey(manifest.key),
+    "hjbejdmgpifdjjlpgmdfmbmbhkedgnjc",
+  )
+})
 
 test("synchronizes only installable Chrome files into the distribution directory", async () => {
   const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "anybox-chrome-package-"))
@@ -75,9 +126,13 @@ test("synchronizes only installable Chrome files into the distribution directory
       "browser-extension/manifest.json",
       "browser-extension/popup.html",
       "browser-extension/popup.js",
+      nativeHostBuildTarget().packagePath.split(path.sep).join("/"),
       "LICENSE",
       "scripts/browser-client.mjs",
       "scripts/browser-server.js",
+      "scripts/extension-id.json",
+      "scripts/installManifest.mjs",
+      "scripts/native-host-bootstrap.js",
       "scripts/node-repl-server.js",
       "skills/chrome/SKILL.md",
     ])
@@ -87,6 +142,10 @@ test("synchronizes only installable Chrome files into the distribution directory
     assert.equal(files.some((entry) => entry.startsWith("browser-native-host/")), false)
     assert.equal(files.some((entry) => entry.endsWith("package.json")), false)
     assert.equal(files.some((entry) => entry.toLowerCase().includes("readme")), false)
+    assert.equal(
+      await fsp.readFile(path.join(pluginRoot, "scripts", "browser-client.mjs"), "utf8"),
+      "// generated browser runtime\n",
+    )
 
     const manifest = JSON.parse(
       await fsp.readFile(path.join(pluginRoot, ".anybox-plugin", "plugin.json"), "utf8"),
@@ -94,8 +153,12 @@ test("synchronizes only installable Chrome files into the distribution directory
     assert.equal(manifest.package, undefined)
     assert.equal(manifest.skillPreviews.length, 1)
     assert.equal(
-      await fsp.readFile(path.join(projectRoot, "browser-native-host", "src", "main.ts"), "utf8"),
-      path.join("browser-native-host", "src", "main.ts"),
+      await fsp.readFile(path.join(projectRoot, "browser-native-host", "src", "main.rs"), "utf8"),
+      path.join("browser-native-host", "src", "main.rs"),
+    )
+    assert.equal(
+      await fsp.readFile(path.join(projectRoot, "browser-runtime", "src", "browser-client.ts"), "utf8"),
+      path.join("browser-runtime", "src", "browser-client.ts"),
     )
 
     await packageChromePlugin({ projectRoot, pluginRoot, check: true })
@@ -122,6 +185,27 @@ test("check mode reports a stale tracked plugin without overwriting it", async (
     assert.equal(
       await fsp.readFile(path.join(pluginRoot, "scripts", "browser-server.js"), "utf8"),
       "stale\n",
+    )
+  } finally {
+    await fsp.rm(tempRoot, { recursive: true, force: true })
+  }
+})
+
+test("rejects a generated package that exceeds the GitHub Tree install limit", async () => {
+  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "anybox-chrome-package-size-"))
+  const projectRoot = path.join(tempRoot, "packages", "chrome-plugin")
+  const pluginRoot = path.join(tempRoot, "plugins", "Anybox-Plugins", "chrome")
+
+  try {
+    await createFixture(projectRoot)
+    await packageChromePlugin({ projectRoot, pluginRoot })
+    await fsp.writeFile(
+      path.join(pluginRoot, "assets", "oversized.bin"),
+      Buffer.alloc(5 * 1024 * 1024),
+    )
+    await assert.rejects(
+      validateChromePluginPackage(pluginRoot),
+      /GitHub Tree installs are limited/,
     )
   } finally {
     await fsp.rm(tempRoot, { recursive: true, force: true })

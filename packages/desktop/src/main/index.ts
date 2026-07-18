@@ -2,7 +2,6 @@ import { app, BrowserWindow, Menu, protocol, session } from "electron"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { registerIpcHandlers } from "./ipc"
-import { registerBrowserNativeMessagingHost } from "./browser-native-messaging"
 import { registerLocalImageProtocolHandler, registerLocalImageProtocolScheme } from "./local-image-protocol"
 import { registerLocalPreviewProtocolHandler, registerLocalPreviewProtocolScheme } from "./preview-targets"
 import { readLocaleConfigSnapshot } from "./locale-config"
@@ -59,9 +58,6 @@ void app.whenReady().then(async () => {
   } catch (error) {
     safeError("[desktop] failed to start managed agent", error)
   }
-  await registerBrowserNativeMessagingHost().catch((error) => {
-    safeError("[desktop] failed to register browser native messaging host", error)
-  })
   await ensureMobileBridgeServerRunning().catch((error) => {
     safeError("[desktop] failed to start mobile bridge", error)
   })

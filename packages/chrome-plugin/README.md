@@ -11,8 +11,9 @@ The installable plugin directory is generated separately at
 ```text
 packages/chrome-plugin/
   browser-extension/       Vite/TypeScript Chrome extension project
-  browser-native-host/     Bun/TypeScript Native Messaging Host project
-  runtime/                 Authored plugin manifest, MCP scripts, and Skill
+  browser-runtime/         TypeScript browser SDK bundled to browser-client.mjs
+  browser-native-host/     Rust Native Messaging Host project
+  runtime/                 Authored plugin manifest, MCP server scripts, and Skill
   tools/                   Distribution synchronization and regression tests
   LICENSE
   README.md
@@ -20,6 +21,7 @@ packages/chrome-plugin/
 plugins/Anybox-Plugins/chrome/
   .anybox-plugin/          Generated canonical manifest
   browser-extension/       Generated extension build
+  extension-host/          Platform-specific Rust Native Messaging Host
   scripts/                 Generated MCP and Node REPL runtime
   skills/                  Generated Chrome Skill
   LICENSE
@@ -37,10 +39,13 @@ From the repository root:
 corepack pnpm chrome-plugin:package
 ```
 
-This command builds the Chrome extension and replaces the final plugin
-directory from a strict allowlist. It excludes TypeScript source, tests,
-configuration, source maps, dependencies, caches, documentation, and the Native
-Host project.
+This command type-checks and bundles `browser-runtime/src/browser-client.ts`
+with esbuild, builds the Chrome extension and Rust Native Messaging Host, and
+replaces the final plugin directory from a strict allowlist. The generated
+`plugins/Anybox-Plugins/chrome/scripts/browser-client.mjs` is a minified build
+artifact and must not be edited directly. The package excludes TypeScript
+source, Rust source, tests, configuration, source maps, dependencies, caches,
+and documentation.
 
 Run the packaging regression tests:
 
@@ -59,7 +64,9 @@ directory together.
 
 ## Native Host delivery
 
-The Native Messaging Host source belongs to this project, but its executable is
-platform-specific and is delivered by the Anybox desktop packaging pipeline.
-The downloadable plugin directory therefore contains the built Chrome
-extension and plugin runtime, but not a duplicate Native Host executable.
+Like the Codex Chrome plugin, the downloadable Anybox plugin owns its Native
+Messaging Host. The current platform binary is generated under
+`extension-host/<platform>/<architecture>/`, and `scripts/installManifest.mjs`
+registers a user-level Chrome Native Messaging manifest that points directly to
+that plugin-owned binary. The Anybox desktop package does not carry a duplicate
+host.

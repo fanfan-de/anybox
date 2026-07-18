@@ -1,6 +1,6 @@
 {
   "name": "chrome",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Control Chrome with a plugin-bundled Chrome MCP runtime, Chrome extension, and Native Messaging host.",
   "author": {
     "name": "Anybox"
@@ -23,8 +23,8 @@
       "zh-CN": "通过 Anybox Chrome 扩展使用 Chrome 标签页。"
     },
     "longDescription": {
-      "en-US": "A self-contained Chrome plugin that bundles its Chrome MCP, Node REPL, Chrome runtime, and built Chrome extension. The complete extension and Native Messaging Host projects remain available in the GitHub source repository.",
-      "zh-CN": "一个自包含的 Chrome 插件，内含 Chrome MCP、Node REPL、Chrome 运行时与构建后的 Chrome 扩展；完整扩展和 Native Messaging Host 工程保留在 GitHub 源码仓库中。"
+      "en-US": "A self-contained Chrome plugin that bundles its Chrome MCP, Node REPL, Chrome runtime, built Chrome extension, and platform-specific Rust Native Messaging Host.",
+      "zh-CN": "一个自包含的 Chrome 插件，内含 Chrome MCP、Node REPL、Chrome 运行时、构建后的 Chrome 扩展，以及平台对应的 Rust Native Messaging Host。"
     },
     "developerName": "Anybox",
     "category": "Browser",
@@ -146,6 +146,7 @@
       "permissions": [
         "Reads Chrome tab titles, URLs, visible page text, DOM trees, accessibility trees, interactive elements, and screenshots.",
         "Opens, activates, clicks, scrolls, types into, and fills Chrome tabs through the Anybox Chrome extension.",
+        "Registers and runs the plugin-bundled Native Messaging Host for the current user.",
         "Requires the Anybox Chrome extension to be installed, enabled, and connected."
       ],
       "runtime": {
@@ -209,6 +210,7 @@
       },
       "installReview": [
         "Runs a local Node.js MCP server bundled inside the Chrome plugin.",
+        "Registers a user-level Chrome Native Messaging Host whose executable is bundled inside the plugin.",
         "Requires the Anybox Chrome extension to be connected before browser commands can run.",
         "Interactive page actions are configured to ask before execution."
       ]

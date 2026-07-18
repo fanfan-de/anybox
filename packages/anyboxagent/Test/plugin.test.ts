@@ -1071,7 +1071,7 @@ async function writeChromePluginPackage() {
   if (!activeRoot) throw new Error("Temp root has not been initialized.")
 
   const packageSourceRoot = pluginInstallRoot()
-  const packageRoot = join(packageSourceRoot, "chrome", "0.2.2")
+  const packageRoot = join(packageSourceRoot, "chrome", "0.3.0")
   const chromePluginRoot = join(
     import.meta.dir,
     "..",
@@ -3543,8 +3543,8 @@ describe("plugin marketplace API", () => {
     await Plugin.reconcileInstalledRuntimeBindings()
 
     const migrated = Plugin.getInstalled("chrome")
-    expect(migrated?.version).toBe("0.2.2")
-    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "chrome", "0.2.2"))
+    expect(migrated?.version).toBe("0.3.0")
+    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "chrome", "0.3.0"))
     expect(migrated?.mcpServerIDs).toEqual([
       "plugin.chrome.chrome",
       "plugin.chrome.node-repl",
@@ -3598,7 +3598,7 @@ describe("plugin marketplace API", () => {
     expect(await Config.getSelectedMcpServerIDs("legacy-browser-project")).toEqual([])
 
     const packageSourceRoot = await writeChromePluginPackage()
-    const packageRoot = join(packageSourceRoot, "chrome", "0.2.2")
+    const packageRoot = join(packageSourceRoot, "chrome", "0.3.0")
     const app = createServerApp()
 
     const catalogResponse = await app.request("/api/plugins/catalog")

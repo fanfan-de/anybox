@@ -6,6 +6,6 @@
   "scripts": {
     "build": "node ./tools/package-chrome-plugin.mjs",
     "check": "node ./tools/package-chrome-plugin.mjs --check",
-    "test": "node --test ./tools/package-chrome-plugin.test.mjs"
+    "test": "corepack pnpm --filter anybox-chrome-browser-runtime test && corepack pnpm --filter anybox-chrome-native-host test && node --test ./tools/*.test.mjs"
   }
 }

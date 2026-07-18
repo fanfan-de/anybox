@@ -185,14 +185,19 @@ importers:
         specifier: ^7.3.1
         version: 7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.101.0)(terser@5.48.0)(yaml@2.8.3)
 
-  packages/chrome-plugin/browser-native-host:
+  packages/chrome-plugin/browser-native-host: {}
+
+  packages/chrome-plugin/browser-runtime:
     devDependencies:
-      '@types/bun':
-        specifier: 1.3.11
-        version: 1.3.11
+      '@anybox/shared':
+        specifier: workspace:*
+        version: link:../../shared
       '@types/node':
         specifier: ^25.5.0
         version: 25.6.0
+      esbuild:
+        specifier: ^0.27.2
+        version: 0.27.2
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -11042,9 +11047,7 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.76.2': {}
 

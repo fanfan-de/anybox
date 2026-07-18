@@ -25,6 +25,7 @@ function startMcpServer(serverPath: string, env: NodeJS.ProcessEnv = {}) {
     windowsHide: true,
     env: {
       ...process.env,
+      ANYBOX_BROWSER_NATIVE_INSTALL: "off",
       ...env,
     },
   })
@@ -103,6 +104,9 @@ describe("Chrome plugin runtimes", () => {
     expect(existsSync(join(chromePluginRoot, "browser-extension", "manifest.json"))).toBe(true)
     expect(existsSync(join(chromePluginRoot, "browser-extension", "src"))).toBe(false)
     expect(existsSync(join(chromePluginRoot, "browser-native-host"))).toBe(false)
+    expect(
+      existsSync(join(chromePluginRoot, "extension-host", "windows", "x64", "extension-host.exe")),
+    ).toBe(true)
     expect(existsSync(join(chromePluginRoot, "browser-extension", "package.json"))).toBe(false)
     expect(existsSync(join(chromePluginRoot, "runtime-package"))).toBe(false)
     expect(sourceManifest.package).toBeUndefined()
@@ -133,6 +137,9 @@ describe("Chrome plugin runtimes", () => {
     expect(existsSync(join(chromePluginScriptsRoot, "browser-client.mjs"))).toBe(true)
     expect(existsSync(chromeMcpServerPath)).toBe(true)
     expect(existsSync(nodeReplServerPath)).toBe(true)
+    expect(existsSync(join(chromePluginScriptsRoot, "extension-id.json"))).toBe(true)
+    expect(existsSync(join(chromePluginScriptsRoot, "installManifest.mjs"))).toBe(true)
+    expect(existsSync(join(chromePluginScriptsRoot, "native-host-bootstrap.js"))).toBe(true)
   })
 
   test("lists tools and preserves globalThis state", async () => {

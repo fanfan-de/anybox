@@ -6,6 +6,7 @@ const path = require("node:path")
 const { pathToFileURL } = require("node:url")
 const { createRequire } = require("node:module")
 const Module = require("node:module")
+const { ensureNativeMessagingHost } = require("./native-host-bootstrap")
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const MAX_TIMEOUT_MS = 120_000
@@ -17,6 +18,7 @@ let sandbox
 let writes
 let images
 const nodeModuleDirs = []
+const nativeMessagingHostReady = ensureNativeMessagingHost()
 
 const tools = [
   {
@@ -270,6 +272,7 @@ rl.on("line", (line) => {
     const message = JSON.parse(line)
 
     if (message.method === "initialize") {
+      await nativeMessagingHostReady
       send({
         jsonrpc: "2.0",
         id: message.id,

@@ -15,6 +15,40 @@ export const defaultPluginRoot = path.join(
   "chrome",
 )
 
+const MAX_GITHUB_TREE_PACKAGE_BYTES = 5 * 1024 * 1024
+
+export function nativeHostBuildTarget(
+  platform = process.platform,
+  architecture = process.arch,
+) {
+  const platformDirectory = {
+    darwin: "macos",
+    linux: "linux",
+    win32: "windows",
+  }[platform]
+  const architectureDirectory = {
+    arm64: "arm64",
+    x64: "x64",
+  }[architecture]
+  if (!platformDirectory || !architectureDirectory) {
+    throw new Error(`Unsupported Native Messaging Host target: ${platform}/${architecture}`)
+  }
+  const executableName = platform === "win32" ? "extension-host.exe" : "extension-host"
+  return {
+    architectureDirectory,
+    executableName,
+    packagePath: path.join(
+      "extension-host",
+      platformDirectory,
+      architectureDirectory,
+      executableName,
+    ),
+    platformDirectory,
+  }
+}
+
+const currentNativeHostTarget = nativeHostBuildTarget()
+
 const requiredPackageFiles = [
   path.join(".anybox-plugin", "plugin.json"),
   path.join("assets", "chrome.svg"),
@@ -24,8 +58,12 @@ const requiredPackageFiles = [
   path.join("browser-extension", "content.js"),
   path.join("browser-extension", "popup.html"),
   path.join("browser-extension", "popup.js"),
+  currentNativeHostTarget.packagePath,
   path.join("scripts", "browser-client.mjs"),
   path.join("scripts", "browser-server.js"),
+  path.join("scripts", "extension-id.json"),
+  path.join("scripts", "installManifest.mjs"),
+  path.join("scripts", "native-host-bootstrap.js"),
   path.join("scripts", "node-repl-server.js"),
   path.join("skills", "chrome", "SKILL.md"),
 ]
@@ -34,6 +72,7 @@ const allowedTopLevelEntries = new Set([
   ".anybox-plugin",
   "assets",
   "browser-extension",
+  "extension-host",
   "LICENSE",
   "scripts",
   "skills",
@@ -70,6 +109,26 @@ function toPosixPath(value) {
 
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex")
+}
+
+export function chromeExtensionIDFromManifestKey(key) {
+  if (typeof key !== "string" || !key.trim()) {
+    throw new Error("Chrome extension manifest must contain a stable public key.")
+  }
+  let publicKey
+  try {
+    publicKey = Buffer.from(key, "base64")
+  } catch {
+    throw new Error("Chrome extension manifest public key must be base64 encoded.")
+  }
+  if (publicKey.length === 0) {
+    throw new Error("Chrome extension manifest public key must not be empty.")
+  }
+
+  return [...createHash("sha256").update(publicKey).digest().subarray(0, 16)]
+    .flatMap((byte) => [byte >> 4, byte & 0x0f])
+    .map((nibble) => String.fromCharCode("a".charCodeAt(0) + nibble))
+    .join("")
 }
 
 async function pathExists(target) {
@@ -142,6 +201,49 @@ async function copyChromeExtensionBuild(projectRoot, packageRoot) {
   }
 }
 
+async function copyBrowserRuntimeBuild(projectRoot, packageRoot) {
+  const browserClientPath = path.join(
+    projectRoot,
+    "browser-runtime",
+    "dist",
+    "browser-client.mjs",
+  )
+  if (!(await pathExists(browserClientPath))) {
+    throw new Error(
+      `Chrome browser runtime build output is missing at ${browserClientPath}. Run the browser runtime build first.`,
+    )
+  }
+
+  await copyFile(
+    browserClientPath,
+    path.join(packageRoot, "scripts", "browser-client.mjs"),
+  )
+}
+
+async function copyNativeHostBuild(projectRoot, packageRoot) {
+  const source = path.join(
+    projectRoot,
+    "browser-native-host",
+    "dist",
+    currentNativeHostTarget.platformDirectory,
+    currentNativeHostTarget.architectureDirectory,
+    currentNativeHostTarget.executableName,
+  )
+  if (!(await pathExists(source))) {
+    throw new Error(
+      `Chrome Native Messaging Host build output is missing at ${source}. Run the native host build first.`,
+    )
+  }
+
+  await copyFile(
+    source,
+    path.join(packageRoot, currentNativeHostTarget.packagePath),
+  )
+  if (process.platform !== "win32") {
+    await fsp.chmod(path.join(packageRoot, currentNativeHostTarget.packagePath), 0o755)
+  }
+}
+
 export async function validateChromePluginPackage(packageRoot) {
   if (!(await pathExists(packageRoot))) {
     throw new Error(`Chrome plugin package does not exist: ${packageRoot}`)
@@ -150,6 +252,16 @@ export async function validateChromePluginPackage(packageRoot) {
   const files = await listFiles(packageRoot)
   const normalizedFiles = files.map(toPosixPath)
   const normalizedSet = new Set(normalizedFiles)
+  const packageBytes = (
+    await Promise.all(files.map(async (relativePath) =>
+      (await fsp.stat(path.join(packageRoot, relativePath))).size
+    ))
+  ).reduce((total, size) => total + size, 0)
+  if (packageBytes > MAX_GITHUB_TREE_PACKAGE_BYTES) {
+    throw new Error(
+      `Chrome plugin package is ${packageBytes} bytes; GitHub Tree installs are limited to ${MAX_GITHUB_TREE_PACKAGE_BYTES} bytes.`,
+    )
+  }
 
   for (const requiredPath of requiredPackageFiles.map(toPosixPath)) {
     if (!normalizedSet.has(requiredPath)) {
@@ -199,6 +311,22 @@ export async function validateChromePluginPackage(packageRoot) {
     throw new Error("Chrome plugin manifest must derive its ID from the canonical name.")
   }
 
+  const extensionManifest = JSON.parse(
+    await fsp.readFile(path.join(packageRoot, "browser-extension", "manifest.json"), "utf8"),
+  )
+  const extensionConfig = JSON.parse(
+    await fsp.readFile(path.join(packageRoot, "scripts", "extension-id.json"), "utf8"),
+  )
+  const derivedExtensionID = chromeExtensionIDFromManifestKey(extensionManifest.key)
+  if (extensionConfig.extensionId !== derivedExtensionID) {
+    throw new Error(
+      `Chrome Native Messaging extension ID mismatch: expected ${derivedExtensionID}, got ${extensionConfig.extensionId ?? "missing"}.`,
+    )
+  }
+  if (extensionConfig.extensionHostName !== "com.anybox.browser") {
+    throw new Error("Chrome Native Messaging host name must be 'com.anybox.browser'.")
+  }
+
   return {
     files,
     manifest,
@@ -208,12 +336,14 @@ export async function validateChromePluginPackage(packageRoot) {
 export async function stageChromePluginPackage({ projectRoot, packageRoot }) {
   const runtimeSourceRoot = path.join(projectRoot, "runtime")
   const manifestPath = path.join(runtimeSourceRoot, ".anybox-plugin", "plugin.json")
+  const browserRuntimeProjectPath = path.join(projectRoot, "browser-runtime", "package.json")
   const extensionProjectPath = path.join(projectRoot, "browser-extension", "package.json")
   const nativeHostProjectPath = path.join(projectRoot, "browser-native-host", "package.json")
   const licensePath = path.join(projectRoot, "LICENSE")
 
   for (const requiredSource of [
     manifestPath,
+    browserRuntimeProjectPath,
     extensionProjectPath,
     nativeHostProjectPath,
     licensePath,
@@ -238,6 +368,8 @@ export async function stageChromePluginPackage({ projectRoot, packageRoot }) {
   await fsp.rm(packageRoot, { recursive: true, force: true })
   await fsp.mkdir(packageRoot, { recursive: true })
   await copyDirectoryContents(runtimeSourceRoot, packageRoot)
+  await copyBrowserRuntimeBuild(projectRoot, packageRoot)
+  await copyNativeHostBuild(projectRoot, packageRoot)
   await copyFile(licensePath, path.join(packageRoot, "LICENSE"))
   await copyChromeExtensionBuild(projectRoot, packageRoot)
 
@@ -346,13 +478,38 @@ function run(command, args, options = {}) {
   }
 }
 
+function runPnpm(args, options = {}) {
+  const npmExecPath = process.env.npm_execpath
+  if (npmExecPath && /\.(?:c|m)?js$/i.test(npmExecPath)) {
+    const executableName = path.basename(npmExecPath).toLowerCase()
+    const cliArgs = executableName.startsWith("corepack")
+      ? [npmExecPath, "pnpm", ...args]
+      : [npmExecPath, ...args]
+    run(process.execPath, cliArgs, {
+      shell: false,
+      ...options,
+    })
+    return
+  }
+
+  run("corepack", ["pnpm", ...args], options)
+}
+
 export function buildChromeExtension() {
-  run("corepack", ["pnpm", "--filter", "anybox-chrome-extension", "build"], {
+  runPnpm(["--filter", "anybox-chrome-extension", "build"], {
     env: {
       ...process.env,
       ANYBOX_BROWSER_EXTENSION_SOURCEMAP: "false",
     },
   })
+}
+
+export function buildBrowserRuntime() {
+  runPnpm(["--filter", "anybox-chrome-browser-runtime", "build"])
+}
+
+export function buildNativeHost() {
+  runPnpm(["--filter", "anybox-chrome-native-host", "build"])
 }
 
 function parseArgs(argv) {
@@ -378,13 +535,13 @@ function parseArgs(argv) {
 
 function printHelp() {
   process.stdout.write([
-    "Build the Chrome extension and synchronize the tracked Anybox Chrome plugin directory.",
+    "Build the browser runtime, Chrome extension, and Rust Native Messaging Host, then synchronize the tracked Anybox Chrome plugin directory.",
     "",
     "Usage:",
     "  node tools/package-chrome-plugin.mjs [options]",
     "",
     "Options:",
-    "  --skip-build  Reuse the current browser-extension/dist output.",
+    "  --skip-build  Reuse the current browser-runtime, browser-extension, and native-host outputs.",
     "  --check       Verify the tracked plugin directory without modifying it.",
     "  -h, --help    Show this help.",
     "",
@@ -398,7 +555,11 @@ async function main() {
     return
   }
 
-  if (options.build) buildChromeExtension()
+  if (options.build) {
+    buildBrowserRuntime()
+    buildChromeExtension()
+    buildNativeHost()
+  }
   const result = await packageChromePlugin({ check: options.check })
   process.stdout.write(`${JSON.stringify({
     check: result.check,

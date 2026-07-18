@@ -54,6 +54,9 @@ jobs:
         with:
           bun-version: 1.3.6
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Enable the pinned pnpm version
         shell: pwsh
         run: corepack enable
@@ -68,6 +71,7 @@ jobs:
           corepack pnpm --filter anybox-chrome-extension typecheck
           corepack pnpm --filter anybox-chrome-native-host typecheck
           corepack pnpm --filter anybox-chrome-native-host test
+          cargo fmt --check --manifest-path packages/chrome-plugin/browser-native-host/Cargo.toml
 
       - name: Test the directory synchronizer
         shell: pwsh

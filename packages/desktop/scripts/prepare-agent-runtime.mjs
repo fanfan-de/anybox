@@ -11,7 +11,6 @@ const desktopDir = path.resolve(scriptDir, "..")
 const repoRoot = path.resolve(desktopDir, "..", "..")
 const agentDir = path.join(repoRoot, "packages", "anyboxagent")
 const cinemaWebDistDir = path.join(repoRoot, "packages", "cinema-web", "dist")
-const browserNativeHostDir = path.join(repoRoot, "packages", "chrome-plugin", "browser-native-host")
 const runtimeDir = path.join(desktopDir, "build", "agent-runtime")
 const cinemaProviderCatalogSource = path.join(agentDir, "src", "cinema", "provider-manifests.json")
 const cinemaProviderManifestsSourceDir = path.join(agentDir, "src", "cinema", "provider-manifests")
@@ -19,9 +18,6 @@ const gmailConnectorSourceDir = path.join(agentDir, "plugins", "builtin", "gmail
 const feishuConnectorSourceDir = path.join(agentDir, "plugins", "builtin", "feishu", "0.1.0", "connectors", "feishu")
 
 const bunExecutableName = process.platform === "win32" ? "bun.exe" : "bun"
-const nativeHostExecutableName = process.platform === "win32"
-  ? "anybox-chrome-native-host.exe"
-  : "anybox-chrome-native-host"
 const connectorBuildConfigFile = path.join(runtimeDir, "config", "connectors.json")
 
 function readEnv(key) {
@@ -39,27 +35,8 @@ async function pathExists(target) {
   }
 }
 
-async function resetRuntimeDirectory({ reuseActiveNativeHost }) {
-  if (!reuseActiveNativeHost) {
-    await fsp.rm(runtimeDir, { recursive: true, force: true })
-    return
-  }
-
-  await fsp.mkdir(runtimeDir, { recursive: true })
-  const nativeHostExecutable = path.join(runtimeDir, "native-host", nativeHostExecutableName)
-  if (!(await pathExists(nativeHostExecutable))) {
-    throw new Error(
-      "ANYBOX_REUSE_ACTIVE_NATIVE_HOST requires an existing packaged native host executable.",
-    )
-  }
-  for (const entry of await fsp.readdir(runtimeDir, { withFileTypes: true })) {
-    if (entry.name === "native-host") continue
-    await fsp.rm(path.join(runtimeDir, entry.name), { recursive: true, force: true })
-  }
-  console.warn(
-    "[desktop][build] reusing the active browser native host; close Chrome and rerun without " +
-    "ANYBOX_REUSE_ACTIVE_NATIVE_HOST before publishing a release.",
-  )
+async function resetRuntimeDirectory() {
+  await fsp.rm(runtimeDir, { recursive: true, force: true })
 }
 
 function run(command, args, options = {}) {
@@ -186,29 +163,6 @@ async function copyCinemaProviderManifests() {
   await fsp.cp(cinemaProviderManifestsSourceDir, targetManifestsDir, { recursive: true })
 }
 
-async function buildBrowserNativeHost(bunBinary, { reuseActiveNativeHost = false } = {}) {
-  const entrypoint = path.join(browserNativeHostDir, "src", "main.ts")
-  if (!(await pathExists(entrypoint))) {
-    throw new Error(`Missing Chrome Native Messaging Host entrypoint at ${entrypoint}`)
-  }
-
-  const targetDir = path.join(runtimeDir, "native-host")
-  if (reuseActiveNativeHost) return
-  await fsp.mkdir(targetDir, { recursive: true })
-  run(
-    bunBinary,
-    [
-      "build",
-      entrypoint,
-      "--target=bun",
-      "--compile",
-      "--outfile",
-      path.join(targetDir, nativeHostExecutableName),
-    ],
-    { cwd: repoRoot },
-  )
-}
-
 async function writeConnectorBuildConfig() {
   const gmailOAuthClientID = readEnv("ANYBOX_GMAIL_OAUTH_CLIENT_ID")
   const gmailOAuthClientSecret = readEnv("ANYBOX_GMAIL_OAUTH_CLIENT_SECRET")
@@ -228,9 +182,8 @@ async function writeConnectorBuildConfig() {
 async function main() {
   const bunBinary = resolveBunBinary()
   const runtimeNodeModulesDir = path.join(runtimeDir, "node_modules")
-  const reuseActiveNativeHost = readEnv("ANYBOX_REUSE_ACTIVE_NATIVE_HOST") === "1"
 
-  await resetRuntimeDirectory({ reuseActiveNativeHost })
+  await resetRuntimeDirectory()
   await fsp.mkdir(runtimeNodeModulesDir, { recursive: true })
 
   console.log(`[desktop][build] bundling agent server with ${bunBinary}`)
@@ -256,7 +209,6 @@ async function main() {
   await copyCinemaProviderManifests()
   await copyCinemaWebDist()
   await copyBundledAccountConnectors()
-  await buildBrowserNativeHost(bunBinary, { reuseActiveNativeHost })
   await writeConnectorBuildConfig()
   await prepareWorkspaceDependencies({
     bunBinary,

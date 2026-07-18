@@ -10,8 +10,9 @@
 ```text
 packages/chrome-plugin/
   browser-extension/       Vite/TypeScript Chrome 扩展工程
-  browser-native-host/     Bun/TypeScript Native Messaging Host 工程
-  runtime/                 插件清单、MCP 脚本与 Skill 源码
+  browser-runtime/         编译为 browser-client.mjs 的 TypeScript 浏览器 SDK
+  browser-native-host/     Rust Native Messaging Host 工程
+  runtime/                 插件清单、MCP Server 脚本与 Skill 源码
   tools/                   发行目录同步脚本与回归测试
   LICENSE
   README.md
@@ -19,6 +20,7 @@ packages/chrome-plugin/
 plugins/Anybox-Plugins/chrome/
   .anybox-plugin/          生成后的规范清单
   browser-extension/       生成后的扩展文件
+  extension-host/          平台对应的 Rust Native Messaging Host
   scripts/                 生成后的 MCP 与 Node REPL 运行时
   skills/                  生成后的 Chrome Skill
   LICENSE
@@ -35,9 +37,12 @@ plugins/Anybox-Plugins/chrome/
 corepack pnpm chrome-plugin:package
 ```
 
-该命令会构建 Chrome 扩展，并按严格允许列表替换最终插件目录。TypeScript
-源码、测试、工程配置、sourcemap、依赖、缓存、开发文档和 Native Host
-工程都不会进入最终插件。
+该命令会先对 `browser-runtime/src/browser-client.ts` 做类型检查，再通过
+esbuild 打包压缩为 `browser-client.mjs`，随后构建 Chrome 扩展和 Rust
+Native Messaging Host，并按严格允许列表替换最终插件目录。生成的
+`plugins/Anybox-Plugins/chrome/scripts/browser-client.mjs` 是构建产物，
+禁止直接修改。TypeScript/Rust 源码、测试、工程配置、sourcemap、依赖、
+缓存和开发文档都不会进入最终插件。
 
 运行打包回归测试：
 
@@ -56,6 +61,7 @@ corepack pnpm chrome-plugin:package:check
 
 ## Native Host 交付
 
-Native Messaging Host 的源码属于该工程，但可执行文件与平台相关，由 Anybox
-桌面端打包流程交付。最终插件目录只包含构建后的 Chrome 扩展和插件运行时，不重复携带
-Native Host 可执行文件。
+与 Codex Chrome 插件一样，Native Messaging Host 由可下载插件自身交付。
+当前平台二进制生成到 `extension-host/<platform>/<architecture>/`，
+`scripts/installManifest.mjs` 会为当前用户注册 Chrome Native Messaging
+清单，并让清单直接指向插件包内的二进制。Anybox 桌面安装包不再重复携带 Host。
