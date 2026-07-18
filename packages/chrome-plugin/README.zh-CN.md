@@ -12,7 +12,7 @@ packages/chrome-plugin/
   browser-extension/       Vite/TypeScript Chrome 扩展工程
   browser-runtime/         编译为 browser-client.mjs 的 TypeScript 浏览器 SDK
   browser-native-host/     Rust Native Messaging Host 工程
-  runtime/                 插件清单、MCP Server 脚本与 Skill 源码
+  runtime/                 插件清单、Node REPL MCP 脚本与 Skill 源码
   tools/                   发行目录同步脚本与回归测试
   LICENSE
   README.md
@@ -21,7 +21,7 @@ plugins/Anybox-Plugins/chrome/
   .anybox-plugin/          生成后的规范清单
   browser-extension/       生成后的扩展文件
   extension-host/          平台对应的 Rust Native Messaging Host
-  scripts/                 生成后的 MCP 与 Node REPL 运行时
+  scripts/                 生成后的 Node REPL 与浏览器客户端运行时
   skills/                  生成后的 Chrome Skill
   LICENSE
 ```
@@ -58,6 +58,12 @@ corepack pnpm chrome-plugin:package:check
 
 提交代码时，应同时提交源码变更和重新生成的
 `plugins/Anybox-Plugins/chrome`。
+
+## 浏览器控制架构
+
+插件只注册一个持久 `node-repl` MCP Server。模型通过其 `js` 工具使用预加载的
+`agent.browsers` API 完成标签页查询、页面检查、交互、截图和 CDP 操作；插件不再
+注册逐动作的 `browser_*` MCP 工具。
 
 ## Native Host 交付
 

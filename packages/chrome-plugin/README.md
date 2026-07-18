@@ -13,7 +13,7 @@ packages/chrome-plugin/
   browser-extension/       Vite/TypeScript Chrome extension project
   browser-runtime/         TypeScript browser SDK bundled to browser-client.mjs
   browser-native-host/     Rust Native Messaging Host project
-  runtime/                 Authored plugin manifest, MCP server scripts, and Skill
+  runtime/                 Authored manifest, Node REPL MCP script, and Skill
   tools/                   Distribution synchronization and regression tests
   LICENSE
   README.md
@@ -22,7 +22,7 @@ plugins/Anybox-Plugins/chrome/
   .anybox-plugin/          Generated canonical manifest
   browser-extension/       Generated extension build
   extension-host/          Platform-specific Rust Native Messaging Host
-  scripts/                 Generated MCP and Node REPL runtime
+  scripts/                 Generated Node REPL and browser client runtime
   skills/                  Generated Chrome Skill
   LICENSE
 ```
@@ -61,6 +61,13 @@ corepack pnpm chrome-plugin:package:check
 
 Commit source changes and the regenerated `plugins/Anybox-Plugins/chrome`
 directory together.
+
+## Browser control architecture
+
+The plugin registers one persistent `node-repl` MCP server. The model uses its
+`js` tool and the preloaded `agent.browsers` API for tab discovery, inspection,
+interaction, screenshots, and CDP. The plugin no longer registers per-action
+`browser_*` MCP tools.
 
 ## Native Host delivery
 

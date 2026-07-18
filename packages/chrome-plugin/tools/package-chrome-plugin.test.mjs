@@ -33,7 +33,6 @@ async function createFixture(projectRoot) {
       },
     ],
   }, null, 2)}\n`)
-  await write(projectRoot, path.join("runtime", "scripts", "browser-server.js"))
   await write(
     projectRoot,
     path.join("runtime", "scripts", "extension-id.json"),
@@ -129,7 +128,6 @@ test("synchronizes only installable Chrome files into the distribution directory
       nativeHostBuildTarget().packagePath.split(path.sep).join("/"),
       "LICENSE",
       "scripts/browser-client.mjs",
-      "scripts/browser-server.js",
       "scripts/extension-id.json",
       "scripts/installManifest.mjs",
       "scripts/native-host-bootstrap.js",
@@ -176,14 +174,14 @@ test("check mode reports a stale tracked plugin without overwriting it", async (
   try {
     await createFixture(projectRoot)
     await packageChromePlugin({ projectRoot, pluginRoot })
-    await fsp.writeFile(path.join(pluginRoot, "scripts", "browser-server.js"), "stale\n")
+    await fsp.writeFile(path.join(pluginRoot, "scripts", "node-repl-server.js"), "stale\n")
 
     await assert.rejects(
       packageChromePlugin({ projectRoot, pluginRoot, check: true }),
-      /changed: scripts\/browser-server\.js/,
+      /changed: scripts\/node-repl-server\.js/,
     )
     assert.equal(
-      await fsp.readFile(path.join(pluginRoot, "scripts", "browser-server.js"), "utf8"),
+      await fsp.readFile(path.join(pluginRoot, "scripts", "node-repl-server.js"), "utf8"),
       "stale\n",
     )
   } finally {

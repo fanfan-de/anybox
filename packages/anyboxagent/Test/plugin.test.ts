@@ -1071,7 +1071,7 @@ async function writeChromePluginPackage() {
   if (!activeRoot) throw new Error("Temp root has not been initialized.")
 
   const packageSourceRoot = pluginInstallRoot()
-  const packageRoot = join(packageSourceRoot, "chrome", "0.3.0")
+  const packageRoot = join(packageSourceRoot, "chrome", "0.4.0")
   const chromePluginRoot = join(
     import.meta.dir,
     "..",
@@ -3543,21 +3543,11 @@ describe("plugin marketplace API", () => {
     await Plugin.reconcileInstalledRuntimeBindings()
 
     const migrated = Plugin.getInstalled("chrome")
-    expect(migrated?.version).toBe("0.3.0")
-    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "chrome", "0.3.0"))
-    expect(migrated?.mcpServerIDs).toEqual([
-      "plugin.chrome.chrome",
-      "plugin.chrome.node-repl",
-    ])
+    expect(migrated?.version).toBe("0.4.0")
+    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "chrome", "0.4.0"))
+    expect(migrated?.mcpServerIDs).toEqual(["plugin.chrome.node-repl"])
     expect(migrated?.connectorRequirementIDs).toEqual([])
-    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.chrome")).toMatchObject({
-      transport: "stdio",
-      owner: {
-        kind: "plugin",
-        pluginID: "chrome",
-        bindingID: "mcp:chrome",
-      },
-    })
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.chrome")).toBeUndefined()
     expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.node-repl")).toMatchObject({
       transport: "stdio",
       owner: {
@@ -3568,7 +3558,7 @@ describe("plugin marketplace API", () => {
     })
   })
 
-  test("loads Chrome MCP and Node REPL from the Chrome plugin package", async () => {
+  test("loads the Chrome Node REPL from the Chrome plugin package", async () => {
     await useTempDatabase()
     const legacyBrowserServerID = "connector.browser.default"
     const legacyNodeReplServerID = "connector.node-repl.default"
@@ -3598,7 +3588,7 @@ describe("plugin marketplace API", () => {
     expect(await Config.getSelectedMcpServerIDs("legacy-browser-project")).toEqual([])
 
     const packageSourceRoot = await writeChromePluginPackage()
-    const packageRoot = join(packageSourceRoot, "chrome", "0.3.0")
+    const packageRoot = join(packageSourceRoot, "chrome", "0.4.0")
     const app = createServerApp()
 
     const catalogResponse = await app.request("/api/plugins/catalog")
@@ -3612,8 +3602,7 @@ describe("plugin marketplace API", () => {
     expect(plugin?.icon).toBe("./assets/chrome.svg")
     expect(plugin?.iconUrl).toMatch(/^data:image\/svg\+xml;base64,/)
     expect(plugin?.brandColor).toBe("#4285F4")
-    expect(plugin?.mcpServers.map((server) => server.id)).toEqual(["chrome", "node-repl"])
-    expect(plugin?.mcpServers.find((server) => server.id === "chrome")?.tools).toHaveLength(16)
+    expect(plugin?.mcpServers.map((server) => server.id)).toEqual(["node-repl"])
     expect(plugin?.mcpServers.find((server) => server.id === "node-repl")?.tools).toHaveLength(3)
 
     const connectorCatalogResponse = await app.request("/api/connectors/catalog")
@@ -3637,27 +3626,14 @@ describe("plugin marketplace API", () => {
     const installBody = (await installResponse.json()) as InstalledPluginEnvelope
 
     expect(installResponse.status).toBe(200)
-    expect(installBody.data?.mcpServerIDs).toEqual([
-      "plugin.chrome.chrome",
-      "plugin.chrome.node-repl",
-    ])
+    expect(installBody.data?.mcpServerIDs).toEqual(["plugin.chrome.node-repl"])
     expect(installBody.data?.connectorIDs).toEqual([])
     expect(installBody.data?.connectorRequirementIDs).toEqual([])
 
-    const server = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.chrome")
-    expect(server?.transport).toBe("stdio")
-    expect(server?.transport === "stdio" ? server.command : undefined).toBe("node")
-    expect(server?.transport === "stdio" ? server.cwd : undefined).toBe(packageRoot)
-    expect(
-      (server?.transport === "stdio" ? server.args?.[0] : undefined)?.replaceAll("\\", "/"),
-    ).toBe(`${packageRoot.replaceAll("\\", "/")}/scripts/browser-server.js`)
-    expect(server?.owner).toEqual({
-      kind: "plugin",
-      pluginID: "chrome",
-      bindingID: "mcp:chrome",
-    })
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.chrome")).toBeUndefined()
     const nodeReplServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.node-repl")
     expect(nodeReplServer?.transport).toBe("stdio")
+    expect(nodeReplServer?.transport === "stdio" ? nodeReplServer.command : undefined).toBe("node")
     expect(nodeReplServer?.transport === "stdio" ? nodeReplServer.cwd : undefined).toBe(packageRoot)
     expect(
       (nodeReplServer?.transport === "stdio" ? nodeReplServer.args?.[0] : undefined)?.replaceAll("\\", "/"),
@@ -3671,13 +3647,7 @@ describe("plugin marketplace API", () => {
     await Config.setSelectedPluginIDs("chrome-project", ["chrome"])
     expect(
       (await Config.resolveProjectMcpServers("chrome-project")).map((entry) => entry.id),
-    ).toEqual(expect.arrayContaining(["plugin.chrome.chrome", "plugin.chrome.node-repl"]))
-
-    const diagnosticResponse = await app.request("/api/mcp/servers/plugin.chrome.chrome/diagnostic")
-    const diagnosticBody = (await diagnosticResponse.json()) as DiagnosticEnvelope
-    expect(diagnosticResponse.status).toBe(200)
-    expect(diagnosticBody.data?.ok).toBe(true)
-    expect(diagnosticBody.data?.toolCount).toBe(16)
+    ).toEqual(expect.arrayContaining(["plugin.chrome.node-repl"]))
 
     const nodeReplDiagnosticResponse = await app.request("/api/mcp/servers/plugin.chrome.node-repl/diagnostic")
     const nodeReplDiagnosticBody = (await nodeReplDiagnosticResponse.json()) as DiagnosticEnvelope
@@ -3686,7 +3656,7 @@ describe("plugin marketplace API", () => {
     expect(nodeReplDiagnosticBody.data?.toolCount).toBe(3)
 
     const disableChildResponse = await app.request(
-      "/api/plugins/installed/chrome/mcp/plugin.chrome.chrome",
+      "/api/plugins/installed/chrome/mcp/plugin.chrome.node-repl",
       {
         method: "PATCH",
         headers: {
@@ -3695,7 +3665,7 @@ describe("plugin marketplace API", () => {
         body: JSON.stringify({
           enabled: false,
           toolPolicies: {
-            browser_status: {
+            js: {
               policy: "disabled",
             },
           },
@@ -3705,9 +3675,9 @@ describe("plugin marketplace API", () => {
     expect(disableChildResponse.status).toBe(200)
     await Plugin.reconcileInstalledRuntimeBindings()
 
-    const resyncedChromeServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.chrome")
-    expect(resyncedChromeServer?.enabled).toBe(false)
-    expect(resyncedChromeServer?.toolPolicies?.browser_status?.policy).toBe("disabled")
+    const resyncedNodeReplServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.node-repl")
+    expect(resyncedNodeReplServer?.enabled).toBe(false)
+    expect(resyncedNodeReplServer?.toolPolicies?.js?.policy).toBe("disabled")
 
     const deleteResponse = await app.request("/api/plugins/installed/chrome", {
       method: "DELETE",

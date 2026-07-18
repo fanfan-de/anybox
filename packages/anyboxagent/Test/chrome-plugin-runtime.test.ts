@@ -14,7 +14,6 @@ const chromePluginRoot = join(
   "chrome",
 )
 const chromePluginScriptsRoot = join(chromePluginRoot, "scripts")
-const chromeMcpServerPath = join(chromePluginScriptsRoot, "browser-server.js")
 const nodeReplServerPath = join(chromePluginScriptsRoot, "node-repl-server.js")
 const children: ChildProcessWithoutNullStreams[] = []
 const agentServers: Server[] = []
@@ -119,7 +118,8 @@ describe("Chrome plugin runtimes", () => {
     expect(pluginManifest.interface?.logo).toBe("./assets/chrome.svg")
     expect(pluginManifest.interface?.iconUrl).toBe("./assets/chrome.svg")
     expect(pluginManifest.interface?.brandColor).toBe("#4285F4")
-    expect(pluginManifest.mcpServers?.map((server: { id: string }) => server.id)).toEqual(["chrome", "node-repl"])
+    expect(pluginManifest.version).toBe("0.4.0")
+    expect(pluginManifest.mcpServers?.map((server: { id: string }) => server.id)).toEqual(["node-repl"])
     expect(pluginManifest.skillPreviews).toHaveLength(1)
     expect(pluginManifest.skillPreviews[0]).toMatchObject({ name: "Chrome", directory: "chrome" })
     expect(extensionManifest.icons).toEqual({
@@ -135,7 +135,7 @@ describe("Chrome plugin runtimes", () => {
       )
     }
     expect(existsSync(join(chromePluginScriptsRoot, "browser-client.mjs"))).toBe(true)
-    expect(existsSync(chromeMcpServerPath)).toBe(true)
+    expect(existsSync(join(chromePluginScriptsRoot, "browser-server.js"))).toBe(false)
     expect(existsSync(nodeReplServerPath)).toBe(true)
     expect(existsSync(join(chromePluginScriptsRoot, "extension-id.json"))).toBe(true)
     expect(existsSync(join(chromePluginScriptsRoot, "installManifest.mjs"))).toBe(true)
@@ -148,19 +148,19 @@ describe("Chrome plugin runtimes", () => {
 
     const list = await server.request("tools/list") as { result?: { tools?: Array<{ name: string }> } }
     expect(list.result?.tools?.map((tool) => tool.name)).toEqual([
-      "node_repl_js",
-      "node_repl_reset",
-      "node_repl_add_node_module_dir",
+      "js",
+      "js_reset",
+      "js_add_node_module_dir",
     ])
 
     const first = await server.request("tools/call", {
-      name: "node_repl_js",
+      name: "js",
       arguments: {
         code: "globalThis.answer = (globalThis.answer || 0) + 1\nreturn globalThis.answer",
       },
     }) as { result?: { structuredContent?: { result?: unknown } } }
     const second = await server.request("tools/call", {
-      name: "node_repl_js",
+      name: "js",
       arguments: {
         code: "globalThis.answer = (globalThis.answer || 0) + 1\nreturn globalThis.answer",
       },
@@ -175,20 +175,26 @@ describe("Chrome plugin runtimes", () => {
     await server.request("initialize")
 
     const response = await server.request("tools/call", {
-      name: "node_repl_js",
+      name: "js",
       arguments: {
         code: [
           "await setupBrowserRuntime({ globals: globalThis })",
           "const runtime = await agent.browsers.get('extension')",
-          "return typeof runtime.tabs.open",
+          "return {",
+          "  open: typeof runtime.tabs.open,",
+          "  documented: (await runtime.documentation()).includes('Anybox Chrome browser runtime'),",
+          "}",
         ].join("\n"),
       },
-    }) as { result?: { structuredContent?: { result?: unknown } } }
+    }) as { result?: { structuredContent?: { result?: { open?: unknown; documented?: unknown } } } }
 
-    expect(response.result?.structuredContent?.result).toBe("function")
+    expect(response.result?.structuredContent?.result).toEqual({
+      open: "function",
+      documented: true,
+    })
   })
 
-  test("derives the Anybox Agent URL from the host environment", async () => {
+  test("reads Chrome connection status through the Node REPL browser runtime", async () => {
     const agentPort = await startAgentServer((request, response) => {
       request.resume()
       response.setHeader("content-type", "application/json")
@@ -200,7 +206,7 @@ describe("Chrome plugin runtimes", () => {
         },
       }))
     })
-    const server = startMcpServer(chromeMcpServerPath, {
+    const server = startMcpServer(nodeReplServerPath, {
       ANYBOX_AGENT_BASE_URL: "",
       ANYBOX_SERVER_HOST: "127.0.0.1",
       ANYBOX_SERVER_PORT: String(agentPort),
@@ -208,11 +214,15 @@ describe("Chrome plugin runtimes", () => {
     await server.request("initialize")
 
     const response = await server.request("tools/call", {
-      name: "browser_status",
-      arguments: {},
-    }) as { result?: { structuredContent?: { connected?: boolean } } }
+      name: "js",
+      arguments: {
+        code: "return await (await agent.browsers.get('extension')).status()",
+      },
+    }) as { result?: { structuredContent?: { result?: unknown } } }
 
-    expect(response.result?.structuredContent?.connected).toBe(true)
+    expect(
+      (response.result?.structuredContent?.result as { connected?: boolean } | undefined)?.connected,
+    ).toBe(true)
   })
 
   test("loads the plugin Chrome runtime and forwards its trusted token", async () => {
@@ -239,7 +249,7 @@ describe("Chrome plugin runtimes", () => {
     await server.request("initialize")
 
     const response = await server.request("tools/call", {
-      name: "node_repl_js",
+      name: "js",
       arguments: {
         code: [
           "const runtime = await agent.browsers.get('extension')",
@@ -251,5 +261,50 @@ describe("Chrome plugin runtimes", () => {
 
     expect(response.result?.structuredContent?.result).toBe(2)
     expect(receivedToken).toBe("browser-runtime-test-token")
+  })
+
+  test("emits Chrome screenshots from the Node REPL as image content", async () => {
+    const imageData = Buffer.from("fixture-png").toString("base64")
+    const agentPort = await startAgentServer((request, response) => {
+      request.resume()
+      response.setHeader("content-type", "application/json")
+      response.end(JSON.stringify({
+        success: true,
+        data: {
+          tabId: 7,
+          mime: "image/png",
+          data: imageData,
+        },
+      }))
+    })
+    const server = startMcpServer(nodeReplServerPath, {
+      ANYBOX_AGENT_BASE_URL: "",
+      ANYBOX_SERVER_HOST: "127.0.0.1",
+      ANYBOX_SERVER_PORT: String(agentPort),
+    })
+    await server.request("initialize")
+
+    const response = await server.request("tools/call", {
+      name: "js",
+      arguments: {
+        code: [
+          "const runtime = await agent.browsers.get('extension')",
+          "const tab = await runtime.tabs.get(7)",
+          "await nodeRepl.emitImage(await tab.screenshot())",
+        ].join("\n"),
+      },
+    }) as {
+      result?: {
+        content?: Array<{ type?: string; mimeType?: string; data?: string }>
+        structuredContent?: { imageCount?: number }
+      }
+    }
+
+    expect(response.result?.structuredContent?.imageCount).toBe(1)
+    expect(response.result?.content).toContainEqual({
+      type: "image",
+      mimeType: "image/png",
+      data: imageData,
+    })
   })
 })

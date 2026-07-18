@@ -19,6 +19,10 @@ interface BrowserCommandOptions {
   timeoutMs?: number
 }
 
+export interface BrowserRuntimeStatus extends Record<string, unknown> {
+  connected: boolean
+}
+
 interface AgentFetchOptions extends Omit<RequestInit, "headers"> {
   headers?: Record<string, string>
 }
@@ -77,6 +81,45 @@ const AGENT_BASE_URL = normalizeBaseURL(
   process.env.ANYBOX_AGENT_BASE_URL || DEFAULT_AGENT_BASE_URL,
 )
 const TRUSTED_TOKEN = process.env.ANYBOX_BROWSER_TRUSTED_TOKEN || ""
+const BROWSER_RUNTIME_DOCUMENTATION = [
+  "Anybox Chrome browser runtime",
+  "",
+  "Browser:",
+  "  await browser.status()",
+  "  await browser.documentation()",
+  "  await browser.tabs.list()",
+  "  await browser.tabs.open(url, options?)",
+  "  await browser.tabs.activate(tabId)",
+  "  await browser.tabs.get(tabId)",
+  "  await browser.tabs.current()",
+  "",
+  "Tab inspection:",
+  "  await tab.info()",
+  "  await tab.snapshot(options?)",
+  "  await tab.interactiveSnapshot(options?)",
+  "  await tab.domTree(options?)",
+  "  await tab.accessibilityTree(options?)",
+  "  await tab.screenshot(options?)",
+  "",
+  "Tab interaction:",
+  "  await tab.activate()",
+  "  await tab.click(x, y, options?)",
+  "  await tab.clickElement(elementId, options?)",
+  "  await tab.fill(elementId, text, options?)",
+  "  await tab.type(text)",
+  "  await tab.scroll(options?)",
+  "  await tab.waitFor({ text?, urlIncludes?, selector?, elementId?, timeoutMs? })",
+  "  await tab.release()",
+  "",
+  "Advanced:",
+  "  tab.locator(selector)",
+  "  tab.playwright.locator/click/fill/evaluate/waitForSelector/screenshot",
+  "  await tab.evaluate(pageFunctionOrExpression, ...args)",
+  "  await tab.cdp.send(method, params?)",
+  "",
+  "Use structured inspection and element actions before evaluate or CDP.",
+  "Emit screenshots with: await nodeRepl.emitImage(await tab.screenshot())",
+].join("\n")
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -402,6 +445,16 @@ function createPlaywrightAdapter(tab: BrowserTab): PlaywrightAdapter {
 }
 
 class BrowserRuntime {
+  async status(): Promise<BrowserRuntimeStatus> {
+    return agentFetch<BrowserRuntimeStatus>("/api/browser-extension/status", {
+      method: "GET",
+    })
+  }
+
+  async documentation(): Promise<string> {
+    return BROWSER_RUNTIME_DOCUMENTATION
+  }
+
   readonly tabs = {
     list: async (): Promise<Array<BrowserExtensionTabSummary & { runtime: BrowserTab }>> => {
       const result = await browserCommand<BrowserExtensionTabsListResult>("tabs.list")

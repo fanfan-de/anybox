@@ -22,8 +22,8 @@ const nativeMessagingHostReady = ensureNativeMessagingHost()
 
 const tools = [
   {
-    name: "node_repl_js",
-    title: "Node REPL JavaScript",
+    name: "js",
+    title: "Chrome Node REPL JavaScript",
     description: "Run JavaScript in a persistent Node.js REPL with Chrome runtime helpers.",
     inputSchema: {
       type: "object",
@@ -43,8 +43,8 @@ const tools = [
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
   },
   {
-    name: "node_repl_reset",
-    title: "Reset Node REPL",
+    name: "js_reset",
+    title: "Reset Chrome Node REPL",
     description: "Reset the persistent Node.js REPL state.",
     inputSchema: {
       type: "object",
@@ -54,7 +54,7 @@ const tools = [
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
   {
-    name: "node_repl_add_node_module_dir",
+    name: "js_add_node_module_dir",
     title: "Add Node Module Directory",
     description: "Add a node_modules directory to CommonJS module resolution for later REPL calls.",
     inputSchema: {
@@ -182,6 +182,18 @@ function normalizeImage(imageLike) {
       data: Buffer.from(imageLike.bytes).toString("base64"),
     }
   }
+  if (
+    imageLike
+    && typeof imageLike === "object"
+    && typeof imageLike.data === "string"
+    && imageLike.data
+  ) {
+    return {
+      type: "image",
+      mimeType: imageLike.mime || imageLike.mimeType || "image/png",
+      data: imageLike.data,
+    }
+  }
   throw new Error("Unsupported image payload.")
 }
 
@@ -243,19 +255,25 @@ async function runJavaScript(code, ms) {
 }
 
 async function callTool(name, args) {
-  if (name === "node_repl_reset") {
+  const normalizedName = {
+    node_repl_js: "js",
+    node_repl_reset: "js_reset",
+    node_repl_add_node_module_dir: "js_add_node_module_dir",
+  }[name] || name
+
+  if (normalizedName === "js_reset") {
     resetKernel()
     return textResult("Node REPL reset.", { reset: true })
   }
 
-  if (name === "node_repl_add_node_module_dir") {
+  if (normalizedName === "js_add_node_module_dir") {
     const added = addNodeModuleDir(args && args.path)
     return textResult(`Added node_modules directory: ${added}`, { path: added })
   }
 
-  if (name === "node_repl_js") {
+  if (normalizedName === "js") {
     const code = args && typeof args.code === "string" ? args.code : ""
-    if (!code.trim()) throw new Error("node_repl_js requires code.")
+    if (!code.trim()) throw new Error("js requires code.")
     return runJavaScript(code, timeoutMs(args && args.timeoutMs))
   }
 
@@ -279,7 +297,7 @@ rl.on("line", (line) => {
         result: {
           protocolVersion: "2025-06-18",
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "anybox-node-repl", version: "0.1.0" },
+          serverInfo: { name: "anybox-chrome-node-repl", version: "0.2.0" },
         },
       })
       return

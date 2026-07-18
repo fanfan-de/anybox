@@ -19,7 +19,10 @@ test("installs the browser runtime on the provided globals object", async () => 
   assert.equal(globals.agent, agent)
   assert.equal(globals.setupBrowserRuntime, setupBrowserRuntime)
   assert.equal(typeof agent.browsers.get, "function")
-  assert.ok(await agent.browsers.get("extension"))
+  const browser = await agent.browsers.get("extension")
+  assert.ok(browser)
+  assert.match(await browser.documentation(), /Anybox Chrome browser runtime/)
+  assert.match(await browser.documentation(), /nodeRepl\.emitImage/)
   await assert.rejects(agent.browsers.get("unknown"), /Unknown browser runtime/)
 })
 
@@ -32,14 +35,16 @@ test("routes browser commands through the Anybox agent API", async () => {
   process.env.ANYBOX_AGENT_BASE_URL = "http://127.0.0.1:9876/"
   process.env.ANYBOX_BROWSER_TRUSTED_TOKEN = "test-token"
   globalThis.fetch = async (url, options) => {
-    const body = JSON.parse(String(options.body))
+    const body = options?.body ? JSON.parse(String(options.body)) : undefined
     requests.push({ url: String(url), options, body })
 
-    const data = body.method === "tabs.list"
-      ? { tabs: [{ id: 42, title: "Example", url: "https://example.com" }] }
-      : body.method === "page.executeScript"
-        ? { value: 3 }
-        : {}
+    const data = String(url).endsWith("/status")
+      ? { connected: true, connectionCount: 1 }
+      : body?.method === "tabs.list"
+        ? { tabs: [{ id: 42, title: "Example", url: "https://example.com" }] }
+        : body?.method === "page.executeScript"
+          ? { value: 3 }
+          : {}
     return new Response(JSON.stringify({ success: true, data }), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -50,8 +55,10 @@ test("routes browser commands through the Anybox agent API", async () => {
     const { setupBrowserRuntime } = await importRuntime("commands")
     const agent = await setupBrowserRuntime({ globals: {} })
     const browser = await agent.browsers.get()
+    const status = await browser.status()
     const tabs = await browser.tabs.list()
 
+    assert.equal(status.connected, true)
     assert.equal(tabs.length, 1)
     assert.equal(tabs[0].id, 42)
     assert.equal(tabs[0].runtime.tabId, 42)
@@ -60,15 +67,17 @@ test("routes browser commands through the Anybox agent API", async () => {
       3,
     )
 
-    assert.equal(requests[0].url, "http://127.0.0.1:9876/api/browser-extension/command")
-    assert.equal(requests[0].body.method, "tabs.list")
+    assert.equal(requests[0].url, "http://127.0.0.1:9876/api/browser-extension/status")
+    assert.equal(requests[0].options.method, "GET")
+    assert.equal(requests[1].url, "http://127.0.0.1:9876/api/browser-extension/command")
+    assert.equal(requests[1].body.method, "tabs.list")
     assert.equal(
-      requests[1].url,
+      requests[2].url,
       "http://127.0.0.1:9876/api/browser-extension/trusted-command",
     )
-    assert.equal(requests[1].body.method, "page.executeScript")
+    assert.equal(requests[2].body.method, "page.executeScript")
     assert.equal(
-      requests[1].options.headers["x-anybox-browser-trusted-token"],
+      requests[2].options.headers["x-anybox-browser-trusted-token"],
       "test-token",
     )
   } finally {
