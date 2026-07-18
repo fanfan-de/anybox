@@ -66,8 +66,9 @@ directory together.
 
 The plugin registers one persistent `node-repl` MCP server. The model uses its
 `js` tool and the preloaded `agent.browsers` API for tab discovery, inspection,
-interaction, screenshots, and CDP. The plugin no longer registers per-action
-`browser_*` MCP tools.
+interaction, and screenshots. Raw page evaluation, selector adapters, and CDP
+are disabled until command-level capability and permission policy is available.
+The plugin no longer registers per-action `browser_*` MCP tools.
 
 ## Native Host delivery
 

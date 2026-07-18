@@ -11,7 +11,7 @@ Explicit Chrome intent wins. If the user names Chrome or this plugin, asks to op
 
 Otherwise, treat a URL or open tab as context rather than browser intent. Before each semantic operation on a linked resource, inspect available tools and use tool discovery when available to find an applicable connector, API, or CLI. Prefer that purpose-built surface when it can complete the operation. Use Chrome when no such surface exists, it lacks the required capability, existing Chrome state matters, or UI work remains.
 
-Use this skill for navigating, inspecting visible page state, testing local web apps, clicking, filling, typing, scrolling, waiting for page changes, taking screenshots, and running page JavaScript or CDP commands.
+Use this skill for navigating, inspecting visible page state, testing local web apps, clicking, filling, typing, scrolling, waiting for page changes, and taking screenshots.
 
 ## Use only the persistent Node REPL
 
@@ -86,8 +86,7 @@ Prefer the highest-level operation that can complete the task:
 - Use `tab.interactiveSnapshot()` before element actions, then pass a current `elementId` to `tab.clickElement()` or `tab.fill()`.
 - Use `tab.waitFor()` with a concrete URL, text, selector, or element condition after navigation or page-changing actions.
 - Use `tab.click()` for coordinates only when element-based interaction is unavailable.
-- Use `tab.locator()` or `tab.playwright.*` when selector-based work is necessary.
-- Use `tab.evaluate()` or `tab.cdp.send()` only when structured methods cannot perform the required operation.
+- Raw selector adapters, page JavaScript, and CDP are disabled until Anybox can enforce permission at the command boundary.
 
 Interactive element IDs can become stale after DOM changes. Take a new interactive snapshot instead of retrying an old ID.
 
@@ -103,9 +102,7 @@ Available APIs include:
 - `chrome.tabs.list()`, `open(url, options)`, `activate(tabId)`, `get(tabId)`, and `current()`
 - `tab.info()`, `activate()`, `snapshot()`, `interactiveSnapshot()`, `domTree()`, `accessibilityTree()`, and `screenshot()`
 - `tab.click()`, `clickElement()`, `fill()`, `type()`, `scroll()`, `waitFor()`, and `release()`
-- `tab.locator()`, `tab.evaluate()`, `tab.cdp.send()`, and `tab.playwright.*`
-
-References to Playwright mean the plugin's lightweight `tab.playwright` adapter, not standalone Playwright.
+- `tab.playwright.screenshot()`, `waitForSelector()`, keyboard typing, and coordinate mouse clicks
 
 ## Authentication and privacy
 

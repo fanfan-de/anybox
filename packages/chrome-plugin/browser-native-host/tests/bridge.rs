@@ -1,8 +1,11 @@
+use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::process::{Command, Stdio};
 use std::thread;
-use tungstenite::{Message, accept};
+use std::time::{SystemTime, UNIX_EPOCH};
+use tungstenite::handshake::server::{Request, Response};
+use tungstenite::{Message, accept_hdr};
 
 fn native_frame(payload: &[u8]) -> Vec<u8> {
     let mut frame = Vec::with_capacity(payload.len() + 4);
@@ -23,9 +26,31 @@ fn read_native_frame(reader: &mut impl Read) -> Vec<u8> {
 fn forwards_messages_between_chrome_and_the_agent_websocket() {
     let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
     let port = listener.local_addr().unwrap().port();
+    let runtime_config_path = std::env::temp_dir().join(format!(
+        "anybox-browser-native-host-{}-{}.json",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::write(
+        &runtime_config_path,
+        format!(
+            r#"{{"agentBaseURL":"http://127.0.0.1:{port}","browserTransportToken":"transport-secret"}}"#
+        ),
+    )
+    .unwrap();
     let server = thread::spawn(move || {
         let (stream, _) = listener.accept().unwrap();
-        let mut websocket = accept(stream).unwrap();
+        let mut websocket = accept_hdr(stream, |request: &Request, response: Response| {
+            assert_eq!(
+                request.headers().get("authorization").unwrap(),
+                "Bearer transport-secret"
+            );
+            Ok(response)
+        })
+        .unwrap();
         websocket
             .send(Message::Text(
                 r#"{"type":"command","commandID":"1"}"#.into(),
@@ -40,7 +65,9 @@ fn forwards_messages_between_chrome_and_the_agent_websocket() {
     });
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_extension-host"))
-        .env("ANYBOX_AGENT_BASE_URL", format!("http://127.0.0.1:{port}"))
+        .env_remove("ANYBOX_AGENT_BASE_URL")
+        .env_remove("ANYBOX_BROWSER_TRANSPORT_TOKEN")
+        .env("ANYBOX_BROWSER_NATIVE_CONFIG", &runtime_config_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -62,6 +89,7 @@ fn forwards_messages_between_chrome_and_the_agent_websocket() {
     drop(child.stdin.take());
     server.join().unwrap();
     let status = child.wait().unwrap();
+    fs::remove_file(runtime_config_path).unwrap();
     if !status.success() {
         let mut stderr = String::new();
         child

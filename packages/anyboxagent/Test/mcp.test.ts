@@ -125,12 +125,20 @@ async function writeMockMcpServer(root: string) {
       "  }",
       "  if (message.method === 'tools/call') {",
       "    const value = message.params?.arguments?.value ?? ''",
+      "    const envKeys = new Set(Object.keys(process.env).map((key) => key.toUpperCase()))",
+      "    const envProbe = value === '__browser_env__' ? {",
+      "      browserTrustedToken: envKeys.has('ANYBOX_BROWSER_TRUSTED_TOKEN') ? 'present' : 'absent',",
+      "      browserTransportToken: envKeys.has('ANYBOX_BROWSER_TRANSPORT_TOKEN') ? 'present' : 'absent',",
+      "    } : {}",
       "    send({",
       "      jsonrpc: '2.0',",
       "      id: message.id,",
       "      result: {",
       "        content: [{ type: 'text', text: `echo:${value}` }],",
-      "        structuredContent: { echoed: value },",
+      "        structuredContent: {",
+      "          echoed: value,",
+      "          ...envProbe,",
+      "        },",
       "        isError: false,",
       "      },",
       "    })",
@@ -297,6 +305,70 @@ describe("mcp integration", () => {
         await new Promise((resolve) => setTimeout(resolve, 50))
       }
     } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("injects browser credentials only into the managed Chrome runtime", async () => {
+    const root = await mkdtemp(join(tmpdir(), "anybox-mcp-browser-env-"))
+    const originalTrustedToken = process.env.ANYBOX_BROWSER_TRUSTED_TOKEN
+    const originalTransportToken = process.env.ANYBOX_BROWSER_TRANSPORT_TOKEN
+    process.env.ANYBOX_BROWSER_TRUSTED_TOKEN = "must-not-leak-to-generic-mcp"
+    process.env.ANYBOX_BROWSER_TRANSPORT_TOKEN = "must-not-leak-to-generic-mcp"
+
+    try {
+      const script = await writeMockMcpServer(root)
+      const createClient = (owner?: Config.McpServerOwner) => new McpClient({
+        cwd: root,
+        worktree: root,
+        requestTimeoutMs: 1000,
+        server: {
+          id: owner ? "plugin.chrome.node-repl" : "generic",
+          name: owner ? "Chrome" : "Generic",
+          transport: "stdio",
+          command: process.execPath,
+          args: [script],
+          env: owner
+            ? undefined
+            : {
+                anybox_browser_trusted_token: "generic-override-must-be-removed",
+                AnYbOx_BrOwSeR_TrAnSpOrT_ToKeN: "generic-override-must-be-removed",
+              },
+          enabled: true,
+          owner,
+        },
+      })
+
+      const generic = createClient()
+      try {
+        const result = await generic.callTool("echo", { value: "__browser_env__" })
+        expect(result.structuredContent).toMatchObject({
+          browserTrustedToken: "absent",
+          browserTransportToken: "absent",
+        })
+      } finally {
+        await generic.dispose()
+      }
+
+      const chrome = createClient({
+        kind: "plugin",
+        pluginID: "chrome",
+        bindingID: "mcp:node-repl",
+      })
+      try {
+        const result = await chrome.callTool("echo", { value: "__browser_env__" })
+        expect(result.structuredContent).toMatchObject({
+          browserTrustedToken: "present",
+          browserTransportToken: "present",
+        })
+      } finally {
+        await chrome.dispose()
+      }
+    } finally {
+      if (originalTrustedToken === undefined) delete process.env.ANYBOX_BROWSER_TRUSTED_TOKEN
+      else process.env.ANYBOX_BROWSER_TRUSTED_TOKEN = originalTrustedToken
+      if (originalTransportToken === undefined) delete process.env.ANYBOX_BROWSER_TRANSPORT_TOKEN
+      else process.env.ANYBOX_BROWSER_TRANSPORT_TOKEN = originalTransportToken
       await rm(root, { recursive: true, force: true })
     }
   })

@@ -7,9 +7,21 @@ import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
 import type { ReadResourceResult, Resource, ResourceTemplate } from "@modelcontextprotocol/sdk/types.js"
 import type { McpServerSummary } from "#config/config.ts"
 import type { ResolvedConnectorRuntime } from "#connector/connector.ts"
+import {
+  getBrowserTransportToken,
+  getBrowserTrustedCommandToken,
+} from "#browser-extension/runtime-token.ts"
 import * as Log from "#util/log.ts"
 
 const log = Log.create({ service: "mcp.client" })
+const BROWSER_SECRET_ENV_KEYS = new Set([
+  "ANYBOX_BROWSER_TRANSPORT_TOKEN",
+  "ANYBOX_BROWSER_TRUSTED_TOKEN",
+])
+
+function isBrowserSecretEnvKey(key: string) {
+  return BROWSER_SECRET_ENV_KEYS.has(key.toUpperCase())
+}
 
 export interface McpToolDefinition {
   name: string
@@ -51,12 +63,33 @@ function getToolDisplayName(tool: McpToolDefinition) {
 
 function mergeProcessEnv(overrides?: Record<string, string>) {
   const env = Object.fromEntries(
-    Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[1] === "string" && !isBrowserSecretEnvKey(entry[0]),
+    ),
+  )
+  const safeOverrides = Object.fromEntries(
+    Object.entries(overrides ?? {}).filter(([key]) => !isBrowserSecretEnvKey(key)),
   )
 
   return {
     ...env,
-    ...(overrides ?? {}),
+    ...safeOverrides,
+  }
+}
+
+function browserRuntimeCredentials(server: McpServerSummary): Record<string, string> | undefined {
+  if (
+    server.owner?.kind !== "plugin"
+    || server.owner.pluginID !== "chrome"
+    || server.owner.bindingID !== "mcp:node-repl"
+  ) {
+    return undefined
+  }
+
+  return {
+    ANYBOX_BROWSER_TRANSPORT_TOKEN: getBrowserTransportToken(),
+    ANYBOX_BROWSER_TRUSTED_TOKEN: getBrowserTrustedCommandToken(),
   }
 }
 
@@ -389,7 +422,10 @@ export class McpClient {
       command: this.options.server.command,
       args: this.options.server.args ?? [],
       cwd: this.options.cwd,
-      env: mergeProcessEnv(this.options.server.env),
+      env: {
+        ...mergeProcessEnv(this.options.server.env),
+        ...(browserRuntimeCredentials(this.options.server) ?? {}),
+      },
       stderr: "pipe",
     })
     this.captureStderr(transport.stderr)

@@ -62,8 +62,9 @@ corepack pnpm chrome-plugin:package:check
 ## 浏览器控制架构
 
 插件只注册一个持久 `node-repl` MCP Server。模型通过其 `js` 工具使用预加载的
-`agent.browsers` API 完成标签页查询、页面检查、交互、截图和 CDP 操作；插件不再
-注册逐动作的 `browser_*` MCP 工具。
+`agent.browsers` API 完成标签页查询、页面检查、交互和截图。原始页面脚本、
+selector 适配层与 CDP 在 command boundary 的 capability/permission policy
+完成前默认关闭；插件不再注册逐动作的 `browser_*` MCP 工具。
 
 ## Native Host 交付
 

@@ -1,11 +1,12 @@
 {
   "name": "anybox-chrome-extension",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Chrome extension bridge for the Anybox Chrome plugin.",
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "test": "bun test ./Test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

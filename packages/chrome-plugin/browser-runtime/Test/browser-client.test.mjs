@@ -27,70 +27,63 @@ test("installs the browser runtime on the provided globals object", async () => 
 })
 
 test("routes browser commands through the Anybox agent API", async () => {
-  const originalBaseURL = process.env.ANYBOX_AGENT_BASE_URL
-  const originalTrustedToken = process.env.ANYBOX_BROWSER_TRUSTED_TOKEN
-  const originalFetch = globalThis.fetch
   const requests = []
-
-  process.env.ANYBOX_AGENT_BASE_URL = "http://127.0.0.1:9876/"
-  process.env.ANYBOX_BROWSER_TRUSTED_TOKEN = "test-token"
-  globalThis.fetch = async (url, options) => {
-    const body = options?.body ? JSON.parse(String(options.body)) : undefined
-    requests.push({ url: String(url), options, body })
-
-    const data = String(url).endsWith("/status")
-      ? { connected: true, connectionCount: 1 }
-      : body?.method === "tabs.list"
-        ? { tabs: [{ id: 42, title: "Example", url: "https://example.com" }] }
-        : body?.method === "page.executeScript"
-          ? { value: 3 }
-          : {}
-    return new Response(JSON.stringify({ success: true, data }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    })
+  const transport = async (request) => {
+    requests.push(request)
+    if (request.type === "status") {
+      return { connected: true, connectionCount: 1 }
+    }
+    if (request.method === "tabs.list") {
+      return { tabs: [{ id: 42, title: "Example", url: "https://example.com" }] }
+    }
+    return {}
   }
 
-  try {
-    const { setupBrowserRuntime } = await importRuntime("commands")
-    const agent = await setupBrowserRuntime({ globals: {} })
-    const browser = await agent.browsers.get()
-    const status = await browser.status()
-    const tabs = await browser.tabs.list()
+  const { setupBrowserRuntime } = await importRuntime("commands")
+  const agent = await setupBrowserRuntime({ globals: {}, transport })
+  const browser = await agent.browsers.get()
+  const status = await browser.status()
+  const tabs = await browser.tabs.list()
 
-    assert.equal(status.connected, true)
-    assert.equal(tabs.length, 1)
-    assert.equal(tabs[0].id, 42)
-    assert.equal(tabs[0].runtime.tabId, 42)
-    assert.equal(
-      await tabs[0].runtime.evaluate((value) => value + 1, 2),
-      3,
-    )
+  assert.equal(status.connected, true)
+  assert.equal(tabs.length, 1)
+  assert.equal(tabs[0].id, 42)
+  assert.equal(tabs[0].runtime.tabId, 42)
+  await assert.rejects(
+    tabs[0].runtime.evaluate((value) => value + 1, 2),
+    /disabled until Anybox can enforce command-level capability/,
+  )
+  await assert.rejects(
+    tabs[0].runtime.cdp.send("Runtime.evaluate", { expression: "1 + 1" }),
+    /disabled until Anybox can enforce command-level capability/,
+  )
 
-    assert.equal(requests[0].url, "http://127.0.0.1:9876/api/browser-extension/status")
-    assert.equal(requests[0].options.method, "GET")
-    assert.equal(requests[1].url, "http://127.0.0.1:9876/api/browser-extension/command")
-    assert.equal(requests[1].body.method, "tabs.list")
-    assert.equal(
-      requests[2].url,
-      "http://127.0.0.1:9876/api/browser-extension/trusted-command",
-    )
-    assert.equal(requests[2].body.method, "page.executeScript")
-    assert.equal(
-      requests[2].options.headers["x-anybox-browser-trusted-token"],
-      "test-token",
-    )
-  } finally {
-    if (originalBaseURL === undefined) {
-      delete process.env.ANYBOX_AGENT_BASE_URL
-    } else {
-      process.env.ANYBOX_AGENT_BASE_URL = originalBaseURL
-    }
-    if (originalTrustedToken === undefined) {
-      delete process.env.ANYBOX_BROWSER_TRUSTED_TOKEN
-    } else {
-      process.env.ANYBOX_BROWSER_TRUSTED_TOKEN = originalTrustedToken
-    }
-    globalThis.fetch = originalFetch
-  }
+  assert.deepEqual(requests[0], { type: "status" })
+  assert.deepEqual(requests[1], {
+    type: "command",
+    method: "tabs.list",
+    params: {},
+  })
+  assert.equal(requests.length, 2)
+})
+
+test("rejects browser API calls when the host transport is unavailable", async () => {
+  const { setupBrowserRuntime } = await importRuntime("missing-transport")
+  const agent = await setupBrowserRuntime({ globals: {} })
+  const browser = await agent.browsers.get()
+
+  await assert.rejects(browser.status(), /runtime transport is not available/)
+  await assert.rejects(browser.tabs.list(), /runtime transport is not available/)
+})
+
+test("keeps the host transport out of model-visible runtime properties", async () => {
+  const transport = async () => ({ connected: true })
+  const { setupBrowserRuntime } = await importRuntime("private-transport")
+  const agent = await setupBrowserRuntime({ globals: {}, transport })
+  const browser = await agent.browsers.get()
+  const tab = await browser.tabs.get(7)
+
+  assert.equal(Object.prototype.hasOwnProperty.call(browser, "transport"), false)
+  assert.equal(Object.prototype.hasOwnProperty.call(tab, "transport"), false)
+  assert.equal(JSON.stringify({ browser, tab }).includes("transport"), false)
 })

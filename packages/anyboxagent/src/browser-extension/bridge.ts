@@ -1,4 +1,5 @@
 import {
+  ANYBOX_CHROME_EXTENSION_ID,
   BrowserExtensionClientMessage,
   BrowserExtensionCommandMethod,
   BrowserExtensionServerMessage,
@@ -19,10 +20,11 @@ type SocketLike = {
 type Connection = {
   socket: SocketLike
   connectionID: string
+  ready: boolean
   extensionInstanceID?: string
   extensionID?: string
   version?: string
-  transport?: "native" | "websocket"
+  transport?: "native"
   hostName?: string
   lastTransportError?: string
   connectedAt: number
@@ -63,7 +65,7 @@ type LastCommand = {
 }
 
 type ConnectionOptions = {
-  transport?: "native" | "websocket"
+  transport?: "native"
   hostName?: string
 }
 
@@ -84,7 +86,7 @@ function normalizeError(error: unknown) {
   return new Error(typeof error === "string" ? error : String(error))
 }
 
-class BrowserExtensionBridge {
+export class BrowserExtensionBridge {
   private readonly connections = new Map<string, Connection>()
   private readonly pending = new Map<string, PendingCommand>()
   private readonly ownedTabs = new Map<number, OwnedTab>()
@@ -166,13 +168,13 @@ class BrowserExtensionBridge {
     const connection: Connection = {
       socket,
       connectionID,
+      ready: false,
       transport: options.transport,
       hostName: options.hostName,
       connectedAt: Date.now(),
       lastSeenAt: Date.now(),
     }
     this.connections.set(connectionID, connection)
-    this.activeConnectionID = connectionID
     log.info("connected", { connectionID, transport: options.transport, hostName: options.hostName })
     return connectionID
   }
@@ -183,7 +185,7 @@ class BrowserExtensionBridge {
 
     this.connections.delete(connectionID)
     if (this.activeConnectionID === connectionID) {
-      this.activeConnectionID = this.connections.keys().next().value
+      this.activeConnectionID = [...this.connections.values()].find((candidate) => candidate.ready)?.connectionID
     }
 
     for (const [commandID, pending] of this.pending) {
@@ -314,10 +316,10 @@ class BrowserExtensionBridge {
   private activeConnection() {
     if (this.activeConnectionID) {
       const active = this.connections.get(this.activeConnectionID)
-      if (active) return active
+      if (active?.ready) return active
     }
 
-    const next = this.connections.values().next().value
+    const next = [...this.connections.values()].find((connection) => connection.ready)
     this.activeConnectionID = next?.connectionID
     return next
   }
@@ -325,13 +327,24 @@ class BrowserExtensionBridge {
   private handleMessage(connection: Connection, message: BrowserExtensionClientMessageValue) {
     switch (message.type) {
       case "hello":
+        if (message.extensionID !== ANYBOX_CHROME_EXTENSION_ID) {
+          log.warn("rejected extension identity", {
+            connectionID: connection.connectionID,
+            extensionID: message.extensionID,
+          })
+          connection.socket.close(1008, "Browser extension identity is invalid.")
+          this.unregister(connection.connectionID)
+          return
+        }
         connection.extensionInstanceID = message.extensionInstanceID
         connection.extensionID = message.extensionID
         connection.version = message.version
-        connection.transport = message.transport ?? connection.transport
-        connection.hostName = message.hostName ?? connection.hostName
         connection.lastTransportError = message.lastTransportError
-        this.activeConnectionID = connection.connectionID
+        connection.ready = true
+        const active = this.activeConnectionID
+          ? this.connections.get(this.activeConnectionID)
+          : undefined
+        if (!active?.ready) this.activeConnectionID = connection.connectionID
         log.info("hello", {
           connectionID: connection.connectionID,
           extensionInstanceID: message.extensionInstanceID,
@@ -344,6 +357,7 @@ class BrowserExtensionBridge {
       case "result": {
         const pending = this.pending.get(message.commandID)
         if (!pending) return
+        if (pending.connectionID !== connection.connectionID) return
         clearTimeout(pending.timer)
         this.pending.delete(message.commandID)
         this.lastCommand = {

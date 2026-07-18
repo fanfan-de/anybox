@@ -7,6 +7,7 @@ import {
   install,
   nativeMessagingManifest,
   resolveAgentBaseURL,
+  resolveBrowserTransportToken,
   resolveBundledExtensionHost,
   resolveNativeMessagingPaths,
 } from "../runtime/scripts/installManifest.mjs"
@@ -72,6 +73,59 @@ test("derives the Anybox Agent URL from the runtime environment", () => {
     () => resolveAgentBaseURL({ ANYBOX_AGENT_BASE_URL: "https://example.com" }),
     /must use local HTTP/,
   )
+  assert.equal(
+    resolveAgentBaseURL({ ANYBOX_AGENT_BASE_URL: "http://127.42.0.9:4096" }),
+    "http://127.42.0.9:4096",
+  )
+  assert.equal(
+    resolveAgentBaseURL({ ANYBOX_AGENT_BASE_URL: "http://LOCALHOST:4096" }),
+    "http://localhost:4096",
+  )
+  assert.equal(
+    resolveAgentBaseURL({ ANYBOX_AGENT_BASE_URL: "http://[::1]:4096" }),
+    "http://[::1]:4096",
+  )
+  for (const agentBaseURL of [
+    "http://example.com:4096",
+    "http://192.168.1.10:4096",
+    "http://0.0.0.0:4096",
+    "http://[::2]:4096",
+    "http://localhost.example.com:4096",
+  ]) {
+    assert.throws(
+      () => resolveAgentBaseURL({ ANYBOX_AGENT_BASE_URL: agentBaseURL }),
+      /must use a loopback host/,
+    )
+  }
+  for (const agentBaseURL of [
+    "http://user:password@127.0.0.1:4096",
+    "http://127.0.0.1:4096?token=value",
+    "http://127.0.0.1:4096#fragment",
+  ]) {
+    assert.throws(
+      () => resolveAgentBaseURL({ ANYBOX_AGENT_BASE_URL: agentBaseURL }),
+      /cannot contain credentials, query, or fragment/,
+    )
+  }
+})
+
+test("requires a single-line browser transport token", () => {
+  assert.equal(
+    resolveBrowserTransportToken({
+      ANYBOX_BROWSER_TRANSPORT_TOKEN: " transport-secret ",
+    }),
+    "transport-secret",
+  )
+  assert.throws(
+    () => resolveBrowserTransportToken({}),
+    /Missing Anybox browser transport token/,
+  )
+  assert.throws(
+    () => resolveBrowserTransportToken({
+      ANYBOX_BROWSER_TRANSPORT_TOKEN: "transport-secret\r\nx-injected: true",
+    }),
+    /must be a single line/,
+  )
 })
 
 test("installs a plugin-owned Windows Native Messaging host", async () => {
@@ -87,6 +141,7 @@ test("installs a plugin-owned Windows Native Messaging host", async () => {
       env: {
         APPDATA: appData,
         ANYBOX_AGENT_BASE_URL: "http://127.0.0.1:4567",
+        ANYBOX_BROWSER_TRANSPORT_TOKEN: "transport-secret",
       },
       homeDir: path.join(tempRoot, "home"),
       platform: "win32",
@@ -118,6 +173,7 @@ test("installs a plugin-owned Windows Native Messaging host", async () => {
 
     const runtimeConfig = JSON.parse(await fsp.readFile(result.runtimeConfigPath, "utf8"))
     assert.equal(runtimeConfig.agentBaseURL, "http://127.0.0.1:4567")
+    assert.equal(runtimeConfig.browserTransportToken, "transport-secret")
     assert.equal(typeof runtimeConfig.updatedAt, "string")
   } finally {
     await fsp.rm(tempRoot, { recursive: true, force: true })

@@ -26,11 +26,29 @@ function requiredString(value, label) {
   return value.trim()
 }
 
+function isLoopbackHostname(hostname) {
+  const normalized = hostname.startsWith("[") && hostname.endsWith("]")
+    ? hostname.slice(1, -1)
+    : hostname
+  if (normalized.toLowerCase() === "localhost" || normalized === "::1") return true
+
+  const octets = normalized.split(".")
+  return octets.length === 4
+    && octets[0] === "127"
+    && octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)
+}
+
 function normalizeAgentBaseURL(value) {
   const normalized = requiredString(value, "Anybox Agent base URL").replace(/\/+$/, "")
   const parsed = new URL(normalized)
   if (parsed.protocol !== "http:") {
     throw new Error(`Anybox Agent base URL must use local HTTP: ${normalized}`)
+  }
+  if (!isLoopbackHostname(parsed.hostname)) {
+    throw new Error(`Anybox Agent base URL must use a loopback host: ${normalized}`)
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error("Anybox Agent base URL cannot contain credentials, query, or fragment.")
   }
   return parsed.toString().replace(/\/+$/, "")
 }
@@ -42,6 +60,17 @@ export function resolveAgentBaseURL(env = process.env) {
   const host = env.ANYBOX_SERVER_HOST?.trim() || "127.0.0.1"
   const port = env.ANYBOX_SERVER_PORT?.trim() || "4096"
   return normalizeAgentBaseURL(`http://${host}:${port}`)
+}
+
+export function resolveBrowserTransportToken(env = process.env) {
+  const token = requiredString(
+    env.ANYBOX_BROWSER_TRANSPORT_TOKEN,
+    "Anybox browser transport token",
+  )
+  if (/[\r\n]/.test(token)) {
+    throw new Error("Anybox browser transport token must be a single line.")
+  }
+  return token
 }
 
 export function resolveBundledExtensionHost(
@@ -190,13 +219,15 @@ export async function install(options = {}) {
     extensionHostPath,
     extensionId,
   })
-  await Promise.all(paths.manifestPaths.map((manifestPath) => writeJson(manifestPath, manifest)))
-
   const runtimeConfig = {
     agentBaseURL: resolveAgentBaseURL(env),
+    browserTransportToken: resolveBrowserTransportToken(env),
     updatedAt: new Date().toISOString(),
   }
+
+  await Promise.all(paths.manifestPaths.map((manifestPath) => writeJson(manifestPath, manifest)))
   await writeJson(paths.runtimeConfigPath, runtimeConfig)
+  if (platform !== "win32") await chmod(paths.runtimeConfigPath, 0o600)
 
   let registryKey
   if (platform === "win32") {

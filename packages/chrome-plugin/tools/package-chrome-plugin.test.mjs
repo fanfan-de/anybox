@@ -41,7 +41,12 @@ async function createFixture(projectRoot) {
       extensionId,
     }, null, 2)}\n`,
   )
-  await write(projectRoot, path.join("runtime", "scripts", "installManifest.mjs"))
+  await write(
+    projectRoot,
+    path.join("runtime", "scripts", "installManifest.mjs"),
+    "const browserTransportToken = process.env.ANYBOX_BROWSER_TRANSPORT_TOKEN\n",
+  )
+  await write(projectRoot, path.join("runtime", "scripts", "browser-gateway-worker.js"))
   await write(projectRoot, path.join("runtime", "scripts", "native-host-bootstrap.js"))
   await write(projectRoot, path.join("runtime", "scripts", "node-repl-server.js"))
   await write(projectRoot, path.join("runtime", "assets", "chrome.svg"), "<svg />\n")
@@ -128,6 +133,7 @@ test("synchronizes only installable Chrome files into the distribution directory
       nativeHostBuildTarget().packagePath.split(path.sep).join("/"),
       "LICENSE",
       "scripts/browser-client.mjs",
+      "scripts/browser-gateway-worker.js",
       "scripts/extension-id.json",
       "scripts/installManifest.mjs",
       "scripts/native-host-bootstrap.js",
@@ -143,6 +149,10 @@ test("synchronizes only installable Chrome files into the distribution directory
     assert.equal(
       await fsp.readFile(path.join(pluginRoot, "scripts", "browser-client.mjs"), "utf8"),
       "// generated browser runtime\n",
+    )
+    assert.equal(
+      await fsp.readFile(path.join(pluginRoot, "scripts", "installManifest.mjs"), "utf8"),
+      "const browserTransportToken = process.env.ANYBOX_BROWSER_TRANSPORT_TOKEN\n",
     )
 
     const manifest = JSON.parse(

@@ -9,7 +9,13 @@ on:
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "packages/anyboxagent/Test/chrome-plugin-runtime.test.ts"
+      - "packages/anyboxagent/Test/browser-extension-*.test.ts"
+      - "packages/anyboxagent/Test/mcp.test.ts"
       - "packages/anyboxagent/Test/plugin.test.ts"
+      - "packages/anyboxagent/src/browser-extension/**"
+      - "packages/anyboxagent/src/mcp/client.ts"
+      - "packages/anyboxagent/src/server/routes/browser-extension.ts"
+      - "packages/anyboxagent/src/server/server.ts"
       - "packages/chrome-plugin/**"
       - "packages/desktop/package.json"
       - "packages/desktop/scripts/prepare-agent-runtime.mjs"
@@ -25,7 +31,13 @@ on:
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "packages/anyboxagent/Test/chrome-plugin-runtime.test.ts"
+      - "packages/anyboxagent/Test/browser-extension-*.test.ts"
+      - "packages/anyboxagent/Test/mcp.test.ts"
       - "packages/anyboxagent/Test/plugin.test.ts"
+      - "packages/anyboxagent/src/browser-extension/**"
+      - "packages/anyboxagent/src/mcp/client.ts"
+      - "packages/anyboxagent/src/server/routes/browser-extension.ts"
+      - "packages/anyboxagent/src/server/server.ts"
       - "packages/chrome-plugin/**"
       - "packages/desktop/package.json"
       - "packages/desktop/scripts/prepare-agent-runtime.mjs"
@@ -85,5 +97,6 @@ jobs:
         shell: pwsh
         working-directory: packages/anyboxagent
         run: |
+          bun test Test/browser-extension-routes.test.ts Test/browser-extension-bridge.test.ts Test/mcp.test.ts
           bun test Test/chrome-plugin-runtime.test.ts
           bun test Test/plugin.test.ts

@@ -60,6 +60,7 @@ const requiredPackageFiles = [
   path.join("browser-extension", "popup.js"),
   currentNativeHostTarget.packagePath,
   path.join("scripts", "browser-client.mjs"),
+  path.join("scripts", "browser-gateway-worker.js"),
   path.join("scripts", "extension-id.json"),
   path.join("scripts", "installManifest.mjs"),
   path.join("scripts", "native-host-bootstrap.js"),

@@ -1,6 +1,6 @@
 {
   "name": "chrome",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Control Chrome through a plugin-bundled persistent Node REPL, Chrome extension, and Native Messaging host.",
   "author": {
     "name": "Anybox"

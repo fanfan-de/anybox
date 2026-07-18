@@ -1,13 +1,18 @@
+import type { MiddlewareHandler } from "hono"
 import type { UpgradeWebSocket } from "hono/ws"
 import { Hono } from "hono"
 import z from "zod"
 import {
+  ANYBOX_CHROME_NATIVE_HOST_NAME,
   BrowserExtensionCommandContext,
   BrowserExtensionCommandMethod,
   BrowserExtensionTabSummary,
 } from "@anybox/shared/browser-extension"
 import { browserExtensionBridge } from "#browser-extension/bridge.ts"
-import { isBrowserTrustedCommandToken } from "#browser-extension/runtime-token.ts"
+import {
+  isBrowserTransportAuthorization,
+  isBrowserTrustedCommandToken,
+} from "#browser-extension/runtime-token.ts"
 import { ApiError } from "#server/error.ts"
 import { ok, parseJsonBody } from "#server/http.ts"
 import type { AppEnv } from "#server/types.ts"
@@ -44,6 +49,26 @@ const BrowserTrustedCommandBody = z.object({
   timeoutMs: z.number().int().positive().max(120_000).optional(),
 })
 
+const requireBrowserTrustedToken: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (!isBrowserTrustedCommandToken(c.req.header("x-anybox-browser-trusted-token"))) {
+    throw new ApiError(401, "UNAUTHORIZED", "Browser trusted token is invalid.")
+  }
+  if (c.req.header("origin")) {
+    throw new ApiError(403, "FORBIDDEN", "Browser-origin control requests are not allowed.")
+  }
+  await next()
+}
+
+const requireBrowserNativeTransport: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (!isBrowserTransportAuthorization(c.req.header("authorization"))) {
+    throw new ApiError(401, "UNAUTHORIZED", "Browser transport credential is invalid.")
+  }
+  if (c.req.header("origin")) {
+    throw new ApiError(403, "FORBIDDEN", "Browser-origin WebSocket connections are not allowed.")
+  }
+  await next()
+}
+
 function readMessageData(data: MessageEvent["data"]) {
   if (typeof data === "string") return data
   if (data instanceof ArrayBuffer) return new TextDecoder().decode(data)
@@ -57,6 +82,11 @@ export function BrowserExtensionRoutes(options: { upgradeWebSocket: UpgradeWebSo
   const app = new Hono<AppEnv>()
 
   app.get("/health", (c) => ok(c, { ok: true }))
+  app.use("/status", requireBrowserTrustedToken)
+  app.use("/command", requireBrowserTrustedToken)
+  app.use("/trusted-command", requireBrowserTrustedToken)
+  app.use("/ws", requireBrowserNativeTransport)
+
   app.get("/status", (c) => ok(c, browserExtensionBridge.status()))
   app.post("/command", async (c) => {
     const body = await parseJsonBody(c, BrowserCommandBody, "Browser command payload is invalid.")
@@ -64,9 +94,6 @@ export function BrowserExtensionRoutes(options: { upgradeWebSocket: UpgradeWebSo
   })
 
   app.post("/trusted-command", async (c) => {
-    if (!isBrowserTrustedCommandToken(c.req.header("x-anybox-browser-trusted-token"))) {
-      throw new ApiError(401, "UNAUTHORIZED", "Browser trusted command token is invalid.")
-    }
     const body = await parseJsonBody(c, BrowserTrustedCommandBody, "Browser trusted command payload is invalid.")
     return ok(c, await runBrowserCommand(body, { trusted: true }))
   })
@@ -102,14 +129,15 @@ export function BrowserExtensionRoutes(options: { upgradeWebSocket: UpgradeWebSo
 
   app.get(
     "/ws",
-    options.upgradeWebSocket((c) => {
+    options.upgradeWebSocket(() => {
       let connectionID: string | undefined
-      const transport = c.req.query("transport") === "native" ? "native" : "websocket"
-      const hostName = c.req.query("hostName")?.trim() || undefined
 
       return {
         onOpen(_event, ws) {
-          connectionID = browserExtensionBridge.register(ws, { transport, hostName })
+          connectionID = browserExtensionBridge.register(ws, {
+            transport: "native",
+            hostName: ANYBOX_CHROME_NATIVE_HOST_NAME,
+          })
         },
         onMessage(event, ws) {
           if (!connectionID) {
@@ -119,11 +147,8 @@ export function BrowserExtensionRoutes(options: { upgradeWebSocket: UpgradeWebSo
 
           try {
             browserExtensionBridge.handleRawMessage(connectionID, readMessageData(event.data))
-          } catch (error) {
-            ws.send(JSON.stringify({
-              type: "error",
-              error: error instanceof Error ? error.message : String(error),
-            }))
+          } catch {
+            ws.close(1008, "Browser extension protocol message is invalid.")
           }
         },
         onClose() {

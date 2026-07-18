@@ -59,10 +59,41 @@ type AccessibilityTreeNode = {
   childIds?: string[]
 }
 
+type DomSensitivityMetadata = {
+  sensitive: boolean
+  privateValue: boolean
+  metadata: string
+}
+
 const SENSITIVE_VALUE_PATTERN =
-  /\b(password|passcode|passwd|secret|token|api[_-]?key|authorization|cookie|session|csrf|credit|card|cvv|cvc|ssn|otp|2fa)\b/i
+  /(?:^|-)(?:password|passcode|passwd|secret|token|api-key|authorization|cookie|session|csrf|credit|debit|card|cardholder|card-holder|cardnumber|card-number|cvv|cvc|ssn|otp|otpcode|otp-code|2fa|onetime|one-time|onetimecode|one-time-code|cc-number|cc-csc|cc-cvc|cc-exp|verificationcode|verification-code|securitycode|security-code|pin)(?:$|-)|验证码|密码|口令|令牌|银行卡|卡号|安全码|一次性/i
 const MAX_NODE_TEXT_CHARS = 500
 const REDACTED_VALUE = "[redacted]"
+const REDACTED_URL = "[redacted-url]"
+const REDACTED_PATH = "[redacted-path]"
+const URL_ATTRIBUTE_NAMES = new Set([
+  "action",
+  "archive",
+  "background",
+  "cite",
+  "classid",
+  "codebase",
+  "data",
+  "formaction",
+  "href",
+  "icon",
+  "longdesc",
+  "manifest",
+  "ping",
+  "poster",
+  "profile",
+  "src",
+  "srcset",
+  "style",
+  "usemap",
+  "url",
+  "xlink:href",
+])
 
 function readRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {}
@@ -112,12 +143,62 @@ function compactJsonValue(value: unknown): unknown {
   return String(value)
 }
 
+function normalizeSensitiveMetadata(value: unknown) {
+  if (value === undefined || value === null) return ""
+  return String(value)
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/[^a-z0-9\u3400-\u9fff]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase()
+}
+
+function hasSensitiveMetadata(...values: unknown[]) {
+  return SENSITIVE_VALUE_PATTERN.test(
+    values.map(normalizeSensitiveMetadata).filter(Boolean).join("-"),
+  )
+}
+
+function comparablePrivateText(value: unknown) {
+  if (value === undefined || value === null) return ""
+  return String(value)
+    .replace(/[^a-z0-9\u3400-\u9fff]+/gi, "")
+    .toLowerCase()
+}
+
+function containsPrivateText(value: unknown, privateValues: string[]) {
+  const candidate = comparablePrivateText(value)
+  return candidate.length > 0 && privateValues.some((privateValue) => {
+    const comparablePrivateValue = comparablePrivateText(privateValue)
+    return comparablePrivateValue.length > 0 && candidate.includes(comparablePrivateValue)
+  })
+}
+
+function redactBrowserUrl(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return undefined
+  try {
+    const url = new URL(value)
+    if (url.protocol === "file:") return REDACTED_URL
+    const suffix = `${url.search ? `?${REDACTED_VALUE}` : ""}${url.hash ? `#${REDACTED_VALUE}` : ""}`
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return `${url.origin}${url.pathname === "/" ? "/" : `/${REDACTED_PATH}`}${suffix}`
+    }
+    if (url.protocol === "chrome:" || url.protocol === "chrome-extension:") {
+      return `${url.protocol}//${url.host}${url.pathname === "/" ? "/" : `/${REDACTED_PATH}`}${suffix}`
+    }
+    if (url.protocol === "about:" && value === "about:blank") return value
+    return REDACTED_URL
+  } catch {
+    return REDACTED_URL
+  }
+}
+
 function toTabSummary(tab: any): TabSummary {
   return {
     id: tab.id,
     windowId: tab.windowId,
     title: tab.title,
-    url: tab.url,
+    url: redactBrowserUrl(tab.url),
     active: tab.active,
   }
 }
@@ -202,9 +283,75 @@ async function snapshot(params: unknown) {
   const tabId = await activeTabId(input.tabId)
   const maxTextChars = Math.min(readNumber(input.maxTextChars, 20_000) ?? 20_000, 100_000)
   const tab = await tabInfo(tabId)
-  const data = await runInPage(tabId, (limit: number) => {
-    const trim = (value: string | null | undefined) => (value ?? "").replace(/\s+/g, " ").trim()
-    const text = trim(document.body?.innerText ?? "")
+  const data = await runInPage(tabId, (limit: number, sensitivePatternSource: string) => {
+    const trim = (value: unknown) => {
+      if (value === undefined || value === null) return ""
+      return String(value).replace(/\s+/g, " ").trim()
+    }
+    const sensitivePattern = new RegExp(sensitivePatternSource, "i")
+    const normalizeMetadata = (value: unknown) => {
+      if (value === undefined || value === null) return ""
+      return String(value)
+        .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+        .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+        .replace(/[^a-z0-9\u3400-\u9fff]+/gi, "-")
+        .replace(/^-+|-+$/g, "")
+        .toLowerCase()
+    }
+    const labelledByText = (element: Element) => {
+      const id = element.getAttribute("aria-labelledby")
+      if (!id) return ""
+      return id
+        .split(/\s+/)
+        .map((part) => document.getElementById(part)?.textContent ?? "")
+        .join(" ")
+    }
+    const sensitiveFor = (element: Element) => {
+      const field = element as HTMLInputElement
+      const type = (field.type || "").toLowerCase()
+      const haystack = [
+        type,
+        field.name,
+        field.id,
+        field.autocomplete,
+        field.placeholder,
+        element.getAttribute("aria-label"),
+        element.getAttribute("title"),
+        labelledByText(element),
+        ...Array.from(field.labels ?? []).map((label) => label.textContent ?? ""),
+      ].map(normalizeMetadata).filter(Boolean).join("-")
+      return type === "password" || type === "hidden" || sensitivePattern.test(haystack)
+    }
+    const snapshotFields = Array.from(document.querySelectorAll(
+      "input, textarea, select, [contenteditable]:not([contenteditable='false' i]), [role='textbox']",
+    ))
+    const privateValuesFor = (field: Element) => {
+      const input = field as HTMLInputElement
+      return [input.value, (field as HTMLElement).innerText, field.textContent]
+        .map(trim)
+        .filter((value) => value.length > 0)
+    }
+    const safeMetadata = (value: unknown, privateValues: string[]) => {
+      const candidate = trim(value)
+      if (!candidate) return undefined
+      const comparable = (text: string) => text
+        .replace(/[^a-z0-9\u3400-\u9fff]+/gi, "")
+        .toLowerCase()
+      const candidateComparable = comparable(candidate)
+      return privateValues.some((privateValue) => {
+        const privateComparable = comparable(privateValue)
+        return privateComparable.length > 0 && candidateComparable.includes(privateComparable)
+      })
+        ? undefined
+        : candidate
+    }
+    const sensitiveText = snapshotFields
+      .flatMap(privateValuesFor)
+      .sort((left, right) => right.length - left.length)
+    let text = trim(document.body?.innerText ?? "")
+    for (const value of sensitiveText) {
+      text = text.split(value).join("[redacted]")
+    }
     const limitedText = text.length > limit ? `${text.slice(0, limit).trimEnd()}\n\n[truncated]` : text
     const links = Array.from(document.querySelectorAll("a[href]"))
       .slice(0, 80)
@@ -217,15 +364,18 @@ async function snapshot(params: unknown) {
       .slice(0, 80)
       .map((button) => ({ text: trim((button as HTMLInputElement).value || button.textContent) }))
       .filter((button) => button.text)
-    const inputs = Array.from(document.querySelectorAll("input, textarea, select"))
+    const inputs = snapshotFields
       .slice(0, 80)
       .map((field) => {
         const input = field as HTMLInputElement
+        const sensitive = sensitiveFor(field)
+        if (sensitive) return { sensitive: true }
+        const privateValues = privateValuesFor(field)
         return {
-          name: input.name || undefined,
-          type: input.type || field.tagName.toLowerCase(),
-          placeholder: input.placeholder || undefined,
-          value: typeof input.value === "string" ? input.value.slice(0, 200) : undefined,
+          name: safeMetadata(input.name, privateValues),
+          type: safeMetadata(input.type || field.tagName.toLowerCase(), privateValues),
+          placeholder: safeMetadata(input.placeholder, privateValues),
+          value: undefined,
         }
       })
     return {
@@ -235,13 +385,17 @@ async function snapshot(params: unknown) {
       inputs,
       truncated: text.length > limit,
     }
-  }, [maxTextChars])
+  }, [maxTextChars, SENSITIVE_VALUE_PATTERN.source])
 
   return {
     tabId,
     url: tab.url,
     title: tab.title,
     ...data,
+    links: data.links.map((link) => ({
+      ...link,
+      href: redactBrowserUrl(link.href),
+    })),
   }
 }
 
@@ -250,8 +404,18 @@ async function interactiveSnapshot(params: unknown) {
   const tabId = await activeTabId(input.tabId)
   const maxElements = Math.min(Math.max(readNumber(input.maxElements, 200) ?? 200, 1), 500)
   const tab = await tabInfo(tabId)
-  const data = await runInPage(tabId, (limit: number) => {
+  const data = await runInPage(tabId, (limit: number, sensitivePatternSource: string) => {
     const ATTR = "data-anybox-element-id"
+    const sensitivePattern = new RegExp(sensitivePatternSource, "i")
+    const normalizeMetadata = (value: unknown) => {
+      if (value === undefined || value === null) return ""
+      return String(value)
+        .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+        .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+        .replace(/[^a-z0-9\u3400-\u9fff]+/gi, "-")
+        .replace(/^-+|-+$/g, "")
+        .toLowerCase()
+    }
     const selectors = [
       "a[href]",
       "button",
@@ -261,10 +425,13 @@ async function interactiveSnapshot(params: unknown) {
       "[role='button']",
       "[role='link']",
       "[role='textbox']",
-      "[contenteditable='true']",
+      "[contenteditable]:not([contenteditable='false' i])",
       "[tabindex]",
     ].join(",")
-    const trim = (value: string | null | undefined) => (value ?? "").replace(/\s+/g, " ").trim()
+    const trim = (value: unknown) => {
+      if (value === undefined || value === null) return ""
+      return String(value).replace(/\s+/g, " ").trim()
+    }
     const textFor = (element: Element) => trim(element.textContent).slice(0, 300)
     const labelledByText = (element: Element) => {
       const id = element.getAttribute("aria-labelledby")
@@ -274,16 +441,18 @@ async function interactiveSnapshot(params: unknown) {
         .map((part) => document.getElementById(part)?.textContent ?? "")
         .join(" ")
     }
-    const nameFor = (element: Element) => {
+    const nameFor = (element: Element, includeTextContent: boolean) => {
       const input = element as HTMLInputElement
+      const type = (input.type || "").toLowerCase()
+      const buttonValue = ["button", "submit", "reset"].includes(type) ? input.value : ""
       return trim(
         element.getAttribute("aria-label") ||
           labelledByText(element) ||
           element.getAttribute("alt") ||
           element.getAttribute("title") ||
           input.placeholder ||
-          input.value ||
-          element.textContent,
+          buttonValue ||
+          (includeTextContent ? element.textContent : ""),
       ).slice(0, 300)
     }
     const roleFor = (element: Element) => {
@@ -304,15 +473,52 @@ async function interactiveSnapshot(params: unknown) {
     }
     const sensitiveFor = (element: Element) => {
       const input = element as HTMLInputElement
+      const type = (input.type || "").toLowerCase()
       const haystack = [
-        input.type,
+        type,
         input.name,
         input.id,
         input.autocomplete,
         input.placeholder,
         element.getAttribute("aria-label"),
-      ].join(" ").toLowerCase()
-      return /\b(password|passcode|secret|token|api[_-]?key|credit|card|cvv|cvc|ssn|otp|2fa)\b/.test(haystack)
+        element.getAttribute("title"),
+        element.getAttribute("alt"),
+        labelledByText(element),
+      ].map(normalizeMetadata).filter(Boolean).join("-")
+      return type === "password" || type === "hidden" || sensitivePattern.test(haystack)
+    }
+    const hasPrivateValue = (element: Element) => {
+      const tag = element.tagName.toLowerCase()
+      const inputType = ((element as HTMLInputElement).type || "").toLowerCase()
+      if (tag === "input") return !["button", "submit", "reset"].includes(inputType)
+      if (tag === "textarea" || tag === "select") return true
+      if ((element.getAttribute("role") ?? "").toLowerCase() === "textbox") return true
+      const contenteditable = (element.getAttribute("contenteditable") ?? "").toLowerCase()
+      const hasContenteditableAttribute = element.getAttribute("contenteditable") !== null
+      return (element as HTMLElement).isContentEditable === true ||
+        hasContenteditableAttribute && contenteditable === "" ||
+        contenteditable === "true" ||
+        contenteditable === "plaintext-only"
+    }
+    const privateValuesFor = (element: Element) => {
+      const input = element as HTMLInputElement
+      return [input.value, (element as HTMLElement).innerText, element.textContent]
+        .map(trim)
+        .filter((value) => value.length > 0)
+    }
+    const safeMetadata = (value: unknown, privateValues: string[]) => {
+      const candidate = trim(value)
+      if (!candidate) return undefined
+      const comparable = (text: string) => text
+        .replace(/[^a-z0-9\u3400-\u9fff]+/gi, "")
+        .toLowerCase()
+      const candidateComparable = comparable(candidate)
+      return privateValues.some((privateValue) => {
+        const privateComparable = comparable(privateValue)
+        return privateComparable.length > 0 && candidateComparable.includes(privateComparable)
+      })
+        ? undefined
+        : candidate
     }
     const visibleFor = (element: Element, rect: DOMRect) => {
       const style = window.getComputedStyle(element)
@@ -339,19 +545,25 @@ async function interactiveSnapshot(params: unknown) {
       if (!visible) continue
       const tag = element.tagName.toLowerCase()
       const input = element as HTMLInputElement
+      const sensitive = sensitiveFor(element)
+      const privateValue = hasPrivateValue(element)
+      const privateValues = privateValue ? privateValuesFor(element) : []
+      const name = nameFor(element, !privateValue)
       elements.push({
         elementId: ensureElementId(element, index),
         role: roleFor(element),
         tag,
-        name: nameFor(element) || undefined,
-        text: textFor(element) || undefined,
+        name: sensitive ? undefined : safeMetadata(name, privateValues),
+        text: sensitive || privateValue ? undefined : textFor(element) || undefined,
         href: tag === "a" ? (element as HTMLAnchorElement).href : undefined,
         type: input.type || undefined,
-        placeholder: input.placeholder || undefined,
-        value: typeof input.value === "string" && input.type !== "password" ? input.value.slice(0, 200) : undefined,
+        placeholder: sensitive ? undefined : safeMetadata(input.placeholder, privateValues),
+        value: privateValue || sensitive || typeof input.value !== "string"
+          ? undefined
+          : input.value.slice(0, 200),
         disabled: disabledFor(element),
         visible,
-        sensitive: sensitiveFor(element) || undefined,
+        sensitive: sensitive || undefined,
         rect: {
           x: rect.x,
           y: rect.y,
@@ -365,38 +577,171 @@ async function interactiveSnapshot(params: unknown) {
       elements,
       truncated: elements.length >= limit && nodes.length > elements.length,
     }
-  }, [maxElements])
+  }, [maxElements, SENSITIVE_VALUE_PATTERN.source])
 
   return {
     tabId,
     url: tab.url,
     title: tab.title,
     ...data,
+    elements: data.elements.map((element) => ({
+      ...element,
+      href: redactBrowserUrl(element.href),
+    })),
   }
 }
 
 function readCdpAttribute(rawNode: any, name: string) {
   const attributes = Array.isArray(rawNode?.attributes) ? rawNode.attributes : []
+  const expected = name.toLowerCase()
   for (let index = 0; index < attributes.length; index += 2) {
-    if (attributes[index] === name) return typeof attributes[index + 1] === "string" ? attributes[index + 1] : ""
+    if (typeof attributes[index] === "string" && attributes[index].toLowerCase() === expected) {
+      return typeof attributes[index + 1] === "string" ? attributes[index + 1] : ""
+    }
   }
   return undefined
 }
 
-function shouldRedactDomAttribute(rawNode: any, attributeName: string) {
-  if (SENSITIVE_VALUE_PATTERN.test(attributeName)) return true
-  if (attributeName.toLowerCase() !== "value") return false
-  return (readCdpAttribute(rawNode, "type") ?? "").toLowerCase() === "password"
+function isPrivateDomValueNode(rawNode: any) {
+  const tag = String(rawNode?.localName ?? rawNode?.nodeName ?? "").toLowerCase()
+  const type = (readCdpAttribute(rawNode, "type") ?? "").toLowerCase()
+  if (tag === "input") return !["button", "submit", "reset"].includes(type)
+  if (tag === "textarea" || tag === "select") return true
+  if ((readCdpAttribute(rawNode, "role") ?? "").toLowerCase() === "textbox") return true
+  const contenteditable = (readCdpAttribute(rawNode, "contenteditable") ?? "").toLowerCase()
+  return (contenteditable === "" && readCdpAttribute(rawNode, "contenteditable") !== undefined) ||
+    contenteditable === "true" ||
+    contenteditable === "plaintext-only"
 }
 
-function normalizeDomAttributes(rawNode: any) {
+function isValueBearingDomAttribute(attributeName: string) {
+  return normalizeSensitiveMetadata(attributeName).includes("value")
+}
+
+function isUrlBearingDomAttribute(attributeName: string, value: string) {
+  const normalizedName = attributeName.toLowerCase()
+  if (URL_ATTRIBUTE_NAMES.has(normalizedName)) {
+    return normalizedName !== "style" || /url\s*\(/i.test(value)
+  }
+  return normalizedName.endsWith("url") ||
+    normalizedName.endsWith("uri") ||
+    /(?:https?|file|data|blob):/i.test(value) ||
+    /url\s*\(/i.test(value)
+}
+
+function privateDomValues(rawNode: any) {
+  const values: string[] = []
+  const attributes = Array.isArray(rawNode?.attributes) ? rawNode.attributes : []
+  for (let index = 0; index < attributes.length; index += 2) {
+    const name = typeof attributes[index] === "string" ? attributes[index] : ""
+    const value = typeof attributes[index + 1] === "string" ? attributes[index + 1] : ""
+    if (isValueBearingDomAttribute(name) && value) values.push(value)
+  }
+  const collectText = (node: any, remaining: number): number => {
+    if (!node || typeof node !== "object" || remaining <= 0) return remaining
+    const text = truncateText(node.nodeValue)
+    if (text) values.push(text)
+    remaining -= 1
+    if (!Array.isArray(node.children)) return remaining
+    for (const child of node.children) {
+      remaining = collectText(child, remaining)
+      if (remaining <= 0) break
+    }
+    return remaining
+  }
+  collectText(rawNode, 100)
+  return [...new Set(values)].sort((left, right) => right.length - left.length)
+}
+
+function shouldRedactDomAttribute(
+  rawNode: any,
+  attributeName: string,
+  nodeSensitive = false,
+  privateValue = false,
+) {
+  if (nodeSensitive) return true
+  if (hasSensitiveMetadata(attributeName)) return true
+  if (privateValue && isValueBearingDomAttribute(attributeName)) return true
+  if (attributeName.toLowerCase() !== "value") return false
+  const type = (readCdpAttribute(rawNode, "type") ?? "").toLowerCase()
+  if (type === "password" || type === "hidden") return true
+  const metadata = [
+    type,
+    readCdpAttribute(rawNode, "name"),
+    readCdpAttribute(rawNode, "id"),
+    readCdpAttribute(rawNode, "autocomplete"),
+    readCdpAttribute(rawNode, "placeholder"),
+    readCdpAttribute(rawNode, "aria-label"),
+  ]
+  return hasSensitiveMetadata(...metadata)
+}
+
+function isSensitiveDomNode(rawNode: any) {
+  const type = (readCdpAttribute(rawNode, "type") ?? "").toLowerCase()
+  if (type === "password" || type === "hidden") return true
+  const attributes = Array.isArray(rawNode?.attributes) ? rawNode.attributes : []
+  return hasSensitiveMetadata(type, ...attributes)
+}
+
+function collectDomSensitivityMetadata(rawRoot: any, maxNodes: number) {
+  const output = new Map<number, DomSensitivityMetadata>()
+  let visited = 0
+  const visit = (
+    rawNode: any,
+    inheritedSensitive = false,
+    inheritedPrivateValue = false,
+  ) => {
+    if (!rawNode || typeof rawNode !== "object" || visited >= maxNodes) return
+    visited += 1
+    const sensitive = inheritedSensitive || isSensitiveDomNode(rawNode)
+    const privateValue = inheritedPrivateValue || isPrivateDomValueNode(rawNode)
+    const metadata = [
+      readCdpAttribute(rawNode, "type"),
+      readCdpAttribute(rawNode, "name"),
+      readCdpAttribute(rawNode, "id"),
+      readCdpAttribute(rawNode, "autocomplete"),
+      readCdpAttribute(rawNode, "placeholder"),
+      readCdpAttribute(rawNode, "aria-label"),
+      readCdpAttribute(rawNode, "role"),
+    ].join(" ")
+    if (typeof rawNode.backendNodeId === "number") {
+      output.set(rawNode.backendNodeId, { sensitive, privateValue, metadata })
+    }
+    const children = [
+      ...(Array.isArray(rawNode.children) ? rawNode.children : []),
+      ...(Array.isArray(rawNode.shadowRoots) ? rawNode.shadowRoots : []),
+      ...(Array.isArray(rawNode.pseudoElements) ? rawNode.pseudoElements : []),
+      rawNode.contentDocument,
+      rawNode.templateContent,
+    ]
+    for (const child of children) visit(child, sensitive, privateValue)
+  }
+  visit(rawRoot)
+  return output
+}
+
+function normalizeDomAttributes(
+  rawNode: any,
+  nodeSensitive = false,
+  privateValue = false,
+) {
   const attributes = Array.isArray(rawNode?.attributes) ? rawNode.attributes : []
   const output: Record<string, string> = {}
+  const privateValues = privateValue ? privateDomValues(rawNode) : []
   for (let index = 0; index < attributes.length; index += 2) {
     const name = typeof attributes[index] === "string" ? attributes[index] : undefined
     if (!name) continue
     const value = typeof attributes[index + 1] === "string" ? attributes[index + 1] : ""
-    output[name] = shouldRedactDomAttribute(rawNode, name) ? REDACTED_VALUE : (truncateText(value) ?? "")
+    if (
+      shouldRedactDomAttribute(rawNode, name, nodeSensitive, privateValue) ||
+      containsPrivateText(value, privateValues)
+    ) {
+      output[name] = REDACTED_VALUE
+    } else if (isUrlBearingDomAttribute(name, value)) {
+      output[name] = redactBrowserUrl(value) ?? REDACTED_URL
+    } else {
+      output[name] = truncateText(value) ?? ""
+    }
   }
   return Object.keys(output).length > 0 ? output : undefined
 }
@@ -436,7 +781,12 @@ async function domTree(params: unknown) {
   let nodeCount = 0
   let truncated = false
 
-  const visit = (rawNode: any, relation: DomTreeRelation = "child"): DomTreeNode | undefined => {
+  const visit = (
+    rawNode: any,
+    relation: DomTreeRelation = "child",
+    inheritedSensitive = false,
+    inheritedPrivateValue = false,
+  ): DomTreeNode | undefined => {
     if (!rawNode || typeof rawNode !== "object") return undefined
     if (!includeText && rawNode.nodeType === 3) return undefined
     if (nodeCount >= maxNodes) {
@@ -445,6 +795,8 @@ async function domTree(params: unknown) {
     }
 
     nodeCount += 1
+    const sensitive = inheritedSensitive || isSensitiveDomNode(rawNode)
+    const privateValue = inheritedPrivateValue || isPrivateDomValueNode(rawNode)
     const normalized: DomTreeNode = {
       ...(relation !== "child" ? { relation } : {}),
       ...(typeof rawNode.nodeId === "number" ? { nodeId: rawNode.nodeId } : {}),
@@ -454,21 +806,23 @@ async function domTree(params: unknown) {
       ...(typeof rawNode.localName === "string" && rawNode.localName ? { localName: rawNode.localName } : {}),
     }
     const nodeValue = truncateText(rawNode.nodeValue)
-    if (nodeValue) normalized.nodeValue = nodeValue
+    if (nodeValue) normalized.nodeValue = sensitive || privateValue ? REDACTED_VALUE : nodeValue
     if (includeAttributes) {
-      const attributes = normalizeDomAttributes(rawNode)
+      const attributes = normalizeDomAttributes(rawNode, sensitive, privateValue)
       if (attributes) normalized.attributes = attributes
     }
 
-    appendDomChildren(normalized, rawNode.children, "child", visit)
-    appendDomChildren(normalized, rawNode.shadowRoots, "shadowRoot", visit)
-    appendDomChildren(normalized, rawNode.pseudoElements, "pseudoElement", visit)
-    const contentDocument = visit(rawNode.contentDocument, "contentDocument")
+    const visitChild = (child: any, childRelation: DomTreeRelation) =>
+      visit(child, childRelation, sensitive, privateValue)
+    appendDomChildren(normalized, rawNode.children, "child", visitChild)
+    appendDomChildren(normalized, rawNode.shadowRoots, "shadowRoot", visitChild)
+    appendDomChildren(normalized, rawNode.pseudoElements, "pseudoElement", visitChild)
+    const contentDocument = visit(rawNode.contentDocument, "contentDocument", sensitive, privateValue)
     if (contentDocument) {
       if (!normalized.children) normalized.children = []
       normalized.children.push(contentDocument)
     }
-    const templateContent = visit(rawNode.templateContent, "templateContent")
+    const templateContent = visit(rawNode.templateContent, "templateContent", sensitive, privateValue)
     if (templateContent) {
       if (!normalized.children) normalized.children = []
       normalized.children.push(templateContent)
@@ -518,19 +872,48 @@ function axProperties(rawNode: any) {
   for (const property of rawNode.properties) {
     if (!property || typeof property.name !== "string") continue
     const value = axValue(property.value)
-    if (value !== undefined) properties[property.name] = value
+    if (value === undefined) continue
+    properties[property.name] = URL_ATTRIBUTE_NAMES.has(property.name.toLowerCase())
+      ? redactBrowserUrl(value) ?? REDACTED_URL
+      : value
   }
   return Object.keys(properties).length > 0 ? properties : undefined
 }
 
-function shouldRedactAccessibilityValue(node: AccessibilityTreeNode) {
+function shouldRedactAccessibilityValue(
+  node: AccessibilityTreeNode,
+  domMetadata?: DomSensitivityMetadata,
+) {
   const haystack = [
     node.role,
     node.name,
+    node.value === undefined ? "" : String(node.value),
     node.description,
     node.properties ? Object.entries(node.properties).map(([key, value]) => `${key} ${String(value)}`).join(" ") : "",
+    domMetadata?.metadata,
   ].join(" ")
-  return SENSITIVE_VALUE_PATTERN.test(haystack)
+  return domMetadata?.sensitive === true || hasSensitiveMetadata(haystack)
+}
+
+function hasEditableAccessibilityValue(node: AccessibilityTreeNode) {
+  const role = (node.role ?? "").toLowerCase()
+  if (["textbox", "searchbox", "combobox", "spinbutton"].includes(role)) return true
+  if (!node.properties) return false
+  return Object.entries(node.properties).some(([key, value]) =>
+    key.toLowerCase() === "editable" && value !== false && value !== "false",
+  )
+}
+
+function redactAccessibilityNode(node: AccessibilityTreeNode) {
+  if (node.ignoredReasons) node.ignoredReasons = node.ignoredReasons.map(() => REDACTED_VALUE)
+  if (node.name !== undefined) node.name = REDACTED_VALUE
+  if (node.value !== undefined) node.value = REDACTED_VALUE
+  if (node.description !== undefined) node.description = REDACTED_VALUE
+  if (node.properties) {
+    node.properties = Object.fromEntries(
+      Object.keys(node.properties).map((key) => [key, REDACTED_VALUE]),
+    )
+  }
 }
 
 async function accessibilityTree(params: unknown) {
@@ -546,6 +929,18 @@ async function accessibilityTree(params: unknown) {
     depth: maxDepth,
   }) as { nodes?: any[] }
   const rawNodes = Array.isArray(rawTree.nodes) ? rawTree.nodes : []
+  let domMetadataByBackendId = new Map<number, DomSensitivityMetadata>()
+  try {
+    await sendCdp(tabId, "DOM.enable", {})
+    const documentTree = await sendCdp(tabId, "DOM.getDocument", {
+      depth: maxDepth,
+      pierce: true,
+    }) as { root?: any }
+    domMetadataByBackendId = collectDomSensitivityMetadata(documentTree?.root, maxNodes * 5)
+  } catch {
+    // Some pages do not expose a DOM tree for every accessibility target. In that
+    // case, editable AX values are still redacted by the role-based fallback.
+  }
   const parentById = new Map<string, string>()
   for (const rawNode of rawNodes) {
     const nodeId = typeof rawNode?.nodeId === "string" ? rawNode.nodeId : undefined
@@ -555,7 +950,12 @@ async function accessibilityTree(params: unknown) {
     }
   }
 
-  const normalized = rawNodes.map((rawNode): AccessibilityTreeNode | undefined => {
+  const normalizedEntries = rawNodes.map((rawNode): {
+    node: AccessibilityTreeNode
+    rawNode: any
+    domMetadata?: DomSensitivityMetadata
+    sensitive: boolean
+  } | undefined => {
     const nodeId = typeof rawNode?.nodeId === "string" ? rawNode.nodeId : undefined
     if (!nodeId) return undefined
     const node: AccessibilityTreeNode = {
@@ -569,9 +969,48 @@ async function accessibilityTree(params: unknown) {
       ...(axValueText(rawNode.description) ? { description: axValueText(rawNode.description) } : {}),
       ...(axProperties(rawNode) ? { properties: axProperties(rawNode) } : {}),
     }
-    if (shouldRedactAccessibilityValue(node) && node.value !== undefined) node.value = REDACTED_VALUE
+    const domMetadata = typeof rawNode.backendDOMNodeId === "number"
+      ? domMetadataByBackendId.get(rawNode.backendDOMNodeId)
+      : undefined
+    return {
+      node,
+      rawNode,
+      domMetadata,
+      sensitive: shouldRedactAccessibilityValue(node, domMetadata),
+    }
+  }).filter((entry): entry is {
+    node: AccessibilityTreeNode
+    rawNode: any
+    domMetadata?: DomSensitivityMetadata
+    sensitive: boolean
+  } => Boolean(entry))
+
+  const privateNodeIds = new Set(
+    normalizedEntries
+      .filter(({ node, domMetadata, sensitive }) =>
+        sensitive || domMetadata?.privateValue === true || hasEditableAccessibilityValue(node),
+      )
+      .map(({ node }) => node.nodeId),
+  )
+  const rawNodeById = new Map(
+    normalizedEntries.map(({ node, rawNode }) => [node.nodeId, rawNode]),
+  )
+  const privacyQueue = [...privateNodeIds]
+  while (privacyQueue.length > 0) {
+    const nodeId = privacyQueue.shift()!
+    const rawNode = rawNodeById.get(nodeId)
+    if (!Array.isArray(rawNode?.childIds)) continue
+    for (const childId of rawNode.childIds) {
+      if (typeof childId !== "string" || privateNodeIds.has(childId)) continue
+      privateNodeIds.add(childId)
+      privacyQueue.push(childId)
+    }
+  }
+
+  const normalized = normalizedEntries.map(({ node, sensitive }) => {
+    if (sensitive || privateNodeIds.has(node.nodeId)) redactAccessibilityNode(node)
     return node
-  }).filter((node): node is AccessibilityTreeNode => Boolean(node))
+  })
 
   const filteredNodes = normalized.filter((node) => includeIgnored || !node.ignored)
   const keptNodes = filteredNodes.slice(0, maxNodes)
@@ -789,9 +1228,10 @@ async function waitFor(params: unknown) {
   const started = Date.now()
   let reason = "Timed out."
   while (Date.now() - started <= timeoutMs) {
-    const tab = await tabInfo(tabId)
-    if (urlIncludes && tab.url?.includes(urlIncludes)) {
-      return { tabId, url: tab.url, title: tab.title, matched: true, reason: `URL includes '${urlIncludes}'.` }
+    const rawTab = await chrome.tabs.get(tabId)
+    if (urlIncludes && rawTab.url?.includes(urlIncludes)) {
+      const tab = toTabSummary(rawTab)
+      return { tabId, url: tab.url, title: tab.title, matched: true, reason: "URL condition matched." }
     }
 
     const matched = await runInPage(tabId, (query: {

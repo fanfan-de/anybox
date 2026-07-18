@@ -2,25 +2,28 @@ use serde::Deserialize;
 use std::env;
 use std::fs;
 use std::io::{self, Read, Write};
-use std::net::TcpStream;
+use std::net::{Ipv4Addr, Ipv6Addr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, TryRecvError};
 use std::thread;
 use std::time::Duration;
-use tungstenite::{Message, client};
+use tungstenite::Message;
+use tungstenite::client::{IntoClientRequest, client};
+use tungstenite::http::{Request, header::AUTHORIZATION};
 
 const DEFAULT_AGENT_BASE_URL: &str = "http://127.0.0.1:4096";
-const HOST_NAME: &str = "com.anybox.browser";
 const RUNTIME_CONFIG_ENV: &str = "ANYBOX_BROWSER_NATIVE_CONFIG";
 const RUNTIME_CONFIG_FILENAME: &str = "com.anybox.browser.runtime.json";
 const MAX_NATIVE_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
 const SOCKET_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 const SOCKET_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct RuntimeConfig {
     #[serde(rename = "agentBaseURL")]
     agent_base_url: Option<String>,
+    #[serde(rename = "browserTransportToken")]
+    browser_transport_token: Option<String>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -46,7 +49,7 @@ fn main() {
 
 fn run() -> Result<(), String> {
     let endpoint = parse_agent_base_url(&agent_base_url()?)?;
-    let websocket_url = websocket_url(&endpoint);
+    let request = websocket_request(&endpoint, &browser_transport_token()?)?;
     let stream = TcpStream::connect((endpoint.host.as_str(), endpoint.port)).map_err(|error| {
         format!(
             "failed to connect to Anybox Agent at {}: {error}",
@@ -63,7 +66,7 @@ fn run() -> Result<(), String> {
         .set_write_timeout(Some(SOCKET_HANDSHAKE_TIMEOUT))
         .map_err(|error| format!("failed to configure the Anybox Agent socket timeout: {error}"))?;
 
-    let (mut socket, response) = client(websocket_url.as_str(), stream)
+    let (mut socket, response) = client(request, stream)
         .map_err(|error| format!("failed to open the Anybox Agent websocket: {error}"))?;
     if response.status().as_u16() != 101 {
         return Err(format!(
@@ -226,6 +229,32 @@ fn agent_base_url() -> Result<String, String> {
     Ok(DEFAULT_AGENT_BASE_URL.to_string())
 }
 
+fn browser_transport_token() -> Result<String, String> {
+    if let Some(explicit) = normalized_env("ANYBOX_BROWSER_TRANSPORT_TOKEN") {
+        return Ok(explicit);
+    }
+
+    for candidate in runtime_config_candidates() {
+        let Ok(contents) = fs::read_to_string(&candidate) else {
+            continue;
+        };
+        let Ok(config) = serde_json::from_str::<RuntimeConfig>(&contents) else {
+            continue;
+        };
+        if let Some(value) = config
+            .browser_transport_token
+            .filter(|value| !value.trim().is_empty())
+        {
+            return Ok(value.trim().to_string());
+        }
+    }
+
+    Err(
+        "browser transport token is missing; reinstall the Anybox Chrome Native Messaging host"
+            .to_string(),
+    )
+}
+
 fn normalized_env(name: &str) -> Option<String> {
     env::var(name)
         .ok()
@@ -308,14 +337,25 @@ fn parse_agent_base_url(value: &str) -> Result<AgentEndpoint, String> {
     let remainder = trimmed
         .strip_prefix("http://")
         .ok_or_else(|| format!("Anybox Agent URL must start with http://: {trimmed}"))?;
+    if remainder.contains('?') || remainder.contains('#') {
+        return Err("Anybox Agent URL cannot contain a query string or fragment".to_string());
+    }
     let (authority, path) = remainder
         .split_once('/')
         .map_or((remainder, ""), |(authority, path)| (authority, path));
     if authority.is_empty() {
         return Err("Anybox Agent URL is missing a host".to_string());
     }
+    if authority.contains('@') {
+        return Err("Anybox Agent URL cannot contain credentials".to_string());
+    }
 
     let (host, port) = parse_authority(authority)?;
+    if !is_loopback_host(&host) {
+        return Err(format!(
+            "Anybox Agent URL must use localhost, 127.0.0.0/8, or ::1: {trimmed}"
+        ));
+    }
     let base_path = if path.is_empty() {
         String::new()
     } else {
@@ -361,11 +401,36 @@ fn parse_authority(authority: &str) -> Result<(String, u16), String> {
     Ok((authority.to_string(), 80))
 }
 
+fn is_loopback_host(host: &str) -> bool {
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    if let Ok(address) = host.parse::<Ipv4Addr>() {
+        return address.is_loopback();
+    }
+    host.parse::<Ipv6Addr>()
+        .is_ok_and(|address| address.is_loopback())
+}
+
 fn websocket_url(endpoint: &AgentEndpoint) -> String {
     format!(
-        "ws://{}{}{}?transport=native&hostName={HOST_NAME}",
+        "ws://{}{}{}",
         endpoint.authority, endpoint.base_path, "/api/browser-extension/ws"
     )
+}
+
+fn websocket_request(
+    endpoint: &AgentEndpoint,
+    browser_transport_token: &str,
+) -> Result<Request<()>, String> {
+    let mut request = websocket_url(endpoint)
+        .into_client_request()
+        .map_err(|error| format!("failed to create the Anybox Agent websocket request: {error}"))?;
+    let authorization = format!("Bearer {browser_transport_token}")
+        .parse()
+        .map_err(|_| "browser transport token is not valid for an HTTP header".to_string())?;
+    request.headers_mut().insert(AUTHORIZATION, authorization);
+    Ok(request)
 }
 
 #[cfg(test)]
@@ -438,7 +503,71 @@ mod tests {
         );
         assert_eq!(
             websocket_url(&endpoint),
-            "ws://127.0.0.1:4567/base/api/browser-extension/ws?transport=native&hostName=com.anybox.browser"
+            "ws://127.0.0.1:4567/base/api/browser-extension/ws"
+        );
+    }
+
+    #[test]
+    fn accepts_only_loopback_agent_urls() {
+        for url in [
+            "http://localhost:4096",
+            "http://LOCALHOST:4096",
+            "http://127.0.0.1:4096",
+            "http://127.42.0.9:4096",
+            "http://[::1]:4096",
+        ] {
+            assert!(parse_agent_base_url(url).is_ok(), "{url}");
+        }
+
+        for url in [
+            "http://example.com:4096",
+            "http://192.168.1.10:4096",
+            "http://0.0.0.0:4096",
+            "http://[::2]:4096",
+            "http://localhost.example.com:4096",
+        ] {
+            assert!(parse_agent_base_url(url).is_err(), "{url}");
+        }
+    }
+
+    #[test]
+    fn adds_the_browser_transport_token_to_the_websocket_handshake() {
+        let endpoint = parse_agent_base_url("http://127.0.0.1:4567/base").unwrap();
+        let request = websocket_request(&endpoint, "transport-secret").unwrap();
+
+        assert_eq!(
+            request.uri().to_string(),
+            "ws://127.0.0.1:4567/base/api/browser-extension/ws"
+        );
+        assert_eq!(
+            request.headers().get(AUTHORIZATION).unwrap(),
+            "Bearer transport-secret"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_authorization_values_without_echoing_the_token() {
+        let endpoint = parse_agent_base_url("http://127.0.0.1:4567").unwrap();
+        let token = "transport-secret\r\nx-injected: true";
+        let error = websocket_request(&endpoint, token).unwrap_err();
+
+        assert_eq!(
+            error,
+            "browser transport token is not valid for an HTTP header"
+        );
+        assert!(!error.contains(token));
+    }
+
+    #[test]
+    fn deserializes_the_browser_transport_token_from_runtime_config() {
+        let config: RuntimeConfig = serde_json::from_str(
+            r#"{"agentBaseURL":"http://127.0.0.1:4096","browserTransportToken":"transport-secret"}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.browser_transport_token.as_deref(),
+            Some("transport-secret")
         );
     }
 
@@ -446,5 +575,17 @@ mod tests {
     fn rejects_non_http_agent_urls() {
         assert!(parse_agent_base_url("https://127.0.0.1:4096").is_err());
         assert!(parse_agent_base_url("file:///tmp/agent").is_err());
+    }
+
+    #[test]
+    fn rejects_agent_urls_with_credentials_queries_or_fragments() {
+        for url in [
+            "http://user:password@127.0.0.1:4096",
+            "http://127.0.0.1:4096?token=value",
+            "http://127.0.0.1:4096/base?token=value",
+            "http://127.0.0.1:4096#fragment",
+        ] {
+            assert!(parse_agent_base_url(url).is_err(), "{url}");
+        }
     }
 }

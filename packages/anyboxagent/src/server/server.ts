@@ -95,8 +95,14 @@ export function createServerRuntime(options: Pick<ServerOptions, "corsWhitelist"
     await next()
   })
 
-  if (whitelist.length > 0) app.use("/api/*", cors({ origin: whitelist }))
-  else app.use("/api/*", cors())
+  const apiCors = whitelist.length > 0 ? cors({ origin: whitelist }) : cors()
+  app.use("/api/*", async (c, next) => {
+    if (c.req.path.startsWith("/api/browser-extension/")) {
+      await next()
+      return
+    }
+    await apiCors(c, next)
+  })
 
   app.use("*", async (c, next) => {
     const started = Date.now()

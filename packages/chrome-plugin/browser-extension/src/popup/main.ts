@@ -8,7 +8,7 @@ const reconnectButton = document.querySelector<HTMLButtonElement>("#reconnect-bu
 
 type Status = {
   state?: "connected" | "connecting" | "disconnected"
-  transport?: "native" | "websocket"
+  transport?: "native"
   hostName?: string
   error?: string
   lastChecked?: number
@@ -23,9 +23,7 @@ function renderStatus(status: Status | null | undefined) {
   if (statusDetail) {
     const transportDetail = status?.transport === "native"
       ? `Native Messaging (${status.hostName ?? "host"})`
-      : status?.transport === "websocket"
-        ? "WebSocket fallback"
-        : "Anybox Agent"
+      : "Anybox Agent"
     statusDetail.textContent = status?.error
       ? status.error
       : state === "connected"

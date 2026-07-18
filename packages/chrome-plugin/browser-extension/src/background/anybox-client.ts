@@ -1,4 +1,6 @@
 import {
+  ANYBOX_CHROME_NATIVE_HOST_NAME,
+  BROWSER_EXTENSION_PROTOCOL_VERSION,
   BrowserExtensionClientMessage,
   BrowserExtensionServerMessage,
   type BrowserExtensionCommandMessage,
@@ -11,16 +13,12 @@ import {
   type BridgeStatus,
 } from "../shared/status"
 
-const ANYBOX_WS_URL = "ws://127.0.0.1:4096/api/browser-extension/ws"
-const NATIVE_HOST_NAME = "com.anybox.browser"
-const FORCE_WEBSOCKET_STORAGE_KEY = "ANYBOX_FORCE_WEBSOCKET_BRIDGE"
+const NATIVE_HOST_NAME = ANYBOX_CHROME_NATIVE_HOST_NAME
 const RECONNECT_BASE_MS = 1_000
 const RECONNECT_MAX_MS = 15_000
 
-type TransportKind = "native" | "websocket"
-
 type ActiveTransport = {
-  kind: TransportKind
+  kind: "native"
   send(message: unknown): boolean
   close(): void
 }
@@ -45,11 +43,6 @@ async function extensionInstanceID() {
   return created
 }
 
-async function shouldForceWebSocket() {
-  const stored = await chrome.storage.local.get(FORCE_WEBSOCKET_STORAGE_KEY)
-  return stored[FORCE_WEBSOCKET_STORAGE_KEY] === true
-}
-
 async function setStatus(status: BridgeStatus) {
   await chrome.storage.local.set({ [STATUS_STORAGE_KEY]: status })
 }
@@ -72,11 +65,10 @@ function sendClientMessage(message: unknown) {
 async function sendHello() {
   sendClientMessage({
     type: "hello",
+    protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
     extensionID: chrome.runtime.id,
     extensionInstanceID: await extensionInstanceID(),
     version: extensionVersion(),
-    transport: activeTransport?.kind,
-    hostName: activeTransport?.kind === "native" ? NATIVE_HOST_NAME : undefined,
     lastTransportError,
   })
 }
@@ -141,7 +133,14 @@ function connectNativeTransport() {
   } catch (error) {
     connecting = false
     lastTransportError = transportErrorMessage(error)
-    connectWebSocketTransport()
+    void setStatus({
+      state: "disconnected",
+      lastChecked: Date.now(),
+      transport: "native",
+      hostName: NATIVE_HOST_NAME,
+      error: lastTransportError,
+    })
+    scheduleReconnect()
     return
   }
 
@@ -195,89 +194,13 @@ function connectNativeTransport() {
       error: message,
     })
 
-    if (message) {
-      connectWebSocketTransport()
-      return
-    }
     scheduleReconnect()
-  })
-}
-
-function connectWebSocketTransport() {
-  connecting = true
-  void setStatus({ state: "connecting", lastChecked: Date.now(), transport: "websocket", error: lastTransportError })
-
-  let socket: WebSocket
-  try {
-    socket = new WebSocket(ANYBOX_WS_URL)
-  } catch (error) {
-    connecting = false
-    lastTransportError = transportErrorMessage(error)
-    void setStatus({
-      state: "disconnected",
-      lastChecked: Date.now(),
-      transport: "websocket",
-      error: lastTransportError,
-    })
-    scheduleReconnect()
-    return
-  }
-
-  const transport: ActiveTransport = {
-    kind: "websocket",
-    send(message) {
-      if (socket.readyState !== WebSocket.OPEN) return false
-      socket.send(JSON.stringify(message))
-      return true
-    },
-    close() {
-      socket.close()
-    },
-  }
-
-  socket.addEventListener("open", () => {
-    activeTransport = transport
-    reconnectAttempt = 0
-    connecting = false
-    void setStatus({ state: "connected", lastChecked: Date.now(), transport: "websocket", error: lastTransportError })
-    void sendHello()
-  })
-
-  socket.addEventListener("message", (event) => {
-    if (typeof event.data !== "string") return
-    try {
-      handleServerMessage(event.data)
-    } catch (error) {
-      sendClientMessage({
-        type: "event",
-        event: "client_error",
-        data: { message: error instanceof Error ? error.message : String(error) },
-      })
-    }
-  })
-
-  socket.addEventListener("close", () => {
-    clearActiveTransport(transport)
-    connecting = false
-    void setStatus({ state: "disconnected", lastChecked: Date.now(), transport: "websocket", error: lastTransportError })
-    scheduleReconnect()
-  })
-
-  socket.addEventListener("error", () => {
-    lastTransportError = "WebSocket connection failed."
-    void setStatus({ state: "disconnected", lastChecked: Date.now(), transport: "websocket", error: lastTransportError })
   })
 }
 
 export function connectAnybox() {
   if (activeTransport || connecting) return
-  void (async () => {
-    if (await shouldForceWebSocket()) {
-      connectWebSocketTransport()
-      return
-    }
-    connectNativeTransport()
-  })()
+  connectNativeTransport()
 }
 
 export function getBridgeStatusStorageKey() {

@@ -5,12 +5,14 @@ const os = require("node:os")
 const path = require("node:path")
 const { pathToFileURL } = require("node:url")
 const { createRequire } = require("node:module")
+const { Worker } = require("node:worker_threads")
 const Module = require("node:module")
 const { ensureNativeMessagingHost } = require("./native-host-bootstrap")
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const MAX_TIMEOUT_MS = 120_000
 const browserClientPath = path.resolve(__dirname, "browser-client.mjs")
+const browserGatewayWorkerPath = path.resolve(__dirname, "browser-gateway-worker.js")
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
 
 let browserClientPromise
@@ -19,6 +21,8 @@ let writes
 let images
 const nodeModuleDirs = []
 const nativeMessagingHostReady = ensureNativeMessagingHost()
+const browserGateway = createBrowserGateway()
+let runtimeReadyPromise
 
 const tools = [
   {
@@ -123,6 +127,107 @@ async function loadBrowserClient() {
   return browserClientPromise
 }
 
+function browserGatewayAgentBaseURL() {
+  const explicit = String(process.env.ANYBOX_AGENT_BASE_URL || "").trim()
+  if (explicit) return explicit
+  const host = String(process.env.ANYBOX_SERVER_HOST || "127.0.0.1").trim() || "127.0.0.1"
+  const port = String(process.env.ANYBOX_SERVER_PORT || "4096").trim() || "4096"
+  return `http://${host}:${port}`
+}
+
+function createBrowserGateway() {
+  const worker = new Worker(browserGatewayWorkerPath, {
+    workerData: {
+      agentBaseURL: browserGatewayAgentBaseURL(),
+      trustedToken: process.env.ANYBOX_BROWSER_TRUSTED_TOKEN || "",
+    },
+  })
+  const pending = new Map()
+  let nextID = 1
+  let readyResolve
+  let readyReject
+  let settled = false
+  const ready = new Promise((resolve, reject) => {
+    readyResolve = resolve
+    readyReject = reject
+  })
+
+  const rejectPending = (error) => {
+    for (const request of pending.values()) request.reject(error)
+    pending.clear()
+  }
+
+  worker.on("message", (message) => {
+    if (message?.type === "ready") {
+      settled = true
+      readyResolve()
+      return
+    }
+    const request = pending.get(message?.id)
+    if (!request) return
+    pending.delete(message.id)
+    if (message.ok) request.resolve(message.data)
+    else request.reject(new Error(message.error || "Chrome browser gateway request failed."))
+  })
+  worker.on("error", (error) => {
+    if (!settled) {
+      settled = true
+      readyReject(error)
+    }
+    rejectPending(error)
+  })
+  worker.on("exit", (code) => {
+    const error = new Error(`Chrome browser gateway stopped with exit code ${code}.`)
+    if (!settled) {
+      settled = true
+      readyReject(error)
+    }
+    rejectPending(error)
+  })
+
+  return {
+    ready,
+    request(request) {
+      return new Promise((resolve, reject) => {
+        const id = nextID
+        nextID += 1
+        pending.set(id, { resolve, reject })
+        try {
+          worker.postMessage({ id, request })
+        } catch (error) {
+          pending.delete(id)
+          reject(error)
+        }
+      })
+    },
+  }
+}
+
+function clearSensitiveRuntimeEnvironment() {
+  delete process.env.ANYBOX_BROWSER_TRUSTED_TOKEN
+  delete process.env.ANYBOX_BROWSER_TRANSPORT_TOKEN
+}
+
+function prepareRuntime() {
+  runtimeReadyPromise ??= Promise.all([
+    nativeMessagingHostReady,
+    loadBrowserClient(),
+    browserGateway.ready,
+  ]).then(([, browserClient]) => {
+    return browserClient
+  }).finally(() => {
+    clearSensitiveRuntimeEnvironment()
+  })
+  return runtimeReadyPromise
+}
+
+function installBrowserRuntime(browserClient, options = {}) {
+  return browserClient.setupBrowserRuntime({
+    ...options,
+    transport: browserGateway.request,
+  })
+}
+
 function resetKernel() {
   writes = []
   images = []
@@ -218,9 +323,9 @@ async function runWithTimeout(promise, ms) {
 }
 
 async function runJavaScript(code, ms) {
-  const browserClient = await loadBrowserClient()
-  sandbox.setupBrowserRuntime = browserClient.setupBrowserRuntime
-  if (!sandbox.agent) await browserClient.setupBrowserRuntime({ globals: sandbox })
+  const browserClient = await prepareRuntime()
+  sandbox.setupBrowserRuntime = (options = {}) => installBrowserRuntime(browserClient, options)
+  if (!sandbox.agent) await installBrowserRuntime(browserClient, { globals: sandbox })
 
   writes = []
   images = []
@@ -285,19 +390,21 @@ resetKernel()
 const rl = readline.createInterface({ input: process.stdin })
 
 rl.on("line", (line) => {
+  let requestID = null
   void (async () => {
     if (!line.trim()) return
     const message = JSON.parse(line)
+    requestID = message.id ?? null
 
     if (message.method === "initialize") {
-      await nativeMessagingHostReady
+      await prepareRuntime()
       send({
         jsonrpc: "2.0",
         id: message.id,
         result: {
           protocolVersion: "2025-06-18",
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "anybox-chrome-node-repl", version: "0.2.0" },
+          serverInfo: { name: "anybox-chrome-node-repl", version: "0.2.1" },
         },
       })
       return
@@ -340,7 +447,7 @@ rl.on("line", (line) => {
   })().catch((error) => {
     send({
       jsonrpc: "2.0",
-      id: null,
+      id: requestID,
       error: {
         code: -32603,
         message: error instanceof Error ? error.message : String(error),

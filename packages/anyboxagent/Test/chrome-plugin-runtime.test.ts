@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { createServer, type RequestListener, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { join } from "node:path"
+import { Worker } from "node:worker_threads"
 
 const repoRoot = join(import.meta.dir, "..", "..", "..")
 const chromePluginProjectRoot = join(repoRoot, "packages", "chrome-plugin")
@@ -15,6 +16,12 @@ const chromePluginRoot = join(
 )
 const chromePluginScriptsRoot = join(chromePluginRoot, "scripts")
 const nodeReplServerPath = join(chromePluginScriptsRoot, "node-repl-server.js")
+const browserGatewayWorkerPath = join(
+  chromePluginProjectRoot,
+  "runtime",
+  "scripts",
+  "browser-gateway-worker.js",
+)
 const children: ChildProcessWithoutNullStreams[] = []
 const agentServers: Server[] = []
 
@@ -118,7 +125,7 @@ describe("Chrome plugin runtimes", () => {
     expect(pluginManifest.interface?.logo).toBe("./assets/chrome.svg")
     expect(pluginManifest.interface?.iconUrl).toBe("./assets/chrome.svg")
     expect(pluginManifest.interface?.brandColor).toBe("#4285F4")
-    expect(pluginManifest.version).toBe("0.4.0")
+    expect(pluginManifest.version).toBe("0.4.1")
     expect(pluginManifest.mcpServers?.map((server: { id: string }) => server.id)).toEqual(["node-repl"])
     expect(pluginManifest.skillPreviews).toHaveLength(1)
     expect(pluginManifest.skillPreviews[0]).toMatchObject({ name: "Chrome", directory: "chrome" })
@@ -135,6 +142,7 @@ describe("Chrome plugin runtimes", () => {
       )
     }
     expect(existsSync(join(chromePluginScriptsRoot, "browser-client.mjs"))).toBe(true)
+    expect(existsSync(join(chromePluginScriptsRoot, "browser-gateway-worker.js"))).toBe(true)
     expect(existsSync(join(chromePluginScriptsRoot, "browser-server.js"))).toBe(false)
     expect(existsSync(nodeReplServerPath)).toBe(true)
     expect(existsSync(join(chromePluginScriptsRoot, "extension-id.json"))).toBe(true)
@@ -170,6 +178,113 @@ describe("Chrome plugin runtimes", () => {
     expect(second.result?.structuredContent?.result).toBe(2)
   })
 
+  test("keeps browser credentials outside the model-visible Node environment", async () => {
+    const server = startMcpServer(nodeReplServerPath, {
+      ANYBOX_BROWSER_TRUSTED_TOKEN: "trusted-model-secret",
+      ANYBOX_BROWSER_TRANSPORT_TOKEN: "transport-model-secret",
+    })
+    await server.request("initialize")
+
+    const response = await server.request("tools/call", {
+      name: "js",
+      arguments: {
+        code: [
+          "const env = require('process').env",
+          "return {",
+          "  trusted: env.ANYBOX_BROWSER_TRUSTED_TOKEN,",
+          "  transport: env.ANYBOX_BROWSER_TRANSPORT_TOKEN,",
+          "}",
+        ].join("\n"),
+      },
+    }) as {
+      result?: {
+        structuredContent?: {
+          result?: {
+            trusted?: unknown
+            transport?: unknown
+          }
+        }
+      }
+    }
+
+    expect(response.result?.structuredContent?.result).toEqual({})
+  })
+
+  test("keeps trusted HTTP credentials outside model-visible fetch and diagnostics hooks", async () => {
+    let receivedToken: string | undefined
+    const agentPort = await startAgentServer((request, response) => {
+      request.resume()
+      receivedToken = typeof request.headers["x-anybox-browser-trusted-token"] === "string"
+        ? request.headers["x-anybox-browser-trusted-token"]
+        : undefined
+      response.setHeader("content-type", "application/json")
+      response.end(JSON.stringify({
+        success: true,
+        data: { connected: true },
+      }))
+    })
+    const server = startMcpServer(nodeReplServerPath, {
+      ANYBOX_AGENT_BASE_URL: `http://127.0.0.1:${agentPort}`,
+      ANYBOX_BROWSER_TRUSTED_TOKEN: "worker-isolated-token",
+    })
+    await server.request("initialize")
+
+    const response = await server.request("tools/call", {
+      name: "js",
+      arguments: {
+        code: [
+          "const realGlobal = require('node:vm').runInThisContext('globalThis')",
+          "const channel = require('node:diagnostics_channel').channel('undici:request:create')",
+          "const originalFetch = realGlobal.fetch",
+          "let interceptedFetch = false",
+          "let observedRequests = 0",
+          "const observe = () => { observedRequests += 1 }",
+          "channel.subscribe(observe)",
+          "realGlobal.fetch = async () => {",
+          "  interceptedFetch = true",
+          "  throw new Error('model fetch hook must not receive browser gateway traffic')",
+          "}",
+          "try {",
+          "  const status = await (await agent.browsers.get('extension')).status()",
+          "  return { connected: status.connected, interceptedFetch, observedRequests }",
+          "} finally {",
+          "  realGlobal.fetch = originalFetch",
+          "  channel.unsubscribe(observe)",
+          "}",
+        ].join("\n"),
+      },
+    }) as {
+      result?: {
+        structuredContent?: {
+          result?: {
+            connected?: boolean
+            interceptedFetch?: boolean
+            observedRequests?: number
+          }
+        }
+      }
+    }
+
+    expect(response.result?.structuredContent?.result).toEqual({
+      connected: true,
+      interceptedFetch: false,
+      observedRequests: 0,
+    })
+    expect(receivedToken).toBe("worker-isolated-token")
+  })
+
+  test("rejects a non-loopback browser gateway before initializing the model runtime", async () => {
+    const server = startMcpServer(nodeReplServerPath, {
+      ANYBOX_AGENT_BASE_URL: "http://browser-gateway.example:4096",
+      ANYBOX_BROWSER_TRUSTED_TOKEN: "remote-gateway-token",
+    })
+    const response = await server.request("initialize") as {
+      error?: { message?: string }
+    }
+
+    expect(response.error?.message).toContain("requires a loopback Anybox Agent host")
+  })
+
   test("preloads setupBrowserRuntime", async () => {
     const server = startMcpServer(nodeReplServerPath)
     await server.request("initialize")
@@ -195,8 +310,12 @@ describe("Chrome plugin runtimes", () => {
   })
 
   test("reads Chrome connection status through the Node REPL browser runtime", async () => {
+    let receivedToken: string | undefined
     const agentPort = await startAgentServer((request, response) => {
       request.resume()
+      receivedToken = typeof request.headers["x-anybox-browser-trusted-token"] === "string"
+        ? request.headers["x-anybox-browser-trusted-token"]
+        : undefined
       response.setHeader("content-type", "application/json")
       response.end(JSON.stringify({
         success: true,
@@ -210,6 +329,7 @@ describe("Chrome plugin runtimes", () => {
       ANYBOX_AGENT_BASE_URL: "",
       ANYBOX_SERVER_HOST: "127.0.0.1",
       ANYBOX_SERVER_PORT: String(agentPort),
+      ANYBOX_BROWSER_TRUSTED_TOKEN: "browser-runtime-status-token",
     })
     await server.request("initialize")
 
@@ -223,15 +343,14 @@ describe("Chrome plugin runtimes", () => {
     expect(
       (response.result?.structuredContent?.result as { connected?: boolean } | undefined)?.connected,
     ).toBe(true)
+    expect(receivedToken).toBe("browser-runtime-status-token")
   })
 
-  test("loads the plugin Chrome runtime and forwards its trusted token", async () => {
-    let receivedToken: string | undefined
+  test("keeps raw page evaluation disabled at the model command boundary", async () => {
+    let requestCount = 0
     const agentPort = await startAgentServer((request, response) => {
       request.resume()
-      receivedToken = typeof request.headers["x-anybox-browser-trusted-token"] === "string"
-        ? request.headers["x-anybox-browser-trusted-token"]
-        : undefined
+      requestCount += 1
       response.setHeader("content-type", "application/json")
       response.end(JSON.stringify({
         success: true,
@@ -259,8 +378,73 @@ describe("Chrome plugin runtimes", () => {
       },
     }) as { result?: { structuredContent?: { result?: unknown } } }
 
-    expect(response.result?.structuredContent?.result).toBe(2)
-    expect(receivedToken).toBe("browser-runtime-test-token")
+    expect(
+      (response.result?.structuredContent as { error?: string } | undefined)?.error,
+    ).toContain("disabled until Anybox can enforce command-level capability")
+    expect(requestCount).toBe(0)
+  })
+
+  test("rejects raw browser requests inside the isolated gateway worker", async () => {
+    let requestCount = 0
+    const agentPort = await startAgentServer((request, response) => {
+      request.resume()
+      requestCount += 1
+      response.setHeader("content-type", "application/json")
+      response.end(JSON.stringify({ success: true, data: {} }))
+    })
+    const worker = new Worker(browserGatewayWorkerPath, {
+      workerData: {
+        agentBaseURL: `http://127.0.0.1:${agentPort}`,
+        trustedToken: "worker-policy-token",
+      },
+    })
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onMessage = (message: unknown) => {
+          if ((message as { type?: string })?.type !== "ready") return
+          worker.off("error", reject)
+          resolve()
+        }
+        worker.on("message", onMessage)
+        worker.once("error", reject)
+      })
+      const request = (id: number, payload: unknown) => new Promise<{
+        id: number
+        ok: boolean
+        error?: string
+      }>((resolve) => {
+        const onMessage = (message: {
+          id?: number
+          ok?: boolean
+          error?: string
+        }) => {
+          if (message.id !== id) return
+          worker.off("message", onMessage)
+          resolve(message as { id: number; ok: boolean; error?: string })
+        }
+        worker.on("message", onMessage)
+        worker.postMessage({ id, request: payload })
+      })
+
+      const trusted = await request(1, {
+        type: "trusted-command",
+        method: "page.executeScript",
+        params: { script: "document.body.innerText" },
+      })
+      const disguised = await request(2, {
+        type: "command",
+        method: "page.executeScript",
+        params: { script: "document.body.innerText" },
+      })
+
+      expect(trusted.ok).toBe(false)
+      expect(trusted.error).toContain("request type is invalid")
+      expect(disguised.ok).toBe(false)
+      expect(disguised.error).toContain("command method is invalid")
+      expect(requestCount).toBe(0)
+    } finally {
+      await worker.terminate()
+    }
   })
 
   test("emits Chrome screenshots from the Node REPL as image content", async () => {
@@ -281,6 +465,7 @@ describe("Chrome plugin runtimes", () => {
       ANYBOX_AGENT_BASE_URL: "",
       ANYBOX_SERVER_HOST: "127.0.0.1",
       ANYBOX_SERVER_PORT: String(agentPort),
+      ANYBOX_BROWSER_TRUSTED_TOKEN: "browser-runtime-screenshot-token",
     })
     await server.request("initialize")
 

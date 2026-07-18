@@ -1,5 +1,9 @@
 import { z } from "zod"
 
+export const BROWSER_EXTENSION_PROTOCOL_VERSION = 1 as const
+export const ANYBOX_CHROME_EXTENSION_ID = "hjbejdmgpifdjjlpgmdfmbmbhkedgnjc"
+export const ANYBOX_CHROME_NATIVE_HOST_NAME = "com.anybox.browser"
+
 export const BrowserExtensionCommandMethod = z.enum([
   "tabs.list",
   "tabs.open",
@@ -30,11 +34,10 @@ export type BrowserExtensionCommandContext = z.infer<typeof BrowserExtensionComm
 
 export const BrowserExtensionHelloMessage = z.object({
   type: z.literal("hello"),
+  protocolVersion: z.literal(BROWSER_EXTENSION_PROTOCOL_VERSION),
   extensionInstanceID: z.string().min(1),
-  extensionID: z.string().min(1).optional(),
+  extensionID: z.string().min(1),
   version: z.string().min(1),
-  transport: z.enum(["native", "websocket"]).optional(),
-  hostName: z.string().min(1).optional(),
   lastTransportError: z.string().min(1).optional(),
 })
 export type BrowserExtensionHelloMessage = z.infer<typeof BrowserExtensionHelloMessage>
