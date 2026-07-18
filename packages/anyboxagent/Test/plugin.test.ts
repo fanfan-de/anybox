@@ -1068,14 +1068,14 @@ async function writeBrowserPluginPackage() {
   if (!activeRoot) throw new Error("Temp root has not been initialized.")
 
   const packageSourceRoot = pluginInstallRoot()
-  const packageRoot = join(packageSourceRoot, "browser", "0.2.0")
+  const packageRoot = join(packageSourceRoot, "browser", "0.2.1")
   const sourceRoot = join(import.meta.dir, "..", "..", "..", "plugins", "Anybox-Plugins", "browser")
   const files = [
-    "plugin.json",
+    join(".anybox-plugin", "plugin.json"),
     join("skills", "browser", "SKILL.md"),
-    join("scripts", "browser", "server.js"),
-    join("scripts", "browser-runtime", "client.mjs"),
-    join("scripts", "node-repl", "server.js"),
+    join("scripts", "browser-server.js"),
+    join("scripts", "browser-client.mjs"),
+    join("scripts", "node-repl-server.js"),
   ]
 
   for (const relativePath of files) {
@@ -3542,8 +3542,8 @@ describe("plugin marketplace API", () => {
     await Plugin.reconcileInstalledRuntimeBindings()
 
     const migrated = Plugin.getInstalled("browser")
-    expect(migrated?.version).toBe("0.2.0")
-    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "browser", "0.2.0"))
+    expect(migrated?.version).toBe("0.2.1")
+    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "browser", "0.2.1"))
     expect(migrated?.mcpServerIDs).toEqual([
       "plugin.browser.browser",
       "plugin.browser.node-repl",
@@ -3597,7 +3597,7 @@ describe("plugin marketplace API", () => {
     expect(await Config.getSelectedMcpServerIDs("legacy-browser-project")).toEqual([])
 
     const packageSourceRoot = await writeBrowserPluginPackage()
-    const packageRoot = join(packageSourceRoot, "browser", "0.2.0")
+    const packageRoot = join(packageSourceRoot, "browser", "0.2.1")
     const app = createServerApp()
 
     const catalogResponse = await app.request("/api/plugins/catalog")
@@ -3646,7 +3646,7 @@ describe("plugin marketplace API", () => {
     expect(server?.transport === "stdio" ? server.cwd : undefined).toBe(packageRoot)
     expect(
       (server?.transport === "stdio" ? server.args?.[0] : undefined)?.replaceAll("\\", "/"),
-    ).toBe(`${packageRoot.replaceAll("\\", "/")}/scripts/browser/server.js`)
+    ).toBe(`${packageRoot.replaceAll("\\", "/")}/scripts/browser-server.js`)
     expect(server?.owner).toEqual({
       kind: "plugin",
       pluginID: "browser",
@@ -3657,7 +3657,7 @@ describe("plugin marketplace API", () => {
     expect(nodeReplServer?.transport === "stdio" ? nodeReplServer.cwd : undefined).toBe(packageRoot)
     expect(
       (nodeReplServer?.transport === "stdio" ? nodeReplServer.args?.[0] : undefined)?.replaceAll("\\", "/"),
-    ).toBe(`${packageRoot.replaceAll("\\", "/")}/scripts/node-repl/server.js`)
+    ).toBe(`${packageRoot.replaceAll("\\", "/")}/scripts/node-repl-server.js`)
     expect(nodeReplServer?.owner).toEqual({
       kind: "plugin",
       pluginID: "browser",

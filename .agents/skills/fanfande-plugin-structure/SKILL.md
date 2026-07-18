@@ -1,6 +1,6 @@
 ---
 name: fanfande-plugin-structure
-description: Build, explain, review, or validate current Anybox/Fanfande-derived plugin packages. Use when the user asks how to structure a plugin folder, write root plugin.json, add plugin MCP servers, bundle plugin skills, define app connectors or connector requirements, create plugin registry manifests, migrate away from plugin.meta.json or zip artifacts, or check whether a plugin package matches the current plugin system.
+description: Build, explain, review, or validate current Anybox/Fanfande-derived plugin packages. Use when the user asks how to structure a plugin folder, write the canonical .anybox-plugin/plugin.json manifest, add plugin MCP servers, bundle plugin skills, define app connectors or connector requirements, create plugin registry manifests, migrate away from plugin.meta.json or zip artifacts, or check whether a plugin package matches the current plugin system.
 ---
 
 # Fanfande / Anybox Plugin Structure
@@ -14,7 +14,8 @@ Treat these files as the implementation source when schema details may have chan
 - `packages/anyboxagent/src/plugin/plugin.ts`
 - `packages/anyboxagent/Test/plugin.test.ts`
 - `plugins/Anybox-Plugins/index.json`
-- `plugins/Anybox-Plugins/hyperframes/plugin.json`
+- `plugins/Anybox-Plugins/computer-use-windows/.anybox-plugin/plugin.json`
+- `plugins/Anybox-Plugins/scripts/convert-openai-plugins.mjs`
 - `plugins/Anybox-Plugins/anybox-plugin-development/docs/anybox-third-party-plugin-development.md`
 
 Prefer the running code in `plugin.ts` over older docs when they disagree.
@@ -27,7 +28,8 @@ The current built-in plugin registry is an expanded source tree:
 plugins/Anybox-Plugins/
   index.json
   <plugin-id>/
-    plugin.json
+    .anybox-plugin/
+      plugin.json
     skills/
     connectors/
     scripts/
@@ -37,12 +39,13 @@ plugins/Anybox-Plugins/
 
 Important rules:
 
-- Put `plugin.json` at the plugin directory root.
+- Put the canonical manifest at `<plugin-id>/.anybox-plugin/plugin.json`.
+- Keep runtime code and content directories at the plugin root, as siblings of `.anybox-plugin`.
 - Do not use `plugin.meta.json`.
 - Do not commit zip artifacts to the built-in expanded registry.
-- `plugins/Anybox-Plugins/index.json` is a JSON array of direct HTTPS `plugin.json` URLs.
+- `plugins/Anybox-Plugins/index.json` is a JSON array of direct HTTPS `.anybox-plugin/plugin.json` URLs.
 - Directory registry URLs are not supported.
-- `.anybox-plugin/plugin.json` is accepted only as a legacy package manifest location.
+- Root `plugin.json` and `.codex-plugin/plugin.json` remain parser compatibility inputs, but are not the layout to generate for Anybox packages.
 - `.fanfande-plugin/plugin.json` is not the current Anybox runtime format.
 
 ## Package Layout
@@ -62,7 +65,8 @@ Preferred expanded package layout:
 ```text
 <plugin-source-root>/
   <plugin-id>/
-    plugin.json
+    .anybox-plugin/
+      plugin.json
     skills/
       <skill-name>/
         SKILL.md
@@ -79,24 +83,25 @@ Versioned package directories are still accepted, mostly for managed installs an
 <plugin-source-root>/
   <plugin-id>/
     <version>/
-      plugin.json
+      .anybox-plugin/
+        plugin.json
       skills/
         <skill-name>/
           SKILL.md
 ```
 
-The legacy Anybox layout is also accepted:
+Compatibility imports may also contain a root manifest or a Codex manifest:
 
 ```text
 <plugin-source-root>/
   <plugin-id>/
-    <version>/
-      .anybox-plugin/
-        plugin.json
-      skills/
+    plugin.json
+    # or
+    .codex-plugin/
+      plugin.json
 ```
 
-Keep `assets`, `docs`, `scripts`, `connectors`, and `skills` next to `plugin.json`, not inside `.anybox-plugin`.
+Keep `assets`, `docs`, `scripts`, `connectors`, and `skills` at the package root next to the `.anybox-plugin` directory, not inside it.
 
 Use lowercase stable plugin IDs. The runtime normalizes `plugin.json` `name` to lowercase to form `pluginID`; keep the folder name, manifest `name`, and registry URL path aligned.
 
@@ -172,7 +177,7 @@ Valid catalog categories are `Code`, `Browser`, `Git`, `Database`, `Docs`, `Auto
 Display assets can be `https://`, `data:image/`, or package-relative paths.
 
 - Local package-relative assets are exposed as displayable data URLs when the file exists and uses a supported image type.
-- Remote registry manifest relative assets are resolved against the manifest URL, for example `https://raw.githubusercontent.com/.../<plugin-id>/plugin.json` plus `./assets/icon.png`.
+- Remote registry manifest relative assets are resolved from the package root even when the manifest URL is `https://raw.githubusercontent.com/.../<plugin-id>/.anybox-plugin/plugin.json`.
 
 ## MCP Servers
 
@@ -415,13 +420,14 @@ Remote `index.json` must be a JSON array of direct HTTPS manifest URLs:
 
 ```json
 [
-  "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/hyperframes/plugin.json"
+  "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/hyperframes/.anybox-plugin/plugin.json"
 ]
 ```
 
 Rules for remote registry entries:
 
 - Every entry must point directly to `plugin.json`.
+- New Anybox registry entries should use the canonical `<plugin-id>/.anybox-plugin/plugin.json` URL.
 - Directory URLs are not supported.
 - `plugin.meta.json` is not supported.
 - GitHub `blob` URLs may be normalized to `raw.githubusercontent.com`, but raw URLs are preferred.
@@ -448,8 +454,8 @@ For the built-in expanded registry under `plugins/Anybox-Plugins`, do not keep z
 
 When building, migrating, or reviewing a plugin package:
 
-1. Confirm the package root contains root `plugin.json`.
-2. Treat `.anybox-plugin/plugin.json` as legacy compatibility only.
+1. Confirm the package contains `.anybox-plugin/plugin.json`.
+2. Treat root `plugin.json` and `.codex-plugin/plugin.json` as compatibility inputs, not the canonical Anybox output layout.
 3. Do not create `.fanfande-plugin/plugin.json` for current Anybox packages.
 4. Check `plugin.json` is valid JSON and uses only supported schema fields.
 5. Check every declared skill root stays inside the package and contains direct skill subdirectories with `SKILL.md`.
@@ -458,7 +464,7 @@ When building, migrating, or reviewing a plugin package:
 8. Check connector placeholders match `credential.key` or connector config fields.
 9. Check `connectorRequirements` reference platform connector IDs that exist in the app.
 10. Check risk is not `critical` unless blocked installation is intended.
-11. For `plugins/Anybox-Plugins/index.json`, verify every entry ends with `/plugin.json`.
+11. For `plugins/Anybox-Plugins/index.json`, verify new Anybox entries end with `/.anybox-plugin/plugin.json`.
 12. For the built-in expanded registry, verify there are no `*.zip`, no `plugin.meta.json`, and no root `package` fields unless explicitly intended.
 13. Run a catalog load against the candidate package:
 
@@ -481,7 +487,8 @@ bun test Test/plugin.test.ts
 ```text
 plugin-source-root/
   manifest-lab/
-    plugin.json
+    .anybox-plugin/
+      plugin.json
     skills/
       review/
         SKILL.md

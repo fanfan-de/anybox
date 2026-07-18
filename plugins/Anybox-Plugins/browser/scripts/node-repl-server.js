@@ -9,8 +9,7 @@ const Module = require("node:module")
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const MAX_TIMEOUT_MS = 120_000
-const runtimeRoot = __dirname
-const browserClientPath = path.resolve(runtimeRoot, "..", "browser-runtime", "client.mjs")
+const browserClientPath = path.resolve(__dirname, "browser-client.mjs")
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
 
 let browserClientPromise
@@ -125,7 +124,7 @@ async function loadBrowserClient() {
 function resetKernel() {
   writes = []
   images = []
-  const localRequire = createRequire(path.join(runtimeRoot, "server.js"))
+  const localRequire = createRequire(__filename)
   sandbox = {
     Buffer,
     URL,

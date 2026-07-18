@@ -493,7 +493,7 @@ npm run verify:agent-runtime
 2. 明确最小 scope 和初版工具列表。
 3. 在 `connector.ts` 添加平台定义。
 4. 如果需要本地 wrapper，新增 `plugins/builtin/<id>/0.1.0/connectors/<id>/server.js`。
-5. 如果需要插件依赖，新增或更新插件根目录 `plugin.json` 的 `connectorRequirements`。
+5. 如果需要插件依赖，新增或更新插件 `.anybox-plugin/plugin.json` 的 `connectorRequirements`。
 6. 如果需要 skill，新增 `skills/<id>/SKILL.md`。
 7. 只有平台 Connector 自身确实需要随 Agent 发布本地 wrapper 时，才更新 `prepare-agent-runtime.mjs` 和 `verify-agent-runtime.mjs`；插件自有 MCP runtime 必须留在插件包内。
 8. 如果新增 schema 字段，同步 main/preload/renderer/shared 类型。

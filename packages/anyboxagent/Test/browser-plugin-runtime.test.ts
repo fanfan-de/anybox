@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
+import { existsSync } from "node:fs"
 import { createServer, type RequestListener, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { join } from "node:path"
 
-const browserPluginScriptsRoot = join(
+const browserPluginRoot = join(
   import.meta.dir,
   "..",
   "..",
@@ -12,10 +13,10 @@ const browserPluginScriptsRoot = join(
   "plugins",
   "Anybox-Plugins",
   "browser",
-  "scripts",
 )
-const browserMcpServerPath = join(browserPluginScriptsRoot, "browser", "server.js")
-const nodeReplServerPath = join(browserPluginScriptsRoot, "node-repl", "server.js")
+const browserPluginScriptsRoot = join(browserPluginRoot, "scripts")
+const browserMcpServerPath = join(browserPluginScriptsRoot, "browser-server.js")
+const nodeReplServerPath = join(browserPluginScriptsRoot, "node-repl-server.js")
 const children: ChildProcessWithoutNullStreams[] = []
 const agentServers: Server[] = []
 
@@ -79,6 +80,14 @@ afterEach(async () => {
 })
 
 describe("Browser plugin runtimes", () => {
+  test("uses the canonical Anybox plugin package layout", () => {
+    expect(existsSync(join(browserPluginRoot, ".anybox-plugin", "plugin.json"))).toBe(true)
+    expect(existsSync(join(browserPluginRoot, "plugin.json"))).toBe(false)
+    expect(existsSync(join(browserPluginScriptsRoot, "browser-client.mjs"))).toBe(true)
+    expect(existsSync(browserMcpServerPath)).toBe(true)
+    expect(existsSync(nodeReplServerPath)).toBe(true)
+  })
+
   test("lists tools and preserves globalThis state", async () => {
     const server = startMcpServer(nodeReplServerPath)
     await server.request("initialize")

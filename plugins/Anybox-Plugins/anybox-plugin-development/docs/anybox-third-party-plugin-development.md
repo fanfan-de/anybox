@@ -37,15 +37,13 @@ Anybox 插件是一个能力包，不是新的执行引擎。
 
 ### Plugin Package
 
-插件包是一个目录，里面必须有：
+插件包是一个目录。新建 Anybox 插件必须使用 canonical manifest 位置：
 
 ```text
-<plugin-id>/plugin.json
-# Legacy Anybox package location:
 <plugin-id>/.anybox-plugin/plugin.json
-# Codex-compatible package location:
-<plugin-id>/.codex-plugin/plugin.json
 ```
+
+运行时仍可读取根目录 `plugin.json` 和 `.codex-plugin/plugin.json` 作为兼容输入，但 Anybox 内置仓库、转换脚本和新插件都不应生成这两种结构。
 
 推荐 Codex-like 展开结构：
 
@@ -61,7 +59,7 @@ my-anybox-plugins/
     assets/
 ```
 
-`my-anybox-plugins` 是插件来源根目录。Anybox 会扫描它下面的每个 `<plugin-id>`。如果需要在同一个插件目录里保留多个版本，也可以使用 `<plugin-id>/<version>/.anybox-plugin/plugin.json`，Anybox 会选择最高版本；根目录 `plugin.json` 不再作为 manifest 入口。
+`my-anybox-plugins` 是插件来源根目录。Anybox 会扫描它下面的每个 `<plugin-id>`。如果需要在同一个插件目录里保留多个版本，也可以使用 `<plugin-id>/<version>/.anybox-plugin/plugin.json`，Anybox 会选择最高版本。根目录 `plugin.json` 只用于向后兼容，不是新包的输出规范。
 
 ### Manifest
 
@@ -78,7 +76,7 @@ Repository and registry `plugin.json` files may also include `skillPreviews` so 
 }
 ```
 
-Manifest entry points can be root `plugin.json`, legacy `.anybox-plugin/plugin.json`, or Codex-compatible `.codex-plugin/plugin.json`. If the manifest is inside `.anybox-plugin` or `.codex-plugin`, package-relative paths still resolve from the plugin package root, not from the hidden manifest directory.
+The canonical Anybox manifest entry point is `.anybox-plugin/plugin.json`. Root `plugin.json` and `.codex-plugin/plugin.json` are compatibility inputs only. Package-relative paths resolve from the plugin package root, not from the hidden manifest directory.
 
 ### External component JSON files
 
@@ -781,7 +779,7 @@ anybox-plugin-examples/
 $env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\Projects\anybox-plugin-examples"
 ```
 
-For the built-in registry, `index.json` is a JSON array of HTTPS manifest URLs such as `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/<plugin-id>/plugin.json`. Legacy `.anybox-plugin/plugin.json` and Codex-compatible `.codex-plugin/plugin.json` URLs are also accepted. Directory URLs are not supported.
+For the built-in registry, `index.json` is a JSON array of canonical HTTPS manifest URLs such as `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/<plugin-id>/.anybox-plugin/plugin.json`. Root `plugin.json` and Codex-compatible `.codex-plugin/plugin.json` URLs are accepted only for compatibility. Directory URLs are not supported.
 Zip artifacts are optional remote install artifacts. Do not commit them to the built-in expanded plugin registry unless the matching `package` metadata points to a real downloadable file.
 
 ## 常见问题

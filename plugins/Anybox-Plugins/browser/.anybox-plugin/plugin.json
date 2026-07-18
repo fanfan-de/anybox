@@ -1,6 +1,6 @@
 {
   "name": "browser",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Control Chrome through the Anybox browser extension with plugin-bundled MCP and Browser runtime.",
   "author": {
     "name": "Anybox"
@@ -150,7 +150,7 @@
         "transport": "stdio",
         "command": "node",
         "args": [
-          "${PLUGIN_ROOT}/scripts/browser/server.js"
+          "${PLUGIN_ROOT}/scripts/browser-server.js"
         ],
         "cwd": "${PLUGIN_ROOT}",
         "timeoutMs": 30000,
@@ -244,7 +244,7 @@
         "transport": "stdio",
         "command": "node",
         "args": [
-          "${PLUGIN_ROOT}/scripts/node-repl/server.js"
+          "${PLUGIN_ROOT}/scripts/node-repl-server.js"
         ],
         "cwd": "${PLUGIN_ROOT}",
         "timeoutMs": 120000,
