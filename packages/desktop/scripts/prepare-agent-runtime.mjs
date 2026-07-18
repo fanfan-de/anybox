@@ -11,7 +11,7 @@ const desktopDir = path.resolve(scriptDir, "..")
 const repoRoot = path.resolve(desktopDir, "..", "..")
 const agentDir = path.join(repoRoot, "packages", "anyboxagent")
 const cinemaWebDistDir = path.join(repoRoot, "packages", "cinema-web", "dist")
-const browserNativeHostDir = path.join(repoRoot, "packages", "browser-native-host")
+const browserNativeHostDir = path.join(repoRoot, "packages", "chrome-plugin", "browser-native-host")
 const runtimeDir = path.join(desktopDir, "build", "agent-runtime")
 const cinemaProviderCatalogSource = path.join(agentDir, "src", "cinema", "provider-manifests.json")
 const cinemaProviderManifestsSourceDir = path.join(agentDir, "src", "cinema", "provider-manifests")
@@ -20,8 +20,8 @@ const feishuConnectorSourceDir = path.join(agentDir, "plugins", "builtin", "feis
 
 const bunExecutableName = process.platform === "win32" ? "bun.exe" : "bun"
 const nativeHostExecutableName = process.platform === "win32"
-  ? "anybox-browser-native-host.exe"
-  : "anybox-browser-native-host"
+  ? "anybox-chrome-native-host.exe"
+  : "anybox-chrome-native-host"
 const connectorBuildConfigFile = path.join(runtimeDir, "config", "connectors.json")
 
 function readEnv(key) {
@@ -189,7 +189,7 @@ async function copyCinemaProviderManifests() {
 async function buildBrowserNativeHost(bunBinary, { reuseActiveNativeHost = false } = {}) {
   const entrypoint = path.join(browserNativeHostDir, "src", "main.ts")
   if (!(await pathExists(entrypoint))) {
-    throw new Error(`Missing Browser Native Messaging Host entrypoint at ${entrypoint}`)
+    throw new Error(`Missing Chrome Native Messaging Host entrypoint at ${entrypoint}`)
   }
 
   const targetDir = path.join(runtimeDir, "native-host")

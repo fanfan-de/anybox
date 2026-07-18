@@ -1,6 +1,6 @@
 ---
 name: frontend-testing-debugging
-description: "Use when testing, debugging, or making targeted improvements to rendered frontend apps through the Build Web Apps or web dev plugin: local dev servers, UI regressions, interaction bugs, console errors, responsive layout, and visual QA. Check whether the Browser plugin is available and use it first when it is; otherwise use regular Playwright with the recorded reason."
+description: "Use when testing, debugging, or making targeted improvements to rendered frontend apps through the Build Web Apps or web dev plugin: local dev servers, UI regressions, interaction bugs, console errors, responsive layout, and visual QA. Check whether the Chrome plugin is available and use it first when it is; otherwise use regular Playwright with the recorded reason."
 ---
 
 # Frontend Testing Debugging
@@ -32,8 +32,8 @@ For any code change to a rendered frontend surface, do the validation loop by de
 
 First classify Browser availability:
 
-- **Available**: the Browser plugin and its `browser` skill are listed in the session. Read and follow that skill before any browser action.
-- **Absent**: the Browser plugin or `browser` skill is not listed. Use regular Playwright and record `Browser plugin not available`.
+- **Available**: the Chrome plugin and its `chrome` skill are listed in the session. Read and follow that skill before any browser action.
+- **Absent**: the Chrome plugin or `chrome` skill is not listed. Use regular Playwright and record `Chrome plugin not available`.
 - **Invocation failed**: Browser appears available, but the skill/runtime, Node REPL JavaScript setup, tab acquisition, or navigation fails. Treat this as a Browser-path blocker.
 
 Do not use regular Playwright, external Chrome, or shell `open` first when Browser is available.
@@ -50,13 +50,13 @@ If the user asked for general smoke testing, use:
 
 `The flow under test is: app loads -> first meaningful screen renders -> primary visible controls respond without runtime errors.`
 
-## Browser Plugin Loop
+## Chrome Plugin Loop
 
 Run Browser commands through the Node REPL JavaScript tool described by the Browser skill. Do not invent a separate browser setup path. Keep using the same tab binding unless the Browser skill says otherwise.
 
 Required sequence:
 
-1. Load the Browser runtime exactly as the Browser skill instructs.
+1. Load the Chrome runtime exactly as the Chrome skill instructs.
 2. Name the session with `agent.browser.nameSession("...")`.
 3. Acquire a tab with `agent.browser.tabs.selected()` or `agent.browser.tabs.new()`.
 4. Navigate with `tab.goto(url)`.
@@ -121,7 +121,7 @@ Use this shape:
 
 If issues were found, lead with **Findings** before the summary. Each finding should include what the user sees, reproduction steps, screenshot/DOM/console evidence, likely owner or file when known, and the fix made or remaining blocker.
 
-When using Browser screenshots that should be shown to the user, emit or display the screenshot through the Browser runtime so it can be referenced in chat. When using Playwright screenshots, save them outside the repo and reference them in chat. Include multiple screenshots when they help verify distinct states or flows.
+When using Chrome screenshots that should be shown to the user, emit or display the screenshot through the Chrome runtime so it can be referenced in chat. When using Playwright screenshots, save them outside the repo and reference them in chat. Include multiple screenshots when they help verify distinct states or flows.
 
 Do not interleave screenshots throughout the written report. Put a short **Screenshots** section at the very end, and make it a consecutive image gallery with one image per line. Add short labels only when they clarify the state, for example `Before`, `After`, `Filtered results`, `Empty state`, or `Mobile`.
 
@@ -139,4 +139,4 @@ Do not write reports, screenshots, traces, or temporary scripts into the repo un
 
 Use the QA final response report format above. Keep it concise, but include enough concrete evidence that a PR reviewer can trust the validation without rerunning it immediately.
 
-If Browser was absent and Playwright was used, end by suggesting that the user install the Browser plugin for a better frontend development experience with in-app navigation, screenshots, DOM snapshots, console logs, and interaction validation.
+If Chrome was absent and Playwright was used, end by suggesting that the user install the Chrome plugin for a better frontend development experience with in-app navigation, screenshots, DOM snapshots, console logs, and interaction validation.

@@ -1,0 +1,85 @@
+name: Chrome plugin directory
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/chrome-plugin.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "packages/anyboxagent/Test/chrome-plugin-runtime.test.ts"
+      - "packages/anyboxagent/Test/plugin.test.ts"
+      - "packages/chrome-plugin/**"
+      - "packages/desktop/package.json"
+      - "packages/desktop/scripts/prepare-agent-runtime.mjs"
+      - "packages/shared/**"
+      - "plugins/Anybox-Plugins/index.json"
+      - "plugins/Anybox-Plugins/chrome/**"
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/chrome-plugin.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "packages/anyboxagent/Test/chrome-plugin-runtime.test.ts"
+      - "packages/anyboxagent/Test/plugin.test.ts"
+      - "packages/chrome-plugin/**"
+      - "packages/desktop/package.json"
+      - "packages/desktop/scripts/prepare-agent-runtime.mjs"
+      - "packages/shared/**"
+      - "plugins/Anybox-Plugins/index.json"
+      - "plugins/Anybox-Plugins/chrome/**"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the exact source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.6
+
+      - name: Enable the pinned pnpm version
+        shell: pwsh
+        run: corepack enable
+
+      - name: Install workspace dependencies
+        shell: pwsh
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Verify Chrome source projects
+        shell: pwsh
+        run: |
+          corepack pnpm --filter anybox-chrome-extension typecheck
+          corepack pnpm --filter anybox-chrome-native-host typecheck
+          corepack pnpm --filter anybox-chrome-native-host test
+
+      - name: Test the directory synchronizer
+        shell: pwsh
+        run: corepack pnpm chrome-plugin:package:test
+
+      - name: Verify the tracked plugin directory
+        shell: pwsh
+        run: corepack pnpm chrome-plugin:package:check
+
+      - name: Verify Anybox loads and runs the plugin
+        shell: pwsh
+        working-directory: packages/anyboxagent
+        run: |
+          bun test Test/chrome-plugin-runtime.test.ts
+          bun test Test/plugin.test.ts

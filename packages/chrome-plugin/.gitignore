@@ -1,0 +1,8 @@
+node_modules/
+browser-extension/node_modules/
+browser-extension/dist/
+browser-extension/.vite-temp/
+browser-native-host/node_modules/
+browser-native-host/dist/
+artifacts/
+*.log

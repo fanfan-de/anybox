@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import "./sqlite.cleanup.ts"
 import { createHash } from "node:crypto"
 import { existsSync } from "node:fs"
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import * as Auth from "#auth/auth.ts"
@@ -992,8 +992,10 @@ async function writeLocalSourcePluginPackage() {
   const packageRoot = join(packageSourceRoot, "local-source-lab")
   const manifestRoot = join(packageRoot, ".anybox-plugin")
   const skillRoot = join(packageRoot, "skills", "local-review")
+  const ignoredDependencyRoot = join(packageRoot, "node_modules", "ignored-dependency")
   await mkdir(manifestRoot, { recursive: true })
   await mkdir(skillRoot, { recursive: true })
+  await mkdir(ignoredDependencyRoot, { recursive: true })
 
   await writeFile(join(skillRoot, "SKILL.md"), [
     "---",
@@ -1021,6 +1023,7 @@ async function writeLocalSourcePluginPackage() {
     },
     skills: "skills",
   }, null, 2))
+  await writeFile(join(ignoredDependencyRoot, "index.js"), "export default 'development-only'\n")
 
   return packageRoot
 }
@@ -1064,40 +1067,36 @@ async function writeRelativeAssetPluginPackage() {
   return packageRoot
 }
 
-async function writeBrowserPluginPackage() {
+async function writeChromePluginPackage() {
   if (!activeRoot) throw new Error("Temp root has not been initialized.")
 
   const packageSourceRoot = pluginInstallRoot()
-  const packageRoot = join(packageSourceRoot, "browser", "0.2.1")
-  const sourceRoot = join(import.meta.dir, "..", "..", "..", "plugins", "Anybox-Plugins", "browser")
-  const files = [
-    join(".anybox-plugin", "plugin.json"),
-    join("skills", "browser", "SKILL.md"),
-    join("scripts", "browser-server.js"),
-    join("scripts", "browser-client.mjs"),
-    join("scripts", "node-repl-server.js"),
-  ]
-
-  for (const relativePath of files) {
-    const destination = join(packageRoot, relativePath)
-    await mkdir(dirname(destination), { recursive: true })
-    await writeFile(destination, await readFile(join(sourceRoot, relativePath)))
-  }
+  const packageRoot = join(packageSourceRoot, "chrome", "0.2.2")
+  const chromePluginRoot = join(
+    import.meta.dir,
+    "..",
+    "..",
+    "..",
+    "plugins",
+    "Anybox-Plugins",
+    "chrome",
+  )
+  await cp(chromePluginRoot, packageRoot, { recursive: true })
 
   return packageSourceRoot
 }
 
-async function writeLegacyBrowserPluginPackage() {
+async function writeLegacyChromePluginPackage() {
   if (!activeRoot) throw new Error("Temp root has not been initialized.")
 
   const packageSourceRoot = pluginInstallRoot()
-  const packageRoot = join(packageSourceRoot, "browser", "0.1.0")
+  const packageRoot = join(packageSourceRoot, "chrome", "0.1.0")
   const manifestRoot = join(packageRoot, ".anybox-plugin")
   await mkdir(manifestRoot, { recursive: true })
   await writeFile(join(manifestRoot, "plugin.json"), JSON.stringify({
-    name: "browser",
+    name: "chrome",
     version: "0.1.0",
-    description: "Legacy Browser plugin backed by platform connectors.",
+    description: "Legacy Chrome plugin backed by platform connectors.",
     connectorRequirements: [
       {
         connector: "browser",
@@ -1533,6 +1532,8 @@ describe("plugin marketplace API", () => {
     expect(existsSync(installedPackageRoot)).toBe(true)
     expect(existsSync(join(installedPackageRoot, "plugin.json"))).toBe(false)
     expect(existsSync(join(installedPackageRoot, ".anybox-plugin", "plugin.json"))).toBe(true)
+    expect(existsSync(join(localPackageRoot, "node_modules", "ignored-dependency", "index.js"))).toBe(true)
+    expect(existsSync(join(installedPackageRoot, "node_modules"))).toBe(false)
 
     const deleteResponse = await app.request("/api/plugins/installed/local-source-lab", {
       method: "DELETE",
@@ -3526,11 +3527,11 @@ describe("plugin marketplace API", () => {
     ).not.toContain("connector.docs.default")
   })
 
-  test("migrates a legacy Browser package to the newer local plugin-owned runtime", async () => {
+  test("migrates a legacy Chrome package to the newer local plugin-owned runtime", async () => {
     await useTempDatabase()
-    const legacyPackageRoot = await writeLegacyBrowserPluginPackage()
+    const legacyPackageRoot = await writeLegacyChromePluginPackage()
 
-    const legacyInstalled = await Plugin.install("browser", { enabled: true })
+    const legacyInstalled = await Plugin.install("chrome", { enabled: true })
     expect(legacyInstalled.version).toBe("0.1.0")
     expect(legacyInstalled.packageRoot).toBe(legacyPackageRoot)
     expect(legacyInstalled.mcpServerIDs).toEqual([])
@@ -3541,33 +3542,33 @@ describe("plugin marketplace API", () => {
 
     await Plugin.reconcileInstalledRuntimeBindings()
 
-    const migrated = Plugin.getInstalled("browser")
-    expect(migrated?.version).toBe("0.2.1")
-    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "browser", "0.2.1"))
+    const migrated = Plugin.getInstalled("chrome")
+    expect(migrated?.version).toBe("0.2.2")
+    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "chrome", "0.2.2"))
     expect(migrated?.mcpServerIDs).toEqual([
-      "plugin.browser.browser",
-      "plugin.browser.node-repl",
+      "plugin.chrome.chrome",
+      "plugin.chrome.node-repl",
     ])
     expect(migrated?.connectorRequirementIDs).toEqual([])
-    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.browser.browser")).toMatchObject({
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.chrome")).toMatchObject({
       transport: "stdio",
       owner: {
         kind: "plugin",
-        pluginID: "browser",
-        bindingID: "mcp:browser",
+        pluginID: "chrome",
+        bindingID: "mcp:chrome",
       },
     })
-    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.browser.node-repl")).toMatchObject({
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.node-repl")).toMatchObject({
       transport: "stdio",
       owner: {
         kind: "plugin",
-        pluginID: "browser",
+        pluginID: "chrome",
         bindingID: "mcp:node-repl",
       },
     })
   })
 
-  test("loads Browser MCP and Node REPL from the Browser plugin package", async () => {
+  test("loads Chrome MCP and Node REPL from the Chrome plugin package", async () => {
     await useTempDatabase()
     const legacyBrowserServerID = "connector.browser.default"
     const legacyNodeReplServerID = "connector.node-repl.default"
@@ -3596,20 +3597,20 @@ describe("plugin marketplace API", () => {
     expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, legacyNodeReplServerID)).toBeUndefined()
     expect(await Config.getSelectedMcpServerIDs("legacy-browser-project")).toEqual([])
 
-    const packageSourceRoot = await writeBrowserPluginPackage()
-    const packageRoot = join(packageSourceRoot, "browser", "0.2.1")
+    const packageSourceRoot = await writeChromePluginPackage()
+    const packageRoot = join(packageSourceRoot, "chrome", "0.2.2")
     const app = createServerApp()
 
     const catalogResponse = await app.request("/api/plugins/catalog")
     const catalogBody = (await catalogResponse.json()) as PluginCatalogEnvelope
-    const plugin = catalogBody.data?.find((item) => item.id === "browser")
+    const plugin = catalogBody.data?.find((item) => item.id === "chrome")
 
     expect(catalogResponse.status).toBe(200)
     expect(plugin?.connectors).toEqual([])
     expect(plugin?.apps).toEqual([])
     expect(plugin?.connectorRequirements).toEqual([])
-    expect(plugin?.mcpServers.map((server) => server.id)).toEqual(["browser", "node-repl"])
-    expect(plugin?.mcpServers.find((server) => server.id === "browser")?.tools).toHaveLength(16)
+    expect(plugin?.mcpServers.map((server) => server.id)).toEqual(["chrome", "node-repl"])
+    expect(plugin?.mcpServers.find((server) => server.id === "chrome")?.tools).toHaveLength(16)
     expect(plugin?.mcpServers.find((server) => server.id === "node-repl")?.tools).toHaveLength(3)
 
     const connectorCatalogResponse = await app.request("/api/connectors/catalog")
@@ -3621,7 +3622,7 @@ describe("plugin marketplace API", () => {
     expect(definitions.some((item) => item.id === "browser")).toBe(false)
     expect(definitions.some((item) => item.id === "node-repl")).toBe(false)
 
-    const installResponse = await app.request("/api/plugins/installed/browser", {
+    const installResponse = await app.request("/api/plugins/installed/chrome", {
       method: "PUT",
       headers: {
         "content-type": "application/json",
@@ -3634,13 +3635,13 @@ describe("plugin marketplace API", () => {
 
     expect(installResponse.status).toBe(200)
     expect(installBody.data?.mcpServerIDs).toEqual([
-      "plugin.browser.browser",
-      "plugin.browser.node-repl",
+      "plugin.chrome.chrome",
+      "plugin.chrome.node-repl",
     ])
     expect(installBody.data?.connectorIDs).toEqual([])
     expect(installBody.data?.connectorRequirementIDs).toEqual([])
 
-    const server = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.browser.browser")
+    const server = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.chrome")
     expect(server?.transport).toBe("stdio")
     expect(server?.transport === "stdio" ? server.command : undefined).toBe("node")
     expect(server?.transport === "stdio" ? server.cwd : undefined).toBe(packageRoot)
@@ -3649,10 +3650,10 @@ describe("plugin marketplace API", () => {
     ).toBe(`${packageRoot.replaceAll("\\", "/")}/scripts/browser-server.js`)
     expect(server?.owner).toEqual({
       kind: "plugin",
-      pluginID: "browser",
-      bindingID: "mcp:browser",
+      pluginID: "chrome",
+      bindingID: "mcp:chrome",
     })
-    const nodeReplServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.browser.node-repl")
+    const nodeReplServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.node-repl")
     expect(nodeReplServer?.transport).toBe("stdio")
     expect(nodeReplServer?.transport === "stdio" ? nodeReplServer.cwd : undefined).toBe(packageRoot)
     expect(
@@ -3660,29 +3661,29 @@ describe("plugin marketplace API", () => {
     ).toBe(`${packageRoot.replaceAll("\\", "/")}/scripts/node-repl-server.js`)
     expect(nodeReplServer?.owner).toEqual({
       kind: "plugin",
-      pluginID: "browser",
+      pluginID: "chrome",
       bindingID: "mcp:node-repl",
     })
 
-    await Config.setSelectedPluginIDs("browser-project", ["browser"])
+    await Config.setSelectedPluginIDs("chrome-project", ["chrome"])
     expect(
-      (await Config.resolveProjectMcpServers("browser-project")).map((entry) => entry.id),
-    ).toEqual(expect.arrayContaining(["plugin.browser.browser", "plugin.browser.node-repl"]))
+      (await Config.resolveProjectMcpServers("chrome-project")).map((entry) => entry.id),
+    ).toEqual(expect.arrayContaining(["plugin.chrome.chrome", "plugin.chrome.node-repl"]))
 
-    const diagnosticResponse = await app.request("/api/mcp/servers/plugin.browser.browser/diagnostic")
+    const diagnosticResponse = await app.request("/api/mcp/servers/plugin.chrome.chrome/diagnostic")
     const diagnosticBody = (await diagnosticResponse.json()) as DiagnosticEnvelope
     expect(diagnosticResponse.status).toBe(200)
     expect(diagnosticBody.data?.ok).toBe(true)
     expect(diagnosticBody.data?.toolCount).toBe(16)
 
-    const nodeReplDiagnosticResponse = await app.request("/api/mcp/servers/plugin.browser.node-repl/diagnostic")
+    const nodeReplDiagnosticResponse = await app.request("/api/mcp/servers/plugin.chrome.node-repl/diagnostic")
     const nodeReplDiagnosticBody = (await nodeReplDiagnosticResponse.json()) as DiagnosticEnvelope
     expect(nodeReplDiagnosticResponse.status).toBe(200)
     expect(nodeReplDiagnosticBody.data?.ok).toBe(true)
     expect(nodeReplDiagnosticBody.data?.toolCount).toBe(3)
 
     const disableChildResponse = await app.request(
-      "/api/plugins/installed/browser/mcp/plugin.browser.browser",
+      "/api/plugins/installed/chrome/mcp/plugin.chrome.chrome",
       {
         method: "PATCH",
         headers: {
@@ -3701,16 +3702,16 @@ describe("plugin marketplace API", () => {
     expect(disableChildResponse.status).toBe(200)
     await Plugin.reconcileInstalledRuntimeBindings()
 
-    const resyncedBrowserServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.browser.browser")
-    expect(resyncedBrowserServer?.enabled).toBe(false)
-    expect(resyncedBrowserServer?.toolPolicies?.browser_status?.policy).toBe("disabled")
+    const resyncedChromeServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.chrome")
+    expect(resyncedChromeServer?.enabled).toBe(false)
+    expect(resyncedChromeServer?.toolPolicies?.browser_status?.policy).toBe("disabled")
 
-    const deleteResponse = await app.request("/api/plugins/installed/browser", {
+    const deleteResponse = await app.request("/api/plugins/installed/chrome", {
       method: "DELETE",
     })
     expect(deleteResponse.status).toBe(200)
-    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.browser.browser")).toBeUndefined()
-    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.browser.node-repl")).toBeUndefined()
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.chrome")).toBeUndefined()
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.node-repl")).toBeUndefined()
   })
 
   test("loads plugin package manifests and exposes MCP, skills, and app connector metadata", async () => {

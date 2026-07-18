@@ -87,13 +87,13 @@ describe("useProjectComposer model selection", () => {
       configurable: true,
       value: {
         getProjectPlugins: vi.fn(async () => [{
-          pluginID: "browser",
+          pluginID: "chrome",
           version: "1.0.0",
           enabled: true,
-          mcpServerID: "legacy.browser",
-          mcpServerIDs: ["legacy.browser"],
+          mcpServerID: "legacy.chrome",
+          mcpServerIDs: ["legacy.chrome"],
           mcpServerEnabled: {
-            "legacy.browser": true,
+            "legacy.chrome": true,
           },
           skillIDs: [],
           connectorIDs: [],
@@ -106,20 +106,20 @@ describe("useProjectComposer model selection", () => {
         getPluginCatalog: vi.fn(async () => []),
         getGlobalMcpServers: vi.fn(async () => [
           {
-            id: "managed.browser",
-            name: "Managed browser",
+            id: "managed.chrome",
+            name: "Managed Chrome",
             enabled: true,
             transport: "stdio",
             command: "node",
             owner: {
               kind: "plugin",
-              pluginID: "browser",
-              bindingID: "mcp:browser",
+              pluginID: "chrome",
+              bindingID: "mcp:chrome",
             },
           },
           {
-            id: "legacy.browser",
-            name: "Legacy browser",
+            id: "legacy.chrome",
+            name: "Legacy Chrome",
             enabled: true,
             transport: "stdio",
             command: "node",
@@ -143,7 +143,7 @@ describe("useProjectComposer model selection", () => {
           },
         ]),
         getProjectMcpSelection: vi.fn(async () => ({
-          serverIDs: ["managed.browser", "legacy.browser", "plugin.user-looking"],
+          serverIDs: ["managed.chrome", "legacy.chrome", "plugin.user-looking"],
         })),
       } as unknown as typeof window.desktop,
     })

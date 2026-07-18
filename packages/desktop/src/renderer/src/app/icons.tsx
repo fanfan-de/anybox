@@ -70,6 +70,7 @@ import {
   SlidersHorizontal,
   Smartphone,
   SortAsc,
+  Sparkles,
   Square,
   SquareChartGantt,
   Star,
@@ -156,7 +157,11 @@ export const NewItemIcon = createIcon(FilePlus2)
 export const PlusIcon = createIcon(Plus)
 export const ForkIcon = createIcon(GitFork)
 export const SettingsIcon = createIcon(Settings)
+export const SkillIcon = createIcon(Sparkles)
 export const PluginIcon = createIcon(Puzzle)
+export function McpIcon() {
+  return <span className="codicon codicon-mcp" aria-hidden="true" />
+}
 export const ConnectionsIcon = createIcon(Plug)
 export const SegmentedControlIcon = createIcon(SlidersHorizontal)
 export const WorkspaceIcon = createIcon(SquareChartGantt)

@@ -14,8 +14,8 @@ const EXTENSION_ID_ENV = "ANYBOX_BROWSER_EXTENSION_ID"
 const AGENT_RUNTIME_ENV = "ANYBOX_AGENT_RUNTIME_DIR"
 const AGENT_BASE_URL_ENV = "ANYBOX_AGENT_BASE_URL"
 const nativeHostExecutableName = process.platform === "win32"
-  ? "anybox-browser-native-host.exe"
-  : "anybox-browser-native-host"
+  ? "anybox-chrome-native-host.exe"
+  : "anybox-chrome-native-host"
 
 export function browserNativeMessagingRegistryKey(hostName = BROWSER_NATIVE_HOST_NAME) {
   return `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${hostName}`
@@ -30,7 +30,7 @@ export function browserNativeMessagingManifest(input: {
   const extensionID = input.extensionID || DEFAULT_BROWSER_EXTENSION_ID
   return {
     name: hostName,
-    description: "Anybox Browser Native Messaging Host",
+    description: "Anybox Chrome Native Messaging Host",
     path: input.hostPath,
     type: "stdio",
     allowed_origins: [`chrome-extension://${extensionID}/`],

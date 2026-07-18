@@ -516,7 +516,7 @@ describe("ConnectorsPage", () => {
       ...createConnector(),
       id: "browser",
       name: "Browser",
-      description: "Control Chrome through the Anybox browser extension.",
+      description: "Control Chrome through the Anybox Chrome extension.",
       category: "builtin_mcp",
       credential: undefined,
     }

@@ -422,7 +422,7 @@ DELETE /api/plugins/installed/:pluginID/connectors/:appID/auth/session
 
 项目选择插件后，`Config.resolveProjectMcpServers()` 会把该插件要求的平台 connector server 也纳入项目可用 MCP server 集合。
 
-Browser 插件是相反的边界示例：Browser MCP、Node REPL 和 Browser Runtime 都位于插件目录并由 `mcpServers` 声明；Anybox Agent 只保留 Chrome 扩展桥接与通用 MCP/插件宿主。安装后生成 `plugin.browser.browser` 和 `plugin.browser.node-repl`，不再生成 `connector.browser.default` 或 `connector.node-repl.default`。
+Chrome 插件是相反的边界示例：Chrome MCP、Node REPL 和 Chrome Runtime 都位于插件目录并由 `mcpServers` 声明；Anybox Agent 只保留 Chrome 扩展桥接与通用 MCP/插件宿主。安装后生成 `plugin.chrome.chrome` 和 `plugin.chrome.node-repl`，不再生成 `connector.browser.default` 或 `connector.node-repl.default`。
 
 ## 10. Skill 集成
 
@@ -460,7 +460,7 @@ Skill 浏览器遵循以下边界：
 安装插件只是写入全局安装记录和全局 MCP server 配置。项目级启用另走项目配置：
 
 ```text
-selected_plugins = ["calendar", "browser"]
+selected_plugins = ["calendar", "chrome"]
 ```
 
 相关 API：

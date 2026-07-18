@@ -44,6 +44,13 @@ const PLUGIN_REGISTRY_FILES_ENV = "ANYBOX_PLUGIN_REGISTRY_FILES"
 const PLUGIN_REGISTRY_INDEX_URL_ENV = "ANYBOX_PLUGIN_REGISTRY_INDEX_URL"
 const PLUGIN_REGISTRY_CACHE_DIR_ENV = "ANYBOX_PLUGIN_REGISTRY_CACHE_DIR"
 const PLUGIN_IMPORTED_REGISTRY_FILE_ENV = "ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE"
+const LOCAL_PLUGIN_COPY_IGNORED_DIRECTORIES = new Set([
+  ".cache",
+  ".git",
+  ".turbo",
+  ".vite-temp",
+  "node_modules",
+])
 const DEFAULT_PLUGIN_REGISTRY_INDEX_URL = "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/index.json"
 const MAX_PLUGIN_PACKAGE_BYTES = 100 * 1024 * 1024
 const MAX_PLUGIN_DISPLAY_ASSET_BYTES = 2 * 1024 * 1024
@@ -3490,7 +3497,16 @@ async function copyPluginPackageToInstalled(source: PluginManifestSource) {
 
   await rm(finalRoot, { recursive: true, force: true })
   await mkdir(dirname(finalRoot), { recursive: true })
-  await cp(sourceRoot, finalRoot, { recursive: true })
+  await cp(sourceRoot, finalRoot, {
+    recursive: true,
+    filter: (sourcePath) => {
+      const relativePath = relative(sourceRoot, sourcePath)
+      if (!relativePath) return true
+      return relativePath
+        .split(/[\\/]/u)
+        .every((segment) => !LOCAL_PLUGIN_COPY_IGNORED_DIRECTORIES.has(segment))
+    },
+  })
 
   const installedManifest = safeReadPluginManifest(finalRoot)
   if (!installedManifest) {

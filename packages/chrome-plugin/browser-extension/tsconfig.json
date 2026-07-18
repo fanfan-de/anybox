@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "paths": {
+      "@anybox/shared": ["../../shared/src/index.ts"],
+      "@anybox/shared/*": ["../../shared/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "popup.html", "vite.config.ts"]
+}

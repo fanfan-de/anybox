@@ -248,10 +248,10 @@ describe("SessionCanvasTopMenu project plugins", () => {
       icon: "BWA",
     },
     {
-      value: "browser",
-      label: "Browser",
-      description: "Browser automation - 1 MCP",
-      iconUrl: "https://example.test/browser.png",
+      value: "chrome",
+      label: "Chrome",
+      description: "Chrome automation - 1 MCP",
+      iconUrl: "https://example.test/chrome.png",
     },
   ]
 
@@ -272,12 +272,12 @@ describe("SessionCanvasTopMenu project plugins", () => {
     expect(selectedOption).toHaveAttribute("title", "Frontend workflows - 1 MCP, 3 skills")
     expect(selectedOption.querySelector(".canvas-top-menu-plugin-mark-glyph")).toHaveTextContent("BWA")
 
-    const browserOption = within(menu).getByRole("menuitemcheckbox", { name: /Browser/ })
-    expect(browserOption.querySelector(".canvas-top-menu-plugin-mark img")).toHaveAttribute("src", "https://example.test/browser.png")
+    const chromeOption = within(menu).getByRole("menuitemcheckbox", { name: /Chrome/ })
+    expect(chromeOption.querySelector(".canvas-top-menu-plugin-mark img")).toHaveAttribute("src", "https://example.test/chrome.png")
 
-    fireEvent.click(browserOption)
+    fireEvent.click(chromeOption)
 
-    expect(onPluginToggle).toHaveBeenCalledWith("browser")
+    expect(onPluginToggle).toHaveBeenCalledWith("chrome")
   })
 })
 

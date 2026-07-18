@@ -7,10 +7,12 @@ import {
   ConnectedStatusIcon,
   DeleteIcon,
   FolderOpenIcon,
+  McpIcon,
   OpenExternalIcon,
   PluginIcon,
   PlusIcon,
   SettingsIcon,
+  SkillIcon,
 } from "../icons"
 import { ShellTopMenu, joinClassNames } from "../shared-ui"
 import { McpToolsPolicyPanel } from "../mcp/McpToolsPolicyPanel"
@@ -1630,7 +1632,7 @@ export function PluginsPage({
                                 }
                               }}
                             >
-                              <span className="plugins-included-icon"><SettingsIcon /></span>
+                              <span className="plugins-included-icon"><SkillIcon /></span>
                               <span className="plugins-included-copy">
                                 <strong>{skill.name}</strong>
                                 <span>{skill.description}</span>
@@ -1726,7 +1728,7 @@ export function PluginsPage({
                               aria-label={`Show details for ${server.name}`}
                               onClick={() => toggleIncludedItem(itemID)}
                             >
-                              <span className="plugins-included-icon"><PluginIcon /></span>
+                              <span className="plugins-included-icon"><McpIcon /></span>
                               <span className="plugins-included-copy">
                                 <strong>{server.name}</strong>
                                 <span>{runtimeTitle(server.runtime)}</span>

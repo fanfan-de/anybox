@@ -1,0 +1,4 @@
+interface:
+  display_name: "Anybox 插件规范"
+  short_description: "用于构建、迁移、评审和验证当前 Anybox 插件包与清单规范"
+  default_prompt: "使用 $anybox-plugin 按照当前 Anybox 运行时格式创建、迁移或验证插件包。"

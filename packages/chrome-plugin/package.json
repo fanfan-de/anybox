@@ -1,0 +1,11 @@
+{
+  "name": "anybox-chrome-plugin-project",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ./tools/package-chrome-plugin.mjs",
+    "check": "node ./tools/package-chrome-plugin.mjs --check",
+    "test": "node --test ./tools/package-chrome-plugin.test.mjs"
+  }
+}

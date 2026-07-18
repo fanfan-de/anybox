@@ -249,7 +249,7 @@ describe("McpServersPage tool policies", () => {
             {
               id: "browser",
               name: "Browser",
-              description: "Control Chrome through the Anybox browser extension.",
+              description: "Control Chrome through the Anybox Chrome extension.",
               category: "builtin_mcp",
               publisher: "Anybox",
               risk: "high",

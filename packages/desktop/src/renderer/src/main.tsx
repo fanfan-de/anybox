@@ -1,3 +1,4 @@
+import "@vscode/codicons/dist/codicon.css"
 import "@xterm/xterm/css/xterm.css"
 import "../../../../dockview-react/dist/styles/dockview.css"
 import React from "react"

@@ -716,7 +716,10 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   useEffect(() => {
     if (!isPluginsPageOpen) return
 
-    void loadPlugins()
+    void Promise.all([
+      loadPlugins(),
+      loadMcpServers({ silent: true }),
+    ])
   }, [isPluginsPageOpen])
 
   useEffect(() => {
@@ -3424,7 +3427,10 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
         config: pluginDraft.pluginID === pluginID ? pluginDraft.config : buildPluginDraft(plugin).config,
         enabled: true,
       })
-      await loadPlugins({ silent: true })
+      await Promise.all([
+        loadPlugins({ silent: true }),
+        loadMcpServers({ silent: true }),
+      ])
       await notifyPluginCapabilitiesUpdated()
       setActivePluginSelection(pluginID)
       setPluginDraft(buildPluginDraft(plugin, installed))
@@ -3489,7 +3495,10 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
         pluginID,
         ...update,
       })
-      await loadPlugins({ silent: true })
+      await Promise.all([
+        loadPlugins({ silent: true }),
+        loadMcpServers({ silent: true }),
+      ])
       await notifyPluginCapabilitiesUpdated()
       setActivePluginSelection(pluginID)
       setPluginDraft(buildPluginDraft(plugin, installed))
@@ -3530,7 +3539,10 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       await window.desktop.deleteInstalledPlugin({
         pluginID,
       })
-      await loadPlugins({ silent: true })
+      await Promise.all([
+        loadPlugins({ silent: true }),
+        loadMcpServers({ silent: true }),
+      ])
       await notifyPluginCapabilitiesUpdated()
       setPluginDiagnostics((current) => {
         const next = { ...current }

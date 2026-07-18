@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { ToastProvider } from "./toast"
-import type { InstalledPlugin, PluginCatalogItem } from "./types"
+import type { InstalledPlugin, McpServerSummary, PluginCatalogItem } from "./types"
 import { useSettingsPage } from "./use-settings-page"
 
 function createPlugin(id: string, name: string): PluginCatalogItem {
@@ -52,6 +52,22 @@ function createInstalledPlugin(pluginID: string): InstalledPlugin {
   }
 }
 
+function createPluginMcpServer(pluginID: string, name: string): McpServerSummary {
+  return {
+    id: `plugin.${pluginID}`,
+    name,
+    owner: {
+      kind: "plugin",
+      pluginID,
+      bindingID: "mcp:default",
+    },
+    transport: "stdio",
+    command: "node",
+    args: ["server.js"],
+    enabled: true,
+  }
+}
+
 function wrapper({ children }: { children: ReactNode }) {
   return <ToastProvider>{children}</ToastProvider>
 }
@@ -74,6 +90,7 @@ describe("useSettingsPage plugin state", () => {
     window.desktop = {
       getPluginCatalog: vi.fn().mockResolvedValue(catalog),
       getInstalledPlugins: vi.fn().mockImplementation(async () => installedPlugins),
+      getGlobalMcpServers: vi.fn().mockResolvedValue([]),
       deleteInstalledPlugin,
     } as unknown as Window["desktop"]
 
@@ -186,5 +203,111 @@ describe("useSettingsPage plugin state", () => {
         },
       },
     })
+  })
+
+  it("loads the MCP inventory when the plugins page opens", async () => {
+    const plugin = createPlugin("filesystem", "Filesystem")
+    const installed = {
+      ...createInstalledPlugin("filesystem"),
+      mcpServerIDs: ["plugin.filesystem"],
+      mcpServerEnabled: {
+        "plugin.filesystem": true,
+      },
+    }
+    const server = createPluginMcpServer("filesystem", "Filesystem")
+    const getGlobalMcpServers = vi.fn().mockResolvedValue([server])
+
+    window.desktop = {
+      getPluginCatalog: vi.fn().mockResolvedValue([plugin]),
+      getInstalledPlugins: vi.fn().mockResolvedValue([installed]),
+      getGlobalMcpServers,
+    } as unknown as Window["desktop"]
+
+    const { result } = renderHook(
+      () => useSettingsPage({ isPluginsPageOpen: true }),
+      { wrapper },
+    )
+
+    await waitFor(() => expect(result.current.mcpServers).toEqual([server]))
+    expect(getGlobalMcpServers).toHaveBeenCalledTimes(1)
+  })
+
+  it("refreshes plugin data and MCP inventory after install, update, and uninstall", async () => {
+    const plugin = createPlugin("filesystem", "Filesystem")
+    const installed = {
+      ...createInstalledPlugin("filesystem"),
+      mcpServerIDs: ["plugin.filesystem"],
+      mcpServerEnabled: {
+        "plugin.filesystem": true,
+      },
+    }
+    const server = createPluginMcpServer("filesystem", "Filesystem")
+    let installedPlugins: InstalledPlugin[] = []
+    let mcpServers: McpServerSummary[] = []
+    const getGlobalMcpServers = vi.fn().mockImplementation(async () => mcpServers)
+    const installPlugin = vi.fn().mockImplementation(async () => {
+      installedPlugins = [installed]
+      mcpServers = [server]
+      return installed
+    })
+    const updateInstalledPlugin = vi.fn().mockImplementation(async (input: { enabled?: boolean }) => {
+      const updated = {
+        ...installed,
+        enabled: input.enabled ?? installed.enabled,
+      }
+      installedPlugins = [updated]
+      mcpServers = [{
+        ...server,
+        enabled: updated.enabled,
+      }]
+      return updated
+    })
+    const deleteInstalledPlugin = vi.fn().mockImplementation(async () => {
+      installedPlugins = []
+      mcpServers = []
+    })
+
+    window.desktop = {
+      getPluginCatalog: vi.fn().mockResolvedValue([plugin]),
+      getInstalledPlugins: vi.fn().mockImplementation(async () => installedPlugins),
+      getGlobalMcpServers,
+      installPlugin,
+      updateInstalledPlugin,
+      deleteInstalledPlugin,
+    } as unknown as Window["desktop"]
+
+    const { result } = renderHook(
+      () => useSettingsPage({ isPluginsPageOpen: true }),
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(result.current.pluginCatalog).toEqual([plugin])
+      expect(getGlobalMcpServers).toHaveBeenCalled()
+    })
+    getGlobalMcpServers.mockClear()
+
+    await act(async () => {
+      await expect(result.current.installPlugin("filesystem")).resolves.toBe(true)
+    })
+    expect(getGlobalMcpServers).toHaveBeenCalledTimes(1)
+    expect(result.current.installedPlugins).toEqual([installed])
+    expect(result.current.mcpServers).toEqual([server])
+
+    getGlobalMcpServers.mockClear()
+    await act(async () => {
+      await expect(result.current.setInstalledPluginEnabled("filesystem", false)).resolves.toBe(true)
+    })
+    expect(getGlobalMcpServers).toHaveBeenCalledTimes(1)
+    expect(result.current.installedPlugins[0]?.enabled).toBe(false)
+    expect(result.current.mcpServers[0]?.enabled).toBe(false)
+
+    getGlobalMcpServers.mockClear()
+    await act(async () => {
+      await expect(result.current.deleteInstalledPlugin("filesystem")).resolves.toBe(true)
+    })
+    expect(getGlobalMcpServers).toHaveBeenCalledTimes(1)
+    expect(result.current.installedPlugins).toEqual([])
+    expect(result.current.mcpServers).toEqual([])
   })
 })

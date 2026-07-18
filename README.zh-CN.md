@@ -150,9 +150,10 @@ pnpm site:build
 |   |-- monitor/             Monitor Web UI
 |   |-- site/                官网和文档站点
 |   |-- mobile-app/          配套移动端应用
-|   |-- browser-extension/   浏览器集成扩展
-|   `-- browser-native-host/ 浏览器集成本机宿主
+|   `-- chrome-plugin/       完整 Chrome 集成源码工程
 |-- plugins/                 内置和本地插件包
+|   `-- Anybox-Plugins/
+|       `-- chrome/          Anybox 整目录下载的 Chrome 最终插件
 |-- scripts/                 仓库维护脚本
 |-- package.json             workspace 入口脚本
 `-- pnpm-workspace.yaml      workspace 包配置

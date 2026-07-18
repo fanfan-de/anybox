@@ -17,8 +17,8 @@ const runtimeDir = path.join(desktopDir, "build", "agent-runtime")
 const dependenciesDir = path.join(runtimeDir, "dependencies")
 const bunExecutableName = process.platform === "win32" ? "bun.exe" : "bun"
 const nativeHostExecutableName = process.platform === "win32"
-  ? "anybox-browser-native-host.exe"
-  : "anybox-browser-native-host"
+  ? "anybox-chrome-native-host.exe"
+  : "anybox-chrome-native-host"
 const pythonExecutable = process.platform === "win32"
   ? path.join(dependenciesDir, "python", "python.exe")
   : path.join(dependenciesDir, "python", "bin", "python3")
@@ -130,7 +130,7 @@ const pluginOwnedRuntimeFiles = [
 ]
 const bundledPluginRuntimeFiles = pluginOwnedRuntimeFiles.filter((filePath) => fs.existsSync(filePath))
 if (bundledPluginRuntimeFiles.length > 0) {
-  console.error("[desktop][build] Browser plugin runtimes must not be bundled into the Anybox Agent runtime:")
+  console.error("[desktop][build] Chrome plugin runtimes must not be bundled into the Anybox Agent runtime:")
   for (const filePath of bundledPluginRuntimeFiles) {
     console.error(`- ${filePath}`)
   }

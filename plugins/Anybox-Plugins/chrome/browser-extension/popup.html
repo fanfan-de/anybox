@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Anybox Chrome</title>
+    <script type="module" crossorigin src="/popup.js"></script>
+    <link rel="modulepreload" crossorigin href="/chunks/status-D5415wll.js">
+    <link rel="stylesheet" crossorigin href="/assets/popup-v8wrkja9.css">
+  </head>
+  <body>
+    <main class="popup-shell">
+      <header class="popup-header">
+        <span class="popup-logo" aria-hidden="true"></span>
+        <div>
+          <h1>Anybox Chrome</h1>
+          <p>Extension bridge</p>
+        </div>
+      </header>
+      <section class="status-card">
+        <div class="status-row">
+          <span id="status-dot" class="status-dot" aria-hidden="true"></span>
+          <strong id="status-label">Checking</strong>
+        </div>
+        <p id="status-detail">Connecting to Anybox Agent...</p>
+      </section>
+      <button id="reconnect-button" type="button">Reconnect</button>
+    </main>
+  </body>
+</html>

@@ -27,13 +27,13 @@ function toWindowsSeparators(value: string) {
 describe("browser native messaging registration helpers", () => {
   it("builds a Chrome native messaging manifest", () => {
     const manifest = browserNativeMessagingManifest({
-      hostPath: "C:\\Anybox\\anybox-browser-native-host.exe",
+      hostPath: "C:\\Anybox\\anybox-chrome-native-host.exe",
     })
 
     expect(manifest).toEqual({
       name: BROWSER_NATIVE_HOST_NAME,
-      description: "Anybox Browser Native Messaging Host",
-      path: "C:\\Anybox\\anybox-browser-native-host.exe",
+      description: "Anybox Chrome Native Messaging Host",
+      path: "C:\\Anybox\\anybox-chrome-native-host.exe",
       type: "stdio",
       allowed_origins: [`chrome-extension://${DEFAULT_BROWSER_EXTENSION_ID}/`],
     })

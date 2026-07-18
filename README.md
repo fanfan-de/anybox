@@ -150,9 +150,10 @@ pnpm site:build
 |   |-- monitor/             Monitor web UI
 |   |-- site/                Public website and docs
 |   |-- mobile-app/          Companion mobile app
-|   |-- browser-extension/   Browser integration package
-|   `-- browser-native-host/ Native host for browser integration
+|   `-- chrome-plugin/       Complete Chrome integration source project
 |-- plugins/                 Bundled and local plugin packages
+|   `-- Anybox-Plugins/
+|       `-- chrome/          Generated Chrome plugin directory downloaded by Anybox
 |-- scripts/                 Repository maintenance scripts
 |-- package.json             Workspace entrypoint scripts
 `-- pnpm-workspace.yaml      Workspace package configuration

@@ -167,11 +167,13 @@ importers:
         specifier: ^4.0.8
         version: 4.1.4(@opentelemetry/api@1.9.0)(@types/node@24.12.2)(jsdom@27.4.0)(vite@7.3.1(@types/node@24.12.2)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.101.0)(terser@5.48.0)(yaml@2.8.3))
 
-  packages/browser-extension:
+  packages/chrome-plugin: {}
+
+  packages/chrome-plugin/browser-extension:
     dependencies:
       '@anybox/shared':
         specifier: workspace:*
-        version: link:../shared
+        version: link:../../shared
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -183,7 +185,7 @@ importers:
         specifier: ^7.3.1
         version: 7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.101.0)(terser@5.48.0)(yaml@2.8.3)
 
-  packages/browser-native-host:
+  packages/chrome-plugin/browser-native-host:
     devDependencies:
       '@types/bun':
         specifier: 1.3.11
@@ -288,6 +290,9 @@ importers:
       '@tanstack/react-virtual':
         specifier: ^3.14.5
         version: 3.14.5(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@vscode/codicons':
+        specifier: 0.0.45
+        version: 0.0.45
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -3200,6 +3205,9 @@ packages:
 
   '@vitest/utils@4.1.4':
     resolution: {integrity: sha512-13QMT+eysM5uVGa1rG4kegGYNp6cnQcsTc67ELFbhNLQO+vgsygtYJx2khvdt4gVQqSSpC/KT5FZZxUpP3Oatw==}
+
+  '@vscode/codicons@0.0.45':
+    resolution: {integrity: sha512-1KAZ7XCMagp5Gdrlr4bbbcAqgcIL623iO1wW6rfcSVGAVUQvR0WP7bQx1SbJ11gmV3fdQTSEFIJQ/5C+HuVasw==}
 
   '@webgpu/types@0.1.69':
     resolution: {integrity: sha512-RPmm6kgRbI8e98zSD3RVACvnuktIja5+yLgDAkTmxLr90BEwdTXRQWNLF3ETTTyH/8mKhznZuN5AveXYFEsMGQ==}
@@ -11587,6 +11595,8 @@ snapshots:
       '@vitest/pretty-format': 4.1.4
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
+
+  '@vscode/codicons@0.0.45': {}
 
   '@webgpu/types@0.1.69':
     optional: true

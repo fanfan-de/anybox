@@ -25,7 +25,7 @@ The two priorities of this skill outrank everything else:
 7. Before coding, build a small design system from the accepted image: tokens, typography, component families, variants, spacing, icon treatment, and container rules. Include both content typography and UI chrome typography for tools, editors, and dashboards. Implement from that system so repeated elements stay consistent.
 8. For new complex app UIs such as dashboards, admin tools, editors, data-heavy tools, and multi-panel product surfaces, default to React + Vite unless the user specifies another framework, the existing repo already dictates one, or the task is explicitly a single-file/static deliverable.
 9. Hero eyebrow, kicker, pretitle, badge, or pill labels above the main heading are prohibited by default. Use one only when the user explicitly requested it or the accepted/reference design already contains it.
-10. Verify in the Browser plugin / built-in browser first. Use Playwright Chromium only when Browser/IAB is unavailable or unreliable, and state the fallback reason.
+10. Verify in the Chrome plugin / built-in browser first. Use Playwright Chromium only when Chrome/IAB is unavailable or unreliable, and state the fallback reason.
 11. Final handoff is blocked until you use `view_image` on both the accepted concept and the latest browser screenshot. This cannot be skipped or replaced with browser inspection alone. Judge the pair directly: is this agency-signoff faithfully implemented, and would a great, highly skilled design agency sign off on this exact implementation of the accepted design? If not, keep fixing.
 12. Remove temporary QA artifacts before handoff unless the user or task explicitly asks to keep them.
 

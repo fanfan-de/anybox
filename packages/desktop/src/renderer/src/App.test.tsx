@@ -10370,11 +10370,11 @@ describe("App", () => {
     const browserDefinition = {
       id: "browser",
       name: "Browser",
-      description: "Control Chrome through the Anybox browser extension.",
+      description: "Control Chrome through the Anybox Chrome extension.",
       category: "builtin_mcp",
       publisher: "Anybox",
       risk: "high",
-      permissions: ["Controls Chrome through the browser extension."],
+      permissions: ["Controls Chrome through the Chrome extension."],
       tools: [],
       runtime: {
         transport: "stdio",

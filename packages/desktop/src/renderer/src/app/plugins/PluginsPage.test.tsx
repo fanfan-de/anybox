@@ -946,6 +946,35 @@ describe("PluginsPage", () => {
     expect(screen.getByText("https://docs.example.test/mcp")).toBeInTheDocument()
   })
 
+  it("uses the Codicons MCP glyph for included MCP servers", () => {
+    render(
+      <PluginsPage
+        {...createProps({
+          activePluginID: "filesystem",
+        })}
+      />,
+    )
+
+    const mcpRow = screen.getByRole("button", { name: "Show details for Filesystem" })
+    expect(mcpRow.querySelector(".plugins-included-icon .codicon-mcp")).not.toBeNull()
+    expect(mcpRow.querySelector(".plugins-included-icon .lucide-puzzle")).toBeNull()
+  })
+
+  it("uses the Sparkles glyph for included Skills", () => {
+    render(
+      <PluginsPage
+        {...createProps({
+          activePluginID: "docs",
+          pluginCatalog: [createDocsPlugin()],
+        })}
+      />,
+    )
+
+    const skillRow = screen.getByRole("button", { name: "Show details for Review Docs" })
+    expect(skillRow.querySelector(".plugins-included-icon .lucide-sparkles")).not.toBeNull()
+    expect(skillRow.querySelector(".plugins-included-icon .lucide-settings")).toBeNull()
+  })
+
   it("browses an installed plugin Skill folder from the Skill row context menu", async () => {
     const plugin = createDocsPlugin()
     const listInstalledPluginSkillEntries = vi.fn(async (input: {
