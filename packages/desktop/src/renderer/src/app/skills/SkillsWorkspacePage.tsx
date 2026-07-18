@@ -172,7 +172,7 @@ export function SkillsWorkspacePage({
 
   useEffect(() => {
     if (mode === "downloaded") setSelectedSkillSource("downloaded")
-    if (mode === "local" || mode === "plugin") setSelectedSkillSource("local")
+    if (mode === "local") setSelectedSkillSource("local")
   }, [mode])
 
   useEffect(() => {
@@ -385,7 +385,6 @@ export function SkillsWorkspacePage({
     { id: "all", label: t("skillLibrary.provider.all") },
     { id: "local", label: t("skillLibrary.mode.local") },
     { id: "downloaded", label: t("skillLibrary.mode.downloaded") },
-    { id: "plugin", label: t("shell.plugins") },
   ]
 
   function handleModeTabKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, currentMode: SkillLibraryMode) {
@@ -418,7 +417,11 @@ export function SkillsWorkspacePage({
             onChange={(event) => setSearchTerm(event.target.value)}
           />
           {searchTerm ? (
-            <button type="button" aria-label="Clear skills search" onClick={() => setSearchTerm("")}>
+            <button
+              type="button"
+              aria-label={t("skillLibrary.searchClearAria")}
+              onClick={() => setSearchTerm("")}
+            >
               <CloseIcon />
             </button>
           ) : null}
@@ -449,7 +452,7 @@ export function SkillsWorkspacePage({
           </nav>
           <select
             className="skills-workspace-status-filter"
-            aria-label="Filter by status"
+            aria-label={t("skillLibrary.statusFilterAria")}
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value as SkillLibraryStatusFilter)}
           >
@@ -526,7 +529,7 @@ export function SkillsWorkspacePage({
               onSearchTermChange={setSearchTerm}
             />
           ) : (
-            <div className="skills-workspace-fallback-list" aria-label="Downloaded skills">
+            <div className="skills-workspace-fallback-list" aria-label={t("skillLibrary.downloadedAria")}>
               {visibleDownloadedSkills.map((skill) => (
                   <button
                     key={skill.id}

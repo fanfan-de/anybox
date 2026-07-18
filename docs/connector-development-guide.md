@@ -1,6 +1,6 @@
 # Anybox Connector 开发指南
 
-本文档说明如何在当前 `anybox` 项目里新增、维护和发布 Connector。这里的 Connector 指 Anybox 平台级或插件级的外部系统连接能力，例如 Gmail、飞书、Slack、GitHub、数据库、浏览器、本地文件等。
+本文档说明如何在当前 `anybox` 项目里新增、维护和发布 Connector。这里的 Connector 指需要管理外部服务连接、凭据或账号授权状态的能力，例如 Gmail、飞书、Slack、GitHub 和数据库。Browser、Node REPL、本地文件等不管理外部账号连接的能力应优先由插件通过 `mcpServers` 自带，不归入 Connector 管理入口，也不应作为 Anybox 内置 MCP。
 
 ## 设计原则
 
@@ -9,6 +9,8 @@ Connector 是 Anybox 的平台能力，不应该默认属于某个单独插件�
 核心原则：
 
 - 普通用户只做授权或填写必要的自建应用凭证，不理解 OAuth 细节。
+- Connector 是连接控制面的所有者；鉴权、凭据、账号和授权状态由 Connector 管理。
+- MCP Runtime 是 Connector 向 Agent 暴露能力的执行面；一个 Connector 可以拥有 0、1 或多个 MCP Runtime。
 - 插件不保存第三方平台密钥，不把 OAuth client secret 写进插件 manifest。
 - 全局 MCP 配置只保存 `connectorId`，不保存 token、API key、App Secret。
 - Connector runtime 在真正启动 MCP server 时才解析凭证，并只在内存中注入。
@@ -18,6 +20,22 @@ Connector 是 Anybox 的平台能力，不应该默认属于某个单独插件�
 
 - Gmail：Anybox 官方构建注入 Google OAuth client metadata，用户一键授权。
 - Feishu：用户自建飞书应用，用户本地填写 App ID/App Secret，再授权自己的飞书账号。
+
+规范关系模型：
+
+```text
+ConnectorDefinition
+├─ category: account_connector
+├─ credential / configFields
+└─ mcpRuntimes: 0..N
+
+ConnectorStatus
+└─ mcpBindings: 0..N
+   ├─ runtimeID
+   └─ serverID
+```
+
+`runtime` 和 `generatedMcpServerID` 是迁移期兼容字段。新代码必须分别消费 `mcpRuntimes` 和 `mcpBindings`。
 
 ## 代码地图
 
@@ -194,36 +212,44 @@ packages/anyboxagent/plugins/builtin/<id>/0.1.0/
 - `id`
 - `name`
 - `description`
+- `category`
 - `publisher`
 - `risk`
 - `permissions`
 - `tools`
 - `credential`
-- `runtime`
+- `mcpRuntimes`
 - `installReview`
 - `available`
 
 本地 stdio runtime 示例：
 
 ```ts
-runtime: {
-  transport: "stdio",
-  command: "node",
-  args: [serverPath],
-  cwd: connectorRoot,
-  env: {
-    SERVICE_ACCESS_TOKEN: "${OAUTH_ACCESS_TOKEN}",
-    SERVICE_TOKEN_TYPE: "${OAUTH_TOKEN_TYPE}"
-  },
-  timeoutMs: 10000
-}
+category: "account_connector",
+mcpRuntimes: [
+  {
+    id: "default",
+    name: "Service tools",
+    transport: "stdio",
+    command: "node",
+    args: [serverPath],
+    cwd: connectorRoot,
+    env: {
+      SERVICE_ACCESS_TOKEN: "${OAUTH_ACCESS_TOKEN}",
+      SERVICE_TOKEN_TYPE: "${OAUTH_TOKEN_TYPE}"
+    },
+    timeoutMs: 10000
+  }
+]
 ```
 
 注意：
 
-- `available` 应该检查 runtime 文件是否存在。
+- Runtime ID 必须在同一 Connector 内唯一。`default` Runtime 会继续生成原有的 `connector.<definition>.default` Server ID；其他 Runtime 在末尾追加 Runtime ID。
+- `available` 表示连接控制面是否可用；每个 Runtime 的可用性由自己的 runtime metadata 表达。
 - 官方托管 OAuth 可以额外检查 build config 是否存在。
 - 自建应用 OAuth 不应因为用户还没填 App ID/App Secret 就 `available: false`；应该 `available: true`，但 `configured: false`。
+- 只有鉴权、暂时不暴露 Agent 工具的 Connector 使用空的 `mcpRuntimes`，不要创建假的 MCP Runtime。
 
 ### 4. 如果需要用户配置，使用 `configFields`
 
@@ -346,6 +372,8 @@ packages/desktop/build/agent-runtime/connectors/<id>/server.js
 
 - connector 列表
 - OAuth/API key 状态
+- Authentication / MCP 分区
+- 0、1 或多个 MCP Runtime 的绑定与选择
 - `configFields` 表单
 - 保存配置
 - 清除配置
@@ -465,9 +493,9 @@ npm run verify:agent-runtime
 2. 明确最小 scope 和初版工具列表。
 3. 在 `connector.ts` 添加平台定义。
 4. 如果需要本地 wrapper，新增 `plugins/builtin/<id>/0.1.0/connectors/<id>/server.js`。
-5. 如果需要插件依赖，新增或更新 `.anybox-plugin/plugin.json` 的 `connectorRequirements`。
+5. 如果需要插件依赖，新增或更新插件根目录 `plugin.json` 的 `connectorRequirements`。
 6. 如果需要 skill，新增 `skills/<id>/SKILL.md`。
-7. 更新 `prepare-agent-runtime.mjs` 和 `verify-agent-runtime.mjs`。
+7. 只有平台 Connector 自身确实需要随 Agent 发布本地 wrapper 时，才更新 `prepare-agent-runtime.mjs` 和 `verify-agent-runtime.mjs`；插件自有 MCP runtime 必须留在插件包内。
 8. 如果新增 schema 字段，同步 main/preload/renderer/shared 类型。
 9. 更新或补充 `ConnectorsPage` 测试。
 10. 更新 `Test/plugin.test.ts` 覆盖 auth/config/runtime。

@@ -40,6 +40,7 @@ function createInstalledPlugin(pluginID: string): InstalledPlugin {
     version: "1.0.0",
     enabled: true,
     mcpServerIDs: [],
+    mcpServerEnabled: {},
     skillIDs: [],
     connectorIDs: [],
     connectorRequirementIDs: [],
@@ -101,6 +102,89 @@ describe("useSettingsPage plugin state", () => {
         ROOT_PATH: "",
       },
       appApiKeys: {},
+    })
+  })
+
+  it("saves plugin MCP enablement and tool policies through the ownership-checked API", async () => {
+    const plugin = createPlugin("filesystem", "Filesystem")
+    const installed = {
+      ...createInstalledPlugin("filesystem"),
+      mcpServerIDs: ["plugin.filesystem"],
+      mcpServerEnabled: {
+        "plugin.filesystem": true,
+      },
+    }
+    const server = {
+      id: "plugin.filesystem",
+      name: "Filesystem",
+      owner: {
+        kind: "plugin" as const,
+        pluginID: "filesystem",
+        bindingID: "mcp:default",
+      },
+      transport: "stdio" as const,
+      command: "node",
+      toolPolicies: {
+        read_file: {
+          policy: "ask" as const,
+        },
+      },
+      enabled: true,
+    }
+    const updateInstalledPluginMcpControls = vi.fn().mockResolvedValue({
+      plugin: installed,
+      server,
+    })
+
+    window.desktop = {
+      getPluginCatalog: vi.fn().mockResolvedValue([plugin]),
+      getInstalledPlugins: vi.fn().mockResolvedValue([installed]),
+      getGlobalMcpServers: vi.fn().mockResolvedValue([server]),
+      updateInstalledPluginMcpControls,
+    } as unknown as Window["desktop"]
+
+    const { result } = renderHook(
+      () => useSettingsPage({
+        isMcpServersPageOpen: true,
+        isPluginsPageOpen: true,
+      }),
+      { wrapper },
+    )
+
+    await waitFor(() => expect(result.current.mcpServers).toHaveLength(1))
+
+    await act(async () => {
+      await expect(
+        result.current.setInstalledPluginMcpEnabled("filesystem", "plugin.filesystem", false),
+      ).resolves.toBe(true)
+    })
+    expect(updateInstalledPluginMcpControls).toHaveBeenCalledWith({
+      pluginID: "filesystem",
+      serverID: "plugin.filesystem",
+      enabled: false,
+    })
+
+    await act(async () => {
+      await expect(
+        result.current.setInstalledPluginMcpToolPolicy(
+          "filesystem",
+          "plugin.filesystem",
+          "write_file",
+          "disabled",
+        ),
+      ).resolves.toBe(true)
+    })
+    expect(updateInstalledPluginMcpControls).toHaveBeenLastCalledWith({
+      pluginID: "filesystem",
+      serverID: "plugin.filesystem",
+      toolPolicies: {
+        read_file: {
+          policy: "ask",
+        },
+        write_file: {
+          policy: "disabled",
+        },
+      },
     })
   })
 })

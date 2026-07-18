@@ -3,7 +3,6 @@ import { delimiter, dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import z from "zod"
 import * as Auth from "#auth/auth.ts"
-import { getBrowserTrustedCommandToken } from "#browser-extension/runtime-token.ts"
 import * as ProviderAuth from "#auth/provider-auth.ts"
 import * as Config from "#config/config.ts"
 import * as Mcp from "#mcp/manager.ts"
@@ -22,10 +21,6 @@ const LEGACY_GMAIL_OAUTH_CLIENT_SECRET_ENV = "GOOGLE_OAUTH_CLIENT_SECRET"
 const BUILTIN_GMAIL_PACKAGE_PATH = ["plugins", "builtin", "gmail", "0.1.0"] as const
 const BUILTIN_FEISHU_PACKAGE_PATH = ["plugins", "builtin", "feishu", "0.1.0"] as const
 const BUILD_CONNECTOR_CONFIG_PATH = ["config", "connectors.json"] as const
-const BUILD_BROWSER_CONNECTOR_PATH = ["connectors", "browser"] as const
-const SOURCE_BROWSER_CONNECTOR_PATH = ["connectors", "browser"] as const
-const BUILD_NODE_REPL_CONNECTOR_PATH = ["connectors", "node-repl"] as const
-const SOURCE_NODE_REPL_CONNECTOR_PATH = ["connectors", "node-repl"] as const
 const BUILD_GMAIL_CONNECTOR_PATH = ["connectors", "gmail"] as const
 const BUILD_FEISHU_CONNECTOR_PATH = ["connectors", "feishu"] as const
 const CONNECTOR_CUSTOM_OAUTH_CLIENT_KEY = "custom-oauth-client"
@@ -164,30 +159,126 @@ export type ConnectorRemoteRuntime = z.infer<typeof ConnectorRemoteRuntime>
 export const ConnectorRuntime = z.union([ConnectorStdioRuntime, ConnectorRemoteRuntime])
 export type ConnectorRuntime = z.infer<typeof ConnectorRuntime>
 
-export const ConnectorDefinition = z
+const ConnectorMcpRuntimeFields = {
+  id: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]*$/),
+  name: z.string().min(1).optional(),
+  available: z.boolean().default(true),
+} as const
+
+export const ConnectorMcpStdioRuntime = ConnectorStdioRuntime.extend(ConnectorMcpRuntimeFields)
+export type ConnectorMcpStdioRuntime = z.infer<typeof ConnectorMcpStdioRuntime>
+
+export const ConnectorMcpRemoteRuntime = ConnectorRemoteRuntime.extend(ConnectorMcpRuntimeFields)
+export type ConnectorMcpRemoteRuntime = z.infer<typeof ConnectorMcpRemoteRuntime>
+
+export const ConnectorMcpRuntime = z.union([ConnectorMcpStdioRuntime, ConnectorMcpRemoteRuntime])
+export type ConnectorMcpRuntime = z.infer<typeof ConnectorMcpRuntime>
+
+export const ConnectorCategory = z.enum(["account_connector", "builtin_mcp"])
+export type ConnectorCategory = z.infer<typeof ConnectorCategory>
+
+const ConnectorDefinitionFields = {
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().min(1),
+  publisher: z.string().min(1).default("Anybox"),
+  icon: z.string().optional(),
+  risk: z.enum(["low", "medium", "high", "critical"]).default("medium"),
+  permissions: z.array(z.string()).default([]),
+  tools: z.array(ConnectorToolPreview).default([]),
+  configFields: z.array(ConnectorConfigField).default([]),
+  oauthCallbackURL: z.string().min(1).optional(),
+  credential: ConnectorCredential.optional(),
+  installReview: z.array(z.string()).default([]),
+  source: z.enum(["platform", "registry"]).default("platform"),
+  available: z.boolean().default(true),
+} as const
+
+const CanonicalConnectorDefinitionInput = z
   .object({
-    id: z.string().min(1),
-    name: z.string().min(1),
-    description: z.string().min(1),
-    publisher: z.string().min(1).default("Anybox"),
-    icon: z.string().optional(),
-    risk: z.enum(["low", "medium", "high", "critical"]).default("medium"),
-    permissions: z.array(z.string()).default([]),
-    tools: z.array(ConnectorToolPreview).default([]),
-    configFields: z.array(ConnectorConfigField).default([]),
-    oauthCallbackURL: z.string().min(1).optional(),
-    credential: ConnectorCredential.optional(),
-    runtime: ConnectorRuntime.optional(),
-    installReview: z.array(z.string()).default([]),
-    source: z.enum(["platform", "registry"]).default("platform"),
-    available: z.boolean().default(true),
+    ...ConnectorDefinitionFields,
+    category: ConnectorCategory,
+    mcpRuntimes: z.array(ConnectorMcpRuntime).default([]),
   })
   .strict()
+
+const LegacyConnectorDefinitionInput = z
+  .object({
+    ...ConnectorDefinitionFields,
+    runtime: ConnectorRuntime.optional(),
+  })
+  .strict()
+
+function legacyRuntimeAlias(runtime: ConnectorMcpRuntime | undefined): ConnectorRuntime | undefined {
+  if (!runtime) return undefined
+  const {
+    id: _id,
+    name: _name,
+    available: _available,
+    ...legacyRuntime
+  } = runtime
+  return ConnectorRuntime.parse(legacyRuntime)
+}
+
+function validateConnectorDefinition(
+  definition: {
+    category: ConnectorCategory
+    credential?: ConnectorCredential
+    mcpRuntimes: ConnectorMcpRuntime[]
+  },
+  ctx: z.RefinementCtx,
+) {
+  if (definition.category === "builtin_mcp" && definition.credential) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Built-in MCP definitions cannot declare connector credentials.",
+      path: ["credential"],
+    })
+  }
+
+  const seenRuntimeIDs = new Set<string>()
+  definition.mcpRuntimes.forEach((runtime, index) => {
+    if (seenRuntimeIDs.has(runtime.id)) {
+      ctx.addIssue({
+        code: "custom",
+        message: `Duplicate MCP runtime id '${runtime.id}'.`,
+        path: ["mcpRuntimes", index, "id"],
+      })
+    }
+    seenRuntimeIDs.add(runtime.id)
+  })
+}
+
+const CanonicalConnectorDefinition = CanonicalConnectorDefinitionInput
+  .superRefine(validateConnectorDefinition)
+  .transform((definition) => ({
+    ...definition,
+    /** @deprecated Use mcpRuntimes. */
+    runtime: legacyRuntimeAlias(
+      definition.mcpRuntimes.find((runtime) => runtime.id === "default") ?? definition.mcpRuntimes[0],
+    ),
+  }))
+
+const LegacyConnectorDefinition = LegacyConnectorDefinitionInput
+  .transform((definition) => ({
+    ...definition,
+    category: "account_connector" as const,
+    mcpRuntimes: definition.runtime
+      ? [ConnectorMcpRuntime.parse({ id: "default", ...definition.runtime })]
+      : [],
+  }))
+  .superRefine(validateConnectorDefinition)
+
+export const ConnectorDefinition = z.union([
+  CanonicalConnectorDefinition,
+  LegacyConnectorDefinition,
+])
 export type ConnectorDefinition = z.infer<typeof ConnectorDefinition>
 
 export const ConnectorRequirement = z
   .object({
     connector: z.string().min(1),
+    runtimeIDs: z.array(z.string().min(1)).optional(),
     tools: z.array(z.string().min(1)).optional(),
     permissions: z.array(z.string().min(1)).optional(),
     required: z.boolean().optional(),
@@ -196,10 +287,17 @@ export const ConnectorRequirement = z
   .strict()
 export type ConnectorRequirement = z.infer<typeof ConnectorRequirement>
 
-const ConnectorRegistryFile = z
+const LegacyConnectorRegistryFile = z
   .object({
     schemaVersion: z.literal(1).optional(),
-    connectors: z.array(ConnectorDefinition),
+    connectors: z.array(LegacyConnectorDefinition),
+  })
+  .strict()
+
+const ConnectorRegistryFile = z
+  .object({
+    schemaVersion: z.literal(2),
+    connectors: z.array(CanonicalConnectorDefinition),
   })
   .strict()
 
@@ -239,6 +337,15 @@ const ConnectorDiagnostic = z
   .strict()
 type ConnectorDiagnostic = z.infer<typeof ConnectorDiagnostic>
 
+export const ConnectorMcpBinding = z
+  .object({
+    runtimeID: z.string().min(1),
+    serverID: z.string().min(1),
+    name: z.string().min(1).optional(),
+  })
+  .strict()
+export type ConnectorMcpBinding = z.infer<typeof ConnectorMcpBinding>
+
 export const ConnectorStatus = z
   .object({
     connectorID: z.string().min(1),
@@ -255,6 +362,8 @@ export const ConnectorStatus = z
     email: z.string().optional(),
     expiresAt: z.number().optional(),
     activeFlow: ProviderAuth.ProviderAuthFlow.optional(),
+    mcpBindings: z.array(ConnectorMcpBinding).default([]),
+    /** @deprecated Use mcpBindings. */
     generatedMcpServerID: z.string().min(1).optional(),
     lastDiagnostic: ConnectorDiagnostic.optional(),
   })
@@ -295,8 +404,16 @@ export function connectorIDForDefinition(definitionID: string, instanceID = "def
   return `${CONNECTOR_PREFIX}${normalizedDefinitionID}:${normalizedInstanceID}`
 }
 
-export function mcpServerIDForConnector(definitionID: string, instanceID = "default") {
-  return `connector.${normalizeConnectorDefinitionID(definitionID)}.${instanceID.trim() || "default"}`
+export function mcpServerIDForConnector(
+  definitionID: string,
+  instanceID = "default",
+  runtimeID = "default",
+) {
+  const baseID = `connector.${normalizeConnectorDefinitionID(definitionID)}.${instanceID.trim() || "default"}`
+  const normalizedRuntimeID = runtimeID.trim() || "default"
+  return normalizedRuntimeID === "default"
+    ? baseID
+    : `${baseID}.${normalizeConnectorDefinitionID(normalizedRuntimeID)}`
 }
 
 function parseConnectorID(connectorID: string) {
@@ -311,9 +428,9 @@ function parseConnectorID(connectorID: string) {
   }
 }
 
-export function mcpServerIDForConnectorID(connectorID: string) {
+export function mcpServerIDForConnectorID(connectorID: string, runtimeID = "default") {
   const parsed = parseConnectorID(connectorID)
-  return parsed ? mcpServerIDForConnector(parsed.definitionID, parsed.instanceID) : undefined
+  return parsed ? mcpServerIDForConnector(parsed.definitionID, parsed.instanceID, runtimeID) : undefined
 }
 
 function registryFilePaths() {
@@ -331,13 +448,19 @@ function readConnectorRegistryFile(path: string): ConnectorDefinition[] {
     const parsedJSON = JSON.parse(raw) as unknown
     const parsed = Array.isArray(parsedJSON)
       ? z.array(ConnectorDefinition).parse(parsedJSON)
-      : ConnectorRegistryFile.parse(parsedJSON).connectors
+      : z.union([LegacyConnectorRegistryFile, ConnectorRegistryFile]).parse(parsedJSON).connectors
 
-    return parsed.map((definition) => ConnectorDefinition.parse({
-      ...definition,
-      id: normalizeConnectorDefinitionID(definition.id),
-      source: definition.source === "platform" ? "registry" : definition.source,
-    }))
+    return parsed.map((definition) => {
+      const {
+        runtime: _legacyRuntime,
+        ...canonicalDefinition
+      } = definition
+      return CanonicalConnectorDefinition.parse({
+        ...canonicalDefinition,
+        id: normalizeConnectorDefinitionID(definition.id),
+        source: "registry",
+      })
+    })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     throw new ConnectorError("CONNECTOR_REGISTRY_INVALID", `Connector registry '${path}' is invalid: ${message}`)
@@ -382,16 +505,6 @@ function builtinFeishuPackageRoot() {
   return packageRootFromAnyboxAgentRoot(...BUILTIN_FEISHU_PACKAGE_PATH)
 }
 
-function builtinBrowserConnectorRoot() {
-  const packagedRoot = resolve(bundledRuntimeRoot(), ...BUILD_BROWSER_CONNECTOR_PATH)
-  return existsSync(packagedRoot) ? packagedRoot : packageRootFromAnyboxAgentRoot(...SOURCE_BROWSER_CONNECTOR_PATH)
-}
-
-function builtinNodeReplConnectorRoot() {
-  const packagedRoot = resolve(bundledRuntimeRoot(), ...BUILD_NODE_REPL_CONNECTOR_PATH)
-  return existsSync(packagedRoot) ? packagedRoot : packageRootFromAnyboxAgentRoot(...SOURCE_NODE_REPL_CONNECTOR_PATH)
-}
-
 function builtinGmailConnectorRoot() {
   const packagedRoot = resolve(bundledRuntimeRoot(), ...BUILD_GMAIL_CONNECTOR_PATH)
   return existsSync(packagedRoot) ? packagedRoot : resolve(builtinGmailPackageRoot(), "connectors", "gmail")
@@ -417,19 +530,7 @@ function builtinGmailOAuthClientSecret() {
     buildConfig.gmailOAuthClientSecret?.trim()
 }
 
-function localAgentBaseURL() {
-  const host = getProcessEnvValue("ANYBOX_SERVER_HOST")?.trim() || "127.0.0.1"
-  const port = getProcessEnvValue("ANYBOX_SERVER_PORT")?.trim() || "4096"
-  return `http://${host}:${port}`
-}
-
 function builtinDefinitions(): ConnectorDefinition[] {
-  const browserConnectorRoot = builtinBrowserConnectorRoot()
-  const browserServerPath = resolve(browserConnectorRoot, "server.js")
-  const browserRuntimeAvailable = existsSync(browserServerPath)
-  const nodeReplConnectorRoot = builtinNodeReplConnectorRoot()
-  const nodeReplServerPath = resolve(nodeReplConnectorRoot, "server.js")
-  const nodeReplRuntimeAvailable = existsSync(nodeReplServerPath)
   const gmailConnectorRoot = builtinGmailConnectorRoot()
   const gmailServerPath = resolve(gmailConnectorRoot, "server.js")
   const gmailClientID = builtinGmailOAuthClientID()
@@ -442,208 +543,8 @@ function builtinDefinitions(): ConnectorDefinition[] {
 
   return [
     ConnectorDefinition.parse({
-      id: "browser",
-      name: "Browser",
-      description: "Control Chrome through the Anybox browser extension.",
-      publisher: "Anybox",
-      icon: "BR",
-      risk: "high",
-      permissions: [
-        "Reads Chrome tab titles, URLs, visible page text, DOM trees, accessibility trees, interactive elements, and screenshots.",
-        "Opens, activates, clicks, scrolls, types into, and fills Chrome tabs through the Anybox browser extension.",
-        "Requires the Anybox browser extension to be installed, enabled, and connected.",
-      ],
-      tools: [
-        {
-          name: "browser_status",
-          title: "Browser Status",
-          description: "Check whether the Anybox browser extension is connected.",
-          readOnly: true,
-        },
-        {
-          name: "browser_get_tabs",
-          title: "Get Browser Tabs",
-          description: "List Chrome tabs visible to the Anybox browser extension.",
-          readOnly: true,
-        },
-        {
-          name: "browser_open_tab",
-          title: "Open Browser Tab",
-          description: "Open a URL in Chrome.",
-          readOnly: false,
-        },
-        {
-          name: "browser_activate_tab",
-          title: "Activate Browser Tab",
-          description: "Activate an existing Chrome tab.",
-          readOnly: false,
-        },
-        {
-          name: "browser_snapshot",
-          title: "Browser Snapshot",
-          description: "Read page title, URL, visible text, links, buttons, and inputs.",
-          readOnly: true,
-        },
-        {
-          name: "browser_interactive_snapshot",
-          title: "Browser Interactive Snapshot",
-          description: "List visible clickable and fillable page elements with stable element IDs.",
-          readOnly: true,
-        },
-        {
-          name: "browser_dom_tree",
-          title: "Browser DOM Tree",
-          description: "Read a compact DOM tree for a Chrome page.",
-          readOnly: true,
-        },
-        {
-          name: "browser_accessibility_tree",
-          title: "Browser Accessibility Tree",
-          description: "Read Chrome's accessibility tree for a page.",
-          readOnly: true,
-        },
-        {
-          name: "browser_screenshot",
-          title: "Browser Screenshot",
-          description: "Capture a PNG screenshot of a Chrome tab.",
-          readOnly: true,
-        },
-        {
-          name: "browser_click",
-          title: "Browser Click",
-          description: "Click viewport coordinates in a Chrome tab.",
-          readOnly: false,
-        },
-        {
-          name: "browser_click_element",
-          title: "Browser Click Element",
-          description: "Click an element returned by browser_interactive_snapshot.",
-          readOnly: false,
-        },
-        {
-          name: "browser_fill",
-          title: "Browser Fill",
-          description: "Fill an input-like element returned by browser_interactive_snapshot.",
-          readOnly: false,
-        },
-        {
-          name: "browser_type",
-          title: "Browser Type",
-          description: "Insert text into the focused element in a Chrome tab.",
-          readOnly: false,
-        },
-        {
-          name: "browser_scroll",
-          title: "Browser Scroll",
-          description: "Scroll a Chrome tab by a viewport delta.",
-          readOnly: false,
-        },
-        {
-          name: "browser_wait_for",
-          title: "Browser Wait For",
-          description: "Wait until a Chrome page reaches a URL, text, selector, or element condition.",
-          readOnly: true,
-        },
-        {
-          name: "browser_release_tab",
-          title: "Browser Release Tab",
-          description: "Release a Chrome tab from session ownership without closing it.",
-          readOnly: false,
-        },
-      ],
-      runtime: {
-        transport: "stdio",
-        command: "node",
-        args: [browserServerPath],
-        cwd: browserConnectorRoot,
-        env: {
-          ANYBOX_AGENT_BASE_URL: localAgentBaseURL(),
-        },
-        timeoutMs: 30_000,
-        toolPolicies: {
-          browser_status: { policy: "auto" },
-          browser_get_tabs: { policy: "auto" },
-          browser_snapshot: { policy: "auto" },
-          browser_interactive_snapshot: { policy: "auto" },
-          browser_dom_tree: { policy: "auto" },
-          browser_accessibility_tree: { policy: "auto" },
-          browser_screenshot: { policy: "auto" },
-          browser_wait_for: { policy: "auto" },
-          browser_open_tab: { policy: "ask" },
-          browser_activate_tab: { policy: "ask" },
-          browser_click: { policy: "ask" },
-          browser_click_element: { policy: "ask" },
-          browser_fill: { policy: "ask" },
-          browser_type: { policy: "ask" },
-          browser_scroll: { policy: "ask" },
-          browser_release_tab: { policy: "ask" },
-        },
-      },
-      installReview: [
-        "Runs a local Node.js MCP wrapper bundled with Anybox.",
-        "Requires the Anybox browser extension to be connected before browser commands can run.",
-        "Interactive page actions are configured to ask before execution.",
-      ],
-      source: "platform",
-      available: browserRuntimeAvailable,
-    }),
-    ConnectorDefinition.parse({
-      id: "node-repl",
-      name: "Node REPL",
-      description: "Run JavaScript in a persistent local Node.js REPL with optional Browser runtime helpers.",
-      publisher: "Anybox",
-      icon: "JS",
-      risk: "high",
-      permissions: [
-        "Starts a local Node.js MCP wrapper bundled with Anybox.",
-        "Runs JavaScript code requested by the agent in a persistent process.",
-        "When used with the Browser plugin, can execute raw JavaScript and CDP commands in Chrome tabs.",
-      ],
-      tools: [
-        {
-          name: "node_repl_js",
-          title: "Node REPL JavaScript",
-          description: "Run JavaScript in a persistent Node.js REPL.",
-          readOnly: false,
-        },
-        {
-          name: "node_repl_reset",
-          title: "Reset Node REPL",
-          description: "Reset the persistent Node.js REPL state.",
-          readOnly: false,
-        },
-        {
-          name: "node_repl_add_node_module_dir",
-          title: "Add Node Module Directory",
-          description: "Add a node_modules directory to CommonJS module resolution.",
-          readOnly: false,
-        },
-      ],
-      runtime: {
-        transport: "stdio",
-        command: "node",
-        args: [nodeReplServerPath],
-        cwd: nodeReplConnectorRoot,
-        env: {
-          ANYBOX_AGENT_BASE_URL: localAgentBaseURL(),
-          ANYBOX_BROWSER_TRUSTED_TOKEN: getBrowserTrustedCommandToken(),
-        },
-        timeoutMs: 120_000,
-        toolPolicies: {
-          node_repl_reset: { policy: "auto" },
-          node_repl_add_node_module_dir: { policy: "ask" },
-          node_repl_js: { policy: "ask" },
-        },
-      },
-      installReview: [
-        "Runs a persistent local JavaScript process.",
-        "Browser raw page script and CDP access require this connector and the Browser plugin to be selected.",
-      ],
-      source: "platform",
-      available: nodeReplRuntimeAvailable,
-    }),
-    ConnectorDefinition.parse({
       id: "gmail",
+      category: "account_connector",
       name: "Gmail",
       description: "Connect Gmail with Google OAuth and expose read-only mail tools.",
       publisher: "Anybox",
@@ -696,27 +597,33 @@ function builtinDefinitions(): ConnectorDefinition[] {
           type: "authorization_bearer",
         },
       },
-      runtime: {
-        transport: "stdio",
-        command: "node",
-        args: [gmailServerPath],
-        cwd: gmailConnectorRoot,
-        env: {
-          GMAIL_ACCESS_TOKEN: "${OAUTH_ACCESS_TOKEN}",
-          GMAIL_TOKEN_TYPE: "${OAUTH_TOKEN_TYPE}",
+      mcpRuntimes: [
+        {
+          id: "default",
+          name: "Gmail",
+          available: gmailRuntimeAvailable,
+          transport: "stdio",
+          command: "node",
+          args: [gmailServerPath],
+          cwd: gmailConnectorRoot,
+          env: {
+            GMAIL_ACCESS_TOKEN: "${OAUTH_ACCESS_TOKEN}",
+            GMAIL_TOKEN_TYPE: "${OAUTH_TOKEN_TYPE}",
+          },
+          timeoutMs: 10000,
         },
-        timeoutMs: 10000,
-      },
+      ],
       installReview: [
         "OAuth client metadata is managed by Anybox.",
         "Uses the read-only Gmail API scope.",
         "Runs a local stdio MCP wrapper bundled with Anybox.",
       ],
       source: "platform",
-      available: gmailConfigured && gmailRuntimeAvailable,
+      available: gmailConfigured,
     }),
     ConnectorDefinition.parse({
       id: "feishu",
+      category: "account_connector",
       name: "Feishu",
       description: "Connect a Feishu custom app and expose user-authorized document tools.",
       publisher: "Anybox",
@@ -834,25 +741,30 @@ function builtinDefinitions(): ConnectorDefinition[] {
           type: "authorization_bearer",
         },
       },
-      runtime: {
-        transport: "stdio",
-        command: "node",
-        args: [feishuServerPath],
-        cwd: feishuConnectorRoot,
-        env: {
-          FEISHU_ACCESS_TOKEN: "${OAUTH_ACCESS_TOKEN}",
-          FEISHU_TOKEN_TYPE: "${OAUTH_TOKEN_TYPE}",
-          FEISHU_GRANTED_SCOPES: "${OAUTH_SCOPES}",
+      mcpRuntimes: [
+        {
+          id: "default",
+          name: "Feishu",
+          available: feishuRuntimeAvailable,
+          transport: "stdio",
+          command: "node",
+          args: [feishuServerPath],
+          cwd: feishuConnectorRoot,
+          env: {
+            FEISHU_ACCESS_TOKEN: "${OAUTH_ACCESS_TOKEN}",
+            FEISHU_TOKEN_TYPE: "${OAUTH_TOKEN_TYPE}",
+            FEISHU_GRANTED_SCOPES: "${OAUTH_SCOPES}",
+          },
+          timeoutMs: 10000,
         },
-        timeoutMs: 10000,
-      },
+      ],
       installReview: [
         "Create a Feishu Open Platform custom app and copy its App ID and App Secret here.",
         "Add the local callback URL shown by Anybox to the app security settings when connecting.",
         "Enable the required Drive and Docx scopes on the Feishu app before authorizing.",
       ],
       source: "platform",
-      available: feishuRuntimeAvailable,
+      available: true,
     }),
   ]
 }
@@ -870,6 +782,10 @@ export function listDefinitions(): ConnectorDefinition[] {
   }
 
   return [...byID.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export function listAccountDefinitions(): ConnectorDefinition[] {
+  return listDefinitions().filter((definition) => definition.category === "account_connector")
 }
 
 export function getDefinition(definitionID: string) {
@@ -971,8 +887,11 @@ function accountSummary(credential: Auth.CredentialRecord | undefined) {
   }
 }
 
-async function statusForDefinition(definition: ConnectorDefinition): Promise<ConnectorStatus> {
-  const connectorID = connectorIDForDefinition(definition.id)
+async function statusForDefinition(
+  definition: ConnectorDefinition,
+  instanceID = "default",
+): Promise<ConnectorStatus> {
+  const connectorID = connectorIDForDefinition(definition.id, instanceID)
   const activeCredential = await Auth.getActiveProviderCredential(connectorID)
   const credential = activeCredential?.credential
   const record = await Auth.getProviderRecord(connectorID)
@@ -984,10 +903,17 @@ async function statusForDefinition(definition: ConnectorDefinition): Promise<Con
   const activeFlow = ProviderAuth.getLatestProviderAuthFlow(connectorID)
   const isPendingFlow = activeFlow && ["pending", "waiting_user", "authorizing"].includes(activeFlow.status)
   const connected = !definition.credential
-    ? Boolean(definition.runtime && definition.available)
+    ? definition.category === "account_connector"
+      ? definition.available
+      : Boolean(definition.mcpRuntimes.some((runtime) => runtime.available) && definition.available)
     : definition.credential.kind === "api_key"
       ? credential?.kind === "api_key"
       : credential?.kind === "oauth_session" && credential.expiresAt > now()
+  const mcpBindings = definition.mcpRuntimes.map((runtime) => ({
+    runtimeID: runtime.id,
+    serverID: mcpServerIDForConnector(definition.id, instanceID, runtime.id),
+    name: runtime.name,
+  }))
 
   const authStatus: ConnectorStatus["authStatus"] = !definition.available
     ? "unavailable"
@@ -1020,21 +946,23 @@ async function statusForDefinition(definition: ConnectorDefinition): Promise<Con
     email: credential?.kind === "oauth_session" ? credential.email : undefined,
     expiresAt: credential?.kind === "oauth_session" ? credential.expiresAt : undefined,
     activeFlow,
-    generatedMcpServerID: definition.runtime ? mcpServerIDForConnector(definition.id) : undefined,
+    mcpBindings,
+    generatedMcpServerID: mcpBindings.find((binding) => binding.runtimeID === "default")?.serverID
+      ?? mcpBindings[0]?.serverID,
   }
 }
 
 export async function listStatuses(): Promise<ConnectorStatus[]> {
-  return Promise.all(listDefinitions().map((definition) => statusForDefinition(definition)))
+  return Promise.all(listAccountDefinitions().map((definition) => statusForDefinition(definition)))
 }
 
 export async function getStatus(connectorID: string): Promise<ConnectorStatus> {
-  const { definition } = assertDefinitionForConnectorID(connectorID)
-  return statusForDefinition(definition)
+  const { definition, parsed } = assertDefinitionForConnectorID(connectorID)
+  return statusForDefinition(definition, parsed.instanceID)
 }
 
 export async function saveConnectorApiKey(connectorID: string, input: SaveConnectorApiKeyInput) {
-  const { definition } = assertDefinitionForConnectorID(connectorID)
+  const { definition, parsed } = assertDefinitionForConnectorID(connectorID)
   const credential = assertApiKeyCredential(definition)
   const apiKey = input.apiKey?.trim()
 
@@ -1053,8 +981,8 @@ export async function saveConnectorApiKey(connectorID: string, input: SaveConnec
     )
   }
 
-  await syncConnectorRuntimeBinding(definition)
-  return statusForDefinition(definition)
+  await syncConnectorDefinitionRuntimeBindings(definition, parsed.instanceID)
+  return statusForDefinition(definition, parsed.instanceID)
 }
 
 export async function removeConnectorApiKey(connectorID: string) {
@@ -1071,7 +999,7 @@ function readRequiredConfig(input: SaveConnectorConfigInput, key: string, label:
 }
 
 export async function saveConnectorConfig(connectorID: string, input: SaveConnectorConfigInput) {
-  const { definition } = assertDefinitionForConnectorID(connectorID)
+  const { definition, parsed } = assertDefinitionForConnectorID(connectorID)
   const credential = definition.credential?.kind === "oauth" ? definition.credential : undefined
   if (!credential?.clientIDConfigKey || !credential.clientSecretConfigKey) {
     throw new ConnectorError("CONNECTOR_CONFIG_UNSUPPORTED", `${definition.name} does not use custom OAuth app configuration.`)
@@ -1090,21 +1018,21 @@ export async function saveConnectorConfig(connectorID: string, input: SaveConnec
     scope: credential.scopes.join(" "),
   })
   await Auth.setProviderLastError(connectorID, null)
-  await syncConnectorRuntimeBinding(definition)
-  return statusForDefinition(definition)
+  await syncConnectorDefinitionRuntimeBindings(definition, parsed.instanceID)
+  return statusForDefinition(definition, parsed.instanceID)
 }
 
 export async function removeConnectorConfig(connectorID: string) {
-  const { definition } = assertDefinitionForConnectorID(connectorID)
+  const { definition, parsed } = assertDefinitionForConnectorID(connectorID)
   await Auth.removeProviderCredentials(connectorID, ({ credential }) => credential.kind === "oauth_session")
   await Auth.removeOAuthClientRegistration(connectorID, CONNECTOR_CUSTOM_OAUTH_CLIENT_KEY)
   await Auth.setProviderLastError(connectorID, null)
-  await syncConnectorRuntimeBinding(definition)
-  return statusForDefinition(definition)
+  await syncConnectorDefinitionRuntimeBindings(definition, parsed.instanceID)
+  return statusForDefinition(definition, parsed.instanceID)
 }
 
 export async function startConnectorOAuthFlow(connectorID: string, input: { serverBaseURL: string }) {
-  const { definition } = assertDefinitionForConnectorID(connectorID)
+  const { definition, parsed } = assertDefinitionForConnectorID(connectorID)
   if (!definition.available) {
     throw new ConnectorError("CONNECTOR_UNAVAILABLE", `${definition.name} is not available.`)
   }
@@ -1113,7 +1041,7 @@ export async function startConnectorOAuthFlow(connectorID: string, input: { serv
   if (credential.clientIDConfigKey && !(await customOAuthClientRegistration(connectorID))) {
     throw new ConnectorError("CONNECTOR_CONFIG_REQUIRED", `${definition.name} requires App ID and App Secret before sign-in.`)
   }
-  await syncConnectorRuntimeBinding(definition)
+  await syncConnectorDefinitionRuntimeBindings(definition, parsed.instanceID)
   return ProviderAuth.startGenericOAuthFlow({
     providerID: connectorID,
     method: oauthMethodForDefinition(definition),
@@ -1135,15 +1063,15 @@ export async function cancelConnectorOAuthFlow(connectorID: string, flowID: stri
 }
 
 export async function deleteConnectorOAuthSession(connectorID: string) {
-  const { definition } = assertDefinitionForConnectorID(connectorID)
+  const { definition, parsed } = assertDefinitionForConnectorID(connectorID)
   const credential = assertOAuthCredential(definition)
   await ProviderAuth.deleteGenericOAuthSession(
     connectorID,
     oauthMethodForDefinition(definition),
     await oauthConfigForCredential(credential, connectorID, definition),
   )
-  await syncConnectorRuntimeBinding(definition)
-  return statusForDefinition(definition)
+  await syncConnectorDefinitionRuntimeBindings(definition, parsed.instanceID)
+  return statusForDefinition(definition, parsed.instanceID)
 }
 
 function replacePlaceholders(value: string, config: Record<string, string>) {
@@ -1166,13 +1094,32 @@ function replaceRecordPlaceholders(record: Record<string, string> | undefined, c
   return entries.length > 0 ? Object.fromEntries(entries) : undefined
 }
 
-async function resolvePlatformRuntime(connectorID: string): Promise<ResolvedConnectorRuntime> {
+function runtimeForDefinition(definition: ConnectorDefinition, runtimeID: string) {
+  const normalizedRuntimeID = runtimeID.trim() || "default"
+  const runtime = definition.mcpRuntimes.find((candidate) => candidate.id === normalizedRuntimeID)
+  if (!runtime) {
+    throw new ConnectorError(
+      "CONNECTOR_RUNTIME_NOT_FOUND",
+      `${definition.name} does not define MCP runtime '${normalizedRuntimeID}'.`,
+    )
+  }
+  return runtime
+}
+
+async function resolvePlatformRuntime(
+  connectorID: string,
+  runtimeID = "default",
+): Promise<ResolvedConnectorRuntime> {
   const { definition } = assertDefinitionForConnectorID(connectorID)
   if (!definition.available) {
     throw new ConnectorError("CONNECTOR_UNAVAILABLE", `${definition.name} is not available.`)
   }
-  if (!definition.runtime) {
-    throw new ConnectorError("CONNECTOR_RUNTIME_MISSING", `${definition.name} does not define a runtime.`)
+  const runtime = runtimeForDefinition(definition, runtimeID)
+  if (!runtime.available) {
+    throw new ConnectorError(
+      "CONNECTOR_RUNTIME_UNAVAILABLE",
+      `${definition.name} MCP runtime '${runtime.id}' is not available.`,
+    )
   }
 
   const config: Record<string, string> = {}
@@ -1199,26 +1146,29 @@ async function resolvePlatformRuntime(connectorID: string): Promise<ResolvedConn
     config.OAUTH_SCOPES = session.scope ?? ""
   }
 
-  if (definition.runtime.transport === "stdio") {
+  if (runtime.transport === "stdio") {
     return {
       transport: "stdio",
-      command: replacePlaceholders(definition.runtime.command, config),
-      args: definition.runtime.args?.map((arg) => replacePlaceholders(arg, config)),
-      cwd: replaceOptionalPlaceholders(definition.runtime.cwd, config),
-      env: replaceRecordPlaceholders(definition.runtime.env, config),
+      command: replacePlaceholders(runtime.command, config),
+      args: runtime.args?.map((arg) => replacePlaceholders(arg, config)),
+      cwd: replaceOptionalPlaceholders(runtime.cwd, config),
+      env: replaceRecordPlaceholders(runtime.env, config),
     }
   }
 
-  const serverUrl = replaceOptionalPlaceholders(definition.runtime.serverUrl, config)
+  const serverUrl = replaceOptionalPlaceholders(runtime.serverUrl, config)
   if (!serverUrl) {
-    throw new ConnectorError("CONNECTOR_RUNTIME_MISSING", `${definition.name} does not declare a remote MCP server URL.`)
+    throw new ConnectorError(
+      "CONNECTOR_RUNTIME_MISSING",
+      `${definition.name} MCP runtime '${runtime.id}' does not declare a remote MCP server URL.`,
+    )
   }
 
   const result: ResolvedConnectorRuntime = {
     transport: "remote",
     serverUrl,
-    authorization: replaceOptionalPlaceholders(definition.runtime.authorization, config),
-    headers: replaceRecordPlaceholders(definition.runtime.headers, config),
+    authorization: replaceOptionalPlaceholders(runtime.authorization, config),
+    headers: replaceRecordPlaceholders(runtime.headers, config),
   }
 
   if (definition.credential?.kind === "oauth" && !result.authorization) {
@@ -1236,21 +1186,30 @@ async function resolvePlatformRuntime(connectorID: string): Promise<ResolvedConn
   return result
 }
 
-export async function resolveRuntime(connectorID: string): Promise<ResolvedConnectorRuntime> {
+export async function resolveRuntime(
+  connectorID: string,
+  runtimeID = "default",
+): Promise<ResolvedConnectorRuntime> {
   if (connectorID.startsWith(PLUGIN_CONNECTOR_PREFIX) || connectorID.startsWith(LEGACY_PLUGIN_APP_CONNECTOR_PREFIX)) {
+    if (runtimeID !== "default") {
+      throw new ConnectorError(
+        "CONNECTOR_RUNTIME_NOT_FOUND",
+        `Plugin connector '${connectorID}' does not define MCP runtime '${runtimeID}'.`,
+      )
+    }
     const pluginModule = await import("#plugin/plugin.ts")
     return pluginModule.resolveConnectorRuntime(connectorID)
   }
 
-  return resolvePlatformRuntime(connectorID)
+  return resolvePlatformRuntime(connectorID, runtimeID)
 }
 
-export async function resolveRemoteServer(connectorID: string): Promise<{
+export async function resolveRemoteServer(connectorID: string, runtimeID = "default"): Promise<{
   serverUrl: string
   authorization?: string
   headers?: Record<string, string>
 }> {
-  const runtime = await resolveRuntime(connectorID)
+  const runtime = await resolveRuntime(connectorID, runtimeID)
   if (runtime.transport !== "remote") {
     throw new ConnectorError("CONNECTOR_RUNTIME_MISSING", `Connector '${connectorID}' does not resolve to a remote MCP server.`)
   }
@@ -1262,52 +1221,164 @@ export async function resolveRemoteServer(connectorID: string): Promise<{
   }
 }
 
-function runtimeBindingForConnector(definition: ConnectorDefinition): Config.McpServerInput | undefined {
-  if (!definition.runtime) return undefined
+function runtimeBindingForConnector(
+  definition: ConnectorDefinition,
+  runtime: ConnectorMcpRuntime,
+  instanceID = "default",
+): Config.McpConnectorServerInput {
+  const connectorId = connectorIDForDefinition(definition.id, instanceID)
   return {
-    name: definition.name,
+    name: runtime.name ?? definition.name,
     transport: "connector",
-    provider: definition.runtime.transport === "remote" ? definition.runtime.provider : undefined,
-    connectorId: connectorIDForDefinition(definition.id),
-    serverDescription: definition.runtime.serverDescription,
-    allowedTools: definition.runtime.allowedTools,
-    toolPolicies: definition.runtime.toolPolicies,
-    requireApproval: definition.runtime.requireApproval,
-    enabled: definition.available,
-    timeoutMs: definition.runtime.timeoutMs,
+    provider: runtime.transport === "remote" ? runtime.provider : undefined,
+    connectorId,
+    connectorRuntimeId: runtime.id,
+    serverDescription: runtime.serverDescription,
+    allowedTools: runtime.allowedTools,
+    toolPolicies: runtime.toolPolicies,
+    requireApproval: runtime.requireApproval,
+    // Enabled records user intent. Definition/runtime availability is checked
+    // independently during resolution so a temporary outage cannot persist as
+    // a user-disabled MCP server after the runtime recovers.
+    enabled: true,
+    timeoutMs: runtime.timeoutMs,
   }
 }
 
-async function syncConnectorRuntimeBinding(definition: ConnectorDefinition) {
-  const runtimeBinding = runtimeBindingForConnector(definition)
-  if (!runtimeBinding) return
-  await Config.setMcpServer(Config.GLOBAL_CONFIG_ID, mcpServerIDForConnector(definition.id), runtimeBinding)
+function ownerForConnectorRuntime(
+  definition: ConnectorDefinition,
+  connectorId: string,
+  runtimeID: string,
+  serverID: string,
+): Config.McpServerOwner {
+  return definition.category === "account_connector"
+    ? {
+        kind: "connector",
+        connectorId,
+        runtimeID,
+      }
+    : {
+        kind: "anybox",
+        bindingID: serverID,
+      }
+}
+
+async function syncConnectorRuntimeBinding(
+  definition: ConnectorDefinition,
+  runtime: ConnectorMcpRuntime,
+  instanceID = "default",
+) {
+  const runtimeBinding = runtimeBindingForConnector(definition, runtime, instanceID)
+  const serverID = mcpServerIDForConnector(definition.id, instanceID, runtime.id)
+  const existing = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, serverID)
+  // Runtime metadata is regenerated from the connector definition, while the
+  // MCP controls exposed to users must survive connector/plugin resyncs.
+  const preservesUserControls =
+    runtimeBinding.transport === "connector"
+    && existing?.transport === "connector"
+    && existing.connectorId === runtimeBinding.connectorId
+    && (existing.connectorRuntimeId ?? "default") === runtime.id
+  const synchronizedBinding = preservesUserControls
+    ? {
+        ...runtimeBinding,
+        enabled: existing.enabled,
+        toolPolicies: existing.toolPolicies ?? runtimeBinding.toolPolicies,
+      }
+    : runtimeBinding
+
+  await Config.setManagedMcpServer(
+    Config.GLOBAL_CONFIG_ID,
+    serverID,
+    synchronizedBinding,
+    ownerForConnectorRuntime(
+      definition,
+      runtimeBinding.connectorId,
+      runtime.id,
+      serverID,
+    ),
+  )
+  return serverID
+}
+
+async function syncConnectorDefinitionRuntimeBindings(
+  definition: ConnectorDefinition,
+  instanceID = "default",
+) {
+  const serverIDs: string[] = []
+  for (const runtime of definition.mcpRuntimes) {
+    serverIDs.push(await syncConnectorRuntimeBinding(definition, runtime, instanceID))
+  }
+  return serverIDs
+}
+
+function isConnectorRuntimeOwner(owner: Config.McpServerOwner | undefined) {
+  return owner?.kind === "connector" && Boolean(parseConnectorID(owner.connectorId))
+}
+
+function isAnyboxConnectorRuntimeOwner(owner: Config.McpServerOwner | undefined) {
+  return owner?.kind === "anybox" && owner.bindingID.startsWith("connector.")
 }
 
 export async function syncConnectorRuntimeBindings() {
-  for (const definition of listDefinitions()) {
-    await syncConnectorRuntimeBinding(definition)
+  const definitions = listDefinitions()
+  const definitionsByID = new Map(definitions.map((definition) => [definition.id, definition]))
+  const existingServers = await Config.listMcpServers(Config.GLOBAL_CONFIG_ID)
+  const instancesByDefinitionID = new Map<string, Set<string>>(
+    definitions.map((definition) => [definition.id, new Set(["default"])]),
+  )
+
+  for (const server of existingServers) {
+    if (server.owner?.kind !== "connector") continue
+    const parsed = parseConnectorID(server.owner.connectorId)
+    if (!parsed || !definitionsByID.has(parsed.definitionID)) continue
+    instancesByDefinitionID.get(parsed.definitionID)?.add(parsed.instanceID)
+  }
+
+  const desiredServerIDs = new Set<string>()
+  for (const definition of definitions) {
+    for (const instanceID of instancesByDefinitionID.get(definition.id) ?? ["default"]) {
+      for (const serverID of await syncConnectorDefinitionRuntimeBindings(definition, instanceID)) {
+        desiredServerIDs.add(serverID)
+      }
+    }
+  }
+
+  for (const server of existingServers) {
+    if (desiredServerIDs.has(server.id)) continue
+    if (!isConnectorRuntimeOwner(server.owner) && !isAnyboxConnectorRuntimeOwner(server.owner)) continue
+    await Config.removeMcpServer(Config.GLOBAL_CONFIG_ID, server.id)
+    await Config.removeSelectedMcpServerIDFromAllProjects(server.id)
   }
 }
 
-export async function diagnoseConnector(connectorID: string) {
-  const { definition } = assertDefinitionForConnectorID(connectorID)
-  const runtimeBinding = runtimeBindingForConnector(definition)
-  if (!runtimeBinding) {
+export async function diagnoseConnector(connectorID: string, runtimeID = "default") {
+  const { definition, parsed } = assertDefinitionForConnectorID(connectorID)
+  const normalizedRuntimeID = runtimeID.trim() || "default"
+  const runtime = definition.mcpRuntimes.find((candidate) => candidate.id === normalizedRuntimeID)
+  const serverID = mcpServerIDForConnector(definition.id, parsed.instanceID, normalizedRuntimeID)
+  if (!runtime) {
     return {
-      serverID: mcpServerIDForConnector(definition.id),
+      serverID,
       enabled: false,
       ok: false,
       toolCount: 0,
       toolNames: [],
       tools: [],
-      error: `${definition.name} does not define a runtime.`,
+      error: `${definition.name} does not define MCP runtime '${normalizedRuntimeID}'.`,
     }
   }
 
-  const server = Config.McpServerSummary.parse({
-    id: mcpServerIDForConnector(definition.id),
+  const existing = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, serverID)
+  const runtimeBinding = runtimeBindingForConnector(definition, runtime, parsed.instanceID)
+  const server = existing ?? Config.McpServerSummary.parse({
+    id: serverID,
     ...runtimeBinding,
+    owner: ownerForConnectorRuntime(
+      definition,
+      runtimeBinding.connectorId,
+      runtime.id,
+      serverID,
+    ),
     enabled: runtimeBinding.enabled ?? true,
   })
   return Mcp.diagnoseServer(server)

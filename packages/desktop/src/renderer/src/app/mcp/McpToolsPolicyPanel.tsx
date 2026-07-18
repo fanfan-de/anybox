@@ -2,12 +2,11 @@ import { useState } from "react"
 import { ChevronDownIcon, ChevronRightIcon } from "../icons"
 import type {
   McpServerDiagnostic,
-  McpServerDraftState,
   McpToolDiagnostic,
   McpToolPolicyValue,
 } from "../types"
 import { SettingsSelect } from "../settings/SettingsSelect"
-import { resolveMcpToolPolicy } from "./mcp-tool-policies"
+import { resolveMcpToolPolicy, type McpToolPolicyDraft } from "./mcp-tool-policies"
 
 const TOOL_POLICY_LABELS: Record<McpToolPolicyValue, string> = {
   disabled: "Disabled",
@@ -42,7 +41,8 @@ function getToolDetailsID(toolName: string, index: number) {
 
 interface McpToolsPolicyPanelProps {
   diagnostic: McpServerDiagnostic | null
-  draft: McpServerDraftState
+  disabled?: boolean
+  draft: McpToolPolicyDraft
   onPolicyChange: (toolName: string, policy: McpToolPolicyValue) => void
 }
 
@@ -53,6 +53,7 @@ interface ExpandedToolState {
 
 export function McpToolsPolicyPanel({
   diagnostic,
+  disabled = false,
   draft,
   onPolicyChange,
 }: McpToolsPolicyPanelProps) {
@@ -138,6 +139,7 @@ export function McpToolsPolicyPanel({
                 <div className="settings-field mcp-tool-policy-select">
                   <SettingsSelect<McpToolPolicyValue>
                     ariaLabel={`Policy for ${tool.name}`}
+                    disabled={disabled}
                     options={[
                       { value: "disabled", label: TOOL_POLICY_LABELS.disabled },
                       { value: "ask", label: TOOL_POLICY_LABELS.ask },

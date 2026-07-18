@@ -305,6 +305,15 @@ export async function resolveSelectedSkillIDs(
   return (await getSelected(projectRoot, skillIDs, options)).map((skill) => skill.id)
 }
 
+export async function resolveSelectedStandaloneSkillIDs(
+  projectRoot: string,
+  skillIDs: string[],
+): Promise<string[]> {
+  return resolveSelectedSkillIDs(projectRoot, skillIDs, {
+    pluginIDs: [],
+  })
+}
+
 export async function resolveTurnSkillIDs(input: {
   projectID: string
   projectRoot: string
@@ -312,7 +321,17 @@ export async function resolveTurnSkillIDs(input: {
 }): Promise<string[]> {
   const pluginIDs = await Config.getSelectedPluginIDs(input.projectID)
   const requestedSkillIDs = input.requestedSkillIDs ?? await Config.getSelectedSkillIDs(input.projectID)
-  return await resolveSelectedSkillIDs(input.projectRoot, requestedSkillIDs, { pluginIDs })
+  if (requestedSkillIDs.length === 0) return []
+
+  const selectedStandaloneSkillIDs = await resolveSelectedStandaloneSkillIDs(
+    input.projectRoot,
+    requestedSkillIDs,
+  )
+
+  return normalizeSkillIDs([
+    ...selectedStandaloneSkillIDs,
+    ...Plugin.resolveEnabledInstalledPluginSkillIDs(pluginIDs),
+  ])
 }
 
 export function configureSessionSkills(sessionID: string, skillIDs: string[]) {

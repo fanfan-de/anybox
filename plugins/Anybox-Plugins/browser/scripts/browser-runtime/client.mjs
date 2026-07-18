@@ -1,8 +1,15 @@
-const DEFAULT_AGENT_BASE_URL = "http://127.0.0.1:4096"
+// Browser JavaScript SDK shared by execution hosts such as the Node REPL.
+const DEFAULT_AGENT_BASE_URL = defaultAgentBaseURL()
 const AGENT_BASE_URL = normalizeBaseURL(
   process.env.ANYBOX_AGENT_BASE_URL || DEFAULT_AGENT_BASE_URL,
 )
 const TRUSTED_TOKEN = process.env.ANYBOX_BROWSER_TRUSTED_TOKEN || ""
+
+function defaultAgentBaseURL() {
+  const host = String(process.env.ANYBOX_SERVER_HOST || "127.0.0.1").trim() || "127.0.0.1"
+  const port = String(process.env.ANYBOX_SERVER_PORT || "4096").trim() || "4096"
+  return `http://${host}:${port}`
+}
 
 function normalizeBaseURL(value) {
   const normalized = String(value || DEFAULT_AGENT_BASE_URL).trim().replace(/\/+$/, "")

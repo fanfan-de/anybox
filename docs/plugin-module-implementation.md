@@ -176,13 +176,14 @@ Registry item 可以只有展示 metadata，也可以携带 zip 包下载信息�
    - `version`
    - `enabled`
    - `mcpServerID` / `mcpServerIDs`
+   - `mcpServerEnabled`
    - `skillIDs`
    - `connectorIDs`
    - `connectorRequirementIDs`
    - `config`
    - `installedAt` / `updatedAt`
 4. 写入 SQLite 表 `installed_plugins`。
-5. 调用 `syncPluginRuntimeBindings()` 生成全局 MCP server 配置。
+5. 调用 `syncPluginRuntimeBindings()` 生成全局 MCP server 配置。普通 MCP 和 connector-backed MCP 都带有显式的 plugin owner、`pluginID` 与稳定 `bindingID`。
 
 安装本身不把插件暴露给所有项目。用户还需要在项目里选择该插件。
 
@@ -205,7 +206,10 @@ Registry zip 安装会做以下校验：
 - 可更新 `enabled`。
 - 可更新安装配置 `config`。
 - 重新生成 `mcpServerIDs`、`skillIDs`、`connectorIDs`、`connectorRequirementIDs`。
+- 保留仍存在 MCP 的 `mcpServerEnabled` 与 MCP 配置中的 `toolPolicies`；新 MCP 默认启用，已移除 MCP 的偏好会被清理。
 - 写回全局 MCP server 配置，并移除已经不再存在的旧 server ID。
+
+启动 reconcile 会为旧插件绑定补写 owner，依据旧 MCP 的有效启用状态惰性补齐 `mcpServerEnabled`，并清理已卸载插件遗留的 plugin-owned server。归属判断优先使用 owner；只对已安装记录中的精确 server ID 做旧数据兼容，不能仅凭 `plugin.*` 前缀认定归属。
 
 ### 5.4 卸载
 
@@ -392,7 +396,7 @@ DELETE /api/plugins/installed/:pluginID/connectors/:appID/auth/session
 
 ## 9. 平台 Connector Requirement
 
-`connectorRequirements` 用于声明插件依赖已有的平台共享 connector。典型场景是 Browser、Gmail、Node REPL 这类多插件共享的能力。
+`connectorRequirements` 用于声明插件依赖已有的平台共享 connector。典型场景是 Gmail、GitHub 或数据库账号这类用户只授权一次、由多个插件复用的连接。
 
 示意：
 
@@ -400,10 +404,10 @@ DELETE /api/plugins/installed/:pluginID/connectors/:appID/auth/session
 {
   "connectorRequirements": [
     {
-      "connector": "browser",
-      "tools": ["browser_get_tabs", "browser_snapshot"],
+      "connector": "gmail",
+      "tools": ["gmail_search_messages"],
       "required": true,
-      "reason": "Browser control through the shared Anybox browser connector."
+      "reason": "Search mail through the shared Anybox Gmail connector."
     }
   ]
 }
@@ -413,10 +417,12 @@ DELETE /api/plugins/installed/:pluginID/connectors/:appID/auth/session
 
 - 不生成 plugin-owned connector ID。
 - 不保存插件私有 credential。
-- 记录 `connectorRequirementIDs`，例如 `connector:browser:default`。
+- 记录 `connectorRequirementIDs`，例如 `connector:gmail:default`。
 - 调用 `Connector.syncConnectorRuntimeBindings()`，确保平台 connector 对应的全局 MCP server 存在。
 
 项目选择插件后，`Config.resolveProjectMcpServers()` 会把该插件要求的平台 connector server 也纳入项目可用 MCP server 集合。
+
+Browser 插件是相反的边界示例：Browser MCP、Node REPL 和 Browser Runtime 都位于插件目录并由 `mcpServers` 声明；Anybox Agent 只保留 Chrome 扩展桥接与通用 MCP/插件宿主。安装后生成 `plugin.browser.browser` 和 `plugin.browser.node-repl`，不再生成 `connector.browser.default` 或 `connector.node-repl.default`。
 
 ## 10. Skill 集成
 
@@ -436,7 +442,18 @@ DELETE /api/plugins/installed/:pluginID/connectors/:appID/auth/session
 
 catalog 阶段会读取 `SKILL.md` frontmatter 生成预览。运行时 skill 发现由 `Skill.discoverPluginDocuments()` 调用 `Plugin.listInstalledPluginSkillRoots(pluginIDs)` 完成。
 
-项目未选择某个插件时，该插件 skill 不进入当前会话可发现范围。`load_skill` 和 `read_skill_resource` 也会按当前项目的 selected plugin IDs 过滤。
+项目未选择某个插件时，该插件 skill 不进入当前会话可发现范围。`load_skill` 和 `read_skill_resource` 也会按当前项目的 selected plugin IDs 过滤。全局 Skill 页面和 `/api/skills/tree` 不展示插件 Skill；插件详情展示 Skill 名称、描述、ID、目录和随插件总开关变化的状态，并提供归属于插件页的只读目录浏览器。
+
+Skill 浏览器遵循以下边界：
+
+- Skill 行右键菜单提供“浏览 Skill 文件”，展开详情内同时保留一个可发现的同名按钮。
+- 只有已安装且 package 可用的插件可以打开；插件总开关关闭不影响只读浏览。
+- Agent 根据 `pluginID + skillID` 重新验证安装记录与 manifest 声明，不接受 Renderer 传入绝对目录。
+- API 路径必须是使用 `/` 的规范相对路径，禁止绝对路径、盘符、反斜杠、空段、`.` 和 `..`。
+- 真实路径必须始终留在 Skill 根目录及插件包内；符号链接不会出现在目录列表中，也不能作为读取路径。
+- 子目录按需读取且文件夹优先排序；单目录最多返回 1000 项。
+- 文本预览上限为 1 MiB，图片预览上限为 2 MiB；其他二进制文件只返回元信息。
+- Renderer 默认打开 `SKILL.md`，Markdown 可切换阅读与源码模式，其他 UTF-8 文本、常见图片和不可预览文件分别使用对应只读状态。
 
 ## 11. 项目选择和工具暴露
 
@@ -461,13 +478,16 @@ PUT /api/projects/:id/plugins/selection
 - 插件包不能 missing。
 - ID 会 normalize 和去重。
 
-解析项目 MCP server 时：
+项目只持久化独立 Skill/MCP 的选择和插件 ID。旧项目中残留的插件 Skill/MCP 子项选择在读取时忽略，并在下一次保存时自然清理。
 
-1. 读取项目自己的 MCP server 选择。
+解析项目能力时：
+
+1. 读取项目自己的独立 Skill/MCP 选择。
 2. 读取项目 `selected_plugins`。
-3. 找到全局 MCP 配置中 ID 前缀为 `plugin.<pluginID>` 的 server。
+3. 通过显式 plugin owner 与已安装 binding 映射找到插件 MCP，并同时应用插件总开关和 `mcpServerEnabled` 子开关。
 4. 找到 selected plugins 的 `connectorRequirementIDs`，转换为平台 connector MCP server ID。
-5. 返回项目 MCP server + 选中插件相关 server。
+5. 将插件全部 Skill 与独立 Skill 选择合并；独立 Skill 选择不会抑制插件 Skill。
+6. 返回项目独立 MCP + 当前有效的插件 MCP + 共享 connector requirement MCP。
 
 最终工具注册阶段，MCP manager 会连接这些 server 并把工具暴露成模型工具 ID：
 
@@ -486,8 +506,11 @@ GET    /api/plugins/catalog
 GET    /api/plugins/installed
 PUT    /api/plugins/installed/:pluginID
 PATCH  /api/plugins/installed/:pluginID
+PATCH  /api/plugins/installed/:pluginID/mcp/:serverID
 DELETE /api/plugins/installed/:pluginID
 GET    /api/plugins/installed/:pluginID/diagnostic
+GET    /api/plugins/installed/:pluginID/skills/:skillID/entries?path=<relative-directory>
+GET    /api/plugins/installed/:pluginID/skills/:skillID/file?path=<relative-file>
 
 GET    /api/plugins/installed/:pluginID/connectors
 PUT    /api/plugins/installed/:pluginID/connectors/:appID/api-key
@@ -513,11 +536,15 @@ Renderer UI
 
 前端状态和交互主要在 `use-settings-page.ts` 和 `PluginsPage.tsx`。前端不会直接读取插件包、不会启动插件 runtime，也不会直接处理密钥；这些都由 Agent 端完成。
 
+插件 MCP 控制接口只接受 `enabled` 和 `toolPolicies`。manifest 定义的 command、URL、环境变量、headers 等运行信息在插件详情只读；server 不属于路径中的插件时返回 `PLUGIN_MCP_NOT_FOUND`。
+
+Skill 文件浏览通过 `listInstalledPluginSkillEntries` 和 `readInstalledPluginSkillFile` 两个桌面 IPC 方法桥接到上述只读 Agent API。响应只包含 Skill 内相对路径、文件元信息以及受大小限制的文本内容或图片 data URL，不返回本地绝对路径。
+
 ## 13. 诊断
 
 插件诊断分两类：
 
-- 普通 MCP server：`GET /api/plugins/installed/:pluginID/diagnostic`
+- 普通 MCP server：复用 `GET /api/mcp/servers/:serverID/diagnostic`
 - 插件自带 connector：`GET /api/plugins/installed/:pluginID/connectors/:appID/diagnostic`
 
 诊断调用 `Mcp.diagnoseServer(server)`：
@@ -582,7 +609,10 @@ packages/anyboxagent/Test/calendar-plugin.test.ts
 - 平台 connector 与插件 `connectorRequirements`。
 - Browser/Gmail 内置插件通过平台 connector 工作。
 - 插件 manifest 中 MCP、skills、connectors/apps 的解析。
-- 插件 skill 文件树和只读限制。
+- 插件 Skill 运行时发现，以及从全局 Skill 文件树中隐藏。
+- 插件 Skill 目录的所有权校验、路径穿越拒绝、文本/图片预览，以及 Renderer 右键浏览、懒加载和不可用状态。
+- MCP owner/binding 回填、子项偏好持久化、总开关暂停/恢复和 tool policy 保留。
+- 项目选择插件后自动合并内部 Skill/MCP，并过滤旧的插件子能力选择。
 - API key connector 的密钥外置存储和运行时注入。
 - 本地 stdio connector 的包内路径约束。
 - OAuth connector 的 PKCE、动态注册、scope 校验、token refresh。

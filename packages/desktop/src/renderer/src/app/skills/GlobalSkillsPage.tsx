@@ -30,7 +30,7 @@ import type { GlobalSkillFolderOption } from "../use-global-skills"
 import { SkillProductIcon } from "./SkillCatalogViews"
 
 export type CreateGlobalSkillDraftKind = "skill" | "folder"
-export type SkillLibrarySourceFilter = "all" | "local" | "downloaded" | "plugin"
+export type SkillLibrarySourceFilter = "all" | "local" | "downloaded"
 export type SkillLibraryStatusFilter = "all" | "enabled" | "disabled"
 
 interface GlobalSkillsPageProps {
@@ -328,33 +328,31 @@ function filterGlobalSkillTreeByLibraryFilters(
   nodes: GlobalSkillTreeNode[],
   sourceFilter: SkillLibrarySourceFilter,
   statusFilter: SkillLibraryStatusFilter,
-  inheritedPlugin = false,
   inheritedEnabled: boolean | undefined = undefined,
 ): GlobalSkillTreeNode[] {
   if (sourceFilter === "downloaded") return []
 
   return nodes.flatMap((node) => {
-    const isPlugin = inheritedPlugin || node.scope === "plugin" || node.path.startsWith("plugin-skills://")
-    const enabled = node.enabled ?? inheritedEnabled ?? (isPlugin ? undefined : true)
+    if (node.scope === "plugin") return []
+
+    const enabled = node.enabled ?? inheritedEnabled ?? true
     const filteredChildren = node.kind === "directory"
-      ? filterGlobalSkillTreeByLibraryFilters(node.children ?? [], sourceFilter, statusFilter, isPlugin, enabled)
+      ? filterGlobalSkillTreeByLibraryFilters(node.children ?? [], sourceFilter, statusFilter, enabled)
       : []
-    const sourceMatches = sourceFilter === "all"
-      || (sourceFilter === "plugin" ? isPlugin : !isPlugin)
     const statusMatches = statusFilter === "all"
       || enabled === (statusFilter === "enabled")
 
-    if (node.kind === "file") return sourceMatches && statusMatches ? [node] : []
+    if (node.kind === "file") return statusMatches ? [node] : []
 
     const role = getDirectoryRole(node)
     if (role === "folder") {
       if (filteredChildren.length > 0) return [{ ...node, children: filteredChildren }]
-      return sourceMatches && statusFilter === "all" && sourceFilter !== "plugin" && (node.children ?? []).length === 0
+      return statusFilter === "all" && (node.children ?? []).length === 0
         ? [node]
         : []
     }
 
-    return sourceMatches && statusMatches
+    return statusMatches
       ? [{ ...node, children: filteredChildren }]
       : []
   })
@@ -481,7 +479,6 @@ function GlobalSkillListRow({
   const [isRowMenuOpen, setIsRowMenuOpen] = useState(false)
   const rowMenuRef = useRef<HTMLDivElement | null>(null)
   const skillDocumentPath = getSkillDocumentPath(node)
-  const isPlugin = node.scope === "plugin" || node.path.startsWith("plugin-skills://")
   const isEnabled = node.enabled ?? true
   const isSelected = containsSkillTreePath(node, activeFilePath)
   const isManaged = !node.readOnly
@@ -537,10 +534,10 @@ function GlobalSkillListRow({
             />
           </span>
           <span className="skill-library-result-summary">
-            {groupLabel || (isPlugin ? node.pluginID ?? "Plugin skill" : "Local skill")}
+            {groupLabel || "Local skill"}
           </span>
           <span className="skill-library-result-meta">
-            <span>{isPlugin ? "Plugin" : "Local"}</span>
+            <span>Local</span>
             <span>{node.readOnly ? "Read-only" : "Editable"}</span>
           </span>
         </span>
@@ -581,7 +578,7 @@ function GlobalSkillListRow({
                   onRenameGlobalSkillDraftStart(node.path)
                 }}
               >
-                Rename
+                {t("skillLibrary.local.rename")}
               </button>
               <button
                 className="global-skills-install-menu-item"
@@ -592,7 +589,7 @@ function GlobalSkillListRow({
                   onMoveGlobalSkillDirectoryStart(node.path)
                 }}
               >
-                Move to folder...
+                {t("skillLibrary.local.moveToFolder")}
               </button>
               <button
                 className="global-skills-install-menu-item"
@@ -603,7 +600,7 @@ function GlobalSkillListRow({
                   void onDeleteGlobalSkill(node.path)
                 }}
               >
-                Delete skill
+                {t("skillLibrary.local.deleteSkill")}
               </button>
             </div>
           ) : null}
@@ -673,7 +670,6 @@ function GlobalSkillsTreeNodeRow({
   const rowMenuRef = useRef<HTMLDivElement | null>(null)
   const role = node.kind === "directory" ? getDirectoryRole(node) : "resource"
   const isReadOnlyNode = Boolean(node.readOnly)
-  const showPluginBadge = node.scope === "plugin" && node.path.startsWith("plugin-skills://")
   const isManagedDirectory = !isReadOnlyNode && (role === "folder" || role === "skill")
 
   useEffect(() => {
@@ -719,7 +715,6 @@ function GlobalSkillsTreeNodeRow({
             <FileTextIcon />
           </span>
           <span className="skill-tree-label">{node.name}</span>
-          {showPluginBadge ? <span className="skill-tree-source-badge">Plugin</span> : null}
         </button>
       </div>
     )
@@ -854,7 +849,6 @@ function GlobalSkillsTreeNodeRow({
               </span>
             ) : null}
             <span className="skill-tree-label">{node.name}</span>
-            {showPluginBadge ? <span className="skill-tree-source-badge">Plugin</span> : null}
           </button>
         )}
         {isManagedDirectory ? (
@@ -887,13 +881,17 @@ function GlobalSkillsTreeNodeRow({
                   {t("skillLibrary.local.openFileLocation")}
                 </button>
                 <button className="global-skills-install-menu-item" role="menuitem" type="button" onClick={handleRenameDirectory}>
-                  Rename
+                  {t("skillLibrary.local.rename")}
                 </button>
                 <button className="global-skills-install-menu-item" role="menuitem" type="button" onClick={handleMoveDirectory}>
-                  {role === "folder" ? "Move to..." : "Move to folder..."}
+                  {role === "folder"
+                    ? t("skillLibrary.local.moveTo")
+                    : t("skillLibrary.local.moveToFolder")}
                 </button>
                 <button className="global-skills-install-menu-item" role="menuitem" type="button" onClick={handleDeleteDirectory}>
-                  {role === "folder" ? "Delete empty folder" : "Delete skill"}
+                  {role === "folder"
+                    ? t("skillLibrary.local.deleteEmptyFolder")
+                    : t("skillLibrary.local.deleteSkill")}
                 </button>
               </div>
             ) : null}
@@ -988,6 +986,7 @@ export function GlobalSkillsNavigator({
   onLocalSkillSelect,
   onSearchTermChange,
 }: GlobalSkillsNavigatorProps) {
+  const { t } = useI18n()
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
   const [internalSkillSearchTerm, setInternalSkillSearchTerm] = useState("")
   const createMenuRef = useRef<HTMLDivElement | null>(null)
@@ -1097,7 +1096,7 @@ export function GlobalSkillsNavigator({
         {isLoadingSkillsTree && globalSkillsTree.length === 0 ? (
           <p className="skills-tree-empty">Loading skills...</p>
         ) : unified && visibleLocalSkillEntries.length > 0 ? (
-          <section className="skills-workspace-local-skill-list" aria-label="Local and plugin skills">
+          <section className="skills-workspace-local-skill-list" aria-label={t("skillLibrary.mode.local")}>
             {visibleLocalSkillEntries.map((entry) => (
               <GlobalSkillListRow
                 key={entry.node.path}
@@ -1153,7 +1152,7 @@ export function GlobalSkillsNavigator({
         ) : null}
 
         {visibleDownloadedSkills.length > 0 ? (
-          <section className="skills-workspace-downloaded-group" aria-label="Downloaded skills">
+          <section className="skills-workspace-downloaded-group" aria-label={t("skillLibrary.downloadedAria")}>
             <div className="skills-workspace-list-heading">
               <span>Downloaded</span>
               <span>{visibleDownloadedSkills.length}</span>
@@ -1183,10 +1182,10 @@ export function GlobalSkillsNavigator({
             ))}
           </section>
         ) : sourceFilter === "downloaded" ? (
-          <p className="skills-tree-empty">No downloaded skills match the current filters.</p>
+          <p className="skills-tree-empty">{t("skillLibrary.downloadedFilteredEmpty")}</p>
         ) : null}
 
-        {sourceFilter !== "downloaded" && sourceFilter !== "plugin" && isCreateGlobalSkillDraftVisible && creatingGlobalSkillParentDirectory === null ? (
+        {sourceFilter !== "downloaded" && isCreateGlobalSkillDraftVisible && creatingGlobalSkillParentDirectory === null ? (
           <CreateGlobalSkillForm
             creatingGlobalSkillName={creatingGlobalSkillName}
             draftKind={creatingGlobalSkillDraftKind}
@@ -1195,7 +1194,7 @@ export function GlobalSkillsNavigator({
             onChange={onCreateGlobalSkillDraftChange}
             onSubmit={onCreateGlobalSkill}
           />
-        ) : sourceFilter !== "downloaded" && sourceFilter !== "plugin" ? (
+        ) : sourceFilter !== "downloaded" ? (
           <div className="global-skills-new-menu-shell" ref={createMenuRef}>
             <button
               className={isCreateMenuOpen ? "secondary-button global-skills-new-button is-open" : "secondary-button global-skills-new-button"}

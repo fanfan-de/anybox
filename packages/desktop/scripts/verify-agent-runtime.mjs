@@ -104,9 +104,6 @@ const requiredFiles = [
   path.join(runtimeDir, "agent-server.js"),
   ...bundledCinemaProviderManifests,
   path.join(runtimeDir, "cinema-web", "index.html"),
-  path.join(runtimeDir, "connectors", "browser", "server.js"),
-  path.join(runtimeDir, "connectors", "node-repl", "server.js"),
-  path.join(runtimeDir, "connectors", "node-repl", "browser-client.mjs"),
   path.join(runtimeDir, "connectors", "gmail", "server.js"),
   path.join(runtimeDir, "connectors", "feishu", "server.js"),
   path.join(runtimeDir, "native-host", nativeHostExecutableName),
@@ -121,6 +118,20 @@ const missing = requiredFiles.filter((filePath) => !fs.existsSync(filePath))
 if (missing.length > 0) {
   console.error("[desktop][build] agent runtime is incomplete:")
   for (const filePath of missing) {
+    console.error(`- ${filePath}`)
+  }
+  process.exit(1)
+}
+
+const pluginOwnedRuntimeFiles = [
+  path.join(runtimeDir, "connectors", "browser", "server.js"),
+  path.join(runtimeDir, "connectors", "browser-runtime", "client.mjs"),
+  path.join(runtimeDir, "connectors", "node-repl", "server.js"),
+]
+const bundledPluginRuntimeFiles = pluginOwnedRuntimeFiles.filter((filePath) => fs.existsSync(filePath))
+if (bundledPluginRuntimeFiles.length > 0) {
+  console.error("[desktop][build] Browser plugin runtimes must not be bundled into the Anybox Agent runtime:")
+  for (const filePath of bundledPluginRuntimeFiles) {
     console.error(`- ${filePath}`)
   }
   process.exit(1)

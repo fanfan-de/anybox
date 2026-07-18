@@ -113,4 +113,56 @@ describe("desktop preload bridge", () => {
     expect(electronMock.invoke).toHaveBeenCalledWith("desktop:update-downloaded-registry-skill", { id: "registry:clawhub:demo/docs", version: "2.0.0" })
     expect(electronMock.invoke).toHaveBeenCalledWith("desktop:rollback-downloaded-registry-skill", { id: "registry:clawhub:demo/docs", version: "1.0.0" })
   })
+
+  it("exposes read-only installed plugin Skill browsing channels", async () => {
+    const api = electronMock.exposedDesktopApi as Record<string, (...args: unknown[]) => Promise<unknown>>
+    const directoryInput = {
+      pluginID: "docs",
+      skillID: "plugin:docs:review",
+      path: "references",
+    }
+    const fileInput = {
+      pluginID: "docs",
+      skillID: "plugin:docs:review",
+      path: "references/checklist.md",
+    }
+    const directory = {
+      pluginID: "docs",
+      skillID: "plugin:docs:review",
+      skillName: "Review Docs",
+      path: "references",
+      entries: [],
+      readOnly: true,
+    }
+    const file = {
+      pluginID: "docs",
+      skillID: "plugin:docs:review",
+      skillName: "Review Docs",
+      path: "references/checklist.md",
+      name: "checklist.md",
+      kind: "text",
+      mimeType: "text/markdown",
+      size: 12,
+      content: "# Checklist",
+      tooLarge: false,
+      readOnly: true,
+    }
+    electronMock.invoke
+      .mockResolvedValueOnce(directory)
+      .mockResolvedValueOnce(file)
+
+    await expect(api.listInstalledPluginSkillEntries(directoryInput)).resolves.toEqual(directory)
+    await expect(api.readInstalledPluginSkillFile(fileInput)).resolves.toEqual(file)
+
+    expect(electronMock.invoke).toHaveBeenNthCalledWith(
+      1,
+      "desktop:list-installed-plugin-skill-entries",
+      directoryInput,
+    )
+    expect(electronMock.invoke).toHaveBeenNthCalledWith(
+      2,
+      "desktop:read-installed-plugin-skill-file",
+      fileInput,
+    )
+  })
 })

@@ -15,7 +15,9 @@ import * as Global from "#global/global.ts"
 import { toCreateTableSQL, withPrimaryKey, zodObjectToColumnDefs } from "#database/parser.ts"
 import * as Mcp from "#mcp/manager.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
+import * as Log from "#util/log.ts"
 
+const log = Log.create({ service: "plugin" })
 const INSTALLED_PLUGINS_TABLE = "installed_plugins"
 const PLUGIN_MANIFEST_PATH = join(".anybox-plugin", "plugin.json")
 const PLUGIN_ROOT_MANIFEST_PATH = "plugin.json"
@@ -48,6 +50,9 @@ const MAX_PLUGIN_DISPLAY_ASSET_BYTES = 2 * 1024 * 1024
 const MAX_PLUGIN_REGISTRY_INDEX_BYTES = 256 * 1024
 const MAX_PLUGIN_META_BYTES = 1024 * 1024
 const MAX_PLUGIN_COMPONENT_BYTES = 1024 * 1024
+const MAX_PLUGIN_SKILL_TEXT_BYTES = 1024 * 1024
+const MAX_PLUGIN_SKILL_IMAGE_BYTES = 2 * 1024 * 1024
+const MAX_PLUGIN_SKILL_DIRECTORY_ENTRIES = 1000
 const MAX_REMOTE_PLUGIN_META_COUNT = 200
 const PLUGIN_REGISTRY_FETCH_TIMEOUT_MS = 8000
 const MAX_PLUGIN_GITHUB_DIRECTORY_BYTES = 5 * 1024 * 1024
@@ -65,6 +70,62 @@ const PLUGIN_DISPLAY_ASSET_MIME_TYPES = new Map([
   [".svg", "image/svg+xml"],
   [".webp", "image/webp"],
 ])
+const PLUGIN_SKILL_IMAGE_MIME_TYPES = new Map([
+  [".avif", "image/avif"],
+  [".bmp", "image/bmp"],
+  [".gif", "image/gif"],
+  [".ico", "image/x-icon"],
+  [".jpeg", "image/jpeg"],
+  [".jpg", "image/jpeg"],
+  [".png", "image/png"],
+  [".webp", "image/webp"],
+])
+const PLUGIN_SKILL_TEXT_EXTENSIONS = new Set([
+  ".bat",
+  ".c",
+  ".cjs",
+  ".cmd",
+  ".cpp",
+  ".css",
+  ".csv",
+  ".env",
+  ".gql",
+  ".graphql",
+  ".go",
+  ".h",
+  ".hpp",
+  ".html",
+  ".ini",
+  ".java",
+  ".js",
+  ".json",
+  ".jsonc",
+  ".jsx",
+  ".kt",
+  ".lua",
+  ".md",
+  ".markdown",
+  ".mjs",
+  ".php",
+  ".ps1",
+  ".py",
+  ".rb",
+  ".rs",
+  ".scss",
+  ".sh",
+  ".sql",
+  ".svelte",
+  ".svg",
+  ".toml",
+  ".ts",
+  ".tsv",
+  ".tsx",
+  ".txt",
+  ".vue",
+  ".xml",
+  ".yaml",
+  ".yml",
+])
 
 type PluginManifestSource = {
   manifest: PluginManifest
@@ -81,6 +142,10 @@ export type PluginErrorCode =
   | "PLUGIN_ALREADY_INSTALLED"
   | "PLUGIN_CONFIG_INVALID"
   | "PLUGIN_RISK_NOT_ALLOWED"
+  | "PLUGIN_MCP_NOT_FOUND"
+  | "PLUGIN_SKILL_NOT_FOUND"
+  | "PLUGIN_SKILL_PATH_NOT_FOUND"
+  | "PLUGIN_SKILL_PATH_INVALID"
   | "PLUGIN_CONNECTOR_NOT_FOUND"
   | "PLUGIN_CONNECTOR_NOT_CONNECTED"
   | "PLUGIN_REGISTRY_UNAVAILABLE"
@@ -335,6 +400,48 @@ export const PluginSkillPreview = z
   })
   .strict()
 export type PluginSkillPreview = z.infer<typeof PluginSkillPreview>
+
+export const PluginSkillEntry = z
+  .object({
+    name: z.string().min(1),
+    path: z.string(),
+    kind: z.enum(["file", "directory"]),
+    size: z.number().int().nonnegative().optional(),
+    mimeType: z.string().min(1).optional(),
+    hasChildren: z.boolean().optional(),
+  })
+  .strict()
+export type PluginSkillEntry = z.infer<typeof PluginSkillEntry>
+
+export const PluginSkillDirectory = z
+  .object({
+    pluginID: z.string().min(1),
+    skillID: z.string().min(1),
+    skillName: z.string().min(1),
+    path: z.string(),
+    entries: z.array(PluginSkillEntry),
+    readOnly: z.literal(true),
+  })
+  .strict()
+export type PluginSkillDirectory = z.infer<typeof PluginSkillDirectory>
+
+export const PluginSkillFile = z
+  .object({
+    pluginID: z.string().min(1),
+    skillID: z.string().min(1),
+    skillName: z.string().min(1),
+    path: z.string().min(1),
+    name: z.string().min(1),
+    kind: z.enum(["text", "image", "binary"]),
+    mimeType: z.string().min(1),
+    size: z.number().int().nonnegative(),
+    content: z.string().optional(),
+    previewUrl: z.string().optional(),
+    tooLarge: z.boolean(),
+    readOnly: z.literal(true),
+  })
+  .strict()
+export type PluginSkillFile = z.infer<typeof PluginSkillFile>
 
 const PluginRegistrySkillPreview = PluginSkillPreview.omit({ id: true })
   .extend({
@@ -631,6 +738,7 @@ export const InstalledPlugin = z
     enabled: z.boolean(),
     mcpServerID: z.string().min(1).optional(),
     mcpServerIDs: z.array(z.string()).optional(),
+    mcpServerEnabled: z.record(z.string(), z.boolean()).optional(),
     skillIDs: z.array(z.string()).optional(),
     connectorIDs: z.array(z.string()).optional(),
     connectorRequirementIDs: z.array(z.string()).optional(),
@@ -645,9 +753,10 @@ export const InstalledPlugin = z
   .strict()
 export type InstalledPlugin = Omit<
   z.infer<typeof InstalledPlugin>,
-  "mcpServerIDs" | "skillIDs" | "connectorIDs" | "connectorRequirementIDs" | "lastConnectorDiagnostics"
+  "mcpServerIDs" | "mcpServerEnabled" | "skillIDs" | "connectorIDs" | "connectorRequirementIDs" | "lastConnectorDiagnostics"
 > & {
   mcpServerIDs: string[]
+  mcpServerEnabled: Record<string, boolean>
   skillIDs: string[]
   connectorIDs: string[]
   connectorRequirementIDs: string[]
@@ -1908,9 +2017,31 @@ async function listManifestSourcesFresh() {
 
 function getPackageManifestSource(pluginID: string, options: { managedInstallOnly?: boolean } = {}) {
   const normalizedPluginID = normalizePluginID(pluginID)
+  if (options.managedInstallOnly) {
+    return getNewestPackageManifestSource(normalizedPluginID, true)
+  }
   return listPackageManifestSources()
-    .filter((entry) => !options.managedInstallOnly || entry.managedInstall)
     .find((entry) => normalizeManifestID(entry.manifest.name) === normalizedPluginID)
+}
+
+function getNewestPackageManifestSource(pluginID: string, managedInstall: boolean) {
+  const normalizedPluginID = normalizePluginID(pluginID)
+  let newest: PluginManifestSource | undefined
+
+  for (const entry of packageSearchRoots()) {
+    if (entry.managedInstall !== managedInstall) continue
+    for (const source of readPackageManifestsFromRoot(entry.root, entry.managedInstall)) {
+      if (normalizeManifestID(source.manifest.name) !== normalizedPluginID) continue
+      if (
+        !newest
+        || compareManifestVersions(source.manifest.version, newest.manifest.version) >= 0
+      ) {
+        newest = source
+      }
+    }
+  }
+
+  return newest
 }
 
 async function getRegistryManifestSource(pluginID: string) {
@@ -2297,6 +2428,9 @@ function normalizeInstalledRecord(record: z.infer<typeof InstalledPlugin> | null
   if (!record) return null
   const packageSource = getPackageManifestSource(record.pluginID, { managedInstallOnly: true })
   const mcpServerIDs = uniqueStrings([...(record.mcpServerIDs ?? []), record.mcpServerID])
+  const mcpServerEnabled = Object.fromEntries(
+    mcpServerIDs.map((serverID) => [serverID, record.mcpServerEnabled?.[serverID] ?? true]),
+  )
   const skillIDs = uniqueStrings(record.skillIDs ?? [])
   const connectorIDs = uniqueStrings(record.connectorIDs ?? [])
   const connectorRequirementIDs = uniqueStrings(record.connectorRequirementIDs ?? [])
@@ -2305,6 +2439,7 @@ function normalizeInstalledRecord(record: z.infer<typeof InstalledPlugin> | null
     ...record,
     mcpServerID: record.mcpServerID ?? mcpServerIDs[0],
     mcpServerIDs,
+    mcpServerEnabled,
     skillIDs,
     connectorIDs,
     connectorRequirementIDs,
@@ -2314,11 +2449,13 @@ function normalizeInstalledRecord(record: z.infer<typeof InstalledPlugin> | null
   }
 }
 
-function readInstalled(pluginID: string) {
+function readStoredInstalled(pluginID: string) {
   ensureInstalledPluginsTable()
-  return normalizeInstalledRecord(
-    db.findById(INSTALLED_PLUGINS_TABLE, InstalledPlugin, normalizePluginID(pluginID), "pluginID"),
-  )
+  return db.findById(INSTALLED_PLUGINS_TABLE, InstalledPlugin, normalizePluginID(pluginID), "pluginID")
+}
+
+function readInstalled(pluginID: string) {
+  return normalizeInstalledRecord(readStoredInstalled(pluginID))
 }
 
 function requiredConfigValue(plugin: PluginCatalogItem, config: Record<string, string>, field: PluginConfigField) {
@@ -2470,6 +2607,88 @@ function generatedMcpServerIDs(plugin: PluginCatalogItem) {
   ]
 }
 
+function generatedMcpServerOwner(
+  plugin: PluginCatalogItem,
+  serverID: string,
+): Config.McpServerOwner | undefined {
+  const directServer = plugin.mcpServers.find(
+    (server) => mcpServerIDForPlugin(plugin.id, server.id) === serverID,
+  )
+  if (directServer) {
+    return {
+      kind: "plugin",
+      pluginID: plugin.id,
+      bindingID: `mcp:${directServer.id}`,
+    }
+  }
+
+  const app = plugin.apps.find(
+    (candidate) => mcpServerIDForPluginApp(plugin.id, candidate.appID) === serverID,
+  )
+  if (!app) return undefined
+
+  return {
+    kind: "plugin",
+    pluginID: plugin.id,
+    bindingID: `app:${app.appID}`,
+  }
+}
+
+function normalizeMcpServerEnabled(
+  serverIDs: string[],
+  current: Record<string, boolean> | undefined,
+) {
+  return Object.fromEntries(
+    serverIDs.map((serverID) => [serverID, current?.[serverID] ?? true]),
+  )
+}
+
+function primaryMcpServerID(serverIDs: string[], current: string | undefined) {
+  return current && serverIDs.includes(current) ? current : serverIDs[0]
+}
+
+async function migrateInstalledMcpServerEnabled(
+  plugin: PluginCatalogItem,
+  installed: InstalledPlugin,
+) {
+  const stored = readStoredInstalled(installed.pluginID)
+  if (!stored) return installed
+
+  const serverIDs = generatedMcpServerIDs(plugin)
+  const storedEnabled = stored.mcpServerEnabled ?? {}
+  const nextEnabled: Record<string, boolean> = {}
+  let changed = Object.keys(storedEnabled).some((serverID) => !serverIDs.includes(serverID))
+
+  for (const serverID of serverIDs) {
+    if (Object.prototype.hasOwnProperty.call(storedEnabled, serverID)) {
+      nextEnabled[serverID] = storedEnabled[serverID]!
+      continue
+    }
+
+    const existingServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, serverID)
+    nextEnabled[serverID] = installed.enabled ? existingServer?.enabled ?? true : true
+    changed = true
+  }
+
+  if (!changed) {
+    return {
+      ...installed,
+      mcpServerEnabled: nextEnabled,
+    }
+  }
+
+  const migrated = InstalledPlugin.parse({
+    ...stored,
+    mcpServerEnabled: nextEnabled,
+  })
+  db.upsert(INSTALLED_PLUGINS_TABLE, migrated, ["pluginID"])
+  const normalized = normalizeInstalledRecord(migrated) ?? installed
+  return {
+    ...normalized,
+    mcpServerEnabled: nextEnabled,
+  }
+}
+
 function generatedSkillIDs(plugin: PluginCatalogItem) {
   return plugin.skills.map((skill) => skill.id)
 }
@@ -2483,24 +2702,109 @@ function generatedConnectorRequirementIDs(plugin: PluginCatalogItem) {
 }
 
 async function syncPluginRuntimeBindings(plugin: PluginCatalogItem, installed: InstalledPlugin) {
+  const synchronizedServerIDs: string[] = []
   for (const server of plugin.mcpServers) {
-    await Config.setMcpServer(
+    const serverID = mcpServerIDForPlugin(plugin.id, server.id)
+    const binding = runtimeBindingForMcpServer(plugin, server, installed)
+    const existing = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, serverID)
+    if (
+      existing?.owner
+      && (existing.owner.kind !== "plugin" || existing.owner.pluginID !== plugin.id)
+    ) {
+      log.warn("plugin MCP binding id is owned by another source", {
+        pluginID: plugin.id,
+        serverID,
+        owner: existing.owner,
+      })
+      synchronizedServerIDs.push(serverID)
+      continue
+    }
+    await Config.setManagedMcpServer(
       Config.GLOBAL_CONFIG_ID,
-      mcpServerIDForPlugin(plugin.id, server.id),
-      runtimeBindingForMcpServer(plugin, server, installed),
+      serverID,
+      {
+        ...binding,
+        enabled: installed.enabled && (installed.mcpServerEnabled[serverID] ?? true),
+        toolPolicies: existing?.toolPolicies ?? binding.toolPolicies,
+      },
+      {
+        kind: "plugin",
+        pluginID: plugin.id,
+        bindingID: `mcp:${server.id}`,
+      },
     )
+    synchronizedServerIDs.push(serverID)
   }
 
   for (const app of plugin.apps) {
-    await Config.setMcpServer(
+    const serverID = mcpServerIDForPluginApp(plugin.id, app.appID)
+    const binding = runtimeBindingForAppConnector(plugin, app, installed)
+    const existing = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, serverID)
+    if (
+      existing?.owner
+      && (existing.owner.kind !== "plugin" || existing.owner.pluginID !== plugin.id)
+    ) {
+      log.warn("plugin connector MCP binding id is owned by another source", {
+        pluginID: plugin.id,
+        serverID,
+        owner: existing.owner,
+      })
+      synchronizedServerIDs.push(serverID)
+      continue
+    }
+    await Config.setManagedMcpServer(
       Config.GLOBAL_CONFIG_ID,
-      mcpServerIDForPluginApp(plugin.id, app.appID),
-      runtimeBindingForAppConnector(plugin, app, installed),
+      serverID,
+      {
+        ...binding,
+        enabled: installed.enabled && (installed.mcpServerEnabled[serverID] ?? true),
+        toolPolicies: existing?.toolPolicies ?? binding.toolPolicies,
+      },
+      {
+        kind: "plugin",
+        pluginID: plugin.id,
+        bindingID: `app:${app.appID}`,
+      },
     )
+    synchronizedServerIDs.push(serverID)
   }
 
   if (plugin.connectorRequirements.length > 0) {
     await Connector.syncConnectorRuntimeBindings()
+  }
+
+  return synchronizedServerIDs
+}
+
+export async function reconcileInstalledRuntimeBindings() {
+  const desiredServerIDs = new Set<string>()
+  for (const listedInstalled of listInstalled()) {
+    await refreshManagedPluginPackageFromLocalSource(listedInstalled.pluginID)
+    const currentInstalled = readInstalled(listedInstalled.pluginID) ?? listedInstalled
+    if (currentInstalled.missingPackage) continue
+    const plugin = assertPackagePlugin(currentInstalled.pluginID)
+    const installed = await migrateInstalledMcpServerEnabled(plugin, currentInstalled)
+    const mcpServerIDs = generatedMcpServerIDs(plugin)
+    const reconciled = await writeInstalled({
+      ...installed,
+      version: plugin.version,
+      mcpServerID: primaryMcpServerID(mcpServerIDs, installed.mcpServerID),
+      mcpServerIDs,
+      mcpServerEnabled: normalizeMcpServerEnabled(mcpServerIDs, installed.mcpServerEnabled),
+      skillIDs: generatedSkillIDs(plugin),
+      connectorIDs: generatedConnectorIDs(plugin),
+      connectorRequirementIDs: generatedConnectorRequirementIDs(plugin),
+    })
+    for (const serverID of reconciled.mcpServerIDs) {
+      desiredServerIDs.add(serverID)
+    }
+  }
+
+  const existingServers = await Config.listMcpServers(Config.GLOBAL_CONFIG_ID)
+  for (const server of existingServers) {
+    if (desiredServerIDs.has(server.id) || server.owner?.kind !== "plugin") continue
+    await Config.removeMcpServer(Config.GLOBAL_CONFIG_ID, server.id)
+    await Config.removeSelectedMcpServerIDFromAllProjects(server.id)
   }
 }
 
@@ -2514,7 +2818,10 @@ async function writeInstalled(record: InstalledPlugin) {
   db.upsert(INSTALLED_PLUGINS_TABLE, parsed, ["pluginID"])
   await syncPluginRuntimeBindings(plugin, parsed)
   const staleServerIDs = (previous?.mcpServerIDs ?? []).filter((serverID) => !parsed.mcpServerIDs.includes(serverID))
-  await Promise.all(staleServerIDs.map((serverID) => Config.removeMcpServer(Config.GLOBAL_CONFIG_ID, serverID)))
+  for (const serverID of staleServerIDs) {
+    await Config.removeMcpServer(Config.GLOBAL_CONFIG_ID, serverID)
+    await Config.removeSelectedMcpServerIDFromAllProjects(serverID)
+  }
   return parsed
 }
 
@@ -2585,6 +2892,30 @@ export function resolveEnabledInstalledPluginIDs(pluginIDs: string[]) {
   return result
 }
 
+export function resolveEnabledInstalledPluginMcpServerIDs(pluginIDs: string[]) {
+  const selectedPluginIDs = new Set(resolveEnabledInstalledPluginIDs(pluginIDs))
+  if (selectedPluginIDs.size === 0) return []
+
+  return uniqueStrings(
+    listEnabledInstalled()
+      .filter((plugin) => selectedPluginIDs.has(plugin.pluginID))
+      .flatMap((plugin) => plugin.mcpServerIDs.filter(
+        (serverID) => plugin.mcpServerEnabled[serverID] ?? true,
+      )),
+  )
+}
+
+export function resolveEnabledInstalledPluginSkillIDs(pluginIDs: string[]) {
+  const selectedPluginIDs = new Set(resolveEnabledInstalledPluginIDs(pluginIDs))
+  if (selectedPluginIDs.size === 0) return []
+
+  return uniqueStrings(
+    listEnabledInstalled()
+      .filter((plugin) => selectedPluginIDs.has(plugin.pluginID))
+      .flatMap((plugin) => plugin.skillIDs),
+  )
+}
+
 export function resolveEnabledInstalledPluginConnectorRequirementServerIDs(pluginIDs: string[]) {
   const selectedPluginIDs = new Set(resolveEnabledInstalledPluginIDs(pluginIDs))
   if (selectedPluginIDs.size === 0) return []
@@ -2592,10 +2923,15 @@ export function resolveEnabledInstalledPluginConnectorRequirementServerIDs(plugi
   return uniqueStrings(
     listEnabledInstalled()
       .filter((plugin) => selectedPluginIDs.has(plugin.pluginID))
-      .flatMap((plugin) => plugin.connectorRequirementIDs)
-      .flatMap((connectorID) => {
-        const serverID = Connector.mcpServerIDForConnectorID(connectorID)
-        return serverID ? [serverID] : []
+      .flatMap((installed) => {
+        const plugin = assertPackagePlugin(installed.pluginID)
+        return plugin.connectorRequirements.flatMap((requirement) => {
+          const connectorID = Connector.connectorIDForDefinition(requirement.connector)
+          return (requirement.runtimeIDs ?? ["default"]).flatMap((runtimeID) => {
+            const serverID = Connector.mcpServerIDForConnectorID(connectorID, runtimeID)
+            return serverID ? [serverID] : []
+          })
+        })
       }),
   )
 }
@@ -3173,6 +3509,21 @@ async function copyPluginPackageToInstalled(source: PluginManifestSource) {
   return finalRoot
 }
 
+async function refreshManagedPluginPackageFromLocalSource(pluginID: string) {
+  const localSource = getNewestPackageManifestSource(pluginID, false)
+  const managedSource = getNewestPackageManifestSource(pluginID, true)
+  if (!localSource) return managedSource
+  if (
+    managedSource
+    && compareManifestVersions(localSource.manifest.version, managedSource.manifest.version) <= 0
+  ) {
+    return managedSource
+  }
+
+  await copyPluginPackageToInstalled(localSource)
+  return getNewestPackageManifestSource(pluginID, true)
+}
+
 async function ensurePluginPackageAvailable(pluginID: string) {
   const existing = getPackageManifestSource(pluginID)
   if (existing) {
@@ -3210,14 +3561,19 @@ async function ensurePluginPackageAvailable(pluginID: string) {
 export async function install(pluginID: string, input: InstallPluginInput) {
   await ensurePluginPackageAvailable(pluginID)
   const plugin = assertPackagePlugin(pluginID)
-  const existing = readInstalled(plugin.id)
+  const existingRecord = readInstalled(plugin.id)
+  const existing = existingRecord
+    ? await migrateInstalledMcpServerEnabled(plugin, existingRecord)
+    : null
+  const mcpServerIDs = generatedMcpServerIDs(plugin)
   const timestamp = now()
   const record: InstalledPlugin = {
     pluginID: plugin.id,
     version: plugin.version,
     enabled: input.enabled ?? existing?.enabled ?? true,
-    mcpServerID: existing?.mcpServerID ?? generatedMcpServerIDs(plugin)[0],
-    mcpServerIDs: generatedMcpServerIDs(plugin),
+    mcpServerID: primaryMcpServerID(mcpServerIDs, existing?.mcpServerID),
+    mcpServerIDs,
+    mcpServerEnabled: normalizeMcpServerEnabled(mcpServerIDs, existing?.mcpServerEnabled),
     skillIDs: generatedSkillIDs(plugin),
     connectorIDs: generatedConnectorIDs(plugin),
     connectorRequirementIDs: generatedConnectorRequirementIDs(plugin),
@@ -3233,17 +3589,20 @@ export async function install(pluginID: string, input: InstallPluginInput) {
 
 export async function update(pluginID: string, input: UpdateInstalledPluginInput) {
   const plugin = assertPackagePlugin(pluginID)
-  const existing = readInstalled(plugin.id)
-  if (!existing) {
+  const existingRecord = readInstalled(plugin.id)
+  if (!existingRecord) {
     throw new PluginError("INSTALLED_PLUGIN_NOT_FOUND", `Plugin '${pluginID}' is not installed.`)
   }
+  const existing = await migrateInstalledMcpServerEnabled(plugin, existingRecord)
+  const mcpServerIDs = generatedMcpServerIDs(plugin)
 
   const record: InstalledPlugin = {
     ...existing,
     version: plugin.version,
     enabled: input.enabled ?? existing.enabled,
-    mcpServerID: existing.mcpServerID ?? generatedMcpServerIDs(plugin)[0],
-    mcpServerIDs: generatedMcpServerIDs(plugin),
+    mcpServerID: primaryMcpServerID(mcpServerIDs, existing.mcpServerID),
+    mcpServerIDs,
+    mcpServerEnabled: normalizeMcpServerEnabled(mcpServerIDs, existing.mcpServerEnabled),
     skillIDs: generatedSkillIDs(plugin),
     connectorIDs: generatedConnectorIDs(plugin),
     connectorRequirementIDs: generatedConnectorRequirementIDs(plugin),
@@ -3252,6 +3611,104 @@ export async function update(pluginID: string, input: UpdateInstalledPluginInput
   }
 
   return writeInstalled(record)
+}
+
+export async function updateMcpControls(
+  pluginID: string,
+  serverID: string,
+  input: {
+    enabled?: boolean
+    toolPolicies?: Config.McpToolPolicies
+  },
+) {
+  const plugin = assertPackagePlugin(pluginID)
+  const existingRecord = readInstalled(plugin.id)
+  if (!existingRecord) {
+    throw new PluginError("INSTALLED_PLUGIN_NOT_FOUND", `Plugin '${pluginID}' is not installed.`)
+  }
+
+  const normalizedServerID = serverID.trim()
+  const expectedOwner = normalizedServerID
+    ? generatedMcpServerOwner(plugin, normalizedServerID)
+    : undefined
+  if (!expectedOwner) {
+    throw new PluginError(
+      "PLUGIN_MCP_NOT_FOUND",
+      `MCP server '${serverID}' does not belong to plugin '${plugin.id}'.`,
+    )
+  }
+
+  const installed = await migrateInstalledMcpServerEnabled(plugin, existingRecord)
+  let server = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, normalizedServerID)
+  const hasMatchingExplicitOwner = server?.owner?.kind === "plugin"
+    && server.owner.pluginID === plugin.id
+  const isExactLegacyBinding = Boolean(
+    server
+    && !server.owner
+    && installed.mcpServerIDs.includes(normalizedServerID),
+  )
+
+  if (!server || (!hasMatchingExplicitOwner && !isExactLegacyBinding)) {
+    throw new PluginError(
+      "PLUGIN_MCP_NOT_FOUND",
+      `MCP server '${serverID}' is not registered for plugin '${plugin.id}'.`,
+    )
+  }
+
+  if (!server.owner) {
+    const {
+      id: _serverID,
+      owner: _owner,
+      ...serverInput
+    } = server
+    server = await Config.setManagedMcpServer(
+      Config.GLOBAL_CONFIG_ID,
+      normalizedServerID,
+      serverInput,
+      expectedOwner,
+    )
+  }
+
+  const nextInstalled = input.enabled === undefined
+    ? installed
+    : await writeInstalled({
+        ...installed,
+        mcpServerEnabled: {
+          ...installed.mcpServerEnabled,
+          [normalizedServerID]: input.enabled,
+        },
+        updatedAt: now(),
+      })
+
+  server = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, normalizedServerID)
+  if (!server) {
+    throw new PluginError(
+      "PLUGIN_MCP_NOT_FOUND",
+      `MCP server '${serverID}' is not registered for plugin '${plugin.id}'.`,
+    )
+  }
+
+  if (input.toolPolicies !== undefined) {
+    const {
+      id: _serverID,
+      owner: _owner,
+      ...serverInput
+    } = server
+    server = await Config.setManagedMcpServer(
+      Config.GLOBAL_CONFIG_ID,
+      normalizedServerID,
+      {
+        ...serverInput,
+        toolPolicies: input.toolPolicies,
+      },
+      expectedOwner,
+    )
+  }
+
+  return {
+    plugin: nextInstalled,
+    server,
+  }
 }
 
 export async function remove(pluginID: string) {
@@ -3688,6 +4145,349 @@ export async function resolveConnectorRemoteServer(connectorID: string): Promise
     serverUrl: runtime.serverUrl,
     authorization: runtime.authorization,
     headers: runtime.headers,
+  }
+}
+
+type InstalledPluginSkillLocation = {
+  installed: InstalledPlugin
+  skill: PluginSkillPreview
+  root: string
+}
+
+function pluginSkillPathError(code: "PLUGIN_SKILL_PATH_NOT_FOUND" | "PLUGIN_SKILL_PATH_INVALID", message: string) {
+  return new PluginError(code, message)
+}
+
+function normalizePluginSkillBrowserPath(path: string, options: { allowRoot: boolean }) {
+  const trimmed = path.trim()
+  if (!trimmed || trimmed === ".") {
+    if (options.allowRoot) return ""
+    throw pluginSkillPathError("PLUGIN_SKILL_PATH_INVALID", "A Skill file path is required.")
+  }
+  if (
+    trimmed.includes("\0")
+    || trimmed.includes("\\")
+    || trimmed.startsWith("/")
+    || /^[A-Za-z]:/.test(trimmed)
+  ) {
+    throw pluginSkillPathError("PLUGIN_SKILL_PATH_INVALID", `Skill path '${path}' is invalid.`)
+  }
+
+  const segments = trimmed.split("/")
+  if (segments.some((segment) => !segment || segment === "." || segment === "..")) {
+    throw pluginSkillPathError("PLUGIN_SKILL_PATH_INVALID", `Skill path '${path}' is invalid.`)
+  }
+
+  return segments.join("/")
+}
+
+function isPathInside(root: string, candidate: string) {
+  const relativePath = relative(root, candidate)
+  return !relativePath || (!relativePath.startsWith("..") && !isAbsolute(relativePath))
+}
+
+function resolveInstalledPluginSkillLocation(pluginID: string, skillID: string): InstalledPluginSkillLocation {
+  const normalizedPluginID = normalizePluginID(pluginID)
+  const normalizedSkillID = skillID.trim()
+  const installed = readInstalled(normalizedPluginID)
+  if (!installed) {
+    throw new PluginError("INSTALLED_PLUGIN_NOT_FOUND", `Plugin '${pluginID}' is not installed.`)
+  }
+  if (installed.missingPackage || !installed.packageRoot) {
+    throw new PluginError("PLUGIN_PACKAGE_UNAVAILABLE", `Plugin '${pluginID}' package is unavailable.`)
+  }
+  if (!installed.skillIDs.includes(normalizedSkillID)) {
+    throw new PluginError(
+      "PLUGIN_SKILL_NOT_FOUND",
+      `Skill '${skillID}' does not belong to installed plugin '${normalizedPluginID}'.`,
+    )
+  }
+
+  const manifest = safeReadPluginManifest(installed.packageRoot)
+  if (!manifest || normalizeManifestID(manifest.name) !== normalizedPluginID) {
+    throw new PluginError("PLUGIN_PACKAGE_INVALID", `Plugin '${pluginID}' package manifest is invalid.`)
+  }
+
+  let realPackageRoot: string
+  try {
+    realPackageRoot = realpathSync(installed.packageRoot)
+  } catch {
+    throw new PluginError("PLUGIN_PACKAGE_UNAVAILABLE", `Plugin '${pluginID}' package is unavailable.`)
+  }
+  const matchingLocations = skillDirectoryDeclarations(manifest).flatMap((directory) => {
+    const declaredRoot = resolvePackageRelativePath(installed.packageRoot!, directory)
+    if (!declaredRoot || !existsSync(declaredRoot)) return []
+
+    try {
+      const declaredRootStat = lstatSync(declaredRoot)
+      if (!declaredRootStat.isDirectory() || declaredRootStat.isSymbolicLink()) return []
+      const realDeclaredRoot = realpathSync(declaredRoot)
+      if (!isPathInside(realPackageRoot, realDeclaredRoot)) return []
+
+      return readdirSync(realDeclaredRoot, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory() && skillIDForPlugin(normalizedPluginID, entry.name) === normalizedSkillID)
+        .flatMap((entry) => {
+          const root = join(realDeclaredRoot, entry.name)
+          const rootStat = lstatSync(root)
+          if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) return []
+          const realRoot = realpathSync(root)
+          if (!isPathInside(realPackageRoot, realRoot) || !isPathInside(realDeclaredRoot, realRoot)) return []
+
+          const skillFile = join(realRoot, "SKILL.md")
+          if (!existsSync(skillFile)) return []
+          const skillFileStat = lstatSync(skillFile)
+          if (!skillFileStat.isFile() || skillFileStat.isSymbolicLink()) return []
+
+          const parsed = matter(readFileSync(skillFile, "utf8"))
+          const frontmatter = parsed.data as { name?: unknown; description?: unknown }
+          const name = typeof frontmatter.name === "string" && frontmatter.name.trim()
+            ? frontmatter.name.trim()
+            : entry.name
+          const description = typeof frontmatter.description === "string" && frontmatter.description.trim()
+            ? frontmatter.description.trim()
+            : firstParagraph(parsed.content) || name
+          const skill: PluginSkillPreview = {
+            id: normalizedSkillID,
+            name,
+            description,
+            directory: entry.name,
+          }
+          return [{ installed, skill, root: realRoot }]
+        })
+    } catch {
+      return []
+    }
+  })
+
+  if (matchingLocations.length === 0) {
+    throw new PluginError(
+      "PLUGIN_SKILL_NOT_FOUND",
+      `Skill '${skillID}' does not belong to installed plugin '${normalizedPluginID}'.`,
+    )
+  }
+  if (matchingLocations.length > 1) {
+    throw new PluginError(
+      "PLUGIN_PACKAGE_INVALID",
+      `Plugin '${normalizedPluginID}' declares duplicate Skill directory '${matchingLocations[0]!.skill.directory}'.`,
+    )
+  }
+
+  return matchingLocations[0]!
+}
+
+function resolveInstalledPluginSkillPath(root: string, path: string, options: { allowRoot: boolean }) {
+  const normalizedPath = normalizePluginSkillBrowserPath(path, options)
+
+  try {
+    const realRoot = realpathSync(root)
+    const candidate = normalizedPath
+      ? resolve(realRoot, ...normalizedPath.split("/"))
+      : realRoot
+    if (!isPathInside(realRoot, candidate)) {
+      throw pluginSkillPathError("PLUGIN_SKILL_PATH_INVALID", `Skill path '${path}' is outside the Skill directory.`)
+    }
+
+    let current = realRoot
+    for (const segment of normalizedPath ? normalizedPath.split("/") : []) {
+      current = join(current, segment)
+      const currentStat = lstatSync(current)
+      if (currentStat.isSymbolicLink()) {
+        throw pluginSkillPathError("PLUGIN_SKILL_PATH_INVALID", `Skill path '${path}' contains a symbolic link.`)
+      }
+    }
+
+    const realCandidate = realpathSync(candidate)
+    if (!isPathInside(realRoot, realCandidate)) {
+      throw pluginSkillPathError("PLUGIN_SKILL_PATH_INVALID", `Skill path '${path}' is outside the Skill directory.`)
+    }
+
+    return {
+      normalizedPath,
+      path: realCandidate,
+    }
+  } catch (error) {
+    if (error instanceof PluginError) throw error
+    throw pluginSkillPathError("PLUGIN_SKILL_PATH_NOT_FOUND", `Skill path '${path || "."}' was not found.`)
+  }
+}
+
+function pluginSkillTextMimeType(path: string) {
+  switch (extname(path).toLowerCase()) {
+    case ".css":
+      return "text/css"
+    case ".csv":
+      return "text/csv"
+    case ".html":
+      return "text/html"
+    case ".js":
+    case ".cjs":
+    case ".mjs":
+      return "text/javascript"
+    case ".json":
+    case ".jsonc":
+      return "application/json"
+    case ".md":
+    case ".markdown":
+      return "text/markdown"
+    case ".svg":
+      return "image/svg+xml"
+    case ".ts":
+    case ".tsx":
+      return "text/typescript"
+    case ".xml":
+      return "application/xml"
+    case ".yaml":
+    case ".yml":
+      return "application/yaml"
+    default:
+      return "text/plain"
+  }
+}
+
+function pluginSkillEntryMimeType(path: string) {
+  return PLUGIN_SKILL_IMAGE_MIME_TYPES.get(extname(path).toLowerCase())
+    ?? (PLUGIN_SKILL_TEXT_EXTENSIONS.has(extname(path).toLowerCase()) ? pluginSkillTextMimeType(path) : undefined)
+}
+
+function hasSafePluginSkillChildren(directory: string) {
+  return readdirSync(directory, { withFileTypes: true }).some((entry) => !entry.isSymbolicLink())
+}
+
+export function listInstalledPluginSkillEntries(
+  pluginID: string,
+  skillID: string,
+  path = "",
+): PluginSkillDirectory {
+  const location = resolveInstalledPluginSkillLocation(pluginID, skillID)
+  const directory = resolveInstalledPluginSkillPath(location.root, path, { allowRoot: true })
+  const directoryStat = lstatSync(directory.path)
+  if (!directoryStat.isDirectory()) {
+    throw pluginSkillPathError("PLUGIN_SKILL_PATH_INVALID", `Skill path '${path || "."}' is not a directory.`)
+  }
+
+  const rawEntries = readdirSync(directory.path, { withFileTypes: true })
+    .filter((entry) => !entry.isSymbolicLink())
+  if (rawEntries.length > MAX_PLUGIN_SKILL_DIRECTORY_ENTRIES) {
+    throw pluginSkillPathError(
+      "PLUGIN_SKILL_PATH_INVALID",
+      `Skill directory '${path || "."}' contains too many entries to browse.`,
+    )
+  }
+
+  const entries = rawEntries
+    .map((entry): PluginSkillEntry | null => {
+      const absoluteEntryPath = join(directory.path, entry.name)
+      const entryPath = directory.normalizedPath
+        ? `${directory.normalizedPath}/${entry.name}`
+        : entry.name
+      if (entry.isDirectory()) {
+        return {
+          name: entry.name,
+          path: entryPath,
+          kind: "directory",
+          hasChildren: hasSafePluginSkillChildren(absoluteEntryPath),
+        }
+      }
+      if (!entry.isFile()) return null
+
+      const entryStat = lstatSync(absoluteEntryPath)
+      return {
+        name: entry.name,
+        path: entryPath,
+        kind: "file",
+        size: entryStat.size,
+        mimeType: pluginSkillEntryMimeType(entry.name),
+      }
+    })
+    .filter((entry): entry is PluginSkillEntry => Boolean(entry))
+    .toSorted((left, right) => {
+      if (left.kind !== right.kind) return left.kind === "directory" ? -1 : 1
+      return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: "base" })
+    })
+
+  return {
+    pluginID: location.installed.pluginID,
+    skillID: location.skill.id,
+    skillName: location.skill.name,
+    path: directory.normalizedPath,
+    entries,
+    readOnly: true,
+  }
+}
+
+function decodePluginSkillText(bytes: Buffer) {
+  if (bytes.includes(0)) return undefined
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes)
+  } catch {
+    return undefined
+  }
+}
+
+export function readInstalledPluginSkillFile(
+  pluginID: string,
+  skillID: string,
+  path: string,
+): PluginSkillFile {
+  const location = resolveInstalledPluginSkillLocation(pluginID, skillID)
+  const file = resolveInstalledPluginSkillPath(location.root, path, { allowRoot: false })
+  const fileStat = lstatSync(file.path)
+  if (!fileStat.isFile()) {
+    throw pluginSkillPathError("PLUGIN_SKILL_PATH_INVALID", `Skill path '${path}' is not a file.`)
+  }
+
+  const name = file.normalizedPath.split("/").at(-1) ?? file.normalizedPath
+  const extension = extname(name).toLowerCase()
+  const imageMimeType = PLUGIN_SKILL_IMAGE_MIME_TYPES.get(extension)
+  const common = {
+    pluginID: location.installed.pluginID,
+    skillID: location.skill.id,
+    skillName: location.skill.name,
+    path: file.normalizedPath,
+    name,
+    size: fileStat.size,
+    readOnly: true as const,
+  }
+
+  if (imageMimeType) {
+    if (fileStat.size > MAX_PLUGIN_SKILL_IMAGE_BYTES) {
+      return {
+        ...common,
+        kind: "image",
+        mimeType: imageMimeType,
+        tooLarge: true,
+      }
+    }
+
+    return {
+      ...common,
+      kind: "image",
+      mimeType: imageMimeType,
+      previewUrl: `data:${imageMimeType};base64,${readFileSync(file.path).toString("base64")}`,
+      tooLarge: false,
+    }
+  }
+
+  if (fileStat.size <= MAX_PLUGIN_SKILL_TEXT_BYTES) {
+    const bytes = readFileSync(file.path)
+    const content = decodePluginSkillText(bytes)
+    if (content !== undefined) {
+      return {
+        ...common,
+        kind: "text",
+        mimeType: pluginSkillTextMimeType(file.path),
+        content,
+        tooLarge: false,
+      }
+    }
+  }
+
+  const isKnownTextFile = PLUGIN_SKILL_TEXT_EXTENSIONS.has(extension)
+  return {
+    ...common,
+    kind: isKnownTextFile ? "text" : "binary",
+    mimeType: isKnownTextFile ? pluginSkillTextMimeType(file.path) : "application/octet-stream",
+    tooLarge: isKnownTextFile && fileStat.size > MAX_PLUGIN_SKILL_TEXT_BYTES,
   }
 }
 

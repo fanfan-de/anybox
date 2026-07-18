@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import {
   BackIcon,
@@ -13,7 +13,10 @@ import {
   SettingsIcon,
 } from "../icons"
 import { ShellTopMenu, joinClassNames } from "../shared-ui"
+import { McpToolsPolicyPanel } from "../mcp/McpToolsPolicyPanel"
+import { mcpToolPolicyDraftFromServer } from "../mcp/mcp-tool-policies"
 import { installedPluginDisplayName } from "../plugin-catalog"
+import { PluginSkillBrowserPanel } from "./PluginSkillBrowserPanel"
 import { useI18n } from "../i18n/I18nProvider"
 import type { TranslationKey } from "../i18n/translations"
 import type { AppLocale } from "../../../../shared/locale"
@@ -21,11 +24,14 @@ import type {
   ConnectorStatus,
   InstalledPlugin,
   McpServerDiagnostic,
+  McpServerSummary,
+  McpToolPolicyValue,
   PluginCatalogItem,
   PluginCategory,
   PluginConnectorStatus,
   PluginDraftState,
   PluginRuntimeTemplate,
+  PluginSkillPreview,
 } from "../types"
 
 interface PluginsPageProps {
@@ -42,6 +48,10 @@ interface PluginsPageProps {
   pluginConnectorStatuses: Record<string, PluginConnectorStatus[]>
   pluginDiagnostics: Record<string, McpServerDiagnostic>
   pluginDraft: PluginDraftState
+  mcpDiagnostics: Record<string, McpServerDiagnostic>
+  mcpServers: McpServerSummary[]
+  diagnosingMcpServerID: string | null
+  savingMcpServerID: string | null
   savingPluginConnectorID: string | null
   hideTopMenu?: boolean
   searchQuery?: string
@@ -53,6 +63,7 @@ interface PluginsPageProps {
   onDeleteInstalledPluginConnectorAuthSession: (pluginID: string, appID: string) => boolean | Promise<boolean>
   onDiagnoseInstalledPlugin: (pluginID: string) => boolean | Promise<boolean>
   onDiagnoseInstalledPluginConnector: (pluginID: string, appID: string) => boolean | Promise<boolean>
+  onDiagnoseMcpServer: (serverID: string) => boolean | Promise<boolean>
   onImportPluginFromURL: (url: string) => boolean | Promise<boolean>
   onInstallPlugin: (pluginID: string) => boolean | Promise<boolean>
   onPluginDraftAppApiKeyChange: (appID: string, value: string) => void
@@ -63,6 +74,18 @@ interface PluginsPageProps {
   onSaveInstalledPluginConfig: (pluginID: string) => boolean | Promise<boolean>
   onSearchQueryChange?: (value: string) => void
   onSetInstalledPluginEnabled: (pluginID: string, enabled: boolean) => boolean | Promise<boolean>
+  onSetInstalledPluginMcpEnabled: (
+    pluginID: string,
+    serverID: string,
+    enabled: boolean,
+  ) => boolean | Promise<boolean>
+  onSetInstalledPluginMcpToolPolicy: (
+    pluginID: string,
+    serverID: string,
+    toolName: string,
+    policy: McpToolPolicyValue,
+  ) => boolean | Promise<boolean>
+  onManageConnector?: (connectorID: string) => void
   onStartInstalledPluginConnectorAuthFlow: (pluginID: string, appID: string) => boolean | Promise<boolean>
 }
 
@@ -126,6 +149,10 @@ function generatedServerID(plugin: PluginCatalogItem, server: PluginCatalogItem[
   return server.id === "default" ? `plugin.${plugin.id}` : `plugin.${plugin.id}.${server.id}`
 }
 
+function generatedAppServerID(plugin: PluginCatalogItem, appID: string) {
+  return `plugin.${plugin.id}.connector.${appID}`
+}
+
 function toolSummary(tools?: Array<{ name: string; title?: string }>) {
   if (!tools?.length) return "No static tools declared"
   return tools.map((tool) => tool.title ?? tool.name).join(", ")
@@ -159,6 +186,135 @@ function connectorStatusDotClassName(status: ConnectorStatus | PluginConnectorSt
   if (status?.authStatus === "error" || status?.authStatus === "expired") return "is-error"
   if (status?.authStatus === "unavailable") return "is-unavailable"
   return "is-disconnected"
+}
+
+function findPluginMcpServer(
+  servers: McpServerSummary[],
+  installed: InstalledPlugin | null,
+  pluginID: string,
+  bindingID: string,
+  fallbackServerID: string,
+) {
+  const ownedBinding = servers.find(
+    (server) => server.owner?.kind === "plugin"
+      && server.owner.pluginID === pluginID
+      && server.owner.bindingID === bindingID,
+  )
+  if (ownedBinding) return ownedBinding
+
+  if (!installed?.mcpServerIDs.includes(fallbackServerID)) return undefined
+  return servers.find((server) => server.id === fallbackServerID && !server.owner)
+}
+
+interface PluginMcpControlsProps {
+  diagnostic: McpServerDiagnostic | null
+  installed: InstalledPlugin | null
+  isDiagnosing: boolean
+  isSaving: boolean
+  pluginID: string
+  server: McpServerSummary | undefined
+  t: Translate
+  onDiagnose: (serverID: string) => boolean | Promise<boolean>
+  onEnabledChange: (pluginID: string, serverID: string, enabled: boolean) => boolean | Promise<boolean>
+  onPolicyChange: (
+    pluginID: string,
+    serverID: string,
+    toolName: string,
+    policy: McpToolPolicyValue,
+  ) => boolean | Promise<boolean>
+  onRepair: () => boolean | Promise<boolean>
+}
+
+function PluginMcpControls({
+  diagnostic,
+  installed,
+  isDiagnosing,
+  isSaving,
+  pluginID,
+  server,
+  t,
+  onDiagnose,
+  onEnabledChange,
+  onPolicyChange,
+  onRepair,
+}: PluginMcpControlsProps) {
+  if (!installed || installed.missingPackage) {
+    return <p className="plugins-connector-empty">{t("plugins.mcp.installPreview")}</p>
+  }
+
+  if (!server) {
+    return (
+      <div className="plugins-mcp-binding-error">
+        <div className="settings-banner is-error" role="alert">
+          {t("plugins.mcp.bindingMissing")}
+        </div>
+        <button
+          className="plugins-detail-uninstall-button"
+          type="button"
+          onClick={() => void onRepair()}
+        >
+          {t("plugins.mcp.repair")}
+        </button>
+      </div>
+    )
+  }
+
+  const preferenceEnabled = installed.mcpServerEnabled[server.id] ?? true
+  const controlsDisabled = isSaving || !installed.enabled
+  const diagnosticDisabled = controlsDisabled || isDiagnosing || !preferenceEnabled || !server.enabled
+  const preferenceCopy = !installed.enabled
+    ? t("plugins.mcp.pausedByPlugin")
+    : preferenceEnabled
+      ? t("plugins.mcp.enabledCopy")
+      : t("plugins.mcp.disabledCopy")
+
+  return (
+    <div className="plugins-mcp-controls">
+      <div className="plugins-mcp-control-row">
+        <span className="plugins-mcp-control-copy">
+          <strong>{t("plugins.mcp.enable")}</strong>
+          <small>{preferenceCopy}</small>
+        </span>
+        <button
+          className={preferenceEnabled ? "plugins-mcp-switch is-active" : "plugins-mcp-switch"}
+          type="button"
+          role="switch"
+          aria-checked={preferenceEnabled}
+          aria-label={t("plugins.mcp.enableAria", { server: server.name ?? server.id })}
+          disabled={controlsDisabled}
+          onClick={() => void onEnabledChange(pluginID, server.id, !preferenceEnabled)}
+        >
+          <span aria-hidden="true" />
+        </button>
+      </div>
+
+      <div className="plugins-connector-actions">
+        <button
+          className="plugins-detail-uninstall-button"
+          type="button"
+          disabled={diagnosticDisabled}
+          onClick={() => void onDiagnose(server.id)}
+        >
+          {isDiagnosing ? t("plugins.mcp.checking") : t("plugins.mcp.diagnose")}
+        </button>
+      </div>
+
+      {diagnostic?.error ? (
+        <div className="settings-banner is-error" role="alert">{diagnostic.error}</div>
+      ) : null}
+
+      {diagnostic?.ok ? (
+        <McpToolsPolicyPanel
+          diagnostic={diagnostic}
+          disabled={isSaving || !installed.enabled || !preferenceEnabled}
+          draft={mcpToolPolicyDraftFromServer(server)}
+          onPolicyChange={(toolName, policy) => {
+            void onPolicyChange(pluginID, server.id, toolName, policy)
+          }}
+        />
+      ) : null}
+    </div>
+  )
 }
 
 function openPluginExternalUrl(url: string) {
@@ -764,6 +920,105 @@ function InstalledPluginsSidebar({
   )
 }
 
+type PluginSkillContextMenuState = {
+  pluginID: string
+  pluginName: string
+  skill: PluginSkillPreview
+  canBrowse: boolean
+  trigger: HTMLButtonElement
+  x: number
+  y: number
+} | null
+
+type PluginSkillBrowserState = {
+  pluginID: string
+  pluginName: string
+  skill: PluginSkillPreview
+  trigger: HTMLButtonElement
+} | null
+
+interface PluginSkillContextMenuProps {
+  menu: NonNullable<PluginSkillContextMenuState>
+  t: Translate
+  onBrowse: (menu: NonNullable<PluginSkillContextMenuState>) => void
+  onClose: (restoreFocus?: boolean) => void
+}
+
+function PluginSkillContextMenu({
+  menu,
+  t,
+  onBrowse,
+  onClose,
+}: PluginSkillContextMenuProps) {
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const actionRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (menu.canBrowse) {
+      actionRef.current?.focus()
+    } else {
+      menuRef.current?.focus()
+    }
+
+    function handlePointerDown(event: globalThis.PointerEvent) {
+      const target = event.target as Node | null
+      if (!target || menuRef.current?.contains(target)) return
+      onClose()
+    }
+
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") onClose()
+    }
+    function handleViewportChange() {
+      onClose()
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
+    window.addEventListener("resize", handleViewportChange)
+    window.addEventListener("scroll", handleViewportChange, true)
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
+      window.removeEventListener("resize", handleViewportChange)
+      window.removeEventListener("scroll", handleViewportChange, true)
+    }
+  }, [onClose])
+
+  const position = clampInstalledPluginContextMenuPosition(menu.x, menu.y)
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      className="ui-context-menu plugins-skill-context-menu"
+      role="menu"
+      aria-label={t("plugins.skill.menuAria", { skill: menu.skill.name })}
+      tabIndex={-1}
+      style={{ left: position.x, top: position.y }}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      <button
+        ref={actionRef}
+        className="ui-context-menu__item"
+        role="menuitem"
+        type="button"
+        disabled={!menu.canBrowse}
+        title={!menu.canBrowse ? t("plugins.skill.browseUnavailable") : undefined}
+        onClick={() => {
+          if (!menu.canBrowse) return
+          onClose(false)
+          onBrowse(menu)
+        }}
+      >
+        <span className="ui-context-menu__icon" aria-hidden="true"><FolderOpenIcon /></span>
+        <span className="ui-context-menu__label">{t("plugins.skill.browse")}</span>
+      </button>
+    </div>,
+    document.body,
+  )
+}
+
 interface PluginSectionProps {
   canInstallPlugin: (plugin: PluginCatalogItem) => boolean
   installedByPluginID: Map<string, InstalledPlugin>
@@ -825,6 +1080,7 @@ export function PluginsPage({
   activePluginID,
   connectorStatuses,
   deletingPluginID,
+  diagnosingMcpServerID,
   diagnosingPluginID,
   installingPluginID,
   installedPlugins,
@@ -833,17 +1089,21 @@ export function PluginsPage({
   loadError,
   pluginCatalog,
   pluginConnectorStatuses,
+  mcpDiagnostics,
+  mcpServers,
   searchQuery,
   updatingPluginID,
   windowControls,
   diagnosingPluginConnectorID,
   pluginDraft,
   savingPluginConnectorID,
+  savingMcpServerID,
   onCancelInstalledPluginConnectorAuthFlow,
   onDeleteInstalledPlugin,
   onDeleteInstalledPluginConnectorApiKey,
   onDeleteInstalledPluginConnectorAuthSession,
   onDiagnoseInstalledPluginConnector,
+  onDiagnoseMcpServer,
   onImportPluginFromURL,
   onInstallPlugin,
   onPluginDraftAppApiKeyChange,
@@ -852,6 +1112,10 @@ export function PluginsPage({
   onPluginSelect,
   onSaveInstalledPluginConnectorApiKey,
   onSaveInstalledPluginConfig,
+  onSetInstalledPluginEnabled,
+  onSetInstalledPluginMcpEnabled,
+  onSetInstalledPluginMcpToolPolicy,
+  onManageConnector,
   onStartInstalledPluginConnectorAuthFlow,
 }: PluginsPageProps) {
   const { locale, t } = useI18n()
@@ -861,6 +1125,8 @@ export function PluginsPage({
   const [pluginImportURL, setPluginImportURL] = useState("")
   const [pluginImportError, setPluginImportError] = useState<string | null>(null)
   const [isImportingPluginURL, setIsImportingPluginURL] = useState(false)
+  const [skillContextMenu, setSkillContextMenu] = useState<PluginSkillContextMenuState>(null)
+  const [skillBrowser, setSkillBrowser] = useState<PluginSkillBrowserState>(null)
   const effectiveSearchQuery = searchQuery ?? ""
 
   const installedByPluginID = useMemo(
@@ -976,6 +1242,28 @@ export function PluginsPage({
   const toggleIncludedItem = (itemID: string) => {
     setExpandedIncludedItemID((currentItemID) => currentItemID === itemID ? null : itemID)
   }
+  const closeSkillContextMenu = useCallback((restoreFocus = true) => {
+    const trigger = skillContextMenu?.trigger
+    setSkillContextMenu(null)
+    if (restoreFocus && trigger) {
+      window.requestAnimationFrame(() => trigger.focus())
+    }
+  }, [skillContextMenu])
+  const openSkillBrowser = useCallback((menu: NonNullable<PluginSkillContextMenuState>) => {
+    setSkillBrowser({
+      pluginID: menu.pluginID,
+      pluginName: menu.pluginName,
+      skill: menu.skill,
+      trigger: menu.trigger,
+    })
+  }, [])
+  const closeSkillBrowser = useCallback(() => {
+    const trigger = skillBrowser?.trigger
+    setSkillBrowser(null)
+    if (trigger) {
+      window.requestAnimationFrame(() => trigger.focus())
+    }
+  }, [skillBrowser])
   const openImportURLDialog = () => {
     setPluginImportError(null)
     setIsImportURLDialogOpen(true)
@@ -1085,6 +1373,11 @@ export function PluginsPage({
   useEffect(() => {
     setExpandedIncludedItemID(defaultIncludedItemID)
   }, [defaultIncludedItemID])
+
+  useEffect(() => {
+    setSkillContextMenu(null)
+    setSkillBrowser(null)
+  }, [activePluginID])
 
   return (
     <section className={hideTopMenu ? "plugins-page is-embedded" : "plugins-page"} aria-label={pluginsTitle}>
@@ -1281,78 +1574,6 @@ export function PluginsPage({
                   <section className="plugins-detail-section">
                     <h2>{t("plugins.detail.included")}</h2>
                     <div className="plugins-included-card">
-                      {activePlugin.mcpServers.map((server) => {
-                        const itemID = `${activePlugin.id}:mcp:${server.id}`
-                        const isExpanded = expandedIncludedItemID === itemID
-                        const statusLabel = activeInstalledPlugin
-                          ? installedPluginStatusText(activeInstalledPlugin, t)
-                          : t("plugins.status.notInstalled")
-                        const statusClassName = activeInstalledPlugin
-                          ? installedPluginStatusClassName(activeInstalledPlugin)
-                          : "is-not-installed"
-
-                        return (
-                          <div key={`mcp:${server.id}`} className="plugins-included-item">
-                            <button
-                              className={isExpanded ? "plugins-included-row is-expanded" : "plugins-included-row"}
-                              type="button"
-                              aria-expanded={isExpanded}
-                              aria-controls={`${itemID}:detail`}
-                              aria-label={`Show details for ${server.name}`}
-                              onClick={() => toggleIncludedItem(itemID)}
-                            >
-                              <span className="plugins-included-icon"><PluginIcon /></span>
-                              <span className="plugins-included-copy">
-                                <strong>{server.name}</strong>
-                                <span>{runtimeTitle(server.runtime)}</span>
-                              </span>
-                              <span
-                                className={joinClassNames("plugins-included-status-dot", statusClassName)}
-                                role="img"
-                                aria-label={`Status: ${statusLabel}`}
-                                title={statusLabel}
-                              />
-                              <span className="plugins-included-chevron" aria-hidden="true"><ChevronDownIcon /></span>
-                            </button>
-                            {isExpanded ? (
-                              <div className="plugins-included-detail" id={`${itemID}:detail`}>
-                                <dl className="plugins-included-detail-grid">
-                                  <div>
-                                    <dt>Type</dt>
-                                    <dd>MCP server</dd>
-                                  </div>
-                                  <div>
-                                    <dt>Server ID</dt>
-                                    <dd>{generatedServerID(activePlugin, server)}</dd>
-                                  </div>
-                                  <div>
-                                    <dt>Runtime</dt>
-                                    <dd>{runtimePrimary(server.runtime)}</dd>
-                                  </div>
-                                  <div>
-                                    <dt>Runtime details</dt>
-                                    <dd>{runtimeSecondary(server.runtime)}</dd>
-                                  </div>
-                                  <div>
-                                    <dt>Tools</dt>
-                                    <dd>{toolSummary(server.tools)}</dd>
-                                  </div>
-                                  <div>
-                                    <dt>Permissions</dt>
-                                    <dd>{permissionSummary(server.permissions)}</dd>
-                                  </div>
-                                  {server.description ? (
-                                    <div className="is-wide">
-                                      <dt>Description</dt>
-                                      <dd>{server.description}</dd>
-                                    </div>
-                                  ) : null}
-                                </dl>
-                              </div>
-                            ) : null}
-                          </div>
-                        )
-                      })}
                       {activePlugin.skills.map((skill) => {
                         const itemID = `${activePlugin.id}:skill:${skill.id}`
                         const isExpanded = expandedIncludedItemID === itemID
@@ -1362,6 +1583,22 @@ export function PluginsPage({
                         const statusClassName = activeInstalledPlugin
                           ? installedPluginStatusClassName(activeInstalledPlugin)
                           : "is-not-installed"
+                        const canBrowseSkill = Boolean(activeInstalledPlugin && !activeInstalledPlugin.missingPackage)
+                        const openSkillContextMenu = (
+                          trigger: HTMLButtonElement,
+                          x: number,
+                          y: number,
+                        ) => {
+                          setSkillContextMenu({
+                            pluginID: activePlugin.id,
+                            pluginName: activePluginName,
+                            skill,
+                            canBrowse: canBrowseSkill,
+                            trigger,
+                            x,
+                            y,
+                          })
+                        }
 
                         return (
                           <div key={`skill:${skill.id}`} className="plugins-included-item">
@@ -1372,6 +1609,26 @@ export function PluginsPage({
                               aria-controls={`${itemID}:detail`}
                               aria-label={`Show details for ${skill.name}`}
                               onClick={() => toggleIncludedItem(itemID)}
+                              onContextMenu={(event) => {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                openSkillContextMenu(
+                                  event.currentTarget,
+                                  event.clientX,
+                                  event.clientY,
+                                )
+                              }}
+                              onKeyDown={(event) => {
+                                if ((event.shiftKey && event.key === "F10") || event.key === "ContextMenu") {
+                                  event.preventDefault()
+                                  const rect = event.currentTarget.getBoundingClientRect()
+                                  openSkillContextMenu(
+                                    event.currentTarget,
+                                    rect.left + 20,
+                                    rect.top + 20,
+                                  )
+                                }
+                              }}
                             >
                               <span className="plugins-included-icon"><SettingsIcon /></span>
                               <span className="plugins-included-copy">
@@ -1406,37 +1663,76 @@ export function PluginsPage({
                                     <dd>{skill.description}</dd>
                                   </div>
                                 </dl>
+                                <div className="plugins-skill-detail-actions">
+                                  <button
+                                    className="secondary-button plugins-skill-browse-button"
+                                    type="button"
+                                    disabled={!canBrowseSkill}
+                                    title={!canBrowseSkill ? t("plugins.skill.browseUnavailable") : undefined}
+                                    onClick={(event) => {
+                                      setSkillBrowser({
+                                        pluginID: activePlugin.id,
+                                        pluginName: activePluginName,
+                                        skill,
+                                        trigger: event.currentTarget,
+                                      })
+                                    }}
+                                  >
+                                    <FolderOpenIcon />
+                                    <span>{t("plugins.skill.browse")}</span>
+                                  </button>
+                                </div>
                               </div>
                             ) : null}
                           </div>
                         )
                       })}
-                      {activePlugin.connectorRequirements.map((requirement) => {
-                        const itemID = `${activePlugin.id}:connector-requirement:${requirement.connector}`
+                      {activePlugin.mcpServers.map((server) => {
+                        const itemID = `${activePlugin.id}:mcp:${server.id}`
                         const isExpanded = expandedIncludedItemID === itemID
-                        const status = platformConnectorStatusByDefinitionID.get(requirement.connector)
-                        const statusLabel = connectorStatusLabel(status)
-                        const connectorID = status?.connectorID ?? `connector:${requirement.connector}:default`
-                        const requestedTools = requirement.tools?.join(", ") || "Declared by connector"
-                        const requestedPermissions = requirement.permissions?.join(", ") || "Declared by connector"
+                        const serverID = generatedServerID(activePlugin, server)
+                        const mcpServer = findPluginMcpServer(
+                          mcpServers,
+                          activeInstalledPlugin,
+                          activePlugin.id,
+                          `mcp:${server.id}`,
+                          serverID,
+                        )
+                        const preferenceEnabled = activeInstalledPlugin?.mcpServerEnabled[serverID] ?? true
+                        const statusLabel = !activeInstalledPlugin
+                          ? t("plugins.status.notInstalled")
+                          : !mcpServer
+                            ? t("plugins.mcp.bindingMissing")
+                            : !activeInstalledPlugin.enabled
+                              ? t("plugins.status.disabled")
+                              : preferenceEnabled
+                                ? t("app.enabled")
+                                : t("app.disabled")
+                        const statusClassName = !activeInstalledPlugin
+                          ? "is-not-installed"
+                          : !mcpServer
+                            ? "is-error"
+                            : activeInstalledPlugin.enabled && preferenceEnabled
+                              ? "is-enabled"
+                              : "is-unavailable"
 
                         return (
-                          <div key={`connector-requirement:${requirement.connector}`} className="plugins-included-item">
+                          <div key={`mcp:${server.id}`} className="plugins-included-item">
                             <button
                               className={isExpanded ? "plugins-included-row is-expanded" : "plugins-included-row"}
                               type="button"
                               aria-expanded={isExpanded}
                               aria-controls={`${itemID}:detail`}
-                              aria-label={`Show details for ${requirement.connector}`}
+                              aria-label={`Show details for ${server.name}`}
                               onClick={() => toggleIncludedItem(itemID)}
                             >
-                              <span className="plugins-included-icon"><ConnectedStatusIcon /></span>
+                              <span className="plugins-included-icon"><PluginIcon /></span>
                               <span className="plugins-included-copy">
-                                <strong>{requirement.connector}</strong>
-                                <span>{requirement.reason ?? "Platform connector requirement"}</span>
+                                <strong>{server.name}</strong>
+                                <span>{runtimeTitle(server.runtime)}</span>
                               </span>
                               <span
-                                className={joinClassNames("plugins-included-status-dot", connectorStatusDotClassName(status))}
+                                className={joinClassNames("plugins-included-status-dot", statusClassName)}
                                 role="img"
                                 aria-label={`Status: ${statusLabel}`}
                                 title={statusLabel}
@@ -1448,51 +1744,48 @@ export function PluginsPage({
                                 <dl className="plugins-included-detail-grid">
                                   <div>
                                     <dt>Type</dt>
-                                    <dd>Platform connector</dd>
+                                    <dd>MCP server</dd>
                                   </div>
                                   <div>
-                                    <dt>Connector</dt>
-                                    <dd>{requirement.connector}</dd>
+                                    <dt>Server ID</dt>
+                                    <dd>{serverID}</dd>
                                   </div>
                                   <div>
-                                    <dt>Status</dt>
-                                    <dd>{connectorStatusLabel(status)}</dd>
+                                    <dt>Runtime</dt>
+                                    <dd>{runtimePrimary(server.runtime)}</dd>
                                   </div>
                                   <div>
-                                    <dt>Connector ID</dt>
-                                    <dd>{connectorID}</dd>
-                                  </div>
-                                  {status?.email ? (
-                                    <div>
-                                      <dt>Account</dt>
-                                      <dd>{status.email}</dd>
-                                    </div>
-                                  ) : null}
-                                  {status?.generatedMcpServerID ? (
-                                    <div>
-                                      <dt>MCP server</dt>
-                                      <dd>{status.generatedMcpServerID}</dd>
-                                    </div>
-                                  ) : null}
-                                  <div>
-                                    <dt>Required</dt>
-                                    <dd>{requirement.required === false ? "Optional" : "Required"}</dd>
+                                    <dt>Runtime details</dt>
+                                    <dd>{runtimeSecondary(server.runtime)}</dd>
                                   </div>
                                   <div>
                                     <dt>Tools</dt>
-                                    <dd>{requestedTools}</dd>
+                                    <dd>{toolSummary(server.tools)}</dd>
                                   </div>
                                   <div>
                                     <dt>Permissions</dt>
-                                    <dd>{requestedPermissions}</dd>
+                                    <dd>{permissionSummary(server.permissions)}</dd>
                                   </div>
-                                  {requirement.reason ? (
+                                  {server.description ? (
                                     <div className="is-wide">
-                                      <dt>Reason</dt>
-                                      <dd>{requirement.reason}</dd>
+                                      <dt>Description</dt>
+                                      <dd>{server.description}</dd>
                                     </div>
                                   ) : null}
                                 </dl>
+                                <PluginMcpControls
+                                  diagnostic={mcpServer ? mcpDiagnostics[mcpServer.id] ?? null : null}
+                                  installed={activeInstalledPlugin}
+                                  isDiagnosing={Boolean(mcpServer && diagnosingMcpServerID === mcpServer.id)}
+                                  isSaving={Boolean(mcpServer && savingMcpServerID === mcpServer.id)}
+                                  pluginID={activePlugin.id}
+                                  server={mcpServer}
+                                  t={t}
+                                  onDiagnose={onDiagnoseMcpServer}
+                                  onEnabledChange={onSetInstalledPluginMcpEnabled}
+                                  onPolicyChange={onSetInstalledPluginMcpToolPolicy}
+                                  onRepair={() => onInstallPlugin(activePlugin.id)}
+                                />
                               </div>
                             ) : null}
                           </div>
@@ -1502,7 +1795,22 @@ export function PluginsPage({
                         const itemID = `${activePlugin.id}:app:${app.appID}`
                         const isExpanded = expandedIncludedItemID === itemID
                         const status = activeConnectorStatusByAppID.get(app.appID)
-                        const statusLabel = connectorStatusLabel(status)
+                        const fallbackServerID = status?.generatedMcpServerID ?? generatedAppServerID(activePlugin, app.appID)
+                        const mcpServer = findPluginMcpServer(
+                          mcpServers,
+                          activeInstalledPlugin,
+                          activePlugin.id,
+                          `app:${app.appID}`,
+                          fallbackServerID,
+                        )
+                        const preferenceEnabled = activeInstalledPlugin?.mcpServerEnabled[mcpServer?.id ?? fallbackServerID] ?? true
+                        const statusLabel = !activeInstalledPlugin
+                          ? t("plugins.status.notInstalled")
+                          : !mcpServer
+                            ? t("plugins.mcp.bindingMissing")
+                            : !activeInstalledPlugin.enabled || !preferenceEnabled
+                              ? t("app.disabled")
+                              : connectorStatusLabel(status)
                         const connectorKey = `${activePlugin.id}:${app.appID}`
                         const credentialKind = app.credential.kind === "oauth" ? "oauth" : "api_key"
                         const apiKeyCredential = app.credential.kind === "oauth" ? null : app.credential
@@ -1513,6 +1821,13 @@ export function PluginsPage({
                         const appSummary = activeInstalledPlugin
                           ? `${statusLabel} - ${app.description ?? "Connector-backed MCP"}`
                           : `Install to enable ${credentialKindLabel(credentialKind)}`
+                        const statusDotClassName = !activeInstalledPlugin
+                          ? "is-not-installed"
+                          : !mcpServer
+                            ? "is-error"
+                            : !activeInstalledPlugin.enabled || !preferenceEnabled
+                              ? "is-unavailable"
+                              : connectorStatusDotClassName(status)
 
                         return (
                           <div key={`app:${app.appID}`} className="plugins-included-item">
@@ -1530,7 +1845,7 @@ export function PluginsPage({
                                 <span>{appSummary}</span>
                               </span>
                               <span
-                                className={joinClassNames("plugins-included-status-dot", connectorStatusDotClassName(status))}
+                                className={joinClassNames("plugins-included-status-dot", statusDotClassName)}
                                 role="img"
                                 aria-label={`Status: ${statusLabel}`}
                                 title={statusLabel}
@@ -1551,6 +1866,10 @@ export function PluginsPage({
                                   <div>
                                     <dt>Connector ID</dt>
                                     <dd>{status?.connectorID ?? `plugin-connector:${activePlugin.id}:${app.appID}`}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>MCP server</dt>
+                                    <dd>{mcpServer?.id ?? fallbackServerID}</dd>
                                   </div>
                                   <div>
                                     <dt>Credential</dt>
@@ -1583,6 +1902,19 @@ export function PluginsPage({
                                     <dd>{app.description ?? app.credential.description ?? "Connector-backed MCP"}</dd>
                                   </div>
                                 </dl>
+                                <PluginMcpControls
+                                  diagnostic={mcpServer ? mcpDiagnostics[mcpServer.id] ?? null : null}
+                                  installed={activeInstalledPlugin}
+                                  isDiagnosing={Boolean(mcpServer && diagnosingMcpServerID === mcpServer.id)}
+                                  isSaving={Boolean(mcpServer && savingMcpServerID === mcpServer.id)}
+                                  pluginID={activePlugin.id}
+                                  server={mcpServer}
+                                  t={t}
+                                  onDiagnose={onDiagnoseMcpServer}
+                                  onEnabledChange={onSetInstalledPluginMcpEnabled}
+                                  onPolicyChange={onSetInstalledPluginMcpToolPolicy}
+                                  onRepair={() => onInstallPlugin(activePlugin.id)}
+                                />
                                 {activeInstalledPlugin ? (
                                   <div className="plugins-connector-actions">
                                     {!apiKeyCredential ? (
@@ -1667,6 +1999,104 @@ export function PluginsPage({
                           </div>
                         )
                       })}
+                      {activePlugin.connectorRequirements.map((requirement) => {
+                        const itemID = `${activePlugin.id}:connector-requirement:${requirement.connector}`
+                        const isExpanded = expandedIncludedItemID === itemID
+                        const status = platformConnectorStatusByDefinitionID.get(requirement.connector)
+                        const statusLabel = connectorStatusLabel(status)
+                        const connectorID = status?.connectorID ?? `connector:${requirement.connector}:default`
+                        const requestedTools = requirement.tools?.join(", ") || "Declared by connector"
+                        const requestedPermissions = requirement.permissions?.join(", ") || "Declared by connector"
+
+                        return (
+                          <div key={`connector-requirement:${requirement.connector}`} className="plugins-included-item">
+                            <button
+                              className={isExpanded ? "plugins-included-row is-expanded" : "plugins-included-row"}
+                              type="button"
+                              aria-expanded={isExpanded}
+                              aria-controls={`${itemID}:detail`}
+                              aria-label={`Show details for ${requirement.connector}`}
+                              onClick={() => toggleIncludedItem(itemID)}
+                            >
+                              <span className="plugins-included-icon"><ConnectedStatusIcon /></span>
+                              <span className="plugins-included-copy">
+                                <strong>{requirement.connector}</strong>
+                                <span>{requirement.reason ?? "Platform connector requirement"}</span>
+                              </span>
+                              <span
+                                className={joinClassNames("plugins-included-status-dot", connectorStatusDotClassName(status))}
+                                role="img"
+                                aria-label={`Status: ${statusLabel}`}
+                                title={statusLabel}
+                              />
+                              <span className="plugins-included-chevron" aria-hidden="true"><ChevronDownIcon /></span>
+                            </button>
+                            {isExpanded ? (
+                              <div className="plugins-included-detail" id={`${itemID}:detail`}>
+                                <dl className="plugins-included-detail-grid">
+                                  <div>
+                                    <dt>Type</dt>
+                                    <dd>Platform connector</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Connector</dt>
+                                    <dd>{requirement.connector}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Status</dt>
+                                    <dd>{connectorStatusLabel(status)}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Connector ID</dt>
+                                    <dd>{connectorID}</dd>
+                                  </div>
+                                  {status?.email ? (
+                                    <div>
+                                      <dt>Account</dt>
+                                      <dd>{status.email}</dd>
+                                    </div>
+                                  ) : null}
+                                  {status?.generatedMcpServerID ? (
+                                    <div>
+                                      <dt>{t("mcp.title")}</dt>
+                                      <dd>{status.generatedMcpServerID}</dd>
+                                    </div>
+                                  ) : null}
+                                  <div>
+                                    <dt>Required</dt>
+                                    <dd>{requirement.required === false ? "Optional" : "Required"}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Tools</dt>
+                                    <dd>{requestedTools}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Permissions</dt>
+                                    <dd>{requestedPermissions}</dd>
+                                  </div>
+                                  {requirement.reason ? (
+                                    <div className="is-wide">
+                                      <dt>Reason</dt>
+                                      <dd>{requirement.reason}</dd>
+                                    </div>
+                                  ) : null}
+                                </dl>
+                                {onManageConnector ? (
+                                  <div className="plugins-connector-actions">
+                                    <button
+                                      className="plugins-detail-uninstall-button"
+                                      type="button"
+                                      onClick={() => onManageConnector(connectorID)}
+                                    >
+                                      {t("plugins.connector.manage")}
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        )
+                      })}
                     </div>
                   </section>
 
@@ -1742,6 +2172,31 @@ export function PluginsPage({
                     <div className="plugins-detail-actions" aria-label={`${activePluginName} plugin actions`}>
                       {activeInstalledPlugin && !activeInstalledPlugin.missingPackage ? (
                         <>
+                          <div className="plugins-master-toggle">
+                            <span>
+                              <strong>{t("plugins.detail.masterEnable")}</strong>
+                              <small>
+                                {activeInstalledPlugin.enabled
+                                  ? t("plugins.detail.masterEnableCopy")
+                                  : t("plugins.detail.masterDisabledCopy")}
+                              </small>
+                            </span>
+                            <button
+                              className={activeInstalledPlugin.enabled
+                                ? "plugins-mcp-switch is-active"
+                                : "plugins-mcp-switch"}
+                              type="button"
+                              role="switch"
+                              aria-checked={activeInstalledPlugin.enabled}
+                              aria-label={t("plugins.detail.masterEnableAria", { plugin: activePluginName })}
+                              disabled={pluginBusyIDs.has(activePlugin.id)}
+                              onClick={() => {
+                                void onSetInstalledPluginEnabled(activePlugin.id, !activeInstalledPlugin.enabled)
+                              }}
+                            >
+                              <span aria-hidden="true" />
+                            </button>
+                          </div>
                           <span className="plugins-detail-action-status" aria-label={`${activePluginName} installed`}>
                             <ConnectedStatusIcon />
                             <span>{activeInstalledPlugin.enabled ? "Installed" : "Disabled"}</span>
@@ -1779,6 +2234,22 @@ export function PluginsPage({
         )}
       </div>
       {importURLDialog}
+      {skillContextMenu ? (
+        <PluginSkillContextMenu
+          menu={skillContextMenu}
+          t={t}
+          onBrowse={openSkillBrowser}
+          onClose={closeSkillContextMenu}
+        />
+      ) : null}
+      {skillBrowser ? (
+        <PluginSkillBrowserPanel
+          pluginID={skillBrowser.pluginID}
+          pluginName={skillBrowser.pluginName}
+          skill={skillBrowser.skill}
+          onClose={closeSkillBrowser}
+        />
+      ) : null}
     </section>
   )
 }

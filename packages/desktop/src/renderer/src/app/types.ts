@@ -1770,9 +1770,29 @@ export type McpRequireApproval =
       }
     }
 
+export type McpServerOwner =
+  | {
+      kind: "connector"
+      connectorId: string
+      runtimeID: string
+    }
+  | {
+      kind: "plugin"
+      pluginID: string
+      bindingID: string
+    }
+  | {
+      kind: "anybox"
+      bindingID: string
+    }
+  | {
+      kind: "user"
+    }
+
 export interface StdioMcpServerSummary {
   id: string
   name?: string
+  owner?: McpServerOwner
   transport: "stdio"
   command: string
   args?: string[]
@@ -1786,10 +1806,12 @@ export interface StdioMcpServerSummary {
 export interface RemoteMcpServerSummary {
   id: string
   name?: string
+  owner?: McpServerOwner
   transport: "remote"
   provider?: "openai"
   serverUrl?: string
   connectorId?: string
+  connectorRuntimeId?: string
   authorization?: string
   headers?: Record<string, string>
   serverDescription?: string
@@ -1803,9 +1825,11 @@ export interface RemoteMcpServerSummary {
 export interface ConnectorMcpServerSummary {
   id: string
   name?: string
+  owner?: McpServerOwner
   transport: "connector"
   provider?: "openai"
   connectorId: string
+  connectorRuntimeId?: string
   serverDescription?: string
   allowedTools?: McpAllowedTools
   toolPolicies?: McpToolPolicies
@@ -1937,10 +1961,31 @@ export interface ConnectorRemoteRuntime {
 
 export type ConnectorRuntime = ConnectorStdioRuntime | ConnectorRemoteRuntime
 
+export interface ConnectorStdioMcpRuntime extends ConnectorStdioRuntime {
+  id: string
+  name?: string
+  available: boolean
+}
+
+export interface ConnectorRemoteMcpRuntime extends ConnectorRemoteRuntime {
+  id: string
+  name?: string
+  available: boolean
+}
+
+export type ConnectorMcpRuntime = ConnectorStdioMcpRuntime | ConnectorRemoteMcpRuntime
+
+export interface ConnectorMcpBinding {
+  runtimeID: string
+  serverID: string
+  name?: string
+}
+
 export interface ConnectorDefinition {
   id: string
   name: string
   description: string
+  category?: "account_connector" | "builtin_mcp"
   publisher: string
   icon?: string
   risk: ConnectorRisk
@@ -1949,6 +1994,7 @@ export interface ConnectorDefinition {
   configFields: ConnectorConfigField[]
   oauthCallbackURL?: string
   credential?: ConnectorCredential
+  mcpRuntimes?: ConnectorMcpRuntime[]
   runtime?: ConnectorRuntime
   installReview: string[]
   source: "platform" | "registry"
@@ -1978,6 +2024,7 @@ export interface ConnectorStatus {
   email?: string
   expiresAt?: number
   activeFlow?: ProviderAuthFlow
+  mcpBindings?: ConnectorMcpBinding[]
   generatedMcpServerID?: string
   lastDiagnostic?: McpServerDiagnostic
 }
@@ -2112,6 +2159,39 @@ export interface PluginSkillPreview {
   directory: string
 }
 
+export interface PluginSkillEntry {
+  name: string
+  path: string
+  kind: "file" | "directory"
+  size?: number
+  mimeType?: string
+  hasChildren?: boolean
+}
+
+export interface PluginSkillDirectory {
+  pluginID: string
+  skillID: string
+  skillName: string
+  path: string
+  entries: PluginSkillEntry[]
+  readOnly: true
+}
+
+export interface PluginSkillFile {
+  pluginID: string
+  skillID: string
+  skillName: string
+  path: string
+  name: string
+  kind: "text" | "image" | "binary"
+  mimeType: string
+  size: number
+  content?: string
+  previewUrl?: string
+  tooLarge: boolean
+  readOnly: true
+}
+
 export interface PluginAppConnector {
   id?: string
   appID: string
@@ -2167,6 +2247,7 @@ export interface InstalledPlugin {
   enabled: boolean
   mcpServerID?: string
   mcpServerIDs: string[]
+  mcpServerEnabled: Record<string, boolean>
   skillIDs: string[]
   connectorIDs: string[]
   connectorRequirementIDs: string[]
@@ -2211,6 +2292,7 @@ export interface McpServerDraftState {
   cwd: string
   serverUrl: string
   connectorId: string
+  connectorRuntimeId?: string
   authorization: string
   headers: string
   allowedToolsMode: "all" | "names" | "read-only" | "read-only-names"

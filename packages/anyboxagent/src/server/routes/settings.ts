@@ -188,6 +188,47 @@ export function SettingsRoutes() {
     return ok(c, await SettingsUseCase.updateInstalledPlugin(c.req.param("pluginID"), payload))
   })
 
+  app.patch("/plugins/installed/:pluginID/mcp/:serverID", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      SettingsUseCase.UpdateInstalledPluginMcpControlsBody,
+      "Body must contain an enabled state or tool policies.",
+    )
+    return ok(c, await SettingsUseCase.updateInstalledPluginMcpControls(
+      c.req.param("pluginID"),
+      c.req.param("serverID"),
+      payload,
+    ))
+  })
+
+  app.get("/plugins/installed/:pluginID/skills/:skillID/entries", async (c) => {
+    const payload = parseQuery(
+      { path: c.req.query("path") ?? "" },
+      SettingsUseCase.InstalledPluginSkillEntriesQuery,
+      "INVALID_QUERY",
+      "Query parameter 'path' must be a valid relative Skill directory path.",
+    )
+    return ok(c, SettingsUseCase.listInstalledPluginSkillEntries(
+      c.req.param("pluginID"),
+      c.req.param("skillID"),
+      payload,
+    ))
+  })
+
+  app.get("/plugins/installed/:pluginID/skills/:skillID/file", async (c) => {
+    const payload = parseQuery(
+      { path: c.req.query("path") },
+      SettingsUseCase.InstalledPluginSkillFileQuery,
+      "INVALID_QUERY",
+      "Query parameter 'path' must be a non-empty relative Skill file path.",
+    )
+    return ok(c, SettingsUseCase.readInstalledPluginSkillBrowserFile(
+      c.req.param("pluginID"),
+      c.req.param("skillID"),
+      payload,
+    ))
+  })
+
   app.delete("/plugins/installed/:pluginID", async (c) =>
     ok(c, await SettingsUseCase.removeInstalledPlugin(c.req.param("pluginID"))),
   )
@@ -271,7 +312,13 @@ export function SettingsRoutes() {
   )
 
   app.get("/connectors/:connectorID/diagnostic", async (c) =>
-    ok(c, await SettingsUseCase.getConnectorDiagnostic(c.req.param("connectorID"))),
+    ok(
+      c,
+      await SettingsUseCase.getConnectorDiagnostic(
+        c.req.param("connectorID"),
+        c.req.query("runtimeID"),
+      ),
+    ),
   )
 
   app.get("/plugins/installed/:pluginID/connectors", async (c) =>

@@ -82,6 +82,87 @@ afterEach(() => {
 })
 
 describe("useProjectComposer model selection", () => {
+  it("keeps plugin-owned MCP servers out of the project picker without using id prefixes", async () => {
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: {
+        getProjectPlugins: vi.fn(async () => [{
+          pluginID: "browser",
+          version: "1.0.0",
+          enabled: true,
+          mcpServerID: "legacy.browser",
+          mcpServerIDs: ["legacy.browser"],
+          mcpServerEnabled: {
+            "legacy.browser": true,
+          },
+          skillIDs: [],
+          connectorIDs: [],
+          connectorRequirementIDs: [],
+          config: {},
+          installedAt: "2026-07-18T00:00:00.000Z",
+          updatedAt: "2026-07-18T00:00:00.000Z",
+        }]),
+        getProjectPluginSelection: vi.fn(async () => ({ pluginIDs: [] })),
+        getPluginCatalog: vi.fn(async () => []),
+        getGlobalMcpServers: vi.fn(async () => [
+          {
+            id: "managed.browser",
+            name: "Managed browser",
+            enabled: true,
+            transport: "stdio",
+            command: "node",
+            owner: {
+              kind: "plugin",
+              pluginID: "browser",
+              bindingID: "mcp:browser",
+            },
+          },
+          {
+            id: "legacy.browser",
+            name: "Legacy browser",
+            enabled: true,
+            transport: "stdio",
+            command: "node",
+          },
+          {
+            id: "plugin.user-looking",
+            name: "User prefix",
+            enabled: true,
+            transport: "stdio",
+            command: "node",
+            owner: {
+              kind: "user",
+            },
+          },
+          {
+            id: "plugin.ownerless-looking",
+            name: "Ownerless prefix",
+            enabled: true,
+            transport: "stdio",
+            command: "node",
+          },
+        ]),
+        getProjectMcpSelection: vi.fn(async () => ({
+          serverIDs: ["managed.browser", "legacy.browser", "plugin.user-looking"],
+        })),
+      } as unknown as typeof window.desktop,
+    })
+
+    const { result } = renderHook(() =>
+      useProjectComposer({
+        attachmentPaths: [],
+        projectID: "project-plugin-mcp-filter",
+      }),
+    )
+
+    await waitFor(() => expect(result.current.mcpOptions).toHaveLength(2))
+
+    expect(result.current.mcpOptions.map((option) => option.value)).toEqual([
+      "plugin.user-looking",
+      "plugin.ownerless-looking",
+    ])
+  })
+
   it("uses the project selection for create-session composers when session model APIs are available", async () => {
     const getProjectModels = vi.fn(async () =>
       createModelsPayload({

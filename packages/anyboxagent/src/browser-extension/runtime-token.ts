@@ -1,4 +1,5 @@
-const token = crypto.randomUUID()
+const token = process.env.ANYBOX_BROWSER_TRUSTED_TOKEN?.trim() || crypto.randomUUID()
+process.env.ANYBOX_BROWSER_TRUSTED_TOKEN = token
 
 export function getBrowserTrustedCommandToken() {
   return token

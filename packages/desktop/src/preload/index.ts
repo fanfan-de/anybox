@@ -670,6 +670,24 @@ try {
       invokeDesktop("desktop:install-plugin", input) as Promise<InstalledPlugin>,
     updateInstalledPlugin: (input: PluginUpdateInput) =>
       invokeDesktop("desktop:update-installed-plugin", input) as Promise<InstalledPlugin>,
+    updateInstalledPluginMcpControls: (
+      input: DesktopIpcInput<"desktop:update-installed-plugin-mcp-controls">,
+    ) => invokeDesktop(
+      "desktop:update-installed-plugin-mcp-controls",
+      input,
+    ) as Promise<DesktopIpcOutput<"desktop:update-installed-plugin-mcp-controls">>,
+    listInstalledPluginSkillEntries: (
+      input: DesktopIpcInput<"desktop:list-installed-plugin-skill-entries">,
+    ) => invokeDesktop(
+      "desktop:list-installed-plugin-skill-entries",
+      input,
+    ) as Promise<DesktopIpcOutput<"desktop:list-installed-plugin-skill-entries">>,
+    readInstalledPluginSkillFile: (
+      input: DesktopIpcInput<"desktop:read-installed-plugin-skill-file">,
+    ) => invokeDesktop(
+      "desktop:read-installed-plugin-skill-file",
+      input,
+    ) as Promise<DesktopIpcOutput<"desktop:read-installed-plugin-skill-file">>,
     deleteInstalledPlugin: (input: { pluginID: string }) =>
       invokeDesktop("desktop:delete-installed-plugin", input) as Promise<PluginDeleteResult>,
     getInstalledPluginDiagnostic: (input: { pluginID: string }) =>
@@ -696,7 +714,7 @@ try {
       invokeDesktop("desktop:cancel-connector-auth-flow", input) as Promise<AgentProviderAuthFlow | undefined>,
     deleteConnectorAuthSession: (input: { connectorID: string }) =>
       invokeDesktop("desktop:delete-connector-auth-session", input) as Promise<ConnectorStatus>,
-    getConnectorDiagnostic: (input: { connectorID: string }) =>
+    getConnectorDiagnostic: (input: { connectorID: string; runtimeID?: string }) =>
       invokeDesktop("desktop:get-connector-diagnostic", input) as Promise<McpServerDiagnostic>,
     getInstalledPluginConnectors: (input: { pluginID: string }) =>
       invokeDesktop("desktop:get-installed-plugin-connectors", input) as Promise<PluginConnectorStatus[]>,

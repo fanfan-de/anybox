@@ -1,9 +1,15 @@
 import type {
+  McpServerSummary,
   McpServerDiagnostic,
   McpServerDraftState,
   McpToolDiagnostic,
   McpToolPolicyValue,
 } from "../types"
+
+export type McpToolPolicyDraft = Pick<
+  McpServerDraftState,
+  "transport" | "allowedToolsMode" | "allowedToolNames" | "toolPolicies"
+>
 
 function parseLineList(input: string) {
   return input
@@ -20,7 +26,7 @@ export function recommendedMcpToolPolicy(tool: McpToolDiagnostic): McpToolPolicy
 
 export function defaultMcpToolPolicyForDraft(
   tool: McpToolDiagnostic,
-  draft: McpServerDraftState,
+  draft: McpToolPolicyDraft,
 ): McpToolPolicyValue {
   if (draft.transport !== "stdio") {
     const allowedToolNames = new Set(parseLineList(draft.allowedToolNames))
@@ -43,9 +49,36 @@ export function defaultMcpToolPolicyForDraft(
 
 export function resolveMcpToolPolicy(
   tool: McpToolDiagnostic,
-  draft: McpServerDraftState,
+  draft: McpToolPolicyDraft,
 ): McpToolPolicyValue {
   return draft.toolPolicies[tool.name] ?? defaultMcpToolPolicyForDraft(tool, draft)
+}
+
+export function mcpToolPolicyDraftFromServer(server: McpServerSummary): McpToolPolicyDraft {
+  const allowedTools = server.transport === "stdio" ? undefined : server.allowedTools
+  const allowedToolNames = Array.isArray(allowedTools)
+    ? allowedTools
+    : allowedTools?.toolNames ?? []
+  const allowedToolsMode: McpServerDraftState["allowedToolsMode"] = !allowedTools
+    ? "all"
+    : Array.isArray(allowedTools)
+      ? "names"
+      : allowedTools.readOnly && allowedToolNames.length > 0
+        ? "read-only-names"
+        : allowedTools.readOnly
+          ? "read-only"
+          : allowedToolNames.length > 0
+            ? "names"
+            : "all"
+
+  return {
+    transport: server.transport,
+    allowedToolsMode,
+    allowedToolNames: allowedToolNames.join("\n"),
+    toolPolicies: Object.fromEntries(
+      Object.entries(server.toolPolicies ?? {}).map(([toolName, value]) => [toolName, value.policy]),
+    ),
+  }
 }
 
 export function mergeMcpToolPolicyDefaults(

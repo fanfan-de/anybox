@@ -140,6 +140,21 @@ export const PluginCatalogQuery = z.object({
 })
 export const InstallPluginBody = Plugin.InstallPluginInput
 export const UpdateInstalledPluginBody = Plugin.UpdateInstalledPluginInput
+export const UpdateInstalledPluginMcpControlsBody = z
+  .object({
+    enabled: z.boolean().optional(),
+    toolPolicies: Config.McpToolPolicies.optional(),
+  })
+  .strict()
+  .refine((input) => input.enabled !== undefined || input.toolPolicies !== undefined, {
+    message: "Body must contain an enabled state or tool policies.",
+  })
+export const InstalledPluginSkillEntriesQuery = z.object({
+  path: z.string().max(4096).default(""),
+})
+export const InstalledPluginSkillFileQuery = z.object({
+  path: z.string().min(1).max(4096),
+})
 export const ImportPluginURLBody = Plugin.ImportPluginURLInput
 export const SavePluginConnectorApiKeyBody = Plugin.SavePluginConnectorApiKeyInput
 export const SaveConnectorApiKeyBody = Connector.SaveConnectorApiKeyInput
@@ -362,6 +377,9 @@ function toPluginApiError(error: unknown) {
     switch (error.code) {
       case "PLUGIN_NOT_FOUND":
       case "INSTALLED_PLUGIN_NOT_FOUND":
+      case "PLUGIN_MCP_NOT_FOUND":
+      case "PLUGIN_SKILL_NOT_FOUND":
+      case "PLUGIN_SKILL_PATH_NOT_FOUND":
       case "PLUGIN_CONNECTOR_NOT_FOUND":
         return new ApiError(404, error.code, error.message)
       case "PLUGIN_ALREADY_INSTALLED":
@@ -371,6 +389,7 @@ function toPluginApiError(error: unknown) {
         return new ApiError(502, error.code, error.message)
       case "PLUGIN_CONFIG_INVALID":
       case "PLUGIN_RISK_NOT_ALLOWED":
+      case "PLUGIN_SKILL_PATH_INVALID":
       case "PLUGIN_CONNECTOR_NOT_CONNECTED":
       case "PLUGIN_PACKAGE_UNAVAILABLE":
       case "PLUGIN_PACKAGE_INVALID":
@@ -1257,6 +1276,42 @@ export async function updateInstalledPlugin(pluginID: string, input: z.infer<typ
   }
 }
 
+export async function updateInstalledPluginMcpControls(
+  pluginID: string,
+  serverID: string,
+  input: z.infer<typeof UpdateInstalledPluginMcpControlsBody>,
+) {
+  try {
+    return await Plugin.updateMcpControls(pluginID, serverID, input)
+  } catch (error) {
+    throw toPluginApiError(error)
+  }
+}
+
+export function listInstalledPluginSkillEntries(
+  pluginID: string,
+  skillID: string,
+  input: z.infer<typeof InstalledPluginSkillEntriesQuery>,
+) {
+  try {
+    return Plugin.listInstalledPluginSkillEntries(pluginID, skillID, input.path)
+  } catch (error) {
+    throw toPluginApiError(error)
+  }
+}
+
+export function readInstalledPluginSkillBrowserFile(
+  pluginID: string,
+  skillID: string,
+  input: z.infer<typeof InstalledPluginSkillFileQuery>,
+) {
+  try {
+    return Plugin.readInstalledPluginSkillFile(pluginID, skillID, input.path)
+  } catch (error) {
+    throw toPluginApiError(error)
+  }
+}
+
 export async function removeInstalledPlugin(pluginID: string) {
   try {
     return await Plugin.remove(pluginID)
@@ -1275,7 +1330,7 @@ export async function getInstalledPluginDiagnostic(pluginID: string) {
 
 export function listConnectorCatalog() {
   try {
-    return Connector.listDefinitions()
+    return Connector.listAccountDefinitions()
   } catch (error) {
     throw toConnectorApiError(error)
   }
@@ -1367,9 +1422,9 @@ export async function deleteConnectorAuthSession(connectorID: string) {
   }
 }
 
-export async function getConnectorDiagnostic(connectorID: string) {
+export async function getConnectorDiagnostic(connectorID: string, runtimeID?: string) {
   try {
-    return await Connector.diagnoseConnector(connectorID)
+    return await Connector.diagnoseConnector(connectorID, runtimeID)
   } catch (error) {
     throw toConnectorApiError(error)
   }
@@ -2042,21 +2097,17 @@ export async function listSkills() {
 }
 
 export async function getSkillTree() {
-  const globalTree = await SkillManager.getGlobalSkillTree()
-  const pluginTree = await getInstalledPluginSkillTreeNode()
-
-  if (!pluginTree) return globalTree
-
-  return {
-    ...globalTree,
-    items: [...globalTree.items, pluginTree],
-  }
+  return SkillManager.getGlobalSkillTree()
 }
 
 export async function readSkillFile(input: z.infer<typeof SkillFileQuery>) {
   try {
-    const pluginDocument = await readInstalledPluginSkillFile(input.path)
-    if (pluginDocument) return pluginDocument
+    if (isPluginSkillTreePath(input.path)) {
+      throw new SkillManager.SkillManagerError(
+        "INVALID_SKILL_PATH",
+        "Plugin skill files are managed from the plugin detail page.",
+      )
+    }
 
     return await SkillManager.readGlobalSkillFile(input.path)
   } catch (error) {

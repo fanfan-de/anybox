@@ -192,8 +192,13 @@ function resolveComposerPluginLabel(selectedPluginIDs: string[], plugins: Compos
   return `${selectedPluginIDs.length} plugins`
 }
 
-function isPluginGeneratedMcpServerID(serverID: string) {
-  return serverID.startsWith("plugin.")
+function isPluginOwnedMcpServer(
+  server: McpServerSummary,
+  legacyPluginMcpServerIDs: ReadonlySet<string>,
+) {
+  if (server.owner?.kind === "plugin") return true
+  if (server.owner) return false
+  return legacyPluginMcpServerIDs.has(server.id)
 }
 
 function describeComposerMcpServer(server: McpServerSummary) {
@@ -277,6 +282,7 @@ interface ComposerMcpPayload {
 }
 
 interface ComposerPluginsPayload {
+  pluginMcpServerIDs: string[]
   plugins: ComposerPluginOption[]
   selectedPluginIDs: string[]
 }
@@ -337,6 +343,7 @@ export function useProjectComposer({
   const [isLoadingSkills, setIsLoadingSkills] = useState(false)
 
   const [plugins, setPlugins] = useState<ComposerPluginOption[]>([])
+  const [pluginMcpServerIDs, setPluginMcpServerIDs] = useState<string[]>([])
   const [selectedPluginIDs, setSelectedPluginIDs] = useState<string[]>([])
   const [isLoadingPlugins, setIsLoadingPlugins] = useState(false)
 
@@ -504,6 +511,7 @@ export function useProjectComposer({
     const getPluginCatalog = window.desktop?.getPluginCatalog
     if (!projectID || !getProjectPlugins || !getProjectPluginSelection || !getPluginCatalog) {
       setPlugins([])
+      setPluginMcpServerIDs([])
       setSelectedPluginIDs([])
       setIsLoadingPlugins(false)
       return
@@ -513,6 +521,7 @@ export function useProjectComposer({
     const cachedPayload = shouldUseComposerResourceCache ? projectComposerPluginsPayloadCache.get(cacheKey) : null
     if (cachedPayload) {
       setPlugins(cachedPayload.plugins)
+      setPluginMcpServerIDs(cachedPayload.pluginMcpServerIDs ?? [])
       setSelectedPluginIDs(cachedPayload.selectedPluginIDs)
       setIsLoadingPlugins(false)
       return
@@ -529,15 +538,18 @@ export function useProjectComposer({
       .then(([nextPlugins, selection, cachedCatalog]) => {
         if (pluginsRequestRef.current !== requestID) return
         const pluginOptions = buildComposerPluginOptions(nextPlugins, cachedCatalog)
+        const nextPluginMcpServerIDs = [...new Set(nextPlugins.flatMap((plugin) => plugin.mcpServerIDs))]
         const availablePluginIDs = new Set(pluginOptions.map((plugin) => plugin.value))
         const nextSelectedPluginIDs = selection.pluginIDs.filter((pluginID) => availablePluginIDs.has(pluginID))
         if (shouldUseComposerResourceCache) {
           projectComposerPluginsPayloadCache.set(cacheKey, {
+            pluginMcpServerIDs: nextPluginMcpServerIDs,
             plugins: pluginOptions,
             selectedPluginIDs: nextSelectedPluginIDs,
           })
         }
         setPlugins(pluginOptions)
+        setPluginMcpServerIDs(nextPluginMcpServerIDs)
         setSelectedPluginIDs(nextSelectedPluginIDs)
 
         void getPluginCatalog({ freshness: "fresh" })
@@ -553,6 +565,7 @@ export function useProjectComposer({
               )
               if (shouldUseComposerResourceCache) {
                 projectComposerPluginsPayloadCache.set(cacheKey, {
+                  pluginMcpServerIDs: nextPluginMcpServerIDs,
                   plugins: freshPluginOptions,
                   selectedPluginIDs: freshSelectedPluginIDs,
                 })
@@ -569,6 +582,7 @@ export function useProjectComposer({
         if (pluginsRequestRef.current !== requestID) return
         console.error("[desktop] refreshProjectComposerPlugins failed:", error)
         setPlugins([])
+        setPluginMcpServerIDs([])
         setSelectedPluginIDs([])
       })
       .finally(() => {
@@ -701,8 +715,12 @@ export function useProjectComposer({
     label: skill.name,
     description: skill.description,
   }))
+  const legacyPluginMcpServerIDs = new Set(pluginMcpServerIDs)
   const mcpOptions: ComposerMcpOption[] = mcpServers
-    .filter((server) => server.enabled && !isPluginGeneratedMcpServerID(server.id))
+    .filter((server) => (
+      server.enabled
+      && !isPluginOwnedMcpServer(server, legacyPluginMcpServerIDs)
+    ))
     .map((server) => ({
       value: server.id,
       label: server.name ?? server.id,
@@ -907,6 +925,7 @@ export function useProjectComposer({
       const nextSelectedPluginIDs = result.pluginIDs.filter((pluginID) => availablePluginIDs.has(pluginID))
       if (shouldUseComposerResourceCache) {
         projectComposerPluginsPayloadCache.set(getComposerResourceCacheKey(projectID, refreshToken), {
+          pluginMcpServerIDs,
           plugins,
           selectedPluginIDs: nextSelectedPluginIDs,
         })

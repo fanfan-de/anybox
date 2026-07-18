@@ -411,6 +411,7 @@ function WorkspaceContextMenu({
   onProjectPin,
   onProjectRemove,
 }: WorkspaceContextMenuProps) {
+  const { t } = useI18n()
   const menuRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -458,7 +459,7 @@ function WorkspaceContextMenu({
         ref={menuRef}
         className="ui-context-menu workspace-background-context-menu"
         role="menu"
-        aria-label="Workspace sidebar actions"
+        aria-label={t("sidebar.workspaceActions")}
         style={{ left: position.x, top: position.y }}
       >
         <button
@@ -537,7 +538,7 @@ function WorkspaceContextMenu({
         }}
       >
         <span className="ui-context-menu__icon" aria-hidden="true"><FileTextIcon /></span>
-        <span className="ui-context-menu__label">Open Cinema</span>
+        <span className="ui-context-menu__label">{t("sidebar.openCinema")}</span>
       </button>
       <button
         className="ui-context-menu__item"
@@ -1451,8 +1452,6 @@ function SkillsTreeNodeRow({
   onRenameGlobalSkillDraftStart: (directoryPath: string) => void
 }) {
   const isReadOnlyNode = Boolean(node.readOnly)
-  const showPluginBadge = node.scope === "plugin" && node.path.startsWith("plugin-skills://")
-
   if (node.kind === "file") {
     const isActive = node.path === selectedGlobalSkillFilePath
 
@@ -1472,7 +1471,6 @@ function SkillsTreeNodeRow({
             <FileTextIcon />
           </span>
           <span className="skill-tree-label">{node.name}</span>
-          {showPluginBadge ? <span className="skill-tree-source-badge">Plugin</span> : null}
         </button>
       </div>
     )
@@ -1542,7 +1540,6 @@ function SkillsTreeNodeRow({
               {isExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
             </span>
             <span className="skill-tree-label">{node.name}</span>
-            {showPluginBadge ? <span className="skill-tree-source-badge">Plugin</span> : null}
           </button>
         )}
         {showDeleteAction ? (

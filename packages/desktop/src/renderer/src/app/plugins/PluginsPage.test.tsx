@@ -174,6 +174,9 @@ function createInstalledPlugin(overrides: Partial<InstalledPlugin> = {}): Instal
     enabled: overrides.enabled ?? true,
     mcpServerID: overrides.mcpServerID ?? "plugin.filesystem",
     mcpServerIDs: overrides.mcpServerIDs ?? ["plugin.filesystem"],
+    mcpServerEnabled: overrides.mcpServerEnabled ?? {
+      "plugin.filesystem": true,
+    },
     skillIDs: overrides.skillIDs ?? [],
     connectorIDs: overrides.connectorIDs ?? [],
     connectorRequirementIDs: overrides.connectorRequirementIDs ?? [],
@@ -207,6 +210,7 @@ function createProps(overrides: Partial<PluginsPageProps> = {}): PluginsPageProp
     deletingPluginID: null,
     diagnosingPluginConnectorID: null,
     diagnosingPluginID: null,
+    diagnosingMcpServerID: null,
     installingPluginID: null,
     installedPlugins: [],
     isLoading: false,
@@ -220,7 +224,10 @@ function createProps(overrides: Partial<PluginsPageProps> = {}): PluginsPageProp
       config: {},
       appApiKeys: {},
     },
+    mcpDiagnostics: {},
+    mcpServers: [],
     savingPluginConnectorID: null,
+    savingMcpServerID: null,
     updatingPluginID: null,
     onCancelInstalledPluginConnectorAuthFlow: vi.fn(),
     onDeleteInstalledPlugin: vi.fn(),
@@ -228,6 +235,7 @@ function createProps(overrides: Partial<PluginsPageProps> = {}): PluginsPageProp
     onDeleteInstalledPluginConnectorAuthSession: vi.fn(),
     onDiagnoseInstalledPlugin: vi.fn(),
     onDiagnoseInstalledPluginConnector: vi.fn(),
+    onDiagnoseMcpServer: vi.fn(),
     onImportPluginFromURL: vi.fn(),
     onInstallPlugin: vi.fn(),
     onPluginDraftAppApiKeyChange: vi.fn(),
@@ -237,6 +245,8 @@ function createProps(overrides: Partial<PluginsPageProps> = {}): PluginsPageProp
     onSaveInstalledPluginConnectorApiKey: vi.fn(),
     onSaveInstalledPluginConfig: vi.fn(),
     onSetInstalledPluginEnabled: vi.fn(),
+    onSetInstalledPluginMcpEnabled: vi.fn(),
+    onSetInstalledPluginMcpToolPolicy: vi.fn(),
     onStartInstalledPluginConnectorAuthFlow: vi.fn(),
     ...overrides,
   }
@@ -936,6 +946,398 @@ describe("PluginsPage", () => {
     expect(screen.getByText("https://docs.example.test/mcp")).toBeInTheDocument()
   })
 
+  it("browses an installed plugin Skill folder from the Skill row context menu", async () => {
+    const plugin = createDocsPlugin()
+    const listInstalledPluginSkillEntries = vi.fn(async (input: {
+      pluginID: string
+      skillID: string
+      path?: string
+    }) => {
+      if (input.path === "references") {
+        return {
+          pluginID: "docs",
+          skillID: "plugin:docs:review",
+          skillName: "Review Docs",
+          path: "references",
+          entries: [
+            {
+              kind: "file" as const,
+              name: "checklist.md",
+              path: "references/checklist.md",
+              size: 28,
+              mimeType: "text/markdown",
+            },
+          ],
+          readOnly: true as const,
+        }
+      }
+
+      return {
+        pluginID: "docs",
+        skillID: "plugin:docs:review",
+        skillName: "Review Docs",
+        path: "",
+        entries: [
+          {
+            kind: "directory" as const,
+            name: "references",
+            path: "references",
+            hasChildren: true,
+          },
+          {
+            kind: "file" as const,
+            name: "SKILL.md",
+            path: "SKILL.md",
+            size: 92,
+            mimeType: "text/markdown",
+          },
+        ],
+        readOnly: true as const,
+      }
+    })
+    const readInstalledPluginSkillFile = vi.fn(async (input: {
+      pluginID: string
+      skillID: string
+      path: string
+    }) => {
+      const isChecklist = input.path === "references/checklist.md"
+      const content = isChecklist
+        ? "# Checklist\n\nCheck links and examples."
+        : "---\nname: review-docs\ndescription: Review documentation output.\n---\n# Review Docs\n\nStart here."
+
+      return {
+        pluginID: "docs",
+        skillID: "plugin:docs:review",
+        skillName: "Review Docs",
+        path: input.path,
+        name: isChecklist ? "checklist.md" : "SKILL.md",
+        kind: "text" as const,
+        mimeType: "text/markdown",
+        size: content.length,
+        content,
+        tooLarge: false,
+        readOnly: true as const,
+      }
+    })
+    window.desktop = {
+      listInstalledPluginSkillEntries,
+      readInstalledPluginSkillFile,
+    } as unknown as Window["desktop"]
+
+    render(
+      <PluginsPage
+        {...createProps({
+          activePluginID: "docs",
+          pluginCatalog: [plugin],
+          installedPlugins: [
+            createInstalledPlugin({
+              pluginID: "docs",
+              enabled: false,
+              mcpServerID: "plugin.docs.app.docs-api",
+              mcpServerIDs: ["plugin.docs.app.docs-api"],
+              skillIDs: ["plugin:docs:review"],
+              connectorIDs: ["plugin-app:docs:docs-api"],
+              config: {},
+            }),
+          ],
+        })}
+      />,
+    )
+
+    const skillRow = screen.getByRole("button", { name: "Show details for Review Docs" })
+    fireEvent.contextMenu(skillRow, {
+      clientX: 120,
+      clientY: 180,
+    })
+
+    const menu = screen.getByRole("menu", { name: "Review Docs actions" })
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Browse Skill files" }))
+
+    const dialog = await screen.findByRole("dialog", { name: "Browse files for Review Docs" })
+    await waitFor(() => {
+      expect(listInstalledPluginSkillEntries).toHaveBeenCalledWith({
+        pluginID: "docs",
+        skillID: "plugin:docs:review",
+        path: "",
+      })
+      expect(readInstalledPluginSkillFile).toHaveBeenCalledWith({
+        pluginID: "docs",
+        skillID: "plugin:docs:review",
+        path: "SKILL.md",
+      })
+    })
+    expect(within(dialog).getByRole("heading", { level: 1, name: "Review Docs" })).toBeInTheDocument()
+    expect(within(dialog).getByText("Start here.")).toBeInTheDocument()
+    expect(within(dialog).queryByText("name: review-docs")).not.toBeInTheDocument()
+
+    fireEvent.click(within(dialog).getByRole("treeitem", { name: "references" }))
+    const checklist = await within(dialog).findByRole("treeitem", { name: "checklist.md" })
+    expect(listInstalledPluginSkillEntries).toHaveBeenCalledWith({
+      pluginID: "docs",
+      skillID: "plugin:docs:review",
+      path: "references",
+    })
+
+    fireEvent.click(checklist)
+    await waitFor(() => {
+      expect(readInstalledPluginSkillFile).toHaveBeenCalledWith({
+        pluginID: "docs",
+        skillID: "plugin:docs:review",
+        path: "references/checklist.md",
+      })
+    })
+    expect(within(dialog).getByRole("heading", { name: "Checklist" })).toBeInTheDocument()
+    expect(within(dialog).getByText("Check links and examples.")).toBeInTheDocument()
+
+    fireEvent.click(within(dialog).getByRole("treeitem", { name: "SKILL.md" }))
+    await waitFor(() => {
+      expect(within(dialog).getByText("Start here.")).toBeInTheDocument()
+    })
+    const renderedTab = within(dialog).getByRole("tab", { name: "Rendered" })
+    renderedTab.focus()
+    fireEvent.keyDown(renderedTab, { key: "ArrowRight" })
+    expect(within(dialog).getByRole("tab", { name: "Source" })).toHaveAttribute("aria-selected", "true")
+    expect(within(dialog).getByText(/name: review-docs/)).toBeInTheDocument()
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close Skill browser" }))
+    expect(screen.queryByRole("dialog", { name: "Browse files for Review Docs" })).not.toBeInTheDocument()
+  })
+
+  it("disables Skill folder browsing until the plugin package is available", () => {
+    const plugin = createDocsPlugin()
+    const { rerender } = render(
+      <PluginsPage
+        {...createProps({
+          activePluginID: "docs",
+          pluginCatalog: [plugin],
+        })}
+      />,
+    )
+
+    const skillRow = screen.getByRole("button", { name: "Show details for Review Docs" })
+    fireEvent.contextMenu(skillRow, {
+      clientX: 120,
+      clientY: 180,
+    })
+
+    const unavailableMenuItem = screen.getByRole("menuitem", { name: "Browse Skill files" })
+    expect(unavailableMenuItem).toBeDisabled()
+    expect(unavailableMenuItem).toHaveAttribute(
+      "title",
+      "Install this plugin before browsing its Skill files.",
+    )
+    fireEvent.keyDown(document, { key: "Escape" })
+
+    rerender(
+      <PluginsPage
+        {...createProps({
+          activePluginID: "docs",
+          pluginCatalog: [plugin],
+          installedPlugins: [
+            createInstalledPlugin({
+              pluginID: "docs",
+              missingPackage: true,
+              skillIDs: ["plugin:docs:review"],
+            }),
+          ],
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Show details for Review Docs" }))
+    expect(screen.getByRole("button", { name: "Browse Skill files" })).toBeDisabled()
+    expect(screen.queryByRole("dialog", { name: "Browse files for Review Docs" })).not.toBeInTheDocument()
+  })
+
+  it("manages a plugin-owned MCP binding from the plugin detail", () => {
+    const onDiagnoseMcpServer = vi.fn()
+    const onSetInstalledPluginMcpEnabled = vi.fn()
+    const onSetInstalledPluginMcpToolPolicy = vi.fn()
+
+    render(
+      <PluginsPage
+        {...createProps({
+          activePluginID: "filesystem",
+          installedPlugins: [
+            createInstalledPlugin({
+              mcpServerEnabled: {
+                "plugin.filesystem": true,
+              },
+            }),
+          ],
+          mcpServers: [
+            {
+              id: "plugin.filesystem",
+              name: "Filesystem",
+              owner: {
+                kind: "plugin",
+                pluginID: "filesystem",
+                bindingID: "mcp:default",
+              },
+              transport: "stdio",
+              command: "npx",
+              args: ["server-filesystem"],
+              enabled: true,
+            },
+          ],
+          mcpDiagnostics: {
+            "plugin.filesystem": {
+              serverID: "plugin.filesystem",
+              enabled: true,
+              ok: true,
+              toolCount: 1,
+              toolNames: ["read_file"],
+              tools: [
+                {
+                  name: "read_file",
+                  displayName: "Read file",
+                  description: "Read a file.",
+                  annotations: {
+                    readOnlyHint: true,
+                  },
+                  riskHint: "read-only",
+                  recommendedPolicy: "auto",
+                },
+              ],
+            },
+          },
+          onDiagnoseMcpServer,
+          onSetInstalledPluginMcpEnabled,
+          onSetInstalledPluginMcpToolPolicy,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Show details for Filesystem" }))
+
+    const mcpSwitch = screen.getByRole("switch", { name: "Enable MCP server Filesystem" })
+    expect(mcpSwitch).toHaveAttribute("aria-checked", "true")
+    fireEvent.click(mcpSwitch)
+    expect(onSetInstalledPluginMcpEnabled).toHaveBeenCalledWith(
+      "filesystem",
+      "plugin.filesystem",
+      false,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Diagnose" }))
+    expect(onDiagnoseMcpServer).toHaveBeenCalledWith("plugin.filesystem")
+
+    expect(screen.getByText("Tool Permissions")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("combobox", { name: "Policy for read_file" }))
+    fireEvent.click(screen.getByRole("option", { name: "Disabled" }))
+    expect(onSetInstalledPluginMcpToolPolicy).toHaveBeenCalledWith(
+      "filesystem",
+      "plugin.filesystem",
+      "read_file",
+      "disabled",
+    )
+  })
+
+  it("handles MCP preview, missing binding, diagnostic failure, and saving states", () => {
+    const baseProps = createProps({
+      activePluginID: "filesystem",
+    })
+    const { rerender } = render(<PluginsPage {...baseProps} />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Show details for Filesystem" }))
+    expect(
+      screen.getByText("Install this plugin to register and manage this MCP server."),
+    ).toBeInTheDocument()
+
+    rerender(
+      <PluginsPage
+        {...createProps({
+          activePluginID: "filesystem",
+          installedPlugins: [createInstalledPlugin()],
+        })}
+      />,
+    )
+    expect(
+      screen.getByRole("alert"),
+    ).toHaveTextContent("The installed plugin is missing this MCP binding.")
+    expect(screen.getByRole("button", { name: "Repair plugin" })).toBeEnabled()
+
+    rerender(
+      <PluginsPage
+        {...createProps({
+          activePluginID: "filesystem",
+          installedPlugins: [createInstalledPlugin()],
+          mcpServers: [
+            {
+              id: "plugin.filesystem",
+              name: "Filesystem",
+              owner: {
+                kind: "plugin",
+                pluginID: "filesystem",
+                bindingID: "mcp:default",
+              },
+              transport: "stdio",
+              command: "npx",
+              enabled: true,
+            },
+          ],
+          mcpDiagnostics: {
+            "plugin.filesystem": createDiagnostic({
+              ok: false,
+              error: "Runtime unavailable.",
+            }),
+          },
+          diagnosingMcpServerID: "plugin.filesystem",
+          savingMcpServerID: "plugin.filesystem",
+        })}
+      />,
+    )
+
+    expect(screen.getByRole("switch", { name: "Enable MCP server Filesystem" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Checking..." })).toBeDisabled()
+    expect(screen.getByRole("alert")).toHaveTextContent("Runtime unavailable.")
+  })
+
+  it("keeps child MCP preferences while the plugin master switch is off", () => {
+    const onSetInstalledPluginEnabled = vi.fn()
+
+    render(
+      <PluginsPage
+        {...createProps({
+          activePluginID: "filesystem",
+          installedPlugins: [
+            createInstalledPlugin({
+              enabled: false,
+              mcpServerEnabled: {
+                "plugin.filesystem": true,
+              },
+            }),
+          ],
+          mcpServers: [
+            {
+              id: "plugin.filesystem",
+              name: "Filesystem",
+              owner: {
+                kind: "plugin",
+                pluginID: "filesystem",
+                bindingID: "mcp:default",
+              },
+              transport: "stdio",
+              command: "npx",
+              enabled: false,
+            },
+          ],
+          onSetInstalledPluginEnabled,
+        })}
+      />,
+    )
+
+    const masterSwitch = screen.getByRole("switch", { name: "Enable plugin Filesystem" })
+    expect(masterSwitch).toHaveAttribute("aria-checked", "false")
+    fireEvent.click(masterSwitch)
+    expect(onSetInstalledPluginEnabled).toHaveBeenCalledWith("filesystem", true)
+
+    fireEvent.click(screen.getByRole("button", { name: "Show details for Filesystem" }))
+    const childSwitch = screen.getByRole("switch", { name: "Enable MCP server Filesystem" })
+    expect(childSwitch).toHaveAttribute("aria-checked", "true")
+    expect(childSwitch).toBeDisabled()
+  })
+
   it("shows platform connector requirement connection state from global connectors", () => {
     const plugin = createPlugin({
       id: "mail-helper",
@@ -953,6 +1355,7 @@ describe("PluginsPage", () => {
         },
       ],
     })
+    const onManageConnector = vi.fn()
 
     render(
       <PluginsPage
@@ -982,6 +1385,7 @@ describe("PluginsPage", () => {
               generatedMcpServerID: "connector.gmail.default",
             },
           ],
+          onManageConnector,
         })}
       />,
     )
@@ -992,12 +1396,15 @@ describe("PluginsPage", () => {
     expect(screen.getByText("connector:gmail:default")).toBeInTheDocument()
     expect(screen.getByText("person@example.test")).toBeInTheDocument()
     expect(screen.getByText("connector.gmail.default")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Manage in Connectors" }))
+    expect(onManageConnector).toHaveBeenCalledWith("connector:gmail:default")
   })
 
   it("shows OAuth connector sign-in controls in included app details", () => {
     const plugin = createOAuthPlugin()
     const onStartInstalledPluginConnectorAuthFlow = vi.fn()
     const onDeleteInstalledPluginConnectorAuthSession = vi.fn()
+    const onSetInstalledPluginMcpEnabled = vi.fn()
 
     render(
       <PluginsPage
@@ -1009,9 +1416,26 @@ describe("PluginsPage", () => {
               pluginID: "mail",
               mcpServerID: "plugin.mail.app.gmail",
               mcpServerIDs: ["plugin.mail.app.gmail"],
+              mcpServerEnabled: {
+                "plugin.mail.app.gmail": true,
+              },
               connectorIDs: ["plugin-app:mail:gmail"],
               config: {},
             }),
+          ],
+          mcpServers: [
+            {
+              id: "plugin.mail.app.gmail",
+              name: "Gmail",
+              owner: {
+                kind: "plugin",
+                pluginID: "mail",
+                bindingID: "app:gmail",
+              },
+              transport: "remote",
+              serverUrl: "https://gmail.example.test/mcp",
+              enabled: true,
+            },
           ],
           pluginConnectorStatuses: {
             mail: [
@@ -1029,12 +1453,19 @@ describe("PluginsPage", () => {
           },
           onStartInstalledPluginConnectorAuthFlow,
           onDeleteInstalledPluginConnectorAuthSession,
+          onSetInstalledPluginMcpEnabled,
         })}
       />,
     )
 
     expect(screen.getByText("Credential kind")).toBeInTheDocument()
     expect(screen.getByText("OAuth")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("switch", { name: "Enable MCP server Gmail" }))
+    expect(onSetInstalledPluginMcpEnabled).toHaveBeenCalledWith(
+      "mail",
+      "plugin.mail.app.gmail",
+      false,
+    )
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }))
     expect(onStartInstalledPluginConnectorAuthFlow).toHaveBeenCalledWith("mail", "gmail")
     expect(screen.queryByRole("textbox", { name: /Google account/ })).not.toBeInTheDocument()

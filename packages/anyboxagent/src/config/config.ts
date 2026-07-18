@@ -270,12 +270,46 @@ export const McpRequireApproval = z
   })
 export type McpRequireApproval = z.infer<typeof McpRequireApproval>
 
+export const McpServerOwner = z
+  .discriminatedUnion("kind", [
+    z
+      .object({
+        kind: z.literal("connector"),
+        connectorId: z.string().min(1),
+        runtimeID: z.string().min(1),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal("plugin"),
+        pluginID: z.string().min(1),
+        bindingID: z.string().min(1),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal("anybox"),
+        bindingID: z.string().min(1),
+      })
+      .strict(),
+    z
+      .object({
+        kind: z.literal("user"),
+      })
+      .strict(),
+  ])
+  .meta({
+    ref: "McpServerOwner",
+  })
+export type McpServerOwner = z.infer<typeof McpServerOwner>
+
 const McpServerBaseFields = {
   id: z.string().min(1),
   name: z.string().min(1).optional(),
   enabled: z.boolean().optional(),
   timeoutMs: z.number().int().positive().optional(),
   toolPolicies: McpToolPolicies,
+  owner: McpServerOwner.optional(),
 } as const
 
 export const McpStdioServerConfig = z
@@ -300,6 +334,7 @@ export const McpRemoteServerConfig = z
     provider: McpRemoteProvider.optional(),
     serverUrl: z.string().min(1).optional(),
     connectorId: z.string().min(1).optional(),
+    connectorRuntimeId: z.string().min(1).optional(),
     authorization: z.string().min(1).optional(),
     headers: z.record(z.string(), z.string()).optional(),
     serverDescription: z.string().min(1).optional(),
@@ -322,6 +357,7 @@ export const McpConnectorServerConfig = z
     ...McpServerBaseFields,
     transport: z.literal("connector"),
     connectorId: z.string().min(1),
+    connectorRuntimeId: z.string().min(1).optional(),
     provider: McpRemoteProvider.optional(),
     serverDescription: z.string().min(1).optional(),
     allowedTools: McpAllowedTools,
@@ -340,6 +376,7 @@ export type McpServerConfig = z.infer<typeof McpServerConfig>
 
 export const McpStdioServerInput = McpStdioServerConfig.omit({
   id: true,
+  owner: true,
 }).meta({
   ref: "McpStdioServerInput",
 })
@@ -354,6 +391,7 @@ export const McpRemoteServerInput = z
     provider: McpRemoteProvider.optional(),
     serverUrl: z.string().min(1).optional(),
     connectorId: z.string().min(1).optional(),
+    connectorRuntimeId: z.string().min(1).optional(),
     authorization: z.string().min(1).optional(),
     headers: z.record(z.string(), z.string()).optional(),
     serverDescription: z.string().min(1).optional(),
@@ -373,6 +411,7 @@ export type McpRemoteServerInput = z.infer<typeof McpRemoteServerInput>
 
 export const McpConnectorServerInput = McpConnectorServerConfig.omit({
   id: true,
+  owner: true,
 }).meta({
   ref: "McpConnectorServerInput",
 })
@@ -401,12 +440,14 @@ export const McpRemoteServerSummary = z
     provider: McpRemoteProvider.optional(),
     serverUrl: z.string().min(1).optional(),
     connectorId: z.string().min(1).optional(),
+    connectorRuntimeId: z.string().min(1).optional(),
     authorization: z.string().min(1).optional(),
     headers: z.record(z.string(), z.string()).optional(),
     serverDescription: z.string().min(1).optional(),
     allowedTools: McpAllowedTools,
     toolPolicies: McpToolPolicies,
     requireApproval: McpRequireApproval,
+    owner: McpServerOwner.optional(),
   })
   .strict()
   .refine((value) => Boolean(value.serverUrl || value.connectorId), {
@@ -656,6 +697,7 @@ function normalizeMcpServer(config: McpServerConfig): McpServerSummary {
       name: connector.name,
       transport: "connector",
       connectorId: connector.connectorId,
+      connectorRuntimeId: connector.connectorRuntimeId,
       allowedTools: connector.allowedTools,
       toolPolicies: connector.toolPolicies,
       requireApproval: connector.requireApproval,
@@ -663,6 +705,7 @@ function normalizeMcpServer(config: McpServerConfig): McpServerSummary {
       serverDescription: connector.serverDescription,
       enabled: connector.enabled ?? true,
       timeoutMs: connector.timeoutMs,
+      owner: connector.owner,
     }
   }
 
@@ -680,9 +723,11 @@ function normalizeMcpServer(config: McpServerConfig): McpServerSummary {
       requireApproval: remote.requireApproval,
       provider: remote.provider,
       connectorId: remote.connectorId,
+      connectorRuntimeId: remote.connectorRuntimeId,
       serverDescription: remote.serverDescription,
       enabled: remote.enabled ?? true,
       timeoutMs: remote.timeoutMs,
+      owner: remote.owner,
     }
   }
 
@@ -975,6 +1020,46 @@ export async function setSelectedMcpServerIDs(configID: string, serverIDs: strin
   return writeConfig(normalizedConfigID, Info.parse(next))
 }
 
+export async function removeSelectedMcpServerIDFromAllProjects(serverID: string): Promise<{
+  affectedProjectIDs: string[]
+  affectedCount: number
+}> {
+  const transaction = db.db.transaction(() => removeSelectedMcpServerIDFromAllProjectsInCurrentTransaction(serverID))
+  return transaction()
+}
+
+export function removeSelectedMcpServerIDFromAllProjectsInCurrentTransaction(serverID: string): {
+  affectedProjectIDs: string[]
+  affectedCount: number
+} {
+  const normalizedServerID = serverID.trim()
+  if (!normalizedServerID) return { affectedProjectIDs: [], affectedCount: 0 }
+
+  ensureProjectConfigTable()
+  const rows = db.findMany("project_configs", ProjectConfigRecord)
+  const affected = rows.flatMap((row) => {
+    const current = normalizeMcpServerIDs(row.config.selected_mcp_servers ?? [])
+    if (!current.includes(normalizedServerID)) return []
+    const next = Info.parse({
+      ...row.config,
+      selected_mcp_servers: current.filter((id) => id !== normalizedServerID),
+    })
+    return [{ projectID: row.projectID, config: next }]
+  })
+
+  for (const row of affected) {
+    db.upsert("project_configs", row, ["projectID"])
+  }
+
+  const affectedProjectIDs = affected
+    .map((row) => row.projectID)
+    .filter((projectID) => projectID !== GLOBAL_CONFIG_ID)
+  return {
+    affectedProjectIDs,
+    affectedCount: affectedProjectIDs.length,
+  }
+}
+
 function readSelectedSkillIDs(configID: string) {
   const selected = readConfig(configID).selected_skills
   return selected ? normalizeSkillIDs(selected) : null
@@ -1261,8 +1346,10 @@ export async function resolveProjectMcpServers(projectID: string): Promise<McpSe
   const normalizedProjectID = normalizeConfigID(projectID)
   const selectedServerIDs = readSelectedMcpServerIDs(normalizedProjectID)
   const selectedPluginIDs = readSelectedPluginIDs(normalizedProjectID) ?? []
-  const selectedPluginServerPrefixes = selectedPluginIDs.map((pluginID) => `plugin.${pluginID}`)
   const pluginModule = await import("#plugin/plugin.ts")
+  const selectedPluginOwnedServerIDs = new Set(
+    pluginModule.resolveEnabledInstalledPluginMcpServerIDs(selectedPluginIDs),
+  )
   const selectedPluginConnectorRequirementServerIDs = new Set(
     pluginModule.resolveEnabledInstalledPluginConnectorRequirementServerIDs(selectedPluginIDs),
   )
@@ -1270,7 +1357,7 @@ export async function resolveProjectMcpServers(projectID: string): Promise<McpSe
   const selectedPluginServerIDs = new Set(
     globalServers
       .filter((server) =>
-        selectedPluginServerPrefixes.some((prefix) => server.id === prefix || server.id.startsWith(`${prefix}.`)) ||
+        selectedPluginOwnedServerIDs.has(server.id) ||
         selectedPluginConnectorRequirementServerIDs.has(server.id),
       )
       .map((server) => server.id),
@@ -1332,12 +1419,23 @@ export async function getMcpServer(configID: string, serverID: string): Promise<
   return normalizeMcpServer(server)
 }
 
-export async function setMcpServer(configID: string, serverID: string, server: McpServerInput) {
-  const normalizedConfigID = normalizeConfigID(configID)
-  const current = readConfig(normalizedConfigID)
+function parsePublicMcpServerInput(server: McpServerInput) {
+  const { owner: _ignoredOwner, ...input } = server as McpServerInput & { owner?: unknown }
+  return McpServerInput.parse(input)
+}
+
+function writeMcpServer(
+  normalizedConfigID: string,
+  current: Info,
+  serverID: string,
+  server: McpServerInput,
+  owner: McpServerOwner | undefined,
+) {
+  const input = parsePublicMcpServerInput(server)
   const parsed = McpServerConfig.parse({
-    ...server,
+    ...input,
     id: serverID,
+    owner,
   })
   const next: Info = {
     ...current,
@@ -1350,6 +1448,29 @@ export async function setMcpServer(configID: string, serverID: string, server: M
   }
   writeConfig(normalizedConfigID, Info.parse(next))
   return normalizeMcpServer(parsed)
+}
+
+export async function setMcpServer(configID: string, serverID: string, server: McpServerInput) {
+  const normalizedConfigID = normalizeConfigID(configID)
+  const current = readConfig(normalizedConfigID)
+  const existing = current.mcp?.servers?.[serverID]
+  const owner: McpServerOwner | undefined = existing
+    ? existing.owner
+    : {
+        kind: "user",
+      }
+  return writeMcpServer(normalizedConfigID, current, serverID, server, owner)
+}
+
+export async function setManagedMcpServer(
+  configID: string,
+  serverID: string,
+  server: McpServerInput,
+  owner: McpServerOwner,
+) {
+  const normalizedConfigID = normalizeConfigID(configID)
+  const current = readConfig(normalizedConfigID)
+  return writeMcpServer(normalizedConfigID, current, serverID, server, McpServerOwner.parse(owner))
 }
 
 export async function removeMcpServer(configID: string, serverID: string) {

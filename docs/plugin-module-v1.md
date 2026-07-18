@@ -115,9 +115,15 @@ skills/
 plugin:<pluginID>:<skill-directory-name>
 ```
 
+Skill 的产品形态是一个目录，而不是单个 `SKILL.md` 文档。插件详情的“包含内容”只用一行展示 Skill 摘要；安装完成且包文件可用时，用户可以右键该行并选择“浏览 Skill 文件”，在只读面板中浏览完整目录树。面板按需加载子目录，默认打开 `SKILL.md`，Markdown 支持阅读/源码切换，其他 UTF-8 文本和常见图片可直接预览。插件总开关关闭时仍可查看本地文件；未安装或包文件缺失时不允许浏览。
+
+浏览功能不会向 Renderer 暴露绝对路径，也不允许编辑、执行脚本或下载文件。Agent 只接受归属于指定已安装插件的精确 Skill ID，并对相对路径、真实路径边界、符号链接、目录项数量和预览文件大小做限制。
+
 ## Platform Connector Requirements
 
-`connectorRequirements` 用于引用共享平台 connector。平台 connector 独立于插件，适合 GitHub、workspace files、browser、database 等用户预期只配置一次的能力。
+`connectorRequirements` 用于引用共享平台 connector。平台 connector 独立于插件，适合 Gmail、GitHub、数据库账号等用户预期只授权一次、由多个插件复用的连接。
+
+Browser 自动化、Node REPL 和类似的本地执行 runtime 不属于共享账号连接，应由对应插件放在自身目录中并通过 `mcpServers` 声明。Anybox 可以保留通用宿主或桥接基础设施，但不应把这些插件能力重新实现成平台内置 Connector。
 
 ```json
 {
@@ -306,12 +312,19 @@ type ResolvedConnectorRuntime =
 安装插件时只生成绑定：
 
 - 写入 `installed_plugins`。
-- 按 manifest 生成全局 MCP server 配置。
+- 按 manifest 生成全局 MCP server 配置，并写入 `owner.kind = "plugin"`、`pluginID` 和稳定 `bindingID`。
+- 为每个生成的 MCP 写入 `mcpServerEnabled` 子项偏好；新 server 默认启用，升级时保留未变 server 的偏好并清理已移除项。
 - 记录插件 Skill 根目录，供 Skill 发现流程读取。
 - 为 plugin-owned connector 生成 connector ID 和 connector-backed MCP server。
 - 记录 `connectorRequirementIDs`，用于项目选择时解析平台 connector。
 
-安装不会自动把插件暴露给所有项目。项目仍通过现有 MCP picker 和 Skill selection 显式选择可用能力。
+安装不会自动把插件暴露给所有项目。项目只需在插件选择器中选择插件；运行时会自动带入该插件所有 Skill、同时通过插件总开关和子开关的 MCP，以及声明的共享 connector requirements。插件内部 Skill/MCP 不再出现在独立 Skill/MCP picker 中。
+
+插件总开关只暂停内部能力，不覆盖 `mcpServerEnabled` 子项偏好；重新启用插件后会恢复原来的 MCP 子项状态。MCP 的 `toolPolicies` 继续保存在 MCP 配置中，插件同步、配置更新和升级不会覆盖用户策略。
+
+插件是其 Skill、普通 MCP 和插件专属 connector MCP 的唯一管理入口。共享平台 connector 仍由“连接器”页面管理，插件详情只展示依赖状态和跳转入口。
+
+Skill 行的展开区继续展示 Skill ID、目录和描述；目录内容通过该行的右键菜单进入只读文件浏览器，不在全局 Skill 页面重复提供入口。
 
 `critical` 风险插件禁止安装。其他风险等级的具体工具调用继续由 MCP tool policy、权限审批和工具 annotation 决定。
 
@@ -365,8 +378,11 @@ GET    /api/plugins/catalog
 GET    /api/plugins/installed
 PUT    /api/plugins/installed/:pluginID
 PATCH  /api/plugins/installed/:pluginID
+PATCH  /api/plugins/installed/:pluginID/mcp/:serverID
 DELETE /api/plugins/installed/:pluginID
 GET    /api/plugins/installed/:pluginID/diagnostic
+GET    /api/plugins/installed/:pluginID/skills/:skillID/entries?path=<relative-directory>
+GET    /api/plugins/installed/:pluginID/skills/:skillID/file?path=<relative-file>
 
 GET    /api/connectors/catalog
 GET    /api/connectors

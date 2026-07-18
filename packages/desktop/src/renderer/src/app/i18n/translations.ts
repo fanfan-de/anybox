@@ -12,6 +12,7 @@ import { trTR } from "./locales/tr-TR"
 import { viVN } from "./locales/vi-VN"
 import { zhTW } from "./locales/zh-TW"
 import { literalPatternTemplates } from "./literal-pattern-locales"
+import { pluginOwnershipTranslations } from "./plugin-ownership-translations"
 import { subscriptionTranslations } from "./subscription-translations"
 
 export const zhCN = {
@@ -144,6 +145,8 @@ export const zhCN = {
   "skillLibrary.local.readOnly": "只读",
   "skillLibrary.local.editable": "可编辑",
   "skillLibrary.local.instructions": "Skill 内容",
+  "skillLibrary.local.skillFileName": "SKILL.md",
+  "skillLibrary.local.viewModeAria": "Skill 文件查看模式",
   "skillLibrary.local.deleteDescription": "删除这个本地 Skill 及其目录中的全部文件。",
   "skillLibrary.local.edit": "编辑",
   "skillLibrary.local.preview": "预览",
@@ -155,6 +158,15 @@ export const zhCN = {
   "skillLibrary.add.fromUrl": "从 URL 安装",
   "skillLibrary.add.fromLocalFile": "从本地文件导入",
   "skillLibrary.local.openFileLocation": "打开文件位置",
+  "skillLibrary.local.rename": "重命名",
+  "skillLibrary.local.moveTo": "移动到…",
+  "skillLibrary.local.moveToFolder": "移动到文件夹…",
+  "skillLibrary.local.deleteSkill": "删除 Skill",
+  "skillLibrary.local.deleteEmptyFolder": "删除空文件夹",
+  "skillLibrary.searchClearAria": "清除 Skill 搜索",
+  "skillLibrary.statusFilterAria": "按状态筛选",
+  "skillLibrary.downloadedAria": "已下载的 Skill",
+  "skillLibrary.downloadedFilteredEmpty": "当前筛选条件下没有匹配的已下载 Skill。",
   "skillLibrary.marketplace.open": "获取第三方 Skill",
   "skillLibrary.marketplace.title": "第三方 Skill",
   "skillLibrary.marketplace.description": "内容来自 ClawHub 和腾讯 SkillHub，搜索和下载会访问外部服务。",
@@ -1526,6 +1538,7 @@ export const zhCN = {
   "plugins.detail.capability": "能力",
   "plugins.detail.capabilities": "能力",
   "plugins.detail.generatedDescription": "{description} 此插件包含 {count} 项 {category} 工作流能力，安装后可按项目启用。",
+  ...pluginOwnershipTranslations.zhCN,
   "mcp.importJson": "导入 JSON",
   "mcp.title": "MCP 服务器",
   "mcp.serverConfiguration": "服务器配置",
@@ -1683,6 +1696,8 @@ export const enUS = {
   "skillLibrary.local.readOnly": "Read-only",
   "skillLibrary.local.editable": "Editable",
   "skillLibrary.local.instructions": "Skill content",
+  "skillLibrary.local.skillFileName": "SKILL.md",
+  "skillLibrary.local.viewModeAria": "Skill file view mode",
   "skillLibrary.local.deleteDescription": "Deletes this local skill and every file in its directory.",
   "skillLibrary.local.edit": "Edit",
   "skillLibrary.local.preview": "Preview",
@@ -1694,6 +1709,15 @@ export const enUS = {
   "skillLibrary.add.fromUrl": "Install from URL",
   "skillLibrary.add.fromLocalFile": "Import from local file",
   "skillLibrary.local.openFileLocation": "Open file location",
+  "skillLibrary.local.rename": "Rename",
+  "skillLibrary.local.moveTo": "Move to...",
+  "skillLibrary.local.moveToFolder": "Move to folder...",
+  "skillLibrary.local.deleteSkill": "Delete skill",
+  "skillLibrary.local.deleteEmptyFolder": "Delete empty folder",
+  "skillLibrary.searchClearAria": "Clear skills search",
+  "skillLibrary.statusFilterAria": "Filter by status",
+  "skillLibrary.downloadedAria": "Downloaded skills",
+  "skillLibrary.downloadedFilteredEmpty": "No downloaded skills match the current filters.",
   "skillLibrary.marketplace.open": "Get third-party Skills",
   "skillLibrary.marketplace.title": "Third-party Skills",
   "skillLibrary.marketplace.description": "Content comes from ClawHub and Tencent SkillHub. Searching and downloading will access external services.",
@@ -3068,6 +3092,7 @@ export const enUS = {
   "plugins.detail.capability": "capability",
   "plugins.detail.capabilities": "capabilities",
   "plugins.detail.generatedDescription": "{description} This plugin includes {count} {capabilityLabel} for {category} workflows and can be enabled per project after installation.",
+  ...pluginOwnershipTranslations.enUS,
   "mcp.importJson": "Import JSON",
   "mcp.title": "MCP servers",
   "mcp.serverConfiguration": "Server Configuration",

@@ -2,9 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test"
 import "./sqlite.cleanup.ts"
 import { createHash } from "node:crypto"
 import { existsSync } from "node:fs"
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import * as Auth from "#auth/auth.ts"
 import * as ProviderAuth from "#auth/provider-auth.ts"
 import * as Config from "#config/config.ts"
@@ -110,6 +110,9 @@ type PluginCatalogEnvelope = JsonEnvelope<
     }>
     mcpServers: Array<{
       id: string
+      tools: Array<{
+        name: string
+      }>
       runtime: {
         transport: string
       }
@@ -161,6 +164,7 @@ type PluginCatalogEnvelope = JsonEnvelope<
     }>
     connectorRequirements: Array<{
       connector: string
+      runtimeIDs?: string[]
       tools?: string[]
       permissions?: string[]
       required?: boolean
@@ -175,6 +179,7 @@ type InstalledPluginEnvelope = JsonEnvelope<{
   enabled: boolean
   mcpServerID: string
   mcpServerIDs: string[]
+  mcpServerEnabled: Record<string, boolean>
   skillIDs: string[]
   connectorIDs: string[]
   connectorRequirementIDs: string[]
@@ -187,6 +192,7 @@ type ConnectorCatalogEnvelope = JsonEnvelope<
   Array<{
     id: string
     name: string
+    category: "account_connector" | "builtin_mcp"
     credential?: {
       kind: "api_key" | "oauth"
       label: string
@@ -216,6 +222,13 @@ type ConnectorCatalogEnvelope = JsonEnvelope<
       cwd?: string
       serverUrl?: string
     }
+    mcpRuntimes: Array<{
+      id: string
+      name?: string
+      available: boolean
+      transport: "stdio" | "remote"
+      serverUrl?: string
+    }>
   }>
 >
 
@@ -228,6 +241,11 @@ type PlatformConnectorStatusEnvelope = JsonEnvelope<
     credentialKind?: "api_key" | "oauth"
     configured?: boolean
     configurationLabel?: string
+    mcpBindings: Array<{
+      runtimeID: string
+      serverID: string
+      name?: string
+    }>
     generatedMcpServerID?: string
   }>
 >
@@ -240,6 +258,11 @@ type SinglePlatformConnectorStatusEnvelope = JsonEnvelope<{
   credentialKind?: "api_key" | "oauth"
   configured?: boolean
   configurationLabel?: string
+  mcpBindings: Array<{
+    runtimeID: string
+    serverID: string
+    name?: string
+  }>
   generatedMcpServerID?: string
 }>
 
@@ -461,8 +484,14 @@ async function writeManifestPluginPackage(packageSourceRoot = pluginInstallRoot(
   const versionRoot = join(packageRoot, "0.1.0")
   const manifestRoot = join(versionRoot, ".anybox-plugin")
   const skillRoot = join(versionRoot, "skills", "review")
+  const skillReferencesRoot = join(skillRoot, "references")
+  const skillScriptsRoot = join(skillRoot, "scripts")
+  const skillAssetsRoot = join(skillRoot, "assets")
   await mkdir(manifestRoot, { recursive: true })
   await mkdir(skillRoot, { recursive: true })
+  await mkdir(skillReferencesRoot, { recursive: true })
+  await mkdir(skillScriptsRoot, { recursive: true })
+  await mkdir(skillAssetsRoot, { recursive: true })
 
   await writeFile(join(skillRoot, "SKILL.md"), [
     "---",
@@ -475,6 +504,9 @@ async function writeManifestPluginPackage(packageSourceRoot = pluginInstallRoot(
     "Use this skill to review generated documentation notes.",
     "",
   ].join("\n"))
+  await writeFile(join(skillReferencesRoot, "checklist.md"), "# Review checklist\n\nVerify the generated notes.\n")
+  await writeFile(join(skillScriptsRoot, "inspect.ts"), "export const inspect = () => 'read-only fixture'\n")
+  await writeFile(join(skillAssetsRoot, "pixel.png"), Buffer.from(tinyPngBase64, "base64"))
 
   await writeFile(join(manifestRoot, "plugin.json"), JSON.stringify({
     name: "manifest-lab",
@@ -798,6 +830,69 @@ async function writeConnectorRegistryFile() {
   return registryPath
 }
 
+async function writeMultiRuntimeConnectorRegistryFile(includeSearchRuntime = true) {
+  if (!activeRoot) throw new Error("Temp root has not been initialized.")
+
+  const registryPath = join(activeRoot, "connectors-v2.json")
+  const mcpRuntimes = [
+    {
+      id: "default",
+      name: "Multi Docs",
+      transport: "remote",
+      serverUrl: "https://docs.example.test/mcp",
+      headers: {
+        "x-api-key": "${DOCS_API_KEY}",
+      },
+    },
+    ...(includeSearchRuntime
+      ? [
+          {
+            id: "search",
+            name: "Multi Docs Search",
+            transport: "remote",
+            serverUrl: "https://search.docs.example.test/mcp",
+            headers: {
+              "x-api-key": "${DOCS_API_KEY}",
+            },
+          },
+        ]
+      : []),
+  ]
+
+  await writeFile(registryPath, JSON.stringify({
+    schemaVersion: 2,
+    connectors: [
+      {
+        id: "multi-docs",
+        category: "account_connector",
+        name: "Multi Docs",
+        description: "Connector with multiple MCP runtimes.",
+        publisher: "Anybox",
+        risk: "medium",
+        permissions: ["Sends requests to docs.example.test"],
+        tools: [
+          {
+            name: "search_docs",
+            description: "Search fixture docs.",
+            readOnly: true,
+          },
+        ],
+        credential: {
+          kind: "api_key",
+          key: "DOCS_API_KEY",
+          label: "Docs API key",
+          type: "password",
+          required: true,
+          secret: true,
+        },
+        mcpRuntimes,
+      },
+    ],
+  }, null, 2))
+  process.env.ANYBOX_CONNECTOR_REGISTRY_FILES = registryPath
+  return registryPath
+}
+
 async function writePlatformConnectorRequirementPluginPackage() {
   if (!activeRoot) throw new Error("Temp root has not been initialized.")
 
@@ -820,6 +915,7 @@ async function writePlatformConnectorRequirementPluginPackage() {
     connectorRequirements: [
       {
         connector: "docs",
+        runtimeIDs: ["default"],
         tools: ["search_docs"],
         permissions: ["Sends requests to docs.example.test"],
         required: true,
@@ -968,89 +1064,55 @@ async function writeRelativeAssetPluginPackage() {
   return packageRoot
 }
 
-async function writeBrowserConnectorRequirementPluginPackage() {
+async function writeBrowserPluginPackage() {
+  if (!activeRoot) throw new Error("Temp root has not been initialized.")
+
+  const packageSourceRoot = pluginInstallRoot()
+  const packageRoot = join(packageSourceRoot, "browser", "0.2.0")
+  const sourceRoot = join(import.meta.dir, "..", "..", "..", "plugins", "Anybox-Plugins", "browser")
+  const files = [
+    "plugin.json",
+    join("skills", "browser", "SKILL.md"),
+    join("scripts", "browser", "server.js"),
+    join("scripts", "browser-runtime", "client.mjs"),
+    join("scripts", "node-repl", "server.js"),
+  ]
+
+  for (const relativePath of files) {
+    const destination = join(packageRoot, relativePath)
+    await mkdir(dirname(destination), { recursive: true })
+    await writeFile(destination, await readFile(join(sourceRoot, relativePath)))
+  }
+
+  return packageSourceRoot
+}
+
+async function writeLegacyBrowserPluginPackage() {
   if (!activeRoot) throw new Error("Temp root has not been initialized.")
 
   const packageSourceRoot = pluginInstallRoot()
   const packageRoot = join(packageSourceRoot, "browser", "0.1.0")
   const manifestRoot = join(packageRoot, ".anybox-plugin")
-  const skillRoot = join(packageRoot, "skills", "browser")
   await mkdir(manifestRoot, { recursive: true })
-  await mkdir(skillRoot, { recursive: true })
-
-  await writeFile(join(skillRoot, "SKILL.md"), [
-    "---",
-    "name: Browser",
-    "description: Use when the Browser plugin is enabled and the user asks to inspect or control Chrome through the Anybox browser connector.",
-    "---",
-    "",
-    "# Browser",
-    "",
-    "Use the Browser MCP tools from this plugin to inspect and control Chrome through the Anybox browser extension.",
-    "",
-  ].join("\n"))
-
   await writeFile(join(manifestRoot, "plugin.json"), JSON.stringify({
     name: "browser",
     version: "0.1.0",
-    description: "Control Chrome through the Anybox browser extension and browser MCP connector.",
-    author: {
-      name: "Anybox",
-    },
-    interface: {
-      displayName: "Browser",
-      shortDescription: "Use Chrome tabs through the Anybox browser extension.",
-      developerName: "Anybox",
-      category: "Browser",
-      logo: "BR",
-    },
-    skills: "skills",
+    description: "Legacy Browser plugin backed by platform connectors.",
     connectorRequirements: [
       {
         connector: "browser",
-        tools: [
-          "browser_status",
-          "browser_get_tabs",
-          "browser_open_tab",
-          "browser_activate_tab",
-          "browser_snapshot",
-          "browser_interactive_snapshot",
-          "browser_dom_tree",
-          "browser_accessibility_tree",
-          "browser_screenshot",
-          "browser_click",
-          "browser_click_element",
-          "browser_fill",
-          "browser_type",
-          "browser_scroll",
-          "browser_wait_for",
-          "browser_release_tab",
-        ],
-        permissions: [
-          "Read Chrome tab titles, URLs, visible page text, DOM trees, accessibility trees, interactive elements, and screenshots.",
-          "Open, activate, click, scroll, type into, and fill Chrome tabs through the Anybox browser extension.",
-        ],
         required: true,
-        reason: "Browser control through the shared Anybox browser connector.",
+        reason: "Legacy Browser connector requirement.",
       },
       {
         connector: "node-repl",
-        tools: [
-          "node_repl_js",
-          "node_repl_reset",
-          "node_repl_add_node_module_dir",
-        ],
-        permissions: [
-          "Run JavaScript in a persistent local Node.js REPL.",
-          "Use the Browser runtime adapter for raw page JavaScript and CDP commands when browser automation needs it.",
-        ],
         required: true,
-        reason: "Codex-like Browser runtime API through the shared Anybox Node REPL connector.",
+        reason: "Legacy Node REPL connector requirement.",
       },
     ],
   }, null, 2))
 
-  return packageSourceRoot
+  return packageRoot
 }
 
 async function writeCriticalPluginPackage() {
@@ -2453,12 +2515,100 @@ describe("plugin marketplace API", () => {
       "plugin.manifest-lab.notes",
       "plugin.manifest-lab.connector.docs",
     ])
+    expect(installBody.data?.mcpServerEnabled).toEqual({
+      "plugin.manifest-lab.notes": true,
+      "plugin.manifest-lab.connector.docs": true,
+    })
 
     const server = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.manifest-lab.notes")
     expect(server?.transport).toBe("stdio")
     expect(server?.enabled).toBe(true)
     expect(server?.name).toBe("Manifest Notes")
     expect(server?.transport === "stdio" ? server.args : undefined).toEqual(["server.js"])
+    expect(server?.owner).toEqual({
+      kind: "plugin",
+      pluginID: "manifest-lab",
+      bindingID: "mcp:notes",
+    })
+    const connectorBackedServer = await Config.getMcpServer(
+      Config.GLOBAL_CONFIG_ID,
+      "plugin.manifest-lab.connector.docs",
+    )
+    expect(connectorBackedServer?.owner).toEqual({
+      kind: "plugin",
+      pluginID: "manifest-lab",
+      bindingID: "app:docs",
+    })
+
+    const disableConnectorBackedChildResponse = await app.request(
+      "/api/plugins/installed/manifest-lab/mcp/plugin.manifest-lab.connector.docs",
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          enabled: false,
+        }),
+      },
+    )
+    expect(disableConnectorBackedChildResponse.status).toBe(200)
+    expect(
+      Plugin.getInstalled("manifest-lab")?.mcpServerEnabled["plugin.manifest-lab.connector.docs"],
+    ).toBe(false)
+
+    const disableChildResponse = await app.request(
+      "/api/plugins/installed/manifest-lab/mcp/plugin.manifest-lab.notes",
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          enabled: false,
+          toolPolicies: {
+            read_notes: {
+              policy: "ask",
+            },
+          },
+        }),
+      },
+    )
+    const disableChildBody = (await disableChildResponse.json()) as JsonEnvelope<{
+      plugin: NonNullable<InstalledPluginEnvelope["data"]>
+      server: {
+        enabled: boolean
+        toolPolicies?: Record<string, { policy: string }>
+      }
+    }>
+    expect(disableChildResponse.status).toBe(200)
+    expect(disableChildBody.data?.plugin.mcpServerEnabled["plugin.manifest-lab.notes"]).toBe(false)
+    expect(disableChildBody.data?.server.enabled).toBe(false)
+    expect(disableChildBody.data?.server.toolPolicies?.read_notes?.policy).toBe("ask")
+    await Plugin.reconcileInstalledRuntimeBindings()
+    expect(Plugin.getInstalled("manifest-lab")?.mcpServerEnabled["plugin.manifest-lab.notes"]).toBe(false)
+    const reconciledChildServer = await Config.getMcpServer(
+      Config.GLOBAL_CONFIG_ID,
+      "plugin.manifest-lab.notes",
+    )
+    expect(reconciledChildServer?.enabled).toBe(false)
+    expect(reconciledChildServer?.toolPolicies?.read_notes?.policy).toBe("ask")
+
+    const ownershipResponse = await app.request(
+      "/api/plugins/installed/manifest-lab/mcp/plugin.looks-like-a-plugin",
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          enabled: false,
+        }),
+      },
+    )
+    const ownershipBody = (await ownershipResponse.json()) as JsonEnvelope<unknown>
+    expect(ownershipResponse.status).toBe(404)
+    expect(ownershipBody.error?.code).toBe("PLUGIN_MCP_NOT_FOUND")
 
     const disableResponse = await app.request("/api/plugins/installed/manifest-lab", {
       method: "PATCH",
@@ -2474,7 +2624,53 @@ describe("plugin marketplace API", () => {
 
     expect(disableResponse.status).toBe(200)
     expect(disableBody.data?.enabled).toBe(false)
+    expect(disableBody.data?.mcpServerEnabled["plugin.manifest-lab.notes"]).toBe(false)
+    expect(disableBody.data?.mcpServerEnabled["plugin.manifest-lab.connector.docs"]).toBe(false)
     expect(disabledServer?.enabled).toBe(false)
+
+    const reenableResponse = await app.request("/api/plugins/installed/manifest-lab", {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        enabled: true,
+      }),
+    })
+    const reenableBody = (await reenableResponse.json()) as InstalledPluginEnvelope
+    const stillDisabledServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.manifest-lab.notes")
+    expect(reenableResponse.status).toBe(200)
+    expect(reenableBody.data?.mcpServerEnabled["plugin.manifest-lab.notes"]).toBe(false)
+    expect(reenableBody.data?.mcpServerEnabled["plugin.manifest-lab.connector.docs"]).toBe(false)
+    expect(stillDisabledServer?.enabled).toBe(false)
+    expect(stillDisabledServer?.toolPolicies?.read_notes?.policy).toBe("ask")
+
+    const reenableChildResponse = await app.request(
+      "/api/plugins/installed/manifest-lab/mcp/plugin.manifest-lab.notes",
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          enabled: true,
+        }),
+      },
+    )
+    expect(reenableChildResponse.status).toBe(200)
+    const reenabledChildServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.manifest-lab.notes")
+    expect(reenabledChildServer?.enabled).toBe(true)
+    expect(reenabledChildServer?.toolPolicies?.read_notes?.policy).toBe("ask")
+
+    await app.request("/api/plugins/installed/manifest-lab", {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        enabled: false,
+      }),
+    })
 
     const diagnosticResponse = await app.request("/api/plugins/installed/manifest-lab/diagnostic")
     const diagnosticBody = (await diagnosticResponse.json()) as DiagnosticEnvelope
@@ -2535,6 +2731,239 @@ describe("plugin marketplace API", () => {
     expect(installed?.missingPackage).toBe(true)
     expect(installed?.packageRoot).toBeUndefined()
     expect(Plugin.listInstalledPluginSkillRoots(["manifest-lab"])).toEqual([])
+  })
+
+  test("backfills legacy plugin MCP preferences without claiming user-owned plugin-like ids", async () => {
+    await useTempDatabase()
+    await writeManifestPluginPackage()
+    const app = createServerApp()
+
+    const installResponse = await app.request("/api/plugins/installed/manifest-lab", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        enabled: true,
+      }),
+    })
+    expect(installResponse.status).toBe(200)
+
+    const globalConfig = await Config.get(Config.GLOBAL_CONFIG_ID)
+    const notesServer = globalConfig.mcp?.servers?.["plugin.manifest-lab.notes"]
+    expect(notesServer).toBeDefined()
+    if (!notesServer) throw new Error("Expected the plugin notes MCP binding.")
+    const {
+      owner: _notesOwner,
+      ...legacyNotesServer
+    } = notesServer
+    await Config.set(
+      Config.GLOBAL_CONFIG_ID,
+      {
+        ...globalConfig,
+        mcp: {
+          ...globalConfig.mcp,
+          servers: {
+            ...globalConfig.mcp?.servers,
+            "plugin.manifest-lab.notes": {
+              ...legacyNotesServer,
+              enabled: false,
+            },
+          },
+        },
+      },
+    )
+    await Config.setMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.looks-user-owned", {
+      name: "User prefix fixture",
+      transport: "stdio",
+      command: "node",
+      enabled: true,
+    })
+    Sqlite.db.prepare(
+      "UPDATE installed_plugins SET mcpServerEnabled = NULL WHERE pluginID = ?",
+    ).run("manifest-lab")
+
+    await Plugin.reconcileInstalledRuntimeBindings()
+
+    expect(Plugin.getInstalled("manifest-lab")?.mcpServerEnabled).toEqual({
+      "plugin.manifest-lab.notes": false,
+      "plugin.manifest-lab.connector.docs": true,
+    })
+    expect(
+      (await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.manifest-lab.notes"))?.enabled,
+    ).toBe(false)
+    expect(
+      (await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.manifest-lab.notes"))?.owner,
+    ).toEqual({
+      kind: "plugin",
+      pluginID: "manifest-lab",
+      bindingID: "mcp:notes",
+    })
+    expect(
+      (await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.looks-user-owned"))?.owner,
+    ).toEqual({
+      kind: "user",
+    })
+  })
+
+  test("does not reclaim an exact plugin server id with an explicit user owner", async () => {
+    await useTempDatabase()
+    await writeManifestPluginPackage()
+    const app = createServerApp()
+
+    expect((await app.request("/api/plugins/installed/manifest-lab", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        enabled: true,
+      }),
+    })).status).toBe(200)
+
+    const server = await Config.getMcpServer(
+      Config.GLOBAL_CONFIG_ID,
+      "plugin.manifest-lab.notes",
+    )
+    expect(server).toBeDefined()
+    if (!server) throw new Error("Expected the plugin notes MCP binding.")
+    const {
+      id: _serverID,
+      owner: _owner,
+      ...serverInput
+    } = server
+    await Config.setManagedMcpServer(
+      Config.GLOBAL_CONFIG_ID,
+      server.id,
+      serverInput,
+      {
+        kind: "user",
+      },
+    )
+    await Plugin.reconcileInstalledRuntimeBindings()
+
+    const updateResponse = await app.request(
+      "/api/plugins/installed/manifest-lab/mcp/plugin.manifest-lab.notes",
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          enabled: false,
+        }),
+      },
+    )
+
+    expect(updateResponse.status).toBe(404)
+    expect(
+      (await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, server.id))?.owner,
+    ).toEqual({
+      kind: "user",
+    })
+    expect(
+      Plugin.getInstalled("manifest-lab")?.mcpServerEnabled[server.id],
+    ).toBe(true)
+  })
+
+  test("preserves MCP child preferences across plugin manifest upgrades", async () => {
+    await useTempDatabase()
+    await writeManifestPluginPackage()
+    const app = createServerApp()
+
+    expect((await app.request("/api/plugins/installed/manifest-lab", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        enabled: true,
+      }),
+    })).status).toBe(200)
+    expect((await app.request(
+      "/api/plugins/installed/manifest-lab/mcp/plugin.manifest-lab.notes",
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          enabled: false,
+        }),
+      },
+    )).status).toBe(200)
+
+    const manifestPath = join(
+      pluginInstallRoot(),
+      "manifest-lab",
+      "0.1.0",
+      ".anybox-plugin",
+      "plugin.json",
+    )
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, any>
+    manifest.version = "0.2.0"
+    manifest.mcpServers = [
+      ...(manifest.mcpServers as unknown[]),
+      {
+        id: "search",
+        name: "Manifest Search",
+        risk: "low",
+        tools: [],
+        runtime: {
+          transport: "stdio",
+          command: "node",
+          args: ["search-server.js"],
+        },
+      },
+    ]
+    await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
+
+    const addServerResponse = await app.request("/api/plugins/installed/manifest-lab", {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({}),
+    })
+    const addServerBody = (await addServerResponse.json()) as InstalledPluginEnvelope
+    expect(addServerResponse.status).toBe(200)
+    expect(addServerBody.data?.mcpServerEnabled).toEqual({
+      "plugin.manifest-lab.notes": false,
+      "plugin.manifest-lab.search": true,
+      "plugin.manifest-lab.connector.docs": true,
+    })
+    expect(
+      (await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.manifest-lab.notes"))?.enabled,
+    ).toBe(false)
+    expect(
+      (await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.manifest-lab.search"))?.enabled,
+    ).toBe(true)
+
+    manifest.version = "0.3.0"
+    manifest.mcpServers = (manifest.mcpServers as Array<{ id?: string }>)
+      .filter((server) => server.id !== "notes")
+    await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
+
+    const removeServerResponse = await app.request("/api/plugins/installed/manifest-lab", {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({}),
+    })
+    const removeServerBody = (await removeServerResponse.json()) as InstalledPluginEnvelope
+    expect(removeServerResponse.status).toBe(200)
+    expect(removeServerBody.data?.mcpServerIDs).toEqual([
+      "plugin.manifest-lab.search",
+      "plugin.manifest-lab.connector.docs",
+    ])
+    expect(removeServerBody.data?.mcpServerEnabled).toEqual({
+      "plugin.manifest-lab.search": true,
+      "plugin.manifest-lab.connector.docs": true,
+    })
+    expect(
+      await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.manifest-lab.notes"),
+    ).toBeUndefined()
   })
 
   test("lists installed plugins with cached connector diagnostics that include configured policies", async () => {
@@ -2639,13 +3068,22 @@ describe("plugin marketplace API", () => {
     const catalogBody = (await catalogResponse.json()) as ConnectorCatalogEnvelope
     expect(catalogResponse.status).toBe(200)
     const docsConnector = catalogBody.data?.find((connector) => connector.id === "docs")
+    expect(docsConnector?.category).toBe("account_connector")
     expect(docsConnector?.credential?.kind).toBe("api_key")
+    expect(docsConnector?.mcpRuntimes.map((runtime) => runtime.id)).toEqual(["default"])
+    expect(docsConnector?.runtime?.transport).toBe("remote")
 
     const disconnectedResponse = await app.request("/api/connectors")
     const disconnectedBody = (await disconnectedResponse.json()) as PlatformConnectorStatusEnvelope
     const docsStatus = disconnectedBody.data?.find((connector) => connector.connectorID === "connector:docs:default")
     expect(disconnectedResponse.status).toBe(200)
     expect(docsStatus?.connected).toBe(false)
+    expect(docsStatus?.mcpBindings).toEqual([
+      {
+        runtimeID: "default",
+        serverID: "connector.docs.default",
+      },
+    ])
 
     const connectResponse = await app.request("/api/connectors/connector%3Adocs%3Adefault/api-key", {
       method: "PUT",
@@ -2663,11 +3101,155 @@ describe("plugin marketplace API", () => {
     const server = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "connector.docs.default")
     expect(server?.transport).toBe("connector")
     expect(server?.transport === "connector" ? server.connectorId : undefined).toBe("connector:docs:default")
+    expect(server?.transport === "connector" ? server.connectorRuntimeId : undefined).toBe("default")
+    expect(server?.owner).toEqual({
+      kind: "connector",
+      connectorId: "connector:docs:default",
+      runtimeID: "default",
+    })
     expect(JSON.stringify(server)).not.toContain("platform-secret")
 
     const runtime = await Connector.resolveRemoteServer("connector:docs:default")
     expect(runtime.serverUrl).toBe("https://docs.example.test/mcp")
     expect(runtime.headers?.["x-api-key"]).toBe("platform-secret")
+  })
+
+  test("keeps credentialless and zero-runtime account connectors in the connector control plane", async () => {
+    await useTempDatabase()
+    if (!activeRoot) throw new Error("Temp root has not been initialized.")
+
+    const legacy = Connector.ConnectorDefinition.parse({
+      id: "legacy-public",
+      name: "Legacy Public",
+      description: "Legacy credentialless connector.",
+      runtime: {
+        transport: "remote",
+        serverUrl: "https://public.example.test/mcp",
+      },
+    })
+    expect(legacy.category).toBe("account_connector")
+    expect(legacy.mcpRuntimes.map((runtime) => runtime.id)).toEqual(["default"])
+
+    const registryPath = join(activeRoot, "connectors-zero-runtime.json")
+    await writeFile(registryPath, JSON.stringify({
+      schemaVersion: 2,
+      connectors: [
+        {
+          id: "account-only",
+          category: "account_connector",
+          name: "Account Only",
+          description: "Account connector without authentication or MCP runtime.",
+          mcpRuntimes: [],
+        },
+      ],
+    }))
+    process.env.ANYBOX_CONNECTOR_REGISTRY_FILES = registryPath
+
+    const app = createServerApp()
+    const catalogResponse = await app.request("/api/connectors/catalog")
+    const catalogBody = (await catalogResponse.json()) as ConnectorCatalogEnvelope
+    expect(catalogBody.data?.find((definition) => definition.id === "account-only")?.mcpRuntimes).toEqual([])
+
+    const statusResponse = await app.request("/api/connectors")
+    const statusBody = (await statusResponse.json()) as PlatformConnectorStatusEnvelope
+    const status = statusBody.data?.find((candidate) => candidate.definitionID === "account-only")
+    expect(status?.connected).toBe(true)
+    expect(status?.authStatus).toBe("connected")
+    expect(status?.mcpBindings).toEqual([])
+    expect(status?.generatedMcpServerID).toBeUndefined()
+  })
+
+  test("reconciles multiple connector MCP runtimes with stable ids and managed ownership", async () => {
+    await useTempDatabase()
+    await writeMultiRuntimeConnectorRegistryFile()
+    const app = createServerApp()
+
+    const catalogResponse = await app.request("/api/connectors/catalog")
+    const catalogBody = (await catalogResponse.json()) as ConnectorCatalogEnvelope
+    const definition = catalogBody.data?.find((connector) => connector.id === "multi-docs")
+    expect(catalogResponse.status).toBe(200)
+    expect(definition?.category).toBe("account_connector")
+    expect(definition?.mcpRuntimes.map((runtime) => runtime.id)).toEqual(["default", "search"])
+
+    const statusResponse = await app.request("/api/connectors")
+    const statusBody = (await statusResponse.json()) as PlatformConnectorStatusEnvelope
+    expect(statusBody.data?.find((status) => status.definitionID === "multi-docs")?.mcpBindings).toEqual([
+      {
+        runtimeID: "default",
+        serverID: "connector.multi-docs.default",
+        name: "Multi Docs",
+      },
+      {
+        runtimeID: "search",
+        serverID: "connector.multi-docs.default.search",
+        name: "Multi Docs Search",
+      },
+    ])
+
+    const connectResponse = await app.request("/api/connectors/connector%3Amulti-docs%3Adefault/api-key", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        apiKey: "multi-runtime-secret",
+      }),
+    })
+    expect(connectResponse.status).toBe(200)
+
+    const defaultServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "connector.multi-docs.default")
+    const searchServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "connector.multi-docs.default.search")
+    expect(defaultServer?.transport === "connector" ? defaultServer.connectorRuntimeId : undefined).toBe("default")
+    expect(searchServer?.transport === "connector" ? searchServer.connectorRuntimeId : undefined).toBe("search")
+    expect(searchServer?.owner).toEqual({
+      kind: "connector",
+      connectorId: "connector:multi-docs:default",
+      runtimeID: "search",
+    })
+    expect(Connector.mcpServerIDForConnector("multi-docs")).toBe("connector.multi-docs.default")
+    expect(Connector.mcpServerIDForConnector("multi-docs", "default", "search")).toBe(
+      "connector.multi-docs.default.search",
+    )
+
+    const searchRuntime = await Connector.resolveRemoteServer("connector:multi-docs:default", "search")
+    expect(searchRuntime.serverUrl).toBe("https://search.docs.example.test/mcp")
+    expect(searchRuntime.headers?.["x-api-key"]).toBe("multi-runtime-secret")
+
+    await Connector.saveConnectorApiKey("connector:multi-docs:work", {
+      apiKey: "work-runtime-secret",
+    })
+    expect(
+      await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "connector.multi-docs.work"),
+    ).toBeDefined()
+    expect(
+      await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "connector.multi-docs.work.search"),
+    ).toBeDefined()
+
+    const missingDiagnosticResponse = await app.request(
+      "/api/connectors/connector%3Amulti-docs%3Adefault/diagnostic?runtimeID=missing",
+    )
+    const missingDiagnosticBody = (await missingDiagnosticResponse.json()) as DiagnosticEnvelope
+    expect(missingDiagnosticResponse.status).toBe(200)
+    expect(missingDiagnosticBody.data?.serverID).toBe("connector.multi-docs.default.missing")
+    expect(missingDiagnosticBody.data?.ok).toBe(false)
+    await expect(
+      Connector.resolveRuntime("connector:multi-docs:default", "missing"),
+    ).rejects.toMatchObject({
+      code: "CONNECTOR_RUNTIME_NOT_FOUND",
+    })
+
+    await Config.setSelectedMcpServerIDs("multi-runtime-project", [
+      "connector.multi-docs.default.search",
+      "connector.multi-docs.work.search",
+    ])
+    await writeMultiRuntimeConnectorRegistryFile(false)
+    await Connector.syncConnectorRuntimeBindings()
+
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "connector.multi-docs.default")).toBeDefined()
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "connector.multi-docs.default.search")).toBeUndefined()
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "connector.multi-docs.work")).toBeDefined()
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "connector.multi-docs.work.search")).toBeUndefined()
+    expect(await Config.getSelectedMcpServerIDs("multi-runtime-project")).toEqual([])
   })
 
   test("reads the Gmail OAuth client ID from connector build config", async () => {
@@ -2908,6 +3490,7 @@ describe("plugin marketplace API", () => {
     expect(plugin?.connectorRequirements).toEqual([
       {
         connector: "docs",
+        runtimeIDs: ["default"],
         tools: ["search_docs"],
         permissions: ["Sends requests to docs.example.test"],
         required: true,
@@ -2928,11 +3511,93 @@ describe("plugin marketplace API", () => {
     expect(installResponse.status).toBe(200)
     expect(installBody.data?.connectorIDs).toEqual([])
     expect(installBody.data?.connectorRequirementIDs).toEqual(["connector:docs:default"])
+    expect(Plugin.resolveEnabledInstalledPluginConnectorRequirementServerIDs(["connector-requirement-lab"])).toEqual([
+      "connector.docs.default",
+    ])
+
+    await Config.setSelectedPluginIDs("connector-requirement-project", ["connector-requirement-lab"])
+    expect(
+      (await Config.resolveProjectMcpServers("connector-requirement-project")).map((server) => server.id),
+    ).toContain("connector.docs.default")
+
+    await Plugin.update("connector-requirement-lab", { enabled: false })
+    expect(
+      (await Config.resolveProjectMcpServers("connector-requirement-project")).map((server) => server.id),
+    ).not.toContain("connector.docs.default")
   })
 
-  test("loads Browser plugin package through the platform browser connector", async () => {
+  test("migrates a legacy Browser package to the newer local plugin-owned runtime", async () => {
     await useTempDatabase()
-    await writeBrowserConnectorRequirementPluginPackage()
+    const legacyPackageRoot = await writeLegacyBrowserPluginPackage()
+
+    const legacyInstalled = await Plugin.install("browser", { enabled: true })
+    expect(legacyInstalled.version).toBe("0.1.0")
+    expect(legacyInstalled.packageRoot).toBe(legacyPackageRoot)
+    expect(legacyInstalled.mcpServerIDs).toEqual([])
+    expect(legacyInstalled.connectorRequirementIDs).toEqual([
+      "connector:browser:default",
+      "connector:node-repl:default",
+    ])
+
+    await Plugin.reconcileInstalledRuntimeBindings()
+
+    const migrated = Plugin.getInstalled("browser")
+    expect(migrated?.version).toBe("0.2.0")
+    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "browser", "0.2.0"))
+    expect(migrated?.mcpServerIDs).toEqual([
+      "plugin.browser.browser",
+      "plugin.browser.node-repl",
+    ])
+    expect(migrated?.connectorRequirementIDs).toEqual([])
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.browser.browser")).toMatchObject({
+      transport: "stdio",
+      owner: {
+        kind: "plugin",
+        pluginID: "browser",
+        bindingID: "mcp:browser",
+      },
+    })
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.browser.node-repl")).toMatchObject({
+      transport: "stdio",
+      owner: {
+        kind: "plugin",
+        pluginID: "browser",
+        bindingID: "mcp:node-repl",
+      },
+    })
+  })
+
+  test("loads Browser MCP and Node REPL from the Browser plugin package", async () => {
+    await useTempDatabase()
+    const legacyBrowserServerID = "connector.browser.default"
+    const legacyNodeReplServerID = "connector.node-repl.default"
+    const legacyServerIDs = [legacyBrowserServerID, legacyNodeReplServerID]
+    for (const serverID of legacyServerIDs) {
+      await Config.setManagedMcpServer(
+        Config.GLOBAL_CONFIG_ID,
+        serverID,
+        {
+          name: serverID === "connector.browser.default" ? "Browser" : "Node REPL",
+          transport: "connector",
+          connectorId: serverID === "connector.browser.default"
+            ? "connector:browser:default"
+            : "connector:node-repl:default",
+          enabled: true,
+        },
+        {
+          kind: "anybox",
+          bindingID: serverID,
+        },
+      )
+    }
+    await Config.setSelectedMcpServerIDs("legacy-browser-project", legacyServerIDs)
+    await Connector.syncConnectorRuntimeBindings()
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, legacyBrowserServerID)).toBeUndefined()
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, legacyNodeReplServerID)).toBeUndefined()
+    expect(await Config.getSelectedMcpServerIDs("legacy-browser-project")).toEqual([])
+
+    const packageSourceRoot = await writeBrowserPluginPackage()
+    const packageRoot = join(packageSourceRoot, "browser", "0.2.0")
     const app = createServerApp()
 
     const catalogResponse = await app.request("/api/plugins/catalog")
@@ -2942,64 +3607,19 @@ describe("plugin marketplace API", () => {
     expect(catalogResponse.status).toBe(200)
     expect(plugin?.connectors).toEqual([])
     expect(plugin?.apps).toEqual([])
-    expect(plugin?.connectorRequirements).toEqual([
-      {
-        connector: "browser",
-        tools: [
-          "browser_status",
-          "browser_get_tabs",
-          "browser_open_tab",
-          "browser_activate_tab",
-          "browser_snapshot",
-          "browser_interactive_snapshot",
-          "browser_dom_tree",
-          "browser_accessibility_tree",
-          "browser_screenshot",
-          "browser_click",
-          "browser_click_element",
-          "browser_fill",
-          "browser_type",
-          "browser_scroll",
-          "browser_wait_for",
-          "browser_release_tab",
-        ],
-        permissions: [
-          "Read Chrome tab titles, URLs, visible page text, DOM trees, accessibility trees, interactive elements, and screenshots.",
-          "Open, activate, click, scroll, type into, and fill Chrome tabs through the Anybox browser extension.",
-        ],
-        required: true,
-        reason: "Browser control through the shared Anybox browser connector.",
-      },
-      {
-        connector: "node-repl",
-        tools: [
-          "node_repl_js",
-          "node_repl_reset",
-          "node_repl_add_node_module_dir",
-        ],
-        permissions: [
-          "Run JavaScript in a persistent local Node.js REPL.",
-          "Use the Browser runtime adapter for raw page JavaScript and CDP commands when browser automation needs it.",
-        ],
-        required: true,
-        reason: "Codex-like Browser runtime API through the shared Anybox Node REPL connector.",
-      },
-    ])
+    expect(plugin?.connectorRequirements).toEqual([])
+    expect(plugin?.mcpServers.map((server) => server.id)).toEqual(["browser", "node-repl"])
+    expect(plugin?.mcpServers.find((server) => server.id === "browser")?.tools).toHaveLength(16)
+    expect(plugin?.mcpServers.find((server) => server.id === "node-repl")?.tools).toHaveLength(3)
 
     const connectorCatalogResponse = await app.request("/api/connectors/catalog")
     const connectorCatalogBody = (await connectorCatalogResponse.json()) as ConnectorCatalogEnvelope
-    const browserConnector = connectorCatalogBody.data?.find((item) => item.id === "browser")
-    const nodeReplConnector = connectorCatalogBody.data?.find((item) => item.id === "node-repl")
+    const definitions = Connector.listDefinitions()
     expect(connectorCatalogResponse.status).toBe(200)
-    expect(browserConnector?.credential).toBeUndefined()
-    expect(browserConnector?.runtime?.transport).toBe("stdio")
-    expect(nodeReplConnector?.credential).toBeUndefined()
-    expect(nodeReplConnector?.runtime?.transport).toBe("stdio")
-    expect(nodeReplConnector?.tools.map((tool) => tool.name)).toEqual([
-      "node_repl_js",
-      "node_repl_reset",
-      "node_repl_add_node_module_dir",
-    ])
+    expect(connectorCatalogBody.data?.some((item) => item.id === "browser")).toBe(false)
+    expect(connectorCatalogBody.data?.some((item) => item.id === "node-repl")).toBe(false)
+    expect(definitions.some((item) => item.id === "browser")).toBe(false)
+    expect(definitions.some((item) => item.id === "node-repl")).toBe(false)
 
     const installResponse = await app.request("/api/plugins/installed/browser", {
       method: "PUT",
@@ -3013,38 +3633,84 @@ describe("plugin marketplace API", () => {
     const installBody = (await installResponse.json()) as InstalledPluginEnvelope
 
     expect(installResponse.status).toBe(200)
-    expect(installBody.data?.mcpServerIDs).toEqual([])
+    expect(installBody.data?.mcpServerIDs).toEqual([
+      "plugin.browser.browser",
+      "plugin.browser.node-repl",
+    ])
     expect(installBody.data?.connectorIDs).toEqual([])
-    expect(installBody.data?.connectorRequirementIDs).toEqual(["connector:browser:default", "connector:node-repl:default"])
+    expect(installBody.data?.connectorRequirementIDs).toEqual([])
 
-    const server = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "connector.browser.default")
-    expect(server?.transport).toBe("connector")
-    expect(server?.transport === "connector" ? server.connectorId : undefined).toBe("connector:browser:default")
-    const nodeReplServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "connector.node-repl.default")
-    expect(nodeReplServer?.transport).toBe("connector")
-    expect(nodeReplServer?.transport === "connector" ? nodeReplServer.connectorId : undefined).toBe("connector:node-repl:default")
+    const server = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.browser.browser")
+    expect(server?.transport).toBe("stdio")
+    expect(server?.transport === "stdio" ? server.command : undefined).toBe("node")
+    expect(server?.transport === "stdio" ? server.cwd : undefined).toBe(packageRoot)
+    expect(
+      (server?.transport === "stdio" ? server.args?.[0] : undefined)?.replaceAll("\\", "/"),
+    ).toBe(`${packageRoot.replaceAll("\\", "/")}/scripts/browser/server.js`)
+    expect(server?.owner).toEqual({
+      kind: "plugin",
+      pluginID: "browser",
+      bindingID: "mcp:browser",
+    })
+    const nodeReplServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.browser.node-repl")
+    expect(nodeReplServer?.transport).toBe("stdio")
+    expect(nodeReplServer?.transport === "stdio" ? nodeReplServer.cwd : undefined).toBe(packageRoot)
+    expect(
+      (nodeReplServer?.transport === "stdio" ? nodeReplServer.args?.[0] : undefined)?.replaceAll("\\", "/"),
+    ).toBe(`${packageRoot.replaceAll("\\", "/")}/scripts/node-repl/server.js`)
+    expect(nodeReplServer?.owner).toEqual({
+      kind: "plugin",
+      pluginID: "browser",
+      bindingID: "mcp:node-repl",
+    })
 
-    const runtime = await Connector.resolveRuntime("connector:browser:default")
-    expect(runtime.transport).toBe("stdio")
-    expect(runtime.transport === "stdio" ? runtime.command : undefined).toBe("node")
-    expect(runtime.transport === "stdio" ? runtime.args?.[0] : undefined).toContain("connectors")
-    expect(runtime.transport === "stdio" ? runtime.args?.[0] : undefined).toContain("browser")
-    const nodeReplRuntime = await Connector.resolveRuntime("connector:node-repl:default")
-    expect(nodeReplRuntime.transport).toBe("stdio")
-    expect(typeof (nodeReplRuntime.transport === "stdio" ? nodeReplRuntime.env?.ANYBOX_BROWSER_TRUSTED_TOKEN : undefined)).toBe("string")
-    expect(nodeReplRuntime.transport === "stdio" ? nodeReplRuntime.args?.[0] : undefined).toContain("node-repl")
+    await Config.setSelectedPluginIDs("browser-project", ["browser"])
+    expect(
+      (await Config.resolveProjectMcpServers("browser-project")).map((entry) => entry.id),
+    ).toEqual(expect.arrayContaining(["plugin.browser.browser", "plugin.browser.node-repl"]))
 
-    const diagnosticResponse = await app.request("/api/connectors/connector%3Abrowser%3Adefault/diagnostic")
+    const diagnosticResponse = await app.request("/api/mcp/servers/plugin.browser.browser/diagnostic")
     const diagnosticBody = (await diagnosticResponse.json()) as DiagnosticEnvelope
     expect(diagnosticResponse.status).toBe(200)
     expect(diagnosticBody.data?.ok).toBe(true)
     expect(diagnosticBody.data?.toolCount).toBe(16)
 
-    const nodeReplDiagnosticResponse = await app.request("/api/connectors/connector%3Anode-repl%3Adefault/diagnostic")
+    const nodeReplDiagnosticResponse = await app.request("/api/mcp/servers/plugin.browser.node-repl/diagnostic")
     const nodeReplDiagnosticBody = (await nodeReplDiagnosticResponse.json()) as DiagnosticEnvelope
     expect(nodeReplDiagnosticResponse.status).toBe(200)
     expect(nodeReplDiagnosticBody.data?.ok).toBe(true)
     expect(nodeReplDiagnosticBody.data?.toolCount).toBe(3)
+
+    const disableChildResponse = await app.request(
+      "/api/plugins/installed/browser/mcp/plugin.browser.browser",
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          enabled: false,
+          toolPolicies: {
+            browser_status: {
+              policy: "disabled",
+            },
+          },
+        }),
+      },
+    )
+    expect(disableChildResponse.status).toBe(200)
+    await Plugin.reconcileInstalledRuntimeBindings()
+
+    const resyncedBrowserServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.browser.browser")
+    expect(resyncedBrowserServer?.enabled).toBe(false)
+    expect(resyncedBrowserServer?.toolPolicies?.browser_status?.policy).toBe("disabled")
+
+    const deleteResponse = await app.request("/api/plugins/installed/browser", {
+      method: "DELETE",
+    })
+    expect(deleteResponse.status).toBe(200)
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.browser.browser")).toBeUndefined()
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.browser.node-repl")).toBeUndefined()
   })
 
   test("loads plugin package manifests and exposes MCP, skills, and app connector metadata", async () => {
@@ -3105,47 +3771,118 @@ describe("plugin marketplace API", () => {
     expect(treeResponse.status).toBe(200)
 
     const pluginGroup = findSkillTreeNode(treeBody.data?.items, (node) => node.name === "Plugin skills")
-    expect(pluginGroup?.readOnly).toBe(true)
-    expect(pluginGroup?.scope).toBe("plugin")
+    expect(pluginGroup).toBeNull()
+    expect(JSON.stringify(treeBody.data?.items ?? [])).not.toContain("plugin-skills://")
+    expect(JSON.stringify(treeBody.data?.items ?? [])).not.toContain("plugin:manifest-lab:review")
 
-    const pluginSkillFile = findSkillTreeNode(
-      pluginGroup?.children,
-      (node) => node.name === "SKILL.md" && node.pluginID === "manifest-lab",
+    const legacyPluginFileResponse = await app.request(
+      "/api/skills/file?path=plugin-skills%3A%2F%2Finstalled%2Fmanifest-lab%2F0%2Freview%2FSKILL.md",
     )
-    expect(pluginSkillFile?.readOnly).toBe(true)
-    expect(pluginSkillFile?.scope).toBe("plugin")
-    expect(pluginSkillFile?.path).toBe("plugin-skills://installed/manifest-lab/0/review/SKILL.md")
+    expect(legacyPluginFileResponse.status).toBe(400)
+  })
 
-    const readSkillResponse = await app.request(
-      `/api/skills/file?path=${encodeURIComponent(pluginSkillFile?.path ?? "")}`,
-    )
-    const readSkillBody = (await readSkillResponse.json()) as JsonEnvelope<{
-      path: string
-      content: string
-      readOnly?: boolean
-      scope?: string
-      pluginID?: string
-    }>
-    expect(readSkillResponse.status).toBe(200)
-    expect(readSkillBody.data?.path).toBe(pluginSkillFile?.path)
-    expect(readSkillBody.data?.readOnly).toBe(true)
-    expect(readSkillBody.data?.scope).toBe("plugin")
-    expect(readSkillBody.data?.pluginID).toBe("manifest-lab")
-    expect(readSkillBody.data?.content).toContain("Use this skill to review generated documentation notes.")
+  test("browses installed plugin Skill folders through ownership-scoped read-only routes", async () => {
+    await useTempDatabase()
+    await writeManifestPluginPackage()
+    const app = createServerApp()
+    const skillID = "plugin:manifest-lab:review"
+    const encodedSkillID = encodeURIComponent(skillID)
 
-    const writeSkillResponse = await app.request("/api/skills/file", {
+    await app.request("/api/plugins/installed/manifest-lab", {
       method: "PUT",
       headers: {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        path: pluginSkillFile?.path,
-        content: "changed",
+        enabled: true,
       }),
     })
-    const writeSkillBody = (await writeSkillResponse.json()) as JsonEnvelope<unknown>
-    expect(writeSkillResponse.status).toBe(400)
-    expect(writeSkillBody.error?.code).toBe("INVALID_SKILL_PATH")
+
+    const rootResponse = await app.request(
+      `/api/plugins/installed/manifest-lab/skills/${encodedSkillID}/entries`,
+    )
+    const rootBody = (await rootResponse.json()) as JsonEnvelope<Plugin.PluginSkillDirectory>
+    expect(rootResponse.status).toBe(200)
+    expect(rootBody.data).toMatchObject({
+      pluginID: "manifest-lab",
+      skillID,
+      path: "",
+      readOnly: true,
+    })
+    expect(rootBody.data?.entries.map((entry) => [entry.kind, entry.name])).toEqual([
+      ["directory", "assets"],
+      ["directory", "references"],
+      ["directory", "scripts"],
+      ["file", "SKILL.md"],
+    ])
+
+    const nestedResponse = await app.request(
+      `/api/plugins/installed/manifest-lab/skills/${encodedSkillID}/entries?path=references`,
+    )
+    const nestedBody = (await nestedResponse.json()) as JsonEnvelope<Plugin.PluginSkillDirectory>
+    expect(nestedResponse.status).toBe(200)
+    expect(nestedBody.data?.entries).toEqual([
+      expect.objectContaining({
+        kind: "file",
+        name: "checklist.md",
+        path: "references/checklist.md",
+        mimeType: "text/markdown",
+      }),
+    ])
+
+    const markdownResponse = await app.request(
+      `/api/plugins/installed/manifest-lab/skills/${encodedSkillID}/file?path=SKILL.md`,
+    )
+    const markdownBody = (await markdownResponse.json()) as JsonEnvelope<Plugin.PluginSkillFile>
+    expect(markdownResponse.status).toBe(200)
+    expect(markdownBody.data).toMatchObject({
+      kind: "text",
+      mimeType: "text/markdown",
+      path: "SKILL.md",
+      readOnly: true,
+      tooLarge: false,
+    })
+    expect(markdownBody.data?.content).toContain("# Review Notes")
+
+    const imageResponse = await app.request(
+      `/api/plugins/installed/manifest-lab/skills/${encodedSkillID}/file?path=assets%2Fpixel.png`,
+    )
+    const imageBody = (await imageResponse.json()) as JsonEnvelope<Plugin.PluginSkillFile>
+    expect(imageResponse.status).toBe(200)
+    expect(imageBody.data).toMatchObject({
+      kind: "image",
+      mimeType: "image/png",
+      previewUrl: `data:image/png;base64,${tinyPngBase64}`,
+      tooLarge: false,
+    })
+
+    await app.request("/api/plugins/installed/manifest-lab", {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        enabled: false,
+      }),
+    })
+    const disabledPluginResponse = await app.request(
+      `/api/plugins/installed/manifest-lab/skills/${encodedSkillID}/file?path=references%2Fchecklist.md`,
+    )
+    expect(disabledPluginResponse.status).toBe(200)
+
+    const wrongOwnerResponse = await app.request(
+      `/api/plugins/installed/manifest-lab/skills/${encodeURIComponent("plugin:another-plugin:review")}/entries`,
+    )
+    const wrongOwnerBody = (await wrongOwnerResponse.json()) as JsonEnvelope<unknown>
+    expect(wrongOwnerResponse.status).toBe(404)
+    expect(wrongOwnerBody.error?.code).toBe("PLUGIN_SKILL_NOT_FOUND")
+
+    const traversalResponse = await app.request(
+      `/api/plugins/installed/manifest-lab/skills/${encodedSkillID}/file?path=${encodeURIComponent("../plugin.json")}`,
+    )
+    const traversalBody = (await traversalResponse.json()) as JsonEnvelope<unknown>
+    expect(traversalResponse.status).toBe(400)
+    expect(traversalBody.error?.code).toBe("PLUGIN_SKILL_PATH_INVALID")
   })
 
   test("loads the newest manifest from a versioned plugin package", async () => {

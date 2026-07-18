@@ -1378,9 +1378,29 @@ export type AgentMcpRequireApproval =
       }
     }
 
+export type AgentMcpServerOwner =
+  | {
+      kind: "connector"
+      connectorId: string
+      runtimeID: string
+    }
+  | {
+      kind: "plugin"
+      pluginID: string
+      bindingID: string
+    }
+  | {
+      kind: "anybox"
+      bindingID: string
+    }
+  | {
+      kind: "user"
+    }
+
 export interface AgentStdioMcpServerSummary {
   id: string
   name?: string
+  owner?: AgentMcpServerOwner
   transport: "stdio"
   command: string
   args?: string[]
@@ -1394,10 +1414,12 @@ export interface AgentStdioMcpServerSummary {
 export interface AgentRemoteMcpServerSummary {
   id: string
   name?: string
+  owner?: AgentMcpServerOwner
   transport: "remote"
   provider?: "openai"
   serverUrl?: string
   connectorId?: string
+  connectorRuntimeId?: string
   authorization?: string
   headers?: Record<string, string>
   serverDescription?: string
@@ -1411,9 +1433,11 @@ export interface AgentRemoteMcpServerSummary {
 export interface AgentConnectorMcpServerSummary {
   id: string
   name?: string
+  owner?: AgentMcpServerOwner
   transport: "connector"
   provider?: "openai"
   connectorId: string
+  connectorRuntimeId?: string
   serverDescription?: string
   allowedTools?: AgentMcpAllowedTools
   toolPolicies?: AgentMcpToolPolicies
@@ -1545,10 +1569,33 @@ export interface AgentConnectorRemoteRuntime {
 
 export type AgentConnectorRuntime = AgentConnectorStdioRuntime | AgentConnectorRemoteRuntime
 
+export interface AgentConnectorStdioMcpRuntime extends AgentConnectorStdioRuntime {
+  id: string
+  name?: string
+  available: boolean
+}
+
+export interface AgentConnectorRemoteMcpRuntime extends AgentConnectorRemoteRuntime {
+  id: string
+  name?: string
+  available: boolean
+}
+
+export type AgentConnectorMcpRuntime =
+  | AgentConnectorStdioMcpRuntime
+  | AgentConnectorRemoteMcpRuntime
+
+export interface AgentConnectorMcpBinding {
+  runtimeID: string
+  serverID: string
+  name?: string
+}
+
 export interface AgentConnectorDefinition {
   id: string
   name: string
   description: string
+  category?: "account_connector" | "builtin_mcp"
   publisher: string
   icon?: string
   risk: AgentConnectorRisk
@@ -1557,6 +1604,7 @@ export interface AgentConnectorDefinition {
   configFields: AgentConnectorConfigField[]
   oauthCallbackURL?: string
   credential?: AgentConnectorCredential
+  mcpRuntimes?: AgentConnectorMcpRuntime[]
   runtime?: AgentConnectorRuntime
   installReview: string[]
   source: "platform" | "registry"
@@ -1586,6 +1634,7 @@ export interface AgentConnectorStatus {
   email?: string
   expiresAt?: number
   activeFlow?: AgentProviderAuthFlow
+  mcpBindings?: AgentConnectorMcpBinding[]
   generatedMcpServerID?: string
   lastDiagnostic?: AgentMcpServerDiagnostic
 }
@@ -1720,6 +1769,39 @@ export interface AgentPluginSkillPreview {
   directory: string
 }
 
+export interface AgentPluginSkillEntry {
+  name: string
+  path: string
+  kind: "file" | "directory"
+  size?: number
+  mimeType?: string
+  hasChildren?: boolean
+}
+
+export interface AgentPluginSkillDirectory {
+  pluginID: string
+  skillID: string
+  skillName: string
+  path: string
+  entries: AgentPluginSkillEntry[]
+  readOnly: true
+}
+
+export interface AgentPluginSkillFile {
+  pluginID: string
+  skillID: string
+  skillName: string
+  path: string
+  name: string
+  kind: "text" | "image" | "binary"
+  mimeType: string
+  size: number
+  content?: string
+  previewUrl?: string
+  tooLarge: boolean
+  readOnly: true
+}
+
 export interface AgentPluginAppConnector {
   id?: string
   appID: string
@@ -1775,6 +1857,7 @@ export interface AgentInstalledPlugin {
   enabled: boolean
   mcpServerID?: string
   mcpServerIDs: string[]
+  mcpServerEnabled: Record<string, boolean>
   skillIDs: string[]
   connectorIDs: string[]
   connectorRequirementIDs: string[]
@@ -1801,6 +1884,18 @@ export interface AgentPluginUpdateInput {
   pluginID: string
   config?: Record<string, string>
   enabled?: boolean
+}
+
+export interface AgentPluginMcpControlsInput {
+  pluginID: string
+  serverID: string
+  enabled?: boolean
+  toolPolicies?: AgentMcpToolPolicies
+}
+
+export interface AgentPluginMcpControlsResult {
+  plugin: AgentInstalledPlugin
+  server: AgentMcpServerSummary
 }
 
 export interface AgentPluginDeleteResult {

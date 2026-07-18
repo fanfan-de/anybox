@@ -2,6 +2,8 @@ import { startServer, stopServer, url } from "#server/server.ts"
 import { cinemaRenderQueue } from "#cinema/render-queue.ts"
 import * as Log from "#util/log.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
+import * as Connector from "#connector/connector.ts"
+import * as Plugin from "#plugin/plugin.ts"
 
 const log = Log.create({ service: "server-bootstrap" })
 
@@ -26,6 +28,18 @@ await Log.init({
 })
 
 log.info("server-logging-ready", Log.status())
+
+try {
+  await Plugin.reconcileInstalledRuntimeBindings()
+} catch (error) {
+  log.error("plugin-runtime-reconcile-failed", { error })
+}
+
+try {
+  await Connector.syncConnectorRuntimeBindings()
+} catch (error) {
+  log.error("connector-runtime-reconcile-failed", { error })
+}
 
 startServer()
 log.info("server-ready", { url: url().toString() })

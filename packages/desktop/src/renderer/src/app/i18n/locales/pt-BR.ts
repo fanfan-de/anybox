@@ -1,6 +1,7 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
+import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 
 export const ptBR = {
   "app.loading": "Carregando",
@@ -1392,4 +1393,5 @@ export const ptBR = {
   "mcp.validation.requireUrl": "Servidores MCP remotos exigem uma URL do servidor.",
   "mcp.validation.requireConnectorId": "Servidores MCP de conector exigem um id do conector.",
   "mcp.validation.requireToolNames": "Filtros de ferramentas nomeados exigem pelo menos um nome de ferramenta.",
+  ...pluginOwnershipTranslations.enUS,
 } as const satisfies Record<TranslationKey, string>

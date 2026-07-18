@@ -343,12 +343,20 @@ export class McpClient {
 
   private async createTransport() {
     if (this.options.server.transport === "connector") {
-      return this.createResolvedConnectorTransport(await this.resolveConnectorRuntime(this.options.server.connectorId))
+      return this.createResolvedConnectorTransport(
+        await this.resolveConnectorRuntime(
+          this.options.server.connectorId,
+          this.options.server.connectorRuntimeId,
+        ),
+      )
     }
 
     if (this.options.server.transport === "remote") {
       const connectorRuntime = this.options.server.connectorId
-        ? await this.resolveConnectorRuntime(this.options.server.connectorId)
+        ? await this.resolveConnectorRuntime(
+            this.options.server.connectorId,
+            this.options.server.connectorRuntimeId,
+          )
         : undefined
       if (connectorRuntime?.transport === "stdio") {
         return this.createResolvedConnectorTransport(connectorRuntime)
@@ -409,9 +417,9 @@ export class McpClient {
     return transport
   }
 
-  private async resolveConnectorRuntime(connectorId: string) {
+  private async resolveConnectorRuntime(connectorId: string, runtimeID = "default") {
     const connectorModule = await import("#connector/connector.ts")
-    return connectorModule.resolveRuntime(connectorId)
+    return connectorModule.resolveRuntime(connectorId, runtimeID)
   }
 
   private captureStderr(stream: Stream | null) {

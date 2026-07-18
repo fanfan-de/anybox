@@ -5,6 +5,8 @@ import faqEn from "./content/faq.en.md?raw"
 import faqZh from "./content/faq.md?raw"
 import gettingStartedEn from "./content/getting-started.en.md?raw"
 import gettingStartedZh from "./content/下载安装.md?raw"
+import pluginDevelopmentEn from "./content/plugin-development.en.md?raw"
+import pluginDevelopmentZh from "./content/plugin-development.md?raw"
 import providersEn from "./content/providers.en.md?raw"
 import providersZh from "./content/providers.md?raw"
 import skillsEn from "./content/skills.en.md?raw"
@@ -67,6 +69,17 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       ],
     },
     {
+      title: "扩展",
+      items: [
+        {
+          content: pluginDevelopmentZh,
+          description: "从第一个 Skill 插件开始，加入 MCP、Connector，并发布给其他用户。",
+          slug: "plugin-development",
+          title: "制作插件",
+        },
+      ],
+    },
+    {
       title: "支持",
       items: [
         {
@@ -116,6 +129,17 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
           description: "Create, select, and manage reusable Skills.",
           slug: "skills",
           title: "Skills",
+        },
+      ],
+    },
+    {
+      title: "Extend",
+      items: [
+        {
+          content: pluginDevelopmentEn,
+          description: "Start with a Skill plugin, add MCP and connectors, then publish it for other users.",
+          slug: "plugin-development",
+          title: "Build Plugins",
         },
       ],
     },

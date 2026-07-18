@@ -256,7 +256,6 @@ describe("SkillsWorkspacePage", () => {
       "All",
       "Local",
       "Downloaded",
-      "Plugins",
     ])
     expect(screen.queryByRole("tab", { name: "Discover" })).not.toBeInTheDocument()
 

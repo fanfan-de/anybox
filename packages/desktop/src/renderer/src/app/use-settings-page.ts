@@ -39,6 +39,12 @@ import { useToast } from "./toast"
 import { useI18n } from "./i18n/I18nProvider"
 import type { DesktopProviderAuthPrompt, DesktopStorageUsageSnapshot } from "../../../shared/desktop-ipc-contract"
 import { getStorageUsage } from "./settings/client"
+import {
+  connectorIDForDefinition,
+  isAccountConnectorDefinition,
+  normalizeConnectorDefinition,
+  normalizeConnectorStatus,
+} from "./connectors/connector-presentation"
 
 interface SettingsMessage {
   tone: "success" | "error"
@@ -386,7 +392,16 @@ function toMcpDraft(server?: McpServerSummary): McpServerDraftState {
     env: server?.transport === "stdio" ? stringifyKeyValueEntries(server.env) : "",
     cwd: server?.transport === "stdio" ? (server.cwd ?? "") : "",
     serverUrl: server?.transport === "remote" ? (server.serverUrl ?? "") : "",
-    connectorId: server?.transport === "connector" ? server.connectorId : "",
+    connectorId:
+      server?.transport === "connector"
+        ? server.connectorId
+        : server?.transport === "remote"
+          ? (server.connectorId ?? "")
+          : "",
+    connectorRuntimeId:
+      server?.transport === "connector" || server?.transport === "remote"
+        ? (server.connectorRuntimeId ?? "")
+        : "",
     authorization: server?.transport === "remote" ? (server.authorization ?? "") : "",
     headers: server?.transport === "remote" ? stringifyKeyValueEntries(server.headers) : "",
     allowedToolsMode: server?.transport === "remote" || server?.transport === "connector" ? resolveAllowedToolsMode(server.allowedTools) : "all",
@@ -415,21 +430,6 @@ function buildPluginDraft(plugin: PluginCatalogItem | undefined, installed?: Ins
       ]),
     ),
     appApiKeys: Object.fromEntries((plugin.apps ?? []).map((app) => [app.appID, ""])),
-  }
-}
-
-function fallbackConnectorID(definitionID: string) {
-  return `connector:${definitionID}:default`
-}
-
-function connectorIDForDefinition(definition: ConnectorDefinition, statuses: ConnectorStatus[]) {
-  return statuses.find((status) => status.definitionID === definition.id)?.connectorID ?? fallbackConnectorID(definition.id)
-}
-
-function normalizeConnectorDefinition(definition: ConnectorDefinition): ConnectorDefinition {
-  return {
-    ...definition,
-    configFields: definition.configFields ?? [],
   }
 }
 
@@ -641,6 +641,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   const [isSavingSelection, setIsSavingSelection] = useState(false)
   const [savingMcpServerID, setSavingMcpServerID] = useState<string | null>(null)
   const [deletingMcpServerID, setDeletingMcpServerID] = useState<string | null>(null)
+  const [diagnosingMcpServerID, setDiagnosingMcpServerID] = useState<string | null>(null)
   const [isImportingMcpConfigJson, setIsImportingMcpConfigJson] = useState(false)
   const [isLoadingConnectors, setIsLoadingConnectors] = useState(false)
   const [connectorsError, setConnectorsError] = useState<string | null>(null)
@@ -651,7 +652,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   const [deletingPluginID, setDeletingPluginID] = useState<string | null>(null)
   const [diagnosingPluginID, setDiagnosingPluginID] = useState<string | null>(null)
   const [savingConnectorID, setSavingConnectorID] = useState<string | null>(null)
-  const [diagnosingConnectorID, setDiagnosingConnectorID] = useState<string | null>(null)
+  const [diagnosingConnectorMcpServerID, setDiagnosingConnectorMcpServerID] = useState<string | null>(null)
   const [savingPluginConnectorID, setSavingPluginConnectorID] = useState<string | null>(null)
   const [diagnosingPluginConnectorID, setDiagnosingPluginConnectorID] = useState<string | null>(null)
   const [isSavingBuiltinTools, setIsSavingBuiltinTools] = useState(false)
@@ -1110,21 +1111,22 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   }
 
   function upsertConnectorStatus(status: ConnectorStatus) {
+    const normalizedStatus = normalizeConnectorStatus(status)
     setConnectorStatuses((current) => {
-      const existingIndex = current.findIndex((item) => item.connectorID === status.connectorID)
-      if (existingIndex < 0) return [...current, status]
+      const existingIndex = current.findIndex((item) => item.connectorID === normalizedStatus.connectorID)
+      if (existingIndex < 0) return [...current, normalizedStatus]
 
       const next = [...current]
-      next[existingIndex] = status
+      next[existingIndex] = normalizedStatus
       return next
     })
     setConnectorApiKeyDrafts((current) => ({
       ...current,
-      [status.connectorID]: current[status.connectorID] ?? "",
+      [normalizedStatus.connectorID]: current[normalizedStatus.connectorID] ?? "",
     }))
     setConnectorConfigDrafts((current) => ({
       ...current,
-      [status.connectorID]: current[status.connectorID] ?? {},
+      [normalizedStatus.connectorID]: current[normalizedStatus.connectorID] ?? {},
     }))
   }
 
@@ -1133,23 +1135,27 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     nextStatuses: ConnectorStatus[],
   ) {
     const normalizedCatalog = nextCatalog.map(normalizeConnectorDefinition)
+    const normalizedStatuses = nextStatuses.map(normalizeConnectorStatus)
+    const accountCatalog = normalizedCatalog.filter(isAccountConnectorDefinition)
+    const accountDefinitionIDs = new Set(accountCatalog.map((definition) => definition.id))
+    const accountStatuses = normalizedStatuses.filter((status) => accountDefinitionIDs.has(status.definitionID))
 
     setConnectorCatalog(normalizedCatalog)
-    setConnectorStatuses(nextStatuses)
-    setConnectorApiKeyDrafts((current) => buildConnectorApiKeyDrafts(normalizedCatalog, nextStatuses, current))
-    setConnectorConfigDrafts((current) => buildConnectorConfigDrafts(normalizedCatalog, nextStatuses, current))
+    setConnectorStatuses(normalizedStatuses)
+    setConnectorApiKeyDrafts((current) => buildConnectorApiKeyDrafts(accountCatalog, accountStatuses, current))
+    setConnectorConfigDrafts((current) => buildConnectorConfigDrafts(accountCatalog, accountStatuses, current))
 
     const connectorIDs = new Set([
-      ...normalizedCatalog.map((definition) => connectorIDForDefinition(definition, nextStatuses)),
-      ...nextStatuses.map((status) => status.connectorID),
+      ...accountCatalog.map((definition) => connectorIDForDefinition(definition, accountStatuses)),
+      ...accountStatuses.map((status) => status.connectorID),
     ])
     const currentConnectorID = activeConnectorIDRef.current
     const preferredConnectorID =
       currentConnectorID && connectorIDs.has(currentConnectorID)
         ? currentConnectorID
-        : normalizedCatalog[0]
-          ? connectorIDForDefinition(normalizedCatalog[0], nextStatuses)
-          : nextStatuses[0]?.connectorID ?? null
+        : accountCatalog[0]
+          ? connectorIDForDefinition(accountCatalog[0], accountStatuses)
+          : accountStatuses[0]?.connectorID ?? null
 
     setActiveConnectorSelection(preferredConnectorID)
   }
@@ -1482,14 +1488,22 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     }
   }
 
-  async function diagnoseConnector(connectorID: string) {
+  async function diagnoseConnector(
+    connectorID: string,
+    runtimeID: string,
+    serverID: string,
+  ) {
     const getConnectorDiagnostic = window.desktop?.getConnectorDiagnostic
     if (!getConnectorDiagnostic) return false
 
-    setDiagnosingConnectorID(connectorID)
+    setDiagnosingConnectorMcpServerID(serverID)
 
     try {
-      const diagnostic = await getConnectorDiagnostic({ connectorID })
+      const diagnostic = await getConnectorDiagnostic({ connectorID, runtimeID })
+      setMcpDiagnostics((current) => ({
+        ...current,
+        [serverID]: diagnostic,
+      }))
       await loadConnectorStatus(connectorID)
       showMessage(formatMcpDiagnosticMessage(diagnostic, "diagnose"))
       return diagnostic.ok
@@ -1500,7 +1514,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       })
       return false
     } finally {
-      setDiagnosingConnectorID(null)
+      setDiagnosingConnectorMcpServerID(null)
     }
   }
 
@@ -1671,6 +1685,20 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
         [serverID]: diagnostic,
       }))
       return diagnostic
+    }
+  }
+
+  async function diagnoseMcpServer(serverID: string) {
+    setDiagnosingMcpServerID(serverID)
+
+    try {
+      const diagnostic = await loadMcpServerDiagnostic(serverID)
+      if (!diagnostic) return false
+
+      showMessage(formatMcpDiagnosticMessage(diagnostic, "diagnose"))
+      return diagnostic.ok
+    } finally {
+      setDiagnosingMcpServerID(null)
     }
   }
 
@@ -3067,6 +3095,142 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     }
   }
 
+  async function saveConnectorMcpControls(
+    server: McpServerSummary,
+    controls: {
+      enabled: boolean
+      toolPolicies?: McpToolPolicies
+    },
+  ) {
+    const updateGlobalMcpServer = window.desktop?.updateGlobalMcpServer
+    if (!updateGlobalMcpServer) return false
+
+    setSavingMcpServerID(server.id)
+
+    try {
+      const {
+        id: _serverID,
+        owner: _owner,
+        ...serverInput
+      } = server
+      await updateGlobalMcpServer({
+        serverID: server.id,
+        server: {
+          ...serverInput,
+          toolPolicies: controls.toolPolicies,
+          enabled: controls.enabled,
+        },
+      })
+      await loadMcpServers({ silent: true })
+      await notifyMcpUpdated()
+      return true
+    } catch (error) {
+      showMessage({
+        tone: "error",
+        text: getErrorMessage(error),
+      })
+      return false
+    } finally {
+      setSavingMcpServerID(null)
+    }
+  }
+
+  async function setConnectorMcpEnabled(serverID: string, enabled: boolean) {
+    const server = mcpServers.find((item) => item.id === serverID)
+    if (!server) return false
+    if (server.owner && server.owner.kind !== "connector") return false
+    if (!server.owner && server.transport !== "connector") return false
+
+    return saveConnectorMcpControls(server, {
+      enabled,
+      toolPolicies: server.toolPolicies,
+    })
+  }
+
+  async function setConnectorMcpToolPolicy(
+    serverID: string,
+    toolName: string,
+    policy: McpToolPolicyValue,
+  ) {
+    const server = mcpServers.find((item) => item.id === serverID)
+    if (!server) return false
+    if (server.owner && server.owner.kind !== "connector") return false
+    if (!server.owner && server.transport !== "connector") return false
+
+    return saveConnectorMcpControls(server, {
+      enabled: server.enabled,
+      toolPolicies: {
+        ...(server.toolPolicies ?? {}),
+        [toolName]: { policy },
+      },
+    })
+  }
+
+  async function saveInstalledPluginMcpControls(
+    pluginID: string,
+    serverID: string,
+    controls: {
+      enabled?: boolean
+      toolPolicies?: McpToolPolicies
+    },
+  ) {
+    const updateInstalledPluginMcpControls = window.desktop?.updateInstalledPluginMcpControls
+    if (!updateInstalledPluginMcpControls) return false
+
+    setSavingMcpServerID(serverID)
+
+    try {
+      await updateInstalledPluginMcpControls({
+        pluginID,
+        serverID,
+        ...controls,
+      })
+      await Promise.all([
+        loadPlugins({ silent: true }),
+        loadMcpServers({ silent: true }),
+      ])
+      await notifyPluginCapabilitiesUpdated()
+      return true
+    } catch (error) {
+      showMessage({
+        tone: "error",
+        text: getErrorMessage(error),
+      })
+      return false
+    } finally {
+      setSavingMcpServerID(null)
+    }
+  }
+
+  async function setInstalledPluginMcpEnabled(
+    pluginID: string,
+    serverID: string,
+    enabled: boolean,
+  ) {
+    return saveInstalledPluginMcpControls(pluginID, serverID, {
+      enabled,
+    })
+  }
+
+  async function setInstalledPluginMcpToolPolicy(
+    pluginID: string,
+    serverID: string,
+    toolName: string,
+    policy: McpToolPolicyValue,
+  ) {
+    const server = mcpServers.find((item) => item.id === serverID)
+    if (!server || server.owner?.kind !== "plugin" || server.owner.pluginID !== pluginID) {
+      return false
+    }
+
+    return saveInstalledPluginMcpControls(pluginID, serverID, {
+      toolPolicies: {
+        ...(server.toolPolicies ?? {}),
+        [toolName]: { policy },
+      },
+    })
+  }
+
   async function saveMcpServer() {
     if (!window.desktop?.updateGlobalMcpServer) return false
 
@@ -3078,6 +3242,21 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
         text: validationError,
       })
       return false
+    }
+
+    const existingServer = mcpServers.find((server) => server.id === activeMcpServerID)
+    const isManagedServer = Boolean(
+      existingServer
+      && (
+        (existingServer.owner && existingServer.owner.kind !== "user")
+        || (!existingServer.owner && existingServer.transport === "connector")
+      ),
+    )
+    if (existingServer && isManagedServer) {
+      return saveConnectorMcpControls(existingServer, {
+        enabled: mcpServerDraft.enabled,
+        toolPolicies: buildToolPolicies(mcpServerDraft),
+      })
     }
 
     setSavingMcpServerID(serverID)
@@ -3102,7 +3281,9 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
               ? {
                 name: mcpServerDraft.name.trim() || undefined,
                 transport: "remote",
-                serverUrl: mcpServerDraft.serverUrl.trim(),
+                serverUrl: mcpServerDraft.serverUrl.trim() || undefined,
+                connectorId: mcpServerDraft.connectorId.trim() || undefined,
+                connectorRuntimeId: mcpServerDraft.connectorRuntimeId?.trim() || undefined,
                 authorization: mcpServerDraft.authorization.trim() || undefined,
                 headers: parseMcpKeyValue(mcpServerDraft.headers, "header"),
                 allowedTools: buildAllowedTools(mcpServerDraft),
@@ -3114,6 +3295,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
                   name: mcpServerDraft.name.trim() || undefined,
                   transport: "connector",
                   connectorId: mcpServerDraft.connectorId.trim(),
+                  connectorRuntimeId: mcpServerDraft.connectorRuntimeId?.trim() || undefined,
                   allowedTools: buildAllowedTools(mcpServerDraft),
                   toolPolicies: buildToolPolicies(mcpServerDraft),
                   enabled: mcpServerDraft.enabled,
@@ -3248,7 +3430,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       setPluginDraft(buildPluginDraft(plugin, installed))
       showMessage({
         tone: "success",
-        text: `${plugin.name} installed. Enable it for a project from the MCP picker when needed.`,
+        text: t("plugins.message.installed", { plugin: plugin.name }),
       })
       return true
     } catch (error) {
@@ -3748,11 +3930,13 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     deletingProviderID,
     deleteInstalledPluginConnectorApiKey,
     diagnoseConnector,
+    diagnoseMcpServer,
     diagnoseInstalledPlugin,
     diagnoseInstalledPluginConnector,
     diagnosingPluginID,
     diagnosingPluginConnectorID,
-    diagnosingConnectorID,
+    diagnosingConnectorMcpServerID,
+    diagnosingMcpServerID,
     importPluginFromURL,
     installPlugin,
     installPromptsFromUrl,
@@ -3789,6 +3973,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     isSavingSelection,
     loadError,
     mcpServerDraft,
+    mcpDiagnostics,
     mcpServers,
     models,
     modelCatalog,
@@ -3863,7 +4048,11 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     setMcpServerDraftValue,
     setMcpToolPolicy,
     setInstalledPluginEnabled,
+    setInstalledPluginMcpEnabled,
+    setInstalledPluginMcpToolPolicy,
     setConnectorApiKeyDraft,
+    setConnectorMcpEnabled,
+    setConnectorMcpToolPolicy,
     setConnectorConfigDraft,
     setPluginDraftAppApiKey,
     setPluginDraftConfigValue,

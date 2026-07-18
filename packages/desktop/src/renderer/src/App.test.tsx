@@ -10367,10 +10367,35 @@ describe("App", () => {
   })
 
   it("opens platform connectors from the activity rail and runs diagnostics", async () => {
+    const browserDefinition = {
+      id: "browser",
+      name: "Browser",
+      description: "Control Chrome through the Anybox browser extension.",
+      category: "builtin_mcp",
+      publisher: "Anybox",
+      risk: "high",
+      permissions: ["Controls Chrome through the browser extension."],
+      tools: [],
+      runtime: {
+        transport: "stdio",
+        command: "node",
+      },
+      mcpRuntimes: [{
+        id: "default",
+        name: "Browser",
+        available: true,
+        transport: "stdio",
+        command: "node",
+      }],
+      installReview: [],
+      source: "platform",
+      available: true,
+    }
     const gmailDefinition = {
       id: "gmail",
       name: "Gmail",
       description: "Read and draft Gmail messages through a platform-managed connector.",
+      category: "account_connector",
       publisher: "Anybox",
       risk: "medium",
       permissions: ["Read Gmail metadata"],
@@ -10390,7 +10415,46 @@ describe("App", () => {
         tokenURL: "https://accounts.example.test/token",
         scopes: ["gmail.readonly"],
       },
+      runtime: {
+        transport: "stdio",
+        command: "node",
+        args: ["gmail.js"],
+        timeoutMs: 10_000,
+      },
+      mcpRuntimes: [{
+        id: "default",
+        name: "Gmail",
+        available: true,
+        transport: "stdio",
+        command: "node",
+        args: ["gmail.js"],
+        timeoutMs: 10_000,
+      }],
       installReview: ["Review Gmail OAuth scopes before connecting."],
+      source: "platform",
+      available: true,
+    }
+    const nodeReplDefinition = {
+      id: "node-repl",
+      name: "Node REPL",
+      description: "Run JavaScript in the Anybox Node runtime.",
+      category: "builtin_mcp",
+      publisher: "Anybox",
+      risk: "high",
+      permissions: ["Runs JavaScript in the local Node runtime."],
+      tools: [],
+      runtime: {
+        transport: "stdio",
+        command: "node",
+      },
+      mcpRuntimes: [{
+        id: "default",
+        name: "Node REPL",
+        available: true,
+        transport: "stdio",
+        command: "node",
+      }],
+      installReview: [],
       source: "platform",
       available: true,
     }
@@ -10404,17 +10468,94 @@ describe("App", () => {
       credentialKind: "oauth",
       credentialLabel: "Google account",
       email: "person@example.test",
+      mcpBindings: [{
+        runtimeID: "default",
+        serverID: "connector.gmail.default",
+        name: "Gmail",
+      }],
       generatedMcpServerID: "connector.gmail.default",
     }
-    window.desktop!.getConnectorCatalog = vi.fn().mockResolvedValue([gmailDefinition])
-    window.desktop!.getConnectors = vi.fn().mockResolvedValue([gmailStatus])
+    const browserStatus = {
+      connectorID: "connector:browser:default",
+      definitionID: "browser",
+      name: "Browser",
+      connected: true,
+      available: true,
+      authStatus: "connected",
+      mcpBindings: [{
+        runtimeID: "default",
+        serverID: "connector.browser.default",
+        name: "Browser",
+      }],
+      generatedMcpServerID: "connector.browser.default",
+    }
+    const nodeReplStatus = {
+      connectorID: "connector:node-repl:default",
+      definitionID: "node-repl",
+      name: "Node REPL",
+      connected: true,
+      available: true,
+      authStatus: "connected",
+      mcpBindings: [{
+        runtimeID: "default",
+        serverID: "connector.node-repl.default",
+        name: "Node REPL",
+      }],
+      generatedMcpServerID: "connector.node-repl.default",
+    }
+    window.desktop!.getConnectorCatalog = vi.fn().mockResolvedValue([
+      browserDefinition,
+      gmailDefinition,
+      nodeReplDefinition,
+    ])
+    window.desktop!.getConnectors = vi.fn().mockResolvedValue([browserStatus, gmailStatus, nodeReplStatus])
     window.desktop!.getConnector = vi.fn().mockResolvedValue(gmailStatus)
+    window.desktop!.getGlobalMcpServers = vi.fn().mockResolvedValue([
+      {
+        id: "connector.browser.default",
+        name: "Browser",
+        owner: {
+          kind: "anybox",
+          bindingID: "browser",
+        },
+        transport: "connector",
+        connectorId: "connector:browser:default",
+        connectorRuntimeId: "default",
+        enabled: true,
+      },
+      {
+        id: "connector.gmail.default",
+        name: "Gmail",
+        owner: {
+          kind: "connector",
+          connectorId: "connector:gmail:default",
+          runtimeID: "default",
+        },
+        transport: "connector",
+        connectorId: "connector:gmail:default",
+        connectorRuntimeId: "default",
+        enabled: true,
+      },
+      {
+        id: "connector.node-repl.default",
+        name: "Node REPL",
+        owner: {
+          kind: "anybox",
+          bindingID: "node-repl",
+        },
+        transport: "connector",
+        connectorId: "connector:node-repl:default",
+        connectorRuntimeId: "default",
+        enabled: true,
+      },
+    ])
     window.desktop!.getConnectorDiagnostic = vi.fn().mockResolvedValue({
       serverID: "connector.gmail.default",
       enabled: true,
       ok: true,
       toolCount: 1,
       toolNames: ["search_email_ids"],
+      tools: [],
     })
 
     render(<App />)
@@ -10422,20 +10563,51 @@ describe("App", () => {
     openActivityRailConfigurationView("Open connections and extensions")
 
     expect(await screen.findByLabelText("Connections and extensions top menu")).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "MCP 2" })).toBeInTheDocument()
     fireEvent.click(screen.getByRole("tab", { name: "Connectors 1" }))
     expect(document.querySelector("#app-sidebar")).not.toBeInTheDocument()
     expect(screen.queryByRole("complementary", { name: "Inspector sidebar" })).not.toBeInTheDocument()
     expect(await screen.findByRole("button", { name: "Gmail Connected" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Browser Connected" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Node REPL Connected" })).not.toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "Gmail", level: 1 })).toBeInTheDocument()
     expect(screen.getByText("person@example.test")).toBeInTheDocument()
 
+    const connectorTabs = screen.getByRole("tablist", { name: "Gmail connector settings" })
+    fireEvent.click(within(connectorTabs).getByRole("tab", { name: "MCP" }))
+    fireEvent.click(screen.getByRole("switch", { name: "Enable Gmail MCP runtime" }))
+    await waitFor(() => {
+      expect(window.desktop!.updateGlobalMcpServer).toHaveBeenCalledWith({
+        serverID: "connector.gmail.default",
+        server: expect.objectContaining({
+          connectorId: "connector:gmail:default",
+          enabled: false,
+          transport: "connector",
+        }),
+      })
+    })
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Diagnose" })).toBeEnabled()
+    })
     fireEvent.click(screen.getByRole("button", { name: "Diagnose" }))
 
     await waitFor(() => {
       expect(window.desktop!.getConnectorDiagnostic).toHaveBeenCalledWith({
         connectorID: "connector:gmail:default",
+        runtimeID: "default",
       })
     })
+    expect(await screen.findByLabelText("MCP tool permissions")).toBeInTheDocument()
+
+    fireEvent.click(within(connectorTabs).getByRole("tab", { name: "Authentication" }))
+    expect(within(connectorTabs).getByRole("tab", { name: "Authentication" })).toHaveAttribute("aria-selected", "true")
+    expect(screen.getByText("person@example.test")).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("tab", { name: "MCP 2" }))
+    const mcpList = await screen.findByRole("list", { name: "MCP servers" })
+    expect(within(mcpList).getByRole("button", { name: "Browser built into Anybox enabled" })).toBeInTheDocument()
+    expect(within(mcpList).getByRole("button", { name: "Node REPL built into Anybox enabled" })).toBeInTheDocument()
+    expect(within(mcpList).queryByRole("button", { name: /Gmail/ })).not.toBeInTheDocument()
   })
 
   it("edits global MCP servers from the activity rail and runs global diagnostics", async () => {

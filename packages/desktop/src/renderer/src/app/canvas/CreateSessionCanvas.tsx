@@ -252,10 +252,7 @@ export function GlobalSkillsCanvas({
   const metadataName = getSkillMetadataValue(parsedSkillDocument.metadata, "name")
   const metadataDescription = getSkillMetadataValue(parsedSkillDocument.metadata, "description")
   const displayName = metadataName || selectedSkillDirectoryName || "Skill"
-  const isPluginSkill = Boolean(
-    selectedSkillDirectoryPath?.startsWith("plugin-skills://") || selectedFilePath?.startsWith("plugin-skills://"),
-  )
-  const sourceLabel = isPluginSkill ? t("shell.plugins") : t("skillLibrary.mode.local")
+  const sourceLabel = t("skillLibrary.mode.local")
   const accessLabel = selectedFileReadOnly ? t("skillLibrary.local.readOnly") : t("skillLibrary.local.editable")
   const tabs = [
     { id: "overview" as const, label: t("skillLibrary.detail.overview") },
@@ -330,7 +327,7 @@ export function GlobalSkillsCanvas({
               {metadataDescription ? <p>{metadataDescription}</p> : null}
               <div className="skill-library-detail-meta">
                 <span>{selectedSkillDirectoryName}</span>
-                <span>SKILL.md</span>
+                <span>{t("skillLibrary.local.skillFileName")}</span>
               </div>
             </div>
           </div>
@@ -418,7 +415,11 @@ export function GlobalSkillsCanvas({
               <div className="global-skills-toolbar">
                 <div className="global-skills-toolbar-spacer" aria-hidden="true" />
                 <div className="global-skills-toolbar-actions">
-                  <div className="global-skills-mode-toggle" role="group" aria-label="Skill file view mode">
+                  <div
+                    className="global-skills-mode-toggle"
+                    role="group"
+                    aria-label={t("skillLibrary.local.viewModeAria")}
+                  >
                     <button
                       className={viewMode === "edit" ? "global-skills-mode-button is-active" : "global-skills-mode-button"}
                       aria-pressed={viewMode === "edit"}

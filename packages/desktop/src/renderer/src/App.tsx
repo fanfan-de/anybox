@@ -5,6 +5,8 @@ import { BuiltinToolsPage } from "./app/tools/BuiltinToolsPage"
 import { ConnectionsPage } from "./app/connections/ConnectionsPage"
 import { MobileConnectionPage, type MobileConnectionPanel } from "./app/connections/MobileConnectionPage"
 import { McpServersPage } from "./app/mcp/McpServersPage"
+import { filterMcpInventoryServers } from "./app/mcp/mcp-server-source"
+import { isAccountConnectorDefinition } from "./app/connectors/connector-presentation"
 import { RightSidebar } from "./app/sidebar/RightSidebar"
 import { Sidebar } from "./app/sidebar/Sidebar"
 import { SidebarResizer } from "./app/sidebar/SidebarResizer"
@@ -1569,11 +1571,13 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     deletingPromptPresetID,
     deletingProviderID,
     diagnoseConnector,
+    diagnoseMcpServer,
     diagnoseInstalledPlugin,
     diagnoseInstalledPluginConnector,
     diagnosingPluginID,
     diagnosingPluginConnectorID,
-    diagnosingConnectorID,
+    diagnosingConnectorMcpServerID,
+    diagnosingMcpServerID,
     importPluginFromURL,
     installPlugin,
     installPromptsFromUrl,
@@ -1605,6 +1609,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     loadError,
     loadArchivedSessions,
     loadStorageUsage,
+    mcpDiagnostics,
     mcpServerDraft,
     mcpServers,
     models,
@@ -1677,7 +1682,11 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     selectPlugin,
     selectionDraft,
     setInstalledPluginEnabled,
+    setInstalledPluginMcpEnabled,
+    setInstalledPluginMcpToolPolicy,
     setConnectorApiKeyDraft,
+    setConnectorMcpEnabled,
+    setConnectorMcpToolPolicy,
     setMcpServerDraftValue,
     setMcpToolPolicy,
     setPluginDraftAppApiKey,
@@ -1709,6 +1718,28 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     onSkillsUpdated: refreshComposerSkills,
     onProviderModelsUpdated: refreshComposerModels,
   })
+  const mcpInventoryServers = useMemo(
+    () => filterMcpInventoryServers(
+      mcpServers,
+      installedPlugins,
+      pluginCatalog,
+      connectorCatalog,
+    ),
+    [connectorCatalog, installedPlugins, mcpServers, pluginCatalog],
+  )
+  const accountConnectorCount = useMemo(
+    () => connectorCatalog.filter(isAccountConnectorDefinition).length,
+    [connectorCatalog],
+  )
+
+  useEffect(() => {
+    if (
+      activeMcpServerID
+      && !mcpInventoryServers.some((server) => server.id === activeMcpServerID)
+    ) {
+      startNewMcpServer()
+    }
+  }, [activeMcpServerID, mcpInventoryServers, startNewMcpServer])
 
   const automationRefreshKnownSessionIDsRef = useRef<Set<string>>(new Set())
   const refreshWorkspaceFromDirectoryRef = useRef(refreshWorkspaceFromDirectory)
@@ -2911,8 +2942,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
           ) : isConnectionsView ? (
             <ConnectionsPage
               activeTab={activeConnectionsTab}
-              connectorCount={connectorCatalog.length}
-              mcpCount={mcpServers.length}
+              connectorCount={accountConnectorCount}
+              mcpCount={mcpInventoryServers.length}
               pluginCount={pluginCatalog.length}
               searchQuery={connectionSearchQueries[activeConnectionsTab]}
               windowControls={windowControls}
@@ -2936,7 +2967,11 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                     pluginConnectorStatuses={pluginConnectorStatuses}
                     pluginDiagnostics={pluginDiagnostics}
                     pluginDraft={pluginDraft}
+                    diagnosingMcpServerID={diagnosingMcpServerID}
+                    mcpDiagnostics={mcpDiagnostics}
+                    mcpServers={mcpServers}
                     savingPluginConnectorID={savingPluginConnectorID}
+                    savingMcpServerID={savingMcpServerID}
                     searchQuery={connectionSearchQueries.plugins}
                     updatingPluginID={updatingPluginID}
                     onCancelInstalledPluginConnectorAuthFlow={cancelInstalledPluginConnectorAuthFlow}
@@ -2945,6 +2980,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                     onDeleteInstalledPluginConnectorAuthSession={deleteInstalledPluginConnectorAuthSession}
                     onDiagnoseInstalledPlugin={diagnoseInstalledPlugin}
                     onDiagnoseInstalledPluginConnector={diagnoseInstalledPluginConnector}
+                    onDiagnoseMcpServer={diagnoseMcpServer}
                     onImportPluginFromURL={importPluginFromURL}
                     onInstallPlugin={installPlugin}
                     onPluginDraftAppApiKeyChange={setPluginDraftAppApiKey}
@@ -2955,6 +2991,12 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                     onSaveInstalledPluginConfig={saveInstalledPluginConfig}
                     onSearchQueryChange={handleConnectionSearchQueryChange}
                     onSetInstalledPluginEnabled={setInstalledPluginEnabled}
+                    onSetInstalledPluginMcpEnabled={setInstalledPluginMcpEnabled}
+                    onSetInstalledPluginMcpToolPolicy={setInstalledPluginMcpToolPolicy}
+                    onManageConnector={(connectorID) => {
+                      setActiveConnectionsTab("connectors")
+                      selectConnector(connectorID)
+                    }}
                     onStartInstalledPluginConnectorAuthFlow={startInstalledPluginConnectorAuthFlow}
                   />
                 </Suspense>
@@ -2967,10 +3009,13 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                     connectorConfigDrafts={connectorConfigDrafts}
                     connectorStatuses={connectorStatuses}
                     connectorsError={connectorsError}
-                    diagnosingConnectorID={diagnosingConnectorID}
+                    diagnosingConnectorMcpServerID={diagnosingConnectorMcpServerID}
                     hideTopMenu
                     isLoading={isLoadingConnectors}
+                    mcpDiagnostics={mcpDiagnostics}
+                    mcpServers={mcpServers}
                     savingConnectorID={savingConnectorID}
+                    savingConnectorMcpServerID={savingMcpServerID}
                     searchQuery={connectionSearchQueries.connectors}
                     onCancelConnectorAuthFlow={cancelConnectorAuthFlow}
                     onConnectorApiKeyDraftChange={setConnectorApiKeyDraft}
@@ -2980,6 +3025,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                     onDeleteConnectorConfig={deleteConnectorConfig}
                     onDeleteConnectorAuthSession={deleteConnectorAuthSession}
                     onDiagnoseConnector={diagnoseConnector}
+                    onConnectorMcpEnabledChange={setConnectorMcpEnabled}
+                    onConnectorMcpToolPolicyChange={setConnectorMcpToolPolicy}
                     onSaveConnectorApiKey={saveConnectorApiKey}
                     onSaveConnectorConfig={saveConnectorConfig}
                     onSearchQueryChange={handleConnectionSearchQueryChange}
@@ -2990,18 +3037,21 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 <McpServersPage
                   activeMcpServerID={activeMcpServerID}
                   activeMcpServerDiagnostic={activeMcpServerDiagnostic}
+                  connectorCatalog={connectorCatalog}
                   deletingMcpServerID={deletingMcpServerID}
+                  diagnosingMcpServerID={diagnosingMcpServerID}
                   hideTopMenu
                   isLoading={isLoading}
                   loadError={loadError}
                   installedPlugins={installedPlugins}
                   mcpServerDraft={mcpServerDraft}
-                  mcpServers={mcpServers}
+                  mcpServers={mcpInventoryServers}
                   pluginCatalog={pluginCatalog}
                   savingMcpServerID={savingMcpServerID}
                   isImportingMcpConfigJson={isImportingMcpConfigJson}
                   searchQuery={connectionSearchQueries.mcp}
                   onDeleteMcpServer={deleteMcpServer}
+                  onDiagnoseMcpServer={diagnoseMcpServer}
                   onImportMcpConfigJson={importMcpConfigJson}
                   onMcpServerDraftChange={setMcpServerDraftValue}
                   onMcpToolPolicyChange={setMcpToolPolicy}
@@ -3299,7 +3349,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               installedPlugins={installedPlugins}
               loadError={loadError}
               mcpServerDraft={mcpServerDraft}
-              mcpServers={mcpServers}
+              mcpServers={mcpInventoryServers}
               models={models}
               modelCatalog={modelCatalog}
               pluginCatalog={pluginCatalog}

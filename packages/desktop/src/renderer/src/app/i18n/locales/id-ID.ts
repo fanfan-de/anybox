@@ -1,6 +1,7 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
+import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 
 export const idID = {
   "app.loading": "Memuat",
@@ -1392,4 +1393,5 @@ export const idID = {
   "mcp.validation.requireUrl": "Server MCP jarak jauh memerlukan URL server.",
   "mcp.validation.requireConnectorId": "Server MCP konektor memerlukan id konektor.",
   "mcp.validation.requireToolNames": "Filter alat bernama memerlukan setidaknya satu nama alat.",
+  ...pluginOwnershipTranslations.enUS,
 } as const satisfies Record<TranslationKey, string>

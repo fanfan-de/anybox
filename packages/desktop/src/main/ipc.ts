@@ -136,6 +136,9 @@ import type {
   AgentPluginCatalogItem,
   AgentPluginConnectorStatus,
   AgentPluginDeleteResult,
+  AgentPluginMcpControlsResult,
+  AgentPluginSkillDirectory,
+  AgentPluginSkillFile,
   AgentPermissionRequest,
   AgentPermissionResolveResult,
   AgentProjectDeleteResult,
@@ -5097,6 +5100,57 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     },
   )
 
+  handleDesktopIpc(
+    "desktop:update-installed-plugin-mcp-controls",
+    async (_event, input) => {
+      const pluginID = input.pluginID.trim()
+      const serverID = input.serverID.trim()
+      const result = await requestAgentJSON<AgentPluginMcpControlsResult>(
+        `/api/plugins/installed/${encodeURIComponent(pluginID)}/mcp/${encodeURIComponent(serverID)}`,
+        {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            enabled: input.enabled,
+            toolPolicies: input.toolPolicies,
+          }),
+        },
+      )
+
+      return result.data
+    },
+  )
+
+  handleDesktopIpc(
+    "desktop:list-installed-plugin-skill-entries",
+    async (_event, input) => {
+      const pluginID = input.pluginID.trim()
+      const skillID = input.skillID.trim()
+      const directoryPath = input.path ?? ""
+      const query = directoryPath ? `?path=${encodeURIComponent(directoryPath)}` : ""
+      const result = await requestAgentJSON<AgentPluginSkillDirectory>(
+        `/api/plugins/installed/${encodeURIComponent(pluginID)}/skills/${encodeURIComponent(skillID)}/entries${query}`,
+      )
+
+      return result.data
+    },
+  )
+
+  handleDesktopIpc(
+    "desktop:read-installed-plugin-skill-file",
+    async (_event, input) => {
+      const pluginID = input.pluginID.trim()
+      const skillID = input.skillID.trim()
+      const result = await requestAgentJSON<AgentPluginSkillFile>(
+        `/api/plugins/installed/${encodeURIComponent(pluginID)}/skills/${encodeURIComponent(skillID)}/file?path=${encodeURIComponent(input.path)}`,
+      )
+
+      return result.data
+    },
+  )
+
   handleDesktopIpc("desktop:delete-installed-plugin", async (_event, input: { pluginID: string }) => {
     const pluginID = input.pluginID.trim()
     const result = await requestAgentJSON<AgentPluginDeleteResult>(
@@ -5271,10 +5325,15 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     return result.data
   })
 
-  handleDesktopIpc("desktop:get-connector-diagnostic", async (_event, input: { connectorID: string }) => {
+  handleDesktopIpc("desktop:get-connector-diagnostic", async (
+    _event,
+    input: { connectorID: string; runtimeID?: string },
+  ) => {
     const connectorID = input.connectorID.trim()
+    const runtimeID = input.runtimeID?.trim()
+    const runtimeQuery = runtimeID ? `?runtimeID=${encodeURIComponent(runtimeID)}` : ""
     const result = await requestAgentJSON<AgentMcpServerDiagnostic>(
-      `/api/connectors/${encodeURIComponent(connectorID)}/diagnostic`,
+      `/api/connectors/${encodeURIComponent(connectorID)}/diagnostic${runtimeQuery}`,
     )
 
     return result.data

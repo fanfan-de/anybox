@@ -619,7 +619,7 @@ export async function listProjectSkills(projectID: string) {
   const repositoryRoot = Project.getRepositoryRoot(project)
   if (isSshWorkspaceUri(repositoryRoot)) return []
   return Skill.list(repositoryRoot, {
-    pluginIDs: await Config.getSelectedPluginIDs(projectID),
+    pluginIDs: [],
   })
 }
 
@@ -629,11 +629,11 @@ export async function getProjectSkillSelection(projectID: string) {
   if (isSshWorkspaceUri(repositoryRoot)) {
     return { skillIDs: [] }
   }
-  const pluginIDs = await Config.getSelectedPluginIDs(projectID)
   return {
-    skillIDs: await Skill.resolveSelectedSkillIDs(repositoryRoot, await Config.getSelectedSkillIDs(projectID), {
-      pluginIDs,
-    }),
+    skillIDs: await Skill.resolveSelectedStandaloneSkillIDs(
+      repositoryRoot,
+      await Config.getSelectedSkillIDs(projectID),
+    ),
   }
 }
 
@@ -647,10 +647,7 @@ export async function updateProjectSkillSelection(
     const config = await Config.setSelectedSkillIDs(projectID, [])
     return { skillIDs: config.selected_skills ?? [] }
   }
-  const pluginIDs = await Config.getSelectedPluginIDs(projectID)
-  const skillIDs = await Skill.resolveSelectedSkillIDs(repositoryRoot, input.skillIDs, {
-    pluginIDs,
-  })
+  const skillIDs = await Skill.resolveSelectedStandaloneSkillIDs(repositoryRoot, input.skillIDs)
   const config = await Config.setSelectedSkillIDs(projectID, skillIDs)
 
   return {
@@ -683,10 +680,33 @@ export async function updateProjectPluginSelection(
   }
 }
 
+async function resolveIndependentMcpServerIDs(serverIDs: string[]) {
+  const legacyPluginServerIDs = new Set(
+    Plugin.listInstalled().flatMap((plugin) => plugin.mcpServerIDs),
+  )
+  const globalServersByID = new Map(
+    (await Config.listMcpServers(Config.GLOBAL_CONFIG_ID)).map((server) => [server.id, server]),
+  )
+  const seen = new Set<string>()
+
+  return serverIDs.filter((serverID) => {
+    const normalizedServerID = serverID.trim()
+    if (!normalizedServerID || seen.has(normalizedServerID)) return false
+    seen.add(normalizedServerID)
+
+    const server = globalServersByID.get(normalizedServerID)
+    if (server?.owner?.kind === "plugin") return false
+    if (server?.owner) return true
+    return !legacyPluginServerIDs.has(normalizedServerID)
+  })
+}
+
 export async function getProjectMcpSelection(projectID: string) {
   safeReadProject(projectID)
   return {
-    serverIDs: await Config.getSelectedMcpServerIDs(projectID),
+    serverIDs: await resolveIndependentMcpServerIDs(
+      await Config.getSelectedMcpServerIDs(projectID),
+    ),
   }
 }
 
@@ -695,7 +715,10 @@ export async function updateProjectMcpSelection(
   input: z.infer<typeof UpdateProjectMcpSelectionBody>,
 ) {
   safeReadProject(projectID)
-  const config = await Config.setSelectedMcpServerIDs(projectID, input.serverIDs)
+  const config = await Config.setSelectedMcpServerIDs(
+    projectID,
+    await resolveIndependentMcpServerIDs(input.serverIDs),
+  )
 
   return {
     serverIDs: config.selected_mcp_servers ?? [],

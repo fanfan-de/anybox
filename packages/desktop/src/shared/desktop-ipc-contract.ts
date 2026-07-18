@@ -33,6 +33,10 @@ import type {
   AgentPluginDeleteResult,
   AgentPluginImportURLInput,
   AgentPluginInstallInput,
+  AgentPluginMcpControlsInput,
+  AgentPluginMcpControlsResult,
+  AgentPluginSkillDirectory,
+  AgentPluginSkillFile,
   AgentPluginUpdateInput,
   AgentProjectDeleteResult,
   AgentProjectMcpSelection,
@@ -191,6 +195,10 @@ export type {
   AgentPluginConnectorStatus,
   AgentPluginDeleteResult,
   AgentPluginInstallInput,
+  AgentPluginMcpControlsInput,
+  AgentPluginMcpControlsResult,
+  AgentPluginSkillDirectory,
+  AgentPluginSkillFile,
   AgentPluginUpdateInput,
   AgentProjectDeleteResult,
   AgentProjectMcpSelection,
@@ -326,7 +334,7 @@ export type McpServerSummary = AgentMcpServerSummary
 export type McpServerDiagnostic = AgentMcpServerDiagnostic
 export type McpServerInput = AgentMcpServerSummary extends infer Server
   ? Server extends unknown
-    ? Omit<Server, "id">
+    ? Omit<Server, "id" | "owner">
     : never
   : never
 export type ProjectMcpSelection = AgentProjectMcpSelection
@@ -1826,6 +1834,18 @@ export interface DesktopIpcContract {
     input: AgentPluginUpdateInput
     output: AgentInstalledPlugin
   }
+  "desktop:update-installed-plugin-mcp-controls": {
+    input: AgentPluginMcpControlsInput
+    output: AgentPluginMcpControlsResult
+  }
+  "desktop:list-installed-plugin-skill-entries": {
+    input: { pluginID: string; skillID: string; path?: string }
+    output: AgentPluginSkillDirectory
+  }
+  "desktop:read-installed-plugin-skill-file": {
+    input: { pluginID: string; skillID: string; path: string }
+    output: AgentPluginSkillFile
+  }
   "desktop:delete-installed-plugin": {
     input: { pluginID: string }
     output: AgentPluginDeleteResult
@@ -1879,7 +1899,7 @@ export interface DesktopIpcContract {
     output: AgentConnectorStatus
   }
   "desktop:get-connector-diagnostic": {
-    input: { connectorID: string }
+    input: { connectorID: string; runtimeID?: string }
     output: AgentMcpServerDiagnostic
   }
   "desktop:get-installed-plugin-connectors": {
@@ -2491,6 +2511,9 @@ export interface DesktopApiMethods {
   importPluginFromURL(input: DesktopIpcInput<"desktop:import-plugin-from-url">): Promise<DesktopIpcOutput<"desktop:import-plugin-from-url">>
   installPlugin(input: DesktopIpcInput<"desktop:install-plugin">): Promise<DesktopIpcOutput<"desktop:install-plugin">>
   updateInstalledPlugin(input: DesktopIpcInput<"desktop:update-installed-plugin">): Promise<DesktopIpcOutput<"desktop:update-installed-plugin">>
+  updateInstalledPluginMcpControls(input: DesktopIpcInput<"desktop:update-installed-plugin-mcp-controls">): Promise<DesktopIpcOutput<"desktop:update-installed-plugin-mcp-controls">>
+  listInstalledPluginSkillEntries(input: DesktopIpcInput<"desktop:list-installed-plugin-skill-entries">): Promise<DesktopIpcOutput<"desktop:list-installed-plugin-skill-entries">>
+  readInstalledPluginSkillFile(input: DesktopIpcInput<"desktop:read-installed-plugin-skill-file">): Promise<DesktopIpcOutput<"desktop:read-installed-plugin-skill-file">>
   deleteInstalledPlugin(input: DesktopIpcInput<"desktop:delete-installed-plugin">): Promise<DesktopIpcOutput<"desktop:delete-installed-plugin">>
   getInstalledPluginDiagnostic(input: DesktopIpcInput<"desktop:get-installed-plugin-diagnostic">): Promise<DesktopIpcOutput<"desktop:get-installed-plugin-diagnostic">>
   getConnectorCatalog(): Promise<DesktopIpcOutput<"desktop:get-connector-catalog">>

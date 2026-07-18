@@ -1,6 +1,7 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
+import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 
 export const viVN = {
   "app.loading": "Đang tải",
@@ -1392,4 +1393,5 @@ export const viVN = {
   "mcp.validation.requireUrl": "Máy chủ MCP từ xa yêu cầu một URL máy chủ.",
   "mcp.validation.requireConnectorId": "Máy chủ MCP connector yêu cầu một id connector.",
   "mcp.validation.requireToolNames": "Bộ lọc công cụ được đặt tên yêu cầu ít nhất một tên công cụ.",
+  ...pluginOwnershipTranslations.enUS,
 } as const satisfies Record<TranslationKey, string>

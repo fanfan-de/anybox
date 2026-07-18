@@ -1,6 +1,7 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
+import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 
 export const deDE = {
   "app.loading": "Laden",
@@ -1392,4 +1393,5 @@ export const deDE = {
   "mcp.validation.requireUrl": "Entfernte MCP-Server benötigen eine Server-URL.",
   "mcp.validation.requireConnectorId": "Connector-MCP-Server benötigen eine Connector-ID.",
   "mcp.validation.requireToolNames": "Benannte Tool-Filter erfordern mindestens einen Tool-Namen.",
+  ...pluginOwnershipTranslations.enUS,
 } as const satisfies Record<TranslationKey, string>

@@ -2081,6 +2081,11 @@ a.commit-row:focus-visible {
   padding: 0.12em 0.34em;
 }
 
+.docs-content :not(pre) > code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .docs-content pre {
   overflow-x: auto;
   padding: 18px;

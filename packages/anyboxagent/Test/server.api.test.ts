@@ -24,6 +24,7 @@ import * as Provider from "#provider/provider.ts"
 import * as PromptPresets from "#session/support/prompt-presets.ts"
 import * as SystemPrompt from "#session/core/system.ts"
 import * as SettingsUseCase from "#server/usecases/settings.ts"
+import * as Skill from "#skill/skill.ts"
 import * as Log from "#util/log.ts"
 import * as db from "#database/Sqlite.ts"
 
@@ -2678,6 +2679,21 @@ describe("server api", () => {
       process.env.ANYBOX_PLUGIN_INSTALL_DIR = pluginInstallRoot
       await writeProjectSelectionPluginPackage(pluginInstallRoot)
       await createGitRepo(repositoryRoot, "plugin-selection-project")
+      await mkdir(join(repositoryRoot, ".anybox", "skills", "reviewer"), { recursive: true })
+      await writeFile(
+        join(repositoryRoot, ".anybox", "skills", "reviewer", "SKILL.md"),
+        [
+          "---",
+          "name: Reviewer",
+          "description: Review project changes.",
+          "---",
+          "",
+          "# Reviewer",
+          "",
+          "Review carefully.",
+          "",
+        ].join("\n"),
+      )
 
       const installResponse = await app.request("http://localhost/api/plugins/installed/project-lab", {
         method: "PUT",
@@ -2733,7 +2749,86 @@ describe("server api", () => {
       const afterSkillsBody = (await afterSkillsResponse.json()) as SkillListEnvelope
 
       expect(afterSkillsResponse.status).toBe(200)
-      expect(afterSkillsBody.data?.some((skill) => skill.scope === "plugin")).toBe(true)
+      expect(afterSkillsBody.data?.some((skill) => skill.scope === "plugin")).toBe(false)
+      expect(afterSkillsBody.data?.some((skill) => skill.id === "project:reviewer")).toBe(true)
+
+      const skillSelectionResponse = await app.request(
+        `http://localhost/api/projects/${projectID}/skills/selection`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            skillIDs: [
+              "project:reviewer",
+              "plugin:project-lab:project-helper",
+            ],
+          }),
+        },
+      )
+      const skillSelectionBody = (await skillSelectionResponse.json()) as ProjectSkillSelectionEnvelope
+      expect(skillSelectionBody.data?.skillIDs).toEqual(["project:reviewer"])
+      expect(await Skill.resolveTurnSkillIDs({
+        projectID: projectID!,
+        projectRoot: repositoryRoot,
+      })).toEqual([
+        "project:reviewer",
+        "plugin:project-lab:project-helper",
+      ])
+      expect(await Skill.resolveTurnSkillIDs({
+        projectID: projectID!,
+        projectRoot: repositoryRoot,
+        requestedSkillIDs: ["plugin:project-lab:project-helper"],
+      })).toEqual([
+        "plugin:project-lab:project-helper",
+      ])
+
+      const projectMcpResponse = await app.request(
+        `http://localhost/api/projects/${projectID}/mcp/servers`,
+      )
+      const projectMcpBody = (await projectMcpResponse.json()) as McpServerListEnvelope
+      expect(projectMcpBody.data?.map((server) => server.id)).toContain("plugin.project-lab.notes")
+
+      await Config.setMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.user-looking", {
+        name: "User-owned prefix fixture",
+        transport: "stdio",
+        command: "node",
+        enabled: true,
+      })
+      const mcpSelectionResponse = await app.request(
+        `http://localhost/api/projects/${projectID}/mcp/selection`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            serverIDs: [
+              "plugin.project-lab.notes",
+              "plugin.user-looking",
+            ],
+          }),
+        },
+      )
+      const mcpSelectionBody = (await mcpSelectionResponse.json()) as JsonEnvelope<{
+        serverIDs: string[]
+      }>
+      expect(mcpSelectionBody.data?.serverIDs).toEqual(["plugin.user-looking"])
+
+      const disablePluginMcpResponse = await app.request(
+        "http://localhost/api/plugins/installed/project-lab/mcp/plugin.project-lab.notes",
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            enabled: false,
+          }),
+        },
+      )
+      expect(disablePluginMcpResponse.status).toBe(200)
+      const disabledProjectMcpResponse = await app.request(
+        `http://localhost/api/projects/${projectID}/mcp/servers`,
+      )
+      const disabledProjectMcpBody = (await disabledProjectMcpResponse.json()) as McpServerListEnvelope
+      expect(disabledProjectMcpBody.data?.map((server) => server.id)).not.toContain("plugin.project-lab.notes")
+      expect(disabledProjectMcpBody.data?.map((server) => server.id)).toContain("plugin.user-looking")
     } finally {
       await app.request("http://localhost/api/plugins/installed/project-lab", {
         method: "DELETE",

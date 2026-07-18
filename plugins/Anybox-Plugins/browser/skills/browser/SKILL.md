@@ -1,6 +1,6 @@
 ---
 name: Browser
-description: Use when the Browser plugin is enabled and the user asks to inspect or control Chrome through the Anybox browser connector or Node REPL browser runtime.
+description: Use when the Browser plugin is enabled and the user asks to inspect or control Chrome through its bundled Browser MCP or Node REPL runtime.
 ---
 
 # Browser
