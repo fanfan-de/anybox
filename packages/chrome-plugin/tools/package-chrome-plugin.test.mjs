@@ -32,6 +32,7 @@ async function createFixture(projectRoot) {
   await write(projectRoot, path.join("runtime", "scripts", "browser-client.mjs"))
   await write(projectRoot, path.join("runtime", "scripts", "browser-server.js"))
   await write(projectRoot, path.join("runtime", "scripts", "node-repl-server.js"))
+  await write(projectRoot, path.join("runtime", "assets", "chrome.svg"), "<svg />\n")
   await write(projectRoot, path.join("runtime", "skills", "chrome", "SKILL.md"))
   await write(projectRoot, "LICENSE", "MIT License\n")
 
@@ -67,6 +68,7 @@ test("synchronizes only installable Chrome files into the distribution directory
 
     assert.deepEqual(files, [
       ".anybox-plugin/plugin.json",
+      "assets/chrome.svg",
       "browser-extension/background.js",
       "browser-extension/chunks/shared.js",
       "browser-extension/content.js",

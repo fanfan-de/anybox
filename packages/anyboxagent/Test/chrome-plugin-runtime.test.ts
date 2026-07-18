@@ -89,12 +89,17 @@ describe("Chrome plugin runtimes", () => {
     const pluginManifest = JSON.parse(
       readFileSync(join(chromePluginRoot, ".anybox-plugin", "plugin.json"), "utf8"),
     )
+    const extensionManifest = JSON.parse(
+      readFileSync(join(chromePluginRoot, "browser-extension", "manifest.json"), "utf8"),
+    )
 
     expect(existsSync(join(chromePluginProjectRoot, "browser-extension", "src"))).toBe(true)
     expect(existsSync(join(chromePluginProjectRoot, "browser-native-host", "src"))).toBe(true)
     expect(existsSync(join(chromePluginProjectRoot, "tools", "package-chrome-plugin.mjs"))).toBe(true)
+    expect(existsSync(join(chromePluginProjectRoot, "runtime", "assets", "chrome.svg"))).toBe(true)
     expect(existsSync(join(chromePluginRoot, ".anybox-plugin", "plugin.json"))).toBe(true)
     expect(existsSync(join(chromePluginRoot, "plugin.json"))).toBe(false)
+    expect(existsSync(join(chromePluginRoot, "assets", "chrome.svg"))).toBe(true)
     expect(existsSync(join(chromePluginRoot, "browser-extension", "manifest.json"))).toBe(true)
     expect(existsSync(join(chromePluginRoot, "browser-extension", "src"))).toBe(false)
     expect(existsSync(join(chromePluginRoot, "browser-native-host"))).toBe(false)
@@ -107,9 +112,24 @@ describe("Chrome plugin runtimes", () => {
       "en-US": "Chrome",
       "zh-CN": "Chrome",
     })
+    expect(pluginManifest.interface?.logo).toBe("./assets/chrome.svg")
+    expect(pluginManifest.interface?.iconUrl).toBe("./assets/chrome.svg")
+    expect(pluginManifest.interface?.brandColor).toBe("#4285F4")
     expect(pluginManifest.mcpServers?.map((server: { id: string }) => server.id)).toEqual(["chrome", "node-repl"])
     expect(pluginManifest.skillPreviews).toHaveLength(1)
     expect(pluginManifest.skillPreviews[0]).toMatchObject({ name: "Chrome", directory: "chrome" })
+    expect(extensionManifest.icons).toEqual({
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png",
+    })
+    for (const size of [16, 48, 128]) {
+      expect(
+        readFileSync(join(chromePluginRoot, "browser-extension", "icons", `icon${size}.png`)),
+      ).toEqual(
+        readFileSync(join(chromePluginProjectRoot, "browser-extension", "public", "icons", `icon${size}.png`)),
+      )
+    }
     expect(existsSync(join(chromePluginScriptsRoot, "browser-client.mjs"))).toBe(true)
     expect(existsSync(chromeMcpServerPath)).toBe(true)
     expect(existsSync(nodeReplServerPath)).toBe(true)

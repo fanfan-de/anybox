@@ -17,6 +17,7 @@ export const defaultPluginRoot = path.join(
 
 const requiredPackageFiles = [
   path.join(".anybox-plugin", "plugin.json"),
+  path.join("assets", "chrome.svg"),
   "LICENSE",
   path.join("browser-extension", "manifest.json"),
   path.join("browser-extension", "background.js"),
@@ -31,6 +32,7 @@ const requiredPackageFiles = [
 
 const allowedTopLevelEntries = new Set([
   ".anybox-plugin",
+  "assets",
   "browser-extension",
   "LICENSE",
   "scripts",
