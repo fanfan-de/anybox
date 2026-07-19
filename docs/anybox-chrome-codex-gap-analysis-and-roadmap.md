@@ -47,6 +47,80 @@ Node REPL 本身不是效果变好的原因。真正决定效果的是 Node REPL
 
 > 本机传输迁移、长期 transport token 清理和 capability 声明漂移已经完成；Phase 0 整体仍未退出。阻塞项已转为可信 peer/provenance、command-boundary policy 与 tab ownership、screenshot/trace/error redaction，以及真正的取消隔离。
 
+### 0.2 Browser IPC 迁移验收记录
+
+截至 2026-07-19，本次 transport 迁移的生产调用链已经固定为：
+
+```text
+MCP js
+→ node-repl-server.js
+→ browser-client.mjs
+→ isolated browser-gateway-worker.js
+→ authenticated Runtime Named Pipe / Unix Domain Socket
+→ Anybox Agent Browser IPC Policy Gateway
+→ BrowserExtensionBridge
+→ authenticated Native Host Named Pipe / Unix Domain Socket
+→ Rust Native Host
+→ Chrome Native Messaging stdio
+→ Chrome Extension
+```
+
+`BrowserExtensionBridge` 仍是 Browser connection registry、first-ready
+selection、pending command、timeout、connection-owned result 和 tab ownership
+的唯一业务实现。Browser IPC Gateway 只在它前面增加 transport authentication、
+role/method schema、context forwarding 和 Runtime command allowlist；Runtime
+没有连接 Native Host endpoint 或绕过 Agent 的代码路径。Node listener sidecar
+只是 Agent 内部的 socket byte relay，不持有 proof、policy、pending command
+或 Browser ownership 状态。
+
+本次入口变化如下：
+
+| 入口 | 迁移后状态 | 说明 |
+|---|---|---|
+| Browser HTTP `/status` | 已删除 | 不再通过 localhost 暴露 Browser connection 状态 |
+| Browser HTTP `/command` | 已删除 | Runtime command 只接受认证 Runtime IPC |
+| Browser HTTP `/trusted-command` | 已删除 | 模型侧没有等价 IPC method |
+| Browser WebSocket `/ws` | 已删除 | Native Host 只连接认证 Native Host IPC |
+| Browser HTTP `/health` | 保留 | 只返回最小 `ok: true` envelope，不包含连接、endpoint、broker 或凭据 |
+| Runtime IPC endpoint | 新增 | Windows Named Pipe；macOS/Linux Unix Domain Socket |
+| Native Host IPC endpoint | 新增 | 与 Runtime endpoint 物理分离，并绑定 `native-host` role |
+| Chrome Native Messaging stdio | 保留 | Chrome Extension 与 Rust Native Host 之间的 Chrome 标准传输 |
+
+凭据与认证生命周期已经从长期 bearer token 改为：
+
+- endpoint 名称和持久化 runtime config 只用于定位，不作为 secret 或认证依据；
+- Runtime proof 在每次 Agent 进程启动时重新生成，只注入受管 Chrome MCP，
+  Worker 创建后会从模型可见的进程环境删除；
+- Native Host proof 写入当前用户 IPC 状态目录中的临时 bootstrap 文件，最长
+  有效 5 分钟，只允许成功消费一次，成功认证、断线和过期都会触发删除或轮换；
+- hello proof 使用 challenge nonce、role、broker instance、client instance 和
+  client version 组成 HMAC transcript，旧 broker、旧 proof、过期 proof 和 replay
+  均 fail-closed；
+- Runtime 与 Native Host 使用独立 endpoint 和严格 message union，不能通过
+  自报 role 在另一端执行命令；
+- 4-byte big-endian length-prefixed JSON frame 设置 16 MiB 上限，并拒绝空长度、
+  malformed UTF-8/JSON、超限、截断和未知 message type。
+
+迁移验收结论：
+
+- Worker 和 Native Host 的生产默认 transport 均为 IPC。
+- 生产代码没有 HTTP/WebSocket fallback、development fallback 或自动降级。
+- 长期 Browser transport token 已从 Agent、Worker、Native Host 和持久配置删除；
+  代码中保留的旧 URL/token 示例只用于断言 legacy config 会被拒绝。
+- raw page JavaScript、selector adapter、CDP 和 `trusted-command` 继续在 Browser
+  Facade、isolated Worker 和 Agent Gateway 边界 fail-closed。
+- Windows Named Pipe 已通过 Agent、Runtime 和 Rust Native Host 的真实跨进程
+  测试；macOS/Linux UDS 代码已实现，但本轮 Windows 工作区没有提供实机结果。
+- source manifest、生成包、README、Chrome Skill 和运行时 capability 已同步；
+  `plugins/Anybox-Plugins/chrome` 只能由 packaging 工具从权威源码生成。
+- 相关自动测试、生成包一致性和 Desktop managed Agent runtime build/verify
+  已通过，详细数量见 [25.1 当前已有测试覆盖](#251-当前已有测试覆盖)。
+
+因此可以把 **Browser transport IPC migration** 标记为完成，但不能把
+**Phase 0** 标记为完成。另一 Windows 用户的 ACL 拒绝、peer PID/SID/uid、
+包 provenance、完整 command permission、heartbeat、cancel、screenshot/trace/
+error redaction 和真实 Chrome 安装升级矩阵仍是发布阻断项或残余风险。
+
 ---
 
 ## 1. 证据范围与可信度
