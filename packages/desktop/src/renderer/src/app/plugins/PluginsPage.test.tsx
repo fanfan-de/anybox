@@ -215,7 +215,6 @@ function createProps(overrides: Partial<PluginsPageProps> = {}): PluginsPageProp
     installedPlugins: [],
     isLoading: false,
     loadError: null,
-    connectorCatalog: [],
     connectorStatuses: [],
     pluginCatalog: [createPlugin()],
     pluginConnectorStatuses: {},
@@ -1453,39 +1452,18 @@ describe("PluginsPage", () => {
         {...createProps({
           activePluginID: "chrome",
           pluginCatalog: [plugin],
-          connectorCatalog: [
+          mcpServers: [
             {
-              id: "node-repl",
+              id: "connector.node-repl.default",
               name: "Node REPL",
-              description: "Run JavaScript in the Anybox Node runtime.",
-              category: "builtin_mcp",
-              publisher: "Anybox",
-              risk: "high",
-              permissions: [],
-              tools: [],
-              configFields: [],
-              mcpRuntimes: [],
-              installReview: [],
-              source: "platform",
-              available: true,
-            },
-          ],
-          connectorStatuses: [
-            {
-              connectorID: "connector:node-repl:default",
-              definitionID: "node-repl",
-              name: "Node REPL",
-              connected: true,
-              available: true,
-              authStatus: "connected",
-              mcpBindings: [
-                {
-                  runtimeID: "default",
-                  serverID: "connector.node-repl.default",
-                  name: "Node REPL",
-                },
-              ],
-              generatedMcpServerID: "connector.node-repl.default",
+              owner: {
+                kind: "anybox",
+                bindingID: "connector.node-repl.default",
+              },
+              transport: "connector",
+              connectorId: "connector:node-repl:default",
+              connectorRuntimeId: "default",
+              enabled: true,
             },
           ],
           onManageConnector,

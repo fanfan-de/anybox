@@ -23,7 +23,6 @@ import { useI18n } from "../i18n/I18nProvider"
 import type { TranslationKey } from "../i18n/translations"
 import type { AppLocale } from "../../../../shared/locale"
 import type {
-  ConnectorDefinition,
   ConnectorStatus,
   InstalledPlugin,
   McpServerDiagnostic,
@@ -46,7 +45,6 @@ interface PluginsPageProps {
   installedPlugins: InstalledPlugin[]
   isLoading: boolean
   loadError: string | null
-  connectorCatalog: ConnectorDefinition[]
   connectorStatuses: ConnectorStatus[]
   pluginCatalog: PluginCatalogItem[]
   pluginConnectorStatuses: Record<string, PluginConnectorStatus[]>
@@ -156,6 +154,26 @@ function generatedServerID(plugin: PluginCatalogItem, server: PluginCatalogItem[
 
 function generatedAppServerID(plugin: PluginCatalogItem, appID: string) {
   return `plugin.${plugin.id}.connector.${appID}`
+}
+
+function matchesAnyboxMcpConnectorRequirement(
+  server: McpServerSummary,
+  connectorDefinitionID: string,
+) {
+  if (server.owner?.kind !== "anybox") return false
+
+  const connectorID =
+    server.transport === "connector" || server.transport === "remote"
+      ? server.connectorId
+      : undefined
+  if (connectorID?.startsWith("connector:")) {
+    const definitionID = connectorID.slice("connector:".length).split(":")[0]?.trim()
+    if (definitionID === connectorDefinitionID) return true
+  }
+
+  return server.owner.bindingID === connectorDefinitionID
+    || server.owner.bindingID.startsWith(`connector.${connectorDefinitionID}.`)
+    || server.id.startsWith(`connector.${connectorDefinitionID}.`)
 }
 
 function toolSummary(tools?: Array<{ name: string; title?: string }>) {
@@ -1083,7 +1101,6 @@ function PluginSection({
 
 export function PluginsPage({
   activePluginID,
-  connectorCatalog,
   connectorStatuses,
   deletingPluginID,
   diagnosingMcpServerID,
@@ -1177,10 +1194,6 @@ export function PluginsPage({
   const platformConnectorStatusByDefinitionID = useMemo(
     () => new Map(connectorStatuses.map((status) => [status.definitionID, status])),
     [connectorStatuses],
-  )
-  const platformConnectorDefinitionByID = useMemo(
-    () => new Map(connectorCatalog.map((definition) => [definition.id, definition])),
-    [connectorCatalog],
   )
   const pluginBusyIDs = useMemo(
     () => new Set([installingPluginID, updatingPluginID, deletingPluginID, diagnosingPluginID].filter(Boolean) as string[]),
@@ -2016,10 +2029,13 @@ export function PluginsPage({
                         const status = platformConnectorStatusByDefinitionID.get(requirement.connector)
                         const statusLabel = connectorStatusLabel(status)
                         const connectorID = status?.connectorID ?? `connector:${requirement.connector}:default`
-                        const connectorDefinition = platformConnectorDefinitionByID.get(requirement.connector)
-                        const isBuiltinMcp = connectorDefinition?.category === "builtin_mcp"
+                        const builtinMcpServer = mcpServers.find((server) =>
+                          matchesAnyboxMcpConnectorRequirement(server, requirement.connector),
+                        )
+                        const isBuiltinMcp = Boolean(builtinMcpServer)
                         const mcpServerID =
-                          status?.mcpBindings?.find((binding) => binding.runtimeID === "default")?.serverID
+                          builtinMcpServer?.id
+                          ?? status?.mcpBindings?.find((binding) => binding.runtimeID === "default")?.serverID
                           ?? status?.generatedMcpServerID
                           ?? status?.mcpBindings?.[0]?.serverID
                           ?? `connector.${requirement.connector}.default`
