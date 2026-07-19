@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test"
-import { BrowserExtensionServerMessage } from "@anybox/shared/browser-extension"
+import { BrowserExtensionServerMessage } from "@anybox/chrome-shared/browser-extension"
 import {
   supportsBrowserCommandContractVersion,
 } from "../src/background/browser-contract-compat"
 
-test("accepts a legacy Agent command envelope while rejecting an explicit future contract", () => {
+test("accepts a legacy Browser Host command envelope while rejecting an explicit future contract", () => {
   const legacy = BrowserExtensionServerMessage.parse({
     type: "command",
     commandID: "legacy-command",

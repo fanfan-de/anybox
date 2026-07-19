@@ -1,4 +1,4 @@
-import { BROWSER_CONTRACT_VERSION } from "@anybox/shared/browser-contract"
+import { BROWSER_CONTRACT_VERSION } from "@anybox/chrome-shared/browser-contract"
 
 export function supportsBrowserCommandContractVersion(
   contractVersion: number | undefined,

@@ -171,9 +171,9 @@ importers:
 
   packages/chrome-plugin/browser-extension:
     dependencies:
-      '@anybox/shared':
+      '@anybox/chrome-shared':
         specifier: workspace:*
-        version: link:../../shared
+        version: link:../shared
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -185,13 +185,18 @@ importers:
         specifier: ^7.3.1
         version: 7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.101.0)(terser@5.48.0)(yaml@2.8.3)
 
-  packages/chrome-plugin/browser-native-host: {}
-
-  packages/chrome-plugin/browser-runtime:
-    devDependencies:
-      '@anybox/shared':
+  packages/chrome-plugin/browser-host:
+    dependencies:
+      '@anybox/chrome-shared':
         specifier: workspace:*
-        version: link:../../shared
+        version: link:../shared
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@types/bun':
+        specifier: 1.3.11
+        version: 1.3.11
       '@types/node':
         specifier: ^25.5.0
         version: 25.6.0
@@ -201,6 +206,39 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/chrome-plugin/browser-native-host: {}
+
+  packages/chrome-plugin/browser-runtime:
+    devDependencies:
+      '@anybox/chrome-shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@types/node':
+        specifier: ^25.5.0
+        version: 25.6.0
+      esbuild:
+        specifier: ^0.27.2
+        version: 0.27.2
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/chrome-plugin/shared:
+    dependencies:
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@types/node':
+        specifier: ^25.5.0
+        version: 25.6.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.2
+        version: 4.1.4(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(jsdom@27.4.0)(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.101.0)(terser@5.48.0)(yaml@2.8.3))
 
   packages/cinema-web:
     dependencies:

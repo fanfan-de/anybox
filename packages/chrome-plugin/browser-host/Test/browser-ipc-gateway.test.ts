@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import "./sqlite.cleanup.ts"
 import { createHmac, randomUUID } from "node:crypto"
 import {
   existsSync,
@@ -15,7 +14,7 @@ import {
   ANYBOX_CHROME_EXTENSION_ID,
   ANYBOX_CHROME_NATIVE_HOST_NAME,
   BROWSER_EXTENSION_PROTOCOL_VERSION,
-} from "@anybox/shared/browser-extension"
+} from "@anybox/chrome-shared/browser-extension"
 import {
   BROWSER_IPC_PROTOCOL_VERSION,
   BrowserIpcFrameDecoder,
@@ -23,12 +22,12 @@ import {
   encodeBrowserIpcFrame,
   type BrowserIpcChallengeMessage,
   type BrowserIpcRole,
-} from "@anybox/shared/browser-ipc"
-import { BrowserExtensionBridge } from "#browser-extension/bridge.ts"
+} from "@anybox/chrome-shared/browser-ipc"
+import { BrowserExtensionBridge } from "../src/bridge.ts"
 import {
   BrowserIpcGateway,
   defaultBrowserIpcPaths,
-} from "#browser-extension/ipc-gateway.ts"
+} from "../src/ipc-gateway.ts"
 
 type JsonRecord = Record<string, unknown>
 
@@ -427,7 +426,7 @@ describe("Browser IPC Gateway transport and authentication", () => {
     })
   })
 
-  test("routes runtime commands through the Agent Bridge with context and ownership", async () => {
+  test("routes runtime commands through the plugin Browser Host with context and ownership", async () => {
     const { bridge, gateway } = gatewayFixture()
     await gateway.start()
     const native = await authenticateNative(gateway)
@@ -835,7 +834,7 @@ describe("Browser IPC Gateway transport and authentication", () => {
     })
   })
 
-  test("rebinds endpoints with fresh credentials across an Agent restart", async () => {
+  test("rebinds endpoints with fresh credentials across a Browser Host restart", async () => {
     const { bootstrapPath, bridge, gateway } = gatewayFixture()
     await gateway.start()
     const runtime = await authenticateRuntime(gateway)

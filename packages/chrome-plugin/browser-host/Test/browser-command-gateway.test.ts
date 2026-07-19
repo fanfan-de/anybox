@@ -3,16 +3,16 @@ import {
   BROWSER_CONTRACT_COMMAND_METHODS,
   BROWSER_CONTRACT_VERSION,
   createBrowserBackendInfo,
-} from "@anybox/shared/browser-contract"
-import type { BrowserExtensionBridge } from "#browser-extension/bridge.ts"
+} from "@anybox/chrome-shared/browser-contract"
+import type { BrowserExtensionBridge } from "../src/bridge.ts"
 import {
   BrowserCommandGatewayError,
   runBrowserRuntimeCommand,
-} from "#browser-extension/command-gateway.ts"
+} from "../src/command-gateway.ts"
 import {
   BrowserPolicyEngine,
   type BrowserPolicyEngine as BrowserPolicyEngineType,
-} from "#browser-extension/browser-policy.ts"
+} from "../src/browser-policy.ts"
 
 function bridgeStub(input: {
   connected?: boolean
@@ -172,7 +172,7 @@ describe("Browser command gateway contract and policy order", () => {
     expect(disconnectedEvents).toEqual([])
   })
 
-  test("rejects raw JavaScript at the Agent contract boundary", async () => {
+  test("rejects raw JavaScript at the Browser Host contract boundary", async () => {
     const events: string[] = []
     const request = {
       contractVersion: BROWSER_CONTRACT_VERSION,
@@ -331,7 +331,7 @@ describe("Browser command gateway contract and policy order", () => {
     ])
   })
 
-  test("applies policy before the Agent-local tabs.release implementation", async () => {
+  test("applies policy before the Browser Host tabs.release implementation", async () => {
     const events: string[] = []
     const bridge = bridgeStub({
       events,

@@ -4,9 +4,8 @@ import { defineConfig } from "vite"
 export default defineConfig({
   resolve: {
     alias: {
-      "@anybox/shared/browser-contract": resolve(__dirname, "../../shared/src/browser-contract.ts"),
-      "@anybox/shared/browser-extension": resolve(__dirname, "../../shared/src/browser-extension.ts"),
-      "@anybox/shared": resolve(__dirname, "../../shared/src/index.ts"),
+      "@anybox/chrome-shared/browser-contract": resolve(__dirname, "../shared/src/browser-contract.ts"),
+      "@anybox/chrome-shared/browser-extension": resolve(__dirname, "../shared/src/browser-extension.ts"),
     },
   },
   build: {

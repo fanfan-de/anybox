@@ -20,13 +20,14 @@ import {
   writeFileSync,
 } from "node:fs"
 import path from "node:path"
+import { createConnection } from "node:net"
 import { fileURLToPath } from "node:url"
 import { ZodError } from "zod"
 import {
   ANYBOX_CHROME_EXTENSION_ID,
   ANYBOX_CHROME_NATIVE_HOST_NAME,
-} from "@anybox/shared/browser-extension"
-import { BROWSER_CONTRACT_VERSION } from "@anybox/shared/browser-contract"
+} from "@anybox/chrome-shared/browser-extension"
+import { BROWSER_CONTRACT_VERSION } from "@anybox/chrome-shared/browser-contract"
 import {
   BROWSER_IPC_HANDSHAKE_TIMEOUT_MS,
   BROWSER_IPC_PROTOCOL_VERSION,
@@ -43,23 +44,21 @@ import {
   type BrowserIpcErrorCode,
   type BrowserIpcRuntimeRequest as BrowserIpcRuntimeRequestValue,
   type BrowserIpcTransportKind,
-} from "@anybox/shared/browser-ipc"
+} from "@anybox/chrome-shared/browser-ipc"
 import {
   browserExtensionBridge,
   type BrowserExtensionBridge,
-} from "#browser-extension/bridge.ts"
+} from "./bridge.ts"
 import {
   BrowserCommandGatewayError,
   runBrowserRuntimeCommand,
-} from "#browser-extension/command-gateway.ts"
+} from "./command-gateway.ts"
 import {
   browserPolicyEngine,
   type BrowserPolicyEngine,
-} from "#browser-extension/browser-policy.ts"
-import * as Global from "#global/global.ts"
-import { getProcessEnvValue } from "#env/compat.ts"
-import * as Log from "#util/log.ts"
-import { which } from "#util/which.ts"
+} from "./browser-policy.ts"
+import * as Log from "./log.ts"
+import { browserRuntimePaths } from "@anybox/chrome-shared/runtime-paths"
 
 const log = Log.create({ service: "browser-ipc" })
 const IPC_DIRECTORY_NAME = "browser-ipc"
@@ -125,8 +124,8 @@ function endpointIdentity(homeDir: string) {
 
 export function defaultBrowserIpcPaths(
   platform: NodeJS.Platform = process.platform,
-  homeDir = Global.Path.home,
-  stateDir = Global.Path.state,
+  homeDir = browserRuntimePaths().home,
+  stateDir = browserRuntimePaths().state,
 ) {
   if (!["win32", "darwin", "linux"].includes(platform)) {
     throw new BrowserIpcProtocolError(
@@ -191,6 +190,32 @@ function protocolError(error: unknown) {
     "INTERNAL_ERROR",
     error instanceof Error ? error.message : String(error),
   )
+}
+
+function endpointIsActive(
+  endpoint: string,
+  platform: NodeJS.Platform,
+  timeoutMs = 300,
+) {
+  if (platform !== "win32" && !existsSync(endpoint)) {
+    return Promise.resolve(false)
+  }
+  return new Promise<boolean>((resolve) => {
+    const socket = createConnection(endpoint)
+    let settled = false
+    const finish = (active: boolean) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      socket.destroy()
+      resolve(active)
+    }
+    const timer = setTimeout(() => finish(true), timeoutMs)
+    socket.once("connect", () => finish(true))
+    socket.once("error", (error: NodeJS.ErrnoException) => {
+      finish(!["ENOENT", "ECONNREFUSED"].includes(error.code ?? ""))
+    })
+  })
 }
 
 export class BrowserIpcGateway {
@@ -308,6 +333,13 @@ export class BrowserIpcGateway {
 
   private async startInternal() {
     this.prepareIpcDirectory()
+    if (await endpointIsActive(this.runtimeEndpoint, this.platform)) {
+      const error = new Error(
+        "Another Chrome plugin Browser Host already owns the runtime endpoint.",
+      ) as Error & { code: string }
+      error.code = "BROWSER_HOST_ALREADY_RUNNING"
+      throw error
+    }
     this.removeUnixEndpoint(this.runtimeEndpoint)
     this.removeUnixEndpoint(this.nativeHostEndpoint)
 
@@ -342,14 +374,7 @@ export class BrowserIpcGateway {
     if (this.listenerSidecar) {
       return Promise.reject(new Error("Browser IPC listener sidecar is already running."))
     }
-    const nodeBinary = getProcessEnvValue("ANYBOX_NODE_BINARY")?.trim()
-      || which("node.exe")
-      || which("node")
-    if (!nodeBinary) {
-      return Promise.reject(
-        new Error("Node.js is required to host the Browser IPC listener."),
-      )
-    }
+    const nodeBinary = process.env.ANYBOX_NODE_BINARY?.trim() || process.execPath
     const sidecarPath = fileURLToPath(
       new URL("./ipc-listener-sidecar.mjs", import.meta.url),
     )
@@ -360,7 +385,7 @@ export class BrowserIpcGateway {
           && !entry[0].toUpperCase().startsWith("ANYBOX_BROWSER_"),
       ),
     )
-    if (getProcessEnvValue("ANYBOX_NODE_RUN_AS_NODE") === "1") {
+    if (process.env.ANYBOX_NODE_RUN_AS_NODE === "1") {
       env.ELECTRON_RUN_AS_NODE = "1"
     }
     const child = spawnChild(nodeBinary, [sidecarPath], {
@@ -808,7 +833,7 @@ export class BrowserIpcGateway {
           code,
           message: error instanceof BrowserCommandGatewayError
             ? error.message
-            : "The Anybox Agent could not complete the browser request.",
+            : "The Chrome plugin Browser Host could not complete the browser request.",
           ...(error instanceof BrowserCommandGatewayError
             ? { retryable: error.retryable }
             : {}),

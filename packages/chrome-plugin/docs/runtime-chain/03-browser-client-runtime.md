@@ -1,50 +1,19 @@
 # 节点 03：Browser Client Runtime
 
-[上一节点](./02-node-repl-mcp-server.md) ·
-[下一节点：Host Service Bridge](./04-transport-worker-and-runtime-ipc.md)
+[上一节点：通用 Node REPL](./02-node-repl-mcp-server.md) ·
+[返回总览](./README.md) ·
+[下一节点：Browser Client ↔ Host IPC](./04-transport-worker-and-runtime-ipc.md)
 
-源码是 `browser-runtime/src/browser-client.ts`，发行构建是插件内的
-`scripts/browser-client.mjs`。
+`browser-runtime/src/browser-client.ts` 构建为插件 `scripts/browser-client.mjs`。初始化只在
+新的 Node 会话执行一次，并把 `agent.browsers` 安装到当前全局对象。
 
-Agent 首次使用时执行：
+Browser Client 负责：
 
-```js
-if (globalThis.agent?.browsers == null) {
-  const { pathToFileURL } = require("node:url")
-  const { setupBrowserRuntime } = await import(
-    pathToFileURL("<absolute-plugin-root>/scripts/browser-client.mjs").href
-  )
-  await setupBrowserRuntime({ globals: globalThis })
-}
-```
+- Backend 发现和 `BrowserContext` / `BrowserTab` 易用 API；
+- 使用插件私有 Contract 做参数和结果的早期校验；
+- 根据 Host 广告的 capability 生成 API 与动态文档；
+- 将 `nodeRepl.requestMeta` 附加到 command；
+- 禁止 raw page JavaScript、selector click/fill adapter 和 CDP。
 
-这是 LLM 循环内的自主模块导入，不是 Node Server 写死的预加载步骤。
-
-## Transport
-
-没有显式 test transport 时，Browser Client 检查：
-
-```js
-nodeRepl.requestHost
-```
-
-每个 Runtime request 都转换为：
-
-```js
-await nodeRepl.requestHost("browser", request)
-```
-
-请求形态只有 `status`、`getInfo` 和 `command`。Browser Client 不知道 Agent IPC
-endpoint，也不持有 proof。
-
-第一次发出 host request 前，Browser Client 动态加载同目录
-`native-host-bootstrap.js`，确保插件自带的 Rust Host 已为当前用户注册。
-
-## API 与校验
-
-`getInfo` 返回 backend capability、API Manifest 和 Documentation Manifest。
-Browser Client 只暴露 backend 真正声明的命令，并在本地解析参数和结果。Agent 会再次
-执行权威校验。
-
-Raw page evaluation、selector click/fill adapter 和 full CDP 仍在 Browser Client
-本地直接拒绝。
+默认 transport 由 `browser-host-client.ts` 实现。测试仍可显式注入 transport，但生产
+路径不会调用 AnyboxAgent host service。

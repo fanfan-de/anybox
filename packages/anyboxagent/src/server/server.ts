@@ -11,7 +11,6 @@ import { PermissionsRoutes } from "#server/routes/permissions.ts"
 import { PtyRoutes } from "#server/routes/pty.ts"
 import { RemoteRoutes } from "#server/routes/remote.ts"
 import { WorkspaceFilesRoutes } from "#server/routes/workspace-files.ts"
-import { BrowserExtensionRoutes } from "#server/routes/browser-extension.ts"
 import { CinemaRoutes } from "#server/routes/cinema.ts"
 import { CinemaAssetLibraryRoutes } from "#server/routes/cinema-assets.ts"
 import { CinemaWebRoutes } from "#server/routes/cinema-web.ts"
@@ -29,10 +28,6 @@ import * as Log from "#util/log.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
 import { getServerBaseURL, setServerBaseURL } from "#server/base-url.ts"
 import { startAutomationScheduler } from "#automation/scheduler.ts"
-import {
-  startBrowserIpcGateway,
-  stopBrowserIpcGateway,
-} from "#browser-extension/ipc-gateway.ts"
 
 export interface ServerOptions {
   host?: string
@@ -100,13 +95,7 @@ export function createServerRuntime(options: Pick<ServerOptions, "corsWhitelist"
   })
 
   const apiCors = whitelist.length > 0 ? cors({ origin: whitelist }) : cors()
-  app.use("/api/*", async (c, next) => {
-    if (c.req.path.startsWith("/api/browser-extension/")) {
-      await next()
-      return
-    }
-    await apiCors(c, next)
-  })
+  app.use("/api/*", apiCors)
 
   app.use("*", async (c, next) => {
     const started = Date.now()
@@ -147,7 +136,6 @@ export function createServerRuntime(options: Pick<ServerOptions, "corsWhitelist"
   app.route("/api/permissions", PermissionsRoutes())
   app.route("/api/remote", RemoteRoutes())
   app.route("/api/workspace-files", WorkspaceFilesRoutes())
-  app.route("/api/browser-extension", BrowserExtensionRoutes())
   app.route("/api/pty", PtyRoutes({ registry: ptyRegistry, upgradeWebSocket }))
   app.route("/api/automation-events", AutomationEventRoutes())
   app.route("/api/automations", AutomationRoutes())
@@ -199,9 +187,6 @@ export function startServer(options: ServerOptions = {}) {
     corsWhitelist: options.corsWhitelist,
     ptyRegistry: options.ptyRegistry,
   })
-  void startBrowserIpcGateway().catch((error) => {
-    log.error("browser-ipc-start-failed", { error })
-  })
   activeServer = Bun.serve({
     hostname: host,
     port,
@@ -228,7 +213,4 @@ export function stopServer() {
     activeServer = undefined
     log.info("server-stopped")
   }
-  void stopBrowserIpcGateway().catch((error) => {
-    log.error("browser-ipc-stop-failed", { error })
-  })
 }

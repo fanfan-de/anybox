@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+
 import {
   ANYBOX_CHROME_EXTENSION_ID,
   BROWSER_EXTENSION_PROTOCOL_VERSION,

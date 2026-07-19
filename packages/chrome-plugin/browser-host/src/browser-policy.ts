@@ -5,7 +5,7 @@ import {
   type BrowserCommandSecurityClass,
   type BrowserContractCommandMethod as BrowserContractCommandMethodValue,
   type BrowserContractErrorCode,
-} from "@anybox/shared/browser-contract"
+} from "@anybox/chrome-shared/browser-contract"
 
 export type BrowserPolicyDecision = {
   method: BrowserContractCommandMethodValue

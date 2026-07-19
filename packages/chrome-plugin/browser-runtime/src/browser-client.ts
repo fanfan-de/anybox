@@ -7,7 +7,7 @@ import {
   createBrowserDocumentationManifest,
   parseBrowserCommandParams,
   parseBrowserCommandResult,
-} from "@anybox/shared/browser-contract"
+} from "@anybox/chrome-shared/browser-contract"
 import type {
   BrowserApiManifest,
   BrowserBackendCapabilities,
@@ -17,7 +17,7 @@ import type {
   BrowserContractCommandResult,
   BrowserContractErrorCode,
   BrowserDocumentationManifest,
-} from "@anybox/shared/browser-contract"
+} from "@anybox/chrome-shared/browser-contract"
 import type {
   BrowserExtensionAccessibilityTreeResult,
   BrowserExtensionClickResult,
@@ -33,12 +33,15 @@ import type {
   BrowserExtensionTabsReleaseResult,
   BrowserExtensionTypeResult,
   BrowserExtensionWaitForResult,
-} from "@anybox/shared/browser-extension"
+} from "@anybox/chrome-shared/browser-extension"
+import {
+  ensureBrowserHostRuntime,
+  requestBrowserHost,
+} from "./browser-host-client.ts"
 
 type BrowserCommandParams = Record<string, unknown>
 type PageFunction<TResult = unknown> = (...args: any[]) => TResult
 
-const BROWSER_HOST_SERVICE = "browser"
 const NATIVE_INSTALL_ENV = "ANYBOX_BROWSER_NATIVE_INSTALL"
 let nativeMessagingHostReady: Promise<void> | undefined
 
@@ -148,10 +151,11 @@ export interface BrowserRuntimeAgent extends Record<string, unknown> {
 export interface BrowserRuntimeGlobals extends Record<string, unknown> {
   agent?: BrowserRuntimeAgent | Record<string, unknown>
   nodeRepl?: {
-    requestHost?<TResult = unknown>(
-      service: string,
-      request: unknown,
-    ): Promise<TResult>
+    readonly requestMeta?: {
+      sessionID?: string
+      messageID?: string
+      toolCallID?: string
+    }
   }
   setupBrowserRuntime?: typeof setupBrowserRuntime
 }
@@ -187,32 +191,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
-function unavailableTransport<TResult>(): Promise<TResult> {
-  return Promise.reject(
-    new BrowserRuntimeError(
-      "BACKEND_UNAVAILABLE",
-      "Chrome browser runtime transport is not available.",
-      { retryable: true },
-    ),
-  )
-}
-
-function hostBrowserTransport(
+function pluginBrowserTransport(
   globals: BrowserRuntimeGlobals,
-): BrowserRuntimeTransport | undefined {
-  const nodeRepl = globals.nodeRepl
-  const requestHost = nodeRepl?.requestHost
-  if (typeof requestHost !== "function") return undefined
-
+): BrowserRuntimeTransport {
   return async <TResult = unknown>(
     request: BrowserRuntimeTransportRequest,
   ): Promise<TResult> => {
+    await ensureBrowserHostRuntime()
     await ensureNativeMessagingHost()
-    return requestHost.call(
-      nodeRepl,
-      BROWSER_HOST_SERVICE,
-      request,
-    ) as Promise<TResult>
+    if (request.type === "status") {
+      return requestBrowserHost<TResult>({ operation: "status" })
+    }
+    if (request.type === "getInfo") {
+      return requestBrowserHost<TResult>({
+        operation: "getInfo",
+        contractVersion: request.contractVersion,
+      })
+    }
+    return requestBrowserHost<TResult>({
+      operation: "command",
+      contractVersion: request.contractVersion,
+      method: request.method,
+      params: request.params,
+      ...(request.timeoutMs ? { timeoutMs: request.timeoutMs } : {}),
+      ...(globals.nodeRepl?.requestMeta
+        ? { context: globals.nodeRepl.requestMeta }
+        : {}),
+    })
   }
 }
 
@@ -804,8 +809,7 @@ export async function setupBrowserRuntime(
   const globals = options.globals
     ?? globalThis as unknown as BrowserRuntimeGlobals
   const transport = options.transport
-    ?? hostBrowserTransport(globals)
-    ?? unavailableTransport
+    ?? pluginBrowserTransport(globals)
   const agent = isRecord(globals.agent)
     ? globals.agent as BrowserRuntimeAgent
     : {} as BrowserRuntimeAgent

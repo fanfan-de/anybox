@@ -6,7 +6,7 @@
 
 ## 1. 这不是命令主传输链
 
-Content script 和 Popup 都不负责把 browser command 从 Agent 送到 Chrome：
+Content script 和 Popup 都不负责把 browser command 从 Browser Host 送到 Chrome：
 
 ```text
 主链：
@@ -155,8 +155,8 @@ Service Worker 的 `connectAnybox()` 如果已有 active transport 或正在 con
 | 观察 | 精确含义 |
 | --- | --- |
 | Popup `Connected` | Service Worker 已创建 Native Messaging Port，并写入 storage |
-| `chrome.status().connected === true` | Browser Client 经 MCP host service 看到已连接 Extension |
-| `chrome.status().connected === true` | Agent Bridge 有 compatible active Extension connection |
+| `chrome.status().connected === true` | Browser Client 经本机 IPC 看到已连接 Extension |
+| `chrome.status().connected === true` | Browser Host Bridge 有 compatible active Extension connection |
 
 只有第三项最接近“浏览器 backend 端到端可用”。即便为 true，下一条具体命令仍可能因
 tab 关闭、Chrome 页面限制、debugger 冲突或超时失败。
@@ -175,17 +175,17 @@ chrome.runtime.lastError.message
 - Host 退出；
 - Native Messaging 连接断开。
 
-它不包含完整 Agent `lastCommand`、Contract compatibility 或 Runtime connection 状态。
-深度诊断要看 `chrome.status()`、Agent Browser IPC/Extension Bridge 日志和 Host stderr。
+它不包含完整 Browser Host `lastCommand`、Contract compatibility 或 Runtime connection 状态。
+深度诊断要看 `chrome.status()`、Browser Host IPC/Extension Bridge 日志和 Native Host stderr。
 
 ## 9. 本节点的限制
 
 - Overlay 不是审计日志，只显示 2.5 秒；
 - 只在动作完成后通知，不在动作开始前；
-- Popup status 没有 Agent hello ack；
+- Popup status 没有 Browser Host hello ack；
 - Popup 不显示 Contract version/capabilities；
 - Popup 不显示正在执行的命令；
-- Reconnect 不会重启 Anybox Agent 或重新注册 Host；
+- Reconnect 不会重启 Browser Host 或重新注册 Native Host；
 - Content script 不参与 elementId 扫描；扫描由 Service Worker 的 scripting injection
   完成。
 

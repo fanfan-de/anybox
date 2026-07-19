@@ -1,11 +1,11 @@
-import type { BrowserExtensionCommandMethod } from "@anybox/shared/browser-extension"
+import type { BrowserExtensionCommandMethod } from "@anybox/chrome-shared/browser-extension"
 import {
   BrowserContractCommandMethod,
   BrowserContractValidationError,
   parseBrowserCommandParams,
   parseBrowserCommandResult,
   type BrowserContractCommandMethod as BrowserContractCommandMethodValue,
-} from "@anybox/shared/browser-contract"
+} from "@anybox/chrome-shared/browser-contract"
 
 const attachedTabs = new Set<number>()
 

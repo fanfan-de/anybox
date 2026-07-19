@@ -1,3 +1,4 @@
+// Browser IPC is implemented and versioned by the Chrome plugin.
 import { z } from "zod"
 import {
   ANYBOX_CHROME_EXTENSION_ID,

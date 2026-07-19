@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+
 import {
   BROWSER_CONTRACT_COMMAND_METHODS,
   BROWSER_CONTRACT_ERROR_CODES,

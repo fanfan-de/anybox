@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@anybox/shared": "workspace:*",
+    "@anybox/chrome-shared": "workspace:*",
     "zod": "^4.3.6"
   },
   "devDependencies": {

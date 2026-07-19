@@ -2,7 +2,7 @@ import {
   BrowserExtensionTabSummary,
   BrowserExtensionTabsListResult,
   type BrowserExtensionCommandContext,
-} from "@anybox/shared/browser-extension"
+} from "@anybox/chrome-shared/browser-extension"
 import {
   BROWSER_CONTRACT_VERSION,
   BrowserContractErrorCode,
@@ -11,17 +11,17 @@ import {
   parseBrowserCommandResult,
   type BrowserBackendInfo,
   type BrowserContractCommandMethod,
-} from "@anybox/shared/browser-contract"
-import type { BrowserIpcRuntimeCommandRequest } from "@anybox/shared/browser-ipc"
+} from "@anybox/chrome-shared/browser-contract"
+import type { BrowserIpcRuntimeCommandRequest } from "@anybox/chrome-shared/browser-ipc"
 import {
   browserExtensionBridge,
   type BrowserExtensionBridge,
-} from "#browser-extension/bridge.ts"
+} from "./bridge.ts"
 import {
   BrowserPolicyError,
   browserPolicyEngine,
   type BrowserPolicyEngine,
-} from "#browser-extension/browser-policy.ts"
+} from "./browser-policy.ts"
 
 export class BrowserCommandGatewayError extends Error {
   constructor(

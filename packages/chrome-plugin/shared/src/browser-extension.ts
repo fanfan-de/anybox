@@ -1,3 +1,4 @@
+// Chrome extension wire types are private to the Chrome plugin package.
 import { z } from "zod"
 
 export const BROWSER_EXTENSION_PROTOCOL_VERSION = 1 as const

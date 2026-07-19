@@ -6,8 +6,6 @@ import * as Connector from "../src/connector/connector"
 import { McpClient } from "../src/mcp/client"
 
 const temporaryRoots: string[] = []
-const originalBrowserRuntimeEndpoint = process.env.ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT
-const originalBrowserRuntimeProof = process.env.ANYBOX_BROWSER_IPC_RUNTIME_PROOF
 const originalNodeBinary = process.env.ANYBOX_NODE_BINARY
 const originalNodeRunAsNode = process.env.ANYBOX_NODE_RUN_AS_NODE
 
@@ -38,16 +36,6 @@ async function createClient() {
 }
 
 afterEach(async () => {
-  if (originalBrowserRuntimeEndpoint === undefined) {
-    delete process.env.ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT
-  } else {
-    process.env.ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT = originalBrowserRuntimeEndpoint
-  }
-  if (originalBrowserRuntimeProof === undefined) {
-    delete process.env.ANYBOX_BROWSER_IPC_RUNTIME_PROOF
-  } else {
-    process.env.ANYBOX_BROWSER_IPC_RUNTIME_PROOF = originalBrowserRuntimeProof
-  }
   if (originalNodeBinary === undefined) delete process.env.ANYBOX_NODE_BINARY
   else process.env.ANYBOX_NODE_BINARY = originalNodeBinary
   if (originalNodeRunAsNode === undefined) delete process.env.ANYBOX_NODE_RUN_AS_NODE
@@ -88,8 +76,9 @@ describe("built-in Node REPL connector", () => {
     if (runtime.transport !== "stdio") throw new Error("Expected stdio runtime.")
     const source = await readFile(runtime.args?.[0] ?? "", "utf8")
     expect(source).toContain("anybox-node-repl")
-    expect(source).toContain("requestHost")
-    expect(source).not.toMatch(/Chrome|browser-gateway|native-host|anybox\.browser-runtime|getCapability/)
+    expect(source).not.toMatch(
+      /Chrome|browser|native-host|requestHost|getCapability/,
+    )
   })
 
   test("uses Electron's Node mode in the managed desktop runtime", () => {
@@ -130,7 +119,7 @@ describe("built-in Node REPL connector", () => {
         processType: "undefined",
         agentType: "undefined",
         capabilityType: "undefined",
-        requestHostType: "function",
+        requestHostType: "undefined",
       })
 
       await client.callTool("js_reset", {})
@@ -143,20 +132,17 @@ describe("built-in Node REPL connector", () => {
     }
   })
 
-  test("routes registered host services with trusted call context and no Browser IPC secrets", async () => {
-    process.env.ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT = "must-not-reach-node"
-    process.env.ANYBOX_BROWSER_IPC_RUNTIME_PROOF = "must-not-reach-node"
+  test("exposes generic per-call metadata without a business host-service bridge", async () => {
     const client = await createClient()
     try {
       const result = await client.callTool(
         "js",
         {
-          code: `const realProcess = require("node:process")
+          code: `const pathModule = await import("node:path")
             return {
-              status: await nodeRepl.requestHost("browser", { type: "status" }),
               requestMeta: nodeRepl.requestMeta,
-              runtimeEndpoint: realProcess.env.ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT,
-              runtimeProof: realProcess.env.ANYBOX_BROWSER_IPC_RUNTIME_PROOF
+              requestHostType: typeof nodeRepl.requestHost,
+              importedModule: typeof pathModule.resolve
             }`,
         },
         undefined,
@@ -169,30 +155,19 @@ describe("built-in Node REPL connector", () => {
 
       expect(result.isError).toBe(false)
       expect(result.structuredContent?.result).toMatchObject({
-        status: {
-          connected: false,
-          transport: "anybox-host-service",
-        },
         requestMeta: {
           sessionID: "session-node-repl",
           messageID: "message-node-repl",
           toolCallID: "tool-node-repl",
         },
+        requestHostType: "undefined",
+        importedModule: "function",
       })
-      expect(
-        (result.structuredContent?.result as Record<string, unknown>).runtimeEndpoint,
-      ).toBeUndefined()
-      expect(
-        (result.structuredContent?.result as Record<string, unknown>).runtimeProof,
-      ).toBeUndefined()
 
-      const missing = await client.callTool("js", {
-        code: 'return await nodeRepl.requestHost("not-registered", {})',
+      const nextCall = await client.callTool("js", {
+        code: "return nodeRepl.requestMeta",
       })
-      expect(missing.isError).toBe(true)
-      expect(missing.structuredContent).toMatchObject({
-        code: "HOST_SERVICE_NOT_FOUND",
-      })
+      expect(nextCall.structuredContent?.result).toBeNull()
     } finally {
       await client.dispose()
     }

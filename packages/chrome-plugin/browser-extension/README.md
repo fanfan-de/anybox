@@ -16,20 +16,21 @@ Load the unpacked extension from:
 packages/chrome-plugin/browser-extension/dist
 ```
 
-Start Anybox Agent before loading or reconnecting the extension:
+Build the plugin-owned Browser Host before loading or reconnecting the extension:
 
 ```bash
-corepack pnpm --dir packages/anyboxagent run dev:server
+corepack pnpm --filter anybox-chrome-browser-host build
 ```
 
 The extension connects only through Chrome Native Messaging host
-`com.anybox.browser`. Start Anybox Agent before loading or reconnecting the
-extension so the managed plugin runtime can install the host configuration and
-its short-lived transport credential.
+`com.anybox.browser`. Import and initialize the plugin Browser Client from the
+general-purpose Node REPL before reconnecting the extension; the Browser Client
+starts the plugin-owned Browser Host, installs the Native Host configuration,
+and provisions its short-lived transport credential.
 
-Browser-extension status and command endpoints are authenticated internal
-interfaces. They are accessed by the managed Chrome plugin runtime rather than
-directly from extension pages or browser-origin HTTP requests.
+Browser-extension status and commands use authenticated local IPC owned by the
+Chrome plugin. They are not AnyboxAgent HTTP routes and are not exposed directly
+to extension pages or browser-origin HTTP requests.
 
 ## MVP Commands
 

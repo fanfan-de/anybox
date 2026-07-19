@@ -8,7 +8,7 @@ import {
   type BrowserExtensionCommandContext,
   type BrowserExtensionCommandMethod as BrowserExtensionCommandMethodValue,
   type BrowserExtensionTabSummary,
-} from "@anybox/shared/browser-extension"
+} from "@anybox/chrome-shared/browser-extension"
 import {
   BROWSER_CONTRACT_COMMAND_METHODS,
   BROWSER_CONTRACT_VERSION,
@@ -16,8 +16,8 @@ import {
   createBrowserBackendInfo,
   createBrowserGetInfoResult,
   type BrowserContractCommandMethod as BrowserContractCommandMethodValue,
-} from "@anybox/shared/browser-contract"
-import * as Log from "#util/log.ts"
+} from "@anybox/chrome-shared/browser-contract"
+import * as Log from "./log.ts"
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 15_000
 

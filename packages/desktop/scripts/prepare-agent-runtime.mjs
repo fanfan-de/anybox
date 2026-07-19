@@ -225,10 +225,6 @@ async function main() {
   await fsp.copyFile(bunBinary, path.join(runtimeDir, bunExecutableName))
   await fsp.chmod(path.join(runtimeDir, bunExecutableName), 0o755).catch(() => {})
   await fsp.copyFile(path.join(agentDir, "src", "pty", "node-pty-worker.mjs"), path.join(runtimeDir, "node-pty-worker.mjs"))
-  await fsp.copyFile(
-    path.join(agentDir, "src", "browser-extension", "ipc-listener-sidecar.mjs"),
-    path.join(runtimeDir, "ipc-listener-sidecar.mjs"),
-  )
   await copyNodePtyRuntime(runtimeNodeModulesDir)
   await fixNodePtySpawnHelperPermissions(runtimeNodeModulesDir)
   await copyCinemaProviderManifests()

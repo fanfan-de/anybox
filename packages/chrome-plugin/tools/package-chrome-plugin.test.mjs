@@ -84,13 +84,25 @@ async function createFixture(projectRoot) {
     [
       "// disabled until Anybox can enforce command-level capability",
       "export function setupBrowserRuntime() {}",
-      "nodeRepl.requestHost('browser', {})",
+      "new URL('./browser-host.mjs', import.meta.url)",
       "new URL('./native-host-bootstrap.js', import.meta.url)",
       "const contractVersion = 1",
       "const capabilities = { arbitraryJavaScript: false, fullCdp: false }",
       "const unavailable = 'CAPABILITY_UNAVAILABLE'",
       "",
     ].join("\n"),
+  )
+  await write(projectRoot, path.join("browser-host", "package.json"), "{}\n")
+  await write(projectRoot, path.join("browser-host", "src", "main.ts"))
+  await write(
+    projectRoot,
+    path.join("browser-host", "dist", "browser-host.mjs"),
+    "const boundary = 'Browser Host runtime.request'\n",
+  )
+  await write(
+    projectRoot,
+    path.join("browser-host", "dist", "ipc-listener-sidecar.mjs"),
+    "const sidecar = true\n",
   )
   await write(projectRoot, path.join("browser-extension", "package.json"), "{}\n")
   await write(projectRoot, path.join("browser-extension", "src", "background.ts"))
@@ -167,8 +179,10 @@ test("synchronizes only installable Chrome files into the distribution directory
       nativeHostBuildTarget().packagePath.split(path.sep).join("/"),
       "LICENSE",
       "scripts/browser-client.mjs",
+      "scripts/browser-host.mjs",
       "scripts/extension-id.json",
       "scripts/installManifest.mjs",
+      "scripts/ipc-listener-sidecar.mjs",
       "scripts/native-host-bootstrap.js",
       "skills/chrome/SKILL.md",
     ])
@@ -256,7 +270,7 @@ test("rejects Browser Client output that restores the old capability boundary", 
     )
     await assert.rejects(
       validateChromePluginPackage(pluginRoot),
-      /host-service Browser Client, and Native Host boundaries are inconsistent/,
+      /Browser Client, plugin-owned Browser Host, and Native Host boundaries are inconsistent/,
     )
   })
 })

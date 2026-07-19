@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test"
 import {
   ANYBOX_CHROME_EXTENSION_ID,
   BROWSER_EXTENSION_PROTOCOL_VERSION,
-} from "@anybox/shared/browser-extension"
-import { BROWSER_CONTRACT_VERSION } from "@anybox/shared/browser-contract"
-import { BrowserExtensionBridge } from "#browser-extension/bridge.ts"
+} from "@anybox/chrome-shared/browser-extension"
+import { BROWSER_CONTRACT_VERSION } from "@anybox/chrome-shared/browser-contract"
+import { BrowserExtensionBridge } from "../src/bridge.ts"
 
 type SentCommand = {
   type: "command"

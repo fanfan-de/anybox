@@ -60,6 +60,8 @@ const requiredPackageFiles = [
   path.join("browser-extension", "popup.js"),
   currentNativeHostTarget.packagePath,
   path.join("scripts", "browser-client.mjs"),
+  path.join("scripts", "browser-host.mjs"),
+  path.join("scripts", "ipc-listener-sidecar.mjs"),
   path.join("scripts", "extension-id.json"),
   path.join("scripts", "installManifest.mjs"),
   path.join("scripts", "native-host-bootstrap.js"),
@@ -216,6 +218,23 @@ async function copyBrowserRuntimeBuild(projectRoot, packageRoot) {
     browserClientPath,
     path.join(packageRoot, "scripts", "browser-client.mjs"),
   )
+}
+
+async function copyBrowserHostBuild(projectRoot, packageRoot) {
+  const browserHostRoot = path.join(
+    projectRoot,
+    "browser-host",
+    "dist",
+  )
+  for (const filename of ["browser-host.mjs", "ipc-listener-sidecar.mjs"]) {
+    const source = path.join(browserHostRoot, filename)
+    if (!(await pathExists(source))) {
+      throw new Error(
+        `Chrome Browser Host build output is missing at ${source}. Run the Browser Host build first.`,
+      )
+    }
+    await copyFile(source, path.join(packageRoot, "scripts", filename))
+  }
 }
 
 async function copyNativeHostBuild(projectRoot, packageRoot) {
@@ -384,6 +403,10 @@ export async function validateChromePluginPackage(packageRoot) {
       path.join(packageRoot, "scripts", "browser-client.mjs"),
       "utf8",
     )
+    const browserHost = await fsp.readFile(
+      path.join(packageRoot, "scripts", "browser-host.mjs"),
+      "utf8",
+    )
     const nativeHostBootstrap = await fsp.readFile(
       path.join(packageRoot, "scripts", "native-host-bootstrap.js"),
       "utf8",
@@ -395,18 +418,21 @@ export async function validateChromePluginPackage(packageRoot) {
       || !/connector_node_repl_default/.test(skill)
       || !/disabled until Anybox can enforce command-level capability/i.test(browserRuntime)
       || !/\bsetupBrowserRuntime\b/.test(browserRuntime)
-      || !/\brequestHost\b/.test(browserRuntime)
+      || /\brequestHost\b/.test(browserRuntime)
+      || !/\bbrowser-host\.mjs\b/.test(browserRuntime)
       || !/\bnative-host-bootstrap\.js\b/.test(browserRuntime)
       || !/\bcontractVersion\b/.test(browserRuntime)
       || !/\barbitraryJavaScript\b/.test(browserRuntime)
       || !/\bfullCdp\b/.test(browserRuntime)
       || !/\bCAPABILITY_UNAVAILABLE\b/.test(browserRuntime)
+      || !/\bBrowser Host\b/.test(browserHost)
+      || !/\bruntime\.request\b/.test(browserHost)
       || !/\bensureNativeMessagingHost\b/.test(nativeHostBootstrap)
       || /\banybox\.browser-runtime\b/.test(browserRuntime)
       || /\bgetCapability\b/.test(browserRuntime)
     ) {
       throw new Error(
-        "Chrome manifest, Skill, host-service Browser Client, and Native Host boundaries are inconsistent.",
+        "Chrome manifest, Skill, Browser Client, plugin-owned Browser Host, and Native Host boundaries are inconsistent.",
       )
     }
   }
@@ -437,6 +463,7 @@ export async function stageChromePluginPackage({ projectRoot, packageRoot }) {
   const runtimeSourceRoot = path.join(projectRoot, "runtime")
   const manifestPath = path.join(runtimeSourceRoot, ".anybox-plugin", "plugin.json")
   const browserRuntimeProjectPath = path.join(projectRoot, "browser-runtime", "package.json")
+  const browserHostProjectPath = path.join(projectRoot, "browser-host", "package.json")
   const extensionProjectPath = path.join(projectRoot, "browser-extension", "package.json")
   const nativeHostProjectPath = path.join(projectRoot, "browser-native-host", "package.json")
   const licensePath = path.join(projectRoot, "LICENSE")
@@ -444,6 +471,7 @@ export async function stageChromePluginPackage({ projectRoot, packageRoot }) {
   for (const requiredSource of [
     manifestPath,
     browserRuntimeProjectPath,
+    browserHostProjectPath,
     extensionProjectPath,
     nativeHostProjectPath,
     licensePath,
@@ -469,6 +497,7 @@ export async function stageChromePluginPackage({ projectRoot, packageRoot }) {
   await fsp.mkdir(packageRoot, { recursive: true })
   await copyDirectoryContents(runtimeSourceRoot, packageRoot)
   await copyBrowserRuntimeBuild(projectRoot, packageRoot)
+  await copyBrowserHostBuild(projectRoot, packageRoot)
   await copyNativeHostBuild(projectRoot, packageRoot)
   await copyFile(licensePath, path.join(packageRoot, "LICENSE"))
   await copyChromeExtensionBuild(projectRoot, packageRoot)
@@ -608,6 +637,10 @@ export function buildBrowserRuntime() {
   runPnpm(["--filter", "anybox-chrome-browser-runtime", "build"])
 }
 
+export function buildBrowserHost() {
+  runPnpm(["--filter", "anybox-chrome-browser-host", "build"])
+}
+
 export function buildNativeHost() {
   runPnpm(["--filter", "anybox-chrome-native-host", "build"])
 }
@@ -635,13 +668,13 @@ function parseArgs(argv) {
 
 function printHelp() {
   process.stdout.write([
-    "Build the browser runtime, Chrome extension, and Rust Native Messaging Host, then synchronize the tracked Anybox Chrome plugin directory.",
+    "Build the Browser Client, plugin-owned Browser Host, Chrome extension, and Rust Native Messaging Host, then synchronize the tracked Anybox Chrome plugin directory.",
     "",
     "Usage:",
     "  node tools/package-chrome-plugin.mjs [options]",
     "",
     "Options:",
-    "  --skip-build  Reuse the current browser-runtime, browser-extension, and native-host outputs.",
+    "  --skip-build  Reuse the current Browser Client, Browser Host, extension, and Native Host outputs.",
     "  --check       Verify the tracked plugin directory without modifying it.",
     "  -h, --help    Show this help.",
     "",
@@ -656,6 +689,7 @@ async function main() {
   }
 
   if (options.build) {
+    buildBrowserHost()
     buildBrowserRuntime()
     buildChromeExtension()
     buildNativeHost()

@@ -10,7 +10,7 @@
 
 [`browser-extension/src/background/commands.ts`](../../browser-extension/src/background/commands.ts)
 
-这个节点接收经过 Agent 验证的 command，但仍不盲目信任上游：
+这个节点接收经过 Browser Host 验证的 command，但仍不盲目信任上游：
 
 ```text
 解析 Contract method
@@ -19,7 +19,7 @@
   → 再次 parse result
 ```
 
-然后 Service Worker 才把 result 送回 Agent。
+然后 Service Worker 才把 result 送回 Browser Host。
 
 ## 2. 命令与 Chrome API 映射
 
@@ -398,7 +398,7 @@ arbitrary page JavaScript and raw CDP are not extension capabilities
 - 另一个 debugger/DevTools attachment 可能冲突；
 - 页面导航、frame 生命周期或 CSP/浏览器规则可能让动作失败。
 
-Extension 不会绕过 Chrome 的平台限制。错误沿 result → Bridge → Agent Gateway 返回。
+Extension 不会绕过 Chrome 的平台限制。错误沿 result → Bridge → Browser Host Gateway 返回。
 
 ## 19. 当前隐私边界总结
 
@@ -420,6 +420,5 @@ Extension 不会绕过 Chrome 的平台限制。错误沿 result → Bridge → 
 - `<all_urls>` 和 tabs 列表意味着 backend 能看到用户所有普通 Chrome tabs；
 - ownership 和逐动作 approval 当前未强制。
 
-本节点执行完成后，result 沿 Service Worker → Rust Host → Agent Bridge → Command
+本节点执行完成后，result 沿 Service Worker → Rust Host → Browser Host Bridge → Command
 Gateway → Runtime → Node REPL 原路返回。
-

@@ -1,3 +1,4 @@
+// This contract belongs to the Chrome plugin and is not part of the Agent core.
 import { z } from "zod"
 import {
   BrowserExtensionAccessibilityTreeResult,

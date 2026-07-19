@@ -23,14 +23,14 @@ function renderStatus(status: Status | null | undefined) {
   if (statusDetail) {
     const transportDetail = status?.transport === "native"
       ? `Native Messaging (${status.hostName ?? "host"})`
-      : "Anybox Agent"
+      : "Anybox Browser Host"
     statusDetail.textContent = status?.error
       ? status.error
       : state === "connected"
         ? `${transportDetail} can use this Chrome profile.`
         : state === "connecting"
           ? `Connecting via ${transportDetail}...`
-          : "Start Anybox Agent, then reconnect."
+          : "Start Chrome control in Anybox, then reconnect."
   }
   if (statusDot) {
     statusDot.title = state

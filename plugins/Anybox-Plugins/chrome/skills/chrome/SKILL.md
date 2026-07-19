@@ -21,11 +21,13 @@ The `js_reset` tool only clears persistent JavaScript state. The `js_add_node_mo
 
 Keep setup details internal. Unless the user asks about implementation, describe progress naturally as connecting to Chrome, inspecting the page, or retrying the connection.
 
-The Browser Client sends only operations advertised by the negotiated Browser Contract through a controlled Anybox host-service bridge. The client performs an early schema and capability check, and the Anybox Agent authoritatively validates every command again before it can reach Chrome. Do not call `nodeRepl.requestHost(...)` directly.
+The Browser Client sends only operations advertised by the negotiated Browser Contract to the plugin-owned Browser Host over authenticated local IPC. The client performs an early schema and capability check, and the Browser Host authoritatively validates every command again before it can reach Chrome. The general-purpose Node environment does not provide a browser host-service API; do not call or expect `nodeRepl.requestHost(...)`.
 
 ## Bootstrap once
 
 The Node REPL is a general Anybox environment. It preloads `nodeRepl`, but it does not preload `browser-client`, `setupBrowserRuntime`, `agent`, or Chrome-specific capabilities.
+
+Importing and initializing the Browser Client starts or reconnects the Browser Host from this same plugin package as needed. Keep that lifecycle internal unless the user explicitly asks about implementation.
 
 The absolute path shown when this Skill is loaded ends in `skills/chrome/SKILL.md`. Resolve this plugin's package root by moving two directories up from that Skill directory. The bundled Browser Client is `scripts/browser-client.mjs` under that package root. Import exactly that file through an absolute file URL. Never import an external or built-in `browser-client` package. If the bundled file is missing, stop and report that the Chrome plugin package is incomplete.
 

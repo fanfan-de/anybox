@@ -17,13 +17,13 @@ Host stdin  ← Extension 发来的 Native Messaging frame
 Host stdout → 发给 Extension 的 Native Messaging frame
 ```
 
-Host 同时主动连接 Agent 的 `native-host` IPC endpoint。
+Host 同时主动连接插件 Browser Host 的 `native-host` IPC endpoint。
 
 它的核心职责：
 
 ```text
 读取持久 runtime config 和短期 bootstrap
-  → 认证到 Agent native-host endpoint
+  → 认证到 Browser Host native-host endpoint
   → Chrome Native Messaging framing ↔ Browser IPC framing
   → 透明转发 JSON
 ```
@@ -40,10 +40,10 @@ Host 同时主动连接 Agent 的 `native-host` IPC endpoint。
 4. 校验 role、endpoint、broker、proof 非空和 expiresAt；
 5. 连接本机 endpoint；
 6. 完成 challenge/HMAC/ready；
-7. 认证成功后才开始读取 Chrome stdin 和 Agent IPC 的业务消息。
+7. 认证成功后才开始读取 Chrome stdin 和 Browser Host IPC 的业务消息。
 
 所以 Extension 很早调用 `port.postMessage(hello)` 时，Chrome/管道可以暂存数据，但 Host
-不会在 Agent 认证前把它转发。
+不会在 Browser Host 认证前把它转发。
 
 ## 3. runtime config 查找顺序
 
@@ -82,11 +82,11 @@ bootstrap：
 - broker ID 和 proof 非空；
 - `expiresAt` 未过期。
 
-Host 自己不会删除 bootstrap 文件；Agent 在认证成功后消费并删除。
+Host 自己不会删除 bootstrap 文件；Browser Host 在认证成功后消费并删除。
 
 ## 5. Native Host IPC 认证
 
-Host 连接 endpoint 后读取 Agent challenge：
+Host 连接 endpoint 后读取 Browser Host challenge：
 
 ```json
 {
@@ -124,7 +124,7 @@ nativeHostName = com.anybox.browser
 extensionID    = hjbejdmgpifdjjlpgmdfmbmbhkedgnjc
 ```
 
-只有 Agent 返回匹配的：
+只有 Browser Host 返回匹配的：
 
 ```json
 {
@@ -165,7 +165,7 @@ Host 的通用 `read_length_prefixed/write_length_prefixed` 会检查：
 
 Chrome 侧消息即使小于 64 MiB，包进 Browser IPC 后仍受 16 MiB 上限约束。
 
-## 7. Chrome → Agent
+## 7. Chrome → Browser Host
 
 Host 的 Chrome reader thread：
 
@@ -182,19 +182,19 @@ Host 的 Chrome reader thread：
 }
 ```
 
-4. 用 Browser IPC framing 写到 Agent。
+4. 用 Browser IPC framing 写到 Browser Host。
 
 Extension 的 `hello`、`result`、`event`、`pong` 都走这条方向。
 
-## 8. Agent → Chrome
+## 8. Browser Host → Chrome
 
-Agent reader thread从 IPC 读取 JSON。主循环处理：
+Browser Host reader thread 从 IPC 读取 JSON。主循环处理：
 
 ### `native.message`
 
 取内部 `message`，序列化为 JSON bytes，用 Chrome Native Messaging framing 写 stdout。
 
-Agent 的 `command`、`ping` 都被 Gateway/Bridge 包在 `native.message` 中。
+Browser Host 的 `command`、`ping` 都被 Gateway/Bridge 包在 `native.message` 中。
 
 ### `ping`
 
@@ -202,7 +202,7 @@ Agent 的 `command`、`ping` 都被 Gateway/Bridge 包在 `native.message` 中�
 
 ### `error`
 
-把 Agent code/message 转为 Host 错误并退出。
+把 Browser Host code/message 转为 Native Host 错误并退出。
 
 其他类型会被视为 unsupported，避免 Host 被当作通用 IPC client。
 
@@ -211,7 +211,7 @@ Agent 的 `command`、`ping` 都被 Gateway/Bridge 包在 `native.message` 中�
 Host 要同时等待：
 
 - Chrome stdin；
-- Agent local socket。
+- Browser Host local socket。
 
 它分别启动两个线程，把输入汇合到 Rust `mpsc` channel；主线程串行处理并负责写：
 
@@ -247,7 +247,7 @@ Host不理解：
 - URL、页面内容和截图；
 - per-action permission。
 
-即便 Host 收到一个结构上是 JSON、业务上恶意的 `command`，它也会透明转发；Agent
+即便 Host 收到一个结构上是 JSON、业务上恶意的 `command`，它也会透明转发；Browser Host
 Bridge 与 Extension schema 才负责业务验证。
 
 ## 11. 安全边界
@@ -263,14 +263,13 @@ Host 增加的保护：
 
 当前缺口：
 
-- Agent Gateway 没有验证 Host 对端 PID/签名；
-- Host 也没有对 Agent executable 做签名级验证；
+- Browser Host Gateway 没有验证 Native Host 对端 PID/签名；
+- Native Host 也没有对 Browser Host executable 做签名级验证；
 - bootstrap 在被 Host 读取到认证完成之间仍存在本机同用户进程可读取风险，主要依赖
   current-user ACL、短 TTL 和一次性消费降低风险。
 
 ## 12. 本节点的输出
 
-认证完成后，Host 对 Extension 看起来就是一个 Native Messaging Port；对 Agent 看起来
+认证完成后，Native Host 对 Extension 看起来就是一个 Native Messaging Port；对 Browser Host 看起来
 就是一个已认证 `native-host` IPC client。下一节点是 Extension MV3 Service Worker，
 它在这个 Port 上发送应用层 hello 并接收 command。
-

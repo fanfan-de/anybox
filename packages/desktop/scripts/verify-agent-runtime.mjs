@@ -113,7 +113,6 @@ async function verifyBetaMediaRuntime(mediaToolsDir) {
 
 const requiredFiles = [
   path.join(runtimeDir, "agent-server.js"),
-  path.join(runtimeDir, "ipc-listener-sidecar.mjs"),
   path.join(runtimeDir, "node-pty-worker.mjs"),
   ...bundledCinemaProviderManifests,
   path.join(runtimeDir, "cinema-web", "index.html"),
@@ -137,6 +136,7 @@ if (missing.length > 0) {
 }
 
 const pluginOwnedRuntimeFiles = [
+  path.join(runtimeDir, "ipc-listener-sidecar.mjs"),
   path.join(runtimeDir, "connectors", "browser", "server.js"),
   path.join(runtimeDir, "connectors", "browser-runtime", "client.mjs"),
 ]

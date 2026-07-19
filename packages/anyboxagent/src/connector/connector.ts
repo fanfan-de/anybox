@@ -575,7 +575,7 @@ function builtinDefinitions(): ConnectorDefinition[] {
       permissions: [
         "Runs JavaScript requested by the agent in a persistent local process.",
         "JavaScript can load local modules and access the local filesystem and network.",
-        "Allows installed Anybox modules to call explicitly registered host services through an authenticated request bridge.",
+        "Imported modules run with ordinary Node.js capabilities; this runtime does not add domain-specific host services.",
       ],
       tools: [
         {
@@ -624,7 +624,7 @@ function builtinDefinitions(): ConnectorDefinition[] {
       installReview: [
         "This runtime belongs to Anybox rather than to a specific plugin.",
         "Its working directory is the active project, not an installed plugin package.",
-        "Browser behavior is supplied by the Chrome plugin after the agent imports that plugin's Browser Client.",
+        "Plugins can expose capabilities by having the agent import their own modules at runtime.",
       ],
       source: "platform",
       available: nodeReplRuntimeAvailable,

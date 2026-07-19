@@ -6,11 +6,11 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json && node ./build.mjs",
-    "test": "tsc --noEmit -p tsconfig.json && node ./build.mjs && node --test ./Test/*.test.mjs",
+    "test": "corepack pnpm --filter anybox-chrome-browser-host build && tsc --noEmit -p tsconfig.json && node ./build.mjs && node --test ./Test/*.test.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
-    "@anybox/shared": "workspace:*",
+    "@anybox/chrome-shared": "workspace:*",
     "@types/node": "^25.5.0",
     "esbuild": "^0.27.2",
     "typescript": "^5.9.3"

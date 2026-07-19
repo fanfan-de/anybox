@@ -67,9 +67,9 @@ enum BridgeInput {
     ChromeMessage(Vec<u8>),
     ChromeEnd,
     ChromeError(String),
-    AgentMessage(Value),
-    AgentEnd,
-    AgentError(String),
+    BrowserHostMessage(Value),
+    BrowserHostEnd,
+    BrowserHostError(String),
 }
 
 fn main() {
@@ -90,7 +90,7 @@ fn run() -> Result<(), String> {
     })?;
     authenticate(&mut stream, &bootstrap)?;
 
-    let mut agent_reader = stream
+    let mut browser_host_reader = stream
         .try_clone()
         .map_err(|error| format!("failed to clone the Browser IPC stream: {error}"))?;
     let (input_tx, input_rx) = mpsc::channel();
@@ -120,18 +120,21 @@ fn run() -> Result<(), String> {
 
     thread::spawn(move || {
         loop {
-            match read_ipc_json(&mut agent_reader) {
+            match read_ipc_json(&mut browser_host_reader) {
                 Ok(Some(message)) => {
-                    if input_tx.send(BridgeInput::AgentMessage(message)).is_err() {
+                    if input_tx
+                        .send(BridgeInput::BrowserHostMessage(message))
+                        .is_err()
+                    {
                         return;
                     }
                 }
                 Ok(None) => {
-                    let _ = input_tx.send(BridgeInput::AgentEnd);
+                    let _ = input_tx.send(BridgeInput::BrowserHostEnd);
                     return;
                 }
                 Err(error) => {
-                    let _ = input_tx.send(BridgeInput::AgentError(error.to_string()));
+                    let _ = input_tx.send(BridgeInput::BrowserHostError(error.to_string()));
                     return;
                 }
             }
@@ -161,11 +164,11 @@ fn run() -> Result<(), String> {
                     "failed to read a Chrome Native Messaging frame: {error}"
                 ));
             }
-            BridgeInput::AgentMessage(message) => {
-                handle_agent_message(&mut stream, &mut output, message)?;
+            BridgeInput::BrowserHostMessage(message) => {
+                handle_browser_host_message(&mut stream, &mut output, message)?;
             }
-            BridgeInput::AgentEnd => return Ok(()),
-            BridgeInput::AgentError(error) => {
+            BridgeInput::BrowserHostEnd => return Ok(()),
+            BridgeInput::BrowserHostError(error) => {
                 return Err(format!("Anybox Browser IPC connection failed: {error}"));
             }
         }
@@ -174,7 +177,7 @@ fn run() -> Result<(), String> {
     Ok(())
 }
 
-fn handle_agent_message(
+fn handle_browser_host_message(
     stream: &mut LocalSocketStream,
     output: &mut impl Write,
     message: Value,
@@ -189,9 +192,9 @@ fn handle_agent_message(
                 "Anybox Browser IPC native.message is missing its payload".to_string()
             })?;
             let payload = serde_json::to_vec(nested)
-                .map_err(|error| format!("failed to encode an Anybox Agent message: {error}"))?;
+                .map_err(|error| format!("failed to encode a Browser Host message: {error}"))?;
             write_native_message(output, &payload)
-                .map_err(|error| format!("failed to forward an Anybox Agent message: {error}"))
+                .map_err(|error| format!("failed to forward a Browser Host message: {error}"))
         }
         "ping" => {
             let nonce = message

@@ -11,11 +11,8 @@ import * as Config from "#config/config.ts"
 import * as Connector from "#connector/connector.ts"
 import * as Sqlite from "#database/Sqlite.ts"
 import * as Plugin from "#plugin/plugin.ts"
-import { stopBrowserIpcGateway } from "#browser-extension/ipc-gateway.ts"
 import { createServerApp } from "#server/server.ts"
 import * as Skill from "#skill/skill.ts"
-
-const originalBrowserNativeInstall = process.env.ANYBOX_BROWSER_NATIVE_INSTALL
 
 interface JsonEnvelope<T> {
   success: boolean
@@ -1074,7 +1071,7 @@ async function writeChromePluginPackage() {
   if (!activeRoot) throw new Error("Temp root has not been initialized.")
 
   const packageSourceRoot = pluginInstallRoot()
-  const packageRoot = join(packageSourceRoot, "chrome", "0.8.0")
+  const packageRoot = join(packageSourceRoot, "chrome", "0.9.0")
   const chromePluginRoot = join(
     import.meta.dir,
     "..",
@@ -1212,12 +1209,6 @@ async function writeVersionedPluginPackage() {
 }
 
 afterEach(async () => {
-  await stopBrowserIpcGateway()
-  if (originalBrowserNativeInstall === undefined) {
-    delete process.env.ANYBOX_BROWSER_NATIVE_INSTALL
-  } else {
-    process.env.ANYBOX_BROWSER_NATIVE_INSTALL = originalBrowserNativeInstall
-  }
   await Auth.clearProvider("plugin-app:manifest-lab:docs")
   await Auth.clearProvider("plugin-app:oauth-lab:mail")
   await Auth.clearProvider("plugin-connector:manifest-lab:docs")
@@ -3552,8 +3543,8 @@ describe("plugin marketplace API", () => {
     await Plugin.reconcileInstalledRuntimeBindings()
 
     const migrated = Plugin.getInstalled("chrome")
-    expect(migrated?.version).toBe("0.8.0")
-    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "chrome", "0.8.0"))
+    expect(migrated?.version).toBe("0.9.0")
+    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "chrome", "0.9.0"))
     expect(migrated?.mcpServerIDs).toEqual([])
     expect(migrated?.connectorRequirementIDs).toEqual([
       "connector:node-repl:default",
@@ -3571,7 +3562,6 @@ describe("plugin marketplace API", () => {
   })
 
   test("loads Chrome through the Anybox-owned Node REPL connector", async () => {
-    process.env.ANYBOX_BROWSER_NATIVE_INSTALL = "off"
     await useTempDatabase()
     const legacyBrowserServerID = "connector.browser.default"
     const legacyNodeReplServerID = "connector.node-repl.default"
@@ -3626,13 +3616,13 @@ describe("plugin marketplace API", () => {
         tools: ["js", "js_reset", "js_add_node_module_dir"],
         permissions: [
           "Reads and controls Chrome tabs through the Anybox Chrome extension, including navigation, page inspection, screenshots, clicks, scrolling, typing, and form filling.",
-          "Uses a versioned Browser Contract and backend capabilities; the Anybox Agent revalidates every browser command before forwarding it.",
-          "Raw page JavaScript, selector-driven click/fill adapters, and Chrome DevTools Protocol commands are disabled at both the Browser Contract and Anybox Agent command boundaries; bounded selector waits remain available.",
+          "Uses a versioned Browser Contract and backend capabilities; the plugin-owned Browser Host revalidates every browser command before forwarding it.",
+          "Raw page JavaScript, selector-driven click/fill adapters, and Chrome DevTools Protocol commands are disabled at both the Browser Client and plugin-owned Browser Host boundaries; bounded selector waits remain available.",
           "Registers and runs the plugin-bundled Native Messaging Host for the current user.",
           "Requires the Anybox Chrome extension to be installed, enabled, and connected.",
         ],
         required: true,
-        reason: "The agent imports this plugin's Browser Client into Anybox's persistent general-purpose Node REPL.",
+        reason: "The agent imports this plugin's Browser Client into Anybox's persistent general-purpose Node REPL; all Chrome-specific runtime behavior remains inside the plugin.",
       },
     ])
     expect(plugin?.icon).toBe("./assets/chrome.svg")

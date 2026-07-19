@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto"
 import { type Stream } from "node:stream"
 import { pathToFileURL } from "node:url"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
@@ -6,46 +5,13 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
 import type { ReadResourceResult, Resource, ResourceTemplate } from "@modelcontextprotocol/sdk/types.js"
-import { z } from "zod"
 import type { McpServerSummary } from "#config/config.ts"
 import type { ResolvedConnectorRuntime } from "#connector/connector.ts"
-import {
-  runMcpHostService,
-  type McpHostRequestContext,
-} from "#mcp/host-service.ts"
 import * as Log from "#util/log.ts"
 
 const log = Log.create({ service: "mcp.client" })
 const NODE_REPL_SERVER_ID = "connector.node-repl.default"
 const NODE_REPL_CONNECTOR_ID = "connector:node-repl:default"
-const HOST_REQUEST_METHOD = "anybox/node-repl/host-request"
-const HOST_REQUEST_TOKEN_META_KEY = "anybox/hostRequestToken"
-const BROWSER_SECRET_ENV_KEYS = new Set([
-  "ANYBOX_BROWSER_TRANSPORT_TOKEN",
-  "ANYBOX_BROWSER_TRUSTED_TOKEN",
-  "ANYBOX_BROWSER_IPC_BOOTSTRAP_PATH",
-  "ANYBOX_BROWSER_IPC_BROKER_INSTANCE_ID",
-  "ANYBOX_BROWSER_IPC_NATIVE_ENDPOINT",
-  "ANYBOX_BROWSER_IPC_PROTOCOL_VERSION",
-  "ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT",
-  "ANYBOX_BROWSER_IPC_RUNTIME_PROOF",
-  "ANYBOX_BROWSER_IPC_TRANSPORT",
-])
-const McpHostRequestSchema = z
-  .object({
-    method: z.literal(HOST_REQUEST_METHOD),
-    params: z
-      .object({
-        service: z.string().min(1),
-        request: z.unknown(),
-        token: z.string().min(1),
-      })
-      .strict(),
-  })
-
-function isBrowserSecretEnvKey(key: string) {
-  return BROWSER_SECRET_ENV_KEYS.has(key.toUpperCase())
-}
 
 export interface McpToolDefinition {
   name: string
@@ -81,7 +47,11 @@ export interface McpClientOptions {
   worktree: string
 }
 
-export interface McpToolRequestContext extends McpHostRequestContext {}
+export interface McpToolRequestContext {
+  sessionID?: string
+  messageID?: string
+  toolCallID?: string
+}
 
 function getToolDisplayName(tool: McpToolDefinition) {
   return tool.title || tool.annotations?.title || tool.name
@@ -91,16 +61,13 @@ function mergeProcessEnv(overrides?: Record<string, string>) {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] =>
-        typeof entry[1] === "string" && !isBrowserSecretEnvKey(entry[0]),
+        typeof entry[1] === "string",
     ),
-  )
-  const safeOverrides = Object.fromEntries(
-    Object.entries(overrides ?? {}).filter(([key]) => !isBrowserSecretEnvKey(key)),
   )
 
   return {
     ...env,
-    ...safeOverrides,
+    ...(overrides ?? {}),
   }
 }
 
@@ -191,10 +158,6 @@ export class McpClient {
   private closed = false
   private initializePromise?: Promise<void>
   private readonly options: McpClientOptions
-  private readonly hostRequestContexts = new Map<
-    string,
-    { context: McpToolRequestContext | undefined }
-  >()
   private readonly stderrLines: string[] = []
   private stderrStream?: Stream | null
   private transport?: StdioClientTransport | StreamableHTTPClientTransport
@@ -206,7 +169,6 @@ export class McpClient {
   async dispose() {
     if (this.closed) return
     this.closed = true
-    this.hostRequestContexts.clear()
 
     const closeTasks: Promise<unknown>[] = []
     if (this.transport instanceof StreamableHTTPClientTransport && this.transport.sessionId) {
@@ -297,35 +259,24 @@ export class McpClient {
   ): Promise<McpToolCallResult> {
     await this.ensureInitialized()
     const requestContext = normalizedRequestContext(context)
-    const hostRequestToken = isAnyboxNodeReplServer(this.options.server)
-      ? randomBytes(32).toString("base64url")
-      : undefined
-    const requestMeta = hostRequestToken
-      ? {
-          ...(requestContext ?? {}),
-          [HOST_REQUEST_TOKEN_META_KEY]: hostRequestToken,
-        }
+    const requestMeta = isAnyboxNodeReplServer(this.options.server)
+      ? requestContext
+        ? { ...requestContext } as Record<string, unknown>
+        : undefined
       : undefined
 
-    if (hostRequestToken) {
-      this.hostRequestContexts.set(hostRequestToken, { context: requestContext })
-    }
-    try {
-      return normalizeCallResult(await this.client!.callTool(
-        {
-          name: toolName,
-          arguments: args,
-          ...(requestMeta ? { _meta: requestMeta } : {}),
-        },
-        undefined,
-        {
-          signal: abort,
-          timeout: this.options.requestTimeoutMs,
-        },
-      ))
-    } finally {
-      if (hostRequestToken) this.hostRequestContexts.delete(hostRequestToken)
-    }
+    return normalizeCallResult(await this.client!.callTool(
+      {
+        name: toolName,
+        arguments: args,
+        ...(requestMeta ? { _meta: requestMeta } : {}),
+      },
+      undefined,
+      {
+        signal: abort,
+        timeout: this.options.requestTimeoutMs,
+      },
+    ))
   }
 
   private async ensureInitialized() {
@@ -382,26 +333,6 @@ export class McpClient {
             name: value === this.options.cwd ? "cwd" : "worktree",
           })),
       }))
-      if (isAnyboxNodeReplServer(this.options.server)) {
-        client.setRequestHandler(McpHostRequestSchema, async ({ params }) => {
-          const pending = this.hostRequestContexts.get(params.token)
-          if (!pending) {
-            return {
-              ok: false,
-              error: {
-                code: "HOST_REQUEST_UNAUTHORIZED",
-                message: "The Anybox host request is not associated with an active Node REPL call.",
-              },
-            }
-          }
-          return runMcpHostService(
-            params.service,
-            params.request,
-            pending.context,
-          )
-        })
-      }
-
       const transport = await this.createTransport()
       transport.onerror = (error) => {
         if (this.closed) return

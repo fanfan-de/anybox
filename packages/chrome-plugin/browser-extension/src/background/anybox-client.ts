@@ -5,11 +5,11 @@ import {
   BrowserExtensionServerMessage,
   type BrowserExtensionCommandMessage,
   type BrowserExtensionServerMessage as BrowserExtensionServerMessageValue,
-} from "@anybox/shared/browser-extension"
+} from "@anybox/chrome-shared/browser-extension"
 import {
   BROWSER_CONTRACT_COMMAND_METHODS,
   BROWSER_CONTRACT_VERSION,
-} from "@anybox/shared/browser-contract"
+} from "@anybox/chrome-shared/browser-contract"
 import {
   supportsBrowserCommandContractVersion,
 } from "./browser-contract-compat"

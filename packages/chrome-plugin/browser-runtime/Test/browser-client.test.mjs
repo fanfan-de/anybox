@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdtemp, readFile, rm } from "node:fs/promises"
+import os from "node:os"
 import path from "node:path"
 import test from "node:test"
 import { pathToFileURL } from "node:url"
@@ -156,28 +158,31 @@ test("installs a discovery-backed BrowserManager on the provided globals", async
   )
 })
 
-test("uses the generic Anybox host-service bridge from nodeRepl", async () => {
-  const requests = []
-  const transport = backendTransport({ requests })
-  const services = []
+test("does not depend on a reverse host-service API in nodeRepl", async () => {
+  let reverseHostCalls = 0
   const globals = {
     nodeRepl: {
-      requestHost(service, request) {
-        services.push(service)
-        return transport(request)
+      requestHost() {
+        reverseHostCalls += 1
+        throw new Error("The generic Node environment must not receive this call.")
       },
     },
   }
-  const { setupBrowserRuntime } = await importRuntime("host-service")
+  const previous = process.env.ANYBOX_BROWSER_HOST
+  process.env.ANYBOX_BROWSER_HOST = "off"
+  const { setupBrowserRuntime } = await importRuntime("no-host-service")
   const agent = await setupBrowserRuntime({ globals })
-  const browser = await agent.browsers.getDefault()
-
-  assert.deepEqual(services, ["browser"])
-  assert.equal(browser.browserId, "extension")
-  assert.deepEqual(requests, [{
-    type: "getInfo",
-    contractVersion: 1,
-  }])
+  try {
+    await assert.rejects(
+      agent.browsers.getDefault(),
+      (error) =>
+        error.code === "BACKEND_UNAVAILABLE" && error.retryable === true,
+    )
+    assert.equal(reverseHostCalls, 0)
+  } finally {
+    if (previous === undefined) delete process.env.ANYBOX_BROWSER_HOST
+    else process.env.ANYBOX_BROWSER_HOST = previous
+  }
 })
 
 test("filters API manifests and documentation from backend capabilities", async () => {
@@ -359,16 +364,23 @@ test("preserves authoritative transport error metadata", async () => {
 })
 
 test("rejects browser API calls when the host transport is unavailable", async () => {
+  const previous = process.env.ANYBOX_BROWSER_HOST
+  process.env.ANYBOX_BROWSER_HOST = "off"
   const { setupBrowserRuntime } = await importRuntime("missing-transport")
   const agent = await setupBrowserRuntime({ globals: {} })
 
-  await assert.rejects(
-    agent.browsers.get(),
-    (error) => error.code === "BACKEND_UNAVAILABLE" && error.retryable === true,
-  )
+  try {
+    await assert.rejects(
+      agent.browsers.get(),
+      (error) => error.code === "BACKEND_UNAVAILABLE" && error.retryable === true,
+    )
+  } finally {
+    if (previous === undefined) delete process.env.ANYBOX_BROWSER_HOST
+    else process.env.ANYBOX_BROWSER_HOST = previous
+  }
 })
 
-test("keeps the host transport out of model-visible runtime properties", async () => {
+test("keeps the Browser Host transport out of model-visible runtime properties", async () => {
   const transport = backendTransport()
   const { setupBrowserRuntime } = await importRuntime("private-transport")
   const agent = await setupBrowserRuntime({ globals: {}, transport })
@@ -404,4 +416,61 @@ test("keeps raw page evaluation, selector execution, and CDP locally denied", as
     (error) => error.code === "CAPABILITY_UNAVAILABLE",
   )
   assert.equal(requests.filter(({ type }) => type === "command").length, 0)
+})
+
+test("starts and connects to the plugin-owned Browser Host", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "anybox-browser-host-runtime-"))
+  const bootstrapPath = path.join(root, "browser-host.runtime.json")
+  const hostEntrypoint = path.resolve(
+    import.meta.dirname,
+    "..",
+    "..",
+    "browser-host",
+    "dist",
+    "browser-host.mjs",
+  )
+  const previous = Object.fromEntries(
+    [
+      "ANYBOX_AGENT_DATA_DIR",
+      "ANYBOX_BROWSER_HOST",
+      "ANYBOX_BROWSER_HOST_BOOTSTRAP_PATH",
+      "ANYBOX_BROWSER_HOST_ENTRYPOINT",
+      "ANYBOX_TEST_HOME",
+    ].map((key) => [key, process.env[key]]),
+  )
+  let hostPID
+  process.env.ANYBOX_AGENT_DATA_DIR = root
+  process.env.ANYBOX_BROWSER_HOST_BOOTSTRAP_PATH = bootstrapPath
+  process.env.ANYBOX_BROWSER_HOST_ENTRYPOINT = hostEntrypoint
+  process.env.ANYBOX_TEST_HOME = root
+  delete process.env.ANYBOX_BROWSER_HOST
+
+  try {
+    const { setupBrowserRuntime } = await importRuntime("real-browser-host")
+    const agent = await setupBrowserRuntime({ globals: {} })
+    const browser = await agent.browsers.getDefault()
+    const status = await browser.status()
+    const bootstrap = JSON.parse(await readFile(bootstrapPath, "utf8"))
+    hostPID = bootstrap.hostPID
+
+    assert.equal(browser.browserId, "extension")
+    assert.equal(status.connected, false)
+    assert.equal(status.runtimeConnections >= 1, true)
+    assert.equal(bootstrap.role, "runtime")
+    assert.equal(typeof hostPID, "number")
+  } finally {
+    if (Number.isInteger(hostPID)) {
+      try {
+        process.kill(hostPID, "SIGTERM")
+      } catch {
+        // The host may already have exited after a failed assertion.
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+    await rm(root, { recursive: true, force: true })
+  }
 })

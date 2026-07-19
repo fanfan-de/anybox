@@ -1,3 +1,4 @@
+// Kept beside Browser Host so all Chrome transport code ships with the plugin.
 import { randomUUID } from "node:crypto"
 import { createServer } from "node:net"
 import { createInterface } from "node:readline"

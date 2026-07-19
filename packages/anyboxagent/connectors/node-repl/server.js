@@ -9,19 +9,14 @@ const Module = require("node:module")
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const MAX_TIMEOUT_MS = 120_000
-const HOST_REQUEST_TIMEOUT_MS = 120_000
-const HOST_REQUEST_METHOD = "anybox/node-repl/host-request"
-const HOST_REQUEST_TOKEN_META_KEY = "anybox/hostRequestToken"
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
 
 let sandbox
 let writes
 let images
 let responseMeta
-let nextHostRequestID = 1
 const nodeModuleDirs = []
 const requestContext = new AsyncLocalStorage()
-const pendingHostRequests = new Map()
 
 const tools = [
   {
@@ -145,76 +140,6 @@ function publicRequestMeta() {
   return Object.keys(result).length > 0 ? Object.freeze(result) : undefined
 }
 
-function hostError(error, fallbackMessage = "Anybox host request failed.") {
-  const result = new Error(
-    error && typeof error === "object" && typeof error.message === "string"
-      ? error.message
-      : fallbackMessage,
-  )
-  if (error && typeof error === "object") {
-    if (typeof error.code === "string") result.code = error.code
-    if (typeof error.retryable === "boolean") result.retryable = error.retryable
-    if (error.details && typeof error.details === "object" && !Array.isArray(error.details)) {
-      result.details = error.details
-    }
-  }
-  return result
-}
-
-function requestHost(service, request) {
-  if (typeof service !== "string" || !service.trim()) {
-    return Promise.reject(new Error("requestHost requires a service name."))
-  }
-  const context = requestContext.getStore()
-  if (!context?.hostRequestToken) {
-    return Promise.reject(
-      new Error("Host services are available only while an Anybox Node REPL tool call is running."),
-    )
-  }
-
-  const id = `host-${process.pid}-${nextHostRequestID}`
-  nextHostRequestID += 1
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      pendingHostRequests.delete(id)
-      const error = new Error(
-        `Anybox host service '${service.trim()}' timed out after ${HOST_REQUEST_TIMEOUT_MS}ms.`,
-      )
-      error.code = "DEADLINE_EXCEEDED"
-      error.retryable = true
-      reject(error)
-    }, HOST_REQUEST_TIMEOUT_MS)
-    pendingHostRequests.set(id, {
-      resolve(value) {
-        clearTimeout(timer)
-        resolve(value)
-      },
-      reject(error) {
-        clearTimeout(timer)
-        reject(error)
-      },
-    })
-    send({
-      jsonrpc: "2.0",
-      id,
-      method: HOST_REQUEST_METHOD,
-      params: {
-        service: service.trim(),
-        request,
-        token: context.hostRequestToken,
-      },
-    })
-  }).then((result) => {
-    if (result && typeof result === "object" && result.ok === true) {
-      return result.data
-    }
-    if (result && typeof result === "object" && result.ok === false) {
-      throw hostError(result.error)
-    }
-    throw hostError(undefined, "Anybox host returned an invalid response.")
-  })
-}
-
 function resetKernel() {
   writes = []
   images = []
@@ -248,7 +173,6 @@ function resetKernel() {
     tmpDir: os.tmpdir(),
     nodeModuleDirs,
     addNodeModuleDir,
-    requestHost,
     write(text) {
       writes.push(String(text))
     },
@@ -403,22 +327,7 @@ function readRequestContext(message) {
     )
     if (typeof value === "string") context[target] = value.trim()
   }
-  const token = meta[HOST_REQUEST_TOKEN_META_KEY]
-  if (typeof token === "string" && token) context.hostRequestToken = token
   return Object.keys(context).length > 0 ? context : undefined
-}
-
-function handleResponse(message) {
-  if (message?.method !== undefined || message?.id === undefined) return false
-  const pending = pendingHostRequests.get(String(message.id))
-  if (!pending) return false
-  pendingHostRequests.delete(String(message.id))
-  if (message.error) {
-    pending.reject(hostError(message.error))
-  } else {
-    pending.resolve(message.result)
-  }
-  return true
 }
 
 resetKernel()
@@ -430,7 +339,6 @@ rl.on("line", (line) => {
   void (async () => {
     if (!line.trim()) return
     const message = JSON.parse(line)
-    if (handleResponse(message)) return
     requestID = message.id ?? null
 
     if (message.method === "initialize") {
@@ -497,8 +405,5 @@ rl.on("line", (line) => {
 })
 
 rl.on("close", () => {
-  const error = new Error("Anybox host connection closed.")
-  for (const pending of pendingHostRequests.values()) pending.reject(error)
-  pendingHostRequests.clear()
   process.exit(0)
 })

@@ -95,7 +95,7 @@ close()       → port.disconnect()
 
 ## 4. Popup 的 `connected` 不等于端到端 ready
 
-当前状态写入时点是 `connectNative` 返回 Port 之后，而不是 Agent Bridge 对 Extension
+当前状态写入时点是 `connectNative` 返回 Port 之后，而不是 Browser Host Bridge 对 Extension
 hello 完成校验之后。Extension protocol 也没有一个 hello ack。
 
 因此 Popup `Connected` 精确表示：
@@ -106,12 +106,12 @@ Extension 当前持有一个 Native Messaging Port
 
 它不严格证明：
 
-- Rust Host 已完成 Agent IPC 认证；
-- Agent Bridge 已接受 hello；
+- Rust Host 已完成 Browser Host IPC 认证；
+- Browser Host Bridge 已接受 hello；
 - Browser Contract 兼容；
 - 下一条 command 一定成功。
 
-Agent Runtime 的 `chrome.status().connected` 更接近端到端 backend 状态，因为它来自
+Browser Client 的 `chrome.status().connected` 更接近端到端 backend 状态，因为它来自
 Bridge 的 active compatible connection。
 
 ## 5. Extension hello
@@ -136,12 +136,12 @@ Bridge 的 active compatible connection。
 `extensionInstanceID` 第一次生成 UUID 后保存在 `chrome.storage.local`，扩展 Service
 Worker 重启后复用；Extension 重新安装或 storage 清除后会变化。
 
-`extensionID` 使用运行时的 `chrome.runtime.id`，Agent 会与固定 ID 比较。
+`extensionID` 使用运行时的 `chrome.runtime.id`，Browser Host 会与固定 ID 比较。
 
 `capabilities.commands` 来自共享 `BROWSER_CONTRACT_COMMAND_METHODS`，不是手写第二份
 列表。
 
-## 6. 接收 Agent 消息
+## 6. 接收 Browser Host 消息
 
 Port message 先经共享 `BrowserExtensionServerMessage` schema 解析，只允许：
 
@@ -167,7 +167,7 @@ ping
 3. 成功发送 `result {ok:true,data}`；
 4. 失败发送 `result {ok:false,error,code?,retryable?}`。
 
-Contract version 在 Extension protocol v1 中是 optional，用于兼容旧 Agent。当前新 Agent
+Contract version 在 Extension protocol v1 中是 optional，用于兼容旧 Host。当前 Browser Host
 总是发送 v1。
 
 如果 server message 无法解析，Extension 尝试发送：
@@ -197,7 +197,7 @@ event
 pong
 ```
 
-因此 Extension 自己构造出错误结构时会在本地失败，不会把任意对象发给 Agent。
+因此 Extension 自己构造出错误结构时会在本地失败，不会把任意对象发给 Browser Host。
 
 ## 8. 断线与指数重连
 
@@ -231,18 +231,17 @@ hello 和 reconnect 都能在 Worker 重建后重新执行。
 
 ## 10. 当前没有的连接能力
 
-- 没有同时选择多个 Agent；
-- 没有用户选择 Chrome profile 到 Agent connection 的映射；
+- 没有同时选择多个 Browser Host；
+- 没有用户选择 Chrome profile 到 Host connection 的映射；
 - 没有 hello ack；
 - 没有周期性 heartbeat；
 - 没有 command cancel message；
-- 没有 Extension 主动查询 Agent capability 后缩减自己广告集合。
+- 没有 Extension 主动查询 Browser Host capability 后缩减自己广告集合。
 
-当前 capability 协商由 Extension 广告、Agent 取 canonical 交集完成。
+当前 capability 协商由 Extension 广告、Browser Host 取 canonical 交集完成。
 
 ## 11. 本节点的输出
 
-这个节点把 Agent `command` 交给 `handleBrowserCommand(...)`，并把下一节点返回的结构封装
+这个节点把 Browser Host `command` 交给 `handleBrowserCommand(...)`，并把下一节点返回的结构封装
 成 `result`。下一节点才真正调用 `chrome.tabs`、`chrome.scripting` 和
 `chrome.debugger`。
-
